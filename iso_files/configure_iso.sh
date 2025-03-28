@@ -2,10 +2,8 @@
 
 YAI_LATEST=$(curl -fSsL https://api.github.com/repos/ublue-os/yai/releases/latest | jq -r --arg arch $(arch) '.assets[] | select(.name | match("yai-.*."+$arch+".rpm")) | .browser_download_url')
 dnf install -y $YAI_LATEST
-mkdir -p /etc/gnome-initial-setup
-tee /etc/gnome-initial-setup/vendor.conf <<EOF
-[live_user pages]
-skip=privacy;timezone;software;goa
+
+tee -a /usr/share/gnome-initial-setup/vendor.conf <<EOF
 
 [install]
 application=yai.desktop
