@@ -23,13 +23,13 @@ on:
       - main
       - F42
       - a10
-      - 10-kitten
+      - a10s
   push:
     branches:
       - main
       - F42
       - a10
-      - 10-kitten
+      - a10s
     paths:
       - '.github/workflows/build-iso.yml'
       - 'iso_files/*'
