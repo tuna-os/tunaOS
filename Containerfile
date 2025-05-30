@@ -7,7 +7,7 @@ COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 
 ARG MAJOR_VERSION="${MAJOR_VERSION:-c10s}"
-FROM quay.io/centos-bootc/centos-bootc:$MAJOR_VERSION
+FROM quay.io/centos-bootc/centos-bootc:c10s
 
 ARG ENABLE_DX="${ENABLE_DX:-0}"
 ARG ENABLE_GDX="${ENABLE_GDX:-0}"
