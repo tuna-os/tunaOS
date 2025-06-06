@@ -6,12 +6,14 @@ on:
       - main
       - F42
       - a10
+      - a10-server
       - a10s
   push:
     branches:
       - main
       - F42
       - a10
+      - a10-server
       - a10s
   schedule:
     - cron: "0 1 * * TUE" # Every Tuesday at 1am UTC
@@ -28,7 +30,7 @@ jobs:
     secrets: inherit
     with:
       image-name: bluefin
-      major-version: ${{ github.ref_name == 'a10' && '10' || github.ref_name == 'a10s' && '10s' || github.ref_name == 'F42' && '42' || github.ref_name == 'main' && 'stream10' || github.ref_name }}
+      major-version: ${{ github.ref_name == 'a10-server' && '10' || github.ref_name == 'a10' && '10' || github.ref_name == 'a10s' && '10s' || github.ref_name == 'F42' && '42' || github.ref_name == 'main' && 'stream10' || github.ref_name }}
       default-tag: ${{ github.ref_name == 'main' && 'lts' || github.ref_name }}
       rechunk: ${{ github.event_name != 'pull_request' }}
       sbom: ${{ github.event_name != 'pull_request' }}
