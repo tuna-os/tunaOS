@@ -11,4 +11,4 @@ Currently there are 4 forks:
 - 🎣 **Bluefin-tuna** `F42` - based on Fedora 42
   - This is the tooling and build of Bluefin LTS (based on CentOS 10) ported to Fedora  
 
-I'm currently dailying `bluefin-dx:a10s` and plan on using `bluefin:a10-server` as a replacemnt to my Proxmox server
+I'm currently dailying `bluefin-dx:a10s` and plan on using `bluefin:a10-server` as a replacemnt to my Proxmox server. Let me know if you are using/liking any of these images. I'm currently assuming I'm the only one using the right now. Open an issue or come hangout at the [AlmaLinux Atomic SIG Chat](https://chat.almalinux.org/almalinux/channels/sigatomic) or the [Universal Blue Discord](https://discord.gg/WEu6BdFEtp)
