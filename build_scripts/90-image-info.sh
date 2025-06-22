@@ -18,7 +18,7 @@ cat >$IMAGE_INFO <<EOF
 EOF
 
 OLD_PRETTY_NAME="$(sh -c '. /usr/lib/os-release ; echo $NAME $VERSION')"
-IMAGE_PRETTY_NAME="Bluefin LTS"
+IMAGE_PRETTY_NAME="Bluefin"
 HOME_URL="https://projectbluefin.io"
 DOCUMENTATION_URL="https://docs.projectbluefin.io"
 SUPPORT_URL="https://github.com/ublue-os/bluefin-lts/issues/"

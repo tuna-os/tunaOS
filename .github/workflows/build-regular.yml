@@ -1,16 +1,14 @@
-name: Build Bluefin LTS
+name: Build Bluefin
 
 on:
   pull_request:
     branches:
-      - main
       - F42
       - a10
       - a10s
       - a10-server
   push:
     branches:
-      - main
       - F42
       - a10
       - a10s

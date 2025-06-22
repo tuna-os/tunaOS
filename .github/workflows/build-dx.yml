@@ -1,4 +1,4 @@
-name: Build Bluefin LTS DX
+name: Build Bluefin DX
 
 on:
   pull_request:
@@ -9,7 +9,7 @@ on:
       - F42
   push:
     branches:
-      - main
+      
       - a10s
       - a10
       - c10s
