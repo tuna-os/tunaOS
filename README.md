@@ -1,11 +1,11 @@
 # TunaOS (forks of Bluefin LTS)
 This is a set of forks of [Bluefin LTS](https://github.com/ublue-os/bluefin-lts)
 Currently there are 4 forks:
-- 🐠 **Yellowfin** `a10s` - based on AlmaLinux Kitten 10
-  - This is the closest to upstream Bluefin LTS but with AlmaLinux Kitten 10 which has some diffrences
+- 🐠 **Yellowfin** `a10s` - based on [AlmaLinux Kitten 10](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#container-images)
+  - This is the closest to upstream Bluefin LTS but with AlmaLinux Kitten 10 which has [some differences](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#how-is-almalinux-os-kitten-different-from-centos-stream) like:
     - x86_64/v2 support
     - SPICE support for qemu/livirt
-    - Secureboot support (though upstream CentOS will have this again soon) 
+    - Secureboot support (though upstream CentOS will have this again [soon](https://github.com/rhboot/shim-review/issues/454)) 
 - 🐟 **Albacore** `:a10` - based on AlmaLinux 10.0
   - **Albacore-server** `:a10-server` - disabled gdm and added "Virtualization host"
 - 🎣 **Bluefin-tuna** `F42` - based on Fedora 42
