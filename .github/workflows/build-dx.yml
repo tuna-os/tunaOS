@@ -1,4 +1,4 @@
-name: Build Bluefin DX
+name: Build DX
 
 on:
   pull_request:
@@ -9,7 +9,6 @@ on:
       - F42
   push:
     branches:
-      
       - a10s
       - a10
       - c10s
@@ -31,7 +30,7 @@ jobs:
       image-name: bluefin-dx
       flavor: dx
       major-version: ${{ github.ref_name == 'a10' && '10' || github.ref_name == 'a10s' && '10s' || github.ref_name == 'F42' && 'F42' || github.ref_name == 'main' && 'stream10' || github.ref_name }}
-      default-tag: ${{ github.ref_name == 'main' && 'lts' || github.ref_name }}
+      default-tag: ${{ github.ref_name == 'main' && 'lts' || 'latest' }}
       rechunk: ${{ github.event_name != 'pull_request' }}
       sbom: ${{ github.event_name != 'pull_request' }}
       publish: ${{ github.event_name != 'pull_request' }}

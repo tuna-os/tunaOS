@@ -1,0 +1,37 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:best-practices",
+  ],
+
+  "rebaseWhen": "never",
+  "baseBranches": [ 
+    "main",
+    "a10",
+    "a10-server",
+    "a10s",
+    "F42", 
+  ],
+  "packageRules": [
+    {
+      "automerge": true,
+      "matchUpdateTypes": ["pin", "pinDigest"]
+    },
+    {
+      "enabled": false,
+      "matchUpdateTypes": ["digest", "pinDigest", "pin"],
+      "matchDepTypes": ["container"],
+      "matchFileNames": [".github/workflows/**.yaml", ".github/workflows/**.yml"],
+    },
+    {
+      "automerge": true,
+      "matchUpdateTypes": ["digest"],
+      "matchDepNames": [
+        "quay.io/centos-bootc/centos-bootc",
+        "ghcr.io/hanthor/almalinux-bootc",
+        "quay.io/fedora/fedora-bootc",
+        "quay.io/almalinux/almalinux-bootc",
+      ],
+    }
+  ]
+}
