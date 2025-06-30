@@ -27,9 +27,9 @@ jobs:
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
-      image-name: bluefin-dx
+      image-name: ${{ github.ref_name }}-dx
       flavor: dx
-      major-version: ${{ github.ref_name == 'a10' && '10' || github.ref_name == 'a10s' && '10s' || github.ref_name == 'F42' && 'F42' || github.ref_name == 'main' && 'stream10' || github.ref_name }}
+      major-version: ${{ github.ref_name == 'albacore' && '10' || github.ref_name == 'yellowfin' && '10s' || github.ref_name == 'bluefin-tuna' && 'F42' || github.ref_name == 'main' && 'stream10' || github.ref_name }}
       default-tag: ${{ github.ref_name == 'main' && 'lts' || 'latest' }}
       rechunk: ${{ github.event_name != 'pull_request' }}
       sbom: ${{ github.event_name != 'pull_request' }}
