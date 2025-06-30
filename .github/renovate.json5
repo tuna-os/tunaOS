@@ -5,7 +5,13 @@
   ],
 
   "rebaseWhen": "never",
-
+  "baseBranches": [ 
+    "main",
+    "a10",
+    "a10-server",
+    "a10s",
+    "F42", 
+  ],
   "packageRules": [
     {
       "automerge": true,
@@ -24,6 +30,7 @@
         "quay.io/centos-bootc/centos-bootc",
         "ghcr.io/hanthor/almalinux-bootc",
         "quay.io/fedora/fedora-bootc",
+        "quay.io/almalinux/almalinux-bootc",
       ],
     }
   ]

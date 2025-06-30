@@ -3,13 +3,14 @@ name: Build Regular
 on:
   pull_request:
     branches:
-      - a10-server
+      - albacore-server
   push:
     branches:
-      - F42
-      - a10
-      - a10s
-      - a10-server
+      - albacore
+      - albacore-server
+      - yellowfin
+      - bluefin-tuna
+      - main
   schedule:
     - cron: "0 1 * * TUE" # Every Tuesday at 1am UTC
   merge_group:
@@ -24,10 +25,11 @@ jobs:
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
-      image-name: ${{ github.ref_name }}
-      major-version: ${{ github.ref_name == 'a10' && '10' || github.ref_name == 'a10s' && '10s' || github.ref_name == 'F42' && '42' || github.ref_name == 'main' && 'stream10' || github.ref_name }}
-      default-tag: ${{ github.ref_name == 'main' && 'lts' || 'latest' }}
+      image-name: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || format('{0}', github.ref_name) }}
+      major-version: ${{ github.ref_name == 'albacore-server' && '10' ||github.ref_name == 'albacore' && '10' || github.ref_name == 'yellowfin' && '10s' || github.ref_name == 'bluefin-tuna' && '42' || github.ref_name == 'main' && 'stream10' || github.ref_name }}
+      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || (github.ref_name == 'albacore-server' && '10' || github.ref_name == 'albacore' && '10' || github.ref_name == 'yellowfin' && '10s' || github.ref_name == 'bluefin-tuna' && 'F42' || github.ref_name == 'main' && 'stream10' || github.ref_name) }}
       rechunk: ${{ github.event_name != 'pull_request' }}
       sbom: ${{ github.event_name != 'pull_request' }}
       publish: ${{ github.event_name != 'pull_request' }}
       platforms: ${{ github.ref_name == 'albacore-server' && 'linux/arm64,linux/amd64,linux/amd64/v2' || github.ref_name == 'albacore' && 'linux/arm64,linux/amd64,linux/amd64/v2'  || github.ref_name == 'yellowfin' && 'linux/arm64,linux/amd64,linux/amd64/v2'  || 'linux/arm64,linux/amd64'  }}
+      image-desc: ${{ github.ref_name == 'albacore-server' && '🐟 Server variant of Albacore' || github.ref_name == 'albacore' && '🐟 Based on AlmaLinux 10.0 Almalinux' || github.ref_name == 'yellowfin' && '🐠 Based on AlmaLinux Kitten 10' || github.ref_name == 'bluefin-tuna' && '🎣 Based on Fedora 42' || github.ref_name == 'main' && 'Bluefin LTS' || github.ref_name }}

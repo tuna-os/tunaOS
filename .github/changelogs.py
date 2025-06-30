@@ -27,14 +27,14 @@ PATTERN_PKGREL = "{version}"
 COMMON_PAT = "### All Images\n| | Name | Previous | New |\n| --- | --- | --- | --- |{changes}\n\n"
 OTHER_NAMES = {
     "base": "### Base Images\n| | Name | Previous | New |\n| --- | --- | --- | --- |{changes}\n\n",
-    "dx": "### [Developer Experience Images](https://docs.projectbluefin.io/bluefin-dx)\n| | Name | Previous | New |\n| --- | --- | --- | --- |{changes}\n\n",
-    "gdx": "### [Graphical Developer Experience Images](https://docs.projectbluefin.io/gdx)\n| | Name | Previous | New |\n| --- | --- | --- | --- |{changes}\n\n",
-    "gnome": "### [Bluefin Images](https://docs.projectbluefin.io/lts)\n| | Name | Previous | New |\n| --- | --- | --- | --- |{changes}\n\n",
+    "dx": "### [Developer Experience Images](https://docs.projectalbacore.io/albacore-dx)\n| | Name | Previous | New |\n| --- | --- | --- | --- |{changes}\n\n",
+    "gdx": "### [Graphical Developer Experience Images](https://docs.projectalbacore.io/gdx)\n| | Name | Previous | New |\n| --- | --- | --- | --- |{changes}\n\n",
+    "gnome": "### [Albacore Images](https://docs.projectalbacore.io/lts)\n| | Name | Previous | New |\n| --- | --- | --- | --- |{changes}\n\n",
     "nvidia": "### Nvidia Images\n| | Name | Previous | New |\n| --- | --- | --- | --- |{changes}\n\n",
 }
 
 COMMITS_FORMAT = "### Commits\n| Hash | Subject |\n| --- | --- |{commits}\n\n"
-COMMIT_FORMAT = "\n| **[{short}](https://github.com/hanthor/bluefin-lts/commit/{githash})** | {subject} |"
+COMMIT_FORMAT = "\n| **[{short}](https://github.com/hanthor/albacore-lts/commit/{githash})** | {subject} |"
 
 CHANGELOG_TITLE = "{tag}: {pretty}"
 CHANGELOG_FORMAT = """\
@@ -74,7 +74,7 @@ sudo bootc switch --enforce-container-sigpolicy ghcr.io/hanthor/$IMAGE_NAME:{cur
 ```
 
 ### Documentation
-Be sure to read the [documentation](https://docs.projectbluefin.io/lts) for more information
+Be sure to read the [documentation](https://docs.projectalbacore.io/lts) for more information
 on how to use your cloud native system.
 """
 HANDWRITTEN_PLACEHOLDER = """\
@@ -98,7 +98,7 @@ def get_images(target: str):
     for experience, de, image_flavor in product(*matrix.values()):
         img = ""
         if de == "gnome":
-            img += "bluefin"
+            img += "albacore"
 
         if experience == "dx":
             img += "-dx"

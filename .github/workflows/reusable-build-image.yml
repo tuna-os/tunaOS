@@ -11,7 +11,7 @@ on:
         description: "The description of the image to build"
         required: false
         type: string
-        default: "Bluefin, built on CentOS Stream with bootc"
+        default: "Albacore, built on CentOS Stream with bootc"
       flavor:
         description: "The flavor of the image to build"
         required: false
@@ -21,7 +21,7 @@ on:
         description: "The platforms to build the image for"
         required: false
         type: string
-        default: "amd64,arm64"
+        default: "linux/amd64,linux/arm64"
       major-version:
         description: "The version of CentOS to build the image on"
         required: false
@@ -83,13 +83,15 @@ jobs:
 
           MATRIX="{\"include\":[]}"
           for platform in "${platforms[@]}"; do
-            MATRIX="$(echo "${MATRIX}" | jq ".include += [{\"platform\": \"${platform}\"}]")"
+            safeplatform="${platform//\//-}" # Replace all / with -
+            MATRIX="$(echo "${MATRIX}" | jq ".include += [{\"platform\": \"${platform}\", \"safeplatform\": \"${safeplatform}\"}]")"
           done
           echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
+        
 
   build_push:
     name: Build and push image
-    runs-on: ${{ matrix.platform == 'amd64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
+    runs-on: ${{ contains(matrix.platform, 'amd64') && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
     timeout-minutes: 60
     needs: generate_matrix
     strategy:
@@ -102,7 +104,7 @@ jobs:
 
     steps:
       - name: Install dependencies
-        if: matrix.platform == 'linux/arm64'
+        if: contains(matrix.platform, 'linux/arm64')
         run: |
           sudo apt update -y
           sudo apt install -y \
@@ -128,6 +130,7 @@ jobs:
         env:
           FLAVOR: ${{ inputs.flavor }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          PLATFORM: ${{ matrix.platform }}
         run: |
           set -x
           just=$(which just)
@@ -141,12 +144,12 @@ jobs:
             ENABLE_DX=1
           fi
 
-          sudo $just build "${IMAGE_NAME}" "${DEFAULT_TAG}" "${ENABLE_DX}" "${ENABLE_GDX}"
+          sudo $just build "${IMAGE_NAME}" "${DEFAULT_TAG}" "${ENABLE_DX}" "${ENABLE_GDX}" "${PLATFORM}"
 
       - name: Setup Syft
         id: setup-syft
         if: ${{ inputs.sbom && inputs.publish }}
-        uses: anchore/sbom-action/download-syft@9246b90769f852b3a8921f330c59e0b3f439d6e9 # v0
+        uses: anchore/sbom-action/download-syft@e11c554f704a0b820cbf8c51673f6945e0731532 # v0
 
       - name: Generate SBOM
         id: generate-sbom
@@ -210,21 +213,19 @@ jobs:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
           IMAGE_DIGEST: ${{ steps.load.outputs.digest }}
           PLATFORM: ${{ matrix.platform }}
+          SAFE_PLATFORM: ${{ matrix.safeplatform }}
           MAX_RETRIES: 3
         run: |
           set -x
-          if [[ "${PLATFORM}" == *"/"* ]]; then
-            PLATFORM=$(echo "${PLATFORM}" | cut -d'/' -f1)
-          fi
-          podman tag "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${PLATFORM}"
+          podman tag "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
           for i in $(seq "${MAX_RETRIES}"); do
-            podman push --digestfile=/tmp/digestfile "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${PLATFORM}" && break || sleep $((5 * i));
+            podman push --digestfile=/tmp/digestfile "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}" && break || sleep $((5 * i));
           done
           REMOTE_IMAGE_DIGEST=$(cat /tmp/digestfile)
           echo "remote_image_digest=${REMOTE_IMAGE_DIGEST}" >> $GITHUB_OUTPUT
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+        uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
         if: ${{ inputs.publish }}
 
       - name: Sign Image
@@ -272,17 +273,17 @@ jobs:
         if: ${{ inputs.publish }}
         env:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          PLATFORM: ${{ matrix.platform }}
+          SAFE_PLATFORM: ${{ matrix.safeplatform }}
           DIGEST: ${{ steps.push.outputs.remote_image_digest }}
         run: |
           mkdir -p /tmp/outputs/digests
-          echo "${DIGEST}" > "/tmp/outputs/digests/${IMAGE_NAME}-${PLATFORM}.txt"
+          echo "${DIGEST}" > "/tmp/outputs/digests/${IMAGE_NAME}-${SAFE_PLATFORM}.txt"
 
       - name: Upload Output Artifacts
         if: ${{ inputs.publish }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ env.IMAGE_NAME }}-${{ matrix.platform }}
+          name: ${{ env.IMAGE_NAME }}-${{ matrix.safeplatform }}
           retention-days: 1
           if-no-files-found: error
           path: |
@@ -308,7 +309,7 @@ jobs:
     steps:
       - name: Install dependencies
         run: |
-          apk add jq git podman uutils bash conmon crun netavark fuse-overlayfs
+          apk add jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++
           ln -sf /bin/bash /bin/sh
           mkdir -p /etc/containers
           echo '{"default":[{"type":"insecureAcceptAnything"}]}' | jq . > /etc/containers/policy.json
@@ -346,7 +347,7 @@ jobs:
           echo "MAJOR_VERSION_NUMBER=${numbers_only}" >> "${GITHUB_ENV}"
 
       - name: Image Metadata
-        uses: docker/metadata-action@902fa8ec7d6ecbf8d84d538b9b233a880e428804 # v5
+        uses: docker/metadata-action@b798ed8388581f6f002541048b6458ca2c4ba442 # v5
         id: metadata
         with:
           tags: |
@@ -356,14 +357,14 @@ jobs:
             io.artifacthub.package.readme-url=https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/refs/heads/main/README.md
             org.opencontainers.image.created=${{ steps.date.outputs.date }}
             org.opencontainers.image.description=${{ env.IMAGE_DESC }}
-            org.opencontainers.image.documentation=https://docs.projectbluefin.io
+            org.opencontainers.image.documentation=https://docs.projectalbacore.io
             org.opencontainers.image.source=https://github.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/blob/main/Containerfile
             org.opencontainers.image.title=${{ env.IMAGE_NAME }}
-            org.opencontainers.image.url=https://projectbluefin.io
+            org.opencontainers.image.url=https://projectalbacore.io
             org.opencontainers.image.vendor=${{ github.repository_owner }}
             org.opencontainers.image.version=${{ env.MAJOR_VERSION }}
             io.artifacthub.package.deprecated=false
-            io.artifacthub.package.keywords=bootc,centos,bluefin,ublue,universal-blue
+            io.artifacthub.package.keywords=bootc,centos,albacore,ublue,universal-blue
             io.artifacthub.package.license=Apache-2.0
             io.artifacthub.package.logo-url=https://avatars.githubusercontent.com/u/120078124?s=200&v=4
             io.artifacthub.package.maintainers=[{\"name\":\"tulilirockz\",\"email\":\"tulilirockz@outlook.com\"},{\"name\":\"castrojo\",\"email\":\"jorge.castro@gmail.com\"}]
@@ -381,14 +382,20 @@ jobs:
       - name: Load Outputs
         if: ${{ inputs.publish }}
         id: load-outputs
+        env:
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
+          set -e
           DIGESTS_JSON="$(jq -n '{}')"
           for digest_file in /tmp/artifacts/*.txt; do
-            # Extract the platform from the file name
-            PLATFORM="$(basename "${digest_file}" | rev | cut -d'-' -f1 | rev | cut -d'.' -f1)"
+            FILENAME_ONLY="$(basename "${digest_file}")"
+            # Extract the safeplatform key from the filename (e.g., "albacore-linux-amd64-v2.txt" -> "linux-amd64-v2")
+            # Remove prefix "${IMAGE_NAME}-"
+            KEY_PART="${FILENAME_ONLY#${IMAGE_NAME}-}"
+            # Remove suffix ".txt"
+            PLATFORM_KEY="${KEY_PART%.txt}"
             DIGEST="$(cat "${digest_file}")"
-            # Add the platform and digest to the JSON object
-            DIGESTS_JSON="$(echo "${DIGESTS_JSON}" | jq --arg key "${PLATFORM}" --arg value "${DIGEST}" '. + {($key): $value}')"
+            DIGESTS_JSON="$(echo "${DIGESTS_JSON}" | jq --arg key "${PLATFORM_KEY}" --arg value "${DIGEST}" '. + {($key): $value}')"
           done
           echo "DIGESTS_JSON=$(echo "$DIGESTS_JSON" | jq -c '.')" >> "${GITHUB_OUTPUT}"
 
@@ -406,18 +413,36 @@ jobs:
         if: ${{ inputs.publish }}
         env:
           MANIFEST: ${{ steps.create-manifest.outputs.MANIFEST }}
-          DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
+          DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }} # Already confirmed valid JSON
           LABELS: ${{ steps.metadata.outputs.labels }}
           PLATFORMS: "${{ inputs.platforms }}"
         run: |
-          DIGESTS=$(echo "$DIGESTS_JSON" | jq -c '.')
-          # turn the comma separated string into a list
+          set -e # Ensure script exits on error
+
+          # Debug lines (keep if you want, or remove now that we know the JSON is good)
+          echo "DEBUG: Value of DIGESTS_JSON received by Populate Manifest:"
+          echo "'${DIGESTS_JSON}'"
+          echo "DEBUG: Length of DIGESTS_JSON: ${#DIGESTS_JSON}"
+          echo "DEBUG: Checking if DIGESTS_JSON is valid JSON:"
+          echo "${DIGESTS_JSON}" | jq . || echo "DIGESTS_JSON is NOT valid JSON or is empty."
+          echo "-------------------------------------"
+
+          # Turn the comma separated inputs.platforms string into a list
           platforms=()
           IFS=',' read -r -a platforms <<< "${PLATFORMS}"
-          for platform in ${platforms[@]}; do
-            digest="$(echo $DIGESTS | jq -r ".$platform")"
-            echo "Adding ${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest} for ${platform}"
-            podman manifest add "${MANIFEST}" "${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}" --arch "${platform}"
+
+          for platform_original in "${platforms[@]}"; do
+            platform_key_for_lookup="${platform_original//\//-}"
+
+            digest="$(echo "${DIGESTS_JSON}" | jq -r --arg key "${platform_key_for_lookup}" '.[$key]')"
+
+            if [ "$digest" == "null" ] || [ -z "$digest" ]; then
+              echo "Error: Digest not found for platform ${platform_original} (looked for key ${platform_key_for_lookup} in DIGESTS_JSON: $DIGESTS_JSON)"
+              exit 1
+            fi
+
+            arch_for_podman="${platform_original#linux/}"
+            podman manifest add "${MANIFEST}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}" --os linux --arch "${arch_for_podman}"
           done
 
           # Apply the labels to the manifest (separated by newlines)
@@ -470,7 +495,7 @@ jobs:
           cat ${XDG_RUNTIME_DIR}/containers/auth.json > ~/.docker/config.json
 
       - name: Install Cosign
-        uses: sigstore/cosign-installer@398d4b0eeef1380460a10c8013a76f728fb906ac # v3.9.1
+        uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
 
       - name: Sign Manifest
         env:
@@ -502,4 +527,3 @@ jobs:
           podman tag "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${MAJOR_VERSION}"
           podman tag "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${REFS}"
           echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
-
