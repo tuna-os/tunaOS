@@ -7,10 +7,10 @@
   "rebaseWhen": "never",
   "baseBranches": [ 
     "main",
-    "a10",
-    "a10-server",
-    "a10s",
-    "F42", 
+    "albacore",
+    "albacore-server",
+    "yellowfin",
+    "bluefin-tuna"
   ],
   "packageRules": [
     {
