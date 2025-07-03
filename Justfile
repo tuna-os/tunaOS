@@ -49,7 +49,7 @@ clean:
 [group('Utility')]
 [private]
 sudo-clean:
-    just sudoif just clean
+    sudo just clean
 
 # sudoif bash function
 [group('Utility')]
@@ -67,7 +67,7 @@ sudoif command *args:
             exit 1
         fi
     }
-    just sudoif {{ command }} {{ args }}
+    sudo {{ command }} {{ args }}
 
 # This Justfile recipe builds a container image using Podman.
 #
@@ -157,8 +157,8 @@ mount_image:
         exit 1
     fi
 
-    CREF=$(just sudoif podman create {{ ref }} bash)
-    MOUNT=$(just sudoif podman mount $CREF)
+    CREF=$(sudo podman create {{ ref }} bash)
+    MOUNT=$(sudo podman mount $CREF)
     echo "$CREF" > {{ container_id_file }}
     echo "$MOUNT" > {{ mount_path_file }}
     echo "Image mounted at: $MOUNT"
@@ -170,7 +170,7 @@ create_commit: mount_image
     MOUNT_PATH=$(cat {{ mount_path_file }})
 
     echo "Pruning filesystem..."
-    just sudoif podman run --rm \
+    sudo podman run --rm \
         --privileged \
         --security-opt label=type:unconfined_t \
         -v "${MOUNT_PATH}":/var/tree:Z \
@@ -180,7 +180,7 @@ create_commit: mount_image
         /sources/rechunk/1_prune.sh
 
     echo "Committing to OSTree..."
-    just sudoif podman run --rm \
+    sudo podman run --rm \
         --privileged \
         --security-opt label=type:unconfined_t \
         -v "${MOUNT_PATH}":/var/tree:Z \
@@ -199,10 +199,10 @@ rechunk: create_commit
     CONTAINER_ID=$(cat {{ container_id_file }})
 
     echo "Unmounting and removing container..."
-    just sudoif podman unmount "$CONTAINER_ID"
-    just sudoif podman rm "$CONTAINER_ID"
+    sudo podman unmount "$CONTAINER_ID"
+    sudo podman rm "$CONTAINER_ID"
     if [ -z "{{ keep_ref }}" ]; then
-      just sudoif podman rmi --force {{ ref }}
+      sudo podman rmi --force {{ ref }}
     fi
 
     if [[ -n "{{ meta_file }}" ]]; then
@@ -210,7 +210,7 @@ rechunk: create_commit
     fi
 
     echo "Rechunking OSTree commit..."
-    just sudoif podman run --rm \
+    sudo podman run --rm \
         -v "{{ workdir }}:/workspace" \
         -v "{{ git_repo }}:/var/git" \
         -v "cache_ostree:/var/ostree" \
@@ -235,7 +235,7 @@ rechunk: create_commit
         {{ rechunk_image }} \
         /sources/rechunk/3_chunk.sh
 
-    just sudoif chown $(id -u):$(id -g) -R "{{ workdir }}/{{ out_name }}"
+    sudo chown $(id -u):$(id -g) -R "{{ workdir }}/{{ out_name }}"
 
     echo "--- Just Action Outputs ---"
     echo "version: $(cat {{ workdir }}/version.txt)"
@@ -253,28 +253,7 @@ rechunk_cleanup:
     if [ -d "{{ workdir }}/{{ out_name }}" ]; then
         rm -rf "{{ workdir }}/{{ out_name }}"*
     fi
-    just sudoif podman volume rm cache_ostree || echo "Volume 'cache_ostree' not found."
-
-sync_image SID DID=SID reverse='false':
-    #!/usr/bin/env bash
-    set -eoux pipefail
-
-    if [[ "{{ reverse }}" == 'true' ]]; then
-        if [[ -z "${SUDO_USER:-}" ]] || ! podman image exists "{{ SID }}"; then
-            exit 0
-        fi
-        TARGET_UID=$(id -u "${SUDO_USER}")
-        SOURCE_EP="root@localhost::{{ SID }}"
-        DEST_EP="${TARGET_UID}@localhost::{{ DID }}"
-        just sudoif -i -u "${SUDO_USER}" podman image rm "{{ DID }}" >/dev/null 2>&1 || true
-        podman image scp "${SOURCE_EP}" "${DEST_EP}"
-        podman image rm "{{ SID }}"
-    else
-        if ! podman image exists "{{ SID }}"; then
-            exit 1
-        fi
-        SOURCE_EP="${UID}@localhost::{{ SID }}"
-        DEST_EP="root@localhost::{{ DID }}"
+    sudo podman volume rm cache_ostree || echo "Volume 'cache_ostree' not found."
 
 # Build a bootc bootable image using Bootc Image Builder (BIB)
 # Converts a container image to a bootable image
@@ -285,7 +264,7 @@ sync_image SID DID=SID reverse='false':
 #   config: The configuration file to use for the build (default: image.toml)
 
 # Example: just _rebuild-bib localhost/fedora latest qcow2 image.toml
-_build-bib $target_image $tag $type $config: (sync_image target_image tag)
+_build-bib $target_image $tag $type $config:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -293,9 +272,9 @@ _build-bib $target_image $tag $type $config: (sync_image target_image tag)
 
     echo "Cleaning up previous build"
     if [[ $type == iso ]]; then
-      just sudoif rm -rf "output/bootiso" || true
+      sudo rm -rf "output/bootiso" || true
     else
-      just sudoif rm -rf "output/${type}" || true
+      sudo rm -rf "output/${type}" || true
     fi
 
     args="--type ${type} "
@@ -305,7 +284,7 @@ _build-bib $target_image $tag $type $config: (sync_image target_image tag)
       args+=" --local"
     fi
 
-    just sudoif podman run \
+    sudo podman run \
       --rm \
       -it \
       --privileged \
@@ -319,7 +298,7 @@ _build-bib $target_image $tag $type $config: (sync_image target_image tag)
       ${args} \
       "${target_image}:${tag}"
 
-    just sudoif chown -R $USER:$USER output
+    sudo chown -R $USER:$USER output
 
 # Podman build's the image from the Containerfile and creates a bootable image
 # Parameters:
@@ -439,7 +418,7 @@ spawn-vm rebuild="0" type="qcow2" ram="6G":
 
 # Run osbuild with the specified parameters
 customize-iso-build:
-    just sudoif podman run \
+    sudo podman run \
     --rm -it \
     --privileged \
     --pull=newer \
@@ -491,7 +470,7 @@ lint:
 format:
     /usr/bin/find . -iname "*.sh" -type f -exec shfmt --write "{}" ';'
 
-run-bootc-libvirt $target_image=("localhost/" + image_name) $tag=default_tag $image_name=image_name: (sync_image target_image tag)
+run-bootc-libvirt $target_image=("localhost/" + image_name) $tag=default_tag $image_name=image_name:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -499,18 +478,18 @@ run-bootc-libvirt $target_image=("localhost/" + image_name) $tag=default_tag $im
 
     # clean up previous builds
     echo "Cleaning up previous build"
-    just sudoif if rm -rf "output/${image_name}_${tag}.raw" || true
+    sudo if rm -rf "output/${image_name}_${tag}.raw" || true
     mkdir -p "output/"
 
      # build the disk image
     truncate -s 20G output/${image_name}_${tag}.raw
-    # just sudoif if podman run \
+    # sudo if podman run \
     # --rm --privileged \
     # -v /var/lib/containers:/var/lib/containers \
     # quay.io/centos-bootc/centos-bootc:stream10 \
     # /usr/libexec/bootc-base-imagectl rechunk \
     # ${target_image}:${tag} ${target_image}:re${tag}
-    just sudoif if podman run \
+    sudo if podman run \
     --pid=host --network=host --privileged \
     --security-opt label=type:unconfined_t \
     -v $(pwd)/output:/output:Z \
@@ -523,7 +502,7 @@ run-bootc-libvirt $target_image=("localhost/" + image_name) $tag=default_tag $im
         echo "Disk file ${QEMU_DISK_QCOW2} does not exist. Please build the image first."
         exit 1
     fi
-    just sudoif virt-install --os-variant almalinux9 --boot hd \
+    sudo virt-install --os-variant almalinux9 --boot hd \
         --name "${image_name}-${tag}" \
         --memory 2048 \
         --vcpus 2 \
