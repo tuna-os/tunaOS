@@ -5,7 +5,6 @@ Currently there are 4 forks:
   - This is the closest to upstream Bluefin LTS but with AlmaLinux Kitten 10 which has [some differences](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#how-is-almalinux-os-kitten-different-from-centos-stream) like:
     - x86_64/v2 support
     - SPICE support for qemu/livirt
-    - Secureboot support (though upstream CentOS will have this again [soon](https://github.com/rhboot/shim-review/issues/454)) 
 - [![Build](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml/badge.svg?branch=albacore)](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml) 🐟 **[Albacore](https://github.com/hanthor/tunaOS/tree/albacore)** - based on AlmaLinux 10.0
   - [![Build](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml/badge.svg?branch=albacore-server)](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml) **[Albacore-server](https://github.com/hanthor/tunaOS/tree/albacore-server)** `:a10-server` - disabled gdm and added "Virtualization host"
 - [![Build](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml/badge.svg?branch=bluefon-tuna)](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml) 🎣 **[Bluefin-tuna](https://github.com/hanthor/tunaOS/tree/bluefin-tuna)** - based on Fedora 42
