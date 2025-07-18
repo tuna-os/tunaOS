@@ -514,7 +514,13 @@ jobs:
       packages: write
       id-token: write
     steps:
-      - name: Create Tag
+      - name: Login to GitHub Container Registry
+        env:
+          REGISTRY: ghcr.io
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+
+      - name: Pull Image and Apply Tags
         id: tag
         env:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
@@ -523,7 +529,20 @@ jobs:
           MAJOR_VERSION: ${{ env.MAJOR_VERSION }}
           REFS: ${{ github.ref_name }}
         run: |
-          podman tag "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
-          podman tag "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${MAJOR_VERSION}"
-          podman tag "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${REFS}"
+          set -ex
+          SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+          
+          # Pull the image that the manifest job pushed
+          podman pull "${SOURCE_IMAGE}"
+
+          # Create new tags from the local image
+          podman tag "${SOURCE_IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
+          podman tag "${SOURCE_IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${MAJOR_VERSION}"
+          podman tag "${SOURCE_IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${REFS}"
+
+          # Push the new tags to the registry
+          podman push "${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
+          podman push "${IMAGE_REGISTRY}/${IMAGE_NAME}:${MAJOR_VERSION}"
+          podman push "${IMAGE_REGISTRY}/${IMAGE_NAME}:${REFS}"
+          
           echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
