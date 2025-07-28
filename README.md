@@ -1,7 +1,7 @@
 <div align="center">
 
 # 🐟 TunaOS
-### *A Collection of Immutable Desktop Operating Systems*
+### *A Collection of Atomic Desktop Operating Systems*
 
 *Specialized forks of [Bluefin LTS](https://github.com/ublue-os/bluefin-lts) for different use cases*
 
@@ -15,7 +15,7 @@
 
 ## 🚀 About TunaOS
 
-TunaOS is a curated collection of **immutable desktop operating systems** built on modern container technology. Each variant is carefully crafted for specific use cases, offering the reliability of immutable systems with the flexibility to choose your ideal Linux experience.
+TunaOS is a curated collection of **Atomic desktop operating systems** that are forks of Bluefin, built on modern container technology. Each variant is carefully crafted for specific use cases, offering the reliability of bootc-based systems with the flexibility to choose your ideal Linux experience.
 
 ## 🐠 Available Variants
 
@@ -29,7 +29,7 @@ TunaOS is a curated collection of **immutable desktop operating systems** built 
 The closest to upstream Bluefin LTS experience with enhanced capabilities:
 - ✨ **x86_64/v2** microarchitecture support for better performance
 - 🖥️ **SPICE support** for qemu/libvirt virtualization
-- 🔄 **Fully compatible** with Bluefin LTS workflows
+- 🔄 **Compatible with upstream LTS** because it's based on CentOS
 
 ---
 
@@ -68,7 +68,7 @@ Cutting-edge experience with Bluefin LTS tooling ported to the latest Fedora rel
 
 | Component | Minimum | Recommended |
 |-----------|---------|-------------|
-| **CPU** | x86_64 | x86_64/v2 or better |
+| **CPU** | x86_64, ARM64 | x86_64/v2 or better, ARM64 |
 | **RAM** | 4 GB | 8 GB+ |
 | **Storage** | 20 GB | 50 GB+ |
 | **Architecture** | AMD64, ARM64 | AMD64/v2, ARM64 |
@@ -107,13 +107,14 @@ We'd love to hear from you! Whether you're using these images or just curious:
 
 - [AlmaLinux Kitten 10 Differences](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#how-is-almalinux-os-kitten-different-from-centos-stream)
 - [Bluefin LTS Documentation](https://github.com/ublue-os/bluefin-lts)
+- [Project Bluefin Documentation](https://docs.projectbluefin.io)
 - [Universal Blue Guide](https://universal-blue.org/)
 
 ---
 
 <div align="center">
 
-**Built with ❤️ by the TunaOS community**
+**Made by James in his free time**
 
 *Licensed under [Apache 2.0](LICENSE)*
 
