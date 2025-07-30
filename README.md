@@ -27,7 +27,7 @@ TunaOS is a curated collection of **Atomic desktop operating systems** that are 
 **Branch:** [yellowfin](https://github.com/hanthor/tunaOS/tree/yellowfin)
 
 The closest to upstream Bluefin LTS experience with enhanced capabilities:
-- ✨ **x86_64/v2** microarchitecture support for better performance
+- ✨ **x86_64/v2** microarchitecture support for older CPUs ~pre-2013
 - 🖥️ **SPICE support** for qemu/libvirt virtualization
 - 🔄 **Compatible with upstream LTS** because it's based on CentOS
 
@@ -49,7 +49,7 @@ Stable enterprise-grade desktop experience built on AlmaLinux foundation.
 **Branch:** [albacore-server](https://github.com/hanthor/tunaOS/tree/albacore-server)
 
 Server-optimized variant with:
-- 🚫 **No GDM** (display manager disabled)
+- 🚫 **No GNOME on Boot** (display manager disabled)
 - 💻 **Virtualization Host** capabilities included
 - 🏢 **Perfect for** server deployments and virtualization hosts
 
@@ -88,7 +88,7 @@ sudo podman run --rm -it --privileged \
   -v $(pwd):/output \
   quay.io/centos-bootc/bootc-image-builder:latest \
   build --type iso \
-  ghcr.io/hanthor/tunaos:yellowfin
+  ghcr.io/tuna-os/yellowfin:latest
 ```
 
 ## 🧪 Current Status
