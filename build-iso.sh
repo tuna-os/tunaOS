@@ -49,7 +49,7 @@ sudo podman run --rm -it --privileged \
   -v /var/lib/containers/storage:/var/lib/containers/storage \
   -v "$(pwd)/$TOML_FILE":/config.toml \
   quay.io/centos-bootc/bootc-image-builder:latest \
-  build --type iso --rootfs xfs \
+  build --type iso --rootfs $ROOTFS --use-librepo=False \
   "$IMAGE_URI"
 
 echo "Script finished."
