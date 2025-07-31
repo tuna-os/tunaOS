@@ -45,6 +45,7 @@ sudo podman pull "$IMAGE_URI"
 echo "Running bootc-image-builder..."
 sudo podman run --rm -it --privileged \
   -v "$(pwd)":/output \
+  -v /var/lib/containers/storage:/var/lib/containers/storage \
   -v "$(pwd)/$TOML_FILE":/config.toml \
   quay.io/centos-bootc/bootc-image-builder:latest \
   build --type iso \
