@@ -22,10 +22,10 @@ TunaOS is a curated collection of **Atomic desktop operating systems** that are 
 ### 🐠 Yellowfin
 [![Build Status](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml/badge.svg?branch=yellowfin)](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml)
 
-**Base:** [AlmaLinux Kitten 10](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#container-images)  
+**Base:** [AlmaLinux Kitten 10](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#container-images)
+**Image:** `ghcr.io/tuna-os/yellowfin:latest`  
 **Branch:** [yellowfin](https://github.com/hanthor/tunaOS/tree/yellowfin)
 
-`podman pull ghcr.io/tuna-os/yellowfin:latest`
 
 The closest to upstream Bluefin LTS experience with enhanced capabilities:
 - ✨ **x86_64/v2** microarchitecture support for older CPUs (pre-2013)
@@ -37,17 +37,16 @@ The closest to upstream Bluefin LTS experience with enhanced capabilities:
 ### 🐟 Albacore
 [![Build Status](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml/badge.svg?branch=albacore)](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml)
 
-**Base:** AlmaLinux 10.0  
+**Base:** AlmaLinux 10.0
+**Image:** `ghcr.io/tuna-os/albacore:latest`  
 **Branch:** [albacore](https://github.com/hanthor/tunaOS/tree/albacore)
-
-`podman pull ghcr.io/tuna-os/albacore:latest`
 
 Stable enterprise-grade desktop experience built on AlmaLinux foundation.
 
 #### 🖥️ Albacore Server
 [![Build Status](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml/badge.svg?branch=albacore-server)](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml)
 
-**Tag:** `ghcr.io/tuna-os/albacore-server:latest`  
+**Image:** `ghcr.io/tuna-os/albacore-server:latest`  
 **Branch:** [albacore-server](https://github.com/hanthor/tunaOS/tree/albacore-server)
 
 Server-optimized variant with:
@@ -60,7 +59,8 @@ Server-optimized variant with:
 ### 🎣 Bluefin Tuna
 [![Build Status](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml/badge.svg?branch=bluefin-tuna)](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml)
 
-**Base:** Fedora 42  
+**Base:** Fedora 42
+**Image:** `ghcr.io/tuna-os/bluefin-tuna:latest`  
 **Branch:** [bluefin-tuna](https://github.com/hanthor/tunaOS/tree/bluefin-tuna)
 
 Cutting-edge experience with Bluefin LTS tooling ported to the latest Fedora release.
@@ -84,7 +84,7 @@ podman pull ghcr.io/hanthor/tunaos:yellowfin  # or your preferred variant
 ### Bootable Image
 Use [bootc-image-builder](https://github.com/osbuild/bootc-image-builder) to create installation media:
 
-run the [build-iso.sh](https://github.com/Tuna-OS/tunaOS/blob/main/build-iso.sh) script in this repo or download the script and run it like so:
+run the [build-iso.sh](https://github.com/Tuna-OS/tunaOS/blob/main/build-iso.sh) script in this repo or download the script and run it to use bootc-image-builder to make an ISO:
 
 ```bash
 curl https://raw.githubusercontent.com/Tuna-OS/tunaOS/refs/heads/main/build-iso.sh -o build-iso.sh
