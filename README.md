@@ -15,7 +15,7 @@
 
 ## 🚀 About TunaOS
 
-TunaOS is a curated collection of **Atomic desktop operating systems** that are forks of Bluefin, built on modern container technology. Each variant is carefully crafted for specific use cases, offering the reliability of bootc-based systems with the flexibility to choose your ideal Linux experience.
+TunaOS is a curated collection of **Atomic desktop operating systems** that are forks of Bluefin, built on modern container technology. This is an exploration of the flexibilty of Bootc and a hope that some people believe in the Enterprise Linux Desktop. The plan it to provide a stable experience with up-to-date GNOME and modern tooling. 
 
 ## 🐠 Available Variants
 
@@ -23,11 +23,12 @@ TunaOS is a curated collection of **Atomic desktop operating systems** that are 
 [![Build Status](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml/badge.svg?branch=yellowfin)](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml)
 
 **Base:** [AlmaLinux Kitten 10](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#container-images)  
-**Tag:** `a10s`  
 **Branch:** [yellowfin](https://github.com/hanthor/tunaOS/tree/yellowfin)
 
+`podman pull ghcr.io/tuna-os/yellowfin:latest`
+
 The closest to upstream Bluefin LTS experience with enhanced capabilities:
-- ✨ **x86_64/v2** microarchitecture support for older CPUs ~pre-2013
+- ✨ **x86_64/v2** microarchitecture support for older CPUs (pre-2013)
 - 🖥️ **SPICE support** for qemu/libvirt virtualization
 - 🔄 **Compatible with upstream LTS** because it's based on CentOS
 
@@ -37,15 +38,16 @@ The closest to upstream Bluefin LTS experience with enhanced capabilities:
 [![Build Status](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml/badge.svg?branch=albacore)](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml)
 
 **Base:** AlmaLinux 10.0  
-**Tag:** `10`  
 **Branch:** [albacore](https://github.com/hanthor/tunaOS/tree/albacore)
+
+`podman pull ghcr.io/tuna-os/albacore:latest`
 
 Stable enterprise-grade desktop experience built on AlmaLinux foundation.
 
 #### 🖥️ Albacore Server
 [![Build Status](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml/badge.svg?branch=albacore-server)](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml)
 
-**Tag:** `a10-server`  
+**Tag:** `ghcr.io/tuna-os/albacore-server:latest`  
 **Branch:** [albacore-server](https://github.com/hanthor/tunaOS/tree/albacore-server)
 
 Server-optimized variant with:
@@ -59,7 +61,6 @@ Server-optimized variant with:
 [![Build Status](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml/badge.svg?branch=bluefin-tuna)](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml)
 
 **Base:** Fedora 42  
-**Tag:** `F42`  
 **Branch:** [bluefin-tuna](https://github.com/hanthor/tunaOS/tree/bluefin-tuna)
 
 Cutting-edge experience with Bluefin LTS tooling ported to the latest Fedora release.
@@ -83,12 +84,12 @@ podman pull ghcr.io/hanthor/tunaos:yellowfin  # or your preferred variant
 ### Bootable Image
 Use [bootc-image-builder](https://github.com/osbuild/bootc-image-builder) to create installation media:
 
+run the build-iso.sh script in this repo or download the script and run it like so:
+
 ```bash
-sudo podman run --rm -it --privileged \
-  -v $(pwd):/output \
-  quay.io/centos-bootc/bootc-image-builder:latest \
-  build --type iso \
-  ghcr.io/tuna-os/yellowfin:latest
+curl https://raw.githubusercontent.com/Tuna-OS/tunaOS/refs/heads/main/build-iso.sh -o build-iso.sh
+chmod +x build-iso.sh 
+./build-iso.sh ghcr.io/tuna-os/yellowfin-dx:latest
 ```
 
 ## 🧪 Current Status
@@ -100,15 +101,15 @@ sudo podman run --rm -it --privileged \
 We'd love to hear from you! Whether you're using these images or just curious:
 
 - 🐛 **Report Issues:** [GitHub Issues](https://github.com/hanthor/tunaOS/issues)
-- 💬 **Chat with us:** [AlmaLinux Atomic SIG](https://chat.almalinux.org/almalinux/channels/sigatomic)
 - 🎮 **Discord:** [Universal Blue Community](https://discord.gg/WEu6BdFEtp)
+- 💬 **Chat with AlmaLinux:** [AlmaLinux Atomic SIG](https://chat.almalinux.org/almalinux/channels/sigatomic)
 
 ## 📚 Documentation
 
 - [AlmaLinux Kitten 10 Differences](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#how-is-almalinux-os-kitten-different-from-centos-stream)
 - [Bluefin LTS Documentation](https://github.com/ublue-os/bluefin-lts)
 - [Project Bluefin Documentation](https://docs.projectbluefin.io)
-- [Universal Blue Guide](https://universal-blue.org/)
+- [Universal Blue](https://universal-blue.org/)
 
 ---
 
