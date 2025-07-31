@@ -84,7 +84,7 @@ podman pull ghcr.io/hanthor/tunaos:yellowfin  # or your preferred variant
 ### Bootable Image
 Use [bootc-image-builder](https://github.com/osbuild/bootc-image-builder) to create installation media:
 
-run the build-iso.sh script in this repo or download the script and run it like so:
+run the [build-iso.sh](https://github.com/Tuna-OS/tunaOS/blob/main/build-iso.sh) script in this repo or download the script and run it like so:
 
 ```bash
 curl https://raw.githubusercontent.com/Tuna-OS/tunaOS/refs/heads/main/build-iso.sh -o build-iso.sh
