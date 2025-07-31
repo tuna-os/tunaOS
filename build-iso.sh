@@ -9,6 +9,7 @@ fi
 
 IMAGE_URI="$1"
 TOML_FILE="iso.toml"
+ROOTFS="xfs"
 
 # Create the TOML file with dynamic content
 cat << EOF > "$TOML_FILE"
@@ -48,7 +49,7 @@ sudo podman run --rm -it --privileged \
   -v /var/lib/containers/storage:/var/lib/containers/storage \
   -v "$(pwd)/$TOML_FILE":/config.toml \
   quay.io/centos-bootc/bootc-image-builder:latest \
-  build --type iso \
+  build --type iso --rootfs xfs \
   "$IMAGE_URI"
 
 echo "Script finished."
