@@ -7,6 +7,7 @@ on:
       - albacore
       - yellowfin
       - bluefin-tuna
+      - bluefin
       - main
   schedule:
     - cron: "0 1 * * TUE" # Every Tuesday at 1am UTC
@@ -16,7 +17,7 @@ on:
       variant:
         description: 'Build variant (regular, dx, gdx, all)'
         required: false
-        default: 'regular'
+        default: 'all'
         type: choice
         options:
         - regular
@@ -54,10 +55,9 @@ jobs:
             VARIANTS="regular dx gdx"
           fi
           
-          # Determine branch configuration
-          # FIX 1: Sanitize the branch name by replacing '/' with '-'
+          # Use current branch
           BRANCH="${{ github.ref_name }}"
-          BRANCH="${BRANCH//\//-}" 
+          BRANCH="${BRANCH//\//-}"
           
           case "$BRANCH" in
             main)
@@ -90,6 +90,12 @@ jobs:
               PLATFORMS="linux/arm64,linux/amd64"
               DESCRIPTION="🎣 Based on Fedora 42"
               ;;
+            bluefin)
+              MAJOR_VERSION="stream10"
+              DEFAULT_TAG="stream10"
+              PLATFORMS="linux/arm64,linux/amd64"
+              DESCRIPTION="🔵 Bluefin"
+              ;;
             *)
               # PR or unknown branch
               MAJOR_VERSION="$BRANCH"
@@ -121,41 +127,13 @@ jobs:
                 ;;
             esac
             
-            # FIX 2: Correct the logic for IMAGE_NAME and DEFAULT_TAG
-            local_image_name=""
-            local_default_tag=""
-            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-              local_image_name="pr-${{ github.event.pull_request.number }}${VARIANT_SUFFIX}"
-              local_default_tag="pr-${{ github.event.pull_request.number }}"
-            else
-              local_image_name="${BRANCH}${VARIANT_SUFFIX}"
-              local_default_tag="$DEFAULT_TAG"
-            fi
-            
-            # Add to matrix
-            MATRIX="$(echo "${MATRIX}" | jq ".include += [{
-              \"variant\": \"${variant}\",
-              \"image_name\": \"${local_image_name}\",
-              \"major_version\": \"${MAJOR_VERSION}\",
-              \"default_tag\": \"${local_default_tag}\",
-              \"platforms\": \"${PLATFORMS}\",
-              \"description\": \"${DESCRIPTION}\",
-              \"dx\": \"${DX}\",
-              \"gdx\": \"${GDX}\",
-              \"rechunk\": ${{ github.event_name != 'pull_request' }},
-              \"sbom\": ${{ github.event_name != 'pull_request' }},
-              \"publish\": ${{ github.event_name != 'pull_request' }}
-            }]")"
-          done
-          
-          echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
-
-            
-            # Determine image name
+            # Determine image name and tag
             if [[ "${{ github.event_name }}" == "pull_request" ]]; then
               IMAGE_NAME="pr-${{ github.event.pull_request.number }}${VARIANT_SUFFIX}"
+              TAG="pr-${{ github.event.pull_request.number }}"
             else
-              IMAGE_NAME="${{ github.ref_name }}${VARIANT_SUFFIX}"
+              IMAGE_NAME="${BRANCH}${VARIANT_SUFFIX}"
+              TAG="$DEFAULT_TAG"
             fi
             
             # Add to matrix
@@ -163,7 +141,7 @@ jobs:
               \"variant\": \"${variant}\",
               \"image_name\": \"${IMAGE_NAME}\",
               \"major_version\": \"${MAJOR_VERSION}\",
-              \"default_tag\": \"${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || env.DEFAULT_TAG }}\",
+              \"default_tag\": \"${TAG}\",
               \"platforms\": \"${PLATFORMS}\",
               \"description\": \"${DESCRIPTION}\",
               \"dx\": \"${DX}\",
