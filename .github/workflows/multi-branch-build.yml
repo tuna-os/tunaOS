@@ -37,7 +37,9 @@ jobs:
             if [[ "${{ inputs.branches }}" == "all" ]]; then
               BRANCHES="yellowfin albacore albacore-server bluefin-tuna bluefin"
             else
+              # Replace commas with spaces for proper parsing
               BRANCHES="${{ inputs.branches }}"
+              BRANCHES="${BRANCHES//,/ }"
             fi
           else
             # For scheduled builds, build all target branches
@@ -47,6 +49,8 @@ jobs:
           # Convert to JSON array for matrix
           BRANCH_ARRAY="["
           for branch in $BRANCHES; do
+            # Trim whitespace
+            branch=$(echo "$branch" | xargs)
             BRANCH_ARRAY="$BRANCH_ARRAY\"$branch\","
           done
           BRANCH_ARRAY="${BRANCH_ARRAY%,}]"
