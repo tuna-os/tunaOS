@@ -8,13 +8,6 @@ on:
       - yellowfin
       - bluefin-tuna
       - main
-  push:
-    branches:
-      - albacore
-      - albacore-server
-      - yellowfin
-      - bluefin-tuna
-      - main
   schedule:
     - cron: "0 1 * * TUE" # Every Tuesday at 1am UTC
   merge_group:
