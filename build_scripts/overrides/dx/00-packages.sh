@@ -2,8 +2,6 @@
 
 set -xeuo pipefail
 
-dnf install -y \
-	python3-ramalama
 
 # VSCode on the base image!
 dnf config-manager --add-repo "https://packages.microsoft.com/yumrepos/vscode"
