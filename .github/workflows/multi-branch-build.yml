@@ -35,7 +35,7 @@ jobs:
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             if [[ "${{ inputs.branches }}" == "all" ]]; then
-              BRANCHES="yellowfin albacore albacore-server bluefin-tuna bluefin"
+              BRANCHES="yellowfin albacore"
             else
               # Replace commas with spaces for proper parsing
               BRANCHES="${{ inputs.branches }}"
