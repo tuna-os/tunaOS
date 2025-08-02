@@ -1,0 +1,203 @@
+name: Build Images
+
+on:
+  pull_request:
+    branches:
+      - albacore-server
+      - albacore
+      - yellowfin
+      - bluefin-tuna
+      - main
+  push:
+    branches:
+      - albacore
+      - albacore-server
+      - yellowfin
+      - bluefin-tuna
+      - main
+  schedule:
+    - cron: "0 1 * * TUE" # Every Tuesday at 1am UTC
+  merge_group:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Build variant (regular, dx, gdx, all)'
+        required: false
+        default: 'regular'
+        type: choice
+        options:
+        - regular
+        - dx
+        - gdx
+        - all
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ inputs.variant || 'auto' }}
+  cancel-in-progress: true
+
+jobs:
+  # Generate build matrix based on branch and variant
+  generate_matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout for config
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        
+      - name: Generate build matrix
+        id: set-matrix
+        run: |
+          # Determine which variants to build
+          VARIANTS="regular"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ inputs.variant }}" == "all" ]]; then
+              VARIANTS="regular dx gdx"
+            else
+              VARIANTS="${{ inputs.variant }}"
+            fi
+          elif [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            # For scheduled/push builds, build all variants
+            VARIANTS="regular dx gdx"
+          fi
+          
+          # Determine branch configuration
+          # FIX 1: Sanitize the branch name by replacing '/' with '-'
+          BRANCH="${{ github.ref_name }}"
+          BRANCH="${BRANCH//\//-}" 
+          
+          case "$BRANCH" in
+            main)
+              MAJOR_VERSION="stream10"
+              DEFAULT_TAG="stream10"
+              PLATFORMS="linux/arm64,linux/amd64"
+              DESCRIPTION="Bluefin LTS"
+              ;;
+            albacore)
+              MAJOR_VERSION="10"
+              DEFAULT_TAG="10"
+              PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
+              DESCRIPTION="🐟 Based on AlmaLinux 10.0 Almalinux"
+              ;;
+            albacore-server)
+              MAJOR_VERSION="10"
+              DEFAULT_TAG="10"
+              PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
+              DESCRIPTION="🐟 Server variant of Albacore"
+              ;;
+            yellowfin)
+              MAJOR_VERSION="10s"
+              DEFAULT_TAG="10s"
+              PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
+              DESCRIPTION="🐠 Based on AlmaLinux Kitten 10"
+              ;;
+            bluefin-tuna)
+              MAJOR_VERSION="42"
+              DEFAULT_TAG="F42"
+              PLATFORMS="linux/arm64,linux/amd64"
+              DESCRIPTION="🎣 Based on Fedora 42"
+              ;;
+            *)
+              # PR or unknown branch
+              MAJOR_VERSION="$BRANCH"
+              DEFAULT_TAG="$BRANCH"
+              PLATFORMS="linux/arm64,linux/amd64"
+              DESCRIPTION="Test build for $BRANCH"
+              ;;
+          esac
+          
+          # Generate matrix
+          MATRIX="{\"include\":[]}"
+          for variant in $VARIANTS; do
+            # Set variant-specific values
+            case "$variant" in
+              regular)
+                VARIANT_SUFFIX=""
+                DX="0"
+                GDX="0"
+                ;;
+              dx)
+                VARIANT_SUFFIX="-dx"
+                DX="1"
+                GDX="0"
+                ;;
+              gdx)
+                VARIANT_SUFFIX="-gdx"
+                DX="0"
+                GDX="1"
+                ;;
+            esac
+            
+            # FIX 2: Correct the logic for IMAGE_NAME and DEFAULT_TAG
+            local_image_name=""
+            local_default_tag=""
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              local_image_name="pr-${{ github.event.pull_request.number }}${VARIANT_SUFFIX}"
+              local_default_tag="pr-${{ github.event.pull_request.number }}"
+            else
+              local_image_name="${BRANCH}${VARIANT_SUFFIX}"
+              local_default_tag="$DEFAULT_TAG"
+            fi
+            
+            # Add to matrix
+            MATRIX="$(echo "${MATRIX}" | jq ".include += [{
+              \"variant\": \"${variant}\",
+              \"image_name\": \"${local_image_name}\",
+              \"major_version\": \"${MAJOR_VERSION}\",
+              \"default_tag\": \"${local_default_tag}\",
+              \"platforms\": \"${PLATFORMS}\",
+              \"description\": \"${DESCRIPTION}\",
+              \"dx\": \"${DX}\",
+              \"gdx\": \"${GDX}\",
+              \"rechunk\": ${{ github.event_name != 'pull_request' }},
+              \"sbom\": ${{ github.event_name != 'pull_request' }},
+              \"publish\": ${{ github.event_name != 'pull_request' }}
+            }]")"
+          done
+          
+          echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
+
+            
+            # Determine image name
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              IMAGE_NAME="pr-${{ github.event.pull_request.number }}${VARIANT_SUFFIX}"
+            else
+              IMAGE_NAME="${{ github.ref_name }}${VARIANT_SUFFIX}"
+            fi
+            
+            # Add to matrix
+            MATRIX="$(echo "${MATRIX}" | jq ".include += [{
+              \"variant\": \"${variant}\",
+              \"image_name\": \"${IMAGE_NAME}\",
+              \"major_version\": \"${MAJOR_VERSION}\",
+              \"default_tag\": \"${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || env.DEFAULT_TAG }}\",
+              \"platforms\": \"${PLATFORMS}\",
+              \"description\": \"${DESCRIPTION}\",
+              \"dx\": \"${DX}\",
+              \"gdx\": \"${GDX}\",
+              \"rechunk\": ${{ github.event_name != 'pull_request' }},
+              \"sbom\": ${{ github.event_name != 'pull_request' }},
+              \"publish\": ${{ github.event_name != 'pull_request' }}
+            }]")"
+          done
+          
+          echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
+
+  # Build images using the reusable workflow
+  build:
+    needs: generate_matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}
+      image-desc: ${{ matrix.description }}
+      flavor: ${{ matrix.variant }}
+      platforms: ${{ matrix.platforms }}
+      major-version: ${{ matrix.major_version }}
+      default-tag: ${{ matrix.default_tag }}
+      rechunk: ${{ matrix.rechunk }}
+      sbom: ${{ matrix.sbom }}
+      publish: ${{ matrix.publish }}
