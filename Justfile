@@ -109,7 +109,7 @@ build $target_image=image_name $tag=default_tag $dx="0" $gdx="0" $platform="linu
             ;;
         "albacore")
             BASE_IMG="{{ base_image }}"
-            BASE_TAG="10.0"  # Using AlmaLinux 10.0 stable
+            BASE_TAG="10"  # Using AlmaLinux stable
             ;;
         *)
             BASE_IMG="{{ base_image }}"
