@@ -10,7 +10,6 @@ export base_image := env("BASE_IMAGE", "quay.io/almalinuxorg/almalinux-bootc")
 export base_image_tag := env("BASE_IMAGE_TAG", "10")
 
 alias build-vm := build-qcow2
-alias rebuild-vm := rebuild-qcow2
 alias run-vm := run-vm-qcow2
 
 [private]
@@ -178,146 +177,11 @@ build-custom $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
 
 # Build all available variants including additional distributions
 build-all:
-    just build-yellowfin
-    just build-albacore
-    just build-centos
-    just build-fedora
-
-# Default variables mirroring the GitHub Action inputs
-# Override from the command line, e.g., just --set ref 'your/image'
-
-ref := 'localhost/' + image_name + ':' + default_tag
-prev_ref := ''
-clear_plan := ''
-prev_ref_fail := ''
-max_layers := ''
-skip_compression := ''
-labels := ''
-description := ''
-version := '<date>'
-pretty := ''
-rechunk_image := 'ghcr.io/hhd-dev/rechunk:latest'
-keep_ref := ''
-changelog := ''
-git_repo := '.'
-revision := ''
-formatters := ''
-meta_file := ''
-
-# Internal variables
-
-workdir := '.'
-container_id_file := workdir + '/container.id'
-mount_path_file := workdir + '/mount.path'
-out_name := file_name(replace(ref, ':', '_'))
-
-# Mounts the initial OCI image using Podman
-mount_image:
-    #!/usr/bin/env bash
-    set -euxo pipefail
-
-    if [[ -z "{{ ref }}" ]]; then
-        echo "Error: 'ref' variable must be set."
-        exit 1
-    fi
-
-    CREF=$(sudo podman create {{ ref }} bash)
-    MOUNT=$(sudo podman mount $CREF)
-    echo "$CREF" > {{ container_id_file }}
-    echo "$MOUNT" > {{ mount_path_file }}
-    echo "Image mounted at: $MOUNT"
-
-# Creates an OSTree commit from the mounted filesystem
-create_commit: mount_image
-    #!/usr/bin/env bash
-    set -euxo pipefail
-    MOUNT_PATH=$(cat {{ mount_path_file }})
-
-    echo "Pruning filesystem..."
-    sudo podman run --rm \
-        --privileged \
-        --security-opt label=type:unconfined_t \
-        -v "${MOUNT_PATH}":/var/tree:Z \
-        -e TREE=/var/tree \
-        -u 0:0 \
-        {{ rechunk_image }} \
-        /sources/rechunk/1_prune.sh
-
-    echo "Committing to OSTree..."
-    sudo podman run --rm \
-        --privileged \
-        --security-opt label=type:unconfined_t \
-        -v "${MOUNT_PATH}":/var/tree:Z \
-        -e TREE=/var/tree \
-        -v "cache_ostree:/var/ostree" \
-        -e REPO=/var/ostree/repo \
-        -e RESET_TIMESTAMP=1 \
-        -u 0:0 \
-        {{ rechunk_image }} \
-        /sources/rechunk/2_create.sh
-
-# Rechunks the OSTree commit into a new OCI image
-rechunk: create_commit
-    #!/usr/bin/env bash
-    set -euxo pipefail
-    CONTAINER_ID=$(cat {{ container_id_file }})
-
-    echo "Unmounting and removing container..."
-    sudo podman unmount "$CONTAINER_ID"
-    sudo podman rm "$CONTAINER_ID"
-    if [ -z "{{ keep_ref }}" ]; then
-      sudo podman rmi --force {{ ref }}
-    fi
-
-    if [[ -n "{{ meta_file }}" ]]; then
-        cp "{{ meta_file }}" "{{ workdir }}/_meta_in.yml"
-    fi
-
-    echo "Rechunking OSTree commit..."
-    sudo podman run --rm \
-        -v "{{ workdir }}:/workspace" \
-        -v "{{ git_repo }}:/var/git" \
-        -v "cache_ostree:/var/ostree" \
-        -e REPO=/var/ostree/repo \
-        -e MAX_LAYERS="{{ max_layers }}" \
-        -e SKIP_COMPRESSION="{{ skip_compression }}" \
-        -e PREV_REF="{{ prev_ref }}" \
-        -e OUT_NAME="{{ out_name }}" \
-        -e LABELS="{{ labels }}" \
-        -e FORMATTERS="{{ formatters }}" \
-        -e VERSION="{{ version }}" \
-        -e VERSION_FN="/workspace/version.txt" \
-        -e PRETTY="{{ pretty }}" \
-        -e DESCRIPTION="{{ description }}" \
-        -e CHANGELOG="{{ changelog }}" \
-        -e OUT_REF="oci:{{ out_name }}" \
-        -e GIT_DIR="/var/git" \
-        -e CLEAR_PLAN="{{ clear_plan }}" \
-        -e REVISION="{{ revision }}" \
-        -e PREV_REF_FAIL="{{ prev_ref_fail }}" \
-        -u 0:0 \
-        {{ rechunk_image }} \
-        /sources/rechunk/3_chunk.sh
-
-    sudo chown $(id -u):$(id -g) -R "{{ workdir }}/{{ out_name }}"
-
-    echo "--- Just Action Outputs ---"
-    echo "version: $(cat {{ workdir }}/version.txt)"
-    echo "ref: oci:{{ workdir }}/{{ out_name }}"
-    echo "location: {{ workdir }}/{{ out_name }}"
-    echo "changelog: {{ workdir }}/{{ out_name }}.changelog.txt"
-    echo "manifest: {{ workdir }}/{{ out_name }}.manifest.json"
-
-# Cleans up generated files and volumes
-rechunk_cleanup:
-    #!/usr/bin/env bash
-    set -euxo pipefail
-    echo "Removing temporary files and OSTree volume..."
-    rm -f {{ container_id_file }} {{ mount_path_file }} {{ workdir }}/_meta_in.yml {{ workdir }}/version.txt
-    if [ -d "{{ workdir }}/{{ out_name }}" ]; then
-        rm -rf "{{ workdir }}/{{ out_name }}"*
-    fi
-    sudo podman volume rm cache_ostree || echo "Volume 'cache_ostree' not found."
+    just build-yellowfin &
+    just build-albacore &
+    just build-centos &
+    just build-fedora &
+    wait
 
 # Build a bootc bootable image using Bootc Image Builder (BIB)
 # Converts a container image to a bootable image
@@ -371,9 +235,6 @@ _build-bib $target_image $tag $type $config:
 #   type: The type of image to build (ex. qcow2, raw, iso)
 #   config: The configuration file to use for the build (deafult: image.toml)
 
-# Example: just _rebuild-bib localhost/fedora latest qcow2 image.toml
-_rebuild-bib $target_image $tag $type $config: (build target_image tag) && (_build-bib target_image tag type config)
-
 # Build a QCOW2 virtual machine image
 
 build-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "qcow2" "image.toml")
@@ -385,18 +246,6 @@ build-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_build
 # Build an ISO virtual machine image
 
 build-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "iso" "iso.toml")
-
-# Rebuild a QCOW2 virtual machine image
-
-rebuild-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "qcow2" "image.toml")
-
-# Rebuild a RAW virtual machine image
-
-rebuild-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "raw" "image.toml")
-
-# Rebuild an ISO virtual machine image
-
-rebuild-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "iso" "iso.toml")
 
 # Run a virtual machine with the specified image type and configuration
 _run-vm $target_image $tag $type $config:
@@ -453,78 +302,6 @@ run-vm-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_run-
 
 run-vm-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_run-vm target_image tag "iso" "iso.toml")
 
-# Run a virtual machine using systemd-vmspawn
-
-spawn-vm rebuild="0" type="qcow2" ram="6G":
-    #!/usr/bin/env bash
-
-    set -euo pipefail
-
-    [ "{{ rebuild }}" -eq 1 ] && echo "Rebuilding the ISO" && just build-vm {{ rebuild }} {{ type }}
-
-    systemd-vmspawn \
-      -M "achillobator" \
-      --console=gui \
-      --cpus=2 \
-      --ram=$(echo {{ ram }}| /usr/bin/numfmt --from=iec) \
-      --network-user-mode \
-      --vsock=false --pass-ssh-key=false \
-      -i ./output/**/*.{{ type }}
-
-##########################
-#  'customize-iso-build' #
-##########################
-# Description:
-# Enables the manual customization of the osbuild manifest before running the ISO build
-#
-# Mount the configuration file and output directory
-# Clear the entrypoint to run the custom command
-
-# Run osbuild with the specified parameters
-customize-iso-build:
-    sudo podman run \
-    --rm -it \
-    --privileged \
-    --pull=newer \
-    --net=host \
-    --security-opt label=type:unconfined_t \
-    -v $(pwd)/iso.toml \
-    -v $(pwd)/output:/output \
-    -v /var/lib/containers/storage:/var/lib/containers/storage \
-    --entrypoint "" \
-    "${bib_image}" \
-    osbuild --store /store --output-directory /output /output/manifest-iso.json --export bootiso
-
-##########################
-#  'patch-iso-branding'  #
-##########################
-# Description:
-# creates a custom branded ISO image. As per https://docs.redhat.com/en/documentation/red_hat_enterprise_linux/7/html/anaconda_customization_guide/sect-iso-images#sect-product-img
-# Parameters:
-#   override: A flag to determine if the final ISO should replace the original ISO (default is 0).
-#   iso_path: The path to the original ISO file.
-# Runs a Podman container with Fedora image. Installs 'lorax' and 'mkksiso' tools inside the container. Creates a compressed 'product.img'
-# from the Brnading images in the 'iso_files' directory. Uses 'mkksiso' to add the 'product.img' to the original ISO and creates 'final.iso'
-# in the output directory. If 'override' is not 0, replaces the original ISO with the newly created 'final.iso'.
-
-# applies custom branding to an ISO image.
-patch-iso-branding override="0" iso_path="output/bootiso/install.iso":
-    #!/usr/bin/env bash
-    podman run \
-        --rm \
-        -it \
-        --pull=newer \
-        --privileged \
-        -v ./output:/output \
-        -v ./iso_files:/iso_files \
-        quay.io/centos/centos:stream10 \
-        bash -c 'dnf install -y lorax && \
-    	mkdir /images && cd /iso_files/product && find . | cpio -c -o | gzip -9cv > /images/product.img && cd / \
-            && mkksiso --add images --volid albacore-boot /{{ iso_path }} /output/final.iso'
-
-    if [ {{ override }} -ne 0 ] ; then
-        mv output/final.iso {{ iso_path }}
-    fi
 
 # Runs shell check on all Bash scripts
 lint:
@@ -533,44 +310,3 @@ lint:
 # Runs shfmt on all Bash scripts
 format:
     /usr/bin/find . -iname "*.sh" -type f -exec shfmt --write "{}" ';'
-
-run-bootc-libvirt $target_image=("localhost/" + image_name) $tag=default_tag $image_name=image_name:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    mkdir -p "output/"
-
-    # clean up previous builds
-    echo "Cleaning up previous build"
-    sudo if rm -rf "output/${image_name}_${tag}.raw" || true
-    mkdir -p "output/"
-
-     # build the disk image
-    truncate -s 20G output/${image_name}_${tag}.raw
-    # sudo if podman run \
-    # --rm --privileged \
-    # -v /var/lib/containers:/var/lib/containers \
-    # quay.io/centos-bootc/centos-bootc:stream10 \
-    # /usr/libexec/bootc-base-imagectl rechunk \
-    # ${target_image}:${tag} ${target_image}:re${tag}
-    sudo if podman run \
-    --pid=host --network=host --privileged \
-    --security-opt label=type:unconfined_t \
-    -v $(pwd)/output:/output:Z \
-    ${target_image}:${tag} bootc install to-disk --via-loopback --generic-image /output/${image_name}_${tag}.raw
-    QEMU_DISK_QCOW2=$(pwd)/output/${image_name}_${tag}.raw
-    # Run the VM using QEMU
-    echo "Running VM with QEMU using disk: ${QEMU_DISK_QCOW2}"
-    # Ensure the disk file exists
-    if [[ ! -f "${QEMU_DISK_QCOW2}" ]]; then
-        echo "Disk file ${QEMU_DISK_QCOW2} does not exist. Please build the image first."
-        exit 1
-    fi
-    sudo virt-install --os-variant almalinux9 --boot hd \
-        --name "${image_name}-${tag}" \
-        --memory 2048 \
-        --vcpus 2 \
-        --disk path="${QEMU_DISK_QCOW2}",format=raw,bus=scsi,discard=unmap \
-        --network bridge=virbr0,model=virtio \
-        --console pty,target_type=virtio \
-        --noautoconsole

@@ -2,6 +2,11 @@
 
 set -xeuo pipefail
 
+MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
+SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
+export SCRIPTS_PATH
+export MAJOR_VERSION_NUMBER
+
 IMAGE_REF="ostree-image-signed:docker://ghcr.io/${IMAGE_VENDOR}/${IMAGE_NAME}"
 IMAGE_INFO="/usr/share/ublue-os/image-info.json"
 IMAGE_FLAVOR="main"
@@ -12,13 +17,12 @@ cat >$IMAGE_INFO <<EOF
   "image-ref": "${IMAGE_REF}",
   "image-flavor": "${IMAGE_FLAVOR}",
   "image-vendor": "${IMAGE_VENDOR}",
-  "image-tag": "lts",
+  "image-tag": "latest",
   "centos-version": "${MAJOR_VERSION_NUMBER}"
 }
 EOF
 
-OLD_PRETTY_NAME="$(sh -c '. /usr/lib/os-release ; echo $NAME $VERSION')"
-IMAGE_PRETTY_NAME="Bluefin"
+IMAGE_PRETTY_NAME="Yellowfin"
 HOME_URL="https://projectbluefin.io"
 DOCUMENTATION_URL="https://docs.projectbluefin.io"
 SUPPORT_URL="https://github.com/ublue-os/bluefin-lts/issues/"
@@ -33,7 +37,7 @@ s/^VARIANT_ID=.*/VARIANT_ID=${IMAGE_NAME}/
 s/^PRETTY_NAME=.*/PRETTY_NAME=\"${IMAGE_PRETTY_NAME}\"/
 s|^HOME_URL=.*|HOME_URL=\"${HOME_URL}\"|
 s|^BUG_REPORT_URL=.*|BUG_REPORT_URL=\"${BUG_SUPPORT_URL}\"|
-s|^CPE_NAME=\"cpe:/o:centos:centos|CPE_NAME=\"cpe:/o:universal-blue:bluefin-lts|
+s|^CPE_NAME=\"cpe:/o:centos:centos|CPE_NAME=\"cpe:/o:jamesreilly:yellowfin-lts|
 
 /^REDHAT_BUGZILLA_PRODUCT=/d
 /^REDHAT_BUGZILLA_PRODUCT_VERSION=/d
@@ -44,6 +48,6 @@ EOF
 tee -a /usr/lib/os-release <<EOF
 DOCUMENTATION_URL="${DOCUMENTATION_URL}"
 SUPPORT_URL="${SUPPORT_URL}"
-DEFAULT_HOSTNAME="bluefin"
+DEFAULT_HOSTNAME="yellowfin"
 BUILD_ID="${SHA_HEAD_SHORT:-testing}"
 EOF

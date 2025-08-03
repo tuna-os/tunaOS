@@ -98,21 +98,25 @@ jobs:
                   MAJOR_VERSION="10"
                   BASE_IMAGE_TAG="10-kitten"
                   DESCRIPTION="🐠 Based on AlmaLinux Kitten 10"
+                  PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
                   ;;
                 albacore)
                   MAJOR_VERSION="10"
                   BASE_IMAGE_TAG="10"
                   DESCRIPTION="🐟 Based on AlmaLinux 10"
+                  PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
                   ;;
                 skipjack)
                   MAJOR_VERSION="10"
                   BASE_IMAGE_TAG="stream10"
                   DESCRIPTION="🏛️ Based on CentOS Stream 10"
+                  PLATFORMS="linux/arm64,linux/amd64"
                   ;;
                 bonito)
                   MAJOR_VERSION="42"
                   BASE_IMAGE_TAG="42"
                   DESCRIPTION="🎩 Based on Fedora 42"
+                  PLATFORMS="linux/arm64,linux/amd64"
                   ;;
               esac
               
@@ -133,7 +137,7 @@ jobs:
                 \"major_version\": \"${MAJOR_VERSION}\",
                 \"base_image_tag\": \"${BASE_IMAGE_TAG}\",
                 \"default_tag\": \"${TAG}\",
-                \"platforms\": \"linux/arm64,linux/amd64\",
+                \"platforms\": \"${PLATFORMS}\",
                 \"description\": \"${DESCRIPTION}\",
                 \"dx\": \"${DX}\",
                 \"gdx\": \"${GDX}\",

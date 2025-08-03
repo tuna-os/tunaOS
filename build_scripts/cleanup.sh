@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 
 set -xeuo pipefail
+printf "::group:: ===Image Cleanup===\n"
 
 # Image cleanup
 # Specifically called by build.sh
 
 # The compose repos we used during the build are point in time repos that are
 # not updated, so we don't want to leave them enabled.
-dnf config-manager --set-disabled baseos-compose,appstream-compose
+# dnf config-manager --set-disabled baseos-compose,appstream-compose
 
 dnf clean all
 
@@ -25,3 +26,5 @@ chmod 644 /usr/share/ublue-os/image-info.json
 
 # FIXME: use --fix option once https://github.com/containers/bootc/pull/1152 is merged
 bootc container lint --fatal-warnings || true
+
+printf "::endgroup::\n"

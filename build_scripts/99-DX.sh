@@ -4,6 +4,7 @@
 # Thus leading to silent failures
 
 set -eo pipefail
+printf "::group:: === DX/GDX ===\n"
 
 # Do not rely on any of these scripts existing in a specific path
 # Make the names as descriptive as possible and everything that uses dnf for package installation/removal should have `packages-` as a prefix.
@@ -41,10 +42,10 @@ copy_systemfiles_for() {
 	printf "::endgroup::\n"
 }
 
-CUSTOM_NAME="base"
-copy_systemfiles_for ../files
-run_buildscripts_for ..
-CUSTOM_NAME=""
+# CUSTOM_NAME="base"
+# copy_systemfiles_for ../files
+# run_buildscripts_for ..
+# CUSTOM_NAME=""
 
 copy_systemfiles_for "$(arch)"
 run_buildscripts_for "$(arch)"
@@ -62,3 +63,5 @@ if [ "$ENABLE_GDX" == "1" ]; then
 	copy_systemfiles_for "$(arch)-gdx"
 	run_buildscripts_for "$(arch)/gdx"
 fi
+
+printf "::endgroup::\n"
