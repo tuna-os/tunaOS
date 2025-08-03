@@ -137,7 +137,7 @@ build $target_image=image_name $tag=default_tag $dx="0" $gdx="0" $platform="linu
         .
 
 # Build yellowfin variant (AlmaLinux Kitten 10)
-build-yellowfin $tag="yellowfin-10" $dx="0" $gdx="0" $platform="linux/amd64":
+build-yellowfin $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
     just build yellowfin {{tag}} {{dx}} {{gdx}} {{platform}} yellowfin
 
 # Build albacore variant (AlmaLinux 10.0)
