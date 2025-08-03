@@ -14,8 +14,8 @@ on:
         options:
         - yellowfin
         - albacore
-        - bluefin
-        - bluefin-tuna
+        - skipjack
+        - bonito
         - all
       build_variant:
         description: 'Build variant (regular, dx, gdx, all)'
@@ -104,12 +104,12 @@ jobs:
                   BASE_IMAGE_TAG="10"
                   DESCRIPTION="🐟 Based on AlmaLinux 10"
                   ;;
-                bluefin)
+                skipjack)
                   MAJOR_VERSION="10"
                   BASE_IMAGE_TAG="stream10"
                   DESCRIPTION="🏛️ Based on CentOS Stream 10"
                   ;;
-                bluefin-tuna)
+                bonito)
                   MAJOR_VERSION="42"
                   BASE_IMAGE_TAG="42"
                   DESCRIPTION="🎩 Based on Fedora 42"
