@@ -105,7 +105,7 @@ build $target_image=image_name $tag=default_tag $dx="0" $gdx="0" $platform="linu
     case "${variant}" in
         "yellowfin")
             BASE_IMG="{{ base_image }}"
-            BASE_TAG="10"  # Using AlmaLinux 10 kitten (development)
+            BASE_TAG="10-kitten" 
             ;;
         "albacore")
             BASE_IMG="{{ base_image }}"
