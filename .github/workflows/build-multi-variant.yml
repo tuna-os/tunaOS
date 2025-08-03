@@ -13,13 +13,15 @@ on:
   workflow_dispatch:
     inputs:
       image_variant:
-        description: 'Image variant to build (yellowfin, albacore, all)'
+        description: 'Image variant to build (yellowfin, albacore, centos, fedora, all)'
         required: false
         default: 'all'
         type: choice
         options:
         - yellowfin
         - albacore
+        - centos
+        - fedora
         - all
       build_variant:
         description: 'Build variant (regular, dx, gdx, all)'
@@ -54,6 +56,9 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             if [[ "${{ inputs.image_variant }}" != "all" ]]; then
               IMAGE_VARIANTS="${{ inputs.image_variant }}"
+            else
+              # Include all variants when explicitly requested
+              IMAGE_VARIANTS="yellowfin albacore centos fedora"
             fi
           fi
           
@@ -102,8 +107,18 @@ jobs:
                   ;;
                 albacore)
                   MAJOR_VERSION="10"
-                  BASE_IMAGE_TAG="10.0"
-                  DESCRIPTION="🐟 Based on AlmaLinux 10.0"
+                  BASE_IMAGE_TAG="10"
+                  DESCRIPTION="🐟 Based on AlmaLinux 10"
+                  ;;
+                centos)
+                  MAJOR_VERSION="10"
+                  BASE_IMAGE_TAG="c10s"
+                  DESCRIPTION="🏛️ Based on CentOS Stream 10"
+                  ;;
+                fedora)
+                  MAJOR_VERSION="40"
+                  BASE_IMAGE_TAG="40"
+                  DESCRIPTION="🎩 Based on Fedora 40"
                   ;;
               esac
               

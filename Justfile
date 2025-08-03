@@ -4,7 +4,7 @@ export centos_version := env("CENTOS_VERSION", "10")
 export default_tag := env("DEFAULT_TAG", "a10-server")
 export bib_image := env("BIB_IMAGE", "quay.io/centos-bootc/bootc-image-builder:latest")
 
-# Image variant configuration
+# Base image configuration - supports multiple bootc-compatible images
 export base_image := env("BASE_IMAGE", "quay.io/almalinuxorg/almalinux-bootc")
 export base_image_tag := env("BASE_IMAGE_TAG", "10")
 
@@ -95,6 +95,12 @@ sudoif command *args:
 #
 
 # Build the image using the specified parameters
+# Supports multiple base images through variants:
+# - yellowfin: AlmaLinux Kitten 10 (development)
+# - albacore: AlmaLinux 10 (stable) 
+# - centos: CentOS Stream bootc
+# - fedora: Fedora bootc
+# - custom: Use BASE_IMAGE and BASE_IMAGE_TAG environment variables
 build $target_image=image_name $tag=default_tag $dx="0" $gdx="0" $platform="linux/amd64" $variant="albacore":
     #!/usr/bin/env bash
 
@@ -104,14 +110,23 @@ build $target_image=image_name $tag=default_tag $dx="0" $gdx="0" $platform="linu
     # Set base image based on variant
     case "${variant}" in
         "yellowfin")
-            BASE_IMG="{{ base_image }}"
-            BASE_TAG="10-kitten" 
+            BASE_IMG="quay.io/almalinuxorg/almalinux-bootc"
+            BASE_TAG="10-kitten"
             ;;
         "albacore")
-            BASE_IMG="{{ base_image }}"
-            BASE_TAG="10"  # Using AlmaLinux stable
+            BASE_IMG="quay.io/almalinuxorg/almalinux-bootc"
+            BASE_TAG="10"
             ;;
-        *)
+        "centos")
+            BASE_IMG="quay.io/centos-bootc/centos-bootc"
+            BASE_TAG="c10s"
+            ;;
+        "fedora")
+            BASE_IMG="quay.io/fedora/fedora-bootc"
+            BASE_TAG="40"
+            ;;
+        "custom"|*)
+            # Use environment variables for custom base images
             BASE_IMG="{{ base_image }}"
             BASE_TAG="{{ base_image_tag }}"
             ;;
@@ -144,10 +159,29 @@ build-yellowfin $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
 build-albacore $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
     just build albacore {{tag}} {{dx}} {{gdx}} {{platform}} albacore
 
-# Build all variants
+# Build CentOS Stream variant
+build-centos $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
+    just build centos-{{tag}} {{tag}} {{dx}} {{gdx}} {{platform}} centos
+
+# Build Fedora variant
+build-fedora $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
+    just build fedora-{{tag}} {{tag}} {{dx}} {{gdx}} {{platform}} fedora
+
+# Build with custom base image (uses BASE_IMAGE and BASE_IMAGE_TAG env vars)
+build-custom $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
+    just build custom-{{tag}} {{tag}} {{dx}} {{gdx}} {{platform}} custom
+
+# Build all main variants (AlmaLinux only for compatibility)
 build-all:
     just build-yellowfin
     just build-albacore
+
+# Build all available variants including additional distributions
+build-all-variants:
+    just build-yellowfin
+    just build-albacore
+    just build-centos
+    just build-fedora
 
 # Default variables mirroring the GitHub Action inputs
 # Override from the command line, e.g., just --set ref 'your/image'

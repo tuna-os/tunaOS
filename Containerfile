@@ -1,4 +1,5 @@
 ARG MAJOR_VERSION="${MAJOR_VERSION:-10}"
+# Base image configuration - supports any bootc-compatible image
 ARG BASE_IMAGE="${BASE_IMAGE:-quay.io/almalinuxorg/almalinux-bootc}"
 ARG BASE_IMAGE_TAG="${BASE_IMAGE_TAG:-10}"
 FROM scratch as context
@@ -8,6 +9,7 @@ COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 
 ARG MAJOR_VERSION="${MAJOR_VERSION:-10}"
+# Base image configuration - supports any bootc-compatible image  
 ARG BASE_IMAGE="${BASE_IMAGE:-quay.io/almalinuxorg/almalinux-bootc}"
 ARG BASE_IMAGE_TAG="${BASE_IMAGE_TAG:-10}"
 FROM ${BASE_IMAGE}:${BASE_IMAGE_TAG}
