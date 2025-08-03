@@ -1,12 +1,6 @@
 name: Build Multi-Variant Images
 
 on:
-  pull_request:
-    branches:
-      - main
-  push:
-    branches:
-      - main
   schedule:
     - cron: "0 1 * * TUE" # Every Tuesday at 1am UTC
   merge_group:
@@ -20,8 +14,8 @@ on:
         options:
         - yellowfin
         - albacore
-        - centos
-        - fedora
+        - bluefin
+        - bluefin-tuna
         - all
       build_variant:
         description: 'Build variant (regular, dx, gdx, all)'
@@ -58,7 +52,7 @@ jobs:
               IMAGE_VARIANTS="${{ inputs.image_variant }}"
             else
               # Include all variants when explicitly requested
-              IMAGE_VARIANTS="yellowfin albacore centos fedora"
+              IMAGE_VARIANTS="yellowfin albacore bluefin bluefin-tuna"
             fi
           fi
           
@@ -110,15 +104,15 @@ jobs:
                   BASE_IMAGE_TAG="10"
                   DESCRIPTION="🐟 Based on AlmaLinux 10"
                   ;;
-                centos)
+                bluefin)
                   MAJOR_VERSION="10"
-                  BASE_IMAGE_TAG="c10s"
+                  BASE_IMAGE_TAG="stream10"
                   DESCRIPTION="🏛️ Based on CentOS Stream 10"
                   ;;
-                fedora)
-                  MAJOR_VERSION="40"
-                  BASE_IMAGE_TAG="40"
-                  DESCRIPTION="🎩 Based on Fedora 40"
+                bluefin-tuna)
+                  MAJOR_VERSION="42"
+                  BASE_IMAGE_TAG="42"
+                  DESCRIPTION="🎩 Based on Fedora 42"
                   ;;
               esac
               
