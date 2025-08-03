@@ -5,6 +5,7 @@ export default_tag := env("DEFAULT_TAG", "a10-server")
 export bib_image := env("BIB_IMAGE", "quay.io/centos-bootc/bootc-image-builder:latest")
 
 # Base image configuration - supports multiple bootc-compatible images
+
 export base_image := env("BASE_IMAGE", "quay.io/almalinuxorg/almalinux-bootc")
 export base_image_tag := env("BASE_IMAGE_TAG", "10")
 
@@ -93,13 +94,13 @@ sudoif command *args:
 #
 # This will build an image 'albacore:a10-server' with DX and GDX enabled.
 #
-
 # Build the image using the specified parameters
 # Supports multiple base images through variants:
 # - yellowfin: AlmaLinux Kitten 10 (development)
-# - albacore: AlmaLinux 10 (stable) 
+# - albacore: AlmaLinux 10 (stable)
 # - skipjack: CentOS Stream bootc
 # - bonito: Fedora bootc
+
 # - custom: Use BASE_IMAGE and BASE_IMAGE_TAG environment variables
 build $target_image=image_name $tag=default_tag $dx="0" $gdx="0" $platform="linux/amd64" $variant="albacore":
     #!/usr/bin/env bash
@@ -157,23 +158,23 @@ build $target_image=image_name $tag=default_tag $dx="0" $gdx="0" $platform="linu
 
 # Build yellowfin variant (AlmaLinux Kitten 10)
 build-yellowfin $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
-    just build yellowfin {{tag}} {{dx}} {{gdx}} {{platform}} yellowfin
+    just build yellowfin {{ tag }} {{ dx }} {{ gdx }} {{ platform }} yellowfin
 
 # Build albacore variant (AlmaLinux 10.0)
 build-albacore $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
-    just build albacore {{tag}} {{dx}} {{gdx}} {{platform}} albacore
+    just build albacore {{ tag }} {{ dx }} {{ gdx }} {{ platform }} albacore
 
 # Build CentOS Stream variant
 build-skipjack $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
-    just build skipjack {{tag}} {{dx}} {{gdx}} {{platform}} skipjack
+    just build skipjack {{ tag }} {{ dx }} {{ gdx }} {{ platform }} skipjack
 
 # Build Fedora variant
 build-bonito $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
-    just build bonito {{tag}} {{dx}} {{gdx}} {{platform}} bonito
+    just build bonito {{ tag }} {{ dx }} {{ gdx }} {{ platform }} bonito
 
 # Build with custom base image (uses BASE_IMAGE and BASE_IMAGE_TAG env vars)
 build-custom $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
-    just build custom-{{tag}} {{tag}} {{dx}} {{gdx}} {{platform}} custom
+    just build custom-{{ tag }} {{ tag }} {{ dx }} {{ gdx }} {{ platform }} custom
 
 # Build all available variants including additional distributions
 build-all:
