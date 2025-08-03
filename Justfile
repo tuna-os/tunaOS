@@ -6,7 +6,7 @@ export bib_image := env("BIB_IMAGE", "quay.io/centos-bootc/bootc-image-builder:l
 
 # Image variant configuration
 export base_image := env("BASE_IMAGE", "quay.io/almalinuxorg/almalinux-bootc")
-export base_image_tag := env("BASE_IMAGE_TAG", "10.0")
+export base_image_tag := env("BASE_IMAGE_TAG", "10")
 
 alias build-vm := build-qcow2
 alias rebuild-vm := rebuild-qcow2
