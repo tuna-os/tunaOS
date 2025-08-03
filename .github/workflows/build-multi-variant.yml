@@ -97,7 +97,7 @@ jobs:
               case "$image_variant" in
                 yellowfin)
                   MAJOR_VERSION="10"
-                  BASE_IMAGE_TAG="10"
+                  BASE_IMAGE_TAG="10-kitten"
                   DESCRIPTION="🐠 Based on AlmaLinux Kitten 10"
                   ;;
                 albacore)
