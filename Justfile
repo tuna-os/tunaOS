@@ -141,7 +141,7 @@ build-yellowfin $tag="yellowfin-10" $dx="0" $gdx="0" $platform="linux/amd64":
     just build yellowfin {{tag}} {{dx}} {{gdx}} {{platform}} yellowfin
 
 # Build albacore variant (AlmaLinux 10.0)
-build-albacore $tag="albacore-10" $dx="0" $gdx="0" $platform="linux/amd64":
+build-albacore $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
     just build albacore {{tag}} {{dx}} {{gdx}} {{platform}} albacore
 
 # Build all variants
