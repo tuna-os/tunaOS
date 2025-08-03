@@ -32,6 +32,11 @@ on:
         required: false
         type: string
         default: "lts"
+      image-variant:
+        description: "The image variant to build (yellowfin, albacore, etc.)"
+        required: false
+        type: string
+        default: "albacore"
       rechunk:
         description: "Rechunk the build"
         required: false
@@ -130,6 +135,7 @@ jobs:
         env:
           FLAVOR: ${{ inputs.flavor }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          IMAGE_VARIANT: ${{ inputs.image-variant }}
           PLATFORM: ${{ matrix.platform }}
         run: |
           set -x
@@ -144,7 +150,7 @@ jobs:
             ENABLE_DX=1
           fi
 
-          sudo $just build "${IMAGE_NAME}" "${DEFAULT_TAG}" "${ENABLE_DX}" "${ENABLE_GDX}" "${PLATFORM}"
+          sudo $just build "${IMAGE_NAME}" "${DEFAULT_TAG}" "${ENABLE_DX}" "${ENABLE_GDX}" "${PLATFORM}" "${IMAGE_VARIANT}"
 
       - name: Setup Syft
         id: setup-syft
