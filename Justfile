@@ -17,7 +17,6 @@ default:
     @just --list
 
 # Check Just Syntax
-[group('Just')]
 check:
     #!/usr/bin/env bash
     find . -type f -name "*.just" | while read -r file; do
@@ -28,7 +27,6 @@ check:
     just --unstable --fmt --check -f Justfile
 
 # Fix Just Syntax
-[group('Just')]
 fix:
     #!/usr/bin/env bash
     find . -type f -name "*.just" | while read -r file; do
@@ -39,7 +37,6 @@ fix:
     just --unstable --fmt -f Justfile || { exit 1; }
 
 # Clean Repo
-[group('Utility')]
 clean:
     #!/usr/bin/env bash
     set -eoux pipefail
@@ -50,13 +47,11 @@ clean:
     rm -f output.env
 
 # Sudo Clean Repo
-[group('Utility')]
 [private]
 sudo-clean:
     sudo just clean
 
 # sudoif bash function
-[group('Utility')]
 [private]
 sudoif command *args:
     #!/usr/bin/env bash
@@ -110,11 +105,11 @@ build $target_image=image_name $tag=default_tag $dx="0" $gdx="0" $platform="linu
     case "${variant}" in
         "yellowfin")
             BASE_IMG="{{ base_image }}"
-            BASE_TAG="10.0"  # Using AlmaLinux 10.0 for kitten
+            BASE_TAG="10"  # Using AlmaLinux 10 kitten (development)
             ;;
         "albacore")
             BASE_IMG="{{ base_image }}"
-            BASE_TAG="10.0"
+            BASE_TAG="10.0"  # Using AlmaLinux 10.0 stable
             ;;
         *)
             BASE_IMG="{{ base_image }}"
@@ -346,27 +341,27 @@ _build-bib $target_image $tag $type $config:
 _rebuild-bib $target_image $tag $type $config: (build target_image tag) && (_build-bib target_image tag type config)
 
 # Build a QCOW2 virtual machine image
-[group('Build Virtal Machine Image')]
+
 build-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "qcow2" "image.toml")
 
 # Build a RAW virtual machine image
-[group('Build Virtal Machine Image')]
+
 build-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "raw" "image.toml")
 
 # Build an ISO virtual machine image
-[group('Build Virtal Machine Image')]
+
 build-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "iso" "iso.toml")
 
 # Rebuild a QCOW2 virtual machine image
-[group('Build Virtal Machine Image')]
+
 rebuild-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "qcow2" "image.toml")
 
 # Rebuild a RAW virtual machine image
-[group('Build Virtal Machine Image')]
+
 rebuild-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "raw" "image.toml")
 
 # Rebuild an ISO virtual machine image
-[group('Build Virtal Machine Image')]
+
 rebuild-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "iso" "iso.toml")
 
 # Run a virtual machine with the specified image type and configuration
@@ -413,19 +408,19 @@ _run-vm $target_image $tag $type $config:
     fg "%podman"
 
 # Run a virtual machine from a QCOW2 image
-[group('Run Virtal Machine')]
+
 run-vm-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_run-vm target_image tag "qcow2" "image.toml")
 
 # Run a virtual machine from a RAW image
-[group('Run Virtal Machine')]
+
 run-vm-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_run-vm target_image tag "raw" "image.toml")
 
 # Run a virtual machine from an ISO
-[group('Run Virtal Machine')]
+
 run-vm-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_run-vm target_image tag "iso" "iso.toml")
 
 # Run a virtual machine using systemd-vmspawn
-[group('Run Virtal Machine')]
+
 spawn-vm rebuild="0" type="qcow2" ram="6G":
     #!/usr/bin/env bash
 
