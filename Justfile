@@ -4,6 +4,10 @@ export centos_version := env("CENTOS_VERSION", "10")
 export default_tag := env("DEFAULT_TAG", "a10-server")
 export bib_image := env("BIB_IMAGE", "quay.io/centos-bootc/bootc-image-builder:latest")
 
+# Base image configuration - supports multiple bootc-compatible images
+export base_image := env("BASE_IMAGE", "quay.io/almalinuxorg/almalinux-bootc")
+export base_image_tag := env("BASE_IMAGE_TAG", "10")
+
 alias build-vm := build-qcow2
 alias rebuild-vm := rebuild-qcow2
 alias run-vm := run-vm-qcow2
@@ -13,7 +17,6 @@ default:
     @just --list
 
 # Check Just Syntax
-[group('Just')]
 check:
     #!/usr/bin/env bash
     find . -type f -name "*.just" | while read -r file; do
@@ -24,7 +27,6 @@ check:
     just --unstable --fmt --check -f Justfile
 
 # Fix Just Syntax
-[group('Just')]
 fix:
     #!/usr/bin/env bash
     find . -type f -name "*.just" | while read -r file; do
@@ -35,7 +37,6 @@ fix:
     just --unstable --fmt -f Justfile || { exit 1; }
 
 # Clean Repo
-[group('Utility')]
 clean:
     #!/usr/bin/env bash
     set -eoux pipefail
@@ -46,13 +47,11 @@ clean:
     rm -f output.env
 
 # Sudo Clean Repo
-[group('Utility')]
 [private]
 sudo-clean:
     sudo just clean
 
 # sudoif bash function
-[group('Utility')]
 [private]
 sudoif command *args:
     #!/usr/bin/env bash
@@ -96,11 +95,46 @@ sudoif command *args:
 #
 
 # Build the image using the specified parameters
-build $target_image=image_name $tag=default_tag $dx="0" $gdx="0" $platform="linux/amd64":
+# Supports multiple base images through variants:
+# - yellowfin: AlmaLinux Kitten 10 (development)
+# - albacore: AlmaLinux 10 (stable) 
+# - skipjack: CentOS Stream bootc
+# - bonito: Fedora bootc
+# - custom: Use BASE_IMAGE and BASE_IMAGE_TAG environment variables
+build $target_image=image_name $tag=default_tag $dx="0" $gdx="0" $platform="linux/amd64" $variant="albacore":
     #!/usr/bin/env bash
 
     # Get Version
     ver="${tag}-${centos_version}.$(date +%Y%m%d)"
+
+    # Set base image based on variant
+    case "${variant}" in
+        "yellowfin")
+            BASE_IMG="quay.io/almalinuxorg/almalinux-bootc"
+            BASE_TAG="10-kitten"
+            ;;
+        "albacore")
+            BASE_IMG="quay.io/almalinuxorg/almalinux-bootc"
+            BASE_TAG="10"
+            ;;
+        "skipjack")
+            BASE_IMG="quay.io/centos-bootc/centos-bootc"
+            BASE_TAG="stream10"
+            ;;
+        "bonito")
+            BASE_IMG="quay.io/fedora/fedora-bootc"
+            BASE_TAG="42"
+            ;;
+        "bonito-rawhide")
+            BASE_IMG="quay.io/fedora/fedora-bootc"
+            BASE_TAG="rawhide"
+            ;;
+        "custom"|*)
+            # Use environment variables for custom base images
+            BASE_IMG="{{ base_image }}"
+            BASE_TAG="{{ base_image_tag }}"
+            ;;
+    esac
 
     BUILD_ARGS=()
     BUILD_ARGS+=("--build-arg" "MAJOR_VERSION=${centos_version}")
@@ -108,6 +142,8 @@ build $target_image=image_name $tag=default_tag $dx="0" $gdx="0" $platform="linu
     BUILD_ARGS+=("--build-arg" "IMAGE_VENDOR=${repo_organization}")
     BUILD_ARGS+=("--build-arg" "ENABLE_DX=${dx}")
     BUILD_ARGS+=("--build-arg" "ENABLE_GDX=${gdx}")
+    BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${BASE_IMG}")
+    BUILD_ARGS+=("--build-arg" "BASE_IMAGE_TAG=${BASE_TAG}")
     if [[ -z "$(git status -s)" ]]; then
         BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=$(git rev-parse --short HEAD)")
     fi
@@ -118,6 +154,33 @@ build $target_image=image_name $tag=default_tag $dx="0" $gdx="0" $platform="linu
         --pull=newer \
         --tag "${target_image}:${tag}" \
         .
+
+# Build yellowfin variant (AlmaLinux Kitten 10)
+build-yellowfin $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
+    just build yellowfin {{tag}} {{dx}} {{gdx}} {{platform}} yellowfin
+
+# Build albacore variant (AlmaLinux 10.0)
+build-albacore $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
+    just build albacore {{tag}} {{dx}} {{gdx}} {{platform}} albacore
+
+# Build CentOS Stream variant
+build-skipjack $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
+    just build skipjack {{tag}} {{dx}} {{gdx}} {{platform}} skipjack
+
+# Build Fedora variant
+build-bonito $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
+    just build bonito {{tag}} {{dx}} {{gdx}} {{platform}} bonito
+
+# Build with custom base image (uses BASE_IMAGE and BASE_IMAGE_TAG env vars)
+build-custom $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
+    just build custom-{{tag}} {{tag}} {{dx}} {{gdx}} {{platform}} custom
+
+# Build all available variants including additional distributions
+build-all:
+    just build-yellowfin
+    just build-albacore
+    just build-centos
+    just build-fedora
 
 # Default variables mirroring the GitHub Action inputs
 # Override from the command line, e.g., just --set ref 'your/image'
@@ -311,27 +374,27 @@ _build-bib $target_image $tag $type $config:
 _rebuild-bib $target_image $tag $type $config: (build target_image tag) && (_build-bib target_image tag type config)
 
 # Build a QCOW2 virtual machine image
-[group('Build Virtal Machine Image')]
+
 build-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "qcow2" "image.toml")
 
 # Build a RAW virtual machine image
-[group('Build Virtal Machine Image')]
+
 build-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "raw" "image.toml")
 
 # Build an ISO virtual machine image
-[group('Build Virtal Machine Image')]
+
 build-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_build-bib target_image tag "iso" "iso.toml")
 
 # Rebuild a QCOW2 virtual machine image
-[group('Build Virtal Machine Image')]
+
 rebuild-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "qcow2" "image.toml")
 
 # Rebuild a RAW virtual machine image
-[group('Build Virtal Machine Image')]
+
 rebuild-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "raw" "image.toml")
 
 # Rebuild an ISO virtual machine image
-[group('Build Virtal Machine Image')]
+
 rebuild-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_rebuild-bib target_image tag "iso" "iso.toml")
 
 # Run a virtual machine with the specified image type and configuration
@@ -378,19 +441,19 @@ _run-vm $target_image $tag $type $config:
     fg "%podman"
 
 # Run a virtual machine from a QCOW2 image
-[group('Run Virtal Machine')]
+
 run-vm-qcow2 $target_image=("localhost/" + image_name) $tag=default_tag: && (_run-vm target_image tag "qcow2" "image.toml")
 
 # Run a virtual machine from a RAW image
-[group('Run Virtal Machine')]
+
 run-vm-raw $target_image=("localhost/" + image_name) $tag=default_tag: && (_run-vm target_image tag "raw" "image.toml")
 
 # Run a virtual machine from an ISO
-[group('Run Virtal Machine')]
+
 run-vm-iso $target_image=("localhost/" + image_name) $tag=default_tag: && (_run-vm target_image tag "iso" "iso.toml")
 
 # Run a virtual machine using systemd-vmspawn
-[group('Run Virtal Machine')]
+
 spawn-vm rebuild="0" type="qcow2" ram="6G":
     #!/usr/bin/env bash
 
