@@ -98,8 +98,8 @@ sudoif command *args:
 # Supports multiple base images through variants:
 # - yellowfin: AlmaLinux Kitten 10 (development)
 # - albacore: AlmaLinux 10 (stable) 
-# - centos: CentOS Stream bootc
-# - fedora: Fedora bootc
+# - skipjack: CentOS Stream bootc
+# - bonito: Fedora bootc
 # - custom: Use BASE_IMAGE and BASE_IMAGE_TAG environment variables
 build $target_image=image_name $tag=default_tag $dx="0" $gdx="0" $platform="linux/amd64" $variant="albacore":
     #!/usr/bin/env bash
@@ -117,13 +117,17 @@ build $target_image=image_name $tag=default_tag $dx="0" $gdx="0" $platform="linu
             BASE_IMG="quay.io/almalinuxorg/almalinux-bootc"
             BASE_TAG="10"
             ;;
-        "centos")
+        "skipjack")
             BASE_IMG="quay.io/centos-bootc/centos-bootc"
-            BASE_TAG="c10s"
+            BASE_TAG="stream10"
             ;;
-        "fedora")
+        "bonito")
             BASE_IMG="quay.io/fedora/fedora-bootc"
-            BASE_TAG="40"
+            BASE_TAG="42"
+            ;;
+        "bonito-rawhide")
+            BASE_IMG="quay.io/fedora/fedora-bootc"
+            BASE_TAG="rawhide"
             ;;
         "custom"|*)
             # Use environment variables for custom base images
@@ -160,24 +164,19 @@ build-albacore $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
     just build albacore {{tag}} {{dx}} {{gdx}} {{platform}} albacore
 
 # Build CentOS Stream variant
-build-centos $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
-    just build centos-{{tag}} {{tag}} {{dx}} {{gdx}} {{platform}} centos
+build-skipjack $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
+    just build skipjack {{tag}} {{dx}} {{gdx}} {{platform}} skipjack
 
 # Build Fedora variant
-build-fedora $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
-    just build fedora-{{tag}} {{tag}} {{dx}} {{gdx}} {{platform}} fedora
+build-bonito $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
+    just build bonito {{tag}} {{dx}} {{gdx}} {{platform}} bonito
 
 # Build with custom base image (uses BASE_IMAGE and BASE_IMAGE_TAG env vars)
 build-custom $tag="latest" $dx="0" $gdx="0" $platform="linux/amd64":
     just build custom-{{tag}} {{tag}} {{dx}} {{gdx}} {{platform}} custom
 
-# Build all main variants (AlmaLinux only for compatibility)
-build-all:
-    just build-yellowfin
-    just build-albacore
-
 # Build all available variants including additional distributions
-build-all-variants:
+build-all:
     just build-yellowfin
     just build-albacore
     just build-centos
