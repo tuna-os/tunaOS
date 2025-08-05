@@ -52,7 +52,7 @@ jobs:
               IMAGE_VARIANTS="${{ inputs.image_variant }}"
             else
               # Include all variants when explicitly requested
-              IMAGE_VARIANTS="yellowfin albacore bluefin bluefin-tuna"
+              IMAGE_VARIANTS="yellowfin albacore skipjack bonito"
             fi
           fi
           

@@ -35,7 +35,9 @@ dnf -y install --enablerepo=epel-multimedia \
 	gstreamer1-plugins-base \
 	lame \
 	lame-libs \
-	libjxl \
+	libjxl 
+
+if [ "${IMAGE_NAME}" != "albacore"]; then
 	ffmpegthumbnailer
 
 dnf swap -y coreutils-single coreutils
