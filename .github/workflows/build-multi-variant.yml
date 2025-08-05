@@ -1,6 +1,9 @@
 name: Build Multi-Variant Images
 
 on:
+  pull_request: 
+    branches:
+      - main
   schedule:
     - cron: "0 1 * * TUE" # Every Tuesday at 1am UTC
   merge_group:
@@ -20,7 +23,7 @@ on:
       build_variant:
         description: 'Build variant (regular, dx, gdx, all)'
         required: false
-        default: 'regular'
+        default: 'all'
         type: choice
         options:
         - regular
