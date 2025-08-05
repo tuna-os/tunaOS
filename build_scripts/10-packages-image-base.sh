@@ -19,8 +19,11 @@ export MAJOR_VERSION_NUMBER
 dnf -y install 'dnf-command(versionlock)'
 dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
 
-dnf -y install "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${MAJOR_VERSION_NUMBER}.noarch.rpm"
-dnf config-manager --set-enabled crb
+
+if [ "${IMAGE_NAME}" != "bonito" ]; then
+	dnf install -y epel-release
+	dnf config-manager --set-enabled crb
+fi
 
 # Multimidia codecs
 dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
@@ -37,8 +40,7 @@ dnf -y install --enablerepo=epel-multimedia \
 	lame-libs \
 	libjxl 
 
-if [ "${IMAGE_NAME}" != "albacore"]; then
-	ffmpegthumbnailer
+
 
 dnf swap -y coreutils-single coreutils
 
