@@ -315,6 +315,8 @@ jobs:
     steps:
       - name: Install dependencies
         run: |
+          apk update
+          # Install necessary packages for building and pushing the image
           apk add jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++
           ln -sf /bin/bash /bin/sh
           mkdir -p /etc/containers
