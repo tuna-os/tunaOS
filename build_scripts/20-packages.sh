@@ -19,7 +19,7 @@ dnf -y install \
 	distrobox \
 	fastfetch \
 	fpaste \
-	gnome-shell-extension-{appindicator,dash-to-dock,blur-my-shell,caffeine} \
+	gnome-shell-extension-{appindicator,dash-to-dock,blur-my-shell} \
 	just \
 	powertop \
 	tuned-ppd \
@@ -31,6 +31,14 @@ dnf -y install \
 	buildah \
 	btrfs-progs \
     xhost
+
+if [ "${IMAGE_NAME}" == "albacore" ]; then
+	dnf install -y https://kojipkgs.fedoraproject.org//packages/gnome-shell-extension-caffeine/56/1.el10_1/noarch/gnome-shell-extension-caffeine-56-1.el10_1.noarch.rpm
+fi
+
+if [ "${IMAGE_NAME}" != "albacore" ]; then
+	dnf install -y gnome-shell-extension-caffeine
+fi
 
 # Everything that depends on external repositories should be after this.
 # Make sure to set them as disabled and enable them only when you are going to use their packages.
