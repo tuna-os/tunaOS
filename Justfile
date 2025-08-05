@@ -101,7 +101,7 @@ sudoif command *args:
 # - bonito: Fedora bootc
 
 # - custom: Use BASE_IMAGE and BASE_IMAGE_TAG environment variables
-build $target_image=image_name $tag=default_tag $dx="0" $gdx="0" $platform="linux/amd64" $variant="albacore":
+build $target_image=image_name $tag=default_tag $dx="0" $gdx="0" $platform="linux/amd64" $variant="albacore" $chain_base_image="":
     #!/usr/bin/env bash
 
     # Get Version
@@ -144,6 +144,12 @@ build $target_image=image_name $tag=default_tag $dx="0" $gdx="0" $platform="linu
     BUILD_ARGS+=("--build-arg" "ENABLE_GDX=${gdx}")
     BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${BASE_IMG}")
     BUILD_ARGS+=("--build-arg" "BASE_IMAGE_TAG=${BASE_TAG}")
+    
+    # Add CHAIN_BASE_IMAGE if specified for chained builds
+    if [[ -n "${chain_base_image}" ]]; then
+        BUILD_ARGS+=("--build-arg" "CHAIN_BASE_IMAGE=${chain_base_image}")
+    fi
+    
     if [[ -z "$(git status -s)" ]]; then
         BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=$(git rev-parse --short HEAD)")
     fi
