@@ -58,6 +58,11 @@ on:
         type: boolean
         # default: ${{ github.event_name != 'pull_request' }}
         default: true
+      chain-base-image:
+        description: "Base image to use for chained builds (instead of OS base image)"
+        required: false
+        type: string
+        default: ""
     secrets:
       SIGNING_SECRET:
         description: "The private key used to sign the image"
@@ -137,6 +142,7 @@ jobs:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
           IMAGE_VARIANT: ${{ inputs.image-variant }}
           PLATFORM: ${{ matrix.platform }}
+          CHAIN_BASE_IMAGE: ${{ inputs.chain-base-image }}
         run: |
           set -x
           just=$(which just)
@@ -150,7 +156,7 @@ jobs:
             ENABLE_DX=1
           fi
 
-          sudo $just build "${IMAGE_NAME}" "${DEFAULT_TAG}" "${ENABLE_DX}" "${ENABLE_GDX}" "${PLATFORM}" "${IMAGE_VARIANT}"
+          sudo $just build "${IMAGE_NAME}" "${DEFAULT_TAG}" "${ENABLE_DX}" "${ENABLE_GDX}" "${PLATFORM}" "${IMAGE_VARIANT}" "${CHAIN_BASE_IMAGE}"
 
       - name: Setup Syft
         id: setup-syft

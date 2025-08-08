@@ -1,6 +1,9 @@
 name: Build Multi-Variant Images
 
 on:
+  pull_request: 
+    branches:
+      - main
   schedule:
     - cron: "0 1 * * TUE" # Every Tuesday at 1am UTC
   merge_group:
@@ -20,7 +23,7 @@ on:
       build_variant:
         description: 'Build variant (regular, dx, gdx, all)'
         required: false
-        default: 'regular'
+        default: 'all'
         type: choice
         options:
         - regular
@@ -33,7 +36,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # Generate build matrix for multi-variant builds
+  # Generate build matrix for image variants
   generate_matrix:
     runs-on: ubuntu-latest
     outputs:
@@ -42,7 +45,7 @@ jobs:
       - name: Checkout for config
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
         
-      - name: Generate multi-variant build matrix
+      - name: Generate image variant build matrix
         id: set-matrix
         run: |
           # Determine which image variants to build
@@ -56,103 +59,73 @@ jobs:
             fi
           fi
           
-          # Determine which build variants to build
-          BUILD_VARIANTS="regular"
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            if [[ "${{ inputs.build_variant }}" == "all" ]]; then
-              BUILD_VARIANTS="regular dx gdx"
-            elif [[ "${{ inputs.build_variant }}" != "regular" ]]; then
-              BUILD_VARIANTS="${{ inputs.build_variant }}"
-            fi
-          elif [[ "${{ github.event_name }}" != "pull_request" ]]; then
-            # For scheduled/push builds, build all variants
-            BUILD_VARIANTS="regular dx gdx"
-          fi
-          
           # Generate matrix
           MATRIX="{\"include\":[]}"
           for image_variant in $IMAGE_VARIANTS; do
-            for build_variant in $BUILD_VARIANTS; do
-              # Set variant-specific values
-              case "$build_variant" in
-                regular)
-                  VARIANT_SUFFIX=""
-                  DX="0"
-                  GDX="0"
-                  ;;
-                dx)
-                  VARIANT_SUFFIX="-dx"
-                  DX="1"
-                  GDX="0"
-                  ;;
-                gdx)
-                  VARIANT_SUFFIX="-gdx"
-                  DX="0"
-                  GDX="1"
-                  ;;
-              esac
-              
-              # Set image-specific values
-              case "$image_variant" in
-                yellowfin)
-                  MAJOR_VERSION="10"
-                  BASE_IMAGE_TAG="10-kitten"
-                  DESCRIPTION="🐠 Based on AlmaLinux Kitten 10"
-                  PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
-                  ;;
-                albacore)
-                  MAJOR_VERSION="10"
-                  BASE_IMAGE_TAG="10"
-                  DESCRIPTION="🐟 Based on AlmaLinux 10"
-                  PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
-                  ;;
-                skipjack)
-                  MAJOR_VERSION="10"
-                  BASE_IMAGE_TAG="stream10"
-                  DESCRIPTION="🏛️ Based on CentOS Stream 10"
-                  PLATFORMS="linux/arm64,linux/amd64"
-                  ;;
-                bonito)
-                  MAJOR_VERSION="42"
-                  BASE_IMAGE_TAG="42"
-                  DESCRIPTION="🎩 Based on Fedora 42"
-                  PLATFORMS="linux/arm64,linux/amd64"
-                  ;;
-              esac
-              
-              # Determine image name and tag
-              if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-                IMAGE_NAME="pr-${{ github.event.pull_request.number }}-${image_variant}${VARIANT_SUFFIX}"
-                TAG="pr-${{ github.event.pull_request.number }}"
-              else
-                IMAGE_NAME="${image_variant}${VARIANT_SUFFIX}"
-                TAG="${MAJOR_VERSION}"
-              fi
-              
-              # Add to matrix
-              MATRIX="$(echo "${MATRIX}" | jq ".include += [{
-                \"image_variant\": \"${image_variant}\",
-                \"build_variant\": \"${build_variant}\",
-                \"image_name\": \"${IMAGE_NAME}\",
-                \"major_version\": \"${MAJOR_VERSION}\",
-                \"base_image_tag\": \"${BASE_IMAGE_TAG}\",
-                \"default_tag\": \"${TAG}\",
-                \"platforms\": \"${PLATFORMS}\",
-                \"description\": \"${DESCRIPTION}\",
-                \"dx\": \"${DX}\",
-                \"gdx\": \"${GDX}\",
-                \"rechunk\": ${{ github.event_name != 'pull_request' }},
-                \"sbom\": ${{ github.event_name != 'pull_request' }},
-                \"publish\": ${{ github.event_name != 'pull_request' }}
-              }]")"
-            done
+            # Set image-specific values
+            case "$image_variant" in
+              yellowfin)
+                MAJOR_VERSION="10"
+                BASE_IMAGE_TAG="10-kitten"
+                DESCRIPTION="🐠 Based on AlmaLinux Kitten 10"
+                PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
+                ;;
+              albacore)
+                MAJOR_VERSION="10"
+                BASE_IMAGE_TAG="10"
+                DESCRIPTION="🐟 Based on AlmaLinux 10"
+                PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
+                ;;
+              skipjack)
+                MAJOR_VERSION="10"
+                BASE_IMAGE_TAG="stream10"
+                DESCRIPTION="🏛️ Based on CentOS Stream 10"
+                PLATFORMS="linux/arm64,linux/amd64"
+                ;;
+              bonito)
+                MAJOR_VERSION="42"
+                BASE_IMAGE_TAG="42"
+                DESCRIPTION="🎩 Based on Fedora 42"
+                PLATFORMS="linux/arm64,linux/amd64"
+                ;;
+            esac
+            
+            # Determine image name and tag
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              IMAGE_NAME="pr-${{ github.event.pull_request.number }}-${image_variant}"
+              TAG="pr-${{ github.event.pull_request.number }}"
+            else
+              IMAGE_NAME="${image_variant}"
+              TAG="${MAJOR_VERSION}"
+            fi
+            
+            # Add to matrix
+            MATRIX="$(echo "${MATRIX}" | jq ".include += [{
+              \"image_variant\": \"${image_variant}\",
+              \"image_name\": \"${IMAGE_NAME}\",
+              \"major_version\": \"${MAJOR_VERSION}\",
+              \"base_image_tag\": \"${BASE_IMAGE_TAG}\",
+              \"default_tag\": \"${TAG}\",
+              \"platforms\": \"${PLATFORMS}\",
+              \"description\": \"${DESCRIPTION}\",
+              \"rechunk\": ${{ github.event_name != 'pull_request' }},
+              \"sbom\": ${{ github.event_name != 'pull_request' }},
+              \"publish\": true
+            }]")"
           done
           
           echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
 
-  # Build images using the reusable workflow
-  build:
+  # Build regular images (base for chaining)
+  build-regular:
     needs: generate_matrix
+    # Only run if regular or all variants are requested
+    if: |
+      github.event_name != 'workflow_dispatch' ||
+      inputs.build_variant == 'regular' ||
+      inputs.build_variant == 'all' ||
+      inputs.build_variant == 'dx' ||
+      inputs.build_variant == 'gdx'
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
@@ -162,10 +135,63 @@ jobs:
       image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }}
       image-variant: ${{ matrix.image_variant }}
-      flavor: ${{ matrix.build_variant }}
+      flavor: regular
       platforms: ${{ matrix.platforms }}
       major-version: ${{ matrix.major_version }}
       default-tag: ${{ matrix.default_tag }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ matrix.publish }}
+
+  # Build DX images (chain from regular)
+  build-dx:
+    needs: [generate_matrix, build-regular]
+    # Only run if dx or all variants are requested
+    if: |
+      (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
+      inputs.build_variant == 'dx' ||
+      inputs.build_variant == 'all' ||
+      inputs.build_variant == 'gdx'
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}-dx
+      image-desc: ${{ matrix.description }} DX
+      image-variant: ${{ matrix.image_variant }}
+      flavor: dx
+      platforms: ${{ matrix.platforms }}
+      major-version: ${{ matrix.major_version }}
+      default-tag: ${{ matrix.default_tag }}
+      rechunk: ${{ matrix.rechunk }}
+      sbom: ${{ matrix.sbom }}
+      publish: ${{ github.event_name != 'pull_request' }}
+      chain-base-image: ${{ format('ghcr.io/{0}/{1}:{2}', github.repository_owner, matrix.image_name, matrix.default_tag) }}
+
+  # Build GDX images (chain from DX)
+  build-gdx:
+    needs: [generate_matrix, build-dx]
+    # Only run if gdx or all variants are requested
+    if: |
+      (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
+      inputs.build_variant == 'gdx' ||
+      inputs.build_variant == 'all'
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}-gdx
+      image-desc: ${{ matrix.description }} GDX
+      image-variant: ${{ matrix.image_variant }}
+      flavor: gdx
+      platforms: ${{ matrix.platforms }}
+      major-version: ${{ matrix.major_version }}
+      default-tag: ${{ matrix.default_tag }}
+      rechunk: ${{ matrix.rechunk }}
+      sbom: ${{ matrix.sbom }}
+      publish: ${{ github.event_name != 'pull_request' }}
+      chain-base-image: ${{ format('ghcr.io/{0}/{1}-dx:{2}', github.repository_owner, matrix.image_name, matrix.default_tag) }}
