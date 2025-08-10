@@ -29,6 +29,8 @@ SUPPORT_URL="https://github.com/ublue-os/bluefin-lts/issues/"
 BUG_SUPPORT_URL="https://github.com/ublue-os/bluefin-lts/issues/"
 CODE_NAME="Achillobator"
 
+chmod 644 $IMAGE_INFO
+
 # OS Release File (changed in order with upstream)
 sed -i -f - /usr/lib/os-release <<EOF
 s/^NAME=.*/NAME=\"${IMAGE_PRETTY_NAME}\"/
