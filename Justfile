@@ -34,7 +34,6 @@ fix:
     echo "Checking syntax: Justfile"
     just --unstable --fmt -f Justfile || { exit 1; }
 
-
 # ==============================================================================
 #  BUILD PIPELINE
 # ==============================================================================
@@ -65,6 +64,7 @@ _build target_tag final_image_name container_file base_image_for_build image_bra
 
 # --- LOCAL Build Pipeline ---
 # Assumes 'variant' and 'image_name' are the same.
+
 # Usage: just build <variant> [flavor]
 build variant='albacore' flavor='regular' *args:
     #!/usr/bin/env bash
@@ -116,6 +116,7 @@ build variant='albacore' flavor='regular' *args:
 
 # --- CI Build Pipeline (for GitHub Actions) ---
 # Separates 'image_name' (the final tag) from 'variant' (the base OS).
+
 # Usage: just ci-build <image_name> <variant> [flavor]
 ci-build variant='albacore' flavor='regular' platform='linux/amd64' *args:
     #!/usr/bin/env bash
