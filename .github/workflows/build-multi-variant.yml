@@ -29,11 +29,7 @@ on:
         - regular
         - regular,dx
         - regular,dx,gdx
-      default_tag:
-        description: 'Default tag for the images'
-        required: false
-        default: 'latest'
-        type: string
+
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ inputs.image_variant || 'auto' }}-${{ inputs.build_variant || 'auto' }}
@@ -99,7 +95,7 @@ jobs:
               TAG="pr-${{ github.event.pull_request.number }}"
             else
               IMAGE_NAME="${image_variant}"
-              TAG="${{ inputs.default_tag }}"
+              TAG="${{ (github.ref_name == 'main' && github.event_name != 'pull_request' && github.event_name != 'workflow_dispatch') && 'latest' || github.sha }}"
             fi
             
             # Add to matrix
