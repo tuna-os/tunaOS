@@ -52,7 +52,7 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             if [[ "${{ inputs.image_variant }}" != "all" ]]; then
               IMAGE_VARIANTS="${{ inputs.image_variant }}"
-            elseif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
               # For PRs, default to yellowfin and albacore
               IMAGE_VARIANTS="yellowfin albacore"
             else
