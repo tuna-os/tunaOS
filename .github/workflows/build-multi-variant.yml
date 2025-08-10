@@ -90,11 +90,11 @@ jobs:
             
             # Determine image name and tag
             if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-              IMAGE_NAME="pr-${{ github.event.pull_request.number }}-${image_variant}"
+              IMAGE_NAME="${image_variant}"
               TAG="pr-${{ github.event.pull_request.number }}"
             else
               IMAGE_NAME="${image_variant}"
-              TAG="${MAJOR_VERSION}"
+              TAG="${{ inputs.default_tag }}"
             fi
             
             # Add to matrix
