@@ -2,7 +2,7 @@ ARG MAJOR_VERSION="${MAJOR_VERSION:-10}"
 ARG BASE_IMAGE="${BASE_IMAGE:-quay.io/almalinuxorg/almalinux-bootc}"
 ARG BASE_IMAGE_TAG="${BASE_IMAGE_TAG:-10}"
 
-# For chained builds, allows specifying a pre-built image as base instead of the OS base
+# For chained builds of DX/GDX, allows specifying a pre-built image as base instead of the OS base
 ARG CHAIN_BASE_IMAGE="${CHAIN_BASE_IMAGE:-}"
 
 FROM scratch as context
@@ -12,6 +12,8 @@ COPY build_scripts /build_scripts
 
 # If CHAIN_BASE_IMAGE is provided, use it; otherwise use the original base image
 FROM ${CHAIN_BASE_IMAGE:-${BASE_IMAGE}:${BASE_IMAGE_TAG}}
+
+RUN mkdir -p /opt
 
 ARG ENABLE_DX="${ENABLE_DX:-0}"
 ARG ENABLE_GDX="${ENABLE_GDX:-0}"
