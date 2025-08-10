@@ -2,6 +2,8 @@
 
 set -xeuo pipefail
 
+printf "::group:: === 20 Packages ===\n"
+
 MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
 SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
 export SCRIPTS_PATH
@@ -103,3 +105,5 @@ dnf -y remove gnome-shell-extension-blur-my-shell
 # the homebrew package getting updated through our builds.
 # We could get some kind of static binary for GCC but this is the cleanest and most tested alternative. This Sucks.
 dnf -y --setopt=install_weak_deps=False install gcc
+
+printf "::endgroup::\n"

@@ -1,0 +1,19 @@
+ARG BASE_IMAGE
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG SHA_HEAD_SHORT
+
+FROM scratch as context
+COPY system_files /files
+COPY system_files_overrides /overrides
+COPY build_scripts /build_scripts
+
+FROM ${BASE_IMAGE}
+
+# Choose the appropriate build script based on whether this is a chained build
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/var \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+    IMAGE_NAME=${IMAGE_NAME} /run/context/build_scripts/GDX.sh
+

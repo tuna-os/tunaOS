@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -xeuo pipefail
+printf "::group:: === 10 Base Packages ===\n"
 
 MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
 SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
@@ -20,10 +21,9 @@ dnf -y install 'dnf-command(versionlock)'
 dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
 
 
-if [ "${IMAGE_NAME}" != "bonito" ]; then
+if [ $(rpm -E %fedora) == "%fedora" ]; then
 	dnf install -y epel-release
 	dnf config-manager --set-enabled crb
-fi
 
 # Multimidia codecs
 dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
@@ -38,15 +38,16 @@ dnf -y install \
 	lame \
 	lame-libs \
 	libjxl 
+fi
 
+if [ $(rpm -E %almalinux) -ge 9 ]; then
+	dnf swap -y coreutils-single coreutils
+fi
 
-
-dnf swap -y coreutils-single coreutils
-
-# Gnome 48 Backport
-dnf -y copr enable jreilly1821/c10s-gnome-48
-dnf -y copr enable jreilly1821/packages
-
+if [ $(rpm -E %rhel) -ge 10 ]; then
+	dnf -y copr enable jreilly1821/c10s-gnome-48
+	dnf -y copr enable jreilly1821/packages
+fi
 
 # `dnf group info Workstation` without GNOME
 dnf group install -y --nobest \
@@ -108,3 +109,5 @@ dnf -y install \
 
 # This package adds "[systemd] Failed Units: *" to the bashrc startup
 dnf -y remove console-login-helper-messages
+
+printf "::endgroup::\n"

@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -xeuo pipefail
+set -eo pipefail
+printf "::group:: === 00-workarounds ===\n"
 
 MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
 SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
@@ -18,3 +19,6 @@ rm -f /usr/lib/bootc/install/20-rhel.toml
 # 	-e "s@\(baseos\|appstream\)@&-compose@" \
 # 	/etc/yum.repos.d/compose.repo
 # cat /etc/yum.repos.d/compose.repo
+
+printf "::endgroup::\n"
+
