@@ -4,6 +4,7 @@ export repo_organization := env("GITHUB_REPOSITORY_OWNER", "tuna-os")
 export image_name := env("IMAGE_NAME", "albacore")
 export default_tag := env("DEFAULT_TAG", "latest")
 export bib_image := env("BIB_IMAGE", "quay.io/centos-bootc/bootc-image-builder:latest")
+just := just_executable()
 
 # --- Default Base Image (for 'regular' flavor builds) ---
 
@@ -12,7 +13,7 @@ export base_image_tag := env("BASE_IMAGE_TAG", "10")
 
 [private]
 default:
-    @just --list
+    @{{ just }} --list
 
 # Check Just Syntax
 check:
