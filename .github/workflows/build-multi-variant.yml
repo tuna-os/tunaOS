@@ -29,6 +29,11 @@ on:
         - regular
         - regular,dx
         - regular,dx,gdx
+      default_tag:
+        description: 'Default tag for the images'
+        required: false
+        default: 'latest'
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ inputs.image_variant || 'auto' }}-${{ inputs.build_variant || 'auto' }}
