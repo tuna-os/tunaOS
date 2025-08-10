@@ -144,7 +144,8 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
         run: |
           set -x
-          sudo just ci-build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}"  
+          just=$(which just)
+          sudo "$just" ci-build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}"
 
       - name: Setup Syft
         id: setup-syft
