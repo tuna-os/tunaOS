@@ -96,13 +96,7 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="false" i
 
     case "{{ flavor }}" in
         "regular")
-            case "{{ variant }}" in
-                "yellowfin"|"almalinux-kitten") BASE_FOR_BUILD="quay.io/almalinuxorg/almalinux-bootc:10-kitten" ;;
-                "albacore"|"almalinux")        BASE_FOR_BUILD="quay.io/almalinuxorg/almalinux-bootc:10" ;;
-                "skipjack"|"centos"|"lts")     BASE_FOR_BUILD="quay.io/centos-bootc/centos-bootc:stream10" ;;
-                "bonito"|"fedora"|"bluefin")   BASE_FOR_BUILD="quay.io/fedora/fedora-bootc:42" ;;
-                "bonito-rawhide"|"rawhide")    BASE_FOR_BUILD="quay.io/fedora/fedora-bootc:rawhide" ;;
-            esac
+            BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
             ;;
         "dx")
             if [[ "{{ is_ci }}" = "true" ]]; then

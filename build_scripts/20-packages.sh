@@ -4,18 +4,14 @@ set -xeuo pipefail
 
 printf "::group:: === 20 Packages ===\n"
 
-MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
-SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
-export SCRIPTS_PATH
-export MAJOR_VERSION_NUMBER
+source /run/context/build_scripts/lib.sh
 
-dnf -y remove \
-	setroubleshoot
+# Remove conflicting packages
+dnf -y remove setroubleshoot
 
+# Install base packages
 dnf -y install \
 	-x gnome-extensions-app \
-	almalinux-backgrounds \
-	almalinux-logos \
 	system-reinstall-bootc \
 	gnome-disk-utility \
 	distrobox \
@@ -34,30 +30,34 @@ dnf -y install \
 	btrfs-progs \
 	xhost
 
-if [ "${IMAGE_NAME}" == "albacore" ]; then
-	dnf install -y https://kojipkgs.fedoraproject.org//packages/gnome-shell-extension-caffeine/56/1.el10_1/noarch/gnome-shell-extension-caffeine-56-1.el10_1.noarch.rpm
+# Install OS-specific branding
+if is_fedora; then
+    dnf -y install fedora-logos
+else
+    dnf -y install almalinux-backgrounds almalinux-logos
 fi
 
-if [ "${IMAGE_NAME}" != "albacore" ]; then
+# Install caffeine extension
+if [ "${IMAGE_NAME}" == "albacore" ]; then
+	dnf install -y https://kojipkgs.fedoraproject.org//packages/gnome-shell-extension-caffeine/56/1.el10_1/noarch/gnome-shell-extension-caffeine-56-1.el10_1.noarch.rpm
+else
 	dnf install -y gnome-shell-extension-caffeine
 fi
 
 # Everything that depends on external repositories should be after this.
-# Make sure to set them as disabled and enable them only when you are going to use their packages.
-# We do, however, leave crb and EPEL enabled by default.
 
 # Tailscale
-dnf config-manager --add-repo "https://pkgs.tailscale.com/stable/centos/${MAJOR_VERSION_NUMBER}/tailscale.repo"
+if is_fedora; then
+    dnf config-manager --add-repo "https://pkgs.tailscale.com/stable/fedora/tailscale.repo"
+else
+    dnf config-manager --add-repo "https://pkgs.tailscale.com/stable/centos/${MAJOR_VERSION_NUMBER}/tailscale.repo"
+fi
 dnf config-manager --set-disabled "tailscale-stable"
 # FIXME: tailscale EPEL10 request: https://bugzilla.redhat.com/show_bug.cgi?id=2349099
-dnf -y --enablerepo "tailscale-stable" install \
-	tailscale
+dnf -y --enablerepo "tailscale-stable" install tailscale
 
-dnf -y copr enable ublue-os/packages
-dnf -y copr disable ublue-os/packages
-
-# Yellowfin Branding and tools
-dnf -y --enablerepo copr:copr.fedorainfracloud.org:ublue-os:packages install \
+# ublue-os packages
+install_from_copr ublue-os/packages \
 	ublue-os-just \
 	ublue-os-luks \
 	ublue-os-signing \
@@ -69,35 +69,32 @@ dnf -y --enablerepo copr:copr.fedorainfracloud.org:ublue-os:packages install \
 
 # Upstream ublue-os-signing bug, we are using /usr/etc for the container signing and bootc gets mad at this
 # FIXME: remove this once https://github.com/ublue-os/packages/issues/245 is closed
-cp -avf /usr/etc/. /etc
-rm -rvf /usr/etc
+if [ -d /usr/etc ]; then
+    cp -avf /usr/etc/. /etc
+    rm -rvf /usr/etc
+fi
 
-# GNOME Extensions no in EPEL
-dnf -y copr enable ublue-os/staging
-dnf -y copr disable ublue-os/staging
+# Extra GNOME Extensions
 # FIXME: gsconnect EPEL10 request: https://bugzilla.redhat.com/show_bug.cgi?id=2349097
-dnf -y --enablerepo copr:copr.fedorainfracloud.org:ublue-os:staging install \
-	gnome-shell-extension-{search-light,logo-menu,gsconnect}
+install_from_copr ublue-os/staging gnome-shell-extension-{search-light,logo-menu,gsconnect}
 
 # Nerd Fonts
-dnf -y copr enable che/nerd-fonts "centos-stream-${MAJOR_VERSION_NUMBER}-$(arch)"
-dnf -y copr disable che/nerd-fonts
-dnf -y --enablerepo "copr:copr.fedorainfracloud.org:che:nerd-fonts" install \
-	nerd-fonts
+install_from_copr che/nerd-fonts nerd-fonts
 
 # MoreWaita icon theme
-dnf -y copr enable trixieua/morewaita-icon-theme
-dnf -y copr disable trixieua/morewaita-icon-theme
-dnf -y --enablerepo "copr:copr.fedorainfracloud.org:trixieua:morewaita-icon-theme" install \
-	morewaita-icon-theme
+install_from_copr trixieua/morewaita-icon-theme morewaita-icon-theme
 
-# GNOME 48: EPEL version of blur-my-shell is incompatible
-dnf -y remove gnome-shell-extension-blur-my-shell
+# GNOME version specific workarounds
+GNOME_VERSION=$(gnome-shell --version | cut -d ' ' -f 3 | cut -d '.' -f 1)
+if [ "$GNOME_VERSION" -ge 48 ]; then
+    # GNOME 48: EPEL version of blur-my-shell is incompatible
+    dnf -y remove gnome-shell-extension-blur-my-shell
 
-# GNOME 48: force update xdg-desktop-portal
-# dnf -y install \
-# 	xdg-desktop-portal \
-# 	xdg-desktop-portal-gnome
+    # GNOME 48: force update xdg-desktop-portal
+    # dnf -y install \
+    # 	xdg-desktop-portal \
+    # 	xdg-desktop-portal-gnome
+fi
 
 # This is required so homebrew works indefinitely.
 # Symlinking it makes it so whenever another GCC version gets released it will break if the user has updated it without-

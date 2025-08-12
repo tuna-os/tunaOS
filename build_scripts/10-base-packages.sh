@@ -1,12 +1,10 @@
 #!/usr/bin/env bash
 
 set -xeuo pipefail
+
 printf "::group:: === 10 Base Packages ===\n"
 
-MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
-SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
-export SCRIPTS_PATH
-export MAJOR_VERSION_NUMBER
+source /run/context/build_scripts/lib.sh
 
 # This is the base for a minimal GNOME system on CentOS Stream.
 
@@ -20,30 +18,39 @@ export MAJOR_VERSION_NUMBER
 dnf -y install 'dnf-command(versionlock)'
 dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
 
-if [ $(rpm -E %fedora) == "%fedora" ]; then
-	dnf install -y epel-release
-	dnf config-manager --set-enabled crb
+if is_fedora; then
+    # Setup RPM Fusion
+    dnf install -y \
+      https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
+      https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+    
+    # Install multimedia codecs
+    dnf group install -y --with-optional Multimedia
 
-	# Multimidia codecs
-	dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
-	dnf -y install \
-		ffmpeg \
-		libavcodec \
-		@multimedia \
-		gstreamer1-plugins-bad-free \
-		gstreamer1-plugins-bad-free-libs \
-		gstreamer1-plugins-good \
-		gstreamer1-plugins-base \
-		lame \
-		lame-libs \
-		libjxl
+elif is_rhel; then
+    dnf install -y epel-release
+    dnf config-manager --set-enabled crb
+
+    # Multimedia codecs
+    dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
+    dnf -y install \
+        ffmpeg \
+        libavcodec \
+        @multimedia \
+        gstreamer1-plugins-bad-free \
+        gstreamer1-plugins-bad-free-libs \
+        gstreamer1-plugins-good \
+        gstreamer1-plugins-base \
+        lame \
+        lame-libs \
+        libjxl
 fi
 
-if [ $(rpm -E %almalinux) -ge 9 ]; then
+if is_almalinux && [ "$MAJOR_VERSION_NUMBER" -ge 9 ]; then
 	dnf swap -y coreutils-single coreutils
 fi
 
-if [ $(rpm -E %rhel) -ge 10 ]; then
+if is_rhel && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
 	dnf -y copr enable jreilly1821/c10s-gnome-48
 	dnf -y copr enable jreilly1821/packages
 fi
