@@ -32,7 +32,7 @@ dnf -y install \
 	jetbrains-mono-fonts-all \
 	buildah \
 	btrfs-progs \
-    xhost
+	xhost
 
 if [ "${IMAGE_NAME}" == "albacore" ]; then
 	dnf install -y https://kojipkgs.fedoraproject.org//packages/gnome-shell-extension-caffeine/56/1.el10_1/noarch/gnome-shell-extension-caffeine-56-1.el10_1.noarch.rpm
@@ -55,7 +55,6 @@ dnf -y --enablerepo "tailscale-stable" install \
 
 dnf -y copr enable ublue-os/packages
 dnf -y copr disable ublue-os/packages
-
 
 # Yellowfin Branding and tools
 dnf -y --enablerepo copr:copr.fedorainfracloud.org:ublue-os:packages install \
@@ -92,7 +91,7 @@ dnf -y copr disable trixieua/morewaita-icon-theme
 dnf -y --enablerepo "copr:copr.fedorainfracloud.org:trixieua:morewaita-icon-theme" install \
 	morewaita-icon-theme
 
- # GNOME 48: EPEL version of blur-my-shell is incompatible
+# GNOME 48: EPEL version of blur-my-shell is incompatible
 dnf -y remove gnome-shell-extension-blur-my-shell
 
 # GNOME 48: force update xdg-desktop-portal

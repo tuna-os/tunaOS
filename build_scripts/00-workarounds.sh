@@ -21,4 +21,3 @@ rm -f /usr/lib/bootc/install/20-rhel.toml
 # cat /etc/yum.repos.d/compose.repo
 
 printf "::endgroup::\n"
-

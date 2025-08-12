@@ -12,12 +12,11 @@ dnf config-manager --set-disabled "epel-nvidia"
 # Also make sure the kernel is locked before this is run whenever the kernel updates
 # kernel-devel might pull in an entire new kernel if you dont do
 dnf versionlock delete kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
-dnf install -y "kernel-devel-$QUALIFIED_KERNEL" "kernel-headers-$QUALIFIED_KERNEL"  dkms gcc-c++
+dnf install -y "kernel-devel-$QUALIFIED_KERNEL" "kernel-headers-$QUALIFIED_KERNEL" dkms gcc-c++
 dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
 
-
 dnf install -y --enablerepo="epel-nvidia" \
-  cuda nvidia-driver{,-cuda} dkms-nvidia
+	cuda nvidia-driver{,-cuda} dkms-nvidia
 
 sed -i -e 's/kernel$/kernel-open/g' /etc/nvidia/kernel.conf
 cat /etc/nvidia/kernel.conf

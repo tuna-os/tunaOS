@@ -20,24 +20,23 @@ export MAJOR_VERSION_NUMBER
 dnf -y install 'dnf-command(versionlock)'
 dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
 
-
 if [ $(rpm -E %fedora) == "%fedora" ]; then
 	dnf install -y epel-release
 	dnf config-manager --set-enabled crb
 
-# Multimidia codecs
-dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
-dnf -y install \
-	ffmpeg \
-	libavcodec \
-	@multimedia \
-	gstreamer1-plugins-bad-free \
-	gstreamer1-plugins-bad-free-libs \
-	gstreamer1-plugins-good \
-	gstreamer1-plugins-base \
-	lame \
-	lame-libs \
-	libjxl 
+	# Multimidia codecs
+	dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
+	dnf -y install \
+		ffmpeg \
+		libavcodec \
+		@multimedia \
+		gstreamer1-plugins-bad-free \
+		gstreamer1-plugins-bad-free-libs \
+		gstreamer1-plugins-good \
+		gstreamer1-plugins-base \
+		lame \
+		lame-libs \
+		libjxl
 fi
 
 if [ $(rpm -E %almalinux) -ge 9 ]; then
@@ -70,7 +69,7 @@ dnf -y install \
 	-x PackageKit-command-not-found \
 	-x gnome-software-fedora-langpacks \
 	"NetworkManager-adsl" \
- 	"glib2" \
+	"glib2" \
 	"gdm" \
 	"gnome-bluetooth" \
 	"gnome-color-manager" \
