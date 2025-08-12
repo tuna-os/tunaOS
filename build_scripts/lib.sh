@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 
-# This file needs to exist otherwise running this in a RUN label makes it so bash strict mode doesnt work.
-# Thus leading to silent failures
+# This file is intended to be sourced by other scripts, not executed directly.
 
 set -eo pipefail
 
@@ -15,12 +14,39 @@ SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
 export SCRIPTS_PATH
 export MAJOR_VERSION_NUMBER
 
+IS_FEDORA=false
+IS_RHEL=false
+IS_ALMALINUX=false
+IS_ALMALINUXKITTEN=false
+IS_CENTOS=false
+
+if [ "$(rpm -E '%fedora')" != "%fedora" ]; then
+	IS_FEDORA=true
+fi
+
+if [ "$(rpm -E '%rhel')" != "%rhel" ]; then
+	IS_RHEL=true
+fi
+
+if [ "$(rpm -E '%almalinux')" != "%almalinux" ]; then
+	IS_ALMALINUX=true
+fi
+
+if [ "$(rpm -E '%almalinux-kitten')" != "%almalinux-kitten" ]; then
+	IS_ALMALINUXKITTEN=true
+fi
+
+if [ "$(rpm -E '%centos')" != "%centos" ]; then
+	IS_CENTOS=true
+fi
+
+
 run_buildscripts_for() {
 	WHAT=$1
 	shift
 	# Complex "find" expression here since there might not be any overrides
-	find "${BUILD_SCRIPTS_PATH}/overrides/$WHAT" -maxdepth 1 -iname "*-*.sh" -type f -print0 | sort --zero-terminated --sort=human-numeric | while IFS= read -r -d $'\0' script ; do
-		if [ "${CUSTOM_NAME}" != "" ] ; then
+	find "${BUILD_SCRIPTS_PATH}/overrides/$WHAT" -maxdepth 1 -iname "*-*.sh" -type f -print0 | sort --zero-terminated --sort=human-numeric | while IFS= read -r -d $'\0' script; do
+		if [ "${CUSTOM_NAME}" != "" ]; then
 			WHAT=$CUSTOM_NAME
 		fi
 		printf "::group:: ===$WHAT-%s===\n" "$(basename "$script")"
@@ -33,32 +59,10 @@ copy_systemfiles_for() {
 	WHAT=$1
 	shift
 	DISPLAY_NAME=$WHAT
-	if [ "${CUSTOM_NAME}" != "" ] ; then
+	if [ "${CUSTOM_NAME}" != "" ]; then
 		DISPLAY_NAME=$CUSTOM_NAME
 	fi
 	printf "::group:: ===%s-file-copying===\n" "${DISPLAY_NAME}"
 	cp -avf "${CONTEXT_PATH}/overrides/$WHAT/." /
 	printf "::endgroup::\n"
 }
-
-CUSTOM_NAME="base"
-copy_systemfiles_for ../files
-run_buildscripts_for ..
-CUSTOM_NAME=""
-
-copy_systemfiles_for "$(arch)"
-run_buildscripts_for "$(arch)"
-
-if [ "$ENABLE_DX" == "1" ]; then
-	copy_systemfiles_for dx
-	run_buildscripts_for dx
-	copy_systemfiles_for "$(arch)-dx"
-	run_buildscripts_for "$(arch)/dx"
-fi
-
-if [ "$ENABLE_GDX" == "1" ]; then
-	copy_systemfiles_for gdx
-	run_buildscripts_for gdx
-	copy_systemfiles_for "$(arch)-gdx"
-	run_buildscripts_for "$(arch)/gdx"
-fi

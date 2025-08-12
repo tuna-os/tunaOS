@@ -18,4 +18,3 @@ append_group() {
 # We dont have incus on the image yet
 # append_group incus-admin
 # usermod -aG incus-admin $user
-

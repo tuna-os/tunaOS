@@ -2,6 +2,8 @@
 
 set -xeuo pipefail
 
+printf "::group:: === 40 Services ===\n"
+
 MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
 SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
 export SCRIPTS_PATH
@@ -40,3 +42,5 @@ sed -i -e "s@PrivateTmp=.*@PrivateTmp=no@g" /usr/lib/systemd/system/systemd-reso
 # FIXME: this does not yet work, the resolution service fails for somer reason
 # enable systemd-resolved for proper name resolution
 systemctl enable systemd-resolved.service
+
+printf "::endgroup::\n"

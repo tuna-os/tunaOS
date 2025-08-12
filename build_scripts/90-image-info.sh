@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -xeuo pipefail
+printf "::group:: === 90 Image Info ===\n"
 
 MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
 SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
@@ -18,7 +19,7 @@ cat >$IMAGE_INFO <<EOF
   "image-flavor": "${IMAGE_FLAVOR}",
   "image-vendor": "${IMAGE_VENDOR}",
   "image-tag": "latest",
-  "centos-version": "${MAJOR_VERSION_NUMBER}"
+  "major-version": "${MAJOR_VERSION_NUMBER}"
 }
 EOF
 
@@ -53,3 +54,5 @@ SUPPORT_URL="${SUPPORT_URL}"
 DEFAULT_HOSTNAME="yellowfin"
 BUILD_ID="${SHA_HEAD_SHORT:-testing}"
 EOF
+
+printf "::endgroup::\n"
