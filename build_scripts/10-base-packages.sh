@@ -2,10 +2,9 @@
 
 set -xeuo pipefail
 
-MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
-SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
-export SCRIPTS_PATH
-export MAJOR_VERSION_NUMBER
+printf "::group:: === 10 Base Packages ===\n"
+
+source /run/context/build_scripts/lib.sh
 
 # This is the base for a minimal GNOME system on CentOS Stream.
 
@@ -20,33 +19,48 @@ dnf -y install 'dnf-command(versionlock)'
 dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
 
 
-if [ "${IMAGE_NAME}" != "bonito" ]; then
+if [[ $IS_FEDORA == true ]]; then
+    # Enable the Fedora 40 repos
+    dnf config-manager --set-enabled fedora-cisco-openh264
+    dnf config-manager --set-enabled updates-cisco-openh264
+    dnf config-manager --set-enabled updates-testing-cisco-openh264
+	# Setup RPM Fusion
+    dnf install -y \
+      https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
+      https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+    
+    # Install multimedia codecs
+    dnf group install -y --with-optional Multimedia
+else
+    # Enable the EPEL repos for RHEL and AlmaLinux
 	dnf install -y epel-release
-	dnf config-manager --set-enabled crb
+    dnf config-manager --set-enabled epel
+    dnf config-manager --set-enabled crb
+
+	# Multimedia codecs
+	dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
+	dnf -y install \
+		ffmpeg \
+		libavcodec \
+		@multimedia \
+		gstreamer1-plugins-bad-free \
+		gstreamer1-plugins-bad-free-libs \
+		gstreamer1-plugins-good \
+		gstreamer1-plugins-base \
+		lame \
+		lame-libs \
+		libjxl
 fi
 
-# Multimidia codecs
-dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
-dnf -y install \
-	ffmpeg \
-	libavcodec \
-	@multimedia \
-	gstreamer1-plugins-bad-free \
-	gstreamer1-plugins-bad-free-libs \
-	gstreamer1-plugins-good \
-	gstreamer1-plugins-base \
-	lame \
-	lame-libs \
-	libjxl 
 
+if [[ $IS_ALMALINUX == true ]] && [ "$MAJOR_VERSION_NUMBER" -ge 9 ]; then
+	dnf swap -y coreutils-single coreutils
+fi
 
-
-dnf swap -y coreutils-single coreutils
-
-# Gnome 48 Backport
-dnf -y copr enable jreilly1821/c10s-gnome-48
-dnf -y copr enable jreilly1821/packages
-
+if [[ $IS_RHEL == true ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
+	dnf -y copr enable jreilly1821/c10s-gnome-48
+	dnf -y copr enable jreilly1821/packages
+fi
 
 # `dnf group info Workstation` without GNOME
 dnf group install -y --nobest \
@@ -69,7 +83,7 @@ dnf -y install \
 	-x PackageKit-command-not-found \
 	-x gnome-software-fedora-langpacks \
 	"NetworkManager-adsl" \
- 	"glib2" \
+	"glib2" \
 	"gdm" \
 	"gnome-bluetooth" \
 	"gnome-color-manager" \
@@ -108,3 +122,5 @@ dnf -y install \
 
 # This package adds "[systemd] Failed Units: *" to the bashrc startup
 dnf -y remove console-login-helper-messages
+
+printf "::endgroup::\n"
