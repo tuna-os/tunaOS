@@ -34,6 +34,7 @@ if [[ $IS_FEDORA == true ]]; then
 else
     # Enable the EPEL repos for RHEL and AlmaLinux
 	dnf install -y epel-release
+	/usr/bin/crb enable
     dnf config-manager --set-enabled epel
     dnf config-manager --set-enabled crb
 

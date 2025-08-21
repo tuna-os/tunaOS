@@ -15,47 +15,47 @@ ARG SHA_HEAD_SHORT="${SHA_HEAD_SHORT:-deadbeef}"
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/var --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  IMAGE_NAME=${IMAGE_NAME} /run/context/build_scripts/copy-files.sh
+   /run/context/build_scripts/copy-files.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/var --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  IMAGE_NAME=${IMAGE_NAME} /run/context/build_scripts/00-workarounds.sh
+   /run/context/build_scripts/00-workarounds.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/var --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  IMAGE_NAME=${IMAGE_NAME} /run/context/build_scripts/10-base-packages.sh
+   /run/context/build_scripts/10-base-packages.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/var --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  IMAGE_NAME=${IMAGE_NAME} /run/context/build_scripts/20-packages.sh
+   /run/context/build_scripts/20-packages.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/var --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  IMAGE_NAME=${IMAGE_NAME} /run/context/build_scripts/26-packages-post.sh
+   /run/context/build_scripts/26-packages-post.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/var --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  IMAGE_NAME=${IMAGE_NAME} /run/context/build_scripts/40-services.sh
+   /run/context/build_scripts/40-services.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/var --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  IMAGE_NAME=${IMAGE_NAME} /run/context/build_scripts/90-image-info.sh
+   /run/context/build_scripts/90-image-info.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/var --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  IMAGE_NAME=${IMAGE_NAME} /run/context/build_scripts/arch-customizations.sh
+   /run/context/build_scripts/arch-customizations.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/var --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  IMAGE_NAME=${IMAGE_NAME} /run/context/build_scripts/cleanup.sh
+   /run/context/build_scripts/cleanup.sh
 
 # Makes `/opt` writeable by default
 # Needs to be here to make the main image build strict (no /opt there)
