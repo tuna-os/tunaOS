@@ -145,7 +145,7 @@ jobs:
         run: |
           set -x
           just=$(which just)
-          sudo "$just" ci-build "${IMAGE_NAME}" "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}"
+          sudo "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${IMAGE_NAME}"
 
       - name: Setup Syft
         id: setup-syft
