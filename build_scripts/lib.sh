@@ -14,31 +14,71 @@ SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
 export SCRIPTS_PATH
 export MAJOR_VERSION_NUMBER
 
+# OS Detection Flags
 IS_FEDORA=false
 IS_RHEL=false
 IS_ALMALINUX=false
 IS_ALMALINUXKITTEN=false
 IS_CENTOS=false
+IS_UBUNTU=false
+IS_DEBIAN=false
 
-if [ "$(rpm -E '%fedora')" != "%fedora" ]; then
-	IS_FEDORA=true
+# Detect using /etc/os-release if available
+if [ -f /etc/os-release ]; then
+	. /etc/os-release
+	case "$ID" in
+		fedora)
+			IS_FEDORA=true
+			;;
+		rhel)
+			IS_RHEL=true
+			;;
+		almalinux)
+			IS_ALMALINUX=true
+			;;
+		centos)
+			IS_CENTOS=true
+			;;
+		ubuntu)
+			IS_UBUNTU=true
+			;;
+		debian)
+			IS_DEBIAN=true
+			;;
+	esac
+	# Handle variants
+	if [[ "$ID_LIKE" == *rhel* ]]; then
+		IS_RHEL=true
+	fi
+	if [[ "$ID" == "almalinux-kitten" ]]; then
+		IS_ALMALINUXKITTEN=true
+	fi
+else
+	# Fallback to rpm macros if /etc/os-release is missing
+	if [ "$(rpm -E '%fedora')" != "%fedora" ]; then
+		IS_FEDORA=true
+	fi
+	if [ "$(rpm -E '%rhel')" != "%rhel" ]; then
+		IS_RHEL=true
+	fi
+	if [ "$(rpm -E '%almalinux')" != "%almalinux" ]; then
+		IS_ALMALINUX=true
+	fi
+	if [ "$(rpm -E '%almalinux-kitten')" != "%almalinux-kitten" ]; then
+		IS_ALMALINUXKITTEN=true
+	fi
+	if [ "$(rpm -E '%centos')" != "%centos" ]; then
+		IS_CENTOS=true
+	fi
 fi
 
-if [ "$(rpm -E '%rhel')" != "%rhel" ]; then
-	IS_RHEL=true
-fi
-
-if [ "$(rpm -E '%almalinux')" != "%almalinux" ]; then
-	IS_ALMALINUX=true
-fi
-
-if [ "$(rpm -E '%almalinux-kitten')" != "%almalinux-kitten" ]; then
-	IS_ALMALINUXKITTEN=true
-fi
-
-if [ "$(rpm -E '%centos')" != "%centos" ]; then
-	IS_CENTOS=true
-fi
+is_fedora() { [ "$IS_FEDORA" = true ]; }
+is_rhel() { [ "$IS_RHEL" = true ]; }
+is_almalinux() { [ "$IS_ALMALINUX" = true ]; }
+is_almalinuxkitten() { [ "$IS_ALMALINUXKITTEN" = true ]; }
+is_centos() { [ "$IS_CENTOS" = true ]; }
+is_ubuntu() { [ "$IS_UBUNTU" = true ]; }
+is_debian() { [ "$IS_DEBIAN" = true ]; }
 
 
 run_buildscripts_for() {
@@ -65,4 +105,12 @@ copy_systemfiles_for() {
 	printf "::group:: ===%s-file-copying===\n" "${DISPLAY_NAME}"
 	cp -avf "${CONTEXT_PATH}/overrides/$WHAT/." /
 	printf "::endgroup::\n"
+}
+
+install_from_copr() {
+    CO_PR_NAME=$1
+    shift
+    dnf -y copr enable "$CO_PR_NAME"
+    dnf -y --enablerepo "copr:copr.fedorainfracloud.org:$(echo "$CO_PR_NAME" | tr '/' ':')" install "$@"
+    dnf -y copr disable "$CO_PR_NAME"
 }

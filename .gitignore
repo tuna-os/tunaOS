@@ -2,3 +2,4 @@ cosign.key
 output/
 *.raw
 *.qcow2
+.rpm-cache

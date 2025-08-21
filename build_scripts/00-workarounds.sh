@@ -18,5 +18,10 @@ if is_centos && ! is_almalinux; then
     cat /etc/yum.repos.d/compose.repo
 fi
 
+echo "is_fedora: $IS_FEDORA"
+echo "is_rhel: $IS_RHEL"
+echo "is_almalinux: $IS_ALMALINUX"
+echo "is_almalinuxkitten: $IS_ALMALINUXKITTEN"
+echo "is_centos: $IS_CENTOS"
 
 printf "::endgroup::\n"

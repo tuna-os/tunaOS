@@ -13,8 +13,10 @@ printf "::group:: ===Image Cleanup===\n"
 dnf clean all
 
 rm -rf /.gitkeep
-find /var -mindepth 1 -delete
-find /boot -mindepth 1 -delete
+# Clean /var but skip mounted directories and cache that might be in use
+find /var -mindepth 1 -maxdepth 1 ! -path '/var/cache' -delete 2>/dev/null || true
+find /var/cache -mindepth 1 ! -path '/var/cache/dnf*' -delete 2>/dev/null || true
+
 mkdir -p /var /boot
 
 # Make /usr/local writeable

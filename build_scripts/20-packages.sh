@@ -9,6 +9,7 @@ source /run/context/build_scripts/lib.sh
 # Remove conflicting packages
 dnf -y remove setroubleshoot
 
+
 # Install base packages
 dnf -y install \
 	-x gnome-extensions-app \
@@ -18,27 +19,26 @@ dnf -y install \
 	fastfetch \
 	fpaste \
 	gnome-shell-extension-{appindicator,dash-to-dock,blur-my-shell} \
-	just \
 	powertop \
 	tuned-ppd \
 	fzf \
 	glow \
 	wl-clipboard \
 	gum \
-	jetbrains-mono-fonts-all \
 	buildah \
 	btrfs-progs \
 	xhost
 
+
 # Install OS-specific branding
-if is_fedora; then
+if [[ $IS_FEDORA == true ]]; then
     dnf -y install fedora-logos
 else
     dnf -y install almalinux-backgrounds almalinux-logos
 fi
 
 # Install caffeine extension
-if [ "${IMAGE_NAME}" == "albacore" ]; then
+if [[ $IS_ALMALINUX == true || $IS_RHEL == true ]]; then
 	dnf install -y https://kojipkgs.fedoraproject.org//packages/gnome-shell-extension-caffeine/56/1.el10_1/noarch/gnome-shell-extension-caffeine-56-1.el10_1.noarch.rpm
 else
 	dnf install -y gnome-shell-extension-caffeine
@@ -47,7 +47,7 @@ fi
 # Everything that depends on external repositories should be after this.
 
 # Tailscale
-if is_fedora; then
+if [[ $IS_FEDORA == true ]]; then
     dnf config-manager --add-repo "https://pkgs.tailscale.com/stable/fedora/tailscale.repo"
 else
     dnf config-manager --add-repo "https://pkgs.tailscale.com/stable/centos/${MAJOR_VERSION_NUMBER}/tailscale.repo"
@@ -79,7 +79,9 @@ fi
 install_from_copr ublue-os/staging gnome-shell-extension-{search-light,logo-menu,gsconnect}
 
 # Nerd Fonts
-install_from_copr che/nerd-fonts nerd-fonts
+if  [[ $IS_CENTOS == true ]] && [[ $IS_ALMALINUXKITTEN == false ]]; then
+	install_from_copr che/nerd-fonts nerd-fonts
+fi
 
 # MoreWaita icon theme
 install_from_copr trixieua/morewaita-icon-theme morewaita-icon-theme

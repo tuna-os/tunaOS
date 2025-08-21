@@ -4,6 +4,7 @@ export repo_organization := env("GITHUB_REPOSITORY_OWNER", "tuna-os")
 export image_name := env("IMAGE_NAME", "albacore")
 export default_tag := env("DEFAULT_TAG", "latest")
 export bib_image := env("BIB_IMAGE", "quay.io/centos-bootc/bootc-image-builder:latest")
+export rpm_cache_dir := env("RPM_CACHE_DIR", "$(pwd)/.rpm-cache")
 just := just_executable()
 
 # --- Default Base Image (for 'regular' flavor builds) ---
@@ -19,7 +20,7 @@ default:
 check:
     #!/usr/bin/env bash
     echo "Checking syntax of shell scripts..."
-    /usr/bin/find . -iname "*.sh" -type f -exec shellcheck "{}" ';'
+    /usr/bin/find . -iname "*.sh" -type f -exec shellcheck "{}" ";"
     find . -type f -name "*.just" | while read -r file; do
         echo "Checking syntax: $file"
         just --unstable --fmt --check -f $file
@@ -31,7 +32,7 @@ check:
 fix:
     #!/usr/bin/env bash
     echo "Fixing syntax of shell scripts..."
-        /usr/bin/find . -iname "*.sh" -type f -exec shfmt --write "{}" ';'
+        /usr/bin/find . -iname "*.sh" -type f -exec shfmt --write "{}" ";"
     find . -type f -name "*.just" | while read -r file; do
         echo "Checking syntax: $file"
         just --unstable --fmt -f $file
@@ -45,7 +46,7 @@ fix:
 
 # Private build engine. Now accepts final image name and brand as parameters.
 [private]
-_build target_tag final_image_name container_file base_image_for_build platform='linux/amd64' *args:
+_build target_tag final_image_name container_file base_image_for_build platform='linux/amd64' use_cache="0" *args:
     #!/usr/bin/env bash
     set -euxo pipefail
 
@@ -55,6 +56,11 @@ _build target_tag final_image_name container_file base_image_for_build platform=
     BUILD_ARGS+=("--build-arg" "BASE_IMAGE={{ base_image_for_build }}")
     if [[ -z "$(git status -s)" ]]; then
         BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=$(git rev-parse --short HEAD)")
+    fi
+    echo "{{ use_cache }}"
+    if [[ "{{ use_cache }}" == "1" ]]; then
+        mkdir -p "{{ rpm_cache_dir }}"
+        BUILD_ARGS+=("--volume" "{{ rpm_cache_dir }}:/var/cache/dnf")
     fi
 
     podman build \
@@ -69,7 +75,7 @@ _build target_tag final_image_name container_file base_image_for_build platform=
 # --- Unified Build Pipeline ---
 # This rule now handles both local and CI builds.
 # For CI builds, pass `is_ci=true` and `image_name` as the final tag.
-# For local builds, pass `is_ci=false` (or omit) and `variant` as the local name.
+# For local builds, pass `is_ci=0` (or omit) and `variant` as the local name.
 #
 # Usage (local): just build <variant> [flavor]
 # Example: just build yellowfin dx
@@ -77,7 +83,7 @@ _build target_tag final_image_name container_file base_image_for_build platform=
 # Usage (CI): just build image_name=<final_name> variant=<base_os> is_ci=true [flavor]
 
 # Example: just build image_name=albacore variant=almalinux is_ci=true gdx
-build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="false" image_name='albacore' *args:
+build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" image_name='albacore' *args:
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -127,11 +133,15 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="false" i
     esac
 
     final_image_name="{{ image_name }}"
-    if [[ "{{ is_ci }}" = "false" ]]; then
+    if [[ "{{ is_ci }}" = "0" ]]; then
         final_image_name="${local_image_name}"
     fi
 
-    just _build "${TARGET_TAG_WITH_VERSION}" "${final_image_name}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" {{ args }}
+    if [[ "{{ is_ci }}" == "0" ]]; then
+        just _build "${TARGET_TAG_WITH_VERSION}" "${final_image_name}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1" {{ args }}
+    else
+        just _build "${TARGET_TAG_WITH_VERSION}" "${final_image_name}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" {{ args }}
+    fi
 
 # --- Build-all helpers ---
 build-all-regular:
@@ -147,7 +157,7 @@ build-all:
     just build bonito all
 
 lint:
-    /usr/bin/find . -iname "*.sh" -type f -exec shellcheck "{}" ';'
+    /usr/bin/find . -iname "*.sh" -type f -exec shellcheck "{}" ";"
 
 # Runs shfmt on all Bash scripts
 format:

@@ -18,39 +18,46 @@ source /run/context/build_scripts/lib.sh
 dnf -y install 'dnf-command(versionlock)'
 dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
 
-if is_fedora; then
-    # Setup RPM Fusion
+
+if [[ $IS_FEDORA == true ]]; then
+    # Enable the Fedora 40 repos
+    dnf config-manager --set-enabled fedora-cisco-openh264
+    dnf config-manager --set-enabled updates-cisco-openh264
+    dnf config-manager --set-enabled updates-testing-cisco-openh264
+	# Setup RPM Fusion
     dnf install -y \
       https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
       https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
     
     # Install multimedia codecs
     dnf group install -y --with-optional Multimedia
-
-elif is_rhel; then
-    dnf install -y epel-release
+else
+    # Enable the EPEL repos for RHEL and AlmaLinux
+	dnf install -y epel-release
+    dnf config-manager --set-enabled epel
     dnf config-manager --set-enabled crb
 
-    # Multimedia codecs
-    dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
-    dnf -y install \
-        ffmpeg \
-        libavcodec \
-        @multimedia \
-        gstreamer1-plugins-bad-free \
-        gstreamer1-plugins-bad-free-libs \
-        gstreamer1-plugins-good \
-        gstreamer1-plugins-base \
-        lame \
-        lame-libs \
-        libjxl
+	# Multimedia codecs
+	dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
+	dnf -y install \
+		ffmpeg \
+		libavcodec \
+		@multimedia \
+		gstreamer1-plugins-bad-free \
+		gstreamer1-plugins-bad-free-libs \
+		gstreamer1-plugins-good \
+		gstreamer1-plugins-base \
+		lame \
+		lame-libs \
+		libjxl
 fi
 
-if is_almalinux && [ "$MAJOR_VERSION_NUMBER" -ge 9 ]; then
+
+if [[ $IS_ALMALINUX == true ]] && [ "$MAJOR_VERSION_NUMBER" -ge 9 ]; then
 	dnf swap -y coreutils-single coreutils
 fi
 
-if is_rhel && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
+if [[ $IS_RHEL == true ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
 	dnf -y copr enable jreilly1821/c10s-gnome-48
 	dnf -y copr enable jreilly1821/packages
 fi
