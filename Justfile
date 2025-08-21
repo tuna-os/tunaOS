@@ -169,9 +169,9 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" image
     echo "================================================================"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
-        just _build "${TARGET_TAG_WITH_VERSION}" "${final_image_name}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1" {{ args }}
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "${final_image_name}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1" {{ args }}
     else
-        just _build "${TARGET_TAG_WITH_VERSION}" "${final_image_name}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" {{ args }}
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "${final_image_name}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" {{ args }}
     fi
 
 # --- Build-all helpers ---
