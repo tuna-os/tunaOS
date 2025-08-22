@@ -1,4 +1,4 @@
-name: Build Multi-Variant Images
+name: Build Images
 
 on:
   pull_request: 
@@ -106,7 +106,7 @@ jobs:
               \"platforms\": \"${PLATFORMS}\",
               \"description\": \"${DESCRIPTION}\",
               \"rechunk\": ${{ github.event_name != 'pull_request' }},
-              \"sbom\": ${{ github.event_name != 'pull_request' }},
+              \"sbom\": false,
               \"publish\": true
             }]")"
           done
