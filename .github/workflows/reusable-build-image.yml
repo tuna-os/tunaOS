@@ -163,7 +163,7 @@ jobs:
           sudo systemctl start podman.socket
           OUTPUT_PATH="$(mktemp -d)/sbom.json"
           export SYFT_PARALLELISM=$(($(nproc)*2))
-          sudo "$SYFT_CMD" "${IMAGE}:${DEFAULT_TAG}" -o "spdx-json=${OUTPUT_PATH}"
+          sudo "$SYFT_CMD" "${IMAGE_REGISTRY}/${IMAGE}:${DEFAULT_TAG}" -o "spdx-json=${OUTPUT_PATH}"
           echo "OUTPUT_PATH=${OUTPUT_PATH}" >> "${GITHUB_OUTPUT}"
       
       - name: push un-rechunked image

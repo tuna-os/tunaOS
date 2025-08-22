@@ -47,13 +47,12 @@ if [ -f /etc/os-release ]; then
 			;;
 	esac
 	# Handle variants
-	if [[ "$ID_LIKE" == *rhel* ]]; then
+	if [ -n "${ID_LIKE:-}" ] && [[ "$ID_LIKE" == *rhel* ]]; then
 		IS_RHEL=true
 	fi
 	if [[ "$ID" == "almalinux-kitten" ]]; then
 		IS_ALMALINUXKITTEN=true
 	fi
-else
 	# Fallback to rpm macros if /etc/os-release is missing
 	if [ "$(rpm -E '%fedora')" != "%fedora" ]; then
 		IS_FEDORA=true

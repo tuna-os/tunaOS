@@ -21,9 +21,9 @@ dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-
 
 if [[ $IS_FEDORA == true ]]; then
     # Enable the Fedora 40 repos
-    dnf config-manager --set-enabled fedora-cisco-openh264
-    dnf config-manager --set-enabled updates-cisco-openh264
-    dnf config-manager --set-enabled updates-testing-cisco-openh264
+    dnf --enable-repo=fedora-cisco-openh264
+    dnf --enable-repo=updates-cisco-openh264
+    dnf --enable-repo=updates-testing-cisco-openh264
 	# Setup RPM Fusion
     dnf install -y \
       https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \

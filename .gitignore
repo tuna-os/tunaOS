@@ -3,3 +3,4 @@ output/
 *.raw
 *.qcow2
 .rpm-cache
+.rpm-cache*

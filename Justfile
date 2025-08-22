@@ -3,7 +3,6 @@
 export repo_organization := env("GITHUB_REPOSITORY_OWNER", "tuna-os")
 export default_tag := env("DEFAULT_TAG", "latest")
 export bib_image := env("BIB_IMAGE", "quay.io/centos-bootc/bootc-image-builder:latest")
-export rpm_cache_dir := env("RPM_CACHE_DIR", "$(pwd)/.rpm-cache")
 just := just_executable()
 
 # --- Default Base Image (for 'regular' flavor builds) ---
@@ -58,8 +57,8 @@ _build target_tag final_image_name container_file base_image_for_build platform=
     fi
     echo "{{ use_cache }}"
     if [[ "{{ use_cache }}" == "1" ]]; then
-        mkdir -p "{{ rpm_cache_dir }}"
-        BUILD_ARGS+=("--volume" "{{ rpm_cache_dir }}:/var/cache/dnf")
+        mkdir -p "$(pwd)/.rpm-cache-{{ final_image_name }}"
+        BUILD_ARGS+=("--volume" "$(pwd)/.rpm-cache-{{ final_image_name }}:/var/cache/dnf")
     fi
 
     podman build \
