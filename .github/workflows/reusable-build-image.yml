@@ -166,16 +166,6 @@ jobs:
           sudo "$SYFT_CMD" "${IMAGE_REGISTRY}/${IMAGE}:${DEFAULT_TAG}" -o "spdx-json=${OUTPUT_PATH}"
           echo "OUTPUT_PATH=${OUTPUT_PATH}" >> "${GITHUB_OUTPUT}"
       
-      - name: push un-rechunked image
-        if: ${{ inputs.publish && !inputs.rechunk }}
-        id: push_unrechunked
-        env:
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
-          DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
-        run: |
-          podman tag "localhost/${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-unrechunked"
-          podman push "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
 
       - name: Run Rechunker
         if: ${{ inputs.rechunk && inputs.publish }}
