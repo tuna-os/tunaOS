@@ -72,10 +72,9 @@ Cutting-edge experience with Bluefin LTS tooling ported to the latest Fedora rel
 
 | Component | Minimum | Recommended |
 |-----------|---------|-------------|
-| **CPU** | x86_64, ARM64 | x86_64/v2 or better, ARM64 |
+| **CPU** | x86_64, ARM64 | x86_64, ARM64 |
 | **RAM** | 4 GB | 8 GB+ |
 | **Storage** | 20 GB | 50 GB+ |
-| **Architecture** | AMD64, ARM64 | AMD64/v2, ARM64 |
 
 ## 🛠️ Installation
 
@@ -104,6 +103,9 @@ chmod +x build-iso.sh
 We'd love to hear from you! Whether you're using these images or just curious:
 
 - 🐛 **Report Issues:** [GitHub Issues](https://github.com/hanthor/tunaOS/issues)
+- [m] Chat: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia) 
+
+Related Communities: 
 - 🎮 **Discord:** [Universal Blue Community](https://discord.gg/WEu6BdFEtp)
 - 💬 **Chat with AlmaLinux:** [AlmaLinux Atomic SIG](https://chat.almalinux.org/almalinux/channels/sigatomic)
 
