@@ -29,6 +29,15 @@ on:
         - regular
         - regular,dx
         - regular,dx,gdx
+      platforms:
+        description: 'Platforms to build'
+        required: false
+        default: ''
+        type: choice
+        options:
+        - linux/amd64
+        - linux/amd64,linux/arm64
+        - linux/arm64
 
 
 concurrency:
@@ -98,6 +107,10 @@ jobs:
               TAG="${{ (github.ref_name == 'main' && github.event_name != 'pull_request') && 'latest' || github.sha }}"
             fi
             
+            # If Platforms is set
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.platforms }}" ]]; then
+  PLATFORMS="${{ inputs.platforms }}"
+            fi
             # Add to matrix
             MATRIX="$(echo "${MATRIX}" | jq ".include += [{
               \"image_variant\": \"${image_variant}\",
