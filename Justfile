@@ -111,7 +111,7 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" tag='
             BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
             ;;
         "dx")
-            if [[ "{{ is_ci }}" = "true" ]]; then
+            if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ tag }}"
             else
                 BASE_FOR_BUILD="localhost/${local_image_name}:{{ default_tag }}"
@@ -119,7 +119,7 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" tag='
             CONTAINERFILE="Containerfile.dx"
             ;;
         "gdx")
-            if [[ "{{ is_ci }}" = "true" ]]; then
+            if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-dx:{{ tag }}"
             else
                 BASE_FOR_BUILD="localhost/${local_image_name}-dx:{{ tag }}"
