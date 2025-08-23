@@ -109,7 +109,7 @@ jobs:
             
             # If Platforms is set
             if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.platforms }}" ]]; then
-  PLATFORMS="${{ inputs.platforms }}"
+              PLATFORMS="${{ inputs.platforms }}"
             fi
             # Add to matrix
             MATRIX="$(echo "${MATRIX}" | jq ".include += [{
@@ -120,7 +120,7 @@ jobs:
               \"description\": \"${DESCRIPTION}\",
               \"rechunk\": ${{ github.event_name != 'pull_request' }},
               \"sbom\": ${{ github.event_name != 'pull_request' }},
-              \"publish\": true
+              \"publish\": true, 
             }]")"
           done
           
