@@ -22,6 +22,8 @@ TunaOS is a curated collection of **Atomic desktop operating systems** that are 
 
 ## 🐠 Available Variants
 
+![Albacore,Yellowfin,Skipjack,BigEye Tuna](https://en.wikipedia.org/wiki/File%3ATuna_assortment.png)
+
 ### 🐠 Yellowfin
 [![Build Status](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml/badge.svg?branch=yellowfin)](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml)
 
