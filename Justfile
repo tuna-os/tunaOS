@@ -44,12 +44,12 @@ fix:
 
 # Private build engine. Now accepts final image name and brand as parameters.
 [private]
-_build target_tag final_image_name container_file base_image_for_build platform='linux/amd64' use_cache="0" *args:
+_build target_tag_with_version target_tag container_file base_image_for_build platform='linux/amd64' use_cache="0" *args:
     #!/usr/bin/env bash
     set -euxo pipefail
 
     BUILD_ARGS=()
-    BUILD_ARGS+=("--build-arg" "IMAGE_NAME={{ final_image_name }}")
+    BUILD_ARGS+=("--build-arg" "IMAGE_NAME={{ target_tag }}")
     BUILD_ARGS+=("--build-arg" "IMAGE_VENDOR={{ repo_organization }}")
     BUILD_ARGS+=("--build-arg" "BASE_IMAGE={{ base_image_for_build }}")
     if [[ -z "$(git status -s)" ]]; then
@@ -57,8 +57,8 @@ _build target_tag final_image_name container_file base_image_for_build platform=
     fi
     echo "{{ use_cache }}"
     if [[ "{{ use_cache }}" == "1" ]]; then
-        mkdir -p "$(pwd)/.rpm-cache-{{ final_image_name }}"
-        BUILD_ARGS+=("--volume" "$(pwd)/.rpm-cache-{{ final_image_name }}:/var/cache/dnf")
+        mkdir -p "$(pwd)/.rpm-cache-{{ target_tag }}"
+        BUILD_ARGS+=("--volume" "$(pwd)/.rpm-cache-{{ target_tag }}:/var/cache/dnf")
     fi
 
     podman build \
@@ -66,7 +66,7 @@ _build target_tag final_image_name container_file base_image_for_build platform=
         "${BUILD_ARGS[@]}" \
         {{ args }} \
         --pull=newer \
-        --tag "{{ target_tag }}" \
+        --tag "{{ target_tag_with_version }}" \
         --file "{{ container_file }}" \
         .
 
@@ -140,7 +140,7 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" tag='
     echo "================================================================"
     echo "Building image with the following parameters:"
     echo "  Target Tag: ${TARGET_TAG_WITH_VERSION}"
-    echo "  Final Image Name: ${final_image_name}"
+    echo "  Variant: {{ variant }}"
     echo "  Containerfile: ${CONTAINERFILE}"
     echo "  Base Image for Build: ${BASE_FOR_BUILD}"
     echo "  Platform: {{ platform }}"
@@ -149,9 +149,9 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" tag='
     echo "================================================================"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "${final_image_name}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1" {{ args }}
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1" {{ args }}
     else
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "${final_image_name}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" {{ args }}
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" {{ args }}
     fi
 
 # --- Build-all helpers ---
