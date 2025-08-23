@@ -1,3 +1,6 @@
+
+# Note: Builds are failing as I update the core logic. I'll focus on this after finalizing the build for Bluefin LTS. 
+
 <div align="center">
 
 # 🐟 TunaOS
