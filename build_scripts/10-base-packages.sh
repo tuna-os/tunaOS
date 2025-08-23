@@ -59,7 +59,7 @@ if [[ $IS_ALMALINUX == true ]] && [ "$MAJOR_VERSION_NUMBER" -ge 9 ]; then
 fi
 
 if [[ $IS_RHEL == true ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
-	dnf -y copr enable jreilly1821/c10s-gnome-48
+	dnf -y copr enable jreilly1821/c10s-gnome
 	dnf -y copr enable jreilly1821/packages
 fi
 

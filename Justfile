@@ -94,13 +94,6 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" tag='
     echo "  Args: {{ args }}"
     echo "==============================================================="
 
-    TARGET_TAG="{{ variant }}"
-    TARGET_TAG_WITH_VERSION="${TARGET_TAG}:{{ default_tag }}"
-    if [[ "{{ flavor }}" != "regular" ]]; then
-        TARGET_TAG="${TARGET_TAG}-{{ flavor }}"
-        local_image_name="${TARGET_TAG}"
-    fi
-
 
 
     BASE_FOR_BUILD=""
@@ -138,14 +131,11 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" tag='
             ;;
     esac
 
-    final_image_name="{{ variant }}"
-    if [[ "{{ flavor }}" == "dx" ]]; then
-        final_image_name="{{ variant }}-dx"
-    elif [[ "{{ flavor }}" == "gdx" ]]; then
-        final_image_name="{{ variant }}-gdx"
-    else
-        final_image_name="{{ variant }}"
+    TARGET_TAG={{ variant }}
+    if [[ "{{ flavor }}" != "regular" ]]; then
+        TARGET_TAG+="-{{ flavor }}"
     fi
+    TARGET_TAG_WITH_VERSION="${TARGET_TAG}:{{ tag }}"
 
     echo "================================================================"
     echo "Building image with the following parameters:"
