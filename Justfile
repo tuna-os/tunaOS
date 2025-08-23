@@ -81,7 +81,7 @@ _build target_tag final_image_name container_file base_image_for_build platform=
 # Usage (CI): just build image_name=<final_name> variant=<base_os> is_ci=true [flavor]
 
 # Example: just build image_name=albacore variant=almalinux is_ci=true gdx
-build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" image_name='' *args:
+build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" tag='latest' *args:
     #!/usr/bin/env bash
     set -euo pipefail
     echo "==============================================================="
@@ -90,24 +90,17 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" image
     echo "  Flavor: {{ flavor }}"
     echo "  Platform: {{ platform }}"
     echo "  Is CI: {{ is_ci }}"
-    echo "  Image Name: {{ image_name }}"
+    echo "  Tag: {{ tag }}"
     echo "  Args: {{ args }}"
     echo "==============================================================="
 
-    if [[ "{{ is_ci }}" == 0 ]]; then
-        TARGET_TAG="{{ variant }}"
-        local_image_name="{{ variant }}"
-
-    else
-        TARGET_TAG="{{ image_name }}"
-        local_image_name="{{ image_name }}"
-    fi
+    TARGET_TAG="{{ variant }}"
+    TARGET_TAG_WITH_VERSION="${TARGET_TAG}:{{ default_tag }}"
     if [[ "{{ flavor }}" != "regular" ]]; then
         TARGET_TAG="${TARGET_TAG}-{{ flavor }}"
-        local_image_name="${local_image_name}"
+        local_image_name="${TARGET_TAG}"
     fi
 
-    TARGET_TAG_WITH_VERSION="${TARGET_TAG}:{{ default_tag }}"
 
 
     BASE_FOR_BUILD=""
@@ -119,7 +112,7 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" image
             ;;
         "dx")
             if [[ "{{ is_ci }}" = "true" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ image_name }}:{{ default_tag }}"
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ tag }}"
             else
                 BASE_FOR_BUILD="localhost/${local_image_name}:{{ default_tag }}"
             fi
@@ -127,16 +120,16 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" image
             ;;
         "gdx")
             if [[ "{{ is_ci }}" = "true" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ image_name }}-dx:{{ default_tag }}"
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-dx:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/${local_image_name}-dx:{{ default_tag }}"
+                BASE_FOR_BUILD="localhost/${local_image_name}-dx:{{ tag }}"
             fi
             CONTAINERFILE="Containerfile.gdx"
             ;;
         "all")
-            just build variant={{ variant }} image_name={{ image_name }} is_ci={{ is_ci }} regular
-            just build variant={{ variant }} image_name={{ image_name }} is_ci={{ is_ci }} dx
-            just build variant={{ variant }} image_name={{ image_name }} is_ci={{ is_ci }} gdx
+            just build variant={{ variant }} is_ci={{ is_ci }} regular
+            just build variant={{ variant }} is_ci={{ is_ci }} dx
+            just build variant={{ variant }} is_ci={{ is_ci }} gdx
             exit 0
             ;;
         *)
@@ -145,15 +138,13 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" image
             ;;
     esac
 
-    final_image_name="{{ image_name }}"
-    if [[ "{{ is_ci }}" = "0" ]]; then
-        if [[ "{{ flavor }}" == "dx" ]]; then
-            final_image_name="${local_image_name}-dx"
-        elif [[ "{{ flavor }}" == "gdx" ]]; then
-            final_image_name="${local_image_name}-gdx"
-        else
-            final_image_name="${local_image_name}"
-        fi
+    final_image_name="{{ variant }}"
+    if [[ "{{ flavor }}" == "dx" ]]; then
+        final_image_name="{{ variant }}-dx"
+    elif [[ "{{ flavor }}" == "gdx" ]]; then
+        final_image_name="{{ variant }}-gdx"
+    else
+        final_image_name="{{ variant }}"
     fi
 
     echo "================================================================"

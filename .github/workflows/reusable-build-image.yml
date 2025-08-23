@@ -139,13 +139,13 @@ jobs:
         shell: bash
         env:
           FLAVOR: ${{ inputs.flavor }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
           IMAGE_VARIANT: ${{ inputs.image-variant }}
+          DEFAULT_TAG: ${{ inputs.default-tag }}
           PLATFORM: ${{ matrix.platform }}
         run: |
           set -x
           just=$(which just)
-          sudo "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${IMAGE_NAME}"
+          sudo "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}"
 
       - name: Setup Syft
         id: setup-syft
