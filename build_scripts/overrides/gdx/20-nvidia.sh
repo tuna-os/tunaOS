@@ -8,10 +8,6 @@ KERNEL_SUFFIX=""
 QUALIFIED_KERNEL="$(rpm -qa | grep -P 'kernel-(|'"$KERNEL_SUFFIX"'-)(\d+\.\d+\.\d+)' | sed -E 's/kernel-(|'"$KERNEL_SUFFIX"'-)//' | tail -n 1)"
 
 if [ "$IS_ALMALINUX" == true ]; then
-	# TODO: #10 Downgrading kernel as a workaround pending https://git.almalinux.org/rpms/nvidia-open-kmod/issues/12
-	if [ "$IS_ALMALINUXKITTEN" == true ]; then
-		QUALIFIED_KERNEL="6.12.0-109.el10.$(arch)"
-	fi
 	dnf versionlock delete kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
 	dnf install -y \
 		kernel-modules-extra-matched-$QUALIFIED_KERNEL \
