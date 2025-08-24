@@ -10,12 +10,12 @@ if is_rhel; then rm -f /usr/lib/bootc/install/20-rhel.toml; fi
 # uses during its build.  This avoids downgrading packages in the image that
 # have strict NVR requirements.
 if is_centos && ! is_almalinux; then
-    curl --retry 3 -Lo "/etc/yum.repos.d/compose.repo" "https://gitlab.com/redhat/centos-stream/containers/bootc/-/raw/c${MAJOR_VERSION_NUMBER}s/cs.repo"
-    sed -i \
-        -e "s@- (BaseOS|AppStream)@& - Compose@" \
-        -e "s@\(baseos\|appstream\)@&-compose@" \
-        /etc/yum.repos.d/compose.repo
-    cat /etc/yum.repos.d/compose.repo
+	curl --retry 3 -Lo "/etc/yum.repos.d/compose.repo" "https://gitlab.com/redhat/centos-stream/containers/bootc/-/raw/c${MAJOR_VERSION_NUMBER}s/cs.repo"
+	sed -i \
+		-e "s@- (BaseOS|AppStream)@& - Compose@" \
+		-e "s@\(baseos\|appstream\)@&-compose@" \
+		/etc/yum.repos.d/compose.repo
+	cat /etc/yum.repos.d/compose.repo
 fi
 echo "DEBUG info:"
 echo "is_fedora: $IS_FEDORA"

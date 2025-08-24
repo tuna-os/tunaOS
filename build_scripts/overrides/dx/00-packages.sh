@@ -1,6 +1,7 @@
 #!/bin/bash
 
-set -xeuo pipefail
+set -euox pipefail
+source /run/context/build_scripts/lib.sh
 
 # Function to handle errors and exit
 handle_error() {

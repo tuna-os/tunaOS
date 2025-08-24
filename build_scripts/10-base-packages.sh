@@ -18,25 +18,24 @@ source /run/context/build_scripts/lib.sh
 dnf -y install 'dnf-command(versionlock)'
 dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
 
-
 if [[ $IS_FEDORA == true ]]; then
-    # Enable the Fedora 40 repos
-    dnf --enable-repo=fedora-cisco-openh264
-    dnf --enable-repo=updates-cisco-openh264
-    dnf --enable-repo=updates-testing-cisco-openh264
+	# Enable the Fedora 40 repos
+	dnf --enable-repo=fedora-cisco-openh264
+	dnf --enable-repo=updates-cisco-openh264
+	dnf --enable-repo=updates-testing-cisco-openh264
 	# Setup RPM Fusion
-    dnf install -y \
-      https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
-      https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
-    
-    # Install multimedia codecs
-    dnf group install -y --with-optional Multimedia
+	dnf install -y \
+		https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
+		https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+
+	# Install multimedia codecs
+	dnf group install -y --with-optional Multimedia
 else
-    # Enable the EPEL repos for RHEL and AlmaLinux
+	# Enable the EPEL repos for RHEL and AlmaLinux
 	dnf install -y epel-release
 	/usr/bin/crb enable
-    dnf config-manager --set-enabled epel
-    dnf config-manager --set-enabled crb
+	dnf config-manager --set-enabled epel
+	dnf config-manager --set-enabled crb
 
 	# Multimedia codecs
 	dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
@@ -52,7 +51,6 @@ else
 		lame-libs \
 		libjxl
 fi
-
 
 if [[ $IS_ALMALINUX == true ]] && [ "$MAJOR_VERSION_NUMBER" -ge 9 ]; then
 	dnf swap -y coreutils-single coreutils

@@ -107,7 +107,7 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" tag='
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/${local_image_name}:{{ default_tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}:{{ default_tag }}"
             fi
             CONTAINERFILE="Containerfile.dx"
             ;;
@@ -115,14 +115,14 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" tag='
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-dx:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/${local_image_name}-dx:{{ tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}-dx:{{ tag }}"
             fi
             CONTAINERFILE="Containerfile.gdx"
             ;;
         "all")
-            just build variant={{ variant }} is_ci={{ is_ci }} regular
-            just build variant={{ variant }} is_ci={{ is_ci }} dx
-            just build variant={{ variant }} is_ci={{ is_ci }} gdx
+            just build {{ variant }} regular
+            just build {{ variant }} dx
+            just build {{ variant }} gdx
             exit 0
             ;;
         *)
@@ -169,6 +169,3 @@ build-all:
 
 lint:
     /usr/bin/find . -iname "*.sh" -type f -exec shellcheck "{}" ";"
-
-# Runs shfmt on all Bash scripts
-format:

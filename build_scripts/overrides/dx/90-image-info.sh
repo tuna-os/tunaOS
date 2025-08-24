@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-set -xeuo pipefail
+set -euox pipefail
+source /run/context/build_scripts/lib.sh
 
 FLAVOR="dx"
 IMAGE_NAME="${IMAGE_NAME}"
@@ -9,4 +10,3 @@ export FLAVOR
 export IMAGE_NAME
 export IMAGE_REF
 "${SCRIPTS_PATH}/image-info-set"
-

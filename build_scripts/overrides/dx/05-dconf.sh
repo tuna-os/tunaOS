@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-set -xeuo pipefail
+set -euox pipefail
+source /run/context/build_scripts/lib.sh
 
 # FIXME: make this part prettier, i dont know how to do it right now
 cat >/etc/dconf/db/distro.d/05-dx-logomenu-extension <<EOF

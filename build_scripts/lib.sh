@@ -27,24 +27,24 @@ IS_DEBIAN=false
 if [ -f /etc/os-release ]; then
 	. /etc/os-release
 	case "$ID" in
-		fedora)
-			IS_FEDORA=true
-			;;
-		rhel)
-			IS_RHEL=true
-			;;
-		almalinux)
-			IS_ALMALINUX=true
-			;;
-		centos)
-			IS_CENTOS=true
-			;;
-		ubuntu)
-			IS_UBUNTU=true
-			;;
-		debian)
-			IS_DEBIAN=true
-			;;
+	fedora)
+		IS_FEDORA=true
+		;;
+	rhel)
+		IS_RHEL=true
+		;;
+	almalinux)
+		IS_ALMALINUX=true
+		;;
+	centos)
+		IS_CENTOS=true
+		;;
+	ubuntu)
+		IS_UBUNTU=true
+		;;
+	debian)
+		IS_DEBIAN=true
+		;;
 	esac
 	# Handle variants
 	if [ -n "${ID_LIKE:-}" ] && [[ "$ID_LIKE" == *rhel* ]]; then
@@ -79,7 +79,6 @@ is_centos() { [ "$IS_CENTOS" = true ]; }
 is_ubuntu() { [ "$IS_UBUNTU" = true ]; }
 is_debian() { [ "$IS_DEBIAN" = true ]; }
 
-
 run_buildscripts_for() {
 	WHAT=$1
 	shift
@@ -107,9 +106,9 @@ copy_systemfiles_for() {
 }
 
 install_from_copr() {
-    CO_PR_NAME=$1
-    shift
-    dnf -y copr enable "$CO_PR_NAME"
-    dnf -y --enablerepo "copr:copr.fedorainfracloud.org:$(echo "$CO_PR_NAME" | tr '/' ':')" install "$@"
-    dnf -y copr disable "$CO_PR_NAME"
+	CO_PR_NAME=$1
+	shift
+	dnf -y copr enable "$CO_PR_NAME"
+	dnf -y --enablerepo "copr:copr.fedorainfracloud.org:$(echo "$CO_PR_NAME" | tr '/' ':')" install "$@"
+	dnf -y copr disable "$CO_PR_NAME"
 }

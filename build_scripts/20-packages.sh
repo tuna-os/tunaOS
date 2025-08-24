@@ -9,7 +9,6 @@ source /run/context/build_scripts/lib.sh
 # Remove conflicting packages
 dnf -y remove setroubleshoot
 
-
 # Install base packages
 dnf -y install \
 	-x gnome-extensions-app \
@@ -29,12 +28,11 @@ dnf -y install \
 	btrfs-progs \
 	xhost
 
-
 # Install OS-specific branding
 if [[ $IS_FEDORA == true ]]; then
-    dnf -y install fedora-logos
+	dnf -y install fedora-logos
 else
-    dnf -y install almalinux-backgrounds almalinux-logos
+	dnf -y install almalinux-backgrounds almalinux-logos
 fi
 
 # Install caffeine extension
@@ -48,9 +46,9 @@ fi
 
 # Tailscale
 if [[ $IS_FEDORA == true ]]; then
-    dnf config-manager --add-repo "https://pkgs.tailscale.com/stable/fedora/tailscale.repo"
+	dnf config-manager --add-repo "https://pkgs.tailscale.com/stable/fedora/tailscale.repo"
 else
-    dnf config-manager --add-repo "https://pkgs.tailscale.com/stable/centos/${MAJOR_VERSION_NUMBER}/tailscale.repo"
+	dnf config-manager --add-repo "https://pkgs.tailscale.com/stable/centos/${MAJOR_VERSION_NUMBER}/tailscale.repo"
 fi
 dnf config-manager --set-disabled "tailscale-stable"
 # FIXME: tailscale EPEL10 request: https://bugzilla.redhat.com/show_bug.cgi?id=2349099
@@ -70,8 +68,8 @@ install_from_copr ublue-os/packages \
 # Upstream ublue-os-signing bug, we are using /usr/etc for the container signing and bootc gets mad at this
 # FIXME: remove this once https://github.com/ublue-os/packages/issues/245 is closed
 if [ -d /usr/etc ]; then
-    cp -avf /usr/etc/. /etc
-    rm -rvf /usr/etc
+	cp -avf /usr/etc/. /etc
+	rm -rvf /usr/etc
 fi
 
 # Extra GNOME Extensions
@@ -79,7 +77,7 @@ fi
 install_from_copr ublue-os/staging gnome-shell-extension-{search-light,logo-menu,gsconnect}
 
 # Nerd Fonts
-if  [[ $IS_CENTOS == true ]] && [[ $IS_ALMALINUXKITTEN == false ]]; then
+if [[ $IS_CENTOS == true ]] && [[ $IS_ALMALINUXKITTEN == false ]]; then
 	install_from_copr che/nerd-fonts nerd-fonts
 fi
 
@@ -89,13 +87,13 @@ install_from_copr trixieua/morewaita-icon-theme morewaita-icon-theme
 # GNOME version specific workarounds
 GNOME_VERSION=$(gnome-shell --version | cut -d ' ' -f 3 | cut -d '.' -f 1)
 if [ "$GNOME_VERSION" -ge 48 ]; then
-    # GNOME 48: EPEL version of blur-my-shell is incompatible
-    dnf -y remove gnome-shell-extension-blur-my-shell
+	# GNOME 48: EPEL version of blur-my-shell is incompatible
+	dnf -y remove gnome-shell-extension-blur-my-shell
 
-    # GNOME 48: force update xdg-desktop-portal
-    # dnf -y install \
-    # 	xdg-desktop-portal \
-    # 	xdg-desktop-portal-gnome
+	# GNOME 48: force update xdg-desktop-portal
+	# dnf -y install \
+	# 	xdg-desktop-portal \
+	# 	xdg-desktop-portal-gnome
 fi
 
 # This is required so homebrew works indefinitely.
