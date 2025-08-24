@@ -20,64 +20,64 @@ IS_RHEL=false
 IS_ALMALINUX=false
 IS_ALMALINUXKITTEN=false
 IS_CENTOS=false
-IS_UBUNTU=false
-IS_DEBIAN=false
 
-# Detect using /etc/os-release if available
-if [ -f /etc/os-release ]; then
-	. /etc/os-release
-	case "$ID" in
-	fedora)
-		IS_FEDORA=true
-		;;
-	rhel)
-		IS_RHEL=true
-		;;
-	almalinux)
-		IS_ALMALINUX=true
-		;;
-	centos)
-		IS_CENTOS=true
-		;;
-	ubuntu)
-		IS_UBUNTU=true
-		;;
-	debian)
-		IS_DEBIAN=true
-		;;
-	esac
-	# Handle variants
-	if [ -n "${ID_LIKE:-}" ] && [[ "$ID_LIKE" == *rhel* ]]; then
-		IS_RHEL=true
-	fi
-	if [[ "$ID" == "almalinux-kitten" ]]; then
-		IS_ALMALINUXKITTEN=true
-	fi
-	# Fallback to rpm macros if /etc/os-release is missing
-	if [ "$(rpm -E '%fedora')" != "%fedora" ]; then
-		IS_FEDORA=true
-	fi
-	if [ "$(rpm -E '%rhel')" != "%rhel" ]; then
-		IS_RHEL=true
-	fi
-	if [ "$(rpm -E '%almalinux')" != "%almalinux" ]; then
-		IS_ALMALINUX=true
-	fi
-	if [ "$(rpm -E '%almalinux-kitten')" != "%almalinux-kitten" ]; then
-		IS_ALMALINUXKITTEN=true
-	fi
-	if [ "$(rpm -E '%centos')" != "%centos" ]; then
-		IS_CENTOS=true
-	fi
+if [ "$(rpm -E '%fedora')" != "%fedora" ]; then
+	IS_FEDORA=true
+fi
+if [ "$(rpm -E '%rhel')" != "%rhel" ]; then
+	IS_RHEL=true
+fi
+if [ "$(rpm -E '%almalinux')" != "%almalinux" ]; then
+	IS_ALMALINUX=true
+fi
+if [ "$(rpm -E '%almalinux-kitten')" != "%almalinux-kitten" ]; then
+	IS_ALMALINUXKITTEN=true
+fi
+if [ "$(rpm -E '%centos')" != "%centos" ]; then
+	IS_CENTOS=true
 fi
 
-is_fedora() { [ "$IS_FEDORA" = true ]; }
-is_rhel() { [ "$IS_RHEL" = true ]; }
-is_almalinux() { [ "$IS_ALMALINUX" = true ]; }
-is_almalinuxkitten() { [ "$IS_ALMALINUXKITTEN" = true ]; }
-is_centos() { [ "$IS_CENTOS" = true ]; }
-is_ubuntu() { [ "$IS_UBUNTU" = true ]; }
-is_debian() { [ "$IS_DEBIAN" = true ]; }
+echo "Detected OS:"
+if [ "$IS_FEDORA" = true ]; then
+	echo "  Fedora"
+fi
+if [ "$IS_RHEL" = true ]; then
+	echo "  RHEL"
+fi
+if [ "$IS_ALMALINUX" = true ]; then
+	echo "  AlmaLinux"
+fi
+if [ "$IS_ALMALINUXKITTEN" = true ]; then
+	echo "  AlmaLinux-Kitten"
+fi
+if [ "$IS_CENTOS" = true ]; then
+	echo "  CentOS"
+fi
+
+export IS_FEDORA
+export IS_RHEL
+export IS_ALMALINUX
+export IS_ALMALINUXKITTEN
+export IS_CENTOS
+
+if [ "$IS_FEDORA" = true ]; then
+	IMAGE_NAME="bonito"
+fi
+if [ "$IS_ALMALINUX" = true ] && [ "$IS_ALMALINUXKITTEN" = false ]; then
+	IMAGE_NAME="albacore"
+fi
+if [ "$IS_ALMALINUXKITTEN" = true ]; then
+	IMAGE_NAME="yellowfin"
+fi
+if [ "$IS_CENTOS" = true ] && [ "$IS_ALMALINUXKITTEN" = false ]; then
+	IMAGE_NAME="skipjack"
+fi
+if [ "$IS_RHEL" = true ] && [ "$IS_ALMALINUX" = false ] && [ "$IS_CENTOS" = false ]; then
+	IMAGE_NAME="redfin"
+fi
+
+export IMAGE_NAME
+
 
 run_buildscripts_for() {
 	WHAT=$1

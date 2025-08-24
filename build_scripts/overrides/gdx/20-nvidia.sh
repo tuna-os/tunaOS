@@ -26,7 +26,7 @@ if [ "$IS_ALMALINUX" == true ]; then
 	dnf config-manager --set-disabled "epel-multimedia" || true
 	dnf install -y almalinux-release-nvidia-driver
 	dnf install -y nvidia-open-kmod nvidia-driver
-	dnf install -y -x cuda-nsight-systems nvidia-driver-cuda cuda
+	dnf install -y -x cuda-nsight -x cuda-nsight-compute -x cuda-nsight-systems -x nsight-compute -x nsight-systems nvidia-driver-cuda cuda
 	dnf config-manager --set-disabled "almalinux-nvidia"
 	dnf config-manager --set-disabled "cuda-rhel10-$(arch)"
 fi

@@ -154,6 +154,12 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" tag='
         {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" {{ args }}
     fi
 
+yellowfin variant='regular':
+    just build yellowfin {{ variant }}
+
+albacore variant='regular':
+    just build albacore {{ variant }}
+
 # --- Build-all helpers ---
 build-all-regular:
     just build yellowfin

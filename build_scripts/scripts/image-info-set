@@ -3,9 +3,9 @@
 FLAVOR="${FLAVOR:-$1}"
 
 set -xeuo pipefail
+source /run/context/build_scripts/lib.sh
 
 IMAGE_INFO="${IMAGE_INFO:-/usr/share/ublue-os/image-info.json}"
-IMAGE_NAME="${IMAGE_NAME}"
 IMAGE_REF="ostree-image-signed:docker://ghcr.io/tuna-os/${IMAGE_NAME}"
 
 cat "${IMAGE_INFO}"
@@ -20,5 +20,6 @@ jq -f /dev/stdin "${IMAGE_INFO}" >"${ANNOYING_JQ_WORKAROUND}" <<EOF
 EOF
 
 mv "${ANNOYING_JQ_WORKAROUND}" "${IMAGE_INFO}"
+chmod 644 "${IMAGE_INFO}"
 cat "${IMAGE_INFO}"
 
