@@ -59,8 +59,33 @@ fi
 if [ "$IS_RHEL" = true ] && [ "$IS_ALMALINUX" = false ] && [ "$IS_CENTOS" = false ]; then
 	IMAGE_NAME="redfin"
 fi
-export IMAGE_NAME
+
+    case "$IMAGE_NAME" in
+        "bonito")
+            IMAGE_PRETTY_NAME="Bonito"
+            ;;
+        "albacore")
+            IMAGE_PRETTY_NAME="Albacore"
+            ;;
+        "yellowfin")
+            IMAGE_PRETTY_NAME="Yellowfin"
+            ;;
+        "skipjack")
+            IMAGE_PRETTY_NAME="Skipjack"
+            ;;
+        "redfin")
+            IMAGE_PRETTY_NAME="Redfin"
+            ;;
+        *)
+            # Fallback to simple capitalization if not in the list
+            IMAGE_PRETTY_NAME="$(tr '[:lower:]' '[:upper:]' <<< "${IMAGE_NAME:0:1}")${IMAGE_NAME:1}"
+            ;;
+    esac
+
+    export IMAGE_NAME
+    export IMAGE_PRETTY_NAME
 }
+
 get_image_name 
 
 detected_os() {
