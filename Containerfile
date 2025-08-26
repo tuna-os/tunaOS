@@ -1,4 +1,4 @@
-ARG BASE_IMAGE="${BASE_IMAGE:-quay.io/almalinuxorg/almalinux-bootc}"
+ARG BASE_IMAGE="${BASE_IMAGE}"
 
 
 FROM scratch as context
@@ -8,14 +8,16 @@ COPY build_scripts /build_scripts
 
 FROM ${BASE_IMAGE}
 
-ARG IMAGE_NAME="${IMAGE_NAME:-bluefin}"
-ARG IMAGE_VENDOR="${IMAGE_VENDOR:-ublue-os}"
+ARG IMAGE_NAME="${IMAGE_NAME}"
+ARG IMAGE_VENDOR="${IMAGE_VENDOR}"
 ARG SHA_HEAD_SHORT="${SHA_HEAD_SHORT:-deadbeef}"
+ARG BASE_IMAGE
+ENV BASE_IMAGE=${BASE_IMAGE}
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/var --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-   /run/context/build_scripts/copy-files.sh
+  BASE_IMAGE="${BASE_IMAGE}" /run/context/build_scripts/copy-files.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/var --mount=type=tmpfs,dst=/boot \

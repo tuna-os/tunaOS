@@ -160,6 +160,12 @@ yellowfin variant='regular':
 albacore variant='regular':
     just build albacore {{ variant }}
 
+skipjack variant='regular':
+    just build skipjack {{ variant }}
+
+bonito variant='regular':
+    just build bonito {{ variant }}
+
 # --- Build-all helpers ---
 build-all-regular:
     just build yellowfin

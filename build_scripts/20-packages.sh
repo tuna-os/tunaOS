@@ -36,7 +36,10 @@ else
 fi
 
 # Install caffeine extension
-if [[ $IS_ALMALINUX == true || $IS_RHEL == true ]]; then
+echo $IMAGE_NAME
+detected_os
+cat /etc/os-release
+if [[ "$IS_ALMALINUX" = true || "$IS_RHEL" = true ]]; then
 	dnf install -y https://kojipkgs.fedoraproject.org//packages/gnome-shell-extension-caffeine/56/1.el10_1/noarch/gnome-shell-extension-caffeine-56-1.el10_1.noarch.rpm
 else
 	dnf install -y gnome-shell-extension-caffeine

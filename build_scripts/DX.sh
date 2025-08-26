@@ -10,4 +10,5 @@ copy_systemfiles_for dx
 run_buildscripts_for dx
 
 jq . /usr/share/ublue-os/image-info.json
+detected_os
 printf "::endgroup::\n"

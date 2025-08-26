@@ -11,8 +11,10 @@ CONTEXT_PATH="$(realpath "$(dirname "$0")/..")" # should return /run/context
 BUILD_SCRIPTS_PATH="$(realpath "$(dirname "$0")")"
 MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
 SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
+BASE_IMAGE="$(sh -c '. /usr/lib/os-release ; echo ${BASE_IMAGE}')"
 export SCRIPTS_PATH
 export MAJOR_VERSION_NUMBER
+export BASE_IMAGE
 
 # OS Detection Flags
 IS_FEDORA=false
@@ -21,37 +23,16 @@ IS_ALMALINUX=false
 IS_ALMALINUXKITTEN=false
 IS_CENTOS=false
 
-if [ "$(rpm -E '%fedora')" != "%fedora" ]; then
-	IS_FEDORA=true
-fi
-if [ "$(rpm -E '%rhel')" != "%rhel" ]; then
-	IS_RHEL=true
-fi
-if [ "$(rpm -E '%almalinux')" != "%almalinux" ]; then
-	IS_ALMALINUX=true
-fi
-if [ "$(rpm -E '%almalinux-kitten')" != "%almalinux-kitten" ]; then
-	IS_ALMALINUXKITTEN=true
-fi
-if [ "$(rpm -E '%centos')" != "%centos" ]; then
-	IS_CENTOS=true
-fi
-
-echo "Detected OS:"
-if [ "$IS_FEDORA" = true ]; then
-	echo "  Fedora"
-fi
-if [ "$IS_RHEL" = true ]; then
-	echo "  RHEL"
-fi
-if [ "$IS_ALMALINUX" = true ]; then
-	echo "  AlmaLinux"
-fi
-if [ "$IS_ALMALINUXKITTEN" = true ]; then
-	echo "  AlmaLinux-Kitten"
-fi
-if [ "$IS_CENTOS" = true ]; then
-	echo "  CentOS"
+if [[ "${BASE_IMAGE,,}" == *"fedora"* ]]; then
+    IS_FEDORA=true
+elif [[ "${BASE_IMAGE,,}" == *"red hat"* ]]; then
+    IS_RHEL=true
+elif [[ "${BASE_IMAGE,,}" == *"almalinux"* ]]; then
+    IS_ALMALINUX=true
+elif [[ "${BASE_IMAGE,,}" == *"kitten"* ]]; then
+    IS_ALMALINUXKITTEN=true
+elif [[ "${BASE_IMAGE,,}" == *"centos"* ]]; then
+    IS_CENTOS=true
 fi
 
 export IS_FEDORA
@@ -78,6 +59,31 @@ fi
 
 export IMAGE_NAME
 
+detected_os() {
+	echo "Detected OS:"
+	if [ "$IS_FEDORA" = true ]; then
+		echo "  Fedora"
+	fi
+	if [ "$IS_RHEL" = true ]; then
+		echo "  RHEL"
+	fi
+	if [ "$IS_ALMALINUX" = true ]; then
+		echo "  AlmaLinux"
+	fi
+	if [ "$IS_ALMALINUXKITTEN" = true ]; then
+		echo "  AlmaLinux-Kitten"
+	fi
+	if [ "$IS_CENTOS" = true ]; then
+		echo "  CentOS"
+	fi
+}
+
+print_debug_info() {
+	detected_os
+	echo "IMAGE_NAME: $IMAGE_NAME"
+    cat /etc/os-release
+    cat /usr/ublue-os/image-info.json || true
+}
 
 run_buildscripts_for() {
 	WHAT=$1

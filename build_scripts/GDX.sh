@@ -10,4 +10,5 @@ copy_systemfiles_for gdx
 run_buildscripts_for gdx
 
 jq . /usr/share/ublue-os/image-info.json
+detected_os
 printf "::endgroup::\n"

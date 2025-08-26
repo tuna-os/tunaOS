@@ -31,4 +31,6 @@ bootc container lint --fatal-warnings || true
 
 jq . /usr/share/ublue-os/image-info.json
 
+detected_os
+
 printf "::endgroup::\n"
