@@ -4,7 +4,7 @@
   printf "::group:: === 90 Image Info ===\n"
 
 source /run/context/build_scripts/lib.sh
-
+get_image_name
 IMAGE_VENDOR=$IMAGE_VENDOR
 IMAGE_NAME=$IMAGE_NAME
   IMAGE_REF="ostree-image-signed:docker://ghcr.io/${IMAGE_VENDOR}/${IMAGE_NAME}"
@@ -23,7 +23,7 @@ IMAGE_NAME=$IMAGE_NAME
   }
   EOF
 
-  IMAGE_PRETTY_NAME="$(tr '[:lower:]' '[:upper:]' <<< "${IMAGE_NAME:0:1}")${IMAGE_NAME:1}"
+  IMAGE_PRETTY_NAME="${IMAGE_PRETTY_NAME}"
   HOME_URL="https://projectbluefin.io"
   DOCUMENTATION_URL="https://docs.projectbluefin.io"
   SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"
