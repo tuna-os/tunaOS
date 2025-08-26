@@ -26,11 +26,9 @@ TunaOS is a curated collection of **Atomic desktop operating systems** that are 
 
 
 ### 🐠 Yellowfin
-[![Build Status](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml/badge.svg?branch=yellowfin)](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml)
 
 **Base:** [AlmaLinux Kitten 10](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#container-images)
 **Image:** `ghcr.io/tuna-os/yellowfin:latest`  
-**Branch:** [yellowfin](https://github.com/hanthor/tunaOS/tree/yellowfin)
 
 
 The closest to upstream Bluefin LTS experience with enhanced capabilities:
@@ -45,7 +43,6 @@ The closest to upstream Bluefin LTS experience with enhanced capabilities:
 
 **Base:** AlmaLinux 10.0
 **Image:** `ghcr.io/tuna-os/albacore:latest`  
-**Branch:** [albacore](https://github.com/hanthor/tunaOS/tree/albacore)
 
 Stable enterprise-grade desktop experience built on AlmaLinux foundation.
 
