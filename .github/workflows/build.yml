@@ -19,7 +19,6 @@ on:
         - albacore
         - skipjack
         - bonito
-        - yellowfin,albacore
         - all
       build_variant:
         description: 'Build variant (regular, dx, gdx)'
