@@ -3,11 +3,7 @@
   set -xeuo pipefail
   printf "::group:: === 90 Image Info ===\n"
 
-  MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
-  SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
-  export SCRIPTS_PATH
-  export MAJOR_VERSION_NUMBER
-
+source /run/context/build_scripts/lib.sh
   IMAGE_REF="ostree-image-signed:docker://ghcr.io/${IMAGE_VENDOR}/${IMAGE_NAME}"
   IMAGE_INFO="/usr/share/ublue-os/image-info.json"
   IMAGE_FLAVOR="main"
