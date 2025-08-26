@@ -58,7 +58,8 @@ if [ "$IS_RHEL" = true ] && [ "$IS_ALMALINUX" = false ] && [ "$IS_CENTOS" = fals
 	IMAGE_NAME="redfin"
 fi
 export IMAGE_NAME
-} 
+}
+get_image_name 
 
 detected_os() {
 	echo "Detected OS:"
