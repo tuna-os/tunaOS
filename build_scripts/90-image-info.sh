@@ -4,7 +4,9 @@
   printf "::group:: === 90 Image Info ===\n"
 
 source /run/context/build_scripts/lib.sh
-IMAGE_VENDOR="tuna-os" 
+
+IMAGE_VENDOR=$IMAGE_VENDOR
+IMAGE_NAME=$IMAGE_NAME
   IMAGE_REF="ostree-image-signed:docker://ghcr.io/${IMAGE_VENDOR}/${IMAGE_NAME}"
   IMAGE_INFO="/usr/share/ublue-os/image-info.json"
   IMAGE_FLAVOR="main"
