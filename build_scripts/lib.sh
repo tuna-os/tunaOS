@@ -41,6 +41,7 @@ export IS_ALMALINUX
 export IS_ALMALINUXKITTEN
 export IS_CENTOS
 
+get_image_name() {
 if [ "$IS_FEDORA" = true ]; then
 	IMAGE_NAME="bonito"
 fi
@@ -56,8 +57,8 @@ fi
 if [ "$IS_RHEL" = true ] && [ "$IS_ALMALINUX" = false ] && [ "$IS_CENTOS" = false ]; then
 	IMAGE_NAME="redfin"
 fi
-
 export IMAGE_NAME
+} 
 
 detected_os() {
 	echo "Detected OS:"
