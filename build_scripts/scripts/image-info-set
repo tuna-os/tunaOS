@@ -19,6 +19,7 @@ jq -f /dev/stdin "${IMAGE_INFO}" >"${ANNOYING_JQ_WORKAROUND}" <<EOF
 ."image-ref" = "${IMAGE_REF}"
 EOF
 
+mkdir -p /usr/share/ublue-os/
 mv "${ANNOYING_JQ_WORKAROUND}" "${IMAGE_INFO}"
 chmod 644 "${IMAGE_INFO}"
 cat "${IMAGE_INFO}"
