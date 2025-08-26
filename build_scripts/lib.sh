@@ -15,6 +15,8 @@ BASE_IMAGE="$(sh -c '. /usr/lib/os-release ; echo ${BASE_IMAGE}')"
 export SCRIPTS_PATH
 export MAJOR_VERSION_NUMBER
 export BASE_IMAGE
+export IMAGE_VENDOR="tuna-os"
+
 
 # OS Detection Flags
 IS_FEDORA=false
