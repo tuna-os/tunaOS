@@ -19,6 +19,7 @@ on:
         - albacore
         - skipjack
         - bonito
+        - yellowfin,albacore
         - all
       build_variant:
         description: 'Build variant (regular, dx, gdx)'
@@ -38,6 +39,7 @@ on:
         - linux/amd64
         - linux/amd64,linux/arm64
         - linux/arm64
+        - linux/amd64/v2
 
 
 concurrency:
