@@ -9,8 +9,9 @@ source /run/context/build_scripts/lib.sh
 # This is the base for a minimal GNOME system on CentOS Stream.
 
 # This thing slows down downloads A LOT for no reason
-# dnf remove -y subscription-manager
-
+if [[ $IS_CENTOS == true ]]; then
+dnf remove -y subscription-manager
+fi
 # dnf -y install centos-release-hyperscale-kernel
 # dnf config-manager --set-disabled "centos-hyperscale,centos-hyperscale-kernel"
 # dnf --enablerepo="centos-hyperscale" --enablerepo="centos-hyperscale-kernel" -y update kernel
