@@ -32,7 +32,7 @@ TunaOS is a curated collection of **Bootc-based desktop operating systems** that
 - **Homebrew**: We bake Homebrew into the image, so all your CLI apps (and fonts) are just a brew command away
 - **Flathub by Default**: This is a no-brainer that isn't preset in our base images. Actually get all the Flatpaks thata generally available on the net. 
 
-## 🐠 Available Variants
+## 🐠 Images
 
 <img width="328" height="318" alt="1000016351" src="https://github.com/user-attachments/assets/759fc093-baf0-4959-900a-5e9c2098f745" />
 
