@@ -110,16 +110,24 @@ Cutting-edge experience with Bluefin LTS tooling ported to the latest Fedora rel
 ### Make an ISO or VM
 Use [bootc-image-builder](https://github.com/osbuild/bootc-image-builder) to create installation media:
 
-## Build-your-own ISO
+## Build-your-own ISO or VM image
 run the [build-iso.sh](https://github.com/Tuna-OS/tunaOS/blob/main/build-iso.sh) script in this repo or download the script and run it to use bootc-image-builder to make an ISO:
 ```bash
-curl https://raw.githubusercontent.com/Tuna-OS/tunaOS/refs/heads/main/build-iso.sh -o build-iso.sh
+curl https://raw.githubusercontent.com/Tuna-OS/tunaOS/refs/heads/main/build-iso.sh \
+-o build-bootc.sh
 chmod +x build-bootc.sh
+
+# Now you can make a ISO for Albacore
 sudo ./build-bootc.sh iso ghcr.io/tuna-os/albacore:latest
+
+# Or build yellowfin-dx
 sudo ./build-bootc.sh iso ghcr.io/tuna-os/yellowfin-dx:latest
 
 # Or make a VM image
 sudo ./build-bootc.sh qcow2 ghcr.io/tuna-os/yellowfin-dx:latest
+
+# default username/password for VMs is "centos" / "centos"
+# you can edit this in the script
 
 ```
 
