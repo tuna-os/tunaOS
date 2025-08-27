@@ -7,12 +7,13 @@ source /run/context/build_scripts/lib.sh
 get_image_name
 IMAGE_VENDOR=$IMAGE_VENDOR
 IMAGE_NAME=$IMAGE_NAME
-  IMAGE_REF="ostree-image-signed:docker://ghcr.io/${IMAGE_VENDOR}/${IMAGE_NAME}"
-  IMAGE_INFO="/usr/share/ublue-os/image-info.json"
-  IMAGE_FLAVOR="main"
+IMAGE_REF="ostree-image-signed:docker://ghcr.io/${IMAGE_VENDOR}/${IMAGE_NAME}"
+IMAGE_INFO="/usr/share/ublue-os/image-info.json"
+IMAGE_FLAVOR="main"
   
 
-  cat >$IMAGE_INFO <<EOF
+  
+cat >$IMAGE_INFO <<EOF
   {
     "image-name": "${IMAGE_NAME}",
     "image-ref": "${IMAGE_REF}",
@@ -21,38 +22,38 @@ IMAGE_NAME=$IMAGE_NAME
     "image-tag": "latest",
     "major-version": "${MAJOR_VERSION_NUMBER}"
   }
-  EOF
+EOF
 
-  IMAGE_PRETTY_NAME="${IMAGE_PRETTY_NAME}"
-  HOME_URL="https://projectbluefin.io"
-  DOCUMENTATION_URL="https://docs.projectbluefin.io"
-  SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"
-  BUG_SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"
-  CODE_NAME="Achillobator"
+IMAGE_PRETTY_NAME="${IMAGE_PRETTY_NAME}"
+HOME_URL="https://projectbluefin.io"
+DOCUMENTATION_URL="https://docs.projectbluefin.io"
+SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"
+BUG_SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"
+CODE_NAME="Achillobator"
 
-  chmod 644 $IMAGE_INFO
+chmod 644 $IMAGE_INFO
 
-  # OS Release File (changed in order with upstream)
-  sed -i -f - /usr/lib/os-release <<EOF
-  s/^NAME=.*/NAME=\"${IMAGE_PRETTY_NAME}\"/
-  s|^VERSION_CODENAME=.*|VERSION_CODENAME=\"${CODE_NAME}\"|
-  s/^VARIANT_ID=.*/VARIANT_ID=${IMAGE_NAME}/
-  s/^PRETTY_NAME=.*/PRETTY_NAME=\"${IMAGE_PRETTY_NAME}\"/
-  s|^HOME_URL=.*|HOME_URL=\"${HOME_URL}\"|
-  s|^BUG_REPORT_URL=.*|BUG_REPORT_URL=\"${BUG_SUPPORT_URL}\"|
-  s|^CPE_NAME=\"cpe:/o:centos:centos|CPE_NAME=\"cpe:/o:jamesreilly:${IMAGE_NAME}-tunaos\"|
+# OS Release File (changed in order with upstream)
+sed -i -f - /usr/lib/os-release <<EOF
+s/^NAME=.*/NAME=\"${IMAGE_PRETTY_NAME}\"/
+s|^VERSION_CODENAME=.*|VERSION_CODENAME=\"${CODE_NAME}\"|
+s/^VARIANT_ID=.*/VARIANT_ID=${IMAGE_NAME}/
+s/^PRETTY_NAME=.*/PRETTY_NAME=\"${IMAGE_PRETTY_NAME}\"/
+s|^HOME_URL=.*|HOME_URL=\"${HOME_URL}\"|
+s|^BUG_REPORT_URL=.*|BUG_REPORT_URL=\"${BUG_SUPPORT_URL}\"|
+s|^CPE_NAME=\"cpe:/o:centos:centos|CPE_NAME=\"cpe:/o:jamesreilly:${IMAGE_NAME}-tunaos\"|
 
-  /^REDHAT_BUGZILLA_PRODUCT=/d
-  /^REDHAT_BUGZILLA_PRODUCT_VERSION=/d
-  /^REDHAT_SUPPORT_PRODUCT=/d
-  /^REDHAT_SUPPORT_PRODUCT_VERSION=/d
-  EOF
+/^REDHAT_BUGZILLA_PRODUCT=/d
+/^REDHAT_BUGZILLA_PRODUCT_VERSION=/d
+/^REDHAT_SUPPORT_PRODUCT=/d
+/^REDHAT_SUPPORT_PRODUCT_VERSION=/d
+EOF
 
-  tee -a /usr/lib/os-release <<EOF
-  DOCUMENTATION_URL="${DOCUMENTATION_URL}"
-  SUPPORT_URL="${SUPPORT_URL}"
-  DEFAULT_HOSTNAME="${IMAGE_NAME}"
-  BUILD_ID="${SHA_HEAD_SHORT:-testing}"
-  EOF
+tee -a /usr/lib/os-release <<EOF
+DOCUMENTATION_URL="${DOCUMENTATION_URL}"
+SUPPORT_URL="${SUPPORT_URL}"
+DEFAULT_HOSTNAME="${IMAGE_NAME}"
+BUILD_ID="${SHA_HEAD_SHORT:-testing}"
+EOF
 
-  printf "::endgroup::\n"
+printf "::endgroup::\n"
