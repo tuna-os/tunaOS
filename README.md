@@ -160,9 +160,12 @@ Related Communities:
 
 <div align="center">
 
-**Made by James in his free time**
-**Powered by [Bootc](https://github.com/bootc-dev/bootc)**
-**Inspired by [Bluefin](https://projectbluefin.io) and the [Universal Blue](https://universal-blue.org/) Community
+*Made by James in his free time*
+
+*Powered by [Bootc](https://github.com/bootc-dev/bootc)*
+
+*Inspired by [Bluefin](https://projectbluefin.io) and the [Universal Blue](https://universal-blue.org/) Community*
+
 *Licensed under [Apache 2.0](LICENSE)*
 
 </div>
