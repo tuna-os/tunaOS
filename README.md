@@ -14,9 +14,9 @@
 
 ---
 
-[![License](https://img.shields.io/github/license/hanthor/tunaOS?style=for-the-badge)](LICENSE)
-[![GitHub Stars](https://img.shields.io/github/stars/hanthor/tunaOS?style=for-the-badge)](https://github.com/hanthor/tunaOS/stargazers)
-[![Issues](https://img.shields.io/github/issues/hanthor/tunaOS?style=for-the-badge)](https://github.com/hanthor/tunaOS/issues)
+[![License](https://img.shields.io/github/license/tuna-os/tunaOS?style=for-the-badge)](LICENSE)
+[![GitHub Stars](https://img.shields.io/github/stars/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/stargazers)
+[![Issues](https://img.shields.io/github/issues/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/issues)
 
 </div>
 
@@ -129,7 +129,7 @@ PRs welcome! The goal is to match the feature set of Bluefin LTS and Bluefin.
 
 We'd love to hear from you! Whether you're using these images or just curious:
 
-- 🐛 **Report Issues:** [GitHub Issues](https://github.com/hanthor/tunaOS/issues)
+- 🐛 **Report Issues:** [GitHub Issues](https://github.com/tuna-os/tunaOS/issues)
 - [m] **Chat**: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia) 
 
 Related Communities: 
