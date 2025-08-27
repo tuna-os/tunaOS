@@ -52,7 +52,9 @@ We ship 3 versions, matching upstream:
 **Base:** [AlmaLinux 10.0](https://almalinux.org/blog/2025-05-27-welcoming-almalinux-10/)
 
 **Image:** `ghcr.io/tuna-os/albacore:latest` 
+
 **DX:** `ghcr.io/tuna-os/albacore-dx:latest` 
+
 **GDX:** `ghcr.io/tuna-os/albacore-gdx:latest` 
 
 
@@ -66,7 +68,9 @@ Stable enterprise-grade desktop experience built on AlmaLinux foundation.
 **Base:** [AlmaLinux Kitten 10](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#container-images)
 
 **Image:** `ghcr.io/tuna-os/yellowfin:latest`  
+
 **DX:** `ghcr.io/tuna-os/yellowfin-dx:latest`  
+
 **GDX:** `ghcr.io/tuna-os/yellowfin-gdx:latest`  
 
 
@@ -80,6 +84,7 @@ The closest to upstream Bluefin LTS experience with enhanced capabilities:
 ### 🎣 Bonito (Fedora)
 
 **Base:** Fedora 42
+
 **Image:** `ghcr.io/tuna-os/bonito:latest`  
 
 Cutting-edge experience with Bluefin LTS tooling ported to the latest Fedora release.
@@ -88,6 +93,7 @@ Cutting-edge experience with Bluefin LTS tooling ported to the latest Fedora rel
 ### 🍣 Skipjack (CentOS)
 
 **Base:**  CentOS 10
+
 **Image:** `ghcr.io/tuna-os/skipjack:latest`  
 
 ---
