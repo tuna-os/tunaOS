@@ -1,5 +1,3 @@
-> [!IMPORTANT]
->Builds are failing as I update the core logic. I'll focus on this after finalizing the build for Bluefin LTS. 
 
 <div align="center">
 <picture>
@@ -33,9 +31,10 @@ TunaOS is a curated collection of **Bootc-based desktop operating systems** that
 - **Flathub by Default**: This is a no-brainer that isn't preset in our base images. Actually get all the Flatpaks thata generally available on the net. 
 
 ## 🐠 Images
+<div align="center">
 
 <img width="328" height="318" alt="1000016351" src="https://github.com/user-attachments/assets/759fc093-baf0-4959-900a-5e9c2098f745" />
-
+</div>
 
 We ship 3 versions, matching upstream:
 
