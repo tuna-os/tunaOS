@@ -38,6 +38,7 @@ on:
         default: ''
         type: choice
         options:
+        - ''
         - linux/amd64
         - linux/amd64/v2
         - linux/arm64
