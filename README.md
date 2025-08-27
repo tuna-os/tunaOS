@@ -37,6 +37,15 @@ TunaOS is a curated collection of **Bootc-based desktop operating systems** that
 <img width="328" height="318" alt="1000016351" src="https://github.com/user-attachments/assets/759fc093-baf0-4959-900a-5e9c2098f745" />
 
 
+We ship 3 versions, matching upstream:
+
+- [**Regular**:](https://docs.projectbluefin.io/)
+    - See Bluefin's excellent documentation for info 
+- [**DX (Developer Experience)**](https://docs.projectbluefin.io/dx)
+    - Adding libvirt, Docker, VSCode, etc. 
+- [**GDX (Graphical Developer Experience)**](https://docs.projectbluefin.io/gdx)
+    - Adding Nvidia drivers and CUDA. For Nvdia users/AI/VFX devs.
+
 
 ### 🐟 Albacore (AlmaLinux)
 
