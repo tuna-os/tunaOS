@@ -2,6 +2,7 @@
 
 set -xeuo pipefail
 printf "::group:: ===Image Cleanup===\n"
+source /run/context/build_scripts/lib.sh
 
 # Image cleanup
 # Specifically called by build.sh
