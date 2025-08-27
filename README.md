@@ -25,18 +25,6 @@ TunaOS is a curated collection of **Atomic desktop operating systems** that are 
 <img width="328" height="318" alt="1000016351" src="https://github.com/user-attachments/assets/759fc093-baf0-4959-900a-5e9c2098f745" />
 
 
-### 🐠 Yellowfin
-
-**Base:** [AlmaLinux Kitten 10](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#container-images)
-**Image:** `ghcr.io/tuna-os/yellowfin:latest`  
-
-
-The closest to upstream Bluefin LTS experience with enhanced capabilities:
-- ✨ **x86_64/v2** microarchitecture support for older CPUs (pre-2013)
-- 🖥️ **SPICE support** for qemu/libvirt virtualization
-- 🔄 **Compatible with upstream LTS** because it's based on CentOS
-
----
 
 ### 🐟 Albacore
 [![Build Status](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml/badge.svg?branch=albacore)](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml)
@@ -56,6 +44,18 @@ Server-optimized variant with:
 - 🚫 **No GNOME on Boot** (display manager disabled)
 - 💻 **Virtualization Host** capabilities included
 - 🏢 **Perfect for** server deployments and virtualization hosts
+
+---
+### 🐠 Yellowfin
+
+**Base:** [AlmaLinux Kitten 10](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#container-images)
+**Image:** `ghcr.io/tuna-os/yellowfin:latest`  
+
+
+The closest to upstream Bluefin LTS experience with enhanced capabilities:
+- ✨ **x86_64/v2** microarchitecture support for older CPUs (pre-2013)
+- 🖥️ **SPICE support** for qemu/libvirt virtualization
+- 🔄 **Compatible with upstream LTS** because it's based on CentOS
 
 ---
 
