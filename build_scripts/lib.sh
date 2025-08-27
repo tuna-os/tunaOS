@@ -25,17 +25,17 @@ IS_ALMALINUX=false
 IS_ALMALINUXKITTEN=false
 IS_CENTOS=false
 
-if [[ "${BASE_IMAGE,,}" == *"fedora"* ]]; then
-    IS_FEDORA=true
-elif [[ "${BASE_IMAGE,,}" == *"red hat"* ]]; then
-    IS_RHEL=true
-elif [[ "${BASE_IMAGE,,}" == *"almalinux"* ]]; then
-    IS_ALMALINUX=true
-elif [[ "${BASE_IMAGE,,}" == *"kitten"* ]]; then
-    IS_ALMALINUXKITTEN=true
-elif [[ "${BASE_IMAGE,,}" == *"centos"* ]]; then
-    IS_CENTOS=true
-fi
+[[ "${BASE_IMAGE,,}" == *"fedora"* ]] && IS_FEDORA=true
+[[ "${BASE_IMAGE,,}" == *"red hat"* ]] && IS_RHEL=true
+[[ "${BASE_IMAGE,,}" == *"almalinux"* ]] && IS_ALMALINUX=true
+[[ "${BASE_IMAGE,,}" == *"-kitten"* ]] && IS_ALMALINUXKITTEN=true
+[[ "${BASE_IMAGE,,}" == *"centos"* ]] && IS_CENTOS=true
+
+echo "FEDORA: $IS_FEDORA"
+echo "RHEL: $IS_RHEL"
+echo "ALMALINUX: $IS_ALMALINUX"
+echo "ALMALINUXKITTEN: $IS_ALMALINUXKITTEN"
+echo "CENTOS: $IS_CENTOS"
 
 export IS_FEDORA
 export IS_RHEL
@@ -44,26 +44,22 @@ export IS_ALMALINUXKITTEN
 export IS_CENTOS
 
 get_image_name() {
-if [ "$IS_FEDORA" = true ]; then
-	IMAGE_NAME="bonito"
-	IMAGE_PRETTY_NAME="Bonito"
-fi
-if [ "$IS_ALMALINUX" = true ] && [ "$IS_ALMALINUXKITTEN" = false ]; then
-	IMAGE_NAME="albacore"
-	IMAGE_PRETTY_NAME="Albacore"
-fi
-if [ "$IS_ALMALINUXKITTEN" = true ]; then
-	IMAGE_NAME="yellowfin"
-	IMAGE_PRETTY_NAME="Yellowfin"
-fi
-if [ "$IS_CENTOS" = true ] && [ "$IS_ALMALINUXKITTEN" = false ]; then
-	IMAGE_NAME="skipjack"
-	IMAGE_PRETTY_NAME="Skipjack"
-fi
-if [ "$IS_RHEL" = true ] && [ "$IS_ALMALINUX" = false ] && [ "$IS_CENTOS" = false ]; then
-	IMAGE_NAME="redfin"
-	IMAGE_PRETTY_NAME="Redfin"
-fi
+    if [ "$IS_FEDORA" = true ]; then
+        IMAGE_NAME="bonito"
+        IMAGE_PRETTY_NAME="Bonito"
+    elif [ "$IS_ALMALINUXKITTEN" = true ]; then
+        IMAGE_NAME="yellowfin"
+        IMAGE_PRETTY_NAME="Yellowfin"
+    elif [ "$IS_ALMALINUX" = true ]; then
+        IMAGE_NAME="albacore"
+        IMAGE_PRETTY_NAME="Albacore"
+    elif [ "$IS_CENTOS" = true ]; then
+        IMAGE_NAME="skipjack"
+        IMAGE_PRETTY_NAME="Skipjack"
+    elif [ "$IS_RHEL" = true ]; then
+        IMAGE_NAME="redfin"
+        IMAGE_PRETTY_NAME="Redfin"
+    fi
 
     export IMAGE_NAME
     export IMAGE_PRETTY_NAME
