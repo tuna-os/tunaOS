@@ -22,7 +22,15 @@
 
 ## 🚀 About TunaOS
 
-TunaOS is a curated collection of **Atomic desktop operating systems** that are forks of Bluefin, built on modern container technology. This is an exploration of the flexibilty of Bootc and a hope that some people believe in the Enterprise Linux Desktop. The plan it to provide a stable experience with up-to-date GNOME and modern tooling. 
+TunaOS is a curated collection of **Bootc-based desktop operating systems** that are forks of Bluefin LTS, built on modern container technology. This is an exploration of the flexibilty of Bootc and a hope that some people believe in the Enterprise Linux Desktop. The plan is to provide a stable experience with up-to-date GNOME and modern tooling. 
+
+### Features
+
+- **Latest GNOME**: Don't get stuck on a 3-year-old GNOME. We try to backport the latest Desktop feature and bring them to the Enterprise Desktop
+  - Currently we're shipping GNOME `48.3` while EL will be stuck on GNOME `47` for the foreseeable future
+- **Anaconda WebUI & Live ISO**: (Pending; present upstream)
+- **Homebrew**: We bake Homebrew into the image, so all your CLI apps (and fonts) are just a brew command away
+- **Flathub by Default**: This is a no-brainer that isn't preset in our base images. Actually get all the Flatpaks thata generally available on the net. 
 
 ## 🐠 Available Variants
 
@@ -30,37 +38,50 @@ TunaOS is a curated collection of **Atomic desktop operating systems** that are 
 
 
 
-### 🐟 Albacore
+### 🐟 Albacore (AlmaLinux)
 
-**Base:** AlmaLinux 10.0
+**Base:** [AlmaLinux 10.0](https://almalinux.org/blog/2025-05-27-welcoming-almalinux-10/)
 
-**Image:** `ghcr.io/tuna-os/albacore:latest`  
+**Image:** `ghcr.io/tuna-os/albacore:latest` 
+**DX:** `ghcr.io/tuna-os/albacore-dx:latest` 
+**GDX:** `ghcr.io/tuna-os/albacore-gdx:latest` 
+
 
 Stable enterprise-grade desktop experience built on AlmaLinux foundation.
+- ✨ **x86_64/v2** microarchitecture support for older CPUs (pre-2013)
+- 🖥️ **SPICE support** for qemu/libvirt virtualization
 
 ---
-### 🐠 Yellowfin
+### 🐠 Yellowfin (AlmaLinux Kitten)
 
 **Base:** [AlmaLinux Kitten 10](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#container-images)
 
 **Image:** `ghcr.io/tuna-os/yellowfin:latest`  
+**DX:** `ghcr.io/tuna-os/yellowfin-dx:latest`  
+**GDX:** `ghcr.io/tuna-os/yellowfin-gdx:latest`  
 
 
 The closest to upstream Bluefin LTS experience with enhanced capabilities:
 - ✨ **x86_64/v2** microarchitecture support for older CPUs (pre-2013)
 - 🖥️ **SPICE support** for qemu/libvirt virtualization
-- 🔄 **Compatible with upstream LTS** because it's based on CentOS
+- 🔄 **Compatible with upstream LTS** because Kitten is based on CentOS
 
 ---
 
-### 🎣 Bluefin Tuna
+### 🎣 Bonito (Fedora)
 
 **Base:** Fedora 42
-**Image:** `ghcr.io/tuna-os/bluefin-tuna:latest`  
-**Branch:** [bluefin-tuna](https://github.com/hanthor/tunaOS/tree/bluefin-tuna)
+**Image:** `ghcr.io/tuna-os/bonito:latest`  
 
 Cutting-edge experience with Bluefin LTS tooling ported to the latest Fedora release.
 
+---
+### 🍣 Skipjack (CentOS)
+
+**Base:**  CentOS 10
+**Image:** `ghcr.io/tuna-os/skipjack:latest`  
+
+---
 ## 📋 System Requirements
 
 | Component | Minimum | Recommended |
@@ -71,16 +92,11 @@ Cutting-edge experience with Bluefin LTS tooling ported to the latest Fedora rel
 
 ## 🛠️ Installation
 
-### Container Runtime
-```bash
-podman pull ghcr.io/hanthor/tunaos:yellowfin  # or your preferred variant
-```
-
-### Bootable Image
+### Make an ISO or VM
 Use [bootc-image-builder](https://github.com/osbuild/bootc-image-builder) to create installation media:
 
+## Build-your-own ISO
 run the [build-iso.sh](https://github.com/Tuna-OS/tunaOS/blob/main/build-iso.sh) script in this repo or download the script and run it to use bootc-image-builder to make an ISO:
-
 ```bash
 curl https://raw.githubusercontent.com/Tuna-OS/tunaOS/refs/heads/main/build-iso.sh -o build-iso.sh
 chmod +x build-bootc.sh
@@ -95,6 +111,10 @@ sudo ./build-bootc.sh qcow2 ghcr.io/tuna-os/yellowfin-dx:latest
 ## 🧪 Current Status
 
 > **Note:** These images are currently in active development. I'm daily-driving `yellowfin` and maintaining the upstream Bluefin LTS
+
+## Contributing
+
+PRs welcome! The goal is to match the feature set of Bluefin LTS and Bluefin. 
 
 ## 🤝 Community & Support
 
