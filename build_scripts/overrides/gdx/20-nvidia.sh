@@ -8,21 +8,10 @@ KERNEL_SUFFIX=""
 QUALIFIED_KERNEL="$(rpm -qa | grep -P 'kernel-(|'"$KERNEL_SUFFIX"'-)(\d+\.\d+\.\d+)' | sed -E 's/kernel-(|'"$KERNEL_SUFFIX"'-)//' | tail -n 1)"
 
 if [ "$IS_ALMALINUX" == true ]; then
-	dnf versionlock delete kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
-	dnf install -y \
-		kernel-modules-extra-matched-$QUALIFIED_KERNEL \
-		kernel-modules-core-$QUALIFIED_KERNEL \
-		kernel-core-$QUALIFIED_KERNEL \
-		kernel-modules-$QUALIFIED_KERNEL \
-		kernel-modules-extra-$QUALIFIED_KERNEL \
-		kernel-$QUALIFIED_KERNEL \
-		kernel-tools-libs-$QUALIFIED_KERNEL \
-		kernel-tools-$QUALIFIED_KERNEL \
-		kernel-headers-$QUALIFIED_KERNEL
 	dnf config-manager --set-disabled "epel-multimedia" || true
 	dnf install -y almalinux-release-nvidia-driver
 	dnf install -y nvidia-open-kmod nvidia-driver
-	dnf install -y -x cuda-nsight -x cuda-nsight-compute -x cuda-nsight-systems -x nsight-compute -x nsight-systems nvidia-driver-cuda cuda
+	dnf install -y nvidia-driver-cuda cuda
 	dnf config-manager --set-disabled "almalinux-nvidia"
 	dnf config-manager --set-disabled "cuda-rhel10-$(arch)"
 fi

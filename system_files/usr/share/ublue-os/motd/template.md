@@ -1,4 +1,4 @@
-# 🐠 Welcome to Yellowfin
+# 🐠 Welcome to %IMAGE_PRETTY_NAME%
 
 󱋩 `%IMAGE_NAME%:%IMAGE_TAG%`
 
@@ -6,7 +6,7 @@
 | ------- | ----------- |
 | `ujust --choose`  | Show available commands  |
 | `ujust toggle-user-motd` | Toggle this banner on/off |
-| `ujust yellowfin-cli` | Enable terminal bling |
+| `ujust ublue-cli` | Enable terminal bling |
 | `brew help` | Manage command line packages |
 
 NOTE: Use `ujust install-system-flatpaks` to finish the installation

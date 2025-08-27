@@ -46,41 +46,24 @@ export IS_CENTOS
 get_image_name() {
 if [ "$IS_FEDORA" = true ]; then
 	IMAGE_NAME="bonito"
+	IMAGE_PRETTY_NAME="Bonito"
 fi
 if [ "$IS_ALMALINUX" = true ] && [ "$IS_ALMALINUXKITTEN" = false ]; then
 	IMAGE_NAME="albacore"
+	IMAGE_PRETTY_NAME="Albacore"
 fi
 if [ "$IS_ALMALINUXKITTEN" = true ]; then
 	IMAGE_NAME="yellowfin"
+	IMAGE_PRETTY_NAME="Yellowfin"
 fi
 if [ "$IS_CENTOS" = true ] && [ "$IS_ALMALINUXKITTEN" = false ]; then
 	IMAGE_NAME="skipjack"
+	IMAGE_PRETTY_NAME="Skipjack"
 fi
 if [ "$IS_RHEL" = true ] && [ "$IS_ALMALINUX" = false ] && [ "$IS_CENTOS" = false ]; then
 	IMAGE_NAME="redfin"
+	IMAGE_PRETTY_NAME="Redfin"
 fi
-
-    case "$IMAGE_NAME" in
-        "bonito")
-            IMAGE_PRETTY_NAME="Bonito"
-            ;;
-        "albacore")
-            IMAGE_PRETTY_NAME="Albacore"
-            ;;
-        "yellowfin")
-            IMAGE_PRETTY_NAME="Yellowfin"
-            ;;
-        "skipjack")
-            IMAGE_PRETTY_NAME="Skipjack"
-            ;;
-        "redfin")
-            IMAGE_PRETTY_NAME="Redfin"
-            ;;
-        *)
-            # Fallback to simple capitalization if not in the list
-            IMAGE_PRETTY_NAME="$(tr '[:lower:]' '[:upper:]' <<< "${IMAGE_NAME:0:1}")${IMAGE_NAME:1}"
-            ;;
-    esac
 
     export IMAGE_NAME
     export IMAGE_PRETTY_NAME

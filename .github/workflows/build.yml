@@ -29,6 +29,9 @@ on:
         - regular
         - regular,dx
         - regular,dx,gdx
+        - dx
+        - gdx
+        - dx,gdx
       platforms:
         description: 'Platforms to build'
         required: false
@@ -36,9 +39,10 @@ on:
         type: choice
         options:
         - linux/amd64
-        - linux/amd64,linux/arm64
-        - linux/arm64
         - linux/amd64/v2
+        - linux/arm64
+        - linux/amd64,linux/arm64
+        - linux/amd64,linux/amd64/v2,linux/arm64
 
 
 concurrency:
@@ -160,7 +164,9 @@ jobs:
     if: |
       (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
       inputs.build_variant == 'regular,dx' ||
-      inputs.build_variant == 'regular,dx,gdx'
+      inputs.build_variant == 'regular,dx,gdx' ||
+      inputs.build_variant == 'dx,gdx' ||
+      inputs.build_variant == 'dx'
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
@@ -183,7 +189,9 @@ jobs:
     # Only run if gdx or all variants are requested
     if: |
       (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
-      inputs.build_variant == 'regular,dx,gdx'
+      inputs.build_variant == 'regular,dx,gdx' ||
+      inputs.build_variant == 'gdx' ||
+      inputs.build_variant == 'dx,gdx'
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}

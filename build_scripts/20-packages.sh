@@ -6,38 +6,18 @@ printf "::group:: === 20 Packages ===\n"
 
 source /run/context/build_scripts/lib.sh
 
-# Remove conflicting packages
-dnf -y remove setroubleshoot
-
-# Install base packages
-dnf -y install \
-	-x gnome-extensions-app \
-	system-reinstall-bootc \
-	gnome-disk-utility \
-	distrobox \
-	fastfetch \
-	fpaste \
-	gnome-shell-extension-{appindicator,dash-to-dock,blur-my-shell} \
-	powertop \
-	tuned-ppd \
-	fzf \
-	glow \
-	wl-clipboard \
-	gum \
-	buildah \
-	btrfs-progs \
-	xhost
-
 # Install OS-specific branding
 if [[ $IS_FEDORA == true ]]; then
 	dnf -y install fedora-logos
-if [[ $IS_ALMALINUX== true ]]; then
+fi
+if [[ $IS_ALMALINUX == true ]]; then
 	dnf -y install almalinux-backgrounds almalinux-logos
-if [[ $IS_CENTOS== true ]]; then
-dnf -y install centos-backgrounds centos-logos
+fi
+if [[ $IS_CENTOS == true ]]; then
+	dnf -y install centos-backgrounds centos-logos
 fi
 
-# Install caffeine extension
+# Install caffeine extension only in EPEL 10.1 or Fedora
 echo $IMAGE_NAME
 detected_os
 cat /etc/os-release
@@ -81,11 +61,6 @@ fi
 # FIXME: gsconnect EPEL10 request: https://bugzilla.redhat.com/show_bug.cgi?id=2349097
 install_from_copr ublue-os/staging gnome-shell-extension-{search-light,logo-menu,gsconnect}
 
-# Nerd Fonts
-if [[ $IS_CENTOS == true ]] && [[ $IS_ALMALINUXKITTEN == false ]]; then
-	install_from_copr che/nerd-fonts nerd-fonts
-fi
-
 # MoreWaita icon theme
 install_from_copr trixieua/morewaita-icon-theme morewaita-icon-theme
 
@@ -95,10 +70,6 @@ if [ "$GNOME_VERSION" -ge 48 ]; then
 	# GNOME 48: EPEL version of blur-my-shell is incompatible
 	dnf -y remove gnome-shell-extension-blur-my-shell
 
-	# GNOME 48: force update xdg-desktop-portal
-	# dnf -y install \
-	# 	xdg-desktop-portal \
-	# 	xdg-desktop-portal-gnome
 fi
 
 # This is required so homebrew works indefinitely.

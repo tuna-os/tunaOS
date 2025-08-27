@@ -10,11 +10,16 @@ COPY build_scripts /build_scripts
 
 FROM ${BASE_IMAGE}
 
+RUN rm -rf /opt && mkdir /opt
 
-# Choose the appropriate build script based on whether this is a chained build
-RUN --mount=type=tmpfs,dst=/tmp \
+RUN \
+  --mount=type=tmpfs,dst=/opt \ 
+  --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/var \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/DX.sh; 
 
+# Makes `/opt` writeable by default
+# Needs to be here to make the main image build strict (no /opt there)
+RUN rm -rf /opt && ln -s /var/opt /opt 
