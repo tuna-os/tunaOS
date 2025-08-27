@@ -31,9 +31,9 @@ dnf -y install \
 # Install OS-specific branding
 if [[ $IS_FEDORA == true ]]; then
 	dnf -y install fedora-logos
-elseif [[ $IS_ALMALINUX== true ]]; then
+if [[ $IS_ALMALINUX== true ]]; then
 	dnf -y install almalinux-backgrounds almalinux-logos
-elseif [[ $IS_CENTOS== true ]]; then
+if [[ $IS_CENTOS== true ]]; then
 dnf -y install centos-backgrounds centos-logos
 fi
 
