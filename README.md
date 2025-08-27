@@ -1,12 +1,16 @@
-
-# Note: Builds are failing as I update the core logic. I'll focus on this after finalizing the build for Bluefin LTS. 
+> [!IMPORTANT]
+>Builds are failing as I update the core logic. I'll focus on this after finalizing the build for Bluefin LTS. 
 
 <div align="center">
+<picture>
+  <source srcset="https://fonts.gstatic.com/s/e/notoemoji/latest/1f41f/512.webp" type="image/webp">
+  <img src="https://fonts.gstatic.com/s/e/notoemoji/latest/1f41f/512.gif" alt="🐟" width="128" height="128">
+</picture>
 
-# 🐟 TunaOS
-### *A Collection of Atomic Desktop Operating Systems*
+## TunaOS
+### *A Collection of Cloud-Native Enterprise Linux OS Images*
 
-*Specialized forks of [Bluefin LTS](https://github.com/ublue-os/bluefin-lts) for different use cases*
+*Specialized forks of [Bluefin LTS](https://github.com/ublue-os/bluefin-lts) based on AlmaLinux 10, AlmaLinux Kitten 10, CentOS 10, and Fedora*
 
 ---
 
@@ -27,28 +31,18 @@ TunaOS is a curated collection of **Atomic desktop operating systems** that are 
 
 
 ### 🐟 Albacore
-[![Build Status](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml/badge.svg?branch=albacore)](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml)
 
 **Base:** AlmaLinux 10.0
+
 **Image:** `ghcr.io/tuna-os/albacore:latest`  
 
 Stable enterprise-grade desktop experience built on AlmaLinux foundation.
-
-#### 🖥️ Albacore Server
-[![Build Status](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml/badge.svg?branch=albacore-server)](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml)
-
-**Image:** `ghcr.io/tuna-os/albacore-server:latest`  
-**Branch:** [albacore-server](https://github.com/hanthor/tunaOS/tree/albacore-server)
-
-Server-optimized variant with:
-- 🚫 **No GNOME on Boot** (display manager disabled)
-- 💻 **Virtualization Host** capabilities included
-- 🏢 **Perfect for** server deployments and virtualization hosts
 
 ---
 ### 🐠 Yellowfin
 
 **Base:** [AlmaLinux Kitten 10](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#container-images)
+
 **Image:** `ghcr.io/tuna-os/yellowfin:latest`  
 
 
@@ -60,7 +54,6 @@ The closest to upstream Bluefin LTS experience with enhanced capabilities:
 ---
 
 ### 🎣 Bluefin Tuna
-[![Build Status](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml/badge.svg?branch=bluefin-tuna)](https://github.com/hanthor/tunaOS/actions/workflows/build-regular.yml)
 
 **Base:** Fedora 42
 **Image:** `ghcr.io/tuna-os/bluefin-tuna:latest`  
@@ -90,24 +83,29 @@ run the [build-iso.sh](https://github.com/Tuna-OS/tunaOS/blob/main/build-iso.sh)
 
 ```bash
 curl https://raw.githubusercontent.com/Tuna-OS/tunaOS/refs/heads/main/build-iso.sh -o build-iso.sh
-chmod +x build-iso.sh 
-./build-iso.sh ghcr.io/tuna-os/yellowfin-dx:latest
+chmod +x build-bootc.sh
+sudo ./build-bootc.sh iso ghcr.io/tuna-os/albacore:latest
+sudo ./build-bootc.sh iso ghcr.io/tuna-os/yellowfin-dx:latest
+
+# Or make a VM image
+sudo ./build-bootc.sh qcow2 ghcr.io/tuna-os/yellowfin-dx:latest
+
 ```
 
 ## 🧪 Current Status
 
-> **Note:** These images are currently in active development. The maintainer is daily-driving `yellowfin` and planning to deploy `albacore-server` as a Proxmox replacement.
+> **Note:** These images are currently in active development. I'm daily-driving `yellowfin` and maintaining the upstream Bluefin LTS
 
 ## 🤝 Community & Support
 
 We'd love to hear from you! Whether you're using these images or just curious:
 
 - 🐛 **Report Issues:** [GitHub Issues](https://github.com/hanthor/tunaOS/issues)
-- [m] Chat: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia) 
+- [m] **Chat**: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia) 
 
 Related Communities: 
 - 🎮 **Discord:** [Universal Blue Community](https://discord.gg/WEu6BdFEtp)
-- 💬 **Chat with AlmaLinux:** [AlmaLinux Atomic SIG](https://chat.almalinux.org/almalinux/channels/sigatomic)
+- 💬 **AlmaLinux Atomic SIG:** [AlmaLinux Atomic SIG](https://chat.almalinux.org/almalinux/channels/sigatomic)
 
 ## 📚 Documentation
 
@@ -121,7 +119,8 @@ Related Communities:
 <div align="center">
 
 **Made by James in his free time**
-
+**Powered by [Bootc](https://github.com/bootc-dev/bootc)**
+**Inspired by [Bluefin](https://projectbluefin.io) and the [Universal Blue](https://universal-blue.org/) Community
 *Licensed under [Apache 2.0](LICENSE)*
 
 </div>
