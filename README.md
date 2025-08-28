@@ -79,7 +79,8 @@ The closest to upstream Bluefin LTS experience with enhanced capabilities:
 - 🔄 **Compatible with upstream LTS** because Kitten is based on CentOS
 
 ---
-
+>[!NOTE]
+> Bonito is still needing some work to get into a functional state
 ### 🎣 Bonito (Fedora)
 
 **Base:** Fedora 42
