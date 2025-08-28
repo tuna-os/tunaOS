@@ -1,4 +1,4 @@
-name: Build Images
+name: Build
 
 on:
   pull_request: 
@@ -133,7 +133,7 @@ jobs:
           echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
 
   # Build regular images (base for chaining)
-  build-regular:
+  build-base:
     needs: generate_matrix
     # Only run if regular or all variants are requested
     if: |
