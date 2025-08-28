@@ -11,7 +11,7 @@ CONTEXT_PATH="$(realpath "$(dirname "$0")/..")" # should return /run/context
 BUILD_SCRIPTS_PATH="$(realpath "$(dirname "$0")")"
 MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
 SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
-BASE_IMAGE="$(sh -c '. /usr/lib/os-release ; echo ${BASE_IMAGE}')"
+BASE_IMAGE="$(sh -c '. /etc/os-release ; echo ${BASE_IMAGE}')"
 export SCRIPTS_PATH
 export MAJOR_VERSION_NUMBER
 export BASE_IMAGE
