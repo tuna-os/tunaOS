@@ -1,9 +1,9 @@
 #!/bin/bash
-
+# This script is merely a wrapper for bootc-image-builder
 # Check if an argument is provided
 if [ -z "$2" ]; then
 	echo "Usage: $0 <image_type> <image_uri>"
-	echo "This can be used to create an ISO or QCOW2 image."
+	echo "This can be used to create an iso,ami,gce,qcow2,raw,vhd,vmdkimage."
 	echo "Example: $0 iso ghcr.io/tuna-os/yellowfin:latest"
 	exit 1
 fi
@@ -11,9 +11,11 @@ fi
 TYPE="$1"
 IMAGE_URI="$2"
 TOML_FILE="$TYPE.toml"
+# TODO: make this setable
 ROOTFS="xfs"
 
 if [ "$TYPE" = "iso" ]; then
+# TODO: enable user creation for KDE and server images, this is currently only for GNOME
 	# Create the TOML file with dynamic content for ISO
 	cat <<EOF >"$TOML_FILE"
 [customizations.installer.kickstart]
@@ -36,8 +38,10 @@ disable = [
 	"org.fedoraproject.Anaconda.Modules.Timezone"
 ]
 EOF
-elif [ "$TYPE" = "qcow2" ]; then
-	cat <<EOF >"$TOML_FILE"
+
+else; then
+# TODO: make the username and password setable
+cat <<EOF >"$TOML_FILE"
 [[customizations.user]]
 name = "centos"
 password = "centos"
@@ -60,7 +64,7 @@ sudo podman pull "$IMAGE_URI"
 # Run the bootc-image-builder command
 echo "Running bootc-image-builder..."
 sudo podman run --rm -it --privileged \
-	-v "$(pwd)":/output \
+	-v "$(pwd)":/output:z \
 	-v /var/lib/containers/storage:/var/lib/containers/storage \
 	-v "$(pwd)/$TOML_FILE":/config.toml \
 	quay.io/centos-bootc/bootc-image-builder:latest \
