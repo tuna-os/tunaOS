@@ -106,10 +106,7 @@ Cutting-edge experience with Bluefin LTS tooling ported to the latest Fedora rel
 
 ## 🛠️ Installation
 
-### Make an ISO or VM
-Use [bootc-image-builder](https://github.com/osbuild/bootc-image-builder) to create installation media:
-
-## Build-your-own ISO or VM image
+### Build-your-own ISO or VM image
 run the [build-iso.sh](https://github.com/Tuna-OS/tunaOS/blob/main/build-iso.sh) script in this repo or download the script and run it to use bootc-image-builder to make an ISO:
 ```bash
 curl https://raw.githubusercontent.com/Tuna-OS/tunaOS/refs/heads/main/build-iso.sh \
