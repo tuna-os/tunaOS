@@ -5,7 +5,7 @@ export default_tag := env("DEFAULT_TAG", "latest")
 export bib_image := env("BIB_IMAGE", "quay.io/centos-bootc/bootc-image-builder:latest")
 just := just_executable()
 
-# --- Default Base Image (for 'regular' flavor builds) ---
+# --- Default Base Image (for 'base' flavor builds) ---
 
 export base_image := env("BASE_IMAGE", "quay.io/almalinuxorg/almalinux-bootc")
 export base_image_tag := env("BASE_IMAGE_TAG", "10")
@@ -81,7 +81,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
 # Usage (CI): just build image_name=<final_name> variant=<base_os> is_ci=true [flavor]
 
 # Example: just build image_name=albacore variant=almalinux is_ci=true gdx
-build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" tag='latest' *args:
+build variant='albacore' flavor='base' platform='linux/amd64' is_ci="0" tag='latest' *args:
     #!/usr/bin/env bash
     set -euo pipefail
     echo "==============================================================="
@@ -100,7 +100,7 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" tag='
     CONTAINERFILE="Containerfile"
 
     case "{{ flavor }}" in
-        "regular")
+        "base")
             BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
             ;;
         "dx")
@@ -120,19 +120,19 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" tag='
             CONTAINERFILE="Containerfile.gdx"
             ;;
         "all")
-            just build {{ variant }} regular
+            just build {{ variant }} base
             just build {{ variant }} dx
             just build {{ variant }} gdx
             exit 0
             ;;
         *)
-            echo "Unknown flavor '{{ flavor }}'. Valid options are: regular, dx, gdx, all."
+            echo "Unknown flavor '{{ flavor }}'. Valid options are: base, dx, gdx, all."
             exit 1
             ;;
     esac
 
     TARGET_TAG={{ variant }}
-    if [[ "{{ flavor }}" != "regular" ]]; then
+    if [[ "{{ flavor }}" != "base" ]]; then
         TARGET_TAG+="-{{ flavor }}"
     fi
     TARGET_TAG_WITH_VERSION="${TARGET_TAG}:{{ tag }}"
@@ -154,20 +154,20 @@ build variant='albacore' flavor='regular' platform='linux/amd64' is_ci="0" tag='
         {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" {{ args }}
     fi
 
-yellowfin variant='regular':
+yellowfin variant='base':
     just build yellowfin {{ variant }}
 
-albacore variant='regular':
+albacore variant='base':
     just build albacore {{ variant }}
 
-skipjack variant='regular':
+skipjack variant='base':
     just build skipjack {{ variant }}
 
-bonito variant='regular':
+bonito variant='base':
     just build bonito {{ variant }}
 
 # --- Build-all helpers ---
-build-all-regular:
+build-all-base:
     just build yellowfin
     just build albacore
     just build skipjack
@@ -181,3 +181,26 @@ build-all:
 
 lint:
     /usr/bin/find . -iname "*.sh" -type f -exec shellcheck "{}" ";"
+
+iso variant flavor='base' repo='local':
+    #! /bin/bash
+    if [ "{{ flavor }}" != "base" ]; then
+        $FLAVOR="-{{ flavor }}"
+    else
+        $FLAVOR=
+    fi
+    if [ "{{ repo }}" = "ghcr" ]; then bash ./build-bootc-diskimage.sh iso ghcr.io/{{ repo_organization }}/{{ variant }}$FLAVOR:{{ default_tag }}
+    elif [ "{{ repo }}" = "local" ]; then bash ./build-bootc-diskimage.sh iso localhost/{{ variant }}$FLAVOR:{{ default_tag }}
+    fi
+
+qcow2 variant flavor='base' repo='local':
+    #! /bin/bash
+    if [ "{{ flavor }}" != "base" ]; then
+        $FLAVOR="-{{ flavor }}"
+    else
+        $FLAVOR=
+    fi
+    if [ "{{ repo }}" = "ghcr" ]; then bash ./build-bootc-diskimage.sh qcow2 ghcr.io/{{ repo_organization }}/{{ variant }}$FLAVOR:{{ default_tag }}
+    elif [ "{{ repo }}" = "local" ]; then bash ./build-bootc-diskimage.sh qcow2 localhost/{{ variant }}$FLAVOR :{{ default_tag }}
+    fi
+

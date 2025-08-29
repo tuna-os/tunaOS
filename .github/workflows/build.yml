@@ -1,5 +1,4 @@
 name: Build
-
 on:
   pull_request: 
     branches:
@@ -21,14 +20,14 @@ on:
         - bonito
         - all
       build_variant:
-        description: 'Build variant (regular, dx, gdx)'
+        description: 'Build variant (base, dx, gdx)'
         required: false
-        default: 'regular,dx,gdx'
+        default: 'base,dx,gdx'
         type: choice
         options:
-        - regular
-        - regular,dx
-        - regular,dx,gdx
+        - base
+        - base,dx
+        - base,dx,gdx
         - dx
         - gdx
         - dx,gdx
@@ -132,15 +131,15 @@ jobs:
           
           echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
 
-  # Build regular images (base for chaining)
+  # Build base images (base for chaining)
   build-base:
     needs: generate_matrix
-    # Only run if regular or all variants are requested
+    # Only run if base or all variants are requested
     if: |
       github.event_name != 'workflow_dispatch' ||
-      inputs.build_variant == 'regular' ||
-      inputs.build_variant == 'regular,dx' ||
-      inputs.build_variant == 'regular,dx,gdx'
+      inputs.build_variant == 'base' ||
+      inputs.build_variant == 'base,dx' ||
+      inputs.build_variant == 'base,dx,gdx'
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
@@ -150,7 +149,7 @@ jobs:
       image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }}
       image-variant: ${{ matrix.image_variant }}
-      flavor: regular
+      flavor: base
       platforms: ${{ matrix.platforms }}
       major-version: ${{ matrix.major_version }}
       default-tag: ${{ matrix.default_tag }}
@@ -158,14 +157,14 @@ jobs:
       sbom: ${{ matrix.sbom }}
       publish: ${{ matrix.publish }}
 
-  # Build DX images (chain from regular)
+  # Build DX images (chain from base)
   build-dx:
-    needs: [generate_matrix, build-regular]
+    needs: [generate_matrix, build-base]
     # Only run if dx or all variants are requested
     if: |
       (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
-      inputs.build_variant == 'regular,dx' ||
-      inputs.build_variant == 'regular,dx,gdx' ||
+      inputs.build_variant == 'base,dx' ||
+      inputs.build_variant == 'base,dx,gdx' ||
       inputs.build_variant == 'dx,gdx' ||
       inputs.build_variant == 'dx'
     strategy:
@@ -190,7 +189,7 @@ jobs:
     # Only run if gdx or all variants are requested
     if: |
       (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
-      inputs.build_variant == 'regular,dx,gdx' ||
+      inputs.build_variant == 'base,dx,gdx' ||
       inputs.build_variant == 'gdx' ||
       inputs.build_variant == 'dx,gdx'
     strategy:

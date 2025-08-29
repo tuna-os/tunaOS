@@ -1,5 +1,12 @@
 #!/bin/bash
 # This script is merely a wrapper for bootc-image-builder
+
+# Check if running with root privileges
+if [ "$EUID" -ne 0 ]; then
+  echo "Please run as root"
+  exit
+fi
+
 # Check if an argument is provided
 if [ -z "$2" ]; then
 	echo "Usage: $0 <image_type> <image_uri>"
@@ -8,16 +15,21 @@ if [ -z "$2" ]; then
 	exit 1
 fi
 
+# Create tmpdir
+TMPDIR=$(mktemp -d)
+mkdir -p "$TMPDIR/output"   
 TYPE="$1"
 IMAGE_URI="$2"
 TOML_FILE="$TYPE.toml"
 # TODO: make this setable
 ROOTFS="xfs"
 
+
+
+
 if [ "$TYPE" = "iso" ]; then
 # TODO: enable user creation for KDE and server images, this is currently only for GNOME
-	# Create the TOML file with dynamic content for ISO
-	cat <<EOF >"$TOML_FILE"
+cat <<EOF >"$TMPDIR/$TOML_FILE"
 [customizations.installer.kickstart]
 contents = """
 %post
@@ -39,9 +51,9 @@ disable = [
 ]
 EOF
 
-else; then
+else
 # TODO: make the username and password setable
-cat <<EOF >"$TOML_FILE"
+cat <<EOF >"$TMPDIR/$TOML_FILE"
 [[customizations.user]]
 name = "centos"
 password = "centos"
@@ -54,21 +66,38 @@ EOF
 fi
 
 echo "Generated $TOML_FILE with content:"
-cat "$TOML_FILE"
+cat "$TMPDIR/$TOML_FILE"
 echo ""
 
-# Pull the image
 echo "Pulling image: $IMAGE_URI"
 sudo podman pull "$IMAGE_URI"
 
+
+ARGS="--type $TYPE "
+ARGS+="--rootfs $ROOTFS "
+ARGS+="--use-librepo=False"
+
+
 # Run the bootc-image-builder command
 echo "Running bootc-image-builder..."
-sudo podman run --rm -it --privileged \
-	-v "$(pwd)":/output:z \
+podman run --rm -it --privileged \
+	-v "$TMPDIR/output":/output:z \
 	-v /var/lib/containers/storage:/var/lib/containers/storage \
-	-v "$(pwd)/$TOML_FILE":/config.toml \
+	-v "$TMPDIR/$TOML_FILE":/config.toml \
 	quay.io/centos-bootc/bootc-image-builder:latest \
-	build --type iso --rootfs $ROOTFS --use-librepo=False \
+	build $ARGS \
 	"$IMAGE_URI"
 
-echo "Script finished."
+IMAGE_NAME=$(echo "$IMAGE_URI" | awk -F'/' '{print $NF}' | awk -F':' '{print $1}')
+
+# Find the output artifact based on type
+file=$(find "$TMPDIR/output" -type f -name "*.$TYPE")
+if [ -f "$file" ]; then
+	mv "$file" "./${IMAGE_NAME}.$TYPE"
+	chown $(id -u):$(id -g) "./${IMAGE_NAME}.$TYPE"
+	echo "Image created: ${IMAGE_NAME}.$TYPE"
+else
+	echo "ERROR: Image was not created."
+	exit 1
+fi
+
