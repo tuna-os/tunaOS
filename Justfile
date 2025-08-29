@@ -203,4 +203,3 @@ qcow2 variant flavor='base' repo='local':
     if [ "{{ repo }}" = "ghcr" ]; then bash ./build-bootc-diskimage.sh qcow2 ghcr.io/{{ repo_organization }}/{{ variant }}$FLAVOR:{{ default_tag }}
     elif [ "{{ repo }}" = "local" ]; then bash ./build-bootc-diskimage.sh qcow2 localhost/{{ variant }}$FLAVOR :{{ default_tag }}
     fi
-
