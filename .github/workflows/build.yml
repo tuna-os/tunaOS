@@ -157,13 +157,76 @@ jobs:
       sbom: ${{ matrix.sbom }}
       publish: ${{ matrix.publish }}
 
-  # Build DX images (chain from base)
-  build-dx:
+  # Verify base image manifests contain all intended platforms
+  verify-base-manifests:
     needs: [generate_matrix, build-base]
-    # Only run if dx or all variants are requested AND base job completed successfully
     if: |
       always() && 
       needs.build-base.result == 'success' &&
+      (
+        (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
+        inputs.build_variant == 'base,dx' ||
+        inputs.build_variant == 'base,dx,gdx' ||
+        inputs.build_variant == 'dx,gdx' ||
+        inputs.build_variant == 'dx'
+      )
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Login to GitHub Container Registry
+        env:
+          REGISTRY: ghcr.io
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+
+      - name: Verify Multiplatform Manifest
+        env:
+          IMAGE_NAME: ${{ matrix.image_name }}
+          IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
+          DEFAULT_TAG: ${{ matrix.default_tag }}
+          EXPECTED_PLATFORMS: ${{ matrix.platforms }}
+        run: |
+          set -euo pipefail
+          
+          IMAGE_FULL="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+          echo "Verifying manifest for image: ${IMAGE_FULL}"
+          echo "Expected platforms: ${EXPECTED_PLATFORMS}"
+          
+          # Get the manifest
+          MANIFEST_JSON=$(podman manifest inspect "${IMAGE_FULL}" 2>/dev/null || {
+            echo "❌ Failed to get manifest for ${IMAGE_FULL}"
+            exit 1
+          })
+          
+          # Extract actual platforms from manifest
+          ACTUAL_PLATFORMS=$(echo "${MANIFEST_JSON}" | jq -r '.manifests[].platform | "\(.os)/\(.architecture)" + (if .variant then "/\(.variant)" else "" end)' | sort | tr '\n' ',' | sed 's/,$//')
+          
+          echo "Actual platforms in manifest: ${ACTUAL_PLATFORMS}"
+          
+          # Convert expected platforms to sorted list for comparison
+          EXPECTED_SORTED=$(echo "${EXPECTED_PLATFORMS}" | tr ',' '\n' | sort | tr '\n' ',' | sed 's/,$//')
+          
+          if [ "${ACTUAL_PLATFORMS}" = "${EXPECTED_SORTED}" ]; then
+            echo "✅ Manifest verification successful - all expected platforms present"
+          else
+            echo "❌ Manifest verification failed"
+            echo "Expected: ${EXPECTED_SORTED}"
+            echo "Actual:   ${ACTUAL_PLATFORMS}"
+            exit 1
+          fi
+
+  # Build DX images (chain from base)
+  build-dx:
+    needs: [generate_matrix, verify-base-manifests]
+    # Only run if dx or all variants are requested AND base verification completed successfully
+    if: |
+      always() && 
+      needs.verify-base-manifests.result == 'success' &&
       (
         (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
         inputs.build_variant == 'base,dx' ||
@@ -187,13 +250,75 @@ jobs:
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
 
-  # Build GDX images (chain from DX)
-  build-gdx:
+  # Verify DX image manifests contain all intended platforms
+  verify-dx-manifests:
     needs: [generate_matrix, build-dx]
-    # Only run if gdx or all variants are requested AND dx job completed successfully
     if: |
       always() && 
       needs.build-dx.result == 'success' &&
+      (
+        (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
+        inputs.build_variant == 'base,dx,gdx' ||
+        inputs.build_variant == 'gdx' ||
+        inputs.build_variant == 'dx,gdx'
+      )
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Login to GitHub Container Registry
+        env:
+          REGISTRY: ghcr.io
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+
+      - name: Verify Multiplatform Manifest
+        env:
+          IMAGE_NAME: ${{ matrix.image_name }}-dx
+          IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
+          DEFAULT_TAG: ${{ matrix.default_tag }}
+          EXPECTED_PLATFORMS: ${{ matrix.platforms }}
+        run: |
+          set -euo pipefail
+          
+          IMAGE_FULL="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+          echo "Verifying manifest for image: ${IMAGE_FULL}"
+          echo "Expected platforms: ${EXPECTED_PLATFORMS}"
+          
+          # Get the manifest
+          MANIFEST_JSON=$(podman manifest inspect "${IMAGE_FULL}" 2>/dev/null || {
+            echo "❌ Failed to get manifest for ${IMAGE_FULL}"
+            exit 1
+          })
+          
+          # Extract actual platforms from manifest
+          ACTUAL_PLATFORMS=$(echo "${MANIFEST_JSON}" | jq -r '.manifests[].platform | "\(.os)/\(.architecture)" + (if .variant then "/\(.variant)" else "" end)' | sort | tr '\n' ',' | sed 's/,$//')
+          
+          echo "Actual platforms in manifest: ${ACTUAL_PLATFORMS}"
+          
+          # Convert expected platforms to sorted list for comparison
+          EXPECTED_SORTED=$(echo "${EXPECTED_PLATFORMS}" | tr ',' '\n' | sort | tr '\n' ',' | sed 's/,$//')
+          
+          if [ "${ACTUAL_PLATFORMS}" = "${EXPECTED_SORTED}" ]; then
+            echo "✅ Manifest verification successful - all expected platforms present"
+          else
+            echo "❌ Manifest verification failed"
+            echo "Expected: ${EXPECTED_SORTED}"
+            echo "Actual:   ${ACTUAL_PLATFORMS}"
+            exit 1
+          fi
+
+  # Build GDX images (chain from DX)
+  build-gdx:
+    needs: [generate_matrix, verify-dx-manifests]
+    # Only run if gdx or all variants are requested AND dx verification completed successfully
+    if: |
+      always() && 
+      needs.verify-dx-manifests.result == 'success' &&
       (
         (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
         inputs.build_variant == 'base,dx,gdx' ||
@@ -215,3 +340,139 @@ jobs:
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
+
+  # Verify GDX image manifests contain all intended platforms
+  verify-gdx-manifests:
+    needs: [generate_matrix, build-gdx]
+    if: |
+      always() && 
+      needs.build-gdx.result == 'success'
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Login to GitHub Container Registry
+        env:
+          REGISTRY: ghcr.io
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+
+      - name: Verify Multiplatform Manifest
+        env:
+          IMAGE_NAME: ${{ matrix.image_name }}-gdx
+          IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
+          DEFAULT_TAG: ${{ matrix.default_tag }}
+          EXPECTED_PLATFORMS: ${{ matrix.platforms }}
+        run: |
+          set -euo pipefail
+          
+          IMAGE_FULL="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+          echo "Verifying manifest for image: ${IMAGE_FULL}"
+          echo "Expected platforms: ${EXPECTED_PLATFORMS}"
+          
+          # Get the manifest
+          MANIFEST_JSON=$(podman manifest inspect "${IMAGE_FULL}" 2>/dev/null || {
+            echo "❌ Failed to get manifest for ${IMAGE_FULL}"
+            exit 1
+          })
+          
+          # Extract actual platforms from manifest
+          ACTUAL_PLATFORMS=$(echo "${MANIFEST_JSON}" | jq -r '.manifests[].platform | "\(.os)/\(.architecture)" + (if .variant then "/\(.variant)" else "" end)' | sort | tr '\n' ',' | sed 's/,$//')
+          
+          echo "Actual platforms in manifest: ${ACTUAL_PLATFORMS}"
+          
+          # Convert expected platforms to sorted list for comparison
+          EXPECTED_SORTED=$(echo "${EXPECTED_PLATFORMS}" | tr ',' '\n' | sort | tr '\n' ',' | sed 's/,$//')
+          
+          if [ "${ACTUAL_PLATFORMS}" = "${EXPECTED_SORTED}" ]; then
+            echo "✅ Manifest verification successful - all expected platforms present"
+          else
+            echo "❌ Manifest verification failed"
+            echo "Expected: ${EXPECTED_SORTED}"
+            echo "Actual:   ${ACTUAL_PLATFORMS}"
+            exit 1
+          fi
+
+  # Final verification that all requested build variants have proper multiplatform manifests
+  verify-build-completion:
+    needs: [generate_matrix, build-base, verify-base-manifests, build-dx, verify-dx-manifests, build-gdx, verify-gdx-manifests]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Check Build Results
+        env:
+          BUILD_VARIANT: ${{ inputs.build_variant || 'base,dx,gdx' }}
+          BASE_BUILD_RESULT: ${{ needs.build-base.result }}
+          BASE_VERIFY_RESULT: ${{ needs.verify-base-manifests.result }}
+          DX_BUILD_RESULT: ${{ needs.build-dx.result }}
+          DX_VERIFY_RESULT: ${{ needs.verify-dx-manifests.result }}
+          GDX_BUILD_RESULT: ${{ needs.build-gdx.result }}
+          GDX_VERIFY_RESULT: ${{ needs.verify-gdx-manifests.result }}
+        run: |
+          echo "Build variant requested: ${BUILD_VARIANT}"
+          echo ""
+          echo "Job Results:"
+          echo "  Base Build: ${BASE_BUILD_RESULT}"
+          echo "  Base Verify: ${BASE_VERIFY_RESULT}"
+          echo "  DX Build: ${DX_BUILD_RESULT}"
+          echo "  DX Verify: ${DX_VERIFY_RESULT}"
+          echo "  GDX Build: ${GDX_BUILD_RESULT}"
+          echo "  GDX Verify: ${GDX_VERIFY_RESULT}"
+          echo ""
+          
+          # Check if required jobs succeeded
+          FAILURES=0
+          
+          # Always check base if it was supposed to run
+          if [[ "${BUILD_VARIANT}" == *"base"* ]] || [[ "${BUILD_VARIANT}" == "all" ]] || [[ -z "${BUILD_VARIANT}" ]]; then
+            if [[ "${BASE_BUILD_RESULT}" != "success" ]]; then
+              echo "❌ Base build failed or was skipped unexpectedly"
+              FAILURES=$((FAILURES + 1))
+            elif [[ "${BASE_VERIFY_RESULT}" != "success" && "${BASE_VERIFY_RESULT}" != "skipped" ]]; then
+              echo "❌ Base manifest verification failed"
+              FAILURES=$((FAILURES + 1))
+            else
+              echo "✅ Base build and manifest verification completed successfully"
+            fi
+          fi
+          
+          # Check DX if it was supposed to run
+          if [[ "${BUILD_VARIANT}" == *"dx"* ]] || [[ "${BUILD_VARIANT}" == "all" ]] || [[ -z "${BUILD_VARIANT}" ]]; then
+            if [[ "${DX_BUILD_RESULT}" != "success" && "${DX_BUILD_RESULT}" != "skipped" ]]; then
+              echo "❌ DX build failed"
+              FAILURES=$((FAILURES + 1))
+            elif [[ "${DX_VERIFY_RESULT}" != "success" && "${DX_VERIFY_RESULT}" != "skipped" ]]; then
+              echo "❌ DX manifest verification failed"
+              FAILURES=$((FAILURES + 1))
+            else
+              echo "✅ DX build and manifest verification completed successfully"
+            fi
+          fi
+          
+          # Check GDX if it was supposed to run
+          if [[ "${BUILD_VARIANT}" == *"gdx"* ]] || [[ "${BUILD_VARIANT}" == "all" ]] || [[ -z "${BUILD_VARIANT}" ]]; then
+            if [[ "${GDX_BUILD_RESULT}" != "success" && "${GDX_BUILD_RESULT}" != "skipped" ]]; then
+              echo "❌ GDX build failed"
+              FAILURES=$((FAILURES + 1))
+            elif [[ "${GDX_VERIFY_RESULT}" != "success" && "${GDX_VERIFY_RESULT}" != "skipped" ]]; then
+              echo "❌ GDX manifest verification failed"
+              FAILURES=$((FAILURES + 1))
+            else
+              echo "✅ GDX build and manifest verification completed successfully"
+            fi
+          fi
+          
+          echo ""
+          if [[ ${FAILURES} -eq 0 ]]; then
+            echo "🎉 All requested build variants completed successfully with verified multiplatform manifests!"
+          else
+            echo "💥 ${FAILURES} build variant(s) failed"
+            exit 1
+          fi

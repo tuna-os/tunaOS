@@ -518,6 +518,42 @@ jobs:
             podman manifest annotate --index --annotation "$label" "${MANIFEST}"
           done <<< "${LABELS}"
 
+      - name: Verify Manifest Before Push
+        if: ${{ inputs.publish }}
+        env:
+          MANIFEST: ${{ steps.create-manifest.outputs.MANIFEST }}
+          EXPECTED_PLATFORMS: "${{ inputs.platforms }}"
+        run: |
+          set -euo pipefail
+          
+          echo "Verifying manifest contains all expected platforms before push..."
+          echo "Expected platforms: ${EXPECTED_PLATFORMS}"
+          
+          # Get the manifest
+          MANIFEST_JSON=$(podman manifest inspect "${MANIFEST}" 2>/dev/null || {
+            echo "❌ Failed to inspect manifest ${MANIFEST}"
+            exit 1
+          })
+          
+          # Extract actual platforms from manifest
+          ACTUAL_PLATFORMS=$(echo "${MANIFEST_JSON}" | jq -r '.manifests[].platform | "\(.os)/\(.architecture)" + (if .variant then "/\(.variant)" else "" end)' | sort | tr '\n' ',' | sed 's/,$//')
+          
+          echo "Actual platforms in manifest: ${ACTUAL_PLATFORMS}"
+          
+          # Convert expected platforms to sorted list for comparison
+          EXPECTED_SORTED=$(echo "${EXPECTED_PLATFORMS}" | tr ',' '\n' | sort | tr '\n' ',' | sed 's/,$//')
+          
+          if [ "${ACTUAL_PLATFORMS}" = "${EXPECTED_SORTED}" ]; then
+            echo "✅ Manifest verification successful - all expected platforms present"
+          else
+            echo "❌ Manifest verification failed"
+            echo "Expected: ${EXPECTED_SORTED}"
+            echo "Actual:   ${ACTUAL_PLATFORMS}"
+            echo "Manifest JSON:"
+            echo "${MANIFEST_JSON}" | jq .
+            exit 1
+          fi
+
       - name: Login to GitHub Container Registry
         if: ${{ inputs.publish }}
         env:
