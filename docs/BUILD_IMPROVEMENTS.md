@@ -33,6 +33,12 @@ This document outlines the improvements made to the TunaOS build system and CI/C
 
 ## CI/CD Workflow Improvements
 
+### Recent Enhancements:
+1. **Multiplatform Manifest Verification**: Added comprehensive verification jobs that ensure all intended platforms are present in container manifests before proceeding to the next build stage
+2. **Build Pipeline Coordination**: Enhanced job dependencies to ensure proper sequencing (base → dx → gdx) with verification gates
+3. **Error Reporting**: Clear status reporting when manifest verification fails or succeeds
+4. **Platform Safety**: "latest" tags are only applied after successful manifest verification
+
 ### Proposed Changes:
 1. **Unified workflow**: Replace three separate workflows with one consolidated workflow
 2. **Matrix-based builds**: Use proper matrix strategy for different variants
@@ -45,6 +51,8 @@ This document outlines the improvements made to the TunaOS build system and CI/C
 - Reduced duplication
 - Better readability
 - More flexible variant building
+- **Enhanced reliability**: Multiplatform manifests are verified before progression
+- **Early failure detection**: Platform-specific issues caught immediately
 
 ## Build Optimizations
 
