@@ -16,8 +16,8 @@ on:
         options:
         - yellowfin
         - albacore
-        - skipjack
-        - bonito
+        # - skipjack
+        # - bonito
         - all
       build_variant:
         description: 'Build variant (base, dx, gdx)'
@@ -72,7 +72,7 @@ jobs:
               IMAGE_VARIANTS="yellowfin albacore"
             else
               # Include all variants when explicitly requested
-              IMAGE_VARIANTS="yellowfin albacore skipjack bonito"
+              IMAGE_VARIANTS="yellowfin albacore" # skipjack bonito"
             fi
           fi
           
