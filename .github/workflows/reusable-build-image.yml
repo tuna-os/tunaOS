@@ -134,6 +134,77 @@ jobs:
         shell: bash
         run: just check
 
+      - name: Login to GitHub Container Registry (for base image verification)
+        if: ${{ inputs.flavor != 'base' }}
+        env:
+          REGISTRY: ghcr.io
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+
+      - name: Verify Base Image Availability
+        if: ${{ inputs.flavor != 'base' }}
+        shell: bash
+        env:
+          IMAGE_VARIANT: ${{ inputs.image-variant }}
+          DEFAULT_TAG: ${{ inputs.default-tag }}
+          PLATFORM: ${{ matrix.platform }}
+          FLAVOR: ${{ inputs.flavor }}
+        run: |
+          set -x
+          # Determine the base image that will be used
+          if [[ "${FLAVOR}" == "dx" ]]; then
+            BASE_IMAGE="ghcr.io/${{ github.repository_owner }}/${IMAGE_VARIANT}:${DEFAULT_TAG}"
+          elif [[ "${FLAVOR}" == "gdx" ]]; then
+            BASE_IMAGE="ghcr.io/${{ github.repository_owner }}/${IMAGE_VARIANT}-dx:${DEFAULT_TAG}"
+          else
+            echo "Unknown flavor: ${FLAVOR}"
+            exit 1
+          fi
+          
+          echo "Verifying base image: ${BASE_IMAGE} for platform: ${PLATFORM}"
+          
+          # Extract platform components
+          platform_os="${PLATFORM%/*}"
+          platform_arch_full="${PLATFORM#*/}"
+          platform_arch="${platform_arch_full%/*}"
+          platform_variant=""
+          if [[ "$platform_arch_full" == *"/"* ]]; then
+            platform_variant="${platform_arch_full#*/}"
+          fi
+          
+          # Give base build time to complete manifest creation
+          echo "Waiting 60 seconds for base build to complete manifest creation..."
+          sleep 60
+          
+          # Wait for base image to be available with correct platform
+          max_attempts=20
+          attempt=1
+          while [ $attempt -le $max_attempts ]; do
+            echo "Attempt $attempt/$max_attempts: Checking base image availability..."
+            
+            # Check if manifest exists and contains our platform
+            manifest_check=""
+            if [[ -n "$platform_variant" ]]; then
+              manifest_check=$(podman manifest inspect "${BASE_IMAGE}" 2>/dev/null | jq -e --arg os "$platform_os" --arg arch "$platform_arch" --arg variant "$platform_variant" '.manifests[] | select(.platform.os == $os and .platform.architecture == $arch and .platform.variant == $variant)' 2>/dev/null)
+            else
+              manifest_check=$(podman manifest inspect "${BASE_IMAGE}" 2>/dev/null | jq -e --arg os "$platform_os" --arg arch "$platform_arch" '.manifests[] | select(.platform.os == $os and .platform.architecture == $arch and (.platform.variant == null or .platform.variant == ""))' 2>/dev/null)
+            fi
+            
+            if [[ -n "$manifest_check" ]]; then
+              echo "✓ Base image ${BASE_IMAGE} is available for platform ${PLATFORM}"
+              break
+            elif [ $attempt -eq $max_attempts ]; then
+              echo "✗ Base image ${BASE_IMAGE} not available for platform ${PLATFORM} after $max_attempts attempts"
+              echo "Available platforms:"
+              podman manifest inspect "${BASE_IMAGE}" 2>/dev/null | jq -r '.manifests[].platform | "\(.os)/\(.architecture)" + (if .variant then "/\(.variant)" else "" end)' || echo "No manifest found"
+              exit 1
+            else
+              echo "Base image not ready for platform ${PLATFORM}, waiting 30 seconds before retry..."
+              sleep 30
+              ((attempt++))
+            fi
+          done
+
       - name: Build Image
         id: build-image
         shell: bash

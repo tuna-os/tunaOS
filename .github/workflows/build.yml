@@ -160,13 +160,17 @@ jobs:
   # Build DX images (chain from base)
   build-dx:
     needs: [generate_matrix, build-base]
-    # Only run if dx or all variants are requested
+    # Only run if dx or all variants are requested AND base job completed successfully
     if: |
-      (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
-      inputs.build_variant == 'base,dx' ||
-      inputs.build_variant == 'base,dx,gdx' ||
-      inputs.build_variant == 'dx,gdx' ||
-      inputs.build_variant == 'dx'
+      always() && 
+      needs.build-base.result == 'success' &&
+      (
+        (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
+        inputs.build_variant == 'base,dx' ||
+        inputs.build_variant == 'base,dx,gdx' ||
+        inputs.build_variant == 'dx,gdx' ||
+        inputs.build_variant == 'dx'
+      )
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
@@ -186,12 +190,16 @@ jobs:
   # Build GDX images (chain from DX)
   build-gdx:
     needs: [generate_matrix, build-dx]
-    # Only run if gdx or all variants are requested
+    # Only run if gdx or all variants are requested AND dx job completed successfully
     if: |
-      (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
-      inputs.build_variant == 'base,dx,gdx' ||
-      inputs.build_variant == 'gdx' ||
-      inputs.build_variant == 'dx,gdx'
+      always() && 
+      needs.build-dx.result == 'success' &&
+      (
+        (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
+        inputs.build_variant == 'base,dx,gdx' ||
+        inputs.build_variant == 'gdx' ||
+        inputs.build_variant == 'dx,gdx'
+      )
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}

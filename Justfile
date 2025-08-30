@@ -48,6 +48,39 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
     #!/usr/bin/env bash
     set -euxo pipefail
 
+    echo "================================================================"
+    echo "Build parameters:"
+    echo "  Target Tag: {{ target_tag_with_version }}"
+    echo "  Container File: {{ container_file }}"
+    echo "  Base Image: {{ base_image_for_build }}"
+    echo "  Platform: {{ platform }}"
+    echo "  Use Cache: {{ use_cache }}"
+    echo "================================================================"
+
+    # For non-base builds, verify the base image is available for the target platform
+    if [[ "{{ container_file }}" != "Containerfile" ]]; then
+        echo "Verifying base image availability for platform {{ platform }}..."
+        
+        # Extract platform components
+        platform_os="{{ platform }}"
+        platform_os="${platform_os%/*}"
+        platform_arch_full="{{ platform }}"
+        platform_arch_full="${platform_arch_full#*/}"
+        platform_arch="${platform_arch_full%/*}"
+        
+        echo "Looking for platform: ${platform_os}/${platform_arch}"
+        
+        # Check if the base image manifest contains our platform
+        if ! podman manifest inspect "{{ base_image_for_build }}" 2>/dev/null | jq -e --arg os "$platform_os" --arg arch "$platform_arch" '.manifests[] | select(.platform.os == $os and .platform.architecture == $arch)' >/dev/null; then
+            echo "ERROR: Base image {{ base_image_for_build }} does not contain platform {{ platform }}"
+            echo "Available platforms:"
+            podman manifest inspect "{{ base_image_for_build }}" 2>/dev/null | jq -r '.manifests[].platform | "\(.os)/\(.architecture)" + (if .variant then "/\(.variant)" else "" end)' || echo "No manifest found or accessible"
+            exit 1
+        fi
+        
+        echo "✓ Base image verified for platform {{ platform }}"
+    fi
+
     BUILD_ARGS=()
     BUILD_ARGS+=("--build-arg" "IMAGE_NAME={{ target_tag }}")
     BUILD_ARGS+=("--build-arg" "IMAGE_VENDOR={{ repo_organization }}")
