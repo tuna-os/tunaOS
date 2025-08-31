@@ -183,9 +183,9 @@ lint:
 iso variant flavor='base' repo='local':
     #! /bin/bash
     if [ "{{ flavor }}" != "base" ]; then
-        $FLAVOR="-{{ flavor }}"
+        FLAVOR="-{{ flavor }}"
     else
-        $FLAVOR=
+        FLAVOR=
     fi
     if [ "{{ repo }}" = "ghcr" ]; then bash ./build-bootc-diskimage.sh iso ghcr.io/{{ repo_organization }}/{{ variant }}$FLAVOR:{{ default_tag }}
     elif [ "{{ repo }}" = "local" ]; then bash ./build-bootc-diskimage.sh iso localhost/{{ variant }}$FLAVOR:{{ default_tag }}
@@ -194,10 +194,10 @@ iso variant flavor='base' repo='local':
 qcow2 variant flavor='base' repo='local':
     #! /bin/bash
     if [ "{{ flavor }}" != "base" ]; then
-        $FLAVOR="-{{ flavor }}"
+        FLAVOR="-{{ flavor }}"
     else
-        $FLAVOR=
+        FLAVOR=
     fi
     if [ "{{ repo }}" = "ghcr" ]; then bash ./build-bootc-diskimage.sh qcow2 ghcr.io/{{ repo_organization }}/{{ variant }}$FLAVOR:{{ default_tag }}
-    elif [ "{{ repo }}" = "local" ]; then bash ./build-bootc-diskimage.sh qcow2 localhost/{{ variant }}$FLAVOR :{{ default_tag }}
+    elif [ "{{ repo }}" = "local" ]; then bash ./build-bootc-diskimage.sh qcow2 localhost/{{ variant }}$FLAVOR:{{ default_tag }}
     fi
