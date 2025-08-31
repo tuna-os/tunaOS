@@ -44,7 +44,7 @@ fix:
 
 # Private build engine. Now accepts final image name and brand as parameters.
 [private]
-_build target_tag_with_version target_tag container_file base_image_for_build platform='linux/amd64' use_cache="0" *args:
+_build target_tag_with_version target_tag container_file base_image_for_build platform use_cache *args:
     #!/usr/bin/env bash
     set -euxo pipefail
 
@@ -81,7 +81,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
 # Usage (CI): just build image_name=<final_name> variant=<base_os> is_ci=true [flavor]
 
 # Example: just build image_name=albacore variant=almalinux is_ci=true gdx
-build variant='albacore' flavor='base' platform='linux/amd64' is_ci="0" tag='latest' *args:
+build variant='albacore' flavor='base' platform='linux/amd64' is_ci="0" tag='latest':
     #!/usr/bin/env bash
     set -euo pipefail
     echo "==============================================================="
@@ -91,7 +91,6 @@ build variant='albacore' flavor='base' platform='linux/amd64' is_ci="0" tag='lat
     echo "  Platform: {{ platform }}"
     echo "  Is CI: {{ is_ci }}"
     echo "  Tag: {{ tag }}"
-    echo "  Args: {{ args }}"
     echo "==============================================================="
 
 
@@ -145,13 +144,12 @@ build variant='albacore' flavor='base' platform='linux/amd64' is_ci="0" tag='lat
     echo "  Base Image for Build: ${BASE_FOR_BUILD}"
     echo "  Platform: {{ platform }}"
     echo "  is_ci: {{ is_ci }}"
-    echo "  Additional Args: {{ args }}"
     echo "================================================================"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1" {{ args }}
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1"
     else
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" {{ args }}
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0"
     fi
 
 yellowfin variant='base':
