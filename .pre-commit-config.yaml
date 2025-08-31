@@ -1,0 +1,9 @@
+repos:
+  - repo: local
+    hooks:
+      - id: lint
+        name: lint (shellcheck)
+        entry: bash
+        args: ['-c', 'find . -iname "*.sh" -type f -print0 | xargs -0 shellcheck --severity=error --exclude=SC1091,SC2269,SC2086']
+        language: system
+        pass_filenames: false

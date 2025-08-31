@@ -1,4 +1,4 @@
-  #!/usr/bin/env bash
+#!/usr/bin/env bash
 
   set -xeuo pipefail
   printf "::group:: === 90 Image Info ===\n"
