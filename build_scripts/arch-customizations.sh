@@ -12,8 +12,8 @@ printf "::group:: === Arch Customizations ===\n"
 source /run/context/build_scripts/lib.sh
 
 if [ -d "/run/context/overrides/$(arch)" ]; then
-	copy_systemfiles_for "$(arch)"
-	run_buildscripts_for "$(arch)"
+  copy_systemfiles_for "$(arch)"
+  run_buildscripts_for "$(arch)"
 fi
 
 printf "::endgroup::\n"

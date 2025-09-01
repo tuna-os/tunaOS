@@ -11,7 +11,7 @@ case "$variant" in
 "bonito" | "fedora" | "bluefin") echo "quay.io/fedora/fedora-bootc:42" ;;
 "bonito-rawhide" | "rawhide") echo "quay.io/fedora/fedora-bootc:rawhide" ;;
 *)
-	echo "Unknown variant: $variant" >&2
-	exit 1
-	;;
+  echo "Unknown variant: $variant" >&2
+  exit 1
+  ;;
 esac

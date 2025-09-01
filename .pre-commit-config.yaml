@@ -7,3 +7,14 @@ repos:
         args: ['-c', 'find . -iname "*.sh" -type f -print0 | xargs -0 shellcheck --severity=error --exclude=SC1091,SC2269,SC2086']
         language: system
         pass_filenames: false
+  - repo: local
+    hooks:
+      - id: format
+        name: format (shfmt)
+        entry: bash
+        args: ['-c', 'find . -iname "*.sh" -type f -print0 | xargs -0 shfmt -w -i 2']
+        language: system
+  - repo: https://github.com/instrumentl/pre-commit-just
+    rev: 'main'
+    hooks:
+      - id: format-justfile
