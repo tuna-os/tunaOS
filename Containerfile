@@ -1,5 +1,4 @@
-ARG BASE_IMAGE="${BASE_IMAGE}"
-
+ARG BASE_IMAGE
 
 FROM scratch as context
 COPY system_files /files
@@ -8,16 +7,20 @@ COPY build_scripts /build_scripts
 
 FROM ${BASE_IMAGE}
 
-ARG IMAGE_NAME="${IMAGE_NAME}"
-ARG IMAGE_VENDOR="${IMAGE_VENDOR}"
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
 ARG SHA_HEAD_SHORT="${SHA_HEAD_SHORT:-deadbeef}"
 ARG BASE_IMAGE
 ENV BASE_IMAGE=${BASE_IMAGE}
+ENV IMAGE_NAME=${IMAGE_NAME}
+ENV IMAGE_VENDOR=${IMAGE_VENDOR}
+ENV SHA_HEAD_SHORT=${SHA_HEAD_SHORT}
 
+# We pass in BASE_IMAGE as an env var to set it in os-release so that we know what we are building on
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/var --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  BASE_IMAGE="${BASE_IMAGE}" /run/context/build_scripts/copy-files.sh
+  /run/context/build_scripts/copy-files.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/var --mount=type=tmpfs,dst=/boot \

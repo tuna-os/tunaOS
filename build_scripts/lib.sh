@@ -17,7 +17,6 @@ fi
 export SCRIPTS_PATH
 export MAJOR_VERSION_NUMBER
 export BASE_IMAGE
-export IMAGE_VENDOR="tuna-os"
 
 # OS Detection Flags
 IS_FEDORA=false
@@ -28,7 +27,7 @@ IS_CENTOS=false
 
 [[ "${BASE_IMAGE,,}" == *"fedora"* ]] && IS_FEDORA=true
 [[ "${BASE_IMAGE,,}" == *"red hat"* ]] && IS_RHEL=true
-[[ "${BASE_IMAGE,,}" == *"almalinux"* ]] && IS_ALMALINUX=true
+[[ "${BASE_IMAGE,,}" == *"almalinux"* && "${BASE_IMAGE,,}" != *"-kitten"* ]] && IS_ALMALINUX=true
 [[ "${BASE_IMAGE,,}" == *"-kitten"* ]] && IS_ALMALINUXKITTEN=true
 [[ "${BASE_IMAGE,,}" == *"centos"* ]] && IS_CENTOS=true
 
@@ -65,8 +64,6 @@ get_image_name() {
 	export IMAGE_NAME
 	export IMAGE_PRETTY_NAME
 }
-
-get_image_name
 
 detected_os() {
 	echo "Detected OS:"
@@ -121,9 +118,9 @@ copy_systemfiles_for() {
 }
 
 install_from_copr() {
-	CO_PR_NAME=$1
+	COPR_NAME=$1
 	shift
-	dnf -y copr enable "$CO_PR_NAME"
-	dnf -y --enablerepo "copr:copr.fedorainfracloud.org:$(echo "$CO_PR_NAME" | tr '/' ':')" install "$@"
-	dnf -y copr disable "$CO_PR_NAME"
+	dnf -y copr enable "$COPR_NAME"
+	dnf -y --enablerepo "copr:copr.fedorainfracloud.org:$(echo "$COPR_NAME" | tr '/' ':')" install "$@"
+	dnf -y copr disable "$COPR_NAME"
 }
