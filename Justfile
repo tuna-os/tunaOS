@@ -4,6 +4,8 @@ export repo_organization := env("GITHUB_REPOSITORY_OWNER", "tuna-os")
 export default_tag := env("DEFAULT_TAG", "latest")
 export bib_image := env("BIB_IMAGE", "quay.io/centos-bootc/bootc-image-builder:latest")
 just := just_executable()
+arch := arch()
+export platform := if arch == "x86_64" { "linux/amd64" } else if arch == "arm64" { "linux/arm64" } else if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") }
 
 # --- Default Base Image (for 'base' flavor builds) ---
 
@@ -101,18 +103,24 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
 # Usage (CI): just build image_name=<final_name> variant=<base_os> is_ci=true [flavor]
 
 # Example: just build image_name=albacore variant=almalinux is_ci=true gdx
-build variant='albacore' flavor='base' platform='linux/amd64' is_ci="0" tag='latest':
+build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='latest':
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "==============================================================="
-    echo "Build config:"
-    echo "  Variant: {{ variant }}"
-    echo "  Flavor: {{ flavor }}"
-    echo "  Platform: {{ platform }}"
-    echo "  Is CI: {{ is_ci }}"
-    echo "  Tag: {{ tag }}"
-    echo "==============================================================="
 
+    # ANSI color codes
+    BLUE='\033[0;34m'
+    GREEN='\033[0;32m'
+    YELLOW='\033[1;33m'
+    NC='\033[0m' # No Color
+
+    echo -e "${BLUE}===============================================================${NC}"
+    echo -e "${GREEN}Build config:${NC}"
+    echo -e "  Variant: ${YELLOW}{{ variant }}${NC}"
+    echo -e "  Flavor: ${YELLOW}{{ flavor }}${NC}"
+    echo -e "  Platform: ${YELLOW}{{ platform }}${NC}"
+    echo -e "  Is CI: ${YELLOW}{{ is_ci }}${NC}"
+    echo -e "  Tag: ${YELLOW}{{ tag }}${NC}"
+    echo -e "${BLUE}===============================================================${NC}"
 
 
     BASE_FOR_BUILD=""
@@ -156,15 +164,15 @@ build variant='albacore' flavor='base' platform='linux/amd64' is_ci="0" tag='lat
     fi
     TARGET_TAG_WITH_VERSION="${TARGET_TAG}:{{ tag }}"
 
-    echo "================================================================"
-    echo "Building image with the following parameters:"
-    echo "  Target Tag: ${TARGET_TAG_WITH_VERSION}"
-    echo "  Variant: {{ variant }}"
-    echo "  Containerfile: ${CONTAINERFILE}"
-    echo "  Base Image for Build: ${BASE_FOR_BUILD}"
-    echo "  Platform: {{ platform }}"
-    echo "  is_ci: {{ is_ci }}"
-    echo "================================================================"
+    echo -e "${BLUE}================================================================${NC}"
+    echo -e "${GREEN}Building image with the following parameters:${NC}"
+    echo -e "  Target Tag: ${YELLOW}${TARGET_TAG_WITH_VERSION}${NC}"
+    echo -e "  Variant: ${YELLOW}{{ variant }}${NC}"
+    echo -e "  Containerfile: ${YELLOW}${CONTAINERFILE}${NC}"
+    echo -e "  Base Image for Build: ${YELLOW}${BASE_FOR_BUILD}${NC}"
+    echo -e "  Platform: ${YELLOW}{{ platform }}${NC}"
+    echo -e "  is_ci: ${YELLOW}{{ is_ci }}${NC}"
+    echo -e "${BLUE}================================================================${NC}"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
         {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1"
