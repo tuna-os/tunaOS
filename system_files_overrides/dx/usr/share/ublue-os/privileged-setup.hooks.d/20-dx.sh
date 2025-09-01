@@ -6,11 +6,11 @@ version-script dx-usergroups-lts privileged 1 || exit 0
 
 # Function to append a group entry to /etc/group
 append_group() {
-  local group_name="$1"
-  if ! grep -q "^$group_name:" /etc/group; then
-    echo "Appending $group_name to /etc/group"
-    grep "^$group_name:" /usr/lib/group | tee -a /etc/group >/dev/null
-  fi
+	local group_name="$1"
+	if ! grep -q "^$group_name:" /etc/group; then
+		echo "Appending $group_name to /etc/group"
+		grep "^$group_name:" /usr/lib/group | tee -a /etc/group >/dev/null
+	fi
 }
 
 # Setup Groups

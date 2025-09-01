@@ -38,6 +38,26 @@ fix:
     echo "Checking syntax: Justfile"
     just --unstable --fmt -f Justfile || { exit 1; }
 
+clean:
+    #!/usr/bin/env bash
+    echo "Cleaning up..."
+    rm -rf '.rpm-cache-*'
+    rm -rf .build-logs
+    echo "Removing local podman images for all variants and flavors..."
+    variants=(yellowfin albacore bonito skipjack)
+    images=()
+    for variant in "${variants[@]}"; do
+        images+=("$variant")
+        images+=("${variant}-dx")
+        images+=("${variant}-gdx")
+    done
+    for img in "${images[@]}"; do
+        podman rmi -f "localhost/${img}:latest" 2>/dev/null || true
+    done
+    for img in "${images[@]}"; do
+        sudo podman rmi -f "localhost/${img}:latest" 2>/dev/null || true
+    done
+
 # ==============================================================================
 #  BUILD PIPELINE
 # ==============================================================================
@@ -164,21 +184,21 @@ skipjack variant='base':
 bonito variant='base':
     just build bonito {{ variant }}
 
-# --- Build-all helpers ---
 build-all-base:
-    just build yellowfin
-    just build albacore
-    # just build skipjack
-    # just build bonito
+    #!/usr/bin/env bash
+    set -euo pipefail
+    bash ./scripts/build-all.sh --base-only --include-experimental
 
 build-all:
-    just build yellowfin all
-    just build albacore all
-    # just build skipjack all
-    # just build bonito all
+    #!/usr/bin/env bash
+    bash ./scripts/build-all.sh
+
+build-all-experimental:
+    #!/usr/bin/env bash
+    bash ./scripts/build-all.sh --include-experimental
 
 iso variant flavor='base' repo='local':
-    #! /bin/bash
+    #!/usr/bin/env bash
     if [ "{{ flavor }}" != "base" ]; then
         FLAVOR="-{{ flavor }}"
     else
@@ -189,7 +209,7 @@ iso variant flavor='base' repo='local':
     fi
 
 qcow2 variant flavor='base' repo='local':
-    #! /bin/bash
+    #!/usr/bin/env bash
     if [ "{{ flavor }}" != "base" ]; then
         FLAVOR="-{{ flavor }}"
     else

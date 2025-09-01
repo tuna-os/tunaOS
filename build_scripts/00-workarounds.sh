@@ -10,12 +10,12 @@ if [[ "$IS_RHEL" = true || "$IS_CENTOS" = true ]]; then rm -f /usr/lib/bootc/ins
 # uses during its build.  This avoids downgrading packages in the image that
 # have strict NVR requirements.
 if [[ "$IS_CENTOS" = true ]] && ! [[ "$IS_ALMALINUX" = true ]]; then
-  curl --retry 3 -Lo "/etc/yum.repos.d/compose.repo" "https://gitlab.com/redhat/centos-stream/containers/bootc/-/raw/c${MAJOR_VERSION_NUMBER}s/cs.repo"
-  sed -i \
-    -e "s@- (BaseOS|AppStream)@& - Compose@" \
-    -e "s@\(baseos\|appstream\)@&-compose@" \
-    /etc/yum.repos.d/compose.repo
-  cat /etc/yum.repos.d/compose.repo
+	curl --retry 3 -Lo "/etc/yum.repos.d/compose.repo" "https://gitlab.com/redhat/centos-stream/containers/bootc/-/raw/c${MAJOR_VERSION_NUMBER}s/cs.repo"
+	sed -i \
+		-e "s@- (BaseOS|AppStream)@& - Compose@" \
+		-e "s@\(baseos\|appstream\)@&-compose@" \
+		/etc/yum.repos.d/compose.repo
+	cat /etc/yum.repos.d/compose.repo
 fi
 echo "DEBUG info:"
 echo "is_fedora: $IS_FEDORA"

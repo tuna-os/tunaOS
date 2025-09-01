@@ -8,8 +8,8 @@ set -x
 
 # Setup VSCode
 if test ! -e "$HOME"/.config/Code/User/settings.json; then
-  mkdir -p "$HOME"/.config/Code/User
-  cp -f /etc/skel/.config/Code/User/settings.json "$HOME"/.config/Code/User/settings.json
+	mkdir -p "$HOME"/.config/Code/User
+	cp -f /etc/skel/.config/Code/User/settings.json "$HOME"/.config/Code/User/settings.json
 fi
 
 code --install-extension ms-vscode-remote.remote-containers

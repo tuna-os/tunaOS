@@ -19,6 +19,7 @@ repos:
         entry: just
         args: ['fix']
         language: system
+        pass_filenames: false
   - repo: https://github.com/instrumentl/pre-commit-just
     rev: 'v0.1'
     hooks:

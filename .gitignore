@@ -4,6 +4,7 @@ output/
 *.qcow2
 .rpm-cache
 .rpm-cache*
+.build-logs/
 # Temporary build artifacts
 just.tar.gz
 Cargo.lock
