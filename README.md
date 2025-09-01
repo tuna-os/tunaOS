@@ -160,11 +160,14 @@ Related Communities:
 <img width="400" height="400" alt="Tuna_OS_Logo" src="https://github.com/user-attachments/assets/0c0de438-25ae-429d-b7a5-fe32ea85547f" />
 
 *Made by James in his free time*
-<a href="https://github.com/bootc-dev/bootc">
-<img width="100" height="100" alt="Bootc_Logo" src="https://raw.githubusercontent.com/containers/common/main/logos/bootc-logo-full-vert.png" />
-</a>
+
 
 *Powered by [Bootc](https://github.com/bootc-dev/bootc)*
+
+
+<a href="https://github.com/bootc-dev/bootc">
+<img width="100" height="130" alt="Bootc_Logo" src="https://raw.githubusercontent.com/containers/common/main/logos/bootc-logo-full-vert.png" />
+</a>
 
 *Inspired by [Bluefin](https://projectbluefin.io) and the [Universal Blue](https://universal-blue.org/) Community*
 
