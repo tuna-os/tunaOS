@@ -7,10 +7,6 @@
   "rebaseWhen": "never",
   "baseBranches": [ 
     "main",
-    "albacore",
-    "albacore-server",
-    "yellowfin",
-    "bluefin-tuna"
   ],
   "packageRules": [
     {

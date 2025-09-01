@@ -18,7 +18,7 @@ if [[ $IS_CENTOS == true ]]; then
 fi
 
 # Install caffeine extension only in EPEL 10.1 or Fedora
-echo $IMAGE_NAME
+echo "$IMAGE_NAME"
 detected_os
 cat /etc/os-release
 if [[ "$IS_ALMALINUX" = true || "$IS_RHEL" = true ]]; then

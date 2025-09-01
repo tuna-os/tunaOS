@@ -18,7 +18,7 @@ default:
 check:
     #!/usr/bin/env bash
     echo "Checking syntax of shell scripts..."
-    /usr/bin/find . -iname "*.sh" -type f -exec shellcheck "{}" ";"
+    /usr/bin/find . -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
     find . -type f -name "*.just" | while read -r file; do
         echo "Checking syntax: $file"
         just --unstable --fmt --check -f $file
@@ -176,9 +176,6 @@ build-all:
     just build albacore all
     just build skipjack all
     just build bonito all
-
-lint:
-    /usr/bin/find . -iname "*.sh" -type f -exec shellcheck "{}" ";"
 
 iso variant flavor='base' repo='local':
     #! /bin/bash

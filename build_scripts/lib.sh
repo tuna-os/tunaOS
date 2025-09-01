@@ -11,9 +11,7 @@ CONTEXT_PATH="$(realpath "$(dirname "$0")/..")" # should return /run/context
 BUILD_SCRIPTS_PATH="$(realpath "$(dirname "$0")")"
 MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
 SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
-if [ -n "${BASE_IMAGE}" ]; then
-	BASE_IMAGE="${BASE_IMAGE}"
-else
+if [ -z "${BASE_IMAGE}" ]; then
 	BASE_IMAGE="$(sh -c '. /etc/os-release ; echo ${BASE_IMAGE}')"
 fi
 export SCRIPTS_PATH

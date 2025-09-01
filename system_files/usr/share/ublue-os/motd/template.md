@@ -1,4 +1,4 @@
-# 🐠 Welcome to %IMAGE_PRETTY_NAME%
+# 🐠 Welcome to %IMAGE_NAME%
 
 󱋩 `%IMAGE_NAME%:%IMAGE_TAG%`
 

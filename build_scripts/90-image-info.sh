@@ -5,8 +5,6 @@
 
 source /run/context/build_scripts/lib.sh
 get_image_name
-IMAGE_VENDOR=$IMAGE_VENDOR
-IMAGE_NAME=$IMAGE_NAME
 IMAGE_REF="ostree-image-signed:docker://ghcr.io/${IMAGE_VENDOR}/${IMAGE_NAME}"
 IMAGE_INFO="/usr/share/ublue-os/image-info.json"
 IMAGE_FLAVOR="main"
@@ -24,7 +22,6 @@ cat >$IMAGE_INFO <<EOF
   }
 EOF
 
-IMAGE_PRETTY_NAME="${IMAGE_PRETTY_NAME}"
 HOME_URL="https://projectbluefin.io"
 DOCUMENTATION_URL="https://docs.projectbluefin.io"
 SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"

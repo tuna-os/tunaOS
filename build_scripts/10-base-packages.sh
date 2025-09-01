@@ -23,8 +23,8 @@ if [[ $IS_FEDORA == true ]]; then
 	dnf install -y 'dnf5-command(config-manager)'
 	# Setup RPM Fusion
 	dnf install -y \
-		https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm \
-		https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm
+		https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-"$(rpm -E %fedora)".noarch.rpm \
+		https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-"$(rpm -E %fedora)".noarch.rpm
 
 	dnf config-manager setopt fedora-multimedia.enabled=1 ||
 	dnf config-manager addrepo --from-repofile="https://negativo17.org/repos/fedora-multimedia.repo"
