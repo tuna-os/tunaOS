@@ -4,3 +4,10 @@ output/
 *.qcow2
 .rpm-cache
 .rpm-cache*
+# Temporary build artifacts
+just.tar.gz
+Cargo.lock
+Cargo.toml
+GRAMMAR.md
+just.1
+completions/
