@@ -1,20 +1,25 @@
 repos:
   - repo: local
     hooks:
-      - id: lint
-        name: lint (shellcheck)
-        entry: bash
-        args: ['-c', 'find . -iname "*.sh" -type f -print0 | xargs -0 shellcheck --severity=error --exclude=SC1091,SC2269,SC2086']
+      - id: check
+        name: syntax check
+        entry: just
+        args: ['check']
         language: system
         pass_filenames: false
-  - repo: local
-    hooks:
-      - id: format
-        name: format (shfmt)
-        entry: bash
-        args: ['-c', 'find . -iname "*.sh" -type f -print0 | xargs -0 shfmt -w -i 2']
+      - id: build-base
+        name: "build all base images (WARNING: takes maybe 20 minutes)"
+        entry: just
+        args: ['build-all-base']
+        language: system
+        pass_filenames: false
+        stages: [manual]
+      - id: fix
+        name: format (shfmt, just)
+        entry: just
+        args: ['fix']
         language: system
   - repo: https://github.com/instrumentl/pre-commit-just
-    rev: 'main'
+    rev: 'v0.1'
     hooks:
       - id: format-justfile

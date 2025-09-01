@@ -168,14 +168,14 @@ bonito variant='base':
 build-all-base:
     just build yellowfin
     just build albacore
-    just build skipjack
-    just build bonito
+    # just build skipjack
+    # just build bonito
 
 build-all:
     just build yellowfin all
     just build albacore all
-    just build skipjack all
-    just build bonito all
+    # just build skipjack all
+    # just build bonito all
 
 iso variant flavor='base' repo='local':
     #! /bin/bash
