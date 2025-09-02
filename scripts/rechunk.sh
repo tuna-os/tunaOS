@@ -35,6 +35,7 @@ echo "⚙️  Creating OSTree commit..."
 
 # Prune the filesystem tree
 sudo podman run --rm \
+	--privileged --security-opt label=disable \
 	-v "$MOUNT":/var/tree \
 	-e TREE=/var/tree \
 	-u 0:0 \
@@ -43,6 +44,7 @@ sudo podman run --rm \
 
 # Commit the tree to a temporary OSTree repository
 sudo podman run --rm \
+	--privileged --security-opt label=disable \
 	-v "$MOUNT":/var/tree \
 	-e TREE=/var/tree \
 	-v "cache_ostree:/var/ostree" \
@@ -52,11 +54,8 @@ sudo podman run --rm \
 	"$RECHUNKER_IMAGE" \
 	/sources/rechunk/2_create.sh
 
-# Unmount and remove the original container and image to save space
 echo "Cleaning up original container and image..."
 sudo podman unmount "$CREF"
-sudo podman rm "$CREF"
-sudo podman rmi "$REF"
 echo "✅ OSTree commit created and source cleaned up."
 
 ## 3. Rechunk the commit into a new OCI image
@@ -68,6 +67,7 @@ OUT_NAME=$(echo "$REF" | rev | cut -d'/' -f1 | rev | sed 's/:/_/')
 
 # Run the final chunking script
 sudo podman run --rm \
+	--privileged --security-opt label=disable \
 	-v "$WORKSPACE":/workspace \
 	-v "cache_ostree:/var/ostree" \
 	-e REPO=/var/ostree/repo \
