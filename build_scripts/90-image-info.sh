@@ -10,7 +10,6 @@ IMAGE_INFO="/usr/share/ublue-os/image-info.json"
 IMAGE_FLAVOR="main"
 IMAGE_PRETTY_NAME="${IMAGE_NAME^}"
 
-
 cat >$IMAGE_INFO <<EOF
   {
     "image-name": "${IMAGE_NAME}",

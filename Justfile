@@ -195,15 +195,15 @@ bonito variant='base':
 build-all-base:
     #!/usr/bin/env bash
     set -euo pipefail
-    bash ./scripts/build-all.sh --base-only --include-experimental
+    bash ./scripts/build-all-images.sh --base-only --include-experimental
 
 build-all:
     #!/usr/bin/env bash
-    bash ./scripts/build-all.sh
+    bash ./scripts/build-all-images.sh
 
 build-all-experimental:
     #!/usr/bin/env bash
-    bash ./scripts/build-all.sh --include-experimental
+    bash ./scripts/build-all-images.sh --include-experimental
 
 iso variant flavor='base' repo='local':
     #!/usr/bin/env bash
@@ -212,8 +212,8 @@ iso variant flavor='base' repo='local':
     else
         FLAVOR=
     fi
-    if [ "{{ repo }}" = "ghcr" ]; then bash ./build-bootc-diskimage.sh iso ghcr.io/{{ repo_organization }}/{{ variant }}$FLAVOR:{{ default_tag }}
-    elif [ "{{ repo }}" = "local" ]; then bash ./build-bootc-diskimage.sh iso localhost/{{ variant }}$FLAVOR:{{ default_tag }}
+    if [ "{{ repo }}" = "ghcr" ]; then bash ./scripts/build-bootc-diskimage.sh iso ghcr.io/{{ repo_organization }}/{{ variant }}$FLAVOR:{{ default_tag }}
+    elif [ "{{ repo }}" = "local" ]; then bash ./scripts/build-bootc-diskimage.sh iso localhost/{{ variant }}$FLAVOR:{{ default_tag }}
     fi
 
 qcow2 variant flavor='base' repo='local':
@@ -223,6 +223,6 @@ qcow2 variant flavor='base' repo='local':
     else
         FLAVOR=
     fi
-    if [ "{{ repo }}" = "ghcr" ]; then bash ./build-bootc-diskimage.sh qcow2 ghcr.io/{{ repo_organization }}/{{ variant }}$FLAVOR:{{ default_tag }}
-    elif [ "{{ repo }}" = "local" ]; then bash ./build-bootc-diskimage.sh qcow2 localhost/{{ variant }}$FLAVOR:{{ default_tag }}
+    if [ "{{ repo }}" = "ghcr" ]; then bash ./scripts/build-bootc-diskimage.sh qcow2 ghcr.io/{{ repo_organization }}/{{ variant }}$FLAVOR:{{ default_tag }}
+    elif [ "{{ repo }}" = "local" ]; then bash ./scripts/build-bootc-diskimage.sh qcow2 localhost/{{ variant }}$FLAVOR:{{ default_tag }}
     fi
