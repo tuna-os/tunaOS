@@ -25,11 +25,11 @@ IS_ALMALINUX=false
 IS_ALMALINUXKITTEN=false
 IS_CENTOS=false
 
-[[ "${BASE_IMAGE,,}" == *"fedora"* ]] && IS_FEDORA=true
-[[ "${BASE_IMAGE,,}" == *"red hat"* ]] && IS_RHEL=true
-[[ "${BASE_IMAGE,,}" == *"almalinux"* && "${BASE_IMAGE,,}" != *"-kitten"* ]] && IS_ALMALINUX=true
-[[ "${BASE_IMAGE,,}" == *"-kitten"* ]] && IS_ALMALINUXKITTEN=true
-[[ "${BASE_IMAGE,,}" == *"centos"* ]] && IS_CENTOS=true
+[[ "${BASE_IMAGE,,}" == *"fedora"* ]] && IS_FEDORA=true && IMAGE_NAME="bonito" && IMAGE_PRETTY_NAME="Bonito"
+[[ "${BASE_IMAGE,,}" == *"red hat"* ]] && IS_RHEL=true && IMAGE_NAME="redfin" && IMAGE_PRETTY_NAME="Redfin"
+[[ "${BASE_IMAGE,,}" == *"almalinux"* && "${BASE_IMAGE,,}" != *"-kitten"* ]] && IS_ALMALINUX=true && IMAGE_NAME="albacore" && IMAGE_PRETTY_NAME="Albacore"
+[[ "${BASE_IMAGE,,}" == *"-kitten"* ]] && IS_ALMALINUXKITTEN=true && IMAGE_NAME="yellowfin" && IMAGE_PRETTY_NAME="Yellowfin"
+[[ "${BASE_IMAGE,,}" == *"centos"* ]] && IS_CENTOS=true && IMAGE_NAME="skipjack" && IMAGE_PRETTY_NAME="Skipjack"
 
 echo "FEDORA: $IS_FEDORA"
 echo "RHEL: $IS_RHEL"
@@ -42,28 +42,8 @@ export IS_RHEL
 export IS_ALMALINUX
 export IS_ALMALINUXKITTEN
 export IS_CENTOS
-
-get_image_name() {
-	if [ "$IS_FEDORA" = true ]; then
-		IMAGE_NAME="bonito"
-		IMAGE_PRETTY_NAME="Bonito"
-	elif [ "$IS_ALMALINUXKITTEN" = true ]; then
-		IMAGE_NAME="yellowfin"
-		IMAGE_PRETTY_NAME="Yellowfin"
-	elif [ "$IS_ALMALINUX" = true ]; then
-		IMAGE_NAME="albacore"
-		IMAGE_PRETTY_NAME="Albacore"
-	elif [ "$IS_CENTOS" = true ]; then
-		IMAGE_NAME="skipjack"
-		IMAGE_PRETTY_NAME="Skipjack"
-	elif [ "$IS_RHEL" = true ]; then
-		IMAGE_NAME="redfin"
-		IMAGE_PRETTY_NAME="Redfin"
-	fi
-
-	export IMAGE_NAME
-	export IMAGE_PRETTY_NAME
-}
+export IMAGE_NAME
+export IMAGE_PRETTY_NAME
 
 detected_os() {
 	echo "Detected OS:"
