@@ -18,17 +18,25 @@ if [ -z "$1" ]; then
 	exit 1
 fi
 readonly REF="$1"
-readonly WORKSPACE="$(pwd)/.build"
+readonly WORKSPACE=$(pwd)/.rechunk
 
-# Create .build directory if it doesn't exist
-mkdir -p "$WORKSPACE"
+# --- Cleanup previous runs ---
+readonly OUT_NAME=$(echo "$REF" | rev | cut -d'/' -f1 | rev | sed 's/:/_/')
+sudo podman rmi "$OUT_NAME" || true
+rm -rf "$WORKSPACE"
+sudo podman image prune -f
 
 echo "▶️  Starting rechunk process for image: $REF"
+
+# --- Pull the image ---
+sudo podman pull "$REF"
+
+mkdir -p "$WORKSPACE"
 
 ## 1. Mount the source image
 echo "---"
 echo "⚙️  Mounting image..."
-CREF=$(sudo podman create "$REF" bash)
+CREF=$(sudo podman create --platform linux/amd64 "$REF" bash)
 MOUNT=$(sudo podman mount "$CREF")
 echo "✅ Image mounted at: $MOUNT"
 
@@ -65,9 +73,6 @@ echo "✅ OSTree commit created and source cleaned up."
 echo "---"
 echo "⚙️  Rechunking into new OCI image..."
 
-# Generate an output directory name from the input image reference
-OUT_NAME=$(echo "$REF" | rev | cut -d'/' -f1 | rev | sed 's/:/_/')
-
 # Run the final chunking script
 sudo podman run --rm \
 	--privileged --security-opt label=disable \
@@ -95,14 +100,15 @@ sudo podman volume rm cache_ostree >/dev/null
 
 echo "---"
 echo "✅ Success! Rechunking complete."
-echo "📦 The new OCI image is located at: $WORKSPACE/$OUT_NAME"
+echo "📦 The new OCI image is located at: $WORKSPACE/./$OUT_NAME"
 
 # podman import OCI image
 
 echo "loading into podman..."
-sudo podman import "$WORKSPACE/$OUT_NAME" "$OUT_NAME:rechunk"
-echo "✅ Image loaded into Podman as: $OUT_NAME:rechunk"
+sudo podman pull oci:$WORKSPACE/$OUT_NAME
+echo "✅ Image loaded into Podman as: $OUT_NAME"
 echo "Cleaning up..."
-if podman inspect "$OUT_NAME:rechunk" >/dev/null 2>&1; then
+if sudo podman inspect "$OUT_NAME" >/dev/null 2>&1; then
 	rm -rf "$WORKSPACE/$OUT_NAME"
+	sudo podman tag "$OUT_NAME" "$OUT_NAME:rechunked"
 fi
