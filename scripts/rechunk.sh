@@ -18,7 +18,10 @@ if [ -z "$1" ]; then
 	exit 1
 fi
 readonly REF="$1"
-readonly WORKSPACE=$(pwd)
+readonly WORKSPACE="$(pwd)/.build"
+
+# Create .build directory if it doesn't exist
+mkdir -p "$WORKSPACE"
 
 echo "▶️  Starting rechunk process for image: $REF"
 

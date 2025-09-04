@@ -510,11 +510,18 @@ jobs:
       packages: write
       id-token: write
     steps:
+      - name: Install skopeo
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y skopeo
+
       - name: Login to GitHub Container Registry
         env:
           REGISTRY: ghcr.io
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+          # Also login with skopeo
+          echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
 
       - name: Pull Image and Apply Tags
         id: tag
@@ -528,15 +535,9 @@ jobs:
           set -ex
           SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
           
-          # Pull the image that the manifest job pushed
-          podman pull "${SOURCE_IMAGE}"
-
-          # Create new tags from the local image
-          podman tag "${SOURCE_IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
-          podman tag "${SOURCE_IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:$(date +%Y%m%d)"
-
-          # Push the new tags to the registry
-          podman push "${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
-          podman push "${IMAGE_REGISTRY}/${IMAGE_NAME}:$(date +%Y%m%d)"
+          # Copy the multi-architecture manifest to new tag names
+          # This preserves all architectures in the manifest
+          skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
+          skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:$(date +%Y%m%d)"
 
           echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
