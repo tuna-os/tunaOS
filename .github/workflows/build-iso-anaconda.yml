@@ -1,6 +1,14 @@
 ---
 name: Build Anaconda ISO Images
 on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'iso_files/**'
+      - '.github/workflows/build-iso-anaconda.yml'
+      - '.github/workflows/reusable-build-iso-anaconda.yml'
+      - 'iso.toml'
   schedule:
     - cron: "0 1 2 * *" # The second of every month at 1am UTC
   merge_group:
