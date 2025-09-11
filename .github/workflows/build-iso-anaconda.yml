@@ -75,24 +75,30 @@ jobs:
       - name: Generate ISO build matrix
         id: set-matrix
         run: |
-          # Determine which image variants to build
-          IMAGE_VARIANTS="yellowfin albacore"
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            if [[ "${{ inputs.image_variant }}" != "all" ]]; then
-              IMAGE_VARIANTS="${{ inputs.image_variant }}"
-            else
-              # Include all variants when explicitly requested
-              IMAGE_VARIANTS="yellowfin albacore skipjack bonito"
+          # For pull requests, only build albacore base on one platform for quick validation
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            IMAGE_VARIANTS="albacore"
+            FLAVORS="base"
+          else
+            # Determine which image variants to build
+            IMAGE_VARIANTS="yellowfin albacore"
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+              if [[ "${{ inputs.image_variant }}" != "all" ]]; then
+                IMAGE_VARIANTS="${{ inputs.image_variant }}"
+              else
+                # Include all variants when explicitly requested
+                IMAGE_VARIANTS="yellowfin albacore skipjack bonito"
+              fi
             fi
-          fi
-          
-          # Determine flavors to build  
-          FLAVORS="base"
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            if [[ "${{ inputs.flavor }}" != "all" ]]; then
-              FLAVORS="${{ inputs.flavor }}"
-            else
-              FLAVORS="base dx gdx"
+            
+            # Determine flavors to build  
+            FLAVORS="base"
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+              if [[ "${{ inputs.flavor }}" != "all" ]]; then
+                FLAVORS="${{ inputs.flavor }}"
+              else
+                FLAVORS="base dx gdx"
+              fi
             fi
           fi
           
@@ -123,8 +129,11 @@ jobs:
             IMAGE_NAME="${image_variant}"
             TAG="${{ (github.ref_name == 'main' && github.event_name != 'pull_request') && 'latest' || github.sha }}"
             
-            # Override platforms if specified in input
-            if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.platforms }}" ]]; then
+            # Override platforms if specified in input or for PR validation
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              # Use only one platform for PR validation
+              PLATFORMS="linux/amd64"
+            elif [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.platforms }}" ]]; then
               PLATFORMS="${{ inputs.platforms }}"
             fi
             
