@@ -6,6 +6,7 @@ output/
 .rpm-cache*
 .rechunk/
 .build-logs/
+.build/
 # Temporary build artifacts
 just.tar.gz
 Cargo.lock
