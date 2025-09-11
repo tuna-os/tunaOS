@@ -205,17 +205,6 @@ build-all-experimental:
     #!/usr/bin/env bash
     bash ./scripts/build-all-images.sh --include-experimental
 
-iso variant flavor='base' repo='local':
-    #!/usr/bin/env bash
-    if [ "{{ flavor }}" != "base" ]; then
-        FLAVOR="-{{ flavor }}"
-    else
-        FLAVOR=
-    fi
-    if [ "{{ repo }}" = "ghcr" ]; then bash ./scripts/build-bootc-diskimage.sh iso ghcr.io/{{ repo_organization }}/{{ variant }}$FLAVOR:{{ default_tag }}
-    elif [ "{{ repo }}" = "local" ]; then bash ./scripts/build-bootc-diskimage.sh iso localhost/{{ variant }}$FLAVOR:{{ default_tag }}
-    fi
-
 qcow2 variant flavor='base' repo='local':
     #!/usr/bin/env bash
     if [ "{{ flavor }}" != "base" ]; then
@@ -226,3 +215,7 @@ qcow2 variant flavor='base' repo='local':
     if [ "{{ repo }}" = "ghcr" ]; then bash ./scripts/build-bootc-diskimage.sh qcow2 ghcr.io/{{ repo_organization }}/{{ variant }}$FLAVOR:{{ default_tag }}
     elif [ "{{ repo }}" = "local" ]; then bash ./scripts/build-bootc-diskimage.sh qcow2 localhost/{{ variant }}$FLAVOR:{{ default_tag }}
     fi
+
+iso variant flavor='base' repo='local' hook_script='iso_files/configure_lts_iso_anaconda.sh' flatpaks_file='system_files/etc/ublue-os/system-flatpaks.list':
+    #!/usr/bin/env bash
+    bash ./scripts/build-titanoboa.sh {{ variant }} {{ flavor }} {{ repo }} {{ hook_script }}
