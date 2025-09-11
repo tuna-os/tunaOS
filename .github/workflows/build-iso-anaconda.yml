@@ -1,0 +1,158 @@
+---
+name: Build Anaconda ISO Images
+on:
+  schedule:
+    - cron: "0 1 2 * *" # The second of every month at 1am UTC
+  merge_group:
+  workflow_dispatch:
+    inputs:
+      upload_r2:
+        description: 'Upload built ISOs to Cloudflare R2'
+        required: false
+        default: false
+        type: boolean
+      upload_artifacts:
+        description: 'Upload built ISOs to GitHub Artifacts'
+        required: false
+        default: false
+        type: boolean
+      image_variant:
+        description: 'Image variant to build (yellowfin, albacore, skipjack, bonito, all)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+        - yellowfin
+        - albacore
+        - skipjack
+        - bonito
+        - all
+      flavor:
+        description: 'Flavor (base, dx, gdx, all)'
+        required: false
+        default: 'base'
+        type: choice
+        options:
+        - base
+        - dx
+        - gdx
+        - all
+      platforms:
+        description: 'Platforms to build'
+        required: false
+        default: ''
+        type: choice
+        options:
+        - ''
+        - linux/amd64
+        - linux/amd64/v2
+        - linux/arm64
+        - linux/amd64,linux/arm64
+        - linux/amd64,linux/amd64/v2,linux/arm64
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ inputs.image_variant || 'auto' }}-${{ inputs.flavor || 'auto' }}
+  cancel-in-progress: true
+
+jobs:
+  # Generate build matrix for image variants, flavors, and platforms
+  generate_matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout for config
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        
+      - name: Generate ISO build matrix
+        id: set-matrix
+        run: |
+          # Determine which image variants to build
+          IMAGE_VARIANTS="yellowfin albacore"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ inputs.image_variant }}" != "all" ]]; then
+              IMAGE_VARIANTS="${{ inputs.image_variant }}"
+            else
+              # Include all variants when explicitly requested
+              IMAGE_VARIANTS="yellowfin albacore skipjack bonito"
+            fi
+          fi
+          
+          # Determine flavors to build  
+          FLAVORS="base"
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ inputs.flavor }}" != "all" ]]; then
+              FLAVORS="${{ inputs.flavor }}"
+            else
+              FLAVORS="base dx gdx"
+            fi
+          fi
+          
+          # Generate matrix
+          MATRIX="{\"include\":[]}"
+          for image_variant in $IMAGE_VARIANTS; do
+            # Set image-specific values
+            case "$image_variant" in
+              yellowfin)
+                DESCRIPTION="🐠 Based on AlmaLinux Kitten 10"
+                PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
+                ;;
+              albacore)
+                DESCRIPTION="🐟 Based on AlmaLinux 10"
+                PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
+                ;;
+              skipjack)
+                DESCRIPTION="🏛️ Based on CentOS Stream 10"
+                PLATFORMS="linux/arm64,linux/amd64"
+                ;;
+              bonito)
+                DESCRIPTION="🎩 Based on Fedora 42"
+                PLATFORMS="linux/arm64,linux/amd64"
+                ;;
+            esac
+            
+            # Determine image name and tag
+            IMAGE_NAME="${image_variant}"
+            TAG="${{ (github.ref_name == 'main' && github.event_name != 'pull_request') && 'latest' || github.sha }}"
+            
+            # Override platforms if specified in input
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.platforms }}" ]]; then
+              PLATFORMS="${{ inputs.platforms }}"
+            fi
+            
+            # Split flavors and platforms into arrays for matrix generation
+            IFS=',' read -ra FLAVOR_ARRAY <<< "$FLAVORS"
+            IFS=',' read -ra PLATFORM_ARRAY <<< "$PLATFORMS"
+            
+            # Generate matrix entries for each combination of variant, flavor, and platform
+            for flavor in "${FLAVOR_ARRAY[@]}"; do
+              for platform in "${PLATFORM_ARRAY[@]}"; do
+                MATRIX="$(echo "${MATRIX}" | jq ".include += [{
+                  \"image_variant\": \"${image_variant}\",
+                  \"image_name\": \"${IMAGE_NAME}\",
+                  \"default_tag\": \"${TAG}\",
+                  \"flavor\": \"${flavor}\",
+                  \"platform\": \"${platform}\",
+                  \"description\": \"${DESCRIPTION}\"
+                }]")"
+              done
+            done
+          done
+          
+          echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
+
+  build_isos:
+    name: Build ISO - ${{ matrix.image_variant }}-${{ matrix.flavor }}-${{ matrix.platform }}
+    needs: generate_matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.generate_matrix.outputs.matrix) }}
+    uses: ./.github/workflows/reusable-build-iso-anaconda.yml
+    secrets: inherit
+    with:
+      image_variant: ${{ matrix.image_variant }}
+      flavor: ${{ matrix.flavor }}
+      platform: ${{ matrix.platform }}
+      default_tag: ${{ matrix.default_tag }}
+      upload_r2: ${{ github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || inputs.upload_r2) }}
+      upload_artifacts: ${{ github.ref_name == 'testing' || (github.event_name == 'workflow_dispatch' && inputs.upload_artifacts) }}
