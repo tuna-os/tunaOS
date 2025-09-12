@@ -45,6 +45,7 @@ clean:
     echo "Cleaning up..."
     rm -rf '.rpm-cache-*'
     rm -rf .build-logs
+    sudo rm -rf .build/*
     echo "Removing local podman images for all variants and flavors..."
     variants=(yellowfin albacore bonito skipjack)
     images=()
