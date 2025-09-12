@@ -219,6 +219,9 @@ jobs:
           else
             IMAGE_TAG=${{ matrix.default_tag }}
           fi
+          UNSAFE_PLATFORM=${{ matrix.platform }}
+          SAFE_PLATFORM="${unsafe_platform//\//-}"
+          echo "safe_platform=${SAFE_PLATFORM}" >> $GITHUB_OUTPUT
           echo "image_suffix=${IMAGE_SUFFIX}" >> $GITHUB_OUTPUT
           echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
 
@@ -241,7 +244,7 @@ jobs:
           set -x
           mkdir -p output
           OUTPUT_DIRECTORY="$(realpath output)"
-          ISO_NAME="${{ matrix.image_variant }}-${{ matrix.flavor }}-${{ matrix.platform }}"
+          ISO_NAME="${{ matrix.image_variant }}-${{ matrix.flavor }}-${{ steps.get_image_ref.outputs.safe_platform }}"
           sha256sum "${OUTPUT_PATH}" | tee "${OUTPUT_DIRECTORY}/${ISO_NAME}.iso-CHECKSUM"
           mv "${OUTPUT_PATH}" "${OUTPUT_DIRECTORY}/${ISO_NAME}.iso"
           echo "output_directory=$OUTPUT_DIRECTORY" >> "${GITHUB_OUTPUT}"
@@ -250,7 +253,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.upload_artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.3.3
         with:
-          name: "${{ matrix.image_variant }}-${{ matrix.flavor }}-${{ matrix.platform }}.iso"
+          name: "${{ matrix.image_variant }}-${{ matrix.flavor }}-${{ steps.get_image_ref.outputs.safe_platform }}"
           if-no-files-found: error
           path: ${{ steps.rename.outputs.output_directory }}
 
