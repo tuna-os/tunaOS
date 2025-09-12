@@ -8,6 +8,7 @@ IMAGE_REF="$(jq -c -r '."image-ref"' <<<"$IMAGE_INFO")"
 IMAGE_NAME="$(jq -c -r '."image-name"' <<<"$IMAGE_INFO")"
 IMAGE_PRETTY_NAME="${IMAGE_NAME^}"
 IMAGE_REF="${IMAGE_REF##*://}"
+DISTRO="${TITINOBOA_BUILDER_DISTRO:-almalinux}
 # sbkey='https://github.com/ublue-os/akmods/raw/main/certs/public_key.der'
 
 # Configure Live Environment
