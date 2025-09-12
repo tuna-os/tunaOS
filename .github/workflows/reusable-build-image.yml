@@ -58,6 +58,11 @@ on:
         type: boolean
         # default: ${{ github.event_name != 'pull_request' }}
         default: true
+      remove-unwanted-software:
+        description: "Run the remove-unwanted-software action to free up disk space"
+        required: false
+        type: boolean
+        default: false
       chain-base-image:
         description: "Base image to use for chained builds (instead of OS base image)"
         required: false
@@ -124,7 +129,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       
       - name: Maximize build space (remove-software)
-        if: matrix.flavor == 'gdx' && matrix.platform != 'linux/arm64'
+        if: inputs.remove-unwanted-software && matrix.platform != 'arm64'
         uses: ublue-os/remove-unwanted-software@cc0becac701cf642c8f0a6613bbdaf5dc36b259e # v9
         with:
           remove-codeql: true
