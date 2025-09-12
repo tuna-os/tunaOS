@@ -77,13 +77,13 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             if [[ "${{ inputs.image_variant }}" != "all" ]]; then
               IMAGE_VARIANTS="${{ inputs.image_variant }}"
-            elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-              # For PRs, default to yellowfin and albacore
-              IMAGE_VARIANTS="yellowfin albacore"
             else
               # Include all variants when explicitly requested
               IMAGE_VARIANTS="yellowfin albacore" # skipjack bonito"
             fi
+          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            # For PRs, default to albacore
+            IMAGE_VARIANTS="albacore"
           fi
           
           # Generate matrix
@@ -131,19 +131,29 @@ jobs:
             # If Platforms is set
             if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.platforms }}" ]]; then
               PLATFORMS="${{ inputs.platforms }}"
+            elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              PLATFORMS="linux/amd64"
             fi
-            # Add to matrix
-            MATRIX="$(echo "${MATRIX}" | jq ".include += [{
-              \"image_variant\": \"${image_variant}\",
-              \"image_name\": \"${IMAGE_NAME}\",
-              \"default_tag\": \"${TAG}\",
-              \"flavor\": \"${FLAVORS}\",
-              \"platforms\": \"${PLATFORMS}\",
-              \"description\": \"${DESCRIPTION}\",
-              \"rechunk\": ${{ github.event_name != 'pull_request' }},
-              \"sbom\": false,
-              \"publish\": true, 
-            }]")"
+
+            # Add to matrix for each flavor and platform
+            for flavor in $(echo $FLAVORS | sed "s/,/ /g"); do
+              for platform in $(echo $PLATFORMS | sed "s/,/ /g"); do
+                # Get short platform name for runner
+                runner_platform=$(echo $platform | cut -d'/' -f2)
+                MATRIX="$(echo "${MATRIX}" | jq ".include += [{
+                  \"image_variant\": \"${image_variant}\",
+                  \"image_name\": \"${IMAGE_NAME}\",
+                  \"default_tag\": \"latest\",
+                  \"flavor\": \"${flavor}\",
+                  \"platform\": \"${platform}\",
+                  \"runner_platform\": \"${runner_platform}\",
+                  \"description\": \"${DESCRIPTION}\",
+                  \"rechunk\": ${{ github.event_name != 'pull_request' }},
+                  \"sbom\": false,
+                  \"publish\": true, 
+                }]")"
+              done
+            done
           done
           
           echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
@@ -151,7 +161,7 @@ jobs:
 
   build:
     name: Build ISOs
-    runs-on: ${{ matrix.platform == 'amd64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
+    runs-on: ${{ matrix.runner_platform == 'amd64' && 'ubuntu-24.04' || 'ubuntu-24.04-arm' }}
     needs: generate_matrix
     strategy:
       fail-fast: false
@@ -196,9 +206,10 @@ jobs:
           just check
 
       - name: get image ref
+        id: get_image_ref
         shell: bash
         run: |
-          if ${{ matrix.flavor == 'base' }}; then
+          if [[ "${{ matrix.flavor }}" == "base" ]]; then
             IMAGE_SUFFIX=""
           else
             IMAGE_SUFFIX="-${{ matrix.flavor }}"
@@ -223,16 +234,16 @@ jobs:
           set -x
           mkdir -p output
           OUTPUT_DIRECTORY="$(realpath output)"
-          ISO_NAME="${{ matrix.image_variant }}-${{ matrix.flavor }}"
+          ISO_NAME="${{ matrix.image_variant }}-${{ matrix.flavor }}-${{ matrix.runner_platform }}"
           sha256sum "${OUTPUT_PATH}" | tee "${OUTPUT_DIRECTORY}/${ISO_NAME}.iso-CHECKSUM"
           mv "${OUTPUT_PATH}" "${OUTPUT_DIRECTORY}/${ISO_NAME}.iso"
           echo "output_directory=$OUTPUT_DIRECTORY" >> "${GITHUB_OUTPUT}"
 
       - name: Upload to Job Artifacts
-        if: github.ref_name == 'testing' || (github.event_name == 'workflow_dispatch' && github.event.inputs.upload_artifacts)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.upload_artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.3.3
         with:
-          name: ${{ steps.image_ref.outputs.artifact_format }}
+          name: "${{ matrix.image_variant }}-${{ matrix.flavor }}-${{ matrix.runner_platform }}"
           if-no-files-found: error
           path: ${{ steps.rename.outputs.output_directory }}
 
