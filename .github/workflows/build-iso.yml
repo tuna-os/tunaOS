@@ -1,4 +1,4 @@
-iiname: Build ISOs
+name: Build ISOs
 on:
   pull_request: 
     branches:
