@@ -1,7 +1,7 @@
 ---
 name: Reusable ISO Workflow
 on:
-  workflow_cal:
+  workflow_call:
     inputs:
       upload_r2:
         description: 'Upload built ISOs to Cloudflare R2'
