@@ -71,4 +71,5 @@ fi
 #################
 
 # Make sure initramfs is rebuilt after nvidia drivers or kernel replacement
+mkdir -p /var/tmp
 /usr/bin/dracut --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible --zstd -v -f
