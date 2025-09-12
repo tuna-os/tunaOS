@@ -219,14 +219,13 @@ jobs:
         env:
           OUTPUT_PATH: ${{ steps.build.outputs.iso-dest }}
           FLAVOR: ${{ matrix.flavor }}
-          OUTPUT_NAME: ${{ steps.image_ref.outputs.artifact_format }}
-          IMAGE_VERSION: ${{ matrix.image_version }}
         run: |
           set -x
           mkdir -p output
           OUTPUT_DIRECTORY="$(realpath output)"
-          sha256sum "${OUTPUT_PATH}" | tee "${OUTPUT_DIRECTORY}/${OUTPUT_NAME}.iso-CHECKSUM"
-          mv "${OUTPUT_PATH}" "${OUTPUT_DIRECTORY}/${OUTPUT_NAME}.iso"
+          ISO_NAME="${{ matrix.image_variant }}-${{ matrix.flavor }}"
+          sha256sum "${OUTPUT_PATH}" | tee "${OUTPUT_DIRECTORY}/${ISO_NAME}.iso-CHECKSUM"
+          mv "${OUTPUT_PATH}" "${OUTPUT_DIRECTORY}/${ISO_NAME}.iso"
           echo "output_directory=$OUTPUT_DIRECTORY" >> "${GITHUB_OUTPUT}"
 
       - name: Upload to Job Artifacts
