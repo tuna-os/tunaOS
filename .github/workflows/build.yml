@@ -211,3 +211,4 @@ jobs:
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
+      remove-unwanted-software: true
