@@ -6,7 +6,7 @@ Always reference these instructions first and fallback to search or bash command
 ## Working Effectively
 
 ### Dependencies and Setup
-- Install Just command runner: `wget https://github.com/casey/just/releases/download/1.32.0/just-1.32.0-x86_64-unknown-linux-musl.tar.gz -O just.tar.gz && tar xzf just.tar.gz && sudo mv just /usr/local/bin/`
+- Install Just command runner to a temp dir not the root of the repo: `mkdir .just && wget https://github.com/casey/just/releases/download/1.32.0/just-1.32.0-x86_64-unknown-linux-musl.tar.gz -O just.tar.gz && tar xzf .just/just.tar.gz && sudo mv .just/just /usr/local/bin/ && rm -rf .just`
 - Podman is required for container builds (usually pre-installed in CI environments)
 - Shellcheck is required for linting: `sudo apt-get update && sudo apt-get install -y shellcheck`
 - Root privileges are required for ISO/VM image generation
