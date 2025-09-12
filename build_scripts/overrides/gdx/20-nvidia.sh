@@ -13,6 +13,7 @@ if [ "$IS_ALMALINUX" == true ]; then
 	dnf install -y nvidia-open-kmod nvidia-driver
 	dnf install -y nvidia-driver-cuda cuda
 	dnf config-manager --set-disabled "almalinux-nvidia"
+	if 
 	dnf config-manager --set-disabled "cuda-rhel10-$(arch)"
 fi
 
