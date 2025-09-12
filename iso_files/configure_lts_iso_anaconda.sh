@@ -83,7 +83,7 @@ os_id = ${IMAGE_NAME}
 default_on_boot = FIRST_WIRED_WITH_LINK
 
 [Bootloader]
-efi_dir = centos
+efi_dir = ${DISTRO}
 menu_auto_hide = True
 
 [Storage]
