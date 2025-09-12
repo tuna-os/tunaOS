@@ -74,7 +74,7 @@ fi
 # Clone Titanoboa if not already present
 if [ ! -d "$BUILD_DIR" ]; then
 	echo "Cloning Titanoboa builder..."
-	git clone https://github.com/ublue-os/titanoboa "$BUILD_DIR"
+	git clone https://github.com/hanthor/titanoboa "$BUILD_DIR"
 fi
 
 # Copy flatpaks file to $BUILD_DIR directory for Titanoboa to use
