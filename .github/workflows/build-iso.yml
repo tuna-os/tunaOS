@@ -250,15 +250,15 @@ jobs:
           echo "output_directory=$OUTPUT_DIRECTORY" >> "${GITHUB_OUTPUT}"
 
       - name: Upload to Job Artifacts
-        if: github.event_name == 'workflow_dispatch' && github.event.inputs.upload_artifacts
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.upload_artifacts == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.3.3
         with:
-          name: "${{ matrix.image_variant }}-${{ matrix.flavor }}-${{ steps.get_image_ref.outputs.safe_platform }}"
+          name: "${{ matrix.image_variant }}-${{ matrix.flavor }}-${{ steps.get_image_ref.outputs.safe_platform }}-${{ github.run_id }}"
           if-no-files-found: error
           path: ${{ steps.rename.outputs.output_directory }}
 
       - name: Upload to CloudFlare
-        if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || github.event.inputs.upload_r2)
+        if: github.event_name != 'pull_request' && (github.event_name != 'workflow_dispatch' || github.event.inputs.upload_r2 == 'true')
         shell: bash
         env:
           RCLONE_CONFIG_R2_TYPE: s3

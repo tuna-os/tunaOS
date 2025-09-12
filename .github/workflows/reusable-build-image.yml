@@ -296,7 +296,7 @@ jobs:
         if: ${{ inputs.publish }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ env.IMAGE_NAME }}-${{ matrix.safeplatform }}
+          name: ${{ env.IMAGE_NAME }}-${{ matrix.safeplatform }}-${{ github.run_id }}
           retention-days: 1
           if-no-files-found: error
           path: |
