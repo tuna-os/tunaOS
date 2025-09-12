@@ -69,7 +69,7 @@ GNOME_VERSION=$(gnome-shell --version | cut -d ' ' -f 3 | cut -d '.' -f 1)
 if [ "$GNOME_VERSION" -ge 48 ]; then
 	# GNOME 48: EPEL version of blur-my-shell is incompatible
 	dnf -y remove gnome-shell-extension-blur-my-shell
-
+	dnf -y install https://kojipkgs.fedoraproject.org//packages/gnome-shell-extension-blur-my-shell/69/1.fc43/noarch/gnome-shell-extension-blur-my-shell-69-1.fc43.noarch.rpm
 fi
 
 # This is required so homebrew works indefinitely.

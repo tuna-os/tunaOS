@@ -56,7 +56,7 @@ on:
 
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ inputs.image_variant || 'auto' }}-${{ inputs.build_variant || 'auto' }}
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ inputs.image_variant || 'auto' }}-${{ inputs.flavor || 'auto' }}
   cancel-in-progress: true
 
 jobs:
@@ -214,13 +214,20 @@ jobs:
           else
             IMAGE_SUFFIX="-${{ matrix.flavor }}"
           fi
+          if [[ "${{ matrix.platform }}" == "linux/amd64/v2" ]]; then
+            IMAGE_TAG=${{ matrix.default_tag }}-linux-amd64-v2
+          else
+            IMAGE_TAG=${{ matrix.default_tag }}
+          fi
           echo "image_suffix=${IMAGE_SUFFIX}" >> $GITHUB_OUTPUT
+          echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
+
 
       - name: Build ISO
         id: build
         uses: hanthor/titanoboa@main
         with:
-          image-ref: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}${{ steps.get_image_ref.outputs.image_suffix }}:${{ matrix.default_tag }}
+          image-ref: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}${{ steps.get_image_ref.outputs.image_suffix }}:${{ steps.get_image_ref.outputs.image_tag }}
           flatpaks-list: ${{ github.workspace }}/system_files/etc/ublue-os/system-flatpaks.list
           hook-post-rootfs: ${{ github.workspace }}/iso_files/configure_lts_iso_anaconda.sh
           builder-distro: ${{ matrix.image_variant == 'yellowfin' && 'almalinux' || matrix.image_variant == 'albacore' && 'almalinux' || matrix.image_variant == 'skipjack' && 'centos' || matrix.image_variant == 'bonito' && 'fedora' }}
@@ -243,7 +250,7 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.upload_artifacts
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.3.3
         with:
-          name: "${{ matrix.image_variant }}-${{ matrix.flavor }}-${{ matrix.runner_platform }}"
+          name: "${{ matrix.image_variant }}-${{ matrix.flavor }}-${{ matrix.platform }}.iso"
           if-no-files-found: error
           path: ${{ steps.rename.outputs.output_directory }}
 

@@ -35,9 +35,6 @@ on:
         - base
         - base,dx
         - base,dx,gdx
-        - dx
-        - gdx
-        - dx,gdx
       platforms:
         description: 'Platforms to build'
         required: false
