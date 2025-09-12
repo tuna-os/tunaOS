@@ -124,7 +124,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
       
       - name: Maximize build space (remove-software)
-        if: matrix.flavor == 'gdx' && matrix.platform != 'arm64'
+        if: matrix.flavor == 'gdx' && matrix.platform != 'linux/arm64'
         uses: ublue-os/remove-unwanted-software@cc0becac701cf642c8f0a6613bbdaf5dc36b259e # v9
         with:
           remove-codeql: true
