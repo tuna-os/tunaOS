@@ -1,18 +1,7 @@
 ---
 name: Reusable ISO Workflow
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'iso_files/**'
-      - '.github/workflows/build-iso-anaconda.yml'
-      - '.github/workflows/reusable-build-iso-anaconda.yml'
-      - 'iso.toml'
-  schedule:
-    - cron: "0 1 2 * *" # The second of every month at 1am UTC
-  merge_group:
-  workflow_dispatch:
+  workflow_cal:
     inputs:
       upload_r2:
         description: 'Upload built ISOs to Cloudflare R2'
