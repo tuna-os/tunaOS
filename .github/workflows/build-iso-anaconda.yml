@@ -1,5 +1,5 @@
 ---
-name: Build Anaconda ISO Images
+name: Reusable ISO Workflow
 on:
   pull_request:
     branches:
