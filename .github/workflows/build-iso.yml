@@ -1,4 +1,4 @@
-name: Build ISOs
+iiname: Build ISOs
 on:
   pull_request: 
     branches:
@@ -241,7 +241,7 @@ jobs:
           set -x
           mkdir -p output
           OUTPUT_DIRECTORY="$(realpath output)"
-          ISO_NAME="${{ matrix.image_variant }}-${{ matrix.flavor }}-${{ matrix.runner_platform }}"
+          ISO_NAME="${{ matrix.image_variant }}-${{ matrix.flavor }}-${{ matrix.platform }}"
           sha256sum "${OUTPUT_PATH}" | tee "${OUTPUT_DIRECTORY}/${ISO_NAME}.iso-CHECKSUM"
           mv "${OUTPUT_PATH}" "${OUTPUT_DIRECTORY}/${ISO_NAME}.iso"
           echo "output_directory=$OUTPUT_DIRECTORY" >> "${GITHUB_OUTPUT}"
