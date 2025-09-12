@@ -261,4 +261,4 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y rclone
-          rclone copy --log-level INFO --checksum "${SOURCE_DIR}" R2:tunaos
+          rclone copy --log-level INFO --checksum --s3-no-check-bucket "${SOURCE_DIR}" R2:bluefin
