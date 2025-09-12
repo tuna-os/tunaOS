@@ -78,8 +78,8 @@ jobs:
             if [[ "${{ inputs.image_variant }}" != "all" ]]; then
               IMAGE_VARIANTS="${{ inputs.image_variant }}"
             elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-              # For PRs, default to yellowfin and albacore
-              IMAGE_VARIANTS="yellowfin albacore"
+              # For PRs, default to albacore
+              IMAGE_VARIANTS="albacore"
             else
               # Include all variants when explicitly requested
               IMAGE_VARIANTS="yellowfin albacore" # skipjack bonito"
@@ -131,6 +131,8 @@ jobs:
             # If Platforms is set
             if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.platforms }}" ]]; then
               PLATFORMS="${{ inputs.platforms }}"
+            elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              PLATFORMS="linux/amd64"
             fi
 
             # Add to matrix for each flavor and platform
@@ -141,7 +143,7 @@ jobs:
                 MATRIX="$(echo "${MATRIX}" | jq ".include += [{
                   \"image_variant\": \"${image_variant}\",
                   \"image_name\": \"${IMAGE_NAME}\",
-                  \"default_tag\": \"${TAG}\",
+                  \"default_tag\": latest,
                   \"flavor\": \"${flavor}\",
                   \"platform\": \"${platform}\",
                   \"runner_platform\": \"${runner_platform}\",
