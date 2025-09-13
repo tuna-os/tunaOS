@@ -234,6 +234,7 @@ jobs:
           flatpaks-list: ${{ github.workspace }}/system_files/etc/ublue-os/system-flatpaks.list
           hook-post-rootfs: ${{ github.workspace }}/iso_files/configure_lts_iso_anaconda.sh
           builder-distro: ${{ matrix.image_variant == 'yellowfin' && 'almalinux' || matrix.image_variant == 'albacore' && 'almalinux' || matrix.image_variant == 'skipjack' && 'centos' || matrix.image_variant == 'bonito' && 'fedora' }}
+          platform: ${{ matrix.platform }}
 
       - name: Rename ISO
         id: rename
