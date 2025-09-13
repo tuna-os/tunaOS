@@ -1,5 +1,4 @@
-// For format details, see https://aka.ms/devcontainer.json.
 {
-	"name": "cayo-devcontainer",
+	"name": "tunaos-devcontainer",
 	"image": "ghcr.io/ublue-os/devcontainer:latest"
 }
