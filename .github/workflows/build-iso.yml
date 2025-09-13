@@ -220,7 +220,7 @@ jobs:
             IMAGE_TAG=${{ matrix.default_tag }}
           fi
           UNSAFE_PLATFORM=${{ matrix.platform }}
-          SAFE_PLATFORM="${unsafe_platform//\//-}"
+          SAFE_PLATFORM="${UNSAFE_PLATFORM//\//-}"
           echo "safe_platform=${SAFE_PLATFORM}" >> $GITHUB_OUTPUT
           echo "image_suffix=${IMAGE_SUFFIX}" >> $GITHUB_OUTPUT
           echo "image_tag=${IMAGE_TAG}" >> $GITHUB_OUTPUT
