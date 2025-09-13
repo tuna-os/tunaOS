@@ -21,6 +21,18 @@ check:
     #!/usr/bin/env bash
     echo "Checking syntax of shell scripts..."
     /usr/bin/find . -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
+    find . -type f -name "*.yaml" | while read -r file; do
+        echo "Checking syntax: $file"
+        yamllint -c ./.yamllint.yml "$file" || { exit 1; }
+    done
+    find . -type f -name "*.yml" | while read -r file; do
+        echo "Checking syntax: $file"
+        yamllint "$file" || { exit 1; }
+    done
+    find . -type f -name "*.json" | while read -r file; do
+        echo "Checking syntax: $file"
+        jq . "$file" > /dev/null || { exit 1; }
+    done
     find . -type f -name "*.just" | while read -r file; do
         echo "Checking syntax: $file"
         just --unstable --fmt --check -f $file

@@ -1,0 +1,54 @@
+# YAMLlint configuration optimized for GitHub Actions workflows
+extends: relaxed
+
+rules:
+  # Line length - GitHub Actions can have long lines for action references
+  line-length:
+    max: 150  # More reasonable for GitHub Actions with long action names
+    allow-non-breakable-words: true
+    allow-non-breakable-inline-mappings: true
+
+  # Document start - not required for GitHub Actions
+  document-start: disable
+
+  # Document end - not required for GitHub Actions
+  document-end: disable
+
+  # Trailing spaces - should be errors
+  trailing-spaces: enable
+
+  # Comments - be more lenient
+  comments:
+    min-spaces-from-content: 1
+    require-starting-space: false
+
+  # Indentation - GitHub Actions standard
+  indentation:
+    spaces: 2
+    indent-sequences: true
+    check-multi-line-strings: false
+
+  # Brackets - more lenient for GitHub Actions matrices
+  brackets:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+    min-spaces-inside-empty: 0
+    max-spaces-inside-empty: 0
+
+  # Braces - more lenient for expressions
+  braces:
+    min-spaces-inside: 0
+    max-spaces-inside: 1
+    min-spaces-inside-empty: 0
+    max-spaces-inside-empty: 0
+
+  # Empty lines - reasonable for readability
+  empty-lines:
+    max: 2
+    max-start: 0
+    max-end: 1
+
+  # Truthy values - GitHub Actions uses many boolean-like strings
+  truthy:
+    allowed-values: ['true', 'false', 'on', 'off', 'yes', 'no']
+    check-keys: false

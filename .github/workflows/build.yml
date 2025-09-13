@@ -49,6 +49,9 @@ on:
         - linux/amd64,linux/amd64/v2,linux/arm64
 
 
+# Declare default permissions as read only.
+permissions: read-all
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ inputs.image_variant || 'auto' }}-${{ inputs.build_variant || 'auto' }}
   cancel-in-progress: true
@@ -61,7 +64,7 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - name: Checkout for config
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4
         
       - name: Generate image variant build matrix
         id: set-matrix

@@ -18,10 +18,12 @@ if [ -z "$1" ]; then
 	exit 1
 fi
 readonly REF="$1"
-readonly WORKSPACE=$(pwd)/.rechunk
+WORKSPACE_TMP=$(pwd)/.rechunk
+readonly WORKSPACE="$WORKSPACE_TMP"
 
 # --- Cleanup previous runs ---
-readonly OUT_NAME=$(echo "$REF" | rev | cut -d'/' -f1 | rev | sed 's/:/_/')
+OUT_NAME_TMP=$(echo "$REF" | rev | cut -d'/' -f1 | rev | sed 's/:/_/')
+readonly OUT_NAME="$OUT_NAME_TMP"
 sudo podman rmi "$OUT_NAME" || true
 rm -rf "$WORKSPACE"
 sudo podman image prune -f
@@ -105,10 +107,10 @@ echo "📦 The new OCI image is located at: $WORKSPACE/./$OUT_NAME"
 # podman import OCI image
 
 echo "loading into podman..."
-sudo podman pull oci:$WORKSPACE/$OUT_NAME
+sudo podman pull oci:"$WORKSPACE"/"$OUT_NAME"
 echo "✅ Image loaded into Podman as: $OUT_NAME"
 echo "Cleaning up..."
 if sudo podman inspect "$OUT_NAME" >/dev/null 2>&1; then
-	rm -rf "$WORKSPACE/$OUT_NAME"
+	rm -rf "${WORKSPACE:?}/$OUT_NAME"
 	sudo podman tag "$OUT_NAME" "$OUT_NAME:rechunked"
 fi

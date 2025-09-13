@@ -12,13 +12,16 @@ on:
     inputs:
       handwritten:
         description: "Small Changelog about changes in this build"
-permissions:
-  contents: write
+
+# Declare default permissions as read only.
+permissions: read-all
 
 name: Generate Release
 jobs:
   generate-release:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:

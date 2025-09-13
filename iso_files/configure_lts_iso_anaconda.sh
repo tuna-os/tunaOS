@@ -8,6 +8,7 @@ IMAGE_REF="$(jq -c -r '."image-ref"' <<<"$IMAGE_INFO")"
 IMAGE_NAME="$(jq -c -r '."image-name"' <<<"$IMAGE_INFO")"
 IMAGE_PRETTY_NAME="${IMAGE_NAME^}"
 IMAGE_REF="${IMAGE_REF##*://}"
+# shellcheck disable=SC2034 # Used in here document below
 DISTRO="${TITINOBOA_BUILDER_DISTRO:-almalinux}"
 # sbkey='https://github.com/ublue-os/akmods/raw/main/certs/public_key.der'
 
@@ -68,7 +69,7 @@ sed -i 's|/usr/libexec/webui-desktop|/usr/libexec/anaconda/webui-desktop|g' /bin
 # Anaconda Profile Detection
 
 # ${IMAGE_PRETTY_NAME}
-tee /etc/anaconda/profile.d/${IMAGE_NAME}.conf <<'EOF'
+tee "/etc/anaconda/profile.d/${IMAGE_NAME}.conf" <<'EOF'
 # Anaconda configuration file for ${IMAGE_PRETTY_NAME}
 
 [Profile]

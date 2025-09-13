@@ -1,6 +1,6 @@
 name: Build ISOs
 on:
-  pull_request: 
+  pull_request:
     branches:
       - main
   schedule:
@@ -24,36 +24,39 @@ on:
         default: 'all'
         type: choice
         options:
-        - yellowfin
-        - albacore
-        # - skipjack
-        # - bonito
-        - all
+          - yellowfin
+          - albacore
+          # - skipjack
+          # - bonito
+          - all
       flavor:
         description: 'Flavor (base, dx, gdx)'
         required: false
         default: 'base,dx,gdx'
         type: choice
         options:
-        - base
-        - base,dx
-        - base,dx,gdx
-        - dx
-        - gdx
-        - dx,gdx
+          - base
+          - base,dx
+          - base,dx,gdx
+          - dx
+          - gdx
+          - dx,gdx
       platforms:
         description: 'Platforms to build'
         required: false
         default: ''
         type: choice
         options:
-        - ''
-        - linux/amd64
-        - linux/amd64/v2
-        - linux/arm64
-        - linux/amd64,linux/arm64
-        - linux/amd64,linux/amd64/v2,linux/arm64
+          - ''
+          - linux/amd64
+          - linux/amd64/v2
+          - linux/arm64
+          - linux/amd64,linux/arm64
+          - linux/amd64,linux/amd64/v2,linux/arm64
 
+
+# Declare default permissions as read only.
+permissions: read-all
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ inputs.image_variant || 'auto' }}-${{ inputs.flavor || 'auto' }}
@@ -68,7 +71,7 @@ jobs:
     steps:
       - name: Checkout for config
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
-        
+
       - name: Generate image variant build matrix
         id: set-matrix
         run: |
@@ -85,7 +88,6 @@ jobs:
             # For PRs, default to albacore
             IMAGE_VARIANTS="albacore"
           fi
-          
           # Generate matrix
           MATRIX="{\"include\":[]}"
           for image_variant in $IMAGE_VARIANTS; do
@@ -112,7 +114,6 @@ jobs:
                 PLATFORMS="linux/arm64,linux/amd64"
                 ;;
             esac
-            
             # Determine image name and tag
             if [[ "${{ github.event_name }}" == "pull_request" ]]; then
               IMAGE_NAME="${image_variant}"
@@ -127,7 +128,6 @@ jobs:
             if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.flavor }}" ]]; then
               FLAVORS="${{ inputs.flavor }}"
             fi
-            
             # If Platforms is set
             if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.platforms }}" ]]; then
               PLATFORMS="${{ inputs.platforms }}"
@@ -150,14 +150,12 @@ jobs:
                   \"description\": \"${DESCRIPTION}\",
                   \"rechunk\": ${{ github.event_name != 'pull_request' }},
                   \"sbom\": false,
-                  \"publish\": true, 
+                  \"publish\": true,
                 }]")"
               done
             done
           done
-          
           echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
-
 
   build:
     name: Build ISOs
@@ -246,7 +244,7 @@ jobs:
           mkdir -p output
           OUTPUT_DIRECTORY="$(realpath output)"
           PLATFORM_NAME="${{ steps.get_image_ref.outputs.safe_platform }}"
-          PLATFORM_NAME="${PLATFORM_NAME#linux}" 
+          PLATFORM_NAME="${PLATFORM_NAME#linux}"
           ISO_NAME="${{ matrix.image_variant }}${{ steps.get_image_ref.outputs.image_suffix }}${PLATFORM_NAME}"
           sha256sum "${OUTPUT_PATH}" | tee "${OUTPUT_DIRECTORY}/${ISO_NAME}.iso-CHECKSUM"
           mv "${OUTPUT_PATH}" "${OUTPUT_DIRECTORY}/${ISO_NAME}.iso"
