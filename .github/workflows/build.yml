@@ -141,6 +141,10 @@ jobs:
   # Build base images (base for chaining)
   build-base:
     needs: generate_matrix
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     # Only run if base or all variants are requested
     if: |
       github.event_name != 'workflow_dispatch' ||
@@ -167,6 +171,10 @@ jobs:
   # Build DX images (chain from base)
   build-dx:
     needs: [generate_matrix, build-base]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     # Only run if dx or all variants are requested
     if: |
       (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
@@ -193,6 +201,10 @@ jobs:
   # Build GDX images (chain from DX)
   build-gdx:
     needs: [generate_matrix, build-dx]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     # Only run if gdx or all variants are requested
     if: |
       (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
