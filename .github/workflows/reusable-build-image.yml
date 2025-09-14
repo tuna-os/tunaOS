@@ -81,9 +81,6 @@ env:
   MAJOR_VERSION: ${{ inputs.major-version }}
   PLATFORMS: ${{ inputs.platforms }}
 
-# Declare default permissions as read only.
-permissions: read-all
-
 jobs:
   generate_matrix:
     runs-on: ubuntu-latest

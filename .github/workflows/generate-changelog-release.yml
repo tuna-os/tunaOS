@@ -13,8 +13,6 @@ on:
       handwritten:
         description: "Small Changelog about changes in this build"
 
-# Declare default permissions as read only.
-permissions: read-all
 
 name: Generate Release
 jobs:

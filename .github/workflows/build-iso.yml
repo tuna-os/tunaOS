@@ -53,10 +53,7 @@ on:
           - linux/arm64
           - linux/amd64,linux/arm64
           - linux/amd64,linux/amd64/v2,linux/arm64
-
-
-# Declare default permissions as read only.
-permissions: read-all
+ 
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ inputs.image_variant || 'auto' }}-${{ inputs.flavor || 'auto' }}
