@@ -64,7 +64,11 @@ if [[ $IS_ALMALINUX == true ]] && [ "$MAJOR_VERSION_NUMBER" -ge 9 ]; then
 fi
 
 if [[ $IS_FEDORA == false ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
-	dnf -y copr enable jreilly1821/c10s-gnome
+	if is_x86_64_v2; then
+		dnf -y copr enable jreilly1821/a10-gnome-x86-v2
+	else
+		dnf -y copr enable jreilly1821/c10s-gnome
+	fi
 fi
 
 # `dnf group info Workstation` without GNOME
