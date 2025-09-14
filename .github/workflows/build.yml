@@ -36,7 +36,7 @@ on:
         - base,dx
         - base,dx,gdx
       platforms:
-        description: 'Platforms to build'
+        description: 'Platforms to build (Be sure to build all on Main!)'
         required: false
         default: ''
         type: choice
@@ -48,9 +48,6 @@ on:
         - linux/amd64,linux/arm64
         - linux/amd64,linux/amd64/v2,linux/arm64
 
-
-# Declare default permissions as read only.
-permissions: read-all
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ inputs.image_variant || 'auto' }}-${{ inputs.build_variant || 'auto' }}
