@@ -64,6 +64,15 @@ detected_os() {
 	fi
 }
 
+is_x86_64_v2() {
+	# Check if the kernel package ends with x86_64_v2 to determine v2 architecture
+	if rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; then
+		return 0
+	else
+		return 1
+	fi
+}
+
 print_debug_info() {
 	detected_os
 	echo "IMAGE_NAME: $IMAGE_NAME"
