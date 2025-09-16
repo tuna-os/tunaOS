@@ -45,7 +45,11 @@ else
 	dnf config-manager --set-enabled crb
 
 	# Multimedia codecs
-	dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
+	if is_x86_64_v2; then
+		echo "no epel-multimedia for x86_64_v2"
+	else
+		dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
+	fi
 	dnf -y install \
 		ffmpeg \
 		libavcodec \
