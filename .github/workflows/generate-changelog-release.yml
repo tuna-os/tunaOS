@@ -34,7 +34,7 @@ jobs:
         id: generate-release-text
         shell: bash
         run: |
-          python3 .github/changelogs.py --workdir . "${{ matrix.version }}" ./output.env ./changelog.md --handwritten "${{ inputs.handwritten }}" 
+          python3 .github/changelogs.py --workdir . "${{ matrix.version }}" ./output.env ./changelog.md --handwritten "${{ inputs.handwritten }}"
           source ./output.env
           echo "title=${TITLE}" >> $GITHUB_OUTPUT
           echo "tag=${TAG}" >> $GITHUB_OUTPUT
