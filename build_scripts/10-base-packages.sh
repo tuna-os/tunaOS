@@ -28,7 +28,7 @@ if [[ $IS_FEDORA == true ]]; then
 
 	dnf config-manager setopt fedora-multimedia.enabled=1 ||
 		dnf config-manager addrepo --from-repofile="https://negativo17.org/repos/fedora-multimedia.repo"
-	dnf config-manager setopt fedora-multimedia.priority=90
+	dnf config-manager --set-enabled --setopt fedora-multimedia.priority=90
 	dnf remove -y fedora-flathub-remote
 	sudo dnf install -y \
 		gstreamer1-plugins-good \
