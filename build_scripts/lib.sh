@@ -109,7 +109,22 @@ copy_systemfiles_for() {
 install_from_copr() {
 	COPR_NAME=$1
 	shift
+	PRIORITY=""
+	
+	# Check if priority is specified as first argument after COPR_NAME
+	if [[ $# -gt 0 && $1 =~ ^[0-9]+$ ]]; then
+		PRIORITY=$1
+		shift
+	fi
+	
 	dnf -y copr enable "$COPR_NAME"
+	
+	# Set priority if specified
+	if [[ -n "$PRIORITY" ]]; then
+		REPO_ID="copr:copr.fedorainfracloud.org:$(echo "$COPR_NAME" | tr '/' ':')"
+		dnf config-manager setopt "${REPO_ID}.priority=${PRIORITY}"
+	fi
+	
 	dnf -y --enablerepo "copr:copr.fedorainfracloud.org:$(echo "$COPR_NAME" | tr '/' ':')" install "$@"
 	dnf -y copr disable "$COPR_NAME"
 }
