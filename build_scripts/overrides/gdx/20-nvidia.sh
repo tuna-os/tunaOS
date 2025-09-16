@@ -23,8 +23,13 @@ fi
 ##############################
 
 if [ "$IS_CENTOS" == true ] && [ "$IS_ALMALINUX" == false ]; then
+	# Add negativo17 repo for NVIDIA drivers (kmod)
 	dnf config-manager --add-repo="https://negativo17.org/repos/epel-nvidia.repo"
 	dnf config-manager --set-disabled "epel-nvidia"
+
+	# Add official NVIDIA CUDA repository for CentOS/RHEL 10
+	dnf config-manager --add-repo="https://developer.download.nvidia.com/compute/cuda/repos/rhel10/x86_64/cuda-rhel10.repo"
+	dnf config-manager --set-disabled "cuda-rhel10-x86_64"
 
 	# These are necessary for building the nvidia drivers
 	# Also make sure the kernel is locked before this is run whenever the kernel updates
@@ -33,8 +38,12 @@ if [ "$IS_CENTOS" == true ] && [ "$IS_ALMALINUX" == false ]; then
 	dnf install -y "kernel-devel-$QUALIFIED_KERNEL" "kernel-headers-$QUALIFIED_KERNEL" dkms gcc-c++
 	dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
 
+	# Install NVIDIA drivers from negativo17 and CUDA from official NVIDIA repo
 	dnf install -y --enablerepo="epel-nvidia" \
-		cuda nvidia-driver{,-cuda} dkms-nvidia
+		nvidia-driver{,-cuda} dkms-nvidia
+	
+	dnf install -y --enablerepo="cuda-rhel10-x86_64" \
+		cuda
 
 	sed -i -e 's/kernel$/kernel-open/g' /etc/nvidia/kernel.conf
 	cat /etc/nvidia/kernel.conf
