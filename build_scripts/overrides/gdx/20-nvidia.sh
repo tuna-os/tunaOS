@@ -26,10 +26,15 @@ if [ "$IS_CENTOS" == true ] && [ "$IS_ALMALINUX" == false ]; then
 	# Add negativo17 repo for NVIDIA drivers (kmod)
 	dnf config-manager --add-repo="https://negativo17.org/repos/epel-nvidia.repo"
 	dnf config-manager --set-disabled "epel-nvidia"
+	# Set lower priority for negativo17 repo
+	dnf config-manager setopt epel-nvidia.priority=50
 
 	# Add official NVIDIA CUDA repository for CentOS/RHEL 10
 	dnf config-manager --add-repo="https://developer.download.nvidia.com/compute/cuda/repos/rhel10/x86_64/cuda-rhel10.repo"
 	dnf config-manager --set-disabled "cuda-rhel10-x86_64"
+	# Set higher priority for official NVIDIA CUDA repo and exclude kmod packages
+	dnf config-manager setopt cuda-rhel10-x86_64.priority=10
+	dnf config-manager setopt cuda-rhel10-x86_64.excludepkgs=kmod-nvidia-latest-dkms
 
 	# These are necessary for building the nvidia drivers
 	# Also make sure the kernel is locked before this is run whenever the kernel updates
