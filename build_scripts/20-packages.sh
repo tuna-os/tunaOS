@@ -59,7 +59,7 @@ fi
 
 # Extra GNOME Extensions
 # FIXME: gsconnect EPEL10 request: https://bugzilla.redhat.com/show_bug.cgi?id=2349097
-install_from_copr ublue-os/staging gnome-shell-extension-{search-light,logo-menu,gsconnect}
+install_from_copr ublue-os/staging 10 gnome-shell-extension-{search-light,logo-menu,gsconnect}
 
 # MoreWaita icon theme
 install_from_copr trixieua/morewaita-icon-theme morewaita-icon-theme
