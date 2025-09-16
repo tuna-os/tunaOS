@@ -46,7 +46,7 @@ if [ "$IS_CENTOS" == true ] && [ "$IS_ALMALINUX" == false ]; then
 	# Install NVIDIA drivers from negativo17 and CUDA from official NVIDIA repo
 	dnf install -y --enablerepo="epel-nvidia" \
 		nvidia-driver{,-cuda} dkms-nvidia
-	
+
 	dnf install -y --enablerepo="cuda-rhel10-x86_64" \
 		cuda
 
