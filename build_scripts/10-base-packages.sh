@@ -67,11 +67,11 @@ if [[ $IS_FEDORA == false ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
 	if is_x86_64_v2; then
 		dnf -y copr enable jreilly1821/a10-gnome-x86-v2
 		# Set high priority for GNOME COPR to override OS packages
-		dnf config-manager setopt "copr:copr.fedorainfracloud.org:jreilly1821:a10-gnome-x86-v2.priority=10"
+		dnf config-manager --setopt "copr:copr.fedorainfracloud.org:jreilly1821:a10-gnome-x86-v2.priority=10"
 	else
 		dnf -y copr enable jreilly1821/c10s-gnome
 		# Set high priority for GNOME COPR to override OS packages
-		dnf config-manager setopt "copr:copr.fedorainfracloud.org:jreilly1821:c10s-gnome.priority=10"
+		dnf config-manager --setopt "copr:copr.fedorainfracloud.org:jreilly1821:c10s-gnome.priority=10"
 	fi
 fi
 
