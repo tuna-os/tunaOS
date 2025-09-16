@@ -71,6 +71,10 @@ if [[ $IS_FEDORA == false ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
 	fi
 fi
 
+dnf -y upgrade glib2
+# Please, dont remove this as it will break everything GNOME related
+dnf versionlock add glib2
+
 # `dnf group info Workstation` without GNOME
 dnf group install -y --nobest \
 	-x PackageKit \
