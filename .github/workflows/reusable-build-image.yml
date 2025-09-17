@@ -420,13 +420,39 @@ jobs:
         id: check_platforms
         env:
           DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
-          PLATFORMS: "${{ inputs.platforms }}"
+          IMAGE_VARIANT: "${{ inputs.image-variant }}"
         run: |
           set -e
           
-          # Parse expected platforms
+          # Determine default platforms based on variant (same logic as build.yml)
+          case "${IMAGE_VARIANT}" in
+            yellowfin)
+              DEFAULT_PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
+              ;;
+            albacore)
+              DEFAULT_PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
+              ;;
+            skipjack)
+              DEFAULT_PLATFORMS="linux/arm64,linux/amd64"
+              ;;
+            bonito)
+              DEFAULT_PLATFORMS="linux/arm64,linux/amd64"
+              ;;
+            bonito-rawhide)
+              DEFAULT_PLATFORMS="linux/arm64,linux/amd64"
+              ;;
+            *)
+              echo "Unknown variant: ${IMAGE_VARIANT}"
+              DEFAULT_PLATFORMS="linux/arm64,linux/amd64"
+              ;;
+          esac
+          
+          echo "Variant: ${IMAGE_VARIANT}"
+          echo "Default platforms for this variant: ${DEFAULT_PLATFORMS}"
+          
+          # Parse expected platforms (use default platforms, not input platforms)
           expected_platforms=()
-          IFS=',' read -r -a expected_platforms <<< "${PLATFORMS}"
+          IFS=',' read -r -a expected_platforms <<< "${DEFAULT_PLATFORMS}"
           
           # Check if all expected platforms have digests
           all_platforms_built="true"
@@ -442,7 +468,7 @@ jobs:
             fi
           done
           
-          echo "All platforms built: ${all_platforms_built}"
+          echo "All default platforms built: ${all_platforms_built}"
           echo "all_platforms_built=${all_platforms_built}" >> "${GITHUB_OUTPUT}"
 
       - name: Create Manifest
@@ -581,12 +607,12 @@ jobs:
           # Always copy to date-based tag
           skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:$(date +%Y%m%d)"
           
-          # Only tag as 'latest' if all expected platforms were built
+          # Only tag as 'latest' if all default platforms for this variant were built
           if [ "${ALL_PLATFORMS_BUILT}" = "true" ]; then
-            echo "All platforms built successfully - tagging as latest"
+            echo "All default platforms for this variant built successfully - tagging as latest"
             skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
           else
-            echo "Not all platforms built - skipping latest tag"
+            echo "Not all default platforms for this variant built - skipping latest tag"
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:$(date +%Y%m%d)" >> $GITHUB_OUTPUT
           fi
