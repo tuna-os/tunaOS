@@ -604,15 +604,16 @@ jobs:
           set -ex
           SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
           
-          # Always copy to date-based tag
-          skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:$(date +%Y%m%d)"
+          # Always copy to sha-based tag
+          skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${REFS}"
           
           # Only tag as 'latest' if all default platforms for this variant were built
           if [ "${ALL_PLATFORMS_BUILT}" = "true" ]; then
             echo "All default platforms for this variant built successfully - tagging as latest"
+            skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:$(date +%Y%m%d)"
             skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
           else
             echo "Not all default platforms for this variant built - skipping latest tag"
-            echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:$(date +%Y%m%d)" >> $GITHUB_OUTPUT
+            echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${REFS}" >> $GITHUB_OUTPUT
           fi
