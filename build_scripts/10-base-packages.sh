@@ -47,10 +47,19 @@ else
 	# Multimedia codecs
 	if is_x86_64_v2; then
 		echo "no epel-multimedia for x86_64_v2"
+  dnf -y install \
+  ffmpeg-free \
+		@multimedia \
+		gstreamer1-plugins-bad-free \
+		gstreamer1-plugins-bad-free-libs \
+		gstreamer1-plugins-good \
+		gstreamer1-plugins-base \
+		lame \
+		lame-libs \
+		libjxl
 	else
 		dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
-	fi
-	dnf -y install \
+  dnf -y install \
 		ffmpeg \
 		libavcodec \
 		@multimedia \
@@ -61,6 +70,8 @@ else
 		lame \
 		lame-libs \
 		libjxl
+	fi
+	
 fi
 
 if [[ $IS_ALMALINUX == true ]] && [ "$MAJOR_VERSION_NUMBER" -ge 9 ]; then
