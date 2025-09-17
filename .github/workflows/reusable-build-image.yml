@@ -319,6 +319,7 @@ jobs:
     outputs:
       image: ${{ steps.push_manifest.outputs.IMAGE }}
       digest: ${{ steps.push_manifest.outputs.DIGEST }}
+      all_platforms_built: ${{ steps.check_platforms.outputs.all_platforms_built }}
     steps:
       - name: Install dependencies
         run: |
@@ -413,6 +414,36 @@ jobs:
             DIGESTS_JSON="$(echo "${DIGESTS_JSON}" | jq --arg key "${PLATFORM_KEY}" --arg value "${DIGEST}" '. + {($key): $value}')"
           done
           echo "DIGESTS_JSON=$(echo "$DIGESTS_JSON" | jq -c '.')" >> "${GITHUB_OUTPUT}"
+
+      - name: Check Platform Completeness
+        if: ${{ inputs.publish }}
+        id: check_platforms
+        env:
+          DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
+          PLATFORMS: "${{ inputs.platforms }}"
+        run: |
+          set -e
+          
+          # Parse expected platforms
+          expected_platforms=()
+          IFS=',' read -r -a expected_platforms <<< "${PLATFORMS}"
+          
+          # Check if all expected platforms have digests
+          all_platforms_built="true"
+          for platform_original in "${expected_platforms[@]}"; do
+            platform_key="${platform_original//\//-}"
+            digest="$(echo "${DIGESTS_JSON}" | jq -r --arg key "${platform_key}" '.[$key]')"
+            
+            if [ "$digest" == "null" ] || [ -z "$digest" ]; then
+              echo "Missing platform: ${platform_original} (key: ${platform_key})"
+              all_platforms_built="false"
+            else
+              echo "Found platform: ${platform_original} (key: ${platform_key})"
+            fi
+          done
+          
+          echo "All platforms built: ${all_platforms_built}"
+          echo "all_platforms_built=${all_platforms_built}" >> "${GITHUB_OUTPUT}"
 
       - name: Create Manifest
         if: ${{ inputs.publish }}
@@ -542,13 +573,20 @@ jobs:
           DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
           MAJOR_VERSION: ${{ env.MAJOR_VERSION }}
           REFS: ${{ github.ref_name }}
+          ALL_PLATFORMS_BUILT: ${{ needs.manifest.outputs.all_platforms_built }}
         run: |
           set -ex
           SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
           
-          # Copy the multi-architecture manifest to new tag names
-          # This preserves all architectures in the manifest
-          skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
+          # Always copy to date-based tag
           skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:$(date +%Y%m%d)"
-
-          echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
+          
+          # Only tag as 'latest' if all expected platforms were built
+          if [ "${ALL_PLATFORMS_BUILT}" = "true" ]; then
+            echo "All platforms built successfully - tagging as latest"
+            skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
+            echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
+          else
+            echo "Not all platforms built - skipping latest tag"
+            echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:$(date +%Y%m%d)" >> $GITHUB_OUTPUT
+          fi
