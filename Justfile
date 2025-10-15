@@ -93,7 +93,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
     echo "{{ use_cache }}"
     if [[ "{{ use_cache }}" == "1" ]]; then
         mkdir -p "$(pwd)/.rpm-cache-{{ target_tag }}"
-        BUILD_ARGS+=("--volume" "$(pwd)/.rpm-cache-{{ target_tag }}:/var/cache/dnf")
+        BUILD_ARGS+=("--volume" "$(pwd)/.rpm-cache-{{ target_tag }}:/var/cache/dnf:z")
     fi
 
     podman build \

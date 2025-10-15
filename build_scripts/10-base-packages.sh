@@ -47,31 +47,31 @@ else
 	# Multimedia codecs
 	if is_x86_64_v2; then
 		echo "no epel-multimedia for x86_64_v2"
-  dnf -y install \
-  ffmpeg-free \
-		@multimedia \
-		gstreamer1-plugins-bad-free \
-		gstreamer1-plugins-bad-free-libs \
-		gstreamer1-plugins-good \
-		gstreamer1-plugins-base \
-		lame \
-		lame-libs \
-		libjxl
+		dnf -y install \
+			ffmpeg-free \
+			@multimedia \
+			gstreamer1-plugins-bad-free \
+			gstreamer1-plugins-bad-free-libs \
+			gstreamer1-plugins-good \
+			gstreamer1-plugins-base \
+			lame \
+			lame-libs \
+			libjxl
 	else
 		dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
-  dnf -y install \
-		ffmpeg \
-		libavcodec \
-		@multimedia \
-		gstreamer1-plugins-bad-free \
-		gstreamer1-plugins-bad-free-libs \
-		gstreamer1-plugins-good \
-		gstreamer1-plugins-base \
-		lame \
-		lame-libs \
-		libjxl
+		dnf -y install \
+			ffmpeg \
+			libavcodec \
+			@multimedia \
+			gstreamer1-plugins-bad-free \
+			gstreamer1-plugins-bad-free-libs \
+			gstreamer1-plugins-good \
+			gstreamer1-plugins-base \
+			lame \
+			lame-libs \
+			libjxl
 	fi
-	
+
 fi
 
 if [[ $IS_ALMALINUX == true ]] && [ "$MAJOR_VERSION_NUMBER" -ge 9 ]; then
@@ -80,7 +80,7 @@ fi
 
 if [[ $IS_FEDORA == false ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
 	if is_x86_64_v2; then
-		dnf -y copr enable jreilly1821/a10-gnome-x86-v2
+		dnf -y copr enable jreilly1821/a10-gnome-x86-v2 alma-kitten+epel-10-x86_64_v2
 		# Set high priority for GNOME COPR to override OS packages
 		dnf config-manager --set-enabled --setopt "copr:copr.fedorainfracloud.org:jreilly1821:a10-gnome-x86-v2.priority=10"
 	else
