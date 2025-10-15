@@ -80,12 +80,9 @@ fi
 
 if [[ $IS_FEDORA == false ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
 	if is_x86_64_v2; then
-		if [[ $IS_ALMALINUXKITTEN == true ]]; then
-			# AlmaLinux Kitten requires specific repo name
-			dnf -y copr enable jreilly1821/a10-gnome-x86-v2 alma-kitten+epel-10-x86_64_v2
-		else
-			dnf -y copr enable jreilly1821/a10-gnome-x86-v2
-		fi
+		# The a10-gnome-x86-v2 COPR only has alma-kitten+epel-10-x86_64_v2 repo
+		# Both AlmaLinux Kitten and regular AlmaLinux use this repository
+		dnf -y copr enable jreilly1821/a10-gnome-x86-v2 alma-kitten+epel-10-x86_64_v2
 		# Set high priority for GNOME COPR to override OS packages
 		dnf config-manager --set-enabled --setopt "copr:copr.fedorainfracloud.org:jreilly1821:a10-gnome-x86-v2.priority=10"
 	else
