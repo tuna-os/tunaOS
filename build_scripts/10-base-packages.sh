@@ -20,21 +20,23 @@ dnf -y install 'dnf-command(versionlock)'
 dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
 
 if [[ $IS_FEDORA == true ]]; then
-	dnf install -y 'dnf5-command(config-manager)'
-	# Setup RPM Fusion
-	dnf install -y \
-		https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-"$(rpm -E %fedora)".noarch.rpm \
-		https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-"$(rpm -E %fedora)".noarch.rpm
-
+	# Install config-manager and RPM Fusion in one transaction
+	dnf -y do \
+		--action=install 'dnf5-command(config-manager)' \
+		"https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
+		"https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
+	
+	# Add fedora-multimedia repo and set priority
 	dnf config-manager setopt fedora-multimedia.enabled=1 ||
 		dnf config-manager addrepo --from-repofile="https://negativo17.org/repos/fedora-multimedia.repo"
-	dnf config-manager --set-enabled --setopt fedora-multimedia.priority=90
-	dnf remove -y fedora-flathub-remote
-	sudo dnf install -y \
+	dnf config-manager setopt fedora-multimedia.priority=90
+	
+	# Install multimedia packages and remove unwanted ones in single transaction
+	dnf -y do \
+		--action=install \
 		gstreamer1-plugins-good \
 		gstreamer1-plugins-ugly \
 		gstreamer1-plugins-bad-free \
-		gstreamer1-plugins-bad-nonfree \
 		lame \
 		ffmpeg
 else
@@ -94,76 +96,156 @@ dnf -y upgrade glib2
 # Please, dont remove this as it will break everything GNOME related
 dnf versionlock add glib2
 
-# `dnf group info Workstation` without GNOME
-dnf group install -y --nobest \
-	-x PackageKit \
-	-x PackageKit-command-not-found \
-	"Common NetworkManager submodules" \
-	"Core" \
-	"Fonts" \
-	"Guest Desktop Agents" \
-	"Hardware Support" \
-	"Printing Client" \
-	"Standard" \
-	"Workstation product core"
+# Install base groups and packages - different between Fedora and RHEL/AlmaLinux
+if [[ $IS_FEDORA == true ]]; then
+	# Fedora Silverblue-style package list
+	dnf -y install \
+		-x PackageKit \
+		-x PackageKit-command-not-found \
+		-x gnome-software \
+		-x gnome-software-fedora-langpacks \
+		ModemManager \
+		NetworkManager-adsl \
+		NetworkManager-openconnect-gnome \
+		NetworkManager-openvpn-gnome \
+		NetworkManager-ppp \
+		NetworkManager-ssh-gnome \
+		NetworkManager-vpnc-gnome \
+		NetworkManager-wwan \
+		avahi \
+		dconf \
+		fprintd-pam \
+		gdm \
+		glib-networking \
+		gnome-backgrounds \
+		gnome-bluetooth \
+		gnome-browser-connector \
+		gnome-classic-session \
+		gnome-color-manager \
+		gnome-control-center \
+		gnome-disk-utility \
+		gnome-initial-setup \
+		gnome-remote-desktop \
+		gnome-session-wayland-session \
+		gnome-settings-daemon \
+		gnome-shell \
+		gnome-system-monitor \
+		gnome-user-docs \
+		gnome-user-share \
+		gvfs-afc \
+		gvfs-afp \
+		gvfs-archive \
+		gvfs-fuse \
+		gvfs-goa \
+		gvfs-gphoto2 \
+		gvfs-mtp \
+		gvfs-smb \
+		librsvg2 \
+		libsane-hpaio \
+		mesa-dri-drivers \
+		mesa-libEGL \
+		mesa-vulkan-drivers \
+		nautilus \
+		plymouth \
+		plymouth-system-theme \
+		polkit \
+		ptyxis \
+		systemd-oomd-defaults \
+		xdg-desktop-portal \
+		xdg-desktop-portal-gnome \
+		xdg-desktop-portal-gtk \
+		xdg-user-dirs-gtk \
+		yelp \
+		desktop-backgrounds-gnome \
+		gnome-shell-extension-background-logo \
+		pinentry-gnome3 \
+		qadwaitadecorations-qt5 \
+		evince-thumbnailer \
+		evince-previewer \
+		totem-video-thumbnailer \
+		buildah \
+		podman \
+		skopeo \
+		systemd-container \
+		flatpak \
+		distrobox \
+		fastfetch \
+		fpaste \
+		fwupd \
+		systemd-resolved \
+		btrfs-progs
+else
+	# RHEL/AlmaLinux base groups
+	dnf group install -y --nobest \
+		-x PackageKit \
+		-x PackageKit-command-not-found \
+		"Common NetworkManager submodules" \
+		"Core" \
+		"Fonts" \
+		"Guest Desktop Agents" \
+		"Hardware Support" \
+		"Printing Client" \
+		"Standard" \
+		"Workstation product core"
 
-dnf -y install \
-	-x gnome-software \
-	-x gnome-extensions-app \
-	-x PackageKit \
-	-x PackageKit-command-not-found \
-	-x gnome-software-fedora-langpacks \
-	"NetworkManager-adsl" \
-	"glib2" \
-	"gdm" \
-	"gnome-bluetooth" \
-	"gnome-color-manager" \
-	"gnome-control-center" \
-	"gnome-initial-setup" \
-	"gnome-remote-desktop" \
-	"gnome-session-wayland-session" \
-	"gnome-settings-daemon" \
-	"gnome-shell" \
-	"gnome-user-docs" \
-	"gvfs-fuse" \
-	"gvfs-goa" \
-	"gvfs-gphoto2" \
-	"gvfs-mtp" \
-	"gvfs-smb" \
-	"libsane-hpaio" \
-	"nautilus" \
-	"orca" \
-	"ptyxis" \
-	"sane-backends-drivers-scanners" \
-	"xdg-desktop-portal-gnome" \
-	"xdg-user-dirs-gtk" \
-	"yelp-tools" \
-	"plymouth" \
-	"plymouth-system-theme" \
-	"fwupd" \
-	"systemd-resolved" \
-	"systemd-container" \
-	"systemd-oomd" \
-	"libcamera-v4l2" \
-	"libcamera-gstreamer" \
-	"libcamera-tools" \
-	"system-reinstall-bootc" \
-	"gnome-disk-utility" \
-	"distrobox" \
-	"fastfetch" \
-	"fpaste" \
-	"gnome-shell-extension-appindicator" \
-	"gnome-shell-extension-dash-to-dock" \
-	"gnome-shell-extension-blur-my-shell" \
-	"powertop" \
-	"tuned-ppd" \
-	"fzf" \
-	"glow" \
-	"wl-clipboard" \
-	"gum" \
-	"buildah" \
-	"btrfs-progs" \
-	"xhost"
+	dnf -y install \
+		-x gnome-software \
+		-x gnome-extensions-app \
+		-x PackageKit \
+		-x PackageKit-command-not-found \
+		-x gnome-software-fedora-langpacks \
+		"NetworkManager-adsl" \
+		"glib2" \
+		"gdm" \
+		"gnome-bluetooth" \
+		"gnome-color-manager" \
+		"gnome-control-center" \
+		"gnome-initial-setup" \
+		"gnome-remote-desktop" \
+		"gnome-session-wayland-session" \
+		"gnome-settings-daemon" \
+		"gnome-shell" \
+		"gnome-user-docs" \
+		"gvfs-fuse" \
+		"gvfs-goa" \
+		"gvfs-gphoto2" \
+		"gvfs-mtp" \
+		"gvfs-smb" \
+		"libsane-hpaio" \
+		"nautilus" \
+		"orca" \
+		"ptyxis" \
+		"sane-backends-drivers-scanners" \
+		"xdg-desktop-portal-gnome" \
+		"xdg-user-dirs-gtk" \
+		"yelp-tools" \
+		"plymouth" \
+		"plymouth-system-theme" \
+		"fwupd" \
+		"systemd-resolved" \
+		"systemd-container" \
+		"systemd-oomd" \
+		"libcamera-v4l2" \
+		"libcamera-gstreamer" \
+		"libcamera-tools" \
+		"system-reinstall-bootc" \
+		"gnome-disk-utility" \
+		"distrobox" \
+		"fastfetch" \
+		"fpaste" \
+		"gnome-shell-extension-appindicator" \
+		"gnome-shell-extension-dash-to-dock" \
+		"gnome-shell-extension-blur-my-shell" \
+		"powertop" \
+		"tuned-ppd" \
+		"fzf" \
+		"glow" \
+		"wl-clipboard" \
+		"gum" \
+		"buildah" \
+		"btrfs-progs" \
+		"xhost"
+fi
 
 dnf -y remove console-login-helper-messages setroubleshoot
 

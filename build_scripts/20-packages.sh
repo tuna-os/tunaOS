@@ -31,14 +31,14 @@ fi
 
 # Tailscale
 if [[ $IS_FEDORA == true ]]; then
-	dnf config-manager --add-repo "https://pkgs.tailscale.com/stable/fedora/tailscale.repo"
+	dnf config-manager addrepo --from-repofile="https://pkgs.tailscale.com/stable/fedora/tailscale.repo"
+	dnf -y install tailscale
 else
 	dnf config-manager --add-repo "https://pkgs.tailscale.com/stable/centos/${MAJOR_VERSION_NUMBER}/tailscale.repo"
+	dnf config-manager --set-disabled "tailscale-stable"
+	# FIXME: tailscale EPEL10 request: https://bugzilla.redhat.com/show_bug.cgi?id=2349099
+	dnf -y --enablerepo "tailscale-stable" install tailscale
 fi
-dnf config-manager --set-disabled "tailscale-stable"
-# FIXME: tailscale EPEL10 request: https://bugzilla.redhat.com/show_bug.cgi?id=2349099
-dnf -y --enablerepo "tailscale-stable" install tailscale
-
 # ublue-os packages
 install_from_copr ublue-os/packages \
 	ublue-os-just \
