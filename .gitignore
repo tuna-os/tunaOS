@@ -14,3 +14,6 @@ Cargo.toml
 GRAMMAR.md
 just.1
 completions/
+
+# dev files
+hack/
