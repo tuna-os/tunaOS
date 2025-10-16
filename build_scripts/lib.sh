@@ -122,7 +122,11 @@ install_from_copr() {
 	# Set priority if specified
 	if [[ -n "$PRIORITY" ]]; then
 		REPO_ID="copr:copr.fedorainfracloud.org:$(echo "$COPR_NAME" | tr '/' ':')"
-		dnf config-manager --set-enabled --setopt "${REPO_ID}.priority=${PRIORITY}"
+		if [[ $IS_FEDORA == true ]]; then
+			dnf config-manager setopt "${REPO_ID}.priority=${PRIORITY}"
+		else 
+			dnf config-manager --set-enabled --setopt "${REPO_ID}.priority=${PRIORITY}"
+		fi
 	fi
 
 	dnf -y --enablerepo "copr:copr.fedorainfracloud.org:$(echo "$COPR_NAME" | tr '/' ':')" install "$@"
