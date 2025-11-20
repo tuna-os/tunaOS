@@ -181,7 +181,7 @@ jobs:
       - name: Run Rechunker
         if: ${{ inputs.rechunk && inputs.publish }}
         id: rechunk
-        uses: hhd-dev/rechunk@ca77507401f8700bb0b25ebecbbf980a078cd180 # v1.2.2
+        uses: hhd-dev/rechunk@5fbe1d3a639615d2548d83bc888360de6267b1a2 # v1.2.4
         with:
           rechunk: ghcr.io/hhd-dev/rechunk:v1.2.1
           ref: localhost/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}
