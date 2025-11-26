@@ -1,86 +1,44 @@
----
-name: Build Image
+name: Build Next Image
 on:
-  workflow_call:
+  push:
+    branches:
+      - main
+      - coreos
+  workflow_dispatch:
     inputs:
-      image-name:
-        description: "The name of the image to build"
-        required: true
-        type: string
-      image-desc:
-        description: "The description of the image to build"
+      variant:
+        description: 'Image variant to build (yellowfin, albacore, or all)'
         required: false
-        type: string
-        default: "Albacore, built on CentOS Stream with bootc"
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - yellowfin
+          - albacore
       flavor:
-        description: "The flavor of the image to build"
+        description: 'Build flavor (base, dx, gdx, or all)'
         required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - base
+          - dx
+          - gdx
+      registry:
+        description: 'Container registry to use'
+        required: false
+        default: 'ghcr.io'
         type: string
-        default: "regular"
       platforms:
-        description: "The platforms to build the image for"
+        description: 'Platforms to build (comma-separated)'
         required: false
+        default: 'linux/arm64,linux/amd64,linux/amd64/v2'
         type: string
-        default: "linux/amd64,linux/arm64"
-      major-version:
-        description: "The version of CentOS to build the image on"
-        required: false
-        type: string
-        default: "10"
-      default-tag:
-        description: "The default tag to use for the image"
-        required: false
-        type: string
-        default: "lts"
-      image-variant:
-        description: "The image variant to build (yellowfin, albacore, etc.)"
-        required: false
-        type: string
-        default: "albacore"
-      rechunk:
-        description: "Rechunk the build"
-        required: false
-        type: boolean
-        default: true
-      sbom:
-        description: "Generate/publish SBOMs for the artifacts"
-        required: false
-        type: boolean
-        default: true
-      cleanup_runner:
-        description: "Use the ublue cleanup action to clean up the runner before running the build"
-        required: false
-        type: boolean
-        default: true
-      publish:
-        description: "Publish this image"
-        required: false
-        type: boolean
-        # default: ${{ github.event_name != 'pull_request' }}
-        default: true
-      remove-unwanted-software:
-        description: "Run the remove-unwanted-software action to free up disk space"
-        required: false
-        type: boolean
-        default: false
-      chain-base-image:
-        description: "Base image to use for chained builds (instead of OS base image)"
-        required: false
-        type: string
-        default: ""
-    secrets:
-      SIGNING_SECRET:
-        description: "The private key used to sign the image"
-        required: false
-
 
 env:
-  IMAGE_NAME: ${{ inputs.image-name }}
-  IMAGE_DESC: ${{ inputs.image-desc }}
-  IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
-  DEFAULT_TAG: ${{ inputs.default-tag }}
-  MAJOR_VERSION: ${{ inputs.major-version }}
-  PLATFORMS: ${{ inputs.platforms }}
+  REGISTRY: ${{ inputs.registry || 'ghcr.io' }}
+  IMAGE_NAMESPACE: ${{ github.repository_owner }}
 
 jobs:
   generate_matrix:
@@ -88,533 +46,151 @@ jobs:
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
-      - name: Set matrix
+      - name: Generate image variant matrix
         id: set-matrix
         env:
-          PLATFORMS: "${{ inputs.platforms }}"
+          INPUT_VARIANT: ${{ inputs.variant || 'all' }}
+          INPUT_FLAVOR: ${{ inputs.flavor || 'all' }}
+          INPUT_PLATFORMS: ${{ inputs.platforms || '' }}
         run: |
-          # turn the comma separated string into a list
-          platforms=()
-          IFS=',' read -r -a platforms <<< "${PLATFORMS}"
-
+          # Define image variants to build based on input
+          if [ "$INPUT_VARIANT" = "all" ]; then
+            IMAGE_VARIANTS="yellowfin albacore"
+          else
+            IMAGE_VARIANTS="$INPUT_VARIANT"
+          fi
+          
+          # Define flavors to build based on input, ensuring dependencies are met
+          FLAVORS_TO_BUILD=""
+          if [ "$INPUT_FLAVOR" = "all" ]; then
+            FLAVORS_TO_BUILD="base dx gdx"
+          elif [ "$INPUT_FLAVOR" = "gdx" ]; then
+            FLAVORS_TO_BUILD="base dx gdx"
+          elif [ "$INPUT_FLAVOR" = "dx" ]; then
+            FLAVORS_TO_BUILD="base dx"
+          else # base
+            FLAVORS_TO_BUILD="base"
+          fi
+          
+          # Generate matrix
           MATRIX="{\"include\":[]}"
-          for platform in "${platforms[@]}"; do
-            safeplatform="${platform//\//-}" # Replace all / with -
-            MATRIX="$(echo "${MATRIX}" | jq ".include += [{\"platform\": \"${platform}\", \"safeplatform\": \"${safeplatform}\"}]")"
+          for variant in $IMAGE_VARIANTS; do
+            for flavor in $FLAVORS_TO_BUILD; do
+              # Determine image name based on flavor
+              if [ "$flavor" != "base" ]; then
+                IMAGE_NAME="${variant}-${flavor}"
+              else
+                IMAGE_NAME="${variant}"
+              fi
+              
+              # Set variant-specific descriptions and platforms
+              case "$variant" in
+                yellowfin)
+                  DESCRIPTION="🐠 Based on AlmaLinux Kitten 10"
+                  PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
+                  ;;
+                albacore)
+                  DESCRIPTION="🐟 Based on AlmaLinux 10"
+                  PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
+                  ;;
+              esac
+              
+              # Override platforms if provided via input
+              if [ -n "$INPUT_PLATFORMS" ]; then
+                PLATFORMS="$INPUT_PLATFORMS"
+              fi
+              
+              # Add flavor suffix to description
+              case "$flavor" in
+                dx)
+                  DESCRIPTION="${DESCRIPTION} DX"
+                  ;;
+                gdx)
+                  DESCRIPTION="${DESCRIPTION} GDX"
+                  ;;
+              esac
+              
+              MATRIX="$(echo "${MATRIX}" | jq ".include += [{
+                \"variant\": \"${variant}\",
+                \"flavor\": \"${flavor}\",
+                \"image_name\": \"${IMAGE_NAME}\",
+                \"description\": \"${DESCRIPTION}\",
+                \"platforms\": \"${PLATFORMS}\"
+              }]")"
+            done
           done
+          
           echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
-        
 
-  build_push:
-    name: Build and push image
-    runs-on: ${{ contains(matrix.platform, 'amd64') && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
-    timeout-minutes: 60
+  build_base_images:
     needs: generate_matrix
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
+      matrix:
+        include: ${{ fromJson(needs.generate_matrix.outputs.matrix) }}
+    if: matrix.flavor == 'base'
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}
+      image-desc: ${{ matrix.description }}
+      image-variant: ${{ matrix.variant }}
+      flavor: base
+      platforms: ${{ matrix.platforms }}
+      default-tag: next
+      rechunk: true
+      sbom: false
+      publish: true
+
+  build_dx_images:
+    needs: [generate_matrix, build_base_images]
     permissions:
       contents: read
       packages: write
       id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.generate_matrix.outputs.matrix) }}
+    if: matrix.flavor == 'dx'
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}
+      image-desc: ${{ matrix.description }}
+      image-variant: ${{ matrix.variant }}
+      flavor: dx
+      platforms: ${{ matrix.platforms }}
+      default-tag: next
+      rechunk: true
+      sbom: false
+      publish: true
 
-    steps:
-      - name: Install dependencies
-        if: contains(matrix.platform, 'linux/arm64')
-        run: |
-          sudo apt update -y
-          sudo apt install -y \
-            podman
-
-      - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v4
-      
-      - name: Maximize build space (remove-software)
-        if: inputs.remove-unwanted-software && matrix.platform != 'arm64'
-        uses: ublue-os/remove-unwanted-software@cc0becac701cf642c8f0a6613bbdaf5dc36b259e # v9
-        with:
-          remove-codeql: true
-
-      - name: Mount BTRFS for podman storage
-        if: ${{ matrix.platform != 'linux/arm64' && inputs.cleanup_runner }}
-        uses: ublue-os/container-storage-action@main
-
-      - name: Setup Just
-        uses: extractions/setup-just@e33e0265a09d6d736e2ee1e0eb685ef1de4669ff # v3
-
-      - name: Check Just Syntax
-        shell: bash
-        run: just check
-
-      - name: Build Image
-        id: build-image
-        shell: bash
-        env:
-          FLAVOR: ${{ inputs.flavor }}
-          IMAGE_VARIANT: ${{ inputs.image-variant }}
-          DEFAULT_TAG: ${{ inputs.default-tag }}
-          PLATFORM: ${{ matrix.platform }}
-        run: |
-          set -x
-          just=$(which just)
-          sudo "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}"
-
-      - name: Setup Syft
-        id: setup-syft
-        if: ${{ inputs.sbom && inputs.publish }}
-        uses: anchore/sbom-action/download-syft@fbfd9c6c189226748411491745178e0c2017392d # v0
-
-      - name: Generate SBOM
-        id: generate-sbom
-        if: ${{ inputs.sbom && inputs.publish }}
-        env:
-          IMAGE: ${{ env.IMAGE_NAME }}
-          DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
-          SYFT_CMD: ${{ steps.setup-syft.outputs.cmd }}
-        run: |
-          sudo systemctl start podman.socket
-          OUTPUT_PATH="$(mktemp -d)/sbom.json"
-          export SYFT_PARALLELISM=$(($(nproc)*2))
-          sudo "$SYFT_CMD" "${IMAGE_REGISTRY}/${IMAGE}:${DEFAULT_TAG}" -o "spdx-json=${OUTPUT_PATH}"
-          echo "OUTPUT_PATH=${OUTPUT_PATH}" >> "${GITHUB_OUTPUT}"
-      
-
-      - name: Run Rechunker
-        if: ${{ inputs.rechunk && inputs.publish }}
-        id: rechunk
-        uses: hhd-dev/rechunk@ca77507401f8700bb0b25ebecbbf980a078cd180 # v1.2.2
-        with:
-          rechunk: ghcr.io/hhd-dev/rechunk:v1.2.1
-          ref: localhost/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}
-          prev-ref: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}
-          skip_compression: true
-          version: ${{ env.MAJOR_VERSION }}
-
-      - name: Load Image
-        if: ${{ inputs.publish }}
-        id: load
-        env:
-          RECHUNK_RAN: ${{ inputs.rechunk }}
-          RECHUNK_REF: ${{ steps.rechunk.outputs.ref }}
-          RECHUNK_LOCATION: ${{ steps.rechunk.outputs.location }}
-        run: |
-          if [ "${RECHUNK_RAN}" == "true" ] ; then
-            IMAGE="$(podman pull "${RECHUNK_REF}")"
-            sudo rm -rf "${RECHUNK_LOCATION}"
-          else
-            IMAGE="localhost/${IMAGE_NAME}:${DEFAULT_TAG}"
-          fi
-          podman image tag "${IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
-
-          IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
-          IMAGE_DIGEST="$(podman image inspect --format '{{.Digest}}' "${IMAGE}")"
-          echo "image=${IMAGE}" >> "${GITHUB_OUTPUT}"
-          echo "digest=${IMAGE_DIGEST}" >> "${GITHUB_OUTPUT}"
-
-      - name: Login to GitHub Container Registry
-        if: ${{ inputs.publish }}
-        env:
-          REGISTRY: ghcr.io
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
-
-      - name: Push to GHCR
-        if: ${{ inputs.publish }}
-        id: push
-        env:
-          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          IMAGE_DIGEST: ${{ steps.load.outputs.digest }}
-          PLATFORM: ${{ matrix.platform }}
-          SAFE_PLATFORM: ${{ matrix.safeplatform }}
-          MAX_RETRIES: 3
-        run: |
-          set -x
-          podman tag "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
-          for i in $(seq "${MAX_RETRIES}"); do
-            podman push --digestfile=/tmp/digestfile "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}" && break || sleep $((5 * i));
-          done
-          REMOTE_IMAGE_DIGEST=$(cat /tmp/digestfile)
-          echo "remote_image_digest=${REMOTE_IMAGE_DIGEST}" >> $GITHUB_OUTPUT
-
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
-        if: ${{ inputs.publish }}
-
-      - name: Sign Image
-        if: ${{ inputs.publish }}
-        run: |
-          IMAGE_FULL="${IMAGE_REGISTRY}/${IMAGE_NAME}"
-          cosign sign -y --key env://COSIGN_PRIVATE_KEY ${IMAGE_FULL}@${{ steps.push.outputs.remote_image_digest }}
-        env:
-          TAGS: ${{ steps.push.outputs.digest }}
-          COSIGN_EXPERIMENTAL: false
-          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
-
-      - name: Add SBOM Attestation
-        if: ${{ inputs.sbom }}
-        env:
-          IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
-          DIGEST: ${{ steps.push.outputs.remote_image_digest }}
-          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
-          SBOM_OUTPUT: ${{ steps.generate-sbom.outputs.OUTPUT_PATH }}
-        run: |
-          cd "$(dirname "$SBOM_OUTPUT")"
-
-          # Compress the SBOM and create the predicate
-          TYPE="urn:ublue-os:attestation:spdx+json+zstd:v1"
-          zstd -19 "./sbom.json" -o "./sbom.json.zst"
-          BASE64_SBOM_FILE="payload.b64"
-          base64 "./sbom.json.zst" | tr -d '\n' > "${BASE64_SBOM_FILE}"
-          PREDICATE_FILE="payload.json"
-          jq -n \
-            --arg compression "zstd" \
-            --arg mediaType "application/spdx+json" \
-            --rawfile payload "${BASE64_SBOM_FILE}" \
-            '{compression: $compression, mediaType: $mediaType, payload: $payload}' \
-            > "$PREDICATE_FILE"
-          rm -f "${BASE64_SBOM_FILE}"
-
-          # Create the attestation
-          cosign attest -y \
-            --predicate "${PREDICATE_FILE}" \
-            --type $TYPE \
-            --key env://COSIGN_PRIVATE_KEY \
-            "${IMAGE}@${DIGEST}"
-
-      - name: Create Job Outputs
-        if: ${{ inputs.publish }}
-        env:
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          SAFE_PLATFORM: ${{ matrix.safeplatform }}
-          DIGEST: ${{ steps.push.outputs.remote_image_digest }}
-        run: |
-          mkdir -p /tmp/outputs/digests
-          echo "${DIGEST}" > "/tmp/outputs/digests/${IMAGE_NAME}-${SAFE_PLATFORM}.txt"
-
-      - name: Upload Output Artifacts
-        if: ${{ inputs.publish }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: ${{ env.IMAGE_NAME }}-${{ matrix.safeplatform }}-${{ github.run_id }}
-          retention-days: 1
-          if-no-files-found: error
-          path: |
-            /tmp/outputs/digests/*.txt
-
-  manifest:
-    name: Create ${{ inputs.image-name }}:${{ inputs.major-version }} Manifest
-    runs-on: ubuntu-latest
-    if: always()
-    needs:
-      - generate_matrix
-      - build_push
-    container:
-      image:  cgr.dev/chainguard/wolfi-base:latest
-      options: --privileged --security-opt seccomp=unconfined
+  build_gdx_images:
+    needs: [generate_matrix, build_dx_images]
     permissions:
       contents: read
       packages: write
       id-token: write
-    outputs:
-      image: ${{ steps.push_manifest.outputs.IMAGE }}
-      digest: ${{ steps.push_manifest.outputs.DIGEST }}
-      all_platforms_built: ${{ steps.check_platforms.outputs.all_platforms_built }}
-    steps:
-      - name: Install dependencies
-        run: |
-          apk update
-          # Install necessary packages for building and pushing the image
-          apk add jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++
-          ln -sf /bin/bash /bin/sh
-          mkdir -p /etc/containers
-          echo '{"default":[{"type":"insecureAcceptAnything"}]}' | jq . > /etc/containers/policy.json
-
-      - name: Exit on failure
-        env:
-          JOBS: ${{ toJson(needs) }}
-        run: |
-          echo "Job status:"
-          echo $JOBS | jq -r 'to_entries[] | " - \(.key): \(.value.result)"'
-
-          for i in $(echo "${JOBS}" | jq -r 'to_entries[] | .value.result'); do
-            if [ "$i" != "success" ] && [ "$i" != "skipped" ]; then
-              echo ""
-              echo "Status check not okay!"
-              exit 1
-            fi
-          done
-
-      - name: Get current date
-        id: date
-        run: |
-          # Should generate a timestamp like what is defined on the ArtifactHub documentation
-          # E.G: 2022-02-08T15:38:15Z'
-          # https://artifacthub.io/docs/topics/repositories/container-images/
-          # https://linux.die.net/man/1/date
-          echo "date=$(date -u +%Y\-%m\-%d\T%H\:%M\:%S\Z)" >> $GITHUB_OUTPUT
-
-      - name: Extract numbers from input
-        id: extract-numbers
-        env:
-          MAJOR_VERSION: ${{ env.MAJOR_VERSION }}
-        run: |
-          numbers_only=$(echo "${MAJOR_VERSION}" | tr -cd '0-9')
-          echo "MAJOR_VERSION_NUMBER=${numbers_only}" >> "${GITHUB_ENV}"
-
-      - name: Image Metadata
-        uses: docker/metadata-action@8d8c7c12f7b958582a5cb82ba16d5903cb27976a # v5
-        id: metadata
-        with:
-          tags: |
-            type=raw,value=${{ env.DEFAULT_TAG}}
-            type=ref,event=pr
-          labels: |
-            io.artifacthub.package.readme-url=https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/${{ github.sha }}/README.md
-            org.opencontainers.image.created=${{ steps.date.outputs.date }}
-            org.opencontainers.image.description=${{ env.IMAGE_DESC }}
-            org.opencontainers.image.documentation=https://tunaos.org/docs/intro
-            org.opencontainers.image.source=https://github.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/blob/${{ github.sha }}/Containerfile
-            org.opencontainers.image.title=${{ env.IMAGE_NAME }}
-            org.opencontainers.image.url=https://tunaos.org
-            org.opencontainers.image.vendor=${{ github.repository_owner }}
-            org.opencontainers.image.version=${{ env.MAJOR_VERSION }}
-            io.artifacthub.package.deprecated=false
-            io.artifacthub.package.keywords=bootc,tunaos
-            io.artifacthub.package.license=Apache-2.0
-            io.artifacthub.package.logo-url=https://avatars.githubusercontent.com/u/223733964?s=200&v=4
-            io.artifacthub.package.maintainers=[{\"name\":\"hanthor\",\"email\":\"jreilly1821@gmail.com\"}]
-            io.artifacthub.package.prerelease=true
-            containers.bootc=1
-
-      - name: Fetch Build Outputs
-        if: ${{ inputs.publish }}
-        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v4
-        with:
-          pattern: ${{ env.IMAGE_NAME }}-*
-          merge-multiple: true
-          path: /tmp/artifacts
-
-      - name: Load Outputs
-        if: ${{ inputs.publish }}
-        id: load-outputs
-        env:
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-        run: |
-          set -e
-          DIGESTS_JSON="$(jq -n '{}')"
-          for digest_file in /tmp/artifacts/*.txt; do
-            FILENAME_ONLY="$(basename "${digest_file}")"
-            # Extract the safeplatform key from the filename (e.g., "albacore-linux-amd64-v2.txt" -> "linux-amd64-v2")
-            # Remove prefix "${IMAGE_NAME}-"
-            KEY_PART="${FILENAME_ONLY#${IMAGE_NAME}-}"
-            # Remove suffix ".txt"
-            PLATFORM_KEY="${KEY_PART%.txt}"
-            DIGEST="$(cat "${digest_file}")"
-            DIGESTS_JSON="$(echo "${DIGESTS_JSON}" | jq --arg key "${PLATFORM_KEY}" --arg value "${DIGEST}" '. + {($key): $value}')"
-          done
-          echo "DIGESTS_JSON=$(echo "$DIGESTS_JSON" | jq -c '.')" >> "${GITHUB_OUTPUT}"
-
-      - name: Check Platform Completeness
-        if: ${{ inputs.publish }}
-        id: check_platforms
-        env:
-          DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
-          IMAGE_VARIANT: "${{ inputs.image-variant }}"
-        run: |
-          set -e
-          
-          # Determine default platforms based on variant (same logic as build.yml)
-          case "${IMAGE_VARIANT}" in
-            yellowfin)
-              DEFAULT_PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
-              ;;
-            albacore)
-              DEFAULT_PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
-              ;;
-            skipjack)
-              DEFAULT_PLATFORMS="linux/arm64,linux/amd64"
-              ;;
-            bonito)
-              DEFAULT_PLATFORMS="linux/arm64,linux/amd64"
-              ;;
-            bonito-rawhide)
-              DEFAULT_PLATFORMS="linux/arm64,linux/amd64"
-              ;;
-            *)
-              echo "Unknown variant: ${IMAGE_VARIANT}"
-              DEFAULT_PLATFORMS="linux/arm64,linux/amd64"
-              ;;
-          esac
-          
-          echo "Variant: ${IMAGE_VARIANT}"
-          echo "Default platforms for this variant: ${DEFAULT_PLATFORMS}"
-          
-          # Parse expected platforms (use default platforms, not input platforms)
-          expected_platforms=()
-          IFS=',' read -r -a expected_platforms <<< "${DEFAULT_PLATFORMS}"
-          
-          # Check if all expected platforms have digests
-          all_platforms_built="true"
-          for platform_original in "${expected_platforms[@]}"; do
-            platform_key="${platform_original//\//-}"
-            digest="$(echo "${DIGESTS_JSON}" | jq -r --arg key "${platform_key}" '.[$key]')"
-            
-            if [ "$digest" == "null" ] || [ -z "$digest" ]; then
-              echo "Missing platform: ${platform_original} (key: ${platform_key})"
-              all_platforms_built="false"
-            else
-              echo "Found platform: ${platform_original} (key: ${platform_key})"
-            fi
-          done
-          
-          echo "All default platforms built: ${all_platforms_built}"
-          echo "all_platforms_built=${all_platforms_built}" >> "${GITHUB_OUTPUT}"
-
-      - name: Create Manifest
-        if: ${{ inputs.publish }}
-        id: create-manifest
-        env:
-          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-        run: |
-          podman manifest create ${IMAGE_REGISTRY}/${IMAGE_NAME}
-          echo "MANIFEST=${IMAGE_REGISTRY}/${IMAGE_NAME}" >> $GITHUB_OUTPUT
-
-      - name: Populate Manifest
-        if: ${{ inputs.publish }}
-        env:
-          MANIFEST: ${{ steps.create-manifest.outputs.MANIFEST }}
-          DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }} # Already confirmed valid JSON
-          LABELS: ${{ steps.metadata.outputs.labels }}
-          PLATFORMS: "${{ inputs.platforms }}"
-        run: |
-          set -e # Ensure script exits on error
-
-          # Turn the comma separated inputs.platforms string into a list
-          platforms=()
-          IFS=',' read -r -a platforms <<< "${PLATFORMS}"
-
-          for platform_original in "${platforms[@]}"; do
-            platform_key_for_lookup="${platform_original//\//-}"
-
-            digest="$(echo "${DIGESTS_JSON}" | jq -r --arg key "${platform_key_for_lookup}" '.[$key]')"
-
-            if [ "$digest" == "null" ] || [ -z "$digest" ]; then
-              echo "Error: Digest not found for platform ${platform_original} (looked for key ${platform_key_for_lookup} in DIGESTS_JSON: $DIGESTS_JSON)"
-              exit 1
-            fi
-
-            arch_for_podman="${platform_original#linux/}"
-            podman manifest add "${MANIFEST}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}" --os linux --arch "${arch_for_podman}"
-          done
-
-          # Apply the labels to the manifest (separated by newlines)
-          while IFS= read -r label; do
-            echo "Applying label ${label} to manifest"
-            podman manifest annotate --index --annotation "$label" "${MANIFEST}"
-          done <<< "${LABELS}"
-
-      - name: Login to GitHub Container Registry
-        if: ${{ inputs.publish }}
-        env:
-          REGISTRY: ghcr.io
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
-
-      - name: Push Manifest
-        if: github.event_name != 'pull_request'
-        id: push_manifest
-        env:
-          MANIFEST: ${{ steps.create-manifest.outputs.MANIFEST }}
-          TAGS: ${{ steps.metadata.outputs.tags }}
-          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-        run: |
-          while IFS= read -r tag; do
-            podman manifest push --all=false --digestfile=/tmp/digestfile $MANIFEST $IMAGE_REGISTRY/$IMAGE_NAME:$tag
-          done <<< "$TAGS"
-
-          DIGEST=$(cat /tmp/digestfile)
-          echo "DIGEST=$DIGEST" >> $GITHUB_OUTPUT
-          echo "IMAGE=$IMAGE_REGISTRY/$IMAGE_NAME" >> $GITHUB_OUTPUT
-
-  # Cosign throws errors when ran inside the Fedora container for one reason or another
-  # so we move this to another step in order to run on Ubuntu
-  sign:
-    needs: manifest
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    steps:
-      - name: Login to GitHub Container Registry
-        if: ${{ inputs.publish }}
-        env:
-          REGISTRY: ghcr.io
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
-          cat ${XDG_RUNTIME_DIR}/containers/auth.json > ~/.docker/config.json
-
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
-
-      - name: Sign Manifest
-        env:
-          DIGEST: ${{ needs.manifest.outputs.digest }}
-          IMAGE: ${{ needs.manifest.outputs.image }}
-          COSIGN_EXPERIMENTAL: false
-          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
-        run: |
-          cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${DIGEST}"
-  tag-image:
-    needs: manifest
-    if: github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    steps:
-      - name: Install skopeo
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y skopeo
-
-      - name: Login to GitHub Container Registry
-        env:
-          REGISTRY: ghcr.io
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
-          # Also login with skopeo
-          echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
-
-      - name: Pull Image and Apply Tags
-        id: tag
-        env:
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
-          DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
-          MAJOR_VERSION: ${{ env.MAJOR_VERSION }}
-          REFS: ${{ github.ref_name }}
-          ALL_PLATFORMS_BUILT: ${{ needs.manifest.outputs.all_platforms_built }}
-        run: |
-          set -ex
-          SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
-          
-          # Always copy to sha-based tag
-          skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${REFS}"
-          
-          # Only tag as 'latest' if all default platforms for this variant were built
-          if [ "${ALL_PLATFORMS_BUILT}" = "true" ]; then
-            echo "All default platforms for this variant built successfully - tagging as latest"
-            skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:$(date +%Y%m%d)"
-            skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
-            echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
-          else
-            echo "Not all default platforms for this variant built - skipping latest tag"
-            echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${REFS}" >> $GITHUB_OUTPUT
-          fi
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.generate_matrix.outputs.matrix) }}
+    if: matrix.flavor == 'gdx'
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}
+      image-desc: ${{ matrix.description }}
+      image-variant: ${{ matrix.variant }}
+      flavor: gdx
+      platforms: ${{ matrix.platforms }}
+      default-tag: next
+      rechunk: true
+      sbom: false
+      publish: true
+      remove-unwanted-software: true
