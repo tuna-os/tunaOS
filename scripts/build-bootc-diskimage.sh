@@ -36,13 +36,13 @@ bootc switch --mutate-in-place --transport registry --enforce-container-sigpolic
 
 [customizations.installer.modules]
 enable = [
-	"org.fedoraproject.Anaconda.Modules.Storage"
+	"org.fedoraproject.Anaconda.Modules.Storage",
+	"org.fedoraproject.Anaconda.Modules.Users"
 ]
 disable = [
 	"org.fedoraproject.Anaconda.Modules.Network",
 	"org.fedoraproject.Anaconda.Modules.Security",
 	"org.fedoraproject.Anaconda.Modules.Services",
-	"org.fedoraproject.Anaconda.Modules.Users",
 	"org.fedoraproject.Anaconda.Modules.Subscription",
 	"org.fedoraproject.Anaconda.Modules.Timezone"
 ]
@@ -69,10 +69,6 @@ echo ""
 echo "Pulling image: $IMAGE_URI"
 sudo podman pull "$IMAGE_URI"
 
-ARGS="--type $TYPE "
-ARGS+="--rootfs $ROOTFS "
-ARGS+="--use-librepo=False"
-
 # Run the bootc-image-builder command
 echo "Running bootc-image-builder..."
 podman run --rm -it --privileged \
@@ -80,7 +76,7 @@ podman run --rm -it --privileged \
 	-v /var/lib/containers/storage:/var/lib/containers/storage \
 	-v "$TMPDIR/$TOML_FILE":/config.toml \
 	quay.io/centos-bootc/bootc-image-builder:latest \
-	build "$ARGS" \
+	build --type "$TYPE" \
 	"$IMAGE_URI"
 
 IMAGE_NAME=$(echo "$IMAGE_URI" | awk -F'/' '{print $NF}' | awk -F':' '{print $1}')

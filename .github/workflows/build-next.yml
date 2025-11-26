@@ -1,0 +1,197 @@
+name: Build Next Image
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Image variant to build (yellowfin, albacore, or all)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - yellowfin
+          - albacore
+      flavor:
+        description: 'Build flavor (base, dx, gdx, or all)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - base
+          - dx
+          - gdx
+      registry:
+        description: 'Container registry to use'
+        required: false
+        default: 'ghcr.io'
+        type: string
+      platforms:
+        description: 'Platforms to build (comma-separated)'
+        required: false
+        default: 'linux/arm64,linux/amd64,linux/amd64/v2'
+        type: string
+
+env:
+  REGISTRY: ${{ inputs.registry || 'ghcr.io' }}
+  IMAGE_NAMESPACE: ${{ github.repository_owner }}
+
+jobs:
+  generate_matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Generate image variant matrix
+        id: set-matrix
+        env:
+          INPUT_VARIANT: ${{ inputs.variant || 'all' }}
+          INPUT_FLAVOR: ${{ inputs.flavor || 'all' }}
+          INPUT_PLATFORMS: ${{ inputs.platforms || '' }}
+        run: |
+          # Define image variants to build based on input
+          if [ "$INPUT_VARIANT" = "all" ]; then
+            IMAGE_VARIANTS="yellowfin albacore"
+          else
+            IMAGE_VARIANTS="$INPUT_VARIANT"
+          fi
+          
+          # Define flavors to build based on input
+          if [ "$INPUT_FLAVOR" = "all" ]; then
+            FLAVORS="base dx gdx"
+          else
+            FLAVORS="$INPUT_FLAVOR"
+          fi
+          
+          # Generate matrix
+          MATRIX="{\"include\":[]}"
+          for variant in $IMAGE_VARIANTS; do
+            for flavor in $FLAVORS; do
+              # Determine image name based on flavor
+              if [ "$flavor" != "base" ]; then
+                IMAGE_NAME="${variant}-${flavor}"
+              else
+                IMAGE_NAME="${variant}"
+              fi
+              
+              # Set variant-specific descriptions and platforms
+              case "$variant" in
+                yellowfin)
+                  DESCRIPTION="🐠 Based on AlmaLinux Kitten 10"
+                  PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
+                  ;;
+                albacore)
+                  DESCRIPTION="🐟 Based on AlmaLinux 10"
+                  PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
+                  ;;
+              esac
+              
+              # Override platforms if provided via input
+              if [ -n "$INPUT_PLATFORMS" ]; then
+                PLATFORMS="$INPUT_PLATFORMS"
+              fi
+              
+              # Add flavor suffix to description
+              case "$flavor" in
+                dx)
+                  DESCRIPTION="${DESCRIPTION} DX"
+                  ;;
+                gdx)
+                  DESCRIPTION="${DESCRIPTION} GDX"
+                  ;;
+              esac
+              
+              MATRIX="$(echo "${MATRIX}" | jq ".include += [{
+                \"variant\": \"${variant}\",
+                \"flavor\": \"${flavor}\",
+                \"image_name\": \"${IMAGE_NAME}\",
+                \"description\": \"${DESCRIPTION}\",
+                \"platforms\": \"${PLATFORMS}\"
+              }]")"
+            done
+          done
+          
+          echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
+
+  # Build base images
+  build-base:
+    needs: generate_matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.generate_matrix.outputs.matrix) }}
+    # Only build base flavor
+    if: matrix.flavor == 'base'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}
+      image-desc: ${{ matrix.description }}
+      image-variant: ${{ matrix.variant }}
+      flavor: base
+      platforms: ${{ matrix.platforms }}
+      default-tag: next
+      rechunk: true
+      sbom: false
+      publish: true
+
+  # Build DX images (chain from base)
+  build-dx:
+    needs: [generate_matrix, build-base]
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.generate_matrix.outputs.matrix) }}
+    # Only build dx flavor
+    if: matrix.flavor == 'dx'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}
+      image-desc: ${{ matrix.description }}
+      image-variant: ${{ matrix.variant }}
+      flavor: dx
+      platforms: ${{ matrix.platforms }}
+      default-tag: next
+      rechunk: true
+      sbom: false
+      publish: true
+
+  # Build GDX images (chain from DX)
+  build-gdx:
+    needs: [generate_matrix, build-dx]
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJson(needs.generate_matrix.outputs.matrix) }}
+    # Only build gdx flavor
+    if: matrix.flavor == 'gdx'
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}
+      image-desc: ${{ matrix.description }}
+      image-variant: ${{ matrix.variant }}
+      flavor: gdx
+      platforms: ${{ matrix.platforms }}
+      default-tag: next
+      rechunk: true
+      sbom: false
+      publish: true
+      remove-unwanted-software: true
