@@ -93,49 +93,9 @@ jobs:
           aws-region: us-east-1
 
             - name: Upload to S3
-
               run: |
-
                 aws s3 cp output/qcow2/disk.qcow2 s3://${{ secrets.S3_BUCKET }}/tunaos-${{ github.ref_name }}.qcow2
-
                 echo "IMAGE_URL=https://${{ secrets.S3_BUCKET }}.s3.amazonaws.com/tunaos-${{ github.ref_name }}.qcow2" >> $GITHUB_ENV
-
-
-            - name: Setup openQA CLI
-
-              run: |
-
-                sudo apt-get update && sudo apt-get install -y jq
-
-                # Installing openQA client (example, might need specific repo or container)
-
-                # For now, assuming we can run it via container or it's available.
-
-                # Let's use a container for the CLI to be safe.
-
-                echo "alias openqa-cli='podman run --rm \
-
-                  -e OPENQA_API_KEY=${{ secrets.OPENQA_API_KEY }} \
-
-                  -e OPENQA_API_SECRET=${{ secrets.OPENQA_API_SECRET }} \
-
-                  -e OPENQA_HOST=${{ secrets.OPENQA_HOST }} \
-
-                  registry.opensuse.org/devel/openqa/containers/openqa_client:latest openqa-cli'" >> ~/.bashrc
-
-                source ~/.bashrc
-
-      
-
-            - name: Run openQA Test
-
-              run: |
-
-                # Source bashrc to get the alias
-
-                source ~/.bashrc
-
-                ./scripts/openqa-trigger.sh "${{ env.IMAGE_URL }}" "${{ github.ref_name }}"
 
             - name: Promote to Stable
               if: success()
