@@ -17,3 +17,5 @@ completions/
 
 # dev files
 hack/
+
+secrets.env

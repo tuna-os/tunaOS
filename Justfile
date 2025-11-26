@@ -97,6 +97,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
     fi
 
     podman build \
+        --dns=8.8.8.8 \
         --platform "{{ platform }}" \
         "${BUILD_ARGS[@]}" \
         {{ args }} \

@@ -1,0 +1,95 @@
+name: Test QEMU Integration
+
+on:
+  push:
+    tags:
+      - '*-[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9].[0-9]*-test'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ${{ github.repository_owner }}
+
+jobs:
+  parse_tag:
+    runs-on: ubuntu-latest
+    outputs:
+      variant: ${{ steps.parse.outputs.variant }}
+      flavor: ${{ steps.parse.outputs.flavor }}
+      version: ${{ steps.parse.outputs.version }}
+    steps:
+      - name: Parse tag
+        id: parse
+        run: |
+          TAG="${{ github.ref_name }}"
+          # Expected format: <variant>-YYYYMMDD.x-test or <variant>-<flavor>-YYYYMMDD.x-test
+          if [[ "$TAG" =~ ^([a-z]+)-(dx|gdx)-([0-9]{8}\.[0-9]+)-test$ ]]; then
+            echo "variant=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+            echo "flavor=${BASH_REMATCH[2]}" >> $GITHUB_OUTPUT
+            echo "version=${BASH_REMATCH[3]}" >> $GITHUB_OUTPUT
+          elif [[ "$TAG" =~ ^([a-z]+)-([0-9]{8}\.[0-9]+)-test$ ]]; then
+            echo "variant=${BASH_REMATCH[1]}" >> $GITHUB_OUTPUT
+            echo "flavor=base" >> $GITHUB_OUTPUT
+            echo "version=${BASH_REMATCH[2]}" >> $GITHUB_OUTPUT
+          else
+            echo "Invalid tag format: $TAG"
+            exit 1
+          fi
+
+  test-and-promote:
+    needs: parse_tag
+    runs-on: [self-hosted, linux, kvm]
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set image name
+        id: image
+        run: |
+          VARIANT="${{ needs.parse_tag.outputs.variant }}"
+          FLAVOR="${{ needs.parse_tag.outputs.flavor }}"
+          if [ "$FLAVOR" != "base" ]; then
+            IMAGE_NAME="${VARIANT}-${FLAVOR}"
+          else
+            IMAGE_NAME="${VARIANT}"
+          fi
+          echo "name=$IMAGE_NAME" >> $GITHUB_OUTPUT
+
+      - name: Pull Next Image
+        run: podman pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ steps.image.outputs.name }}:next
+
+      # - name: Build Image (Local Act)
+      #   if: ${{ env.ACT }}
+      #   run: podman build -t ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:next -f Containerfile .
+
+      - name: Generate Disk Image
+        run: |
+          mkdir -p output
+          sudo podman run --rm -it --privileged \
+            -v $(pwd)/output:/output \
+            -v $(pwd)/config.toml:/config.toml \
+            -v /var/lib/containers/storage:/var/lib/containers/storage \
+            quay.io/centos-bootc/bootc-image-builder:latest \
+            build --type qcow2 \
+            --config /config.toml \
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ steps.image.outputs.name }}:next
+
+      - name: Run QEMU Test
+        run: ./scripts/qemu-test.sh output/qcow2/disk.qcow2
+
+      - name: Promote to Testing
+        if: success()
+        run: |
+          skopeo copy \
+            docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ steps.image.outputs.name }}:next \
+            docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ steps.image.outputs.name }}:testing
