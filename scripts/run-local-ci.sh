@@ -46,6 +46,22 @@ transform_workflow() {
     ' "$workflow" > "$output"
 }
 
+# Function to add workflow_dispatch to reusable workflows for act compatibility
+add_workflow_dispatch() {
+    local workflow_file=$1
+    
+    # Check if this is a reusable workflow (has workflow_call but no workflow_dispatch)
+    if grep -q "workflow_call:" "$workflow_file" && ! grep -q "workflow_dispatch:" "$workflow_file"; then
+        echo "Adding workflow_dispatch trigger for act compatibility..."
+        
+        # Use yq to duplicate workflow_call inputs as workflow_dispatch inputs
+        yq eval -i '
+            .on.workflow_dispatch.inputs = .on.workflow_call.inputs
+        ' "$workflow_file"
+    fi
+}
+
+
 if [ -n "$1" ]; then
     choice=$1
 else
@@ -125,22 +141,48 @@ case $choice in
         
         # Step 1: Build
         echo "[1/3] Building image..."
-        transform_workflow ".github/workflows/build-next.yml" "$TMP_DIR/build-next.yml"
+        transform_workflow ".github/workflows/reusable-build-image.yml" "$TMP_DIR/reusable-build-image.yml"
         
-        echo "Building: variant=$variant, flavor=$flavor, image=$IMAGE_NAME, registry=localhost:5000"
+        # Add workflow_dispatch trigger for act (keeps production YAML pristine)
+        add_workflow_dispatch "$TMP_DIR/reusable-build-image.yml"
+        
+        # Determine image description based on variant
+        case "$variant" in
+            yellowfin)
+                IMAGE_DESC="🐠 Based on AlmaLinux Kitten 10"
+                ;;
+            albacore)
+                IMAGE_DESC="🐟 Based on AlmaLinux 10"
+                ;;
+        esac
+        
+        # Add flavor to description
+        case "$flavor" in
+            dx) IMAGE_DESC="${IMAGE_DESC} DX" ;;
+            gdx) IMAGE_DESC="${IMAGE_DESC} GDX" ;;
+        esac
+        
+        echo "Building: image=$IMAGE_NAME, variant=$variant, flavor=$flavor"
+        echo "Registry: localhost:5000, Tag: next"
         echo ""
         
-        # Run act with workflow inputs - much simpler than transforming YAML!
+        # Call the reusable workflow directly - same code path as production!
         act workflow_dispatch \
-            -W "$TMP_DIR/build-next.yml" \
+            -W "$TMP_DIR/reusable-build-image.yml" \
             --secret-file secrets.env \
             -s GITHUB_TOKEN="$GITHUB_TOKEN" \
             --network host \
             --container-options "--privileged" \
-            --input variant="$variant" \
+            --input image-name="$IMAGE_NAME" \
+            --input image-desc="$IMAGE_DESC" \
+            --input image-variant="$variant" \
             --input flavor="$flavor" \
-            --input registry="localhost:5000" \
-            --input platforms="linux/amd64" || { echo "Build failed!"; exit 1; }
+            --input platforms="linux/amd64" \
+            --input default-tag="next" \
+            --input rechunk="false" \
+            --input sbom="false" \
+            --input cleanup_runner="false" \
+            --input publish="true" || { echo "Build failed!"; exit 1; }
         
         echo ""
         echo "[2/3] Testing image in QEMU..."

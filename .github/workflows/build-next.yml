@@ -1,9 +1,14 @@
 name: Build Next Image
 
+# This workflow uses reusable workflows for production builds.
+# For local testing with 'act', the run-local-ci.sh script dynamically adds
+# workflow_dispatch triggers to reusable workflows, keeping production YAML pristine.
+
 on:
   push:
     branches:
       - main
+      - coreos
   workflow_dispatch:
     inputs:
       variant:

@@ -73,6 +73,7 @@ on:
         description: "The private key used to sign the image"
         required: false
 
+
 env:
   IMAGE_NAME: ${{ inputs.image-name }}
   IMAGE_DESC: ${{ inputs.image-desc }}
