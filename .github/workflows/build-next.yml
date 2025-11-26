@@ -169,7 +169,7 @@ jobs:
     needs: [generate_matrix, build_base_images]
     if: |
       always() &&
-      needs.build_base_images.result != 'failure' &&
+      (needs.build_base_images.result == 'success' || needs.build_base_images.result == 'skipped') &&
       needs.generate_matrix.outputs.dx_matrix != '{"include":[]}'
     permissions:
       contents: read
@@ -195,7 +195,7 @@ jobs:
     needs: [generate_matrix, build_dx_images]
     if: |
       always() &&
-      needs.build_dx_images.result != 'failure' &&
+      (needs.build_dx_images.result == 'success' || needs.build_dx_images.result == 'skipped') &&
       needs.generate_matrix.outputs.gdx_matrix != '{"include":[]}'
     permissions:
       contents: read
