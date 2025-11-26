@@ -236,6 +236,45 @@ jobs:
           REMOTE_IMAGE_DIGEST=$(cat /tmp/digestfile)
           echo "remote_image_digest=${REMOTE_IMAGE_DIGEST}" >> $GITHUB_OUTPUT
 
+      - name: Generate PR Diff
+        if: github.event_name == 'pull_request'
+        env:
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
+          SAFE_PLATFORM: ${{ matrix.safeplatform }}
+        run: |
+          # Only run diff for one platform to avoid spamming comments (e.g., amd64)
+          if [[ "${SAFE_PLATFORM}" != *"amd64"* ]]; then
+            echo "Skipping diff for non-amd64 platform"
+            exit 0
+          fi
+
+          # Pull the 'next' image (base for comparison)
+          # We assume 'next' tag exists. If not, we might fail or skip.
+          # We'll try to pull it, if it fails, we skip diff.
+          BASE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:next"
+          TARGET_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
+          
+          echo "Pulling base image $BASE_IMAGE..."
+          if ! podman pull "$BASE_IMAGE"; then
+            echo "Failed to pull $BASE_IMAGE. Skipping diff."
+            exit 0
+          fi
+          
+          echo "Running diff..."
+          ./scripts/diff-images.sh "$BASE_IMAGE" "$TARGET_IMAGE" "diff_report.md"
+          
+          # Add a header to the report
+          sed -i '1s/^/## 🔍 Image Diff Report\n\n/' diff_report.md
+
+      - name: Post Diff Comment
+        if: github.event_name == 'pull_request' && hashFiles('diff_report.md') != ''
+        uses: thollander/actions-comment-pull-request@v2
+        with:
+          filePath: diff_report.md
+          comment_tag: diff-${{ env.IMAGE_NAME }}
+
       - name: Install Cosign
         uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
         if: ${{ inputs.publish }}

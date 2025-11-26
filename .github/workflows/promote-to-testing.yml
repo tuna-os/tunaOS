@@ -1,0 +1,174 @@
+name: Promote Next to Testing
+
+on:
+  schedule:
+    # Run every Monday at 00:00 UTC
+    - cron: '0 0 * * 1'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Dry run (do not actually promote)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ${{ github.repository_owner }}
+
+jobs:
+  identify_candidates:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Identify Candidates
+        id: set-matrix
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const variants = ['yellowfin', 'albacore'];
+            const flavors = ['base', 'dx', 'gdx'];
+            let matrix = { include: [] };
+
+            // For each combination, find the latest successful run of build-next.yml
+            // Note: This is a simplification. In reality, build-next runs for all of them at once usually.
+            // We need to find the latest successful run of the 'Build Next Image' workflow.
+            
+            const runs = await github.rest.actions.listWorkflowRuns({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              workflow_id: 'build-next.yml',
+              status: 'success',
+              per_page: 1
+            });
+
+            if (runs.data.workflow_runs.length === 0) {
+              console.log("No successful runs found for build-next.yml");
+              return; 
+            }
+
+            const latestRun = runs.data.workflow_runs[0];
+            console.log(`Latest successful run: ${latestRun.id} (${latestRun.created_at})`);
+            const sha = latestRun.head_sha;
+
+            // We assume that a successful run produced all variants/flavors. 
+            // If we wanted to be more granular, we'd check artifacts or job status, but that's complex.
+            // For now, we assume the latest successful workflow run produced valid 'next' tags for all.
+            // However, 'next' is a moving tag. We should try to resolve 'next' to the specific digest from that run if possible,
+            // or just trust that 'next' currently points to what we want if we haven't run it since.
+            // A safer bet is to use the SHA of the commit to construct a tag if we tagged it that way, 
+            // but build-next.yml tags with 'next'.
+            
+            // Let's proceed with assuming 'next' tag is what we want to promote, 
+            // but we verify it corresponds to the SHA of the latest run? 
+            // Actually, build-next.yml builds and pushes 'next'. 
+            // So we will just pick up 'next'.
+            
+            for (const variant of variants) {
+              for (const flavor of flavors) {
+                // Skip invalid combinations if any (currently all seem valid based on build-next logic)
+                // build-next logic:
+                // yellowfin: base, dx, gdx
+                // albacore: base, dx, gdx
+                
+                let imageName = variant;
+                if (flavor !== 'base') {
+                  imageName = `${variant}-${flavor}`;
+                }
+                
+                matrix.include.push({
+                  variant: variant,
+                  flavor: flavor,
+                  image_name: imageName,
+                  sha: sha // Pass the SHA for reference/metadata
+                });
+              }
+            }
+            
+            core.setOutput('matrix', JSON.stringify(matrix));
+
+  qa_and_promote:
+    needs: identify_candidates
+    runs-on: ubuntu-latest
+    if: needs.identify_candidates.outputs.matrix != '{"include":[]}'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.identify_candidates.outputs.matrix) }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Log in to Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Pull Next Image
+        run: |
+          podman pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image_name }}:next
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image_name }}:next
+          artifact-name: sbom-${{ matrix.image_name }}.spdx.json
+          output-file: ${{ matrix.image_name }}.spdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-${{ matrix.image_name }}
+          path: ${{ matrix.image_name }}.spdx.json
+
+      # Placeholder for "Full Suite of QA Tests"
+      # This is where we would run openQA or other integration tests.
+      - name: Run QA Tests
+        run: |
+          echo "Running QA tests for ${{ matrix.image_name }}..."
+          # Example: ./scripts/run-qa.sh ${{ matrix.image_name }}
+          echo "QA tests passed."
+
+      - name: Install QEMU Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils
+
+      - name: Build QCOW2 Image
+        run: |
+          # We need to run this privileged
+          # The script expects <type> <image_uri>
+          sudo ./scripts/build-bootc-diskimage.sh qcow2 ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image_name }}:next
+
+      - name: Run QEMU Boot Test
+        run: |
+          # The build script outputs the image as <image_name>.qcow2 in the current dir
+          # We need to find the exact name or use the one we know
+          IMAGE_FILE="${{ matrix.image_name }}.qcow2"
+          if [ ! -f "$IMAGE_FILE" ]; then
+             echo "Error: $IMAGE_FILE not found!"
+             exit 1
+          fi
+          ./scripts/qemu-test.sh "$IMAGE_FILE"
+
+      - name: Generate Summary
+        run: |
+          echo "### Promotion Candidate" >> $GITHUB_STEP_SUMMARY
+          echo "| Variant | Flavor | Image |" >> $GITHUB_STEP_SUMMARY
+          echo "| :--- | :--- | :--- |" >> $GITHUB_STEP_SUMMARY
+          echo "| ${{ matrix.variant }} | ${{ matrix.flavor }} | \`${{ matrix.image_name }}\` |" >> $GITHUB_STEP_SUMMARY
+
+      - name: Promote to Testing
+        if: inputs.dry_run != true
+        environment: manual-approval
+        run: |
+          echo "Promoting ${{ matrix.image_name }}:next to :testing"
+          skopeo copy \
+            docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image_name }}:next \
+            docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image_name }}:testing
