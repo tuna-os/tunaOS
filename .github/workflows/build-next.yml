@@ -60,17 +60,22 @@ jobs:
             IMAGE_VARIANTS="$INPUT_VARIANT"
           fi
           
-          # Define flavors to build based on input
+          # Define flavors to build based on input, ensuring dependencies are met
+          FLAVORS_TO_BUILD=""
           if [ "$INPUT_FLAVOR" = "all" ]; then
-            FLAVORS="base dx gdx"
-          else
-            FLAVORS="$INPUT_FLAVOR"
+            FLAVORS_TO_BUILD="base dx gdx"
+          elif [ "$INPUT_FLAVOR" = "gdx" ]; then
+            FLAVORS_TO_BUILD="base dx gdx"
+          elif [ "$INPUT_FLAVOR" = "dx" ]; then
+            FLAVORS_TO_BUILD="base dx"
+          else # base
+            FLAVORS_TO_BUILD="base"
           fi
           
           # Generate matrix
           MATRIX="{\"include\":[]}"
           for variant in $IMAGE_VARIANTS; do
-            for flavor in $FLAVORS; do
+            for flavor in $FLAVORS_TO_BUILD; do
               # Determine image name based on flavor
               if [ "$flavor" != "base" ]; then
                 IMAGE_NAME="${variant}-${flavor}"
@@ -117,81 +122,93 @@ jobs:
           
           echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
 
-  # Build base images
-  build-base:
+  build_base_images:
     needs: generate_matrix
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJson(needs.generate_matrix.outputs.matrix) }}
-    # Only build base flavor
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     if: matrix.flavor == 'base'
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
-    with:
-      image-name: ${{ matrix.image_name }}
-      image-desc: ${{ matrix.description }}
-      image-variant: ${{ matrix.variant }}
-      flavor: base
-      platforms: ${{ matrix.platforms }}
-      default-tag: next
-      rechunk: true
-      sbom: false
-      publish: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  # Build DX images (chain from base)
-  build-dx:
-    needs: [generate_matrix, build-base]
+      - name: Build base image
+        uses: ./.github/workflows/reusable-build-image.yml
+        secrets: inherit
+        with:
+          image-name: ${{ matrix.image_name }}
+          image-desc: ${{ matrix.description }}
+          image-variant: ${{ matrix.variant }}
+          flavor: base
+          platforms: ${{ matrix.platforms }}
+          default-tag: next
+          rechunk: true
+          sbom: false
+          publish: true
+
+  build_dx_images:
+    needs: [generate_matrix, build_base_images]
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJson(needs.generate_matrix.outputs.matrix) }}
-    # Only build dx flavor
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     if: matrix.flavor == 'dx'
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
-    with:
-      image-name: ${{ matrix.image_name }}
-      image-desc: ${{ matrix.description }}
-      image-variant: ${{ matrix.variant }}
-      flavor: dx
-      platforms: ${{ matrix.platforms }}
-      default-tag: next
-      rechunk: true
-      sbom: false
-      publish: true
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-  # Build GDX images (chain from DX)
-  build-gdx:
-    needs: [generate_matrix, build-dx]
+      - name: Build DX image (chain from base)
+        uses: ./.github/workflows/reusable-build-image.yml
+        secrets: inherit
+        with:
+          image-name: ${{ matrix.image_name }}
+          image-desc: ${{ matrix.description }}
+          image-variant: ${{ matrix.variant }}
+          flavor: dx
+          platforms: ${{ matrix.platforms }}
+          default-tag: next
+          rechunk: true
+          sbom: false
+          publish: true
+
+  build_gdx_images:
+    needs: [generate_matrix, build_dx_images]
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         include: ${{ fromJson(needs.generate_matrix.outputs.matrix) }}
-    # Only build gdx flavor
-    if: matrix.flavor == 'gdx'
     permissions:
       contents: read
       packages: write
       id-token: write
-    uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
-    with:
-      image-name: ${{ matrix.image_name }}
-      image-desc: ${{ matrix.description }}
-      image-variant: ${{ matrix.variant }}
-      flavor: gdx
-      platforms: ${{ matrix.platforms }}
-      default-tag: next
-      rechunk: true
-      sbom: false
-      publish: true
-      remove-unwanted-software: true
+    if: matrix.flavor == 'gdx'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build GDX image (chain from DX)
+        uses: ./.github/workflows/reusable-build-image.yml
+        secrets: inherit
+        with:
+          image-name: ${{ matrix.image_name }}
+          image-desc: ${{ matrix.description }}
+          image-variant: ${{ matrix.variant }}
+          flavor: gdx
+          platforms: ${{ matrix.platforms }}
+          default-tag: next
+          rechunk: true
+          sbom: false
+          publish: true
+          remove-unwanted-software: true
