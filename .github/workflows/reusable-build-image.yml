@@ -127,7 +127,7 @@ jobs:
             podman
 
       - name: Checkout
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v4
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v4
       
       - name: Maximize build space (remove-software)
         if: inputs.remove-unwanted-software && matrix.platform != 'arm64'
