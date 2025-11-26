@@ -21,8 +21,6 @@ mkdir -p "$TMPDIR/output"
 TYPE="$1"
 IMAGE_URI="$2"
 TOML_FILE="$TYPE.toml"
-# TODO: make this setable
-ROOTFS="xfs"
 
 if [ "$TYPE" = "iso" ]; then
 	# TODO: enable user creation for KDE and server images, this is currently only for GNOME

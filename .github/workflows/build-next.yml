@@ -61,7 +61,7 @@ jobs:
           else
             IMAGE_VARIANTS="$INPUT_VARIANT"
           fi
-          
+
           # Define flavors to build based on input, ensuring dependencies are met
           FLAVORS_TO_BUILD=""
           if [ "$INPUT_FLAVOR" = "all" ]; then
@@ -73,12 +73,12 @@ jobs:
           else # base
             FLAVORS_TO_BUILD="base"
           fi
-          
+
           # Generate separate matrices for each flavor
           BASE_MATRIX="{\"include\":[]}"
           DX_MATRIX="{\"include\":[]}"
           GDX_MATRIX="{\"include\":[]}"
-          
+
           for variant in $IMAGE_VARIANTS; do
             for flavor in $FLAVORS_TO_BUILD; do
               # Determine image name based on flavor
@@ -87,7 +87,7 @@ jobs:
               else
                 IMAGE_NAME="${variant}"
               fi
-              
+
               # Set variant-specific descriptions and platforms
               case "$variant" in
                 yellowfin)
@@ -99,12 +99,12 @@ jobs:
                   PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
                   ;;
               esac
-              
+
               # Override platforms if provided via input
               if [ -n "$INPUT_PLATFORMS" ]; then
                 PLATFORMS="$INPUT_PLATFORMS"
               fi
-              
+
               # Add flavor suffix to description
               case "$flavor" in
                 dx)
@@ -114,7 +114,7 @@ jobs:
                   DESCRIPTION="${DESCRIPTION} GDX"
                   ;;
               esac
-              
+
               ENTRY="{
                 \"variant\": \"${variant}\",
                 \"flavor\": \"${flavor}\",
@@ -122,7 +122,7 @@ jobs:
                 \"description\": \"${DESCRIPTION}\",
                 \"platforms\": \"${PLATFORMS}\"
               }"
-              
+
               # Add to appropriate matrix
               case "$flavor" in
                 base)
@@ -137,7 +137,7 @@ jobs:
               esac
             done
           done
-          
+
           echo "base_matrix=$(echo "${BASE_MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
           echo "dx_matrix=$(echo "${DX_MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
           echo "gdx_matrix=$(echo "${GDX_MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT

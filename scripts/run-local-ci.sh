@@ -20,7 +20,8 @@ fi
 # Try to get GITHUB_TOKEN from gh cli if not set
 if [ -z "$GITHUB_TOKEN" ] && command -v gh &> /dev/null; then
     echo "Fetching GITHUB_TOKEN from gh CLI..."
-    export GITHUB_TOKEN=$(gh auth token)
+    GITHUB_TOKEN=$(gh auth token)
+    export GITHUB_TOKEN
 fi
 
 if [ -z "$GITHUB_TOKEN" ] && ! grep -q "GITHUB_TOKEN" secrets.env 2>/dev/null; then
@@ -70,12 +71,12 @@ else
     echo "2. Promote to Testing (test-and-promote.yml)"
     echo "3. Release Stable (release-stable.yml)"
     echo "4. Run Full Pipeline (build → test → release)"
-    read -p "Select workflow to run (1-4): " choice
+    read -r -p "Select workflow to run (1-4): " choice
 fi
 
 # Create temp directory for transformed workflows
 TMP_DIR=$(mktemp -d)
-trap "rm -rf $TMP_DIR" EXIT
+trap 'rm -rf $TMP_DIR' EXIT
 
 case $choice in
     1)
@@ -114,13 +115,13 @@ case $choice in
         if [ -n "$2" ]; then
             variant=$2
         else
-            read -p "Enter image variant (yellowfin/albacore): " variant
+            read -r -p "Enter image variant (yellowfin/albacore): " variant
         fi
         
         if [ -n "$3" ]; then
             flavor=$3
         else
-            read -p "Enter flavor (base/dx/gdx): " flavor
+            read -r -p "Enter flavor (base/dx/gdx): " flavor
         fi
         
         # Determine image name

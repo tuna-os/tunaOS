@@ -1,6 +1,6 @@
 name: Build
 on:
-  pull_request: 
+  pull_request:
     branches:
       - main
     paths:
@@ -21,32 +21,32 @@ on:
         default: 'all'
         type: choice
         options:
-        - yellowfin
-        - albacore
-        # - skipjack
-        # - bonito
-        - all
+          - yellowfin
+          - albacore
+          # - skipjack
+          # - bonito
+          - all
       build_variant:
         description: 'Build variant (base, dx, gdx)'
         required: false
         default: 'base,dx,gdx'
         type: choice
         options:
-        - base
-        - base,dx
-        - base,dx,gdx
+          - base
+          - base,dx
+          - base,dx,gdx
       platforms:
         description: 'Platforms to build (Be sure to build all on Main!)'
         required: false
         default: ''
         type: choice
         options:
-        - ''
-        - linux/amd64
-        - linux/amd64/v2
-        - linux/arm64
-        - linux/amd64,linux/arm64
-        - linux/amd64,linux/amd64/v2,linux/arm64
+          - ''
+          - linux/amd64
+          - linux/amd64/v2
+          - linux/arm64
+          - linux/amd64,linux/arm64
+          - linux/amd64,linux/amd64/v2,linux/arm64
 
 
 concurrency:
@@ -61,8 +61,8 @@ jobs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
       - name: Checkout for config
-        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3  # v4
-        
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v4
+
       - name: Generate image variant build matrix
         id: set-matrix
         run: |
@@ -79,7 +79,7 @@ jobs:
               IMAGE_VARIANTS="yellowfin albacore" # skipjack bonito"
             fi
           fi
-          
+
           # Generate matrix
           MATRIX="{\"include\":[]}"
           for image_variant in $IMAGE_VARIANTS; do
@@ -106,7 +106,7 @@ jobs:
                 PLATFORMS="linux/arm64,linux/amd64"
                 ;;
             esac
-            
+
             # Determine image name and tag
             if [[ "${{ github.event_name }}" == "pull_request" ]]; then
               IMAGE_NAME="${image_variant}"
@@ -115,7 +115,7 @@ jobs:
               IMAGE_NAME="${image_variant}"
               TAG="${{ (github.ref_name == 'main' && github.event_name != 'pull_request') && 'latest' || github.sha }}"
             fi
-            
+
             # If Platforms is set
             if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.platforms }}" ]]; then
               PLATFORMS="${{ inputs.platforms }}"
@@ -129,10 +129,10 @@ jobs:
               \"description\": \"${DESCRIPTION}\",
               \"rechunk\": ${{ github.event_name != 'pull_request' }},
               \"sbom\": false,
-              \"publish\": true, 
+              \"publish\": true,
             }]")"
           done
-          
+
           echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
 
   # Build base images (base for chaining)

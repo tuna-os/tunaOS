@@ -41,9 +41,6 @@ trap cleanup EXIT
 echo "Waiting for SSH..."
 MAX_RETRIES=30
 RETRY_COUNT=0
-SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5 -p 2222"
-SSH_USER="admin"
-SSH_PASS="password" # In a real scenario, use keys or secrets. For now, we'll rely on the config.toml setting.
 # Note: For real testing, you might need a specific user/key injected via cloud-init or similar.
 # For this example, we'll assume there's a way to connect or just check the port.
 # If passwordless SSH isn't set up, we might just check if the port is open using netcat.
