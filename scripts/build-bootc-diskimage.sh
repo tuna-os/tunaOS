@@ -83,7 +83,13 @@ IMAGE_NAME=$(echo "$IMAGE_URI" | awk -F'/' '{print $NF}' | awk -F':' '{print $1}
 file=$(find "$TMPDIR/output" -type f -name "*.$TYPE")
 if [ -f "$file" ]; then
 	mv "$file" "./${IMAGE_NAME}.$TYPE"
-	chown "$(id -u):$(id -g)" "./${IMAGE_NAME}.$TYPE"
+	
+	if [ -n "$SUDO_UID" ] && [ -n "$SUDO_GID" ]; then
+		chown "$SUDO_UID:$SUDO_GID" "./${IMAGE_NAME}.$TYPE"
+	else
+		chown "$(id -u):$(id -g)" "./${IMAGE_NAME}.$TYPE"
+	fi
+	
 	echo "Image created: ${IMAGE_NAME}.$TYPE"
 else
 	echo "ERROR: Image was not created."

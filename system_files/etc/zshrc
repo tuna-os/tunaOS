@@ -1,0 +1,121 @@
+# /etc/zshrc
+
+# System wide functions and aliases for interactive, non-login shells.
+# Environment stuff should remain in /etc/profile or /etc/profile.d/
+
+# It's NOT a good idea to change this file unless you know what you
+# are doing. It's much better to create a custom.sh shell script in
+# /etc/profile.d/ to make custom changes to your environment, as this
+# will prevent the need for merging in future updates.
+
+# Prevent doublesourcing
+if [ -z "$ZSHRC_SOURCED" ]; then
+    ZSHRC_SOURCED="Y"
+
+    # are we an interactive shell?
+    if [ "$PS1" ]; then
+        # --- Zsh Options ---
+
+        setopt APPEND_HISTORY
+        
+        # Share history immediately between all sessions
+        setopt SHARE_HISTORY
+
+        setopt CHECK_JOBS
+
+        # Allow case-insensitive globbing
+        # setopt NO_CASE_GLOB
+        
+        # --- Prompt and Terminal Title Handling ---
+
+        # Function to set the terminal title
+        _set_term_title() {
+            local title_cmd
+            
+            case $TERM in
+            xterm*)
+                if [ -e /etc/sysconfig/zsh-prompt-xterm ]; then
+                    title_cmd=$(cat /etc/sysconfig/zsh-prompt-xterm)
+                else
+                    # Use Zsh's print -P command to correctly parse prompt sequences 
+                    # %n=user, %m=host (short), %~=PWD (~ expanded)
+                    title_cmd='print -P "\033]0;%n@%m:%~\007"'
+                fi
+                ;;
+            screen*)
+                if [ -e /etc/sysconfig/zsh-prompt-screen ]; then
+                    title_cmd=$(cat /etc/sysconfig/zsh-prompt-screen)
+                else
+                    # Use Zsh's print -P command to correctly parse prompt sequences
+                    # Set screen window title
+                    title_cmd='print -P "\033k%n@%m:%~\033\\"'
+                fi
+                ;;
+            *)
+                [ -e /etc/sysconfig/zsh-prompt-default ] && title_cmd=$(cat /etc/sysconfig/zsh-prompt-default)
+                ;;
+            esac
+
+            if [ -n "$title_cmd" ]; then
+                # Execute the title command (now using print -P)
+                eval "$title_cmd"
+            fi
+        }
+
+        # Add the title setting function to the precmd hook array
+        # This runs before every prompt is displayed
+        if [[ -z "${precmd_functions[(r)_set_term_title]}" ]]; then
+            precmd_functions+=_set_term_title
+        fi
+
+        # Change the default prompt string
+        # If no prompt is set, use a simple Zsh-style prompt.
+        if [ -z "$PROMPT" ]; then
+             # Zsh: %n=user, %m=host (short), %~=PWD (~ expanded), %#=root/#, user/%
+             PROMPT='[%n@%m %~]$ '
+        fi
+        
+    fi # end interactive shell check
+
+    # Check if we are NOT a login shell
+    if [[ ! -o login ]]; then
+        # Need to redefine pathmunge function, which may be unset by /etc/profile
+        pathmunge () {
+            case ":${PATH}:" in
+                *:"$1":*)
+                    ;;
+                *)
+                    if [ "$2" = "after" ] ; then
+                        PATH=$PATH:$1
+                    else
+                        PATH=$1:$PATH
+                    fi
+                    ;;
+            esac
+        }
+
+        # Set default umask for non-login shell only if it is set to 0
+        [ $(umask) -eq 0 ] && umask 022
+
+        # SHELL should be set to Zsh for Zsh, but we can source the profile scripts
+        # for environment vars.
+        
+        # Only display echos from profile.d scripts if we are interactive,
+        # otherwise just process them to set envvars silently.
+        for i in /etc/profile.d/*.sh; do
+            if [ -r "$i" ]; then
+                # Source the script. Since these are often written for sh/bash,
+                # they should still be sourced directly in zsh.
+                if [ "$PS1" ]; then
+                    . "$i" # Interactive - allow output
+                else
+                    # Non-interactive - suppress output to maintain compatibility
+                    . "$i" >/dev/null 2>&1
+                fi
+            fi
+        done
+
+        unset i
+        unset -f pathmunge
+    fi
+fi

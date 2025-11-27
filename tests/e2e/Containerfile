@@ -1,0 +1,19 @@
+FROM python:3.11-slim
+
+# Install Chromium and Chromedriver
+RUN apt-get update && apt-get install -y \
+    chromium \
+    chromium-driver \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Selenium
+RUN pip install selenium
+
+# Set working directory
+WORKDIR /app
+
+# Copy test script
+COPY login_test.py .
+
+# Run the test
+CMD ["python", "login_test.py"]

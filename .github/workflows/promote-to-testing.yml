@@ -135,27 +135,92 @@ jobs:
           # Example: ./scripts/run-qa.sh ${{ matrix.image_name }}
           echo "QA tests passed."
 
-      - name: Install QEMU Dependencies
+      - name: Build ISO Image
         run: |
-          sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 qemu-utils
+          # Determine builder distro based on variant
+          case "${{ matrix.variant }}" in
+            yellowfin|albacore)
+              BUILDER_DISTRO="almalinux"
+              ;;
+            skipjack)
+              BUILDER_DISTRO="centos"
+              ;;
+            bonito)
+              BUILDER_DISTRO="fedora"
+              ;;
+            *)
+              echo "Unknown variant: ${{ matrix.variant }}"
+              exit 1
+              ;;
+          esac
 
-      - name: Build QCOW2 Image
-        run: |
-          # We need to run this privileged
-          # The script expects <type> <image_uri>
-          sudo ./scripts/build-bootc-diskimage.sh qcow2 ${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image_name }}:next
-
-      - name: Run QEMU Boot Test
-        run: |
-          # The build script outputs the image as <image_name>.qcow2 in the current dir
-          # We need to find the exact name or use the one we know
-          IMAGE_FILE="${{ matrix.image_name }}.qcow2"
-          if [ ! -f "$IMAGE_FILE" ]; then
-             echo "Error: $IMAGE_FILE not found!"
-             exit 1
+          # Clone titanoboa
+          BUILD_DIR=".build/${{ matrix.image_name }}"
+          if [ -d "$BUILD_DIR" ]; then
+            sudo rm -rf "$BUILD_DIR"
           fi
-          ./scripts/qemu-test.sh "$IMAGE_FILE"
+          git clone https://github.com/hanthor/titanoboa "$BUILD_DIR"
+
+          # Copy files
+          cp system_files/etc/ublue-os/system-flatpaks.list "$BUILD_DIR/flatpaks.list"
+          cp iso_files/configure_lts_iso_anaconda.sh "$BUILD_DIR/hook.sh"
+
+          # Build ISO
+          cd "$BUILD_DIR"
+          sudo TITANOBOA_BUILDER_DISTRO="$BUILDER_DISTRO" \
+            HOOK_post_rootfs="hook.sh" \
+            just build "${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${{ matrix.image_name }}:next" 1 flatpaks.list
+
+          # Find and move ISO
+          BUILT_ISO=$(find . -name "*.iso" -type f | head -n 1)
+          if [ -z "$BUILT_ISO" ]; then
+            echo "ERROR: ISO not found!"
+            exit 1
+          fi
+          sudo mv "$BUILT_ISO" "../${{ matrix.image_name }}.iso"
+          cd ..
+          sudo chown $(id -u):$(id -g) "${{ matrix.image_name }}.iso"
+
+      - name: Start QEMU Container
+        run: |
+          # Check for KVM support
+          if [ -e /dev/kvm ]; then
+            KVM_ARGS="--device /dev/kvm"
+            echo "KVM is available."
+          else
+            KVM_ARGS=""
+            echo "KVM is NOT available, running in emulation mode (slow)."
+          fi
+
+          # Start ghcr.io/qemus/qemu with ISO
+          docker run -d --name qemu \
+            $KVM_ARGS \
+            -p 8006:8006 \
+            -e CPU_CORES=4 \
+            -e RAM_SIZE=8G \
+            -e DISK_SIZE=64G \
+            -v $(pwd)/${{ matrix.image_name }}.iso:/boot.iso \
+            ghcr.io/qemus/qemu
+
+          # Wait for NoVNC to be up
+          echo "Waiting for NoVNC..."
+          timeout 60s bash -c 'until curl -s http://localhost:8006 > /dev/null; do sleep 2; done'
+          echo "NoVNC is up."
+
+      - name: Run Selenium Login Test
+        run: |
+          # Install dependencies
+          pip install selenium
+
+          # Run the test
+          python tests/e2e/login_test.py
+
+      - name: Upload Test Screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshots-${{ matrix.image_name }}
+          path: "*.png"
 
       - name: Generate Summary
         run: |

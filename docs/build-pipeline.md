@@ -62,7 +62,7 @@ This workflow manages the promotion from `next` to `testing`.
     1.  **Candidate Selection**: Identifies the latest successful `build-next` run.
     2.  **QA & Verification**:
         -   **SBOM**: Generates a Software Bill of Materials using `syft`.
-        -   **QEMU Boot Test**: Builds a QCOW2 disk image from the container and boots it in QEMU to verify system integrity.
+        -   **QEMU Boot Test**: Builds a bootable ISO image using `titanoboa` and boots it in a `ghcr.io/qemus/qemu` container. Uses Selenium to connect to the WebVNC interface and verify the live OS boots and the login process works.
     3.  **Manual Gate**: Pauses for approval in the `manual-approval` Environment.
     4.  **Promotion**: Upon approval, retags the specific image digest to `:testing`.
     5.  **Summary**: Outputs a summary of promoted images.
@@ -86,8 +86,8 @@ This workflow handles the final release.
 The pipeline relies on several helper scripts in the `scripts/` directory:
 
 -   **`diff-images.sh`**: Compares two container images and outputs a Markdown report of RPM and file differences. Used in PR checks.
+-   **`build-titanoboa.sh`**: A wrapper around `titanoboa` to generate bootable ISO images from container images. Requires privileged mode.
 -   **`build-bootc-diskimage.sh`**: A wrapper around `bootc-image-builder` to generate disk images (QCOW2, ISO, etc.) from container images. Requires privileged mode.
--   **`qemu-test.sh`**: Boots a QCOW2 image in QEMU and waits for the SSH port to become active, verifying the image is bootable.
 
 ---
 
