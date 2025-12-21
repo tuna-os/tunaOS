@@ -221,6 +221,7 @@ build-all-experimental:
 
 qcow2 variant flavor='base' repo='local':
     #!/usr/bin/env bash
+    set -euo pipefail
     if [ "{{ flavor }}" != "base" ]; then
         FLAVOR="-{{ flavor }}"
     else
@@ -228,7 +229,23 @@ qcow2 variant flavor='base' repo='local':
     fi
     if [ "{{ repo }}" = "ghcr" ]; then bash ./scripts/build-bootc-diskimage.sh qcow2 ghcr.io/{{ repo_organization }}/{{ variant }}$FLAVOR:{{ default_tag }}
     elif [ "{{ repo }}" = "local" ]; then bash ./scripts/build-bootc-diskimage.sh qcow2 localhost/{{ variant }}$FLAVOR:{{ default_tag }}
+    else echo "DEBUG: repo '{{ repo }}' did not match ghcr or local"; exit 1
     fi
+
+test-vm variant flavor='base':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    bash ./scripts/test-vm.sh {{ variant }} {{ flavor }}
+
+debug-vm variant flavor='base' repo='local':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [ "{{ repo }}" == "local" ]; then
+        {{ just }} build {{ variant }} {{ flavor }}
+    fi
+    {{ just }} qcow2 {{ variant }} {{ flavor }} {{ repo }}
+    {{ just }} test-vm {{ variant }} {{ flavor }}
+
 
 iso variant flavor='base' repo='local' hook_script='iso_files/configure_lts_iso_anaconda.sh' flatpaks_file='system_files/etc/ublue-os/system-flatpaks.list':
     #!/usr/bin/env bash
