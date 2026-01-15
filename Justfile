@@ -22,7 +22,11 @@ default:
 _get-deps:
     #!/usr/bin/env bash
     echo "Getting dependencies..."
-    # Check and install dependencies: yamllint, jq, shellcheck, podman, git    
+    # Check and install dependencies: yamllint, jq, shellcheck, podman, git 
+    if ! command -v brew &> /dev/null; then
+        echo "Missing requirement: 'brew' is not installed."
+        curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | bash
+    fi  
     if ! command -v yamllint &> /dev/null; then
         echo "Missing requirement: 'yamllint' is not installed."
         brew install yamllint
