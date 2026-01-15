@@ -34,7 +34,7 @@ jobs:
             // For each combination, find the latest successful run of build-next.yml
             // Note: This is a simplification. In reality, build-next runs for all of them at once usually.
             // We need to find the latest successful run of the 'Build Next Image' workflow.
-            
+
             const runs = await github.rest.actions.listWorkflowRuns({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -45,38 +45,38 @@ jobs:
 
             if (runs.data.workflow_runs.length === 0) {
               console.log("No successful runs found for build-next.yml");
-              return; 
+              return;
             }
 
             const latestRun = runs.data.workflow_runs[0];
             console.log(`Latest successful run: ${latestRun.id} (${latestRun.created_at})`);
             const sha = latestRun.head_sha;
 
-            // We assume that a successful run produced all variants/flavors. 
+            // We assume that a successful run produced all variants/flavors.
             // If we wanted to be more granular, we'd check artifacts or job status, but that's complex.
             // For now, we assume the latest successful workflow run produced valid 'next' tags for all.
             // However, 'next' is a moving tag. We should try to resolve 'next' to the specific digest from that run if possible,
             // or just trust that 'next' currently points to what we want if we haven't run it since.
-            // A safer bet is to use the SHA of the commit to construct a tag if we tagged it that way, 
+            // A safer bet is to use the SHA of the commit to construct a tag if we tagged it that way,
             // but build-next.yml tags with 'next'.
-            
-            // Let's proceed with assuming 'next' tag is what we want to promote, 
-            // but we verify it corresponds to the SHA of the latest run? 
-            // Actually, build-next.yml builds and pushes 'next'. 
+
+            // Let's proceed with assuming 'next' tag is what we want to promote,
+            // but we verify it corresponds to the SHA of the latest run?
+            // Actually, build-next.yml builds and pushes 'next'.
             // So we will just pick up 'next'.
-            
+
             for (const variant of variants) {
               for (const flavor of flavors) {
                 // Skip invalid combinations if any (currently all seem valid based on build-next logic)
                 // build-next logic:
                 // yellowfin: base, dx, gdx
                 // albacore: base, dx, gdx
-                
+
                 let imageName = variant;
                 if (flavor !== 'base') {
                   imageName = `${variant}-${flavor}`;
                 }
-                
+
                 matrix.include.push({
                   variant: variant,
                   flavor: flavor,
@@ -85,7 +85,7 @@ jobs:
                 });
               }
             }
-            
+
             core.setOutput('matrix', JSON.stringify(matrix));
 
   qa_and_promote:

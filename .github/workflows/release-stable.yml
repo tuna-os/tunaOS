@@ -92,21 +92,20 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
-            - name: Upload to S3
-              run: |
-                aws s3 cp output/qcow2/disk.qcow2 s3://${{ secrets.S3_BUCKET }}/tunaos-${{ github.ref_name }}.qcow2
-                echo "IMAGE_URL=https://${{ secrets.S3_BUCKET }}.s3.amazonaws.com/tunaos-${{ github.ref_name }}.qcow2" >> $GITHUB_ENV
+      - name: Upload to S3
+        run: |
+          aws s3 cp output/qcow2/disk.qcow2 s3://${{ secrets.S3_BUCKET }}/tunaos-${{ github.ref_name }}.qcow2
+          echo "IMAGE_URL=https://${{ secrets.S3_BUCKET }}.s3.amazonaws.com/tunaos-${{ github.ref_name }}.qcow2" >> $GITHUB_ENV
 
-            - name: Promote to Stable
-              if: success()
-              run: |
-                VERSION=${{ github.ref_name }}
-                IMAGE_NAME="${{ steps.image.outputs.name }}"
-                skopeo copy \
-                  docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${IMAGE_NAME}:testing \
-                  docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${IMAGE_NAME}:stable
-                skopeo copy \
-                  docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${IMAGE_NAME}:testing \
-                  docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${IMAGE_NAME}:${VERSION}
+      - name: Promote to Stable
+        if: success()
+        run: |
+          VERSION=${{ github.ref_name }}
+          IMAGE_NAME="${{ steps.image.outputs.name }}"
+          skopeo copy \
+            docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${IMAGE_NAME}:testing \
+            docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${IMAGE_NAME}:stable
+          skopeo copy \
+            docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${IMAGE_NAME}:testing \
+            docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${IMAGE_NAME}:${VERSION}
 
-      
