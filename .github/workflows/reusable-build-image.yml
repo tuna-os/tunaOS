@@ -63,6 +63,16 @@ on:
         required: false
         type: boolean
         default: false
+      archive:
+        description: "Archive the image as an artifact"
+        required: false
+        type: boolean
+        default: false
+      download-base-artifact:
+        description: "The name of the base image artifact to download"
+        required: false
+        type: string
+        default: ""
       chain-base-image:
         description: "Base image to use for chained builds (instead of OS base image)"
         required: false
@@ -138,6 +148,54 @@ jobs:
         if: ${{ matrix.platform != 'linux/arm64' && inputs.cleanup_runner }}
         uses: ublue-os/container-storage-action@main
 
+      - name: Download Base Image Artifact
+        if: ${{ inputs.download-base-artifact != '' }}
+        uses: actions/download-artifact@v4
+        with:
+          name: ${{ inputs.download-base-artifact }}-${{ matrix.safeplatform }}
+          path: /tmp/base-artifact
+
+      - name: Load Base Image
+        if: ${{ inputs.download-base-artifact != '' }}
+        run: |
+          set -ex
+          podman load -i /tmp/base-artifact/image.tar
+          
+          # The loaded image will have the tag it was saved with.
+          # We need to tag it as the expected base image URL for the build context if needed,
+          # OR just ensure it's available as localhost/variant:tag if that's what the build expects.
+          # However, the Justfile determines the BASE_FOR_BUILD.
+          # In CI mode (is_ci=1), Justfile uses ghcr.io/...
+          # We need to make sure the loaded image is tagged as ghcr.io/... so the build finds it locally.
+          
+          # We construct the expected pull name based on the input name
+          # The passed 'download-base-artifact' is e.g. 'albacore' or 'albacore-dx'
+          # Justfile expects: ghcr.io/{{ repo_organization }}/{{ variant }}:{{ tag }}
+          
+          # We can extract the variant/tag from inputs or just assume standard naming.
+          # A simpler way is to inspect what we loaded.
+          
+          LOADED_IMAGE=$(podman image list --format "{{.Repository}}:{{.Tag}}" | head -n 1)
+          echo "Loaded image: $LOADED_IMAGE"
+          
+          # Tag it as the remote image so the build script finds it in local storage 
+          # instead of trying to pull it.
+          # But 'podman build' might still try to pull if we don't say otherwise.
+          # Actually, if we use --pull=newer (which Justfile uses), and the image is local and newer/same, it might skip?
+          # Or we can simply rely on the fact that we loaded it.
+          
+          # Regrettably, Justfile constructs the name:
+          # BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ tag }}"
+          
+          # So we need to tag our loaded image to match that.
+          # The artifact name passed in 'download-base-artifact' should be the 'variant' (e.g. albacore).
+          
+          TARGET_REF="ghcr.io/${{ github.repository_owner }}/${{ inputs.download-base-artifact }}:${{ inputs.default-tag }}"
+          
+          podman tag "$LOADED_IMAGE" "$TARGET_REF"
+          echo "Tagged $LOADED_IMAGE as $TARGET_REF"
+
+
       - name: Setup Homebrew
         uses: Homebrew/actions/setup-homebrew@master
 
@@ -192,7 +250,7 @@ jobs:
           version: ${{ env.MAJOR_VERSION }}
 
       - name: Load Image
-        if: ${{ inputs.publish }}
+        if: ${{ inputs.publish || inputs.archive }}
         id: load
         env:
           RECHUNK_RAN: ${{ inputs.rechunk }}
@@ -205,12 +263,29 @@ jobs:
           else
             IMAGE="localhost/${IMAGE_NAME}:${DEFAULT_TAG}"
           fi
+          
+          # Tag for Registry (always needed for push OR for consistent artifact naming)
           podman image tag "${IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
 
           IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
           IMAGE_DIGEST="$(podman image inspect --format '{{.Digest}}' "${IMAGE}")"
           echo "image=${IMAGE}" >> "${GITHUB_OUTPUT}"
           echo "digest=${IMAGE_DIGEST}" >> "${GITHUB_OUTPUT}"
+
+      - name: Save Image to Artifact
+        if: ${{ inputs.archive }}
+        run: |
+          mkdir -p /tmp/image-artifact
+          # Save the image we just tagged
+          podman save -o /tmp/image-artifact/image.tar "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+
+      - name: Upload Image Artifact
+        if: ${{ inputs.archive }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.IMAGE_NAME }}-${{ matrix.safeplatform }}
+          path: /tmp/image-artifact/image.tar
+          retention-days: 1
 
       - name: Login to GitHub Container Registry
         if: ${{ inputs.publish }}
@@ -220,19 +295,27 @@ jobs:
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
           echo "${{ secrets.GITHUB_TOKEN }}" | docker login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
 
+      - name: Tag Image for Push/Diff
+        if: ${{ inputs.publish || inputs.archive }}
+        env:
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
+          SAFE_PLATFORM: ${{ matrix.safeplatform }}
+        run: |
+           podman tag "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
+
       - name: Push to GHCR
         if: ${{ inputs.publish }}
         id: push
         env:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          IMAGE_DIGEST: ${{ steps.load.outputs.digest }}
-          PLATFORM: ${{ matrix.platform }}
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
+          DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
           MAX_RETRIES: 3
         run: |
           set -x
-          podman tag "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
           for i in $(seq "${MAX_RETRIES}"); do
             podman push --digestfile=/tmp/digestfile "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}" && break || sleep $((5 * i));
           done

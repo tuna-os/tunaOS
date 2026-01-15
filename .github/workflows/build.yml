@@ -120,6 +120,15 @@ jobs:
             if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.platforms }}" ]]; then
               PLATFORMS="${{ inputs.platforms }}"
             fi
+            # Determine publishing and archiving
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              PUBLISH="false"
+              ARCHIVE="true"
+            else
+              PUBLISH="true"
+              ARCHIVE="false"
+            fi
+
             # Add to matrix
             MATRIX="$(echo "${MATRIX}" | jq ".include += [{
               \"image_variant\": \"${image_variant}\",
@@ -129,7 +138,8 @@ jobs:
               \"description\": \"${DESCRIPTION}\",
               \"rechunk\": ${{ github.event_name != 'pull_request' }},
               \"sbom\": false,
-              \"publish\": true,
+              \"publish\": ${PUBLISH},
+              \"archive\": ${ARCHIVE},
             }]")"
           done
 
@@ -164,6 +174,7 @@ jobs:
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ matrix.publish }}
+      archive: ${{ matrix.archive }}
 
   # Build DX images (chain from base)
   build-dx:
@@ -174,7 +185,7 @@ jobs:
       id-token: write
     # Only run if dx or all variants are requested
     if: |
-      (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
+      github.event_name != 'workflow_dispatch' ||
       inputs.build_variant == 'base,dx' ||
       inputs.build_variant == 'base,dx,gdx' ||
       inputs.build_variant == 'dx,gdx' ||
@@ -193,7 +204,9 @@ jobs:
       default-tag: ${{ matrix.default_tag }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
-      publish: ${{ github.event_name != 'pull_request' }}
+      publish: ${{ matrix.publish }}
+      archive: ${{ matrix.archive }}
+      download-base-artifact: ${{ matrix.archive && matrix.image_name || '' }}
 
   # Build GDX images (chain from DX)
   build-gdx:
@@ -204,7 +217,7 @@ jobs:
       id-token: write
     # Only run if gdx or all variants are requested
     if: |
-      (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
+      github.event_name != 'workflow_dispatch' ||
       inputs.build_variant == 'base,dx,gdx' ||
       inputs.build_variant == 'gdx' ||
       inputs.build_variant == 'dx,gdx'
@@ -222,5 +235,7 @@ jobs:
       default-tag: ${{ matrix.default_tag }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
-      publish: ${{ github.event_name != 'pull_request' }}
+      publish: ${{ matrix.publish }}
+      archive: ${{ matrix.archive }}
+      download-base-artifact: ${{ matrix.archive && format('{0}-dx', matrix.image_name) || '' }}
       remove-unwanted-software: true
