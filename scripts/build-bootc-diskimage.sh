@@ -114,7 +114,7 @@ if [ -f "$file" ]; then
 	# Determine target UID/GID for ownership check
 	if [ -n "${SUDO_UID:-}" ]; then
 		TARGET_UID="$SUDO_UID"
-		TARGET_GID="$SUDO_GID"
+		TARGET_GID="${SUDO_GID:-0}"
 	else
 		TARGET_UID="0"
 		TARGET_GID="0"

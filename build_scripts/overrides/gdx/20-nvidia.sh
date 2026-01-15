@@ -11,13 +11,7 @@ QUALIFIED_KERNEL="$(rpm -qa | grep -P 'kernel-(|'"$KERNEL_SUFFIX"'-)(\d+\.\d+\.\
 KERNEL_NAME="kernel"
 KERNEL_VRA="$(rpm -q "$KERNEL_NAME" --queryformat '%{EVR}.%{ARCH}')"
 
-# Detect architecture for NVIDIA repo
-ARCH="$(uname -m)"
-if [ "$ARCH" = "aarch64" ]; then
-	NVIDIA_ARCH="sbsa"
-else
-	NVIDIA_ARCH="$ARCH"
-fi
+# Local architecture detection removed as NVIDIA_ARCH was unused
 
 ##############################
 # Nvidia install for AlmaLinux

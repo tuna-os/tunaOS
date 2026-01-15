@@ -493,6 +493,7 @@ jobs:
           tags: |
             type=raw,value=${{ env.DEFAULT_TAG}}
             type=ref,event=pr
+          # yamllint disable rule:line-length
           labels: |
             io.artifacthub.package.readme-url=https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/${{ github.sha }}/README.md
             org.opencontainers.image.created=${{ steps.date.outputs.date }}
@@ -510,6 +511,7 @@ jobs:
             io.artifacthub.package.maintainers=[{\"name\":\"hanthor\",\"email\":\"jreilly1821@gmail.com\"}]
             io.artifacthub.package.prerelease=true
             containers.bootc=1
+          # yamllint enable rule:line-length
 
       - name: Fetch Build Outputs
         if: ${{ inputs.publish }}
@@ -625,7 +627,8 @@ jobs:
             digest="$(echo "${DIGESTS_JSON}" | jq -r --arg key "${platform_key_for_lookup}" '.[$key]')"
 
             if [ "$digest" == "null" ] || [ -z "$digest" ]; then
-              echo "Error: Digest not found for platform ${platform_original} (looked for key ${platform_key_for_lookup} in DIGESTS_JSON: $DIGESTS_JSON)"
+              echo "Error: Digest not found for platform ${platform_original}"
+              echo "(looked for key ${platform_key_for_lookup} in DIGESTS_JSON: $DIGESTS_JSON)"
               exit 1
             fi
 

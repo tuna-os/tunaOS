@@ -28,6 +28,7 @@ qemu-system-x86_64 \
 QEMU_PID=$!
 echo "QEMU started with PID $QEMU_PID"
 
+# shellcheck disable=SC2329
 cleanup() {
 	echo "Stopping QEMU..."
 	if [ -f qemu.pid ]; then
