@@ -2,6 +2,22 @@
 
 This document contains guidelines for AI agents (like GitHub Copilot) working on the TunaOS repository.
 
+## Setup Requirements
+
+### Install Just via Homebrew
+
+Before working on this repository, ensure you have `just` installed via Homebrew for consistency with CI:
+
+```bash
+# Install Homebrew if not already installed (Linux/macOS)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# Install just
+brew install just
+```
+
+**Why Homebrew?** The CI environment uses Homebrew to install just, ensuring version consistency between local development and CI builds. This prevents formatting mismatches that can cause CI failures.
+
 ## Pre-Commit Requirements
 
 ### Always Run `just fix` Before Committing

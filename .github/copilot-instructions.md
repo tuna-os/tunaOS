@@ -39,7 +39,18 @@ sudo just iso yellowfin base local
 ## Working Effectively
 
 ### Dependencies and Setup
-- Install Just command runner to a temp dir not the root of the repo: `mkdir -p /tmp/just && cd /tmp/just && wget https://github.com/casey/just/releases/download/1.32.0/just-1.32.0-x86_64-unknown-linux-musl.tar.gz -O just.tar.gz && tar xzf just.tar.gz && sudo mv just /usr/local/bin/ && cd - && rm -rf /tmp/just`
+- **Install Just via Homebrew** (recommended for consistency with CI):
+  ```bash
+  # Install Homebrew if not already installed
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  
+  # Install just
+  brew install just
+  ```
+- **Alternative**: Install Just from GitHub releases to a temp dir (not recommended):
+  ```bash
+  mkdir -p /tmp/just && cd /tmp/just && wget https://github.com/casey/just/releases/download/1.32.0/just-1.32.0-x86_64-unknown-linux-musl.tar.gz -O just.tar.gz && tar xzf just.tar.gz && sudo mv just /usr/local/bin/ && cd - && rm -rf /tmp/just
+  ```
 - **CRITICAL**: NEVER extract just or any other tools directly into the repository root as this will overwrite project files like LICENSE and README.md
 - Podman is required for container builds (usually pre-installed in CI environments)
 - Shellcheck is required for linting: `sudo apt-get update && sudo apt-get install -y shellcheck`

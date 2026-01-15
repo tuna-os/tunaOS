@@ -138,8 +138,11 @@ jobs:
         if: ${{ matrix.platform != 'linux/arm64' && inputs.cleanup_runner }}
         uses: ublue-os/container-storage-action@main
 
-      - name: Setup Just
-        uses: extractions/setup-just@e33e0265a09d6d736e2ee1e0eb685ef1de4669ff # v3
+      - name: Setup Homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+
+      - name: Install Just via Homebrew
+        run: brew install just
 
       - name: Check Just Syntax
         shell: bash
