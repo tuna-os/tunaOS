@@ -1,3 +1,0 @@
-[install]
-root-fs-type = "btrfs"
-block = ["tpm2-luks"]

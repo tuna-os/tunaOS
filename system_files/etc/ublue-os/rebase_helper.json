@@ -1,6 +1,0 @@
-{
-	"dx-helper-enabled": true,
-	"image-base-name": "yellowfin",
-	"available-tags": ["a10s", "stream10"],
-	"image-date-separator": "-"
-}
