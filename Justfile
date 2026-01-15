@@ -91,8 +91,10 @@ _ensure-yq:
     fi
 
 # Private build engine. Now accepts final image name and brand as parameters.
+# Note: enable_gdx parameter controls both GDX features and HWE (Hardware Enablement).
+# When enable_gdx=1, ENABLE_HWE is set to 1 and coreos-stable akmods are used for
 
-# Note: enable_gdx controls both GDX features and use of coreos akmods (HWE)
+# NVIDIA drivers, ZFS modules, and the coreos/fedora kernel.
 [private]
 _build target_tag_with_version target_tag container_file base_image_for_build platform use_cache enable_gdx *args: _ensure-yq
     #!/usr/bin/env bash
