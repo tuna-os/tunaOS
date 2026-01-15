@@ -255,16 +255,16 @@ jobs:
           # We'll try to pull it, if it fails, we skip diff.
           BASE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:next"
           TARGET_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
-          
+
           echo "Pulling base image $BASE_IMAGE..."
           if ! podman pull "$BASE_IMAGE"; then
             echo "Failed to pull $BASE_IMAGE. Skipping diff."
             exit 0
           fi
-          
+
           echo "Running diff..."
           ./scripts/diff-images.sh "$BASE_IMAGE" "$TARGET_IMAGE" "diff_report.md"
-          
+
           # Add a header to the report
           sed -i '1s/^/## 🔍 Image Diff Report\n\n/' diff_report.md
 
@@ -461,7 +461,7 @@ jobs:
           IMAGE_VARIANT: "${{ inputs.image-variant }}"
         run: |
           set -e
-          
+
           # Determine default platforms based on variant (same logic as build.yml)
           case "${IMAGE_VARIANT}" in
             yellowfin)
@@ -484,20 +484,20 @@ jobs:
               DEFAULT_PLATFORMS="linux/arm64,linux/amd64"
               ;;
           esac
-          
+
           echo "Variant: ${IMAGE_VARIANT}"
           echo "Default platforms for this variant: ${DEFAULT_PLATFORMS}"
-          
+
           # Parse expected platforms (use default platforms, not input platforms)
           expected_platforms=()
           IFS=',' read -r -a expected_platforms <<< "${DEFAULT_PLATFORMS}"
-          
+
           # Check if all expected platforms have digests
           all_platforms_built="true"
           for platform_original in "${expected_platforms[@]}"; do
             platform_key="${platform_original//\//-}"
             digest="$(echo "${DIGESTS_JSON}" | jq -r --arg key "${platform_key}" '.[$key]')"
-            
+
             if [ "$digest" == "null" ] || [ -z "$digest" ]; then
               echo "Missing platform: ${platform_original} (key: ${platform_key})"
               all_platforms_built="false"
@@ -505,7 +505,7 @@ jobs:
               echo "Found platform: ${platform_original} (key: ${platform_key})"
             fi
           done
-          
+
           echo "All default platforms built: ${all_platforms_built}"
           echo "all_platforms_built=${all_platforms_built}" >> "${GITHUB_OUTPUT}"
 
@@ -641,10 +641,10 @@ jobs:
         run: |
           set -ex
           SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
-          
+
           # Always copy to sha-based tag
           skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${REFS}"
-          
+
           # Only tag as 'latest' if all default platforms for this variant were built
           if [ "${ALL_PLATFORMS_BUILT}" = "true" ]; then
             echo "All default platforms for this variant built successfully - tagging as latest"

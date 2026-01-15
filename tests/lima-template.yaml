@@ -11,10 +11,10 @@ video:
   display: "vnc"
 
 # Use the default user 'centos' with password 'centos' (as defined in build-bootc-diskimage.sh)
-# Lima will try to inject its own keys, but since we are booting a pre-built image 
-# without cloud-init (unless we add it), we rely on the baked-in credentials or 
-# if the image has cloud-init enabled, lima can handle it. 
-# Our current bootc build might not have cloud-init fully set up for Lima, 
+# Lima will try to inject its own keys, but since we are booting a pre-built image
+# without cloud-init (unless we add it), we rely on the baked-in credentials or
+# if the image has cloud-init enabled, lima can handle it.
+# Our current bootc build might not have cloud-init fully set up for Lima,
 # so we might need to rely on the console/VNC or SSH if keys are injected.
 # For now, we assume the user will log in via VNC or SSH if configured.
 
