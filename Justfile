@@ -19,8 +19,33 @@ export base_image_tag := env("BASE_IMAGE_TAG", "10")
 default:
     @{{ just }} --list
 
+_get-deps:
+    #!/usr/bin/env bash
+    echo "Getting dependencies..."
+    # Check and install dependencies: yamllint, jq, shellcheck, podman, git    
+    if ! command -v yamllint &> /dev/null; then
+        echo "Missing requirement: 'yamllint' is not installed."
+        brew install yamllint
+    fi
+    if ! command -v jq &> /dev/null; then
+        echo "Missing requirement: 'jq' is not installed."
+        brew install jq
+    fi
+    if ! command -v shellcheck &> /dev/null; then
+        echo "Missing requirement: 'shellcheck' is not installed."
+        brew install shellcheck
+    fi
+    if ! command -v podman &> /dev/null; then
+        echo "Missing requirement: 'podman' is not installed."
+        brew install podman
+    fi
+    if ! command -v git &> /dev/null; then
+        echo "Missing requirement: 'git' is not installed."
+        brew install git
+    fi
+
 # Check Just Syntax
-check:
+check: _get-deps
     #!/usr/bin/env bash
     echo "Checking syntax of shell scripts..."
     /usr/bin/find . -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
@@ -44,7 +69,7 @@ check:
     just --unstable --fmt --check -f Justfile
 
 # Fix Just Syntax
-fix:
+fix: _get-deps
     #!/usr/bin/env bash
     echo "Fixing syntax of shell scripts..."
         /usr/bin/find . -iname "*.sh" -type f -exec shfmt --write "{}" ";"
@@ -86,7 +111,7 @@ _ensure-yq:
     #!/usr/bin/env bash
     if ! command -v yq &> /dev/null; then
         echo "Missing requirement: 'yq' is not installed."
-        echo "Please install yq (e.g. 'brew install yq' or download from https://github.com/mikefarah/yq)"
+        brew install yq
         exit 1
     fi
 

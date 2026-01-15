@@ -160,38 +160,38 @@ jobs:
         run: |
           set -ex
           podman load -i /tmp/base-artifact/image.tar
-          
+
           # The loaded image will have the tag it was saved with.
           # We need to tag it as the expected base image URL for the build context if needed,
           # OR just ensure it's available as localhost/variant:tag if that's what the build expects.
           # However, the Justfile determines the BASE_FOR_BUILD.
           # In CI mode (is_ci=1), Justfile uses ghcr.io/...
           # We need to make sure the loaded image is tagged as ghcr.io/... so the build finds it locally.
-          
+
           # We construct the expected pull name based on the input name
           # The passed 'download-base-artifact' is e.g. 'albacore' or 'albacore-dx'
           # Justfile expects: ghcr.io/{{ repo_organization }}/{{ variant }}:{{ tag }}
-          
+
           # We can extract the variant/tag from inputs or just assume standard naming.
           # A simpler way is to inspect what we loaded.
-          
+
           LOADED_IMAGE=$(podman image list --format "{{.Repository}}:{{.Tag}}" | head -n 1)
           echo "Loaded image: $LOADED_IMAGE"
-          
-          # Tag it as the remote image so the build script finds it in local storage 
+
+          # Tag it as the remote image so the build script finds it in local storage
           # instead of trying to pull it.
           # But 'podman build' might still try to pull if we don't say otherwise.
           # Actually, if we use --pull=newer (which Justfile uses), and the image is local and newer/same, it might skip?
           # Or we can simply rely on the fact that we loaded it.
-          
+
           # Regrettably, Justfile constructs the name:
           # BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ tag }}"
-          
+
           # So we need to tag our loaded image to match that.
           # The artifact name passed in 'download-base-artifact' should be the 'variant' (e.g. albacore).
-          
+
           TARGET_REF="ghcr.io/${{ github.repository_owner }}/${{ inputs.download-base-artifact }}:${{ inputs.default-tag }}"
-          
+
           podman tag "$LOADED_IMAGE" "$TARGET_REF"
           echo "Tagged $LOADED_IMAGE as $TARGET_REF"
 
@@ -263,7 +263,7 @@ jobs:
           else
             IMAGE="localhost/${IMAGE_NAME}:${DEFAULT_TAG}"
           fi
-          
+
           # Tag for Registry (always needed for push OR for consistent artifact naming)
           podman image tag "${IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
 
