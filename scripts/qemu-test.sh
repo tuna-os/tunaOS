@@ -4,8 +4,8 @@ set -euo pipefail
 DISK_IMAGE="$1"
 
 if [ -z "$DISK_IMAGE" ]; then
-    echo "Usage: $0 <path-to-qcow2-image>"
-    exit 1
+	echo "Usage: $0 <path-to-qcow2-image>"
+	exit 1
 fi
 
 echo "Starting QEMU with image: $DISK_IMAGE"
@@ -17,23 +17,23 @@ echo "Starting QEMU with image: $DISK_IMAGE"
 # -net user,hostfwd=tcp::2222-:22: Forward host port 2222 to guest port 22
 # -snapshot: Don't write to the image file
 qemu-system-x86_64 \
-    -m 2G \
-    -smp 2 \
-    -nographic \
-    -drive file="$DISK_IMAGE",format=qcow2,if=virtio,snapshot=on \
-    -netdev user,id=net0,hostfwd=tcp::2222-:22 \
-    -device virtio-net-pci,netdev=net0 \
-    -pidfile qemu.pid &
+	-m 2G \
+	-smp 2 \
+	-nographic \
+	-drive file="$DISK_IMAGE",format=qcow2,if=virtio,snapshot=on \
+	-netdev user,id=net0,hostfwd=tcp::2222-:22 \
+	-device virtio-net-pci,netdev=net0 \
+	-pidfile qemu.pid &
 
 QEMU_PID=$!
 echo "QEMU started with PID $QEMU_PID"
 
 cleanup() {
-    echo "Stopping QEMU..."
-    if [ -f qemu.pid ]; then
-        kill "$(cat qemu.pid)" || true
-        rm qemu.pid
-    fi
+	echo "Stopping QEMU..."
+	if [ -f qemu.pid ]; then
+		kill "$(cat qemu.pid)" || true
+		rm qemu.pid
+	fi
 }
 trap cleanup EXIT
 
@@ -46,18 +46,18 @@ RETRY_COUNT=0
 # If passwordless SSH isn't set up, we might just check if the port is open using netcat.
 
 while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
-    if nc -z localhost 2222; then
-        echo "SSH port is open!"
-        break
-    fi
-    echo "Waiting for SSH (attempt $((RETRY_COUNT+1))/$MAX_RETRIES)..."
-    sleep 10
-    RETRY_COUNT=$((RETRY_COUNT+1))
+	if nc -z localhost 2222; then
+		echo "SSH port is open!"
+		break
+	fi
+	echo "Waiting for SSH (attempt $((RETRY_COUNT + 1))/$MAX_RETRIES)..."
+	sleep 10
+	RETRY_COUNT=$((RETRY_COUNT + 1))
 done
 
 if [ $RETRY_COUNT -eq $MAX_RETRIES ]; then
-    echo "Timed out waiting for SSH."
-    exit 1
+	echo "Timed out waiting for SSH."
+	exit 1
 fi
 
 # Run basic checks
