@@ -138,8 +138,11 @@ jobs:
         if: ${{ matrix.platform != 'linux/arm64' && inputs.cleanup_runner }}
         uses: ublue-os/container-storage-action@main
 
-      - name: Setup Just
-        uses: extractions/setup-just@e33e0265a09d6d736e2ee1e0eb685ef1de4669ff # v3
+      - name: Setup Homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+
+      - name: Install Just via Homebrew
+        run: brew install just
 
       - name: Check Just Syntax
         shell: bash
@@ -250,10 +253,10 @@ jobs:
             exit 0
           fi
 
-          # Pull the 'next' image (base for comparison)
-          # We assume 'next' tag exists. If not, we might fail or skip.
+          # Pull the 'latest' image (base for comparison)
+          # We assume 'latest' tag exists. If not, we might fail or skip.
           # We'll try to pull it, if it fails, we skip diff.
-          BASE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:next"
+          BASE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
           TARGET_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
 
           echo "Pulling base image $BASE_IMAGE..."

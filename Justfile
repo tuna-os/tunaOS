@@ -8,7 +8,7 @@ export brew_image := env("BREW_IMAGE", "ghcr.io/ublue-os/brew")
 export coreos_stable_version := env("COREOS_STABLE_VERSION", "42")
 just := just_executable()
 arch := arch()
-export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else if arch == "arm64" { "linux/arm64" } else if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") })
+export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else { if arch == "arm64" { "linux/arm64" } else { if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") } } })
 
 # --- Default Base Image (for 'base' flavor builds) ---
 
@@ -91,8 +91,12 @@ _ensure-yq:
     fi
 
 # Private build engine. Now accepts final image name and brand as parameters.
+# Note: enable_gdx parameter controls both GDX features and HWE (Hardware Enablement).
+# When enable_gdx=1, ENABLE_HWE is set to 1 and coreos-stable akmods are used for
+
+# NVIDIA drivers, ZFS modules, and the coreos/fedora kernel.
 [private]
-_build target_tag_with_version target_tag container_file base_image_for_build platform use_cache enable_hwe enable_gdx *args: _ensure-yq
+_build target_tag_with_version target_tag container_file base_image_for_build platform use_cache enable_gdx *args: _ensure-yq
     #!/usr/bin/env bash
     set -euxo pipefail
 
@@ -108,11 +112,13 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
     BUILD_ARGS+=("--build-arg" "BASE_IMAGE={{ base_image_for_build }}")
     BUILD_ARGS+=("--build-arg" "COMMON_IMAGE_REF=${common_image_ref}")
     BUILD_ARGS+=("--build-arg" "BREW_IMAGE_REF=${brew_image_ref}")
-    BUILD_ARGS+=("--build-arg" "ENABLE_HWE={{ enable_hwe }}")
+    # GDX builds use coreos akmods for HWE (Hardware Enablement)
+    BUILD_ARGS+=("--build-arg" "ENABLE_HWE={{ enable_gdx }}")
     BUILD_ARGS+=("--build-arg" "ENABLE_GDX={{ enable_gdx }}")
 
     # Select akmods source tag for mounted ZFS/NVIDIA images
-    if [[ "{{ enable_hwe }}" -eq "1" || "{{ enable_gdx }}" -eq "1" ]]; then
+    # GDX flavor uses coreos-stable akmods for HWE kernel and drivers
+    if [[ "{{ enable_gdx }}" -eq "1" ]]; then
         BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=coreos-stable-{{ coreos_stable_version }}")
     else
         BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=centos-10")
@@ -209,8 +215,7 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
     fi
     TARGET_TAG_WITH_VERSION="${TARGET_TAG}:{{ tag }}"
 
-    # Determine HWE and GDX flags
-    ENABLE_HWE="0"
+    # Determine GDX flag - gdx flavor always uses coreos akmods for HWE
     ENABLE_GDX="0"
     if [[ "{{ flavor }}" == "gdx" ]]; then
         ENABLE_GDX="1"
@@ -224,14 +229,13 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
     echo -e "  Base Image for Build: ${YELLOW}${BASE_FOR_BUILD}${NC}"
     echo -e "  Platform: ${YELLOW}{{ platform }}${NC}"
     echo -e "  is_ci: ${YELLOW}{{ is_ci }}${NC}"
-    echo -e "  Enable HWE: ${YELLOW}${ENABLE_HWE}${NC}"
-    echo -e "  Enable GDX: ${YELLOW}${ENABLE_GDX}${NC}"
+    echo -e "  Enable GDX (uses coreos akmods): ${YELLOW}${ENABLE_GDX}${NC}"
     echo -e "${BLUE}================================================================${NC}"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1" "${ENABLE_HWE}" "${ENABLE_GDX}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1" "${ENABLE_GDX}"
     else
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" "${ENABLE_HWE}" "${ENABLE_GDX}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" "${ENABLE_GDX}"
     fi
 
 yellowfin variant='base':

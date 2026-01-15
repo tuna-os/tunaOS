@@ -39,7 +39,18 @@ sudo just iso yellowfin base local
 ## Working Effectively
 
 ### Dependencies and Setup
-- Install Just command runner to a temp dir not the root of the repo: `mkdir -p /tmp/just && cd /tmp/just && wget https://github.com/casey/just/releases/download/1.32.0/just-1.32.0-x86_64-unknown-linux-musl.tar.gz -O just.tar.gz && tar xzf just.tar.gz && sudo mv just /usr/local/bin/ && cd - && rm -rf /tmp/just`
+- **Install Just via Homebrew** (recommended for consistency with CI):
+  ```bash
+  # Install Homebrew if not already installed
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+  
+  # Install just
+  brew install just
+  ```
+- **Alternative**: Install Just from GitHub releases to a temp dir (not recommended):
+  ```bash
+  mkdir -p /tmp/just && cd /tmp/just && wget https://github.com/casey/just/releases/download/1.32.0/just-1.32.0-x86_64-unknown-linux-musl.tar.gz -O just.tar.gz && tar xzf just.tar.gz && sudo mv just /usr/local/bin/ && cd - && rm -rf /tmp/just
+  ```
 - **CRITICAL**: NEVER extract just or any other tools directly into the repository root as this will overwrite project files like LICENSE and README.md
 - Podman is required for container builds (usually pre-installed in CI environments)
 - Shellcheck is required for linting: `sudo apt-get update && sudo apt-get install -y shellcheck`
@@ -143,8 +154,17 @@ For changes that don't affect the build process (e.g., documentation, CI config)
 
 ## Development Workflow
 
+### Pre-Commit Requirements (MANDATORY):
+Before making any commit, you MUST run these commands in order:
+
+1. **Format code**: `just fix` - Formats shell scripts and Just files
+2. **Validate syntax**: `just check` - Checks all scripts, YAML, JSON, and Just files
+3. **Review changes**: `git status` and `git diff` - Verify what will be committed
+
+**CRITICAL**: Running `just fix` and `just check` before every commit is mandatory. This prevents CI failures and ensures code quality. See `AGENTS.md` for detailed guidelines.
+
 ### Making Changes:
-1. **Always run syntax checks first**: `just check`
+1. **Always run `just fix` then `just check` before committing**: This is mandatory, not optional
 2. **Test locally before pushing**: Build at least one variant to verify changes work
 3. **Respect build timing**: Allow 45-60 minutes for full builds, never cancel early
 4. **CI Integration**: All changes must pass GitHub Actions workflow within 60-minute timeout
@@ -236,7 +256,8 @@ Build arguments passed to Podman:
 ### Critical Don'ts:
 - **NEVER cancel builds early**: Builds take 45-60 minutes, canceling early wastes resources
 - **NEVER extract tools to repo root**: Always use /tmp or other temporary directories to avoid overwriting project files
-- **NEVER skip validation**: Always run `just check` before committing changes
+- **NEVER skip `just fix` and `just check`**: ALWAYS run both commands before committing - this is mandatory
+- **NEVER commit without validation**: Running `just fix` then `just check` before every commit prevents CI failures
 - **NEVER commit build artifacts**: Use `.gitignore` to exclude `.build/`, `.rpm-cache-*`, and similar directories
 
 ### Build Best Practices:

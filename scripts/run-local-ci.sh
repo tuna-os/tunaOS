@@ -67,11 +67,10 @@ if [ -n "$1" ]; then
     choice=$1
 else
     echo "Available workflows:"
-    echo "1. Build Next Image (build-next.yml)"
-    echo "2. Promote to Testing (test-and-promote.yml)"
-    echo "3. Release Stable (release-stable.yml)"
-    echo "4. Run Full Pipeline (build → test → release)"
-    read -r -p "Select workflow to run (1-4): " choice
+    echo "1. Build Weekly Images (build-next.yml)"
+    echo "2. Build PR/Main (build.yml)"
+    echo "3. Run Full Build Pipeline (build all variants)"
+    read -r -p "Select workflow to run (1-3): " choice
 fi
 
 # Create temp directory for transformed workflows
@@ -80,7 +79,7 @@ trap 'rm -rf $TMP_DIR' EXIT
 
 case $choice in
     1)
-        echo "Running Build Next Image..."
+        echo "Running Build Weekly Images..."
         transform_workflow ".github/workflows/build-next.yml" "$TMP_DIR/build-next.yml"
         act -W "$TMP_DIR/build-next.yml" \
             --secret-file secrets.env \
@@ -89,26 +88,17 @@ case $choice in
             --container-options "--privileged"
         ;;
     2)
-        echo "Running Test QEMU Integration..."
-        echo "Note: This requires KVM support and might fail if not running on a bare metal linux host or properly configured VM."
-        transform_workflow ".github/workflows/test-and-promote.yml" "$TMP_DIR/test-and-promote.yml"
-        act -W "$TMP_DIR/test-and-promote.yml" \
+        echo "Running Build PR/Main..."
+        transform_workflow ".github/workflows/build.yml" "$TMP_DIR/build.yml"
+        act -W "$TMP_DIR/build.yml" \
             --secret-file secrets.env \
             -s GITHUB_TOKEN="$GITHUB_TOKEN" \
             --network host \
             --container-options "--privileged"
         ;;
     3)
-        echo "Running Release Stable..."
-        transform_workflow ".github/workflows/release-stable.yml" "$TMP_DIR/release-stable.yml"
-        act -W "$TMP_DIR/release-stable.yml" \
-            --secret-file secrets.env \
-            -s GITHUB_TOKEN="$GITHUB_TOKEN" \
-            --network host
-        ;;
-    4)
-        echo "Running Full Pipeline..."
-        echo "This will run: Build → Test → Release for a single image variant"
+        echo "Running Full Build Pipeline..."
+        echo "This will build all image variants and flavors"
         echo ""
         
         # Accept variant and flavor as arguments, or prompt if not provided
@@ -140,8 +130,8 @@ case $choice in
         echo "============================="
         echo ""
         
-        # Step 1: Build
-        echo "[1/3] Building image..."
+        # Build the image
+        echo "Building image..."
         transform_workflow ".github/workflows/reusable-build-image.yml" "$TMP_DIR/reusable-build-image.yml"
         
         # Add workflow_dispatch trigger for act (keeps production YAML pristine)
@@ -164,7 +154,7 @@ case $choice in
         esac
         
         echo "Building: image=$IMAGE_NAME, variant=$variant, flavor=$flavor"
-        echo "Registry: localhost:5000, Tag: next"
+        echo "Registry: localhost:5000, Tag: latest"
         echo ""
         
         # Call the reusable workflow directly - same code path as production!
@@ -179,50 +169,19 @@ case $choice in
             --input image-variant="$variant" \
             --input flavor="$flavor" \
             --input platforms="linux/amd64" \
-            --input default-tag="next" \
+            --input default-tag="latest" \
             --input rechunk="false" \
             --input sbom="false" \
             --input cleanup_runner="false" \
             --input publish="true" || { echo "Build failed!"; exit 1; }
         
         echo ""
-        echo "[2/3] Testing image in QEMU..."
-        transform_workflow ".github/workflows/test-and-promote.yml" "$TMP_DIR/test-and-promote.yml"
-        
-        # Mock the tag parsing to use our variant/flavor
-        yq eval -i ".jobs.parse_tag.steps[0].run = \"echo variant=${variant} >> \$GITHUB_OUTPUT && echo flavor=${flavor} >> \$GITHUB_OUTPUT && echo version=test >> \$GITHUB_OUTPUT\"" "$TMP_DIR/test-and-promote.yml"
-        
-        act -W "$TMP_DIR/test-and-promote.yml" \
-            --secret-file secrets.env \
-            -s GITHUB_TOKEN="$GITHUB_TOKEN" \
-            --network host \
-            --container-options "--privileged" || { echo "QEMU test failed!"; exit 1; }
-        
-        echo ""
-        echo "[3/3] Running release validation..."
-        transform_workflow ".github/workflows/release-stable.yml" "$TMP_DIR/release-stable.yml"
-        
-        # Mock the tag parsing and skip actual S3/openQA
-        yq eval -i ".jobs.parse_tag.steps[0].run = \"echo variant=${variant} >> \$GITHUB_OUTPUT && echo flavor=${flavor} >> \$GITHUB_OUTPUT && echo version=1.0.0 >> \$GITHUB_OUTPUT\"" "$TMP_DIR/release-stable.yml"
-        yq eval -i '(.jobs.*.steps[] | select(.name == "Upload Image to S3") | .if) = "false"' "$TMP_DIR/release-stable.yml"
-        yq eval -i '(.jobs.*.steps[] | select(.name == "Upload to S3") | .if) = "false"' "$TMP_DIR/release-stable.yml"
-        yq eval -i '(.jobs.*.steps[] | select(.name == "Setup openQA CLI") | .if) = "false"' "$TMP_DIR/release-stable.yml"
-        yq eval -i '(.jobs.*.steps[] | select(.name == "Run openQA Test") | .if) = "false"' "$TMP_DIR/release-stable.yml"
-        
-        act -W "$TMP_DIR/release-stable.yml" \
-            --secret-file secrets.env \
-            -s GITHUB_TOKEN="$GITHUB_TOKEN" \
-            --network host || { echo "Release validation failed!"; exit 1; }
-        
-        echo ""
         echo "============================="
-        echo "✅ Full pipeline completed successfully!"
+        echo "✅ Build completed successfully!"
         echo "============================="
         echo ""
-        echo "Images created:"
-        echo "  localhost:5000/${IMAGE_NAME}:next"
-        echo "  localhost:5000/${IMAGE_NAME}:testing"
-        echo "  localhost:5000/${IMAGE_NAME}:stable"
+        echo "Image created:"
+        echo "  localhost:5000/${IMAGE_NAME}:latest"
         echo ""
         echo "Verify with: podman images | grep ${IMAGE_NAME}"
         ;;
