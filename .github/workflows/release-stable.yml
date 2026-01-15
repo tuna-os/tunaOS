@@ -106,7 +106,7 @@ jobs:
             docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${IMAGE_NAME}:testing \
             docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${IMAGE_NAME}:stable
           skopeo copy \
-                  docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${IMAGE_NAME}:testing \
-                  docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${IMAGE_NAME}:${VERSION}
+            docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${IMAGE_NAME}:testing \
+            docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${IMAGE_NAME}:${VERSION}
 
 
