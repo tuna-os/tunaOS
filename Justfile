@@ -3,9 +3,12 @@
 export repo_organization := env("GITHUB_REPOSITORY_OWNER", "tuna-os")
 export default_tag := env("DEFAULT_TAG", "latest")
 export bib_image := env("BIB_IMAGE", "quay.io/centos-bootc/bootc-image-builder:latest")
+export common_image := env("COMMON_IMAGE", "ghcr.io/projectbluefin/common")
+export brew_image := env("BREW_IMAGE", "ghcr.io/ublue-os/brew")
+export coreos_stable_version := env("COREOS_STABLE_VERSION", "42")
 just := just_executable()
 arch := arch()
-export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else if arch == "arm64" { "linux/arm64" } else if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") })
+export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else { if arch == "arm64" { "linux/arm64" } else { if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") } } })
 
 # --- Default Base Image (for 'base' flavor builds) ---
 
@@ -77,16 +80,44 @@ clean:
 #  BUILD PIPELINE
 # ==============================================================================
 
+# Check if yq is installed
+[private]
+_ensure-yq:
+    #!/usr/bin/env bash
+    if ! command -v yq &> /dev/null; then
+        echo "Missing requirement: 'yq' is not installed."
+        echo "Please install yq (e.g. 'brew install yq' or download from https://github.com/mikefarah/yq)"
+        exit 1
+    fi
+
 # Private build engine. Now accepts final image name and brand as parameters.
 [private]
-_build target_tag_with_version target_tag container_file base_image_for_build platform use_cache *args:
+_build target_tag_with_version target_tag container_file base_image_for_build platform use_cache enable_hwe enable_gdx *args: _ensure-yq
     #!/usr/bin/env bash
     set -euxo pipefail
+
+    # Get image digests from image-versions.yaml
+    common_image_sha=$(yq -r '.images[] | select(.name == "common") | .digest' image-versions.yaml)
+    common_image_ref="{{ common_image }}@${common_image_sha}"
+    brew_image_sha=$(yq -r '.images[] | select(.name == "brew") | .digest' image-versions.yaml)
+    brew_image_ref="{{ brew_image }}@${brew_image_sha}"
 
     BUILD_ARGS=()
     BUILD_ARGS+=("--build-arg" "IMAGE_NAME={{ target_tag }}")
     BUILD_ARGS+=("--build-arg" "IMAGE_VENDOR={{ repo_organization }}")
     BUILD_ARGS+=("--build-arg" "BASE_IMAGE={{ base_image_for_build }}")
+    BUILD_ARGS+=("--build-arg" "COMMON_IMAGE_REF=${common_image_ref}")
+    BUILD_ARGS+=("--build-arg" "BREW_IMAGE_REF=${brew_image_ref}")
+    BUILD_ARGS+=("--build-arg" "ENABLE_HWE={{ enable_hwe }}")
+    BUILD_ARGS+=("--build-arg" "ENABLE_GDX={{ enable_gdx }}")
+
+    # Select akmods source tag for mounted ZFS/NVIDIA images
+    if [[ "{{ enable_hwe }}" -eq "1" || "{{ enable_gdx }}" -eq "1" ]]; then
+        BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=coreos-stable-{{ coreos_stable_version }}")
+    else
+        BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=centos-10")
+    fi
+
     if [[ -z "$(git status -s)" ]]; then
         BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=$(git rev-parse --short HEAD)")
     fi
@@ -178,6 +209,13 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
     fi
     TARGET_TAG_WITH_VERSION="${TARGET_TAG}:{{ tag }}"
 
+    # Determine HWE and GDX flags
+    ENABLE_HWE="0"
+    ENABLE_GDX="0"
+    if [[ "{{ flavor }}" == "gdx" ]]; then
+        ENABLE_GDX="1"
+    fi
+
     echo -e "${BLUE}================================================================${NC}"
     echo -e "${GREEN}Building image with the following parameters:${NC}"
     echo -e "  Target Tag: ${YELLOW}${TARGET_TAG_WITH_VERSION}${NC}"
@@ -186,12 +224,14 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
     echo -e "  Base Image for Build: ${YELLOW}${BASE_FOR_BUILD}${NC}"
     echo -e "  Platform: ${YELLOW}{{ platform }}${NC}"
     echo -e "  is_ci: ${YELLOW}{{ is_ci }}${NC}"
+    echo -e "  Enable HWE: ${YELLOW}${ENABLE_HWE}${NC}"
+    echo -e "  Enable GDX: ${YELLOW}${ENABLE_GDX}${NC}"
     echo -e "${BLUE}================================================================${NC}"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1" "${ENABLE_HWE}" "${ENABLE_GDX}"
     else
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" "${ENABLE_HWE}" "${ENABLE_GDX}"
     fi
 
 yellowfin variant='base':
@@ -245,7 +285,6 @@ debug-vm variant flavor='base' repo='local':
     fi
     {{ just }} qcow2 {{ variant }} {{ flavor }} {{ repo }}
     {{ just }} test-vm {{ variant }} {{ flavor }}
-
 
 iso variant flavor='base' repo='local' hook_script='iso_files/configure_lts_iso_anaconda.sh' flatpaks_file='system_files/etc/ublue-os/system-flatpaks.list':
     #!/usr/bin/env bash

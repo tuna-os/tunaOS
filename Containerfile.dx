@@ -2,9 +2,21 @@ ARG BASE_IMAGE
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR
 ARG SHA_HEAD_SHORT
+ARG ENABLE_HWE="${ENABLE_HWE:-0}"
+ARG ENABLE_GDX="${ENABLE_GDX:-0}"
+ARG AKMODS_VERSION="${AKMODS_VERSION:-centos-10}"
+ARG COMMON_IMAGE_REF
+ARG BREW_IMAGE_REF
+
+FROM ghcr.io/ublue-os/akmods-zfs:${AKMODS_VERSION} AS akmods_zfs
+FROM ghcr.io/ublue-os/akmods-nvidia-open:${AKMODS_VERSION} AS akmods_nvidia_open
+FROM ${COMMON_IMAGE_REF} AS common
+FROM ${BREW_IMAGE_REF} AS brew
 
 FROM scratch as context
 COPY system_files /files
+COPY --from=brew /system_files /files
+COPY --from=common /system_files/shared /files
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 
@@ -17,6 +29,9 @@ RUN \
   --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/var \
   --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
+  --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \
+  --mount=type=bind,from=akmods_nvidia_open,src=/rpms,dst=/tmp/akmods-nvidia-open-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/DX.sh; 
 
