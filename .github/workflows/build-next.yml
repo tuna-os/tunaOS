@@ -1,9 +1,8 @@
-name: Build Next Image
+name: Build Weekly Images
 on:
-  push:
-    branches:
-      - main
-      - coreos
+  schedule:
+    # Run every Tuesday at 1am UTC (weekly builds)
+    - cron: "0 1 * * TUE"
   workflow_dispatch:
     inputs:
       variant:
@@ -160,7 +159,7 @@ jobs:
       image-variant: ${{ matrix.variant }}
       flavor: base
       platforms: ${{ matrix.platforms }}
-      default-tag: next
+      default-tag: latest
       rechunk: true
       sbom: false
       publish: true
@@ -186,7 +185,7 @@ jobs:
       image-variant: ${{ matrix.variant }}
       flavor: dx
       platforms: ${{ matrix.platforms }}
-      default-tag: next
+      default-tag: latest
       rechunk: true
       sbom: false
       publish: true
@@ -212,7 +211,7 @@ jobs:
       image-variant: ${{ matrix.variant }}
       flavor: gdx
       platforms: ${{ matrix.platforms }}
-      default-tag: next
+      default-tag: latest
       rechunk: true
       sbom: false
       publish: true

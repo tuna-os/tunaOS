@@ -250,10 +250,10 @@ jobs:
             exit 0
           fi
 
-          # Pull the 'next' image (base for comparison)
-          # We assume 'next' tag exists. If not, we might fail or skip.
+          # Pull the 'latest' image (base for comparison)
+          # We assume 'latest' tag exists. If not, we might fail or skip.
           # We'll try to pull it, if it fails, we skip diff.
-          BASE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:next"
+          BASE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
           TARGET_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
 
           echo "Pulling base image $BASE_IMAGE..."
