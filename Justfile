@@ -8,7 +8,7 @@ export brew_image := env("BREW_IMAGE", "ghcr.io/ublue-os/brew")
 export coreos_stable_version := env("COREOS_STABLE_VERSION", "42")
 just := just_executable()
 arch := arch()
-export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else { if arch == "arm64" { "linux/arm64" } else { if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") } } })
+export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else if arch == "arm64" { "linux/arm64" } else if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") })
 
 # --- Default Base Image (for 'base' flavor builds) ---
 
