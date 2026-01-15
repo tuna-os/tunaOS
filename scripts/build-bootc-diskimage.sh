@@ -65,7 +65,7 @@ EOF
 	else
 		USER_HOME="$HOME"
 	fi
-	
+
 	if [ -f "$USER_HOME/.ssh/id_ed25519.pub" ]; then
 		SSH_KEY=$(cat "$USER_HOME/.ssh/id_ed25519.pub")
 	elif [ -f "$USER_HOME/.ssh/id_rsa.pub" ]; then
@@ -73,7 +73,7 @@ EOF
 	fi
 
 	if [ -n "$SSH_KEY" ]; then
-		echo "key = \"$SSH_KEY\"" >> "$TMPDIR/$TOML_FILE"
+		echo "key = \"$SSH_KEY\"" >>"$TMPDIR/$TOML_FILE"
 		echo "Injected SSH key for user centos"
 	fi
 
@@ -109,7 +109,7 @@ IMAGE_NAME=$(echo "$IMAGE_URI" | awk -F'/' '{print $NF}' | awk -F':' '{print $1}
 file=$(find "$TMPDIR/output" -type f -name "*.$TYPE")
 if [ -f "$file" ]; then
 	mv "$file" "./${IMAGE_NAME}.$TYPE"
-	
+
 	# Determine target UID/GID for ownership check
 	# Determine target UID/GID for ownership check
 	if [ -n "${SUDO_UID:-}" ]; then
@@ -119,7 +119,7 @@ if [ -f "$file" ]; then
 		TARGET_UID="0"
 		TARGET_GID="0"
 	fi
-	
+
 	chown "${TARGET_UID}:${TARGET_GID}" "./${IMAGE_NAME}.$TYPE"
 	echo "Image created: ${IMAGE_NAME}.$TYPE"
 else

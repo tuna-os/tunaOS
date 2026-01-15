@@ -21,18 +21,18 @@ dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-
 
 if [[ $IS_FEDORA == true ]]; then
 	# Install config-manager and RPM Fusion in one transaction
-	dnf -y do \
+	dnf -y "do" \
 		--action=install 'dnf5-command(config-manager)' \
 		"https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
 		"https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
-	
+
 	# Add fedora-multimedia repo and set priority
 	dnf config-manager setopt fedora-multimedia.enabled=1 ||
 		dnf config-manager addrepo --from-repofile="https://negativo17.org/repos/fedora-multimedia.repo"
 	dnf config-manager setopt fedora-multimedia.priority=90
-	
+
 	# Install multimedia packages and remove unwanted ones in single transaction
-	dnf -y do \
+	dnf -y "do" \
 		--action=install \
 		gstreamer1-plugins-good \
 		gstreamer1-plugins-ugly \
