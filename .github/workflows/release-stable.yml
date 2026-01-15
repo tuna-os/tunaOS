@@ -109,4 +109,3 @@ jobs:
             docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${IMAGE_NAME}:testing \
             docker://${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/${IMAGE_NAME}:${VERSION}
 
-
