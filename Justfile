@@ -116,7 +116,6 @@ _ensure-yq:
     if ! command -v yq &> /dev/null; then
         echo "Missing requirement: 'yq' is not installed."
         brew install yq
-        exit 1
     fi
 
 # Private build engine. Now accepts final image name and brand as parameters.
