@@ -8,7 +8,7 @@ export brew_image := env("BREW_IMAGE", "ghcr.io/ublue-os/brew")
 export coreos_stable_version := env("COREOS_STABLE_VERSION", "42")
 just := just_executable()
 arch := arch()
-export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else { if arch == "arm64" { "linux/arm64" } else { if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") } } })
+export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else if arch == "arm64" { "linux/arm64" } else if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") })
 
 # --- Default Base Image (for 'base' flavor builds) ---
 
@@ -19,8 +19,37 @@ export base_image_tag := env("BASE_IMAGE_TAG", "10")
 default:
     @{{ just }} --list
 
+_get-deps:
+    #!/usr/bin/env bash
+    echo "Getting dependencies..."
+    # Check and install dependencies: yamllint, jq, shellcheck, podman, git 
+    if ! command -v brew &> /dev/null; then
+        echo "Missing requirement: 'brew' is not installed."
+        curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh | bash
+    fi  
+    if ! command -v yamllint &> /dev/null; then
+        echo "Missing requirement: 'yamllint' is not installed."
+        brew install yamllint
+    fi
+    if ! command -v jq &> /dev/null; then
+        echo "Missing requirement: 'jq' is not installed."
+        brew install jq
+    fi
+    if ! command -v shellcheck &> /dev/null; then
+        echo "Missing requirement: 'shellcheck' is not installed."
+        brew install shellcheck
+    fi
+    if ! command -v podman &> /dev/null; then
+        echo "Missing requirement: 'podman' is not installed."
+        brew install podman
+    fi
+    if ! command -v git &> /dev/null; then
+        echo "Missing requirement: 'git' is not installed."
+        brew install git
+    fi
+
 # Check Just Syntax
-check:
+check: _get-deps
     #!/usr/bin/env bash
     echo "Checking syntax of shell scripts..."
     /usr/bin/find . -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
@@ -44,7 +73,7 @@ check:
     just --unstable --fmt --check -f Justfile
 
 # Fix Just Syntax
-fix:
+fix: _get-deps
     #!/usr/bin/env bash
     echo "Fixing syntax of shell scripts..."
         /usr/bin/find . -iname "*.sh" -type f -exec shfmt --write "{}" ";"
@@ -86,8 +115,7 @@ _ensure-yq:
     #!/usr/bin/env bash
     if ! command -v yq &> /dev/null; then
         echo "Missing requirement: 'yq' is not installed."
-        echo "Please install yq (e.g. 'brew install yq' or download from https://github.com/mikefarah/yq)"
-        exit 1
+        brew install yq
     fi
 
 # Private build engine. Now accepts final image name and brand as parameters.
