@@ -4,10 +4,11 @@ ARG ENABLE_GDX="${ENABLE_GDX:-0}"
 ARG AKMODS_VERSION="${AKMODS_VERSION:-centos-10}"
 ARG COMMON_IMAGE_REF
 ARG BREW_IMAGE_REF
+ARG AKMODS_BASE="ghcr.io/ublue-os"
 
 # Upstream mounts akmods-zfs and akmods-nvidia-open; select their tag via AKMODS_VERSION
-FROM ghcr.io/ublue-os/akmods-zfs:${AKMODS_VERSION} AS akmods_zfs
-FROM ghcr.io/ublue-os/akmods-nvidia-open:${AKMODS_VERSION} AS akmods_nvidia_open
+FROM ${AKMODS_BASE}/akmods-zfs:${AKMODS_VERSION} AS akmods_zfs
+FROM ${AKMODS_BASE}/akmods-nvidia-open:${AKMODS_VERSION} AS akmods_nvidia_open
 FROM ${COMMON_IMAGE_REF} AS common
 FROM ${BREW_IMAGE_REF} AS brew
 

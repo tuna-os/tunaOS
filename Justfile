@@ -116,6 +116,16 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
     BUILD_ARGS+=("--build-arg" "ENABLE_HWE={{ enable_gdx }}")
     BUILD_ARGS+=("--build-arg" "ENABLE_GDX={{ enable_gdx }}")
 
+    # Determine AKMODS_BASE based on target variant and HWE status
+    # AlmaLinux kernels (albacore, yellowfin, almalinux) use tuna-os for akmods, others use upstream ublue-os
+    akmods_base="ghcr.io/ublue-os"
+    if [[ "{{ target_tag }}" == albacore* ]] || [[ "{{ target_tag }}" == yellowfin* ]] || [[ "{{ target_tag }}" == almalinux* ]]; then
+        if [[ "{{ enable_gdx }}" != "1" ]]; then
+            akmods_base="ghcr.io/tuna-os"
+        fi
+    fi
+    BUILD_ARGS+=("--build-arg" "AKMODS_BASE=${akmods_base}")
+
     # Select akmods source tag for mounted ZFS/NVIDIA images
     # GDX flavor uses coreos-stable akmods for HWE kernel and drivers
     if [[ "{{ enable_gdx }}" -eq "1" ]]; then
