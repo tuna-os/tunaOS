@@ -66,7 +66,7 @@ clean:
     images=()
     for variant in "${variants[@]}"; do
         images+=("$variant")
-        images+=("${variant}-dx")
+        images+=("${variant}-hwe")
         images+=("${variant}-gdx")
     done
     for img in "${images[@]}"; do
@@ -94,9 +94,10 @@ _ensure-yq:
 # Note: enable_gdx parameter controls both GDX features and HWE (Hardware Enablement).
 # When enable_gdx=1, ENABLE_HWE is set to 1 and coreos-stable akmods are used for
 
+# When enable_hwe=1, coreos-stable akmods are used for
 # NVIDIA drivers, ZFS modules, and the coreos/fedora kernel.
 [private]
-_build target_tag_with_version target_tag container_file base_image_for_build platform use_cache enable_gdx *args: _ensure-yq
+_build target_tag_with_version target_tag container_file base_image_for_build platform use_cache enable_gdx enable_hwe *args: _ensure-yq
     #!/usr/bin/env bash
     set -euxo pipefail
 
@@ -112,23 +113,23 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
     BUILD_ARGS+=("--build-arg" "BASE_IMAGE={{ base_image_for_build }}")
     BUILD_ARGS+=("--build-arg" "COMMON_IMAGE_REF=${common_image_ref}")
     BUILD_ARGS+=("--build-arg" "BREW_IMAGE_REF=${brew_image_ref}")
-    # GDX builds use coreos akmods for HWE (Hardware Enablement)
-    BUILD_ARGS+=("--build-arg" "ENABLE_HWE={{ enable_gdx }}")
+    # GDX or HWE builds use coreos akmods for HWE (Hardware Enablement)
+    BUILD_ARGS+=("--build-arg" "ENABLE_HWE={{ enable_hwe }}")
     BUILD_ARGS+=("--build-arg" "ENABLE_GDX={{ enable_gdx }}")
 
     # Determine AKMODS_BASE based on target variant and HWE status
     # AlmaLinux kernels (albacore, yellowfin, almalinux) use tuna-os for akmods, others use upstream ublue-os
     akmods_base="ghcr.io/ublue-os"
     if [[ "{{ target_tag }}" == albacore* ]] || [[ "{{ target_tag }}" == yellowfin* ]] || [[ "{{ target_tag }}" == almalinux* ]]; then
-        if [[ "{{ enable_gdx }}" != "1" ]]; then
+        if [[ "{{ enable_hwe }}" != "1" ]]; then
             akmods_base="ghcr.io/tuna-os"
         fi
     fi
     BUILD_ARGS+=("--build-arg" "AKMODS_BASE=${akmods_base}")
 
     # Select akmods source tag for mounted ZFS/NVIDIA images
-    # GDX flavor uses coreos-stable akmods for HWE kernel and drivers
-    if [[ "{{ enable_gdx }}" -eq "1" ]]; then
+    # HWE/GDX flavors use coreos-stable akmods for HWE kernel and drivers
+    if [[ "{{ enable_hwe }}" -eq "1" ]]; then
         BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=coreos-stable-{{ coreos_stable_version }}")
     else
         BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=centos-10")
@@ -191,30 +192,30 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
         "base")
             BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
             ;;
-        "dx")
+        "hwe")
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ tag }}"
             else
                 BASE_FOR_BUILD="localhost/{{ variant }}:{{ default_tag }}"
             fi
-            CONTAINERFILE="Containerfile.dx"
+            CONTAINERFILE="Containerfile.hwe"
             ;;
         "gdx")
             if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-dx:{{ tag }}"
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-hwe:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}-dx:{{ tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}-hwe:{{ tag }}"
             fi
             CONTAINERFILE="Containerfile.gdx"
             ;;
         "all")
             just build {{ variant }} base
-            just build {{ variant }} dx
+            just build {{ variant }} hwe
             just build {{ variant }} gdx
             exit 0
             ;;
         *)
-            echo "Unknown flavor '{{ flavor }}'. Valid options are: base, dx, gdx, all."
+            echo "Unknown flavor '{{ flavor }}'. Valid options are: base, hwe, gdx, all."
             exit 1
             ;;
     esac
@@ -225,7 +226,13 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
     fi
     TARGET_TAG_WITH_VERSION="${TARGET_TAG}:{{ tag }}"
 
-    # Determine GDX flag - gdx flavor always uses coreos akmods for HWE
+    # Determine HWE flag - hwe and gdx flavors always use coreos akmods
+    ENABLE_HWE="0"
+    if [[ "{{ flavor }}" == "hwe" ]] || [[ "{{ flavor }}" == "gdx" ]]; then
+        ENABLE_HWE="1"
+    fi
+
+    # Determine GDX flag
     ENABLE_GDX="0"
     if [[ "{{ flavor }}" == "gdx" ]]; then
         ENABLE_GDX="1"
@@ -239,13 +246,14 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
     echo -e "  Base Image for Build: ${YELLOW}${BASE_FOR_BUILD}${NC}"
     echo -e "  Platform: ${YELLOW}{{ platform }}${NC}"
     echo -e "  is_ci: ${YELLOW}{{ is_ci }}${NC}"
-    echo -e "  Enable GDX (uses coreos akmods): ${YELLOW}${ENABLE_GDX}${NC}"
+    echo -e "  Enable HWE (uses coreos akmods): ${YELLOW}${ENABLE_HWE}${NC}"
+    echo -e "  Enable GDX: ${YELLOW}${ENABLE_GDX}${NC}"
     echo -e "${BLUE}================================================================${NC}"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1" "${ENABLE_GDX}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1" "${ENABLE_GDX}" "${ENABLE_HWE}"
     else
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" "${ENABLE_GDX}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" "${ENABLE_GDX}" "${ENABLE_HWE}"
     fi
 
 yellowfin variant='base':

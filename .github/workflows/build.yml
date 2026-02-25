@@ -27,14 +27,14 @@ on:
           # - bonito
           - all
       build_variant:
-        description: 'Build variant (base, dx, gdx)'
+        description: 'Build variant (base, hwe, gdx)'
         required: false
-        default: 'base,dx,gdx'
+        default: 'base,hwe,gdx'
         type: choice
         options:
           - base
-          - base,dx
-          - base,dx,gdx
+          - base,hwe
+          - base,hwe,gdx
       platforms:
         description: 'Platforms to build (Be sure to build all on Main!)'
         required: false
@@ -67,7 +67,7 @@ jobs:
         id: set-matrix
         run: |
           # Determine which image variants to build
-          IMAGE_VARIANTS="yellowfin albacore"
+          IMAGE_VARIANTS="yellowfin albacore skipjack bonito"
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
             if [[ "${{ inputs.image_variant }}" != "all" ]]; then
               IMAGE_VARIANTS="${{ inputs.image_variant }}"
@@ -76,7 +76,7 @@ jobs:
               IMAGE_VARIANTS="yellowfin albacore"
             else
               # Include all variants when explicitly requested
-              IMAGE_VARIANTS="yellowfin albacore" # skipjack bonito"
+              IMAGE_VARIANTS="yellowfin albacore skipjack bonito"
             fi
           fi
 
@@ -146,8 +146,8 @@ jobs:
     if: |
       github.event_name != 'workflow_dispatch' ||
       inputs.build_variant == 'base' ||
-      inputs.build_variant == 'base,dx' ||
-      inputs.build_variant == 'base,dx,gdx'
+      inputs.build_variant == 'base,hwe' ||
+      inputs.build_variant == 'base,hwe,gdx'
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
@@ -165,39 +165,39 @@ jobs:
       sbom: ${{ matrix.sbom }}
       publish: ${{ matrix.publish }}
 
-  # Build DX images (chain from base)
-  build-dx:
+  # Build HWE images (chain from base)
+  build-hwe:
     needs: [generate_matrix, build-base]
     permissions:
       contents: read
       packages: write
       id-token: write
-    # Only run if dx or all variants are requested
+    # Only run if hwe or all variants are requested
     if: |
       (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
-      inputs.build_variant == 'base,dx' ||
-      inputs.build_variant == 'base,dx,gdx' ||
-      inputs.build_variant == 'dx,gdx' ||
-      inputs.build_variant == 'dx'
+      inputs.build_variant == 'base,hwe' ||
+      inputs.build_variant == 'base,hwe,gdx' ||
+      inputs.build_variant == 'hwe,gdx' ||
+      inputs.build_variant == 'hwe'
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
-      image-name: ${{ matrix.image_name }}-dx
-      image-desc: ${{ matrix.description }} DX
+      image-name: ${{ matrix.image_name }}-hwe
+      image-desc: ${{ matrix.description }} HWE
       image-variant: ${{ matrix.image_variant }}
-      flavor: dx
+      flavor: hwe
       platforms: ${{ matrix.platforms }}
       default-tag: ${{ matrix.default_tag }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
 
-  # Build GDX images (chain from DX)
+  # Build GDX images (chain from HWE)
   build-gdx:
-    needs: [generate_matrix, build-dx]
+    needs: [generate_matrix, build-hwe]
     permissions:
       contents: read
       packages: write
@@ -205,9 +205,9 @@ jobs:
     # Only run if gdx or all variants are requested
     if: |
       (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
-      inputs.build_variant == 'base,dx,gdx' ||
+      inputs.build_variant == 'base,hwe,gdx' ||
       inputs.build_variant == 'gdx' ||
-      inputs.build_variant == 'dx,gdx'
+      inputs.build_variant == 'hwe,gdx'
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}

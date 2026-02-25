@@ -1,0 +1,34 @@
+name: Build Tunaos GDX
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+
+on:
+  pull_request:
+    branches:
+      - main
+      - lts
+  push:
+    branches:
+      - main
+      - lts
+  merge_group:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: tunaos-gdx
+      flavor: gdx
+      kernel-pin: 6.17.12-200.fc42
+      rechunk: ${{ github.event_name != 'pull_request' }}
+      sbom: ${{ github.event_name != 'pull_request' }}
+      publish: ${{ github.event_name != 'pull_request' }}
