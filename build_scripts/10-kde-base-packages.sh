@@ -50,7 +50,6 @@ else
         dnf install -y --nogpgcheck https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-${MAJOR_VERSION_NUMBER}.noarch.rpm https://mirrors.rpmfusion.org/nonfree/el/rpmfusion-nonfree-release-${MAJOR_VERSION_NUMBER}.noarch.rpm
         dnf -y install --downloadonly \
             ffmpeg \
-            libavcodec \
             @multimedia \
             gstreamer1-plugins-bad-free \
             gstreamer1-plugins-bad-free-libs \
