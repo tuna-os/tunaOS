@@ -81,6 +81,7 @@ jobs:
   generate_matrix:
     runs-on: ubuntu-latest
     needs: [detect_pr_scope]
+    # This prevents the job from skipping when triggered manually (where detect_pr_scope is skipped)
     if: always() && !cancelled() && needs.detect_pr_scope.result != 'failure'
     outputs:
       base_matrix: ${{ steps.set-matrix.outputs.base_matrix }}
@@ -218,7 +219,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: needs.generate_matrix.outputs.base_matrix != '{"include":[]}'
+    if: needs.generate_matrix.result == 'success' && fromJSON(needs.generate_matrix.outputs.base_matrix).include[0] != null
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.base_matrix)}}
@@ -242,7 +243,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}'
+    if: needs.generate_matrix.result == 'success' && fromJSON(needs.generate_matrix.outputs.hwe_gdx_matrix).include[0] != null
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
@@ -265,7 +266,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}'
+    if: needs.generate_matrix.result == 'success' && fromJSON(needs.generate_matrix.outputs.hwe_gdx_matrix).include[0] != null
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
@@ -289,7 +290,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: needs.generate_matrix.outputs.kde_matrix != '{"include":[]}'
+    if: needs.generate_matrix.result == 'success' && fromJSON(needs.generate_matrix.outputs.kde_matrix).include[0] != null
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.kde_matrix)}}
@@ -312,7 +313,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}'
+    if: needs.generate_matrix.result == 'success' && fromJSON(needs.generate_matrix.outputs.kde_hwe_gdx_matrix).include[0] != null
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.kde_hwe_gdx_matrix)}}
@@ -335,7 +336,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}'
+    if: needs.generate_matrix.result == 'success' && fromJSON(needs.generate_matrix.outputs.kde_hwe_gdx_matrix).include[0] != null
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.kde_hwe_gdx_matrix)}}
