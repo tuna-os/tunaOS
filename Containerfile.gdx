@@ -28,7 +28,6 @@ RUN rm -rf /opt && mkdir /opt
 RUN \
   --mount=type=tmpfs,dst=/opt \ 
   --mount=type=tmpfs,dst=/tmp \
-  --mount=type=tmpfs,dst=/var \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
   --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \

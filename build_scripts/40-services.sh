@@ -9,6 +9,20 @@ SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
 export SCRIPTS_PATH
 export MAJOR_VERSION_NUMBER
 
+# Helper function to safely enable a service (ignore if it doesn't exist)
+safe_enable() {
+    if systemctl list-unit-files "$1" &>/dev/null || [[ -f "/usr/lib/systemd/system/$1" ]]; then
+        systemctl enable "$1" || true
+    fi
+}
+
+# Helper function to safely disable a service (ignore if it doesn't exist)
+safe_disable() {
+    if systemctl list-unit-files "$1" &>/dev/null || [[ -f "/usr/lib/systemd/system/$1" ]]; then
+        systemctl disable "$1" || true
+    fi
+}
+
 sed -i 's|uupd|& --disable-module-distrobox|' /usr/lib/systemd/system/uupd.service
 
 # Enable sleep then hibernation by DEFAULT!
@@ -16,21 +30,21 @@ sed -i 's/#HandleLidSwitch=.*/HandleLidSwitch=suspend-then-hibernate/g' /usr/lib
 sed -i 's/#HandleLidSwitchDocked=.*/HandleLidSwitchDocked=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
 sed -i 's/#HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
 sed -i 's/#SleepOperation=.*/SleepOperation=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
-systemctl enable brew-setup.service
-systemctl enable gdm.service
-systemctl enable fwupd.service
-systemctl enable rpm-ostree-countme.service
+safe_enable brew-setup.service
+safe_enable gdm.service
+safe_enable fwupd.service
+safe_enable rpm-ostree-countme.service
 systemctl --global enable podman-auto-update.timer
-systemctl enable rpm-ostree-countme.service
-systemctl disable rpm-ostree.service
-systemctl enable dconf-update.service
-systemctl disable mcelog.service
-systemctl enable tailscaled.service
-systemctl enable uupd.timer
-systemctl enable ublue-system-setup.service
+safe_enable rpm-ostree-countme.service
+safe_disable rpm-ostree.service
+safe_enable dconf-update.service
+safe_disable mcelog.service
+safe_enable tailscaled.service
+safe_enable uupd.timer
+safe_enable ublue-system-setup.service
 systemctl --global enable ublue-user-setup.service
 systemctl mask bootc-fetch-apply-updates.timer bootc-fetch-apply-updates.service
-systemctl enable check-sb-key.service
+safe_enable check-sb-key.service
 
 # Disable lastlog display on previous failed login in GDM (This makes logins slow)
 authselect enable-feature with-silent-lastlog

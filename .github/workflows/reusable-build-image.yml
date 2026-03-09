@@ -148,6 +148,26 @@ jobs:
         shell: bash
         run: just check
 
+      - name: Cache DNF/RPM Packages
+        uses: actions/cache@6849a6489940f00c2f30c0fb92c6274307ccb58a # v4
+        id: dnf-cache
+        with:
+          path: |
+            /var/cache/dnf
+            /var/cache/libdnf5
+            /var/lib/rpm
+          key: dnf-${{ matrix.platform }}-${{ hashFiles('build_scripts/**', 'Containerfile*') }}-${{ github.ref }}
+          restore-keys: |
+            dnf-${{ matrix.platform }}-${{ hashFiles('build_scripts/**', 'Containerfile*') }}-
+            dnf-${{ matrix.platform }}-
+          save-always: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Fix cache permissions
+        if: steps.dnf-cache.outputs.cache-hit == 'true'
+        run: |
+          sudo chown -R root:root /var/cache/dnf /var/cache/libdnf5 /var/lib/rpm 2>/dev/null || true
+          sudo chmod -R 755 /var/cache/dnf /var/cache/libdnf5 /var/lib/rpm 2>/dev/null || true
+
       - name: Build Image
         id: build-image
         shell: bash

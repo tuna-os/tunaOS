@@ -86,6 +86,11 @@ sudo just iso yellowfin base local
 - **NEVER CANCEL BUILDS**: Container builds take 45-60 minutes. Set timeout to 90+ minutes minimum.
 - **CI TIMEOUT**: GitHub Actions uses 60-minute timeout - respect this as the maximum expected build time.
 - Use `timeout=5400` (90 minutes) for build commands to ensure completion.
+- **CACHE BEHAVIOR**: Local builds use DNF/RPM caching for faster rebuilds (25-40% faster after first build).
+  - First build: ~45-60 minutes (cold cache)
+  - Subsequent builds: ~25-35 minutes (warm cache)
+  - Cache shared across all variants in `.rpm-cache` directory (subdirs: `dnf/`, `libdnf5/`, `rpm/`)
+  - CI builds also use GitHub Actions cache with similar speedups
 
 ### ISO and VM Generation
 - `sudo just iso <variant> <flavor> <repo>` - Generate bootable ISO using Titanoboa
@@ -102,10 +107,11 @@ sudo just iso yellowfin base local
 
 ### Utility Commands
 - `just clean` - Clean up build artifacts, caches, and local images
-  - Removes `.rpm-cache-*` directories
   - Removes `.build-logs` directory
   - Removes `.build/*` directory
   - Removes all local podman images for TunaOS variants
+  - **Note**: Preserves `.rpm-cache` for faster rebuilds (shared across all variants)
+- `just clean-cache` - Remove DNF/RPM cache directory only (use when cache grows too large or troubleshooting)
 
 ## Image Variants and Flavors
 
@@ -258,7 +264,7 @@ Build arguments passed to Podman:
 - **NEVER extract tools to repo root**: Always use /tmp or other temporary directories to avoid overwriting project files
 - **NEVER skip `just fix` and `just check`**: ALWAYS run both commands before committing - this is mandatory
 - **NEVER commit without validation**: Running `just fix` then `just check` before every commit prevents CI failures
-- **NEVER commit build artifacts**: Use `.gitignore` to exclude `.build/`, `.rpm-cache-*`, and similar directories
+- **NEVER commit build artifacts**: Use `.gitignore` to exclude `.build/`, `.rpm-cache/`, and similar directories
 
 ### Build Best Practices:
 - Always build base flavor first before dx or gdx

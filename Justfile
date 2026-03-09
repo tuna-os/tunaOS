@@ -8,7 +8,7 @@ export brew_image := env("BREW_IMAGE", "ghcr.io/ublue-os/brew")
 export coreos_stable_version := env("COREOS_STABLE_VERSION", "42")
 just := just_executable()
 arch := arch()
-export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else { if arch == "arm64" { "linux/arm64" } else { if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") } } })
+export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else if arch == "arm64" { "linux/arm64" } else if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") })
 
 # --- Default Base Image (for 'base' flavor builds) ---
 
@@ -57,8 +57,8 @@ fix:
 
 clean:
     #!/usr/bin/env bash
-    echo "Cleaning up..."
-    rm -rf '.rpm-cache-*'
+    echo "Cleaning up build artifacts and images..."
+    echo "Note: Preserving .rpm-cache for faster rebuilds. Use 'just clean-cache' to remove."
     rm -rf .build-logs
     sudo rm -rf .build/*
     echo "Removing local podman images for all variants and flavors..."
@@ -75,6 +75,15 @@ clean:
     for img in "${images[@]}"; do
         sudo podman rmi -f "localhost/${img}:latest" 2>/dev/null || true
     done
+
+# Prune build caches (DNF/RPM cache directory shared across all variants)
+clean-cache:
+    #!/usr/bin/env bash
+    echo "Pruning local build caches..."
+    echo "Removing .rpm-cache directory..."
+    rm -rf '.rpm-cache'
+    echo "Cache cleanup complete."
+    echo "Note: Podman BuildKit cache is separate. Use 'podman system prune --build-cache' if needed."
 
 # ==============================================================================
 #  BUILD PIPELINE
@@ -93,8 +102,8 @@ _ensure-yq:
 # Private build engine. Now accepts final image name and brand as parameters.
 # Note: enable_gdx parameter controls both GDX features and HWE (Hardware Enablement).
 # When enable_gdx=1, ENABLE_HWE is set to 1 and coreos-stable akmods are used for
-
 # When enable_hwe=1, coreos-stable akmods are used for
+
 # NVIDIA drivers, ZFS modules, and the coreos/fedora kernel.
 [private]
 _build target_tag_with_version target_tag container_file base_image_for_build platform use_cache enable_gdx enable_hwe *args: _ensure-yq
@@ -132,7 +141,11 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
     if [[ "{{ enable_hwe }}" -eq "1" ]]; then
         BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=coreos-stable-{{ coreos_stable_version }}")
     else
-        BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=centos-10")
+        if [[ "{{ target_tag }}" == albacore* ]] || [[ "{{ target_tag }}" == yellowfin* ]] || [[ "{{ target_tag }}" == almalinux* ]]; then
+            BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=almalinux-10")
+        else
+            BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=centos-10")
+        fi
     fi
 
     if [[ -z "$(git status -s)" ]]; then
@@ -140,8 +153,12 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
     fi
     echo "{{ use_cache }}"
     if [[ "{{ use_cache }}" == "1" ]]; then
-        mkdir -p "$(pwd)/.rpm-cache-{{ target_tag }}"
-        BUILD_ARGS+=("--volume" "$(pwd)/.rpm-cache-{{ target_tag }}:/var/cache/dnf:z")
+        mkdir -p "$(pwd)/.rpm-cache/dnf"
+        mkdir -p "$(pwd)/.rpm-cache/libdnf5"
+        mkdir -p "$(pwd)/.rpm-cache/rpm"
+        BUILD_ARGS+=("--volume" "$(pwd)/.rpm-cache/dnf:/var/cache/dnf:z")
+        BUILD_ARGS+=("--volume" "$(pwd)/.rpm-cache/libdnf5:/var/cache/libdnf5:z")
+        BUILD_ARGS+=("--volume" "$(pwd)/.rpm-cache/rpm:/var/lib/rpm:z")
     fi
 
     podman build \
