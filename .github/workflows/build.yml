@@ -218,7 +218,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: !cancelled() && needs.generate_matrix.result == 'success' && needs.generate_matrix.outputs.base_matrix != '{"include":[]}'
+    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.generate_matrix.outputs.base_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.base_matrix)}}
@@ -242,7 +242,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: !cancelled() && needs.generate_matrix.result == 'success' && needs.build-base.result == 'success' && needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}'
+    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-base.result == 'success' && needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
@@ -265,7 +265,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: !cancelled() && needs.generate_matrix.result == 'success' && needs.build-base.result == 'success' && needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}'
+    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-base.result == 'success' && needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
@@ -289,7 +289,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: !cancelled() && needs.generate_matrix.result == 'success' && needs.build-base.result == 'success' && needs.generate_matrix.outputs.kde_matrix != '{"include":[]}'
+    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-base.result == 'success' && needs.generate_matrix.outputs.kde_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.kde_matrix)}}
@@ -312,7 +312,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: !cancelled() && needs.generate_matrix.result == 'success' && needs.build-kde.result == 'success' && needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}'
+    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-kde.result == 'success' && needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.kde_hwe_gdx_matrix)}}
@@ -335,7 +335,7 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: !cancelled() && needs.generate_matrix.result == 'success' && needs.build-kde-hwe.result == 'success' && needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}'
+    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-kde-hwe.result == 'success' && needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.kde_hwe_gdx_matrix)}}
