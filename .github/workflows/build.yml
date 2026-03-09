@@ -82,7 +82,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect_pr_scope]
     outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
+      base_matrix: ${{ steps.set-matrix.outputs.base_matrix }}
+      hwe_gdx_matrix: ${{ steps.set-matrix.outputs.hwe_gdx_matrix }}
+      kde_matrix: ${{ steps.set-matrix.outputs.kde_matrix }}
+      kde_hwe_gdx_matrix: ${{ steps.set-matrix.outputs.kde_hwe_gdx_matrix }}
     steps:
       - name: Checkout for config
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v4
@@ -202,7 +205,11 @@ jobs:
             }]")"
           done
 
-          echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> "$GITHUB_OUTPUT"
+          # Output filtered matrices using jq
+          echo "base_matrix=$(echo "${MATRIX}" | jq -c '.')" >> "$GITHUB_OUTPUT"
+          echo "hwe_gdx_matrix=$(echo "${MATRIX}" | jq -c '{"include": [.include[] | select(.run_hwe_gdx == true)]}')" >> "$GITHUB_OUTPUT"
+          echo "kde_matrix=$(echo "${MATRIX}" | jq -c '{"include": [.include[] | select(.run_kde == true)]}')" >> "$GITHUB_OUTPUT"
+          echo "kde_hwe_gdx_matrix=$(echo "${MATRIX}" | jq -c '{"include": [.include[] | select(.run_kde_hwe_gdx == true)]}')" >> "$GITHUB_OUTPUT"
 
   build-base:
     needs: generate_matrix
@@ -210,9 +217,10 @@ jobs:
       contents: read
       packages: write
       id-token: write
+    if: needs.generate_matrix.outputs.base_matrix != '{"include":[]}'
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
+      matrix: ${{fromJson(needs.generate_matrix.outputs.base_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
@@ -233,10 +241,10 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: matrix.run_hwe_gdx
+    if: needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}'
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
+      matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
@@ -256,10 +264,10 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: matrix.run_hwe_gdx
+    if: needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}'
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
+      matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
@@ -280,10 +288,10 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: matrix.run_kde
+    if: needs.generate_matrix.outputs.kde_matrix != '{"include":[]}'
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
+      matrix: ${{fromJson(needs.generate_matrix.outputs.kde_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
@@ -303,10 +311,10 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: matrix.run_kde_hwe_gdx
+    if: needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}'
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
+      matrix: ${{fromJson(needs.generate_matrix.outputs.kde_hwe_gdx_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
@@ -326,10 +334,10 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: matrix.run_kde_hwe_gdx
+    if: needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}'
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
+      matrix: ${{fromJson(needs.generate_matrix.outputs.kde_hwe_gdx_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
@@ -343,3 +351,4 @@ jobs:
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
       remove-unwanted-software: true
+      
