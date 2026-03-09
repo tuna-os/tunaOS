@@ -75,7 +75,7 @@ dnf -y upgrade glib2
 dnf versionlock add glib2
 
 if [[ $IS_FEDORA == true ]]; then
-    dnf -y group install "KDE Plasma Workspaces"
+    dnf -y group install "kde-desktop"
     dnf -y install --downloadonly \
         -x PackageKit \
         -x PackageKit-command-not-found \
