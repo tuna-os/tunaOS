@@ -10,7 +10,7 @@ if [[ $IS_CENTOS == true ]]; then
     dnf remove -y subscription-manager
 fi
 
-dnf -y install --downloadonly 'dnf-command(versionlock)'
+dnf -y install 'dnf-command(versionlock)'
 dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
 
 if [[ $IS_FEDORA == true ]]; then
