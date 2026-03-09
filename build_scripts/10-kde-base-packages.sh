@@ -10,7 +10,7 @@ if [[ $IS_CENTOS == true ]]; then
     dnf remove -y subscription-manager
 fi
 
-dnf -y install 'dnf-command(versionlock)'
+dnf -y install --downloadonly 'dnf-command(versionlock)'
 dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
 
 if [[ $IS_FEDORA == true ]]; then
@@ -19,9 +19,7 @@ if [[ $IS_FEDORA == true ]]; then
         "https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
         "https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
 
-    dnf config-manager setopt fedora-multimedia.enabled=1 || \
-        dnf config-manager addrepo --from-repofile="https://negativo17.org/repos/fedora-multimedia.repo"
-    dnf config-manager setopt fedora-multimedia.priority=90
+    # fedora-multimedia removed in favor of rpmfusion
 
     dnf -y "do" \
         --action=install \
@@ -38,7 +36,7 @@ else
 
     if is_x86_64_v2; then
         echo "no epel-multimedia for x86_64_v2"
-        dnf -y install \
+        dnf -y install --downloadonly \
             ffmpeg-free \
             @multimedia \
             gstreamer1-plugins-bad-free \
@@ -49,8 +47,8 @@ else
             lame-libs \
             libjxl
     else
-        dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
-        dnf -y install \
+        dnf install -y --nogpgcheck https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-${MAJOR_VERSION_NUMBER}.noarch.rpm https://mirrors.rpmfusion.org/nonfree/el/rpmfusion-nonfree-release-${MAJOR_VERSION_NUMBER}.noarch.rpm
+        dnf -y install --downloadonly \
             ffmpeg \
             libavcodec \
             @multimedia \
@@ -78,7 +76,7 @@ dnf versionlock add glib2
 
 if [[ $IS_FEDORA == true ]]; then
     dnf -y group install "KDE Plasma Workspaces"
-    dnf -y install \
+    dnf -y install --downloadonly \
         -x PackageKit \
         -x PackageKit-command-not-found \
         sddm \
@@ -106,7 +104,7 @@ if [[ $IS_FEDORA == true ]]; then
         skopeo \
         btrfs-progs
 else
-    dnf group install -y --nobest \
+    dnf group install -y --downloadonly --nobest \
         "KDE Plasma Workspaces" \
         "Common NetworkManager submodules" \
         "Core" \
@@ -116,7 +114,7 @@ else
         "Printing Client" \
         "Standard"
 
-    dnf -y install \
+    dnf -y install --downloadonly \
         -x PackageKit \
         -x PackageKit-command-not-found \
         sddm \

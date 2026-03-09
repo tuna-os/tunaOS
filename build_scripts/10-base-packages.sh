@@ -31,10 +31,7 @@ if [[ $IS_FEDORA == true ]]; then
 		"https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
 		"https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
 
-	# Add fedora-multimedia repo and set priority
-	dnf config-manager setopt fedora-multimedia.enabled=1 ||
-		dnf config-manager addrepo --from-repofile="https://negativo17.org/repos/fedora-multimedia.repo"
-	dnf config-manager setopt fedora-multimedia.priority=90
+	# using rpmfusion for multimedia
 
 	# Install multimedia packages and remove unwanted ones in single transaction
 	dnf -y "do" \
@@ -65,7 +62,7 @@ else
 			lame-libs \
 			libjxl
 	else
-		dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
+		dnf install -y --nogpgcheck https://mirrors.rpmfusion.org/free/el/rpmfusion-free-release-${MAJOR_VERSION_NUMBER}.noarch.rpm https://mirrors.rpmfusion.org/nonfree/el/rpmfusion-nonfree-release-${MAJOR_VERSION_NUMBER}.noarch.rpm
 		dnf -y install \
 			ffmpeg \
 			libavcodec \
