@@ -6,6 +6,7 @@ printf "::group:: === 40 Services ===\n"
 
 MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
 SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
+DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 export SCRIPTS_PATH
 export MAJOR_VERSION_NUMBER
 
@@ -31,7 +32,12 @@ sed -i 's/#HandleLidSwitchDocked=.*/HandleLidSwitchDocked=suspend-then-hibernate
 sed -i 's/#HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
 sed -i 's/#SleepOperation=.*/SleepOperation=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
 safe_enable brew-setup.service
-safe_enable gdm.service
+if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
+    safe_disable gdm.service
+    safe_enable sddm.service
+else
+    safe_enable gdm.service
+fi
 safe_enable fwupd.service
 safe_enable rpm-ostree-countme.service
 systemctl --global enable podman-auto-update.timer

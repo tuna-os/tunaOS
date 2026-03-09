@@ -16,25 +16,27 @@ on:
   workflow_dispatch:
     inputs:
       image_variant:
-        description: 'Image variant to build (yellowfin, albacore, centos, fedora, all)'
+        description: 'Image variant to build (yellowfin, albacore, skipjack, bonito, all)'
         required: false
         default: 'all'
         type: choice
         options:
           - yellowfin
           - albacore
-          # - skipjack
-          # - bonito
+          - skipjack
+          - bonito
           - all
       build_variant:
-        description: 'Build variant (base, hwe, gdx)'
+        description: 'Build variant set'
         required: false
-        default: 'base,hwe,gdx'
+        default: 'base,hwe,gdx,kde,kde-hwe,kde-gdx'
         type: choice
         options:
           - base
-          - base,hwe
           - base,hwe,gdx
+          - base,kde
+          - base,kde,kde-hwe,kde-gdx
+          - base,hwe,gdx,kde,kde-hwe,kde-gdx
       platforms:
         description: 'Platforms to build (Be sure to build all on Main!)'
         required: false
@@ -48,15 +50,37 @@ on:
           - linux/amd64,linux/arm64
           - linux/amd64,linux/amd64/v2,linux/arm64
 
-
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}-${{ inputs.image_variant || 'auto' }}-${{ inputs.build_variant || 'auto' }}
   cancel-in-progress: true
 
 jobs:
-  # Generate build matrix for image variants
+  detect_pr_scope:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    outputs:
+      hwe_gdx_related: ${{ steps.filter.outputs.hwe_gdx_related }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v4
+      - name: Detect HWE/GDX-related changes
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            hwe_gdx_related:
+              - 'Containerfile.hwe'
+              - 'Containerfile.gdx'
+              - 'Containerfile.kde.hwe'
+              - 'Containerfile.kde.gdx'
+              - 'build_scripts/HWE.sh'
+              - 'build_scripts/GDX.sh'
+              - 'build_scripts/overrides/**'
+              - 'system_files_overrides/gdx/**'
+
   generate_matrix:
     runs-on: ubuntu-latest
+    needs: [detect_pr_scope]
     outputs:
       matrix: ${{ steps.set-matrix.outputs.matrix }}
     steps:
@@ -66,48 +90,38 @@ jobs:
       - name: Generate image variant build matrix
         id: set-matrix
         run: |
-          # Determine which image variants to build
-          IMAGE_VARIANTS="yellowfin albacore"
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            if [[ "${{ inputs.image_variant }}" != "all" ]]; then
-              IMAGE_VARIANTS="${{ inputs.image_variant }}"
-            elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-              # For PRs, default to yellowfin and albacore
-              IMAGE_VARIANTS="yellowfin albacore"
-            else
-              # Include all variants when explicitly requested
-              IMAGE_VARIANTS="yellowfin albacore" # skipjack bonito"
-            fi
+          IMAGE_VARIANTS="yellowfin albacore skipjack bonito"
+          PR_HWE_GDX_RELATED="${{ needs.detect_pr_scope.outputs.hwe_gdx_related || 'false' }}"
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.image_variant }}" != "all" ]]; then
+            IMAGE_VARIANTS="${{ inputs.image_variant }}"
           fi
 
-          # Generate matrix
-          MATRIX="{\"include\":[]}"
+          MATRIX='{"include":[]}'
           for image_variant in $IMAGE_VARIANTS; do
-            # Set image-specific values
             case "$image_variant" in
               yellowfin)
-                DESCRIPTION="🐠 Based on AlmaLinux Kitten 10"
+                DESCRIPTION="Based on AlmaLinux Kitten 10"
                 PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
                 ;;
               albacore)
-                DESCRIPTION="🐟 Based on AlmaLinux 10"
+                DESCRIPTION="Based on AlmaLinux 10"
                 PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
                 ;;
               skipjack)
-                DESCRIPTION="🏛️ Based on CentOS Stream 10"
+                DESCRIPTION="Based on CentOS Stream 10"
                 PLATFORMS="linux/arm64,linux/amd64"
                 ;;
               bonito)
-                DESCRIPTION="🎩 Based on Fedora 42"
+                DESCRIPTION="Based on Fedora 42"
                 PLATFORMS="linux/arm64,linux/amd64"
                 ;;
-              bonito-rawhide)
-                DESCRIPTION="🎩 Based on Fedora Rawhide"
-                PLATFORMS="linux/arm64,linux/amd64"
+              *)
+                echo "Unknown variant: $image_variant"
+                exit 1
                 ;;
             esac
 
-            # Determine image name and tag
             if [[ "${{ github.event_name }}" == "pull_request" ]]; then
               IMAGE_NAME="${image_variant}"
               TAG="pr-${{ github.event.pull_request.number }}"
@@ -116,38 +130,86 @@ jobs:
               TAG="${{ (github.ref_name == 'main' && github.event_name != 'pull_request') && 'latest' || github.sha }}"
             fi
 
-            # If Platforms is set
             if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.platforms }}" ]]; then
               PLATFORMS="${{ inputs.platforms }}"
             fi
-            # Add to matrix
+
+            RUN_HWE_GDX=true
+            RUN_KDE=true
+            RUN_KDE_HWE_GDX=true
+
+            # Preserve historical PR behavior: no HWE/GDX by default on PRs.
+            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+              RUN_HWE_GDX=false
+              RUN_KDE=false
+              RUN_KDE_HWE_GDX=false
+
+              # For skipjack/bonito, allow HWE/GDX and KDE-HWE/KDE-GDX when related files changed.
+              if [[ "$image_variant" == "skipjack" || "$image_variant" == "bonito" ]]; then
+                if [[ "$PR_HWE_GDX_RELATED" == "true" ]]; then
+                  RUN_HWE_GDX=true
+                  RUN_KDE_HWE_GDX=true
+                fi
+              fi
+            fi
+
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+              case "${{ inputs.build_variant }}" in
+                "base")
+                  RUN_HWE_GDX=false
+                  RUN_KDE=false
+                  RUN_KDE_HWE_GDX=false
+                  ;;
+                "base,hwe,gdx")
+                  RUN_HWE_GDX=true
+                  RUN_KDE=false
+                  RUN_KDE_HWE_GDX=false
+                  ;;
+                "base,kde")
+                  RUN_HWE_GDX=false
+                  RUN_KDE=true
+                  RUN_KDE_HWE_GDX=false
+                  ;;
+                "base,kde,kde-hwe,kde-gdx")
+                  RUN_HWE_GDX=false
+                  RUN_KDE=true
+                  RUN_KDE_HWE_GDX=true
+                  ;;
+                "base,hwe,gdx,kde,kde-hwe,kde-gdx")
+                  RUN_HWE_GDX=true
+                  RUN_KDE=true
+                  RUN_KDE_HWE_GDX=true
+                  ;;
+                *)
+                  echo "Unknown build_variant option"
+                  exit 1
+                  ;;
+              esac
+            fi
+
             MATRIX="$(echo "${MATRIX}" | jq ".include += [{
               \"image_variant\": \"${image_variant}\",
               \"image_name\": \"${IMAGE_NAME}\",
               \"default_tag\": \"${TAG}\",
               \"platforms\": \"${PLATFORMS}\",
               \"description\": \"${DESCRIPTION}\",
+              \"run_hwe_gdx\": ${RUN_HWE_GDX},
+              \"run_kde\": ${RUN_KDE},
+              \"run_kde_hwe_gdx\": ${RUN_KDE_HWE_GDX},
               \"rechunk\": ${{ github.event_name != 'pull_request' }},
               \"sbom\": false,
-              \"publish\": true,
+              \"publish\": true
             }]")"
           done
 
-          echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
+          echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> "$GITHUB_OUTPUT"
 
-  # Build base images
   build-base:
     needs: generate_matrix
     permissions:
       contents: read
       packages: write
       id-token: write
-    # Only run if base or all variants are requested
-    if: |
-      github.event_name != 'workflow_dispatch' ||
-      inputs.build_variant == 'base' ||
-      inputs.build_variant == 'base,hwe' ||
-      inputs.build_variant == 'base,hwe,gdx'
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
@@ -165,19 +227,13 @@ jobs:
       sbom: ${{ matrix.sbom }}
       publish: ${{ matrix.publish }}
 
-  # Build HWE images (chain from base)
   build-hwe:
     needs: [generate_matrix, build-base]
     permissions:
       contents: read
       packages: write
       id-token: write
-    # Only run if hwe or all variants are requested
-    if: |
-      (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
-      inputs.build_variant == 'base,hwe' ||
-      inputs.build_variant == 'base,hwe,gdx' ||
-      inputs.build_variant == 'hwe'
+    if: matrix.run_hwe_gdx
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
@@ -194,18 +250,13 @@ jobs:
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
 
-  # Build GDX images (chain from base, not hwe)
   build-gdx:
     needs: [generate_matrix, build-base]
     permissions:
       contents: read
       packages: write
       id-token: write
-    # Only run if gdx or all variants are requested
-    if: |
-      (github.event_name != 'workflow_dispatch' && github.event_name != 'pull_request') ||
-      inputs.build_variant == 'base,hwe,gdx' ||
-      inputs.build_variant == 'gdx'
+    if: matrix.run_hwe_gdx
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
@@ -216,6 +267,76 @@ jobs:
       image-desc: ${{ matrix.description }} GDX
       image-variant: ${{ matrix.image_variant }}
       flavor: gdx
+      platforms: ${{ matrix.platforms }}
+      default-tag: ${{ matrix.default_tag }}
+      rechunk: ${{ matrix.rechunk }}
+      sbom: ${{ matrix.sbom }}
+      publish: ${{ github.event_name != 'pull_request' }}
+      remove-unwanted-software: true
+
+  build-kde:
+    needs: [generate_matrix, build-base]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    if: matrix.run_kde
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}-kde
+      image-desc: ${{ matrix.description }} KDE
+      image-variant: ${{ matrix.image_variant }}
+      flavor: kde
+      platforms: ${{ matrix.platforms }}
+      default-tag: ${{ matrix.default_tag }}
+      rechunk: ${{ matrix.rechunk }}
+      sbom: ${{ matrix.sbom }}
+      publish: ${{ github.event_name != 'pull_request' }}
+
+  build-kde-hwe:
+    needs: [generate_matrix, build-kde]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    if: matrix.run_kde_hwe_gdx
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}-kde-hwe
+      image-desc: ${{ matrix.description }} KDE HWE
+      image-variant: ${{ matrix.image_variant }}
+      flavor: kde-hwe
+      platforms: ${{ matrix.platforms }}
+      default-tag: ${{ matrix.default_tag }}
+      rechunk: ${{ matrix.rechunk }}
+      sbom: ${{ matrix.sbom }}
+      publish: ${{ github.event_name != 'pull_request' }}
+
+  build-kde-gdx:
+    needs: [generate_matrix, build-kde-hwe]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    if: matrix.run_kde_hwe_gdx
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}-kde-gdx
+      image-desc: ${{ matrix.description }} KDE GDX
+      image-variant: ${{ matrix.image_variant }}
+      flavor: kde-gdx
       platforms: ${{ matrix.platforms }}
       default-tag: ${{ matrix.default_tag }}
       rechunk: ${{ matrix.rechunk }}

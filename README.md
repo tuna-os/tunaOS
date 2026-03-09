@@ -36,14 +36,16 @@ TunaOS is a curated collection of **Bootc-based desktop operating systems** that
 <img width="328" height="318" alt="1000016351" src="https://github.com/user-attachments/assets/759fc093-baf0-4959-900a-5e9c2098f745" />
 </div>
 
-We ship 3 versions, matching upstream:
+We ship multiple flavors:
 
 - [**Regular**:](https://docs.projectbluefin.io/)
     - See Bluefin's excellent documentation for info 
-- [**DX (Developer Experience)**](https://docs.projectbluefin.io/dx)
-    - Adding libvirt, Docker, VSCode, etc. 
+- [**HWE (Hardware Enablement)**]
+    - Newer kernel stack and hardware support profile.
 - [**GDX (Graphical Developer Experience)**](https://docs.projectbluefin.io/gdx)
-    - Adding Nvidia drivers and CUDA. For Nvdia users/AI/VFX devs.
+    - NVIDIA drivers and CUDA for graphics/AI workflows.
+- [**KDE**]
+    - Plasma desktop builds (`-kde`, `-kde-hwe`, `-kde-gdx`) alongside GNOME images.
 
 
 ### 🐟 Albacore (AlmaLinux)
@@ -53,11 +55,14 @@ We ship 3 versions, matching upstream:
 **Image:** `ghcr.io/tuna-os/albacore:latest`
     **ISO:** [x86_64](https://download.tunaos.org/albacore-amd64.iso), [x86_64_v2](https://download.tunaos.org/albacore-amd64-v2.iso), [arm64](https://download.tunaos.org/albacore-arm64.iso) 
 
-**DX:** `ghcr.io/tuna-os/albacore-dx:latest`
-    **ISO:** [x86_64](https://download.tunaos.org/albacore-dx-amd64.iso), [x86_64_v2](https://download.tunaos.org/albacore-dx-amd64-v2.iso), [arm64](https://download.tunaos.org/albacore-dx-arm64.iso)
+**HWE:** `ghcr.io/tuna-os/albacore-hwe:latest`
+    **ISO:** [x86_64](https://download.tunaos.org/albacore-hwe-amd64.iso), [x86_64_v2](https://download.tunaos.org/albacore-hwe-amd64-v2.iso), [arm64](https://download.tunaos.org/albacore-hwe-arm64.iso)
   
 **GDX:** `ghcr.io/tuna-os/albacore-gdx:latest`
     **ISO:** [x86_64](https://download.tunaos.org/albacore-gdx-amd64.iso), [x86_64_v2](https://download.tunaos.org/albacore-gdx-amd64-v2.iso), [arm64](https://download.tunaos.org/albacore-gdx-arm64.iso)
+
+**KDE:** `ghcr.io/tuna-os/albacore-kde:latest`
+    **ISO:** [x86_64](https://download.tunaos.org/albacore-kde-amd64.iso), [x86_64_v2](https://download.tunaos.org/albacore-kde-amd64-v2.iso), [arm64](https://download.tunaos.org/albacore-kde-arm64.iso)
 
 
 Stable enterprise-grade desktop experience built on AlmaLinux foundation.
@@ -72,11 +77,14 @@ Stable enterprise-grade desktop experience built on AlmaLinux foundation.
 **Image:** `ghcr.io/tuna-os/yellowfin:latest`
     **ISO:** [x86_64](https://download.tunaos.org/yellowfin-amd64.iso), [x86_64_v2](https://download.tunaos.org/yellowfin-amd64-v2.iso), [arm64](https://download.tunaos.org/yellowfin-arm64.iso)
 
-**DX:** `ghcr.io/tuna-os/yellowfin-dx:latest`
-    **ISO:** [x86_64](https://download.tunaos.org/yellowfin-dx-amd64.iso), [x86_64_v2](https://download.tunaos.org/yellowfin-dx-amd64-v2.iso), [arm64](https://download.tunaos.org/yellowfin-dx-arm64.iso)
+**HWE:** `ghcr.io/tuna-os/yellowfin-hwe:latest`
+    **ISO:** [x86_64](https://download.tunaos.org/yellowfin-hwe-amd64.iso), [x86_64_v2](https://download.tunaos.org/yellowfin-hwe-amd64-v2.iso), [arm64](https://download.tunaos.org/yellowfin-hwe-arm64.iso)
 
 **GDX:** `ghcr.io/tuna-os/yellowfin-gdx:latest`
     **ISO:** [x86_64](https://download.tunaos.org/yellowfin-gdx-amd64.iso), [x86_64_v2](https://download.tunaos.org/yellowfin-gdx-amd64-v2.iso), [arm64](https://download.tunaos.org/yellowfin-gdx-arm64.iso)
+
+**KDE:** `ghcr.io/tuna-os/yellowfin-kde:latest`
+    **ISO:** [x86_64](https://download.tunaos.org/yellowfin-kde-amd64.iso), [x86_64_v2](https://download.tunaos.org/yellowfin-kde-amd64-v2.iso), [arm64](https://download.tunaos.org/yellowfin-kde-arm64.iso)
 
 
 The closest to upstream Bluefin LTS experience with enhanced capabilities:
@@ -123,11 +131,11 @@ chmod +x build-bootc.sh
 # Now you can make a ISO for Albacore
 sudo ./build-bootc.sh iso ghcr.io/tuna-os/albacore:latest
 
-# Or build yellowfin-dx
-sudo ./build-bootc.sh iso ghcr.io/tuna-os/yellowfin-dx:latest
+# Or build yellowfin-kde
+sudo ./build-bootc.sh iso ghcr.io/tuna-os/yellowfin-kde:latest
 
 # Or make a VM image
-sudo ./build-bootc.sh qcow2 ghcr.io/tuna-os/yellowfin-dx:latest
+sudo ./build-bootc.sh qcow2 ghcr.io/tuna-os/yellowfin-kde:latest
 
 # default username/password for VMs is "centos" / "centos"
 # you can edit this in the script

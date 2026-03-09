@@ -6,8 +6,15 @@ source /run/context/build_scripts/lib.sh
 
 # Set ENABLE_GDX for gdx-specific scripts
 export ENABLE_GDX="${ENABLE_GDX:-1}"
+DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
+export DESKTOP_FLAVOR
 
 printf "::group:: === GDX ===\n"
+
+if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
+	copy_systemfiles_for kde-gdx
+	run_buildscripts_for kde-gdx
+fi
 
 copy_systemfiles_for gdx
 run_buildscripts_for gdx

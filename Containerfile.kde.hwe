@@ -4,7 +4,7 @@ ARG IMAGE_VENDOR
 ARG SHA_HEAD_SHORT
 ARG ENABLE_HWE="${ENABLE_HWE:-0}"
 ARG ENABLE_GDX="${ENABLE_GDX:-0}"
-ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
+ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-kde}"
 ARG AKMODS_VERSION="${AKMODS_VERSION:-centos-10}"
 ARG COMMON_IMAGE_REF
 ARG BREW_IMAGE_REF
@@ -24,19 +24,19 @@ COPY build_scripts /build_scripts
 
 FROM ${BASE_IMAGE}
 
-ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
+ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-kde}"
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
 RUN rm -rf /opt && mkdir /opt
 
 RUN \
-  --mount=type=tmpfs,dst=/opt \ 
+  --mount=type=tmpfs,dst=/opt \
   --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
   --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \
   --mount=type=bind,from=akmods_nvidia_open,src=/rpms,dst=/tmp/akmods-nvidia-open-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
-    /run/context/build_scripts/GDX.sh
+    /run/context/build_scripts/HWE.sh;
 
-RUN rm -rf /opt && ln -s /var/opt /opt 
+RUN rm -rf /opt && ln -s /var/opt /opt

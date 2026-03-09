@@ -1,24 +1,16 @@
 ARG BASE_IMAGE
 ARG ENABLE_HWE="${ENABLE_HWE:-0}"
 ARG ENABLE_GDX="${ENABLE_GDX:-0}"
-ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
+ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-kde}"
 ARG AKMODS_VERSION="${AKMODS_VERSION:-centos-10}"
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:latest"
 ARG BREW_IMAGE_REF="ghcr.io/ublue-os/brew:latest"
 ARG AKMODS_BASE="ghcr.io/ublue-os"
 
-# Upstream mounts akmods-zfs and akmods-nvidia-open; select their tag via AKMODS_VERSION
 FROM ${AKMODS_BASE}/akmods-zfs:${AKMODS_VERSION} AS akmods_zfs
 FROM ${COMMON_IMAGE_REF} AS common
 FROM ${BREW_IMAGE_REF} AS brew
 
-# Context layer combines:
-# - Local TunaOS customizations (system_files/)
-# - Brew tools (/system_files from brew image - homebrew setup)
-# - Common shared utilities (/system_files/shared from common - udev rules, scripts, services)
-# - Common bluefin branding (/system_files/bluefin from common - theming, wallpapers, dconf)
-# - Variant-specific overrides (system_files_overrides/)
-# - Build scripts
 FROM scratch as context
 COPY system_files /files
 COPY --from=brew /system_files /files
@@ -35,7 +27,7 @@ ARG SHA_HEAD_SHORT="${SHA_HEAD_SHORT:-deadbeef}"
 ARG BASE_IMAGE
 ARG ENABLE_HWE="${ENABLE_HWE:-0}"
 ARG ENABLE_GDX="${ENABLE_GDX:-0}"
-ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
+ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-kde}"
 ENV BASE_IMAGE=${BASE_IMAGE}
 ENV IMAGE_NAME=${IMAGE_NAME}
 ENV IMAGE_VENDOR=${IMAGE_VENDOR}
@@ -44,7 +36,6 @@ ENV ENABLE_HWE=${ENABLE_HWE}
 ENV ENABLE_GDX=${ENABLE_GDX}
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
-# We pass in BASE_IMAGE as an env var to set it in os-release so that we know what we are building on
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
@@ -108,6 +99,4 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/cleanup.sh
 
-# Makes `/opt` writeable by default
-# Needs to be here to make the main image build strict (no /opt there)
-RUN rm -rf /opt && ln -s /var/opt /opt 
+RUN rm -rf /opt && ln -s /var/opt /opt

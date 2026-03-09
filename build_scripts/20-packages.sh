@@ -6,6 +6,11 @@ printf "::group:: === 20 Packages ===\n"
 
 source /run/context/build_scripts/lib.sh
 
+if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
+	/run/context/build_scripts/20-kde-packages.sh
+	exit 0
+fi
+
 # Install OS-specific branding
 if [[ $IS_FEDORA == true ]]; then
 	dnf -y install fedora-logos

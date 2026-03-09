@@ -14,9 +14,11 @@ SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
 if [ -z "${BASE_IMAGE}" ]; then
 	BASE_IMAGE="$(sh -c '. /etc/os-release ; echo ${BASE_IMAGE}')"
 fi
+DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 export SCRIPTS_PATH
 export MAJOR_VERSION_NUMBER
 export BASE_IMAGE
+export DESKTOP_FLAVOR
 
 # OS Detection Flags
 IS_FEDORA=false
@@ -83,8 +85,13 @@ print_debug_info() {
 run_buildscripts_for() {
 	WHAT=$1
 	shift
+	local override_path="${BUILD_SCRIPTS_PATH}/overrides/$WHAT"
+	if [ ! -d "$override_path" ]; then
+		echo "No build script overrides for '$WHAT', skipping."
+		return 0
+	fi
 	# Complex "find" expression here since there might not be any overrides
-	find "${BUILD_SCRIPTS_PATH}/overrides/$WHAT" -maxdepth 1 -iname "*-*.sh" -type f -print0 | sort --zero-terminated --sort=human-numeric | while IFS= read -r -d $'\0' script; do
+	find "$override_path" -maxdepth 1 -iname "*-*.sh" -type f -print0 | sort --zero-terminated --sort=human-numeric | while IFS= read -r -d $'\0' script; do
 		if [ "${CUSTOM_NAME}" != "" ]; then
 			WHAT=$CUSTOM_NAME
 		fi
@@ -97,12 +104,17 @@ run_buildscripts_for() {
 copy_systemfiles_for() {
 	WHAT=$1
 	shift
+	local override_path="${CONTEXT_PATH}/overrides/$WHAT"
 	DISPLAY_NAME=$WHAT
 	if [ "${CUSTOM_NAME}" != "" ]; then
 		DISPLAY_NAME=$CUSTOM_NAME
 	fi
+	if [ ! -d "$override_path" ]; then
+		echo "No system file overrides for '$WHAT', skipping."
+		return 0
+	fi
 	printf "::group:: ===%s-file-copying===\n" "${DISPLAY_NAME}"
-	cp -avf "${CONTEXT_PATH}/overrides/$WHAT/." /
+	cp -avf "$override_path/." /
 	printf "::endgroup::\n"
 }
 

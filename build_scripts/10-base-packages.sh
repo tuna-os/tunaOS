@@ -6,6 +6,11 @@ printf "::group:: === 10 Base Packages ===\n"
 
 source /run/context/build_scripts/lib.sh
 
+if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
+	/run/context/build_scripts/10-kde-base-packages.sh
+	exit 0
+fi
+
 # This is the base for a minimal GNOME system on CentOS Stream.
 
 # This thing slows down downloads A LOT for no reason

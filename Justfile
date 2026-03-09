@@ -68,6 +68,9 @@ clean:
         images+=("$variant")
         images+=("${variant}-hwe")
         images+=("${variant}-gdx")
+        images+=("${variant}-kde")
+        images+=("${variant}-kde-hwe")
+        images+=("${variant}-kde-gdx")
     done
     for img in "${images[@]}"; do
         podman rmi -f "localhost/${img}:latest" 2>/dev/null || true
@@ -106,7 +109,7 @@ _ensure-yq:
 
 # NVIDIA drivers, ZFS modules, and the coreos/fedora kernel.
 [private]
-_build target_tag_with_version target_tag container_file base_image_for_build platform use_cache enable_gdx enable_hwe *args: _ensure-yq
+_build target_tag_with_version target_tag container_file base_image_for_build platform use_cache enable_gdx enable_hwe desktop_flavor *args: _ensure-yq
     #!/usr/bin/env bash
     set -euxo pipefail
 
@@ -125,6 +128,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
     # GDX or HWE builds use coreos akmods for HWE (Hardware Enablement)
     BUILD_ARGS+=("--build-arg" "ENABLE_HWE={{ enable_hwe }}")
     BUILD_ARGS+=("--build-arg" "ENABLE_GDX={{ enable_gdx }}")
+    BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR={{ desktop_flavor }}")
 
     # Determine AKMODS_BASE based on target variant and HWE status
     # AlmaLinux kernels (albacore, yellowfin, almalinux) use tuna-os for akmods, others use upstream ublue-os
@@ -177,11 +181,11 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
 # For local builds, pass `is_ci=0` (or omit) and `variant` as the local name.
 #
 # Usage (local): just build <variant> [flavor]
-# Example: just build yellowfin dx
+# Example: just build yellowfin kde
 #
 # Usage (CI): just build image_name=<final_name> variant=<base_os> is_ci=true [flavor]
 
-# Example: just build image_name=albacore variant=almalinux is_ci=true gdx
+# Example: just build image_name=albacore variant=almalinux is_ci=true kde-gdx
 build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='latest':
     #!/usr/bin/env bash
     set -euo pipefail
@@ -204,6 +208,7 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
 
     BASE_FOR_BUILD=""
     CONTAINERFILE="Containerfile"
+    DESKTOP_FLAVOR="gnome"
 
     case "{{ flavor }}" in
         "base")
@@ -225,14 +230,40 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
             fi
             CONTAINERFILE="Containerfile.gdx"
             ;;
+        "kde")
+            BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
+            CONTAINERFILE="Containerfile.kde"
+            DESKTOP_FLAVOR="kde"
+            ;;
+        "kde-hwe")
+            if [[ "{{ is_ci }}" = "1" ]]; then
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-kde:{{ tag }}"
+            else
+                BASE_FOR_BUILD="localhost/{{ variant }}-kde:{{ default_tag }}"
+            fi
+            CONTAINERFILE="Containerfile.kde.hwe"
+            DESKTOP_FLAVOR="kde"
+            ;;
+        "kde-gdx")
+            if [[ "{{ is_ci }}" = "1" ]]; then
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-kde-hwe:{{ tag }}"
+            else
+                BASE_FOR_BUILD="localhost/{{ variant }}-kde-hwe:{{ tag }}"
+            fi
+            CONTAINERFILE="Containerfile.kde.gdx"
+            DESKTOP_FLAVOR="kde"
+            ;;
         "all")
             just build {{ variant }} base
             just build {{ variant }} hwe
             just build {{ variant }} gdx
+            just build {{ variant }} kde
+            just build {{ variant }} kde-hwe
+            just build {{ variant }} kde-gdx
             exit 0
             ;;
         *)
-            echo "Unknown flavor '{{ flavor }}'. Valid options are: base, hwe, gdx, all."
+            echo "Unknown flavor '{{ flavor }}'. Valid options are: base, hwe, gdx, kde, kde-hwe, kde-gdx, all."
             exit 1
             ;;
     esac
@@ -245,13 +276,13 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
 
     # Determine HWE flag - hwe and gdx flavors always use coreos akmods
     ENABLE_HWE="0"
-    if [[ "{{ flavor }}" == "hwe" ]] || [[ "{{ flavor }}" == "gdx" ]]; then
+    if [[ "{{ flavor }}" == "hwe" ]] || [[ "{{ flavor }}" == "gdx" ]] || [[ "{{ flavor }}" == "kde-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx" ]]; then
         ENABLE_HWE="1"
     fi
 
     # Determine GDX flag
     ENABLE_GDX="0"
-    if [[ "{{ flavor }}" == "gdx" ]]; then
+    if [[ "{{ flavor }}" == "gdx" ]] || [[ "{{ flavor }}" == "kde-gdx" ]]; then
         ENABLE_GDX="1"
     fi
 
@@ -263,14 +294,15 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
     echo -e "  Base Image for Build: ${YELLOW}${BASE_FOR_BUILD}${NC}"
     echo -e "  Platform: ${YELLOW}{{ platform }}${NC}"
     echo -e "  is_ci: ${YELLOW}{{ is_ci }}${NC}"
+    echo -e "  Desktop Flavor: ${YELLOW}${DESKTOP_FLAVOR}${NC}"
     echo -e "  Enable HWE (uses coreos akmods): ${YELLOW}${ENABLE_HWE}${NC}"
     echo -e "  Enable GDX: ${YELLOW}${ENABLE_GDX}${NC}"
     echo -e "${BLUE}================================================================${NC}"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1" "${ENABLE_GDX}" "${ENABLE_HWE}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
     else
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" "${ENABLE_GDX}" "${ENABLE_HWE}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
     fi
 
 yellowfin variant='base':
@@ -292,7 +324,7 @@ build-all-base:
 
 build-all:
     #!/usr/bin/env bash
-    bash ./scripts/build-all-images.sh
+    bash ./scripts/build-all-images.sh --include-kde
 
 build-all-experimental:
     #!/usr/bin/env bash
