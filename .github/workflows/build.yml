@@ -224,7 +224,7 @@ jobs:
           echo "kde_hwe_gdx_matrix=$(echo "${MATRIX}" | jq -c '{"include": [.include[] | select(.run_kde_hwe_gdx == true)]}')" >> "$GITHUB_OUTPUT"
           echo "niri_hwe_gdx_matrix=$(echo "${MATRIX}" | jq -c '{"include": [.include[] | select(.run_niri_hwe_gdx == true)]}')" >> "$GITHUB_OUTPUT"
 
-  build-gnome:
+  build-base:
     needs: generate_matrix
     permissions:
       contents: read
@@ -237,142 +237,56 @@ jobs:
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
-      image-name: ${{ matrix.image_name }}-gnome
-      image-desc: ${{ matrix.description }}
+      image-name: ${{ matrix.image_name }}
+      image-desc: ${{ matrix.description }} no-DE base
       image-variant: ${{ matrix.image_variant }}
-      flavor: gnome
+      flavor: base
       platforms: ${{ matrix.platforms }}
       major-version: ${{ matrix.major_version }}
-      default-tag: ${{ matrix.default_tag }}
+      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-base', github.event.pull_request.number) || 'base' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ matrix.publish }}
 
-  build-hwe:
-    needs: [generate_matrix, build-hwe-base]
+  build-gnome:
+    needs: [generate_matrix, build-base]
     permissions:
       contents: read
       packages: write
       id-token: write
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
-      needs.build-hwe-base.result == 'success' &&
-      needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
+      needs.build-base.result == 'success' &&
+      needs.generate_matrix.outputs.base_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
+      matrix: ${{fromJson(needs.generate_matrix.outputs.base_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
-      image-name: ${{ matrix.image_name }}-gnome-hwe
-      image-desc: ${{ matrix.description }} GNOME HWE
+      image-name: ${{ matrix.image_name }}
+      image-desc: ${{ matrix.description }} GNOME
       image-variant: ${{ matrix.image_variant }}
-      flavor: gnome-hwe
+      flavor: gnome
       platforms: ${{ matrix.platforms }}
-      default-tag: ${{ matrix.default_tag }}
+      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-gnome', github.event.pull_request.number) || 'gnome' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
-      publish: ${{ github.event_name != 'pull_request' }}
+      publish: ${{ matrix.publish }}
       chain-base-image: >-
         ${{ github.event_name != 'pull_request' &&
-        format('ghcr.io/{0}/{1}-hwe-base:{2}', github.repository_owner,
-        matrix.image_name, matrix.default_tag) || '' }}
-
-  build-gdx:
-    needs: [generate_matrix, build-gdx-base]
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    # Note: AlmaLinux non-HWE GDX builds may fail due to driver version lag in repos
-    # This is expected and non-fatal; fail-fast: false ensures other variants continue
-    if: >-
-      ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
-      needs.build-gdx-base.result == 'success' &&
-      needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
-    strategy:
-      fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
-    uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
-    with:
-      image-name: ${{ matrix.image_name }}-gnome-gdx
-      image-desc: ${{ matrix.description }} GNOME GDX
-      image-variant: ${{ matrix.image_variant }}
-      flavor: gnome-gdx
-      platforms: ${{ matrix.platforms }}
-      default-tag: ${{ matrix.default_tag }}
-      rechunk: ${{ matrix.rechunk }}
-      sbom: ${{ matrix.sbom }}
-      publish: ${{ github.event_name != 'pull_request' }}
-      remove-unwanted-software: true
-      chain-base-image: >-
-        ${{ github.event_name != 'pull_request' &&
-        format('ghcr.io/{0}/{1}-gdx-base:{2}', github.repository_owner,
-        matrix.image_name, matrix.default_tag) || '' }}
-
-  build-hwe-base:
-    needs: [generate_matrix, build-gnome]
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    if: >-
-      ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
-      needs.build-gnome.result == 'success' &&
-      needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
-    strategy:
-      fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
-    uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
-    with:
-      image-name: ${{ matrix.image_name }}-hwe-base
-      image-desc: ${{ matrix.description }} HWE no-DE base
-      image-variant: ${{ matrix.image_variant }}
-      flavor: hwe-base
-      platforms: ${{ matrix.platforms }}
-      default-tag: ${{ matrix.default_tag }}
-      rechunk: ${{ matrix.rechunk }}
-      sbom: ${{ matrix.sbom }}
-      publish: ${{ github.event_name != 'pull_request' }}
-
-  build-gdx-base:
-    needs: [generate_matrix, build-gnome]
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-    if: >-
-      ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
-      needs.build-gnome.result == 'success' &&
-      needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
-    strategy:
-      fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
-    uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
-    with:
-      image-name: ${{ matrix.image_name }}-gdx-base
-      image-desc: ${{ matrix.description }} GDX no-DE base
-      image-variant: ${{ matrix.image_variant }}
-      flavor: gdx-base
-      platforms: ${{ matrix.platforms }}
-      default-tag: ${{ matrix.default_tag }}
-      rechunk: ${{ matrix.rechunk }}
-      sbom: ${{ matrix.sbom }}
-      publish: ${{ github.event_name != 'pull_request' }}
-      remove-unwanted-software: true
+        format('ghcr.io/{0}/{1}:base', github.repository_owner,
+        matrix.image_name) || '' }}
 
   build-kde:
-    needs: [generate_matrix, build-gnome]
+    needs: [generate_matrix, build-base]
     permissions:
       contents: read
       packages: write
       id-token: write
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
-      needs.build-gnome.result == 'success' &&
+      needs.build-base.result == 'success' &&
       needs.generate_matrix.outputs.kde_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
@@ -380,25 +294,120 @@ jobs:
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
-      image-name: ${{ matrix.image_name }}-kde
+      image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} KDE
       image-variant: ${{ matrix.image_variant }}
       flavor: kde
       platforms: ${{ matrix.platforms }}
-      default-tag: ${{ matrix.default_tag }}
+      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-kde', github.event.pull_request.number) || 'kde' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
-      publish: ${{ github.event_name != 'pull_request' }}
+      publish: ${{ matrix.publish }}
+      chain-base-image: >-
+        ${{ github.event_name != 'pull_request' &&
+        format('ghcr.io/{0}/{1}:base', github.repository_owner,
+        matrix.image_name) || '' }}
 
-  build-kde-hwe:
-    needs: [generate_matrix, build-hwe-base]
+  build-niri:
+    needs: [generate_matrix, build-base]
     permissions:
       contents: read
       packages: write
       id-token: write
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
-      needs.build-hwe-base.result == 'success' &&
+      needs.build-base.result == 'success' &&
+      needs.generate_matrix.outputs.niri_hwe_gdx_matrix != '{"include":[]}' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.niri_hwe_gdx_matrix)}}
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}
+      image-desc: ${{ matrix.description }} Niri
+      image-variant: ${{ matrix.image_variant }}
+      flavor: niri
+      platforms: ${{ matrix.platforms }}
+      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-niri', github.event.pull_request.number) || 'niri' }}
+      rechunk: ${{ matrix.rechunk }}
+      sbom: ${{ matrix.sbom }}
+      publish: ${{ matrix.publish }}
+      chain-base-image: >-
+        ${{ github.event_name != 'pull_request' &&
+        format('ghcr.io/{0}/{1}:base', github.repository_owner,
+        matrix.image_name) || '' }}
+
+  build-hwe:
+    needs: [generate_matrix, build-gnome]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    if: >-
+      ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build-gnome.result == 'success' &&
+      needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}
+      image-desc: ${{ matrix.description }} GNOME HWE
+      image-variant: ${{ matrix.image_variant }}
+      flavor: gnome-hwe
+      platforms: ${{ matrix.platforms }}
+      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-gnome-hwe', github.event.pull_request.number) || 'gnome-hwe' }}
+      rechunk: ${{ matrix.rechunk }}
+      sbom: ${{ matrix.sbom }}
+      publish: ${{ github.event_name != 'pull_request' }}
+      chain-base-image: >-
+        ${{ github.event_name != 'pull_request' &&
+        format('ghcr.io/{0}/{1}:gnome', github.repository_owner,
+        matrix.image_name) || '' }}
+
+  build-gdx:
+    needs: [generate_matrix, build-gnome]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    if: >-
+      ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build-gnome.result == 'success' &&
+      needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}
+      image-desc: ${{ matrix.description }} GNOME GDX
+      image-variant: ${{ matrix.image_variant }}
+      flavor: gnome-gdx
+      platforms: ${{ matrix.platforms }}
+      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-gnome-gdx', github.event.pull_request.number) || 'gnome-gdx' }}
+      rechunk: ${{ matrix.rechunk }}
+      sbom: ${{ matrix.sbom }}
+      publish: ${{ github.event_name != 'pull_request' }}
+      remove-unwanted-software: true
+      chain-base-image: >-
+        ${{ github.event_name != 'pull_request' &&
+        format('ghcr.io/{0}/{1}:gnome', github.repository_owner,
+        matrix.image_name) || '' }}
+
+  build-kde-hwe:
+    needs: [generate_matrix, build-kde]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    if: >-
+      ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build-kde.result == 'success' &&
       needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
@@ -406,29 +415,29 @@ jobs:
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
-      image-name: ${{ matrix.image_name }}-kde-hwe
+      image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} KDE HWE
       image-variant: ${{ matrix.image_variant }}
       flavor: kde-hwe
       platforms: ${{ matrix.platforms }}
-      default-tag: ${{ matrix.default_tag }}
+      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-kde-hwe', github.event.pull_request.number) || 'kde-hwe' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
       chain-base-image: >-
         ${{ github.event_name != 'pull_request' &&
-        format('ghcr.io/{0}/{1}-hwe-base:{2}', github.repository_owner,
-        matrix.image_name, matrix.default_tag) || '' }}
+        format('ghcr.io/{0}/{1}:kde', github.repository_owner,
+        matrix.image_name) || '' }}
 
   build-kde-gdx:
-    needs: [generate_matrix, build-gdx-base]
+    needs: [generate_matrix, build-kde]
     permissions:
       contents: read
       packages: write
       id-token: write
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
-      needs.build-gdx-base.result == 'success' &&
+      needs.build-kde.result == 'success' &&
       needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
@@ -436,30 +445,30 @@ jobs:
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
-      image-name: ${{ matrix.image_name }}-kde-gdx
+      image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} KDE GDX
       image-variant: ${{ matrix.image_variant }}
       flavor: kde-gdx
       platforms: ${{ matrix.platforms }}
-      default-tag: ${{ matrix.default_tag }}
+      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-kde-gdx', github.event.pull_request.number) || 'kde-gdx' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
       remove-unwanted-software: true
       chain-base-image: >-
         ${{ github.event_name != 'pull_request' &&
-        format('ghcr.io/{0}/{1}-gdx-base:{2}', github.repository_owner,
-        matrix.image_name, matrix.default_tag) || '' }}
+        format('ghcr.io/{0}/{1}:kde', github.repository_owner,
+        matrix.image_name) || '' }}
 
   build-niri-hwe:
-    needs: [generate_matrix, build-hwe-base]
+    needs: [generate_matrix, build-niri]
     permissions:
       contents: read
       packages: write
       id-token: write
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
-      needs.build-hwe-base.result == 'success' &&
+      needs.build-niri.result == 'success' &&
       needs.generate_matrix.outputs.niri_hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
@@ -467,29 +476,29 @@ jobs:
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
-      image-name: ${{ matrix.image_name }}-niri-hwe
+      image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} Niri HWE
       image-variant: ${{ matrix.image_variant }}
       flavor: niri-hwe
       platforms: ${{ matrix.platforms }}
-      default-tag: ${{ matrix.default_tag }}
+      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-niri-hwe', github.event.pull_request.number) || 'niri-hwe' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
       chain-base-image: >-
         ${{ github.event_name != 'pull_request' &&
-        format('ghcr.io/{0}/{1}-hwe-base:{2}', github.repository_owner,
-        matrix.image_name, matrix.default_tag) || '' }}
+        format('ghcr.io/{0}/{1}:niri', github.repository_owner,
+        matrix.image_name) || '' }}
 
   build-niri-gdx:
-    needs: [generate_matrix, build-gdx-base]
+    needs: [generate_matrix, build-niri]
     permissions:
       contents: read
       packages: write
       id-token: write
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
-      needs.build-gdx-base.result == 'success' &&
+      needs.build-niri.result == 'success' &&
       needs.generate_matrix.outputs.niri_hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
@@ -497,17 +506,17 @@ jobs:
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
-      image-name: ${{ matrix.image_name }}-niri-gdx
+      image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} Niri GDX
       image-variant: ${{ matrix.image_variant }}
       flavor: niri-gdx
       platforms: ${{ matrix.platforms }}
-      default-tag: ${{ matrix.default_tag }}
+      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-niri-gdx', github.event.pull_request.number) || 'niri-gdx' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
       remove-unwanted-software: true
       chain-base-image: >-
         ${{ github.event_name != 'pull_request' &&
-        format('ghcr.io/{0}/{1}-gdx-base:{2}', github.repository_owner,
-        matrix.image_name, matrix.default_tag) || '' }}
+        format('ghcr.io/{0}/{1}:niri', github.repository_owner,
+        matrix.image_name) || '' }}

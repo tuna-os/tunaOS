@@ -208,9 +208,15 @@ jobs:
         id: chunkify
         env:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          IMAGE_VARIANT: ${{ inputs.image-variant }}
+          FLAVOR: ${{ inputs.flavor }}
           DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
         run: |
-          IMAGE_REF="localhost/${IMAGE_NAME}:${DEFAULT_TAG}"
+          LOCAL_IMAGE_NAME="${IMAGE_VARIANT}"
+          if [ "${FLAVOR}" != "base" ]; then
+            LOCAL_IMAGE_NAME="${LOCAL_IMAGE_NAME}-${FLAVOR}"
+          fi
+          IMAGE_REF="localhost/${LOCAL_IMAGE_NAME}:${DEFAULT_TAG}"
           echo "==> Chunkifying ${IMAGE_REF}..."
 
           # Get config from existing image
@@ -243,11 +249,17 @@ jobs:
         env:
           CHUNKIFY_RAN: ${{ inputs.rechunk }}
           CHUNKIFY_REF: ${{ steps.chunkify.outputs.ref }}
+          IMAGE_VARIANT: ${{ inputs.image-variant }}
+          FLAVOR: ${{ inputs.flavor }}
         run: |
           if [ "${CHUNKIFY_RAN}" == "true" ] && [ -n "${CHUNKIFY_REF}" ]; then
             IMAGE="${CHUNKIFY_REF}"
           else
-            IMAGE="localhost/${IMAGE_NAME}:${DEFAULT_TAG}"
+            LOCAL_IMAGE_NAME="${IMAGE_VARIANT}"
+            if [ "${FLAVOR}" != "base" ]; then
+              LOCAL_IMAGE_NAME="${LOCAL_IMAGE_NAME}-${FLAVOR}"
+            fi
+            IMAGE="localhost/${LOCAL_IMAGE_NAME}:${DEFAULT_TAG}"
           fi
           podman image tag "${IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
 

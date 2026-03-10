@@ -367,7 +367,7 @@ build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag=
     esac
 
     # Allow workflow callers to chain from an explicit parent image.
-    if [[ -n "{{ chain_base_image }}" ]] && [[ "{{ flavor }}" != "base" ]] && [[ "{{ flavor }}" != "gnome" ]]; then
+    if [[ -n "{{ chain_base_image }}" ]] && [[ "{{ flavor }}" != "base" ]]; then
         BASE_FOR_BUILD="{{ chain_base_image }}"
     fi
 
