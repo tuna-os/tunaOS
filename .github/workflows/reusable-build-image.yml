@@ -241,10 +241,10 @@ jobs:
             fi
             IMAGE="localhost/${LOCAL_IMAGE_NAME}:${DEFAULT_TAG}"
           fi
-          podman image tag "${IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+          sudo podman image tag "${IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
 
           IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
-          IMAGE_DIGEST="$(podman image inspect --format '{{.Digest}}' "${IMAGE}")"
+          IMAGE_DIGEST="$(sudo podman image inspect --format '{{.Digest}}' "${IMAGE}")"
           echo "image=${IMAGE}" >> "${GITHUB_OUTPUT}"
           echo "digest=${IMAGE_DIGEST}" >> "${GITHUB_OUTPUT}"
 
@@ -253,8 +253,9 @@ jobs:
         env:
           REGISTRY: ghcr.io
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+          echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+          # Also login for docker (some tools might expect it)
+          echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
 
       - name: Push to GHCR
         if: ${{ inputs.publish }}
@@ -268,11 +269,11 @@ jobs:
           MAX_RETRIES: 3
         run: |
           set -x
-          podman tag "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
+          sudo podman tag "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
           for i in $(seq "${MAX_RETRIES}"); do
-            podman push --digestfile=/tmp/digestfile "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}" && break || sleep $((5 * i));
+            sudo podman push --digestfile=/tmp/digestfile "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}" && break || sleep $((5 * i));
           done
-          REMOTE_IMAGE_DIGEST=$(cat /tmp/digestfile)
+          REMOTE_IMAGE_DIGEST=$(sudo cat /tmp/digestfile)
           echo "remote_image_digest=${REMOTE_IMAGE_DIGEST}" >> $GITHUB_OUTPUT
 
       - name: PR Testing Instructions
@@ -316,7 +317,7 @@ jobs:
           TARGET_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
 
           echo "Pulling base image $BASE_IMAGE..."
-          if ! podman pull "$BASE_IMAGE"; then
+          if ! sudo podman pull "$BASE_IMAGE"; then
             echo "Failed to pull $BASE_IMAGE. Skipping diff."
             exit 0
           fi
@@ -578,7 +579,7 @@ jobs:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
-          podman manifest create ${IMAGE_REGISTRY}/${IMAGE_NAME}
+          sudo podman manifest create ${IMAGE_REGISTRY}/${IMAGE_NAME}
           echo "MANIFEST=${IMAGE_REGISTRY}/${IMAGE_NAME}" >> $GITHUB_OUTPUT
 
       - name: Populate Manifest
@@ -607,13 +608,13 @@ jobs:
             fi
 
             arch_for_podman="${platform_original#linux/}"
-            podman manifest add "${MANIFEST}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}" --os linux --arch "${arch_for_podman}"
+            sudo podman manifest add "${MANIFEST}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}" --os linux --arch "${arch_for_podman}"
           done
 
           # Apply the labels to the manifest (separated by newlines)
           while IFS= read -r label; do
             echo "Applying label ${label} to manifest"
-            podman manifest annotate --index --annotation "$label" "${MANIFEST}"
+            sudo podman manifest annotate --index --annotation "$label" "${MANIFEST}"
           done <<< "${LABELS}"
 
       - name: Login to GitHub Container Registry
@@ -621,7 +622,7 @@ jobs:
         env:
           REGISTRY: ghcr.io
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+          echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
 
       - name: Push Manifest
         if: github.event_name != 'pull_request'
@@ -633,10 +634,10 @@ jobs:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
           while IFS= read -r tag; do
-            podman manifest push --all=false --digestfile=/tmp/digestfile $MANIFEST $IMAGE_REGISTRY/$IMAGE_NAME:$tag
+            sudo podman manifest push --all=false --digestfile=/tmp/digestfile $MANIFEST $IMAGE_REGISTRY/$IMAGE_NAME:$tag
           done <<< "$TAGS"
 
-          DIGEST=$(cat /tmp/digestfile)
+          DIGEST=$(sudo cat /tmp/digestfile)
           echo "DIGEST=$DIGEST" >> $GITHUB_OUTPUT
           echo "IMAGE=$IMAGE_REGISTRY/$IMAGE_NAME" >> $GITHUB_OUTPUT
 
@@ -656,7 +657,7 @@ jobs:
         env:
           REGISTRY: ghcr.io
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+          echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
           cat ${XDG_RUNTIME_DIR}/containers/auth.json > ~/.docker/config.json
 
       - name: Install Cosign
@@ -688,9 +689,9 @@ jobs:
         env:
           REGISTRY: ghcr.io
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+          echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
           # Also login with skopeo
-          echo "${{ secrets.GITHUB_TOKEN }}" | skopeo login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+          echo "${{ secrets.GITHUB_TOKEN }}" | sudo skopeo login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
 
       - name: Pull Image and Apply Tags
         id: tag
@@ -706,13 +707,13 @@ jobs:
           SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
 
           # Always copy to sha-based tag
-          skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${REFS}"
+          sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${REFS}"
 
           # Only tag as 'latest' if all default platforms for this variant were built
           if [ "${ALL_PLATFORMS_BUILT}" = "true" ]; then
             echo "All default platforms for this variant built successfully - tagging as latest"
-            skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:$(date +%Y%m%d)"
-            skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
+            sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:$(date +%Y%m%d)"
+            sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
           else
             echo "Not all default platforms for this variant built - skipping latest tag"
