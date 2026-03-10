@@ -140,11 +140,8 @@ jobs:
         if: ${{ matrix.platform != 'linux/arm64' && inputs.cleanup_runner }}
         uses: ublue-os/container-storage-action@main
 
-      - name: Setup Homebrew
-        uses: Homebrew/actions/setup-homebrew@master
-
-      - name: Install Just via Homebrew
-        run: brew install just
+      - name: Setup TunaOS Build Environment
+        uses: ./.github/actions/setup-tunaos
 
       - name: Check Just Syntax
         shell: bash
@@ -250,11 +247,7 @@ jobs:
 
       - name: Login to GitHub Container Registry
         if: ${{ inputs.publish }}
-        env:
-          REGISTRY: ghcr.io
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
-          echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+        uses: ./.github/actions/ghcr-login
 
       - name: Push to GHCR
         if: ${{ inputs.publish }}
@@ -652,13 +645,12 @@ jobs:
       packages: write
       id-token: write
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Login to GitHub Container Registry
         if: ${{ inputs.publish }}
-        env:
-          REGISTRY: ghcr.io
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
-          echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+        uses: ./.github/actions/ghcr-login
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
