@@ -593,21 +593,24 @@ chunkify image_ref:
     # Run chunkah (default 64 layers) and pipe to podman load
     # Uses --mount=type=image to expose the source image content to chunkah
     # Note: We need --privileged for some podman-in-podman/mount scenarios or just standard access
-    LOADED=$($SUDO_CMD podman run --rm \
+    if LOADED=$($SUDO_CMD podman run --rm \
         --security-opt label=disable \
         --mount=type=image,src="{{ image_ref }}",target=/chunkah \
         -e "CHUNKAH_CONFIG_STR=$CONFIG" \
-        quay.io/jlebon/chunkah:latest build | $SUDO_CMD podman load)
+        quay.io/jlebon/chunkah:latest build | $SUDO_CMD podman load); then
 
-    echo "$LOADED"
+        echo "$LOADED"
 
-    # Parse the loaded image reference
-    NEW_REF=$(echo "$LOADED" | grep -oP '(?<=Loaded image: ).*' || \
-              echo "$LOADED" | grep -oP '(?<=Loaded image\(s\): ).*')
+        # Parse the loaded image reference
+        NEW_REF=$(echo "$LOADED" | grep -oP '(?<=Loaded image: ).*' || \
+                  echo "$LOADED" | grep -oP '(?<=Loaded image\(s\): ).*')
 
-    if [ -n "$NEW_REF" ] && [ "$NEW_REF" != "{{ image_ref }}" ]; then
-        echo "==> Retagging chunked image to {{ image_ref }}..."
-        $SUDO_CMD podman tag "$NEW_REF" "{{ image_ref }}"
+        if [ -n "$NEW_REF" ] && [ "$NEW_REF" != "{{ image_ref }}" ]; then
+            echo "==> Retagging chunked image to {{ image_ref }}..."
+            $SUDO_CMD podman tag "$NEW_REF" "{{ image_ref }}"
+        fi
+    else
+        echo "==> WARNING: Chunkify failed (non-fatal), skipping layer optimization."
     fi
 
 qcow2 variant flavor='gnome' repo='local':
