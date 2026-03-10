@@ -69,24 +69,29 @@ export base_image_tag := env("BASE_IMAGE_TAG", "10")
 default:
     @{{ just }} --list
 
+# Initialize and update git submodules
+submodules:
+    #!/usr/bin/env bash
+    git submodule update --init --recursive
+
 # Check Just Syntax
 check:
     #!/usr/bin/env bash
     echo "Checking syntax of shell scripts..."
-    /usr/bin/find . -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
-    find . -type f -name "*.yaml" | while read -r file; do
+    /usr/bin/find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
+    find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -type f -name "*.yaml" | while read -r file; do
         echo "Checking syntax: $file"
         yamllint -c ./.yamllint.yml "$file" || { exit 1; }
     done
-    find . -type f -name "*.yml" | while read -r file; do
+    find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -type f -name "*.yml" | while read -r file; do
         echo "Checking syntax: $file"
         yamllint "$file" || { exit 1; }
     done
-    find . -type f -name "*.json" | while read -r file; do
+    find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -type f -name "*.json" | while read -r file; do
         echo "Checking syntax: $file"
         jq . "$file" > /dev/null || { exit 1; }
     done
-    find . -type f -name "*.just" | while read -r file; do
+    find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -type f -name "*.just" | while read -r file; do
         echo "Checking syntax: $file"
         just --unstable --fmt --check -f $file
     done
@@ -97,7 +102,7 @@ check:
 fix:
     #!/usr/bin/env bash
     echo "Fixing syntax of shell scripts..."
-        /usr/bin/find . -iname "*.sh" -type f -exec shfmt --write "{}" ";"
+        /usr/bin/find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -iname "*.sh" -type f -exec shfmt --write "{}" ";"
     find . -type f -name "*.just" | while read -r file; do
         echo "Checking syntax: $file"
         just --unstable --fmt -f $file
@@ -255,7 +260,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
 # Usage (CI): just build image_name=<final_name> variant=<base_os> is_ci=true [flavor]
 
 # Example: just build image_name=albacore variant=almalinux is_ci=true kde-gdx
-build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='latest':
+build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='latest': submodules
     #!/usr/bin/env bash
     set -euo pipefail
 

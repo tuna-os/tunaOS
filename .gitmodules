@@ -1,21 +1,24 @@
 [submodule "system_files/usr/share/gnome-shell/extensions/appindicatorsupport@rgcjonas.gmail.com"]
 	path = system_files/usr/share/gnome-shell/extensions/appindicatorsupport@rgcjonas.gmail.com
-	url = https://github.com/ubuntu/gnome-shell-extension-appindicator.git
+	url = https://github.com/ubuntu/gnome-shell-extension-appindicator
 [submodule "system_files/usr/share/gnome-shell/extensions/blur-my-shell@aunetx"]
 	path = system_files/usr/share/gnome-shell/extensions/blur-my-shell@aunetx
-	url = https://github.com/aunetx/blur-my-shell.git
+	url = https://github.com/aunetx/blur-my-shell
 [submodule "system_files/usr/share/gnome-shell/extensions/tmp/caffeine"]
 	path = system_files/usr/share/gnome-shell/extensions/tmp/caffeine
-	url = https://github.com/eonpatapon/gnome-shell-extension-caffeine.git
+	url = https://github.com/eonpatapon/gnome-shell-extension-caffeine
 [submodule "system_files/usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com"]
 	path = system_files/usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com
-	url = https://github.com/micheleg/dash-to-dock.git
+	url = https://github.com/micheleg/dash-to-dock
 [submodule "system_files/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io"]
 	path = system_files/usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io
-	url = https://github.com/GSConnect/gnome-shell-extension-gsconnect.git
+	url = https://github.com/GSConnect/gnome-shell-extension-gsconnect
 [submodule "system_files/usr/share/gnome-shell/extensions/logomenu@aryan_k"]
 	path = system_files/usr/share/gnome-shell/extensions/logomenu@aryan_k
-	url = https://github.com/ublue-os/Logomenu.git
+	url = https://github.com/Aryan20/Logomenu
 [submodule "system_files/usr/share/gnome-shell/extensions/search-light@icedman.github.com"]
 	path = system_files/usr/share/gnome-shell/extensions/search-light@icedman.github.com
-	url = https://github.com/icedman/search-light.git
+	url = https://github.com/icedman/search-light
+[submodule "packages-repo"]
+	path = packages-repo
+	url = https://github.com/tuna-os/packages.git
