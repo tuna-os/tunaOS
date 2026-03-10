@@ -127,7 +127,7 @@ case "${1:-}" in
 	echo "Building GNOME extensions from source..."
 
 	# Install build tooling
-	dnf -y install glib2-devel meson sassc cmake dbus-devel
+	dnf -y install glib2-devel meson sassc cmake dbus-devel unzip
 
 	# AppIndicator Support
 	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/appindicatorsupport@rgcjonas.gmail.com/schemas
