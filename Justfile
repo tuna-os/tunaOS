@@ -1,55 +1,3 @@
-# --- Environment Variables & Exports ---
-# ==============================================================================
-#  PACKAGE MANAGEMENT (TunaOS Custom Packages)
-# ==============================================================================
-
-# Download/sync TunaOS custom packages from GHCR to local cache
-sync-packages:
-    #!/usr/bin/env bash
-    chmod +x build_scripts/download-tuna-packages.sh
-    echo "Syncing TunaOS custom packages from GHCR..."
-    export TUNA_PACKAGES_CACHE="${HOME}/.cache/tuna-packages"
-    mkdir -p "${TUNA_PACKAGES_CACHE}"
-    build_scripts/download-tuna-packages.sh
-    echo "✓ Packages synced to ${TUNA_PACKAGES_CACHE}"
-
-# List available TunaOS custom packages and their versions
-list-packages:
-    #!/usr/bin/env bash
-    CACHE_DIR="${HOME}/.cache/tuna-packages"
-    if [ -d "${CACHE_DIR}" ] && [ -n "$(ls -A "${CACHE_DIR}"/*.rpm 2>/dev/null)" ]; then
-        echo "TunaOS Custom Packages (cached):"
-        echo "================================="
-        for rpm in "${CACHE_DIR}"/*.rpm; do
-            if [ -f "${rpm}" ]; then
-                rpm -qip "${rpm}" 2>/dev/null | grep -E "^(Name|Version|Release|Architecture)" | sed 's/^/  /'
-                echo ""
-            fi
-        done
-    else
-        echo "No packages in cache. Run 'just sync-packages' to download."
-    fi
-    echo ""
-    echo "Configured packages (from packages.list):"
-    echo "=========================================="
-    if [ -f build_scripts/packages.list ]; then
-        grep -v '^#' build_scripts/packages.list | grep -v '^[[:space:]]*$' || echo "  (none configured)"
-    else
-        echo "  packages.list not found"
-    fi
-
-# Clean local TunaOS package cache
-clean-package-cache:
-    #!/usr/bin/env bash
-    CACHE_DIR="${HOME}/.cache/tuna-packages"
-    echo "Cleaning TunaOS package cache..."
-    if [ -d "${CACHE_DIR}" ]; then
-        rm -rf "${CACHE_DIR}"
-        echo "✓ Cache cleared: ${CACHE_DIR}"
-    else
-        echo "Cache directory does not exist: ${CACHE_DIR}"
-    fi
-
 export repo_organization := env("GITHUB_REPOSITORY_OWNER", "tuna-os")
 export default_tag := env("DEFAULT_TAG", "latest")
 export bib_image := env("BIB_IMAGE", "quay.io/centos-bootc/bootc-image-builder:latest")
@@ -267,7 +215,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
 # Usage (CI): just build image_name=<final_name> variant=<base_os> is_ci=true [flavor]
 
 # Example: just build image_name=albacore variant=almalinux is_ci=true kde-gdx
-build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='latest' chain_base_image='':
+build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag='latest' chain_base_image='':
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -300,48 +248,52 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
     case "{{ flavor }}" in
         "base")
             BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
+            DESKTOP_FLAVOR="base-no-de"
             ;;
-        "hwe")
+        "gnome")
+            BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
+            ;;
+        "hwe"|"gnome-hwe")
+            if [[ "{{ is_ci }}" = "1" ]]; then
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-gnome:{{ tag }}"
+            else
+                BASE_FOR_BUILD="localhost/{{ variant }}-gnome:{{ default_tag }}"
+            fi
+            CONTAINERFILE="Containerfile.hwe"
+            ;;
+        "gdx"|"gnome-gdx")
+            if [[ "{{ is_ci }}" = "1" ]]; then
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-gnome:{{ tag }}"
+            else
+                BASE_FOR_BUILD="localhost/{{ variant }}-gnome:{{ default_tag }}"
+            fi
+            CONTAINERFILE="Containerfile.gdx"
+            ;;
+        "gdx-hwe"|"gnome-gdx-hwe")
+            if [[ "{{ is_ci }}" = "1" ]]; then
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-gnome-hwe:{{ tag }}"
+            else
+                BASE_FOR_BUILD="localhost/{{ variant }}-gnome-hwe:{{ default_tag }}"
+            fi
+            CONTAINERFILE="Containerfile.gdx"
+            ;;
+        "hwe-base"|"hwe-base-node")
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ tag }}"
             else
                 BASE_FOR_BUILD="localhost/{{ variant }}:{{ default_tag }}"
             fi
             CONTAINERFILE="Containerfile.hwe"
+            DESKTOP_FLAVOR="hwe-base"
             ;;
-        "gdx")
+        "gdx-base"|"gdx-base-node")
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ tag }}"
             else
                 BASE_FOR_BUILD="localhost/{{ variant }}:{{ default_tag }}"
             fi
             CONTAINERFILE="Containerfile.gdx"
-            ;;
-        "gdx-hwe")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-hwe:{{ tag }}"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}-hwe:{{ default_tag }}"
-            fi
-            CONTAINERFILE="Containerfile.gdx"
-            ;;
-        "hwe-base-node")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ tag }}"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}:{{ default_tag }}"
-            fi
-            CONTAINERFILE="Containerfile.hwe"
-            DESKTOP_FLAVOR="hwe-base-node"
-            ;;
-        "gdx-base-node")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ tag }}"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}:{{ default_tag }}"
-            fi
-            CONTAINERFILE="Containerfile.gdx"
-            DESKTOP_FLAVOR="gdx-base-node"
+            DESKTOP_FLAVOR="gdx-base"
             ;;
         "kde")
             BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
@@ -409,11 +361,12 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
             ;;
         "all")
             just build {{ variant }} base
-            just build {{ variant }} hwe
-            just build {{ variant }} gdx
-            just build {{ variant }} hwe-base-node
-            just build {{ variant }} gdx-base-node
-            just build {{ variant }} gdx-hwe
+            just build {{ variant }} gnome
+            just build {{ variant }} gnome-hwe
+            just build {{ variant }} gnome-gdx
+            just build {{ variant }} hwe-base
+            just build {{ variant }} gdx-base
+            just build {{ variant }} gnome-gdx-hwe
             just build {{ variant }} kde
             just build {{ variant }} kde-hwe
             just build {{ variant }} kde-gdx
@@ -425,13 +378,13 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
             exit 0
             ;;
         *)
-            echo "Unknown flavor '{{ flavor }}'. Valid options are: base, hwe, gdx, hwe-base-node, gdx-base-node, gdx-hwe, kde, kde-hwe, kde-gdx, kde-gdx-hwe, niri, niri-hwe, niri-gdx, niri-gdx-hwe, all."
+            echo "Unknown flavor '{{ flavor }}'. Valid options are: base, gnome, gnome-hwe, gnome-gdx, hwe-base, gdx-base, gnome-gdx-hwe, kde, kde-hwe, kde-gdx, kde-gdx-hwe, niri, niri-hwe, niri-gdx, niri-gdx-hwe, all."
             exit 1
             ;;
     esac
 
     # Allow workflow callers to chain from an explicit parent image.
-    if [[ -n "{{ chain_base_image }}" ]] && [[ "{{ flavor }}" != "base" ]]; then
+    if [[ -n "{{ chain_base_image }}" ]] && [[ "{{ flavor }}" != "base" ]] && [[ "{{ flavor }}" != "gnome" ]]; then
         BASE_FOR_BUILD="{{ chain_base_image }}"
     fi
 
@@ -443,13 +396,13 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
 
     # Determine HWE flag - hwe and gdx flavors always use coreos akmods
     ENABLE_HWE="0"
-    if [[ "{{ flavor }}" == "hwe" ]] || [[ "{{ flavor }}" == "hwe-base-node" ]] || [[ "{{ flavor }}" == "gdx-hwe" ]] || [[ "{{ flavor }}" == "kde-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx-hwe" ]] || [[ "{{ flavor }}" == "niri-hwe" ]] || [[ "{{ flavor }}" == "niri-gdx-hwe" ]]; then
+    if [[ "{{ flavor }}" == "hwe" ]] || [[ "{{ flavor }}" == "gnome-hwe" ]] || [[ "{{ flavor }}" == "hwe-base" ]] || [[ "{{ flavor }}" == "hwe-base-node" ]] || [[ "{{ flavor }}" == "gdx-hwe" ]] || [[ "{{ flavor }}" == "gnome-gdx-hwe" ]] || [[ "{{ flavor }}" == "kde-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx-hwe" ]] || [[ "{{ flavor }}" == "niri-hwe" ]] || [[ "{{ flavor }}" == "niri-gdx-hwe" ]]; then
         ENABLE_HWE="1"
     fi
 
     # Determine GDX flag
     ENABLE_GDX="0"
-    if [[ "{{ flavor }}" == "gdx" ]] || [[ "{{ flavor }}" == "gdx-base-node" ]] || [[ "{{ flavor }}" == "kde-gdx" ]] || [[ "{{ flavor }}" == "gdx-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx-hwe" ]] || [[ "{{ flavor }}" == "niri-gdx" ]] || [[ "{{ flavor }}" == "niri-gdx-hwe" ]]; then
+    if [[ "{{ flavor }}" == "gdx" ]] || [[ "{{ flavor }}" == "gnome-gdx" ]] || [[ "{{ flavor }}" == "gdx-base" ]] || [[ "{{ flavor }}" == "gdx-base-node" ]] || [[ "{{ flavor }}" == "kde-gdx" ]] || [[ "{{ flavor }}" == "gdx-hwe" ]] || [[ "{{ flavor }}" == "gnome-gdx-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx-hwe" ]] || [[ "{{ flavor }}" == "niri-gdx" ]] || [[ "{{ flavor }}" == "niri-gdx-hwe" ]]; then
         ENABLE_GDX="1"
     fi
 
@@ -476,34 +429,34 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
         {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
     fi
 
-yellowfin variant='base':
+yellowfin variant='gnome':
     just build yellowfin {{ variant }}
 
-albacore variant='base':
+albacore variant='gnome':
     just build albacore {{ variant }}
 
-skipjack variant='base':
+skipjack variant='gnome':
     just build skipjack {{ variant }}
 
-bonito variant='base':
+bonito variant='gnome':
     just build bonito {{ variant }}
 
 # NOTE: redfin requires a Red Hat account authenticated to registry.redhat.io.
 
 # Images cannot be published publicly due to the RHEL EULA. See docs/rhel-setup.md.
-redfin variant='base':
+redfin variant='gnome':
     just build redfin {{ variant }}
 
-# Build full GNOME chain for a variant: base → hwe → gdx → gdx-hwe
+# Build full GNOME chain for a variant: gnome → gnome-hwe → gnome-gdx → gnome-gdx-hwe
 build-chain variant:
     #!/usr/bin/env bash
     set -euo pipefail
-    echo "Building full chain for {{ variant }}: base → hwe → gdx → gdx-hwe"
-    just build {{ variant }} base
-    just build {{ variant }} hwe
+    echo "Building full chain for {{ variant }}: gnome → gnome-hwe → gnome-gdx → gnome-gdx-hwe"
+    just build {{ variant }} gnome
+    just build {{ variant }} gnome-hwe
     # AlmaLinux non-HWE GDX may fail due to driver version lag in repos
-    just build {{ variant }} gdx || echo "⚠ Warning: {{ variant }} GDX build failed (non-fatal for AlmaLinux variants)"
-    just build {{ variant }} gdx-hwe
+    just build {{ variant }} gnome-gdx || echo "⚠ Warning: {{ variant }} GNOME-GDX build failed (non-fatal for AlmaLinux variants)"
+    just build {{ variant }} gnome-gdx-hwe
     echo "✓ Complete: {{ variant }} full chain built successfully"
 
 # Build full KDE chain for a variant: kde → kde-hwe → kde-gdx → kde-gdx-hwe

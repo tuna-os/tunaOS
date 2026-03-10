@@ -6,50 +6,11 @@ source /run/context/build_scripts/lib.sh
 
 case "${1:-}" in
 "base")
-	# Download TunaOS custom packages (GNOME 48, etc) from GHCR
-	# This replaces the COPR repositories we used to use
+	# Use COPR GNOME 48 packages for EL10-based builds.
 	if [[ $IS_FEDORA == false ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
-		echo "Downloading TunaOS custom packages..."
-		chmod +x /run/context/build_scripts/download-tuna-packages.sh
-		/run/context/build_scripts/download-tuna-packages.sh || true
-
-		# Install full GNOME 48 stack from TunaOS GHCR cache
-		TUNA_CACHE="/tmp/tuna-packages"
-		GNOME_RPMS=(
-			gnome-shell
-			mutter
-			glib2
-			gdm
-			gnome-control-center
-			gnome-initial-setup
-			gnome-session
-			gnome-settings-daemon
-			gsettings-desktop-schemas
-			gtk4
-			libadwaita
-			libcupsfilters
-			pango
-			poppler
-			tecla
-			xdg-desktop-portal
-			xdg-desktop-portal-gnome
-		)
-
-		CACHED_RPMS=()
-		for pkg in "${GNOME_RPMS[@]}"; do
-			mapfile -d '' FOUND < <(find "${TUNA_CACHE}" -name "${pkg}-*.rpm" -not -name "*.src.rpm" -print0 2>/dev/null)
-			CACHED_RPMS+=("${FOUND[@]}")
-		done
-
-		if [ "${#CACHED_RPMS[@]}" -gt 0 ]; then
-			echo "Installing TunaOS GNOME 48 packages from cache (${#CACHED_RPMS[@]} RPMs)..."
-			dnf -y install "${CACHED_RPMS[@]}" || true
-		else
-			echo "Warning: TunaOS GNOME packages not found in cache, falling back to COPR"
-			dnf -y copr enable jreilly1821/c10s-gnome
-			dnf -y swap gnome-shell gnome-shell-48.3 --allowerasing || true
-			dnf -y copr disable jreilly1821/c10s-gnome
-		fi
+		dnf -y copr enable jreilly1821/c10s-gnome
+		dnf -y swap gnome-shell gnome-shell-48.3 --allowerasing || true
+		dnf -y copr disable jreilly1821/c10s-gnome
 	fi
 
 	# Install base groups and packages - different between Fedora and RHEL/AlmaLinux

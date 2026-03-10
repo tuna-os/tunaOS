@@ -86,7 +86,6 @@ case "${1:-}" in
 			ptyxis \
 			qt6-qtmultimedia \
 			steam-devices \
-			tailscale \
 			udiskie \
 			webp-pixbuf-loader \
 			wireplumber \
@@ -181,10 +180,6 @@ case "${1:-}" in
 		matugen \
 		dgop \
 		danksearch
-
-	# Install Tailscale VPN
-	dnf config-manager --add-repo https://pkgs.tailscale.com/stable/rhel/10/tailscale.repo
-	dnf -y install --enablerepo tailscale-stable tailscale
 
 	# Install Niri desktop environment packages
 	dnf -y --enablerepo copr:copr.fedorainfracloud.org:yselkowitz:wlroots-epel install --setopt=install_weak_deps=False \
