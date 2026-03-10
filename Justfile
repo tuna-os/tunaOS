@@ -187,9 +187,9 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
         BUILD_TARGET="niri"
     elif [[ "{{ desktop_flavor }}" == "base-no-de" ]]; then
         BUILD_TARGET="base-no-de"
-    elif [[ "{{ desktop_flavor }}" == "hwe-base-node" ]]; then
+    elif [[ "{{ desktop_flavor }}" == "hwe-base" ]] || [[ "{{ desktop_flavor }}" == "hwe-base-node" ]]; then
         BUILD_TARGET="hwe-base"
-    elif [[ "{{ desktop_flavor }}" == "gdx-base-node" ]]; then
+    elif [[ "{{ desktop_flavor }}" == "gdx-base" ]] || [[ "{{ desktop_flavor }}" == "gdx-base-node" ]]; then
         BUILD_TARGET="gdx-base"
     fi
 
