@@ -6,20 +6,12 @@ printf "::group:: === 10 Base Packages ===\n"
 
 source /run/context/build_scripts/lib.sh
 
-if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
-	/run/context/build_scripts/10-kde-base-packages.sh
-	exit 0
-fi
-
 # This is the base for a minimal GNOME system on CentOS Stream.
 
 # This thing slows down downloads A LOT for no reason
 if [[ $IS_CENTOS == true ]]; then
 	dnf remove -y subscription-manager
 fi
-# dnf -y install centos-release-hyperscale-kernel
-# dnf config-manager --set-disabled "centos-hyperscale,centos-hyperscale-kernel"
-# dnf --enablerepo="centos-hyperscale" --enablerepo="centos-hyperscale-kernel" -y update kernel
 
 dnf -y install 'dnf-command(versionlock)'
 dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
@@ -82,14 +74,19 @@ if [[ $IS_ALMALINUX == true ]] && [ "$MAJOR_VERSION_NUMBER" -ge 9 ]; then
 fi
 
 if [[ $IS_FEDORA == false ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
-	if is_x86_64_v2; then
-		dnf -y copr enable jreilly1821/a10-gnome-x86-v2 alma-kitten+epel-10-x86_64_v2
-		# Set high priority for GNOME COPR to override OS packages
-		dnf config-manager --set-enabled --setopt "copr:copr.fedorainfracloud.org:jreilly1821:a10-gnome-x86-v2.priority=10"
+	if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
+		dnf -y copr enable ublue-os/packages
+		dnf config-manager --set-enabled --setopt "copr:copr.fedorainfracloud.org:ublue-os:packages.priority=10"
 	else
-		dnf -y copr enable jreilly1821/c10s-gnome
-		# Set high priority for GNOME COPR to override OS packages
-		dnf config-manager --set-enabled --setopt "copr:copr.fedorainfracloud.org:jreilly1821:c10s-gnome.priority=10"
+		if is_x86_64_v2; then
+			dnf -y copr enable jreilly1821/a10-gnome-x86-v2 alma-kitten+epel-10-x86_64_v2
+			# Set high priority for GNOME COPR to override OS packages
+			dnf config-manager --set-enabled --setopt "copr:copr.fedorainfracloud.org:jreilly1821:a10-gnome-x86-v2.priority=10"
+		else
+			dnf -y copr enable jreilly1821/c10s-gnome
+			# Set high priority for GNOME COPR to override OS packages
+			dnf config-manager --set-enabled --setopt "copr:copr.fedorainfracloud.org:jreilly1821:c10s-gnome.priority=10"
+		fi
 	fi
 fi
 
@@ -97,155 +94,235 @@ dnf -y upgrade glib2
 # Please, dont remove this as it will break everything GNOME related
 dnf versionlock add glib2
 
-# Install base groups and packages - different between Fedora and RHEL/AlmaLinux
-if [[ $IS_FEDORA == true ]]; then
-	# Fedora Silverblue-style package list
-	dnf -y install \
-		-x PackageKit \
-		-x PackageKit-command-not-found \
-		-x gnome-software \
-		-x gnome-software-fedora-langpacks \
-		ModemManager \
-		NetworkManager-adsl \
-		NetworkManager-openconnect-gnome \
-		NetworkManager-openvpn-gnome \
-		NetworkManager-ppp \
-		NetworkManager-ssh-gnome \
-		NetworkManager-vpnc-gnome \
-		NetworkManager-wwan \
-		avahi \
-		dconf \
-		fprintd-pam \
-		gdm \
-		glib-networking \
-		gnome-backgrounds \
-		gnome-bluetooth \
-		gnome-browser-connector \
-		gnome-classic-session \
-		gnome-color-manager \
-		gnome-control-center \
-		gnome-disk-utility \
-		gnome-initial-setup \
-		gnome-remote-desktop \
-		gnome-session-wayland-session \
-		gnome-settings-daemon \
-		gnome-shell \
-		gnome-system-monitor \
-		gnome-user-docs \
-		gnome-user-share \
-		gvfs-afc \
-		gvfs-afp \
-		gvfs-archive \
-		gvfs-fuse \
-		gvfs-goa \
-		gvfs-gphoto2 \
-		gvfs-mtp \
-		gvfs-smb \
-		librsvg2 \
-		libsane-hpaio \
-		mesa-dri-drivers \
-		mesa-libEGL \
-		mesa-vulkan-drivers \
-		nautilus \
-		plymouth \
-		plymouth-system-theme \
-		polkit \
-		ptyxis \
-		systemd-oomd-defaults \
-		xdg-desktop-portal \
-		xdg-desktop-portal-gnome \
-		xdg-desktop-portal-gtk \
-		xdg-user-dirs-gtk \
-		yelp \
-		desktop-backgrounds-gnome \
-		gnome-shell-extension-background-logo \
-		pinentry-gnome3 \
-		qadwaitadecorations-qt5 \
-		evince-thumbnailer \
-		evince-previewer \
-		totem-video-thumbnailer \
-		buildah \
-		podman \
-		skopeo \
-		systemd-container \
-		flatpak \
-		distrobox \
-		fastfetch \
-		fpaste \
-		fwupd \
-		systemd-resolved \
-		btrfs-progs
-else
-	# RHEL/AlmaLinux base groups
-	dnf group install -y --nobest \
-		-x PackageKit \
-		-x PackageKit-command-not-found \
-		"Common NetworkManager submodules" \
-		"Core" \
-		"Fonts" \
-		"Guest Desktop Agents" \
-		"Hardware Support" \
-		"Printing Client" \
-		"Standard" \
-		"Workstation product core"
+if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
+	if [[ $IS_FEDORA == true ]]; then
+		dnf -y group install "kde-desktop"
+		dnf -y install \
+			-x PackageKit \
+			-x PackageKit-command-not-found \
+			sddm \
+			dolphin \
+			konsole \
+			kate \
+			ark \
+			plasma-discover \
+			kde-connect \
+			xdg-desktop-portal \
+			xdg-desktop-portal-kde \
+			qt5-qtwayland \
+			qt6-qtwayland \
+			plymouth \
+			plymouth-system-theme \
+			fwupd \
+			systemd-resolved \
+			systemd-container \
+			systemd-oomd-defaults \
+			distrobox \
+			fastfetch \
+			fpaste \
+			buildah \
+			podman \
+			skopeo \
+			btrfs-progs
+	else
+		dnf group install -y --nobest \
+			"KDE Plasma Workspaces" \
+			"Common NetworkManager submodules" \
+			"Core" \
+			"Fonts" \
+			"Guest Desktop Agents" \
+			"Hardware Support" \
+			"Printing Client" \
+			"Standard"
 
-	dnf -y install \
-		-x gnome-software \
-		-x gnome-extensions-app \
-		-x PackageKit \
-		-x PackageKit-command-not-found \
-		-x gnome-software-fedora-langpacks \
-		"NetworkManager-adsl" \
-		"glib2" \
-		"gdm" \
-		"gnome-bluetooth" \
-		"gnome-color-manager" \
-		"gnome-control-center" \
-		"gnome-initial-setup" \
-		"gnome-remote-desktop" \
-		"gnome-session-wayland-session" \
-		"gnome-settings-daemon" \
-		"gnome-shell" \
-		"gnome-user-docs" \
-		"gvfs-fuse" \
-		"gvfs-goa" \
-		"gvfs-gphoto2" \
-		"gvfs-mtp" \
-		"gvfs-smb" \
-		"libsane-hpaio" \
-		"nautilus" \
-		"orca" \
-		"ptyxis" \
-		"sane-backends-drivers-scanners" \
-		"xdg-desktop-portal-gnome" \
-		"xdg-user-dirs-gtk" \
-		"yelp-tools" \
-		"plymouth" \
-		"plymouth-system-theme" \
-		"fwupd" \
-		"systemd-resolved" \
-		"systemd-container" \
-		"systemd-oomd" \
-		"libcamera-v4l2" \
-		"libcamera-gstreamer" \
-		"libcamera-tools" \
-		"system-reinstall-bootc" \
-		"gnome-disk-utility" \
-		"distrobox" \
-		"fastfetch" \
-		"fpaste" \
-		"gnome-shell-extension-appindicator" \
-		"gnome-shell-extension-dash-to-dock" \
-		"gnome-shell-extension-blur-my-shell" \
-		"powertop" \
-		"tuned-ppd" \
-		"fzf" \
-		"glow" \
-		"wl-clipboard" \
-		"gum" \
-		"buildah" \
-		"btrfs-progs" \
-		"xhost"
+		dnf -y install \
+			-x PackageKit \
+			-x PackageKit-command-not-found \
+			sddm \
+			dolphin \
+			konsole \
+			kate \
+			ark \
+			plasma-discover \
+			kde-connect \
+			xdg-desktop-portal \
+			xdg-desktop-portal-kde \
+			qt5-qtwayland \
+			qt6-qtwayland \
+			plymouth \
+			plymouth-system-theme \
+			fwupd \
+			systemd-resolved \
+			systemd-container \
+			systemd-oomd \
+			libcamera-v4l2 \
+			libcamera-gstreamer \
+			libcamera-tools \
+			system-reinstall-bootc \
+			distrobox \
+			fastfetch \
+			fpaste \
+			powertop \
+			tuned-ppd \
+			fzf \
+			glow \
+			wl-clipboard \
+			gum \
+			buildah \
+			btrfs-progs \
+			xhost
+	fi
+else
+	# Install base groups and packages - different between Fedora and RHEL/AlmaLinux
+	if [[ $IS_FEDORA == true ]]; then
+		# Fedora Silverblue-style package list
+		dnf -y install \
+			-x PackageKit \
+			-x PackageKit-command-not-found \
+			-x gnome-software \
+			-x gnome-software-fedora-langpacks \
+			ModemManager \
+			NetworkManager-adsl \
+			NetworkManager-openconnect-gnome \
+			NetworkManager-openvpn-gnome \
+			NetworkManager-ppp \
+			NetworkManager-ssh-gnome \
+			NetworkManager-vpnc-gnome \
+			NetworkManager-wwan \
+			avahi \
+			dconf \
+			fprintd-pam \
+			gdm \
+			glib-networking \
+			gnome-backgrounds \
+			gnome-bluetooth \
+			gnome-browser-connector \
+			gnome-classic-session \
+			gnome-color-manager \
+			gnome-control-center \
+			gnome-disk-utility \
+			gnome-initial-setup \
+			gnome-remote-desktop \
+			gnome-session-wayland-session \
+			gnome-settings-daemon \
+			gnome-shell \
+			gnome-system-monitor \
+			gnome-user-docs \
+			gnome-user-share \
+			gvfs-afc \
+			gvfs-afp \
+			gvfs-archive \
+			gvfs-fuse \
+			gvfs-goa \
+			gvfs-gphoto2 \
+			gvfs-mtp \
+			gvfs-smb \
+			librsvg2 \
+			libsane-hpaio \
+			mesa-dri-drivers \
+			mesa-libEGL \
+			mesa-vulkan-drivers \
+			nautilus \
+			plymouth \
+			plymouth-system-theme \
+			polkit \
+			ptyxis \
+			systemd-oomd-defaults \
+			xdg-desktop-portal \
+			xdg-desktop-portal-gnome \
+			xdg-desktop-portal-gtk \
+			xdg-user-dirs-gtk \
+			yelp \
+			desktop-backgrounds-gnome \
+			gnome-shell-extension-background-logo \
+			pinentry-gnome3 \
+			qadwaitadecorations-qt5 \
+			evince-thumbnailer \
+			evince-previewer \
+			totem-video-thumbnailer \
+			buildah \
+			podman \
+			skopeo \
+			systemd-container \
+			flatpak \
+			distrobox \
+			fastfetch \
+			fpaste \
+			fwupd \
+			systemd-resolved \
+			btrfs-progs
+	else
+		# RHEL/AlmaLinux base groups
+		dnf group install -y --nobest \
+			-x PackageKit \
+			-x PackageKit-command-not-found \
+			"Common NetworkManager submodules" \
+			"Core" \
+			"Fonts" \
+			"Guest Desktop Agents" \
+			"Hardware Support" \
+			"Printing Client" \
+			"Standard" \
+			"Workstation product core"
+
+		dnf -y install \
+			-x gnome-software \
+			-x gnome-extensions-app \
+			-x PackageKit \
+			-x PackageKit-command-not-found \
+			-x gnome-software-fedora-langpacks \
+			"NetworkManager-adsl" \
+			"glib2" \
+			"gdm" \
+			"gnome-bluetooth" \
+			"gnome-color-manager" \
+			"gnome-control-center" \
+			"gnome-initial-setup" \
+			"gnome-remote-desktop" \
+			"gnome-session-wayland-session" \
+			"gnome-settings-daemon" \
+			"gnome-shell" \
+			"gnome-user-docs" \
+			"gvfs-fuse" \
+			"gvfs-goa" \
+			"gvfs-gphoto2" \
+			"gvfs-mtp" \
+			"gvfs-smb" \
+			"libsane-hpaio" \
+			"nautilus" \
+			orca \
+			ptyxis \
+			"sane-backends-drivers-scanners" \
+			"xdg-desktop-portal-gnome" \
+			"xdg-user-dirs-gtk" \
+			"yelp-tools" \
+			"plymouth" \
+			"plymouth-system-theme" \
+			fwupd \
+			"systemd-resolved" \
+			"systemd-container" \
+			"systemd-oomd" \
+			"libcamera-v4l2" \
+			"libcamera-gstreamer" \
+			"libcamera-tools" \
+			"system-reinstall-bootc" \
+			"gnome-disk-utility" \
+			distrobox \
+			fastfetch \
+			fpaste \
+			"gnome-shell-extension-appindicator" \
+			"gnome-shell-extension-dash-to-dock" \
+			"gnome-shell-extension-blur-my-shell" \
+			powertop \
+			tuned-ppd \
+			fzf \
+			glow \
+			wl-clipboard \
+			gum \
+			buildah \
+			btrfs-progs \
+			xhost
+	fi
 fi
 
 dnf -y remove console-login-helper-messages setroubleshoot

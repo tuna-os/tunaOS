@@ -6,11 +6,6 @@ printf "::group:: === 20 Packages ===\n"
 
 source /run/context/build_scripts/lib.sh
 
-if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
-	/run/context/build_scripts/20-kde-packages.sh
-	exit 0
-fi
-
 # Install OS-specific branding
 if [[ $IS_FEDORA == true ]]; then
 	dnf -y install fedora-logos
@@ -22,14 +17,13 @@ if [[ $IS_CENTOS == true ]]; then
 	dnf -y install centos-backgrounds centos-logos
 fi
 
-# Install caffeine extension only in EPEL 10.1 or Fedora
-echo "$IMAGE_NAME"
-detected_os
-cat /etc/os-release
-if [[ "$IS_ALMALINUX" = true || "$IS_RHEL" = true ]]; then
-	dnf install -y https://kojipkgs.fedoraproject.org//packages/gnome-shell-extension-caffeine/56/1.el10_1/noarch/gnome-shell-extension-caffeine-56-1.el10_1.noarch.rpm
-else
-	dnf install -y gnome-shell-extension-caffeine
+if [[ "${DESKTOP_FLAVOR}" != "kde" ]]; then
+	# Install caffeine extension only in EPEL 10.1 or Fedora
+	if [[ "$IS_ALMALINUX" = true || "$IS_RHEL" = true ]]; then
+		dnf install -y https://kojipkgs.fedoraproject.org//packages/gnome-shell-extension-caffeine/56/1.el10_1/noarch/gnome-shell-extension-caffeine-56-1.el10_1.noarch.rpm
+	else
+		dnf install -y gnome-shell-extension-caffeine
+	fi
 fi
 
 # Everything that depends on external repositories should be after this.
@@ -44,16 +38,30 @@ else
 	# FIXME: tailscale EPEL10 request: https://bugzilla.redhat.com/show_bug.cgi?id=2349099
 	dnf -y --enablerepo "tailscale-stable" install tailscale
 fi
+
 # ublue-os packages
-install_from_copr ublue-os/packages \
-	ublue-os-just \
-	ublue-os-luks \
-	ublue-os-signing \
-	ublue-os-udev-rules \
-	ublue-os-update-services \
-	ublue-{motd,bling,rebase-helper,setup-services,polkit-rules,brew} \
-	uupd \
-	bluefin-schemas
+if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
+	install_from_copr ublue-os/packages \
+		ublue-os-just \
+		ublue-os-luks \
+		ublue-os-signing \
+		ublue-os-udev-rules \
+		ublue-os-update-services \
+		ublue-{motd,bling,rebase-helper,setup-services,polkit-rules,brew} \
+		uupd \
+		kcm_ublue \
+		krunner-bazaar
+else
+	install_from_copr ublue-os/packages \
+		ublue-os-just \
+		ublue-os-luks \
+		ublue-os-signing \
+		ublue-os-udev-rules \
+		ublue-os-update-services \
+		ublue-{motd,bling,rebase-helper,setup-services,polkit-rules,brew} \
+		uupd \
+		bluefin-schemas
+fi
 
 # Upstream ublue-os-signing bug, we are using /usr/etc for the container signing and bootc gets mad at this
 # FIXME: remove this once https://github.com/ublue-os/packages/issues/245 is closed
@@ -62,19 +70,23 @@ if [ -d /usr/etc ]; then
 	rm -rvf /usr/etc
 fi
 
-# Extra GNOME Extensions
-# FIXME: gsconnect EPEL10 request: https://bugzilla.redhat.com/show_bug.cgi?id=2349097
-install_from_copr ublue-os/staging 10 gnome-shell-extension-{search-light,logo-menu,gsconnect}
+if [[ "${DESKTOP_FLAVOR}" != "kde" ]]; then
+	# Extra GNOME Extensions
+	# FIXME: gsconnect EPEL10 request: https://bugzilla.redhat.com/show_bug.cgi?id=2349097
+	install_from_copr ublue-os/staging 10 gnome-shell-extension-{search-light,logo-menu,gsconnect}
+fi
 
 # MoreWaita icon theme
 install_from_copr trixieua/morewaita-icon-theme morewaita-icon-theme
 
-# GNOME version specific workarounds
-GNOME_VERSION=$(gnome-shell --version | cut -d ' ' -f 3 | cut -d '.' -f 1)
-if [ "$GNOME_VERSION" -ge 48 ]; then
-	# GNOME 48: EPEL version of blur-my-shell is incompatible
-	dnf -y remove gnome-shell-extension-blur-my-shell
-	dnf -y install https://kojipkgs.fedoraproject.org//packages/gnome-shell-extension-blur-my-shell/69/1.fc43/noarch/gnome-shell-extension-blur-my-shell-69-1.fc43.noarch.rpm
+if [[ "${DESKTOP_FLAVOR}" != "kde" ]]; then
+	# GNOME version specific workarounds
+	GNOME_VERSION=$(gnome-shell --version | cut -d ' ' -f 3 | cut -d '.' -f 1 || echo 0)
+	if [ "$GNOME_VERSION" -ge 48 ]; then
+		# GNOME 48: EPEL version of blur-my-shell is incompatible
+		dnf -y remove gnome-shell-extension-blur-my-shell || true
+		dnf -y install https://kojipkgs.fedoraproject.org//packages/gnome-shell-extension-blur-my-shell/69/1.fc43/noarch/gnome-shell-extension-blur-my-shell-69-1.fc43.noarch.rpm
+	fi
 fi
 
 # This is required so homebrew works indefinitely.

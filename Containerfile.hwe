@@ -25,7 +25,7 @@ COPY build_scripts /build_scripts
 
 FROM ${BASE_IMAGE}
 
-ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
+ARG DESKTOP_FLAVOR
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
 RUN rm -rf /opt && mkdir /opt

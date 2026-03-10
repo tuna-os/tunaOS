@@ -242,7 +242,7 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
             ;;
         "kde")
             BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
-            CONTAINERFILE="Containerfile.kde"
+            CONTAINERFILE="Containerfile"
             DESKTOP_FLAVOR="kde"
             ;;
         "kde-hwe")
@@ -251,7 +251,7 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
             else
                 BASE_FOR_BUILD="localhost/{{ variant }}-kde:{{ default_tag }}"
             fi
-            CONTAINERFILE="Containerfile.kde.hwe"
+            CONTAINERFILE="Containerfile.hwe"
             DESKTOP_FLAVOR="kde"
             ;;
         "kde-gdx")
@@ -260,7 +260,7 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
             else
                 BASE_FOR_BUILD="localhost/{{ variant }}-kde:{{ default_tag }}"
             fi
-            CONTAINERFILE="Containerfile.kde.gdx"
+            CONTAINERFILE="Containerfile.gdx"
             DESKTOP_FLAVOR="kde"
             ;;
         "kde-gdx-hwe")
@@ -269,7 +269,7 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
             else
                 BASE_FOR_BUILD="localhost/{{ variant }}-kde-hwe:{{ default_tag }}"
             fi
-            CONTAINERFILE="Containerfile.kde.gdx"
+            CONTAINERFILE="Containerfile.gdx"
             DESKTOP_FLAVOR="kde"
             ;;
         "all")

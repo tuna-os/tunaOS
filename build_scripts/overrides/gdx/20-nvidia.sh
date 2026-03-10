@@ -6,7 +6,7 @@ printf "::group:: === 20 NVIDIA & CUDA ===\n"
 
 source /run/context/build_scripts/lib.sh
 
-if [[ $IS_ALMALINUX == true ]] || [[ $IS_ALMALINUXKITTEN == true ]]; then
+if [[ "${ENABLE_HWE:-0}" != "1" ]] && { [[ $IS_ALMALINUX == true ]] || [[ $IS_ALMALINUXKITTEN == true ]]; }; then
     # AlmaLinux gets nvidia from the alma repos
     dnf install -y almalinux-release-nvidia-driver
     dnf -y install \
