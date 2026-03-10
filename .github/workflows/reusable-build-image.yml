@@ -259,6 +259,24 @@ jobs:
           REMOTE_IMAGE_DIGEST=$(cat /tmp/digestfile)
           echo "remote_image_digest=${REMOTE_IMAGE_DIGEST}" >> $GITHUB_OUTPUT
 
+      - name: PR Testing Instructions
+        if: github.event_name == 'pull_request'
+        env:
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
+          SAFE_PLATFORM: ${{ matrix.safeplatform }}
+        run: |
+          echo "### 🧪 Testing Instructions for ${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}" >> $GITHUB_STEP_SUMMARY
+          echo "To test this image, run the following command:" >> $GITHUB_STEP_SUMMARY
+          echo " \`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo " sudo bootc switch --enforce-container-sigpolicy ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-${{ matrix.safeplatform }}" >> $GITHUB_STEP_SUMMARY
+          echo " \`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "To go back to the latest stable version:" >> $GITHUB_STEP_SUMMARY
+          echo " \`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo " sudo bootc switch --enforce-container-sigpolicy ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo " \`\`\`" >> $GITHUB_STEP_SUMMARY
+
       - name: Generate PR Diff
         if: github.event_name == 'pull_request'
         env:
