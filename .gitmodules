@@ -19,6 +19,3 @@
 [submodule "system_files/usr/share/gnome-shell/extensions/search-light@icedman.github.com"]
 	path = system_files/usr/share/gnome-shell/extensions/search-light@icedman.github.com
 	url = https://github.com/icedman/search-light
-[submodule "packages-repo"]
-	path = packages-repo
-	url = https://github.com/tuna-os/packages.git

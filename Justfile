@@ -279,18 +279,18 @@ build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag=
             ;;
         "hwe-base"|"hwe-base-node")
             if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ tag }}"
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-gnome:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}:{{ default_tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}-gnome:{{ default_tag }}"
             fi
             CONTAINERFILE="Containerfile.hwe"
             DESKTOP_FLAVOR="hwe-base"
             ;;
         "gdx-base"|"gdx-base-node")
             if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ tag }}"
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-gnome:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}:{{ default_tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}-gnome:{{ default_tag }}"
             fi
             CONTAINERFILE="Containerfile.gdx"
             DESKTOP_FLAVOR="gdx-base"
@@ -484,7 +484,7 @@ build-chain-niri variant:
     echo "✓ Complete: {{ variant }} Niri chain built successfully"
 
 # Build GNOME and KDE base in parallel (shares base-no-de layer)
-build-de-parallel variant flavor='base':
+build-de-parallel variant flavor='gnome':
     #!/usr/bin/env bash
     set -euo pipefail
     echo "Building {{ variant }} {{ flavor }} with GNOME and KDE in parallel..."
@@ -498,7 +498,7 @@ build-de-parallel variant flavor='base':
     GNOME_PID=$!
 
     # For KDE, prepend 'kde-' to flavor
-    if [[ "${BASE_FLAVOR}" == "base" ]]; then
+    if [[ "${BASE_FLAVOR}" == "gnome" ]]; then
         KDE_FLAVOR="kde"
     else
         KDE_FLAVOR="kde-${BASE_FLAVOR}"
@@ -586,7 +586,7 @@ chunkify image_ref:
         $SUDO_CMD podman tag "$NEW_REF" "{{ image_ref }}"
     fi
 
-qcow2 variant flavor='base' repo='local':
+qcow2 variant flavor='gnome' repo='local':
     #!/usr/bin/env bash
     set -euo pipefail
     if [ "{{ flavor }}" != "base" ]; then
@@ -599,12 +599,12 @@ qcow2 variant flavor='base' repo='local':
     else echo "DEBUG: repo '{{ repo }}' did not match ghcr or local"; exit 1
     fi
 
-test-vm variant flavor='base':
+test-vm variant flavor='gnome':
     #!/usr/bin/env bash
     set -euo pipefail
     bash ./scripts/test-vm.sh {{ variant }} {{ flavor }}
 
-debug-vm variant flavor='base' repo='local':
+debug-vm variant flavor='gnome' repo='local':
     #!/usr/bin/env bash
     set -euo pipefail
     if [ "{{ repo }}" == "local" ]; then
@@ -613,6 +613,6 @@ debug-vm variant flavor='base' repo='local':
     {{ just }} qcow2 {{ variant }} {{ flavor }} {{ repo }}
     {{ just }} test-vm {{ variant }} {{ flavor }}
 
-iso variant flavor='base' repo='local' hook_script='iso_files/configure_lts_iso_anaconda.sh' flatpaks_file='system_files/etc/ublue-os/system-flatpaks.list':
+iso variant flavor='gnome' repo='local' hook_script='iso_files/configure_lts_iso_anaconda.sh' flatpaks_file='system_files/etc/ublue-os/system-flatpaks.list':
     #!/usr/bin/env bash
     bash ./scripts/build-titanoboa.sh {{ variant }} {{ flavor }} {{ repo }} {{ hook_script }}
