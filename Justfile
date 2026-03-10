@@ -68,9 +68,11 @@ clean:
         images+=("$variant")
         images+=("${variant}-hwe")
         images+=("${variant}-gdx")
+        images+=("${variant}-gdx-hwe")
         images+=("${variant}-kde")
         images+=("${variant}-kde-hwe")
         images+=("${variant}-kde-gdx")
+        images+=("${variant}-kde-gdx-hwe")
     done
     for img in "${images[@]}"; do
         podman rmi -f "localhost/${img}:latest" 2>/dev/null || true
@@ -224,9 +226,17 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
             ;;
         "gdx")
             if [[ "{{ is_ci }}" = "1" ]]; then
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ tag }}"
+            else
+                BASE_FOR_BUILD="localhost/{{ variant }}:{{ default_tag }}"
+            fi
+            CONTAINERFILE="Containerfile.gdx"
+            ;;
+        "gdx-hwe")
+            if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-hwe:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}-hwe:{{ tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}-hwe:{{ default_tag }}"
             fi
             CONTAINERFILE="Containerfile.gdx"
             ;;
@@ -246,9 +256,18 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
             ;;
         "kde-gdx")
             if [[ "{{ is_ci }}" = "1" ]]; then
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-kde:{{ tag }}"
+            else
+                BASE_FOR_BUILD="localhost/{{ variant }}-kde:{{ default_tag }}"
+            fi
+            CONTAINERFILE="Containerfile.kde.gdx"
+            DESKTOP_FLAVOR="kde"
+            ;;
+        "kde-gdx-hwe")
+            if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-kde-hwe:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}-kde-hwe:{{ tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}-kde-hwe:{{ default_tag }}"
             fi
             CONTAINERFILE="Containerfile.kde.gdx"
             DESKTOP_FLAVOR="kde"
@@ -257,13 +276,15 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
             just build {{ variant }} base
             just build {{ variant }} hwe
             just build {{ variant }} gdx
+            just build {{ variant }} gdx-hwe
             just build {{ variant }} kde
             just build {{ variant }} kde-hwe
             just build {{ variant }} kde-gdx
+            just build {{ variant }} kde-gdx-hwe
             exit 0
             ;;
         *)
-            echo "Unknown flavor '{{ flavor }}'. Valid options are: base, hwe, gdx, kde, kde-hwe, kde-gdx, all."
+            echo "Unknown flavor '{{ flavor }}'. Valid options are: base, hwe, gdx, gdx-hwe, kde, kde-hwe, kde-gdx, kde-gdx-hwe, all."
             exit 1
             ;;
     esac
@@ -276,13 +297,13 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
 
     # Determine HWE flag - hwe and gdx flavors always use coreos akmods
     ENABLE_HWE="0"
-    if [[ "{{ flavor }}" == "hwe" ]] || [[ "{{ flavor }}" == "gdx" ]] || [[ "{{ flavor }}" == "kde-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx" ]]; then
+    if [[ "{{ flavor }}" == "hwe" ]] || [[ "{{ flavor }}" == "gdx-hwe" ]] || [[ "{{ flavor }}" == "kde-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx-hwe" ]]; then
         ENABLE_HWE="1"
     fi
 
     # Determine GDX flag
     ENABLE_GDX="0"
-    if [[ "{{ flavor }}" == "gdx" ]] || [[ "{{ flavor }}" == "kde-gdx" ]]; then
+    if [[ "{{ flavor }}" == "gdx" ]] || [[ "{{ flavor }}" == "kde-gdx" ]] || [[ "{{ flavor }}" == "gdx-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx-hwe" ]]; then
         ENABLE_GDX="1"
     fi
 
