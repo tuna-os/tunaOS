@@ -159,17 +159,24 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
     fi
     echo "{{ use_cache }}"
     if [[ "{{ use_cache }}" == "1" ]]; then
-        mkdir -p "$(pwd)/.rpm-cache/dnf"
-        mkdir -p "$(pwd)/.rpm-cache/libdnf5"
-        mkdir -p "$(pwd)/.rpm-cache/rpm"
-        BUILD_ARGS+=("--volume" "$(pwd)/.rpm-cache/dnf:/var/cache/dnf:z")
-        BUILD_ARGS+=("--volume" "$(pwd)/.rpm-cache/libdnf5:/var/cache/libdnf5:z")
-        BUILD_ARGS+=("--volume" "$(pwd)/.rpm-cache/rpm:/var/lib/rpm:z")
+        # Use per-variant cache with deduplication for parallel builds
+        readarray -t CACHE_MOUNTS < <(./scripts/setup-build-cache.sh "{{ target_tag }}")
+        BUILD_ARGS+=("${CACHE_MOUNTS[@]}")
+    fi
+
+    # Determine build target for multi-stage Containerfiles
+    # GNOME is default, KDE uses kde target
+    # The --target flag tells podman which final stage to build
+    # Both GNOME and KDE share the base-no-de layer, enabling parallel builds
+    BUILD_TARGET="gnome"
+    if [[ "{{ desktop_flavor }}" == "kde" ]]; then
+        BUILD_TARGET="kde"
     fi
 
     podman build \
         --dns=8.8.8.8 \
         --platform "{{ platform }}" \
+        --target="${BUILD_TARGET}" \
         "${BUILD_ARGS[@]}" \
         {{ args }} \
         --pull=newer \
@@ -322,6 +329,8 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
 
     if [[ "{{ is_ci }}" == "0" ]]; then
         {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
+        # Sync cache after successful local build for deduplication
+        ./scripts/sync-build-cache.sh "${TARGET_TAG}" || true
     else
         {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
     fi
@@ -337,6 +346,80 @@ skipjack variant='base':
 
 bonito variant='base':
     just build bonito {{ variant }}
+
+# Build full GNOME chain for a variant: base → hwe → gdx → gdx-hwe
+build-chain variant:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building full chain for {{ variant }}: base → hwe → gdx → gdx-hwe"
+    just build {{ variant }} base
+    just build {{ variant }} hwe
+    just build {{ variant }} gdx
+    just build {{ variant }} gdx-hwe
+    echo "✓ Complete: {{ variant }} full chain built successfully"
+
+# Build full KDE chain for a variant: kde → kde-hwe → kde-gdx → kde-gdx-hwe
+build-chain-kde variant:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building full KDE chain for {{ variant }}: kde → kde-hwe → kde-gdx → kde-gdx-hwe"
+    just build {{ variant }} kde
+    just build {{ variant }} kde-hwe
+    just build {{ variant }} kde-gdx
+    just build {{ variant }} kde-gdx-hwe
+    echo "✓ Complete: {{ variant }} KDE chain built successfully"
+
+# Build GNOME and KDE base in parallel (shares base-no-de layer)
+build-de-parallel variant flavor='base':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building {{ variant }} {{ flavor }} with GNOME and KDE in parallel..."
+    echo "Both will share the base-no-de layer for maximum efficiency"
+
+    # Map flavor to actual DE names
+    BASE_FLAVOR="{{ flavor }}"
+
+    # Build both DEs in parallel - they share the base-no-de cached layer!
+    just build {{ variant }} "${BASE_FLAVOR}" &
+    GNOME_PID=$!
+
+    # For KDE, prepend 'kde-' to flavor
+    if [[ "${BASE_FLAVOR}" == "base" ]]; then
+        KDE_FLAVOR="kde"
+    else
+        KDE_FLAVOR="kde-${BASE_FLAVOR}"
+    fi
+    just build {{ variant }} "${KDE_FLAVOR}" &
+    KDE_PID=$!
+
+    wait $GNOME_PID $KDE_PID
+    echo "✓ Complete: {{ variant }} ${BASE_FLAVOR} (GNOME) and ${KDE_FLAVOR} built successfully"
+
+# Build all stable variants in parallel (each doing full chain)
+
+# Warning: Very resource intensive! Builds yellowfin, albacore, and skipjack simultaneously
+build-all-parallel:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building all stable variants in parallel..."
+    just build-chain yellowfin &
+    just build-chain albacore &
+    just build-chain skipjack &
+    wait
+    echo "✓ All stable variants built"
+
+# Build all variants including experimental (bonito, bonito-rawhide)
+build-all-parallel-experimental:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building all variants (including experimental) in parallel..."
+    just build-chain yellowfin &
+    just build-chain albacore &
+    just build-chain skipjack &
+    just build-chain bonito &
+    just build-chain bonito-rawhide &
+    wait
+    echo "✓ All variants (including experimental) built"
 
 build-all-base:
     #!/usr/bin/env bash
