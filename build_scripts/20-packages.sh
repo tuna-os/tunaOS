@@ -29,9 +29,9 @@ else
 fi
 
 if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
-	/run/context/build_scripts/20-kde-packages.sh
+	/run/context/build_scripts/kde.sh extra
 else
-	/run/context/build_scripts/20-gnome-packages.sh
+	/run/context/build_scripts/gnome.sh extra
 fi
 
 # Upstream ublue-os-signing bug, we are using /usr/etc for the container signing and bootc gets mad at this

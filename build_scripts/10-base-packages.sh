@@ -76,9 +76,9 @@ dnf -y upgrade glib2
 dnf versionlock add glib2
 
 if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
-	/run/context/build_scripts/10-kde-base-packages.sh
+	/run/context/build_scripts/kde.sh base
 else
-	/run/context/build_scripts/10-gnome-base-packages.sh
+	/run/context/build_scripts/gnome.sh base
 fi
 
 dnf -y remove console-login-helper-messages setroubleshoot
