@@ -260,9 +260,14 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
 # Usage (CI): just build image_name=<final_name> variant=<base_os> is_ci=true [flavor]
 
 # Example: just build image_name=albacore variant=almalinux is_ci=true kde-gdx
-build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='latest': submodules
+build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='latest':
     #!/usr/bin/env bash
     set -euo pipefail
+
+    # Initialize submodules locally (CI uses actions/checkout with submodules: recursive)
+    if [[ "{{ is_ci }}" != "1" ]]; then
+        git submodule update --init --recursive
+    fi
 
     # ANSI color codes
     BLUE='\033[0;34m'
