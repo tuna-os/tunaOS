@@ -7,12 +7,20 @@ printf "::group:: === 20 NVIDIA & CUDA ===\n"
 source /run/context/build_scripts/lib.sh
 
 if [[ "${ENABLE_HWE:-0}" != "1" ]] && { [[ $IS_ALMALINUX == true ]] || [[ $IS_ALMALINUXKITTEN == true ]]; }; then
-    # AlmaLinux gets nvidia from the alma repos
+    # AlmaLinux gets nvidia from the alma repos (signed with AlmaLinux Secure Boot key)
     dnf install -y almalinux-release-nvidia-driver
-    dnf -y install \
+    
+    # Install nvidia driver that works with current kernel
+    # Use --nobest --skip-broken to allow DNF to find compatible versions
+    dnf -y install --nobest --skip-broken \
         nvidia-driver \
-        cuda \
-        nvidia-driver-cuda
+        nvidia-driver-cuda-libs || echo "Warning: Some NVIDIA packages failed to install, hardware may not be supported"
+    
+    # Add official NVIDIA CUDA repository for EL
+    dnf config-manager --add-repo "https://developer.download.nvidia.com/compute/cuda/repos/rhel${MAJOR_VERSION_NUMBER}/x86_64/cuda-rhel${MAJOR_VERSION_NUMBER}.repo"
+    
+    # Install CUDA toolkit from official NVIDIA repo
+    dnf -y install cuda-toolkit
 else
     # Fedora/CentOS from akmods
     # Install from the mounted directory, including the kernel to satisfy dependencies

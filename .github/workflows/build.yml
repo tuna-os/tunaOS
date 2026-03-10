@@ -265,6 +265,8 @@ jobs:
       contents: read
       packages: write
       id-token: write
+    # Note: AlmaLinux non-HWE GDX builds may fail due to driver version lag in repos
+    # This is expected and non-fatal; fail-fast: false ensures other variants continue
     if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-base.result == 'success' && needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false

@@ -192,6 +192,8 @@ jobs:
 
   build_gdx_images:
     needs: [generate_matrix, build_dx_images]
+    # Note: AlmaLinux non-HWE GDX builds may fail due to driver version lag in repos
+    # This is expected and non-fatal; fail-fast: false ensures other variants continue
     if: |
       always() &&
       (needs.build_dx_images.result == 'success' || needs.build_dx_images.result == 'skipped') &&
