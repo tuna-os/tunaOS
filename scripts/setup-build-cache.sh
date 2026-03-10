@@ -15,9 +15,18 @@ if [[ -z "$VARIANT" ]]; then
     exit 1
 fi
 
+# Extract base variant name by stripping flavor suffixes
+# This ensures all flavors of a variant share the same cache
+# Examples: albacore-gdx -> albacore, yellowfin-hwe -> yellowfin
+BASE_VARIANT="${VARIANT}"
+BASE_VARIANT="${BASE_VARIANT%-gdx}"
+BASE_VARIANT="${BASE_VARIANT%-hwe}"
+BASE_VARIANT="${BASE_VARIANT%-kde}"
+BASE_VARIANT="${BASE_VARIANT%-dx}"
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CACHE_BASE="${REPO_ROOT}/.rpm-cache/shared"
-CACHE_VARIANT="${REPO_ROOT}/.rpm-cache/${VARIANT}"
+CACHE_VARIANT="${REPO_ROOT}/.rpm-cache/${BASE_VARIANT}"
 
 # Create cache directory structure
 # - shared/: Read-only base layer with common packages (deduplication)

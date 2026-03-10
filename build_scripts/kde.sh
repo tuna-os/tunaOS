@@ -42,6 +42,7 @@ case "${1:-}" in
 			btrfs-progs
 	else
 		dnf group install -y --nobest \
+			-x plasma-discover \
 			"KDE Plasma Workspaces" \
 			"Common NetworkManager submodules" \
 			"Core" \
@@ -59,7 +60,6 @@ case "${1:-}" in
 			konsole \
 			kate \
 			ark \
-			plasma-discover \
 			kde-connect \
 			xdg-desktop-portal \
 			xdg-desktop-portal-kde \
@@ -67,6 +67,7 @@ case "${1:-}" in
 			qt6-qtwayland \
 			plymouth \
 			plymouth-system-theme \
+			plasma-wallpapers-dynamic \
 			fwupd \
 			systemd-resolved \
 			systemd-container \
@@ -87,19 +88,45 @@ case "${1:-}" in
 			buildah \
 			btrfs-progs \
 			xhost
+
+		# Install fcitx5 input method support (Asian languages)
+		dnf -y install \
+			fcitx5 \
+			fcitx5-chewing \
+			fcitx5-chinese-addons \
+			fcitx5-gtk \
+			fcitx5-hangul \
+			fcitx5-m17n \
+			fcitx5-mozc \
+			fcitx5-qt \
+			fcitx5-sayura \
+			fcitx5-unikey \
+			kcm-fcitx5
+
+		# Version lock critical KDE packages to prevent partial upgrades causing black screens
+		# Reference: https://github.com/ublue-os/aurora/issues/1227
+		dnf -y install python3-dnf-plugin-versionlock
+		dnf versionlock add plasma-desktop
+		dnf versionlock add "qt6-*"
 	fi
 	;;
 "extra")
-	# ublue-os packages
-	install_from_copr ublue-os/packages \
-		ublue-os-just \
-		ublue-os-luks \
-		ublue-os-signing \
-		ublue-os-udev-rules \
-		ublue-os-update-services \
-		ublue-{motd,bling,rebase-helper,setup-services,polkit-rules,brew} \
+	# ublue-os packages - most packages moved to common OCI, only KDE-specific remain
+	dnf -y copr enable ublue-os/packages
+	dnf -y copr disable ublue-os/packages
+	dnf -y --enablerepo copr:copr.fedorainfracloud.org:ublue-os:packages install \
 		uupd \
 		kcm_ublue \
 		krunner-bazaar
+
+	# Disable plasma-discover in favor of Flatpak/Bazaar (like Aurora)
+	if [ -f /usr/share/applications/org.kde.discover.desktop ]; then
+		mv /usr/share/applications/org.kde.discover.desktop \
+		   /usr/share/applications/org.kde.discover.desktop.disabled
+	fi
+	if [ -f /usr/share/applications/org.kde.discover.urlhandler.desktop ]; then
+		mv /usr/share/applications/org.kde.discover.urlhandler.desktop \
+		   /usr/share/applications/org.kde.discover.urlhandler.desktop.disabled
+	fi
 	;;
 esac

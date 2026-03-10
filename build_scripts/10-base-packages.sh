@@ -64,7 +64,13 @@ install_base_packages_no_de() {
 			# Use negativo17 epel-multimedia repo (same as upstream bluefin-lts)
 			dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
 			dnf config-manager --set-disabled epel-multimedia
-			dnf -y install --enablerepo=epel-multimedia \
+			# Disable fastestmirror for this repo to avoid corrupted mirrors
+			dnf config-manager --setopt="epel-multimedia.fastestmirror=0" --save
+			
+			# Install with retries to handle transient mirror issues
+			retry_count=0
+			max_retries=3
+			until dnf -y install --enablerepo=epel-multimedia \
 				ffmpeg \
 				libavcodec \
 				@multimedia \
@@ -75,7 +81,12 @@ install_base_packages_no_de() {
 				lame \
 				lame-libs \
 				libjxl \
-				ffmpegthumbnailer
+				ffmpegthumbnailer || [ $retry_count -eq $max_retries ]; do
+				retry_count=$((retry_count + 1))
+				echo "Multimedia package installation failed, retry $retry_count of $max_retries"
+				dnf clean metadata
+				sleep 5
+			done
 		fi
 
 	fi

@@ -339,6 +339,8 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
 
     if [[ "{{ is_ci }}" == "0" ]]; then
         {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
+        # Chunkify the built image for optimal layer distribution
+        {{ just }} chunkify "${TARGET_TAG_WITH_VERSION}"
         # Sync cache after successful local build for deduplication
         ./scripts/sync-build-cache.sh "${TARGET_TAG}" || true
     else
@@ -451,6 +453,44 @@ build-all:
 build-all-experimental:
     #!/usr/bin/env bash
     bash ./scripts/build-all-images.sh --include-experimental
+
+# ── Chunkah ──────────────────────────────────────────────────────────
+
+# Use the pre-built chunkah image from quay.io
+chunkify image_ref:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Use sudo unless already root (CI runners are root)
+    SUDO_CMD=""
+    if [ "$(id -u)" -ne 0 ]; then
+        SUDO_CMD="sudo"
+    fi
+
+    echo "==> Chunkifying {{ image_ref }}..."
+
+    # Get config from existing image
+    CONFIG=$($SUDO_CMD podman inspect "{{ image_ref }}")
+
+    # Run chunkah (default 64 layers) and pipe to podman load
+    # Uses --mount=type=image to expose the source image content to chunkah
+    # Note: We need --privileged for some podman-in-podman/mount scenarios or just standard access
+    LOADED=$($SUDO_CMD podman run --rm \
+        --security-opt label=type:unconfined_t \
+        --mount=type=image,src="{{ image_ref }}",dest=/chunkah \
+        -e "CHUNKAH_CONFIG_STR=$CONFIG" \
+        quay.io/jlebon/chunkah:latest build | $SUDO_CMD podman load)
+
+    echo "$LOADED"
+
+    # Parse the loaded image reference
+    NEW_REF=$(echo "$LOADED" | grep -oP '(?<=Loaded image: ).*' || \
+              echo "$LOADED" | grep -oP '(?<=Loaded image\(s\): ).*')
+
+    if [ -n "$NEW_REF" ] && [ "$NEW_REF" != "{{ image_ref }}" ]; then
+        echo "==> Retagging chunked image to {{ image_ref }}..."
+        $SUDO_CMD podman tag "$NEW_REF" "{{ image_ref }}"
+    fi
 
 qcow2 variant flavor='base' repo='local':
     #!/usr/bin/env bash

@@ -200,28 +200,49 @@ jobs:
           sudo "$SYFT_CMD" "${IMAGE_REGISTRY}/${IMAGE}:${DEFAULT_TAG}" -o "spdx-json=${OUTPUT_PATH}"
           echo "OUTPUT_PATH=${OUTPUT_PATH}" >> "${GITHUB_OUTPUT}"
 
-      - name: Run Rechunker
+      - name: Run Chunkah
         if: ${{ inputs.rechunk && inputs.publish }}
-        id: rechunk
-        uses: hhd-dev/rechunk@ca77507401f8700bb0b25ebecbbf980a078cd180 # v1.2.2
-        with:
-          rechunk: ghcr.io/hhd-dev/rechunk:v1.2.1
-          ref: localhost/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}
-          prev-ref: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}
-          skip_compression: true
-          version: ${{ env.MAJOR_VERSION }}
+        id: chunkify
+        env:
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
+        run: |
+          IMAGE_REF="localhost/${IMAGE_NAME}:${DEFAULT_TAG}"
+          echo "==> Chunkifying ${IMAGE_REF}..."
+
+          # Get config from existing image
+          CONFIG=$(sudo podman inspect "${IMAGE_REF}")
+
+          # Run chunkah (default 64 layers) and pipe to podman load
+          LOADED=$(sudo podman run --rm \
+            --security-opt label=type:unconfined_t \
+            --mount=type=image,src="${IMAGE_REF}",dest=/chunkah \
+            -e "CHUNKAH_CONFIG_STR=$CONFIG" \
+            quay.io/jlebon/chunkah:latest build | sudo podman load)
+
+          echo "$LOADED"
+
+          # Parse the loaded image reference
+          NEW_REF=$(echo "$LOADED" | grep -oP '(?<=Loaded image: ).*' || \
+                    echo "$LOADED" | grep -oP '(?<=Loaded image\(s\): ).*')
+
+          if [ -n "$NEW_REF" ] && [ "$NEW_REF" != "${IMAGE_REF}" ]; then
+            echo "==> Retagging chunked image to ${IMAGE_REF}..."
+            sudo podman tag "$NEW_REF" "${IMAGE_REF}"
+            echo "ref=${IMAGE_REF}" >> "${GITHUB_OUTPUT}"
+          else
+            echo "ref=${IMAGE_REF}" >> "${GITHUB_OUTPUT}"
+          fi
 
       - name: Load Image
         if: ${{ inputs.publish }}
         id: load
         env:
-          RECHUNK_RAN: ${{ inputs.rechunk }}
-          RECHUNK_REF: ${{ steps.rechunk.outputs.ref }}
-          RECHUNK_LOCATION: ${{ steps.rechunk.outputs.location }}
+          CHUNKIFY_RAN: ${{ inputs.rechunk }}
+          CHUNKIFY_REF: ${{ steps.chunkify.outputs.ref }}
         run: |
-          if [ "${RECHUNK_RAN}" == "true" ] ; then
-            IMAGE="$(podman pull "${RECHUNK_REF}")"
-            sudo rm -rf "${RECHUNK_LOCATION}"
+          if [ "${CHUNKIFY_RAN}" == "true" ] && [ -n "${CHUNKIFY_REF}" ]; then
+            IMAGE="${CHUNKIFY_REF}"
           else
             IMAGE="localhost/${IMAGE_NAME}:${DEFAULT_TAG}"
           fi

@@ -178,15 +178,10 @@ case "${1:-}" in
 		dnf install -y gnome-shell-extension-caffeine
 	fi
 
-	# ublue-os packages
-	install_from_copr ublue-os/packages \
-		ublue-os-just \
-		ublue-os-luks \
-		ublue-os-signing \
-		ublue-os-udev-rules \
-		ublue-os-update-services \
-		ublue-{motd,bling,rebase-helper,setup-services,polkit-rules,brew} \
-		uupd
+	# ublue-os packages - most packages moved to common OCI, only uupd remains
+	dnf -y copr enable ublue-os/packages
+	dnf -y copr disable ublue-os/packages
+	dnf -y --enablerepo copr:copr.fedorainfracloud.org:ublue-os:packages install uupd
 
 	# GNOME version specific workarounds
 	GNOME_VERSION=$(gnome-shell --version | cut -d ' ' -f 3 | cut -d '.' -f 1 || echo 0)
