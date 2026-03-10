@@ -1,0 +1,8 @@
+{
+  "track_id": "ci_consolidation_20260310",
+  "type": "feature",
+  "status": "new",
+  "created_at": "2026-03-10T10:00:00Z",
+  "updated_at": "2026-03-10T10:00:00Z",
+  "description": "Consolidate and optimize the GitHub Actions CI/CD pipeline and restore functional CI builds after a major refactor."
+}
