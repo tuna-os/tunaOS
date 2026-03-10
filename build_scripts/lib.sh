@@ -28,7 +28,7 @@ IS_ALMALINUXKITTEN=false
 IS_CENTOS=false
 
 [[ "${BASE_IMAGE,,}" == *"fedora"* ]] && IS_FEDORA=true && IMAGE_NAME="bonito" && IMAGE_PRETTY_NAME="Bonito"
-[[ "${BASE_IMAGE,,}" == *"red hat"* ]] && IS_RHEL=true && IMAGE_NAME="redfin" && IMAGE_PRETTY_NAME="Redfin"
+[[ "${BASE_IMAGE,,}" == *"red hat"* || "${BASE_IMAGE,,}" == *"rhel"* || "${BASE_IMAGE,,}" == *"redhat"* ]] && IS_RHEL=true && IMAGE_NAME="redfin" && IMAGE_PRETTY_NAME="Redfin"
 [[ "${BASE_IMAGE,,}" == *"almalinux"* && "${BASE_IMAGE,,}" != *"-kitten"* ]] && IS_ALMALINUX=true && IMAGE_NAME="albacore" && IMAGE_PRETTY_NAME="Albacore"
 [[ "${BASE_IMAGE,,}" == *"-kitten"* ]] && IS_ALMALINUXKITTEN=true && IMAGE_NAME="yellowfin" && IMAGE_PRETTY_NAME="Yellowfin"
 [[ "${BASE_IMAGE,,}" == *"centos"* ]] && IS_CENTOS=true && IMAGE_NAME="skipjack" && IMAGE_PRETTY_NAME="Skipjack"

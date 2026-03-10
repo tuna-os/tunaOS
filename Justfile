@@ -137,6 +137,12 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
 
     BUILD_ARGS+=("--build-arg" "AKMODS_BASE=ghcr.io/ublue-os")
 
+    # Pass RHSM credentials for RHEL registration during build
+    BUILD_ARGS+=("--build-arg" "RHSM_USER=${RHSM_USER:-}")
+    BUILD_ARGS+=("--build-arg" "RHSM_PASSWORD=${RHSM_PASSWORD:-}")
+    BUILD_ARGS+=("--build-arg" "RHSM_ORG=${RHSM_ORG:-}")
+    BUILD_ARGS+=("--build-arg" "RHSM_ACTIVATION_KEY=${RHSM_ACTIVATION_KEY:-}")
+
     # Select akmods source tag for mounted NVIDIA images.
     # HWE and bonito (Fedora) always use coreos-stable.
     if [[ "{{ enable_hwe }}" -eq "1" ]] || [[ "{{ target_tag }}" == bonito* ]]; then
