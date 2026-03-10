@@ -84,3 +84,4 @@ jobs:
           flatpaks-list: ${{ github.workspace }}/system_files/etc/ublue-os/system-flatpaks.list
           hook-post-rootfs: ${{ github.workspace }}/iso_files/configure_lts_iso_anaconda.sh
           builder-distro: ${{ matrix.variant == 'bonito' && 'fedora' || (matrix.variant == 'skipjack' && 'centos' || 'almalinux') }}
+# Trigger refresh
