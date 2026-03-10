@@ -220,7 +220,7 @@ jobs:
           # Use the just recipe for chunking
           just_cmd=$(which just)
           sudo "$just_cmd" chunkify "${IMAGE_REF}"
-          
+
           echo "ref=${IMAGE_REF}" >> "${GITHUB_OUTPUT}"
 
       - name: Load Image
