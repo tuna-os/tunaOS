@@ -10,6 +10,7 @@ case "$variant" in
 "skipjack" | "centos" | "lts") echo "quay.io/centos-bootc/centos-bootc:stream10" ;;
 "bonito" | "fedora" | "bluefin") echo "quay.io/fedora/fedora-bootc:43" ;;
 "bonito-rawhide" | "rawhide") echo "quay.io/fedora/fedora-bootc:rawhide" ;;
+"redfin" | "rhel") echo "registry.redhat.io/rhel10/rhel-bootc:latest" ;;
 *)
 	echo "Unknown variant: $variant" >&2
 	exit 1

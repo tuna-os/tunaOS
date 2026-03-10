@@ -16,6 +16,7 @@ fi
 if [[ $IS_CENTOS == true ]]; then
 	dnf -y install centos-backgrounds centos-logos
 fi
+# RHEL: no redistribution-safe branding packages; skip OS branding install
 
 # Tailscale
 if [[ $IS_FEDORA == true ]]; then
