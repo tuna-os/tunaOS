@@ -14,18 +14,12 @@ The pipeline builds images on a weekly schedule and publishes them with the `lat
 -   **Flavors**: Different package sets.
     -   `base`: Minimal OS.
     -   `dx`: Developer Experience (includes dev tools).
-    -   `gdx`: Graphical Developer Experience (includes desktop environment and NVIDIA/ZFS support via coreos akmods).
+    -   `gdx`: Graphical Developer Experience (includes desktop environment and NVIDIA support via coreos akmods).
 
 ### Hardware Enablement (HWE)
 
 The `gdx` flavor uses the coreos/fedora kernel and akmods for hardware enablement:
 -   **NVIDIA drivers**: Provided by `ublue-os/akmods-nvidia-open` using coreos-stable builds
--   **ZFS modules**: Provided by `ublue-os/akmods-zfs` using coreos-stable builds
-
-**Note**: AlmaLinux 10 and AlmaLinux Kitten 10 may require custom ZFS akmods builds since ublue-os/akmods may not fully support these variants yet. The current configuration attempts to use coreos-stable akmods for ZFS on these platforms. If you encounter issues with ZFS on AlmaLinux variants:
-- Report issues at https://github.com/tuna-os/tunaOS/issues
-- Check the upstream ublue-os/akmods project for AlmaLinux 10 support status
-- Consider building custom ZFS akmods for AlmaLinux 10/Kitten if needed
 
 ---
 

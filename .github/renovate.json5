@@ -52,11 +52,9 @@
         // Shared common layers
         "ghcr.io/projectbluefin/common",
         // Upstream ublue akmods (used for HWE and Fedora/CentOS)
-        "ghcr.io/ublue-os/akmods-zfs",
         "ghcr.io/ublue-os/akmods-nvidia-open",
         "ghcr.io/ublue-os/brew",
-        // Tuna-OS akmods (used for AlmaLinux base builds)
-        "ghcr.io/tuna-os/akmods-zfs",
+        // Tuna-OS akmods
         "ghcr.io/tuna-os/akmods-nvidia-open",
       ]
     }

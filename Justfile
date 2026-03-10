@@ -112,7 +112,7 @@ _ensure-yq:
 # When enable_gdx=1, ENABLE_HWE is set to 1 and coreos-stable akmods are used for
 # When enable_hwe=1, coreos-stable akmods are used for
 
-# NVIDIA drivers, ZFS modules, and the coreos/fedora kernel.
+# NVIDIA drivers and the coreos/fedora kernel.
 [private]
 _build target_tag_with_version target_tag container_file base_image_for_build platform use_cache enable_gdx enable_hwe desktop_flavor *args: _ensure-yq
     #!/usr/bin/env bash
@@ -135,33 +135,16 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
     BUILD_ARGS+=("--build-arg" "ENABLE_GDX={{ enable_gdx }}")
     BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR={{ desktop_flavor }}")
 
-    # Determine AKMODS_BASE based on target variant/flavor and HWE status.
-    # HWE: always use ublue-os coreos akmods (with coreos kernel).
-    # Non-HWE Alma: use tuna-os akmods for zfs; uses Alma repos for NVIDIA (no akmods-nvidia-open).
-    # Non-HWE others: use ublue-os and appropriate version tag.
-    akmods_base="ghcr.io/ublue-os"
-    if [[ "{{ target_tag }}" == albacore* ]] || [[ "{{ target_tag }}" == yellowfin* ]] || [[ "{{ target_tag }}" == almalinux* ]] || [[ "{{ target_tag }}" == redfin* ]]; then
-        if [[ "{{ enable_hwe }}" != "1" ]]; then
-            akmods_base="ghcr.io/tuna-os"
-        fi
-    fi
-    BUILD_ARGS+=("--build-arg" "AKMODS_BASE=${akmods_base}")
+    BUILD_ARGS+=("--build-arg" "AKMODS_BASE=ghcr.io/ublue-os")
 
-    # Select akmods source tag for mounted ZFS/NVIDIA images.
-    # HWE always uses coreos-stable for compatibility with coreos kernel.
-    # Non-HWE Alma uses almalinux-10 for zfs (NVIDIA from Alma repos, uses coreos-stable nvidia image but won't mount it).
-    if [[ "{{ enable_hwe }}" -eq "1" ]]; then
+    # Select akmods source tag for mounted NVIDIA images.
+    # HWE and bonito (Fedora) always use coreos-stable.
+    if [[ "{{ enable_hwe }}" -eq "1" ]] || [[ "{{ target_tag }}" == bonito* ]]; then
         BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=coreos-stable-{{ coreos_stable_version }}")
         BUILD_ARGS+=("--build-arg" "AKMODS_NVIDIA_VERSION=coreos-stable-{{ coreos_stable_version }}")
     else
-        if [[ "{{ target_tag }}" == albacore* ]] || [[ "{{ target_tag }}" == yellowfin* ]] || [[ "{{ target_tag }}" == almalinux* ]] || [[ "{{ target_tag }}" == redfin* ]]; then
-            BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=almalinux-10")
-            # Non-HWE Alma: use coreos-stable for nvidia image (optional mount, won't be used)
-            BUILD_ARGS+=("--build-arg" "AKMODS_NVIDIA_VERSION=coreos-stable-{{ coreos_stable_version }}")
-        else
-            BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=centos-10")
-            BUILD_ARGS+=("--build-arg" "AKMODS_NVIDIA_VERSION=centos-10")
-        fi
+        BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=centos-10")
+        BUILD_ARGS+=("--build-arg" "AKMODS_NVIDIA_VERSION=centos-10")
     fi
     # Pass build context to Containerfile for conditional handling
     BUILD_ARGS+=("--build-arg" "ENABLE_HWE={{ enable_hwe }}")

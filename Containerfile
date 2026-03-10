@@ -2,13 +2,9 @@ ARG BASE_IMAGE
 ARG ENABLE_HWE="${ENABLE_HWE:-0}"
 ARG ENABLE_GDX="${ENABLE_GDX:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
-ARG AKMODS_VERSION="${AKMODS_VERSION:-centos-10}"
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:latest"
 ARG BREW_IMAGE_REF="ghcr.io/ublue-os/brew:latest"
-ARG AKMODS_BASE="ghcr.io/ublue-os"
 
-# Upstream mounts akmods-zfs and akmods-nvidia-open; select their tag via AKMODS_VERSION
-FROM ${AKMODS_BASE}/akmods-zfs:${AKMODS_VERSION} AS akmods_zfs
 FROM ${COMMON_IMAGE_REF} AS common
 FROM ${BREW_IMAGE_REF} AS brew
 
@@ -51,65 +47,47 @@ ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 # We pass in BASE_IMAGE as an env var to set it in os-release so that we know what we are building on
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
-  --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/copy-files.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
-  --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/00-workarounds.sh
 
 # Install base packages WITHOUT DE (calls install_base_packages_no_de function)
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
-  --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
   bash -c "source /run/context/build_scripts/lib.sh && source /run/context/build_scripts/10-base-packages.sh && install_base_packages_no_de"
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
-  --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/20-packages.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
-  --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/26-packages-post.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
-  --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/40-services.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
-  --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/90-image-info.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
-  --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/arch-customizations.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
-  --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/cleanup.sh
 
@@ -124,8 +102,6 @@ ENV DESKTOP_FLAVOR=gnome
 # Install GNOME desktop environment
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
-  --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/gnome.sh base
 
@@ -147,8 +123,6 @@ ENV DESKTOP_FLAVOR=kde
 # Install KDE desktop environment
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
-  --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/kde.sh base
 
@@ -170,8 +144,6 @@ ENV DESKTOP_FLAVOR=niri
 # Install Niri desktop environment
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=akmods_zfs,src=/rpms,dst=/tmp/akmods-zfs-rpms \
-  --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/niri.sh base
 
