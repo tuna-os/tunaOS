@@ -185,18 +185,8 @@ case "${1:-}" in
 		ublue-os-signing \
 		ublue-os-udev-rules \
 		ublue-os-update-services \
-		ublue-os-motd \
-		ublue-os-bling \
-		ublue-os-rebase-helper \
-		ublue-os-setup-services \
-		ublue-os-polkit-rules \
-		ublue-os-brew \
-		uupd \
-		bluefin-schemas
-
-	# Extra GNOME Extensions
-	# FIXME: gsconnect EPEL10 request: https://bugzilla.redhat.com/show_bug.cgi?id=2349097
-	install_from_copr ublue-os/staging 10 gnome-shell-extension-{search-light,logo-menu,gsconnect}
+		ublue-{motd,bling,rebase-helper,setup-services,polkit-rules,brew} \
+		uupd
 
 	# GNOME version specific workarounds
 	GNOME_VERSION=$(gnome-shell --version | cut -d ' ' -f 3 | cut -d '.' -f 1 || echo 0)

@@ -23,7 +23,10 @@ COPY --from=common /system_files/shared /files
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 
-FROM ${BASE_IMAGE}
+# ==============================================================================
+# HWE Base stage - Adds HWE packages to the base image
+# ==============================================================================
+FROM ${BASE_IMAGE} AS hwe-base
 
 ARG DESKTOP_FLAVOR
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
@@ -38,7 +41,33 @@ RUN \
   --mount=type=bind,from=akmods_zfs,src=/kernel-rpms,dst=/tmp/kernel-rpms \
   --mount=type=bind,from=akmods_nvidia_open,src=/rpms,dst=/tmp/akmods-nvidia-open-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
-    /run/context/build_scripts/HWE.sh; 
+    /run/context/build_scripts/HWE.sh
+
+# ==============================================================================
+# GNOME variant - HWE base with GNOME desktop
+# ==============================================================================
+FROM hwe-base AS gnome
+
+ARG DESKTOP_FLAVOR=gnome
+ENV DESKTOP_FLAVOR=gnome
+
+# Lock glib2 for consistency
+RUN dnf versionlock add glib2
+
+# Makes `/opt` writeable by default
+# Needs to be here to make the main image build strict (no /opt there)
+RUN rm -rf /opt && ln -s /var/opt /opt
+
+# ==============================================================================
+# KDE variant - HWE base with KDE desktop
+# ==============================================================================
+FROM hwe-base AS kde
+
+ARG DESKTOP_FLAVOR=kde
+ENV DESKTOP_FLAVOR=kde
+
+# Lock glib2 for consistency
+RUN dnf versionlock add glib2
 
 # Makes `/opt` writeable by default
 # Needs to be here to make the main image build strict (no /opt there)

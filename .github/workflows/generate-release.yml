@@ -28,9 +28,8 @@ jobs:
     # Only run if the workflow was successful and on lts branch
     if: |
       github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' && 
+      (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.head_branch == 'lts')
-    
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -87,13 +86,13 @@ jobs:
         run: |
           TAG="${{ steps.changelog.outputs.TAG }}"
           TITLE="${{ steps.changelog.outputs.TITLE }}"
-          
+
           # Check if release already exists
           if gh release view "$TAG" >/dev/null 2>&1; then
             echo "Release $TAG already exists, skipping creation"
             exit 0
           fi
-          
+
           # Create the release
           gh release create "$TAG" \
             --title "$TITLE" \
