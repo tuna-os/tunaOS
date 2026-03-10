@@ -36,8 +36,14 @@ install_base_packages_no_de() {
 			ffmpeg
 	else
 		# Enable the EPEL repos for RHEL and AlmaLinux
-		dnf install -y epel-release
-		/usr/bin/crb enable
+		# RHEL requires URL-based EPEL install since epel-release is not in default repos
+		if [[ $IS_RHEL == true ]]; then
+			dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${MAJOR_VERSION_NUMBER}.noarch.rpm"
+			subscription-manager repos --enable "codeready-builder-for-rhel-${MAJOR_VERSION_NUMBER}-$(uname -m)-rpms"
+		else
+			dnf install -y epel-release
+			/usr/bin/crb enable
+		fi
 		dnf config-manager --set-enabled epel
 		dnf config-manager --set-enabled crb
 

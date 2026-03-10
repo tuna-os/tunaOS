@@ -62,7 +62,7 @@ clean:
     rm -rf .build-logs
     sudo rm -rf .build/*
     echo "Removing local podman images for all variants and flavors..."
-    variants=(yellowfin albacore bonito skipjack)
+    variants=(yellowfin albacore bonito skipjack redfin)
     images=()
     for variant in "${variants[@]}"; do
         images+=("$variant")
@@ -135,7 +135,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
     # Determine AKMODS_BASE based on target variant and HWE status
     # AlmaLinux kernels (albacore, yellowfin, almalinux) use tuna-os for akmods, others use upstream ublue-os
     akmods_base="ghcr.io/ublue-os"
-    if [[ "{{ target_tag }}" == albacore* ]] || [[ "{{ target_tag }}" == yellowfin* ]] || [[ "{{ target_tag }}" == almalinux* ]]; then
+    if [[ "{{ target_tag }}" == albacore* ]] || [[ "{{ target_tag }}" == yellowfin* ]] || [[ "{{ target_tag }}" == almalinux* ]] || [[ "{{ target_tag }}" == redfin* ]]; then
         if [[ "{{ enable_hwe }}" != "1" ]]; then
             akmods_base="ghcr.io/tuna-os"
         fi
@@ -147,7 +147,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
     if [[ "{{ enable_hwe }}" -eq "1" ]]; then
         BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=coreos-stable-{{ coreos_stable_version }}")
     else
-        if [[ "{{ target_tag }}" == albacore* ]] || [[ "{{ target_tag }}" == yellowfin* ]] || [[ "{{ target_tag }}" == almalinux* ]]; then
+        if [[ "{{ target_tag }}" == albacore* ]] || [[ "{{ target_tag }}" == yellowfin* ]] || [[ "{{ target_tag }}" == almalinux* ]] || [[ "{{ target_tag }}" == redfin* ]]; then
             BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=almalinux-10")
         else
             BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=centos-10")
@@ -346,6 +346,12 @@ skipjack variant='base':
 
 bonito variant='base':
     just build bonito {{ variant }}
+
+# NOTE: redfin requires a Red Hat account authenticated to registry.redhat.io.
+
+# Images cannot be published publicly due to the RHEL EULA. See docs/rhel-setup.md.
+redfin variant='base':
+    just build redfin {{ variant }}
 
 # Build full GNOME chain for a variant: base → hwe → gdx → gdx-hwe
 build-chain variant:
