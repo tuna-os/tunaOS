@@ -105,7 +105,7 @@ jobs:
                 PLATFORMS="linux/arm64,linux/amd64"
                 ;;
               bonito)
-                DESCRIPTION="🎩 Based on Fedora 42"
+                DESCRIPTION="🎩 Based on Fedora 43"
                 PLATFORMS="linux/arm64,linux/amd64"
                 ;;
               bonito-rawhide)

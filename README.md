@@ -97,7 +97,7 @@ The closest to upstream Bluefin LTS experience with enhanced capabilities:
 > Bonito is still needing some work to get into a functional state
 ### 🎣 Bonito (Fedora)
 
-**Base:** Fedora 42
+**Base:** Fedora 43
 
 **Image:** `ghcr.io/tuna-os/bonito:latest`  
 

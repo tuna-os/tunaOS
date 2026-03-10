@@ -119,7 +119,7 @@ sudo just iso yellowfin base local
 1. **yellowfin** - AlmaLinux Kitten 10 (most compatible with upstream Bluefin LTS)
 2. **albacore** - AlmaLinux 10 (stable enterprise)
 3. **skipjack** - CentOS Stream 10 (experimental) 
-4. **bonito** - Fedora 42 (cutting edge, incomplete)
+4. **bonito** - Fedora 43 (cutting edge, incomplete)
 
 ### Flavors (Feature Sets):
 1. **base** - Basic desktop OS with GNOME, Flathub, Homebrew
