@@ -1,13 +1,13 @@
 # Implementation Plan: CI/CD Consolidation and Optimization
 
 ## Phase 1: Research and Specification
-- [ ] Task: Research existing workflows and identify consolidation opportunities
+- [x] Task: Research existing workflows (Finished researching build.yml, build-iso.yml, and reusable-build-image.yml. Identified consolidation points in matrix generation and reusable steps.) and identify consolidation opportunities
     - [ ] Analyze `build.yml`, `build-iso.yml`, and `reusable-build-image.yml`
     - [ ] Map out the required build matrix for all variants and flavors
-- [ ] Task: Define the new unified workflow specification
+- [x] Task: Define the new unified (Created docs/CI_SPEC.md defining the new YAML configuration and workflow structure.) workflow specification
     - [ ] Finalize the structure of the central configuration file
     - [ ] Document the proposed GitHub Actions YAML structure
-- [ ] Task: Conductor - User Manual Verification 'Phase 1: Research and Specification' (Protocol in workflow.md)
+- [~] Task: Conductor - User Manual Verification 'Phase 1: Research and Specification' (Protocol in workflow.md)
 
 ## Phase 2: Implementation of Unified Workflow
 - [ ] Task: Create a central configuration file for variants and platforms
