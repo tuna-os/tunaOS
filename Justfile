@@ -240,7 +240,7 @@ build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag=
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-gnome:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}-gnome:{{ default_tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}:gnome"
             fi
             CONTAINERFILE="Containerfile.hwe"
             ;;
@@ -248,7 +248,7 @@ build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag=
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-gnome:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}-gnome:{{ default_tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}:gnome"
             fi
             CONTAINERFILE="Containerfile.gdx"
             ;;
@@ -256,7 +256,7 @@ build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag=
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-gnome-hwe:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}-gnome-hwe:{{ default_tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}:gnome-hwe"
             fi
             CONTAINERFILE="Containerfile.gdx"
             ;;
@@ -264,7 +264,7 @@ build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag=
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-gnome:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}-gnome:{{ default_tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}:gnome"
             fi
             CONTAINERFILE="Containerfile.hwe"
             DESKTOP_FLAVOR="hwe-base"
@@ -273,7 +273,7 @@ build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag=
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-gnome:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}-gnome:{{ default_tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}:gnome"
             fi
             CONTAINERFILE="Containerfile.gdx"
             DESKTOP_FLAVOR="gdx-base"
@@ -287,7 +287,7 @@ build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag=
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-kde:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}-kde:{{ default_tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}:kde"
             fi
             CONTAINERFILE="Containerfile.hwe"
             DESKTOP_FLAVOR="kde"
@@ -296,7 +296,7 @@ build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag=
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-kde:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}-kde:{{ default_tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}:kde"
             fi
             CONTAINERFILE="Containerfile.gdx"
             DESKTOP_FLAVOR="kde"
@@ -305,7 +305,7 @@ build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag=
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-kde-hwe:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}-kde-hwe:{{ default_tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}:kde-hwe"
             fi
             CONTAINERFILE="Containerfile.gdx"
             DESKTOP_FLAVOR="kde"
@@ -319,7 +319,7 @@ build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag=
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-niri:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}-niri:{{ default_tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}:niri"
             fi
             CONTAINERFILE="Containerfile.hwe"
             DESKTOP_FLAVOR="niri"
@@ -328,7 +328,7 @@ build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag=
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-niri:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}-niri:{{ default_tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}:niri"
             fi
             CONTAINERFILE="Containerfile.gdx"
             DESKTOP_FLAVOR="niri"
@@ -337,7 +337,7 @@ build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag=
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-niri-hwe:{{ tag }}"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}-niri-hwe:{{ default_tag }}"
+                BASE_FOR_BUILD="localhost/{{ variant }}:niri-hwe"
             fi
             CONTAINERFILE="Containerfile.gdx"
             DESKTOP_FLAVOR="niri"
@@ -372,10 +372,11 @@ build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag=
     fi
 
     TARGET_TAG={{ variant }}
-    if [[ "{{ flavor }}" != "base" ]]; then
-        TARGET_TAG+="-{{ flavor }}"
+    TARGET_IMAGE_TAG="{{ tag }}"
+    if [[ "{{ tag }}" == "latest" ]]; then
+        TARGET_IMAGE_TAG="{{ flavor }}"
     fi
-    TARGET_TAG_WITH_VERSION="${TARGET_TAG}:{{ tag }}"
+    TARGET_TAG_WITH_VERSION="${TARGET_TAG}:${TARGET_IMAGE_TAG}"
 
     # Determine HWE flag - hwe and gdx flavors always use coreos akmods
     ENABLE_HWE="0"
@@ -521,15 +522,36 @@ build-all-parallel-experimental:
 build-all-base:
     #!/usr/bin/env bash
     set -euo pipefail
-    bash ./scripts/build-all-images.sh --base-only --include-experimental
+    echo "Building base images sequentially (chunkified per build)..."
+    for variant in yellowfin albacore skipjack bonito; do
+        just build "$variant" base
+    done
+    echo "✓ Base image builds completed"
 
 build-all:
     #!/usr/bin/env bash
-    bash ./scripts/build-all-images.sh --include-kde
+    set -euo pipefail
+    echo "Building stable variants sequentially with GNOME and KDE chains (chunkified per build)..."
+    for variant in yellowfin albacore; do
+        just build "$variant" gnome
+        just build "$variant" gnome-hwe
+        just build "$variant" gnome-gdx || echo "⚠ Warning: $variant gnome-gdx failed (non-fatal)"
+        just build "$variant" kde
+        just build "$variant" kde-hwe
+        just build "$variant" kde-gdx || echo "⚠ Warning: $variant kde-gdx failed (non-fatal)"
+    done
+    echo "✓ Stable variant builds completed"
 
 build-all-experimental:
     #!/usr/bin/env bash
-    bash ./scripts/build-all-images.sh --include-experimental
+    set -euo pipefail
+    echo "Building all variants sequentially with GNOME chain (chunkified per build)..."
+    for variant in yellowfin albacore skipjack bonito; do
+        just build "$variant" gnome
+        just build "$variant" gnome-hwe
+        just build "$variant" gnome-gdx || echo "⚠ Warning: $variant gnome-gdx failed (non-fatal)"
+    done
+    echo "✓ Experimental-inclusive builds completed"
 
 # ── Chunkah ──────────────────────────────────────────────────────────
 
