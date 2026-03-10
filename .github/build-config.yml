@@ -1,0 +1,95 @@
+config:
+  global_platforms: ["linux/amd64", "linux/arm64"]
+
+variants:
+  - id: yellowfin
+    description: "Based on AlmaLinux Kitten 10"
+    platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
+    flavors:
+      - id: gnome
+        build_image: true
+        build_iso: true
+        build_qcow2: true
+      - id: gnome-hwe
+        build_image: true
+        build_iso: true
+      - id: gnome-gdx
+        build_image: true
+      - id: gnome-gdx-hwe
+        build_image: true
+      - id: kde
+        build_image: true
+        build_iso: true
+      - id: kde-hwe
+        build_image: true
+      - id: kde-gdx
+        build_image: true
+      - id: niri
+        build_image: true
+      - id: niri-hwe
+        build_image: true
+      - id: niri-gdx
+        build_image: true
+
+  - id: albacore
+    description: "Based on AlmaLinux 10"
+    platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
+    flavors:
+      - id: gnome
+        build_image: true
+        build_iso: true
+        build_qcow2: true
+      - id: gnome-hwe
+        build_image: true
+        build_iso: true
+      - id: gnome-gdx
+        build_image: true
+      - id: gnome-gdx-hwe
+        build_image: true
+      - id: kde
+        build_image: true
+        build_iso: true
+      - id: kde-hwe
+        build_image: true
+      - id: kde-gdx
+        build_image: true
+      - id: niri
+        build_image: true
+      - id: niri-hwe
+        build_image: true
+      - id: niri-gdx
+        build_image: true
+
+  - id: skipjack
+    description: "Based on CentOS Stream 10"
+    platforms: ["linux/amd64", "linux/arm64"]
+    flavors:
+      - id: gnome
+        build_image: true
+        build_iso: true
+        build_qcow2: true
+      - id: gnome-hwe
+        build_image: true
+      - id: gnome-gdx
+        build_image: true
+      - id: kde
+        build_image: true
+      - id: niri
+        build_image: true
+
+  - id: bonito
+    description: "Based on Fedora 43"
+    platforms: ["linux/amd64", "linux/arm64"]
+    flavors:
+      - id: gnome
+        build_image: true
+        build_iso: true
+        build_qcow2: true
+      - id: gnome-hwe
+        build_image: true
+      - id: gnome-gdx
+        build_image: true
+      - id: kde
+        build_image: true
+      - id: niri
+        build_image: true

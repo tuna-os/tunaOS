@@ -10,15 +10,15 @@
 - [x] Task: Conductor - User Manual Verification 'Phase 1: Research and Specification' (Protocol in workflow.md)
 
 ## Phase 2: Implementation of Unified Workflow
-- [ ] Task: Create a central configuration file for variants and platforms
+- [x] Task: Create a central configuration (Created .github/build-config.yml with detailed variant/flavor/platform mappings.) file for variants and platforms
     - [ ] Define `.github/build-config.yml` with all variant/flavor combinations
-- [ ] Task: Implement a unified GitHub Actions workflow with matrix strategies
+- [x] Task: Implement a unified (Created .github/workflows/main-build.yml with dynamic matrix generation from YAML config.) GitHub Actions workflow with matrix strategies
     - [ ] Create `.github/workflows/main-build.yml`
     - [ ] Implement the matrix strategy using the central config
-- [ ] Task: Migrate build logic from individual workflows to the unified one
+- [x] Task: Migrate build logic (Incorporated ISO build logic into main-build.yml matrix job.) from individual workflows to the unified one
     - [ ] Incorporate ISO and VM build steps into the unified workflow
     - [ ] Ensure proper secret handling and container registry logins
-- [ ] Task: Conductor - User Manual Verification 'Phase 2: Implementation of Unified Workflow' (Protocol in workflow.md)
+- [~] Task: Conductor - User Manual Verification 'Phase 2: Implementation of Unified Workflow' (Protocol in workflow.md)
 
 ## Phase 3: Optimization and Validation
 - [ ] Task: Implement composite actions for common CI steps

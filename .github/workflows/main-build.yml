@@ -1,0 +1,85 @@
+name: Unified Build
+on:
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "0 1 * * TUE"
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Image variant (all, yellowfin, albacore, skipjack, bonito)'
+        default: 'all'
+        type: string
+      flavor:
+        description: 'Flavor (all, gnome, kde, niri, etc.)'
+        default: 'all'
+        type: string
+
+jobs:
+  generate_matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      image_matrix: ${{ steps.set-matrix.outputs.image_matrix }}
+      artifact_matrix: ${{ steps.set-matrix.outputs.artifact_matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Generate Matrix
+        id: set-matrix
+        run: |
+          FILTER_VARIANT="${{ inputs.variant || 'all' }}"
+          FILTER_FLAVOR="${{ inputs.flavor || 'all' }}"
+
+          QUERY=".variants[]"
+          if [[ "$FILTER_VARIANT" != "all" ]]; then
+            QUERY+=" | select(.id == \"$FILTER_VARIANT\")"
+          fi
+
+          # Flatten the matrix
+          FULL_MATRIX=$(yq -o=json "$QUERY | {variant: .id, description: .description, platforms: .platforms, flavors: .flavors}" .github/build-config.yml | jq -c -s 'map({variant: .variant, description: .description, platforms: .platforms, flavor: .flavors[]}) | map(select("'"$FILTER_FLAVOR"'" == "all" or .flavor.id == "'"$FILTER_FLAVOR"'"))')
+
+          # Matrix for image building
+          IMAGE_MATRIX=$(echo "$FULL_MATRIX" | jq -c '{include: map({variant: .variant, flavor: .flavor.id, platforms: .platforms | join(",")})}')
+          echo "image_matrix=$IMAGE_MATRIX" >> $GITHUB_OUTPUT
+
+          # Matrix for artifact building (ISO/QCOW2)
+          # We only build artifacts for amd64 for now as per current project setup
+          ARTIFACT_MATRIX=$(echo "$FULL_MATRIX" | jq -c '{include: map(select(.flavor.build_iso == true or .flavor.build_qcow2 == true) | {variant: .variant, flavor: .flavor.id, build_iso: .flavor.build_iso, build_qcow2: .flavor.build_qcow2, platform: "linux/amd64"})}')
+          echo "artifact_matrix=$ARTIFACT_MATRIX" >> $GITHUB_OUTPUT
+
+  build_images:
+    name: Build ${{ matrix.variant }}:${{ matrix.flavor }}
+    needs: generate_matrix
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate_matrix.outputs.image_matrix) }}
+    uses: ./.github/workflows/reusable-build-image.yml
+    with:
+      image-name: ${{ matrix.variant }}-${{ matrix.flavor }}
+      image-variant: ${{ matrix.variant }}
+      flavor: ${{ matrix.flavor }}
+      platforms: ${{ matrix.platforms }}
+      publish: ${{ github.event_name != 'pull_request' }}
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+
+  build_iso:
+    name: ISO ${{ matrix.variant }}:${{ matrix.flavor }}
+    needs: [generate_matrix, build_images]
+    if: github.event_name != 'pull_request' && matrix.build_iso == true
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_matrix) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Build ISO
+        uses: ublue-os/isogenerator@v1
+        with:
+          image-name: ${{ matrix.variant }}-${{ matrix.flavor }}
+          installer-repo: ghcr.io/${{ github.repository_owner }}/${{ matrix.variant }}-${{ matrix.flavor }}:latest
+          flatpaks-list: ${{ github.workspace }}/system_files/etc/ublue-os/system-flatpaks.list
+          hook-post-rootfs: ${{ github.workspace }}/iso_files/configure_lts_iso_anaconda.sh
+          builder-distro: ${{ matrix.variant == 'bonito' && 'fedora' || (matrix.variant == 'skipjack' && 'centos' || 'almalinux') }}
