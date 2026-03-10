@@ -153,7 +153,21 @@ else
 	/run/context/build_scripts/gnome.sh base
 fi
 
-# Please, dont remove this as it will break everything GNOME related
-dnf versionlock add glib2
+# Versionlock glib2 and the full GNOME 48 stack to prevent dnf from upgrading
+# back to whatever EL10 ships by default (which may not be GNOME 48)
+dnf versionlock add \
+	glib2 \
+	gdm \
+	gnome-shell \
+	mutter \
+	gnome-session-wayland-session \
+	gnome-settings-daemon \
+	gnome-control-center \
+	gsettings-desktop-schemas \
+	gtk4 \
+	libadwaita \
+	pango \
+	xdg-desktop-portal \
+	xdg-desktop-portal-gnome || true
 
 printf "::endgroup::\n"

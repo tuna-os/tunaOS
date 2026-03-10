@@ -1,4 +1,54 @@
 # --- Environment Variables & Exports ---
+# ==============================================================================
+#  PACKAGE MANAGEMENT (TunaOS Custom Packages)
+# ==============================================================================
+
+# Download/sync TunaOS custom packages from GHCR to local cache
+sync-packages:
+    #!/usr/bin/env bash
+    chmod +x build_scripts/download-tuna-packages.sh
+    echo "Syncing TunaOS custom packages from GHCR..."
+    export TUNA_PACKAGES_CACHE="${HOME}/.cache/tuna-packages"
+    mkdir -p "${TUNA_PACKAGES_CACHE}"
+    build_scripts/download-tuna-packages.sh
+    echo "✓ Packages synced to ${TUNA_PACKAGES_CACHE}"
+
+# List available TunaOS custom packages and their versions
+list-packages:
+    #!/usr/bin/env bash
+    CACHE_DIR="${HOME}/.cache/tuna-packages"
+    if [ -d "${CACHE_DIR}" ] && [ -n "$(ls -A "${CACHE_DIR}"/*.rpm 2>/dev/null)" ]; then
+        echo "TunaOS Custom Packages (cached):"
+        echo "================================="
+        for rpm in "${CACHE_DIR}"/*.rpm; do
+            if [ -f "${rpm}" ]; then
+                rpm -qip "${rpm}" 2>/dev/null | grep -E "^(Name|Version|Release|Architecture)" | sed 's/^/  /'
+                echo ""
+            fi
+        done
+    else
+        echo "No packages in cache. Run 'just sync-packages' to download."
+    fi
+    echo ""
+    echo "Configured packages (from packages.list):"
+    echo "=========================================="
+    if [ -f build_scripts/packages.list ]; then
+        grep -v '^#' build_scripts/packages.list | grep -v '^[[:space:]]*$' || echo "  (none configured)"
+    else
+        echo "  packages.list not found"
+    fi
+
+# Clean local TunaOS package cache
+clean-package-cache:
+    #!/usr/bin/env bash
+    CACHE_DIR="${HOME}/.cache/tuna-packages"
+    echo "Cleaning TunaOS package cache..."
+    if [ -d "${CACHE_DIR}" ]; then
+        rm -rf "${CACHE_DIR}"
+        echo "✓ Cache cleared: ${CACHE_DIR}"
+    else
+        echo "Cache directory does not exist: ${CACHE_DIR}"
+    fi
 
 export repo_organization := env("GITHUB_REPOSITORY_OWNER", "tuna-os")
 export default_tag := env("DEFAULT_TAG", "latest")

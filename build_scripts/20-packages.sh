@@ -19,32 +19,38 @@ fi
 # RHEL: no redistribution-safe branding packages; skip OS branding install
 
 # Tailscale
-if [[ $IS_FEDORA == true ]]; then
-	dnf config-manager addrepo --from-repofile="https://pkgs.tailscale.com/stable/fedora/tailscale.repo"
-	# Retry with backoff for HTTP/2 stream errors
-	for attempt in {1..3}; do
-		if dnf -y install tailscale; then
-			break
-		fi
-		if [[ $attempt -lt 3 ]]; then
-			echo "Tailscale install failed, retrying in 10 seconds..."
-			sleep 10
-		fi
-	done
+TUNA_CACHE="/tmp/tuna-packages"
+if [ -d "${TUNA_CACHE}" ] && find "${TUNA_CACHE}" -name "tailscale-*.rpm" -type f | grep -q .; then
+	echo "Installing Tailscale from TunaOS packages..."
+	dnf -y install "${TUNA_CACHE}"/tailscale-*.rpm
 else
-	dnf config-manager --add-repo "https://pkgs.tailscale.com/stable/centos/${MAJOR_VERSION_NUMBER}/tailscale.repo"
-	dnf config-manager --set-disabled "tailscale-stable"
-	# FIXME: tailscale EPEL10 request: https://bugzilla.redhat.com/show_bug.cgi?id=2349099
-	# Retry with backoff for HTTP/2 stream errors
-	for attempt in {1..3}; do
-		if dnf -y --enablerepo "tailscale-stable" install tailscale; then
-			break
-		fi
-		if [[ $attempt -lt 3 ]]; then
-			echo "Tailscale install failed, retrying in 10 seconds..."
-			sleep 10
-		fi
-	done
+	echo "Tailscale not found in TunaOS cache, falling back to upstream repository"
+	if [[ $IS_FEDORA == true ]]; then
+		dnf config-manager addrepo --from-repofile="https://pkgs.tailscale.com/stable/fedora/tailscale.repo"
+		# Retry with backoff for HTTP/2 stream errors
+		for attempt in {1..3}; do
+			if dnf -y install tailscale; then
+				break
+			fi
+			if [[ $attempt -lt 3 ]]; then
+				echo "Tailscale install failed, retrying in 10 seconds..."
+				sleep 10
+			fi
+		done
+	else
+		dnf config-manager --add-repo "https://pkgs.tailscale.com/stable/centos/${MAJOR_VERSION_NUMBER}/tailscale.repo"
+		dnf config-manager --set-disabled "tailscale-stable"
+		# Retry with backoff for HTTP/2 stream errors
+		for attempt in {1..3}; do
+			if dnf -y --enablerepo "tailscale-stable" install tailscale; then
+				break
+			fi
+			if [[ $attempt -lt 3 ]]; then
+				echo "Tailscale install failed, retrying in 10 seconds..."
+				sleep 10
+			fi
+		done
+	fi
 fi
 
 if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
@@ -60,8 +66,15 @@ if [ -d /usr/etc ]; then
 	rm -rvf /usr/etc
 fi
 
-# MoreWaita icon theme
-install_from_copr trixieua/morewaita-icon-theme morewaita-icon-theme
+# MoreWaita icon theme from TunaOS packages
+TUNA_CACHE="/tmp/tuna-packages"
+if [ -d "${TUNA_CACHE}" ] && find "${TUNA_CACHE}" -name "morewaita-icon-theme-*.rpm" -type f | grep -q .; then
+	echo "Installing MoreWaita icon theme from TunaOS packages..."
+	dnf -y install "${TUNA_CACHE}"/morewaita-icon-theme-*.rpm
+else
+	echo "Warning: MoreWaita not found in TunaOS packages, falling back to COPR"
+	install_from_copr trixieua/morewaita-icon-theme morewaita-icon-theme
+fi
 
 # This is required so homebrew works indefinitely.
 # Symlinking it makes it so whenever another GCC version gets released it will break if the user has updated it without-
