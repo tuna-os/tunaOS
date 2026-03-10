@@ -253,9 +253,8 @@ jobs:
         env:
           REGISTRY: ghcr.io
         run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
           echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
-          # Also login for docker (some tools might expect it)
-          echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
 
       - name: Push to GHCR
         if: ${{ inputs.publish }}
@@ -622,6 +621,7 @@ jobs:
         env:
           REGISTRY: ghcr.io
         run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
           echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
 
       - name: Push Manifest
@@ -657,8 +657,8 @@ jobs:
         env:
           REGISTRY: ghcr.io
         run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
           echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
-          cat ${XDG_RUNTIME_DIR}/containers/auth.json > ~/.docker/config.json
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
@@ -689,6 +689,7 @@ jobs:
         env:
           REGISTRY: ghcr.io
         run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
           echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
           # Also login with skopeo
           echo "${{ secrets.GITHUB_TOKEN }}" | sudo skopeo login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
