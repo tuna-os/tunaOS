@@ -19,7 +19,46 @@ fi
 # RHEL: no redistribution-safe branding packages; skip OS branding install
 
 # Tailscale
-install_tailscale_from_url
+tailscale_version="$(awk -F: '/^tailscale:/{print $2; exit}' /run/context/build_scripts/packages.list 2>/dev/null || true)"
+if [[ -z "${tailscale_version}" ]]; then
+	echo "Failed to determine tailscale version from packages.list" >&2
+	exit 1
+fi
+
+# Tailscale RPM naming is tailscale_<version>_<arch>.rpm, while packages.list may pin NVR-style version-release.
+tailscale_base_version="${tailscale_version%%-*}"
+
+rpm_arch="$(uname -m)"
+if [[ "${rpm_arch}" == "x86_64_v2" ]]; then
+	rpm_arch="x86_64"
+fi
+
+if [[ $IS_FEDORA == true ]]; then
+	repo_base="https://pkgs.tailscale.com/stable/fedora/${MAJOR_VERSION_NUMBER}/${rpm_arch}"
+else
+	repo_base="https://pkgs.tailscale.com/stable/centos/${MAJOR_VERSION_NUMBER}/${rpm_arch}"
+fi
+
+# Primary URL format used by current Tailscale RPM repos.
+rpm_url="${repo_base}/tailscale_${tailscale_base_version}_${rpm_arch}.rpm"
+# Compatibility fallback for historical naming with an explicit release suffix.
+rpm_url_fallback="${repo_base}/tailscale_${tailscale_version}_${rpm_arch}.rpm"
+echo "Installing Tailscale from URL: ${rpm_url}"
+
+for attempt in 1 2 3; do
+	if dnf -y install "${rpm_url}"; then
+		break
+	elif dnf -y install "${rpm_url_fallback}"; then
+		break
+	fi
+	if [[ ${attempt} -lt 3 ]]; then
+		echo "Tailscale URL install failed, retrying in 10 seconds..."
+		sleep 10
+	else
+		echo "Failed to install Tailscale from URL after retries" >&2
+		exit 1
+	fi
+done
 
 if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
 	/run/context/build_scripts/kde.sh extra
