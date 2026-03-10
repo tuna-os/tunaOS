@@ -291,14 +291,16 @@ jobs:
           DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
         run: |
+          TEST_IMAGE_REF="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-${{ matrix.safeplatform }}"
+          STABLE_IMAGE_REF="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
           echo "### 🧪 Testing Instructions for ${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}" >> $GITHUB_STEP_SUMMARY
           echo "To test this image, run the following command:" >> $GITHUB_STEP_SUMMARY
           echo " \`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo " sudo bootc switch --enforce-container-sigpolicy ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-${{ matrix.safeplatform }}" >> $GITHUB_STEP_SUMMARY
+          echo " sudo bootc switch --enforce-container-sigpolicy ${TEST_IMAGE_REF}" >> $GITHUB_STEP_SUMMARY
           echo " \`\`\`" >> $GITHUB_STEP_SUMMARY
           echo "To go back to the latest stable version:" >> $GITHUB_STEP_SUMMARY
           echo " \`\`\`bash" >> $GITHUB_STEP_SUMMARY
-          echo " sudo bootc switch --enforce-container-sigpolicy ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo " sudo bootc switch --enforce-container-sigpolicy ${STABLE_IMAGE_REF}" >> $GITHUB_STEP_SUMMARY
           echo " \`\`\`" >> $GITHUB_STEP_SUMMARY
 
       - name: Generate PR Diff
@@ -468,16 +470,19 @@ jobs:
       - name: Image Metadata
         uses: docker/metadata-action@8d8c7c12f7b958582a5cb82ba16d5903cb27976a # v5
         id: metadata
+        env:
+          README_URL: https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/${{ github.sha }}/README.md
+          SOURCE_URL: https://github.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/blob/${{ github.sha }}/Containerfile
         with:
           tags: |
             type=raw,value=${{ env.DEFAULT_TAG}}
             type=ref,event=pr
           labels: |
-            io.artifacthub.package.readme-url=https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/${{ github.sha }}/README.md
+            io.artifacthub.package.readme-url=${{ env.README_URL }}
             org.opencontainers.image.created=${{ steps.date.outputs.date }}
             org.opencontainers.image.description=${{ env.IMAGE_DESC }}
             org.opencontainers.image.documentation=https://tunaos.org/docs/intro
-            org.opencontainers.image.source=https://github.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/blob/${{ github.sha }}/Containerfile
+            org.opencontainers.image.source=${{ env.SOURCE_URL }}
             org.opencontainers.image.title=${{ env.IMAGE_NAME }}
             org.opencontainers.image.url=https://tunaos.org
             org.opencontainers.image.vendor=${{ github.repository_owner }}
@@ -604,7 +609,8 @@ jobs:
             digest="$(echo "${DIGESTS_JSON}" | jq -r --arg key "${platform_key_for_lookup}" '.[$key]')"
 
             if [ "$digest" == "null" ] || [ -z "$digest" ]; then
-              echo "Error: Digest not found for platform ${platform_original} (looked for key ${platform_key_for_lookup} in DIGESTS_JSON: $DIGESTS_JSON)"
+                echo "Error: Digest not found for platform ${platform_original}"
+                echo "Lookup key: ${platform_key_for_lookup} in DIGESTS_JSON=${DIGESTS_JSON}"
               exit 1
             fi
 

@@ -210,7 +210,7 @@ jobs:
               \"run_hwe_gdx\": ${RUN_HWE_GDX},
               \"run_kde\": ${RUN_KDE},
               \"run_kde_hwe_gdx\": ${RUN_KDE_HWE_GDX},
-              "run_niri_hwe_gdx": ${RUN_NIRI_HWE_GDX},
+              \"run_niri_hwe_gdx\": ${RUN_NIRI_HWE_GDX},
               \"rechunk\": ${{ github.event_name != 'pull_request' }},
               \"sbom\": false,
               \"publish\": true
@@ -254,7 +254,10 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-hwe-base-node.result == 'success' && needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
+    if: >-
+      ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build-hwe-base-node.result == 'success' &&
+      needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
@@ -270,7 +273,10 @@ jobs:
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
-      chain-base-image: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}-hwe-base-node:${{ matrix.default_tag }}
+      chain-base-image: >-
+        ${{ github.event_name != 'pull_request' &&
+        format('ghcr.io/{0}/{1}-hwe-base-node:{2}', github.repository_owner,
+        matrix.image_name, matrix.default_tag) || '' }}
 
   build-gdx:
     needs: [generate_matrix, build-gdx-base-node]
@@ -280,7 +286,10 @@ jobs:
       id-token: write
     # Note: AlmaLinux non-HWE GDX builds may fail due to driver version lag in repos
     # This is expected and non-fatal; fail-fast: false ensures other variants continue
-    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-gdx-base-node.result == 'success' && needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
+    if: >-
+      ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build-gdx-base-node.result == 'success' &&
+      needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
@@ -297,7 +306,10 @@ jobs:
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
       remove-unwanted-software: true
-      chain-base-image: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}-gdx-base-node:${{ matrix.default_tag }}
+      chain-base-image: >-
+        ${{ github.event_name != 'pull_request' &&
+        format('ghcr.io/{0}/{1}-gdx-base-node:{2}', github.repository_owner,
+        matrix.image_name, matrix.default_tag) || '' }}
 
   build-hwe-base-node:
     needs: [generate_matrix, build-base]
@@ -305,7 +317,10 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-base.result == 'success' && needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
+    if: >-
+      ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build-base.result == 'success' &&
+      needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
@@ -328,7 +343,10 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-base.result == 'success' && needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
+    if: >-
+      ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build-base.result == 'success' &&
+      needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
@@ -352,7 +370,10 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-base.result == 'success' && needs.generate_matrix.outputs.kde_matrix != '{"include":[]}' }}
+    if: >-
+      ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build-base.result == 'success' &&
+      needs.generate_matrix.outputs.kde_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.kde_matrix)}}
@@ -375,7 +396,10 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-hwe-base-node.result == 'success' && needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}' }}
+    if: >-
+      ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build-hwe-base-node.result == 'success' &&
+      needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.kde_hwe_gdx_matrix)}}
@@ -391,7 +415,10 @@ jobs:
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
-      chain-base-image: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}-hwe-base-node:${{ matrix.default_tag }}
+      chain-base-image: >-
+        ${{ github.event_name != 'pull_request' &&
+        format('ghcr.io/{0}/{1}-hwe-base-node:{2}', github.repository_owner,
+        matrix.image_name, matrix.default_tag) || '' }}
 
   build-kde-gdx:
     needs: [generate_matrix, build-gdx-base-node]
@@ -399,7 +426,10 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-gdx-base-node.result == 'success' && needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}' }}
+    if: >-
+      ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build-gdx-base-node.result == 'success' &&
+      needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.kde_hwe_gdx_matrix)}}
@@ -416,7 +446,10 @@ jobs:
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
       remove-unwanted-software: true
-      chain-base-image: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}-gdx-base-node:${{ matrix.default_tag }}
+      chain-base-image: >-
+        ${{ github.event_name != 'pull_request' &&
+        format('ghcr.io/{0}/{1}-gdx-base-node:{2}', github.repository_owner,
+        matrix.image_name, matrix.default_tag) || '' }}
 
   build-niri-hwe:
     needs: [generate_matrix, build-hwe-base-node]
@@ -424,7 +457,10 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-hwe-base-node.result == 'success' && needs.generate_matrix.outputs.niri_hwe_gdx_matrix != '{"include":[]}' }}
+    if: >-
+      ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build-hwe-base-node.result == 'success' &&
+      needs.generate_matrix.outputs.niri_hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.niri_hwe_gdx_matrix)}}
@@ -440,7 +476,10 @@ jobs:
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
-      chain-base-image: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}-hwe-base-node:${{ matrix.default_tag }}
+      chain-base-image: >-
+        ${{ github.event_name != 'pull_request' &&
+        format('ghcr.io/{0}/{1}-hwe-base-node:{2}', github.repository_owner,
+        matrix.image_name, matrix.default_tag) || '' }}
 
   build-niri-gdx:
     needs: [generate_matrix, build-gdx-base-node]
@@ -448,7 +487,10 @@ jobs:
       contents: read
       packages: write
       id-token: write
-    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-gdx-base-node.result == 'success' && needs.generate_matrix.outputs.niri_hwe_gdx_matrix != '{"include":[]}' }}
+    if: >-
+      ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build-gdx-base-node.result == 'success' &&
+      needs.generate_matrix.outputs.niri_hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.niri_hwe_gdx_matrix)}}
@@ -465,4 +507,7 @@ jobs:
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
       remove-unwanted-software: true
-      chain-base-image: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}-gdx-base-node:${{ matrix.default_tag }}
+      chain-base-image: >-
+        ${{ github.event_name != 'pull_request' &&
+        format('ghcr.io/{0}/{1}-gdx-base-node:{2}', github.repository_owner,
+        matrix.image_name, matrix.default_tag) || '' }}
