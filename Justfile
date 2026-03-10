@@ -132,19 +132,20 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
     BUILD_ARGS+=("--build-arg" "ENABLE_GDX={{ enable_gdx }}")
     BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR={{ desktop_flavor }}")
 
-    # Determine AKMODS_BASE based on target variant and HWE status
-    # AlmaLinux kernels (albacore, yellowfin, almalinux) use tuna-os for akmods, others use upstream ublue-os
+    # Determine AKMODS_BASE based on target variant/flavor.
+    # GDX and HWE rely on upstream coreos-stable akmods from ublue-os.
+    # Non-HWE/GDX AlmaLinux variants can use tuna-os akmods.
     akmods_base="ghcr.io/ublue-os"
     if [[ "{{ target_tag }}" == albacore* ]] || [[ "{{ target_tag }}" == yellowfin* ]] || [[ "{{ target_tag }}" == almalinux* ]] || [[ "{{ target_tag }}" == redfin* ]]; then
-        if [[ "{{ enable_hwe }}" != "1" ]]; then
+        if [[ "{{ enable_hwe }}" != "1" ]] && [[ "{{ enable_gdx }}" != "1" ]]; then
             akmods_base="ghcr.io/tuna-os"
         fi
     fi
     BUILD_ARGS+=("--build-arg" "AKMODS_BASE=${akmods_base}")
 
-    # Select akmods source tag for mounted ZFS/NVIDIA images
-    # HWE/GDX flavors use coreos-stable akmods for HWE kernel and drivers
-    if [[ "{{ enable_hwe }}" -eq "1" ]]; then
+    # Select akmods source tag for mounted ZFS/NVIDIA images.
+    # HWE and GDX both use coreos-stable akmods for compatible kernel/driver artifacts.
+    if [[ "{{ enable_hwe }}" -eq "1" ]] || [[ "{{ enable_gdx }}" -eq "1" ]]; then
         BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=coreos-stable-{{ coreos_stable_version }}")
     else
         if [[ "{{ target_tag }}" == albacore* ]] || [[ "{{ target_tag }}" == yellowfin* ]] || [[ "{{ target_tag }}" == almalinux* ]] || [[ "{{ target_tag }}" == redfin* ]]; then

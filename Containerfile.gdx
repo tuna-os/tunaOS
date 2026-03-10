@@ -22,11 +22,24 @@ COPY --from=common /system_files/shared /files
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 
-FROM ${BASE_IMAGE}
+# ==============================================================================
+# GDX Base stage - Adds graphics/developer extras to the base image
+# ==============================================================================
+FROM ${BASE_IMAGE} AS gdx-base
 
+ARG BASE_IMAGE
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG SHA_HEAD_SHORT
 ARG ENABLE_HWE
-ENV ENABLE_HWE=${ENABLE_HWE}
+ARG ENABLE_GDX
 ARG DESKTOP_FLAVOR
+ENV BASE_IMAGE=${BASE_IMAGE}
+ENV IMAGE_NAME=${IMAGE_NAME}
+ENV IMAGE_VENDOR=${IMAGE_VENDOR}
+ENV SHA_HEAD_SHORT=${SHA_HEAD_SHORT}
+ENV ENABLE_HWE=${ENABLE_HWE}
+ENV ENABLE_GDX=${ENABLE_GDX}
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
 RUN rm -rf /opt && mkdir /opt
@@ -41,4 +54,22 @@ RUN \
   --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/GDX.sh
 
-RUN rm -rf /opt && ln -s /var/opt /opt 
+# ==============================================================================
+# GNOME variant - GDX base with GNOME desktop target
+# ==============================================================================
+FROM gdx-base AS gnome
+
+ARG DESKTOP_FLAVOR=gnome
+ENV DESKTOP_FLAVOR=gnome
+
+RUN rm -rf /opt && ln -s /var/opt /opt
+
+# ==============================================================================
+# KDE variant - GDX base with KDE desktop target
+# ==============================================================================
+FROM gdx-base AS kde
+
+ARG DESKTOP_FLAVOR=kde
+ENV DESKTOP_FLAVOR=kde
+
+RUN rm -rf /opt && ln -s /var/opt /opt
