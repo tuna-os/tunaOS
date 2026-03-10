@@ -161,23 +161,17 @@ case "${1:-}" in
 			"yelp-tools" \
 			"gnome-disk-utility"
 	fi
-	;;
-"extra")
-	# ublue-os packages - most packages moved to common OCI, only uupd remains
-	dnf -y copr enable ublue-os/packages
-	dnf -y copr disable ublue-os/packages
-	dnf -y --enablerepo copr:copr.fedorainfracloud.org:ublue-os:packages install uupd
 
-	# Build GNOME extensions from source
+	# Build GNOME extensions from source (must run after gnome-shell is installed)
 	echo "Building GNOME extensions from source..."
-	
-	# Install tooling
+
+	# Install build tooling
 	dnf -y install glib2-devel meson sassc cmake dbus-devel
 
 	# AppIndicator Support
 	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/appindicatorsupport@rgcjonas.gmail.com/schemas
 
-	# Blur My Shell
+	# Blur My Shell (requires gnome-extensions pack from gnome-shell)
 	make -C /usr/share/gnome-shell/extensions/blur-my-shell@aunetx
 	unzip -o /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/build/blur-my-shell@aunetx.shell-extension.zip -d /usr/share/gnome-shell/extensions/blur-my-shell@aunetx
 	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/schemas
@@ -211,8 +205,14 @@ case "${1:-}" in
 	rm /usr/share/glib-2.0/schemas/gschemas.compiled
 	glib-compile-schemas /usr/share/glib-2.0/schemas
 
-	# Cleanup
+	# Cleanup build tooling
 	dnf -y remove glib2-devel meson sassc cmake dbus-devel
 	rm -rf /usr/share/gnome-shell/extensions/tmp
+	;;
+"extra")
+	# ublue-os packages - most packages moved to common OCI, only uupd remains
+	dnf -y copr enable ublue-os/packages
+	dnf -y copr disable ublue-os/packages
+	dnf -y --enablerepo copr:copr.fedorainfracloud.org:ublue-os:packages install uupd
 	;;
 esac
