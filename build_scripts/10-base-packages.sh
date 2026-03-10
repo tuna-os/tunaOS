@@ -95,6 +95,52 @@ install_base_packages_no_de() {
 		dnf swap -y coreutils-single coreutils
 	fi
 
+	# Install common desktop packages (shared between GNOME and KDE)
+	if [[ $IS_FEDORA == true ]]; then
+		dnf -y install \
+			buildah \
+			podman \
+			skopeo \
+			systemd-container \
+			flatpak \
+			distrobox \
+			fastfetch \
+			fpaste \
+			fwupd \
+			systemd-resolved \
+			btrfs-progs \
+			plymouth \
+			plymouth-system-theme \
+			xdg-desktop-portal \
+			systemd-oomd-defaults
+	else
+		# RHEL/AlmaLinux
+		dnf -y install \
+			buildah \
+			btrfs-progs \
+			distrobox \
+			fastfetch \
+			fpaste \
+			fwupd \
+			systemd-resolved \
+			systemd-container \
+			systemd-oomd \
+			plymouth \
+			plymouth-system-theme \
+			xdg-desktop-portal \
+			libcamera-v4l2 \
+			libcamera-gstreamer \
+			libcamera-tools \
+			system-reinstall-bootc \
+			powertop \
+			tuned-ppd \
+			fzf \
+			glow \
+			wl-clipboard \
+			gum \
+			xhost
+	fi
+
 	dnf -y remove console-login-helper-messages setroubleshoot
 }
 

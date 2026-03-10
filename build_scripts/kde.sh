@@ -23,23 +23,9 @@ case "${1:-}" in
 			ark \
 			plasma-discover \
 			kde-connect \
-			xdg-desktop-portal \
 			xdg-desktop-portal-kde \
 			qt5-qtwayland \
-			qt6-qtwayland \
-			plymouth \
-			plymouth-system-theme \
-			fwupd \
-			systemd-resolved \
-			systemd-container \
-			systemd-oomd-defaults \
-			distrobox \
-			fastfetch \
-			fpaste \
-			buildah \
-			podman \
-			skopeo \
-			btrfs-progs
+			qt6-qtwayland
 	else
 		dnf group install -y --nobest \
 			-x plasma-discover \
@@ -61,33 +47,10 @@ case "${1:-}" in
 			kate \
 			ark \
 			kde-connect \
-			xdg-desktop-portal \
 			xdg-desktop-portal-kde \
 			qt5-qtwayland \
 			qt6-qtwayland \
-			plymouth \
-			plymouth-system-theme \
-			plasma-wallpapers-dynamic \
-			fwupd \
-			systemd-resolved \
-			systemd-container \
-			systemd-oomd \
-			libcamera-v4l2 \
-			libcamera-gstreamer \
-			libcamera-tools \
-			system-reinstall-bootc \
-			distrobox \
-			fastfetch \
-			fpaste \
-			powertop \
-			tuned-ppd \
-			fzf \
-			glow \
-			wl-clipboard \
-			gum \
-			buildah \
-			btrfs-progs \
-			xhost
+			plasma-wallpapers-dynamic
 
 		# Install fcitx5 input method support (Asian languages)
 		dnf -y install \

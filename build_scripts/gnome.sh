@@ -69,34 +69,18 @@ case "${1:-}" in
 			mesa-libEGL \
 			mesa-vulkan-drivers \
 			nautilus \
-			plymouth \
-			plymouth-system-theme \
 			polkit \
 			ptyxis \
-			systemd-oomd-defaults \
-			xdg-desktop-portal \
 			xdg-desktop-portal-gnome \
 			xdg-desktop-portal-gtk \
 			xdg-user-dirs-gtk \
 			yelp \
 			desktop-backgrounds-gnome \
-			gnome-shell-extension-background-logo \
 			pinentry-gnome3 \
 			qadwaitadecorations-qt5 \
 			evince-thumbnailer \
 			evince-previewer \
-			totem-video-thumbnailer \
-			buildah \
-			podman \
-			skopeo \
-			systemd-container \
-			flatpak \
-			distrobox \
-			fastfetch \
-			fpaste \
-			fwupd \
-			systemd-resolved \
-			btrfs-progs
+			totem-video-thumbnailer
 	else
 		# RHEL/AlmaLinux base groups
 		dnf group install -y --nobest \
@@ -142,53 +126,60 @@ case "${1:-}" in
 			"xdg-desktop-portal-gnome" \
 			"xdg-user-dirs-gtk" \
 			"yelp-tools" \
-			"plymouth" \
-			"plymouth-system-theme" \
-			"fwupd" \
-			"systemd-resolved" \
-			"systemd-container" \
-			"systemd-oomd" \
-			"libcamera-v4l2" \
-			"libcamera-gstreamer" \
-			"libcamera-tools" \
-			"system-reinstall-bootc" \
-			"gnome-disk-utility" \
-			"distrobox" \
-			"fastfetch" \
-			"fpaste" \
-			"gnome-shell-extension-appindicator" \
-			"gnome-shell-extension-dash-to-dock" \
-			"gnome-shell-extension-blur-my-shell" \
-			"powertop" \
-			"tuned-ppd" \
-			"fzf" \
-			"glow" \
-			"wl-clipboard" \
-			"gum" \
-			"buildah" \
-			"btrfs-progs" \
-			"xhost"
+			"gnome-disk-utility"
 	fi
 	;;
 "extra")
-	# Install caffeine extension only in EPEL 10.1 or Fedora
-	if [[ "$IS_ALMALINUX" = true || "$IS_RHEL" = true ]]; then
-		dnf install -y https://kojipkgs.fedoraproject.org//packages/gnome-shell-extension-caffeine/56/1.el10_1/noarch/gnome-shell-extension-caffeine-56-1.el10_1.noarch.rpm
-	else
-		dnf install -y gnome-shell-extension-caffeine
-	fi
-
 	# ublue-os packages - most packages moved to common OCI, only uupd remains
 	dnf -y copr enable ublue-os/packages
 	dnf -y copr disable ublue-os/packages
 	dnf -y --enablerepo copr:copr.fedorainfracloud.org:ublue-os:packages install uupd
 
-	# GNOME version specific workarounds
-	GNOME_VERSION=$(gnome-shell --version | cut -d ' ' -f 3 | cut -d '.' -f 1 || echo 0)
-	if [ "$GNOME_VERSION" -ge 48 ]; then
-		# GNOME 48: EPEL version of blur-my-shell is incompatible
-		dnf -y remove gnome-shell-extension-blur-my-shell || true
-		dnf -y install https://kojipkgs.fedoraproject.org//packages/gnome-shell-extension-blur-my-shell/69/1.fc43/noarch/gnome-shell-extension-blur-my-shell-69-1.fc43.noarch.rpm
-	fi
+	# Build GNOME extensions from source
+	echo "Building GNOME extensions from source..."
+	
+	# Install tooling
+	dnf -y install glib2-devel meson sassc cmake dbus-devel
+
+	# AppIndicator Support
+	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/appindicatorsupport@rgcjonas.gmail.com/schemas
+
+	# Blur My Shell
+	make -C /usr/share/gnome-shell/extensions/blur-my-shell@aunetx
+	unzip -o /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/build/blur-my-shell@aunetx.shell-extension.zip -d /usr/share/gnome-shell/extensions/blur-my-shell@aunetx
+	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/schemas
+	rm -rf /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/build
+
+	# Caffeine
+	# The Caffeine extension is built/packaged into a temporary subdirectory (tmp/caffeine/caffeine@patapon.info).
+	# Unlike other extensions, it must be moved to the standard extensions directory so GNOME Shell can detect it.
+	mv /usr/share/gnome-shell/extensions/tmp/caffeine/caffeine@patapon.info /usr/share/gnome-shell/extensions/caffeine@patapon.info
+	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/caffeine@patapon.info/schemas
+
+	# Dash to Dock
+	make -C /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com
+	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/schemas
+
+	# GSConnect
+	meson setup --prefix=/usr /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/_build
+	meson install -C /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/_build --skip-subprojects
+	# GSConnect installs schemas to /usr/share/glib-2.0/schemas and meson compiles them automatically
+
+	# Logo Menu
+	# xdg-terminal-exec is required for this extension as it opens up terminals using that script
+	install -Dpm0755 -t /usr/bin /usr/share/gnome-shell/extensions/logomenu@aryan_k/distroshelf-helper
+	install -Dpm0755 -t /usr/bin /usr/share/gnome-shell/extensions/logomenu@aryan_k/missioncenter-helper
+	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/logomenu@aryan_k/schemas
+
+	# Search Light
+	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/search-light@icedman.github.com/schemas
+
+	# Recompile all schemas
+	rm /usr/share/glib-2.0/schemas/gschemas.compiled
+	glib-compile-schemas /usr/share/glib-2.0/schemas
+
+	# Cleanup
+	dnf -y remove glib2-devel meson sassc cmake dbus-devel
+	rm -rf /usr/share/gnome-shell/extensions/tmp
 	;;
 esac
