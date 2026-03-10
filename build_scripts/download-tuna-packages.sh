@@ -46,8 +46,10 @@ if ! command -v oras &>/dev/null; then
     echo "Installing ORAS CLI..."
     ORAS_VERSION="1.1.0"
     ORAS_TMP="/tmp/oras"
+    ORAS_ARCH="amd64"
+    if [ "$(uname -m)" = "aarch64" ]; then ORAS_ARCH="arm64"; fi
     mkdir -p "${ORAS_TMP}"
-    curl -sL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz" \
+    curl -sL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_${ORAS_ARCH}.tar.gz" \
         | tar xz -C "${ORAS_TMP}"
     install -m 755 "${ORAS_TMP}/oras" /usr/local/bin/oras
     rm -rf "${ORAS_TMP}"
@@ -91,8 +93,8 @@ while IFS=: read -r PACKAGE_NAME VERSION_RELEASE PKG_ARCH || [ -n "${PACKAGE_NAM
     TAG="${VERSION_RELEASE}-${PKG_ARCH}-el10"
     FULL_REF="${REGISTRY}/${REPOSITORY}/${PACKAGE_NAME}:${TAG}"
     
-    # Check if already cached
-    if find "${CACHE_DIR}" -name "${PACKAGE_NAME}-${VERSION_RELEASE}*.${PKG_ARCH}.rpm" -type f | grep -q .; then
+    # Check if already cached (support both dash and underscore filename separators)
+    if find "${CACHE_DIR}" -name "${PACKAGE_NAME}[-_]*.rpm" -not -name "*.src.rpm" -type f | grep -q .; then
         echo "  ✓ ${PACKAGE_NAME} ${VERSION_RELEASE} (${PKG_ARCH}) - cached"
         ((SKIP_COUNT++)) || true
         continue

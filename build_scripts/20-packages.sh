@@ -20,9 +20,11 @@ fi
 
 # Tailscale
 TUNA_CACHE="/tmp/tuna-packages"
-if [ -d "${TUNA_CACHE}" ] && find "${TUNA_CACHE}" -name "tailscale-*.rpm" -type f | grep -q .; then
+if [ -d "${TUNA_CACHE}" ] && find "${TUNA_CACHE}" -name "tailscale[-_]*.rpm" -type f | grep -q .; then
 	echo "Installing Tailscale from TunaOS packages..."
-	dnf -y install "${TUNA_CACHE}"/tailscale-*.rpm
+	TAILSCALE_RPMS=$(find "${TUNA_CACHE}" -name "tailscale[-_]*.rpm" -type f)
+	# shellcheck disable=SC2086
+	dnf -y install ${TAILSCALE_RPMS}
 else
 	echo "Tailscale not found in TunaOS cache, falling back to upstream repository"
 	if [[ $IS_FEDORA == true ]]; then
