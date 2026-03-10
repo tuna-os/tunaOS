@@ -1,0 +1,9 @@
+name: Login to GHCR
+description: Logs into GitHub Container Registry
+runs:
+  using: composite
+  steps:
+    - name: Login
+      run: |
+        echo "${{ github.token }}" | podman login -u "${{ github.actor }}" --password-stdin ghcr.io
+      shell: bash

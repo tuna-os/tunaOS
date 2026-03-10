@@ -6,6 +6,11 @@ export brew_image := env("BREW_IMAGE", "ghcr.io/ublue-os/brew")
 export coreos_stable_version := env("COREOS_STABLE_VERSION", "42")
 just := just_executable()
 arch := arch()
+
+# Fetch default platforms for a variant from build-config.yml
+# Usage: {{ just }} platforms <variant>
+platforms variant:
+    @yq -r ".variants[] | select(.id == \"{{ variant }}\") | .platforms | join(\",\")" .github/build-config.yml
 export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else if arch == "arm64" { "linux/arm64" } else if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") })
 
 # --- Default Base Image (for 'base' flavor builds) ---
@@ -204,7 +209,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
 # Usage (CI): just build image_name=<final_name> variant=<base_os> is_ci=true [flavor]
 
 # Example: just build image_name=albacore variant=almalinux is_ci=true kde-gdx
-build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag='latest' chain_base_image='':
+build variant='albacore' flavor='gnome' platform='' is_ci="0" tag='latest' chain_base_image='':
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -220,10 +225,16 @@ build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag=
     NC='\033[0m' # No Color
 
     echo -e "${BLUE}===============================================================${NC}"
+    # Fetch platforms from config if not provided
+    if [[ -z "{{ platform }}" ]]; then
+        PLATFORM=$(yq -r ".variants[] | select(.id == \"{{ variant }}\") | .platforms | join(\",\")" .github/build-config.yml)
+    else
+        PLATFORM="{{ platform }}"
+    fi
     echo -e "${GREEN}Build config:${NC}"
     echo -e "  Variant: ${YELLOW}{{ variant }}${NC}"
     echo -e "  Flavor: ${YELLOW}{{ flavor }}${NC}"
-    echo -e "  Platform: ${YELLOW}{{ platform }}${NC}"
+    echo -e "  Platform: ${YELLOW}${PLATFORM}${NC}"
     echo -e "  Is CI: ${YELLOW}{{ is_ci }}${NC}"
     echo -e "  Tag: ${YELLOW}{{ tag }}${NC}"
     echo -e "  Chain Base Image: ${YELLOW}{{ chain_base_image }}${NC}"
@@ -402,7 +413,7 @@ build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag=
     echo -e "  Variant: ${YELLOW}{{ variant }}${NC}"
     echo -e "  Containerfile: ${YELLOW}${CONTAINERFILE}${NC}"
     echo -e "  Base Image for Build: ${YELLOW}${BASE_FOR_BUILD}${NC}"
-    echo -e "  Platform: ${YELLOW}{{ platform }}${NC}"
+    echo -e "  Platform: ${YELLOW}${PLATFORM}${NC}"
     echo -e "  is_ci: ${YELLOW}{{ is_ci }}${NC}"
     echo -e "  Desktop Flavor: ${YELLOW}${DESKTOP_FLAVOR}${NC}"
     echo -e "  Enable HWE (uses coreos akmods): ${YELLOW}${ENABLE_HWE}${NC}"
@@ -410,13 +421,13 @@ build variant='albacore' flavor='gnome' platform=`echo $platform` is_ci="0" tag=
     echo -e "${BLUE}================================================================${NC}"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "1" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
         # Chunkify the built image for optimal layer distribution
         {{ just }} chunkify "${TARGET_TAG_WITH_VERSION}"
         # Sync cache after successful local build for deduplication
         ./scripts/sync-build-cache.sh "${TARGET_TAG}" || true
     else
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "{{ platform }}" "0" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
     fi
 
 yellowfin variant='gnome':

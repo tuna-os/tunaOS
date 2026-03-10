@@ -21,9 +21,9 @@
 - [x] Task: Conductor - User Manual Verification 'Phase 2: Implementation of Unified Workflow' (Protocol in workflow.md)
 
 ## Phase 3: Optimization and Validation
-- [ ] Task: Implement composite actions for common CI steps
+- [x] Task: Implement composite actions (Created composite actions for environment setup and registry login.) for common CI steps
     - [ ] Create composite actions for `setup-podman`, `setup-just`, and `ghcr-login`
-- [ ] Task: Restore and verify CI build functionality for all variants
+- [~] Task: Restore and verify CI build functionality for all variants
     - [ ] Trigger test builds for all primary variants
     - [ ] Debug and fix any failures resulting from the recent refactor
 - [ ] Task: Conductor - User Manual Verification 'Phase 3: Optimization and Validation' (Protocol in workflow.md)

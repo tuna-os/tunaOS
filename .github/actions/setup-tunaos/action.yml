@@ -1,0 +1,26 @@
+name: Setup TunaOS Build Environment
+description: Installs just, podman, and yq
+runs:
+  using: composite
+  steps:
+    - name: Install Podman
+      run: |
+        if ! command -v podman &> /dev/null; then
+          sudo apt-get update && sudo apt-get install -y podman
+        fi
+      shell: bash
+    - name: Install yq
+      run: |
+        if ! command -v yq &> /dev/null; then
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+          sudo chmod +x /usr/bin/yq
+        fi
+      shell: bash
+    - name: Setup Homebrew
+      uses: Homebrew/actions/setup-homebrew@master
+    - name: Install Just
+      run: |
+        if ! command -v just &> /dev/null; then
+          brew install just
+        fi
+      shell: bash
