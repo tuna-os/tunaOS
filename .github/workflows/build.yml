@@ -248,7 +248,7 @@ jobs:
       sbom: ${{ matrix.sbom }}
       publish: ${{ matrix.publish }}
 
-  build-gnome:
+  build-hwe-base:
     needs: [generate_matrix, build-base]
     permissions:
       contents: read
@@ -257,6 +257,68 @@ jobs:
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
       needs.build-base.result == 'success' &&
+      needs.generate_matrix.outputs.base_matrix != '{"include":[]}' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.base_matrix)}}
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}
+      image-desc: ${{ matrix.description }} HWE no-DE base
+      image-variant: ${{ matrix.image_variant }}
+      flavor: hwe-base
+      platforms: ${{ matrix.platforms }}
+      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-hwe-base', github.event.pull_request.number) || 'hwe-base' }}
+      rechunk: ${{ matrix.rechunk }}
+      sbom: ${{ matrix.sbom }}
+      publish: ${{ matrix.publish }}
+      chain-base-image: >-
+        ${{ github.event_name != 'pull_request' &&
+        format('ghcr.io/{0}/{1}:base', github.repository_owner,
+        matrix.image_name) || '' }}
+
+  build-gdx-base:
+    needs: [generate_matrix, build-base]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    if: >-
+      ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build-base.result == 'success' &&
+      needs.generate_matrix.outputs.base_matrix != '{"include":[]}' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.base_matrix)}}
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}
+      image-desc: ${{ matrix.description }} GDX no-DE base
+      image-variant: ${{ matrix.image_variant }}
+      flavor: gdx-base
+      platforms: ${{ matrix.platforms }}
+      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-gdx-base', github.event.pull_request.number) || 'gdx-base' }}
+      rechunk: ${{ matrix.rechunk }}
+      sbom: ${{ matrix.sbom }}
+      publish: ${{ matrix.publish }}
+      remove-unwanted-software: true
+      chain-base-image: >-
+        ${{ github.event_name != 'pull_request' &&
+        format('ghcr.io/{0}/{1}:base', github.repository_owner,
+        matrix.image_name) || '' }}
+
+  build-gnome:
+    needs: [generate_matrix, build-hwe-base, build-gdx-base]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    if: >-
+      ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build-hwe-base.result == 'success' &&
+      needs.build-gdx-base.result == 'success' &&
       needs.generate_matrix.outputs.base_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
@@ -279,14 +341,15 @@ jobs:
         matrix.image_name) || '' }}
 
   build-kde:
-    needs: [generate_matrix, build-base]
+    needs: [generate_matrix, build-hwe-base, build-gdx-base]
     permissions:
       contents: read
       packages: write
       id-token: write
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
-      needs.build-base.result == 'success' &&
+      needs.build-hwe-base.result == 'success' &&
+      needs.build-gdx-base.result == 'success' &&
       needs.generate_matrix.outputs.kde_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
@@ -309,14 +372,15 @@ jobs:
         matrix.image_name) || '' }}
 
   build-niri:
-    needs: [generate_matrix, build-base]
+    needs: [generate_matrix, build-hwe-base, build-gdx-base]
     permissions:
       contents: read
       packages: write
       id-token: write
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
-      needs.build-base.result == 'success' &&
+      needs.build-hwe-base.result == 'success' &&
+      needs.build-gdx-base.result == 'success' &&
       needs.generate_matrix.outputs.niri_hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false

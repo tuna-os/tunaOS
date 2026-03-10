@@ -142,6 +142,11 @@ install_base_packages_no_de() {
 	fi
 
 	dnf -y remove console-login-helper-messages setroubleshoot
+
+	dnf -y copr enable ublue-os/packages
+	dnf -y copr disable ublue-os/packages
+	dnf -y --enablerepo copr:copr.fedorainfracloud.org:ublue-os:packages install \
+	uupd
 }
 
 # Main execution: install base packages and DE

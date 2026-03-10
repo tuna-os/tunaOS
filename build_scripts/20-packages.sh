@@ -56,8 +56,6 @@ if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
 	/run/context/build_scripts/kde.sh extra
 elif [[ "${DESKTOP_FLAVOR}" == "niri" ]]; then
 	/run/context/build_scripts/niri.sh extra
-elif [[ "${DESKTOP_FLAVOR}" == "gnome" ]]; then
-	/run/context/build_scripts/gnome.sh extra
 else
 	echo "Skipping DE-specific extra packages (DESKTOP_FLAVOR='${DESKTOP_FLAVOR}')"
 fi
