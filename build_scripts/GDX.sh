@@ -14,6 +14,9 @@ printf "::group:: === GDX ===\n"
 if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
 	copy_systemfiles_for kde-gdx
 	run_buildscripts_for kde-gdx
+elif [[ "${DESKTOP_FLAVOR}" == "niri" ]]; then
+	copy_systemfiles_for niri-gdx
+	run_buildscripts_for niri-gdx
 fi
 
 copy_systemfiles_for gdx

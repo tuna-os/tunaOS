@@ -76,3 +76,12 @@ ARG DESKTOP_FLAVOR=kde
 ENV DESKTOP_FLAVOR=kde
 
 RUN rm -rf /opt && ln -s /var/opt /opt
+# ==============================================================================
+# Niri variant - GDX base with Niri+DMS desktop target
+# ==============================================================================
+FROM gdx-base AS niri
+
+ARG DESKTOP_FLAVOR=niri
+ENV DESKTOP_FLAVOR=niri
+
+RUN rm -rf /opt && ln -s /var/opt /opt

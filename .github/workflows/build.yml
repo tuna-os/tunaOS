@@ -75,6 +75,7 @@ jobs:
               - 'Containerfile.kde.gdx'
               - 'build_scripts/HWE.sh'
               - 'build_scripts/GDX.sh'
+              - 'build_scripts/niri.sh'
               - 'build_scripts/overrides/**'
               - 'system_files_overrides/gdx/**'
 
@@ -87,6 +88,7 @@ jobs:
       hwe_gdx_matrix: ${{ steps.set-matrix.outputs.hwe_gdx_matrix }}
       kde_matrix: ${{ steps.set-matrix.outputs.kde_matrix }}
       kde_hwe_gdx_matrix: ${{ steps.set-matrix.outputs.kde_hwe_gdx_matrix }}
+      niri_hwe_gdx_matrix: ${{ steps.set-matrix.outputs.niri_hwe_gdx_matrix }}
     steps:
       - name: Checkout for config
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v4
@@ -141,18 +143,21 @@ jobs:
             RUN_HWE_GDX=true
             RUN_KDE=true
             RUN_KDE_HWE_GDX=true
+            RUN_NIRI_HWE_GDX=true
 
             # Preserve historical PR behavior: no HWE/GDX by default on PRs.
             if [[ "${{ github.event_name }}" == "pull_request" ]]; then
               RUN_HWE_GDX=false
               RUN_KDE=false
               RUN_KDE_HWE_GDX=false
+              RUN_NIRI_HWE_GDX=false
 
               # For skipjack/bonito, allow HWE/GDX and KDE-HWE/KDE-GDX when related files changed.
               if [[ "$image_variant" == "skipjack" || "$image_variant" == "bonito" ]]; then
                 if [[ "$PR_HWE_GDX_RELATED" == "true" ]]; then
                   RUN_HWE_GDX=true
                   RUN_KDE_HWE_GDX=true
+                  RUN_NIRI_HWE_GDX=true
                 fi
               fi
             fi
@@ -163,26 +168,31 @@ jobs:
                   RUN_HWE_GDX=false
                   RUN_KDE=false
                   RUN_KDE_HWE_GDX=false
+                  RUN_NIRI_HWE_GDX=false
                   ;;
                 "base,hwe,gdx")
                   RUN_HWE_GDX=true
                   RUN_KDE=false
                   RUN_KDE_HWE_GDX=false
+                  RUN_NIRI_HWE_GDX=true
                   ;;
                 "base,kde")
                   RUN_HWE_GDX=false
                   RUN_KDE=true
                   RUN_KDE_HWE_GDX=false
+                  RUN_NIRI_HWE_GDX=false
                   ;;
                 "base,kde,kde-hwe,kde-gdx")
                   RUN_HWE_GDX=false
                   RUN_KDE=true
                   RUN_KDE_HWE_GDX=true
+                  RUN_NIRI_HWE_GDX=false
                   ;;
                 "base,hwe,gdx,kde,kde-hwe,kde-gdx")
                   RUN_HWE_GDX=true
                   RUN_KDE=true
                   RUN_KDE_HWE_GDX=true
+                  RUN_NIRI_HWE_GDX=true
                   ;;
                 *)
                   echo "Unknown build_variant option"
@@ -200,6 +210,7 @@ jobs:
               \"run_hwe_gdx\": ${RUN_HWE_GDX},
               \"run_kde\": ${RUN_KDE},
               \"run_kde_hwe_gdx\": ${RUN_KDE_HWE_GDX},
+              "run_niri_hwe_gdx": ${RUN_NIRI_HWE_GDX},
               \"rechunk\": ${{ github.event_name != 'pull_request' }},
               \"sbom\": false,
               \"publish\": true
@@ -211,6 +222,7 @@ jobs:
           echo "hwe_gdx_matrix=$(echo "${MATRIX}" | jq -c '{"include": [.include[] | select(.run_hwe_gdx == true)]}')" >> "$GITHUB_OUTPUT"
           echo "kde_matrix=$(echo "${MATRIX}" | jq -c '{"include": [.include[] | select(.run_kde == true)]}')" >> "$GITHUB_OUTPUT"
           echo "kde_hwe_gdx_matrix=$(echo "${MATRIX}" | jq -c '{"include": [.include[] | select(.run_kde_hwe_gdx == true)]}')" >> "$GITHUB_OUTPUT"
+          echo "niri_hwe_gdx_matrix=$(echo "${MATRIX}" | jq -c '{"include": [.include[] | select(.run_niri_hwe_gdx == true)]}')" >> "$GITHUB_OUTPUT"
 
   build-base:
     needs: generate_matrix
@@ -237,12 +249,12 @@ jobs:
       publish: ${{ matrix.publish }}
 
   build-hwe:
-    needs: [generate_matrix, build-base]
+    needs: [generate_matrix, build-hwe-base-node]
     permissions:
       contents: read
       packages: write
       id-token: write
-    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-base.result == 'success' && needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
+    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-hwe-base-node.result == 'success' && needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
@@ -258,16 +270,17 @@ jobs:
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
+      chain-base-image: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}-hwe-base-node:${{ matrix.default_tag }}
 
   build-gdx:
-    needs: [generate_matrix, build-base]
+    needs: [generate_matrix, build-gdx-base-node]
     permissions:
       contents: read
       packages: write
       id-token: write
     # Note: AlmaLinux non-HWE GDX builds may fail due to driver version lag in repos
     # This is expected and non-fatal; fail-fast: false ensures other variants continue
-    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-base.result == 'success' && needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
+    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-gdx-base-node.result == 'success' && needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
@@ -278,6 +291,54 @@ jobs:
       image-desc: ${{ matrix.description }} GDX
       image-variant: ${{ matrix.image_variant }}
       flavor: gdx
+      platforms: ${{ matrix.platforms }}
+      default-tag: ${{ matrix.default_tag }}
+      rechunk: ${{ matrix.rechunk }}
+      sbom: ${{ matrix.sbom }}
+      publish: ${{ github.event_name != 'pull_request' }}
+      remove-unwanted-software: true
+      chain-base-image: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}-gdx-base-node:${{ matrix.default_tag }}
+
+  build-hwe-base-node:
+    needs: [generate_matrix, build-base]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-base.result == 'success' && needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}-hwe-base-node
+      image-desc: ${{ matrix.description }} HWE no-DE base
+      image-variant: ${{ matrix.image_variant }}
+      flavor: hwe-base-node
+      platforms: ${{ matrix.platforms }}
+      default-tag: ${{ matrix.default_tag }}
+      rechunk: ${{ matrix.rechunk }}
+      sbom: ${{ matrix.sbom }}
+      publish: ${{ github.event_name != 'pull_request' }}
+
+  build-gdx-base-node:
+    needs: [generate_matrix, build-base]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-base.result == 'success' && needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}-gdx-base-node
+      image-desc: ${{ matrix.description }} GDX no-DE base
+      image-variant: ${{ matrix.image_variant }}
+      flavor: gdx-base-node
       platforms: ${{ matrix.platforms }}
       default-tag: ${{ matrix.default_tag }}
       rechunk: ${{ matrix.rechunk }}
@@ -309,12 +370,12 @@ jobs:
       publish: ${{ github.event_name != 'pull_request' }}
 
   build-kde-hwe:
-    needs: [generate_matrix, build-kde]
+    needs: [generate_matrix, build-hwe-base-node]
     permissions:
       contents: read
       packages: write
       id-token: write
-    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-kde.result == 'success' && needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}' }}
+    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-hwe-base-node.result == 'success' && needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.kde_hwe_gdx_matrix)}}
@@ -330,14 +391,15 @@ jobs:
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
+      chain-base-image: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}-hwe-base-node:${{ matrix.default_tag }}
 
   build-kde-gdx:
-    needs: [generate_matrix, build-kde-hwe]
+    needs: [generate_matrix, build-gdx-base-node]
     permissions:
       contents: read
       packages: write
       id-token: write
-    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-kde-hwe.result == 'success' && needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}' }}
+    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-gdx-base-node.result == 'success' && needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.kde_hwe_gdx_matrix)}}
@@ -354,3 +416,53 @@ jobs:
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
       remove-unwanted-software: true
+      chain-base-image: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}-gdx-base-node:${{ matrix.default_tag }}
+
+  build-niri-hwe:
+    needs: [generate_matrix, build-hwe-base-node]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-hwe-base-node.result == 'success' && needs.generate_matrix.outputs.niri_hwe_gdx_matrix != '{"include":[]}' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.niri_hwe_gdx_matrix)}}
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}-niri-hwe
+      image-desc: ${{ matrix.description }} Niri HWE
+      image-variant: ${{ matrix.image_variant }}
+      flavor: niri-hwe
+      platforms: ${{ matrix.platforms }}
+      default-tag: ${{ matrix.default_tag }}
+      rechunk: ${{ matrix.rechunk }}
+      sbom: ${{ matrix.sbom }}
+      publish: ${{ github.event_name != 'pull_request' }}
+      chain-base-image: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}-hwe-base-node:${{ matrix.default_tag }}
+
+  build-niri-gdx:
+    needs: [generate_matrix, build-gdx-base-node]
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    if: ${{ !cancelled() && needs.generate_matrix.result == 'success' && needs.build-gdx-base-node.result == 'success' && needs.generate_matrix.outputs.niri_hwe_gdx_matrix != '{"include":[]}' }}
+    strategy:
+      fail-fast: false
+      matrix: ${{fromJson(needs.generate_matrix.outputs.niri_hwe_gdx_matrix)}}
+    uses: ./.github/workflows/reusable-build-image.yml
+    secrets: inherit
+    with:
+      image-name: ${{ matrix.image_name }}-niri-gdx
+      image-desc: ${{ matrix.description }} Niri GDX
+      image-variant: ${{ matrix.image_variant }}
+      flavor: niri-gdx
+      platforms: ${{ matrix.platforms }}
+      default-tag: ${{ matrix.default_tag }}
+      rechunk: ${{ matrix.rechunk }}
+      sbom: ${{ matrix.sbom }}
+      publish: ${{ github.event_name != 'pull_request' }}
+      remove-unwanted-software: true
+      chain-base-image: ghcr.io/${{ github.repository_owner }}/${{ matrix.image_name }}-gdx-base-node:${{ matrix.default_tag }}

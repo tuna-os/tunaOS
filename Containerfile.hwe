@@ -82,4 +82,19 @@ RUN dnf versionlock add glib2
 
 # Makes `/opt` writeable by default
 # Needs to be here to make the main image build strict (no /opt there)
+RUN rm -rf /opt && ln -s /var/opt /opt
+
+# ==============================================================================
+# Niri variant - HWE base with Niri+DMS desktop
+# ==============================================================================
+FROM hwe-base AS niri
+
+ARG DESKTOP_FLAVOR=niri
+ENV DESKTOP_FLAVOR=niri
+
+# Lock glib2 for consistency
+RUN dnf versionlock add glib2
+
+# Makes `/opt` writeable by default
+# Needs to be here to make the main image build strict (no /opt there)
 RUN rm -rf /opt && ln -s /var/opt /opt 

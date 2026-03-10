@@ -41,19 +41,67 @@ echo "Repository: ${REPOSITORY}"
 echo "Cache: ${CACHE_DIR}"
 echo
 
-# Install oras if not present
+# Setup ORAS with multiple fallback strategies
+ORAS_CMD="oras"
+ORAS_WRAPPER=""
+
 if ! command -v oras &>/dev/null; then
-    echo "Installing ORAS CLI..."
-    ORAS_VERSION="1.1.0"
-    ORAS_TMP="/tmp/oras"
-    ORAS_ARCH="amd64"
-    if [ "$(uname -m)" = "aarch64" ]; then ORAS_ARCH="arm64"; fi
-    mkdir -p "${ORAS_TMP}"
-    curl -sL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_${ORAS_ARCH}.tar.gz" \
-        | tar xz -C "${ORAS_TMP}"
-    install -m 755 "${ORAS_TMP}/oras" /usr/local/bin/oras
-    rm -rf "${ORAS_TMP}"
-    echo "✓ ORAS installed"
+    echo "ORAS CLI not found. Attempting installation with fallbacks..."
+    
+    # Strategy 1: Try homebrew
+    if command -v brew &>/dev/null; then
+        echo "  → Trying homebrew install..."
+        if brew install oras 2>/dev/null; then
+            echo "  ✓ ORAS installed via homebrew"
+            ORAS_CMD="oras"
+        else
+            echo "  ✗ Homebrew install failed"
+        fi
+    fi
+    
+    # Strategy 2: Try user-local installation (~/.local/bin)
+    if ! command -v oras &>/dev/null; then
+        echo "  → Trying user-local installation to ~/.local/bin..."
+        ORAS_VERSION="1.1.0"
+        ORAS_TMP="/tmp/oras-$$"
+        ORAS_ARCH="amd64"
+        [ "$(uname -m)" = "aarch64" ] && ORAS_ARCH="arm64"
+        
+        if mkdir -p "${ORAS_TMP}" && \
+           curl -sL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_${ORAS_ARCH}.tar.gz" \
+               | tar xz -C "${ORAS_TMP}" 2>/dev/null; then
+            
+            mkdir -p "$HOME/.local/bin"
+            if mv "${ORAS_TMP}/oras" "$HOME/.local/bin/oras" 2>/dev/null && \
+               chmod +x "$HOME/.local/bin/oras"; then
+                export PATH="$HOME/.local/bin:$PATH"
+                echo "  ✓ ORAS installed to ~/.local/bin"
+                ORAS_CMD="$HOME/.local/bin/oras"
+            else
+                echo "  ✗ Failed to move ORAS binary"
+            fi
+        else
+            echo "  ✗ Failed to download ORAS"
+        fi
+        rm -rf "${ORAS_TMP}"
+    fi
+    
+    # Strategy 3: Use podman container as wrapper
+    if ! command -v "${ORAS_CMD}" &>/dev/null && command -v podman &>/dev/null; then
+        echo "  → Using podman container for ORAS..."
+        ORAS_CMD="podman"
+        ORAS_WRAPPER="run --rm -v ${CACHE_DIR}:${CACHE_DIR} ghcr.io/oras-project/oras:v1.1.0"
+        echo "  ✓ Will use podman container: ghcr.io/oras-project/oras:v1.1.0"
+    fi
+    
+    # Final check
+    if ! command -v "${ORAS_CMD%% *}" &>/dev/null && [ -z "${ORAS_WRAPPER}" ]; then
+        echo "✗ Failed to install or find ORAS CLI" >&2
+        echo "  Please manually install ORAS:" >&2
+        echo "    - Via homebrew: brew install oras" >&2
+        echo "    - Via GitHub: https://github.com/oras-project/oras/releases" >&2
+        exit 1
+    fi
 fi
 
 # Create cache directory
@@ -102,9 +150,12 @@ while IFS=: read -r PACKAGE_NAME VERSION_RELEASE PKG_ARCH || [ -n "${PACKAGE_NAM
     
     echo "  ⬇ Downloading ${PACKAGE_NAME} ${VERSION_RELEASE} (${PKG_ARCH})..."
     
-    # Pull with ORAS
+    # Pull with ORAS (using appropriate method: direct, homebrew, or podman)
     cd "${CACHE_DIR}"
-    if oras pull "${FULL_REF}" 2>/dev/null; then
+    ORAS_PULL_CMD="${ORAS_CMD}"
+    [ -n "${ORAS_WRAPPER}" ] && ORAS_PULL_CMD="${ORAS_WRAPPER} oras"
+    
+    if ${ORAS_PULL_CMD} pull "${FULL_REF}" 2>/dev/null; then
         ((DOWNLOAD_COUNT++)) || true
         echo "    ✓ Downloaded"
     else
@@ -113,7 +164,7 @@ while IFS=: read -r PACKAGE_NAME VERSION_RELEASE PKG_ARCH || [ -n "${PACKAGE_NAM
             FALLBACK_TAG="${VERSION_RELEASE}-x86_64-el10"
             FALLBACK_REF="${REGISTRY}/${REPOSITORY}/${PACKAGE_NAME}:${FALLBACK_TAG}"
             echo "    ! ${FULL_REF} not found, trying fallback: ${FALLBACK_REF}"
-            if oras pull "${FALLBACK_REF}" 2>/dev/null; then
+            if ${ORAS_PULL_CMD} pull "${FALLBACK_REF}" 2>/dev/null; then
                 ((DOWNLOAD_COUNT++)) || true
                 echo "    ✓ Downloaded via x86_64 fallback"
             else

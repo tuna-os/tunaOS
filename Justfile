@@ -229,13 +229,20 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
         BUILD_ARGS+=("${CACHE_MOUNTS[@]}")
     fi
 
-    # Determine build target for multi-stage Containerfiles
-    # GNOME is default, KDE uses kde target
-    # The --target flag tells podman which final stage to build
-    # Both GNOME and KDE share the base-no-de layer, enabling parallel builds
+    # Determine build target for multi-stage Containerfiles.
+    # GNOME is default; KDE and Niri are selected explicitly.
+    # no-DE intermediates map to the base stages in HWE/GDX Containerfiles.
     BUILD_TARGET="gnome"
     if [[ "{{ desktop_flavor }}" == "kde" ]]; then
         BUILD_TARGET="kde"
+    elif [[ "{{ desktop_flavor }}" == "niri" ]]; then
+        BUILD_TARGET="niri"
+    elif [[ "{{ desktop_flavor }}" == "base-no-de" ]]; then
+        BUILD_TARGET="base-no-de"
+    elif [[ "{{ desktop_flavor }}" == "hwe-base-node" ]]; then
+        BUILD_TARGET="hwe-base"
+    elif [[ "{{ desktop_flavor }}" == "gdx-base-node" ]]; then
+        BUILD_TARGET="gdx-base"
     fi
 
     podman build \
@@ -260,7 +267,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
 # Usage (CI): just build image_name=<final_name> variant=<base_os> is_ci=true [flavor]
 
 # Example: just build image_name=albacore variant=almalinux is_ci=true kde-gdx
-build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='latest':
+build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='latest' chain_base_image='':
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -282,6 +289,7 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
     echo -e "  Platform: ${YELLOW}{{ platform }}${NC}"
     echo -e "  Is CI: ${YELLOW}{{ is_ci }}${NC}"
     echo -e "  Tag: ${YELLOW}{{ tag }}${NC}"
+    echo -e "  Chain Base Image: ${YELLOW}{{ chain_base_image }}${NC}"
     echo -e "${BLUE}===============================================================${NC}"
 
 
@@ -317,6 +325,24 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
             fi
             CONTAINERFILE="Containerfile.gdx"
             ;;
+        "hwe-base-node")
+            if [[ "{{ is_ci }}" = "1" ]]; then
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ tag }}"
+            else
+                BASE_FOR_BUILD="localhost/{{ variant }}:{{ default_tag }}"
+            fi
+            CONTAINERFILE="Containerfile.hwe"
+            DESKTOP_FLAVOR="hwe-base-node"
+            ;;
+        "gdx-base-node")
+            if [[ "{{ is_ci }}" = "1" ]]; then
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ tag }}"
+            else
+                BASE_FOR_BUILD="localhost/{{ variant }}:{{ default_tag }}"
+            fi
+            CONTAINERFILE="Containerfile.gdx"
+            DESKTOP_FLAVOR="gdx-base-node"
+            ;;
         "kde")
             BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
             CONTAINERFILE="Containerfile"
@@ -349,22 +375,65 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
             CONTAINERFILE="Containerfile.gdx"
             DESKTOP_FLAVOR="kde"
             ;;
+        "niri")
+            BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
+            CONTAINERFILE="Containerfile"
+            DESKTOP_FLAVOR="niri"
+            ;;
+        "niri-hwe")
+            if [[ "{{ is_ci }}" = "1" ]]; then
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-niri:{{ tag }}"
+            else
+                BASE_FOR_BUILD="localhost/{{ variant }}-niri:{{ default_tag }}"
+            fi
+            CONTAINERFILE="Containerfile.hwe"
+            DESKTOP_FLAVOR="niri"
+            ;;
+        "niri-gdx")
+            if [[ "{{ is_ci }}" = "1" ]]; then
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-niri:{{ tag }}"
+            else
+                BASE_FOR_BUILD="localhost/{{ variant }}-niri:{{ default_tag }}"
+            fi
+            CONTAINERFILE="Containerfile.gdx"
+            DESKTOP_FLAVOR="niri"
+            ;;
+        "niri-gdx-hwe")
+            if [[ "{{ is_ci }}" = "1" ]]; then
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-niri-hwe:{{ tag }}"
+            else
+                BASE_FOR_BUILD="localhost/{{ variant }}-niri-hwe:{{ default_tag }}"
+            fi
+            CONTAINERFILE="Containerfile.gdx"
+            DESKTOP_FLAVOR="niri"
+            ;;
         "all")
             just build {{ variant }} base
             just build {{ variant }} hwe
             just build {{ variant }} gdx
+            just build {{ variant }} hwe-base-node
+            just build {{ variant }} gdx-base-node
             just build {{ variant }} gdx-hwe
             just build {{ variant }} kde
             just build {{ variant }} kde-hwe
             just build {{ variant }} kde-gdx
             just build {{ variant }} kde-gdx-hwe
+            just build {{ variant }} niri
+            just build {{ variant }} niri-hwe
+            just build {{ variant }} niri-gdx
+            just build {{ variant }} niri-gdx-hwe
             exit 0
             ;;
         *)
-            echo "Unknown flavor '{{ flavor }}'. Valid options are: base, hwe, gdx, gdx-hwe, kde, kde-hwe, kde-gdx, kde-gdx-hwe, all."
+            echo "Unknown flavor '{{ flavor }}'. Valid options are: base, hwe, gdx, hwe-base-node, gdx-base-node, gdx-hwe, kde, kde-hwe, kde-gdx, kde-gdx-hwe, niri, niri-hwe, niri-gdx, niri-gdx-hwe, all."
             exit 1
             ;;
     esac
+
+    # Allow workflow callers to chain from an explicit parent image.
+    if [[ -n "{{ chain_base_image }}" ]] && [[ "{{ flavor }}" != "base" ]]; then
+        BASE_FOR_BUILD="{{ chain_base_image }}"
+    fi
 
     TARGET_TAG={{ variant }}
     if [[ "{{ flavor }}" != "base" ]]; then
@@ -374,13 +443,13 @@ build variant='albacore' flavor='base' platform=`echo $platform` is_ci="0" tag='
 
     # Determine HWE flag - hwe and gdx flavors always use coreos akmods
     ENABLE_HWE="0"
-    if [[ "{{ flavor }}" == "hwe" ]] || [[ "{{ flavor }}" == "gdx-hwe" ]] || [[ "{{ flavor }}" == "kde-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx-hwe" ]]; then
+    if [[ "{{ flavor }}" == "hwe" ]] || [[ "{{ flavor }}" == "hwe-base-node" ]] || [[ "{{ flavor }}" == "gdx-hwe" ]] || [[ "{{ flavor }}" == "kde-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx-hwe" ]] || [[ "{{ flavor }}" == "niri-hwe" ]] || [[ "{{ flavor }}" == "niri-gdx-hwe" ]]; then
         ENABLE_HWE="1"
     fi
 
     # Determine GDX flag
     ENABLE_GDX="0"
-    if [[ "{{ flavor }}" == "gdx" ]] || [[ "{{ flavor }}" == "kde-gdx" ]] || [[ "{{ flavor }}" == "gdx-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx-hwe" ]]; then
+    if [[ "{{ flavor }}" == "gdx" ]] || [[ "{{ flavor }}" == "gdx-base-node" ]] || [[ "{{ flavor }}" == "kde-gdx" ]] || [[ "{{ flavor }}" == "gdx-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx-hwe" ]] || [[ "{{ flavor }}" == "niri-gdx" ]] || [[ "{{ flavor }}" == "niri-gdx-hwe" ]]; then
         ENABLE_GDX="1"
     fi
 
@@ -448,6 +517,18 @@ build-chain-kde variant:
     just build {{ variant }} kde-gdx || echo "⚠ Warning: {{ variant }} KDE-GDX build failed (non-fatal for AlmaLinux variants)"
     just build {{ variant }} kde-gdx-hwe
     echo "✓ Complete: {{ variant }} KDE chain built successfully"
+
+# Build full Niri chain for a variant: niri → niri-hwe → niri-gdx → niri-gdx-hwe
+build-chain-niri variant:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "Building full Niri chain for {{ variant }}: niri → niri-hwe → niri-gdx → niri-gdx-hwe"
+    just build {{ variant }} niri
+    just build {{ variant }} niri-hwe
+    # AlmaLinux non-HWE GDX may fail due to driver version lag in repos
+    just build {{ variant }} niri-gdx || echo "⚠ Warning: {{ variant }} Niri-GDX build failed (non-fatal for AlmaLinux variants)"
+    just build {{ variant }} niri-gdx-hwe
+    echo "✓ Complete: {{ variant }} Niri chain built successfully"
 
 # Build GNOME and KDE base in parallel (shares base-no-de layer)
 build-de-parallel variant flavor='base':

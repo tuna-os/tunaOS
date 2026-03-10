@@ -178,10 +178,11 @@ jobs:
           IMAGE_VARIANT: ${{ inputs.image-variant }}
           DEFAULT_TAG: ${{ inputs.default-tag }}
           PLATFORM: ${{ matrix.platform }}
+          CHAIN_BASE_IMAGE: ${{ inputs.chain-base-image }}
         run: |
           set -x
           just=$(which just)
-          sudo "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}"
+          sudo "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}"
 
       - name: Setup Syft
         id: setup-syft
