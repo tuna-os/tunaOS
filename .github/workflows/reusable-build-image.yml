@@ -207,7 +207,6 @@ jobs:
         if: ${{ inputs.rechunk && inputs.publish }}
         id: chunkify
         env:
-          IMAGE_NAME: ${{ env.IMAGE_NAME }}
           IMAGE_VARIANT: ${{ inputs.image-variant }}
           FLAVOR: ${{ inputs.flavor }}
           DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
@@ -217,31 +216,12 @@ jobs:
             LOCAL_IMAGE_NAME="${LOCAL_IMAGE_NAME}-${FLAVOR}"
           fi
           IMAGE_REF="localhost/${LOCAL_IMAGE_NAME}:${DEFAULT_TAG}"
-          echo "==> Chunkifying ${IMAGE_REF}..."
 
-          # Get config from existing image
-          CONFIG=$(sudo podman inspect "${IMAGE_REF}")
-
-          # Run chunkah (default 64 layers) and pipe to podman load
-          LOADED=$(sudo podman run --rm \
-            --security-opt label=type:unconfined_t \
-            --mount=type=image,src="${IMAGE_REF}",dest=/chunkah \
-            -e "CHUNKAH_CONFIG_STR=$CONFIG" \
-            quay.io/jlebon/chunkah:latest build | sudo podman load)
-
-          echo "$LOADED"
-
-          # Parse the loaded image reference
-          NEW_REF=$(echo "$LOADED" | grep -oP '(?<=Loaded image: ).*' || \
-                    echo "$LOADED" | grep -oP '(?<=Loaded image\(s\): ).*')
-
-          if [ -n "$NEW_REF" ] && [ "$NEW_REF" != "${IMAGE_REF}" ]; then
-            echo "==> Retagging chunked image to ${IMAGE_REF}..."
-            sudo podman tag "$NEW_REF" "${IMAGE_REF}"
-            echo "ref=${IMAGE_REF}" >> "${GITHUB_OUTPUT}"
-          else
-            echo "ref=${IMAGE_REF}" >> "${GITHUB_OUTPUT}"
-          fi
+          # Use the just recipe for chunking
+          just_cmd=$(which just)
+          sudo "$just_cmd" chunkify "${IMAGE_REF}"
+          
+          echo "ref=${IMAGE_REF}" >> "${GITHUB_OUTPUT}"
 
       - name: Load Image
         if: ${{ inputs.publish }}
