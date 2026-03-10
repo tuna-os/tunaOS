@@ -21,12 +21,30 @@ fi
 # Tailscale
 if [[ $IS_FEDORA == true ]]; then
 	dnf config-manager addrepo --from-repofile="https://pkgs.tailscale.com/stable/fedora/tailscale.repo"
-	dnf -y install tailscale
+	# Retry with backoff for HTTP/2 stream errors
+	for attempt in {1..3}; do
+		if dnf -y install tailscale; then
+			break
+		fi
+		if [[ $attempt -lt 3 ]]; then
+			echo "Tailscale install failed, retrying in 10 seconds..."
+			sleep 10
+		fi
+	done
 else
 	dnf config-manager --add-repo "https://pkgs.tailscale.com/stable/centos/${MAJOR_VERSION_NUMBER}/tailscale.repo"
 	dnf config-manager --set-disabled "tailscale-stable"
 	# FIXME: tailscale EPEL10 request: https://bugzilla.redhat.com/show_bug.cgi?id=2349099
-	dnf -y --enablerepo "tailscale-stable" install tailscale
+	# Retry with backoff for HTTP/2 stream errors
+	for attempt in {1..3}; do
+		if dnf -y --enablerepo "tailscale-stable" install tailscale; then
+			break
+		fi
+		if [[ $attempt -lt 3 ]]; then
+			echo "Tailscale install failed, retrying in 10 seconds..."
+			sleep 10
+		fi
+	done
 fi
 
 if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
