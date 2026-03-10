@@ -592,8 +592,8 @@ chunkify image_ref:
     # Uses --mount=type=image to expose the source image content to chunkah
     # Note: We need --privileged for some podman-in-podman/mount scenarios or just standard access
     LOADED=$($SUDO_CMD podman run --rm \
-        --security-opt label=type:unconfined_t \
-        --mount=type=image,src="{{ image_ref }}",dest=/chunkah \
+        --security-opt label=disable \
+        --mount=type=image,src="{{ image_ref }}",target=/chunkah \
         -e "CHUNKAH_CONFIG_STR=$CONFIG" \
         quay.io/jlebon/chunkah:latest build | $SUDO_CMD podman load)
 
