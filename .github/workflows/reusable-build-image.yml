@@ -331,16 +331,16 @@ jobs:
         if: ${{ inputs.publish }}
 
       - name: Sign Image
-       if: ${{ inputs.publish }}
-       run: |
-         IMAGE_FULL="${IMAGE_REGISTRY}/${IMAGE_NAME}"
-         cosign sign -y --key env://COSIGN_PRIVATE_KEY ${IMAGE_FULL}@${{ steps.push.outputs.remote_image_digest }}
-       env:
-         COSIGN_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-         COSIGN_REGISTRY_USERNAME: ${{ github.actor }}
-         TAGS: ${{ steps.push.outputs.digest }}
-         COSIGN_EXPERIMENTAL: false
-         COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+        if: ${{ inputs.publish }}
+        run: |
+          IMAGE_FULL="${IMAGE_REGISTRY}/${IMAGE_NAME}"
+          cosign sign -y --key env://COSIGN_PRIVATE_KEY ${IMAGE_FULL}@${{ steps.push.outputs.remote_image_digest }}
+        env:
+          COSIGN_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          COSIGN_REGISTRY_USERNAME: ${{ github.actor }}
+          TAGS: ${{ steps.push.outputs.digest }}
+          COSIGN_EXPERIMENTAL: false
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
     
       - name: Add SBOM Attestation
         if: ${{ inputs.sbom }}
