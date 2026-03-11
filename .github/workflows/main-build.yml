@@ -136,7 +136,7 @@ jobs:
       image-variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
       platforms: ${{ matrix.platforms }}
-      default-tag: lts
+      default-tag: ${{ matrix.flavor }}
       publish: ${{ github.event_name != 'pull_request' }}
     secrets:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
@@ -166,7 +166,7 @@ jobs:
       image-variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
       platforms: ${{ matrix.platforms }}
-      default-tag: lts
+      default-tag: ${{ matrix.flavor }}
       publish: ${{ github.event_name != 'pull_request' }}
     secrets:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
@@ -189,7 +189,7 @@ jobs:
       image-variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
       platforms: ${{ matrix.platforms }}
-      default-tag: lts
+      default-tag: ${{ matrix.flavor }}
       publish: ${{ github.event_name != 'pull_request' }}
     secrets:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
