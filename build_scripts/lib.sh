@@ -144,4 +144,3 @@ install_from_copr() {
 	dnf -y --enablerepo "copr:copr.fedorainfracloud.org:$(echo "$COPR_NAME" | tr '/' ':')" install "$@"
 	dnf -y copr disable "$COPR_NAME"
 }
-

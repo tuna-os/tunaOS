@@ -10,10 +10,10 @@ flavor="${2:-base}"
 upstream_image="${3:-}"
 
 if [[ -z "$variant" ]] || [[ -z "$upstream_image" ]]; then
-    echo "Usage: $0 <variant> <flavor> <upstream-image>"
-    echo "Example: $0 skipjack base ghcr.io/ublue-os/bluefin-lts:latest"
-    echo "Example: $0 bonito-kde base ghcr.io/ublue-os/aurora:latest"
-    exit 1
+	echo "Usage: $0 <variant> <flavor> <upstream-image>"
+	echo "Example: $0 skipjack base ghcr.io/ublue-os/bluefin-lts:latest"
+	echo "Example: $0 bonito-kde base ghcr.io/ublue-os/aurora:latest"
+	exit 1
 fi
 
 TUNAOS_IMAGE="localhost/tunaos/${variant}:${flavor}-latest"
@@ -29,15 +29,15 @@ echo ""
 
 # Check if TunaOS image exists locally
 if ! podman image exists "$TUNAOS_IMAGE"; then
-    echo "ERROR: TunaOS image not found: $TUNAOS_IMAGE"
-    echo "Please build it first with: just build $variant $flavor"
-    exit 1
+	echo "ERROR: TunaOS image not found: $TUNAOS_IMAGE"
+	echo "Please build it first with: just build $variant $flavor"
+	exit 1
 fi
 
 # Pull upstream image if not present
 if ! podman image exists "$UPSTREAM_IMAGE"; then
-    echo "Pulling upstream image: $UPSTREAM_IMAGE"
-    podman pull "$UPSTREAM_IMAGE"
+	echo "Pulling upstream image: $UPSTREAM_IMAGE"
+	podman pull "$UPSTREAM_IMAGE"
 fi
 
 # Create temporary directory for comparison
@@ -96,8 +96,8 @@ echo "Unique Files in TunaOS (not in upstream)"
 echo "========================================"
 echo ""
 
-(cd "$TUNAOS_DIR" && find . -type f | sort) > "$TEMP_DIR/tunaos-files.txt"
-(cd "$UPSTREAM_DIR" && find . -type f | sort) > "$TEMP_DIR/upstream-files.txt"
+(cd "$TUNAOS_DIR" && find . -type f | sort) >"$TEMP_DIR/tunaos-files.txt"
+(cd "$UPSTREAM_DIR" && find . -type f | sort) >"$TEMP_DIR/upstream-files.txt"
 
 comm -23 "$TEMP_DIR/tunaos-files.txt" "$TEMP_DIR/upstream-files.txt" | head -50
 UNIQUE_TUNAOS=$(comm -23 "$TEMP_DIR/tunaos-files.txt" "$TEMP_DIR/upstream-files.txt" | wc -l)
@@ -122,8 +122,8 @@ echo "========================================"
 echo ""
 
 echo "Extracting package lists..."
-podman run --rm "$TUNAOS_IMAGE" rpm -qa | sort > "$TEMP_DIR/tunaos-packages.txt"
-podman run --rm "$UPSTREAM_IMAGE" rpm -qa | sort > "$TEMP_DIR/upstream-packages.txt"
+podman run --rm "$TUNAOS_IMAGE" rpm -qa | sort >"$TEMP_DIR/tunaos-packages.txt"
+podman run --rm "$UPSTREAM_IMAGE" rpm -qa | sort >"$TEMP_DIR/upstream-packages.txt"
 
 echo ""
 echo "Packages in TunaOS but not Upstream (first 30):"

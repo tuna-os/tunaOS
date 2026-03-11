@@ -21,7 +21,7 @@ install_base_packages_no_de() {
 			echo "Registering with Red Hat Subscription Manager using activation key..."
 			subscription-manager register --org "${RHSM_ORG}" --activationkey "${RHSM_ACTIVATION_KEY}" --auto-attach || true
 		fi
-		
+
 		# Ensure repositories are enabled after registration
 		subscription-manager repos --enable "rhel-10-for-x86_64-baseos-rpms" || true
 		subscription-manager repos --enable "rhel-10-for-x86_64-appstream-rpms" || true
@@ -79,7 +79,7 @@ install_base_packages_no_de() {
 			dnf config-manager --set-disabled epel-multimedia
 			# Disable fastestmirror for this repo to avoid corrupted mirrors
 			dnf config-manager --setopt="epel-multimedia.fastestmirror=0" --save
-			
+
 			# Install with retries to handle transient mirror issues
 			retry_count=0
 			max_retries=3
@@ -159,7 +159,7 @@ install_base_packages_no_de() {
 	dnf -y copr enable ublue-os/packages
 	dnf -y copr disable ublue-os/packages
 	dnf -y --enablerepo copr:copr.fedorainfracloud.org:ublue-os:packages install \
-	uupd
+		uupd
 }
 
 # Main execution: install base packages and DE

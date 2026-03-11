@@ -18,7 +18,6 @@ if [[ $IS_CENTOS == true ]]; then
 fi
 # RHEL: no redistribution-safe branding packages; skip OS branding install
 
-
 if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
 	/run/context/build_scripts/kde.sh extra
 elif [[ "${DESKTOP_FLAVOR}" == "niri" ]]; then

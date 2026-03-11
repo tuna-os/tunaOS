@@ -90,11 +90,11 @@ case "${1:-}" in
 	# Disable plasma-discover in favor of Flatpak/Bazaar (like Aurora)
 	if [ -f /usr/share/applications/org.kde.discover.desktop ]; then
 		mv /usr/share/applications/org.kde.discover.desktop \
-		   /usr/share/applications/org.kde.discover.desktop.disabled
+			/usr/share/applications/org.kde.discover.desktop.disabled
 	fi
 	if [ -f /usr/share/applications/org.kde.discover.urlhandler.desktop ]; then
 		mv /usr/share/applications/org.kde.discover.urlhandler.desktop \
-		   /usr/share/applications/org.kde.discover.urlhandler.desktop.disabled
+			/usr/share/applications/org.kde.discover.urlhandler.desktop.disabled
 	fi
 	;;
 esac

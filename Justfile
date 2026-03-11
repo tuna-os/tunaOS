@@ -22,6 +22,9 @@ _ensure_check_deps:
     if ! command -v shellcheck &> /dev/null; then
         brew install shellcheck
     fi
+    if ! command -v shfmt &> /dev/null; then
+        brew install shfmt
+    fi
     if ! command -v yamllint &> /dev/null; then
         brew install yamllint
     fi
@@ -55,6 +58,7 @@ check: _ensure_check_deps
                    -ignore "SC2034" -ignore "SC2015" -ignore "SC1001" \
                    -ignore "SC2295" \
                    -ignore "save-always" \
+                   -ignore "cannot be filtered" \
                    .github/workflows/*.yml .github/workflows/*.yaml || { exit 1; }
     fi
     just --unstable --fmt --check -f Justfile
@@ -65,10 +69,8 @@ fix:
     echo "Fixing syntax of shell scripts..."
         /usr/bin/find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -iname "*.sh" -type f -exec shfmt --write "{}" ";"
     find . -type f -name "*.just" | while read -r file; do
-        echo "Checking syntax: $file"
         just --unstable --fmt -f $file
     done
-    echo "Checking syntax: Justfile"
     just --unstable --fmt -f Justfile || { exit 1; }
 
 clean:

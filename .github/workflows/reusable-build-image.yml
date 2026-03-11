@@ -261,7 +261,9 @@ jobs:
           set -x
           sudo podman tag "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
           for i in $(seq "${MAX_RETRIES}"); do
-            sudo podman push --digestfile=/tmp/digestfile "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}" && break || sleep $((5 * i));
+            sudo podman push --digestfile=/tmp/digestfile \
+              "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}" \
+              && break || sleep $((5 * i));
           done
           REMOTE_IMAGE_DIGEST=$(sudo cat /tmp/digestfile)
           echo "remote_image_digest=${REMOTE_IMAGE_DIGEST}" >> $GITHUB_OUTPUT
@@ -360,11 +362,12 @@ jobs:
         run: |
           oras attach \
             --artifact-type application/vnd.spdx+json \
-            --annotation filename=$(basename "$SBOM") \
+            --annotation "filename=$(basename "$SBOM")" \
             "${IMAGE}@${DIGEST}" \
             "$SBOM"
 
-          sbom_digest=$(oras discover --format json "${IMAGE}@${DIGEST}" | jq -r '.referrers[] | select(.artifactType == "application/vnd.spdx+json") | .digest')
+          sbom_digest=$(oras discover --format json "${IMAGE}@${DIGEST}" \
+            | jq -r '.referrers[] | select(.artifactType == "application/vnd.spdx+json") | .digest')
 
           echo "sbom_digest=${sbom_digest}" >> $GITHUB_OUTPUT
 

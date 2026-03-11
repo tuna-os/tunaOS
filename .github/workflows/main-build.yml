@@ -42,15 +42,17 @@ jobs:
           FILTER_VARIANT: ${{ inputs.variant || 'all' }}
           FILTER_FLAVOR: ${{ inputs.flavor || 'all' }}
         run: |
-          VALID_VARIANTS="all yellowfin albacore skipjack bonito"
+          VALID_VARIANTS="all yellowfin albacore skipjack bonito redfin"
           VALID_FLAVORS="all base base-hwe base-gdx gnome gnome-hwe gnome-gdx gnome-gdx-hwe kde kde-hwe kde-gdx niri niri-hwe niri-gdx"
 
-          if [[ ! " $VALID_VARIANTS " =~ " $FILTER_VARIANT " ]]; then
+          variant_pattern=" $FILTER_VARIANT "
+          flavor_pattern=" $FILTER_FLAVOR "
+          if [[ ! " $VALID_VARIANTS " =~ $variant_pattern ]]; then
             echo "::error::Invalid variant '$FILTER_VARIANT'. Must be one of: $VALID_VARIANTS"
             exit 1
           fi
 
-          if [[ ! " $VALID_FLAVORS " =~ " $FILTER_FLAVOR " ]]; then
+          if [[ ! " $VALID_FLAVORS " =~ $flavor_pattern ]]; then
             echo "::error::Invalid flavor '$FILTER_FLAVOR'. Must be one of: $VALID_FLAVORS"
             exit 1
           fi
@@ -72,7 +74,7 @@ jobs:
             | select(env.FILTER_FLAVOR == "all" or .id == env.FILTER_FLAVOR)
             | {
                 variant:       $v.id,
-                builder_distro: $v.builder_distro,
+                base_image:    $v.base_image,
                 platforms:     ($v.platforms | join(",")),
                 flavor:        .id,
                 stage:         .stage,
@@ -86,10 +88,10 @@ jobs:
             local STAGE=$1
             echo "$FULL_MATRIX" | jq -c --argjson stage "$STAGE" '{
               include: map(select(.stage == $stage) | {
-                variant:        .variant,
-                flavor:         .flavor,
-                platforms:      .platforms,
-                builder_distro: .builder_distro
+                variant:    .variant,
+                flavor:     .flavor,
+                platforms:  .platforms,
+                base_image: .base_image
               })
             }'
           }
@@ -107,12 +109,12 @@ jobs:
             include: map(
               select(.build_iso == true or .build_qcow2 == true)
               | {
-                  variant:        .variant,
-                  flavor:         .flavor,
-                  build_iso:      .build_iso,
-                  build_qcow2:    .build_qcow2,
-                  builder_distro: .builder_distro,
-                  platform:       "linux/amd64"
+                  variant:     .variant,
+                  flavor:      .flavor,
+                  build_iso:   .build_iso,
+                  build_qcow2: .build_qcow2,
+                  base_image:  .base_image,
+                  platform:    "linux/amd64"
                 }
             )
           }')
@@ -217,7 +219,7 @@ jobs:
           installer-repo: ghcr.io/${{ github.repository_owner }}/${{ matrix.variant }}:${{ matrix.flavor }}
           flatpaks-list: ${{ github.workspace }}/system_files/etc/ublue-os/system-flatpaks.list
           hook-post-rootfs: ${{ github.workspace }}/iso_files/configure_lts_iso_anaconda.sh
-          builder-distro: ${{ matrix.builder_distro }}
+          builder-distro: ${{ matrix.base_image }}
 
       - name: Build QCOW2
         if: matrix.build_qcow2 == true
@@ -225,4 +227,4 @@ jobs:
         with:
           image-name: ${{ matrix.variant }}-${{ matrix.flavor }}
           installer-repo: ghcr.io/${{ github.repository_owner }}/${{ matrix.variant }}:${{ matrix.flavor }}
-          builder-distro: ${{ matrix.builder_distro }}
+          builder-distro: ${{ matrix.base_image }}

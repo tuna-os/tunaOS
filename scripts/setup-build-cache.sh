@@ -9,9 +9,9 @@ set -euo pipefail
 VARIANT="${1:-}"
 
 if [[ -z "$VARIANT" ]]; then
-    echo "Usage: $0 <variant>" >&2
-    echo "Example: $0 skipjack" >&2
-    exit 1
+	echo "Usage: $0 <variant>" >&2
+	echo "Example: $0 skipjack" >&2
+	exit 1
 fi
 
 # Extract base variant name by stripping flavor suffixes
@@ -36,8 +36,8 @@ mkdir -p "${CACHE_VARIANT}"/{dnf,libdnf5,rpm}
 # For the first build, initialize shared cache if empty
 # Subsequent builds will read from shared and write to variant-specific
 if [[ ! -f "${CACHE_BASE}/.initialized" ]]; then
-    echo "Initializing shared cache layer..." >&2
-    touch "${CACHE_BASE}/.initialized"
+	echo "Initializing shared cache layer..." >&2
+	touch "${CACHE_BASE}/.initialized"
 fi
 
 # Build volume mount arguments for podman

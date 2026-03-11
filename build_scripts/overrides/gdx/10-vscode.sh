@@ -10,7 +10,7 @@ source /run/context/build_scripts/lib.sh
 rpm --import https://packages.microsoft.com/keys/microsoft.asc
 
 # Add VS Code repository
-cat <<EOF > /etc/yum.repos.d/vscode.repo
+cat <<EOF >/etc/yum.repos.d/vscode.repo
 [code]
 name=Visual Studio Code
 baseurl=https://packages.microsoft.com/yumrepos/vscode
