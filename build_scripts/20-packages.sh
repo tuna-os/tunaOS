@@ -18,39 +18,6 @@ if [[ $IS_CENTOS == true ]]; then
 fi
 # RHEL: no redistribution-safe branding packages; skip OS branding install
 
-# Tailscale - resolve latest version via GitHub releases (same as Homebrew livecheck :github_latest strategy)
-tailscale_version="$(curl -fsSL -o /dev/null -w '%{url_effective}' https://github.com/tailscale/tailscale/releases/latest | grep -oP 'v\K[\d.]+')"
-if [[ -z "${tailscale_version}" ]]; then
-	echo "Failed to determine latest Tailscale version from GitHub" >&2
-	exit 1
-fi
-
-rpm_arch="$(uname -m)"
-if [[ "${rpm_arch}" == "x86_64_v2" ]]; then
-	rpm_arch="x86_64"
-fi
-
-if [[ $IS_FEDORA == true ]]; then
-	repo_base="https://pkgs.tailscale.com/stable/fedora/${MAJOR_VERSION_NUMBER}/${rpm_arch}"
-else
-	repo_base="https://pkgs.tailscale.com/stable/centos/${MAJOR_VERSION_NUMBER}/${rpm_arch}"
-fi
-
-rpm_url="${repo_base}/tailscale_${tailscale_version}_${rpm_arch}.rpm"
-echo "Installing Tailscale ${tailscale_version} from URL: ${rpm_url}"
-
-for attempt in 1 2 3; do
-	if dnf -y install "${rpm_url}"; then
-		break
-	fi
-	if [[ ${attempt} -lt 3 ]]; then
-		echo "Tailscale install failed, retrying in 10 seconds..."
-		sleep 10
-	else
-		echo "Failed to install Tailscale from URL after retries" >&2
-		exit 1
-	fi
-done
 
 if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
 	/run/context/build_scripts/kde.sh extra
