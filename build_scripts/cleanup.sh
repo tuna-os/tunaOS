@@ -20,8 +20,9 @@ find /var/cache -mindepth 1 ! -path '/var/cache/dnf*' -delete 2>/dev/null || tru
 
 mkdir -p /var /boot
 
-# Make /usr/local writeable
-ln -s /var/usrlocal /usr/local
+
+# Make /usr/local writeable, if /usr/local exists skip
+ls /usr/local || ln -s /var/usrlocal /usr/local
 
 # We need this else anything accessing image-info fails
 # FIXME: Figure out why this doesnt have the right permissions by default

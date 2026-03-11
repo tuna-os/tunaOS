@@ -447,10 +447,16 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
 
 # ── Chunkah ──────────────────────────────────────────────────────────
 
-# Use the pre-built chunkah image from quay.io
+# Use the pre-built chunkah image from ghcr.io/tuna-os/chunkah, fallback to local build
 chunkify image_ref:
     #!/usr/bin/env bash
     set -euo pipefail
+
+    CHUNKAH_IMG="ghcr.io/tuna-os/chunkah:latest"
+    if podman image exists localhost/chunkah:latest; then
+        echo "==> Using local chunkah build (localhost/chunkah:latest)"
+        CHUNKAH_IMG="localhost/chunkah:latest"
+    fi
 
     echo "==> Chunkifying {{ image_ref }}..."
 
@@ -464,7 +470,7 @@ chunkify image_ref:
         --security-opt label=disable \
         --mount=type=image,src="{{ image_ref }}",target=/chunkah \
         -e "CHUNKAH_CONFIG_STR=$CONFIG" \
-        quay.io/jlebon/chunkah:latest build | podman load); then
+        "${CHUNKAH_IMG}" build | podman load); then
 
         echo "$LOADED"
 
@@ -479,6 +485,10 @@ chunkify image_ref:
     else
         echo "==> WARNING: Chunkify failed (non-fatal), skipping layer optimization."
     fi
+
+# Build chunkah locally from the tuna-os fork
+build-chunkah path="":
+    ./scripts/build-chunkah.sh {{ path }}
 
 # Run the full staged build pipeline locally, mirroring the CI job graph.
 # Reads .github/build-config.yml for the variant/flavor/stage structure.
