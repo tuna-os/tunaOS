@@ -1,17 +1,25 @@
 name: Login to GHCR
-description: Logs into GitHub Container Registry
+description: Logs into GitHub Container Registry for both Docker and Podman (including sudo podman, which is required by some build tools).
+
 runs:
   using: composite
   steps:
-    - name: Login to GitHub Container Registry
+    - name: Login to GitHub Container Registry (Docker)
       uses: docker/login-action@v3
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ github.token }}
 
-    - name: Login to Podman
+    # Podman login is required separately because some build steps invoke podman
+    # directly rather than going through the Docker credential store.
+    # Sudo podman is needed for privileged build operations (e.g. isogenerator).
+    - name: Login to Podman (user)
       run: |
         echo "${{ github.token }}" | podman login -u "${{ github.actor }}" --password-stdin ghcr.io
+      shell: bash
+
+    - name: Login to Podman (sudo)
+      run: |
         echo "${{ github.token }}" | sudo podman login -u "${{ github.actor }}" --password-stdin ghcr.io
       shell: bash
