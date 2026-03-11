@@ -186,6 +186,7 @@ jobs:
       - name: Generate SBOM
         id: generate-sbom
         if: ${{ inputs.sbom && inputs.publish }}
+        continue-on-error: true
         env:
           IMAGE: ${{ env.IMAGE_NAME }}
           DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
