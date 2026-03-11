@@ -9,7 +9,8 @@ case "${1:-}" in
 	# Use COPR GNOME 48 packages for EL10-based builds.
 	if [[ $IS_FEDORA == false ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
 		dnf -y copr enable jreilly1821/c10s-gnome
-		dnf -y swap gnome-shell gnome-shell-48.3 --allowerasing || true
+		# Use install --allowerasing which is more robust than swap if the package is already present
+		dnf -y install gnome-shell-48.3 --allowerasing || true
 		dnf -y copr disable jreilly1821/c10s-gnome
 	fi
 
