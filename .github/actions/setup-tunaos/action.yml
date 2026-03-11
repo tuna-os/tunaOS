@@ -28,18 +28,3 @@ runs:
           brew install just
         fi
       shell: bash
-
-    # Fix #8: actionlint is installed here and used in the lint job.
-    # If you don't have a lint job, remove actionlint from this action.
-    - name: Install Actionlint
-      run: |
-        if ! command -v actionlint &> /dev/null; then
-          brew install actionlint
-        fi
-      shell: bash
-
-    # Fix #8: Actually run actionlint so the install isn't wasted.
-    # This lints all workflow files in .github/workflows/.
-    - name: Lint Workflows
-      run: actionlint
-      shell: bash
