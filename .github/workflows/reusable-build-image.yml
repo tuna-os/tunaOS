@@ -342,7 +342,7 @@ jobs:
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
 
       - name: Add SBOM Attestation
-        if: ${{ inputs.sbom }}
+        if: ${{ inputs.sbom && inputs.publish }}
         env:
           IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
           DIGEST: ${{ steps.push.outputs.remote_image_digest }}
