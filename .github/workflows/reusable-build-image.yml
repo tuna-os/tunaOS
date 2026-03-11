@@ -145,7 +145,7 @@ jobs:
         run: just check
 
       - name: Cache DNF/RPM Packages
-        uses: actions/cache@v4 # v4
+        uses: actions/cache@v5.0.3 
         id: dnf-cache
         with:
           path: |
@@ -434,7 +434,7 @@ jobs:
       PLATFORMS: ${{ inputs.platforms }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Install dependencies
         run: |
@@ -658,7 +658,7 @@ jobs:
       id-token: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Login to GitHub Container Registry
         if: ${{ inputs.publish }}
