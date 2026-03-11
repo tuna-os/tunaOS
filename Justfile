@@ -50,6 +50,10 @@ check:
         echo "Checking syntax: $file"
         just --unstable --fmt --check -f $file
     done
+    if command -v actionlint &> /dev/null; then
+        echo "Checking syntax of GitHub Actions workflows..."
+        actionlint .github/workflows/*.yml .github/workflows/*.yaml || { exit 1; }
+    fi
     echo "Checking syntax: Justfile"
     just --unstable --fmt --check -f Justfile
 

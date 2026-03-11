@@ -18,9 +18,12 @@ runs:
       shell: bash
     - name: Setup Homebrew
       uses: Homebrew/actions/setup-homebrew@master
-    - name: Install Just
+    - name: Install Just and Actionlint
       run: |
         if ! command -v just &> /dev/null; then
           brew install just
+        fi
+        if ! command -v actionlint &> /dev/null; then
+          brew install actionlint
         fi
       shell: bash
