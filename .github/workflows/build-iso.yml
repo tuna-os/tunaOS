@@ -46,10 +46,10 @@ on:
       platforms:
         description: 'Platforms to build'
         required: false
-        default: ''
+        default: 'default'
         type: choice
         options:
-          - ''
+          - 'default'
           - linux/amd64
           - linux/amd64/v2
           - linux/arm64
@@ -128,7 +128,7 @@ jobs:
               FLAVORS="${{ inputs.flavor }}"
             fi
             # If Platforms is set
-            if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.platforms }}" ]]; then
+            if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.platforms }}" != "default" ]]; then
               PLATFORMS="${{ inputs.platforms }}"
             elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
               PLATFORMS="linux/amd64"

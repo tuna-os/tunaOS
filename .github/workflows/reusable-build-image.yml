@@ -55,7 +55,6 @@ on:
         description: "Publish this image"
         required: false
         type: boolean
-        # default: ${{ github.event_name != 'pull_request' }}
         default: true
       remove-unwanted-software:
         description: "Run the remove-unwanted-software action to free up disk space"
@@ -129,7 +128,7 @@ jobs:
           submodules: recursive
 
       - name: Maximize build space (remove-software)
-        if: inputs.remove-unwanted-software && matrix.platform != 'arm64'
+        if: ${{ inputs.remove-unwanted-software && matrix.platform != 'arm64' }}
         uses: ublue-os/remove-unwanted-software@cc0becac701cf642c8f0a6613bbdaf5dc36b259e # v9
         with:
           remove-codeql: true
