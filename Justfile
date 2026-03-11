@@ -17,32 +17,39 @@ export base_image_tag := env("BASE_IMAGE_TAG", "10")
 default:
     @{{ just }} --list
 
+_ensure_check_deps:
+    #!/usr/bin/env bash
+    if ! command -v shellcheck &> /dev/null; then
+        brew install shellcheck
+    fi
+    if ! command -v yamllint &> /dev/null; then
+        brew install yamllint
+    fi
+    if ! command -v jq &> /dev/null; then
+        brew install jq
+    fi
+    if ! command -v actionlint &> /dev/null; then
+        brew install actionlint
+    fi
+
 # Check Just Syntax
-check:
+check: _ensure_check_deps
     #!/usr/bin/env bash
     echo "Checking syntax of shell scripts..."
     /usr/bin/find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
     find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -type f -name "*.yaml" | while read -r file; do
-        echo "Checking syntax: $file"
         yamllint -c ./.yamllint.yml "$file" || { exit 1; }
     done
     find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -type f -name "*.yml" | while read -r file; do
-        echo "Checking syntax: $file"
         yamllint "$file" || { exit 1; }
     done
     find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -type f -name "*.json" | while read -r file; do
-        echo "Checking syntax: $file"
         jq . "$file" > /dev/null || { exit 1; }
     done
     find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -type f -name "*.just" | while read -r file; do
-        echo "Checking syntax: $file"
         just --unstable --fmt --check -f $file
     done
     if command -v actionlint &> /dev/null; then
-        echo "Checking syntax of GitHub Actions workflows..."
-        # Ignore id-token: write permission warnings which are false positives for OIDC
-        # Ignore various shellcheck warnings that are often intentional or problematic in YAML
-        # Ignore deprecated save-always in actions/cache as it's common in these workflows
         actionlint -ignore "permission \"id-token\" is unknown" \
                    -ignore "SC2086" -ignore "SC2129" -ignore "SC2001" \
                    -ignore "SC2034" -ignore "SC2015" -ignore "SC1001" \
@@ -50,7 +57,6 @@ check:
                    -ignore "save-always" \
                    .github/workflows/*.yml .github/workflows/*.yaml || { exit 1; }
     fi
-    echo "Checking syntax: Justfile"
     just --unstable --fmt --check -f Justfile
 
 # Fix Just Syntax

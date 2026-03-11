@@ -12,6 +12,7 @@ LABELS=(__LABELS__)
 SPINNER_FRAMES=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
 spin_idx=0
 
+
 BOLD="\033[1m"
 DIM="\033[2m"
 GREEN="\033[32m"
@@ -50,13 +51,17 @@ render() {
     printf "  %b%-30s  %-10s  %-7s%b\n" "$BOLD" "IMAGE" "STATUS" "TIME" "$RESET"
     printf "  %s\n" "──────────────────────────────────────────────────"
 
-    for label in "${LABELS[@]}"; do
-        local key state state_file start_epoch end_epoch elapsed took
+    for entry in "${LABELS[@]}"; do
+        local emoji label key state state_file start_epoch end_epoch elapsed took
+        # Labels are encoded as "emoji||variant:flavor" by pipeline.sh
+        emoji="${entry%%||*}"
+        label="${entry#*||}"
+        local display_label="${emoji} ${label}"
         key="${label//:/-}"
         state_file="$STATUS_DIR/$key"
 
         if [[ ! -f "$state_file" ]]; then
-            printf "  %-30s  %b%-10s%b  %s\n" "$label" "$DIM" "queued" "$RESET" "--:--"
+            printf "  %-32s  %b%-10s%b  %s\n" "$display_label" "$DIM" "queued" "$RESET" "--:--"
             queued_count=$(( queued_count + 1 ))
             all_done=0
             continue
@@ -74,28 +79,28 @@ render() {
 
         case "$state" in
             running)
-                printf "  %-30s  %b%s %-8s%b  %s\n" \
-                    "$label" "$YELLOW" "$spin" "building" "$RESET" \
+                printf "  %-32s  %b%s %-8s%b  %s\n" \
+                    "$display_label" "$YELLOW" "$spin" "building" "$RESET" \
                     "$(fmt_duration $elapsed)"
                 running_count=$(( running_count + 1 ))
                 all_done=0
                 ;;
             done)
                 took=$(( end_epoch - start_epoch ))
-                printf "  %-30s  %b✓ %-8s%b  %s\n" \
-                    "$label" "$GREEN" "done" "$RESET" \
+                printf "  %-32s  %b✓ %-8s%b  %s\n" \
+                    "$display_label" "$GREEN" "done" "$RESET" \
                     "$(fmt_duration $took)"
                 done_count=$(( done_count + 1 ))
                 ;;
             failed)
                 took=$(( end_epoch - start_epoch ))
-                printf "  %-30s  %b✗ %-8s%b  %s\n" \
-                    "$label" "$RED" "FAILED" "$RESET" \
+                printf "  %-32s  %b✗ %-8s%b  %s\n" \
+                    "$display_label" "$RED" "FAILED" "$RESET" \
                     "$(fmt_duration $took)"
                 failed_count=$(( failed_count + 1 ))
                 ;;
             *)
-                printf "  %-30s  %b%-10s%b  %s\n" "$label" "$DIM" "unknown" "$RESET" "--:--"
+                printf "  %-32s  %b%-10s%b  %s\n" "$display_label" "$DIM" "unknown" "$RESET" "--:--"
                 queued_count=$(( queued_count + 1 ))
                 all_done=0
                 ;;
@@ -107,7 +112,7 @@ render() {
     render_progress_bar "$total_count" "$finished_count" 30
     printf "\n"
 
-    printf "\n  %bDone: %d  Failed: %d  Running: %d  Queued: %d%b\n" \
+    printf "\n  %bDone: %d  %bFailed: %d  %bRunning: %d  %bQueued: %d%b\n" \
         "$GREEN" "$done_count" "$RED" "$failed_count" "$YELLOW" "$running_count" "$DIM" "$queued_count" "$RESET"
 
     printf "\n  %b.build-logs/   │   %s%b\n" "$DIM" "$(date '+%H:%M:%S')" "$RESET"

@@ -132,7 +132,7 @@ write_zellij_layout() {
     {
         echo 'layout {'
         echo '  pane split_direction="horizontal" {'
-        printf '    pane size=40 name="Overview" {\n'
+        printf '    pane size=20 name="Overview" {\n'
         printf '      command "%s"\n' "$overview_script"
         printf '    }\n'
         echo '    pane split_direction="vertical" {'
@@ -166,16 +166,16 @@ run_stage() {
     local status_dir; status_dir=$(mktemp -d /tmp/pipeline-status-XXXXXX)
     STATUS_DIRS_TO_CLEAN+=("$status_dir")
 
-    while IFS=$'\t' read -r v f _s; do
+    while IFS=$'\t' read -r v f _s _emoji; do
         local base_ref; base_ref=$("$base_ref_fn" "$v" "$f")
         local logfile="${LOG_DIR}/${v}-${f}.log"
-        : > "$logfile"
+        : >"$logfile"
         vs+=("$v"); fs+=("$f")
         logfiles+=("$logfile")
         base_refs+=("$base_ref")
-        labels+=("${v}:${f}")
+        labels+=("${_emoji}||${v}:${f}")
         pane_args+=("$logfile" "${v}:${f}")
-    done <<< "$entries"
+    done <<<"$entries"
 
     local count=${#vs[@]}
 
@@ -319,7 +319,7 @@ ENTRIES=$(yq -o=json '.' .github/build-config.yml | jq -r '
         ("'"$FILTER_VARIANT"'" == "all" or $v.id == "'"$FILTER_VARIANT"'") and
         ("'"$FILTER_FLAVOR"'" == "all" or .id == "'"$FILTER_FLAVOR"'")
       )
-    | [$v.id, .id, (.stage | tostring)] | join("\t")
+    | [$v.id, .id, (.stage | tostring), ($v.emoji // "🐡")] | join("\t")
 ')
 
 if [[ -z "$ENTRIES" ]]; then

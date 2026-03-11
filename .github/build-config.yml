@@ -16,8 +16,9 @@ config:
 
 variants:
   - id: yellowfin
+    emoji: "🐠"
     description: "Based on AlmaLinux Kitten 10"
-    builder_distro: almalinux
+    base_image: "quay.io/almalinuxorg/almalinux-bootc:10-kitten"
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
     flavors:
       # ── Stage 1 ────────────────────────────────────────────────────────────
@@ -92,8 +93,9 @@ variants:
         build_qcow2: false
 
   - id: albacore
+    emoji: "🐟"
     description: "Based on AlmaLinux 10"
-    builder_distro: almalinux
+    base_image: "quay.io/almalinuxorg/almalinux-bootc:10"
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
     flavors:
       # ── Stage 1 ────────────────────────────────────────────────────────────
@@ -168,8 +170,9 @@ variants:
         build_qcow2: false
 
   - id: skipjack
+    emoji: "🍣"
     description: "Based on CentOS Stream 10"
-    builder_distro: centos
+    base_image: "quay.io/centos-bootc/centos-bootc:stream10"
     # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
     platforms: ["linux/amd64", "linux/arm64"]
     flavors:
@@ -220,8 +223,9 @@ variants:
         build_qcow2: false
 
   - id: bonito
+    emoji: "🎣"
     description: "Based on Fedora 43"
-    builder_distro: fedora
+    base_image: "quay.io/fedora/fedora-bootc:43"
     # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
     platforms: ["linux/amd64", "linux/arm64"]
     flavors:
@@ -254,6 +258,55 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: niri
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
+      # ── Stage 3 ────────────────────────────────────────────────────────────
+      - id: gnome-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome-gdx
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
+  - id: redfin
+    emoji: "🎩"
+    description: "Based on RHEL 10 (local-build only — not published)"
+    base_image: "registry.redhat.io/rhel10/rhel-bootc:latest"
+    # Note: RHEL EULA prohibits redistribution; images are local-only.
+    # linux/amd64/v2 omitted — verify builder support before adding.
+    platforms: ["linux/amd64", "linux/arm64"]
+    flavors:
+      # ── Stage 1 ────────────────────────────────────────────────────────────
+      - id: base
+        stage: 1
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
+      # ── Stage 2 ────────────────────────────────────────────────────────────
+      - id: base-hwe
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: base-gdx
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: true
+      - id: kde
         stage: 2
         build_image: true
         build_iso: false
