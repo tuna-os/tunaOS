@@ -127,6 +127,9 @@ case "${1:-}" in
 	# Build GNOME extensions from source (must run after gnome-shell is installed)
 	echo "Building GNOME extensions from source..."
 
+	# Remove versionlock on glib2 to allow installing glib2-devel (will re-lock after)
+	dnf versionlock delete glib2 || true
+
 	# Install build tooling
 	dnf -y install glib2-devel meson sassc cmake dbus-devel unzip
 
@@ -170,5 +173,8 @@ case "${1:-}" in
 	# Cleanup build tooling
 	dnf -y remove glib2-devel meson sassc cmake dbus-devel
 	rm -rf /usr/share/gnome-shell/extensions/tmp
+
+	# Re-add versionlock for glib2
+	dnf versionlock add glib2
 	;;
 esac
