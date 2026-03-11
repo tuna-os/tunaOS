@@ -442,7 +442,7 @@ jobs:
           mkdir -p /etc/containers
           echo '{"default":[{"type":"insecureAcceptAnything"}]}' | jq . > /etc/containers/policy.json
 
-     - name: Checkout
+      - name: Checkout
         uses: actions/checkout@v6
 
       - name: Exit on failure
