@@ -341,7 +341,7 @@ jobs:
           TAGS: ${{ steps.push.outputs.digest }}
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
-    
+
       - name: Add SBOM Attestation
         if: ${{ inputs.sbom }}
         env:
@@ -392,7 +392,6 @@ jobs:
           if-no-files-found: error
           path: |
             /tmp/outputs/digests/*.txt
-
   manifest:
     name: Create ${{ inputs.image-name }}:${{ inputs.major-version }} Manifest
     runs-on: ubuntu-latest
