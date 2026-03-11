@@ -417,11 +417,14 @@ jobs:
       MAJOR_VERSION: ${{ inputs.major-version }}
       PLATFORMS: ${{ inputs.platforms }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
       - name: Install dependencies
         run: |
           apk update
           # Install necessary packages for building and pushing the image
-          apk add jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++
+          apk add jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++ yq
           ln -sf /bin/bash /bin/sh
           mkdir -p /etc/containers
           echo '{"default":[{"type":"insecureAcceptAnything"}]}' | jq . > /etc/containers/policy.json
@@ -523,28 +526,13 @@ jobs:
         run: |
           set -e
 
-          # Determine default platforms based on variant (same logic as build.yml)
-          case "${IMAGE_VARIANT}" in
-            yellowfin)
-              DEFAULT_PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
-              ;;
-            albacore)
-              DEFAULT_PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
-              ;;
-            skipjack)
-              DEFAULT_PLATFORMS="linux/arm64,linux/amd64"
-              ;;
-            bonito)
-              DEFAULT_PLATFORMS="linux/arm64,linux/amd64"
-              ;;
-            bonito-rawhide)
-              DEFAULT_PLATFORMS="linux/arm64,linux/amd64"
-              ;;
-            *)
-              echo "Unknown variant: ${IMAGE_VARIANT}"
-              DEFAULT_PLATFORMS="linux/arm64,linux/amd64"
-              ;;
-          esac
+          # Read default platforms from build-config.yml
+          DEFAULT_PLATFORMS=$(yq -r '.variants[] | select(.id == env.IMAGE_VARIANT) | .platforms | join(",")' .github/build-config.yml)
+
+          if [ -z "$DEFAULT_PLATFORMS" ]; then
+            echo "Unknown variant: ${IMAGE_VARIANT}"
+            DEFAULT_PLATFORMS="linux/arm64,linux/amd64"
+          fi
 
           echo "Variant: ${IMAGE_VARIANT}"
           echo "Default platforms for this variant: ${DEFAULT_PLATFORMS}"

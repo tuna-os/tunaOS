@@ -74,79 +74,58 @@ jobs:
       - name: Generate image variant build matrix
         id: set-matrix
         run: |
-          # Determine which image variants to build
-          IMAGE_VARIANTS="yellowfin albacore"
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            if [[ "${{ inputs.image_variant }}" != "all" ]]; then
-              IMAGE_VARIANTS="${{ inputs.image_variant }}"
-            else
-              # Include all variants when explicitly requested
-              IMAGE_VARIANTS="yellowfin albacore" # skipjack bonito"
-            fi
-          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            # For PRs, default to albacore
-            IMAGE_VARIANTS="albacore"
+          FILTER_VARIANT="${{ github.event_name == 'workflow_dispatch' && inputs.image_variant || 'all' }}"
+          FILTER_PLATFORMS="${{ github.event_name == 'workflow_dispatch' && inputs.platforms || 'default' }}"
+
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            TAG="pr-${{ github.event.pull_request.number }}"
+          elif [[ "${{ github.ref_name }}" == "main" ]]; then
+            TAG="latest"
+          else
+            TAG="${{ github.sha }}"
           fi
-          # Generate matrix
-          MATRIX="{\"include\":[]}"
-          for image_variant in $IMAGE_VARIANTS; do
-            # Set image-specific values
-            case "$image_variant" in
-              yellowfin)
-                DESCRIPTION="🐠 Based on AlmaLinux Kitten 10"
-                PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
-                ;;
-              albacore)
-                DESCRIPTION="🐟 Based on AlmaLinux 10"
-                PLATFORMS="linux/arm64,linux/amd64,linux/amd64/v2"
-                ;;
-              skipjack)
-                DESCRIPTION="🏛️ Based on CentOS Stream 10"
-                PLATFORMS="linux/arm64,linux/amd64"
-                ;;
-              bonito)
-                DESCRIPTION="🎩 Based on Fedora 43"
-                PLATFORMS="linux/arm64,linux/amd64"
-                ;;
-              bonito-rawhide)
-                DESCRIPTION="🎩 Based on Fedora Rawhide"
-                PLATFORMS="linux/arm64,linux/amd64"
-                ;;
-            esac
-            # Determine image name and tag
-            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-              IMAGE_NAME="${image_variant}"
-              TAG="pr-${{ github.event.pull_request.number }}"
-            else
-              IMAGE_NAME="${image_variant}"
-              TAG="${{ (github.ref_name == 'main' && github.event_name != 'pull_request') && 'latest' || github.sha }}"
-            fi
 
-            # Determine flavors
+          if [[ "$FILTER_VARIANT" == "all" ]]; then
+            FILTER_VARIANT=""
+          fi
+
+          FULL_MATRIX=$(yq -o=json '.variants[]' .github/build-config.yml | jq -c --arg filter "$FILTER_VARIANT" --arg platforms "$FILTER_PLATFORMS" '
+            select($filter == "" or .id == $filter)
+            | . as $v
+            | {
+                variant:       $v.id,
+                description:   $v.description,
+                builder_distro: $v.builder_distro,
+                platforms:     (if $platforms == "default" then $v.platforms else [$platforms] end)
+              }
+          ' | jq -c -s '.')
+
+          FLAVORS="${{ github.event_name == 'workflow_dispatch' && inputs.flavor || 'base' }}"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             FLAVORS="base"
-            if [[ "${{ github.event_name }}" == "workflow_dispatch" && -n "${{ inputs.flavor }}" ]]; then
-              FLAVORS="${{ inputs.flavor }}"
-            fi
-            # If Platforms is set
-            if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.platforms }}" != "default" ]]; then
-              PLATFORMS="${{ inputs.platforms }}"
-            elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-              PLATFORMS="linux/amd64"
-            fi
+            FULL_MATRIX=$(echo "$FULL_MATRIX" | jq '[.[] | select(.variant == "albacore")]')
+          fi
 
-            # Add to matrix for each flavor and platform
+          MATRIX="{\"include\":[]}"
+          for row in $(echo "$FULL_MATRIX" | jq -r '.[] | @base64'); do
+            _jq() { echo "$row" | base64 -d | jq -r "$1"; }
+            image_variant=$(_jq '.variant')
+            DESCRIPTION=$(_jq '.description')
+            BUILDER_DISTRO=$(_jq '.builder_distro')
+            PLATFORMS=$(_jq '.platforms | join(",")')
+
             for flavor in $(echo $FLAVORS | sed "s/,/ /g"); do
               for platform in $(echo $PLATFORMS | sed "s/,/ /g"); do
-                # Get short platform name for runner
                 runner_platform=$(echo $platform | cut -d'/' -f2)
                 MATRIX="$(echo "${MATRIX}" | jq ".include += [{
                   \"image_variant\": \"${image_variant}\",
-                  \"image_name\": \"${IMAGE_NAME}\",
-                  \"default_tag\": \"latest\",
+                  \"image_name\": \"${image_variant}\",
+                  \"default_tag\": \"${TAG}\",
                   \"flavor\": \"${flavor}\",
                   \"platform\": \"${platform}\",
                   \"runner_platform\": \"${runner_platform}\",
                   \"description\": \"${DESCRIPTION}\",
+                  \"builder_distro\": \"${BUILDER_DISTRO}\",
                   \"rechunk\": ${{ github.event_name != 'pull_request' }},
                   \"sbom\": false,
                   \"publish\": true,
@@ -236,11 +215,7 @@ jobs:
             steps.get_image_ref.outputs.image_tag }}
           flatpaks-list: ${{ github.workspace }}/system_files/etc/ublue-os/system-flatpaks.list
           hook-post-rootfs: ${{ github.workspace }}/iso_files/configure_lts_iso_anaconda.sh
-          builder-distro: |
-            ${{ matrix.image_variant == 'yellowfin' && 'almalinux' ||
-                matrix.image_variant == 'albacore' && 'almalinux' ||
-                matrix.image_variant == 'skipjack' && 'centos' ||
-                matrix.image_variant == 'bonito' && 'fedora' }}
+          builder-distro: ${{ matrix.builder_distro }}
           platform: ${{ matrix.platform }}
 
       - name: Rename ISO
