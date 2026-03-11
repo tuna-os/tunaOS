@@ -117,7 +117,7 @@ write_overview_script() {
 		-e "s|__STAGE_NAME__|${stage_name}|g" \
 		-e "s|__CURRENT_STAGE__|${current}|g" \
 		-e "s|__TOTAL_STAGES__|${total}|g" \
-		-e "s|__LABELS__|${labels_str}|g" \
+		-e "s@__LABELS__@${labels_str}@g" \
 		"$out"
 	chmod +x "$out"
 }
