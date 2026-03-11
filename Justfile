@@ -479,6 +479,165 @@ chunkify image_ref:
         echo "==> WARNING: Chunkify failed (non-fatal), skipping layer optimization."
     fi
 
+# Run the full staged build pipeline locally, mirroring the CI job graph.
+# Reads .github/build-config.yml for the variant/flavor/stage structure.
+#
+# Stages:
+#   1 — base images (sequential, one per variant)
+#   2 — base-hwe, base-gdx, gnome, kde, niri  (depend on stage 1 base)
+#   3 — *-hwe, *-gdx, *-gdx-hwe              (depend on stage 2 parents)
+#
+# Usage:
+#   just pipeline                          # build everything
+#   just pipeline yellowfin                # one variant, all flavors
+#   just pipeline yellowfin gnome          # one variant, one flavor (respects stage deps)
+#   just pipeline all gnome-hwe            # one flavor across all variants
+#
+# Options:
+#   dry_run=1   print commands without executing them
+#   tag=<tag>   image tag to use (default: latest)
+pipeline variant='all' flavor='all' tag='latest' dry_run='0':
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    FILTER_VARIANT="{{ variant }}"
+    FILTER_FLAVOR="{{ flavor }}"
+    TAG="{{ tag }}"
+    DRY_RUN="{{ dry_run }}"
+    JUST="{{ just }}"
+
+    # ── Helpers ──────────────────────────────────────────────────────────────
+
+    run() {
+        if [[ "$DRY_RUN" == "1" ]]; then
+            echo "[dry-run] $*"
+        else
+            "$@"
+        fi
+    }
+
+    # Resolve the local image ref that a given variant:flavor was tagged as.
+    # Matches the tagging logic in the existing `build` recipe.
+    local_ref() {
+        local variant=$1 flavor=$2
+        echo "localhost/${variant}:${flavor}"
+    }
+
+    # Build one flavor, passing chain_base_image if provided.
+    build_one() {
+        local variant=$1 flavor=$2 base_ref=${3:-}
+        echo ""
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        echo "  Building ${variant}:${flavor}${base_ref:+  (base: ${base_ref})}"
+        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+        run "$JUST" build \
+            variant="${variant}" \
+            flavor="${flavor}" \
+            tag="${TAG}" \
+            is_ci="0" \
+            chain_base_image="${base_ref}"
+    }
+
+    # ── Load config ──────────────────────────────────────────────────────────
+
+    CONFIG=.github/build-config.yml
+
+    # Build the flat list of {variant, flavor, stage} tuples matching our filters,
+    # output as tab-separated lines: variant<TAB>flavor<TAB>stage
+    ENTRIES=$(yq -o=json '.' "$CONFIG" | jq -r '
+        .variants[]
+        | . as $v
+        | .flavors[]
+        | select(
+            ("'"$FILTER_VARIANT"'" == "all" or $v.id == "'"$FILTER_VARIANT"'") and
+            ("'"$FILTER_FLAVOR"'" == "all" or .id == "'"$FILTER_FLAVOR"'")
+          )
+        | [$v.id, .id, (.stage | tostring)] | join("\t")
+    ')
+
+    if [[ -z "$ENTRIES" ]]; then
+        echo "No matching entries for variant='$FILTER_VARIANT' flavor='$FILTER_FLAVOR'."
+        exit 1
+    fi
+
+    # Split into per-stage lists
+    STAGE1=$(echo "$ENTRIES" | awk -F'\t' '$3 == "1"')
+    STAGE2=$(echo "$ENTRIES" | awk -F'\t' '$3 == "2"')
+    STAGE3=$(echo "$ENTRIES" | awk -F'\t' '$3 == "3"')
+
+    total=$(echo "$ENTRIES" | wc -l | tr -d ' ')
+    echo ""
+    echo "Pipeline: $total image(s) across $(echo "$STAGE1" | grep -c . || true) + $(echo "$STAGE2" | grep -c . || true) + $(echo "$STAGE3" | grep -c . || true) stages"
+    echo "  Filter: variant=${FILTER_VARIANT}  flavor=${FILTER_FLAVOR}  tag=${TAG}"
+    [[ "$DRY_RUN" == "1" ]] && echo "  Mode: DRY RUN"
+
+    # ── Stage 1: base ────────────────────────────────────────────────────────
+
+    if [[ -n "$STAGE1" ]]; then
+        echo ""
+        echo "╔══════════════════════════════════════════════════════════════╗"
+        echo "║  Stage 1 — base images                                      ║"
+        echo "╚══════════════════════════════════════════════════════════════╝"
+        while IFS=$'\t' read -r v f _stage; do
+            build_one "$v" "$f"
+        done <<< "$STAGE1"
+    fi
+
+    # ── Stage 2: base-hwe, base-gdx, gnome, kde, niri ────────────────────────
+    # Each flavor is chained from the stage-1 base image of its own variant.
+
+    if [[ -n "$STAGE2" ]]; then
+        echo ""
+        echo "╔══════════════════════════════════════════════════════════════╗"
+        echo "║  Stage 2 — base-hwe / base-gdx / desktop base flavors       ║"
+        echo "╚══════════════════════════════════════════════════════════════╝"
+        while IFS=$'\t' read -r v f _stage; do
+            base_ref=$(local_ref "$v" "base")
+            build_one "$v" "$f" "$base_ref"
+        done <<< "$STAGE2"
+    fi
+
+    # ── Stage 3: *-hwe, *-gdx, *-gdx-hwe ────────────────────────────────────
+    # Each flavor is chained from its direct parent (the matching stage-2 image).
+    # Parent resolution:
+    #   gnome-hwe   → {variant}:base-hwe
+    #   gnome-gdx   → {variant}:base-gdx
+    #   gnome-gdx-hwe → {variant}:base-hwe  (gdx applied on top of hwe base)
+    #   kde-hwe     → {variant}:base-hwe
+    #   (etc.)
+
+    if [[ -n "$STAGE3" ]]; then
+        echo ""
+        echo "╔══════════════════════════════════════════════════════════════╗"
+        echo "║  Stage 3 — HWE / GDX desktop flavors                        ║"
+        echo "╚══════════════════════════════════════════════════════════════╝"
+        while IFS=$'\t' read -r v f _stage; do
+            # Determine which stage-2 image this flavor layers on top of.
+            # *-gdx-hwe layers on base-hwe (GDX is applied via Containerfile.gdx,
+            # but the kernel/driver base comes from base-hwe).
+            case "$f" in
+                *-gdx-hwe)  parent_flavor="base-hwe" ;;
+                *-gdx)      parent_flavor="base-gdx" ;;
+                *-hwe)      parent_flavor="base-hwe" ;;
+                *)
+                    echo "WARNING: No parent resolution for stage-3 flavor '$f' — building without chain."
+                    parent_flavor=""
+                    ;;
+            esac
+            if [[ -n "$parent_flavor" ]]; then
+                base_ref=$(local_ref "$v" "$parent_flavor")
+            else
+                base_ref=""
+            fi
+            build_one "$v" "$f" "$base_ref"
+        done <<< "$STAGE3"
+    fi
+
+    echo ""
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║  Pipeline complete ✓                                         ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+
 qcow2 variant flavor='gnome' repo='local':
     #!/usr/bin/env bash
     set -euo pipefail
