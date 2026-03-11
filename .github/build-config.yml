@@ -4,6 +4,8 @@ config:
 variants:
   - id: yellowfin
     description: "Based on AlmaLinux Kitten 10"
+    # Fix #6: builder_distro defined per-variant in config, not hardcoded in workflow logic.
+    builder_distro: almalinux
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
     flavors:
       - id: gnome
@@ -13,26 +15,44 @@ variants:
       - id: gnome-hwe
         build_image: true
         build_iso: true
+        build_qcow2: false
       - id: gnome-gdx
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: gnome-gdx-hwe
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: kde
         build_image: true
         build_iso: true
+        build_qcow2: false
       - id: kde-hwe
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: kde-gdx
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: niri
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: niri-hwe
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: niri-gdx
         build_image: true
+        build_iso: false
+        build_qcow2: false
 
   - id: albacore
     description: "Based on AlmaLinux 10"
+    # Fix #6: builder_distro defined per-variant in config.
+    builder_distro: almalinux
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
     flavors:
       - id: gnome
@@ -42,26 +62,45 @@ variants:
       - id: gnome-hwe
         build_image: true
         build_iso: true
+        build_qcow2: false
       - id: gnome-gdx
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: gnome-gdx-hwe
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: kde
         build_image: true
         build_iso: true
+        build_qcow2: false
       - id: kde-hwe
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: kde-gdx
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: niri
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: niri-hwe
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: niri-gdx
         build_image: true
+        build_iso: false
+        build_qcow2: false
 
   - id: skipjack
     description: "Based on CentOS Stream 10"
+    # Fix #6: builder_distro defined per-variant in config.
+    builder_distro: centos
+    # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
     platforms: ["linux/amd64", "linux/arm64"]
     flavors:
       - id: gnome
@@ -70,15 +109,26 @@ variants:
         build_qcow2: true
       - id: gnome-hwe
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: gnome-gdx
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: kde
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: niri
         build_image: true
+        build_iso: false
+        build_qcow2: false
 
   - id: bonito
     description: "Based on Fedora 43"
+    # Fix #6: builder_distro defined per-variant in config.
+    builder_distro: fedora
+    # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
     platforms: ["linux/amd64", "linux/arm64"]
     flavors:
       - id: gnome
@@ -87,9 +137,17 @@ variants:
         build_qcow2: true
       - id: gnome-hwe
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: gnome-gdx
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: kde
         build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: niri
         build_image: true
+        build_iso: false
+        build_qcow2: false
