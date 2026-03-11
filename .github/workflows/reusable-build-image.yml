@@ -584,7 +584,7 @@ jobs:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
           DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
         run: |
-          sudo podman manifest create ${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}
+          podman manifest create ${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}
           echo "MANIFEST=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
 
       - name: Populate Manifest
@@ -613,7 +613,7 @@ jobs:
             fi
 
             arch_for_podman="${platform_original#linux/}"
-            sudo podman manifest add "${MANIFEST}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}" --os linux --arch "${arch_for_podman}"
+            podman manifest add "${MANIFEST}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}" --os linux --arch "${arch_for_podman}"
           done
 
           # Apply the labels to the manifest (separated by newlines)
@@ -640,7 +640,7 @@ jobs:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
           while IFS= read -r tag; do
-            sudo podman manifest push --all=false --digestfile=/tmp/digestfile $MANIFEST $IMAGE_REGISTRY/$IMAGE_NAME:$tag
+            podman manifest push --all=false --digestfile=/tmp/digestfile $MANIFEST $IMAGE_REGISTRY/$IMAGE_NAME:$tag
           done <<< "$TAGS"
 
           DIGEST=$(sudo cat /tmp/digestfile)
