@@ -87,7 +87,7 @@ ZELLIJ_SOCKET_PATH=""
 if command -v zellij &>/dev/null && [[ "$DRY_RUN" != "1" ]]; then
 	if [[ -n "${ZELLIJ:-}" ]]; then
 		USE_ZELLIJ=2
-		ZELLIJ_SOCKET_PATH="$ZELLIJ_SOCKET"
+		ZELLIJ_SOCKET_PATH="${ZELLIJ_SOCKET:-}"
 	elif [[ -n "${ZELLIJ_SOCKET:-}" ]]; then
 		USE_ZELLIJ=2
 		ZELLIJ_SOCKET_PATH="$ZELLIJ_SOCKET"

@@ -12,14 +12,14 @@ LABELS=(__LABELS__)
 SPINNER_FRAMES=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
 spin_idx=0
 
-BOLD="\033[1m"
-DIM="\033[2m"
-GREEN="\033[32m"
-RED="\033[31m"
-YELLOW="\033[33m"
-CYAN="\033[36m"
-RESET="\033[0m"
-CLEAR="\033[2J\033[H"
+BOLD=$'\033[1m'
+DIM=$'\033[2m'
+GREEN=$'\033[32m'
+RED=$'\033[31m'
+YELLOW=$'\033[33m'
+CYAN=$'\033[36m'
+RESET=$'\033[0m'
+CLEAR=$'\033[2J\033[H'
 
 fmt_duration() {
 	local secs=${1:-0}
@@ -44,10 +44,10 @@ render() {
 	local done_count=0 failed_count=0 running_count=0 queued_count=0
 	local total_count=${#LABELS[@]}
 
-	printf "%b" "$CLEAR"
-	printf "%b\n" "${BOLD}${CYAN}  TunaOS Build Pipeline${RESET}"
+	printf "%s" "$CLEAR"
+	printf "%s\n" "${BOLD}${CYAN}  TunaOS Build Pipeline${RESET}"
 	printf "  Stage %d / %d  —  %s\n\n" "$CURRENT_STAGE" "$TOTAL_STAGES" "$STAGE_NAME"
-	printf "  %b%-30s  %-10s  %-7s%b\n" "$BOLD" "IMAGE" "STATUS" "TIME" "$RESET"
+	printf "  %s%-30s  %-10s  %-7s%s\n" "$BOLD" "IMAGE" "STATUS" "TIME" "$RESET"
 	printf "  %s\n" "──────────────────────────────────────────────────"
 
 	for entry in "${LABELS[@]}"; do
@@ -60,7 +60,7 @@ render() {
 		state_file="$STATUS_DIR/$key"
 
 		if [[ ! -f "$state_file" ]]; then
-			printf "  %-32s  %b%-10s%b  %s\n" "$display_label" "$DIM" "queued" "$RESET" "--:--"
+			printf "  %-32s  %s%-10s%s  %s\n" "$display_label" "$DIM" "queued" "$RESET" "--:--"
 			queued_count=$((queued_count + 1))
 			all_done=0
 			continue
@@ -78,7 +78,7 @@ render() {
 
 		case "$state" in
 		running)
-			printf "  %-32s  %b%s %-8s%b  %s\n" \
+			printf "  %-32s  %s%s %-8s%s  %s\n" \
 				"$display_label" "$YELLOW" "$spin" "building" "$RESET" \
 				"$(fmt_duration $elapsed)"
 			running_count=$((running_count + 1))
@@ -86,20 +86,20 @@ render() {
 			;;
 		done)
 			took=$((end_epoch - start_epoch))
-			printf "  %-32s  %b✓ %-8s%b  %s\n" \
+			printf "  %-32s  %s✓ %-8s%s  %s\n" \
 				"$display_label" "$GREEN" "done" "$RESET" \
 				"$(fmt_duration $took)"
 			done_count=$((done_count + 1))
 			;;
 		failed)
 			took=$((end_epoch - start_epoch))
-			printf "  %-32s  %b✗ %-8s%b  %s\n" \
+			printf "  %-32s  %s✗ %-8s%s  %s\n" \
 				"$display_label" "$RED" "FAILED" "$RESET" \
 				"$(fmt_duration $took)"
 			failed_count=$((failed_count + 1))
 			;;
 		*)
-			printf "  %-32s  %b%-10s%b  %s\n" "$display_label" "$DIM" "unknown" "$RESET" "--:--"
+			printf "  %-32s  %s%-10s%s  %s\n" "$display_label" "$DIM" "unknown" "$RESET" "--:--"
 			queued_count=$((queued_count + 1))
 			all_done=0
 			;;
@@ -111,16 +111,16 @@ render() {
 	render_progress_bar "$total_count" "$finished_count" 30
 	printf "\n"
 
-	printf "\n  %bDone: %d  %bFailed: %d  %bRunning: %d  %bQueued: %d%b\n" \
+	printf "\n  %sDone: %d  %sFailed: %d  %sRunning: %d  %sQueued: %d%s\n" \
 		"$GREEN" "$done_count" "$RED" "$failed_count" "$YELLOW" "$running_count" "$DIM" "$queued_count" "$RESET"
 
-	printf "\n  %b.build-logs/   │   %s%b\n" "$DIM" "$(date '+%H:%M:%S')" "$RESET"
+	printf "\n  %s.build-logs/   │   %s%s\n" "$DIM" "$(date '+%H:%M:%S')" "$RESET"
 
 	if [[ "$all_done" == "1" ]]; then
 		if [[ $failed_count -eq 0 ]]; then
-			printf "\n  %bAll jobs complete successfully.%b\n" "${BOLD}${GREEN}" "$RESET"
+			printf "\n  %sAll jobs complete successfully.%s\n" "${BOLD}${GREEN}" "$RESET"
 		else
-			printf "\n  %bStage finished with %d failures.%b\n" "${BOLD}${RED}" "$failed_count" "$RESET"
+			printf "\n  %sStage finished with %d failures.%s\n" "${BOLD}${RED}" "$failed_count" "$RESET"
 		fi
 		exit 0
 	fi
