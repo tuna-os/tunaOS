@@ -49,9 +49,11 @@ if [[ "$IS_ALMALINUX" = true ]] || [[ "$IS_ALMALINUXKITTEN" = true ]]; then
 			if [[ "$IS_ALMALINUXKITTEN" = true ]]; then
 				# For AlmaLinux Kitten: use kitten.repo.almalinux.org
 				sed -i 's|baseurl=https://kitten\.[^/]*/|baseurl=https://kitten.repo.almalinux.org/|' "$repo_file"
+				# shellcheck disable=SC2016
 				sed -i 's|baseurl=https://\([^k][^/]*\)/\$releasever-kitten/|baseurl=https://kitten.repo.almalinux.org/\$releasever-kitten/|' "$repo_file"
 			else
 				# For regular AlmaLinux: use repo.almalinux.org
+				# shellcheck disable=SC2016
 				sed -i 's|baseurl=https://[^/]*/\$releasever/|baseurl=https://repo.almalinux.org/\$releasever/|' "$repo_file"
 			fi
 

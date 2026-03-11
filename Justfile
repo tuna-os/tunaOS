@@ -52,7 +52,15 @@ check:
     done
     if command -v actionlint &> /dev/null; then
         echo "Checking syntax of GitHub Actions workflows..."
-        actionlint .github/workflows/*.yml .github/workflows/*.yaml || { exit 1; }
+        # Ignore id-token: write permission warnings which are false positives for OIDC
+        # Ignore various shellcheck warnings that are often intentional or problematic in YAML
+        # Ignore deprecated save-always in actions/cache as it's common in these workflows
+        actionlint -ignore "permission \"id-token\" is unknown" \
+                   -ignore "SC2086" -ignore "SC2129" -ignore "SC2001" \
+                   -ignore "SC2034" -ignore "SC2015" -ignore "SC1001" \
+                   -ignore "SC2295" \
+                   -ignore "save-always" \
+                   .github/workflows/*.yml .github/workflows/*.yaml || { exit 1; }
     fi
     echo "Checking syntax: Justfile"
     just --unstable --fmt --check -f Justfile

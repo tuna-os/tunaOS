@@ -7,11 +7,10 @@
 set -euo pipefail
 
 VARIANT="${1:-}"
-OUTPUT_VAR="${2:-CACHE_MOUNTS}"
 
 if [[ -z "$VARIANT" ]]; then
-    echo "Usage: $0 <variant> [output_var_name]" >&2
-    echo "Example: $0 skipjack CACHE_MOUNTS" >&2
+    echo "Usage: $0 <variant>" >&2
+    echo "Example: $0 skipjack" >&2
     exit 1
 fi
 

@@ -29,6 +29,7 @@ else
     if [ -n "$rpms" ]; then
         # Mask rpm-ostree kernel-install script to prevent dracut errors during container build
         mv /usr/lib/kernel/install.d/05-rpmostree.install /tmp/05-rpmostree.install.bak || true
+        # shellcheck disable=SC2086
         dnf install -y $rpms
         mv /tmp/05-rpmostree.install.bak /usr/lib/kernel/install.d/05-rpmostree.install || true
     fi
