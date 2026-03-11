@@ -1,153 +1,272 @@
 config:
   global_platforms: ["linux/amd64", "linux/arm64"]
 
+# Build stages (for reference — enforced by the workflow job graph):
+#
+#   Stage 1:  base
+#                ├── Stage 2: base-hwe, base-gdx
+#                └── Stage 2: gnome, kde, niri
+#                                ├── Stage 3: gnome-hwe, kde-hwe, niri-hwe   (layer on base-hwe)
+#                                └── Stage 3: gnome-gdx, kde-gdx, niri-gdx   (layer on base-gdx)
+#
+# The `stage` field on each flavor tells generate_matrix which job matrix it belongs to:
+#   stage: 1  → build_base      (no dependencies)
+#   stage: 2  → build_stage2    (needs: build_base)
+#   stage: 3  → build_stage3    (needs: build_stage2)
+
 variants:
   - id: yellowfin
     description: "Based on AlmaLinux Kitten 10"
-    # Fix #6: builder_distro defined per-variant in config, not hardcoded in workflow logic.
     builder_distro: almalinux
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
     flavors:
+      # ── Stage 1 ────────────────────────────────────────────────────────────
+      - id: base
+        stage: 1
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
+      # ── Stage 2 ────────────────────────────────────────────────────────────
+      - id: base-hwe
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: base-gdx
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: gnome
+        stage: 2
         build_image: true
         build_iso: true
         build_qcow2: true
+      - id: kde
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: niri
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
+      # ── Stage 3 ────────────────────────────────────────────────────────────
       - id: gnome-hwe
+        stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
       - id: gnome-gdx
+        stage: 3
         build_image: true
         build_iso: false
         build_qcow2: false
       - id: gnome-gdx-hwe
+        stage: 3
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: kde
-        build_image: true
-        build_iso: true
-        build_qcow2: false
       - id: kde-hwe
+        stage: 3
         build_image: true
         build_iso: false
         build_qcow2: false
       - id: kde-gdx
-        build_image: true
-        build_iso: false
-        build_qcow2: false
-      - id: niri
+        stage: 3
         build_image: true
         build_iso: false
         build_qcow2: false
       - id: niri-hwe
+        stage: 3
         build_image: true
         build_iso: false
         build_qcow2: false
       - id: niri-gdx
+        stage: 3
         build_image: true
         build_iso: false
         build_qcow2: false
 
   - id: albacore
     description: "Based on AlmaLinux 10"
-    # Fix #6: builder_distro defined per-variant in config.
     builder_distro: almalinux
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
     flavors:
+      # ── Stage 1 ────────────────────────────────────────────────────────────
+      - id: base
+        stage: 1
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
+      # ── Stage 2 ────────────────────────────────────────────────────────────
+      - id: base-hwe
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: base-gdx
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: gnome
+        stage: 2
         build_image: true
         build_iso: true
         build_qcow2: true
+      - id: kde
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: niri
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
+      # ── Stage 3 ────────────────────────────────────────────────────────────
       - id: gnome-hwe
+        stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
       - id: gnome-gdx
+        stage: 3
         build_image: true
         build_iso: false
         build_qcow2: false
       - id: gnome-gdx-hwe
+        stage: 3
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: kde
-        build_image: true
-        build_iso: true
-        build_qcow2: false
       - id: kde-hwe
+        stage: 3
         build_image: true
         build_iso: false
         build_qcow2: false
       - id: kde-gdx
-        build_image: true
-        build_iso: false
-        build_qcow2: false
-      - id: niri
+        stage: 3
         build_image: true
         build_iso: false
         build_qcow2: false
       - id: niri-hwe
+        stage: 3
         build_image: true
         build_iso: false
         build_qcow2: false
       - id: niri-gdx
+        stage: 3
         build_image: true
         build_iso: false
         build_qcow2: false
 
   - id: skipjack
     description: "Based on CentOS Stream 10"
-    # Fix #6: builder_distro defined per-variant in config.
     builder_distro: centos
     # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
     platforms: ["linux/amd64", "linux/arm64"]
     flavors:
+      # ── Stage 1 ────────────────────────────────────────────────────────────
+      - id: base
+        stage: 1
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
+      # ── Stage 2 ────────────────────────────────────────────────────────────
+      - id: base-hwe
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: base-gdx
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: gnome
+        stage: 2
         build_image: true
         build_iso: true
         build_qcow2: true
-      - id: gnome-hwe
-        build_image: true
-        build_iso: false
-        build_qcow2: false
-      - id: gnome-gdx
-        build_image: true
-        build_iso: false
-        build_qcow2: false
       - id: kde
+        stage: 2
         build_image: true
         build_iso: false
         build_qcow2: false
       - id: niri
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
+      # ── Stage 3 ────────────────────────────────────────────────────────────
+      - id: gnome-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome-gdx
+        stage: 3
         build_image: true
         build_iso: false
         build_qcow2: false
 
   - id: bonito
     description: "Based on Fedora 43"
-    # Fix #6: builder_distro defined per-variant in config.
     builder_distro: fedora
     # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
     platforms: ["linux/amd64", "linux/arm64"]
     flavors:
+      # ── Stage 1 ────────────────────────────────────────────────────────────
+      - id: base
+        stage: 1
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
+      # ── Stage 2 ────────────────────────────────────────────────────────────
+      - id: base-hwe
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: base-gdx
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: gnome
+        stage: 2
         build_image: true
         build_iso: true
         build_qcow2: true
-      - id: gnome-hwe
-        build_image: true
-        build_iso: false
-        build_qcow2: false
-      - id: gnome-gdx
-        build_image: true
-        build_iso: false
-        build_qcow2: false
       - id: kde
+        stage: 2
         build_image: true
         build_iso: false
         build_qcow2: false
       - id: niri
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
+      # ── Stage 3 ────────────────────────────────────────────────────────────
+      - id: gnome-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome-gdx
+        stage: 3
         build_image: true
         build_iso: false
         build_qcow2: false
