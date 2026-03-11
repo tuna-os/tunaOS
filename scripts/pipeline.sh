@@ -82,11 +82,16 @@ stage3_base_ref() {
 # ── Zellij detection ─────────────────────────────────────────────────────
 
 USE_ZELLIJ=0
+ZELLIJ_SOCKET_PATH=""
 if command -v zellij &>/dev/null && [[ "$DRY_RUN" != "1" ]]; then
-    if [[ -z "${ZELLIJ:-}" ]]; then
-        USE_ZELLIJ=1
-    else
+    if [[ -n "${ZELLIJ:-}" ]]; then
         USE_ZELLIJ=2
+        ZELLIJ_SOCKET_PATH="$ZELLIJ_SOCKET"
+    elif [[ -n "${ZELLIJ_SOCKET:-}" ]]; then
+        USE_ZELLIJ=2
+        ZELLIJ_SOCKET_PATH="$ZELLIJ_SOCKET"
+    else
+        USE_ZELLIJ=1
     fi
 fi
 
@@ -196,7 +201,9 @@ run_stage() {
             zellij_session="pipeline-$$-${CURRENT_STAGE}"
             # Launch zellij and wait until the session is actually reachable
             # before starting builds, so panes are ready to show output.
-            zellij --session "$zellij_session" --layout "$layout_file" &
+            # Use nohup and disown to keep zellij running after script exits.
+            nohup zellij --session "$zellij_session" --layout "$layout_file" </dev/null &>/dev/null &
+            disown $!
             local waited=0
             while ! zellij list-sessions 2>/dev/null | grep -q "$zellij_session"; do
                 sleep 0.2
@@ -212,7 +219,11 @@ run_stage() {
                 echo "  attach in another terminal: zellij attach $zellij_session"
             fi
         elif [[ "$USE_ZELLIJ" == "2" ]]; then
-            zellij action new-tab --layout "$layout_file" --name "Stage $CURRENT_STAGE"
+            if [[ -n "$ZELLIJ_SOCKET_PATH" ]]; then
+                ZELLIJ_SOCKET="$ZELLIJ_SOCKET_PATH" zellij action new-tab --layout "$layout_file" --name "Stage $CURRENT_STAGE"
+            else
+                zellij action new-tab --layout "$layout_file" --name "Stage $CURRENT_STAGE"
+            fi
             echo "  zellij tab opened in current session."
         fi
     fi
