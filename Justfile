@@ -524,18 +524,16 @@ pipeline variant='all' flavor='all' tag='latest' dry_run='0':
     }
 
     # Build one flavor, passing chain_base_image if provided.
+    # Args are passed positionally to match the `build` recipe signature:
+    #   build variant flavor target_platform is_ci tag chain_base_image
+    # target_platform is left empty so `build` falls back to the native platform.
     build_one() {
-        local variant=$1 flavor=$2 base_ref=${3:-}
+        local v=$1 f=$2 base_ref=${3:-}
         echo ""
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "  Building ${variant}:${flavor}${base_ref:+  (base: ${base_ref})}"
+        echo "  Building ${v}:${f}${base_ref:+  ← ${base_ref}}"
         echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        run "$JUST" build \
-            variant="${variant}" \
-            flavor="${flavor}" \
-            tag="${TAG}" \
-            is_ci="0" \
-            chain_base_image="${base_ref}"
+        run "$JUST" build "$v" "$f" "" "0" "$TAG" "$base_ref"
     }
 
     # ── Load config ──────────────────────────────────────────────────────────
