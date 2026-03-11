@@ -42,7 +42,7 @@ jobs:
           FILTER_VARIANT: ${{ inputs.variant || 'all' }}
           FILTER_FLAVOR: ${{ inputs.flavor || 'all' }}
         run: |
-          VALID_VARIANTS="all yellowfin albacore skipjack bonito redfin"
+          VALID_VARIANTS="all yellowfin albacore skipjack bonito"
           VALID_FLAVORS="all base base-hwe base-gdx gnome gnome-hwe gnome-gdx gnome-gdx-hwe kde kde-hwe kde-gdx niri niri-hwe niri-gdx"
 
           variant_pattern=" $FILTER_VARIANT "
