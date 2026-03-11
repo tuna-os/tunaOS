@@ -506,7 +506,8 @@ build-chunkah path="":
 #
 # Options:
 #   dry_run=1   print commands without executing
-#   tag=<tag>   image tag (default: latest)
+
+# tag=<tag>   image tag (default: latest)
 pipeline variant='all' flavor='all' tag='latest' dry_run='0':
     #!/usr/bin/env bash
     export JUST="{{ just }}"
