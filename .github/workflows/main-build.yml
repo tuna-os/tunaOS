@@ -213,7 +213,7 @@ jobs:
         if: matrix.build_iso == true
         uses: ublue-os/isogenerator@v1
         with:
-          image-name: ${{ matrix.variant }}:${{ matrix.flavor }}
+          image-name: ${{ matrix.variant }}-${{ matrix.flavor }}
           installer-repo: ghcr.io/${{ github.repository_owner }}/${{ matrix.variant }}:${{ matrix.flavor }}
           flatpaks-list: ${{ github.workspace }}/system_files/etc/ublue-os/system-flatpaks.list
           hook-post-rootfs: ${{ github.workspace }}/iso_files/configure_lts_iso_anaconda.sh
@@ -223,6 +223,6 @@ jobs:
         if: matrix.build_qcow2 == true
         uses: ublue-os/qcow2generator@v1
         with:
-          image-name: ${{ matrix.variant }}:${{ matrix.flavor }}
+          image-name: ${{ matrix.variant }}-${{ matrix.flavor }}
           installer-repo: ghcr.io/${{ github.repository_owner }}/${{ matrix.variant }}:${{ matrix.flavor }}
           builder-distro: ${{ matrix.builder_distro }}

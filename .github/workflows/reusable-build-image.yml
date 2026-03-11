@@ -222,8 +222,8 @@ jobs:
         if: ${{ inputs.publish }}
         id: load
         env:
-          CHUNKIFY_RAN: ${{ inputs.rechunk }}
-          CHUNKIFY_REF: ${{ steps.chunkify.outputs.ref }}
+          CHUNKIFY_RAN: "${{ inputs.rechunk }}"
+          CHUNKIFY_REF: "${{ steps.chunkify.outputs.ref }}"
           IMAGE_VARIANT: ${{ inputs.image-variant }}
           FLAVOR: ${{ inputs.flavor }}
         run: |
@@ -380,13 +380,13 @@ jobs:
           DIGEST: ${{ steps.push.outputs.remote_image_digest }}
         run: |
           mkdir -p /tmp/outputs/digests
-          echo "${DIGEST}" > "/tmp/outputs/digests/${IMAGE_NAME}-${SAFE_PLATFORM}.txt"
+          echo "${DIGEST}" > "/tmp/outputs/digests/${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.txt"
 
       - name: Upload Output Artifacts
         if: ${{ inputs.publish }}
         uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v4
         with:
-          name: ${{ env.IMAGE_NAME }}-${{ matrix.safeplatform }}-${{ github.run_id }}
+          name: ${{ env.IMAGE_NAME }}-${{ env.DEFAULT_TAG }}-${{ matrix.safeplatform }}-${{ github.run_id }}
           retention-days: 1
           if-no-files-found: error
           path: |
@@ -493,7 +493,7 @@ jobs:
         if: ${{ inputs.publish }}
         uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v4
         with:
-          pattern: ${{ env.IMAGE_NAME }}-*
+          pattern: ${{ env.IMAGE_NAME }}-${{ env.DEFAULT_TAG }}-*
           merge-multiple: true
           path: /tmp/artifacts
 
@@ -502,14 +502,15 @@ jobs:
         id: load-outputs
         env:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
         run: |
           set -e
           DIGESTS_JSON="$(jq -n '{}')"
           for digest_file in /tmp/artifacts/*.txt; do
             FILENAME_ONLY="$(basename "${digest_file}")"
-            # Extract the safeplatform key from the filename (e.g., "albacore-linux-amd64-v2.txt" -> "linux-amd64-v2")
-            # Remove prefix "${IMAGE_NAME}-"
-            KEY_PART="${FILENAME_ONLY#${IMAGE_NAME}-}"
+            # Extract the safeplatform key from the filename (e.g., "bonito-base-linux-amd64-v2.txt" -> "linux-amd64-v2")
+            # Remove prefix "${IMAGE_NAME}-${DEFAULT_TAG}-"
+            KEY_PART="${FILENAME_ONLY#${IMAGE_NAME}-${DEFAULT_TAG}-}"
             # Remove suffix ".txt"
             PLATFORM_KEY="${KEY_PART%.txt}"
             DIGEST="$(cat "${digest_file}")"
@@ -564,9 +565,10 @@ jobs:
         env:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
         run: |
-          sudo podman manifest create ${IMAGE_REGISTRY}/${IMAGE_NAME}
-          echo "MANIFEST=${IMAGE_REGISTRY}/${IMAGE_NAME}" >> $GITHUB_OUTPUT
+          sudo podman manifest create ${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}
+          echo "MANIFEST=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
 
       - name: Populate Manifest
         if: ${{ inputs.publish }}
