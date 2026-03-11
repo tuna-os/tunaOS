@@ -73,14 +73,6 @@ on:
         required: false
 
 
-env:
-  IMAGE_NAME: ${{ inputs.image-name }}
-  IMAGE_DESC: ${{ inputs.image-desc }}
-  IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
-  DEFAULT_TAG: ${{ inputs.default-tag }}
-  MAJOR_VERSION: ${{ inputs.major-version }}
-  PLATFORMS: ${{ inputs.platforms }}
-
 jobs:
   generate_matrix:
     runs-on: ubuntu-latest
@@ -115,6 +107,13 @@ jobs:
       contents: read
       packages: write
       id-token: write
+    env:
+      IMAGE_NAME: ${{ inputs.image-name }}
+      IMAGE_DESC: ${{ inputs.image-desc }}
+      IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
+      DEFAULT_TAG: ${{ inputs.default-tag }}
+      MAJOR_VERSION: ${{ inputs.major-version }}
+      PLATFORMS: ${{ inputs.platforms }}
 
     steps:
       - name: Install dependencies
@@ -410,6 +409,13 @@ jobs:
       image: ${{ steps.push_manifest.outputs.IMAGE }}
       digest: ${{ steps.push_manifest.outputs.DIGEST }}
       all_platforms_built: ${{ steps.check_platforms.outputs.all_platforms_built }}
+    env:
+      IMAGE_NAME: ${{ inputs.image-name }}
+      IMAGE_DESC: ${{ inputs.image-desc }}
+      IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
+      DEFAULT_TAG: ${{ inputs.default-tag }}
+      MAJOR_VERSION: ${{ inputs.major-version }}
+      PLATFORMS: ${{ inputs.platforms }}
     steps:
       - name: Install dependencies
         run: |
@@ -671,6 +677,13 @@ jobs:
       contents: read
       packages: write
       id-token: write
+    env:
+      IMAGE_NAME: ${{ inputs.image-name }}
+      IMAGE_DESC: ${{ inputs.image-desc }}
+      IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
+      DEFAULT_TAG: ${{ inputs.default-tag }}
+      MAJOR_VERSION: ${{ inputs.major-version }}
+      PLATFORMS: ${{ inputs.platforms }}
     steps:
       - name: Install skopeo
         run: |
