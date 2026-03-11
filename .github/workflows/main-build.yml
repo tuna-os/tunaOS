@@ -31,20 +31,15 @@ jobs:
           FILTER_VARIANT="${{ inputs.variant || 'all' }}"
           FILTER_FLAVOR="${{ inputs.flavor || 'all' }}"
 
-          QUERY=".variants[]"
-          if [[ "$FILTER_VARIANT" != "all" ]]; then
-            QUERY+=" | select(.id == \"$FILTER_VARIANT\")"
-          fi
-
-          # Flatten the matrix
-          FULL_MATRIX=$(yq -o=json "$QUERY | {variant: .id, description: .description, platforms: .platforms, flavors: .flavors}" .github/build-config.yml | jq -c -s 'map({variant: .variant, description: .description, platforms: .platforms, flavor: .flavors[]}) | map(select("'"$FILTER_FLAVOR"'" == "all" or .flavor.id == "'"$FILTER_FLAVOR"'"))')
+          # Use yq to convert the entire config to JSON, then use jq for everything else
+          # This is more robust than mixing yq and jq syntax
+          FULL_MATRIX=$(yq -o=json '.' .github/build-config.yml | jq -c '.variants[] | select("'"$FILTER_VARIANT"'" == "all" or .id == "'"$FILTER_VARIANT"'") | {variant: .id, description: .description, platforms: .platforms, flavor: .flavors[]}' | jq -c -s 'map(select("'"$FILTER_FLAVOR"'" == "all" or .flavor.id == "'"$FILTER_FLAVOR"'"))')
 
           # Matrix for image building
           IMAGE_MATRIX=$(echo "$FULL_MATRIX" | jq -c '{include: map({variant: .variant, flavor: .flavor.id, platforms: .platforms | join(",")})}')
           echo "image_matrix=$IMAGE_MATRIX" >> $GITHUB_OUTPUT
 
           # Matrix for artifact building (ISO/QCOW2)
-          # We only build artifacts for amd64 for now as per current project setup
           ARTIFACT_MATRIX=$(echo "$FULL_MATRIX" | jq -c '{include: map(select(.flavor.build_iso == true or .flavor.build_qcow2 == true) | {variant: .variant, flavor: .flavor.id, build_iso: .flavor.build_iso, build_qcow2: .flavor.build_qcow2, platform: "linux/amd64"})}')
           echo "artifact_matrix=$ARTIFACT_MATRIX" >> $GITHUB_OUTPUT
 
