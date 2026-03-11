@@ -29,6 +29,12 @@ case "${1:-}" in
 	else
 		dnf group install -y --nobest \
 			-x plasma-discover \
+			-x plasma-discover-notifier \
+			-x plasma-nm-vpnc \
+			-x pinentry-qt \
+			-x plasma-workspace-wayland \
+			-x plasma-workspace-geolocation \
+			-x plasma-drkonqi \
 			"KDE Plasma Workspaces" \
 			"Common NetworkManager submodules" \
 			"Core" \

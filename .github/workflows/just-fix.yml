@@ -1,0 +1,55 @@
+name: Just Fix
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'Justfile'
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check if last commit is from bot
+        id: check-bot
+        run: |
+          LAST_COMMIT_AUTHOR=$(git log -1 --format='%an')
+          LAST_COMMIT_MSG=$(git log -1 --format='%s')
+          if [[ "$LAST_COMMIT_AUTHOR" == "github-actions[bot]" ]] && [[ "$LAST_COMMIT_MSG" == "style: fix Justfile formatting" ]]; then
+            echo "last_commit_is_bot=true" >> $GITHUB_OUTPUT
+          else
+            echo "last_commit_is_bot=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Install Homebrew
+        if: steps.check-bot.outputs.last_commit_is_bot != 'true'
+        run: |
+          /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+          (echo; echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"') >> $HOME/.bashrc
+          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+
+      - name: Install just
+        if: steps.check-bot.outputs.last_commit_is_bot != 'true'
+        run: brew install just
+
+      - name: Run just fix
+        if: steps.check-bot.outputs.last_commit_is_bot != 'true'
+        run: just fix
+
+      - name: Commit and push changes
+        if: steps.check-bot.outputs.last_commit_is_bot != 'true'
+        run: |
+          if [[ $(git status --porcelain) ]]; then
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
+            git add Justfile
+            git commit -m "style: fix Justfile formatting"
+            git push
+          fi
