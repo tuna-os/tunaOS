@@ -13,15 +13,21 @@ on:
         default: 'all'
         type: string
       flavor:
-        description: 'Flavor (all, gnome, kde, niri, etc.)'
+        description: 'Flavor (all, base, gnome, kde, niri, etc.)'
         default: 'all'
         type: string
 
 jobs:
+  # ── Matrix Generation ───────────────────────────────────────────────────────
+  # Reads build-config.yml and emits one matrix per build stage plus the
+  # artifact matrix. Each image matrix only contains flavors for that stage,
+  # which lets the workflow enforce the dependency chain via `needs`.
   generate_matrix:
     runs-on: ubuntu-latest
     outputs:
-      image_matrix: ${{ steps.set-matrix.outputs.image_matrix }}
+      stage1_matrix: ${{ steps.set-matrix.outputs.stage1_matrix }}
+      stage2_matrix: ${{ steps.set-matrix.outputs.stage2_matrix }}
+      stage3_matrix: ${{ steps.set-matrix.outputs.stage3_matrix }}
       artifact_matrix: ${{ steps.set-matrix.outputs.artifact_matrix }}
       artifact_count: ${{ steps.set-matrix.outputs.artifact_count }}
     steps:
@@ -29,17 +35,15 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Build Environment
-        uses: ./.github/actions/setup-build-env
+        uses: ./.github/actions/setup-tunaos
 
-      # Fix #1: Inputs are passed via env vars to prevent shell injection.
-      # Never interpolate ${{ inputs.* }} directly inside a run script body.
       - name: Validate Inputs
         env:
           FILTER_VARIANT: ${{ inputs.variant || 'all' }}
           FILTER_FLAVOR: ${{ inputs.flavor || 'all' }}
         run: |
           VALID_VARIANTS="all yellowfin albacore skipjack bonito"
-          VALID_FLAVORS="all gnome gnome-hwe gnome-gdx gnome-gdx-hwe kde kde-hwe kde-gdx niri niri-hwe niri-gdx"
+          VALID_FLAVORS="all base base-hwe base-gdx gnome gnome-hwe gnome-gdx gnome-gdx-hwe kde kde-hwe kde-gdx niri niri-hwe niri-gdx"
 
           if [[ ! " $VALID_VARIANTS " =~ " $FILTER_VARIANT " ]]; then
             echo "::error::Invalid variant '$FILTER_VARIANT'. Must be one of: $VALID_VARIANTS"
@@ -51,62 +55,81 @@ jobs:
             exit 1
           fi
 
-      # Fix #1 (continued): All inputs consumed as env vars, not interpolated into script.
-      # Fix #5: Normalize missing build_iso/build_qcow2 to false via // false in jq.
-      # Fix #3: Emit artifact_count separately for a reliable empty-check.
       - name: Generate Matrix
         id: set-matrix
         env:
           FILTER_VARIANT: ${{ inputs.variant || 'all' }}
           FILTER_FLAVOR: ${{ inputs.flavor || 'all' }}
         run: |
+          # Flatten config into one entry per {variant, flavor}, applying filters.
+          # All inputs are in env vars — no direct interpolation of ${{ inputs.* }}
+          # into the script body to prevent shell injection.
           FULL_MATRIX=$(yq -o=json '.' .github/build-config.yml | jq -c '
             .variants[]
             | select(env.FILTER_VARIANT == "all" or .id == env.FILTER_VARIANT)
-            | {variant: .id, description: .description, platforms: .platforms, builder_distro: .builder_distro, flavor: .flavors[]}
-          ' | jq -c -s '
-            map(select(env.FILTER_FLAVOR == "all" or .flavor.id == env.FILTER_FLAVOR))
-          ')
+            | . as $v
+            | .flavors[]
+            | select(env.FILTER_FLAVOR == "all" or .id == env.FILTER_FLAVOR)
+            | {
+                variant:       $v.id,
+                builder_distro: $v.builder_distro,
+                platforms:     ($v.platforms | join(",")),
+                flavor:        .id,
+                stage:         .stage,
+                build_iso:     (.build_iso  // false),
+                build_qcow2:   (.build_qcow2 // false)
+              }
+          ' | jq -c -s '.')
 
-          # Matrix for image building
-          IMAGE_MATRIX=$(echo "$FULL_MATRIX" | jq -c '{
-            include: map({
-              variant: .variant,
-              flavor: .flavor.id,
-              platforms: (.platforms | join(","))
-            })
-          }')
-          echo "image_matrix=$IMAGE_MATRIX" >> $GITHUB_OUTPUT
+          # Helper: emit an image matrix for a given stage number.
+          make_image_matrix() {
+            local STAGE=$1
+            echo "$FULL_MATRIX" | jq -c --argjson stage "$STAGE" '{
+              include: map(select(.stage == $stage) | {
+                variant:        .variant,
+                flavor:         .flavor,
+                platforms:      .platforms,
+                builder_distro: .builder_distro
+              })
+            }'
+          }
 
-          # Fix #5: Normalize null build_iso / build_qcow2 to false.
-          # Fix #4: artifact_matrix now includes both iso and qcow2 flags so
-          #         the build_artifacts job can act on both.
-          # Fix #6: builder_distro comes from config, not hardcoded workflow logic.
+          STAGE1_MATRIX=$(make_image_matrix 1)
+          STAGE2_MATRIX=$(make_image_matrix 2)
+          STAGE3_MATRIX=$(make_image_matrix 3)
+
+          echo "stage1_matrix=$STAGE1_MATRIX" >> $GITHUB_OUTPUT
+          echo "stage2_matrix=$STAGE2_MATRIX" >> $GITHUB_OUTPUT
+          echo "stage3_matrix=$STAGE3_MATRIX" >> $GITHUB_OUTPUT
+
+          # Artifact matrix: all stages, only entries that need an ISO or QCOW2.
           ARTIFACT_MATRIX=$(echo "$FULL_MATRIX" | jq -c '{
             include: map(
-              {
-                variant: .variant,
-                flavor: .flavor.id,
-                build_iso: (.flavor.build_iso // false),
-                build_qcow2: (.flavor.build_qcow2 // false),
-                builder_distro: .builder_distro,
-                platform: "linux/amd64"
-              }
-              | select(.build_iso == true or .build_qcow2 == true)
+              select(.build_iso == true or .build_qcow2 == true)
+              | {
+                  variant:        .variant,
+                  flavor:         .flavor,
+                  build_iso:      .build_iso,
+                  build_qcow2:    .build_qcow2,
+                  builder_distro: .builder_distro,
+                  platform:       "linux/amd64"
+                }
             )
           }')
           echo "artifact_matrix=$ARTIFACT_MATRIX" >> $GITHUB_OUTPUT
 
-          # Fix #3: Emit a count for a reliable non-empty check in job conditions.
           ARTIFACT_COUNT=$(echo "$ARTIFACT_MATRIX" | jq '.include | length')
           echo "artifact_count=$ARTIFACT_COUNT" >> $GITHUB_OUTPUT
 
-  build_images:
-    name: Build ${{ matrix.variant }}:${{ matrix.flavor }}
+  # ── Stage 1: Base images ────────────────────────────────────────────────────
+  # Builds {variant}:base for every variant in parallel.
+  # Nothing else may start until all base images are published.
+  build_base:
+    name: "Stage 1 | ${{ matrix.variant }}:${{ matrix.flavor }}"
     needs: generate_matrix
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.generate_matrix.outputs.image_matrix) }}
+      matrix: ${{ fromJson(needs.generate_matrix.outputs.stage1_matrix) }}
     uses: ./.github/workflows/reusable-build-image.yml
     with:
       image-name: ${{ matrix.variant }}-${{ matrix.flavor }}
@@ -117,13 +140,63 @@ jobs:
     secrets:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
-  # Fix #2: Renamed job to build_artifacts to reflect it handles both ISO and QCOW2.
-  # Fix #3: Condition now uses artifact_count instead of a fragile string comparison.
-  # Fix #4: Job now has separate steps for ISO and QCOW2 builds.
-  # Fix #6: builder_distro is sourced from matrix (populated from config), not inline ternary.
+  # ── Stage 2: base-hwe, base-gdx, and desktop base flavors ──────────────────
+  # Runs only after ALL stage-1 jobs pass. Includes:
+  #   - base-hwe  (layers on base)
+  #   - base-gdx  (layers on base)
+  #   - gnome     (layers on base)
+  #   - kde       (layers on base)
+  #   - niri      (layers on base)
+  # All of these run in parallel within stage 2.
+  #
+  # Note: GHA `needs` waits for the entire prior matrix job to complete, not
+  # individual cells. So albacore:gnome must wait for yellowfin:base too — this
+  # is a known GHA limitation with dynamic matrices. In practice it adds minimal
+  # wall-clock time since all base images build in parallel.
+  build_stage2:
+    name: "Stage 2 | ${{ matrix.variant }}:${{ matrix.flavor }}"
+    needs: [generate_matrix, build_base]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate_matrix.outputs.stage2_matrix) }}
+    uses: ./.github/workflows/reusable-build-image.yml
+    with:
+      image-name: ${{ matrix.variant }}-${{ matrix.flavor }}
+      image-variant: ${{ matrix.variant }}
+      flavor: ${{ matrix.flavor }}
+      platforms: ${{ matrix.platforms }}
+      publish: ${{ github.event_name != 'pull_request' }}
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+
+  # ── Stage 3: Desktop HWE and GDX flavors ───────────────────────────────────
+  # Runs only after ALL stage-2 jobs pass. Includes:
+  #   - gnome-hwe, kde-hwe, niri-hwe   (layer on base-hwe)
+  #   - gnome-gdx, kde-gdx, niri-gdx   (layer on base-gdx)
+  #   - gnome-gdx-hwe                  (layers on both)
+  # All run in parallel within stage 3.
+  build_stage3:
+    name: "Stage 3 | ${{ matrix.variant }}:${{ matrix.flavor }}"
+    needs: [generate_matrix, build_stage2]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate_matrix.outputs.stage3_matrix) }}
+    uses: ./.github/workflows/reusable-build-image.yml
+    with:
+      image-name: ${{ matrix.variant }}-${{ matrix.flavor }}
+      image-variant: ${{ matrix.variant }}
+      flavor: ${{ matrix.flavor }}
+      platforms: ${{ matrix.platforms }}
+      publish: ${{ github.event_name != 'pull_request' }}
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+
+  # ── Artifact builds (ISO + QCOW2) ──────────────────────────────────────────
+  # Runs after all image stages are complete. Only triggered on non-PR events
+  # and only when the artifact matrix is non-empty.
   build_artifacts:
-    name: Artifacts ${{ matrix.variant }}:${{ matrix.flavor }}
-    needs: [generate_matrix, build_images]
+    name: "Artifacts | ${{ matrix.variant }}:${{ matrix.flavor }}"
+    needs: [generate_matrix, build_stage3]
     if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_count != '0'
     strategy:
       fail-fast: false
@@ -133,8 +206,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Fix #2: isogenerator is a composite action used at step level — valid.
-      # Previously this was used correctly at the step level; retained as-is.
       - name: Build ISO
         if: matrix.build_iso == true
         uses: ublue-os/isogenerator@v1
@@ -143,10 +214,8 @@ jobs:
           installer-repo: ghcr.io/${{ github.repository_owner }}/${{ matrix.variant }}-${{ matrix.flavor }}:latest
           flatpaks-list: ${{ github.workspace }}/system_files/etc/ublue-os/system-flatpaks.list
           hook-post-rootfs: ${{ github.workspace }}/iso_files/configure_lts_iso_anaconda.sh
-          # Fix #6: builder_distro is now a config field, not a hardcoded ternary.
           builder-distro: ${{ matrix.builder_distro }}
 
-      # Fix #4: QCOW2 builds are now actually executed (were silently skipped before).
       - name: Build QCOW2
         if: matrix.build_qcow2 == true
         uses: ublue-os/qcow2generator@v1
