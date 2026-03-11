@@ -543,8 +543,9 @@ jobs:
         run: |
           set -e
 
-          # Read default platforms from build-config.yml
-          DEFAULT_PLATFORMS=$(yq -r '.variants[] | select(.id == env.IMAGE_VARIANT) | .platforms | join(",")' .github/build-config.yml)
+          # Use strenv() for robust environment variable access in yq
+DEFAULT_PLATFORMS=$(yq -r '.variants[] | select(.id == strenv(IMAGE_VARIANT)) | .platforms | join(",")' .github/build-config.yml)
+
 
           if [ -z "$DEFAULT_PLATFORMS" ]; then
             echo "Unknown variant: ${IMAGE_VARIANT}"
