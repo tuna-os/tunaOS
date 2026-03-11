@@ -286,40 +286,40 @@ variants:
       # ── Stage 1 ────────────────────────────────────────────────────────────
       - id: base
         stage: 1
-        build_image: true
+        build_image: false
         build_iso: false
         build_qcow2: false
 
       # ── Stage 2 ────────────────────────────────────────────────────────────
       - id: base-hwe
         stage: 2
-        build_image: true
+        build_image: false
         build_iso: false
         build_qcow2: false
       - id: base-gdx
         stage: 2
-        build_image: true
+        build_image: false
         build_iso: false
         build_qcow2: false
       - id: gnome
         stage: 2
-        build_image: true
-        build_iso: true
-        build_qcow2: true
+        build_image: false
+        build_iso: false
+        build_qcow2: false
       - id: kde
         stage: 2
-        build_image: true
+        build_image: false
         build_iso: false
         build_qcow2: false
 
       # ── Stage 3 ────────────────────────────────────────────────────────────
       - id: gnome-hwe
         stage: 3
-        build_image: true
+        build_image: false
         build_iso: false
         build_qcow2: false
       - id: gnome-gdx
         stage: 3
-        build_image: true
+        build_image: false
         build_iso: false
         build_qcow2: false
