@@ -481,21 +481,21 @@ chunkify image_ref:
 
 # Run the full staged build pipeline locally, mirroring the CI job graph.
 # Reads .github/build-config.yml for the variant/flavor/stage structure.
+# Builds within each stage run in parallel; stages are sequential.
 #
-# Stages:
-#   1 — base images (sequential, one per variant)
-#   2 — base-hwe, base-gdx, gnome, kde, niri  (depend on stage 1 base)
-#   3 — *-hwe, *-gdx, *-gdx-hwe              (depend on stage 2 parents)
+# Requires zellij for the live UI (overview pane + one log pane per build).
+# Falls back to prefixed stdout if zellij is not available.
+# Logs always written to .build-logs/{variant}-{flavor}.log.
 #
 # Usage:
-#   just pipeline                          # build everything
-#   just pipeline yellowfin                # one variant, all flavors
-#   just pipeline yellowfin gnome          # one variant, one flavor (respects stage deps)
-#   just pipeline all gnome-hwe            # one flavor across all variants
+#   just pipeline                    # build everything
+#   just pipeline yellowfin          # one variant, all flavors
+#   just pipeline yellowfin gnome    # one flavor (respects stage deps)
+#   just pipeline all gnome-hwe      # one flavor across all variants
 #
 # Options:
-#   dry_run=1   print commands without executing them
-#   tag=<tag>   image tag to use (default: latest)
+#   dry_run=1   print commands without executing
+#   tag=<tag>   image tag (default: latest)
 pipeline variant='all' flavor='all' tag='latest' dry_run='0':
     #!/usr/bin/env bash
     set -euo pipefail
@@ -505,44 +505,316 @@ pipeline variant='all' flavor='all' tag='latest' dry_run='0':
     TAG="{{ tag }}"
     DRY_RUN="{{ dry_run }}"
     JUST="{{ just }}"
+    LOG_DIR=".build-logs"
+    mkdir -p "$LOG_DIR"
 
     # ── Helpers ──────────────────────────────────────────────────────────────
 
-    run() {
-        if [[ "$DRY_RUN" == "1" ]]; then
-            echo "[dry-run] $*"
-        else
-            "$@"
+    local_ref() { echo "localhost/${1}:${2}"; }
+
+    parent_for() {
+        case "$1" in
+            *-gdx-hwe) echo "base-hwe" ;;
+            *-gdx)     echo "base-gdx" ;;
+            *-hwe)     echo "base-hwe" ;;
+            *)         echo ""         ;;
+        esac
+    }
+
+    stage1_base_ref() { echo ""; }
+    stage2_base_ref() { local_ref "$1" "base"; }
+    stage3_base_ref() {
+        local parent; parent=$(parent_for "$2")
+        if [[ -n "$parent" ]]; then local_ref "$1" "$parent"
+        else echo "WARNING: no parent for stage-3 flavor '$2'" >&2; echo ""; fi
+    }
+
+    # ── Zellij detection ─────────────────────────────────────────────────────
+
+    USE_ZELLIJ=0
+    if command -v zellij &>/dev/null && [[ -z "${ZELLIJ:-}" ]] && [[ "$DRY_RUN" != "1" ]]; then
+        USE_ZELLIJ=1
+    fi
+
+    # ── Overview pane script ──────────────────────────────────────────────────
+    # Written to a temp file and run inside the zellij overview pane.
+    # Reads a shared status dir where each job writes:
+    #   $STATUS_DIR/{variant}-{flavor}  →  "running\t<start_epoch>"
+    #                                   →  "done\t<start_epoch>\t<end_epoch>"
+    #                                   →  "failed\t<start_epoch>\t<end_epoch>"
+    # The script re-renders the board every second until all jobs are terminal.
+
+    write_overview_script() {
+        local script_file=$1
+        local status_dir=$2
+        local stage_name=$3
+        local total_stages=$4
+        local current_stage=$5
+        shift 5
+        local labels=("$@")   # ordered list of "variant:flavor" labels
+
+        cat > "$script_file" << 'OVERVIEW_EOF'
+#!/usr/bin/env bash
+STATUS_DIR="__STATUS_DIR__"
+STAGE_NAME="__STAGE_NAME__"
+CURRENT_STAGE=__CURRENT_STAGE__
+TOTAL_STAGES=__TOTAL_STAGES__
+LABELS=(__LABELS__)
+
+SPINNER_FRAMES=("⠋" "⠙" "⠹" "⠸" "⠼" "⠴" "⠦" "⠧" "⠇" "⠏")
+spin_idx=0
+
+# ANSI
+BOLD="\033[1m"
+DIM="\033[2m"
+GREEN="\033[32m"
+RED="\033[31m"
+YELLOW="\033[33m"
+CYAN="\033[36m"
+RESET="\033[0m"
+CLEAR_SCREEN="\033[2J\033[H"
+
+fmt_duration() {
+    local secs=$1
+    printf "%d:%02d" $((secs / 60)) $((secs % 60))
+}
+
+render() {
+    local now; now=$(date +%s)
+    local spin="${SPINNER_FRAMES[$((spin_idx % ${#SPINNER_FRAMES[@]}))]}"
+    local all_done=1
+
+    printf "%b" "$CLEAR_SCREEN"
+    printf "%b" "${BOLD}  TunaOS Build Pipeline${RESET}\n"
+    printf "  Stage %d / %d  —  %s\n\n" "$CURRENT_STAGE" "$TOTAL_STAGES" "$STAGE_NAME"
+
+    # Header row
+    printf "  ${BOLD}%-30s  %-10s  %s${RESET}\n" "IMAGE" "STATUS" "TIME"
+    printf "  %s\n" "$(printf '─%.0s' {1..52})"
+
+    for label in "${LABELS[@]}"; do
+        local key="${label//:/-}"
+        local state_file="$STATUS_DIR/$key"
+        if [[ ! -f "$state_file" ]]; then
+            printf "  %-30s  ${DIM}%-10s${RESET}  %s\n" "$label" "waiting" "--:--"
+            all_done=0
+            continue
         fi
+        IFS=$'\t' read -r state start_epoch rest < "$state_file" || true
+        local elapsed=$(( now - start_epoch ))
+        case "$state" in
+            running)
+                printf "  %-30s  ${YELLOW}%s %-8s${RESET}  %s\n" \
+                    "$label" "$spin" "building" "$(fmt_duration $elapsed)"
+                all_done=0
+                ;;
+            done)
+                IFS=$'\t' read -r _s _start end_epoch <<< "$(cat "$state_file")"
+                local took=$(( end_epoch - start_epoch ))
+                printf "  %-30s  ${GREEN}✓ %-8s${RESET}  %s\n" \
+                    "$label" "done" "$(fmt_duration $took)"
+                ;;
+            failed)
+                IFS=$'\t' read -r _s _start end_epoch <<< "$(cat "$state_file")"
+                local took=$(( end_epoch - start_epoch ))
+                printf "  %-30s  ${RED}✗ %-8s${RESET}  %s\n" \
+                    "$label" "FAILED" "$(fmt_duration $took)"
+                ;;
+        esac
+    done
+
+    printf "\n  ${DIM}Logs: .build-logs/   │   %s${RESET}\n" "$(date '+%H:%M:%S')"
+
+    if [[ "$all_done" == "1" ]]; then
+        printf "\n  ${BOLD}${GREEN}All jobs complete.${RESET}\n"
+        exit 0
+    fi
+}
+
+while true; do
+    render
+    spin_idx=$(( spin_idx + 1 ))
+    sleep 0.8
+done
+OVERVIEW_EOF
+
+        # Substitute placeholders
+        local labels_str=""
+        for l in "${labels[@]}"; do labels_str+="\"$l\" "; done
+        sed -i \
+            -e "s|__STATUS_DIR__|${status_dir}|g" \
+            -e "s|__STAGE_NAME__|${stage_name}|g" \
+            -e "s|__CURRENT_STAGE__|${current_stage}|g" \
+            -e "s|__TOTAL_STAGES__|${total_stages}|g" \
+            -e "s|__LABELS__|${labels_str}|g" \
+            "$script_file"
+        chmod +x "$script_file"
     }
 
-    # Resolve the local image ref that a given variant:flavor was tagged as.
-    # Matches the tagging logic in the existing `build` recipe.
-    local_ref() {
-        local variant=$1 flavor=$2
-        echo "localhost/${variant}:${flavor}"
+    # ── KDL layout builder ────────────────────────────────────────────────────
+    # Generates a layout with the overview pane on the left (fixed width) and
+    # one log-tail pane per build stacked vertically on the right.
+
+    write_zellij_layout() {
+        local layout_file=$1
+        local overview_script=$2
+        shift 2
+        local panes=("$@")   # alternating: logfile label ...
+
+        {
+            echo 'layout {'
+            # Root split: overview left (40 cols) | logs right
+            echo '  pane split_direction="horizontal" {'
+
+            # Overview pane — fixed width, runs the status board script
+            printf '    pane size=40 name="Overview" {\n'
+            printf '      command "%s"\n' "$overview_script"
+            printf '    }\n'
+
+            # Right column: all log panes stacked vertically
+            echo '    pane split_direction="vertical" {'
+            local i=0
+            while [[ $i -lt ${#panes[@]} ]]; do
+                local logfile="${panes[$i]}"
+                local label="${panes[$((i+1))]}"
+                printf '      pane name="%s" {\n' "$label"
+                printf '        command "tail"\n'
+                printf '        args "-n" "50" "-f" "%s"\n' "$logfile"
+                printf '      }\n'
+                i=$((i + 2))
+            done
+            echo '    }'
+            echo '  }'
+            echo '}'
+        } > "$layout_file"
     }
 
-    # Build one flavor, passing chain_base_image if provided.
-    # Args are passed positionally to match the `build` recipe signature:
-    #   build variant flavor target_platform is_ci tag chain_base_image
-    # target_platform is left empty so `build` falls back to the native platform.
-    build_one() {
-        local v=$1 f=$2 base_ref=${3:-}
+    # ── Parallel stage runner ─────────────────────────────────────────────────
+
+    TOTAL_STAGES=3
+    CURRENT_STAGE=0
+
+    run_stage() {
+        local stage_name=$1
+        local entries=$2
+        local base_ref_fn=$3
+        CURRENT_STAGE=$(( CURRENT_STAGE + 1 ))
+
+        if [[ -z "$entries" ]]; then return 0; fi
+
+        # ── Collect job metadata ──────────────────────────────────────────
+        local -a vs=() fs=() logfiles=() base_refs=() labels=() pane_args=()
+        local status_dir; status_dir=$(mktemp -d /tmp/pipeline-status-XXXXXX)
+
+        while IFS=$'\t' read -r v f _s; do
+            local base_ref; base_ref=$("$base_ref_fn" "$v" "$f")
+            local logfile="${LOG_DIR}/${v}-${f}.log"
+            : > "$logfile"
+            vs+=("$v"); fs+=("$f")
+            logfiles+=("$logfile")
+            base_refs+=("$base_ref")
+            labels+=("${v}:${f}")
+            pane_args+=("$logfile" "${v}:${f}")
+        done <<< "$entries"
+
+        local count=${#vs[@]}
+
         echo ""
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        echo "  Building ${v}:${f}${base_ref:+  ← ${base_ref}}"
-        echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-        run "$JUST" build "$v" "$f" "" "0" "$TAG" "$base_ref"
+        echo "╔══════════════════════════════════════════════════════════════╗"
+        printf "║  Stage %d/%d — %-51s║\n" "$CURRENT_STAGE" "$TOTAL_STAGES" "$stage_name"
+        echo "╚══════════════════════════════════════════════════════════════╝"
+        echo "  Launching $count build(s) in parallel..."
+
+        # ── Write zellij layout & overview script ─────────────────────────
+        local layout_file overview_script zellij_session=""
+        layout_file=$(mktemp /tmp/zellij-layout-XXXXXX.kdl)
+        overview_script=$(mktemp /tmp/pipeline-overview-XXXXXX.sh)
+
+        if [[ "$USE_ZELLIJ" == "1" ]]; then
+            write_overview_script \
+                "$overview_script" "$status_dir" \
+                "$stage_name" "$TOTAL_STAGES" "$CURRENT_STAGE" \
+                "${labels[@]}"
+            write_zellij_layout "$layout_file" "$overview_script" "${pane_args[@]}"
+            zellij_session="pipeline-$$-${CURRENT_STAGE}"
+            zellij --session "$zellij_session" --layout "$layout_file" &
+            echo "  zellij session '$zellij_session' — attach: zellij attach $zellij_session"
+        fi
+
+        # ── Launch builds ─────────────────────────────────────────────────
+        local -a pids=()
+        for (( i=0; i<count; i++ )); do
+            local v="${vs[$i]}" f="${fs[$i]}"
+            local logfile="${logfiles[$i]}" base_ref="${base_refs[$i]}"
+            local key="${v}-${f}"
+
+            if [[ "$DRY_RUN" == "1" ]]; then
+                echo "[dry-run] build $v $f (base: ${base_ref:-none})"
+                pids+=(-1)
+                continue
+            fi
+
+            # Write status file and run build, updating status on exit
+            (
+                local start; start=$(date +%s)
+                printf "%s\t%s" "running" "$start" > "$status_dir/$key"
+                if [[ "$USE_ZELLIJ" == "1" ]]; then
+                    "$JUST" build "$v" "$f" "" "0" "$TAG" "$base_ref" \
+                        >"$logfile" 2>&1
+                else
+                    "$JUST" build "$v" "$f" "" "0" "$TAG" "$base_ref" \
+                        > >(while IFS= read -r line; do
+                                printf "[%s:%s] %s\n" "$v" "$f" "$line"
+                            done | tee -a "$logfile") 2>&1
+                fi
+                local end; end=$(date +%s)
+                printf "%s\t%s\t%s" "done" "$start" "$end" > "$status_dir/$key"
+            ) &
+            pids+=($!)
+            echo "  ↳ ${v}:${f}  pid=$!  log=${logfile}"
+        done
+
+        echo ""
+
+        # ── Wait & report ─────────────────────────────────────────────────
+        local any_failed=0
+        for (( i=0; i<count; i++ )); do
+            local pid="${pids[$i]}"
+            [[ "$pid" == "-1" ]] && continue
+            local code=0
+            wait "$pid" || code=$?
+            local v="${vs[$i]}" f="${fs[$i]}" key="${vs[$i]}-${fs[$i]}"
+            if [[ $code -ne 0 ]]; then
+                # Overwrite status as failed (subshell may not have reached its trap)
+                local start; start=$(awk -F'\t' '{print $2}' "$status_dir/$key" 2>/dev/null || date +%s)
+                printf "%s\t%s\t%s" "failed" "$start" "$(date +%s)" > "$status_dir/$key"
+                echo "  ✗  ${v}:${f}  (exit $code — see ${logfiles[$i]})"
+                any_failed=1
+            else
+                echo "  ✓  ${v}:${f}"
+            fi
+        done
+
+        # ── Teardown zellij ───────────────────────────────────────────────
+        if [[ "$USE_ZELLIJ" == "1" ]] && [[ -n "$zellij_session" ]]; then
+            sleep 2   # let overview render the final state
+            zellij delete-session "$zellij_session" --force 2>/dev/null || true
+        fi
+        rm -f "$layout_file" "$overview_script"
+        rm -rf "$status_dir"
+
+        if [[ $any_failed -ne 0 ]]; then
+            echo ""
+            echo "✗  Stage '$stage_name' failed. Aborting pipeline."
+            echo "   Logs: $LOG_DIR/"
+            return 1
+        fi
+        echo "  ✓  Stage complete."
     }
 
-    # ── Load config ──────────────────────────────────────────────────────────
+    # ── Load config & filter ─────────────────────────────────────────────────
 
-    CONFIG=.github/build-config.yml
-
-    # Build the flat list of {variant, flavor, stage} tuples matching our filters,
-    # output as tab-separated lines: variant<TAB>flavor<TAB>stage
-    ENTRIES=$(yq -o=json '.' "$CONFIG" | jq -r '
+    ENTRIES=$(yq -o=json '.' .github/build-config.yml | jq -r '
         .variants[]
         | . as $v
         | .flavors[]
@@ -554,82 +826,34 @@ pipeline variant='all' flavor='all' tag='latest' dry_run='0':
     ')
 
     if [[ -z "$ENTRIES" ]]; then
-        echo "No matching entries for variant='$FILTER_VARIANT' flavor='$FILTER_FLAVOR'."
+        echo "No entries for variant='$FILTER_VARIANT' flavor='$FILTER_FLAVOR'."
         exit 1
     fi
 
-    # Split into per-stage lists
-    STAGE1=$(echo "$ENTRIES" | awk -F'\t' '$3 == "1"')
-    STAGE2=$(echo "$ENTRIES" | awk -F'\t' '$3 == "2"')
-    STAGE3=$(echo "$ENTRIES" | awk -F'\t' '$3 == "3"')
+    STAGE1=$(echo "$ENTRIES" | awk -F'\t' '$3 == "1"' || true)
+    STAGE2=$(echo "$ENTRIES" | awk -F'\t' '$3 == "2"' || true)
+    STAGE3=$(echo "$ENTRIES" | awk -F'\t' '$3 == "3"' || true)
 
+    count_lines() { [[ -z "${1:-}" ]] && echo 0 || echo "$1" | wc -l | tr -d ' '; }
     total=$(echo "$ENTRIES" | wc -l | tr -d ' ')
+
     echo ""
-    echo "Pipeline: $total image(s) across $(echo "$STAGE1" | grep -c . || true) + $(echo "$STAGE2" | grep -c . || true) + $(echo "$STAGE3" | grep -c . || true) stages"
-    echo "  Filter: variant=${FILTER_VARIANT}  flavor=${FILTER_FLAVOR}  tag=${TAG}"
-    [[ "$DRY_RUN" == "1" ]] && echo "  Mode: DRY RUN"
-
-    # ── Stage 1: base ────────────────────────────────────────────────────────
-
-    if [[ -n "$STAGE1" ]]; then
-        echo ""
-        echo "╔══════════════════════════════════════════════════════════════╗"
-        echo "║  Stage 1 — base images                                      ║"
-        echo "╚══════════════════════════════════════════════════════════════╝"
-        while IFS=$'\t' read -r v f _stage; do
-            build_one "$v" "$f"
-        done <<< "$STAGE1"
+    echo "╔══════════════════════════════════════════════════════════════╗"
+    echo "║  TunaOS Pipeline                                             ║"
+    echo "╚══════════════════════════════════════════════════════════════╝"
+    echo "  Images : $total  ($(count_lines "$STAGE1") + $(count_lines "$STAGE2") + $(count_lines "$STAGE3") across 3 stages)"
+    echo "  Filter : variant=${FILTER_VARIANT}  flavor=${FILTER_FLAVOR}  tag=${TAG}"
+    if [[ "$USE_ZELLIJ" == "1" ]]; then
+        echo "  UI     : zellij  (overview + per-build log panes)"
+    else
+        echo "  UI     : inline  (install zellij for live panes)"
     fi
+    [[ "$DRY_RUN" == "1" ]] && echo "  Mode   : DRY RUN"
+    echo ""
 
-    # ── Stage 2: base-hwe, base-gdx, gnome, kde, niri ────────────────────────
-    # Each flavor is chained from the stage-1 base image of its own variant.
-
-    if [[ -n "$STAGE2" ]]; then
-        echo ""
-        echo "╔══════════════════════════════════════════════════════════════╗"
-        echo "║  Stage 2 — base-hwe / base-gdx / desktop base flavors       ║"
-        echo "╚══════════════════════════════════════════════════════════════╝"
-        while IFS=$'\t' read -r v f _stage; do
-            base_ref=$(local_ref "$v" "base")
-            build_one "$v" "$f" "$base_ref"
-        done <<< "$STAGE2"
-    fi
-
-    # ── Stage 3: *-hwe, *-gdx, *-gdx-hwe ────────────────────────────────────
-    # Each flavor is chained from its direct parent (the matching stage-2 image).
-    # Parent resolution:
-    #   gnome-hwe   → {variant}:base-hwe
-    #   gnome-gdx   → {variant}:base-gdx
-    #   gnome-gdx-hwe → {variant}:base-hwe  (gdx applied on top of hwe base)
-    #   kde-hwe     → {variant}:base-hwe
-    #   (etc.)
-
-    if [[ -n "$STAGE3" ]]; then
-        echo ""
-        echo "╔══════════════════════════════════════════════════════════════╗"
-        echo "║  Stage 3 — HWE / GDX desktop flavors                        ║"
-        echo "╚══════════════════════════════════════════════════════════════╝"
-        while IFS=$'\t' read -r v f _stage; do
-            # Determine which stage-2 image this flavor layers on top of.
-            # *-gdx-hwe layers on base-hwe (GDX is applied via Containerfile.gdx,
-            # but the kernel/driver base comes from base-hwe).
-            case "$f" in
-                *-gdx-hwe)  parent_flavor="base-hwe" ;;
-                *-gdx)      parent_flavor="base-gdx" ;;
-                *-hwe)      parent_flavor="base-hwe" ;;
-                *)
-                    echo "WARNING: No parent resolution for stage-3 flavor '$f' — building without chain."
-                    parent_flavor=""
-                    ;;
-            esac
-            if [[ -n "$parent_flavor" ]]; then
-                base_ref=$(local_ref "$v" "$parent_flavor")
-            else
-                base_ref=""
-            fi
-            build_one "$v" "$f" "$base_ref"
-        done <<< "$STAGE3"
-    fi
+    run_stage "base images"                   "$STAGE1" stage1_base_ref
+    run_stage "base-hwe / base-gdx / desktop" "$STAGE2" stage2_base_ref
+    run_stage "HWE / GDX desktop flavors"     "$STAGE3" stage3_base_ref
 
     echo ""
     echo "╔══════════════════════════════════════════════════════════════╗"
