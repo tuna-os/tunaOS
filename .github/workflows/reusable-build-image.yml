@@ -433,9 +433,6 @@ jobs:
       MAJOR_VERSION: ${{ inputs.major-version }}
       PLATFORMS: ${{ inputs.platforms }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
-
       - name: Install dependencies
         run: |
           apk update
@@ -444,6 +441,9 @@ jobs:
           ln -sf /bin/bash /bin/sh
           mkdir -p /etc/containers
           echo '{"default":[{"type":"insecureAcceptAnything"}]}' | jq . > /etc/containers/policy.json
+
+     - name: Checkout
+        uses: actions/checkout@v6
 
       - name: Exit on failure
         env:
