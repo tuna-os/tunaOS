@@ -6,13 +6,6 @@ export brew_image := env("BREW_IMAGE", "ghcr.io/ublue-os/brew")
 export coreos_stable_version := env("COREOS_STABLE_VERSION", "42")
 just := just_executable()
 arch := arch()
-
-# Fetch default platforms for a variant from build-config.yml
-
-# Usage: {{ just }} platforms <variant>
-platforms variant:
-    @yq -r ".variants[] | select(.id == \"{{ variant }}\") | .platforms | join(\",\")" .github/build-config.yml
-
 export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else if arch == "arm64" { "linux/arm64" } else if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") })
 
 # --- Default Base Image (for 'base' flavor builds) ---
@@ -23,11 +16,6 @@ export base_image_tag := env("BASE_IMAGE_TAG", "10")
 [private]
 default:
     @{{ just }} --list
-
-# Initialize and update git submodules
-submodules:
-    #!/usr/bin/env bash
-    git submodule update --init --recursive
 
 # Check Just Syntax
 check:
@@ -133,7 +121,7 @@ _ensure-yq:
 
 # NVIDIA drivers and the coreos/fedora kernel.
 [private]
-_build target_tag_with_version target_tag container_file base_image_for_build platform use_cache enable_gdx enable_hwe desktop_flavor *args: _ensure-yq
+_build target_tag_with_version target_tag container_file base_image_for_build target_platform use_cache enable_gdx enable_hwe desktop_flavor *args: _ensure-yq
     #!/usr/bin/env bash
     set -euxo pipefail
 
@@ -203,7 +191,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
 
     podman build \
         --dns=8.8.8.8 \
-        --platform "{{ platform }}" \
+        --platform "{{ target_platform }}" \
         --target="${BUILD_TARGET}" \
         "${BUILD_ARGS[@]}" \
         {{ args }} \
@@ -223,7 +211,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build pl
 # Usage (CI): just build image_name=<final_name> variant=<base_os> is_ci=true [flavor]
 
 # Example: just build image_name=albacore variant=almalinux is_ci=true kde-gdx
-build variant='albacore' flavor='gnome' platform='' is_ci="0" tag='latest' chain_base_image='':
+build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='':
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -240,10 +228,16 @@ build variant='albacore' flavor='gnome' platform='' is_ci="0" tag='latest' chain
 
     echo -e "${BLUE}===============================================================${NC}"
     # Fetch platforms from config if not provided
-    if [[ -z "{{ platform }}" ]]; then
-        PLATFORM=$(yq -r ".variants[] | select(.id == \"{{ variant }}\") | .platforms | join(\",\")" .github/build-config.yml)
+    if [[ -z "{{ target_platform }}" ]]; then
+        # Default to native platform if not specified and not in CI
+        if [[ "{{ is_ci }}" != "1" ]]; then
+            PLATFORM="{{ platform }}"
+        else
+            # In CI, we expect a platform or we'd fetch all (but reusable workflow always passes one)
+            PLATFORM=$(yq -r ".variants[] | select(.id == \"{{ variant }}\") | .platforms | join(\",\")" .github/build-config.yml)
+        fi
     else
-        PLATFORM="{{ platform }}"
+        PLATFORM="{{ target_platform }}"
     fi
     echo -e "${GREEN}Build config:${NC}"
     echo -e "  Variant: ${YELLOW}{{ variant }}${NC}"
@@ -443,24 +437,6 @@ build variant='albacore' flavor='gnome' platform='' is_ci="0" tag='latest' chain
     else
         {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
     fi
-
-yellowfin variant='gnome':
-    just build yellowfin {{ variant }}
-
-albacore variant='gnome':
-    just build albacore {{ variant }}
-
-skipjack variant='gnome':
-    just build skipjack {{ variant }}
-
-bonito variant='gnome':
-    just build bonito {{ variant }}
-
-# NOTE: redfin requires a Red Hat account authenticated to registry.redhat.io.
-
-# Images cannot be published publicly due to the RHEL EULA. See docs/rhel-setup.md.
-redfin variant='gnome':
-    just build redfin {{ variant }}
 
 # ── Chunkah ──────────────────────────────────────────────────────────
 
