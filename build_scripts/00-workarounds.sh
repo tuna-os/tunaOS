@@ -64,12 +64,6 @@ if [[ "$IS_ALMALINUX" = true ]] || [[ "$IS_ALMALINUXKITTEN" = true ]]; then
 	done
 fi
 
-# Clean DNF cache to avoid corrupted package issues from mirrors
-# Addresses checksum mismatch issues with packages like gstreamer1-plugins-bad, intel-mediasdk
-echo "Cleaning DNF cache to prevent corrupted mirror issues"
-dnf clean all
-rm -rf /var/cache/dnf/*
-
 # Enable the same compose repos during our build that the centos-bootc image
 # uses during its build.  This avoids downgrading packages in the image that
 # have strict NVR requirements.
