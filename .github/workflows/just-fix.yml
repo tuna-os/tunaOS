@@ -1,10 +1,7 @@
 name: Just Fix
 on:
   push:
-    branches:
-      - main
-    paths:
-      - 'Justfile'
+  pull_request:
 
 jobs:
   fix:
@@ -22,7 +19,7 @@ jobs:
         run: |
           LAST_COMMIT_AUTHOR=$(git log -1 --format='%an')
           LAST_COMMIT_MSG=$(git log -1 --format='%s')
-          if [[ "$LAST_COMMIT_AUTHOR" == "github-actions[bot]" ]] && [[ "$LAST_COMMIT_MSG" == "style: fix Justfile formatting" ]]; then
+          if [[ "$LAST_COMMIT_AUTHOR" == "github-actions[bot]" ]] && [[ "$LAST_COMMIT_MSG" == "style: fix formatting" ]]; then
             echo "last_commit_is_bot=true" >> $GITHUB_OUTPUT
           else
             echo "last_commit_is_bot=false" >> $GITHUB_OUTPUT
@@ -50,7 +47,7 @@ jobs:
           if [[ $(git status --porcelain) ]]; then
             git config --local user.email "github-actions[bot]@users.noreply.github.com"
             git config --local user.name "github-actions[bot]"
-            git add Justfile
-            git commit -m "style: fix Justfile formatting"
+            git add -A
+            git commit -m "style: fix formatting"
             git push
           fi
