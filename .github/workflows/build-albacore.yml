@@ -17,7 +17,7 @@ on:
 
 jobs:
   build:
-    name: Albacore Pipeline
+    name: 🐟 Albacore Pipeline
     uses: ./.github/workflows/build-variant.yml
     with:
       variant: 'albacore'

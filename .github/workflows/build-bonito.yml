@@ -17,7 +17,7 @@ on:
 
 jobs:
   build:
-    name: Bonito Pipeline
+    name: 🎣 Bonito Pipeline
     uses: ./.github/workflows/build-variant.yml
     with:
       variant: 'bonito'

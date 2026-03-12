@@ -17,7 +17,7 @@ on:
 
 jobs:
   build:
-    name: Yellowfin Pipeline
+    name: 🐠 Yellowfin Pipeline
     uses: ./.github/workflows/build-variant.yml
     with:
       variant: 'yellowfin'

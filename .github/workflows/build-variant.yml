@@ -68,6 +68,7 @@ jobs:
             | select(env.FILTER_FLAVOR == "all" or .id == env.FILTER_FLAVOR)
             | {
                 variant:       $v.id,
+                variant_emoji: ($v.emoji // "❓"),
                 base_image:    $v.base_image,
                 platforms:     ($v.platforms | join(",")),
                 flavor:        .id,
@@ -82,10 +83,11 @@ jobs:
             local STAGE=$1
             echo "$FULL_MATRIX" | jq -c --argjson stage "$STAGE" '{
               include: map(select(.stage == $stage) | {
-                variant:    .variant,
-                flavor:     .flavor,
-                platforms:  .platforms,
-                base_image: .base_image
+                variant:       .variant,
+                variant_emoji: .variant_emoji,
+                flavor:        .flavor,
+                platforms:     .platforms,
+                base_image:    .base_image
               })
             }'
           }
@@ -103,12 +105,13 @@ jobs:
             include: map(
               select(.build_iso == true or .build_qcow2 == true)
               | {
-                  variant:     .variant,
-                  flavor:      .flavor,
-                  build_iso:   .build_iso,
-                  build_qcow2: .build_qcow2,
-                  base_image:  .base_image,
-                  platform:    "linux/amd64"
+                  variant:       .variant,
+                  variant_emoji: .variant_emoji,
+                  flavor:        .flavor,
+                  build_iso:     .build_iso,
+                  build_qcow2:   .build_qcow2,
+                  base_image:    .base_image,
+                  platform:      "linux/amd64"
                 }
             )
           }')
@@ -121,7 +124,7 @@ jobs:
   # Builds {variant}:base for every variant in parallel.
   # Nothing else may start until all base images are published.
   build_base:
-    name: "Stage 1 | ${{ matrix.variant }}:${{ matrix.flavor }}"
+    name: "S1 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
     needs: generate_matrix
     strategy:
       fail-fast: false
@@ -151,7 +154,7 @@ jobs:
   # is a known GHA limitation with dynamic matrices. In practice it adds minimal
   # wall-clock time since all base images build in parallel.
   build_stage2:
-    name: "Stage 2 | ${{ matrix.variant }}:${{ matrix.flavor }}"
+    name: "S2 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
     needs: [generate_matrix, build_base]
     strategy:
       fail-fast: false
@@ -174,7 +177,7 @@ jobs:
   #   - gnome-gdx-hwe                  (layers on both)
   # All run in parallel within stage 3.
   build_stage3:
-    name: "Stage 3 | ${{ matrix.variant }}:${{ matrix.flavor }}"
+    name: "S3 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
     needs: [generate_matrix, build_stage2]
     strategy:
       fail-fast: false
@@ -194,7 +197,7 @@ jobs:
   # Runs after all image stages are complete. Only triggered on non-PR events
   # and only when the artifact matrix is non-empty.
   build_artifacts:
-    name: "Artifacts | ${{ matrix.variant }}:${{ matrix.flavor }}"
+    name: "Pkg | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
     needs: [generate_matrix, build_stage3]
     if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_count != '0'
     strategy:

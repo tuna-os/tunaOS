@@ -95,7 +95,7 @@ jobs:
           echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
 
   build_push:
-    name: Build and push image
+    name: Build ${{ matrix.platform }}
     runs-on: ${{ contains(matrix.platform, 'amd64') && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
     timeout-minutes: 60
     needs: generate_matrix
@@ -408,7 +408,7 @@ jobs:
           path: |
             /tmp/outputs/digests/*.txt
   manifest:
-    name: Create ${{ inputs.image-name }}:${{ inputs.major-version }} Manifest
+    name: Manifest ${{ inputs.image-name }}:${{ inputs.major-version }}
     runs-on: ubuntu-latest
     if: always()
     needs:
@@ -650,6 +650,7 @@ jobs:
   # Cosign throws errors when ran inside the Fedora container for one reason or another
   # so we move this to another step in order to run on Ubuntu
   sign:
+    name: Sign Manifest
     needs: manifest
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -677,6 +678,7 @@ jobs:
         run: |
           cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${DIGEST}"
   tag-image:
+    name: Tag Image
     needs: manifest
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
