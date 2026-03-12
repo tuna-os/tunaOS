@@ -29,9 +29,8 @@ jobs:
         if: steps.check-bot.outputs.last_commit_is_bot != 'true'
         run: |
           /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-          # shellcheck disable=SC2016
-          echo 'eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"' >> ~/.bashrc
-          eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+          echo "/home/linuxbrew/.linuxbrew/bin" >> $GITHUB_PATH
+          echo "/home/linuxbrew/.linuxbrew/sbin" >> $GITHUB_PATH
 
       - name: Install just
         if: steps.check-bot.outputs.last_commit_is_bot != 'true'
