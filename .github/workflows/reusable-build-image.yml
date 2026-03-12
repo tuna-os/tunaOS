@@ -619,7 +619,7 @@ jobs:
           # Apply the labels to the manifest (separated by newlines)
           while IFS= read -r label; do
             echo "Applying label ${label} to manifest"
-            sudo podman manifest annotate --index --annotation "$label" "${MANIFEST}"
+            podman manifest annotate --index --annotation "$label" "${MANIFEST}"
           done <<< "${LABELS}"
 
       - name: Login to GitHub Container Registry
