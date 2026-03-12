@@ -54,13 +54,20 @@ case "${1:-}" in
 			valent-git
 
 		# Install Niri desktop environment packages (Fedora repos)
+		FCITX5_MOZC=""
+		if dnf repoquery --available fcitx5-mozc &>/dev/null; then
+			FCITX5_MOZC="fcitx5-mozc"
+		else
+			echo "Skipping fcitx5-mozc (not available in repos)"
+		fi
+
 		dnf -y install --setopt=install_weak_deps=False \
 			brightnessctl \
 			cava \
 			chezmoi \
 			ddcutil \
 			fastfetch \
-			fcitx5-mozc \
+			${FCITX5_MOZC} \
 			flatpak \
 			foot \
 			fpaste \

@@ -57,19 +57,24 @@ case "${1:-}" in
 			qt5-qtwayland \
 			qt6-qtwayland
 
-		# Install fcitx5 input method support (Asian languages)
-		dnf -y install \
-			fcitx5 \
-			fcitx5-chewing \
-			fcitx5-chinese-addons \
-			fcitx5-gtk \
-			fcitx5-hangul \
-			fcitx5-m17n \
-			fcitx5-mozc \
-			fcitx5-qt \
-			fcitx5-sayura \
-			fcitx5-unikey \
-			kcm-fcitx5
+		# Install fcitx5 input method support (Asian languages) if available
+		# Not available in EPEL10 yet
+		if dnf repoquery --available fcitx5 &>/dev/null; then
+			dnf -y install \
+				fcitx5 \
+				fcitx5-chewing \
+				fcitx5-chinese-addons \
+				fcitx5-gtk \
+				fcitx5-hangul \
+				fcitx5-m17n \
+				fcitx5-mozc \
+				fcitx5-qt \
+				fcitx5-sayura \
+				fcitx5-unikey \
+				kcm-fcitx5
+		else
+			echo "Skipping fcitx5 packages (not available in repos)"
+		fi
 
 		# Version lock critical KDE packages to prevent partial upgrades causing black screens
 		# Reference: https://github.com/ublue-os/aurora/issues/1227
