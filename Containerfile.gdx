@@ -23,7 +23,7 @@ COPY build_scripts /build_scripts
 # ==============================================================================
 # GDX Base stage - Adds graphics/developer extras to the base image
 # ==============================================================================
-FROM ${BASE_IMAGE} AS gdx-base
+FROM ${BASE_IMAGE} AS base-gdx
 
 ARG BASE_IMAGE
 ARG IMAGE_NAME
@@ -55,7 +55,7 @@ RUN \
 # ==============================================================================
 # GNOME variant - GDX base with GNOME desktop target
 # ==============================================================================
-FROM gdx-base AS gnome
+FROM base-gdx AS gnome
 
 ARG DESKTOP_FLAVOR=gnome
 ENV DESKTOP_FLAVOR=gnome
@@ -65,7 +65,7 @@ RUN rm -rf /opt && ln -s /var/opt /opt
 # ==============================================================================
 # KDE variant - GDX base with KDE desktop target
 # ==============================================================================
-FROM gdx-base AS kde
+FROM base-gdx AS kde
 
 ARG DESKTOP_FLAVOR=kde
 ENV DESKTOP_FLAVOR=kde
@@ -74,7 +74,7 @@ RUN rm -rf /opt && ln -s /var/opt /opt
 # ==============================================================================
 # Niri variant - GDX base with Niri+DMS desktop target
 # ==============================================================================
-FROM gdx-base AS niri
+FROM base-gdx AS niri
 
 ARG DESKTOP_FLAVOR=niri
 ENV DESKTOP_FLAVOR=niri

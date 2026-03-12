@@ -24,7 +24,7 @@ COPY build_scripts /build_scripts
 # ==============================================================================
 # HWE Base stage - Adds HWE packages to the base image
 # ==============================================================================
-FROM ${BASE_IMAGE} AS hwe-base
+FROM ${BASE_IMAGE} AS base-hwe
 
 ARG BASE_IMAGE
 ARG IMAGE_NAME
@@ -54,7 +54,7 @@ RUN \
 # ==============================================================================
 # GNOME variant - HWE base with GNOME desktop
 # ==============================================================================
-FROM hwe-base AS gnome
+FROM base-hwe AS gnome
 
 ARG DESKTOP_FLAVOR=gnome
 ENV DESKTOP_FLAVOR=gnome
@@ -69,7 +69,7 @@ RUN rm -rf /opt && ln -s /var/opt /opt
 # ==============================================================================
 # KDE variant - HWE base with KDE desktop
 # ==============================================================================
-FROM hwe-base AS kde
+FROM base-hwe AS kde
 
 ARG DESKTOP_FLAVOR=kde
 ENV DESKTOP_FLAVOR=kde
@@ -84,7 +84,7 @@ RUN rm -rf /opt && ln -s /var/opt /opt
 # ==============================================================================
 # Niri variant - HWE base with Niri+DMS desktop
 # ==============================================================================
-FROM hwe-base AS niri
+FROM base-hwe AS niri
 
 ARG DESKTOP_FLAVOR=niri
 ENV DESKTOP_FLAVOR=niri
