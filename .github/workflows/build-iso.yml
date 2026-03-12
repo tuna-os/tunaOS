@@ -32,17 +32,10 @@ on:
           # - bonito
           - all
       flavor:
-        description: 'Flavor (base, dx, gdx)'
+        description: 'Flavor'
         required: false
-        default: 'base,dx,gdx'
-        type: choice
-        options:
-          - base
-          - base,dx
-          - base,dx,gdx
-          - dx
-          - gdx
-          - dx,gdx
+        default: 'all'
+        type: string
       platforms:
         description: 'Platforms to build'
         required: false
@@ -90,20 +83,31 @@ jobs:
             FILTER_VARIANT=""
           fi
 
-          FULL_MATRIX=$(yq -o=json '.variants[]' .github/build-config.yml | jq -c --arg filter "$FILTER_VARIANT" --arg platforms "$FILTER_PLATFORMS" '
-            select($filter == "" or .id == $filter)
+          FILTER_FLAVOR="${{ github.event_name == 'workflow_dispatch' && inputs.flavor || 'all' }}"
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            FILTER_FLAVOR="base"
+          fi
+
+          FULL_MATRIX=$(yq -o=json '.' .github/build-config.yml | jq -c \
+            --arg filter_v "$FILTER_VARIANT" \
+            --arg platforms "$FILTER_PLATFORMS" \
+            --arg filter_f "$FILTER_FLAVOR" '
+            .variants[]
+            | select($filter_v == "" or .id == $filter_v)
             | . as $v
+            | .flavors[]
+            | select(.build_iso == true)
+            | select($filter_f == "all" or .id == $filter_f)
             | {
                 variant:       $v.id,
                 description:   $v.description,
                 builder_distro: $v.builder_distro,
-                platforms:     (if $platforms == "default" then $v.platforms else [$platforms] end)
+                platforms:     (if $platforms == "default" then $v.platforms else [$platforms] end),
+                flavor:        .id
               }
           ' | jq -c -s '.')
 
-          FLAVORS="${{ github.event_name == 'workflow_dispatch' && inputs.flavor || 'base' }}"
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            FLAVORS="base"
             FULL_MATRIX=$(echo "$FULL_MATRIX" | jq '[.[] | select(.variant == "albacore")]')
           fi
 
@@ -114,24 +118,23 @@ jobs:
             DESCRIPTION=$(_jq '.description')
             BUILDER_DISTRO=$(_jq '.builder_distro')
             PLATFORMS=$(_jq '.platforms | join(",")')
+            flavor=$(_jq '.flavor')
 
-            for flavor in $(echo $FLAVORS | sed "s/,/ /g"); do
-              for platform in $(echo $PLATFORMS | sed "s/,/ /g"); do
-                runner_platform=$(echo $platform | cut -d'/' -f2)
-                MATRIX="$(echo "${MATRIX}" | jq ".include += [{
-                  \"image_variant\": \"${image_variant}\",
-                  \"image_name\": \"${image_variant}\",
-                  \"default_tag\": \"${TAG}\",
-                  \"flavor\": \"${flavor}\",
-                  \"platform\": \"${platform}\",
-                  \"runner_platform\": \"${runner_platform}\",
-                  \"description\": \"${DESCRIPTION}\",
-                  \"builder_distro\": \"${BUILDER_DISTRO}\",
-                  \"rechunk\": ${{ github.event_name != 'pull_request' }},
-                  \"sbom\": false,
-                  \"publish\": true,
-                }]")"
-              done
+            for platform in $(echo $PLATFORMS | sed "s/,/ /g"); do
+              runner_platform=$(echo $platform | cut -d'/' -f2)
+              MATRIX="$(echo "${MATRIX}" | jq ".include += [{
+                \"image_variant\": \"${image_variant}\",
+                \"image_name\": \"${image_variant}\",
+                \"default_tag\": \"${TAG}\",
+                \"flavor\": \"${flavor}\",
+                \"platform\": \"${platform}\",
+                \"runner_platform\": \"${runner_platform}\",
+                \"description\": \"${DESCRIPTION}\",
+                \"builder_distro\": \"${BUILDER_DISTRO}\",
+                \"rechunk\": ${{ github.event_name != 'pull_request' }},
+                \"sbom\": false,
+                \"publish\": true,
+              }]")"
             done
           done
           echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT

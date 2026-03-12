@@ -274,5 +274,3 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-
-

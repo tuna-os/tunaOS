@@ -42,8 +42,8 @@ jobs:
           FILTER_VARIANT: ${{ inputs.variant || 'all' }}
           FILTER_FLAVOR: ${{ inputs.flavor || 'all' }}
         run: |
-          VALID_VARIANTS="all yellowfin albacore skipjack bonito"
-          VALID_FLAVORS="all base base-hwe base-gdx gnome gnome-hwe gnome-gdx gnome-gdx-hwe kde kde-hwe kde-gdx niri niri-hwe niri-gdx"
+          VALID_VARIANTS="all $(yq -r '.variants[].id' .github/build-config.yml | tr '\n' ' ')"
+          VALID_FLAVORS="all $(yq -r '.variants[].flavors[].id' .github/build-config.yml | sort -u | tr '\n' ' ')"
 
           variant_pattern=" $FILTER_VARIANT "
           flavor_pattern=" $FILTER_FLAVOR "
