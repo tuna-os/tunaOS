@@ -55,8 +55,7 @@ case "${1:-}" in
 			kde-connect \
 			xdg-desktop-portal-kde \
 			qt5-qtwayland \
-			qt6-qtwayland \
-			plasma-wallpapers-dynamic
+			qt6-qtwayland
 
 		# Install fcitx5 input method support (Asian languages)
 		dnf -y install \

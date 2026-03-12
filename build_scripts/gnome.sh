@@ -138,15 +138,17 @@ case "${1:-}" in
 	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/appindicatorsupport@rgcjonas.gmail.com/schemas
 
 	# Blur My Shell (requires gnome-extensions pack from gnome-shell)
-	make -C /usr/share/gnome-shell/extensions/blur-my-shell@aunetx
+	# We build it and then unzip it into its final location to ensure the structure is correct
+	make -C /usr/share/gnome-shell/extensions/blur-my-shell@aunetx build
 	unzip -o /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/build/blur-my-shell@aunetx.shell-extension.zip -d /usr/share/gnome-shell/extensions/blur-my-shell@aunetx
 	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/schemas
 	rm -rf /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/build
 
 	# Caffeine
-	# The Caffeine extension is built/packaged into a temporary subdirectory (tmp/caffeine/caffeine@patapon.info).
-	# Unlike other extensions, it must be moved to the standard extensions directory so GNOME Shell can detect it.
-	mv /usr/share/gnome-shell/extensions/tmp/caffeine/caffeine@patapon.info /usr/share/gnome-shell/extensions/caffeine@patapon.info
+	# The Caffeine extension is in system_files/usr/share/gnome-shell/extensions/tmp/caffeine/caffeine@patapon.info
+	if [ -d /usr/share/gnome-shell/extensions/tmp/caffeine/caffeine@patapon.info ]; then
+		mv /usr/share/gnome-shell/extensions/tmp/caffeine/caffeine@patapon.info /usr/share/gnome-shell/extensions/caffeine@patapon.info
+	fi
 	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/caffeine@patapon.info/schemas
 
 	# Dash to Dock

@@ -156,6 +156,7 @@ case "${1:-}" in
 	# Install Niri window manager from yalter/niri-git COPR
 	dnf -y --enablerepo copr:copr.fedorainfracloud.org:yalter:niri-git install \
 		--setopt=install_weak_deps=False \
+		libinput \
 		niri
 
 	# Verify niri installation

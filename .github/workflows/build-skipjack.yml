@@ -17,7 +17,7 @@ on:
 
 jobs:
   build:
-    name: 🍣 Skipjack Pipeline
+    name: 🍣-skipjack
     uses: ./.github/workflows/build-variant.yml
     with:
       variant: 'skipjack'
