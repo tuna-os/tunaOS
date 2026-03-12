@@ -273,7 +273,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
             ;;
         "hwe"|"gnome-hwe")
             if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-gnome:{{ tag }}"
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:gnome"
             else
                 BASE_FOR_BUILD="localhost/{{ variant }}:gnome"
             fi
@@ -281,7 +281,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
             ;;
         "gdx"|"gnome-gdx")
             if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-gnome:{{ tag }}"
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:gnome"
             else
                 BASE_FOR_BUILD="localhost/{{ variant }}:gnome"
             fi
@@ -289,7 +289,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
             ;;
         "gdx-hwe"|"gnome-gdx-hwe")
             if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-gnome-hwe:{{ tag }}"
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:gnome-hwe"
             else
                 BASE_FOR_BUILD="localhost/{{ variant }}:gnome-hwe"
             fi
@@ -297,7 +297,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
             ;;
         "base-hwe"|"base-hwe-node")
             if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-gnome:{{ tag }}"
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:base"
             else
                 BASE_FOR_BUILD="localhost/{{ variant }}:gnome"
             fi
@@ -306,7 +306,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
             ;;
         "base-gdx"|"base-gdx-node")
             if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-gnome:{{ tag }}"
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:base"
             else
                 BASE_FOR_BUILD="localhost/{{ variant }}:gnome"
             fi
@@ -320,7 +320,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
             ;;
         "kde-hwe")
             if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-kde:{{ tag }}"
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:kde"
             else
                 BASE_FOR_BUILD="localhost/{{ variant }}:kde"
             fi
@@ -329,7 +329,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
             ;;
         "kde-gdx")
             if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-kde:{{ tag }}"
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:kde"
             else
                 BASE_FOR_BUILD="localhost/{{ variant }}:kde"
             fi
@@ -338,7 +338,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
             ;;
         "kde-gdx-hwe")
             if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-kde-hwe:{{ tag }}"
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:kde-hwe"
             else
                 BASE_FOR_BUILD="localhost/{{ variant }}:kde-hwe"
             fi
@@ -352,7 +352,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
             ;;
         "niri-hwe")
             if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-niri:{{ tag }}"
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:niri"
             else
                 BASE_FOR_BUILD="localhost/{{ variant }}:niri"
             fi
@@ -361,7 +361,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
             ;;
         "niri-gdx")
             if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-niri:{{ tag }}"
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:niri"
             else
                 BASE_FOR_BUILD="localhost/{{ variant }}:niri"
             fi
@@ -370,7 +370,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
             ;;
         "niri-gdx-hwe")
             if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}-niri-hwe:{{ tag }}"
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:niri-hwe"
             else
                 BASE_FOR_BUILD="localhost/{{ variant }}:niri-hwe"
             fi

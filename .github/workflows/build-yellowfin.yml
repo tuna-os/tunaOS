@@ -1,0 +1,25 @@
+name: Build Yellowfin
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "0 1 * * TUE"
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: 'Flavor (all, base, gnome, kde, niri, etc.)'
+        default: 'all'
+        type: string
+
+jobs:
+  build:
+    name: Yellowfin Pipeline
+    uses: ./.github/workflows/build-variant.yml
+    with:
+      variant: 'yellowfin'
+      flavor: ${{ inputs.flavor || 'all' }}
+    secrets: inherit

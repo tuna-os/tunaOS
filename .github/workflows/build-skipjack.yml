@@ -1,0 +1,25 @@
+name: Build Skipjack
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  schedule:
+    - cron: "0 1 * * TUE"
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: 'Flavor (all, base, gnome, kde, niri, etc.)'
+        default: 'all'
+        type: string
+
+jobs:
+  build:
+    name: Skipjack Pipeline
+    uses: ./.github/workflows/build-variant.yml
+    with:
+      variant: 'skipjack'
+      flavor: ${{ inputs.flavor || 'all' }}
+    secrets: inherit
