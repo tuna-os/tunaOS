@@ -223,9 +223,10 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
 # Example: just build yellowfin kde
 #
 # Usage (CI): just build image_name=<final_name> variant=<base_os> is_ci=true [flavor]
-
 # Example: just build image_name=albacore variant=almalinux is_ci=true kde-gdx
-build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='':
+
+# Build a TunaOS variant
+build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='' chunk='1': _ensure-yq
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -448,7 +449,9 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     if [[ "{{ is_ci }}" == "0" ]]; then
         {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
         # Chunkify the built image for optimal layer distribution
-        {{ just }} chunkify "${TARGET_TAG_WITH_VERSION}"
+        if [[ "{{ chunk }}" == "1" ]]; then
+            {{ just }} chunkify "${TARGET_TAG_WITH_VERSION}"
+        fi
         # Sync cache after successful local build for deduplication
         ./scripts/sync-build-cache.sh "${TARGET_TAG}" || true
     else
@@ -531,13 +534,17 @@ pipeline variant='all' flavor='all' tag='latest' dry_run='0':
 qcow2 variant flavor='gnome' repo='local':
     #!/usr/bin/env bash
     set -euo pipefail
+    if [ "{{ repo }}" = "local" ]; then
+        echo "Building unchunked image for QCOW2 generation..."
+        {{ just }} build {{ variant }} {{ flavor }} chunk=0
+    fi
     if [ "{{ flavor }}" != "base" ]; then
         FLAVOR="-{{ flavor }}"
     else
         FLAVOR=
     fi
-    if [ "{{ repo }}" = "ghcr" ]; then bash ./scripts/build-bootc-diskimage.sh qcow2 ghcr.io/{{ repo_organization }}/{{ variant }}$FLAVOR:{{ default_tag }}
-    elif [ "{{ repo }}" = "local" ]; then bash ./scripts/build-bootc-diskimage.sh qcow2 localhost/{{ variant }}$FLAVOR:{{ default_tag }}
+    if [ "{{ repo }}" = "ghcr" ]; then bash ./scripts/build-bootc-diskimage.sh qcow2 ghcr.io/{{ repo_organization }}/{{ variant }}:{{ flavor }}
+    elif [ "{{ repo }}" = "local" ]; then bash ./scripts/build-bootc-diskimage.sh qcow2 localhost/{{ variant }}:{{ flavor }}
     else echo "DEBUG: repo '{{ repo }}' did not match ghcr or local"; exit 1
     fi
 
@@ -566,3 +573,97 @@ test-vm variant flavor='gnome':
 iso variant flavor='gnome' repo='local' hook_script='iso_files/configure_lts_iso_anaconda.sh' flatpaks_file='system_files/etc/ublue-os/system-flatpaks.list':
     #!/usr/bin/env bash
     bash ./scripts/build-titanoboa.sh {{ variant }} {{ flavor }} {{ repo }} {{ hook_script }}
+
+# Run an ISO image in a QEMU container
+run-iso variant flavor='gnome' iso_file='':
+    @{{ just }} _run-vm iso {{ variant }} {{ flavor }} {{ iso_file }}
+
+# Run a qcow2 image in a QEMU container
+run-qcow2 variant flavor='gnome':
+    @{{ just }} _run-vm qcow2 {{ variant }} {{ flavor }}
+
+# Internal helper to run a VM using the QEMU container (ghcr.io/qemus/qemu)
+[private]
+_run-vm type variant flavor='gnome' iso_file='':
+    #!/usr/bin/env bash
+    set -eoux pipefail
+
+    # Determine the image file based on the type and project conventions
+    if [[ -n "{{ iso_file }}" ]]; then
+        image_file="{{ iso_file }}"
+    elif [[ "{{ type }}" == "iso" ]]; then
+        # Check for titanoboa output first
+        TITANOBOA_ISO=".build/{{ variant }}-{{ flavor }}/output/install.iso"
+        # Check for bootc-image-builder output
+        BIB_ISO="{{ variant }}.iso"
+        if [[ -f "$TITANOBOA_ISO" ]]; then
+            image_file="$TITANOBOA_ISO"
+        elif [[ -f "$BIB_ISO" ]]; then
+            image_file="$BIB_ISO"
+        else
+            image_file="{{ variant }}.iso"
+        fi
+    else
+        # QCow2 follows variant[-flavor].qcow2
+        if [[ -f "{{ variant }}-{{ flavor }}.qcow2" ]]; then
+            image_file="{{ variant }}-{{ flavor }}.qcow2"
+        else
+            image_file="{{ variant }}.qcow2"
+        fi
+    fi
+
+    # Build the image if it does not exist (skip if custom iso_file provided)
+    if [[ ! -f "${image_file}" ]]; then
+        if [[ -n "{{ iso_file }}" ]]; then
+            echo "ISO not found at {{ iso_file }}. Please build it first or specify a valid ISO path."
+            exit 1
+        fi
+        echo "Image ${image_file} not found. Building it now..."
+        {{ just }} "{{ type }}" "{{ variant }}" "{{ flavor }}"
+        # Re-check because build-bootc-diskimage.sh might name it differently
+        if [[ ! -f "${image_file}" ]]; then
+            if [[ "{{ type }}" == "qcow2" ]]; then
+                image_file="{{ variant }}.qcow2"
+            elif [[ "{{ type }}" == "iso" ]]; then
+                 image_file="{{ variant }}.iso"
+            fi
+        fi
+    fi
+
+    # Determine an available port to use for Web VNC
+    port=8006
+    while ss -tln | grep -q ":${port} "; do
+        port=$(( port + 1 ))
+    done
+    echo "Using Web Port: ${port}"
+    echo "Connect via Web: http://localhost:${port}"
+
+    # Set up the arguments for running the VM
+    run_args=()
+    run_args+=(--rm --privileged)
+    run_args+=(--pull=newer)
+    run_args+=(--publish "127.0.0.1:${port}:8006")
+    run_args+=(--env "CPU_CORES=4")
+    run_args+=(--env "RAM_SIZE=4G")
+    run_args+=(--env "DISK_SIZE=64G")
+    run_args+=(--env "TPM=Y")
+    run_args+=(--env "GPU=Y")
+    run_args+=(--device=/dev/kvm)
+
+    # Add SSH port forwarding
+    ssh_port=$(( port + 1 ))
+    while ss -tln | grep -q ":${ssh_port} "; do
+        ssh_port=$(( ssh_port + 1 ))
+    done
+    echo "Using SSH Port: ${ssh_port}"
+    echo "Connect via SSH: ssh centos@localhost -p ${ssh_port}"
+    run_args+=(--publish "127.0.0.1:${ssh_port}:22")
+    run_args+=(--env "USER_PORTS=22")
+    run_args+=(--env "NETWORK=user")
+
+    run_args+=(--volume "${PWD}/${image_file}":"/boot.{{ type }}")
+    run_args+=(ghcr.io/qemus/qemu)
+
+    # Run the VM and open the browser to connect
+    (sleep 5 && xdg-open "http://localhost:${port}") &
+    podman run "${run_args[@]}"

@@ -137,6 +137,9 @@ case "${1:-}" in
 		rm -rf /usr/share/doc/niri || true
 		rm -rf /usr/share/doc/just || true
 
+		# Apply Niri-specific system file overrides (e.g. SELinux permissive config)
+		copy_systemfiles_for niri
+
 		exit 0
 	fi
 	# EL10 Niri build (AlmaLinux Kitten, AlmaLinux 10, CentOS Stream 10)
@@ -258,6 +261,9 @@ case "${1:-}" in
 	# Remove heavy docs to save space (mirroring gnome.sh pattern)
 	rm -rf /usr/share/doc/niri || true
 	rm -rf /usr/share/doc/just || true
+
+	# Apply Niri-specific system file overrides (e.g. SELinux permissive config)
+	copy_systemfiles_for niri
 
 	;;
 "extra")

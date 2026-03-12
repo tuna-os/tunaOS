@@ -234,6 +234,7 @@ jobs:
             IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
           fi
           sudo podman image tag "${IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+          sudo podman image tag "localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-unchunked"
 
           IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
           IMAGE_DIGEST="$(sudo podman image inspect --format '{{.Digest}}' "${IMAGE}")"
@@ -257,11 +258,19 @@ jobs:
         run: |
           set -x
           sudo podman tag "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
+          sudo podman tag "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-unchunked" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-unchunked-${SAFE_PLATFORM}"
           for i in $(seq "${MAX_RETRIES}"); do
             sudo podman push --digestfile=/tmp/digestfile \
               "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}" \
               && break || sleep $((5 * i));
           done
+
+          # Push unchunked image
+          for i in $(seq "${MAX_RETRIES}"); do
+            sudo podman push "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-unchunked-${SAFE_PLATFORM}" \
+              && break || sleep $((5 * i));
+          done
+
           REMOTE_IMAGE_DIGEST=$(sudo cat /tmp/digestfile)
           echo "remote_image_digest=${REMOTE_IMAGE_DIGEST}" >> $GITHUB_OUTPUT
 

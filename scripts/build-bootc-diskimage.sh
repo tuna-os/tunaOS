@@ -49,13 +49,19 @@ disable = [
 EOF
 
 else
-	# TODO: make the username and password setable
-	cat <<EOF >"$TMPDIR/$TOML_FILE"
+	# Use existing config.toml if it exists in the current directory and contains 'customizations'
+	if [ -f "config.toml" ] && grep -q "customizations" "config.toml"; then
+		echo "Using existing config.toml from current directory"
+		cp "config.toml" "$TMPDIR/$TOML_FILE"
+	else
+		# TODO: make the username and password setable
+		cat <<EOF >"$TMPDIR/$TOML_FILE"
 [[customizations.user]]
 name = "centos"
 password = "centos"
 groups = ["wheel"]
 EOF
+	fi
 
 	# Try to find an SSH key to inject
 	SSH_KEY=""
@@ -76,21 +82,18 @@ EOF
 		echo "key = \"$SSH_KEY\"" >>"$TMPDIR/$TOML_FILE"
 		echo "Injected SSH key for user centos"
 	fi
-
-	cat <<EOF >>"$TMPDIR/$TOML_FILE"
-
-[[customizations.filesystem]]
-mountpoint = "/"
-minsize = "20 GiB"
-EOF
 fi
 
 echo "Generated $TOML_FILE with content:"
 cat "$TMPDIR/$TOML_FILE"
 echo ""
 
-echo "Pulling image: $IMAGE_URI"
-podman pull "$IMAGE_URI"
+echo "Ensuring image is available: $IMAGE_URI"
+if podman image exists "$IMAGE_URI"; then
+	echo "Image exists locally, skipping pull."
+else
+	podman pull "$IMAGE_URI"
+fi
 
 # Run the bootc-image-builder command
 echo "Running bootc-image-builder..."
@@ -101,6 +104,7 @@ podman run --rm -it --privileged --pid=host \
 	-v "$TMPDIR/$TOML_FILE":/config.toml \
 	quay.io/centos-bootc/bootc-image-builder:latest \
 	build --type "$TYPE" \
+	--rootfs xfs \
 	"$IMAGE_URI"
 
 IMAGE_NAME=$(echo "$IMAGE_URI" | awk -F'/' '{print $NF}' | awk -F':' '{print $1}')
