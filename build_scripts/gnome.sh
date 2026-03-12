@@ -11,7 +11,7 @@ case "${1:-}" in
 		dnf -y copr enable jreilly1821/c10s-gnome
 		dnf config-manager --save --setopt="copr:copr.fedorainfracloud.org:jreilly1821:c10s-gnome.exclude=glib2*"
 		# Use install --allowerasing which is more robust than swap if the package is already present
-		dnf -y install gnome-shell-48.3 --allowerasing || true
+		dnf -y install gnome-shell --allowerasing || true
 		dnf -y copr disable jreilly1821/c10s-gnome
 	fi
 

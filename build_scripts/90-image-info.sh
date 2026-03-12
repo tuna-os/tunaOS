@@ -39,7 +39,7 @@ s/^VARIANT_ID=.*/VARIANT_ID=${IMAGE_NAME}/
 s/^PRETTY_NAME=.*/PRETTY_NAME=\"${IMAGE_PRETTY_NAME}\"/
 s|^HOME_URL=.*|HOME_URL=\"${HOME_URL}\"|
 s|^BUG_REPORT_URL=.*|BUG_REPORT_URL=\"${BUG_SUPPORT_URL}\"|
-s|^CPE_NAME=\"cpe:/o:centos:centos|CPE_NAME=\"cpe:/o:jamesreilly:${IMAGE_NAME}-tunaos\"|
+s|^CPE_NAME=.*|CPE_NAME=\"cpe:/o:jamesreilly:${IMAGE_NAME}-tunaos\"|
 
 /^REDHAT_BUGZILLA_PRODUCT=/d
 /^REDHAT_BUGZILLA_PRODUCT_VERSION=/d
