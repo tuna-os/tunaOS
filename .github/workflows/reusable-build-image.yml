@@ -45,7 +45,7 @@ on:
         description: "Generate/publish SBOMs for the artifacts"
         required: false
         type: boolean
-        default: true
+        default: false
       cleanup_runner:
         description: "Use the ublue cleanup action to clean up the runner before running the build"
         required: false
@@ -364,15 +364,18 @@ jobs:
           cd "$(dirname "$SBOM")"
           SBOM_FILE="$(basename "$SBOM")"
 
-          oras attach \
+          # Extract the digest of the attached SBOM artifact directly from oras attach output
+          # oras attach outputs: "Digest: sha256:..." on the last line
+          sbom_digest=$(oras attach \
             --artifact-type application/vnd.spdx+json \
             --annotation "filename=${SBOM_FILE}" \
             "${IMAGE}@${DIGEST}" \
-            "${SBOM_FILE}"
+            "${SBOM_FILE}" | grep "Digest:" | awk '{print $2}')
 
-          # Extract the digest of the attached SBOM artifact
-          sbom_digest=$(oras discover --format json "${IMAGE}@${DIGEST}" \
-            | jq -r '.manifests[] | select(.artifactType == "application/vnd.spdx+json") | .digest')
+          if [ -z "$sbom_digest" ]; then
+            echo "Failed to extract SBOM digest from oras attach output"
+            exit 1
+          fi
 
           echo "sbom_digest=${sbom_digest}" >> $GITHUB_OUTPUT
 
