@@ -206,11 +206,7 @@ jobs:
           FLAVOR: ${{ inputs.flavor }}
           DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
         run: |
-          LOCAL_IMAGE_NAME="${IMAGE_VARIANT}"
-          if [ "${FLAVOR}" != "base" ]; then
-            LOCAL_IMAGE_NAME="${LOCAL_IMAGE_NAME}-${FLAVOR}"
-          fi
-          IMAGE_REF="localhost/${LOCAL_IMAGE_NAME}:${DEFAULT_TAG}"
+          IMAGE_REF="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
 
           # Use the just recipe for chunking
           just_cmd=$(which just)
@@ -230,11 +226,7 @@ jobs:
           if [ "${CHUNKIFY_RAN}" == "true" ] && [ -n "${CHUNKIFY_REF}" ]; then
             IMAGE="${CHUNKIFY_REF}"
           else
-            LOCAL_IMAGE_NAME="${IMAGE_VARIANT}"
-            if [ "${FLAVOR}" != "base" ]; then
-              LOCAL_IMAGE_NAME="${LOCAL_IMAGE_NAME}-${FLAVOR}"
-            fi
-            IMAGE="localhost/${LOCAL_IMAGE_NAME}:${DEFAULT_TAG}"
+            IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
           fi
           sudo podman image tag "${IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
 

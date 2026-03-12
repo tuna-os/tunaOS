@@ -226,6 +226,7 @@ variants:
     emoji: "🎣"
     description: "Based on Fedora 43"
     base_image: "quay.io/fedora/fedora-bootc:43"
+    akmods: "ublue-os"
     # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
     platforms: ["linux/amd64", "linux/arm64"]
     flavors:

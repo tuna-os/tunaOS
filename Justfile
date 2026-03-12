@@ -13,6 +13,11 @@ export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/de
 export base_image := env("BASE_IMAGE", "quay.io/almalinuxorg/almalinux-bootc")
 export base_image_tag := env("BASE_IMAGE_TAG", "10")
 
+# Simulate the GitHub Actions CI matrix
+simulate-matrix:
+    #!/usr/bin/env bash
+    ./scripts/simulate-matrix.sh
+
 [private]
 default:
     @{{ just }} --list
@@ -150,7 +155,8 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     BUILD_ARGS+=("--build-arg" "ENABLE_GDX={{ enable_gdx }}")
     BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR={{ desktop_flavor }}")
 
-    BUILD_ARGS+=("--build-arg" "AKMODS_BASE=ghcr.io/ublue-os")
+    AKMODS_ORG=$(yq -r ".variants[] | select(.id == \"{{ target_tag }}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
+    BUILD_ARGS+=("--build-arg" "AKMODS_BASE=ghcr.io/${AKMODS_ORG}")
 
     # Pass RHSM credentials for RHEL registration during build
     BUILD_ARGS+=("--build-arg" "RHSM_USER=${RHSM_USER:-}")
@@ -299,7 +305,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:base"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}:gnome"
+                BASE_FOR_BUILD="localhost/{{ variant }}:base"
             fi
             CONTAINERFILE="Containerfile.hwe"
             DESKTOP_FLAVOR="base-hwe"
@@ -308,7 +314,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
             if [[ "{{ is_ci }}" = "1" ]]; then
                 BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:base"
             else
-                BASE_FOR_BUILD="localhost/{{ variant }}:gnome"
+                BASE_FOR_BUILD="localhost/{{ variant }}:base"
             fi
             CONTAINERFILE="Containerfile.gdx"
             DESKTOP_FLAVOR="base-gdx"
@@ -406,7 +412,8 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         BASE_FOR_BUILD="{{ chain_base_image }}"
     fi
 
-    TARGET_TAG={{ variant }}
+    # Set the target tag based on variant and flavor.
+    TARGET_TAG="{{ variant }}"
     TARGET_IMAGE_TAG="{{ tag }}"
     if [[ "{{ tag }}" == "latest" ]]; then
         TARGET_IMAGE_TAG="{{ flavor }}"
