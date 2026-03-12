@@ -352,7 +352,7 @@ jobs:
         run: |
           echo ${{ secrets.GITHUB_TOKEN }} | oras login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Upload SBOM
+            - name: Upload SBOM
         if: ${{ inputs.sbom && inputs.publish && steps.generate-sbom.outputs.SBOM != '' }}
         id: upload-sbom
         env:
@@ -360,16 +360,47 @@ jobs:
           DIGEST: ${{ steps.push.outputs.remote_image_digest }}
           SBOM: ${{ steps.generate-sbom.outputs.SBOM }}
         run: |
+          # Change to the directory containing the SBOM to use a relative path
+          cd "$(dirname "$SBOM")"
+          SBOM_FILE="$(basename "$SBOM")"
+
           oras attach \
             --artifact-type application/vnd.spdx+json \
-            --annotation "filename=$(basename "$SBOM")" \
+            --annotation "filename=${SBOM_FILE}" \
             "${IMAGE}@${DIGEST}" \
-            "$SBOM"
+            "${SBOM_FILE}"
 
+          # Extract the digest of the attached SBOM artifact
           sbom_digest=$(oras discover --format json "${IMAGE}@${DIGEST}" \
-            | jq -r '.referrers[] | select(.artifactType == "application/vnd.spdx+json") | .digest')
+            | jq -r '.manifests[] | select(.artifactType == "application/vnd.spdx+json") | .digest')
 
           echo "sbom_digest=${sbom_digest}" >> $GITHUB_OUTPUT
+
+            - name: Sign SBOM OCI Artifact
+              if: ${{ inputs.sbom && inputs.publish && steps.generate-sbom.outputs.SBOM != '' }}
+              env:
+                COSIGN_EXPERIMENTAL: false
+                COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+                SBOM: ${{ steps.generate-sbom.outputs.SBOM }}
+                IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+                DIGEST: ${{ steps.push.outputs.remote_image_digest }}
+                SBOM_DIGEST: ${{ steps.upload-sbom.outputs.sbom_digest }}
+              run: |
+                # Attest the image with the SBOM
+                cosign attest -y \
+                  --predicate "$SBOM" \
+                  --type spdxjson \
+                  --key env://COSIGN_PRIVATE_KEY \
+                  "${IMAGE}@${DIGEST}"
+            
+                # Sign the attached SBOM artifact itself
+                cosign sign -y --key  env://COSIGN_PRIVATE_KEY         "${IMAGE}@${SBOM_DIGEST}"
+
+
+                sbom_digest=$(oras discover --format json "${IMAGE}@${DIGEST}" \
+                | jq -r '.referrers[] | select(.artifactType == "application/vnd.spdx+json") | .digest')
+
+                echo "sbom_digest=${sbom_digest}" >> $GITHUB_OUTPUT
 
       - name: Sign SBOM OCI Artifact
         if: ${{ inputs.sbom && inputs.publish && steps.generate-sbom.outputs.SBOM != '' }}
