@@ -162,12 +162,21 @@ case "${1:-}" in
 
 	# Logo Menu
 	# xdg-terminal-exec is required for this extension as it opens up terminals using that script
-	install -Dpm0755 -t /usr/bin /usr/share/gnome-shell/extensions/logomenu@aryan_k/distroshelf-helper
-	install -Dpm0755 -t /usr/bin /usr/share/gnome-shell/extensions/logomenu@aryan_k/missioncenter-helper
-	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/logomenu@aryan_k/schemas
+	# Only install if submodule is present
+	if [ -f /usr/share/gnome-shell/extensions/logomenu@aryan_k/distroshelf-helper ]; then
+		install -Dpm0755 -t /usr/bin /usr/share/gnome-shell/extensions/logomenu@aryan_k/distroshelf-helper
+		install -Dpm0755 -t /usr/bin /usr/share/gnome-shell/extensions/logomenu@aryan_k/missioncenter-helper
+		glib-compile-schemas --strict /usr/share/gnome-shell/extensions/logomenu@aryan_k/schemas
+	else
+		echo "Skipping logomenu (submodule not available)"
+	fi
 
 	# Search Light
-	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/search-light@icedman.github.com/schemas
+	if [ -d /usr/share/gnome-shell/extensions/search-light@icedman.github.com/schemas ]; then
+		glib-compile-schemas --strict /usr/share/gnome-shell/extensions/search-light@icedman.github.com/schemas
+	else
+		echo "Skipping search-light (submodule not available)"
+	fi
 
 	# Recompile all schemas
 	rm /usr/share/glib-2.0/schemas/gschemas.compiled
