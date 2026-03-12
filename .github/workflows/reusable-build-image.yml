@@ -643,7 +643,7 @@ jobs:
             podman manifest push --all=false --digestfile=/tmp/digestfile $MANIFEST $IMAGE_REGISTRY/$IMAGE_NAME:$tag
           done <<< "$TAGS"
 
-          DIGEST=$(sudo cat /tmp/digestfile)
+          DIGEST=$(cat /tmp/digestfile)
           echo "DIGEST=$DIGEST" >> $GITHUB_OUTPUT
           echo "IMAGE=$IMAGE_REGISTRY/$IMAGE_NAME" >> $GITHUB_OUTPUT
 
