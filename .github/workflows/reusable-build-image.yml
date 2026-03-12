@@ -277,13 +277,13 @@ jobs:
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
         run: |
           TEST_IMAGE_REF="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-${{ matrix.safeplatform }}"
-          STABLE_IMAGE_REF="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          STABLE_IMAGE_REF="${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}"
           echo "### 🧪 Testing Instructions for ${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}" >> $GITHUB_STEP_SUMMARY
           echo "To test this image, run the following command:" >> $GITHUB_STEP_SUMMARY
           echo " \`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo " sudo bootc switch --enforce-container-sigpolicy ${TEST_IMAGE_REF}" >> $GITHUB_STEP_SUMMARY
           echo " \`\`\`" >> $GITHUB_STEP_SUMMARY
-          echo "To go back to the latest stable version:" >> $GITHUB_STEP_SUMMARY
+          echo "To go back to the stable version of this flavor:" >> $GITHUB_STEP_SUMMARY
           echo " \`\`\`bash" >> $GITHUB_STEP_SUMMARY
           echo " sudo bootc switch --enforce-container-sigpolicy ${STABLE_IMAGE_REF}" >> $GITHUB_STEP_SUMMARY
           echo " \`\`\`" >> $GITHUB_STEP_SUMMARY
@@ -302,10 +302,10 @@ jobs:
             exit 0
           fi
 
-          # Pull the 'latest' image (base for comparison)
-          # We assume 'latest' tag exists. If not, we might fail or skip.
+          # Pull the stable base flavor image (base for comparison)
+          # We assume the default tag exists. If not, we might fail or skip.
           # We'll try to pull it, if it fails, we skip diff.
-          BASE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
+          BASE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
           TARGET_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
 
           echo "Pulling base image $BASE_IMAGE..."
@@ -730,13 +730,12 @@ jobs:
           # Always copy to sha-based tag
           sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${REFS}"
 
-          # Only tag as 'latest' if all default platforms for this variant were built
+          # Only copy to 'YYYYMMDD' style tags and record as 'best stable output tag' if all default platforms for this variant were built
           if [ "${ALL_PLATFORMS_BUILT}" = "true" ]; then
-            echo "All default platforms for this variant built successfully - tagging as latest"
+            echo "All default platforms for this variant built successfully - tagging with YYYYMMDD"
             sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:$(date +%Y%m%d)"
-            sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:latest"
-            echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:latest" >> $GITHUB_OUTPUT
+            echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
           else
-            echo "Not all default platforms for this variant built - skipping latest tag"
+            echo "Not all default platforms for this variant built - skipping YYYYMMDD tag"
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${REFS}" >> $GITHUB_OUTPUT
           fi

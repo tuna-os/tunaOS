@@ -80,7 +80,8 @@ jobs:
           if [[ "${{ github.event_name }}" == "pull_request" ]]; then
             TAG="pr-${{ github.event.pull_request.number }}"
           elif [[ "${{ github.ref_name }}" == "main" ]]; then
-            TAG="latest"
+            # ISOs are built referencing the specific flavor tag from ghcr
+            TAG="${FLAVOR}"
           else
             TAG="${{ github.sha }}"
           fi
