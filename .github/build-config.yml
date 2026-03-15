@@ -44,6 +44,11 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: true
+      - id: gnome50
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: kde
         stage: 2
         build_image: true
@@ -67,6 +72,16 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: gnome-gdx-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome50-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome50-gdx
         stage: 3
         build_image: true
         build_iso: false
@@ -121,6 +136,11 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: true
+      - id: gnome50
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: kde
         stage: 2
         build_image: true
@@ -144,6 +164,16 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: gnome-gdx-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome50-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome50-gdx
         stage: 3
         build_image: true
         build_iso: false
@@ -199,6 +229,11 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: true
+      - id: gnome50
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: kde
         stage: 2
         build_image: true
@@ -217,6 +252,16 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: gnome-gdx
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome50-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome50-gdx
         stage: 3
         build_image: true
         build_iso: false

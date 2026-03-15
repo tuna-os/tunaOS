@@ -6,13 +6,19 @@ source /run/context/build_scripts/lib.sh
 
 case "${1:-}" in
 "base")
-	# Use COPR GNOME 48 packages for EL10-based builds.
+	# Use COPR GNOME packages for EL10-based builds.
 	if [[ $IS_FEDORA == false ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
-		dnf -y copr enable jreilly1821/c10s-gnome
-		dnf config-manager --save --setopt="copr:copr.fedorainfracloud.org:jreilly1821:c10s-gnome.exclude=glib2*"
+		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
+			GNOME_COPR="jreilly1821/c10s-gnome-50"
+		else
+			GNOME_COPR="jreilly1821/c10s-gnome-49"
+		fi
+		GNOME_REPO_ID="copr:copr.fedorainfracloud.org:$(echo "$GNOME_COPR" | tr '/' ':')"
+		dnf -y copr enable "$GNOME_COPR"
+		dnf config-manager --save --setopt="${GNOME_REPO_ID}.exclude=glib2*"
 		# Use install --allowerasing which is more robust than swap if the package is already present
 		dnf -y install gnome-shell --allowerasing || true
-		dnf -y copr disable jreilly1821/c10s-gnome
+		dnf -y copr disable "$GNOME_COPR"
 	fi
 
 	# Install base groups and packages - different between Fedora and RHEL/AlmaLinux

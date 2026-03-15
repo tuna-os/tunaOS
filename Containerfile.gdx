@@ -63,6 +63,16 @@ ENV DESKTOP_FLAVOR=gnome
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 # ==============================================================================
+# GNOME 50 variant - GDX base with GNOME 50 desktop target
+# ==============================================================================
+FROM base-gdx AS gnome50
+
+ARG DESKTOP_FLAVOR=gnome50
+ENV DESKTOP_FLAVOR=gnome50
+
+RUN rm -rf /opt && ln -s /var/opt /opt
+
+# ==============================================================================
 # KDE variant - GDX base with KDE desktop target
 # ==============================================================================
 FROM base-gdx AS kde

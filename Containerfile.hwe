@@ -67,6 +67,20 @@ RUN dnf versionlock add glib2
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 # ==============================================================================
+# GNOME 50 variant - HWE base with GNOME 50 desktop
+# ==============================================================================
+FROM base-hwe AS gnome50
+
+ARG DESKTOP_FLAVOR=gnome50
+ENV DESKTOP_FLAVOR=gnome50
+
+# Lock glib2 for consistency
+RUN dnf versionlock add glib2
+
+# Makes `/opt` writeable by default
+RUN rm -rf /opt && ln -s /var/opt /opt
+
+# ==============================================================================
 # KDE variant - HWE base with KDE desktop
 # ==============================================================================
 FROM base-hwe AS kde
