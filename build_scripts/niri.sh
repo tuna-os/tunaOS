@@ -45,11 +45,11 @@ case "${1:-}" in
 			dms-cli \
 			dms-greeter \
 			dgop \
-			dsearch
+			dsearch \
+			matugen
 
 		# Install Fedora Niri ecosystem packages from zirconium/packages COPR
 		dnf -y --enablerepo copr:copr.fedorainfracloud.org:zirconium:packages install \
-			matugen \
 			iio-niri \
 			valent-git
 
