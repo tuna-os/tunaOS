@@ -15,6 +15,10 @@ on:
         default: 'all'
         type: string
 
+concurrency:
+  group: build-albacore-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: 🐟-albacore
