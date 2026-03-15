@@ -85,23 +85,13 @@ clean:
     rm -rf .build-logs
     sudo rm -rf .build/*
     echo "Removing local podman images for all variants and flavors..."
-    variants=(yellowfin albacore bonito skipjack redfin)
-    images=()
-    for variant in "${variants[@]}"; do
-        images+=("$variant")
-        images+=("${variant}-hwe")
-        images+=("${variant}-gdx")
-        images+=("${variant}-gdx-hwe")
-        images+=("${variant}-kde")
-        images+=("${variant}-kde-hwe")
-        images+=("${variant}-kde-gdx")
-        images+=("${variant}-kde-gdx-hwe")
-    done
-    for img in "${images[@]}"; do
-        podman rmi -f "localhost/${img}:latest" 2>/dev/null || true
-    done
-    for img in "${images[@]}"; do
-        sudo podman rmi -f "localhost/${img}:latest" 2>/dev/null || true
+    readarray -t VARIANTS < <(yq -r '.variants[].id' .github/build-config.yml 2>/dev/null || echo -e "yellowfin\nalbacore\nbonito\nskipjack\nredfin")
+    for variant in "${VARIANTS[@]}"; do
+        readarray -t FLAVORS < <(yq -r ".variants[] | select(.id == \"$variant\") | .flavors[].id" .github/build-config.yml 2>/dev/null || true)
+        for flavor in "${FLAVORS[@]}"; do
+            podman rmi -f "localhost/${variant}:${flavor}" 2>/dev/null || true
+            sudo podman rmi -f "localhost/${variant}:${flavor}" 2>/dev/null || true
+        done
     done
 
 # Prune build caches (DNF/RPM cache directory shared across all variants)
@@ -187,25 +177,10 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
         BUILD_ARGS+=("${CACHE_MOUNTS[@]}")
     fi
 
-    # Determine build target for multi-stage Containerfiles.
-    # GNOME is default; KDE and Niri are selected explicitly.
-    # no-DE intermediates map to the base stages in HWE/GDX Containerfiles.
-    BUILD_TARGET="gnome"
-    if [[ "{{ desktop_flavor }}" == "gnome50" ]]; then
-        BUILD_TARGET="gnome50"
-    elif [[ "{{ desktop_flavor }}" == "cosmic" ]]; then
-        BUILD_TARGET="cosmic"
-    elif [[ "{{ desktop_flavor }}" == "kde" ]]; then
-        BUILD_TARGET="kde"
-    elif [[ "{{ desktop_flavor }}" == "niri" ]]; then
-        BUILD_TARGET="niri"
-    elif [[ "{{ desktop_flavor }}" == "base-no-de" ]]; then
-        BUILD_TARGET="base-no-de"
-    elif [[ "{{ desktop_flavor }}" == "base-hwe" ]] || [[ "{{ desktop_flavor }}" == "base-hwe-node" ]]; then
-        BUILD_TARGET="base-hwe"
-    elif [[ "{{ desktop_flavor }}" == "base-gdx" ]] || [[ "{{ desktop_flavor }}" == "base-gdx-node" ]]; then
-        BUILD_TARGET="base-gdx"
-    fi
+    # Build target maps directly to the desktop_flavor value, which matches
+    # the stage names in all Containerfiles (base-no-de, gnome, kde, niri,
+    # gnome50, cosmic, base-hwe, base-gdx).
+    BUILD_TARGET="{{ desktop_flavor }}"
 
     podman build \
         --dns=8.8.8.8 \
@@ -269,195 +244,74 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     echo -e "  Chain Base Image: ${YELLOW}{{ chain_base_image }}${NC}"
     echo -e "${BLUE}===============================================================${NC}"
 
-
     BASE_FOR_BUILD=""
     CONTAINERFILE="Containerfile"
-    DESKTOP_FLAVOR="gnome"
+    ENABLE_HWE="0"
+    ENABLE_GDX="0"
+    PARENT_FLAVOR=""
+    FLAVOR="{{ flavor }}"
+    DESKTOP_FLAVOR="${FLAVOR}"
 
-    case "{{ flavor }}" in
-        "base")
-            BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
-            DESKTOP_FLAVOR="base-no-de"
-            ;;
-        "gnome")
-            BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
-            ;;
-        "gnome50")
-            BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
-            DESKTOP_FLAVOR="gnome50"
-            ;;
-        "gnome50-hwe")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:gnome50"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}:gnome50"
-            fi
-            CONTAINERFILE="Containerfile.hwe"
-            DESKTOP_FLAVOR="gnome50"
-            ;;
-        "gnome50-gdx")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:gnome50"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}:gnome50"
-            fi
-            CONTAINERFILE="Containerfile.gdx"
-            DESKTOP_FLAVOR="gnome50"
-            ;;
-        "cosmic")
-            BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
-            DESKTOP_FLAVOR="cosmic"
-            ;;
-        "cosmic-hwe")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:cosmic"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}:cosmic"
-            fi
-            CONTAINERFILE="Containerfile.hwe"
-            DESKTOP_FLAVOR="cosmic"
-            ;;
-        "cosmic-gdx")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:cosmic"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}:cosmic"
-            fi
-            CONTAINERFILE="Containerfile.gdx"
-            DESKTOP_FLAVOR="cosmic"
-            ;;
-        "hwe"|"gnome-hwe")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:gnome"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}:gnome"
-            fi
-            CONTAINERFILE="Containerfile.hwe"
-            ;;
-        "gdx"|"gnome-gdx")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:gnome"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}:gnome"
-            fi
-            CONTAINERFILE="Containerfile.gdx"
-            ;;
-        "gdx-hwe"|"gnome-gdx-hwe")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:gnome-hwe"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}:gnome-hwe"
-            fi
-            CONTAINERFILE="Containerfile.gdx"
-            ;;
-        "base-hwe"|"base-hwe-node")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:base"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}:base"
-            fi
-            CONTAINERFILE="Containerfile.hwe"
-            DESKTOP_FLAVOR="base-hwe"
-            ;;
-        "base-gdx"|"base-gdx-node")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:base"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}:base"
-            fi
-            CONTAINERFILE="Containerfile.gdx"
-            DESKTOP_FLAVOR="base-gdx"
-            ;;
-        "kde")
-            BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
-            CONTAINERFILE="Containerfile"
-            DESKTOP_FLAVOR="kde"
-            ;;
-        "kde-hwe")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:kde"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}:kde"
-            fi
-            CONTAINERFILE="Containerfile.hwe"
-            DESKTOP_FLAVOR="kde"
-            ;;
-        "kde-gdx")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:kde"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}:kde"
-            fi
-            CONTAINERFILE="Containerfile.gdx"
-            DESKTOP_FLAVOR="kde"
-            ;;
-        "kde-gdx-hwe")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:kde-hwe"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}:kde-hwe"
-            fi
-            CONTAINERFILE="Containerfile.gdx"
-            DESKTOP_FLAVOR="kde"
-            ;;
-        "niri")
-            BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
-            CONTAINERFILE="Containerfile"
-            DESKTOP_FLAVOR="niri"
-            ;;
-        "niri-hwe")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:niri"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}:niri"
-            fi
-            CONTAINERFILE="Containerfile.hwe"
-            DESKTOP_FLAVOR="niri"
-            ;;
-        "niri-gdx")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:niri"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}:niri"
-            fi
-            CONTAINERFILE="Containerfile.gdx"
-            DESKTOP_FLAVOR="niri"
-            ;;
-        "niri-gdx-hwe")
-            if [[ "{{ is_ci }}" = "1" ]]; then
-                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:niri-hwe"
-            else
-                BASE_FOR_BUILD="localhost/{{ variant }}:niri-hwe"
-            fi
-            CONTAINERFILE="Containerfile.gdx"
-            DESKTOP_FLAVOR="niri"
-            ;;
-        "all")
-            just build {{ variant }} base
-            just build {{ variant }} gnome
-            just build {{ variant }} gnome-hwe
-            just build {{ variant }} gnome-gdx
-            just build {{ variant }} base-hwe
-            just build {{ variant }} base-gdx
-            just build {{ variant }} gnome-gdx-hwe
-            just build {{ variant }} kde
-            just build {{ variant }} kde-hwe
-            just build {{ variant }} kde-gdx
-            just build {{ variant }} kde-gdx-hwe
-            just build {{ variant }} niri
-            just build {{ variant }} niri-hwe
-            just build {{ variant }} niri-gdx
-            just build {{ variant }} niri-gdx-hwe
-            exit 0
-            ;;
-        *)
-            echo "Unknown flavor '{{ flavor }}'. Valid options are: base, gnome, gnome-hwe, gnome-gdx, base-hwe, base-gdx, gnome-gdx-hwe, kde, kde-hwe, kde-gdx, kde-gdx-hwe, niri, niri-hwe, niri-gdx, niri-gdx-hwe, all."
-            exit 1
-            ;;
+    # Normalize legacy aliases
+    case "${FLAVOR}" in
+        "hwe") FLAVOR="gnome-hwe" ;;
+        "gdx") FLAVOR="gnome-gdx" ;;
+        "gdx-hwe") FLAVOR="gnome-gdx-hwe" ;;
     esac
 
+    # Derive build parameters from flavor name using suffix pattern matching.
+    # .github/build-config.yml is the sole source of truth for valid flavors.
+    if [[ "${FLAVOR}" == "all" ]]; then
+        readarray -t FLAVORS < <(yq -r '.variants[] | select(.id == "{{ variant }}") | .flavors[].id' .github/build-config.yml)
+        for f in "${FLAVORS[@]}"; do
+            {{ just }} build "{{ variant }}" "$f"
+        done
+        exit 0
+    elif [[ "${FLAVOR}" == "base" ]]; then
+        BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
+        DESKTOP_FLAVOR="base-no-de"
+    elif [[ "${FLAVOR}" == "base-hwe" ]]; then
+        CONTAINERFILE="Containerfile.hwe"
+        ENABLE_HWE="1"
+        DESKTOP_FLAVOR="base-hwe"
+        PARENT_FLAVOR="base"
+    elif [[ "${FLAVOR}" == "base-gdx" ]]; then
+        CONTAINERFILE="Containerfile.gdx"
+        ENABLE_GDX="1"
+        DESKTOP_FLAVOR="base-gdx"
+        PARENT_FLAVOR="base"
+    elif [[ "${FLAVOR}" == *"-gdx-hwe" ]]; then
+        DESKTOP_FLAVOR="${FLAVOR%-gdx-hwe}"
+        CONTAINERFILE="Containerfile.gdx"
+        ENABLE_GDX="1"
+        ENABLE_HWE="1"
+        PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
+    elif [[ "${FLAVOR}" == *"-hwe" ]]; then
+        DESKTOP_FLAVOR="${FLAVOR%-hwe}"
+        CONTAINERFILE="Containerfile.hwe"
+        ENABLE_HWE="1"
+        PARENT_FLAVOR="${DESKTOP_FLAVOR}"
+    elif [[ "${FLAVOR}" == *"-gdx" ]]; then
+        DESKTOP_FLAVOR="${FLAVOR%-gdx}"
+        CONTAINERFILE="Containerfile.gdx"
+        ENABLE_GDX="1"
+        PARENT_FLAVOR="${DESKTOP_FLAVOR}"
+    else
+        # Plain DE flavor (gnome, kde, niri, gnome50, cosmic, or any future flavor)
+        DESKTOP_FLAVOR="${FLAVOR}"
+        BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
+    fi
+
+    if [[ -n "${PARENT_FLAVOR}" ]]; then
+        if [[ "{{ is_ci }}" = "1" ]]; then
+            BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:${PARENT_FLAVOR}"
+        else
+            BASE_FOR_BUILD="localhost/{{ variant }}:${PARENT_FLAVOR}"
+        fi
+    fi
+
     # Allow workflow callers to chain from an explicit parent image.
-    if [[ -n "{{ chain_base_image }}" ]] && [[ "{{ flavor }}" != "base" ]]; then
+    if [[ -n "{{ chain_base_image }}" ]] && [[ "${FLAVOR}" != "base" ]]; then
         BASE_FOR_BUILD="{{ chain_base_image }}"
     fi
 
@@ -465,21 +319,9 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     TARGET_TAG="{{ variant }}"
     TARGET_IMAGE_TAG="{{ tag }}"
     if [[ "{{ tag }}" == "latest" ]]; then
-        TARGET_IMAGE_TAG="{{ flavor }}"
+        TARGET_IMAGE_TAG="${FLAVOR}"
     fi
     TARGET_TAG_WITH_VERSION="${TARGET_TAG}:${TARGET_IMAGE_TAG}"
-
-    # Determine HWE flag - hwe and gdx flavors always use coreos akmods
-    ENABLE_HWE="0"
-    if [[ "{{ flavor }}" == "hwe" ]] || [[ "{{ flavor }}" == "gnome-hwe" ]] || [[ "{{ flavor }}" == "gnome50-hwe" ]] || [[ "{{ flavor }}" == "cosmic-hwe" ]] || [[ "{{ flavor }}" == "base-hwe" ]] || [[ "{{ flavor }}" == "base-hwe-node" ]] || [[ "{{ flavor }}" == "gdx-hwe" ]] || [[ "{{ flavor }}" == "gnome-gdx-hwe" ]] || [[ "{{ flavor }}" == "kde-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx-hwe" ]] || [[ "{{ flavor }}" == "niri-hwe" ]] || [[ "{{ flavor }}" == "niri-gdx-hwe" ]]; then
-        ENABLE_HWE="1"
-    fi
-
-    # Determine GDX flag
-    ENABLE_GDX="0"
-    if [[ "{{ flavor }}" == "gdx" ]] || [[ "{{ flavor }}" == "gnome-gdx" ]] || [[ "{{ flavor }}" == "gnome50-gdx" ]] || [[ "{{ flavor }}" == "cosmic-gdx" ]] || [[ "{{ flavor }}" == "base-gdx" ]] || [[ "{{ flavor }}" == "base-gdx-node" ]] || [[ "{{ flavor }}" == "kde-gdx" ]] || [[ "{{ flavor }}" == "gdx-hwe" ]] || [[ "{{ flavor }}" == "gnome-gdx-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx-hwe" ]] || [[ "{{ flavor }}" == "niri-gdx" ]] || [[ "{{ flavor }}" == "niri-gdx-hwe" ]]; then
-        ENABLE_GDX="1"
-    fi
 
     echo -e "${BLUE}================================================================${NC}"
     echo -e "${GREEN}Building image with the following parameters:${NC}"
