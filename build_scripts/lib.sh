@@ -92,7 +92,7 @@ run_buildscripts_for() {
 	fi
 	# Complex "find" expression here since there might not be any overrides
 	find "$override_path" -maxdepth 1 -iname "*-*.sh" -type f -print0 | sort --zero-terminated --sort=human-numeric | while IFS= read -r -d $'\0' script; do
-		if [ "${CUSTOM_NAME}" != "" ]; then
+		if [ "${CUSTOM_NAME:-}" != "" ]; then
 			WHAT=$CUSTOM_NAME
 		fi
 		printf "::group:: ===$WHAT-%s===\n" "$(basename "$script")"
@@ -106,7 +106,7 @@ copy_systemfiles_for() {
 	shift
 	local override_path="${CONTEXT_PATH}/overrides/$WHAT"
 	DISPLAY_NAME=$WHAT
-	if [ "${CUSTOM_NAME}" != "" ]; then
+	if [ "${CUSTOM_NAME:-}" != "" ]; then
 		DISPLAY_NAME=$CUSTOM_NAME
 	fi
 	if [ ! -d "$override_path" ]; then

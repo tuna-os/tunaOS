@@ -59,7 +59,7 @@ case "${1:-}" in
 
 		# Install fcitx5 input method support (Asian languages) if available
 		# Not available in EPEL10 yet
-		if dnf repoquery --available fcitx5 &>/dev/null; then
+		if dnf repoquery --available fcitx5 2>/dev/null | grep -q .; then
 			dnf -y install \
 				fcitx5 \
 				fcitx5-chewing \
