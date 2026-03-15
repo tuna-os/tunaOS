@@ -163,8 +163,11 @@ case "${1:-}" in
 	dnf install -y greetd \
 		--repo=copr:copr.fedorainfracloud.org:ligenix:enterprise-cosmic
 
-	# Install Niri window manager from yalter/niri-git COPR
-	dnf -y --enablerepo copr:copr.fedorainfracloud.org:yalter:niri-git install \
+	# Install Niri window manager from yalter/niri-git COPR.
+	# libinput must come from yselkowitz/wlroots-epel — the EL10 stock version
+	# is too old and doesn't provide the symbols niri requires.
+	dnf -y --enablerepo copr:copr.fedorainfracloud.org:yalter:niri-git \
+		--enablerepo copr:copr.fedorainfracloud.org:yselkowitz:wlroots-epel install \
 		--setopt=install_weak_deps=False \
 		libinput \
 		niri
