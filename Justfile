@@ -193,6 +193,8 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     BUILD_TARGET="gnome"
     if [[ "{{ desktop_flavor }}" == "gnome50" ]]; then
         BUILD_TARGET="gnome50"
+    elif [[ "{{ desktop_flavor }}" == "cosmic" ]]; then
+        BUILD_TARGET="cosmic"
     elif [[ "{{ desktop_flavor }}" == "kde" ]]; then
         BUILD_TARGET="kde"
     elif [[ "{{ desktop_flavor }}" == "niri" ]]; then
@@ -301,6 +303,28 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
             fi
             CONTAINERFILE="Containerfile.gdx"
             DESKTOP_FLAVOR="gnome50"
+            ;;
+        "cosmic")
+            BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
+            DESKTOP_FLAVOR="cosmic"
+            ;;
+        "cosmic-hwe")
+            if [[ "{{ is_ci }}" = "1" ]]; then
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:cosmic"
+            else
+                BASE_FOR_BUILD="localhost/{{ variant }}:cosmic"
+            fi
+            CONTAINERFILE="Containerfile.hwe"
+            DESKTOP_FLAVOR="cosmic"
+            ;;
+        "cosmic-gdx")
+            if [[ "{{ is_ci }}" = "1" ]]; then
+                BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:cosmic"
+            else
+                BASE_FOR_BUILD="localhost/{{ variant }}:cosmic"
+            fi
+            CONTAINERFILE="Containerfile.gdx"
+            DESKTOP_FLAVOR="cosmic"
             ;;
         "hwe"|"gnome-hwe")
             if [[ "{{ is_ci }}" = "1" ]]; then
@@ -447,13 +471,13 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
 
     # Determine HWE flag - hwe and gdx flavors always use coreos akmods
     ENABLE_HWE="0"
-    if [[ "{{ flavor }}" == "hwe" ]] || [[ "{{ flavor }}" == "gnome-hwe" ]] || [[ "{{ flavor }}" == "gnome50-hwe" ]] || [[ "{{ flavor }}" == "base-hwe" ]] || [[ "{{ flavor }}" == "base-hwe-node" ]] || [[ "{{ flavor }}" == "gdx-hwe" ]] || [[ "{{ flavor }}" == "gnome-gdx-hwe" ]] || [[ "{{ flavor }}" == "kde-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx-hwe" ]] || [[ "{{ flavor }}" == "niri-hwe" ]] || [[ "{{ flavor }}" == "niri-gdx-hwe" ]]; then
+    if [[ "{{ flavor }}" == "hwe" ]] || [[ "{{ flavor }}" == "gnome-hwe" ]] || [[ "{{ flavor }}" == "gnome50-hwe" ]] || [[ "{{ flavor }}" == "cosmic-hwe" ]] || [[ "{{ flavor }}" == "base-hwe" ]] || [[ "{{ flavor }}" == "base-hwe-node" ]] || [[ "{{ flavor }}" == "gdx-hwe" ]] || [[ "{{ flavor }}" == "gnome-gdx-hwe" ]] || [[ "{{ flavor }}" == "kde-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx-hwe" ]] || [[ "{{ flavor }}" == "niri-hwe" ]] || [[ "{{ flavor }}" == "niri-gdx-hwe" ]]; then
         ENABLE_HWE="1"
     fi
 
     # Determine GDX flag
     ENABLE_GDX="0"
-    if [[ "{{ flavor }}" == "gdx" ]] || [[ "{{ flavor }}" == "gnome-gdx" ]] || [[ "{{ flavor }}" == "gnome50-gdx" ]] || [[ "{{ flavor }}" == "base-gdx" ]] || [[ "{{ flavor }}" == "base-gdx-node" ]] || [[ "{{ flavor }}" == "kde-gdx" ]] || [[ "{{ flavor }}" == "gdx-hwe" ]] || [[ "{{ flavor }}" == "gnome-gdx-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx-hwe" ]] || [[ "{{ flavor }}" == "niri-gdx" ]] || [[ "{{ flavor }}" == "niri-gdx-hwe" ]]; then
+    if [[ "{{ flavor }}" == "gdx" ]] || [[ "{{ flavor }}" == "gnome-gdx" ]] || [[ "{{ flavor }}" == "gnome50-gdx" ]] || [[ "{{ flavor }}" == "cosmic-gdx" ]] || [[ "{{ flavor }}" == "base-gdx" ]] || [[ "{{ flavor }}" == "base-gdx-node" ]] || [[ "{{ flavor }}" == "kde-gdx" ]] || [[ "{{ flavor }}" == "gdx-hwe" ]] || [[ "{{ flavor }}" == "gnome-gdx-hwe" ]] || [[ "{{ flavor }}" == "kde-gdx-hwe" ]] || [[ "{{ flavor }}" == "niri-gdx" ]] || [[ "{{ flavor }}" == "niri-gdx-hwe" ]]; then
         ENABLE_GDX="1"
     fi
 

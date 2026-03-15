@@ -63,6 +63,16 @@ ENV DESKTOP_FLAVOR=gnome
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 # ==============================================================================
+# COSMIC variant - GDX base with COSMIC desktop target
+# ==============================================================================
+FROM base-gdx AS cosmic
+
+ARG DESKTOP_FLAVOR=cosmic
+ENV DESKTOP_FLAVOR=cosmic
+
+RUN rm -rf /opt && ln -s /var/opt /opt
+
+# ==============================================================================
 # GNOME 50 variant - GDX base with GNOME 50 desktop target
 # ==============================================================================
 FROM base-gdx AS gnome50

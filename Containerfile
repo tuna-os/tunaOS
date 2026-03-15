@@ -127,6 +127,26 @@ RUN dnf versionlock add glib2
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 # ==============================================================================
+# COSMIC variant - Adds COSMIC desktop (yselkowitz/cosmic-epel) to base-no-de
+# ==============================================================================
+FROM base-no-de AS cosmic
+
+ARG DESKTOP_FLAVOR=cosmic
+ENV DESKTOP_FLAVOR=cosmic
+
+# Install COSMIC desktop environment
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/cosmic.sh base
+
+# Lock glib2 after COSMIC installation
+RUN dnf versionlock add glib2
+
+# Makes `/opt` writeable by default
+RUN rm -rf /opt && ln -s /var/opt /opt
+
+# ==============================================================================
 # GNOME 50 variant - Adds GNOME 50 (c10s-gnome-50 COPR) desktop to base-no-de
 # ==============================================================================
 FROM base-no-de AS gnome50

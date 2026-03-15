@@ -49,6 +49,11 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+      - id: cosmic
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: kde
         stage: 2
         build_image: true
@@ -82,6 +87,16 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: gnome50-gdx
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: cosmic-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: cosmic-gdx
         stage: 3
         build_image: true
         build_iso: false
@@ -141,6 +156,11 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+      - id: cosmic
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: kde
         stage: 2
         build_image: true
@@ -174,6 +194,16 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: gnome50-gdx
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: cosmic-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: cosmic-gdx
         stage: 3
         build_image: true
         build_iso: false
@@ -234,6 +264,11 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+      - id: cosmic
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: kde
         stage: 2
         build_image: true
@@ -262,6 +297,16 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: gnome50-gdx
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: cosmic-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: cosmic-gdx
         stage: 3
         build_image: true
         build_iso: false

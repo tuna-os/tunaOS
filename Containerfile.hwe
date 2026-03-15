@@ -67,6 +67,20 @@ RUN dnf versionlock add glib2
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 # ==============================================================================
+# COSMIC variant - HWE base with COSMIC desktop
+# ==============================================================================
+FROM base-hwe AS cosmic
+
+ARG DESKTOP_FLAVOR=cosmic
+ENV DESKTOP_FLAVOR=cosmic
+
+# Lock glib2 for consistency
+RUN dnf versionlock add glib2
+
+# Makes `/opt` writeable by default
+RUN rm -rf /opt && ln -s /var/opt /opt
+
+# ==============================================================================
 # GNOME 50 variant - HWE base with GNOME 50 desktop
 # ==============================================================================
 FROM base-hwe AS gnome50
