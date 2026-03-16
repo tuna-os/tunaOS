@@ -562,7 +562,7 @@ _run-vm type variant flavor='gnome' iso_file='':
 live-iso variant='yellowfin' flavor='gnome' repo='local' tag='latest' type='iso':
     #!/usr/bin/env bash
     set -euo pipefail
-    bash ./scripts/build-live-iso.sh {{ variant }} {{ flavor }} {{ repo }} {{ tag }} {{ type }}
+    bash ./scripts/build-live-iso.sh "{{ variant }}" "{{ flavor }}" "{{ repo }}" "{{ tag }}" "{{ type }}"
 
 # Verify a Live ISO using Lima
 verify-live-iso iso_file:

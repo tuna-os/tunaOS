@@ -54,10 +54,10 @@ jobs:
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT_2025 }}
         run: |
           # First build the image (if not already in registry, but we build it here for safety)
-          just build ${{ github.event.inputs.variant }} ${{ github.event.inputs.flavor }} chunk=0
+          just build variant=${{ github.event.inputs.variant }} flavor=${{ github.event.inputs.flavor }} is_ci=1 chunk=0
 
           # Then build the live ISO
-          just live-iso ${{ github.event.inputs.variant }} ${{ github.event.inputs.flavor }} local latest
+          just live-iso variant=${{ github.event.inputs.variant }} flavor=${{ github.event.inputs.flavor }} repo=local tag=latest
 
       - name: Install Lima
         run: |
