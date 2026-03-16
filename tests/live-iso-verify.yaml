@@ -1,0 +1,24 @@
+# Lima template to verify TunaOS Live ISO boot
+images:
+  - location: "${ISO_PATH}"
+    arch: "x86_64"
+
+# Resources
+cpus: 2
+memory: "4GiB"
+disk: "10GiB"
+
+# Use UEFI
+firmware:
+  legacyBIOS: false
+
+# Skip waiting for guest agent
+plain: true
+
+video:
+  display: "none"
+
+# We can try to use a serial console or just check if the process stays alive
+# But better to check if we can reach it via SSH if we add a user.
+# For a Live ISO, it usually has a default user or autologin.
+# TunaOS/Bluefin Live ISOs usually have a user 'centos' with password 'centos' (or similar).

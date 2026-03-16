@@ -1,0 +1,18 @@
+# This Containerfile builds the "installer" image for the live ISO.
+# It's based on the target OS image and adds the live-boot components.
+
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+
+ARG LABEL="TunaOS-Live"
+ARG DESKTOP_FLAVOR="gnome"
+
+COPY src /src
+RUN LABEL="${LABEL}" DESKTOP_FLAVOR="${DESKTOP_FLAVOR}" /src/build.sh
+
+# Copy in the iso config for image-builder
+RUN mkdir -p /usr/lib/bootc-image-builder
+COPY src/iso.yaml /usr/lib/bootc-image-builder/iso.yaml
+# Substitute LABEL in iso.yaml
+RUN sed -i "s/\${LABEL:-TunaOS-Live}/${LABEL}/g" /usr/lib/bootc-image-builder/iso.yaml && \
+    sed -i "s/\${LABEL:-TunaOS Live ISO}/${LABEL} Live ISO/g" /usr/lib/bootc-image-builder/iso.yaml

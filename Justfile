@@ -557,3 +557,46 @@ _run-vm type variant flavor='gnome' iso_file='':
     # Run the VM and open the browser to connect
     (sleep 5 && xdg-open "http://localhost:${port}") &
     podman run "${run_args[@]}"
+
+# Build a Live ISO for a TunaOS variant
+live-iso variant='yellowfin' flavor='gnome' repo='local' tag='latest' type='iso':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    bash ./scripts/build-live-iso.sh {{ variant }} {{ flavor }} {{ repo }} {{ tag }} {{ type }}
+
+# Verify a Live ISO using Lima
+verify-live-iso iso_file:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ISO_PATH="$(realpath {{ iso_file }})"
+    if [[ ! -f "$ISO_PATH" ]]; then
+        echo "ISO not found: $ISO_PATH"
+        exit 1
+    fi
+    echo "Verifying ISO: $ISO_PATH"
+    export ISO_PATH
+    # Generate temporary template with real path
+    TEMPLATE_PATH=$(mktemp --suffix=.yaml)
+    sed "s|\${ISO_PATH}|$ISO_PATH|g" tests/live-iso-verify.yaml > "$TEMPLATE_PATH"
+
+    INSTANCE_NAME="verify-live-iso-$(date +%s)"
+    echo "Starting Lima instance: $INSTANCE_NAME"
+    limactl start --name="$INSTANCE_NAME" --tty=false "$TEMPLATE_PATH"
+
+    # Give it some time to boot
+    echo "Waiting for 60 seconds to see if it boots..."
+    sleep 60
+
+    # Check if instance is still running
+    if limactl list "$INSTANCE_NAME" --json | jq -e 'select(.status == "Running")' > /dev/null; then
+        echo "ISO booted and instance is running!"
+        limactl stop "$INSTANCE_NAME"
+        limactl delete "$INSTANCE_NAME"
+        rm "$TEMPLATE_PATH"
+        echo "Verification successful."
+    else
+        echo "ISO verification failed - instance not running."
+        limactl delete -f "$INSTANCE_NAME"
+        rm "$TEMPLATE_PATH"
+        exit 1
+    fi

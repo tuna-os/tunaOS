@@ -1,0 +1,7 @@
+label: "${LABEL:-TunaOS-Live}"
+grub2:
+  timeout: 10
+  entries:
+    - name: "${LABEL:-TunaOS Live ISO}"
+      linux: "/images/pxeboot/vmlinuz quiet rhgb root=live:CDLABEL=${LABEL:-TunaOS-Live} enforcing=0 rd.live.image"
+      initrd: "/images/pxeboot/initrd.img"

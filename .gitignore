@@ -18,4 +18,5 @@ completions/
 # dev files
 hack/
 
-secrets.env
+secrets.envbuild.log
+CLAUDE.md
