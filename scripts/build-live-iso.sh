@@ -139,6 +139,7 @@ podman build \
 	--build-arg "LABEL=${LABEL}" \
 	--build-arg "DESKTOP_FLAVOR=${FLAVOR}" \
 	--build-arg "PAYLOAD_REF=${PAYLOAD_REF}" \
+	--build-arg "ENABLE_SSHD=${DEV_SSHD:-0}" \
 	-t "localhost/${INSTALLER_TAG}" \
 	-f live-iso/common/Containerfile \
 	live-iso/common

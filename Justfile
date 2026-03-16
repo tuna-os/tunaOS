@@ -567,17 +567,20 @@ build-image-builder:
     sudo bash ./scripts/build-live-iso.sh --build-image-builder-only
 
 # Build a TunaOS live installer ISO using the bootc-isos approach (Ondrej Budai).
-
 # Requires root (uses privileged containers). Defaults to skipjack:gnome for local testing.
-live-iso variant='skipjack' flavor='gnome' repo='local' tag='':
+
+# Pass dev=1 to enable sshd in the live environment (testing only — not for production ISOs).
+live-iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
     #!/usr/bin/env bash
     set -euo pipefail
     _tag="{{ tag }}"
     [[ -z "$_tag" ]] && _tag="{{ flavor }}"
-    sudo bash ./scripts/build-live-iso.sh "{{ variant }}" "{{ flavor }}" "{{ repo }}" "$_tag"
+    sudo DEV_SSHD="{{ dev }}" bash ./scripts/build-live-iso.sh "{{ variant }}" "{{ flavor }}" "{{ repo }}" "$_tag"
 
 # Boot a TunaOS live ISO in QEMU via browser (uses ghcr.io/qemus/qemu). Requires /dev/kvm.
-run-iso iso_file:
+
+# Pass ssh=1 to enable SSH port forwarding and print the limactl-compatible SSH command.
+run-iso iso_file ssh='0':
     #!/usr/bin/env bash
     set -euo pipefail
     ISO_PATH="$(realpath "{{ iso_file }}")"
@@ -590,14 +593,26 @@ run-iso iso_file:
         port=$(( port + 1 ))
     done
     echo "==> Connect to http://localhost:${port}"
+    run_args=(--rm --privileged)
+    run_args+=(--publish "127.0.0.1:${port}:8006")
+    run_args+=(--env CPU_CORES=4)
+    run_args+=(--env RAM_SIZE=8G)
+    run_args+=(--env DISK_SIZE=64G)
+    run_args+=(--env BOOT_MODE=windows_secure)
+    run_args+=(--env TPM=Y)
+    run_args+=(--device=/dev/kvm)
+    run_args+=(--volume "${ISO_PATH}:/boot.iso")
+    if [[ "{{ ssh }}" == "1" ]]; then
+        ssh_port=2222
+        while ss -tunalp | grep -q ":${ssh_port}"; do
+            ssh_port=$(( ssh_port + 1 ))
+        done
+        run_args+=(--publish "127.0.0.1:${ssh_port}:22")
+        run_args+=(--env "USER_PORTS=22")
+        run_args+=(--env "NETWORK=user")
+        echo "==> SSH port: ${ssh_port}"
+        echo "==> Connect via SSH: ssh liveuser@localhost -p ${ssh_port}"
+        echo "==> Or with limactl: ssh -i ~/.lima/_config/user -p ${ssh_port} liveuser@127.0.0.1"
+    fi
     (sleep 3 && xdg-open "http://localhost:${port}") &
-    podman run --rm --privileged \
-        --publish "127.0.0.1:${port}:8006" \
-        --env CPU_CORES=4 \
-        --env RAM_SIZE=8G \
-        --env DISK_SIZE=64G \
-        --env BOOT_MODE=windows_secure \
-        --env TPM=Y \
-        --device=/dev/kvm \
-        --volume "${ISO_PATH}:/boot.iso" \
-        ghcr.io/qemus/qemu
+    podman run "${run_args[@]}" ghcr.io/qemus/qemu

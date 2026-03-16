@@ -49,6 +49,21 @@ systemctl disable brew-update.timer || true
 systemctl --global disable podman-auto-update.timer || true
 systemctl --global disable ublue-user-setup.service || true
 
+# ── Dev: enable sshd for local testing ───────────────────────────────────────
+# Only active when ENABLE_SSHD=1 (passed via `just live-iso dev=1`).
+# Never enabled in production ISO builds.
+
+if [ "${ENABLE_SSHD:-0}" = "1" ]; then
+	echo "==> DEV: enabling sshd for local testing"
+	systemctl enable sshd.service
+	# Allow liveuser to SSH in with an empty password
+	mkdir -p /etc/ssh/sshd_config.d
+	tee /etc/ssh/sshd_config.d/99-liveiso-dev.conf <<'EOF'
+PermitEmptyPasswords yes
+PermitRootLogin no
+EOF
+fi
+
 # ── Install Anaconda ─────────────────────────────────────────────────────────
 
 # Remove old liveinst package; anaconda-live replaces it
