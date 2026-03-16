@@ -218,9 +218,9 @@ dnf install -y xorriso isomd5sum squashfs-tools
 
 mkdir -p /usr/lib/bootc-image-builder
 # Write iso.yaml with the correct LABEL substituted
-CDLABEL="${LABEL//-/_}" # CDLABEL can't have hyphens in some tools; use underscores
+CDLABEL="${LABEL//-/_}" # ISO labels can't have hyphens; use underscores
 cat >/usr/lib/bootc-image-builder/iso.yaml <<EOF
-label: "${LABEL}"
+label: "${CDLABEL}"
 grub2:
   timeout: 10
   entries:
