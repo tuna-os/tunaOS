@@ -30,6 +30,9 @@ else
 	VM_NAME="verify-${VARIANT}-${FLAVOR}"
 fi
 
+# Sanitize VM_NAME for Lima
+VM_NAME=$(echo "$VM_NAME" | tr '[:upper:]' '[:lower:]' | tr -c '[:alnum:]' '-' | sed 's/--/-/g' | sed 's/^-//;s/-$//')
+
 IMAGE_PATH="$(pwd)/${IMAGE_FILENAME}"
 
 if [ ! -f "$IMAGE_PATH" ]; then
@@ -54,7 +57,7 @@ fi
 
 # Create Lima Config
 CONFIG_FILE="$(mktemp --suffix=.yaml)"
-cat > "$CONFIG_FILE" <<EOF
+cat > "$CONFIG_FILE" <<LIMAEOF
 vmType: qemu
 arch: $LIMA_ARCH
 cpus: 2
@@ -72,7 +75,7 @@ mounts: []
 ssh:
   localPort: 0
   loadDotSSHPubKeys: false
-EOF
+LIMAEOF
 
 # Start VM
 echo "Starting VM..."

@@ -19,7 +19,8 @@ if [ ! -f "$ISO_PATH" ]; then
 fi
 
 # Extract variant/flavor for VM name if possible
-VM_NAME="verify-iso-$(basename "$ISO_FILE" .iso | tr '[:upper:]' '[:lower:]' | tr -c '[:alnum:]-' '-')"
+# Lima identifiers must match ^[A-Za-z0-9]+(?:[._-](?:[A-Za-z0-9]+))*$
+VM_NAME="verify-iso-$(basename "$ISO_FILE" .iso | tr '[:upper:]' '[:lower:]' | tr -c '[:alnum:]' '-' | sed 's/--/-/g' | sed 's/^-//;s/-$//')"
 
 if ! command -v limactl &>/dev/null; then
 	echo "Error: limactl is not installed."
@@ -44,12 +45,8 @@ if limactl list -q | grep -q "^${VM_NAME}$"; then
 fi
 
 # Create Lima Config for ISO Booting
-# Note: Lima doesn't have a direct "boot from ISO" flag in a simple way
-# but we can use qemu arguments or just point to the ISO in images.
-# Actually, the standard way is to use `vmType: qemu` and add the ISO as a drive.
-
 CONFIG_FILE="$(mktemp --suffix=.yaml)"
-cat > "$CONFIG_FILE" <<EOF
+cat > "$CONFIG_FILE" <<LIMAEOF
 vmType: qemu
 arch: $LIMA_ARCH
 cpus: 2
@@ -70,35 +67,18 @@ ssh:
   loadDotSSHPubKeys: false
 
 # Attach ISO as a CDROM
-# We use qemu args for this to ensure it boots from CDROM
-additionalArgs:
-  - "-device"
-  - "virtio-blk-pci,drive=cdrom"
-  - "-drive"
-  - "file=$ISO_PATH,format=raw,if=none,id=cdrom,readonly=on"
-  - "-boot"
-  - "order=d,once=d,menu=on"
-EOF
-
-# Wait, the above might be complicated.
-# Let's try a simpler approach if Lima supports it.
-# Actually, the user wants "ISO -> VM test" which might mean install.
-# For now, let's just see if it boots.
+qemu:
+  args:
+    - -device
+    - virtio-blk-pci,drive=cdrom
+    - -drive
+    - "file=$ISO_PATH,format=raw,if=none,id=cdrom,readonly=on"
+    - -boot
+    - order=d,once=d,menu=on
+LIMAEOF
 
 echo "Starting VM (ISO Boot)..."
-# We might need to use --tty=false to avoid interactive prompts
-# But ISO boot might not have SSH keys injected, so 'limactl shell' might not work.
-# We'll rely on checking if the VNC port is active and maybe some other heuristic.
-
-# Alternatively, we can use the 'bootc' installer ISO's auto-install if we have a kickstart.
-# But TunaOS ISOs use 'bootc' generic ISO which has an installer menu.
-
-# Let's just use the 'test-vm.sh' style but for ISO.
-
 limactl start --name="$VM_NAME" --tty=false "$CONFIG_FILE" --timeout=10m || echo "VM started (ignoring potential SSH timeout)"
-
-# For ISO, we can't easily run commands via 'limactl shell' unless it's the installed system.
-# If it's the live environment, we might need to wait and check VNC.
 
 echo "Waiting for VM to settle..."
 sleep 60
