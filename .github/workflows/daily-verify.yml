@@ -1,0 +1,90 @@
+name: Daily Image Verification
+on:
+  schedule:
+    - cron: '0 4 * * *' # 4 AM UTC daily
+  workflow_dispatch:
+
+jobs:
+  generate_matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Generate matrix
+        id: set-matrix
+        run: |
+          # We only verify 'gnome' flavor for each variant as a representative sample
+          # and only for amd64 as Lima is currently set up for it in our CI scripts.
+          MATRIX="{\"include\":[
+            {\"variant\": \"yellowfin\", \"flavor\": \"gnome\"},
+            {\"variant\": \"albacore\", \"flavor\": \"gnome\"},
+            {\"variant\": \"skipjack\", \"flavor\": \"gnome\"},
+            {\"variant\": \"bonito\", \"flavor\": \"gnome\"}
+          ]}"
+          echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
+
+  verify:
+    name: Verify ${{ matrix.variant }}:${{ matrix.flavor }}
+    needs: generate_matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate_matrix.outputs.matrix) }}
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup TunaOS Build Environment
+        uses: ./.github/actions/setup-tunaos
+
+      - name: Setup Lima
+        uses: ./.github/actions/setup-lima
+
+      - name: Run Verification
+        id: run_verify
+        env:
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+        run: |
+          # Pull the image from GHCR first to avoid building it locally (which takes too long for daily)
+          # Note: scripts/verify-image.sh expects a local .qcow2.
+          # We need to build the qcow2 from the remote image.
+          
+          IMAGE_REF="ghcr.io/${{ github.repository_owner }}/${VARIANT}:${FLAVOR}"
+          echo "Pulling ${IMAGE_REF}..."
+          
+          # Use just qcow2 repo=ghcr to build it from the remote image
+          just qcow2 "${VARIANT}" "${FLAVOR}" "ghcr"
+          
+          # Run the verify recipe
+          just verify "${VARIANT}" "${FLAVOR}"
+
+      - name: Create Issue on Failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+        run: |
+          TITLE="🚨 Daily Verification Failed: ${VARIANT}:${FLAVOR}"
+          BODY="The daily verification for \`${VARIANT}:${FLAVOR}\` failed. 
+          
+          [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          
+          Please investigate the boot logs and GDM status."
+          
+          # Check if an open issue with the same title already exists
+          EXISTING_ISSUE=$(gh issue list --search "${TITLE}" --state open --json number -q '.[0].number')
+          
+          if [ -z "${EXISTING_ISSUE}" ]; then
+            gh issue create --title "${TITLE}" --body "${BODY}" --label "bug,verification-failed"
+          else
+            gh issue comment "${EXISTING_ISSUE}" --body "Daily verification failed again. See: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fi
