@@ -140,8 +140,10 @@ case "${1:-}" in
 	# Install build tooling
 	dnf -y install glib2-devel meson sassc cmake dbus-devel unzip
 
-	# AppIndicator Support
-	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/appindicatorsupport@rgcjonas.gmail.com/schemas
+	# AppIndicator Support (not present in all GNOME versions/COPRs)
+	if [ -d /usr/share/gnome-shell/extensions/appindicatorsupport@rgcjonas.gmail.com/schemas ]; then
+		glib-compile-schemas --strict /usr/share/gnome-shell/extensions/appindicatorsupport@rgcjonas.gmail.com/schemas
+	fi
 
 	# Blur My Shell (requires gnome-extensions pack from gnome-shell)
 	# We build it and then unzip it into its final location to ensure the structure is correct

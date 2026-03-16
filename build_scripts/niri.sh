@@ -181,13 +181,11 @@ case "${1:-}" in
 	# - dms-cli, dms-greeter: CLI control + greeter for greetd
 	# - matugen, dgop, danksearch: DMS utilities and theming
 	dnf -y copr enable avengemedia/danklinux
-	dnf -y --enablerepo copr:copr.fedorainfracloud.org:avengemedia:danklinux install \
-		quickshell-git
-
 	dnf -y copr enable avengemedia/dms-git
 	dnf -y --enablerepo copr:copr.fedorainfracloud.org:avengemedia:dms-git \
 		--enablerepo copr:copr.fedorainfracloud.org:avengemedia:danklinux install \
 		--setopt=install_weak_deps=False \
+		quickshell-git \
 		dms \
 		dms-cli \
 		dms-greeter \

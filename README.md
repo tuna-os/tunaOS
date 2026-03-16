@@ -8,7 +8,7 @@
 ## TunaOS
 ### *A Collection of Cloud-Native Enterprise Linux OS Images*
 
-*Specialized forks of [Bluefin LTS](https://github.com/ublue-os/bluefin-lts) based on AlmaLinux 10, AlmaLinux Kitten 10, CentOS 10, and Fedora*
+*Bootc-based desktop Linux images built on AlmaLinux, CentOS Stream, and Fedora*
 
 ---
 
@@ -20,97 +20,124 @@
 
 ## 🚀 About TunaOS
 
-TunaOS is a curated collection of **Bootc-based desktop operating systems** that are forks of Bluefin LTS, built on modern container technology. This is an exploration of the flexibilty of Bootc and a hope that some people believe in the Enterprise Linux Desktop. The plan is to provide a stable experience with up-to-date GNOME and modern tooling. 
+TunaOS is a curated collection of **bootc-based desktop operating systems** built on modern container technology. The goal is to bring a modern desktop experience to Enterprise Linux — stable, immutable, and up-to-date. Inspired by [Bluefin](https://projectbluefin.io) and the [Universal Blue](https://universal-blue.org/) community.
 
 ### Features
 
-- **Latest GNOME**: Don't get stuck on a 3-year-old GNOME. We try to backport the latest Desktop feature and bring them to the Enterprise Desktop
-  - Currently we're shipping GNOME `48.3` while EL will be stuck on GNOME `47` for the foreseeable future
-- **Anaconda WebUI & Live ISO**: (Pending; present upstream)
-- **Homebrew**: We bake Homebrew into the image, so all your CLI apps (and fonts) are just a brew command away
-- **Flathub by Default**: This is a no-brainer that isn't preset in our base images. Actually get all the Flatpaks thata generally available on the net. 
+- **Modern Desktops**: GNOME, KDE Plasma, COSMIC, and Niri — your choice, on Enterprise Linux
+- **Latest GNOME**: Don't get stuck on a 3-year-old GNOME. We backport the latest desktop features to the Enterprise Desktop
+- **Homebrew**: Baked into the image — all your CLI apps and fonts are just a `brew` command away
+- **Flathub by Default**: Full Flathub access out of the box — get any Flatpak available on the net
+- **HWE Option**: Hardware Enablement kernel for newer hardware support
+- **GDX Option**: NVIDIA drivers and CUDA for graphics and AI workflows
 
 ## 🐠 Images
+
 <div align="center">
 
 <img width="328" height="318" alt="1000016351" src="https://github.com/user-attachments/assets/759fc093-baf0-4959-900a-5e9c2098f745" />
 </div>
 
-We ship multiple flavors:
+### Desktops
 
-- [**Regular**:](https://docs.projectbluefin.io/)
-    - See Bluefin's excellent documentation for info 
-- [**HWE (Hardware Enablement)**]
-    - Newer kernel stack and hardware support profile.
-- [**GDX (Graphical Developer Experience)**](https://docs.projectbluefin.io/gdx)
-    - NVIDIA drivers and CUDA for graphics/AI workflows.
-- [**KDE**]
-    - Plasma desktop builds (`-kde`, `-kde-hwe`, `-kde-gdx`) alongside GNOME images.
+Each variant ships multiple desktop environments:
 
+| Tag suffix | Desktop |
+|---|---|
+| `gnome` | GNOME (stable) |
+| `gnome50` | GNOME 50 (latest) |
+| `kde` | KDE Plasma |
+| `cosmic` | COSMIC Desktop |
+| `niri` | Niri (tiling Wayland compositor) |
 
-### 🐟 Albacore (AlmaLinux)
+### Hardware Variants
 
-**Based on:** [AlmaLinux 10.0](https://almalinux.org/blog/2025-05-27-welcoming-almalinux-10/)
+Append to any desktop tag:
 
-**Image:** `ghcr.io/tuna-os/albacore:latest`
-    **ISO:** [x86_64](https://download.tunaos.org/albacore-amd64.iso), [x86_64_v2](https://download.tunaos.org/albacore-amd64-v2.iso), [arm64](https://download.tunaos.org/albacore-arm64.iso) 
+| Suffix | Description |
+|---|---|
+| *(none)* | Standard build |
+| `-hwe` | Hardware Enablement — newer kernel stack |
+| `-gdx` | NVIDIA drivers + CUDA |
+| `-gdx-hwe` | GDX on HWE kernel |
 
-**HWE:** `ghcr.io/tuna-os/albacore-hwe:latest`
-    **ISO:** [x86_64](https://download.tunaos.org/albacore-hwe-amd64.iso), [x86_64_v2](https://download.tunaos.org/albacore-hwe-amd64-v2.iso), [arm64](https://download.tunaos.org/albacore-hwe-arm64.iso)
-  
-**GDX:** `ghcr.io/tuna-os/albacore-gdx:latest`
-    **ISO:** [x86_64](https://download.tunaos.org/albacore-gdx-amd64.iso), [x86_64_v2](https://download.tunaos.org/albacore-gdx-amd64-v2.iso), [arm64](https://download.tunaos.org/albacore-gdx-arm64.iso)
+Example: `ghcr.io/tuna-os/yellowfin:gnome-hwe`, `ghcr.io/tuna-os/albacore:kde-gdx`
 
-**KDE:** `ghcr.io/tuna-os/albacore-kde:latest`
-    **ISO:** [x86_64](https://download.tunaos.org/albacore-kde-amd64.iso), [x86_64_v2](https://download.tunaos.org/albacore-kde-amd64-v2.iso), [arm64](https://download.tunaos.org/albacore-kde-arm64.iso)
+---
 
+### 🐠 Yellowfin (AlmaLinux Kitten 10)
 
-Stable enterprise-grade desktop experience built on AlmaLinux foundation.
-- ✨ **x86_64/v2** microarchitecture support for older CPUs (pre-2013)
+**Base:** [AlmaLinux Kitten 10](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#container-images) — the closest to upstream CentOS Stream
+
+**Platforms:** x86_64, x86_64/v2 (pre-2013 CPUs), ARM64
+
+```
+ghcr.io/tuna-os/yellowfin:gnome
+ghcr.io/tuna-os/yellowfin:gnome-hwe
+ghcr.io/tuna-os/yellowfin:kde
+ghcr.io/tuna-os/yellowfin:niri
+ghcr.io/tuna-os/yellowfin:cosmic
+```
+
+- ✨ **x86_64/v2** microarchitecture support
 - 🖥️ **SPICE support** for qemu/libvirt virtualization
+- 🔄 **Compatible with upstream** — Kitten tracks CentOS Stream
 
 ---
-### 🐠 Yellowfin (AlmaLinux Kitten)
 
-**Base:** [AlmaLinux Kitten 10](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#container-images)
+### 🐟 Albacore (AlmaLinux 10)
 
-**Image:** `ghcr.io/tuna-os/yellowfin:latest`
-    **ISO:** [x86_64](https://download.tunaos.org/yellowfin-amd64.iso), [x86_64_v2](https://download.tunaos.org/yellowfin-amd64-v2.iso), [arm64](https://download.tunaos.org/yellowfin-arm64.iso)
+**Base:** [AlmaLinux 10](https://almalinux.org/blog/2025-05-27-welcoming-almalinux-10/) — stable, RHEL-compatible
 
-**HWE:** `ghcr.io/tuna-os/yellowfin-hwe:latest`
-    **ISO:** [x86_64](https://download.tunaos.org/yellowfin-hwe-amd64.iso), [x86_64_v2](https://download.tunaos.org/yellowfin-hwe-amd64-v2.iso), [arm64](https://download.tunaos.org/yellowfin-hwe-arm64.iso)
+**Platforms:** x86_64, x86_64/v2, ARM64
 
-**GDX:** `ghcr.io/tuna-os/yellowfin-gdx:latest`
-    **ISO:** [x86_64](https://download.tunaos.org/yellowfin-gdx-amd64.iso), [x86_64_v2](https://download.tunaos.org/yellowfin-gdx-amd64-v2.iso), [arm64](https://download.tunaos.org/yellowfin-gdx-arm64.iso)
+```
+ghcr.io/tuna-os/albacore:gnome
+ghcr.io/tuna-os/albacore:gnome-hwe
+ghcr.io/tuna-os/albacore:kde
+ghcr.io/tuna-os/albacore:niri
+ghcr.io/tuna-os/albacore:cosmic
+```
 
-**KDE:** `ghcr.io/tuna-os/yellowfin-kde:latest`
-    **ISO:** [x86_64](https://download.tunaos.org/yellowfin-kde-amd64.iso), [x86_64_v2](https://download.tunaos.org/yellowfin-kde-amd64-v2.iso), [arm64](https://download.tunaos.org/yellowfin-kde-arm64.iso)
-
-
-The closest to upstream Bluefin LTS experience with enhanced capabilities:
-- ✨ **x86_64/v2** microarchitecture support for older CPUs (pre-2013)
+- ✨ **x86_64/v2** microarchitecture support
 - 🖥️ **SPICE support** for qemu/libvirt virtualization
-- 🔄 **Compatible with upstream LTS** because Kitten is based on CentOS
+- 🏢 **Enterprise stability** — follows RHEL lifecycle
 
 ---
->[!NOTE]
-> Bonito is still needing some work to get into a functional state
-### 🎣 Bonito (Fedora)
 
-**Base:** Fedora 43
+### 🍣 Skipjack (CentOS Stream 10)
 
-**Image:** `ghcr.io/tuna-os/bonito:latest`  
+**Base:** CentOS Stream 10 — the upstream of RHEL
 
-Cutting-edge experience with Bluefin LTS tooling ported to the latest Fedora release.
+**Platforms:** x86_64, ARM64
 
----
-### 🍣 Skipjack (CentOS)
-
-**Base:**  CentOS 10
-
-**Image:** `ghcr.io/tuna-os/skipjack:latest`  
+```
+ghcr.io/tuna-os/skipjack:gnome
+ghcr.io/tuna-os/skipjack:kde
+ghcr.io/tuna-os/skipjack:niri
+ghcr.io/tuna-os/skipjack:cosmic
+```
 
 ---
+
+> [!NOTE]
+> Bonito is still a work in progress and may not be fully functional
+
+### 🎣 Bonito (Fedora 43)
+
+**Base:** Fedora 43 — cutting-edge Fedora on bootc
+
+**Platforms:** x86_64, ARM64
+
+```
+ghcr.io/tuna-os/bonito:gnome
+ghcr.io/tuna-os/bonito:kde
+ghcr.io/tuna-os/bonito:niri
+ghcr.io/tuna-os/bonito:cosmic
+```
+
+---
+
 ## 📋 System Requirements
 
 | Component | Minimum | Recommended |
@@ -121,52 +148,61 @@ Cutting-edge experience with Bluefin LTS tooling ported to the latest Fedora rel
 
 ## 🛠️ Installation
 
-### Build-your-own ISO or VM image
-run the [build-iso.sh](https://github.com/Tuna-OS/tunaOS/blob/main/build-iso.sh) script in this repo or download the script and run it to use bootc-image-builder to make an ISO:
+### Use a pre-built ISO
+
+ISOs are built for `gnome` and `gnome-hwe` flavors of Yellowfin and Albacore. Check the [releases page](https://github.com/tuna-os/tunaOS/releases) for downloads.
+
+### Build your own ISO or VM image
+
+Use [bootc-image-builder](https://github.com/osbuild/bootc-image-builder) directly:
+
 ```bash
-curl https://raw.githubusercontent.com/Tuna-OS/tunaOS/refs/heads/main/build-iso.sh \
--o build-bootc.sh
-chmod +x build-bootc.sh
+# ISO
+sudo podman run --rm -it --privileged \
+  -v /var/lib/containers/storage:/var/lib/containers/storage \
+  ghcr.io/osbuild/bootc-image-builder:latest \
+  --type iso \
+  ghcr.io/tuna-os/yellowfin:gnome
 
-# Now you can make a ISO for Albacore
-sudo ./build-bootc.sh iso ghcr.io/tuna-os/albacore:latest
+# QCOW2 (VM image)
+sudo podman run --rm -it --privileged \
+  -v /var/lib/containers/storage:/var/lib/containers/storage \
+  ghcr.io/osbuild/bootc-image-builder:latest \
+  --type qcow2 \
+  ghcr.io/tuna-os/yellowfin:gnome
+```
 
-# Or build yellowfin-kde
-sudo ./build-bootc.sh iso ghcr.io/tuna-os/yellowfin-kde:latest
+### Switch an existing system
 
-# Or make a VM image
-sudo ./build-bootc.sh qcow2 ghcr.io/tuna-os/yellowfin-kde:latest
+If you're already running a compatible bootc system:
 
-# default username/password for VMs is "centos" / "centos"
-# you can edit this in the script
-
+```bash
+sudo bootc switch ghcr.io/tuna-os/yellowfin:gnome
 ```
 
 ## 🧪 Current Status
 
-> **Note:** These images are currently in active development. I'm daily-driving `yellowfin` and maintaining the upstream Bluefin LTS
+> **Note:** These images are in active development. Yellowfin and Albacore are the most mature variants. Bonito (Fedora) still needs work.
 
 ## Contributing
 
-PRs welcome! The goal is to match the feature set of Bluefin LTS and Bluefin. 
+PRs welcome! The goal is a great modern desktop on Enterprise Linux.
 
 ## 🤝 Community & Support
 
-We'd love to hear from you! Whether you're using these images or just curious:
-
 - 🐛 **Report Issues:** [GitHub Issues](https://github.com/tuna-os/tunaOS/issues)
-- [m] **Chat**: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia) 
+- [m] **Chat**: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia)
 
-Related Communities: 
+Related Communities:
 - 🎮 **Discord:** [Universal Blue Community](https://discord.gg/WEu6BdFEtp)
 - 💬 **AlmaLinux Atomic SIG:** [AlmaLinux Atomic SIG](https://chat.almalinux.org/almalinux/channels/sigatomic)
 
 ## 📚 Documentation
 
 - [AlmaLinux Kitten 10 Differences](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#how-is-almalinux-os-kitten-different-from-centos-stream)
-- [Bluefin LTS Documentation](https://github.com/ublue-os/bluefin-lts)
 - [Project Bluefin Documentation](https://docs.projectbluefin.io)
 - [Universal Blue](https://universal-blue.org/)
+- [bootc](https://github.com/bootc-dev/bootc)
 
 ---
 

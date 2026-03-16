@@ -68,8 +68,6 @@ case "${1:-}" in
 		cosmic-config-fedora \
 		greetd \
 		xdg-desktop-portal-cosmic \
-		pop-gtk-theme \
-		pop-icon-theme \
 		adw-gtk3-theme
 
 	# Verify cosmic-session installed
