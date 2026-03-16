@@ -1,18 +1,13 @@
-# This Containerfile builds the "installer" image for the live ISO.
-# It's based on the target OS image and adds the live-boot components.
+# run with --cap-add sys_admin --security-opt label=disable
 
 ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 
 ARG LABEL="TunaOS-Live"
 ARG DESKTOP_FLAVOR="gnome"
+# Ref that Anaconda will install from (containers-storage).
+# Must match the --bootc-installer-payload-ref passed to image-builder.
+ARG PAYLOAD_REF=""
 
-COPY src /src
-RUN LABEL="${LABEL}" DESKTOP_FLAVOR="${DESKTOP_FLAVOR}" /src/build.sh
-
-# Copy in the iso config for image-builder
-RUN mkdir -p /usr/lib/bootc-image-builder
-COPY src/iso.yaml /usr/lib/bootc-image-builder/iso.yaml
-# Substitute LABEL in iso.yaml
-RUN sed -i "s/\${LABEL:-TunaOS-Live}/${LABEL}/g" /usr/lib/bootc-image-builder/iso.yaml && \
-    sed -i "s/\${LABEL:-TunaOS Live ISO}/${LABEL} Live ISO/g" /usr/lib/bootc-image-builder/iso.yaml
+RUN --mount=type=bind,source=src,target=/src \
+    LABEL="${LABEL}" DESKTOP_FLAVOR="${DESKTOP_FLAVOR}" PAYLOAD_REF="${PAYLOAD_REF}" /src/build.sh

@@ -5,7 +5,7 @@ on:
       variant:
         description: 'Variant to build'
         required: true
-        default: 'yellowfin'
+        default: 'skipjack'
         type: choice
         options:
           - yellowfin
@@ -16,8 +16,9 @@ on:
         description: 'Flavor to build'
         required: true
         default: 'gnome'
+        type: string
       upload_r2:
-        description: 'Upload to R2'
+        description: 'Upload to Cloudflare R2'
         required: false
         default: false
         type: boolean
@@ -28,7 +29,6 @@ jobs:
     permissions:
       contents: read
       packages: read
-      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -41,7 +41,15 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y just podman jq rclone golang-go
+          sudo apt-get install -y just podman jq rclone golang-go git
+
+      - name: Build OS image
+        run: |
+          sudo just build \
+            variant="${{ github.event.inputs.variant }}" \
+            flavor="${{ github.event.inputs.flavor }}" \
+            is_ci=1 \
+            tag="${{ github.event.inputs.flavor }}"
 
       - name: Build Live ISO
         env:
@@ -53,25 +61,15 @@ jobs:
           RCLONE_CONFIG_R2_REGION: auto
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT_2025 }}
         run: |
-          # First build the image (if not already in registry, but we build it here for safety)
-          just build "${{ github.event.inputs.variant }}" "${{ github.event.inputs.flavor }}" "" 1 latest "" 0
-
-          # Then build the live ISO
-          just live-iso "${{ github.event.inputs.variant }}" "${{ github.event.inputs.flavor }}" local latest
-
-      - name: Install Lima
-        run: |
-          curl -L https://github.com/lima-vm/lima/releases/download/v0.20.1/lima-0.20.1-Linux-x86_64.tar.gz | sudo tar -C /usr/local -xz
-          # Start qemu if needed, but limactl should handle it if qemu is installed
-          sudo apt-get install -y qemu-system-x86
-
-      - name: Verify Live ISO
-        run: |
-          ISO_FILE=$(find . -maxdepth 1 -name "*.iso" | head -n 1)
-          just verify-live-iso "$ISO_FILE"
+          sudo just live-iso \
+            variant="${{ github.event.inputs.variant }}" \
+            flavor="${{ github.event.inputs.flavor }}" \
+            repo=local \
+            tag="${{ github.event.inputs.flavor }}"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ github.event.inputs.variant }}-${{ github.event.inputs.flavor }}-live-iso
           path: "*.iso"
+          if-no-files-found: error

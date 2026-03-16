@@ -464,10 +464,6 @@ iso variant flavor='gnome' repo='local' hook_script='iso_files/configure_lts_iso
     #!/usr/bin/env bash
     bash ./scripts/build-titanoboa.sh {{ variant }} {{ flavor }} {{ repo }} {{ hook_script }}
 
-# Run an ISO image in a QEMU container
-run-iso variant flavor='gnome' iso_file='':
-    @{{ just }} _run-vm iso {{ variant }} {{ flavor }} {{ iso_file }}
-
 # Run a qcow2 image in a QEMU container
 run-qcow2 variant flavor='gnome':
     @{{ just }} _run-vm qcow2 {{ variant }} {{ flavor }}
@@ -558,45 +554,50 @@ _run-vm type variant flavor='gnome' iso_file='':
     (sleep 5 && xdg-open "http://localhost:${port}") &
     podman run "${run_args[@]}"
 
-# Build a Live ISO for a TunaOS variant
-live-iso variant='yellowfin' flavor='gnome' repo='local' tag='latest' type='iso':
-    #!/usr/bin/env bash
-    set -euo pipefail
-    bash ./scripts/build-live-iso.sh "{{ variant }}" "{{ flavor }}" "{{ repo }}" "{{ tag }}" "{{ type }}"
+# Build the custom image-builder-dev container needed for live ISO generation.
 
-# Verify a Live ISO using Lima
-verify-live-iso iso_file:
+# Called automatically by live-iso, but can be run standalone to pre-cache it.
+build-image-builder:
     #!/usr/bin/env bash
     set -euo pipefail
-    ISO_PATH="$(realpath {{ iso_file }})"
+    if sudo podman image exists image-builder-dev; then
+        echo "image-builder-dev already exists. To rebuild: sudo podman rmi image-builder-dev"
+        exit 0
+    fi
+    sudo bash ./scripts/build-live-iso.sh --build-image-builder-only
+
+# Build a TunaOS live installer ISO using the bootc-isos approach (Ondrej Budai).
+
+# Requires root (uses privileged containers). Defaults to skipjack:gnome for local testing.
+live-iso variant='skipjack' flavor='gnome' repo='local' tag='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    _tag="{{ tag }}"
+    [[ -z "$_tag" ]] && _tag="{{ flavor }}"
+    sudo bash ./scripts/build-live-iso.sh "{{ variant }}" "{{ flavor }}" "{{ repo }}" "$_tag"
+
+# Boot a TunaOS live ISO in QEMU via browser (uses ghcr.io/qemus/qemu). Requires /dev/kvm.
+run-iso iso_file:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ISO_PATH="$(realpath "{{ iso_file }}")"
     if [[ ! -f "$ISO_PATH" ]]; then
         echo "ISO not found: $ISO_PATH"
         exit 1
     fi
-    echo "Verifying ISO: $ISO_PATH"
-    export ISO_PATH
-    # Generate temporary template with real path
-    TEMPLATE_PATH=$(mktemp --suffix=.yaml)
-    sed "s|\${ISO_PATH}|$ISO_PATH|g" tests/live-iso-verify.yaml > "$TEMPLATE_PATH"
-
-    INSTANCE_NAME="verify-live-iso-$(date +%s)"
-    echo "Starting Lima instance: $INSTANCE_NAME"
-    limactl start --name="$INSTANCE_NAME" --tty=false "$TEMPLATE_PATH"
-
-    # Give it some time to boot
-    echo "Waiting for 60 seconds to see if it boots..."
-    sleep 60
-
-    # Check if instance is still running
-    if limactl list "$INSTANCE_NAME" --json | jq -e 'select(.status == "Running")' > /dev/null; then
-        echo "ISO booted and instance is running!"
-        limactl stop "$INSTANCE_NAME"
-        limactl delete "$INSTANCE_NAME"
-        rm "$TEMPLATE_PATH"
-        echo "Verification successful."
-    else
-        echo "ISO verification failed - instance not running."
-        limactl delete -f "$INSTANCE_NAME"
-        rm "$TEMPLATE_PATH"
-        exit 1
-    fi
+    port=8006
+    while ss -tunalp | grep -q ":${port}"; do
+        port=$(( port + 1 ))
+    done
+    echo "==> Connect to http://localhost:${port}"
+    (sleep 3 && xdg-open "http://localhost:${port}") &
+    podman run --rm --privileged \
+        --publish "127.0.0.1:${port}:8006" \
+        --env CPU_CORES=4 \
+        --env RAM_SIZE=8G \
+        --env DISK_SIZE=64G \
+        --env BOOT_MODE=windows_secure \
+        --env TPM=Y \
+        --device=/dev/kvm \
+        --volume "${ISO_PATH}:/boot.iso" \
+        ghcr.io/qemus/qemu
