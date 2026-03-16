@@ -237,6 +237,19 @@ jobs:
           sha256sum "${OUTPUT_PATH}" | tee "${OUTPUT_DIRECTORY}/${ISO_NAME}.iso-CHECKSUM"
           mv "${OUTPUT_PATH}" "${OUTPUT_DIRECTORY}/${ISO_NAME}.iso"
           echo "output_directory=$OUTPUT_DIRECTORY" >> "${GITHUB_OUTPUT}"
+          echo "iso_path=${OUTPUT_DIRECTORY}/${ISO_NAME}.iso" >> "${GITHUB_OUTPUT}"
+
+      - name: Setup Lima for ISO Verification
+        if: matrix.runner_platform == 'amd64'
+        uses: ./.github/actions/setup-lima
+
+      - name: Verify ISO in VM
+        if: matrix.runner_platform == 'amd64'
+        shell: bash
+        env:
+          ISO_PATH: ${{ steps.rename.outputs.iso_path }}
+        run: |
+          just verify-iso "${ISO_PATH}"
 
       - name: Upload to Job Artifacts
         if: github.event_name == 'workflow_dispatch' && github.event.inputs.upload_artifacts == 'true'

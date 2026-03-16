@@ -60,19 +60,20 @@ jobs:
           # Flatten config into one entry per {variant, flavor}, applying filters.
           # All inputs are in env vars — no direct interpolation of ${{ inputs.* }}
           # into the script body to prevent shell injection.
-          FULL_MATRIX=$(yq -o=json '.' .github/build-config.yml | jq -c '
+          FULL_MATRIX=$(yq -o=json '.' .github/build-config.yml | jq -c --arg event "${{ github.event_name }}" '
             .variants[]
             | select(env.FILTER_VARIANT == "all" or .id == env.FILTER_VARIANT)
             | . as $v
             | .flavors[]
             | select(env.FILTER_FLAVOR == "all" or .id == env.FILTER_FLAVOR)
+            | select($event != "pull_request" or .id == "gnome")
             | {
                 variant:       $v.id,
                 variant_emoji: ($v.emoji // "❓"),
                 base_image:    $v.base_image,
-                platforms:     ($v.platforms | join(",")),
+                platforms:     (if $event == "pull_request" then "linux/amd64" else ($v.platforms | join(",")) end),
                 flavor:        .id,
-                stage:         .stage,
+                stage:         (if $event == "pull_request" then 1 else .stage end),
                 build_iso:     (.build_iso  // false),
                 build_qcow2:   (.build_qcow2 // false)
               }
@@ -126,6 +127,7 @@ jobs:
   build_base:
     name: "S1 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
     needs: generate_matrix
+    if: fromJson(needs.generate_matrix.outputs.stage1_matrix).include[0]
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.stage1_matrix) }}
@@ -137,8 +139,7 @@ jobs:
       platforms: ${{ matrix.platforms }}
       default-tag: ${{ matrix.flavor }}
       publish: ${{ github.event_name != 'pull_request' }}
-    secrets:
-      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+    secrets: inherit
 
   # ── Stage 2: base-hwe, base-gdx, and desktop base flavors ──────────────────
   # Runs only after ALL stage-1 jobs pass. Includes:
@@ -148,14 +149,10 @@ jobs:
   #   - kde       (layers on base)
   #   - niri      (layers on base)
   # All of these run in parallel within stage 2.
-  #
-  # Note: GHA `needs` waits for the entire prior matrix job to complete, not
-  # individual cells. So albacore:gnome must wait for yellowfin:base too — this
-  # is a known GHA limitation with dynamic matrices. In practice it adds minimal
-  # wall-clock time since all base images build in parallel.
   build_stage2:
     name: "S2 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
     needs: [generate_matrix, build_base]
+    if: github.event_name != 'pull_request' && fromJson(needs.generate_matrix.outputs.stage2_matrix).include[0]
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.stage2_matrix) }}
@@ -166,9 +163,8 @@ jobs:
       flavor: ${{ matrix.flavor }}
       platforms: ${{ matrix.platforms }}
       default-tag: ${{ matrix.flavor }}
-      publish: ${{ github.event_name != 'pull_request' }}
-    secrets:
-      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+      publish: true
+    secrets: inherit
 
   # ── Stage 3: Desktop HWE and GDX flavors ───────────────────────────────────
   # Runs only after ALL stage-2 jobs pass. Includes:
@@ -179,6 +175,7 @@ jobs:
   build_stage3:
     name: "S3 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
     needs: [generate_matrix, build_stage2]
+    if: github.event_name != 'pull_request' && fromJson(needs.generate_matrix.outputs.stage3_matrix).include[0]
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.stage3_matrix) }}
@@ -189,9 +186,8 @@ jobs:
       flavor: ${{ matrix.flavor }}
       platforms: ${{ matrix.platforms }}
       default-tag: ${{ matrix.flavor }}
-      publish: ${{ github.event_name != 'pull_request' }}
-    secrets:
-      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+      publish: true
+    secrets: inherit
 
   # ── Artifact builds (ISO + QCOW2) ──────────────────────────────────────────
   # Runs after all image stages are complete. Only triggered on non-PR events

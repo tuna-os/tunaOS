@@ -183,6 +183,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     BUILD_TARGET="{{ desktop_flavor }}"
 
     podman build \
+        --security-opt label=disable \
         --dns=8.8.8.8 \
         --platform "{{ target_platform }}" \
         --target="${BUILD_TARGET}" \
@@ -426,7 +427,7 @@ qcow2 variant flavor='gnome' repo='local':
     set -euo pipefail
     if [ "{{ repo }}" = "local" ]; then
         echo "Building unchunked image for QCOW2 generation..."
-        {{ just }} build {{ variant }} {{ flavor }} chunk=0
+        {{ just }} build {{ variant }} {{ flavor }} '' '0' 'latest' '' '0'
     fi
     if [ "{{ flavor }}" != "base" ]; then
         FLAVOR="-{{ flavor }}"
@@ -467,6 +468,18 @@ iso variant flavor='gnome' repo='local' hook_script='iso_files/configure_lts_iso
 # Run a qcow2 image in a QEMU container
 run-qcow2 variant flavor='gnome':
     @{{ just }} _run-vm qcow2 {{ variant }} {{ flavor }}
+
+# Verify a variant/flavor combo using a Lima VM (automated gdm check)
+verify variant flavor='gnome':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ./scripts/verify-image.sh "{{ variant }}" "{{ flavor }}"
+
+# Verify an ISO file using a Lima VM (basic boot check)
+verify-iso iso_file:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ./scripts/verify-iso.sh "{{ iso_file }}"
 
 # Internal helper to run a VM using the QEMU container (ghcr.io/qemus/qemu)
 [private]
