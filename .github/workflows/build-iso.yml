@@ -240,11 +240,11 @@ jobs:
           echo "iso_path=${OUTPUT_DIRECTORY}/${ISO_NAME}.iso" >> "${GITHUB_OUTPUT}"
 
       - name: Setup Lima for ISO Verification
-        if: (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && matrix.runner_platform == 'amd64'
+        if: matrix.runner_platform == 'amd64'
         uses: ./.github/actions/setup-lima
 
       - name: Verify ISO in VM
-        if: (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') && matrix.runner_platform == 'amd64'
+        if: matrix.runner_platform == 'amd64'
         shell: bash
         env:
           ISO_PATH: ${{ steps.rename.outputs.iso_path }}
