@@ -9,7 +9,7 @@ case "${1:-}" in
 	# Use COPR GNOME packages for EL10-based builds.
 	if [[ $IS_FEDORA == false ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
 		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
-			GNOME_COPR="jreilly1821/c10s-gnome-50"
+			GNOME_COPR="jreilly1821/c10s-gnome-50-fresh"
 		else
 			GNOME_COPR="jreilly1821/c10s-gnome-49"
 		fi
