@@ -579,8 +579,8 @@ live-iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
 
 # Boot a TunaOS live ISO in QEMU via browser (uses ghcr.io/qemus/qemu). Requires /dev/kvm.
 
-# Pass ssh=1 to enable SSH port forwarding and print the limactl-compatible SSH command.
-run-iso iso_file ssh='0':
+# Pass enable_ssh=1 to enable SSH port forwarding and print the connection command.
+run-iso iso_file enable_ssh='0':
     #!/usr/bin/env bash
     set -euo pipefail
     ISO_PATH="$(realpath "{{ iso_file }}")"
@@ -602,7 +602,7 @@ run-iso iso_file ssh='0':
     run_args+=(--env TPM=Y)
     run_args+=(--device=/dev/kvm)
     run_args+=(--volume "${ISO_PATH}:/boot.iso")
-    if [[ "{{ ssh }}" == "1" ]]; then
+    if [[ "{{ enable_ssh }}" == "1" ]]; then
         ssh_port=2222
         while ss -tunalp | grep -q ":${ssh_port}"; do
             ssh_port=$(( ssh_port + 1 ))

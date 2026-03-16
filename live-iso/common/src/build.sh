@@ -56,12 +56,31 @@ systemctl --global disable ublue-user-setup.service || true
 if [ "${ENABLE_SSHD:-0}" = "1" ]; then
 	echo "==> DEV: enabling sshd for local testing"
 	systemctl enable sshd.service
-	# Allow liveuser to SSH in with an empty password
+
+	# Allow password auth (liveuser password set at runtime by oneshot below)
 	mkdir -p /etc/ssh/sshd_config.d
 	tee /etc/ssh/sshd_config.d/99-liveiso-dev.conf <<'EOF'
-PermitEmptyPasswords yes
+PasswordAuthentication yes
 PermitRootLogin no
 EOF
+
+	# Oneshot that runs after livesys.service creates liveuser,
+	# then sets the password to "live" so SSH can authenticate normally.
+	tee /etc/systemd/system/liveiso-dev-ssh.service <<'EOF'
+[Unit]
+Description=Set liveuser password for dev SSH access
+After=livesys.service
+Requires=livesys.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash -c 'id liveuser && echo "liveuser:live" | chpasswd'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+	systemctl enable liveiso-dev-ssh.service
 fi
 
 # ── Install Anaconda ─────────────────────────────────────────────────────────
