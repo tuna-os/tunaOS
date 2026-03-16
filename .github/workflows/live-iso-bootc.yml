@@ -32,9 +32,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: Maximize build space
-        uses: ublue-os/container-storage-action@v1
+        uses: ublue-os/container-storage-action@main
 
       - name: Install dependencies
         run: |
