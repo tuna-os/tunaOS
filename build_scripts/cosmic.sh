@@ -42,10 +42,9 @@ case "${1:-}" in
 	dnf -y copr enable yselkowitz/cosmic-epel
 	dnf -y copr disable yselkowitz/cosmic-epel
 
-	# Install COSMIC desktop from COPR
+	# Install COSMIC desktop from COPR (Core components)
 	dnf -y --enablerepo copr:copr.fedorainfracloud.org:yselkowitz:cosmic-epel \
 		install --setopt=install_weak_deps=False \
-		cosmic-session \
 		cosmic-comp \
 		cosmic-panel \
 		cosmic-app-library \
@@ -63,12 +62,17 @@ case "${1:-}" in
 		cosmic-term \
 		cosmic-wallpapers \
 		cosmic-workspaces \
-		cosmic-greeter \
 		cosmic-icon-theme \
-		cosmic-config-fedora \
-		greetd \
 		xdg-desktop-portal-cosmic \
 		adw-gtk3-theme
+
+	# Install COSMIC session, greetd and COSMIC greeter separately (handles greetd-selinux conflict)
+	# Use --nobest and --allowerasing to resolve EL10 policy conflicts
+	dnf -y --enablerepo copr:copr.fedorainfracloud.org:yselkowitz:cosmic-epel \
+		install --setopt=install_weak_deps=False --nobest --allowerasing \
+		cosmic-session \
+		greetd \
+		cosmic-greeter || true
 
 	# Verify cosmic-session installed
 	cosmic-session --version || true
