@@ -160,37 +160,6 @@ install_base_packages_no_de() {
 	dnf -y copr disable ublue-os/packages
 	dnf -y --enablerepo copr:copr.fedorainfracloud.org:ublue-os:packages install \
 		uupd
+
+	printf "::endgroup::\n"
 }
-
-# Main execution: install base packages and DE
-install_base_packages_no_de
-
-if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
-	/run/context/build_scripts/kde.sh base
-elif [[ "${DESKTOP_FLAVOR}" == "niri" ]]; then
-	/run/context/build_scripts/niri.sh base
-else
-	/run/context/build_scripts/gnome.sh base
-fi
-
-# Versionlock glib2 and the full GNOME 48 stack to prevent dnf from upgrading
-# back to whatever EL10 ships by default (which may not be GNOME 48)
-# Only applied to GNOME flavor; KDE and Niri handle their own versionlocking
-if [[ "${DESKTOP_FLAVOR}" == "gnome" ]]; then
-	dnf versionlock add \
-		glib2 \
-		gdm \
-		gnome-shell \
-		mutter \
-		gnome-session-wayland-session \
-		gnome-settings-daemon \
-		gnome-control-center \
-		gsettings-desktop-schemas \
-		gtk4 \
-		libadwaita \
-		pango \
-		xdg-desktop-portal \
-		xdg-desktop-portal-gnome || true
-fi
-
-printf "::endgroup::\n"

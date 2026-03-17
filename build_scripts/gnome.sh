@@ -147,26 +147,44 @@ case "${1:-}" in
 
 	# Blur My Shell (requires gnome-extensions pack from gnome-shell)
 	# We build it and then unzip it into its final location to ensure the structure is correct
-	make -C /usr/share/gnome-shell/extensions/blur-my-shell@aunetx build
-	unzip -o /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/build/blur-my-shell@aunetx.shell-extension.zip -d /usr/share/gnome-shell/extensions/blur-my-shell@aunetx
-	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/schemas
-	rm -rf /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/build
+	if [ -d /usr/share/gnome-shell/extensions/blur-my-shell@aunetx ]; then
+		if [ -f /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/Makefile ]; then
+			make -C /usr/share/gnome-shell/extensions/blur-my-shell@aunetx build
+			unzip -o /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/build/blur-my-shell@aunetx.shell-extension.zip -d /usr/share/gnome-shell/extensions/blur-my-shell@aunetx
+			glib-compile-schemas --strict /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/schemas
+			rm -rf /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/build
+		else
+			echo "Skipping blur-my-shell build (Makefile not found)"
+		fi
+	fi
 
 	# Caffeine
 	# The Caffeine extension is in system_files/usr/share/gnome-shell/extensions/tmp/caffeine/caffeine@patapon.info
 	if [ -d /usr/share/gnome-shell/extensions/tmp/caffeine/caffeine@patapon.info ]; then
 		mv /usr/share/gnome-shell/extensions/tmp/caffeine/caffeine@patapon.info /usr/share/gnome-shell/extensions/caffeine@patapon.info
+		glib-compile-schemas --strict /usr/share/gnome-shell/extensions/caffeine@patapon.info/schemas
 	fi
-	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/caffeine@patapon.info/schemas
 
 	# Dash to Dock
-	make -C /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com
-	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/schemas
+	if [ -d /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com ]; then
+		if [ -f /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/Makefile ]; then
+			make -C /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com
+			glib-compile-schemas --strict /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/schemas
+		else
+			echo "Skipping dash-to-dock build (Makefile not found)"
+		fi
+	fi
 
 	# GSConnect
-	meson setup --prefix=/usr /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/_build
-	meson install -C /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/_build --skip-subprojects
-	# GSConnect installs schemas to /usr/share/glib-2.0/schemas and meson compiles them automatically
+	if [ -d /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io ]; then
+		if [ -f /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/meson.build ]; then
+			meson setup --prefix=/usr /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/_build
+			meson install -C /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/_build --skip-subprojects
+			# GSConnect installs schemas to /usr/share/glib-2.0/schemas and meson compiles them automatically
+		else
+			echo "Skipping GSConnect build (meson.build not found)"
+		fi
+	fi
 
 	# Logo Menu
 	# xdg-terminal-exec is required for this extension as it opens up terminals using that script
@@ -194,7 +212,21 @@ case "${1:-}" in
 	dnf -y remove glib2-devel meson sassc cmake dbus-devel
 	rm -rf /usr/share/gnome-shell/extensions/tmp
 
-	# Re-add versionlock for glib2
-	dnf versionlock add glib2
+	# Versionlock glib2 and the full GNOME stack to prevent dnf from upgrading
+	# back to whatever EL10 ships by default (which may not be the COPR version)
+	dnf versionlock add \
+		glib2 \
+		gdm \
+		gnome-shell \
+		mutter \
+		gnome-session-wayland-session \
+		gnome-settings-daemon \
+		gnome-control-center \
+		gsettings-desktop-schemas \
+		gtk4 \
+		libadwaita \
+		pango \
+		xdg-desktop-portal \
+		xdg-desktop-portal-gnome || true
 	;;
 esac

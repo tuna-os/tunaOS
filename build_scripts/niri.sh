@@ -225,9 +225,12 @@ case "${1:-}" in
 		xdg-user-dirs \
 		xwayland-satellite \
 		wtype \
-		brightnessctl \
-		playerctl \
 		wl-mirror
+
+	# Attempt to install GNOME keyring components (may fail if not in repos)
+	dnf -y install --setopt=install_weak_deps=False \
+		gnome-keyring \
+		gnome-keyring-pam || true
 
 	# Install Qt/KDE theming support for better visual consistency
 	dnf install -y --setopt=install_weak_deps=False \

@@ -74,17 +74,19 @@ case "${1:-}" in
 	cosmic-session --version || true
 
 	# Install additional desktop utilities
+	# Note: brightnessctl and playerctl are missing in EL10 repos
 	dnf -y install --setopt=install_weak_deps=False \
-		brightnessctl \
 		flatpak \
-		playerctl \
 		pipewire \
 		wireplumber \
 		wl-clipboard \
 		xdg-user-dirs \
-		gnome-keyring \
-		gnome-keyring-pam \
 		zram-generator
+
+	# Attempt to install GNOME keyring components (may fail if not in repos)
+	dnf -y install --setopt=install_weak_deps=False \
+		gnome-keyring \
+		gnome-keyring-pam || true
 
 	# Build/install glib schemas
 	glib-compile-schemas /usr/share/glib-2.0/schemas || true
