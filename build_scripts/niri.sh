@@ -17,12 +17,6 @@ case "${1:-}" in
 		dnf -y copr disable yalter/niri-git
 		dnf -y config-manager setopt copr:copr.fedorainfracloud.org:yalter:niri-git.priority=1
 
-		dnf -y copr enable avengemedia/danklinux
-		dnf -y copr disable avengemedia/danklinux
-
-		dnf -y copr enable avengemedia/dms-git
-		dnf -y copr disable avengemedia/dms-git
-
 		# Install greetd display manager from Fedora repos (no COPR needed)
 		dnf install -y greetd greetd-selinux
 
@@ -34,24 +28,11 @@ case "${1:-}" in
 		# Verify niri installation
 		niri --version | grep -i -E "niri [[:digit:]]*\.[[:digit:]]* (.*\.git\..*)" || true
 
-		# Install DankMaterialShell suite (quickshell-git + dms shell + theming/tools)
-		dnf -y --enablerepo copr:copr.fedorainfracloud.org:avengemedia:danklinux install \
-			quickshell-git
-
-		dnf -y --enablerepo copr:copr.fedorainfracloud.org:avengemedia:dms-git \
-			--enablerepo copr:copr.fedorainfracloud.org:avengemedia:danklinux install \
-			--setopt=install_weak_deps=False \
-			dms \
-			dms-cli \
-			dms-greeter \
-			dgop \
-			dsearch \
-			matugen
-
 		# Install Fedora Niri ecosystem packages from zirconium/packages COPR
 		dnf -y --enablerepo copr:copr.fedorainfracloud.org:zirconium:packages install \
 			iio-niri \
 			valent-git
+
 
 		# Install Niri desktop environment packages (Fedora repos)
 		FCITX5_MOZC=""
@@ -150,19 +131,6 @@ case "${1:-}" in
 	dnf -y copr enable yselkowitz/wlroots-epel
 	dnf -y copr disable yselkowitz/wlroots-epel
 
-	dnf -y copr enable ligenix/enterprise-cosmic rhel+epel-10-x86_64
-	dnf -y copr disable ligenix/enterprise-cosmic
-
-	dnf -y copr enable avengemedia/danklinux
-	dnf -y copr disable avengemedia/danklinux
-
-	dnf -y copr enable avengemedia/dms-git
-	dnf -y copr disable avengemedia/dms-git
-
-	# Install greetd display manager from ligenix/enterprise-cosmic COPR
-	dnf install -y greetd \
-		--repo=copr:copr.fedorainfracloud.org:ligenix:enterprise-cosmic
-
 	# Install Niri window manager from yalter/niri-git COPR.
 	# libinput must come from yselkowitz/wlroots-epel — the EL10 stock version
 	# is too old and doesn't provide the symbols niri requires.
@@ -174,24 +142,6 @@ case "${1:-}" in
 
 	# Verify niri installation
 	/usr/bin/niri --version | grep -i -E "niri [[:digit:]]*\.[[:digit:]]* " || true
-
-	# Install DankMaterialShell suite (quickshell + dms shell + theming/tools)
-	# - quickshell-git: QML-based shell framework
-	# - dms: DankMaterialShell compositor shell for Niri
-	# - dms-cli, dms-greeter: CLI control + greeter for greetd
-	# - matugen, dgop, danksearch: DMS utilities and theming
-	dnf -y copr enable avengemedia/danklinux
-	dnf -y copr enable avengemedia/dms-git
-	dnf -y --enablerepo copr:copr.fedorainfracloud.org:avengemedia:dms-git \
-		--enablerepo copr:copr.fedorainfracloud.org:avengemedia:danklinux install \
-		--setopt=install_weak_deps=False \
-		quickshell-git \
-		dms \
-		dms-cli \
-		dms-greeter \
-		matugen \
-		dgop \
-		danksearch
 
 	# Install Niri desktop environment packages
 	dnf -y --enablerepo copr:copr.fedorainfracloud.org:yselkowitz:wlroots-epel install --setopt=install_weak_deps=False \
@@ -208,7 +158,6 @@ case "${1:-}" in
 		gnome-keyring \
 		gnome-keyring-pam \
 		greetd \
-		greetd-selinux \
 		just \
 		nautilus \
 		nautilus-python \
@@ -226,6 +175,11 @@ case "${1:-}" in
 		xwayland-satellite \
 		wtype \
 		wl-mirror
+
+	# Attempt to install greetd-selinux separately (handles greetd-selinux conflict)
+	# Use --nobest and --allowerasing to resolve EL10 policy conflicts
+	dnf -y install --setopt=install_weak_deps=False --nobest --allowerasing \
+		greetd-selinux || true
 
 	# Attempt to install GNOME keyring components (may fail if not in repos)
 	dnf -y install --setopt=install_weak_deps=False \
@@ -249,10 +203,6 @@ case "${1:-}" in
 
 	# Build/install glib schemas (required for dconf/gsettings)
 	glib-compile-schemas /usr/share/glib-2.0/schemas || true
-
-	# Install PAM files for DMS greeter (fixes long login times on fingerprint auth)
-	mkdir -p /usr/lib/pam.d/
-	install -Dpm0644 -t /usr/lib/pam.d/ /usr/share/quickshell/dms/assets/pam/* || true
 
 	# Fix PAM for greetd - enable gnome_keyring for credential storage
 	if [ -f /etc/pam.d/greetd ]; then
