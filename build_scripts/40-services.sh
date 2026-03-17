@@ -35,10 +35,10 @@ safe_enable brew-setup.service
 if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
 	safe_disable gdm.service
 	safe_enable sddm.service
-elif [[ "${DESKTOP_FLAVOR}" == "niri" ]]; then
+elif [[ "${DESKTOP_FLAVOR}" == "niri" || "${DESKTOP_FLAVOR}" == "cosmic" ]]; then
 	safe_disable gdm.service
 	safe_enable greetd.service
-elif [[ "${DESKTOP_FLAVOR}" == "gnome" ]]; then
+elif [[ "${DESKTOP_FLAVOR}" == "gnome" || "${DESKTOP_FLAVOR}" == "gnome50" ]]; then
 	safe_enable gdm.service
 else
 	echo "Skipping DE-specific display-manager service setup (DESKTOP_FLAVOR='${DESKTOP_FLAVOR}')"
