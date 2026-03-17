@@ -82,11 +82,20 @@ echo "Starting VM..."
 limactl start --name="$VM_NAME" --tty=false "$CONFIG_FILE" --timeout=10m
 
 # Verification Steps
-echo "Waiting for GDM to become active..."
+echo "Waiting for Display Manager to become active..."
+DM_SERVICE="gdm"
+if [[ "$FLAVOR" == *"kde"* ]]; then
+	DM_SERVICE="sddm"
+elif [[ "$FLAVOR" == *"cosmic"* || "$FLAVOR" == *"niri"* ]]; then
+	DM_SERVICE="greetd"
+fi
+
+echo "Checking service: $DM_SERVICE"
+
 MAX_ATTEMPTS=30
 for i in $(seq 1 $MAX_ATTEMPTS); do
-	STATUS=$(limactl shell "$VM_NAME" -- systemctl is-active gdm 2>/dev/null || echo "inactive")
-	echo "Attempt $i/$MAX_ATTEMPTS: gdm is $STATUS"
+	STATUS=$(limactl shell "$VM_NAME" -- systemctl is-active "$DM_SERVICE" 2>/dev/null || echo "inactive")
+	echo "Attempt $i/$MAX_ATTEMPTS: $DM_SERVICE is $STATUS"
 	if [[ "$STATUS" == "active" ]]; then
 		break
 	fi
@@ -94,8 +103,8 @@ for i in $(seq 1 $MAX_ATTEMPTS); do
 done
 
 if [[ "$STATUS" != "active" ]]; then
-	echo "ERROR: GDM failed to become active"
-	limactl shell "$VM_NAME" -- journalctl -u gdm --no-pager -n 50 || true
+	echo "ERROR: $DM_SERVICE failed to become active"
+	limactl shell "$VM_NAME" -- journalctl -u "$DM_SERVICE" --no-pager -n 50 || true
 	limactl stop -f "$VM_NAME" || true
 	limactl delete "$VM_NAME"
 	exit 1

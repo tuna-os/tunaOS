@@ -3,6 +3,15 @@ on:
   schedule:
     - cron: '0 4 * * *' # 4 AM UTC daily
   workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Specific variant to verify (leave empty for rotation)'
+        required: false
+        type: string
+      flavor:
+        description: 'Specific flavor to verify (leave empty for rotation)'
+        required: false
+        type: string
 
 jobs:
   generate_matrix:
@@ -14,16 +23,28 @@ jobs:
         uses: actions/checkout@v4
       - name: Generate matrix
         id: set-matrix
+        env:
+          INPUT_VARIANT: ${{ github.event.inputs.variant }}
+          INPUT_FLAVOR: ${{ github.event.inputs.flavor }}
         run: |
-          # We only verify 'gnome' flavor for each variant as a representative sample
-          # and only for amd64 as Lima is currently set up for it in our CI scripts.
-          MATRIX="{\"include\":["
-          MATRIX="${MATRIX}{\"variant\": \"yellowfin\", \"flavor\": \"gnome\"},"
-          MATRIX="${MATRIX}{\"variant\": \"albacore\", \"flavor\": \"gnome\"},"
-          MATRIX="${MATRIX}{\"variant\": \"skipjack\", \"flavor\": \"gnome\"},"
-          MATRIX="${MATRIX}{\"variant\": \"bonito\", \"flavor\": \"gnome\"}"
-          MATRIX="${MATRIX}]}"
-          echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
+          if [[ -n "$INPUT_VARIANT" && -n "$INPUT_FLAVOR" ]]; then
+            PICKED="[{\"variant\": \"$INPUT_VARIANT\", \"flavor\": \"$INPUT_FLAVOR\"}]"
+          else
+            # Get all built variant:flavor pairs, excluding 'base' flavors which lack a DM
+            ALL_IMAGES=$(yq -o=json .github/build-config.yml | jq -c '.variants[] | .id as $v | .flavors[] | select(.build_image == true and (.id | contains("base") | not)) | {variant: $v, flavor: .id}')
+            
+            # Convert to array and count
+            COUNT=$(echo "$ALL_IMAGES" | jq -s 'length')
+            
+            # Use day of year for rotation offset
+            DAY=$(date +%j | sed 's/^0*//')
+            START=$(( (DAY * 3) % COUNT ))
+            
+            # Pick 3 images (including wrap-around)
+            PICKED=$(echo "$ALL_IMAGES" | jq -s ".[$START:$((START + 3))] + .[0:$(( (START + 3 > COUNT) ? (START + 3) % COUNT : 0 ))]")
+          fi
+          
+          echo "matrix={\"include\":$PICKED}" >> $GITHUB_OUTPUT
 
   verify:
     name: Verify ${{ matrix.variant }}:${{ matrix.flavor }}
