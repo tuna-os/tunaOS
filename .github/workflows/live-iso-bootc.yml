@@ -1,4 +1,4 @@
-name: Build Live ISOs (bootc-isos)
+name: Live ISOs (bootc-isos)
 on:
   workflow_dispatch:
     inputs:

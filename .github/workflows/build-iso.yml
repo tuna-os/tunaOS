@@ -1,4 +1,4 @@
-name: Build ISOs
+name: ISOs
 on:
   schedule:
     - cron: "0 1 * * *"
