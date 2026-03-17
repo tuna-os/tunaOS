@@ -1,13 +1,7 @@
 name: Build Skipjack
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
   schedule:
-    - cron: "0 1 * * TUE"
+    - cron: "0 1 * * *"
   workflow_dispatch:
     inputs:
       flavor:

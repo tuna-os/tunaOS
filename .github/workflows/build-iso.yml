@@ -1,13 +1,7 @@
 name: Build ISOs
 on:
-  pull_request:
-    branches:
-      - main
-    paths:
-      - 'iso_files/**'
   schedule:
-    - cron: "0 1 2 * *" # The second of every month at 1am UTC
-  merge_group:
+    - cron: "0 1 * * *"
   workflow_dispatch:
     inputs:
       upload_r2:
