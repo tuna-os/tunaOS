@@ -78,7 +78,6 @@ case "${1:-}" in
 	cosmic-session --version || true
 
 	# Install additional desktop utilities
-	# Note: brightnessctl and playerctl are missing in EL10 repos
 	dnf -y install --setopt=install_weak_deps=False \
 		flatpak \
 		pipewire \
@@ -86,6 +85,13 @@ case "${1:-}" in
 		wl-clipboard \
 		xdg-user-dirs \
 		zram-generator
+
+	# Restore brightnessctl and playerctl for Fedora and compatible EL10 variants (Kitten/CentOS)
+	if [[ $IS_FEDORA == true || $IS_ALMALINUXKITTEN == true || $IS_CENTOS == true ]]; then
+		dnf -y install --setopt=install_weak_deps=False \
+			brightnessctl \
+			playerctl || true
+	fi
 
 	# Attempt to install GNOME keyring components (may fail if not in repos)
 	dnf -y install --setopt=install_weak_deps=False \

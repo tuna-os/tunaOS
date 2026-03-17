@@ -28,6 +28,22 @@ case "${1:-}" in
 		# Verify niri installation
 		niri --version | grep -i -E "niri [[:digit:]]*\.[[:digit:]]* (.*\.git\..*)" || true
 
+		# Install DankMaterialShell suite (quickshell-git + dms shell + theming/tools)
+		dnf -y copr enable avengemedia/danklinux
+		dnf -y copr enable avengemedia/dms-git
+		dnf -y --enablerepo copr:copr.fedorainfracloud.org:avengemedia:dms-git \
+			--enablerepo copr:copr.fedorainfracloud.org:avengemedia:danklinux install \
+			--setopt=install_weak_deps=False \
+			quickshell-git \
+			dms \
+			dms-cli \
+			dms-greeter \
+			dgop \
+			dsearch \
+			matugen
+		dnf -y copr disable avengemedia/danklinux
+		dnf -y copr disable avengemedia/dms-git
+
 		# Install Fedora Niri ecosystem packages from zirconium/packages COPR
 		dnf -y --enablerepo copr:copr.fedorainfracloud.org:zirconium:packages install \
 			iio-niri \
@@ -143,6 +159,25 @@ case "${1:-}" in
 	# Verify niri installation
 	/usr/bin/niri --version | grep -i -E "niri [[:digit:]]*\.[[:digit:]]* " || true
 
+	# Install DankMaterialShell suite (quickshell + dms shell + theming/tools)
+	# Only enabled for AlmaLinux Kitten and CentOS Stream 10 (Qt 6.10+)
+	if [[ $IS_ALMALINUXKITTEN == true || $IS_CENTOS == true ]]; then
+		dnf -y copr enable avengemedia/danklinux
+		dnf -y copr enable avengemedia/dms-git
+		dnf -y --enablerepo copr:copr.fedorainfracloud.org:avengemedia:dms-git \
+			--enablerepo copr:copr.fedorainfracloud.org:avengemedia:danklinux install \
+			--setopt=install_weak_deps=False \
+			quickshell \
+			dms \
+			dms-cli \
+			dms-greeter \
+			matugen \
+			dgop \
+			danksearch
+		dnf -y copr disable avengemedia/danklinux
+		dnf -y copr disable avengemedia/dms-git
+	fi
+
 	# Install Niri desktop environment packages
 	dnf -y --enablerepo copr:copr.fedorainfracloud.org:yselkowitz:wlroots-epel install --setopt=install_weak_deps=False \
 		chezmoi \
@@ -175,6 +210,13 @@ case "${1:-}" in
 		xwayland-satellite \
 		wtype \
 		wl-mirror
+
+	# Restore brightnessctl and playerctl for compatible EL10 variants (Kitten/CentOS)
+	if [[ $IS_ALMALINUXKITTEN == true || $IS_CENTOS == true ]]; then
+		dnf -y install --setopt=install_weak_deps=False \
+			brightnessctl \
+			playerctl || true
+	fi
 
 	# Attempt to install greetd-selinux separately (handles greetd-selinux conflict)
 	# Use --nobest and --allowerasing to resolve EL10 policy conflicts
