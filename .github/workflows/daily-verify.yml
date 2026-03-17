@@ -75,13 +75,12 @@ jobs:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
         run: |
-          # Pull the image from GHCR first to avoid building it locally (which takes too long for daily)
-          # Note: scripts/verify-image.sh expects a local .qcow2.
-          # We need to build the qcow2 from the remote image.
-          IMAGE_REF="ghcr.io/${{ github.repository_owner }}/${VARIANT}:${FLAVOR}"
-          echo "Pulling ${IMAGE_REF}..."
-          # Use just qcow2 repo=ghcr to build it from the remote image
-          just qcow2 "${VARIANT}" "${FLAVOR}" "ghcr"
+          # Use the unchunked image for verification as it preserves necessary bootc/ostree metadata
+          # that can be lost during the chunking process.
+          UNCHUNKED_TAG="${FLAVOR}-unchunked-linux-amd64"
+          echo "Building QCOW2 from ghcr.io/${{ github.repository_owner }}/${VARIANT}:${UNCHUNKED_TAG}..."
+          # Use just qcow2 repo=ghcr with the specific unchunked tag
+          just qcow2 "${VARIANT}" "${FLAVOR}" "ghcr" "${UNCHUNKED_TAG}"
           # Run the verify recipe
           just verify "${VARIANT}" "${FLAVOR}"
 

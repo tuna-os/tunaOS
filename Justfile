@@ -424,20 +424,19 @@ pipeline variant='all' flavor='all' tag='latest' dry_run='0':
     export JUST="{{ just }}"
     ./scripts/pipeline.sh "{{ variant }}" "{{ flavor }}" "{{ tag }}" "{{ dry_run }}"
 
-qcow2 variant flavor='gnome' repo='local':
+qcow2 variant flavor='gnome' repo='local' tag='':
     #!/usr/bin/env bash
     set -euo pipefail
     if [ "{{ repo }}" = "local" ]; then
         echo "Building unchunked image for QCOW2 generation..."
         {{ just }} build {{ variant }} {{ flavor }} '' '0' 'latest' '' '0'
     fi
-    if [ "{{ flavor }}" != "base" ]; then
-        FLAVOR="-{{ flavor }}"
-    else
-        FLAVOR=
+    TAG="{{ tag }}"
+    if [ -z "$TAG" ]; then
+        TAG="{{ flavor }}"
     fi
-    if [ "{{ repo }}" = "ghcr" ]; then bash ./scripts/build-bootc-diskimage.sh qcow2 ghcr.io/{{ repo_organization }}/{{ variant }}:{{ flavor }}
-    elif [ "{{ repo }}" = "local" ]; then bash ./scripts/build-bootc-diskimage.sh qcow2 localhost/{{ variant }}:{{ flavor }}
+    if [ "{{ repo }}" = "ghcr" ]; then bash ./scripts/build-bootc-diskimage.sh qcow2 ghcr.io/{{ repo_organization }}/{{ variant }}:$TAG
+    elif [ "{{ repo }}" = "local" ]; then bash ./scripts/build-bootc-diskimage.sh qcow2 localhost/{{ variant }}:$TAG
     else echo "DEBUG: repo '{{ repo }}' did not match ghcr or local"; exit 1
     fi
 
