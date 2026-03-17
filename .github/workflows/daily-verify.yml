@@ -93,8 +93,15 @@ jobs:
         run: |
           TITLE="Daily Verification Failed: ${VARIANT}:${FLAVOR}"
           BODY="The daily verification for \`${VARIANT}:${FLAVOR}\` failed.
+          
+          **Variant:** ${VARIANT}
+          **Flavor:** ${FLAVOR}
+          **Image:** \`ghcr.io/${{ github.repository_owner }}/${VARIANT}:${FLAVOR}-unchunked-linux-amd64\`
+          
           [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-          Please investigate the boot logs and GDM status."
+          
+          Please investigate the boot logs and display manager status."
+          
           # Check if an open issue with the same title already exists
           EXISTING_ISSUE=$(gh issue list --search "${TITLE}" --state open --json number -q '.[0].number')
           if [ -z "${EXISTING_ISSUE}" ]; then
