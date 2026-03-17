@@ -41,11 +41,12 @@ jobs:
             START=$(( (DAY * 3) % COUNT ))
             
             # Pick 3 images (including wrap-around)
-            PICKED=$(echo "$ALL_IMAGES" | jq -s ".[$START:$((START + 3))] + .[0:$(( (START + 3 > COUNT) ? (START + 3) % COUNT : 0 ))]")
+            PICKED=$(echo "$ALL_IMAGES" | jq -sc ".[$START:$((START + 3))] + .[0:$(( (START + 3 > COUNT) ? (START + 3) % COUNT : 0 ))]")
           fi
           
-          echo "matrix={\"include\":$PICKED}" >> $GITHUB_OUTPUT
-
+          echo "matrix<<EOF" >> $GITHUB_OUTPUT
+          echo "{\"include\":$PICKED}" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
   verify:
     name: Verify ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate_matrix
