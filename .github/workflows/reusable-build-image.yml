@@ -219,6 +219,11 @@ jobs:
           sudo "$SYFT_CMD" "${IMAGE_REGISTRY}/${IMAGE}:${DEFAULT_TAG}" -o "spdx-json=${SBOM_PATH}"
           echo "SBOM=${SBOM_PATH}" >> "${GITHUB_OUTPUT}"
 
+      - name: Tag Unchunked Image
+        if: ${{ inputs.publish }}
+        run: |
+          sudo podman tag "localhost/${{ inputs.image-variant }}:${{ inputs.default-tag }}" "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.default-tag }}-unchunked"
+
       - name: Run Chunkah
         if: ${{ inputs.rechunk && inputs.publish }}
         id: chunkify
@@ -250,7 +255,6 @@ jobs:
             IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
           fi
           sudo podman image tag "${IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
-          sudo podman image tag "localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-unchunked"
 
           IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
           IMAGE_DIGEST="$(sudo podman image inspect --format '{{.Digest}}' "${IMAGE}")"
