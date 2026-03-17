@@ -121,10 +121,6 @@ case "${1:-}" in
 		# Build/install glib schemas
 		glib-compile-schemas /usr/share/glib-2.0/schemas || true
 
-		# Install PAM files for DMS greeter
-		mkdir -p /usr/lib/pam.d/
-		install -Dpm0644 -t /usr/lib/pam.d/ /usr/share/quickshell/dms/assets/pam/* || true
-
 		# Fix PAM for greetd
 		if [ -f /etc/pam.d/greetd ]; then
 			sed --sandbox -i -e '/gnome_keyring.so/ s/-auth/auth/ ; /gnome_keyring.so/ s/-session/session/' /etc/pam.d/greetd
@@ -147,6 +143,9 @@ case "${1:-}" in
 	dnf -y copr enable yselkowitz/wlroots-epel
 	dnf -y copr disable yselkowitz/wlroots-epel
 
+	dnf -y copr enable ligenix/enterprise-cosmic rhel+epel-10-x86_64
+	dnf -y copr disable ligenix/enterprise-cosmic
+
 	# Install Niri window manager from yalter/niri-git COPR.
 	# libinput must come from yselkowitz/wlroots-epel — the EL10 stock version
 	# is too old and doesn't provide the symbols niri requires.
@@ -159,27 +158,10 @@ case "${1:-}" in
 	# Verify niri installation
 	/usr/bin/niri --version | grep -i -E "niri [[:digit:]]*\.[[:digit:]]* " || true
 
-	# Install DankMaterialShell suite (quickshell + dms shell + theming/tools)
-	# Only enabled for AlmaLinux Kitten and CentOS Stream 10 (Qt 6.10+)
-	if [[ $IS_ALMALINUXKITTEN == true || $IS_CENTOS == true ]]; then
-		dnf -y copr enable avengemedia/danklinux
-		dnf -y copr enable avengemedia/dms-git
-		dnf -y --enablerepo copr:copr.fedorainfracloud.org:avengemedia:dms-git \
-			--enablerepo copr:copr.fedorainfracloud.org:avengemedia:danklinux install \
-			--setopt=install_weak_deps=False \
-			quickshell \
-			dms \
-			dms-cli \
-			dms-greeter \
-			matugen \
-			dgop \
-			danksearch
-		dnf -y copr disable avengemedia/danklinux
-		dnf -y copr disable avengemedia/dms-git
-	fi
-
 	# Install Niri desktop environment packages
-	dnf -y --enablerepo copr:copr.fedorainfracloud.org:yselkowitz:wlroots-epel install --setopt=install_weak_deps=False \
+	dnf -y --enablerepo copr:copr.fedorainfracloud.org:yselkowitz:wlroots-epel \
+		--enablerepo copr:copr.fedorainfracloud.org:ligenix:enterprise-cosmic \
+		install --setopt=install_weak_deps=False \
 		chezmoi \
 		ddcutil \
 		fastfetch \
@@ -210,6 +192,27 @@ case "${1:-}" in
 		xwayland-satellite \
 		wtype \
 		wl-mirror
+
+	# Install DankMaterialShell suite (quickshell + dms shell + theming/tools)
+	# Only enabled for AlmaLinux Kitten and CentOS Stream 10 (Qt 6.10+)
+	# Needs ligenix repo enabled for dms-greeter -> greetd dependency
+	if [[ $IS_ALMALINUXKITTEN == true || $IS_CENTOS == true ]]; then
+		dnf -y copr enable avengemedia/danklinux
+		dnf -y copr enable avengemedia/dms-git
+		dnf -y --enablerepo copr:copr.fedorainfracloud.org:avengemedia:dms-git \
+			--enablerepo copr:copr.fedorainfracloud.org:avengemedia:danklinux \
+			--enablerepo copr:copr.fedorainfracloud.org:ligenix:enterprise-cosmic install \
+			--setopt=install_weak_deps=False \
+			quickshell \
+			dms \
+			dms-cli \
+			dms-greeter \
+			matugen \
+			dgop \
+			danksearch
+		dnf -y copr disable avengemedia/danklinux
+		dnf -y copr disable avengemedia/dms-git
+	fi
 
 	# Restore brightnessctl and playerctl for compatible EL10 variants (Kitten/CentOS)
 	if [[ $IS_ALMALINUXKITTEN == true || $IS_CENTOS == true ]]; then
