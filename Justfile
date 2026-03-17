@@ -107,13 +107,18 @@ clean-cache:
 #  BUILD PIPELINE
 # ==============================================================================
 
-# Check if yq is installed
+# Check if requirements are installed
 [private]
-_ensure-yq:
+_ensure-deps:
     #!/usr/bin/env bash
     if ! command -v yq &> /dev/null; then
         echo "Missing requirement: 'yq' is not installed."
         echo "Please install yq (e.g. 'brew install yq' or download from https://github.com/mikefarah/yq)"
+        exit 1
+    fi
+    if ! command -v cargo &> /dev/null; then
+        echo "Missing requirement: 'rust/cargo' is not installed."
+        echo "Please install rust (e.g. 'curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh')"
         exit 1
     fi
 
@@ -124,7 +129,7 @@ _ensure-yq:
 
 # NVIDIA drivers and the coreos/fedora kernel.
 [private]
-_build target_tag_with_version target_tag container_file base_image_for_build target_platform use_cache enable_gdx enable_hwe desktop_flavor *args: _ensure-yq
+_build target_tag_with_version target_tag container_file base_image_for_build target_platform use_cache enable_gdx enable_hwe desktop_flavor *args: _ensure-deps
     #!/usr/bin/env bash
     set -euxo pipefail
 
@@ -206,7 +211,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
 # Example: just build image_name=albacore variant=almalinux is_ci=true kde-gdx
 
 # Build a TunaOS variant
-build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='' chunk='1': _ensure-yq
+build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='' chunk='1': _ensure-deps
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -435,10 +440,28 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     if [ -z "$TAG" ]; then
         TAG="{{ flavor }}"
     fi
-    if [ "{{ repo }}" = "ghcr" ]; then bash ./scripts/build-bootc-diskimage.sh qcow2 ghcr.io/{{ repo_organization }}/{{ variant }}:$TAG
-    elif [ "{{ repo }}" = "local" ]; then bash ./scripts/build-bootc-diskimage.sh qcow2 localhost/{{ variant }}:$TAG
+    
+    IMG_REF=""
+    if [ "{{ repo }}" = "ghcr" ]; then IMG_REF="ghcr.io/{{ repo_organization }}/{{ variant }}:$TAG"
+    elif [ "{{ repo }}" = "local" ]; then IMG_REF="localhost/{{ variant }}:$TAG"
     else echo "DEBUG: repo '{{ repo }}' did not match ghcr or local"; exit 1
     fi
+
+    OUTPUT="{{ variant }}.qcow2"
+    echo "==> Generating $OUTPUT from $IMG_REF using bcvk..."
+    
+    # Ensure bcvk is available
+    if ! command -v bcvk &>/dev/null; then
+        echo "Error: 'bcvk' not found. Please install it (cargo install --git https://github.com/bootc-dev/bcvk.git)"
+        exit 1
+    fi
+
+    # Run bcvk to-disk to create the QCOW2
+    # We use sudo because bcvk to-disk currently requires root/privileged podman for the installation
+    sudo bcvk to-disk --format=qcow2 "$IMG_REF" "$OUTPUT"
+    
+    sudo chown "${SUDO_UID:-$(id -u)}:${SUDO_GID:-$(id -g)}" "$OUTPUT"
+    echo "✓ Created $OUTPUT"
 
 # Attach to the currently running Zellij pipeline session
 attach:

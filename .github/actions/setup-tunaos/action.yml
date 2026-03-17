@@ -28,3 +28,10 @@ runs:
           brew install just
         fi
       shell: bash
+
+    - name: Install bcvk
+      run: |
+        if ! command -v bcvk &> /dev/null; then
+          cargo install --git https://github.com/bootc-dev/bcvk.git
+        fi
+      shell: bash
