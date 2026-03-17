@@ -34,7 +34,9 @@ if [ -d /usr/etc ]; then
 fi
 
 # MoreWaita icon theme
-install_from_copr trixieua/morewaita-icon-theme morewaita-icon-theme
+if [[ "${DESKTOP_FLAVOR}" == *"gnome"* ]]; then
+	install_from_copr trixieua/morewaita-icon-theme morewaita-icon-theme
+fi
 
 # This is required so homebrew works indefinitely.
 # Symlinking it makes it so whenever another GCC version gets released it will break if the user has updated it without-

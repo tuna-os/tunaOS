@@ -213,8 +213,10 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     # Initialize submodules locally (CI uses actions/checkout with submodules: recursive)
     DID_INIT="0"
     if [[ "{{ is_ci }}" != "1" ]] && [[ "${SKIP_SUBMODULES:-0}" != "1" ]]; then
-        git submodule update --init --recursive
-        DID_INIT="1"
+        if [[ "{{ flavor }}" == *"gnome"* ]]; then
+            git submodule update --init --recursive
+            DID_INIT="1"
+        fi
     fi
 
     # ANSI color codes
