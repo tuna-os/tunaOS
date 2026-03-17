@@ -1,0 +1,21 @@
+name: Build Flavor
+on:
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: 'Flavor to build across all variants (base, gnome, kde, niri, cosmic, gnome50, etc.)'
+        required: true
+        type: string
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [yellowfin, albacore, skipjack, bonito]
+    name: Build ${{ matrix.variant }}:${{ github.event.inputs.flavor }}
+    uses: ./.github/workflows/build-variant.yml
+    with:
+      variant: ${{ matrix.variant }}
+      flavor: ${{ github.event.inputs.flavor }}
+    secrets: inherit
