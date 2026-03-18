@@ -118,14 +118,9 @@ clean-cache:
 _ensure-deps:
     #!/usr/bin/env bash
     if ! command -v yq &> /dev/null; then
-        echo "Missing requirement: 'yq' is not installed."
-        echo "Please install yq (e.g. 'brew install yq' or download from https://github.com/mikefarah/yq)"
-        exit 1
-    fi
-    if ! command -v cargo &> /dev/null; then
-        echo "Missing requirement: 'rust/cargo' is not installed."
-        echo "Please install rust (e.g. 'curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh')"
-        exit 1
+    echo "Missing requirement: 'yq' is not installed."
+    echo "Please install yq (e.g. 'brew install yq' or download from https://github.com/mikefarah/yq)"
+    exit 1
     fi
 
 # Private build engine.

@@ -99,8 +99,7 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/cleanup.sh
 
-# Makes `/opt` writeable by default (inherited by all desktop variants)
-RUN rm -rf /opt && ln -s /var/opt /opt
+
 
 # ==============================================================================
 # Desktop Variant Stages
@@ -150,6 +149,10 @@ RUN dnf versionlock add glib2
 
 # Select the requested flavor
 FROM ${DESKTOP_FLAVOR} AS pre-final
+
+# Makes `/opt` writeable by default - done here (not in base-no-de) so that
+# DE stages can still mount tmpfs at /opt during their build steps.
+RUN rm -rf /opt && ln -s /var/opt /opt
 
 # Chunkify the image at build-time using the oci-archive trick.
 # This preserves bootc/ostree metadata while optimizing layer count.

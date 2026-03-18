@@ -70,6 +70,13 @@ jobs:
       - name: Setup TunaOS Build Environment
         uses: ./.github/actions/setup-tunaos
 
+      - name: Install bcvk
+        run: |
+          if ! command -v bcvk &> /dev/null; then
+            cargo install --git https://github.com/bootc-dev/bcvk.git bcvk
+          fi
+        shell: bash
+
       - name: Setup Lima
         uses: ./.github/actions/setup-lima
 
