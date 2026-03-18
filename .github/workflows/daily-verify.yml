@@ -31,7 +31,9 @@ jobs:
             PICKED="[{\"variant\": \"$INPUT_VARIANT\", \"flavor\": \"$INPUT_FLAVOR\"}]"
           else
             # Get all built variant:flavor pairs, excluding 'base' flavors which lack a DM
-            ALL_IMAGES=$(yq -o=json .github/build-config.yml | jq -c '.variants[] | .id as $v | .flavors[] | select(.build_image == true and (.id | contains("base") | not)) | {variant: $v, flavor: .id}')
+            CONFIG_FILE=".github/build-config.yml"
+            JQ_FILTER='.variants[] | .id as $v | .flavors[] | select(.build_image == true and (.id | contains("base") | not)) | {variant: $v, flavor: .id}'
+            ALL_IMAGES=$(yq -o=json "${CONFIG_FILE}" | jq -c "${JQ_FILTER}")
             
             # Convert to array and count
             COUNT=$(echo "$ALL_IMAGES" | jq -s 'length')
@@ -41,12 +43,14 @@ jobs:
             START=$(( (DAY * 3) % COUNT ))
             
             # Pick 3 images (including wrap-around)
-            PICKED=$(echo "$ALL_IMAGES" | jq -sc ".[$START:$((START + 3))] + .[0:$(( (START + 3 > COUNT) ? (START + 3) % COUNT : 0 ))]")
+            SLICE_FILTER=".[$START:$((START + 3))] + .[0:$(( (START + 3 > COUNT) ? (START + 3) % COUNT : 0 ))]"
+            PICKED=$(echo "$ALL_IMAGES" | jq -sc "${SLICE_FILTER}")
           fi
           
           echo "matrix<<EOF" >> $GITHUB_OUTPUT
           echo "{\"include\":$PICKED}" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+
   verify:
     name: Verify ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate_matrix
@@ -91,20 +95,37 @@ jobs:
           FLAVOR: ${{ matrix.flavor }}
         run: |
           TITLE="Daily Verification Failed: ${VARIANT}:${FLAVOR}"
-          BODY="The daily verification for \`${VARIANT}:${FLAVOR}\` failed.
+          BODY_TEXT="The daily verification for \`${VARIANT}:${FLAVOR}\` failed."
+          REPO_URL="${{ github.server_url }}/${{ github.repository }}"
+          RUN_URL="${REPO_URL}/actions/runs/${{ github.run_id }}"
+          IMAGE_URI="ghcr.io/${{ github.repository_owner }}/${VARIANT}:${FLAVOR}-linux-amd64"
+          
+          BODY=$(cat <<EOF
+          ${BODY_TEXT}
           
           **Variant:** ${VARIANT}
           **Flavor:** ${FLAVOR}
-          **Image:** \`ghcr.io/${{ github.repository_owner }}/${VARIANT}:${FLAVOR}-linux-amd64\`
+          **Image:** \`${IMAGE_URI}\`
           
-          [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          [View Workflow Run](${RUN_URL})
           
-          Please investigate the boot logs and display manager status."
+          Please investigate the boot logs and display manager status.
+          EOF
+          )
           
           # Check if an open issue with the same title already exists
-          EXISTING_ISSUE=$(gh issue list --search "${TITLE}" --state open --json number -q '.[0].number')
+          EXISTING_ISSUE=$(gh issue list \
+            --search "${TITLE}" \
+            --state open \
+            --json number \
+            -q '.[0].number')
+            
           if [ -z "${EXISTING_ISSUE}" ]; then
-            gh issue create --title "${TITLE}" --body "${BODY}" --label "bug,verification-failed"
+            gh issue create \
+              --title "${TITLE}" \
+              --body "${BODY}" \
+              --label "bug,verification-failed"
           else
-            gh issue comment "${EXISTING_ISSUE}" --body "Daily verification failed again. See: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+            gh issue comment "${EXISTING_ISSUE}" \
+              --body "Daily verification failed again. See: ${RUN_URL}"
           fi

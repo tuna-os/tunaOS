@@ -6,7 +6,8 @@ runs:
   steps:
     - name: Enable KVM
       run: |
-        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+        echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
+          sudo tee /etc/udev/rules.d/99-kvm4all.rules
         sudo udevadm control --reload-rules
         sudo udevadm trigger --name-match=kvm
         ls -la /dev/kvm
@@ -16,8 +17,13 @@ runs:
       run: |
         sudo apt-get update -q
         sudo apt-get install -y -q qemu-system-x86 qemu-utils ovmf
-        LIMA_VERSION=$(curl -s https://api.github.com/repos/lima-vm/lima/releases/latest | python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
+        LIMA_URL="https://api.github.com/repos/lima-vm/lima/releases/latest"
+        LIMA_VERSION=$(curl -s "${LIMA_URL}" | \
+          python3 -c "import sys,json; print(json.load(sys.stdin)['tag_name'])")
         echo "Installing Lima ${LIMA_VERSION}"
-        curl -fsSL "https://github.com/lima-vm/lima/releases/download/${LIMA_VERSION}/lima-${LIMA_VERSION#v}-$(uname -s)-$(uname -m).tar.gz" | sudo tar xz -C /usr/local
+        BINARY="lima-${LIMA_VERSION#v}-$(uname -s)-$(uname -m).tar.gz"
+        BASE_URL="https://github.com/lima-vm/lima/releases/download"
+        curl -fsSL "${BASE_URL}/${LIMA_VERSION}/${BINARY}" | \
+          sudo tar xz -C /usr/local
         limactl --version
       shell: bash
