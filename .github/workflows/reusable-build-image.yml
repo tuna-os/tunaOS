@@ -36,11 +36,6 @@ on:
         required: false
         type: string
         default: "albacore"
-      rechunk:
-        description: "Rechunk the build"
-        required: false
-        type: boolean
-        default: true
       sbom:
         description: "Generate/publish SBOMs for the artifacts"
         required: false
@@ -178,12 +173,11 @@ jobs:
           DEFAULT_TAG: ${{ inputs.default-tag }}
           PLATFORM: ${{ matrix.platform }}
           CHAIN_BASE_IMAGE: ${{ inputs.chain-base-image }}
-          CHUNKAH_ENABLED: "${{ inputs.rechunk && '1' || '0' }}"
         run: |
           set -x
           just=$(which just)
-          # just build now handles two-pass chunking internally if CHUNKAH_ENABLED=1
-          sudo CHUNKAH_ENABLED="${CHUNKAH_ENABLED}" "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}"
+          # just build now handles two-pass chunking internally by default
+          sudo "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}"
 
       - name: Verify Image in VM
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')

@@ -3,7 +3,6 @@ export default_tag := env("DEFAULT_TAG", "latest")
 export common_image := env("COMMON_IMAGE", "ghcr.io/projectbluefin/common")
 export brew_image := env("BREW_IMAGE", "ghcr.io/ublue-os/brew")
 export coreos_stable_version := env("COREOS_STABLE_VERSION", "43")
-export chunkah_enabled := env("CHUNKAH_ENABLED", "1")
 just := just_executable()
 arch := arch()
 export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else if arch == "arm64" { "linux/arm64" } else if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") })
@@ -67,6 +66,12 @@ check: _ensure_check_deps
                    .github/workflows/*.yml .github/workflows/*.yaml || { exit 1; }
     fi
     just --unstable --fmt --check -f Justfile
+
+# Generate GitHub Actions workflows from build-config.yml
+generate-workflows:
+    #!/usr/bin/env bash
+    chmod +x scripts/generate-workflows.py
+    python3 scripts/generate-workflows.py
 
 # Fix Just Syntax
 fix:
@@ -174,54 +179,39 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
         BUILD_ARGS+=("${CACHE_MOUNTS[@]}")
     fi
 
-    if [[ "{{ chunkah_enabled }}" == "1" ]]; then
-        echo "==> Build-time chunking enabled. Starting two-pass build..."
-        
-        # Pass 1: Build up to 'chunker' stage and extract the OCI archive to host
-        # We must use --skip-unused-stages=false to ensure the 'builder' stage is actually built
-        # and available for the 'chunker' mount.
-        podman build \
-            --security-opt label=disable \
-            --dns=8.8.8.8 \
-            --platform "{{ target_platform }}" \
-            --target="chunker" \
-            "${BUILD_ARGS[@]}" \
-            --skip-unused-stages=false \
-            -v "$(pwd):/run/out:Z" \
-            {{ args }} \
-            --pull=newer \
-            --file "{{ container_file }}" \
-            .
-            
-        echo "==> OCI archive generated. Starting Pass 2 (final stage)..."
-        
-        # Pass 2: Build the 'final' stage from the generated archive
-        podman build \
-            --security-opt label=disable \
-            --dns=8.8.8.8 \
-            --platform "{{ target_platform }}" \
-            --target="final" \
-            "${BUILD_ARGS[@]}" \
-            --tag "{{ target_tag_with_version }}" \
-            --file "{{ container_file }}" \
-            .
-            
-        # Clean up the large archive
-        rm -f out.ociarchive
-    else
-        # Standard build targeting the desktop flavor stage (no chunking)
-        podman build \
-            --security-opt label=disable \
-            --dns=8.8.8.8 \
-            --platform "{{ target_platform }}" \
-            --target="{{ desktop_flavor }}" \
-            "${BUILD_ARGS[@]}" \
-            {{ args }} \
-            --pull=newer \
-            --tag "{{ target_tag_with_version }}" \
-            --file "{{ container_file }}" \
-            .
-    fi
+    echo "==> Build-time chunking enabled. Starting two-pass build..."
+
+    # Pass 1: Build up to 'chunker' stage and extract the OCI archive to host
+    # We must use --skip-unused-stages=false to ensure the 'builder' stage is actually built
+    # and available for the 'chunker' mount.
+    podman build \
+        --security-opt label=disable \
+        --dns=8.8.8.8 \
+        --platform "{{ target_platform }}" \
+        --target="chunker" \
+        "${BUILD_ARGS[@]}" \
+        --skip-unused-stages=false \
+        -v "$(pwd):/run/out:Z" \
+        {{ args }} \
+        --pull=newer \
+        --file "{{ container_file }}" \
+        .
+
+    echo "==> OCI archive generated. Starting Pass 2 (final stage)..."
+
+    # Pass 2: Build the 'final' stage from the generated archive
+    podman build \
+        --security-opt label=disable \
+        --dns=8.8.8.8 \
+        --platform "{{ target_platform }}" \
+        --target="final" \
+        "${BUILD_ARGS[@]}" \
+        --tag "{{ target_tag_with_version }}" \
+        --file "{{ container_file }}" \
+        .
+
+    # Clean up the large archive
+    rm -f out.ociarchive
 
 # Build a TunaOS variant
 build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='': _ensure-deps
@@ -342,7 +332,7 @@ iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
 qcow2 variant flavor='gnome' repo='local' tag='':
     #!/usr/bin/env bash
     set -euo pipefail
-    
+
     IMG_REF=""
     if [[ "{{ variant }}" == *":"* || "{{ variant }}" == *"/"* ]]; then
         IMG_REF="{{ variant }}"
@@ -353,7 +343,7 @@ qcow2 variant flavor='gnome' repo='local' tag='':
         fi
         TAG="{{ tag }}"
         [[ -z "$TAG" ]] && TAG="{{ flavor }}"
-        
+
         if [ "{{ repo }}" = "ghcr" ]; then IMG_REF="ghcr.io/{{ repo_organization }}/{{ variant }}:$TAG"
         elif [ "{{ repo }}" = "local" ]; then IMG_REF="localhost/{{ variant }}:$TAG"
         else exit 1; fi
@@ -362,7 +352,7 @@ qcow2 variant flavor='gnome' repo='local' tag='':
 
     OUTPUT="${OUTPUT_NAME}.qcow2"
     echo "==> Generating $OUTPUT from $IMG_REF using bcvk..."
-    
+
     if ! command -v bcvk &>/dev/null; then
         echo "Error: 'bcvk' not found. Please install it (cargo install --git https://github.com/bootc-dev/bcvk.git bcvk)"
         exit 1

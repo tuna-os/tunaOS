@@ -49,7 +49,6 @@ case "${1:-}" in
 			iio-niri \
 			valent-git
 
-
 		# Install Niri desktop environment packages (Fedora repos)
 		FCITX5_MOZC=""
 		if dnf repoquery --available fcitx5-mozc &>/dev/null; then

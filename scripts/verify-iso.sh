@@ -46,7 +46,7 @@ fi
 
 # Create Lima Config for ISO Booting
 CONFIG_FILE="$(mktemp --suffix=.yaml)"
-cat > "$CONFIG_FILE" <<LIMAEOF
+cat >"$CONFIG_FILE" <<LIMAEOF
 vmType: qemu
 arch: $LIMA_ARCH
 cpus: 2
