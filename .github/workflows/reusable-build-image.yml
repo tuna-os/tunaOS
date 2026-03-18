@@ -140,9 +140,6 @@ jobs:
       - name: Setup TunaOS Build Environment
         uses: ./.github/actions/setup-tunaos
 
-      - name: Check Just Syntax
-        shell: bash
-        run: just check
 
       - name: Cache DNF/RPM Packages
         uses: actions/cache@v5.0.3

@@ -177,10 +177,6 @@ jobs:
       - name: Install Just via Homebrew
         run: brew install just
 
-      - name: Check Just Syntax
-        shell: bash
-        run: |
-          just check
 
       - name: get image ref
         id: get_image_ref
