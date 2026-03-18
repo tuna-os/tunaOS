@@ -8,13 +8,7 @@ ARG BREW_IMAGE_REF="ghcr.io/ublue-os/brew:latest"
 FROM ${COMMON_IMAGE_REF} AS common
 FROM ${BREW_IMAGE_REF} AS brew
 
-# Context layer combines:
-# - Local TunaOS customizations (system_files/)
-# - Brew tools (/system_files from brew image - homebrew setup)
-# - Common shared utilities (/system_files/shared from common - udev rules, scripts, services)
-# - Common bluefin branding (/system_files/bluefin from common - theming, wallpapers, dconf)
-# - Variant-specific overrides (system_files_overrides/)
-# - Build scripts
+# Context layer combines build-time dependencies and configuration files
 FROM scratch as context
 COPY system_files /files
 COPY --from=brew /system_files /files
@@ -24,7 +18,7 @@ COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 
 # ==============================================================================
-# Base stage (no DE) - Shared layer for GNOME and KDE variants
+# Base stage (no DE) - Shared layer for all variants
 # ==============================================================================
 FROM ${BASE_IMAGE} AS base-no-de
 
@@ -58,7 +52,7 @@ ENV RHSM_ACTIVATION_KEY=${RHSM_ACTIVATION_KEY}
 # Preserve desktop flavor so base-stage scripts don't fall back to GNOME defaults
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
-# We pass in BASE_IMAGE as an env var to set it in os-release so that we know what we are building on
+# Copy system files and apply TunaOS customizations
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
@@ -69,7 +63,7 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/00-workarounds.sh
 
-# Install base packages WITHOUT DE (calls install_base_packages_no_de function)
+# Install base packages WITHOUT DE
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
@@ -105,105 +99,76 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/cleanup.sh
 
+# Makes `/opt` writeable by default (inherited by all desktop variants)
+RUN rm -rf /opt && ln -s /var/opt /opt
+
 # ==============================================================================
-# GNOME variant - Adds GNOME desktop to base-no-de
+# Desktop Variant Stages
 # ==============================================================================
+
+FROM base-no-de AS base
+# Just an alias for base-no-de
+
 FROM base-no-de AS gnome
-
-ARG DESKTOP_FLAVOR=gnome
-ENV DESKTOP_FLAVOR=gnome
-
-# Install GNOME desktop environment
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/gnome.sh base
-
-# Lock glib2 after GNOME installation
 RUN dnf versionlock add glib2
 
-# Makes `/opt` writeable by default
-# Needs to be here to make the main image build strict (no /opt there)
-RUN rm -rf /opt && ln -s /var/opt /opt
-
-# ==============================================================================
-# COSMIC variant - Adds COSMIC desktop (yselkowitz/cosmic-epel) to base-no-de
-# ==============================================================================
 FROM base-no-de AS cosmic
-
-ARG DESKTOP_FLAVOR=cosmic
-ENV DESKTOP_FLAVOR=cosmic
-
-# Install COSMIC desktop environment
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/cosmic.sh base
-
-# Lock glib2 after COSMIC installation
 RUN dnf versionlock add glib2
 
-# Makes `/opt` writeable by default
-RUN rm -rf /opt && ln -s /var/opt /opt
-
-# ==============================================================================
-# GNOME 50 variant - Adds GNOME 50 (c10s-gnome-50 COPR) desktop to base-no-de
-# ==============================================================================
 FROM base-no-de AS gnome50
-
-ARG DESKTOP_FLAVOR=gnome50
-ENV DESKTOP_FLAVOR=gnome50
-
-# Install GNOME 50 desktop environment
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/gnome.sh base
-
-# Lock glib2 after GNOME installation
 RUN dnf versionlock add glib2
 
-# Makes `/opt` writeable by default
-RUN rm -rf /opt && ln -s /var/opt /opt
-
-# ==============================================================================
-# KDE variant - Adds KDE desktop to base-no-de
-# ==============================================================================
 FROM base-no-de AS kde
-
-ARG DESKTOP_FLAVOR=kde
-ENV DESKTOP_FLAVOR=kde
-
-# Install KDE desktop environment
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/kde.sh base
-
-# Lock glib2 after KDE installation
 RUN dnf versionlock add glib2
 
-# Makes `/opt` writeable by default
-# Needs to be here to make the main image build strict (no /opt there)
-RUN rm -rf /opt && ln -s /var/opt /opt
-
-# ==============================================================================
-# Niri variant - Adds Niri+DMS desktop to base-no-de
-# ==============================================================================
 FROM base-no-de AS niri
-
-ARG DESKTOP_FLAVOR=niri
-ENV DESKTOP_FLAVOR=niri
-
-# Install Niri desktop environment
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/niri.sh base
-
-# Lock glib2 after Niri installation
 RUN dnf versionlock add glib2
 
-# Makes `/opt` writeable by default
-# Needs to be here to make the main image build strict (no /opt there)
-RUN rm -rf /opt && ln -s /var/opt /opt
+# ==============================================================================
+# Finalization & Chunking
+# ==============================================================================
+
+# Select the requested flavor
+FROM ${DESKTOP_FLAVOR} AS pre-final
+
+# Chunkify the image at build-time using the oci-archive trick.
+# This preserves bootc/ostree metadata while optimizing layer count.
+FROM ghcr.io/tuna-os/chunkah:latest AS chunker
+RUN --mount=from=pre-final,src=/,target=/chunkah,ro \
+    --mount=type=bind,target=/run/out,rw \
+    chunkah build > /run/out/out.ociarchive
+
+# The 'final' stage uses the archive generated in the previous step.
+# NOTE: In local/CI pipelines, this usually requires a two-pass build if 
+# the archive isn't already present in the build context.
+FROM oci-archive:out.ociarchive AS final
+
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG DESKTOP_FLAVOR
+ARG SHA_HEAD_SHORT
+
+LABEL org.opencontainers.image.title="TunaOS ${IMAGE_NAME} (${DESKTOP_FLAVOR})"
+LABEL org.opencontainers.image.vendor="${IMAGE_VENDOR}"
+LABEL org.opencontainers.image.version="${SHA_HEAD_SHORT}"
+LABEL io.bootc=1

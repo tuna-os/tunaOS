@@ -178,10 +178,12 @@ jobs:
           DEFAULT_TAG: ${{ inputs.default-tag }}
           PLATFORM: ${{ matrix.platform }}
           CHAIN_BASE_IMAGE: ${{ inputs.chain-base-image }}
+          CHUNKAH_ENABLED: "${{ inputs.rechunk && '1' || '0' }}"
         run: |
           set -x
           just=$(which just)
-          sudo "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}"
+          # just build now handles two-pass chunking internally if CHUNKAH_ENABLED=1
+          sudo CHUNKAH_ENABLED="${CHUNKAH_ENABLED}" "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}"
 
       - name: Verify Image in VM
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
@@ -219,48 +221,6 @@ jobs:
           sudo "$SYFT_CMD" "${IMAGE_REGISTRY}/${IMAGE}:${DEFAULT_TAG}" -o "spdx-json=${SBOM_PATH}"
           echo "SBOM=${SBOM_PATH}" >> "${GITHUB_OUTPUT}"
 
-      - name: Tag Unchunked Image
-        if: ${{ inputs.publish }}
-        run: |
-          sudo podman tag "localhost/${{ inputs.image-variant }}:${{ inputs.default-tag }}" "${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ inputs.default-tag }}-unchunked"
-
-      - name: Run Chunkah
-        if: ${{ inputs.rechunk && inputs.publish }}
-        id: chunkify
-        env:
-          IMAGE_VARIANT: ${{ inputs.image-variant }}
-          FLAVOR: ${{ inputs.flavor }}
-          DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
-        run: |
-          IMAGE_REF="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
-
-          # Use the just recipe for chunking
-          just_cmd=$(which just)
-          sudo "$just_cmd" chunkify "${IMAGE_REF}"
-
-          echo "ref=${IMAGE_REF}" >> "${GITHUB_OUTPUT}"
-
-      - name: Load Image
-        if: ${{ inputs.publish }}
-        id: load
-        env:
-          CHUNKIFY_RAN: "${{ inputs.rechunk }}"
-          CHUNKIFY_REF: "${{ steps.chunkify.outputs.ref }}"
-          IMAGE_VARIANT: ${{ inputs.image-variant }}
-          FLAVOR: ${{ inputs.flavor }}
-        run: |
-          if [ "${CHUNKIFY_RAN}" == "true" ] && [ -n "${CHUNKIFY_REF}" ]; then
-            IMAGE="${CHUNKIFY_REF}"
-          else
-            IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
-          fi
-          sudo podman image tag "${IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
-
-          IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
-          IMAGE_DIGEST="$(sudo podman image inspect --format '{{.Digest}}' "${IMAGE}")"
-          echo "image=${IMAGE}" >> "${GITHUB_OUTPUT}"
-          echo "digest=${IMAGE_DIGEST}" >> "${GITHUB_OUTPUT}"
-
       - name: Login to GitHub Container Registry
         if: ${{ inputs.publish }}
         uses: ./.github/actions/ghcr-login
@@ -271,28 +231,27 @@ jobs:
         env:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
-          IMAGE_DIGEST: ${{ steps.load.outputs.digest }}
+          IMAGE_VARIANT: ${{ inputs.image-variant }}
+          DEFAULT_TAG: ${{ inputs.default-tag }}
           PLATFORM: ${{ matrix.platform }}
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
           MAX_RETRIES: 3
         run: |
           set -x
-          sudo podman tag "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
-          sudo podman tag "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-unchunked" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-unchunked-${SAFE_PLATFORM}"
+          IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
+          IMAGE_DIGEST="$(sudo podman image inspect --format '{{.Digest}}' "${IMAGE}")"
+          
+          sudo podman tag "${IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
+          
           for i in $(seq "${MAX_RETRIES}"); do
             sudo podman push --digestfile=/tmp/digestfile \
               "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}" \
               && break || sleep $((5 * i));
           done
 
-          # Push unchunked image
-          for i in $(seq "${MAX_RETRIES}"); do
-            sudo podman push "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-unchunked-${SAFE_PLATFORM}" \
-              && break || sleep $((5 * i));
-          done
-
           REMOTE_IMAGE_DIGEST=$(sudo cat /tmp/digestfile)
           echo "remote_image_digest=${REMOTE_IMAGE_DIGEST}" >> $GITHUB_OUTPUT
+          echo "digest=${IMAGE_DIGEST}" >> $GITHUB_OUTPUT
 
       - name: PR Testing Instructions
         if: github.event_name == 'pull_request'

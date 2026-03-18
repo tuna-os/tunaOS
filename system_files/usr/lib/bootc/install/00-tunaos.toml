@@ -1,0 +1,13 @@
+# TunaOS Bootc Install Configuration
+# This ensures bootc knows how to partition the disk during install-to-disk workflows.
+
+[install]
+# Default to XFS for root, matching standard enterprise Linux patterns
+root-filesystem = "xfs"
+
+[install.block-dev]
+# Basic partitioning scheme
+# /boot: 1GiB XFS
+# /boot/efi: 512MiB vfat
+# /: remaining space XFS
+wipe = true

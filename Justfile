@@ -1,9 +1,9 @@
 export repo_organization := env("GITHUB_REPOSITORY_OWNER", "tuna-os")
 export default_tag := env("DEFAULT_TAG", "latest")
-export bib_image := env("BIB_IMAGE", "quay.io/centos-bootc/bootc-image-builder:latest")
 export common_image := env("COMMON_IMAGE", "ghcr.io/projectbluefin/common")
 export brew_image := env("BREW_IMAGE", "ghcr.io/ublue-os/brew")
 export coreos_stable_version := env("COREOS_STABLE_VERSION", "43")
+export chunkah_enabled := env("CHUNKAH_ENABLED", "1")
 just := just_executable()
 arch := arch()
 export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else if arch == "arm64" { "linux/arm64" } else if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") })
@@ -84,6 +84,7 @@ clean:
     echo "Note: Preserving .rpm-cache for faster rebuilds. Use 'just clean-cache' to remove."
     rm -rf .build-logs
     sudo rm -rf .build/*
+    rm -f out.ociarchive
     echo "Removing local podman images for all variants and flavors..."
     readarray -t VARIANTS < <(yq -r '.variants[].id' .github/build-config.yml 2>/dev/null || echo -e "yellowfin\nalbacore\nbonito\nskipjack\nredfin")
     for variant in "${VARIANTS[@]}"; do
@@ -122,12 +123,7 @@ _ensure-deps:
         exit 1
     fi
 
-# Private build engine. Now accepts final image name and brand as parameters.
-# Note: enable_gdx parameter controls both GDX features and HWE (Hardware Enablement).
-# When enable_gdx=1, ENABLE_HWE is set to 1 and coreos-stable akmods are used for
-# When enable_hwe=1, coreos-stable akmods are used for
-
-# NVIDIA drivers and the coreos/fedora kernel.
+# Private build engine.
 [private]
 _build target_tag_with_version target_tag container_file base_image_for_build target_platform use_cache enable_gdx enable_hwe desktop_flavor *args: _ensure-deps
     #!/usr/bin/env bash
@@ -145,7 +141,6 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     BUILD_ARGS+=("--build-arg" "BASE_IMAGE={{ base_image_for_build }}")
     BUILD_ARGS+=("--build-arg" "COMMON_IMAGE_REF=${common_image_ref}")
     BUILD_ARGS+=("--build-arg" "BREW_IMAGE_REF=${brew_image_ref}")
-    # GDX or HWE builds use coreos akmods for HWE (Hardware Enablement)
     BUILD_ARGS+=("--build-arg" "ENABLE_HWE={{ enable_hwe }}")
     BUILD_ARGS+=("--build-arg" "ENABLE_GDX={{ enable_gdx }}")
     BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR={{ desktop_flavor }}")
@@ -153,14 +148,12 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     AKMODS_ORG=$(yq -r ".variants[] | select(.id == \"{{ target_tag }}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
     BUILD_ARGS+=("--build-arg" "AKMODS_BASE=ghcr.io/${AKMODS_ORG}")
 
-    # Pass RHSM credentials for RHEL registration during build
+    # Pass RHSM credentials
     BUILD_ARGS+=("--build-arg" "RHSM_USER=${RHSM_USER:-}")
     BUILD_ARGS+=("--build-arg" "RHSM_PASSWORD=${RHSM_PASSWORD:-}")
     BUILD_ARGS+=("--build-arg" "RHSM_ORG=${RHSM_ORG:-}")
     BUILD_ARGS+=("--build-arg" "RHSM_ACTIVATION_KEY=${RHSM_ACTIVATION_KEY:-}")
 
-    # Select akmods source tag for mounted NVIDIA images.
-    # HWE and bonito (Fedora) always use coreos-stable.
     if [[ "{{ enable_hwe }}" -eq "1" ]] || [[ "{{ target_tag }}" == bonito* ]]; then
         BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=coreos-stable-{{ coreos_stable_version }}")
         BUILD_ARGS+=("--build-arg" "AKMODS_NVIDIA_VERSION=coreos-stable-{{ coreos_stable_version }}")
@@ -168,54 +161,74 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
         BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=centos-10")
         BUILD_ARGS+=("--build-arg" "AKMODS_NVIDIA_VERSION=centos-10")
     fi
-    # Pass build context to Containerfile for conditional handling
-    BUILD_ARGS+=("--build-arg" "ENABLE_HWE={{ enable_hwe }}")
     BUILD_ARGS+=("--build-arg" "IMAGE_NAME_VARIANT={{ target_tag }}")
 
     if [[ -z "$(git status -s)" ]]; then
         BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=$(git rev-parse --short HEAD)")
+    else
+        BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=dirty")
     fi
-    echo "{{ use_cache }}"
+
     if [[ "{{ use_cache }}" == "1" ]]; then
-        # Use per-variant cache with deduplication for parallel builds
         readarray -t CACHE_MOUNTS < <(./scripts/setup-build-cache.sh "{{ target_tag }}")
         BUILD_ARGS+=("${CACHE_MOUNTS[@]}")
     fi
 
-    # Build target maps directly to the desktop_flavor value, which matches
-    # the stage names in all Containerfiles (base-no-de, gnome, kde, niri,
-    # gnome50, cosmic, base-hwe, base-gdx).
-    BUILD_TARGET="{{ desktop_flavor }}"
-
-    podman build \
-        --security-opt label=disable \
-        --dns=8.8.8.8 \
-        --platform "{{ target_platform }}" \
-        --target="${BUILD_TARGET}" \
-        "${BUILD_ARGS[@]}" \
-        {{ args }} \
-        --pull=newer \
-        --tag "{{ target_tag_with_version }}" \
-        --file "{{ container_file }}" \
-        .
-
-# --- Unified Build Pipeline ---
-# This rule now handles both local and CI builds.
-# For CI builds, pass `is_ci=true` and `image_name` as the final tag.
-# For local builds, pass `is_ci=0` (or omit) and `variant` as the local name.
-#
-# Usage (local): just build <variant> [flavor]
-# Example: just build yellowfin kde
-#
-# Usage (CI): just build image_name=<final_name> variant=<base_os> is_ci=true [flavor]
-# Example: just build image_name=albacore variant=almalinux is_ci=true kde-gdx
+    if [[ "{{ chunkah_enabled }}" == "1" ]]; then
+        echo "==> Build-time chunking enabled. Starting two-pass build..."
+        
+        # Pass 1: Build up to 'chunker' stage and extract the OCI archive to host
+        # We must use --skip-unused-stages=false to ensure the 'builder' stage is actually built
+        # and available for the 'chunker' mount.
+        podman build \
+            --security-opt label=disable \
+            --dns=8.8.8.8 \
+            --platform "{{ target_platform }}" \
+            --target="chunker" \
+            "${BUILD_ARGS[@]}" \
+            --skip-unused-stages=false \
+            -v "$(pwd):/run/out:Z" \
+            {{ args }} \
+            --pull=newer \
+            --file "{{ container_file }}" \
+            .
+            
+        echo "==> OCI archive generated. Starting Pass 2 (final stage)..."
+        
+        # Pass 2: Build the 'final' stage from the generated archive
+        podman build \
+            --security-opt label=disable \
+            --dns=8.8.8.8 \
+            --platform "{{ target_platform }}" \
+            --target="final" \
+            "${BUILD_ARGS[@]}" \
+            --tag "{{ target_tag_with_version }}" \
+            --file "{{ container_file }}" \
+            .
+            
+        # Clean up the large archive
+        rm -f out.ociarchive
+    else
+        # Standard build targeting the desktop flavor stage (no chunking)
+        podman build \
+            --security-opt label=disable \
+            --dns=8.8.8.8 \
+            --platform "{{ target_platform }}" \
+            --target="{{ desktop_flavor }}" \
+            "${BUILD_ARGS[@]}" \
+            {{ args }} \
+            --pull=newer \
+            --tag "{{ target_tag_with_version }}" \
+            --file "{{ container_file }}" \
+            .
+    fi
 
 # Build a TunaOS variant
-build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='' chunk='1': _ensure-deps
+build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='': _ensure-deps
     #!/usr/bin/env bash
     set -euo pipefail
 
-    # Initialize submodules locally (CI uses actions/checkout with submodules: recursive)
+    # Initialize submodules locally
     DID_INIT="0"
     if [[ "{{ is_ci }}" != "1" ]] && [[ "${SKIP_SUBMODULES:-0}" != "1" ]]; then
         if [[ "{{ flavor }}" == *"gnome"* ]]; then
@@ -224,33 +237,16 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         fi
     fi
 
-    # ANSI color codes
     BLUE='\033[0;34m'
     GREEN='\033[0;32m'
     YELLOW='\033[1;33m'
-    NC='\033[0m' # No Color
+    NC='\033[0m'
 
-    echo -e "${BLUE}===============================================================${NC}"
-    # Fetch platforms from config if not provided
     if [[ -z "{{ target_platform }}" ]]; then
-        # Default to native platform if not specified and not in CI
-        if [[ "{{ is_ci }}" != "1" ]]; then
-            PLATFORM="{{ platform }}"
-        else
-            # In CI, we expect a platform or we'd fetch all (but reusable workflow always passes one)
+        if [[ "{{ is_ci }}" != "1" ]]; then PLATFORM="{{ platform }}"; else
             PLATFORM=$(yq -r ".variants[] | select(.id == \"{{ variant }}\") | .platforms | join(\",\")" .github/build-config.yml)
         fi
-    else
-        PLATFORM="{{ target_platform }}"
-    fi
-    echo -e "${GREEN}Build config:${NC}"
-    echo -e "  Variant: ${YELLOW}{{ variant }}${NC}"
-    echo -e "  Flavor: ${YELLOW}{{ flavor }}${NC}"
-    echo -e "  Platform: ${YELLOW}${PLATFORM}${NC}"
-    echo -e "  Is CI: ${YELLOW}{{ is_ci }}${NC}"
-    echo -e "  Tag: ${YELLOW}{{ tag }}${NC}"
-    echo -e "  Chain Base Image: ${YELLOW}{{ chain_base_image }}${NC}"
-    echo -e "${BLUE}===============================================================${NC}"
+    else PLATFORM="{{ target_platform }}"; fi
 
     BASE_FOR_BUILD=""
     CONTAINERFILE="Containerfile"
@@ -260,20 +256,15 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     FLAVOR="{{ flavor }}"
     DESKTOP_FLAVOR="${FLAVOR}"
 
-    # Normalize legacy aliases
     case "${FLAVOR}" in
         "hwe") FLAVOR="gnome-hwe" ;;
         "gdx") FLAVOR="gnome-gdx" ;;
         "gdx-hwe") FLAVOR="gnome-gdx-hwe" ;;
     esac
 
-    # Derive build parameters from flavor name using suffix pattern matching.
-    # .github/build-config.yml is the sole source of truth for valid flavors.
     if [[ "${FLAVOR}" == "all" ]]; then
         readarray -t FLAVORS < <(yq -r '.variants[] | select(.id == "{{ variant }}") | .flavors[].id' .github/build-config.yml)
-        for f in "${FLAVORS[@]}"; do
-            {{ just }} build "{{ variant }}" "$f"
-        done
+        for f in "${FLAVORS[@]}"; do {{ just }} build "{{ variant }}" "$f"; done
         exit 0
     elif [[ "${FLAVOR}" == "base" ]]; then
         BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
@@ -289,68 +280,32 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         DESKTOP_FLAVOR="base-gdx"
         PARENT_FLAVOR="base"
     elif [[ "${FLAVOR}" == *"-gdx-hwe" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-gdx-hwe}"
-        CONTAINERFILE="Containerfile.gdx"
-        ENABLE_GDX="1"
-        ENABLE_HWE="1"
-        PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
+        DESKTOP_FLAVOR="${FLAVOR%-gdx-hwe}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_GDX="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
     elif [[ "${FLAVOR}" == *"-hwe" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-hwe}"
-        CONTAINERFILE="Containerfile.hwe"
-        ENABLE_HWE="1"
-        PARENT_FLAVOR="${DESKTOP_FLAVOR}"
+        DESKTOP_FLAVOR="${FLAVOR%-hwe}"; CONTAINERFILE="Containerfile.hwe"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
     elif [[ "${FLAVOR}" == *"-gdx" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-gdx}"
-        CONTAINERFILE="Containerfile.gdx"
-        ENABLE_GDX="1"
-        PARENT_FLAVOR="${DESKTOP_FLAVOR}"
+        DESKTOP_FLAVOR="${FLAVOR%-gdx}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_GDX="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
     else
-        # Plain DE flavor (gnome, kde, niri, gnome50, cosmic, or any future flavor)
         DESKTOP_FLAVOR="${FLAVOR}"
         BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
     fi
 
     if [[ -n "${PARENT_FLAVOR}" ]]; then
-        if [[ "{{ is_ci }}" = "1" ]]; then
-            BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:${PARENT_FLAVOR}"
-        else
-            BASE_FOR_BUILD="localhost/{{ variant }}:${PARENT_FLAVOR}"
-        fi
+        if [[ "{{ is_ci }}" = "1" ]]; then BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:${PARENT_FLAVOR}"; else
+            BASE_FOR_BUILD="localhost/{{ variant }}:${PARENT_FLAVOR}"; fi
     fi
 
-    # Allow workflow callers to chain from an explicit parent image.
     if [[ -n "{{ chain_base_image }}" ]] && [[ "${FLAVOR}" != "base" ]]; then
         BASE_FOR_BUILD="{{ chain_base_image }}"
     fi
 
-    # Set the target tag based on variant and flavor.
     TARGET_TAG="{{ variant }}"
     TARGET_IMAGE_TAG="{{ tag }}"
-    if [[ "{{ tag }}" == "latest" ]]; then
-        TARGET_IMAGE_TAG="${FLAVOR}"
-    fi
+    [[ "{{ tag }}" == "latest" ]] && TARGET_IMAGE_TAG="${FLAVOR}"
     TARGET_TAG_WITH_VERSION="${TARGET_TAG}:${TARGET_IMAGE_TAG}"
-
-    echo -e "${BLUE}================================================================${NC}"
-    echo -e "${GREEN}Building image with the following parameters:${NC}"
-    echo -e "  Target Tag: ${YELLOW}${TARGET_TAG_WITH_VERSION}${NC}"
-    echo -e "  Variant: ${YELLOW}{{ variant }}${NC}"
-    echo -e "  Containerfile: ${YELLOW}${CONTAINERFILE}${NC}"
-    echo -e "  Base Image for Build: ${YELLOW}${BASE_FOR_BUILD}${NC}"
-    echo -e "  Platform: ${YELLOW}${PLATFORM}${NC}"
-    echo -e "  is_ci: ${YELLOW}{{ is_ci }}${NC}"
-    echo -e "  Desktop Flavor: ${YELLOW}${DESKTOP_FLAVOR}${NC}"
-    echo -e "  Enable HWE (uses coreos akmods): ${YELLOW}${ENABLE_HWE}${NC}"
-    echo -e "  Enable GDX: ${YELLOW}${ENABLE_GDX}${NC}"
-    echo -e "${BLUE}================================================================${NC}"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
         {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
-        # Chunkify the built image for optimal layer distribution
-        if [[ "{{ chunk }}" == "1" ]]; then
-            {{ just }} chunkify "${TARGET_TAG_WITH_VERSION}"
-        fi
-        # Sync cache after successful local build for deduplication
         ./scripts/sync-build-cache.sh "${TARGET_TAG}" || true
     else
         {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
@@ -361,239 +316,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         git submodule deinit -f --all
     fi
 
-# ── Chunkah ──────────────────────────────────────────────────────────
-
-# Use the pre-built chunkah image from ghcr.io/tuna-os/chunkah, fallback to local build
-chunkify image_ref:
-    #!/usr/bin/env bash
-    set -euo pipefail
-
-    CHUNKAH_IMG="ghcr.io/tuna-os/chunkah:latest"
-    if podman image exists localhost/chunkah:latest; then
-        echo "==> Using local chunkah build (localhost/chunkah:latest)"
-        CHUNKAH_IMG="localhost/chunkah:latest"
-    fi
-
-    echo "==> Chunkifying {{ image_ref }}..."
-
-    # Get config from existing image
-    CONFIG=$(podman inspect "{{ image_ref }}")
-
-    # Run chunkah (default 64 layers) and pipe to podman load
-    # Uses --mount=type=image to expose the source image content to chunkah
-    # Note: We need --privileged for some podman-in-podman/mount scenarios or just standard access
-    if LOADED=$(podman run --rm \
-        --security-opt label=disable \
-        --mount=type=image,src="{{ image_ref }}",target=/chunkah \
-        -e "CHUNKAH_CONFIG_STR=$CONFIG" \
-        "${CHUNKAH_IMG}" build | podman load); then
-
-        echo "$LOADED"
-
-        # Parse the loaded image reference
-        NEW_REF=$(echo "$LOADED" | grep -oP '(?<=Loaded image: ).*' || \
-                  echo "$LOADED" | grep -oP '(?<=Loaded image\(s\): ).*')
-
-        if [ -n "$NEW_REF" ] && [ "$NEW_REF" != "{{ image_ref }}" ]; then
-            echo "==> Retagging chunked image to {{ image_ref }}..."
-            podman tag "$NEW_REF" "{{ image_ref }}"
-        fi
-    else
-        echo "==> WARNING: Chunkify failed (non-fatal), skipping layer optimization."
-    fi
-
-# Build chunkah locally from the tuna-os fork
-build-chunkah path="":
-    ./scripts/build-chunkah.sh {{ path }}
-
-# Run the full staged build pipeline locally, mirroring the CI job graph.
-# Reads .github/build-config.yml for the variant/flavor/stage structure.
-# Builds within each stage run in parallel; stages are sequential.
-#
-# Requires zellij for the live UI (overview status board + one log pane per build).
-# Falls back to prefixed stdout if zellij is not available.
-# Logs always written to .build-logs/{variant}-{flavor}.log.
-#
-# Usage:
-#   just pipeline                    # build everything
-#   just pipeline yellowfin          # one variant, all flavors
-#   just pipeline yellowfin gnome    # one flavor (respects stage deps)
-#   just pipeline all gnome-hwe      # one flavor across all variants
-#
-# Options:
-#   dry_run=1   print commands without executing
-
-# tag=<tag>   image tag (default: latest)
-pipeline variant='all' flavor='all' tag='latest' dry_run='0':
-    #!/usr/bin/env bash
-    export JUST="{{ just }}"
-    ./scripts/pipeline.sh "{{ variant }}" "{{ flavor }}" "{{ tag }}" "{{ dry_run }}"
-
-qcow2 variant flavor='gnome' repo='local' tag='':
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [ "{{ repo }}" = "local" ]; then
-        echo "Building unchunked image for QCOW2 generation..."
-        {{ just }} build {{ variant }} {{ flavor }} '' '0' 'latest' '' '0'
-    fi
-    TAG="{{ tag }}"
-    if [ -z "$TAG" ]; then
-        TAG="{{ flavor }}"
-    fi
-    
-    IMG_REF=""
-    if [ "{{ repo }}" = "ghcr" ]; then IMG_REF="ghcr.io/{{ repo_organization }}/{{ variant }}:$TAG"
-    elif [ "{{ repo }}" = "local" ]; then IMG_REF="localhost/{{ variant }}:$TAG"
-    else echo "DEBUG: repo '{{ repo }}' did not match ghcr or local"; exit 1
-    fi
-
-    OUTPUT="{{ variant }}.qcow2"
-    echo "==> Generating $OUTPUT from $IMG_REF using bcvk..."
-    
-    # Ensure bcvk is available
-    if ! command -v bcvk &>/dev/null; then
-        echo "Error: 'bcvk' not found. Please install it (cargo install --git https://github.com/bootc-dev/bcvk.git)"
-        exit 1
-    fi
-
-    # Run bcvk to-disk to create the QCOW2
-    # We use sudo because bcvk to-disk currently requires root/privileged podman for the installation
-    sudo bcvk to-disk --format=qcow2 "$IMG_REF" "$OUTPUT"
-    
-    sudo chown "${SUDO_UID:-$(id -u)}:${SUDO_GID:-$(id -g)}" "$OUTPUT"
-    echo "✓ Created $OUTPUT"
-
-# Attach to the currently running Zellij pipeline session
-attach:
-    #!/usr/bin/env bash
-    # First try pipeline- specific sessions
-    SESSION=$(zellij list-sessions 2>/dev/null | grep "pipeline-" | head -1 | awk '{print $1}')
-    if [ -z "$SESSION" ]; then
-        # Fall back to any session that isn't a gemini- session
-        SESSION=$(zellij list-sessions 2>/dev/null | grep -v "gemini-" | head -1 | awk '{print $1}')
-    fi
-    if [ -n "$SESSION" ]; then
-        echo "Attaching to Zellij session: $SESSION"
-        zellij attach "$SESSION"
-    else
-        echo "No active zellij session found."
-        exit 1
-    fi
-
-test-vm variant flavor='gnome':
-    #!/usr/bin/env bash
-    set -euo pipefail
-    bash ./scripts/test-vm.sh {{ variant }} {{ flavor }}
-
-iso variant flavor='gnome' repo='local' hook_script='iso_files/configure_lts_iso_anaconda.sh' flatpaks_file='system_files/etc/ublue-os/system-flatpaks.list':
-    #!/usr/bin/env bash
-    bash ./scripts/build-titanoboa.sh {{ variant }} {{ flavor }} {{ repo }} {{ hook_script }}
-
-# Run a qcow2 image in a QEMU container
-run-qcow2 variant flavor='gnome':
-    @{{ just }} _run-vm qcow2 {{ variant }} {{ flavor }}
-
-# Verify a variant/flavor combo using a Lima VM (automated gdm check)
-verify variant flavor='gnome':
-    #!/usr/bin/env bash
-    set -euo pipefail
-    ./scripts/verify-image.sh "{{ variant }}" "{{ flavor }}"
-
-# Verify an ISO file using a Lima VM (basic boot check)
-verify-iso iso_file:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    ./scripts/verify-iso.sh "{{ iso_file }}"
-
-# Internal helper to run a VM using the QEMU container (ghcr.io/qemus/qemu)
-[private]
-_run-vm type variant flavor='gnome' iso_file='':
-    #!/usr/bin/env bash
-    set -eoux pipefail
-
-    # Determine the image file based on the type and project conventions
-    if [[ -n "{{ iso_file }}" ]]; then
-        image_file="{{ iso_file }}"
-    elif [[ "{{ type }}" == "iso" ]]; then
-        # Check for titanoboa output first
-        TITANOBOA_ISO=".build/{{ variant }}-{{ flavor }}/output/install.iso"
-        # Check for bootc-image-builder output
-        BIB_ISO="{{ variant }}.iso"
-        if [[ -f "$TITANOBOA_ISO" ]]; then
-            image_file="$TITANOBOA_ISO"
-        elif [[ -f "$BIB_ISO" ]]; then
-            image_file="$BIB_ISO"
-        else
-            image_file="{{ variant }}.iso"
-        fi
-    else
-        # QCow2 follows variant[-flavor].qcow2
-        if [[ -f "{{ variant }}-{{ flavor }}.qcow2" ]]; then
-            image_file="{{ variant }}-{{ flavor }}.qcow2"
-        else
-            image_file="{{ variant }}.qcow2"
-        fi
-    fi
-
-    # Build the image if it does not exist (skip if custom iso_file provided)
-    if [[ ! -f "${image_file}" ]]; then
-        if [[ -n "{{ iso_file }}" ]]; then
-            echo "ISO not found at {{ iso_file }}. Please build it first or specify a valid ISO path."
-            exit 1
-        fi
-        echo "Image ${image_file} not found. Building it now..."
-        {{ just }} "{{ type }}" "{{ variant }}" "{{ flavor }}"
-        # Re-check because build-bootc-diskimage.sh might name it differently
-        if [[ ! -f "${image_file}" ]]; then
-            if [[ "{{ type }}" == "qcow2" ]]; then
-                image_file="{{ variant }}.qcow2"
-            elif [[ "{{ type }}" == "iso" ]]; then
-                 image_file="{{ variant }}.iso"
-            fi
-        fi
-    fi
-
-    # Determine an available port to use for Web VNC
-    port=8006
-    while ss -tln | grep -q ":${port} "; do
-        port=$(( port + 1 ))
-    done
-    echo "Using Web Port: ${port}"
-    echo "Connect via Web: http://localhost:${port}"
-
-    # Set up the arguments for running the VM
-    run_args=()
-    run_args+=(--rm --privileged)
-    run_args+=(--pull=newer)
-    run_args+=(--publish "127.0.0.1:${port}:8006")
-    run_args+=(--env "CPU_CORES=4")
-    run_args+=(--env "RAM_SIZE=4G")
-    run_args+=(--env "DISK_SIZE=64G")
-    run_args+=(--env "TPM=Y")
-    run_args+=(--env "GPU=Y")
-    run_args+=(--device=/dev/kvm)
-
-    # Add SSH port forwarding
-    ssh_port=$(( port + 1 ))
-    while ss -tln | grep -q ":${ssh_port} "; do
-        ssh_port=$(( ssh_port + 1 ))
-    done
-    echo "Using SSH Port: ${ssh_port}"
-    echo "Connect via SSH: ssh centos@localhost -p ${ssh_port}"
-    run_args+=(--publish "127.0.0.1:${ssh_port}:22")
-    run_args+=(--env "USER_PORTS=22")
-    run_args+=(--env "NETWORK=user")
-
-    run_args+=(--volume "${PWD}/${image_file}":"/boot.{{ type }}")
-    run_args+=(ghcr.io/qemus/qemu)
-
-    # Run the VM and open the browser to connect
-    (sleep 5 && xdg-open "http://localhost:${port}") &
-    podman run "${run_args[@]}"
-
 # Build the custom image-builder-dev container needed for live ISO generation.
-
-# Called automatically by live-iso, but can be run standalone to pre-cache it.
 build-image-builder:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -603,10 +326,7 @@ build-image-builder:
     fi
     sudo bash ./scripts/build-live-iso.sh --build-image-builder-only
 
-# Build a TunaOS live installer ISO using the bootc-isos approach (Ondrej Budai).
-# Requires root (uses privileged containers). Defaults to skipjack:gnome for local testing.
-
-# Pass dev=1 to enable sshd in the live environment (testing only — not for production ISOs).
+# Build a TunaOS live installer ISO using the bootc-isos approach.
 live-iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
     #!/usr/bin/env bash
     set -euo pipefail
@@ -614,42 +334,124 @@ live-iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
     [[ -z "$_tag" ]] && _tag="{{ flavor }}"
     sudo DEV_SSHD="{{ dev }}" bash ./scripts/build-live-iso.sh "{{ variant }}" "{{ flavor }}" "{{ repo }}" "$_tag"
 
-# Boot a TunaOS live ISO in QEMU via browser (uses ghcr.io/qemus/qemu). Requires /dev/kvm.
+# Shortcut for live-iso
+iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
+    @{{ just }} live-iso {{ variant }} {{ flavor }} {{ repo }} {{ tag }} {{ dev }}
 
-# Pass enable_ssh=1 to enable SSH port forwarding and print the connection command.
-run-iso iso_file enable_ssh='0':
+# Generate a QCOW2 disk image using bcvk (bootc virtualization kit)
+qcow2 variant flavor='gnome' repo='local' tag='':
     #!/usr/bin/env bash
     set -euo pipefail
-    ISO_PATH="$(realpath "{{ iso_file }}")"
-    if [[ ! -f "$ISO_PATH" ]]; then
-        echo "ISO not found: $ISO_PATH"
+    
+    IMG_REF=""
+    if [[ "{{ variant }}" == *":"* || "{{ variant }}" == *"/"* ]]; then
+        IMG_REF="{{ variant }}"
+        OUTPUT_NAME=$(echo "{{ variant }}" | awk -F'/' '{print $NF}' | awk -F':' '{print $1}')
+    else
+        if [ "{{ repo }}" = "local" ]; then
+            {{ just }} build {{ variant }} {{ flavor }}
+        fi
+        TAG="{{ tag }}"
+        [[ -z "$TAG" ]] && TAG="{{ flavor }}"
+        
+        if [ "{{ repo }}" = "ghcr" ]; then IMG_REF="ghcr.io/{{ repo_organization }}/{{ variant }}:$TAG"
+        elif [ "{{ repo }}" = "local" ]; then IMG_REF="localhost/{{ variant }}:$TAG"
+        else exit 1; fi
+        OUTPUT_NAME="{{ variant }}"
+    fi
+
+    OUTPUT="${OUTPUT_NAME}.qcow2"
+    echo "==> Generating $OUTPUT from $IMG_REF using bcvk..."
+    
+    if ! command -v bcvk &>/dev/null; then
+        echo "Error: 'bcvk' not found. Please install it (cargo install --git https://github.com/bootc-dev/bcvk.git bcvk)"
         exit 1
     fi
-    port=8006
-    while ss -tunalp | grep -q ":${port}"; do
-        port=$(( port + 1 ))
-    done
-    echo "==> Connect to http://localhost:${port}"
-    run_args=(--rm --privileged)
-    run_args+=(--publish "127.0.0.1:${port}:8006")
-    run_args+=(--env CPU_CORES=4)
-    run_args+=(--env RAM_SIZE=8G)
-    run_args+=(--env DISK_SIZE=64G)
-    run_args+=(--env BOOT_MODE=windows_secure)
-    run_args+=(--env TPM=Y)
-    run_args+=(--device=/dev/kvm)
-    run_args+=(--volume "${ISO_PATH}:/boot.iso")
-    if [[ "{{ enable_ssh }}" == "1" ]]; then
-        ssh_port=2222
-        while ss -tunalp | grep -q ":${ssh_port}"; do
-            ssh_port=$(( ssh_port + 1 ))
-        done
-        run_args+=(--publish "127.0.0.1:${ssh_port}:22")
-        run_args+=(--env "USER_PORTS=22")
-        run_args+=(--env "NETWORK=user")
-        echo "==> SSH port: ${ssh_port}"
-        echo "==> Connect via SSH: ssh liveuser@localhost -p ${ssh_port}"
-        echo "==> Or with limactl: ssh -i ~/.lima/_config/user -p ${ssh_port} liveuser@127.0.0.1"
+
+    sudo "$(which bcvk)" to-disk --format=qcow2 "$IMG_REF" "$OUTPUT"
+    sudo chown "${SUDO_UID:-$(id -u)}:${SUDO_GID:-$(id -g)}" "$OUTPUT"
+    echo "✓ Created $OUTPUT"
+
+# Test an image locally using Lima VM (automated display manager check)
+test-vm variant flavor='gnome':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    bash ./scripts/test-vm.sh {{ variant }} {{ flavor }}
+
+# Boot an image in QEMU via browser (uses ghcr.io/qemus/qemu)
+run-qcow2 variant flavor='gnome':
+    @{{ just }} _run-vm qcow2 {{ variant }} {{ flavor }}
+
+# Boot an ISO in QEMU via browser
+run-iso variant flavor='gnome' iso_file='':
+    @{{ just }} _run-vm iso {{ variant }} {{ flavor }} "{{ iso_file }}"
+
+# Verify an image using Lima (automated DM check)
+verify variant flavor='gnome':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ./scripts/verify-image.sh "{{ variant }}" "{{ flavor }}"
+
+# Verify an ISO using Lima
+verify-iso iso_file:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ./scripts/verify-iso.sh "{{ iso_file }}"
+
+# Internal helper to run a VM using the QEMU container
+[private]
+_run-vm type variant flavor='gnome' iso_file='':
+    #!/usr/bin/env bash
+    set -eoux pipefail
+
+    if [[ -n "{{ iso_file }}" ]]; then
+        image_file="{{ iso_file }}"
+    elif [[ "{{ type }}" == "iso" ]]; then
+        ISO_FILE=$(find . -maxdepth 1 -name "{{ variant }}-{{ flavor }}-*.iso" | head -1)
+        if [[ -f "$ISO_FILE" ]]; then image_file="$ISO_FILE"; else image_file="{{ variant }}.iso"; fi
+    else
+        if [[ -f "{{ variant }}-{{ flavor }}.qcow2" ]]; then image_file="{{ variant }}-{{ flavor }}.qcow2"
+        else image_file="{{ variant }}.qcow2"; fi
     fi
-    (sleep 3 && xdg-open "http://localhost:${port}") &
-    podman run "${run_args[@]}" ghcr.io/qemus/qemu
+
+    if [[ ! -f "${image_file}" ]]; then
+        if [[ -n "{{ iso_file }}" ]]; then echo "ISO not found: {{ iso_file }}"; exit 1; fi
+        echo "Image ${image_file} not found. Building it now..."
+        {{ just }} "{{ type }}" "{{ variant }}" "{{ flavor }}"
+        if [[ ! -f "${image_file}" ]]; then
+            if [[ "{{ type }}" == "qcow2" ]]; then image_file="{{ variant }}.qcow2"
+            elif [[ "{{ type }}" == "iso" ]]; then image_file="{{ variant }}.iso"; fi
+        fi
+    fi
+
+    port=8006
+    while ss -tln | grep -q ":${port} "; do port=$(( port + 1 )); done
+    echo "Using Web Port: ${port}"
+    echo "Connect via Web: http://127.0.0.1:${port}"
+
+    run_args=(--rm --privileged --pull=newer --publish "127.0.0.1:${port}:8006" --env "CPU_CORES=4" --env "RAM_SIZE=4G" --env "DISK_SIZE=64G" --env "TPM=Y" --env "GPU=Y" --device=/dev/kvm)
+
+    ssh_port=$(( port + 1 ))
+    while ss -tln | grep -q ":${ssh_port} "; do ssh_port=$(( ssh_port + 1 )); done
+    echo "Using SSH Port: ${ssh_port}"
+    echo "Connect via SSH: ssh centos@127.0.0.1 -p ${ssh_port}"
+    run_args+=(--publish "127.0.0.1:${ssh_port}:22" --env "USER_PORTS=22" --env "NETWORK=user")
+
+    run_args+=(--volume "${PWD}/${image_file}":"/boot.{{ type }}" ghcr.io/qemus/qemu)
+
+    (sleep 5 && xdg-open "http://127.0.0.1:${port}") &
+    podman run "${run_args[@]}"
+
+# Run the full staged build pipeline
+pipeline variant='all' flavor='all' tag='latest' dry_run='0':
+    #!/usr/bin/env bash
+    export JUST="{{ just }}"
+    ./scripts/pipeline.sh "{{ variant }}" "{{ flavor }}" "{{ tag }}" "{{ dry_run }}"
+
+# Attach to the currently running Zellij pipeline session
+attach:
+    #!/usr/bin/env bash
+    SESSION=$(zellij list-sessions 2>/dev/null | grep "pipeline-" | head -1 | awk '{print $1}')
+    [[ -z "$SESSION" ]] && SESSION=$(zellij list-sessions 2>/dev/null | grep -v "gemini-" | head -1 | awk '{print $1}')
+    if [ -n "$SESSION" ]; then echo "Attaching to Zellij session: $SESSION"; zellij attach "$SESSION"
+    else echo "No active zellij session found."; exit 1; fi

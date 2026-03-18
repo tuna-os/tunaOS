@@ -75,12 +75,11 @@ jobs:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
         run: |
-          # Use the unchunked image for verification as it preserves necessary bootc/ostree metadata
-          # that can be lost during the chunking process.
-          UNCHUNKED_TAG="${FLAVOR}-unchunked-linux-amd64"
-          echo "Building QCOW2 from ghcr.io/${{ github.repository_owner }}/${VARIANT}:${UNCHUNKED_TAG}..."
-          # Use just qcow2 repo=ghcr with the specific unchunked tag
-          just qcow2 "${VARIANT}" "${FLAVOR}" "ghcr" "${UNCHUNKED_TAG}"
+          # The optimized images are now functional for verification thanks to the build-time chunking logic.
+          IMAGE_TAG="${FLAVOR}-linux-amd64"
+          echo "Building QCOW2 from ghcr.io/${{ github.repository_owner }}/${VARIANT}:${IMAGE_TAG}..."
+          # Use just qcow2 repo=ghcr with the standard tag
+          just qcow2 "${VARIANT}" "${FLAVOR}" "ghcr" "${IMAGE_TAG}"
           # Run the verify recipe
           just verify "${VARIANT}" "${FLAVOR}"
 
@@ -96,7 +95,7 @@ jobs:
           
           **Variant:** ${VARIANT}
           **Flavor:** ${FLAVOR}
-          **Image:** \`ghcr.io/${{ github.repository_owner }}/${VARIANT}:${FLAVOR}-unchunked-linux-amd64\`
+          **Image:** \`ghcr.io/${{ github.repository_owner }}/${VARIANT}:${FLAVOR}-linux-amd64\`
           
           [View Workflow Run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
           
