@@ -670,6 +670,17 @@ verify-iso iso_file:
     set -euo pipefail
     ./scripts/verify-iso.sh "{{ iso_file }}"
 
+# Boot an ISO and expose the Anaconda WebUI on http://localhost:19090
+
+# Optional: pass --kickstart <ks_file> for unattended install
+install-test iso_file kickstart='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    ks_arg=""
+    [[ -n "{{ kickstart }}" ]] && ks_arg="--kickstart {{ kickstart }}"
+    # shellcheck disable=SC2086
+    bash ./scripts/install-test.sh "{{ iso_file }}" $ks_arg
+
 # Internal helper to run a VM using the QEMU container
 [private]
 _run-vm type variant flavor='gnome' iso_file='':
