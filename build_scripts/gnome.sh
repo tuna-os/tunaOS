@@ -7,6 +7,10 @@ source /run/context/build_scripts/lib.sh
 case "${1:-}" in
 "base")
 	# Use COPR GNOME packages for EL10-based builds.
+	# The COPR must remain enabled through the full package install so that
+	# mutter, gjs, and other GNOME stack deps are resolved from the same COPR.
+	GNOME_COPR=""
+	GNOME_REPO_ID=""
 	if [[ $IS_FEDORA == false ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
 		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
 			GNOME_COPR="jreilly1821/c10s-gnome-50-fresh"
@@ -15,10 +19,17 @@ case "${1:-}" in
 		fi
 		GNOME_REPO_ID="copr:copr.fedorainfracloud.org:$(echo "$GNOME_COPR" | tr '/' ':')"
 		dnf -y copr enable "$GNOME_COPR"
-		dnf config-manager --save --setopt="${GNOME_REPO_ID}.exclude=glib2*"
-		# Use install --allowerasing which is more robust than swap if the package is already present
-		dnf -y install gnome-shell --allowerasing || true
-		dnf -y copr disable "$GNOME_COPR"
+		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
+			# GNOME 50 requires glib2 >= 2.86.0; upgrade it from the COPR before
+			# anything else so the full dep chain (gtk4, libadwaita, nautilus) resolves.
+			# Exclude selinux-policy from COPR — its version conflicts with base EL10.
+			dnf config-manager --save --setopt="${GNOME_REPO_ID}.exclude=selinux-policy*"
+			dnf -y upgrade glib2
+			dnf -y install gnome50-el10-compat
+		else
+			# For GNOME 49, pin glib2 to the base repo version to avoid unwanted upgrades
+			dnf config-manager --save --setopt="${GNOME_REPO_ID}.exclude=glib2*"
+		fi
 	fi
 
 	# Install base groups and packages - different between Fedora and RHEL/AlmaLinux
@@ -85,7 +96,7 @@ case "${1:-}" in
 			totem-video-thumbnailer
 	else
 		# RHEL/AlmaLinux base groups
-		dnf group install -y --nobest \
+		dnf group install -y --nobest --allowerasing \
 			-x PackageKit \
 			-x PackageKit-command-not-found \
 			"Common NetworkManager submodules" \
@@ -211,6 +222,11 @@ case "${1:-}" in
 	# Cleanup build tooling
 	dnf -y remove glib2-devel meson sassc cmake dbus-devel
 	rm -rf /usr/share/gnome-shell/extensions/tmp
+
+	# Disable COPR now that build tooling (including glib2-devel) is fully removed
+	if [[ -n "${GNOME_COPR:-}" ]]; then
+		dnf -y copr disable "$GNOME_COPR"
+	fi
 
 	# Versionlock glib2 and the full GNOME stack to prevent dnf from upgrading
 	# back to whatever EL10 ships by default (which may not be the COPR version)

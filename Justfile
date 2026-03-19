@@ -5,6 +5,7 @@ export brew_image := env("BREW_IMAGE", "ghcr.io/ublue-os/brew")
 export coreos_stable_version := env("COREOS_STABLE_VERSION", "43")
 just := just_executable()
 arch := arch()
+yq := `which yq`
 export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else if arch == "arm64" { "linux/arm64" } else if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") })
 
 # --- Default Base Image (for 'base' flavor builds) ---
@@ -91,9 +92,9 @@ clean:
     sudo rm -rf .build/*
     rm -f out.ociarchive
     echo "Removing local podman images for all variants and flavors..."
-    readarray -t VARIANTS < <(yq -r '.variants[].id' .github/build-config.yml 2>/dev/null || echo -e "yellowfin\nalbacore\nbonito\nskipjack\nredfin")
+    readarray -t VARIANTS < <({{ yq }} -r '.variants[].id' .github/build-config.yml 2>/dev/null || echo -e "yellowfin\nalbacore\nbonito\nskipjack\nredfin")
     for variant in "${VARIANTS[@]}"; do
-        readarray -t FLAVORS < <(yq -r ".variants[] | select(.id == \"$variant\") | .flavors[].id" .github/build-config.yml 2>/dev/null || true)
+        readarray -t FLAVORS < <({{ yq }} -r ".variants[] | select(.id == \"$variant\") | .flavors[].id" .github/build-config.yml 2>/dev/null || true)
         for flavor in "${FLAVORS[@]}"; do
             podman rmi -f "localhost/${variant}:${flavor}" 2>/dev/null || true
             sudo podman rmi -f "localhost/${variant}:${flavor}" 2>/dev/null || true
@@ -117,7 +118,7 @@ clean-cache:
 [private]
 _ensure-deps:
     #!/usr/bin/env bash
-    if ! command -v yq &> /dev/null; then
+    if ! command -v "{{ yq }}" &> /dev/null; then
         echo "Missing requirement: 'yq' is not installed."
         echo "Please install yq (e.g. 'brew install yq' or download from https://github.com/mikefarah/yq)"
         exit 1
@@ -130,9 +131,9 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     set -euxo pipefail
 
     # Get image digests from image-versions.yaml
-    common_image_sha=$(yq -r '.images[] | select(.name == "common") | .digest' image-versions.yaml)
+    common_image_sha=$({{ yq }} -r '.images[] | select(.name == "common") | .digest' image-versions.yaml)
     common_image_ref="{{ common_image }}@${common_image_sha}"
-    brew_image_sha=$(yq -r '.images[] | select(.name == "brew") | .digest' image-versions.yaml)
+    brew_image_sha=$({{ yq }} -r '.images[] | select(.name == "brew") | .digest' image-versions.yaml)
     brew_image_ref="{{ brew_image }}@${brew_image_sha}"
 
     BUILD_ARGS=()
@@ -145,7 +146,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     BUILD_ARGS+=("--build-arg" "ENABLE_GDX={{ enable_gdx }}")
     BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR={{ desktop_flavor }}")
 
-    AKMODS_ORG=$(yq -r ".variants[] | select(.id == \"{{ target_tag }}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
+    AKMODS_ORG=$({{ yq }} -r ".variants[] | select(.id == \"{{ target_tag }}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
     BUILD_ARGS+=("--build-arg" "AKMODS_BASE=ghcr.io/${AKMODS_ORG}")
 
     # Pass RHSM credentials
@@ -174,39 +175,55 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
         BUILD_ARGS+=("${CACHE_MOUNTS[@]}")
     fi
 
-    echo "==> Build-time chunking enabled. Starting two-pass build..."
+    DESKTOP_FLAVOR="{{ desktop_flavor }}"
+    PRE_CHUNK_TAG="{{ target_tag_with_version }}-pre-chunk"
 
-    # Pass 1: Build up to 'chunker' stage and extract the OCI archive to host
-    # We must use --skip-unused-stages=false to ensure the 'builder' stage is actually built
-    # and available for the 'chunker' mount.
+    echo "==> Building ${DESKTOP_FLAVOR} stage..."
+
+    # Pass 1: Build the target DE stage directly — no unused stages built
     podman build \
         --security-opt label=disable \
         --dns=8.8.8.8 \
         --platform "{{ target_platform }}" \
-        --target="chunker" \
+        --target="${DESKTOP_FLAVOR}" \
         "${BUILD_ARGS[@]}" \
-        --skip-unused-stages=false \
-        -v "$(pwd):/run/out:Z" \
+        --tag "${PRE_CHUNK_TAG}" \
         {{ args }} \
         --pull=newer \
         --file "{{ container_file }}" \
         .
 
-    echo "==> OCI archive generated. Starting Pass 2 (final stage)..."
+    echo "==> Running chunkah on ${PRE_CHUNK_TAG}..."
 
-    # Pass 2: Build the 'final' stage from the generated archive
+    # Use a clean temp dir to avoid SELinux relabeling issues with existing files in PWD
+    CHUNK_OUT=$(mktemp -d)
+    # Pass 2: Run chunkah externally against the built image
+    podman run --rm \
+        --security-opt label=disable \
+        --dns=8.8.8.8 \
+        --entrypoint="" \
+        -v "${CHUNK_OUT}:/run/out:Z" \
+        --mount "type=image,source=${PRE_CHUNK_TAG},target=/chunkah" \
+        ghcr.io/tuna-os/chunkah:latest \
+        sh -c 'chunkah build > /run/out/out.ociarchive'
+    mv "${CHUNK_OUT}/out.ociarchive" out.ociarchive
+    rm -rf "${CHUNK_OUT}"
+
+    echo "==> Applying labels from OCI archive..."
+
+    # Pass 3: Load archive and apply OCI labels via Containerfile.final
     podman build \
         --security-opt label=disable \
         --dns=8.8.8.8 \
         --platform "{{ target_platform }}" \
-        --target="final" \
         "${BUILD_ARGS[@]}" \
         --tag "{{ target_tag_with_version }}" \
-        --file "{{ container_file }}" \
+        --file "Containerfile.final" \
         .
 
-    # Clean up the large archive
+    # Cleanup
     rm -f out.ociarchive
+    podman rmi "${PRE_CHUNK_TAG}" 2>/dev/null || true
 
 # Build a TunaOS variant
 build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='': _ensure-deps
@@ -229,7 +246,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
 
     if [[ -z "{{ target_platform }}" ]]; then
         if [[ "{{ is_ci }}" != "1" ]]; then PLATFORM="{{ platform }}"; else
-            PLATFORM=$(yq -r ".variants[] | select(.id == \"{{ variant }}\") | .platforms | join(\",\")" .github/build-config.yml)
+            PLATFORM=$({{ yq }} -r ".variants[] | select(.id == \"{{ variant }}\") | .platforms | join(\",\")" .github/build-config.yml)
         fi
     else PLATFORM="{{ target_platform }}"; fi
 
@@ -248,7 +265,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     esac
 
     if [[ "${FLAVOR}" == "all" ]]; then
-        readarray -t FLAVORS < <(yq -r '.variants[] | select(.id == "{{ variant }}") | .flavors[].id' .github/build-config.yml)
+        readarray -t FLAVORS < <({{ yq }} -r '.variants[] | select(.id == "{{ variant }}") | .flavors[].id' .github/build-config.yml)
         for f in "${FLAVORS[@]}"; do {{ just }} build "{{ variant }}" "$f"; done
         exit 0
     elif [[ "${FLAVOR}" == "base" ]]; then
@@ -323,7 +340,7 @@ live-iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
 iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
     @{{ just }} live-iso {{ variant }} {{ flavor }} {{ repo }} {{ tag }} {{ dev }}
 
-# Generate a QCOW2 disk image using bcvk (bootc virtualization kit)
+# Generate a QCOW2 disk image using bootc install to-disk (via loopback in a privileged container)
 qcow2 variant flavor='gnome' repo='local' tag='':
     #!/usr/bin/env bash
     set -euo pipefail
@@ -346,15 +363,88 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     fi
 
     OUTPUT="${OUTPUT_NAME}.qcow2"
-    echo "==> Generating $OUTPUT from $IMG_REF using bcvk..."
+    RAW_FILE="${OUTPUT_NAME}.raw"
+    echo "==> Generating $OUTPUT from $IMG_REF using bootc install to-disk..."
 
-    if ! command -v bcvk &>/dev/null; then
-        echo "Error: 'bcvk' not found. Please install it (cargo install --git https://github.com/bootc-dev/bcvk.git bcvk)"
-        exit 1
+    # Ensure root podman storage has the LATEST version of this image.
+    # (bootc install to-disk runs as root and reads from root storage)
+    if [[ "${IMG_REF}" == localhost/* ]] || [[ "${IMG_REF}" == *"/"* && "${IMG_REF}" != ghcr* ]]; then
+        echo "==> Syncing $IMG_REF into root podman storage..."
+        podman save "$IMG_REF" | sudo podman load
     fi
 
-    sudo "$(which bcvk)" to-disk --format=qcow2 "$IMG_REF" "$OUTPUT"
-    sudo chown "${SUDO_UID:-$(id -u)}:${SUDO_GID:-$(id -g)}" "$OUTPUT"
+    # Create a sparse raw disk file (40 GiB)
+    rm -f "$RAW_FILE"
+    truncate -s 40G "$RAW_FILE"
+    RAW_ABS="$(realpath "$RAW_FILE")"
+
+    # bootc install to-disk runs from inside the container image so it can
+    # access its own OSTree commit. --via-loopback writes to a regular file
+    # instead of a real block device. --generic-image skips firmware flashing
+    # and installs all bootloader types (required for disk images).
+    #
+    # We also mount the correct install config from the repo over the top of
+    # whatever is baked into the image, so stale cached builds can't break
+    # the TOML parse step.
+    INSTALL_TOML="$(pwd)/system_files/usr/lib/bootc/install/00-tunaos.toml"
+
+    # Collect the local user's SSH public keys to inject into root's authorized_keys
+    SSH_PUBKEYS_FILE=""
+    TMPKEYS=$(mktemp)
+    for pub in ~/.ssh/id_ed25519.pub ~/.ssh/id_rsa.pub ~/.ssh/id_ecdsa.pub ~/.ssh/id_dsa.pub; do
+        [[ -f "$pub" ]] && cat "$pub" >> "$TMPKEYS"
+    done
+    # Also pick up any additional id_*.pub files not already included
+    while IFS= read -r pub; do
+        cat "$pub" >> "$TMPKEYS"
+    done < <(ls ~/.ssh/id_*.pub 2>/dev/null | grep -vE 'id_ed25519|id_rsa|id_ecdsa|id_dsa' || true)
+    # Also include the Lima VM key so Lima-booted VMs are accessible via SSH
+    [[ -f ~/.lima/_config/user.pub ]] && cat ~/.lima/_config/user.pub >> "$TMPKEYS"
+    if [[ -s "$TMPKEYS" ]]; then
+        SSH_PUBKEYS_FILE="$TMPKEYS"
+        echo "==> Injecting SSH authorized keys for root from ~/.ssh/id_*.pub..."
+    else
+        rm -f "$TMPKEYS"
+        echo "==> No local SSH public keys found; skipping root SSH key injection."
+    fi
+
+    SSH_VOL_ARGS=()
+    SSH_KEY_ARGS=()
+    if [[ -n "$SSH_PUBKEYS_FILE" ]]; then
+        SSH_VOL_ARGS=("-v" "${SSH_PUBKEYS_FILE}:/run/root-authorized-keys:ro")
+        SSH_KEY_ARGS=("--root-ssh-authorized-keys" "/run/root-authorized-keys")
+    fi
+
+    echo "==> Running bootc install to-disk (this takes a few minutes)..."
+    sudo podman run \
+        --rm \
+        --privileged \
+        --pid=host \
+        -v /dev:/dev \
+        -v /var/lib/containers:/var/lib/containers \
+        -v "${RAW_ABS}:/disk.img" \
+        -v "${INSTALL_TOML}:/usr/lib/bootc/install/00-tunaos.toml:ro" \
+        "${SSH_VOL_ARGS[@]}" \
+        --security-opt label=disable \
+        "$IMG_REF" \
+        bootc install to-disk \
+            --via-loopback \
+            --generic-image \
+            "${SSH_KEY_ARGS[@]}" \
+            --source-imgref "containers-storage:${IMG_REF}" \
+            /disk.img
+
+    [[ -n "$SSH_PUBKEYS_FILE" ]] && rm -f "$SSH_PUBKEYS_FILE"
+
+    # Convert raw → qcow2 for Lima/QEMU consumption
+    echo "==> Converting raw → qcow2..."
+    if ! command -v qemu-img &>/dev/null; then
+        echo "Error: 'qemu-img' not found. Install qemu-img (e.g. sudo dnf install qemu-img)"
+        exit 1
+    fi
+    qemu-img convert -f raw -O qcow2 -p "$RAW_FILE" "$OUTPUT"
+    rm -f "$RAW_FILE"
+    sudo chown "${SUDO_UID:-$(id -u)}:${SUDO_GID:-$(id -g)}" "$OUTPUT" 2>/dev/null || chown "$(id -u):$(id -g)" "$OUTPUT" 2>/dev/null || true
     echo "✓ Created $OUTPUT"
 
 # Test an image locally using Lima VM (automated display manager check)
@@ -370,6 +460,203 @@ run-qcow2 variant flavor='gnome':
 # Boot an ISO in QEMU via browser
 run-iso variant flavor='gnome' iso_file='':
     @{{ just }} _run-vm iso {{ variant }} {{ flavor }} "{{ iso_file }}"
+
+# Build a qcow2 image and boot it in a QEMU container with a built-in web VNC UI
+
+# Pass rebuild=1 to force a fresh image build even if one already exists
+demo variant='albacore' flavor='gnome' rebuild='0':
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    if [[ -f "{{ variant }}-{{ flavor }}.qcow2" ]]; then
+        QCOW2_FILE="{{ variant }}-{{ flavor }}.qcow2"
+    else
+        QCOW2_FILE="{{ variant }}.qcow2"
+    fi
+
+    if [[ "{{ rebuild }}" == "1" ]] || [[ ! -f "${QCOW2_FILE}" ]]; then
+        echo "==> Building qcow2..."
+        {{ just }} qcow2 "{{ variant }}" "{{ flavor }}"
+        if [[ -f "{{ variant }}-{{ flavor }}.qcow2" ]]; then QCOW2_FILE="{{ variant }}-{{ flavor }}.qcow2"
+        else QCOW2_FILE="{{ variant }}.qcow2"; fi
+    fi
+
+    if [[ ! -f "${QCOW2_FILE}" ]]; then
+        echo "Error: ${QCOW2_FILE} not found after build."
+        exit 1
+    fi
+
+    {{ just }} _run-vm qcow2 "{{ variant }}" "{{ flavor }}"
+
+# Build a live ISO and boot it in a QEMU container with a built-in web VNC UI
+
+# Pass rebuild=1 to force a fresh ISO build even if one already exists
+demo-iso variant='skipjack' flavor='gnome' rebuild='0':
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    BUILD_DIR=".build/live-iso/{{ variant }}-{{ flavor }}"
+    ISO_FILE=$(find "${BUILD_DIR}" -maxdepth 1 -name "*.iso" 2>/dev/null | head -1 || true)
+
+    if [[ "{{ rebuild }}" == "1" ]] || [[ -z "${ISO_FILE}" ]] || [[ ! -f "${ISO_FILE}" ]]; then
+        echo "==> Building live ISO..."
+        {{ just }} live-iso "{{ variant }}" "{{ flavor }}" local
+        ISO_FILE=$(find "${BUILD_DIR}" -maxdepth 1 -name "*.iso" 2>/dev/null | head -1 || true)
+    fi
+
+    if [[ -z "${ISO_FILE}" ]] || [[ ! -f "${ISO_FILE}" ]]; then
+        echo "Error: ISO not found in ${BUILD_DIR}. Check build output."
+        exit 1
+    fi
+
+    {{ just }} _run-vm iso "{{ variant }}" "{{ flavor }}" "$(realpath "${ISO_FILE}")"
+
+# Internal: start a Lima VM from a qcow2 or live ISO, then wire up a noVNC container
+[private]
+_lima-novnc vm_name type image_path:
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    VM_NAME="{{ vm_name }}"
+    TYPE="{{ type }}"
+    IMAGE_PATH="{{ image_path }}"
+
+    if ! command -v limactl &>/dev/null; then
+        echo "Error: 'limactl' not found. Install Lima: https://lima-vm.io/"
+        exit 1
+    fi
+
+    ARCH=$(uname -m)
+    [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]] && LIMA_ARCH="aarch64" || LIMA_ARCH="x86_64"
+
+    # Remove any pre-existing VM with this name
+    if limactl list -q 2>/dev/null | grep -q "^${VM_NAME}$"; then
+        echo "==> Removing existing VM: ${VM_NAME}"
+        limactl stop -f "${VM_NAME}" 2>/dev/null || true
+        limactl delete "${VM_NAME}"
+    fi
+
+    CONFIG_FILE=$(mktemp --suffix=.yaml)
+    CLEANUP_FILES=("${CONFIG_FILE}")
+    trap 'rm -f "${CLEANUP_FILES[@]}" 2>/dev/null || true' EXIT
+
+    if [[ "${TYPE}" == "iso" ]]; then
+        # Create a sparse target disk; QEMU boots from the ISO via -cdrom
+        EMPTY_DISK=$(mktemp --suffix=.qcow2)
+        CLEANUP_FILES+=("${EMPTY_DISK}")
+        qemu-img create -f qcow2 "${EMPTY_DISK}" 32G
+
+        # plain=true skips SSH/cloud-init checks so Lima doesn't block waiting for a live OS
+        echo "images:" > "${CONFIG_FILE}"
+        echo "  - location: ${EMPTY_DISK}" >> "${CONFIG_FILE}"
+        echo "    arch: ${LIMA_ARCH}" >> "${CONFIG_FILE}"
+        echo "video:" >> "${CONFIG_FILE}"
+        echo "  display: \"vnc\"" >> "${CONFIG_FILE}"
+        echo "memory: \"4GiB\"" >> "${CONFIG_FILE}"
+        echo "cpus: 4" >> "${CONFIG_FILE}"
+        echo "plain: true" >> "${CONFIG_FILE}"
+        echo "qemu:" >> "${CONFIG_FILE}"
+        echo "  extraArgs:" >> "${CONFIG_FILE}"
+        echo "    - \"-cdrom\"" >> "${CONFIG_FILE}"
+        echo "    - ${IMAGE_PATH}" >> "${CONFIG_FILE}"
+        echo "    - \"-boot\"" >> "${CONFIG_FILE}"
+        echo "    - \"order=d,menu=on\"" >> "${CONFIG_FILE}"
+    else
+        # qcow2: boot directly; plain=true because bootc images may not have cloud-init
+        echo "images:" > "${CONFIG_FILE}"
+        echo "  - location: ${IMAGE_PATH}" >> "${CONFIG_FILE}"
+        echo "    arch: ${LIMA_ARCH}" >> "${CONFIG_FILE}"
+        echo "video:" >> "${CONFIG_FILE}"
+        echo "  display: \"vnc\"" >> "${CONFIG_FILE}"
+        echo "memory: \"4GiB\"" >> "${CONFIG_FILE}"
+        echo "cpus: 4" >> "${CONFIG_FILE}"
+        echo "plain: true" >> "${CONFIG_FILE}"
+    fi
+
+    echo "==> Starting Lima VM: ${VM_NAME}"
+    limactl start --name="${VM_NAME}" --tty=false "${CONFIG_FILE}"
+
+    # Resolve VNC host:port — Lima writes the QEMU display string to vncdisplay
+    VNC_DISPLAY=""
+    VNC_DISPLAY=$(limactl list --json 2>/dev/null | jq -r "select(.name==\"${VM_NAME}\") | .video.vnc.display // empty" || true)
+    if [[ -z "${VNC_DISPLAY}" ]]; then
+        VNC_FILE="${HOME}/.lima/${VM_NAME}/vncdisplay"
+        [[ -f "${VNC_FILE}" ]] && VNC_DISPLAY=$(cat "${VNC_FILE}")
+    fi
+
+    if [[ -z "${VNC_DISPLAY}" ]]; then
+        echo "Error: could not determine VNC display for ${VM_NAME}."
+        echo "Check: ls ~/.lima/${VM_NAME}/"
+        exit 1
+    fi
+
+    VNC_DISPLAY="${VNC_DISPLAY%%,*}"      # strip trailing options like ",to=9"
+    VNC_HOST="${VNC_DISPLAY%:*}"
+    VNC_DISP_NUM="${VNC_DISPLAY##*:}"
+    VNC_PORT=$(( 5900 + VNC_DISP_NUM ))
+
+    # Lima generates a VNC password stored alongside the display file
+    VNC_PASS_FILE="${HOME}/.lima/${VM_NAME}/vncpassword"
+    VNC_PASS=""
+    [[ -f "${VNC_PASS_FILE}" ]] && VNC_PASS=$(cat "${VNC_PASS_FILE}")
+
+    # Find a free port for the noVNC web UI
+    NOVNC_PORT=6080
+    while ss -tln 2>/dev/null | grep -q ":${NOVNC_PORT} "; do
+        NOVNC_PORT=$(( NOVNC_PORT + 1 ))
+    done
+
+    echo "==> VNC at ${VNC_HOST}:${VNC_PORT}"
+    echo "==> Starting noVNC on port ${NOVNC_PORT}..."
+
+    # Remove any leftover noVNC container from a previous run
+    podman rm -f "${VM_NAME}-novnc" 2>/dev/null || true
+
+    # ghcr.io/novnc/novnc ships novnc_proxy (websockify wrapper + static files).
+    # --network host lets the container reach Lima's VNC on 127.0.0.1.
+    podman run -d --rm \
+        --name "${VM_NAME}-novnc" \
+        --network host \
+        ghcr.io/novnc/novnc:latest \
+        /usr/share/novnc/utils/novnc_proxy \
+            --listen "${NOVNC_PORT}" \
+            --vnc "${VNC_HOST}:${VNC_PORT}"
+
+    # Build the local URL; embed password so the browser connects automatically
+    NOVNC_PARAMS="vnc.html?autoconnect=1"
+    [[ -n "${VNC_PASS}" ]] && NOVNC_PARAMS="${NOVNC_PARAMS}&password=${VNC_PASS}"
+    LOCAL_URL="http://127.0.0.1:${NOVNC_PORT}/${NOVNC_PARAMS}&host=127.0.0.1&port=${NOVNC_PORT}"
+
+    # Detect Tailscale IP for remote access
+    TAILSCALE_IP=""
+    if command -v tailscale &>/dev/null; then
+        TAILSCALE_IP=$(tailscale ip -4 2>/dev/null | head -1 || true)
+    fi
+    if [[ -z "${TAILSCALE_IP}" ]]; then
+        TAILSCALE_IP=$(ip addr show tailscale0 2>/dev/null | awk '/inet / {print $2}' | cut -d/ -f1 | head -1 || true)
+    fi
+
+    echo "==> Waiting for noVNC to be ready..."
+    for _i in $(seq 1 20); do
+        curl -sf "http://127.0.0.1:${NOVNC_PORT}/" &>/dev/null && break || sleep 1
+    done
+
+    echo ""
+    echo "=============================="
+    echo " VM:       ${VM_NAME}"
+    echo " Local:    ${LOCAL_URL}"
+    if [[ -n "${TAILSCALE_IP}" ]]; then
+        TAILNET_URL="http://${TAILSCALE_IP}:${NOVNC_PORT}/${NOVNC_PARAMS}&host=${TAILSCALE_IP}&port=${NOVNC_PORT}"
+        echo " Tailnet:  ${TAILNET_URL}"
+    fi
+    [[ -n "${VNC_PASS}" ]] && echo " Password: ${VNC_PASS}"
+    echo "=============================="
+    echo " Stop: limactl stop ${VM_NAME} && podman stop ${VM_NAME}-novnc"
+    echo ""
+
+    if command -v xdg-open &>/dev/null; then
+        xdg-open "${LOCAL_URL}" || true
+    fi
 
 # Verify an image using Lima (automated DM check)
 verify variant flavor='gnome':

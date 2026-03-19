@@ -43,6 +43,7 @@ elif [[ "${DESKTOP_FLAVOR}" == "gnome" || "${DESKTOP_FLAVOR}" == "gnome50" ]]; t
 else
 	echo "Skipping DE-specific display-manager service setup (DESKTOP_FLAVOR='${DESKTOP_FLAVOR}')"
 fi
+safe_enable sshd.service
 safe_enable fwupd.service
 safe_enable rpm-ostree-countme.service
 systemctl --global enable podman-auto-update.timer

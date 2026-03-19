@@ -52,6 +52,9 @@ ENV RHSM_ACTIVATION_KEY=${RHSM_ACTIVATION_KEY}
 # Preserve desktop flavor so base-stage scripts don't fall back to GNOME defaults
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
+# Ensure /opt is a real directory so tmpfs mounts work in all subsequent stages
+RUN rm -rf /opt && mkdir /opt
+
 # Copy system files and apply TunaOS customizations
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
@@ -99,14 +102,14 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/cleanup.sh
 
-
-
 # ==============================================================================
 # Desktop Variant Stages
+# Each stage ends with the /opt symlink so chunkah can be run against them.
 # ==============================================================================
 
 FROM base-no-de AS base
-# Just an alias for base-no-de
+# Base image with no DE - /opt made writeable via symlink
+RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS gnome
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
@@ -114,6 +117,7 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/gnome.sh base
 RUN dnf versionlock add glib2
+RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS cosmic
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
@@ -121,6 +125,7 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/cosmic.sh base
 RUN dnf versionlock add glib2
+RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS gnome50
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
@@ -128,6 +133,7 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/gnome.sh base
 RUN dnf versionlock add glib2
+RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS kde
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
@@ -135,6 +141,7 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/kde.sh base
 RUN dnf versionlock add glib2
+RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS niri
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
@@ -142,36 +149,4 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/niri.sh base
 RUN dnf versionlock add glib2
-
-# ==============================================================================
-# Finalization & Chunking
-# ==============================================================================
-
-# Select the requested flavor
-FROM ${DESKTOP_FLAVOR} AS pre-final
-
-# Makes `/opt` writeable by default - done here (not in base-no-de) so that
-# DE stages can still mount tmpfs at /opt during their build steps.
 RUN rm -rf /opt && ln -s /var/opt /opt
-
-# Chunkify the image at build-time using the oci-archive trick.
-# This preserves bootc/ostree metadata while optimizing layer count.
-FROM ghcr.io/tuna-os/chunkah:latest AS chunker
-RUN --mount=from=pre-final,src=/,target=/chunkah,ro \
-    --mount=type=bind,target=/run/out,rw \
-    chunkah build > /run/out/out.ociarchive
-
-# The 'final' stage uses the archive generated in the previous step.
-# NOTE: In local/CI pipelines, this usually requires a two-pass build if 
-# the archive isn't already present in the build context.
-FROM oci-archive:out.ociarchive AS final
-
-ARG IMAGE_NAME
-ARG IMAGE_VENDOR
-ARG DESKTOP_FLAVOR
-ARG SHA_HEAD_SHORT
-
-LABEL org.opencontainers.image.title="TunaOS ${IMAGE_NAME} (${DESKTOP_FLAVOR})"
-LABEL org.opencontainers.image.vendor="${IMAGE_VENDOR}"
-LABEL org.opencontainers.image.version="${SHA_HEAD_SHORT}"
-LABEL io.bootc=1
