@@ -211,11 +211,14 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
 
     echo "==> Applying labels from OCI archive..."
 
-    # Pass 3: Load archive into podman storage, then apply OCI labels via Containerfile.final.
-    # Using skopeo copy avoids "FROM oci-archive:" failures on some podman versions
-    # where the config sha256 is copied but not made available in containers storage.
+    # Pass 3: Load archive into podman storage via podman load, then apply OCI labels.
+    # podman load guarantees the same graphRoot as the subsequent podman build.
+    # skopeo copy is avoided here because CI uses ublue-os/container-storage-action
+    # which mounts a BTRFS graphRoot for podman; skopeo defaults to overlay and writes
+    # to a different path, causing podman build to fall back to a remote registry pull.
     RECHUNKED_REF="localhost/{{ target_tag_with_version }}-rechunked-$$"
-    skopeo copy "oci-archive:out.ociarchive" "containers-storage:${RECHUNKED_REF}"
+    LOADED_ID=$(podman load --input out.ociarchive | awk '/Loaded image/{print $NF}')
+    podman tag "${LOADED_ID}" "${RECHUNKED_REF}"
 
     podman build \
         --security-opt label=disable \
