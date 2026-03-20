@@ -14,9 +14,19 @@ source /run/context/build_scripts/lib.sh
 dnf clean all
 
 rm -rf /.gitkeep
-# Clean /var but skip mounted directories and cache that might be in use
+
+# Clean up /run artifacts left by dnf/selinux during build (bootc lint: nonempty-run-tmp)
+rm -rf /run/dnf /run/selinux-policy
+
+# Clean /var/log dnf artifacts (bootc lint: var-log)
+rm -f /var/log/dnf5.log /var/log/dnf5.log.*
+
+# Clean /var but skip mounted directories
 find /var -mindepth 1 -maxdepth 1 ! -path '/var/cache' -delete 2>/dev/null || true
-find /var/cache -mindepth 1 ! -path '/var/cache/dnf*' -delete 2>/dev/null || true
+find /var/cache -mindepth 1 -delete 2>/dev/null || true
+
+# Declare /var/cache/dnf in tmpfiles.d so it's recreated on first boot (bootc lint: var-tmpfiles)
+echo "d /var/cache/dnf 0755 root root - -" >/usr/lib/tmpfiles.d/dnf-cache.conf
 
 mkdir -p /var /boot
 
@@ -28,7 +38,7 @@ ls /usr/local || ln -s /var/usrlocal /usr/local
 chmod 644 /usr/share/ublue-os/image-info.json
 
 # FIXME: use --fix option once https://github.com/containers/bootc/pull/1152 is merged
-bootc container lint --fatal-warnings || true
+bootc container lint --fatal-warnings
 
 jq . /usr/share/ublue-os/image-info.json
 
