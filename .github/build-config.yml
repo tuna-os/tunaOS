@@ -8,11 +8,13 @@ config:
 #                └── Stage 2: gnome, kde, niri
 #                                ├── Stage 3: gnome-hwe, kde-hwe, niri-hwe   (layer on base-hwe)
 #                                └── Stage 3: gnome-gdx, kde-gdx, niri-gdx   (layer on base-gdx)
+#                                                └── Stage 4: gnome-gdx-hwe  (layer on gnome-hwe)
 #
 # The `stage` field on each flavor tells generate_matrix which job matrix it belongs to:
 #   stage: 1  → build_base      (no dependencies)
 #   stage: 2  → build_stage2    (needs: build_base)
 #   stage: 3  → build_stage3    (needs: build_stage2)
+#   stage: 4  → build_stage4    (needs: build_stage3)
 
 variants:
   - id: yellowfin
@@ -77,7 +79,7 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: gnome-gdx-hwe
-        stage: 3
+        stage: 4
         build_image: true
         build_iso: false
         build_qcow2: false
@@ -181,7 +183,7 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: gnome-gdx-hwe
-        stage: 3
+        stage: 4
         build_image: true
         build_iso: false
         build_qcow2: false

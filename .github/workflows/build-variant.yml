@@ -22,6 +22,7 @@ jobs:
       stage1_matrix: ${{ steps.set-matrix.outputs.stage1_matrix }}
       stage2_matrix: ${{ steps.set-matrix.outputs.stage2_matrix }}
       stage3_matrix: ${{ steps.set-matrix.outputs.stage3_matrix }}
+      stage4_matrix: ${{ steps.set-matrix.outputs.stage4_matrix }}
       artifact_matrix: ${{ steps.set-matrix.outputs.artifact_matrix }}
       artifact_count: ${{ steps.set-matrix.outputs.artifact_count }}
     steps:
@@ -96,10 +97,12 @@ jobs:
           STAGE1_MATRIX=$(make_image_matrix 1)
           STAGE2_MATRIX=$(make_image_matrix 2)
           STAGE3_MATRIX=$(make_image_matrix 3)
+          STAGE4_MATRIX=$(make_image_matrix 4)
 
           echo "stage1_matrix=$STAGE1_MATRIX" >> $GITHUB_OUTPUT
           echo "stage2_matrix=$STAGE2_MATRIX" >> $GITHUB_OUTPUT
           echo "stage3_matrix=$STAGE3_MATRIX" >> $GITHUB_OUTPUT
+          echo "stage4_matrix=$STAGE4_MATRIX" >> $GITHUB_OUTPUT
 
           # Artifact matrix: all stages, only entries that need an ISO or QCOW2.
           ARTIFACT_MATRIX=$(echo "$FULL_MATRIX" | jq -c '{
@@ -170,7 +173,6 @@ jobs:
   # Runs only after ALL stage-2 jobs pass. Includes:
   #   - gnome-hwe, kde-hwe, niri-hwe   (layer on base-hwe)
   #   - gnome-gdx, kde-gdx, niri-gdx   (layer on base-gdx)
-  #   - gnome-gdx-hwe                  (layers on both)
   # All run in parallel within stage 3.
   build_stage3:
     name: "S3 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
@@ -189,12 +191,34 @@ jobs:
       publish: true
     secrets: inherit
 
+  # ── Stage 4: Combined GDX+HWE flavors ──────────────────────────────────────
+  # Runs only after ALL stage-3 jobs pass. Includes:
+  #   - gnome-gdx-hwe   (layers on gnome-hwe from stage 3)
+  # Must be a separate stage from stage 3 because gnome-gdx-hwe depends on
+  # gnome-hwe, which is also built in stage 3.
+  build_stage4:
+    name: "S4 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
+    needs: [generate_matrix, build_stage3]
+    if: github.event_name != 'pull_request' && fromJson(needs.generate_matrix.outputs.stage4_matrix).include[0]
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate_matrix.outputs.stage4_matrix) }}
+    uses: ./.github/workflows/reusable-build-image.yml
+    with:
+      image-name: ${{ matrix.variant }}
+      image-variant: ${{ matrix.variant }}
+      flavor: ${{ matrix.flavor }}
+      platforms: ${{ matrix.platforms }}
+      default-tag: ${{ matrix.flavor }}
+      publish: true
+    secrets: inherit
+
   # ── Artifact builds (ISO + QCOW2) ──────────────────────────────────────────
   # Runs after all image stages are complete. Only triggered on non-PR events
   # and only when the artifact matrix is non-empty.
   build_artifacts:
     name: "Pkg | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
-    needs: [generate_matrix, build_stage3]
+    needs: [generate_matrix, build_stage4]
     if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_count != '0'
     strategy:
       fail-fast: false

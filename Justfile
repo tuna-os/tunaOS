@@ -216,6 +216,13 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     # skopeo copy is avoided here because CI uses ublue-os/container-storage-action
     # which mounts a BTRFS graphRoot for podman; skopeo defaults to overlay and writes
     # to a different path, causing podman build to fall back to a remote registry pull.
+
+    # Remove the pre-chunk image before loading the rechunked archive to free disk space.
+    # GDX images are 5-6 GB; keeping both in storage simultaneously causes disk pressure
+    # on S3 CI runners, which triggers a podman storage index bug where podman load
+    # copies the config blob but fails to register it ("image not known").
+    podman rmi "${PRE_CHUNK_TAG}" 2>/dev/null || true
+
     RECHUNKED_REF="localhost/{{ target_tag_with_version }}-rechunked-$$"
     LOADED_ID=$(podman load --input out.ociarchive | awk '/Loaded image/{print $NF}')
     podman tag "${LOADED_ID}" "${RECHUNKED_REF}"
@@ -233,7 +240,6 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
 
     # Cleanup
     rm -f out.ociarchive
-    podman rmi "${PRE_CHUNK_TAG}" 2>/dev/null || true
 
 # Build a TunaOS variant
 build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='': _ensure-deps
