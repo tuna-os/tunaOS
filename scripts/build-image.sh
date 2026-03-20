@@ -200,7 +200,7 @@ podman run --rm \
 	--dns=8.8.8.8 \
 	--entrypoint="" \
 	-v "${CHUNK_OUT}:/run/out:Z" \
-	--mount "type=image,source=${PRE_CHUNK_TAG},target=/chunkah" \
+	--mount "type=image,source=localhost/${PRE_CHUNK_TAG},target=/chunkah" \
 	ghcr.io/tuna-os/chunkah:latest \
 	sh -c 'chunkah build > /run/out/out.ociarchive'
 mv "${CHUNK_OUT}/out.ociarchive" out.ociarchive

@@ -151,11 +151,8 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: true
-      - id: gnome50
-        stage: 2
-        build_image: true
-        build_iso: false
-        build_qcow2: false
+      # gnome50 disabled for albacore: c10s-gnome-50-fresh COPR requires
+      # libinput >= 1.27.0 which is not available in AlmaLinux 10.
       - id: cosmic
         stage: 2
         build_image: true
@@ -188,16 +185,8 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: gnome50-hwe
-        stage: 3
-        build_image: true
-        build_iso: false
-        build_qcow2: false
-      - id: gnome50-gdx
-        stage: 3
-        build_image: true
-        build_iso: false
-        build_qcow2: false
+      # gnome50-hwe disabled for albacore (gnome50 not available)
+      # gnome50-gdx disabled for albacore (gnome50 not available)
       - id: cosmic-hwe
         stage: 3
         build_image: true

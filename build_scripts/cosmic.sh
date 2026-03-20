@@ -31,7 +31,6 @@ case "${1:-}" in
 			cosmic-icon-theme \
 			greetd \
 			xdg-desktop-portal-cosmic \
-			pop-gtk-theme \
 			pop-icon-theme
 
 		exit 0

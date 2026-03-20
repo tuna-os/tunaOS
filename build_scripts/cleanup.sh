@@ -20,13 +20,17 @@ rm -rf /run/dnf /run/selinux-policy
 
 # Clean /var/log dnf artifacts (bootc lint: var-log)
 rm -f /var/log/dnf5.log /var/log/dnf5.log.*
+rm -f /var/log/dnf.log /var/log/dnf.rpm.log /var/log/dnf.librepo.log /var/log/hawkey.log
 
 # Clean /var but skip mounted directories
 find /var -mindepth 1 -maxdepth 1 ! -path '/var/cache' -delete 2>/dev/null || true
 find /var/cache -mindepth 1 -delete 2>/dev/null || true
 
-# Declare /var/cache/dnf in tmpfiles.d so it's recreated on first boot (bootc lint: var-tmpfiles)
-echo "d /var/cache/dnf 0755 root root - -" >/usr/lib/tmpfiles.d/dnf-cache.conf
+# Declare /var/cache/dnf and /var/lib/dnf in tmpfiles.d so they're recreated on first boot (bootc lint: var-tmpfiles)
+printf 'd /var/cache/dnf 0755 root root - -\nd /var/lib/dnf 0755 root root - -\n' >/usr/lib/tmpfiles.d/dnf-cache.conf
+
+# Remove /var/lib/dnf state files left by the build (recreated by dnf on first use)
+rm -rf /var/lib/dnf
 
 mkdir -p /var /boot
 
