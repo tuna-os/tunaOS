@@ -231,9 +231,9 @@ jobs:
           set -x
           IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
           IMAGE_DIGEST="$(sudo podman image inspect --format '{{.Digest}}' "${IMAGE}")"
-          
+
           sudo podman tag "${IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
-          
+
           for i in $(seq "${MAX_RETRIES}"); do
             sudo podman push --digestfile=/tmp/digestfile \
               "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}" \

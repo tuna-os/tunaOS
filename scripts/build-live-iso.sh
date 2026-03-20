@@ -58,8 +58,13 @@ if [ "$_BUILD_ONLY" = "0" ]; then
 		BASE_IMAGE="ghcr.io/${GITHUB_REPOSITORY_OWNER}/${VARIANT}:${TAG}"
 		PAYLOAD_REF="ghcr.io/${GITHUB_REPOSITORY_OWNER}/${VARIANT}:${TAG}"
 		;;
+	registry)
+		REGISTRY="${REGISTRY:-localhost:5000}"
+		BASE_IMAGE="${REGISTRY}/${VARIANT}:${FLAVOR}"
+		PAYLOAD_REF="${REGISTRY}/${VARIANT}:${FLAVOR}"
+		;;
 	*)
-		echo "Unknown repo '${REPO}'. Use 'local' or 'ghcr'." >&2
+		echo "Unknown repo '${REPO}'. Use 'local', 'ghcr', or 'registry'." >&2
 		exit 1
 		;;
 	esac

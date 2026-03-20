@@ -1,0 +1,19 @@
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG DESKTOP_FLAVOR
+ARG SHA_HEAD_SHORT
+
+# Produced by external chunkah run - see Justfile _build recipe
+FROM oci-archive:out.ociarchive
+
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG DESKTOP_FLAVOR
+ARG SHA_HEAD_SHORT
+
+LABEL org.opencontainers.image.title="TunaOS ${IMAGE_NAME} (${DESKTOP_FLAVOR})"
+LABEL org.opencontainers.image.vendor="${IMAGE_VENDOR}"
+LABEL org.opencontainers.image.version="${SHA_HEAD_SHORT}"
+LABEL io.bootc=1
+LABEL containers.bootc=1
+LABEL ostree.bootable=1

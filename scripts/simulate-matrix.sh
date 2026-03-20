@@ -18,7 +18,6 @@ yq -o=json '.variants[] | {"variant": .id, "description": .description, "platfor
 
 	# We will simulate the build commands that would be executed in sequence
 	echo "$line" | jq -r '.flavors[]' | while read -r FLAVOR; do
-		IMAGE_NAMING_CONVENTION="variant:flavor"
 		LOCAL_IMAGE_REF="localhost/${VARIANT}:${FLAVOR}"
 		GHCR_REF="ghcr.io/${GITHUB_REPOSITORY_OWNER:-tuna-os}/${VARIANT}:${FLAVOR}"
 
