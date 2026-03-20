@@ -27,7 +27,10 @@ case "${1:-}" in
 		else
 			# GNOME 49 also requires glib2 >= 2.82 (g_variant_builder_init_static) and
 			# fontconfig >= 2.17.0 from COPR — same ABI requirements as GNOME 50.
-			dnf -y upgrade glib2 fontconfig
+			# gobject-introspection 1.84 and gjs 1.86 must also be upgraded from COPR:
+			# gnome-shell links libgirepository-1.0 but gjs links libgirepository-2.0;
+			# having both loaded causes GIRepository type double-registration → crash.
+			dnf -y upgrade glib2 fontconfig gobject-introspection gjs
 		fi
 	fi
 
