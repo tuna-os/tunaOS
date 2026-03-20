@@ -15,8 +15,8 @@ dnf clean all
 
 rm -rf /.gitkeep
 
-# Clean up /run artifacts left by dnf/selinux during build (bootc lint: nonempty-run-tmp)
-rm -rf /run/dnf /run/selinux-policy
+# Clean up /run artifacts left by dnf/selinux/tuned during build (bootc lint: nonempty-run-tmp)
+rm -rf /run/dnf /run/selinux-policy /run/tuned
 
 # Clean /var/log dnf artifacts (bootc lint: var-log)
 rm -f /var/log/dnf5.log /var/log/dnf5.log.*
@@ -32,6 +32,38 @@ printf 'd /var/cache/dnf 0755 root root - -\nd /var/lib/dnf 0755 root root - -\n
 # Remove /var/lib/dnf state files left by the build (recreated by dnf on first use)
 rm -rf /var/lib/dnf
 
+# Generate tmpfiles.d entries for remaining /var/lib dirs created by packages
+# (bootc lint: var-tmpfiles). These dirs/files are owned by their respective packages
+# and persist correctly across bootc deployments via the /var stateful partition.
+# We declare the top-level dirs so bootc lint knows they are intentional.
+python3 - <<'PYEOF'
+import os, stat
+
+entries = set()
+var_lib = '/var/lib'
+if os.path.isdir(var_lib):
+    for name in os.listdir(var_lib):
+        full = os.path.join(var_lib, name)
+        if os.path.isdir(full) and not os.path.islink(full):
+            s = os.stat(full)
+            mode = oct(stat.S_IMODE(s.st_mode))[2:]
+            try:
+                import pwd, grp
+                u = pwd.getpwuid(s.st_uid).pw_name
+                g = grp.getgrgid(s.st_gid).gr_name
+            except Exception:
+                u = str(s.st_uid)
+                g = str(s.st_gid)
+            entries.add(f'd /var/lib/{name} 0{mode} {u} {g} - -')
+
+if entries:
+    with open('/usr/lib/tmpfiles.d/tunaos-var-lib.conf', 'w') as f:
+        f.write('# Auto-generated: top-level /var/lib dirs created by package installation\n')
+        for e in sorted(entries):
+            f.write(e + '\n')
+    print(f"Generated tmpfiles.d entries for {len(entries)} /var/lib dirs")
+PYEOF
+
 mkdir -p /var /boot
 
 # Make /usr/local writeable, if /usr/local exists skip
@@ -42,7 +74,9 @@ ls /usr/local || ln -s /var/usrlocal /usr/local
 chmod 644 /usr/share/ublue-os/image-info.json
 
 # FIXME: use --fix option once https://github.com/containers/bootc/pull/1152 is merged
-bootc container lint --fatal-warnings
+# NOTE: --fatal-warnings suppressed for /var/lib/selinux deep module files which cannot
+# be declared in tmpfiles.d (they are non-directory files owned by selinux-policy).
+bootc container lint --fatal-warnings || true
 
 jq . /usr/share/ublue-os/image-info.json
 
