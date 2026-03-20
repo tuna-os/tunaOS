@@ -223,7 +223,6 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     podman build \
         --security-opt label=disable \
         --dns=8.8.8.8 \
-        --platform "{{ target_platform }}" \
         "${BUILD_ARGS[@]}" \
         --build-arg "RECHUNKED_BASE=${RECHUNKED_REF}" \
         --tag "{{ target_tag_with_version }}" \
