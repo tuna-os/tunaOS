@@ -208,15 +208,23 @@ rm -rf "${CHUNK_OUT}"
 
 echo "==> Applying labels from OCI archive..."
 
-# Pass 3: Load archive and apply OCI labels via Containerfile.final
+# Pass 3: Load archive into podman storage, then apply OCI labels via Containerfile.final.
+# Using podman load + tag avoids "FROM oci-archive:" failures on some podman versions
+# where the config sha256 is copied but not made available in containers storage.
+RECHUNKED_REF="localhost/${TARGET_TAG_WITH_VERSION}-rechunked-$$"
+skopeo copy "oci-archive:out.ociarchive" "containers-storage:${RECHUNKED_REF}"
+
 podman build \
 	--security-opt label=disable \
 	--dns=8.8.8.8 \
 	--platform "$PLATFORM" \
 	"${BUILD_ARGS[@]}" \
+	--build-arg "RECHUNKED_BASE=${RECHUNKED_REF}" \
 	--tag "$TARGET_TAG_WITH_VERSION" \
 	--file "Containerfile.final" \
 	.
+
+podman rmi "${RECHUNKED_REF}" 2>/dev/null || true
 
 # Cleanup
 rm -f out.ociarchive

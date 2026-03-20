@@ -10,14 +10,12 @@ case "${1:-}" in
 	# The COPR must remain enabled through the full package install so that
 	# mutter, gjs, and other GNOME stack deps are resolved from the same COPR.
 	GNOME_COPR=""
-	GNOME_REPO_ID=""
 	if [[ $IS_FEDORA == false ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
 		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
 			GNOME_COPR="jreilly1821/c10s-gnome-50-fresh"
 		else
 			GNOME_COPR="jreilly1821/c10s-gnome-49"
 		fi
-		GNOME_REPO_ID="copr:copr.fedorainfracloud.org:$(echo "$GNOME_COPR" | tr '/' ':')"
 		dnf -y copr enable "$GNOME_COPR"
 		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
 			# GNOME 50 requires glib2 >= 2.86.0 and fontconfig >= 2.17.0 (pango links
@@ -27,8 +25,9 @@ case "${1:-}" in
 			dnf -y upgrade glib2 fontconfig
 			dnf -y install gnome50-el10-compat
 		else
-			# For GNOME 49, pin glib2 to the base repo version to avoid unwanted upgrades
-			dnf config-manager --save --setopt="${GNOME_REPO_ID}.exclude=glib2*"
+			# GNOME 49 also requires glib2 >= 2.82 (g_variant_builder_init_static) and
+			# fontconfig >= 2.17.0 from COPR — same ABI requirements as GNOME 50.
+			dnf -y upgrade glib2 fontconfig
 		fi
 	fi
 
