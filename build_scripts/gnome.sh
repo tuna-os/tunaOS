@@ -20,11 +20,11 @@ case "${1:-}" in
 		GNOME_REPO_ID="copr:copr.fedorainfracloud.org:$(echo "$GNOME_COPR" | tr '/' ':')"
 		dnf -y copr enable "$GNOME_COPR"
 		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
-			# GNOME 50 requires glib2 >= 2.86.0; upgrade it from the COPR before
-			# anything else so the full dep chain (gtk4, libadwaita, nautilus) resolves.
-			# Exclude selinux-policy from COPR — its version conflicts with base EL10.
-			dnf config-manager --save --setopt="${GNOME_REPO_ID}.exclude=selinux-policy*"
-			dnf -y upgrade glib2
+			# GNOME 50 requires glib2 >= 2.86.0 and fontconfig >= 2.17.0 (pango links
+			# against FcConfigSetDefaultSubstitute which is absent in EL10's 2.15.x).
+			# selinux-policy 43.x from COPR is required for GDM 50 userdb socket policy;
+			# the base EL10 42.x policy denies the Varlink socket even in permissive mode.
+			dnf -y upgrade glib2 fontconfig
 			dnf -y install gnome50-el10-compat
 		else
 			# For GNOME 49, pin glib2 to the base repo version to avoid unwanted upgrades
@@ -133,6 +133,7 @@ case "${1:-}" in
 			"gvfs-smb" \
 			"libsane-hpaio" \
 			"nautilus" \
+			dbus-daemon \
 			orca \
 			ptyxis \
 			"sane-backends-drivers-scanners" \
@@ -232,6 +233,7 @@ case "${1:-}" in
 	# back to whatever EL10 ships by default (which may not be the COPR version)
 	dnf versionlock add \
 		glib2 \
+		fontconfig \
 		gdm \
 		gnome-shell \
 		mutter \
