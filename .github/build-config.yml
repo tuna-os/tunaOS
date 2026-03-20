@@ -253,6 +253,11 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+      - id: gnome49
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: cosmic
         stage: 2
         build_image: true
