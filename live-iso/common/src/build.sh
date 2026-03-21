@@ -77,12 +77,12 @@ fi
 # Install dependencies for the installer and live environment
 dnf install -y \
 	python3-gobject gtk4 libadwaita \
-	glib2-devel gtk4-devel libadwaita-devel \
+	glib2-devel \
 	parted cryptsetup dosfstools xfsprogs e2fsprogs btrfs-progs \
 	fuse-overlayfs \
 	firefox \
 	openssh-server \
-	meson gcc python3-devel gettext
+	meson python3-devel gettext
 
 # Build and install tunaos-first-setup from source
 git clone https://github.com/tuna-os/first-setup /tmp/first-setup
