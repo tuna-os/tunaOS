@@ -84,6 +84,7 @@ fi
 dnf install -y \
 	python3-gobject gtk4 libadwaita \
 	glib2-devel \
+	python3-pytz libgweather \
 	parted cryptsetup dosfstools xfsprogs e2fsprogs btrfs-progs \
 	fuse-overlayfs \
 	firefox \
