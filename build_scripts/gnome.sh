@@ -31,6 +31,11 @@ case "${1:-}" in
 			# gnome-shell links libgirepository-1.0 but gjs links libgirepository-2.0;
 			# having both loaded causes GIRepository type double-registration → crash.
 			dnf -y upgrade glib2 fontconfig gobject-introspection gjs
+			# gnome49-el10-compat provides the SELinux policy module (gdm-gnome49.pp)
+			# that permits xdm_t to create the userdb Varlink socket in enforcing mode,
+			# plus the systemd-user PAM override needed for GDM greeter auth.
+			# Without it, GDM fails to start on EL10.
+			dnf -y install gnome49-el10-compat
 		fi
 	fi
 
