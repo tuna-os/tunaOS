@@ -74,6 +74,12 @@ fi
 
 # ── Install tunaos-first-setup (TunaOS Installer) ────────────────────────────
 
+# For gnome50 images, glib2 is from COPR (newer version versionlocked).
+# We must enable the COPR so glib2-devel resolves against the same version.
+if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
+	dnf -y copr enable jreilly1821/c10s-gnome-50-fresh
+fi
+
 # Install dependencies for the installer and live environment
 dnf install -y \
 	python3-gobject gtk4 libadwaita \
@@ -83,6 +89,11 @@ dnf install -y \
 	firefox \
 	openssh-server \
 	meson python3-devel gettext
+
+# Disable COPR again — only needed for glib2-devel resolution
+if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
+	dnf -y copr disable jreilly1821/c10s-gnome-50-fresh
+fi
 
 # Build and install tunaos-first-setup from source
 git clone https://github.com/tuna-os/first-setup /tmp/first-setup
