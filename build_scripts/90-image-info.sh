@@ -7,7 +7,7 @@ source /run/context/build_scripts/lib.sh
 
 IMAGE_REF="ostree-image-signed:docker://ghcr.io/${IMAGE_VENDOR}/${IMAGE_NAME}"
 IMAGE_INFO="/usr/share/ublue-os/image-info.json"
-IMAGE_FLAVOR="main"
+IMAGE_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 IMAGE_PRETTY_NAME="${IMAGE_NAME^}"
 
 cat >$IMAGE_INFO <<EOF

@@ -2,24 +2,13 @@
 
 set -eoux pipefail
 
-IMAGE_INFO="$(cat /usr/share/ublue-os/image-info.json)"
-IMAGE_TAG="$(jq -c -r '."image-tag"' <<<"$IMAGE_INFO")"
-IMAGE_REF="$(jq -c -r '."image-ref"' <<<"$IMAGE_INFO")"
-IMAGE_REF="${IMAGE_REF##*://}"
-
-# PAYLOAD_REF is the containers-storage ref Anaconda will install from.
-# It's set at build time by the build script and must match the
-# --bootc-installer-payload-ref passed to image-builder-cli.
-# Default to the registry ref from image-info.json if not overridden.
-PAYLOAD_REF="${PAYLOAD_REF:-${IMAGE_REF}:${IMAGE_TAG}}"
-
 # ── Live environment configuration ──────────────────────────────────────────
 
 # Set up the GNOME dock for the installer
 tee /usr/share/glib-2.0/schemas/zz2-tunaos-installer.gschema.override <<'EOF'
 [org.gnome.shell]
 welcome-dialog-last-shown-version='4294967295'
-favorite-apps = ['liveinst.desktop', 'org.mozilla.firefox.desktop', 'org.gnome.Nautilus.desktop']
+favorite-apps = ['org.tunaos.FirstSetup.desktop', 'org.mozilla.firefox.desktop', 'org.gnome.Nautilus.desktop']
 EOF
 
 # Disable suspend/sleep so the installer doesn't go to sleep mid-install
@@ -60,8 +49,8 @@ if [ "${ENABLE_SSHD:-0}" = "1" ]; then
 	# Allow password auth (liveuser password set at runtime by oneshot below)
 	mkdir -p /etc/ssh/sshd_config.d
 	tee /etc/ssh/sshd_config.d/99-liveiso-dev.conf <<'EOF'
-PasswordAuthentication yes
-PermitRootLogin no
+ PasswordAuthentication yes
+ PermitRootLogin no
 EOF
 
 	# Oneshot that runs after livesys.service creates liveuser,
@@ -83,97 +72,27 @@ EOF
 	systemctl enable liveiso-dev-ssh.service
 fi
 
-# ── Install Anaconda ─────────────────────────────────────────────────────────
+# ── Install tunaos-first-setup (TunaOS Installer) ────────────────────────────
 
-# Remove old liveinst package; anaconda-live replaces it
-dnf remove -y anaconda-liveinst || true
-
-# Install EPEL (needed for some deps on EL10)
-dnf install -y epel-release ||
-	dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm"
-
-# Anaconda WebUI COPR (backport for EL10)
-dnf copr enable -y jreilly1821/anaconda-webui
-
-dnf install -y --nobest --allowerasing \
-	libblockdev \
-	libblockdev-lvm \
-	libblockdev-dm \
-	anaconda \
-	anaconda-live \
-	anaconda-webui \
+# Install dependencies for the installer and live environment
+dnf install -y \
+	python3-gobject gtk4 libadwaita \
+	parted cryptsetup dosfstools xfsprogs e2fsprogs btrfs-progs \
+	fuse-overlayfs \
 	firefox \
 	openssh-server \
-	fuse-overlayfs
+	meson gcc python3-devel
 
-# Fix anaconda-webui desktop file pointing to wrong path
-sed -i 's|/usr/libexec/webui-desktop|/usr/libexec/anaconda/webui-desktop|g' /bin/liveinst || true
+# Build and install tunaos-first-setup from source
+git clone https://github.com/tuna-os/first-setup /tmp/first-setup
+cd /tmp/first-setup
+meson setup build --prefix=/usr
+meson install -C build
+cd /
+rm -rf /tmp/first-setup
 
-# HOTFIX: Blivet/dasbus import error in Anaconda Storage Module (Python 3.12)
-DISCOVER_PY=$(find /usr/lib*/python3.* -path "*/pyanaconda/modules/storage/iscsi/discover.py" 2>/dev/null | head -n 1)
-if [ -n "$DISCOVER_PY" ]; then
-	sed -i "s/from blivet.safe_dbus import SafeDBusError/from dasbus.error import DBusError as SafeDBusError/g" \
-		"$DISCOVER_PY" || true
-fi
-
-# ── Anaconda profile ─────────────────────────────────────────────────────────
-
-# Tag the OS so Anaconda's profile detection can match it
-sed -i 's/^ID=.*/ID=tunaos/' /usr/lib/os-release
-echo "VARIANT_ID=tunaos" >>/usr/lib/os-release
-
-mkdir -p /etc/anaconda/profile.d
-tee /etc/anaconda/profile.d/tunaos.conf <<'EOF'
-[Profile]
-profile_id = tunaos
-
-[Profile Detection]
-os_id = tunaos
-
-[Network]
-default_on_boot = FIRST_WIRED_WITH_LINK
-
-[Bootloader]
-efi_dir = centos
-menu_auto_hide = True
-
-[Storage]
-file_system_type = xfs
-default_partitioning =
-    /     (min 5 GiB, max 70 GiB)
-    /var  (min 5 GiB)
-
-[User Interface]
-hidden_spokes =
-    NetworkSpoke
-    PasswordSpoke
-    UserSpoke
-hidden_webui_pages =
-    anaconda-screen-accounts
-
-[Localization]
-use_geolocation = False
-EOF
-
-# ── Kickstart ────────────────────────────────────────────────────────────────
-
-mkdir -p /usr/share/anaconda/post-scripts
-
-# Install from the embedded image in containers-storage
-tee -a /usr/share/anaconda/interactive-defaults.ks <<EOF
-ostreecontainer --url=${PAYLOAD_REF} --transport=containers-storage --no-signature-verification
-%include /usr/share/anaconda/post-scripts/install-flatpaks.ks
-EOF
-
-# Copy Flatpaks installed on the live system to the installed system
-tee /usr/share/anaconda/post-scripts/install-flatpaks.ks <<'EOF'
-%post --erroronfail --nochroot
-deployment="$(ostree rev-parse --repo=/mnt/sysimage/ostree/repo ostree/0/1/0)"
-target="/mnt/sysimage/ostree/deploy/default/deploy/$deployment.0/var/lib/"
-mkdir -p "$target"
-rsync -aAXUHKP /var/lib/flatpak "$target"
-%end
-EOF
+# Remove meson/gcc — no longer needed at runtime
+dnf remove -y meson gcc python3-devel || true
 
 # ── dracut-live (live boot initramfs) ────────────────────────────────────────
 
@@ -225,7 +144,7 @@ grub2:
   timeout: 10
   entries:
     - name: "Install ${LABEL}"
-      linux: "/images/pxeboot/vmlinuz quiet rhgb root=live:CDLABEL=${CDLABEL} enforcing=0 rd.live.image"
+      linux: "/images/pxeboot/vmlinuz quiet rhgb root=live:CDLABEL=${CDLABEL} tunaos.live=1 enforcing=0 rd.live.image"
       initrd: "/images/pxeboot/initrd.img"
 EOF
 
@@ -233,8 +152,8 @@ EOF
 
 dnf clean all
 
-# ── fuse-overlayfs for Anaconda container storage ────────────────────────────
-# Required for Anaconda to deploy the bootc container image from the ISO
+# ── fuse-overlayfs for container storage ─────────────────────────────────────
+# Required for the installer to access the bootc container image from containers-storage
 
 if [ ! -f /etc/containers/storage.conf ] && [ -f /usr/share/containers/storage.conf ]; then
 	cp /usr/share/containers/storage.conf /etc/containers/storage.conf
