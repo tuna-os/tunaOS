@@ -77,12 +77,10 @@ jobs:
           if-no-files-found: error
 
       - name: Install QEMU for boot verification
-        if: github.event_name == 'pull_request'
         run: |
           sudo apt-get install -y qemu-system-x86 ovmf socat imagemagick
 
       - name: Boot ISO and capture desktop screenshot
-        if: github.event_name == 'pull_request'
         timeout-minutes: 10
         run: |
           ISO=$(find . -maxdepth 1 -name "*.iso" | head -1)
@@ -159,7 +157,6 @@ jobs:
           echo "quit" | socat - UNIX-CONNECT:/tmp/qemu-monitor.sock || true
 
       - name: Upload desktop screenshot
-        if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: desktop-screenshot

@@ -268,6 +268,96 @@ jobs:
           path: "*.iso"
           if-no-files-found: warn
 
+      - name: Install QEMU for boot verification
+        if: matrix.build_iso == true
+        run: |
+          sudo apt-get install -y qemu-system-x86 ovmf socat imagemagick
+
+      - name: Boot ISO and capture screenshot
+        if: matrix.build_iso == true
+        timeout-minutes: 10
+        run: |
+          ISO=$(find . -maxdepth 1 -name "*.iso" | head -1)
+          echo "==> Booting $ISO in QEMU (headless, KVM)..."
+
+          # Locate UEFI firmware (path varies by Ubuntu version)
+          OVMF_CODE=""
+          for f in \
+            /usr/share/OVMF/OVMF_CODE_4M.fd \
+            /usr/share/OVMF/OVMF_CODE.fd \
+            /usr/share/edk2/ovmf/OVMF_CODE.fd; do
+            [ -f "$f" ] && OVMF_CODE="$f" && break
+          done
+          OVMF_VARS=""
+          for f in \
+            /usr/share/OVMF/OVMF_VARS_4M.fd \
+            /usr/share/OVMF/OVMF_VARS.fd \
+            /usr/share/edk2/ovmf/OVMF_VARS.fd; do
+            if [ -f "$f" ]; then
+              cp "$f" /tmp/OVMF_VARS.fd
+              OVMF_VARS="/tmp/OVMF_VARS.fd"
+              break
+            fi
+          done
+
+          PFLASH=()
+          if [ -n "$OVMF_CODE" ] && [ -n "$OVMF_VARS" ]; then
+            echo "==> Using UEFI: $OVMF_CODE"
+            PFLASH+=(-drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE")
+            PFLASH+=(-drive "if=pflash,format=raw,file=$OVMF_VARS")
+          else
+            echo "==> OVMF not found, booting in BIOS mode"
+          fi
+
+          qemu-system-x86_64 \
+            -machine type=q35,accel=kvm \
+            -cpu host \
+            -m 4G \
+            -smp 2 \
+            -cdrom "$ISO" \
+            -boot d \
+            "${PFLASH[@]}" \
+            -monitor unix:/tmp/qemu-monitor.sock,server,nowait \
+            -serial file:/tmp/serial.log \
+            -display none \
+            -daemonize
+
+          # Wait for monitor socket
+          for i in $(seq 1 30); do
+            [ -S /tmp/qemu-monitor.sock ] && break
+            sleep 2
+          done
+
+          # Wait for live desktop to fully boot (~4 minutes)
+          echo "==> Waiting 4 minutes for GNOME desktop to appear..."
+          sleep 240
+
+          # Capture screenshot via QEMU monitor
+          echo "screendump /tmp/screenshot.ppm" | \
+            socat - UNIX-CONNECT:/tmp/qemu-monitor.sock
+          sleep 3
+
+          # Convert to PNG
+          if [ -f /tmp/screenshot.ppm ]; then
+            convert /tmp/screenshot.ppm screenshot.png 2>/dev/null || \
+              cp /tmp/screenshot.ppm screenshot.png
+            echo "==> Screenshot captured: $(ls -lh screenshot.png)"
+          else
+            echo "WARNING: screenshot.ppm not found; serial log follows:"
+            cat /tmp/serial.log || true
+          fi
+
+          # Shut down QEMU
+          echo "quit" | socat - UNIX-CONNECT:/tmp/qemu-monitor.sock || true
+
+      - name: Upload boot screenshot
+        if: matrix.build_iso == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.variant }}-${{ matrix.flavor }}-boot-screenshot
+          path: screenshot.png
+          if-no-files-found: warn
+
       - name: Build QCOW2
         if: matrix.build_qcow2 == true
         run: |
