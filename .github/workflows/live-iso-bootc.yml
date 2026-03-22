@@ -55,11 +55,7 @@ jobs:
 
       - name: Build OS image
         run: |
-          sudo just build \
-            variant="$VARIANT" \
-            flavor="$FLAVOR" \
-            is_ci=1 \
-            tag="$FLAVOR"
+          sudo just build "$VARIANT" "$FLAVOR" "" 1 "$FLAVOR"
 
       - name: Build Live ISO
         env:
@@ -71,11 +67,7 @@ jobs:
           RCLONE_CONFIG_R2_REGION: auto
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT_2025 }}
         run: |
-          sudo just live-iso \
-            variant="$VARIANT" \
-            flavor="$FLAVOR" \
-            repo=local \
-            tag="$FLAVOR"
+          sudo just live-iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4

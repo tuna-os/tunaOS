@@ -255,10 +255,10 @@ jobs:
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT_2025 }}
         run: |
           sudo just live-iso \
-            variant="${{ matrix.variant }}" \
-            flavor="${{ matrix.flavor }}" \
-            repo=ghcr \
-            tag="${{ matrix.flavor }}-linux-amd64"
+            "${{ matrix.variant }}" \
+            "${{ matrix.flavor }}" \
+            ghcr \
+            "${{ matrix.flavor }}-linux-amd64"
 
       - name: Upload ISO Artifact
         if: matrix.build_iso == true
