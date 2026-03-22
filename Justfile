@@ -723,18 +723,18 @@ _run-vm type variant flavor='gnome' iso_file='':
         fi
     fi
 
-    port=8006
+    port=8100
     while ss -tln | grep -q ":${port} "; do port=$(( port + 1 )); done
     echo "Using Web Port: ${port}"
     echo "Connect via Web: http://127.0.0.1:${port}"
 
-    run_args=(--rm --privileged --pull=newer --publish "127.0.0.1:${port}:8006" --env "CPU_CORES=4" --env "RAM_SIZE=4G" --env "DISK_SIZE=64G" --env "TPM=Y" --env "GPU=Y" --device=/dev/kvm)
+    run_args=(--rm --privileged --pull=newer --publish "0.0.0.0:${port}:8006" --env "CPU_CORES=4" --env "RAM_SIZE=4G" --env "DISK_SIZE=64G" --env "TPM=Y" --env "GPU=Y" --device=/dev/kvm)
 
     ssh_port=$(( port + 1 ))
     while ss -tln | grep -q ":${ssh_port} "; do ssh_port=$(( ssh_port + 1 )); done
     echo "Using SSH Port: ${ssh_port}"
     echo "Connect via SSH: ssh centos@127.0.0.1 -p ${ssh_port}"
-    run_args+=(--publish "127.0.0.1:${ssh_port}:22" --env "USER_PORTS=22" --env "NETWORK=user")
+    run_args+=(--publish "0.0.0.0:${ssh_port}:22" --env "USER_PORTS=22" --env "NETWORK=user")
 
     run_args+=(--volume "${PWD}/${image_file}":"/boot.{{ type }}" ghcr.io/qemus/qemu)
 
