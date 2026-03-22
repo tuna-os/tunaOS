@@ -216,6 +216,8 @@ jobs:
   # ── Artifact builds (ISO + QCOW2) ──────────────────────────────────────────
   # Runs after all image stages are complete. Only triggered on non-PR events
   # and only when the artifact matrix is non-empty.
+  # ISOs use the bootc-isos approach (tunaos-first-setup installer), pulling
+  # the already-published GHCR image so we don't rebuild from scratch.
   build_artifacts:
     name: "Pkg | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
     needs: [generate_matrix, build_stage4]
@@ -224,19 +226,47 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_matrix) }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Build ISO
-        if: matrix.build_iso == true
-        uses: ublue-os/isogenerator@1.0.9
         with:
-          image-name: ${{ matrix.variant }}-${{ matrix.flavor }}
-          installer-repo: ghcr.io/${{ github.repository_owner }}/${{ matrix.variant }}:${{ matrix.flavor }}-linux-amd64
-          flatpaks-list: ${{ github.workspace }}/system_files/etc/ublue-os/system-flatpaks.list
-          hook-post-rootfs: ${{ github.workspace }}/iso_files/configure_lts_iso_anaconda.sh
-          builder-distro: ${{ matrix.base_image }}
+          submodules: recursive
+
+      - name: Maximize build space
+        uses: ublue-os/container-storage-action@main
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y just podman jq rclone golang-go git
+
+      - name: Build Live ISO
+        if: matrix.build_iso == true
+        env:
+          UPLOAD_R2: "true"
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID_2025 }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY_2025 }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT_2025 }}
+        run: |
+          sudo just live-iso \
+            variant="${{ matrix.variant }}" \
+            flavor="${{ matrix.flavor }}" \
+            repo=ghcr \
+            tag="${{ matrix.flavor }}-linux-amd64"
+
+      - name: Upload ISO Artifact
+        if: matrix.build_iso == true
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.variant }}-${{ matrix.flavor }}-live-iso
+          path: "*.iso"
+          if-no-files-found: warn
 
       - name: Build QCOW2
         if: matrix.build_qcow2 == true
