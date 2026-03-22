@@ -309,7 +309,7 @@ jobs:
             echo "==> OVMF not found, booting in BIOS mode"
           fi
 
-          qemu-system-x86_64 \
+          sudo qemu-system-x86_64 \
             -machine type=q35,accel=kvm \
             -cpu host \
             -m 4G \
@@ -334,21 +334,21 @@ jobs:
 
           # Capture screenshot via QEMU monitor
           echo "screendump /tmp/screenshot.ppm" | \
-            socat - UNIX-CONNECT:/tmp/qemu-monitor.sock
+            sudo socat - UNIX-CONNECT:/tmp/qemu-monitor.sock
           sleep 3
 
           # Convert to PNG
-          if [ -f /tmp/screenshot.ppm ]; then
-            convert /tmp/screenshot.ppm screenshot.png 2>/dev/null || \
-              cp /tmp/screenshot.ppm screenshot.png
+          if sudo test -f /tmp/screenshot.ppm; then
+            sudo convert /tmp/screenshot.ppm screenshot.png 2>/dev/null || \
+              sudo cp /tmp/screenshot.ppm screenshot.png
             echo "==> Screenshot captured: $(ls -lh screenshot.png)"
           else
             echo "WARNING: screenshot.ppm not found; serial log follows:"
-            cat /tmp/serial.log || true
+            sudo cat /tmp/serial.log || true
           fi
 
           # Shut down QEMU
-          echo "quit" | socat - UNIX-CONNECT:/tmp/qemu-monitor.sock || true
+          echo "quit" | sudo socat - UNIX-CONNECT:/tmp/qemu-monitor.sock || true
 
       - name: Upload boot screenshot
         if: matrix.build_iso == true
