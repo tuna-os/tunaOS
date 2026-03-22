@@ -74,11 +74,18 @@ fi
 
 # ── Install tunaos-first-setup (TunaOS Installer) ────────────────────────────
 
-# For gnome50 images, glib2 is from COPR (newer version versionlocked).
-# We must enable the COPR so glib2-devel resolves against the same version.
+# glib2 may be version-locked to a GNOME COPR on EL10. Enable the matching
+# COPR so glib2-devel resolves against the installed glib2 version.
+#   gnome50  → jreilly1821/c10s-gnome-50-fresh (glib2 >= 2.86)
+#   gnome49  → jreilly1821/c10s-gnome-49       (glib2 >= 2.84, < 2.86)
+_glib2_minor=$(rpm -q --queryformat '%{VERSION}' glib2 2>/dev/null | awk -F. '{print $2+0}')
+GNOME_COPR=""
 if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
-	dnf -y copr enable jreilly1821/c10s-gnome-50-fresh
+	GNOME_COPR="jreilly1821/c10s-gnome-50-fresh"
+elif [[ "$_glib2_minor" -ge 84 ]]; then
+	GNOME_COPR="jreilly1821/c10s-gnome-49"
 fi
+[[ -n "$GNOME_COPR" ]] && dnf -y copr enable "$GNOME_COPR"
 
 # Install dependencies for the installer and live environment
 dnf install -y \
@@ -92,9 +99,7 @@ dnf install -y \
 	meson python3-devel gettext
 
 # Disable COPR again — only needed for glib2-devel resolution
-if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
-	dnf -y copr disable jreilly1821/c10s-gnome-50-fresh
-fi
+[[ -n "$GNOME_COPR" ]] && dnf -y copr disable "$GNOME_COPR"
 
 # Build and install tunaos-first-setup from source
 git clone https://github.com/tuna-os/first-setup /tmp/first-setup
