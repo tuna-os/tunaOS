@@ -142,6 +142,7 @@ jobs:
       platforms: ${{ matrix.platforms }}
       default-tag: ${{ matrix.flavor }}
       publish: ${{ github.event_name != 'pull_request' }}
+      sbom: ${{ github.event_name != 'pull_request' }}
     secrets: inherit
 
   # ── Stage 2: base-hwe, base-gdx, and desktop base flavors ──────────────────
@@ -167,6 +168,7 @@ jobs:
       platforms: ${{ matrix.platforms }}
       default-tag: ${{ matrix.flavor }}
       publish: true
+      sbom: true
     secrets: inherit
 
   # ── Stage 3: Desktop HWE and GDX flavors ───────────────────────────────────
@@ -189,6 +191,7 @@ jobs:
       platforms: ${{ matrix.platforms }}
       default-tag: ${{ matrix.flavor }}
       publish: true
+      sbom: true
     secrets: inherit
 
   # ── Stage 4: Combined GDX+HWE flavors ──────────────────────────────────────
@@ -211,6 +214,7 @@ jobs:
       platforms: ${{ matrix.platforms }}
       default-tag: ${{ matrix.flavor }}
       publish: true
+      sbom: true
     secrets: inherit
 
   # ── Artifact builds (ISO + QCOW2) ──────────────────────────────────────────
