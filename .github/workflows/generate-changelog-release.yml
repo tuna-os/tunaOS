@@ -40,6 +40,7 @@ jobs:
           cosign-key: "https://raw.githubusercontent.com/tuna-os/tunaOS/main/cosign.pub"
           images: "yellowfin albacore skipjack"
           stream: ${{ matrix.stream }}
+          tag-pattern: '^\d{8}$'
           handwritten: ${{ inputs.handwritten }}
           output: changelog.md
           output-env: output.env
