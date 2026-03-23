@@ -711,7 +711,10 @@ jobs:
           # Only copy to 'YYYYMMDD' style tags and record as 'best stable output tag' if all default platforms for this variant were built
           if [ "${ALL_PLATFORMS_BUILT}" = "true" ]; then
             echo "All default platforms for this variant built successfully - tagging with YYYYMMDD"
-            sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:$(date +%Y%m%d)"
+            DATE_TAG="$(date +%Y%m%d)"
+            sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DATE_TAG}"
+            # Also tag as {flavor}-YYYYMMDD so the changelog action can discover tags by stream (e.g. stream=gnome finds gnome-20250323)
+            sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${DATE_TAG}"
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
           else
             echo "Not all default platforms for this variant built - skipping YYYYMMDD tag"

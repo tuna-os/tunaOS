@@ -1,20 +1,25 @@
+name: Generate Release
+
 on:
   schedule:
-    - cron: '05 11 * * *' # 11:05am UTC everyday
-  workflow_call:
-    inputs:
-      stream_name:
-        description: "Release Tag (e.g. stream10, latest)"
-        type: string
-        default: "lts"
-        required: false
+    - cron: '05 11 * * *' # 11:05 UTC daily
   workflow_dispatch:
     inputs:
+      stream:
+        description: "Image flavor/stream to generate changelog for (e.g. gnome, kde)"
+        type: string
+        default: "gnome"
+        required: false
       handwritten:
-        description: "Small Changelog about changes in this build"
+        description: "Optional handwritten note to include at the top of the changelog"
+        type: string
+        required: false
+      dry_run:
+        description: "Generate changelog but do not publish a GitHub Release"
+        type: boolean
+        default: false
+        required: false
 
-
-name: Generate Release
 jobs:
   generate-release:
     runs-on: ubuntu-latest
@@ -23,28 +28,64 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        version: ["lts"]
+        stream: ${{ github.event_name == 'workflow_dispatch' && fromJson(format('["{0}"]', inputs.stream)) || fromJson('["gnome"]') }}
     steps:
-      - name: Checkout last 500 commits (for <commits> to work)
-        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v4
-        with:
-          fetch-depth: 500
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
-      - name: Generate Release Text
-        id: generate-release-text
-        shell: bash
+      - name: Generate changelog
+        uses: hanthor/changelog-action@master
+        with:
+          registry: "ghcr.io/tuna-os/"
+          cosign-key: "https://raw.githubusercontent.com/tuna-os/tunaOS/main/cosign.pub"
+          images: "yellowfin albacore skipjack"
+          stream: ${{ matrix.stream }}
+          handwritten: ${{ inputs.handwritten }}
+          output: changelog.md
+          output-env: output.env
+          verbose: "true"
+
+      - name: Read changelog outputs
+        id: changelog
         run: |
-          python3 .github/changelogs.py --workdir . "${{ matrix.version }}" ./output.env ./changelog.md --handwritten "${{ inputs.handwritten }}"
-          source ./output.env
-          echo "title=${TITLE}" >> $GITHUB_OUTPUT
-          echo "tag=${TAG}" >> $GITHUB_OUTPUT
+          if [ -f output.env ]; then
+            cat output.env >> $GITHUB_OUTPUT
+          else
+            echo "output.env not found — changelog generation was skipped"
+            echo "skip_release=true" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Create Release
-        uses: softprops/action-gh-release@5be0e66d93ac7ed76da52eca8bb058f665c3a5fe # v2
-        if: (github.event.schedule == '50 5 * * 0' || contains(fromJson('["workflow_dispatch", "workflow_call","schedule"]'), github.event_name))
+      - name: Upload changelog artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ steps.generate-release-text.outputs.title }}
-          tag_name: ${{ steps.generate-release-text.outputs.tag }}
-          body_path: ./changelog.md
-          make_latest: true
+          name: changelog-${{ matrix.stream }}
+          path: |
+            changelog.md
+            output.env
+
+      - name: Create GitHub Release
+        if: |
+          steps.changelog.outputs.skip_release != 'true' &&
+          inputs.dry_run != true &&
+          (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ steps.changelog.outputs.TAG }}"
+          TITLE="${{ steps.changelog.outputs.TITLE }}"
+
+          if [ -z "$TAG" ]; then
+            echo "No TAG in output.env — skipping release creation"
+            exit 0
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG already exists — skipping"
+            exit 0
+          fi
+
+          gh release create "$TAG" \
+            --title "$TITLE" \
+            --notes-file changelog.md \
+            --latest
 
