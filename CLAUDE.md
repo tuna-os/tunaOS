@@ -1,4 +1,4 @@
-# TunaOS - Gemini Context
+# CLAUDE.md
 
 > The authoritative agent guide lives at [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md). Read that file for complete instructions on setup, building, pre-commit workflow, architecture, and troubleshooting.
 

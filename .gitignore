@@ -19,7 +19,6 @@ completions/
 hack/
 
 secrets.envbuild.log
-CLAUDE.md
 out.ociarchive
 *.iso
 *.qcow2
