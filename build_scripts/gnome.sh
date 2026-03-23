@@ -23,7 +23,7 @@ case "${1:-}" in
 			# selinux-policy 43.x from COPR is required for GDM 50 userdb socket policy;
 			# the base EL10 42.x policy denies the Varlink socket even in permissive mode.
 			dnf -y upgrade glib2 fontconfig
-			dnf -y install gnome50-el10-compat
+			dnf -y install --allowerasing gnome50-el10-compat
 		else
 			# GNOME 49 also requires glib2 >= 2.82 (g_variant_builder_init_static) and
 			# fontconfig >= 2.17.0 from COPR — same ABI requirements as GNOME 50.
@@ -35,7 +35,7 @@ case "${1:-}" in
 			# that permits xdm_t to create the userdb Varlink socket in enforcing mode,
 			# plus the systemd-user PAM override needed for GDM greeter auth.
 			# Without it, GDM fails to start on EL10.
-			dnf -y install gnome49-el10-compat
+			dnf -y install --allowerasing gnome49-el10-compat
 		fi
 	fi
 
