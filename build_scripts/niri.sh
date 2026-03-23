@@ -267,11 +267,12 @@ case "${1:-}" in
 "extra")
 	if [[ $IS_FEDORA == true ]]; then
 		# Fedora: install iio-niri and valent-git from zirconium/packages COPR
+		# These may not be available for all Fedora versions; skip gracefully if absent
 		dnf -y copr enable zirconium/packages
 		dnf -y copr disable zirconium/packages
 		dnf -y --enablerepo copr:copr.fedorainfracloud.org:zirconium:packages install \
 			iio-niri \
-			valent-git
+			valent-git || echo "Skipping iio-niri/valent-git (not available in COPR for this Fedora version)"
 	fi
 	;;
 esac
