@@ -142,6 +142,10 @@ def get_manifests(target: str):
 def get_tags(target: str, manifests: dict[str, Any]):
     tags = set()
 
+    if not manifests:
+        print(f"No manifests available for target '{target}', skipping")
+        exit(1)
+
     first = next(iter(manifests.values()))
     for tag in first["RepoTags"]:
         # Tags ending with .0 should not exist
