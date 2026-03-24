@@ -99,6 +99,7 @@ sudo podman run \
 	bootc install to-disk \
 	--via-loopback \
 	--generic-image \
+	--experimental-unified-storage \
 	"${SSH_KEY_ARGS[@]}" \
 	--source-imgref "containers-storage:${IMG_REF}" \
 	/disk.img
