@@ -21,7 +21,7 @@ curl --retry 3 -o /etc/flatpak/remotes.d/flathub.flatpakrepo "https://dl.flathub
 # Add resume module so that hibernation works
 echo "add_dracutmodules+=\" resume \"" >/etc/dracut.conf.d/resume.conf
 # Omit optional modules that aren't available in container builds
-echo "omit_dracutmodules+=\" pcsc bluetooth pcmcia \"" >/etc/dracut.conf.d/omit-optional.conf
+echo "omit_dracutmodules+=\" pcsc bluetooth pcmcia syslog \"" >/etc/dracut.conf.d/omit-optional.conf
 KERNEL_SUFFIX=""
 QUALIFIED_KERNEL="$(rpm -qa | grep -P 'kernel-(|'"$KERNEL_SUFFIX"'-)(\d+\.\d+\.\d+)' | sed -E 's/kernel-(|'"$KERNEL_SUFFIX"'-)//' | tail -n 1)"
 /usr/bin/dracut --tmpdir /tmp --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible --zstd -v --add ostree -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
