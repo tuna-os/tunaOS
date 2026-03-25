@@ -47,7 +47,7 @@ case "${1:-}" in
 		# Install Fedora Niri ecosystem packages from zirconium/packages COPR
 		dnf -y --enablerepo copr:copr.fedorainfracloud.org:zirconium:packages install \
 			iio-niri \
-			valent-git
+			valent-git || echo "Skipping iio-niri/valent-git (not available in COPR for this Fedora version)"
 
 		# Install Niri desktop environment packages (Fedora repos)
 		FCITX5_MOZC=""
