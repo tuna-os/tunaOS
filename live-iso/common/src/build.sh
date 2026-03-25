@@ -96,7 +96,8 @@ dnf install -y \
 	fuse-overlayfs \
 	firefox \
 	openssh-server \
-	meson python3-devel gettext
+	meson python3-devel gettext \
+	git
 
 # Disable COPR again — only needed for glib2-devel resolution
 [[ -n "$GNOME_COPR" ]] && dnf -y copr disable "$GNOME_COPR"
@@ -109,8 +110,8 @@ meson install -C build
 cd /
 rm -rf /tmp/first-setup
 
-# Remove meson/gcc — no longer needed at runtime
-dnf remove -y meson gcc python3-devel || true
+# Remove build tools — no longer needed at runtime
+dnf remove -y meson gcc python3-devel git || true
 
 # ── dracut-live (live boot initramfs) ────────────────────────────────────────
 
