@@ -1,0 +1,120 @@
+name: Publish Live ISOs to R2
+
+on:
+  schedule:
+    # Runs on the 1st and 15th of every month at 00:00 UTC
+    - cron: '0 0 1,15 * *'
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Variant to build (all = build everything)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - yellowfin
+          - albacore
+      flavor:
+        description: 'Flavor to build (all = build everything)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - gnome
+          - gnome-hwe
+
+jobs:
+  build-and-publish:
+    name: ${{ matrix.variant }}:${{ matrix.flavor }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: yellowfin
+            flavor: gnome
+          - variant: yellowfin
+            flavor: gnome-hwe
+          - variant: albacore
+            flavor: gnome
+          - variant: albacore
+            flavor: gnome-hwe
+    steps:
+      - name: Check matrix filter
+        id: filter
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            WANT_VARIANT="${{ github.event.inputs.variant }}"
+            WANT_FLAVOR="${{ github.event.inputs.flavor }}"
+            if [[ "$WANT_VARIANT" != "all" && "$WANT_VARIANT" != "${{ matrix.variant }}" ]]; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            elif [[ "$WANT_FLAVOR" != "all" && "$WANT_FLAVOR" != "${{ matrix.flavor }}" ]]; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Checkout
+        if: steps.filter.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Maximize build space
+        if: steps.filter.outputs.skip != 'true'
+        uses: ublue-os/container-storage-action@main
+
+      - name: Install dependencies
+        if: steps.filter.outputs.skip != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y just podman jq rclone golang-go git
+
+      - name: Install yq
+        if: steps.filter.outputs.skip != 'true'
+        run: sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
+
+      - name: Log in to GHCR
+        if: steps.filter.outputs.skip != 'true'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build Live ISO (from published image)
+        if: steps.filter.outputs.skip != 'true'
+        env:
+          GITHUB_REPOSITORY_OWNER: tuna-os
+        run: |
+          sudo GITHUB_REPOSITORY_OWNER=tuna-os \
+            just live-iso "${{ matrix.variant }}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
+
+      - name: Upload ISO to Cloudflare R2
+        if: steps.filter.outputs.skip != 'true'
+        env:
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID_2025 }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY_2025 }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT_2025 }}
+        run: |
+          ISO=$(find . -maxdepth 1 -name "${{ matrix.variant }}-${{ matrix.flavor }}-*.iso" | head -1)
+          if [[ -z "$ISO" ]]; then
+            echo "ERROR: No ISO found for ${{ matrix.variant }}-${{ matrix.flavor }}"
+            exit 1
+          fi
+          echo "==> Uploading $ISO to R2..."
+          rclone copy --log-level INFO --checksum --s3-no-check-bucket \
+            "$ISO" R2:tunaos/live-isos/
+          echo "==> Upload complete: $(basename "$ISO")"
+
+      - name: Upload ISO as artifact (fallback)
+        if: steps.filter.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.variant }}-${{ matrix.flavor }}-iso
+          path: "*.iso"
+          if-no-files-found: error
+          retention-days: 7

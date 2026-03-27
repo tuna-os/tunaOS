@@ -1,0 +1,159 @@
+name: Weekly ISO Test
+
+on:
+  schedule:
+    # Every Sunday at 02:00 UTC (after R2 uploads have had time to settle)
+    - cron: '0 2 * * 0'
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Variant to test'
+        required: false
+        default: 'yellowfin'
+        type: choice
+        options:
+          - yellowfin
+          - albacore
+      flavor:
+        description: 'Flavor to test'
+        required: false
+        default: 'gnome'
+        type: choice
+        options:
+          - gnome
+          - gnome-hwe
+
+# TODO: implement full automated ISO boot/smoke testing.
+# Current state: downloads the latest ISO from R2 and runs a basic QEMU boot
+# verification (same as live-iso-bootc.yml). Full smoke tests (installer
+# walkthrough, post-install validation) are planned for a future iteration.
+
+jobs:
+  test:
+    name: Test ${{ matrix.variant }}:${{ matrix.flavor }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: yellowfin
+            flavor: gnome
+          - variant: albacore
+            flavor: gnome
+    steps:
+      - name: Check matrix filter
+        id: filter
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ github.event.inputs.variant }}" != "${{ matrix.variant }}" ]] || \
+               [[ "${{ github.event.inputs.flavor }}"  != "${{ matrix.flavor }}" ]]; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+            fi
+          fi
+
+      - name: Install dependencies
+        if: steps.filter.outputs.skip != 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rclone qemu-system-x86 ovmf socat imagemagick
+
+      - name: Download latest ISO from R2
+        if: steps.filter.outputs.skip != 'true'
+        env:
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID_2025 }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY_2025 }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT_2025 }}
+        run: |
+          echo "==> Fetching latest ${{ matrix.variant }}-${{ matrix.flavor }} ISO from R2..."
+          rclone copy --log-level INFO --s3-no-check-bucket \
+            --include "${{ matrix.variant }}-${{ matrix.flavor }}-*.iso" \
+            R2:tunaos/live-isos/ .
+          ISO=$(find . -maxdepth 1 -name "${{ matrix.variant }}-${{ matrix.flavor }}-*.iso" | head -1)
+          if [[ -z "$ISO" ]]; then
+            echo "ERROR: No ISO found in R2 for ${{ matrix.variant }}-${{ matrix.flavor }}"
+            exit 1
+          fi
+          echo "==> Downloaded: $ISO"
+          echo "ISO_PATH=$ISO" >> "$GITHUB_ENV"
+
+      - name: Boot ISO and capture desktop screenshot
+        if: steps.filter.outputs.skip != 'true'
+        timeout-minutes: 10
+        run: |
+          ISO="${{ env.ISO_PATH }}"
+          echo "==> Booting $ISO in QEMU (headless)..."
+
+          OVMF_CODE=""
+          for f in \
+            /usr/share/OVMF/OVMF_CODE_4M.fd \
+            /usr/share/OVMF/OVMF_CODE.fd \
+            /usr/share/edk2/ovmf/OVMF_CODE.fd; do
+            [ -f "$f" ] && OVMF_CODE="$f" && break
+          done
+          OVMF_VARS=""
+          for f in \
+            /usr/share/OVMF/OVMF_VARS_4M.fd \
+            /usr/share/OVMF/OVMF_VARS.fd \
+            /usr/share/edk2/ovmf/OVMF_VARS.fd; do
+            if [ -f "$f" ]; then
+              cp "$f" /tmp/OVMF_VARS.fd
+              OVMF_VARS="/tmp/OVMF_VARS.fd"
+              break
+            fi
+          done
+
+          PFLASH=()
+          if [ -n "$OVMF_CODE" ] && [ -n "$OVMF_VARS" ]; then
+            PFLASH+=(-drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE")
+            PFLASH+=(-drive "if=pflash,format=raw,file=$OVMF_VARS")
+          fi
+
+          sudo qemu-system-x86_64 \
+            -machine type=q35,accel=kvm \
+            -cpu host \
+            -m 4G \
+            -smp 2 \
+            -cdrom "$ISO" \
+            -boot d \
+            "${PFLASH[@]}" \
+            -monitor unix:/tmp/qemu-monitor.sock,server,nowait \
+            -serial file:/tmp/serial.log \
+            -display none \
+            -daemonize
+
+          for i in $(seq 1 30); do
+            [ -S /tmp/qemu-monitor.sock ] && break
+            sleep 2
+          done
+
+          echo "==> Waiting 4 minutes for desktop to appear..."
+          sleep 240
+
+          echo "screendump /tmp/screenshot.ppm" | \
+            sudo socat - UNIX-CONNECT:/tmp/qemu-monitor.sock
+          sleep 3
+
+          if sudo test -f /tmp/screenshot.ppm; then
+            sudo convert /tmp/screenshot.ppm screenshot.png 2>/dev/null || \
+              sudo cp /tmp/screenshot.ppm screenshot.png
+            echo "==> Screenshot captured"
+          else
+            echo "WARNING: No screenshot captured; serial log:"
+            sudo cat /tmp/serial.log || true
+            exit 1
+          fi
+
+          echo "quit" | sudo socat - UNIX-CONNECT:/tmp/qemu-monitor.sock || true
+
+      - name: Upload screenshot
+        if: steps.filter.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-${{ matrix.variant }}-${{ matrix.flavor }}
+          path: screenshot.png
+          if-no-files-found: warn
