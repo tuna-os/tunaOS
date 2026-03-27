@@ -37,6 +37,8 @@ systemctl disable brew-upgrade.timer || true
 systemctl disable brew-update.timer || true
 systemctl --global disable podman-auto-update.timer || true
 systemctl --global disable ublue-user-setup.service || true
+# auditd fails in the live overlay environment (audit netlink unavailable)
+systemctl mask auditd.service || true
 
 # ── Dev: enable sshd for local testing ───────────────────────────────────────
 # Only active when ENABLE_SSHD=1 (passed via `just live-iso dev=1`).
