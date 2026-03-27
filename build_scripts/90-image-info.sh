@@ -47,6 +47,12 @@ s|^CPE_NAME=.*|CPE_NAME=\"cpe:/o:jamesreilly:${IMAGE_NAME}-tunaos\"|
 /^REDHAT_SUPPORT_PRODUCT_VERSION=/d
 EOF
 
+# Ensure VARIANT_ID is set — the sed substitution above only replaces an
+# existing line; AlmaLinux base images omit it entirely.
+if ! grep -q "^VARIANT_ID=" /usr/lib/os-release; then
+	echo "VARIANT_ID=${IMAGE_NAME}" >>/usr/lib/os-release
+fi
+
 tee -a /usr/lib/os-release <<EOF
 DOCUMENTATION_URL="${DOCUMENTATION_URL}"
 SUPPORT_URL="${SUPPORT_URL}"

@@ -8,7 +8,7 @@ set -eoux pipefail
 tee /usr/share/glib-2.0/schemas/zz2-tunaos-installer.gschema.override <<'EOF'
 [org.gnome.shell]
 welcome-dialog-last-shown-version='4294967295'
-favorite-apps = ['org.tunaos.FirstSetup.desktop', 'org.mozilla.firefox.desktop', 'org.gnome.Nautilus.desktop']
+favorite-apps = ['org.tunaos.FirstSetup.desktop', 'firefox.desktop', 'org.gnome.Nautilus.desktop']
 EOF
 
 # Disable suspend/sleep so the installer doesn't go to sleep mid-install
@@ -39,6 +39,15 @@ systemctl --global disable podman-auto-update.timer || true
 systemctl --global disable ublue-user-setup.service || true
 # auditd fails in the live overlay environment (audit netlink unavailable)
 systemctl mask auditd.service || true
+
+# Fix resolv.conf permissions — in the live overlay the file can be written
+# with mode 0700 by NetworkManager, blocking DNS for non-root processes.
+mkdir -p /etc/NetworkManager/dispatcher.d
+tee /etc/NetworkManager/dispatcher.d/99-fix-resolv-perms.sh <<'EOF'
+#!/bin/bash
+chmod 644 /etc/resolv.conf 2>/dev/null || true
+EOF
+chmod 755 /etc/NetworkManager/dispatcher.d/99-fix-resolv-perms.sh
 
 # ── Dev: enable sshd for local testing ───────────────────────────────────────
 # Only active when ENABLE_SSHD=1 (passed via `just live-iso dev=1`).
