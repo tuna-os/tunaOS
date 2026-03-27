@@ -144,9 +144,13 @@ dnf install -y grub2-efi-x64-cdboot
 
 # image-builder expects EFI files under /boot/efi
 mkdir -p /boot/efi
-# grub2-efi-x64-cdboot on EL puts files in /usr/lib/efi
+# Kitten/el10-kitten: shim ships in /usr/lib/efi/shim/*/EFI/
 if [ -d /usr/lib/efi ]; then
 	cp -av /usr/lib/efi/*/*/EFI /boot/efi/ 2>/dev/null || true
+fi
+# AlmaLinux 10 stable: shim ships via bootupd in /usr/lib/bootupd/updates/EFI/
+if [ -d /usr/lib/bootupd/updates/EFI ]; then
+	cp -av /usr/lib/bootupd/updates/EFI /boot/efi/ 2>/dev/null || true
 fi
 
 # Tools needed inside the osbuild buildroot
