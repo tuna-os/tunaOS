@@ -191,6 +191,32 @@ EOF
 
 dnf clean all
 
+# ── bootc copy-to-storage service ────────────────────────────────────────────
+# Copies the booted image into podman container storage as localhost/bootc so
+# the installer can use it as a fast local source ref (no internet required).
+# Also writes the original upstream ref to /run/tunaos-installer/target-imgref
+# so the installer can pass --target-imgref to bootc for update tracking.
+
+tee /etc/systemd/system/bootc-copy-to-storage.service <<'EOF'
+[Unit]
+Description=Copy bootc image to podman container storage for installer
+DefaultDependencies=no
+After=systemd-remount-fs.service local-fs.target
+Before=display-manager.service livesys.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+TimeoutStartSec=600
+ExecStart=/usr/bin/bootc image copy-to-storage
+ExecStartPost=/bin/bash -c 'mkdir -p /run/tunaos-installer && podman inspect localhost/bootc --format "{{range .RepoTags}}{{.}}\n{{end}}" 2>/dev/null | grep -v "^localhost/" | grep -v "^$" | head -1 > /run/tunaos-installer/target-imgref || true'
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl enable bootc-copy-to-storage.service
+
 # ── fuse-overlayfs for container storage ─────────────────────────────────────
 # Required for the installer to access the bootc container image from containers-storage
 
