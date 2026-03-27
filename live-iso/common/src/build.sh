@@ -121,6 +121,11 @@ meson install -C build
 cd /
 rm -rf /tmp/first-setup
 
+# Show the installer in the dock — the upstream desktop file sets NoDisplay=true
+# to hide it from app grids on installed systems, but in the live ISO it must
+# be visible so users can launch it from the dash.
+sed -i 's/^NoDisplay=true/NoDisplay=false/' /usr/share/applications/org.tunaos.FirstSetup.desktop
+
 # Remove build tools — no longer needed at runtime
 dnf remove -y meson gcc python3-devel git || true
 
