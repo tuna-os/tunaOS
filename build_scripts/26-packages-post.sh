@@ -13,6 +13,15 @@ export MAJOR_VERSION_NUMBER
 curl --retry 3 -Lo /tmp/bluefin.pdf https://github.com/ublue-os/bluefin-docs/releases/download/0.1/bluefin.pdf
 install -Dm0644 -t /usr/share/doc/bluefin/ /tmp/bluefin.pdf
 
+# Install JetBrains Mono Nerd Font
+curl --retry 3 -Lo /tmp/JetBrainsMono.zip \
+	"https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/JetBrainsMono.zip"
+mkdir -p /usr/share/fonts/JetBrainsMonoNerdFont
+unzip -o /tmp/JetBrainsMono.zip -d /usr/share/fonts/JetBrainsMonoNerdFont \
+	"*.ttf" -x "*Windows*"
+fc-cache -f /usr/share/fonts/JetBrainsMonoNerdFont
+rm /tmp/JetBrainsMono.zip
+
 # Add Flathub by default
 mkdir -p /etc/flatpak/remotes.d
 curl --retry 3 -o /etc/flatpak/remotes.d/flathub.flatpakrepo "https://dl.flathub.org/repo/flathub.flatpakrepo"
