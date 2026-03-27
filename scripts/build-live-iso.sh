@@ -204,6 +204,6 @@ echo "==> Done! ISO: ${FINAL_ISO}"
 if [ "${UPLOAD_R2:-false}" = "true" ]; then
 	echo "==> Uploading to Cloudflare R2..."
 	rclone copy --log-level INFO --checksum --s3-no-check-bucket \
-		"./${FINAL_ISO}" R2:tunaos/live-isos/
+		"./${FINAL_ISO}" R2:"${R2_BUCKET}"/live-isos/
 	echo "==> Uploaded."
 fi

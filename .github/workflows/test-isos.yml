@@ -64,15 +64,15 @@ jobs:
         env:
           RCLONE_CONFIG_R2_TYPE: s3
           RCLONE_CONFIG_R2_PROVIDER: Cloudflare
-          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID_2025 }}
-          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY_2025 }}
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           RCLONE_CONFIG_R2_REGION: auto
-          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT_2025 }}
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
         run: |
           echo "==> Fetching latest ${{ matrix.variant }}-${{ matrix.flavor }} ISO from R2..."
           rclone copy --log-level INFO --s3-no-check-bucket \
             --include "${{ matrix.variant }}-${{ matrix.flavor }}-*.iso" \
-            R2:tunaos/live-isos/ .
+            R2:${{ secrets.R2_BUCKET }}/live-isos/ .
           ISO=$(find . -maxdepth 1 -name "${{ matrix.variant }}-${{ matrix.flavor }}-*.iso" | head -1)
           if [[ -z "$ISO" ]]; then
             echo "ERROR: No ISO found in R2 for ${{ matrix.variant }}-${{ matrix.flavor }}"

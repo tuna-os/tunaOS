@@ -95,10 +95,10 @@ jobs:
         env:
           RCLONE_CONFIG_R2_TYPE: s3
           RCLONE_CONFIG_R2_PROVIDER: Cloudflare
-          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID_2025 }}
-          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY_2025 }}
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           RCLONE_CONFIG_R2_REGION: auto
-          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT_2025 }}
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
         run: |
           ISO=$(find . -maxdepth 1 -name "${{ matrix.variant }}-${{ matrix.flavor }}-*.iso" | head -1)
           if [[ -z "$ISO" ]]; then
@@ -107,7 +107,7 @@ jobs:
           fi
           echo "==> Uploading $ISO to R2..."
           rclone copy --log-level INFO --checksum --s3-no-check-bucket \
-            "$ISO" R2:tunaos/live-isos/
+            "$ISO" R2:${{ secrets.R2_BUCKET }}/live-isos/
           echo "==> Upload complete: $(basename "$ISO")"
 
       - name: Upload ISO as artifact (fallback)
