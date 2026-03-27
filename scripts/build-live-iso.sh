@@ -205,5 +205,8 @@ if [ "${UPLOAD_R2:-false}" = "true" ]; then
 	echo "==> Uploading to Cloudflare R2..."
 	rclone copy --log-level INFO --checksum --s3-no-check-bucket \
 		"./${FINAL_ISO}" R2:"${R2_BUCKET}"/live-isos/
-	echo "==> Uploaded."
+	LATEST_ISO="${VARIANT}-${FLAVOR}-latest.iso"
+	rclone copyto --log-level INFO --s3-no-check-bucket \
+		"./${FINAL_ISO}" "R2:${R2_BUCKET}/live-isos/${LATEST_ISO}"
+	echo "==> Uploaded (versioned + latest)."
 fi

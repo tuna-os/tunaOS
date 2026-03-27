@@ -109,6 +109,11 @@ jobs:
           rclone copy --log-level INFO --checksum --s3-no-check-bucket \
             "$ISO" R2:${{ secrets.R2_BUCKET }}/live-isos/
           echo "==> Upload complete: $(basename "$ISO")"
+          LATEST="${{ matrix.variant }}-${{ matrix.flavor }}-latest.iso"
+          echo "==> Uploading as $LATEST..."
+          rclone copyto --log-level INFO --s3-no-check-bucket \
+            "$ISO" "R2:${{ secrets.R2_BUCKET }}/live-isos/${LATEST}"
+          echo "==> Latest link updated."
 
       - name: Upload ISO as artifact (fallback)
         if: steps.filter.outputs.skip != 'true'

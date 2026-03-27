@@ -150,7 +150,12 @@ ghcr.io/tuna-os/bonito:cosmic
 
 ### Use a pre-built ISO
 
-ISOs are built for `gnome` and `gnome-hwe` flavors of Yellowfin and Albacore. Check the [releases page](https://github.com/tuna-os/tunaOS/releases) for downloads.
+ISOs are published every two weeks for `gnome` and `gnome-hwe` flavors of Yellowfin and Albacore:
+
+| Variant | GNOME | GNOME (HWE) |
+|---------|-------|-------------|
+| **Albacore** | [albacore-gnome-latest.iso](https://download.tunaos.org/live-isos/albacore-gnome-latest.iso) | [albacore-gnome-hwe-latest.iso](https://download.tunaos.org/live-isos/albacore-gnome-hwe-latest.iso) |
+| **Yellowfin** | [yellowfin-gnome-latest.iso](https://download.tunaos.org/live-isos/yellowfin-gnome-latest.iso) | [yellowfin-gnome-hwe-latest.iso](https://download.tunaos.org/live-isos/yellowfin-gnome-hwe-latest.iso) |
 
 ### Build your own ISO or VM image
 
