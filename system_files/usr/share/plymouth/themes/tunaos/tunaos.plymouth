@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=TunaOS
+Description=TunaOS boot animation
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/tunaos
+ScriptFile=/usr/share/plymouth/themes/tunaos/tunaos.script

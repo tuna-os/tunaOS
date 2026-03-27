@@ -123,7 +123,7 @@ install_base_packages_no_de() {
 			systemd-resolved \
 			btrfs-progs \
 			plymouth \
-			plymouth-system-theme \
+			plymouth-plugin-script \
 			xdg-desktop-portal \
 			systemd-oomd-defaults
 	else
@@ -139,8 +139,7 @@ install_base_packages_no_de() {
 			systemd-container \
 			systemd-oomd \
 			plymouth \
-			plymouth-system-theme \
-			xdg-desktop-portal \
+			plymouth-plugin-script \
 			libcamera-v4l2 \
 			libcamera-gstreamer \
 			libcamera-tools \

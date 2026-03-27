@@ -18,6 +18,8 @@ mkdir -p /etc/flatpak/remotes.d
 curl --retry 3 -o /etc/flatpak/remotes.d/flathub.flatpakrepo "https://dl.flathub.org/repo/flathub.flatpakrepo"
 
 # Generate initramfs image after installing Yellowfin branding because of Plymouth subpackage
+# Set TunaOS Plymouth theme before rebuilding initramfs so dracut picks it up
+plymouth-set-default-theme tunaos
 # Add resume module so that hibernation works
 echo "add_dracutmodules+=\" resume \"" >/etc/dracut.conf.d/resume.conf
 # Omit optional modules that aren't available in container builds

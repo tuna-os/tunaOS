@@ -1,0 +1,41 @@
+# TunaOS Plymouth boot animation
+# Displays the TunaOS fish emoji animation centered on a black background.
+
+Window.SetBackgroundTopColor(0, 0, 0);
+Window.SetBackgroundBottomColor(0, 0, 0);
+
+FRAME_COUNT = 72;
+FRAME_RATE  = 2;  # advance one frame every N refresh ticks (Plymouth ticks at ~20fps)
+                  # FRAME_RATE=2 → ~10fps playback to match the original GIF speed
+
+fun ZeroPad(n) {
+    if (n < 10)   return "000" + n;
+    if (n < 100)  return "00"  + n;
+    if (n < 1000) return "0"   + n;
+    return "" + n;
+}
+
+# Pre-load all frames
+for (i = 1; i <= FRAME_COUNT; i++) {
+    fish_images[i] = Image("fish-" + ZeroPad(i) + ".png");
+}
+
+# Centre the sprite on screen
+fish_sprite = Sprite();
+fish_sprite.SetX(Window.GetWidth()  / 2 - fish_images[1].GetWidth()  / 2);
+fish_sprite.SetY(Window.GetHeight() / 2 - fish_images[1].GetHeight() / 2);
+fish_sprite.SetZ(1);
+fish_sprite.SetImage(fish_images[1]);
+
+current_frame = 1;
+tick = 0;
+
+fun refresh_callback() {
+    tick = tick + 1;
+    if (tick % FRAME_RATE == 0) {
+        current_frame = (current_frame % FRAME_COUNT) + 1;
+        fish_sprite.SetImage(fish_images[current_frame]);
+    }
+}
+
+Plymouth.SetRefreshFunction(refresh_callback);
