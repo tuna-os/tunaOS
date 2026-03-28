@@ -38,7 +38,7 @@ systemctl disable brew-update.timer || true
 systemctl --global disable podman-auto-update.timer || true
 systemctl --global disable ublue-user-setup.service || true
 # auditd fails in the live overlay environment (audit netlink unavailable)
-systemctl mask auditd.service || true
+systemctl mask auditd.service audit-rules.service || true
 
 # Fix resolv.conf permissions — in the live overlay the file can be written
 # with mode 0700 by NetworkManager, blocking DNS for non-root processes.

@@ -55,7 +55,7 @@ safe_enable tailscaled.service
 safe_enable uupd.timer
 safe_enable ublue-system-setup.service
 systemctl --global enable ublue-user-setup.service
-systemctl mask bootc-fetch-apply-updates.timer bootc-fetch-apply-updates.service
+systemctl mask bootc-fetch-apply-updates.timer bootc-fetch-apply-updates.service auditd.service audit-rules.service
 safe_enable check-sb-key.service
 
 # Disable lastlog display on previous failed login in GDM (This makes logins slow)
