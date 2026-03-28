@@ -10,6 +10,8 @@ DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 export SCRIPTS_PATH
 export MAJOR_VERSION_NUMBER
 
+source /run/context/build_scripts/lib.sh
+
 # Helper function to safely enable a service (ignore if it doesn't exist)
 safe_enable() {
 	if systemctl list-unit-files "$1" &>/dev/null || [[ -f "/usr/lib/systemd/system/$1" ]]; then
@@ -57,6 +59,14 @@ safe_enable ublue-system-setup.service
 systemctl --global enable ublue-user-setup.service
 systemctl mask bootc-fetch-apply-updates.timer bootc-fetch-apply-updates.service auditd.service audit-rules.service
 safe_enable check-sb-key.service
+
+# Authselect configuration
+if [[ "$IS_FEDORA" == true ]]; then
+	authselect select minimal --force
+else
+	# RHEL/AlmaLinux/CentOS require sssd for GDM/login to function correctly
+	authselect select sssd --force
+fi
 
 # Disable lastlog display on previous failed login in GDM (This makes logins slow)
 authselect enable-feature with-silent-lastlog

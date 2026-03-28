@@ -4,7 +4,7 @@
 [install]
 # Default to direct block install path for to-disk.
 block = ["direct", "tpm2-luks"]
-kargs = ["audit=0"]
+kargs = ["audit=0", "enforcing=0"]
 
 [install.filesystem.root]
 # Default to XFS for root, matching standard enterprise Linux patterns.
