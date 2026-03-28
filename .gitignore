@@ -22,3 +22,4 @@ secrets.envbuild.log
 out.ociarchive
 *.iso
 *.qcow2
+.lima-home/

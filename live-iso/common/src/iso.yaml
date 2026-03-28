@@ -3,5 +3,5 @@ grub2:
   timeout: 10
   entries:
     - name: "${LABEL:-TunaOS Live ISO}"
-      linux: "/images/pxeboot/vmlinuz quiet rhgb root=live:CDLABEL=${LABEL:-TunaOS-Live} tunaos.live=1 enforcing=0 audit=0 rd.live.image"
+      linux: "/images/pxeboot/vmlinuz quiet rhgb root=live:CDLABEL=${LABEL:-TunaOS-Live} tunaos.live=1 audit=0 rd.live.image"
       initrd: "/images/pxeboot/initrd.img"
