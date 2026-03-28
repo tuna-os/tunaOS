@@ -125,7 +125,8 @@ install_base_packages_no_de() {
 			plymouth \
 			plymouth-plugin-script \
 			xdg-desktop-portal \
-			systemd-oomd-defaults
+			systemd-oomd-defaults \
+			unzip
 	else
 		# RHEL/AlmaLinux
 		dnf -y install \
@@ -150,7 +151,8 @@ install_base_packages_no_de() {
 			glow \
 			wl-clipboard \
 			gum \
-			xhost
+			xhost \
+			unzip
 	fi
 
 	dnf -y remove console-login-helper-messages setroubleshoot
