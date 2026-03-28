@@ -62,7 +62,8 @@ safe_enable check-sb-key.service
 
 # Authselect configuration
 if [[ "$IS_FEDORA" == true ]]; then
-	authselect select minimal --force
+	# Fedora uses 'local' as the base profile for standard setups
+	authselect select local --force
 else
 	# RHEL/AlmaLinux/CentOS require sssd for GDM/login to function correctly
 	authselect select sssd --force
@@ -73,6 +74,9 @@ authselect enable-feature with-silent-lastlog
 
 # Enable polkit rules for fingerprint sensors via fprintd
 authselect enable-feature with-fingerprint
+
+# Cleanup authselect backups to satisfy bootc lint
+rm -rf /var/lib/authselect/backups/*
 
 if [[ -f /usr/lib/systemd/system/systemd-resolved.service ]]; then
 	sed -i -e "s@PrivateTmp=.*@PrivateTmp=no@g" /usr/lib/systemd/system/systemd-resolved.service
