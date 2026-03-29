@@ -75,8 +75,9 @@ authselect enable-feature with-silent-lastlog
 # Enable polkit rules for fingerprint sensors via fprintd
 authselect enable-feature with-fingerprint
 
-# Cleanup authselect backups to satisfy bootc lint
+# Cleanup authselect backups and checksum to satisfy bootc lint
 rm -rf /var/lib/authselect/backups/*
+rm -f /var/lib/authselect/checksum
 
 if [[ -f /usr/lib/systemd/system/systemd-resolved.service ]]; then
 	sed -i -e "s@PrivateTmp=.*@PrivateTmp=no@g" /usr/lib/systemd/system/systemd-resolved.service

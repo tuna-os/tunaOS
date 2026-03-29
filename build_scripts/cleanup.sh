@@ -105,6 +105,12 @@ ls /usr/local || ln -s /var/usrlocal /usr/local
 # FIXME: Figure out why this doesnt have the right permissions by default
 chmod 644 /usr/share/ublue-os/image-info.json
 
+# Clean up remaining /var artifacts to satisfy bootc lint
+rm -rf /var/lib/rhsm/*
+rm -rf /var/log/rhsm/*
+rm -rf /var/spool/plymouth/*
+rm -rf /var/roothome/buildinfo
+
 # FIXME: use --fix option once https://github.com/containers/bootc/pull/1152 is merged
 # NOTE: --fatal-warnings suppressed for /var/lib/selinux deep module files which cannot
 # be declared in tmpfiles.d (they are non-directory files owned by selinux-policy).
