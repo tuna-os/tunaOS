@@ -86,8 +86,11 @@ jobs:
             exit 0
           fi
 
+          # Read changelog content for release body
+          NOTES=$(cat changelog.md)
+
           gh release create "$TAG" \
             --title "$TITLE" \
-            --notes-file changelog.md \
+            --notes "$NOTES" \
             --latest
 
