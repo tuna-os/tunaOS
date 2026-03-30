@@ -50,7 +50,9 @@ jobs:
         id: changelog
         run: |
           if [ -f output.env ]; then
-            cat output.env >> $GITHUB_OUTPUT
+            source output.env
+            echo "TITLE=${TITLE}" >> $GITHUB_OUTPUT
+            echo "TAG=${TAG}" >> $GITHUB_OUTPUT
           else
             echo "output.env not found — changelog generation was skipped"
             echo "skip_release=true" >> $GITHUB_OUTPUT
@@ -71,10 +73,9 @@ jobs:
           (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.changelog.outputs.TAG }}
+          TITLE: ${{ steps.changelog.outputs.TITLE }}
         run: |
-          TAG="${{ steps.changelog.outputs.TAG }}"
-          TITLE="${{ steps.changelog.outputs.TITLE }}"
-
           if [ -z "$TAG" ]; then
             echo "No TAG in output.env — skipping release creation"
             exit 0

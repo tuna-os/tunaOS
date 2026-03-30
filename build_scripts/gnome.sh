@@ -39,6 +39,13 @@ case "${1:-}" in
 		fi
 	fi
 
+	# Mask rpm-ostree kernel-install script to prevent dracut errors during container build
+	# This avoids "dracut-install: ERROR: installing '/root'" and other non-fatal but noisy errors
+	# that can sometimes become fatal depending on the environment.
+	if [ -f /usr/lib/kernel/install.d/05-rpmostree.install ]; then
+		mv /usr/lib/kernel/install.d/05-rpmostree.install /tmp/05-rpmostree.install.bak || true
+	fi
+
 	# Install base groups and packages - different between Fedora and RHEL/AlmaLinux
 	if [[ $IS_FEDORA == true ]]; then
 		# Fedora Silverblue-style package list
@@ -148,6 +155,11 @@ case "${1:-}" in
 			"xdg-user-dirs-gtk" \
 			"yelp-tools" \
 			"gnome-disk-utility"
+	fi
+
+	# Restore rpm-ostree kernel-install script
+	if [ -f /tmp/05-rpmostree.install.bak ]; then
+		mv /tmp/05-rpmostree.install.bak /usr/lib/kernel/install.d/05-rpmostree.install || true
 	fi
 
 	# Build GNOME extensions from source (must run after gnome-shell is installed)
