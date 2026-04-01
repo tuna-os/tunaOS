@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       variant:
-        description: 'Variant to build (all = build everything)'
+        description: 'Variant to build (all = build everything with build_iso: true)'
         required: false
         default: 'all'
         type: choice
@@ -15,8 +15,10 @@ on:
           - all
           - yellowfin
           - albacore
+          - skipjack
+          - bonito
       flavor:
-        description: 'Flavor to build (all = build everything)'
+        description: 'Flavor to build (all = build everything with build_iso: true)'
         required: false
         default: 'all'
         type: choice
@@ -24,66 +26,79 @@ on:
           - all
           - gnome
           - gnome-hwe
+          - kde
+          - cosmic
+          - niri
+      skip_upload:
+        description: 'Build ISOs but skip uploading to R2 (dry run / testing)'
+        required: false
+        default: false
+        type: boolean
 
 jobs:
+  generate-matrix:
+    name: Generate ISO matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.build.outputs.matrix }}
+      count: ${{ steps.build.outputs.count }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install yq
+        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+
+      - name: Build matrix from build-config.yml
+        id: build
+        env:
+          WANT_VARIANT: ${{ inputs.variant || 'all' }}
+          WANT_FLAVOR: ${{ inputs.flavor || 'all' }}
+        run: |
+          MATRIX=$(yq -o json .github/build-config.yml | jq -c \
+            --arg v "$WANT_VARIANT" --arg f "$WANT_FLAVOR" '{
+              include: [
+                .variants[] | . as $var |
+                .flavors[] |
+                select(.build_iso == true) |
+                select($v == "all" or $var.id == $v) |
+                select($f == "all" or .id == $f) |
+                {variant: $var.id, flavor: .id}
+              ]
+            }')
+          COUNT=$(echo "$MATRIX" | jq '.include | length')
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Building $COUNT ISO(s):"
+          echo "$MATRIX" | jq -r '.include[] | "  \(.variant):\(.flavor)"'
+
   build-and-publish:
     name: ${{ matrix.variant }}:${{ matrix.flavor }}
+    needs: generate-matrix
+    if: ${{ needs.generate-matrix.outputs.count != '0' }}
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       packages: read
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - variant: yellowfin
-            flavor: gnome
-          - variant: yellowfin
-            flavor: gnome-hwe
-          - variant: albacore
-            flavor: gnome
-          - variant: albacore
-            flavor: gnome-hwe
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
     steps:
-      - name: Check matrix filter
-        id: filter
-        run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            WANT_VARIANT="${{ github.event.inputs.variant }}"
-            WANT_FLAVOR="${{ github.event.inputs.flavor }}"
-            if [[ "$WANT_VARIANT" != "all" && "$WANT_VARIANT" != "${{ matrix.variant }}" ]]; then
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-            elif [[ "$WANT_FLAVOR" != "all" && "$WANT_FLAVOR" != "${{ matrix.flavor }}" ]]; then
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-            fi
-          fi
-
-      - name: Checkout
-        if: steps.filter.outputs.skip != 'true'
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
 
-      - name: Maximize build space
-        if: steps.filter.outputs.skip != 'true'
-        uses: ublue-os/container-storage-action@main
+      - uses: ublue-os/container-storage-action@main
 
       - name: Install dependencies
-        if: steps.filter.outputs.skip != 'true'
         run: |
-          sudo apt-get update
+          sudo apt-get update -qq
           sudo apt-get install -y just podman jq rclone golang-go git
-
-      - name: Install yq
-        if: steps.filter.outputs.skip != 'true'
-        run: sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq && sudo chmod +x /usr/bin/yq
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
       - name: Log in to GHCR
-        if: steps.filter.outputs.skip != 'true'
         run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Build Live ISO (from published image)
-        if: steps.filter.outputs.skip != 'true'
+      - name: Build Live ISO (from published GHCR image)
         env:
           GITHUB_REPOSITORY_OWNER: tuna-os
         run: |
@@ -91,7 +106,7 @@ jobs:
             just live-iso "${{ matrix.variant }}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
 
       - name: Upload ISO to Cloudflare R2
-        if: steps.filter.outputs.skip != 'true'
+        if: ${{ inputs.skip_upload != true }}
         env:
           RCLONE_CONFIG_R2_TYPE: s3
           RCLONE_CONFIG_R2_PROVIDER: Cloudflare
@@ -110,13 +125,11 @@ jobs:
             "$ISO" R2:${{ secrets.R2_BUCKET }}/live-isos/
           echo "==> Upload complete: $(basename "$ISO")"
           LATEST="${{ matrix.variant }}-${{ matrix.flavor }}-latest.iso"
-          echo "==> Uploading as $LATEST..."
           rclone copyto --log-level INFO --s3-no-check-bucket \
             "$ISO" "R2:${{ secrets.R2_BUCKET }}/live-isos/${LATEST}"
           echo "==> Latest link updated."
 
-      - name: Upload ISO as artifact (fallback)
-        if: steps.filter.outputs.skip != 'true'
+      - name: Upload ISO as artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.variant }}-${{ matrix.flavor }}-iso

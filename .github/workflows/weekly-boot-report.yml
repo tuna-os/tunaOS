@@ -268,6 +268,17 @@ jobs:
             printf '%s\n\n' '---' >> "$REPORT"
           done
 
+          DISPATCH_URL="https://github.com/${REPO}/actions/workflows/publish-isos.yml"
+          printf '## 🚀 Release ISOs\n\n' >> "$REPORT"
+          printf 'Review the screenshots above. If everything looks good, trigger the ISO publish workflow:\n\n' >> "$REPORT"
+          printf '**[→ Trigger ISO publish](%s)**\n\n' "$DISPATCH_URL" >> "$REPORT"
+          printf '| Option | Description |\n' >> "$REPORT"
+          printf '|---|---|\n' >> "$REPORT"
+          printf '| **variant** | `all` to publish every variant, or pick one to publish selectively |\n' >> "$REPORT"
+          printf '| **flavor** | `all` to publish every flavor, or pick one to skip a bad build |\n' >> "$REPORT"
+          printf '| **skip_upload** | Check to build without uploading to R2 (dry run / CI test) |\n\n' >> "$REPORT"
+          printf '_ISOs are also auto-published on the 1st and 15th of each month._\n\n' >> "$REPORT"
+
           ISSUE_URL=$(gh issue create \
             --repo "$REPO" \
             --title "🖥️ Weekly Boot Report — ${TODAY}" \
