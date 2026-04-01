@@ -33,7 +33,7 @@ jobs:
             exit 0
           fi
           echo "Creating orphan screenshots branch..."
-          TREE_SHA=$(echo '{"tree":[]}' | \
+          TREE_SHA=$(printf '{"tree":[{"path":"README.md","mode":"100644","type":"blob","content":"# Boot Screenshots\\n\\nBoot screenshots captured by CI, committed here so they can be embedded in weekly report issues.\\n"}]}' | \
             gh api --method POST "/repos/${REPO}/git/trees" --input - --jq '.sha')
           COMMIT_SHA=$(gh api --method POST "/repos/${REPO}/git/commits" \
             -f "message=Initialize screenshots branch" \
