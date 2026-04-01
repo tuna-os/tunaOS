@@ -4,11 +4,12 @@ ARG BASE_IMAGE
 FROM ${BASE_IMAGE}
 
 ARG LABEL="TunaOS-Live"
+ARG VARIANT="tunaos"
 ARG DESKTOP_FLAVOR="gnome"
 # Set to 1 to enable sshd in the live environment for local testing only.
 # Never set this in production ISO builds.
 ARG ENABLE_SSHD="0"
 
 RUN --mount=type=bind,source=src,target=/src \
-    LABEL="${LABEL}" DESKTOP_FLAVOR="${DESKTOP_FLAVOR}" \
+    LABEL="${LABEL}" VARIANT="${VARIANT}" DESKTOP_FLAVOR="${DESKTOP_FLAVOR}" \
     ENABLE_SSHD="${ENABLE_SSHD}" /src/build.sh

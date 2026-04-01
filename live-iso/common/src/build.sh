@@ -131,6 +131,96 @@ sed -i 's/^NoDisplay=true/NoDisplay=false/' /usr/share/applications/org.tunaos.F
 # Remove build tools — no longer needed at runtime
 dnf remove -y meson gcc python3-devel git || true
 
+# ── tuna-installer configuration ─────────────────────────────────────────────
+# Drop /etc/tuna-installer/{recipe,images}.json so the installer knows which
+# variant/flavor it is, points update tracking at the right GHCR tag, and
+# presents a focused TunaOS image catalog (used when running standalone via
+# the Flatpak outside of live-ISO mode).
+#
+# Offline install works automatically in live-ISO mode: fisherman detects
+# /run/ostree-booted and calls bootc install directly against the running
+# image — no network pull required. The imgref here is only used for
+# day-2 update tracking after the system is installed.
+
+_VARIANT="${VARIANT:-tunaos}"
+_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
+_GHCR_REF="ghcr.io/tuna-os/${_VARIANT}:${_FLAVOR}"
+
+mkdir -p /etc/tuna-installer
+
+# recipe.json — TunaOS branding + this variant's update-tracking imgref.
+cat >/etc/tuna-installer/recipe.json <<EOF
+{
+  "distro_name": "TunaOS",
+  "distro_logo": "org.tunaos.Installer",
+  "imgref": "${_GHCR_REF}",
+  "hostname": "tunaos",
+  "needs_user_creation": true
+}
+EOF
+
+# images.json — full TunaOS catalog for standalone Flatpak use.
+# default_image points at this variant/flavor. Icons use the GResource paths
+# already bundled in the installer binary.
+python3 - "${_VARIANT}" "${_FLAVOR}" <<'PYEOF'
+import json, sys
+
+variant, flavor = sys.argv[1], sys.argv[2]
+base = "ghcr.io/tuna-os"
+default = f"{base}/{variant}:{flavor}"
+
+VARIANTS = [
+    ("yellowfin", "Yellowfin", "AlmaLinux Kitten 10"),
+    ("albacore",  "Albacore",  "AlmaLinux 10"),
+    ("skipjack",  "Skipjack",  "CentOS Stream 10"),
+    ("bonito",    "Bonito",    "Fedora 43"),
+]
+FLAVORS = [
+    ("gnome",   "GNOME"),
+    ("kde",     "KDE Plasma"),
+    ("niri",    "Niri"),
+    ("cosmic",  "COSMIC"),
+]
+
+def variant_entry(vid, vname, vdesc):
+    return {
+        "name": vname,
+        "subtitle": vdesc,
+        "icon": f"resource:///org/tunaos/Installer/images/{vid}.svg",
+        "children": [
+            {
+                "name": fname,
+                "imgref": f"{base}/{vid}:{fid}",
+                "icon": f"resource:///org/tunaos/Installer/images/{vid}.svg",
+                "desc": f"TunaOS {vname} — {fname} desktop",
+                "needs_user_creation": True,
+            }
+            for fid, fname in FLAVORS
+        ],
+    }
+
+manifest = {
+    "app_name": "TunaOS Installer",
+    "default_image": default,
+    "fallback_flatpaks": [
+        "org.mozilla.firefox",
+        "org.gnome.Console",
+        "org.gnome.TextEditor",
+    ],
+    "images": [
+        {
+            "name": "TunaOS",
+            "search_extra": "tunaos tuna",
+            "children": [variant_entry(vid, vname, vdesc) for vid, vname, vdesc in VARIANTS],
+        }
+    ],
+}
+
+with open("/etc/tuna-installer/images.json", "w") as f:
+    json.dump(manifest, f, indent=2)
+print(f"tuna-installer: wrote images.json (default={default})")
+PYEOF
+
 # ── dracut-live (live boot initramfs) ────────────────────────────────────────
 
 # Create the directory that /root is symlinked to (needed in some containers)

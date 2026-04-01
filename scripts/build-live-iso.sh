@@ -142,6 +142,7 @@ podman build \
 	--security-opt label=disable \
 	--build-arg "BASE_IMAGE=${BASE_IMAGE}" \
 	--build-arg "LABEL=${LABEL}" \
+	--build-arg "VARIANT=${VARIANT}" \
 	--build-arg "DESKTOP_FLAVOR=${FLAVOR}" \
 	--build-arg "ENABLE_SSHD=${DEV_SSHD:-0}" \
 	-t "localhost/${INSTALLER_TAG}" \
