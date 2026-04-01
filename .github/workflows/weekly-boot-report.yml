@@ -8,6 +8,7 @@ on:
 permissions:
   issues: write
   actions: read
+  contents: write
 
 jobs:
   report:
@@ -21,6 +22,26 @@ jobs:
             --description "Weekly boot screenshot reports" \
             --color "0075ca" \
             --repo "${{ github.repository }}" 2>/dev/null || true
+
+      - name: Ensure screenshots branch exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          if gh api "/repos/${REPO}/git/refs/heads/screenshots" &>/dev/null; then
+            echo "Screenshots branch already exists."
+            exit 0
+          fi
+          echo "Creating orphan screenshots branch..."
+          TREE_SHA=$(echo '{"tree":[]}' | \
+            gh api --method POST "/repos/${REPO}/git/trees" --input - --jq '.sha')
+          COMMIT_SHA=$(gh api --method POST "/repos/${REPO}/git/commits" \
+            -f "message=Initialize screenshots branch" \
+            -f "tree=${TREE_SHA}" --jq '.sha')
+          gh api --method POST "/repos/${REPO}/git/refs" \
+            -f "ref=refs/heads/screenshots" \
+            -f "sha=${COMMIT_SHA}"
+          echo "Screenshots branch created."
 
       - name: Collect screenshots and create report
         env:
@@ -82,17 +103,45 @@ jobs:
             fi
           done
 
-          # Create stub issue to obtain issue number (required for image uploads)
+          # Push each screenshot to the screenshots branch via the Contents API.
+          # raw.githubusercontent.com URLs are permanently accessible and render
+          # inline in GitHub markdown without any authentication.
           TODAY=$(date -u +"%Y-%m-%d")
-          ISSUE_URL=$(gh issue create \
-            --repo "$REPO" \
-            --title "🖥️ Weekly Boot Report — ${TODAY}" \
-            --label "boot-report" \
-            --body "⏳ Building report…")
-          ISSUE_NUMBER="${ISSUE_URL##*/}"
-          echo "==> Created issue #${ISSUE_NUMBER}: ${ISSUE_URL}"
+          declare -A IMG_URLS
 
-          # Build the report body
+          for COMBO in "${COMBOS[@]}"; do
+            read -r VARIANT FLAVOR <<< "$COMBO"
+            KEY="${VARIANT}-${FLAVOR}"
+            SRC="screenshots/${KEY}.png"
+            [[ -f "$SRC" ]] || continue
+
+            PATH_IN_REPO="boot/${TODAY}/${KEY}.png"
+            echo "==> Committing ${KEY} to screenshots branch..."
+
+            EXISTING_SHA=$(gh api \
+              "/repos/${REPO}/contents/${PATH_IN_REPO}?ref=screenshots" \
+              --jq '.sha' 2>/dev/null || echo "")
+
+            # Use jq to safely encode the binary content and build the payload
+            PAYLOAD=$(jq -n \
+              --arg msg "Boot screenshot: ${KEY} ${TODAY}" \
+              --arg content "$(base64 -w0 "$SRC")" \
+              --arg branch "screenshots" \
+              --arg sha "$EXISTING_SHA" \
+              'if $sha != "" then
+                {message: $msg, content: $content, branch: $branch, sha: $sha}
+              else
+                {message: $msg, content: $content, branch: $branch}
+              end')
+
+            gh api --method PUT "/repos/${REPO}/contents/${PATH_IN_REPO}" \
+              --input - <<< "$PAYLOAD" > /dev/null
+
+            IMG_URLS[$KEY]="https://raw.githubusercontent.com/${REPO}/screenshots/${PATH_IN_REPO}"
+            echo "    ${IMG_URLS[$KEY]}"
+          done
+
+          # Build the report body then create the issue in one shot
           REPORT=$(mktemp)
 
           printf '# 🖥️ Weekly Boot Screenshot Report\n\n' >> "$REPORT"
@@ -122,23 +171,9 @@ jobs:
               printf '**Date:** %s\n\n' "$FORMATTED_DATE" >> "$REPORT"
             fi
 
-            if [[ -f "screenshots/${KEY}.png" ]]; then
-              echo "    Uploading screenshot for ${KEY}…"
-              UPLOAD=$(curl -sf -X POST \
-                -H "Authorization: Bearer ${GH_TOKEN}" \
-                -H "Content-Type: image/png" \
-                --data-binary "@screenshots/${KEY}.png" \
-                "https://uploads.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}/assets?name=${KEY}.png" \
-                2>/dev/null) || UPLOAD=""
-
-              IMG_URL=$(echo "$UPLOAD" | jq -r '.url // empty' 2>/dev/null || echo "")
-
-              if [[ -n "$IMG_URL" ]]; then
-                printf '![%s boot screenshot](%s)\n\n' "$KEY" "$IMG_URL" >> "$REPORT"
-              else
-                printf '_⚠️ Screenshot upload failed._\n\n' >> "$REPORT"
-                echo "    Upload response: ${UPLOAD}"
-              fi
+            IMG_URL="${IMG_URLS[$KEY]:-}"
+            if [[ -n "$IMG_URL" ]]; then
+              printf '![%s boot screenshot](%s)\n\n' "$KEY" "$IMG_URL" >> "$REPORT"
             else
               printf '_No screenshot available for this build._\n\n' >> "$REPORT"
             fi
@@ -146,5 +181,9 @@ jobs:
             printf '%s\n\n' '---' >> "$REPORT"
           done
 
-          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --body-file "$REPORT"
+          ISSUE_URL=$(gh issue create \
+            --repo "$REPO" \
+            --title "🖥️ Weekly Boot Report — ${TODAY}" \
+            --label "boot-report" \
+            --body-file "$REPORT")
           echo "==> Report complete: ${ISSUE_URL}"
