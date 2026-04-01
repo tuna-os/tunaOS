@@ -44,22 +44,27 @@ OUTPUT="${OUTPUT_NAME}.qcow2"
 RAW_FILE="${OUTPUT_NAME}.raw"
 echo "==> Generating $OUTPUT from $IMG_REF using bootc install to-disk..."
 
-# Ensure root podman storage has the LATEST version of this image BEFORE starting
-# the privileged container. bootc reads the image via the container's fd3
-# additional-store (a snapshot of the host /var/lib/containers taken at startup).
-# We also tag GHCR images with a localhost/ alias so bootc can find them in
-# containers-storage without needing registry credentials inside the container.
-SOURCE_IMGREF="containers-storage:${IMG_REF}"
+# For local images, sync from user podman to sudo podman so containers-storage
+# can find it inside the privileged container.
+# For remote images, use docker:// as the source so bootc pulls directly from
+# the registry inside the container — this avoids the fd3 additional-store issue
+# where containers-storage can find the image manifest but fails to copy the
+# layers when creating the ostree deployment.
+AUTH_VOL_ARGS=()
 if [[ "${IMG_REF}" == localhost/* ]]; then
 	echo "==> Syncing $IMG_REF from user podman into root podman storage..."
 	podman save "$IMG_REF" | sudo podman load
+	SOURCE_IMGREF="containers-storage:${IMG_REF}"
 else
-	echo "==> Pulling $IMG_REF into root podman storage..."
-	sudo podman pull "${IMG_REF}"
-	LOCAL_REF="localhost/${OUTPUT_NAME}:bootc-install"
-	echo "==> Tagging as ${LOCAL_REF} for containers-storage lookup..."
-	sudo podman tag "${IMG_REF}" "${LOCAL_REF}"
-	SOURCE_IMGREF="containers-storage:${LOCAL_REF}"
+	SOURCE_IMGREF="docker://${IMG_REF}"
+	# Mount the podman auth file so bootc can authenticate with private registries.
+	for auth_path in /run/containers/0/auth.json /root/.config/containers/auth.json; do
+		if [[ -f "$auth_path" ]]; then
+			AUTH_VOL_ARGS=("-v" "${auth_path}:/run/containers/0/auth.json:ro")
+			echo "==> Mounting registry auth from ${auth_path}"
+			break
+		fi
+	done
 fi
 
 # Create a sparse raw disk file (40 GiB)
@@ -106,6 +111,7 @@ sudo podman run \
 	-v "${RAW_ABS}:/disk.img" \
 	-v "${INSTALL_TOML}:/usr/lib/bootc/install/00-tunaos.toml:ro" \
 	"${SSH_VOL_ARGS[@]}" \
+	"${AUTH_VOL_ARGS[@]}" \
 	--security-opt label=disable \
 	"$IMG_REF" \
 	bootc install to-disk \
