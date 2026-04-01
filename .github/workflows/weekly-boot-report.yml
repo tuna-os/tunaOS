@@ -98,7 +98,7 @@ jobs:
           printf '# 🖥️ Weekly Boot Screenshot Report\n\n' >> "$REPORT"
           printf '**Generated:** %s\n\n' "$(date -u +"%Y-%m-%d %H:%M UTC")" >> "$REPORT"
           printf 'Scroll through each variant below to verify the desktop loaded correctly.\n\n' >> "$REPORT"
-          printf '---\n\n' >> "$REPORT"
+          printf '%s\n\n' '---' >> "$REPORT"
 
           for COMBO in "${COMBOS[@]}"; do
             read -r VARIANT FLAVOR <<< "$COMBO"
@@ -143,7 +143,7 @@ jobs:
               printf '_No screenshot available for this build._\n\n' >> "$REPORT"
             fi
 
-            printf '---\n\n' >> "$REPORT"
+            printf '%s\n\n' '---' >> "$REPORT"
           done
 
           gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --body-file "$REPORT"
