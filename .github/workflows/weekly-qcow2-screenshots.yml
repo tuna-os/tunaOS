@@ -10,18 +10,39 @@ on:
         required: false
         default: ""
         type: string
+      flavor:
+        description: "Flavor to test (leave blank for all: gnome, kde, niri, cosmic)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   screenshot:
-    name: ${{ matrix.variant }}/gnome
+    name: ${{ matrix.variant }}/${{ matrix.flavor }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        variant: [yellowfin, albacore, skipjack, bonito]
+        include:
+          - {variant: yellowfin, flavor: gnome}
+          - {variant: yellowfin, flavor: kde}
+          - {variant: yellowfin, flavor: niri}
+          - {variant: yellowfin, flavor: cosmic}
+          - {variant: albacore, flavor: gnome}
+          - {variant: albacore, flavor: kde}
+          - {variant: albacore, flavor: niri}
+          - {variant: albacore, flavor: cosmic}
+          - {variant: skipjack, flavor: gnome}
+          - {variant: skipjack, flavor: kde}
+          - {variant: skipjack, flavor: niri}
+          - {variant: skipjack, flavor: cosmic}
+          - {variant: bonito, flavor: gnome}
+          - {variant: bonito, flavor: kde}
+          - {variant: bonito, flavor: niri}
+          - {variant: bonito, flavor: cosmic}
     steps:
       - name: Check matrix filter
         id: filter
@@ -29,6 +50,11 @@ jobs:
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && \
                 -n "${{ github.event.inputs.variant }}" && \
                 "${{ github.event.inputs.variant }}" != "${{ matrix.variant }}" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && \
+                -n "${{ github.event.inputs.flavor }}" && \
+                "${{ github.event.inputs.flavor }}" != "${{ matrix.flavor }}" ]]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -48,7 +74,7 @@ jobs:
         timeout-minutes: 45
         run: |
           sudo scripts/build-qcow2.sh \
-            "ghcr.io/${{ github.repository_owner }}/${{ matrix.variant }}:gnome-linux-amd64"
+            "ghcr.io/${{ github.repository_owner }}/${{ matrix.variant }}:${{ matrix.flavor }}-linux-amd64"
 
       - name: Boot QCOW2 and capture screenshot
         if: steps.filter.outputs.skip != 'true'
@@ -102,7 +128,7 @@ jobs:
             sleep 2
           done
 
-          echo "==> Waiting 4 minutes for GNOME desktop to appear..."
+          echo "==> Waiting 4 minutes for desktop to load..."
           sleep 240
 
           echo "screendump /tmp/screenshot.ppm" | \
@@ -124,6 +150,6 @@ jobs:
         if: steps.filter.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.variant }}-gnome-qcow2-boot-screenshot
+          name: ${{ matrix.variant }}-${{ matrix.flavor }}-qcow2-boot-screenshot
           path: screenshot.png
           if-no-files-found: warn

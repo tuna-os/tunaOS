@@ -56,8 +56,10 @@ jobs:
           COMBOS=(
             "yellowfin gnome"
             "yellowfin gnome-hwe"
+            "yellowfin kde"
             "albacore gnome"
             "albacore gnome-hwe"
+            "albacore kde"
             "skipjack gnome"
             "bonito gnome"
           )
@@ -65,9 +67,21 @@ jobs:
           # Variant/flavor combinations that produce QCOW2 boot screenshots
           QCOW2_COMBOS=(
             "yellowfin gnome"
+            "yellowfin kde"
+            "yellowfin niri"
+            "yellowfin cosmic"
             "albacore gnome"
+            "albacore kde"
+            "albacore niri"
+            "albacore cosmic"
             "skipjack gnome"
+            "skipjack kde"
+            "skipjack niri"
+            "skipjack cosmic"
             "bonito gnome"
+            "bonito kde"
+            "bonito niri"
+            "bonito cosmic"
           )
 
           declare -A ISO_DATES ISO_RUN_IDS
@@ -184,14 +198,14 @@ jobs:
           printf 'Each variant shows ISO and QCOW2 boot screenshots side by side.\n\n' >> "$REPORT"
           printf '%s\n\n' '---' >> "$REPORT"
 
+          # Merge ISO and QCOW2 combos, deduplicating while preserving order
           ALL_COMBOS=("${COMBOS[@]}")
           for COMBO in "${QCOW2_COMBOS[@]}"; do
             [[ " ${COMBOS[*]} " != *" ${COMBO} "* ]] && ALL_COMBOS+=("$COMBO")
           done
 
-          # Deduplicate and preserve order (COMBOS already covers all, QCOW2_COMBOS is a subset)
           SEEN_KEYS=()
-          for COMBO in "${COMBOS[@]}"; do
+          for COMBO in "${ALL_COMBOS[@]}"; do
             read -r VARIANT FLAVOR <<< "$COMBO"
             KEY="${VARIANT}-${FLAVOR}"
 
