@@ -44,10 +44,16 @@ OUTPUT="${OUTPUT_NAME}.qcow2"
 RAW_FILE="${OUTPUT_NAME}.raw"
 echo "==> Generating $OUTPUT from $IMG_REF using bootc install to-disk..."
 
-# Ensure root podman storage has the LATEST version of this image.
-if [[ "${IMG_REF}" == localhost/* ]] || [[ "${IMG_REF}" == *"/"* && "${IMG_REF}" != ghcr* ]]; then
-	echo "==> Syncing $IMG_REF into root podman storage..."
+# Ensure root podman storage has the LATEST version of this image BEFORE starting
+# the privileged container. bootc reads the image via the container's fd3
+# additional-store (a snapshot of the host /var/lib/containers taken at startup),
+# so the image must be present BEFORE the container is launched.
+if [[ "${IMG_REF}" == localhost/* ]]; then
+	echo "==> Syncing $IMG_REF from user podman into root podman storage..."
 	podman save "$IMG_REF" | sudo podman load
+else
+	echo "==> Pulling $IMG_REF into root podman storage..."
+	sudo podman pull "${IMG_REF}"
 fi
 
 # Create a sparse raw disk file (40 GiB)
