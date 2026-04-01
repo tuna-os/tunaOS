@@ -52,7 +52,7 @@ jobs:
           set -euo pipefail
           mkdir -p screenshots
 
-          # Variant/flavor combinations that produce boot screenshots
+          # Variant/flavor combinations that produce ISO boot screenshots
           COMBOS=(
             "yellowfin gnome"
             "yellowfin gnome-hwe"
@@ -62,72 +62,91 @@ jobs:
             "bonito gnome"
           )
 
-          declare -A ARTIFACT_DATES
-          declare -A RUN_IDS
+          # Variant/flavor combinations that produce QCOW2 boot screenshots
+          QCOW2_COMBOS=(
+            "yellowfin gnome"
+            "albacore gnome"
+            "skipjack gnome"
+            "bonito gnome"
+          )
 
-          for COMBO in "${COMBOS[@]}"; do
-            read -r VARIANT FLAVOR <<< "$COMBO"
-            KEY="${VARIANT}-${FLAVOR}"
-            ARTIFACT_NAME="${KEY}-boot-screenshot"
+          declare -A ISO_DATES ISO_RUN_IDS
+          declare -A QCOW2_DATES QCOW2_RUN_IDS
 
-            echo "==> Fetching artifact: $ARTIFACT_NAME"
+          fetch_screenshot() {
+            local KEY="$1" ARTIFACT_NAME="$2" DEST_FILE="$3"
 
+            local ARTIFACT
             ARTIFACT=$(gh api \
               "/repos/${REPO}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=1" \
               --jq '.artifacts[0] // empty')
+            [[ -n "$ARTIFACT" ]] || return 1
 
-            if [[ -z "$ARTIFACT" ]]; then
-              echo "    No artifact found."
-              ARTIFACT_DATES[$KEY]="N/A"
-              RUN_IDS[$KEY]=""
-              continue
+            local DATE RUN_ID
+            DATE=$(echo "$ARTIFACT" | jq -r '.created_at')
+            RUN_ID=$(echo "$ARTIFACT" | jq -r '.workflow_run.id')
+
+            local TMP_DIR="screenshots/.dl/${KEY}/${ARTIFACT_NAME}"
+            mkdir -p "$TMP_DIR"
+            if gh run download "$RUN_ID" --repo "$REPO" --name "$ARTIFACT_NAME" \
+                 --dir "$TMP_DIR" 2>/dev/null && [[ -f "$TMP_DIR/screenshot.png" ]]; then
+              mv "$TMP_DIR/screenshot.png" "$DEST_FILE"
+              echo "DATE=${DATE}"
+              echo "RUN_ID=${RUN_ID}"
+              return 0
             fi
+            return 1
+          }
 
-            ARTIFACT_DATES[$KEY]=$(echo "$ARTIFACT" | jq -r '.created_at')
-            RUN_IDS[$KEY]=$(echo "$ARTIFACT" | jq -r '.workflow_run.id')
-
-            echo "    Run: ${RUN_IDS[$KEY]} | Date: ${ARTIFACT_DATES[$KEY]}"
-
-            if gh run download "${RUN_IDS[$KEY]}" \
-              --repo "$REPO" \
-              --name "$ARTIFACT_NAME" \
-              --dir "screenshots/${KEY}/" 2>/dev/null; then
-              if [[ -f "screenshots/${KEY}/screenshot.png" ]]; then
-                mv "screenshots/${KEY}/screenshot.png" "screenshots/${KEY}.png"
-                echo "    Screenshot extracted."
-              else
-                echo "    screenshot.png not found in artifact."
-              fi
-            else
-              echo "    Failed to download artifact."
-            fi
-          done
-
-          # Push each screenshot to the screenshots branch via the Contents API.
-          # raw.githubusercontent.com URLs are permanently accessible and render
-          # inline in GitHub markdown without any authentication.
-          TODAY=$(date -u +"%Y-%m-%d")
-          declare -A IMG_URLS
-
+          echo "==> Fetching ISO boot screenshots..."
           for COMBO in "${COMBOS[@]}"; do
             read -r VARIANT FLAVOR <<< "$COMBO"
             KEY="${VARIANT}-${FLAVOR}"
-            SRC="screenshots/${KEY}.png"
-            [[ -f "$SRC" ]] || continue
+            echo "  -> $KEY (ISO)"
+            RESULT=$(fetch_screenshot "$KEY" "${KEY}-boot-screenshot" "screenshots/${KEY}-iso.png" 2>&1) && {
+              ISO_DATES[$KEY]=$(echo "$RESULT" | grep '^DATE=' | cut -d= -f2-)
+              ISO_RUN_IDS[$KEY]=$(echo "$RESULT" | grep '^RUN_ID=' | cut -d= -f2-)
+              echo "     ${ISO_DATES[$KEY]}"
+            } || {
+              ISO_DATES[$KEY]="N/A"
+              ISO_RUN_IDS[$KEY]=""
+              echo "     no artifact"
+            }
+          done
 
-            PATH_IN_REPO="boot/${TODAY}/${KEY}.png"
-            echo "==> Committing ${KEY} to screenshots branch..."
+          echo "==> Fetching QCOW2 boot screenshots..."
+          for COMBO in "${QCOW2_COMBOS[@]}"; do
+            read -r VARIANT FLAVOR <<< "$COMBO"
+            KEY="${VARIANT}-${FLAVOR}"
+            echo "  -> $KEY (QCOW2)"
+            RESULT=$(fetch_screenshot "$KEY" "${KEY}-qcow2-boot-screenshot" "screenshots/${KEY}-qcow2.png" 2>&1) && {
+              QCOW2_DATES[$KEY]=$(echo "$RESULT" | grep '^DATE=' | cut -d= -f2-)
+              QCOW2_RUN_IDS[$KEY]=$(echo "$RESULT" | grep '^RUN_ID=' | cut -d= -f2-)
+              echo "     ${QCOW2_DATES[$KEY]}"
+            } || {
+              QCOW2_DATES[$KEY]="N/A"
+              QCOW2_RUN_IDS[$KEY]=""
+              echo "     no artifact"
+            }
+          done
 
-            EXISTING_SHA=$(gh api \
-              "/repos/${REPO}/contents/${PATH_IN_REPO}?ref=screenshots" \
+          # Push screenshots to the screenshots branch via the Contents API.
+          # raw.githubusercontent.com URLs render inline in GitHub markdown without auth.
+          TODAY=$(date -u +"%Y-%m-%d")
+          declare -A ISO_IMG_URLS QCOW2_IMG_URLS
+
+          commit_screenshot() {
+            local SRC="$1" PATH_IN_REPO="$2" KEY="$3" TYPE="$4"
+            [[ -f "$SRC" ]] || return 1
+            echo "==> Committing ${KEY} (${TYPE}) to screenshots branch..."
+            local EXISTING_SHA
+            EXISTING_SHA=$(gh api "/repos/${REPO}/contents/${PATH_IN_REPO}?ref=screenshots" \
               --jq '.sha' 2>/dev/null || echo "")
-
-            # base64 output is too large to pass as a jq --arg (ARG_MAX).
-            # Write it to a temp file and use --rawfile instead.
+            local B64
             B64=$(mktemp)
             base64 -w0 "$SRC" > "$B64"
             jq -n \
-              --arg msg "Boot screenshot: ${KEY} ${TODAY}" \
+              --arg msg "Boot screenshot: ${KEY} ${TYPE} ${TODAY}" \
               --rawfile content "$B64" \
               --arg branch "screenshots" \
               --arg sha "$EXISTING_SHA" \
@@ -136,49 +155,90 @@ jobs:
               else
                 {message: $msg, content: ($content | rtrimstr("\n")), branch: $branch}
               end' | \
-              gh api --method PUT "/repos/${REPO}/contents/${PATH_IN_REPO}" \
-                --input - > /dev/null
+              gh api --method PUT "/repos/${REPO}/contents/${PATH_IN_REPO}" --input - > /dev/null
             rm "$B64"
-
-            IMG_URLS[$KEY]="https://raw.githubusercontent.com/${REPO}/screenshots/${PATH_IN_REPO}"
-            echo "    ${IMG_URLS[$KEY]}"
-          done
-
-          # Build the report body then create the issue in one shot
-          REPORT=$(mktemp)
-
-          printf '# 🖥️ Weekly Boot Screenshot Report\n\n' >> "$REPORT"
-          printf '**Generated:** %s\n\n' "$(date -u +"%Y-%m-%d %H:%M UTC")" >> "$REPORT"
-          printf 'Scroll through each variant below to verify the desktop loaded correctly.\n\n' >> "$REPORT"
-          printf '%s\n\n' '---' >> "$REPORT"
+          }
 
           for COMBO in "${COMBOS[@]}"; do
             read -r VARIANT FLAVOR <<< "$COMBO"
             KEY="${VARIANT}-${FLAVOR}"
-            RAW_DATE="${ARTIFACT_DATES[$KEY]:-N/A}"
-            RUN_ID="${RUN_IDS[$KEY]:-}"
-
-            if [[ "$RAW_DATE" != "N/A" ]]; then
-              FORMATTED_DATE=$(date -u -d "$RAW_DATE" +"%Y-%m-%d %H:%M UTC" 2>/dev/null || echo "$RAW_DATE")
-            else
-              FORMATTED_DATE="No recent build found"
+            ISO_PATH="boot/${TODAY}/${KEY}-iso.png"
+            if commit_screenshot "screenshots/${KEY}-iso.png" "$ISO_PATH" "$KEY" "iso"; then
+              ISO_IMG_URLS[$KEY]="https://raw.githubusercontent.com/${REPO}/screenshots/${ISO_PATH}"
             fi
+          done
+
+          for COMBO in "${QCOW2_COMBOS[@]}"; do
+            read -r VARIANT FLAVOR <<< "$COMBO"
+            KEY="${VARIANT}-${FLAVOR}"
+            QCOW2_PATH="boot/${TODAY}/${KEY}-qcow2.png"
+            if commit_screenshot "screenshots/${KEY}-qcow2.png" "$QCOW2_PATH" "$KEY" "qcow2"; then
+              QCOW2_IMG_URLS[$KEY]="https://raw.githubusercontent.com/${REPO}/screenshots/${QCOW2_PATH}"
+            fi
+          done
+
+          # Build the report
+          REPORT=$(mktemp)
+          printf '# 🖥️ Weekly Boot Screenshot Report\n\n' >> "$REPORT"
+          printf '**Generated:** %s\n\n' "$(date -u +"%Y-%m-%d %H:%M UTC")" >> "$REPORT"
+          printf 'Each variant shows ISO and QCOW2 boot screenshots side by side.\n\n' >> "$REPORT"
+          printf '%s\n\n' '---' >> "$REPORT"
+
+          ALL_COMBOS=("${COMBOS[@]}")
+          for COMBO in "${QCOW2_COMBOS[@]}"; do
+            [[ " ${COMBOS[*]} " != *" ${COMBO} "* ]] && ALL_COMBOS+=("$COMBO")
+          done
+
+          # Deduplicate and preserve order (COMBOS already covers all, QCOW2_COMBOS is a subset)
+          SEEN_KEYS=()
+          for COMBO in "${COMBOS[@]}"; do
+            read -r VARIANT FLAVOR <<< "$COMBO"
+            KEY="${VARIANT}-${FLAVOR}"
+
+            ISO_DATE="${ISO_DATES[$KEY]:-N/A}"
+            ISO_RUN="${ISO_RUN_IDS[$KEY]:-}"
+            QCOW2_DATE="${QCOW2_DATES[$KEY]:-N/A}"
+            QCOW2_RUN="${QCOW2_RUN_IDS[$KEY]:-}"
+
+            fmt_date() { [[ "$1" != "N/A" ]] && date -u -d "$1" +"%Y-%m-%d %H:%M UTC" 2>/dev/null || echo "not available"; }
+            ISO_FMT=$(fmt_date "$ISO_DATE")
+            QCOW2_FMT=$(fmt_date "$QCOW2_DATE")
 
             printf $'## `%s` / `%s`\n\n' "$VARIANT" "$FLAVOR" >> "$REPORT"
-            printf $'**Image:** `ghcr.io/%s/%s:%s`  \n' "$REPO_OWNER" "$VARIANT" "$FLAVOR" >> "$REPORT"
+            printf $'**Image:** `ghcr.io/%s/%s:%s`\n\n' "$REPO_OWNER" "$VARIANT" "$FLAVOR" >> "$REPORT"
 
-            if [[ -n "$RUN_ID" && "$RUN_ID" != "null" ]]; then
-              printf '**Date:** %s ([workflow run](https://github.com/%s/actions/runs/%s))\n\n' \
-                "$FORMATTED_DATE" "$REPO" "$RUN_ID" >> "$REPORT"
-            else
-              printf '**Date:** %s\n\n' "$FORMATTED_DATE" >> "$REPORT"
-            fi
+            ISO_URL="${ISO_IMG_URLS[$KEY]:-}"
+            QCOW2_URL="${QCOW2_IMG_URLS[$KEY]:-}"
 
-            IMG_URL="${IMG_URLS[$KEY]:-}"
-            if [[ -n "$IMG_URL" ]]; then
-              printf '![%s boot screenshot](%s)\n\n' "$KEY" "$IMG_URL" >> "$REPORT"
+            if [[ -n "$ISO_URL" && -n "$QCOW2_URL" ]]; then
+              # Both available — show side by side
+              ISO_LINK=""
+              [[ -n "$ISO_RUN" && "$ISO_RUN" != "null" ]] && ISO_LINK=" ([run](https://github.com/${REPO}/actions/runs/${ISO_RUN}))"
+              QCOW2_LINK=""
+              [[ -n "$QCOW2_RUN" && "$QCOW2_RUN" != "null" ]] && QCOW2_LINK=" ([run](https://github.com/${REPO}/actions/runs/${QCOW2_RUN}))"
+
+              printf '| **ISO Boot** | **QCOW2 Boot** |\n' >> "$REPORT"
+              printf '|:---:|:---:|\n' >> "$REPORT"
+              printf '| `%s`%s | `%s`%s |\n' "$ISO_FMT" "$ISO_LINK" "$QCOW2_FMT" "$QCOW2_LINK" >> "$REPORT"
+              printf '| ![%s ISO boot](%s) | ![%s QCOW2 boot](%s) |\n\n' \
+                "$KEY" "$ISO_URL" "$KEY" "$QCOW2_URL" >> "$REPORT"
+
+            elif [[ -n "$ISO_URL" ]]; then
+              ISO_LINK=""
+              [[ -n "$ISO_RUN" && "$ISO_RUN" != "null" ]] && ISO_LINK=" ([run](https://github.com/${REPO}/actions/runs/${ISO_RUN}))"
+              printf '**ISO Boot:** `%s`%s\n\n' "$ISO_FMT" "$ISO_LINK" >> "$REPORT"
+              printf '![%s ISO boot](%s)\n\n' "$KEY" "$ISO_URL" >> "$REPORT"
+              printf '_QCOW2 boot screenshot not available._\n\n' >> "$REPORT"
+
+            elif [[ -n "$QCOW2_URL" ]]; then
+              QCOW2_LINK=""
+              [[ -n "$QCOW2_RUN" && "$QCOW2_RUN" != "null" ]] && QCOW2_LINK=" ([run](https://github.com/${REPO}/actions/runs/${QCOW2_RUN}))"
+              printf '_ISO boot screenshot not available._\n\n' >> "$REPORT"
+              printf '**QCOW2 Boot:** `%s`%s\n\n' "$QCOW2_FMT" "$QCOW2_LINK" >> "$REPORT"
+              printf '![%s QCOW2 boot](%s)\n\n' "$KEY" "$QCOW2_URL" >> "$REPORT"
+
             else
-              printf '_No screenshot available for this build._\n\n' >> "$REPORT"
+              printf '_No screenshots available for this build._\n\n' >> "$REPORT"
             fi
 
             printf '%s\n\n' '---' >> "$REPORT"

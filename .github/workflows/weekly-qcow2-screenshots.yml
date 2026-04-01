@@ -1,0 +1,129 @@
+name: Weekly QCOW2 Boot Screenshots
+
+on:
+  schedule:
+    - cron: "0 23 * * 0" # Every Sunday at 23:00 UTC (ready for Monday report)
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "Variant to test (leave blank for all: yellowfin, albacore, skipjack, bonito)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  screenshot:
+    name: ${{ matrix.variant }}/gnome
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [yellowfin, albacore, skipjack, bonito]
+    steps:
+      - name: Check matrix filter
+        id: filter
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" && \
+                -n "${{ github.event.inputs.variant }}" && \
+                "${{ github.event.inputs.variant }}" != "${{ matrix.variant }}" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.filter.outputs.skip != 'true'
+
+      - name: Log in to GHCR
+        if: steps.filter.outputs.skip != 'true'
+        uses: ./.github/actions/ghcr-login
+
+      - name: Install dependencies
+        if: steps.filter.outputs.skip != 'true'
+        run: sudo apt-get update -q && sudo apt-get install -y qemu-utils qemu-system-x86 ovmf socat imagemagick
+
+      - name: Build QCOW2 from published image
+        if: steps.filter.outputs.skip != 'true'
+        timeout-minutes: 45
+        run: |
+          sudo scripts/build-qcow2.sh \
+            "ghcr.io/${{ github.repository_owner }}/${{ matrix.variant }}:gnome-linux-amd64"
+
+      - name: Boot QCOW2 and capture screenshot
+        if: steps.filter.outputs.skip != 'true'
+        timeout-minutes: 10
+        run: |
+          QCOW2=$(find . -maxdepth 1 -name "*.qcow2" | head -1)
+          echo "==> Booting $QCOW2 in QEMU (headless, KVM)..."
+
+          OVMF_CODE=""
+          for f in \
+            /usr/share/OVMF/OVMF_CODE_4M.fd \
+            /usr/share/OVMF/OVMF_CODE.fd \
+            /usr/share/edk2/ovmf/OVMF_CODE.fd; do
+            [ -f "$f" ] && OVMF_CODE="$f" && break
+          done
+          OVMF_VARS=""
+          for f in \
+            /usr/share/OVMF/OVMF_VARS_4M.fd \
+            /usr/share/OVMF/OVMF_VARS.fd \
+            /usr/share/edk2/ovmf/OVMF_VARS.fd; do
+            if [ -f "$f" ]; then
+              cp "$f" /tmp/OVMF_VARS.fd
+              OVMF_VARS="/tmp/OVMF_VARS.fd"
+              break
+            fi
+          done
+
+          PFLASH=()
+          if [ -n "$OVMF_CODE" ] && [ -n "$OVMF_VARS" ]; then
+            echo "==> Using UEFI: $OVMF_CODE"
+            PFLASH+=(-drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE")
+            PFLASH+=(-drive "if=pflash,format=raw,file=$OVMF_VARS")
+          else
+            echo "==> OVMF not found, booting in BIOS mode"
+          fi
+
+          sudo qemu-system-x86_64 \
+            -machine type=q35,accel=kvm \
+            -cpu host \
+            -m 4G \
+            -smp 2 \
+            -drive "file=${QCOW2},format=qcow2,if=virtio" \
+            "${PFLASH[@]}" \
+            -monitor unix:/tmp/qemu-monitor.sock,server,nowait \
+            -serial file:/tmp/serial.log \
+            -display none \
+            -daemonize
+
+          for i in $(seq 1 30); do
+            [ -S /tmp/qemu-monitor.sock ] && break
+            sleep 2
+          done
+
+          echo "==> Waiting 4 minutes for GNOME desktop to appear..."
+          sleep 240
+
+          echo "screendump /tmp/screenshot.ppm" | \
+            sudo socat - UNIX-CONNECT:/tmp/qemu-monitor.sock
+          sleep 3
+
+          if sudo test -f /tmp/screenshot.ppm; then
+            sudo convert /tmp/screenshot.ppm screenshot.png 2>/dev/null || \
+              sudo cp /tmp/screenshot.ppm screenshot.png
+            echo "==> Screenshot captured: $(ls -lh screenshot.png)"
+          else
+            echo "WARNING: screenshot.ppm not found; serial log follows:"
+            sudo cat /tmp/serial.log || true
+          fi
+
+          echo "quit" | sudo socat - UNIX-CONNECT:/tmp/qemu-monitor.sock || true
+
+      - name: Upload QCOW2 boot screenshot
+        if: steps.filter.outputs.skip != 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.variant }}-gnome-qcow2-boot-screenshot
+          path: screenshot.png
+          if-no-files-found: warn
