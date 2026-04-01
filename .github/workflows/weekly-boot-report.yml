@@ -1,0 +1,149 @@
+name: Weekly Boot Screenshot Report
+
+on:
+  schedule:
+    - cron: "0 10 * * 1" # Every Monday at 10:00 UTC
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  actions: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ensure boot-report label exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "boot-report" \
+            --description "Weekly boot screenshot reports" \
+            --color "0075ca" \
+            --repo "${{ github.repository }}" 2>/dev/null || true
+
+      - name: Collect screenshots and create report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          REPO_OWNER: ${{ github.repository_owner }}
+        run: |
+          set -euo pipefail
+          mkdir -p screenshots
+
+          # Variant/flavor combinations that produce boot screenshots
+          COMBOS=(
+            "yellowfin gnome"
+            "yellowfin gnome-hwe"
+            "albacore gnome"
+            "albacore gnome-hwe"
+            "skipjack gnome"
+            "bonito gnome"
+          )
+
+          declare -A ARTIFACT_DATES
+          declare -A RUN_IDS
+
+          for COMBO in "${COMBOS[@]}"; do
+            read -r VARIANT FLAVOR <<< "$COMBO"
+            KEY="${VARIANT}-${FLAVOR}"
+            ARTIFACT_NAME="${KEY}-boot-screenshot"
+
+            echo "==> Fetching artifact: $ARTIFACT_NAME"
+
+            ARTIFACT=$(gh api \
+              "/repos/${REPO}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=1" \
+              --jq '.artifacts[0] // empty')
+
+            if [[ -z "$ARTIFACT" ]]; then
+              echo "    No artifact found."
+              ARTIFACT_DATES[$KEY]="N/A"
+              RUN_IDS[$KEY]=""
+              continue
+            fi
+
+            ARTIFACT_ID=$(echo "$ARTIFACT" | jq -r '.id')
+            ARTIFACT_DATES[$KEY]=$(echo "$ARTIFACT" | jq -r '.created_at')
+            RUN_IDS[$KEY]=$(echo "$ARTIFACT" | jq -r '.workflow_run.id')
+
+            echo "    ID: $ARTIFACT_ID | Run: ${RUN_IDS[$KEY]} | Date: ${ARTIFACT_DATES[$KEY]}"
+
+            if gh api --output "screenshots/${KEY}.zip" \
+              "/repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip" 2>/dev/null; then
+              if unzip -oq "screenshots/${KEY}.zip" screenshot.png \
+                -d "screenshots/${KEY}/" 2>/dev/null; then
+                mv "screenshots/${KEY}/screenshot.png" "screenshots/${KEY}.png"
+                echo "    Screenshot extracted."
+              else
+                echo "    Failed to extract screenshot from zip."
+              fi
+            else
+              echo "    Failed to download artifact."
+            fi
+          done
+
+          # Create stub issue to obtain issue number (required for image uploads)
+          TODAY=$(date -u +"%Y-%m-%d")
+          ISSUE_URL=$(gh issue create \
+            --title "🖥️ Weekly Boot Report — ${TODAY}" \
+            --label "boot-report" \
+            --body "⏳ Building report…")
+          ISSUE_NUMBER="${ISSUE_URL##*/}"
+          echo "==> Created issue #${ISSUE_NUMBER}: ${ISSUE_URL}"
+
+          # Build the report body
+          REPORT=$(mktemp)
+
+          printf '# 🖥️ Weekly Boot Screenshot Report\n\n' >> "$REPORT"
+          printf '**Generated:** %s\n\n' "$(date -u +"%Y-%m-%d %H:%M UTC")" >> "$REPORT"
+          printf 'Scroll through each variant below to verify the desktop loaded correctly.\n\n' >> "$REPORT"
+          printf '---\n\n' >> "$REPORT"
+
+          for COMBO in "${COMBOS[@]}"; do
+            read -r VARIANT FLAVOR <<< "$COMBO"
+            KEY="${VARIANT}-${FLAVOR}"
+            RAW_DATE="${ARTIFACT_DATES[$KEY]:-N/A}"
+            RUN_ID="${RUN_IDS[$KEY]:-}"
+
+            if [[ "$RAW_DATE" != "N/A" ]]; then
+              FORMATTED_DATE=$(date -u -d "$RAW_DATE" +"%Y-%m-%d %H:%M UTC" 2>/dev/null || echo "$RAW_DATE")
+            else
+              FORMATTED_DATE="No recent build found"
+            fi
+
+            printf '## `%s` / `%s`\n\n' "$VARIANT" "$FLAVOR" >> "$REPORT"
+            printf '**Image:** `ghcr.io/%s/%s:%s`  \n' "$REPO_OWNER" "$VARIANT" "$FLAVOR" >> "$REPORT"
+
+            if [[ -n "$RUN_ID" && "$RUN_ID" != "null" ]]; then
+              printf '**Date:** %s ([workflow run](https://github.com/%s/actions/runs/%s))\n\n' \
+                "$FORMATTED_DATE" "$REPO" "$RUN_ID" >> "$REPORT"
+            else
+              printf '**Date:** %s\n\n' "$FORMATTED_DATE" >> "$REPORT"
+            fi
+
+            if [[ -f "screenshots/${KEY}.png" ]]; then
+              echo "    Uploading screenshot for ${KEY}…"
+              UPLOAD=$(curl -sf -X POST \
+                -H "Authorization: Bearer ${GH_TOKEN}" \
+                -H "Content-Type: image/png" \
+                --data-binary "@screenshots/${KEY}.png" \
+                "https://uploads.github.com/repos/${REPO}/issues/${ISSUE_NUMBER}/assets?name=${KEY}.png" \
+                2>/dev/null) || UPLOAD=""
+
+              IMG_URL=$(echo "$UPLOAD" | jq -r '.url // empty' 2>/dev/null || echo "")
+
+              if [[ -n "$IMG_URL" ]]; then
+                printf '![%s boot screenshot](%s)\n\n' "$KEY" "$IMG_URL" >> "$REPORT"
+              else
+                printf '_⚠️ Screenshot upload failed._\n\n' >> "$REPORT"
+                echo "    Upload response: ${UPLOAD}"
+              fi
+            else
+              printf '_No screenshot available for this build._\n\n' >> "$REPORT"
+            fi
+
+            printf '---\n\n' >> "$REPORT"
+          done
+
+          gh issue edit "$ISSUE_NUMBER" --body-file "$REPORT"
+          echo "==> Report complete: ${ISSUE_URL}"
