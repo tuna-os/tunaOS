@@ -102,6 +102,14 @@ if [[ -n "$SSH_PUBKEYS_FILE" ]]; then
 fi
 
 echo "==> Running bootc install to-disk (this takes a few minutes)..."
+# --experimental-unified-storage was removed in newer bootc (it became the default).
+# Probe the image's bootc to see if the flag is still accepted.
+UNIFIED_STORAGE_ARGS=()
+if sudo podman run --rm "${AUTH_VOL_ARGS[@]}" --security-opt label=disable \
+	"$IMG_REF" bootc install to-disk --help 2>&1 | grep -q 'experimental-unified-storage'; then
+	UNIFIED_STORAGE_ARGS=(--experimental-unified-storage)
+fi
+
 sudo podman run \
 	--rm \
 	--privileged \
@@ -117,7 +125,7 @@ sudo podman run \
 	bootc install to-disk \
 	--via-loopback \
 	--generic-image \
-	--experimental-unified-storage \
+	"${UNIFIED_STORAGE_ARGS[@]}" \
 	"${SSH_KEY_ARGS[@]}" \
 	--source-imgref "${SOURCE_IMGREF}" \
 	/disk.img

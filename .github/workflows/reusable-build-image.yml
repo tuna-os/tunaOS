@@ -471,7 +471,6 @@ jobs:
         with:
           tags: |
             type=raw,value=${{ env.DEFAULT_TAG}}
-            type=ref,event=pr
           labels: |
             io.artifacthub.package.readme-url=${{ env.README_URL }}
             org.opencontainers.image.created=${{ steps.date.outputs.date }}
@@ -700,24 +699,31 @@ jobs:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
           MAJOR_VERSION: ${{ env.MAJOR_VERSION }}
-          REFS: ${{ github.ref_name }}
           ALL_PLATFORMS_BUILT: ${{ needs.manifest.outputs.all_platforms_built }}
         run: |
           set -ex
           SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
 
-          # Always copy to sha-based tag
-          sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${REFS}"
+          DATE_TAG="$(date +%Y%m%d)"
 
-          # Only copy to 'YYYYMMDD' style tags and record as 'best stable output tag' if all default platforms for this variant were built
           if [ "${ALL_PLATFORMS_BUILT}" = "true" ]; then
-            echo "All default platforms for this variant built successfully - tagging with YYYYMMDD"
-            DATE_TAG="$(date +%Y%m%d)"
-            sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DATE_TAG}"
-            # Also tag as {flavor}-YYYYMMDD so the changelog action can discover tags by stream (e.g. stream=gnome finds gnome-20250323)
+            echo "All default platforms for this variant built successfully - tagging"
+
+            # Tag with flavor only
+            sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+
+            # Tag with flavor-date
             sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${DATE_TAG}"
+
+            # Tag each platform with flavor-arch and flavor-arch-date
+            for platform in ${{ inputs.platforms }}; do
+              arch="${platform#linux/}"
+              sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${arch}"
+              sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${arch}-${DATE_TAG}"
+            done
+
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
           else
             echo "Not all default platforms for this variant built - skipping YYYYMMDD tag"
-            echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${REFS}" >> $GITHUB_OUTPUT
+            echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
           fi

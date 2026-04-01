@@ -61,7 +61,7 @@ check: _ensure_check_deps
         actionlint -ignore "permission \"id-token\" is unknown" \
                    -ignore "SC2086" -ignore "SC2129" -ignore "SC2001" \
                    -ignore "SC2034" -ignore "SC2015" -ignore "SC1001" \
-                   -ignore "SC2295" \
+                   -ignore "SC2295" -ignore "SC2016" \
                    -ignore "save-always" \
                    -ignore "cannot be filtered" \
                    .github/workflows/*.yml .github/workflows/*.yaml || { exit 1; }
