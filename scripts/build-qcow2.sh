@@ -46,14 +46,20 @@ echo "==> Generating $OUTPUT from $IMG_REF using bootc install to-disk..."
 
 # Ensure root podman storage has the LATEST version of this image BEFORE starting
 # the privileged container. bootc reads the image via the container's fd3
-# additional-store (a snapshot of the host /var/lib/containers taken at startup),
-# so the image must be present BEFORE the container is launched.
+# additional-store (a snapshot of the host /var/lib/containers taken at startup).
+# We also tag GHCR images with a localhost/ alias so bootc can find them in
+# containers-storage without needing registry credentials inside the container.
+SOURCE_IMGREF="containers-storage:${IMG_REF}"
 if [[ "${IMG_REF}" == localhost/* ]]; then
 	echo "==> Syncing $IMG_REF from user podman into root podman storage..."
 	podman save "$IMG_REF" | sudo podman load
 else
 	echo "==> Pulling $IMG_REF into root podman storage..."
 	sudo podman pull "${IMG_REF}"
+	LOCAL_REF="localhost/${OUTPUT_NAME}:bootc-install"
+	echo "==> Tagging as ${LOCAL_REF} for containers-storage lookup..."
+	sudo podman tag "${IMG_REF}" "${LOCAL_REF}"
+	SOURCE_IMGREF="containers-storage:${LOCAL_REF}"
 fi
 
 # Create a sparse raw disk file (40 GiB)
@@ -107,7 +113,7 @@ sudo podman run \
 	--generic-image \
 	--experimental-unified-storage \
 	"${SSH_KEY_ARGS[@]}" \
-	--source-imgref "containers-storage:${IMG_REF}" \
+	--source-imgref "${SOURCE_IMGREF}" \
 	/disk.img
 
 [[ -n "$SSH_PUBKEYS_FILE" ]] && rm -f "$SSH_PUBKEYS_FILE"
