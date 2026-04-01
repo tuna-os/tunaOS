@@ -4,15 +4,16 @@ set -eoux pipefail
 
 # ── Live environment configuration ──────────────────────────────────────────
 
-# Set up the GNOME dock for the installer
-tee /usr/share/glib-2.0/schemas/zz2-tunaos-installer.gschema.override <<'EOF'
+if [[ "${DESKTOP_FLAVOR:-gnome}" == gnome* ]]; then
+	# Set up the GNOME dock for the installer
+	tee /usr/share/glib-2.0/schemas/zz2-tunaos-installer.gschema.override <<'EOF'
 [org.gnome.shell]
 welcome-dialog-last-shown-version='4294967295'
 favorite-apps = ['org.tunaos.FirstSetup.desktop', 'firefox.desktop', 'org.gnome.Nautilus.desktop']
 EOF
 
-# Disable suspend/sleep so the installer doesn't go to sleep mid-install
-tee /usr/share/glib-2.0/schemas/zz3-tunaos-installer-power.gschema.override <<'EOF'
+	# Disable suspend/sleep so the installer doesn't go to sleep mid-install
+	tee /usr/share/glib-2.0/schemas/zz3-tunaos-installer-power.gschema.override <<'EOF'
 [org.gnome.settings-daemon.plugins.power]
 sleep-inactive-ac-type='nothing'
 sleep-inactive-battery-type='nothing'
@@ -23,7 +24,8 @@ sleep-inactive-battery-timeout=0
 idle-delay=uint32 0
 EOF
 
-glib-compile-schemas /usr/share/glib-2.0/schemas
+	glib-compile-schemas /usr/share/glib-2.0/schemas
+fi
 
 # ── Disable TunaOS services not needed in the live/installer env ─────────────
 
@@ -152,6 +154,48 @@ DRACUT_NO_XATTR=1 dracut -v --force --zstd --no-hostonly \
 dnf install -y livesys-scripts
 sed -i "s/^livesys_session=.*/livesys_session=${DESKTOP_FLAVOR:-gnome}/" /etc/sysconfig/livesys
 systemctl enable livesys.service livesys-late.service
+
+# ── Inject missing livesys session modules for COSMIC and Niri ───────────────
+# EPEL's livesys-scripts lags behind Fedora — livesys-cosmic and livesys-niri
+# are absent from the EL10 package. Write them inline if not already present.
+
+SESSIONS_DIR=/usr/libexec/livesys/sessions.d
+mkdir -p "$SESSIONS_DIR"
+
+# livesys-cosmic: ported from Fedora livesys-scripts PR #23 (ngompa)
+# Appends [initial_session] to cosmic-greeter.toml so liveuser autologs in.
+if [[ ! -f "${SESSIONS_DIR}/livesys-cosmic" ]]; then
+	cat >"${SESSIONS_DIR}/livesys-cosmic" <<'LIVESYS_COSMIC'
+#!/bin/bash
+# livesys-cosmic — autologin for COSMIC live sessions
+if [ -f /etc/greetd/cosmic-greeter.toml ]; then
+    cat >> /etc/greetd/cosmic-greeter.toml <<'TOML_EOF'
+
+[initial_session]
+user = "liveuser"
+command = "cosmic-session"
+TOML_EOF
+fi
+LIVESYS_COSMIC
+	chmod 755 "${SESSIONS_DIR}/livesys-cosmic"
+fi
+
+# livesys-niri: adds [initial_session] to greetd's config.toml for niri-session
+if [[ ! -f "${SESSIONS_DIR}/livesys-niri" ]]; then
+	cat >"${SESSIONS_DIR}/livesys-niri" <<'LIVESYS_NIRI'
+#!/bin/bash
+# livesys-niri — autologin for Niri live sessions via greetd
+if [ -f /etc/greetd/config.toml ]; then
+    cat >> /etc/greetd/config.toml <<'TOML_EOF'
+
+[initial_session]
+user = "liveuser"
+command = "niri-session"
+TOML_EOF
+fi
+LIVESYS_NIRI
+	chmod 755 "${SESSIONS_DIR}/livesys-niri"
+fi
 
 # ── EFI / ISO tooling ────────────────────────────────────────────────────────
 

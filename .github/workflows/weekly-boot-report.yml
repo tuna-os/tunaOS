@@ -57,11 +57,21 @@ jobs:
             "yellowfin gnome"
             "yellowfin gnome-hwe"
             "yellowfin kde"
+            "yellowfin cosmic"
+            "yellowfin niri"
             "albacore gnome"
             "albacore gnome-hwe"
             "albacore kde"
+            "albacore cosmic"
+            "albacore niri"
             "skipjack gnome"
+            "skipjack kde"
+            "skipjack cosmic"
+            "skipjack niri"
             "bonito gnome"
+            "bonito kde"
+            "bonito cosmic"
+            "bonito niri"
           )
 
           # Variant/flavor combinations that produce QCOW2 boot screenshots
