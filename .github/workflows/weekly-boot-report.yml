@@ -122,20 +122,23 @@ jobs:
               "/repos/${REPO}/contents/${PATH_IN_REPO}?ref=screenshots" \
               --jq '.sha' 2>/dev/null || echo "")
 
-            # Use jq to safely encode the binary content and build the payload
-            PAYLOAD=$(jq -n \
+            # base64 output is too large to pass as a jq --arg (ARG_MAX).
+            # Write it to a temp file and use --rawfile instead.
+            B64=$(mktemp)
+            base64 -w0 "$SRC" > "$B64"
+            jq -n \
               --arg msg "Boot screenshot: ${KEY} ${TODAY}" \
-              --arg content "$(base64 -w0 "$SRC")" \
+              --rawfile content "$B64" \
               --arg branch "screenshots" \
               --arg sha "$EXISTING_SHA" \
               'if $sha != "" then
-                {message: $msg, content: $content, branch: $branch, sha: $sha}
+                {message: $msg, content: ($content | rtrimstr("\n")), branch: $branch, sha: $sha}
               else
-                {message: $msg, content: $content, branch: $branch}
-              end')
-
-            gh api --method PUT "/repos/${REPO}/contents/${PATH_IN_REPO}" \
-              --input - <<< "$PAYLOAD" > /dev/null
+                {message: $msg, content: ($content | rtrimstr("\n")), branch: $branch}
+              end' | \
+              gh api --method PUT "/repos/${REPO}/contents/${PATH_IN_REPO}" \
+                --input - > /dev/null
+            rm "$B64"
 
             IMG_URLS[$KEY]="https://raw.githubusercontent.com/${REPO}/screenshots/${PATH_IN_REPO}"
             echo "    ${IMG_URLS[$KEY]}"
