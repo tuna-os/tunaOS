@@ -62,20 +62,20 @@ jobs:
               continue
             fi
 
-            ARTIFACT_ID=$(echo "$ARTIFACT" | jq -r '.id')
             ARTIFACT_DATES[$KEY]=$(echo "$ARTIFACT" | jq -r '.created_at')
             RUN_IDS[$KEY]=$(echo "$ARTIFACT" | jq -r '.workflow_run.id')
 
-            echo "    ID: $ARTIFACT_ID | Run: ${RUN_IDS[$KEY]} | Date: ${ARTIFACT_DATES[$KEY]}"
+            echo "    Run: ${RUN_IDS[$KEY]} | Date: ${ARTIFACT_DATES[$KEY]}"
 
-            if gh api --output "screenshots/${KEY}.zip" \
-              "/repos/${REPO}/actions/artifacts/${ARTIFACT_ID}/zip" 2>/dev/null; then
-              if unzip -oq "screenshots/${KEY}.zip" screenshot.png \
-                -d "screenshots/${KEY}/" 2>/dev/null; then
+            if gh run download "${RUN_IDS[$KEY]}" \
+              --repo "$REPO" \
+              --name "$ARTIFACT_NAME" \
+              --dir "screenshots/${KEY}/" 2>/dev/null; then
+              if [[ -f "screenshots/${KEY}/screenshot.png" ]]; then
                 mv "screenshots/${KEY}/screenshot.png" "screenshots/${KEY}.png"
                 echo "    Screenshot extracted."
               else
-                echo "    Failed to extract screenshot from zip."
+                echo "    screenshot.png not found in artifact."
               fi
             else
               echo "    Failed to download artifact."
@@ -85,6 +85,7 @@ jobs:
           # Create stub issue to obtain issue number (required for image uploads)
           TODAY=$(date -u +"%Y-%m-%d")
           ISSUE_URL=$(gh issue create \
+            --repo "$REPO" \
             --title "🖥️ Weekly Boot Report — ${TODAY}" \
             --label "boot-report" \
             --body "⏳ Building report…")
@@ -111,8 +112,8 @@ jobs:
               FORMATTED_DATE="No recent build found"
             fi
 
-            printf '## `%s` / `%s`\n\n' "$VARIANT" "$FLAVOR" >> "$REPORT"
-            printf '**Image:** `ghcr.io/%s/%s:%s`  \n' "$REPO_OWNER" "$VARIANT" "$FLAVOR" >> "$REPORT"
+            printf $'## `%s` / `%s`\n\n' "$VARIANT" "$FLAVOR" >> "$REPORT"
+            printf $'**Image:** `ghcr.io/%s/%s:%s`  \n' "$REPO_OWNER" "$VARIANT" "$FLAVOR" >> "$REPORT"
 
             if [[ -n "$RUN_ID" && "$RUN_ID" != "null" ]]; then
               printf '**Date:** %s ([workflow run](https://github.com/%s/actions/runs/%s))\n\n' \
@@ -145,5 +146,5 @@ jobs:
             printf '---\n\n' >> "$REPORT"
           done
 
-          gh issue edit "$ISSUE_NUMBER" --body-file "$REPORT"
+          gh issue edit "$ISSUE_NUMBER" --repo "$REPO" --body-file "$REPORT"
           echo "==> Report complete: ${ISSUE_URL}"
