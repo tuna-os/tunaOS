@@ -120,6 +120,7 @@ jobs:
           AUTHOR: ${{ matrix.author }}
           DATE: ${{ matrix.date }}
           URL: ${{ matrix.url }}
+          PROMPT_FILE: .github/prompts/aurora-port.md
         run: |
           COMMIT_JSON=$(gh api "/repos/ublue-os/aurora/commits/${SHA}")
           FULL_MSG=$(echo "$COMMIT_JSON" | jq -r '.commit.message')
@@ -128,20 +129,9 @@ jobs:
             map("### " + .filename + "\n```diff\n" + (.patch // "(binary or no diff)") + "\n```") |
             join("\n\n")
           ')
-
+          export FULL_MSG DIFF
           mkdir -p .github/upstream-notes
-
-          # Build the task file (printf avoids heredoc yamllint issues)
-          printf '%s\n\n' "$(cat .github/prompts/aurora-port.md)" > GEMINI_TASK.md
-          printf '---\n\n## Commit Details\n\n' >> GEMINI_TASK.md
-          printf 'SHORT_SHA=%s\n' "$SHORT_SHA" >> GEMINI_TASK.md
-          printf 'SHA=%s\n' "$SHA" >> GEMINI_TASK.md
-          printf 'SUBJECT=%s\n' "$SUBJECT" >> GEMINI_TASK.md
-          printf 'AUTHOR=%s\n' "$AUTHOR" >> GEMINI_TASK.md
-          printf 'DATE=%s\n' "$DATE" >> GEMINI_TASK.md
-          printf 'URL=%s\n\n' "$URL" >> GEMINI_TASK.md
-          printf '## Full Commit Message\n\n```\n%s\n```\n\n' "$FULL_MSG" >> GEMINI_TASK.md
-          printf '## Diff\n\n%s\n' "$DIFF" >> GEMINI_TASK.md
+          python3 .github/scripts/write-gemini-task.py
 
       - name: Run Gemini to port the change
         uses: google-github-actions/run-gemini-cli@v0.1.21
@@ -151,7 +141,7 @@ jobs:
         with:
           prompt: >
             Read GEMINI_TASK.md in the repository root for your complete task and follow the
-            instructions there exactly. The task is to port an upstream niri commit from
+            instructions there exactly. The task is to port an upstream kde commit from
             ublue-os/aurora into this TunaOS repository. The porting guide and commit
             diff are both in GEMINI_TASK.md. Do not create a PR — just make changes and commit.
 
