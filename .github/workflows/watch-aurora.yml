@@ -123,6 +123,8 @@ jobs:
           DATE: ${{ matrix.date }}
           URL: ${{ matrix.url }}
           PROMPT_FILE: .github/prompts/aurora-port.md
+          BUILD_SCRIPT: build_scripts/kde.sh
+          OVERRIDES_DIR: system_files_overrides/kde
         run: |
           COMMIT_JSON=$(gh api "/repos/ublue-os/aurora/commits/${SHA}")
           FULL_MSG=$(echo "$COMMIT_JSON" | jq -r '.commit.message')
@@ -150,16 +152,18 @@ jobs:
             ublue-os/aurora into this TunaOS repository. The porting guide and commit
             diff are both in GEMINI_TASK.md. Do not create a PR — just make changes and commit.
 
-      - name: Fallback - GitHub Copilot (if Gemini quota exceeded)
-        id: copilot
+      - name: Fallback - Fire Copilot coding agent
         if: steps.gemini.outcome == 'failure'
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+          REPO: ${{ github.repository }}
           SHORT_SHA: ${{ matrix.short_sha }}
-          BUILD_SCRIPT: build_scripts/kde.sh
-          OVERRIDES_DIR: system_files_overrides/kde
-          COMMIT_PREFIX: port(kde)
-        run: python3 .github/scripts/copilot-port-fallback.py
+          SUBJECT: ${{ matrix.subject }}
+          URL: ${{ matrix.url }}
+          FLAVOR: kde
+          UPSTREAM: ublue-os/aurora
+          LABEL: upstream-aurora
+        run: python3 .github/scripts/fire-copilot-agent.py
 
       - name: Push branch and open PR
         env:
