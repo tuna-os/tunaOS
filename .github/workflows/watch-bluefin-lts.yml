@@ -136,9 +136,9 @@ jobs:
       - name: Run Gemini to port the change
         uses: google-github-actions/run-gemini-cli@v0.1.21
         env:
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
           prompt: >
             Read GEMINI_TASK.md in the repository root for your complete task and follow the
             instructions there exactly. The task is to port an upstream gnome commit from
