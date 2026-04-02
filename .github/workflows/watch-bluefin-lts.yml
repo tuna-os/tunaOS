@@ -1,4 +1,4 @@
-name: Watch Zirconium Upstream
+name: Watch bluefin-lts Upstream
 
 on:
   schedule:
@@ -29,9 +29,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
         run: |
-          gh label create "upstream-zirconium" \
+          gh label create "upstream-bluefin-lts" \
             --repo "$REPO" \
-            --description "Ported from zirconium-dev/zirconium" \
+            --description "Ported from ublue-os/bluefin-lts" \
             --color "8B5CF6" 2>/dev/null || true
           gh label create "gemini-port" \
             --repo "$REPO" \
@@ -48,7 +48,7 @@ jobs:
           SINCE=$(date -u -d "${LOOKBACK_DAYS} days ago" +%Y-%m-%dT%H:%M:%SZ)
           echo "Scanning zirconium commits since $SINCE"
 
-          ALL=$(gh api "/repos/zirconium-dev/zirconium/commits?since=${SINCE}&per_page=100" \
+          ALL=$(gh api "/repos/ublue-os/bluefin-lts/commits?since=${SINCE}&per_page=100" \
             --jq '[.[] |
               select(.commit.author.name != "renovate[bot]") |
               select(.commit.message | test("^(chore\\(deps\\)|ci:|docs:)") | not) |
@@ -68,7 +68,7 @@ jobs:
             SHORT_SHA=$(echo "$item" | jq -r '.short_sha')
             EXISTING=$(gh pr list \
               --repo "$REPO" \
-              --search "head:zirconium-port/${SHORT_SHA}" \
+              --search "head:bluefin-lts-port/${SHORT_SHA}" \
               --state all \
               --json number --jq 'length' 2>/dev/null || echo "0")
             if [[ "$EXISTING" == "0" ]]; then
@@ -109,7 +109,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Create branch
-        run: git checkout -b "zirconium-port/${{ matrix.short_sha }}"
+        run: git checkout -b "bluefin-lts-port/${{ matrix.short_sha }}"
 
       - name: Fetch diff and write task for Gemini
         env:
@@ -121,7 +121,7 @@ jobs:
           DATE: ${{ matrix.date }}
           URL: ${{ matrix.url }}
         run: |
-          COMMIT_JSON=$(gh api "/repos/zirconium-dev/zirconium/commits/${SHA}")
+          COMMIT_JSON=$(gh api "/repos/ublue-os/bluefin-lts/commits/${SHA}")
           FULL_MSG=$(echo "$COMMIT_JSON" | jq -r '.commit.message')
           DIFF=$(echo "$COMMIT_JSON" | jq -r '
             .files |
@@ -132,7 +132,7 @@ jobs:
           mkdir -p .github/upstream-notes
 
           # Build the task file (printf avoids heredoc yamllint issues)
-          printf '%s\n\n' "$(cat .github/prompts/zirconium-port.md)" > GEMINI_TASK.md
+          printf '%s\n\n' "$(cat .github/prompts/bluefin-lts-port.md)" > GEMINI_TASK.md
           printf '---\n\n## Commit Details\n\n' >> GEMINI_TASK.md
           printf 'SHORT_SHA=%s\n' "$SHORT_SHA" >> GEMINI_TASK.md
           printf 'SHA=%s\n' "$SHA" >> GEMINI_TASK.md
@@ -152,7 +152,7 @@ jobs:
           prompt: >
             Read GEMINI_TASK.md in the repository root for your complete task and follow the
             instructions there exactly. The task is to port an upstream niri commit from
-            zirconium-dev/zirconium into this TunaOS repository. The porting guide and commit
+            ublue-os/bluefin-lts into this TunaOS repository. The porting guide and commit
             diff are both in GEMINI_TASK.md. Do not create a PR — just make changes and commit.
 
       - name: Push branch and open PR
@@ -170,10 +170,10 @@ jobs:
             exit 0
           fi
 
-          git push origin "zirconium-port/${SHORT_SHA}"
+          git push origin "bluefin-lts-port/${SHORT_SHA}"
 
           PR_BODY=$(printf '%s' \
-            "## Automated port from [zirconium-dev/zirconium](https://github.com/zirconium-dev/zirconium)" \
+            "## Automated port from [ublue-os/bluefin-lts](https://github.com/ublue-os/bluefin-lts)" \
             $'\n\n' \
             "**Upstream commit**: [\`${SHORT_SHA}\`](${URL})" \
             $'\n' \
@@ -195,7 +195,7 @@ jobs:
           gh pr create \
             --repo "$REPO" \
             --base main \
-            --head "zirconium-port/${SHORT_SHA}" \
+            --head "bluefin-lts-port/${SHORT_SHA}" \
             --title "⬆️ [zirconium port] ${SUBJECT} (${SHORT_SHA})" \
-            --label "upstream-zirconium,gemini-port" \
+            --label "upstream-bluefin-lts,gemini-port" \
             --body "$PR_BODY"
