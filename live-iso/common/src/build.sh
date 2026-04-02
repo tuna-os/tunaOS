@@ -114,7 +114,7 @@ dnf install -y \
 	fuse-overlayfs \
 	firefox \
 	openssh-server \
-	meson python3-devel gettext \
+	meson python3-devel gettext desktop-file-utils \
 	git
 
 # Disable COPR again — only needed for glib2-devel resolution
