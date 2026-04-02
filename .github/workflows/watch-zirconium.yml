@@ -79,6 +79,8 @@ jobs:
           done < <(echo "$ALL" | jq -c '.[]')
 
           COUNT=$(echo "$FILTERED" | jq 'length')
+          # Cap to 3 per run to stay within API quotas
+          FILTERED=$(echo "$FILTERED" | jq '.[0:3]')
           MATRIX=$(echo "$FILTERED" | jq -c '{include: .}')
 
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
@@ -95,7 +97,7 @@ jobs:
       pull-requests: write
     strategy:
       fail-fast: false
-      max-parallel: 2
+      max-parallel: 1
       matrix: ${{ fromJson(needs.scan.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
@@ -139,6 +141,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           gemini_api_key: ${{ secrets.GEMINI_API_KEY }}
+          gemini_model: gemini-2.5-flash
           prompt: >
             Read GEMINI_TASK.md in the repository root for your complete task and follow the
             instructions there exactly. The task is to port an upstream niri commit from
