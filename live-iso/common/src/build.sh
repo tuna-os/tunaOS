@@ -91,12 +91,17 @@ fi
 # COPR so glib2-devel resolves against the installed glib2 version.
 #   gnome50  → jreilly1821/c10s-gnome-50-fresh (glib2 >= 2.86)
 #   gnome49  → jreilly1821/c10s-gnome-49       (glib2 >= 2.84, < 2.86)
+# Fedora ships these GNOME versions in base repos — no COPR needed there.
 _glib2_minor=$(rpm -q --queryformat '%{VERSION}' glib2 2>/dev/null | awk -F. '{print $2+0}')
+# shellcheck source=/dev/null
+. /etc/os-release
 GNOME_COPR=""
-if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
-	GNOME_COPR="jreilly1821/c10s-gnome-50-fresh"
-elif [[ "$_glib2_minor" -ge 84 ]]; then
-	GNOME_COPR="jreilly1821/c10s-gnome-49"
+if [[ "$ID" != "fedora" ]]; then
+	if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
+		GNOME_COPR="jreilly1821/c10s-gnome-50-fresh"
+	elif [[ "$_glib2_minor" -ge 84 ]]; then
+		GNOME_COPR="jreilly1821/c10s-gnome-49"
+	fi
 fi
 [[ -n "$GNOME_COPR" ]] && dnf -y copr enable "$GNOME_COPR"
 
