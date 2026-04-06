@@ -716,7 +716,8 @@ jobs:
             sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${DATE_TAG}"
 
             # Tag each platform with flavor-arch and flavor-arch-date
-            for platform in ${{ inputs.platforms }}; do
+            IFS=',' read -r -a PLATFORMS <<< "${{ inputs.platforms }}"
+            for platform in "${PLATFORMS[@]}"; do
               arch="${platform#linux/}"
               sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${arch}"
               sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${arch}-${DATE_TAG}"
