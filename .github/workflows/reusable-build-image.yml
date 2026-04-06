@@ -719,6 +719,7 @@ jobs:
             IFS=',' read -r -a PLATFORMS <<< "${{ inputs.platforms }}"
             for platform in "${PLATFORMS[@]}"; do
               arch="${platform#linux/}"
+              arch="${arch//\//-}"
               sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${arch}"
               sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${arch}-${DATE_TAG}"
             done
