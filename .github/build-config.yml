@@ -154,11 +154,13 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: true
-      - id: gnome50
-        stage: 2
-        build_image: true
-        build_iso: true
-        build_qcow2: false
+      # gnome50 disabled: mutter-50 requires libinput >= 1.27.0 which AlmaLinux 10
+      # stable does not ship. Tracked: https://github.com/tuna-os/github-copr/issues/18
+      # - id: gnome50
+      # stage: 2
+      # build_image: true
+      # build_iso: true
+      # build_qcow2: false
       - id: cosmic
         stage: 2
         build_image: true
@@ -192,16 +194,18 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: gnome50-hwe
-        stage: 3
-        build_image: true
-        build_iso: false
-        build_qcow2: false
-      - id: gnome50-gdx
-        stage: 3
-        build_image: true
-        build_iso: true
-        build_qcow2: false
+      # gnome50-hwe/gnome50-gdx disabled: gnome50 not available on albacore
+      # Tracked: https://github.com/tuna-os/github-copr/issues/18
+      # - id: gnome50-hwe
+      # stage: 3
+      # build_image: true
+      # build_iso: false
+      # build_qcow2: false
+      # - id: gnome50-gdx
+      # stage: 3
+      # build_image: true
+      # build_iso: true
+      # build_qcow2: false
       - id: cosmic-hwe
         stage: 3
         build_image: true
