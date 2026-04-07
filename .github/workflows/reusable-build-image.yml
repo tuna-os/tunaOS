@@ -236,6 +236,7 @@ jobs:
 
           for i in $(seq "${MAX_RETRIES}"); do
             sudo podman push --digestfile=/tmp/digestfile \
+              --compression-format=zstd:chunked \
               "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}" \
               && break || sleep $((5 * i));
           done
@@ -624,7 +625,7 @@ jobs:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
           while IFS= read -r tag; do
-            podman manifest push --all=false --digestfile=/tmp/digestfile $MANIFEST $IMAGE_REGISTRY/$IMAGE_NAME:$tag
+            podman manifest push --all=false --digestfile=/tmp/digestfile --compression-format=zstd:chunked $MANIFEST $IMAGE_REGISTRY/$IMAGE_NAME:$tag
           done <<< "$TAGS"
 
           DIGEST=$(cat /tmp/digestfile)
