@@ -49,7 +49,7 @@ variants:
       - id: gnome50
         stage: 2
         build_image: true
-        build_iso: false
+        build_iso: true
         build_qcow2: false
       - id: cosmic
         stage: 2
@@ -68,15 +68,16 @@ variants:
         build_qcow2: false
 
       # ── Stage 3 ────────────────────────────────────────────────────────────
+      # HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
       - id: gnome-hwe
         stage: 3
         build_image: true
-        build_iso: true
+        build_iso: false
         build_qcow2: false
       - id: gnome-gdx
         stage: 3
         build_image: true
-        build_iso: false
+        build_iso: true
         build_qcow2: false
       - id: gnome-gdx-hwe
         stage: 4
@@ -91,7 +92,7 @@ variants:
       - id: gnome50-gdx
         stage: 3
         build_image: true
-        build_iso: false
+        build_iso: true
         build_qcow2: false
       - id: cosmic-hwe
         stage: 3
@@ -101,7 +102,7 @@ variants:
       - id: cosmic-gdx
         stage: 3
         build_image: true
-        build_iso: false
+        build_iso: true
         build_qcow2: false
       - id: kde-hwe
         stage: 3
@@ -111,7 +112,7 @@ variants:
       - id: kde-gdx
         stage: 3
         build_image: true
-        build_iso: false
+        build_iso: true
         build_qcow2: false
       - id: niri-hwe
         stage: 3
@@ -121,7 +122,7 @@ variants:
       - id: niri-gdx
         stage: 3
         build_image: true
-        build_iso: false
+        build_iso: true
         build_qcow2: false
 
   - id: albacore
@@ -172,15 +173,16 @@ variants:
         build_qcow2: false
 
       # ── Stage 3 ────────────────────────────────────────────────────────────
+      # HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
       - id: gnome-hwe
         stage: 3
         build_image: true
-        build_iso: true
+        build_iso: false
         build_qcow2: false
       - id: gnome-gdx
         stage: 3
         build_image: true
-        build_iso: false
+        build_iso: true
         build_qcow2: false
       - id: gnome-gdx-hwe
         stage: 4
@@ -197,7 +199,7 @@ variants:
       - id: cosmic-gdx
         stage: 3
         build_image: true
-        build_iso: false
+        build_iso: true
         build_qcow2: false
       - id: kde-hwe
         stage: 3
@@ -207,7 +209,7 @@ variants:
       - id: kde-gdx
         stage: 3
         build_image: true
-        build_iso: false
+        build_iso: true
         build_qcow2: false
       - id: niri-hwe
         stage: 3
@@ -217,7 +219,7 @@ variants:
       - id: niri-gdx
         stage: 3
         build_image: true
-        build_iso: false
+        build_iso: true
         build_qcow2: false
 
   - id: skipjack
@@ -253,12 +255,7 @@ variants:
       - id: gnome50
         stage: 2
         build_image: true
-        build_iso: false
-        build_qcow2: false
-      - id: gnome49
-        stage: 2
-        build_image: true
-        build_iso: false
+        build_iso: true
         build_qcow2: false
       - id: cosmic
         stage: 2
@@ -277,6 +274,7 @@ variants:
         build_qcow2: false
 
       # ── Stage 3 ────────────────────────────────────────────────────────────
+      # HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
       - id: gnome-hwe
         stage: 3
         build_image: true
@@ -285,7 +283,7 @@ variants:
       - id: gnome-gdx
         stage: 3
         build_image: true
-        build_iso: false
+        build_iso: true
         build_qcow2: false
       - id: gnome50-hwe
         stage: 3
@@ -295,7 +293,7 @@ variants:
       - id: gnome50-gdx
         stage: 3
         build_image: true
-        build_iso: false
+        build_iso: true
         build_qcow2: false
       - id: cosmic-hwe
         stage: 3
@@ -305,7 +303,7 @@ variants:
       - id: cosmic-gdx
         stage: 3
         build_image: true
-        build_iso: false
+        build_iso: true
         build_qcow2: false
 
   - id: bonito
@@ -356,6 +354,7 @@ variants:
         build_qcow2: false
 
       # ── Stage 3 ────────────────────────────────────────────────────────────
+      # HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
       - id: gnome-hwe
         stage: 3
         build_image: true
@@ -364,5 +363,20 @@ variants:
       - id: gnome-gdx
         stage: 3
         build_image: true
-        build_iso: false
+        build_iso: true
+        build_qcow2: false
+      - id: cosmic-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: kde-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: niri-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
         build_qcow2: false
