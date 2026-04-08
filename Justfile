@@ -225,6 +225,11 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
 
     RECHUNKED_REF="localhost/{{ target_tag_with_version }}-rechunked-$$"
     LOADED_ID=$(podman load --input out.ociarchive | awk '/Loaded image/{print $NF}')
+    rm -f out.ociarchive  # free disk immediately after load; don't hold archive while build runs
+    if [[ -z "${LOADED_ID}" ]]; then
+        echo "ERROR: podman load produced no image ID; the OCI archive may be corrupt or disk full" >&2
+        exit 1
+    fi
     podman tag "${LOADED_ID}" "${RECHUNKED_REF}"
 
     podman build \
@@ -237,9 +242,6 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
         .
 
     podman rmi "${RECHUNKED_REF}" 2>/dev/null || true
-
-    # Cleanup
-    rm -f out.ociarchive
 
 # Build a TunaOS variant
 build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='': _ensure-deps

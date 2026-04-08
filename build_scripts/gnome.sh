@@ -18,6 +18,12 @@ case "${1:-}" in
 		fi
 		dnf -y copr enable "$GNOME_COPR"
 		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
+			# c10s-gnome-50 provides backported deps (e.g. libinput >= 1.27.0) that
+			# mutter-50 requires but AlmaLinux 10 stable doesn't ship. Enable it
+			# alongside c10s-gnome-50-fresh so both the GNOME stack and its deps resolve.
+			dnf -y copr enable "jreilly1821/c10s-gnome-50"
+		fi
+		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
 			# GNOME 50 requires glib2 >= 2.86.0 and fontconfig >= 2.17.0 (pango links
 			# against FcConfigSetDefaultSubstitute which is absent in EL10's 2.15.x).
 			# selinux-policy 43.x from COPR is required for GDM 50 userdb socket policy;
