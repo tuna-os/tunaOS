@@ -72,7 +72,7 @@ jobs:
                 variant:       $v.id,
                 variant_emoji: ($v.emoji // "❓"),
                 base_image:    $v.base_image,
-                platforms:     (if $event == "pull_request" then "linux/amd64" else ($v.platforms | join(",")) end),
+                platforms:     (if $event == "pull_request" then "linux/amd64" else ((.platforms // $v.platforms) | join(",")) end),
                 flavor:        .id,
                 stage:         (if $event == "pull_request" then 1 else .stage end),
                 build_iso:     (.build_iso  // false),

@@ -159,6 +159,11 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
+        # libinput >= 1.27.0 only available for x86_64 in COPR; arm64 excluded until
+        # aarch64 libinput lands. See: https://github.com/tuna-os/github-copr/issues/18
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
       - id: cosmic
         stage: 2
         build_image: true
@@ -197,11 +202,21 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+        # libinput >= 1.27.0 only available for x86_64 in COPR; arm64 excluded until
+        # aarch64 libinput lands. See: https://github.com/tuna-os/github-copr/issues/18
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
       - id: gnome50-gdx
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
+        # libinput >= 1.27.0 only available for x86_64 in COPR; arm64 excluded until
+        # aarch64 libinput lands. See: https://github.com/tuna-os/github-copr/issues/18
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
       - id: cosmic-hwe
         stage: 3
         build_image: true

@@ -222,6 +222,10 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     # on S3 CI runners, which triggers a podman storage index bug where podman load
     # copies the config blob but fails to register it ("image not known").
     podman rmi "${PRE_CHUNK_TAG}" 2>/dev/null || true
+    # Also remove the chain base image (e.g. the S2 image pulled for a GDX build).
+    # For multi-stage builds this is the largest contributor to BTRFS pressure since
+    # it was only needed to build the pre-chunk image and is no longer required.
+    podman rmi "{{ base_image_for_build }}" 2>/dev/null || true
 
     RECHUNKED_REF="localhost/{{ target_tag_with_version }}-rechunked-$$"
     LOADED_ID=$(podman load --input out.ociarchive | awk '/Loaded image/{print $NF}')
