@@ -33,12 +33,43 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
+      - name: Filter available images
+        id: images
+        env:
+          STREAM: ${{ matrix.stream }}
+        run: |
+          # Only pass images that have both today's AND yesterday's stream tag to
+          # the changelog action. Builds that failed won't have a dated tag and
+          # would otherwise abort the entire release run.
+          CURR=$(date -u +%Y%m%d)
+          PREV=$(date -u -d "yesterday" +%Y%m%d)
+          CANDIDATES="yellowfin albacore skipjack bonito"
+          AVAILABLE=""
+          for img in $CANDIDATES; do
+            CURR_REF="docker://ghcr.io/tuna-os/${img}:${STREAM}-${CURR}"
+            PREV_REF="docker://ghcr.io/tuna-os/${img}:${STREAM}-${PREV}"
+            if skopeo inspect --raw "${CURR_REF}" >/dev/null 2>&1 && \
+               skopeo inspect --raw "${PREV_REF}" >/dev/null 2>&1; then
+              AVAILABLE="${AVAILABLE} ${img}"
+            else
+              echo "Skipping ${img}: missing ${STREAM}-${CURR} or ${STREAM}-${PREV} tag"
+            fi
+          done
+          AVAILABLE="${AVAILABLE# }"
+          echo "images=${AVAILABLE}" >> "$GITHUB_OUTPUT"
+          if [ -z "$AVAILABLE" ]; then
+            echo "No images have both tags — skipping changelog generation"
+          else
+            echo "Images with both tags: ${AVAILABLE}"
+          fi
+
       - name: Generate changelog
+        if: steps.images.outputs.images != ''
         uses: hanthor/changelog-action@master
         with:
           registry: "ghcr.io/tuna-os/"
           cosign-key: "https://raw.githubusercontent.com/tuna-os/tunaOS/main/cosign.pub"
-          images: "yellowfin albacore skipjack"
+          images: ${{ steps.images.outputs.images }}
           stream: ${{ matrix.stream }}
           handwritten: ${{ inputs.handwritten }}
           output: changelog.md
