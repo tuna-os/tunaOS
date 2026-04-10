@@ -11,7 +11,17 @@ CONTEXT_PATH="$(realpath "$(dirname "$0")/..")" # should return /run/context
 BUILD_SCRIPTS_PATH="$(realpath "$(dirname "$0")")"
 MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
 SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
-if [ -z "${BASE_IMAGE}" ]; then
+
+# Determine the true OS base image for OS detection.
+# For chained builds (GDX, HWE) the BASE_IMAGE env var is set via Containerfile
+# ARG/ENV to the intermediate TunaOS stage image (e.g. ghcr.io/tuna-os/yellowfin:gnome50),
+# not the original OS base. Use image-info.json written by the previous stage when
+# available — it records the true OS base from stage 1.
+_IMAGE_INFO="/usr/share/ublue-os/image-info.json"
+if [[ -f "${_IMAGE_INFO}" ]]; then
+	BASE_IMAGE="$(jq -r '.["base-image"] // empty' "${_IMAGE_INFO}" 2>/dev/null)"
+fi
+if [[ -z "${BASE_IMAGE:-}" ]]; then
 	BASE_IMAGE="$(sh -c '. /etc/os-release ; echo ${BASE_IMAGE}')"
 fi
 DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
@@ -79,7 +89,7 @@ print_debug_info() {
 	detected_os
 	echo "IMAGE_NAME: $IMAGE_NAME"
 	cat /etc/os-release
-	cat /usr/ublue-os/image-info.json || true
+	cat /usr/share/ublue-os/image-info.json || true
 }
 
 run_buildscripts_for() {

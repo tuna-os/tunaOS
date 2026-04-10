@@ -217,15 +217,13 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     # which mounts a BTRFS graphRoot for podman; skopeo defaults to overlay and writes
     # to a different path, causing podman build to fall back to a remote registry pull.
 
-    # Remove the pre-chunk image before loading the rechunked archive to free disk space.
-    # GDX images are 5-6 GB; keeping both in storage simultaneously causes disk pressure
-    # on S3 CI runners, which triggers a podman storage index bug where podman load
-    # copies the config blob but fails to register it ("image not known").
-    podman rmi "${PRE_CHUNK_TAG}" 2>/dev/null || true
-    # Also remove the chain base image (e.g. the S2 image pulled for a GDX build).
-    # For multi-stage builds this is the largest contributor to BTRFS pressure since
-    # it was only needed to build the pre-chunk image and is no longer required.
-    podman rmi "{{ base_image_for_build }}" 2>/dev/null || true
+    # Prune ALL unused images from BTRFS storage before loading the rechunked archive.
+    # Targeted rmi of just pre-chunk + chain base isn't sufficient: multi-stage FROM
+    # images (e.g. akmods-nvidia-open) are also left in BTRFS and cause disk pressure
+    # that triggers a podman storage index bug ("image not known" after load).
+    # Containerfile.final only needs the rechunked archive (loaded next), so it's safe
+    # to remove everything else at this point.
+    podman system prune -af 2>/dev/null || true
 
     RECHUNKED_REF="localhost/{{ target_tag_with_version }}-rechunked-$$"
     LOADED_ID=$(podman load --input out.ociarchive | awk '/Loaded image/{print $NF}')
