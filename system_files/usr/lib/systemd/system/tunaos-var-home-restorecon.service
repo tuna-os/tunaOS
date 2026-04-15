@@ -1,0 +1,18 @@
+[Unit]
+Description=Relabel /var/home before graphical login
+DefaultDependencies=no
+ConditionSecurity=selinux
+ConditionPathIsDirectory=/var/home
+ConditionPathExists=!/var/lib/tunaos/var-home-relabeled
+After=local-fs.target
+Before=display-manager.service gdm.service
+Wants=local-fs.target
+
+[Service]
+Type=oneshot
+StateDirectory=tunaos
+ExecStart=/usr/sbin/restorecon -RF /var/home
+ExecStart=/usr/bin/touch /var/lib/tunaos/var-home-relabeled
+
+[Install]
+WantedBy=graphical.target
