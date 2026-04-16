@@ -237,6 +237,8 @@ jobs:
           for i in $(seq "${MAX_RETRIES}"); do
             sudo podman push --digestfile=/tmp/digestfile \
               --compression-format=zstd:chunked \
+              --compression-level=3 \
+              --force-compression \
               "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}" \
               && break || sleep $((5 * i));
           done
@@ -312,7 +314,13 @@ jobs:
         if: ${{ inputs.publish }}
         run: |
           IMAGE_FULL="${IMAGE_REGISTRY}/${IMAGE_NAME}"
-          cosign sign -y --key env://COSIGN_PRIVATE_KEY ${IMAGE_FULL}@${{ steps.push.outputs.remote_image_digest }}
+          for i in 1 2 3; do
+            cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE_FULL}@${{ steps.push.outputs.remote_image_digest }}" && break
+            if [ "$i" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((15 * i))
+          done
         env:
           COSIGN_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           COSIGN_REGISTRY_USERNAME: ${{ github.actor }}
@@ -366,12 +374,25 @@ jobs:
           DIGEST: ${{ steps.push.outputs.remote_image_digest }}
           SBOM_DIGEST: ${{ steps.upload-sbom.outputs.sbom_digest }}
         run: |
-          cosign attest -y \
-            --predicate "$SBOM" \
-            --type spdxjson \
-            --key env://COSIGN_PRIVATE_KEY \
-            "${IMAGE}@${DIGEST}"
-          cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${SBOM_DIGEST}"
+          for i in 1 2 3; do
+            cosign attest -y \
+              --predicate "$SBOM" \
+              --type spdxjson \
+              --key env://COSIGN_PRIVATE_KEY \
+              "${IMAGE}@${DIGEST}" && break
+            if [ "$i" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((15 * i))
+          done
+
+          for i in 1 2 3; do
+            cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${SBOM_DIGEST}" && break
+            if [ "$i" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((15 * i))
+          done
 
       - name: Create Job Outputs
         if: ${{ inputs.publish }}
@@ -624,7 +645,11 @@ jobs:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
           while IFS= read -r tag; do
-            podman manifest push --all=false --digestfile=/tmp/digestfile --compression-format=zstd:chunked $MANIFEST $IMAGE_REGISTRY/$IMAGE_NAME:$tag
+            podman manifest push --all=false --digestfile=/tmp/digestfile \
+              --compression-format=zstd:chunked \
+              --compression-level=3 \
+              --force-compression \
+              "$MANIFEST" "$IMAGE_REGISTRY/$IMAGE_NAME:$tag"
           done <<< "$TAGS"
 
           DIGEST=$(cat /tmp/digestfile)
@@ -661,7 +686,13 @@ jobs:
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
         run: |
-          cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${DIGEST}"
+          for i in 1 2 3; do
+            cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${DIGEST}" && break
+            if [ "$i" -eq 3 ]; then
+              exit 1
+            fi
+            sleep $((15 * i))
+          done
 
       - name: Attest Build Provenance (SLSA)
         uses: actions/attest-build-provenance@v2

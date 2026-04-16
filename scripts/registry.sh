@@ -49,6 +49,9 @@ push)
 		exit 1
 	fi
 	podman push --tls-verify=false \
+		--compression-format=zstd:chunked \
+		--compression-level=3 \
+		--force-compression \
 		"localhost/${VARIANT}:${FLAVOR}" \
 		"${HOST}:${PORT}/${VARIANT}:${FLAVOR}"
 	;;
