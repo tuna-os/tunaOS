@@ -34,6 +34,7 @@ sed -i 's/#HandleLidSwitchDocked=.*/HandleLidSwitchDocked=suspend-then-hibernate
 sed -i 's/#HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
 sed -i 's/#SleepOperation=.*/SleepOperation=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
 safe_enable brew-setup.service
+safe_enable tunaos-var-home-restorecon.service
 if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
 	safe_disable gdm.service
 	safe_enable sddm.service
