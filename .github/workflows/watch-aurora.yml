@@ -140,7 +140,7 @@ jobs:
       - name: Run Gemini to port the change
         id: gemini
         continue-on-error: true
-        uses: google-github-actions/run-gemini-cli@v0.1.21
+        uses: google-github-actions/run-gemini-cli@v0.1.22
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
