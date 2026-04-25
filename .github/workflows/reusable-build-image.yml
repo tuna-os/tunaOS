@@ -314,13 +314,22 @@ jobs:
         if: ${{ inputs.publish }}
         run: |
           IMAGE_FULL="${IMAGE_REGISTRY}/${IMAGE_NAME}"
-          for i in 1 2 3; do
-            cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE_FULL}@${{ steps.push.outputs.remote_image_digest }}" && break
-            if [ "$i" -eq 3 ]; then
-              exit 1
-            fi
-            sleep $((15 * i))
-          done
+          run_cosign() {
+            local subcommand="$1"
+            shift
+
+            for i in 1 2 3; do
+              if cosign "$subcommand" "$@"; then
+                return 0
+              fi
+              sleep $((15 * i))
+            done
+
+            echo "::warning::Rekor remained unavailable after retries; retrying once without transparency log upload"
+            cosign "$subcommand" --tlog-upload=false "$@"
+          }
+
+          run_cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE_FULL}@${{ steps.push.outputs.remote_image_digest }}"
         env:
           COSIGN_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           COSIGN_REGISTRY_USERNAME: ${{ github.actor }}
@@ -374,25 +383,28 @@ jobs:
           DIGEST: ${{ steps.push.outputs.remote_image_digest }}
           SBOM_DIGEST: ${{ steps.upload-sbom.outputs.sbom_digest }}
         run: |
-          for i in 1 2 3; do
-            cosign attest -y \
-              --predicate "$SBOM" \
-              --type spdxjson \
-              --key env://COSIGN_PRIVATE_KEY \
-              "${IMAGE}@${DIGEST}" && break
-            if [ "$i" -eq 3 ]; then
-              exit 1
-            fi
-            sleep $((15 * i))
-          done
+          run_cosign() {
+            local subcommand="$1"
+            shift
 
-          for i in 1 2 3; do
-            cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${SBOM_DIGEST}" && break
-            if [ "$i" -eq 3 ]; then
-              exit 1
-            fi
-            sleep $((15 * i))
-          done
+            for i in 1 2 3; do
+              if cosign "$subcommand" "$@"; then
+                return 0
+              fi
+              sleep $((15 * i))
+            done
+
+            echo "::warning::Rekor remained unavailable after retries; retrying once without transparency log upload"
+            cosign "$subcommand" --tlog-upload=false "$@"
+          }
+
+          run_cosign attest -y \
+            --predicate "$SBOM" \
+            --type spdxjson \
+            --key env://COSIGN_PRIVATE_KEY \
+            "${IMAGE}@${DIGEST}"
+
+          run_cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${SBOM_DIGEST}"
 
       - name: Create Job Outputs
         if: ${{ inputs.publish }}
@@ -686,13 +698,22 @@ jobs:
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
         run: |
-          for i in 1 2 3; do
-            cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${DIGEST}" && break
-            if [ "$i" -eq 3 ]; then
-              exit 1
-            fi
-            sleep $((15 * i))
-          done
+          run_cosign() {
+            local subcommand="$1"
+            shift
+
+            for i in 1 2 3; do
+              if cosign "$subcommand" "$@"; then
+                return 0
+              fi
+              sleep $((15 * i))
+            done
+
+            echo "::warning::Rekor remained unavailable after retries; retrying once without transparency log upload"
+            cosign "$subcommand" --tlog-upload=false "$@"
+          }
+
+          run_cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${DIGEST}"
 
       - name: Attest Build Provenance (SLSA)
         uses: actions/attest-build-provenance@v2
