@@ -36,30 +36,43 @@ Always run `just fix && just check` after making changes to validate the build c
 
 ## Porting Rules
 
-1. **Packages**: Aurora targets Fedora only. TunaOS KDE targets both Fedora (bonito) and EL10
-   (yellowfin/albacore/skipjack). Port Fedora packages into the `IS_FEDORA == true` block in
-   `build_scripts/kde.sh`. For packages that also exist in EL10 repos or the `ublue-os/packages`
-   COPR, also add them to the EL10 block.
+> **Goal: incorporate as much as possible from upstream.**
+> At the end of this file is an **EL10 Package Availability Check** section with
+> definitive results from a live AlmaLinux Kitten 10 + EPEL 10 + CRB container query.
+> Use those results — do not guess.
+
+1. **Packages — use the availability report**:
+
+   Aurora targets Fedora only. TunaOS KDE targets both Fedora (`bonito`) and EL10
+   (`yellowfin`/`albacore`/`skipjack`). For every package in the diff, check the
+   `## EL10 Package Availability Check` section at the bottom of this file:
+
+   | Result | Action |
+   |---|---|
+   | ✅ Available in EL10 | Add to **both** the `IS_FEDORA == true` block **and** the `else` (EL10) block in `build_scripts/kde.sh` |
+   | ❌ Not available in EL10 | Add **only** inside `if [[ $IS_FEDORA == true ]]; then` — a tracking issue has already been opened |
+
+   Active EL10 repos in TunaOS: base AlmaLinux/CentOS Stream 10, EPEL 10, CRB,
+   `ublue-os/packages` COPR, `tuna-os/github-copr` COPR (see `build_scripts/lib.sh`).
 
 2. **COPR packages**: Aurora uses `ublue-os/packages`, `ublue-os/staging`, `ledif/kairpods`,
-   `lizardbyte/beta`. TunaOS already has `ublue-os/packages` for EL10. Add Fedora-only COPRs
+   `lizardbyte/beta`. TunaOS has `ublue-os/packages` for EL10. Add Fedora-only COPRs
    inside the `IS_FEDORA == true` block only.
 
-3. **Config files**: Mirror aurora's `system_files/shared/` → TunaOS's `system_files/`,
-   and any KDE-specific overrides → `system_files_overrides/kde/`.
+3. **Config files**: Mirror aurora's `system_files/shared/` → TunaOS `system_files/`,
+   and KDE-specific overrides → `system_files_overrides/kde/`.
 
-4. **Version-specific packages**: Aurora has `case "$FEDORA_MAJOR_VERSION"` blocks. TunaOS
+4. **Version-specific packages**: Aurora uses `case "$FEDORA_MAJOR_VERSION"` blocks. TunaOS
    uses `$MAJOR_VERSION_NUMBER` from `lib.sh`. Replicate conditionals using that variable.
 
-5. **DX flavor**: Aurora's `dx` variant maps to TunaOS's `kde` flavor with DX additions — check
-   `system_files_overrides/kde/` for the right place.
+5. **DX flavor**: Aurora's `dx` variant maps to TunaOS's `kde` flavor with DX additions —
+   check `system_files_overrides/kde/` for the right place.
 
-6. **Do NOT port**: aurora/fedora branding, `plasma-lookandfeel-fedora` removal (TunaOS may
-   have its own), signing keys, CI/CD files, Renovate config, documentation,
-   `plasma-welcome-fedora` removal (check if TunaOS needs this), or `image.toml`.
+6. **Do NOT port**: aurora/fedora branding, signing keys, CI/CD files, Renovate config,
+   documentation, `image.toml`, or `os-release` changes.
 
-7. **If nothing to port**: Still commit a file `.github/upstream-notes/aurora-{SHORT_SHA}.md`
-   documenting why the commit was reviewed and skipped.
+7. **If nothing to port**: Still commit `.github/upstream-notes/aurora-{SHORT_SHA}.md`
+   explaining why the commit was skipped.
 
 ## Output
 

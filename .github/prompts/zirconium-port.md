@@ -34,23 +34,34 @@ Always run `just fix && just check` after making changes to validate the build c
 
 ## Porting Rules
 
-1. **Packages**: Only port packages that exist in Fedora repos or the active COPRs already configured
-   in `niri.sh` (e.g., `yalter/niri-git`, `avengemedia/dms-git`, `zirconium/packages`).
-   If a package is Fedora-only and not available on EL10, add it only in the `IS_FEDORA == true` block.
+> **Goal: incorporate as much as possible from upstream.**
+> At the end of this file is an **EL10 Package Availability Check** section with
+> definitive results from a live AlmaLinux Kitten 10 + EPEL 10 + CRB container query.
+> Use those results — do not guess.
 
-2. **Config files**: Drop config files into `system_files_overrides/niri/` mirroring the path structure
+1. **Packages — use the availability report**:
+
+   For every package in the diff, check the `## EL10 Package Availability Check`
+   section at the bottom of this file and apply the following rules:
+
+   | Result | Action |
+   |---|---|
+   | ✅ Available in EL10 | Add to **both** the `IS_FEDORA == true` block **and** the `else` (EL10) block |
+   | ❌ Not available in EL10 | Add **only** inside `if [[ $IS_FEDORA == true ]]; then` — a tracking issue has already been opened |
+
+   Active EL10 repos in TunaOS: base AlmaLinux/CentOS Stream 10, EPEL 10, CRB,
+   `ublue-os/packages` COPR, `tuna-os/github-copr` COPR (see `build_scripts/lib.sh`).
+
+2. **Config files**: Drop config files into `system_files_overrides/niri/` mirroring the path
    from `mkosi.extra/`. Create subdirectories as needed.
 
 3. **Post-install scripts**: Add equivalent logic to the `"post"` case in `build_scripts/niri.sh`.
 
-4. **EL10 variants**: TunaOS targets both Fedora (bonito) and EL10 (yellowfin/albacore/skipjack).
-   If the change only makes sense for Fedora, wrap it in `if [[ $IS_FEDORA == true ]]; then`.
+4. **Do NOT port**: branding changes, hostname changes, zirconium-specific signing keys/policies,
+   `os-release` changes, CI/CD files, Renovate config, or documentation.
 
-5. **Do NOT port**: branding changes, hostname changes, zirconium-specific signing keys/policies,
-   changes to `os-release`, CI/CD files, Renovate config, or documentation.
-
-6. **If nothing to port**: Still commit a file `.github/upstream-notes/zirconium-{SHORT_SHA}.md`
-   documenting why the commit was reviewed and skipped.
+5. **If nothing to port**: Still commit `.github/upstream-notes/zirconium-{SHORT_SHA}.md`
+   explaining why the commit was skipped.
 
 ## Output
 

@@ -137,6 +137,16 @@ jobs:
           mkdir -p .github/upstream-notes
           python3 .github/scripts/write-gemini-task.py
 
+      - name: Check EL10 package availability
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHORT_SHA: ${{ matrix.short_sha }}
+          URL: ${{ matrix.url }}
+          UPSTREAM_REPO: ublue-os/bluefin-lts
+          FLAVOR: gnome
+        run: python3 .github/scripts/check-el10-packages.py
+
       - name: Run Gemini to port the change
         id: gemini
         continue-on-error: true

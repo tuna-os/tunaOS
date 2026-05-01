@@ -8,6 +8,15 @@ FRAME_COUNT = 72;
 FRAME_RATE  = 2;  # advance one frame every N refresh ticks (Plymouth ticks at ~20fps)
                   # FRAME_RATE=2 → ~10fps playback to match the original GIF speed
 
+TEXT_COLOR_R = 1;
+TEXT_COLOR_G = 1;
+TEXT_COLOR_B = 1;
+MUTED_COLOR_R = 0.72;
+MUTED_COLOR_G = 0.8;
+MUTED_COLOR_B = 0.9;
+PROMPT_GAP = 28;
+ENTRY_GAP = 10;
+
 fun ZeroPad(n) {
     if (n < 10)   return "000" + n;
     if (n < 100)  return "00"  + n;
@@ -29,6 +38,118 @@ fish_sprite.SetImage(fish_images[1]);
 
 current_frame = 1;
 tick = 0;
+status = "normal";
+prompt_sprite = NULL;
+entry_sprite = NULL;
+prompt_image = NULL;
+entry_image = NULL;
+prompt_text = "";
+prompt_value = "";
+password_bullets = 0;
+fish_x = Window.GetWidth()  / 2 - fish_images[1].GetWidth()  / 2;
+fish_y = Window.GetHeight() / 2 - fish_images[1].GetHeight() / 2;
+
+fun RepeatText(text, count) {
+    local output;
+    output = "";
+
+    for (i = 0; i < count; i++) {
+        output += text;
+    }
+
+    return output;
+}
+
+fun SetSpriteImage(sprite, image) {
+    if (!sprite) {
+        sprite = Sprite();
+    }
+
+    sprite.SetImage(image);
+    sprite.SetZ(10);
+    return sprite;
+}
+
+fun HidePromptOverlay() {
+    if (prompt_sprite) {
+        prompt_sprite.SetOpacity(0);
+    }
+
+    if (entry_sprite) {
+        entry_sprite.SetOpacity(0);
+    }
+}
+
+fun PositionPromptOverlay() {
+    local center_x;
+    local prompt_y;
+    local entry_y;
+
+    if (!prompt_image || !entry_image) {
+        return;
+    }
+
+    center_x = Window.GetWidth() / 2;
+    prompt_y = fish_y + fish_images[current_frame].GetHeight() + PROMPT_GAP;
+    entry_y = prompt_y + prompt_image.GetHeight() + ENTRY_GAP;
+
+    prompt_sprite.SetX(center_x - prompt_image.GetWidth() / 2);
+    prompt_sprite.SetY(prompt_y);
+    prompt_sprite.SetOpacity(1);
+
+    entry_sprite.SetX(center_x - entry_image.GetWidth() / 2);
+    entry_sprite.SetY(entry_y);
+    entry_sprite.SetOpacity(1);
+}
+
+fun ShowPromptOverlay(prompt_text, entry_text, entry_r, entry_g, entry_b) {
+    prompt_image = Image.Text(prompt_text, TEXT_COLOR_R, TEXT_COLOR_G, TEXT_COLOR_B);
+    entry_image = Image.Text(entry_text, entry_r, entry_g, entry_b);
+
+    prompt_sprite = SetSpriteImage(prompt_sprite, prompt_image);
+    entry_sprite = SetSpriteImage(entry_sprite, entry_image);
+    PositionPromptOverlay();
+}
+
+fun display_normal_callback() {
+    status = "normal";
+    prompt_text = "";
+    prompt_value = "";
+    password_bullets = 0;
+    HidePromptOverlay();
+}
+
+fun display_password_callback(prompt, bullets) {
+    local bullet_text;
+
+    status = "password";
+    prompt_text = prompt;
+    password_bullets = bullets;
+
+    bullet_text = RepeatText("*", bullets);
+
+    if (bullet_text == "") {
+        bullet_text = "Enter disk password";
+    }
+
+    prompt_value = bullet_text;
+    ShowPromptOverlay(prompt_text, prompt_value, MUTED_COLOR_R, MUTED_COLOR_G, MUTED_COLOR_B);
+}
+
+fun display_question_callback(prompt, entry_text) {
+    local value_text;
+
+    status = "question";
+    prompt_text = prompt;
+    value_text = entry_text;
+
+    if (value_text == "") {
+        value_text = "_";
+    }
+
+    prompt_value = value_text;
+    ShowPromptOverlay(prompt_text, prompt_value, MUTED_COLOR_R, MUTED_COLOR_G, MUTED_COLOR_B);
+}
 
 fun refresh_callback() {
     tick = tick + 1;
@@ -36,6 +157,20 @@ fun refresh_callback() {
         current_frame = (current_frame % FRAME_COUNT) + 1;
         fish_sprite.SetImage(fish_images[current_frame]);
     }
+
+    fish_x = Window.GetWidth()  / 2 - fish_images[current_frame].GetWidth()  / 2;
+    fish_y = Window.GetHeight() / 2 - fish_images[current_frame].GetHeight() / 2;
+    fish_sprite.SetX(fish_x);
+    fish_sprite.SetY(fish_y);
+
+    if (status == "password") {
+        PositionPromptOverlay();
+    } else if (status == "question") {
+        PositionPromptOverlay();
+    }
 }
 
 Plymouth.SetRefreshFunction(refresh_callback);
+Plymouth.SetDisplayNormalFunction(display_normal_callback);
+Plymouth.SetDisplayPasswordFunction(display_password_callback);
+Plymouth.SetDisplayQuestionFunction(display_question_callback);
