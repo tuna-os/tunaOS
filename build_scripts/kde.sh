@@ -88,8 +88,8 @@ case "${1:-}" in
 	dnf -y copr enable ublue-os/packages
 	dnf -y copr disable ublue-os/packages
 	dnf -y --enablerepo copr:copr.fedorainfracloud.org:ublue-os:packages install \
-		kcm_ublue \
-		krunner-bazaar
+		kcm_ublue
+	# krunner-bazaar 1.3.0 requires Qt 6.10 which is not yet in EL10; re-add when COPR is fixed
 
 	# Disable plasma-discover in favor of Flatpak/Bazaar (like Aurora)
 	if [ -f /usr/share/applications/org.kde.discover.desktop ]; then
