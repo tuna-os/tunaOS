@@ -40,9 +40,14 @@ env = {**os.environ, "GH_TOKEN": GH_TOKEN}
 
 
 def gh(*args):
-    return subprocess.run(
-        ["gh", *args], env=env, capture_output=True, text=True, check=True
+    result = subprocess.run(
+        ["gh", *args], env=env, capture_output=True, text=True
     )
+    if result.returncode != 0:
+        print(f"gh {' '.join(args)} failed (exit {result.returncode}):", file=sys.stderr)
+        print(result.stderr, file=sys.stderr)
+        result.check_returncode()
+    return result
 
 
 def graphql(query, **variables):
@@ -176,52 +181,44 @@ label_args = ["--label", LABEL] if LABEL else []
 title = f"⬆️ [{FLAVOR} port] {len(unported)} upstream commit(s): {shorts}"
 
 # ── Create the issue ─────────────────────────────────────────────────────────
-issue = json.loads(
-    gh(
-        "issue", "create",
-        "--repo", REPO,
-        "--title", title,
-        "--body", issue_body,
-        "--json", "number,nodeId",
-        *label_args,
-    ).stdout
-)
-issue_number = issue["number"]
-issue_node_id = issue["nodeId"]
-print(f"Created issue #{issue_number}")
+# gh issue create prints the issue URL to stdout; parse the number from it
+url_output = gh(
+    "issue", "create",
+    "--repo", REPO,
+    "--title", title,
+    "--body", issue_body,
+    *label_args,
+).stdout.strip()
+issue_number = int(url_output.rstrip("/").rsplit("/", 1)[-1])
+print(f"Created issue #{issue_number} — {url_output}")
 
-# ── Get Copilot actor ID ─────────────────────────────────────────────────────
-data = graphql(
-    """
-    query($owner: String!, $repo: String!) {
-      repository(owner: $owner, name: $repo) {
-        suggestedActors(capabilities: [CAN_BE_ASSIGNED_TO_COPILOT_ISSUES], first: 1) {
-          nodes { id login }
-        }
-      }
-    }
-    """,
+# Fetch the nodeId via REST so we can use it in the GraphQL mutation
+issue_data = json.loads(
+    gh("api", f"/repos/{REPO}/issues/{issue_number}").stdout
+)
+issue_node_id = issue_data["node_id"]
+
+# ── Assign the issue to the Copilot coding agent via agentAssignment ─────────
+# Get the repo nodeId required by agentAssignment
+repo_data = graphql(
+    "query($owner: String!, $repo: String!) { repository(owner: $owner, name: $repo) { id } }",
     owner=owner, repo=repo,
 )
-actors = data["data"]["repository"]["suggestedActors"]["nodes"]
-if not actors:
-    print("ERROR: No Copilot coding agent actor found.")
-    print("Make sure the Copilot coding agent is enabled for this repository.")
-    sys.exit(1)
+repo_node_id = repo_data["data"]["repository"]["id"]
 
-copilot_id = actors[0]["id"]
-print(f"Copilot actor: {actors[0]['login']}")
-
-# ── Assign the issue to the Copilot coding agent ─────────────────────────────
 graphql(
     """
-    mutation($issueId: ID!, $actorId: ID!) {
-      replaceActorsForAssignable(input: {assignableId: $issueId, actorIds: [$actorId]}) {
+    mutation($issueId: ID!, $repoId: ID!) {
+      replaceActorsForAssignable(input: {
+        assignableId: $issueId,
+        actorLogins: ["copilot-swe-agent"],
+        agentAssignment: { targetRepositoryId: $repoId }
+      }) {
         assignable { ... on Issue { number } }
       }
     }
     """,
-    issueId=issue_node_id, actorId=copilot_id,
+    issueId=issue_node_id, repoId=repo_node_id,
 )
 print(f"Copilot coding agent assigned to issue #{issue_number}")
 print(f"Track: https://github.com/{REPO}/issues/{issue_number}")
