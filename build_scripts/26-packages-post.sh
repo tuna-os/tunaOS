@@ -9,22 +9,25 @@ SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
 export SCRIPTS_PATH
 export MAJOR_VERSION_NUMBER
 
+# Download directory - use /var/tmp to avoid tmpfs limitations
+DOWNLOADS_DIR="/var/tmp/tunaos-downloads"
+mkdir -p "$DOWNLOADS_DIR"
+
 # Offline Yellowfin documentation
-curl --retry 3 -Lo /tmp/bluefin.pdf https://github.com/ublue-os/bluefin-docs/releases/download/0.1/bluefin.pdf
-install -Dm0644 -t /usr/share/doc/bluefin/ /tmp/bluefin.pdf
+curl --retry 3 --fail -Lo "$DOWNLOADS_DIR/bluefin.pdf" https://github.com/ublue-os/bluefin-docs/releases/download/0.1/bluefin.pdf
+install -Dm0644 -t /usr/share/doc/bluefin/ "$DOWNLOADS_DIR/bluefin.pdf"
 
 # Install JetBrains Mono Nerd Font
-curl --retry 3 -Lo /tmp/JetBrainsMono.zip \
-	"https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/JetBrainsMono.zip"
+curl --retry 3 --fail -Lo "$DOWNLOADS_DIR/JetBrainsMono.tar.xz" \
+	"https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/JetBrainsMono.tar.xz"
 mkdir -p /usr/share/fonts/JetBrainsMonoNerdFont
-unzip -o /tmp/JetBrainsMono.zip -d /usr/share/fonts/JetBrainsMonoNerdFont \
-	"*.ttf" -x "*Windows*"
+tar -xJf "$DOWNLOADS_DIR/JetBrainsMono.tar.xz" -C /usr/share/fonts/JetBrainsMonoNerdFont
 fc-cache -f /usr/share/fonts/JetBrainsMonoNerdFont
-rm /tmp/JetBrainsMono.zip
+rm "$DOWNLOADS_DIR/JetBrainsMono.tar.xz"
 
 # Add Flathub by default
 mkdir -p /etc/flatpak/remotes.d
-curl --retry 3 -o /etc/flatpak/remotes.d/flathub.flatpakrepo "https://dl.flathub.org/repo/flathub.flatpakrepo"
+curl --retry 3 --fail -o /etc/flatpak/remotes.d/flathub.flatpakrepo "https://dl.flathub.org/repo/flathub.flatpakrepo"
 
 # Generate initramfs image after installing Yellowfin branding because of Plymouth subpackage
 # Set TunaOS Plymouth theme before rebuilding initramfs so dracut picks it up
