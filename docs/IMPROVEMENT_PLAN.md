@@ -1,45 +1,31 @@
 # TunaOS — Robustness, Security & E2E Testing Plan
 
-Status: 2026-05-23 — proposal, not yet approved.
+Status: 2026-05-23 — in progress. Eight commits landed on main this
+session; phases 2, 3a, 4.1, and 4.2 done in part. Remaining work below.
 
-This plan covers the multi-step work the user requested in May 2026:
-build-failure robustness, dakota-style end-to-end ISO testing, ISO building
-for every variant via tacklebox, and security hardening. The low-risk
-build-robustness fixes are already landed (see the **Already shipped**
-section); everything else is staged for review and approval.
+This plan covers the multi-step work requested in May 2026:
+build-failure robustness, dakota-style end-to-end ISO testing, ISO
+building via tacklebox for every variant, and security hardening.
 
 ---
 
-## Already shipped (this branch)
+## Shipped (this session, on main)
 
-These are the low-risk fixes I implemented immediately because the failure
-modes were obvious and the changes were contained.
+Commits between `12a8e92` (prior HEAD) and `f967658` (current HEAD).
 
-1. **`build_scripts/lib.sh`** — added a `dnf_retry` helper that retries
-   transient mirror failures (`SSL_ERROR_SYSCALL`, partial-file, slow
-   mirror) up to 4 times with backoff, clearing metadata between attempts.
-   Real transaction errors still fail fast.
-2. **`build_scripts/00-workarounds.sh`** —
-   - Moved the rpm-ostree kernel-install hook mask from `gnome.sh` to here,
-     so **all** variants (including `bonito` base, which doesn't run
-     `gnome.sh`) silence the `dracut-install: ERROR: installing '/root'`
-     warning.
-   - Extended the AlmaLinux-only DNF reliability settings (`timeout=300`,
-     `retries=10`, `minrate=100`, `max_parallel_downloads=10`) to **all**
-     RPM-based variants. EPEL and CentOS mirrors fail just as often.
-3. **`build_scripts/10-base-packages.sh`** — wrapped the EPEL-multimedia
-   install **and** the RHEL/Alma main desktop install in `dnf_retry`. The
-   second one is what was killing `albacore` builds when `gum` /
-   `distrobox` / `fastfetch` downloads stalled (EPEL has no retry today).
-4. **`Containerfile`** — removed `ENV RHSM_USER/PASSWORD/ORG/ACTIVATION_KEY`
-   from the `base-no-de` stage. Those bake credentials into the image
-   config (visible to anyone who pulls the image via `podman inspect`).
-   They're now passed inline to the one `RUN` that needs them.
-   *Caveat:* this still leaks into `podman history --no-trunc`. Full fix
-   below requires BuildKit secrets — staged for Phase 4.
+| Commit | Phase | What |
+|---|---|---|
+| `539bb42` | hygiene | Removed stale `build.log`, `SBOM_CHANGELOG_IMPLEMENTATION.md`, `conductor/`. Fixed malformed `.gitignore` line, added `.claude/` / `.antigravitycli/`. |
+| `33e11a1` | 1.1 | Pre-remove `gnome-shell-common` (48.x EL10) before installing the COPR's `gnome-shell-49` so the file-conflict that was breaking skipjack builds no longer fires. Upstream fix is `Obsoletes:` in `tuna-os/github-copr`. |
+| `fd7c4cc` | 1 | New `dnf_retry` helper in `lib.sh` (4 attempts, exponential backoff, metadata clear). Used for the RHEL/Alma main desktop install that pulls `gum` from EPEL — the actual cause of albacore CI failures. |
+| `901d075` | 2 | E2E harness: `tunaos-live-ready.service` systemd unit that prints a marker to the serial console, `scripts/iso-e2e.sh` QEMU+OVMF host runner with screenshot+serial-log capture, `.github/workflows/iso-e2e.yml` workflow with R2 ISO download and artifact upload. |
+| `4363b64` | 2 | Narrowed iso-e2e PR trigger paths so it only fires when the harness itself changes (the workflow downloads from R2, which doesn't reflect PR changes). |
+| `f85b851` | 4.2 | Pinned 4 unique third-party GitHub Actions to commit SHAs across 9 workflows. Closes the floating-ref supply-chain risk for `ublue-os/container-storage-action@main`, `hanthor/changelog-action@master`, and the v* tags. |
+| `1be982c` | 4.1 | RHSM credentials via BuildKit secret. Justfile materialises a mode-0600 tempfile and passes `--secret id=rhsm`; Containerfile mounts it at `/run/secrets/rhsm` for one RUN only. No more leaks via `podman inspect` *or* `podman history --no-trunc`. |
+| `f967658` | 3a | New `scripts/build-iso-tacklebox.sh` + `just iso-tacklebox` recipe. Tacklebox is built from a pinned SHA in `/var/cache/tunaos/tacklebox`; output ISO is dmsquash-live + sd-boot (no Anaconda). Added *alongside* `just live-iso`, not as a replacement. |
 
-Validation: `shellcheck --exclude=SC1091`, `shfmt -d`, `yamllint` all clean
-on the changed files.
+Validation on every commit: `shellcheck --exclude=SC1091`, `shfmt -d`,
+`yamllint`, `actionlint`, `just --unstable --fmt --check`.
 
 ---
 
@@ -273,21 +259,52 @@ Estimate: 1 day, can land alongside any of the above.
 
 ---
 
-## Suggested ordering
+## Remaining work (next session)
 
-```
-Phase 1 (robustness)   ──┐
-                         ├─► Phase 2 (e2e) ──┐
-Phase 4 (security)    ───┘                   ├─► Phase 3 (tacklebox)
-                                             │
-                            Phase 5 (docs) ──┘
-```
+Most impactful items first:
 
-Phase 1 and Phase 4 can run in parallel — different files, different
-failure modes. Phase 2 wants Phase 1 done first (clean builds make the
-e2e signal trustworthy). Phase 3 wants Phase 2 ready so we can verify
-tacklebox-built ISOs against the same harness. Phase 5 can interleave.
+1. **Phase 3b — Tacklebox CI integration.** Wire `just iso-tacklebox`
+   into a workflow that builds and publishes an ISO for every
+   variant×flavor with `build_iso: true` in `.github/build-config.yml`.
+   Right now only `yellowfin-gnome` and `albacore-gnome` get published
+   (in `publish-isos.yml`); the matrix already supports more. Likely
+   touches `.github/workflows/publish-isos.yml` and `iso-e2e.yml`.
+2. **Phase 2 follow-up — kickstart mode.** `scripts/iso-e2e.sh
+   --kickstart KS` is currently stubbed (exit 3). Implement: copy
+   kickstart to a virtual floppy, append `inst.ks=hd:fd0` to kernel
+   cmdline, watch for `/var/log/anaconda` completion via the QEMU
+   monitor. Reuse `tests/anaconda-ks.cfg` as the default.
+3. **Phase 2 follow-up — per-PR ISO build.** Currently `iso-e2e.yml`
+   downloads from R2, which means PR changes aren't actually tested.
+   Add a `pull_request`-triggered job that builds the ISO locally (via
+   the new `iso-tacklebox` path — much faster than the anaconda path)
+   and runs the harness against that. ~25 min budget on a free runner.
+4. **Phase 4.3 — `--security-opt label=disable`.** Used in every
+   `podman build` in the Justfile and most workflow steps. SELinux
+   labelling is disabled because the build mounts the repo in. The
+   safer pattern is `:Z` on the bind mount, which relabels just that
+   path. Plumb where feasible; document where it isn't.
+5. **Phase 4.4 — `set -euo pipefail` consistency.** Several
+   `build_scripts/*` files use `set -eo pipefail` only — unset-variable
+   errors slip through silently. Standardise on `set -euo pipefail`
+   and add `:-` fallbacks where intentional.
+6. **Phase 1.2 — surface bonito's three lint failures.** Remove the
+   `|| true` from `cleanup.sh:117` for `IS_FEDORA`, capture the exact
+   warnings, fix the underlying tmpfiles.d / var-state issues. The
+   `.build-logs/` snapshot is from March 2026; later commits to
+   `cleanup.sh` may have already resolved these. Verify against a
+   fresh build before removing the mask.
+7. **Phase 5 — docs polish.** Update `docs/AGENT_GUIDE.md` with the
+   `dnf_retry` and `iso-e2e.sh` behaviour. Add `docs/TESTING.md`
+   explaining how to run the e2e harness locally.
 
-If forced to pick a single next step: **Phase 1.1** (fix the skipjack
-GNOME conflict in `tuna-os/github-copr`) unblocks the most users
-immediately and is a contained one-PR change.
+## Upstream work (separate repos)
+
+- **`tuna-os/github-copr`** — add `Obsoletes: gnome-shell-common < %{major_version}`
+  to `src/gnome-49/gnome-shell/gnome-shell.spec` and the matching
+  `gnome-50` spec. Once that lands, the workaround in `build_scripts/gnome.sh:48`
+  (commit `33e11a1`) can be removed.
+- **`tuna-os/tacklebox`** — publish a release container image so we
+  don't have to `go build` from source each time. The `scripts/build-iso-tacklebox.sh`
+  fallback to building from source will still work as a development
+  shortcut, but releases are nicer for CI.
