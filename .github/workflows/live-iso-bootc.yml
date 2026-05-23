@@ -46,7 +46,7 @@ jobs:
           submodules: recursive
 
       - name: Maximize build space
-        uses: ublue-os/container-storage-action@main
+        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
 
       - name: Install dependencies
         run: |

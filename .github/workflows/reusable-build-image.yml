@@ -135,7 +135,7 @@ jobs:
 
       - name: Mount BTRFS for podman storage
         if: ${{ matrix.platform != 'linux/arm64' && inputs.cleanup_runner }}
-        uses: ublue-os/container-storage-action@main
+        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
 
       - name: Setup TunaOS Build Environment
         uses: ./.github/actions/setup-tunaos
@@ -301,7 +301,7 @@ jobs:
 
       - name: Post Diff Comment
         if: github.event_name == 'pull_request' && hashFiles('diff_report.md') != ''
-        uses: thollander/actions-comment-pull-request@v2
+        uses: thollander/actions-comment-pull-request@fabd468d3a1a0b97feee5f6b9e499eab0dd903f6 # v2.5.0
         with:
           filePath: diff_report.md
           comment_tag: diff-${{ env.IMAGE_NAME }}
