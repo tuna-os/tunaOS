@@ -378,6 +378,14 @@ live-iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
 iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
     @{{ just }} live-iso {{ variant }} {{ flavor }} {{ repo }} {{ tag }} {{ dev }}
 
+# Build a live ISO via tacklebox (no Anaconda, dmsquash-live + sd-boot)
+iso-tacklebox variant='yellowfin' flavor='gnome' repo='local' tag='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    _tag="{{ tag }}"
+    [[ -z "$_tag" ]] && _tag="{{ flavor }}"
+    sudo bash ./scripts/build-iso-tacklebox.sh "{{ variant }}" "{{ flavor }}" "{{ repo }}" "$_tag"
+
 # Generate a QCOW2 disk image using bootc install to-disk (via loopback in a privileged container)
 qcow2 variant flavor='gnome' repo='local' tag='':
     #!/usr/bin/env bash
