@@ -38,17 +38,15 @@ on:
         options:
           - r2-latest      # Download the latest published ISO from Cloudflare R2.
           - artifact       # Consume an ISO uploaded as a workflow artifact.
-  # PR trigger gated on paths that actually affect the ISO; saves CI minutes.
+  # PR trigger only when the harness itself changes. Building a per-PR ISO
+  # to test arbitrary Containerfile/build_scripts changes would take ~40 min
+  # and isn't wired up yet (the workflow currently downloads from R2, which
+  # has the published main-branch ISO, not the PR's). Tracked: PHASE-2
+  # follow-up in docs/IMPROVEMENT_PLAN.md.
   pull_request:
     paths:
-      - 'Containerfile'
-      - 'Containerfile.*'
-      - 'build_scripts/**'
-      - 'live-iso/**'
       - 'scripts/iso-e2e.sh'
-      - 'scripts/build-live-iso.sh'
-      - 'system_files/**'
-      - 'system_files_overrides/**'
+      - 'live-iso/common/src/tunaos-live-ready.service'
       - '.github/workflows/iso-e2e.yml'
   # Weekly catch-all: ensures the harness keeps working even when no PR has
   # touched ISO-affecting files for a while.
@@ -117,9 +115,11 @@ jobs:
             echo "::error::No ISO found in R2 for ${VARIANT}-${FLAVOR}"
             exit 1
           fi
-          echo "ISO_PATH=$(realpath "$ISO")" >> "$GITHUB_ENV"
-          echo "VARIANT=${VARIANT}" >> "$GITHUB_ENV"
-          echo "FLAVOR=${FLAVOR}" >> "$GITHUB_ENV"
+          {
+            echo "ISO_PATH=$(realpath "$ISO")"
+            echo "VARIANT=${VARIANT}"
+            echo "FLAVOR=${FLAVOR}"
+          } >> "$GITHUB_ENV"
 
       - name: Run readiness e2e
         id: e2e
