@@ -149,11 +149,29 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     AKMODS_ORG=$({{ yq }} -r ".variants[] | select(.id == \"{{ target_tag }}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
     BUILD_ARGS+=("--build-arg" "AKMODS_BASE=ghcr.io/${AKMODS_ORG}")
 
-    # Pass RHSM credentials
-    BUILD_ARGS+=("--build-arg" "RHSM_USER=${RHSM_USER:-}")
-    BUILD_ARGS+=("--build-arg" "RHSM_PASSWORD=${RHSM_PASSWORD:-}")
-    BUILD_ARGS+=("--build-arg" "RHSM_ORG=${RHSM_ORG:-}")
-    BUILD_ARGS+=("--build-arg" "RHSM_ACTIVATION_KEY=${RHSM_ACTIVATION_KEY:-}")
+    # RHSM credentials via BuildKit-style secret. The previous --build-arg
+    # approach baked them into `podman history --no-trunc` (and earlier into
+    # the image ENV); --mount=type=secret in the Containerfile exposes them
+    # only inside the one RUN that registers with subscription-manager and
+    # never persists them in any layer.
+    #
+    # Only materialise the secret file if at least one RHSM var is set —
+    # for non-RHEL builds (yellowfin/albacore/skipjack/bonito) this stays
+    # empty and no secret is passed.
+    RHSM_SECRET_FILE=""
+    if [[ -n "${RHSM_USER:-}${RHSM_PASSWORD:-}${RHSM_ORG:-}${RHSM_ACTIVATION_KEY:-}" ]]; then
+        RHSM_SECRET_FILE=$(mktemp)
+        # shellcheck disable=SC2064 # cleanup must run with the captured path
+        trap "rm -f '${RHSM_SECRET_FILE}'" EXIT
+        chmod 0600 "${RHSM_SECRET_FILE}"
+        {
+            printf 'export RHSM_USER=%q\n'           "${RHSM_USER:-}"
+            printf 'export RHSM_PASSWORD=%q\n'       "${RHSM_PASSWORD:-}"
+            printf 'export RHSM_ORG=%q\n'            "${RHSM_ORG:-}"
+            printf 'export RHSM_ACTIVATION_KEY=%q\n' "${RHSM_ACTIVATION_KEY:-}"
+        } > "${RHSM_SECRET_FILE}"
+        BUILD_ARGS+=("--secret" "id=rhsm,src=${RHSM_SECRET_FILE}")
+    fi
 
     if [[ "{{ enable_hwe }}" -eq "1" ]] || [[ "{{ target_tag }}" == bonito* ]]; then
         BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=coreos-stable-{{ coreos_stable_version }}")

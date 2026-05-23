@@ -30,11 +30,11 @@ ARG IMAGE_NAME
 ARG IMAGE_VENDOR
 ARG SHA_HEAD_SHORT
 
-# RHSM Credentials for RHEL registration
-ARG RHSM_USER
-ARG RHSM_PASSWORD
-ARG RHSM_ORG
-ARG RHSM_ACTIVATION_KEY
+# RHSM credentials are NOT declared as ARG here — they're passed via
+# `--secret id=rhsm` from the Justfile and consumed in the
+# install_base_packages_no_de RUN below. Keeping them out of ARG/ENV
+# ensures they never appear in `podman history --no-trunc` or in the
+# final image config (`podman inspect`).
 
 ENV BASE_IMAGE=${BASE_IMAGE}
 ENV IMAGE_NAME=${IMAGE_NAME}
@@ -42,12 +42,6 @@ ENV IMAGE_VENDOR=${IMAGE_VENDOR}
 ENV SHA_HEAD_SHORT=${SHA_HEAD_SHORT}
 ENV ENABLE_HWE=${ENABLE_HWE}
 ENV ENABLE_GDX=${ENABLE_GDX}
-
-# Pass RHSM credentials as ENV to be used by build scripts
-ENV RHSM_USER=${RHSM_USER}
-ENV RHSM_PASSWORD=${RHSM_PASSWORD}
-ENV RHSM_ORG=${RHSM_ORG}
-ENV RHSM_ACTIVATION_KEY=${RHSM_ACTIVATION_KEY}
 
 # Preserve desktop flavor so base-stage scripts don't fall back to GNOME defaults
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
@@ -66,10 +60,15 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/00-workarounds.sh
 
-# Install base packages WITHOUT DE
+# Install base packages WITHOUT DE.
+# The optional RHSM secret is mounted at /run/secrets/rhsm only inside this
+# RUN. It contains `export RHSM_USER=…` etc.; install_base_packages_no_de
+# sources it if present. The mount is also gated by `required=false` so
+# non-RHEL builds (which never pass --secret) succeed unchanged.
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
+  --mount=type=secret,id=rhsm,target=/run/secrets/rhsm,required=false \
   bash -c "source /run/context/build_scripts/lib.sh && source /run/context/build_scripts/10-base-packages.sh && install_base_packages_no_de"
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \

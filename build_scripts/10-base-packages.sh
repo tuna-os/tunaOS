@@ -9,6 +9,18 @@ source /run/context/build_scripts/lib.sh
 # Function to install DE-agnostic base packages
 # This can be called from multi-stage builds to create a shared base layer
 install_base_packages_no_de() {
+	# Source RHSM credentials from the BuildKit secret if it's mounted.
+	# /run/secrets/rhsm is provided by the `--mount=type=secret,id=rhsm`
+	# directive in the Containerfile (only when RHSM_* env was set when
+	# the Justfile invoked podman build). The file exports RHSM_USER etc.
+	# into our shell so the subscription-manager calls below see them; the
+	# secret is gone the moment this RUN completes — no image layer or
+	# build-history record retains the values.
+	if [[ -f /run/secrets/rhsm ]]; then
+		# shellcheck disable=SC1091 # path only exists at build time
+		. /run/secrets/rhsm
+	fi
+
 	# This thing slows down downloads A LOT for no reason
 	if [[ $IS_CENTOS == true ]]; then
 		dnf remove -y subscription-manager
