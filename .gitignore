@@ -18,8 +18,13 @@ completions/
 # dev files
 hack/
 
-secrets.envbuild.log
+secrets.env
+build.log
 out.ociarchive
 *.iso
 *.qcow2
 .lima-home/
+
+# Local tooling / agent state (not project content)
+.claude/
+.antigravitycli/
