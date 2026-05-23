@@ -1,0 +1,190 @@
+name: ISO E2E Smoke
+
+# End-to-end ISO boot smoke test. Boots a published or freshly-built TunaOS
+# live ISO under QEMU + OVMF, waits for the TUNAOS_LIVE_READY marker from
+# tunaos-live-ready.service, and uploads serial logs + screenshots as
+# artifacts.
+#
+# Design notes: docs/IMPROVEMENT_PLAN.md §Phase 2.
+# Modelled on projectbluefin/dakota-iso's test-luks-install.yml.
+#
+# This is the lightweight readiness mode (--mode=ready). Future iterations
+# add --kickstart and --ssh-only modes. See scripts/iso-e2e.sh --help.
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Variant to test'
+        required: false
+        default: 'yellowfin'
+        type: choice
+        options:
+          - yellowfin
+          - albacore
+      flavor:
+        description: 'Flavor to test'
+        required: false
+        default: 'gnome'
+        type: choice
+        options:
+          - gnome
+          - gnome-hwe
+      source:
+        description: 'Where to source the ISO from'
+        required: false
+        default: 'r2-latest'
+        type: choice
+        options:
+          - r2-latest      # Download the latest published ISO from Cloudflare R2.
+          - artifact       # Consume an ISO uploaded as a workflow artifact.
+  # PR trigger gated on paths that actually affect the ISO; saves CI minutes.
+  pull_request:
+    paths:
+      - 'Containerfile'
+      - 'Containerfile.*'
+      - 'build_scripts/**'
+      - 'live-iso/**'
+      - 'scripts/iso-e2e.sh'
+      - 'scripts/build-live-iso.sh'
+      - 'system_files/**'
+      - 'system_files_overrides/**'
+      - '.github/workflows/iso-e2e.yml'
+  # Weekly catch-all: ensures the harness keeps working even when no PR has
+  # touched ISO-affecting files for a while.
+  schedule:
+    - cron: '0 6 * * 1'   # Monday 06:00 UTC
+
+permissions:
+  contents: read
+  # actions: read is needed when source=artifact to download the prior run's ISO.
+  actions: read
+
+jobs:
+  e2e:
+    name: E2E ${{ matrix.variant }}:${{ matrix.flavor }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      # Don't cancel the other leg if one fails — we want to see both signals.
+      fail-fast: false
+      matrix:
+        include:
+          - variant: yellowfin
+            flavor: gnome
+          - variant: albacore
+            flavor: gnome
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install QEMU and helpers
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            qemu-system-x86 ovmf socat \
+            rclone sshpass \
+            imagemagick
+
+      # The R2 source is the default — it tests the artifact users actually
+      # download. Skipped when source=artifact (workflow_dispatch only).
+      - name: Download latest ISO from R2
+        if: github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest'
+        env:
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          # PR + scheduled runs use the matrix; workflow_dispatch overrides
+          # the matrix with the chosen variant/flavor.
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            VARIANT="${{ inputs.variant }}"
+            FLAVOR="${{ inputs.flavor }}"
+          else
+            VARIANT="${{ matrix.variant }}"
+            FLAVOR="${{ matrix.flavor }}"
+          fi
+          echo "==> Fetching latest ${VARIANT}-${FLAVOR} ISO from R2..."
+          rclone copy --log-level INFO --s3-no-check-bucket \
+            --include "${VARIANT}-${FLAVOR}-*.iso" \
+            R2:${{ secrets.R2_BUCKET }}/live-isos/ .
+          ISO=$(find . -maxdepth 1 -name "${VARIANT}-${FLAVOR}-*.iso" | head -1)
+          if [[ -z "$ISO" ]]; then
+            echo "::error::No ISO found in R2 for ${VARIANT}-${FLAVOR}"
+            exit 1
+          fi
+          echo "ISO_PATH=$(realpath "$ISO")" >> "$GITHUB_ENV"
+          echo "VARIANT=${VARIANT}" >> "$GITHUB_ENV"
+          echo "FLAVOR=${FLAVOR}" >> "$GITHUB_ENV"
+
+      - name: Run readiness e2e
+        id: e2e
+        timeout-minutes: 20
+        run: |
+          mkdir -p iso-e2e-out
+          # Free runners get KVM via /dev/kvm permissions; if it's not
+          # readable we fall back to TCG (slower but functional).
+          KVM_FLAG=""
+          [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
+          set +e
+          sudo --preserve-env=KVM_FLAG \
+            ./scripts/iso-e2e.sh "${ISO_PATH}" \
+              --output iso-e2e-out \
+              --timeout 600 \
+              ${KVM_FLAG}
+          rc=$?
+          set -e
+          echo "rc=${rc}" >> "$GITHUB_OUTPUT"
+          # Make the artifact dir readable so upload-artifact can stage it.
+          sudo chown -R "$USER:$(id -gn)" iso-e2e-out || true
+
+      - name: Convert screenshots to PNG
+        if: always()
+        continue-on-error: true
+        run: |
+          for ppm in iso-e2e-out/*.ppm; do
+            [[ -f "$ppm" ]] || continue
+            convert "$ppm" "${ppm%.ppm}.png" || true
+          done
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## ISO E2E — ${VARIANT:-?}:${FLAVOR:-?}"
+            echo ""
+            echo "| Field | Value |"
+            echo "|---|---|"
+            echo "| ISO | \`${ISO_PATH:-not set}\` |"
+            echo "| Exit code | ${{ steps.e2e.outputs.rc || 'n/a' }} |"
+            echo ""
+            if [[ -f iso-e2e-out/serial.log ]]; then
+              echo "### Serial log tail (last 50 lines)"
+              echo ''
+              echo '```'
+              tail -50 iso-e2e-out/serial.log
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: iso-e2e-${{ matrix.variant }}-${{ matrix.flavor }}
+          path: |
+            iso-e2e-out/serial.log
+            iso-e2e-out/*.png
+            iso-e2e-out/*.ppm
+          if-no-files-found: warn
+          retention-days: 14
+
+      - name: Fail on e2e error
+        if: steps.e2e.outputs.rc != '0'
+        run: |
+          echo "::error::iso-e2e.sh exited ${{ steps.e2e.outputs.rc }} (see serial.log artifact)"
+          exit 1

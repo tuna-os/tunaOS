@@ -85,6 +85,18 @@ EOF
 	systemctl enable liveiso-dev-ssh.service
 fi
 
+# ── E2E readiness marker ─────────────────────────────────────────────────────
+# Install a oneshot unit that prints TUNAOS_LIVE_READY to /dev/console once
+# the live environment is up. scripts/iso-e2e.sh and the iso-e2e CI workflow
+# poll the QEMU serial log for this string to know they can proceed with
+# install / SSH tests. Always installed — the marker is harmless in
+# production ISOs (one journal line) and removing the unit at release time
+# would break the e2e workflow we use to validate those very releases.
+
+install -Dm0644 /src/tunaos-live-ready.service \
+	/etc/systemd/system/tunaos-live-ready.service
+systemctl enable tunaos-live-ready.service
+
 # ── Install tunaos-first-setup (TunaOS Installer) ────────────────────────────
 
 # glib2 may be version-locked to a GNOME COPR on EL10. Enable the matching
