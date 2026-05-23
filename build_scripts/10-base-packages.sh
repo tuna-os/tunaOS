@@ -129,8 +129,11 @@ install_base_packages_no_de() {
 			systemd-oomd-defaults \
 			unzip
 	else
-		# RHEL/AlmaLinux
-		dnf -y install \
+		# RHEL/AlmaLinux — wrapped in dnf_retry because this set pulls from EPEL
+		# (gum, distrobox, fastfetch, glow). EPEL mirror flakes (curl
+		# SSL_ERROR_SYSCALL, partial-file) were the actual cause of albacore CI
+		# failures captured in .build-logs/albacore-base.log.
+		dnf_retry -y install \
 			buildah \
 			btrfs-progs \
 			distrobox \

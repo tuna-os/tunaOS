@@ -128,6 +128,36 @@ copy_systemfiles_for() {
 	printf "::endgroup::\n"
 }
 
+# Run `dnf` with retries to absorb transient mirror flakes (EPEL / AlmaLinux /
+# CentOS mirrors fail with curl SSL_ERROR_SYSCALL / partial-file errors a few
+# times a week, which previously broke whole CI builds — see albacore failing
+# on `gum` downloads in .build-logs/). Re-runs on failure with backoff,
+# clearing metadata between attempts so DNF picks a different mirror.
+#
+# Does NOT mask intrinsic errors (transaction conflicts, missing packages) —
+# those fail identically on every attempt; the loop returns the last DNF
+# exit code so callers still see real errors.
+#
+# Usage: dnf_retry install -y foo bar
+#        dnf_retry -y install --setopt=… foo
+dnf_retry() {
+	local max_attempts="${DNF_RETRY_ATTEMPTS:-4}"
+	local attempt=1
+	local rc=0
+	while ((attempt <= max_attempts)); do
+		if dnf "$@"; then
+			return 0
+		fi
+		rc=$?
+		echo "dnf attempt ${attempt}/${max_attempts} failed (exit ${rc}); clearing metadata and retrying..." >&2
+		dnf clean metadata || true
+		sleep "$((attempt * 5))"
+		attempt=$((attempt + 1))
+	done
+	echo "dnf failed after ${max_attempts} attempts" >&2
+	return "$rc"
+}
+
 install_from_copr() {
 	COPR_NAME=$1
 	shift
