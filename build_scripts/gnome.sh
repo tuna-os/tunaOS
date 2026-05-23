@@ -23,6 +23,22 @@ case "${1:-}" in
 			# alongside c10s-gnome-50-fresh so both the GNOME stack and its deps resolve.
 			dnf -y copr enable "jreilly1821/c10s-gnome-50"
 		fi
+		# Pre-remove the EL10-shipped gnome-shell-common (48.x) before installing
+		# the COPR's gnome-shell (49.x / 50.x). Without this, the file
+		# /usr/share/glib-2.0/schemas/org.gnome.shell.gschema.xml is owned by
+		# both packages and DNF aborts with a "Transaction test error: file ...
+		# conflicts with file from package gnome-shell-common-48.3" — which has
+		# been the root cause of skipjack base-flavor build failures.
+		# `--allowerasing` resolves dependency conflicts but does NOT resolve
+		# file-ownership conflicts; only an explicit remove (or upstream
+		# `Obsoletes:`) does. Tracked: tuna-os/github-copr should add
+		# `Obsoletes: gnome-shell-common < %{major_version}` to its spec.
+		# --noautoremove keeps reverse-deps alive; they'll re-resolve to the
+		# COPR's gnome-shell-49 in the next install.
+		if rpm -q gnome-shell-common &>/dev/null; then
+			dnf -y remove --noautoremove gnome-shell-common || true
+		fi
+
 		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
 			# GNOME 50 requires glib2 >= 2.86.0 and fontconfig >= 2.17.0 (pango links
 			# against FcConfigSetDefaultSubstitute which is absent in EL10's 2.15.x).
