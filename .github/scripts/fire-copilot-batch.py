@@ -64,7 +64,18 @@ def gh(*args, allow_auth_failure=False):
     )
     if result.returncode != 0:
         stderr = result.stderr or ""
-        if allow_auth_failure and ("401" in stderr or "Bad credentials" in stderr):
+        # `gh auth status` reports a stale token with the friendly
+        # "Failed to log in" / "token in GH_TOKEN is invalid" lines, while
+        # API endpoints surface raw "401 Bad credentials". Catch both so
+        # the same auth-degradation logic fires for either gh CLI version.
+        auth_failure_signals = (
+            "401",
+            "Bad credentials",
+            "Failed to log in",
+            "token in GH_TOKEN is invalid",
+            "token is invalid",
+        )
+        if allow_auth_failure and any(s in stderr for s in auth_failure_signals):
             return result
         print(f"gh {' '.join(args)} failed (exit {result.returncode}):", file=sys.stderr)
         print(stderr, file=sys.stderr)
