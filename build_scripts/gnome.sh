@@ -239,6 +239,23 @@ case "${1:-}" in
 		fi
 	fi
 
+	# Gradia Capture — area screenshot integration for the Gradia screenshot
+	# app. (Ported from ublue-os/bluefin-lts d32c9ea3 — feat(extension):
+	# Add gradia capture extension.) Build mirrors blur-my-shell: `build.sh`
+	# inside the submodule produces a shell-extension.zip which we unzip in
+	# place, then compile the schemas.
+	if [ -d /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io ]; then
+		if [ -f /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/build.sh ]; then
+			bash /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/build.sh
+			unzip -o /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/gradia-integration@alexandervanhee.github.io.shell-extension.zip \
+				-d /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io
+			rm -f /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/gradia-integration@alexandervanhee.github.io.shell-extension.zip
+			glib-compile-schemas --strict /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/schemas
+		else
+			echo "Skipping gradia-capture build (build.sh not found)"
+		fi
+	fi
+
 	# Logo Menu
 	# xdg-terminal-exec is required for this extension as it opens up terminals using that script
 	# Only install if submodule is present

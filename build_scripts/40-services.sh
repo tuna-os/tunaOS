@@ -46,10 +46,24 @@ elif [[ "${DESKTOP_FLAVOR}" == "gnome" || "${DESKTOP_FLAVOR}" == "gnome50" ]]; t
 else
 	echo "Skipping DE-specific display-manager service setup (DESKTOP_FLAVOR='${DESKTOP_FLAVOR}')"
 fi
-safe_enable sshd.service
+# sshd is disabled by default on the installed system. Live ISOs may enable
+# it via the ENABLE_SSHD=1 path in live-iso/common/Containerfile for local
+# dev testing, but production installs default closed.
+# (Aligned with zirconium-dev/zirconium dd9f2789 — Disable sshd by default.)
+safe_disable sshd.service
+safe_disable sshd.socket 2>/dev/null || systemctl mask sshd.socket || true
+
 safe_enable fwupd.service
 safe_enable rpm-ostree-countme.service
 systemctl --global enable podman-auto-update.timer
+
+# Orca and other AT-SPI screen readers expect speech-dispatcher to be
+# socket-activatable per user. Fedora 43 used to enable it as part of
+# the user preset but the Fedora policy shifted to disabled-by-default;
+# enable explicitly so accessibility works out of the box.
+# (Ported from ublue-os/aurora 5e9047c5 — feat: enable speech-dispatcher
+# by default. Revisit when redhat-systemd-presets PR#4 lands.)
+systemctl --global enable speech-dispatcher.socket 2>/dev/null || true
 safe_enable rpm-ostree-countme.service
 safe_disable rpm-ostree.service
 safe_enable dconf-update.service

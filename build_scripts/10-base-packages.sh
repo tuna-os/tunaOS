@@ -121,6 +121,9 @@ install_base_packages_no_de() {
 	fi
 
 	# Install common desktop packages (shared between GNOME and KDE)
+	# gcc + gcc-c++ are required by Homebrew formulae that build from source
+	# (Ported from ublue-os/aurora 844b4865 — feat(packages): Add gcc-c++
+	# to packages so Homebrew has a c++).
 	if [[ $IS_FEDORA == true ]]; then
 		dnf -y install \
 			buildah \
@@ -134,6 +137,8 @@ install_base_packages_no_de() {
 			fwupd \
 			systemd-resolved \
 			btrfs-progs \
+			gcc \
+			gcc-c++ \
 			plymouth \
 			plymouth-system-theme \
 			plymouth-plugin-script \
@@ -155,6 +160,8 @@ install_base_packages_no_de() {
 			systemd-resolved \
 			systemd-container \
 			systemd-oomd \
+			gcc \
+			gcc-c++ \
 			plymouth \
 			plymouth-system-theme \
 			plymouth-plugin-script \
