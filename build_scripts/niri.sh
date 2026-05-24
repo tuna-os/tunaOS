@@ -100,7 +100,21 @@ case "${1:-}" in
 			xdg-user-dirs \
 			xwayland-satellite \
 			ykman \
-			zram-generator
+			zram-generator \
+			bolt \
+			btop \
+			fcitx5-rime \
+			gst-thumbnailers \
+			librime-lua \
+			lshw \
+			nano-default-editor \
+			nm-connection-editor \
+			NetworkManager-tui \
+			openrgb-udev-rules \
+			qt6-qtimageformats \
+			tesseract \
+			xdg-desktop-portal-gnome \
+			xorg-x11-server-Xwayland
 
 		# Install Qt/KDE theming support for visual consistency
 		dnf install -y --setopt=install_weak_deps=False \
@@ -215,10 +229,32 @@ case "${1:-}" in
 
 	# Restore brightnessctl and playerctl for compatible EL10 variants (Kitten/CentOS)
 	if [[ $IS_ALMALINUXKITTEN == true || $IS_CENTOS == true ]]; then
-		dnf -y install --setopt=install_weak_deps=False \
+		install_available --copr ligenix/enterprise-cosmic \
 			brightnessctl \
-			playerctl || true
+			playerctl
 	fi
+
+	# Zirconium-parity extras on EL10 — many of these are Fedora-shipped
+	# but show up in EL10 via EPEL / CRB / the ublue-os COPRs we already
+	# enable elsewhere. install_available probes each and skips the
+	# rest so a missing EL10 build of, say, librime-lua doesn't kill
+	# the whole package install transaction.
+	install_available --copr ublue-os/packages \
+		bolt \
+		btop \
+		gst-thumbnailers \
+		input-remapper \
+		librime-lua \
+		lshw \
+		nano-default-editor \
+		nm-connection-editor \
+		NetworkManager-tui \
+		openrgb-udev-rules \
+		qt6-qtimageformats \
+		tesseract \
+		xdg-desktop-portal-gnome \
+		xorg-x11-server-Xwayland \
+		fcitx5-rime
 
 	# Attempt to install greetd-selinux separately (handles greetd-selinux conflict)
 	# Use --nobest and --allowerasing to resolve EL10 policy conflicts

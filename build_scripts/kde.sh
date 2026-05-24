@@ -13,6 +13,9 @@ case "${1:-}" in
 
 	if [[ $IS_FEDORA == true ]]; then
 		dnf -y group install "kde-desktop"
+		# Fedora-only set: these are Aurora's KDE package selection
+		# (ublue-os/aurora build_files/base/01-packages.sh FEDORA_PACKAGES).
+		# All available in Fedora repos; safe to install in one transaction.
 		dnf -y install \
 			-x PackageKit \
 			-x PackageKit-command-not-found \
@@ -25,7 +28,20 @@ case "${1:-}" in
 			kde-connect \
 			xdg-desktop-portal-kde \
 			qt5-qtwayland \
-			qt6-qtwayland
+			qt6-qtwayland \
+			ksshaskpass \
+			ksystemlog \
+			input-remapper \
+			evtest \
+			tesseract \
+			libratbag-ratbagd \
+			solaar-udev \
+			openrgb-udev-rules \
+			pam-u2f \
+			pam_yubico \
+			pamu2fcfg \
+			yubikey-manager \
+			nvtop
 	else
 		dnf group install -y --nobest \
 			-x plasma-discover \
@@ -57,6 +73,27 @@ case "${1:-}" in
 			qt5-qtwayland \
 			qt6-qtwayland
 
+		# EL10 catch-up to Aurora's Fedora-only package set. lib.sh's
+		# install_available probes each one against the active repos
+		# (BaseOS / AppStream / EPEL10 / CRB + the ublue-os/packages
+		# COPR for things like `kcm_ublue`) and installs only what
+		# resolves. Misses get logged so the next porter sees the gap.
+		install_available --copr ublue-os/packages \
+			ksshaskpass \
+			ksystemlog \
+			input-remapper \
+			evtest \
+			tesseract \
+			libratbag-ratbagd \
+			solaar-udev \
+			openrgb-udev-rules \
+			pam-u2f \
+			pam_yubico \
+			pamu2fcfg \
+			yubikey-manager \
+			nvtop \
+			kcm_ublue
+
 		# Install fcitx5 input method support (Asian languages) if available
 		# Not available in EPEL10 yet
 		if dnf repoquery --available fcitx5 2>/dev/null | grep -q .; then
@@ -84,12 +121,14 @@ case "${1:-}" in
 	fi
 	;;
 "extra")
-	# ublue-os packages - most packages moved to common OCI, only KDE-specific remain
-	dnf -y copr enable ublue-os/packages
-	dnf -y copr disable ublue-os/packages
-	dnf -y --enablerepo copr:copr.fedorainfracloud.org:ublue-os:packages install \
-		kcm_ublue
-	# krunner-bazaar 1.3.0 requires Qt 6.10 which is not yet in EL10; re-add when COPR is fixed
+	# ublue-os packages — most moved to the common OCI layer; only KDE-
+	# specific extras stay here. install_available probes each name in
+	# the COPR so a missing entry (e.g. krunner-bazaar awaiting Qt 6.10
+	# on EL10) is logged-and-skipped rather than aborting the build.
+	# Reference: https://github.com/ublue-os/aurora/issues/1227
+	install_available --copr ublue-os/packages \
+		kcm_ublue \
+		krunner-bazaar
 
 	# Disable plasma-discover in favor of Flatpak/Bazaar (like Aurora)
 	if [ -f /usr/share/applications/org.kde.discover.desktop ]; then

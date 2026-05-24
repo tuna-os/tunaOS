@@ -158,6 +158,95 @@ dnf_retry() {
 	return "$rc"
 }
 
+# Install only the packages that the active DNF repo set can actually
+# resolve. The lower-bound case is "your upstream Fedora package list
+# is half-missing on EL10"; the upper-bound is "you've enabled a COPR
+# that ships half of them". The function probes each package, installs
+# the survivors as one transaction, and logs the misses so the next
+# porter sees the shrinking gap.
+#
+# Optional `--copr <slug>` flags enable additional COPRs for the
+# duration of the probe+install, then disable them again — keeping
+# the COPR enablement out of the final image config when you only
+# need a one-shot package pull. Pass `--copr` multiple times to stack.
+#
+# Usage:
+#   install_available pkg1 pkg2 pkg3
+#   install_available --copr ublue-os/packages kcm_ublue uupd
+#   install_available --copr avengemedia/danklinux --copr avengemedia/dms-git \
+#       quickshell-git dms dms-cli dms-greeter
+#
+# Notes:
+# - `dnf repoquery --available --qf '%{name}\n' "$pkg" | grep -qx "$pkg"`
+#   is intentionally strict: bare `dnf repoquery pkg` matches partial
+#   names (probing `pam-u2f` also matches `pam-u2f-doc`) which falsely
+#   classifies non-existent packages as available.
+# - Logs go through `::group::` markers so the build output stays
+#   foldable in CI.
+install_available() {
+	local coprs=()
+	while [[ "${1:-}" == "--copr" ]]; do
+		coprs+=("$2")
+		shift 2
+	done
+	local pkgs=("$@")
+	if [[ ${#pkgs[@]} -eq 0 ]]; then
+		echo "install_available: no packages requested" >&2
+		return 0
+	fi
+
+	# Track which COPRs we enabled so we only disable those.
+	local enabled_coprs=()
+	for copr in "${coprs[@]}"; do
+		if dnf -y copr enable "$copr"; then
+			enabled_coprs+=("$copr")
+		else
+			echo "install_available: failed to enable copr ${copr} (skipping)" >&2
+		fi
+	done
+
+	local available=() missing=()
+	for pkg in "${pkgs[@]}"; do
+		if dnf repoquery --available --qf '%{name}\n' "$pkg" 2>/dev/null | grep -qx "$pkg"; then
+			available+=("$pkg")
+		else
+			missing+=("$pkg")
+		fi
+	done
+
+	if [[ ${#missing[@]} -gt 0 ]]; then
+		printf '::group:: install_available: %d skipped (not in active repos)\n' "${#missing[@]}"
+		printf '  %s\n' "${missing[@]}"
+		printf '::endgroup::\n'
+	fi
+
+	if [[ ${#available[@]} -gt 0 ]]; then
+		printf '::group:: install_available: installing %d package(s)\n' "${#available[@]}"
+		printf '  %s\n' "${available[@]}"
+		printf '::endgroup::\n'
+
+		# Build the enablerepo flag set so the install can see the
+		# packages from the just-enabled COPRs even though they're
+		# being disabled again right after.
+		local enablerepo_args=()
+		for copr in "${enabled_coprs[@]}"; do
+			local repo_id
+			repo_id="copr:copr.fedorainfracloud.org:$(echo "$copr" | tr '/' ':')"
+			enablerepo_args+=("--enablerepo=${repo_id}")
+		done
+		dnf -y install --setopt=install_weak_deps=False \
+			"${enablerepo_args[@]}" \
+			"${available[@]}"
+	fi
+
+	# Take the COPRs back out of the repo set so we don't leave them
+	# enabled in the final image (mirrors the install_from_copr
+	# pattern below).
+	for copr in "${enabled_coprs[@]}"; do
+		dnf -y copr disable "$copr" || true
+	done
+}
+
 install_from_copr() {
 	COPR_NAME=$1
 	shift
