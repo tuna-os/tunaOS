@@ -274,6 +274,27 @@ install_available() {
 	done
 }
 
+# systemctl enable wrapper that tolerates the unit-not-present case.
+# Build scripts run in a multi-stage container build where some units may
+# only exist on certain variants (e.g. tailscaled on EL10 but not on EL9).
+# The vanilla `systemctl enable` returns non-zero on a missing unit, which
+# under `set -e` would abort the build for an entirely-expected condition.
+#
+# Idempotent: enabling an already-enabled unit is a no-op.
+safe_enable() {
+	if systemctl list-unit-files "$1" &>/dev/null || [[ -f "/usr/lib/systemd/system/$1" ]]; then
+		systemctl enable "$1" || true
+	fi
+}
+
+# Mirror of safe_enable for disabling. Same rationale — units that don't
+# exist on a given variant shouldn't trip the build.
+safe_disable() {
+	if systemctl list-unit-files "$1" &>/dev/null || [[ -f "/usr/lib/systemd/system/$1" ]]; then
+		systemctl disable "$1" || true
+	fi
+}
+
 install_from_copr() {
 	COPR_NAME=$1
 	shift

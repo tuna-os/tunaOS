@@ -22,6 +22,8 @@
 # Outputs to .build/iso-tacklebox/<variant>-<flavor>/tunaos-<variant>-<flavor>.iso
 
 set -euo pipefail
+# shellcheck source=lib/common.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
 VARIANT="${1:?usage: $0 <variant> <flavor> [repo] [tag]}"
 FLAVOR="${2:?usage: $0 <variant> <flavor> [repo] [tag]}"
@@ -40,31 +42,13 @@ if [[ ! -d "live-iso" ]]; then
 fi
 
 # ── Resolve the source bootc image ref ──────────────────────────────────────
+# tunaos_image_ref + tunaos_import_to_root_storage are defined in
+# scripts/lib/common.sh.
 
-case "$REPO" in
-local)
-	IMAGE_REF="localhost/${VARIANT}:${FLAVOR}"
-	if ! podman image exists "$IMAGE_REF"; then
-		echo "==> $IMAGE_REF not in root podman storage; trying user storage..."
-		REAL_USER="${SUDO_USER:-$(logname 2>/dev/null || echo)}"
-		if [[ -n "$REAL_USER" ]]; then
-			sudo -u "$REAL_USER" podman save "$IMAGE_REF" 2>/dev/null | podman load
-		fi
-		if ! podman image exists "$IMAGE_REF"; then
-			echo "ERROR: build the image first: just ${VARIANT} ${FLAVOR}" >&2
-			exit 1
-		fi
-	fi
-	;;
-ghcr)
-	GITHUB_REPOSITORY_OWNER="${GITHUB_REPOSITORY_OWNER:-tuna-os}"
-	IMAGE_REF="ghcr.io/${GITHUB_REPOSITORY_OWNER}/${VARIANT}:${TAG}"
-	;;
-*)
-	echo "ERROR: unknown repo '$REPO' (expected: local | ghcr)" >&2
-	exit 1
-	;;
-esac
+IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")
+if [[ "$REPO" == "local" ]]; then
+	tunaos_import_to_root_storage "$IMAGE_REF"
+fi
 
 # ── Resolve tacklebox: prefer the published container, fall back to source ──
 # Published image: ghcr.io/tuna-os/tacklebox:latest (multi-arch). Use that by

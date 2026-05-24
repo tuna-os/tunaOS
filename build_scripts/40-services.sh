@@ -12,19 +12,9 @@ export MAJOR_VERSION_NUMBER
 
 source /run/context/build_scripts/lib.sh
 
-# Helper function to safely enable a service (ignore if it doesn't exist)
-safe_enable() {
-	if systemctl list-unit-files "$1" &>/dev/null || [[ -f "/usr/lib/systemd/system/$1" ]]; then
-		systemctl enable "$1" || true
-	fi
-}
-
-# Helper function to safely disable a service (ignore if it doesn't exist)
-safe_disable() {
-	if systemctl list-unit-files "$1" &>/dev/null || [[ -f "/usr/lib/systemd/system/$1" ]]; then
-		systemctl disable "$1" || true
-	fi
-}
+# safe_enable / safe_disable are defined in lib.sh — they're called from
+# multiple build scripts, so the definition lives with the other shared
+# helpers (install_available, install_from_copr, etc.).
 
 sed -i 's|uupd|& --disable-module-distrobox|' /usr/lib/systemd/system/uupd.service
 
