@@ -51,7 +51,17 @@ jobs:
           ALL=$(gh api "/repos/zirconium-dev/zirconium/commits?since=${SINCE}&per_page=100" \
             --jq '[.[] |
               select(.commit.author.name != "renovate[bot]") |
-              select(.commit.message | test("^(chore\\(deps\\)|ci:|docs:)") | not) |
+              # Skip commits that obviously do not apply to TunaOS so we do not
+              # a Gemini call on them. Catches:
+              #   - non-code conventional-commit types: chore/docs/style/build/test/revert/ci
+              #     (with or without a scope), e.g. `chore(ci):`, `docs:`, `build(deps):`
+              #   - code-type commits whose scope is CI/release/deps/etc., e.g.
+              #     `fix(ci):`, `fix(workflow):`, `feat(release):`
+              #   - merge commits (the underlying changes already arrive as
+              #     individual commits in the same window)
+              select(.commit.message | test("^(chore|docs|style|build|test|revert|ci)(\\([^)]+\\))?:") | not) |
+              select(.commit.message | test("^(fix|feat|perf|refactor)\\((ci|deps|actions|workflow|workflows|github|release|readme|version|deps-dev)\\):") | not) |
+              select(.commit.message | test("^Merge (pull request|branch|remote-tracking branch|tag)") | not) |
               {
                 sha: .sha,
                 short_sha: .sha[:8],
