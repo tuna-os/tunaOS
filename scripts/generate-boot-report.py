@@ -233,11 +233,47 @@ def build_status_for(variant: str) -> dict | None:
     return latest_workflow_run(f"build-{variant}.yml")
 
 
+# Cached on the first call; iso-e2e.yml's run + jobs payload is the same
+# for every combo so we only need one round-trip.
+_E2E_JOBS_CACHE: dict[int, list[dict]] | None = None
+
+
 def e2e_status_for(variant: str, flavor: str) -> dict | None:
-    """Latest iso-e2e run; the matrix is variant×flavor-keyed so we'd need
-    job-level inspection to be precise. For the report we just surface the
-    workflow's overall conclusion (which fails-fast if any matrix cell did)."""
-    return latest_workflow_run("iso-e2e.yml")
+    """Per-combo iso-e2e conclusion.
+
+    iso-e2e.yml fans out one matrix cell per (variant, flavor); each shows
+    up in the job list with name `E2E <variant>:<flavor>`. We look up the
+    most recent run, then find the matrix cell that matches our combo.
+    Returns the same shape as a run dict ({conclusion, html_url}) so the
+    caller doesn't have to special-case.
+    """
+    global _E2E_JOBS_CACHE
+    run = latest_workflow_run("iso-e2e.yml")
+    if not run:
+        return None
+    run_id = run["id"]
+    if _E2E_JOBS_CACHE is None or run_id not in _E2E_JOBS_CACHE:
+        try:
+            data = gh_json(
+                "api",
+                f"/repos/{REPO}/actions/runs/{run_id}/jobs?per_page=100",
+            )
+            jobs = data.get("jobs") or []
+        except Exception:
+            jobs = []
+        _E2E_JOBS_CACHE = {run_id: jobs}
+
+    target_name = f"E2E {variant}:{flavor}"
+    for job in _E2E_JOBS_CACHE.get(run_id, []):
+        # Job names contain the matrix expansion (e.g. "E2E yellowfin:gnome").
+        if job.get("name", "").startswith(target_name):
+            return {
+                "conclusion": job.get("conclusion"),
+                "html_url": job.get("html_url") or run.get("html_url"),
+            }
+    # No matrix cell ran for this combo — fall back to the workflow's
+    # top-level conclusion so the cell still shows *some* signal.
+    return run
 
 
 # ── Missing-package wishlist ────────────────────────────────────────────────
@@ -522,10 +558,9 @@ def main() -> int:
 
     work_root = pathlib.Path(tempfile.mkdtemp(prefix="boot-report-"))
 
-    # Pre-fetch workflow status per variant (build) and global (e2e). Cache
-    # these so we don't re-query for each flavor in the same variant.
+    # Pre-fetch the per-variant build status (one workflow per variant);
+    # e2e is per-combo now so it's fetched inline below (cached internally).
     build_runs: dict[str, dict | None] = {}
-    e2e_run = e2e_status_for("", "")
 
     combos_data: list[dict] = []
     wishlist: dict[str, list[str]] = {}
@@ -534,6 +569,7 @@ def main() -> int:
         print(f"==> {combo.key}", file=sys.stderr)
         if combo.variant not in build_runs:
             build_runs[combo.variant] = build_status_for(combo.variant)
+        e2e_run = e2e_status_for(combo.variant, combo.flavor)
 
         iso_info = None
         if combo.build_iso:
