@@ -1,0 +1,7 @@
+{
+  "upstream": "https://github.com/zirconium-dev/zirconium.git",
+  "branch": "main",
+  "sha": "dd90145c662514b74076166a7a9967c2f15b6eb8",
+  "synced_at": "2026-05-24T00:40:06Z",
+  "paths": "mkosi.extra:mkosi.images:mkosi.conf:mkosi.local.conf:packages.list:Justfile"
+}

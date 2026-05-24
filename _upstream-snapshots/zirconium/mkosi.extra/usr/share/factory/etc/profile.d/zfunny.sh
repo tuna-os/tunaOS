@@ -1,0 +1,1 @@
+alias run67='run0'

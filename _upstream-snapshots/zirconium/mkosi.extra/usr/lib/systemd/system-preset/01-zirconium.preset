@@ -1,0 +1,14 @@
+disable systemd-timesyncd.service
+disable bootc-fetch-apply-updates.timer
+disable sshd.socket
+disable sshd.service
+enable auditd.service
+enable brew-setup.service
+enable firewalld.service
+enable flatpak-add-flathub-repos.service
+enable flatpak-preinstall.service
+enable greetd.service
+enable ntpd-rs.service
+enable systemd-resolved.service
+enable tailscaled.service
+enable uupd.timer

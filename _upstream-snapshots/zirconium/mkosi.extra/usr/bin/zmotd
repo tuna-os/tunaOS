@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+if test ! -e "${XDG_CONFIG_HOME:-$HOME/.config}/zirconium/no-show-user-motd" ; then
+  reset=$'\e[0m'
+  # bold=$'\e[1m'
+  # link=$'\e[38;2;23;118;122m'
+  slight_red=$'\e[48;2;48;48;48m\e[38;2;245;86;71m'
+  header=$'\e[1;38;5;228m\e[48;5;63m'
+  # PLEASE make sure this is properly organized, i dont want to include glow on the image :steamsad:
+  cat <<EOF
+
+  ${header} Welcome to Zirconium! ${reset}
+
+     Command                        │ Description
+  ───────────────────────────────────┼────────────────────────────────────
+    ${slight_red} zjust toggle-user-motd ${reset}         │ Toggle this banner on/off
+    ${slight_red} zjust zdots-update ${reset}             │ Update your unmodified dotfiles
+    ${slight_red} zjust update-greeter ${reset}           │ Update your greeter with modifications from your current user
+    ${slight_red} zjust reset-niri ${reset}               │ Reset niri to the default configuration
+    ${slight_red} sudo bootc update ${reset}              │ Manually update the system
+
+EOF
+fi
