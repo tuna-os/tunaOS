@@ -240,10 +240,22 @@ trap cleanup_vm EXIT
 # ── Boot the live ISO ───────────────────────────────────────────────────────
 
 boot_live_iso() {
+	# qemu-img lives in the qemu-utils Debian/Ubuntu package, which the
+	# `qemu-system-x86` package depends on only as Recommends. If the
+	# workflow's apt install line forgets it, every diagnostic ends up
+	# baffling ("QEMU failed to daemonize" with no further detail).
+	# Surface the missing-binary case before we try to use it.
+	if ! command -v qemu-img &>/dev/null; then
+		echo "ERROR: qemu-img not found (install qemu-utils on Debian/Ubuntu)" >&2
+		return 77
+	fi
 	# Create install disk on first call; reuse if exists (kickstart path).
 	if [[ ! -f "$INSTALL_DISK" ]]; then
 		echo "==> Creating 32G install disk: ${INSTALL_DISK}"
-		qemu-img create -f qcow2 "$INSTALL_DISK" 32G >/dev/null
+		if ! qemu-img create -f qcow2 "$INSTALL_DISK" 32G; then
+			echo "ERROR: qemu-img create failed" >&2
+			return 1
+		fi
 	fi
 
 	# Kernel cmdline override: append `console=ttyS0` so the live env's

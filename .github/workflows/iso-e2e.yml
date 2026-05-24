@@ -98,7 +98,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            qemu-system-x86 ovmf socat \
+            qemu-system-x86 qemu-utils ovmf socat \
             rclone sshpass \
             imagemagick
 
