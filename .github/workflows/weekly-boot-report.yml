@@ -105,8 +105,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_REPOSITORY: ${{ github.repository }}
           GITHUB_RUN_ID: ${{ github.run_id }}
-          REPORT_DATE: ""  # let the script default to today
-          TODAY_BRANCH: boot/${{ steps.previous.outputs.today_date || '' }}
+          # REPORT_DATE / TODAY_BRANCH default to today's date in the script.
           PREVIOUS_BRANCH: ${{ steps.previous.outputs.previous_branch }}
         run: |
           # The script writes commits to the `screenshots` branch as a side
