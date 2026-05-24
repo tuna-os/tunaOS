@@ -77,7 +77,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # When workflow_dispatch is used, the user picks a single
+      # variant/flavor — but the matrix still spawns every cell. Skip
+      # the cells that don't match the dispatch inputs so we don't end
+      # up running both yellowfin and albacore jobs both downloading
+      # the dispatched variant's ISO.
+      - name: Matrix-vs-dispatch filter
+        id: filter
+        run: |
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            if [[ "${{ inputs.variant }}" != "${{ matrix.variant }}" ]] \
+               || [[ "${{ inputs.flavor }}" != "${{ matrix.flavor }}" ]]; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "Skipping ${{ matrix.variant }}:${{ matrix.flavor }} — dispatch chose ${{ inputs.variant }}:${{ inputs.flavor }}"
+            fi
+          fi
+
       - name: Install QEMU and helpers
+        if: steps.filter.outputs.skip != 'true'
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
@@ -88,7 +105,9 @@ jobs:
       # The R2 source is the default — it tests the artifact users actually
       # download. Skipped when source=artifact (workflow_dispatch only).
       - name: Download latest ISO from R2
-        if: github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest'
+        if: |
+          steps.filter.outputs.skip != 'true' &&
+          (github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest')
         env:
           RCLONE_CONFIG_R2_TYPE: s3
           RCLONE_CONFIG_R2_PROVIDER: Cloudflare
@@ -97,32 +116,34 @@ jobs:
           RCLONE_CONFIG_R2_REGION: auto
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
         run: |
-          # PR + scheduled runs use the matrix; workflow_dispatch overrides
-          # the matrix with the chosen variant/flavor.
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            VARIANT="${{ inputs.variant }}"
-            FLAVOR="${{ inputs.flavor }}"
-          else
-            VARIANT="${{ matrix.variant }}"
-            FLAVOR="${{ matrix.flavor }}"
-          fi
-          echo "==> Fetching latest ${VARIANT}-${FLAVOR} ISO from R2..."
+          # After the filter step above, matrix.variant/flavor and
+          # inputs.variant/flavor are aligned (or this step is skipped).
+          # Use matrix.* directly — that's what the job name displays.
+          VARIANT="${{ matrix.variant }}"
+          FLAVOR="${{ matrix.flavor }}"
+          # `publish-isos.yml` writes the canonical name as
+          # `<variant>-<flavor>-latest.iso` (search for `LATEST=` in that
+          # workflow). Match that exact name so we don't accidentally pick
+          # up `${VARIANT}-${FLAVOR}-gdx-latest.iso` etc. via the `-*.iso`
+          # glob (which over-matches because the rclone include glob
+          # isn't anchored at the end).
+          OBJECT="${VARIANT}-${FLAVOR}-latest.iso"
+          echo "==> Fetching ${OBJECT} from R2..."
           rclone copy --log-level INFO --s3-no-check-bucket \
-            --include "${VARIANT}-${FLAVOR}-*.iso" \
-            R2:${{ secrets.R2_BUCKET }}/live-isos/ .
-          ISO=$(find . -maxdepth 1 -name "${VARIANT}-${FLAVOR}-*.iso" | head -1)
-          if [[ -z "$ISO" ]]; then
-            echo "::error::No ISO found in R2 for ${VARIANT}-${FLAVOR}"
+            "R2:${{ secrets.R2_BUCKET }}/live-isos/${OBJECT}" .
+          if [[ ! -f "${OBJECT}" ]]; then
+            echo "::error::No ISO found in R2 at live-isos/${OBJECT}"
             exit 1
           fi
           {
-            echo "ISO_PATH=$(realpath "$ISO")"
+            echo "ISO_PATH=$(realpath "${OBJECT}")"
             echo "VARIANT=${VARIANT}"
             echo "FLAVOR=${FLAVOR}"
           } >> "$GITHUB_ENV"
 
       - name: Run readiness e2e
         id: e2e
+        if: steps.filter.outputs.skip != 'true'
         timeout-minutes: 20
         run: |
           mkdir -p iso-e2e-out
@@ -143,7 +164,7 @@ jobs:
           sudo chown -R "$USER:$(id -gn)" iso-e2e-out || true
 
       - name: Convert screenshots to PNG
-        if: always()
+        if: always() && steps.filter.outputs.skip != 'true'
         continue-on-error: true
         run: |
           for ppm in iso-e2e-out/*.ppm; do
@@ -152,7 +173,7 @@ jobs:
           done
 
       - name: Job summary
-        if: always()
+        if: always() && steps.filter.outputs.skip != 'true'
         run: |
           {
             echo "## ISO E2E — ${VARIANT:-?}:${FLAVOR:-?}"
@@ -172,7 +193,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload artifacts
-        if: always()
+        if: always() && steps.filter.outputs.skip != 'true'
         uses: actions/upload-artifact@v4
         with:
           name: iso-e2e-${{ matrix.variant }}-${{ matrix.flavor }}
@@ -183,8 +204,11 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+      # Only fail when the e2e step actually ran AND reported failure.
+      # When the filter step skipped the job, steps.e2e.outputs.rc is empty,
+      # which would otherwise compare unequal to '0' and falsely fail.
       - name: Fail on e2e error
-        if: steps.e2e.outputs.rc != '0'
+        if: steps.filter.outputs.skip != 'true' && steps.e2e.outputs.rc != '0'
         run: |
           echo "::error::iso-e2e.sh exited ${{ steps.e2e.outputs.rc }} (see serial.log artifact)"
           exit 1
