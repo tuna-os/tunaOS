@@ -23,7 +23,7 @@ import pathlib
 import subprocess
 import sys
 
-GH_TOKEN = os.environ["GH_TOKEN"]
+GH_TOKEN = os.environ.get("GH_TOKEN", "").strip()
 REPO = os.environ["REPO"]
 MATRIX = json.loads(os.environ["MATRIX"])
 BRANCH_PREFIX = os.environ["BRANCH_PREFIX"]
@@ -34,20 +34,56 @@ BUILD_SCRIPT = os.environ.get("BUILD_SCRIPT", "")
 OVERRIDES_DIR = os.environ.get("OVERRIDES_DIR", "")
 LABEL = os.environ.get("LABEL", "")
 
+# Skip cleanly when the Copilot PAT is missing. The watch-* workflows pass
+# secrets.COPILOT_PAT into GH_TOKEN; if that secret was rotated out or
+# never set, GH_TOKEN is empty and every gh API call would 401. Treat that
+# as "no Copilot batch this run" rather than failing the workflow — the
+# per-commit Gemini port job already runs in parallel and handles the
+# majority of upstream catch-up.
+if not GH_TOKEN:
+    print("WARNING: GH_TOKEN is empty (COPILOT_PAT secret not set?). "
+          "Skipping Copilot batch — Gemini port job results still apply.",
+          file=sys.stderr)
+    sys.exit(0)
+
 owner, repo = REPO.split("/", 1)
 commits = MATRIX.get("include", [])
 env = {**os.environ, "GH_TOKEN": GH_TOKEN}
 
 
-def gh(*args):
+def gh(*args, allow_auth_failure=False):
+    """Run `gh <args>`.
+
+    With allow_auth_failure=True, returns the subprocess result on 401-style
+    auth errors instead of raising — so the caller can decide whether to
+    keep going or skip. Used during the initial precheck so a stale
+    COPILOT_PAT degrades gracefully instead of failing the workflow.
+    """
     result = subprocess.run(
         ["gh", *args], env=env, capture_output=True, text=True
     )
     if result.returncode != 0:
+        stderr = result.stderr or ""
+        if allow_auth_failure and ("401" in stderr or "Bad credentials" in stderr):
+            return result
         print(f"gh {' '.join(args)} failed (exit {result.returncode}):", file=sys.stderr)
-        print(result.stderr, file=sys.stderr)
+        print(stderr, file=sys.stderr)
         result.check_returncode()
     return result
+
+
+# ── Precheck: verify GH_TOKEN actually works before any real work. ──────────
+# `gh auth status` is the canonical health check and doesn't burn API rate
+# limit on a search query. If it fails we exit 0 with a warning so the
+# workflow's overall status reflects only the Gemini port job, not the
+# best-effort Copilot batch.
+_probe = gh("auth", "status", allow_auth_failure=True)
+if _probe.returncode != 0:
+    print("WARNING: COPILOT_PAT token appears invalid or expired:", file=sys.stderr)
+    print(_probe.stderr.strip(), file=sys.stderr)
+    print("Skipping Copilot batch — rotate the secret to re-enable.",
+          file=sys.stderr)
+    sys.exit(0)
 
 
 def graphql(query, **variables):
