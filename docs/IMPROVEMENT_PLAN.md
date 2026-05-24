@@ -1,7 +1,8 @@
 # TunaOS — Robustness, Security & E2E Testing Plan
 
-Status: 2026-05-23 — in progress. Eight commits landed on main this
-session; phases 2, 3a, 4.1, and 4.2 done in part. Remaining work below.
+Status: 2026-05-24 — substantial progress. Eighteen commits landed on
+main across two sessions plus two upstream PRs merged. Phases 1, 2,
+3a, 4.1, 4.2 effectively complete; 4.4 partial; remaining work below.
 
 This plan covers the multi-step work requested in May 2026:
 build-failure robustness, dakota-style end-to-end ISO testing, ISO
@@ -9,23 +10,36 @@ building via tacklebox for every variant, and security hardening.
 
 ---
 
-## Shipped (this session, on main)
+## Shipped (this work, on main)
 
-Commits between `12a8e92` (prior HEAD) and `f967658` (current HEAD).
+Commits between `12a8e92` (prior HEAD) and `ffdb9e6` (current HEAD).
 
 | Commit | Phase | What |
 |---|---|---|
 | `539bb42` | hygiene | Removed stale `build.log`, `SBOM_CHANGELOG_IMPLEMENTATION.md`, `conductor/`. Fixed malformed `.gitignore` line, added `.claude/` / `.antigravitycli/`. |
-| `33e11a1` | 1.1 | Pre-remove `gnome-shell-common` (48.x EL10) before installing the COPR's `gnome-shell-49` so the file-conflict that was breaking skipjack builds no longer fires. Upstream fix is `Obsoletes:` in `tuna-os/github-copr`. |
+| `33e11a1` | 1.1 | Pre-remove `gnome-shell-common` (48.x EL10) before installing the COPR's `gnome-shell-49` so the file-conflict that was breaking skipjack builds no longer fires. **Now superseded** by upstream `Obsoletes:` (PR below). |
 | `fd7c4cc` | 1 | New `dnf_retry` helper in `lib.sh` (4 attempts, exponential backoff, metadata clear). Used for the RHEL/Alma main desktop install that pulls `gum` from EPEL — the actual cause of albacore CI failures. |
-| `901d075` | 2 | E2E harness: `tunaos-live-ready.service` systemd unit that prints a marker to the serial console, `scripts/iso-e2e.sh` QEMU+OVMF host runner with screenshot+serial-log capture, `.github/workflows/iso-e2e.yml` workflow with R2 ISO download and artifact upload. |
-| `4363b64` | 2 | Narrowed iso-e2e PR trigger paths so it only fires when the harness itself changes (the workflow downloads from R2, which doesn't reflect PR changes). |
-| `f85b851` | 4.2 | Pinned 4 unique third-party GitHub Actions to commit SHAs across 9 workflows. Closes the floating-ref supply-chain risk for `ublue-os/container-storage-action@main`, `hanthor/changelog-action@master`, and the v* tags. |
+| `901d075` | 2 | E2E harness: `tunaos-live-ready.service` systemd unit, `scripts/iso-e2e.sh` QEMU+OVMF host runner with screenshot+serial-log capture, `.github/workflows/iso-e2e.yml` workflow with R2 ISO download and artifact upload. |
+| `4363b64` | 2 | Narrowed iso-e2e PR trigger paths so it only fires when the harness itself changes. |
+| `f85b851` | 4.2 | Pinned 4 unique third-party GitHub Actions to commit SHAs across 9 workflows. Closes the floating-ref supply-chain risk for `ublue-os/container-storage-action@main`, `hanthor/changelog-action@master`, and v* tags. |
 | `1be982c` | 4.1 | RHSM credentials via BuildKit secret. Justfile materialises a mode-0600 tempfile and passes `--secret id=rhsm`; Containerfile mounts it at `/run/secrets/rhsm` for one RUN only. No more leaks via `podman inspect` *or* `podman history --no-trunc`. |
-| `f967658` | 3a | New `scripts/build-iso-tacklebox.sh` + `just iso-tacklebox` recipe. Tacklebox is built from a pinned SHA in `/var/cache/tunaos/tacklebox`; output ISO is dmsquash-live + sd-boot (no Anaconda). Added *alongside* `just live-iso`, not as a replacement. |
+| `f967658` | 3a | New `scripts/build-iso-tacklebox.sh` + `just iso-tacklebox` recipe. Pinned SHA / source build in `/var/cache/tunaos/tacklebox`. Added *alongside* `just live-iso`, not as a replacement. |
+| `8efe55f` | docs | Plan doc updated mid-session. |
+| `970042d` | 2 + KDE | Two fixes in one commit: filter mismatched matrix cells in `iso-e2e.yml` and fetch the exact `<variant>-<flavor>-latest.iso` name (the rclone glob was over-matching `-gdx-latest.iso`). Plus KDE Plasma live-environment block in `live-iso/common/src/build.sh` — SDDM autologin, kscreenlocker off, power profile no-sleep, suspend targets masked — lifted from `hanthor/tromso-iso`. |
+| `0c9466e` | catch-up fix | `fire-copilot-batch.py` exits 0 with a warning instead of raising when `COPILOT_PAT` is missing or rejected. Unblocked Watch Aurora / Bluefin-LTS / Zirconium workflows that had been failing on every scheduled run since 2026-05-18. |
+| `711e88b` | 2 | Install `qemu-utils` in `iso-e2e.yml` so `qemu-img create` doesn't silently no-op. Surface the missing-binary case in `iso-e2e.sh` with exit 77. |
+| `5629307` | catch-up fix | Broaden the auth-failure signal set in `fire-copilot-batch.py` — `gh auth status` reports invalid tokens with friendlier strings than the raw API's "401 Bad credentials". |
+| `bbf6691` | 3a→ | `build-iso-tacklebox.sh` now prefers `ghcr.io/tuna-os/tacklebox:latest` (published by the upstream PR landed this session). Source build still available via `TACKLEBOX_FROM_SOURCE=1`. |
+| `27a8947` | catch-up | Watch-upstream commit filter now skips `chore(ci):`, `fix(ci):`, `chore(release):`, `fix(workflow):`, merge commits, and similar. Saves Gemini API calls on commits Gemini was reliably deciding not to port. |
+| `ffdb9e6` | 4.4 | `set -euo pipefail` on `lib.sh`, `00-workarounds.sh`, `scripts/rechunk.sh`. Other `build_scripts/*.sh` left at their existing mix pending per-file verification. |
 
 Validation on every commit: `shellcheck --exclude=SC1091`, `shfmt -d`,
 `yamllint`, `actionlint`, `just --unstable --fmt --check`.
+
+## Shipped upstream
+
+- **`tuna-os/github-copr#23`** (merged): `Obsoletes: gnome-shell-common < %{major_version}` + matching `Provides:` in both gnome-49 and gnome-50 specs. Replaces the local workaround in commit `33e11a1`; that workaround can be removed once the COPR rebuilds and a fresh skipjack build confirms the file-conflict is gone.
+- **`tuna-os/tacklebox#1`** (merged): two-stage `Containerfile` + `release-image.yml` publishing `ghcr.io/tuna-os/tacklebox:latest` on every main push and `:vX.Y.Z` on tags. Multi-arch (linux/amd64 + linux/arm64) with build-provenance attestation. Downstream `build-iso-tacklebox.sh` switched to the published image in commit `bbf6691`.
 
 ---
 
