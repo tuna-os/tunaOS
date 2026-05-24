@@ -1,19 +1,56 @@
+---
 name: Weekly Boot Screenshot Report
 
-on:
+# Monday-morning report aggregating every variant×flavor's latest ISO/QCOW2
+# boot screenshot into a single GitHub issue. Heavy lifting lives in
+# scripts/generate-boot-report.py — this workflow is just plumbing:
+#
+#   1. Ensure label + screenshots branch exist
+#   2. Resolve last week's screenshot branch (for change detection)
+#   3. Run the script (writes commits to `screenshots`, prints markdown to stdout)
+#   4. Open the issue with that markdown
+#
+# Improvements vs. the previous inline-bash version of this workflow:
+#   - Matrix pulled from .github/build-config.yml (no hardcoded combos)
+#   - Each row shows latest Build <Variant> + iso-e2e workflow conclusions
+#   - Per-screenshot age flag (✅ ≤7d / ⚠️ 8-30d / ❌ >30d)
+#   - Diff vs. last week (sha256 of PNG bytes)
+#   - EL10 wishlist section from install_available's
+#     /usr/share/tunaos/missing-on-*.txt files in each published image
+#   - Old dated dirs in the screenshots branch are pruned to keep size sane
+
+"on":
   schedule:
-    - cron: "0 10 * * 1" # Every Monday at 10:00 UTC
+    - cron: "0 10 * * 1"  # Monday 10:00 UTC
   workflow_dispatch:
 
 permissions:
   issues: write
-  actions: read
   contents: write
+  actions: read
+  packages: read
 
 jobs:
   report:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v4
+
+      - name: Install podman (for image inspect)
+        run: |
+          # The boot-report script uses `podman create + cp` to extract the
+          # missing-package wishlist from each published image. Podman is
+          # already on ubuntu-24.04 runners; this is the no-op verification
+          # path. If a future runner drops it, this step would install.
+          if ! command -v podman &>/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends podman
+          fi
+          podman version
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+
       - name: Ensure boot-report label exists
         env:
           GH_TOKEN: ${{ github.token }}
@@ -33,7 +70,7 @@ jobs:
             exit 0
           fi
           echo "Creating orphan screenshots branch..."
-          TREE_SHA=$(printf '{"tree":[{"path":"README.md","mode":"100644","type":"blob","content":"# Boot Screenshots\\n\\nBoot screenshots captured by CI, committed here so they can be embedded in weekly report issues.\\n"}]}' | \
+          TREE_SHA=$(printf '{"tree":[{"path":"README.md","mode":"100644","type":"blob","content":"# Boot Screenshots\n\nWeekly boot-report assets, committed by .github/workflows/weekly-boot-report.yml.\n"}]}' | \
             gh api --method POST "/repos/${REPO}/git/trees" --input - --jq '.sha')
           COMMIT_SHA=$(gh api --method POST "/repos/${REPO}/git/commits" \
             -f "message=Initialize screenshots branch" \
@@ -41,247 +78,56 @@ jobs:
           gh api --method POST "/repos/${REPO}/git/refs" \
             -f "ref=refs/heads/screenshots" \
             -f "sha=${COMMIT_SHA}"
-          echo "Screenshots branch created."
 
-      - name: Collect screenshots and create report
+      - name: Resolve previous report's branch path
+        id: previous
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
-          REPO_OWNER: ${{ github.repository_owner }}
         run: |
-          set -euo pipefail
-          mkdir -p screenshots
+          # Diff-vs-last-week is best-effort. List the dated dirs in the
+          # screenshots branch, pick the most-recent that isn't today's,
+          # and pass it to the report script via env.
+          TODAY=$(date -u +%Y-%m-%d)
+          PREV=$(gh api "/repos/${REPO}/contents/boot?ref=screenshots" \
+            --jq "[.[] | select(.type==\"dir\") | .name] | sort | reverse | map(select(. != \"${TODAY}\")) | .[0] // empty" \
+            2>/dev/null || true)
+          if [[ -n "$PREV" ]]; then
+            echo "previous_branch=boot/${PREV}" >> "$GITHUB_OUTPUT"
+            echo "Found previous snapshot: boot/${PREV}"
+          else
+            echo "No prior snapshot — change detection will skip."
+          fi
 
-          # Variant/flavor combinations that produce ISO boot screenshots
-          COMBOS=(
-            "yellowfin gnome"
-            "yellowfin gnome-hwe"
-            "yellowfin kde"
-            "yellowfin cosmic"
-            "yellowfin niri"
-            "albacore gnome"
-            "albacore gnome-hwe"
-            "albacore kde"
-            "albacore cosmic"
-            "albacore niri"
-            "skipjack gnome"
-            "skipjack kde"
-            "skipjack cosmic"
-            "skipjack niri"
-            "bonito gnome"
-            "bonito kde"
-            "bonito cosmic"
-            "bonito niri"
-          )
+      - name: Generate report
+        id: report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          REPORT_DATE: ""  # let the script default to today
+          TODAY_BRANCH: boot/${{ steps.previous.outputs.today_date || '' }}
+          PREVIOUS_BRANCH: ${{ steps.previous.outputs.previous_branch }}
+        run: |
+          # The script writes commits to the `screenshots` branch as a side
+          # effect and prints the issue body to stdout. Capture stdout to a
+          # file so we can use --body-file (preserves newlines + escaping).
+          BODY_FILE=$(mktemp)
+          python3 scripts/generate-boot-report.py > "$BODY_FILE"
+          echo "body_file=${BODY_FILE}" >> "$GITHUB_OUTPUT"
+          echo "Report bytes: $(stat -c%s "$BODY_FILE")"
 
-          # Variant/flavor combinations that produce QCOW2 boot screenshots
-          QCOW2_COMBOS=(
-            "yellowfin gnome"
-            "yellowfin kde"
-            "yellowfin niri"
-            "yellowfin cosmic"
-            "albacore gnome"
-            "albacore kde"
-            "albacore niri"
-            "albacore cosmic"
-            "skipjack gnome"
-            "skipjack kde"
-            "skipjack niri"
-            "skipjack cosmic"
-            "bonito gnome"
-            "bonito kde"
-            "bonito niri"
-            "bonito cosmic"
-          )
-
-          declare -A ISO_DATES ISO_RUN_IDS
-          declare -A QCOW2_DATES QCOW2_RUN_IDS
-
-          fetch_screenshot() {
-            local KEY="$1" ARTIFACT_NAME="$2" DEST_FILE="$3"
-
-            local ARTIFACT
-            ARTIFACT=$(gh api \
-              "/repos/${REPO}/actions/artifacts?name=${ARTIFACT_NAME}&per_page=1" \
-              --jq '.artifacts[0] // empty')
-            [[ -n "$ARTIFACT" ]] || return 1
-
-            local DATE RUN_ID
-            DATE=$(echo "$ARTIFACT" | jq -r '.created_at')
-            RUN_ID=$(echo "$ARTIFACT" | jq -r '.workflow_run.id')
-
-            local TMP_DIR="screenshots/.dl/${KEY}/${ARTIFACT_NAME}"
-            mkdir -p "$TMP_DIR"
-            if gh run download "$RUN_ID" --repo "$REPO" --name "$ARTIFACT_NAME" \
-                 --dir "$TMP_DIR" 2>/dev/null && [[ -f "$TMP_DIR/screenshot.png" ]]; then
-              mv "$TMP_DIR/screenshot.png" "$DEST_FILE"
-              echo "DATE=${DATE}"
-              echo "RUN_ID=${RUN_ID}"
-              return 0
-            fi
-            return 1
-          }
-
-          echo "==> Fetching ISO boot screenshots..."
-          for COMBO in "${COMBOS[@]}"; do
-            read -r VARIANT FLAVOR <<< "$COMBO"
-            KEY="${VARIANT}-${FLAVOR}"
-            echo "  -> $KEY (ISO)"
-            RESULT=$(fetch_screenshot "$KEY" "${KEY}-boot-screenshot" "screenshots/${KEY}-iso.png" 2>&1) && {
-              ISO_DATES[$KEY]=$(echo "$RESULT" | grep '^DATE=' | cut -d= -f2-)
-              ISO_RUN_IDS[$KEY]=$(echo "$RESULT" | grep '^RUN_ID=' | cut -d= -f2-)
-              echo "     ${ISO_DATES[$KEY]}"
-            } || {
-              ISO_DATES[$KEY]="N/A"
-              ISO_RUN_IDS[$KEY]=""
-              echo "     no artifact"
-            }
-          done
-
-          echo "==> Fetching QCOW2 boot screenshots..."
-          for COMBO in "${QCOW2_COMBOS[@]}"; do
-            read -r VARIANT FLAVOR <<< "$COMBO"
-            KEY="${VARIANT}-${FLAVOR}"
-            echo "  -> $KEY (QCOW2)"
-            RESULT=$(fetch_screenshot "$KEY" "${KEY}-qcow2-boot-screenshot" "screenshots/${KEY}-qcow2.png" 2>&1) && {
-              QCOW2_DATES[$KEY]=$(echo "$RESULT" | grep '^DATE=' | cut -d= -f2-)
-              QCOW2_RUN_IDS[$KEY]=$(echo "$RESULT" | grep '^RUN_ID=' | cut -d= -f2-)
-              echo "     ${QCOW2_DATES[$KEY]}"
-            } || {
-              QCOW2_DATES[$KEY]="N/A"
-              QCOW2_RUN_IDS[$KEY]=""
-              echo "     no artifact"
-            }
-          done
-
-          # Push screenshots to the screenshots branch via the Contents API.
-          # raw.githubusercontent.com URLs render inline in GitHub markdown without auth.
-          TODAY=$(date -u +"%Y-%m-%d")
-          declare -A ISO_IMG_URLS QCOW2_IMG_URLS
-
-          commit_screenshot() {
-            local SRC="$1" PATH_IN_REPO="$2" KEY="$3" TYPE="$4"
-            [[ -f "$SRC" ]] || return 1
-            echo "==> Committing ${KEY} (${TYPE}) to screenshots branch..."
-            local EXISTING_SHA
-            EXISTING_SHA=$(gh api "/repos/${REPO}/contents/${PATH_IN_REPO}?ref=screenshots" \
-              --jq '.sha' 2>/dev/null || echo "")
-            local B64
-            B64=$(mktemp)
-            base64 -w0 "$SRC" > "$B64"
-            jq -n \
-              --arg msg "Boot screenshot: ${KEY} ${TYPE} ${TODAY}" \
-              --rawfile content "$B64" \
-              --arg branch "screenshots" \
-              --arg sha "$EXISTING_SHA" \
-              'if $sha != "" then
-                {message: $msg, content: ($content | rtrimstr("\n")), branch: $branch, sha: $sha}
-              else
-                {message: $msg, content: ($content | rtrimstr("\n")), branch: $branch}
-              end' | \
-              gh api --method PUT "/repos/${REPO}/contents/${PATH_IN_REPO}" --input - > /dev/null
-            rm "$B64"
-          }
-
-          for COMBO in "${COMBOS[@]}"; do
-            read -r VARIANT FLAVOR <<< "$COMBO"
-            KEY="${VARIANT}-${FLAVOR}"
-            ISO_PATH="boot/${TODAY}/${KEY}-iso.png"
-            if commit_screenshot "screenshots/${KEY}-iso.png" "$ISO_PATH" "$KEY" "iso"; then
-              ISO_IMG_URLS[$KEY]="https://raw.githubusercontent.com/${REPO}/screenshots/${ISO_PATH}"
-            fi
-          done
-
-          for COMBO in "${QCOW2_COMBOS[@]}"; do
-            read -r VARIANT FLAVOR <<< "$COMBO"
-            KEY="${VARIANT}-${FLAVOR}"
-            QCOW2_PATH="boot/${TODAY}/${KEY}-qcow2.png"
-            if commit_screenshot "screenshots/${KEY}-qcow2.png" "$QCOW2_PATH" "$KEY" "qcow2"; then
-              QCOW2_IMG_URLS[$KEY]="https://raw.githubusercontent.com/${REPO}/screenshots/${QCOW2_PATH}"
-            fi
-          done
-
-          # Build the report
-          REPORT=$(mktemp)
-          printf '# 🖥️ Weekly Boot Screenshot Report\n\n' >> "$REPORT"
-          printf '**Generated:** %s\n\n' "$(date -u +"%Y-%m-%d %H:%M UTC")" >> "$REPORT"
-          printf 'Each variant shows ISO and QCOW2 boot screenshots side by side.\n\n' >> "$REPORT"
-          printf '%s\n\n' '---' >> "$REPORT"
-
-          # Merge ISO and QCOW2 combos, deduplicating while preserving order
-          ALL_COMBOS=("${COMBOS[@]}")
-          for COMBO in "${QCOW2_COMBOS[@]}"; do
-            [[ " ${COMBOS[*]} " != *" ${COMBO} "* ]] && ALL_COMBOS+=("$COMBO")
-          done
-
-          SEEN_KEYS=()
-          for COMBO in "${ALL_COMBOS[@]}"; do
-            read -r VARIANT FLAVOR <<< "$COMBO"
-            KEY="${VARIANT}-${FLAVOR}"
-
-            ISO_DATE="${ISO_DATES[$KEY]:-N/A}"
-            ISO_RUN="${ISO_RUN_IDS[$KEY]:-}"
-            QCOW2_DATE="${QCOW2_DATES[$KEY]:-N/A}"
-            QCOW2_RUN="${QCOW2_RUN_IDS[$KEY]:-}"
-
-            fmt_date() { [[ "$1" != "N/A" ]] && date -u -d "$1" +"%Y-%m-%d %H:%M UTC" 2>/dev/null || echo "not available"; }
-            ISO_FMT=$(fmt_date "$ISO_DATE")
-            QCOW2_FMT=$(fmt_date "$QCOW2_DATE")
-
-            printf $'## `%s` / `%s`\n\n' "$VARIANT" "$FLAVOR" >> "$REPORT"
-            printf $'**Image:** `ghcr.io/%s/%s:%s`\n\n' "$REPO_OWNER" "$VARIANT" "$FLAVOR" >> "$REPORT"
-
-            ISO_URL="${ISO_IMG_URLS[$KEY]:-}"
-            QCOW2_URL="${QCOW2_IMG_URLS[$KEY]:-}"
-
-            if [[ -n "$ISO_URL" && -n "$QCOW2_URL" ]]; then
-              # Both available — show side by side
-              ISO_LINK=""
-              [[ -n "$ISO_RUN" && "$ISO_RUN" != "null" ]] && ISO_LINK=" ([run](https://github.com/${REPO}/actions/runs/${ISO_RUN}))"
-              QCOW2_LINK=""
-              [[ -n "$QCOW2_RUN" && "$QCOW2_RUN" != "null" ]] && QCOW2_LINK=" ([run](https://github.com/${REPO}/actions/runs/${QCOW2_RUN}))"
-
-              printf '| **ISO Boot** | **QCOW2 Boot** |\n' >> "$REPORT"
-              printf '|:---:|:---:|\n' >> "$REPORT"
-              printf '| `%s`%s | `%s`%s |\n' "$ISO_FMT" "$ISO_LINK" "$QCOW2_FMT" "$QCOW2_LINK" >> "$REPORT"
-              printf '| ![%s ISO boot](%s) | ![%s QCOW2 boot](%s) |\n\n' \
-                "$KEY" "$ISO_URL" "$KEY" "$QCOW2_URL" >> "$REPORT"
-
-            elif [[ -n "$ISO_URL" ]]; then
-              ISO_LINK=""
-              [[ -n "$ISO_RUN" && "$ISO_RUN" != "null" ]] && ISO_LINK=" ([run](https://github.com/${REPO}/actions/runs/${ISO_RUN}))"
-              printf '**ISO Boot:** `%s`%s\n\n' "$ISO_FMT" "$ISO_LINK" >> "$REPORT"
-              printf '![%s ISO boot](%s)\n\n' "$KEY" "$ISO_URL" >> "$REPORT"
-              printf '_QCOW2 boot screenshot not available._\n\n' >> "$REPORT"
-
-            elif [[ -n "$QCOW2_URL" ]]; then
-              QCOW2_LINK=""
-              [[ -n "$QCOW2_RUN" && "$QCOW2_RUN" != "null" ]] && QCOW2_LINK=" ([run](https://github.com/${REPO}/actions/runs/${QCOW2_RUN}))"
-              printf '_ISO boot screenshot not available._\n\n' >> "$REPORT"
-              printf '**QCOW2 Boot:** `%s`%s\n\n' "$QCOW2_FMT" "$QCOW2_LINK" >> "$REPORT"
-              printf '![%s QCOW2 boot](%s)\n\n' "$KEY" "$QCOW2_URL" >> "$REPORT"
-
-            else
-              printf '_No screenshots available for this build._\n\n' >> "$REPORT"
-            fi
-
-            printf '%s\n\n' '---' >> "$REPORT"
-          done
-
-          DISPATCH_URL="https://github.com/${REPO}/actions/workflows/publish-isos.yml"
-          printf '## 🚀 Release ISOs\n\n' >> "$REPORT"
-          printf 'Review the screenshots above. If everything looks good, trigger the ISO publish workflow:\n\n' >> "$REPORT"
-          printf '**[→ Trigger ISO publish](%s)**\n\n' "$DISPATCH_URL" >> "$REPORT"
-          printf '| Option | Description |\n' >> "$REPORT"
-          printf '|---|---|\n' >> "$REPORT"
-          printf '| **variant** | `all` to publish every variant, or pick one to publish selectively |\n' >> "$REPORT"
-          printf '| **flavor** | `all` to publish every flavor, or pick one to skip a bad build |\n' >> "$REPORT"
-          printf '| **skip_upload** | Check to build without uploading to R2 (dry run / CI test) |\n\n' >> "$REPORT"
-          printf '_ISOs are also auto-published on the 1st and 15th of each month._\n\n' >> "$REPORT"
-
+      - name: Open report issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          TODAY=$(date -u +%Y-%m-%d)
           ISSUE_URL=$(gh issue create \
             --repo "$REPO" \
             --title "🖥️ Weekly Boot Report — ${TODAY}" \
             --label "boot-report" \
-            --body-file "$REPORT")
-          echo "==> Report complete: ${ISSUE_URL}"
+            --body-file "${{ steps.report.outputs.body_file }}")
+          echo "==> Report: ${ISSUE_URL}"
+          echo "## Boot report" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Issue: ${ISSUE_URL}" >> "$GITHUB_STEP_SUMMARY"
