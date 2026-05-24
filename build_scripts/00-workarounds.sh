@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -eo pipefail
+set -euo pipefail
 printf "::group:: === 00-workarounds ===\n"
 
 source /run/context/build_scripts/lib.sh

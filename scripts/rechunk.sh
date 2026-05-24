@@ -3,8 +3,8 @@
 # A simple script to repartition an OCI image into equal-sized chunks.
 # It takes a single argument: the URI of the container image to process.
 #
-# Exit immediately if a command exits with a non-zero status.
-set -e
+# Strict mode: exit on error, unset variable, or pipeline middle failure.
+set -euo pipefail
 
 # --- Configuration ---
 # The rechunker OCI image to use for the process.

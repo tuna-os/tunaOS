@@ -2,7 +2,7 @@
 
 # This file is intended to be sourced by other scripts, not executed directly.
 
-set -eo pipefail
+set -euo pipefail
 
 # Do not rely on any of these scripts existing in a specific path
 # Make the names as descriptive as possible and everything that uses dnf for package installation/removal should have `packages-` as a prefix.
