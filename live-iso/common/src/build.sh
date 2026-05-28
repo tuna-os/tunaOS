@@ -143,57 +143,6 @@ install -Dm0644 /src/tunaos-live-ready.service \
 	/etc/systemd/system/tunaos-live-ready.service
 systemctl enable tunaos-live-ready.service
 
-# ── Install tunaos-first-setup (TunaOS Installer) ────────────────────────────
-
-# glib2 may be version-locked to a GNOME COPR on EL10. Enable the matching
-# COPR so glib2-devel resolves against the installed glib2 version.
-#   gnome50  → jreilly1821/c10s-gnome-50-fresh (glib2 >= 2.86)
-#   gnome49  → jreilly1821/c10s-gnome-49       (glib2 >= 2.84, < 2.86)
-# Fedora ships these GNOME versions in base repos — no COPR needed there.
-_glib2_minor=$(rpm -q --queryformat '%{VERSION}' glib2 2>/dev/null | awk -F. '{print $2+0}')
-# shellcheck source=/dev/null
-. /etc/os-release
-GNOME_COPR=""
-if [[ "$ID" != "fedora" ]]; then
-	if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
-		GNOME_COPR="jreilly1821/c10s-gnome-50-fresh"
-	elif [[ "$_glib2_minor" -ge 84 ]]; then
-		GNOME_COPR="jreilly1821/c10s-gnome-49"
-	fi
-fi
-[[ -n "$GNOME_COPR" ]] && dnf -y copr enable "$GNOME_COPR"
-
-# Install dependencies for the installer and live environment
-dnf install -y \
-	python3-gobject gtk4 libadwaita \
-	glib2-devel \
-	python3-pytz libgweather \
-	parted cryptsetup dosfstools xfsprogs e2fsprogs btrfs-progs \
-	fuse-overlayfs \
-	firefox \
-	openssh-server \
-	meson python3-devel gettext desktop-file-utils \
-	git
-
-# Disable COPR again — only needed for glib2-devel resolution
-[[ -n "$GNOME_COPR" ]] && dnf -y copr disable "$GNOME_COPR"
-
-# Build and install tunaos-first-setup from source
-git clone https://github.com/tuna-os/first-setup /tmp/first-setup
-cd /tmp/first-setup
-meson setup build --prefix=/usr
-meson install -C build
-cd /
-rm -rf /tmp/first-setup
-
-# Show the installer in the dock — the upstream desktop file sets NoDisplay=true
-# to hide it from app grids on installed systems, but in the live ISO it must
-# be visible so users can launch it from the dash.
-sed -i 's/^NoDisplay=true/NoDisplay=false/' /usr/share/applications/org.tunaos.FirstSetup.desktop
-
-# Remove build tools — no longer needed at runtime
-dnf remove -y meson gcc python3-devel git || true
-
 # ── tuna-installer configuration ─────────────────────────────────────────────
 # Drop /etc/tuna-installer/{recipe,images}.json so the installer knows which
 # variant/flavor it is, points update tracking at the right GHCR tag, and

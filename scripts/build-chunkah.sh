@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# Build the chunkah container image locally from the tuna-os fork.
+# Build the chunkah container image locally from upstream coreos/chunkah.
 #
 # Usage:
-#   ./scripts/build-chunkah.sh              # build from tuna-os/chunkah
+#   ./scripts/build-chunkah.sh              # build from coreos/chunkah
 #   ./scripts/build-chunkah.sh /path/to/src # build from a local checkout
 #
 # The image is tagged as localhost/chunkah:latest.
 
 set -euo pipefail
 
-REPO_URL="https://github.com/tuna-os/chunkah.git"
+REPO_URL="https://github.com/coreos/chunkah.git"
 TAG="localhost/chunkah:latest"
 
 if [[ -n "${1:-}" ]] && [[ -d "$1" ]]; then

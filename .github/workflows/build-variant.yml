@@ -220,7 +220,7 @@ jobs:
   # ── Artifact builds (ISO + QCOW2) ──────────────────────────────────────────
   # Runs after all image stages are complete. Only triggered on non-PR events
   # and only when the artifact matrix is non-empty.
-  # ISOs use the bootc-isos approach (tunaos-first-setup installer), pulling
+  # ISOs use the bootc-isos approach (bootc-installer), pulling
   # the already-published GHCR image so we don't rebuild from scratch.
   build_artifacts:
     name: "Pkg | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"

@@ -222,7 +222,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
         --entrypoint="" \
         -v "${CHUNK_OUT}:/run/out:Z" \
         --mount "type=image,source=${PRE_CHUNK_TAG},target=/chunkah" \
-        ghcr.io/tuna-os/chunkah:latest \
+        ghcr.io/coreos/chunkah:latest \
         sh -c 'chunkah build > /run/out/out.ociarchive'
     mv "${CHUNK_OUT}/out.ociarchive" out.ociarchive
     rm -rf "${CHUNK_OUT}"
