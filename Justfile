@@ -213,6 +213,18 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
 
     echo "==> Running chunkah on ${PRE_CHUNK_TAG}..."
 
+    # Ensure the chunkah image is available. Try the published image first,
+    # then fall back to building from source if it's not pullable (e.g. GHCR
+    # package hasn't been set up yet).
+    CHUNKAH_IMAGE="ghcr.io/coreos/chunkah:latest"
+    if ! podman image inspect "${CHUNKAH_IMAGE}" &>/dev/null; then
+        if ! podman pull "${CHUNKAH_IMAGE}" 2>/dev/null; then
+            echo "==> chunkah image not pullable, building from source..."
+            ./scripts/build-chunkah.sh
+            CHUNKAH_IMAGE="localhost/chunkah:latest"
+        fi
+    fi
+
     # Use a clean temp dir to avoid SELinux relabeling issues with existing files in PWD
     CHUNK_OUT=$(mktemp -d)
     # Pass 2: Run chunkah externally against the built image
@@ -222,7 +234,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
         --entrypoint="" \
         -v "${CHUNK_OUT}:/run/out:Z" \
         --mount "type=image,source=${PRE_CHUNK_TAG},target=/chunkah" \
-        ghcr.io/coreos/chunkah:latest \
+        "${CHUNKAH_IMAGE}" \
         sh -c 'chunkah build > /run/out/out.ociarchive'
     mv "${CHUNK_OUT}/out.ociarchive" out.ociarchive
     rm -rf "${CHUNK_OUT}"

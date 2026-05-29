@@ -21,6 +21,9 @@ if [[ "${ENABLE_HWE:-0}" != "1" ]] && { [[ $IS_ALMALINUX == true ]] || [[ $IS_AL
 		# Add official NVIDIA CUDA repository for EL (x86_64 only)
 		dnf config-manager --add-repo "https://developer.download.nvidia.com/compute/cuda/repos/rhel${MAJOR_VERSION_NUMBER}/x86_64/cuda-rhel${MAJOR_VERSION_NUMBER}.repo"
 
+		# Free disk space for large CUDA packages
+		dnf clean packages
+
 		# Install CUDA toolkit from official NVIDIA repo
 		dnf -y install cuda-toolkit
 	else

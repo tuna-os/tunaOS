@@ -23,12 +23,23 @@ fi
 
 echo "Building chunkah image..."
 cd "$SRC_DIR"
-# Use buildah build with the required volume mount for out.ociarchive
-buildah build \
-	-v "$PWD:/run/src" --security-opt=label=disable \
-	--skip-unused-stages=false \
-	--tag "$TAG" \
-	.
+# Use podman build (available in CI); fall back to buildah if podman isn't available
+if command -v podman &>/dev/null; then
+	podman build \
+		--security-opt=label=disable \
+		--skip-unused-stages=false \
+		--tag "$TAG" \
+		.
+elif command -v buildah &>/dev/null; then
+	buildah build \
+		-v "$PWD:/run/src" --security-opt=label=disable \
+		--skip-unused-stages=false \
+		--tag "$TAG" \
+		.
+else
+	echo "ERROR: neither podman nor buildah found" >&2
+	exit 1
+fi
 
 echo ""
 echo "✓ Built $TAG"

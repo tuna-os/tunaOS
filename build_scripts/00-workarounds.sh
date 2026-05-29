@@ -74,6 +74,7 @@ if [[ "$IS_CENTOS" = true ]] && ! [[ "$IS_ALMALINUX" = true ]]; then
 	sed -i \
 		-e "s@- (BaseOS|AppStream)@& - Compose@" \
 		-e "s@\(baseos\|appstream\)@&-compose@" \
+		-e "/^\[.*compose\]/a skip_if_unavailable=True" \
 		/etc/yum.repos.d/compose.repo
 	cat /etc/yum.repos.d/compose.repo
 fi
