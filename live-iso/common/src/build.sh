@@ -2,6 +2,25 @@
 
 set -eoux pipefail
 
+# ── Repository workarounds for CentOS Stream ────────────────────────────────
+
+# Enable the same compose repos during our build that the centos-bootc image
+# uses during its build.  This avoids downgrading packages in the image that
+# have strict NVR requirements.
+# See: build_scripts/00-workarounds.sh for the main image equivalent.
+if grep -q "centos" /etc/os-release 2>/dev/null; then
+	if ls /etc/yum.repos.d/centos*.repo 2>/dev/null; then
+		echo "Configuring CentOS Compose repos with skip_if_unavailable"
+		curl --retry 3 --fail -Lo "/etc/yum.repos.d/compose.repo" "https://gitlab.com/redhat/centos-stream/containers/bootc/-/raw/c10s/cs.repo"
+		sed -i \
+			-e "s@- (BaseOS|AppStream)@& - Compose@" \
+			-e "s@\(baseos\|appstream\)@&-compose@" \
+			-e "/^\[.*compose\]/a skip_if_unavailable=True" \
+			/etc/yum.repos.d/compose.repo
+		cat /etc/yum.repos.d/compose.repo
+	fi
+fi
+
 # ── Live environment configuration ──────────────────────────────────────────
 
 if [[ "${DESKTOP_FLAVOR:-gnome}" == gnome* ]]; then
