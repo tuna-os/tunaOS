@@ -270,7 +270,7 @@ boot_live_iso() {
 
 	"$QEMU" \
 		-name "tunaos-iso-e2e" \
-		-machine q35 \
+		-machine pc \
 		-cpu "$CPU_ARG" \
 		-accel "$ACCEL" \
 		-m "$MEMORY" \

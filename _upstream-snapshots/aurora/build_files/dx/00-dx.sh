@@ -16,55 +16,55 @@ source /ctx/build_files/shared/copr-helpers.sh
 
 # DX packages from Fedora repos - common to all versions
 FEDORA_PACKAGES=(
-    android-tools
-    bcc
-    bpftop
-    bpftrace
-    cockpit-bridge
-    cockpit-machines
-    cockpit-networkmanager
-    cockpit-ostree
-    cockpit-podman
-    cockpit-selinux
-    cockpit-storaged
-    cockpit-system
-    edk2-ovmf
-    flatpak-builder
-    incus
-    incus-agent
-    iotop
-    libvirt
-    libvirt-nss
-    lxc
-    nicstat
-    numactl
-    osbuild-selinux
-    p7zip
-    p7zip-plugins
-    podman-compose
-    podman-machine
-    podman-tui
-    qemu
-    qemu-char-spice
-    qemu-device-display-virtio-gpu
-    qemu-device-display-virtio-vga
-    qemu-device-usb-redirect
-    qemu-img
-    qemu-system-x86-core
-    qemu-user-binfmt
-    qemu-user-static
-    sysprof
-    trace-cmd
-    udica
-    virt-manager
-    virt-v2v
-    virt-viewer
-    ydotool
+	android-tools
+	bcc
+	bpftop
+	bpftrace
+	cockpit-bridge
+	cockpit-machines
+	cockpit-networkmanager
+	cockpit-ostree
+	cockpit-podman
+	cockpit-selinux
+	cockpit-storaged
+	cockpit-system
+	edk2-ovmf
+	flatpak-builder
+	incus
+	incus-agent
+	iotop
+	libvirt
+	libvirt-nss
+	lxc
+	nicstat
+	numactl
+	osbuild-selinux
+	p7zip
+	p7zip-plugins
+	podman-compose
+	podman-machine
+	podman-tui
+	qemu
+	qemu-char-spice
+	qemu-device-display-virtio-gpu
+	qemu-device-display-virtio-vga
+	qemu-device-usb-redirect
+	qemu-img
+	qemu-system-x86-core
+	qemu-user-binfmt
+	qemu-user-static
+	sysprof
+	trace-cmd
+	udica
+	virt-manager
+	virt-v2v
+	virt-viewer
+	ydotool
 )
 
 # rocm doesn't work well on nvidia
 if [[ ! "${IMAGE_NAME}" =~ nvidia ]]; then
-  FEDORA_PACKAGES+=("rocm-hip" "rocm-opencl" "rocm-smi")
+	FEDORA_PACKAGES+=("rocm-hip" "rocm-opencl" "rocm-smi")
 fi
 
 echo "Installing ${#FEDORA_PACKAGES[@]} DX packages from Fedora repos..."
@@ -74,12 +74,12 @@ dnf5 -y install "${FEDORA_PACKAGES[@]}"
 dnf config-manager addrepo --from-repofile=https://download.docker.com/linux/fedora/docker-ce.repo
 sed -i "s/enabled=.*/enabled=0/g" /etc/yum.repos.d/docker-ce.repo
 dnf -y install --enablerepo=docker-ce-stable \
-    containerd.io \
-    docker-buildx-plugin \
-    docker-ce \
-    docker-ce-cli \
-    docker-compose-plugin \
-    docker-model-plugin
+	containerd.io \
+	docker-buildx-plugin \
+	docker-ce \
+	docker-ce-cli \
+	docker-compose-plugin \
+	docker-model-plugin
 
 # VSCode package from Microsoft repo
 echo "Installing VSCode from official repo..."
@@ -93,7 +93,7 @@ gpgkey=https://packages.microsoft.com/keys/microsoft.asc
 EOF
 sed -i "s/enabled=.*/enabled=0/g" /etc/yum.repos.d/vscode.repo
 dnf -y install --enablerepo=code \
-    code
+	code
 
 # DX Copr packages using isolated enablement (secure)
 echo "Installing DX COPR packages with isolated repo enablement..."
@@ -107,24 +107,24 @@ EXCLUDED_PACKAGES=()
 
 # Version-specific package exclusions for DX
 case "$FEDORA_MAJOR_VERSION" in
-    43)
-        EXCLUDED_PACKAGES+=()
-        ;;
+43)
+	EXCLUDED_PACKAGES+=()
+	;;
 esac
 
 # Remove excluded packages if they are installed
 if [[ "${#EXCLUDED_PACKAGES[@]}" -gt 0 ]]; then
-    readarray -t INSTALLED_EXCLUDED < <(rpm -qa --queryformat='%{NAME}\n' "${EXCLUDED_PACKAGES[@]}" 2>/dev/null || true)
-    if [[ "${#INSTALLED_EXCLUDED[@]}" -gt 0 ]]; then
-        dnf5 -y remove "${INSTALLED_EXCLUDED[@]}"
-    else
-        echo "No excluded packages found to remove."
-    fi
+	readarray -t INSTALLED_EXCLUDED < <(rpm -qa --queryformat='%{NAME}\n' "${EXCLUDED_PACKAGES[@]}" 2>/dev/null || true)
+	if [[ "${#INSTALLED_EXCLUDED[@]}" -gt 0 ]]; then
+		dnf5 -y remove "${INSTALLED_EXCLUDED[@]}"
+	else
+		echo "No excluded packages found to remove."
+	fi
 fi
 
 # Enable DX services
 if rpm -q docker-ce >/dev/null; then
-    systemctl enable docker.socket
+	systemctl enable docker.socket
 fi
 systemctl enable podman.socket
 systemctl enable ublue-os-libvirt-workarounds.service
@@ -133,9 +133,9 @@ systemctl enable --global aurora-dx-user-vscode.service
 
 # Disable RPM Fusion repos
 for i in /etc/yum.repos.d/rpmfusion-*.repo; do
-    if [[ -f "$i" ]]; then
-        sed -i 's@enabled=1@enabled=0@g' "$i"
-    fi
+	if [[ -f "$i" ]]; then
+		sed -i 's@enabled=1@enabled=0@g' "$i"
+	fi
 done
 
 echo "::endgroup::"
