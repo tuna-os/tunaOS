@@ -99,7 +99,6 @@ FEDORA_PACKAGES=(
     pamu2fcfg
     plasma-wallpapers-dynamic
     plasma-firewall-"${PLASMA_VERS}"
-    powerstat
     powertop
     rclone
     restic
@@ -118,18 +117,29 @@ FEDORA_PACKAGES=(
     zsh
 )
 
+FEDORA_PACKAGES_AMD64=(
+    powerstat
+  )
+
 NEGATIVO_PACKAGES=(
     ffmpeg{,-libs}
-    intel-vaapi-driver
     libfdk-aac
     libva-utils
     pipewire-libs-extra
     uld
   )
 
-# Install all Fedora packages (bulk - safe from COPR injection)
-echo "Installing ${#FEDORA_PACKAGES[@]} packages from Fedora repos and ${#NEGATIVO_PACKAGES[@]} from Negativo..."
-dnf5 -y install "${FEDORA_PACKAGES[@]}" "${NEGATIVO_PACKAGES[@]}"
+NEGATIVO_PACKAGES_AMD64=(
+    intel-vaapi-driver
+  )
+
+PACKAGES=( "${FEDORA_PACKAGES[@]}" "${NEGATIVO_PACKAGES[@]}" )
+
+if [[ $(arch) == x86_64 ]]; then
+  PACKAGES+=( "${FEDORA_PACKAGES_AMD64[@]}" "${NEGATIVO_PACKAGES_AMD64[@]}" )
+fi
+
+dnf -y install "${PACKAGES[@]}"
 
 # Fedora Tailscale is usually behind
 dnf config-manager addrepo --from-repofile=https://pkgs.tailscale.com/stable/fedora/tailscale.repo
@@ -180,14 +190,6 @@ if [[ "${#EXCLUDED_PACKAGES[@]}" -gt 0 ]]; then
     fi
 fi
 
-# https://github.com/ublue-os/bazzite/issues/1400
-# TODO: test if we still need this when upgrading firmware with fwupd
-dnf -y copr enable ublue-os/staging
-dnf -y copr disable ublue-os/staging
-dnf -y swap \
-  --repo=copr:copr.fedorainfracloud.org:ublue-os:staging \
-  fwupd fwupd
-
 ## Pins and Overrides
 ## Use this section to pin packages in order to avoid regressions
 # Remember to leave a note with rationale/link to issue for each pin!
@@ -199,6 +201,8 @@ dnf -y swap \
 #fi
 
 # https://invent.kde.org/plasma/plasma-setup/-/issues/72
+dnf -y copr enable ublue-os/staging
+dnf -y copr disable ublue-os/staging
 dnf -y swap --repo=copr:copr.fedorainfracloud.org:ublue-os:staging \
   plasma-setup plasma-setup-"${PLASMA_VERS}"-*.aurora
 
