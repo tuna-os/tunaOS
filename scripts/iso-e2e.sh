@@ -191,6 +191,9 @@ fi
 CPU_ARG="qemu64"
 if [[ "$ACCEL" == "kvm" ]]; then
 	CPU_ARG="host"
+else
+	# TCG: disable features that can cause UEFI firmware issues
+	CPU_ARG="qemu64,-fxsr_opt,-xsave,-xsavec,-xsaves"
 fi
 
 # ── Per-run scratch files ───────────────────────────────────────────────────
