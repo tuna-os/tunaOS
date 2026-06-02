@@ -191,6 +191,12 @@ fi
 CPU_ARG="qemu64"
 if [[ "$ACCEL" == "kvm" ]]; then
 	CPU_ARG="host"
+else
+	# Broaden the TCG CPU to include modern extensions that post-2020
+	# shim/GRUB binaries require. The default qemu64 omits SSE4, AES-NI,
+	# XSAVE, and AVX, causing #UD crashes when loading EFI bootloaders
+	# from newer distros (e.g. AlmaLinux Kitten 10 / yellowfin).
+	CPU_ARG="qemu64,+sse4.1,+sse4.2,+aes,+xsave,+xsaveopt,+xsavec,+xsaves,+popcnt,+avx,+avx2"
 fi
 
 # ── Per-run scratch files ───────────────────────────────────────────────────

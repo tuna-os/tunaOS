@@ -93,6 +93,22 @@ jobs:
             fi
           fi
 
+      # GitHub-hosted ubuntu-24.04 runners expose /dev/kvm but with mode 0660
+      # owned by root:kvm. The runner user is not in the kvm group, so the
+      # KVM check in iso-e2e.sh falls back to TCG. This udev rule widens the
+      # permissions to 0666 so any user (and thus the QEMU child process) can
+      # open the device. Without this, yellowfin's newer AlmaLinux Kitten shim
+      # crashes with #UD (Invalid Opcode) in TCG mode because qemu64 lacks the
+      # CPU extensions the bootloader requires.
+      - name: Enable KVM group permissions
+        if: steps.filter.outputs.skip != 'true'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -la /dev/kvm 2>/dev/null && echo "KVM available" || echo "Warning: /dev/kvm not present — QEMU will use TCG"
+
       - name: Install QEMU and helpers
         if: steps.filter.outputs.skip != 'true'
         run: |
