@@ -4,13 +4,8 @@
 # tacklebox (https://github.com/tuna-os/tacklebox) is a Go-based bootc →
 # bootable-media orchestrator. Its `--iso` target produces a UEFI live ISO
 # from a bootc OCI ref with no anaconda dependency (uses systemd-boot +
-# dmsquash-live), which is simpler than the current osbuild image-builder-cli
-# path and a better fit for the e2e harness from Phase 2.
-#
-# This script complements rather than replaces scripts/build-live-iso.sh —
-# the anaconda installer ISO from that path still has uses (kickstart-driven
-# unattended installs, GUI installer for end users). Use this script when
-# you want a fast boot smoke test or a multi-environment USB image.
+# dmsquash-live). This replaces the previous osbuild image-builder-cli
+# approach for simpler, more reliable ISO generation.
 #
 # Usage:
 #   sudo ./scripts/build-iso-tacklebox.sh <variant> <flavor> [<repo>] [<tag>]
@@ -19,7 +14,7 @@
 #     repo      local | ghcr   (default: local)
 #     tag       defaults to <flavor>
 #
-# Outputs to .build/iso-tacklebox/<variant>-<flavor>/tunaos-<variant>-<flavor>.iso
+# Outputs to project root as <variant>-<flavor>-<version>-<arch>.iso
 
 set -euo pipefail
 # shellcheck source=lib/common.sh
@@ -40,6 +35,9 @@ if [[ ! -d "live-iso" ]]; then
 	echo "ERROR: run from project root (live-iso/ not found in $(pwd))" >&2
 	exit 1
 fi
+
+# Store the project root for later use when copying ISOs
+REPO_ROOT="$(pwd)"
 
 # ── Resolve the source bootc image ref ──────────────────────────────────────
 # tunaos_image_ref + tunaos_import_to_root_storage are defined in
@@ -171,4 +169,22 @@ if [[ -n "${SUDO_USER:-}" ]]; then
 	chown "${SUDO_UID:-$(id -u "$SUDO_USER")}:${SUDO_GID:-$(id -g "$SUDO_USER")}" "$ISO_OUT" || true
 fi
 
-echo "==> Done: ${ISO_OUT} ($(du -h "$ISO_OUT" | cut -f1))"
+# ── Copy ISO to project root (matching publish-isos expectations) ──────────────
+# Copy to project root with version info in filename (matching bootc-image-builder pattern)
+cd - >/dev/null
+REPO_ROOT="${REPO_ROOT:-.}"
+VERSION_ID=$(podman run --rm --security-opt label=disable \
+	"$IMAGE_REF" \
+	sh -c '. /usr/lib/os-release && echo "${VERSION_ID}"')
+ARCH=$(podman run --rm --security-opt label=disable \
+	"$IMAGE_REF" uname -m)
+
+FINAL_ISO="${REPO_ROOT}/${VARIANT}-${FLAVOR}-${VERSION_ID}-${ARCH}.iso"
+cp "$ISO_OUT" "$FINAL_ISO"
+
+if [[ -n "${SUDO_USER:-}" ]]; then
+	chown "${SUDO_UID:-$(id -u "$SUDO_USER")}:${SUDO_GID:-$(id -g "$SUDO_USER")}" "$FINAL_ISO" || true
+fi
+
+echo ""
+echo "==> Done! ISO: ${FINAL_ISO} ($(du -h "$FINAL_ISO" | cut -f1))"

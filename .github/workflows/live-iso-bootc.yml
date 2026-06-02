@@ -1,4 +1,4 @@
-name: Live ISOs (bootc-isos)
+name: Live ISOs (Tacklebox)
 on:
   workflow_dispatch:
     inputs:
@@ -26,7 +26,7 @@ on:
     branches: [main]
     paths:
       - 'live-iso/**'
-      - 'scripts/build-live-iso.sh'
+      - 'scripts/build-iso-tacklebox.sh'
       - '.github/workflows/live-iso-bootc.yml'
 
 jobs:
@@ -68,7 +68,7 @@ jobs:
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
-          sudo just live-iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
+          sudo just iso-tacklebox "$VARIANT" "$FLAVOR" local "$FLAVOR"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4

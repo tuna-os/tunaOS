@@ -159,21 +159,28 @@ ISOs are published every two weeks for `gnome` and `gnome-hwe` flavors of Yellow
 
 ### Build your own ISO or VM image
 
-Use [bootc-image-builder](https://github.com/osbuild/bootc-image-builder) directly:
+Use [tacklebox](https://github.com/tuna-os/tacklebox) to build ISOs:
 
 ```bash
-# ISO
-sudo podman run --rm -it --privileged \
-  -v /var/lib/containers/storage:/var/lib/containers/storage \
-  ghcr.io/osbuild/bootc-image-builder:latest \
-  --type iso \
-  ghcr.io/tuna-os/yellowfin:gnome
+# ISO (requires root)
+sudo tacklebox build --iso tunaos-yellowfin-gnome.iso \
+  --bootable-environment-image ghcr.io/tuna-os/yellowfin:gnome \
+  --bootable-environment-desktop gnome \
+  --output-base .build/iso
+```
 
+Or use the included helper script:
+
+```bash
+sudo ./scripts/build-iso-tacklebox.sh yellowfin gnome ghcr gnome
+```
+
+For QCOW2 VM images, use bootc directly:
+
+```bash
 # QCOW2 (VM image)
-sudo podman run --rm -it --privileged \
-  -v /var/lib/containers/storage:/var/lib/containers/storage \
-  ghcr.io/osbuild/bootc-image-builder:latest \
-  --type qcow2 \
+sudo bootc image build-to-qcow2 \
+  --output-format qcow2 \
   ghcr.io/tuna-os/yellowfin:gnome
 ```
 

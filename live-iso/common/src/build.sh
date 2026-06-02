@@ -337,21 +337,6 @@ fi
 # Tools needed inside the osbuild buildroot
 dnf install -y xorriso isomd5sum squashfs-tools
 
-# ── GRUB config for the ISO ──────────────────────────────────────────────────
-
-mkdir -p /usr/lib/bootc-image-builder
-# Write iso.yaml with the correct LABEL substituted
-CDLABEL="${LABEL//-/_}" # ISO labels can't have hyphens; use underscores
-cat >/usr/lib/bootc-image-builder/iso.yaml <<EOF
-label: "${CDLABEL}"
-grub2:
-  timeout: 10
-  entries:
-    - name: "Install ${LABEL}"
-      linux: "/images/pxeboot/vmlinuz quiet rhgb root=live:CDLABEL=${CDLABEL} tunaos.live=1 enforcing=0 rd.live.image"
-      initrd: "/images/pxeboot/initrd.img"
-EOF
-
 # ── Cleanup ──────────────────────────────────────────────────────────────────
 
 dnf clean all

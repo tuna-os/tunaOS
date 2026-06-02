@@ -97,7 +97,7 @@ tunaos_image_ref() {
 }
 
 # ── Cross-storage image import ──────────────────────────────────────────────
-# Some scripts run via `sudo` (e.g. build-live-iso.sh, build-iso-tacklebox.sh)
+# Some scripts run via `sudo` (e.g. build-iso-tacklebox.sh)
 # which uses root's podman storage, while developers usually build images
 # into their unprivileged user's storage. This helper copies the image over
 # without re-pulling from the registry.

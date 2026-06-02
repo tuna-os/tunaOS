@@ -368,29 +368,19 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         git submodule deinit -f --all
     fi
 
-# Build the custom image-builder-dev container needed for live ISO generation.
-build-image-builder:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if sudo podman image exists image-builder-dev; then
-        echo "image-builder-dev already exists. To rebuild: sudo podman rmi image-builder-dev"
-        exit 0
-    fi
-    sudo bash ./scripts/build-live-iso.sh --build-image-builder-only
-
-# Build a TunaOS live installer ISO using the bootc-isos approach.
-live-iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
+# Build a TunaOS live ISO via tacklebox (no Anaconda, dmsquash-live + sd-boot)
+live-iso variant='skipjack' flavor='gnome' repo='local' tag='':
     #!/usr/bin/env bash
     set -euo pipefail
     _tag="{{ tag }}"
     [[ -z "$_tag" ]] && _tag="{{ flavor }}"
-    sudo DEV_SSHD="{{ dev }}" bash ./scripts/build-live-iso.sh "{{ variant }}" "{{ flavor }}" "{{ repo }}" "$_tag"
+    sudo bash ./scripts/build-iso-tacklebox.sh "{{ variant }}" "{{ flavor }}" "{{ repo }}" "$_tag"
 
 # Shortcut for live-iso
-iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
-    @{{ just }} live-iso {{ variant }} {{ flavor }} {{ repo }} {{ tag }} {{ dev }}
+iso variant='skipjack' flavor='gnome' repo='local' tag='':
+    @{{ just }} live-iso {{ variant }} {{ flavor }} {{ repo }} {{ tag }}
 
-# Build a live ISO via tacklebox (no Anaconda, dmsquash-live + sd-boot)
+# Build a live ISO via tacklebox (alias, replaces deprecated bootc-image-builder approach)
 iso-tacklebox variant='yellowfin' flavor='gnome' repo='local' tag='':
     #!/usr/bin/env bash
     set -euo pipefail
