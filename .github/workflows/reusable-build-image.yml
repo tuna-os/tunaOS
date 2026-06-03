@@ -161,11 +161,6 @@ jobs:
           sudo chown -R root:root /var/cache/dnf /var/cache/libdnf5 /var/lib/rpm 2>/dev/null || true
           sudo chmod -R 755 /var/cache/dnf /var/cache/libdnf5 /var/lib/rpm 2>/dev/null || true
 
-      # Login before Build Image so `just build` can pull ghcr.io/coreos/chunkah:latest
-      # without falling back to a source build that fails on newer podman versions.
-      - name: Login to GHCR (pre-build)
-        uses: ./.github/actions/ghcr-login
-
       - name: Build Image
         id: build-image
         shell: bash

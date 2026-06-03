@@ -214,9 +214,8 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     echo "==> Running chunkah on ${PRE_CHUNK_TAG}..."
 
     # Ensure the chunkah image is available. Try the published image first,
-    # then fall back to building from source if it's not pullable (e.g. GHCR
-    # package hasn't been set up yet).
-    CHUNKAH_IMAGE="ghcr.io/coreos/chunkah:latest"
+    # then fall back to building from source if it's not pullable.
+    CHUNKAH_IMAGE="quay.io/coreos/chunkah:latest"
     if ! podman image inspect "${CHUNKAH_IMAGE}" &>/dev/null; then
         if ! podman pull "${CHUNKAH_IMAGE}" 2>/dev/null; then
             echo "==> chunkah image not pullable, building from source..."
