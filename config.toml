@@ -1,5 +1,6 @@
-[[user]]
-name = "admin"
-password = "password"
-groups = ["wheel"]
-ssh_authorized_keys = [] # Add keys if needed, or rely on password for now
+# Security: No default password. Generate one at build time or use SSH keys.
+# [[user]]
+# name = "admin"
+# password = "password"  # REMOVED: hardcoded default credential
+# groups = ["wheel"]
+# ssh_authorized_keys = []

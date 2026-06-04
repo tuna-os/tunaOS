@@ -1,7 +1,8 @@
-[[customizations.user]]
-name = "centos"
-password = "centos"
-groups = ["wheel"]
+# Security: No default password. Generate one at build time or use SSH keys.
+# [[customizations.user]]
+# name = "centos"
+# password = "centos"  # REMOVED: hardcoded default credential
+# groups = ["wheel"]
 
 [[customizations.filesystem]]
 mountpoint = "/"
