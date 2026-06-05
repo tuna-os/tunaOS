@@ -1,4 +1,3 @@
-
 <div align="center">
 <picture>
   <source srcset="https://fonts.gstatic.com/s/e/notoemoji/latest/1f41f/512.webp" type="image/webp">
@@ -123,9 +122,9 @@ ghcr.io/tuna-os/skipjack:cosmic
 > [!NOTE]
 > Bonito is still a work in progress and may not be fully functional
 
-### 🎣 Bonito (Fedora 43)
+### 🎣 Bonito (Fedora 44)
 
-**Base:** Fedora 43 — cutting-edge Fedora on bootc
+**Base:** Fedora 44 — cutting-edge Fedora on bootc
 
 **Platforms:** x86_64, ARM64
 
@@ -147,6 +146,23 @@ ghcr.io/tuna-os/bonito:cosmic
 | **Storage** | 20 GB | 50 GB+ |
 
 ## 🛠️ Installation
+
+### Container Registry Authentication
+
+TunaOS images are published to GitHub Container Registry (GHCR). Public images can be pulled without authentication, but GitHub imposes **rate limits** on unauthenticated pulls.
+
+To avoid rate limits, authenticate with GHCR:
+
+```bash
+# Log in to GitHub Container Registry
+podman login ghcr.io
+
+# When prompted, enter:
+#   Username: your GitHub username
+#   Password: a GitHub personal access token (classic) with read:packages scope
+```
+
+For details, see [Working with the GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
 
 ### Use a pre-built ISO
 
