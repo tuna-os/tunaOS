@@ -48,6 +48,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
 
     BASE_FOR_BUILD=""
     CONTAINERFILE="Containerfile"
+    HW_VARIANT="no-de"
     ENABLE_HWE="0"
     ENABLE_GDX="0"
     PARENT_FLAVOR=""
@@ -68,21 +69,21 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
         DESKTOP_FLAVOR="base-no-de"
     elif [[ "${FLAVOR}" == "base-hwe" ]]; then
-        CONTAINERFILE="Containerfile.hwe"
+        HW_VARIANT="hwe"
         ENABLE_HWE="1"
         DESKTOP_FLAVOR="base-hwe"
         PARENT_FLAVOR="base"
     elif [[ "${FLAVOR}" == "base-gdx" ]]; then
-        CONTAINERFILE="Containerfile.gdx"
+        HW_VARIANT="gdx"
         ENABLE_GDX="1"
         DESKTOP_FLAVOR="base-gdx"
         PARENT_FLAVOR="base"
     elif [[ "${FLAVOR}" == *"-gdx-hwe" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-gdx-hwe}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_GDX="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
+        DESKTOP_FLAVOR="${FLAVOR%-gdx-hwe}"; HW_VARIANT="gdx"; ENABLE_GDX="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
     elif [[ "${FLAVOR}" == *"-hwe" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-hwe}"; CONTAINERFILE="Containerfile.hwe"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
+        DESKTOP_FLAVOR="${FLAVOR%-hwe}"; HW_VARIANT="hwe"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
     elif [[ "${FLAVOR}" == *"-gdx" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-gdx}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_GDX="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
+        DESKTOP_FLAVOR="${FLAVOR%-gdx}"; HW_VARIANT="gdx"; ENABLE_GDX="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
     else
         DESKTOP_FLAVOR="${FLAVOR}"
         BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
@@ -103,10 +104,10 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     TARGET_TAG_WITH_VERSION="${TARGET_TAG}:${TARGET_IMAGE_TAG}"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}" "${HW_VARIANT}"
         ./scripts/sync-build-cache.sh "${TARGET_TAG}" || true
     else
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}" "${HW_VARIANT}"
     fi
 
     if [[ "$DID_INIT" == "1" ]]; then

@@ -15,7 +15,8 @@
 #   $7: enable_gdx
 #   $8: enable_hwe
 #   $9: desktop_flavor
-#   ${10}...: extra podman build args (*args from just)
+#   ${10}: hw_variant
+#   ${11}...: extra podman build args (*args from just)
 set -euxo pipefail
 
 target_tag_with_version="$1"
@@ -27,7 +28,8 @@ use_cache="$6"
 enable_gdx="$7"
 enable_hwe="$8"
 desktop_flavor="$9"
-shift 9
+hw_variant="${10}"
+shift 10
 extra_args=("$@")
 
 # ── Image digests ────────────────────────────────────────────────────────────
@@ -45,6 +47,7 @@ BUILD_ARGS+=("--build-arg" "COMMON_IMAGE_REF=${common_image_ref}")
 BUILD_ARGS+=("--build-arg" "BREW_IMAGE_REF=${brew_image_ref}")
 BUILD_ARGS+=("--build-arg" "ENABLE_HWE=${enable_hwe}")
 BUILD_ARGS+=("--build-arg" "ENABLE_GDX=${enable_gdx}")
+BUILD_ARGS+=("--build-arg" "HW_VARIANT=${hw_variant}")
 BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR=${desktop_flavor}")
 
 AKMODS_ORG=$("${YQ}" -r ".variants[] | select(.id == \"${target_tag}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
