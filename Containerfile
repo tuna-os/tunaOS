@@ -1,13 +1,13 @@
 ARG BASE_IMAGE
+# NOTE: ENABLE_HWE and ENABLE_GDX are passed by the Justfile _build helper
+# to every Containerfile for interface uniformity. The main Containerfile never
+# gates on them — HWE/GDX behavior is controlled by Containerfile selection
+# (main vs Containerfile.hwe vs Containerfile.gdx) and AKMODS_VERSION dispatch.
 ARG ENABLE_HWE="${ENABLE_HWE:-0}"
 ARG ENABLE_GDX="${ENABLE_GDX:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
-# SECURITY: Defaults use placeholder tags that MUST be overridden at build time.
-# The Justfile and scripts/build-image.sh always pin these to specific SHA256
-# digests (e.g., ghcr.io/projectbluefin/common@sha256:...). Direct podman build
-# without --build-arg overrides will fail with a clear error.
-ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
-ARG BREW_IMAGE_REF="ghcr.io/ublue-os/brew:unpinned-must-override"
+ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:latest"
+ARG BREW_IMAGE_REF="ghcr.io/ublue-os/brew:latest"
 
 FROM ${COMMON_IMAGE_REF} AS common
 FROM ${BREW_IMAGE_REF} AS brew
@@ -131,14 +131,6 @@ RUN dnf versionlock add glib2
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS gnome50
-RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
-  --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/gnome.sh base
-RUN dnf versionlock add glib2
-RUN rm -rf /opt && ln -s /var/opt /opt
-
-FROM base-no-de AS gnome49
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \

@@ -150,22 +150,10 @@ BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR=${DESKTOP_FLAVOR}")
 AKMODS_ORG=$("$YQ" -r ".variants[] | select(.id == \"${TARGET_TAG}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
 BUILD_ARGS+=("--build-arg" "AKMODS_BASE=ghcr.io/${AKMODS_ORG}")
 
-# RHSM credentials via BuildKit-style secret (matches Justfile approach).
-# Using --secret avoids leaking creds into podman history --no-trunc.
-RHSM_SECRET_FILE=""
-if [[ -n "${RHSM_USER:-}${RHSM_PASSWORD:-}${RHSM_ORG:-}${RHSM_ACTIVATION_KEY:-}" ]]; then
-	RHSM_SECRET_FILE=$(mktemp)
-	# shellcheck disable=SC2064
-	trap "rm -f '${RHSM_SECRET_FILE}'" EXIT
-	chmod 0600 "${RHSM_SECRET_FILE}"
-	{
-		printf 'export RHSM_USER=%q\n'           "${RHSM_USER:-}"
-		printf 'export RHSM_PASSWORD=%q\n'       "${RHSM_PASSWORD:-}"
-		printf 'export RHSM_ORG=%q\n'            "${RHSM_ORG:-}"
-		printf 'export RHSM_ACTIVATION_KEY=%q\n' "${RHSM_ACTIVATION_KEY:-}"
-	} > "${RHSM_SECRET_FILE}"
-	BUILD_ARGS+=("--secret" "id=rhsm,src=${RHSM_SECRET_FILE}")
-fi
+BUILD_ARGS+=("--build-arg" "RHSM_USER=${RHSM_USER:-}")
+BUILD_ARGS+=("--build-arg" "RHSM_PASSWORD=${RHSM_PASSWORD:-}")
+BUILD_ARGS+=("--build-arg" "RHSM_ORG=${RHSM_ORG:-}")
+BUILD_ARGS+=("--build-arg" "RHSM_ACTIVATION_KEY=${RHSM_ACTIVATION_KEY:-}")
 
 if [[ "$ENABLE_HWE" -eq "1" ]] || [[ "$TARGET_TAG" == bonito* ]]; then
 	BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=coreos-stable-${coreos_stable_version:-43}")

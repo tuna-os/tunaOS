@@ -145,8 +145,8 @@ just --list              # Show all available commands
 |---|---|
 | `Justfile` | All build commands and task automation |
 | `Containerfile` | Main multi-stage build definition |
-| `Containerfile.dx` | DX flavor definition |
-| `Containerfile.gdx` | GDX flavor definition (Containerfile.hwe-based NVIDIA/CUDA) |
+| `Containerfile.dx` | ⚠️ DEPRECATED — superseded by `Containerfile.gdx`. No CI consumers. Retained for reference only. |
+| `Containerfile.gdx` | GDX flavor definition (NVIDIA drivers + CUDA) |
 | `Containerfile.hwe` | HWE layer definition (coreos kernel, akmods) |
 | `build_scripts/lib.sh` | Shared functions; OS detection logic |
 | `build_scripts/overrides/` | Variant-specific script overrides |
