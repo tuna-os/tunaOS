@@ -123,9 +123,9 @@ ghcr.io/tuna-os/skipjack:cosmic
 > [!NOTE]
 > Bonito is still a work in progress and may not be fully functional
 
-### 🎣 Bonito (Fedora 43)
+### 🎣 Bonito (Fedora 44)
 
-**Base:** Fedora 43 — cutting-edge Fedora on bootc
+**Base:** Fedora 44 — cutting-edge Fedora on bootc
 
 **Platforms:** x86_64, ARM64
 
@@ -134,6 +134,24 @@ ghcr.io/tuna-os/bonito:gnome
 ghcr.io/tuna-os/bonito:kde
 ghcr.io/tuna-os/bonito:niri
 ghcr.io/tuna-os/bonito:cosmic
+```
+
+---
+
+### 🔒 Redfin (RHEL 10) — Local-Build Only
+
+**Base:** Red Hat Enterprise Linux 10 — fully supported, subscription-based
+
+**Platforms:** x86_64, ARM64
+
+> [!IMPORTANT]
+> Due to the RHEL EULA, Redfin images **cannot be publicly distributed**. This variant is local-build only.
+> For a freely redistributable RHEL-compatible alternative, use Albacore (AlmaLinux 10).
+
+See [`docs/rhel-setup.md`](docs/rhel-setup.md) for prerequisites, authentication, and build instructions.
+
+```bash
+just redfin base
 ```
 
 ---
@@ -192,13 +210,31 @@ If you're already running a compatible bootc system:
 sudo bootc switch ghcr.io/tuna-os/yellowfin:gnome
 ```
 
+## 🔐 Container Registry Authentication
+
+Images are published on GitHub Container Registry (GHCR). To pull images with `bootc` or `podman`:
+
+```bash
+# Authenticate to GHCR (requires a GitHub personal access token with read:packages scope)
+echo "$GITHUB_TOKEN" | podman login ghcr.io -u YOUR_USERNAME --password-stdin
+
+# Or use the GitHub CLI
+grep auth token | podman login ghcr.io -u YOUR_USERNAME --password-stdin
+```
+
+See [GitHub Container Registry docs](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) for more details.
+
 ## 🧪 Current Status
 
 > **Note:** These images are in active development. Yellowfin and Albacore are the most mature variants. Bonito (Fedora) still needs work.
 
 ## Contributing
 
-PRs welcome! The goal is a great modern desktop on Enterprise Linux.
+Contributions welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for:
+- Development environment setup
+- Build workflow and pre-commit checklist
+- Pull request guidelines
+- Architecture overview
 
 ## 🤝 Community & Support
 
@@ -211,6 +247,16 @@ Related Communities:
 
 ## 📚 Documentation
 
+### Project Docs
+- [Contributor Guide](CONTRIBUTING.md) — how to set up, build, and contribute
+- [Agent Guide](docs/AGENT_GUIDE.md) — complete architecture and contributor reference
+- [Build Pipeline](docs/build-pipeline.md) — CI/CD workflow overview
+- [Testing Guide](docs/TESTING.md) — ISO end-to-end test harness
+- [Improvement Plan](docs/IMPROVEMENT_PLAN.md) — roadmap and development progress
+- [Redfin Setup](docs/rhel-setup.md) — RHEL 10 local-build instructions
+- [mdBook](docs/book/src/introduction.md) — user-facing documentation
+
+### External Resources
 - [AlmaLinux Kitten 10 Differences](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#how-is-almalinux-os-kitten-different-from-centos-stream)
 - [Project Bluefin Documentation](https://docs.projectbluefin.io)
 - [Universal Blue](https://universal-blue.org/)
