@@ -4,6 +4,21 @@ on:
   pull_request:
 
 jobs:
+  verify-generated:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify generated workflow files match generator
+        run: |
+          python3 scripts/generate-workflows.py
+          if ! git diff --exit-code .github/workflows/build-*.yml; then
+            echo "::error::Generated workflow files are out of sync. Run 'python3 scripts/generate-workflows.py' and commit the result."
+            exit 1
+          fi
+          echo "Generated workflow files are in sync."
+
   fix:
     runs-on: ubuntu-latest
     permissions:
