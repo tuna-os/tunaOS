@@ -19,15 +19,20 @@ TunaOS is a **bootc-based OS image builder** — it produces bootable OCI contai
 | `yellowfin` | AlmaLinux Kitten 10 | Stable |
 | `albacore` | AlmaLinux 10 | Stable |
 | `skipjack` | CentOS Stream 10 | Experimental |
-| `bonito` | Fedora 44 | Incomplete |
+| `bonito` | Fedora 44 | Experimental |
 
-### Flavors (feature layers — each builds on the previous)
+### Flavors (layered via 4-stage DAG; see `.github/build-config.yml` for full matrix)
 
-| Flavor | Contents |
-|---|---|
-| `base` | GNOME desktop, Flathub, Homebrew |
-| `dx` | + Docker, VSCode, dev tools |
-| `gdx` | + NVIDIA drivers, CUDA |
+| Layer | Flavors | Contents |
+|---|---|---|
+| Stage 1 — base | `base` | Minimal OS (all variants) |
+| Stage 2 — HWE/GDX base + desktops | `base-hwe`, `base-gdx`, `gnome`, `gnome50`, `cosmic`, `kde`, `niri` | DE packages; HWE coreos kernel; GDX NVIDIA base |
+| Stage 3 — HWE/GDX desktops | `<de>-hwe`, `<de>-gdx` (e.g. `gnome-hwe`, `kde-gdx`) | DE layered on HWE/GDX base |
+| Stage 4 — combined | `gnome-gdx-hwe` | GNOME + GDX + HWE (layers on `gnome-hwe`) |
+
+Flavor availability varies per variant — consult `.github/build-config.yml`.
+- `bonito` has fewer HWE/GDX combos (no `gnome50`, fewer non-GNOME HWE layers).
+- HWE flavors ship the `coreos/fedora` kernel + `ublue-os/akmods-nvidia-open`.
 
 ---
 
@@ -57,11 +62,11 @@ Other requirements:
 just fix        # Format shell scripts and Justfile
 just check      # shellcheck, yamllint, jq, actionlint
 
-# Build a single variant (fastest test)
+# Build a single variant + flavor (fastest test)
 just yellowfin base
 
-# Build the full flavor chain
-just yellowfin base && just yellowfin dx && just yellowfin gdx
+# Build a chain (each depends on previous stage)
+just yellowfin base && just yellowfin gnome && just yellowfin gnome-gdx
 
 # Build shortcuts (all default to base flavor)
 just yellowfin [flavor]
@@ -75,6 +80,7 @@ just build-all-base      # Base flavor only for all variants
 
 # ISO / VM generation (requires root, adds 20-30 min)
 sudo just iso <variant> <flavor> <local|ghcr>
+sudo just iso-tacklebox <variant> <flavor> <local|ghcr> <tag>
 sudo just qcow2 <variant> <flavor> <local|ghcr>
 
 # Cleanup
@@ -139,7 +145,9 @@ just --list              # Show all available commands
 |---|---|
 | `Justfile` | All build commands and task automation |
 | `Containerfile` | Main multi-stage build definition |
-| `Containerfile.dx` / `Containerfile.gdx` | DX and GDX flavor definitions |
+| `Containerfile.dx` | DX flavor definition |
+| `Containerfile.gdx` | GDX flavor definition (Containerfile.hwe-based NVIDIA/CUDA) |
+| `Containerfile.hwe` | HWE layer definition (coreos kernel, akmods) |
 | `build_scripts/lib.sh` | Shared functions; OS detection logic |
 | `build_scripts/overrides/` | Variant-specific script overrides |
 | `system_files/` | Files copied into every image (`etc/`, `usr/`) |
@@ -189,8 +197,9 @@ When debugging RPM conflicts or missing packages in skipjack/yellowfin GNOME bui
 ### Build failures
 - Check network connectivity (base image pull from Quay.io)
 - Verify disk space (20GB+ required)
-- Check parent image exists (base must exist before dx; dx before gdx)
+- Check parent image exists (base must exist before stage 2; stage 2 before stage 3)
 - RPM conflicts in skipjack/yellowfin GNOME builds → check [github.com/tuna-os/github-copr](https://github.com/tuna-os/github-copr)
+- Transient EPEL/RPM fetch failures → `dnf_retry` in `lib.sh` auto-retries up to 4 attempts with exponential backoff and metadata clear; check `.build-logs/` for retry traces
 
 ### Common pitfalls
 - **NEVER cancel builds early**
