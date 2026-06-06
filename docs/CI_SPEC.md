@@ -21,7 +21,7 @@ variants:
         build_qcow2: true
       - id: gnome-hwe
         build_image: true
-      - id: gnome-gdx
+      - id: gnome-nvidia
         build_image: true
       - id: kde
         build_image: true

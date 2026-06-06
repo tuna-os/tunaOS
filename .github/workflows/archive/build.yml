@@ -29,14 +29,14 @@ on:
       build_variant:
         description: 'Build variant set'
         required: false
-        default: 'gnome,gnome-hwe,gnome-gdx,kde,kde-hwe,kde-gdx'
+        default: 'gnome,gnome-hwe,gnome-nvidia,kde,kde-hwe,kde-nvidia'
         type: choice
         options:
           - gnome
-          - gnome,gnome-hwe,gnome-gdx
+          - gnome,gnome-hwe,gnome-nvidia
           - gnome,kde
-          - gnome,kde,kde-hwe,kde-gdx
-          - gnome,gnome-hwe,gnome-gdx,kde,kde-hwe,kde-gdx
+          - gnome,kde,kde-hwe,kde-nvidia
+          - gnome,gnome-hwe,gnome-nvidia,kde,kde-hwe,kde-nvidia
       platforms:
         description: 'Platforms to build (Be sure to build all on Main!)'
         required: false
@@ -59,7 +59,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event_name == 'pull_request'
     outputs:
-      hwe_gdx_related: ${{ steps.filter.outputs.hwe_gdx_related }}
+      hwe_nvidia_related: ${{ steps.filter.outputs.hwe_nvidia_related }}
     steps:
       - name: Checkout
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v4
@@ -68,16 +68,16 @@ jobs:
         uses: dorny/paths-filter@v3
         with:
           filters: |
-            hwe_gdx_related:
+            hwe_nvidia_related:
               - 'Containerfile.hwe'
               - 'Containerfile.gdx'
               - 'Containerfile.kde.hwe'
               - 'Containerfile.kde.gdx'
               - 'build_scripts/HWE.sh'
-              - 'build_scripts/GDX.sh'
+              - 'build_scripts/nvidia.sh'
               - 'build_scripts/niri.sh'
               - 'build_scripts/overrides/**'
-              - 'system_files_overrides/gdx/**'
+              - 'system_files_overrides/nvidia/**'
 
   generate_matrix:
     runs-on: ubuntu-latest
@@ -85,10 +85,10 @@ jobs:
     if: always() && !cancelled() && needs.detect_pr_scope.result != 'failure'
     outputs:
       base_matrix: ${{ steps.set-matrix.outputs.base_matrix }}
-      hwe_gdx_matrix: ${{ steps.set-matrix.outputs.hwe_gdx_matrix }}
+      hwe_nvidia_matrix: ${{ steps.set-matrix.outputs.hwe_nvidia_matrix }}
       kde_matrix: ${{ steps.set-matrix.outputs.kde_matrix }}
-      kde_hwe_gdx_matrix: ${{ steps.set-matrix.outputs.kde_hwe_gdx_matrix }}
-      niri_hwe_gdx_matrix: ${{ steps.set-matrix.outputs.niri_hwe_gdx_matrix }}
+      kde_hwe_nvidia_matrix: ${{ steps.set-matrix.outputs.kde_hwe_nvidia_matrix }}
+      niri_hwe_nvidia_matrix: ${{ steps.set-matrix.outputs.niri_hwe_nvidia_matrix }}
     steps:
       - name: Checkout for config
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v4
@@ -97,7 +97,7 @@ jobs:
         id: set-matrix
         run: |
           IMAGE_VARIANTS="yellowfin albacore skipjack bonito"
-          PR_HWE_GDX_RELATED="${{ needs.detect_pr_scope.outputs.hwe_gdx_related || 'false' }}"
+          PR_HWE_GDX_RELATED="${{ needs.detect_pr_scope.outputs.hwe_nvidia_related || 'false' }}"
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.image_variant }}" != "all" ]]; then
             IMAGE_VARIANTS="${{ inputs.image_variant }}"
@@ -170,7 +170,7 @@ jobs:
                   RUN_KDE_HWE_GDX=false
                   RUN_NIRI_HWE_GDX=false
                   ;;
-                "gnome,gnome-hwe,gnome-gdx")
+                "gnome,gnome-hwe,gnome-nvidia")
                   RUN_HWE_GDX=true
                   RUN_KDE=false
                   RUN_KDE_HWE_GDX=false
@@ -182,13 +182,13 @@ jobs:
                   RUN_KDE_HWE_GDX=false
                   RUN_NIRI_HWE_GDX=false
                   ;;
-                "gnome,kde,kde-hwe,kde-gdx")
+                "gnome,kde,kde-hwe,kde-nvidia")
                   RUN_HWE_GDX=false
                   RUN_KDE=true
                   RUN_KDE_HWE_GDX=true
                   RUN_NIRI_HWE_GDX=false
                   ;;
-                "gnome,gnome-hwe,gnome-gdx,kde,kde-hwe,kde-gdx")
+                "gnome,gnome-hwe,gnome-nvidia,kde,kde-hwe,kde-nvidia")
                   RUN_HWE_GDX=true
                   RUN_KDE=true
                   RUN_KDE_HWE_GDX=true
@@ -207,10 +207,10 @@ jobs:
               \"default_tag\": \"${TAG}\",
               \"platforms\": \"${PLATFORMS}\",
               \"description\": \"${DESCRIPTION}\",
-              \"run_hwe_gdx\": ${RUN_HWE_GDX},
+              \"run_hwe_nvidia\": ${RUN_HWE_GDX},
               \"run_kde\": ${RUN_KDE},
-              \"run_kde_hwe_gdx\": ${RUN_KDE_HWE_GDX},
-              \"run_niri_hwe_gdx\": ${RUN_NIRI_HWE_GDX},
+              \"run_kde_hwe_nvidia\": ${RUN_KDE_HWE_GDX},
+              \"run_niri_hwe_nvidia\": ${RUN_NIRI_HWE_GDX},
               \"rechunk\": ${{ github.event_name != 'pull_request' }},
               \"sbom\": false,
               \"publish\": true
@@ -219,10 +219,10 @@ jobs:
 
           # Output filtered matrices using jq
           echo "base_matrix=$(echo "${MATRIX}" | jq -c '.')" >> "$GITHUB_OUTPUT"
-          echo "hwe_gdx_matrix=$(echo "${MATRIX}" | jq -c '{"include": [.include[] | select(.run_hwe_gdx == true)]}')" >> "$GITHUB_OUTPUT"
+          echo "hwe_nvidia_matrix=$(echo "${MATRIX}" | jq -c '{"include": [.include[] | select(.run_hwe_nvidia == true)]}')" >> "$GITHUB_OUTPUT"
           echo "kde_matrix=$(echo "${MATRIX}" | jq -c '{"include": [.include[] | select(.run_kde == true)]}')" >> "$GITHUB_OUTPUT"
-          echo "kde_hwe_gdx_matrix=$(echo "${MATRIX}" | jq -c '{"include": [.include[] | select(.run_kde_hwe_gdx == true)]}')" >> "$GITHUB_OUTPUT"
-          echo "niri_hwe_gdx_matrix=$(echo "${MATRIX}" | jq -c '{"include": [.include[] | select(.run_niri_hwe_gdx == true)]}')" >> "$GITHUB_OUTPUT"
+          echo "kde_hwe_nvidia_matrix=$(echo "${MATRIX}" | jq -c '{"include": [.include[] | select(.run_kde_hwe_nvidia == true)]}')" >> "$GITHUB_OUTPUT"
+          echo "niri_hwe_nvidia_matrix=$(echo "${MATRIX}" | jq -c '{"include": [.include[] | select(.run_niri_hwe_nvidia == true)]}')" >> "$GITHUB_OUTPUT"
 
   build-base:
     needs: generate_matrix
@@ -278,7 +278,7 @@ jobs:
         format('ghcr.io/{0}/{1}:base', github.repository_owner,
         matrix.image_name) || '' }}
 
-  build-gdx-base:
+  build-nvidia-base:
     needs: [generate_matrix, build-base]
     permissions:
       contents: read
@@ -295,11 +295,11 @@ jobs:
     secrets: inherit
     with:
       image-name: ${{ matrix.image_name }}
-      image-desc: ${{ matrix.description }} GDX no-DE base
+      image-desc: ${{ matrix.description }} NVIDIA no-DE base
       image-variant: ${{ matrix.image_variant }}
-      flavor: gdx-base
+      flavor: nvidia-base
       platforms: ${{ matrix.platforms }}
-      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-gdx-base', github.event.pull_request.number) || 'gdx-base' }}
+      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-nvidia-base', github.event.pull_request.number) || 'gdx-base' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ matrix.publish }}
@@ -310,7 +310,7 @@ jobs:
         matrix.image_name) || '' }}
 
   build-gnome:
-    needs: [generate_matrix, build-hwe-base, build-gdx-base]
+    needs: [generate_matrix, build-hwe-base, build-nvidia-base]
     permissions:
       contents: read
       packages: write
@@ -318,7 +318,7 @@ jobs:
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
       needs.build-hwe-base.result == 'success' &&
-      needs.build-gdx-base.result == 'success' &&
+      needs.build-nvidia-base.result == 'success' &&
       needs.generate_matrix.outputs.base_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
@@ -341,7 +341,7 @@ jobs:
         matrix.image_name) || '' }}
 
   build-kde:
-    needs: [generate_matrix, build-hwe-base, build-gdx-base]
+    needs: [generate_matrix, build-hwe-base, build-nvidia-base]
     permissions:
       contents: read
       packages: write
@@ -349,7 +349,7 @@ jobs:
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
       needs.build-hwe-base.result == 'success' &&
-      needs.build-gdx-base.result == 'success' &&
+      needs.build-nvidia-base.result == 'success' &&
       needs.generate_matrix.outputs.kde_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
@@ -372,7 +372,7 @@ jobs:
         matrix.image_name) || '' }}
 
   build-niri:
-    needs: [generate_matrix, build-hwe-base, build-gdx-base]
+    needs: [generate_matrix, build-hwe-base, build-nvidia-base]
     permissions:
       contents: read
       packages: write
@@ -380,11 +380,11 @@ jobs:
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
       needs.build-hwe-base.result == 'success' &&
-      needs.build-gdx-base.result == 'success' &&
-      needs.generate_matrix.outputs.niri_hwe_gdx_matrix != '{"include":[]}' }}
+      needs.build-nvidia-base.result == 'success' &&
+      needs.generate_matrix.outputs.niri_hwe_nvidia_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.niri_hwe_gdx_matrix)}}
+      matrix: ${{fromJson(needs.generate_matrix.outputs.niri_hwe_nvidia_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
@@ -411,10 +411,10 @@ jobs:
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
       needs.build-gnome.result == 'success' &&
-      needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
+      needs.generate_matrix.outputs.hwe_nvidia_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
+      matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_nvidia_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
@@ -432,7 +432,7 @@ jobs:
         format('ghcr.io/{0}/{1}:gnome', github.repository_owner,
         matrix.image_name) || '' }}
 
-  build-gdx:
+  build-nvidia:
     needs: [generate_matrix, build-gnome]
     permissions:
       contents: read
@@ -441,19 +441,19 @@ jobs:
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
       needs.build-gnome.result == 'success' &&
-      needs.generate_matrix.outputs.hwe_gdx_matrix != '{"include":[]}' }}
+      needs.generate_matrix.outputs.hwe_nvidia_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
+      matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_nvidia_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
       image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} GNOME GDX
       image-variant: ${{ matrix.image_variant }}
-      flavor: gnome-gdx
+      flavor: gnome-nvidia
       platforms: ${{ matrix.platforms }}
-      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-gnome-gdx', github.event.pull_request.number) || 'gnome-gdx' }}
+      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-gnome-nvidia', github.event.pull_request.number) || 'gnome-nvidia' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
@@ -472,10 +472,10 @@ jobs:
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
       needs.build-kde.result == 'success' &&
-      needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}' }}
+      needs.generate_matrix.outputs.kde_hwe_nvidia_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.kde_hwe_gdx_matrix)}}
+      matrix: ${{fromJson(needs.generate_matrix.outputs.kde_hwe_nvidia_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
@@ -493,7 +493,7 @@ jobs:
         format('ghcr.io/{0}/{1}:kde', github.repository_owner,
         matrix.image_name) || '' }}
 
-  build-kde-gdx:
+  build-kde-nvidia:
     needs: [generate_matrix, build-kde]
     permissions:
       contents: read
@@ -502,19 +502,19 @@ jobs:
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
       needs.build-kde.result == 'success' &&
-      needs.generate_matrix.outputs.kde_hwe_gdx_matrix != '{"include":[]}' }}
+      needs.generate_matrix.outputs.kde_hwe_nvidia_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.kde_hwe_gdx_matrix)}}
+      matrix: ${{fromJson(needs.generate_matrix.outputs.kde_hwe_nvidia_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
       image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} KDE GDX
       image-variant: ${{ matrix.image_variant }}
-      flavor: kde-gdx
+      flavor: kde-nvidia
       platforms: ${{ matrix.platforms }}
-      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-kde-gdx', github.event.pull_request.number) || 'kde-gdx' }}
+      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-kde-nvidia', github.event.pull_request.number) || 'kde-nvidia' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}
@@ -533,10 +533,10 @@ jobs:
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
       needs.build-niri.result == 'success' &&
-      needs.generate_matrix.outputs.niri_hwe_gdx_matrix != '{"include":[]}' }}
+      needs.generate_matrix.outputs.niri_hwe_nvidia_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.niri_hwe_gdx_matrix)}}
+      matrix: ${{fromJson(needs.generate_matrix.outputs.niri_hwe_nvidia_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
@@ -554,7 +554,7 @@ jobs:
         format('ghcr.io/{0}/{1}:niri', github.repository_owner,
         matrix.image_name) || '' }}
 
-  build-niri-gdx:
+  build-niri-nvidia:
     needs: [generate_matrix, build-niri]
     permissions:
       contents: read
@@ -563,19 +563,19 @@ jobs:
     if: >-
       ${{ !cancelled() && needs.generate_matrix.result == 'success' &&
       needs.build-niri.result == 'success' &&
-      needs.generate_matrix.outputs.niri_hwe_gdx_matrix != '{"include":[]}' }}
+      needs.generate_matrix.outputs.niri_hwe_nvidia_matrix != '{"include":[]}' }}
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.niri_hwe_gdx_matrix)}}
+      matrix: ${{fromJson(needs.generate_matrix.outputs.niri_hwe_nvidia_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
     secrets: inherit
     with:
       image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} Niri GDX
       image-variant: ${{ matrix.image_variant }}
-      flavor: niri-gdx
+      flavor: niri-nvidia
       platforms: ${{ matrix.platforms }}
-      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-niri-gdx', github.event.pull_request.number) || 'niri-gdx' }}
+      default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-niri-nvidia', github.event.pull_request.number) || 'niri-nvidia' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
       publish: ${{ github.event_name != 'pull_request' }}

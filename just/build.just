@@ -10,7 +10,7 @@ _ensure-deps:
 # Private build engine.
 # [build]
 [private]
-_build target_tag_with_version target_tag container_file base_image_for_build target_platform use_cache enable_gdx enable_hwe desktop_flavor *args: _ensure-deps
+_build target_tag_with_version target_tag container_file base_image_for_build target_platform use_cache enable_nvidia enable_hwe desktop_flavor *args: _ensure-deps
     #!/usr/bin/env bash
     export YQ="{{ yq }}"
     export COMMON_IMAGE="{{ common_image }}"
@@ -50,15 +50,15 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     CONTAINERFILE="Containerfile"
     HW_VARIANT="no-de"
     ENABLE_HWE="0"
-    ENABLE_GDX="0"
+    ENABLE_NVIDIA="0"
     PARENT_FLAVOR=""
     FLAVOR="{{ flavor }}"
     DESKTOP_FLAVOR="${FLAVOR}"
 
     case "${FLAVOR}" in
         "hwe") FLAVOR="gnome-hwe" ;;
-        "gdx") FLAVOR="gnome-gdx" ;;
-        "gdx-hwe") FLAVOR="gnome-gdx-hwe" ;;
+        "nvidia") FLAVOR="gnome-nvidia" ;;
+        "nvidia-hwe") FLAVOR="gnome-nvidia-hwe" ;;
     esac
 
     if [[ "${FLAVOR}" == "all" ]]; then
@@ -73,17 +73,17 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         ENABLE_HWE="1"
         DESKTOP_FLAVOR="base-hwe"
         PARENT_FLAVOR="base"
-    elif [[ "${FLAVOR}" == "base-gdx" ]]; then
-        HW_VARIANT="gdx"
-        ENABLE_GDX="1"
-        DESKTOP_FLAVOR="base-gdx"
+    elif [[ "${FLAVOR}" == "base-nvidia" ]]; then
+        HW_VARIANT="nvidia"
+        ENABLE_NVIDIA="1"
+        DESKTOP_FLAVOR="base-nvidia"
         PARENT_FLAVOR="base"
-    elif [[ "${FLAVOR}" == *"-gdx-hwe" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-gdx-hwe}"; HW_VARIANT="gdx"; ENABLE_GDX="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
+    elif [[ "${FLAVOR}" == *"-nvidia-hwe" ]]; then
+        DESKTOP_FLAVOR="${FLAVOR%-nvidia-hwe}"; HW_VARIANT="nvidia"; ENABLE_NVIDIA="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
     elif [[ "${FLAVOR}" == *"-hwe" ]]; then
         DESKTOP_FLAVOR="${FLAVOR%-hwe}"; HW_VARIANT="hwe"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
-    elif [[ "${FLAVOR}" == *"-gdx" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-gdx}"; HW_VARIANT="gdx"; ENABLE_GDX="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
+    elif [[ "${FLAVOR}" == *"-nvidia" ]]; then
+        DESKTOP_FLAVOR="${FLAVOR%-nvidia}"; HW_VARIANT="nvidia"; ENABLE_NVIDIA="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
     else
         DESKTOP_FLAVOR="${FLAVOR}"
         BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
@@ -104,10 +104,10 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     TARGET_TAG_WITH_VERSION="${TARGET_TAG}:${TARGET_IMAGE_TAG}"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}" "${HW_VARIANT}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}" "${HW_VARIANT}"
         ./scripts/sync-build-cache.sh "${TARGET_TAG}" || true
     else
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}" "${HW_VARIANT}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}" "${HW_VARIANT}"
     fi
 
     if [[ "$DID_INIT" == "1" ]]; then

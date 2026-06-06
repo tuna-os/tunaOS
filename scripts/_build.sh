@@ -12,7 +12,7 @@
 #   $4: base_image_for_build
 #   $5: target_platform
 #   $6: use_cache
-#   $7: enable_gdx
+#   $7: enable_nvidia
 #   $8: enable_hwe
 #   $9: desktop_flavor
 #   ${10}: hw_variant
@@ -25,7 +25,7 @@ container_file="$3"
 base_image_for_build="$4"
 target_platform="$5"
 use_cache="$6"
-enable_gdx="$7"
+enable_nvidia="$7"
 enable_hwe="$8"
 desktop_flavor="$9"
 hw_variant="${10}"
@@ -46,7 +46,7 @@ BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${base_image_for_build}")
 BUILD_ARGS+=("--build-arg" "COMMON_IMAGE_REF=${common_image_ref}")
 BUILD_ARGS+=("--build-arg" "BREW_IMAGE_REF=${brew_image_ref}")
 BUILD_ARGS+=("--build-arg" "ENABLE_HWE=${enable_hwe}")
-BUILD_ARGS+=("--build-arg" "ENABLE_GDX=${enable_gdx}")
+BUILD_ARGS+=("--build-arg" "ENABLE_NVIDIA=${enable_nvidia}")
 BUILD_ARGS+=("--build-arg" "HW_VARIANT=${hw_variant}")
 BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR=${desktop_flavor}")
 

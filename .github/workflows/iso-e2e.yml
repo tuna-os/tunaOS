@@ -140,7 +140,7 @@ jobs:
           # `publish-isos.yml` writes the canonical name as
           # `<variant>-<flavor>-latest.iso` (search for `LATEST=` in that
           # workflow). Match that exact name so we don't accidentally pick
-          # up `${VARIANT}-${FLAVOR}-gdx-latest.iso` etc. via the `-*.iso`
+          # up `${VARIANT}-${FLAVOR}-nvidia-latest.iso` etc. via the `-*.iso`
           # glob (which over-matches because the rclone include glob
           # isn't anchored at the end).
           OBJECT="${VARIANT}-${FLAVOR}-latest.iso"

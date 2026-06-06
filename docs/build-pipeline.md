@@ -14,11 +14,11 @@ The pipeline builds images on a weekly schedule and publishes them with the `lat
 -   **Flavors**: Different package sets.
     -   `base`: Minimal OS.
     -   `dx`: Developer Experience (includes dev tools).
-    -   `gdx`: Graphical Developer Experience (includes desktop environment and NVIDIA support via coreos akmods).
+    -   `nvidia`: NVIDIA drivers (includes desktop environment and CUDA support via coreos akmods).
 
 ### Hardware Enablement (HWE)
 
-The `gdx` flavor uses the coreos/fedora kernel and akmods for hardware enablement:
+The `nvidia` flavor uses the coreos/fedora kernel and akmods for hardware enablement:
 -   **NVIDIA drivers**: Provided by `ublue-os/akmods-nvidia-open` using coreos-stable builds
 
 ---
@@ -37,7 +37,7 @@ This is the primary build workflow that runs weekly.
     2.  **Build**: Uses `reusable-build-image.yml` to build the container images.
     3.  **Push**: Pushes images to GHCR with the `:latest` tag.
 -   **Key Features**:
-    -   **Chaining**: Builds `base` first, then uses it as the base for `dx`, and `dx` for `gdx`.
+    -   **Chaining**: Builds `base` first, then uses it as the base for `dx`, and `dx` for `nvidia`.
 
 ### 2. Pull Request Checks (`build.yml`)
 

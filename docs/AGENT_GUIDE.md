@@ -27,7 +27,7 @@ TunaOS is a **bootc-based OS image builder** — it produces bootable OCI contai
 |---|---|
 | `base` | GNOME desktop, Flathub, Homebrew |
 | `dx` | + Docker, VSCode, dev tools |
-| `gdx` | + NVIDIA drivers, CUDA |
+| `nvidia` | + NVIDIA drivers, CUDA |
 
 ---
 
@@ -61,7 +61,7 @@ just check      # shellcheck, yamllint, jq, actionlint
 just yellowfin base
 
 # Build the full flavor chain
-just yellowfin base && just yellowfin dx && just yellowfin gdx
+just yellowfin base && just yellowfin dx && just yellowfin nvidia
 
 # Build shortcuts (all default to base flavor)
 just yellowfin [flavor]
@@ -138,8 +138,7 @@ just --list              # Show all available commands
 | File/Dir | Purpose |
 |---|---|
 | `Justfile` | All build commands and task automation |
-| `Containerfile` | Main multi-stage build definition |
-| `Containerfile.dx` / `Containerfile.gdx` | DX and GDX flavor definitions |
+| `Containerfile` | Unified multi-stage build definition (parametrized via HW_VARIANT) |
 | `build_scripts/lib.sh` | Shared functions; OS detection logic |
 | `build_scripts/overrides/` | Variant-specific script overrides |
 | `system_files/` | Files copied into every image (`etc/`, `usr/`) |
@@ -189,7 +188,7 @@ When debugging RPM conflicts or missing packages in skipjack/yellowfin GNOME bui
 ### Build failures
 - Check network connectivity (base image pull from Quay.io)
 - Verify disk space (20GB+ required)
-- Check parent image exists (base must exist before dx; dx before gdx)
+- Check parent image exists (base must exist before dx; dx before nvidia)
 - RPM conflicts in skipjack/yellowfin GNOME builds → check [github.com/tuna-os/github-copr](https://github.com/tuna-os/github-copr)
 
 ### Common pitfalls

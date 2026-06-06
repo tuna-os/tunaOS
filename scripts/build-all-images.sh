@@ -41,9 +41,9 @@ while [[ $# -gt 0 ]]; do
 	--help | -h)
 		echo "Usage: $0 [OPTIONS]"
 		echo "Options:"
-		echo "  --base-only              Build only base flavors (skip hwe/gdx and kde chain)"
+		echo "  --base-only              Build only base flavors (skip hwe/nvidia and kde chain)"
 		echo "  --include-experimental   Include experimental variants (skipjack, bonito)"
-		echo "  --include-kde            Include KDE flavor chain (kde, kde-hwe, kde-gdx)"
+		echo "  --include-kde            Include KDE flavor chain (kde, kde-hwe, kde-nvidia)"
 		echo "  --tmux                   Launch a tmux session to monitor logs"
 		echo "  --help, -h               Show this help message"
 		exit 0
@@ -68,9 +68,9 @@ if [[ "$BASE_ONLY" == "true" ]]; then
 	echo -e "${CYAN}Starting concurrent builds for base variants only...${NC}"
 	echo -e "${WHITE}Building variants: ${VARIANTS[*]}${NC}"
 else
-	echo -e "${CYAN}Starting concurrent builds for all flavors (base -> hwe -> gdx)...${NC}"
+	echo -e "${CYAN}Starting concurrent builds for all flavors (base -> hwe -> nvidia)...${NC}"
 	if [[ "$INCLUDE_KDE" == "true" ]]; then
-		echo -e "${WHITE}Including KDE chain: kde -> kde-hwe -> kde-gdx${NC}"
+		echo -e "${WHITE}Including KDE chain: kde -> kde-hwe -> kde-nvidia${NC}"
 	fi
 	echo -e "${WHITE}Building variants: ${VARIANTS[*]}${NC}"
 fi
@@ -153,11 +153,11 @@ build_variant_pipeline() {
 		exit 1
 	fi
 
-	echo "Building $variant gdx..."
-	if just build "$variant" gdx; then
-		echo "$variant gdx completed at $(date)"
+	echo "Building $variant nvidia..."
+	if just build "$variant" nvidia; then
+		echo "$variant nvidia completed at $(date)"
 	else
-		echo "$variant gdx failed at $(date)"
+		echo "$variant nvidia failed at $(date)"
 		exit 1
 	fi
 
@@ -178,11 +178,11 @@ build_variant_pipeline() {
 			exit 1
 		fi
 
-		echo "Building $variant kde-gdx..."
-		if just build "$variant" kde-gdx; then
-			echo "$variant kde-gdx completed at $(date)"
+		echo "Building $variant kde-nvidia..."
+		if just build "$variant" kde-nvidia; then
+			echo "$variant kde-nvidia completed at $(date)"
 		else
-			echo "$variant kde-gdx failed at $(date)"
+			echo "$variant kde-nvidia failed at $(date)"
 			exit 1
 		fi
 	fi
