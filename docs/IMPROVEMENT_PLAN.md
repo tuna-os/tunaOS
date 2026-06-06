@@ -308,9 +308,7 @@ Most impactful items first:
    `.build-logs/` snapshot is from March 2026; later commits to
    `cleanup.sh` may have already resolved these. Verify against a
    fresh build before removing the mask.
-7. **Phase 5 — docs polish.** Update `docs/AGENT_GUIDE.md` with the
-   `dnf_retry` and `iso-e2e.sh` behaviour. Add `docs/TESTING.md`
-   explaining how to run the e2e harness locally.
+7. **Phase 5 — docs polish.** ✅ COMPLETE (PR #319 + follow-up commit `a7c87f0`). AGENT_GUIDE Troubleshooting updated with dnf_retry, flavor table modernized to 4-stage DAG, Key Files expanded with Containerfile.hwe, Commands examples fixed (dx/gdx→gnome/gnome-gdx). docs/TESTING.md and tests/README.md added. build-pipeline.md fully rewritten: 5 variants, unified build-variant.yml, tacklebox, iso-e2e.
 
 ## Upstream work (separate repos)
 
