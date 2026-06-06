@@ -1,0 +1,29 @@
+# .sync-manifest.yaml — Files to extract from ublue-os/bluefin-lts upstream.
+# Used by scripts/sync-upstream-snapshots.sh to minimize vendored content.
+#
+# Bluefin-LTS is Fedora-based GNOME LTS. tunaOS uses its build_scripts as
+# a reference for build_scripts/gnome.sh and system_files_overrides/gnome/.
+#
+# RFC-007 Phase 3
+
+include:
+  # Core build scripts (DE-agnostic)
+  - "build_scripts/00-workarounds.sh"
+  - "build_scripts/20-packages.sh"
+  - "build_scripts/21-build-gnome-extensions.sh"
+  - "build_scripts/26-packages-post.sh"
+  - "build_scripts/40-services.sh"
+  - "build_scripts/90-image-info.sh"
+  - "build_scripts/build.sh"
+  - "build_scripts/cleanup.sh"
+  # System config reference
+  - "system_files/"
+  # Top-level config references
+  - "Containerfile"
+  - "Justfile"
+
+exclude:
+  - "build_scripts/overrides/"               # per-arch/variant overrides, not consumed
+  - "build_scripts/scripts/"                 # helper scripts, not consumed directly
+  - "Containerfile.dx"                       # DX variant, not used by tunaOS
+  - ".snapshot.json"                         # metadata, not upstream content

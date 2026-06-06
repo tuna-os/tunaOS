@@ -1,0 +1,72 @@
+---
+name: Watch Upstreams (consolidated)
+
+# Single workflow consolidating watch-aurora.yml, watch-bluefin-lts.yml,
+# and watch-zirconium.yml. Uses a matrix to call the shared
+# watch-upstream.yml reusable workflow for each upstream. Adding a new
+# upstream is now a one-line entry in the matrix.
+#
+# RFC-007 Phase 2
+
+"on":
+  schedule:
+    # Every Monday at 08:00 UTC (before the boot report at 09:00)
+    - cron: '0 8 * * 1'
+  workflow_dispatch:
+    inputs:
+      lookback_days:
+        description: 'How many days back to look for commits'
+        required: false
+        default: '7'
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  watch:
+    strategy:
+      fail-fast: false
+      matrix:
+        upstream:
+          - name: aurora
+            repo: ublue-os/aurora
+            pretty: Aurora
+            branch_prefix: aurora-port
+            label: upstream-aurora
+            flavor: kde
+            build_script: build_scripts/kde.sh
+            overrides_dir: system_files_overrides/kde
+            prompt_file: .github/prompts/aurora-port.md
+          - name: bluefin-lts
+            repo: ublue-os/bluefin-lts
+            pretty: Bluefin-LTS
+            branch_prefix: bluefin-lts-port
+            label: upstream-bluefin-lts
+            flavor: gnome
+            build_script: build_scripts/gnome.sh
+            overrides_dir: system_files_overrides/gnome
+            prompt_file: .github/prompts/bluefin-lts-port.md
+          - name: zirconium
+            repo: zirconium-dev/zirconium
+            pretty: Zirconium
+            branch_prefix: zirconium-port
+            label: upstream-zirconium
+            flavor: niri
+            build_script: build_scripts/niri.sh
+            overrides_dir: system_files_overrides/niri
+            prompt_file: .github/prompts/zirconium-port.md
+    uses: ./.github/workflows/watch-upstream.yml
+    with:
+      upstream_repo: ${{ matrix.upstream.repo }}
+      upstream_pretty: ${{ matrix.upstream.pretty }}
+      branch_prefix: ${{ matrix.upstream.branch_prefix }}
+      label: ${{ matrix.upstream.label }}
+      flavor: ${{ matrix.upstream.flavor }}
+      build_script: ${{ matrix.upstream.build_script }}
+      overrides_dir: ${{ matrix.upstream.overrides_dir }}
+      prompt_file: ${{ matrix.upstream.prompt_file }}
+      lookback_days: ${{ inputs.lookback_days || '7' }}
+    secrets: inherit

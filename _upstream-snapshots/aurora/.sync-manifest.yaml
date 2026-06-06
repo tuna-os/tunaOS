@@ -1,0 +1,37 @@
+# .sync-manifest.yaml — Files to extract from ublue-os/aurora upstream.
+# Used by scripts/sync-upstream-snapshots.sh to minimize vendored content.
+#
+# Aurora is Fedora-only KDE. tunaOS uses its build_files as a reference
+# for build_scripts/kde.sh and system_files_overrides/kde/.
+#
+# RFC-007 Phase 3
+
+include:
+  # Core build pipeline (DE-agnostic)
+  - "build_files/base/01-packages.sh"
+  - "build_files/base/02-install-common-kernel-akmods.sh"
+  - "build_files/base/03-fetch.sh"
+  - "build_files/base/16-override-install.sh"
+  - "build_files/base/17-cleanup.sh"
+  - "build_files/base/18-image-info.sh"
+  - "build_files/base/19-initramfs.sh"
+  # Shared build logic
+  - "build_files/shared/build.sh"
+  - "build_files/shared/build-dx.sh"
+  - "build_files/shared/clean-stage.sh"
+  - "build_files/shared/copr-helpers.sh"
+  - "build_files/shared/validate-repos.sh"
+  # System config reference
+  - "system_files/"
+  # Top-level config references
+  - "Containerfile.in"
+  - "Justfile"
+  - "image-versions.yml"
+
+exclude:
+  - "build_files/base/04-nvidia.sh"          # tunaOS handles nvidia differently
+  - "build_files/base/20-tests.sh"           # test scripts, not consumed
+  - "build_files/base/zfs.sh"                # tunaOS doesn't use ZFS
+  - "build_files/dx/"                        # DX variant not used by tunaOS
+  - "build_files/shared/utils/"              # ghcurl utility, not consumed
+  - ".snapshot.json"                         # metadata, not upstream content

@@ -1,0 +1,30 @@
+# .sync-manifest.yaml — Files to extract from zirconium-dev/zirconium upstream.
+# Used by scripts/sync-upstream-snapshots.sh to minimize vendored content.
+#
+# Zirconium is Fedora-based Niri (mkosi-built). tunaOS uses its systemd units
+# and scripts as a reference for build_scripts/niri.sh. The mkosi build system
+# itself (~600K) is not consumed — tunaOS uses Containerfile-based builds.
+#
+# RFC-007 Phase 3
+
+include:
+  # Systemd units and presets
+  - "mkosi.extra/usr/lib/systemd/"
+  - "mkosi.extra/usr/bin/"
+  - "mkosi.extra/usr/lib/bootc/"
+  - "mkosi.extra/usr/lib/dracut/"
+  - "mkosi.extra/usr/lib/pam.d/"
+  # Top-level config
+  - "mkosi.conf"
+  - "Justfile"
+
+exclude:
+  - "mkosi.conf.d/"                          # per-profile configs, not consumed
+  - "mkosi.profiles/"                        # variant profiles
+  - "mkosi.bump"                             # version bump script
+  - "mkosi.postinst.chroot"                  # mkosi post-install
+  - "mkosi.prepare.chroot"                   # mkosi prepare
+  - "iso.toml"                               # ISO config, not consumed
+  - "iso-nvidia.toml"                        # NVIDIA ISO config
+  - "repos/"                                 # repo definitions
+  - ".snapshot.json"                         # metadata, not upstream content
