@@ -146,6 +146,16 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     BUILD_ARGS+=("--build-arg" "ENABLE_GDX={{ enable_gdx }}")
     BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR={{ desktop_flavor }}")
 
+    # Determine HW_VARIANT for unified Containerfile
+    if [[ "{{ enable_hwe }}" -eq "1" ]]; then
+        HW_VARIANT="hwe"
+    elif [[ "{{ enable_gdx }}" -eq "1" ]]; then
+        HW_VARIANT="gdx"
+    else
+        HW_VARIANT="no-de"
+    fi
+    BUILD_ARGS+=("--build-arg" "HW_VARIANT=${HW_VARIANT}")
+
     AKMODS_ORG=$({{ yq }} -r ".variants[] | select(.id == \"{{ target_tag }}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
     BUILD_ARGS+=("--build-arg" "AKMODS_BASE=ghcr.io/${AKMODS_ORG}")
 
@@ -300,7 +310,6 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     else PLATFORM="{{ target_platform }}"; fi
 
     BASE_FOR_BUILD=""
-    CONTAINERFILE="Containerfile"
     ENABLE_HWE="0"
     ENABLE_GDX="0"
     PARENT_FLAVOR=""
@@ -321,21 +330,19 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
         DESKTOP_FLAVOR="base-no-de"
     elif [[ "${FLAVOR}" == "base-hwe" ]]; then
-        CONTAINERFILE="Containerfile.hwe"
         ENABLE_HWE="1"
         DESKTOP_FLAVOR="base-hwe"
         PARENT_FLAVOR="base"
     elif [[ "${FLAVOR}" == "base-gdx" ]]; then
-        CONTAINERFILE="Containerfile.gdx"
         ENABLE_GDX="1"
         DESKTOP_FLAVOR="base-gdx"
         PARENT_FLAVOR="base"
     elif [[ "${FLAVOR}" == *"-gdx-hwe" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-gdx-hwe}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_GDX="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
+        DESKTOP_FLAVOR="${FLAVOR%-gdx-hwe}"; ENABLE_GDX="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
     elif [[ "${FLAVOR}" == *"-hwe" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-hwe}"; CONTAINERFILE="Containerfile.hwe"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
+        DESKTOP_FLAVOR="${FLAVOR%-hwe}"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
     elif [[ "${FLAVOR}" == *"-gdx" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-gdx}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_GDX="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
+        DESKTOP_FLAVOR="${FLAVOR%-gdx}"; ENABLE_GDX="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
     else
         DESKTOP_FLAVOR="${FLAVOR}"
         BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
@@ -356,10 +363,10 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     TARGET_TAG_WITH_VERSION="${TARGET_TAG}:${TARGET_IMAGE_TAG}"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" Containerfile "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
         ./scripts/sync-build-cache.sh "${TARGET_TAG}" || true
     else
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" Containerfile "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
     fi
 
     if [[ "$DID_INIT" == "1" ]]; then
