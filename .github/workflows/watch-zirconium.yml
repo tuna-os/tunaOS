@@ -1,0 +1,37 @@
+---
+name: Watch Zirconium Upstream
+
+# Zirconium is Fedora-based Niri (mkosi-built). Catch-up flows into
+# build_scripts/niri.sh and system_files_overrides/niri/. Thin caller
+# of .github/workflows/watch-upstream.yml.
+
+"on":
+  schedule:
+    - cron: '0 8 * * 1'  # Monday 08:00 UTC
+  workflow_dispatch:
+    inputs:
+      lookback_days:
+        description: 'How many days back to look for commits'
+        required: false
+        default: '7'
+        type: string
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  watch:
+    uses: ./.github/workflows/watch-upstream.yml
+    with:
+      upstream_repo: zirconium-dev/zirconium
+      upstream_pretty: Zirconium
+      branch_prefix: zirconium-port
+      label: upstream-zirconium
+      flavor: niri
+      build_script: build_scripts/niri.sh
+      overrides_dir: system_files_overrides/niri
+      prompt_file: .github/prompts/zirconium-port.md
+      lookback_days: ${{ inputs.lookback_days || '7' }}
+    secrets: inherit

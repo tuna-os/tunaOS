@@ -1,0 +1,4 @@
+{
+	"name": "tunaos-devcontainer",
+	"image": "ghcr.io/ublue-os/devcontainer:latest"
+}

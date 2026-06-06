@@ -1,0 +1,147 @@
+---
+name: Snapshot upstreams
+
+# Refresh `_upstream-snapshots/{aurora,bluefin-lts,zirconium}/` from the
+# current state of each upstream's main branch (filtered to the paths
+# that map to anything TunaOS builds). If the snapshot moved, open a PR
+# so a human (or a follow-up Gemini step) can see the *content* delta
+# and decide what to port.
+#
+# Replaces the per-commit Watch <Upstream> workflows. Reasoning:
+# the old approach walked every commit in the lookback window, burned
+# a Gemini API call deciding whether it was portable, and produced
+# noise on every `chore(ci):` / `chore(deps):` / merge commit. The
+# snapshot model only surfaces a diff when the *content of paths we
+# care about* actually moved, regardless of how many commits caused
+# the movement.
+
+"on":
+  schedule:
+    # Mondays 09:00 UTC — picks up a full work-week of upstream churn
+    # at once. The expensive bit is the rsync, not the clone, and
+    # the upstreams aren't getting more active than that.
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+    inputs:
+      upstream:
+        description: 'Which upstream to sync (all = every entry in the registry)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - aurora
+          - bluefin-lts
+          - zirconium
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    name: Sync ${{ inputs.upstream || 'all' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          # We need write access to the index; default token is fine.
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Run snapshot sync
+        id: sync
+        run: |
+          ./scripts/sync-upstream-snapshots.sh "${{ inputs.upstream || 'all' }}"
+
+      - name: Detect changes
+        id: diff
+        run: |
+          if git status -s -- _upstream-snapshots/ | grep -q .; then
+            echo "has_diff=true" >> "$GITHUB_OUTPUT"
+            # Capture a compact one-page-ish view of the delta for the
+            # PR body — full diff will live in the PR itself.
+            {
+              echo "summary<<EOF"
+              echo '```'
+              git diff --stat -- _upstream-snapshots/ | head -50
+              echo '```'
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+          else
+            echo "has_diff=false" >> "$GITHUB_OUTPUT"
+            echo "No upstream changes — nothing to PR."
+          fi
+
+      - name: Open or update PR with snapshot
+        if: steps.diff.outputs.has_diff == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DIFF_SUMMARY: ${{ steps.diff.outputs.summary }}
+        run: |
+          set -euo pipefail
+          DATE=$(date -u +%Y-%m-%d)
+          NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          BRANCH="upstream-snapshots/${DATE}"
+          # Stable branch per-week so re-runs the same week reuse it.
+          git checkout -b "$BRANCH" 2>/dev/null || git checkout "$BRANCH"
+          git add _upstream-snapshots/
+          if git diff --cached --quiet; then
+            echo "Nothing staged after add — skip"
+            exit 0
+          fi
+          # Write the commit message to a file to avoid YAML-vs-bash
+          # multi-line-string headaches.
+          MSG=$(mktemp)
+          printf 'chore(snapshots): refresh upstream tree snapshots\n\nRun at %s. See _upstream-snapshots/<repo>/.snapshot.json for the\nexact upstream commit each path was taken from.\n\nThis diff IS the catch-up review surface — content-level, no\ncommit-message noise.\n' "$NOW" > "$MSG"
+          git commit -F "$MSG"
+          rm -f "$MSG"
+          git push --force-with-lease origin "$BRANCH"
+
+          # PR body: similarly written via a temp file so the run-step
+          # YAML stays clean.
+          BODY=$(mktemp)
+          {
+            echo "## Weekly upstream snapshot refresh"
+            echo
+            echo "Content delta between last week's snapshot and current upstream state (Aurora, Bluefin-LTS, Zirconium)."
+            echo
+            echo "### Stat"
+            echo
+            echo "${DIFF_SUMMARY}"
+            echo
+            echo "### Next step"
+            echo "- Skim the diff. feat/fix to build pipeline (package list, service flip, config) is a porting candidate."
+            echo "- Open a separate PR with the port. Once it lands, merge this one to update the baseline."
+          } > "$BODY"
+
+          if gh pr view "$BRANCH" --repo "${GITHUB_REPOSITORY}" &>/dev/null; then
+            gh pr edit "$BRANCH" --repo "${GITHUB_REPOSITORY}" --body-file "$BODY"
+          else
+            gh pr create \
+              --repo "${GITHUB_REPOSITORY}" \
+              --base main \
+              --head "$BRANCH" \
+              --title "chore(snapshots): refresh upstream tree (${DATE})" \
+              --label "upstream-snapshot" \
+              --body-file "$BODY"
+          fi
+          rm -f "$BODY"
+
+      - name: Job summary
+        if: always()
+        run: |
+          {
+            echo "## Upstream snapshot sync"
+            echo ""
+            if [[ "${{ steps.diff.outputs.has_diff }}" == "true" ]]; then
+              echo "**Changes detected.** A PR was opened or updated with the snapshot delta."
+            else
+              echo "**No changes.** All tracked paths in upstream match the prior snapshot."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

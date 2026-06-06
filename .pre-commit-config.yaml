@@ -1,0 +1,26 @@
+repos:
+  - repo: local
+    hooks:
+      - id: check
+        name: syntax check
+        entry: just
+        args: ['check']
+        language: system
+        pass_filenames: false
+      - id: build-base
+        name: "build all base images (WARNING: takes maybe 20 minutes)"
+        entry: just
+        args: ['build-all-base']
+        language: system
+        pass_filenames: false
+        stages: [manual]
+      - id: fix
+        name: format (shfmt, just)
+        entry: just
+        args: ['fix']
+        language: system
+        pass_filenames: false
+  - repo: https://github.com/instrumentl/pre-commit-just
+    rev: 'v0.1'
+    hooks:
+      - id: format-justfile

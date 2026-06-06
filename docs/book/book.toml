@@ -1,0 +1,10 @@
+[book]
+authors = ["TunaOS Team"]
+language = "en"
+multilingual = false
+src = "src"
+title = "TunaOS Documentation"
+
+[output.html]
+git-repository-url = "https://github.com/tuna-os/tunaOS"
+edit-endpoint-url = "https://github.com/tuna-os/tunaOS/edit/main/docs/book/src/{path}"

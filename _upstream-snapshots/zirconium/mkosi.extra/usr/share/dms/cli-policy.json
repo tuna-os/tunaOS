@@ -1,0 +1,8 @@
+{
+  "policy_version": 1,
+  "blocked_commands": [
+    "greeter install",
+    "greeter enable",
+    "setup"
+  ]
+}

@@ -1,0 +1,23 @@
+name: Build Bonito
+on:
+  schedule:
+    - cron: "0 1 * * *"
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: 'Flavor (all, base, gnome, kde, niri, etc.)'
+        default: 'all'
+        type: string
+
+concurrency:
+  group: build-bonito-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 🎣-bonito
+    uses: ./.github/workflows/build-variant.yml
+    with:
+      variant: 'bonito'
+      flavor: ${{ inputs.flavor || 'all' }}
+    secrets: inherit

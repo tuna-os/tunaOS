@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+exec fastfetch --logo /usr/share/zirconium/glorp.txt --config /usr/share/zirconium/fastfetch.jsonc "${@}"

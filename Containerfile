@@ -1,0 +1,159 @@
+ARG BASE_IMAGE
+ARG ENABLE_HWE="${ENABLE_HWE:-0}"
+ARG ENABLE_GDX="${ENABLE_GDX:-0}"
+ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
+ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:latest"
+ARG BREW_IMAGE_REF="ghcr.io/ublue-os/brew:latest"
+
+FROM ${COMMON_IMAGE_REF} AS common
+FROM ${BREW_IMAGE_REF} AS brew
+
+# Context layer combines build-time dependencies and configuration files
+FROM scratch as context
+COPY system_files /files
+COPY --from=brew /system_files /files
+COPY --from=common /system_files/shared /files
+COPY --from=common /system_files/bluefin /files
+COPY system_files_overrides /overrides
+COPY build_scripts /build_scripts
+
+# ==============================================================================
+# Base stage (no DE) - Shared layer for all variants
+# ==============================================================================
+FROM ${BASE_IMAGE} AS base-no-de
+
+ARG BASE_IMAGE
+ARG ENABLE_HWE
+ARG ENABLE_GDX
+ARG DESKTOP_FLAVOR
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG SHA_HEAD_SHORT
+
+# RHSM credentials are NOT declared as ARG here — they're passed via
+# `--secret id=rhsm` from the Justfile and consumed in the
+# install_base_packages_no_de RUN below. Keeping them out of ARG/ENV
+# ensures they never appear in `podman history --no-trunc` or in the
+# final image config (`podman inspect`).
+
+ENV BASE_IMAGE=${BASE_IMAGE}
+ENV IMAGE_NAME=${IMAGE_NAME}
+ENV IMAGE_VENDOR=${IMAGE_VENDOR}
+ENV SHA_HEAD_SHORT=${SHA_HEAD_SHORT}
+ENV ENABLE_HWE=${ENABLE_HWE}
+ENV ENABLE_GDX=${ENABLE_GDX}
+
+# Preserve desktop flavor so base-stage scripts don't fall back to GNOME defaults
+ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
+
+# Ensure /opt is a real directory so tmpfs mounts work in all subsequent stages
+RUN rm -rf /opt && mkdir /opt
+
+# Copy system files and apply TunaOS customizations
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/copy-files.sh
+
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+   /run/context/build_scripts/00-workarounds.sh
+
+# Install base packages WITHOUT DE.
+# The optional RHSM secret is mounted at /run/secrets/rhsm only inside this
+# RUN. It contains `export RHSM_USER=…` etc.; install_base_packages_no_de
+# sources it if present. The mount is also gated by `required=false` so
+# non-RHEL builds (which never pass --secret) succeed unchanged.
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  --mount=type=secret,id=rhsm,target=/run/secrets/rhsm,required=false \
+  bash -c "source /run/context/build_scripts/lib.sh && source /run/context/build_scripts/10-base-packages.sh && install_base_packages_no_de"
+
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+   /run/context/build_scripts/20-packages.sh
+
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+   /run/context/build_scripts/26-packages-post.sh
+
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+   /run/context/build_scripts/40-services.sh
+
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+   /run/context/build_scripts/90-image-info.sh
+
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+   /run/context/build_scripts/arch-customizations.sh
+
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+   /run/context/build_scripts/cleanup.sh
+
+# ==============================================================================
+# Desktop Variant Stages
+# Each stage ends with the /opt symlink so chunkah can be run against them.
+# ==============================================================================
+
+FROM base-no-de AS base
+# Base image with no DE - /opt made writeable via symlink
+RUN rm -rf /opt && ln -s /var/opt /opt
+
+FROM base-no-de AS gnome
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/gnome.sh base
+RUN dnf versionlock add glib2
+RUN rm -rf /opt && ln -s /var/opt /opt
+
+FROM base-no-de AS cosmic
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/cosmic.sh base
+RUN dnf versionlock add glib2
+RUN rm -rf /opt && ln -s /var/opt /opt
+
+FROM base-no-de AS gnome50
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/gnome.sh base
+RUN dnf versionlock add glib2
+RUN rm -rf /opt && ln -s /var/opt /opt
+
+FROM base-no-de AS gnome49
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/gnome.sh base
+RUN dnf versionlock add glib2
+RUN rm -rf /opt && ln -s /var/opt /opt
+
+FROM base-no-de AS kde
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/kde.sh base
+RUN dnf versionlock add glib2
+RUN rm -rf /opt && ln -s /var/opt /opt
+
+FROM base-no-de AS niri
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/niri.sh base
+RUN dnf versionlock add glib2
+RUN rm -rf /opt && ln -s /var/opt /opt

@@ -1,0 +1,148 @@
+#!/usr/bin/env bash
+
+set -xeuo pipefail
+
+ARCH=$(uname -m)
+
+# This is the base for a minimal GNOME system on CentOS Stream.
+
+# This thing slows down downloads A LOT for no reason
+dnf remove -y subscription-manager
+dnf -y install 'dnf-command(versionlock)'
+
+/run/context/build_scripts/scripts/kernel-swap.sh
+
+if [[ "${GNOME_VERSION:-49}" == "50" ]]; then
+	# GNOME 50 COPR
+	dnf copr enable -y "jreilly1821/c10s-gnome-50"
+	# libjxl 0.11 in this COPR has a different ABI than EPEL's 0.10, which breaks
+	# epel-multimedia's libavcodec (needs libjxl.so.0.10).  Exclude it so EPEL wins.
+	GNOME50_REPO=$(find /etc/yum.repos.d/ -name "*jreilly1821*gnome-50*" | head -1)
+	echo "exclude=libjxl*" >>"${GNOME50_REPO}"
+
+	# These upgrades MUST happen before the GNOME group install.
+	# - glib2: EL10 ships 2.80.x; GNOME 49/50 require newer API symbols.
+	# - fontconfig: COPR pango 1.57+ links FcConfigSetDefaultSubstitute (added in
+	#   fontconfig 2.17.0); EL10 base ships 2.15.0 — causes a symbol lookup error
+	#   at gnome-shell startup.
+	# - selinux-policy: COPR 43.x is required for GDM 49/50 userdb varlink socket
+	#   architecture; EL10 base 42.x lacks the necessary policy rules.
+	# - gnutls: newer glib2 from COPR may depend on gnutls symbols not in base.
+	dnf -y install selinux-policy selinux-policy-targeted gnutls
+	dnf -y upgrade glib2 fontconfig
+else
+	# GNOME 49 COPR (default)
+	dnf copr enable -y "jreilly1821/c10s-gnome-49"
+	# gdk-pixbuf2 2.44.5 in this COPR has no built-in image format loaders (PNG,
+	# JPEG, SVG, etc.) and ships no -modules subpackage.  Exclude it so the base
+	# EL10 gdk-pixbuf2 (2.42.x, with working built-in loaders) is kept — otherwise
+	# gnome-shell cannot decode most icon files.
+	GNOME49_REPO=$(find /etc/yum.repos.d/ -name "*jreilly1821*gnome-49*" | head -1)
+	echo "exclude=gdk-pixbuf2*" >>"${GNOME49_REPO}"
+
+	# These upgrades MUST happen before the GNOME group install.
+	# - glib2: EL10 ships 2.80.x; GNOME 49/50 require newer API symbols.
+	# - fontconfig: COPR pango 1.57+ links FcConfigSetDefaultSubstitute (added in
+	#   fontconfig 2.17.0); EL10 base ships 2.15.0 — causes a symbol lookup error
+	#   at gnome-shell startup.
+	# - selinux-policy: COPR 43.x is required for GDM 49/50 userdb varlink socket
+	#   architecture; EL10 base 42.x lacks the necessary policy rules.
+	# - gobject-introspection / gjs: glib2 2.84+ ships both libgirepository-1.0
+	#   and libgirepository-2.0. If only one is upgraded, both get loaded and
+	#   double-registering GIRepository crashes gnome-shell at startup.
+	# - gnutls: newer glib2 from COPR may depend on gnutls symbols not in base.
+	dnf -y install selinux-policy selinux-policy-targeted gnutls
+	dnf -y upgrade glib2 fontconfig gobject-introspection gjs
+fi
+
+# Please, dont remove this as it will break everything GNOME related
+dnf versionlock add glib2 fontconfig
+
+# This fixes a lot of skew issues on GDX because kernel-devel wont update then
+dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
+
+dnf -y install "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${MAJOR_VERSION_NUMBER}.noarch.rpm"
+dnf config-manager --set-enabled crb
+
+# Multimidia codecs
+dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
+dnf config-manager --set-disabled epel-multimedia
+dnf -y install --enablerepo=epel-multimedia \
+	ffmpeg libavcodec @multimedia gstreamer1-plugins-{bad-free,bad-free-libs,good,base} lame{,-libs} libjxl ffmpegthumbnailer
+
+# `dnf group info Workstation` without GNOME
+dnf group install -y --nobest \
+	-x rsyslog* \
+	-x cockpit \
+	-x cronie* \
+	-x crontabs \
+	-x PackageKit \
+	-x PackageKit-command-not-found \
+	"Common NetworkManager submodules" \
+	"Core" \
+	"Fonts" \
+	"Guest Desktop Agents" \
+	"Hardware Support" \
+	"Printing Client" \
+	"Standard" \
+	"Workstation product core"
+
+# Minimal GNOME group. ("Multimedia" adds most of the packages from the GNOME group. This should clear those up too.)
+# In order to reproduce this, get the packages with `dnf group info GNOME`, install them manually with dnf install and see all the packages that are already installed.
+# Other than that, I've removed a few packages we didnt want, those being a few GUI applications.
+dnf -y install \
+	-x PackageKit \
+	-x PackageKit-command-not-found \
+	-x gnome-software-fedora-langpacks \
+	-x gnome-extensions-app \
+	-x gnome-software \
+	"NetworkManager-adsl" \
+	"adwaita-fonts-all" \
+	"centos-backgrounds" \
+	"dbus-daemon" \
+	"gdm" \
+	"gnome-bluetooth" \
+	"gnome-color-manager" \
+	"gnome-control-center" \
+	"gnome-initial-setup" \
+	"gnome-remote-desktop" \
+	"gnome-session-wayland-session" \
+	"gnome-settings-daemon" \
+	"gnome-shell" \
+	"gnome-user-docs" \
+	"gvfs-fuse" \
+	"gvfs-goa" \
+	"gvfs-gphoto2" \
+	"gvfs-mtp" \
+	"gvfs-smb" \
+	"libsane-hpaio" \
+	"nautilus" \
+	"orca" \
+	"ptyxis" \
+	"sane-backends-drivers-scanners" \
+	"xdg-desktop-portal-gnome" \
+	"xdg-user-dirs-gtk" \
+	"yelp-tools"
+
+dnf -y install \
+	plymouth \
+	plymouth-system-theme \
+	fwupd \
+	systemd-{resolved,container,oomd} \
+	libcamera{,-{v4l2,gstreamer,tools}}
+
+if [[ "${GNOME_VERSION:-49}" == "50" ]]; then
+	dnf -y install gnome50-el10-compat libgda
+else
+	dnf -y install gnome49-el10-compat libgda
+fi
+
+# This package adds "[systemd] Failed Units: *" to the bashrc startup
+dnf -y remove console-login-helper-messages
+
+# We need to remove centos-logos before applying bluefin's logos and after installing this package. Do not remove this!
+rpm --erase --nodeps centos-logos
+# HACK: There currently is no generic-logos equivalent like on Fedora
+# We need this so packages like anaconda don't replace our logos by pulling in centos-logos again
+dnf -y install https://kojipkgs.fedoraproject.org//packages/generic-logos/18.0.0/26.fc43/noarch/generic-logos-18.0.0-26.fc43.noarch.rpm
+rpm --erase --nodeps --nodb generic-logos

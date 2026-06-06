@@ -1,0 +1,132 @@
+---
+name: Weekly Boot Screenshot Report
+
+# Monday-morning report aggregating every variant×flavor's latest ISO/QCOW2
+# boot screenshot into a single GitHub issue. Heavy lifting lives in
+# scripts/generate-boot-report.py — this workflow is just plumbing:
+#
+#   1. Ensure label + screenshots branch exist
+#   2. Resolve last week's screenshot branch (for change detection)
+#   3. Run the script (writes commits to `screenshots`, prints markdown to stdout)
+#   4. Open the issue with that markdown
+#
+# Improvements vs. the previous inline-bash version of this workflow:
+#   - Matrix pulled from .github/build-config.yml (no hardcoded combos)
+#   - Each row shows latest Build <Variant> + iso-e2e workflow conclusions
+#   - Per-screenshot age flag (✅ ≤7d / ⚠️ 8-30d / ❌ >30d)
+#   - Diff vs. last week (sha256 of PNG bytes)
+#   - EL10 wishlist section from install_available's
+#     /usr/share/tunaos/missing-on-*.txt files in each published image
+#   - Old dated dirs in the screenshots branch are pruned to keep size sane
+
+"on":
+  schedule:
+    - cron: "0 10 * * 1"  # Monday 10:00 UTC
+  workflow_dispatch:
+
+permissions:
+  issues: write
+  contents: write
+  actions: read
+  packages: read
+
+jobs:
+  report:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install podman (for image inspect)
+        run: |
+          # The boot-report script uses `podman create + cp` to extract the
+          # missing-package wishlist from each published image. Podman is
+          # already on ubuntu-24.04 runners; this is the no-op verification
+          # path. If a future runner drops it, this step would install.
+          if ! command -v podman &>/dev/null; then
+            sudo apt-get update -qq
+            sudo apt-get install -y --no-install-recommends podman
+          fi
+          podman version
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Ensure boot-report label exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create "boot-report" \
+            --description "Weekly boot screenshot reports" \
+            --color "0075ca" \
+            --repo "${{ github.repository }}" 2>/dev/null || true
+
+      - name: Ensure screenshots branch exists
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          if gh api "/repos/${REPO}/git/refs/heads/screenshots" &>/dev/null; then
+            echo "Screenshots branch already exists."
+            exit 0
+          fi
+          echo "Creating orphan screenshots branch..."
+          TREE_SHA=$(printf '{"tree":[{"path":"README.md","mode":"100644","type":"blob","content":"# Boot Screenshots\n\nWeekly boot-report assets, committed by .github/workflows/weekly-boot-report.yml.\n"}]}' | \
+            gh api --method POST "/repos/${REPO}/git/trees" --input - --jq '.sha')
+          COMMIT_SHA=$(gh api --method POST "/repos/${REPO}/git/commits" \
+            -f "message=Initialize screenshots branch" \
+            -f "tree=${TREE_SHA}" --jq '.sha')
+          gh api --method POST "/repos/${REPO}/git/refs" \
+            -f "ref=refs/heads/screenshots" \
+            -f "sha=${COMMIT_SHA}"
+
+      - name: Resolve previous report's branch path
+        id: previous
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # Diff-vs-last-week is best-effort. List the dated dirs in the
+          # screenshots branch, pick the most-recent that isn't today's,
+          # and pass it to the report script via env.
+          TODAY=$(date -u +%Y-%m-%d)
+          PREV=$(gh api "/repos/${REPO}/contents/boot?ref=screenshots" \
+            --jq "[.[] | select(.type==\"dir\") | .name] | sort | reverse | map(select(. != \"${TODAY}\")) | .[0] // empty" \
+            2>/dev/null || true)
+          if [[ -n "$PREV" ]]; then
+            echo "previous_branch=boot/${PREV}" >> "$GITHUB_OUTPUT"
+            echo "Found previous snapshot: boot/${PREV}"
+          else
+            echo "No prior snapshot — change detection will skip."
+          fi
+
+      - name: Generate report
+        id: report
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          # REPORT_DATE / TODAY_BRANCH default to today's date in the script.
+          PREVIOUS_BRANCH: ${{ steps.previous.outputs.previous_branch }}
+        run: |
+          # The script writes commits to the `screenshots` branch as a side
+          # effect and prints the issue body to stdout. Capture stdout to a
+          # file so we can use --body-file (preserves newlines + escaping).
+          BODY_FILE=$(mktemp)
+          python3 scripts/generate-boot-report.py > "$BODY_FILE"
+          echo "body_file=${BODY_FILE}" >> "$GITHUB_OUTPUT"
+          echo "Report bytes: $(stat -c%s "$BODY_FILE")"
+
+      - name: Open report issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          TODAY=$(date -u +%Y-%m-%d)
+          ISSUE_URL=$(gh issue create \
+            --repo "$REPO" \
+            --title "🖥️ Weekly Boot Report — ${TODAY}" \
+            --label "boot-report" \
+            --body-file "${{ steps.report.outputs.body_file }}")
+          echo "==> Report: ${ISSUE_URL}"
+          echo "## Boot report" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Issue: ${ISSUE_URL}" >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,308 @@
+#!/usr/bin/env bash
+
+set -xeuo pipefail
+
+source /run/context/build_scripts/lib.sh
+
+case "${1:-}" in
+"base")
+	# Use COPR GNOME packages for EL10-based builds.
+	# The COPR must remain enabled through the full package install so that
+	# mutter, gjs, and other GNOME stack deps are resolved from the same COPR.
+	GNOME_COPR=""
+	if [[ $IS_FEDORA == false ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
+		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
+			GNOME_COPR="jreilly1821/c10s-gnome-50-fresh"
+		else
+			GNOME_COPR="jreilly1821/c10s-gnome-49"
+		fi
+		dnf -y copr enable "$GNOME_COPR"
+		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
+			# c10s-gnome-50 provides backported deps (e.g. libinput >= 1.27.0) that
+			# mutter-50 requires but AlmaLinux 10 stable doesn't ship. Enable it
+			# alongside c10s-gnome-50-fresh so both the GNOME stack and its deps resolve.
+			dnf -y copr enable "jreilly1821/c10s-gnome-50"
+		fi
+		# Pre-remove the EL10-shipped gnome-shell-common (48.x) before installing
+		# the COPR's gnome-shell (49.x / 50.x). Without this, the file
+		# /usr/share/glib-2.0/schemas/org.gnome.shell.gschema.xml is owned by
+		# both packages and DNF aborts with a "Transaction test error: file ...
+		# conflicts with file from package gnome-shell-common-48.3" — which has
+		# been the root cause of skipjack base-flavor build failures.
+		# `--allowerasing` resolves dependency conflicts but does NOT resolve
+		# file-ownership conflicts; only an explicit remove (or upstream
+		# `Obsoletes:`) does. Tracked: tuna-os/github-copr should add
+		# `Obsoletes: gnome-shell-common < %{major_version}` to its spec.
+		# --noautoremove keeps reverse-deps alive; they'll re-resolve to the
+		# COPR's gnome-shell-49 in the next install.
+		if rpm -q gnome-shell-common &>/dev/null; then
+			dnf -y remove --noautoremove gnome-shell-common || true
+		fi
+
+		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
+			# GNOME 50 requires glib2 >= 2.86.0 and fontconfig >= 2.17.0 (pango links
+			# against FcConfigSetDefaultSubstitute which is absent in EL10's 2.15.x).
+			# selinux-policy 43.x from COPR is required for GDM 50 userdb socket policy;
+			# the base EL10 42.x policy denies the Varlink socket even in permissive mode.
+			dnf -y upgrade glib2 fontconfig
+			dnf -y install --allowerasing gnome50-el10-compat
+		else
+			# GNOME 49 also requires glib2 >= 2.82 (g_variant_builder_init_static) and
+			# fontconfig >= 2.17.0 from COPR — same ABI requirements as GNOME 50.
+			# gobject-introspection 1.84 and gjs 1.86 must also be upgraded from COPR:
+			# gnome-shell links libgirepository-1.0 but gjs links libgirepository-2.0;
+			# having both loaded causes GIRepository type double-registration → crash.
+			dnf -y upgrade glib2 fontconfig gobject-introspection gjs
+			# gnome49-el10-compat provides the SELinux policy module (gdm-gnome49.pp)
+			# that permits xdm_t to create the userdb Varlink socket in enforcing mode,
+			# plus the systemd-user PAM override needed for GDM greeter auth.
+			# Without it, GDM fails to start on EL10.
+			dnf -y install --allowerasing gnome49-el10-compat
+		fi
+	fi
+
+	# Mask rpm-ostree kernel-install script to prevent dracut errors during container build
+	# This avoids "dracut-install: ERROR: installing '/root'" and other non-fatal but noisy errors
+	# that can sometimes become fatal depending on the environment.
+	if [ -f /usr/lib/kernel/install.d/05-rpmostree.install ]; then
+		mv /usr/lib/kernel/install.d/05-rpmostree.install /tmp/05-rpmostree.install.bak || true
+	fi
+
+	# Install base groups and packages - different between Fedora and RHEL/AlmaLinux
+	if [[ $IS_FEDORA == true ]]; then
+		# Fedora Silverblue-style package list
+		dnf -y install \
+			-x PackageKit \
+			-x PackageKit-command-not-found \
+			-x gnome-software \
+			-x gnome-software-fedora-langpacks \
+			ModemManager \
+			NetworkManager-adsl \
+			NetworkManager-openconnect-gnome \
+			NetworkManager-openvpn-gnome \
+			NetworkManager-ppp \
+			NetworkManager-ssh-gnome \
+			NetworkManager-vpnc-gnome \
+			NetworkManager-wwan \
+			avahi \
+			dconf \
+			fprintd-pam \
+			gdm \
+			glib-networking \
+			gnome-backgrounds \
+			gnome-bluetooth \
+			gnome-browser-connector \
+			gnome-classic-session \
+			gnome-color-manager \
+			gnome-control-center \
+			gnome-disk-utility \
+			gnome-initial-setup \
+			gnome-remote-desktop \
+			gnome-session-wayland-session \
+			gnome-settings-daemon \
+			gnome-shell \
+			gnome-system-monitor \
+			gnome-user-docs \
+			gnome-user-share \
+			gvfs-afc \
+			gvfs-afp \
+			gvfs-archive \
+			gvfs-fuse \
+			gvfs-goa \
+			gvfs-gphoto2 \
+			gvfs-mtp \
+			gvfs-smb \
+			librsvg2 \
+			libsane-hpaio \
+			mesa-dri-drivers \
+			mesa-libEGL \
+			mesa-vulkan-drivers \
+			nautilus \
+			polkit \
+			ptyxis \
+			xdg-desktop-portal-gnome \
+			xdg-desktop-portal-gtk \
+			xdg-user-dirs-gtk \
+			yelp \
+			desktop-backgrounds-gnome \
+			pinentry-gnome3 \
+			qadwaitadecorations-qt5 \
+			evince-thumbnailer \
+			evince-previewer \
+			totem-video-thumbnailer
+	else
+		# RHEL/AlmaLinux base groups
+		dnf group install -y --nobest --allowerasing \
+			-x PackageKit \
+			-x PackageKit-command-not-found \
+			"Common NetworkManager submodules" \
+			"Core" \
+			"Fonts" \
+			"Guest Desktop Agents" \
+			"Hardware Support" \
+			"Printing Client" \
+			"Standard" \
+			"Workstation product core"
+
+		dnf -y install \
+			-x gnome-software \
+			-x gnome-extensions-app \
+			-x PackageKit \
+			-x PackageKit-command-not-found \
+			-x gnome-software-fedora-langpacks \
+			"NetworkManager-adsl" \
+			"glib2" \
+			"gdm" \
+			"gnome-bluetooth" \
+			"gnome-color-manager" \
+			"gnome-control-center" \
+			"gnome-initial-setup" \
+			"gnome-remote-desktop" \
+			"gnome-session-wayland-session" \
+			"gnome-settings-daemon" \
+			"gnome-shell" \
+			"gnome-user-docs" \
+			"gvfs-fuse" \
+			"gvfs-goa" \
+			"gvfs-gphoto2" \
+			"gvfs-mtp" \
+			"gvfs-smb" \
+			"libsane-hpaio" \
+			"nautilus" \
+			dbus-daemon \
+			orca \
+			ptyxis \
+			"sane-backends-drivers-scanners" \
+			"xdg-desktop-portal-gnome" \
+			"xdg-user-dirs-gtk" \
+			"yelp-tools" \
+			"gnome-disk-utility"
+	fi
+
+	# Restore rpm-ostree kernel-install script
+	if [ -f /tmp/05-rpmostree.install.bak ]; then
+		mv /tmp/05-rpmostree.install.bak /usr/lib/kernel/install.d/05-rpmostree.install || true
+	fi
+
+	# Build GNOME extensions from source (must run after gnome-shell is installed)
+	echo "Building GNOME extensions from source..."
+
+	# Remove versionlock on glib2 to allow installing glib2-devel (will re-lock after)
+	dnf versionlock delete glib2 || true
+
+	# Install build tooling
+	dnf -y install glib2-devel meson sassc cmake dbus-devel unzip
+
+	# AppIndicator Support (not present in all GNOME versions/COPRs)
+	if [ -d /usr/share/gnome-shell/extensions/appindicatorsupport@rgcjonas.gmail.com/schemas ]; then
+		glib-compile-schemas --strict /usr/share/gnome-shell/extensions/appindicatorsupport@rgcjonas.gmail.com/schemas
+	fi
+
+	# Blur My Shell (requires gnome-extensions pack from gnome-shell)
+	# We build it and then unzip it into its final location to ensure the structure is correct
+	if [ -d /usr/share/gnome-shell/extensions/blur-my-shell@aunetx ]; then
+		if [ -f /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/Makefile ]; then
+			make -C /usr/share/gnome-shell/extensions/blur-my-shell@aunetx build
+			unzip -o /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/build/blur-my-shell@aunetx.shell-extension.zip -d /usr/share/gnome-shell/extensions/blur-my-shell@aunetx
+			glib-compile-schemas --strict /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/schemas
+			rm -rf /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/build
+		else
+			echo "Skipping blur-my-shell build (Makefile not found)"
+		fi
+	fi
+
+	# Caffeine
+	# The Caffeine extension is in system_files/usr/share/gnome-shell/extensions/tmp/caffeine/caffeine@patapon.info
+	if [ -d /usr/share/gnome-shell/extensions/tmp/caffeine/caffeine@patapon.info ]; then
+		mv /usr/share/gnome-shell/extensions/tmp/caffeine/caffeine@patapon.info /usr/share/gnome-shell/extensions/caffeine@patapon.info
+		glib-compile-schemas --strict /usr/share/gnome-shell/extensions/caffeine@patapon.info/schemas
+	fi
+
+	# Dash to Dock
+	if [ -d /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com ]; then
+		if [ -f /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/Makefile ]; then
+			make -C /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com
+			glib-compile-schemas --strict /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/schemas
+		else
+			echo "Skipping dash-to-dock build (Makefile not found)"
+		fi
+	fi
+
+	# GSConnect
+	if [ -d /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io ]; then
+		if [ -f /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/meson.build ]; then
+			meson setup --prefix=/usr /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/_build
+			meson install -C /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/_build --skip-subprojects
+			# GSConnect installs schemas to /usr/share/glib-2.0/schemas and meson compiles them automatically
+		else
+			echo "Skipping GSConnect build (meson.build not found)"
+		fi
+	fi
+
+	# Gradia Capture — area screenshot integration for the Gradia screenshot
+	# app. (Ported from ublue-os/bluefin-lts d32c9ea3 — feat(extension):
+	# Add gradia capture extension.) Build mirrors blur-my-shell: `build.sh`
+	# inside the submodule produces a shell-extension.zip which we unzip in
+	# place, then compile the schemas.
+	if [ -d /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io ]; then
+		if [ -f /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/build.sh ]; then
+			bash /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/build.sh
+			unzip -o /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/gradia-integration@alexandervanhee.github.io.shell-extension.zip \
+				-d /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io
+			rm -f /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/gradia-integration@alexandervanhee.github.io.shell-extension.zip
+			glib-compile-schemas --strict /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/schemas
+		else
+			echo "Skipping gradia-capture build (build.sh not found)"
+		fi
+	fi
+
+	# Logo Menu
+	# xdg-terminal-exec is required for this extension as it opens up terminals using that script
+	# Only install if submodule is present
+	if [ -f /usr/share/gnome-shell/extensions/logomenu@aryan_k/distroshelf-helper ]; then
+		install -Dpm0755 -t /usr/bin /usr/share/gnome-shell/extensions/logomenu@aryan_k/distroshelf-helper
+		install -Dpm0755 -t /usr/bin /usr/share/gnome-shell/extensions/logomenu@aryan_k/missioncenter-helper
+		glib-compile-schemas --strict /usr/share/gnome-shell/extensions/logomenu@aryan_k/schemas
+	else
+		echo "Skipping logomenu (submodule not available)"
+	fi
+
+	# Search Light
+	if [ -d /usr/share/gnome-shell/extensions/search-light@icedman.github.com/schemas ]; then
+		glib-compile-schemas --strict /usr/share/gnome-shell/extensions/search-light@icedman.github.com/schemas
+	else
+		echo "Skipping search-light (submodule not available)"
+	fi
+
+	# Recompile all schemas
+	rm /usr/share/glib-2.0/schemas/gschemas.compiled
+	glib-compile-schemas /usr/share/glib-2.0/schemas
+
+	# Cleanup build tooling
+	dnf -y remove glib2-devel meson sassc cmake dbus-devel
+	rm -rf /usr/share/gnome-shell/extensions/tmp
+
+	# Disable COPR now that build tooling (including glib2-devel) is fully removed
+	if [[ -n "${GNOME_COPR:-}" ]]; then
+		dnf -y copr disable "$GNOME_COPR"
+	fi
+
+	# Versionlock glib2 and the full GNOME stack to prevent dnf from upgrading
+	# back to whatever EL10 ships by default (which may not be the COPR version)
+	dnf versionlock add \
+		glib2 \
+		fontconfig \
+		gdm \
+		gnome-shell \
+		mutter \
+		gnome-session-wayland-session \
+		gnome-settings-daemon \
+		gnome-control-center \
+		gsettings-desktop-schemas \
+		gtk4 \
+		libadwaita \
+		pango \
+		xdg-desktop-portal \
+		xdg-desktop-portal-gnome || true
+	;;
+esac

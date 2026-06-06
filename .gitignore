@@ -1,0 +1,30 @@
+cosign.key
+output/
+*.raw
+*.qcow2
+.rpm-cache
+.rpm-cache*
+.rechunk/
+.build-logs/
+.build/
+# Temporary build artifacts
+just.tar.gz
+Cargo.lock
+Cargo.toml
+GRAMMAR.md
+just.1
+completions/
+
+# dev files
+hack/
+
+secrets.env
+build.log
+out.ociarchive
+*.iso
+*.qcow2
+.lima-home/
+
+# Local tooling / agent state (not project content)
+.claude/
+.antigravitycli/

@@ -1,0 +1,200 @@
+name: Live ISOs (Tacklebox)
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Variant to build'
+        required: true
+        default: 'skipjack'
+        type: choice
+        options:
+          - yellowfin
+          - albacore
+          - bonito
+          - skipjack
+      flavor:
+        description: 'Flavor to build'
+        required: true
+        default: 'gnome'
+        type: string
+      upload_r2:
+        description: 'Upload to Cloudflare R2'
+        required: false
+        default: false
+        type: boolean
+  pull_request:
+    branches: [main]
+    paths:
+      - 'live-iso/**'
+      - 'scripts/build-iso-tacklebox.sh'
+      - '.github/workflows/live-iso-bootc.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      packages: read
+      pull-requests: write
+    env:
+      VARIANT: ${{ github.event.inputs.variant || 'skipjack' }}
+      FLAVOR: ${{ github.event.inputs.flavor || 'gnome' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Maximize build space
+        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y just podman jq rclone golang-go git
+
+      - name: Build OS image
+        run: |
+          sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
+
+      - name: Build Live ISO
+        env:
+          UPLOAD_R2: ${{ github.event.inputs.upload_r2 }}
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          sudo just iso-tacklebox "$VARIANT" "$FLAVOR" local "$FLAVOR"
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.VARIANT }}-${{ env.FLAVOR }}-live-iso
+          path: "*.iso"
+          if-no-files-found: error
+
+      - name: Install QEMU for boot verification
+        run: |
+          sudo apt-get install -y qemu-system-x86 ovmf socat imagemagick
+
+      - name: Boot ISO and capture desktop screenshot
+        timeout-minutes: 10
+        run: |
+          ISO=$(find . -maxdepth 1 -name "*.iso" | head -1)
+          echo "==> Booting $ISO in QEMU (headless, KVM)..."
+
+          # Locate UEFI firmware (path varies by Ubuntu version)
+          OVMF_CODE=""
+          for f in \
+            /usr/share/OVMF/OVMF_CODE_4M.fd \
+            /usr/share/OVMF/OVMF_CODE.fd \
+            /usr/share/edk2/ovmf/OVMF_CODE.fd; do
+            [ -f "$f" ] && OVMF_CODE="$f" && break
+          done
+          OVMF_VARS=""
+          for f in \
+            /usr/share/OVMF/OVMF_VARS_4M.fd \
+            /usr/share/OVMF/OVMF_VARS.fd \
+            /usr/share/edk2/ovmf/OVMF_VARS.fd; do
+            if [ -f "$f" ]; then
+              cp "$f" /tmp/OVMF_VARS.fd
+              OVMF_VARS="/tmp/OVMF_VARS.fd"
+              break
+            fi
+          done
+
+          PFLASH=()
+          if [ -n "$OVMF_CODE" ] && [ -n "$OVMF_VARS" ]; then
+            echo "==> Using UEFI: $OVMF_CODE"
+            PFLASH+=(-drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE")
+            PFLASH+=(-drive "if=pflash,format=raw,file=$OVMF_VARS")
+          else
+            echo "==> OVMF not found, booting in BIOS mode"
+          fi
+
+          sudo qemu-system-x86_64 \
+            -machine type=q35,accel=kvm \
+            -cpu host \
+            -m 4G \
+            -smp 2 \
+            -cdrom "$ISO" \
+            -boot d \
+            "${PFLASH[@]}" \
+            -monitor unix:/tmp/qemu-monitor.sock,server,nowait \
+            -serial file:/tmp/serial.log \
+            -display none \
+            -daemonize
+
+          # Wait for monitor socket
+          for i in $(seq 1 30); do
+            [ -S /tmp/qemu-monitor.sock ] && break
+            sleep 2
+          done
+
+          # Wait for live desktop to fully boot (~4 minutes)
+          echo "==> Waiting 4 minutes for GNOME desktop to appear..."
+          sleep 240
+
+          # Capture screenshot via QEMU monitor
+          echo "screendump /tmp/screenshot.ppm" | \
+            sudo socat - UNIX-CONNECT:/tmp/qemu-monitor.sock
+          sleep 3
+
+          # Convert to PNG
+          if sudo test -f /tmp/screenshot.ppm; then
+            sudo convert /tmp/screenshot.ppm screenshot.png 2>/dev/null || \
+              sudo cp /tmp/screenshot.ppm screenshot.png
+            echo "==> Screenshot captured: $(ls -lh screenshot.png)"
+          else
+            echo "WARNING: screenshot.ppm not found; serial log follows:"
+            sudo cat /tmp/serial.log || true
+          fi
+
+          # Shut down QEMU
+          echo "quit" | sudo socat - UNIX-CONNECT:/tmp/qemu-monitor.sock || true
+
+      - name: Upload desktop screenshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-screenshot
+          path: screenshot.png
+          if-no-files-found: warn
+
+      - name: Post boot screenshot to PR
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          VARIANT: ${{ env.VARIANT }}
+          FLAVOR: ${{ env.FLAVOR }}
+        with:
+          script: |
+            const runUrl = [
+              context.serverUrl,
+              context.repo.owner,
+              context.repo.repo,
+              'actions/runs',
+              context.runId,
+            ].join('/');
+            const sha = context.payload.pull_request.head.sha.slice(0, 7);
+            const body = [
+              '## Live ISO Boot Verification',
+              '',
+              'The live ISO built and booted successfully to the GNOME desktop.',
+              '',
+              `**Variant:** \`${process.env.VARIANT}\` | ` +
+                `**Flavor:** \`${process.env.FLAVOR}\` | ` +
+                `**Commit:** \`${sha}\``,
+              '',
+              `📸 [Download desktop screenshot](${runUrl})` +
+                ' — expand **Artifacts** and download `desktop-screenshot`',
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });

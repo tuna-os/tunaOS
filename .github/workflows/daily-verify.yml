@@ -1,0 +1,166 @@
+name: Daily Image Verification
+on:
+  schedule:
+    - cron: '0 4 * * *' # 4 AM UTC daily
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Specific variant to verify (leave empty for rotation)'
+        required: false
+        type: string
+      flavor:
+        description: 'Specific flavor to verify (leave empty for rotation)'
+        required: false
+        type: string
+
+jobs:
+  generate_matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Install yq
+        run: |
+          if ! command -v yq &> /dev/null; then
+            sudo wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+            sudo chmod +x /usr/bin/yq
+          fi
+        shell: bash
+      - name: Generate matrix
+        id: set-matrix
+        env:
+          INPUT_VARIANT: ${{ github.event.inputs.variant }}
+          INPUT_FLAVOR: ${{ github.event.inputs.flavor }}
+        run: |
+          if [[ -n "$INPUT_VARIANT" && -n "$INPUT_FLAVOR" ]]; then
+            PICKED="[{\"variant\": \"$INPUT_VARIANT\", \"flavor\": \"$INPUT_FLAVOR\"}]"
+          else
+            # Get desktop-only variant:flavor pairs (exclude base/hwe/gdx suffixes and base flavors)
+            # These are the most representative images to rotate through for daily checks
+            CONFIG_FILE=".github/build-config.yml"
+            # shellcheck disable=SC2016
+            JQ_DESKTOP='.variants[] | .id as $v | .flavors[] | select(
+              .build_image == true and (.id | test("^(gnome|gnome50|kde|cosmic|niri)$"))
+            ) | {variant: $v, flavor: .id}'
+            ALL_IMAGES=$(yq -o=json "${CONFIG_FILE}" | jq -c "${JQ_DESKTOP}")
+
+            COUNT=$(echo "$ALL_IMAGES" | jq -s 'length')
+
+            # Use day of year for rotation offset, verify 3 images per day
+            DAY=$(date +%j | sed 's/^0*//')
+            START=$(( (DAY * 3) % COUNT ))
+            END=$(( START + 3 ))
+            WRAP=$(( END > COUNT ? END % COUNT : 0 ))
+            PICKED=$(echo "$ALL_IMAGES" | jq -sc ".[$START:$END] + .[0:$WRAP]")
+          fi
+
+          echo "matrix<<EOF" >> "$GITHUB_OUTPUT"
+          echo "{\"include\":$PICKED}" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+  verify:
+    name: Verify ${{ matrix.variant }}:${{ matrix.flavor }}
+    needs: generate_matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate_matrix.outputs.matrix) }}
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup TunaOS Build Environment
+        uses: ./.github/actions/setup-tunaos
+
+      - name: Verify image
+        id: run_verify
+        env:
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          IMAGE_REF="ghcr.io/${OWNER}/${VARIANT}:${FLAVOR}"
+          echo "==> Verifying ${IMAGE_REF}"
+
+          # 1. Check the image exists and pull its manifest
+          if ! skopeo inspect "docker://${IMAGE_REF}" > /tmp/manifest.json 2>&1; then
+            echo "::error::Image not found or not accessible: ${IMAGE_REF}"
+            cat /tmp/manifest.json
+            exit 1
+          fi
+
+          # 2. Verify key bootc labels are present
+          BOOTABLE=$(jq -r '.Labels["containers.bootc"] // empty' /tmp/manifest.json)
+          if [[ "$BOOTABLE" != "1" ]]; then
+            echo "::error::Missing containers.bootc=1 label on ${IMAGE_REF}"
+            exit 1
+          fi
+          echo "  ✓ containers.bootc=1"
+
+          OSTREE=$(jq -r '.Labels["ostree.bootable"] // empty' /tmp/manifest.json)
+          if [[ "$OSTREE" != "1" ]]; then
+            echo "::error::Missing ostree.bootable=1 label on ${IMAGE_REF}"
+            exit 1
+          fi
+          echo "  ✓ ostree.bootable=1"
+
+          # 3. Pull the image and validate bootc install config
+          echo "==> Pulling image for bootc config validation..."
+          podman pull "${IMAGE_REF}"
+
+          echo "==> Running bootc install print-configuration..."
+          podman run --rm --privileged \
+            -v "$(pwd)/system_files/usr/lib/bootc/install/00-tunaos.toml:/usr/lib/bootc/install/00-tunaos.toml:ro" \
+            "${IMAGE_REF}" \
+            bootc install print-configuration
+
+          echo "✓ ${VARIANT}:${FLAVOR} passed verification"
+
+      - name: Create Issue on Failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+        run: |
+          TITLE="Daily Verification Failed: ${VARIANT}:${FLAVOR}"
+          IMAGE_URI="ghcr.io/${{ github.repository_owner }}/${VARIANT}:${FLAVOR}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          BODY=$(cat <<ISSUE_EOF
+          Daily verification failed for \`${VARIANT}:${FLAVOR}\`.
+
+          **Variant:** ${VARIANT}
+          **Flavor:** ${FLAVOR}
+          **Image:** \`${IMAGE_URI}\`
+
+          [View Workflow Run](${RUN_URL})
+
+          Checks performed:
+          - Image exists in ghcr.io
+          - \`containers.bootc=1\` label present
+          - \`ostree.bootable=1\` label present
+          - \`bootc install print-configuration\` passes
+          ISSUE_EOF
+          )
+
+          EXISTING_ISSUE=$(gh issue list \
+            --search "${TITLE}" \
+            --state open \
+            --json number \
+            -q '.[0].number')
+
+          if [[ -z "${EXISTING_ISSUE}" ]]; then
+            gh issue create \
+              --title "${TITLE}" \
+              --body "${BODY}" \
+              --label "bug,verification-failed"
+          else
+            gh issue comment "${EXISTING_ISSUE}" \
+              --body "Daily verification failed again. See: ${RUN_URL}"
+          fi

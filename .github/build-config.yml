@@ -1,0 +1,408 @@
+config:
+  global_platforms: ["linux/amd64", "linux/arm64"]
+
+# Build stages (for reference — enforced by the workflow job graph):
+#
+#   Stage 1:  base
+#                ├── Stage 2: base-hwe, base-gdx
+#                └── Stage 2: gnome, kde, niri
+#                                ├── Stage 3: gnome-hwe, kde-hwe, niri-hwe   (layer on base-hwe)
+#                                └── Stage 3: gnome-gdx, kde-gdx, niri-gdx   (layer on base-gdx)
+#                                                └── Stage 4: gnome-gdx-hwe  (layer on gnome-hwe)
+#
+# The `stage` field on each flavor tells generate_matrix which job matrix it belongs to:
+#   stage: 1  → build_base      (no dependencies)
+#   stage: 2  → build_stage2    (needs: build_base)
+#   stage: 3  → build_stage3    (needs: build_stage2)
+#   stage: 4  → build_stage4    (needs: build_stage3)
+
+variants:
+  - id: yellowfin
+    emoji: "🐠"
+    description: "Based on AlmaLinux Kitten 10"
+    base_image: "quay.io/almalinuxorg/almalinux-bootc:10-kitten"
+    platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
+    flavors:
+      # ── Stage 1 ────────────────────────────────────────────────────────────
+      - id: base
+        stage: 1
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
+      # ── Stage 2 ────────────────────────────────────────────────────────────
+      - id: base-hwe
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: base-gdx
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: true
+      - id: gnome50
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: cosmic
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: kde
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: niri
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+
+      # ── Stage 3 ────────────────────────────────────────────────────────────
+      # HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
+      - id: gnome-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: gnome-gdx-hwe
+        stage: 4
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome50-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome50-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: cosmic-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: cosmic-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: kde-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: kde-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: niri-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: niri-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+
+  - id: albacore
+    emoji: "🐟"
+    description: "Based on AlmaLinux 10"
+    base_image: "quay.io/almalinuxorg/almalinux-bootc:10"
+    platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
+    flavors:
+      # ── Stage 1 ────────────────────────────────────────────────────────────
+      - id: base
+        stage: 1
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
+      # ── Stage 2 ────────────────────────────────────────────────────────────
+      - id: base-hwe
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: base-gdx
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: true
+      - id: gnome50
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+        # libinput >= 1.27.0 only available for x86_64 in COPR; arm64 excluded until
+        # aarch64 libinput lands. See: https://github.com/tuna-os/github-copr/issues/18
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
+      - id: cosmic
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: kde
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: niri
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+
+      # ── Stage 3 ────────────────────────────────────────────────────────────
+      # HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
+      - id: gnome-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: gnome-gdx-hwe
+        stage: 4
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome50-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        # libinput >= 1.27.0 only available for x86_64 in COPR; arm64 excluded until
+        # aarch64 libinput lands. See: https://github.com/tuna-os/github-copr/issues/18
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
+      - id: gnome50-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+        # libinput >= 1.27.0 only available for x86_64 in COPR; arm64 excluded until
+        # aarch64 libinput lands. See: https://github.com/tuna-os/github-copr/issues/18
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
+      - id: cosmic-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: cosmic-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: kde-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: kde-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: niri-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: niri-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+
+  - id: skipjack
+    emoji: "🍣"
+    description: "Based on CentOS Stream 10"
+    base_image: "quay.io/centos-bootc/centos-bootc:stream10"
+    # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
+    platforms: ["linux/amd64", "linux/arm64"]
+    flavors:
+      # ── Stage 1 ────────────────────────────────────────────────────────────
+      - id: base
+        stage: 1
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
+      # ── Stage 2 ────────────────────────────────────────────────────────────
+      - id: base-hwe
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: base-gdx
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: true
+      - id: gnome50
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: cosmic
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: kde
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: niri
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+
+      # ── Stage 3 ────────────────────────────────────────────────────────────
+      # HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
+      - id: gnome-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: gnome50-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome50-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: cosmic-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: cosmic-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+
+  - id: bonito
+    emoji: "🎣"
+    description: "Based on Fedora 44"
+    base_image: "quay.io/fedora/fedora-bootc:44"
+    akmods: "ublue-os"
+    # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
+    platforms: ["linux/amd64", "linux/arm64"]
+    flavors:
+      # ── Stage 1 ────────────────────────────────────────────────────────────
+      - id: base
+        stage: 1
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
+      # ── Stage 2 ────────────────────────────────────────────────────────────
+      - id: base-hwe
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: base-gdx
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: true
+      - id: cosmic
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: kde
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: niri
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+
+      # ── Stage 3 ────────────────────────────────────────────────────────────
+      # HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
+      - id: gnome-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: cosmic-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: kde-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: niri-gdx
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
