@@ -1,6 +1,6 @@
 # TunaOS Agent Guide
 
-Authoritative reference for AI agents working on the TunaOS repository. All other agent-specific files (`CLAUDE.md`, `AGENTS.md`, `GEMINI.md`, `.github/copilot-instructions.md`) point here.
+Authoritative reference for AI agents working on the TunaOS repository. The canonical redirect stub is `AGENTS.md` (supported by GitHub Copilot, Cursor, Windsurf). `.github/copilot-instructions.md` also points here.
 
 ---
 
