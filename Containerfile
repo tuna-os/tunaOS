@@ -2,6 +2,7 @@ ARG BASE_IMAGE
 ARG ENABLE_HWE="${ENABLE_HWE:-0}"
 ARG ENABLE_GDX="${ENABLE_GDX:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
+ARG HW_VARIANT="${HW_VARIANT:-no-de}"
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:latest"
 ARG BREW_IMAGE_REF="ghcr.io/ublue-os/brew:latest"
 
@@ -106,11 +107,11 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
 # Each stage ends with the /opt symlink so chunkah can be run against them.
 # ==============================================================================
 
-FROM base-no-de AS base
+FROM base-${HW_VARIANT} AS base
 # Base image with no DE - /opt made writeable via symlink
 RUN rm -rf /opt && ln -s /var/opt /opt
 
-FROM base-no-de AS gnome
+FROM base-${HW_VARIANT} AS gnome
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
@@ -118,7 +119,7 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
 RUN dnf versionlock add glib2
 RUN rm -rf /opt && ln -s /var/opt /opt
 
-FROM base-no-de AS cosmic
+FROM base-${HW_VARIANT} AS cosmic
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
@@ -126,7 +127,7 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
 RUN dnf versionlock add glib2
 RUN rm -rf /opt && ln -s /var/opt /opt
 
-FROM base-no-de AS gnome50
+FROM base-${HW_VARIANT} AS gnome50
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
@@ -134,7 +135,7 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
 RUN dnf versionlock add glib2
 RUN rm -rf /opt && ln -s /var/opt /opt
 
-FROM base-no-de AS gnome49
+FROM base-${HW_VARIANT} AS gnome49
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
@@ -142,7 +143,7 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
 RUN dnf versionlock add glib2
 RUN rm -rf /opt && ln -s /var/opt /opt
 
-FROM base-no-de AS kde
+FROM base-${HW_VARIANT} AS kde
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
@@ -150,7 +151,7 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
 RUN dnf versionlock add glib2
 RUN rm -rf /opt && ln -s /var/opt /opt
 
-FROM base-no-de AS niri
+FROM base-${HW_VARIANT} AS niri
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
