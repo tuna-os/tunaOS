@@ -219,7 +219,7 @@ Images are published on GitHub Container Registry (GHCR). To pull images with `b
 echo "$GITHUB_TOKEN" | podman login ghcr.io -u YOUR_USERNAME --password-stdin
 
 # Or use the GitHub CLI
-grep auth token | podman login ghcr.io -u YOUR_USERNAME --password-stdin
+gh auth token | podman login ghcr.io -u YOUR_USERNAME --password-stdin
 ```
 
 See [GitHub Container Registry docs](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) for more details.

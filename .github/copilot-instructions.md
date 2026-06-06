@@ -13,7 +13,7 @@ Always reference these instructions first and fallback to search or bash command
 | `yellowfin` | AlmaLinux Kitten 10 | Stable |
 | `albacore` | AlmaLinux 10 | Stable |
 | `skipjack` | CentOS Stream 10 | Experimental |
-| `bonito` | Fedora 43 | Incomplete |
+| `bonito` | Fedora 44 | Incomplete |
 
 Flavors chain: `base` → `dx` (+ Docker/VSCode) → `gdx` (+ NVIDIA/CUDA)
 
