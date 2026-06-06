@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -eo pipefail
+set -euo pipefail
 echo "Running file copy with BASE_IMAGE=${BASE_IMAGE}"
 if ! grep -q '^BASE_IMAGE=' /etc/os-release; then
 	echo "BASE_IMAGE=\"${BASE_IMAGE}\"" >>/etc/os-release

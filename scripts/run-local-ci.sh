@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 if ! command -v act &>/dev/null; then
 	echo "Error: 'act' is not installed."
@@ -18,13 +18,13 @@ if [ ! -f secrets.env ]; then
 fi
 
 # Try to get GITHUB_TOKEN from gh cli if not set
-if [ -z "$GITHUB_TOKEN" ] && command -v gh &>/dev/null; then
+if [ -z "${GITHUB_TOKEN-}" ] && command -v gh &>/dev/null; then
 	echo "Fetching GITHUB_TOKEN from gh CLI..."
 	GITHUB_TOKEN=$(gh auth token)
 	export GITHUB_TOKEN
 fi
 
-if [ -z "$GITHUB_TOKEN" ] && ! grep -q "GITHUB_TOKEN" secrets.env 2>/dev/null; then
+if [ -z "${GITHUB_TOKEN-}" ] && ! grep -q "GITHUB_TOKEN" secrets.env 2>/dev/null; then
 	echo "Warning: GITHUB_TOKEN not found in environment or secrets.env."
 	echo "act may fail to clone actions. Please set GITHUB_TOKEN."
 fi
@@ -62,7 +62,7 @@ add_workflow_dispatch() {
 	fi
 }
 
-if [ -n "$1" ]; then
+if [ -n "${1-}" ]; then
 	choice=$1
 else
 	echo "Available workflows:"
@@ -101,13 +101,13 @@ case $choice in
 	echo ""
 
 	# Accept variant and flavor as arguments, or prompt if not provided
-	if [ -n "$2" ]; then
+	if [ -n "${2-}" ]; then
 		variant=$2
 	else
 		read -r -p "Enter image variant (yellowfin/albacore): " variant
 	fi
 
-	if [ -n "$3" ]; then
+	if [ -n "${3-}" ]; then
 		flavor=$3
 	else
 		read -r -p "Enter flavor (base/dx/gdx): " flavor
