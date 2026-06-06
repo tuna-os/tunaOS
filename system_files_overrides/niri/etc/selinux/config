@@ -3,7 +3,10 @@
 #     enforcing - SELinux security policy is enforced.
 #     permissive - SELinux prints warnings instead of enforcing.
 #     disabled - No SELinux policy is loaded.
-SELINUX=permissive
+SELINUX=enforcing
+# NOTE: If Niri compositor breaks under enforcing, debug via:
+#   sudo ausearch -m avc -ts recent | audit2allow
+# and contribute policy fixes upstream.
 # SELINUXTYPE= can take one of these three values:
 #     targeted - Targeted processes are protected,
 #     minimum - Modification of targeted policy. Only selected processes are protected.

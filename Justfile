@@ -669,9 +669,10 @@ _lima-novnc vm_name type image_path:
             --listen "${NOVNC_PORT}" \
             --vnc "${VNC_HOST}:${VNC_PORT}"
 
-    # Build the local URL; embed password so the browser connects automatically
+    # Build the local URL. Password intentionally NOT embedded in URL —
+    # novnc_proxy uses --passwd for server-side auth; browser prompts users.
+    # Embedding passwords in URLs exposes them in shell history, ps output, and browser history.
     NOVNC_PARAMS="vnc.html?autoconnect=1"
-    [[ -n "${VNC_PASS}" ]] && NOVNC_PARAMS="${NOVNC_PARAMS}&password=${VNC_PASS}"
     LOCAL_URL="http://127.0.0.1:${NOVNC_PORT}/${NOVNC_PARAMS}&host=127.0.0.1&port=${NOVNC_PORT}"
 
     # Detect Tailscale IP for remote access
