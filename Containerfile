@@ -2,8 +2,12 @@ ARG BASE_IMAGE
 ARG ENABLE_HWE="${ENABLE_HWE:-0}"
 ARG ENABLE_GDX="${ENABLE_GDX:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
-ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:latest"
-ARG BREW_IMAGE_REF="ghcr.io/ublue-os/brew:latest"
+# SECURITY: Defaults use placeholder tags that MUST be overridden at build time.
+# The Justfile and scripts/build-image.sh always pin these to specific SHA256
+# digests (e.g., ghcr.io/projectbluefin/common@sha256:...). Direct podman build
+# without --build-arg overrides will fail with a clear error.
+ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
+ARG BREW_IMAGE_REF="ghcr.io/ublue-os/brew:unpinned-must-override"
 
 FROM ${COMMON_IMAGE_REF} AS common
 FROM ${BREW_IMAGE_REF} AS brew
