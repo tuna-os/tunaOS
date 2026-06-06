@@ -2,8 +2,10 @@ ARG BASE_IMAGE
 ARG ENABLE_HWE="${ENABLE_HWE:-0}"
 ARG ENABLE_GDX="${ENABLE_GDX:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
-ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:latest"
-ARG BREW_IMAGE_REF="ghcr.io/ublue-os/brew:latest"
+# Security: no default :latest. Callers MUST provide digest-pinned refs.
+# See Justfile / scripts/build-image.sh which resolve hashes from image-versions.yaml.
+ARG COMMON_IMAGE_REF
+ARG BREW_IMAGE_REF
 
 FROM ${COMMON_IMAGE_REF} AS common
 FROM ${BREW_IMAGE_REF} AS brew
