@@ -144,6 +144,8 @@ just --list              # Show all available commands
 | `build_scripts/overrides/` | Variant-specific script overrides |
 | `system_files/` | Files copied into every image (`etc/`, `usr/`) |
 | `system_files_overrides/` | Variant/flavor-specific file overlays |
+| `scripts/` | Build orchestration (host-side). See `scripts/README.md` |
+| `build_scripts/` | Scripts run inside container during `podman build`. See `build_scripts/README.md` |
 | `scripts/get-base-image.sh` | Maps variant names to base container image URIs |
 | `image-versions.yaml` | Pinned base image digests |
 | `.github/build-config.yml` | Central CI matrix config |
