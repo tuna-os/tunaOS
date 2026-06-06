@@ -20,7 +20,7 @@ runs:
       shell: bash
 
     - name: Setup Homebrew
-      uses: Homebrew/actions/setup-homebrew@master
+      uses: Homebrew/actions/setup-homebrew@main
 
     - name: Install Just
       run: |
