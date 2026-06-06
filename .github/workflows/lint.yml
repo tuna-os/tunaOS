@@ -1,0 +1,136 @@
+name: Lint and Check
+
+# Runs static analysis on shell scripts, YAML, JSON, Justfiles, and
+# GitHub Actions workflows. Uses the project's existing `just check`
+# command which wraps shellcheck, yamllint, jq, actionlint, and just fmt.
+#
+# Triggered on every PR and push to main to catch regressions before
+# they land. Complements `just-fix.yml` (auto-formatting) by adding
+# enforcement of code quality rules.
+#
+# This is a hold-gated PR — human review required before merge.
+# See quality agent finding: https://github.com/tuna-os/tunaOS/issues/150
+
+on:
+  pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+  push:
+    branches: [main]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - 'LICENSE'
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint (${{ matrix.check }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        check:
+          - shellcheck
+          - yamllint
+          - json-validate
+          - actionlint
+          - justfmt
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+
+      - name: Install tools
+        run: |
+          # Install all lint tools; brew is idempotent for already-installed
+          brew install just shellcheck shfmt yamllint jq actionlint 2>/dev/null || true
+          # Verify installations
+          shellcheck --version
+          yamllint --version
+          jq --version
+          actionlint -version
+          just --version
+
+      - name: Run shellcheck
+        if: matrix.check == 'shellcheck'
+        run: |
+          echo "==> Running shellcheck on all .sh files..."
+          # Exclude third-party extensions and build artifacts
+          /usr/bin/find . \
+            -not -path './system_files/usr/share/gnome-shell/extensions/*' \
+            -not -path './packages-repo/*' \
+            -not -path './.build/*' \
+            -iname "*.sh" -type f \
+            -exec shellcheck --exclude=SC1091 --format=tty {} +
+
+      - name: Run yamllint
+        if: matrix.check == 'yamllint'
+        run: |
+          echo "==> Running yamllint on all YAML files..."
+          find . \
+            -not -path './system_files/usr/share/gnome-shell/extensions/*' \
+            -not -path './packages-repo/*' \
+            -not -path './.build/*' \
+            \( -name "*.yaml" -o -name "*.yml" \) -type f \
+            -exec yamllint -c ./.yamllint.yml {} +
+
+      - name: Validate JSON files
+        if: matrix.check == 'json-validate'
+        run: |
+          echo "==> Validating JSON syntax..."
+          find . \
+            -not -path './system_files/usr/share/gnome-shell/extensions/*' \
+            -not -path './packages-repo/*' \
+            -not -path './.build/*' \
+            -name "*.json" -type f \
+            -exec sh -c 'jq . "$1" > /dev/null || { echo "ERROR: invalid JSON in $1"; exit 1; }' _ {} \;
+
+      - name: Run actionlint
+        if: matrix.check == 'actionlint'
+        continue-on-error: true  # actionlint is informative, not blocking
+        run: |
+          echo "==> Running actionlint on workflows..."
+          actionlint \
+            -ignore 'permission "id-token" is unknown' \
+            -ignore "SC2086" -ignore "SC2129" -ignore "SC2001" \
+            -ignore "SC2034" -ignore "SC2015" -ignore "SC1001" \
+            -ignore "SC2295" -ignore "SC2016" \
+            -ignore "save-always" \
+            -ignore "cannot be filtered" \
+            .github/workflows/*.yml .github/workflows/*.yaml
+
+      - name: Check Justfile formatting
+        if: matrix.check == 'justfmt'
+        run: |
+          echo "==> Checking Justfile format..."
+          just --unstable --fmt --check -f Justfile
+          find . \
+            -not -path './system_files/usr/share/gnome-shell/extensions/*' \
+            -not -path './packages-repo/*' \
+            -not -path './.build/*' \
+            -name "*.just" -type f \
+            -exec just --unstable --fmt --check -f {} \;
+
+  # Summary job: aggregates results and posts a single status check
+  lint-summary:
+    name: Lint Summary
+    needs: lint
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check lint results
+        run: |
+          echo "## Lint Results" >> "$GITHUB_STEP_SUMMARY"
+          if [[ "${{ needs.lint.result }}" == "success" ]]; then
+            echo "✅ All lint checks passed" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "❌ Some lint checks failed — see job details above" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
