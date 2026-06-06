@@ -79,6 +79,25 @@ else
 fi
 BUILD_ARGS+=("--build-arg" "IMAGE_NAME_VARIANT=${target_tag}")
 
+# ── Upstream snapshot SHAs ───────────────────────────────────────────────────
+UPSTREAM_JSON="{}"
+SNAPSHOTS_DIR="_upstream-snapshots"
+if [[ -d "${SNAPSHOTS_DIR}" ]]; then
+    declare -a snapshot_entries=()
+    for snap_dir in "${SNAPSHOTS_DIR}"/*/; do
+        [[ -d "${snap_dir}" ]] || continue
+        name=$(basename "${snap_dir}")
+        [[ -f "${snap_dir}.snapshot.json" ]] || continue
+        sha=$(jq -r '.sha' "${snap_dir}.snapshot.json" 2>/dev/null)
+        [[ -n "${sha}" && "${sha}" != "null" ]] || continue
+        snapshot_entries+=("\"${name}\":\"${sha}\"")
+    done
+    if [[ ${#snapshot_entries[@]} -gt 0 ]]; then
+        UPSTREAM_JSON="{$(IFS=','; echo "${snapshot_entries[*]}")}"
+    fi
+fi
+BUILD_ARGS+=("--build-arg" "UPSTREAM_SNAPSHOTS=${UPSTREAM_JSON}")
+
 # ── Git SHA ──────────────────────────────────────────────────────────────────
 if [[ -z "$(git status -s)" ]]; then
     BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=$(git rev-parse --short HEAD)")

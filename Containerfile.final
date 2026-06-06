@@ -2,6 +2,7 @@ ARG IMAGE_NAME
 ARG IMAGE_VENDOR
 ARG DESKTOP_FLAVOR
 ARG SHA_HEAD_SHORT
+ARG UPSTREAM_SNAPSHOTS
 ARG RECHUNKED_BASE
 
 # Produced by external chunkah run and loaded into podman storage via skopeo
@@ -11,10 +12,12 @@ ARG IMAGE_NAME
 ARG IMAGE_VENDOR
 ARG DESKTOP_FLAVOR
 ARG SHA_HEAD_SHORT
+ARG UPSTREAM_SNAPSHOTS
 
 LABEL org.opencontainers.image.title="TunaOS ${IMAGE_NAME} (${DESKTOP_FLAVOR})"
 LABEL org.opencontainers.image.vendor="${IMAGE_VENDOR}"
 LABEL org.opencontainers.image.version="${SHA_HEAD_SHORT}"
+LABEL tunaos.upstream-snapshots="${UPSTREAM_SNAPSHOTS}"
 LABEL io.bootc=1
 LABEL containers.bootc=1
 LABEL ostree.bootable=1
