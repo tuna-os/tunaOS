@@ -4,7 +4,7 @@ source /usr/lib/ublue/setup-services/libsetup.sh
 
 version-script flatpaks-lts privileged 1 || exit 0
 
-set -x
+set -euo pipefail
 
 # Set up Firefox default configuration
 ARCH=$(arch)

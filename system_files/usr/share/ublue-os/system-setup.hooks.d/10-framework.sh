@@ -4,7 +4,7 @@ source /usr/lib/ublue/setup-services/libsetup.sh
 
 version-script framework-lts system 1 || exit 0
 
-set -x
+set -euo pipefail
 
 # GLOBAL
 KARGS=$(rpm-ostree kargs)
