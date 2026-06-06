@@ -68,6 +68,60 @@ check: _ensure_check_deps
     fi
     just --unstable --fmt --check -f Justfile
 
+# --- Test Targets ---
+
+_ensure_test_deps: _ensure_check_deps
+    #!/usr/bin/env bash
+    if ! command -v bats &> /dev/null; then
+        brew install bats-core
+    fi
+    if ! command -v python3 &> /dev/null; then
+        echo "ERROR: python3 required for pytest tests" >&2
+        exit 1
+    fi
+    if ! python3 -c "import pytest" 2>/dev/null; then
+        pip3 install pytest --break-system-packages 2>/dev/null || pip3 install pytest --user
+    fi
+
+# Run all unit tests (BATS + pytest)
+test: _ensure_test_deps
+    #!/usr/bin/env bash
+    set -euo pipefail
+    FAILED=0
+    echo "=== BATS Tests ==="
+    if command -v bats &> /dev/null; then
+        for f in tests/bats/*.bats; do
+            [[ -f "$f" ]] || continue
+            echo "  Running: $f"
+            bats --formatter tap "$f" || FAILED=1
+        done
+    else
+        echo "  bats not found — skipping BATS tests"
+    fi
+    echo "=== pytest Tests ==="
+    if python3 -c "import pytest" 2>/dev/null; then
+        python3 -m pytest tests/ tests/pytest/ -v --tb=short || FAILED=1
+    else
+        echo "  pytest not found — skipping pytest tests"
+    fi
+    exit $FAILED
+
+# Run only BATS tests
+test-bats: _ensure_test_deps
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for f in tests/bats/*.bats; do
+        [[ -f "$f" ]] || continue
+        echo "  Running: $f"
+        bats --formatter tap "$f"
+    done
+
+# Run only pytest tests
+test-pytest: _ensure_test_deps
+    #!/usr/bin/env bash
+    set -euo pipefail
+    python3 -m pytest tests/ tests/pytest/ -v --tb=short
+
 # Generate GitHub Actions workflows from build-config.yml
 generate-workflows:
     #!/usr/bin/env bash
