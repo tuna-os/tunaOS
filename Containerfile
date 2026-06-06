@@ -185,14 +185,13 @@ RUN rm -rf /opt && ln -s /var/opt /opt
 FROM base-${HW_VARIANT} AS gnome
 # Run DE script only for from-scratch builds (no-de); chain builds (hwe/gdx)
 # already have the DE installed in the parent BASE_IMAGE.
+# post-desktop.sh runs unconditionally — versionlock + /opt symlink.
 ARG ENABLE_HWE
 ARG ENABLE_GDX
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  bash -c 'if [ "${ENABLE_HWE}" != "1" ] && [ "${ENABLE_GDX}" != "1" ]; then /run/context/build_scripts/gnome.sh base; fi'
-RUN dnf versionlock add glib2
-RUN rm -rf /opt && ln -s /var/opt /opt
+  bash -c 'if [ "${ENABLE_HWE}" != "1" ] && [ "${ENABLE_GDX}" != "1" ]; then /run/context/build_scripts/gnome.sh base; fi; /run/context/build_scripts/post-desktop.sh'
 
 FROM base-${HW_VARIANT} AS cosmic
 ARG ENABLE_HWE
@@ -200,9 +199,7 @@ ARG ENABLE_GDX
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  bash -c 'if [ "${ENABLE_HWE}" != "1" ] && [ "${ENABLE_GDX}" != "1" ]; then /run/context/build_scripts/cosmic.sh base; fi'
-RUN dnf versionlock add glib2
-RUN rm -rf /opt && ln -s /var/opt /opt
+  bash -c 'if [ "${ENABLE_HWE}" != "1" ] && [ "${ENABLE_GDX}" != "1" ]; then /run/context/build_scripts/cosmic.sh base; fi; /run/context/build_scripts/post-desktop.sh'
 
 FROM base-${HW_VARIANT} AS gnome50
 ARG ENABLE_HWE
@@ -210,9 +207,7 @@ ARG ENABLE_GDX
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  bash -c 'if [ "${ENABLE_HWE}" != "1" ] && [ "${ENABLE_GDX}" != "1" ]; then /run/context/build_scripts/gnome.sh base; fi'
-RUN dnf versionlock add glib2
-RUN rm -rf /opt && ln -s /var/opt /opt
+  bash -c 'if [ "${ENABLE_HWE}" != "1" ] && [ "${ENABLE_GDX}" != "1" ]; then /run/context/build_scripts/gnome.sh base; fi; /run/context/build_scripts/post-desktop.sh'
 
 FROM base-${HW_VARIANT} AS gnome49
 ARG ENABLE_HWE
@@ -220,9 +215,7 @@ ARG ENABLE_GDX
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  bash -c 'if [ "${ENABLE_HWE}" != "1" ] && [ "${ENABLE_GDX}" != "1" ]; then /run/context/build_scripts/gnome.sh base; fi'
-RUN dnf versionlock add glib2
-RUN rm -rf /opt && ln -s /var/opt /opt
+  bash -c 'if [ "${ENABLE_HWE}" != "1" ] && [ "${ENABLE_GDX}" != "1" ]; then /run/context/build_scripts/gnome.sh base; fi; /run/context/build_scripts/post-desktop.sh'
 
 FROM base-${HW_VARIANT} AS kde
 ARG ENABLE_HWE
@@ -230,9 +223,7 @@ ARG ENABLE_GDX
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  bash -c 'if [ "${ENABLE_HWE}" != "1" ] && [ "${ENABLE_GDX}" != "1" ]; then /run/context/build_scripts/kde.sh base; fi'
-RUN dnf versionlock add glib2
-RUN rm -rf /opt && ln -s /var/opt /opt
+  bash -c 'if [ "${ENABLE_HWE}" != "1" ] && [ "${ENABLE_GDX}" != "1" ]; then /run/context/build_scripts/kde.sh base; fi; /run/context/build_scripts/post-desktop.sh'
 
 FROM base-${HW_VARIANT} AS niri
 ARG ENABLE_HWE
@@ -240,6 +231,4 @@ ARG ENABLE_GDX
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  bash -c 'if [ "${ENABLE_HWE}" != "1" ] && [ "${ENABLE_GDX}" != "1" ]; then /run/context/build_scripts/niri.sh base; fi'
-RUN dnf versionlock add glib2
-RUN rm -rf /opt && ln -s /var/opt /opt
+  bash -c 'if [ "${ENABLE_HWE}" != "1" ] && [ "${ENABLE_GDX}" != "1" ]; then /run/context/build_scripts/niri.sh base; fi; /run/context/build_scripts/post-desktop.sh'
