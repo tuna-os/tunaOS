@@ -1,5 +1,7 @@
+# Security: No default password. Require SSH keys at build time.
+# See Justfile qcow2 recipe for key injection mechanism.
 [[user]]
 name = "admin"
-password = "password"
+password = null
 groups = ["wheel"]
-ssh_authorized_keys = [] # Add keys if needed, or rely on password for now
+ssh_authorized_keys = [] # REQUIRED: Populate with SSH public keys before use

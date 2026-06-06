@@ -1,6 +1,8 @@
+# Security: No default password. Require SSH key injection at build time.
+# See Justfile qcow2 recipe for the key injection mechanism.
 [[customizations.user]]
 name = "centos"
-password = "centos"
+password = null
 groups = ["wheel"]
 
 [[customizations.filesystem]]
