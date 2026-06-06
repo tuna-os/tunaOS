@@ -3,7 +3,7 @@
 # This file needs to exist otherwise running this in a RUN label makes it so bash strict mode doesnt work.
 # Thus leading to silent failures
 
-set -eo pipefail
+set -euo pipefail
 printf "::group:: === Arch Customizations ===\n"
 
 # Do not rely on any of these scripts existing in a specific path

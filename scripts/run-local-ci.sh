@@ -1,5 +1,5 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 if ! command -v act &>/dev/null; then
 	echo "Error: 'act' is not installed."
