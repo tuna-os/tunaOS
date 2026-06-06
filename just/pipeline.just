@@ -1,11 +1,13 @@
 # just/pipeline.just — Top-level build pipeline orchestration
 
+# [pipeline]
 # Run the full staged build pipeline
 pipeline variant='all' flavor='all' tag='latest' dry_run='0':
     #!/usr/bin/env bash
     export JUST="{{ just }}"
     ./scripts/pipeline.sh "{{ variant }}" "{{ flavor }}" "{{ tag }}" "{{ dry_run }}"
 
+# [pipeline]
 # Attach to the currently running Zellij pipeline session
 attach:
     #!/usr/bin/env bash

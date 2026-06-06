@@ -1,5 +1,6 @@
 # just/deps.just — Dependency management and code quality checks
 
+# [deps]
 # Check requirements for syntax checking
 [private]
 _ensure_check_deps:
@@ -21,6 +22,7 @@ _ensure_check_deps:
     fi
 
 # Check Just Syntax
+# [deps]
 check: _ensure_check_deps
     #!/usr/bin/env bash
     echo "Checking syntax of shell scripts..."
@@ -30,12 +32,14 @@ check: _ensure_check_deps
     done
 
 # Generate GitHub Actions workflows from build-config.yml
+# [ci]
 generate-workflows:
     #!/usr/bin/env bash
     set -euo pipefail
     python3 scripts/generate-workflows.py
 
 # Fix Just Syntax
+# [deps]
 fix:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -61,6 +65,7 @@ fix:
     find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -type f \( -name "*.md" -o -name "*.mdx" \) | while read -r file; do if is_installed prettier; then prettier --write "$file" 2>/dev/null || true; fi; done
 
 # Remove common build artifacts
+# [deps]
 clean:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -79,6 +84,7 @@ clean:
     echo "Done."
 
 # Prune build caches (DNF/RPM cache directory shared across all variants)
+# [deps]
 clean-cache:
     #!/usr/bin/env bash
     rm -rf ./build-cache/ 2>/dev/null || true

@@ -1,19 +1,23 @@
 # just/vm.just — Testing and VM infrastructure
 
+# [vm]
 # Test an image locally using Lima VM (automated display manager check)
 test-vm variant flavor='gnome':
     #!/usr/bin/env bash
     set -euo pipefail
     bash ./scripts/test-vm.sh {{ variant }} {{ flavor }}
 
+# [vm]
 # Boot an image in QEMU via browser (uses ghcr.io/qemus/qemu)
 run-qcow2 variant flavor='gnome':
     @{{ just }} _run-vm qcow2 {{ variant }} {{ flavor }}
 
+# [vm]
 # Boot an ISO in QEMU via browser
 run-iso variant flavor='gnome' iso_file='':
     @{{ just }} _run-vm iso {{ variant }} {{ flavor }} "{{ iso_file }}"
 
+# [vm]
 # Build a qcow2 image and boot it in a QEMU container with a built-in web VNC UI
 # Pass rebuild=1 to force a fresh image build even if one already exists
 demo variant='albacore' flavor='gnome' rebuild='0':
@@ -40,6 +44,7 @@ demo variant='albacore' flavor='gnome' rebuild='0':
 
     {{ just }} _run-vm qcow2 "{{ variant }}" "{{ flavor }}"
 
+# [vm]
 # Build a live ISO and boot it in a QEMU container with a built-in web VNC UI
 # Pass rebuild=1 to force a fresh ISO build even if one already exists
 demo-iso variant='skipjack' flavor='gnome' rebuild='0':
@@ -62,6 +67,7 @@ demo-iso variant='skipjack' flavor='gnome' rebuild='0':
 
     {{ just }} _run-vm iso "{{ variant }}" "{{ flavor }}" "$(realpath "${ISO_FILE}")"
 
+# [vm]
 # Internal: start a Lima VM from a qcow2 or live ISO, then wire up a noVNC container
 [private]
 _lima-novnc vm_name type image_path:
@@ -209,18 +215,21 @@ _lima-novnc vm_name type image_path:
         xdg-open "${LOCAL_URL}" || true
     fi
 
+# [vm]
 # Verify an image using Lima (automated DM check)
 verify variant flavor='gnome':
     #!/usr/bin/env bash
     set -euo pipefail
     ./scripts/verify-image.sh "{{ variant }}" "{{ flavor }}"
 
+# [vm]
 # Verify an ISO using Lima
 verify-iso iso_file:
     #!/usr/bin/env bash
     set -euo pipefail
     ./scripts/verify-iso.sh "{{ iso_file }}"
 
+# [vm]
 # Boot an ISO and expose the Anaconda WebUI on http://localhost:19090
 # Optional: pass --kickstart <ks_file> for unattended install
 install-test iso_file kickstart='':
@@ -231,6 +240,7 @@ install-test iso_file kickstart='':
     # shellcheck disable=SC2086
     bash ./scripts/install-test.sh "{{ iso_file }}" $ks_arg
 
+# [vm]
 # Internal helper to run a VM using the QEMU container
 [private]
 _run-vm type variant flavor='gnome' iso_file='':

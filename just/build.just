@@ -1,9 +1,5 @@
 # just/build.just — Core build pipeline
 
-# ==============================================================================
-#  BUILD PIPELINE
-# ==============================================================================
-
 # Check if requirements are installed
 [private]
 _ensure-deps:
@@ -12,6 +8,7 @@ _ensure-deps:
     if ! command -v {{ yq }} &> /dev/null; then echo "yq is required. Install via brew install yq or dnf install yq"; exit 1; fi
 
 # Private build engine.
+# [build]
 [private]
 _build target_tag_with_version target_tag container_file base_image_for_build target_platform use_cache enable_gdx enable_hwe desktop_flavor *args: _ensure-deps
     #!/usr/bin/env bash
@@ -162,6 +159,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     podman rmi "${RECHUNKED_REF}" 2>/dev/null || true
 
 # Build a TunaOS variant
+# [build]
 build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='': _ensure-deps
     #!/usr/bin/env bash
     set -euo pipefail
