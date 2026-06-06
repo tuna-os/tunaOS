@@ -1,0 +1,65 @@
+name: Test
+on:
+  pull_request:
+    paths:
+      - 'scripts/**'
+      - 'tests/**'
+      - 'build_scripts/**'
+      - '.github/scripts/**'
+      - '.github/changelogs.py'
+      - 'Justfile'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit-tests:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup TunaOS Build Environment
+        uses: ./.github/actions/setup-tunaos
+
+      - name: Install test dependencies
+        run: |
+          # BATS (bash automated testing system)
+          brew install bats-core
+
+          # pytest for Python tests
+          pip3 install pytest --break-system-packages 2>/dev/null || pip3 install pytest --user
+
+      - name: Run BATS tests
+        run: |
+          echo "=== BATS Tests ==="
+          FAILED=0
+          for f in tests/bats/*.bats; do
+            [[ -f "$f" ]] || continue
+            echo "  Running: $f"
+            bats --formatter tap "$f" || FAILED=1
+          done
+          exit $FAILED
+
+      - name: Run pytest tests
+        run: |
+          echo "=== pytest Tests ==="
+          python3 -m pytest tests/ tests/pytest/ -v --tb=short
+
+      - name: Test summary
+        if: always()
+        run: |
+          BATS_COUNT=$(find tests/bats -name "*.bats" -type f | wc -l)
+          PY_COUNT=$(find tests/pytest -name "*.py" -type f 2>/dev/null | wc -l)
+          echo "| Type | Files |"
+          echo "|---|---|"
+          echo "| BATS | ${BATS_COUNT} |"
+          echo "| pytest | ${PY_COUNT} |"
+          echo "| Top-level pytest | $(find tests -maxdepth 1 -name 'test_*.py' -type f | wc -l) |"
+          echo ""
+          echo "Run locally: \`just test\`"
+          >> "$GITHUB_STEP_SUMMARY"
