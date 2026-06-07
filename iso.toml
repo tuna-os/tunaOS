@@ -1,9 +1,11 @@
-[customizations.installer.kickstart]
-contents = """
-%post
-bootc switch --mutate-in-place --transport registry --enforce-container-sigpolicy ghcr.io/hanthor/bluefin:lts
-%end
-"""
+# FIXME: This references stale hanthor/bluefin image. Update to correct
+# tuna-os image before enabling ISO builds with this kickstart.
+# [customizations.installer.kickstart]
+# contents = """
+# %post
+# bootc switch --mutate-in-place --transport registry --enforce-container-sigpolicy ghcr.io/tuna-os/yellowfin:lts
+# %end
+# """
 
 [customizations.installer.modules]
 enable = [

@@ -44,7 +44,7 @@ ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 RUN rm -rf /opt && mkdir /opt
 
 RUN \
-  --mount=type=tmpfs,dst=/opt \ 
+  --mount=type=tmpfs,dst=/opt \
   --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=akmods_nvidia_open,src=/rpms,dst=/tmp/akmods-nvidia-open-rpms \
