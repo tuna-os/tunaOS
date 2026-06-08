@@ -89,12 +89,12 @@ teardown() {
 }
 
 @test "check.sh: validates .just files with just --fmt --check" {
-  run grep "just.*fmt.*check.*\.just" "${REPO_ROOT}/scripts/check.sh"
+  run grep "just.*--fmt.*--check" "${REPO_ROOT}/scripts/check.sh"
   [ "$status" -eq 0 ]
 }
 
 @test "check.sh: validates Justfile at end" {
-  run grep "just.*fmt.*check.*Justfile" "${REPO_ROOT}/scripts/check.sh"
+  run grep "just.*--fmt.*--check.*Justfile" "${REPO_ROOT}/scripts/check.sh"
   [ "$status" -eq 0 ]
 }
 

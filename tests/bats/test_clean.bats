@@ -58,11 +58,7 @@ teardown() {
 # ── Artifact cleanup ──────────────────────────────────────────────────────
 
 @test "clean: removes .build-logs directory" {
-  run bash -c '
-    rm -rf .build-logs
-    [ ! -d .build-logs ]
-  '
-  cd "${TEST_ROOT}" && eval "$output"
+  rm -rf "${TEST_ROOT}/.build-logs"
   [ ! -d "${TEST_ROOT}/.build-logs" ]
 }
 
@@ -111,7 +107,8 @@ teardown() {
     # Simulate fallback: when yq fails, use hardcoded list
     yq() { return 1; }
     VARIANTS=()
-    if ! readarray -t VARIANTS < <(yq -r ".variants[].id" config.yml 2>/dev/null); then
+    readarray -t VARIANTS < <(yq -r ".variants[].id" config.yml 2>/dev/null) || true
+    if [[ ${#VARIANTS[@]} -eq 0 ]]; then
       VARIANTS=(yellowfin albacore bonito skipjack redfin)
     fi
     echo "${VARIANTS[@]}"

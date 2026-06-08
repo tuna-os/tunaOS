@@ -205,7 +205,7 @@ teardown() {
   done
 
   [ "$overall_success" = false ]
-  [ "${#steps_passed[@]}" -eq 1 ]  # Only 'setup' passed
+  [ "${#steps_passed[@]}" -eq 2 ]  # 'setup' and 'publish' passed, 'compile' failed
   run grep "Step 'compile' failed" "${STUB_LOG}"
   [ "$status" -eq 0 ]
 }

@@ -81,7 +81,8 @@ MOCK
 
   # Source the actual script (with modifications to skip real podman calls)
   # We isolate the logic by sourcing and overriding functions
-  SCRIPT_DIR="${BATS_TEST_DIRNAME:-/data/agents/quality/tunaos-repo/scripts}"
+  REPO_ROOT="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
+  SCRIPT_DIR="${REPO_ROOT}/scripts"
 }
 
 teardown() {

@@ -295,7 +295,7 @@ teardown() {
     if [[ "$FILTER" != "all" ]] && [[ "$FILTER" != "$slug" ]]; then
       continue
     fi
-    ((count++))
+    count=$((count + 1))
   done
   [ "$count" -eq 3 ]
 }
@@ -321,7 +321,7 @@ teardown() {
     if [[ "$FILTER" != "all" ]] && [[ "$FILTER" != "$slug" ]]; then
       continue
     fi
-    ((count++))
+    count=$((count + 1))
   done
   [ "$count" -eq 0 ]
 }
@@ -383,7 +383,7 @@ EOF
   local empty_upstreams=()
   count=0
   for entry in "${empty_upstreams[@]}"; do
-    ((count++))
+    count=$((count + 1))
   done
   [ "$count" -eq 0 ]
 }

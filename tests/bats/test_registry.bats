@@ -67,7 +67,7 @@ teardown() {
 }
 
 @test "registry start: detects existing container" {
-  PODMAN_CONTAINER_EXISTS=1
+  export PODMAN_CONTAINER_EXISTS=1
   run bash -c '
     PODMAN_CONTAINER_EXISTS=1
     HOST="127.0.0.1"; PORT="5000"

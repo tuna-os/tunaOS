@@ -9,7 +9,7 @@
 # Related issue: https://github.com/tuna-os/tunaOS/issues/183
 
 setup() {
-  REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
+  REPO_ROOT="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
   JUSTFILE="${REPO_ROOT}/Justfile"
 }
 

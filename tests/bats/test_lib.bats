@@ -130,7 +130,7 @@ JQ
   # We copy lib.sh to a temp location and tweak paths so it can be sourced.
   cp "${REPO_ROOT}/build_scripts/lib.sh" "${TEST_ROOT}/lib_test.sh"
   # Remove the set -euo pipefail to make testing easier
-  sed -i '1s/^set -euo pipefail/set -uo pipefail\n# set -e removed for test/' "${TEST_ROOT}/lib_test.sh"
+  sed -i 's/^set -euo pipefail/set -uo pipefail\n# set -e removed for test/' "${TEST_ROOT}/lib_test.sh"
 }
 
 teardown() {
