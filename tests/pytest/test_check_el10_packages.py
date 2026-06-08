@@ -17,7 +17,7 @@ import pathlib
 # here for testing. These are the exact regexes and constants from the
 # original script.
 
-PKG_RE = re.compile(r"\b([a-z][a-z0-9._+\-]{2,60})\b")
+PKG_RE = re.compile(r"\b([a-zA-Z][a-zA-Z0-9._+\-]{2,60})\b")
 
 NOISE = {
     "the", "and", "for", "not", "are", "was", "has", "that", "this", "with",
@@ -48,9 +48,13 @@ def extract_candidates(diff_lines: list[str]) -> set[str]:
         stripped = line[1:].strip()
         if stripped.startswith("#"):
             continue
-        # Skip lines that look like paths, URLs, or assignments
-        if any(c in stripped for c in ["/", "http", "$", "=", "{"]):
+        # Strip inline comments
+        if "#" in stripped:
+            stripped = stripped.split("#")[0].strip()
+        # Skip lines that look like URLs, var assignments, or JSON
+        if any(c in stripped for c in ["http", "$", "=", "{"]):
             continue
+        # Only skip path lines — allow copr repo references (repo/packages)
         for m in PKG_RE.finditer(stripped):
             word = m.group(1)
             if word not in NOISE and not word.startswith("-") and len(word) >= 3:

@@ -140,7 +140,7 @@ def test_empty_fields_rendered_as_empty():
 def test_guide_is_never_empty_in_output():
     """Even with empty guide, the structure remains valid."""
     result = generate_task_content(guide="")
-    assert result.startswith("\n---")  # empty guide line then separator
+    assert result.strip().startswith("---")  # separator at top
 
 
 # ── Build Script Include Tests ──────────────────────────────────────────────

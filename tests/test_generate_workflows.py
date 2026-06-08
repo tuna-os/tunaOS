@@ -230,7 +230,8 @@ def test_generate_workflows_writes_yaml_content():
     """)
     parsed = yaml.safe_load(result)
     assert parsed["name"] == "Build Yellowfin"
-    assert "schedule" in parsed["on"]
+    # PyYAML parses 'on' as boolean True; access via True key
+    assert "schedule" in (parsed.get(True) or parsed.get("on", {}))
 
 
 # ── Error Handling Tests ────────────────────────────────────────────────────

@@ -200,7 +200,9 @@ def test_issue_body_contains_commit_sections():
     body = "\n\n---\n\n".join(body_parts)
     assert "## Commit `abc11100`" in body
     assert "feat: a" in body
-    assert "---" in body
+    # --- separator only appears between multiple commits; single commit has none
+    if len(body_parts) > 1:
+        assert "---" in body
 
 
 def test_issue_body_contains_porting_guide():

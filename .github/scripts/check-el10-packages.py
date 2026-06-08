@@ -42,7 +42,7 @@ content = TASK_FILE.read_text()
 diff_text = re.search(r"## Diff\n(.*?)(?=\n## |\Z)", content, re.DOTALL)
 diff_lines = diff_text.group(1).splitlines() if diff_text else []
 
-PKG_RE = re.compile(r'\b([a-z][a-z0-9._+\-]{2,60})\b')
+PKG_RE = re.compile(r'\b([a-zA-Z][a-zA-Z0-9._+\-]{2,60})\b')
 
 # Words that are definitely not package names
 NOISE = {
@@ -71,8 +71,11 @@ for line in diff_lines:
     stripped = line[1:].strip()
     if stripped.startswith("#"):
         continue
-    # Skip lines that look like paths, URLs, or assignments
-    if any(c in stripped for c in ["/", "http", "$", "=", "{"]):
+    # Strip inline comments
+    if "#" in stripped:
+        stripped = stripped.split("#")[0].strip()
+    # Skip lines that look like URLs, var assignments, or JSON
+    if any(c in stripped for c in ["http", "$", "=", "{"]):
         continue
     for m in PKG_RE.finditer(stripped):
         word = m.group(1)
