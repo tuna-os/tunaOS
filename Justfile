@@ -130,6 +130,9 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     #!/usr/bin/env bash
     set -euxo pipefail
 
+    # Source registry abstraction for configurable mirror support (RFC-009)
+    source scripts/_registry.sh
+
     # Get image digests from image-versions.yaml
     common_image_sha=$({{ yq }} -r '.images[] | select(.name == "common") | .digest' image-versions.yaml)
     common_image_ref="{{ common_image }}@${common_image_sha}"
@@ -139,6 +142,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     BUILD_ARGS=()
     BUILD_ARGS+=("--build-arg" "IMAGE_NAME={{ target_tag }}")
     BUILD_ARGS+=("--build-arg" "IMAGE_VENDOR={{ repo_organization }}")
+    BUILD_ARGS+=("--build-arg" "IMAGE_REGISTRY=${IMAGE_REGISTRY:-ghcr.io}")
     BUILD_ARGS+=("--build-arg" "BASE_IMAGE={{ base_image_for_build }}")
     BUILD_ARGS+=("--build-arg" "COMMON_IMAGE_REF=${common_image_ref}")
     BUILD_ARGS+=("--build-arg" "BREW_IMAGE_REF=${brew_image_ref}")
@@ -147,7 +151,9 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR={{ desktop_flavor }}")
 
     AKMODS_ORG=$({{ yq }} -r ".variants[] | select(.id == \"{{ target_tag }}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
-    BUILD_ARGS+=("--build-arg" "AKMODS_BASE=ghcr.io/${AKMODS_ORG}")
+    # Resolve akmods registry via registry-map; falls back to ghcr.io/${AKMODS_ORG} if not mapped
+    AKMODS_REGISTRY_BASE="$(registry_ref akmods 2>/dev/null || echo "ghcr.io/${AKMODS_ORG}")"
+    BUILD_ARGS+=("--build-arg" "AKMODS_BASE=${AKMODS_REGISTRY_BASE}")
 
     # RHSM credentials via BuildKit-style secret. The previous --build-arg
     # approach baked them into `podman history --no-trunc` (and earlier into
@@ -215,7 +221,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
 
     # Ensure the chunkah image is available. Try the published image first,
     # then fall back to building from source if it's not pullable.
-    CHUNKAH_IMAGE="quay.io/coreos/chunkah:latest"
+    CHUNKAH_IMAGE="$(registry_ref coreos-chunkah 2>/dev/null || echo 'quay.io/coreos/chunkah:latest')"
     if ! podman image inspect "${CHUNKAH_IMAGE}" &>/dev/null; then
         if ! podman pull "${CHUNKAH_IMAGE}" 2>/dev/null; then
             echo "==> chunkah image not pullable, building from source..."
@@ -659,12 +665,12 @@ _lima-novnc vm_name type image_path:
     # Remove any leftover noVNC container from a previous run
     podman rm -f "${VM_NAME}-novnc" 2>/dev/null || true
 
-    # ghcr.io/novnc/novnc ships novnc_proxy (websockify wrapper + static files).
+    # Use registry-ref resolved novnc image (RFC-009: configurable mirror support).
     # --network host lets the container reach Lima's VNC on 127.0.0.1.
     podman run -d --rm \
         --name "${VM_NAME}-novnc" \
         --network host \
-        ghcr.io/novnc/novnc:latest \
+        "$(source scripts/_registry.sh 2>/dev/null && registry_ref novnc || echo 'ghcr.io/novnc/novnc:latest')" \
         /usr/share/novnc/utils/novnc_proxy \
             --listen "${NOVNC_PORT}" \
             --vnc "${VNC_HOST}:${VNC_PORT}"
@@ -768,7 +774,8 @@ _run-vm type variant flavor='gnome' iso_file='':
     echo "Connect via SSH: ssh centos@127.0.0.1 -p ${ssh_port}"
     run_args+=(--publish "0.0.0.0:${ssh_port}:22" --env "USER_PORTS=22" --env "NETWORK=user")
 
-    run_args+=(--volume "${PWD}/${image_file}":"/boot.{{ type }}" ghcr.io/qemus/qemu)
+    QEMU_IMAGE="$(source scripts/_registry.sh 2>/dev/null && registry_ref qemu || echo 'ghcr.io/qemus/qemu')"
+    run_args+=(--volume "${PWD}/${image_file}":"/boot.{{ type }}" "${QEMU_IMAGE}")
 
     (sleep 5 && xdg-open "http://127.0.0.1:${port}") &
     podman run "${run_args[@]}"

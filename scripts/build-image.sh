@@ -7,6 +7,9 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+# Source registry abstraction for configurable mirror support (RFC-009)
+source scripts/_registry.sh
+
 VARIANT="${1:-albacore}"
 FLAVOR="${2:-gnome}"
 TARGET_PLATFORM="${3:-}"
@@ -133,13 +136,14 @@ fi
 set -euxo pipefail
 
 common_image_sha=$("$YQ" -r '.images[] | select(.name == "common") | .digest' image-versions.yaml)
-common_image_ref="${common_image:-ghcr.io/projectbluefin/common}@${common_image_sha}"
+common_image_ref="${common_image:-$(registry_ref common "@${common_image_sha}")}"
 brew_image_sha=$("$YQ" -r '.images[] | select(.name == "brew") | .digest' image-versions.yaml)
-brew_image_ref="${brew_image:-ghcr.io/ublue-os/brew}@${brew_image_sha}"
+brew_image_ref="${brew_image:-$(registry_ref brew "@${brew_image_sha}")}"
 
 BUILD_ARGS=()
 BUILD_ARGS+=("--build-arg" "IMAGE_NAME=${TARGET_TAG}")
 BUILD_ARGS+=("--build-arg" "IMAGE_VENDOR=${repo_organization:-tuna-os}")
+BUILD_ARGS+=("--build-arg" "IMAGE_REGISTRY=${IMAGE_REGISTRY:-ghcr.io}")
 BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${BASE_FOR_BUILD}")
 BUILD_ARGS+=("--build-arg" "COMMON_IMAGE_REF=${common_image_ref}")
 BUILD_ARGS+=("--build-arg" "BREW_IMAGE_REF=${brew_image_ref}")
@@ -148,7 +152,9 @@ BUILD_ARGS+=("--build-arg" "ENABLE_GDX=${ENABLE_GDX}")
 BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR=${DESKTOP_FLAVOR}")
 
 AKMODS_ORG=$("$YQ" -r ".variants[] | select(.id == \"${TARGET_TAG}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
-BUILD_ARGS+=("--build-arg" "AKMODS_BASE=ghcr.io/${AKMODS_ORG}")
+# Resolve akmods registry via registry-map; falls back to ghcr.io/${AKMODS_ORG} if not mapped
+AKMODS_REGISTRY_BASE="$(registry_ref akmods 2>/dev/null || echo "ghcr.io/${AKMODS_ORG}")"
+BUILD_ARGS+=("--build-arg" "AKMODS_BASE=${AKMODS_REGISTRY_BASE}")
 
 # RHSM credentials via BuildKit-style secret (matches Justfile approach).
 # Using --secret avoids leaking creds into podman history --no-trunc.
@@ -213,7 +219,7 @@ podman run --rm \
 	--entrypoint="" \
 	-v "${CHUNK_OUT}:/run/out:Z" \
 	--mount "type=image,source=localhost/${PRE_CHUNK_TAG},target=/chunkah" \
-	quay.io/coreos/chunkah:latest \
+	"$(registry_ref coreos-chunkah)" \
 	sh -c 'chunkah build > /run/out/out.ociarchive'
 mv "${CHUNK_OUT}/out.ociarchive" out.ociarchive
 rm -rf "${CHUNK_OUT}"
