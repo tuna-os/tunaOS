@@ -132,6 +132,8 @@ JQ
   cp "${REPO_ROOT}/build_scripts/lib.sh" "${TEST_ROOT}/lib_test.sh"
   # Remove the set -euo pipefail to make testing easier
   sed -i 's/^set -euo pipefail/set -uo pipefail\n# set -e removed for test/' "${TEST_ROOT}/lib_test.sh"
+  # Patch absolute paths that should point to test stubs
+  sed -i "s|_IMAGE_INFO=\"/usr/share/ublue-os/image-info.json\"|_IMAGE_INFO=\"${TEST_ROOT}/usr/share/ublue-os/image-info.json\"|" "${TEST_ROOT}/lib_test.sh"
 }
 
 teardown() {
@@ -210,7 +212,7 @@ teardown() {
   # but image-info.json has the original OS base
   BASE_IMAGE="ghcr.io/tuna-os/yellowfin:gnome50"
   export BASE_IMAGE
-  # image-info.json already has base-image -> almalinuxorg/almalinux-bootc:10 from setup()
+  # image-info.json path is patched in setup() to point to test stub
   source "${TEST_ROOT}/lib_test.sh"
   # The base-image from image-info.json should override the env BASE_IMAGE
   [[ "$IS_ALMALINUX" == "true" ]]
