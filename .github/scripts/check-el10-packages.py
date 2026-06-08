@@ -74,8 +74,13 @@ for line in diff_lines:
     # Strip inline comments
     if "#" in stripped:
         stripped = stripped.split("#")[0].strip()
-    # Skip lines that look like URLs, var assignments, or JSON
-    if any(c in stripped for c in ["http", "$", "=", "{"]):
+    # Skip lines that are primarily file-paths, URLs, or var assignments
+    if any(c in stripped for c in ["http://", "https://", "$"]):
+        continue
+    if re.match(r'^(COPY|ADD)\s+/', stripped):
+        continue
+    if "=" in stripped and not stripped.startswith("RUN"):
+        continue
         continue
     for m in PKG_RE.finditer(stripped):
         word = m.group(1)

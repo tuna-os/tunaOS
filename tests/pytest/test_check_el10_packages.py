@@ -51,8 +51,14 @@ def extract_candidates(diff_lines: list[str]) -> set[str]:
         # Strip inline comments
         if "#" in stripped:
             stripped = stripped.split("#")[0].strip()
-        # Skip lines that look like URLs, var assignments, or JSON
-        if any(c in stripped for c in ["http", "$", "=", "{"]):
+        # Skip lines that are primarily file-paths, URLs, var assignments, or JSON
+        if any(c in stripped for c in ["http://", "https://", "$"}):
+            continue
+        # Skip COPY/ADD file operations (start with / after the command)
+        if re.match(r'^(COPY|ADD)\s+/', stripped):
+            continue
+        if "=" in stripped and not stripped.startswith("RUN"):
+            continue
             continue
         # Only skip path lines — allow copr repo references (repo/packages)
         for m in PKG_RE.finditer(stripped):
