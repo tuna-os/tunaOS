@@ -52,7 +52,7 @@ def extract_candidates(diff_lines: list[str]) -> set[str]:
         if "#" in stripped:
             stripped = stripped.split("#")[0].strip()
         # Skip lines that are primarily file-paths, URLs, var assignments, or JSON
-        if any(c in stripped for c in ["http://", "https://", "$"}):
+        if any(c in stripped for c in ["http://", "https://", "$"]):
             continue
         # Skip COPY/ADD file operations (start with / after the command)
         if re.match(r'^(COPY|ADD)\s+/', stripped):
