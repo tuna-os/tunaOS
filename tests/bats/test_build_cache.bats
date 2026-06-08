@@ -88,9 +88,10 @@ teardown() {
   [ "$output" = "bonito" ]
 }
 
-@test "setup-cache: strips only -gdx from gdx-hwe (keeps -hwe for flavor resolution)" {
-  # Note: this tests the suffix stripping behavior — gdx-hwe is stripped
-  # to just the base variant. This is correct: all flavors share a cache.
+@test "setup-cache: compound suffixes stripped only at end (gdx-hwe → gdx)" {
+  # Note: sequential %-suffix only strips the last matching suffix.
+  # yellowfin-gdx-hwe: %-gdx no match (ends -hwe), %-hwe strips → yellowfin-gdx
+  # Real variant names never have compound suffixes (only: -gdx, -hwe, -kde, -dx)
   run bash -c '
     VARIANT="yellowfin-gdx-hwe"
     BASE_VARIANT="${VARIANT}"
@@ -100,7 +101,7 @@ teardown() {
     BASE_VARIANT="${BASE_VARIANT%-dx}"
     echo "$BASE_VARIANT"
   '
-  [ "$output" = "yellowfin" ]
+  [ "$output" = "yellowfin-gdx" ]
 }
 
 # ═══════════════════════════════════════════════════════════════════════════

@@ -6,8 +6,10 @@
 #
 # Run: bats tests/bats/test_get_base_image.bats
 
+REPO_ROOT="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
+
 setup() {
-  SCRIPT="${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/get-base-image.sh"
+  SCRIPT="${REPO_ROOT}/scripts/get-base-image.sh"
 }
 
 # ── Variant mapping tests ────────────────────────────────────────────────────

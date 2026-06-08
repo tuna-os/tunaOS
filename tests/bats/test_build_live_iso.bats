@@ -234,12 +234,17 @@ teardown() {
 }
 
 @test "project_root: errors when live-iso/ missing" {
+  # Setup creates live-iso/; remove it to test the missing case
+  rmdir "${TEST_ROOT}/live-iso"
+  cd "${TEST_ROOT}"
   run bash -c '
     [[ ! -d "live-iso" ]] && { echo "Must be run from project root" >&2; exit 1; }
     echo "ok"
   '
   [ "$status" -eq 1 ]
   [[ "$output" == *"project root"* ]]
+  # Restore live-iso for subsequent tests
+  mkdir -p "${TEST_ROOT}/live-iso"
 }
 
 # ── Default values ──────────────────────────────────────────────────────────

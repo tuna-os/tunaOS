@@ -11,6 +11,8 @@
 #   - Package name deduplication
 #   - Header comment filtering
 
+REPO_ROOT="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
+
 setup() {
   TEST_ROOT="$(mktemp -d)"
   mkdir -p "${TEST_ROOT}/usr/share/tunaos"
@@ -190,7 +192,7 @@ teardown() {
 # ── Strict mode ───────────────────────────────────────────────────────────
 
 @test "report-missing: has set -euo pipefail" {
-  run grep -c "set -euo pipefail" "${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/report-missing-packages.sh"
+  run grep -c "set -euo pipefail" "${REPO_ROOT}/scripts/report-missing-packages.sh"
   [ "$status" -eq 0 ]
   [ "$output" -ge 1 ]
 }

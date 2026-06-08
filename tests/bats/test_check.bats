@@ -7,12 +7,14 @@
 #   - Exit code propagation
 #   - Path exclusion filtering
 
+REPO_ROOT="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
+
 setup() {
   TEST_ROOT="$(mktemp -d)"
   mkdir -p "${TEST_ROOT}/scripts"
 
   # Copy check.sh (without the set -e for test isolation)
-  cp "${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/check.sh" \
+  cp "${REPO_ROOT}/scripts/check.sh" \
      "${TEST_ROOT}/test_check.sh"
   sed -i '1s/^set -euo pipefail/set -uo pipefail\n# set -e removed for test/' \
      "${TEST_ROOT}/test_check.sh"
@@ -48,55 +50,55 @@ teardown() {
 
 @test "check.sh: shellcheck exclusion SC1091 is passed" {
   # Verify the shellcheck invocation pattern excludes SC1091
-  run grep "SC1091" "${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/check.sh"
+  run grep "SC1091" "${REPO_ROOT}/scripts/check.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *"SC1091"* ]]
 }
 
 @test "check.sh: excludes gnome-shell extensions from linting" {
-  run grep "gnome-shell/extensions" "${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/check.sh"
+  run grep "gnome-shell/extensions" "${REPO_ROOT}/scripts/check.sh"
   [ "$status" -eq 0 ]
 }
 
 @test "check.sh: excludes packages-repo from linting" {
-  run grep "packages-repo" "${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/check.sh"
+  run grep "packages-repo" "${REPO_ROOT}/scripts/check.sh"
   [ "$status" -eq 0 ]
 }
 
 @test "check.sh: actionlint has specific ignore rules" {
   # There should be at least 5 ignore rules
-  run grep -c "\-ignore" "${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/check.sh"
+  run grep -c "\-ignore" "${REPO_ROOT}/scripts/check.sh"
   [ "$status" -eq 0 ]
   [ "$output" -ge 5 ]
 }
 
 @test "check.sh: validates .yaml files with yamllint -c .yamllint.yml" {
-  run grep "yamllint -c" "${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/check.sh"
+  run grep "yamllint -c" "${REPO_ROOT}/scripts/check.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *".yamllint.yml"* ]]
 }
 
 @test "check.sh: validates .yml files with yamllint (no config)" {
-  run grep "yamllint.*yml" "${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/check.sh"
+  run grep "yamllint.*yml" "${REPO_ROOT}/scripts/check.sh"
   [ "$status" -eq 0 ]
 }
 
 @test "check.sh: validates .json files with jq" {
-  run grep "jq \." "${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/check.sh"
+  run grep "jq \." "${REPO_ROOT}/scripts/check.sh"
   [ "$status" -eq 0 ]
 }
 
 @test "check.sh: validates .just files with just --fmt --check" {
-  run grep "just.*fmt.*check.*\.just" "${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/check.sh"
+  run grep "just.*fmt.*check.*\.just" "${REPO_ROOT}/scripts/check.sh"
   [ "$status" -eq 0 ]
 }
 
 @test "check.sh: validates Justfile at end" {
-  run grep "just.*fmt.*check.*Justfile" "${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/check.sh"
+  run grep "just.*fmt.*check.*Justfile" "${REPO_ROOT}/scripts/check.sh"
   [ "$status" -eq 0 ]
 }
 
 @test "check.sh: shellcheck uses /usr/bin/find for cross-platform support" {
-  run grep "/usr/bin/find" "${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/check.sh"
+  run grep "/usr/bin/find" "${REPO_ROOT}/scripts/check.sh"
   [ "$status" -eq 0 ]
 }

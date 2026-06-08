@@ -9,6 +9,8 @@
 #   - Build flags (security-opt, skip-unused-stages)
 #   - set -euo pipefail enforcement
 
+REPO_ROOT="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
+
 setup() {
   TEST_ROOT="$(mktemp -d)"
 
@@ -120,12 +122,13 @@ teardown() {
 }
 
 @test "build-chunkah: falls back to buildah when podman absent" {
+  # Test the fallback logic: podman not available, buildah is
   run bash -c '
-    # Simulate: podman not found, buildah present
-    podman() { return 1; }
-    command -v podman &>/dev/null && echo "podman" || {
-      command -v buildah &>/dev/null && echo "buildah"
-    }
+    has_podman() { return 1; }
+    has_buildah() { return 0; }
+    if has_podman; then echo "podman"
+    elif has_buildah; then echo "buildah"
+    fi
   '
   [ "$status" -eq 0 ]
   [[ "$output" == "buildah" ]]
@@ -161,7 +164,7 @@ teardown() {
 # ── Strict mode ───────────────────────────────────────────────────────────
 
 @test "build-chunkah: has set -euo pipefail" {
-  run grep -c "set -euo pipefail" "${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/build-chunkah.sh"
+  run grep -c "set -euo pipefail" "${REPO_ROOT}/scripts/build-chunkah.sh"
   [ "$status" -eq 0 ]
   [ "$output" -ge 1 ]
 }

@@ -76,9 +76,10 @@ teardown() {
 }
 
 @test "root check: passes when EUID is 0" {
+  # EUID is readonly in bash; use a simulated variable for logic test
   run bash -c '
-    EUID=0
-    [[ "$EUID" -ne 0 ]] && { echo "ERROR" >&2; exit 1; }
+    _EUID=0
+    [[ "$_EUID" -ne 0 ]] && { echo "ERROR" >&2; exit 1; }
     echo "root ok"
   '
   [ "$status" -eq 0 ]
@@ -86,12 +87,17 @@ teardown() {
 }
 
 @test "project root: detects missing live-iso/ directory" {
+  # Setup creates live-iso/; remove it to test the missing case
+  rmdir "${TEST_ROOT}/live-iso"
+  cd "${TEST_ROOT}"
   run bash -c '
     [[ ! -d "live-iso" ]] && { echo "ERROR: run from project root (live-iso/ not found)" >&2; exit 1; }
     echo "ok"
   '
   [ "$status" -eq 1 ]
   [[ "$output" == *"live-iso/ not found"* ]]
+  # Restore live-iso for subsequent tests
+  mkdir -p "${TEST_ROOT}/live-iso"
 }
 
 @test "project root: passes when live-iso/ exists" {
@@ -100,6 +106,7 @@ teardown() {
   run bash -c '
     [[ -d "live-iso" ]] && echo "project root ok"
     [[ ! -d "live-iso" ]] && { echo "ERROR" >&2; exit 1; }
+    true
   '
   [ "$status" -eq 0 ]
   [[ "$output" == *"project root ok"* ]]

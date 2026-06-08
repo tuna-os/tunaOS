@@ -8,6 +8,8 @@
 #   - .rpm-cache preservation message
 #   - sudo/non-sudo image removal attempts
 
+REPO_ROOT="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
+
 setup() {
   TEST_ROOT="$(mktemp -d)"
   mkdir -p "${TEST_ROOT}/.build"
@@ -80,8 +82,8 @@ teardown() {
 
 @test "clean: .rpm-cache is preserved (not mentioned in rm commands)" {
   # Verify the script does NOT rm .rpm-cache — just check the source
-  grep -q "Preserving .rpm-cache" "${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/clean.sh"
-  run grep "rpm-cache" "${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/clean.sh"
+  grep -q "Preserving .rpm-cache" "${REPO_ROOT}/scripts/clean.sh"
+  run grep "rpm-cache" "${REPO_ROOT}/scripts/clean.sh"
   # The only mention should be the informational message, not an rm
   [[ "$output" != *"rm"*"rpm-cache"* ]]
 }

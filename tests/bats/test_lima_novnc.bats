@@ -13,6 +13,8 @@
 #   - Tailscale IP detection
 #   - Existing VM cleanup check
 
+REPO_ROOT="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
+
 setup() {
   TEST_ROOT="$(mktemp -d)"
   export TEST_ROOT
@@ -243,7 +245,7 @@ teardown() {
 # ── Strict mode ───────────────────────────────────────────────────────────
 
 @test "lima-novnc: has set -euo pipefail" {
-  run grep -c "set -euo pipefail" "${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/lima-novnc.sh"
+  run grep -c "set -euo pipefail" "${REPO_ROOT}/scripts/lima-novnc.sh"
   [ "$status" -eq 0 ]
   [ "$output" -ge 1 ]
 }

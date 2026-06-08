@@ -45,7 +45,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Homebrew
-        uses: Homebrew/actions/setup-homebrew@master
+        uses: Homebrew/actions/setup-homebrew@main
 
       - name: Install tools
         run: |
@@ -67,6 +67,7 @@ jobs:
             -not -path './system_files/usr/share/gnome-shell/extensions/*' \
             -not -path './packages-repo/*' \
             -not -path './.build/*' \
+            -not -path './_upstream-snapshots/*' \
             -iname "*.sh" -type f \
             -exec shellcheck --exclude=SC1091 --format=tty {} +
 
@@ -78,6 +79,7 @@ jobs:
             -not -path './system_files/usr/share/gnome-shell/extensions/*' \
             -not -path './packages-repo/*' \
             -not -path './.build/*' \
+            -not -path './_upstream-snapshots/*' \
             \( -name "*.yaml" -o -name "*.yml" \) -type f \
             -exec yamllint -c ./.yamllint.yml {} +
 

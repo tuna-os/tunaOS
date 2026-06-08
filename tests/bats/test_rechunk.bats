@@ -11,6 +11,8 @@
 #   - Permission fixup (chown to current user)
 #   - Final podman import and tagging
 
+REPO_ROOT="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
+
 setup() {
   TEST_ROOT="$(mktemp -d)"
   export TEST_ROOT
@@ -202,7 +204,7 @@ teardown() {
 # ── Strict mode verification ──────────────────────────────────────────────
 
 @test "rechunk: has set -euo pipefail" {
-  run grep -c "set -euo pipefail" "${REPO_ROOT:-/data/agents/quality/tunaos-repo}/scripts/rechunk.sh"
+  run grep -c "set -euo pipefail" "${REPO_ROOT}/scripts/rechunk.sh"
   [ "$status" -eq 0 ]
   [ "$output" -ge 1 ]
 }
