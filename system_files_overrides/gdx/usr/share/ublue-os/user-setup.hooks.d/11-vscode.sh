@@ -4,7 +4,7 @@ source /usr/lib/ublue/setup-services/libsetup.sh
 
 version-script vscode-lts user 1 || exit 1
 
-set -x
+set -euo pipefail
 
 # Setup VSCode
 if test ! -e "$HOME"/.config/Code/User/settings.json; then
