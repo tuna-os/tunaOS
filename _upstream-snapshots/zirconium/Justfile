@@ -5,10 +5,10 @@ default:
     #!/usr/bin/env bash
     set -xeuo pipefail
     just build
-    sudo just load
-    sudo just lint
-    sudo just ostree-rechunk
-    sudo env BUILD_BASE_DIR=/tmp just disk-image
+    just load
+    just lint
+    just rechunk
+    env BUILD_BASE_DIR=/tmp just disk-image
     vmbuddy -f /tmp/bootable.img
 
 build: build-ostree
@@ -57,18 +57,12 @@ disk-image $filesystem=filesystem:
     fi
     just bootc install to-disk --generic-image --bootloader grub --via-loopback /data/bootable.img --filesystem "${filesystem}" --wipe
 
-rechunk:
+rechunk $image_name=image:
     #!/usr/bin/env bash
-    IMG="{{ image }}"
-    # podman pull $IMG # image must be available locally
-    export CHUNKAH_CONFIG_STR="$(sudo podman inspect "${IMG}")"
-    podman run --rm "--mount=type=image,src=${IMG},dest=/chunkah" -e CHUNKAH_CONFIG_STR quay.io/coreos/chunkah build --label ostree.bootable=1 --compressed --max-layers 128 | \
-        podman load | \
-        sort -n | \
-        head -n1 | \
-        cut -d, -f2 | \
-        cut -d: -f3 | \
-        xargs -I{} sudo podman tag {} {{image}}
+    export CHUNKAH_CONFIG_STR="$(podman inspect "${image_name}")"
+    podman run --rm "--mount=type=image,src=${image_name},target=/chunkah" \
+        -e CHUNKAH_CONFIG_STR quay.io/coreos/chunkah build --prune /sysroot/ \
+        --label containers.bootc=1 --max-layers 128 --tag "${image_name}" | podman load
 
 clean:
     mkosi clean

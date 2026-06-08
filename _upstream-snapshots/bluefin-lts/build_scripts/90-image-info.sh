@@ -6,8 +6,8 @@ IMAGE_REF="ostree-image-signed:docker://ghcr.io/${IMAGE_VENDOR}/${IMAGE_NAME}"
 IMAGE_INFO="/usr/share/ublue-os/image-info.json"
 IMAGE_FLAVOR="main"
 IMAGE_TAG="lts"
-if [ "${ENABLE_HWE}" == "1" ]; then
-	IMAGE_TAG="${IMAGE_TAG}-hwe"
+if [ "${ENABLE_HWE}" == "1" ] ; then
+IMAGE_TAG="${IMAGE_TAG}-hwe"
 fi
 
 tee "$IMAGE_INFO" <<EOF
@@ -54,9 +54,9 @@ EOF
 
 # Weekly user count for fastfetch
 # FIXME: change this back to -lts once CentOS fixed their countme
-curl --retry 3 https://raw.githubusercontent.com/ublue-os/countme/main/badge-endpoints/bluefin.json | jq -r ".message" >/usr/share/ublue-os/fastfetch-user-count
+curl --retry 3 https://raw.githubusercontent.com/ublue-os/countme/main/badge-endpoints/bluefin.json | jq -r ".message" > /usr/share/ublue-os/fastfetch-user-count
 
 # bazaar weekly downloads used for fastfetch
 curl -X 'GET' \
-	'https://flathub.org/api/v2/stats/io.github.kolunmi.Bazaar?all=false&days=1' \
-	-H 'accept: application/json' | jq -r ".installs_last_7_days" | numfmt --to=si --round=nearest >/usr/share/ublue-os/bazaar-install-count
+'https://flathub.org/api/v2/stats/io.github.kolunmi.Bazaar?all=false&days=1' \
+-H 'accept: application/json' | jq -r ".installs_last_7_days" | numfmt --to=si --round=nearest > /usr/share/ublue-os/bazaar-install-count
