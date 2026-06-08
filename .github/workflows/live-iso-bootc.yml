@@ -41,7 +41,7 @@ jobs:
       FLAVOR: ${{ github.event.inputs.flavor || 'gnome' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: recursive
 
@@ -71,7 +71,7 @@ jobs:
           sudo just iso-tacklebox "$VARIANT" "$FLAVOR" local "$FLAVOR"
 
       - name: Upload Artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ env.VARIANT }}-${{ env.FLAVOR }}-live-iso
           path: "*.iso"
@@ -158,7 +158,7 @@ jobs:
           echo "quit" | sudo socat - UNIX-CONNECT:/tmp/qemu-monitor.sock || true
 
       - name: Upload desktop screenshot
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: desktop-screenshot
           path: screenshot.png
@@ -166,7 +166,7 @@ jobs:
 
       - name: Post boot screenshot to PR
         if: github.event_name == 'pull_request'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         env:
           VARIANT: ${{ env.VARIANT }}
           FLAVOR: ${{ env.FLAVOR }}
