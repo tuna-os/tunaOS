@@ -27,7 +27,7 @@ jobs:
       artifact_count: ${{ steps.set-matrix.outputs.artifact_count }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Build Environment
         uses: ./.github/actions/setup-tunaos
@@ -235,7 +235,7 @@ jobs:
       packages: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           submodules: recursive
 
@@ -267,7 +267,7 @@ jobs:
 
       - name: Upload ISO Artifact
         if: matrix.build_iso == true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.variant }}-${{ matrix.flavor }}-live-iso
           path: "*.iso"
@@ -357,7 +357,7 @@ jobs:
 
       - name: Upload boot screenshot
         if: matrix.build_iso == true
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ matrix.variant }}-${{ matrix.flavor }}-boot-screenshot
           path: screenshot.png
