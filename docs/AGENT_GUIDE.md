@@ -145,11 +145,13 @@ just --list              # Show all available commands
 | File/Dir | Purpose |
 |---|---|
 | `Justfile` | All build commands and task automation |
+<<<<<<< HEAD
 | `Containerfile` | Main multi-stage build definition (base, gnome, kde, niri, cosmic) |
 | `Containerfile.gdx` | GDX flavor definition (NVIDIA drivers + CUDA + gnome/kde/niri/cosmic DE stages) |
 | `Containerfile.hwe` | HWE layer definition (coreos kernel, akmods + gnome/kde/niri/cosmic DE stages) |
 | `Containerfile.final` | Labels-only stage — applies OCI annotations to rechunked base image |
 | `Containerfile.dx` | ⚠️ DEPRECATED — reference only. Superseded by Containerfile.gdx. No CI consumers. |
+>>>>>>> 07f3b68 ([guide] fix: stagger variant cron schedules (F7), add flavor validation (F8), sync AGENT_GUIDE (F6))
 | `build_scripts/lib.sh` | Shared functions; OS detection logic |
 | `build_scripts/overrides/` | Variant-specific script overrides |
 | `system_files/` | Files copied into every image (`etc/`, `usr/`) |

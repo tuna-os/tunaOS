@@ -1,7 +1,7 @@
 name: Build Yellowfin
 on:
   schedule:
-    - cron: "0 1 * * *"
+    - cron: "0 1 * * *"  # 01:00 UTC daily
   workflow_dispatch:
     inputs:
       flavor:
