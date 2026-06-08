@@ -172,3 +172,20 @@ just demo albacore gnome
 # Build and boot ISO in QEMU via web browser
 just demo-iso skipjack gnome
 ```
+
+### Verify image signatures
+
+All published TunaOS images are signed with [cosign](https://github.com/sigstore/cosign) using keyless signing (OIDC). Verify any image before use:
+
+```bash
+# Verify with OIDC identity
+cosign verify \
+  --certificate-identity https://github.com/tuna-os/tunaOS/.github/workflows/reusable-build-image.yml@refs/heads/main \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/tuna-os/yellowfin:gnome
+
+# Verify with public key (from cosign.pub in the repo)
+cosign verify --key cosign.pub ghcr.io/tuna-os/yellowfin:gnome
+```
+
+For local builds, images are not signed — verification applies only to published GHCR images.

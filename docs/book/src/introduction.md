@@ -57,6 +57,20 @@ Enterprise Linux Base
 | **Bonito** | Fedora 44 | Development | x86_64, ARM64 |
 | **Redfin** | RHEL 10 | Local-build only | x86_64, ARM64 |
 
+### Choosing a Variant
+
+- **Yellowfin** — best for most users. Tracks upstream CentOS Stream closely with AlmaLinux stability. Latest GNOME backports.
+- **Albacore** — best for enterprise deployments. Fully RHEL-compatible, slower package cadence, maximum stability.
+- **Skipjack** — for CentOS Stream purists. Upstream of RHEL; packages may be slightly newer than Albacore.
+- **Bonito** — for Fedora users who want cutting-edge packages. Still in active development.
+- **Redfin** — RHEL 10 with subscription. Local-build only; for environments requiring official Red Hat support.
+
+For hardware variants:
+- **Standard** — works on most hardware with the default EL kernel.
+- **HWE** (`-hwe`) — for recent hardware (post-2023) needing a newer kernel.
+- **GDX** (`-gdx`) — for systems with NVIDIA GPUs; includes drivers and CUDA.
+- **GDX+HWE** (`-gdx-hwe`) — NVIDIA on the HWE kernel; for very recent NVIDIA hardware.
+
 ## Desktop Environments
 
 | Tag | Desktop |
