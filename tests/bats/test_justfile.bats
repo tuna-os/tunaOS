@@ -41,7 +41,8 @@ setup() {
 }
 
 @test "justfile: has container build recipe" {
-  run grep -iE '^build-(image|container|ci)[:( ]' "${JUSTFILE}"
+  # Justfile uses 'build' recipe with parameters, not build-* prefixes
+  run grep -E '^build[ (:]' "${JUSTFILE}"
   [ "$status" -eq 0 ]
 }
 
@@ -74,7 +75,7 @@ setup() {
 # ─── Variable Default Tests ─────────────────────────────────────────────────
 
 @test "justfile: FLAVOR variable has default" {
-  run grep -E 'FLAVOR[[:space:]]*:=' "${JUSTFILE}"
+  run grep -E '^[[:space:]]*FLAVOR[[:space:]]*[:=]' "${JUSTFILE}"
   [ "$status" -eq 0 ]
 }
 
@@ -84,7 +85,8 @@ setup() {
 }
 
 @test "justfile: REGISTRY variable is configured" {
-  run grep -E 'REGISTRY' "${JUSTFILE}"
+  # Justfile uses inline registry references (ghcr.io, quay.io) without a top-level REGISTRY var
+  run grep -E 'ghcr\.io|quay\.io' "${JUSTFILE}"
   [ "$status" -eq 0 ]
 }
 

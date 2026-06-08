@@ -17,7 +17,7 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
 setup() {
   TEST_ROOT="$(mktemp -d)"
   # Create a minimal filesystem for tests
-  mkdir -p "${TEST_ROOT}/usr/lib/os-release"
+  mkdir -p "${TEST_ROOT}/usr/lib"
   mkdir -p "${TEST_ROOT}/usr/share/ublue-os"
   mkdir -p "${TEST_ROOT}/usr/lib/systemd/system"
   mkdir -p "${TEST_ROOT}/usr/share/tunaos"
