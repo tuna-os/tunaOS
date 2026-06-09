@@ -9,6 +9,9 @@
 #   TUNA_IMAGE_PATH_<name>  Override image path (e.g. TUNA_IMAGE_PATH_common=myorg/common-fork)
 #   TUNA_IMAGE_TAG_<name>   Override image tag (e.g. TUNA_IMAGE_TAG_common=v2.0)
 #
+#   Note: hyphens in <name> are replaced with underscores for the env var.
+#   e.g. almalinux-bootc → TUNA_IMAGE_TAG_almalinux_bootc
+#
 # Usage:
 #   source scripts/_registry.sh
 #   common_ref=$(registry_ref common)         # → ghcr.io/projectbluefin/common:latest
@@ -31,13 +34,21 @@ if [[ ! -f "${REGISTRY_MAP}" ]]; then
 	exit 1
 fi
 
+# Normalize an image name or registry key for use in env var names.
+# Replaces hyphens with underscores (bash vars cannot contain hyphens).
+_sanitize_name() {
+	printf '%s' "${1//-/_}"
+}
+
 # Resolve a registry hostname for a given registry key.
 # Applies TUNA_REGISTRY_<key> override if set.
 #
 # Usage: _registry_host ghcr  →  "ghcr.io" (or override)
 _registry_host() {
 	local key="$1"
-	local override_var="TUNA_REGISTRY_${key}"
+	local safe_name
+	safe_name="$(_sanitize_name "${key}")"
+	local override_var="TUNA_REGISTRY_${safe_name}"
 	if [[ -n "${!override_var:-}" ]]; then
 		printf '%s' "${!override_var}"
 	else
@@ -75,8 +86,11 @@ registry_ref() {
 	local default_tag
 	default_tag="$(yq -r ".images.\"${name}\".tag // \"\"" "${REGISTRY_MAP}")"
 
-	# Apply overrides
-	local path_override_var="TUNA_IMAGE_PATH_${name}"
+	# Apply overrides (sanitize name: hyphens → underscores for env var)
+	local safe_name
+	safe_name="$(_sanitize_name "${name}")"
+
+	local path_override_var="TUNA_IMAGE_PATH_${safe_name}"
 	local path="${!path_override_var:-${default_path}}"
 
 	local registry_host
@@ -89,8 +103,8 @@ registry_ref() {
 		# Explicit tag or digest passed by caller
 		ref="${ref}${tag_spec}"
 	elif [[ -n "${default_tag}" && "${default_tag}" != "null" ]]; then
-		# Apply tag override if set
-		local tag_override_var="TUNA_IMAGE_TAG_${name}"
+		# Apply tag override if set (sanitize name for env var)
+		local tag_override_var="TUNA_IMAGE_TAG_${safe_name}"
 		local tag="${!tag_override_var:-${default_tag}}"
 		ref="${ref}:${tag}"
 	fi
