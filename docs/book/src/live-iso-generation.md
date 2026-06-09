@@ -1,66 +1,134 @@
 # Live ISO Generation
 
-TunaOS uses a modern, container-native approach to generate bootable Live ISOs from its `bootc` container images. This process is based on the logic pioneered in the `bootc-isos` project and is now integrated into the official `bootc-image-builder`.
+TunaOS generates bootable Live ISOs from its bootc container images using [tacklebox](https://github.com/tuna-os/tacklebox), a Go-based ISO and disk image builder.
 
 ## Overview
 
-The generation process consists of three main stages:
+The generation process:
 
-1.  **Installer Image Building**: A specialized "installer" container is built on top of the base TunaOS image. This layer adds `dracut-live`, `livesys-scripts`, and other components necessary for a live-booting environment.
-2.  **ISO Composition**: The official `bootc-image-builder` container is used to convert the "installer" container into a bootable ISO. It leverages `osbuild` to compose the final artifact.
-3.  **Verification**: The generated ISO is verified using a Lima VM to ensure it boots correctly to a desktop or shell.
+1. **Container image** — a TunaOS image is built (or pulled from GHCR)
+2. **tacklebox** — converts the OCI image into a bootable ISO with `mksquashfs`
+3. **Output** — a hybrid ISO bootable via UEFI, suitable for `dd` to USB or VM boot
+
+```
+OCI Image (ghcr.io/tuna-os/yellowfin:gnome)
+        │
+        ▼
+    tacklebox build --iso
+        │
+        ▼
+  yellowfin-gnome.iso
+```
 
 ## Prerequisites
 
-- `podman` (rootful required for the ISO composition step)
+- `podman` (rootful required for loopback device access)
 - `just` command runner
-- `lima` (for verification)
+- `lima` (optional, for verification)
 - `rclone` (optional, for R2 upload)
+
+tacklebox is automatically downloaded if not installed (`ghcr.io/tuna-os/tacklebox:latest`).
 
 ## Building a Live ISO
 
-To build a Live ISO for a specific variant and flavor, use the `live-iso` Just recipe:
-
 ```bash
-# Example: Build Yellowfin GNOME Live ISO
-just live-iso yellowfin gnome
+# Build from local image
+just iso yellowfin gnome
+
+# Build from GHCR (no local build needed)
+just iso yellowfin gnome repo=ghcr
+
+# Build with a specific tag
+just iso yellowfin gnome repo=ghcr tag=gnome-hwe
 ```
 
-By default, this will:
-1. Build the base container image (if not already present).
-2. Build the live-installer container.
-3. Run `bootc-image-builder` to generate `yellowfin-gnome-live.iso`.
+This runs `scripts/build-iso-tacklebox.sh` which:
+1. Builds or pulls the container image
+2. Downloads tacklebox if not present
+3. Invokes `tacklebox build --iso` with the image reference
+4. Outputs the ISO to `.build/live-iso/<variant>-<flavor>/`
 
-### Customizing the Build
+## Demo and Testing
 
-You can specify the repository source (`local` or `ghcr`), the image tag, and the output format:
-
-```bash
-# Build from GHCR images
-just live-iso variant=albacore flavor=kde repo=ghcr tag=latest
-```
-
-## Troubleshooting Mirror Issues
-
-If you encounter "No more mirrors to try" errors during the `osbuild` phase (common in local environments with unstable mirror access), it is recommended to run the build in **GitHub CI**.
-
-The GitHub Action workflow `.github/workflows/live-iso-bootc.yml` is configured to handle these builds in a clean environment with reliable network access.
-
-## Verification
-
-After building the ISO, you can verify it boots using Lima:
+### Boot ISO in browser via QEMU
 
 ```bash
-just verify-live-iso yellowfin-gnome-live.iso
+just demo-iso skipjack gnome
 ```
 
-This will spin up a headless Lima VM using the ISO and check if it reaches a running state within 60 seconds.
+This builds the ISO, starts a QEMU VM, and opens a noVNC browser window.
 
-## Publishing to R2
+### Boot ISO in Lima VM
 
-If the `UPLOAD_R2` environment variable is set to `true`, the build script will automatically attempt to upload the finished ISO to Cloudflare R2 using `rclone`.
+```bash
+just _lima-novnc myvm iso path/to/image.iso
+```
+
+### Verify ISO boots
+
+```bash
+just verify-iso path/to/image.iso
+```
+
+## ISO Contents
+
+A TunaOS live ISO contains:
+
+- **bootc container rootfs** — the full TunaOS image as a squashfs filesystem
+- **Kernel + initramfs** — dracut-generated with live boot modules
+- **systemd-boot (sd-boot)** — UEFI bootloader
+- **Live environment** — boots directly to the desktop (gdm/sddm login screen)
+
+## Troubleshooting
+
+### "tacklebox: command not found"
+
+tacklebox is auto-downloaded. If the download fails, build from source:
+
+```bash
+export TACKLEBOX_FROM_SOURCE=1
+just iso yellowfin gnome
+```
+
+### "No more mirrors to try" during package install
+
+This typically happens in unstable network environments. Solutions:
+
+- **Use GHCR images**: `just iso yellowfin gnome repo=ghcr` (skips local package install)
+- **Retry**: The build scripts use `dnf_retry` with exponential backoff (4 attempts)
+- **Run in CI**: GitHub Actions runners have reliable network access
+
+### SELinux denials
+
+Builds require `--security-opt label=disable` on SELinux-enabled hosts. This is applied automatically by the Justfile. If you encounter AVC denials, ensure you're running via `just` rather than raw `podman build`.
+
+### Disk space
+
+- ISO builds require ~20 GB free space
+- The `.build/` directory caches intermediate artifacts
+- Clean up with `just clean` (preserves RPM cache) or `just clean-cache` (removes all)
+
+### "image not known" after load
+
+The build pipeline prunes unused images (`podman system prune -af`) to work around a BTRFS storage index bug. If you encounter this:
+- Ensure you're on BTRFS or overlay storage drivers
+- Run `podman system reset` and rebuild
+
+## Publishing to Cloudflare R2
+
+ISOs are published bi-weekly via `publish-isos.yml`. Manual upload:
 
 ```bash
 export UPLOAD_R2=true
-just live-iso yellowfin gnome
+just iso yellowfin gnome repo=ghcr
 ```
+
+Requires `rclone` configured with R2 credentials.
+
+## Architecture Notes
+
+- tacklebox replaced the previous `bootc-image-builder` (osbuild) pipeline
+- Old pipeline: `Containerfile` → `image-builder-cli` → `osbuild` → ISO
+- New pipeline: `Containerfile` → `tacklebox` → ISO
+- tacklebox is faster (~10 min vs ~30 min) and simpler (no osbuild dependency)
+- Multi-env ISOs (multiple desktop environments on one media) are supported by tacklebox but not yet used by TunaOS
