@@ -53,7 +53,7 @@ The single build workflow for all variants. Replaces the old per-variant `build-
   3. **Stage 2** (`build_stage2`): builds `base-hwe`, `base-gdx`, and all desktop flavors (gnome, kde, niri, cosmic) — runs after all stage 1 complete
   4. **Stage 3** (`build_stage3`): builds `<de>-hwe` and `<de>-gdx` — runs after all stage 2 complete
   5. **Stage 4** (`build_stage4`): builds `gnome-gdx-hwe` — runs after all stage 3 complete
-  6. **Artifacts** (`build_artifacts`): builds ISOs (via `just iso-tacklebox`) and QCOW2s for combo cells where `build_iso: true` / `build_qcow2: true`
+  6. **Artifacts** (`build_artifacts_s2`, `build_artifacts_s3`, `build_artifacts_s4`): per-stage artifact jobs build ISOs (via `just iso-tacklebox`) and QCOW2s for combo cells where `build_iso: true` / `build_qcow2: true`. Each stage's artifacts depend only on that stage's image builds.
 - **Key Features**:
   - **DAG enforcement**: jobs use `needs` to enforce stage ordering; within a stage, `fail-fast: false`
   - **Multi-platform**: `linux/amd64`, `linux/amd64/v2`, `linux/arm64` (per-variant; skipjack/bonito omit v2)

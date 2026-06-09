@@ -40,9 +40,10 @@ variants:
     - Uses the generated matrix.
     - Runs on specialized runners (Ubuntu for amd64, ARM runners for arm64).
     - Calls composite actions for setup and build.
-4. **`build_artifacts` (ISO/QCOW2)**:
-    - Triggers after successful image builds.
-    - Uses the matrix to determine which formats to generate.
+4. **`build_artifacts_s{2,3,4}` (ISO/QCOW2 per stage)**:
+    - Per-stage artifact jobs: `build_artifacts_s2` (needs stage 2), `build_artifacts_s3` (needs stage 3), `build_artifacts_s4` (needs stage 4).
+    - Stage-4 failures do not block stage-2/3 ISOs.
+    - Uses per-stage artifact matrices to determine which formats to generate.
     - Uploads to Cloudflare R2 and GitHub Releases.
 
 ## Composite Actions
