@@ -14,13 +14,13 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 
 ### Active Variants
 
-| Variant | Base | Desktop | Status |
-|---------|------|---------|--------|
-| Yellowfin | Fedora 43 | GNOME | Stable |
-| Albacore | AlmaLinux 10 | GNOME | Stable |
-| Skipjack | Fedora 43 | KDE | Beta |
-| Redfin | RHEL 10 | GNOME | Alpha |
-| Bonito | Fedora 44 | GNOME/KDE | In progress |
+| Variant | Base | Desktops | Status |
+|---------|------|----------|--------|
+| Yellowfin | AlmaLinux Kitten 10 | GNOME, KDE, COSMIC, Niri, GNOME 50 | Stable |
+| Albacore | AlmaLinux 10 | GNOME, KDE, COSMIC, Niri, GNOME 50 | Stable |
+| Skipjack | CentOS Stream 10 | GNOME, KDE, COSMIC, Niri, GNOME 50 | Beta |
+| Bonito | Fedora 44 | GNOME, KDE, COSMIC, Niri | In progress |
+| Redfin | RHEL 10 | GNOME | Alpha (local-build only) |
 
 ### Build Health
 
