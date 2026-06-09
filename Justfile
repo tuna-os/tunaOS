@@ -44,7 +44,7 @@ _ensure_check_deps:
 check: _ensure_check_deps
     #!/usr/bin/env bash
     echo "Checking syntax of shell scripts..."
-    /usr/bin/find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
+    find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
     find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -type f -name "*.yaml" | while read -r file; do
         yamllint -c ./.yamllint.yml "$file" || { exit 1; }
     done
@@ -132,7 +132,7 @@ generate-workflows:
 fix:
     #!/usr/bin/env bash
     echo "Fixing syntax of shell scripts..."
-        /usr/bin/find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -iname "*.sh" -type f -exec shfmt --write "{}" ";"
+        find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -iname "*.sh" -type f -exec shfmt --write "{}" ";"
     find . -type f -name "*.just" | while read -r file; do
         just --unstable --fmt -f $file
     done
