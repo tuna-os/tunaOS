@@ -325,8 +325,8 @@ jobs:
               sleep $((15 * i))
             done
 
-            echo "::warning::Rekor remained unavailable after retries; retrying once without transparency log upload"
-            cosign "$subcommand" --tlog-upload=false "$@"
+            echo "::error::Rekor remained unavailable after 3 retries — aborting to preserve Rekor transparency log"
+            return 1
           }
 
           run_cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE_FULL}@${{ steps.push.outputs.remote_image_digest }}"
@@ -394,8 +394,8 @@ jobs:
               sleep $((15 * i))
             done
 
-            echo "::warning::Rekor remained unavailable after retries; retrying once without transparency log upload"
-            cosign "$subcommand" --tlog-upload=false "$@"
+            echo "::error::Rekor remained unavailable after 3 retries — aborting to preserve Rekor transparency log"
+            return 1
           }
 
           run_cosign attest -y \
@@ -709,8 +709,8 @@ jobs:
               sleep $((15 * i))
             done
 
-            echo "::warning::Rekor remained unavailable after retries; retrying once without transparency log upload"
-            cosign "$subcommand" --tlog-upload=false "$@"
+            echo "::error::Rekor remained unavailable after 3 retries — aborting to preserve Rekor transparency log"
+            return 1
           }
 
           run_cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${DIGEST}"
