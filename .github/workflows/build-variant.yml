@@ -25,6 +25,12 @@ jobs:
       stage4_matrix: ${{ steps.set-matrix.outputs.stage4_matrix }}
       artifact_matrix: ${{ steps.set-matrix.outputs.artifact_matrix }}
       artifact_count: ${{ steps.set-matrix.outputs.artifact_count }}
+      artifact_s2_matrix: ${{ steps.set-matrix.outputs.artifact_s2_matrix }}
+      artifact_s3_matrix: ${{ steps.set-matrix.outputs.artifact_s3_matrix }}
+      artifact_s4_matrix: ${{ steps.set-matrix.outputs.artifact_s4_matrix }}
+      artifact_s2_count: ${{ steps.set-matrix.outputs.artifact_s2_count }}
+      artifact_s3_count: ${{ steps.set-matrix.outputs.artifact_s3_count }}
+      artifact_s4_count: ${{ steps.set-matrix.outputs.artifact_s4_count }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -104,7 +110,28 @@ jobs:
           echo "stage3_matrix=$STAGE3_MATRIX" >> $GITHUB_OUTPUT
           echo "stage4_matrix=$STAGE4_MATRIX" >> $GITHUB_OUTPUT
 
-          # Artifact matrix: all stages, only entries that need an ISO or QCOW2.
+          # Per-stage artifact matrices — each stage's ISOs/QCOW2s depend
+          # only on that stage's image builds, avoiding the stage-4 artifact
+          # jail where a gnome-gdx-hwe failure blocked ALL ISOs (F10).
+          make_artifact_matrix() {
+            local STAGE=$1
+            echo "$FULL_MATRIX" | jq -c --argjson stage "$STAGE" '{
+              include: map(
+                select(.stage == $stage and (.build_iso == true or .build_qcow2 == true))
+                | {
+                    variant:       .variant,
+                    variant_emoji: .variant_emoji,
+                    flavor:        .flavor,
+                    build_iso:     .build_iso,
+                    build_qcow2:   .build_qcow2,
+                    base_image:    .base_image,
+                    platform:      "linux/amd64"
+                  }
+              )
+            }'
+          }
+
+          # Legacy combined matrix (kept for backward compat — not used by new per-stage jobs)
           ARTIFACT_MATRIX=$(echo "$FULL_MATRIX" | jq -c '{
             include: map(
               select(.build_iso == true or .build_qcow2 == true)
@@ -120,9 +147,19 @@ jobs:
             )
           }')
           echo "artifact_matrix=$ARTIFACT_MATRIX" >> $GITHUB_OUTPUT
-
           ARTIFACT_COUNT=$(echo "$ARTIFACT_MATRIX" | jq '.include | length')
           echo "artifact_count=$ARTIFACT_COUNT" >> $GITHUB_OUTPUT
+
+          # Per-stage artifact matrices
+          ARTIFACT_S2_MATRIX=$(make_artifact_matrix 2)
+          ARTIFACT_S3_MATRIX=$(make_artifact_matrix 3)
+          ARTIFACT_S4_MATRIX=$(make_artifact_matrix 4)
+          echo "artifact_s2_matrix=$ARTIFACT_S2_MATRIX" >> $GITHUB_OUTPUT
+          echo "artifact_s3_matrix=$ARTIFACT_S3_MATRIX" >> $GITHUB_OUTPUT
+          echo "artifact_s4_matrix=$ARTIFACT_S4_MATRIX" >> $GITHUB_OUTPUT
+          echo "artifact_s2_count=$(echo "$ARTIFACT_S2_MATRIX" | jq '.include | length')" >> $GITHUB_OUTPUT
+          echo "artifact_s3_count=$(echo "$ARTIFACT_S3_MATRIX" | jq '.include | length')" >> $GITHUB_OUTPUT
+          echo "artifact_s4_count=$(echo "$ARTIFACT_S4_MATRIX" | jq '.include | length')" >> $GITHUB_OUTPUT
 
   # ── Stage 1: Base images ────────────────────────────────────────────────────
   # Builds {variant}:base for every variant in parallel.
@@ -217,154 +254,77 @@ jobs:
       sbom: true
     secrets: inherit
 
-  # ── Artifact builds (ISO + QCOW2) ──────────────────────────────────────────
-  # Runs after all image stages are complete. Only triggered on non-PR events
-  # and only when the artifact matrix is non-empty.
-  # ISOs use the bootc-isos approach (bootc-installer), pulling
-  # the already-published GHCR image so we don't rebuild from scratch.
-  build_artifacts:
-    name: "Pkg | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
-    needs: [generate_matrix, build_stage4]
-    if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_count != '0'
+  # ── Artifact builds per stage (ISO + QCOW2) ───────────────────────────────
+  # Each stage's artifacts depend only on that stage's image builds.
+  # This replaces the old single build_artifacts job that had
+  # `needs: build_stage4`, which blocked ALL ISOs on gnome-gdx-hwe.
+  # ISOs pull the already-published GHCR image for their stage.
+
+  build_artifacts_s2:
+    name: "PkgS2 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
+    needs: [generate_matrix, build_stage2]
+    if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_s2_count != '0'
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_matrix) }}
+      matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s2_matrix) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: ./.github/actions/build-artifacts
         with:
-          submodules: recursive
+          variant: ${{ matrix.variant }}
+          flavor: ${{ matrix.flavor }}
+          build_iso: ${{ matrix.build_iso }}
+          build_qcow2: ${{ matrix.build_qcow2 }}
+          r2_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          r2_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          r2_endpoint: ${{ secrets.R2_ENDPOINT }}
+          r2_bucket: ${{ secrets.R2_BUCKET }}
 
-      - name: Maximize build space
-        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y just podman jq rclone golang-go git
-
-      - name: Build Live ISO
-        if: matrix.build_iso == true
-        env:
-          UPLOAD_R2: "true"
-          RCLONE_CONFIG_R2_TYPE: s3
-          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
-          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          RCLONE_CONFIG_R2_REGION: auto
-          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-        run: |
-          sudo just iso-tacklebox \
-            "${{ matrix.variant }}" \
-            "${{ matrix.flavor }}" \
-            ghcr \
-            "${{ matrix.flavor }}-linux-amd64"
-
-      - name: Upload ISO Artifact
-        if: matrix.build_iso == true
-        uses: actions/upload-artifact@v4
+  build_artifacts_s3:
+    name: "PkgS3 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
+    needs: [generate_matrix, build_stage3]
+    if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_s3_count != '0'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s3_matrix) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: ./.github/actions/build-artifacts
         with:
-          name: ${{ matrix.variant }}-${{ matrix.flavor }}-live-iso
-          path: "*.iso"
-          if-no-files-found: warn
+          variant: ${{ matrix.variant }}
+          flavor: ${{ matrix.flavor }}
+          build_iso: ${{ matrix.build_iso }}
+          build_qcow2: ${{ matrix.build_qcow2 }}
+          r2_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          r2_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          r2_endpoint: ${{ secrets.R2_ENDPOINT }}
+          r2_bucket: ${{ secrets.R2_BUCKET }}
 
-      - name: Install QEMU for boot verification
-        if: matrix.build_iso == true
-        run: |
-          sudo apt-get install -y qemu-system-x86 ovmf socat imagemagick
-
-      - name: Boot ISO and capture screenshot
-        if: matrix.build_iso == true
-        timeout-minutes: 10
-        run: |
-          ISO=$(find . -maxdepth 1 -name "*.iso" | head -1)
-          echo "==> Booting $ISO in QEMU (headless, KVM)..."
-
-          # Locate UEFI firmware (path varies by Ubuntu version)
-          OVMF_CODE=""
-          for f in \
-            /usr/share/OVMF/OVMF_CODE_4M.fd \
-            /usr/share/OVMF/OVMF_CODE.fd \
-            /usr/share/edk2/ovmf/OVMF_CODE.fd; do
-            [ -f "$f" ] && OVMF_CODE="$f" && break
-          done
-          OVMF_VARS=""
-          for f in \
-            /usr/share/OVMF/OVMF_VARS_4M.fd \
-            /usr/share/OVMF/OVMF_VARS.fd \
-            /usr/share/edk2/ovmf/OVMF_VARS.fd; do
-            if [ -f "$f" ]; then
-              cp "$f" /tmp/OVMF_VARS.fd
-              OVMF_VARS="/tmp/OVMF_VARS.fd"
-              break
-            fi
-          done
-
-          PFLASH=()
-          if [ -n "$OVMF_CODE" ] && [ -n "$OVMF_VARS" ]; then
-            echo "==> Using UEFI: $OVMF_CODE"
-            PFLASH+=(-drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE")
-            PFLASH+=(-drive "if=pflash,format=raw,file=$OVMF_VARS")
-          else
-            echo "==> OVMF not found, booting in BIOS mode"
-          fi
-
-          sudo qemu-system-x86_64 \
-            -machine type=q35,accel=kvm \
-            -cpu host \
-            -m 4G \
-            -smp 2 \
-            -cdrom "$ISO" \
-            -boot d \
-            "${PFLASH[@]}" \
-            -monitor unix:/tmp/qemu-monitor.sock,server,nowait \
-            -serial file:/tmp/serial.log \
-            -display none \
-            -daemonize
-
-          # Wait for monitor socket
-          for i in $(seq 1 30); do
-            [ -S /tmp/qemu-monitor.sock ] && break
-            sleep 2
-          done
-
-          # Wait for live desktop to fully boot (~4 minutes)
-          echo "==> Waiting 4 minutes for GNOME desktop to appear..."
-          sleep 240
-
-          # Capture screenshot via QEMU monitor
-          echo "screendump /tmp/screenshot.ppm" | \
-            sudo socat - UNIX-CONNECT:/tmp/qemu-monitor.sock
-          sleep 3
-
-          # Convert to PNG
-          if sudo test -f /tmp/screenshot.ppm; then
-            sudo convert /tmp/screenshot.ppm screenshot.png 2>/dev/null || \
-              sudo cp /tmp/screenshot.ppm screenshot.png
-            echo "==> Screenshot captured: $(ls -lh screenshot.png)"
-          else
-            echo "WARNING: screenshot.ppm not found; serial log follows:"
-            sudo cat /tmp/serial.log || true
-          fi
-
-          # Shut down QEMU
-          echo "quit" | sudo socat - UNIX-CONNECT:/tmp/qemu-monitor.sock || true
-
-      - name: Upload boot screenshot
-        if: matrix.build_iso == true
-        uses: actions/upload-artifact@v4
+  build_artifacts_s4:
+    name: "PkgS4 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
+    needs: [generate_matrix, build_stage4]
+    if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_s4_count != '0'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s4_matrix) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: ./.github/actions/build-artifacts
         with:
-          name: ${{ matrix.variant }}-${{ matrix.flavor }}-boot-screenshot
-          path: screenshot.png
-          if-no-files-found: warn
-
-      - name: Build QCOW2
-        if: matrix.build_qcow2 == true
-        run: |
-          sudo scripts/build-qcow2.sh \
-            "ghcr.io/${{ github.repository_owner }}/${{ matrix.variant }}:${{ matrix.flavor }}-linux-amd64"
+          variant: ${{ matrix.variant }}
+          flavor: ${{ matrix.flavor }}
+          build_iso: ${{ matrix.build_iso }}
+          build_qcow2: ${{ matrix.build_qcow2 }}
+          r2_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          r2_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          r2_endpoint: ${{ secrets.R2_ENDPOINT }}
+          r2_bucket: ${{ secrets.R2_BUCKET }}
