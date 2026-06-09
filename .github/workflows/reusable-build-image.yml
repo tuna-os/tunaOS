@@ -104,7 +104,7 @@ jobs:
     env:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_DESC: ${{ inputs.image-desc }}
-      IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
       DEFAULT_TAG: ${{ inputs.default-tag }}
       MAJOR_VERSION: ${{ inputs.major-version }}
       PLATFORMS: ${{ inputs.platforms }}
@@ -446,7 +446,7 @@ jobs:
     env:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_DESC: ${{ inputs.image-desc }}
-      IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
       DEFAULT_TAG: ${{ inputs.default-tag }}
       MAJOR_VERSION: ${{ inputs.major-version }}
       PLATFORMS: ${{ inputs.platforms }}
@@ -733,7 +733,7 @@ jobs:
     env:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_DESC: ${{ inputs.image-desc }}
-      IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
       DEFAULT_TAG: ${{ inputs.default-tag }}
       MAJOR_VERSION: ${{ inputs.major-version }}
       PLATFORMS: ${{ inputs.platforms }}

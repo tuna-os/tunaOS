@@ -175,7 +175,8 @@ systemctl enable tunaos-live-ready.service
 
 _VARIANT="${VARIANT:-tunaos}"
 _FLAVOR="${DESKTOP_FLAVOR:-gnome}"
-_GHCR_REF="ghcr.io/tuna-os/${_VARIANT}:${_FLAVOR}"
+_IMAGE_REGISTRY="${IMAGE_REGISTRY:-ghcr.io}"
+_GHCR_REF="${_IMAGE_REGISTRY}/tuna-os/${_VARIANT}:${_FLAVOR}"
 
 mkdir -p /etc/tuna-installer
 
@@ -193,11 +194,11 @@ EOF
 # images.json — full TunaOS catalog for standalone Flatpak use.
 # default_image points at this variant/flavor. Icons use the GResource paths
 # already bundled in the installer binary.
-python3 - "${_VARIANT}" "${_FLAVOR}" <<'PYEOF'
+python3 - "${_VARIANT}" "${_FLAVOR}" "${_IMAGE_REGISTRY}" <<'PYEOF'
 import json, sys
 
 variant, flavor = sys.argv[1], sys.argv[2]
-base = "ghcr.io/tuna-os"
+base = f"{sys.argv[3]}/tuna-os" if len(sys.argv) > 3 else "ghcr.io/tuna-os"
 default = f"{base}/{variant}:{flavor}"
 
 VARIANTS = [

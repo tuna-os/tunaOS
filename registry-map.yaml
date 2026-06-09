@@ -1,0 +1,85 @@
+# registry-map.yaml — Registry and image reference configuration.
+#
+# Maps logical image names to registry prefixes and paths. Every registry
+# hostname can be overridden via environment variable:
+#   TUNA_REGISTRY_<key>=mirror.example.com
+#
+# Every image tag can be overridden:
+#   TUNA_IMAGE_TAG_<name>=v2.0
+#
+# Default paths can be overridden:
+#   TUNA_IMAGE_PATH_<name>=my-org/my-fork
+#
+# This file is the single source of truth for all container image references
+# used during builds. Scripts should source scripts/_registry.sh and use
+# the registry_ref() function instead of hardcoding registry hostnames.
+#
+# See RFC-009 for design rationale.
+
+registries:
+  ghcr: "ghcr.io"
+  quay: "quay.io"
+  docker: "docker.io"
+
+images:
+  # --- Build inputs (external dependencies) ---
+  common:
+    registry: ghcr
+    path: projectbluefin/common
+    tag: latest
+
+  brew:
+    registry: ghcr
+    path: ublue-os/brew
+    tag: latest
+
+  akmods:
+    registry: ghcr
+    path: ublue-os
+
+  akmods-nvidia-open:
+    registry: ghcr
+    path: ublue-os/akmods-nvidia-open
+
+  # --- Bootc base images ---
+  almalinux-bootc:
+    registry: quay
+    path: almalinuxorg/almalinux-bootc
+    tag: "10"
+
+  almalinux-bootc-kitten:
+    registry: quay
+    path: almalinuxorg/almalinux-bootc
+    tag: "10-kitten"
+
+  centos-bootc:
+    registry: quay
+    path: centos-bootc/centos-bootc
+    tag: stream10
+
+  fedora-bootc:
+    registry: quay
+    path: fedora/fedora-bootc
+    tag: "44"
+
+  # --- Tool images ---
+  coreos-chunkah:
+    registry: quay
+    path: coreos/chunkah
+    tag: latest
+
+  novnc:
+    registry: ghcr
+    path: novnc/novnc
+    tag: latest
+
+  qemu:
+    registry: ghcr
+    path: qemus/qemu
+    tag: latest
+
+  # --- ISO bootc target ---
+  bluefin-iso:
+    registry: ghcr
+    path: hanthor/bluefin
+    tag: lts

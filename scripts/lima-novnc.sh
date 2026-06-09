@@ -6,6 +6,9 @@
 set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
+# Source registry abstraction for configurable mirror support (RFC-009)
+source scripts/_registry.sh
+
 VM_NAME="${1:-}"
 TYPE="${2:-}"
 IMAGE_PATH="${3:-}"
@@ -105,12 +108,12 @@ echo "==> Starting noVNC on port ${NOVNC_PORT}..."
 # Remove any leftover noVNC container from a previous run
 podman rm -f "${VM_NAME}-novnc" 2>/dev/null || true
 
-# ghcr.io/novnc/novnc ships novnc_proxy (websockify wrapper + static files).
+# Use registry-ref resolved novnc image (RFC-009: configurable mirror support).
 # --network host lets the container reach Lima's VNC on 127.0.0.1.
 podman run -d --rm \
 	--name "${VM_NAME}-novnc" \
 	--network host \
-	ghcr.io/novnc/novnc:latest \
+	"$(registry_ref novnc)" \
 	/usr/share/novnc/utils/novnc_proxy \
 	--listen "${NOVNC_PORT}" \
 	--vnc "${VNC_HOST}:${VNC_PORT}"
