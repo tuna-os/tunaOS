@@ -7,8 +7,11 @@
 set -euo pipefail
 
 # --- Configuration ---
-# The rechunker OCI image to use for the process.
-readonly RECHUNKER_IMAGE='ghcr.io/hhd-dev/rechunk:latest'
+# SECURITY: Pinned to a specific SHA256 digest to prevent supply-chain
+# attacks via tag mutation. To update, fetch the new digest:
+#   podman pull ghcr.io/hhd-dev/rechunk:latest
+#   podman inspect ghcr.io/hhd-dev/rechunk:latest --format '{{.Digest}}'
+readonly RECHUNKER_IMAGE='ghcr.io/hhd-dev/rechunk@sha256:8a84bd5a029681aa8db523f927b7c53b5aded9b078b81605ac0a2fedc969f528'
 
 # --- Input Validation ---
 if [ -z "$1" ]; then
