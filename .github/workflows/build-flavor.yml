@@ -43,4 +43,5 @@ jobs:
     with:
       variant: ${{ matrix.variant }}
       flavor: ${{ needs.validate.outputs.flavor }}
-    secrets: inherit
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}

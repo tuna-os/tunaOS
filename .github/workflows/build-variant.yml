@@ -143,7 +143,8 @@ jobs:
       default-tag: ${{ matrix.flavor }}
       publish: ${{ github.event_name != 'pull_request' }}
       sbom: ${{ github.event_name != 'pull_request' }}
-    secrets: inherit
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
   # ── Stage 2: base-hwe, base-gdx, and desktop base flavors ──────────────────
   # Runs only after ALL stage-1 jobs pass. Includes:
@@ -169,7 +170,8 @@ jobs:
       default-tag: ${{ matrix.flavor }}
       publish: true
       sbom: true
-    secrets: inherit
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
   # ── Stage 3: Desktop HWE and GDX flavors ───────────────────────────────────
   # Runs only after ALL stage-2 jobs pass. Includes:
@@ -192,7 +194,8 @@ jobs:
       default-tag: ${{ matrix.flavor }}
       publish: true
       sbom: true
-    secrets: inherit
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
   # ── Stage 4: Combined GDX+HWE flavors ──────────────────────────────────────
   # Runs only after ALL stage-3 jobs pass. Includes:
@@ -215,7 +218,8 @@ jobs:
       default-tag: ${{ matrix.flavor }}
       publish: true
       sbom: true
-    secrets: inherit
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
   # ── Artifact builds (ISO + QCOW2) ──────────────────────────────────────────
   # Runs after all image stages are complete. Only triggered on non-PR events

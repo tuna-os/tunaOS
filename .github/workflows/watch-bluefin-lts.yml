@@ -34,4 +34,6 @@ jobs:
       overrides_dir: system_files_overrides/gnome
       prompt_file: .github/prompts/bluefin-lts-port.md
       lookback_days: ${{ inputs.lookback_days || '7' }}
-    secrets: inherit
+    secrets:
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      COPILOT_PAT: ${{ secrets.COPILOT_PAT }}

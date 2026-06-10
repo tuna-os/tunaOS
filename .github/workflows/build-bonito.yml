@@ -20,4 +20,5 @@ jobs:
     with:
       variant: 'bonito'
       flavor: ${{ inputs.flavor || 'all' }}
-    secrets: inherit
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
