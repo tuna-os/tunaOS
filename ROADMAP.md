@@ -47,10 +47,10 @@ CI pipeline ~40% functional. Active failures tracked in #226, #227, #228, #229, 
 | CONTRIBUTING.md published | ✅ Done | #268 (PR #319) |
 | SECURITY.md published | ✅ Done | #269 (PR #319) |
 | CODE_OF_CONDUCT.md published | ✅ Done | #270 (PR #319) |
-| ROADMAP.md published | 🟡 This PR | #267 |
+| ROADMAP.md published | ✅ Done | #267 |
 | Redfin (RHEL 10) alpha | 🟡 In progress | — |
-| Security hardcoded creds removed | 🟡 PR #318 open | #209–216 |
-| SELinux enforcing | 🟡 PR #318 open | #214 |
+| Security hardcoded creds removed | ✅ Done | #318 |
+| SELinux enforcing | ✅ Done | #318, #322 |
 
 ---
 
