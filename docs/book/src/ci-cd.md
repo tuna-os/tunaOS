@@ -4,13 +4,9 @@ TunaOS uses GitHub Actions for automated building, testing, and distribution of 
 
 ## Architecture
 
-Workflows are **generated** from a central configuration file:
+The CI pipeline is driven by a **central configuration file** (`.github/build-config.yml`) which defines all variants, flavors, platforms, and build stages. A single reusable workflow (`build-variant.yml`) handles all image builds using matrix strategies generated from this config.
 
-```
-.github/build-config.yml  ──→  scripts/generate-workflows.py  ──→  .github/workflows/build-*.yml
-```
-
-This keeps per-variant workflow files in sync and reduces duplication.
+Per-variant trigger workflows (`build-yellowfin.yml`, etc.) are thin wrappers that call the reusable workflow with the variant name — they exist primarily for independent cron schedules and manual dispatch.
 
 ## Workflows
 
@@ -33,13 +29,15 @@ The reusable workflow:
 
 ### Build Live ISOs
 
-**Workflow:** `publish-isos.yml`
+ISOs are built through two paths:
 
-Triggered on:
-- Schedule (bi-weekly)
-- Manual dispatch
+1. **`build-variant.yml` → `build_artifacts` job** — builds ISOs and QCOW2s as part of the main build pipeline, after all image stages complete. Uses tacklebox. Runs on weekly schedule and manual dispatch.
 
-Downloads the latest container image from GHCR, runs tacklebox to produce an ISO, and uploads to Cloudflare R2 (`download.tunaos.org`).
+2. **`publish-isos.yml`** — standalone ISO publishing workflow. Triggered on:
+   - Schedule (weekly, Sunday 22:00 UTC)
+   - Manual dispatch
+
+Downloads the published container image from GHCR, runs tacklebox to produce an ISO, and uploads to Cloudflare R2 (`download.tunaos.org`).
 
 ### ISO E2E Testing
 
@@ -91,9 +89,8 @@ just fix
 
 ## Cache Strategy
 
-- **RPM cache**: Local builds use `.rpm-cache` volume; CI uses GitHub Actions cache
+- **RPM cache**: Local builds use `.rpm-cache` volume shared across all variants; preserved by `just clean`, removed by `just clean-cache`
 - **Build cache**: Podman BuildKit cache mounted at `/var/cache/tunaos`
-- **Cache sync**: `scripts/sync-build-cache.sh` pushes/pulls cache for CI reuse
 
 ## Artifact Signing
 
@@ -120,13 +117,15 @@ Published to `ghcr.io/tuna-os/` on every successful main build. Tags:
 
 | Tag pattern | When |
 |-------------|------|
-| `<flavor>` | Every build (e.g., `gnome`, `kde`) |
+| `<flavor>` | Every build (e.g., `gnome`, `kde`, `gnome-hwe`) — each flavor is its own tag |
+| `<flavor>-<platform>` | Per-architecture tag (e.g., `gnome-linux-amd64`) |
 | `<sha-short>` | Every build (immutable reference) |
-| `latest` | Latest build of default flavor |
+
+There is no monolithic `latest` tag — each flavor has its own independent tag.
 
 ### ISOs
 
-Published bi-weekly to Cloudflare R2 (`download.tunaos.org`). Currently published variants:
+Published weekly to Cloudflare R2 (`download.tunaos.org`). Currently published variants:
 
 | Variant | Flavors |
 |---------|---------|
