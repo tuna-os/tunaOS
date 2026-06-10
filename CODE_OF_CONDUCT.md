@@ -38,8 +38,10 @@ response to any behavior that they deem inappropriate, threatening, offensive,
 or harmful.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
-reported to the project maintainer. All complaints will be reviewed and
-investigated promptly and fairly.
+reported to the project maintainer via [GitHub Issues](https://github.com/tuna-os/tunaOS/issues)
+with the subject prefix "[CoC]" or privately via the
+[Security Advisory](https://github.com/tuna-os/tunaOS/security/advisories/new) form.
+All complaints will be reviewed and investigated promptly and fairly.
 
 ## Attribution
 
