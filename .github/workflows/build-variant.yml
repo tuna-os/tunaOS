@@ -25,6 +25,12 @@ jobs:
       stage4_matrix: ${{ steps.set-matrix.outputs.stage4_matrix }}
       artifact_matrix: ${{ steps.set-matrix.outputs.artifact_matrix }}
       artifact_count: ${{ steps.set-matrix.outputs.artifact_count }}
+      artifact_s2_matrix: ${{ steps.set-matrix.outputs.artifact_s2_matrix }}
+      artifact_s3_matrix: ${{ steps.set-matrix.outputs.artifact_s3_matrix }}
+      artifact_s4_matrix: ${{ steps.set-matrix.outputs.artifact_s4_matrix }}
+      artifact_s2_count: ${{ steps.set-matrix.outputs.artifact_s2_count }}
+      artifact_s3_count: ${{ steps.set-matrix.outputs.artifact_s3_count }}
+      artifact_s4_count: ${{ steps.set-matrix.outputs.artifact_s4_count }}
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -104,7 +110,28 @@ jobs:
           echo "stage3_matrix=$STAGE3_MATRIX" >> $GITHUB_OUTPUT
           echo "stage4_matrix=$STAGE4_MATRIX" >> $GITHUB_OUTPUT
 
-          # Artifact matrix: all stages, only entries that need an ISO or QCOW2.
+          # Per-stage artifact matrices — each stage's ISOs/QCOW2s depend
+          # only on that stage's image builds, avoiding the stage-4 artifact
+          # jail where a gnome-gdx-hwe failure blocked ALL ISOs (F10).
+          make_artifact_matrix() {
+            local STAGE=$1
+            echo "$FULL_MATRIX" | jq -c --argjson stage "$STAGE" '{
+              include: map(
+                select(.stage == $stage and (.build_iso == true or .build_qcow2 == true))
+                | {
+                    variant:       .variant,
+                    variant_emoji: .variant_emoji,
+                    flavor:        .flavor,
+                    build_iso:     .build_iso,
+                    build_qcow2:   .build_qcow2,
+                    base_image:    .base_image,
+                    platform:      "linux/amd64"
+                  }
+              )
+            }'
+          }
+
+          # Legacy combined matrix (kept for backward compat — not used by new per-stage jobs)
           ARTIFACT_MATRIX=$(echo "$FULL_MATRIX" | jq -c '{
             include: map(
               select(.build_iso == true or .build_qcow2 == true)
@@ -120,9 +147,19 @@ jobs:
             )
           }')
           echo "artifact_matrix=$ARTIFACT_MATRIX" >> $GITHUB_OUTPUT
-
           ARTIFACT_COUNT=$(echo "$ARTIFACT_MATRIX" | jq '.include | length')
           echo "artifact_count=$ARTIFACT_COUNT" >> $GITHUB_OUTPUT
+
+          # Per-stage artifact matrices
+          ARTIFACT_S2_MATRIX=$(make_artifact_matrix 2)
+          ARTIFACT_S3_MATRIX=$(make_artifact_matrix 3)
+          ARTIFACT_S4_MATRIX=$(make_artifact_matrix 4)
+          echo "artifact_s2_matrix=$ARTIFACT_S2_MATRIX" >> $GITHUB_OUTPUT
+          echo "artifact_s3_matrix=$ARTIFACT_S3_MATRIX" >> $GITHUB_OUTPUT
+          echo "artifact_s4_matrix=$ARTIFACT_S4_MATRIX" >> $GITHUB_OUTPUT
+          echo "artifact_s2_count=$(echo "$ARTIFACT_S2_MATRIX" | jq '.include | length')" >> $GITHUB_OUTPUT
+          echo "artifact_s3_count=$(echo "$ARTIFACT_S3_MATRIX" | jq '.include | length')" >> $GITHUB_OUTPUT
+          echo "artifact_s4_count=$(echo "$ARTIFACT_S4_MATRIX" | jq '.include | length')" >> $GITHUB_OUTPUT
 
   # ── Stage 1: Base images ────────────────────────────────────────────────────
   # Builds {variant}:base for every variant in parallel.
@@ -221,18 +258,19 @@ jobs:
     secrets:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
-  # ── Artifact builds (ISO + QCOW2) ──────────────────────────────────────────
-  # Runs after all image stages are complete. Only triggered on non-PR events
-  # and only when the artifact matrix is non-empty.
-  # ISOs use the bootc-isos approach (bootc-installer), pulling
-  # the already-published GHCR image so we don't rebuild from scratch.
-  build_artifacts:
-    name: "Pkg | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
-    needs: [generate_matrix, build_stage4]
-    if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_count != '0'
+  # ── Artifact builds per stage (ISO + QCOW2) ───────────────────────────────
+  # Each stage's artifacts depend only on that stage's image builds.
+  # This replaces the old single build_artifacts job that had
+  # `needs: build_stage4`, which blocked ALL ISOs on gnome-gdx-hwe.
+  # ISOs pull the already-published GHCR image for their stage.
+
+  build_artifacts_s2:
+    name: "PkgS2 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
+    needs: [generate_matrix, build_stage2]
+    if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_s2_count != '0'
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_matrix) }}
+      matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s2_matrix) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -241,7 +279,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
-          submodules: recursive
+          variant: ${{ matrix.variant }}
+          flavor: ${{ matrix.flavor }}
+          build_iso: ${{ matrix.build_iso }}
+          build_qcow2: ${{ matrix.build_qcow2 }}
+          r2_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          r2_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          r2_endpoint: ${{ secrets.R2_ENDPOINT }}
+          r2_bucket: ${{ secrets.R2_BUCKET }}
 
       - name: Maximize build space
         uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
@@ -273,9 +318,14 @@ jobs:
         if: matrix.build_iso == true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ matrix.variant }}-${{ matrix.flavor }}-live-iso
-          path: "*.iso"
-          if-no-files-found: warn
+          variant: ${{ matrix.variant }}
+          flavor: ${{ matrix.flavor }}
+          build_iso: ${{ matrix.build_iso }}
+          build_qcow2: ${{ matrix.build_qcow2 }}
+          r2_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          r2_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          r2_endpoint: ${{ secrets.R2_ENDPOINT }}
+          r2_bucket: ${{ secrets.R2_BUCKET }}
 
       - name: Install QEMU for boot verification
         if: matrix.build_iso == true
@@ -363,12 +413,11 @@ jobs:
         if: matrix.build_iso == true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ matrix.variant }}-${{ matrix.flavor }}-boot-screenshot
-          path: screenshot.png
-          if-no-files-found: warn
-
-      - name: Build QCOW2
-        if: matrix.build_qcow2 == true
-        run: |
-          sudo scripts/build-qcow2.sh \
-            "ghcr.io/${{ github.repository_owner }}/${{ matrix.variant }}:${{ matrix.flavor }}-linux-amd64"
+          variant: ${{ matrix.variant }}
+          flavor: ${{ matrix.flavor }}
+          build_iso: ${{ matrix.build_iso }}
+          build_qcow2: ${{ matrix.build_qcow2 }}
+          r2_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
+          r2_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          r2_endpoint: ${{ secrets.R2_ENDPOINT }}
+          r2_bucket: ${{ secrets.R2_BUCKET }}
