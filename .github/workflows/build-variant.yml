@@ -33,7 +33,7 @@ jobs:
       artifact_s4_count: ${{ steps.set-matrix.outputs.artifact_s4_count }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Build Environment
         uses: ./.github/actions/setup-tunaos
@@ -180,7 +180,8 @@ jobs:
       default-tag: ${{ matrix.flavor }}
       publish: ${{ github.event_name != 'pull_request' }}
       sbom: ${{ github.event_name != 'pull_request' }}
-    secrets: inherit
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
   # ── Stage 2: base-hwe, base-gdx, and desktop base flavors ──────────────────
   # Runs only after ALL stage-1 jobs pass. Includes:
@@ -206,7 +207,8 @@ jobs:
       default-tag: ${{ matrix.flavor }}
       publish: true
       sbom: true
-    secrets: inherit
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
   # ── Stage 3: Desktop HWE and GDX flavors ───────────────────────────────────
   # Runs only after ALL stage-2 jobs pass. Includes:
@@ -229,7 +231,8 @@ jobs:
       default-tag: ${{ matrix.flavor }}
       publish: true
       sbom: true
-    secrets: inherit
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
   # ── Stage 4: Combined GDX+HWE flavors ──────────────────────────────────────
   # Runs only after ALL stage-3 jobs pass. Includes:
@@ -252,7 +255,8 @@ jobs:
       default-tag: ${{ matrix.flavor }}
       publish: true
       sbom: true
-    secrets: inherit
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
   # ── Artifact builds per stage (ISO + QCOW2) ───────────────────────────────
   # Each stage's artifacts depend only on that stage's image builds.
@@ -272,7 +276,8 @@ jobs:
       contents: read
       packages: read
     steps:
-      - uses: ./.github/actions/build-artifacts
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           variant: ${{ matrix.variant }}
           flavor: ${{ matrix.flavor }}
@@ -283,19 +288,35 @@ jobs:
           r2_endpoint: ${{ secrets.R2_ENDPOINT }}
           r2_bucket: ${{ secrets.R2_BUCKET }}
 
-  build_artifacts_s3:
-    name: "PkgS3 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
-    needs: [generate_matrix, build_stage3]
-    if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_s3_count != '0'
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s3_matrix) }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - uses: ./.github/actions/build-artifacts
+      - name: Maximize build space
+        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y just podman jq rclone golang-go git
+
+      - name: Build Live ISO
+        if: matrix.build_iso == true
+        env:
+          UPLOAD_R2: "true"
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          sudo just iso-tacklebox \
+            "${{ matrix.variant }}" \
+            "${{ matrix.flavor }}" \
+            ghcr \
+            "${{ matrix.flavor }}-linux-amd64"
+
+      - name: Upload ISO Artifact
+        if: matrix.build_iso == true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           variant: ${{ matrix.variant }}
           flavor: ${{ matrix.flavor }}
@@ -306,19 +327,91 @@ jobs:
           r2_endpoint: ${{ secrets.R2_ENDPOINT }}
           r2_bucket: ${{ secrets.R2_BUCKET }}
 
-  build_artifacts_s4:
-    name: "PkgS4 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
-    needs: [generate_matrix, build_stage4]
-    if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_s4_count != '0'
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s4_matrix) }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - uses: ./.github/actions/build-artifacts
+      - name: Install QEMU for boot verification
+        if: matrix.build_iso == true
+        run: |
+          sudo apt-get install -y qemu-system-x86 ovmf socat imagemagick
+
+      - name: Boot ISO and capture screenshot
+        if: matrix.build_iso == true
+        timeout-minutes: 10
+        run: |
+          ISO=$(find . -maxdepth 1 -name "*.iso" | head -1)
+          echo "==> Booting $ISO in QEMU (headless, KVM)..."
+
+          # Locate UEFI firmware (path varies by Ubuntu version)
+          OVMF_CODE=""
+          for f in \
+            /usr/share/OVMF/OVMF_CODE_4M.fd \
+            /usr/share/OVMF/OVMF_CODE.fd \
+            /usr/share/edk2/ovmf/OVMF_CODE.fd; do
+            [ -f "$f" ] && OVMF_CODE="$f" && break
+          done
+          OVMF_VARS=""
+          for f in \
+            /usr/share/OVMF/OVMF_VARS_4M.fd \
+            /usr/share/OVMF/OVMF_VARS.fd \
+            /usr/share/edk2/ovmf/OVMF_VARS.fd; do
+            if [ -f "$f" ]; then
+              cp "$f" /tmp/OVMF_VARS.fd
+              OVMF_VARS="/tmp/OVMF_VARS.fd"
+              break
+            fi
+          done
+
+          PFLASH=()
+          if [ -n "$OVMF_CODE" ] && [ -n "$OVMF_VARS" ]; then
+            echo "==> Using UEFI: $OVMF_CODE"
+            PFLASH+=(-drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE")
+            PFLASH+=(-drive "if=pflash,format=raw,file=$OVMF_VARS")
+          else
+            echo "==> OVMF not found, booting in BIOS mode"
+          fi
+
+          sudo qemu-system-x86_64 \
+            -machine type=q35,accel=kvm \
+            -cpu host \
+            -m 4G \
+            -smp 2 \
+            -cdrom "$ISO" \
+            -boot d \
+            "${PFLASH[@]}" \
+            -monitor unix:/tmp/qemu-monitor.sock,server,nowait \
+            -serial file:/tmp/serial.log \
+            -display none \
+            -daemonize
+
+          # Wait for monitor socket
+          for i in $(seq 1 30); do
+            [ -S /tmp/qemu-monitor.sock ] && break
+            sleep 2
+          done
+
+          # Wait for live desktop to fully boot (~4 minutes)
+          echo "==> Waiting 4 minutes for GNOME desktop to appear..."
+          sleep 240
+
+          # Capture screenshot via QEMU monitor
+          echo "screendump /tmp/screenshot.ppm" | \
+            sudo socat - UNIX-CONNECT:/tmp/qemu-monitor.sock
+          sleep 3
+
+          # Convert to PNG
+          if sudo test -f /tmp/screenshot.ppm; then
+            sudo convert /tmp/screenshot.ppm screenshot.png 2>/dev/null || \
+              sudo cp /tmp/screenshot.ppm screenshot.png
+            echo "==> Screenshot captured: $(ls -lh screenshot.png)"
+          else
+            echo "WARNING: screenshot.ppm not found; serial log follows:"
+            sudo cat /tmp/serial.log || true
+          fi
+
+          # Shut down QEMU
+          echo "quit" | sudo socat - UNIX-CONNECT:/tmp/qemu-monitor.sock || true
+
+      - name: Upload boot screenshot
+        if: matrix.build_iso == true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           variant: ${{ matrix.variant }}
           flavor: ${{ matrix.flavor }}

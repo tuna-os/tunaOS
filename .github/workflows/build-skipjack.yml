@@ -1,7 +1,7 @@
 name: Build Skipjack
 on:
   schedule:
-    - cron: "0 1 * * *"
+    - cron: "0 5 * * *"  # 05:00 UTC daily (staggered from albacore)
   workflow_dispatch:
     inputs:
       flavor:
@@ -20,4 +20,5 @@ jobs:
     with:
       variant: 'skipjack'
       flavor: ${{ inputs.flavor || 'all' }}
-    secrets: inherit
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}

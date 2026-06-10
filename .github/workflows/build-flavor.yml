@@ -8,14 +8,40 @@ on:
         type: string
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      flavor: ${{ steps.validate.outputs.flavor }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Flavor
+        id: validate
+        run: |
+          FLAVOR="${{ github.event.inputs.flavor }}"
+          # Read valid flavors from build-config.yml
+          VALID_FLAVORS=$(yq -r '.variants[].flavors[].id' .github/build-config.yml | sort -u | tr '\n' ' ')
+          VALID_FLAVORS="all $VALID_FLAVORS"
+
+          if echo " $VALID_FLAVORS " | grep -q " $FLAVOR "; then
+            echo "flavor=$FLAVOR" >> $GITHUB_OUTPUT
+            echo "✅ Flavor '$FLAVOR' is valid"
+          else
+            echo "::error::Invalid flavor '$FLAVOR'. Valid flavors: $VALID_FLAVORS"
+            exit 1
+          fi
+
   build:
+    needs: validate
     strategy:
       fail-fast: false
       matrix:
         variant: [yellowfin, albacore, skipjack, bonito]
-    name: Build ${{ matrix.variant }}:${{ github.event.inputs.flavor }}
+    name: Build ${{ matrix.variant }}:${{ needs.validate.outputs.flavor }}
     uses: ./.github/workflows/build-variant.yml
     with:
       variant: ${{ matrix.variant }}
-      flavor: ${{ github.event.inputs.flavor }}
-    secrets: inherit
+      flavor: ${{ needs.validate.outputs.flavor }}
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}

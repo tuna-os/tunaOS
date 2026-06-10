@@ -14,13 +14,13 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 
 ### Active Variants
 
-| Variant | Base | Desktop | Status |
-|---------|------|---------|--------|
-| Yellowfin | Fedora 43 | GNOME | Stable |
-| Albacore | AlmaLinux 10 | GNOME | Stable |
-| Skipjack | Fedora 43 | KDE | Beta |
-| Redfin | RHEL 10 | GNOME | Alpha |
-| Bonito | Fedora 44 | GNOME/KDE | In progress |
+| Variant | Base | Desktops | Status |
+|---------|------|----------|--------|
+| Yellowfin | AlmaLinux Kitten 10 | GNOME, KDE, COSMIC, Niri, GNOME 50 | Stable |
+| Albacore | AlmaLinux 10 | GNOME, KDE, COSMIC, Niri, GNOME 50 | Stable |
+| Skipjack | CentOS Stream 10 | GNOME, KDE, COSMIC, Niri, GNOME 50 | Beta |
+| Bonito | Fedora 44 | GNOME, KDE, COSMIC, Niri | In progress |
+| Redfin | RHEL 10 | GNOME | Alpha (local-build only) |
 
 ### Build Health
 
@@ -47,10 +47,10 @@ CI pipeline ~40% functional. Active failures tracked in #226, #227, #228, #229, 
 | CONTRIBUTING.md published | ✅ Done | #268 (PR #319) |
 | SECURITY.md published | ✅ Done | #269 (PR #319) |
 | CODE_OF_CONDUCT.md published | ✅ Done | #270 (PR #319) |
-| ROADMAP.md published | 🟡 This PR | #267 |
+| ROADMAP.md published | ✅ Done | #267 |
 | Redfin (RHEL 10) alpha | 🟡 In progress | — |
-| Security hardcoded creds removed | 🟡 PR #318 open | #209–216 |
-| SELinux enforcing | 🟡 PR #318 open | #214 |
+| Security hardcoded creds removed | ✅ Done | #318 |
+| SELinux enforcing | ✅ Done | #318, #322 |
 
 ---
 

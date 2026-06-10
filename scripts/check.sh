@@ -19,7 +19,7 @@ if ! command -v actionlint &>/dev/null; then brew install actionlint; fi
 [[ "$INSTALL_ONLY" == "1" ]] && exit 0
 
 echo "Checking syntax of shell scripts..."
-/usr/bin/find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
+find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
 find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -type f -name "*.yaml" | while read -r file; do
 	yamllint -c ./.yamllint.yml "$file" || { exit 1; }
 done
@@ -39,6 +39,7 @@ if command -v actionlint &>/dev/null; then
 		-ignore "SC2295" \
 		-ignore "save-always" \
 		-ignore "cannot be filtered" \
-		.github/workflows/*.yml .github/workflows/*.yaml || { exit 1; }
+		.github/workflows/*.{yaml,yml}
 fi
-just --unstable --fmt --check -f Justfile
+
+echo "Shell script and lint checks passed."

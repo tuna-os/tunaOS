@@ -2,15 +2,17 @@
 
 ## Supported Versions
 
-TunaOS images are built weekly and published with the `:latest` tag.
-Only the most recent build is actively supported.
+TunaOS images are built daily with weekly ISO publications. Images are
+published with per-flavor tags (e.g. `gnome`, `kde`, `gnome-hwe`).
+Only the most recent build of each flavor is actively supported.
+See [VERSIONING.md](VERSIONING.md) for the full tagging scheme.
 
 | Variant | Base OS | Status |
 |---|---|---|
 | Yellowfin | AlmaLinux Kitten 10 | ✅ Supported |
 | Albacore | AlmaLinux 10 | ✅ Supported |
-| Skipjack | CentOS Stream 10 | ⚠️ Experimental |
-| Bonito | Fedora | ⚠️ Incomplete |
+| Skipjack | CentOS Stream 10 | ⚠️ Beta |
+| Bonito | Fedora 44 | ⚠️ In progress |
 | Redfin | RHEL 10 | 🔒 Local-build only |
 
 ## Reporting a Vulnerability

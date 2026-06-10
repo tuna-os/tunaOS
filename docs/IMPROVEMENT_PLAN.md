@@ -1,5 +1,10 @@
 # TunaOS — Robustness, Security & E2E Testing Plan
 
+> **📅 Last updated: 2026-06-10**
+> This document is a historical record of the May 2026 improvement sprint.
+> Much of the planned work has been completed. See individual phase status
+> below and [ROADMAP.md](../ROADMAP.md) for current priorities.
+
 Status: 2026-05-24 — substantial progress. Eighteen commits landed on
 main across two sessions plus two upstream PRs merged. Phases 1, 2,
 3a, 4.1, 4.2 effectively complete; 4.4 partial; remaining work below.

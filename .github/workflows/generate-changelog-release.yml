@@ -20,6 +20,11 @@ on:
         default: false
         required: false
 
+env:
+  # IMAGE_REGISTRY: configurable via repo variable for mirror/air-gapped users.
+  # Defaults to ghcr.io/<owner> if not set.
+  IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
+
 jobs:
   generate-release:
     runs-on: ubuntu-latest
@@ -46,8 +51,8 @@ jobs:
           CANDIDATES="yellowfin albacore skipjack bonito"
           AVAILABLE=""
           for img in $CANDIDATES; do
-            CURR_REF="docker://ghcr.io/tuna-os/${img}:${STREAM}-${CURR}"
-            PREV_REF="docker://ghcr.io/tuna-os/${img}:${STREAM}-${PREV}"
+            CURR_REF="docker://${IMAGE_REGISTRY}/${img}:${STREAM}-${CURR}"
+            PREV_REF="docker://${IMAGE_REGISTRY}/${img}:${STREAM}-${PREV}"
             if skopeo inspect --raw "${CURR_REF}" >/dev/null 2>&1 && \
                skopeo inspect --raw "${PREV_REF}" >/dev/null 2>&1; then
               AVAILABLE="${AVAILABLE} ${img}"
@@ -67,7 +72,7 @@ jobs:
         if: steps.images.outputs.images != ''
         uses: hanthor/changelog-action@0f9fc8c023d1f28f69e31ad64e2161d308a56284 # master as of 2026-03-24
         with:
-          registry: "ghcr.io/tuna-os/"
+          registry: "${{ env.IMAGE_REGISTRY }}/"
           cosign-key: "https://raw.githubusercontent.com/tuna-os/tunaOS/main/cosign.pub"
           images: ${{ steps.images.outputs.images }}
           stream: ${{ matrix.stream }}

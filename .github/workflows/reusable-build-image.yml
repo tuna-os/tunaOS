@@ -104,7 +104,7 @@ jobs:
     env:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_DESC: ${{ inputs.image-desc }}
-      IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
       DEFAULT_TAG: ${{ inputs.default-tag }}
       MAJOR_VERSION: ${{ inputs.major-version }}
       PLATFORMS: ${{ inputs.platforms }}
@@ -142,7 +142,7 @@ jobs:
 
 
       - name: Cache DNF/RPM Packages
-        uses: actions/cache@v5.0.3
+        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
         id: dnf-cache
         with:
           path: |
@@ -325,8 +325,8 @@ jobs:
               sleep $((15 * i))
             done
 
-            echo "::warning::Rekor remained unavailable after retries; retrying once without transparency log upload"
-            cosign "$subcommand" --tlog-upload=false "$@"
+            echo "::error::Rekor remained unavailable after 3 retries — aborting to preserve Rekor transparency log"
+            return 1
           }
 
           run_cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE_FULL}@${{ steps.push.outputs.remote_image_digest }}"
@@ -394,8 +394,8 @@ jobs:
               sleep $((15 * i))
             done
 
-            echo "::warning::Rekor remained unavailable after retries; retrying once without transparency log upload"
-            cosign "$subcommand" --tlog-upload=false "$@"
+            echo "::error::Rekor remained unavailable after 3 retries — aborting to preserve Rekor transparency log"
+            return 1
           }
 
           run_cosign attest -y \
@@ -446,7 +446,7 @@ jobs:
     env:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_DESC: ${{ inputs.image-desc }}
-      IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
       DEFAULT_TAG: ${{ inputs.default-tag }}
       MAJOR_VERSION: ${{ inputs.major-version }}
       PLATFORMS: ${{ inputs.platforms }}
@@ -461,7 +461,7 @@ jobs:
           echo '{"default":[{"type":"insecureAcceptAnything"}]}' | jq . > /etc/containers/policy.json
 
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Exit on failure
         env:
@@ -682,7 +682,7 @@ jobs:
       attestations: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v6
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Login to GitHub Container Registry
         if: ${{ inputs.publish }}
@@ -709,14 +709,14 @@ jobs:
               sleep $((15 * i))
             done
 
-            echo "::warning::Rekor remained unavailable after retries; retrying once without transparency log upload"
-            cosign "$subcommand" --tlog-upload=false "$@"
+            echo "::error::Rekor remained unavailable after 3 retries — aborting to preserve Rekor transparency log"
+            return 1
           }
 
           run_cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${DIGEST}"
 
       - name: Attest Build Provenance (SLSA)
-        uses: actions/attest-build-provenance@v2
+        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
         with:
           subject-name: ${{ needs.manifest.outputs.image }}
           subject-digest: ${{ needs.manifest.outputs.digest }}
@@ -733,7 +733,7 @@ jobs:
     env:
       IMAGE_NAME: ${{ inputs.image-name }}
       IMAGE_DESC: ${{ inputs.image-desc }}
-      IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
       DEFAULT_TAG: ${{ inputs.default-tag }}
       MAJOR_VERSION: ${{ inputs.major-version }}
       PLATFORMS: ${{ inputs.platforms }}

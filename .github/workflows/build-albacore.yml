@@ -1,7 +1,7 @@
 name: Build Albacore
 on:
   schedule:
-    - cron: "0 1 * * *"
+    - cron: "0 3 * * *"  # 03:00 UTC daily (staggered from yellowfin)
   workflow_dispatch:
     inputs:
       flavor:
@@ -20,4 +20,5 @@ jobs:
     with:
       variant: 'albacore'
       flavor: ${{ inputs.flavor || 'all' }}
-    secrets: inherit
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}

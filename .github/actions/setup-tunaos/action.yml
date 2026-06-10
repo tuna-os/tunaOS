@@ -14,13 +14,13 @@ runs:
     - name: Install yq
       run: |
         if ! command -v yq &> /dev/null; then
-          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
+          sudo wget https://github.com/mikefarah/yq/releases/download/v4.44.5/yq_linux_amd64 -O /usr/bin/yq
           sudo chmod +x /usr/bin/yq
         fi
       shell: bash
 
     - name: Setup Homebrew
-      uses: Homebrew/actions/setup-homebrew@main
+      uses: Homebrew/actions/setup-homebrew@f830e99d47c69efee99f1ddbf18a8e3144d1b93e
 
     - name: Install Just
       run: |
