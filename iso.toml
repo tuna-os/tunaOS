@@ -1,11 +1,14 @@
-# FIXME: This references stale hanthor/bluefin image. Update to correct
-# tuna-os image before enabling ISO builds with this kickstart.
-# [customizations.installer.kickstart]
-# contents = """
+# NOTE: This iso.toml is the legacy osbuild/bootc-image-builder config.
+# ISO builds now use tacklebox (see scripts/build-iso-tacklebox.sh).
+# The kickstart %post below has been disabled — the installed image
+# should already be the correct TunaOS variant. If re-enabled, the
+# image ref MUST be overridden per variant at build time.
+[customizations.installer.kickstart]
+contents = """
 # %post
-# bootc switch --mutate-in-place --transport registry --enforce-container-sigpolicy ghcr.io/tuna-os/yellowfin:lts
+# bootc switch --mutate-in-place --transport registry --enforce-container-sigpolicy ghcr.io/tuna-os/yellowfin:gnome
 # %end
-# """
+"""
 
 [customizations.installer.modules]
 enable = [
