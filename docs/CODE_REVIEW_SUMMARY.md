@@ -1,5 +1,12 @@
 # TunaOS Build System & CI Code Review Summary
 
+> **⚠️ This document captures the initial code review findings and recommendations from May 2026.**
+> The CI/CD architecture has evolved significantly since this review was written.
+> The current implementation uses `build-variant.yml` (unified orchestrator),
+> `reusable-build-image.yml` (per-cell builder), and per-stage artifact jobs
+> (`build_artifacts_s{2,3,4}`). See [`build-pipeline.md`](build-pipeline.md) for the
+> current architecture and [`CI_SPEC.md`](CI_SPEC.md) for the target specification.
+
 ## Executive Summary
 
 The TunaOS repository has a well-structured build system using modern tools like `just`, Podman, and GitHub Actions. However, there were several opportunities for improvement in maintainability, performance, and developer experience.
