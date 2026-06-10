@@ -18,8 +18,8 @@ TunaOS is a **bootc-based OS image builder** — it produces bootable OCI contai
 |---|---|---|
 | `yellowfin` | AlmaLinux Kitten 10 | Stable |
 | `albacore` | AlmaLinux 10 | Stable |
-| `skipjack` | CentOS Stream 10 | Experimental |
-| `bonito` | Fedora 44 | Experimental |
+| `skipjack` | CentOS Stream 10 | Beta |
+| `bonito` | Fedora 44 | In progress |
 
 ### Flavors (layered via 4-stage DAG; see `.github/build-config.yml` for full matrix)
 
