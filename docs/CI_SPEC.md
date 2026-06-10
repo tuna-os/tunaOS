@@ -1,7 +1,16 @@
 # Unified CI/CD Workflow Specification
 
+> **⚠️ This is a target/aspirational specification — the current implementation differs.**
+> The pipeline has evolved during implementation. See [`build-pipeline.md`](build-pipeline.md)
+> for the currently deployed architecture. Key differences from this spec:
+> - **Orchestrator**: \`build-variant.yml\` (not \`main-build.yml\`)
+> - **Matrix generation**: \`generate_matrix\` job (not \`detect_changes\`)
+> - **Artifact jobs**: Per-stage \`build_artifacts_s{2,3,4}\` (not single \`build_artifacts\`)
+> - **Composite actions**: Single \`build-artifacts\` action (not three separate actions)
+
 ## Overview
-This specification defines the new matrix-driven CI/CD pipeline for TunaOS, consolidating redundant workflows and optimizing the build process.
+This specification defines the target design for the matrix-driven CI/CD pipeline
+for TunaOS, consolidating redundant workflows and optimizing the build process.
 
 ## Central Configuration (`.github/build-config.yml`)
 A single YAML file will serve as the source of truth for all buildable variants, flavors, and platforms.
