@@ -12,15 +12,15 @@ tunaOS is a collection of bootc-based Atomic desktop operating system images. It
 
 ## From Fedora Silverblue / Kinoite / Sericea
 
-Fedora Atomic desktops use rpm-ostree natively. Migration to an AlmaLinux-based tunaOS variant is a rebase operation.
+Fedora Atomic desktops use rpm-ostree natively. Migration to a tunaOS variant is a rebase operation. Yellowfin and Albacore are AlmaLinux-based; Skipjack is CentOS Stream 10; Bonito is Fedora 44 (see [ROADMAP.md](ROADMAP.md) for variant details).
 
 ### Step 1: Identify your target variant
 
 | Current | Target tunaOS Variant | Base |
 |---------|----------------------|------|
-| Fedora Silverblue (GNOME) | Yellowfin GNOME | AlmaLinux 10 |
-| Fedora Kinoite (KDE) | Yellowfin KDE | AlmaLinux 10 |
-| Fedora Sericea (Sway) | Albacore (choose desktop) | AlmaLinux 10 |
+| Fedora Silverblue (GNOME) | Yellowfin GNOME | AlmaLinux Kitten 10 |
+| Fedora Kinoite (KDE) | Yellowfin KDE | AlmaLinux Kitten 10 |
+| Fedora Sericea (Sway) | Albacore COSMIC or Niri | AlmaLinux 10 |
 
 ### Step 2: Rebase
 
@@ -59,7 +59,7 @@ sudo systemctl reboot
 
 ## From Universal Blue (Bluefin, Aurora, Bazzite)
 
-Universal Blue images are Fedora-based. Migration to tunaOS (AlmaLinux-based) is a rebase, but note:
+Universal Blue images are Fedora-based. Migration to an EL-based tunaOS variant (Yellowfin/Albacore/Skipjack) is a rebase, but note:
 
 - **Package layering differences**: Some layered packages may not be available in AlmaLinux repositories or may have different names.
 - **Container tooling**: tunaOS uses `podman` and `docker` via the same container tools. `distrobox` is compatible.
@@ -177,7 +177,7 @@ flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flat
 
 ## Known Limitations
 
-1. **NVIDIA drivers**: GDX variant recommended for NVIDIA hardware. See [VARIANT_GUIDE.md](VARIANT_GUIDE.md).
+1. **NVIDIA drivers**: GDX variant recommended for NVIDIA hardware. See [ROADMAP.md](ROADMAP.md) for available variants and flavors.
 2. **Secure Boot**: Requires manual enrollment of MOK key on first boot after migration.
 3. **Dual boot**: Not recommended or tested with tunaOS Atomic images.
 4. **Fingerprint readers**: May require additional driver configuration.
@@ -192,4 +192,4 @@ flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flat
 
 ---
 
-*For variant-specific details, see the [Variant Guide](VARIANT_GUIDE.md) and [ROADMAP.md](ROADMAP.md).*
+*For variant-specific details, see [ROADMAP.md](ROADMAP.md) and the [Building TunaOS](docs/book/src/building.md) guide.*
