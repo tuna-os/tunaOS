@@ -1,3 +1,7 @@
+# DEPRECATED: Containerfile.dx is superseded by Containerfile.gdx.
+# DX flavor is not present in .github/build-config.yml and has zero
+# CI consumers. This file is retained for reference only.
+# TODO: Remove after verifying no external downstream consumers.
 ARG BASE_IMAGE
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR

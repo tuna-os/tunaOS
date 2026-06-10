@@ -311,6 +311,9 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
+      # gnome-gdx-hwe (stage 4) omitted — blocked by gnome-shell-49 vs
+      # gnome-shell-common-48 file conflict on CentOS Stream 10.
+      # See: tuna-os/github-copr#23, IMPROVEMENT_PLAN Phase 1.1
       - id: gnome50-hwe
         stage: 3
         build_image: true
@@ -339,6 +342,10 @@ variants:
     akmods: "ublue-os"
     # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
     platforms: ["linux/amd64", "linux/arm64"]
+    # Flavor strategy: Fedora ships the latest kernel and GNOME by default,
+    # so HWE layers are only provided for gnome (the primary desktop).
+    # gnome50 is EL10-specific and not needed on Fedora.
+    # gnome-gdx-hwe (stage 4) omitted for now — kernel compatibility TBD.
     flavors:
       # ── Stage 1 ────────────────────────────────────────────────────────────
       - id: base

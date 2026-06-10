@@ -135,8 +135,9 @@ just --list              # Show all available commands
 ### CI/CD
 
 - **Central matrix config:** `.github/build-config.yml` — single source of truth; adding a variant only requires updating this file
-- **Main workflow:** `.github/workflows/reusable-build-image.yml` — multi-platform (amd64, amd64v2, arm64), signs with cosign, generates SBOMs
-- **Per-variant workflows** (`build-yellowfin.yml`, etc.) call the reusable workflow
+- **Orchestrator:** `.github/workflows/build-variant.yml` — DAG with 4 stages + artifact builds; needs-based stage ordering
+- **Reusable job:** `.github/workflows/reusable-build-image.yml` — multi-platform (amd64, amd64v2, arm64), cosign sign, SBOMs
+- **Trigger wrappers:** per-variant workflows (`build-yellowfin.yml`, etc.) call `build-variant.yml`
 - CI timeout: **60 minutes maximum** per build
 
 ### Key Files
@@ -144,10 +145,13 @@ just --list              # Show all available commands
 | File/Dir | Purpose |
 |---|---|
 | `Justfile` | All build commands and task automation |
-| `Containerfile` | Main multi-stage build definition |
-| `Containerfile.dx` | DX flavor definition |
-| `Containerfile.gdx` | GDX flavor definition (Containerfile.hwe-based NVIDIA/CUDA) |
-| `Containerfile.hwe` | HWE layer definition (coreos kernel, akmods) |
+<<<<<<< HEAD
+| `Containerfile` | Main multi-stage build definition (base, gnome, kde, niri, cosmic) |
+| `Containerfile.gdx` | GDX flavor definition (NVIDIA drivers + CUDA + gnome/kde/niri/cosmic DE stages) |
+| `Containerfile.hwe` | HWE layer definition (coreos kernel, akmods + gnome/kde/niri/cosmic DE stages) |
+| `Containerfile.final` | Labels-only stage — applies OCI annotations to rechunked base image |
+| `Containerfile.dx` | ⚠️ DEPRECATED — reference only. Superseded by Containerfile.gdx. No CI consumers. |
+>>>>>>> 07f3b68 ([guide] fix: stagger variant cron schedules (F7), add flavor validation (F8), sync AGENT_GUIDE (F6))
 | `build_scripts/lib.sh` | Shared functions; OS detection logic |
 | `build_scripts/overrides/` | Variant-specific script overrides |
 | `system_files/` | Files copied into every image (`etc/`, `usr/`) |
@@ -165,7 +169,6 @@ Overridable at build time:
 |---|---|
 | `GITHUB_REPOSITORY_OWNER` | `tuna-os` |
 | `DEFAULT_TAG` | `latest` |
-| `BIB_IMAGE` | `quay.io/centos-bootc/bootc-image-builder:latest` |
 | `PLATFORM` | auto-detected from arch |
 | `BASE_IMAGE` | `quay.io/almalinuxorg/almalinux-bootc` |
 | `BASE_IMAGE_TAG` | `10` |

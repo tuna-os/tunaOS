@@ -11,12 +11,9 @@
 enable = [
   "org.fedoraproject.Anaconda.Modules.Storage"
 ]
-# SECURITY: Security module enabled for ISO builds. Container signature
-# verification is required (see configure_lts_iso_anaconda.sh for image refs).
-# Network/Services/Users/Subscription/Timezone disabled as they're configured
-# via kickstart (currently commented out; re-enable modules when kickstart is restored).
 disable = [
   "org.fedoraproject.Anaconda.Modules.Network",
+  "org.fedoraproject.Anaconda.Modules.Security",
   "org.fedoraproject.Anaconda.Modules.Services",
   "org.fedoraproject.Anaconda.Modules.Users",
   "org.fedoraproject.Anaconda.Modules.Subscription",
