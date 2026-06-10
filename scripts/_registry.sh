@@ -76,7 +76,7 @@ registry_ref() {
 	default_tag="$(yq -r ".images.\"${name}\".tag // \"\"" "${REGISTRY_MAP}")"
 
 	# Apply overrides
-	local path_override_var="TUNA_IMAGE_PATH_${name}"
+	local path_override_var="TUNA_IMAGE_PATH_${name//-/_}"
 	local path="${!path_override_var:-${default_path}}"
 
 	local registry_host
@@ -90,7 +90,7 @@ registry_ref() {
 		ref="${ref}${tag_spec}"
 	elif [[ -n "${default_tag}" && "${default_tag}" != "null" ]]; then
 		# Apply tag override if set
-		local tag_override_var="TUNA_IMAGE_TAG_${name}"
+		local tag_override_var="TUNA_IMAGE_TAG_${name//-/_}"
 		local tag="${!tag_override_var:-${default_tag}}"
 		ref="${ref}:${tag}"
 	fi
