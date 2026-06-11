@@ -18,7 +18,7 @@ case "${1:-}" in
 		dnf -y config-manager setopt copr:copr.fedorainfracloud.org:yalter:niri-git.priority=1
 
 		# Install greetd display manager from Fedora repos (no COPR needed)
-		dnf install -y greetd greetd-selinux
+		dnf_retry -y install greetd greetd-selinux
 
 		# Install Niri window manager from yalter/niri-git COPR
 		dnf -y --enablerepo copr:copr.fedorainfracloud.org:yalter:niri-git install \
@@ -57,7 +57,7 @@ case "${1:-}" in
 			echo "Skipping fcitx5-mozc (not available in repos)"
 		fi
 
-		dnf -y install --setopt=install_weak_deps=False \
+		dnf_retry -y install --setopt=install_weak_deps=False \
 			brightnessctl \
 			cava \
 			chezmoi \
@@ -117,14 +117,14 @@ case "${1:-}" in
 			xorg-x11-server-Xwayland
 
 		# Install Qt/KDE theming support for visual consistency
-		dnf install -y --setopt=install_weak_deps=False \
+		dnf_retry -y install --setopt=install_weak_deps=False \
 			kf6-kirigami \
 			qt6ct \
 			plasma-breeze \
 			kf6-qqc2-desktop-style
 
 		# Install fonts
-		dnf install -y \
+		dnf_retry -y install \
 			default-fonts-core-emoji \
 			google-noto-color-emoji-fonts \
 			google-noto-emoji-fonts \
@@ -258,23 +258,23 @@ case "${1:-}" in
 
 	# Attempt to install greetd-selinux separately (handles greetd-selinux conflict)
 	# Use --nobest and --allowerasing to resolve EL10 policy conflicts
-	dnf -y install --setopt=install_weak_deps=False --nobest --allowerasing \
+	dnf_retry -y install --setopt=install_weak_deps=False --nobest --allowerasing \
 		greetd-selinux || true
 
 	# Attempt to install GNOME keyring components (may fail if not in repos)
-	dnf -y install --setopt=install_weak_deps=False \
+	dnf_retry -y install --setopt=install_weak_deps=False \
 		gnome-keyring \
 		gnome-keyring-pam || true
 
 	# Install Qt/KDE theming support for better visual consistency
-	dnf install -y --setopt=install_weak_deps=False \
+	dnf_retry -y install --setopt=install_weak_deps=False \
 		kf6-kirigami \
 		qt6ct \
 		plasma-breeze \
 		kf6-qqc2-desktop-style
 
 	# Install fonts
-	dnf install -y \
+	dnf_retry -y install \
 		default-fonts-core-emoji \
 		google-noto-color-emoji-fonts \
 		google-noto-emoji-fonts \
