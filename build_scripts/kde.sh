@@ -16,7 +16,7 @@ case "${1:-}" in
 		# Fedora-only set: these are Aurora's KDE package selection
 		# (ublue-os/aurora build_files/base/01-packages.sh FEDORA_PACKAGES).
 		# All available in Fedora repos; safe to install in one transaction.
-		dnf -y install \
+		dnf_retry -y install \
 			-x PackageKit \
 			-x PackageKit-command-not-found \
 			sddm \
@@ -60,7 +60,7 @@ case "${1:-}" in
 			"Printing Client" \
 			"Standard"
 
-		dnf -y install \
+		dnf_retry -y install \
 			-x PackageKit \
 			-x PackageKit-command-not-found \
 			sddm \
@@ -97,7 +97,7 @@ case "${1:-}" in
 		# Install fcitx5 input method support (Asian languages) if available
 		# Not available in EPEL10 yet
 		if dnf repoquery --available fcitx5 2>/dev/null | grep -q .; then
-			dnf -y install \
+			dnf_retry -y install \
 				fcitx5 \
 				fcitx5-chewing \
 				fcitx5-chinese-addons \
@@ -115,7 +115,7 @@ case "${1:-}" in
 
 		# Version lock critical KDE packages to prevent partial upgrades causing black screens
 		# Reference: https://github.com/ublue-os/aurora/issues/1227
-		dnf -y install python3-dnf-plugin-versionlock
+		dnf_retry -y install python3-dnf-plugin-versionlock
 		dnf versionlock add plasma-desktop
 		dnf versionlock add "qt6-*"
 	fi

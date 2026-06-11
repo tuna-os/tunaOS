@@ -8,18 +8,18 @@ source /run/context/build_scripts/lib.sh
 
 # Install OS-specific branding
 if [[ $IS_FEDORA == true ]]; then
-	dnf -y install fedora-logos
+	dnf_retry -y install fedora-logos
 fi
 if [[ $IS_ALMALINUX == true ]]; then
-	dnf -y install almalinux-backgrounds almalinux-logos
+	dnf_retry -y install almalinux-backgrounds almalinux-logos
 fi
 if [[ $IS_CENTOS == true ]]; then
-	dnf -y install centos-backgrounds centos-logos
+	dnf_retry -y install centos-backgrounds centos-logos
 fi
 # RHEL: no redistribution-safe branding packages; skip OS branding install
 
 # Ensure unzip is available for font installation in 26-packages-post.sh
-dnf -y install unzip
+dnf_retry -y install unzip
 
 if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
 	/run/context/build_scripts/kde.sh extra

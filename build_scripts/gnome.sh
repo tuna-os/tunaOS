@@ -36,7 +36,7 @@ case "${1:-}" in
 		# --noautoremove keeps reverse-deps alive; they'll re-resolve to the
 		# COPR's gnome-shell-49 in the next install.
 		if rpm -q gnome-shell-common &>/dev/null; then
-			warn_on_fail dnf -y remove --noautoremove gnome-shell-common
+			warn_on_fail dnf_retry -y remove --noautoremove gnome-shell-common
 		fi
 
 		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
@@ -45,7 +45,7 @@ case "${1:-}" in
 			# selinux-policy 43.x from COPR is required for GDM 50 userdb socket policy;
 			# the base EL10 42.x policy denies the Varlink socket even in permissive mode.
 			dnf -y upgrade glib2 fontconfig
-			dnf -y install --allowerasing gnome50-el10-compat
+			dnf_retry -y install --allowerasing gnome50-el10-compat
 		else
 			# GNOME 49 also requires glib2 >= 2.82 (g_variant_builder_init_static) and
 			# fontconfig >= 2.17.0 from COPR — same ABI requirements as GNOME 50.
@@ -57,7 +57,7 @@ case "${1:-}" in
 			# that permits xdm_t to create the userdb Varlink socket in enforcing mode,
 			# plus the systemd-user PAM override needed for GDM greeter auth.
 			# Without it, GDM fails to start on EL10.
-			dnf -y install --allowerasing gnome49-el10-compat
+			dnf_retry -y install --allowerasing gnome49-el10-compat
 		fi
 	fi
 
@@ -71,7 +71,7 @@ case "${1:-}" in
 	# Install base groups and packages - different between Fedora and RHEL/AlmaLinux
 	if [[ $IS_FEDORA == true ]]; then
 		# Fedora Silverblue-style package list
-		dnf -y install \
+		dnf_retry -y install \
 			-x PackageKit \
 			-x PackageKit-command-not-found \
 			-x gnome-software \
@@ -144,7 +144,7 @@ case "${1:-}" in
 			"Standard" \
 			"Workstation product core"
 
-		dnf -y install \
+		dnf_retry -y install \
 			-x gnome-software \
 			-x gnome-extensions-app \
 			-x PackageKit \
@@ -191,7 +191,7 @@ case "${1:-}" in
 	warn_on_fail dnf versionlock delete glib2
 
 	# Install build tooling
-	dnf -y install glib2-devel meson sassc cmake dbus-devel unzip
+	dnf_retry -y install glib2-devel meson sassc cmake dbus-devel unzip
 
 	# AppIndicator Support (not present in all GNOME versions/COPRs)
 	if [ -d /usr/share/gnome-shell/extensions/appindicatorsupport@rgcjonas.gmail.com/schemas ]; then
@@ -279,7 +279,7 @@ case "${1:-}" in
 	glib-compile-schemas /usr/share/glib-2.0/schemas
 
 	# Cleanup build tooling
-	dnf -y remove glib2-devel meson sassc cmake dbus-devel
+	dnf_retry -y remove glib2-devel meson sassc cmake dbus-devel
 	rm -rf /usr/share/gnome-shell/extensions/tmp
 
 	# Disable COPR now that build tooling (including glib2-devel) is fully removed

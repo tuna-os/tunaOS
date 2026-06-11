@@ -8,7 +8,7 @@ case "${1:-}" in
 "base")
 	if [[ $IS_FEDORA == true ]]; then
 		# Fedora ships COSMIC in the main repos
-		dnf -y install --setopt=install_weak_deps=False \
+		dnf_retry -y install --setopt=install_weak_deps=False \
 			cosmic-session \
 			cosmic-comp \
 			cosmic-panel \
@@ -77,7 +77,7 @@ case "${1:-}" in
 	cosmic-session --version || true
 
 	# Install additional desktop utilities
-	dnf -y install --setopt=install_weak_deps=False \
+	dnf_retry -y install --setopt=install_weak_deps=False \
 		flatpak \
 		pipewire \
 		wireplumber \
@@ -87,13 +87,13 @@ case "${1:-}" in
 
 	# Restore brightnessctl and playerctl for Fedora and compatible EL10 variants (Kitten/CentOS)
 	if [[ $IS_FEDORA == true || $IS_ALMALINUXKITTEN == true || $IS_CENTOS == true ]]; then
-		dnf -y install --setopt=install_weak_deps=False \
+		dnf_retry -y install --setopt=install_weak_deps=False \
 			brightnessctl \
 			playerctl || true
 	fi
 
 	# Attempt to install GNOME keyring components (may fail if not in repos)
-	dnf -y install --setopt=install_weak_deps=False \
+	dnf_retry -y install --setopt=install_weak_deps=False \
 		gnome-keyring \
 		gnome-keyring-pam || true
 
