@@ -5,8 +5,13 @@ on:
       - 'scripts/**'
       - 'tests/**'
       - 'build_scripts/**'
+      - 'live-iso/**'
+      - 'iso_files/**'
+      - 'system_files/**'
+      - 'system_files_overrides/**'
       - '.github/scripts/**'
       - '.github/changelogs.py'
+      - '.github/workflows/**'
       - 'Justfile'
   push:
     branches: [main]
@@ -16,6 +21,62 @@ permissions:
   contents: read
 
 jobs:
+  lint:
+    name: Lint (ShellCheck + YAML + JSON)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install lint tools
+        run: |
+          sudo apt-get update && sudo apt-get install -y shellcheck yamllint jq
+
+      - name: ShellCheck
+        run: |
+          find . \
+            -not -path './system_files/usr/share/gnome-shell/extensions/*' \
+            -not -path './packages-repo/*' \
+            -not -path './.build/*' \
+            -iname "*.sh" -type f \
+            -exec shellcheck --exclude=SC1091 "{}" ";"
+
+      - name: YAML lint
+        run: |
+          find . \
+            -not -path './system_files/usr/share/gnome-shell/extensions/*' \
+            -not -path './packages-repo/*' \
+            -not -path './.build/*' \
+            -type f -name "*.yaml" | while read -r file; do
+            yamllint -c ./.yamllint.yml "$file" || { exit 1; }
+          done
+          find . \
+            -not -path './system_files/usr/share/gnome-shell/extensions/*' \
+            -not -path './packages-repo/*' \
+            -not -path './.build/*' \
+            -type f -name "*.yml" | while read -r file; do
+            yamllint "$file" || { exit 1; }
+          done
+
+      - name: JSON validate
+        run: |
+          find . \
+            -not -path './system_files/usr/share/gnome-shell/extensions/*' \
+            -not -path './packages-repo/*' \
+            -not -path './.build/*' \
+            -type f -name "*.json" | while read -r file; do
+            jq . "$file" > /dev/null || { exit 1; }
+          done
+
+      - name: Check generated files are up to date
+        run: |
+          pip3 install pyyaml --break-system-packages 2>/dev/null || pip3 install pyyaml --user
+          just generate-workflows
+          if ! git diff --exit-code -- .github/build-config.yml .github/workflows/build-*.yml; then
+            echo "::error::Generated files are out of date. Run 'just generate-workflows' and commit."
+            exit 1
+          fi
+
   unit-tests:
     name: Unit Tests
     runs-on: ubuntu-latest

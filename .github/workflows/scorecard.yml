@@ -17,6 +17,13 @@ on:
 # Declare default permissions as read only.
 permissions: read-all
 
+# Prevent overlapping scorecard runs on the same ref — the OSSF API has
+# per-repo rate limits and concurrent runs can trigger alternating
+# success/failure (#377).
+concurrency:
+  group: scorecard-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   analysis:
     name: Scorecard analysis
