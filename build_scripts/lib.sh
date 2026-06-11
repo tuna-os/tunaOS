@@ -128,6 +128,24 @@ copy_systemfiles_for() {
 	printf "::endgroup::\n"
 }
 
+# Run a command and emit a GitHub Actions ::warning on failure instead of
+# silently swallowing the error with || true.  Use for operations that are
+# important enough to surface in the build summary but not build-fatal
+# (e.g. versionlock changes, optional removes, RHSM registration).
+#
+# Usage: warn_on_fail subscription-manager register --username "${RHSM_USER}" ...
+#        warn_on_fail dnf -y versionlock delete glib2
+warn_on_fail() {
+	local cmd="$1"
+	shift
+	if ! "$cmd" "$@"; then
+		local caller_script
+		caller_script="$(basename "${BASH_SOURCE[1]:-?}")"
+		printf '::warning title=Operation failed (%s on %s)::%s %s exited with %d (called from %s)\n' \
+			"${IMAGE_NAME:-?}" "${MAJOR_VERSION_NUMBER:-?}" "$cmd" "$*" "$?" "$caller_script"
+	fi
+}
+
 # Run `dnf` with retries to absorb transient mirror flakes (EPEL / AlmaLinux /
 # CentOS mirrors fail with curl SSL_ERROR_SYSCALL / partial-file errors a few
 # times a week, which previously broke whole CI builds — see albacore failing
