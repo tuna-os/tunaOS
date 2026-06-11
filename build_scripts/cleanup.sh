@@ -106,10 +106,11 @@ ls /usr/local || ln -s /var/usrlocal /usr/local
 chmod 644 /usr/share/ublue-os/image-info.json
 
 # Clean up remaining /var artifacts to satisfy bootc lint
-rm -rf /var/lib/rhsm/*
-rm -rf /var/log/rhsm/*
-rm -rf /var/spool/plymouth/*
-rm -rf /var/roothome/buildinfo
+# Guard with existence checks — some paths don't exist on CentOS/AlmaLinux.
+[ -d /var/lib/rhsm ] && rm -rf /var/lib/rhsm/*
+[ -d /var/log/rhsm ] && rm -rf /var/log/rhsm/*
+[ -d /var/spool/plymouth ] && rm -rf /var/spool/plymouth/*
+[ -d /var/roothome/buildinfo ] && rm -rf /var/roothome/buildinfo
 
 # FIXME: use --fix option once https://github.com/containers/bootc/pull/1152 is merged
 # NOTE: --fatal-warnings suppressed for /var/lib/selinux deep module files which cannot
