@@ -93,12 +93,12 @@ teardown() {
   [ "$status" -eq 0 ]
 }
 
-@test "check.sh: validates Justfile at end" {
-  run grep "just.*--fmt.*--check.*Justfile" "${REPO_ROOT}/scripts/check.sh"
+@test "check.sh: validates .just files with just --unstable --fmt --check" {
+  run grep "just.*--unstable.*--fmt.*--check" "${REPO_ROOT}/scripts/check.sh"
   [ "$status" -eq 0 ]
 }
 
-@test "check.sh: shellcheck uses /usr/bin/find for cross-platform support" {
-  run grep "/usr/bin/find" "${REPO_ROOT}/scripts/check.sh"
+@test "check.sh: shellcheck uses find for scanning .sh files" {
+  run grep "find.*-iname.*\\.sh.*-exec.*shellcheck" "${REPO_ROOT}/scripts/check.sh"
   [ "$status" -eq 0 ]
 }
