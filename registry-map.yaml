@@ -71,19 +71,17 @@ images:
     digest: sha256:33ab77f29c90fb3ec7a3a6b6c84ee2f2bcff1846b3c34a3231092aebd39e673b
     tag: latest
 
-  novnc:
-    registry: ghcr
-    path: novnc/novnc
-    tag: latest
-    # FIXME(security): Image ghcr.io/novnc/novnc:latest returned HTTP 404.
-    # Verify the correct image reference and pin to a SHA256 digest.
-
-  qemu:
-    registry: ghcr
-    path: qemus/qemu
-    tag: latest
-    # FIXME(security): Image ghcr.io/qemus/qemu:latest requires Docker Hub
-    # authentication. Verify the correct image reference and pin to a SHA256 digest.
+  # --- Tool images (local dev) ---
+  # novnc and qemu images are used by local development scripts
+  # (lima-novnc.sh, run-vm.sh). Both images currently require
+  # authentication or don't exist on public registries.
+  #
+  # Override with env vars:
+  #   NOVNC_IMAGE=docker.io/your/novnc:tag scripts/lima-novnc.sh ...
+  #   QEMU_IMAGE=docker.io/your/qemu:tag just run-qcow2 albacore gnome
+  #
+  # Once publicly-available images are identified, add them here and
+  # pin to SHA256 digests.
 
   # --- ISO bootc target ---
   bluefin-iso:

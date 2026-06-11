@@ -101,8 +101,11 @@ mkdir -p /var /boot
 # Make /usr/local writeable, if /usr/local exists skip
 ls /usr/local || ln -s /var/usrlocal /usr/local
 
-# We need this else anything accessing image-info fails
-# FIXME: Figure out why this doesnt have the right permissions by default
+# image-info.json sometimes has restrictive permissions from the build
+# process, preventing non-root processes from reading it (breaks
+# fastfetch, uupd, and other tools that source image metadata).
+# This chmod is a workaround — root cause should be fixed in the
+# Containerfile or the tool that creates the file.
 chmod 644 /usr/share/ublue-os/image-info.json
 
 # Clean up remaining /var artifacts to satisfy bootc lint
@@ -112,9 +115,10 @@ chmod 644 /usr/share/ublue-os/image-info.json
 [ -d /var/spool/plymouth ] && rm -rf /var/spool/plymouth/*
 [ -d /var/roothome/buildinfo ] && rm -rf /var/roothome/buildinfo
 
-# FIXME: use --fix option once https://github.com/containers/bootc/pull/1152 is merged
-# NOTE: --fatal-warnings suppressed for /var/lib/selinux deep module files which cannot
-# be declared in tmpfiles.d (they are non-directory files owned by selinux-policy).
+# The --fix option (containers/bootc#1152) was closed without merging.
+# Continue using warn_on_fail until a bootc release provides auto-fix.
+# NOTE: --fatal-warnings suppressed for /var/lib/selinux deep module files
+# which cannot be declared in tmpfiles.d (non-directory files owned by selinux-policy).
 warn_on_fail bootc container lint --fatal-warnings
 
 jq . /usr/share/ublue-os/image-info.json

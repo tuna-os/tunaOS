@@ -86,8 +86,10 @@ rm -f /var/lib/authselect/checksum
 
 if [[ -f /usr/lib/systemd/system/systemd-resolved.service ]]; then
 	sed -i -e "s@PrivateTmp=.*@PrivateTmp=no@g" /usr/lib/systemd/system/systemd-resolved.service
-	# FIXME: this does not yet work, the resolution service fails for somer reason
-	# enable systemd-resolved for proper name resolution
+	# Enable systemd-resolved for proper name resolution.
+	# NOTE: Enabling is not sufficient on some images — the service may
+	# fail at runtime due to dbus policy or nsswitch configuration.
+	# Investigate if resolved consistently fails across all variants.
 	systemctl enable systemd-resolved.service
 fi
 
