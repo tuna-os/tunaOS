@@ -32,7 +32,7 @@ if [[ "${ENABLE_HWE:-0}" != "1" ]] && { [[ $IS_ALMALINUX == true ]] || [[ $IS_AL
 else
 	# Fedora/CentOS from akmods
 	# Install from the mounted directory, including the kernel to satisfy dependencies
-	dnf versionlock delete kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt || true
+	warn_on_fail dnf versionlock delete kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
 	rpms=$(find /tmp/akmods-nvidia-open-rpms/ /tmp/kernel-rpms/ -name "*.rpm" -type f 2>/dev/null | tr '\n' ' ' || true)
 	if [ -n "$rpms" ]; then
 		# Mask rpm-ostree kernel-install script to prevent dracut errors during container build

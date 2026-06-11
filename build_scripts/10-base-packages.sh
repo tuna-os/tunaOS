@@ -28,15 +28,15 @@ install_base_packages_no_de() {
 		# Check for subscription-manager credentials and register if present
 		if [[ -n "${RHSM_USER:-}" ]] && [[ -n "${RHSM_PASSWORD:-}" ]]; then
 			echo "Registering with Red Hat Subscription Manager using credentials..."
-			subscription-manager register --username "${RHSM_USER}" --password "${RHSM_PASSWORD}" --auto-attach || true
+			warn_on_fail subscription-manager register --username "${RHSM_USER}" --password "${RHSM_PASSWORD}" --auto-attach
 		elif [[ -n "${RHSM_ORG:-}" ]] && [[ -n "${RHSM_ACTIVATION_KEY:-}" ]]; then
 			echo "Registering with Red Hat Subscription Manager using activation key..."
-			subscription-manager register --org "${RHSM_ORG}" --activationkey "${RHSM_ACTIVATION_KEY}" --auto-attach || true
+			warn_on_fail subscription-manager register --org "${RHSM_ORG}" --activationkey "${RHSM_ACTIVATION_KEY}" --auto-attach
 		fi
 
 		# Ensure repositories are enabled after registration
-		subscription-manager repos --enable "rhel-10-for-x86_64-baseos-rpms" || true
-		subscription-manager repos --enable "rhel-10-for-x86_64-appstream-rpms" || true
+		warn_on_fail subscription-manager repos --enable "rhel-10-for-x86_64-baseos-rpms"
+		warn_on_fail subscription-manager repos --enable "rhel-10-for-x86_64-appstream-rpms"
 	fi
 
 	dnf -y install 'dnf-command(versionlock)'

@@ -36,7 +36,7 @@ case "${1:-}" in
 		# --noautoremove keeps reverse-deps alive; they'll re-resolve to the
 		# COPR's gnome-shell-49 in the next install.
 		if rpm -q gnome-shell-common &>/dev/null; then
-			dnf -y remove --noautoremove gnome-shell-common || true
+			warn_on_fail dnf -y remove --noautoremove gnome-shell-common
 		fi
 
 		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
@@ -188,7 +188,7 @@ case "${1:-}" in
 	echo "Building GNOME extensions from source..."
 
 	# Remove versionlock on glib2 to allow installing glib2-devel (will re-lock after)
-	dnf versionlock delete glib2 || true
+	warn_on_fail dnf versionlock delete glib2
 
 	# Install build tooling
 	dnf -y install glib2-devel meson sassc cmake dbus-devel unzip
