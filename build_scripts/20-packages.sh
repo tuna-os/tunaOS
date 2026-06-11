@@ -40,8 +40,10 @@ else
 	dnf -y --enablerepo "tailscale-stable" install tailscale
 fi
 
-# Upstream ublue-os-signing bug, we are using /usr/etc for the container signing and bootc gets mad at this
-# FIXME: remove this once https://github.com/ublue-os/packages/issues/245 is closed
+# Upstream ublue-os-signing bug: the package used /usr/etc for container
+# signing; bootc rejects non-/etc paths. Fixed upstream (ublue-os/packages#245
+# closed). Remove this workaround once the updated package is in all base images.
+# The guard is a no-op when /usr/etc doesn't exist.
 if [ -d /usr/etc ]; then
 	cp -avf /usr/etc/. /etc
 	rm -rvf /usr/etc

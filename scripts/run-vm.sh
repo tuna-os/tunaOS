@@ -62,7 +62,11 @@ run)
 	echo "Connect via SSH: ssh centos@127.0.0.1 -p ${ssh_port}"
 	run_args+=(--publish "0.0.0.0:${ssh_port}:22" --env "USER_PORTS=22" --env "NETWORK=user")
 
-	run_args+=(--volume "${PWD}/${image_file}:/boot.${TYPE}" ghcr.io/qemus/qemu)
+	# QEMU container image for booting disk images in a browser-accessible
+	# VNC session. ghcr.io/qemus/qemu requires authentication; override
+	# with QEMU_IMAGE env var to use a different image.
+	QEMU_IMAGE="${QEMU_IMAGE:-ghcr.io/qemus/qemu}"
+	run_args+=(--volume "${PWD}/${image_file}:/boot.${TYPE}" "${QEMU_IMAGE}")
 
 	(sleep 5 && xdg-open "http://127.0.0.1:${port}") &
 	podman run "${run_args[@]}"

@@ -108,12 +108,14 @@ echo "==> Starting noVNC on port ${NOVNC_PORT}..."
 # Remove any leftover noVNC container from a previous run
 podman rm -f "${VM_NAME}-novnc" 2>/dev/null || true
 
-# Use registry-ref resolved novnc image (RFC-009: configurable mirror support).
+# Use registry-ref resolved novnc image (RFC-009: configurable mirror support)
+# when available, with env var override for custom images.
 # --network host lets the container reach Lima's VNC on 127.0.0.1.
+NOVNC_IMAGE="${NOVNC_IMAGE:-$(registry_ref novnc 2>/dev/null || echo 'ghcr.io/novnc/novnc:latest')}"
 podman run -d --rm \
 	--name "${VM_NAME}-novnc" \
 	--network host \
-	"$(registry_ref novnc)" \
+	"${NOVNC_IMAGE}" \
 	/usr/share/novnc/utils/novnc_proxy \
 	--listen "${NOVNC_PORT}" \
 	--vnc "${VNC_HOST}:${VNC_PORT}"
