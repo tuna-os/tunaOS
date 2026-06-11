@@ -70,7 +70,7 @@ jobs:
           filters: |
             hwe_gdx_related:
               - 'Containerfile.hwe'
-              - 'Containerfile.gdx'
+              - 'Containerfile.nvidia'
               - 'Containerfile.kde.hwe'
               - 'Containerfile.kde.gdx'
               - 'build_scripts/HWE.sh'

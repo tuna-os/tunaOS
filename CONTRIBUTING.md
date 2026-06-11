@@ -33,7 +33,7 @@ Commits must be signed with DCO: `git commit -s`
 just yellowfin base
 
 # Build the full flavor chain
-just yellowfin base && just yellowfin dx && just yellowfin gdx
+just yellowfin base && just yellowfin dx && just yellowfin nvidia
 
 # Build other variants
 just albacore base

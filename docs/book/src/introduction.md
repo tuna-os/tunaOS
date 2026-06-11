@@ -32,7 +32,7 @@ Optional hardware layers sit between base and DE:
 ```
 DE Stage
   ↑
-Base-{hwe|gdx} Stage   ← HWE kernel or NVIDIA drivers
+Base-{hwe|nvidia} Stage   ← HWE kernel or NVIDIA drivers
   ↑
 Enterprise Linux Base
 ```
@@ -68,8 +68,8 @@ Enterprise Linux Base
 For hardware variants:
 - **Standard** — works on most hardware with the default EL kernel.
 - **HWE** (`-hwe`) — for recent hardware (post-2023) needing a newer kernel.
-- **GDX** (`-gdx`) — for systems with NVIDIA GPUs; includes drivers and CUDA.
-- **GDX+HWE** (`-gdx-hwe`) — NVIDIA on the HWE kernel; for very recent NVIDIA hardware.
+- **nvidia** (`-nvidia`) — for systems with NVIDIA GPUs; includes drivers and CUDA.
+- **nvidia+HWE** (`-nvidia-hwe`) — NVIDIA on the HWE kernel; for very recent NVIDIA hardware.
 
 ## Desktop Environments
 
@@ -87,10 +87,10 @@ For hardware variants:
 |--------|-------------|
 | *(none)* | Standard kernel |
 | `-hwe` | Hardware Enablement — newer kernel for recent hardware |
-| `-gdx` | NVIDIA drivers + CUDA for graphics/AI workloads |
-| `-gdx-hwe` | NVIDIA + CUDA on HWE kernel |
+| `-nvidia` | NVIDIA drivers + CUDA for graphics/AI workloads |
+| `-nvidia-hwe` | NVIDIA + CUDA on HWE kernel |
 
-Example tags: `yellowfin:gnome`, `albacore:kde-gdx`, `skipjack:niri-hwe`
+Example tags: `yellowfin:gnome`, `albacore:kde-nvidia`, `skipjack:niri-hwe`
 
 ## Immutable Design
 

@@ -24,7 +24,7 @@ Always run `just fix && just check` after making changes to validate the build c
 | `build_files/dx/00-dx.sh` | `build_scripts/kde.sh` or `system_files_overrides/kde/` (DX is a separate flavor in TunaOS) |
 | `system_files/shared/` | `system_files/` |
 | `build_files/base/0X-*.sh` post-install steps | `build_scripts/kde.sh` `"post"` case block |
-| `build_files/base/nvidia.sh` | `build_scripts/kde.sh` or a dedicated nvidia script (check `system_files_overrides/niri-gdx/`) |
+| `build_files/base/nvidia.sh` | `build_scripts/kde.sh` or a dedicated nvidia script (check `system_files_overrides/niri-nvidia/`) |
 
 ## Key Files to Read First
 

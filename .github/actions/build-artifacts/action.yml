@@ -9,7 +9,7 @@ inputs:
     description: 'Variant name (yellowfin, albacore, skipjack, bonito)'
     required: true
   flavor:
-    description: 'Flavor name (gnome, kde, gnome-gdx, etc.)'
+    description: 'Flavor name (gnome, kde, gnome-nvidia, etc.)'
     required: true
   build_iso:
     description: 'Whether to build an ISO'

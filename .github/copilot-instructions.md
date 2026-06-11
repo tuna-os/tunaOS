@@ -15,7 +15,7 @@ Always reference these instructions first and fallback to search or bash command
 | `skipjack` | CentOS Stream 10 | Experimental |
 | `bonito` | Fedora 44 | Incomplete |
 
-Flavors chain: `base` → `dx` (+ Docker/VSCode) → `gdx` (+ NVIDIA/CUDA)
+Flavors chain: `base` → `dx` (+ Docker/VSCode) → `nvidia` (+ NVIDIA/CUDA)
 
 ## Pre-Commit (mandatory)
 
@@ -27,7 +27,7 @@ just fix && just check   # always run before committing
 
 ```bash
 just yellowfin base                        # build a single variant (fastest test)
-just yellowfin base && just yellowfin dx && just yellowfin gdx  # full chain
+just yellowfin base && just yellowfin dx && just yellowfin nvidia  # full chain
 sudo just iso yellowfin base local         # generate ISO (requires root)
 just clean                                 # remove build artifacts
 just --list                                # all available commands

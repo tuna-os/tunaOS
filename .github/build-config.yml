@@ -4,11 +4,11 @@ config:
 # Build stages (for reference — enforced by the workflow job graph):
 #
 #   Stage 1:  base
-#                ├── Stage 2: base-hwe, base-gdx
+#                ├── Stage 2: base-hwe, base-nvidia
 #                └── Stage 2: gnome, kde, niri
 #                                ├── Stage 3: gnome-hwe, kde-hwe, niri-hwe   (layer on base-hwe)
-#                                └── Stage 3: gnome-gdx, kde-gdx, niri-gdx   (layer on base-gdx)
-#                                                └── Stage 4: gnome-gdx-hwe  (layer on gnome-hwe)
+#                                └── Stage 3: gnome-nvidia, kde-nvidia, niri-nvidia   (layer on base-nvidia)
+#                                                └── Stage 4: gnome-nvidia-hwe  (layer on gnome-hwe)
 #
 # The `stage` field on each flavor tells generate_matrix which job matrix it belongs to:
 #   stage: 1  → build_base      (no dependencies)
@@ -36,7 +36,7 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: base-gdx
+      - id: base-nvidia
         stage: 2
         build_image: true
         build_iso: false
@@ -74,12 +74,12 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: gnome-gdx
+      - id: gnome-nvidia
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
-      - id: gnome-gdx-hwe
+      - id: gnome-nvidia-hwe
         stage: 4
         build_image: true
         build_iso: false
@@ -89,7 +89,7 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: gnome50-gdx
+      - id: gnome50-nvidia
         stage: 3
         build_image: true
         build_iso: true
@@ -99,7 +99,7 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: cosmic-gdx
+      - id: cosmic-nvidia
         stage: 3
         build_image: true
         build_iso: true
@@ -109,7 +109,7 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: kde-gdx
+      - id: kde-nvidia
         stage: 3
         build_image: true
         build_iso: true
@@ -119,7 +119,7 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: niri-gdx
+      - id: niri-nvidia
         stage: 3
         build_image: true
         build_iso: true
@@ -144,7 +144,7 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: base-gdx
+      - id: base-nvidia
         stage: 2
         build_image: true
         build_iso: false
@@ -187,12 +187,12 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: gnome-gdx
+      - id: gnome-nvidia
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
-      - id: gnome-gdx-hwe
+      - id: gnome-nvidia-hwe
         stage: 4
         build_image: true
         build_iso: false
@@ -207,7 +207,7 @@ variants:
         platforms:
           - linux/amd64
           - linux/amd64/v2
-      - id: gnome50-gdx
+      - id: gnome50-nvidia
         stage: 3
         build_image: true
         build_iso: true
@@ -222,7 +222,7 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: cosmic-gdx
+      - id: cosmic-nvidia
         stage: 3
         build_image: true
         build_iso: true
@@ -232,7 +232,7 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: kde-gdx
+      - id: kde-nvidia
         stage: 3
         build_image: true
         build_iso: true
@@ -242,7 +242,7 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: niri-gdx
+      - id: niri-nvidia
         stage: 3
         build_image: true
         build_iso: true
@@ -268,7 +268,7 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: base-gdx
+      - id: base-nvidia
         stage: 2
         build_image: true
         build_iso: false
@@ -306,12 +306,12 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: gnome-gdx
+      - id: gnome-nvidia
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
-      # gnome-gdx-hwe (stage 4) omitted — blocked by gnome-shell-49 vs
+      # gnome-nvidia-hwe (stage 4) omitted — blocked by gnome-shell-49 vs
       # gnome-shell-common-48 file conflict on CentOS Stream 10.
       # See: tuna-os/github-copr#23, IMPROVEMENT_PLAN Phase 1.1
       - id: gnome50-hwe
@@ -319,7 +319,7 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: gnome50-gdx
+      - id: gnome50-nvidia
         stage: 3
         build_image: true
         build_iso: true
@@ -329,7 +329,7 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: cosmic-gdx
+      - id: cosmic-nvidia
         stage: 3
         build_image: true
         build_iso: true
@@ -345,7 +345,7 @@ variants:
     # Flavor strategy: Fedora ships the latest kernel and GNOME by default,
     # so HWE layers are only provided for gnome (the primary desktop).
     # gnome50 is EL10-specific and not needed on Fedora.
-    # gnome-gdx-hwe (stage 4) omitted for now — kernel compatibility TBD.
+    # gnome-nvidia-hwe (stage 4) omitted for now — kernel compatibility TBD.
     flavors:
       # ── Stage 1 ────────────────────────────────────────────────────────────
       - id: base
@@ -360,7 +360,7 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: base-gdx
+      - id: base-nvidia
         stage: 2
         build_image: true
         build_iso: false
@@ -393,22 +393,22 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-      - id: gnome-gdx
+      - id: gnome-nvidia
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
-      - id: cosmic-gdx
+      - id: cosmic-nvidia
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
-      - id: kde-gdx
+      - id: kde-nvidia
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
-      - id: niri-gdx
+      - id: niri-nvidia
         stage: 3
         build_image: true
         build_iso: true

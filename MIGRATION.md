@@ -177,7 +177,7 @@ flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flat
 
 ## Known Limitations
 
-1. **NVIDIA drivers**: GDX variant recommended for NVIDIA hardware. See [ROADMAP.md](ROADMAP.md) for available variants and flavors.
+1. **NVIDIA drivers**: nvidia variant recommended for NVIDIA hardware. See [ROADMAP.md](ROADMAP.md) for available variants and flavors.
 2. **Secure Boot**: Requires manual enrollment of MOK key on first boot after migration.
 3. **Dual boot**: Not recommended or tested with tunaOS Atomic images.
 4. **Fingerprint readers**: May require additional driver configuration.

@@ -1,10 +1,10 @@
 ARG BASE_IMAGE
-# NOTE: ENABLE_HWE and ENABLE_GDX are passed by the Justfile _build helper
+# NOTE: ENABLE_HWE and ENABLE_NVIDIA are passed by the Justfile _build helper
 # to every Containerfile for interface uniformity. The main Containerfile never
-# gates on them — HWE/GDX behavior is controlled by Containerfile selection
-# (main vs Containerfile.hwe vs Containerfile.gdx) and AKMODS_VERSION dispatch.
+# gates on them — HWE/NVIDIA behavior is controlled by Containerfile selection
+# (main vs Containerfile.hwe vs Containerfile.nvidia) and AKMODS_VERSION dispatch.
 ARG ENABLE_HWE="${ENABLE_HWE:-0}"
-ARG ENABLE_GDX="${ENABLE_GDX:-0}"
+ARG ENABLE_NVIDIA="${ENABLE_NVIDIA:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 # SECURITY: Defaults use placeholder tags that MUST be overridden at build time.
 # The Justfile and scripts/build-image.sh always pin these to specific SHA256
@@ -32,7 +32,7 @@ FROM ${BASE_IMAGE} AS base-no-de
 
 ARG BASE_IMAGE
 ARG ENABLE_HWE
-ARG ENABLE_GDX
+ARG ENABLE_NVIDIA
 ARG DESKTOP_FLAVOR
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR
@@ -51,7 +51,7 @@ ENV IMAGE_VENDOR=${IMAGE_VENDOR}
 ENV IMAGE_REGISTRY=${IMAGE_REGISTRY}
 ENV SHA_HEAD_SHORT=${SHA_HEAD_SHORT}
 ENV ENABLE_HWE=${ENABLE_HWE}
-ENV ENABLE_GDX=${ENABLE_GDX}
+ENV ENABLE_NVIDIA=${ENABLE_NVIDIA}
 
 # Preserve desktop flavor so base-stage scripts don't fall back to GNOME defaults
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}

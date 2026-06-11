@@ -60,8 +60,8 @@ local_ref() { echo "localhost/${1}:${2}"; }
 
 parent_for() {
 	case "$1" in
-	*-gdx-hwe) echo "base-hwe" ;;
-	*-gdx) echo "base-gdx" ;;
+	*-nvidia-hwe) echo "base-hwe" ;;
+	*-nvidia) echo "base-nvidia" ;;
 	*-hwe) echo "base-hwe" ;;
 	*) echo "" ;;
 	esac
@@ -359,8 +359,8 @@ fi
 echo ""
 
 run_stage "base images" "$STAGE1" stage1_base_ref
-run_stage "base-hwe / base-gdx / desktop" "$STAGE2" stage2_base_ref
-run_stage "HWE / GDX desktop flavors" "$STAGE3" stage3_base_ref
+run_stage "base-hwe / base-nvidia / desktop" "$STAGE2" stage2_base_ref
+run_stage "HWE / nvidia desktop flavors" "$STAGE3" stage3_base_ref
 
 echo ""
 echo "╔══════════════════════════════════════════════════════════════╗"

@@ -5,7 +5,7 @@ permissions:
 
 on:
   workflow_run:
-    workflows: ["Build Tunaos GDX"]
+    workflows: ["Build TunaOS NVIDIA"]
     types:
       - completed
     branches:
@@ -20,7 +20,7 @@ on:
         options:
           - lts
           - dx
-          - gdx
+          - nvidia
 
 jobs:
   generate-release:

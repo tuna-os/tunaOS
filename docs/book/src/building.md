@@ -61,10 +61,10 @@ just build <variant> <flavor>
 | `cosmic` | COSMIC desktop |
 | `niri` | Niri tiling compositor |
 | `gnome-hwe` | GNOME with HWE kernel |
-| `gnome-gdx` | GNOME with NVIDIA drivers |
-| `gnome-gdx-hwe` | GNOME with NVIDIA on HWE kernel |
+| `gnome-nvidia` | GNOME with NVIDIA drivers |
+| `gnome-nvidia-hwe` | GNOME with NVIDIA on HWE kernel |
 
-Any desktop flavor can be combined with `-hwe`, `-gdx`, or `-gdx-hwe` suffixes.
+Any desktop flavor can be combined with `-hwe`, `-nvidia`, or `-nvidia-hwe` suffixes.
 
 ### Platform Selection
 
@@ -81,7 +81,7 @@ Each build runs through these stages:
 
 1. **Context assembly** — system files, brew files, and build scripts copied into a scratch image
 2. **Base stage** (`base-no-de`) — copy files, install packages, configure services, cleanup
-3. **Hardware variant stage** (optional) — `base-hwe` or `base-gdx` for chain builds
+3. **Hardware variant stage** (optional) — `base-hwe` or `base-nvidia` for chain builds
 4. **DE stage** — install desktop packages (`gnome.sh`, `kde.sh`, etc.), versionlock glib2, symlink `/opt → /var/opt`
 5. **Chunkah rechunking** — reduces image layer count for distribution efficiency
 6. **Final stage** — apply labels and OCI annotations
@@ -94,8 +94,8 @@ The Justfile automatically selects the correct Containerfile:
 |---------------|---------------|-------------|
 | *(none)* | `Containerfile` | Base build with `base-no-de` |
 | `-hwe` | `Containerfile.hwe` | HWE kernel layer |
-| `-gdx` | `Containerfile.gdx` | NVIDIA driver layer |
-| `-gdx-hwe` | `Containerfile.gdx` | GDX on HWE parent |
+| `-nvidia` | `Containerfile.nvidia` | NVIDIA driver layer |
+| `-nvidia-hwe` | `Containerfile.nvidia` | nvidia on HWE parent |
 
 ## Building ISOs
 
