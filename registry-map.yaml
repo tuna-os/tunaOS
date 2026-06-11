@@ -66,20 +66,30 @@ images:
   coreos-chunkah:
     registry: quay
     path: coreos/chunkah
+    # SECURITY: Pinned to digest to prevent supply-chain attacks via tag mutation.
+    # tag: latest is retained as fallback for setups without the pinned image.
+    digest: sha256:33ab77f29c90fb3ec7a3a6b6c84ee2f2bcff1846b3c34a3231092aebd39e673b
     tag: latest
 
   novnc:
     registry: ghcr
     path: novnc/novnc
     tag: latest
+    # FIXME(security): Image ghcr.io/novnc/novnc:latest returned HTTP 404.
+    # Verify the correct image reference and pin to a SHA256 digest.
 
   qemu:
     registry: ghcr
     path: qemus/qemu
     tag: latest
+    # FIXME(security): Image ghcr.io/qemus/qemu:latest requires Docker Hub
+    # authentication. Verify the correct image reference and pin to a SHA256 digest.
 
   # --- ISO bootc target ---
   bluefin-iso:
     registry: ghcr
     path: hanthor/bluefin
+    # SECURITY: Pinned to digest. The :lts tag is a floating tag — pinning
+    # protects ISO builds from unexpected image changes.
+    digest: sha256:fa7d24b646cc345542190b7f68fc70fbd9a4d3143e8cc077db4dca68336c3ae8
     tag: lts

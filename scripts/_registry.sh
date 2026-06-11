@@ -8,6 +8,7 @@
 #   TUNA_REGISTRY_<key>     Override registry hostname (e.g. TUNA_REGISTRY_ghcr=mirror.example.com)
 #   TUNA_IMAGE_PATH_<name>  Override image path (e.g. TUNA_IMAGE_PATH_common=myorg/common-fork)
 #   TUNA_IMAGE_TAG_<name>   Override image tag (e.g. TUNA_IMAGE_TAG_common=v2.0)
+#   TUNA_IMAGE_DIGEST_<name> Override image digest (e.g. TUNA_IMAGE_DIGEST_coreos_chunkah=sha256:...)
 #
 # Usage:
 #   source scripts/_registry.sh
@@ -75,6 +76,9 @@ registry_ref() {
 	local default_tag
 	default_tag="$(yq -r ".images.\"${name}\".tag // \"\"" "${REGISTRY_MAP}")"
 
+	local default_digest
+	default_digest="$(yq -r ".images.\"${name}\".digest // \"\"" "${REGISTRY_MAP}")"
+
 	# Apply overrides
 	local path_override_var="TUNA_IMAGE_PATH_${name//-/_}"
 	local path="${!path_override_var:-${default_path}}"
@@ -84,17 +88,22 @@ registry_ref() {
 
 	local ref="${registry_host}/${path}"
 
-	# Determine tag suffix
+	# Determine tag/digest suffix
 	if [[ -n "${tag_spec}" ]]; then
 		# Explicit tag or digest passed by caller
 		ref="${ref}${tag_spec}"
+	elif [[ -n "${default_digest}" && "${default_digest}" != "null" ]]; then
+		# Digest takes precedence over tag (security: immutable reference)
+		local digest_override_var="TUNA_IMAGE_DIGEST_${name}"
+		local digest="${!digest_override_var:-${default_digest}}"
+		ref="${ref}@${digest}"
 	elif [[ -n "${default_tag}" && "${default_tag}" != "null" ]]; then
 		# Apply tag override if set
 		local tag_override_var="TUNA_IMAGE_TAG_${name//-/_}"
 		local tag="${!tag_override_var:-${default_tag}}"
 		ref="${ref}:${tag}"
 	fi
-	# else: no tag (e.g. akmods base path)
+	# else: no tag or digest (e.g. akmods base path)
 
 	printf '%s' "${ref}"
 }
