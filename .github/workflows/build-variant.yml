@@ -112,7 +112,7 @@ jobs:
 
           # Per-stage artifact matrices — each stage's ISOs/QCOW2s depend
           # only on that stage's image builds, avoiding the stage-4 artifact
-          # jail where a gnome-gdx-hwe failure blocked ALL ISOs (F10).
+          # jail where a gnome-nvidia-hwe failure blocked ALL ISOs (F10).
           make_artifact_matrix() {
             local STAGE=$1
             echo "$FULL_MATRIX" | jq -c --argjson stage "$STAGE" '{
@@ -183,10 +183,10 @@ jobs:
     secrets:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
-  # ── Stage 2: base-hwe, base-gdx, and desktop base flavors ──────────────────
+  # ── Stage 2: base-hwe, base-nvidia, and desktop base flavors ──────────────────
   # Runs only after ALL stage-1 jobs pass. Includes:
   #   - base-hwe  (layers on base)
-  #   - base-gdx  (layers on base)
+  #   - base-nvidia  (layers on base)
   #   - gnome     (layers on base)
   #   - kde       (layers on base)
   #   - niri      (layers on base)
@@ -210,10 +210,10 @@ jobs:
     secrets:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
-  # ── Stage 3: Desktop HWE and GDX flavors ───────────────────────────────────
+  # ── Stage 3: Desktop HWE and nvidia flavors ───────────────────────────────────
   # Runs only after ALL stage-2 jobs pass. Includes:
   #   - gnome-hwe, kde-hwe, niri-hwe   (layer on base-hwe)
-  #   - gnome-gdx, kde-gdx, niri-gdx   (layer on base-gdx)
+  #   - gnome-nvidia, kde-nvidia, niri-nvidia   (layer on base-nvidia)
   # All run in parallel within stage 3.
   build_stage3:
     name: "S3 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
@@ -234,10 +234,10 @@ jobs:
     secrets:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
-  # ── Stage 4: Combined GDX+HWE flavors ──────────────────────────────────────
+  # ── Stage 4: Combined nvidia+HWE flavors ──────────────────────────────────────
   # Runs only after ALL stage-3 jobs pass. Includes:
-  #   - gnome-gdx-hwe   (layers on gnome-hwe from stage 3)
-  # Must be a separate stage from stage 3 because gnome-gdx-hwe depends on
+  #   - gnome-nvidia-hwe   (layers on gnome-hwe from stage 3)
+  # Must be a separate stage from stage 3 because gnome-nvidia-hwe depends on
   # gnome-hwe, which is also built in stage 3.
   build_stage4:
     name: "S4 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
@@ -261,7 +261,7 @@ jobs:
   # ── Artifact builds per stage (ISO + QCOW2) ───────────────────────────────
   # Each stage's artifacts depend only on that stage's image builds.
   # This replaces the old single build_artifacts job that had
-  # `needs: build_stage4`, which blocked ALL ISOs on gnome-gdx-hwe.
+  # `needs: build_stage4`, which blocked ALL ISOs on gnome-nvidia-hwe.
   # ISOs pull the already-published GHCR image for their stage.
 
   build_artifacts_s2:

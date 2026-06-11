@@ -110,7 +110,7 @@ case $choice in
 	if [ -n "$3" ]; then
 		flavor=$3
 	else
-		read -r -p "Enter flavor (base/dx/gdx): " flavor
+		read -r -p "Enter flavor (base/dx/nvidia): " flavor
 	fi
 
 	# Determine image name
@@ -149,7 +149,7 @@ case $choice in
 	# Add flavor to description
 	case "$flavor" in
 	dx) IMAGE_DESC="${IMAGE_DESC} DX" ;;
-	gdx) IMAGE_DESC="${IMAGE_DESC} GDX" ;;
+	nvidia) IMAGE_DESC="${IMAGE_DESC} nvidia" ;;
 	esac
 
 	echo "Building: image=$IMAGE_NAME, variant=$variant, flavor=$flavor"

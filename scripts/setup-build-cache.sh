@@ -16,9 +16,9 @@ fi
 
 # Extract base variant name by stripping flavor suffixes
 # This ensures all flavors of a variant share the same cache
-# Examples: albacore-gdx -> albacore, yellowfin-hwe -> yellowfin
+# Examples: albacore-nvidia -> albacore, yellowfin-hwe -> yellowfin
 BASE_VARIANT="${VARIANT}"
-BASE_VARIANT="${BASE_VARIANT%-gdx}"
+BASE_VARIANT="${BASE_VARIANT%-nvidia}"
 BASE_VARIANT="${BASE_VARIANT%-hwe}"
 BASE_VARIANT="${BASE_VARIANT%-kde}"
 BASE_VARIANT="${BASE_VARIANT%-dx}"

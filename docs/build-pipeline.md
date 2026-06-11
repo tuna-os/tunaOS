@@ -4,7 +4,7 @@ This document provides a comprehensive overview of the CI/CD pipeline for TunaOS
 
 ## 🏗️ Architecture Overview
 
-The pipeline builds images on a weekly schedule (Tuesdays at 1am UTC) and publishes them with the `<flavor>` tag (e.g. `gnome`, `gnome-gdx`). There is no promotion system — weekly builds are considered stable and ready for use. `latest` no longer exists as a monolith; each flavor has its own tag.
+The pipeline builds images on a weekly schedule (Tuesdays at 1am UTC) and publishes them with the `<flavor>` tag (e.g. `gnome`, `gnome-nvidia`). There is no promotion system — weekly builds are considered stable and ready for use. `latest` no longer exists as a monolith; each flavor has its own tag.
 
 ### Variants (5 base OSes)
 
@@ -21,9 +21,9 @@ The pipeline builds images on a weekly schedule (Tuesdays at 1am UTC) and publis
 | Stage | Flavors | Description |
 |---|---|---|
 | 1 | `base` | Minimal OS (required for all downstream stages) |
-| 2 | `base-hwe`, `base-gdx`, `gnome`, `gnome50`, `cosmic`, `kde`, `niri` | HWE/GDX base layers + desktop environments |
-| 3 | `<de>-hwe`, `<de>-gdx` (e.g. `gnome-hwe`, `kde-gdx`) | DE layered on HWE or GDX base |
-| 4 | `gnome-gdx-hwe` | GNOME + GDX + HWE combined |
+| 2 | `base-hwe`, `base-nvidia`, `gnome`, `gnome50`, `cosmic`, `kde`, `niri` | HWE/nvidia base layers + desktop environments |
+| 3 | `<de>-hwe`, `<de>-nvidia` (e.g. `gnome-hwe`, `kde-nvidia`) | DE layered on HWE or nvidia base |
+| 4 | `gnome-nvidia-hwe` | GNOME + nvidia + HWE combined |
 
 Flavor availability varies per variant — e.g. `bonito` omits `gnome50` and some non-GNOME HWE layers.
 
@@ -33,7 +33,7 @@ HWE is a dedicated `base-hwe` layer (stage 2), not bundled with any desktop. It 
 - **kernel**: `coreos/fedora` via `ublue-os/akmods`
 - **NVIDIA drivers**: `ublue-os/akmods-nvidia-open` using coreos-stable builds
 
-Desktop HWE images (<de>-hwe) layer on `base-hwe` in stage 3. GDX images (<de>-gdx) layer on `base-gdx`, which includes NVIDIA/CUDA tooling from `Containerfile.gdx` + `Containerfile.hwe`.
+Desktop HWE images (<de>-hwe) layer on `base-hwe` in stage 3. nvidia images (<de>-nvidia) layer on `base-nvidia`, which includes NVIDIA/CUDA tooling from `Containerfile.nvidia` + `Containerfile.hwe`.
 
 ---
 
@@ -50,9 +50,9 @@ The single build workflow for all variants. Replaces the old per-variant `build-
 - **Process**:
   1. **Matrix Generation** (`generate_matrix`): reads `.github/build-config.yml` via `yq` + `jq`, emits one matrix per stage (S1–S4)
   2. **Stage 1** (`build_base`): builds `{variant}:base` for every variant in parallel
-  3. **Stage 2** (`build_stage2`): builds `base-hwe`, `base-gdx`, and all desktop flavors (gnome, kde, niri, cosmic) — runs after all stage 1 complete
-  4. **Stage 3** (`build_stage3`): builds `<de>-hwe` and `<de>-gdx` — runs after all stage 2 complete
-  5. **Stage 4** (`build_stage4`): builds `gnome-gdx-hwe` — runs after all stage 3 complete
+  3. **Stage 2** (`build_stage2`): builds `base-hwe`, `base-nvidia`, and all desktop flavors (gnome, kde, niri, cosmic) — runs after all stage 1 complete
+  4. **Stage 3** (`build_stage3`): builds `<de>-hwe` and `<de>-nvidia` — runs after all stage 2 complete
+  5. **Stage 4** (`build_stage4`): builds `gnome-nvidia-hwe` — runs after all stage 3 complete
   6. **Artifacts** (`build_artifacts_s2`, `build_artifacts_s3`, `build_artifacts_s4`): per-stage artifact jobs build ISOs (via `just iso-tacklebox`) and QCOW2s for combo cells where `build_iso: true` / `build_qcow2: true`. Each stage's artifacts depend only on that stage's image builds.
 - **Key Features**:
   - **DAG enforcement**: jobs use `needs` to enforce stage ordering; within a stage, `fail-fast: false`

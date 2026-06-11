@@ -37,7 +37,7 @@ jobs:
           if [[ -n "$INPUT_VARIANT" && -n "$INPUT_FLAVOR" ]]; then
             PICKED="[{\"variant\": \"$INPUT_VARIANT\", \"flavor\": \"$INPUT_FLAVOR\"}]"
           else
-            # Get desktop-only variant:flavor pairs (exclude base/hwe/gdx suffixes and base flavors)
+            # Get desktop-only variant:flavor pairs (exclude base/hwe/nvidia suffixes and base flavors)
             # These are the most representative images to rotate through for daily checks
             CONFIG_FILE=".github/build-config.yml"
             # shellcheck disable=SC2016
