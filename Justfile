@@ -438,19 +438,8 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     fi
 
 # Build a TunaOS live ISO via tacklebox (no Anaconda, dmsquash-live + sd-boot)
-live-iso variant='skipjack' flavor='gnome' repo='local' tag='':
-    #!/usr/bin/env bash
-    set -euo pipefail
-    _tag="{{ tag }}"
-    [[ -z "$_tag" ]] && _tag="{{ flavor }}"
-    sudo bash ./scripts/build-iso-tacklebox.sh "{{ variant }}" "{{ flavor }}" "{{ repo }}" "$_tag"
-
-# Shortcut for live-iso
+# Build a live ISO via tacklebox (replaces deprecated bootc-image-builder approach)
 iso variant='skipjack' flavor='gnome' repo='local' tag='':
-    @{{ just }} live-iso {{ variant }} {{ flavor }} {{ repo }} {{ tag }}
-
-# Build a live ISO via tacklebox (alias, replaces deprecated bootc-image-builder approach)
-iso-tacklebox variant='yellowfin' flavor='gnome' repo='local' tag='':
     #!/usr/bin/env bash
     set -euo pipefail
     _tag="{{ tag }}"
@@ -461,7 +450,6 @@ iso-tacklebox variant='yellowfin' flavor='gnome' repo='local' tag='':
 # group: '' / default (flagship gnome+hwe), community (kde/cosmic/niri), nvidia.
 iso-group variant='yellowfin' group='default' repo='ghcr':
     sudo bash ./scripts/build-iso-group.sh "{{ variant }}" "{{ group }}" "{{ repo }}"
-
 # Generate a QCOW2 disk image using bootc install to-disk (via loopback in a privileged container)
 qcow2 variant flavor='gnome' repo='local' tag='':
     #!/usr/bin/env bash

@@ -103,7 +103,7 @@ jobs:
           GITHUB_REPOSITORY_OWNER: tuna-os
         run: |
           sudo GITHUB_REPOSITORY_OWNER=tuna-os \
-            just iso-tacklebox "${{ matrix.variant }}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
+            just iso "${{ matrix.variant }}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
 
       - name: Upload ISO to Cloudflare R2
         if: ${{ inputs.skip_upload != true }}

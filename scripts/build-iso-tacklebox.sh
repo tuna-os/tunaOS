@@ -37,8 +37,8 @@ if [[ "$EUID" -ne 0 ]]; then
 	exit 1
 fi
 
-if [[ ! -d "live-iso" ]]; then
-	echo "ERROR: run from project root (live-iso/ not found in $(pwd))" >&2
+if [[ ! -d "scripts" ]]; then
+	echo "ERROR: run from project root (scripts/ not found in $(pwd))" >&2
 	exit 1
 fi
 

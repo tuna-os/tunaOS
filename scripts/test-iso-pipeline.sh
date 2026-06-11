@@ -66,7 +66,7 @@ echo "✓ Step 1 passed"
 # ── Step 2: Build ISO ───────────────────────────────────────────────────────
 
 step "Step 2: Build ISO"
-sudo just live-iso "$VARIANT" "$FLAVOR" local
+sudo just iso "$VARIANT" "$FLAVOR" local
 PASS=$((PASS + 1))
 echo "✓ Step 2 passed"
 
