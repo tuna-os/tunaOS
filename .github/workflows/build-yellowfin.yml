@@ -1,7 +1,7 @@
 name: Build Yellowfin
 on:
   schedule:
-    - cron: "0 1 * * *"  # 01:00 UTC daily
+    - cron: "0 1 * * *"
   workflow_dispatch:
     inputs:
       flavor:
@@ -20,5 +20,4 @@ jobs:
     with:
       variant: 'yellowfin'
       flavor: ${{ inputs.flavor || 'all' }}
-    secrets:
-      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
+    secrets: inherit
