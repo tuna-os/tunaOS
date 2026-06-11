@@ -39,7 +39,9 @@
       "matchUpdateTypes": ["digest"]
     },
     {
-      "automerge": true,
+      // Base image digests are critical to system integrity — require
+      // human review rather than auto-merging (#217).
+      "automerge": false,
       "matchUpdateTypes": ["digest"],
       "matchDepNames": [
         // AlmaLinux base images
