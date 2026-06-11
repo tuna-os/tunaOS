@@ -6,12 +6,19 @@
 # Strict mode: exit on error, unset variable, or pipeline middle failure.
 set -euo pipefail
 
+# Source registry resolution for mirror configurability (RFC-009).
+# Falls back to hardcoded ref if _registry.sh is unavailable.
+if [[ -f "$(dirname "${BASH_SOURCE[0]}")/_registry.sh" ]]; then
+	. "$(dirname "${BASH_SOURCE[0]}")/_registry.sh"
+fi
+
 # --- Configuration ---
 # SECURITY: Pinned to a specific SHA256 digest to prevent supply-chain
-# attacks via tag mutation. To update, fetch the new digest:
+# attacks via tag mutation. Resolved through registry_ref() for mirror
+# configurability (RFC-009). To update the digest:
 #   podman pull ghcr.io/hhd-dev/rechunk:latest
 #   podman inspect ghcr.io/hhd-dev/rechunk:latest --format '{{.Digest}}'
-readonly RECHUNKER_IMAGE='ghcr.io/hhd-dev/rechunk@sha256:8a84bd5a029681aa8db523f927b7c53b5aded9b078b81605ac0a2fedc969f528'
+readonly RECHUNKER_IMAGE="${RECHUNKER_IMAGE:-$(registry_ref rechunker 2>/dev/null || echo 'ghcr.io/hhd-dev/rechunk@sha256:8a84bd5a029681aa8db523f927b7c53b5aded9b078b81605ac0a2fedc969f528')}"
 
 # --- Input Validation ---
 if [ -z "$1" ]; then

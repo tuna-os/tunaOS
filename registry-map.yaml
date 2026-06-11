@@ -71,17 +71,23 @@ images:
     digest: sha256:33ab77f29c90fb3ec7a3a6b6c84ee2f2bcff1846b3c34a3231092aebd39e673b
     tag: latest
 
-  # --- Tool images (local dev) ---
-  # novnc and qemu images are used by local development scripts
-  # (lima-novnc.sh, run-vm.sh). Both images currently require
-  # authentication or don't exist on public registries.
-  #
-  # Override with env vars:
-  #   NOVNC_IMAGE=docker.io/your/novnc:tag scripts/lima-novnc.sh ...
-  #   QEMU_IMAGE=docker.io/your/qemu:tag just run-qcow2 albacore gnome
-  #
-  # Once publicly-available images are identified, add them here and
-  # pin to SHA256 digests.
+  # --- Tool images (build infra) ---
+  tacklebox:
+    registry: ghcr
+    path: tuna-os/tacklebox
+    tag: latest
+
+  rechunker:
+    registry: ghcr
+    path: hhd-dev/rechunk
+    # SECURITY: Pinned to digest. Update by:
+    #   podman pull ghcr.io/hhd-dev/rechunk:latest
+    #   podman inspect ghcr.io/hhd-dev/rechunk:latest --format '{{.Digest}}'
+    digest: sha256:8a84bd5a029681aa8db523f927b7c53b5aded9b078b81605ac0a2fedc969f528
+    tag: latest
+
+  # novnc and qemu: images not publicly available on GHCR/Docker Hub.
+  # Use env vars NOVNC_IMAGE / QEMU_IMAGE in lima-novnc.sh / run-vm.sh.
 
   # --- ISO bootc target ---
   bluefin-iso:

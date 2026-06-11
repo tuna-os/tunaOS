@@ -54,7 +54,7 @@ fi
 # to opt into the source build (helpful when iterating on tacklebox itself
 # locally before a tag is cut).
 
-TACKLEBOX_IMAGE="${TACKLEBOX_IMAGE:-ghcr.io/tuna-os/tacklebox:latest}"
+TACKLEBOX_IMAGE="${TACKLEBOX_IMAGE:-$(registry_ref tacklebox 2>/dev/null || echo 'ghcr.io/tuna-os/tacklebox:latest')}"
 TACKLEBOX_FROM_SOURCE="${TACKLEBOX_FROM_SOURCE:-0}"
 
 if [[ "$TACKLEBOX_FROM_SOURCE" == "1" ]]; then
