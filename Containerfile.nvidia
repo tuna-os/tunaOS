@@ -3,7 +3,7 @@ ARG IMAGE_NAME
 ARG IMAGE_VENDOR
 ARG SHA_HEAD_SHORT
 ARG ENABLE_HWE="${ENABLE_HWE:-0}"
-ARG ENABLE_GDX="${ENABLE_GDX:-0}"
+ARG ENABLE_NVIDIA="${ENABLE_NVIDIA:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 ARG AKMODS_VERSION="${AKMODS_VERSION:-centos-10}"
 ARG AKMODS_NVIDIA_VERSION="${AKMODS_NVIDIA_VERSION:-${AKMODS_VERSION}}"
@@ -21,12 +21,12 @@ COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 
 # ==============================================================================
-# GDX Base stage - Adds graphics/developer extras to the base image
+# NVIDIA Base stage - Adds graphics/developer extras to the base image
 # NOTE: This stage inherits all base image customization (copy-files.sh,
 # package installation, services, etc.) from the chain parent image (${BASE_IMAGE}).
-# Only GDX-specific additions are applied here.
+# Only NVIDIA-specific additions are applied here.
 # ==============================================================================
-FROM ${BASE_IMAGE} AS base-gdx
+FROM ${BASE_IMAGE} AS base-nvidia
 
 ARG BASE_IMAGE
 ARG IMAGE_NAME
@@ -34,7 +34,7 @@ ARG IMAGE_VENDOR
 ARG IMAGE_NAME_VARIANT
 ARG SHA_HEAD_SHORT
 ARG ENABLE_HWE
-ARG ENABLE_GDX
+ARG ENABLE_NVIDIA
 ARG DESKTOP_FLAVOR
 ENV BASE_IMAGE=${BASE_IMAGE}
 ENV IMAGE_NAME=${IMAGE_NAME}
@@ -42,7 +42,7 @@ ENV IMAGE_VENDOR=${IMAGE_VENDOR}
 ENV IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT}
 ENV SHA_HEAD_SHORT=${SHA_HEAD_SHORT}
 ENV ENABLE_HWE=${ENABLE_HWE}
-ENV ENABLE_GDX=${ENABLE_GDX}
+ENV ENABLE_NVIDIA=${ENABLE_NVIDIA}
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
 RUN rm -rf /opt && mkdir /opt
@@ -53,12 +53,15 @@ RUN \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=akmods_nvidia_open_full,src=/rpms,dst=/tmp/akmods-nvidia-open-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
-    /run/context/build_scripts/GDX.sh
+    /run/context/build_scripts/nvidia.sh
 
 # ==============================================================================
-# GNOME variant - GDX base with GNOME desktop target
+# GNOME variant - NVIDIA base with GNOME desktop target
 # ==============================================================================
-FROM base-gdx AS gnome
+# ============================================================
+# GNOME variant - base-nvidia base with GNOME desktop target
+# ============================================================
+FROM base-nvidia AS gnome
 
 ARG DESKTOP_FLAVOR=gnome
 ENV DESKTOP_FLAVOR=gnome
@@ -68,10 +71,10 @@ RUN dnf versionlock add glib2
 
 RUN rm -rf /opt && ln -s /var/opt /opt
 
-# ==============================================================================
-# COSMIC variant - GDX base with COSMIC desktop target
-# ==============================================================================
-FROM base-gdx AS cosmic
+# ============================================================
+# COSMIC variant - base-nvidia base with COSMIC desktop target
+# ============================================================
+FROM base-nvidia AS cosmic
 
 ARG DESKTOP_FLAVOR=cosmic
 ENV DESKTOP_FLAVOR=cosmic
@@ -81,10 +84,10 @@ RUN dnf versionlock add glib2
 
 RUN rm -rf /opt && ln -s /var/opt /opt
 
-# ==============================================================================
-# GNOME 50 variant - GDX base with GNOME 50 desktop target
-# ==============================================================================
-FROM base-gdx AS gnome50
+# ============================================================
+# GNOME50 variant - base-nvidia base with GNOME50 desktop target
+# ============================================================
+FROM base-nvidia AS gnome50
 
 ARG DESKTOP_FLAVOR=gnome50
 ENV DESKTOP_FLAVOR=gnome50
@@ -94,10 +97,10 @@ RUN dnf versionlock add glib2
 
 RUN rm -rf /opt && ln -s /var/opt /opt
 
-# ==============================================================================
-# KDE variant - GDX base with KDE desktop target
-# ==============================================================================
-FROM base-gdx AS kde
+# ============================================================
+# KDE variant - base-nvidia base with KDE desktop target
+# ============================================================
+FROM base-nvidia AS kde
 
 ARG DESKTOP_FLAVOR=kde
 ENV DESKTOP_FLAVOR=kde
@@ -106,10 +109,11 @@ ENV DESKTOP_FLAVOR=kde
 RUN dnf versionlock add glib2
 
 RUN rm -rf /opt && ln -s /var/opt /opt
-# ==============================================================================
-# Niri variant - GDX base with Niri+DMS desktop target
-# ==============================================================================
-FROM base-gdx AS niri
+
+# ============================================================
+# NIRI variant - base-nvidia base with NIRI desktop target
+# ============================================================
+FROM base-nvidia AS niri
 
 ARG DESKTOP_FLAVOR=niri
 ENV DESKTOP_FLAVOR=niri
@@ -118,3 +122,4 @@ ENV DESKTOP_FLAVOR=niri
 RUN dnf versionlock add glib2
 
 RUN rm -rf /opt && ln -s /var/opt /opt
+

@@ -33,14 +33,14 @@ You can expect:
 ## Security Model
 
 TunaOS images are:
-- Built in CI from pinned base images (see `image-versions.yaml`)
+- Built in CI from pinned base images (see `registry-map.yaml`)
 - Signed with [cosign](https://github.com/sigstore/cosign) (public key: `cosign.pub`)
 - Scanned for vulnerabilities via GitHub's built-in scanning
 - Published as SBOM-attested OCI images
 
 ## Supply Chain Security
 
-- Base images pinned by digest in `image-versions.yaml`
+- Base images pinned by digest in `registry-map.yaml`
 - Third-party GitHub Actions pinned to commit SHAs
 - Build secrets use BuildKit secret mounts, never environment variables
 - RPM packages from official AlmaLinux/CentOS/Fedora repositories and verified COPRs

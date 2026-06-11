@@ -58,14 +58,14 @@ fi
 BASE_FOR_BUILD=""
 CONTAINERFILE="Containerfile"
 ENABLE_HWE="0"
-ENABLE_GDX="0"
+ENABLE_NVIDIA="0"
 PARENT_FLAVOR=""
 DESKTOP_FLAVOR="$FLAVOR"
 
 case "$FLAVOR" in
 "hwe") FLAVOR="gnome-hwe" ;;
-"gdx") FLAVOR="gnome-gdx" ;;
-"gdx-hwe") FLAVOR="gnome-gdx-hwe" ;;
+"nvidia") FLAVOR="gnome-nvidia" ;;
+"nvidia-hwe") FLAVOR="gnome-nvidia-hwe" ;;
 esac
 
 if [[ "$FLAVOR" == "all" ]]; then
@@ -82,15 +82,15 @@ elif [[ "$FLAVOR" == "base-hwe" ]]; then
 	ENABLE_HWE="1"
 	DESKTOP_FLAVOR="base-hwe"
 	PARENT_FLAVOR="base"
-elif [[ "$FLAVOR" == "base-gdx" ]]; then
-	CONTAINERFILE="Containerfile.gdx"
-	ENABLE_GDX="1"
-	DESKTOP_FLAVOR="base-gdx"
+elif [[ "$FLAVOR" == "base-nvidia" ]]; then
+	CONTAINERFILE="Containerfile.nvidia"
+	ENABLE_NVIDIA="1"
+	DESKTOP_FLAVOR="base-nvidia"
 	PARENT_FLAVOR="base"
-elif [[ "$FLAVOR" == *"-gdx-hwe" ]]; then
-	DESKTOP_FLAVOR="${FLAVOR%-gdx-hwe}"
-	CONTAINERFILE="Containerfile.gdx"
-	ENABLE_GDX="1"
+elif [[ "$FLAVOR" == *"-nvidia-hwe" ]]; then
+	DESKTOP_FLAVOR="${FLAVOR%-nvidia-hwe}"
+	CONTAINERFILE="Containerfile.nvidia"
+	ENABLE_NVIDIA="1"
 	ENABLE_HWE="1"
 	PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
 elif [[ "$FLAVOR" == *"-hwe" ]]; then
@@ -98,10 +98,10 @@ elif [[ "$FLAVOR" == *"-hwe" ]]; then
 	CONTAINERFILE="Containerfile.hwe"
 	ENABLE_HWE="1"
 	PARENT_FLAVOR="${DESKTOP_FLAVOR}"
-elif [[ "$FLAVOR" == *"-gdx" ]]; then
-	DESKTOP_FLAVOR="${FLAVOR%-gdx}"
-	CONTAINERFILE="Containerfile.gdx"
-	ENABLE_GDX="1"
+elif [[ "$FLAVOR" == *"-nvidia" ]]; then
+	DESKTOP_FLAVOR="${FLAVOR%-nvidia}"
+	CONTAINERFILE="Containerfile.nvidia"
+	ENABLE_NVIDIA="1"
 	PARENT_FLAVOR="${DESKTOP_FLAVOR}"
 else
 	DESKTOP_FLAVOR="$FLAVOR"
@@ -135,10 +135,8 @@ fi
 
 set -euxo pipefail
 
-common_image_sha=$("$YQ" -r '.images[] | select(.name == "common") | .digest' image-versions.yaml)
-common_image_ref="${common_image:-$(registry_ref common "@${common_image_sha}")}"
-brew_image_sha=$("$YQ" -r '.images[] | select(.name == "brew") | .digest' image-versions.yaml)
-brew_image_ref="${brew_image:-$(registry_ref brew "@${brew_image_sha}")}"
+common_image_ref="${common_image:-$(registry_ref common)}"
+brew_image_ref="${brew_image:-$(registry_ref brew)}"
 
 BUILD_ARGS=()
 BUILD_ARGS+=("--build-arg" "IMAGE_NAME=${TARGET_TAG}")
@@ -148,7 +146,7 @@ BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${BASE_FOR_BUILD}")
 BUILD_ARGS+=("--build-arg" "COMMON_IMAGE_REF=${common_image_ref}")
 BUILD_ARGS+=("--build-arg" "BREW_IMAGE_REF=${brew_image_ref}")
 BUILD_ARGS+=("--build-arg" "ENABLE_HWE=${ENABLE_HWE}")
-BUILD_ARGS+=("--build-arg" "ENABLE_GDX=${ENABLE_GDX}")
+BUILD_ARGS+=("--build-arg" "ENABLE_NVIDIA=${ENABLE_NVIDIA}")
 BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR=${DESKTOP_FLAVOR}")
 
 AKMODS_ORG=$("$YQ" -r ".variants[] | select(.id == \"${TARGET_TAG}\") | .akmods // \"ublue-os\"" .github/build-config.yml)

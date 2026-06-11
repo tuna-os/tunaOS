@@ -3,7 +3,7 @@ ARG IMAGE_NAME
 ARG IMAGE_VENDOR
 ARG SHA_HEAD_SHORT
 ARG ENABLE_HWE="${ENABLE_HWE:-0}"
-ARG ENABLE_GDX="${ENABLE_GDX:-0}"
+ARG ENABLE_NVIDIA="${ENABLE_NVIDIA:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 ARG AKMODS_VERSION="${AKMODS_VERSION:-centos-10}"
 ARG COMMON_IMAGE_REF
@@ -34,14 +34,14 @@ ARG IMAGE_NAME
 ARG IMAGE_VENDOR
 ARG SHA_HEAD_SHORT
 ARG ENABLE_HWE
-ARG ENABLE_GDX
+ARG ENABLE_NVIDIA
 ARG DESKTOP_FLAVOR
 ENV BASE_IMAGE=${BASE_IMAGE}
 ENV IMAGE_NAME=${IMAGE_NAME}
 ENV IMAGE_VENDOR=${IMAGE_VENDOR}
 ENV SHA_HEAD_SHORT=${SHA_HEAD_SHORT}
 ENV ENABLE_HWE=${ENABLE_HWE}
-ENV ENABLE_GDX=${ENABLE_GDX}
+ENV ENABLE_NVIDIA=${ENABLE_NVIDIA}
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
 RUN rm -rf /opt && mkdir /opt
@@ -57,6 +57,9 @@ RUN \
 # ==============================================================================
 # GNOME variant - HWE base with GNOME desktop
 # ==============================================================================
+# ============================================================
+# GNOME variant - base-hwe base with GNOME desktop target
+# ============================================================
 FROM base-hwe AS gnome
 
 ARG DESKTOP_FLAVOR=gnome
@@ -65,13 +68,11 @@ ENV DESKTOP_FLAVOR=gnome
 # Lock glib2 for consistency
 RUN dnf versionlock add glib2
 
-# Makes `/opt` writeable by default
-# Needs to be here to make the main image build strict (no /opt there)
 RUN rm -rf /opt && ln -s /var/opt /opt
 
-# ==============================================================================
-# COSMIC variant - HWE base with COSMIC desktop
-# ==============================================================================
+# ============================================================
+# COSMIC variant - base-hwe base with COSMIC desktop target
+# ============================================================
 FROM base-hwe AS cosmic
 
 ARG DESKTOP_FLAVOR=cosmic
@@ -80,12 +81,11 @@ ENV DESKTOP_FLAVOR=cosmic
 # Lock glib2 for consistency
 RUN dnf versionlock add glib2
 
-# Makes `/opt` writeable by default
 RUN rm -rf /opt && ln -s /var/opt /opt
 
-# ==============================================================================
-# GNOME 50 variant - HWE base with GNOME 50 desktop
-# ==============================================================================
+# ============================================================
+# GNOME50 variant - base-hwe base with GNOME50 desktop target
+# ============================================================
 FROM base-hwe AS gnome50
 
 ARG DESKTOP_FLAVOR=gnome50
@@ -94,12 +94,11 @@ ENV DESKTOP_FLAVOR=gnome50
 # Lock glib2 for consistency
 RUN dnf versionlock add glib2
 
-# Makes `/opt` writeable by default
 RUN rm -rf /opt && ln -s /var/opt /opt
 
-# ==============================================================================
-# KDE variant - HWE base with KDE desktop
-# ==============================================================================
+# ============================================================
+# KDE variant - base-hwe base with KDE desktop target
+# ============================================================
 FROM base-hwe AS kde
 
 ARG DESKTOP_FLAVOR=kde
@@ -108,13 +107,11 @@ ENV DESKTOP_FLAVOR=kde
 # Lock glib2 for consistency
 RUN dnf versionlock add glib2
 
-# Makes `/opt` writeable by default
-# Needs to be here to make the main image build strict (no /opt there)
 RUN rm -rf /opt && ln -s /var/opt /opt
 
-# ==============================================================================
-# Niri variant - HWE base with Niri+DMS desktop
-# ==============================================================================
+# ============================================================
+# NIRI variant - base-hwe base with NIRI desktop target
+# ============================================================
 FROM base-hwe AS niri
 
 ARG DESKTOP_FLAVOR=niri
@@ -123,6 +120,5 @@ ENV DESKTOP_FLAVOR=niri
 # Lock glib2 for consistency
 RUN dnf versionlock add glib2
 
-# Makes `/opt` writeable by default
-# Needs to be here to make the main image build strict (no /opt there)
 RUN rm -rf /opt && ln -s /var/opt /opt 
+

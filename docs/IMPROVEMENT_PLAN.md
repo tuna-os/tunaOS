@@ -30,7 +30,7 @@ Commits between `12a8e92` (prior HEAD) and `ffdb9e6` (current HEAD).
 | `1be982c` | 4.1 | RHSM credentials via BuildKit secret. Justfile materialises a mode-0600 tempfile and passes `--secret id=rhsm`; Containerfile mounts it at `/run/secrets/rhsm` for one RUN only. No more leaks via `podman inspect` *or* `podman history --no-trunc`. |
 | `f967658` | 3a | New `scripts/build-iso-tacklebox.sh` + `just iso-tacklebox` recipe. Pinned SHA / source build in `/var/cache/tunaos/tacklebox`. Added *alongside* `just live-iso`, not as a replacement. |
 | `8efe55f` | docs | Plan doc updated mid-session. |
-| `970042d` | 2 + KDE | Two fixes in one commit: filter mismatched matrix cells in `iso-e2e.yml` and fetch the exact `<variant>-<flavor>-latest.iso` name (the rclone glob was over-matching `-gdx-latest.iso`). Plus KDE Plasma live-environment block in `live-iso/common/src/build.sh` — SDDM autologin, kscreenlocker off, power profile no-sleep, suspend targets masked — lifted from `hanthor/tromso-iso`. |
+| `970042d` | 2 + KDE | Two fixes in one commit: filter mismatched matrix cells in `iso-e2e.yml` and fetch the exact `<variant>-<flavor>-latest.iso` name (the rclone glob was over-matching `-nvidia-latest.iso`). Plus KDE Plasma live-environment block in `live-iso/common/src/build.sh` — SDDM autologin, kscreenlocker off, power profile no-sleep, suspend targets masked — lifted from `hanthor/tromso-iso`. |
 | `0c9466e` | catch-up fix | `fire-copilot-batch.py` exits 0 with a warning instead of raising when `COPILOT_PAT` is missing or rejected. Unblocked Watch Aurora / Bluefin-LTS / Zirconium workflows that had been failing on every scheduled run since 2026-05-18. |
 | `711e88b` | 2 | Install `qemu-utils` in `iso-e2e.yml` so `qemu-img create` doesn't silently no-op. Surface the missing-binary case in `iso-e2e.sh` with exit 77. |
 | `5629307` | catch-up fix | Broaden the auth-failure signal set in `fire-copilot-batch.py` — `gh auth status` reports invalid tokens with friendlier strings than the raw API's "401 Bad credentials". |
@@ -313,7 +313,7 @@ Most impactful items first:
    `.build-logs/` snapshot is from March 2026; later commits to
    `cleanup.sh` may have already resolved these. Verify against a
    fresh build before removing the mask.
-7. **Phase 5 — docs polish.** ✅ COMPLETE (PR #319 + follow-up commit `a7c87f0`). AGENT_GUIDE Troubleshooting updated with dnf_retry, flavor table modernized to 4-stage DAG, Key Files expanded with Containerfile.hwe, Commands examples fixed (dx/gdx→gnome/gnome-gdx). docs/TESTING.md and tests/README.md added. build-pipeline.md fully rewritten: 5 variants, unified build-variant.yml, tacklebox, iso-e2e.
+7. **Phase 5 — docs polish.** ✅ COMPLETE (PR #319 + follow-up commit `a7c87f0`). AGENT_GUIDE Troubleshooting updated with dnf_retry, flavor table modernized to 4-stage DAG, Key Files expanded with Containerfile.hwe, Commands examples fixed (dx/nvidia→gnome/gnome-nvidia). docs/TESTING.md and tests/README.md added. build-pipeline.md fully rewritten: 5 variants, unified build-variant.yml, tacklebox, iso-e2e.
 
 ## Upstream work (separate repos)
 

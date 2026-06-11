@@ -29,7 +29,7 @@ TunaOS is a curated collection of **bootc-based desktop operating systems** buil
 - **Homebrew**: Baked into the image — all your CLI apps and fonts are just a `brew` command away
 - **Flathub by Default**: Full Flathub access out of the box — get any Flatpak available on the net
 - **HWE Option**: Hardware Enablement kernel for newer hardware support
-- **GDX Option**: NVIDIA drivers and CUDA for graphics and AI workflows
+- **NVIDIA Option**: NVIDIA drivers and CUDA for graphics and AI workflows
 
 ## 🐠 Images
 
@@ -58,10 +58,10 @@ Append to any desktop tag:
 |---|---|
 | *(none)* | Standard build |
 | `-hwe` | Hardware Enablement — newer kernel stack |
-| `-gdx` | NVIDIA drivers + CUDA |
-| `-gdx-hwe` | GDX on HWE kernel |
+| `-nvidia` | NVIDIA drivers + CUDA |
+| `-nvidia-hwe` | NVIDIA on HWE kernel |
 
-Example: `ghcr.io/tuna-os/yellowfin:gnome-hwe`, `ghcr.io/tuna-os/albacore:kde-gdx`
+Example: `ghcr.io/tuna-os/yellowfin:gnome-hwe`, `ghcr.io/tuna-os/albacore:kde-nvidia`
 
 ---
 

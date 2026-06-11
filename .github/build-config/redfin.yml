@@ -1,0 +1,16 @@
+id: redfin
+emoji: "🔒"
+description: "Based on RHEL 10 (local-build only)"
+base_image: "registry.redhat.io/rhel10/bootc-rhel-bootc:10"
+platforms: ["linux/amd64", "linux/arm64"]
+flavors:
+  - id: base
+    stage: 1
+    build_image: true
+    build_iso: false
+    build_qcow2: false
+  - id: gnome
+    stage: 2
+    build_image: true
+    build_iso: true
+    build_qcow2: false

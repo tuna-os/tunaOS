@@ -45,7 +45,7 @@ just redfin
 
 # Build all flavors
 just redfin base
-just redfin gdx
+just redfin nvidia
 
 # Or use the generic build command
 just build redfin base

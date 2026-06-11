@@ -128,6 +128,13 @@ generate-workflows:
     chmod +x scripts/generate-workflows.py
     python3 scripts/generate-workflows.py
 
+# Generate Containerfiles from desktop environment templates
+# Run after adding or removing a desktop environment.
+generate-containerfiles:
+    #!/usr/bin/env bash
+    chmod +x scripts/generate-containerfiles.py
+    python3 scripts/generate-containerfiles.py
+
 # Fix Just Syntax
 fix:
     #!/usr/bin/env bash
@@ -201,7 +208,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     BUILD_ARGS+=("--build-arg" "COMMON_IMAGE_REF=${common_image_ref}")
     BUILD_ARGS+=("--build-arg" "BREW_IMAGE_REF=${brew_image_ref}")
     BUILD_ARGS+=("--build-arg" "ENABLE_HWE={{ enable_hwe }}")
-    BUILD_ARGS+=("--build-arg" "ENABLE_GDX={{ enable_gdx }}")
+    BUILD_ARGS+=("--build-arg" "ENABLE_NVIDIA={{ enable_gdx }}")
     BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR={{ desktop_flavor }}")
 
     AKMODS_ORG=$({{ yq }} -r ".variants[] | select(.id == \"{{ target_tag }}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
@@ -362,15 +369,15 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     BASE_FOR_BUILD=""
     CONTAINERFILE="Containerfile"
     ENABLE_HWE="0"
-    ENABLE_GDX="0"
+    ENABLE_NVIDIA="0"
     PARENT_FLAVOR=""
     FLAVOR="{{ flavor }}"
     DESKTOP_FLAVOR="${FLAVOR}"
 
     case "${FLAVOR}" in
         "hwe") FLAVOR="gnome-hwe" ;;
-        "gdx") FLAVOR="gnome-gdx" ;;
-        "gdx-hwe") FLAVOR="gnome-gdx-hwe" ;;
+        "nvidia") FLAVOR="gnome-nvidia" ;;
+        "gdx-hwe") FLAVOR="gnome-nvidia-hwe" ;;
     esac
 
     if [[ "${FLAVOR}" == "all" ]]; then
@@ -385,17 +392,17 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         ENABLE_HWE="1"
         DESKTOP_FLAVOR="base-hwe"
         PARENT_FLAVOR="base"
-    elif [[ "${FLAVOR}" == "base-gdx" ]]; then
+    elif [[ "${FLAVOR}" == "base-nvidia" ]]; then
         CONTAINERFILE="Containerfile.gdx"
-        ENABLE_GDX="1"
-        DESKTOP_FLAVOR="base-gdx"
+        ENABLE_NVIDIA="1"
+        DESKTOP_FLAVOR="base-nvidia"
         PARENT_FLAVOR="base"
-    elif [[ "${FLAVOR}" == *"-gdx-hwe" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-gdx-hwe}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_GDX="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
+    elif [[ "${FLAVOR}" == *"-nvidia-hwe" ]]; then
+        DESKTOP_FLAVOR="${FLAVOR%-nvidia-hwe}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_NVIDIA="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
     elif [[ "${FLAVOR}" == *"-hwe" ]]; then
         DESKTOP_FLAVOR="${FLAVOR%-hwe}"; CONTAINERFILE="Containerfile.hwe"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
-    elif [[ "${FLAVOR}" == *"-gdx" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-gdx}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_GDX="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
+    elif [[ "${FLAVOR}" == *"-nvidia" ]]; then
+        DESKTOP_FLAVOR="${FLAVOR%-nvidia}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_NVIDIA="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
     else
         DESKTOP_FLAVOR="${FLAVOR}"
         BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
@@ -416,10 +423,10 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     TARGET_TAG_WITH_VERSION="${TARGET_TAG}:${TARGET_IMAGE_TAG}"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
         ./scripts/sync-build-cache.sh "${TARGET_TAG}" || true
     else
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_GDX}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
     fi
 
     if [[ "$DID_INIT" == "1" ]]; then

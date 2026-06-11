@@ -2,7 +2,7 @@
 
 source /usr/lib/ublue/setup-services/libsetup.sh
 
-version-script gdx-vscode-lts user 1 || exit 0
+version-script nvidia-vscode-lts user 1 || exit 0
 
 set -xeuo pipefail
 

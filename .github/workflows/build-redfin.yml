@@ -1,4 +1,4 @@
-name: Build Skipjack
+name: Build Redfin
 on:
   schedule:
     - cron: "0 1 * * *"
@@ -10,14 +10,14 @@ on:
         type: string
 
 concurrency:
-  group: build-skipjack-${{ github.ref }}
+  group: build-redfin-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: 🍣-skipjack
+    name: 🔒-redfin
     uses: ./.github/workflows/build-variant.yml
     with:
-      variant: 'skipjack'
+      variant: 'redfin'
       flavor: ${{ inputs.flavor || 'all' }}
     secrets: inherit

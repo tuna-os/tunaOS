@@ -1,0 +1,76 @@
+id: skipjack
+emoji: "🍣"
+description: "Based on CentOS Stream 10"
+base_image: "quay.io/centos-bootc/centos-bootc:stream10"
+platforms: ["linux/amd64", "linux/arm64"]
+flavors:
+  - id: base
+    stage: 1
+    build_image: true
+    build_iso: false
+    build_qcow2: false
+  - id: base-hwe
+    stage: 2
+    build_image: true
+    build_iso: false
+    build_qcow2: false
+  - id: base-nvidia
+    stage: 2
+    build_image: true
+    build_iso: false
+    build_qcow2: false
+  - id: gnome
+    stage: 2
+    build_image: true
+    build_iso: true
+    build_qcow2: true
+  - id: gnome50
+    stage: 2
+    build_image: true
+    build_iso: true
+    build_qcow2: false
+  - id: cosmic
+    stage: 2
+    build_image: true
+    build_iso: true
+    build_qcow2: false
+  - id: kde
+    stage: 2
+    build_image: true
+    build_iso: true
+    build_qcow2: false
+  - id: niri
+    stage: 2
+    build_image: true
+    build_iso: true
+    build_qcow2: false
+  - id: gnome-hwe
+    stage: 3
+    build_image: true
+    build_iso: false
+    build_qcow2: false
+  - id: gnome-nvidia
+    stage: 3
+    build_image: true
+    build_iso: true
+    build_qcow2: false
+  - id: gnome50-hwe
+    stage: 3
+    build_image: true
+    build_iso: false
+    build_qcow2: false
+  - id: gnome50-nvidia
+    stage: 3
+    build_image: true
+    build_iso: true
+    build_qcow2: false
+  - id: cosmic-hwe
+    stage: 3
+    build_image: true
+    build_iso: false
+    build_qcow2: false
+  - id: cosmic-nvidia
+    stage: 3
+    build_image: true
+    build_iso: true
+    build_qcow2: false

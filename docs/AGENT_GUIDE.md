@@ -26,12 +26,12 @@ TunaOS is a **bootc-based OS image builder** — it produces bootable OCI contai
 | Layer | Flavors | Contents |
 |---|---|---|
 | Stage 1 — base | `base` | Minimal OS (all variants) |
-| Stage 2 — HWE/GDX base + desktops | `base-hwe`, `base-gdx`, `gnome`, `gnome50`, `cosmic`, `kde`, `niri` | DE packages; HWE coreos kernel; GDX NVIDIA base |
-| Stage 3 — HWE/GDX desktops | `<de>-hwe`, `<de>-gdx` (e.g. `gnome-hwe`, `kde-gdx`) | DE layered on HWE/GDX base |
-| Stage 4 — combined | `gnome-gdx-hwe` | GNOME + GDX + HWE (layers on `gnome-hwe`) |
+| Stage 2 — HWE/nvidia base + desktops | `base-hwe`, `base-nvidia`, `gnome`, `gnome50`, `cosmic`, `kde`, `niri` | DE packages; HWE coreos kernel; nvidia NVIDIA base |
+| Stage 3 — HWE/nvidia desktops | `<de>-hwe`, `<de>-nvidia` (e.g. `gnome-hwe`, `kde-nvidia`) | DE layered on HWE/nvidia base |
+| Stage 4 — combined | `gnome-nvidia-hwe` | GNOME + nvidia + HWE (layers on `gnome-hwe`) |
 
 Flavor availability varies per variant — consult `.github/build-config.yml`.
-- `bonito` has fewer HWE/GDX combos (no `gnome50`, fewer non-GNOME HWE layers).
+- `bonito` has fewer HWE/nvidia combos (no `gnome50`, fewer non-GNOME HWE layers).
 - HWE flavors ship the `coreos/fedora` kernel + `ublue-os/akmods-nvidia-open`.
 
 ---
@@ -66,7 +66,7 @@ just check      # shellcheck, yamllint, jq, actionlint
 just yellowfin base
 
 # Build a chain (each depends on previous stage)
-just yellowfin base && just yellowfin gnome && just yellowfin gnome-gdx
+just yellowfin base && just yellowfin gnome && just yellowfin gnome-nvidia
 
 # Build shortcuts (all default to base flavor)
 just yellowfin [flavor]
@@ -146,16 +146,16 @@ just --list              # Show all available commands
 |---|---|
 | `Justfile` | All build commands and task automation |
 | `Containerfile` | Main multi-stage build definition (base, gnome, kde, niri, cosmic) |
-| `Containerfile.gdx` | GDX flavor definition (NVIDIA drivers + CUDA + gnome/kde/niri/cosmic DE stages) |
+| `Containerfile.nvidia` | NVIDIA flavor definition (NVIDIA drivers + CUDA + gnome/kde/niri/cosmic DE stages) |
 | `Containerfile.hwe` | HWE layer definition (coreos kernel, akmods + gnome/kde/niri/cosmic DE stages) |
 | `Containerfile.final` | Labels-only stage — applies OCI annotations to rechunked base image |
-| `Containerfile.dx` | ⚠️ DEPRECATED — reference only. Superseded by Containerfile.gdx. No CI consumers. |
+| `Containerfile.dx` | ⚠️ DEPRECATED — reference only. Superseded by Containerfile.nvidia. No CI consumers. |
 | `build_scripts/lib.sh` | Shared functions; OS detection logic |
 | `build_scripts/overrides/` | Variant-specific script overrides |
 | `system_files/` | Files copied into every image (`etc/`, `usr/`) |
 | `system_files_overrides/` | Variant/flavor-specific file overlays |
 | `scripts/get-base-image.sh` | Maps variant names to base container image URIs |
-| `image-versions.yaml` | Pinned base image digests |
+| `registry-map.yaml` | Pinned base image digests |
 | `.github/build-config.yml` | Central CI matrix config |
 | `renovate.json5` | Automated dependency update config |
 

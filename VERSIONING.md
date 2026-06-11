@@ -36,10 +36,10 @@ tunaOS images are rebuilt daily from upstream sources. There are no feature rele
 | `cosmic` | COSMIC Desktop |
 | `niri` | Niri (tiling Wayland) |
 | `*-hwe` | Hardware Enablement kernel (suffix, e.g. `gnome-hwe`) |
-| `*-gdx` | NVIDIA drivers + CUDA (suffix, e.g. `gnome-gdx`) |
-| `*-gdx-hwe` | Combined GDX + HWE (suffix, e.g. `gnome-gdx-hwe`) |
+| `*-nvidia` | NVIDIA drivers + CUDA (suffix, e.g. `gnome-nvidia`) |
+| `*-nvidia-hwe` | Combined nvidia + HWE (suffix, e.g. `gnome-nvidia-hwe`) |
 
-Hardware variants append to desktop tags: `<desktop>-hwe-<YYYYMMDD>`, `<desktop>-gdx-<YYYYMMDD>`
+Hardware variants append to desktop tags: `<desktop>-hwe-<YYYYMMDD>`, `<desktop>-nvidia-<YYYYMMDD>`
 
 ## Breaking Changes
 
