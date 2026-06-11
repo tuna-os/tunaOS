@@ -77,7 +77,7 @@ jobs:
     if: ${{ needs.generate-matrix.outputs.count != '0' }}
     runs-on: ubuntu-24.04
     permissions:
-      contents: read
+      contents: write
       packages: read
     strategy:
       fail-fast: false
@@ -136,3 +136,25 @@ jobs:
           path: "*.iso"
           if-no-files-found: error
           retention-days: 7
+
+      - name: Attach ISO to GitHub Release
+        if: ${{ inputs.skip_upload != true }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          DATE=$(date +%Y%m%d)
+          TAG="${{ matrix.flavor }}-${DATE}"
+          ISO=$(find . -maxdepth 1 -name "${{ matrix.variant }}-${{ matrix.flavor }}-*.iso" | head -1)
+          if [[ -z "$ISO" ]]; then
+            echo "No ISO found to attach"
+            exit 0
+          fi
+          # Create or update the release
+          if ! gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" &>/dev/null; then
+            gh release create "$TAG" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "TunaOS ${{ matrix.flavor }} (${DATE})" \
+              --notes "Live ISO for ${{ matrix.variant }}:${{ matrix.flavor }}. Built from ghcr.io/tuna-os/${{ matrix.variant }}:${{ matrix.flavor }}."
+          fi
+          gh release upload "$TAG" --repo "${GITHUB_REPOSITORY}" "$ISO" --clobber
+          echo "==> Attached $(basename "$ISO") to release $TAG"
