@@ -75,7 +75,14 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup TunaOS Build Environment
-        uses: ./.github/actions/setup-tunaos
+        uses: projectbluefin/actions/bootc-build/setup-runner@v1
+        with:
+          storage-backend: ""
+          update-podman: "false"
+          install-tools: '["just"]'
+
+      - name: Install yq
+        uses: mikefarah/yq@9b4e1b1b694a069c393f05e8c1d29c23e5a4a4e2 # v4.44.5
 
       - name: Verify image
         id: run_verify
