@@ -6,9 +6,11 @@ source /run/context/build_scripts/lib.sh
 
 case "${1:-}" in
 "base")
+	# ublue-os/packages COPR dropped EPEL/CentOS chroots; only Fedora remains.
+	# The install_available --copr calls below handle enabling per-package on Fedora.
 	if [[ $IS_FEDORA == false ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
-		dnf -y copr enable ublue-os/packages
-		dnf config-manager --set-enabled --setopt "copr:copr.fedorainfracloud.org:ublue-os:packages.priority=10"
+		warn_on_fail dnf -y copr enable ublue-os/packages
+		warn_on_fail dnf config-manager --set-enabled --setopt "copr:copr.fedorainfracloud.org:ublue-os:packages.priority=10"
 	fi
 
 	if [[ $IS_FEDORA == true ]]; then
