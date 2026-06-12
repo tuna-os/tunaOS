@@ -189,5 +189,11 @@ install_base_packages_no_de() {
 	curl -fsSL "https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/').tar.gz" \
 		| tar -xzf - -C /usr/bin uupd
 
+	# Install systemd units from uupd source (not included in release tarball)
+	UUPD_SRC_BASE="https://raw.githubusercontent.com/ublue-os/uupd/${UUPD_VERSION}"
+	curl -fsSLo /usr/lib/systemd/system/uupd.service "${UUPD_SRC_BASE}/uupd.service"
+	curl -fsSLo /usr/lib/systemd/system/uupd.timer "${UUPD_SRC_BASE}/uupd.timer"
+	curl -fsSLo /usr/lib/systemd/system/uupd-manual.service "${UUPD_SRC_BASE}/uupd-manual.service"
+
 	printf "::endgroup::\n"
 }
