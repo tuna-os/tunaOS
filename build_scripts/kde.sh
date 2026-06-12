@@ -6,13 +6,6 @@ source /run/context/build_scripts/lib.sh
 
 case "${1:-}" in
 "base")
-	# ublue-os/packages COPR dropped EPEL/CentOS chroots; only Fedora remains.
-	# The install_available --copr calls below handle enabling per-package on Fedora.
-	if [[ $IS_FEDORA == false ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
-		warn_on_fail dnf -y copr enable ublue-os/packages
-		warn_on_fail dnf config-manager --set-enabled --setopt "copr:copr.fedorainfracloud.org:ublue-os:packages.priority=10"
-	fi
-
 	if [[ $IS_FEDORA == true ]]; then
 		dnf -y group install "kde-desktop"
 		# Fedora-only set: these are Aurora's KDE package selection
@@ -75,12 +68,13 @@ case "${1:-}" in
 			qt5-qtwayland \
 			qt6-qtwayland
 
-		# EL10 catch-up to Aurora's Fedora-only package set. lib.sh's
+		# EL10 catch-up to Aurora's Fedora-only package set.
 		# install_available probes each one against the active repos
-		# (BaseOS / AppStream / EPEL10 / CRB + the ublue-os/packages
-		# COPR for things like `kcm_ublue`) and installs only what
+		# (BaseOS / AppStream / EPEL10 / CRB) and installs only what
 		# resolves. Misses get logged so the next porter sees the gap.
-		install_available --copr ublue-os/packages \
+		# kcm_ublue removed — Bluefin no longer ships it and the
+		# ublue-os/packages COPR dropped EPEL chroots.
+		install_available \
 			ksshaskpass \
 			ksystemlog \
 			input-remapper \
@@ -93,8 +87,7 @@ case "${1:-}" in
 			pam_yubico \
 			pamu2fcfg \
 			yubikey-manager \
-			nvtop \
-			kcm_ublue
+			nvtop
 
 		# Install fcitx5 input method support (Asian languages) if available
 		# Not available in EPEL10 yet
@@ -123,14 +116,10 @@ case "${1:-}" in
 	fi
 	;;
 "extra")
-	# ublue-os packages — most moved to the common OCI layer; only KDE-
-	# specific extras stay here. install_available probes each name in
-	# the COPR so a missing entry (e.g. krunner-bazaar awaiting Qt 6.10
-	# on EL10) is logged-and-skipped rather than aborting the build.
-	# Reference: https://github.com/ublue-os/aurora/issues/1227
-	install_available --copr ublue-os/packages \
-		kcm_ublue \
-		krunner-bazaar
+	# Build kcm_ublue from source, install krunner-bazaar from GitHub
+	# releases, and copy oversteer udev rules — replacing the
+	# ublue-os/packages COPR which dropped EPEL chroots.
+	source /run/context/build_scripts/kcm-ublue.sh
 
 	# Disable plasma-discover in favor of Flatpak/Bazaar (like Aurora)
 	if [ -f /usr/share/applications/org.kde.discover.desktop ]; then

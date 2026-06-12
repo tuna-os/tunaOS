@@ -235,11 +235,11 @@ case "${1:-}" in
 	fi
 
 	# Zirconium-parity extras on EL10 — many of these are Fedora-shipped
-	# but show up in EL10 via EPEL / CRB / the ublue-os COPRs we already
-	# enable elsewhere. install_available probes each and skips the
-	# rest so a missing EL10 build of, say, librime-lua doesn't kill
-	# the whole package install transaction.
-	install_available --copr ublue-os/packages \
+	# but show up in EL10 via EPEL / CRB. install_available probes each
+	# and skips the rest so a missing EL10 build of, say, librime-lua
+	# doesn't kill the whole package install transaction.
+	# ublue-os/packages COPR removed — EPEL chroots dropped.
+	install_available \
 		bolt \
 		btop \
 		gst-thumbnailers \

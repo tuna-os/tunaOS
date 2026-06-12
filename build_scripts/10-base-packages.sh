@@ -181,13 +181,13 @@ install_base_packages_no_de() {
 
 	dnf -y remove console-login-helper-messages setroubleshoot
 
-	# ublue-os/packages COPR only builds for Fedora (no EPEL/CentOS chroots).
-	if [[ $IS_FEDORA == true ]]; then
-		dnf -y copr enable ublue-os/packages
-		dnf -y copr disable ublue-os/packages
-		dnf -y --enablerepo copr:copr.fedorainfracloud.org:ublue-os:packages install \
-			uupd
-	fi
+	# Install uupd from GitHub release tarball.
+	# The ublue-os/packages COPR dropped epel-10 chroots (~2026-06-08);
+	# Bluefin LTS adopted this same approach.
+	# Version is pinned in image-versions.yaml and tracked by Renovate.
+	UUPD_VERSION=$(grep '^\s*uupd:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
+	curl -fsSL "https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/').tar.gz" \
+		| tar -xzf - -C /usr/bin uupd
 
 	printf "::endgroup::\n"
 }
