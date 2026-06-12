@@ -132,10 +132,19 @@ jobs:
         with:
           storage-backend: btrfs
           update-podman: "true"
-          install-tools: '["just"]'
+          install-tools: '[]'
+
+      - name: Setup Homebrew
+        uses: Homebrew/actions/setup-homebrew@f830e99d47c69efee99f1ddbf18a8e3144d1b93e
+
+      - name: Install just
+        run: brew install just
 
       - name: Install yq
-        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+        run: |
+          ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
+          sudo wget -qO /usr/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}"
+          sudo chmod +x /usr/bin/yq
 
 
       - name: Cache DNF/RPM Packages
