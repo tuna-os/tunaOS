@@ -189,17 +189,6 @@ jobs:
           # Run the verify recipe
           just verify "${IMAGE_VARIANT}" "${FLAVOR}"
 
-      - name: Sign and publish
-        if: ${{ inputs.publish }}
-        uses: projectbluefin/actions/bootc-build/sign-and-publish@v1
-        with:
-          image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
-          digest: ${{ steps.push.outputs.remote_image_digest }}
-          signing-mode: key
-          signing-key: ${{ secrets.SIGNING_SECRET }}
-          generate-sbom: ${{ inputs.sbom }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Login to GitHub Container Registry
         if: ${{ inputs.publish }}
         uses: ./.github/actions/ghcr-login
@@ -234,6 +223,17 @@ jobs:
           REMOTE_IMAGE_DIGEST=$(sudo cat /tmp/digestfile)
           echo "remote_image_digest=${REMOTE_IMAGE_DIGEST}" >> $GITHUB_OUTPUT
           echo "digest=${IMAGE_DIGEST}" >> $GITHUB_OUTPUT
+
+      - name: Sign and publish
+        if: ${{ inputs.publish }}
+        uses: projectbluefin/actions/bootc-build/sign-and-publish@v1
+        with:
+          image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+          digest: ${{ steps.push.outputs.remote_image_digest }}
+          signing-mode: key
+          signing-key: ${{ secrets.SIGNING_SECRET }}
+          generate-sbom: ${{ inputs.sbom }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: PR Testing Instructions
         if: github.event_name == 'pull_request'
