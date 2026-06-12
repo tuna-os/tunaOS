@@ -132,7 +132,7 @@ jobs:
         with:
           storage-backend: btrfs
           update-podman: "true"
-          install-tools: '["just", "cosign"]'
+          install-tools: '["just"]'
 
       - name: Install yq
         uses: mikefarah/yq@9b4e1b1b694a069c393f05e8c1d29c23e5a4a4e2 # v4.44.5
@@ -189,25 +189,16 @@ jobs:
           # Run the verify recipe
           just verify "${IMAGE_VARIANT}" "${FLAVOR}"
 
-      - name: Setup Syft
-        id: setup-syft
-        if: ${{ inputs.sbom && inputs.publish }}
-        uses: anchore/sbom-action/download-syft@fbfd9c6c189226748411491745178e0c2017392d # v0
-
-      - name: Generate SBOM
-        id: generate-sbom
-        if: ${{ inputs.sbom && inputs.publish }}
-        continue-on-error: true
-        env:
-          IMAGE: ${{ env.IMAGE_NAME }}
-          DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
-          SYFT_CMD: ${{ steps.setup-syft.outputs.cmd }}
-        run: |
-          sudo systemctl start podman.socket
-          SBOM_PATH="$(mktemp -d)/sbom.json"
-          export SYFT_PARALLELISM=$(($(nproc)*2))
-          sudo "$SYFT_CMD" "${IMAGE_REGISTRY}/${IMAGE}:${DEFAULT_TAG}" -o "spdx-json=${SBOM_PATH}"
-          echo "SBOM=${SBOM_PATH}" >> "${GITHUB_OUTPUT}"
+      - name: Sign and publish
+        if: ${{ inputs.publish }}
+        uses: projectbluefin/actions/bootc-build/sign-and-publish@v1
+        with:
+          image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
+          digest: ${{ steps.push.outputs.remote_image_digest }}
+          signing-mode: key
+          signing-key: ${{ secrets.SIGNING_SECRET }}
+          generate-sbom: ${{ inputs.sbom }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Login to GitHub Container Registry
         if: ${{ inputs.publish }}
@@ -302,106 +293,6 @@ jobs:
         with:
           filePath: diff_report.md
           comment_tag: diff-${{ env.IMAGE_NAME }}
-
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
-        if: ${{ inputs.publish }}
-
-      - name: Sign Image
-        if: ${{ inputs.publish }}
-        run: |
-          IMAGE_FULL="${IMAGE_REGISTRY}/${IMAGE_NAME}"
-          run_cosign() {
-            local subcommand="$1"
-            shift
-
-            for i in 1 2 3; do
-              if cosign "$subcommand" "$@"; then
-                return 0
-              fi
-              sleep $((15 * i))
-            done
-
-            echo "::error::Rekor remained unavailable after 3 retries — aborting to preserve Rekor transparency log"
-            return 1
-          }
-
-          run_cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE_FULL}@${{ steps.push.outputs.remote_image_digest }}"
-        env:
-          COSIGN_REGISTRY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
-          COSIGN_REGISTRY_USERNAME: ${{ github.actor }}
-          TAGS: ${{ steps.push.outputs.digest }}
-          COSIGN_EXPERIMENTAL: false
-          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
-
-      - name: Install ORAS
-        if: ${{ inputs.sbom && inputs.publish }}
-        uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
-
-      - name: Login to GitHub Container Registry with ORAS
-        if: ${{ inputs.sbom && inputs.publish }}
-        run: |
-          echo ${{ secrets.GITHUB_TOKEN }} | oras login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: Upload SBOM
-        if: ${{ inputs.sbom && inputs.publish && steps.generate-sbom.outputs.SBOM != '' }}
-        id: upload-sbom
-        env:
-          IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
-          DIGEST: ${{ steps.push.outputs.remote_image_digest }}
-          SBOM: ${{ steps.generate-sbom.outputs.SBOM }}
-        run: |
-          # Change to the directory containing the SBOM to use a relative path
-          cd "$(dirname "$SBOM")"
-          SBOM_FILE="$(basename "$SBOM")"
-
-          # Extract the digest of the attached SBOM artifact directly from oras attach output
-          # oras attach outputs: "Digest: sha256:..." on the last line
-          sbom_digest=$(oras attach \
-            --artifact-type application/vnd.spdx+json \
-            --annotation "filename=${SBOM_FILE}" \
-            "${IMAGE}@${DIGEST}" \
-            "${SBOM_FILE}" | grep "Digest:" | awk '{print $2}')
-
-          if [ -z "$sbom_digest" ]; then
-            echo "Failed to extract SBOM digest from oras attach output"
-            exit 1
-          fi
-
-          echo "sbom_digest=${sbom_digest}" >> $GITHUB_OUTPUT
-
-      - name: Sign SBOM OCI Artifact
-        if: ${{ inputs.sbom && inputs.publish && steps.generate-sbom.outputs.SBOM != '' }}
-        env:
-          COSIGN_EXPERIMENTAL: false
-          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
-          SBOM: ${{ steps.generate-sbom.outputs.SBOM }}
-          IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
-          DIGEST: ${{ steps.push.outputs.remote_image_digest }}
-          SBOM_DIGEST: ${{ steps.upload-sbom.outputs.sbom_digest }}
-        run: |
-          run_cosign() {
-            local subcommand="$1"
-            shift
-
-            for i in 1 2 3; do
-              if cosign "$subcommand" "$@"; then
-                return 0
-              fi
-              sleep $((15 * i))
-            done
-
-            echo "::error::Rekor remained unavailable after 3 retries — aborting to preserve Rekor transparency log"
-            return 1
-          }
-
-          run_cosign attest -y \
-            --predicate "$SBOM" \
-            --type spdxjson \
-            --key env://COSIGN_PRIVATE_KEY \
-            "${IMAGE}@${DIGEST}"
-
-          run_cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${SBOM_DIGEST}"
 
       - name: Create Job Outputs
         if: ${{ inputs.publish }}
@@ -670,7 +561,7 @@ jobs:
   sign:
     name: Sign Manifest
     needs: manifest
-    if: github.event_name != 'pull_request'
+    if: ${{ inputs.publish && github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -678,46 +569,15 @@ jobs:
       id-token: write
       attestations: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
-
-      - name: Login to GitHub Container Registry
-        if: ${{ inputs.publish }}
-        uses: ./.github/actions/ghcr-login
-
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
-
-      - name: Sign Manifest
-        env:
-          DIGEST: ${{ needs.manifest.outputs.digest }}
-          IMAGE: ${{ needs.manifest.outputs.image }}
-          COSIGN_EXPERIMENTAL: false
-          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
-        run: |
-          run_cosign() {
-            local subcommand="$1"
-            shift
-
-            for i in 1 2 3; do
-              if cosign "$subcommand" "$@"; then
-                return 0
-              fi
-              sleep $((15 * i))
-            done
-
-            echo "::error::Rekor remained unavailable after 3 retries — aborting to preserve Rekor transparency log"
-            return 1
-          }
-
-          run_cosign sign -y --key env://COSIGN_PRIVATE_KEY "${IMAGE}@${DIGEST}"
-
-      - name: Attest Build Provenance (SLSA)
-        uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
+      - name: Sign manifest
+        uses: projectbluefin/actions/bootc-build/sign-and-publish@v1
         with:
-          subject-name: ${{ needs.manifest.outputs.image }}
-          subject-digest: ${{ needs.manifest.outputs.digest }}
-          push-to-registry: true
+          image: ${{ needs.manifest.outputs.image }}
+          digest: ${{ needs.manifest.outputs.digest }}
+          signing-mode: key
+          signing-key: ${{ secrets.SIGNING_SECRET }}
+          generate-sbom: "false"
+          github-token: ${{ secrets.GITHUB_TOKEN }}
   tag-image:
     name: Tag Image
     needs: manifest
