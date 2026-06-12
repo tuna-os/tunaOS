@@ -219,7 +219,7 @@ podman run --rm \
 	--entrypoint="" \
 	-v "${CHUNK_OUT}:/run/out:Z" \
 	--mount "type=image,source=localhost/${PRE_CHUNK_TAG},target=/chunkah" \
-	"$(registry_ref coreos-chunkah)" \
+	"$(registry_ref coreos-chunkah 2>/dev/null || echo 'quay.io/coreos/chunkah:latest')" \
 	sh -c 'chunkah build > /run/out/out.ociarchive'
 mv "${CHUNK_OUT}/out.ociarchive" out.ociarchive
 rm -rf "${CHUNK_OUT}"
