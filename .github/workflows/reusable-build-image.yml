@@ -135,7 +135,7 @@ jobs:
           install-tools: '["just", "cosign"]'
 
       - name: Install yq
-        uses: mikefarah/yq@9b4e1b1b694a069c393f05e8c1d29c23e5a4a4e2 # v4.44.5
+        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
 
       - name: Cache DNF/RPM Packages
