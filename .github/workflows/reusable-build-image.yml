@@ -127,18 +127,15 @@ jobs:
         uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v4
         if: ${{ startsWith(inputs.flavor, 'base') }}
 
-      - name: Maximize build space (remove-software)
-        if: ${{ inputs.remove-unwanted-software && matrix.platform != 'arm64' }}
-        uses: ublue-os/remove-unwanted-software@cc0becac701cf642c8f0a6613bbdaf5dc36b259e # v9
+      - name: Setup runner
+        uses: projectbluefin/actions/bootc-build/setup-runner@v1
         with:
-          remove-codeql: true
+          storage-backend: btrfs
+          update-podman: "true"
+          install-tools: '["just", "cosign"]'
 
-      - name: Mount BTRFS for podman storage
-        if: ${{ matrix.platform != 'linux/arm64' && inputs.cleanup_runner }}
-        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
-
-      - name: Setup TunaOS Build Environment
-        uses: ./.github/actions/setup-tunaos
+      - name: Install yq
+        uses: mikefarah/yq@9b4e1b1b694a069c393f05e8c1d29c23e5a4a4e2 # v4.44.5
 
 
       - name: Cache DNF/RPM Packages
