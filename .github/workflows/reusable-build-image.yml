@@ -227,6 +227,8 @@ jobs:
       - name: Sign and publish
         if: ${{ inputs.publish }}
         uses: projectbluefin/actions/bootc-build/sign-and-publish@v1
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
         with:
           image: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}
           digest: ${{ steps.push.outputs.remote_image_digest }}
@@ -571,6 +573,8 @@ jobs:
     steps:
       - name: Sign manifest
         uses: projectbluefin/actions/bootc-build/sign-and-publish@v1
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
         with:
           image: ${{ needs.manifest.outputs.image }}
           digest: ${{ needs.manifest.outputs.digest }}
