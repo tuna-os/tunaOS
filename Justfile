@@ -275,8 +275,11 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
 
     # Ensure the chunkah image is available. Try the published image first,
     # then fall back to building from source if it's not pullable.
-    CHUNKAH_IMAGE="$(registry_ref coreos-chunkah 2>/dev/null || true)"
-    CHUNKAH_IMAGE="${CHUNKAH_IMAGE:-quay.io/coreos/chunkah:latest}"
+    # quay.io/coreos/chunkah:latest is the canonical chunkah image.
+    # Override via CHUNKAH_IMAGE env var or registry-map.yaml registry_ref.
+    if [[ -z "${CHUNKAH_IMAGE:-}" ]]; then
+        CHUNKAH_IMAGE="quay.io/coreos/chunkah:latest"
+    fi
     if ! podman image inspect "${CHUNKAH_IMAGE}" &>/dev/null; then
         if ! podman pull "${CHUNKAH_IMAGE}" 2>/dev/null; then
             echo "==> chunkah image not pullable, building from source..."
