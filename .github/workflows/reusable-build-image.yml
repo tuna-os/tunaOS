@@ -564,7 +564,8 @@ jobs:
     steps:
       # TODO: reinstate sign-and-publish for manifest when key propagation
       # through composite actions is resolved. Same issue as per-arch signing.
-      - run: echo "Manifest signing skipped (TODO: sign-and-publish key propagation)"
+      - run: |
+          echo "Manifest signing skipped"
   tag-image:
     name: Tag Image
     needs: manifest
