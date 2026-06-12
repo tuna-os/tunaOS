@@ -11,3 +11,12 @@ images:
     image: ghcr.io/ublue-os/brew
     tag: latest
     digest: sha256:63c7219af97c1cae9a2a38e9944dc26f65d0798ab256980649947f96a269e1ce
+
+# Pinned binary downloads (managed by Renovate)
+downloads:
+  # renovate: datasource=github-releases depName=ublue-os/uupd
+  uupd: "v1.4.0"
+  # renovate: datasource=github-releases depName=bazaar-org/krunner-bazaar
+  krunner-bazaar: "v1.3.0"
+  # renovate: datasource=github-releases depName=ledif/kcm_ublue
+  kcm_ublue: "v0.6.1"
