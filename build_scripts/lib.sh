@@ -36,24 +36,41 @@ IS_RHEL=false
 IS_ALMALINUX=false
 IS_ALMALINUXKITTEN=false
 IS_CENTOS=false
+IS_UBUNTU=false
+IS_DEBIAN=false
 
 [[ "${BASE_IMAGE,,}" == *"fedora"* ]] && IS_FEDORA=true && IMAGE_NAME="bonito" && IMAGE_PRETTY_NAME="Bonito"
 [[ "${BASE_IMAGE,,}" == *"red hat"* || "${BASE_IMAGE,,}" == *"rhel"* || "${BASE_IMAGE,,}" == *"redhat"* ]] && IS_RHEL=true && IMAGE_NAME="redfin" && IMAGE_PRETTY_NAME="Redfin"
 [[ "${BASE_IMAGE,,}" == *"almalinux"* && "${BASE_IMAGE,,}" != *"-kitten"* ]] && IS_ALMALINUX=true && IMAGE_NAME="albacore" && IMAGE_PRETTY_NAME="Albacore"
 [[ "${BASE_IMAGE,,}" == *"-kitten"* ]] && IS_ALMALINUXKITTEN=true && IMAGE_NAME="yellowfin" && IMAGE_PRETTY_NAME="Yellowfin"
 [[ "${BASE_IMAGE,,}" == *"centos"* ]] && IS_CENTOS=true && IMAGE_NAME="skipjack" && IMAGE_PRETTY_NAME="Skipjack"
+[[ "${BASE_IMAGE,,}" == *"ubuntu"* ]] && IS_UBUNTU=true && IMAGE_NAME="grouper" && IMAGE_PRETTY_NAME="Grouper"
+[[ "${BASE_IMAGE,,}" == *"debian"* && "${BASE_IMAGE,,}" != *"ubuntu"* ]] && IS_DEBIAN=true && IMAGE_NAME="flounder" && IMAGE_PRETTY_NAME="Flounder"
+
+# Package manager dimension
+if [[ "$IS_UBUNTU" == true || "$IS_DEBIAN" == true ]]; then
+	PKG_MGR="apt"
+else
+	PKG_MGR="dnf"
+fi
 
 echo "FEDORA: $IS_FEDORA"
 echo "RHEL: $IS_RHEL"
 echo "ALMALINUX: $IS_ALMALINUX"
 echo "ALMALINUXKITTEN: $IS_ALMALINUXKITTEN"
 echo "CENTOS: $IS_CENTOS"
+echo "UBUNTU: $IS_UBUNTU"
+echo "DEBIAN: $IS_DEBIAN"
+echo "PKG_MGR: $PKG_MGR"
 
 export IS_FEDORA
 export IS_RHEL
 export IS_ALMALINUX
 export IS_ALMALINUXKITTEN
 export IS_CENTOS
+export IS_UBUNTU
+export IS_DEBIAN
+export PKG_MGR
 export IMAGE_NAME
 export IMAGE_PRETTY_NAME
 
@@ -74,6 +91,13 @@ detected_os() {
 	if [ "$IS_CENTOS" = true ]; then
 		echo "  CentOS"
 	fi
+	if [ "$IS_UBUNTU" = true ]; then
+		echo "  Ubuntu"
+	fi
+	if [ "$IS_DEBIAN" = true ]; then
+		echo "  Debian"
+	fi
+	echo "  Package manager: ${PKG_MGR}"
 }
 
 is_x86_64_v2() {
@@ -192,6 +216,52 @@ lint_image() {
 	printf '::warning title=bootc lint findings (%s)::lint reported failures (exit %d) — surfaced above, not build-fatal (set BOOTC_LINT_FATAL=1 to enforce)\n' \
 		"${IMAGE_NAME:-?}" "$rc"
 	return 0
+}
+
+# ---- Package manager abstraction (PKG_MGR) ----
+# These wrappers let build scripts call a single command regardless of
+# whether the base image is RPM-based (dnf) or deb-based (apt-get).
+# Scripts that still call dnf directly (e.g. install_from_copr) are
+# intentionally RPM-only and guarded by [[ $PKG_MGR == dnf ]] checks.
+
+# Install packages. On apt, skips recommended/suggested packages to keep
+# the image lean (mirrors --setopt=install_weak_deps=False on dnf).
+pkg_install() {
+	if [[ "$PKG_MGR" == "apt" ]]; then
+		apt-get update -qq
+		apt-get install -y --no-install-recommends "$@"
+	else
+		dnf_retry install -y --setopt=install_weak_deps=False "$@"
+	fi
+}
+
+# Remove packages. `apt-get purge` removes config files too (equivalent
+# to dnf's default `remove` behavior on EL/Fedora).
+pkg_remove() {
+	if [[ "$PKG_MGR" == "apt" ]]; then
+		apt-get purge -y "$@"
+	else
+		dnf_retry remove -y "$@"
+	fi
+}
+
+# Refresh package metadata.
+pkg_refresh() {
+	if [[ "$PKG_MGR" == "apt" ]]; then
+		apt-get update
+	else
+		dnf makecache
+	fi
+}
+
+# Clean package manager caches to minimize final image size.
+pkg_clean() {
+	if [[ "$PKG_MGR" == "apt" ]]; then
+		apt-get clean
+		rm -rf /var/lib/apt/lists/*
+	else
+		dnf clean all
+	fi
 }
 
 # Run `dnf` with retries to absorb transient mirror flakes (EPEL / AlmaLinux /
