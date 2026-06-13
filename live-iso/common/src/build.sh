@@ -2,6 +2,9 @@
 
 set -eoux pipefail
 
+# Directory containing this script — used to locate desktop adapters.
+SCRIPT_DIR="$(dirname "${BASH_SOURCE[0]}")"
+
 # ── Repository workarounds for CentOS Stream ────────────────────────────────
 
 # Enable the same compose repos during our build that the centos-bootc image
@@ -22,75 +25,19 @@ if grep -q "centos" /etc/os-release 2>/dev/null; then
 fi
 
 # ── Live environment configuration ──────────────────────────────────────────
+# Desktop-specific config lives in per-desktop adapter scripts so adding
+# a new desktop only requires a new file — no monolith editing.
 
-if [[ "${DESKTOP_FLAVOR:-gnome}" == gnome* ]]; then
-	# Set up the GNOME dock for the installer
-	tee /usr/share/glib-2.0/schemas/zz2-tunaos-installer.gschema.override <<'EOF'
-[org.gnome.shell]
-welcome-dialog-last-shown-version='4294967295'
-favorite-apps = ['org.tunaos.FirstSetup.desktop', 'firefox.desktop', 'org.gnome.Nautilus.desktop']
-EOF
-
-	# Disable suspend/sleep so the installer doesn't go to sleep mid-install
-	tee /usr/share/glib-2.0/schemas/zz3-tunaos-installer-power.gschema.override <<'EOF'
-[org.gnome.settings-daemon.plugins.power]
-sleep-inactive-ac-type='nothing'
-sleep-inactive-battery-type='nothing'
-sleep-inactive-ac-timeout=0
-sleep-inactive-battery-timeout=0
-
-[org.gnome.desktop.session]
-idle-delay=uint32 0
-EOF
-
-	glib-compile-schemas /usr/share/glib-2.0/schemas
-
-elif [[ "${DESKTOP_FLAVOR:-gnome}" == kde* ]]; then
-	# Mirror of the KDE live-env config used by hanthor/tromso-iso.
-	# livesys-scripts (configured further down) creates the `liveuser`
-	# account; we only need to wire up SDDM autologin to land in the
-	# Plasma session immediately, disable screen-lock + power-suspend
-	# (an installer mid-run can't recover from S3), and mask suspend
-	# targets so KDE's own power-management prefs can't override.
-
-	mkdir -p /etc/sddm.conf.d
-	tee /etc/sddm.conf.d/live-autologin.conf <<'SDDMEOF'
-[General]
-DisplayServer=wayland
-CompositorCommand=kwin_wayland --no-lockscreen
-
-[Autologin]
-User=liveuser
-Session=plasma
-Relogin=false
-SDDMEOF
-
-	mkdir -p /etc/xdg
-	tee /etc/xdg/kscreenlockerrc <<'LOCKEOF'
-[Daemon]
-Autolock=false
-LockOnResume=false
-LOCKEOF
-
-	tee /etc/xdg/powermanagementprofilesrc <<'POWEREOF'
-[AC][SuspendSession]
-idleTime=0
-suspendType=0
-
-[Battery][SuspendSession]
-idleTime=0
-suspendType=0
-
-[LowBattery][SuspendSession]
-idleTime=0
-suspendType=0
-POWEREOF
-
-	# Belt-and-braces: even if the per-user power prefs above are
-	# ignored, the systemd targets they'd trigger are masked so the
-	# install session cannot enter S3.
-	systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target || true
-fi
+case "${DESKTOP_FLAVOR:-gnome}" in
+	gnome*)
+		source "${SCRIPT_DIR}/desktop-gnome.sh"
+		;;
+	kde*)
+		source "${SCRIPT_DIR}/desktop-kde.sh"
+		;;
+	# COSMIC and Niri don't need additional live-environment config —
+	# livesys-scripts handles autologin for both.
+esac
 
 # ── Disable TunaOS services not needed in the live/installer env ─────────────
 
