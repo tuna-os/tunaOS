@@ -4,7 +4,7 @@ This document provides a comprehensive overview of the CI/CD pipeline for TunaOS
 
 ## 🏗️ Architecture Overview
 
-The pipeline builds images on a weekly schedule (Tuesdays at 1am UTC) and publishes them with the `<flavor>` tag (e.g. `gnome`, `gnome-nvidia`). There is no promotion system — weekly builds are considered stable and ready for use. `latest` no longer exists as a monolith; each flavor has its own tag.
+The pipeline builds images on a daily schedule (1am UTC) and publishes them with the `<flavor>` tag (e.g. `gnome`, `gnome-nvidia`). There is no promotion system — weekly builds are considered stable and ready for use. `latest` no longer exists as a monolith; each flavor has its own tag.
 
 ### Variants (5 base OSes)
 
@@ -44,7 +44,7 @@ Desktop HWE images (<de>-hwe) layer on `base-hwe` in stage 3. nvidia images (<de
 The single build workflow for all variants. Replaces the old per-variant `build-{variant}.yml` workflows.
 
 - **Triggers**:
-  - Schedule: weekly on Tuesdays at 1am UTC (per-variant cron)
+  - Schedule: daily at 1am UTC (per-variant cron)
   - Manual: `workflow_dispatch` with `variant` and `flavor` inputs
   - PR: `pull_request` — builds `gnome` flavor only, `linux/amd64` only, no publish
 - **Process**:
