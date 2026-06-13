@@ -228,7 +228,7 @@ lint_image() {
 # the image lean (mirrors --setopt=install_weak_deps=False on dnf).
 pkg_install() {
 	if [[ "$PKG_MGR" == "apt" ]]; then
-		mkdir -p /var/lib/apt/lists/partial
+		mkdir -p /var/lib/apt/lists/partial /var/lib/dpkg
 		apt-get update -qq
 		apt-get install -y --no-install-recommends "$@"
 	else
