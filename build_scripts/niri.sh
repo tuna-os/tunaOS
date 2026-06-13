@@ -6,6 +6,15 @@ source /run/context/build_scripts/lib.sh
 
 case "${1:-}" in
 "base")
+	# ── apt (Ubuntu/Debian) Niri path ────────────────────────────────
+	if [[ "$PKG_MGR" == "apt" ]]; then
+		# Niri scrollable-tiling Wayland compositor + greetd DM.
+		# Niri may not yet be packaged for Ubuntu 26.04 — falls back gracefully.
+		pkg_install greetd || true
+		pkg_install niri || true
+		return 0
+	fi
+	# ── dnf (RPM) Niri path continues below ───────────────────────────
 	# Fedora/EL10 Niri build - handle both variants
 	if [[ $IS_FEDORA == true ]]; then
 		# Fedora Niri build (from zirconium-dev/zirconium upstream)

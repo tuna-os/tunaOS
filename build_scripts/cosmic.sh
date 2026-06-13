@@ -6,6 +6,14 @@ source /run/context/build_scripts/lib.sh
 
 case "${1:-}" in
 "base")
+	# ── apt (Ubuntu/Debian) COSMIC path ───────────────────────────────
+	if [[ "$PKG_MGR" == "apt" ]]; then
+		# COSMIC desktop — available in Ubuntu 24.10+ universe.
+		# Falls back gracefully if not yet packaged for 26.04.
+		pkg_install cosmic-session cosmic-greeter greetd xdg-desktop-portal-cosmic || true
+		return 0
+	fi
+	# ── dnf (RPM) COSMIC path continues below ─────────────────────────
 	if [[ $IS_FEDORA == true ]]; then
 		# Fedora ships COSMIC in the main repos
 		dnf_retry -y install --setopt=install_weak_deps=False \

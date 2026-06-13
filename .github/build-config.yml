@@ -442,12 +442,11 @@ variants:
         build_qcow2: false
 
   # ── Experimental ───────────────────────────────────────────────────────────
-  # RFC 010: Ubuntu 26.04 variant. GNOME-only, x86_64-only, manual dispatch only.
-  # Containerfile.ubuntu + apt build-script branches are pending (Phase 2).
+  # RFC 010: Ubuntu 26.04 variant. ALL desktops, x86_64-only, manual dispatch only.
   - id: grouper
     emoji: "🐟"
     description: "Based on Ubuntu 26.04 Resolute Raccoon"
-    base_image: "ghcr.io/hanthor/ubuntu-26.04-desktop-bootc:latest"
+    base_image: "ghcr.io/tuna-os/ubuntu:latest"
     # TODO: pin to digest before enabling builds (same concern as #462)
     platforms: ["linux/amd64"]
     experimental: true
@@ -456,6 +455,18 @@ variants:
         stage: 1
         build_image: true
       - id: gnome
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: kde
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: cosmic
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: niri
         stage: 2
         build_image: true
         build_iso: true

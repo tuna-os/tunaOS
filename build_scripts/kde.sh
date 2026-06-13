@@ -6,6 +6,15 @@ source /run/context/build_scripts/lib.sh
 
 case "${1:-}" in
 "base")
+	# ── apt (Ubuntu/Debian) KDE path ──────────────────────────────────
+	if [[ "$PKG_MGR" == "apt" ]]; then
+		# KDE Plasma desktop via kubuntu-desktop metapackage.
+		# --no-install-recommends avoids LibreOffice, games, etc.
+		pkg_install kubuntu-desktop
+		pkg_install sddm xdg-desktop-portal-kde
+		return 0
+	fi
+	# ── dnf (RPM) KDE path continues below ────────────────────────────
 	if [[ $IS_FEDORA == true ]]; then
 		dnf -y group install "kde-desktop"
 		# Fedora-only set: these are Aurora's KDE package selection
