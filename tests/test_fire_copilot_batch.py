@@ -42,7 +42,7 @@ def test_empty_gh_token_triggers_skip():
 
 def test_nonempty_gh_token_proceeds():
     """When GH_TOKEN is set, the script continues."""
-    GH_TOKEN = "ghp_faketoken123"
+    GH_TOKEN = "github_pat_test_token_placeholder"
     if not GH_TOKEN:
         skip = True
     else:
