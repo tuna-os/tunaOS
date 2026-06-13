@@ -64,7 +64,7 @@ RUN mkdir -p /var/lib/dpkg/info /var/lib/dpkg/updates \
   dpkg --force-depends --unpack debconf*.deb && \
   dpkg --configure -a || true && \
   rm -f debconf*.deb && \
-  apt-get install -y -f --no-install-recommends
+  apt-get install -y -f --no-install-recommends -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
 
 # Copy system files and apply TunaOS customizations
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \

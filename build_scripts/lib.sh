@@ -230,7 +230,7 @@ pkg_install() {
 	if [[ "$PKG_MGR" == "apt" ]]; then
 		mkdir -p /var/lib/apt/lists/partial /var/lib/dpkg /var/cache/apt/archives/partial
 		apt-get update -qq
-		apt-get install -y --no-install-recommends "$@"
+		apt-get install -y --no-install-recommends -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" "$@"
 	else
 		dnf_retry install -y --setopt=install_weak_deps=False "$@"
 	fi
