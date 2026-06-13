@@ -71,6 +71,30 @@ jobs:
       R2_BUCKET: ${{{{ secrets.R2_BUCKET }}}}
 """
 
+    # Experimental variants: manual dispatch only — no cron schedule.
+    template_experimental = """name: Build {name_cap} [experimental]
+on:
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: 'Flavor (all, base, gnome, kde, niri, etc.)'
+        default: 'all'
+        type: string
+
+concurrency:
+  group: build-{name}-${{{{ github.ref }}}}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: {emoji}-{name}
+    uses: ./.github/workflows/build-variant.yml
+    with:
+      variant: '{name}'
+      flavor: ${{{{ inputs.flavor || 'all' }}}}
+    secrets: inherit
+"""
+
     for variant in config.get('variants', []):
         name = variant.get('id')
         emoji = variant.get('emoji', '❓')
