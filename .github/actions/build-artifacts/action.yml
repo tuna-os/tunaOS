@@ -66,7 +66,7 @@ runs:
         RCLONE_CONFIG_R2_ENDPOINT: ${{ inputs.r2_endpoint }}
         R2_BUCKET: ${{ inputs.r2_bucket }}
       run: |
-        sudo just iso-tacklebox \
+        sudo just iso \
           "${{ inputs.variant }}" \
           "${{ inputs.flavor }}" \
           ghcr \

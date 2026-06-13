@@ -335,7 +335,7 @@ jobs:
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
-          sudo just iso-tacklebox \
+          sudo just iso \
             "${{ matrix.variant }}" \
             "${{ matrix.flavor }}" \
             ghcr \

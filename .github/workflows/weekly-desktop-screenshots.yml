@@ -92,7 +92,7 @@ jobs:
           GITHUB_REPOSITORY_OWNER: tuna-os
         run: |
           sudo GITHUB_REPOSITORY_OWNER=tuna-os \
-            just iso-tacklebox "${{ matrix.variant }}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
+            just iso "${{ matrix.variant }}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
 
       - name: Boot ISO and capture desktop screenshot
         if: steps.filter.outputs.skip != 'true'

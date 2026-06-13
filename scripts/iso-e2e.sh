@@ -21,7 +21,7 @@
 #
 #   scripts/iso-e2e.sh <iso_path> --ssh-only
 #       Boot, then verify SSH connectivity to the live env. ISO must have
-#       been built with ENABLE_SSHD=1 (e.g. `just live-iso dev=1`).
+#       been built with ENABLE_SSHD=1 (e.g. `just iso dev=1`).
 #
 # Options:
 #   --timeout SEC         Per-phase timeout (default: 300)

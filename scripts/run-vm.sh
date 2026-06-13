@@ -109,7 +109,7 @@ demo-iso)
 
 	if [[ "$REBUILD" == "1" ]] || [[ -z "${ISO_FILE}" ]] || [[ ! -f "${ISO_FILE}" ]]; then
 		echo "==> Building live ISO..."
-		just live-iso "$VARIANT" "$FLAVOR" local
+		just iso "$VARIANT" "$FLAVOR" local
 		ISO_FILE=$(find "${BUILD_DIR}" -maxdepth 1 -name "*.iso" 2>/dev/null | head -1 || true)
 	fi
 
