@@ -53,7 +53,7 @@ Validation on every commit: `shellcheck --exclude=SC1091`, `shfmt -d`,
 | Variant | Root cause | Where |
 |---|---|---|
 | `skipjack` | `gnome-shell-49.4` conflicts with `gnome-shell-common-48.3` on the same files (`/usr/share/glib-2.0/schemas/org.gnome.shell.gschema.xml`). Intrinsic to upstream packaging; needs COPR coordination. | `gnome.sh` line 32–44 invokes `gnome49-el10-compat` / `gnome50-el10-compat`; both pull the new gnome-shell while CentOS Stream 10 ships the older one. |
-| `bonito` | `bootc container lint --fatal-warnings` reports `Checks failed: 3` — currently swallowed by `|| true` in `cleanup.sh`. The lint warnings hide actual image-quality regressions. | `cleanup.sh:60` |
+| `bonito` | `bootc container lint --fatal-warnings` reports `Checks failed: 3`. The `\|\| true` mask is gone (now routed through `lint_image` in `lib.sh`, which surfaces every finding into the build-log group + step summary; #272). Findings are visible but not yet build-fatal — set `BOOTC_LINT_FATAL=1` for bonito once the three are fixed. | `cleanup.sh` → `lint_image` (`lib.sh`) |
 | `yellowfin` | Actually succeeded in the last logged run (cache sync complete). The "Unknown variant" error in `build.log` was a separate invocation typo. | n/a |
 
 Proposed treatment: phase 1 below.
@@ -71,10 +71,13 @@ real failures.
      conflicting package. Preferred.
    - Or, in `gnome.sh`, `dnf -y remove gnome-shell-common` before the
      compat install (only on `IS_CENTOS` / `IS_ALMALINUXKITTEN`). Fallback.
-2. **Surface bonito's three lint failures.** Remove the `|| true` from
-   `cleanup.sh:60` for `IS_FEDORA`, capture the exact warnings, and fix
-   the underlying tmpfiles.d / var-state issues. The lint is the
-   product-quality gate for bootc images; it shouldn't be muted.
+2. **Surface bonito's three lint failures.** ✅ Done — `cleanup.sh` now
+   calls `lint_image` (`lib.sh`), which runs `bootc container lint
+   --fatal-warnings`, prints the full findings in a collapsed log group,
+   and mirrors them into `$GITHUB_STEP_SUMMARY`. **Remaining:** read the
+   three findings off a bonito CI run, fix the underlying tmpfiles.d /
+   var-state issues, then set `BOOTC_LINT_FATAL=1` for bonito so the lint
+   becomes the product-quality gate it should be.
 3. **Move the "remove `/var/lib/insights` etc." cleanup** out of the
    per-variant `cleanup.sh` block — `skipjack`'s log shows 7 warnings
    from `file ... remove failed: No such file or directory` because the

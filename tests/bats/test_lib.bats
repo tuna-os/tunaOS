@@ -582,15 +582,16 @@ SCRIPT
 # ═══════════════════════════════════════════════════════════════════════════
 
 @test "warn_on_fail: logs warning when command fails" {
-  BASE_IMAGE="quay.io/almalinuxorg/almalinux-bootc:10"
-  IMAGE_NAME="yellowfin"
-  MAJOR_VERSION_NUMBER="10"
-  export BASE_IMAGE IMAGE_NAME MAJOR_VERSION_NUMBER
+  # Kitten base so lib.sh's OS detection resolves IMAGE_NAME to yellowfin.
+  # MAJOR_VERSION_NUMBER is recomputed from the host /usr/lib/os-release on
+  # source, so assert on the image name + command, not a hard-coded version.
+  BASE_IMAGE="quay.io/almalinuxorg/almalinux-bootc:10-kitten"
+  export BASE_IMAGE
   source "${TEST_ROOT}/lib_test.sh"
   run warn_on_fail false
   [ "$status" -eq 0 ]
   [[ "$output" == *"::warning"* ]]
-  [[ "$output" == *"yellowfin on 10"* ]]
+  [[ "$output" == *"yellowfin"* ]]
   [[ "$output" == *"false"* ]]
 }
 
@@ -605,15 +606,15 @@ SCRIPT
   [[ "$output" != *"::warning"* ]]
 }
 
-@test "warn_on_fail: includes caller script name" {
+@test "warn_on_fail: includes caller field" {
+  # BASH_SOURCE[1] is empty under bats `run`, so the basename degrades to "?".
+  # Assert the feature itself — warn_on_fail reports a "called from" field.
   BASE_IMAGE="quay.io/almalinuxorg/almalinux-bootc:10"
-  IMAGE_NAME="yellowfin"
-  MAJOR_VERSION_NUMBER="10"
-  export BASE_IMAGE IMAGE_NAME MAJOR_VERSION_NUMBER
+  export BASE_IMAGE
   source "${TEST_ROOT}/lib_test.sh"
   run warn_on_fail false arg1
   [ "$status" -eq 0 ]
-  [[ "$output" == *"test_lib.bats"* ]] || [[ "$output" == *"bats"* ]]
+  [[ "$output" == *"called from"* ]]
 }
 
 @test "warn_on_fail: returns 0 even when command fails" {
@@ -636,4 +637,76 @@ SCRIPT
   run warn_on_fail echo hello world
   [ "$status" -eq 0 ]
   [[ "$output" == *"hello world"* ]]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# lint_image()  — #272: surface bootc lint findings instead of swallowing them
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Install a `bootc` stub whose `container lint` exits with $BOOTC_MOCK_RC and
+# prints recognizable findings on failure.
+_stub_bootc() {
+  cat >"${TEST_ROOT}/usr/bin/bootc" <<'BOOTC'
+#!/usr/bin/env bash
+if [[ "$1" == "container" && "$2" == "lint" ]]; then
+  rc="${BOOTC_MOCK_RC:-0}"
+  if [[ "$rc" != "0" ]]; then
+    echo "Checks failed: 3"
+    echo "  - var-tmpfiles: /var/lib/example not declared"
+  fi
+  exit "$rc"
+fi
+exit 0
+BOOTC
+  chmod +x "${TEST_ROOT}/usr/bin/bootc"
+}
+
+@test "lint_image: returns 0 and reports OK when lint passes" {
+  _stub_bootc
+  BASE_IMAGE="quay.io/fedora/fedora-bootc:44"; IMAGE_NAME="bonito"; MAJOR_VERSION_NUMBER="44"
+  export BASE_IMAGE IMAGE_NAME MAJOR_VERSION_NUMBER BOOTC_MOCK_RC=0
+  source "${TEST_ROOT}/lib_test.sh"
+  run lint_image
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"OK"* ]]
+  [[ "$output" != *"::error"* ]]
+}
+
+@test "lint_image: warn-only by default — returns 0 but surfaces findings" {
+  _stub_bootc
+  BASE_IMAGE="quay.io/fedora/fedora-bootc:44"; IMAGE_NAME="bonito"; MAJOR_VERSION_NUMBER="44"
+  export BASE_IMAGE IMAGE_NAME MAJOR_VERSION_NUMBER BOOTC_MOCK_RC=1
+  unset BOOTC_LINT_FATAL
+  source "${TEST_ROOT}/lib_test.sh"
+  run lint_image
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"::group::bootc container lint findings"* ]]
+  [[ "$output" == *"Checks failed: 3"* ]]
+  [[ "$output" == *"::warning"* ]]
+  [[ "$output" != *"::error"* ]]
+}
+
+@test "lint_image: BOOTC_LINT_FATAL=1 fails the build on findings" {
+  _stub_bootc
+  BASE_IMAGE="quay.io/fedora/fedora-bootc:44"; IMAGE_NAME="bonito"; MAJOR_VERSION_NUMBER="44"
+  export BASE_IMAGE IMAGE_NAME MAJOR_VERSION_NUMBER BOOTC_MOCK_RC=1 BOOTC_LINT_FATAL=1
+  source "${TEST_ROOT}/lib_test.sh"
+  run lint_image
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"::error"* ]]
+  [[ "$output" == *"Checks failed: 3"* ]]
+}
+
+@test "lint_image: mirrors findings into GITHUB_STEP_SUMMARY" {
+  _stub_bootc
+  BASE_IMAGE="quay.io/fedora/fedora-bootc:44"; IMAGE_NAME="bonito"; MAJOR_VERSION_NUMBER="44"
+  SUMMARY="${TEST_ROOT}/step_summary.md"
+  : >"$SUMMARY"
+  export BASE_IMAGE IMAGE_NAME MAJOR_VERSION_NUMBER BOOTC_MOCK_RC=1 GITHUB_STEP_SUMMARY="$SUMMARY"
+  unset BOOTC_LINT_FATAL
+  source "${TEST_ROOT}/lib_test.sh"
+  run lint_image
+  [ "$status" -eq 0 ]
+  grep -q "bootc container lint" "$SUMMARY"
+  grep -q "Checks failed: 3" "$SUMMARY"
 }
