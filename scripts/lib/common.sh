@@ -132,3 +132,132 @@ tunaos_import_to_root_storage() {
 		return 1
 	fi
 }
+
+# ── Flavor → human title ────────────────────────────────────────────────────
+# Render a flavor id (e.g. "gnome-nvidia-hwe") into the title shown in the
+# systemd-boot menu of a grouped ISO (e.g. "GNOME (NVIDIA, HWE)"). Keeping the
+# mapping here means the boot-menu labels stay consistent across the single-
+# flavor and grouped-ISO build paths.
+tunaos_flavor_title() {
+	local flavor="${1:?flavor required}"
+	local base="$flavor" mods=() suffix=""
+
+	# Peel hardware modifiers off the end so the desktop name is left bare.
+	if [[ "$base" == *-nvidia-hwe ]]; then
+		mods=("NVIDIA" "HWE")
+		base="${base%-nvidia-hwe}"
+	elif [[ "$base" == *-nvidia ]]; then
+		mods=("NVIDIA")
+		base="${base%-nvidia}"
+	elif [[ "$base" == *-hwe ]]; then
+		mods=("HWE")
+		base="${base%-hwe}"
+	fi
+
+	local name
+	case "$base" in
+	gnome50) name="GNOME 50" ;;
+	gnome) name="GNOME" ;;
+	kde) name="KDE Plasma" ;;
+	cosmic) name="COSMIC" ;;
+	niri) name="Niri" ;;
+	base) name="Base" ;;
+	*) name="${base^}" ;;
+	esac
+
+	if ((${#mods[@]})); then
+		local joined="${mods[0]}" i
+		for ((i = 1; i < ${#mods[@]}; i++)); do
+			joined+=", ${mods[i]}"
+		done
+		suffix=" (${joined})"
+	fi
+	printf '%s%s\n' "$name" "$suffix"
+}
+
+# ── Desktop session for a flavor ────────────────────────────────────────────
+# Map a flavor id to its desktop session so tacklebox's livesys-* sets autologin
+# for the right session manager. Hardware modifiers (-hwe/-nvidia) don't change
+# the desktop, so a prefix match is sufficient.
+tunaos_flavor_desktop() {
+	local flavor="${1:?flavor required}"
+	case "$flavor" in
+	kde*) echo "kde" ;;
+	niri*) echo "niri" ;;
+	cosmic*) echo "cosmic" ;;
+	gnome* | *) echo "gnome" ;;
+	esac
+}
+
+# ── tacklebox runner ────────────────────────────────────────────────────────
+# Resolve tacklebox (the published container image by default, or a pinned
+# source build when TACKLEBOX_FROM_SOURCE=1) and build the ISO described by
+# <recipe_file>. Shared by build-iso-tacklebox.sh (single flavor) and
+# build-iso-group.sh (grouped dedup). Must run as root — tacklebox needs
+# loopback + sgdisk + mkfs.
+#
+# Usage: tunaos_run_tacklebox <recipe_file> <out_dir> <iso_out>
+tunaos_run_tacklebox() {
+	local recipe_file="${1:?recipe_file required}"
+	local out_dir="${2:?out_dir required}"
+	local iso_out="${3:?iso_out required}"
+
+	local tacklebox_image="${TACKLEBOX_IMAGE:-ghcr.io/tuna-os/tacklebox:latest}"
+	local from_source="${TACKLEBOX_FROM_SOURCE:-0}"
+
+	local -a tb
+	if [[ "$from_source" == "1" ]]; then
+		# Pin the source SHA so CI doesn't silently track a moving HEAD.
+		local sha cache bin
+		sha="${TACKLEBOX_SHA:-$(grep '^\s*tacklebox:' image-versions.yaml 2>/dev/null | sed 's/.*"\(.*\)".*/\1/')}"
+		sha="${sha:-75c837b39d9dcb360509c49d2e0306621dced904}"
+		cache="${TACKLEBOX_CACHE:-/var/cache/tunaos/tacklebox}"
+		bin="${cache}/tacklebox"
+
+		if [[ ! -x "$bin" ]] || [[ "$("$bin" version 2>/dev/null || echo)" != *"$sha"* ]]; then
+			echo "==> Building tacklebox @ ${sha}..." >&2
+			mkdir -p "$cache"
+			(
+				cd "$cache" || exit 1
+				if [[ ! -d .git ]]; then
+					git clone --quiet https://github.com/tuna-os/tacklebox.git .
+				else
+					git fetch --quiet origin
+				fi
+				git -c advice.detachedHead=false checkout --quiet "$sha"
+				local go_bin=""
+				for g in /home/linuxbrew/.linuxbrew/bin/go /usr/bin/go go; do
+					if command -v "$g" &>/dev/null; then
+						go_bin="$g"
+						break
+					fi
+				done
+				if [[ -z "$go_bin" ]]; then
+					echo "ERROR: go not found; install go 1.22+ to build tacklebox" >&2
+					exit 1
+				fi
+				"$go_bin" build -o tacklebox ./cmd/tacklebox
+			)
+		fi
+		[[ -x "$bin" ]] || {
+			echo "ERROR: tacklebox binary missing after build" >&2
+			return 1
+		}
+		tb=("$bin")
+	else
+		echo "==> Using tacklebox image: ${tacklebox_image}" >&2
+		podman pull "$tacklebox_image" >/dev/null
+		tb=(podman run --rm --privileged
+			--security-opt label=disable
+			-v /var/lib/containers:/var/lib/containers
+			-v /dev:/dev
+			-v "$(realpath "$out_dir"):$(realpath "$out_dir")"
+			-v "$(realpath "$recipe_file"):$(realpath "$recipe_file"):ro"
+			"$tacklebox_image")
+	fi
+
+	"${tb[@]}" build "$recipe_file" \
+		--iso "$iso_out" \
+		--output-base "$out_dir" \
+		--yes
+}
