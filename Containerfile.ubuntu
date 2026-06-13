@@ -46,6 +46,26 @@ ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 # Ensure /opt is a real directory
 RUN rm -rf /opt && mkdir /opt
 
+# Restore apt infrastructure stripped by the base bootc image.
+# The hanthor ubuntu bootc image keeps apt-get + dpkg binaries and
+# /etc/apt/sources.list but wipes /var/lib/dpkg, /var/lib/apt/lists,
+# /var/cache/apt/archives, and debconf to minimize image size.
+# This bootstrap restores the minimal structure so build scripts can
+# apt-get install normally. The ubuntu-bootc/ Containerfile (see repo)
+# produces a base image that doesn't need this — switch to it when ready.
+RUN mkdir -p /var/lib/dpkg/info /var/lib/dpkg/updates \
+  /var/lib/dpkg/triggers /var/lib/dpkg/alternatives \
+  /var/lib/apt/lists/partial \
+  /var/cache/apt/archives/partial \
+  /var/log/apt && \
+  touch /var/lib/dpkg/status && \
+  apt-get update -qq && \
+  cd /tmp && apt-get download debconf && \
+  dpkg --force-depends --unpack debconf*.deb && \
+  dpkg --configure -a || true && \
+  rm -f debconf*.deb && \
+  apt-get install -y -f --no-install-recommends
+
 # Copy system files and apply TunaOS customizations
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
