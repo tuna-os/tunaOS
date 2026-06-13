@@ -57,6 +57,10 @@ fi
 
 BASE_FOR_BUILD=""
 CONTAINERFILE="Containerfile"
+# RFC 010: grouper (Ubuntu) uses Containerfile.ubuntu
+if [[ "$VARIANT" == "grouper" ]]; then
+	CONTAINERFILE="Containerfile.ubuntu"
+fi
 ENABLE_HWE="0"
 ENABLE_NVIDIA="0"
 PARENT_FLAVOR=""
@@ -87,7 +91,7 @@ elif [[ "$FLAVOR" == "base-nvidia" ]]; then
 	ENABLE_NVIDIA="1"
 	DESKTOP_FLAVOR="base-nvidia"
 	PARENT_FLAVOR="base"
-elif [[ "$FLAVOR" == *"-nvidia-hwe" ]]; then
+elif [[ "$VARIANT" != "grouper" ]] && [[ "$FLAVOR" == *"-nvidia-hwe" ]]; then
 	DESKTOP_FLAVOR="${FLAVOR%-nvidia-hwe}"
 	CONTAINERFILE="Containerfile.nvidia"
 	ENABLE_NVIDIA="1"

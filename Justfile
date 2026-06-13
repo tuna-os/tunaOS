@@ -371,6 +371,10 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
 
     BASE_FOR_BUILD=""
     CONTAINERFILE="Containerfile"
+    # RFC 010: grouper (Ubuntu) uses Containerfile.ubuntu
+    if [[ "{{ variant }}" == "grouper" ]]; then
+        CONTAINERFILE="Containerfile.ubuntu"
+    fi
     ENABLE_HWE="0"
     ENABLE_NVIDIA="0"
     PARENT_FLAVOR=""
@@ -400,7 +404,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         ENABLE_NVIDIA="1"
         DESKTOP_FLAVOR="base-nvidia"
         PARENT_FLAVOR="base"
-    elif [[ "${FLAVOR}" == *"-nvidia-hwe" ]]; then
+    elif [[ "{{ variant }}" != "grouper" ]]; then [[ "${FLAVOR}" == *"-nvidia-hwe" ]]; then
         DESKTOP_FLAVOR="${FLAVOR%-nvidia-hwe}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_NVIDIA="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
     elif [[ "${FLAVOR}" == *"-hwe" ]]; then
         DESKTOP_FLAVOR="${FLAVOR%-hwe}"; CONTAINERFILE="Containerfile.hwe"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"

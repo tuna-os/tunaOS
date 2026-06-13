@@ -6,6 +6,33 @@ source /run/context/build_scripts/lib.sh
 
 case "${1:-}" in
 "base")
+	# ── apt (Ubuntu/Debian) GNOME path ──────────────────────────────────
+	if [[ "$PKG_MGR" == "apt" ]]; then
+		# Ubuntu 26.04 ships GNOME 48 via ubuntu-desktop-minimal.
+		# --no-install-recommends avoids bringing in games, LibreOffice, etc.
+		pkg_install ubuntu-desktop-minimal gnome-shell-extension-manager
+
+		# Additional GNOME utilities (mirrors the RPM set where possible)
+		pkg_install \
+			gnome-browser-connector \
+			gnome-disk-utility \
+			gnome-system-monitor \
+			gnome-user-docs \
+			nautilus \
+			yelp \
+			plymouth-theme-spinner \
+			xdg-desktop-portal-gnome \
+			xdg-desktop-portal-gtk \
+			xdg-user-dirs-gtk
+
+		# Rebuild any shipped extension schemas
+		if command -v glib-compile-schemas &>/dev/null; then
+			glib-compile-schemas /usr/share/glib-2.0/schemas
+		fi
+
+		return 0
+	fi
+	# ── dnf (RPM) GNOME path continues below ────────────────────────────
 	# Use COPR GNOME packages for EL10-based builds.
 	# The COPR must remain enabled through the full package install so that
 	# mutter, gjs, and other GNOME stack deps are resolved from the same COPR.

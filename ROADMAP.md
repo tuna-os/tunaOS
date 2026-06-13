@@ -21,6 +21,7 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 | Skipjack | CentOS Stream 10 | GNOME, KDE, COSMIC, Niri, GNOME 50 | Beta |
 | Bonito | Fedora 44 | GNOME, KDE, COSMIC, Niri | In progress |
 | Redfin | RHEL 10 | GNOME | Alpha (local-build only) |
+| Grouper | Ubuntu 26.04 | GNOME | Experimental (RFC 010, manual dispatch only) |
 
 ### Build Health
 

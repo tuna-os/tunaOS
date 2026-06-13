@@ -3,13 +3,24 @@ on:
   workflow_call:
     inputs:
       variant:
-        description: 'Variant to build (yellowfin, albacore, skipjack, bonito)'
+        description: 'Variant to build (yellowfin, albacore, skipjack, bonito, grouper)'
         required: true
         type: string
       flavor:
         description: 'Flavor (all, base, gnome, kde, niri, etc.)'
         default: 'all'
         type: string
+    secrets:
+      SIGNING_SECRET:
+        required: false
+      R2_ACCESS_KEY_ID:
+        required: false
+      R2_SECRET_ACCESS_KEY:
+        required: false
+      R2_ENDPOINT:
+        required: false
+      R2_BUCKET:
+        required: false
 
 jobs:
   # ── Matrix Generation ───────────────────────────────────────────────────────
