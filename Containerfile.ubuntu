@@ -41,6 +41,12 @@ ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 # Ensure /opt is a real directory
 RUN rm -rf /opt && mkdir /opt
 
+# Bootstrap apt: the base bootc image strips apt cache dirs to save space.
+# Restore the minimal directory structure before any build script runs.
+RUN mkdir -p /var/lib/apt/lists/partial /var/lib/dpkg \
+  /var/cache/apt/archives/partial /var/log/apt && \
+  apt-get update -qq
+
 # Copy system files and apply TunaOS customizations
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
