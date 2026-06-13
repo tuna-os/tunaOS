@@ -4,8 +4,12 @@
 #
 # Skips: RHSM registration, COPR repos, dnf versionlock, RPM Fusion,
 # EPEL, brew/common system_files (RPM/Bluefin-specific).
+#
+# Requires a bootc-enabled Ubuntu base image with apt infrastructure intact.
+# Build the base image first:  podman build -t ubuntu-26.04-desktop-bootc ubuntu-bootc/
+# Or use:                       podman build --build-arg BASE_IMAGE=ghcr.io/hanthor/...
 
-ARG BASE_IMAGE="ghcr.io/hanthor/ubuntu-26.04-desktop-bootc:latest"
+ARG BASE_IMAGE="ubuntu-26.04-desktop-bootc:latest"
 ARG ENABLE_HWE="${ENABLE_HWE:-0}"
 ARG ENABLE_NVIDIA="${ENABLE_NVIDIA:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
@@ -41,17 +45,6 @@ ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
 # Ensure /opt is a real directory
 RUN rm -rf /opt && mkdir /opt
-
-# Bootstrap apt: the base bootc image strips apt dirs and debconf.
-# debconf has a circular dep (needs itself to configure), so install with dpkg.
-RUN mkdir -p /var/lib/apt/lists/partial /var/lib/dpkg \
-  /var/cache/apt/archives/partial /var/log/apt && \
-  apt-get update -qq && \
-  cd /tmp && apt-get download debconf && \
-  dpkg --unpack debconf*.deb && \
-  rm debconf*.deb && \
-  dpkg --configure debconf || true && \
-  apt-get install -y -f --no-install-recommends
 
 # Copy system files and apply TunaOS customizations
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \

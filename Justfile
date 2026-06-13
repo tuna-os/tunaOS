@@ -854,3 +854,9 @@ attach:
     [[ -z "$SESSION" ]] && SESSION=$(zellij list-sessions 2>/dev/null | grep -v "gemini-" | head -1 | awk '{print $1}')
     if [ -n "$SESSION" ]; then echo "Attaching to Zellij session: $SESSION"; zellij attach "$SESSION"
     else echo "No active zellij session found."; exit 1; fi
+
+# Build the Ubuntu 26.04 bootc base image (RFC 010 prerequisite).
+# Produces localhost/ubuntu-26.04-desktop-bootc:latest from ubuntu:resolute.
+# Takes ~10 min on first build (Rust compilation of bootc from source).
+ubuntu-bootc:
+    podman build -t ubuntu-26.04-desktop-bootc:latest -f ubuntu-bootc/Containerfile ubuntu-bootc/
