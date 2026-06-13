@@ -20,6 +20,12 @@ set -euo pipefail
 # shellcheck source=lib/common.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
+# Source registry resolution for TUNA_REGISTRY mirror overrides.
+# Falls back to hardcoded ref if _registry.sh is unavailable.
+if [[ -f "$(dirname "${BASH_SOURCE[0]}")/_registry.sh" ]]; then
+	. "$(dirname "${BASH_SOURCE[0]}")/_registry.sh"
+fi
+
 VARIANT="${1:?usage: $0 <variant> <flavor> [repo] [tag]}"
 FLAVOR="${2:?usage: $0 <variant> <flavor> [repo] [tag]}"
 REPO="${3:-local}"
@@ -54,7 +60,7 @@ fi
 # to opt into the source build (helpful when iterating on tacklebox itself
 # locally before a tag is cut).
 
-TACKLEBOX_IMAGE="${TACKLEBOX_IMAGE:-ghcr.io/tuna-os/tacklebox:latest}"
+TACKLEBOX_IMAGE="${TACKLEBOX_IMAGE:-$(registry_ref tacklebox 2>/dev/null || echo 'ghcr.io/tuna-os/tacklebox:latest')}"
 TACKLEBOX_FROM_SOURCE="${TACKLEBOX_FROM_SOURCE:-0}"
 
 if [[ "$TACKLEBOX_FROM_SOURCE" == "1" ]]; then
