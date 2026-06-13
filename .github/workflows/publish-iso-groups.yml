@@ -1,0 +1,155 @@
+name: Publish Grouped Dedup ISOs to R2
+
+# Builds the combined, deduplicated ISOs defined under `iso_groups:` in
+# .github/build-config.yml (issue #455): one ISO per (variant, group) that
+# packs several desktop environments into a single shared squashfs. This
+# replaces 36 per-desktop ISOs with 12 grouped ones.
+#
+# Runs separately from publish-isos.yml (the legacy per-flavor path) so the two
+# can be compared before the old one is retired.
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: 'Variant (all = every variant)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - yellowfin
+          - albacore
+          - skipjack
+          - bonito
+      group:
+        description: 'ISO group (all = flagship + community + nvidia)'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - default
+          - community
+          - nvidia
+      skip_upload:
+        description: 'Build ISOs but skip uploading to R2 (dry run)'
+        required: false
+        default: false
+        type: boolean
+  schedule:
+    # Sundays at 23:00 UTC — after publish-isos.yml (22:00) so they don't
+    # contend for the same self-hosted/large runners.
+    - cron: '0 23 * * 0'
+
+jobs:
+  generate-matrix:
+    name: Generate ISO-group matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.build.outputs.matrix }}
+      count: ${{ steps.build.outputs.count }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install yq
+        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+
+      - name: Build matrix from iso_groups ∩ variant flavors
+        id: build
+        env:
+          WANT_VARIANT: ${{ inputs.variant || 'all' }}
+          WANT_GROUP: ${{ inputs.group || 'all' }}
+        run: |
+          # Emit one matrix entry per (variant, group) whose intersection of
+          # group flavors with the variant's build_image flavors is non-empty.
+          # "default"/'' is the flagship group; its ISO has no suffix.
+          MATRIX=$(yq -o=json .github/build-config.yml | jq -c \
+            --arg wv "$WANT_VARIANT" --arg wg "$WANT_GROUP" '
+            [ .variants[] as $var
+              | ($var.flavors | map(select(.build_image == true) | .id)) as $vf
+              | .iso_groups[] as $g
+              | ($g.suffix // "") as $suffix
+              | ($g.flavors | map(select(. as $f | $vf | index($f)))) as $sel
+              | select(($sel | length) > 0)
+              | select($wv == "all" or $var.id == $wv)
+              | select($wg == "all"
+                       or ($wg == "default" and $suffix == "")
+                       or $wg == $suffix)
+              | {
+                  variant:  $var.id,
+                  group:    (if $suffix == "" then "default" else $suffix end),
+                  suffix:   $suffix,
+                  basename: (if $suffix == "" then $var.id else "\($var.id)-\($suffix)" end)
+                }
+            ] | { include: . }')
+          COUNT=$(echo "$MATRIX" | jq '.include | length')
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Building $COUNT grouped ISO(s):"
+          echo "$MATRIX" | jq -r '.include[] | "  \(.basename)  (\(.variant) / \(.group))"'
+
+  build-and-publish:
+    name: ${{ matrix.basename }}
+    needs: generate-matrix
+    if: ${{ needs.generate-matrix.outputs.count != '0' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: recursive
+
+      - uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y just podman jq rclone golang-go git
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build combined dedup ISO (from published GHCR images)
+        env:
+          GITHUB_REPOSITORY_OWNER: tuna-os
+        run: |
+          sudo GITHUB_REPOSITORY_OWNER=tuna-os \
+            just iso-group "${{ matrix.variant }}" "${{ matrix.group }}" ghcr
+
+      - name: Upload ISO to Cloudflare R2
+        if: ${{ inputs.skip_upload != true }}
+        env:
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          ISO=$(find . -maxdepth 1 -name "${{ matrix.basename }}-*.iso" | head -1)
+          if [[ -z "$ISO" ]]; then
+            echo "ERROR: No ISO found for ${{ matrix.basename }}"
+            exit 1
+          fi
+          echo "==> Uploading $ISO to R2..."
+          rclone copy --log-level INFO --checksum --s3-no-check-bucket \
+            "$ISO" R2:${{ secrets.R2_BUCKET }}/live-isos/
+          LATEST="${{ matrix.basename }}-latest.iso"
+          rclone copyto --log-level INFO --s3-no-check-bucket \
+            "$ISO" "R2:${{ secrets.R2_BUCKET }}/live-isos/${LATEST}"
+          echo "==> Upload complete: $(basename "$ISO") (latest → ${LATEST})"
+
+      - name: Upload ISO as artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ matrix.basename }}-iso
+          path: "${{ matrix.basename }}-*.iso"
+          if-no-files-found: error
+          retention-days: 7

@@ -1,6 +1,33 @@
 config:
   global_platforms: ["linux/amd64", "linux/arm64"]
 
+# ── Grouped dedup ISOs (issue #455) ───────────────────────────────────────────
+# Per-desktop-per-flavor ISOs are wasteful: all desktops on a variant share the
+# same Enterprise-Linux base, so tacklebox `shared_store.dedup` packs several
+# bootable environments into ONE combined squashfs (~80%+ dedup; an extra
+# desktop adds ~300 MB rather than a whole new ISO). Each group below becomes a
+# single ISO named `<variant>[-<suffix>].iso` whose systemd-boot menu lists
+# every environment by title.
+#
+# `scripts/build-iso-group.sh` intersects each group's `flavors` with the
+# variant's actual `build_image: true` flavors, so a variant that lacks a
+# desktop (e.g. bonito has no gnome50) simply gets a smaller ISO — no group
+# needs per-variant tailoring here.
+iso_groups:
+  # Flagship: the 90%-of-users ISO. GNOME + HWE share userspace (only the
+  # kernel differs) so dedup is near-total. GNOME 50 rides along on the same
+  # base. Published as `<variant>.iso`.
+  - suffix: ""
+    flavors: [gnome, gnome50, gnome-hwe, gnome50-hwe]
+  # Niche desktops grouped by audience. Each adds ~300 MB incremental.
+  # Published as `<variant>-community.iso`.
+  - suffix: community
+    flavors: [kde, kde-hwe, cosmic, cosmic-hwe, niri, niri-hwe]
+  # NVIDIA drivers + CUDA are large; isolate so only GPU users download them.
+  # Published as `<variant>-nvidia.iso`.
+  - suffix: nvidia
+    flavors: [gnome-nvidia, gnome50-nvidia, gnome-nvidia-hwe]
+
 # Build stages (for reference — enforced by the workflow job graph):
 #
 #   Stage 1:  base

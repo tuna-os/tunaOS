@@ -457,6 +457,11 @@ iso-tacklebox variant='yellowfin' flavor='gnome' repo='local' tag='':
     [[ -z "$_tag" ]] && _tag="{{ flavor }}"
     sudo bash ./scripts/build-iso-tacklebox.sh "{{ variant }}" "{{ flavor }}" "{{ repo }}" "$_tag"
 
+# Build ONE combined dedup ISO containing every desktop in an iso_group (#455).
+# group: '' / default (flagship gnome+hwe), community (kde/cosmic/niri), nvidia.
+iso-group variant='yellowfin' group='default' repo='ghcr':
+    sudo bash ./scripts/build-iso-group.sh "{{ variant }}" "{{ group }}" "{{ repo }}"
+
 # Generate a QCOW2 disk image using bootc install to-disk (via loopback in a privileged container)
 qcow2 variant flavor='gnome' repo='local' tag='':
     #!/usr/bin/env bash
