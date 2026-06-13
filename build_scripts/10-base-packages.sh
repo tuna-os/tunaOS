@@ -34,7 +34,6 @@ install_base_packages_no_de() {
 			flatpak \
 			distrobox \
 			fastfetch \
-			fpaste \
 			fwupd \
 			systemd-resolved \
 			btrfs-progs \

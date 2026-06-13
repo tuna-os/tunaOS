@@ -91,7 +91,7 @@ elif [[ "$FLAVOR" == "base-nvidia" ]]; then
 	ENABLE_NVIDIA="1"
 	DESKTOP_FLAVOR="base-nvidia"
 	PARENT_FLAVOR="base"
-elif [[ "$FLAVOR" == *"-nvidia-hwe" ]]; then
+elif [[ "$VARIANT" != "grouper" ]] && [[ "$FLAVOR" == *"-nvidia-hwe" ]]; then
 	DESKTOP_FLAVOR="${FLAVOR%-nvidia-hwe}"
 	CONTAINERFILE="Containerfile.nvidia"
 	ENABLE_NVIDIA="1"

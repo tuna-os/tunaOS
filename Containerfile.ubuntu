@@ -47,7 +47,7 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/copy-files.sh
 
-# Run workarounds (dnf-only sections are guarded by [[ $PKG_MGR == dnf ]])
+# Run workarounds (IS_* flags guard all RPM-specific blocks; all evaluate to false on Ubuntu)
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
@@ -71,6 +71,12 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/40-services.sh
+
+# Add Flathub remote (equivalent to what 26-packages-post.sh does for RPM builds).
+# Must run after flatpak is installed (10-base-packages.sh apt branch).
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
