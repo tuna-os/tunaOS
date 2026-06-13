@@ -153,3 +153,34 @@ jobs:
           name: ${{ matrix.variant }}-${{ matrix.flavor }}-qcow2-boot-screenshot
           path: screenshot.png
           if-no-files-found: warn
+
+      # Publish to R2 so the docs site (tunaos.org) can show real, current
+      # desktop screenshots on each variant's landing page. Served from
+      # download.tunaos.org/screenshots/<variant>-<flavor>-latest.png — the
+      # DesktopScreenshots component in tuna-os/docs reads exactly that path.
+      # Runs only when a screenshot was actually captured; skips cleanly when
+      # R2 credentials are absent (e.g. forks).
+      - name: Publish screenshot to R2
+        if: steps.filter.outputs.skip != 'true' && hashFiles('screenshot.png') != ''
+        env:
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          if [[ -z "${RCLONE_CONFIG_R2_ACCESS_KEY_ID:-}" ]]; then
+            echo "::notice::R2 credentials not configured; skipping screenshot publish."
+            exit 0
+          fi
+          sudo apt-get install -y -q rclone
+          DATE=$(date +%Y%m%d)
+          DEST="R2:${{ secrets.R2_BUCKET }}/screenshots"
+          BASE="${{ matrix.variant }}-${{ matrix.flavor }}"
+          # Dated archive copy + the stable "latest" the docs site links to.
+          rclone copyto --s3-no-check-bucket --log-level INFO \
+            screenshot.png "${DEST}/${BASE}-${DATE}.png"
+          rclone copyto --s3-no-check-bucket --log-level INFO \
+            screenshot.png "${DEST}/${BASE}-latest.png"
+          echo "==> Published ${BASE}-latest.png to R2."
