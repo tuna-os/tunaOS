@@ -192,4 +192,4 @@ flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flat
 
 ---
 
-*For variant-specific details, see [ROADMAP.md](ROADMAP.md) and the [Building TunaOS](docs/book/src/building.md) guide.*
+*For variant-specific details, see [ROADMAP.md](ROADMAP.md) and the build/installation guides at [tunaos.org](https://tunaos.org).*
