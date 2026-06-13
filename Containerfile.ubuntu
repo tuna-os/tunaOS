@@ -36,16 +36,18 @@ ENV IMAGE_REGISTRY=${IMAGE_REGISTRY}
 ENV SHA_HEAD_SHORT=${SHA_HEAD_SHORT}
 ENV ENABLE_HWE=${ENABLE_HWE}
 ENV ENABLE_NVIDIA=${ENABLE_NVIDIA}
+ENV DEBIAN_FRONTEND=noninteractive
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
 # Ensure /opt is a real directory
 RUN rm -rf /opt && mkdir /opt
 
-# Bootstrap apt: the base bootc image strips apt cache dirs to save space.
-# Restore the minimal directory structure before any build script runs.
+# Bootstrap apt: the base bootc image strips apt cache dirs and debconf to save space.
+# Restore minimal apt structure + install debconf before any build script runs.
 RUN mkdir -p /var/lib/apt/lists/partial /var/lib/dpkg \
   /var/cache/apt/archives/partial /var/log/apt && \
-  apt-get update -qq
+  apt-get update -qq && \
+  apt-get install -y --no-install-recommends debconf
 
 # Copy system files and apply TunaOS customizations
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
