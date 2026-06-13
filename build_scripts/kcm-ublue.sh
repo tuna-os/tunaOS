@@ -49,24 +49,46 @@ BUILD_DEPS=(
     gtest-devel
 )
 
-dnf_retry -y install "${BUILD_DEPS[@]}"
+# kcm_ublue is built from source and needs the KF6 / Qt6 *-devel headers.
+# Those aren't in every EL repo set — AlmaLinux Kitten (yellowfin) ships the
+# KF6 runtime but not the -devel packages, so a hard `dnf install` failed the
+# WHOLE kde image (#285: every yellowfin:kde build errored on
+# `No match for argument: kf6-config-devel`, which in turn blocked the entire
+# stage-3 -hwe/-nvidia lineup). Probe first; if any build dep is missing, skip
+# the source build with a warning rather than failing the image. kcm_ublue is
+# a nice-to-have KDE control module, not essential to a working desktop.
+missing_deps=()
+for pkg in "${BUILD_DEPS[@]}"; do
+    if ! dnf repoquery --available --qf '%{name}\n' "$pkg" 2>/dev/null | grep -qx "$pkg"; then
+        missing_deps+=("$pkg")
+    fi
+done
 
-BUILD_DIR=$(mktemp -d)
-trap 'rm -rf "$BUILD_DIR"' EXIT
+if ((${#missing_deps[@]} > 0)); then
+    printf '::warning title=kcm_ublue skipped (%s)::build deps unavailable in the active repos: %s\n' \
+        "${IMAGE_NAME:-?}" "${missing_deps[*]}"
+    echo "Skipping kcm_ublue source build."
+else
+    dnf_retry -y install "${BUILD_DEPS[@]}"
 
-git clone --depth 1 --branch "${KCM_UBLUE_VERSION}" \
-    https://github.com/ledif/kcm_ublue.git "$BUILD_DIR"
+    BUILD_DIR=$(mktemp -d)
+    trap 'rm -rf "$BUILD_DIR"' EXIT
 
-cd "$BUILD_DIR"
-cmake -B build -DCMAKE_INSTALL_PREFIX=/usr
-cmake --build build
-cmake --install build
+    git clone --depth 1 --branch "${KCM_UBLUE_VERSION}" \
+        https://github.com/ledif/kcm_ublue.git "$BUILD_DIR"
 
-# Clean up build dependencies
-dnf -y remove "${BUILD_DEPS[@]}" || true
-dnf -y autoremove || true
+    cd "$BUILD_DIR"
+    cmake -B build -DCMAKE_INSTALL_PREFIX=/usr
+    cmake --build build
+    cmake --install build
+    cd - >/dev/null
 
-echo "kcm_ublue ${KCM_UBLUE_VERSION} installed."
+    # Clean up build dependencies
+    dnf -y remove "${BUILD_DEPS[@]}" || true
+    dnf -y autoremove || true
+
+    echo "kcm_ublue ${KCM_UBLUE_VERSION} installed."
+fi
 
 # ---- krunner-bazaar: install from GitHub release RPM ---------------------
 echo "Installing krunner-bazaar ${KRUNNER_BAZAAR_VERSION} from GitHub release..."
