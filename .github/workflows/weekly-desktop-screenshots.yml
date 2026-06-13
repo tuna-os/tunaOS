@@ -1,0 +1,173 @@
+name: Weekly Desktop Screenshots
+
+# Captures real DESKTOP screenshots of every variant × desktop by building the
+# live ISO (which autologs into the session via livesys) and booting it in
+# QEMU — unlike the QCOW2 path, which lands on the display-manager login screen.
+#
+# Publishes to R2 at screenshots/<variant>-<flavor>-latest.png, served from
+# download.tunaos.org. The DesktopScreenshots component in tuna-os/docs reads
+# exactly that path, so each variant landing page on tunaos.org shows current,
+# automatically-refreshed desktop screenshots.
+
+on:
+  schedule:
+    # Mondays 02:00 UTC — after the weekend image builds have published.
+    - cron: "0 2 * * 1"
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "Variant (blank = all)"
+        required: false
+        default: ""
+        type: string
+      flavor:
+        description: "Flavor (blank = all: gnome, kde, niri, cosmic)"
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  screenshot:
+    name: ${{ matrix.variant }}/${{ matrix.flavor }}
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [yellowfin, albacore, skipjack, bonito]
+        flavor: [gnome, kde, niri, cosmic]
+    steps:
+      - name: Check matrix filter
+        id: filter
+        env:
+          WANT_VARIANT: ${{ github.event.inputs.variant }}
+          WANT_FLAVOR: ${{ github.event.inputs.flavor }}
+        run: |
+          if [[ -n "$WANT_VARIANT" && "$WANT_VARIANT" != "${{ matrix.variant }}" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+          if [[ -n "$WANT_FLAVOR" && "$WANT_FLAVOR" != "${{ matrix.flavor }}" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        if: steps.filter.outputs.skip != 'true'
+        with:
+          submodules: recursive
+
+      - uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
+        if: steps.filter.outputs.skip != 'true'
+
+      # GitHub-hosted runners ship /dev/kvm as root:kvm 0660; widen it so the
+      # nested QEMU gets KVM acceleration (same rule iso-e2e.yml uses).
+      - name: Enable KVM group permissions
+        if: steps.filter.outputs.skip != 'true'
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          ls -la /dev/kvm 2>/dev/null && echo "KVM available" || echo "Warning: no /dev/kvm — QEMU uses TCG"
+
+      - name: Install dependencies
+        if: steps.filter.outputs.skip != 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            just podman jq golang-go git rclone \
+            qemu-system-x86 qemu-utils ovmf socat imagemagick
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+
+      - name: Log in to GHCR
+        if: steps.filter.outputs.skip != 'true'
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build live ISO (from published GHCR image)
+        if: steps.filter.outputs.skip != 'true'
+        timeout-minutes: 45
+        env:
+          GITHUB_REPOSITORY_OWNER: tuna-os
+        run: |
+          sudo GITHUB_REPOSITORY_OWNER=tuna-os \
+            just iso-tacklebox "${{ matrix.variant }}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
+
+      - name: Boot ISO and capture desktop screenshot
+        if: steps.filter.outputs.skip != 'true'
+        id: capture
+        timeout-minutes: 20
+        run: |
+          ISO=$(find . -maxdepth 1 -name "${{ matrix.variant }}-${{ matrix.flavor }}-*.iso" | head -1)
+          if [[ -z "$ISO" ]]; then
+            echo "::error::No ISO found for ${{ matrix.variant }}-${{ matrix.flavor }}"
+            exit 1
+          fi
+          KVM_FLAG=""
+          [[ -r /dev/kvm && -w /dev/kvm ]] || KVM_FLAG="--no-kvm"
+
+          # Boot to the live-ready marker, then keep the VM up so the desktop
+          # can finish painting before we grab the screenshot.
+          set +e
+          sudo --preserve-env=KVM_FLAG ./scripts/iso-e2e.sh "$ISO" \
+            --output shot-out --timeout 600 --keep-vm $KVM_FLAG
+          rc=$?
+          set -e
+          echo "iso-e2e rc=$rc"
+
+          # Let the compositor settle, then screendump the live desktop.
+          if [[ -S shot-out/monitor.sock ]]; then
+            sleep 45
+            echo "screendump $(pwd)/shot-out/desktop.ppm" | \
+              sudo socat - "UNIX-CONNECT:shot-out/monitor.sock" || true
+            sleep 3
+            echo "system_powerdown" | \
+              sudo socat - "UNIX-CONNECT:shot-out/monitor.sock" || true
+          fi
+
+          # Prefer the settled desktop shot; fall back to iso-e2e's ready shot.
+          SRC=""
+          for cand in shot-out/desktop.ppm shot-out/10-ready.ppm shot-out/00-boot.ppm; do
+            if sudo test -f "$cand"; then SRC="$cand"; break; fi
+          done
+          if [[ -z "$SRC" ]]; then
+            echo "::warning::No screenshot captured for ${{ matrix.variant }}-${{ matrix.flavor }}"
+            exit 0
+          fi
+          sudo convert "$SRC" screenshot.png 2>/dev/null || sudo cp "$SRC" screenshot.png
+          sudo chown "$(id -u):$(id -g)" screenshot.png || true
+          echo "captured=true" >> "$GITHUB_OUTPUT"
+          echo "==> Captured $(ls -lh screenshot.png) from $SRC"
+
+      - name: Upload screenshot artifact
+        if: steps.filter.outputs.skip != 'true' && steps.capture.outputs.captured == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ${{ matrix.variant }}-${{ matrix.flavor }}-desktop-screenshot
+          path: screenshot.png
+          if-no-files-found: warn
+
+      - name: Publish desktop screenshot to R2
+        if: steps.filter.outputs.skip != 'true' && steps.capture.outputs.captured == 'true'
+        env:
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          if [[ -z "${RCLONE_CONFIG_R2_ACCESS_KEY_ID:-}" ]]; then
+            echo "::notice::R2 credentials not configured; skipping publish."
+            exit 0
+          fi
+          DATE=$(date +%Y%m%d)
+          DEST="R2:${{ secrets.R2_BUCKET }}/screenshots"
+          BASE="${{ matrix.variant }}-${{ matrix.flavor }}"
+          # Dated archive copy + the stable "latest" the docs site links to.
+          rclone copyto --s3-no-check-bucket --log-level INFO \
+            screenshot.png "${DEST}/${BASE}-${DATE}.png"
+          rclone copyto --s3-no-check-bucket --log-level INFO \
+            screenshot.png "${DEST}/${BASE}-latest.png"
+          echo "==> Published ${BASE}-latest.png to R2."

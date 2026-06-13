@@ -154,12 +154,12 @@ jobs:
           path: screenshot.png
           if-no-files-found: warn
 
-      # Publish to R2 so the docs site (tunaos.org) can show real, current
-      # desktop screenshots on each variant's landing page. Served from
-      # download.tunaos.org/screenshots/<variant>-<flavor>-latest.png — the
-      # DesktopScreenshots component in tuna-os/docs reads exactly that path.
-      # Runs only when a screenshot was actually captured; skips cleanly when
-      # R2 credentials are absent (e.g. forks).
+      # Publish the QCOW2 boot-state screenshot (display-manager / first-boot)
+      # to R2 under screenshots/boot/ — useful for the boot report and
+      # debugging. The *desktop* screenshots the landing pages show come from
+      # weekly-desktop-screenshots.yml (live ISO, autologged-in to the desktop).
+      # Runs only when a screenshot was captured; skips cleanly when R2 creds
+      # are absent (e.g. forks).
       - name: Publish screenshot to R2
         if: steps.filter.outputs.skip != 'true' && hashFiles('screenshot.png') != ''
         env:
@@ -176,9 +176,9 @@ jobs:
           fi
           sudo apt-get install -y -q rclone
           DATE=$(date +%Y%m%d)
-          DEST="R2:${{ secrets.R2_BUCKET }}/screenshots"
+          DEST="R2:${{ secrets.R2_BUCKET }}/screenshots/boot"
           BASE="${{ matrix.variant }}-${{ matrix.flavor }}"
-          # Dated archive copy + the stable "latest" the docs site links to.
+          # Dated archive copy + a stable "latest" boot-state shot.
           rclone copyto --s3-no-check-bucket --log-level INFO \
             screenshot.png "${DEST}/${BASE}-${DATE}.png"
           rclone copyto --s3-no-check-bucket --log-level INFO \
