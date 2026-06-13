@@ -57,6 +57,10 @@ fi
 
 BASE_FOR_BUILD=""
 CONTAINERFILE="Containerfile"
+# RFC 010: grouper (Ubuntu) uses Containerfile.ubuntu
+if [[ "$VARIANT" == "grouper" ]]; then
+	CONTAINERFILE="Containerfile.ubuntu"
+fi
 ENABLE_HWE="0"
 ENABLE_NVIDIA="0"
 PARENT_FLAVOR=""

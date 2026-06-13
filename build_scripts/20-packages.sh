@@ -6,6 +6,21 @@ printf "::group:: === 20 Packages ===\n"
 
 source /run/context/build_scripts/lib.sh
 
+# ── apt (Ubuntu/Debian) path ──────────────────────────────────────────
+if [[ "$PKG_MGR" == "apt" ]]; then
+	# GCC for Homebrew (same rationale as RPM path)
+	pkg_install gcc
+
+	# Tailscale — Ubuntu has native apt repo support
+	curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+	curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list
+	pkg_install tailscale
+
+	printf "::endgroup::\n"
+	return 0
+fi
+# ── dnf (RPM) path continues below ────────────────────────────────────
+
 # Install OS-specific branding
 if [[ $IS_FEDORA == true ]]; then
 	dnf_retry -y install fedora-logos

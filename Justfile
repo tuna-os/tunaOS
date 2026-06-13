@@ -371,6 +371,10 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
 
     BASE_FOR_BUILD=""
     CONTAINERFILE="Containerfile"
+    # RFC 010: grouper (Ubuntu) uses Containerfile.ubuntu
+    if [[ "{{ variant }}" == "grouper" ]]; then
+        CONTAINERFILE="Containerfile.ubuntu"
+    fi
     ENABLE_HWE="0"
     ENABLE_NVIDIA="0"
     PARENT_FLAVOR=""

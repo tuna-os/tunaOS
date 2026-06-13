@@ -21,6 +21,55 @@ install_base_packages_no_de() {
 		. /run/secrets/rhsm
 	fi
 
+	# ── apt (Ubuntu/Debian) path ──────────────────────────────────────────
+	if [[ "$PKG_MGR" == "apt" ]]; then
+		# Base packages common to all desktop flavors on apt-based systems.
+		# Package name mapping from RPM: gcc-c++ → g++, xhost → x11-xserver-utils,
+		# systemd-oomd-defaults → systemd-oomd, tuned-ppd → power-profiles-daemon.
+		pkg_install \
+			buildah \
+			podman \
+			skopeo \
+			systemd-container \
+			flatpak \
+			distrobox \
+			fastfetch \
+			fpaste \
+			fwupd \
+			systemd-resolved \
+			btrfs-progs \
+			gcc \
+			g++ \
+			plymouth \
+			plymouth-themes \
+			xdg-desktop-portal \
+			systemd-oomd \
+			power-profiles-daemon \
+			fzf \
+			glow \
+			wl-clipboard \
+			gum \
+			x11-xserver-utils \
+			unzip \
+			powertop
+
+		# Remove unwanted packages
+		[[ "$IS_UBUNTU" == true ]] && pkg_remove ubuntu-advantage-tools || true
+
+		# Install uupd from GitHub release (same source as RPM path)
+		UUPD_VERSION=$(grep '^\s*uupd:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
+		curl -fsSL "https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/').tar.gz" \
+			| tar -xzf - -C /usr/bin uupd
+		UUPD_SRC_BASE="https://raw.githubusercontent.com/ublue-os/uupd/${UUPD_VERSION}"
+		curl -fsSLo /usr/lib/systemd/system/uupd.service "${UUPD_SRC_BASE}/uupd.service"
+		curl -fsSLo /usr/lib/systemd/system/uupd.timer "${UUPD_SRC_BASE}/uupd.timer"
+		curl -fsSLo /usr/lib/systemd/system/uupd-manual.service "${UUPD_SRC_BASE}/uupd-manual.service"
+
+		printf "::endgroup::\n"
+		return 0
+	fi
+	# ── dnf (RPM) path continues below ────────────────────────────────────
+
 	# This thing slows down downloads A LOT for no reason
 	if [[ $IS_CENTOS == true ]]; then
 		dnf remove -y subscription-manager

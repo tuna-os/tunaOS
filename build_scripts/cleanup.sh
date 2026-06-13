@@ -11,26 +11,33 @@ source /run/context/build_scripts/lib.sh
 # not updated, so we don't want to leave them enabled.
 # dnf config-manager --set-disabled baseos-compose,appstream-compose
 
-dnf clean all
+pkg_clean
 
 rm -rf /.gitkeep
 
-# Clean up /run artifacts left by dnf/selinux/tuned during build (bootc lint: nonempty-run-tmp)
+# Clean up /run artifacts left by package manager/selinux/tuned during build (bootc lint: nonempty-run-tmp)
 rm -rf /run/dnf /run/selinux-policy /run/tuned
 
 # Clean /var/log dnf artifacts (bootc lint: var-log)
-rm -f /var/log/dnf5.log /var/log/dnf5.log.*
-rm -f /var/log/dnf.log /var/log/dnf.rpm.log /var/log/dnf.librepo.log /var/log/hawkey.log
+if [[ "$PKG_MGR" == "dnf" ]]; then
+	rm -f /var/log/dnf5.log /var/log/dnf5.log.*
+	rm -f /var/log/dnf.log /var/log/dnf.rpm.log /var/log/dnf.librepo.log /var/log/hawkey.log
+fi
 
 # Clean /var but skip mounted directories
 find /var -mindepth 1 -maxdepth 1 ! -path '/var/cache' -delete 2>/dev/null || true
 find /var/cache -mindepth 1 -delete 2>/dev/null || true
 
 # Declare /var/cache/dnf and /var/lib/dnf in tmpfiles.d so they're recreated on first boot (bootc lint: var-tmpfiles)
-printf 'd /var/cache/dnf 0755 root root - -\nd /var/lib/dnf 0755 root root - -\nd /var/cache/libdnf5 0755 root root - -\nd /var/lib/dnf5 0755 root root - -\n' >/usr/lib/tmpfiles.d/dnf-cache.conf
+# (dnf-only — apt uses /var/lib/apt/lists which is handled by its own tmpfiles.d)
+if [[ "$PKG_MGR" == "dnf" ]]; then
+	printf 'd /var/cache/dnf 0755 root root - -\nd /var/lib/dnf 0755 root root - -\nd /var/cache/libdnf5 0755 root root - -\nd /var/lib/dnf5 0755 root root - -\n' >/usr/lib/tmpfiles.d/dnf-cache.conf
+fi
 
 # Remove /var/lib/dnf state files left by the build (recreated by dnf on first use)
-rm -rf /var/lib/dnf /var/lib/dnf5
+if [[ "$PKG_MGR" == "dnf" ]]; then
+	rm -rf /var/lib/dnf /var/lib/dnf5
+fi
 
 # Generate tmpfiles.d entries for remaining /var/lib dirs created by packages
 # (bootc lint: var-tmpfiles). These dirs/files are owned by their respective packages
