@@ -67,6 +67,12 @@ check: _ensure_check_deps
                    .github/workflows/*.yml .github/workflows/*.yaml || { exit 1; }
     fi
     just --unstable --fmt --check -f Justfile
+    echo "Checking workflow drift..."
+    python3 scripts/generate-workflows.py
+    if ! git diff --exit-code .github/workflows/build-*.yml; then
+        echo "::error::Generated workflow files are stale. Run 'just generate-workflows' and commit the changes."
+        exit 1
+    fi
 
 # --- Test Targets ---
 
