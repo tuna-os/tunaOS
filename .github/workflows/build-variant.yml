@@ -224,14 +224,24 @@ jobs:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
   # ── Stage 3: Desktop HWE and nvidia flavors ───────────────────────────────────
-  # Runs only after ALL stage-2 jobs pass. Includes:
+  # Layers on stage-2 images:
   #   - gnome-hwe, kde-hwe, niri-hwe   (layer on base-hwe)
   #   - gnome-nvidia, kde-nvidia, niri-nvidia   (layer on base-nvidia)
   # All run in parallel within stage 3.
+  #
+  # `!cancelled()` (rather than the default "all needs succeeded") so that ONE
+  # failed stage-2 flavor doesn't skip the entire stage-3 lineup (#285: a flaky
+  # yellowfin:kde build was blocking every -hwe / -nvidia image from shipping).
+  # fail-fast is already false, so the stage-2 images that *did* build are
+  # pushed and available; stage-3 cells whose specific base is missing fail on
+  # their own without taking the rest down.
   build_stage3:
     name: "S3 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
     needs: [generate_matrix, build_stage2]
-    if: github.event_name != 'pull_request' && fromJson(needs.generate_matrix.outputs.stage3_matrix).include[0]
+    if: >-
+      !cancelled() && needs.generate_matrix.result == 'success' &&
+      github.event_name != 'pull_request' &&
+      fromJson(needs.generate_matrix.outputs.stage3_matrix).include[0]
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.stage3_matrix) }}
@@ -248,14 +258,18 @@ jobs:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
   # ── Stage 4: Combined nvidia+HWE flavors ──────────────────────────────────────
-  # Runs only after ALL stage-3 jobs pass. Includes:
+  # Layers on stage-3 images:
   #   - gnome-nvidia-hwe   (layers on gnome-hwe from stage 3)
-  # Must be a separate stage from stage 3 because gnome-nvidia-hwe depends on
-  # gnome-hwe, which is also built in stage 3.
+  # Separate from stage 3 because gnome-nvidia-hwe depends on gnome-hwe, itself
+  # built in stage 3. Same `!cancelled()` rationale as stage 3 (#285) so a
+  # single stage-3 failure doesn't skip stage 4.
   build_stage4:
     name: "S4 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
     needs: [generate_matrix, build_stage3]
-    if: github.event_name != 'pull_request' && fromJson(needs.generate_matrix.outputs.stage4_matrix).include[0]
+    if: >-
+      !cancelled() && needs.generate_matrix.result == 'success' &&
+      github.event_name != 'pull_request' &&
+      fromJson(needs.generate_matrix.outputs.stage4_matrix).include[0]
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.stage4_matrix) }}
