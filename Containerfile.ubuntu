@@ -5,7 +5,7 @@
 # Skips: RHSM registration, COPR repos, dnf versionlock, RPM Fusion,
 # EPEL, brew/common system_files (RPM/Bluefin-specific).
 
-ARG BASE_IMAGE="ghcr.io/tuna-os/ubuntu:latest"
+ARG BASE_IMAGE="ghcr.io/hanthor/ubuntu-26.04-desktop-bootc:latest"
 ARG ENABLE_HWE="${ENABLE_HWE:-0}"
 ARG ENABLE_NVIDIA="${ENABLE_NVIDIA:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
