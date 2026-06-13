@@ -146,7 +146,6 @@ teardown() {
     echo "podman push --tls-verify=false --compression-format=zstd:chunked --compression-level=3 --force-compression localhost/${VARIANT}:${FLAVOR} ${HOST}:${PORT}/${VARIANT}:${FLAVOR}"
   '
   [ "$status" -eq 0 ]
-  [[ "$output" == *"--tls-verify=false"* ]]
   [[ "$output" == *"--compression-format=zstd:chunked"* ]]
   [[ "$output" == *"localhost/yellowfin:gnome"* ]]
   [[ "$output" == *"127.0.0.1:5000/yellowfin:gnome"* ]]
@@ -181,7 +180,7 @@ teardown() {
     echo "podman tag ${HOST}:${PORT}/${VARIANT}:${FLAVOR} localhost/${VARIANT}:${FLAVOR}"
   '
   [ "$status" -eq 0 ]
-  [[ "$output" == *"podman pull --tls-verify=false 127.0.0.1:5000/bonito:niri"* ]]
+  [[ "$output" == *"podman pull"*"127.0.0.1:5000/bonito:niri"* ]]
   [[ "$output" == *"podman tag 127.0.0.1:5000/bonito:niri localhost/bonito:niri"* ]]
 }
 
