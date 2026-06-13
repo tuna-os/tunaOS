@@ -263,6 +263,10 @@ Related Communities:
 - [Security Policy](SECURITY.md) — vulnerability reporting and supported versions
 - [Code of Conduct](CODE_OF_CONDUCT.md) — community standards
 
+### Community & Governance
+- [Community](COMMUNITY.md) — contribution ladder, metrics, communication
+- [Maintainers](MAINTAINERS.md) — maintainer playbook and bus factor plan
+
 ### External Resources
 - [AlmaLinux Kitten 10 Differences](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#how-is-almalinux-os-kitten-different-from-centos-stream)
 - [Project Bluefin Documentation](https://docs.projectbluefin.io)
