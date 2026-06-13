@@ -153,3 +153,34 @@ jobs:
           name: ${{ matrix.variant }}-${{ matrix.flavor }}-qcow2-boot-screenshot
           path: screenshot.png
           if-no-files-found: warn
+
+      # Publish the QCOW2 boot-state screenshot (display-manager / first-boot)
+      # to R2 under screenshots/boot/ — useful for the boot report and
+      # debugging. The *desktop* screenshots the landing pages show come from
+      # weekly-desktop-screenshots.yml (live ISO, autologged-in to the desktop).
+      # Runs only when a screenshot was captured; skips cleanly when R2 creds
+      # are absent (e.g. forks).
+      - name: Publish screenshot to R2
+        if: steps.filter.outputs.skip != 'true' && hashFiles('screenshot.png') != ''
+        env:
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          if [[ -z "${RCLONE_CONFIG_R2_ACCESS_KEY_ID:-}" ]]; then
+            echo "::notice::R2 credentials not configured; skipping screenshot publish."
+            exit 0
+          fi
+          sudo apt-get install -y -q rclone
+          DATE=$(date +%Y%m%d)
+          DEST="R2:${{ secrets.R2_BUCKET }}/screenshots/boot"
+          BASE="${{ matrix.variant }}-${{ matrix.flavor }}"
+          # Dated archive copy + a stable "latest" boot-state shot.
+          rclone copyto --s3-no-check-bucket --log-level INFO \
+            screenshot.png "${DEST}/${BASE}-${DATE}.png"
+          rclone copyto --s3-no-check-bucket --log-level INFO \
+            screenshot.png "${DEST}/${BASE}-latest.png"
+          echo "==> Published ${BASE}-latest.png to R2."
