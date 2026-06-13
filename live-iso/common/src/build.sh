@@ -141,7 +141,7 @@ Requires=livesys.service
 
 [Service]
 Type=oneshot
-ExecStart=/bin/bash -c 'id liveuser && echo "liveuser:live" | chpasswd'
+ExecStart=/bin/bash -c 'id liveuser && echo "liveuser:$(openssl rand -base64 12)" | chpasswd'
 RemainAfterExit=yes
 
 [Install]
