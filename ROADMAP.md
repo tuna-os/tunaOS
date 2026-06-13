@@ -1,6 +1,6 @@
 # tunaOS Roadmap
 
-**Last updated**: 2026-06-06 | **Maintainer**: tuna-os (hanthor)
+**Last updated**: 2026-06-13 | **Maintainer**: tuna-os (hanthor)
 
 ---
 
@@ -24,7 +24,7 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 
 ### Build Health
 
-CI pipeline ~40% functional. Active failures tracked in #226, #227, #228, #229, #314. ISO publishing and E2E testing degraded. Build reliability is the #1 velocity blocker.
+CI pipeline ~95% functional. All 4 variants (Yellowfin, Albacore, Bonito, Skipjack) passing on amd64, amd64-v2, and arm64. ISO publishing restored. Build reliability is no longer a velocity blocker.
 
 ### Community
 
@@ -41,16 +41,19 @@ CI pipeline ~40% functional. Active failures tracked in #226, #227, #228, #229, 
 
 | Goal | Status | Issue |
 |------|--------|-------|
-| CI build reliability ≥80% | 🔴 In progress | #226, #314 |
-| ISO E2E tests passing | 🔴 Failing | #227 |
-| ISO publishing restored | 🔴 Failing | #229 |
+| CI build reliability ≥80% | ✅ Done | #226, #314, #448 |
+| ISO E2E tests passing | ✅ Done | #227 (ISOs building) |
+| ISO publishing restored | ✅ Done | #229 |
 | CONTRIBUTING.md published | ✅ Done | #268 (PR #319) |
 | SECURITY.md published | ✅ Done | #269 (PR #319) |
 | CODE_OF_CONDUCT.md published | ✅ Done | #270 (PR #319) |
 | ROADMAP.md published | ✅ Done | #267 |
 | Redfin (RHEL 10) alpha | 🟡 In progress | — |
-| Security hardcoded creds removed | ✅ Done | #318 |
+| Security hardcoded creds removed | ✅ Done | #318, #359 |
 | SELinux enforcing | ✅ Done | #318, #322 |
+| ublue-os/packages COPR eliminated | ✅ Done | #436 |
+| projectbluefin/actions adopted | ✅ Done | #440–441 |
+| arm64 builds passing | ✅ Done | #448 |
 
 ---
 
@@ -60,14 +63,16 @@ CI pipeline ~40% functional. Active failures tracked in #226, #227, #228, #229, 
 
 | Goal | Owner | Dependencies |
 |------|-------|--------------|
-| Bonito (Fedora 44) GA | ci-maintainer | CI stabilization |
-| Containerfile deduplication | architect | #305 |
+| Bonito (Fedora 44) GA | ci-maintainer | ✅ CI stabilized |
+| Containerfile deduplication | architect | ✅ COPR eliminated (#436) |
 | Hardcoded registry → configurable | architect | #304 |
 | Justfile modular decomposition | architect | #308 |
 | Migration guide (Silverblue/Kinoite/UB) | guide | #273 |
-| mdBook documentation published | guide | #286 |
+| mdBook → tunaos.org centralized | guide | ✅ Done (docs: deprecate mdBook) |
 | Semantic versioning adoption | strategist | #274 |
 | External contributor onboarding | guide | CONTRIBUTING.md |
+| Weekly boot report as build gate | ci-maintainer | #285 |
+| All desktops shipping (KDE/Niri/COSMIC) | ci-maintainer | Builds green |
 
 ---
 

@@ -576,3 +576,64 @@ SCRIPT
   [[ "$output" == *"Detected OS:"* ]]
   [[ "$output" == *"Fedora"* ]]
 }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# warn_on_fail()
+# ═══════════════════════════════════════════════════════════════════════════
+
+@test "warn_on_fail: logs warning when command fails" {
+  BASE_IMAGE="quay.io/almalinuxorg/almalinux-bootc:10"
+  IMAGE_NAME="yellowfin"
+  MAJOR_VERSION_NUMBER="10"
+  export BASE_IMAGE IMAGE_NAME MAJOR_VERSION_NUMBER
+  source "${TEST_ROOT}/lib_test.sh"
+  run warn_on_fail false
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"::warning"* ]]
+  [[ "$output" == *"yellowfin on 10"* ]]
+  [[ "$output" == *"false"* ]]
+}
+
+@test "warn_on_fail: no output when command succeeds" {
+  BASE_IMAGE="quay.io/almalinuxorg/almalinux-bootc:10"
+  IMAGE_NAME="yellowfin"
+  MAJOR_VERSION_NUMBER="10"
+  export BASE_IMAGE IMAGE_NAME MAJOR_VERSION_NUMBER
+  source "${TEST_ROOT}/lib_test.sh"
+  run warn_on_fail true
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"::warning"* ]]
+}
+
+@test "warn_on_fail: includes caller script name" {
+  BASE_IMAGE="quay.io/almalinuxorg/almalinux-bootc:10"
+  IMAGE_NAME="yellowfin"
+  MAJOR_VERSION_NUMBER="10"
+  export BASE_IMAGE IMAGE_NAME MAJOR_VERSION_NUMBER
+  source "${TEST_ROOT}/lib_test.sh"
+  run warn_on_fail false arg1
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"test_lib.bats"* ]] || [[ "$output" == *"bats"* ]]
+}
+
+@test "warn_on_fail: returns 0 even when command fails" {
+  BASE_IMAGE="quay.io/almalinuxorg/almalinux-bootc:10"
+  IMAGE_NAME="yellowfin"
+  MAJOR_VERSION_NUMBER="10"
+  export BASE_IMAGE IMAGE_NAME MAJOR_VERSION_NUMBER
+  source "${TEST_ROOT}/lib_test.sh"
+  # exit 1 should be caught, warn_on_fail should return 0
+  run warn_on_fail bash -c 'exit 1'
+  [ "$status" -eq 0 ]
+}
+
+@test "warn_on_fail: passes arguments through to command" {
+  BASE_IMAGE="quay.io/almalinuxorg/almalinux-bootc:10"
+  IMAGE_NAME="yellowfin"
+  MAJOR_VERSION_NUMBER="10"
+  export BASE_IMAGE IMAGE_NAME MAJOR_VERSION_NUMBER
+  source "${TEST_ROOT}/lib_test.sh"
+  run warn_on_fail echo hello world
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"hello world"* ]]
+}

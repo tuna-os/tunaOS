@@ -60,6 +60,7 @@ TACKLEBOX_FROM_SOURCE="${TACKLEBOX_FROM_SOURCE:-0}"
 if [[ "$TACKLEBOX_FROM_SOURCE" == "1" ]]; then
 	# Pin the source SHA when building from main so CI doesn't silently
 	# track a moving HEAD. Bump via renovate when a release is cut.
+	TACKLEBOX_SHA="${TACKLEBOX_SHA:-$(grep '^\s*tacklebox:' image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')}"
 	TACKLEBOX_SHA="${TACKLEBOX_SHA:-75c837b39d9dcb360509c49d2e0306621dced904}"
 	TACKLEBOX_CACHE="${TACKLEBOX_CACHE:-/var/cache/tunaos/tacklebox}"
 	TACKLEBOX_BIN="${TACKLEBOX_CACHE}/tacklebox"
