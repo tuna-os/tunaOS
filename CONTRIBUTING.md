@@ -74,7 +74,7 @@ See [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md) for a detailed architecture ove
 - [Build Pipeline](docs/build-pipeline.md) — CI/CD overview
 - [Improvement Plan](docs/IMPROVEMENT_PLAN.md) — roadmap and progress
 - [Testing Guide](docs/TESTING.md) — ISO e2e test harness
-- [mdBook](docs/book/src/introduction.md) — user-facing documentation
+- [Developer Docs](https://tunaos.org/docs/dev/introduction) — build and contribution guide
 
 ## Community
 

@@ -254,7 +254,7 @@ Related Communities:
 - [Testing Guide](docs/TESTING.md) — ISO end-to-end test harness
 - [Improvement Plan](docs/IMPROVEMENT_PLAN.md) — roadmap and development progress
 - [Redfin Setup](docs/rhel-setup.md) — RHEL 10 local-build instructions
-- [mdBook](docs/book/src/introduction.md) — user-facing documentation
+- [Developer Docs](https://tunaos.org/docs/dev/introduction) — build and contribution guide
 
 ### External Resources
 - [AlmaLinux Kitten 10 Differences](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#how-is-almalinux-os-kitten-different-from-centos-stream)
