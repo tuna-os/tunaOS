@@ -146,6 +146,54 @@ warn_on_fail() {
 	fi
 }
 
+# Run `bootc container lint` and SURFACE its findings instead of silently
+# swallowing them. The lint is the product-quality gate for bootc images
+# (#272: bonito's three failures were hidden behind `warn_on_fail`, which
+# emits a one-line ::warning and discards the actual check output — so nobody
+# could see *what* failed, let alone fix it).
+#
+# Behaviour:
+#   * Always runs the lint, capturing combined stdout+stderr.
+#   * On failure, echoes the full output inside a collapsed ::group:: and
+#     mirrors it into $GITHUB_STEP_SUMMARY so the findings are visible in the
+#     run summary, not buried in 10k lines of build log.
+#   * Fails the build when BOOTC_LINT_FATAL=1 (default: warn-only, preserving
+#     today's behaviour). Flip a variant to fatal once its findings are fixed.
+#
+# Usage: lint_image            # lints the in-build root (bootc container lint)
+lint_image() {
+	local fatal="${BOOTC_LINT_FATAL:-0}"
+	local out rc=0
+	out="$(bootc container lint --fatal-warnings 2>&1)" || rc=$?
+
+	if ((rc == 0)); then
+		echo "bootc container lint: OK (${IMAGE_NAME:-?} ${MAJOR_VERSION_NUMBER:-?})"
+		return 0
+	fi
+
+	# Surface the findings prominently.
+	printf '::group::bootc container lint findings (%s %s)\n%s\n::endgroup::\n' \
+		"${IMAGE_NAME:-?}" "${MAJOR_VERSION_NUMBER:-?}" "$out"
+
+	if [[ -n "${GITHUB_STEP_SUMMARY:-}" ]]; then
+		local fence='```'
+		{
+			printf '### ⚠️ bootc container lint — %s %s\n\n' "${IMAGE_NAME:-?}" "${MAJOR_VERSION_NUMBER:-?}"
+			printf '%s\n%s\n%s\n' "$fence" "$out" "$fence"
+		} >>"$GITHUB_STEP_SUMMARY"
+	fi
+
+	if [[ "$fatal" == "1" ]]; then
+		printf '::error title=bootc lint failed (%s)::lint reported failures (exit %d); see the grouped findings above\n' \
+			"${IMAGE_NAME:-?}" "$rc"
+		return "$rc"
+	fi
+
+	printf '::warning title=bootc lint findings (%s)::lint reported failures (exit %d) — surfaced above, not build-fatal (set BOOTC_LINT_FATAL=1 to enforce)\n' \
+		"${IMAGE_NAME:-?}" "$rc"
+	return 0
+}
+
 # Run `dnf` with retries to absorb transient mirror flakes (EPEL / AlmaLinux /
 # CentOS mirrors fail with curl SSL_ERROR_SYSCALL / partial-file errors a few
 # times a week, which previously broke whole CI builds — see albacore failing

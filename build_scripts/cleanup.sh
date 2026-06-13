@@ -116,10 +116,13 @@ chmod 644 /usr/share/ublue-os/image-info.json
 [ -d /var/roothome/buildinfo ] && rm -rf /var/roothome/buildinfo
 
 # The --fix option (containers/bootc#1152) was closed without merging.
-# Continue using warn_on_fail until a bootc release provides auto-fix.
-# NOTE: --fatal-warnings suppressed for /var/lib/selinux deep module files
-# which cannot be declared in tmpfiles.d (non-directory files owned by selinux-policy).
-warn_on_fail bootc container lint --fatal-warnings
+# lint_image runs `bootc container lint --fatal-warnings`, surfaces every
+# finding into the build-log group + GitHub step summary (so e.g. bonito's
+# three Fedora findings are visible and fixable — #272), and only fails the
+# build when BOOTC_LINT_FATAL=1. Default stays warn-only so one new finding
+# doesn't break every image at once; flip a variant to fatal in its build job
+# once its findings are cleared.
+lint_image
 
 jq . /usr/share/ublue-os/image-info.json
 
