@@ -228,6 +228,7 @@ lint_image() {
 # the image lean (mirrors --setopt=install_weak_deps=False on dnf).
 pkg_install() {
 	if [[ "$PKG_MGR" == "apt" ]]; then
+		mkdir -p /var/lib/apt/lists/partial
 		apt-get update -qq
 		apt-get install -y --no-install-recommends "$@"
 	else
@@ -259,6 +260,7 @@ pkg_clean() {
 	if [[ "$PKG_MGR" == "apt" ]]; then
 		apt-get clean
 		rm -rf /var/lib/apt/lists/*
+		mkdir -p /var/lib/apt/lists/partial
 	else
 		dnf clean all
 	fi
