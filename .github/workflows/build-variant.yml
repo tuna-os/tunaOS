@@ -359,7 +359,7 @@ jobs:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
           export TACKLEBOX_FROM_SOURCE=1
-          sudo -E just iso \
+          sudo -E bash ./scripts/build-iso-tacklebox.sh \
             "${{ matrix.variant }}" \
             "${{ matrix.flavor }}" \
             ghcr \
