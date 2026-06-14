@@ -10,6 +10,9 @@ IMAGE_INFO="/usr/share/ublue-os/image-info.json"
 IMAGE_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 IMAGE_PRETTY_NAME="${IMAGE_NAME^}"
 
+# /usr/share/ublue-os ships with UB/Fedora base images but not Ubuntu.
+mkdir -p "$(dirname "$IMAGE_INFO")"
+
 cat >$IMAGE_INFO <<EOF
   {
     "image-name": "${IMAGE_NAME}",

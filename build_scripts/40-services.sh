@@ -16,6 +16,51 @@ source /run/context/build_scripts/lib.sh
 # multiple build scripts, so the definition lives with the other shared
 # helpers (install_available, install_from_copr, etc.).
 
+# ── apt (Ubuntu/Debian) path ──────────────────────────────────────────
+# 40-services upstream is Universal-Blue/Fedora-specific (uupd, authselect,
+# rpm-ostree, ublue-* units, the Fedora /usr/lib/systemd/logind.conf path).
+# On Ubuntu we set up only the units that actually exist; safe_enable/
+# safe_disable already no-op on missing units.
+if [[ "${PKG_MGR:-}" == "apt" ]]; then
+	# Sleep-then-hibernate defaults via a logind drop-in (Ubuntu ships no
+	# stock /usr/lib/systemd/logind.conf; a drop-in is honoured everywhere).
+	mkdir -p /usr/lib/systemd/logind.conf.d
+	cat >/usr/lib/systemd/logind.conf.d/10-tunaos-sleep.conf <<-'LOGIND'
+		[Login]
+		HandleLidSwitch=suspend-then-hibernate
+		HandleLidSwitchDocked=suspend-then-hibernate
+		HandleLidSwitchExternalPower=suspend-then-hibernate
+		SleepOperation=suspend-then-hibernate
+	LOGIND
+
+	# Display manager per desktop flavor.
+	case "${DESKTOP_FLAVOR}" in
+		kde) safe_disable gdm.service; safe_enable sddm.service ;;
+		niri | cosmic) safe_disable gdm.service; safe_enable greetd.service ;;
+		gnome | gnome50) safe_enable gdm.service ;;
+		*) echo "No display manager for DESKTOP_FLAVOR='${DESKTOP_FLAVOR}'" ;;
+	esac
+
+	# Security default: sshd closed (live ISOs may re-enable for dev).
+	safe_disable sshd.service
+	safe_disable sshd.socket 2>/dev/null || systemctl mask sshd.socket || true
+
+	# Units that exist on Ubuntu once their packages are installed.
+	safe_enable tailscaled.service
+	safe_enable fwupd.service
+	systemctl enable podman-auto-update.timer 2>/dev/null || true
+
+	# systemd-resolved for name resolution.
+	if [[ -f /usr/lib/systemd/system/systemd-resolved.service ]]; then
+		sed -i -e "s@PrivateTmp=.*@PrivateTmp=no@g" /usr/lib/systemd/system/systemd-resolved.service
+		systemctl enable systemd-resolved.service
+	fi
+
+	printf "::endgroup::\n"
+	exit 0
+fi
+# ── dnf (RPM / Universal-Blue) path continues below ───────────────────
+
 sed -i 's|uupd|& --disable-module-distrobox|' /usr/lib/systemd/system/uupd.service
 
 # Enable sleep then hibernation by DEFAULT!
