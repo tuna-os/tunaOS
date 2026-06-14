@@ -1,0 +1,36 @@
+{
+  "log_file": "/var/log/bootc-installer.log",
+  "distro_name": "Ubuntu 26.04",
+  "imgref": "ghcr.io/hanthor/ubuntu-26.04-desktop-bootc:latest",
+  "local_imgref": "containers-storage:ghcr.io/hanthor/ubuntu-26.04-desktop-bootc:latest",
+  "tour": {
+    "welcome": {
+      "title": "Installing Ubuntu 26.04",
+      "description": "This will take a few minutes. Ubuntu 26.04 Resolute Raccoon ships GNOME 50 and kernel 7.0, bootc-managed for atomic upgrades."
+    },
+    "completed": {
+      "resource": "/org/bootcinstaller/Installer/assets/complete.svg",
+      "title": "Installation Complete",
+      "description": "Ubuntu 26.04 is ready. Remove the installation media and reboot."
+    }
+  },
+  "steps": {
+    "welcome": {
+      "template": "welcome",
+      "protected": true
+    },
+    "image": {
+      "template": "image",
+      "protected": true
+    },
+    "disk": {
+      "template": "disk"
+    },
+    "encryption": {
+      "template": "encryption"
+    },
+    "user": {
+      "template": "user"
+    }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "default_image": "ghcr.io/hanthor/ubuntu-26.04-desktop-bootc:latest",
+  "fallback_flatpaks": [],
+  "images": [
+    {
+      "name": "Ubuntu 26.04",
+      "imgref": "ghcr.io/hanthor/ubuntu-26.04-desktop-bootc:latest",
+      "desc": "Ubuntu 26.04 Resolute Raccoon — GNOME 50 desktop with kernel 7.0",
+      "bootloader": "systemd",
+      "filesystem": "xfs",
+      "composefs": false,
+      "needs_user_creation": true
+    }
+  ]
+}

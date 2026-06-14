@@ -9,7 +9,7 @@
 # Build the base image first:  podman build -t ubuntu-26.04-desktop-bootc ubuntu-bootc/
 # Or use:                       podman build --build-arg BASE_IMAGE=ghcr.io/hanthor/...
 
-ARG BASE_IMAGE="ubuntu-26.04-desktop-bootc:latest"
+ARG BASE_IMAGE="ghcr.io/tuna-os/ubuntu-bootc:26.04"
 ARG ENABLE_HWE="${ENABLE_HWE:-0}"
 ARG ENABLE_NVIDIA="${ENABLE_NVIDIA:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
