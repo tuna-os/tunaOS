@@ -116,6 +116,8 @@ else
 			--security-opt label=disable \
 			-v /var/lib/containers:/var/lib/containers \
 			-v /dev:/dev \
+			-v /etc/subuid:/etc/subuid:ro \
+			-v /etc/subgid:/etc/subgid:ro \
 			-v "$(realpath "$OUT_DIR"):$(realpath "$OUT_DIR")" \
 			-v "$(realpath "$RECIPE_FILE"):$(realpath "$RECIPE_FILE"):ro" \
 			"$TACKLEBOX_IMAGE" "$@"

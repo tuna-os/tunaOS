@@ -334,6 +334,15 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y just podman jq rclone golang-go git
 
+      - name: Setup rootless podman for tacklebox
+        if: matrix.build_iso == true
+        run: |
+          # tacklebox uses 'podman unshare' for squashfs, which needs
+          # subuid/subgid mappings even when running as root inside the
+          # privileged container.
+          grep -q '^root:' /etc/subuid 2>/dev/null || echo 'root:100000:65536' | sudo tee -a /etc/subuid
+          grep -q '^root:' /etc/subgid 2>/dev/null || echo 'root:100000:65536' | sudo tee -a /etc/subgid
+
       - name: Build Live ISO
         if: matrix.build_iso == true
         env:

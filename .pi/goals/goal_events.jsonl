@@ -1,0 +1,5 @@
+{"type":"goal_created","goalId":"mqclbgsz-cnsqlt","objective":"Get the grouper (Ubuntu 26.04) variant working end-to-end in CI — base image builds, all 4 desktop flavors build, and ISOs publish — using TDD tracer bullets: one CI failure → one fix → repeat.","sisyphus":true,"autoContinue":true,"at":"2026-06-13T16:49:11.891Z"}
+{"type":"task_list_set","goalId":"mqclbgsz-cnsqlt","taskCount":5,"blockCompletion":false,"at":"2026-06-13T16:49:11.904Z"}
+{"type":"goal_resumed","goalId":"mqclbgsz-cnsqlt","reason":"user","at":"2026-06-13T16:56:09.449Z"}
+{"type":"goal_resumed","goalId":"mqclbgsz-cnsqlt","reason":"user","at":"2026-06-13T20:45:37.252Z"}
+{"type":"goal_resumed","goalId":"mqclbgsz-cnsqlt","reason":"user","at":"2026-06-14T02:17:47.982Z"}
