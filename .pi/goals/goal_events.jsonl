@@ -3,3 +3,5 @@
 {"type":"goal_resumed","goalId":"mqclbgsz-cnsqlt","reason":"user","at":"2026-06-13T16:56:09.449Z"}
 {"type":"goal_resumed","goalId":"mqclbgsz-cnsqlt","reason":"user","at":"2026-06-13T20:45:37.252Z"}
 {"type":"goal_resumed","goalId":"mqclbgsz-cnsqlt","reason":"user","at":"2026-06-14T02:17:47.982Z"}
+{"type":"goal_paused","goalId":"mqclbgsz-cnsqlt","reason":"user","status":"paused","at":"2026-06-14T04:27:30.730Z"}
+{"type":"goal_resumed","goalId":"mqclbgsz-cnsqlt","reason":"user","at":"2026-06-14T04:50:00.672Z"}

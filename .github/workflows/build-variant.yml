@@ -334,6 +334,18 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y just podman jq rclone golang-go git
 
+      - name: Setup rootless podman (subuid/subgid for runner)
+        if: matrix.build_iso == true
+        run: |
+          # tacklebox uses 'sudo -u runner podman unshare' for squashfs.
+          # podman unshare needs subuid/subgid entries for the unprivileged user.
+          if ! grep -q "^${USER}:" /etc/subuid 2>/dev/null; then
+            echo "${USER}:100000:65536" | sudo tee -a /etc/subuid
+          fi
+          if ! grep -q "^${USER}:" /etc/subgid 2>/dev/null; then
+            echo "${USER}:100000:65536" | sudo tee -a /etc/subgid
+          fi
+
       - name: Build Live ISO
         if: matrix.build_iso == true
         env:
