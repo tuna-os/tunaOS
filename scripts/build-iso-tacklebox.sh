@@ -126,7 +126,7 @@ fi
 # Schema: github.com/tuna-os/tacklebox/blob/main/internal/recipe/
 # Single-environment, live-only — minimum useful recipe for a smoke ISO.
 
-OUT_DIR=".build/iso-tacklebox/${VARIANT}-${FLAVOR}"
+OUT_DIR="$(pwd)/.build/iso-tacklebox/${VARIANT}-${FLAVOR}"
 mkdir -p "$OUT_DIR"
 RECIPE_FILE="${OUT_DIR}/recipe.json"
 
