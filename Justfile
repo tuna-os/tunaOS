@@ -452,7 +452,7 @@ iso variant='skipjack' flavor='gnome' repo='local' tag='':
     set -euo pipefail
     _tag="{{ tag }}"
     [[ -z "$_tag" ]] && _tag="{{ flavor }}"
-    sudo bash ./scripts/build-iso-tacklebox.sh "{{ variant }}" "{{ flavor }}" "{{ repo }}" "$_tag"
+    sudo -E bash ./scripts/build-iso-tacklebox.sh "{{ variant }}" "{{ flavor }}" "{{ repo }}" "$_tag"
 
 # Build ONE combined dedup ISO containing every desktop in an iso_group (#455).
 # group: '' / default (flagship gnome+hwe), community (kde/cosmic/niri), nvidia.
