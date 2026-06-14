@@ -21,6 +21,11 @@ dracut --force --zstd --reproducible --no-hostonly "${KVER_DIR}/initramfs.img"
 # unusable after this point.
 "${CTX}/build_scripts/bootc/mount-system.sh"
 
+# mount-system.sh wipes /var (composefs layout). Recreate /var/tmp so
+# downstream tooling (tacklebox ISO initramfs, build scripts) doesn't fail
+# with "realpath: /var/tmp: No such file or directory".
+mkdir -p /var/tmp
+
 # Validate the bootcified image. Non-fatal (mirrors cleanup.sh's lint_image) —
 # set BOOTC_LINT_FATAL=1 to enforce. /root is now a bind-mount target absent at
 # build time, so point HOME at /tmp.
