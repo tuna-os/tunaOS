@@ -5,12 +5,12 @@
   "status": "active",
   "autoContinue": true,
   "usage": {
-    "tokensUsed": 508343,
-    "activeSeconds": 10217
+    "tokensUsed": 517764,
+    "activeSeconds": 11664
   },
   "sisyphus": true,
   "createdAt": "2026-06-13T16:49:11.891Z",
-  "updatedAt": "2026-06-14T03:46:31.646Z",
+  "updatedAt": "2026-06-14T04:10:45.589Z",
   "activePath": ".pi/goals/active_goal_2026061317491189_mqclbgsz-cnsqlt.md",
   "taskList": {
     "tasks": [
@@ -59,8 +59,8 @@ Get the grouper (Ubuntu 26.04) variant working end-to-end in CI — base image b
 - Status: sisyphus running
 - Auto-continue: on
 - Sisyphus mode: yes (prompt/criteria style)
-- Time spent: 2h50m17s
-- Tokens used: 508K (508,343) tokens
+- Time spent: 3h14m24s
+- Tokens used: 518K (517,764) tokens
 ## Tasks
 
 <!-- blockCompletion: false -->
