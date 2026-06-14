@@ -52,6 +52,19 @@ REPO_ROOT="$(pwd)"
 IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")
 if [[ "$REPO" == "local" ]]; then
 	tunaos_import_to_root_storage "$IMAGE_REF"
+else
+	# Registry image: tacklebox's Pull() lands it in root's store, but the live
+	# squash mounts it via `sudo -u $SUDO_USER podman unshare`, which reads the
+	# *invoking user's* rootless store (see tacklebox internal/install/{bootc,
+	# live}.go). Without this, the squash fails with "image not known". Pre-pull
+	# into the user's rootless store so the live path can mount it. The root-side
+	# pull tacklebox still does feeds the install/metadata steps that use root's
+	# store, so both stores end up with the image. No-op when not under sudo.
+	REAL_USER="${SUDO_USER:-}"
+	if [[ -n "$REAL_USER" && "$REAL_USER" != "root" ]]; then
+		echo "==> Pre-pulling ${IMAGE_REF} into ${REAL_USER}'s rootless store (for live squash)..."
+		sudo -u "$REAL_USER" -H podman pull "$IMAGE_REF"
+	fi
 fi
 
 # ── Resolve tacklebox: prefer the published container, fall back to source ──
