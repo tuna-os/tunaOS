@@ -17,7 +17,7 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 	pkg_install tailscale
 
 	printf "::endgroup::\n"
-	return 0
+	exit 0
 fi
 # ── dnf (RPM) path continues below ────────────────────────────────────
 

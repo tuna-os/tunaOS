@@ -30,7 +30,7 @@ case "${1:-}" in
 			glib-compile-schemas /usr/share/glib-2.0/schemas
 		fi
 
-		return 0
+		exit 0
 	fi
 	# ── dnf (RPM) GNOME path continues below ────────────────────────────
 	# Use COPR GNOME packages for EL10-based builds.
