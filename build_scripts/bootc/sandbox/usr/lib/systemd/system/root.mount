@@ -1,0 +1,14 @@
+[Unit]
+Description=Bind /var/roothome → /root
+DefaultDependencies=no
+After=local-fs-pre.target
+Before=local-fs.target
+
+[Mount]
+What=/var/roothome
+Where=/root
+Type=none
+Options=bind
+
+[Install]
+WantedBy=local-fs.target

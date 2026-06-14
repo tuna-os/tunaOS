@@ -1,0 +1,14 @@
+[Unit]
+Description=Bind /var/mnt → /mnt
+DefaultDependencies=no
+After=local-fs-pre.target
+Before=local-fs.target
+
+[Mount]
+What=/var/mnt
+Where=/mnt
+Type=none
+Options=bind
+
+[Install]
+WantedBy=local-fs.target

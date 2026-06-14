@@ -1,0 +1,14 @@
+[Unit]
+Description=Bind /var/opt → /opt
+DefaultDependencies=no
+After=local-fs-pre.target
+Before=local-fs.target
+
+[Mount]
+What=/var/opt
+Where=/opt
+Type=none
+Options=bind
+
+[Install]
+WantedBy=local-fs.target

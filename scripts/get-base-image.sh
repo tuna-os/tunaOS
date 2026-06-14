@@ -9,7 +9,7 @@ case "$variant" in
 "albacore" | "almalinux") echo "quay.io/almalinuxorg/almalinux-bootc:10" ;;
 "skipjack" | "centos" | "lts") echo "quay.io/centos-bootc/centos-bootc:stream10" ;;
 "bonito" | "fedora" | "bluefin") echo "quay.io/fedora/fedora-bootc:43" ;;
-  "grouper" | "ubuntu") echo "ghcr.io/tuna-os/ubuntu-bootc:26.04" ;;
+  "grouper" | "ubuntu") echo "docker.io/library/ubuntu:resolute" ;;
 "bonito-rawhide" | "rawhide") echo "quay.io/fedora/fedora-bootc:rawhide" ;;
 "redfin" | "rhel") echo "registry.redhat.io/rhel10/rhel-bootc:latest" ;;
 *)

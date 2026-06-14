@@ -1,26 +1,33 @@
-# Containerfile.ubuntu — TunaOS on Ubuntu 26.04 (grouper variant)
-# RFC 010 Phase 2: Shared base layer (no DE). Uses the PKG_MGR=apt path
-# through pkg_* wrappers in lib.sh.
+# Containerfile.ubuntu — TunaOS grouper (Ubuntu 26.04 "Resolute Raccoon")
 #
-# Skips: RHSM registration, COPR repos, dnf versionlock, RPM Fusion,
-# EPEL, brew/common system_files (RPM/Bluefin-specific).
+# RFC 010. Builds directly from stock docker.io/library/ubuntu:resolute and
+# applies all TunaOS customizations while apt is fully intact, then bootcifies
+# as the final per-variant step.
 #
-# Requires a bootc-enabled Ubuntu base image with apt infrastructure intact.
-# Build the base image first:  podman build -t ubuntu-26.04-desktop-bootc ubuntu-bootc/
-# Or use:                       podman build --build-arg BASE_IMAGE=ghcr.io/hanthor/...
+# Key design (mirrors bootc-shindig/ubuntu-bootc-remix):
+#   * No pre-stripped bootc base image, no apt bootstrap hacks — apt just works.
+#   * bootc is installed from the bootc-shindig/bootc-deb apt repo (it is not in
+#     the Ubuntu archive); it pulls dracut + ostree + libostree-dev.
+#   * The composefs-backed bootc layout is applied LAST via finalize.sh →
+#     mount-system.sh, which wipes /var. apt is unusable after that point, so
+#     every package install must happen before it.
+#   * Sysroot backend is composefs (read-only) — no ostree repo. See
+#     build_scripts/bootc/sandbox/usr/lib/ostree/prepare-root.conf.
+#
+# Skips (RPM/Bluefin-specific): RHSM, COPR, dnf versionlock, RPM Fusion, EPEL.
 
-ARG BASE_IMAGE="ghcr.io/tuna-os/ubuntu-bootc:26.04"
+ARG BASE_IMAGE="docker.io/library/ubuntu:resolute"
 ARG ENABLE_HWE="${ENABLE_HWE:-0}"
 ARG ENABLE_NVIDIA="${ENABLE_NVIDIA:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 
-FROM scratch as context
+FROM scratch AS context
 COPY system_files /files
 COPY build_scripts /build_scripts
 COPY image-versions.yaml /image-versions.yaml
 
 # ==============================================================================
-# Base stage (no DE) — Shared layer
+# Base stage (no DE) — shared layer, built on stock Ubuntu with apt intact
 # ==============================================================================
 FROM ${BASE_IMAGE} AS base-no-de
 
@@ -33,73 +40,94 @@ ARG IMAGE_VENDOR
 ARG SHA_HEAD_SHORT
 ARG IMAGE_REGISTRY="ghcr.io"
 
-ENV BASE_IMAGE=${BASE_IMAGE}
-ENV IMAGE_NAME=${IMAGE_NAME}
-ENV IMAGE_VENDOR=${IMAGE_VENDOR}
-ENV IMAGE_REGISTRY=${IMAGE_REGISTRY}
-ENV SHA_HEAD_SHORT=${SHA_HEAD_SHORT}
-ENV ENABLE_HWE=${ENABLE_HWE}
-ENV ENABLE_NVIDIA=${ENABLE_NVIDIA}
-ENV DEBIAN_FRONTEND=noninteractive
-ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
+ENV BASE_IMAGE=${BASE_IMAGE} \
+    IMAGE_NAME=${IMAGE_NAME} \
+    IMAGE_VENDOR=${IMAGE_VENDOR} \
+    IMAGE_REGISTRY=${IMAGE_REGISTRY} \
+    SHA_HEAD_SHORT=${SHA_HEAD_SHORT} \
+    ENABLE_HWE=${ENABLE_HWE} \
+    ENABLE_NVIDIA=${ENABLE_NVIDIA} \
+    DESKTOP_FLAVOR=${DESKTOP_FLAVOR} \
+    DEBIAN_FRONTEND=noninteractive
 
-# Ensure /opt is a real directory
+# Enable universe + multiverse (resolute uses deb822 /etc/apt/sources.list.d/
+# ubuntu.sources; fall back to the classic sources.list if present).
+RUN set -eux; \
+    if [ -f /etc/apt/sources.list.d/ubuntu.sources ]; then \
+        sed -i 's/^Components: .*/Components: main restricted universe multiverse/' \
+            /etc/apt/sources.list.d/ubuntu.sources; \
+    fi; \
+    if [ -f /etc/apt/sources.list ]; then \
+        sed -i 's/ main$/ main restricted universe multiverse/' /etc/apt/sources.list; \
+    fi; \
+    apt-get update -y
+
+# Install bootc (from bootc-deb) and the bootc runtime tooling needed for
+# `bootc container lint`, plus the static composefs/bootc overlay. apt intact.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    apt-get install -y --no-install-recommends ca-certificates curl gpg && \
+    /run/context/build_scripts/bootc/install-bootc.sh && \
+    apt-get install -y --no-install-recommends \
+        btrfs-progs dosfstools e2fsprogs xfsprogs skopeo \
+        systemd-boot systemd-boot-efi && \
+    cp -a /run/context/build_scripts/bootc/sandbox/. / && \
+    apt-get clean -y && rm -rf /var/lib/apt/lists/*
+
+# Stub kernel/grub post-install hooks so package installs that pull a kernel do
+# not try to build an initramfs or grub config — finalize.sh builds the
+# initramfs explicitly with dracut.
+RUN printf '#!/bin/sh\nexit 0\n' | tee \
+        /usr/sbin/update-initramfs /usr/sbin/mkinitramfs \
+        /usr/sbin/update-grub /usr/sbin/grub-mkconfig > /dev/null && \
+    chmod +x /usr/sbin/update-initramfs /usr/sbin/mkinitramfs \
+        /usr/sbin/update-grub /usr/sbin/grub-mkconfig && \
+    mkdir -p /etc/kernel/postinst.d && \
+    printf '#!/bin/sh\nexit 0\n' > /etc/kernel/postinst.d/kdump-tools && \
+    chmod +x /etc/kernel/postinst.d/kdump-tools
+
+# Install the kernel + firmware and stage vmlinuz where bootc expects it.
+RUN apt-get update -y && \
+    apt-get -o Dpkg::Options::="--force-confold" install -y --no-install-recommends \
+        linux-generic linux-firmware && \
+    KVER=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1 | xargs basename) && \
+    cp "/boot/vmlinuz-${KVER}" "/usr/lib/modules/${KVER}/vmlinuz" && \
+    apt-get clean -y && rm -rf /var/lib/apt/lists/*
+
+# Ensure /opt is a real directory for the build scripts (finalize.sh turns it
+# into a bind-mount target later).
 RUN rm -rf /opt && mkdir /opt
 
-# Restore apt infrastructure stripped by the base bootc image.
-# The hanthor ubuntu bootc image keeps apt-get + dpkg binaries and
-# /etc/apt/sources.list but wipes /var/lib/dpkg, /var/lib/apt/lists,
-# /var/cache/apt/archives, and debconf to minimize image size.
-# This bootstrap restores the minimal structure so build scripts can
-# apt-get install normally. The ubuntu-bootc/ Containerfile (see repo)
-# produces a base image that doesn't need this — switch to it when ready.
-RUN mkdir -p /var/lib/dpkg/info /var/lib/dpkg/updates \
-  /var/lib/dpkg/triggers /var/lib/dpkg/alternatives \
-  /var/lib/apt/lists/partial \
-  /var/cache/apt/archives/partial \
-  /var/log/apt && \
-  touch /var/lib/dpkg/status && \
-  apt-get update -qq && \
-  cd /tmp && apt-get download debconf && \
-  dpkg --force-depends --unpack debconf*.deb && \
-  dpkg --configure -a || true && \
-  rm -f debconf*.deb && \
-  apt-get install -y -f --no-install-recommends && \
-  apt-mark hold base-files
-
-# Copy system files and apply TunaOS customizations
+# Copy system files and apply TunaOS customizations.
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/copy-files.sh
 
-# Run workarounds (IS_* flags guard all RPM-specific blocks; all evaluate to false on Ubuntu)
+# Workarounds (IS_* flags guard all RPM-specific blocks; false on Ubuntu).
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/00-workarounds.sh
 
-# Install base packages WITHOUT DE.
-# No RHSM secret mount — Ubuntu doesn't use subscription-manager.
+# Base packages WITHOUT DE (no RHSM secret mount — Ubuntu has no subscriptions).
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   bash -c "source /run/context/build_scripts/lib.sh && source /run/context/build_scripts/10-base-packages.sh && install_base_packages_no_de"
 
-# 20-packages.sh: desktop-agnostic additional packages (apt branch in the script)
+# Desktop-agnostic additional packages (apt branch in the script).
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/20-packages.sh
 
-# 40-services.sh: enable systemd units (safe_enable/safe_disable)
+# Enable systemd units (safe_enable/safe_disable).
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/40-services.sh
 
-# Add Flathub remote (equivalent to what 26-packages-post.sh does for RPM builds).
-# Must run after flatpak is installed (10-base-packages.sh apt branch).
+# Add the Flathub remote (flatpak comes from 10-base-packages.sh).
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -114,16 +142,50 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/cleanup.sh
 
+# https://bootc-dev.github.io/bootc/bootc-images.html#standard-metadata-for-bootc-compatible-images
+LABEL containers.bootc=1
+
 # ==============================================================================
-# Desktop Variant Stages
+# Desktop variant stages — install DE (apt intact), then bootcify + lint LAST
 # ==============================================================================
 
 FROM base-no-de AS base
-RUN rm -rf /opt && ln -s /var/opt /opt
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/bootc/finalize.sh
 
 FROM base-no-de AS gnome
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/gnome.sh base
-RUN rm -rf /opt && ln -s /var/opt /opt
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/bootc/finalize.sh
+
+FROM base-no-de AS kde
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/kde.sh base
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/bootc/finalize.sh
+
+FROM base-no-de AS cosmic
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/cosmic.sh base
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/bootc/finalize.sh
+
+FROM base-no-de AS niri
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/niri.sh base
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/bootc/finalize.sh

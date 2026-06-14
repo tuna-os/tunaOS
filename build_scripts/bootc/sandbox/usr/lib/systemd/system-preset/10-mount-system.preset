@@ -1,0 +1,5 @@
+enable home.mount
+enable root.mount
+enable srv.mount
+enable opt.mount
+enable mnt.mount

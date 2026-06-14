@@ -447,8 +447,9 @@ variants:
   - id: grouper
     emoji: "🐟"
     description: "Based on Ubuntu 26.04 Resolute Raccoon"
-    base_image: "ghcr.io/tuna-os/ubuntu-bootc:26.04"
-    # TODO: pin to digest before enabling builds (same concern as #462)
+    base_image: "docker.io/library/ubuntu:resolute"
+    # Built directly from stock Ubuntu and bootcified in Containerfile.ubuntu
+    # (bootc from the bootc-shindig/bootc-deb apt repo). See RFC 010.
     platforms: ["linux/amd64"]
     experimental: true
     flavors:
