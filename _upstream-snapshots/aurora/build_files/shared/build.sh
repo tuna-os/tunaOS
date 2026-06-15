@@ -31,7 +31,7 @@ setfattr -n user.component -v "aurora-config" /usr/share/ublue-os
 setfattr -n user.component -v "homebrew" /usr/share/homebrew.tar.zst
 
 if [[ "${IMAGE_FLAVOR}" == "dx" ]]; then
-	/ctx/build_files/shared/build-dx.sh
+  /ctx/build_files/shared/build-dx.sh
 fi
 
 mkdir -p /tmp/scripts/helpers
