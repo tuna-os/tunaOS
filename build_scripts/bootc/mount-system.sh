@@ -12,6 +12,7 @@
 # Adapted from bootc-shindig/ubuntu-bootc-remix.
 set -ouex pipefail
 
+# shellcheck disable=SC2114 # intentional system directory wipe for bootcify
 rm -rf /boot /home /root /srv /var /media
 
 mkdir -p \
