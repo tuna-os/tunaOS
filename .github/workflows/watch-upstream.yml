@@ -55,6 +55,13 @@ name: Watch upstream (reusable)
         required: false
         default: '7'
         type: string
+    secrets:
+      GEMINI_API_KEY:
+        description: 'API key for the Gemini CLI port step'
+        required: false
+      COPILOT_PAT:
+        description: 'PAT used to fire the Copilot batch agent (degrades cleanly if absent)'
+        required: false
 
 jobs:
   scan:
