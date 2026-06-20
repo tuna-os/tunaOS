@@ -384,7 +384,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     case "${FLAVOR}" in
         "hwe") FLAVOR="gnome-hwe" ;;
         "nvidia") FLAVOR="gnome-nvidia" ;;
-        "gdx-hwe") FLAVOR="gnome-nvidia-hwe" ;;
+        "nvidia-hwe") FLAVOR="gnome-nvidia-hwe" ;;
     esac
 
     if [[ "${FLAVOR}" == "all" ]]; then
@@ -404,16 +404,16 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         DESKTOP_FLAVOR="base-hwe"
         PARENT_FLAVOR="base"
     elif [[ "${FLAVOR}" == "base-nvidia" ]]; then
-        CONTAINERFILE="Containerfile.gdx"
+        CONTAINERFILE="Containerfile.nvidia"
         ENABLE_NVIDIA="1"
         DESKTOP_FLAVOR="base-nvidia"
         PARENT_FLAVOR="base"
     elif [[ "{{ variant }}" != "grouper" && "${FLAVOR}" == *"-nvidia-hwe" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-nvidia-hwe}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_NVIDIA="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
+        DESKTOP_FLAVOR="${FLAVOR%-nvidia-hwe}"; CONTAINERFILE="Containerfile.nvidia"; ENABLE_NVIDIA="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
     elif [[ "{{ variant }}" != "grouper" && "${FLAVOR}" == *"-hwe" ]]; then
         DESKTOP_FLAVOR="${FLAVOR%-hwe}"; CONTAINERFILE="Containerfile.hwe"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
     elif [[ "{{ variant }}" != "grouper" && "${FLAVOR}" == *"-nvidia" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-nvidia}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_NVIDIA="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
+        DESKTOP_FLAVOR="${FLAVOR%-nvidia}"; CONTAINERFILE="Containerfile.nvidia"; ENABLE_NVIDIA="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
     else
         DESKTOP_FLAVOR="${FLAVOR}"
         BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
