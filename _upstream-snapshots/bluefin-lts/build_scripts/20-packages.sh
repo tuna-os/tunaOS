@@ -52,9 +52,9 @@ dnf config-manager --set-disabled "tailscale-stable"
 dnf -y --enablerepo "tailscale-stable" install \
 	tailscale
 
-dnf -y copr enable ublue-os/packages
+dnf -y copr enable ublue-os/packages "epel-10-$(arch)"
+dnf -y --setopt=retries=5 install uupd
 dnf -y copr disable ublue-os/packages
-dnf -y --enablerepo copr:copr.fedorainfracloud.org:ublue-os:packages install uupd
 
 dnf -y copr enable che/nerd-fonts "centos-stream-${MAJOR_VERSION_NUMBER}-$(arch)"
 dnf -y copr disable che/nerd-fonts
@@ -68,11 +68,12 @@ dnf -y --enablerepo "copr:copr.fedorainfracloud.org:che:nerd-fonts" install \
 dnf -y --setopt=install_weak_deps=False install gcc
 
 if [[ "${GNOME_VERSION:-49}" == "50" ]]; then
-	# Versionlock GNOME 50 components to prevent downgrades to EL10 base versions
-	dnf versionlock add gnome-shell gdm mutter gnome-session-wayland-session \
-		gnome-settings-daemon gnome-control-center gsettings-desktop-schemas \
-		gtk4 libadwaita pango fontconfig selinux-policy selinux-policy-targeted gnutls
+    # Versionlock GNOME 50 components to prevent downgrades to EL10 base versions
+    dnf versionlock add gnome-shell gdm mutter gnome-session-wayland-session \
+        gnome-settings-daemon gnome-control-center gsettings-desktop-schemas \
+        gtk4 libadwaita pango fontconfig selinux-policy selinux-policy-targeted gnutls
 else
-	# Versionlock GNOME 49 components to prevent upgrades to a mismatched version
-	dnf versionlock add gnome-shell gdm gnome-session-wayland-session gobject-introspection gjs pango fontconfig selinux-policy selinux-policy-targeted gnutls
+    # Versionlock GNOME 49 components to prevent upgrades to a mismatched version
+    dnf versionlock add gnome-shell gdm gnome-session-wayland-session gobject-introspection gjs pango fontconfig selinux-policy selinux-policy-targeted gnutls
 fi
+
