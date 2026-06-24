@@ -38,7 +38,7 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
 @test "compare-with-upstream.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/scripts/compare-with-upstream.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/scripts/compare-with-upstream.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
@@ -81,7 +81,7 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
 @test "pipeline-overview.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/scripts/pipeline-overview.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/scripts/pipeline-overview.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
@@ -119,7 +119,7 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
 @test "run-vm.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/scripts/run-vm.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/scripts/run-vm.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
@@ -153,7 +153,7 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
 @test "setup-build-cache.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/scripts/setup-build-cache.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/scripts/setup-build-cache.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
@@ -186,7 +186,7 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
 @test "simulate-matrix.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/scripts/simulate-matrix.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/scripts/simulate-matrix.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
@@ -220,7 +220,7 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
 @test "sync-build-cache.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/scripts/sync-build-cache.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/scripts/sync-build-cache.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"

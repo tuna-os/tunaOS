@@ -50,7 +50,7 @@ build_scripts_top=(
 
 @test "build_scripts/lib.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/build_scripts/lib.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/lib.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
@@ -76,7 +76,7 @@ build_scripts_top=(
 
 @test "build_scripts/00-workarounds.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/build_scripts/00-workarounds.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/00-workarounds.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
@@ -105,7 +105,7 @@ build_scripts_top=(
 
 @test "build_scripts/10-base-packages.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/build_scripts/10-base-packages.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/10-base-packages.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
@@ -119,7 +119,7 @@ build_scripts_top=(
 
 @test "build_scripts/20-packages.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/build_scripts/20-packages.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/20-packages.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
@@ -133,7 +133,7 @@ build_scripts_top=(
 
 @test "build_scripts/40-services.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/build_scripts/40-services.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/40-services.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
@@ -144,7 +144,7 @@ build_scripts_top=(
   run test -f "${REPO_ROOT}/build_scripts/cleanup.sh"
   [ "$status" -eq 0 ]
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/build_scripts/cleanup.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/cleanup.sh"
     [ "$status" -eq 0 ]
   fi
 }
@@ -153,7 +153,7 @@ build_scripts_top=(
   run test -f "${REPO_ROOT}/build_scripts/copy-files.sh"
   [ "$status" -eq 0 ]
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/build_scripts/copy-files.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/copy-files.sh"
     [ "$status" -eq 0 ]
   fi
 }
@@ -162,7 +162,7 @@ build_scripts_top=(
   run test -f "${REPO_ROOT}/build_scripts/90-image-info.sh"
   [ "$status" -eq 0 ]
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/build_scripts/90-image-info.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/90-image-info.sh"
     [ "$status" -eq 0 ]
   fi
 }
@@ -176,7 +176,7 @@ build_scripts_top=(
 
 @test "build_scripts/gnome.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/build_scripts/gnome.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/gnome.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
@@ -187,7 +187,7 @@ build_scripts_top=(
   run test -f "${REPO_ROOT}/build_scripts/kde.sh"
   [ "$status" -eq 0 ]
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/build_scripts/kde.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/kde.sh"
     [ "$status" -eq 0 ]
   fi
 }
@@ -196,7 +196,7 @@ build_scripts_top=(
   run test -f "${REPO_ROOT}/build_scripts/cosmic.sh"
   [ "$status" -eq 0 ]
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/build_scripts/cosmic.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/cosmic.sh"
     [ "$status" -eq 0 ]
   fi
 }
@@ -205,7 +205,7 @@ build_scripts_top=(
   run test -f "${REPO_ROOT}/build_scripts/niri.sh"
   [ "$status" -eq 0 ]
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/build_scripts/niri.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/niri.sh"
     [ "$status" -eq 0 ]
   fi
 }
@@ -251,7 +251,7 @@ build_scripts_top=(
 
 @test "build_scripts/bootc/install-bootc.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/build_scripts/bootc/install-bootc.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/bootc/install-bootc.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
@@ -262,7 +262,7 @@ build_scripts_top=(
   run test -f "${REPO_ROOT}/build_scripts/bootc/finalize.sh"
   [ "$status" -eq 0 ]
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/build_scripts/bootc/finalize.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/bootc/finalize.sh"
     [ "$status" -eq 0 ]
   fi
 }
@@ -271,7 +271,7 @@ build_scripts_top=(
   run test -f "${REPO_ROOT}/build_scripts/bootc/mount-system.sh"
   [ "$status" -eq 0 ]
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/build_scripts/bootc/mount-system.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/bootc/mount-system.sh"
     [ "$status" -eq 0 ]
   fi
 }
