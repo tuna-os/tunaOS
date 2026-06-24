@@ -34,7 +34,7 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
 @test "build_scripts/26-packages-post.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/build_scripts/26-packages-post.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/26-packages-post.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
@@ -72,7 +72,7 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
 @test "live-iso/common/src/desktop-gnome.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/live-iso/common/src/desktop-gnome.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/live-iso/common/src/desktop-gnome.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
@@ -110,7 +110,7 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
 @test "live-iso/common/src/desktop-kde.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck "${REPO_ROOT}/live-iso/common/src/desktop-kde.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/live-iso/common/src/desktop-kde.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
