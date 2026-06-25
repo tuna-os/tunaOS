@@ -17,14 +17,28 @@
 # Skips (RPM/Bluefin-specific): RHSM, COPR, dnf versionlock, RPM Fusion, EPEL.
 
 ARG BASE_IMAGE="docker.io/library/ubuntu:resolute"
-ARG ENABLE_HWE="${ENABLE_HWE:-0}"
+ARG ENABLE_HWE="${ENABLE_HWE:-0}"  
 ARG ENABLE_NVIDIA="${ENABLE_NVIDIA:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
+ARG ZIRCONIUM_IMAGE_REF="ghcr.io/zirconium-dev/zirconium:unpinned-must-override"
+
+FROM ${ZIRCONIUM_IMAGE_REF} AS zirconium
 
 FROM scratch AS context
 COPY system_files /files
 COPY build_scripts /build_scripts
 COPY image-versions.yaml /image-versions.yaml
+# Copy Niri-related system files from Zirconium (greetd, dms-greeter, session files)
+# Omit RPM-specific files (dnf plugins, SELinux, COPR repos) deliberately.
+COPY --from=zirconium /usr/share/factory/etc/greetd /files/etc/greetd
+COPY --from=zirconium /usr/share/dms /files/usr/share/dms
+COPY --from=zirconium /usr/share/factory/etc/profile.d /files/etc/profile.d
+COPY --from=zirconium /usr/share/greetd /files/usr/share/greetd
+COPY --from=zirconium /usr/lib/pam.d/greetd-spawn /files/usr/lib/pam.d/greetd-spawn
+COPY --from=zirconium /usr/lib/sysusers.d/dms-greeter.conf /files/usr/lib/sysusers.d/dms-greeter.conf
+COPY --from=zirconium /usr/lib/tmpfiles.d/99-dms-greeter.conf /files/usr/lib/tmpfiles.d/99-dms-greeter.conf
+COPY --from=zirconium /usr/lib/systemd/user/dms.service.d /files/usr/lib/systemd/user/dms.service.d
+COPY --from=zirconium /usr/share/flatpak/preinstall.d /files/usr/share/flatpak/preinstall.d
 
 # ==============================================================================
 # Base stage (no DE) — shared layer, built on stock Ubuntu with apt intact
