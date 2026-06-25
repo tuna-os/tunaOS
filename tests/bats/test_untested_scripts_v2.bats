@@ -179,8 +179,13 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$status" -eq 0 ]
 }
 
-@test "simulate-matrix.sh: requires build-config.yml in repo root" {
+@test "simulate-matrix.sh: runs successfully with build-config.yml" {
   run bash "${REPO_ROOT}/scripts/simulate-matrix.sh"
+  [ "$status" -eq 0 ]
+}
+
+@test "simulate-matrix.sh: fails when build-config.yml is missing" {
+  run bash -c "cd \$(mktemp -d) && bash ${REPO_ROOT}/scripts/simulate-matrix.sh 2>/dev/null; exit \$?"
   [ "$status" -ne 0 ]
 }
 
