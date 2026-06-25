@@ -1,29 +1,59 @@
 export repo_organization := env("GITHUB_REPOSITORY_OWNER", "ublue-os")
 export base_image_org := env("BASE_IMAGE_ORG", "quay.io/fedora-ostree-desktops")
 export base_image_name := env("BASE_IMAGE_NAME", "kinoite")
-export common_image := env("COMMON_IMAGE", "ghcr.io/get-aurora-dev/common:latest")
-export brew_image := env("BREW_IMAGE", "ghcr.io/ublue-os/brew:latest")
+
 stable_version := "44"
 latest_version := "44"
 testing_version := "44"
+
 images := '(
     [aurora]=aurora
     [aurora-dx]=aurora-dx
 )'
+
 flavors := '(
     [main]=main
     [nvidia-open]=nvidia-open
 )'
+
 tags := '(
     [stable]=stable
     [latest]=latest
     [testing]=testing
 )'
+
+# Build Containers
+chunkah := shell("yq -r \".images[] | select(.name == \\\"chunkah\\\") | \\\"\\\\(.image)@\\\\(.digest)\\\"\" image-versions.yml")
+common := shell("yq -r \".images[] | select(.name == \\\"common\\\") | \\\"\\\\(.image)@\\\\(.digest)\\\"\" image-versions.yml")
+brew := shell("yq -r \".images[] | select(.name == \\\"brew\\\") | \\\"\\\\(.image)@\\\\(.digest)\\\"\" image-versions.yml")
+
 export SUDO_DISPLAY := if `if [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; then echo true; fi` == "true" { "true" } else { "false" }
 export SUDOIF := if `id -u` == "0" { "" } else { "sudo" }
-export PODMAN := if path_exists("/usr/bin/podman") == "true" { env("PODMAN", "/usr/bin/podman") } else if path_exists("/usr/bin/docker") == "true" { env("PODMAN", "docker") } else { env("PODMAN", "exit 1 ; ") }
-export PULL_POLICY := if PODMAN =~ "docker" { "missing" } else { "newer" }
+export PODMAN := "podman"
+export BUILDAH := "buildah"
 just := just_executable()
+
+# Define a retry function for use in recipes
+retry_function := '
+retry() {
+    if [[ "${#}" -lt 3 ]]; then
+        echo "retry usage: <number of tries> <time between retries> <command> ..."
+        return 1
+    fi
+    tries="${1}"
+    sleep="${2}"
+    shift 2
+    for i in $(seq 1 ${tries}); do
+        if [[ ${i} -gt 1 ]]; then
+            # echo "[+] Command failed. Waiting for ${sleep} seconds"
+            sleep ${sleep}
+        fi
+        # echo "[+] Running (try: ${i}): ${@}"
+        "${@}" && r=0 && break || r=$?
+    done
+    return $r
+}
+'
 
 [private]
 default:
@@ -34,22 +64,22 @@ default:
 check:
     #!/usr/bin/bash
     find . -type f -name "*.just" | while read -r file; do
-    	echo "Checking syntax: $file"
-    	{{ just }} --unstable --fmt --check -f $file
+      echo "Checking syntax: $file"
+      {{ just }} --fmt --check -f $file
     done
     echo "Checking syntax: Justfile"
-    {{ just }} --unstable --fmt --check -f Justfile
+    {{ just }} --fmt --check -f Justfile
 
 # Fix Just Syntax
 [group('Just')]
 fix:
     #!/usr/bin/bash
     find . -type f -name "*.just" | while read -r file; do
-    	echo "Checking syntax: $file"
-    	{{ just }} --unstable --fmt -f $file
+      echo "Checking syntax: $file"
+      {{ just }} --fmt -f $file
     done
     echo "Checking syntax: Justfile"
-    {{ just }} --unstable --fmt -f Justfile || { exit 1; }
+    {{ just }} --fmt -f Justfile || { exit 1; }
 
 # Clean Repo
 [group('Utility')]
@@ -59,6 +89,7 @@ clean:
     rm -f changelog.md
     rm -f output.env
     rm -rf sbom_out
+    rm -f /tmp/aurora*-tags.json
 
 # Check if valid combo
 [group('Utility')]
@@ -69,11 +100,6 @@ validate $image $tag $flavor:
     declare -A images={{ images }}
     declare -A tags={{ tags }}
     declare -A flavors={{ flavors }}
-
-    # Handle Stable Daily
-    if [[ "${tag}" == "stable-daily" ]]; then
-        tag="stable"
-    fi
 
     checkimage="${images[${image}]-}"
     checktag="${tags[${tag}]-}"
@@ -106,23 +132,8 @@ build $image="aurora" $tag="latest" $flavor="main" rechunk="0" ghcr="0" pipeline
 
     # Image Name
     image_name=$({{ just }} image_name {{ image }} {{ tag }} {{ flavor }})
+    akmods_flavor=$({{ just }} akmods_flavor {{ tag }})
 
-    common_image_sha=$(yq -r '.images[] | select(.name == "common") | .digest' image-versions.yml)
-    brew_image_sha=$(yq -r '.images[] | select(.name == "brew") | .digest' image-versions.yml)
-
-    # AKMODS Flavor and Kernel Version
-    if [[ "${tag}" =~ stable ]]; then
-        akmods_flavor="coreos-stable"
-    elif [[ "${tag}" =~ beta ]]; then
-        akmods_flavor="main"
-    else
-        akmods_flavor="main"
-    fi
-
-    # Fedora Version
-    if [[ {{ ghcr }} == "0" ]]; then
-        rm -f /tmp/manifest.json
-    fi
     fedora_version=$({{ just }} fedora_version '{{ image }}' '{{ tag }}' '{{ flavor }}' '{{ kernel_pin }}')
 
     # Verify Base Image with cosign
@@ -147,27 +158,25 @@ build $image="aurora" $tag="latest" $flavor="main" rechunk="0" ghcr="0" pipeline
     cosign verify \
       --certificate-oidc-issuer https://token.actions.githubusercontent.com \
       --certificate-identity-regexp="github.com/get-aurora-dev/common/.github/workflows/*" \
-      "ghcr.io/get-aurora-dev/common:latest@${common_image_sha}"
+      "{{ common }}"
 
-    {{ just }} verify-container cosign.pub "ghcr.io/ublue-os/brew:latest@${brew_image_sha}"
+    cosign verify \
+      --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+      --certificate-identity-regexp="github.com/coreos/chunkah/.github/workflows/*" \
+      "{{ chunkah }}"
+
+    {{ just }} verify-container cosign.pub "{{ brew }}"
 
     # Get Version
+    TIMESTAMP="$(date +%Y%m%d)"
     if [[ "${tag}" =~ stable ]]; then
-        ver="${fedora_version}.$(date +%Y%m%d)"
+        ver="${fedora_version}.${TIMESTAMP}"
     else
-        ver="${tag}-${fedora_version}.$(date +%Y%m%d)"
+        ver="${tag}-${fedora_version}.${TIMESTAMP}"
     fi
-    skopeo list-tags docker://ghcr.io/{{ repo_organization }}/${image_name} > /tmp/repotags.json
-    if [[ $(jq "any(.Tags[]; contains(\"$ver\"))" < /tmp/repotags.json) == "true" ]]; then
-        POINT="1"
-        while $(jq -e "any(.Tags[]; contains(\"$ver.$POINT\"))" < /tmp/repotags.json)
-        do
-            (( POINT++ ))
-        done
-    fi
-    if [[ -n "${POINT:-}" ]]; then
-        ver="${ver}.$POINT"
-    fi
+
+    POINT=$({{ just }} generate-point {{ image }} {{ tag }} {{ flavor }})
+    ver="${ver}.$POINT"
 
     # Build Arguments
     BUILD_ARGS=()
@@ -180,21 +189,18 @@ build $image="aurora" $tag="latest" $flavor="main" rechunk="0" ghcr="0" pipeline
     BUILD_ARGS+=("--build-arg" "BASE_IMAGE_ORG=${base_image_org}")
     BUILD_ARGS+=("--build-arg" "BASE_IMAGE_NAME=${base_image_name}")
     BUILD_ARGS+=("--build-arg" "FEDORA_MAJOR_VERSION=${fedora_version}")
-    BUILD_ARGS+=("--build-arg" "COMMON_IMAGE={{ common_image }}")
-    BUILD_ARGS+=("--build-arg" "COMMON_IMAGE_SHA=${common_image_sha}")
-    BUILD_ARGS+=("--build-arg" "BREW_IMAGE={{ brew_image }}")
-    BUILD_ARGS+=("--build-arg" "BREW_IMAGE_SHA=${brew_image_sha}")
+    BUILD_ARGS+=("--build-arg" "COMMON={{ common }}")
+    BUILD_ARGS+=("--build-arg" "BREW={{ brew }}")
     BUILD_ARGS+=("--build-arg" "IMAGE_NAME=${image_name}")
     BUILD_ARGS+=("--build-arg" "IMAGE_VENDOR={{ repo_organization }}")
     BUILD_ARGS+=("--build-arg" "KERNEL=${kernel_release}")
     BUILD_ARGS+=("--build-arg" "VERSION=${ver}")
     if [[ -z "$(git status -s)" ]]; then
         BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=$(git rev-parse --short HEAD)")
+    else
+        BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=deadbeef")
     fi
     BUILD_ARGS+=("--build-arg" "UBLUE_IMAGE_TAG=${tag}")
-    if [[ "${PODMAN}" =~ docker && "${TERM}" == "dumb" ]]; then
-        BUILD_ARGS+=("--progress" "plain")
-    fi
 
     # Pull in most recent upstream base image
     # if building locally/not ghcr pull the new image
@@ -218,6 +224,11 @@ build $image="aurora" $tag="latest" $flavor="main" rechunk="0" ghcr="0" pipeline
     LABELS+=("--label" "org.opencontainers.image.url=https://getaurora.dev")
     LABELS+=("--label" "org.opencontainers.image.vendor={{ repo_organization }}")
     LABELS+=("--label" "org.opencontainers.image.version=${ver}")
+    if [[ -z "$(git status -s)" ]]; then
+        LABELS+=("--label" "org.opencontainers.image.revision=$(git rev-parse HEAD)")
+    else
+        LABELS+=("--label" "org.opencontainers.image.revision=deadbeef")
+    fi
     LABELS+=("--label" "ostree.linux=${kernel_release}")
 
     echo "::endgroup::"
@@ -230,12 +241,10 @@ build $image="aurora" $tag="latest" $flavor="main" rechunk="0" ghcr="0" pipeline
         BUILD_ARGS+=("--cpp-flag=-DNVIDIA")
     fi
 
-    # Avoid intermediate image disk writes in CI
-    if [[ {{ ghcr }} == "1" ]]; then
-      BUILD_ARGS+=("--layers=false")
-    fi
+    PODMAN_BUILD_ARGS=("${BUILD_ARGS[@]}" "${LABELS[@]}" --tag "${image_name}:${tag}" --file Containerfile.in)
 
-    PODMAN_BUILD_ARGS=("${BUILD_ARGS[@]}" "${LABELS[@]}" --tag localhost/"${image_name}:${tag}" --file Containerfile.in)
+    # Bump retries to minimize network flakes
+    PODMAN_BUILD_ARGS+=("--retry=5" "--retry-delay=60s")
 
     # Add GitHub token secret if available (for CI/CD)
     if [[ -n "${GITHUB_TOKEN:-}" ]]; then
@@ -245,7 +254,7 @@ build $image="aurora" $tag="latest" $flavor="main" rechunk="0" ghcr="0" pipeline
         echo "No GitHub token found - build may hit rate limit"
     fi
 
-    ${PODMAN} build "${PODMAN_BUILD_ARGS[@]}" .
+    ${BUILDAH} build "${PODMAN_BUILD_ARGS[@]}" .
     echo "::endgroup::"
 
     # Rechunk the image if we are running inside ghcr or set the variable locally
@@ -280,9 +289,31 @@ build-pipeline image="aurora" tag="latest" flavor="main" kernel_pin="":
 
 # Rechunk Image
 [group('Image')]
-rechunk $image="aurora" $tag="latest" $flavor="main" ghcr="0" pipeline="0" previous_build="0":
+rechunk $image="aurora" $tag="latest" $flavor="main" ghcr="0" pipeline="0":
     #!/usr/bin/bash
 
+    {{ just }} validate {{ image }} {{ tag }} {{ flavor }}
+
+    image_name=$({{ just }} image_name {{ image }} {{ tag }} {{ flavor }})
+
+    export CHUNKAH_CONFIG_STR=$(${PODMAN} inspect "${image_name}:${tag}")
+
+    set -eoux pipefail
+
+    ${PODMAN} run --rm --mount=type=image,src="${image_name}:${tag}",target=/chunkah \
+    -e CHUNKAH_CONFIG_STR "{{ chunkah }}" \
+    build \
+    --verbose \
+    --compressed \
+    --max-layers 128 \
+    --prune /sysroot/ \
+    --label ostree.commit- --label ostree.final-diffid- \
+    --tag "${image_name}:${tag}" | ${PODMAN} load
+
+# build-chunked-oci
+[group('Image')]
+ostree-rechunk $image="aurora" $tag="latest" $flavor="main" ghcr="0" pipeline="0" previous_build="0":
+    #!/usr/bin/bash
     set -eoux pipefail
 
     # Validate
@@ -291,7 +322,6 @@ rechunk $image="aurora" $tag="latest" $flavor="main" ghcr="0" pipeline="0" previ
     # Image Name
     image_name=$({{ just }} image_name {{ image }} {{ tag }} {{ flavor }})
     fedora_version=$({{ just }} fedora_version '{{ image }}' '{{ tag }}' '{{ flavor }}')
-    DEFAULT_TAG=$({{ just }} generate-default-tag {{ tag }} {{ ghcr }})
 
     if [[ "{{ ghcr }}" == "0" ]]; then
       {{ just }} load-rootful "${image}" "${tag}" "${flavor}"
@@ -300,7 +330,7 @@ rechunk $image="aurora" $tag="latest" $flavor="main" ghcr="0" pipeline="0" previ
       # TODO: Redo everything here with --previous-build in rpm-ostree 2026.1+
       # so we don't have to pull an old image + rename it
     if [[ "{{ previous_build }}" == "1" ]]; then
-      PREVIOUS_IMAGE=ghcr.io/{{ repo_organization }}/"${image_name}":"${DEFAULT_TAG}"
+      PREVIOUS_IMAGE=ghcr.io/{{ repo_organization }}/"${image_name}":"${tag}"
 
       # https://github.com/coreos/rpm-ostree/blob/7e2f2065a4aa4d5965b4537bb7d74e0b2898650e/rust/src/compose.rs#L522-L529
       if skopeo inspect docker://"${PREVIOUS_IMAGE}" | jq -e '.LayersData[1:] | all(.Annotations?["ostree.components"]?)'; then
@@ -311,22 +341,20 @@ rechunk $image="aurora" $tag="latest" $flavor="main" ghcr="0" pipeline="0" previ
     fi
 
     if [[ "{{ ghcr }}" == "1" ]]; then
-      CHUNKED_IMAGE="localhost/"${image_name}":"${DEFAULT_TAG}""
+      CHUNKED_IMAGE="${image_name}:${tag}"
         if [[ "{{ previous_build }}" == "1" ]]; then
           CHUNKED_IMAGE="${PREVIOUS_IMAGE}"
         fi
     else
       # keep the original unrechunked image for local builds
-      CHUNKED_IMAGE="localhost/"${image_name}":"${DEFAULT_TAG}"-chunked"
+      CHUNKED_IMAGE="${image_name}:${tag}-chunked"
     fi
 
     # 96 layers, conservative default, same what ci-test is using
     # one layer is secretly being added for the ostree export
     # 499 is podman run limit
     # 128 is docker pull limit
-    # in CI this renames stable to stable-daily
     ${SUDOIF} ${PODMAN} run --rm \
-        --pull=${PULL_POLICY} \
         --privileged \
         -v "/var/lib/containers:/var/lib/containers" \
         --entrypoint /usr/bin/rpm-ostree \
@@ -335,12 +363,12 @@ rechunk $image="aurora" $tag="latest" $flavor="main" ghcr="0" pipeline="0" previ
         --max-layers 127 \
         --format-version=2 \
         --bootc \
-        --from "localhost/"${image_name}":"${tag}"" \
+        --from "localhost/${image_name}:${tag}" \
         --output containers-storage:${CHUNKED_IMAGE}
 
         # rename the image to localhost
         if [[ "{{ ghcr }}" == "1" && "{{ previous_build }}" == "1" ]]; then
-          ${SUDOIF} ${PODMAN} tag ${CHUNKED_IMAGE} "localhost/"${image_name}":"${DEFAULT_TAG}""
+          ${SUDOIF} ${PODMAN} tag ${CHUNKED_IMAGE} "${image_name}:${tag}"
           ${SUDOIF} ${PODMAN} image rm -f ${CHUNKED_IMAGE}
         fi
 
@@ -349,29 +377,7 @@ rechunk $image="aurora" $tag="latest" $flavor="main" ghcr="0" pipeline="0" previ
         sudo -u "${SUDO_USER}" {{ just }} secureboot "${image}" "${tag}" "${flavor}"
     fi
 
-# Rechunk Image but cooler
-[group('Image')]
-chunkah $image="aurora" $tag="latest" $flavor="main" ghcr="0":
-    #!/usr/bin/bash
-    set -oeux pipefail
-
-    {{ just }} validate {{ image }} {{ tag }} {{ flavor }}
-
-    image_name=$({{ just }} image_name {{ image }} {{ tag }} {{ flavor }})
-    DEFAULT_TAG=$({{ just }} generate-default-tag {{ tag }} {{ ghcr }})
-
-    export CHUNKAH_CONFIG_STR=$(${PODMAN} inspect "${image_name}:${DEFAULT_TAG}")
-    ${PODMAN} run --rm --mount=type=image,src="${image_name}:${DEFAULT_TAG}",target=/chunkah \
-    -e RUST_LOG=debug \
-    -e CHUNKAH_CONFIG_STR quay.io/coreos/chunkah:dev \
-    build \
-    --compressed \
-    --max-layers 128 \
-    --prune /sysroot/ \
-    --label ostree.commit- --label ostree.final-diffid- \
-    --tag "${image_name}:${DEFAULT_TAG}" | ${PODMAN} load
-
-# For Rechunk
+# For Privileged operations
 [group('Image')]
 load-rootful $image="aurora" $tag="latest" $flavor="main":
     #!/usr/bin/bash
@@ -383,16 +389,16 @@ load-rootful $image="aurora" $tag="latest" $flavor="main":
     # Image Name
     image_name=$({{ just }} image_name {{ image }} {{ tag }} {{ flavor }})
 
-    if [[ ! "$(id -u)" == 0 && ! ${PODMAN} =~ docker ]]; then
-      ID=$(${PODMAN} images --filter reference=localhost/"${image_name}":"${tag}" --format "'{{ '{{.ID}}' }}'")
+    if [[ ! "$(id -u)" == 0 ]]; then
+      ID=$(${PODMAN} images --filter reference="${image_name}:${tag}" --format "'{{ '{{.ID}}' }}'")
       if [[ -z "$ID" ]]; then
           {{ just }} build "$image" "$tag" "$flavor"
       fi
-      ${PODMAN} image scp localhost/"${image_name}":"${tag}" root@localhost::
+      ${PODMAN} image scp "${image_name}:${tag}" root@localhost::
     fi
 
 # Generate OCI Archive for PR Testing
-[group('Image')]
+[group('Utility')]
 export-oci $image="aurora" $tag="latest" $flavor="main":
     #!/usr/bin/bash
     set -oux pipefail
@@ -403,7 +409,9 @@ export-oci $image="aurora" $tag="latest" $flavor="main":
     # Image Name
     image_name=$({{ just }} image_name {{ image }} {{ tag }} {{ flavor }})
 
-    ${PODMAN} push --compression-format=zstd --compression-level=3 localhost/"${image_name}":"${tag}" oci-archive:"${image_name}".oci
+    ARCHIVE_NAME="${image_name}"-"$(arch)".oci
+
+    ${PODMAN} push --compression-format=zstd --compression-level=3 "${image_name}:${tag}" oci-archive:"${ARCHIVE_NAME}"
 
 # Run Container
 [group('Image')]
@@ -418,13 +426,13 @@ run $image="aurora" $tag="latest" $flavor="main":
     image_name=$({{ just }} image_name {{ image }} {{ tag }} {{ flavor }})
 
     # Check if image exists
-    ID=$(${PODMAN} images --filter reference=localhost/"${image_name}":"${tag}" --format "'{{ '{{.ID}}' }}'")
+    ID=$(${PODMAN} images --filter reference="${image_name}:${tag}" --format "'{{ '{{.ID}}' }}'")
     if [[ -z "$ID" ]]; then
         {{ just }} build "$image" "$tag" "$flavor"
     fi
 
     # Run Container
-    ${PODMAN} run -it --rm localhost/"${image_name}":"${tag}" bash
+    ${PODMAN} run -it --rm "${image_name}:${tag}" bash
 
 # Test Changelogs
 [group('Changelogs')]
@@ -494,7 +502,7 @@ secureboot $image="aurora" $tag="latest" $flavor="main":
             --volume /tmp/kernel-sign.crt:/tmp/kernel-sign.crt:z \
             --volume /tmp/akmods.crt:/tmp/akmods.crt:z \
             --name ${temp_name} \
-            alpine:edge
+            docker.io/library/alpine:edge
         ${PODMAN} exec ${temp_name} apk add sbsigntool
         CMD="${PODMAN} exec ${temp_name} /usr/bin/sbverify"
     fi
@@ -512,7 +520,6 @@ secureboot $image="aurora" $tag="latest" $flavor="main":
     exit "$returncode"
 
 # Get Fedora Version of an image
-[group('Utility')]
 [private]
 fedora_version image="aurora" tag="latest" flavor="main" $kernel_pin="":
     #!/usr/bin/bash
@@ -530,8 +537,23 @@ fedora_version image="aurora" tag="latest" flavor="main" $kernel_pin="":
 
     echo "${VERSION}"
 
+[private]
+akmods_flavor $tag="latest":
+    #!/usr/bin/bash
+
+    set -eou pipefail
+
+    if [[ "${tag}" =~ stable ]]; then
+        akmods_flavor="coreos-stable"
+    elif [[ "${tag}" =~ testing ]]; then
+        akmods_flavor="main"
+    else
+        akmods_flavor="main"
+    fi
+
+    echo "${akmods_flavor}"
+
 # Image Name
-[group('Utility')]
 [private]
 image_name image="aurora" tag="latest" flavor="main":
     #!/usr/bin/bash
@@ -550,21 +572,15 @@ generate-build-tags image="aurora" tag="latest" flavor="main" kernel_pin="" ghcr
     #!/usr/bin/bash
     set -eou pipefail
 
-    TODAY="$(date +%A)"
-    WEEKLY="Tuesday"
-    if [[ {{ ghcr }} == "0" ]]; then
-        rm -f /tmp/manifest.json
-    fi
     FEDORA_VERSION="$({{ just }} fedora_version '{{ image }}' '{{ tag }}' '{{ flavor }}' '{{ kernel_pin }}')"
-    DEFAULT_TAG=$({{ just }} generate-default-tag {{ tag }} {{ ghcr }})
     IMAGE_NAME=$({{ just }} image_name {{ image }} {{ tag }} {{ flavor }})
-    # Use Build Version from Rechunk
+
+    TIMESTAMP="$(date +%Y%m%d)"
     if [[ -z "${version:-}" ]]; then
-        version="{{ tag }}-${FEDORA_VERSION}.$(date +%Y%m%d)"
+        version="{{ tag }}-${FEDORA_VERSION}.${TIMESTAMP}"
     fi
     version=${version#{{ tag }}-}
 
-    # Arrays for Tags
     BUILD_TAGS=()
     COMMIT_TAGS=()
 
@@ -576,24 +592,38 @@ generate-build-tags image="aurora" tag="latest" flavor="main" kernel_pin="" ghcr
         COMMIT_TAGS+=(${SHA_SHORT}-{{ tag }}-${version})
     fi
 
-    # Convenience Tags
-    if [[ "{{ tag }}" =~ stable ]]; then
-        BUILD_TAGS+=("stable-daily" "${version}" "stable-daily-${version}" "stable-daily-${version:3}")
-    else
-        BUILD_TAGS+=("{{ tag }}" "{{ tag }}-${version}" "{{ tag }}-${version:3}")
+    POINT=$({{ just }} generate-point {{ image }} {{ tag }} {{ flavor }})
+
+    # These are always used regardless of the stream
+    COMMON_TAGS=()
+    COMMON_TAGS+=("{{ tag }}")
+    COMMON_TAGS+=("{{ tag }}-${version}")
+    COMMON_TAGS+=("{{ tag }}-${version:3}")
+    COMMON_TAGS+=("{{ tag }}-${version}.${POINT}")
+    COMMON_TAGS+=("{{ tag }}-${version:3}.${POINT}")
+
+    BUILD_TAGS=("${COMMON_TAGS[@]}" "${BUILD_TAGS[@]}")
+
+    # No special handling here for testing for now
+    if [[ "{{ tag }}" == stable ]]; then
+      # Legacy Compatibility Tag so stable-daily points to stable, do not remove this
+      # TODO: Move this to :latest after the ZFS removal to get daily updates again
+      BUILD_TAGS+=("{{ tag }}-daily")
+      BUILD_TAGS+=("${version}")
+      BUILD_TAGS+=("{{ tag }}-daily-${version}")
+      BUILD_TAGS+=("{{ tag }}-daily-${version:3}")
+      BUILD_TAGS+=("{{ tag }}-daily-${version}.${POINT}")
+      BUILD_TAGS+=("{{ tag }}-daily-${version:3}.${POINT}")
+    elif [[ "{{ tag }}" == latest ]]; then
+      # We only want :$FEDORA_VERSION to point to :latest
+      BUILD_TAGS+=("{{ tag }}-${FEDORA_VERSION}")
+      BUILD_TAGS+=("${FEDORA_VERSION}-${version}")
+      BUILD_TAGS+=("${FEDORA_VERSION}-${version:3}")
+      BUILD_TAGS+=("${FEDORA_VERSION}-${version}.${POINT}")
+      BUILD_TAGS+=("${FEDORA_VERSION}-${version:3}.${POINT}")
     fi
 
-    # Weekly Stable / Rebuild Stable on workflow_dispatch
     github_event="{{ github_event }}"
-    if [[ "{{ tag }}" =~ "stable" && "${WEEKLY}" == "${TODAY}" && "${github_event}" =~ schedule ]]; then
-        BUILD_TAGS+=("stable" "stable-${version}" "stable-${version:3}")
-    elif [[ "{{ tag }}" =~ "stable" && "${github_event}" =~ workflow_dispatch|workflow_call ]]; then
-        BUILD_TAGS+=("stable" "stable-${version}" "stable-${version:3}")
-    elif [[ "{{ tag }}" =~ "stable" && "{{ ghcr }}" == "0" ]]; then
-        BUILD_TAGS+=("stable" "stable-${version}" "stable-${version:3}")
-    elif [[ ! "{{ tag }}" =~ stable|beta ]]; then
-        BUILD_TAGS+=("${FEDORA_VERSION}" "${FEDORA_VERSION}-${version}" "${FEDORA_VERSION}-${version:3}")
-    fi
 
     if [[ "${github_event}" == "pull_request" ]]; then
         alias_tags=("${COMMIT_TAGS[@]}")
@@ -603,22 +633,37 @@ generate-build-tags image="aurora" tag="latest" flavor="main" kernel_pin="" ghcr
 
     echo "${alias_tags[*]}"
 
-# Generate Default Tag
-[group('Utility')]
-generate-default-tag tag="latest" ghcr="0":
+# Get Index Point for multiple daily images
+[private]
+generate-point image="aurora" tag="latest" flavor="main":
     #!/usr/bin/bash
-    set -eou pipefail
+    set -eoux pipefail
 
-    # Default Tag
-    if [[ "{{ tag }}" =~ stable && "{{ ghcr }}" == "1" ]]; then
-        DEFAULT_TAG="stable-daily"
-    elif [[ "{{ tag }}" =~ stable && "{{ ghcr }}" == "0" ]]; then
-        DEFAULT_TAG="stable"
-    else
-        DEFAULT_TAG="{{ tag }}"
+    IMAGE_NAME=$({{ just }} image_name {{ image }} {{ tag }} {{ flavor }})
+    TIMESTAMP="$(date +%Y%m%d)"
+
+    tags="/tmp/${IMAGE_NAME}-tags.json"
+
+    if [[ ! -f ${tags} ]]; then
+      skopeo list-tags docker://ghcr.io/{{ repo_organization }}/${IMAGE_NAME} > "${tags}"
     fi
 
-    echo "${DEFAULT_TAG}"
+    if [[ $(jq --arg tag "{{ tag }}" --arg timestamp "${TIMESTAMP}" 'any(.Tags[]; contains($tag + "-" + $timestamp))' < "${tags}") == "true" ]]; then
+
+      # our image already exists, so find the highest POINT
+      POINT=$(jq -r --arg tag "{{ tag }}" --arg timestamp "${TIMESTAMP}" \
+        '($tag + "-" + $timestamp) as $base | [ .Tags[] | select(startswith($base + ".")) ] | sort_by(split(".")[-1]
+        | tonumber)
+        |.[-1] | if . == null then "1" else split(".")[-1] end' < "${tags}")
+
+      ((POINT++))
+
+    else
+      # there is no image that exists for that day yet
+      POINT=1
+    fi
+
+    echo "${POINT}"
 
 # Tag Images
 [group('Utility')]
@@ -627,7 +672,7 @@ tag-images image_name="" default_tag="" tags="":
     set -eou pipefail
 
     # Get Image, and untag
-    IMAGE=$(${PODMAN} inspect localhost/{{ image_name }}:{{ default_tag }} | jq -r .[].Id)
+    IMAGE=$(${PODMAN} inspect {{ image_name }}:{{ default_tag }} | jq -r .[].Id)
     ${PODMAN} untag localhost/{{ image_name }}:{{ default_tag }}
 
     # Tag Image
@@ -668,6 +713,7 @@ gen-sbom $image="aurora" $tag="latest" $flavor="main" $syft_cmd="syft":
 
 # DNF CI package cache
 [group('Utility')]
+[private]
 setup-cache $image="aurora" $tag="latest" $flavor="main" $ghcr="0" $github_event="0":
     #!/usr/bin/bash
     set -eou pipefail
@@ -711,20 +757,21 @@ bootc $image="aurora" $tag="latest" $flavor="main" *ARGS:
         "${BOOTC_INSTALL_OPTIONS[@]}" \
         -v /dev:/dev \
         -v "${BUILD_BASE_DIR:-.}:/data" \
-        localhost/"${image_name}":"${tag}" bootc {{ ARGS }}
+        "${image_name}:${tag}" bootc {{ ARGS }}
 
 # Create bootable image
 [group('Utility')]
-disk-image $image="aurora" $tag="latest" $flavor="main" ghcr="0" $bootc_fs="btrfs":
+disk-image $image="aurora" $tag="latest" $flavor="main" ghcr="0" $bootc_fs="btrfs" $backend="ostree":
     #!/usr/bin/env bash
     set -eoux pipefail
 
     # this is enough for base aurora to make it more likely to run in CI
     if [[ "{{ ghcr }}" == "1" ]]; then
-      IMG_SIZE=11G
+      # absurd size so it will always be enough for the image
+      IMG_SIZE=35G
     else
-      # Do a little more locally so you can rebase
-      IMG_SIZE=30G
+      # Should at least be enough to rebase and install couple applications
+      IMG_SIZE=40G
     fi
 
     BYTES_IMAGE_SIZE=$(numfmt --from=iec ${IMG_SIZE})
@@ -739,14 +786,79 @@ disk-image $image="aurora" $tag="latest" $flavor="main" ghcr="0" $bootc_fs="btrf
       fi
     fi
 
-    {{ just }} bootc "${image}" "${tag}" "${flavor}" install to-disk --generic-image --bootloader grub --via-loopback /data/bootable.img --filesystem "${bootc_fs}" --wipe
+    BOOTC_INSTALL_ARGS=()
+    BOOTC_INSTALL_ARGS+=("--generic-image"  "--via-loopback" "/data/bootable.img" "--wipe")
+    BOOTC_INSTALL_ARGS+=("--filesystem ${bootc_fs}")
+
+    if [[ "${backend}" == "ostree" ]]; then
+      BOOTC_INSTALL_ARGS+=("--bootloader grub")
+    else
+      BOOTC_INSTALL_ARGS+=("--bootloader systemd" "--composefs-backend")
+    fi
+
+    {{ just }} bootc "${image}" "${tag}" "${flavor}" install to-disk "${BOOTC_INSTALL_ARGS[@]}"
+
+# FIXME: Please consider using podman push in the future for signing as well instead of temporary tag + cosign
+# See: https://github.com/ublue-os/aurora/pull/2199
+# Once https://github.com/containers/podman/issues/27796 is resolved
+
+# Push Image to Registry
+[group('Utility')]
+push-image $image="aurora" $tag="latest" $flavor="main" $ghcr="0" $image_registry="" $temp_push="0" $temp_push_tag="":
+    #!/usr/bin/bash
+    set -eoux pipefail
+
+    PUSH_CMD_ARGS=()
+    PUSH_CMD_ARGS+=("--digestfile=/tmp/digestfile")
+    PUSH_CMD_ARGS+=("--compression-format=zstd")
+    PUSH_CMD_ARGS+=("--compression-level=3")
+    PUSH_CMD_ARGS+=("--retry-delay=30s")
+    PUSH_CMD_ARGS+=("--retry=5")
+
+    PUSH_CMD=""${PODMAN}" push "${PUSH_CMD_ARGS[@]}""
+
+    image_name=$({{ just }} image_name '{{ image }}' '{{ tag }}' '{{ flavor }}')
+
+    alias_tags=$({{ just }} generate-build-tags '{{ image }}' '{{ tag }}' '{{ flavor }}')
+
+    if [[ "{{ ghcr }}" == "1" && -n "${image_registry}" ]]; then
+
+      if [[ "${temp_push}" == "0" ]]; then
+        for tag in ${alias_tags}; do
+          ${PUSH_CMD} ${image_name}:${tag} ${image_registry}/${image_name}:${tag}
+          # We need to push twice to workaround https://github.com/containers/podman/issues/27796
+          ${PUSH_CMD} ${image_name}:${tag} ${image_registry}/${image_name}:${tag}
+          cat /tmp/digestfile
+        done
+
+      elif [[ "${temp_push}" == "1" ]]; then
+        ${PUSH_CMD} ${image_name}:${tag} ${image_registry}/${image_name}:${temp_push_tag}-${tag}
+        # We need to push twice to workaround https://github.com/containers/podman/issues/27796
+        # If we don't do this then the digest changes and we are only signing this specific tag
+        ${PUSH_CMD} ${image_name}:${tag} ${image_registry}/${image_name}:${temp_push_tag}-${tag}
+      fi
+
+    else
+      echo "This is intended to be run in ghcr only."
+      exit 1
+    fi
+
+# Login to Container Registry
+[group('Utility')]
+login-registry bin="" registry="":
+    #!/bin/bash
+    set -euxo pipefail
+
+    {{ retry_function }}
+
+    echo "${GITHUB_TOKEN}" | retry 5 60 "{{ bin }}" login "{{ registry }}" -u "${GITHUB_ACTOR}" --password-stdin
 
 # # Examples:
-#   > just retag-nvidia-on-ghcr stable-daily stable-daily-41.20250126.3 0
+#   > just retag-nvidia-on-ghcr stable stable-41.20250126.3 0
 #   > just retag-nvidia-on-ghcr latest latest-41.20250228.1 0
 #
-# working_tag: The tag of the most recent known good image (e.g., stable-daily-41.20250126.3)
-# stream:      One of latest, stable-daily, stable or gts
+# working_tag: The tag of the most recent known good image (e.g., latest.20250126.3)
+# stream:      One of latest, stable or testing
 # dry_run:     Only print the skopeo commands instead of running them
 #
 # First generate a PAT with package write access (https://github.com/settings/tokens)
