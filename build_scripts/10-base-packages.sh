@@ -53,6 +53,7 @@ install_base_packages_no_de() {
 			powertop
 
 		# Remove unwanted packages
+		# shellcheck disable=SC2015 # intentional: A&&B||true is a guard pattern
 		[[ "$IS_UBUNTU" == true ]] && pkg_remove ubuntu-advantage-tools || true
 
 		# Install uupd from GitHub release (same source as RPM path)
