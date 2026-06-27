@@ -5,13 +5,13 @@ set -euo pipefail
 variant="$1"
 
 case "$variant" in
-"yellowfin" | "almalinux-kitten") echo "quay.io/almalinuxorg/almalinux-bootc:10-kitten" ;;
-"albacore" | "almalinux") echo "quay.io/almalinuxorg/almalinux-bootc:10" ;;
-"skipjack" | "centos" | "lts") echo "quay.io/centos-bootc/centos-bootc:stream10" ;;
-"bonito" | "fedora" | "bluefin") echo "quay.io/fedora/fedora-bootc:43" ;;
-  "grouper" | "ubuntu") echo "docker.io/library/ubuntu:resolute" ;;
-"bonito-rawhide" | "rawhide") echo "quay.io/fedora/fedora-bootc:rawhide" ;;
-"redfin" | "rhel") echo "registry.redhat.io/rhel10/rhel-bootc:latest" ;;
+"yellowfin") echo "quay.io/almalinuxorg/almalinux-bootc:10-kitten" ;;
+"albacore") echo "quay.io/almalinuxorg/almalinux-bootc:10" ;;
+"skipjack") echo "quay.io/centos-bootc/centos-bootc:stream10" ;;
+"bonito") echo "quay.io/fedora/fedora-bootc:43" ;;
+"grouper") echo "docker.io/library/ubuntu:resolute" ;;
+"bonito-rawhide") echo "quay.io/fedora/fedora-bootc:rawhide" ;;
+"redfin") echo "registry.redhat.io/rhel10/rhel-bootc:latest" ;;
 *)
 	echo "Unknown variant: $variant" >&2
 	exit 1

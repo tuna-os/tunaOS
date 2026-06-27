@@ -28,3 +28,6 @@ out.ociarchive
 # Local tooling / agent state (not project content)
 .claude/
 .antigravitycli/
+
+# Agent state (not project content)
+.pi/

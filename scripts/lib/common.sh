@@ -30,35 +30,6 @@ cd "$_TUNAOS_REPO_ROOT" || {
 	exit 1
 }
 
-# ── Platform detection ──────────────────────────────────────────────────────
-# Return the podman --platform string that matches the host kernel.
-# Honors a pre-set $platform env var (used in CI to pin a non-host platform).
-tunaos_host_platform() {
-	if [[ -n "${platform:-}" ]]; then
-		echo "${platform}"
-		return
-	fi
-	local arch
-	arch=$(uname -m)
-	case "$arch" in
-	x86_64)
-		# Detect the x86_64-v2 microarchitecture via the kernel RPM
-		# (Centos Stream 10 / AlmaLinux 10 split between baseline and v2).
-		if rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; then
-			echo "linux/amd64/v2"
-		else
-			echo "linux/amd64"
-		fi
-		;;
-	arm64 | aarch64)
-		echo "linux/arm64"
-		;;
-	*)
-		echo "ERROR: unsupported arch '${arch}' — supported: x86_64, arm64" >&2
-		return 1
-		;;
-	esac
-}
 
 # ── Image-ref resolution ────────────────────────────────────────────────────
 # Given (variant, flavor, repo, tag) → OCI image reference string.

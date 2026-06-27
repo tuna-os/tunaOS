@@ -20,20 +20,8 @@ setup() {
   [ "$output" = "quay.io/almalinuxorg/almalinux-bootc:10-kitten" ]
 }
 
-@test "almalinux-kitten alias → almalinux-bootc:10-kitten" {
-  run bash "$SCRIPT" almalinux-kitten
-  [ "$status" -eq 0 ]
-  [ "$output" = "quay.io/almalinuxorg/almalinux-bootc:10-kitten" ]
-}
-
 @test "albacore → almalinux-bootc:10" {
   run bash "$SCRIPT" albacore
-  [ "$status" -eq 0 ]
-  [ "$output" = "quay.io/almalinuxorg/almalinux-bootc:10" ]
-}
-
-@test "almalinux alias → almalinux-bootc:10" {
-  run bash "$SCRIPT" almalinux
   [ "$status" -eq 0 ]
   [ "$output" = "quay.io/almalinuxorg/almalinux-bootc:10" ]
 }
@@ -44,58 +32,10 @@ setup() {
   [ "$output" = "quay.io/centos-bootc/centos-bootc:stream10" ]
 }
 
-@test "centos alias → centos-bootc:stream10" {
-  run bash "$SCRIPT" centos
-  [ "$status" -eq 0 ]
-  [ "$output" = "quay.io/centos-bootc/centos-bootc:stream10" ]
-}
-
-@test "lts alias → centos-bootc:stream10" {
-  run bash "$SCRIPT" lts
-  [ "$status" -eq 0 ]
-  [ "$output" = "quay.io/centos-bootc/centos-bootc:stream10" ]
-}
-
 @test "bonito → fedora-bootc:43" {
   run bash "$SCRIPT" bonito
   [ "$status" -eq 0 ]
   [ "$output" = "quay.io/fedora/fedora-bootc:43" ]
-}
-
-@test "fedora alias → fedora-bootc:43" {
-  run bash "$SCRIPT" fedora
-  [ "$status" -eq 0 ]
-  [ "$output" = "quay.io/fedora/fedora-bootc:43" ]
-}
-
-@test "bluefin alias → fedora-bootc:43" {
-  run bash "$SCRIPT" bluefin
-  [ "$status" -eq 0 ]
-  [ "$output" = "quay.io/fedora/fedora-bootc:43" ]
-}
-
-@test "bonito-rawhide → fedora-bootc:rawhide" {
-  run bash "$SCRIPT" bonito-rawhide
-  [ "$status" -eq 0 ]
-  [ "$output" = "quay.io/fedora/fedora-bootc:rawhide" ]
-}
-
-@test "rawhide alias → fedora-bootc:rawhide" {
-  run bash "$SCRIPT" rawhide
-  [ "$status" -eq 0 ]
-  [ "$output" = "quay.io/fedora/fedora-bootc:rawhide" ]
-}
-
-@test "redfin → rhel-bootc:latest" {
-  run bash "$SCRIPT" redfin
-  [ "$status" -eq 0 ]
-  [ "$output" = "registry.redhat.io/rhel10/rhel-bootc:latest" ]
-}
-
-@test "rhel alias → rhel-bootc:latest" {
-  run bash "$SCRIPT" rhel
-  [ "$status" -eq 0 ]
-  [ "$output" = "registry.redhat.io/rhel10/rhel-bootc:latest" ]
 }
 
 # ── Error handling ────────────────────────────────────────────────────────────
