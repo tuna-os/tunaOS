@@ -15,6 +15,7 @@
 [![License](https://img.shields.io/github/license/tuna-os/tunaOS?style=for-the-badge)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/stargazers)
 [![Issues](https://img.shields.io/github/issues/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/issues)
+[![Adopters](https://img.shields.io/badge/adopters-0_entries-2ea44f?style=for-the-badge)](ADOPTERS.md)
 
 </div>
 
@@ -261,6 +262,7 @@ Related Communities:
 - [Versioning](VERSIONING.md) — tag scheme and stability tiers
 - [Migration Guide](MIGRATION.md) — switching from other distros
 - [Security Policy](SECURITY.md) — vulnerability reporting and supported versions
+- [Adopters](ADOPTERS.md) — organizations using TunaOS
 - [Code of Conduct](CODE_OF_CONDUCT.md) — community standards
 
 ### Community & Governance
