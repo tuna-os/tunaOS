@@ -79,10 +79,12 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
+          LABEL: ${{ inputs.label }}
+          UPSTREAM_REPO: ${{ inputs.upstream_repo }}
         run: |
-          gh label create "${{ inputs.label }}" \
+          gh label create "${LABEL}" \
             --repo "$REPO" \
-            --description "Ported from ${{ inputs.upstream_repo }}" \
+            --description "Ported from ${UPSTREAM_REPO}" \
             --color "8B5CF6" 2>/dev/null || true
           gh label create "gemini-port" \
             --repo "$REPO" \
@@ -174,7 +176,10 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Create branch
-        run: git checkout -b "${{ inputs.branch_prefix }}/${{ matrix.short_sha }}"
+        env:
+          BRANCH_PREFIX: ${{ inputs.branch_prefix }}
+          SHORT_SHA: ${{ matrix.short_sha }}
+        run: git checkout -b "${BRANCH_PREFIX}/${SHORT_SHA}"
 
       - name: Fetch diff and write task for Gemini
         env:
