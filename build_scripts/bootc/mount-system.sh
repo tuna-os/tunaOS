@@ -12,6 +12,7 @@
 # Adapted from bootc-shindig/ubuntu-bootc-remix.
 set -ouex pipefail
 
+# shellcheck disable=SC2114
 rm -rf /boot /home /root /srv /var /media
 
 mkdir -p \
