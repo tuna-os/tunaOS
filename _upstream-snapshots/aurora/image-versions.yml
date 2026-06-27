@@ -3,19 +3,19 @@ images:
   - name: kinoite
     image: quay.io/fedora-ostree-desktops/kinoite
     tag: 44
-    digest: sha256:6f208c939443a02feb60964e271a7e9cd01cf216a3a3379808e1168544e3cbd5
+    digest: sha256:a2f9ca450fcc46e6b9fbe0b1b5d0d0460da809b28b14d918bdcdfe4c4ced399b
 
   # https://github.com/get-aurora-dev/common   
   - name: common
     image: ghcr.io/get-aurora-dev/common
     tag: latest
-    digest: sha256:18e3fa71f0406b0930b6a6052b3fe66fd7e01d210ed11541d5f0b3a2611eca81
+    digest: sha256:f229dc06dc2d21c2b5abd16c7045e317d79ea450e2636f000c53577fa9c46464
     
   # https://github.com/ublue-os/brew
   - name: brew
     image: ghcr.io/ublue-os/brew
     tag: latest
-    digest: sha256:0b100324e28048639f40607c19d7a063f9930b8c396a6d66f7dcfe1617240f65
+    digest: sha256:2fb4115eb53c6e6a30f22ca85f09fcb816e5a282108fdcda96077dbb7f393c3c
 
   # https://github.com/coreos/chunkah
   - name: chunkah

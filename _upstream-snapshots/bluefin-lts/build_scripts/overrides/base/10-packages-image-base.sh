@@ -28,8 +28,8 @@ if [[ "${GNOME_VERSION:-49}" == "50" ]]; then
     # - selinux-policy: COPR 43.x is required for GDM 49/50 userdb varlink socket
     #   architecture; EL10 base 42.x lacks the necessary policy rules.
     # - gnutls: newer glib2 from COPR may depend on gnutls symbols not in base.
-    dnf -y install selinux-policy selinux-policy-targeted gnutls
-    dnf -y upgrade glib2 fontconfig
+    dnf -y install --setopt=tsflags=noscripts selinux-policy selinux-policy-targeted gnutls
+    dnf -y install glib2 fontconfig
 else
     # GNOME 49 COPR (default)
     dnf copr enable -y "jreilly1821/c10s-gnome-49"
@@ -51,8 +51,8 @@ else
     #   and libgirepository-2.0. If only one is upgraded, both get loaded and
     #   double-registering GIRepository crashes gnome-shell at startup.
     # - gnutls: newer glib2 from COPR may depend on gnutls symbols not in base.
-    dnf -y install selinux-policy selinux-policy-targeted gnutls
-    dnf -y upgrade glib2 fontconfig gobject-introspection gjs
+    dnf -y install --setopt=tsflags=noscripts selinux-policy selinux-policy-targeted gnutls
+    dnf -y install glib2 fontconfig gobject-introspection gjs
 fi
 
 # Please, dont remove this as it will break everything GNOME related
@@ -135,6 +135,34 @@ if [[ "${GNOME_VERSION:-49}" == "50" ]]; then
     dnf -y install gnome50-el10-compat libgda
 else
     dnf -y install gnome49-el10-compat libgda
+fi
+
+# TEMPORARY: pin mutter to 49.4-4.el10 to stop the GNOME Shell boot crash.
+#
+# CentOS Stream 10's mutter-49.4-6.el10 backported a keymap patch (RHEL-106779)
+# that changed the introspected Meta.Backend.set_keymap_async API. The c10s-gnome-49
+# COPR enabled above still ships gnome-shell-49.5-100.el10gnomeqr built against the
+# old API, and its "100" release outranks CS10's lockstep rebuild, so the stale shell
+# sticks while mutter drifts to -6. gnome-shell then segfaults on login and GDM
+# crash-loops to a black screen. Known-good pair: mutter-49.4-4 + gnome-shell-49.5-100
+# (what the last working image, lts-hwe.20260519, shipped). -4 is still in the CS10
+# AppStream repo, so a plain downgrade works.
+#
+# Only affects GNOME 49; GNOME 50 uses a different COPR. gnome-shell stays at 49.5-100.
+# REMOVE THIS once c10s-gnome-49 ships a gnome-shell rebuilt against mutter >= 49.4-6
+# (tracking: tuna-os/github-copr#27, fix in tuna-os/github-copr#28).
+if [[ "${GNOME_VERSION:-49}" != "50" ]]; then
+    MUTTER_GOOD="49.4-4.el${MAJOR_VERSION_NUMBER}"
+    echo "--- pinning mutter to ${MUTTER_GOOD} (temporary GNOME Shell crash workaround) ---"
+    if [[ "$(rpm -q --qf '%{VERSION}-%{RELEASE}' mutter)" != "${MUTTER_GOOD}" ]]; then
+        dnf -y downgrade "mutter-${MUTTER_GOOD}" "mutter-common-${MUTTER_GOOD}"
+    fi
+    for n in mutter mutter-common; do
+        v="$(rpm -q --qf '%{VERSION}-%{RELEASE}' "${n}")"
+        [[ "${v}" == "${MUTTER_GOOD}" ]] || { echo "FATAL: ${n} is ${v}, expected ${MUTTER_GOOD}"; exit 1; }
+    done
+    dnf versionlock add mutter mutter-common
+    echo "mutter pinned to ${MUTTER_GOOD} and versionlocked (TEMP)"
 fi
 
 # This package adds "[systemd] Failed Units: *" to the bashrc startup
