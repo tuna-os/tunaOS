@@ -48,7 +48,7 @@ mkdir -p "${SNAPSHOT_DIR}"
 #   - image-versions / image-versions.yml (pinned bases)
 UPSTREAMS=(
 	"aurora|https://github.com/ublue-os/aurora.git|main|build_files:system_files:Containerfile.in:Justfile:image-versions.yml"
-	"bluefin-lts|https://github.com/ublue-os/bluefin-lts.git|main|build_scripts:system_files:Containerfile:Containerfile.dx:Justfile:image-versions.yml"
+	"bluefin-lts|https://github.com/ublue-os/bluefin-lts.git|main|build_scripts:system_files:Containerfile:Justfile:image-versions.yml"
 	"zirconium|https://github.com/zirconium-dev/zirconium.git|main|mkosi.extra:mkosi.conf.d:mkosi.profiles:mkosi.conf:mkosi.bump:mkosi.postinst.chroot:mkosi.prepare.chroot:Justfile:iso.toml:iso-nvidia.toml:repos"
 )
 
