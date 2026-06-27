@@ -13,7 +13,8 @@ _(None listed yet — be the first!)_
 
 | Organization | Use Case | Variant(s) | Since |
 |---|---|---|---|
-| _(Your org here)_ | _(Description)_ | _(e.g., Yellowfin GNOME)_ | _(Date)_ |
+| [@hanthor](https://github.com/hanthor) (Project Maintainer) | Personal daily driver — development, testing, and dogfooding all variants | Yellowfin GNOME, Albacore GNOME, Skipjack KDE | 2026-04 |
+| [TunaOS Hive Agents](https://github.com/tuna-os) | Automated CI/CD — build, test, and release pipeline runs on TunaOS infrastructure | Yellowfin GNOME, Albacore GNOME | 2026-05 |
 
 ## Ecosystem & Downstream Projects
 
@@ -40,4 +41,4 @@ Questions? Reach out on [Matrix](https://matrix.to/#/%23tunaos:reilly.asia) or o
 
 ---
 
-*Maintained by the TunaOS community. Last updated: 2026-06-26.*
+*Maintained by the TunaOS community. Last updated: 2026-06-27.*
