@@ -67,75 +67,7 @@ else
 	fi
 fi
 
-# ── Resolve tacklebox: prefer the published container, fall back to source ──
-# Published image: ghcr.io/tuna-os/tacklebox:latest (multi-arch). Use that by
-# default so this script needs no Go toolchain. Set TACKLEBOX_FROM_SOURCE=1
-# to opt into the source build (helpful when iterating on tacklebox itself
-# locally before a tag is cut).
-
-TACKLEBOX_IMAGE="${TACKLEBOX_IMAGE:-$(registry_ref tacklebox 2>/dev/null || echo 'ghcr.io/tuna-os/tacklebox:latest')}"
-TACKLEBOX_FROM_SOURCE="${TACKLEBOX_FROM_SOURCE:-0}"
-
-if [[ "$TACKLEBOX_FROM_SOURCE" == "1" ]]; then
-	# Pin the source SHA when building from main so CI doesn't silently
-	# track a moving HEAD. Bump via renovate when a release is cut.
-	TACKLEBOX_SHA="${TACKLEBOX_SHA:-$(grep '^\s*tacklebox:' image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')}"
-	TACKLEBOX_SHA="${TACKLEBOX_SHA:-75c837b39d9dcb360509c49d2e0306621dced904}"
-	TACKLEBOX_CACHE="${TACKLEBOX_CACHE:-/var/cache/tunaos/tacklebox}"
-	TACKLEBOX_BIN="${TACKLEBOX_CACHE}/tacklebox"
-
-	if [[ ! -x "$TACKLEBOX_BIN" ]] || [[ "$("$TACKLEBOX_BIN" version 2>/dev/null || echo)" != *"$TACKLEBOX_SHA"* ]]; then
-		echo "==> Building tacklebox @ ${TACKLEBOX_SHA}..."
-		mkdir -p "$TACKLEBOX_CACHE"
-		cd "$TACKLEBOX_CACHE"
-		if [[ ! -d .git ]]; then
-			git clone --quiet https://github.com/tuna-os/tacklebox.git .
-		else
-			git fetch --quiet origin
-		fi
-		git -c advice.detachedHead=false checkout --quiet "$TACKLEBOX_SHA"
-		GO_BIN=""
-		for g in /home/linuxbrew/.linuxbrew/bin/go /usr/bin/go go; do
-			if command -v "$g" &>/dev/null; then
-				GO_BIN="$g"
-				break
-			fi
-		done
-		if [[ -z "$GO_BIN" ]]; then
-			echo "ERROR: go not found; install go 1.22+ to build tacklebox" >&2
-			exit 1
-		fi
-		"$GO_BIN" build -o tacklebox ./cmd/tacklebox
-		cd - >/dev/null
-	fi
-	if [[ ! -x "$TACKLEBOX_BIN" ]]; then
-		echo "ERROR: tacklebox binary missing after build" >&2
-		exit 1
-	fi
-	# Adapter so the rest of the script doesn't care which path we took.
-	tacklebox() { "$TACKLEBOX_BIN" "$@"; }
-else
-	echo "==> Using tacklebox image: ${TACKLEBOX_IMAGE}"
-	podman pull "$TACKLEBOX_IMAGE" >/dev/null
-
-	# Tacklebox needs:
-	#   * /var/lib/containers/storage so it can pull the source bootc image
-	#     into the same root store we already populated above;
-	#   * /dev for loopback + sgdisk (the container runs --privileged);
-	#   * the recipe + output dir bind-mounted in.
-	# Adapter runs the published image with those mounts in place.
-	tacklebox() {
-		podman run --rm --privileged \
-			--security-opt label=disable \
-			-v /var/lib/containers:/var/lib/containers \
-			-v /dev:/dev \
-			-v /etc/subuid:/etc/subuid:ro \
-			-v /etc/subgid:/etc/subgid:ro \
-			-v "$(realpath "$OUT_DIR"):$(realpath "$OUT_DIR")" \
-			-v "$(realpath "$RECIPE_FILE"):$(realpath "$RECIPE_FILE"):ro" \
-			"$TACKLEBOX_IMAGE" "$@"
-	}
-fi
+# ponytail: tacklebox runner delegated to common.sh tunaos_run_tacklebox
 
 # ── Generate the recipe ─────────────────────────────────────────────────────
 # Schema: github.com/tuna-os/tacklebox/blob/main/internal/recipe/
@@ -181,10 +113,7 @@ echo "    image:  ${IMAGE_REF}"
 echo "    recipe: ${RECIPE_FILE}"
 echo "    output: ${ISO_OUT}"
 
-tacklebox build "$RECIPE_FILE" \
-	--iso "$ISO_OUT" \
-	--output-base "$OUT_DIR" \
-	--yes
+tunaos_run_tacklebox "$RECIPE_FILE" "$OUT_DIR" "$ISO_OUT"
 
 # Hand ownership back to the invoking user so the ISO is usable without sudo.
 if [[ -n "${SUDO_USER:-}" ]]; then
