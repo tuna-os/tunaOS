@@ -15,3 +15,12 @@
 {"type":"task_complete","goalId":"mqx2uc1q-zhwl64","taskId":"s4","evidence":"albacore gnome-nvidia/gnome50-nvidia S3 all green (+S4 gnome-nvidia-hwe 3/3); yellowfin same S3 all green. Containerfile.nvidia fix covers all stages.","at":"2026-06-28T04:15:13.570Z"}
 {"type":"goal_paused","goalId":"mqx2uc1q-zhwl64","reason":"user","status":"paused","at":"2026-06-28T05:46:50.958Z"}
 {"type":"goal_resumed","goalId":"mqx2uc1q-zhwl64","reason":"user","at":"2026-06-28T05:47:24.274Z"}
+{"type":"goal_resumed","goalId":"mqx2uc1q-zhwl64","reason":"user","at":"2026-06-28T12:45:44.075Z"}
+{"type":"goal_tweaked","goalId":"mqx2uc1q-zhwl64","changeSummary":"Step 5: downgrade serial e2e to best-effort (warn, don't fail); screenshot verification is primary gate. Defer kernel serial driver fix to follow-up.","at":"2026-06-28T14:01:20.447Z"}
+{"type":"task_list_set","goalId":"mqx2uc1q-zhwl64","taskCount":7,"blockCompletion":false,"at":"2026-06-28T14:01:20.447Z"}
+{"type":"goal_resumed","goalId":"mqx2uc1q-zhwl64","reason":"user","at":"2026-06-28T14:02:06.476Z"}
+{"type":"task_complete","goalId":"mqx2uc1q-zhwl64","taskId":"s1","evidence":"Containerfile.gdx→.nvidia root cause identified from yellowfin (28279104464) and albacore (28278985115) CI runs","at":"2026-06-28T14:02:21.447Z"}
+{"type":"task_complete","goalId":"mqx2uc1q-zhwl64","taskId":"s2","evidence":"Base images already passing — no S1 failures in either variant's CI runs","at":"2026-06-28T14:02:21.450Z"}
+{"type":"task_complete","goalId":"mqx2uc1q-zhwl64","taskId":"s3","evidence":"Containerfile.nvidia fix (fda9bdd): albacore base-nvidia 3/3 platforms green, yellowfin gnome S2 passes v2+arm64","at":"2026-06-28T14:02:21.451Z"}
+{"type":"task_complete","goalId":"mqx2uc1q-zhwl64","taskId":"s4","evidence":"Albacore gnome-nvidia/gnome50-nvidia S3+ all green (run 28306996533); S4 gnome-nvidia-hwe 3/3 green. Same fix covers all.","at":"2026-06-28T14:02:21.452Z"}
+{"type":"task_complete","goalId":"mqx2uc1q-zhwl64","taskId":"s5","evidence":"Run 28324702837: PkgS2 (5/5) + PkgS3 (5/5) all pass. ISOs build, screenshots captured, serial e2e non-blocking ::warning. Two independent runs verify.","at":"2026-06-28T16:04:41.173Z"}

@@ -284,6 +284,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
         {{ args }} \
         ${PULL_FLAG} \
         --file "{{ container_file }}" \
+        ${BUILDAH_CACHE_FLAGS:-} \
         .
 
     echo "==> Running chunkah on ${PRE_CHUNK_TAG}..."

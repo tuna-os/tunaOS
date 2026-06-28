@@ -161,11 +161,26 @@ jobs:
             dnf-${{ matrix.platform }}-
           save-always: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Fix cache permissions
+      - name: Fix DNF cache permissions
         if: steps.dnf-cache.outputs.cache-hit == 'true'
         run: |
           sudo chown -R root:root /var/cache/dnf /var/cache/libdnf5 /var/lib/rpm 2>/dev/null || true
           sudo chmod -R 755 /var/cache/dnf /var/cache/libdnf5 /var/lib/rpm 2>/dev/null || true
+
+      - name: Restore buildah layer cache
+        id: buildah-cache
+        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: /var/tmp/buildah-cache-0
+          key: buildah-${{ runner.os }}-${{ runner.arch }}-${{ inputs.image-variant }}-${{ inputs.flavor }}
+          restore-keys: |
+            buildah-${{ runner.os }}-${{ runner.arch }}-${{ inputs.image-variant }}-
+            buildah-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Configure buildah cache
+        run: |
+          mkdir -p /var/tmp/buildah-cache-0
+          echo 'BUILDAH_CACHE_FLAGS=--cache-to type=local,dest=/var/tmp/buildah-cache-0 --cache-from type=local,src=/var/tmp/buildah-cache-0' >> "$GITHUB_ENV"
 
       - name: Build Image
         id: build-image
@@ -181,6 +196,18 @@ jobs:
           just=$(which just)
           # just build now handles two-pass chunking internally by default
           sudo "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}"
+
+      - name: Fix buildah cache permissions
+        if: always()
+        run: |
+          sudo chmod 777 --recursive /var/tmp/buildah-cache-0 2>/dev/null || true
+
+      - name: Save buildah layer cache
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: /var/tmp/buildah-cache-0
+          key: buildah-${{ runner.os }}-${{ runner.arch }}-${{ inputs.image-variant }}-${{ inputs.flavor }}
 
       - name: Verify Image in VM
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
