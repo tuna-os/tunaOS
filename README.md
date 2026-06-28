@@ -288,6 +288,22 @@ Related Communities:
 <img width="100" height="130" alt="Bootc_Logo" src="https://raw.githubusercontent.com/containers/common/main/logos/bootc-logo-full-vert.png" />
 </a>
 
+---
+
+### 🤖 Powered by KubeStellar / Hive
+
+This repository and many of the [tuna-os](https://github.com/tuna-os) repositories are developed and maintained using **[Hive](https://github.com/hanthor/hive)** — an AI-driven development platform orchestrated via [KubeStellar](https://kubestellar.io/).
+
+Hive deploys a suite of specialized AI agents (guide, architect, sec-check, quality, ci-maintainer, strategist) onto a local Kubernetes cluster. These agents triage issues, implement fixes, review PRs, manage CI pipelines, and maintain documentation — all working autonomously through GitHub.
+
+<img width="100" alt="Hive" src="https://avatars.githubusercontent.com/in/3942065" />
+
+Every commit, PR, and issue in this repo benefits from multi-agent collaboration coordinated through Hive.
+
+*Learn more: [hanthor/hive](https://github.com/hanthor/hive) | [KubeStellar](https://kubestellar.io/)*
+
+---
+
 *Inspired by [Bluefin](https://projectbluefin.io) and the [Universal Blue](https://universal-blue.org/) Community*
 
 *Licensed under [Apache 2.0](LICENSE)*
