@@ -93,6 +93,11 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
+      - id: xfce
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
 
       # ── Stage 3 ────────────────────────────────────────────────────────────
       # HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
@@ -147,6 +152,16 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: niri-nvidia
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: xfce-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: xfce-nvidia
         stage: 3
         build_image: true
         build_iso: true

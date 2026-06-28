@@ -50,6 +50,7 @@ Each variant ships multiple desktop environments:
 | `kde` | KDE Plasma |
 | `cosmic` | COSMIC Desktop |
 | `niri` | Niri (tiling Wayland compositor) |
+| `xfce` | XFCE 4.20 (Wayland, experimental) — xfwl4 compositor |
 
 ### Hardware Variants
 
@@ -98,6 +99,7 @@ ghcr.io/tuna-os/albacore:gnome-hwe
 ghcr.io/tuna-os/albacore:kde
 ghcr.io/tuna-os/albacore:niri
 ghcr.io/tuna-os/albacore:cosmic
+ghcr.io/tuna-os/albacore:xfce
 ```
 
 - ✨ **x86_64/v2** microarchitecture support
