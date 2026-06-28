@@ -332,7 +332,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y just podman jq rclone golang-go git
+          sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi
 
       - name: Setup rootless podman (subuid/subgid for runner)
         if: matrix.build_iso == true
