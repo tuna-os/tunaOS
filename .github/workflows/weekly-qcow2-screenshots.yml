@@ -49,13 +49,14 @@ jobs:
         env:
           INPUT_VARIANT: ${{ github.event.inputs.variant }}
           INPUT_FLAVOR: ${{ github.event.inputs.flavor }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && \
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && \
                 -n "$INPUT_VARIANT" && \
                 "$INPUT_VARIANT" != "${{ matrix.variant }}" ]]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && \
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && \
                 -n "$INPUT_FLAVOR" && \
                 "$INPUT_FLAVOR" != "${{ matrix.flavor }}" ]]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
