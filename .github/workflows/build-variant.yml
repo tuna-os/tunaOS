@@ -377,7 +377,8 @@ jobs:
       - name: Install QEMU for boot verification
         if: matrix.build_iso == true
         run: |
-          sudo apt-get install -y qemu-system-x86 ovmf socat imagemagick qemu-utils sshpass
+          sudo apt-get install -y qemu-system-x86 ovmf socat imagemagick qemu-utils sshpass python3-pip
+          pip3 install --break-system-packages Pillow requests 2>/dev/null || pip3 install Pillow requests --user
 
       - name: Boot ISO and verify readiness
         id: e2e
@@ -486,7 +487,8 @@ jobs:
       - name: Install QEMU for boot verification
         if: matrix.build_iso == true
         run: |
-          sudo apt-get install -y qemu-system-x86 ovmf socat imagemagick qemu-utils sshpass
+          sudo apt-get install -y qemu-system-x86 ovmf socat imagemagick qemu-utils sshpass python3-pip
+          pip3 install --break-system-packages Pillow requests 2>/dev/null || pip3 install Pillow requests --user
 
       - name: Boot ISO and verify readiness
         id: e2e

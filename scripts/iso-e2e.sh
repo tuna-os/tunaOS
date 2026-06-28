@@ -50,7 +50,8 @@ set -euo pipefail
 
 ISO_PATH=""
 KICKSTART=""
-MODE="ready" # ready | kickstart | ssh
+APP_CMD=""
+MODE="ready" # ready | kickstart | ssh | app-launch
 TIMEOUT=300
 OUTPUT_DIR="./iso-e2e-out"
 MEMORY=4096
@@ -63,6 +64,11 @@ while [[ $# -gt 0 ]]; do
 	--kickstart)
 		MODE="kickstart"
 		KICKSTART="$2"
+		shift 2
+		;;
+	--app-launch)
+		MODE="app-launch"
+		APP_CMD="$2"
 		shift 2
 		;;
 	--ssh-only)
@@ -490,6 +496,16 @@ run_kickstart() {
 	for _ in $(seq 1 60); do
 		if grep -q "Reached target.*Graphical\|Reached target.*Multi-User\|login:" "${SERIAL_LOG}" 2>/dev/null; then
 			echo "==> Installed system booted successfully!"
+			screenshot "30-installed"
+			# VLM verification of installed system
+			if command -v python3 &>/dev/null; then
+				VLM_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/desktop-verify.py"
+				if [[ -f "$VLM_SCRIPT" ]]; then
+					PNG="${OUTPUT_DIR}/30-installed.png"
+					[[ -f "${OUTPUT_DIR}/30-installed.ppm" ]] && convert "${OUTPUT_DIR}/30-installed.ppm" "$PNG" 2>/dev/null || true
+					[[ -f "$PNG" ]] && python3 "$VLM_SCRIPT" "$PNG" --mode desktop || true
+				fi
+			fi
 			return 0
 		fi
 		sleep 5
@@ -509,6 +525,15 @@ ready)
 	wait_for_ready
 	rc=$?
 	screenshot "10-ready"
+	# VLM vision verification (non-blocking)
+	if command -v python3 &>/dev/null; then
+		VLM_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/desktop-verify.py"
+		if [[ -f "$VLM_SCRIPT" ]]; then
+			PNG="${OUTPUT_DIR}/10-ready.png"
+			[[ -f "${OUTPUT_DIR}/10-ready.ppm" ]] && convert "${OUTPUT_DIR}/10-ready.ppm" "$PNG" 2>/dev/null || true
+			[[ -f "$PNG" ]] && python3 "$VLM_SCRIPT" "$PNG" --mode desktop || true
+		fi
+	fi
 	screenshot_compare "10-ready" || true
 	exit "$rc"
 	;;
@@ -531,6 +556,39 @@ kickstart)
 	screenshot "10-ready"
 	run_kickstart
 	exit $?
+	;;
+app-launch)
+	boot_live_iso || exit 1
+	wait_for_ready || exit $?
+	screenshot "10-ready"
+	# Wait for SSH
+	for _ in $(seq 1 15); do
+		check_ssh && break
+		sleep 2
+	done
+	check_ssh || exit $?
+	# Launch the app via SSH
+	APP="${APP_CMD:-nautilus}"
+	echo "==> Launching app via SSH: $APP"
+	sshpass -p live ssh -o StrictHostKeyChecking=no -p 2222 liveuser@127.0.0.1 \
+		"gtk-launch $APP 2>&1" || echo "  (app launch may have failed)"
+	sleep 5
+	screenshot "20-app"
+	# VLM verification
+	if command -v python3 &>/dev/null; then
+		VLM_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/desktop-verify.py"
+		if [[ -f "$VLM_SCRIPT" ]]; then
+			PNG="${OUTPUT_DIR}/20-app.png"
+			[[ -f "${OUTPUT_DIR}/20-app.ppm" ]] && convert "${OUTPUT_DIR}/20-app.ppm" "$PNG" 2>/dev/null || true
+			if [[ -f "$PNG" ]]; then
+				python3 "$VLM_SCRIPT" "$PNG" --mode desktop
+				rc=$?
+				echo "==> VLM verification exit code: $rc"
+				exit $rc
+			fi
+		fi
+	fi
+	exit 0
 	;;
 *)
 	echo "Unknown mode: $MODE" >&2
