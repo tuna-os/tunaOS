@@ -2,16 +2,16 @@
   "version": 3,
   "id": "mqclbgsz-cnsqlt",
   "objective": "Get the grouper (Ubuntu 26.04) variant working end-to-end in CI — base image builds, all 4 desktop flavors build, and ISOs publish — using TDD tracer bullets: one CI failure → one fix → repeat.",
-  "status": "active",
+  "status": "paused",
   "autoContinue": true,
   "usage": {
-    "tokensUsed": 565129,
-    "activeSeconds": 14063
+    "tokensUsed": 602107,
+    "activeSeconds": 14082
   },
   "sisyphus": true,
   "createdAt": "2026-06-13T16:49:11.891Z",
-  "updatedAt": "2026-06-14T05:29:35.889Z",
-  "activePath": ".pi/goals/active_goal_2026061317491189_mqclbgsz-cnsqlt.md",
+  "updatedAt": "2026-06-28T00:48:57.307Z",
+  "stopReason": "user",
   "taskList": {
     "tasks": [
       {
@@ -47,7 +47,8 @@
     ],
     "blockCompletion": false,
     "proposedAt": "2026-06-13T16:49:11.904Z"
-  }
+  },
+  "archivedPath": ".pi/goals/archived/goal_2026062806185628_mqclbgsz-cnsqlt.md"
 }
 
 # Goal Prompt
@@ -56,11 +57,11 @@ Get the grouper (Ubuntu 26.04) variant working end-to-end in CI — base image b
 
 ## Progress
 
-- Status: sisyphus running
+- Status: sisyphus paused
 - Auto-continue: on
 - Sisyphus mode: yes (prompt/criteria style)
-- Time spent: 3h54m23s
-- Tokens used: 565K (565,129) tokens
+- Time spent: 3h54m42s
+- Tokens used: 602K (602,107) tokens
 ## Tasks
 
 <!-- blockCompletion: false -->

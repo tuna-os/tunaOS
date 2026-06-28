@@ -201,14 +201,14 @@ PRE_CHUNK_TAG="${TARGET_TAG_WITH_VERSION}-pre-chunk"
 echo "==> Building ${DESKTOP_FLAVOR} stage..."
 
 # Pass 1: Build the target DE stage directly — no unused stages built
-podman build \
+buildah build \
 	--security-opt label=disable \
 	--dns=8.8.8.8 \
 	--platform "$PLATFORM" \
 	--target="${DESKTOP_FLAVOR}" \
 	"${BUILD_ARGS[@]}" \
 	--tag "${PRE_CHUNK_TAG}" \
-	--pull=newer \
+	--pull-always \
 	--file "$CONTAINERFILE" \
 	.
 

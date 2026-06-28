@@ -265,7 +265,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     echo "==> Building ${DESKTOP_FLAVOR} stage..."
 
     # Pass 1: Build the target DE stage directly — no unused stages built
-    podman build \
+    buildah build \
         --security-opt label=disable \
         --dns=8.8.8.8 \
         --platform "{{ target_platform }}" \
@@ -273,7 +273,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
         "${BUILD_ARGS[@]}" \
         --tag "${PRE_CHUNK_TAG}" \
         {{ args }} \
-        --pull=newer \
+        --pull-always \
         --file "{{ container_file }}" \
         .
 
