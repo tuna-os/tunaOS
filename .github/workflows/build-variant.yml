@@ -369,14 +369,10 @@ jobs:
         if: matrix.build_iso == true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          variant: ${{ matrix.variant }}
-          flavor: ${{ matrix.flavor }}
-          build_iso: ${{ matrix.build_iso }}
-          build_qcow2: ${{ matrix.build_qcow2 }}
-          r2_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
-          r2_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          r2_endpoint: ${{ secrets.R2_ENDPOINT }}
-          r2_bucket: ${{ secrets.R2_BUCKET }}
+          name: iso-${{ matrix.variant }}-${{ matrix.flavor }}
+          path: '*.iso'
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Install QEMU for boot verification
         if: matrix.build_iso == true
@@ -464,11 +460,7 @@ jobs:
         if: matrix.build_iso == true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          variant: ${{ matrix.variant }}
-          flavor: ${{ matrix.flavor }}
-          build_iso: ${{ matrix.build_iso }}
-          build_qcow2: ${{ matrix.build_qcow2 }}
-          r2_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
-          r2_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          r2_endpoint: ${{ secrets.R2_ENDPOINT }}
-          r2_bucket: ${{ secrets.R2_BUCKET }}
+          name: boot-${{ matrix.variant }}-${{ matrix.flavor }}
+          path: screenshot.png
+          if-no-files-found: warn
+          retention-days: 7
