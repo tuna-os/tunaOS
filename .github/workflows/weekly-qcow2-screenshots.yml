@@ -46,15 +46,18 @@ jobs:
     steps:
       - name: Check matrix filter
         id: filter
+        env:
+          INPUT_VARIANT: ${{ github.event.inputs.variant }}
+          INPUT_FLAVOR: ${{ github.event.inputs.flavor }}
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && \
-                -n "${{ github.event.inputs.variant }}" && \
-                "${{ github.event.inputs.variant }}" != "${{ matrix.variant }}" ]]; then
+                -n "$INPUT_VARIANT" && \
+                "$INPUT_VARIANT" != "${{ matrix.variant }}" ]]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
           if [[ "${{ github.event_name }}" == "workflow_dispatch" && \
-                -n "${{ github.event.inputs.flavor }}" && \
-                "${{ github.event.inputs.flavor }}" != "${{ matrix.flavor }}" ]]; then
+                -n "$INPUT_FLAVOR" && \
+                "$INPUT_FLAVOR" != "${{ matrix.flavor }}" ]]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
           fi
 

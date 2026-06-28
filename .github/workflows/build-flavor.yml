@@ -18,8 +18,10 @@ jobs:
 
       - name: Validate Flavor
         id: validate
+        env:
+          FLAVOR_INPUT: ${{ github.event.inputs.flavor }}
         run: |
-          FLAVOR="${{ github.event.inputs.flavor }}"
+          FLAVOR="$FLAVOR_INPUT"
           # Read valid flavors from build-config.yml
           VALID_FLAVORS=$(yq -r '.variants[].flavors[].id' .github/build-config.yml | sort -u | tr '\n' ' ')
           VALID_FLAVORS="all $VALID_FLAVORS"

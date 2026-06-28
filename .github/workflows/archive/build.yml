@@ -95,12 +95,21 @@ jobs:
 
       - name: Generate image variant build matrix
         id: set-matrix
+        env:
+          PR_HWE_GDX: ${{ needs.detect_pr_scope.outputs.hwe_gdx_related || 'false' }}
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_IMAGE_VARIANT: ${{ inputs.image_variant }}
+          INPUT_PLATFORMS: ${{ inputs.platforms }}
+          INPUT_BUILD_VARIANT: ${{ inputs.build_variant }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          REF_NAME: ${{ github.ref_name }}
+          SHA: ${{ github.sha }}
         run: |
           IMAGE_VARIANTS="yellowfin albacore skipjack bonito"
-          PR_HWE_GDX_RELATED="${{ needs.detect_pr_scope.outputs.hwe_gdx_related || 'false' }}"
+          PR_HWE_GDX_RELATED="$PR_HWE_GDX"
 
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.image_variant }}" != "all" ]]; then
-            IMAGE_VARIANTS="${{ inputs.image_variant }}"
+          if [[ "$EVENT_NAME" == "workflow_dispatch" && "$INPUT_IMAGE_VARIANT" != "all" ]]; then
+            IMAGE_VARIANTS="$INPUT_IMAGE_VARIANT"
           fi
 
           MATRIX='{"include":[]}'
@@ -128,16 +137,16 @@ jobs:
                 ;;
             esac
 
-            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
               IMAGE_NAME="${image_variant}"
-              TAG="pr-${{ github.event.pull_request.number }}"
+              TAG="pr-$PR_NUMBER"
             else
               IMAGE_NAME="${image_variant}"
-              TAG="${{ (github.ref_name == 'main' && github.event_name != 'pull_request') && 'latest' || github.sha }}"
+              TAG="$([[ $REF_NAME == 'main' && $EVENT_NAME != 'pull_request' ]] && echo 'latest' || echo $SHA)"
             fi
 
-            if [[ "${{ github.event_name }}" == "workflow_dispatch" && "${{ inputs.platforms }}" != "default" ]]; then
-              PLATFORMS="${{ inputs.platforms }}"
+            if [[ "$EVENT_NAME" == "workflow_dispatch" && "$INPUT_PLATFORMS" != "default" ]]; then
+              PLATFORMS="$INPUT_PLATFORMS"
             fi
 
             RUN_HWE_GDX=true
@@ -145,14 +154,12 @@ jobs:
             RUN_KDE_HWE_GDX=true
             RUN_NIRI_HWE_GDX=true
 
-            # Preserve historical PR behavior: no HWE/GDX by default on PRs.
-            if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
               RUN_HWE_GDX=false
               RUN_KDE=false
               RUN_KDE_HWE_GDX=false
               RUN_NIRI_HWE_GDX=false
 
-              # For skipjack/bonito, allow HWE/GDX and KDE-HWE/KDE-GDX when related files changed.
               if [[ "$image_variant" == "skipjack" || "$image_variant" == "bonito" ]]; then
                 if [[ "$PR_HWE_GDX_RELATED" == "true" ]]; then
                   RUN_HWE_GDX=true
@@ -162,8 +169,8 @@ jobs:
               fi
             fi
 
-            if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-              case "${{ inputs.build_variant }}" in
+            if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+              case "$INPUT_BUILD_VARIANT" in
                 "gnome")
                   RUN_HWE_GDX=false
                   RUN_KDE=false
