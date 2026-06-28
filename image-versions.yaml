@@ -12,6 +12,13 @@ images:
     tag: latest
     digest: sha256:63c7219af97c1cae9a2a38e9944dc26f65d0798ab256980649947f96a269e1ce
 
+  # RFC 010: pre-built Zirconium image for DMS/Niri system files
+  # on grouper (Ubuntu) — not available from Ubuntu apt.
+  - name: zirconium
+    image: ghcr.io/zirconium-dev/zirconium
+    tag: latest
+    digest: sha256:215c2271b641fd0ea30fa7e5c48c9f45bc104238ed0faab03d7ce6e3518b4544
+
 # Pinned binary downloads (managed by Renovate)
 downloads:
   # renovate: datasource=github-releases depName=ublue-os/uupd
