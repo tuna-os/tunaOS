@@ -186,7 +186,7 @@ _ensure-deps:
 
 # Private build engine.
 [private]
-_build target_tag_with_version target_tag container_file base_image_for_build target_platform use_cache enable_gdx enable_hwe desktop_flavor *args: _ensure-deps
+_build target_tag_with_version target_tag container_file base_image_for_build target_platform use_cache enable_gdx enable_hwe desktop_flavor is_ci_build *args: _ensure-deps
     #!/usr/bin/env bash
     set -euxo pipefail
 
@@ -268,7 +268,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     # (the local buildah wrapper tries to pull localhost/buildah-tool which fails).
     BUILDER="podman"
     PULL_FLAG="--pull=newer"
-    if [[ "{{ is_ci }}" == "1" ]] && command -v buildah &>/dev/null; then
+    if [[ "{{ is_ci_build }}" == "1" ]] && command -v buildah &>/dev/null; then
         BUILDER="buildah"
         PULL_FLAG="--pull-always"
     fi
@@ -443,10 +443,10 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     TARGET_TAG_WITH_VERSION="${TARGET_TAG}:${TARGET_IMAGE_TAG}"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}" "{{ is_ci }}"
         ./scripts/sync-build-cache.sh "${TARGET_TAG}" || true
     else
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}" "{{ is_ci }}"
     fi
 
     if [[ "$DID_INIT" == "1" ]]; then
