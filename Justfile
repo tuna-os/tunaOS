@@ -264,8 +264,17 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
 
     echo "==> Building ${DESKTOP_FLAVOR} stage..."
 
+    # Use buildah in CI (for layer caching via actions/cache), podman locally
+    # (the local buildah wrapper tries to pull localhost/buildah-tool which fails).
+    BUILDER="podman"
+    PULL_FLAG="--pull=newer"
+    if [[ "{{ is_ci }}" == "1" ]] && command -v buildah &>/dev/null; then
+        BUILDER="buildah"
+        PULL_FLAG="--pull-always"
+    fi
+
     # Pass 1: Build the target DE stage directly — no unused stages built
-    buildah build \
+    ${BUILDER} build \
         --security-opt label=disable \
         --dns=8.8.8.8 \
         --platform "{{ target_platform }}" \
@@ -273,7 +282,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
         "${BUILD_ARGS[@]}" \
         --tag "${PRE_CHUNK_TAG}" \
         {{ args }} \
-        --pull-always \
+        ${PULL_FLAG} \
         --file "{{ container_file }}" \
         .
 
@@ -333,7 +342,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     fi
     podman tag "${LOADED_ID}" "${RECHUNKED_REF}"
 
-    buildah build \
+    ${BUILDER} build \
         --security-opt label=disable \
         --dns=8.8.8.8 \
         "${BUILD_ARGS[@]}" \
@@ -342,7 +351,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
         --file "Containerfile.final" \
         .
 
-    buildah rmi "${RECHUNKED_REF}" 2>/dev/null || true
+    ${BUILDER} rmi "${RECHUNKED_REF}" 2>/dev/null || true
 
 # Build a TunaOS variant
 build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='': _ensure-deps
