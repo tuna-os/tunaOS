@@ -260,6 +260,32 @@ jobs:
           echo "remote_image_digest=${REMOTE_IMAGE_DIGEST}" >> $GITHUB_OUTPUT
           echo "digest=${IMAGE_DIGEST}" >> $GITHUB_OUTPUT
 
+      - name: Setup Syft
+        if: ${{ inputs.sbom }} && github.event_name != 'pull_request'
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          syft-version: v1.39.0
+
+      - name: Generate SBOM
+        if: ${{ inputs.sbom }} && github.event_name != 'pull_request'
+        env:
+          SYFT_CMD: ${{ steps.setup-syft.outputs.cmd }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          DEFAULT_TAG: ${{ inputs.default-tag }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          IMAGE="ghcr.io/${{ github.repository_owner }}/${IMAGE_NAME}:${DEFAULT_TAG}-${PLATFORM}"
+          $SYFT_CMD "$IMAGE" --scope all-layers -o spdx-json="sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${PLATFORM}.spdx.json"
+
+      - name: Upload SBOM
+        if: ${{ inputs.sbom }} && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom-${{ env.IMAGE_NAME }}-${{ inputs.default-tag }}-${{ matrix.platform }}
+          path: sbom-*.spdx.json
+          if-no-files-found: warn
+          retention-days: 7
+
       # TODO: reinstate sign-and-publish when key propagation through composite
       # actions is resolved. The COSIGN_PRIVATE_KEY env var is masked but
       # arrives empty at runtime in the composite action.
