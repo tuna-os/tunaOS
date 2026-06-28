@@ -25,3 +25,6 @@
 {"type":"task_complete","goalId":"mqx2uc1q-zhwl64","taskId":"s4","evidence":"Albacore gnome-nvidia/gnome50-nvidia S3+ all green (run 28306996533); S4 gnome-nvidia-hwe 3/3 green. Same fix covers all.","at":"2026-06-28T14:02:21.452Z"}
 {"type":"task_complete","goalId":"mqx2uc1q-zhwl64","taskId":"s5","evidence":"Run 28324702837: PkgS2 (5/5) + PkgS3 (5/5) all pass. ISOs build, screenshots captured, serial e2e non-blocking ::warning. Two independent runs verify.","at":"2026-06-28T16:04:41.173Z"}
 {"type":"task_complete","goalId":"mqx2uc1q-zhwl64","taskId":"s6","evidence":"Buildah layer cache wired: cache restore→build→permissions→save in reusable-build-image.yml, matching projectbluefin/bluefin pattern","at":"2026-06-28T16:05:36.835Z"}
+{"type":"goal_paused","goalId":"mqx2uc1q-zhwl64","reason":"user","status":"paused","at":"2026-06-28T16:09:42.652Z"}
+{"type":"goal_tweaked","goalId":"mqx2uc1q-zhwl64","changeSummary":"Remove grouper from step 7 scope and success criteria — separate build infrastructure (Containerfile.ubuntu), deferred to follow-up goal.","at":"2026-06-28T16:13:17.798Z"}
+{"type":"task_list_set","goalId":"mqx2uc1q-zhwl64","taskCount":7,"blockCompletion":false,"at":"2026-06-28T16:13:17.798Z"}
