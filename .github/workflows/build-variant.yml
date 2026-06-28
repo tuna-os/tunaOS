@@ -464,3 +464,131 @@ jobs:
           path: screenshot.png
           if-no-files-found: warn
           retention-days: 7
+
+  # ── Stage 3: Artifacts ───────────────────────────────────────────────
+  # GNOME-nvidia, gnome50-nvidia, and other stage-3 ISOs.
+  # Mirrors build_artifacts_s2 with stage-3 needs + matrix.
+  build_artifacts_s3:
+    name: "PkgS3 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
+    needs: [generate_matrix, build_stage3]
+    if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_s3_count != '0'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s3_matrix) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Maximize build space
+        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
+
+      - name: Setup rootless podman (subuid/subgid for runner)
+        if: matrix.build_iso == true
+        run: |
+          if ! grep -q "^${USER}:" /etc/subuid 2>/dev/null; then
+            echo "${USER}:100000:65536" | sudo tee -a /etc/subuid
+          fi
+          if ! grep -q "^${USER}:" /etc/subgid 2>/dev/null; then
+            echo "${USER}:100000:65536" | sudo tee -a /etc/subgid
+          fi
+
+      - name: Build Live ISO
+        if: matrix.build_iso == true
+        env:
+          UPLOAD_R2: "true"
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          export TACKLEBOX_FROM_SOURCE=1
+          sudo -E bash ./scripts/build-iso-tacklebox.sh \
+            "${{ matrix.variant }}" \
+            "${{ matrix.flavor }}" \
+            ghcr \
+            "${{ matrix.flavor }}-linux-amd64"
+
+      - name: Upload ISO Artifact
+        if: matrix.build_iso == true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: iso-${{ matrix.variant }}-${{ matrix.flavor }}
+          path: '*.iso'
+          if-no-files-found: error
+          retention-days: 7
+
+  # ── Stage 4: Artifacts ───────────────────────────────────────────────
+  # gnome-nvidia-hwe and other stage-4 ISOs (currently none, but wiring it
+  # now avoids a repeat of the stage-3 gap later).
+  build_artifacts_s4:
+    name: "PkgS4 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
+    needs: [generate_matrix, build_stage4]
+    if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_s4_count != '0'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s4_matrix) }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Maximize build space
+        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
+
+      - name: Setup rootless podman (subuid/subgid for runner)
+        if: matrix.build_iso == true
+        run: |
+          if ! grep -q "^${USER}:" /etc/subuid 2>/dev/null; then
+            echo "${USER}:100000:65536" | sudo tee -a /etc/subuid
+          fi
+          if ! grep -q "^${USER}:" /etc/subgid 2>/dev/null; then
+            echo "${USER}:100000:65536" | sudo tee -a /etc/subgid
+          fi
+
+      - name: Build Live ISO
+        if: matrix.build_iso == true
+        env:
+          UPLOAD_R2: "true"
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          export TACKLEBOX_FROM_SOURCE=1
+          sudo -E bash ./scripts/build-iso-tacklebox.sh \
+            "${{ matrix.variant }}" \
+            "${{ matrix.flavor }}" \
+            ghcr \
+            "${{ matrix.flavor }}-linux-amd64"
+
+      - name: Upload ISO Artifact
+        if: matrix.build_iso == true
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: iso-${{ matrix.variant }}-${{ matrix.flavor }}
+          path: '*.iso'
+          if-no-files-found: error
+          retention-days: 7
