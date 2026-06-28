@@ -236,7 +236,7 @@ echo "==> Applying labels from OCI archive..."
 RECHUNKED_REF="localhost/${TARGET_TAG_WITH_VERSION}-rechunked-$$"
 skopeo copy "oci-archive:out.ociarchive" "containers-storage:${RECHUNKED_REF}"
 
-podman build \
+buildah build \
 	--security-opt label=disable \
 	--dns=8.8.8.8 \
 	--platform "$PLATFORM" \

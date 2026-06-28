@@ -311,10 +311,10 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     echo "==> Applying labels from OCI archive..."
 
     # Pass 3: Load archive into podman storage via podman load, then apply OCI labels.
-    # podman load guarantees the same graphRoot as the subsequent podman build.
+    # podman load guarantees the same graphRoot as the subsequent buildah build.
     # skopeo copy is avoided here because CI uses ublue-os/container-storage-action
     # which mounts a BTRFS graphRoot for podman; skopeo defaults to overlay and writes
-    # to a different path, causing podman build to fall back to a remote registry pull.
+    # to a different path, causing buildah build to fall back to a remote registry pull.
 
     # Prune ALL unused images from BTRFS storage before loading the rechunked archive.
     # Targeted rmi of just pre-chunk + chain base isn't sufficient: multi-stage FROM
@@ -333,7 +333,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     fi
     podman tag "${LOADED_ID}" "${RECHUNKED_REF}"
 
-    podman build \
+    buildah build \
         --security-opt label=disable \
         --dns=8.8.8.8 \
         "${BUILD_ARGS[@]}" \
@@ -342,7 +342,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
         --file "Containerfile.final" \
         .
 
-    podman rmi "${RECHUNKED_REF}" 2>/dev/null || true
+    buildah rmi "${RECHUNKED_REF}" 2>/dev/null || true
 
 # Build a TunaOS variant
 build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='': _ensure-deps
