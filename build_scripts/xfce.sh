@@ -8,9 +8,10 @@ case "${1:-}" in
 "base")
 	# ── dnf (RPM) XFCE Wayland path ──────────────────────────────────
 	if [[ "$PKG_MGR" == "dnf" ]]; then
-		# Enable the Tuna OS COPR for XFCE Wayland packages
-		dnf_retry -y install dnf-plugins-core
-		dnf config-manager --set-enabled tuna-os 2>/dev/null || true
+		# Enable the Tuna OS repository for XFCE Wayland packages
+		# (xfwl4 compositor, libxfce4windowing, etc. not in EPEL)
+		curl -fsSLo /etc/yum.repos.d/tuna-os.repo \
+		  https://raw.githubusercontent.com/tuna-os/github-copr/main/contrib/tuna-os.repo
 
 		if [[ $IS_FEDORA == true ]]; then
 			# Fedora 44 has XFCE 4.20 in the official repos
