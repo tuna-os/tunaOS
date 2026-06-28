@@ -82,11 +82,12 @@ else
 	echo "Skipping DE-specific display-manager service setup (DESKTOP_FLAVOR='${DESKTOP_FLAVOR}')"
 fi
 # sshd is disabled by default on the installed system. Live ISOs may enable
-# it via the ENABLE_SSHD=1 path in live-iso/common/Containerfile for local
-# dev testing, but production installs default closed.
+# it via ENABLE_SSHD=1 for dev testing, but production installs default closed.
 # (Aligned with zirconium-dev/zirconium dd9f2789 — Disable sshd by default.)
-safe_disable sshd.service
-safe_disable sshd.socket 2>/dev/null || systemctl mask sshd.socket || true
+if [[ "${ENABLE_SSHD:-0}" != "1" ]]; then
+  safe_disable sshd.service
+  safe_disable sshd.socket 2>/dev/null || systemctl mask sshd.socket || true
+fi
 
 safe_enable fwupd.service
 safe_enable rpm-ostree-countme.service

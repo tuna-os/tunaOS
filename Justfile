@@ -26,7 +26,7 @@ _ensure-deps:
 
 # Private build engine.
 [private]
-_build target_tag_with_version target_tag container_file base_image_for_build target_platform use_cache enable_gdx enable_hwe desktop_flavor is_ci_build *args: _ensure-deps
+_build target_tag_with_version target_tag container_file base_image_for_build target_platform use_cache enable_gdx enable_hwe desktop_flavor is_ci_build enable_sshd_build *args: _ensure-deps
     #!/usr/bin/env bash
     set -euxo pipefail
 
@@ -49,6 +49,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     BUILD_ARGS+=("--build-arg" "ENABLE_HWE={{ enable_hwe }}")
     BUILD_ARGS+=("--build-arg" "ENABLE_NVIDIA={{ enable_gdx }}")
     BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR={{ desktop_flavor }}")
+    BUILD_ARGS+=("--build-arg" "ENABLE_SSHD={{ enable_sshd_build }}")
 
     AKMODS_ORG=$({{ yq }} -r ".variants[] | select(.id == \"{{ target_tag }}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
     # Resolve akmods registry via registry-map; falls back to ghcr.io/${AKMODS_ORG} if not mapped
@@ -202,7 +203,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     ${BUILDER} rmi "${RECHUNKED_REF}" 2>/dev/null || true
 
 # Build a TunaOS variant
-build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='': _ensure-deps
+build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='' enable_sshd="0": _ensure-deps
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -291,10 +292,10 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     TARGET_TAG_WITH_VERSION="${TARGET_TAG}:${TARGET_IMAGE_TAG}"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}" "{{ is_ci }}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}" "{{ is_ci }}" "{{ enable_sshd }}"
         ./scripts/sync-build-cache.sh "${TARGET_TAG}" || true
     else
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}" "{{ is_ci }}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}" "{{ is_ci }}" "{{ enable_sshd }}"
     fi
 
     if [[ "$DID_INIT" == "1" ]]; then
