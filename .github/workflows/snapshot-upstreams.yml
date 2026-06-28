@@ -56,8 +56,10 @@ jobs:
 
       - name: Run snapshot sync
         id: sync
+        env:
+          UPSTREAM: ${{ inputs.upstream || 'all' }}
         run: |
-          ./scripts/sync-upstream-snapshots.sh "${{ inputs.upstream || 'all' }}"
+          ./scripts/sync-upstream-snapshots.sh "${UPSTREAM}"
 
       - name: Detect changes
         id: diff

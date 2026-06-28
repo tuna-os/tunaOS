@@ -128,7 +128,7 @@ jobs:
         if: ${{ startsWith(inputs.flavor, 'base') }}
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@v1
+        uses: projectbluefin/actions/bootc-build/setup-runner@b2481faee5bad2f2a25b64d6269b06399a2f44c0 # v1
         with:
           storage-backend: btrfs
           update-podman: "true"
@@ -667,6 +667,7 @@ jobs:
           DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
           MAJOR_VERSION: ${{ env.MAJOR_VERSION }}
           ALL_PLATFORMS_BUILT: ${{ needs.manifest.outputs.all_platforms_built }}
+          INPUT_PLATFORMS: ${{ inputs.platforms }}
         run: |
           set -ex
           SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
@@ -683,7 +684,7 @@ jobs:
             sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${DATE_TAG}"
 
             # Tag each platform with flavor-arch and flavor-arch-date
-            IFS=',' read -r -a PLATFORMS <<< "${{ inputs.platforms }}"
+            IFS=',' read -r -a PLATFORMS <<< "${INPUT_PLATFORMS}"
             for platform in "${PLATFORMS[@]}"; do
               arch="${platform#linux/}"
               arch="${arch//\//-}"
