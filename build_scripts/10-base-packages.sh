@@ -48,6 +48,8 @@ install_base_packages_no_de() {
 			glow \
 			wl-clipboard \
 			gum \
+			wayland-utils \
+			grim \
 			x11-xserver-utils \
 			unzip \
 			powertop

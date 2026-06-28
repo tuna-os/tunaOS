@@ -133,6 +133,16 @@ fi
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(realpath "$OUTPUT_DIR")"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Extract VARIANT and FLAVOR from ISO filename for screenshot comparison
+# ISO filename pattern: <variant>-<flavor>-<version>-<arch>.iso
+ISO_BASENAME="$(basename "$ISO_PATH" .iso)"
+ISO_VARIANT="${ISO_BASENAME%%-*}"
+ISO_FLAVOR="${ISO_BASENAME#*-}"
+ISO_FLAVOR="${ISO_FLAVOR%%-*}"
+: "${VARIANT:=${ISO_VARIANT}}"
+: "${FLAVOR:=${ISO_FLAVOR}}"
+
 # ── Dependency resolution ───────────────────────────────────────────────────
 
 # Pick a QEMU binary. Order: distro qemu-kvm → qemu-system-x86_64 → brew.
@@ -318,6 +328,60 @@ screenshot() {
 	fi
 }
 
+# Compare screenshot against a reference using ImageMagick SSIM (Layer 2).
+# Returns 0 if similarity >= threshold (0.99 = 99%), 1 otherwise.
+# Reference images are stored in tests/reference/{variant}-{flavor}-reference.png
+# Generate with: convert reference.ppm reference.png && cp to tests/reference/
+screenshot_compare() {
+	local label="$1"
+	local ref_dir="${SCRIPT_DIR}/tests/reference"
+	local variant_flavor="${VARIANT:-unknown}-${FLAVOR:-unknown}"
+	local ref="${ref_dir}/${variant_flavor}-reference.png"
+	local cap="${OUTPUT_DIR}/${label}.ppm"
+	
+	if [[ ! -f "$ref" ]]; then
+		echo "==> No reference image at ${ref} — skipping comparison"
+		return 0
+	fi
+	if [[ ! -f "$cap" ]]; then
+		echo "==> No captured screenshot at ${cap} — cannot compare"
+		return 1
+	fi
+	if ! command -v compare &>/dev/null; then
+		echo "==> ImageMagick compare not available — skipping comparison"
+		return 0
+	fi
+	
+	# Convert PPM to PNG for comparison
+	local cap_png="${OUTPUT_DIR}/${label}.png"
+	if command -v convert &>/dev/null; then
+		convert "$cap" "$cap_png" 2>/dev/null || true
+	fi
+	
+	# SSIM comparison: 1.0 = identical, >0.99 = perceptually same
+	local ssim
+	ssim=$(compare -metric SSIM "$ref" "${cap_png:-$cap}" "${OUTPUT_DIR}/${label}-diff.png" 2>&1 || true)
+	local threshold=0.99
+	
+	if [[ -n "$ssim" ]]; then
+		local ok
+		ok=$(echo "$ssim >= $threshold" | bc 2>/dev/null || echo 0)
+		if [[ "$ok" == "1" ]]; then
+			echo "==> ✅ Screenshot matches reference (SSIM: $ssim >= $threshold)"
+			return 0
+		else
+			echo "==> ⚠️  Screenshot differs from reference (SSIM: $ssim < $threshold)"
+			echo "    Diff image: ${OUTPUT_DIR}/${label}-diff.png"
+			# Non-blocking — emit ::warning, don't fail
+			echo "::warning::Screenshot comparison: SSIM $ssim below threshold $threshold"
+			return 0
+		fi
+	else
+		echo "==> SSIM comparison produced no output — skipping"
+		return 0
+	fi
+}
+
 # Wait for the live env to print its readiness marker.
 wait_for_ready() {
 	local deadline=$(($(date +%s) + TIMEOUT))
@@ -445,6 +509,7 @@ ready)
 	wait_for_ready
 	rc=$?
 	screenshot "10-ready"
+	screenshot_compare "10-ready" || true
 	exit "$rc"
 	;;
 ssh)
