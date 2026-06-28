@@ -363,14 +363,76 @@ check_ssh() {
 # Drive an Anaconda kickstart install. We don't (yet) interact with the
 # install — we let it run unattended and watch for completion via serial
 # log markers ("post-installation" / "reboot").
+# Run bootc install-to-disk via SSH, then reboot and verify the installed system.
+# This replaces the Anaconda kickstart approach (TunaOS uses bootc, not anaconda).
 run_kickstart() {
-	echo "==> Kickstart mode not yet implemented in $0"
-	echo "    Stub: would copy ${KICKSTART} to a virtual floppy, append"
-	echo "    inst.ks=hd:fd0 to the kernel cmdline, then watch for"
-	echo "    /var/log/anaconda completion."
-	# Returning 3 signals "kickstart path planned but not implemented" —
-	# CI workflow can gate on this exit code to skip until done.
-	return 3
+	echo "==> Waiting up to 60s for SSH..."
+	for _ in $(seq 1 30); do
+		check_ssh && break
+		sleep 2
+	done
+	check_ssh || { echo "ERROR: SSH not available"; return 5; }
+
+	echo "==> Running bootc install to-disk /dev/vda..."
+	sshpass -p live ssh -o StrictHostKeyChecking=no -p 2222 liveuser@127.0.0.1 \
+		"sudo bootc install to-disk /dev/vda 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
+		rc=$?
+		if [[ $rc -eq 0 ]]; then true; else
+		echo "ERROR: bootc install failed (exit $rc)"
+		return 3
+		fi
+	}
+
+	echo "==> bootc install complete. Shutting down..."
+	sshpass -p live ssh -o StrictHostKeyChecking=no -p 2222 liveuser@127.0.0.1 \
+		"sudo systemctl poweroff" 2>/dev/null || true
+	sleep 10
+
+	# Wait for VM to fully stop
+	if [[ -f "$QEMU_PIDFILE" ]]; then
+		local pid
+		pid=$(cat "$QEMU_PIDFILE" 2>/dev/null || true)
+		if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+			echo "==> Waiting for VM to shut down..."
+			for _ in $(seq 1 30); do
+				kill -0 "$pid" 2>/dev/null || break
+				sleep 2
+			done
+		fi
+	fi
+
+	echo "==> Booting installed system..."
+	# Boot from the install disk (remove cdrom)
+	"$QEMU" \
+		-name "tunaos-iso-e2e-installed" \
+		-machine pc \
+		-cpu "$CPU_ARG" \
+		-accel "$ACCEL" \
+		-m "$MEMORY" \
+		-smp "$CPUS" \
+		-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
+		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
+		-device virtio-blk-pci,drive=disk \
+		-netdev "user,id=net0,hostfwd=tcp::2222-:22" \
+		-device virtio-net-pci,netdev=net0 \
+		-monitor "unix:${MONITOR_SOCK},server,nowait" \
+		-serial "file:${SERIAL_LOG}" \
+		-display none \
+		-pidfile "$QEMU_PIDFILE" \
+		-daemonize
+
+	echo "==> Waiting for installed system to boot (up to 5 min)..."
+	for _ in $(seq 1 60); do
+		if grep -q "Reached target.*Graphical\|Reached target.*Multi-User\|login:" "${SERIAL_LOG}" 2>/dev/null; then
+			echo "==> Installed system booted successfully!"
+			return 0
+		fi
+		sleep 5
+	done
+
+	echo "ERROR: installed system did not boot within timeout"
+	return 4
 }
 
 # ── Main ────────────────────────────────────────────────────────────────────
