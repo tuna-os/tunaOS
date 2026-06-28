@@ -130,8 +130,8 @@ def call_lemonade(image_b64: str, checks: list) -> dict:
     try:
         resp = requests.post(
             "https://lemonade.manatee-basking.ts.net/v1/chat/completions",
-            json={"model": "gpt-4o", "messages": messages, "max_tokens": 1024},
-            timeout=60
+            json={"model": "Gemma-4-31B-it-GGUF", "messages": messages, "max_tokens": 1024},
+            timeout=120
         )
         resp.raise_for_status()
         data = resp.json()
