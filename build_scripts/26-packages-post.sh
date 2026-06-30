@@ -22,7 +22,7 @@ curl --retry 3 --fail -Lo "$DOWNLOADS_DIR/JetBrainsMono.tar.xz" \
 	"https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/JetBrainsMono.tar.xz"
 mkdir -p /usr/share/fonts/JetBrainsMonoNerdFont
 tar -xJf "$DOWNLOADS_DIR/JetBrainsMono.tar.xz" -C /usr/share/fonts/JetBrainsMonoNerdFont
-fc-cache -f /usr/share/fonts/JetBrainsMonoNerdFont
+command -v fc-cache >/dev/null 2>&1 && fc-cache -f /usr/share/fonts/JetBrainsMonoNerdFont || true
 rm "$DOWNLOADS_DIR/JetBrainsMono.tar.xz"
 
 # Add Flathub by default
