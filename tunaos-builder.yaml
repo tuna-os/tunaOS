@@ -23,7 +23,7 @@ provision:
       # Build toolchain
       dnf install -y podman git just golang yq qemu-img createrepo_c \
         bats ShellCheck shfmt neovim tmux htop ripgrep fd-find \
-        cargo python3-pip
+        cargo python3-pip qemu-system-x86 edk2-ovmf socat sshpass
 
       # Persistent /data on the second disk (corral attaches --disk as /dev/vdb)
       if blkid /dev/vdb 2>/dev/null && ! mountpoint -q /data; then
