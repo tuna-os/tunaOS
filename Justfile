@@ -186,7 +186,7 @@ _ensure-deps:
 
 # Private build engine.
 [private]
-_build target_tag_with_version target_tag container_file base_image_for_build target_platform use_cache enable_gdx enable_hwe desktop_flavor *args: _ensure-deps
+_build target_tag_with_version target_tag container_file base_image_for_build target_platform use_cache enable_gdx enable_hwe enable_sshd desktop_flavor *args: _ensure-deps
     #!/usr/bin/env bash
     set -euxo pipefail
 
@@ -208,6 +208,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     BUILD_ARGS+=("--build-arg" "BREW_IMAGE_REF=${brew_image_ref}")
     BUILD_ARGS+=("--build-arg" "ENABLE_HWE={{ enable_hwe }}")
     BUILD_ARGS+=("--build-arg" "ENABLE_NVIDIA={{ enable_gdx }}")
+    BUILD_ARGS+=("--build-arg" "ENABLE_SSHD={{ enable_sshd }}")
     BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR={{ desktop_flavor }}")
 
     AKMODS_ORG=$({{ yq }} -r ".variants[] | select(.id == \"{{ target_tag }}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
@@ -345,7 +346,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     podman rmi "${RECHUNKED_REF}" 2>/dev/null || true
 
 # Build a TunaOS variant
-build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='': _ensure-deps
+build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='' enable_sshd='0': _ensure-deps
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -377,6 +378,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     fi
     ENABLE_HWE="0"
     ENABLE_NVIDIA="0"
+    ENABLE_SSHD="{{ enable_sshd }}"
     PARENT_FLAVOR=""
     FLAVOR="{{ flavor }}"
     DESKTOP_FLAVOR="${FLAVOR}"
@@ -434,10 +436,10 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     TARGET_TAG_WITH_VERSION="${TARGET_TAG}:${TARGET_IMAGE_TAG}"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${ENABLE_SSHD}" "${DESKTOP_FLAVOR}"
         ./scripts/sync-build-cache.sh "${TARGET_TAG}" || true
     else
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${ENABLE_SSHD}" "${DESKTOP_FLAVOR}"
     fi
 
     if [[ "$DID_INIT" == "1" ]]; then
@@ -447,11 +449,15 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
 
 # Build a TunaOS live ISO via tacklebox (no Anaconda, dmsquash-live + sd-boot)
 # Build a live ISO via tacklebox (replaces deprecated bootc-image-builder approach)
-iso variant='skipjack' flavor='gnome' repo='local' tag='':
+iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
     #!/usr/bin/env bash
     set -euo pipefail
     _tag="{{ tag }}"
     [[ -z "$_tag" ]] && _tag="{{ flavor }}"
+    if [[ "{{ dev }}" == "1" ]] && [[ "{{ repo }}" == "local" ]]; then
+        # Dev mode: build with SSH enabled for e2e testing
+        {{ just }} build "{{ variant }}" "{{ flavor }}" "" "0" "$_tag" "" "1"
+    fi
     sudo -E bash ./scripts/build-iso-tacklebox.sh "{{ variant }}" "{{ flavor }}" "{{ repo }}" "$_tag"
 
 # Build ONE combined dedup ISO containing every desktop in an iso_group (#455).

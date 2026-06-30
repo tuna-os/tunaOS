@@ -42,8 +42,17 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 	esac
 
 	# Security default: sshd closed (live ISOs may re-enable for dev).
-	safe_disable sshd.service
-	safe_disable sshd.socket 2>/dev/null || systemctl mask sshd.socket || true
+	if [[ "${ENABLE_SSHD:-0}" == "1" ]]; then
+		apt-get install -y openssh-server
+		safe_enable sshd.service
+		if ! id liveuser &>/dev/null; then
+			useradd -m -s /bin/bash -G sudo liveuser
+		fi
+		echo 'liveuser:live' | chpasswd
+	else
+		safe_disable sshd.service
+		safe_disable sshd.socket 2>/dev/null || systemctl mask sshd.socket || true
+	fi
 
 	# Units that exist on Ubuntu once their packages are installed.
 	safe_enable tailscaled.service
@@ -82,11 +91,19 @@ else
 	echo "Skipping DE-specific display-manager service setup (DESKTOP_FLAVOR='${DESKTOP_FLAVOR}')"
 fi
 # sshd is disabled by default on the installed system. Live ISOs may enable
-# it via the ENABLE_SSHD=1 path in live-iso/common/Containerfile for local
-# dev testing, but production installs default closed.
+# it via the ENABLE_SSHD=1 build arg for local dev testing, but production
+# installs default closed.
 # (Aligned with zirconium-dev/zirconium dd9f2789 — Disable sshd by default.)
-safe_disable sshd.service
-safe_disable sshd.socket 2>/dev/null || systemctl mask sshd.socket || true
+if [[ "${ENABLE_SSHD:-0}" == "1" ]]; then
+	safe_enable sshd.service
+	if ! id liveuser &>/dev/null; then
+		useradd -m -s /bin/bash -G wheel liveuser
+	fi
+	echo 'liveuser:live' | chpasswd
+else
+	safe_disable sshd.service
+	safe_disable sshd.socket 2>/dev/null || systemctl mask sshd.socket || true
+fi
 
 safe_enable fwupd.service
 safe_enable rpm-ostree-countme.service
