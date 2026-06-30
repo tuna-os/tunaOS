@@ -1,0 +1,56 @@
+# TunaOS builder VM — works with lima (local) and corral (cluster).
+#
+#   lima:   limactl start --name=hyderabad ./tunaos-builder.yaml
+#   corral: corral create hyderabad -f ./tunaos-builder.yaml
+#
+# Lima uses the full file; corral extracts images, cpus, memory, disk,
+# and converts provision scripts to cloud-init runcmd.
+
+images:
+  - location: quay.io/containerdisks/fedora:44
+    arch: x86_64
+
+cpus: 8
+memory: 16GiB
+disk: 60GiB
+
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -euxo pipefail
+
+      # Build toolchain
+      dnf install -y podman git just golang yq qemu-img createrepo_c \
+        bats ShellCheck shfmt neovim tmux htop ripgrep fd-find \
+        cargo python3-pip
+
+      # Persistent /data on the second disk (corral attaches --disk as /dev/vdb)
+      if blkid /dev/vdb 2>/dev/null && ! mountpoint -q /data; then
+        mkdir -p /data
+        mount /dev/vdb /data
+        echo "/dev/vdb /data ext4 defaults 0 0" >> /etc/fstab
+      fi
+
+      # Format if unformatted
+      if ! blkid /dev/vdb >/dev/null 2>&1; then
+        mkfs.ext4 -F /dev/vdb
+        mkdir -p /data
+        mount /dev/vdb /data
+        echo "/dev/vdb /data ext4 defaults 0 0" >> /etc/fstab
+      fi
+
+      chown -R fedora:fedora /data 2>/dev/null || chown -R $(whoami):$(whoami) /data 2>/dev/null || true
+
+      # Move container storage to persistent disk
+      mkdir -p /data/containers
+      if ! mountpoint -q /var/lib/containers 2>/dev/null; then
+        mkdir -p /var/lib/containers
+        mount --bind /data/containers /var/lib/containers
+        echo "/data/containers /var/lib/containers none defaults,bind 0 0" >> /etc/fstab
+      fi
+
+      # Clone repos (idempotent)
+      test -d /data/tunaos/.git   || git -C /data clone https://github.com/tuna-os/tunaos.git
+      test -d /data/corral/.git   || git -C /data clone https://github.com/tuna-os/corral.git
+      chown -R fedora:fedora /data 2>/dev/null || true
