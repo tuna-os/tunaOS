@@ -41,6 +41,9 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 		*) echo "No display manager for DESKTOP_FLAVOR='${DESKTOP_FLAVOR}'" ;;
 	esac
 
+	# Live readiness marker for e2e testing
+	safe_enable tunaos-live-ready.service
+
 	# Security default: sshd closed (live ISOs may re-enable for dev).
 	if [[ "${ENABLE_SSHD:-0}" == "1" ]]; then
 		apt-get install -y openssh-server
@@ -90,6 +93,10 @@ elif [[ "${DESKTOP_FLAVOR}" == "gnome" || "${DESKTOP_FLAVOR}" == "gnome50" ]]; t
 else
 	echo "Skipping DE-specific display-manager service setup (DESKTOP_FLAVOR='${DESKTOP_FLAVOR}')"
 fi
+# Live readiness marker — safe to enable everywhere (oneshot log line)
+# The e2e harness polls the QEMU serial console for TUNAOS_LIVE_READY.
+safe_enable tunaos-live-ready.service
+
 # sshd is disabled by default on the installed system. Live ISOs may enable
 # it via the ENABLE_SSHD=1 build arg for local dev testing, but production
 # installs default closed.
