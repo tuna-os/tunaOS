@@ -31,12 +31,12 @@ curl --retry 3 --fail -o /etc/flatpak/remotes.d/flathub.flatpakrepo "https://dl.
 
 # Generate initramfs image after installing Yellowfin branding because of Plymouth subpackage
 # Set TunaOS Plymouth theme before rebuilding initramfs so dracut picks it up
-plymouth-set-default-theme tunaos
+command -v plymouth-set-default-theme >/dev/null 2>&1 && plymouth-set-default-theme tunaos || true
 
 # Add resume module so that hibernation works
-echo "add_dracutmodules+=\" resume \"" >/etc/dracut.conf.d/resume.conf
+echo "add_dracutmodules+=\" resume \"" >/etc/dracut.conf.d/resume.conf 2>/dev/null || true
 # Omit optional modules that aren't available in container builds
-echo "omit_dracutmodules+=\" pcsc bluetooth pcmcia syslog \"" >/etc/dracut.conf.d/omit-optional.conf
+echo "omit_dracutmodules+=\" pcsc bluetooth pcmcia syslog \"" >/etc/dracut.conf.d/omit-optional.conf 2>/dev/null || true
 
 # Update kernel module dependencies
 depmod -a "$(find /lib/modules/ -maxdepth 1 -mindepth 1 -type d -printf '%f\n' | sort | tail -1)"
