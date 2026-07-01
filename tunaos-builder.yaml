@@ -58,6 +58,11 @@ provision:
       mkdir -p ~/.local/share
       rm -rf ~/.local/share/containers
       ln -sfn /data/containers/rootless ~/.local/share/containers
+      # Rootless podman storage for fedora user
+      mkdir -p /home/fedora/.local/share
+      rm -rf /home/fedora/.local/share/containers
+      ln -sfn /data/containers/rootless /home/fedora/.local/share/containers
+      chown -R fedora:fedora /home/fedora/.local
       # Root podman storage (used by sudo just iso)
       sudo mkdir -p /var/lib
       sudo rm -rf /var/lib/containers
