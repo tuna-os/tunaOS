@@ -190,6 +190,7 @@ install_base_packages_no_de() {
 			plymouth \
 			plymouth-system-theme \
 			plymouth-plugin-script \
+			dracut-live \
 			xdg-desktop-portal \
 			systemd-oomd-defaults \
 			unzip
@@ -213,6 +214,7 @@ install_base_packages_no_de() {
 			plymouth \
 			plymouth-system-theme \
 			plymouth-plugin-script \
+			dracut-live \
 			libcamera-v4l2 \
 			libcamera-gstreamer \
 			libcamera-tools \
