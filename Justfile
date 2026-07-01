@@ -298,9 +298,13 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     # Use a clean temp dir to avoid SELinux relabeling issues with existing files in PWD
     CHUNK_OUT=$(mktemp -d)
     # Pass 2: Run chunkah externally against the built image
+    # --network host: chunkah needs no networking (reads from mounted image,
+    # writes to mounted output dir). Avoids podman userspace-network-NS
+    # (pasta) which fails inside nested VMs (KubeVirt) that lack user
+    # namespace pivot_root capability.
     podman run --rm \
         --security-opt label=disable \
-        --dns=8.8.8.8 \
+        --network host \
         --entrypoint="" \
         -v "${CHUNK_OUT}:/run/out:Z" \
         --mount "type=image,source=${PRE_CHUNK_TAG},target=/chunkah" \
