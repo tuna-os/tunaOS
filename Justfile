@@ -3,6 +3,7 @@ export default_tag := env("DEFAULT_TAG", "latest")
 export common_image := env("COMMON_IMAGE", "ghcr.io/projectbluefin/common")
 export brew_image := env("BREW_IMAGE", "ghcr.io/ublue-os/brew")
 export coreos_stable_version := env("COREOS_STABLE_VERSION", "43")
+export enable_sshd_var := env("ENABLE_SSHD", "0")
 just := just_executable()
 arch := arch()
 yq := `which yq`
@@ -382,7 +383,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     fi
     ENABLE_HWE="0"
     ENABLE_NVIDIA="0"
-    ENABLE_SSHD="{{ env("ENABLE_SSHD", "0") }}"
+    ENABLE_SSHD="{{ enable_sshd_var }}"
     PARENT_FLAVOR=""
     FLAVOR="{{ flavor }}"
     DESKTOP_FLAVOR="${FLAVOR}"
