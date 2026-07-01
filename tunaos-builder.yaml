@@ -53,12 +53,15 @@ provision:
       done
 
       # Move container storage to persistent disk
-      mkdir -p /data/containers
-      if ! mountpoint -q /var/lib/containers 2>/dev/null; then
-        mkdir -p /var/lib/containers
-        mount --bind /data/containers /var/lib/containers
-        echo "/data/containers /var/lib/containers none defaults,bind 0 0" >> /etc/fstab
-      fi
+      mkdir -p /data/containers/rootless /data/containers/root
+      # Rootless podman storage (the default)
+      rm -rf ~/.local/share/containers
+      mkdir -p /data/containers/rootless
+      ln -sfn /data/containers/rootless ~/.local/share/containers
+      # Root podman storage (used by sudo just iso)
+      sudo rm -rf /var/lib/containers
+      sudo mkdir -p /data/containers/root
+      sudo ln -sfn /data/containers/root /var/lib/containers
 
       # Clone repos (idempotent)
       test -d /data/tunaos/.git   || git -C /data clone https://github.com/tuna-os/tunaos.git
