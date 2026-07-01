@@ -33,8 +33,8 @@ curl --retry 3 --fail -o /etc/flatpak/remotes.d/flathub.flatpakrepo "https://dl.
 # Set TunaOS Plymouth theme before rebuilding initramfs so dracut picks it up
 command -v plymouth-set-default-theme >/dev/null 2>&1 && plymouth-set-default-theme tunaos || true
 
-# Add resume module so that hibernation works
-echo "add_dracutmodules+=\" resume \"" >/etc/dracut.conf.d/resume.conf 2>/dev/null || true
+# Add resume and dmsquash-live modules so that hibernation and live boot works
+echo "add_dracutmodules+=\" resume dmsquash-live \"" >/etc/dracut.conf.d/resume.conf 2>/dev/null || true
 # Omit optional modules that aren't available in container builds
 echo "omit_dracutmodules+=\" pcsc bluetooth pcmcia syslog \"" >/etc/dracut.conf.d/omit-optional.conf 2>/dev/null || true
 
