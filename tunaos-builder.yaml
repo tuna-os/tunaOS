@@ -12,7 +12,7 @@ images:
 
 cpus: 8
 memory: 16GiB
-disk: 60GiB
+disk: 150GiB
 
 provision:
   - mode: system
@@ -43,8 +43,8 @@ provision:
       chown -R fedora:fedora /data 2>/dev/null || chown -R $(whoami):$(whoami) /data 2>/dev/null || true
 
       # Redirect tmpdirs to persistent disk (ephemeral root is only 5GB)
-      mkdir -p /data/tmp /data/var-tmp
-      chmod 1777 /data/tmp /data/var-tmp
+      mkdir -p /data/tmp /data/var/tmp
+      chmod 1777 /data/tmp /data/var/tmp
       for d in /tmp /var/tmp; do
         if ! mountpoint -q $d 2>/dev/null; then
           mount --bind /data$d $d
@@ -55,12 +55,12 @@ provision:
       # Move container storage to persistent disk
       mkdir -p /data/containers/rootless /data/containers/root
       # Rootless podman storage (the default)
+      mkdir -p ~/.local/share
       rm -rf ~/.local/share/containers
-      mkdir -p /data/containers/rootless
       ln -sfn /data/containers/rootless ~/.local/share/containers
       # Root podman storage (used by sudo just iso)
+      sudo mkdir -p /var/lib
       sudo rm -rf /var/lib/containers
-      sudo mkdir -p /data/containers/root
       sudo ln -sfn /data/containers/root /var/lib/containers
 
       # Clone repos (idempotent)

@@ -331,7 +331,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     podman system prune -af 2>/dev/null || true
 
     RECHUNKED_REF="localhost/{{ target_tag_with_version }}-rechunked-$$"
-    LOADED_ID=$(podman load --input out.ociarchive | awk '/Loaded image/{print $NF}')
+    LOADED_ID=$(TMPDIR=${TMPDIR:-/tmp} podman load --input out.ociarchive | awk '/Loaded image/{print $NF}')
     rm -f out.ociarchive  # free disk immediately after load; don't hold archive while build runs
     if [[ -z "${LOADED_ID}" ]]; then
         echo "ERROR: podman load produced no image ID; the OCI archive may be corrupt or disk full" >&2

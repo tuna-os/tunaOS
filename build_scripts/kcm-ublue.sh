@@ -99,7 +99,7 @@ KRUNNER_URL="https://github.com/bazaar-org/krunner-bazaar/releases/download/${KR
 # krunner-bazaar only publishes x86_64 RPMs; skip on other arches
 if curl -fsSLI "$KRUNNER_URL" >/dev/null 2>&1; then
     curl -fsSLo "/tmp/${KRUNNER_RPM}" "$KRUNNER_URL"
-    dnf_retry -y install "/tmp/${KRUNNER_RPM}"
+    dnf_retry -y install "/tmp/${KRUNNER_RPM}" || echo "Warning: krunner-bazaar installation failed (likely missing bazaar package in EPEL), skipping."
     rm -f "/tmp/${KRUNNER_RPM}"
     echo "krunner-bazaar ${KRUNNER_BAZAAR_VERSION} installed."
 else
