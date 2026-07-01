@@ -382,7 +382,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     fi
     ENABLE_HWE="0"
     ENABLE_NVIDIA="0"
-    ENABLE_SSHD="{{ enable_sshd }}"
+    ENABLE_SSHD="${ENABLE_SSHD:-{{ enable_sshd }}}"
     PARENT_FLAVOR=""
     FLAVOR="{{ flavor }}"
     DESKTOP_FLAVOR="${FLAVOR}"
