@@ -208,7 +208,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     BUILD_ARGS+=("--build-arg" "BREW_IMAGE_REF=${brew_image_ref}")
     BUILD_ARGS+=("--build-arg" "ENABLE_HWE={{ enable_hwe }}")
     BUILD_ARGS+=("--build-arg" "ENABLE_NVIDIA={{ enable_gdx }}")
-    BUILD_ARGS+=("--build-arg" "ENABLE_SSHD=${ENABLE_SSHD:-{{ enable_sshd }}}")
+    BUILD_ARGS+=("--build-arg" "ENABLE_SSHD={{ enable_sshd }}")
     BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR={{ desktop_flavor }}")
 
     AKMODS_ORG=$({{ yq }} -r ".variants[] | select(.id == \"{{ target_tag }}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
