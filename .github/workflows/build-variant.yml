@@ -87,11 +87,12 @@ jobs:
         env:
           FILTER_VARIANT: ${{ inputs.variant || 'all' }}
           FILTER_FLAVOR: ${{ inputs.flavor || 'all' }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           # Flatten config into one entry per {variant, flavor}, applying filters.
           # All inputs are in env vars — no direct interpolation of ${{ inputs.* }}
           # into the script body to prevent shell injection.
-          FULL_MATRIX=$(yq -o=json '.' .github/build-config.yml | jq -c --arg event "${{ github.event_name }}" '
+          FULL_MATRIX=$(yq -o=json '.' .github/build-config.yml | jq -c --arg event "$EVENT_NAME" '
             .variants[]
             | select(env.FILTER_VARIANT == "all" or .id == env.FILTER_VARIANT)
             | . as $v
