@@ -1,0 +1,49 @@
+{
+  "log_file": "/var/log/tunaos-installer.log",
+  "distro_name": "TunaOS",
+  "welcome_title": "Welcome to TunaOS",
+  "distro_logo": "resource:///org/bootcinstaller/Installer/images/tunaos.png",
+  "imgref": "ghcr.io/tuna-os/tunaos:latest",
+  "local_imgref": "containers-storage:ghcr.io/tuna-os/tunaos:latest",
+  "bootloader": "systemd",
+  "composeFsBackend": true,
+  "filesystem": "xfs",
+  "tour": {
+    "welcome": {
+      "image": "/run/host/usr/share/bootc-installer/images/tunaos-install.png",
+      "title": "Welcome to TunaOS",
+      "description": "TunaOS is an immutable, container-native Linux operating system built for enterprise workstations and developers."
+    },
+    "features": {
+      "image": "/run/host/usr/share/bootc-installer/images/tunaos-install.png",
+      "title": "Container-Native Workflow",
+      "description": "Utilize atomic updates, bootc containers, and transactional layers to keep your system safe and predictable."
+    },
+    "community": {
+      "image": "/run/host/usr/share/bootc-installer/images/tunaos-install.png",
+      "title": "Need Help?",
+      "description": "Find resources, documentation, and the issue tracker at repo.tunaos.org."
+    },
+    "completed": {
+      "image": "/run/host/usr/share/bootc-installer/images/tunaos-install.png",
+      "title": "Installation Finished",
+      "description": "Reboot your machine to enter your new TunaOS workstation environment!"
+    }
+  },
+  "steps": {
+    "welcome": {
+      "template": "welcome",
+      "protected": true
+    },
+    "image": {
+      "template": "image",
+      "protected": true
+    },
+    "disk": {
+      "template": "disk"
+    },
+    "encryption": {
+      "template": "encryption"
+    }
+  }
+}
