@@ -23,6 +23,10 @@ BASE_VARIANT="${BASE_VARIANT%-hwe}"
 BASE_VARIANT="${BASE_VARIANT%-kde}"
 BASE_VARIANT="${BASE_VARIANT%-dx}"
 
+if [[ "$BASE_VARIANT" == "grouper" ]]; then
+	exit 0
+fi
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CACHE_BASE="${REPO_ROOT}/.rpm-cache/shared"
 CACHE_VARIANT="${REPO_ROOT}/.rpm-cache/${BASE_VARIANT}"
