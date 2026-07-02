@@ -13,7 +13,7 @@ set -euo pipefail
 tee /usr/share/glib-2.0/schemas/zz2-tunaos-installer.gschema.override <<'EOF'
 [org.gnome.shell]
 welcome-dialog-last-shown-version='4294967295'
-favorite-apps = ['org.tunaos.FirstSetup.desktop', 'firefox.desktop', 'org.gnome.Nautilus.desktop']
+favorite-apps = ['bootc-installer.desktop', 'firefox.desktop', 'org.gnome.Nautilus.desktop']
 EOF
 
 # Disable suspend/sleep so the installer doesn't go to sleep mid-install
