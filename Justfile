@@ -284,7 +284,11 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     fi
 
     if [[ -n "${PARENT_FLAVOR}" ]]; then
-        if [[ "{{ is_ci }}" = "1" ]]; then BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:${PARENT_FLAVOR}"; else
+        # CI chains on the -testing stream tag: it is pushed by the manifest
+        # job of the parent's build in THIS run, before the parent's boot
+        # gate promotes the bare tag. Chaining on the bare tag would build
+        # stage-3 images against last week's parent.
+        if [[ "{{ is_ci }}" = "1" ]]; then BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:${PARENT_FLAVOR}-testing"; else
             BASE_FOR_BUILD="localhost/{{ variant }}:${PARENT_FLAVOR}"; fi
     fi
 
@@ -354,9 +358,17 @@ qcow2 variant flavor='gnome' repo='local' tag='':
 
     # Ensure root podman storage has the LATEST version of this image.
     # (bootc install to-disk runs as root and reads from root storage)
+    # Skip the expensive save|load when root storage already has it — e.g.
+    # CI builds run under sudo so the image never touches user storage.
     if [[ "${IMG_REF}" == localhost/* ]] || [[ "${IMG_REF}" == *"/"* && "${IMG_REF}" != ghcr* ]]; then
-        echo "==> Syncing $IMG_REF into root podman storage..."
-        podman save "$IMG_REF" | sudo podman load
+        if sudo podman image exists "$IMG_REF"; then
+            echo "==> $IMG_REF already in root podman storage; skipping sync"
+        elif podman image exists "$IMG_REF"; then
+            echo "==> Syncing $IMG_REF into root podman storage..."
+            podman save "$IMG_REF" | sudo podman load
+        else
+            echo "==> $IMG_REF not in local storage; bootc will pull it"
+        fi
     fi
 
     # Create a sparse raw disk file (40 GiB)
@@ -650,6 +662,13 @@ verify variant flavor='gnome':
     #!/usr/bin/env bash
     set -euo pipefail
     ./scripts/verify-image.sh "{{ variant }}" "{{ flavor }}"
+
+# Boot-verify a qcow2/raw disk image with the same QEMU gate CI uses
+# (serial boot marker or screenshot sanity; no Lima required)
+verify-disk disk_image timeout='600':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sudo ./scripts/iso-e2e.sh "{{ disk_image }}" --disk --output verify-out --timeout "{{ timeout }}"
 
 # Verify an ISO using Lima
 verify-iso iso_file:

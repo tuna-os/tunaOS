@@ -17,6 +17,7 @@ on:
           - albacore
           - skipjack
           - bonito
+          - grouper
       flavor:
         description: 'Flavor to build (all = build everything with build_iso: true)'
         required: false
@@ -29,6 +30,7 @@ on:
           - kde
           - cosmic
           - niri
+          - xfce
       skip_upload:
         description: 'Build ISOs but skip uploading to R2 (dry run / testing)'
         required: false
@@ -75,86 +77,23 @@ jobs:
     name: ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate-matrix
     if: ${{ needs.generate-matrix.outputs.count != '0' }}
-    runs-on: ubuntu-24.04
-    permissions:
-      contents: write
-      packages: read
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          submodules: recursive
-
-      - uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y just podman jq rclone golang-go git
-          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
-
-      - name: Log in to GHCR
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
-
-      - name: Build Live ISO (from published GHCR image)
-        env:
-          GITHUB_REPOSITORY_OWNER: tuna-os
-        run: |
-          sudo GITHUB_REPOSITORY_OWNER=tuna-os \
-            just iso "${{ matrix.variant }}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
-
-      - name: Upload ISO to Cloudflare R2
-        if: ${{ inputs.skip_upload != true }}
-        env:
-          RCLONE_CONFIG_R2_TYPE: s3
-          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
-          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          RCLONE_CONFIG_R2_REGION: auto
-          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-        run: |
-          ISO=$(find . -maxdepth 1 -name "${{ matrix.variant }}-${{ matrix.flavor }}-*.iso" | head -1)
-          if [[ -z "$ISO" ]]; then
-            echo "ERROR: No ISO found for ${{ matrix.variant }}-${{ matrix.flavor }}"
-            exit 1
-          fi
-          echo "==> Uploading $ISO to R2..."
-          rclone copy --log-level INFO --checksum --s3-no-check-bucket \
-            "$ISO" R2:${{ secrets.R2_BUCKET }}/live-isos/
-          echo "==> Upload complete: $(basename "$ISO")"
-          LATEST="${{ matrix.variant }}-${{ matrix.flavor }}-latest.iso"
-          rclone copyto --log-level INFO --s3-no-check-bucket \
-            "$ISO" "R2:${{ secrets.R2_BUCKET }}/live-isos/${LATEST}"
-          echo "==> Latest link updated."
-
-      - name: Upload ISO as artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: ${{ matrix.variant }}-${{ matrix.flavor }}-iso
-          path: "*.iso"
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Attach ISO to GitHub Release
-        if: ${{ inputs.skip_upload != true }}
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          DATE=$(date +%Y%m%d)
-          TAG="${{ matrix.flavor }}-${DATE}"
-          ISO=$(find . -maxdepth 1 -name "${{ matrix.variant }}-${{ matrix.flavor }}-*.iso" | head -1)
-          if [[ -z "$ISO" ]]; then
-            echo "No ISO found to attach"
-            exit 0
-          fi
-          # Create or update the release
-          if ! gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" &>/dev/null; then
-            gh release create "$TAG" \
-              --repo "${GITHUB_REPOSITORY}" \
-              --title "TunaOS ${{ matrix.flavor }} (${DATE})" \
-              --notes "Live ISO for ${{ matrix.variant }}:${{ matrix.flavor }}. Built from ghcr.io/tuna-os/${{ matrix.variant }}:${{ matrix.flavor }}."
-          fi
-          gh release upload "$TAG" --repo "${GITHUB_REPOSITORY}" "$ISO" --clobber
-          echo "==> Attached $(basename "$ISO") to release $TAG"
+    permissions:
+      contents: write
+      packages: read
+    # Builds the ISO from the promoted :<flavor> image, boot-gates it in
+    # QEMU, and only publishes (R2 + GitHub Release) if the gate passes.
+    uses: ./.github/workflows/reusable-build-artifacts.yml
+    with:
+      variant: ${{ matrix.variant }}
+      flavor: ${{ matrix.flavor }}
+      image-tag: ${{ matrix.flavor }}
+      upload-r2: ${{ inputs.skip_upload != true }}
+      attach-release: ${{ inputs.skip_upload != true }}
+    secrets:
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}

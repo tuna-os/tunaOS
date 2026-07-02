@@ -1,0 +1,193 @@
+name: Artifacts
+# Reusable ISO build + boot gate + publish for one {variant, flavor} cell.
+#
+# Ordering is the gate: the ISO is built, boot-verified in QEMU
+# (scripts/iso-e2e.sh — serial marker with screenshot-sanity fallback), and
+# only THEN uploaded to R2. A failed boot check fails the job and nothing is
+# published; the ISO and e2e evidence are still uploaded as workflow
+# artifacts for debugging.
+on:
+  workflow_call:
+    inputs:
+      variant:
+        description: "Variant (yellowfin, albacore, skipjack, bonito, grouper)"
+        required: true
+        type: string
+      flavor:
+        description: "Flavor (gnome, kde, niri, xfce, gnome-nvidia, ...)"
+        required: true
+        type: string
+      image-tag:
+        description: "GHCR tag to build the ISO from (defaults to <flavor>-linux-amd64)"
+        required: false
+        type: string
+        default: ""
+      build-iso:
+        description: "Build (and gate + publish) the live ISO"
+        required: false
+        type: boolean
+        default: true
+      upload-r2:
+        description: "Publish the ISO to Cloudflare R2 after the boot gate passes"
+        required: false
+        type: boolean
+        default: true
+      attach-release:
+        description: "Attach the ISO to a <flavor>-<date> GitHub Release after the boot gate passes"
+        required: false
+        type: boolean
+        default: false
+    secrets:
+      R2_ACCESS_KEY_ID:
+        required: false
+      R2_SECRET_ACCESS_KEY:
+        required: false
+      R2_ENDPOINT:
+        required: false
+      R2_BUCKET:
+        required: false
+
+jobs:
+  iso:
+    name: "ISO ${{ inputs.variant }}:${{ inputs.flavor }}"
+    if: inputs.build-iso
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    # No explicit permissions: inherit the caller's grant. publish-isos.yml
+    # grants contents:write (release attach); build-variant.yml grants only
+    # read (attach-release is false there). A called workflow cannot request
+    # more than its caller grants, so declaring write here would break the
+    # build-variant callers.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Maximize build space
+        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
+
+      - name: Setup rootless podman (subuid/subgid for runner)
+        run: |
+          # tacklebox uses 'sudo -u runner podman unshare' for squashfs.
+          # podman unshare needs subuid/subgid entries for the unprivileged user.
+          if ! grep -q "^${USER}:" /etc/subuid 2>/dev/null; then
+            echo "${USER}:100000:65536" | sudo tee -a /etc/subuid
+          fi
+          if ! grep -q "^${USER}:" /etc/subgid 2>/dev/null; then
+            echo "${USER}:100000:65536" | sudo tee -a /etc/subgid
+          fi
+
+      - name: Build Live ISO
+        env:
+          VARIANT: ${{ inputs.variant }}
+          FLAVOR: ${{ inputs.flavor }}
+          IMAGE_TAG: ${{ inputs.image-tag }}
+        run: |
+          export TACKLEBOX_FROM_SOURCE=1
+          TAG="${IMAGE_TAG:-${FLAVOR}-linux-amd64}"
+          sudo -E bash ./scripts/build-iso-tacklebox.sh \
+            "${VARIANT}" "${FLAVOR}" ghcr "${TAG}"
+
+      - name: Upload ISO Artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: iso-${{ inputs.variant }}-${{ inputs.flavor }}
+          path: "*.iso"
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Install QEMU for boot verification
+        run: |
+          sudo apt-get install -y qemu-system-x86 ovmf socat imagemagick qemu-utils sshpass python3-pip
+          pip3 install --break-system-packages Pillow requests 2>/dev/null || pip3 install Pillow requests --user
+
+      - name: "Boot gate: verify ISO readiness"
+        id: e2e
+        timeout-minutes: 25
+        env:
+          VARIANT: ${{ inputs.variant }}
+          FLAVOR: ${{ inputs.flavor }}
+        run: |
+          ISO=$(find . -maxdepth 1 -name "*.iso" | head -1)
+          echo "==> Running iso-e2e boot gate on $ISO"
+          mkdir -p iso-e2e-out
+          # Blocking: readiness marker OR screenshot-sanity fallback must
+          # pass (iso-e2e.sh handles the serial-console-less kernels).
+          sudo --preserve-env \
+            ./scripts/iso-e2e.sh "$ISO" \
+              --output iso-e2e-out \
+              --timeout 900
+
+      - name: Collect e2e evidence
+        if: always()
+        run: |
+          sudo chown -R "$USER:$(id -gn)" iso-e2e-out 2>/dev/null || true
+          for ppm in iso-e2e-out/*.ppm; do
+            [[ -f "$ppm" ]] || continue
+            convert "$ppm" "${ppm%.ppm}.png" || true
+          done
+
+      - name: Upload e2e artifacts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: e2e-${{ inputs.variant }}-${{ inputs.flavor }}
+          path: |
+            iso-e2e-out/serial.log
+            iso-e2e-out/*.png
+          if-no-files-found: warn
+          retention-days: 7
+
+      # Publish only runs if the boot gate above passed.
+      - name: Upload ISO to Cloudflare R2
+        if: inputs.upload-r2
+        env:
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+          VARIANT: ${{ inputs.variant }}
+          FLAVOR: ${{ inputs.flavor }}
+        run: |
+          if [[ -z "${R2_BUCKET}" ]]; then
+            echo "R2 secrets not configured — skipping publish"
+            exit 0
+          fi
+          ISO=$(find . -maxdepth 1 -name "*.iso" | head -1)
+          echo "==> Uploading $ISO to R2..."
+          rclone copy --log-level INFO --checksum --s3-no-check-bucket \
+            "$ISO" "R2:${R2_BUCKET}/live-isos/"
+          LATEST="${VARIANT}-${FLAVOR}-latest.iso"
+          rclone copyto --log-level INFO --s3-no-check-bucket \
+            "$ISO" "R2:${R2_BUCKET}/live-isos/${LATEST}"
+          echo "==> Published $(basename "$ISO") and ${LATEST}"
+
+      - name: Attach ISO to GitHub Release
+        if: inputs.attach-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VARIANT: ${{ inputs.variant }}
+          FLAVOR: ${{ inputs.flavor }}
+        run: |
+          DATE=$(date +%Y%m%d)
+          TAG="${FLAVOR}-${DATE}"
+          ISO=$(find . -maxdepth 1 -name "*.iso" | head -1)
+          if [[ -z "$ISO" ]]; then
+            echo "No ISO found to attach"
+            exit 0
+          fi
+          if ! gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" &>/dev/null; then
+            gh release create "$TAG" \
+              --repo "${GITHUB_REPOSITORY}" \
+              --title "TunaOS ${FLAVOR} (${DATE})" \
+              --notes "Live ISO for ${VARIANT}:${FLAVOR}. Built from ghcr.io/tuna-os/${VARIANT}:${FLAVOR}."
+          fi
+          gh release upload "$TAG" --repo "${GITHUB_REPOSITORY}" "$ISO" --clobber
+          echo "==> Attached $(basename "$ISO") to release $TAG"

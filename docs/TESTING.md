@@ -2,6 +2,35 @@
 
 TunaOS uses a QEMU-based end-to-end test harness to verify ISO images boot correctly and reach the live desktop environment.
 
+## Publish Gating
+
+Nothing user-facing is published without a boot check. The pipeline follows
+Bluefin's testing→stable promotion model:
+
+| Artifact | Gate | Where |
+|---|---|---|
+| GHCR image `:<flavor>` | Manifest is pushed as `:<flavor>-testing`; a **boot gate** (`verify_boot` job) installs it to a qcow2 with bootc, boots it in QEMU (`scripts/iso-e2e.sh --disk`), and only then the promote job writes `:<flavor>`, `:<flavor>-YYYYMMDD`, and per-arch tags. `base*` flavors skip the boot gate (no desktop) and promote after manifest. | `reusable-build-image.yml` |
+| ISOs on R2 / GitHub Releases | ISO is built, boot-verified in QEMU (`scripts/iso-e2e.sh`, readiness marker **or** screenshot-sanity fallback), and only uploaded if the gate passes. | `reusable-build-artifacts.yml`, `publish-iso-groups.yml` |
+| PRs | Build + QEMU boot verification of the locally built image (amd64). | `reusable-build-image.yml` |
+
+The screenshot-sanity fallback exists because the EL10 bootc kernels ship
+`CONFIG_SERIAL_8250=m`, so readiness markers often never reach the serial
+console; a rendered (non-blank) framebuffer captured via `-vga virtio`
+counts as booted, a black/absent one fails the gate.
+
+Run the same gates locally:
+
+```bash
+just verify-disk yellowfin.qcow2      # boot-gate a disk image
+./scripts/iso-e2e.sh some.iso         # boot-gate an ISO
+```
+
+Automated screenshots: `weekly-desktop-screenshots.yml` commits real desktop
+captures for every variant × DE to `docs/images/desktops/`, and
+`installer-screenshots.yml` drives the GUI installer and commits the flow
+captures to `docs/images/installer/` (then boot-verifies the disk the
+walkthrough installed).
+
 ## ISO End-to-End Tests
 
 The `scripts/iso-e2e.sh` script boots a TunaOS live ISO in QEMU with OVMF (UEFI), waits for the live environment to be ready, captures screenshots, and collects serial logs.

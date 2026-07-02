@@ -128,7 +128,7 @@ jobs:
         if: ${{ startsWith(inputs.flavor, 'base') }}
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@b2481faee5bad2f2a25b64d6269b06399a2f44c0 # v1
+        uses: projectbluefin/actions/bootc-build/setup-runner@d8f871c0ca7a868339d3c175200a7319492473c7 # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
           update-podman: "true"
@@ -194,8 +194,28 @@ jobs:
         run: |
           set -x
           just=$(which just)
+          build_start=$(date +%s)
           # just build now handles two-pass chunking internally by default
           sudo "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}"
+          echo "BUILD_SECONDS=$(( $(date +%s) - build_start ))" >> "$GITHUB_ENV"
+
+      - name: Build telemetry
+        if: always()
+        env:
+          IMAGE_VARIANT: ${{ inputs.image-variant }}
+          DEFAULT_TAG: ${{ inputs.default-tag }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
+          SIZE=$(sudo podman image inspect --format '{{.Size}}' "$IMAGE" 2>/dev/null || echo 0)
+          LAYERS=$(sudo podman image inspect --format '{{len .RootFS.Layers}}' "$IMAGE" 2>/dev/null || echo 0)
+          {
+            echo "### 📊 Build telemetry — ${IMAGE_NAME}:${DEFAULT_TAG} (${PLATFORM})"
+            echo ""
+            echo "| build time | image size | layers |"
+            echo "|---|---|---|"
+            echo "| ${BUILD_SECONDS:-?}s | $(numfmt --to=iec "${SIZE}" 2>/dev/null || echo "${SIZE}") | ${LAYERS} |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Fix buildah cache permissions
         if: always()
@@ -209,21 +229,41 @@ jobs:
           path: /var/tmp/buildah-cache-0
           key: buildah-${{ runner.os }}-${{ runner.arch }}-${{ inputs.image-variant }}-${{ inputs.flavor }}
 
-      - name: Verify Image in VM
+      - name: Enable KVM for verification
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
-        uses: ./.github/actions/setup-lima
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+          sudo apt-get install -y qemu-system-x86 qemu-utils ovmf socat imagemagick
 
-      - name: Run Verification
+      - name: Boot-verify image (PR gate)
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
         shell: bash
         env:
           IMAGE_VARIANT: ${{ inputs.image-variant }}
-          FLAVOR: ${{ inputs.flavor }}
+          DEFAULT_TAG: ${{ inputs.default-tag }}
         run: |
-          # Build qcow2 locally for verification
-          just qcow2 "${IMAGE_VARIANT}" "${FLAVOR}"
-          # Run the verify recipe
-          just verify "${IMAGE_VARIANT}" "${FLAVOR}"
+          # The image was built under sudo, so it lives in root podman
+          # storage; just qcow2 detects that and skips the save/load sync.
+          just qcow2 "localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
+          QCOW2=$(find . -maxdepth 1 -name "*.qcow2" | head -1)
+          mkdir -p verify-out
+          sudo ./scripts/iso-e2e.sh "$QCOW2" --disk \
+            --output verify-out \
+            --timeout 600
+
+      - name: Upload PR verification evidence
+        if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: pr-boot-verify-${{ inputs.image-name }}-${{ inputs.default-tag }}-${{ matrix.safeplatform }}
+          path: |
+            verify-out/serial.log
+            verify-out/*.ppm
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Login to GitHub Container Registry
         if: ${{ inputs.publish }}
@@ -260,28 +300,56 @@ jobs:
           echo "remote_image_digest=${REMOTE_IMAGE_DIGEST}" >> $GITHUB_OUTPUT
           echo "digest=${IMAGE_DIGEST}" >> $GITHUB_OUTPUT
 
+      - name: Verify rechunk metadata preserved
+        if: ${{ inputs.publish }}
+        env:
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          DEFAULT_TAG: ${{ inputs.default-tag }}
+          SAFE_PLATFORM: ${{ matrix.safeplatform }}
+        run: |
+          # chunkah packs layers with ostree component annotations; if a
+          # podman/skopeo regression strips them during push, client delta
+          # updates silently degrade. Advisory check (warn, don't block).
+          REF="docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
+          RAW=$(sudo skopeo inspect --raw "$REF")
+          LAYERS=$(echo "$RAW" | jq '.layers | length')
+          ANNOTATED=$(echo "$RAW" | jq '[.layers[].annotations // {} | keys[]] | map(select(test("ostree|chunkah"))) | length')
+          echo "layers=${LAYERS} ostree-annotated-keys=${ANNOTATED}"
+          if [ "${ANNOTATED}" = "0" ]; then
+            echo "::warning::pushed manifest ${REF} has no ostree/chunkah layer annotations — rechunk metadata may have been stripped"
+          fi
+
       - name: Setup Syft
-        if: ${{ inputs.sbom }} && github.event_name != 'pull_request'
+        if: inputs.sbom && github.event_name != 'pull_request'
+        id: setup-syft
         uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0
         with:
           syft-version: v1.39.0
 
       - name: Generate SBOM
-        if: ${{ inputs.sbom }} && github.event_name != 'pull_request'
+        if: inputs.sbom && github.event_name != 'pull_request'
+        # Syft mmaps the multi-GB OCI image and can OOM-kill the runner on
+        # desktop-sized images; cap Go memory and time-box it, and never
+        # fail the build over an SBOM (projectbluefin/actions#294/#300).
+        continue-on-error: true
+        timeout-minutes: 10
         env:
           SYFT_CMD: ${{ steps.setup-syft.outputs.cmd }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
           DEFAULT_TAG: ${{ inputs.default-tag }}
-          PLATFORM: ${{ matrix.platform }}
+          SAFE_PLATFORM: ${{ matrix.safeplatform }}
+          GOMEMLIMIT: 3GiB
+          GOGC: "25"
         run: |
-          IMAGE="ghcr.io/${{ github.repository_owner }}/${IMAGE_NAME}:${DEFAULT_TAG}-${PLATFORM}"
-          $SYFT_CMD "$IMAGE" --scope all-layers -o spdx-json="sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${PLATFORM}.spdx.json"
+          IMAGE="ghcr.io/${{ github.repository_owner }}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
+          $SYFT_CMD "$IMAGE" --scope all-layers -o spdx-json="sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.spdx.json"
 
       - name: Upload SBOM
-        if: ${{ inputs.sbom }} && github.event_name != 'pull_request'
+        if: inputs.sbom && github.event_name != 'pull_request'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: sbom-${{ env.IMAGE_NAME }}-${{ inputs.default-tag }}-${{ matrix.platform }}
+          name: sbom-${{ env.IMAGE_NAME }}-${{ inputs.default-tag }}-${{ matrix.safeplatform }}
           path: sbom-*.spdx.json
           if-no-files-found: warn
           retention-days: 7
@@ -599,12 +667,16 @@ jobs:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
         run: |
+          # Push every tag under a -testing suffix. The bare tags (the ones
+          # users pull and docs reference) are only written by the promote
+          # job after the boot gate passes — a broken image can land in
+          # GHCR as :<flavor>-testing but never as :<flavor>.
           while IFS= read -r tag; do
             podman manifest push --all=false --digestfile=/tmp/digestfile \
               --compression-format=zstd:chunked \
               --compression-level=3 \
               --force-compression \
-              "$MANIFEST" "$IMAGE_REGISTRY/$IMAGE_NAME:$tag"
+              "$MANIFEST" "$IMAGE_REGISTRY/$IMAGE_NAME:${tag}-testing"
           done <<< "$TAGS"
 
           DIGEST=$(cat /tmp/digestfile)
@@ -628,10 +700,87 @@ jobs:
       # through composite actions is resolved. Same issue as per-arch signing.
       - run: |
           echo "Manifest signing skipped"
-  tag-image:
-    name: Tag Image
+  # ── Boot gate ───────────────────────────────────────────────────────────────
+  # Pull the just-pushed :<tag>-testing manifest, install it to a qcow2 with
+  # bootc, boot it in QEMU, and require a graphical session (serial marker or
+  # screenshot sanity — scripts/iso-e2e.sh --disk). Promotion of the bare
+  # tags is blocked while this fails. Skipped for base* flavors (no desktop
+  # to verify; they are exercised by every desktop build layered on them).
+  verify_boot:
+    name: Boot Gate ${{ inputs.image-name }}:${{ inputs.default-tag }}
     needs: manifest
-    if: github.event_name != 'pull_request'
+    if: >-
+      inputs.publish && github.event_name != 'pull_request' &&
+      !startsWith(inputs.flavor, 'base')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: read
+    env:
+      IMAGE_NAME: ${{ inputs.image-name }}
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
+      DEFAULT_TAG: ${{ inputs.default-tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@1af3b93b6815bc44a9784bd300feb67ff0d1eeb3 # v4
+
+      - name: Maximize build space
+        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y just podman jq qemu-system-x86 qemu-utils ovmf socat imagemagick
+
+      - name: Build qcow2 from testing image
+        env:
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+        run: |
+          just qcow2 "${TEST_IMAGE}"
+
+      - name: Boot and verify
+        run: |
+          QCOW2=$(find . -maxdepth 1 -name "*.qcow2" | head -1)
+          mkdir -p verify-out
+          sudo ./scripts/iso-e2e.sh "$QCOW2" --disk \
+            --output verify-out \
+            --timeout 900
+
+      - name: Collect evidence
+        if: always()
+        run: |
+          sudo chown -R "$USER:$(id -gn)" verify-out 2>/dev/null || true
+          for ppm in verify-out/*.ppm; do
+            [[ -f "$ppm" ]] || continue
+            convert "$ppm" "${ppm%.ppm}.png" || true
+          done
+
+      - name: Upload boot evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: boot-gate-${{ inputs.image-name }}-${{ inputs.default-tag }}
+          path: |
+            verify-out/serial.log
+            verify-out/*.png
+          if-no-files-found: warn
+          retention-days: 7
+
+  tag-image:
+    name: Promote Tags
+    needs: [manifest, verify_boot]
+    if: >-
+      !cancelled() && github.event_name != 'pull_request' &&
+      needs.manifest.result == 'success' &&
+      (needs.verify_boot.result == 'success' || needs.verify_boot.result == 'skipped')
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -670,12 +819,14 @@ jobs:
           INPUT_PLATFORMS: ${{ inputs.platforms }}
         run: |
           set -ex
-          SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+          # Promote the verified -testing manifest to the bare tags users
+          # pull. This is the ONLY place the bare :<flavor> tag is written.
+          SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-testing"
 
           DATE_TAG="$(date +%Y%m%d)"
 
           if [ "${ALL_PLATFORMS_BUILT}" = "true" ]; then
-            echo "All default platforms for this variant built successfully - tagging"
+            echo "All default platforms built and boot gate passed - promoting"
 
             # Tag with flavor only
             sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
@@ -694,6 +845,6 @@ jobs:
 
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
           else
-            echo "Not all default platforms for this variant built - skipping YYYYMMDD tag"
+            echo "Not all default platforms built - leaving bare tags at last good version"
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
           fi

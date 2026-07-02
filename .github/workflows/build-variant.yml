@@ -34,8 +34,6 @@ jobs:
       stage2_matrix: ${{ steps.set-matrix.outputs.stage2_matrix }}
       stage3_matrix: ${{ steps.set-matrix.outputs.stage3_matrix }}
       stage4_matrix: ${{ steps.set-matrix.outputs.stage4_matrix }}
-      artifact_matrix: ${{ steps.set-matrix.outputs.artifact_matrix }}
-      artifact_count: ${{ steps.set-matrix.outputs.artifact_count }}
       artifact_s2_matrix: ${{ steps.set-matrix.outputs.artifact_s2_matrix }}
       artifact_s3_matrix: ${{ steps.set-matrix.outputs.artifact_s3_matrix }}
       artifact_s4_matrix: ${{ steps.set-matrix.outputs.artifact_s4_matrix }}
@@ -47,7 +45,7 @@ jobs:
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@b2481faee5bad2f2a25b64d6269b06399a2f44c0 # v1
+        uses: projectbluefin/actions/bootc-build/setup-runner@d8f871c0ca7a868339d3c175200a7319492473c7 # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"
@@ -89,8 +87,8 @@ jobs:
           FILTER_FLAVOR: ${{ inputs.flavor || 'all' }}
         run: |
           # Flatten config into one entry per {variant, flavor}, applying filters.
-          # All inputs are in env vars — no direct interpolation of ${{ inputs.* }}
-          # into the script body to prevent shell injection.
+          # All inputs are in env vars — no direct interpolation of workflow
+          # inputs into the script body, to prevent shell injection.
           FULL_MATRIX=$(yq -o=json '.' .github/build-config.yml | jq -c --arg event "${{ github.event_name }}" '
             .variants[]
             | select(env.FILTER_VARIANT == "all" or .id == env.FILTER_VARIANT)
@@ -154,25 +152,6 @@ jobs:
               )
             }'
           }
-
-          # Legacy combined matrix (kept for backward compat — not used by new per-stage jobs)
-          ARTIFACT_MATRIX=$(echo "$FULL_MATRIX" | jq -c '{
-            include: map(
-              select(.build_iso == true or .build_qcow2 == true)
-              | {
-                  variant:       .variant,
-                  variant_emoji: .variant_emoji,
-                  flavor:        .flavor,
-                  build_iso:     .build_iso,
-                  build_qcow2:   .build_qcow2,
-                  base_image:    .base_image,
-                  platform:      "linux/amd64"
-                }
-            )
-          }')
-          echo "artifact_matrix=$ARTIFACT_MATRIX" >> $GITHUB_OUTPUT
-          ARTIFACT_COUNT=$(echo "$ARTIFACT_MATRIX" | jq '.include | length')
-          echo "artifact_count=$ARTIFACT_COUNT" >> $GITHUB_OUTPUT
 
           # Per-stage artifact matrices
           ARTIFACT_S2_MATRIX=$(make_artifact_matrix 2)
@@ -309,286 +288,68 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s2_matrix) }}
-    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          variant: ${{ matrix.variant }}
-          flavor: ${{ matrix.flavor }}
-          build_iso: ${{ matrix.build_iso }}
-          build_qcow2: ${{ matrix.build_qcow2 }}
-          r2_access_key_id: ${{ secrets.R2_ACCESS_KEY_ID }}
-          r2_secret_access_key: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          r2_endpoint: ${{ secrets.R2_ENDPOINT }}
-          r2_bucket: ${{ secrets.R2_BUCKET }}
+    uses: ./.github/workflows/reusable-build-artifacts.yml
+    with:
+      variant: ${{ matrix.variant }}
+      flavor: ${{ matrix.flavor }}
+      build-iso: ${{ matrix.build_iso }}
+    secrets:
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
 
-      - name: Maximize build space
-        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
-
-      - name: Setup rootless podman (subuid/subgid for runner)
-        if: matrix.build_iso == true
-        run: |
-          # tacklebox uses 'sudo -u runner podman unshare' for squashfs.
-          # podman unshare needs subuid/subgid entries for the unprivileged user.
-          if ! grep -q "^${USER}:" /etc/subuid 2>/dev/null; then
-            echo "${USER}:100000:65536" | sudo tee -a /etc/subuid
-          fi
-          if ! grep -q "^${USER}:" /etc/subgid 2>/dev/null; then
-            echo "${USER}:100000:65536" | sudo tee -a /etc/subgid
-          fi
-
-      - name: Build Live ISO
-        if: matrix.build_iso == true
-        env:
-          UPLOAD_R2: "true"
-          RCLONE_CONFIG_R2_TYPE: s3
-          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
-          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          RCLONE_CONFIG_R2_REGION: auto
-          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-        run: |
-          export TACKLEBOX_FROM_SOURCE=1
-          sudo -E bash ./scripts/build-iso-tacklebox.sh \
-            "${{ matrix.variant }}" \
-            "${{ matrix.flavor }}" \
-            ghcr \
-            "${{ matrix.flavor }}-linux-amd64"
-
-      - name: Upload ISO Artifact
-        if: matrix.build_iso == true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: iso-${{ matrix.variant }}-${{ matrix.flavor }}
-          path: '*.iso'
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Install QEMU for boot verification
-        if: matrix.build_iso == true
-        run: |
-          sudo apt-get install -y qemu-system-x86 ovmf socat imagemagick qemu-utils sshpass python3-pip
-          pip3 install --break-system-packages Pillow requests 2>/dev/null || pip3 install Pillow requests --user
-
-      - name: Boot ISO and verify readiness
-        id: e2e
-        if: matrix.build_iso == true
-        timeout-minutes: 20
-        run: |
-          ISO=$(find . -maxdepth 1 -name "*.iso" | head -1)
-          echo "==> Running iso-e2e readiness test on $ISO"
-          mkdir -p iso-e2e-out
-          # Multi-tier detection: TUNAOS_LIVE_READY → Finished live-ready.service → screenshot fallback
-          set +e
-          sudo --preserve-env \
-            ./scripts/iso-e2e.sh "$ISO" \
-              --output iso-e2e-out \
-              --timeout 900
-          rc=$?
-          echo "e2e_rc=${rc}" >> "$GITHUB_OUTPUT"
-          set -e
-          sudo chown -R "$USER:$(id -gn)" iso-e2e-out || true
-          for ppm in iso-e2e-out/*.ppm; do
-            [[ -f "$ppm" ]] || continue
-            convert "$ppm" "${ppm%.ppm}.png" || true
-          done
-
-      - name: Upload e2e artifacts
-        if: matrix.build_iso == true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: e2e-${{ matrix.variant }}-${{ matrix.flavor }}
-          path: |
-            iso-e2e-out/serial.log
-            iso-e2e-out/*.png
-            iso-e2e-out/*.ppm
-          if-no-files-found: warn
-          retention-days: 7
-
-      - name: Report e2e result (non-blocking)
-        if: matrix.build_iso == true && steps.e2e.outputs.e2e_rc != '0'
-        run: |
-          echo "::warning::iso-e2e.sh exited ${{ steps.e2e.outputs.e2e_rc }} — serial console unavailable (CONFIG_SERIAL_8250=m in bootc base image). Screenshot verification passed. (see e2e artifact)"
-
-  # ── Stage 3: Artifacts ───────────────────────────────────────────────
-  # GNOME-nvidia, gnome50-nvidia, and other stage-3 ISOs.
-  # Mirrors build_artifacts_s2 with stage-3 needs + matrix.
+  # Same cell logic for stage-3 ISOs (gnome-nvidia etc.). `!cancelled()` so a
+  # single stage-3 image failure doesn't skip the artifacts that DID build.
   build_artifacts_s3:
     name: "PkgS3 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
     needs: [generate_matrix, build_stage3]
-    if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_s3_count != '0'
+    if: >-
+      !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build_stage3.result == 'success' &&
+      github.event_name != 'pull_request' &&
+      needs.generate_matrix.outputs.artifact_s3_count != '0'
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s3_matrix) }}
-    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+    uses: ./.github/workflows/reusable-build-artifacts.yml
+    with:
+      variant: ${{ matrix.variant }}
+      flavor: ${{ matrix.flavor }}
+      build-iso: ${{ matrix.build_iso }}
+    secrets:
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
 
-      - name: Maximize build space
-        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
-
-      - name: Setup rootless podman (subuid/subgid for runner)
-        if: matrix.build_iso == true
-        run: |
-          if ! grep -q "^${USER}:" /etc/subuid 2>/dev/null; then
-            echo "${USER}:100000:65536" | sudo tee -a /etc/subuid
-          fi
-          if ! grep -q "^${USER}:" /etc/subgid 2>/dev/null; then
-            echo "${USER}:100000:65536" | sudo tee -a /etc/subgid
-          fi
-
-      - name: Build Live ISO
-        if: matrix.build_iso == true
-        env:
-          UPLOAD_R2: "true"
-          RCLONE_CONFIG_R2_TYPE: s3
-          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
-          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          RCLONE_CONFIG_R2_REGION: auto
-          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-        run: |
-          export TACKLEBOX_FROM_SOURCE=1
-          sudo -E bash ./scripts/build-iso-tacklebox.sh \
-            "${{ matrix.variant }}" \
-            "${{ matrix.flavor }}" \
-            ghcr \
-            "${{ matrix.flavor }}-linux-amd64"
-
-      - name: Upload ISO Artifact
-        if: matrix.build_iso == true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: iso-${{ matrix.variant }}-${{ matrix.flavor }}
-          path: '*.iso'
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Install QEMU for boot verification
-        if: matrix.build_iso == true
-        run: |
-          sudo apt-get install -y qemu-system-x86 ovmf socat imagemagick qemu-utils sshpass python3-pip
-          pip3 install --break-system-packages Pillow requests 2>/dev/null || pip3 install Pillow requests --user
-
-      - name: Boot ISO and verify readiness
-        id: e2e
-        if: matrix.build_iso == true
-        timeout-minutes: 20
-        run: |
-          ISO=$(find . -maxdepth 1 -name "*.iso" | head -1)
-          echo "==> Running iso-e2e readiness test on $ISO"
-          mkdir -p iso-e2e-out
-          set +e
-          sudo --preserve-env \
-            ./scripts/iso-e2e.sh "$ISO" \
-              --output iso-e2e-out \
-              --timeout 900
-          rc=$?
-          echo "e2e_rc=${rc}" >> "$GITHUB_OUTPUT"
-          set -e
-          sudo chown -R "$USER:$(id -gn)" iso-e2e-out || true
-          for ppm in iso-e2e-out/*.ppm; do
-            [[ -f "$ppm" ]] || continue
-            convert "$ppm" "${ppm%.ppm}.png" || true
-          done
-
-      - name: Upload e2e artifacts
-        if: matrix.build_iso == true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: e2e-${{ matrix.variant }}-${{ matrix.flavor }}
-          path: |
-            iso-e2e-out/serial.log
-            iso-e2e-out/*.png
-            iso-e2e-out/*.ppm
-          if-no-files-found: warn
-          retention-days: 7
-
-      - name: Report e2e result (non-blocking)
-        if: matrix.build_iso == true && steps.e2e.outputs.e2e_rc != '0'
-        run: |
-          echo "::warning::iso-e2e.sh exited ${{ steps.e2e.outputs.e2e_rc }} — serial console unavailable (CONFIG_SERIAL_8250=m in bootc base image). Screenshot verification passed. (see e2e artifact)"
-
-  # ── Stage 4: Artifacts ───────────────────────────────────────────────
-  # gnome-nvidia-hwe and other stage-4 ISOs (currently none, but wiring it
-  # now avoids a repeat of the stage-3 gap later).
   build_artifacts_s4:
     name: "PkgS4 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
     needs: [generate_matrix, build_stage4]
-    if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_s4_count != '0'
+    if: >-
+      !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build_stage4.result == 'success' &&
+      github.event_name != 'pull_request' &&
+      needs.generate_matrix.outputs.artifact_s4_count != '0'
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s4_matrix) }}
-    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: read
-    steps:
-      - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Maximize build space
-        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
-
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
-
-      - name: Setup rootless podman (subuid/subgid for runner)
-        if: matrix.build_iso == true
-        run: |
-          if ! grep -q "^${USER}:" /etc/subuid 2>/dev/null; then
-            echo "${USER}:100000:65536" | sudo tee -a /etc/subuid
-          fi
-          if ! grep -q "^${USER}:" /etc/subgid 2>/dev/null; then
-            echo "${USER}:100000:65536" | sudo tee -a /etc/subgid
-          fi
-
-      - name: Build Live ISO
-        if: matrix.build_iso == true
-        env:
-          UPLOAD_R2: "true"
-          RCLONE_CONFIG_R2_TYPE: s3
-          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
-          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          RCLONE_CONFIG_R2_REGION: auto
-          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
-        run: |
-          export TACKLEBOX_FROM_SOURCE=1
-          sudo -E bash ./scripts/build-iso-tacklebox.sh \
-            "${{ matrix.variant }}" \
-            "${{ matrix.flavor }}" \
-            ghcr \
-            "${{ matrix.flavor }}-linux-amd64"
-
-      - name: Upload ISO Artifact
-        if: matrix.build_iso == true
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: iso-${{ matrix.variant }}-${{ matrix.flavor }}
-          path: '*.iso'
-          if-no-files-found: error
-          retention-days: 7
+    uses: ./.github/workflows/reusable-build-artifacts.yml
+    with:
+      variant: ${{ matrix.variant }}
+      flavor: ${{ matrix.flavor }}
+      build-iso: ${{ matrix.build_iso }}
+    secrets:
+      R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+      R2_BUCKET: ${{ secrets.R2_BUCKET }}
