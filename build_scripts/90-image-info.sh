@@ -39,16 +39,28 @@ sed -i -f - /usr/lib/os-release <<EOF
 s/^NAME=.*/NAME=\"${IMAGE_PRETTY_NAME}\"/
 s|^VERSION_CODENAME=.*|VERSION_CODENAME=\"${CODE_NAME}\"|
 s/^VARIANT_ID=.*/VARIANT_ID=${IMAGE_NAME}/
-s/^PRETTY_NAME=.*/PRETTY_NAME=\"${IMAGE_PRETTY_NAME}\"/
+s|^PRETTY_NAME=.*/PRETTY_NAME=\"${IMAGE_PRETTY_NAME}\"/
 s|^HOME_URL=.*|HOME_URL=\"${HOME_URL}\"|
 s|^BUG_REPORT_URL=.*|BUG_REPORT_URL=\"${BUG_SUPPORT_URL}\"|
 s|^CPE_NAME=.*|CPE_NAME=\"cpe:/o:jamesreilly:${IMAGE_NAME}-tunaos\"|
-
-/^REDHAT_BUGZILLA_PRODUCT=/d
-/^REDHAT_BUGZILLA_PRODUCT_VERSION=/d
-/^REDHAT_SUPPORT_PRODUCT=/d
-/^REDHAT_SUPPORT_PRODUCT_VERSION=/d
 EOF
+
+# Dynamically interpolate the specific variant name and logo path in the installer recipe.json
+RECIPE_FILE="/etc/bootc-installer/recipe.json"
+if [[ -f "${RECIPE_FILE}" ]]; then
+	python3 -c "
+import json
+with open('${RECIPE_FILE}', 'r') as f:
+    recipe = json.load(f)
+recipe['distro_name'] = '${IMAGE_PRETTY_NAME}'
+recipe['welcome_title'] = 'Welcome to ${IMAGE_PRETTY_NAME}'
+recipe['distro_logo'] = 'resource:///org/bootcinstaller/Installer/images/${IMAGE_NAME}.png'
+recipe['tour']['welcome']['title'] = 'Welcome to ${IMAGE_PRETTY_NAME}'
+recipe['tour']['welcome']['description'] = '${IMAGE_PRETTY_NAME} is an immutable, container-native Linux operating system built for enterprise workstations and developers.'
+with open('${RECIPE_FILE}', 'w') as f:
+    json.dump(recipe, f, indent=2)
+" || true
+fi
 
 # Ensure VARIANT_ID is set — the sed substitution above only replaces an
 # existing line; AlmaLinux base images omit it entirely.
