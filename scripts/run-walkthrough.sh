@@ -19,7 +19,10 @@ OVMF_VARS="${OUTPUT_DIR}/OVMF_VARS.fd"
 # Locate QEMU and OVMF
 QEMU=""
 for candidate in /usr/libexec/qemu-kvm /usr/bin/qemu-kvm /usr/bin/qemu-system-x86_64; do
-	if [[ -x "$candidate" ]]; then QEMU="$candidate"; break; fi
+	if [[ -x "$candidate" ]]; then
+		QEMU="$candidate"
+		break
+	fi
 done
 if [[ -z "$QEMU" ]]; then
 	echo "ERROR: QEMU not found" >&2
@@ -28,11 +31,17 @@ fi
 
 OVMF_CODE=""
 for f in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_CODE.fd /usr/share/edk2/ovmf/OVMF_CODE.fd /usr/share/edk2-ovmf/x64/OVMF_CODE.fd; do
-	if [[ -f "$f" ]]; then OVMF_CODE="$f"; break; fi
+	if [[ -f "$f" ]]; then
+		OVMF_CODE="$f"
+		break
+	fi
 done
 OVMF_VARS_SRC=""
 for f in /usr/share/OVMF/OVMF_VARS_4M.fd /usr/share/OVMF/OVMF_VARS.fd /usr/share/edk2/ovmf/OVMF_VARS.fd /usr/share/edk2-ovmf/x64/OVMF_VARS.fd; do
-	if [[ -f "$f" ]]; then OVMF_VARS_SRC="$f"; break; fi
+	if [[ -f "$f" ]]; then
+		OVMF_VARS_SRC="$f"
+		break
+	fi
 done
 if [[ -z "$OVMF_CODE" ]]; then
 	echo "ERROR: OVMF not found" >&2
@@ -106,7 +115,7 @@ take_screenshot() {
 	echo "screendump ${ppm}" | socat - "UNIX-CONNECT:${MONITOR_SOCK}" >/dev/null 2>&1
 	sleep 1
 	if [[ -f "$ppm" ]]; then
-		pnmtopng "$ppm" > "$png" 2>/dev/null || python3 -c "from PIL import Image; Image.open('$ppm').save('$png')" 2>/dev/null
+		pnmtopng "$ppm" >"$png" 2>/dev/null || python3 -c "from PIL import Image; Image.open('$ppm').save('$png')" 2>/dev/null
 		rm -f "$ppm"
 		echo "✓ Captured: ${png}"
 	else

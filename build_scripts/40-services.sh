@@ -35,10 +35,16 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 
 	# Display manager per desktop flavor.
 	case "${DESKTOP_FLAVOR}" in
-		kde) safe_disable gdm.service; safe_enable sddm.service ;;
-		niri | cosmic) safe_disable gdm.service; safe_enable greetd.service ;;
-		gnome | gnome50) safe_enable gdm.service ;;
-		*) echo "No display manager for DESKTOP_FLAVOR='${DESKTOP_FLAVOR}'" ;;
+	kde)
+		safe_disable gdm.service
+		safe_enable sddm.service
+		;;
+	niri | cosmic)
+		safe_disable gdm.service
+		safe_enable greetd.service
+		;;
+	gnome | gnome50) safe_enable gdm.service ;;
+	*) echo "No display manager for DESKTOP_FLAVOR='${DESKTOP_FLAVOR}'" ;;
 	esac
 
 	# Live readiness marker for e2e testing

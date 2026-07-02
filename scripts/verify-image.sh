@@ -29,13 +29,22 @@ fi
 VM_NAME=$(echo "$VM_NAME" | tr '[:upper:]' '[:lower:]' | tr -c '[:alnum:]' '-' | sed 's/--/-/g; s/^-//;s/-$//')
 IMAGE_PATH="$(pwd)/${IMAGE_FILENAME}"
 
-[ -f "$IMAGE_PATH" ] || { echo "Error: Image not found at $IMAGE_PATH"; exit 1; }
-command -v limactl &>/dev/null || { echo "Error: limactl not installed"; exit 1; }
+[ -f "$IMAGE_PATH" ] || {
+	echo "Error: Image not found at $IMAGE_PATH"
+	exit 1
+}
+command -v limactl &>/dev/null || {
+	echo "Error: limactl not installed"
+	exit 1
+}
 
 echo "--- Verifying Image: $VARIANT:$FLAVOR ---"
 
 # Cleanup existing VM
-limactl list -q 2>/dev/null | grep -q "^${VM_NAME}$" && { limactl stop -f "$VM_NAME" 2>/dev/null || true; limactl delete "$VM_NAME"; }
+limactl list -q 2>/dev/null | grep -q "^${VM_NAME}$" && {
+	limactl stop -f "$VM_NAME" 2>/dev/null || true
+	limactl delete "$VM_NAME"
+}
 
 CONFIG_FILE="$(mktemp --suffix=.yaml)"
 cat >"$CONFIG_FILE" <<LIMAEOF
@@ -66,8 +75,10 @@ done
 
 # Map desktop → display manager
 DM_SERVICE="gdm"
-if [[ "$DESKTOP_FLAVOR" == *"kde"* ]]; then DM_SERVICE="sddm"
-elif [[ "$DESKTOP_FLAVOR" == *"cosmic"* || "$DESKTOP_FLAVOR" == *"niri"* ]]; then DM_SERVICE="greetd"
+if [[ "$DESKTOP_FLAVOR" == *"kde"* ]]; then
+	DM_SERVICE="sddm"
+elif [[ "$DESKTOP_FLAVOR" == *"cosmic"* || "$DESKTOP_FLAVOR" == *"niri"* ]]; then
+	DM_SERVICE="greetd"
 fi
 
 MAX_ATTEMPTS=30
@@ -90,17 +101,26 @@ DM_OK=false
 for i in $(seq 1 $MAX_ATTEMPTS); do
 	STATUS=$(vm_exec systemctl is-active "$DM_SERVICE")
 	echo "  [$i/$MAX_ATTEMPTS] $DM_SERVICE: $STATUS"
-	if [[ "$STATUS" == "active" ]]; then DM_OK=true; break; fi
+	if [[ "$STATUS" == "active" ]]; then
+		DM_OK=true
+		break
+	fi
 	sleep 10
 done
-$DM_OK || { echo "❌ $DM_SERVICE not active"; RC=1; }
+$DM_OK || {
+	echo "❌ $DM_SERVICE not active"
+	RC=1
+}
 
 # 1b. Check graphical.target
 echo "--- Checking graphical.target ---"
 GT_OK=false
 for i in $(seq 1 15); do
 	STATUS=$(vm_exec systemctl is-active graphical.target)
-	if [[ "$STATUS" == "active" ]]; then GT_OK=true; break; fi
+	if [[ "$STATUS" == "active" ]]; then
+		GT_OK=true
+		break
+	fi
 	sleep 5
 done
 if $GT_OK; then

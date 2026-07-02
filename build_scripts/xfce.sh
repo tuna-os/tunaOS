@@ -39,7 +39,7 @@ case "${1:-}" in
 			# tuna-os/github-copr src/xfce-wayland, served by repo.tunaos.org
 			# (EL10 x86_64 only — build-config restricts xfce* platforms).
 			curl -fsSLo /etc/yum.repos.d/tuna-os.repo \
-			  https://raw.githubusercontent.com/tuna-os/github-copr/main/contrib/tuna-os.repo
+				https://raw.githubusercontent.com/tuna-os/github-copr/main/contrib/tuna-os.repo
 
 			# xfce4-wayland is the meta package tracking the whole adapted
 			# stack (xfwl4, panel, session, xfdesktop, settings, thunar,

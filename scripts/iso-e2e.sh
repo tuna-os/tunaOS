@@ -354,7 +354,7 @@ screenshot_compare() {
 	local variant_flavor="${VARIANT:-unknown}-${FLAVOR:-unknown}"
 	local ref="${ref_dir}/${variant_flavor}-reference.png"
 	local cap="${OUTPUT_DIR}/${label}.ppm"
-	
+
 	if [[ ! -f "$ref" ]]; then
 		echo "==> No reference image at ${ref} — skipping comparison"
 		return 0
@@ -367,18 +367,18 @@ screenshot_compare() {
 		echo "==> ImageMagick compare not available — skipping comparison"
 		return 0
 	fi
-	
+
 	# Convert PPM to PNG for comparison
 	local cap_png="${OUTPUT_DIR}/${label}.png"
 	if command -v convert &>/dev/null; then
 		convert "$cap" "$cap_png" 2>/dev/null || true
 	fi
-	
+
 	# SSIM comparison: 1.0 = identical, >0.99 = perceptually same
 	local ssim
 	ssim=$(compare -metric SSIM "$ref" "${cap_png:-$cap}" "${OUTPUT_DIR}/${label}-diff.png" 2>&1 || true)
 	local threshold=0.99
-	
+
 	if [[ -n "$ssim" ]]; then
 		local ok
 		ok=$(echo "$ssim >= $threshold" | bc 2>/dev/null || echo 0)
@@ -483,15 +483,18 @@ run_kickstart() {
 		check_ssh && break
 		sleep 2
 	done
-	check_ssh || { echo "ERROR: SSH not available"; return 5; }
+	check_ssh || {
+		echo "ERROR: SSH not available"
+		return 5
+	}
 
 	echo "==> Running bootc install to-disk /dev/vda..."
 	sshpass -p live ssh -o StrictHostKeyChecking=no -p 2222 liveuser@127.0.0.1 \
 		"sudo bootc install to-disk /dev/vda 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
 		rc=$?
 		if [[ $rc -eq 0 ]]; then true; else
-		echo "ERROR: bootc install failed (exit $rc)"
-		return 3
+			echo "ERROR: bootc install failed (exit $rc)"
+			return 3
 		fi
 	}
 

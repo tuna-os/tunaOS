@@ -169,11 +169,11 @@ if [[ -n "${RHSM_USER:-}${RHSM_PASSWORD:-}${RHSM_ORG:-}${RHSM_ACTIVATION_KEY:-}"
 	trap "rm -f '${RHSM_SECRET_FILE}'" EXIT
 	chmod 0600 "${RHSM_SECRET_FILE}"
 	{
-		printf 'export RHSM_USER=%q\n'           "${RHSM_USER:-}"
-		printf 'export RHSM_PASSWORD=%q\n'       "${RHSM_PASSWORD:-}"
-		printf 'export RHSM_ORG=%q\n'            "${RHSM_ORG:-}"
+		printf 'export RHSM_USER=%q\n' "${RHSM_USER:-}"
+		printf 'export RHSM_PASSWORD=%q\n' "${RHSM_PASSWORD:-}"
+		printf 'export RHSM_ORG=%q\n' "${RHSM_ORG:-}"
 		printf 'export RHSM_ACTIVATION_KEY=%q\n' "${RHSM_ACTIVATION_KEY:-}"
-	} > "${RHSM_SECRET_FILE}"
+	} >"${RHSM_SECRET_FILE}"
 	BUILD_ARGS+=("--secret" "id=rhsm,src=${RHSM_SECRET_FILE}")
 fi
 

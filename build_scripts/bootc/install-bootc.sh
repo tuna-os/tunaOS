@@ -8,11 +8,11 @@
 # Mirrors bootc-shindig/ubuntu-bootc-remix. Run while apt is still intact.
 set -xeuo pipefail
 
-curl -fsSL https://raw.githubusercontent.com/bootc-shindig/bootc-deb/refs/heads/main/bootc-deb.asc \
-    | gpg --dearmor -o /usr/share/keyrings/bootc-deb.gpg
+curl -fsSL https://raw.githubusercontent.com/bootc-shindig/bootc-deb/refs/heads/main/bootc-deb.asc |
+	gpg --dearmor -o /usr/share/keyrings/bootc-deb.gpg
 
 echo "deb [signed-by=/usr/share/keyrings/bootc-deb.gpg] https://bootc-shindig.github.io/bootc-deb/debian stable main" \
-    > /etc/apt/sources.list.d/bootc-deb.list
+	>/etc/apt/sources.list.d/bootc-deb.list
 
 apt-get update -y
 apt-get install -y bootc
