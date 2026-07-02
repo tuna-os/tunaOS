@@ -64,6 +64,27 @@ A phase of the CI pipeline. Images chain through stages: each stage layers addit
 
 ISOs and QCOW2s are produced per-stage, not gated on all later stages completing.
 
+## Testing Tag
+
+The unverified stream tag `:<desktop>[-<flavor>]-testing` on GHCR. Every CI
+build pushes its multi-arch manifest here first; CI stage chaining consumes it.
+The bare tag is only written by **Promotion**.
+
+## Boot Gate
+
+The QEMU verification between build and publish: an image is installed to a
+disk with bootc and booted (`scripts/iso-e2e.sh --disk`), or a live ISO is
+booted directly, and must reach a graphical/ready state (serial marker or
+screenshot-sanity fallback). Failing the gate blocks Promotion (images) or
+upload (ISOs).
+
+## Promotion
+
+Copying a verified `-testing` manifest onto the user-facing bare tags
+(`:<flavor>`, `:<flavor>-YYYYMMDD`, per-arch). Performed by the "Promote Tags"
+job in `reusable-build-image.yml`, only after the Boot Gate passes and all of
+the variant's platforms built.
+
 ## Rechunking
 
 Using [coreos/chunkah](https://github.com/coreos/chunkah) to reassemble an image's OCI layers for more efficient container pulls. Applied to published images, not a separate build step.

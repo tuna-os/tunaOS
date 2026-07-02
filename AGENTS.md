@@ -6,9 +6,13 @@
 
 ```bash
 just fix && just check   # format + validate (mandatory before every commit)
+just lint && just test   # the same shellcheck/bats/pytest CI runs
 just yellowfin base      # build a single variant (fastest test)
+just verify-disk x.qcow2 # QEMU boot gate, identical to CI's publish gate
 just --list              # show all available commands
 ```
+
+Build pipeline, publish gating, and CI failure triage: [`docs/PIPELINE.md`](docs/PIPELINE.md).
 
 ## Agent skills
 
