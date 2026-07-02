@@ -81,6 +81,7 @@ echo "==> Booting VM under $ACCEL..."
 	-device virtio-blk-pci,drive=disk \
 	-monitor "unix:${MONITOR_SOCK},server,nowait" \
 	-serial "file:${SERIAL_LOG}" \
+	-vga virtio \
 	-display none \
 	-pidfile "$QEMU_PIDFILE" \
 	-daemonize

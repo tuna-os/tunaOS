@@ -4,6 +4,13 @@ TunaOS features an intuitive GUI installer built to make deploying bootc-based o
 
 Below are step-by-step visual guides of the installation flow for both the standard GNOME/XFCE variant and the Cosmic Desktop variant.
 
+> These images are captured automatically: the
+> [Installer Walkthrough Screenshots](../.github/workflows/installer-screenshots.yml)
+> workflow boots a freshly built live ISO in QEMU every Monday, drives the
+> installer with `scripts/run-walkthrough.sh`, and commits the screendumps
+> here. If a screenshot looks stale or wrong, dispatch that workflow (or run
+> the script locally against any built ISO) to refresh them.
+
 ## GNOME / XFCE Installer Flow
 
 This carousel walks through the steps of installing the standard TunaOS desktop:
