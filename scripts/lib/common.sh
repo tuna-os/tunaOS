@@ -30,7 +30,6 @@ cd "$_TUNAOS_REPO_ROOT" || {
 	exit 1
 }
 
-
 # ── Image-ref resolution ────────────────────────────────────────────────────
 # Given (variant, flavor, repo, tag) → OCI image reference string.
 # `repo` is one of: local | ghcr | registry

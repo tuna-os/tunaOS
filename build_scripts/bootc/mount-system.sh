@@ -16,8 +16,8 @@ set -ouex pipefail
 rm -rf /boot /home /root /srv /var /media
 
 mkdir -p \
-    /sysroot /boot /usr/lib/ostree /var \
-    /home /root /srv /opt /mnt
+	/sysroot /boot /usr/lib/ostree /var \
+	/home /root /srv /opt /mnt
 
 ln -s sysroot/ostree /ostree
 ln -s run/media /media

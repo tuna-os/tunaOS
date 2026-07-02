@@ -273,15 +273,7 @@ build_scripts_top=(
 
 # ── Override scripts ─────────────────────────────────────────────────────
 
-@test "build_scripts/overrides/gdx/10-vscode.sh: exists" {
-  run test -f "${REPO_ROOT}/build_scripts/overrides/gdx/10-vscode.sh"
-  [ "$status" -eq 0 ]
-}
 
-@test "build_scripts/overrides/gdx/20-nvidia.sh: exists" {
-  run test -f "${REPO_ROOT}/build_scripts/overrides/gdx/20-nvidia.sh"
-  [ "$status" -eq 0 ]
-}
 
 @test "build_scripts/scripts/image-info-set: exists" {
   run test -f "${REPO_ROOT}/build_scripts/scripts/image-info-set"

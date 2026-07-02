@@ -45,7 +45,7 @@ jobs:
           brew install bats-core
 
           # pytest for Python tests
-          pip3 install pytest --break-system-packages 2>/dev/null || pip3 install pytest --user
+          pip3 install pytest pytest-cov --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov --user
 
       - name: Run BATS tests
         run: |
@@ -61,7 +61,7 @@ jobs:
       - name: Run pytest tests
         run: |
           echo "=== pytest Tests ==="
-          python3 -m pytest tests/ tests/pytest/ -v --tb=short
+          python3 -m pytest tests/ tests/pytest/ -v --tb=short --cov=. --cov-report=term --cov-report=xml:coverage-python.xml
 
       - name: Test summary
         if: always()
@@ -75,3 +75,12 @@ jobs:
           echo "| Top-level pytest | $(find tests -maxdepth 1 -name 'test_*.py' -type f | wc -l) |" >> "$GITHUB_STEP_SUMMARY"
           echo "" >> "$GITHUB_STEP_SUMMARY"
           echo "Run locally: \`just test\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Python coverage | xml artifact uploaded |" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Python coverage
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-python
+          path: coverage-python.xml
+          retention-days: 30

@@ -43,7 +43,6 @@ fi
 if [[ "$IS_ALMALINUX" = true ]] || [[ "$IS_ALMALINUXKITTEN" = true ]]; then
 	echo "Configuring AlmaLinux repos for better reliability"
 
-
 	# Ensure baseurl is available as fallback, but keep mirrorlist enabled
 	for repo_file in /etc/yum.repos.d/almalinux*.repo; do
 		if [ -f "$repo_file" ]; then
