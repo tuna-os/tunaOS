@@ -1,15 +1,17 @@
 [Unit]
-# Print a readiness marker to the kernel console once the live environment is
-# fully usable. The e2e harness (scripts/iso-e2e.sh) polls a QEMU serial log
-# for this string to know it can proceed with install / SSH tests.
+# Print a readiness marker to the serial console (ttyS0) once the live
+# environment is fully usable. The e2e harness (scripts/iso-e2e.sh) polls a
+# QEMU serial log for this string to know it can proceed with install / SSH
+# tests.
+#
+# Writes DIRECTLY to /dev/ttyS0 via StandardOutput=tty + TTYPath, matching
+# the dakota-iso pattern (DAKOTA_LIVE_READY). Using journal+console routes to
+# /dev/console, which is NOT the serial port in headless QEMU (-display none).
 #
 # Ordering: After=livesys.service so liveuser exists and the live overlay is
 # set up; After=NetworkManager-wait-online.service so DNS works for any
 # follow-up step (flatpak remote check, package fetch, etc.); After=
 # graphical.target on DE builds so gdm/sddm/greetd has actually started.
-#
-# StandardOutput=journal+console so the marker reaches /dev/ttyS0 when the
-# kernel is booted with `console=ttyS0`, which the e2e harness sets.
 Description=TunaOS live environment ready marker
 Documentation=https://github.com/tuna-os/tunaos/blob/main/docs/IMPROVEMENT_PLAN.md
 After=livesys.service NetworkManager-wait-online.service graphical.target multi-user.target
@@ -18,8 +20,9 @@ Wants=NetworkManager-wait-online.service
 [Service]
 Type=oneshot
 RemainAfterExit=yes
-StandardOutput=journal+console
-StandardError=journal+console
+StandardOutput=tty
+TTYPath=/dev/ttyS0
+StandardError=tty
 # Print twice to maximise the chance the harness sees it even if the serial
 # device wasn't drained between writes. Including the boot time lets us
 # correlate with the QEMU launch timestamp.

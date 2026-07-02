@@ -14,12 +14,14 @@ jobs:
       flavor: ${{ steps.validate.outputs.flavor }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Validate Flavor
         id: validate
+        env:
+          FLAVOR_INPUT: ${{ github.event.inputs.flavor }}
         run: |
-          FLAVOR="${{ github.event.inputs.flavor }}"
+          FLAVOR="$FLAVOR_INPUT"
           # Read valid flavors from build-config.yml
           VALID_FLAVORS=$(yq -r '.variants[].flavors[].id' .github/build-config.yml | sort -u | tr '\n' ' ')
           VALID_FLAVORS="all $VALID_FLAVORS"

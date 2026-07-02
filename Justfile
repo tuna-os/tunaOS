@@ -9,167 +9,7 @@ arch := arch()
 yq := `which yq`
 export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else if arch == "arm64" { "linux/arm64" } else if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") })
 
-# --- Default Base Image (for 'base' flavor builds) ---
-
-export base_image := env("BASE_IMAGE", "quay.io/almalinuxorg/almalinux-bootc")
-export base_image_tag := env("BASE_IMAGE_TAG", "10")
-
-# Simulate the GitHub Actions CI matrix
-simulate-matrix:
-    #!/usr/bin/env bash
-    ./scripts/simulate-matrix.sh
-
-[private]
-default:
-    @{{ just }} --list
-
-_ensure_check_deps:
-    #!/usr/bin/env bash
-    if ! command -v shellcheck &> /dev/null; then
-        brew install shellcheck
-    fi
-    if ! command -v shfmt &> /dev/null; then
-        brew install shfmt
-    fi
-    if ! command -v yamllint &> /dev/null; then
-        brew install yamllint
-    fi
-    if ! command -v jq &> /dev/null; then
-        brew install jq
-    fi
-    if ! command -v actionlint &> /dev/null; then
-        brew install actionlint
-    fi
-
-# Check Just Syntax
-check: _ensure_check_deps
-    #!/usr/bin/env bash
-    echo "Checking syntax of shell scripts..."
-    find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
-    find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -type f -name "*.yaml" | while read -r file; do
-        yamllint -c ./.yamllint.yml "$file" || { exit 1; }
-    done
-    find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -type f -name "*.yml" | while read -r file; do
-        yamllint "$file" || { exit 1; }
-    done
-    find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -type f -name "*.json" | while read -r file; do
-        jq . "$file" > /dev/null || { exit 1; }
-    done
-    find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -type f -name "*.just" | while read -r file; do
-        just --unstable --fmt --check -f $file
-    done
-    if command -v actionlint &> /dev/null; then
-        actionlint -ignore "permission \"id-token\" is unknown" \
-                   -ignore "SC2086" -ignore "SC2129" -ignore "SC2001" \
-                   -ignore "SC2034" -ignore "SC2015" -ignore "SC1001" \
-                   -ignore "SC2295" -ignore "SC2016" \
-                   -ignore "save-always" \
-                   -ignore "cannot be filtered" \
-                   .github/workflows/*.yml .github/workflows/*.yaml || { exit 1; }
-    fi
-    just --unstable --fmt --check -f Justfile
-    echo "Checking workflow drift..."
-    python3 scripts/generate-workflows.py
-    if ! git diff --exit-code .github/workflows/build-*.yml; then
-        echo "::error::Generated workflow files are stale. Run 'just generate-workflows' and commit the changes."
-        exit 1
-    fi
-
-# --- Test Targets ---
-
-_ensure_test_deps: _ensure_check_deps
-    #!/usr/bin/env bash
-    if ! command -v bats &> /dev/null; then
-        brew install bats-core
-    fi
-    if ! command -v python3 &> /dev/null; then
-        echo "ERROR: python3 required for pytest tests" >&2
-        exit 1
-    fi
-    if ! python3 -c "import pytest" 2>/dev/null; then
-        pip3 install pytest --break-system-packages 2>/dev/null || pip3 install pytest --user
-    fi
-
-# Run all unit tests (BATS + pytest)
-test: _ensure_test_deps
-    #!/usr/bin/env bash
-    set -euo pipefail
-    FAILED=0
-    echo "=== BATS Tests ==="
-    if command -v bats &> /dev/null; then
-        for f in tests/bats/*.bats; do
-            [[ -f "$f" ]] || continue
-            echo "  Running: $f"
-            bats --formatter tap "$f" || FAILED=1
-        done
-    else
-        echo "  bats not found — skipping BATS tests"
-    fi
-    echo "=== pytest Tests ==="
-    if python3 -c "import pytest" 2>/dev/null; then
-        python3 -m pytest tests/ tests/pytest/ -v --tb=short || FAILED=1
-    else
-        echo "  pytest not found — skipping pytest tests"
-    fi
-    exit $FAILED
-
-# Run only BATS tests
-test-bats: _ensure_test_deps
-    #!/usr/bin/env bash
-    set -euo pipefail
-    for f in tests/bats/*.bats; do
-        [[ -f "$f" ]] || continue
-        echo "  Running: $f"
-        bats --formatter tap "$f"
-    done
-
-# Run only pytest tests
-test-pytest: _ensure_test_deps
-    #!/usr/bin/env bash
-    set -euo pipefail
-    python3 -m pytest tests/ tests/pytest/ -v --tb=short
-
-# Generate GitHub Actions workflows from build-config.yml
-generate-workflows:
-    #!/usr/bin/env bash
-    chmod +x scripts/generate-workflows.py
-    python3 scripts/generate-workflows.py
-
-# Fix Just Syntax
-fix:
-    #!/usr/bin/env bash
-    echo "Fixing syntax of shell scripts..."
-        find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -iname "*.sh" -type f -exec shfmt --write "{}" ";"
-    find . -type f -name "*.just" | while read -r file; do
-        just --unstable --fmt -f $file
-    done
-    just --unstable --fmt -f Justfile || { exit 1; }
-
-clean:
-    #!/usr/bin/env bash
-    echo "Cleaning up build artifacts and images..."
-    echo "Note: Preserving .rpm-cache for faster rebuilds. Use 'just clean-cache' to remove."
-    rm -rf .build-logs
-    sudo rm -rf .build/*
-    rm -f out.ociarchive
-    echo "Removing local podman images for all variants and flavors..."
-    readarray -t VARIANTS < <({{ yq }} -r '.variants[].id' .github/build-config.yml 2>/dev/null || echo -e "yellowfin\nalbacore\nbonito\nskipjack\nredfin")
-    for variant in "${VARIANTS[@]}"; do
-        readarray -t FLAVORS < <({{ yq }} -r ".variants[] | select(.id == \"$variant\") | .flavors[].id" .github/build-config.yml 2>/dev/null || true)
-        for flavor in "${FLAVORS[@]}"; do
-            podman rmi -f "localhost/${variant}:${flavor}" 2>/dev/null || true
-            sudo podman rmi -f "localhost/${variant}:${flavor}" 2>/dev/null || true
-        done
-    done
-
-# Prune build caches (DNF/RPM cache directory shared across all variants)
-clean-cache:
-    #!/usr/bin/env bash
-    echo "Pruning local build caches..."
-    echo "Removing .rpm-cache directory..."
-    rm -rf '.rpm-cache'
-    echo "Cache cleanup complete."
-    echo "Note: Podman BuildKit cache is separate. Use 'podman system prune --build-cache' if needed."
+import 'just/utilities.just'
 
 # ==============================================================================
 #  BUILD PIPELINE
@@ -187,7 +27,7 @@ _ensure-deps:
 
 # Private build engine.
 [private]
-_build target_tag_with_version target_tag container_file base_image_for_build target_platform use_cache enable_gdx enable_hwe enable_sshd desktop_flavor *args: _ensure-deps
+_build target_tag_with_version target_tag container_file base_image_for_build target_platform use_cache enable_gdx enable_hwe desktop_flavor is_ci_build enable_sshd_build *args: _ensure-deps
     #!/usr/bin/env bash
     set -euxo pipefail
 
@@ -209,8 +49,8 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     BUILD_ARGS+=("--build-arg" "BREW_IMAGE_REF=${brew_image_ref}")
     BUILD_ARGS+=("--build-arg" "ENABLE_HWE={{ enable_hwe }}")
     BUILD_ARGS+=("--build-arg" "ENABLE_NVIDIA={{ enable_gdx }}")
-    BUILD_ARGS+=("--build-arg" "ENABLE_SSHD={{ enable_sshd }}")
     BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR={{ desktop_flavor }}")
+    BUILD_ARGS+=("--build-arg" "ENABLE_SSHD={{ enable_sshd_build }}")
 
     AKMODS_ORG=$({{ yq }} -r ".variants[] | select(.id == \"{{ target_tag }}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
     # Resolve akmods registry via registry-map; falls back to ghcr.io/${AKMODS_ORG} if not mapped
@@ -250,6 +90,13 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     fi
     BUILD_ARGS+=("--build-arg" "IMAGE_NAME_VARIANT={{ target_tag }}")
 
+    # RFC 010: grouper (Ubuntu) pulls Zirconium system files for DMS/Niri.
+    # Pin the image ref via image-versions.yaml, same as common/brew.
+    if [[ "{{ target_tag }}" == "grouper" ]]; then
+        zirconium_image_sha=$({{ yq }} -r '.images[] | select(.name == "zirconium") | .digest' image-versions.yaml)
+        BUILD_ARGS+=("--build-arg" "ZIRCONIUM_IMAGE_REF=ghcr.io/zirconium-dev/zirconium@${zirconium_image_sha}")
+    fi
+
     if [[ -z "$(git status -s)" ]]; then
         BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=$(git rev-parse --short HEAD)")
     else
@@ -266,8 +113,17 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
 
     echo "==> Building ${DESKTOP_FLAVOR} stage..."
 
+    # Use buildah in CI (for layer caching via actions/cache), podman locally
+    # (the local buildah wrapper tries to pull localhost/buildah-tool which fails).
+    BUILDER="podman"
+    PULL_FLAG="--pull=newer"
+    if [[ "{{ is_ci_build }}" == "1" ]] && command -v buildah &>/dev/null; then
+        BUILDER="buildah"
+        PULL_FLAG="--pull-always"
+    fi
+
     # Pass 1: Build the target DE stage directly — no unused stages built
-    podman build \
+    ${BUILDER} build \
         --security-opt label=disable \
         --dns=8.8.8.8 \
         --platform "{{ target_platform }}" \
@@ -275,8 +131,9 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
         "${BUILD_ARGS[@]}" \
         --tag "${PRE_CHUNK_TAG}" \
         {{ args }} \
-        --pull=newer \
+        ${PULL_FLAG} \
         --file "{{ container_file }}" \
+        ${BUILDAH_CACHE_FLAGS:-} \
         .
 
     echo "==> Running chunkah on ${PRE_CHUNK_TAG}..."
@@ -317,10 +174,10 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     echo "==> Applying labels from OCI archive..."
 
     # Pass 3: Load archive into podman storage via podman load, then apply OCI labels.
-    # podman load guarantees the same graphRoot as the subsequent podman build.
+    # podman load guarantees the same graphRoot as the subsequent buildah build.
     # skopeo copy is avoided here because CI uses ublue-os/container-storage-action
     # which mounts a BTRFS graphRoot for podman; skopeo defaults to overlay and writes
-    # to a different path, causing podman build to fall back to a remote registry pull.
+    # to a different path, causing buildah build to fall back to a remote registry pull.
 
     # Prune ALL unused images from BTRFS storage before loading the rechunked archive.
     # Targeted rmi of just pre-chunk + chain base isn't sufficient: multi-stage FROM
@@ -339,7 +196,7 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     fi
     podman tag "${LOADED_ID}" "${RECHUNKED_REF}"
 
-    podman build \
+    ${BUILDER} build \
         --security-opt label=disable \
         --dns=8.8.8.8 \
         "${BUILD_ARGS[@]}" \
@@ -348,10 +205,10 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
         --file "Containerfile.final" \
         .
 
-    podman rmi "${RECHUNKED_REF}" 2>/dev/null || true
+    ${BUILDER} rmi "${RECHUNKED_REF}" 2>/dev/null || true
 
 # Build a TunaOS variant
-build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='' enable_sshd='0': _ensure-deps
+build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='' enable_sshd="0": _ensure-deps
     #!/usr/bin/env bash
     set -euo pipefail
 
@@ -411,16 +268,16 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         DESKTOP_FLAVOR="base-hwe"
         PARENT_FLAVOR="base"
     elif [[ "${FLAVOR}" == "base-nvidia" ]]; then
-        CONTAINERFILE="Containerfile.gdx"
+        CONTAINERFILE="Containerfile.nvidia"
         ENABLE_NVIDIA="1"
         DESKTOP_FLAVOR="base-nvidia"
         PARENT_FLAVOR="base"
     elif [[ "{{ variant }}" != "grouper" && "${FLAVOR}" == *"-nvidia-hwe" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-nvidia-hwe}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_NVIDIA="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
+        DESKTOP_FLAVOR="${FLAVOR%-nvidia-hwe}"; CONTAINERFILE="Containerfile.nvidia"; ENABLE_NVIDIA="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
     elif [[ "{{ variant }}" != "grouper" && "${FLAVOR}" == *"-hwe" ]]; then
         DESKTOP_FLAVOR="${FLAVOR%-hwe}"; CONTAINERFILE="Containerfile.hwe"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
     elif [[ "{{ variant }}" != "grouper" && "${FLAVOR}" == *"-nvidia" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-nvidia}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_NVIDIA="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
+        DESKTOP_FLAVOR="${FLAVOR%-nvidia}"; CONTAINERFILE="Containerfile.nvidia"; ENABLE_NVIDIA="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
     else
         DESKTOP_FLAVOR="${FLAVOR}"
         BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
@@ -441,10 +298,10 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     TARGET_TAG_WITH_VERSION="${TARGET_TAG}:${TARGET_IMAGE_TAG}"
 
     if [[ "{{ is_ci }}" == "0" ]]; then
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${ENABLE_SSHD}" "${DESKTOP_FLAVOR}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "1" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}" "{{ is_ci }}" "{{ enable_sshd }}"
         ./scripts/sync-build-cache.sh "${TARGET_TAG}" || true
     else
-        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${ENABLE_SSHD}" "${DESKTOP_FLAVOR}"
+        {{ just }} _build "${TARGET_TAG_WITH_VERSION}" "{{ variant }}" "${CONTAINERFILE}" "${BASE_FOR_BUILD}" "$PLATFORM" "0" "${ENABLE_NVIDIA}" "${ENABLE_HWE}" "${DESKTOP_FLAVOR}" "{{ is_ci }}" "{{ enable_sshd }}"
     fi
 
     if [[ "$DID_INIT" == "1" ]]; then

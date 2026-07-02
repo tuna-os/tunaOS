@@ -84,12 +84,15 @@ jobs:
       # the dispatched variant's ISO.
       - name: Matrix-vs-dispatch filter
         id: filter
+        env:
+          DISPATCH_VARIANT: ${{ inputs.variant }}
+          DISPATCH_FLAVOR: ${{ inputs.flavor }}
         run: |
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            if [[ "${{ inputs.variant }}" != "${{ matrix.variant }}" ]] \
-               || [[ "${{ inputs.flavor }}" != "${{ matrix.flavor }}" ]]; then
+            if [[ "${DISPATCH_VARIANT}" != "${{ matrix.variant }}" ]] \
+               || [[ "${DISPATCH_FLAVOR}" != "${{ matrix.flavor }}" ]]; then
               echo "skip=true" >> "$GITHUB_OUTPUT"
-              echo "Skipping ${{ matrix.variant }}:${{ matrix.flavor }} — dispatch chose ${{ inputs.variant }}:${{ inputs.flavor }}"
+              echo "Skipping ${{ matrix.variant }}:${{ matrix.flavor }} — dispatch chose ${DISPATCH_VARIANT}:${DISPATCH_FLAVOR}"
             fi
           fi
 

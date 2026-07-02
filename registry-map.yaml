@@ -92,7 +92,7 @@ images:
   # --- ISO bootc target ---
   bluefin-iso:
     registry: ghcr
-    path: hanthor/bluefin
+    path: tuna-os/bluefin
     # SECURITY: Pinned to digest. The :lts tag is a floating tag — pinning
     # protects ISO builds from unexpected image changes.
     digest: sha256:fa7d24b646cc345542190b7f68fc70fbd9a4d3143e8cc077db4dca68336c3ae8

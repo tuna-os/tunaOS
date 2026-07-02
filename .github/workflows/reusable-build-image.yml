@@ -128,7 +128,7 @@ jobs:
         if: ${{ startsWith(inputs.flavor, 'base') }}
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@v1
+        uses: projectbluefin/actions/bootc-build/setup-runner@b2481faee5bad2f2a25b64d6269b06399a2f44c0 # v1
         with:
           storage-backend: btrfs
           update-podman: "true"
@@ -161,11 +161,26 @@ jobs:
             dnf-${{ matrix.platform }}-
           save-always: ${{ github.ref == 'refs/heads/main' }}
 
-      - name: Fix cache permissions
+      - name: Fix DNF cache permissions
         if: steps.dnf-cache.outputs.cache-hit == 'true'
         run: |
           sudo chown -R root:root /var/cache/dnf /var/cache/libdnf5 /var/lib/rpm 2>/dev/null || true
           sudo chmod -R 755 /var/cache/dnf /var/cache/libdnf5 /var/lib/rpm 2>/dev/null || true
+
+      - name: Restore buildah layer cache
+        id: buildah-cache
+        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: /var/tmp/buildah-cache-0
+          key: buildah-${{ runner.os }}-${{ runner.arch }}-${{ inputs.image-variant }}-${{ inputs.flavor }}
+          restore-keys: |
+            buildah-${{ runner.os }}-${{ runner.arch }}-${{ inputs.image-variant }}-
+            buildah-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Configure buildah cache
+        run: |
+          mkdir -p /var/tmp/buildah-cache-0
+          echo 'BUILDAH_CACHE_FLAGS=--cache-to type=local,dest=/var/tmp/buildah-cache-0 --cache-from type=local,src=/var/tmp/buildah-cache-0' >> "$GITHUB_ENV"
 
       - name: Build Image
         id: build-image
@@ -181,6 +196,18 @@ jobs:
           just=$(which just)
           # just build now handles two-pass chunking internally by default
           sudo "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}"
+
+      - name: Fix buildah cache permissions
+        if: always()
+        run: |
+          sudo chmod 777 --recursive /var/tmp/buildah-cache-0 2>/dev/null || true
+
+      - name: Save buildah layer cache
+        if: github.ref == 'refs/heads/main'
+        uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
+        with:
+          path: /var/tmp/buildah-cache-0
+          key: buildah-${{ runner.os }}-${{ runner.arch }}-${{ inputs.image-variant }}-${{ inputs.flavor }}
 
       - name: Verify Image in VM
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
@@ -232,6 +259,32 @@ jobs:
           REMOTE_IMAGE_DIGEST=$(sudo cat /tmp/digestfile)
           echo "remote_image_digest=${REMOTE_IMAGE_DIGEST}" >> $GITHUB_OUTPUT
           echo "digest=${IMAGE_DIGEST}" >> $GITHUB_OUTPUT
+
+      - name: Setup Syft
+        if: ${{ inputs.sbom }} && github.event_name != 'pull_request'
+        uses: anchore/sbom-action/download-syft@e22c389904149dbc22b58101806040fa8d37a610 # v0
+        with:
+          syft-version: v1.39.0
+
+      - name: Generate SBOM
+        if: ${{ inputs.sbom }} && github.event_name != 'pull_request'
+        env:
+          SYFT_CMD: ${{ steps.setup-syft.outputs.cmd }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          DEFAULT_TAG: ${{ inputs.default-tag }}
+          PLATFORM: ${{ matrix.platform }}
+        run: |
+          IMAGE="ghcr.io/${{ github.repository_owner }}/${IMAGE_NAME}:${DEFAULT_TAG}-${PLATFORM}"
+          $SYFT_CMD "$IMAGE" --scope all-layers -o spdx-json="sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${PLATFORM}.spdx.json"
+
+      - name: Upload SBOM
+        if: ${{ inputs.sbom }} && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: sbom-${{ env.IMAGE_NAME }}-${{ inputs.default-tag }}-${{ matrix.platform }}
+          path: sbom-*.spdx.json
+          if-no-files-found: warn
+          retention-days: 7
 
       # TODO: reinstate sign-and-publish when key propagation through composite
       # actions is resolved. The COSIGN_PRIVATE_KEY env var is masked but
@@ -614,6 +667,7 @@ jobs:
           DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
           MAJOR_VERSION: ${{ env.MAJOR_VERSION }}
           ALL_PLATFORMS_BUILT: ${{ needs.manifest.outputs.all_platforms_built }}
+          INPUT_PLATFORMS: ${{ inputs.platforms }}
         run: |
           set -ex
           SOURCE_IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
@@ -630,7 +684,7 @@ jobs:
             sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${DATE_TAG}"
 
             # Tag each platform with flavor-arch and flavor-arch-date
-            IFS=',' read -r -a PLATFORMS <<< "${{ inputs.platforms }}"
+            IFS=',' read -r -a PLATFORMS <<< "${INPUT_PLATFORMS}"
             for platform in "${PLATFORMS[@]}"; do
               arch="${platform#linux/}"
               arch="${arch//\//-}"

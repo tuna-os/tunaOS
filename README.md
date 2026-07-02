@@ -15,6 +15,7 @@
 [![License](https://img.shields.io/github/license/tuna-os/tunaOS?style=for-the-badge)](LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/stargazers)
 [![Issues](https://img.shields.io/github/issues/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/issues)
+[![Adopters](https://img.shields.io/badge/adopters-0_entries-2ea44f?style=for-the-badge)](ADOPTERS.md)
 
 </div>
 
@@ -49,6 +50,7 @@ Each variant ships multiple desktop environments:
 | `kde` | KDE Plasma |
 | `cosmic` | COSMIC Desktop |
 | `niri` | Niri (tiling Wayland compositor) |
+| `xfce` | XFCE 4.20 (Wayland, experimental) — xfwl4 compositor |
 
 ### Hardware Variants
 
@@ -97,6 +99,7 @@ ghcr.io/tuna-os/albacore:gnome-hwe
 ghcr.io/tuna-os/albacore:kde
 ghcr.io/tuna-os/albacore:niri
 ghcr.io/tuna-os/albacore:cosmic
+ghcr.io/tuna-os/albacore:xfce
 ```
 
 - ✨ **x86_64/v2** microarchitecture support
@@ -261,6 +264,7 @@ Related Communities:
 - [Versioning](VERSIONING.md) — tag scheme and stability tiers
 - [Migration Guide](MIGRATION.md) — switching from other distros
 - [Security Policy](SECURITY.md) — vulnerability reporting and supported versions
+- [Adopters](ADOPTERS.md) — organizations using TunaOS
 - [Code of Conduct](CODE_OF_CONDUCT.md) — community standards
 
 ### Community & Governance
@@ -287,6 +291,22 @@ Related Communities:
 <a href="https://github.com/bootc-dev/bootc">
 <img width="100" height="130" alt="Bootc_Logo" src="https://raw.githubusercontent.com/containers/common/main/logos/bootc-logo-full-vert.png" />
 </a>
+
+---
+
+### 🤖 Powered by KubeStellar / Hive
+
+This repository and many of the [tuna-os](https://github.com/tuna-os) repositories are developed and maintained using **[Hive](https://github.com/hanthor/hive)** — an AI-driven development platform orchestrated via [KubeStellar](https://kubestellar.io/).
+
+Hive deploys a suite of specialized AI agents (guide, architect, sec-check, quality, ci-maintainer, strategist) onto a local Kubernetes cluster. These agents triage issues, implement fixes, review PRs, manage CI pipelines, and maintain documentation — all working autonomously through GitHub.
+
+<img width="100" alt="Hive" src="https://avatars.githubusercontent.com/in/3942065" />
+
+Every commit, PR, and issue in this repo benefits from multi-agent collaboration coordinated through Hive.
+
+*Learn more: [hanthor/hive](https://github.com/hanthor/hive) | [KubeStellar](https://kubestellar.io/)*
+
+---
 
 *Inspired by [Bluefin](https://projectbluefin.io) and the [Universal Blue](https://universal-blue.org/) Community*
 

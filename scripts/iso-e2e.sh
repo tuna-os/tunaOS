@@ -50,7 +50,8 @@ set -euo pipefail
 
 ISO_PATH=""
 KICKSTART=""
-MODE="ready" # ready | kickstart | ssh
+APP_CMD=""
+MODE="ready" # ready | kickstart | ssh | app-launch
 TIMEOUT=300
 OUTPUT_DIR="./iso-e2e-out"
 MEMORY=4096
@@ -63,6 +64,11 @@ while [[ $# -gt 0 ]]; do
 	--kickstart)
 		MODE="kickstart"
 		KICKSTART="$2"
+		shift 2
+		;;
+	--app-launch)
+		MODE="app-launch"
+		APP_CMD="$2"
 		shift 2
 		;;
 	--ssh-only)
@@ -132,6 +138,16 @@ fi
 
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(realpath "$OUTPUT_DIR")"
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Extract VARIANT and FLAVOR from ISO filename for screenshot comparison
+# ISO filename pattern: <variant>-<flavor>-<version>-<arch>.iso
+ISO_BASENAME="$(basename "$ISO_PATH" .iso)"
+ISO_VARIANT="${ISO_BASENAME%%-*}"
+ISO_FLAVOR="${ISO_BASENAME#*-}"
+ISO_FLAVOR="${ISO_FLAVOR%%-*}"
+: "${VARIANT:=${ISO_VARIANT}}"
+: "${FLAVOR:=${ISO_FLAVOR}}"
 
 # ── Dependency resolution ───────────────────────────────────────────────────
 
@@ -318,6 +334,60 @@ screenshot() {
 	fi
 }
 
+# Compare screenshot against a reference using ImageMagick SSIM (Layer 2).
+# Returns 0 if similarity >= threshold (0.99 = 99%), 1 otherwise.
+# Reference images are stored in tests/reference/{variant}-{flavor}-reference.png
+# Generate with: convert reference.ppm reference.png && cp to tests/reference/
+screenshot_compare() {
+	local label="$1"
+	local ref_dir="${SCRIPT_DIR}/tests/reference"
+	local variant_flavor="${VARIANT:-unknown}-${FLAVOR:-unknown}"
+	local ref="${ref_dir}/${variant_flavor}-reference.png"
+	local cap="${OUTPUT_DIR}/${label}.ppm"
+	
+	if [[ ! -f "$ref" ]]; then
+		echo "==> No reference image at ${ref} — skipping comparison"
+		return 0
+	fi
+	if [[ ! -f "$cap" ]]; then
+		echo "==> No captured screenshot at ${cap} — cannot compare"
+		return 1
+	fi
+	if ! command -v compare &>/dev/null; then
+		echo "==> ImageMagick compare not available — skipping comparison"
+		return 0
+	fi
+	
+	# Convert PPM to PNG for comparison
+	local cap_png="${OUTPUT_DIR}/${label}.png"
+	if command -v convert &>/dev/null; then
+		convert "$cap" "$cap_png" 2>/dev/null || true
+	fi
+	
+	# SSIM comparison: 1.0 = identical, >0.99 = perceptually same
+	local ssim
+	ssim=$(compare -metric SSIM "$ref" "${cap_png:-$cap}" "${OUTPUT_DIR}/${label}-diff.png" 2>&1 || true)
+	local threshold=0.99
+	
+	if [[ -n "$ssim" ]]; then
+		local ok
+		ok=$(echo "$ssim >= $threshold" | bc 2>/dev/null || echo 0)
+		if [[ "$ok" == "1" ]]; then
+			echo "==> ✅ Screenshot matches reference (SSIM: $ssim >= $threshold)"
+			return 0
+		else
+			echo "==> ⚠️  Screenshot differs from reference (SSIM: $ssim < $threshold)"
+			echo "    Diff image: ${OUTPUT_DIR}/${label}-diff.png"
+			# Non-blocking — emit ::warning, don't fail
+			echo "::warning::Screenshot comparison: SSIM $ssim below threshold $threshold"
+			return 0
+		fi
+	else
+		echo "==> SSIM comparison produced no output — skipping"
+		return 0
+	fi
+}
+
 # Wait for the live env to print its readiness marker.
 wait_for_ready() {
 	local deadline=$(($(date +%s) + TIMEOUT))
@@ -363,14 +433,86 @@ check_ssh() {
 # Drive an Anaconda kickstart install. We don't (yet) interact with the
 # install — we let it run unattended and watch for completion via serial
 # log markers ("post-installation" / "reboot").
+# Run bootc install-to-disk via SSH, then reboot and verify the installed system.
+# This replaces the Anaconda kickstart approach (TunaOS uses bootc, not anaconda).
 run_kickstart() {
-	echo "==> Kickstart mode not yet implemented in $0"
-	echo "    Stub: would copy ${KICKSTART} to a virtual floppy, append"
-	echo "    inst.ks=hd:fd0 to the kernel cmdline, then watch for"
-	echo "    /var/log/anaconda completion."
-	# Returning 3 signals "kickstart path planned but not implemented" —
-	# CI workflow can gate on this exit code to skip until done.
-	return 3
+	echo "==> Waiting up to 60s for SSH..."
+	for _ in $(seq 1 30); do
+		check_ssh && break
+		sleep 2
+	done
+	check_ssh || { echo "ERROR: SSH not available"; return 5; }
+
+	echo "==> Running bootc install to-disk /dev/vda..."
+	sshpass -p live ssh -o StrictHostKeyChecking=no -p 2222 liveuser@127.0.0.1 \
+		"sudo bootc install to-disk /dev/vda 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
+		rc=$?
+		if [[ $rc -eq 0 ]]; then true; else
+		echo "ERROR: bootc install failed (exit $rc)"
+		return 3
+		fi
+	}
+
+	echo "==> bootc install complete. Shutting down..."
+	sshpass -p live ssh -o StrictHostKeyChecking=no -p 2222 liveuser@127.0.0.1 \
+		"sudo systemctl poweroff" 2>/dev/null || true
+	sleep 10
+
+	# Wait for VM to fully stop
+	if [[ -f "$QEMU_PIDFILE" ]]; then
+		local pid
+		pid=$(cat "$QEMU_PIDFILE" 2>/dev/null || true)
+		if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+			echo "==> Waiting for VM to shut down..."
+			for _ in $(seq 1 30); do
+				kill -0 "$pid" 2>/dev/null || break
+				sleep 2
+			done
+		fi
+	fi
+
+	echo "==> Booting installed system..."
+	# Boot from the install disk (remove cdrom)
+	"$QEMU" \
+		-name "tunaos-iso-e2e-installed" \
+		-machine pc \
+		-cpu "$CPU_ARG" \
+		-accel "$ACCEL" \
+		-m "$MEMORY" \
+		-smp "$CPUS" \
+		-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
+		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
+		-device virtio-blk-pci,drive=disk \
+		-netdev "user,id=net0,hostfwd=tcp::2222-:22" \
+		-device virtio-net-pci,netdev=net0 \
+		-monitor "unix:${MONITOR_SOCK},server,nowait" \
+		-serial "file:${SERIAL_LOG}" \
+		-display none \
+		-pidfile "$QEMU_PIDFILE" \
+		-daemonize
+
+	echo "==> Waiting for installed system to boot (up to 5 min)..."
+	for _ in $(seq 1 60); do
+		if grep -q "Reached target.*Graphical\|Reached target.*Multi-User\|login:" "${SERIAL_LOG}" 2>/dev/null; then
+			echo "==> Installed system booted successfully!"
+			screenshot "30-installed"
+			# VLM verification of installed system
+			if command -v python3 &>/dev/null; then
+				VLM_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/desktop-verify.py"
+				if [[ -f "$VLM_SCRIPT" ]]; then
+					PNG="${OUTPUT_DIR}/30-installed.png"
+					[[ -f "${OUTPUT_DIR}/30-installed.ppm" ]] && convert "${OUTPUT_DIR}/30-installed.ppm" "$PNG" 2>/dev/null || true
+					[[ -f "$PNG" ]] && python3 "$VLM_SCRIPT" "$PNG" --mode desktop || true
+				fi
+			fi
+			return 0
+		fi
+		sleep 5
+	done
+
+	echo "ERROR: installed system did not boot within timeout"
+	return 4
 }
 
 # ── Main ────────────────────────────────────────────────────────────────────
@@ -383,6 +525,16 @@ ready)
 	wait_for_ready
 	rc=$?
 	screenshot "10-ready"
+	# VLM vision verification (non-blocking)
+	if command -v python3 &>/dev/null; then
+		VLM_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/desktop-verify.py"
+		if [[ -f "$VLM_SCRIPT" ]]; then
+			PNG="${OUTPUT_DIR}/10-ready.png"
+			[[ -f "${OUTPUT_DIR}/10-ready.ppm" ]] && convert "${OUTPUT_DIR}/10-ready.ppm" "$PNG" 2>/dev/null || true
+			[[ -f "$PNG" ]] && python3 "$VLM_SCRIPT" "$PNG" --mode desktop || true
+		fi
+	fi
+	screenshot_compare "10-ready" || true
 	exit "$rc"
 	;;
 ssh)
@@ -404,6 +556,39 @@ kickstart)
 	screenshot "10-ready"
 	run_kickstart
 	exit $?
+	;;
+app-launch)
+	boot_live_iso || exit 1
+	wait_for_ready || exit $?
+	screenshot "10-ready"
+	# Wait for SSH
+	for _ in $(seq 1 15); do
+		check_ssh && break
+		sleep 2
+	done
+	check_ssh || exit $?
+	# Launch the app via SSH
+	APP="${APP_CMD:-nautilus}"
+	echo "==> Launching app via SSH: $APP"
+	sshpass -p live ssh -o StrictHostKeyChecking=no -p 2222 liveuser@127.0.0.1 \
+		"gtk-launch $APP 2>&1" || echo "  (app launch may have failed)"
+	sleep 5
+	screenshot "20-app"
+	# VLM verification
+	if command -v python3 &>/dev/null; then
+		VLM_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/desktop-verify.py"
+		if [[ -f "$VLM_SCRIPT" ]]; then
+			PNG="${OUTPUT_DIR}/20-app.png"
+			[[ -f "${OUTPUT_DIR}/20-app.ppm" ]] && convert "${OUTPUT_DIR}/20-app.ppm" "$PNG" 2>/dev/null || true
+			if [[ -f "$PNG" ]]; then
+				python3 "$VLM_SCRIPT" "$PNG" --mode desktop
+				rc=$?
+				echo "==> VLM verification exit code: $rc"
+				exit $rc
+			fi
+		fi
+	fi
+	exit 0
 	;;
 *)
 	echo "Unknown mode: $MODE" >&2

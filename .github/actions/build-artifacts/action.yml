@@ -40,7 +40,7 @@ runs:
   using: composite
   steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       with:
         submodules: recursive
 
@@ -65,16 +65,18 @@ runs:
         RCLONE_CONFIG_R2_REGION: auto
         RCLONE_CONFIG_R2_ENDPOINT: ${{ inputs.r2_endpoint }}
         R2_BUCKET: ${{ inputs.r2_bucket }}
+        INPUT_VARIANT: ${{ inputs.variant }}
+        INPUT_FLAVOR: ${{ inputs.flavor }}
       run: |
         sudo just iso \
-          "${{ inputs.variant }}" \
-          "${{ inputs.flavor }}" \
+          "${INPUT_VARIANT}" \
+          "${INPUT_FLAVOR}" \
           ghcr \
-          "${{ inputs.flavor }}-linux-amd64"
+          "${INPUT_FLAVOR}-linux-amd64"
 
     - name: Upload ISO Artifact
       if: inputs.build_iso == 'true'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: ${{ inputs.variant }}-${{ inputs.flavor }}-live-iso
         path: '*.iso'
@@ -166,7 +168,7 @@ runs:
 
     - name: Upload boot screenshot
       if: inputs.build_iso == 'true'
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
       with:
         name: ${{ inputs.variant }}-${{ inputs.flavor }}-boot-screenshot
         path: screenshot.png
@@ -175,6 +177,8 @@ runs:
     - name: Build QCOW2
       if: inputs.build_qcow2 == 'true'
       shell: bash
+      env:
+        QCOW2_IMAGE: ghcr.io/${{ github.repository_owner }}/${{ inputs.variant }}:${{ inputs.flavor }}-linux-amd64
       run: |
         sudo scripts/build-qcow2.sh \
-          "ghcr.io/${{ github.repository_owner }}/${{ inputs.variant }}:${{ inputs.flavor }}-linux-amd64"
+          "${QCOW2_IMAGE}"

@@ -118,3 +118,15 @@ ENV DESKTOP_FLAVOR=niri
 RUN dnf versionlock add glib2
 
 RUN rm -rf /opt && ln -s /var/opt /opt
+
+# ==============================================================================
+# XFCE variant - NVIDIA base with xfwl4 compositor
+# ==============================================================================
+FROM base-nvidia AS xfce
+
+ARG DESKTOP_FLAVOR=xfce
+ENV DESKTOP_FLAVOR=xfce
+
+RUN dnf versionlock add glib2
+
+RUN rm -rf /opt && ln -s /var/opt /opt

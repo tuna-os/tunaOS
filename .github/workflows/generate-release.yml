@@ -55,9 +55,11 @@ jobs:
 
       - name: Determine target
         id: target
+        env:
+          TARGET: ${{ inputs.target }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "target=${{ inputs.target }}" >> $GITHUB_OUTPUT
+            echo "target=${TARGET}" >> $GITHUB_OUTPUT
           else
             echo "target=lts" >> $GITHUB_OUTPUT
           fi

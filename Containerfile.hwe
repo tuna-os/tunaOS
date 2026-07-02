@@ -126,3 +126,15 @@ RUN dnf versionlock add glib2
 # Makes `/opt` writeable by default
 # Needs to be here to make the main image build strict (no /opt there)
 RUN rm -rf /opt && ln -s /var/opt /opt 
+
+# ==============================================================================
+# XFCE variant - HWE base with xfwl4 compositor
+# ==============================================================================
+FROM base-hwe AS xfce
+
+ARG DESKTOP_FLAVOR=xfce
+ENV DESKTOP_FLAVOR=xfce
+
+RUN dnf versionlock add glib2
+
+RUN rm -rf /opt && ln -s /var/opt /opt 

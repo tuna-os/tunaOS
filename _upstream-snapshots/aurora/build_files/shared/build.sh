@@ -4,8 +4,9 @@ set -eoux pipefail
 
 echo "::group:: Copy Files"
 
-# Speeds up local builds
-dnf config-manager setopt keepcache=1
+# Speeds up local builds and workaround network flakes, mainly for COPR and negativo
+cp /etc/dnf/dnf.conf /etc/dnf/dnf.conf.bak
+dnf config-manager setopt keepcache=1 timeout=60
 
 # We need to remove this package here because lots of files we add from `{projectbluefin,get-aurora-dev}/common` override the rpm files
 # they go away when you do dnf remove
@@ -31,7 +32,7 @@ setfattr -n user.component -v "aurora-config" /usr/share/ublue-os
 setfattr -n user.component -v "homebrew" /usr/share/homebrew.tar.zst
 
 if [[ "${IMAGE_FLAVOR}" == "dx" ]]; then
-	/ctx/build_files/shared/build-dx.sh
+  /ctx/build_files/shared/build-dx.sh
 fi
 
 mkdir -p /tmp/scripts/helpers

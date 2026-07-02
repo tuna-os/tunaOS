@@ -6,6 +6,60 @@ source /run/context/build_scripts/lib.sh
 
 case "${1:-}" in
 "base")
+	# ── apt (Ubuntu/Debian) Niri path ──────────────────────────────────
+	if [[ "$PKG_MGR" == "apt" ]]; then
+		# Ubuntu 26.04: install Niri WM and greetd display manager from apt.
+		# DMS (DankMaterialShell) and quickshell are not yet packaged for
+		# Ubuntu; install them from the Zirconium image COPY layers instead.
+		pkg_install niri greetd greetd-spawn
+
+		# Install Niri ecosystem packages (mirrors the Fedora/EL10 set where
+		# Ubuntu packages exist — excludes COPR-only packages like iio-niri,
+		# valent-git, dms, quickshell, etc.)
+		if apt-cache show brightnessctl &>/dev/null 2>&1; then
+			pkg_install \
+				brightnessctl \
+				btop \
+				cava \
+				chezmoi \
+				ddcutil \
+				fastfetch \
+				fcitx5-rime \
+				flatpak \
+				foot \
+				fzf \
+				gnome-disk-utility \
+				gnome-keyring \
+				gnome-keyring-pam \
+				just \
+				khal \
+				nautilus \
+				nautilus-python \
+				openssh-askpass \
+				pipewire \
+				playerctl \
+				udiskie \
+				wl-clipboard \
+				wl-mirror \
+				wtype \
+				xdg-desktop-portal-gtk \
+				xdg-desktop-portal-gnome \
+				xdg-terminal-exec \
+				xdg-user-dirs \
+				xwayland-satellite \
+				zram-generator
+		fi
+
+		# Build/install glib schemas (required for dconf/gsettings)
+		if command -v glib-compile-schemas &>/dev/null; then
+			glib-compile-schemas /usr/share/glib-2.0/schemas
+		fi
+
+		# Apply Niri-specific system file overrides from Zirconium
+		copy_systemfiles_for niri
+
+		exit 0
+	fi
 	# Fedora/EL10 Niri build - handle both variants
 	if [[ $IS_FEDORA == true ]]; then
 		# Fedora Niri build (from zirconium-dev/zirconium upstream)

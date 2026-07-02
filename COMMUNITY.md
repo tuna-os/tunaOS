@@ -9,6 +9,7 @@ tunaOS is an open-source project building OCI-based Enterprise Linux desktops. W
 1. **Try it**: `bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/yellowfin:gnome`
 2. **Report issues**: [GitHub Issues](https://github.com/tuna-os/tunaOS/issues)
 3. **Read the docs**: [CONTRIBUTING.md](CONTRIBUTING.md), [AGENT_GUIDE.md](docs/AGENT_GUIDE.md)
+4. **Add yourself**: If your org uses TunaOS, add it to [ADOPTERS.md](ADOPTERS.md)
 
 ### Contribution Ladder
 
@@ -34,6 +35,7 @@ tunaOS is an open-source project building OCI-based Enterprise Linux desktops. W
 | Downloads | `ghcr.io/tuna-os` pull counts |
 | Active variants | Yellowfin, Albacore, Skipjack, Bonito, Redfin |
 | Active desktops | GNOME, GNOME 50, KDE, COSMIC, Niri |
+| Adopters | [See ADOPTERS.md](ADOPTERS.md) — organizations using TunaOS |
 
 ### Code of Conduct
 
