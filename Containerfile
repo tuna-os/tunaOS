@@ -13,9 +13,11 @@ ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 # without --build-arg overrides will fail with a clear error.
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 ARG BREW_IMAGE_REF="ghcr.io/ublue-os/brew:unpinned-must-override"
+ARG ZIRCONIUM_IMAGE_REF="ghcr.io/zirconium-dev/zirconium:latest"
 
 FROM ${COMMON_IMAGE_REF} AS common
 FROM ${BREW_IMAGE_REF} AS brew
+FROM ${ZIRCONIUM_IMAGE_REF} AS zirconium
 
 # Context layer combines build-time dependencies and configuration files
 FROM scratch as context
@@ -23,6 +25,10 @@ COPY system_files /files
 COPY --from=brew /system_files /files
 COPY --from=common /system_files/shared /files
 COPY --from=common /system_files/bluefin /files
+COPY --from=zirconium /etc/niri /files/etc/niri
+COPY --from=zirconium /usr/share/zirconium /files/usr/share/zirconium
+COPY --from=zirconium /usr/lib/systemd/user/chezmoi-init.service /files/usr/lib/systemd/user/chezmoi-init.service
+COPY --from=zirconium /usr/lib/systemd/user/chezmoi-update.service /files/usr/lib/systemd/user/chezmoi-update.service
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 COPY image-versions.yaml /image-versions.yaml
