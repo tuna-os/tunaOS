@@ -197,7 +197,14 @@ jobs:
   build_stage2:
     name: "S2 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
     needs: [generate_matrix, build_base]
-    if: github.event_name != 'pull_request' && fromJson(needs.generate_matrix.outputs.stage2_matrix).include[0]
+    # build_base is SKIPPED (not failed) when a flavor-filtered dispatch
+    # leaves stage 1 empty (e.g. `-f flavor=xfce`); without !cancelled() a
+    # skipped need auto-skips this job and single-flavor dispatches no-op.
+    if: >-
+      !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build_base.result != 'failure' && needs.build_base.result != 'cancelled' &&
+      github.event_name != 'pull_request' &&
+      fromJson(needs.generate_matrix.outputs.stage2_matrix).include[0]
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.stage2_matrix) }}
