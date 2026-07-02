@@ -635,8 +635,12 @@ ready)
 	boot_live_iso || exit 1
 	sleep 5
 	screenshot "00-boot"
-	wait_for_ready
-	rc=$?
+	# NB: `&& rc=0 ||` keeps set -e from killing the script when the marker
+	# never arrives — everything below (the 10-ready screenshot and the
+	# screenshot-sanity fallback) MUST still run on that path; it's the
+	# whole recovery story for serial-less kernels. A bare call here
+	# historically aborted the script at exit 2 with only 00-boot captured.
+	wait_for_ready && rc=0 || rc=$?
 	screenshot "10-ready"
 	# Serial marker missing is expected when the guest kernel has no serial
 	# console support; fall back to verifying the framebuffer actually
