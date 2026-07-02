@@ -1,24 +1,24 @@
 # TunaOS Handoff Document
 
 > **Generated:** 2026-07-02  
-> **Branch / HEAD:** `main` @ `2acc89f`
+> **Branch / HEAD:** `main` @ `85bf07f`
 
 ---
 
 ## 1. Current State of `main`
 
-The `feat/pipeline-gating-desktop-matrix` branch has been successfully **merged into `main`** and pushed.
+The latest installer updates and dynamic branding configurations have been **merged into `main`** and pushed.
 
 ### Recent commits (newest first)
 
 | SHA | Description |
 |-----|-------------|
+| `85bf07f` | feat(branding): dynamically interpolate variant name and icon in bootc recipe |
+| `ad85fbc` | feat(branding): add TunaOS installer branding configurations |
+| `53cec47` | feat(installer): replace FirstSetup desktop references with bootc-installer app |
 | `2acc89f` | merge: resolve merge conflicts with origin/main |
 | `6620f52` | feat(zirconium): expand configuration imports from Zirconium image stage |
 | `c9d6176` | feat(zirconium): import Zirconium as builder stage and copy config dirs directly from target image |
-| `022a5ae` | fix(ci): correct redirect syntax inside test workflow |
-| `e81aef7` | feat(installer): update DMS config layout and add matugen generation support |
-| `ecff66f` | feat(installer): implement feature-for-feature ports of projectbluefin/bootc-installer for KDE and COSMIC |
 
 ---
 
@@ -34,6 +34,11 @@ Created native-framework implementations under the new directory `conductor/` mo
 Wired the core user preferences and desktop environment configurations from upstream Zirconium directly into the containerized build steps inside `Containerfile`:
 * Added `ghcr.io/zirconium-dev/zirconium` as a build stage.
 * Copies terminal overrides, Greetd managers, dms themes, PAM policies, and Chezmoi user initialization services directly from the Zirconium image layer at container-build time.
+
+### 2.3 Live ISO and Installer Branding
+* **Autologin & Pinned App**: Replaced the obsolete `FirstSetup` launcher reference with `bootc-installer.desktop` within [`live-iso/common/src/desktop-gnome.sh`](live-iso/common/src/desktop-gnome.sh) to align with upstream `projectbluefin/dakota-iso`.
+* **Installer Branding Config**: Created the shared base installer configuration at [`system_files/etc/bootc-installer/recipe.json`](system_files/etc/bootc-installer/recipe.json).
+* **Dynamic Variant Support**: Configured [`build_scripts/90-image-info.sh`](build_scripts/90-image-info.sh) to dynamically interpolate the distro name, logo icons, and tour welcome details in the installer recipe during image building based on the active target variant (e.g. *Yellowfin*, *Skipjack*, *Bonito*, *Albacore*, or *Grouper*).
 
 ---
 
