@@ -286,10 +286,7 @@ dnf_retry() {
 	local attempt=1
 	local rc=0
 	while ((attempt <= max_attempts)); do
-		if dnf "$@"; then
-			return 0
-		fi
-		rc=$?
+		dnf "$@" && return 0 || rc=$?
 		echo "dnf attempt ${attempt}/${max_attempts} failed (exit ${rc}); clearing metadata and retrying..." >&2
 		dnf clean metadata || true
 		sleep "$((attempt * 5))"
