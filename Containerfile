@@ -27,6 +27,10 @@ COPY --from=common /system_files/shared /files
 COPY --from=common /system_files/bluefin /files
 COPY --from=zirconium /etc/niri /files/etc/niri
 COPY --from=zirconium /usr/share/zirconium /files/usr/share/zirconium
+COPY --from=zirconium /usr/share/xdg-terminal-exec /files/usr/share/xdg-terminal-exec
+COPY --from=zirconium /usr/share/greetd /files/usr/share/greetd
+COPY --from=zirconium /usr/share/dms /files/usr/share/dms
+COPY --from=zirconium /usr/lib/pam.d /files/usr/lib/pam.d
 COPY --from=zirconium /usr/lib/systemd/user/chezmoi-init.service /files/usr/lib/systemd/user/chezmoi-init.service
 COPY --from=zirconium /usr/lib/systemd/user/chezmoi-update.service /files/usr/lib/systemd/user/chezmoi-update.service
 COPY system_files_overrides /overrides
