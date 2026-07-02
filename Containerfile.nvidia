@@ -9,7 +9,8 @@ ARG AKMODS_VERSION="${AKMODS_VERSION:-centos-10}"
 ARG AKMODS_NVIDIA_VERSION="${AKMODS_NVIDIA_VERSION:-${AKMODS_VERSION}}"
 ARG COMMON_IMAGE_REF
 ARG BREW_IMAGE_REF
-FROM ghcr.io/ublue-os/akmods-nvidia-open:${AKMODS_NVIDIA_VERSION} AS akmods_nvidia_open_full
+ARG AKMODS_BASE="ghcr.io/ublue-os"
+FROM ${AKMODS_BASE}/akmods-nvidia-open:${AKMODS_NVIDIA_VERSION} AS akmods_nvidia_open_full
 FROM ${COMMON_IMAGE_REF} AS common
 FROM ${BREW_IMAGE_REF} AS brew
 
