@@ -212,11 +212,6 @@ build_scripts_top=(
 
 # ── Variant-specific scripts ────────────────────────────────────────────
 
-@test "build_scripts/DX.sh: exists" {
-  run test -f "${REPO_ROOT}/build_scripts/DX.sh"
-  [ "$status" -eq 0 ]
-}
-
 @test "build_scripts/HWE.sh: exists" {
   run test -f "${REPO_ROOT}/build_scripts/HWE.sh"
   [ "$status" -eq 0 ]

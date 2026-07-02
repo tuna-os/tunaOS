@@ -22,7 +22,9 @@ curl --retry 3 --fail -Lo "$DOWNLOADS_DIR/JetBrainsMono.tar.xz" \
 	"https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/JetBrainsMono.tar.xz"
 mkdir -p /usr/share/fonts/JetBrainsMonoNerdFont
 tar -xJf "$DOWNLOADS_DIR/JetBrainsMono.tar.xz" -C /usr/share/fonts/JetBrainsMonoNerdFont
-command -v fc-cache >/dev/null 2>&1 && fc-cache -f /usr/share/fonts/JetBrainsMonoNerdFont || true
+if command -v fc-cache >/dev/null 2>&1; then
+	fc-cache -f /usr/share/fonts/JetBrainsMonoNerdFont
+fi
 rm "$DOWNLOADS_DIR/JetBrainsMono.tar.xz"
 
 # Add Flathub by default
@@ -31,7 +33,9 @@ curl --retry 3 --fail -o /etc/flatpak/remotes.d/flathub.flatpakrepo "https://dl.
 
 # Generate initramfs image after installing Yellowfin branding because of Plymouth subpackage
 # Set TunaOS Plymouth theme before rebuilding initramfs so dracut picks it up
-command -v plymouth-set-default-theme >/dev/null 2>&1 && plymouth-set-default-theme tunaos || true
+if command -v plymouth-set-default-theme >/dev/null 2>&1; then
+	plymouth-set-default-theme tunaos
+fi
 
 # Disable system sleep/suspend to prevent VMs from suspending during walkthroughs
 systemctl mask suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target || true

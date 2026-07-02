@@ -732,6 +732,30 @@ _run-vm type variant flavor='gnome' iso_file='':
     (sleep 5 && xdg-open "http://127.0.0.1:${port}") &
     podman run "${run_args[@]}"
 
+# ==============================================================================
+#  DEV LOOP (same checks CI runs)
+# ==============================================================================
+
+# Shellcheck every script with the same excludes as lint.yml
+lint:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "==> shellcheck"
+    /usr/bin/find . \
+      -not -path './system_files/usr/share/gnome-shell/extensions/*' \
+      -not -path './packages-repo/*' \
+      -not -path './.build/*' \
+      -not -path './_upstream-snapshots/*' \
+      -not -path './.git/*' \
+      -iname "*.sh" -type f \
+      -exec shellcheck --exclude=SC1091,SC2114 {} +
+    if command -v yamllint &>/dev/null; then
+        echo "==> yamllint"
+        yamllint -d relaxed .github/
+    else
+        echo "(yamllint not installed; skipped)"
+    fi
+
 # Run the full staged build pipeline
 pipeline variant='all' flavor='all' tag='latest' dry_run='0':
     #!/usr/bin/env bash

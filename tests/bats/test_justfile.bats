@@ -24,19 +24,22 @@ setup() {
   [ "$status" -eq 0 ]
 }
 
+# Recipes may live in the root Justfile or in imported just/*.just modules
+# (import shares one namespace), so existence checks scan both.
+
 @test "justfile: has 'lint' recipe or equivalent" {
   # Should have a lint or check target
-  run grep -E '^(lint|check)[:( ]' "${JUSTFILE}"
+  run grep -hE '^(lint|check)[:( ]' "${JUSTFILE}" "${REPO_ROOT}/just"/*.just
   [ "$status" -eq 0 ]
 }
 
 @test "justfile: has 'clean' recipe" {
-  run grep -E '^clean[:( ]' "${JUSTFILE}"
+  run grep -hE '^clean[:( ]' "${JUSTFILE}" "${REPO_ROOT}/just"/*.just
   [ "$status" -eq 0 ]
 }
 
 @test "justfile: has 'test' recipe" {
-  run grep -E '^test[:( ]' "${JUSTFILE}"
+  run grep -hE '^test[:( ]' "${JUSTFILE}" "${REPO_ROOT}/just"/*.just
   [ "$status" -eq 0 ]
 }
 

@@ -61,7 +61,7 @@ limactl start --name="$VM_NAME" --tty=false "$CONFIG_FILE" --timeout=10m
 DESKTOP_FLAVOR="$FLAVOR"
 # Normalize flavor to base desktop name
 for suffix in -hwe -nvidia -nvidia-hwe -hwe-nvidia; do
-	DESKTOP_FLAVOR="${DESKTOP_FLAVOR%$suffix}"
+	DESKTOP_FLAVOR="${DESKTOP_FLAVOR%"$suffix"}"
 done
 
 # Map desktop → display manager
@@ -103,15 +103,24 @@ for i in $(seq 1 15); do
 	if [[ "$STATUS" == "active" ]]; then GT_OK=true; break; fi
 	sleep 5
 done
-$GT_OK && echo "✅ graphical.target active" || { echo "❌ graphical.target not reached"; RC=1; }
+if $GT_OK; then
+	echo "✅ graphical.target active"
+else
+	echo "❌ graphical.target not reached"
+	RC=1
+fi
 
 # 1c. Check user session
 echo "--- Checking user session ---"
 SESSION=$(vm_exec loginctl list-sessions --no-legend 2>/dev/null | head -1 | awk '{print $1}')
 if [[ -n "$SESSION" ]]; then
-	SESSION_OK=$(vm_exec loginctl show-session "$SESSION" 2>/dev/null | grep -c "Active=yes" || true)
+	SESSION_ACTIVE=$(vm_exec loginctl show-session "$SESSION" 2>/dev/null | grep -c "Active=yes" || true)
 	SESSION_TYPE=$(vm_exec loginctl show-session "$SESSION" 2>/dev/null | grep "Type=" || echo "unknown")
-	echo "✅ Session $SESSION active ($SESSION_TYPE)"
+	if [[ "${SESSION_ACTIVE:-0}" -gt 0 ]]; then
+		echo "✅ Session $SESSION active ($SESSION_TYPE)"
+	else
+		echo "ℹ️  Session $SESSION present but not active ($SESSION_TYPE)"
+	fi
 else
 	echo "ℹ️  No user session found (auto-login may not be configured)"
 fi
