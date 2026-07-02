@@ -82,7 +82,9 @@ jobs:
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
-          sudo just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
+          # -E: TACKLEBOX_FROM_SOURCE must survive sudo or the containerized
+          # tacklebox runs and dies on rootless-only `podman unshare`.
+          sudo -E just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
