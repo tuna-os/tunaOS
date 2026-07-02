@@ -1,0 +1,16 @@
+config-notification {
+    disable-failed
+}
+
+debug {
+   honor-xdg-activation-with-invalid-serial
+}
+
+layer-rule {
+    match namespace="quickshell"
+    place-within-backdrop true
+}
+
+switch-events {
+    lid-close { spawn "dms" "ipc" "call" "lock" "lock"; }
+}

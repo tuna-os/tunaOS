@@ -1,0 +1,55 @@
+{
+  "wallpaperLastPath": "/usr/share/zirconium/skel/Pictures/Wallpapers",
+  "profileLastPath": "",
+  "fileBrowserSettings": {
+    "wallpaper": {
+      "lastPath": "/usr/share/zirconium/skel/Pictures/Wallpapers",
+      "viewMode": "grid",
+      "sortBy": "name",
+      "sortAscending": true,
+      "iconSizeIndex": 1,
+      "showSidebar": true
+    },
+    "profile": {
+      "lastPath": "",
+      "viewMode": "grid",
+      "sortBy": "name",
+      "sortAscending": true,
+      "iconSizeIndex": 1,
+      "showSidebar": true
+    },
+    "notepad_save": {
+      "lastPath": "",
+      "viewMode": "list",
+      "sortBy": "name",
+      "sortAscending": true,
+      "iconSizeIndex": 1,
+      "showSidebar": true
+    },
+    "notepad_load": {
+      "lastPath": "",
+      "viewMode": "list",
+      "sortBy": "name",
+      "sortAscending": true,
+      "iconSizeIndex": 1,
+      "showSidebar": true
+    },
+    "generic": {
+      "lastPath": "",
+      "viewMode": "list",
+      "sortBy": "name",
+      "sortAscending": true,
+      "iconSizeIndex": 1,
+      "showSidebar": true
+    },
+    "default": {
+      "lastPath": "",
+      "viewMode": "list",
+      "sortBy": "name",
+      "sortAscending": true,
+      "iconSizeIndex": 1,
+      "showSidebar": true
+    }
+  },
+  "configVersion": 1
+}
