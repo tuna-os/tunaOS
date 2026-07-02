@@ -18,6 +18,7 @@ user-facing site:
 | Doc | What it covers |
 |-----|----------------|
 | [AGENT_GUIDE.md](AGENT_GUIDE.md) | Repo architecture: variants, flavors, build stages, key files |
+| [INSTALLER_SCREENSHOTS.md](INSTALLER_SCREENSHOTS.md) | Visual step-by-step walkthrough of the GUI installer for GNOME and Cosmic |
 | [build-pipeline.md](build-pipeline.md) | CI/CD workflow and build-stage overview |
 | [CI_SPEC.md](CI_SPEC.md) | CI behavior specification |
 | [TESTING.md](TESTING.md) | ISO end-to-end test harness |
