@@ -27,8 +27,8 @@ out.ociarchive
 
 # Local tooling / agent state (not project content)
 .claude/
-.pi/
 .antigravitycli/
 
-# Agent state (not project content)
-.pi/
+# PI Coding Agent session logs (terminal recording dumps)
+tuna.txt
+ubuntu.txt
