@@ -163,3 +163,11 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   /run/context/build_scripts/niri.sh base
 RUN dnf versionlock add glib2
 RUN rm -rf /opt && ln -s /var/opt /opt
+
+FROM base-no-de AS xfce
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/xfce.sh base
+RUN dnf versionlock add glib2
+RUN rm -rf /opt && ln -s /var/opt /opt

@@ -22,7 +22,7 @@ iso_groups:
   # Niche desktops grouped by audience. Each adds ~300 MB incremental.
   # Published as `<variant>-community.iso`.
   - suffix: community
-    flavors: [kde, kde-hwe, cosmic, cosmic-hwe, niri, niri-hwe]
+    flavors: [kde, kde-hwe, cosmic, cosmic-hwe, niri, niri-hwe, xfce, xfce-hwe]
   # NVIDIA drivers + CUDA are large; isolate so only GPU users download them.
   # Published as `<variant>-nvidia.iso`.
   - suffix: nvidia
@@ -98,6 +98,11 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
+        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
 
       # ── Stage 3 ────────────────────────────────────────────────────────────
       # HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
@@ -161,11 +166,21 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
       - id: xfce-nvidia
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
+        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
 
   - id: albacore
     emoji: "🐟"
@@ -221,6 +236,16 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
+      - id: xfce
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
 
       # ── Stage 3 ────────────────────────────────────────────────────────────
       # HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
@@ -289,6 +314,26 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
+      - id: xfce-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
+      - id: xfce-nvidia
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
 
   - id: skipjack
     emoji: "🍣"
@@ -340,6 +385,15 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
+      - id: xfce
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+        platforms:
+          - linux/amd64
 
       # ── Stage 3 ────────────────────────────────────────────────────────────
       # HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
@@ -427,6 +481,11 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
+      - id: xfce
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
 
       # ── Stage 3 ────────────────────────────────────────────────────────────
       # HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
@@ -455,10 +514,17 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
+      - id: xfce-nvidia
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
 
   # ── Experimental ───────────────────────────────────────────────────────────
-  # RFC 010: Ubuntu 26.04 variant. GNOME-only, x86_64-only, manual dispatch only.
-  # Containerfile.ubuntu + apt build-script branches are pending (Phase 2).
+  # RFC 010: Ubuntu 26.04 variant. x86_64-only, manual dispatch only.
+  # Desktops: gnome/kde/niri/xfce via the apt branches in build_scripts/*.sh
+  # (cosmic has no apt branch yet). No HWE/NVIDIA layers — Ubuntu ships its
+  # own kernel stack and the akmods images are RPM-only.
   - id: grouper
     emoji: "🐟"
     description: "Based on Ubuntu 26.04 Resolute Raccoon"
@@ -472,6 +538,18 @@ variants:
         stage: 1
         build_image: true
       - id: gnome
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: kde
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: niri
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: xfce
         stage: 2
         build_image: true
         build_iso: true

@@ -78,12 +78,13 @@ mkdir -p "$OUT_DIR"
 RECIPE_FILE="${OUT_DIR}/recipe.json"
 
 # `desktop` maps an env to its session manager so livesys-* sets autologin
-# correctly. Approximation from build_scripts/{gnome,kde,niri,cosmic}.sh.
+# correctly. Approximation from build_scripts/{gnome,kde,niri,cosmic,xfce}.sh.
 DESKTOP="gnome"
 case "$FLAVOR" in
 kde*) DESKTOP="kde" ;;
 niri*) DESKTOP="niri" ;;
 cosmic*) DESKTOP="cosmic" ;;
+xfce*) DESKTOP="xfce" ;;
 gnome* | *) DESKTOP="gnome" ;;
 esac
 

@@ -25,6 +25,7 @@ A named product line mapping to a specific upstream distribution. Each variant h
 | Albacore | AlmaLinux 10 | Stable |
 | Skipjack | CentOS Stream 10 | Stable |
 | Bonito | Fedora 44 | Stable |
+| Grouper | Ubuntu 26.04 | Experimental (RFC 010) |
 | Redfin | RHEL 10 | Alpha (local-build only) |
 
 Variants can share desktops and flavors, but not all combinations are built for all variants.
@@ -40,6 +41,7 @@ A desktop environment shipped within an image. The build pipeline installs and c
 | `kde` | KDE Plasma | |
 | `cosmic` | COSMIC Desktop | |
 | `niri` | Niri | Tiling Wayland compositor |
+| `xfce` | XFCE | xfwl4 Wayland compositor on EL10/Fedora; X11 stack on Ubuntu |
 
 ## Flavor
 

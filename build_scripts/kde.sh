@@ -6,6 +6,23 @@ source /run/context/build_scripts/lib.sh
 
 case "${1:-}" in
 "base")
+	# ── apt (Ubuntu/Debian) KDE path ─────────────────────────────────────
+	if [[ "$PKG_MGR" == "apt" ]]; then
+		pkg_install \
+			kde-plasma-desktop \
+			plasma-workspace-wayland \
+			sddm \
+			dolphin \
+			konsole \
+			kate \
+			ark \
+			kde-connect \
+			xdg-desktop-portal-kde \
+			qt6-wayland
+
+		systemctl enable sddm
+		exit 0
+	fi
 	if [[ $IS_FEDORA == true ]]; then
 		dnf -y group install "kde-desktop"
 		# Fedora-only set: these are Aurora's KDE package selection
