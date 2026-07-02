@@ -22,6 +22,7 @@ on:
           - albacore
           - skipjack
           - bonito
+          - grouper
       group:
         description: 'ISO group (all = flagship + community + nvidia)'
         required: false
@@ -123,6 +124,32 @@ jobs:
           sudo GITHUB_REPOSITORY_OWNER=tuna-os \
             just iso-group "${{ matrix.variant }}" "${{ matrix.group }}" ghcr
 
+      - name: Install QEMU for boot gate
+        run: |
+          sudo apt-get install -y qemu-system-x86 qemu-utils ovmf socat imagemagick
+
+      - name: "Boot gate: verify grouped ISO"
+        timeout-minutes: 25
+        run: |
+          ISO=$(find . -maxdepth 1 -name "${{ matrix.basename }}-*.iso" | head -1)
+          echo "==> Boot-gating $ISO (default menu entry)"
+          mkdir -p iso-e2e-out
+          sudo ./scripts/iso-e2e.sh "$ISO" \
+            --output iso-e2e-out \
+            --timeout 900
+
+      - name: Upload boot-gate evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: e2e-${{ matrix.basename }}
+          path: |
+            iso-e2e-out/serial.log
+            iso-e2e-out/*.ppm
+          if-no-files-found: warn
+          retention-days: 7
+
+      # Only reached if the boot gate passed.
       - name: Upload ISO to Cloudflare R2
         if: ${{ inputs.skip_upload != true }}
         env:

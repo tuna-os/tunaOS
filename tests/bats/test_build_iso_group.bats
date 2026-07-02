@@ -109,7 +109,7 @@ _select() {
 }
 
 @test "select: bonito community drops absent -hwe desktops" {
-  [ "$(_select community bonito)" = "kde cosmic niri" ]
+  [ "$(_select community bonito)" = "kde cosmic niri xfce" ]
 }
 
 @test "select: nvidia group resolves for yellowfin" {

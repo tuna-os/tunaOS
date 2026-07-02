@@ -20,19 +20,25 @@ TunaOS is a **bootc-based OS image builder** — it produces bootable OCI contai
 | `albacore` | AlmaLinux 10 | Stable |
 | `skipjack` | CentOS Stream 10 | Beta |
 | `bonito` | Fedora 44 | In progress |
+| `grouper` | Ubuntu 26.04 (bootcified, `Containerfile.ubuntu`) | Experimental, amd64-only |
 
 ### Flavors (layered via 4-stage DAG; see `.github/build-config.yml` for full matrix)
 
 | Layer | Flavors | Contents |
 |---|---|---|
 | Stage 1 — base | `base` | Minimal OS (all variants) |
-| Stage 2 — HWE/nvidia base + desktops | `base-hwe`, `base-nvidia`, `gnome`, `gnome50`, `cosmic`, `kde`, `niri` | DE packages; HWE coreos kernel; nvidia NVIDIA base |
+| Stage 2 — HWE/nvidia base + desktops | `base-hwe`, `base-nvidia`, `gnome`, `gnome50`, `cosmic`, `kde`, `niri`, `xfce` | DE packages; HWE coreos kernel; nvidia NVIDIA base |
 | Stage 3 — HWE/nvidia desktops | `<de>-hwe`, `<de>-nvidia` (e.g. `gnome-hwe`, `kde-nvidia`) | DE layered on HWE/nvidia base |
 | Stage 4 — combined | `gnome-nvidia-hwe` | GNOME + nvidia + HWE (layers on `gnome-hwe`) |
 
 Flavor availability varies per variant — consult `.github/build-config.yml`.
 - `bonito` has fewer HWE/nvidia combos (no `gnome50`, fewer non-GNOME HWE layers).
 - HWE flavors ship the `coreos/fedora` kernel + `ublue-os/akmods-nvidia-open`.
+- `xfce` on EL10 is the **hanthor/xfce-wayland** port (xfwl4 compositor) from
+  repo.tunaos.org — EL10 x86_64 only, hence its platform restrictions.
+  bonito/grouper ship stock X11 XFCE. See `docs/PIPELINE.md`.
+- `grouper` builds only `gnome`, `kde`, `niri`, `xfce` (apt branches in
+  `build_scripts/*.sh`; `cosmic.sh` has no apt branch).
 
 ---
 
@@ -82,6 +88,12 @@ just build-all-base      # Base flavor only for all variants
 sudo just iso <variant> <flavor> <local|ghcr>
 sudo just iso-tacklebox <variant> <flavor> <local|ghcr> <tag>
 sudo just qcow2 <variant> <flavor> <local|ghcr>
+
+# Verification (the same gates CI enforces before publishing)
+just lint                          # shellcheck + yamllint, mirrors lint.yml
+just test                          # bats + pytest, mirrors test.yml
+just verify-disk <image.qcow2>     # QEMU boot gate for a disk image
+./scripts/iso-e2e.sh <file.iso>    # QEMU boot gate for a live ISO
 
 # Cleanup
 just clean               # Remove build artifacts and images (preserves .rpm-cache)
@@ -134,11 +146,14 @@ just --list              # Show all available commands
 
 ### CI/CD
 
+Full reference (workflow map, gating model, triage cheat-sheet): **[`docs/PIPELINE.md`](PIPELINE.md)**.
+
 - **Central matrix config:** `.github/build-config.yml` — single source of truth; adding a variant only requires updating this file
-- **Orchestrator:** `.github/workflows/build-variant.yml` — DAG with 4 stages + artifact builds; needs-based stage ordering
-- **Reusable job:** `.github/workflows/reusable-build-image.yml` — multi-platform (amd64, amd64v2, arm64), cosign sign, SBOMs
+- **Orchestrator:** `.github/workflows/build-variant.yml` — DAG with 4 stages + per-stage artifact (ISO) builds; needs-based stage ordering
+- **Reusable image job:** `.github/workflows/reusable-build-image.yml` — multi-platform (amd64, amd64v2, arm64), SBOMs, and **publish gating**: manifests push as `:<flavor>-testing`, a QEMU boot gate must pass before the bare `:<flavor>` + date tags are promoted
+- **Reusable ISO job:** `.github/workflows/reusable-build-artifacts.yml` — build ISO → boot gate → only then publish to R2/Releases
 - **Trigger wrappers:** per-variant workflows (`build-yellowfin.yml`, etc.) call `build-variant.yml`
-- CI timeout: **60 minutes maximum** per build
+- CI timeout: **60 minutes maximum** per build; boot gates add ~15–25 min after manifest
 
 ### Key Files
 
@@ -206,3 +221,13 @@ When debugging RPM conflicts or missing packages in skipjack/yellowfin GNOME bui
 - **NEVER extract tools into the repo root**
 - **NEVER skip `just fix` + `just check` before committing**
 - **NEVER commit build artifacts** (`.build/`, `.rpm-cache/` are gitignored)
+- **New `build_scripts/*.sh` must be executable** (`chmod +x`) — the container
+  runtime exits 126 launching a mode-644 script, and shellcheck/bats won't
+  catch it
+- **CI's shellcheck is 0.9.0** (Ubuntu apt), stricter on some patterns than
+  local 0.11 — e.g. it flags `A && B || true` as SC2015. Reproduce with
+  `podman run koalaman/shellcheck:v0.9.0`
+- **QEMU screendumps need `-vga virtio`** — the default VGA framebuffer is
+  black under UEFI GOP, which reads as a boot-gate failure
+- **Never install `tuna-os.repo` on Fedora** (bonito) — its $releasever
+  baseurl 404s and `skip_if_unavailable=False` breaks every later dnf call

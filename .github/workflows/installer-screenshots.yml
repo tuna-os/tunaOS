@@ -1,0 +1,195 @@
+name: Installer Walkthrough Screenshots
+
+# Boots a freshly built live ISO in QEMU, drives the bootc-install GUI with
+# scripts/run-walkthrough.sh (sendkey choreography + screendumps), and commits
+# the resulting flow screenshots to docs/images/installer/ — replacing the
+# repo's installer imagery with real captures on a schedule.
+#
+# The gnome flow writes 01_welcome.png … 06_done.png; the cosmic flow gets a
+# cosmic_ prefix. These exact filenames are what docs/INSTALLER_SCREENSHOTS.md
+# and the docs site carousels reference.
+
+on:
+  schedule:
+    # Mondays 05:00 UTC — after weekend image publishes and the 02:00 desktop
+    # screenshot run, before the 06:00 iso-e2e smoke.
+    - cron: "0 5 * * 1"
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "Variant to capture the installer on"
+        required: false
+        default: "skipjack"
+        type: choice
+        options:
+          - yellowfin
+          - albacore
+          - skipjack
+          - bonito
+          - grouper
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  group: installer-screenshots
+  cancel-in-progress: false
+
+jobs:
+  walkthrough:
+    name: ${{ inputs.variant || 'skipjack' }}:${{ matrix.flavor }} installer flow
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - flavor: gnome
+            prefix: ""
+          - flavor: cosmic
+            prefix: "cosmic_"
+    env:
+      VARIANT: ${{ inputs.variant || 'skipjack' }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: recursive
+
+      - uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
+
+      - name: Enable KVM group permissions
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm || true
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            just podman jq golang-go git \
+            qemu-system-x86 qemu-utils ovmf socat netpbm python3-pil
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build live ISO (from published GHCR image)
+        timeout-minutes: 45
+        env:
+          GITHUB_REPOSITORY_OWNER: tuna-os
+        run: |
+          sudo GITHUB_REPOSITORY_OWNER=tuna-os \
+            just iso "${VARIANT}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
+
+      - name: Run installer walkthrough
+        timeout-minutes: 30
+        run: |
+          ISO=$(find . -maxdepth 1 -name "${VARIANT}-${{ matrix.flavor }}-*.iso" | head -1)
+          if [[ -z "$ISO" ]]; then
+            echo "::error::No ISO found for ${VARIANT}-${{ matrix.flavor }}"
+            exit 1
+          fi
+          sudo bash scripts/run-walkthrough.sh "$ISO" walkthrough-out
+          sudo chown -R "$USER:$(id -gn)" walkthrough-out
+
+      # The walkthrough performed a real install onto install-disk.qcow2.
+      # Boot that disk to verify the install flow actually produced a
+      # bootable system — this is the end-to-end check on the ISO install
+      # pipeline, not just the GUI rendering. Advisory for now: sendkey
+      # choreography drift aborts installs without meaning the ISO is bad.
+      - name: Verify installed system boots
+        id: install-verify
+        timeout-minutes: 20
+        continue-on-error: true
+        run: |
+          sudo ./scripts/iso-e2e.sh walkthrough-out/install-disk.qcow2 --disk \
+            --output install-verify-out \
+            --timeout 600
+          sudo chown -R "$USER:$(id -gn)" install-verify-out || true
+
+      - name: Report install verification
+        if: steps.install-verify.outcome == 'failure'
+        run: |
+          echo "::warning::installed system from the walkthrough did not verify as bootable — check installer-debug artifact"
+
+      - name: Apply flavor prefix and validate captures
+        run: |
+          mkdir -p staged
+          count=0
+          for png in walkthrough-out/*.png; do
+            [[ -f "$png" ]] || continue
+            cp "$png" "staged/${{ matrix.prefix }}$(basename "$png")"
+            count=$((count + 1))
+          done
+          echo "Captured ${count} screenshots"
+          if [[ "$count" -lt 6 ]]; then
+            echo "::warning::expected 6 walkthrough screenshots, got ${count} — flow may have drifted (see serial.log artifact)"
+          fi
+          if [[ "$count" -eq 0 ]]; then
+            echo "::error::no screenshots captured"
+            exit 1
+          fi
+
+      - name: Upload walkthrough artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: installer-shots-${{ matrix.flavor }}
+          path: staged/*.png
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload debug evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: installer-debug-${{ matrix.flavor }}
+          path: walkthrough-out/serial.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  commit-to-repo:
+    name: Commit installer screenshots
+    needs: walkthrough
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Download walkthrough artifacts
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v4
+        with:
+          pattern: installer-shots-*
+          merge-multiple: true
+          path: /tmp/installer-shots
+
+      - name: Stage screenshots
+        id: stage
+        run: |
+          mkdir -p docs/images/installer
+          count=0
+          for png in /tmp/installer-shots/*.png; do
+            [[ -f "$png" ]] || continue
+            cp "$png" "docs/images/installer/$(basename "$png")"
+            count=$((count + 1))
+          done
+          echo "staged=${count}" >> "$GITHUB_OUTPUT"
+          echo "Staged ${count} screenshot(s)"
+
+      - name: Commit and push
+        if: steps.stage.outputs.staged != '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/images/installer
+          if git diff --cached --quiet; then
+            echo "No screenshot changes to commit"
+            exit 0
+          fi
+          git commit -m "docs: refresh installer walkthrough screenshots ($(date +%Y-%m-%d)) [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main

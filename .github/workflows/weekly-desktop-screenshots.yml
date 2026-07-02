@@ -8,6 +8,10 @@ name: Weekly Desktop Screenshots
 # download.tunaos.org. The DesktopScreenshots component in tuna-os/docs reads
 # exactly that path, so each variant landing page on tunaos.org shows current,
 # automatically-refreshed desktop screenshots.
+#
+# Also commits the same screenshots to docs/images/desktops/ in this repo
+# (single job at the end, one commit per run) so the repo itself always
+# shows real, current desktops for every variant × DE.
 
 on:
   schedule:
@@ -30,6 +34,10 @@ permissions:
   contents: read
   packages: read
 
+concurrency:
+  group: weekly-desktop-screenshots
+  cancel-in-progress: false
+
 jobs:
   screenshot:
     name: ${{ matrix.variant }}/${{ matrix.flavor }}
@@ -37,8 +45,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [yellowfin, albacore, skipjack, bonito]
-        flavor: [gnome, kde, niri, cosmic]
+        variant: [yellowfin, albacore, skipjack, bonito, grouper]
+        flavor: [gnome, kde, niri, cosmic, xfce]
+        exclude:
+          # grouper (Ubuntu) has no cosmic image — cosmic.sh has no apt branch
+          - variant: grouper
+            flavor: cosmic
     steps:
       - name: Check matrix filter
         id: filter
@@ -171,3 +183,54 @@ jobs:
           rclone copyto --s3-no-check-bucket --log-level INFO \
             screenshot.png "${DEST}/${BASE}-latest.png"
           echo "==> Published ${BASE}-latest.png to R2."
+
+  # ── Commit the fresh screenshots to the repo ────────────────────────────────
+  # One aggregate commit per run so every variant × DE page in docs/ shows a
+  # real, current desktop. Runs even if some cells failed — whatever was
+  # captured gets committed; missing cells keep their previous image.
+  commit-to-repo:
+    name: Commit screenshots to docs/images/desktops
+    needs: screenshot
+    if: always() && !cancelled()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Download all screenshot artifacts
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53 # v4
+        with:
+          pattern: "*-desktop-screenshot"
+          path: /tmp/shots
+
+      - name: Stage screenshots
+        id: stage
+        run: |
+          mkdir -p docs/images/desktops
+          count=0
+          for dir in /tmp/shots/*-desktop-screenshot; do
+            [[ -d "$dir" ]] || continue
+            base=$(basename "$dir")
+            base="${base%-desktop-screenshot}"   # <variant>-<flavor>
+            if [[ -f "$dir/screenshot.png" ]]; then
+              cp "$dir/screenshot.png" "docs/images/desktops/${base}.png"
+              count=$((count + 1))
+            fi
+          done
+          echo "staged=${count}" >> "$GITHUB_OUTPUT"
+          echo "Staged ${count} screenshot(s)"
+
+      - name: Commit and push
+        if: steps.stage.outputs.staged != '0'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/images/desktops
+          if git diff --cached --quiet; then
+            echo "No screenshot changes to commit"
+            exit 0
+          fi
+          git commit -m "docs: refresh desktop screenshots ($(date +%Y-%m-%d)) [skip ci]"
+          git pull --rebase origin main
+          git push origin HEAD:main

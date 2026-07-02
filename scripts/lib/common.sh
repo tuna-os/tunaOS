@@ -156,6 +156,7 @@ tunaos_flavor_desktop() {
 	kde*) echo "kde" ;;
 	niri*) echo "niri" ;;
 	cosmic*) echo "cosmic" ;;
+	xfce*) echo "xfce" ;;
 	gnome* | *) echo "gnome" ;;
 	esac
 }

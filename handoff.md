@@ -136,15 +136,20 @@ Live ISO sessions use autologin (`liveuser` account) configured per-desktop in `
 ### High Priority
 
 - [ ] **Real installer screenshots** — See §4. The current docs have AI-generated placeholders. Need to run `scripts/run-walkthrough.sh` per desktop and replace images in `docs/images/installer/`.
-- [ ] **Skipjack gnome/kde/cosmic flavor builds** — Only `skipjack:base` has been built this session. The stage-2 desktop flavor builds still need to run on `skipjack-vm`.
-- [ ] **ISO builds** — No ISOs have been built this session. ISO builds require `just iso <variant> <flavor>` on each VM after the desktop flavor images exist.
+- [x] **Skipjack gnome/cosmic/kde flavor builds** — All three built on `skipjack-vm`. Note: `podman system prune -af` during chunkah aggressively prunes intermediate images; rebuild before ISO step.
+- [x] **Skipjack ISOs (gnome, cosmic, kde)** — All three ISOs built and QEMU-verified:
+  - `skipjack-gnome-10-x86_64.iso` (3.9 GB)
+  - `skipjack-cosmic-10-x86_64.iso` (2.9 GB)
+  - `skipjack-kde-10-x86_64.iso` (4.0 GB)
+- [x] **Debug kernel initramfs workaround** — CentOS Stream 10 ships a `+debug` kernel with no initramfs. Tacklebox picks the debug kernel first (alphabetically) and fails. Fixed by running `dracut --force --reproducible --no-hostonly` for the debug kernel inside the image before ISO build.
 
 ### Medium Priority
 
 - [ ] **Grouper stage-2 builds** — grouper `base` is built, but no desktop flavors. The composefs pipeline is different — test gnome flavor carefully.
-- [ ] **XFCE variant** — `build_scripts/xfce.sh` exists but is not wired into `build-config.yml` or the Justfile. Needs a decision on whether to enable it.
+- [x] **XFCE variant** — wired into `build-config.yml` for all five variants (xfce stage added to `Containerfile`/`Containerfile.ubuntu`, apt branch implemented in `xfce.sh`, DM install added on EL10, flavor→desktop mapping in `scripts/lib/common.sh` + `build-iso-tacklebox.sh`).
 - [ ] **Arch-derived variant** — No implementation yet. Discussed as a future direction.
 - [ ] **Tromso / Dakota integration** — Reference: `hanthor/tromso` and `hanthor/dakota` projects.
+- [ ] **Tacklebox container image rootless issue** — The containerized tacklebox fails on `podman unshare` when run as root, requiring `TACKLEBOX_FROM_SOURCE=1` to build from source on the host. Root cause: `podman unshare` only works in rootless mode, but tacklebox container runs privileged. Should be fixed in tacklebox or worked around in `scripts/lib/common.sh`.
 
 ### Low Priority / Informational
 
