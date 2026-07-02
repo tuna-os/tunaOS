@@ -68,11 +68,10 @@ jobs:
         run: |
           BATS_COUNT=$(find tests/bats -name "*.bats" -type f | wc -l)
           PY_COUNT=$(find tests/pytest -name "*.py" -type f 2>/dev/null | wc -l)
-          echo "| Type | Files |"
-          echo "|---|---|"
-          echo "| BATS | ${BATS_COUNT} |"
-          echo "| pytest | ${PY_COUNT} |"
-          echo "| Top-level pytest | $(find tests -maxdepth 1 -name 'test_*.py' -type f | wc -l) |"
-          echo ""
-          echo "Run locally: \`just test\`"
-          >> "$GITHUB_STEP_SUMMARY"
+          echo "| Type | Files |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---|---|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| BATS | ${BATS_COUNT} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| pytest | ${PY_COUNT} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Top-level pytest | $(find tests -maxdepth 1 -name 'test_*.py' -type f | wc -l) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Run locally: \`just test\`" >> "$GITHUB_STEP_SUMMARY"
