@@ -37,6 +37,12 @@ Fedora XFCE (X11) until a Fedora chroot exists; grouper ships the Ubuntu X11
 stack (no debs). Session entry is `startxfce4 --wayland`; xfwl4 requires
 `xfwm4` installed (themes).
 
+> **Status**: the EL10 xfce/xfce-hwe/xfce-nvidia entries are **commented out
+> in build-config** — repo.tunaos.org does not serve the stack yet (most
+> component specs and the build-order tier are missing). Tracking:
+> [tuna-os/github-copr#65](https://github.com/tuna-os/github-copr/issues/65).
+> bonito and grouper xfce build today.
+
 ---
 
 ## Image flow: build → testing tag → boot gate → promote
