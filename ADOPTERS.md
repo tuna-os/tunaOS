@@ -28,6 +28,11 @@ _(None listed yet — be the first!)_
 | [Homebrew](https://brew.sh) | Package manager — baked into all images | [brew.sh](https://brew.sh) |
 | [Flathub](https://flathub.org) | App distribution — pre-enabled in all images | [flathub.org](https://flathub.org) |
 | [BuildStream](https://buildstream.build) | Build tool — used by Tromsø (KDE) and XFCE Linux variants | [buildstream.build](https://buildstream.build) |
+| [bootc-dev/bootc](https://github.com/bootc-dev/bootc) | Upstream bootc project — bootable container technology foundation (CNCF Sandbox) | [github.com/bootc-dev/bootc](https://github.com/bootc-dev/bootc) |
+| [System76 / COSMIC](https://system76.com/cosmic) | Desktop environment — COSMIC variant of TunaOS | [github.com/pop-os/cosmic-epoch](https://github.com/pop-os/cosmic-epoch) |
+| [KDE Community](https://kde.org) | Desktop environment — Tromsø variant built on KDE Plasma 6 | [kde.org](https://kde.org) |
+| [XFCE Community](https://xfce.org) | Desktop environment — XFCE Linux variant built on XFCE 4.20 | [xfce.org](https://xfce.org) |
+| [Project Bluefin (Dakota)](https://github.com/projectbluefin/dakota) | Reference implementation — Tromsø and XFCE Linux modeled on Dakota's BuildStream approach | [github.com/projectbluefin/dakota](https://github.com/projectbluefin/dakota) |
 
 ## Adding Your Organization
 
@@ -41,4 +46,4 @@ Questions? Reach out on [Matrix](https://matrix.to/#/%23tunaos:reilly.asia) or o
 
 ---
 
-*Maintained by the TunaOS community. Last updated: 2026-06-27.*
+*Maintained by the TunaOS community. Last updated: 2026-06-30.*
