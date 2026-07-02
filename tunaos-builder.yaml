@@ -20,6 +20,12 @@ provision:
       #!/bin/bash
       set -euxo pipefail
 
+      # Disable SELinux enforcing to prevent podman library loading denials during tacklebox initramfs rebuilds
+      setenforce 0 || true
+      if [ -f /etc/selinux/config ]; then
+        sed -i 's/^SELINUX=enforcing/SELINUX=permissive/' /etc/selinux/config || true
+      fi
+
       # Build toolchain
       dnf install -y podman git just golang yq qemu-img createrepo_c \
         bats ShellCheck shfmt neovim tmux htop ripgrep fd-find \
