@@ -19,20 +19,16 @@ FROM ${COMMON_IMAGE_REF} AS common
 FROM ${BREW_IMAGE_REF} AS brew
 FROM ${ZIRCONIUM_IMAGE_REF} AS zirconium
 
-# Context layer combines build-time dependencies and configuration files
+# Context layer combines build-time dependencies and configuration files.
+# NOTE: no zirconium content here — the context stage feeds EVERY desktop
+# stage, and Zirconium (DMS/Niri) files belong only on niri images, the same
+# way Aurora files inform kde and Bluefin files inform gnome. The zirconium
+# COPYs live in the niri stage below.
 FROM scratch as context
 COPY system_files /files
 COPY --from=brew /system_files /files
 COPY --from=common /system_files/shared /files
 COPY --from=common /system_files/bluefin /files
-COPY --from=zirconium /etc/niri /files/etc/niri
-COPY --from=zirconium /usr/share/zirconium /files/usr/share/zirconium
-COPY --from=zirconium /usr/share/xdg-terminal-exec /files/usr/share/xdg-terminal-exec
-COPY --from=zirconium /usr/share/greetd /files/usr/share/greetd
-COPY --from=zirconium /usr/share/dms /files/usr/share/dms
-COPY --from=zirconium /usr/lib/pam.d /files/usr/lib/pam.d
-COPY --from=zirconium /usr/lib/systemd/user/chezmoi-init.service /files/usr/lib/systemd/user/chezmoi-init.service
-COPY --from=zirconium /usr/lib/systemd/user/chezmoi-update.service /files/usr/lib/systemd/user/chezmoi-update.service
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 COPY image-versions.yaml /image-versions.yaml
@@ -167,6 +163,18 @@ RUN dnf versionlock add glib2
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS niri
+# Zirconium (DMS/Niri upstream) config payload — niri images only.
+# NB: there is NO /etc/niri (or factory equivalent) in the zirconium image
+# — verified against the published image 2026-07-02. Niri user config is
+# materialized per-user by chezmoi-init from /usr/share/zirconium
+# (zdots/skel), so only the /usr paths below are copied.
+COPY --from=zirconium /usr/share/zirconium /usr/share/zirconium
+COPY --from=zirconium /usr/share/xdg-terminal-exec /usr/share/xdg-terminal-exec
+COPY --from=zirconium /usr/share/greetd /usr/share/greetd
+COPY --from=zirconium /usr/share/dms /usr/share/dms
+COPY --from=zirconium /usr/lib/pam.d /usr/lib/pam.d
+COPY --from=zirconium /usr/lib/systemd/user/chezmoi-init.service /usr/lib/systemd/user/chezmoi-init.service
+COPY --from=zirconium /usr/lib/systemd/user/chezmoi-update.service /usr/lib/systemd/user/chezmoi-update.service
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \

@@ -90,12 +90,12 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     fi
     BUILD_ARGS+=("--build-arg" "IMAGE_NAME_VARIANT={{ target_tag }}")
 
-    # RFC 010: grouper (Ubuntu) pulls Zirconium system files for DMS/Niri.
-    # Pin the image ref via image-versions.yaml, same as common/brew.
-    if [[ "{{ target_tag }}" == "grouper" ]]; then
-        zirconium_image_sha=$({{ yq }} -r '.images[] | select(.name == "zirconium") | .digest' image-versions.yaml)
-        BUILD_ARGS+=("--build-arg" "ZIRCONIUM_IMAGE_REF=ghcr.io/zirconium-dev/zirconium@${zirconium_image_sha}")
-    fi
+    # Zirconium system files feed the niri desktop stages (all variants) and
+    # grouper (RFC 010). Pin the image ref via image-versions.yaml, same as
+    # common/brew — without this the Containerfile ARG default floats on
+    # :latest and builds aren't reproducible.
+    zirconium_image_sha=$({{ yq }} -r '.images[] | select(.name == "zirconium") | .digest' image-versions.yaml)
+    BUILD_ARGS+=("--build-arg" "ZIRCONIUM_IMAGE_REF=ghcr.io/zirconium-dev/zirconium@${zirconium_image_sha}")
 
     if [[ -z "$(git status -s)" ]]; then
         BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=$(git rev-parse --short HEAD)")
