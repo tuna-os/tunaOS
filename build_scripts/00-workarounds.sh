@@ -9,12 +9,10 @@ if [[ "$IS_RHEL" = true || "$IS_CENTOS" = true ]]; then rm -f /usr/lib/bootc/ins
 # Remove amd-legacy.conf from upstream: TunaOS kernel is not compiled with si_support/cik_support
 rm -f /usr/lib/modprobe.d/amd-legacy.conf
 
-# Configure AlmaLinux and AlmaLinux Kitten repos for reliability
-if [[ "$IS_ALMALINUX" = true ]] || [[ "$IS_ALMALINUXKITTEN" = true ]]; then
-	echo "Configuring AlmaLinux repos for better reliability"
-
-	# Configure DNF for better timeout handling and retries
+# Configure DNF for better timeout handling and retries on all RHEL-family systems
+if [[ "$IS_ALMALINUX" = true ]] || [[ "$IS_ALMALINUXKITTEN" = true ]] || [[ "$IS_CENTOS" = true ]] || [[ "$IS_RHEL" = true ]]; then
 	if [ -f /etc/dnf/dnf.conf ]; then
+		echo "Configuring DNF for performance and reliability"
 		# Keep fastestmirror but with reasonable timeout
 		sed -i 's/^fastestmirror=.*/fastestmirror=1/' /etc/dnf/dnf.conf
 		if ! grep -q "^fastestmirror=" /etc/dnf/dnf.conf; then
@@ -39,6 +37,12 @@ if [[ "$IS_ALMALINUX" = true ]] || [[ "$IS_ALMALINUXKITTEN" = true ]]; then
 		cat /etc/dnf/dnf.conf
 		echo "--- End of dnf.conf ---"
 	fi
+fi
+
+# Configure AlmaLinux and AlmaLinux Kitten repos for reliability
+if [[ "$IS_ALMALINUX" = true ]] || [[ "$IS_ALMALINUXKITTEN" = true ]]; then
+	echo "Configuring AlmaLinux repos for better reliability"
+
 
 	# Ensure baseurl is available as fallback, but keep mirrorlist enabled
 	for repo_file in /etc/yum.repos.d/almalinux*.repo; do
