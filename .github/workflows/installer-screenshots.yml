@@ -180,6 +180,31 @@ jobs:
           echo "staged=${count}" >> "$GITHUB_OUTPUT"
           echo "Staged ${count} screenshot(s)"
 
+      # tunaos.org's InstallerWalkthrough component reads these:
+      # screenshots/installer/<name>-latest.png on download.tunaos.org.
+      - name: Publish captures to R2
+        if: steps.stage.outputs.staged != '0'
+        env:
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          if [[ -z "${RCLONE_CONFIG_R2_ACCESS_KEY_ID:-}" ]]; then
+            echo "::notice::R2 credentials not configured; skipping publish."
+            exit 0
+          fi
+          sudo apt-get install -y -qq rclone 2>/dev/null || true
+          for png in /tmp/installer-shots/*.png; do
+            [[ -f "$png" ]] || continue
+            base="$(basename "$png" .png)"
+            rclone copyto --s3-no-check-bucket --log-level ERROR \
+              "$png" "R2:${{ secrets.R2_BUCKET }}/screenshots/installer/${base}-latest.png"
+          done
+          echo "Published capture(s) to R2"
+
       - name: Regenerate screenshot gallery
         if: steps.stage.outputs.staged != '0'
         run: bash scripts/gen-screenshot-gallery.sh
