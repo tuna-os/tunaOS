@@ -70,6 +70,13 @@ jobs:
         run: |
           sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
 
+      - name: Sync image into rootless storage
+        run: |
+          # sudo just build lands the image in root podman storage, but
+          # tacklebox's squashfs step reads it via rootless `podman unshare`
+          # as the runner user ("image not known" otherwise).
+          sudo podman save "localhost/${VARIANT}:${FLAVOR}" | podman load
+
       - name: Build Live ISO
         env:
           TACKLEBOX_FROM_SOURCE: "1"
