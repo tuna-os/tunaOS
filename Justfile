@@ -428,6 +428,7 @@ qcow2 variant flavor='gnome' repo='local' tag='':
         bootc install to-disk \
             --via-loopback \
             --generic-image \
+            --karg console=ttyS0 --karg console=tty0 \
             "${SSH_KEY_ARGS[@]}" \
             --source-imgref "containers-storage:${IMG_REF}" \
             /disk.img
