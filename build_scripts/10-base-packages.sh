@@ -31,6 +31,7 @@ install_base_packages_no_de() {
 			podman \
 			skopeo \
 			systemd-container \
+			util-linux \
 			flatpak \
 			distrobox \
 			fastfetch \

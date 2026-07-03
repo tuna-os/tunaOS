@@ -16,7 +16,7 @@ case "${1:-}" in
 			konsole \
 			kate \
 			ark \
-			kde-connect \
+			kdeconnect \
 			xdg-desktop-portal-kde \
 			qt6-wayland
 
@@ -37,7 +37,7 @@ case "${1:-}" in
 			kate \
 			ark \
 			plasma-discover \
-			kde-connect \
+			kdeconnect \
 			xdg-desktop-portal-kde \
 			qt5-qtwayland \
 			qt6-qtwayland \
@@ -80,7 +80,7 @@ case "${1:-}" in
 			konsole \
 			kate \
 			ark \
-			kde-connect \
+			kdeconnect \
 			xdg-desktop-portal-kde \
 			qt5-qtwayland \
 			qt6-qtwayland
