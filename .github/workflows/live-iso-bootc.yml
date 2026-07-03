@@ -51,14 +51,35 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y just podman jq rclone golang-go git
+          sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
+
+      - name: Setup rootless podman (subuid/subgid for runner)
+        run: |
+          # tacklebox runs 'sudo -u runner podman unshare' for the squashfs;
+          # 'podman unshare' only works rootless and needs subuid/subgid
+          # entries for the unprivileged user ("please use unshare with
+          # rootless" otherwise).
+          if ! grep -q "^${USER}:" /etc/subuid 2>/dev/null; then
+            echo "${USER}:100000:65536" | sudo tee -a /etc/subuid
+          fi
+          if ! grep -q "^${USER}:" /etc/subgid 2>/dev/null; then
+            echo "${USER}:100000:65536" | sudo tee -a /etc/subgid
+          fi
 
       - name: Build OS image
         run: |
           sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
 
+      - name: Sync image into rootless storage
+        run: |
+          # sudo just build lands the image in root podman storage, but
+          # tacklebox's squashfs step reads it via rootless `podman unshare`
+          # as the runner user ("image not known" otherwise).
+          sudo podman save "localhost/${VARIANT}:${FLAVOR}" | podman load
+
       - name: Build Live ISO
         env:
+          TACKLEBOX_FROM_SOURCE: "1"
           UPLOAD_R2: ${{ github.event.inputs.upload_r2 }}
           RCLONE_CONFIG_R2_TYPE: s3
           RCLONE_CONFIG_R2_PROVIDER: Cloudflare
@@ -68,7 +89,10 @@ jobs:
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
-          sudo just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
+          # No outer sudo: the `iso` recipe sudos internally. Nesting sudo
+          # makes SUDO_USER=root inside build-iso-tacklebox.sh, so tacklebox
+          # "drops" to root for `podman unshare` and dies (rootless-only).
+          just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
 
       - name: Upload Artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

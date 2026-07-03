@@ -38,6 +38,9 @@ case "${1:-}" in
 			# panel/session/xfdesktop/settings/thunar. Packaged from
 			# tuna-os/github-copr src/xfce-wayland, served by repo.tunaos.org
 			# (EL10 x86_64 only — build-config restricts xfce* platforms).
+			# NOTE: the stack is not published yet — the EL10 xfce flavors
+			# are commented out in build-config until tuna-os/github-copr#65
+			# lands. This branch is the intended install path once it does.
 			curl -fsSLo /etc/yum.repos.d/tuna-os.repo \
 			  https://raw.githubusercontent.com/tuna-os/github-copr/main/contrib/tuna-os.repo
 
