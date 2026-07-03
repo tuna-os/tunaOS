@@ -18,12 +18,18 @@
 
 set -euo pipefail
 
-# `sudo -E` leaks the invoking user's XDG_RUNTIME_DIR (/run/user/<uid>)
-# into root's environment; root podman then writes crun state into the
-# user's runtime dir as root, and every later rootless podman op (the
-# squash/extract steps tacklebox runs as the invoking user) fails with
-# "OCI permission denied" on its own crun directory.
-[[ $EUID -eq 0 ]] && unset XDG_RUNTIME_DIR
+# Rootless steps (tacklebox drops to the invoking user for podman
+# unshare/run, preserving XDG_RUNTIME_DIR) must not share /run/user/<uid>:
+# root-context podman ops in the same pipeline can leave root-owned crun
+# state there, after which every rootless op dies with "OCI permission
+# denied". Hand the dropped user a private, freshly-owned runtime dir.
+if [[ $EUID -eq 0 && -n "${SUDO_USER:-}" && "$SUDO_USER" != "root" ]]; then
+	XDG_RUNTIME_DIR="/tmp/tbox-xdg-${SUDO_USER}"
+	install -d -o "$SUDO_USER" -g "$(id -g "$SUDO_USER")" -m 700 "$XDG_RUNTIME_DIR"
+	export XDG_RUNTIME_DIR
+elif [[ $EUID -eq 0 ]]; then
+	unset XDG_RUNTIME_DIR
+fi
 
 # shellcheck source=lib/common.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
