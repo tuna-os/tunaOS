@@ -3,13 +3,18 @@
 ## Active goals
 
 ### 1. github-copr XFCE Wayland stack (28 packages)
-**Status**: Iterating through tiered build failures. 3 of 9 tiers now pass.
+**Status**: Iterating through tiered build failures. 3 of 9 tiers confirmed passing; tier-3 split (garcon now its own tier) confirmed working; v14 fix pushed and dispatched, not yet confirmed.
 
 - ✅ Tier 0: `xfce4-dev-tools` (build tools)
 - ✅ Tier 1: `gtk-layer-shell`
 - ✅ Tier 2 (core-libs): `libxfce4util` + `xfconf`
-- 🔄 Tier 3 (ui-libs): `libxfce4ui`, `garcon`, `libxfce4windowing` — just pushed fixes for missing BuildRequires (`libSM-devel`, `gtk-doc`, X11/wnck/display-info deps). **v12 running now** (run 28674958876).
-- ⏳ Tiers 4–8: desktop-core, compositor (xfwl4), apps, panel-plugins, meta — unreached yet.
+- 🔄 Tier 3 (ui-libs): `libxfce4ui`, `garcon` (now its own tier `xfce-ui-libs-garcon`), `libxfce4windowing`.
+  - v12 (run 28674958876) failed all three. Root causes: (a) meson's `--auto-features=enabled` promotes optional upstream deps to hard requirements — libxfce4ui was missing `startup-notification-devel`, `libgtop2-devel`, `libepoxy-devel`, `libgudev-devel`; libxfce4windowing was missing `gobject-introspection-devel`. (b) garcon's `configure.ac` hard-requires `libxfce4ui-2` (pkgconfig) + `gtk+-3.0` but was building *in parallel* with libxfce4ui in the same manifest tier — fixed by splitting it into a new tier `xfce-ui-libs-garcon` in `build-order-xfce.yml` that runs after `xfce-ui-libs` consolidates. **The workflow YAML is generated — never hand-edit `.github/workflows/build-xfce-distributed.yml`.** Regenerate with: `python3 scripts/generate-distributed-workflow.py build-order-xfce.yml .github/workflows/build-xfce-distributed.yml --name "XFCE Wayland Distributed Build and Publish" --secondary-r2-path ""`.
+  - v13 (commit b4ca34c, run 28684335234): **garcon tier split worked** (garcon passed). libxfce4ui and libxfce4windowing still failed, but progressed further:
+    - `libxfce4ui`: build succeeded, `%files` packaging failed — meson installs headers under a *versioned* subdir (`xfce4/libxfce4ui-2/libxfce4ui/`, `xfce4/libxfce4kbd-private-3/libxfce4kbd-private/`), spec had the unversioned path. Fixed.
+    - `libxfce4windowing`: `--auto-features=enabled` also forces `vapigen` (Vala bindings) on; missing the `vala` package for the binary. Fixed.
+  - v14 pushed (commit 1f576a2) and dispatched as run 28685969914 — **check this run next**.
+- ⏳ Tiers 4–8: desktop-core, compositor (xfwl4), apps, panel-plugins, meta — unreached yet. Worth auditing BuildRequires vs. manifest tier membership before they're hit, given the garcon intra-tier-dependency bug above — e.g. xfce4-panel/xfdesktop/thunar (tier 4) likely all need garcon, which is fine since garcon's new tier now precedes tier 4, but check for *sibling* deps within tier 4/5/6 matrices too.
 
 **Key fixes applied per spec**:
 | Package | Issues fixed |
@@ -19,22 +24,24 @@
 | `xfce4-dev-tools` | `%files` verified against real tarball, added autoreconf + meson/ninja |
 | `gtk-layer-shell` | devel subpackage, license file names, `%files` |
 | Commit-pin Source0s | 5 specs had whitespace-sensitive gitlab-archive URL replacement failures |
+| `libxfce4ui`, `libxfce4windowing`, `garcon` | see tier-3 root-cause notes above |
 
-**Repo**: `tuna-os/github-copr` main branch
+**Repo**: `tuna-os/github-copr` main branch (checked out at `/home/james/dev/tuna-os/github-copr`)
 **Dispatch**: `gh workflow run build-xfce-distributed.yml`
+**Debugging tip**: `gh run view <id> --json jobs -q '.jobs[] | select(.conclusion=="failure") | .name'` then `gh run view <id> --log --job=<databaseId>` — grep the saved log for `error:|ERROR:|Bad exit status`, the mock debug noise drowns everything else.
 
 ### 2. grouper (Ubuntu 26.04) full parity
-**Status**: All 4 desktop builds pass (gnome, kde, niri, xfce ✅). Boot gate fix for the `bootupd` blocker just implemented, not yet CI-validated.
+**Status**: All 4 desktop builds pass (gnome, kde, niri, xfce ✅). composefs-backend fix for the `bootupd` boot-gate blocker pushed twice (bug found + fixed in between); re-dispatched, not yet confirmed.
 
 - Base `10-base-packages.sh` apt path: fdisk added (Debian splits it from util-linux), plasma-workspace-wayland removed (nonexistent), bootupd reverted (not an apt package).
 - `build_scripts/kde.sh`: removed `plasma-workspace-wayland` from apt install.
 - **Root cause**: `bootc install to-disk` defaults to the ostree backend, which always shells out to `bootupd` for bootloader management — but `bootupd` isn't packaged for Ubuntu apt.
-- **Fix applied** (mirrors `bootc-shindig`/`bootcrew/mono`'s `ubuntu-bootc` reference, which also ships systemd-boot + no bootupd): per bootc docs (bootloaders.md, experimental-composefs.md), if `bootupd` is absent from the image, bootc falls back to systemd-boot — but only under the composefs-native storage backend (`--composefs-backend`), which is a different thing from the `[composefs] enabled = yes` ostree-composefs mode our image already sets in `prepare-root.conf`. Changes:
-  - `build_scripts/10-base-packages.sh`: added `systemd-boot` apt package (provides `bootctl` + EFI binaries) to the apt base-packages list.
-  - `scripts/iso-e2e.sh`, `scripts/build-qcow2.sh`, `Justfile` (`qcow2` recipe): all three `bootc install to-disk` call sites now pass `--composefs-backend` conditionally when the variant is `grouper`. RPM variants (bluefin/aurora-style, which do have bootupd) are untouched.
-- **Untested risk**: `--composefs-backend` is explicitly documented as experimental/"not as heavily tested"; the "sealed image" docs mention UKI generation as part of the *build-time* pattern, but the plain `--composefs-backend` install flag is documented separately as usable "apart from sealed images" — unclear if bootc auto-generates an unsigned UKI at install time or if we'll need to add a UKI-build step (`ukify`) to `finalize.sh`. **Next step: dispatch a grouper build and watch the boot gate log for what it actually complains about.**
-
-**Last grouper re-dispatch**: run 28674971576 (reverted bootupd, tracking S2 builds) — superseded by the composefs-backend fix above, not yet re-dispatched.
+- **Fix** (mirrors `bootc-shindig`/`bootcrew/mono`'s `ubuntu-bootc` reference, which also ships systemd-boot + no bootupd): per bootc docs (bootloaders.md, experimental-composefs.md), if `bootupd` is absent from the image, bootc falls back to systemd-boot — but only under the composefs-native storage backend (`--composefs-backend`), distinct from the `[composefs] enabled = yes` ostree-composefs mode our image already sets in `prepare-root.conf`.
+  - `build_scripts/10-base-packages.sh`: added `systemd-boot` apt package (provides `bootctl` + EFI binaries).
+  - `scripts/iso-e2e.sh`, `scripts/build-qcow2.sh`, `Justfile` (`qcow2` recipe): pass `--composefs-backend` conditionally, scoped to grouper. RPM variants untouched.
+  - **First attempt (commit 0dc374e, run 28684055168) failed all 4 boot gates** with `error: Installing to disk: bootupd is required for ostree-based installs` — the flag never applied. Root cause: the boot gate calls `just qcow2` with a *full image ref* (`ghcr.io/tuna-os/grouper:gnome-testing`), not the bare variant name, so the Justfile's `{{ variant }} == grouper*` glob never matched. `OUTPUT_NAME` (already derived from the ref earlier in the recipe, same pattern `scripts/build-qcow2.sh` already used correctly) is the right thing to match against. Fixed in commit 1b1d7a7.
+  - Re-dispatched as run 28685978251 — **check this run's boot gates next**.
+- **Still-untested risk**: `--composefs-backend` is experimental/"not as heavily tested". If the boot gate now gets past the bootupd error but fails on something UKI/systemd-boot related, the next thing to check is whether bootc auto-generates an unsigned UKI at install time or needs a manual `ukify` step added to `build_scripts/bootc/finalize.sh` (see bootc's `experimental-composefs.md` "sealed images" build pattern).
 
 ## Other repos
 
