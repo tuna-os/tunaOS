@@ -663,6 +663,32 @@ verify variant flavor='gnome':
     set -euo pipefail
     ./scripts/verify-image.sh "{{ variant }}" "{{ flavor }}"
 
+# Boot-gate a published (or local) image via corral: builds a disk with
+# bootc, boots it (KubeVirt when your kubeconfig reaches a cluster, local
+# QEMU otherwise — needs tuna-os/corral#74), waits for SSH, then runs the
+# tier-1 desktop health checks. One command, same behavior locally and in CI.
+boot-gate variant flavor='gnome' tag='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    command -v corral >/dev/null || { echo "corral not installed: go install github.com/tuna-os/corral@latest"; exit 77; }
+    TAG="{{ tag }}"; [[ -z "$TAG" ]] && TAG="{{ flavor }}"
+    IMG="ghcr.io/{{ repo_organization }}/{{ variant }}:$TAG"
+    NAME="gate-{{ variant }}-{{ flavor }}-$(date +%H%M%S)"
+    case "{{ flavor }}" in
+        kde*) DM=sddm ;; niri*|cosmic*) DM=greetd ;; xfce*) DM=lightdm ;; *) DM=gdm ;;
+    esac
+    cleanup() { corral delete "$NAME" >/dev/null 2>&1 || true; }
+    trap cleanup EXIT
+    corral create "$NAME" --bootc "$IMG" --disk 32Gi --wait-ssh --timeout 1200
+    check() { corral ssh "$NAME" -u root -c "$1"; }
+    RC=0
+    [[ "$(check 'systemctl is-active graphical.target' | tr -d '[:space:]')" == active ]] || { echo "FAIL graphical.target"; RC=1; }
+    [[ "$(check "systemctl is-active $DM" | tr -d '[:space:]')" == active ]] || { echo "FAIL $DM"; RC=1; }
+    check 'systemctl --failed --no-legend' || true
+    check 'bootc status --format json' | jq -r '.status.booted.image.image.image' || true
+    [[ $RC -eq 0 ]] && echo "✅ boot-gate PASS: $IMG" || echo "❌ boot-gate FAIL: $IMG"
+    exit $RC
+
 # Boot-verify a qcow2/raw disk image with the same QEMU gate CI uses
 # (serial boot marker or screenshot sanity; no Lima required)
 verify-disk disk_image timeout='600':
