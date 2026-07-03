@@ -31,7 +31,6 @@ install_base_packages_no_de() {
 			podman \
 			skopeo \
 			systemd-container \
-			bootupd \
 			util-linux \
 			fdisk \
 			flatpak \
