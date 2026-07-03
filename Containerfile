@@ -64,6 +64,20 @@ ENV ENABLE_SSHD=${ENABLE_SSHD}
 # Preserve desktop flavor so base-stage scripts don't fall back to GNOME defaults
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
+# Every build_scripts/*.sh RUN below uses
+# `--mount=type=bind,from=context,source=/,target=/run/context` to invoke
+# scripts without a COPY layer — but that bind mount's content is NOT part
+# of buildah's cache-key hashing, so editing a script alone never
+# invalidates the cached layer that ran it (confirmed: a runner reused a
+# pre-fix cached layer for install_base_packages_no_de verbatim after the
+# script changed, silently shipping the old package list). An ENV set here
+# changes the cache key for every RUN after it, so hashing build_scripts/
+# content into it forces correct invalidation — independent of
+# SHA_HEAD_SHORT (declared much later, deliberately, so cache still hits
+# across commits that don't touch these scripts at all).
+ARG BUILD_SCRIPTS_HASH
+ENV BUILD_SCRIPTS_HASH=${BUILD_SCRIPTS_HASH}
+
 # Ensure /opt is a real directory so tmpfs mounts work in all subsequent stages
 RUN rm -rf /opt && mkdir /opt
 

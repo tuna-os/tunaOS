@@ -62,6 +62,18 @@ ENV BASE_IMAGE=${BASE_IMAGE} \
     DESKTOP_FLAVOR=${DESKTOP_FLAVOR} \
     DEBIAN_FRONTEND=noninteractive
 
+# Every build_scripts/*.sh RUN below uses
+# `--mount=type=bind,from=context,source=/,target=/run/context` to invoke
+# scripts without a COPY layer — but that bind mount's content is NOT part
+# of buildah's cache-key hashing, so editing a script alone never
+# invalidates the cached layer that ran it (confirmed: a runner reused a
+# pre-fix cached layer verbatim after the script changed, silently
+# shipping the old package list — grouper missed a fdisk fix this way).
+# An ARG/ENV set here changes the cache key for every RUN after it, so
+# hashing build_scripts/ content into it forces correct invalidation.
+ARG BUILD_SCRIPTS_HASH
+ENV BUILD_SCRIPTS_HASH=${BUILD_SCRIPTS_HASH}
+
 # Enable universe + multiverse (resolute uses deb822 /etc/apt/sources.list.d/
 # ubuntu.sources; fall back to the classic sources.list if present).
 RUN set -eux; \

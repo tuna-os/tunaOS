@@ -97,6 +97,18 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     zirconium_image_sha=$({{ yq }} -r '.images[] | select(.name == "zirconium") | .digest' image-versions.yaml)
     BUILD_ARGS+=("--build-arg" "ZIRCONIUM_IMAGE_REF=ghcr.io/zirconium-dev/zirconium@${zirconium_image_sha}")
 
+    # build_scripts/*.sh are injected into RUN steps via
+    # --mount=type=bind,from=context (not COPY), so their content never
+    # participates in buildah's layer-cache key — editing a script alone
+    # doesn't invalidate the layer that ran it. Hash the directory and pass
+    # it as a build-arg (consumed as an early ENV in the Containerfiles) so
+    # the cache correctly invalidates exactly when these scripts change,
+    # independent of SHA_HEAD_SHORT (which changes every commit and stays
+    # out of this position deliberately, to keep cross-commit caching for
+    # commits that don't touch build_scripts/ at all).
+    build_scripts_hash=$(find build_scripts -type f -name '*.sh' -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-16)
+    BUILD_ARGS+=("--build-arg" "BUILD_SCRIPTS_HASH=${build_scripts_hash}")
+
     if [[ -z "$(git status -s)" ]]; then
         BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=$(git rev-parse --short HEAD)")
     else
