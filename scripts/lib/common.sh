@@ -181,7 +181,7 @@ tunaos_run_tacklebox() {
 		# Pin the source SHA so CI doesn't silently track a moving HEAD.
 		local sha cache bin
 		sha="${TACKLEBOX_SHA:-$(grep '^\s*tacklebox:' image-versions.yaml 2>/dev/null | sed 's/.*"\(.*\)".*/\1/')}"
-		sha="${sha:-75c837b39d9dcb360509c49d2e0306621dced904}"
+		sha="${sha:-e3625d5155b7c96da44b706d0dad57cb1e6cd870}"
 		cache="${TACKLEBOX_CACHE:-/var/cache/tunaos/tacklebox}"
 		bin="${cache}/tacklebox"
 

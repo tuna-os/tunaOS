@@ -28,4 +28,4 @@ downloads:
   # renovate: datasource=github-releases depName=ledif/kcm_ublue
   kcm_ublue: "v0.6.1"
   # renovate: datasource=git-refs depName=tuna-os/tacklebox
-  tacklebox: "75c837b39d9dcb360509c49d2e0306621dced904"
+  tacklebox: "e3625d5155b77ffedbd110eacbaa8c551c2bd24b"
