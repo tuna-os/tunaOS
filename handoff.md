@@ -3,17 +3,18 @@
 ## Active goals
 
 ### 1. github-copr XFCE Wayland stack (28 packages)
-**Status**: Iterating through tiered build failures. 3 of 9 tiers confirmed passing; tier-3 split (garcon now its own tier) confirmed working; v14 fix pushed and dispatched, not yet confirmed.
+**Status**: Iterating through tiered build failures. 3 of 9 tiers confirmed passing; garcon tier-split confirmed working; v15 fix pushed and dispatched, not yet confirmed.
 
 - ✅ Tier 0: `xfce4-dev-tools` (build tools)
 - ✅ Tier 1: `gtk-layer-shell`
 - ✅ Tier 2 (core-libs): `libxfce4util` + `xfconf`
 - 🔄 Tier 3 (ui-libs): `libxfce4ui`, `garcon` (now its own tier `xfce-ui-libs-garcon`), `libxfce4windowing`.
   - v12 (run 28674958876) failed all three. Root causes: (a) meson's `--auto-features=enabled` promotes optional upstream deps to hard requirements — libxfce4ui was missing `startup-notification-devel`, `libgtop2-devel`, `libepoxy-devel`, `libgudev-devel`; libxfce4windowing was missing `gobject-introspection-devel`. (b) garcon's `configure.ac` hard-requires `libxfce4ui-2` (pkgconfig) + `gtk+-3.0` but was building *in parallel* with libxfce4ui in the same manifest tier — fixed by splitting it into a new tier `xfce-ui-libs-garcon` in `build-order-xfce.yml` that runs after `xfce-ui-libs` consolidates. **The workflow YAML is generated — never hand-edit `.github/workflows/build-xfce-distributed.yml`.** Regenerate with: `python3 scripts/generate-distributed-workflow.py build-order-xfce.yml .github/workflows/build-xfce-distributed.yml --name "XFCE Wayland Distributed Build and Publish" --secondary-r2-path ""`.
-  - v13 (commit b4ca34c, run 28684335234): **garcon tier split worked** (garcon passed). libxfce4ui and libxfce4windowing still failed, but progressed further:
-    - `libxfce4ui`: build succeeded, `%files` packaging failed — meson installs headers under a *versioned* subdir (`xfce4/libxfce4ui-2/libxfce4ui/`, `xfce4/libxfce4kbd-private-3/libxfce4kbd-private/`), spec had the unversioned path. Fixed.
-    - `libxfce4windowing`: `--auto-features=enabled` also forces `vapigen` (Vala bindings) on; missing the `vala` package for the binary. Fixed.
-  - v14 pushed (commit 1f576a2) and dispatched as run 28685969914 — **check this run next**.
+  - v13 (commit b4ca34c, run 28684335234): **garcon tier split confirmed working** (garcon passed, stayed green in v14/v15 too). libxfce4ui and libxfce4windowing progressed to `%build` succeeding but `%files` failing (versioned header subdir; missing `vala`). Fixed.
+  - v14 (commit 1f576a2, run 28685969914): both now fail with `error: Installed (but unpackaged) file(s) found` — `%build`/`%install` succeed, the specs just don't list everything meson actually installs. Two very minimal specs (`%files` was only ever written for the core `.so`/headers) meeting a package that also ships binaries, desktop files, icons, GIR/vapi bindings, and locale files.
+    - `libxfce4ui`: missing `libxfce4kbd-private*.so.*` (runtime lib!), `xfce-open`/`xfce-desktop-item-edit`/`xfce4-about` binaries, `xfce4-about.desktop` + hicolor icons, the `xfce4-keyboard-shortcuts.xml` xfconf config, and locale `.mo` files (no `%find_lang`). Fixed by packaging all of it into the single `libxfce4ui` subpackage (no upstream reason found to split `xfce4-about` out — nothing downstream references it).
+    - `libxfce4windowing`: missing GIR typelib (runtime) + `.gir`/vala vapi (devel) for *both* `libxfce4windowing` and `libxfce4windowingui`, and locale files. Fixed.
+  - v15 pushed (commit f481d0c) and dispatched as run 28687708505 — **check this run next**. If it's green, tier 3 is fully done — move on to auditing tiers 4-8 for the same two failure classes (auto-features-enabled missing deps, incomplete `%files`) before dispatching them.
 - ⏳ Tiers 4–8: desktop-core, compositor (xfwl4), apps, panel-plugins, meta — unreached yet. Worth auditing BuildRequires vs. manifest tier membership before they're hit, given the garcon intra-tier-dependency bug above — e.g. xfce4-panel/xfdesktop/thunar (tier 4) likely all need garcon, which is fine since garcon's new tier now precedes tier 4, but check for *sibling* deps within tier 4/5/6 matrices too.
 
 **Key fixes applied per spec**:
@@ -30,8 +31,8 @@
 **Dispatch**: `gh workflow run build-xfce-distributed.yml`
 **Debugging tip**: `gh run view <id> --json jobs -q '.jobs[] | select(.conclusion=="failure") | .name'` then `gh run view <id> --log --job=<databaseId>` — grep the saved log for `error:|ERROR:|Bad exit status`, the mock debug noise drowns everything else.
 
-### 2. grouper (Ubuntu 26.04) full parity
-**Status**: All 4 desktop builds pass (gnome, kde, niri, xfce ✅). composefs-backend fix for the `bootupd` boot-gate blocker pushed twice (bug found + fixed in between); re-dispatched, not yet confirmed.
+### 2. grouper (Ubuntu 26.04) full parity — ✅ DONE (pending final review)
+**Status**: All 4 desktop builds AND all 4 boot gates pass (run 28685978251, confirmed). The composefs-backend fix works end-to-end. Nothing left to iterate on here unless a fresh regression shows up.
 
 - Base `10-base-packages.sh` apt path: fdisk added (Debian splits it from util-linux), plasma-workspace-wayland removed (nonexistent), bootupd reverted (not an apt package).
 - `build_scripts/kde.sh`: removed `plasma-workspace-wayland` from apt install.
