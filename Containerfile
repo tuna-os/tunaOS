@@ -45,7 +45,6 @@ ARG ENABLE_SSHD
 ARG DESKTOP_FLAVOR
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR
-ARG SHA_HEAD_SHORT
 ARG IMAGE_REGISTRY="ghcr.io"
 
 # RHSM credentials are NOT declared as ARG here — they're passed via
@@ -58,7 +57,6 @@ ENV BASE_IMAGE=${BASE_IMAGE}
 ENV IMAGE_NAME=${IMAGE_NAME}
 ENV IMAGE_VENDOR=${IMAGE_VENDOR}
 ENV IMAGE_REGISTRY=${IMAGE_REGISTRY}
-ENV SHA_HEAD_SHORT=${SHA_HEAD_SHORT}
 ENV ENABLE_HWE=${ENABLE_HWE}
 ENV ENABLE_NVIDIA=${ENABLE_NVIDIA}
 ENV ENABLE_SSHD=${ENABLE_SSHD}
@@ -106,6 +104,12 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/40-services.sh
 
+# SHA_HEAD_SHORT changes on every commit. Declared HERE (not at the top of
+# the stage) so only the layers from this point down rebuild per commit —
+# with it in the early ENV block, the layer cache could never hit across
+# commits and the expensive dnf layers above rebuilt every time.
+ARG SHA_HEAD_SHORT
+ENV SHA_HEAD_SHORT=${SHA_HEAD_SHORT}
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \

@@ -51,14 +51,12 @@ ARG ENABLE_NVIDIA
 ARG DESKTOP_FLAVOR
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR
-ARG SHA_HEAD_SHORT
 ARG IMAGE_REGISTRY="ghcr.io"
 
 ENV BASE_IMAGE=${BASE_IMAGE} \
     IMAGE_NAME=${IMAGE_NAME} \
     IMAGE_VENDOR=${IMAGE_VENDOR} \
     IMAGE_REGISTRY=${IMAGE_REGISTRY} \
-    SHA_HEAD_SHORT=${SHA_HEAD_SHORT} \
     ENABLE_HWE=${ENABLE_HWE} \
     ENABLE_NVIDIA=${ENABLE_NVIDIA} \
     DESKTOP_FLAVOR=${DESKTOP_FLAVOR} \
@@ -146,6 +144,11 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   flatpak remote-add --if-not-exists --system flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
+# SHA_HEAD_SHORT changes on every commit — declared here (not in the early
+# ENV block) so per-commit values only rebuild from this layer down and the
+# expensive apt layers above stay cache-hittable. See Containerfile.
+ARG SHA_HEAD_SHORT
+ENV SHA_HEAD_SHORT=${SHA_HEAD_SHORT}
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
