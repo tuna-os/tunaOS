@@ -134,53 +134,41 @@ jobs:
           update-podman: "true"
           install-tools: '[]'
 
-      - name: Setup Homebrew
-        uses: Homebrew/actions/setup-homebrew@f830e99d47c69efee99f1ddbf18a8e3144d1b93e
-
-      - name: Install just
-        run: brew install just
-
-      - name: Install yq
+      - name: Install just and yq
         run: |
+          # Static binaries straight from releases — the Homebrew bootstrap
+          # spent 1-3 min per job for the same result.
           ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
           sudo wget -qO /usr/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}"
-          sudo chmod +x /usr/bin/yq
+          JUST_ARCH=$(uname -m | sed 's/amd64/x86_64/')
+          curl -fsSL "https://github.com/casey/just/releases/latest/download/just-1.40.0-${JUST_ARCH}-unknown-linux-musl.tar.gz" -o /tmp/just.tgz 2>/dev/null \
+            || curl -fsSL https://just.systems/install.sh | sudo bash -s -- --to /usr/local/bin
+          if [ -f /tmp/just.tgz ]; then sudo tar -xzf /tmp/just.tgz -C /usr/local/bin just; fi
+          sudo chmod +x /usr/bin/yq /usr/local/bin/just 2>/dev/null || true
+          just --version && yq --version
 
 
-      - name: Cache DNF/RPM Packages
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        id: dnf-cache
-        with:
-          path: |
-            /var/cache/dnf
-            /var/cache/libdnf5
-            /var/lib/rpm
-          key: dnf-${{ matrix.platform }}-${{ hashFiles('build_scripts/**', 'Containerfile*') }}-${{ github.ref }}
-          restore-keys: |
-            dnf-${{ matrix.platform }}-${{ hashFiles('build_scripts/**', 'Containerfile*') }}-
-            dnf-${{ matrix.platform }}-
-          save-always: ${{ github.ref == 'refs/heads/main' }}
+      # Layer cache lives in a GHCR repo (buildah's native distributed cache):
+      # shared across jobs/flavors/arches, no tarball upload each run, no
+      # 10 GB actions/cache eviction. Replaces two broken mechanisms — a DNF
+      # host-path cache that CI builds never mounted (use_cache=0), and a
+      # buildah "local cache" whose env sudo stripped and whose buildx-only
+      # type=local syntax buildah doesn't even parse.
+      - name: Login to GitHub Container Registry (cache + push)
+        if: ${{ inputs.publish }}
+        uses: ./.github/actions/ghcr-login
 
-      - name: Fix DNF cache permissions
-        if: steps.dnf-cache.outputs.cache-hit == 'true'
+      - name: Configure buildah registry layer cache
+        env:
+          IS_PR: ${{ github.event_name == 'pull_request' }}
         run: |
-          sudo chown -R root:root /var/cache/dnf /var/cache/libdnf5 /var/lib/rpm 2>/dev/null || true
-          sudo chmod -R 755 /var/cache/dnf /var/cache/libdnf5 /var/lib/rpm 2>/dev/null || true
-
-      - name: Restore buildah layer cache
-        id: buildah-cache
-        uses: actions/cache/restore@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: /var/tmp/buildah-cache-0
-          key: buildah-${{ runner.os }}-${{ runner.arch }}-${{ inputs.image-variant }}-${{ inputs.flavor }}
-          restore-keys: |
-            buildah-${{ runner.os }}-${{ runner.arch }}-${{ inputs.image-variant }}-
-            buildah-${{ runner.os }}-${{ runner.arch }}-
-
-      - name: Configure buildah cache
-        run: |
-          mkdir -p /var/tmp/buildah-cache-0
-          echo 'BUILDAH_CACHE_FLAGS=--cache-to type=local,dest=/var/tmp/buildah-cache-0 --cache-from type=local,src=/var/tmp/buildah-cache-0' >> "$GITHUB_ENV"
+          CACHE_REPO="${IMAGE_REGISTRY}/tunaos-buildcache"
+          FLAGS="--layers --cache-from ${CACHE_REPO}"
+          # Only trusted (non-PR) runs may write cache entries.
+          if [ "$IS_PR" != "true" ]; then
+            FLAGS="$FLAGS --cache-to ${CACHE_REPO}"
+          fi
+          echo "BUILDAH_CACHE_FLAGS=${FLAGS}" >> "$GITHUB_ENV"
 
       - name: Build Image
         id: build-image
@@ -191,12 +179,17 @@ jobs:
           DEFAULT_TAG: ${{ inputs.default-tag }}
           PLATFORM: ${{ matrix.platform }}
           CHAIN_BASE_IMAGE: ${{ inputs.chain-base-image }}
+          # PR builds never publish; skip the two-pass chunkah rechunk +
+          # relabel (~10 min) and validate the plain build instead.
+          SKIP_RECHUNK: ${{ github.event_name == 'pull_request' && '1' || '0' }}
         run: |
           set -x
           just=$(which just)
           build_start=$(date +%s)
-          # just build now handles two-pass chunking internally by default
-          sudo "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}"
+          # --preserve-env: sudo otherwise strips the cache/rechunk knobs
+          # (the old layer cache never worked for exactly this reason).
+          sudo --preserve-env=BUILDAH_CACHE_FLAGS,SKIP_RECHUNK \
+            "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}"
           echo "BUILD_SECONDS=$(( $(date +%s) - build_start ))" >> "$GITHUB_ENV"
 
       - name: Build telemetry
@@ -217,17 +210,6 @@ jobs:
             echo "| ${BUILD_SECONDS:-?}s | $(numfmt --to=iec "${SIZE}" 2>/dev/null || echo "${SIZE}") | ${LAYERS} |"
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Fix buildah cache permissions
-        if: always()
-        run: |
-          sudo chmod 777 --recursive /var/tmp/buildah-cache-0 2>/dev/null || true
-
-      - name: Save buildah layer cache
-        if: github.ref == 'refs/heads/main'
-        uses: actions/cache/save@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: /var/tmp/buildah-cache-0
-          key: buildah-${{ runner.os }}-${{ runner.arch }}-${{ inputs.image-variant }}-${{ inputs.flavor }}
 
       - name: Enable KVM for verification
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
@@ -264,10 +246,6 @@ jobs:
             verify-out/*.ppm
           if-no-files-found: warn
           retention-days: 7
-
-      - name: Login to GitHub Container Registry
-        if: ${{ inputs.publish }}
-        uses: ./.github/actions/ghcr-login
 
       - name: Push to GHCR
         if: ${{ inputs.publish }}

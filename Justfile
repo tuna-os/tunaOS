@@ -136,6 +136,14 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
         ${BUILDAH_CACHE_FLAGS:-} \
         .
 
+    # PR/CI validation builds don't publish — the rechunk exists purely for
+    # client pull efficiency, so let callers skip passes 2-3 (~10 min).
+    if [[ "${SKIP_RECHUNK:-0}" == "1" ]]; then
+        echo "==> SKIP_RECHUNK=1 — tagging pre-chunk image as final (no chunkah/relabel)"
+        ${BUILDER} tag "${PRE_CHUNK_TAG}" "{{ target_tag_with_version }}"
+        exit 0
+    fi
+
     echo "==> Running chunkah on ${PRE_CHUNK_TAG}..."
 
     # Ensure the chunkah image is available. Try the published image first,

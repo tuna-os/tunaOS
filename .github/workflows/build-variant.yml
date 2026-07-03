@@ -44,19 +44,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Setup Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@d8f871c0ca7a868339d3c175200a7319492473c7 # v1 as of 2026-07-02
-        with:
-          storage-backend: ""
-          update-podman: "false"
-          install-tools: '[]'
-
-      - name: Setup Homebrew
-        uses: Homebrew/actions/setup-homebrew@f830e99d47c69efee99f1ddbf18a8e3144d1b93e
-
-      - name: Install just
-        run: brew install just
-
+      # This job only runs yq/jq over build-config.yml — no podman, no just.
+      # The runner-setup + Homebrew steps it used to carry added ~3 min to
+      # every pipeline for nothing.
       - name: Install yq
         run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
