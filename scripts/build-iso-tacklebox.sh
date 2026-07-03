@@ -17,6 +17,14 @@
 # Outputs to project root as <variant>-<flavor>-<version>-<arch>.iso
 
 set -euo pipefail
+
+# `sudo -E` leaks the invoking user's XDG_RUNTIME_DIR (/run/user/<uid>)
+# into root's environment; root podman then writes crun state into the
+# user's runtime dir as root, and every later rootless podman op (the
+# squash/extract steps tacklebox runs as the invoking user) fails with
+# "OCI permission denied" on its own crun directory.
+[[ $EUID -eq 0 ]] && unset XDG_RUNTIME_DIR
+
 # shellcheck source=lib/common.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
