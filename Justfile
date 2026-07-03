@@ -433,6 +433,12 @@ qcow2 variant flavor='gnome' repo='local' tag='':
         SSH_KEY_ARGS=("--root-ssh-authorized-keys" "/run/root-authorized-keys")
     fi
 
+    # grouper (Ubuntu) has no bootupd package available via apt, so it ships
+    # systemd-boot instead and installs via bootc's composefs-native backend,
+    # which doesn't shell out to bootupd for bootloader management.
+    COMPOSEFS_ARGS=()
+    [[ "{{ variant }}" == grouper* ]] && COMPOSEFS_ARGS=(--composefs-backend)
+
     echo "==> Running bootc install to-disk (this takes a few minutes)..."
     sudo podman run \
         --rm \
@@ -448,6 +454,7 @@ qcow2 variant flavor='gnome' repo='local' tag='':
         bootc install to-disk \
             --via-loopback \
             --generic-image \
+            "${COMPOSEFS_ARGS[@]}" \
             --karg console=ttyS0 --karg console=tty0 \
             "${SSH_KEY_ARGS[@]}" \
             --source-imgref "containers-storage:${IMG_REF}" \

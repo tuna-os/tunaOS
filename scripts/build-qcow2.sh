@@ -110,6 +110,12 @@ if sudo podman run --rm "${AUTH_VOL_ARGS[@]}" --security-opt label=disable \
 	UNIFIED_STORAGE_ARGS=(--experimental-unified-storage)
 fi
 
+# grouper (Ubuntu) has no bootupd package available via apt, so it ships
+# systemd-boot instead and installs via bootc's composefs-native backend,
+# which doesn't shell out to bootupd for bootloader management.
+COMPOSEFS_ARGS=()
+[[ "$OUTPUT_NAME" == grouper* ]] && COMPOSEFS_ARGS=(--composefs-backend)
+
 sudo podman run \
 	--rm \
 	--privileged \
@@ -126,6 +132,7 @@ sudo podman run \
 	--via-loopback \
 	--generic-image \
 	"${UNIFIED_STORAGE_ARGS[@]}" \
+	"${COMPOSEFS_ARGS[@]}" \
 	"${SSH_KEY_ARGS[@]}" \
 	--source-imgref "${SOURCE_IMGREF}" \
 	/disk.img

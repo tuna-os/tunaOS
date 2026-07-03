@@ -488,9 +488,15 @@ run_kickstart() {
 		return 5
 	}
 
-	echo "==> Running bootc install to-disk /dev/vda..."
+	# grouper (Ubuntu) has no bootupd package available via apt, so it ships
+	# systemd-boot instead and installs via bootc's composefs-native backend,
+	# which doesn't shell out to bootupd for bootloader management.
+	local install_args=""
+	[[ "${VARIANT:-}" == "grouper" ]] && install_args="--composefs-backend"
+
+	echo "==> Running bootc install to-disk /dev/vda ${install_args}..."
 	sshpass -p live ssh -o StrictHostKeyChecking=no -p 2222 liveuser@127.0.0.1 \
-		"sudo bootc install to-disk /dev/vda 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
+		"sudo bootc install to-disk ${install_args} /dev/vda 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
 		rc=$?
 		if [[ $rc -eq 0 ]]; then true; else
 			echo "ERROR: bootc install failed (exit $rc)"

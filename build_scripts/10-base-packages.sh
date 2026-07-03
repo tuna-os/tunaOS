@@ -54,7 +54,8 @@ install_base_packages_no_de() {
 			grim \
 			x11-xserver-utils \
 			unzip \
-			powertop
+			powertop \
+			systemd-boot
 
 		# Remove unwanted packages
 		# shellcheck disable=SC2015 # intentional: A&&B||true is a guard pattern
