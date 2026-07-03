@@ -10,7 +10,6 @@ case "${1:-}" in
 	if [[ "$PKG_MGR" == "apt" ]]; then
 		pkg_install \
 			kde-plasma-desktop \
-			plasma-workspace-wayland \
 			sddm \
 			dolphin \
 			konsole \

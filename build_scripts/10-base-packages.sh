@@ -32,6 +32,7 @@ install_base_packages_no_de() {
 			skopeo \
 			systemd-container \
 			util-linux \
+			fdisk \
 			flatpak \
 			distrobox \
 			fastfetch \
