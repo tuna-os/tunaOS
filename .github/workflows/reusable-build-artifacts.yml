@@ -37,6 +37,11 @@ on:
         required: false
         type: boolean
         default: false
+      capture-installer:
+        description: "Also capture the installer walkthrough flow (screenshots ride the e2e artifact)"
+        required: false
+        type: boolean
+        default: true
     secrets:
       R2_ACCESS_KEY_ID:
         required: false
@@ -121,6 +126,23 @@ jobs:
             ./scripts/iso-e2e.sh "$ISO" \
               --output iso-e2e-out \
               --timeout 900
+
+      # Installer-flow captures join the boot evidence so every visual the
+      # pipeline can produce lands in ONE artifact (and, via the weekly
+      # gallery jobs, in docs/SCREENSHOTS.md). Advisory: choreography drift
+      # must never block a publish — it's evidence, not a gate.
+      - name: Capture installer walkthrough
+        if: inputs.capture-installer
+        continue-on-error: true
+        timeout-minutes: 20
+        run: |
+          ISO=$(find . -maxdepth 1 -name "*.iso" | head -1)
+          sudo bash scripts/run-walkthrough.sh "$ISO" walkthrough-out || true
+          sudo chown -R "$USER:$(id -gn)" walkthrough-out 2>/dev/null || true
+          for png in walkthrough-out/*.png; do
+            [[ -f "$png" ]] || continue
+            cp "$png" "iso-e2e-out/installer_$(basename "$png")"
+          done
 
       - name: Collect e2e evidence
         if: always()

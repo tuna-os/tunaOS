@@ -180,12 +180,16 @@ jobs:
           echo "staged=${count}" >> "$GITHUB_OUTPUT"
           echo "Staged ${count} screenshot(s)"
 
+      - name: Regenerate screenshot gallery
+        if: steps.stage.outputs.staged != '0'
+        run: bash scripts/gen-screenshot-gallery.sh
+
       - name: Commit and push
         if: steps.stage.outputs.staged != '0'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/images/installer
+          git add docs/images/installer docs/SCREENSHOTS.md
           if git diff --cached --quiet; then
             echo "No screenshot changes to commit"
             exit 0
