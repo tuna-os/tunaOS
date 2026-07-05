@@ -211,5 +211,15 @@ jobs:
               --title "TunaOS ${FLAVOR} (${DATE})" \
               --notes "Live ISO for ${VARIANT}:${FLAVOR}. Built from ghcr.io/tuna-os/${VARIANT}:${FLAVOR}."
           fi
-          gh release upload "$TAG" --repo "${GITHUB_REPOSITORY}" "$ISO" --clobber
-          echo "==> Attached $(basename "$ISO") to release $TAG"
+          # gh release upload --clobber returns HTTP 422 when an asset with
+          # the same name already exists and was uploaded in the same API
+          # session. Explicitly delete first, then upload to avoid the race.
+          ISO_NAME=$(basename "$ISO")
+          if gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" --json assets \
+              | python3 -c "import json,sys; assets=json.load(sys.stdin)['assets']; [print(a['name']) for a in assets]" \
+              | grep -qxF "$ISO_NAME"; then
+            echo "==> Deleting existing asset ${ISO_NAME} from release ${TAG}..."
+            gh release delete-asset "$TAG" "$ISO_NAME" --repo "${GITHUB_REPOSITORY}" --yes
+          fi
+          gh release upload "$TAG" --repo "${GITHUB_REPOSITORY}" "$ISO"
+          echo "==> Attached ${ISO_NAME} to release $TAG"
