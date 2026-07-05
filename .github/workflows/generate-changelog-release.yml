@@ -6,23 +6,26 @@ on:
   workflow_dispatch:
     inputs:
       stream:
-        description: "Image flavor/stream to generate changelog for (e.g. gnome, kde)"
+        description: "Image flavor/stream to release (e.g. gnome, kde)"
         type: string
         default: "gnome"
         required: false
+      variant:
+        description: "Primary variant for SBOM (yellowfin, albacore, skipjack, bonito)"
+        type: string
+        default: "yellowfin"
+        required: false
       handwritten:
-        description: "Optional handwritten note to include at the top of the changelog"
+        description: "Optional handwritten note to include at the top of the release"
         type: string
         required: false
       dry_run:
-        description: "Generate changelog but do not publish a GitHub Release"
+        description: "Generate release notes but do not publish a GitHub Release"
         type: boolean
         default: false
         required: false
 
 env:
-  # IMAGE_REGISTRY: configurable via repo variable for mirror/air-gapped users.
-  # Defaults to ghcr.io/<owner> if not set.
   IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
 
 jobs:
@@ -30,102 +33,177 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      actions: read
     strategy:
       fail-fast: false
       matrix:
-        stream: ${{ github.event_name == 'workflow_dispatch' && fromJson(format('["{0}"]', inputs.stream)) || fromJson('["gnome"]') }}
+        stream: ${{ github.event_name == 'workflow_dispatch' && fromJson(format('[\"{0}\"]', inputs.stream)) || fromJson('["gnome"]') }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
 
-      - name: Filter available images
-        id: images
+      # ── Resolve inputs ─────────────────────────────────────────────────────
+      - name: Resolve variant and tag
+        id: vars
         env:
           STREAM: ${{ matrix.stream }}
+          VARIANT: ${{ inputs.variant || 'yellowfin' }}
+          GH_TOKEN: ${{ github.token }}
         run: |
-          # Only pass images that have both today's AND yesterday's stream tag to
-          # the changelog action. Builds that failed won't have a dated tag and
-          # would otherwise abort the entire release run.
-          CURR=$(date -u +%Y%m%d)
-          PREV=$(date -u -d "yesterday" +%Y%m%d)
-          CANDIDATES="yellowfin albacore skipjack bonito"
-          AVAILABLE=""
-          for img in $CANDIDATES; do
-            CURR_REF="docker://${IMAGE_REGISTRY}/${img}:${STREAM}-${CURR}"
-            PREV_REF="docker://${IMAGE_REGISTRY}/${img}:${STREAM}-${PREV}"
-            if skopeo inspect --raw "${CURR_REF}" >/dev/null 2>&1 && \
-               skopeo inspect --raw "${PREV_REF}" >/dev/null 2>&1; then
-              AVAILABLE="${AVAILABLE} ${img}"
-            else
-              echo "Skipping ${img}: missing ${STREAM}-${CURR} or ${STREAM}-${PREV} tag"
-            fi
-          done
-          AVAILABLE="${AVAILABLE# }"
-          echo "images=${AVAILABLE}" >> "$GITHUB_OUTPUT"
-          if [ -z "$AVAILABLE" ]; then
-            echo "No images have both tags — skipping changelog generation"
+          set -euo pipefail
+          DATE=$(date -u +%Y%m%d)
+          TAG="${STREAM}-${DATE}"
+          echo "tag=${TAG}"           >> "$GITHUB_OUTPUT"
+          echo "variant=${VARIANT}"   >> "$GITHUB_OUTPUT"
+          echo "stream=${STREAM}"     >> "$GITHUB_OUTPUT"
+          echo "date=${DATE}"         >> "$GITHUB_OUTPUT"
+
+          # Construct the full image ref (no tag — create-release appends it)
+          IMAGE="${IMAGE_REGISTRY}/${VARIANT}"
+          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
+
+          # Find the latest successful build run for this variant+stream combo
+          # Looks for the build-<variant> workflow that ran on main
+          WORKFLOW="build-${VARIANT}.yml"
+          RUN_ID=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/${WORKFLOW}/runs" \
+            --method GET \
+            -f branch=main \
+            -f status=success \
+            -f per_page=5 \
+            --jq '.workflow_runs | map(select(.head_branch == "main")) | first | .id' \
+            2>/dev/null || echo "")
+
+          if [[ -z "${RUN_ID}" || "${RUN_ID}" == "null" ]]; then
+            echo "::warning::No successful build run found for ${WORKFLOW} on main"
+            echo "run_id=" >> "$GITHUB_OUTPUT"
           else
-            echo "Images with both tags: ${AVAILABLE}"
+            echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
+            echo "Found build run: ${RUN_ID}"
           fi
 
-      - name: Generate changelog
-        if: steps.images.outputs.images != ''
-        uses: tuna-os/changelog-action@0f9fc8c023d1f28f69e31ad64e2161d308a56284 # master as of 2026-03-24 (org fork of hanthor/changelog-action)
-        with:
-          registry: "${{ env.IMAGE_REGISTRY }}/"
-          cosign-key: "https://raw.githubusercontent.com/tuna-os/tunaOS/main/cosign.pub"
-          images: ${{ steps.images.outputs.images }}
-          stream: ${{ matrix.stream }}
-          handwritten: ${{ inputs.handwritten }}
-          output: changelog.md
-          output-env: output.env
-          verbose: "true"
-
-      - name: Read changelog outputs
-        id: changelog
-        run: |
-          if [ -f output.env ]; then
-            source output.env
-            echo "TITLE=${TITLE}" >> $GITHUB_OUTPUT
-            echo "TAG=${TAG}" >> $GITHUB_OUTPUT
-          else
-            echo "output.env not found — changelog generation was skipped"
-            echo "skip_release=true" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Upload changelog artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
-        with:
-          name: changelog-${{ matrix.stream }}
-          path: |
-            changelog.md
-            output.env
-
-      - name: Create GitHub Release
-        if: |
-          steps.changelog.outputs.skip_release != 'true' &&
-          inputs.dry_run != true &&
-          (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+      # ── Download SBOM from latest build run ───────────────────────────────
+      - name: Download SBOM artifact
+        id: sbom
+        if: steps.vars.outputs.run_id != ''
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.changelog.outputs.TAG }}
-          TITLE: ${{ steps.changelog.outputs.TITLE }}
+          RUN_ID:   ${{ steps.vars.outputs.run_id }}
+          VARIANT:  ${{ steps.vars.outputs.variant }}
+          STREAM:   ${{ steps.vars.outputs.stream }}
         run: |
-          if [ -z "$TAG" ]; then
-            echo "No TAG in output.env — skipping release creation"
-            exit 0
+          set -euo pipefail
+          mkdir -p _sbom
+
+          # Primary artifact: amd64 SBOM for the given variant+stream
+          ARTIFACT_NAME="sbom-${VARIANT}-${STREAM}-linux-amd64"
+          echo "Looking for artifact: ${ARTIFACT_NAME} in run ${RUN_ID}"
+
+          if gh api \
+            "repos/${{ github.repository }}/actions/runs/${RUN_ID}/artifacts" \
+            --jq ".artifacts[] | select(.name == \"${ARTIFACT_NAME}\") | .id" \
+            2>/dev/null | grep -q .; then
+
+            gh run download "${RUN_ID}" \
+              --repo "${{ github.repository }}" \
+              --name "${ARTIFACT_NAME}" \
+              --dir _sbom
+            SBOM_FILE=$(find _sbom -name "*.spdx.json" | head -1)
+            if [[ -n "${SBOM_FILE}" ]]; then
+              echo "found=true"          >> "$GITHUB_OUTPUT"
+              echo "path=${SBOM_FILE}"   >> "$GITHUB_OUTPUT"
+              echo "SBOM: ${SBOM_FILE}"
+            else
+              echo "::warning::Artifact downloaded but no .spdx.json found"
+              echo "found=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "::warning::SBOM artifact '${ARTIFACT_NAME}' not found in run ${RUN_ID}"
+            echo "found=false" >> "$GITHUB_OUTPUT"
           fi
 
-          if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG already exists — skipping"
-            exit 0
+      # ── Skip if no SBOM ───────────────────────────────────────────────────
+      - name: Check SBOM availability
+        id: check
+        env:
+          SBOM_FOUND: ${{ steps.sbom.outputs.found }}
+          RUN_ID:     ${{ steps.vars.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          if [[ "${RUN_ID}" == "" || "${SBOM_FOUND}" != "true" ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::No SBOM available — skipping release generation"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
-          # Read changelog content for release body
-          NOTES=$(cat changelog.md)
+      # ── Fetch image digest ────────────────────────────────────────────────
+      - name: Fetch image digest
+        id: digest
+        if: steps.check.outputs.skip == 'false'
+        env:
+          VARIANT: ${{ steps.vars.outputs.variant }}
+          STREAM:  ${{ steps.vars.outputs.stream }}
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y skopeo -q
+          IMAGE_REF="${IMAGE_REGISTRY}/${VARIANT}:${STREAM}"
+          DIGEST=$(skopeo inspect --no-tags "docker://${IMAGE_REF}" \
+            | python3 -c "import json,sys; print(json.load(sys.stdin)['Digest'])" \
+            2>/dev/null || echo "")
+          if [[ -z "${DIGEST}" ]]; then
+            echo "::warning::Could not fetch digest for ${IMAGE_REF}"
+          fi
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
 
-          gh release create "$TAG" \
-            --title "$TITLE" \
-            --notes "$NOTES" \
-            --latest
+      # ── Check if release already exists ──────────────────────────────────
+      - name: Check for existing release
+        id: existing
+        if: steps.check.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.vars.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if gh release view "${TAG}" --repo "${{ github.repository }}" &>/dev/null; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Release ${TAG} already exists — skipping"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
 
+      # ── Create GitHub Release with SBOM diff + release card ──────────────
+      - name: Create Release
+        if: |
+          steps.check.outputs.skip == 'false' &&
+          steps.existing.outputs.exists == 'false' &&
+          inputs.dry_run != true &&
+          (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+        uses: projectbluefin/actions/bootc-build/create-release@d8f871c0ca7a868339d3c175200a7319492473c7 # v1
+        with:
+          sbom-path:          ${{ steps.sbom.outputs.path }}
+          tag:                ${{ steps.vars.outputs.tag }}
+          title:              "TunaOS ${{ steps.vars.outputs.stream }} (${{ steps.vars.outputs.date }})"
+          image:              ${{ steps.vars.outputs.image }}
+          digest:             ${{ steps.digest.outputs.digest }}
+          repo:               ${{ github.repository }}
+          project-name:       "TunaOS"
+          accent-color:       "#0ea5e9"
+          badge-label:        "${{ steps.vars.outputs.stream }}"
+          docs-url:           "https://tunaos.org/docs"
+          cert-identity-regexp: >-
+            ^https://github\.com/tuna-os/tunaOS/\.github/workflows/
+          notable-packages: >-
+            [
+              {"sbom_name": "kernel",        "label": "Kernel"},
+              {"sbom_name": "gnome-shell",   "label": "GNOME Shell"},
+              {"sbom_name": "podman",        "label": "Podman"},
+              {"sbom_name": "bootc",         "label": "bootc"},
+              {"sbom_name": "systemd",       "label": "systemd"},
+              {"sbom_name": "mesa-dri-drivers", "label": "Mesa"},
+              {"sbom_name": "flatpak",       "label": "Flatpak"},
+              {"sbom_name": "pipewire",      "label": "PipeWire"}
+            ]
+          handwritten:  ${{ inputs.handwritten || '' }}
+          github-token: ${{ github.token }}
