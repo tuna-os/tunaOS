@@ -1,0 +1,129 @@
+# KDE Plasma Desktop Manifest
+# Declares what goes into a KDE image — packages, services, config.
+# The generic installer (install-desktop.sh) reads this and applies it.
+
+display_manager: sddm
+
+# Packages to install, keyed by package manager / OS family.
+# The installer picks the right section based on detected OS.
+packages:
+  # ── APT (Ubuntu/Debian) ────────────────────────────────────────────
+  apt:
+    - kde-plasma-desktop
+    - sddm
+    - dolphin
+    - konsole
+    - kate
+    - ark
+    - kdeconnect
+    - xdg-desktop-portal-kde
+    - qt6-wayland
+
+  # ── DNF: Fedora ────────────────────────────────────────────────────
+  fedora:
+    groups:
+      - kde-desktop
+    packages:
+      - sddm
+      - dolphin
+      - konsole
+      - kate
+      - ark
+      - plasma-discover
+      - kdeconnect
+      - xdg-desktop-portal-kde
+      - qt5-qtwayland
+      - qt6-qtwayland
+      - ksshaskpass
+      - ksystemlog
+      - input-remapper
+      - evtest
+      - tesseract
+      - libratbag-ratbagd
+      - solaar-udev
+      - openrgb-udev-rules
+      - pam-u2f
+      - pam_yubico
+      - pamu2fcfg
+      - yubikey-manager
+      - nvtop
+    exclude:
+      - PackageKit
+      - PackageKit-command-not-found
+
+  # ── DNF: EL10 (AlmaLinux, CentOS Stream, RHEL) ────────────────────
+  el10:
+    groups:
+      - "KDE Plasma Workspaces"
+      - "Common NetworkManager submodules"
+      - "Core"
+      - "Fonts"
+      - "Guest Desktop Agents"
+      - "Hardware Support"
+      - "Printing Client"
+      - "Standard"
+    group_options: "--nobest"
+    group_exclude:
+      - plasma-discover
+      - plasma-discover-notifier
+      - plasma-nm-vpnc
+      - pinentry-qt
+      - plasma-workspace-wayland
+      - plasma-workspace-geolocation
+      - plasma-drkonqi
+    packages:
+      - sddm
+      - dolphin
+      - konsole
+      - kate
+      - ark
+      - xdg-desktop-portal-kde
+      - qt5-qtwayland
+      - qt6-qtwayland
+    exclude:
+      - PackageKit
+      - PackageKit-command-not-found
+    # Best-effort packages — installed if available in repos, skipped otherwise
+    optional:
+      - kdeconnect
+      - ksshaskpass
+      - ksystemlog
+      - input-remapper
+      - evtest
+      - tesseract
+      - libratbag-ratbagd
+      - solaar-udev
+      - openrgb-udev-rules
+      - pam-u2f
+      - pam_yubico
+      - pamu2fcfg
+      - yubikey-manager
+      - nvtop
+    # fcitx5 input method support (Asian languages) — only if available
+    optional_group:
+      - fcitx5
+      - fcitx5-chewing
+      - fcitx5-chinese-addons
+      - fcitx5-gtk
+      - fcitx5-hangul
+      - fcitx5-m17n
+      - fcitx5-mozc
+      - fcitx5-qt
+      - fcitx5-sayura
+      - fcitx5-unikey
+      - kcm-fcitx5
+
+# Version locks — prevent partial upgrades causing black screens
+# Ref: https://github.com/ublue-os/aurora/issues/1227
+versionlock:
+  - plasma-desktop
+  - "qt6-*"
+
+# Desktop files to disable (replaced by Bazaar/Flatpak)
+disable_desktop_files:
+  - org.kde.discover.desktop
+  - org.kde.discover.urlhandler.desktop
+
+# Post-install scripts to source (relative to build_scripts/)
+post_install:
+  - kcm-ublue.sh

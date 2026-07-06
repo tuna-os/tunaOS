@@ -1,0 +1,80 @@
+# COSMIC Desktop Manifest
+
+display_manager: greetd
+
+packages:
+  fedora:
+    packages:
+      - cosmic-session
+      - cosmic-comp
+      - cosmic-panel
+      - cosmic-app-library
+      - cosmic-applets
+      - cosmic-bg
+      - cosmic-files
+      - cosmic-idle
+      - cosmic-launcher
+      - cosmic-notifications
+      - cosmic-osd
+      - cosmic-randr
+      - cosmic-screenshot
+      - cosmic-settings
+      - cosmic-settings-daemon
+      - cosmic-term
+      - cosmic-wallpapers
+      - cosmic-workspaces
+      - cosmic-greeter
+      - cosmic-icon-theme
+      - greetd
+      - xdg-desktop-portal-cosmic
+      - pop-icon-theme
+
+  el10:
+    copr:
+      - repo: yselkowitz/cosmic-epel
+        packages:
+          - cosmic-comp
+          - cosmic-panel
+          - cosmic-app-library
+          - cosmic-applets
+          - cosmic-bg
+          - cosmic-files
+          - cosmic-idle
+          - cosmic-launcher
+          - cosmic-notifications
+          - cosmic-osd
+          - cosmic-randr
+          - cosmic-screenshot
+          - cosmic-settings
+          - cosmic-settings-daemon
+          - cosmic-term
+          - cosmic-wallpapers
+          - cosmic-workspaces
+          - cosmic-icon-theme
+          - xdg-desktop-portal-cosmic
+          - adw-gtk3-theme
+      - repo: yselkowitz/cosmic-epel
+        packages:
+          - cosmic-session
+          - greetd
+          - cosmic-greeter
+        options: "--nobest --allowerasing"
+    packages:
+      - flatpak
+      - pipewire
+      - wireplumber
+      - wl-clipboard
+      - xdg-user-dirs
+      - zram-generator
+    optional:
+      - brightnessctl
+      - playerctl
+      - gnome-keyring
+      - gnome-keyring-pam
+
+post_install_inline:
+  - "glib-compile-schemas /usr/share/glib-2.0/schemas || true"
+  - |
+    if [ -f /etc/pam.d/greetd ]; then
+      sed --sandbox -i -e '/gnome_keyring.so/ s/-auth/auth/ ; /gnome_keyring.so/ s/-session/session/' /etc/pam.d/greetd
+    fi

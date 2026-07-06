@@ -1,0 +1,159 @@
+#!/usr/bin/env bash
+# install-desktop.sh — Generic desktop installer driven by YAML manifests.
+#
+# Reads a desktop manifest from manifests/desktops/<desktop>.yaml and
+# installs packages, enables services, applies version locks, and runs
+# post-install hooks. Replaces per-DE shell scripts (kde.sh, cosmic.sh, etc.)
+# with a single data-driven installer.
+#
+# Usage:
+#   /run/context/build_scripts/install-desktop.sh <desktop>
+#
+# Requires yq (mikefarah/yq) available at YQ env var or in PATH.
+
+set -xeuo pipefail
+
+DESKTOP="${1:?Usage: install-desktop.sh <desktop>}"
+CONTEXT_PATH="/run/context"
+MANIFEST="${CONTEXT_PATH}/manifests/desktops/${DESKTOP}.yaml"
+
+if [[ ! -f "${MANIFEST}" ]]; then
+    echo "ERROR: No manifest found at ${MANIFEST}" >&2
+    echo "Available desktops:"
+    ls "${CONTEXT_PATH}/manifests/desktops/"*.yaml 2>/dev/null | sed 's|.*/||;s|\.yaml||'
+    exit 1
+fi
+
+source "${CONTEXT_PATH}/build_scripts/lib.sh"
+
+YQ="${YQ:-yq}"
+printf "::group:: === install-desktop: %s ===\n" "${DESKTOP}"
+
+# ── Determine OS section to use ──────────────────────────────────────────────
+OS_SECTION=""
+if [[ "$PKG_MGR" == "apt" ]]; then
+    OS_SECTION="apt"
+elif [[ "$IS_FEDORA" == true ]]; then
+    OS_SECTION="fedora"
+else
+    OS_SECTION="el10"
+fi
+
+echo "Installing ${DESKTOP} desktop (OS section: ${OS_SECTION})..."
+
+# ── APT path ─────────────────────────────────────────────────────────────────
+if [[ "${OS_SECTION}" == "apt" ]]; then
+    readarray -t PKGS < <($YQ -r ".packages.apt[]" "${MANIFEST}" 2>/dev/null)
+    if ((${#PKGS[@]} > 0)); then
+        pkg_install "${PKGS[@]}"
+    fi
+    # Enable display manager
+    DM=$($YQ -r '.display_manager // empty' "${MANIFEST}")
+    if [[ -n "${DM}" ]]; then
+        systemctl enable "${DM}" || true
+    fi
+    printf "::endgroup::\n"
+    exit 0
+fi
+
+# ── DNF path ─────────────────────────────────────────────────────────────────
+
+# Install groups
+GROUP_OPTIONS=$($YQ -r ".packages.${OS_SECTION}.group_options // empty" "${MANIFEST}")
+readarray -t GROUPS < <($YQ -r ".packages.${OS_SECTION}.groups[] // empty" "${MANIFEST}" 2>/dev/null)
+readarray -t GROUP_EXCLUDES < <($YQ -r ".packages.${OS_SECTION}.group_exclude[] // empty" "${MANIFEST}" 2>/dev/null)
+
+if ((${#GROUPS[@]} > 0)); then
+    EXCLUDE_ARGS=()
+    for exc in "${GROUP_EXCLUDES[@]}"; do
+        [[ -n "$exc" ]] && EXCLUDE_ARGS+=("-x" "$exc")
+    done
+    # shellcheck disable=SC2086 # GROUP_OPTIONS may be empty or contain flags
+    dnf group install -y ${GROUP_OPTIONS} "${EXCLUDE_ARGS[@]}" "${GROUPS[@]}"
+fi
+
+# Install packages
+readarray -t PKGS < <($YQ -r ".packages.${OS_SECTION}.packages[] // empty" "${MANIFEST}" 2>/dev/null)
+readarray -t EXCLUDES < <($YQ -r ".packages.${OS_SECTION}.exclude[] // empty" "${MANIFEST}" 2>/dev/null)
+
+if ((${#PKGS[@]} > 0)); then
+    EXCLUDE_ARGS=()
+    for exc in "${EXCLUDES[@]}"; do
+        [[ -n "$exc" ]] && EXCLUDE_ARGS+=("-x" "$exc")
+    done
+    dnf_retry -y install "${EXCLUDE_ARGS[@]}" "${PKGS[@]}"
+fi
+
+# COPR packages (EL10 primarily)
+COPR_COUNT=$($YQ -r ".packages.${OS_SECTION}.copr | length // 0" "${MANIFEST}" 2>/dev/null)
+for ((i=0; i<COPR_COUNT; i++)); do
+    COPR_REPO=$($YQ -r ".packages.${OS_SECTION}.copr[$i].repo" "${MANIFEST}")
+    readarray -t COPR_PKGS < <($YQ -r ".packages.${OS_SECTION}.copr[$i].packages[]" "${MANIFEST}")
+    COPR_OPTS=$($YQ -r ".packages.${OS_SECTION}.copr[$i].options // empty" "${MANIFEST}")
+
+    dnf -y copr enable "${COPR_REPO}"
+    dnf -y copr disable "${COPR_REPO}"
+    REPO_ID="copr:copr.fedorainfracloud.org:$(echo "${COPR_REPO}" | tr '/' ':')"
+    # shellcheck disable=SC2086
+    dnf -y --enablerepo="${REPO_ID}" install ${COPR_OPTS} "${COPR_PKGS[@]}" || true
+done
+
+# Optional packages (best-effort)
+readarray -t OPTIONAL < <($YQ -r ".packages.${OS_SECTION}.optional[] // empty" "${MANIFEST}" 2>/dev/null)
+if ((${#OPTIONAL[@]} > 0)); then
+    install_available "${OPTIONAL[@]}"
+fi
+
+# Optional group (e.g. fcitx5 — install all if the first one is available)
+readarray -t OPT_GROUP < <($YQ -r ".packages.${OS_SECTION}.optional_group[] // empty" "${MANIFEST}" 2>/dev/null)
+if ((${#OPT_GROUP[@]} > 0)); then
+    FIRST="${OPT_GROUP[0]}"
+    if dnf repoquery --available --qf '%{name}\n' "$FIRST" 2>/dev/null | grep -qx "$FIRST"; then
+        dnf_retry -y install "${OPT_GROUP[@]}"
+    else
+        echo "Skipping optional group (${FIRST} not available in repos)"
+    fi
+fi
+
+# ── Version locks ────────────────────────────────────────────────────────────
+readarray -t LOCKS < <($YQ -r '.versionlock[] // empty' "${MANIFEST}" 2>/dev/null)
+if ((${#LOCKS[@]} > 0)); then
+    # Ensure versionlock plugin is available
+    dnf -y install python3-dnf-plugin-versionlock 2>/dev/null || true
+    for lock in "${LOCKS[@]}"; do
+        [[ -n "$lock" ]] && dnf versionlock add "$lock" 2>/dev/null || true
+    done
+fi
+
+# ── Display manager ──────────────────────────────────────────────────────────
+DM=$($YQ -r '.display_manager // empty' "${MANIFEST}")
+if [[ -n "${DM}" ]]; then
+    safe_enable "${DM}.service"
+fi
+
+# ── Disable desktop files ────────────────────────────────────────────────────
+readarray -t DISABLE_DESKTOPS < <($YQ -r '.disable_desktop_files[] // empty' "${MANIFEST}" 2>/dev/null)
+for df in "${DISABLE_DESKTOPS[@]}"; do
+    if [[ -n "$df" && -f "/usr/share/applications/${df}" ]]; then
+        mv "/usr/share/applications/${df}" "/usr/share/applications/${df}.disabled"
+    fi
+done
+
+# ── Post-install scripts ─────────────────────────────────────────────────────
+readarray -t POST_SCRIPTS < <($YQ -r '.post_install[] // empty' "${MANIFEST}" 2>/dev/null)
+for script in "${POST_SCRIPTS[@]}"; do
+    if [[ -n "$script" && -f "${CONTEXT_PATH}/build_scripts/${script}" ]]; then
+        echo "Running post-install: ${script}"
+        source "${CONTEXT_PATH}/build_scripts/${script}"
+    fi
+done
+
+# Inline post-install commands
+readarray -t POST_INLINE < <($YQ -r '.post_install_inline[] // empty' "${MANIFEST}" 2>/dev/null)
+for cmd in "${POST_INLINE[@]}"; do
+    if [[ -n "$cmd" ]]; then
+        eval "$cmd"
+    fi
+done
+
+printf "::endgroup::\n"
