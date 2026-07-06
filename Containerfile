@@ -156,7 +156,12 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/gnome.sh base
-RUN dnf versionlock add glib2
+# Extensions are a separate layer so DE package install caches independently
+# of submodule updates to extension sources.
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/gnome-extensions.sh
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS cosmic
@@ -172,7 +177,10 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/gnome.sh base
-RUN dnf versionlock add glib2
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/gnome-extensions.sh
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS kde

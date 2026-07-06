@@ -1,0 +1,87 @@
+# Containerfile.overlay — Unified HWE and NVIDIA overlay.
+#
+# Replaces the nearly-identical Containerfile.hwe and Containerfile.nvidia.
+# Parameterized by OVERLAY_TYPE (hwe|nvidia) and DESKTOP_FLAVOR.
+#
+# Usage (via Justfile):
+#   buildah build --build-arg OVERLAY_TYPE=hwe --target=desktop ...
+#   buildah build --build-arg OVERLAY_TYPE=nvidia --target=desktop ...
+
+ARG BASE_IMAGE
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG SHA_HEAD_SHORT
+ARG ENABLE_HWE="${ENABLE_HWE:-0}"
+ARG ENABLE_NVIDIA="${ENABLE_NVIDIA:-0}"
+ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
+ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
+ARG AKMODS_VERSION="${AKMODS_VERSION:-centos-10}"
+ARG AKMODS_NVIDIA_VERSION="${AKMODS_NVIDIA_VERSION:-${AKMODS_VERSION}}"
+ARG OVERLAY_TYPE="hwe"
+ARG COMMON_IMAGE_REF
+ARG BREW_IMAGE_REF
+ARG AKMODS_BASE="ghcr.io/ublue-os"
+ARG IMAGE_REGISTRY="ghcr.io"
+ARG IMAGE_NAME_VARIANT
+
+FROM ${AKMODS_BASE}/akmods-nvidia-open:${AKMODS_NVIDIA_VERSION} AS akmods_nvidia_open
+FROM ${COMMON_IMAGE_REF} AS common
+FROM ${BREW_IMAGE_REF} AS brew
+
+FROM scratch as context
+COPY system_files /files
+COPY --from=brew /system_files /files
+COPY --from=common /system_files/shared /files
+COPY system_files_overrides /overrides
+COPY build_scripts /build_scripts
+
+# ==============================================================================
+# Overlay base stage — applies HWE or NVIDIA packages to the parent image.
+# The parent (${BASE_IMAGE}) is typically a DE image (e.g. yellowfin:gnome)
+# that already has the desktop environment installed. This stage only adds
+# the kernel/driver layer.
+# ==============================================================================
+FROM ${BASE_IMAGE} AS overlay-base
+
+ARG BASE_IMAGE
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG IMAGE_NAME_VARIANT
+ARG SHA_HEAD_SHORT
+ARG ENABLE_HWE
+ARG ENABLE_NVIDIA
+ARG ENABLE_SSHD
+ARG DESKTOP_FLAVOR
+ARG OVERLAY_TYPE
+ENV IMAGE_REGISTRY=${IMAGE_REGISTRY}
+ENV BASE_IMAGE=${BASE_IMAGE}
+ENV IMAGE_NAME=${IMAGE_NAME}
+ENV IMAGE_VENDOR=${IMAGE_VENDOR}
+ENV IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT}
+ENV SHA_HEAD_SHORT=${SHA_HEAD_SHORT}
+ENV ENABLE_HWE=${ENABLE_HWE}
+ENV ENABLE_NVIDIA=${ENABLE_NVIDIA}
+ENV ENABLE_SSHD=${ENABLE_SSHD}
+ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
+
+RUN rm -rf /opt && mkdir /opt
+
+RUN \
+  --mount=type=tmpfs,dst=/opt \
+  --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=akmods_nvidia_open,src=/rpms,dst=/tmp/akmods-nvidia-open-rpms \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+    bash -c 'if [ "${OVERLAY_TYPE}" = "hwe" ]; then /run/context/build_scripts/HWE.sh; else /run/context/build_scripts/nvidia.sh; fi'
+
+# ==============================================================================
+# Desktop target — single parameterized stage replaces the per-DE copy-paste.
+# The Justfile passes --target=desktop and --build-arg DESKTOP_FLAVOR=<de>.
+# ==============================================================================
+FROM overlay-base AS desktop
+
+ARG DESKTOP_FLAVOR
+ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
+
+RUN dnf versionlock add glib2 2>/dev/null || true
+RUN rm -rf /opt && ln -s /var/opt /opt

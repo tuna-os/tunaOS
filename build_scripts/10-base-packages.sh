@@ -63,12 +63,17 @@ install_base_packages_no_de() {
 
 		# Install uupd from GitHub release (same source as RPM path)
 		UUPD_VERSION=$(grep '^\s*uupd:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
-		curl -fsSL "https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/').tar.gz" |
-			tar -xzf - -C /usr/bin uupd
+		UUPD_ARCH="$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/')"
 		UUPD_SRC_BASE="https://raw.githubusercontent.com/ublue-os/uupd/${UUPD_VERSION}"
-		curl -fsSLo /usr/lib/systemd/system/uupd.service "${UUPD_SRC_BASE}/uupd.service"
-		curl -fsSLo /usr/lib/systemd/system/uupd.timer "${UUPD_SRC_BASE}/uupd.timer"
-		curl -fsSLo /usr/lib/systemd/system/uupd-manual.service "${UUPD_SRC_BASE}/uupd-manual.service"
+
+		# Download binary + systemd units in parallel
+		curl --retry 3 --fail -Z \
+			-o /tmp/uupd.tar.gz "https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_${UUPD_ARCH}.tar.gz" \
+			-o /usr/lib/systemd/system/uupd.service "${UUPD_SRC_BASE}/uupd.service" \
+			-o /usr/lib/systemd/system/uupd.timer "${UUPD_SRC_BASE}/uupd.timer" \
+			-o /usr/lib/systemd/system/uupd-manual.service "${UUPD_SRC_BASE}/uupd-manual.service"
+		tar -xzf /tmp/uupd.tar.gz -C /usr/bin uupd
+		rm -f /tmp/uupd.tar.gz
 
 		printf "::endgroup::\n"
 		return 0
@@ -97,22 +102,41 @@ install_base_packages_no_de() {
 	dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
 
 	if [[ $IS_FEDORA == true ]]; then
-		# Install config-manager and RPM Fusion in one transaction
+		# Install config-manager, RPM Fusion, multimedia, and common packages
+		# in as few transactions as possible (each dnf invocation incurs ~10-20s
+		# metadata resolution overhead).
 		dnf -y "do" \
 			--action=install 'dnf5-command(config-manager)' \
 			"https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
 			"https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
 
-		# using rpmfusion for multimedia
-
-		# Install multimedia packages and remove unwanted ones in single transaction
-		dnf -y "do" \
-			--action=install \
+		# Multimedia + common desktop packages in one transaction
+		dnf -y install \
 			gstreamer1-plugins-good \
 			gstreamer1-plugins-ugly \
 			gstreamer1-plugins-bad-free \
 			lame \
-			ffmpeg
+			ffmpeg \
+			buildah \
+			podman \
+			skopeo \
+			systemd-container \
+			flatpak \
+			distrobox \
+			fastfetch \
+			fpaste \
+			fwupd \
+			systemd-resolved \
+			btrfs-progs \
+			gcc \
+			gcc-c++ \
+			plymouth \
+			plymouth-system-theme \
+			plymouth-plugin-script \
+			dracut-live \
+			xdg-desktop-portal \
+			systemd-oomd-defaults \
+			unzip
 	else
 		# Enable the EPEL repos for RHEL and AlmaLinux
 		# RHEL requires URL-based EPEL install since epel-release is not in default repos
@@ -146,10 +170,7 @@ install_base_packages_no_de() {
 			# Disable fastestmirror for this repo to avoid corrupted mirrors
 			dnf config-manager --setopt="epel-multimedia.fastestmirror=0" --save
 
-			# Install with retries to handle transient mirror issues
-			retry_count=0
-			max_retries=3
-			until dnf -y install --enablerepo=epel-multimedia \
+			dnf_retry -y install --enablerepo=epel-multimedia \
 				ffmpeg \
 				libavcodec \
 				@multimedia \
@@ -160,51 +181,17 @@ install_base_packages_no_de() {
 				lame \
 				lame-libs \
 				libjxl \
-				ffmpegthumbnailer || [ $retry_count -eq $max_retries ]; do
-				retry_count=$((retry_count + 1))
-				echo "Multimedia package installation failed, retry $retry_count of $max_retries"
-				dnf clean metadata
-				sleep 5
-			done
+				ffmpegthumbnailer
 		fi
 
-	fi
+		if [[ $IS_ALMALINUX == true ]] && [ "$MAJOR_VERSION_NUMBER" -ge 9 ]; then
+			dnf swap -y coreutils-single coreutils
+		fi
 
-	if [[ $IS_ALMALINUX == true ]] && [ "$MAJOR_VERSION_NUMBER" -ge 9 ]; then
-		dnf swap -y coreutils-single coreutils
-	fi
-
-	# Install common desktop packages (shared between GNOME and KDE)
-	# gcc + gcc-c++ are required by Homebrew formulae that build from source
-	# (Ported from ublue-os/aurora 844b4865 — feat(packages): Add gcc-c++
-	# to packages so Homebrew has a c++).
-	if [[ $IS_FEDORA == true ]]; then
-		dnf -y install \
-			buildah \
-			podman \
-			skopeo \
-			systemd-container \
-			flatpak \
-			distrobox \
-			fastfetch \
-			fpaste \
-			fwupd \
-			systemd-resolved \
-			btrfs-progs \
-			gcc \
-			gcc-c++ \
-			plymouth \
-			plymouth-system-theme \
-			plymouth-plugin-script \
-			dracut-live \
-			xdg-desktop-portal \
-			systemd-oomd-defaults \
-			unzip
-	else
-		# RHEL/AlmaLinux — wrapped in dnf_retry because this set pulls from EPEL
-		# (gum, distrobox, fastfetch, glow). EPEL mirror flakes (curl
-		# SSL_ERROR_SYSCALL, partial-file) were the actual cause of albacore CI
-		# failures captured in .build-logs/albacore-base.log.
+		# Common desktop packages (shared between GNOME and KDE) — single
+		# transaction. Pulls from EPEL (gum, distrobox, fastfetch, glow) so
+		# wrapped in dnf_retry to absorb mirror flakes.
+		# gcc + gcc-c++ required by Homebrew formulae that build from source.
 		dnf_retry -y install \
 			buildah \
 			btrfs-progs \
@@ -242,14 +229,16 @@ install_base_packages_no_de() {
 	# Bluefin LTS adopted this same approach.
 	# Version is pinned in image-versions.yaml and tracked by Renovate.
 	UUPD_VERSION=$(grep '^\s*uupd:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
-	curl -fsSL "https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/').tar.gz" |
-		tar -xzf - -C /usr/bin uupd
-
-	# Install systemd units from uupd source (not included in release tarball)
+	UUPD_ARCH="$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/')"
 	UUPD_SRC_BASE="https://raw.githubusercontent.com/ublue-os/uupd/${UUPD_VERSION}"
-	curl -fsSLo /usr/lib/systemd/system/uupd.service "${UUPD_SRC_BASE}/uupd.service"
-	curl -fsSLo /usr/lib/systemd/system/uupd.timer "${UUPD_SRC_BASE}/uupd.timer"
-	curl -fsSLo /usr/lib/systemd/system/uupd-manual.service "${UUPD_SRC_BASE}/uupd-manual.service"
 
+	# Download binary tarball + systemd units in parallel
+	curl --retry 3 --fail -Z \
+		-o /tmp/uupd.tar.gz "https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_${UUPD_ARCH}.tar.gz" \
+		-o /usr/lib/systemd/system/uupd.service "${UUPD_SRC_BASE}/uupd.service" \
+		-o /usr/lib/systemd/system/uupd.timer "${UUPD_SRC_BASE}/uupd.timer" \
+		-o /usr/lib/systemd/system/uupd-manual.service "${UUPD_SRC_BASE}/uupd-manual.service"
+	tar -xzf /tmp/uupd.tar.gz -C /usr/bin uupd
+	rm -f /tmp/uupd.tar.gz
 	printf "::endgroup::\n"
 }
