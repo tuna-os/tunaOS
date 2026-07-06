@@ -1,7 +1,7 @@
 {
   "upstream": "https://github.com/zirconium-dev/zirconium.git",
   "branch": "main",
-  "sha": "cf4eea275f4b449b41f92d808a31071a345c5c93",
-  "synced_at": "2026-06-29T12:57:11Z",
+  "sha": "a4ff4eda46835d1bfc1a0b237a1328fc9e2bbc6e",
+  "synced_at": "2026-07-06T12:36:28Z",
   "paths": "mkosi.extra:mkosi.conf.d:mkosi.profiles:mkosi.conf:mkosi.bump:mkosi.postinst.chroot:mkosi.prepare.chroot:Justfile:iso.toml:iso-nvidia.toml:repos"
 }
