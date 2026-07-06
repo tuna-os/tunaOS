@@ -109,6 +109,7 @@ cat >"$RECIPE_FILE" <<EOF
   "shared_store": {
     "format": "ext4"
   },
+  "kargs": ["console=ttyS0"],
   "bootable_environments": [
     {
       "id": "${VARIANT}-${FLAVOR}",

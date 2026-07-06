@@ -52,6 +52,11 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR={{ desktop_flavor }}")
     BUILD_ARGS+=("--build-arg" "ENABLE_SSHD={{ enable_sshd_build }}")
 
+    # OVERLAY_TYPE is used by Containerfile.overlay to select HWE or nvidia script
+    if [[ -n "${OVERLAY_TYPE:-}" ]]; then
+        BUILD_ARGS+=("--build-arg" "OVERLAY_TYPE=${OVERLAY_TYPE}")
+    fi
+
     AKMODS_ORG=$({{ yq }} -r ".variants[] | select(.id == \"{{ target_tag }}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
     # Resolve akmods registry via registry-map; falls back to ghcr.io/${AKMODS_ORG} if not mapped
     AKMODS_REGISTRY_BASE="$(registry_ref akmods 2>/dev/null || echo "ghcr.io/${AKMODS_ORG}")"
@@ -253,17 +258,8 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     else PLATFORM="{{ target_platform }}"; fi
 
     BASE_FOR_BUILD=""
-    CONTAINERFILE="Containerfile"
-    # RFC 010: grouper (Ubuntu) uses Containerfile.ubuntu
-    if [[ "{{ variant }}" == "grouper" ]]; then
-        CONTAINERFILE="Containerfile.ubuntu"
-    fi
-    ENABLE_HWE="0"
-    ENABLE_NVIDIA="0"
     ENABLE_SSHD="{{ enable_sshd_var }}"
-    PARENT_FLAVOR=""
     FLAVOR="{{ flavor }}"
-    DESKTOP_FLAVOR="${FLAVOR}"
 
     case "${FLAVOR}" in
         "hwe") FLAVOR="gnome-hwe" ;;
@@ -275,41 +271,21 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         readarray -t FLAVORS < <({{ yq }} -r '.variants[] | select(.id == "{{ variant }}") | .flavors[].id' .github/build-config.yml)
         for f in "${FLAVORS[@]}"; do {{ just }} build "{{ variant }}" "$f"; done
         exit 0
-    elif [[ "${FLAVOR}" == "base" ]]; then
-        BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
-        DESKTOP_FLAVOR="base-no-de"
-        # grouper's base-no-de is intentionally pre-bootcify (apt still intact so
-        # the DE stages can layer packages); the bootcified base is the `base`
-        # stage, which runs finalize.sh (mount-system + bootc container lint).
-        if [[ "{{ variant }}" == "grouper" ]]; then DESKTOP_FLAVOR="base"; fi
-    elif [[ "${FLAVOR}" == "base-hwe" ]]; then
-        CONTAINERFILE="Containerfile.hwe"
-        ENABLE_HWE="1"
-        DESKTOP_FLAVOR="base-hwe"
-        PARENT_FLAVOR="base"
-    elif [[ "${FLAVOR}" == "base-nvidia" ]]; then
-        CONTAINERFILE="Containerfile.nvidia"
-        ENABLE_NVIDIA="1"
-        DESKTOP_FLAVOR="base-nvidia"
-        PARENT_FLAVOR="base"
-    elif [[ "{{ variant }}" != "grouper" && "${FLAVOR}" == *"-nvidia-hwe" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-nvidia-hwe}"; CONTAINERFILE="Containerfile.nvidia"; ENABLE_NVIDIA="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe"
-    elif [[ "{{ variant }}" != "grouper" && "${FLAVOR}" == *"-hwe" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-hwe}"; CONTAINERFILE="Containerfile.hwe"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
-    elif [[ "{{ variant }}" != "grouper" && "${FLAVOR}" == *"-nvidia" ]]; then
-        DESKTOP_FLAVOR="${FLAVOR%-nvidia}"; CONTAINERFILE="Containerfile.nvidia"; ENABLE_NVIDIA="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}"
-    else
-        DESKTOP_FLAVOR="${FLAVOR}"
-        BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
     fi
 
-    if [[ -n "${PARENT_FLAVOR}" ]]; then
-        # CI chains on the -testing stream tag: it is pushed by the manifest
-        # job of the parent's build in THIS run, before the parent's boot
-        # gate promotes the bare tag. Chaining on the bare tag would build
-        # stage-3 images against last week's parent.
-        if [[ "{{ is_ci }}" = "1" ]]; then BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:${PARENT_FLAVOR}-testing"; else
-            BASE_FOR_BUILD="localhost/{{ variant }}:${PARENT_FLAVOR}"; fi
+    # Resolve flavor into build parameters via external script (testable, DRY)
+    eval "$(./scripts/resolve-flavor.sh "{{ variant }}" "${FLAVOR}" "{{ is_ci }}")"
+    # CONTAINERFILE, DESKTOP_FLAVOR, ENABLE_HWE, ENABLE_NVIDIA, OVERLAY_TYPE, PARENT_FLAVOR now set
+    export OVERLAY_TYPE
+
+    # Resolve BASE_FOR_BUILD based on PARENT_FLAVOR
+    if [[ -z "${PARENT_FLAVOR}" ]]; then
+        BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
+    elif [[ "{{ is_ci }}" = "1" ]]; then
+        # CI chains on the -testing stream tag
+        BASE_FOR_BUILD="ghcr.io/{{ repo_organization }}/{{ variant }}:${PARENT_FLAVOR}-testing"
+    else
+        BASE_FOR_BUILD="localhost/{{ variant }}:${PARENT_FLAVOR}"
     fi
 
     if [[ -n "{{ chain_base_image }}" ]] && [[ "${FLAVOR}" != "base" ]]; then

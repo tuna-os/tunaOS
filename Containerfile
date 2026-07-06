@@ -7,6 +7,7 @@ ARG ENABLE_HWE="${ENABLE_HWE:-0}"
 ARG ENABLE_NVIDIA="${ENABLE_NVIDIA:-0}"
 ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
+ARG IMAGE_NAME_VARIANT
 # SECURITY: Defaults use placeholder tags that MUST be overridden at build time.
 # The Justfile and scripts/build-image.sh always pin these to specific SHA256
 # digests (e.g., ghcr.io/projectbluefin/common@sha256:...). Direct podman build
@@ -45,6 +46,7 @@ ARG ENABLE_SSHD
 ARG DESKTOP_FLAVOR
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR
+ARG IMAGE_NAME_VARIANT
 ARG IMAGE_REGISTRY="ghcr.io"
 
 # RHSM credentials are NOT declared as ARG here — they're passed via
@@ -56,6 +58,7 @@ ARG IMAGE_REGISTRY="ghcr.io"
 ENV BASE_IMAGE=${BASE_IMAGE}
 ENV IMAGE_NAME=${IMAGE_NAME}
 ENV IMAGE_VENDOR=${IMAGE_VENDOR}
+ENV IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT}
 ENV IMAGE_REGISTRY=${IMAGE_REGISTRY}
 ENV ENABLE_HWE=${ENABLE_HWE}
 ENV ENABLE_NVIDIA=${ENABLE_NVIDIA}
@@ -153,7 +156,12 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/gnome.sh base
-RUN dnf versionlock add glib2
+# Extensions are a separate layer so DE package install caches independently
+# of submodule updates to extension sources.
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/gnome-extensions.sh
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS cosmic
@@ -169,7 +177,10 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/gnome.sh base
-RUN dnf versionlock add glib2
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/gnome-extensions.sh
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS kde

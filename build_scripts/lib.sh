@@ -9,60 +9,90 @@ set -euo pipefail
 
 CONTEXT_PATH="$(realpath "$(dirname "$0")/..")" # should return /run/context
 BUILD_SCRIPTS_PATH="$(realpath "$(dirname "$0")")"
-MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
 SCRIPTS_PATH="$(realpath "$(dirname "$0")/scripts")"
-
-# Determine the true OS base image for OS detection.
-# For chained builds (nvidia, HWE) the BASE_IMAGE env var is set via Containerfile
-# ARG/ENV to the intermediate TunaOS stage image (e.g. ghcr.io/tuna-os/yellowfin:gnome50),
-# not the original OS base. Use image-info.json written by the previous stage when
-# available — it records the true OS base from stage 1.
-_IMAGE_INFO="/usr/share/ublue-os/image-info.json"
-if [[ -f "${_IMAGE_INFO}" ]]; then
-	BASE_IMAGE="$(jq -r '.["base-image"] // empty' "${_IMAGE_INFO}" 2>/dev/null)"
-fi
-if [[ -z "${BASE_IMAGE:-}" ]]; then
-	BASE_IMAGE="$(sh -c '. /etc/os-release ; echo ${BASE_IMAGE}')"
-fi
 DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 export SCRIPTS_PATH
-export MAJOR_VERSION_NUMBER
-export BASE_IMAGE
 export DESKTOP_FLAVOR
 
-# OS Detection Flags
-IS_FEDORA=false
-IS_RHEL=false
-IS_ALMALINUX=false
-IS_ALMALINUXKITTEN=false
-IS_CENTOS=false
-IS_UBUNTU=false
-IS_DEBIAN=false
+# ── Cached OS Detection ──────────────────────────────────────────────────────
+# OS detection (reading os-release, image-info.json, deriving IS_* flags) runs
+# every time lib.sh is sourced. Since each Containerfile RUN invokes a fresh
+# shell, we cache the results to /tmp/tunaos-build-env on first detection.
+# Subsequent sources within the same RUN (e.g. gnome.sh sourcing lib.sh after
+# 10-base-packages already ran) skip the expensive detection entirely.
+_TUNAOS_ENV_CACHE="/tmp/tunaos-build-env"
 
-[[ "${BASE_IMAGE,,}" == *"fedora"* ]] && IS_FEDORA=true && IMAGE_NAME="bonito" && IMAGE_PRETTY_NAME="Bonito"
-[[ "${BASE_IMAGE,,}" == *"red hat"* || "${BASE_IMAGE,,}" == *"rhel"* || "${BASE_IMAGE,,}" == *"redhat"* ]] && IS_RHEL=true && IMAGE_NAME="redfin" && IMAGE_PRETTY_NAME="Redfin"
-[[ "${BASE_IMAGE,,}" == *"almalinux"* && "${BASE_IMAGE,,}" != *"-kitten"* ]] && IS_ALMALINUX=true && IMAGE_NAME="albacore" && IMAGE_PRETTY_NAME="Albacore"
-[[ "${BASE_IMAGE,,}" == *"-kitten"* ]] && IS_ALMALINUXKITTEN=true && IMAGE_NAME="yellowfin" && IMAGE_PRETTY_NAME="Yellowfin"
-[[ "${BASE_IMAGE,,}" == *"centos"* ]] && IS_CENTOS=true && IMAGE_NAME="skipjack" && IMAGE_PRETTY_NAME="Skipjack"
-[[ "${BASE_IMAGE,,}" == *"ubuntu"* ]] && IS_UBUNTU=true && IMAGE_NAME="grouper" && IMAGE_PRETTY_NAME="Grouper"
-[[ "${BASE_IMAGE,,}" == *"debian"* && "${BASE_IMAGE,,}" != *"ubuntu"* ]] && IS_DEBIAN=true && IMAGE_NAME="flounder" && IMAGE_PRETTY_NAME="Flounder"
-
-# Package manager dimension
-if [[ "$IS_UBUNTU" == true || "$IS_DEBIAN" == true ]]; then
-	PKG_MGR="apt"
+if [[ -f "$_TUNAOS_ENV_CACHE" ]]; then
+	# shellcheck disable=SC1090
+	source "$_TUNAOS_ENV_CACHE"
 else
-	PKG_MGR="dnf"
+	MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
+
+	# Determine the true OS base image for OS detection.
+	# For chained builds (nvidia, HWE) the BASE_IMAGE env var is set via Containerfile
+	# ARG/ENV to the intermediate TunaOS stage image (e.g. ghcr.io/tuna-os/yellowfin:gnome50),
+	# not the original OS base. Use image-info.json written by the previous stage when
+	# available — it records the true OS base from stage 1.
+	_IMAGE_INFO="/usr/share/ublue-os/image-info.json"
+	if [[ -f "${_IMAGE_INFO}" ]]; then
+		BASE_IMAGE="$(jq -r '.["base-image"] // empty' "${_IMAGE_INFO}" 2>/dev/null)"
+	fi
+	if [[ -z "${BASE_IMAGE:-}" ]]; then
+		BASE_IMAGE="$(sh -c '. /etc/os-release ; echo ${BASE_IMAGE}')"
+	fi
+
+	# OS Detection Flags
+	IS_FEDORA=false
+	IS_RHEL=false
+	IS_ALMALINUX=false
+	IS_ALMALINUXKITTEN=false
+	IS_CENTOS=false
+	IS_UBUNTU=false
+	IS_DEBIAN=false
+
+	[[ "${BASE_IMAGE,,}" == *"fedora"* ]] && IS_FEDORA=true && IMAGE_NAME="bonito" && IMAGE_PRETTY_NAME="Bonito"
+	[[ "${BASE_IMAGE,,}" == *"red hat"* || "${BASE_IMAGE,,}" == *"rhel"* || "${BASE_IMAGE,,}" == *"redhat"* ]] && IS_RHEL=true && IMAGE_NAME="redfin" && IMAGE_PRETTY_NAME="Redfin"
+	[[ "${BASE_IMAGE,,}" == *"almalinux"* && "${BASE_IMAGE,,}" != *"-kitten"* ]] && IS_ALMALINUX=true && IMAGE_NAME="albacore" && IMAGE_PRETTY_NAME="Albacore"
+	[[ "${BASE_IMAGE,,}" == *"-kitten"* ]] && IS_ALMALINUXKITTEN=true && IMAGE_NAME="yellowfin" && IMAGE_PRETTY_NAME="Yellowfin"
+	[[ "${BASE_IMAGE,,}" == *"centos"* ]] && IS_CENTOS=true && IMAGE_NAME="skipjack" && IMAGE_PRETTY_NAME="Skipjack"
+	[[ "${BASE_IMAGE,,}" == *"ubuntu"* ]] && IS_UBUNTU=true && IMAGE_NAME="grouper" && IMAGE_PRETTY_NAME="Grouper"
+	[[ "${BASE_IMAGE,,}" == *"debian"* && "${BASE_IMAGE,,}" != *"ubuntu"* ]] && IS_DEBIAN=true && IMAGE_NAME="flounder" && IMAGE_PRETTY_NAME="Flounder"
+
+	# Package manager dimension
+	if [[ "$IS_UBUNTU" == true || "$IS_DEBIAN" == true ]]; then
+		PKG_MGR="apt"
+	else
+		PKG_MGR="dnf"
+	fi
+
+	# Write cache for subsequent sources within this RUN
+	cat > "$_TUNAOS_ENV_CACHE" <<-ENVEOF
+		MAJOR_VERSION_NUMBER="${MAJOR_VERSION_NUMBER}"
+		BASE_IMAGE="${BASE_IMAGE}"
+		IS_FEDORA=${IS_FEDORA}
+		IS_RHEL=${IS_RHEL}
+		IS_ALMALINUX=${IS_ALMALINUX}
+		IS_ALMALINUXKITTEN=${IS_ALMALINUXKITTEN}
+		IS_CENTOS=${IS_CENTOS}
+		IS_UBUNTU=${IS_UBUNTU}
+		IS_DEBIAN=${IS_DEBIAN}
+		PKG_MGR="${PKG_MGR}"
+		IMAGE_NAME="${IMAGE_NAME:-}"
+		IMAGE_PRETTY_NAME="${IMAGE_PRETTY_NAME:-}"
+	ENVEOF
+
+	echo "FEDORA: $IS_FEDORA"
+	echo "RHEL: $IS_RHEL"
+	echo "ALMALINUX: $IS_ALMALINUX"
+	echo "ALMALINUXKITTEN: $IS_ALMALINUXKITTEN"
+	echo "CENTOS: $IS_CENTOS"
+	echo "UBUNTU: $IS_UBUNTU"
+	echo "DEBIAN: $IS_DEBIAN"
+	echo "PKG_MGR: $PKG_MGR"
 fi
 
-echo "FEDORA: $IS_FEDORA"
-echo "RHEL: $IS_RHEL"
-echo "ALMALINUX: $IS_ALMALINUX"
-echo "ALMALINUXKITTEN: $IS_ALMALINUXKITTEN"
-echo "CENTOS: $IS_CENTOS"
-echo "UBUNTU: $IS_UBUNTU"
-echo "DEBIAN: $IS_DEBIAN"
-echo "PKG_MGR: $PKG_MGR"
-
+export MAJOR_VERSION_NUMBER
+export BASE_IMAGE
 export IS_FEDORA
 export IS_RHEL
 export IS_ALMALINUX

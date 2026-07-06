@@ -19,6 +19,13 @@ if [[ "$IS_ALMALINUX" = true ]] || [[ "$IS_ALMALINUXKITTEN" = true ]] || [[ "$IS
 			echo "fastestmirror=1" >>/etc/dnf/dnf.conf
 		fi
 
+		# Disable weak deps globally — saves ~50-100 unnecessary packages
+		# across all installs. Individual scripts no longer need
+		# --setopt=install_weak_deps=False on every dnf call.
+		if ! grep -q "^install_weak_deps=" /etc/dnf/dnf.conf; then
+			echo "install_weak_deps=False" >>/etc/dnf/dnf.conf
+		fi
+
 		# Add timeout and retry settings
 		if ! grep -q "^timeout=" /etc/dnf/dnf.conf; then
 			echo "timeout=300" >>/etc/dnf/dnf.conf
