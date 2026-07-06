@@ -66,14 +66,15 @@ install_base_packages_no_de() {
 		UUPD_ARCH="$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/')"
 		UUPD_SRC_BASE="https://raw.githubusercontent.com/ublue-os/uupd/${UUPD_VERSION}"
 
-		# Download binary + systemd units in parallel
-		curl --retry 3 --fail -Z \
-			-o /tmp/uupd.tar.gz "https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_${UUPD_ARCH}.tar.gz" \
+		# Download binary tarball (separate, so partial download doesn't corrupt)
+		# and systemd units (parallel — small, safe to Z).
+		curl --retry 3 --fail -L \
+			"https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_${UUPD_ARCH}.tar.gz" \
+			2>/dev/null | tar -xzf - -C /usr/bin uupd
+		curl --retry 3 --fail -Z -s \
 			-o /usr/lib/systemd/system/uupd.service "${UUPD_SRC_BASE}/uupd.service" \
 			-o /usr/lib/systemd/system/uupd.timer "${UUPD_SRC_BASE}/uupd.timer" \
 			-o /usr/lib/systemd/system/uupd-manual.service "${UUPD_SRC_BASE}/uupd-manual.service"
-		tar -xzf /tmp/uupd.tar.gz -C /usr/bin uupd
-		rm -f /tmp/uupd.tar.gz
 
 		printf "::endgroup::\n"
 		return 0
@@ -235,13 +236,14 @@ install_base_packages_no_de() {
 	UUPD_ARCH="$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/')"
 	UUPD_SRC_BASE="https://raw.githubusercontent.com/ublue-os/uupd/${UUPD_VERSION}"
 
-	# Download binary tarball + systemd units in parallel
-	curl --retry 3 --fail -Z \
-		-o /tmp/uupd.tar.gz "https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_${UUPD_ARCH}.tar.gz" \
+	# Download binary tarball (separate, so partial download doesn't corrupt)
+	# and systemd units (parallel — small, safe to Z).
+	curl --retry 3 --fail -L \
+		"https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_${UUPD_ARCH}.tar.gz" \
+		2>/dev/null | tar -xzf - -C /usr/bin uupd
+	curl --retry 3 --fail -Z -s \
 		-o /usr/lib/systemd/system/uupd.service "${UUPD_SRC_BASE}/uupd.service" \
 		-o /usr/lib/systemd/system/uupd.timer "${UUPD_SRC_BASE}/uupd.timer" \
 		-o /usr/lib/systemd/system/uupd-manual.service "${UUPD_SRC_BASE}/uupd-manual.service"
-	tar -xzf /tmp/uupd.tar.gz -C /usr/bin uupd
-	rm -f /tmp/uupd.tar.gz
 	printf "::endgroup::\n"
 }
