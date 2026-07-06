@@ -36,9 +36,7 @@ fi
 # Ensure unzip is available for font installation in 26-packages-post.sh
 dnf_retry -y install unzip
 
-if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
-	/run/context/build_scripts/kde.sh extra
-elif [[ "${DESKTOP_FLAVOR}" == "niri" ]]; then
+if [[ "${DESKTOP_FLAVOR}" == "niri" ]]; then
 	/run/context/build_scripts/niri.sh extra
 else
 	echo "Skipping DE-specific extra packages (DESKTOP_FLAVOR='${DESKTOP_FLAVOR}')"

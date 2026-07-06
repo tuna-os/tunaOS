@@ -131,11 +131,11 @@ case "${1:-}" in
 		dnf versionlock add plasma-desktop
 		dnf versionlock add "qt6-*"
 	fi
-	;;
-"extra")
-	# Build kcm_ublue from source, install krunner-bazaar from GitHub
-	# releases, and copy oversteer udev rules — replacing the
-	# ublue-os/packages COPR which dropped EPEL chroots.
+
+	# ── KDE extras (kcm_ublue, Bazaar, oversteer) ────────────────────────
+	# Previously in a separate "extra" case called from 20-packages.sh
+	# (before KDE was installed, so KF6 devel deps were missing). Now runs
+	# after the DE group install so build deps are satisfiable.
 	source /run/context/build_scripts/kcm-ublue.sh
 
 	# Disable plasma-discover in favor of Flatpak/Bazaar (like Aurora)
