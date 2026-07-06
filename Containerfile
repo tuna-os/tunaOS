@@ -156,7 +156,7 @@ FROM base-no-de AS gnome
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/gnome.sh base
+  /run/context/build_scripts/install-desktop.sh gnome
 # Extensions are a separate layer so DE package install caches independently
 # of submodule updates to extension sources.
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
@@ -169,15 +169,14 @@ FROM base-no-de AS cosmic
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/cosmic.sh base
-RUN dnf versionlock add glib2
+  /run/context/build_scripts/install-desktop.sh cosmic
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS gnome50
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/gnome.sh base
+  DESKTOP_FLAVOR=gnome50 /run/context/build_scripts/install-desktop.sh gnome
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
@@ -188,16 +187,11 @@ FROM base-no-de AS kde
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/kde.sh base
-RUN dnf versionlock add glib2
+  /run/context/build_scripts/install-desktop.sh kde
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS niri
 # Zirconium (DMS/Niri upstream) config payload — niri images only.
-# NB: there is NO /etc/niri (or factory equivalent) in the zirconium image
-# — verified against the published image 2026-07-02. Niri user config is
-# materialized per-user by chezmoi-init from /usr/share/zirconium
-# (zdots/skel), so only the /usr paths below are copied.
 COPY --from=zirconium /usr/share/zirconium /usr/share/zirconium
 COPY --from=zirconium /usr/share/xdg-terminal-exec /usr/share/xdg-terminal-exec
 COPY --from=zirconium /usr/share/greetd /usr/share/greetd
@@ -208,14 +202,12 @@ COPY --from=zirconium /usr/lib/systemd/user/chezmoi-update.service /usr/lib/syst
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/niri.sh base
-RUN dnf versionlock add glib2
+  /run/context/build_scripts/install-desktop.sh niri
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS xfce
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/xfce.sh base
-RUN dnf versionlock add glib2
+  /run/context/build_scripts/install-desktop.sh xfce
 RUN rm -rf /opt && ln -s /var/opt /opt
