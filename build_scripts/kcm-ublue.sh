@@ -1,24 +1,21 @@
 #!/usr/bin/env bash
-# Build and install kcm_ublue and krunner-bazaar from source/releases,
-# and copy oversteer udev rules.
+# Build and install kcm_ublue, set up Bazaar Flatpak, and copy oversteer
+# udev rules.
 #
 # Called during KDE image builds (kde.sh "base" or "extra").
 # Uses pinned versions from image-versions.yaml (managed by Renovate).
 #
 # These packages were previously pulled from the ublue-os/packages COPR,
 # which dropped EPEL/CentOS chroots (~2026-06-08).
-# Bluefin LTS adopted the same curl-then-install approach for uupd;
-# we extend it here to the KDE-specific packages.
 
 set -xeuo pipefail
 
 source /run/context/build_scripts/lib.sh
 
-printf "::group:: === KCM Ublue + Krunner Bazaar + Oversteer Udev ===\n"
+printf "::group:: === KCM Ublue + Bazaar + Oversteer Udev ===\n"
 
 # ---- Version pins --------------------------------------------------------
 KCM_UBLUE_VERSION=$(grep '^\s*kcm_ublue:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
-KRUNNER_BAZAAR_VERSION=$(grep '^\s*krunner-bazaar:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
 
 ARCH=$(uname -m)
 # GitHub release arch naming: x86_64 → x86_64, aarch64 → aarch64
@@ -90,21 +87,61 @@ else
 	echo "kcm_ublue ${KCM_UBLUE_VERSION} installed."
 fi
 
-# ---- krunner-bazaar: install from GitHub release RPM ---------------------
-echo "Installing krunner-bazaar ${KRUNNER_BAZAAR_VERSION} from GitHub release..."
+# ---- Bazaar: Flatpak app store + KRunner plugin --------------------------
+# Bazaar is a Flatpak (io.github.kolunmi.Bazaar). The krunner-bazaar plugin
+# talks to it over D-Bus — it doesn't need the `bazaar` RPM at build time,
+# just the Flatpak running at runtime. We build the plugin from source to
+# avoid the fc43 RPM's hard dep on the non-existent EL10 `bazaar` package.
+# See: ublue-os/aurora build_files/base/16-override-install.sh
+echo "Building krunner-bazaar from source and setting up Bazaar Flatpak..."
 
-KRUNNER_RPM="krunner-bazaar-${KRUNNER_BAZAAR_VERSION#v}-1.fc43.${RPM_ARCH}.rpm"
-KRUNNER_URL="https://github.com/bazaar-org/krunner-bazaar/releases/download/${KRUNNER_BAZAAR_VERSION}/${KRUNNER_RPM}"
+# Build krunner-bazaar from source (small CMake KF6 plugin, ~10s)
+KRUNNER_BAZAAR_VERSION="v1.3.0"
+KRUNNER_BAZAAR_SRC="/tmp/krunner-bazaar-src"
 
-# krunner-bazaar only publishes x86_64 RPMs; skip on other arches
-if curl -fsSLI "$KRUNNER_URL" >/dev/null 2>&1; then
-	curl -fsSLo "/tmp/${KRUNNER_RPM}" "$KRUNNER_URL"
-	dnf_retry -y install "/tmp/${KRUNNER_RPM}" || echo "Warning: krunner-bazaar installation failed (likely missing bazaar package in EPEL), skipping."
-	rm -f "/tmp/${KRUNNER_RPM}"
-	echo "krunner-bazaar ${KRUNNER_BAZAAR_VERSION} installed."
+# Build deps — most already present from KDE group install; || true in case
+# some -devel packages aren't available on all variants
+dnf_retry -y install \
+	cmake extra-cmake-modules \
+	kf6-krunner-devel kf6-ki18n-devel kf6-kconfig-devel \
+	qt6-qtbase-devel qt6-qtdeclarative-devel || true
+
+curl -fsSL "https://github.com/bazaar-org/krunner-bazaar/archive/refs/tags/${KRUNNER_BAZAAR_VERSION}.tar.gz" | \
+	tar -xzf - -C /tmp
+mv "/tmp/krunner-bazaar-${KRUNNER_BAZAAR_VERSION#v}" "${KRUNNER_BAZAAR_SRC}"
+
+if cmake -B "${KRUNNER_BAZAAR_SRC}/_build" -S "${KRUNNER_BAZAAR_SRC}" \
+	-DCMAKE_INSTALL_PREFIX=/usr \
+	-DCMAKE_BUILD_TYPE=Release 2>&1; then
+	cmake --build "${KRUNNER_BAZAAR_SRC}/_build" --parallel "$(nproc)"
+	cmake --install "${KRUNNER_BAZAAR_SRC}/_build"
+	echo "krunner-bazaar ${KRUNNER_BAZAAR_VERSION} built and installed from source."
 else
-	echo "krunner-bazaar ${KRUNNER_BAZAAR_VERSION} not available for ${RPM_ARCH} (skipping)"
+	echo "Warning: krunner-bazaar build failed (missing KF6 devel deps?), skipping plugin."
 fi
+rm -rf "${KRUNNER_BAZAAR_SRC}"
+
+# Flatpak preinstall — Bazaar will be installed on first boot
+mkdir -p /usr/share/flatpak/preinstall.d
+cat > /usr/share/flatpak/preinstall.d/bazaar.preinstall <<'EOF'
+[Flatpak Preinstall io.github.kolunmi.Bazaar]
+Branch=stable
+IsRuntime=false
+EOF
+
+# Associate .flatpakref files with Bazaar (same as Aurora)
+mkdir -p /usr/share/applications
+if [ -f /usr/share/applications/mimeapps.list ]; then
+	echo "application/vnd.flatpak.ref=io.github.kolunmi.Bazaar.desktop" >> /usr/share/applications/mimeapps.list
+else
+	cat > /usr/share/applications/mimeapps.list <<'EOF'
+[Default Applications]
+application/vnd.flatpak.ref=io.github.kolunmi.Bazaar.desktop
+EOF
+fi
+
+# Remove the appstream krunner plugin — Bazaar replaces it (same as Aurora)
+rm -f /usr/lib64/qt6/plugins/kf6/krunner/krunner_appstream.so
 
 # ---- oversteer-udev: copy udev rules from upstream -----------------------
 echo "Installing oversteer udev rules..."
