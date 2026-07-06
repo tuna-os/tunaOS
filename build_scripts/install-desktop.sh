@@ -33,10 +33,18 @@ printf "::group:: === install-desktop: %s ===\n" "${DESKTOP}"
 OS_SECTION=""
 if [[ "$PKG_MGR" == "apt" ]]; then
     OS_SECTION="apt"
+elif [[ "$PKG_MGR" == "pacman" ]]; then
+    OS_SECTION="pacman"
 elif [[ "$IS_FEDORA" == true ]]; then
     OS_SECTION="fedora"
 else
     OS_SECTION="el10"
+fi
+
+# Check for CachyOS-specific section (Arch derivative with extra repos)
+if [[ "${OS_SECTION}" == "pacman" ]] && [[ -f /etc/cachyos-release ]]; then
+    # If the manifest has a cachyos section, merge its repos/packages
+    CACHYOS_SECTION="cachyos"
 fi
 
 echo "Installing ${DESKTOP} desktop (OS section: ${OS_SECTION})..."
@@ -47,6 +55,40 @@ if [[ "${OS_SECTION}" == "apt" ]]; then
     if ((${#PKGS[@]} > 0)); then
         pkg_install "${PKGS[@]}"
     fi
+    # Enable display manager
+    DM=$($YQ -r '.display_manager // empty' "${MANIFEST}")
+    if [[ -n "${DM}" ]]; then
+        systemctl enable "${DM}" || true
+    fi
+    printf "::endgroup::\n"
+    exit 0
+fi
+
+# ── Pacman path (Arch Linux / CachyOS) ───────────────────────────────────────
+if [[ "${OS_SECTION}" == "pacman" ]]; then
+    # Install CachyOS repos if applicable
+    if [[ -n "${CACHYOS_SECTION:-}" ]]; then
+        REPO_COUNT=$($YQ -r ".packages.${CACHYOS_SECTION}.repos | length // 0" "${MANIFEST}" 2>/dev/null)
+        for ((i=0; i<REPO_COUNT; i++)); do
+            REPO_NAME=$($YQ -r ".packages.${CACHYOS_SECTION}.repos[$i].name" "${MANIFEST}")
+            REPO_URL=$($YQ -r ".packages.${CACHYOS_SECTION}.repos[$i].url" "${MANIFEST}")
+            if ! grep -q "\\[${REPO_NAME}\\]" /etc/pacman.conf; then
+                printf '\n[%s]\nServer = %s\n' "${REPO_NAME}" "${REPO_URL}" >> /etc/pacman.conf
+            fi
+        done
+        pacman -Sy --noconfirm
+        # Install CachyOS-specific packages
+        readarray -t CACHY_PKGS < <($YQ -r ".packages.${CACHYOS_SECTION}.packages[]" "${MANIFEST}" 2>/dev/null)
+        if ((${#CACHY_PKGS[@]} > 0)); then
+            pacman -S --noconfirm --needed "${CACHY_PKGS[@]}"
+        fi
+    fi
+
+    readarray -t PKGS < <($YQ -r ".packages.pacman[]" "${MANIFEST}" 2>/dev/null)
+    if ((${#PKGS[@]} > 0)); then
+        pacman -S --noconfirm --needed "${PKGS[@]}"
+    fi
+
     # Enable display manager
     DM=$($YQ -r '.display_manager // empty' "${MANIFEST}")
     if [[ -n "${DM}" ]]; then

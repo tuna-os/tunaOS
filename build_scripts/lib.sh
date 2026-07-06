@@ -49,6 +49,8 @@ else
 	IS_CENTOS=false
 	IS_UBUNTU=false
 	IS_DEBIAN=false
+	IS_ARCH=false
+	IS_CACHYOS=false
 
 	[[ "${BASE_IMAGE,,}" == *"fedora"* ]] && IS_FEDORA=true && IMAGE_NAME="bonito" && IMAGE_PRETTY_NAME="Bonito"
 	[[ "${BASE_IMAGE,,}" == *"red hat"* || "${BASE_IMAGE,,}" == *"rhel"* || "${BASE_IMAGE,,}" == *"redhat"* ]] && IS_RHEL=true && IMAGE_NAME="redfin" && IMAGE_PRETTY_NAME="Redfin"
@@ -57,10 +59,14 @@ else
 	[[ "${BASE_IMAGE,,}" == *"centos"* ]] && IS_CENTOS=true && IMAGE_NAME="skipjack" && IMAGE_PRETTY_NAME="Skipjack"
 	[[ "${BASE_IMAGE,,}" == *"ubuntu"* ]] && IS_UBUNTU=true && IMAGE_NAME="grouper" && IMAGE_PRETTY_NAME="Grouper"
 	[[ "${BASE_IMAGE,,}" == *"debian"* && "${BASE_IMAGE,,}" != *"ubuntu"* ]] && IS_DEBIAN=true && IMAGE_NAME="flounder" && IMAGE_PRETTY_NAME="Flounder"
+	[[ "${BASE_IMAGE,,}" == *"archlinux"* || "${BASE_IMAGE,,}" == *"arch-bootc"* ]] && IS_ARCH=true && IMAGE_NAME="marlin" && IMAGE_PRETTY_NAME="Marlin"
+	[[ "${BASE_IMAGE,,}" == *"cachyos"* ]] && IS_CACHYOS=true && IS_ARCH=true && IMAGE_NAME="wahoo" && IMAGE_PRETTY_NAME="Wahoo"
 
 	# Package manager dimension
 	if [[ "$IS_UBUNTU" == true || "$IS_DEBIAN" == true ]]; then
 		PKG_MGR="apt"
+	elif [[ "$IS_ARCH" == true ]]; then
+		PKG_MGR="pacman"
 	else
 		PKG_MGR="dnf"
 	fi
@@ -76,6 +82,8 @@ else
 		IS_CENTOS=${IS_CENTOS}
 		IS_UBUNTU=${IS_UBUNTU}
 		IS_DEBIAN=${IS_DEBIAN}
+		IS_ARCH=${IS_ARCH}
+		IS_CACHYOS=${IS_CACHYOS}
 		PKG_MGR="${PKG_MGR}"
 		IMAGE_NAME="${IMAGE_NAME:-}"
 		IMAGE_PRETTY_NAME="${IMAGE_PRETTY_NAME:-}"
@@ -100,6 +108,8 @@ export IS_ALMALINUXKITTEN
 export IS_CENTOS
 export IS_UBUNTU
 export IS_DEBIAN
+export IS_ARCH
+export IS_CACHYOS
 export PKG_MGR
 export IMAGE_NAME
 export IMAGE_PRETTY_NAME
@@ -264,6 +274,8 @@ pkg_install() {
 			dpkg --configure -a --force-depends || true
 			apt-get install -y -f --no-install-recommends
 		}
+	elif [[ "$PKG_MGR" == "pacman" ]]; then
+		pacman -S --noconfirm --needed "$@"
 	else
 		dnf_retry install -y --setopt=install_weak_deps=False "$@"
 	fi
@@ -274,6 +286,8 @@ pkg_install() {
 pkg_remove() {
 	if [[ "$PKG_MGR" == "apt" ]]; then
 		apt-get purge -y "$@"
+	elif [[ "$PKG_MGR" == "pacman" ]]; then
+		pacman -Rns --noconfirm "$@" 2>/dev/null || true
 	else
 		dnf_retry remove -y "$@"
 	fi
@@ -294,6 +308,8 @@ pkg_clean() {
 		apt-get clean
 		rm -rf /var/lib/apt/lists/*
 		mkdir -p /var/lib/apt/lists/partial
+	elif [[ "$PKG_MGR" == "pacman" ]]; then
+		pacman -Scc --noconfirm 2>/dev/null || true
 	else
 		dnf clean all
 	fi

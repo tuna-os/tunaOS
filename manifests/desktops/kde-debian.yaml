@@ -1,0 +1,29 @@
+# KDE Plasma Desktop Manifest — Debian
+# Uses the same apt path as Ubuntu but with Debian-specific package names.
+
+display_manager: sddm
+
+packages:
+  apt:
+    - kde-plasma-desktop
+    - sddm
+    - dolphin
+    - konsole
+    - kate
+    - ark
+    - kdeconnect
+    - xdg-desktop-portal-kde
+    - qt6-wayland
+    - plasma-workspace-wayland
+    - network-manager
+    - pipewire
+    - wireplumber
+    - flatpak
+    - fwupd
+    - plymouth
+    - power-profiles-daemon
+
+versionlock: []
+
+disable_desktop_files:
+  - org.kde.discover.desktop

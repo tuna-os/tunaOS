@@ -1,0 +1,58 @@
+# KDE Plasma Desktop Manifest — Arch Linux / CachyOS
+# Pacman package names differ from RPM/apt names.
+
+display_manager: sddm
+
+packages:
+  pacman:
+    - plasma-desktop
+    - sddm
+    - dolphin
+    - konsole
+    - kate
+    - ark
+    - kdeconnect
+    - xdg-desktop-portal-kde
+    - qt6-wayland
+    - qt5-wayland
+    - ksshaskpass
+    - ksystemlog
+    - input-remapper
+    - libratbag
+    - solaar
+    - pam-u2f
+    - yubikey-manager
+    - nvtop
+    - networkmanager
+    - pipewire
+    - wireplumber
+    - xdg-user-dirs
+    - flatpak
+    - wl-clipboard
+    - power-profiles-daemon
+    - fwupd
+    - plymouth
+
+  # CachyOS adds its own repos on top of Arch — same pacman packages
+  # but with performance-optimized builds (BORE scheduler, LTO, march=v3)
+  cachyos:
+    repos:
+      - name: cachyos
+        url: "https://mirror.cachyos.org/repo/$arch/cachyos"
+      - name: cachyos-extra
+        url: "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+    packages:
+      - linux-cachyos
+      - linux-cachyos-headers
+      - cachyos-settings
+      - cachyos-keyring
+      - cachyos-mirrorlist
+
+versionlock: []
+
+disable_desktop_files:
+  - org.kde.discover.desktop
+  - org.kde.discover.urlhandler.desktop
+
+post_install:
+  - kcm-ublue.sh
