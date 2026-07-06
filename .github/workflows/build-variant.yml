@@ -160,7 +160,7 @@ jobs:
   # Builds {variant}:base for every variant in parallel.
   # Nothing else may start until all base images are published.
   build_base:
-    name: "S1 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
+    name: "${{ matrix.flavor }}"
     needs: generate_matrix
     if: fromJson(needs.generate_matrix.outputs.stage1_matrix).include[0]
     strategy:
@@ -187,7 +187,7 @@ jobs:
   #   - niri      (layers on base)
   # All of these run in parallel within stage 2.
   build_stage2:
-    name: "S2 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
+    name: "${{ matrix.flavor }}"
     needs: [generate_matrix, build_base]
     # build_base is SKIPPED (not failed) when a flavor-filtered dispatch
     # leaves stage 1 empty (e.g. `-f flavor=xfce`); without !cancelled() a
@@ -225,7 +225,7 @@ jobs:
   # pushed and available; stage-3 cells whose specific base is missing fail on
   # their own without taking the rest down.
   build_stage3:
-    name: "S3 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
+    name: "${{ matrix.flavor }}"
     needs: [generate_matrix, build_stage2]
     if: >-
       !cancelled() && needs.generate_matrix.result == 'success' &&
@@ -253,7 +253,7 @@ jobs:
   # built in stage 3. Same `!cancelled()` rationale as stage 3 (#285) so a
   # single stage-3 failure doesn't skip stage 4.
   build_stage4:
-    name: "S4 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
+    name: "${{ matrix.flavor }}"
     needs: [generate_matrix, build_stage3]
     if: >-
       !cancelled() && needs.generate_matrix.result == 'success' &&
@@ -281,7 +281,7 @@ jobs:
   # ISOs pull the already-published GHCR image for their stage.
 
   build_artifacts_s2:
-    name: "PkgS2 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
+    name: "iso:${{ matrix.flavor }}"
     needs: [generate_matrix, build_stage2]
     if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_s2_count != '0'
     strategy:
@@ -304,7 +304,7 @@ jobs:
   # Same cell logic for stage-3 ISOs (gnome-nvidia etc.). `!cancelled()` so a
   # single stage-3 image failure doesn't skip the artifacts that DID build.
   build_artifacts_s3:
-    name: "PkgS3 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
+    name: "iso:${{ matrix.flavor }}"
     needs: [generate_matrix, build_stage3]
     if: >-
       !cancelled() && needs.generate_matrix.result == 'success' &&
@@ -329,7 +329,7 @@ jobs:
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
 
   build_artifacts_s4:
-    name: "PkgS4 | ${{ matrix.variant_emoji }} ${{ matrix.variant }}:${{ matrix.flavor }}"
+    name: "iso:${{ matrix.flavor }}"
     needs: [generate_matrix, build_stage4]
     if: >-
       !cancelled() && needs.generate_matrix.result == 'success' &&
