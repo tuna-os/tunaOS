@@ -23,8 +23,6 @@ images:
 downloads:
   # renovate: datasource=github-releases depName=ublue-os/uupd
   uupd: "v1.4.0"
-  # renovate: datasource=github-releases depName=bazaar-org/krunner-bazaar
-  krunner-bazaar: "v1.3.0"
   # renovate: datasource=github-releases depName=ledif/kcm_ublue
   kcm_ublue: "v0.6.1"
   # renovate: datasource=git-refs depName=tuna-os/tacklebox
