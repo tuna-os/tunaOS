@@ -90,7 +90,7 @@ jobs:
           echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
 
   build_push:
-    name: Build ${{ matrix.platform }}
+    name: ${{ matrix.safeplatform }}
     runs-on: ${{ contains(matrix.platform, 'amd64') && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
     timeout-minutes: 60
     needs: generate_matrix
@@ -427,7 +427,7 @@ jobs:
           path: |
             /tmp/outputs/digests/*.txt
   manifest:
-    name: Manifest ${{ inputs.image-name }}:${{ inputs.major-version }}
+    name: Manifest
     runs-on: ubuntu-latest
     if: always()
     needs:
@@ -676,7 +676,7 @@ jobs:
   # Cosign throws errors when ran inside the Fedora container for one reason or another
   # so we move this to another step in order to run on Ubuntu
   sign:
-    name: Sign Manifest
+    name: Sign
     needs: manifest
     if: ${{ inputs.publish && github.event_name != 'pull_request' }}
     runs-on: ubuntu-latest
@@ -697,7 +697,7 @@ jobs:
   # tags is blocked while this fails. Skipped for base* flavors (no desktop
   # to verify; they are exercised by every desktop build layered on them).
   verify_boot:
-    name: Boot Gate ${{ inputs.image-name }}:${{ inputs.default-tag }}
+    name: Gate
     needs: manifest
     if: >-
       inputs.publish && github.event_name != 'pull_request' &&
@@ -765,7 +765,7 @@ jobs:
           retention-days: 7
 
   tag-image:
-    name: Promote Tags
+    name: Promote
     needs: [manifest, verify_boot]
     if: >-
       !cancelled() && github.event_name != 'pull_request' &&
