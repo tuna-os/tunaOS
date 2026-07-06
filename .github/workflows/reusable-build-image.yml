@@ -136,13 +136,25 @@ jobs:
 
       - name: Install just and yq
         run: |
-          # Static binaries straight from releases — the Homebrew bootstrap
-          # spent 1-3 min per job for the same result.
+          # Pinned versions — /latest/download/ redirects trigger 403
+          # rate-limiting on some runner types (e.g. linux/amd64/v2).
+          YQ_VERSION="v4.53.3"
+          JUST_VERSION="1.55.1"
           ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
-          sudo wget -qO /usr/bin/yq "https://github.com/mikefarah/yq/releases/latest/download/yq_linux_${ARCH}"
           JUST_ARCH=$(uname -m | sed 's/amd64/x86_64/')
-          curl -fsSL "https://github.com/casey/just/releases/latest/download/just-1.40.0-${JUST_ARCH}-unknown-linux-musl.tar.gz" -o /tmp/just.tgz 2>/dev/null \
+
+          # Retry loop — GitHub CDN transient 403s resolve after a short wait
+          for i in 1 2 3; do
+            sudo wget -qO /usr/bin/yq \
+              "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${ARCH}" \
+              && break || sleep $((i * 2))
+          done
+
+          curl -fsSL \
+            "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${JUST_ARCH}-unknown-linux-musl.tar.gz" \
+            -o /tmp/just.tgz 2>/dev/null \
             || curl -fsSL https://just.systems/install.sh | sudo bash -s -- --to /usr/local/bin
+
           if [ -f /tmp/just.tgz ]; then sudo tar -xzf /tmp/just.tgz -C /usr/local/bin just; fi
           sudo chmod +x /usr/bin/yq /usr/local/bin/just 2>/dev/null || true
           just --version && yq --version

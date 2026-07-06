@@ -79,7 +79,6 @@ case "${1:-}" in
 			konsole \
 			kate \
 			ark \
-			kdeconnect \
 			xdg-desktop-portal-kde \
 			qt5-qtwayland \
 			qt6-qtwayland
@@ -90,7 +89,9 @@ case "${1:-}" in
 		# resolves. Misses get logged so the next porter sees the gap.
 		# kcm_ublue removed — Bluefin no longer ships it and the
 		# ublue-os/packages COPR dropped EPEL chroots.
+		# kdeconnect moved here — not yet packaged for EL10.
 		install_available \
+			kdeconnect \
 			ksshaskpass \
 			ksystemlog \
 			input-remapper \
