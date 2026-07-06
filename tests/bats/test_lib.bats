@@ -135,7 +135,7 @@ JQ
   # Remove the set -euo pipefail to make testing easier
   sed -i 's/^set -euo pipefail/set -uo pipefail\n# set -e removed for test/' "${TEST_ROOT}/lib_test.sh"
   # Make _IMAGE_INFO overridable so image-info.json tests can point to test stubs
-  sed -i 's|^_IMAGE_INFO="/usr/share/ublue-os/image-info.json"|_IMAGE_INFO="${_IMAGE_INFO:-/usr/share/ublue-os/image-info.json}"|' "${TEST_ROOT}/lib_test.sh"
+  sed -i 's|^\([[:space:]]*\)_IMAGE_INFO="/usr/share/ublue-os/image-info.json"|\1_IMAGE_INFO="${_IMAGE_INFO:-/usr/share/ublue-os/image-info.json}"|' "${TEST_ROOT}/lib_test.sh"
 }
 
 teardown() {
