@@ -145,8 +145,9 @@ install_base_packages_no_de() {
 			subscription-manager repos --enable "codeready-builder-for-rhel-${MAJOR_VERSION_NUMBER}-$(uname -m)-rpms"
 		else
 			# Install config-manager before enabling repos — crb enable / dnf config-manager
-			# require the dnf5-command(config-manager) package on EL10 (DNF5).
-			dnf install -y epel-release 'dnf5-command(config-manager)'
+			# require the dnf-command(config-manager) package on EL10.
+			# (Fedora uses dnf5-command(config-manager); EL10 uses the legacy name.)
+			dnf install -y epel-release 'dnf-command(config-manager)'
 			/usr/bin/crb enable
 		fi
 		dnf config-manager --set-enabled epel
