@@ -17,7 +17,7 @@
     {
       "customType": "regex",
       "description": "Update image digests in image-versions.yaml",
-      "fileMatch": ["^image-versions\\.yaml$"],
+      "managerFilePatterns": ["/^image-versions\\.yaml$/"],
       "matchStrings": [
         "- name: (?<depName>[\\w-]+)\\n\\s+image: (?<packageName>[^\\n]+)\\n\\s+tag: (?<currentValue>[^\\n]+)\\n\\s+digest: (?<currentDigest>sha256:[a-f0-9]+)"
       ],
@@ -27,7 +27,7 @@
     {
       "customType": "regex",
       "description": "Update pinned downloads in image-versions.yaml (GitHub releases)",
-      "fileMatch": ["^image-versions\\.yaml$"],
+      "managerFilePatterns": ["/^image-versions\\.yaml$/"],
       "matchStrings": [
         "#\\s*renovate:\\s*datasource=(?<datasource>[^\\s]+)\\s+depName=(?<depName>[^\\s]+)\\n\\s+[\\w-]+:\\s*\"(?<currentValue>[^\"]+)\""
       ]
@@ -35,7 +35,7 @@
     {
       "customType": "regex",
       "description": "Update GitHub Actions pinned SHAs",
-      "fileMatch": ["\\.github/workflows/.+\\.ya?ml$"],
+      "managerFilePatterns": ["/\\.github/workflows/.+\\.ya?ml$/"],
       "matchStrings": [
         "uses:\\s+(?<depName>[\\w-]+/[\\w-]+)@(?<currentDigest>[a-f0-9]{40})\\s*#\\s*(?<currentValue>v?\\d[^\\s]*)"
       ],
@@ -44,7 +44,7 @@
     {
       "customType": "regex",
       "description": "Update font/binary version pins in build scripts",
-      "fileMatch": ["^build_scripts/.+\\.sh$", "^scripts/.+\\.sh$"],
+      "managerFilePatterns": ["/^build_scripts/.+\\.sh$/", "/^scripts/.+\\.sh$/"],
       "matchStrings": [
         "#\\s*renovate:\\s*datasource=(?<datasource>[^\\s]+)\\s+depName=(?<depName>[^\\s]+)\\n.*?(?<currentValue>v?\\d+\\.\\d+[^\\s/\"]*)"
       ]
