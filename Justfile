@@ -261,12 +261,6 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     ENABLE_SSHD="{{ enable_sshd_var }}"
     FLAVOR="{{ flavor }}"
 
-    case "${FLAVOR}" in
-        "hwe") FLAVOR="gnome-hwe" ;;
-        "nvidia") FLAVOR="gnome-nvidia" ;;
-        "gdx-hwe") FLAVOR="gnome-nvidia-hwe" ;;
-    esac
-
     if [[ "${FLAVOR}" == "all" ]]; then
         readarray -t FLAVORS < <({{ yq }} -r '.variants[] | select(.id == "{{ variant }}") | .flavors[].id' .github/build-config.yml)
         for f in "${FLAVORS[@]}"; do {{ just }} build "{{ variant }}" "$f"; done

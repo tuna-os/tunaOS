@@ -98,9 +98,10 @@ build_scripts_top=(
   [ "$status" -eq 0 ]
 }
 
-@test "build_scripts/10-base-packages.sh: defines install_base_packages_no_de" {
+@test "build_scripts/10-base-packages.sh: is a direct executable (no function wrapper)" {
+  # The script should NOT define a function — it runs directly like all other numbered scripts
   run grep 'install_base_packages_no_de()' "${REPO_ROOT}/build_scripts/10-base-packages.sh"
-  [ "$status" -eq 0 ]
+  [ "$status" -ne 0 ]
 }
 
 @test "build_scripts/10-base-packages.sh: passes shellcheck" {
