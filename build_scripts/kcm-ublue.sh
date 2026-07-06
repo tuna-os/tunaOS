@@ -1,24 +1,21 @@
 #!/usr/bin/env bash
-# Build and install kcm_ublue and krunner-bazaar from source/releases,
-# and copy oversteer udev rules.
+# Build and install kcm_ublue, set up Bazaar Flatpak, and copy oversteer
+# udev rules.
 #
 # Called during KDE image builds (kde.sh "base" or "extra").
 # Uses pinned versions from image-versions.yaml (managed by Renovate).
 #
 # These packages were previously pulled from the ublue-os/packages COPR,
 # which dropped EPEL/CentOS chroots (~2026-06-08).
-# Bluefin LTS adopted the same curl-then-install approach for uupd;
-# we extend it here to the KDE-specific packages.
 
 set -xeuo pipefail
 
 source /run/context/build_scripts/lib.sh
 
-printf "::group:: === KCM Ublue + Krunner Bazaar + Oversteer Udev ===\n"
+printf "::group:: === KCM Ublue + Bazaar + Oversteer Udev ===\n"
 
 # ---- Version pins --------------------------------------------------------
 KCM_UBLUE_VERSION=$(grep '^\s*kcm_ublue:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
-KRUNNER_BAZAAR_VERSION=$(grep '^\s*krunner-bazaar:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
 
 ARCH=$(uname -m)
 # GitHub release arch naming: x86_64 → x86_64, aarch64 → aarch64
@@ -90,21 +87,37 @@ else
 	echo "kcm_ublue ${KCM_UBLUE_VERSION} installed."
 fi
 
-# ---- krunner-bazaar: install from GitHub release RPM ---------------------
-echo "Installing krunner-bazaar ${KRUNNER_BAZAAR_VERSION} from GitHub release..."
+# ---- Bazaar: Flatpak app store (replaces Discover) -----------------------
+# Bazaar is a Flatpak (io.github.kolunmi.Bazaar), not an RPM. The krunner-bazaar
+# RPM plugin depends on a `bazaar` RPM that only exists in ublue-os/packages COPR
+# on Fedora — it's not available for EL10. Instead:
+#   1. Preinstall Bazaar Flatpak on first boot via flatpak preinstall.d
+#   2. Set .flatpakref mime association to open in Bazaar
+#   3. Remove the krunner_appstream plugin (Aurora does this too)
+# See: ublue-os/aurora build_files/base/16-override-install.sh
+echo "Setting up Bazaar Flatpak preinstall and mime associations..."
 
-KRUNNER_RPM="krunner-bazaar-${KRUNNER_BAZAAR_VERSION#v}-1.fc43.${RPM_ARCH}.rpm"
-KRUNNER_URL="https://github.com/bazaar-org/krunner-bazaar/releases/download/${KRUNNER_BAZAAR_VERSION}/${KRUNNER_RPM}"
+# Flatpak preinstall — Bazaar will be installed on first boot
+mkdir -p /usr/share/flatpak/preinstall.d
+cat > /usr/share/flatpak/preinstall.d/bazaar.preinstall <<'EOF'
+[Flatpak Preinstall io.github.kolunmi.Bazaar]
+Branch=stable
+IsRuntime=false
+EOF
 
-# krunner-bazaar only publishes x86_64 RPMs; skip on other arches
-if curl -fsSLI "$KRUNNER_URL" >/dev/null 2>&1; then
-	curl -fsSLo "/tmp/${KRUNNER_RPM}" "$KRUNNER_URL"
-	dnf_retry -y install "/tmp/${KRUNNER_RPM}" || echo "Warning: krunner-bazaar installation failed (likely missing bazaar package in EPEL), skipping."
-	rm -f "/tmp/${KRUNNER_RPM}"
-	echo "krunner-bazaar ${KRUNNER_BAZAAR_VERSION} installed."
+# Associate .flatpakref files with Bazaar (same as Aurora)
+mkdir -p /usr/share/applications
+if [ -f /usr/share/applications/mimeapps.list ]; then
+	echo "application/vnd.flatpak.ref=io.github.kolunmi.Bazaar.desktop" >> /usr/share/applications/mimeapps.list
 else
-	echo "krunner-bazaar ${KRUNNER_BAZAAR_VERSION} not available for ${RPM_ARCH} (skipping)"
+	cat > /usr/share/applications/mimeapps.list <<'EOF'
+[Default Applications]
+application/vnd.flatpak.ref=io.github.kolunmi.Bazaar.desktop
+EOF
 fi
+
+# Remove the appstream krunner plugin — Bazaar replaces it (same as Aurora)
+rm -f /usr/lib64/qt6/plugins/kf6/krunner/krunner_appstream.so
 
 # ---- oversteer-udev: copy udev rules from upstream -----------------------
 echo "Installing oversteer udev rules..."
