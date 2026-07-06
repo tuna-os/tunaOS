@@ -87,15 +87,38 @@ else
 	echo "kcm_ublue ${KCM_UBLUE_VERSION} installed."
 fi
 
-# ---- Bazaar: Flatpak app store (replaces Discover) -----------------------
-# Bazaar is a Flatpak (io.github.kolunmi.Bazaar), not an RPM. The krunner-bazaar
-# RPM plugin depends on a `bazaar` RPM that only exists in ublue-os/packages COPR
-# on Fedora — it's not available for EL10. Instead:
-#   1. Preinstall Bazaar Flatpak on first boot via flatpak preinstall.d
-#   2. Set .flatpakref mime association to open in Bazaar
-#   3. Remove the krunner_appstream plugin (Aurora does this too)
+# ---- Bazaar: Flatpak app store + KRunner plugin --------------------------
+# Bazaar is a Flatpak (io.github.kolunmi.Bazaar). The krunner-bazaar plugin
+# talks to it over D-Bus — it doesn't need the `bazaar` RPM at build time,
+# just the Flatpak running at runtime. We build the plugin from source to
+# avoid the fc43 RPM's hard dep on the non-existent EL10 `bazaar` package.
 # See: ublue-os/aurora build_files/base/16-override-install.sh
-echo "Setting up Bazaar Flatpak preinstall and mime associations..."
+echo "Building krunner-bazaar from source and setting up Bazaar Flatpak..."
+
+# Build krunner-bazaar from source (small CMake KF6 plugin, ~10s)
+KRUNNER_BAZAAR_VERSION="v1.3.0"
+KRUNNER_BAZAAR_SRC="/tmp/krunner-bazaar-src"
+
+# Build deps — most already present from KDE group install
+dnf_retry -y install \
+	cmake extra-cmake-modules \
+	kf6-krunner-devel kf6-ki18n-devel kf6-kconfig-devel \
+	qt6-qtbase-devel qt6-qtdeclarative-devel || true
+
+curl -fsSL "https://github.com/bazaar-org/krunner-bazaar/archive/refs/tags/${KRUNNER_BAZAAR_VERSION}.tar.gz" | \
+	tar -xzf - -C /tmp
+mv "/tmp/krunner-bazaar-${KRUNNER_BAZAAR_VERSION#v}" "${KRUNNER_BAZAAR_SRC}"
+
+if cmake -B "${KRUNNER_BAZAAR_SRC}/_build" -S "${KRUNNER_BAZAAR_SRC}" \
+	-DCMAKE_INSTALL_PREFIX=/usr \
+	-DCMAKE_BUILD_TYPE=Release 2>&1; then
+	cmake --build "${KRUNNER_BAZAAR_SRC}/_build" --parallel "$(nproc)"
+	cmake --install "${KRUNNER_BAZAAR_SRC}/_build"
+	echo "krunner-bazaar ${KRUNNER_BAZAAR_VERSION} built and installed from source."
+else
+	echo "Warning: krunner-bazaar build failed (missing KF6 devel deps?), skipping plugin."
+fi
+rm -rf "${KRUNNER_BAZAAR_SRC}"
 
 # Flatpak preinstall — Bazaar will be installed on first boot
 mkdir -p /usr/share/flatpak/preinstall.d
