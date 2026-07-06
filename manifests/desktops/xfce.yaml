@@ -1,0 +1,42 @@
+# XFCE 4.20 Desktop Manifest (Wayland — xfwl4 compositor)
+
+display_manager: gdm
+
+packages:
+  fedora:
+    groups:
+      - xfce-desktop
+    packages:
+      - xfce4-wayland
+      - gdm
+      - xdg-desktop-portal-gtk
+      - xdg-user-dirs-gtk
+      - thunar
+      - mousepad
+      - ristretto
+      - xfce4-terminal
+
+  el10:
+    groups:
+      - xfce-desktop
+    packages:
+      - gdm
+      - xdg-desktop-portal-gtk
+      - xdg-user-dirs-gtk
+      - thunar
+      - mousepad
+      - ristretto
+      - xfce4-terminal
+    optional:
+      - xfce4-wayland
+
+  apt:
+    - xfce4
+    - xfce4-goodies
+    - gdm3
+    - xdg-desktop-portal-gtk
+    - thunar
+    - mousepad
+
+versionlock:
+  - glib2

@@ -1,0 +1,99 @@
+# Niri (Tiling Wayland Compositor) + DMS Desktop Manifest
+
+display_manager: greetd
+
+packages:
+  fedora:
+    copr:
+      - repo: yalter/niri-git
+        packages:
+          - niri
+      - repo: avengemedia/danklinux
+        packages:
+          - quickshell-git
+      - repo: avengemedia/dms-git
+        packages:
+          - dms
+          - dms-cli
+          - dms-greeter
+    packages:
+      - greetd
+      - greetd-selinux
+      - swaylock
+      - SwayNotificationCenter
+      - waybar
+      - fuzzel
+      - swayidle
+      - wl-clipboard
+      - xdg-desktop-portal-gnome
+      - xdg-desktop-portal-gtk
+      - xdg-user-dirs
+      - pipewire
+      - wireplumber
+      - polkit-gnome
+      - NetworkManager-tui
+      - brightnessctl
+      - playerctl
+      - blueman
+      - pavucontrol
+      - gnome-keyring
+      - gnome-keyring-pam
+      - nautilus
+      - adw-gtk3-theme
+      - papirus-icon-theme
+
+  el10:
+    copr:
+      - repo: zirconium/packages
+        packages:
+          - greetd
+          - greetd-selinux
+      - repo: yalter/niri-git
+        packages:
+          - niri
+      - repo: yselkowitz/wlroots-epel
+        packages: []  # just enable for deps
+      - repo: ligenix/enterprise-cosmic
+        packages: []  # just enable for deps
+      - repo: avengemedia/danklinux
+        packages:
+          - quickshell-git
+      - repo: avengemedia/dms-git
+        packages:
+          - dms
+          - dms-cli
+          - dms-greeter
+    packages:
+      - swaylock
+      - SwayNotificationCenter
+      - waybar
+      - fuzzel
+      - swayidle
+      - wl-clipboard
+      - xdg-desktop-portal-gnome
+      - xdg-desktop-portal-gtk
+      - xdg-user-dirs
+      - pipewire
+      - wireplumber
+      - polkit-gnome
+      - NetworkManager-tui
+      - nautilus
+      - adw-gtk3-theme
+      - papirus-icon-theme
+    optional:
+      - brightnessctl
+      - playerctl
+      - blueman
+      - pavucontrol
+      - gnome-keyring
+      - gnome-keyring-pam
+
+versionlock:
+  - glib2
+
+post_install_inline:
+  - "glib-compile-schemas /usr/share/glib-2.0/schemas || true"
+  - |
+    if [ -f /etc/pam.d/greetd ]; then
+      sed --sandbox -i -e '/gnome_keyring.so/ s/-auth/auth/ ; /gnome_keyring.so/ s/-session/session/' /etc/pam.d/greetd
+    fi
