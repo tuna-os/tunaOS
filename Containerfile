@@ -32,6 +32,7 @@ COPY --from=common /system_files/shared /files
 COPY --from=common /system_files/bluefin /files
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
+COPY manifests /manifests
 COPY image-versions.yaml /image-versions.yaml
 
 # ==============================================================================
