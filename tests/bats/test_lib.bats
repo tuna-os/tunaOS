@@ -16,6 +16,8 @@ REPO_ROOT="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}"
 
 setup() {
   TEST_ROOT="$(mktemp -d)"
+  # Clear lib.sh OS detection cache between tests
+  rm -f /tmp/tunaos-build-env 2>/dev/null || true
   # Create a minimal filesystem for tests
   mkdir -p "${TEST_ROOT}/usr/lib"
   mkdir -p "${TEST_ROOT}/usr/bin"

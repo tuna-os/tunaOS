@@ -144,7 +144,9 @@ install_base_packages_no_de() {
 			dnf install -y "https://dl.fedoraproject.org/pub/epel/epel-release-latest-${MAJOR_VERSION_NUMBER}.noarch.rpm"
 			subscription-manager repos --enable "codeready-builder-for-rhel-${MAJOR_VERSION_NUMBER}-$(uname -m)-rpms"
 		else
-			dnf install -y epel-release
+			# Install config-manager before enabling repos — crb enable / dnf config-manager
+			# require the dnf5-command(config-manager) package on EL10 (DNF5).
+			dnf install -y epel-release 'dnf5-command(config-manager)'
 			/usr/bin/crb enable
 		fi
 		dnf config-manager --set-enabled epel
