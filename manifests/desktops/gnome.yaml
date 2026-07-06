@@ -1,0 +1,172 @@
+# GNOME Desktop Manifest
+
+display_manager: gdm
+
+packages:
+  apt:
+    - ubuntu-desktop-minimal
+    - gnome-shell-extension-manager
+    - gnome-browser-connector
+    - gnome-disk-utility
+    - gnome-system-monitor
+    - gnome-user-docs
+    - nautilus
+    - yelp
+    - plymouth-theme-spinner
+    - xdg-desktop-portal-gnome
+    - xdg-desktop-portal-gtk
+    - xdg-user-dirs-gtk
+
+  fedora:
+    packages:
+      - ModemManager
+      - NetworkManager-adsl
+      - NetworkManager-openconnect-gnome
+      - NetworkManager-openvpn-gnome
+      - NetworkManager-ppp
+      - NetworkManager-ssh-gnome
+      - NetworkManager-vpnc-gnome
+      - NetworkManager-wwan
+      - avahi
+      - dconf
+      - fprintd-pam
+      - gdm
+      - glib-networking
+      - gnome-backgrounds
+      - gnome-bluetooth
+      - gnome-browser-connector
+      - gnome-classic-session
+      - gnome-color-manager
+      - gnome-control-center
+      - gnome-disk-utility
+      - gnome-initial-setup
+      - gnome-remote-desktop
+      - gnome-session-wayland-session
+      - gnome-settings-daemon
+      - gnome-shell
+      - gnome-system-monitor
+      - gnome-user-docs
+      - gnome-user-share
+      - gvfs-afc
+      - gvfs-afp
+      - gvfs-archive
+      - gvfs-fuse
+      - gvfs-goa
+      - gvfs-gphoto2
+      - gvfs-mtp
+      - gvfs-smb
+      - librsvg2
+      - libsane-hpaio
+      - mesa-dri-drivers
+      - mesa-libEGL
+      - mesa-vulkan-drivers
+      - nautilus
+      - polkit
+      - ptyxis
+      - xdg-desktop-portal-gnome
+      - xdg-desktop-portal-gtk
+      - xdg-user-dirs-gtk
+      - yelp
+      - desktop-backgrounds-gnome
+      - pinentry-gnome3
+      - qadwaitadecorations-qt5
+      - evince-thumbnailer
+      - evince-previewer
+      - totem-video-thumbnailer
+    exclude:
+      - PackageKit
+      - PackageKit-command-not-found
+      - gnome-software
+      - gnome-software-fedora-langpacks
+
+  el10:
+    # COPR repos for GNOME 49/50 backport — the distro ships GNOME 48
+    # These bring modern GNOME to Enterprise Linux without waiting 3 years
+    copr:
+      - repo: jreilly1821/c10s-gnome-49
+        condition: "gnome"  # only for gnome flavor (not gnome50)
+        pre_install:
+          - "dnf -y upgrade glib2 fontconfig gobject-introspection gjs"
+          - "dnf_retry -y install --allowerasing gnome49-el10-compat"
+        packages: []
+      - repo: jreilly1821/c10s-gnome-50-fresh
+        condition: "gnome50"
+        extra_repos:
+          - jreilly1821/c10s-gnome-50
+        pre_install:
+          - "dnf -y upgrade glib2 fontconfig"
+          - "dnf_retry -y install --allowerasing gnome50-el10-compat"
+        packages: []
+
+    # Remove conflicting packages before COPR install
+    pre_install:
+      - "warn_on_fail dnf_retry -y remove --noautoremove gnome-shell-common"
+
+    groups:
+      - "Common NetworkManager submodules"
+      - "Core"
+      - "Fonts"
+      - "Guest Desktop Agents"
+      - "Hardware Support"
+      - "Printing Client"
+      - "Standard"
+      - "Workstation product core"
+    group_options: "--nobest --allowerasing"
+    group_exclude:
+      - PackageKit
+      - PackageKit-command-not-found
+
+    packages:
+      - gdm
+      - glib2
+      - gnome-bluetooth
+      - gnome-color-manager
+      - gnome-control-center
+      - gnome-initial-setup
+      - gnome-remote-desktop
+      - gnome-session-wayland-session
+      - gnome-settings-daemon
+      - gnome-shell
+      - gnome-user-docs
+      - gvfs-fuse
+      - gvfs-goa
+      - gvfs-gphoto2
+      - gvfs-mtp
+      - gvfs-smb
+      - libsane-hpaio
+      - nautilus
+      - dbus-daemon
+      - orca
+      - ptyxis
+      - sane-backends-drivers-scanners
+      - xdg-desktop-portal-gnome
+      - xdg-user-dirs-gtk
+      - yelp-tools
+      - gnome-disk-utility
+      - NetworkManager-adsl
+    exclude:
+      - gnome-software
+      - gnome-extensions-app
+      - PackageKit
+      - PackageKit-command-not-found
+      - gnome-software-fedora-langpacks
+
+versionlock:
+  - glib2
+  - fontconfig
+  - gdm
+  - gnome-shell
+  - mutter
+  - gnome-session-wayland-session
+  - gnome-settings-daemon
+  - gnome-control-center
+  - gsettings-desktop-schemas
+  - gtk4
+  - libadwaita
+  - pango
+  - xdg-desktop-portal
+  - xdg-desktop-portal-gnome
+
+# Extensions are built in a separate layer (gnome-extensions.sh)
+post_install:
+  - gnome-extensions.sh
