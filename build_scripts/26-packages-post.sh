@@ -13,11 +13,15 @@ export MAJOR_VERSION_NUMBER
 DOWNLOADS_DIR="/var/tmp/tunaos-downloads"
 mkdir -p "$DOWNLOADS_DIR"
 
-# Batch all HTTP downloads in parallel using curl --parallel (-Z).
-# This fetches all assets concurrently instead of sequentially (~3-5s vs ~15s).
+# Download JetBrainsMono tarball separately — large binary downloads can get
+# corrupted under curl -Z parallel transfer (partial file on transient error).
+curl --retry 3 --fail -L \
+	"https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/JetBrainsMono.tar.xz" \
+	-o "$DOWNLOADS_DIR/JetBrainsMono.tar.xz"
+
+# Small assets are safe to batch in parallel.
 curl --retry 3 --fail -Z \
 	-o "$DOWNLOADS_DIR/bluefin.pdf" "https://github.com/ublue-os/bluefin-docs/releases/download/0.1/bluefin.pdf" \
-	-o "$DOWNLOADS_DIR/JetBrainsMono.tar.xz" "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.4.0/JetBrainsMono.tar.xz" \
 	-o "$DOWNLOADS_DIR/flathub.flatpakrepo" "https://dl.flathub.org/repo/flathub.flatpakrepo"
 
 # Install downloaded assets
