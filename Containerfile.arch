@@ -1,0 +1,164 @@
+# Containerfile.arch — Arch Linux bootcification.
+#
+# Builds a bootc-compatible Arch Linux base image from the stock
+# archlinux/archlinux container. Based on bootcrew/mono/arch pattern.
+#
+# Usage:
+#   buildah build --target=base-no-de --file Containerfile.arch .
+#   buildah build --target=kde --file Containerfile.arch .
+
+ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest"
+ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG SHA_HEAD_SHORT
+ARG ENABLE_HWE="${ENABLE_HWE:-0}"
+ARG ENABLE_NVIDIA="${ENABLE_NVIDIA:-0}"
+ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
+ARG IMAGE_REGISTRY="ghcr.io"
+ARG IMAGE_NAME_VARIANT
+
+# ── Build bootc from source (Arch doesn't package it yet) ────────────────────
+FROM ${BASE_IMAGE} AS bootc-builder
+RUN pacman -Syu --noconfirm make git rust go-md2man ostree glibc pkgconf
+WORKDIR /home/build
+RUN git clone --depth 1 https://github.com/bootc-dev/bootc.git . && \
+    make bin && \
+    make install-all DESTDIR=/output
+
+# ── Context layer ────────────────────────────────────────────────────────────
+FROM scratch AS context
+COPY system_files /files
+COPY system_files_overrides /overrides
+COPY build_scripts /build_scripts
+COPY manifests /manifests
+
+# ── Base system (bootc-compatible Arch) ──────────────────────────────────────
+FROM ${BASE_IMAGE} AS base-no-de
+
+ARG BASE_IMAGE
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG IMAGE_NAME_VARIANT
+ARG SHA_HEAD_SHORT
+ARG ENABLE_HWE
+ARG ENABLE_NVIDIA
+ARG ENABLE_SSHD
+ARG DESKTOP_FLAVOR
+ARG IMAGE_REGISTRY
+
+ENV BASE_IMAGE=${BASE_IMAGE}
+ENV IMAGE_NAME=${IMAGE_NAME}
+ENV IMAGE_VENDOR=${IMAGE_VENDOR}
+ENV IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT}
+ENV IMAGE_REGISTRY=${IMAGE_REGISTRY}
+ENV ENABLE_HWE=${ENABLE_HWE}
+ENV ENABLE_NVIDIA=${ENABLE_NVIDIA}
+ENV ENABLE_SSHD=${ENABLE_SSHD}
+ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
+
+# Install bootc from builder stage
+COPY --from=bootc-builder /output /
+
+# Move /var to /usr/lib/sysimage for ostree/pacman compatibility
+# (pacman writes to /var/lib/pacman, /var/cache/pacman — these need to
+# survive ostree deployments via the sysimage path)
+RUN grep "= */var" /etc/pacman.conf | sed "/= *\/var/s/.*=// ; s/ //" | \
+    xargs -n1 sh -c 'mkdir -p "/usr/lib/sysimage/$(dirname $(echo $1 | sed "s@/var/@@"))" && mv -v "$1" "/usr/lib/sysimage/$(echo "$1" | sed "s@/var/@@")"' '' && \
+    sed -i -e "/= *\/var/ s/^#//" -e "s@= */var@= /usr/lib/sysimage@g" -e "/DownloadUser/d" /etc/pacman.conf
+
+# Full system refresh + bootc base packages
+RUN pacman -Syu --noconfirm && \
+    pacman -S --noconfirm --needed \
+        base \
+        dracut \
+        linux \
+        linux-firmware \
+        ostree \
+        btrfs-progs \
+        e2fsprogs \
+        xfsprogs \
+        dosfstools \
+        skopeo \
+        podman \
+        dbus \
+        glib2 \
+        shadow \
+        systemd \
+        networkmanager \
+        pipewire \
+        wireplumber \
+        flatpak \
+        fwupd \
+        plymouth \
+        power-profiles-daemon \
+        fastfetch \
+        wl-clipboard \
+        unzip \
+        curl \
+        git \
+        just \
+        yq && \
+    pacman -Scc --noconfirm
+
+# Build initramfs
+RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \
+    printf 'systemdsystemconfdir=/etc/systemd/system\nsystemdsystemunitdir=/usr/lib/systemd/system\n' \
+        > /usr/lib/dracut/dracut.conf.d/30-fix-bootc-module.conf && \
+    printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" bootc "\n' \
+        > /usr/lib/dracut/dracut.conf.d/30-bootc-container-build.conf && \
+    dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
+
+# Set up bootc/ostree filesystem layout
+RUN rm -rf /boot /home /root /usr/local /srv /opt /mnt /var \
+        /usr/lib/sysimage/log /usr/lib/sysimage/cache/pacman/pkg && \
+    mkdir -p /sysroot /boot /usr/lib/ostree /var && \
+    ln -sT sysroot/ostree /ostree && \
+    ln -sT var/roothome /root && \
+    ln -sT var/srv /srv && \
+    ln -sT var/opt /opt && \
+    ln -sT var/mnt /mnt && \
+    ln -sT var/home /home && \
+    ln -sT ../var/usrlocal /usr/local && \
+    printf 'd /var/opt 0755 root root -\nd /var/home 0755 root root -\nd /var/srv 0755 root root -\nd /var/mnt 0755 root root -\nd /var/usrlocal 0755 root root -\nd /var/roothome 0700 root root -\nd /run/media 0755 root root -\n' \
+        > /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
+    printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' \
+        > /usr/lib/ostree/prepare-root.conf
+
+# Validate
+LABEL containers.bootc 1
+RUN bootc container lint
+
+# ==============================================================================
+# Base target (headless, no DE)
+# ==============================================================================
+FROM base-no-de AS base
+RUN ln -sf /var/opt /opt 2>/dev/null || true
+
+# ==============================================================================
+# Desktop stages — manifest-driven via install-desktop.sh
+# ==============================================================================
+FROM base-no-de AS gnome
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/install-desktop.sh gnome
+RUN ln -sf /var/opt /opt 2>/dev/null || true
+
+FROM base-no-de AS kde
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/install-desktop.sh kde
+RUN ln -sf /var/opt /opt 2>/dev/null || true
+
+FROM base-no-de AS cosmic
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/install-desktop.sh cosmic
+RUN ln -sf /var/opt /opt 2>/dev/null || true
+
+FROM base-no-de AS niri
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/install-desktop.sh niri
+RUN ln -sf /var/opt /opt 2>/dev/null || true
+
+FROM base-no-de AS xfce
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/install-desktop.sh xfce
+RUN ln -sf /var/opt /opt 2>/dev/null || true

@@ -569,3 +569,35 @@ variants:
         stage: 2
         build_image: true
         build_iso: true
+
+  # ── Arch Linux ─────────────────────────────────────────────────────────────
+  # Marlin: rolling-release Arch Linux on bootc. Uses Containerfile.arch
+  # which builds bootc from source (Arch doesn't package it yet) and sets
+  # up the ostree/composefs filesystem layout.
+  - id: marlin
+    emoji: "🐟"
+    description: "Based on Arch Linux (rolling)"
+    base_image: "docker.io/archlinux/archlinux:latest"
+    platforms: ["linux/amd64"]
+    experimental: true
+    flavors:
+      - id: base
+        stage: 1
+        build_image: true
+      - id: gnome
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: kde
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: cosmic
+        stage: 2
+        build_image: true
+      - id: niri
+        stage: 2
+        build_image: true
+      - id: xfce
+        stage: 2
+        build_image: true
