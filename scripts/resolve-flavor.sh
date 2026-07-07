@@ -43,6 +43,11 @@ if [[ "${VARIANT}" == "grouper" ]]; then
     CONTAINERFILE="Containerfile.ubuntu"
 fi
 
+# Arch-based variants use Containerfile.arch
+if [[ "${VARIANT}" == "marlin" || "${VARIANT}" == "wahoo" ]]; then
+    CONTAINERFILE="Containerfile.arch"
+fi
+
 if [[ "${FLAVOR}" == "base" ]]; then
     DESKTOP_FLAVOR="base-no-de"
     # grouper's base-no-de is intentionally pre-bootcify

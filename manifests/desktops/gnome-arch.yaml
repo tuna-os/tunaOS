@@ -1,0 +1,50 @@
+# GNOME Desktop Manifest — Arch Linux / CachyOS
+
+display_manager: gdm
+
+packages:
+  pacman:
+    - gdm
+    - gnome-shell
+    - gnome-control-center
+    - gnome-settings-daemon
+    - gnome-session
+    - gnome-backgrounds
+    - gnome-color-manager
+    - gnome-disk-utility
+    - gnome-system-monitor
+    - gnome-user-docs
+    - gnome-remote-desktop
+    - gnome-bluetooth-3.0
+    - gnome-browser-connector
+    - gnome-keyring
+    - nautilus
+    - ptyxis
+    - yelp
+    - xdg-desktop-portal-gnome
+    - xdg-desktop-portal-gtk
+    - xdg-user-dirs-gtk
+    - gvfs
+    - gvfs-mtp
+    - gvfs-smb
+    - gvfs-gphoto2
+    - gvfs-afc
+    - networkmanager
+    - pipewire
+    - wireplumber
+    - flatpak
+    - wl-clipboard
+    - mesa
+    - vulkan-icd-loader
+    - xdg-user-dirs
+
+  cachyos:
+    repos:
+      - name: cachyos
+        url: "https://mirror.cachyos.org/repo/$arch/cachyos"
+    packages:
+      - linux-cachyos
+      - linux-cachyos-headers
+      - cachyos-settings
+
+versionlock: []
