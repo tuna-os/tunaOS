@@ -121,6 +121,12 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         git submodule deinit -f --all
     fi
 
+# Build on a corral VM (fans out the full flavor matrix on a KubeVirt builder)
+# Usage: just corral-build redfin all
+#        just corral-build yellowfin gnome kde
+corral-build variant='redfin' +flavors='all':
+    ./scripts/corral-build.sh "{{ variant }}" {{ flavors }}
+
 # Build a TunaOS live ISO via tacklebox (no Anaconda, dmsquash-live + sd-boot)
 # Build a live ISO via tacklebox (replaces deprecated bootc-image-builder approach)
 iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
