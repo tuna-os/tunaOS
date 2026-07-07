@@ -124,16 +124,16 @@ fi
 
 # Install groups
 _TD_GROUP_OPTS=$($YQ -r ".packages.${_TD_OS}.group_options" "${_TD_MANIFEST}")
-readarray -t GROUPS < <($YQ -r ".packages.${_TD_OS}.groups[]" "${_TD_MANIFEST}" 2>/dev/null || true)
+_yq_array _TD_GROUPS -r ".packages.${_TD_OS}.groups[]" "${_TD_MANIFEST}"
 readarray -t _TD_GROUP_EXC < <($YQ -r ".packages.${_TD_OS}.group_exclude[]" "${_TD_MANIFEST}" 2>/dev/null || true)
 
-if ((${#GROUPS[@]} > 0)); then
+if ((${#_TD_GROUPS[@]} > 0)); then
     _TD_EXCL_ARGS=()
     for exc in "${_TD_GROUP_EXC[@]}"; do
         [[ -n "$exc" ]] && _TD_EXCL_ARGS+=("-x" "$exc")
     done
     # shellcheck disable=SC2086 # _TD_GROUP_OPTS may be empty or contain flags
-    dnf group install -y ${_TD_GROUP_OPTS} "${_TD_EXCL_ARGS[@]}" "${GROUPS[@]}"
+    dnf group install -y ${_TD_GROUP_OPTS} "${_TD_EXCL_ARGS[@]}" "${_TD_GROUPS[@]}"
 fi
 
 # Install packages
