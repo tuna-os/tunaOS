@@ -27,7 +27,6 @@ fi
 source "${CONTEXT_PATH}/build_scripts/lib.sh"
 
 # Ensure yq is available inside the container for manifest parsing.
-# yq is a static binary — download once, use for the rest of the build.
 YQ="${YQ:-yq}"
 if ! command -v "$YQ" &>/dev/null; then
     YQ_ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
@@ -35,6 +34,22 @@ if ! command -v "$YQ" &>/dev/null; then
     chmod +x /usr/bin/yq
     YQ=/usr/bin/yq
 fi
+
+# Helper: safely read a yq query into a named array variable.
+# Uses a temp file to avoid process-substitution + set -e issues.
+_yq_array() {
+    set +e
+    local _varname=$1; shift
+    local IFS=$'\n'
+    local _output
+    _output=$(/usr/bin/yq "$@" 2>/dev/null)
+    local _result=()
+    for _line in $_output; do
+        [[ -n "$_line" && "$_line" != "null" ]] && _result+=("$_line")
+    done
+    eval "$_varname=(\"\${_result[@]}\")"
+    set -e
+}
 printf "::group:: === install-desktop: %s ===\n" "${DESKTOP}"
 
 # ── Determine OS section to use ──────────────────────────────────────────────
@@ -73,7 +88,7 @@ if [[ "${OS_SECTION}" == "apt" ]]; then
     done
 
     # Install packages (may be under .packages.apt[] or .packages.apt.packages[])
-    readarray -t PKGS < <($YQ -r '(.packages.apt.packages // .packages.apt)[]' "${MANIFEST}" 2>/dev/null)
+    _yq_array PKGS -r '(.packages.apt.packages // .packages.apt)[]' "${MANIFEST}"
     if ((${#PKGS[@]} > 0)); then
         pkg_install "${PKGS[@]}"
     fi
@@ -100,13 +115,13 @@ if [[ "${OS_SECTION}" == "pacman" ]]; then
         done
         pacman -Sy --noconfirm
         # Install CachyOS-specific packages
-        readarray -t CACHY_PKGS < <($YQ -r ".packages.${CACHYOS_SECTION}.packages[]" "${MANIFEST}" 2>/dev/null)
+        _yq_array CACHY_PKGS -r ".packages.${CACHYOS_SECTION}.packages[]" "${MANIFEST}"
         if ((${#CACHY_PKGS[@]} > 0)); then
             pacman -S --noconfirm --needed "${CACHY_PKGS[@]}"
         fi
     fi
 
-    readarray -t PKGS < <($YQ -r ".packages.pacman[]" "${MANIFEST}" 2>/dev/null)
+    _yq_array PKGS -r ".packages.pacman[]" "${MANIFEST}"
     if ((${#PKGS[@]} > 0)); then
         pacman -S --noconfirm --needed "${PKGS[@]}"
     fi
@@ -123,22 +138,24 @@ fi
 # ── DNF path ─────────────────────────────────────────────────────────────────
 
 # Install groups
-GROUP_OPTIONS=$($YQ -r ".packages.${OS_SECTION}.group_options" "${MANIFEST}")
-readarray -t GROUPS < <($YQ -r ".packages.${OS_SECTION}.groups[]" "${MANIFEST}" 2>/dev/null)
-readarray -t GROUP_EXCLUDES < <($YQ -r ".packages.${OS_SECTION}.group_exclude[]" "${MANIFEST}" 2>/dev/null)
+GROUP_OPTIONS=$($YQ -r ".packages.${OS_SECTION}.group_options" "${MANIFEST}" 2>/dev/null) || GROUP_OPTIONS=""
+[[ "$GROUP_OPTIONS" == "null" ]] && GROUP_OPTIONS=""
 
-if ((${#GROUPS[@]} > 0)); then
+_yq_array PKG_GROUPS -r ".packages.${OS_SECTION}.groups[]" "${MANIFEST}"
+_yq_array GROUP_EXCLUDES -r ".packages.${OS_SECTION}.group_exclude[]" "${MANIFEST}"
+
+if ((${#PKG_GROUPS[@]} > 0)); then
     EXCLUDE_ARGS=()
     for exc in "${GROUP_EXCLUDES[@]}"; do
         [[ -n "$exc" ]] && EXCLUDE_ARGS+=("-x" "$exc")
     done
     # shellcheck disable=SC2086 # GROUP_OPTIONS may be empty or contain flags
-    dnf group install -y ${GROUP_OPTIONS} "${EXCLUDE_ARGS[@]}" "${GROUPS[@]}"
+    dnf group install -y ${GROUP_OPTIONS} "${EXCLUDE_ARGS[@]}" "${PKG_GROUPS[@]}"
 fi
 
 # Install packages
-readarray -t PKGS < <($YQ -r ".packages.${OS_SECTION}.packages[]" "${MANIFEST}" 2>/dev/null)
-readarray -t EXCLUDES < <($YQ -r ".packages.${OS_SECTION}.exclude[]" "${MANIFEST}" 2>/dev/null)
+_yq_array PKGS -r ".packages.${OS_SECTION}.packages[]" "${MANIFEST}"
+_yq_array EXCLUDES -r ".packages.${OS_SECTION}.exclude[]" "${MANIFEST}"
 
 if ((${#PKGS[@]} > 0)); then
     EXCLUDE_ARGS=()
@@ -152,7 +169,7 @@ fi
 COPR_COUNT=$($YQ -r ".packages.${OS_SECTION}.copr | length // 0" "${MANIFEST}" 2>/dev/null)
 for ((i=0; i<COPR_COUNT; i++)); do
     COPR_REPO=$($YQ -r ".packages.${OS_SECTION}.copr[$i].repo" "${MANIFEST}")
-    readarray -t COPR_PKGS < <($YQ -r ".packages.${OS_SECTION}.copr[$i].packages[]" "${MANIFEST}")
+    _yq_array COPR_PKGS -r ".packages.${OS_SECTION}.copr[$i].packages[]" "${MANIFEST}"
     COPR_OPTS=$($YQ -r ".packages.${OS_SECTION}.copr[$i].options" "${MANIFEST}")
 
     dnf -y copr enable "${COPR_REPO}"
@@ -163,13 +180,13 @@ for ((i=0; i<COPR_COUNT; i++)); do
 done
 
 # Optional packages (best-effort)
-readarray -t OPTIONAL < <($YQ -r ".packages.${OS_SECTION}.optional[]" "${MANIFEST}" 2>/dev/null)
+_yq_array OPTIONAL -r ".packages.${OS_SECTION}.optional[]" "${MANIFEST}"
 if ((${#OPTIONAL[@]} > 0)); then
     install_available "${OPTIONAL[@]}"
 fi
 
 # Optional group (e.g. fcitx5 — install all if the first one is available)
-readarray -t OPT_GROUP < <($YQ -r ".packages.${OS_SECTION}.optional_group[]" "${MANIFEST}" 2>/dev/null)
+_yq_array OPT_GROUP -r ".packages.${OS_SECTION}.optional_group[]" "${MANIFEST}"
 if ((${#OPT_GROUP[@]} > 0)); then
     FIRST="${OPT_GROUP[0]}"
     if dnf repoquery --available --qf '%{name}\n' "$FIRST" 2>/dev/null | grep -qx "$FIRST"; then
@@ -180,7 +197,7 @@ if ((${#OPT_GROUP[@]} > 0)); then
 fi
 
 # ── Version locks ────────────────────────────────────────────────────────────
-readarray -t LOCKS < <($YQ -r '.versionlock[]' "${MANIFEST}" 2>/dev/null)
+_yq_array LOCKS -r '.versionlock[]' "${MANIFEST}"
 if ((${#LOCKS[@]} > 0)); then
     # Ensure versionlock plugin is available
     dnf -y install python3-dnf-plugin-versionlock 2>/dev/null || true
@@ -196,7 +213,7 @@ if [[ -n "${DM}" ]]; then
 fi
 
 # ── Disable desktop files ────────────────────────────────────────────────────
-readarray -t DISABLE_DESKTOPS < <($YQ -r '.disable_desktop_files[]' "${MANIFEST}" 2>/dev/null)
+_yq_array DISABLE_DESKTOPS -r '.disable_desktop_files[]' "${MANIFEST}"
 for df in "${DISABLE_DESKTOPS[@]}"; do
     if [[ -n "$df" && -f "/usr/share/applications/${df}" ]]; then
         mv "/usr/share/applications/${df}" "/usr/share/applications/${df}.disabled"
@@ -204,7 +221,7 @@ for df in "${DISABLE_DESKTOPS[@]}"; do
 done
 
 # ── Post-install scripts ─────────────────────────────────────────────────────
-readarray -t POST_SCRIPTS < <($YQ -r '.post_install[]' "${MANIFEST}" 2>/dev/null)
+_yq_array POST_SCRIPTS -r '.post_install[]' "${MANIFEST}"
 for script in "${POST_SCRIPTS[@]}"; do
     if [[ -n "$script" && -f "${CONTEXT_PATH}/build_scripts/${script}" ]]; then
         echo "Running post-install: ${script}"
@@ -213,7 +230,7 @@ for script in "${POST_SCRIPTS[@]}"; do
 done
 
 # Inline post-install commands
-readarray -t POST_INLINE < <($YQ -r '.post_install_inline[]' "${MANIFEST}" 2>/dev/null)
+_yq_array POST_INLINE -r '.post_install_inline[]' "${MANIFEST}"
 for cmd in "${POST_INLINE[@]}"; do
     if [[ -n "$cmd" ]]; then
         eval "$cmd"
