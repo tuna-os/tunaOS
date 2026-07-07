@@ -68,18 +68,23 @@ for i in 1 2 3 4 5; do
     sleep 15
 done
 
-# ── Copy registry auth (for RHEL/redfin) ────────────────────────────────────
-AUTH_JSON=""
-for f in "${XDG_RUNTIME_DIR:-/tmp}/containers/auth.json" "$HOME/.config/containers/auth.json" "/run/user/$(id -u)/containers/auth.json"; do
-    [[ -f "$f" ]] && AUTH_JSON="$f" && break
-done
+# ── Copy registry auth (only needed for redfin/RHEL) ─────────────────────────
+if [[ "$VARIANT" == "redfin" ]]; then
+    AUTH_JSON=""
+    for f in "${XDG_RUNTIME_DIR:-/tmp}/containers/auth.json" "$HOME/.config/containers/auth.json" "/run/user/$(id -u)/containers/auth.json"; do
+        [[ -f "$f" ]] && AUTH_JSON="$f" && break
+    done
 
-if [[ -n "$AUTH_JSON" ]]; then
-    echo "==> Copying registry auth to builder..."
-    corral ssh "$VM" -u fedora -c "mkdir -p ~/.config/containers"
-    cat "$AUTH_JSON" | corral ssh "$VM" -u fedora -c "cat > ~/.config/containers/auth.json && chmod 600 ~/.config/containers/auth.json"
-    # Also for root (needed for ISO builds)
-    cat "$AUTH_JSON" | corral ssh "$VM" -u root -c "mkdir -p /run/containers/0 && cat > /run/containers/0/auth.json && chmod 600 /run/containers/0/auth.json" 2>/dev/null || true
+    if [[ -n "$AUTH_JSON" ]] && grep -q "registry.redhat.io" "$AUTH_JSON"; then
+        echo "==> Copying RHEL registry auth to builder..."
+        corral ssh "$VM" -u fedora -c "mkdir -p ~/.config/containers"
+        cat "$AUTH_JSON" | corral ssh "$VM" -u fedora -c "cat > ~/.config/containers/auth.json && chmod 600 ~/.config/containers/auth.json"
+        cat "$AUTH_JSON" | corral ssh "$VM" -u root -c "mkdir -p /run/containers/0 && cat > /run/containers/0/auth.json && chmod 600 /run/containers/0/auth.json" 2>/dev/null || true
+    else
+        echo "ERROR: redfin requires registry.redhat.io auth." >&2
+        echo "       Run: podman login registry.redhat.io" >&2
+        exit 1
+    fi
 fi
 
 # ── Clone/update the repo on the builder ─────────────────────────────────────
@@ -100,16 +105,19 @@ for flavor in "${FLAVORS[@]}"; do
 
     BUILD_START=$(date +%s)
 
-    # Pass RHSM creds if set locally
+    # RHSM creds only for redfin; TMPDIR on persistent disk to avoid tmpfs OOM
     RHSM_EXPORT=""
-    if [[ -n "${RHSM_USER:-}" ]]; then
+    if [[ "$VARIANT" == "redfin" && -n "${RHSM_USER:-}" ]]; then
         RHSM_EXPORT="export RHSM_USER='${RHSM_USER}' RHSM_PASSWORD='${RHSM_PASSWORD}'"
     fi
 
     if corral ssh "$VM" -u fedora -c "
         cd /data/tunaos
         export SKIP_SUBMODULES=1 SKIP_RECHUNK=${SKIP_RECHUNK}
+        export TMPDIR=/data/tmp
+        mkdir -p /data/tmp
         ${RHSM_EXPORT}
+        podman system prune -f 2>/dev/null || true
         just build ${VARIANT} ${flavor} linux/amd64 0 latest '' 1
     " 2>&1 | tee "/tmp/corral-build-${VARIANT}-${flavor}.log" | tail -3; then
         BUILD_SECS=$(($(date +%s) - BUILD_START))
