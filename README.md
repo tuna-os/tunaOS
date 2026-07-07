@@ -147,6 +147,8 @@ ghcr.io/tuna-os/bonito:cosmic
 
 **Platforms:** x86_64, ARM64
 
+**Desktops:** GNOME, GNOME 50, KDE, COSMIC, Niri, XFCE (all desktops supported)
+
 > [!IMPORTANT]
 > Due to the RHEL EULA, Redfin images **cannot be publicly distributed**. This variant is local-build only.
 > For a freely redistributable RHEL-compatible alternative, use Albacore (AlmaLinux 10).
@@ -154,7 +156,11 @@ ghcr.io/tuna-os/bonito:cosmic
 See [`docs/rhel-setup.md`](docs/rhel-setup.md) for prerequisites, authentication, and build instructions.
 
 ```bash
-just redfin base
+just build redfin gnome
+just build redfin kde
+just build redfin cosmic
+just build redfin niri
+just build redfin all
 ```
 
 ---
