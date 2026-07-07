@@ -85,10 +85,10 @@ elif [[ $IS_RHEL == true ]]; then
 	# Check for subscription-manager credentials and register if present
 	if [[ -n "${RHSM_USER:-}" ]] && [[ -n "${RHSM_PASSWORD:-}" ]]; then
 		echo "Registering with Red Hat Subscription Manager using credentials..."
-		warn_on_fail subscription-manager register --username "${RHSM_USER}" --password "${RHSM_PASSWORD}" --auto-attach
+		warn_on_fail subscription-manager register --username "${RHSM_USER}" --password "${RHSM_PASSWORD}"
 	elif [[ -n "${RHSM_ORG:-}" ]] && [[ -n "${RHSM_ACTIVATION_KEY:-}" ]]; then
 		echo "Registering with Red Hat Subscription Manager using activation key..."
-		warn_on_fail subscription-manager register --org "${RHSM_ORG}" --activationkey "${RHSM_ACTIVATION_KEY}" --auto-attach
+		warn_on_fail subscription-manager register --org "${RHSM_ORG}" --activationkey "${RHSM_ACTIVATION_KEY}"
 	fi
 
 	# Ensure repositories are enabled after registration
@@ -147,9 +147,9 @@ else
 		# (Fedora uses dnf5-command(config-manager); EL10 uses the legacy name.)
 		dnf install -y epel-release 'dnf-command(config-manager)'
 		/usr/bin/crb enable
+		dnf config-manager --set-enabled crb
 	fi
 	dnf config-manager --set-enabled epel
-	dnf config-manager --set-enabled crb
 
 	# Multimedia codecs
 	if is_x86_64_v2; then
