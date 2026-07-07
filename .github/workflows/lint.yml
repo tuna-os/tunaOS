@@ -69,7 +69,7 @@ jobs:
             -not -path './.build/*' \
             -not -path './_upstream-snapshots/*' \
             -iname "*.sh" -type f \
-            -exec shellcheck --exclude=SC1091,SC2114 --format=tty {} +
+            -exec shellcheck --severity=error --exclude=SC1091,SC2114 --format=tty {} +
 
       - name: Run yamllint
         if: matrix.check == 'yamllint'
