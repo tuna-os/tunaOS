@@ -71,19 +71,75 @@ export RHSM_ACTIVATION_KEY="your-key"
 
 ## Deploying
 
-The built images are available locally as `localhost/redfin:<flavor>`:
+### Option 1: Generate an ISO (recommended for first install)
 
 ```bash
-# Switch a running RHEL system to any flavor
+# Build + ISO in one command (dev=1 enables SSH for VM testing)
+export RHSM_USER="..." RHSM_PASSWORD="..."
+just iso redfin gnome local "" 1
+
+# Or step by step:
+just build redfin gnome
+sudo ./scripts/build-iso-tacklebox.sh redfin gnome local
+
+# Output: ./redfin-gnome-10-x86_64.iso
+```
+
+The ISO uses tacklebox (same as all other TunaOS variants) — UEFI live boot with systemd-boot + dmsquash-live. Boot it, run the installer, done.
+
+### Option 2: bootc switch (from an existing RHEL system)
+
+```bash
+# Switch a running RHEL 10 system to any redfin flavor
 sudo bootc switch localhost/redfin:gnome
 sudo bootc switch localhost/redfin:kde
 sudo bootc switch localhost/redfin:niri
 sudo bootc switch localhost/redfin:cosmic
-
-# Generate an ISO
-sudo just iso redfin gnome local
-sudo just iso redfin kde local
 ```
+
+### Option 3: Direct disk install (VMs)
+
+```bash
+# Generate a QCOW2 for QEMU/KVM
+just qcow2 redfin gnome local
+```
+
+## Testing in Corral VMs
+
+```bash
+# Build with SSH enabled
+just build redfin gnome "" "0" "latest" "" "1"
+
+# Create a corral VM from the local image
+corral bootc create redfin-gnome \
+  --image localhost/redfin:gnome \
+  --cpu 4 --mem 8G --node karnataka
+
+# Start and SSH in
+corral start redfin-gnome
+corral ssh redfin-gnome -u root -c "systemctl is-active gdm"
+
+# Clean up
+corral delete redfin-gnome --force
+```
+
+## Auto-Update (Local Image Factory)
+
+For ongoing updates without internet access to GHCR (since images can't be published), set up a local auto-rebuild:
+
+```bash
+# 1. Build updated image periodically (cron or systemd timer)
+just build redfin gnome
+
+# 2. Push to local registry (optional — for multi-machine deployments)
+podman push localhost/redfin:gnome registry.internal.example.com/redfin:gnome
+
+# 3. Running systems pull updates
+sudo bootc switch registry.internal.example.com/redfin:gnome
+# After first switch, updates happen automatically via uupd timer
+```
+
+See [renner0e/server](https://github.com/renner0e/server) for a systemd timer pattern that automates this.
 
 Each deployed system must be covered by a RHEL subscription (the same free Developer Subscription works).
 
