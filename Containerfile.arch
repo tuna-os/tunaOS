@@ -68,11 +68,20 @@ RUN grep "= */var" /etc/pacman.conf | sed "/= *\/var/s/.*=// ; s/ //" | \
     sed -i -e "/= *\/var/ s/^#//" -e "s@= */var@= /usr/lib/sysimage@g" -e "/DownloadUser/d" /etc/pacman.conf
 
 # Full system refresh + bootc base packages
-RUN pacman -Syu --noconfirm && \
+# CachyOS images already have CachyOS repos in pacman.conf, so pacman -S
+# will pull optimized packages automatically. We detect CachyOS by checking
+# for the cachyos repo in pacman.conf and install linux-cachyos instead of
+# stock linux.
+RUN KERNEL_PKG="linux"; \
+    if grep -q "^\[cachyos\]" /etc/pacman.conf 2>/dev/null; then \
+        KERNEL_PKG="linux-cachyos"; \
+    fi && \
+    pacman -Syu --noconfirm && \
     pacman -S --noconfirm --needed \
         base \
         dracut \
-        linux \
+        ${KERNEL_PKG} \
+        ${KERNEL_PKG}-headers \
         linux-firmware \
         ostree \
         btrfs-progs \
