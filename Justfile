@@ -123,13 +123,13 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
 
 # Full lifecycle test: build → ISO → boot → install → verify (nested QEMU on corral VM)
 # Usage: just lifecycle-test redfin gnome
-#        just lifecycle-test albacore kde
+# just lifecycle-test albacore kde
 lifecycle-test variant='albacore' flavor='gnome':
     ./scripts/lifecycle-test.sh "{{ variant }}" "{{ flavor }}"
 
 # Build on a corral VM (fans out the full flavor matrix on a KubeVirt builder)
 # Usage: just corral-build redfin all
-#        just corral-build yellowfin gnome kde
+# just corral-build yellowfin gnome kde
 corral-build variant='redfin' +flavors='all':
     ./scripts/corral-build.sh "{{ variant }}" {{ flavors }}
 
