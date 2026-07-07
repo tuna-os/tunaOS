@@ -59,7 +59,21 @@ echo "Installing ${DESKTOP} desktop (OS section: ${OS_SECTION})..."
 
 # ── APT path ─────────────────────────────────────────────────────────────────
 if [[ "${OS_SECTION}" == "apt" ]]; then
-    readarray -t PKGS < <($YQ -r ".packages.apt[]" "${MANIFEST}" 2>/dev/null)
+    # Handle PPAs (Ubuntu only — Debian uses native repos)
+    PPA_COUNT=$($YQ -r ".packages.apt.ppa | length // 0" "${MANIFEST}" 2>/dev/null)
+    for ((i=0; i<PPA_COUNT; i++)); do
+        PPA_REPO=$($YQ -r ".packages.apt.ppa[$i].repo" "${MANIFEST}")
+        PPA_COND=$($YQ -r ".packages.apt.ppa[$i].condition // empty" "${MANIFEST}")
+        # Only add PPA if condition matches (e.g. "ubuntu" only on Ubuntu)
+        if [[ -z "${PPA_COND}" ]] || [[ "$IS_UBUNTU" == true && "${PPA_COND}" == "ubuntu" ]]; then
+            if command -v add-apt-repository &>/dev/null; then
+                add-apt-repository -y "${PPA_REPO}"
+            fi
+        fi
+    done
+
+    # Install packages (may be under .packages.apt[] or .packages.apt.packages[])
+    readarray -t PKGS < <($YQ -r '(.packages.apt.packages // .packages.apt) | if type == "array" then .[] else empty end' "${MANIFEST}" 2>/dev/null)
     if ((${#PKGS[@]} > 0)); then
         pkg_install "${PKGS[@]}"
     fi

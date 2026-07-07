@@ -3,6 +3,35 @@
 display_manager: greetd
 
 packages:
+  # ── APT (Ubuntu via PPA, Debian Sid has native packages) ───────────
+  apt:
+    ppa:
+      - repo: "ppa:hepp3n/cosmic-epoch"
+        condition: "ubuntu"  # only add PPA on Ubuntu; Debian Sid has native pkgs
+    packages:
+      - cosmic-session
+      - cosmic-comp
+      - cosmic-panel
+      - cosmic-app-library
+      - cosmic-applets
+      - cosmic-bg
+      - cosmic-files
+      - cosmic-idle
+      - cosmic-launcher
+      - cosmic-notifications
+      - cosmic-osd
+      - cosmic-randr
+      - cosmic-screenshot
+      - cosmic-settings
+      - cosmic-settings-daemon
+      - cosmic-term
+      - cosmic-wallpapers
+      - cosmic-workspaces
+      - cosmic-greeter
+      - cosmic-icon-theme
+      - greetd
+      - xdg-desktop-portal-cosmic
+
   fedora:
     packages:
       - cosmic-session
