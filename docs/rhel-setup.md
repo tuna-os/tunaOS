@@ -39,28 +39,50 @@ You do **not** need to run `subscription-manager register` on the build host its
 
 ## Building
 
+All desktops are supported — redfin uses the same EL10 code path as yellowfin/albacore/skipjack:
+
 ```bash
-# Build the base GNOME image
-just redfin
-
-# Build all flavors
-just redfin base
-just redfin nvidia
-
-# Or use the generic build command
+# Individual flavors
 just build redfin base
+just build redfin gnome
+just build redfin kde
+just build redfin niri
+just build redfin cosmic
+just build redfin xfce
+
+# All flavors
+just build redfin all
+
+# HWE/nvidia layers
+just build redfin gnome-hwe
+just build redfin gnome-nvidia
+just build redfin kde-nvidia
+```
+
+The RHSM credentials are passed securely via BuildKit secrets (never baked into image history). Set them before building:
+
+```bash
+export RHSM_USER="your-rh-username"
+export RHSM_PASSWORD="your-rh-password"
+# Or use activation key:
+export RHSM_ORG="your-org-id"
+export RHSM_ACTIVATION_KEY="your-key"
 ```
 
 ## Deploying
 
-The built image is available locally as `localhost/redfin:latest`. To deploy:
+The built images are available locally as `localhost/redfin:<flavor>`:
 
 ```bash
-# Switch a running RHEL system to the new image
-sudo bootc switch localhost/redfin:latest
+# Switch a running RHEL system to any flavor
+sudo bootc switch localhost/redfin:gnome
+sudo bootc switch localhost/redfin:kde
+sudo bootc switch localhost/redfin:niri
+sudo bootc switch localhost/redfin:cosmic
 
-# Or generate an ISO for bare-metal installation
-sudo just iso redfin base local
+# Generate an ISO
+sudo just iso redfin gnome local
+sudo just iso redfin kde local
 ```
 
 Each deployed system must be covered by a RHEL subscription (the same free Developer Subscription works).
