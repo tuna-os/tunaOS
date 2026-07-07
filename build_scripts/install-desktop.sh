@@ -26,7 +26,15 @@ fi
 
 source "${CONTEXT_PATH}/build_scripts/lib.sh"
 
+# Ensure yq is available inside the container for manifest parsing.
+# yq is a static binary — download once, use for the rest of the build.
 YQ="${YQ:-yq}"
+if ! command -v "$YQ" &>/dev/null; then
+    YQ_ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+    curl -fsSL "https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_${YQ_ARCH}" -o /usr/bin/yq
+    chmod +x /usr/bin/yq
+    YQ=/usr/bin/yq
+fi
 printf "::group:: === install-desktop: %s ===\n" "${DESKTOP}"
 
 # ── Determine OS section to use ──────────────────────────────────────────────
