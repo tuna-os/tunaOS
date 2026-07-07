@@ -147,9 +147,9 @@ else
 		# (Fedora uses dnf5-command(config-manager); EL10 uses the legacy name.)
 		dnf install -y epel-release 'dnf-command(config-manager)'
 		/usr/bin/crb enable
+		dnf config-manager --set-enabled crb
 	fi
 	dnf config-manager --set-enabled epel
-	dnf config-manager --set-enabled crb
 
 	# Multimedia codecs
 	if is_x86_64_v2; then
