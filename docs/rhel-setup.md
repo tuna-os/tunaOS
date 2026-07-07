@@ -16,17 +16,32 @@ You need a Red Hat account with an active subscription. The free **Red Hat Devel
 The RHEL 10 bootc base image is hosted on `registry.redhat.io` and requires authentication before building:
 
 ```bash
-# For rootless builds
+# Log in (stores credentials in ~/.config/containers/auth.json)
 podman login registry.redhat.io
-
-# For root builds (required for ISO/VM generation)
-sudo podman login registry.redhat.io
 ```
 
 Enter your Red Hat Customer Portal username and password, or use a **Registry Service Account token** (recommended for scripts/automation):
 
 - Create a service account token at <https://access.redhat.com/terms-based-registry/>
 - Use the token username/password in place of your portal credentials
+
+#### Using auth.json on builder VMs (corral/remote)
+
+If you build on a remote VM (corral, CI runner, etc.), copy your local auth.json rather than logging in interactively:
+
+```bash
+# Copy auth to a corral builder VM
+AUTH_JSON="${XDG_RUNTIME_DIR}/containers/auth.json"
+[[ -f "$AUTH_JSON" ]] || AUTH_JSON="$HOME/.config/containers/auth.json"
+
+corral ssh <builder-vm> -u fedora -c "mkdir -p ~/.config/containers"
+cat "$AUTH_JSON" | corral ssh <builder-vm> -u fedora -c "cat > ~/.config/containers/auth.json && chmod 600 ~/.config/containers/auth.json"
+
+# For root builds (ISO generation), also copy to root's store:
+cat "$AUTH_JSON" | corral ssh <builder-vm> -u root -c "mkdir -p /run/containers/0 && cat > /run/containers/0/auth.json && chmod 600 /run/containers/0/auth.json"
+```
+
+The auth.json is a standard Docker/Podman credential file — it works anywhere podman runs without needing to `podman login` again.
 
 ### 3. Build Host Requirements
 
