@@ -634,3 +634,60 @@ variants:
       - id: xfce
         stage: 2
         build_image: true
+
+  # ── Debian ─────────────────────────────────────────────────────────────────
+  # Flounder: Debian Trixie (13) stable. Uses Containerfile.debian.
+  - id: flounder
+    emoji: "🐟"
+    description: "Based on Debian 13 Trixie (stable)"
+    base_image: "docker.io/library/debian:trixie"
+    platforms: ["linux/amd64"]
+    experimental: true
+    flavors:
+      - id: base
+        stage: 1
+        build_image: true
+      - id: gnome
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: kde
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: cosmic
+        stage: 2
+        build_image: true
+      - id: niri
+        stage: 2
+        build_image: true
+      - id: xfce
+        stage: 2
+        build_image: true
+
+  # Flounder-sid: Debian Sid (unstable/rolling). Has latest COSMIC natively.
+  - id: flounder-sid
+    emoji: "🐟"
+    description: "Based on Debian Sid (unstable, rolling)"
+    base_image: "docker.io/library/debian:sid"
+    platforms: ["linux/amd64"]
+    experimental: true
+    flavors:
+      - id: base
+        stage: 1
+        build_image: true
+      - id: gnome
+        stage: 2
+        build_image: true
+      - id: kde
+        stage: 2
+        build_image: true
+      - id: cosmic
+        stage: 2
+        build_image: true
+      - id: niri
+        stage: 2
+        build_image: true
+      - id: xfce
+        stage: 2
+        build_image: true

@@ -43,6 +43,11 @@ if [[ "${VARIANT}" == "grouper" ]]; then
     CONTAINERFILE="Containerfile.ubuntu"
 fi
 
+# Debian variants use Containerfile.debian
+if [[ "${VARIANT}" == "flounder" || "${VARIANT}" == "flounder-sid" ]]; then
+    CONTAINERFILE="Containerfile.debian"
+fi
+
 # Arch-based variants use Containerfile.arch
 if [[ "${VARIANT}" == "marlin" || "${VARIANT}" == "wahoo" ]]; then
     CONTAINERFILE="Containerfile.arch"
