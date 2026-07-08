@@ -144,7 +144,7 @@ fi
 # ── DNF path ─────────────────────────────────────────────────────────────────
 
 # Install groups
-_TD_GROUP_OPTS=$($YQ -r ".packages.${_TD_OS}.group_options" "${_TD_MANIFEST}")
+_TD_GROUP_OPTS=$($YQ -r ".packages.${_TD_OS}.group_options // \"\"" "${_TD_MANIFEST}")
 _yq_array _TD_GROUPS -r ".packages.${_TD_OS}.groups[]" "${_TD_MANIFEST}"
 readarray -t _TD_GROUP_EXC < <($YQ -r ".packages.${_TD_OS}.group_exclude[]" "${_TD_MANIFEST}" 2>/dev/null || true)
 
@@ -174,7 +174,7 @@ _TD_COPR_COUNT=$($YQ -r ".packages.${_TD_OS}.copr | length // 0" "${_TD_MANIFEST
 for ((i=0; i<_TD_COPR_COUNT; i++)); do
     _TD_COPR_REPO=$($YQ -r ".packages.${_TD_OS}.copr[$i].repo" "${_TD_MANIFEST}")
     readarray -t _TD_COPR_PKGS < <($YQ -r ".packages.${_TD_OS}.copr[$i].packages[]" "${_TD_MANIFEST}" 2>/dev/null || true)
-    _TD_COPR_OPTS=$($YQ -r ".packages.${_TD_OS}.copr[$i].options" "${_TD_MANIFEST}")
+    _TD_COPR_OPTS=$($YQ -r ".packages.${_TD_OS}.copr[$i].options // \"\"" "${_TD_MANIFEST}")
 
     dnf -y copr enable "${_TD_COPR_REPO}"
     dnf -y copr disable "${_TD_COPR_REPO}"
