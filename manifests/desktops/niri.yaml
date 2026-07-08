@@ -88,6 +88,14 @@ packages:
       - gnome-keyring
       - gnome-keyring-pam
 
+  zypper:
+    - niri
+    - greetd
+
+  emerge:
+    - gui-wm/niri
+    - gui-apps/greetd
+
 versionlock:
   - glib2
 

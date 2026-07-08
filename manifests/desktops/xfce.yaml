@@ -38,5 +38,14 @@ packages:
     - thunar
     - mousepad
 
+  zypper:
+    - patterns-xfce-xfce
+    - patterns-xfce-xfce_basis
+    - lightdm
+
+  emerge:
+    - xfce-base/xfce4-meta
+    - xfce-base/lightdm
+
 versionlock:
   - glib2

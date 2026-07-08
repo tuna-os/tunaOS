@@ -115,6 +115,16 @@ packages:
 
 # Version locks — prevent partial upgrades causing black screens
 # Ref: https://github.com/ublue-os/aurora/issues/1227
+  zypper:
+    - patterns-kde-kde
+    - patterns-kde-kde_plasma
+    - sddm
+
+  emerge:
+    - kde-plasma/plasma-meta
+    - kde-apps/kde-apps-meta
+    - kde-plasma/sddm
+
 versionlock:
   - plasma-desktop
   - "qt6-*"

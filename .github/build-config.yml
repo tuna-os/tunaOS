@@ -469,6 +469,50 @@ variants:
         build_iso: true
         build_qcow2: false
 
+  # ── openSUSE ──────────────────────────────────────────────────────────────
+  # openSUSE Tumbleweed: rolling-release, zypper-based.
+  - id: opensuse
+    emoji: "🦎"
+    description: "Based on openSUSE Tumbleweed (rolling)"
+    base_image: "registry.opensuse.org/opensuse/tumbleweed:latest"
+    platforms: ["linux/amd64"]
+    experimental: true
+    flavors:
+      - id: base
+        stage: 1
+        build_image: true
+      - id: gnome
+        stage: 2
+        build_image: true
+      - id: kde
+        stage: 2
+        build_image: true
+      - id: niri
+        stage: 2
+        build_image: true
+      - id: xfce
+        stage: 2
+        build_image: true
+
+  # ── Gentoo ────────────────────────────────────────────────────────────────
+  # Gentoo: source-based, emerge/portage. Compiles everything from source.
+  - id: gentoo
+    emoji: "🐧"
+    description: "Based on Gentoo Linux (source-based)"
+    base_image: "docker.io/gentoo/stage3:latest"
+    platforms: ["linux/amd64"]
+    experimental: true
+    flavors:
+      - id: base
+        stage: 1
+        build_image: true
+      - id: gnome
+        stage: 2
+        build_image: true
+      - id: kde
+        stage: 2
+        build_image: true
+
   # ── Rawhide ────────────────────────────────────────────────────────────────
   # Fedora Rawhide (rolling development branch). Uses the same Containerfile
   # as bonito — Fedora bootc with the latest kernel and packages.

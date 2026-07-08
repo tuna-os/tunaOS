@@ -43,6 +43,10 @@ if [[ "$PKG_MGR" == "apt" ]]; then
     _TD_OS="apt"
 elif [[ "$PKG_MGR" == "pacman" ]]; then
     _TD_OS="pacman"
+elif command -v zypper &>/dev/null; then
+    _TD_OS="zypper"
+elif command -v emerge &>/dev/null; then
+    _TD_OS="emerge"
 elif [[ "$IS_FEDORA" == true ]]; then
     _TD_OS="fedora"
 else
@@ -58,6 +62,23 @@ fi
 echo "Installing ${_TD_DESKTOP} desktop (OS section: ${_TD_OS})..."
 
 # ── APT path ─────────────────────────────────────────────────────────────────
+
+# ── Zypper path ────────────────────────────────────────────────────────────────
+if [[ "${_TD_OS}" == "zypper" ]]; then
+    readarray -t _TD_ZYPPER_PKGS < <($YQ -r '.packages.zypper[]' "${_TD_MANIFEST}" 2>/dev/null || true)
+    if ((${#_TD_ZYPPER_PKGS[@]} > 0)); then
+        zypper install -y "${_TD_ZYPPER_PKGS[@]}"
+    fi
+fi
+
+# ── Emerge path ────────────────────────────────────────────────────────────────
+if [[ "${_TD_OS}" == "emerge" ]]; then
+    readarray -t _TD_EMERGE_PKGS < <($YQ -r '.packages.emerge[]' "${_TD_MANIFEST}" 2>/dev/null || true)
+    if ((${#_TD_EMERGE_PKGS[@]} > 0)); then
+        emerge --verbose "${_TD_EMERGE_PKGS[@]}"
+    fi
+fi
+
 if [[ "${_TD_OS}" == "apt" ]]; then
     # Handle PPAs (Ubuntu only — Debian uses native repos)
     _TD_PPA_COUNT=$($YQ -r '.packages.apt | if type == "object" then (.ppa | length // 0) else 0 end' "${_TD_MANIFEST}" 2>/dev/null || echo 0)

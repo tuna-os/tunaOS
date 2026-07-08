@@ -1,0 +1,22 @@
+name: Build Gentoo [experimental]
+on:
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: 'Flavor (all, base, gnome, kde, niri, etc.)'
+        default: 'all'
+        type: string
+
+concurrency:
+  group: build-gentoo-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 🐧-gentoo
+    uses: ./.github/workflows/build-variant.yml
+    with:
+      variant: 'gentoo'
+      flavor: ${{ inputs.flavor || 'all' }}
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
