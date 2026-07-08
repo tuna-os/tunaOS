@@ -1,4 +1,4 @@
-name: Build Gentoo [experimental]
+name: Build Guppy [experimental]
 on:
   workflow_dispatch:
     inputs:
@@ -8,15 +8,15 @@ on:
         type: string
 
 concurrency:
-  group: build-gentoo-${{ github.ref }}
+  group: build-guppy-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: 🐧-gentoo
+    name: 🌈-guppy
     uses: ./.github/workflows/build-variant.yml
     with:
-      variant: 'gentoo'
+      variant: 'guppy'
       flavor: ${{ inputs.flavor || 'all' }}
     secrets:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}

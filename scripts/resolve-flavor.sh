@@ -39,14 +39,14 @@ PARENT_FLAVOR=""
 DESKTOP_FLAVOR="${FLAVOR}"
 
 # RFC 010: grouper (Ubuntu) uses Containerfile.ubuntu
-# openSUSE uses Containerfile.opensuse
-if [[ "${VARIANT}" == "opensuse" ]]; then
-    CONTAINERFILE="Containerfile.opensuse"
+# Sailfin uses Containerfile.sailfin
+if [[ "${VARIANT}" == "sailfin" ]]; then
+    CONTAINERFILE="Containerfile.sailfin"
 fi
 
-# Gentoo uses Containerfile.gentoo
-if [[ "${VARIANT}" == "gentoo" ]]; then
-    CONTAINERFILE="Containerfile.gentoo"
+# Guppy uses Containerfile.guppy
+if [[ "${VARIANT}" == "guppy" ]]; then
+    CONTAINERFILE="Containerfile.guppy"
 fi
 
 if [[ "${VARIANT}" == "grouper" ]]; then

@@ -41,7 +41,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [yellowfin, albacore, skipjack, bonito, bonito-rawhide, grouper, marlin, flounder, flounder-sid, opensuse, gentoo]
+        variant: [yellowfin, albacore, skipjack, bonito, bonito-rawhide, grouper, marlin, flounder, flounder-sid, sailfin, guppy]
     name: Build ${{ matrix.variant }}:${{ needs.validate.outputs.flavor }}
     uses: ./.github/workflows/build-variant.yml
     with:

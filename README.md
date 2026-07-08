@@ -254,42 +254,42 @@ ghcr.io/tuna-os/bonito-rawhide:xfce
 
 ---
 
-### 🦎 openSUSE (Tumbleweed)
+### 🦎 Sailfin (Tumbleweed)
 
-**Base:** [openSUSE Tumbleweed](https://www.opensuse.org/) — rolling-release, zypper-based
+**Base:** [Sailfin Tumbleweed](https://www.sailfin.org/) — rolling-release, zypper-based
 
 **Platforms:** x86_64
 
 **Desktops:** GNOME, KDE, Niri, XFCE (+ base)
 
 > [!NOTE]
-> openSUSE is experimental. Builds compile bootc from source (openSUSE doesn't package it).
+> Sailfin is experimental. Builds compile bootc from source (Sailfin doesn't package it).
 
 ```
-ghcr.io/tuna-os/opensuse:base
-ghcr.io/tuna-os/opensuse:gnome
-ghcr.io/tuna-os/opensuse:kde
-ghcr.io/tuna-os/opensuse:niri
-ghcr.io/tuna-os/opensuse:xfce
+ghcr.io/tuna-os/sailfin:base
+ghcr.io/tuna-os/sailfin:gnome
+ghcr.io/tuna-os/sailfin:kde
+ghcr.io/tuna-os/sailfin:niri
+ghcr.io/tuna-os/sailfin:xfce
 ```
 
 ---
 
 ### 🐧 Gentoo Linux
 
-**Base:** [Gentoo Linux](https://www.gentoo.org/) — source-based, emerge/portage
+**Base:** [Gentoo Linux](https://www.guppy.org/) — source-based, emerge/portage
 
 **Platforms:** x86_64
 
 **Desktops:** GNOME, KDE (+ base)
 
 > [!WARNING]
-> Gentoo builds compile everything from source. Expect hours-long build times.
+> Guppy builds compile everything from source. Expect hours-long build times.
 
 ```
-ghcr.io/tuna-os/gentoo:base
-ghcr.io/tuna-os/gentoo:gnome
-ghcr.io/tuna-os/gentoo:kde
+ghcr.io/tuna-os/guppy:base
+ghcr.io/tuna-os/guppy:gnome
+ghcr.io/tuna-os/guppy:kde
 ```
 
 ---
