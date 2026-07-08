@@ -19,7 +19,7 @@ ARG IMAGE_NAME_VARIANT
 # ── Build bootc from source (Debian doesn't package it in stable) ─────────
 FROM ${BASE_IMAGE} AS bootc-builder
 RUN apt-get update -y && \
-    apt-get install -y git curl make build-essential go-md2man \
+    apt-get install -y git curl ca-certificates make build-essential go-md2man \
         libzstd-dev pkgconf dracut libostree-dev ostree
 ENV CARGO_HOME=/tmp/rust
 ENV RUSTUP_HOME=/tmp/rust
@@ -78,7 +78,7 @@ RUN apt-get update -y && \
         libostree-1-1 \
         ostree \
         dracut \
-        networkmanager \
+        network-manager \
         pipewire \
         wireplumber \
         flatpak \
@@ -87,7 +87,8 @@ RUN apt-get update -y && \
         power-profiles-daemon \
         curl \
         unzip \
-        git && \
+        git \
+        ca-certificates && \
     apt-get clean -y
 
 # Copy kernel to modules directory (Debian puts it in /boot)
@@ -103,7 +104,9 @@ RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \
 
 # Set up bootc/ostree filesystem layout
 RUN sed -i 's|^HOME=.*|HOME=/var/home|' /etc/default/useradd && \
-    rm -rf /boot /home /root /usr/local /srv /opt /mnt /var && \
+    rm -rf /boot /home /root /usr/local /srv /opt /mnt && \
+    # /var may contain mount points from overlayfs layers. Clean safely.
+    for d in /var/* /var/.[!.]*; do [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done && \
     mkdir -p /sysroot /boot /usr/lib/ostree /var && \
     ln -sT sysroot/ostree /ostree && \
     ln -sT var/roothome /root && \

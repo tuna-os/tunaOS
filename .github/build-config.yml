@@ -536,6 +536,87 @@ variants:
         build_iso: true
         build_qcow2: false
 
+  # ── Rawhide ────────────────────────────────────────────────────────────────
+  # Fedora Rawhide (rolling development branch). Uses the same Containerfile
+  # as bonito — Fedora bootc with the latest kernel and packages.
+  - id: bonito-rawhide
+    emoji: "🐉"
+    description: "Based on Fedora Rawhide (rolling)"
+    base_image: "quay.io/fedora/fedora-bootc:rawhide"
+    akmods: "ublue-os"
+    platforms: ["linux/amd64", "linux/arm64"]
+    flavors:
+      - id: base
+        stage: 1
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: base-hwe
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: base-nvidia
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: true
+      - id: cosmic
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: kde
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: niri
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: xfce
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: gnome-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome-nvidia
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: cosmic-nvidia
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: kde-nvidia
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: niri-nvidia
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: xfce-nvidia
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+
   # ── Experimental ───────────────────────────────────────────────────────────
   # RFC 010: Ubuntu 26.04 variant. x86_64-only, manual dispatch only.
   # Desktops: gnome/kde/niri/xfce via the apt branches in build_scripts/*.sh

@@ -60,7 +60,7 @@ echo "Installing ${_TD_DESKTOP} desktop (OS section: ${_TD_OS})..."
 # ── APT path ─────────────────────────────────────────────────────────────────
 if [[ "${_TD_OS}" == "apt" ]]; then
     # Handle PPAs (Ubuntu only — Debian uses native repos)
-    _TD_PPA_COUNT=$($YQ -r ".packages.apt.ppa | length // 0" "${_TD_MANIFEST}" 2>/dev/null)
+    _TD_PPA_COUNT=$($YQ -r '.packages.apt | if type == "object" then (.ppa | length // 0) else 0 end' "${_TD_MANIFEST}" 2>/dev/null || echo 0)
     for ((i=0; i<_TD_PPA_COUNT; i++)); do
         _TD_PPA_REPO=$($YQ -r ".packages.apt.ppa[$i].repo" "${_TD_MANIFEST}")
         _TD_PPA_COND=$($YQ -r ".packages.apt.ppa[$i].condition" "${_TD_MANIFEST}")

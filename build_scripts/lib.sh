@@ -505,3 +505,10 @@ install_from_copr() {
 	dnf -y --enablerepo "copr:copr.fedorainfracloud.org:$(echo "$COPR_NAME" | tr '/' ':')" install "$@"
 	dnf -y copr disable "$COPR_NAME"
 }
+
+# _yq_array — Read YAML array into a bash array variable.
+# Usage: _yq_array <array_name> <yq_args...>
+_yq_array() {
+	local _arr_name="$1"; shift
+	readarray -t "$_arr_name" < <($YQ "$@" 2>/dev/null || true)
+}

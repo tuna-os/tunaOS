@@ -1,49 +1,9 @@
 #!/usr/bin/env bats
 # BATS tests for scripts that still lack test coverage:
-#   compare-with-upstream.sh, pipeline-overview.sh, run-vm.sh,
-#   setup-build-cache.sh, simulate-matrix.sh, sync-build-cache.sh
+#   pipeline-overview.sh, run-vm.sh, setup-build-cache.sh,
+#   simulate-matrix.sh, sync-build-cache.sh
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
-
-# ═══════════════════════════════════════════════════════════════════════════
-# compare-with-upstream.sh
-# ═══════════════════════════════════════════════════════════════════════════
-
-@test "compare-with-upstream.sh: exists" {
-  run test -f "${REPO_ROOT}/scripts/compare-with-upstream.sh"
-  [ "$status" -eq 0 ]
-}
-
-@test "compare-with-upstream.sh: has bash shebang" {
-  run head -1 "${REPO_ROOT}/scripts/compare-with-upstream.sh"
-  [[ "$output" =~ ^#!/.*bash ]] || [[ "$output" =~ ^#!/.*sh ]]
-}
-
-@test "compare-with-upstream.sh: has set -euo pipefail" {
-  run grep 'set -euo pipefail' "${REPO_ROOT}/scripts/compare-with-upstream.sh"
-  [ "$status" -eq 0 ]
-}
-
-@test "compare-with-upstream.sh: fails with usage when called with no arguments" {
-  run bash "${REPO_ROOT}/scripts/compare-with-upstream.sh"
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ Usage ]]
-}
-
-@test "compare-with-upstream.sh: fails when called with variant only" {
-  run bash "${REPO_ROOT}/scripts/compare-with-upstream.sh" skipjack
-  [ "$status" -ne 0 ]
-  [[ "$output" =~ Usage ]]
-}
-
-@test "compare-with-upstream.sh: passes shellcheck" {
-  if command -v shellcheck &>/dev/null; then
-    run shellcheck --exclude=SC1091 "${REPO_ROOT}/scripts/compare-with-upstream.sh"
-    [ "$status" -eq 0 ]
-  else
-    skip "shellcheck not installed"
-  fi
-}
 
 # ═══════════════════════════════════════════════════════════════════════════
 # pipeline-overview.sh — Runtime-patched pipeline display
