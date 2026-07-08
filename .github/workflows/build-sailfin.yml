@@ -1,4 +1,4 @@
-name: Build Opensuse [experimental]
+name: Build Sailfin [experimental]
 on:
   workflow_dispatch:
     inputs:
@@ -8,15 +8,15 @@ on:
         type: string
 
 concurrency:
-  group: build-opensuse-${{ github.ref }}
+  group: build-sailfin-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   build:
-    name: 🦎-opensuse
+    name: 🦈-sailfin
     uses: ./.github/workflows/build-variant.yml
     with:
-      variant: 'opensuse'
+      variant: 'sailfin'
       flavor: ${{ inputs.flavor || 'all' }}
     secrets:
       SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
