@@ -12,6 +12,10 @@ case "$variant" in
 "grouper") echo "docker.io/library/ubuntu:resolute" ;;
 "bonito-rawhide") echo "quay.io/fedora/fedora-bootc:rawhide" ;;
 "redfin") echo "registry.redhat.io/rhel10/rhel-bootc:latest" ;;
+"marlin") echo "docker.io/archlinux/archlinux:latest" ;;
+"wahoo") echo "docker.io/cachyos/cachyos:latest" ;;
+"flounder") echo "docker.io/library/debian:trixie" ;;
+"flounder-sid") echo "docker.io/library/debian:sid" ;;
 *)
 	echo "Unknown variant: $variant" >&2
 	exit 1

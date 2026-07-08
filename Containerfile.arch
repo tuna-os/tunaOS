@@ -119,8 +119,12 @@ RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \
     dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
 
 # Set up bootc/ostree filesystem layout
-RUN rm -rf /boot /home /root /usr/local /srv /opt /mnt /var \
+RUN rm -rf /boot /home /root /usr/local /srv /opt /mnt \
         /usr/lib/sysimage/log /usr/lib/sysimage/cache/pacman/pkg && \
+    # /var may contain mount points from overlayfs layers (rpm, dnf on Fedora
+    # parents; none on Arch). Clean everything that isn't a mount.
+    for d in /var/* /var/.[!.]*; do [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done && \
+    rm -rf /usr/lib/sysimage/log /usr/lib/sysimage/cache/pacman/pkg 2>/dev/null; true && \
     mkdir -p /sysroot /boot /usr/lib/ostree /var && \
     ln -sT sysroot/ostree /ostree && \
     ln -sT var/roothome /root && \
