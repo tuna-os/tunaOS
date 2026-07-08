@@ -493,7 +493,7 @@ boot-gate variant flavor='gnome' tag='':
 # pairs, or a variant alone to gate its default desktop set.
 # Usage:
 #   just boot-gate-matrix yellowfin:gnome yellowfin:kde albacore:gnome
-#   just boot-gate-matrix yellowfin              # gnome kde cosmic niri xfce
+# just boot-gate-matrix yellowfin              # gnome kde cosmic niri xfce
 boot-gate-matrix +targets='yellowfin':
     ./scripts/boot-gate-matrix.sh {{ targets }}
 
