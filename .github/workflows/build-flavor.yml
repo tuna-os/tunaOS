@@ -39,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [yellowfin, albacore, skipjack, bonito, grouper]
+        variant: [yellowfin, albacore, skipjack, bonito, bonito-rawhide, grouper, marlin, flounder, flounder-sid]
     name: Build ${{ matrix.variant }}:${{ needs.validate.outputs.flavor }}
     uses: ./.github/workflows/build-variant.yml
     with:
