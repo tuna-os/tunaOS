@@ -51,6 +51,8 @@ else
 	IS_DEBIAN=false
 	IS_ARCH=false
 	IS_CACHYOS=false
+	IS_OPENSUSE=false
+	IS_GENTOO=false
 
 	[[ "${BASE_IMAGE,,}" == *"fedora"* ]] && IS_FEDORA=true && IMAGE_NAME="bonito" && IMAGE_PRETTY_NAME="Bonito"
 	[[ "${BASE_IMAGE,,}" == *"red hat"* || "${BASE_IMAGE,,}" == *"rhel"* || "${BASE_IMAGE,,}" == *"redhat"* ]] && IS_RHEL=true && IMAGE_NAME="redfin" && IMAGE_PRETTY_NAME="Redfin"
