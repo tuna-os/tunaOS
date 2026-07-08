@@ -163,17 +163,25 @@ just build redfin niri
 just build redfin all
 ```
 
----
 
-## 📋 System Requirements
+### 🐟 Grouper (Ubuntu 26.04 Resolute Raccoon)
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| **CPU** | x86_64, ARM64 | x86_64, ARM64 |
-| **RAM** | 4 GB | 8 GB+ |
-| **Storage** | 20 GB | 50 GB+ |
+**Base:** [Ubuntu 26.04](https://ubuntu.com/) — cloud-native Ubuntu on bootc
 
----
+**Platforms:** x86_64
+
+**Desktops:** GNOME, KDE, Niri, XFCE (+ base)
+
+> [!NOTE]
+> Grouper is an experimental Ubuntu variant using `Containerfile.ubuntu`. COSMIC is not yet supported on Ubuntu.
+
+```
+ghcr.io/tuna-os/grouper:base
+ghcr.io/tuna-os/grouper:gnome
+ghcr.io/tuna-os/grouper:kde
+ghcr.io/tuna-os/grouper:niri
+ghcr.io/tuna-os/grouper:xfce
+```
 
 ### 🚀 Marlin (Arch Linux — Rolling)
 
@@ -243,6 +251,17 @@ ghcr.io/tuna-os/bonito-rawhide:kde
 ghcr.io/tuna-os/bonito-rawhide:niri
 ghcr.io/tuna-os/bonito-rawhide:xfce
 ```
+
+---
+
+
+## 📋 System Requirements
+
+| Component | Minimum | Recommended |
+|-----------|---------|-------------|
+| **CPU** | x86_64, ARM64 | x86_64, ARM64 |
+| **RAM** | 4 GB | 8 GB+ |
+| **Storage** | 20 GB | 50 GB+ |
 
 ---
 
