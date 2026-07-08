@@ -656,7 +656,7 @@ variants:
   # which builds bootc from source (Arch doesn't package it yet) and sets
   # up the ostree/composefs filesystem layout.
   - id: marlin
-    emoji: "🐟"
+    emoji: "🚀"
     description: "Based on Arch Linux (rolling)"
     base_image: "docker.io/archlinux/archlinux:latest"
     platforms: ["linux/amd64"]
@@ -719,7 +719,7 @@ variants:
   # ── Debian ─────────────────────────────────────────────────────────────────
   # Flounder: Debian Trixie (13) stable. Uses Containerfile.debian.
   - id: flounder
-    emoji: "🐟"
+    emoji: "🛡️"
     description: "Based on Debian 13 Trixie (stable)"
     base_image: "docker.io/library/debian:trixie"
     platforms: ["linux/amd64"]
@@ -748,7 +748,7 @@ variants:
 
   # Flounder-sid: Debian Sid (unstable/rolling). Has latest COSMIC natively.
   - id: flounder-sid
-    emoji: "🐟"
+    emoji: "☢️"
     description: "Based on Debian Sid (unstable, rolling)"
     base_image: "docker.io/library/debian:sid"
     platforms: ["linux/amd64"]
