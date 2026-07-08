@@ -175,7 +175,7 @@ just build redfin all
 
 ---
 
-### 🐟 Marlin (Arch Linux — Rolling)
+### 🚀 Marlin (Arch Linux — Rolling)
 
 **Base:** [Arch Linux](https://archlinux.org/) — rolling-release, bleeding-edge packages
 
@@ -197,7 +197,7 @@ ghcr.io/tuna-os/marlin:xfce
 
 ---
 
-### 🐟 Flounder (Debian 13 Trixie)
+### 🛡️ Flounder (Debian 13 Trixie)
 
 **Base:** [Debian 13 Trixie](https://www.debian.org/releases/trixie/) — stable
 
@@ -208,7 +208,7 @@ ghcr.io/tuna-os/marlin:xfce
 
 ---
 
-### 🐟 Flounder Sid (Debian Sid — Unstable)
+### ☢️ Flounder Sid (Debian Sid — Unstable)
 
 **Base:** [Debian Sid](https://www.debian.org/releases/sid/) — rolling/unstable
 
