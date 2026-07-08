@@ -49,7 +49,7 @@ Install `just` via Homebrew (matches CI). **Never** extract tools into the repo 
 
 ## External Package Sources (COPRs)
 
-GNOME builds for skipjack/yellowfin use custom COPR packages from **[github.com/tuna-os/github-copr](https://github.com/tuna-os/github-copr)** (`gnome49-el10-compat`, `gnome50-el10-compat`). Check there first when debugging RPM conflicts.
+GNOME builds for skipjack/yellowfin use custom COPR packages from **[github.com/tuna-os/github-copr](https://github.com/tuna-os/github-copr)** (`gnome50-el10-compat`). Check there first when debugging RPM conflicts.
 
 ## Critical Don'ts
 

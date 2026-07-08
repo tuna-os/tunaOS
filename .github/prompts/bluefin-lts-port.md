@@ -41,7 +41,7 @@ if the upstream change is in one of these files, the port is often trivial.
 ## Porting Rules
 
 1. **Packages**: Port packages from `build_scripts/gnome.sh` directly. If the upstream adds
-   a package in an EL10-specific COPR that TunaOS already uses (e.g., `jreilly1821/c10s-gnome-49`,
+   a package in an EL10-specific COPR that TunaOS already uses (e.g., `jreilly1821/c10s-gnome-50-fresh`,
    `jreilly1821/c10s-gnome-50-fresh`, `ublue-os/packages`), it's safe to add.
    If it requires a new COPR not already in TunaOS, note it in the PR body.
 
