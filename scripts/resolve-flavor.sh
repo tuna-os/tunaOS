@@ -49,11 +49,16 @@ if [[ "${VARIANT}" == "flounder" || "${VARIANT}" == "flounder-sid" ]]; then
 fi
 
 # Arch-based variants use Containerfile.arch
-if [[ "${VARIANT}" == "marlin" || "${VARIANT}" == "wahoo" ]]; then
+if [[ "${VARIANT}" == "marlin" ]]; then
     CONTAINERFILE="Containerfile.arch"
 fi
 
-if [[ "${FLAVOR}" == "base" ]]; then
+if [[ "${VARIANT}" == "marlin" && "${FLAVOR}" == *"-cachyos" ]]; then
+    CONTAINERFILE="Containerfile.cachyos"
+    OVERLAY_TYPE="cachyos"
+    DESKTOP_FLAVOR="desktop"
+    PARENT_FLAVOR="${FLAVOR%-cachyos}"
+elif [[ "${FLAVOR}" == "base" ]]; then
     DESKTOP_FLAVOR="base-no-de"
     # grouper's base-no-de is intentionally pre-bootcify
     if [[ "${VARIANT}" == "grouper" ]]; then DESKTOP_FLAVOR="base"; fi
