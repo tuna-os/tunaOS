@@ -173,6 +173,79 @@ just build redfin all
 | **RAM** | 4 GB | 8 GB+ |
 | **Storage** | 20 GB | 50 GB+ |
 
+---
+
+### 🐟 Marlin (Arch Linux — Rolling)
+
+**Base:** [Arch Linux](https://archlinux.org/) — rolling-release, bleeding-edge packages
+
+**Platforms:** x86_64
+
+**Desktops:** GNOME, KDE, COSMIC, Niri, XFCE (+ base)
+
+> [!NOTE]
+> Marlin compiles bootc from source (Arch doesn't package it). Builds take longer than EL10/Fedora variants.
+
+```
+ghcr.io/tuna-os/marlin:base
+ghcr.io/tuna-os/marlin:gnome
+ghcr.io/tuna-os/marlin:kde
+ghcr.io/tuna-os/marlin:cosmic
+ghcr.io/tuna-os/marlin:niri
+ghcr.io/tuna-os/marlin:xfce
+```
+
+---
+
+### 🐟 Flounder (Debian 13 Trixie)
+
+**Base:** [Debian 13 Trixie](https://www.debian.org/releases/trixie/) — stable
+
+**Platforms:** x86_64
+
+> [!WARNING]
+> Flounder is **blocked** on Debian Trixie due to `ostree` version requirement (Trixie ships ostree 2025.2, bootc requires >= 2025.3).
+
+---
+
+### 🐟 Flounder Sid (Debian Sid — Unstable)
+
+**Base:** [Debian Sid](https://www.debian.org/releases/sid/) — rolling/unstable
+
+**Platforms:** x86_64
+
+```
+ghcr.io/tuna-os/flounder-sid:base
+ghcr.io/tuna-os/flounder-sid:gnome
+ghcr.io/tuna-os/flounder-sid:kde
+ghcr.io/tuna-os/flounder-sid:cosmic
+ghcr.io/tuna-os/flounder-sid:niri
+ghcr.io/tuna-os/flounder-sid:xfce
+```
+
+---
+
+### 🐉 Bonito Rawhide (Fedora Rawhide)
+
+**Base:** [Fedora Rawhide](https://docs.fedoraproject.org/en-US/releases/rawhide/) — rolling Fedora development
+
+**Platforms:** x86_64, ARM64
+
+**Desktops:** GNOME, KDE, COSMIC, Niri, XFCE (including HWE and NVIDIA variants)
+
+> [!NOTE]
+> Rawhide is the development branch of Fedora — expect frequent updates and occasional breakage.
+
+```
+ghcr.io/tuna-os/bonito-rawhide:base
+ghcr.io/tuna-os/bonito-rawhide:gnome
+ghcr.io/tuna-os/bonito-rawhide:kde
+ghcr.io/tuna-os/bonito-rawhide:niri
+ghcr.io/tuna-os/bonito-rawhide:xfce
+```
+
+---
+
 ## 🛠️ Installation
 
 ### Use a pre-built ISO
