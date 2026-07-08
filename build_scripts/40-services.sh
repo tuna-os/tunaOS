@@ -43,7 +43,7 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 		safe_disable gdm.service
 		safe_enable greetd.service
 		;;
-	gnome | gnome50) safe_enable gdm.service ;;
+	gnome) safe_enable gdm.service ;;
 	*) echo "No display manager for DESKTOP_FLAVOR='${DESKTOP_FLAVOR}'" ;;
 	esac
 
@@ -94,7 +94,7 @@ if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
 elif [[ "${DESKTOP_FLAVOR}" == "niri" || "${DESKTOP_FLAVOR}" == "cosmic" ]]; then
 	safe_disable gdm.service
 	safe_enable greetd.service
-elif [[ "${DESKTOP_FLAVOR}" == "gnome" || "${DESKTOP_FLAVOR}" == "gnome50" ]]; then
+elif [[ "${DESKTOP_FLAVOR}" == "gnome" ]]; then
 	safe_enable gdm.service
 else
 	echo "Skipping DE-specific display-manager service setup (DESKTOP_FLAVOR='${DESKTOP_FLAVOR}')"

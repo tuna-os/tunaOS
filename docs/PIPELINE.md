@@ -10,9 +10,9 @@ How images and ISOs get built, verified, and published. If you change CI, read t
 
 | Variant | Base | Desktops | HWE/NVIDIA | Platforms |
 |---------|------|----------|------------|-----------|
-| yellowfin | AlmaLinux Kitten 10 | gnome, gnome50, cosmic, kde, niri, xfce | yes | amd64, amd64/v2, arm64 |
-| albacore | AlmaLinux 10 | gnome, gnome50, cosmic, kde, niri, xfce | yes | amd64, amd64/v2, arm64 |
-| skipjack | CentOS Stream 10 | gnome, gnome50, cosmic, kde, niri | gnome/cosmic families | amd64, arm64 |
+| yellowfin | AlmaLinux Kitten 10 | gnome, cosmic, kde, niri, xfce | yes | amd64, amd64/v2, arm64 |
+| albacore | AlmaLinux 10 | gnome, cosmic, kde, niri, xfce | yes | amd64, amd64/v2, arm64 |
+| skipjack | CentOS Stream 10 | gnome, cosmic, kde, niri | gnome/cosmic families | amd64, arm64 |
 | bonito | Fedora 44 | gnome, cosmic, kde, niri, xfce | nvidia only | amd64, arm64 |
 | grouper | Ubuntu 26.04 | gnome, kde, niri, xfce | none | amd64 |
 
@@ -25,7 +25,7 @@ Stage 1:  base
              │
 Stage 2:  ┌──┼──────────────────────────────────────┐
           │  base-hwe  base-nvidia                   │
-          │  gnome  gnome50  kde  niri  cosmic  xfce │  (all parallel)
+          │  gnome  kde  niri  cosmic  xfce │  (all parallel)
           └──┬───────────────────────────────────────┘
              │
 Stage 3:  gnome-hwe, kde-hwe, niri-hwe, cosmic-hwe     (layer on DE image)

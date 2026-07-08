@@ -38,18 +38,13 @@ case "${1:-}" in
 	# mutter, gjs, and other GNOME stack deps are resolved from the same COPR.
 	GNOME_COPR=""
 	if [[ $IS_FEDORA == false ]] && [ "$MAJOR_VERSION_NUMBER" -ge 10 ]; then
-		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
-			GNOME_COPR="jreilly1821/c10s-gnome-50-fresh"
-		else
-			GNOME_COPR="jreilly1821/c10s-gnome-49"
-		fi
+		# GNOME 50 via COPR on EL10 (yellowfin, albacore, skipjack)
+		GNOME_COPR="jreilly1821/c10s-gnome-50-fresh"
 		dnf -y copr enable "$GNOME_COPR"
-		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
-			# c10s-gnome-50 provides backported deps (e.g. libinput >= 1.27.0) that
-			# mutter-50 requires but AlmaLinux 10 stable doesn't ship. Enable it
-			# alongside c10s-gnome-50-fresh so both the GNOME stack and its deps resolve.
-			dnf -y copr enable "jreilly1821/c10s-gnome-50"
-		fi
+		# c10s-gnome-50 provides backported deps (e.g. libinput >= 1.27.0) that
+		# mutter-50 requires but AlmaLinux 10 stable doesn't ship. Enable it
+		# alongside c10s-gnome-50-fresh so both the GNOME stack and its deps resolve.
+		dnf -y copr enable "jreilly1821/c10s-gnome-50"
 		# Pre-remove the EL10-shipped gnome-shell-common (48.x) before installing
 		# the COPR's gnome-shell (49.x / 50.x). Without this, the file
 		# /usr/share/glib-2.0/schemas/org.gnome.shell.gschema.xml is owned by
@@ -66,23 +61,15 @@ case "${1:-}" in
 			warn_on_fail dnf_retry -y remove --noautoremove gnome-shell-common
 		fi
 
-		if [[ "${DESKTOP_FLAVOR:-gnome}" == "gnome50" ]]; then
-			# GNOME 50 requires glib2 >= 2.86.0 and fontconfig >= 2.17.0 (pango links
+		# GNOME 50 requires glib2 >= 2.86.0 and fontconfig >= 2.17.0 (pango links
 			# against FcConfigSetDefaultSubstitute which is absent in EL10's 2.15.x).
 			# selinux-policy 43.x from COPR is required for GDM 50 userdb socket policy;
 			# the base EL10 42.x policy denies the Varlink socket even in permissive mode.
-			dnf -y upgrade glib2 fontconfig
-			dnf_retry -y install --allowerasing gnome50-el10-compat
-		else
-			# GNOME 49 also requires glib2 >= 2.82 (g_variant_builder_init_static) and
-			# fontconfig >= 2.17.0 from COPR — same ABI requirements as GNOME 50.
-			# gobject-introspection 1.84 and gjs 1.86 must also be upgraded from COPR:
+			# gobject-introspection 1.84 and gjs 1.86 are also upgraded from COPR:
 			# gnome-shell links libgirepository-1.0 but gjs links libgirepository-2.0;
 			# having both loaded causes GIRepository type double-registration → crash.
 			dnf -y upgrade glib2 fontconfig gobject-introspection gjs
-			# gnome49-el10-compat provides the SELinux policy module (gdm-gnome49.pp)
-			# that permits xdm_t to create the userdb Varlink socket in enforcing mode,
-			# plus the systemd-user PAM override needed for GDM greeter auth.
+			dnf_retry -y install --allowerasing gnome50-el10-compat
 			# Without it, GDM fails to start on EL10.
 			dnf_retry -y install --allowerasing gnome49-el10-compat
 		fi
