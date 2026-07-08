@@ -1,0 +1,38 @@
+# Containerfile.cachyos — CachyOS performance kernel overlay for Marlin.
+#
+# Layers the CachyOS kernel, repos, and optimizations on top of a
+# standard Marlin (Arch Linux) desktop image.
+#
+# ARG BASE_IMAGE — typically ghcr.io/tuna-os/marlin:<desktop>
+# e.g. ghcr.io/tuna-os/marlin:gnome
+
+ARG BASE_IMAGE
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG SHA_HEAD_SHORT
+ARG IMAGE_REGISTRY="ghcr.io"
+ARG IMAGE_NAME_VARIANT
+
+FROM ${BASE_IMAGE}
+
+# Install CachyOS keyring and mirrorlist, then swap the kernel
+RUN pacman -Syu --noconfirm --needed \
+        cachyos-keyring \
+        cachyos-mirrorlist \
+        cachyos-settings \
+        linux-cachyos \
+        linux-cachyos-headers && \
+    # Mark the image as CachyOS-augmented
+    install -D /dev/null /etc/cachyos-release && \
+    printf 'CachyOS\n' > /etc/cachyos-release && \
+    # Rebuild initramfs with the CachyOS kernel
+    mkinitcpio -P && \
+    # Clean up package cache
+    pacman -Scc --noconfirm || true
+
+# Mark with bootc labels
+LABEL containers.bootc=1
+LABEL io.bootc=1
+LABEL ostree.bootable=1
+LABEL org.opencontainers.image.title="${IMAGE_NAME} (${FLAVOR})"
+LABEL org.opencontainers.image.vendor="${IMAGE_VENDOR}"

@@ -616,6 +616,26 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
+      - id: gnome-cachyos
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: kde-cachyos
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: niri-cachyos
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: xfce-cachyos
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
 
   # ── Experimental ───────────────────────────────────────────────────────────
   # RFC 010: Ubuntu 26.04 variant. x86_64-only, manual dispatch only.
@@ -683,38 +703,6 @@ variants:
         stage: 2
         build_image: true
 
-  # ── CachyOS ────────────────────────────────────────────────────────────────
-  # Wahoo: performance-optimized Arch Linux. CachyOS ships linux-cachyos
-  # (BORE scheduler, LTO, march=x86-64-v3) and optimized packages.
-  # Uses same Containerfile.arch as marlin — the CachyOS repos and kernel
-  # are declared in the desktop manifests (cachyos: section).
-  - id: wahoo
-    emoji: "🐟"
-    description: "Based on CachyOS (Arch + performance kernel)"
-    base_image: "docker.io/cachyos/cachyos:latest"
-    platforms: ["linux/amd64"]
-    experimental: true
-    flavors:
-      - id: base
-        stage: 1
-        build_image: true
-      - id: gnome
-        stage: 2
-        build_image: true
-        build_iso: true
-      - id: kde
-        stage: 2
-        build_image: true
-        build_iso: true
-      - id: cosmic
-        stage: 2
-        build_image: true
-      - id: niri
-        stage: 2
-        build_image: true
-      - id: xfce
-        stage: 2
-        build_image: true
 
   # ── Debian ─────────────────────────────────────────────────────────────────
   # Flounder: Debian Trixie (13) stable. Uses Containerfile.debian.
