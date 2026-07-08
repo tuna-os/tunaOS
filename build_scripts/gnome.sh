@@ -70,8 +70,6 @@ case "${1:-}" in
 			# having both loaded causes GIRepository type double-registration → crash.
 			dnf -y upgrade glib2 fontconfig gobject-introspection gjs
 			dnf_retry -y install --allowerasing gnome50-el10-compat
-			# Without it, GDM fails to start on EL10.
-			dnf_retry -y install --allowerasing gnome49-el10-compat
 		fi
 	fi
 
