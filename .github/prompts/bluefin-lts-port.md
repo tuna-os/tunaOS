@@ -55,7 +55,7 @@ if the upstream change is in one of these files, the port is often trivial.
    (`cosign.pub`), bluefin-specific services or scripts referencing "bluefin",
    CI/CD files, Renovate config, documentation, or `image.toml`.
 
-5. **gnome50 variant**: TunaOS has both `gnome` (GNOME 49) and `gnome50` flavors. If the
+5. **GNOME version**: TunaOS uses GNOME 50 from COPR on EL10 variants. If the
    upstream change is GNOME-version-specific, check whether it applies to both or just one,
    and use `${DESKTOP_FLAVOR:-gnome}` checks as needed.
 

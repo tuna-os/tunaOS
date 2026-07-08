@@ -21,11 +21,11 @@ The pipeline builds images on a daily schedule (1am UTC) and publishes them with
 | Stage | Flavors | Description |
 |---|---|---|
 | 1 | `base` | Minimal OS (required for all downstream stages) |
-| 2 | `base-hwe`, `base-nvidia`, `gnome`, `gnome50`, `cosmic`, `kde`, `niri` | HWE/nvidia base layers + desktop environments |
+| 2 | `base-hwe`, `base-nvidia`, `gnome`, `cosmic`, `kde`, `niri` | HWE/nvidia base layers + desktop environments |
 | 3 | `<de>-hwe`, `<de>-nvidia` (e.g. `gnome-hwe`, `kde-nvidia`) | DE layered on HWE or nvidia base |
 | 4 | `gnome-nvidia-hwe` | GNOME + nvidia + HWE combined |
 
-Flavor availability varies per variant — e.g. `bonito` omits `gnome50` and some non-GNOME HWE layers.
+Flavor availability varies per variant — e.g. `marlin` omits GNOME 50 (Arch ships the latest GNOME natively).
 
 ### Hardware Enablement (HWE)
 

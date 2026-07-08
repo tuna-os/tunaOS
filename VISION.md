@@ -30,7 +30,7 @@ Every cell in that matrix is a valid, shippable, bootable system. Users traverse
 ┌─────────────────────────────────────────────────────────────┐
 │                      build-config.yml                        │
 │  variant: yellowfin (AlmaLinux Kitten 10)                   │
-│  desktops: [gnome, gnome50, kde, niri, cosmic, xfce]        │
+│  desktops: [gnome, kde, niri, cosmic, xfce]        │
 │  kernels: [standard, hwe]                                   │
 │  drivers: [none, nvidia]                                    │
 └──────────────────────────┬──────────────────────────────────┘

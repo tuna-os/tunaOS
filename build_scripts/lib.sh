@@ -30,7 +30,7 @@ else
 
 	# Determine the true OS base image for OS detection.
 	# For chained builds (nvidia, HWE) the BASE_IMAGE env var is set via Containerfile
-	# ARG/ENV to the intermediate TunaOS stage image (e.g. ghcr.io/tuna-os/yellowfin:gnome50),
+	# ARG/ENV to the intermediate TunaOS stage image (e.g. ghcr.io/tuna-os/yellowfin:gnome),
 	# not the original OS base. Use image-info.json written by the previous stage when
 	# available — it records the true OS base from stage 1.
 	_IMAGE_INFO="/usr/share/ublue-os/image-info.json"

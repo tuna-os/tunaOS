@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
     inputs:
       flavor:
-        description: 'Flavor to build across all variants (base, gnome, kde, niri, cosmic, gnome50, etc.)'
+        description: 'Flavor to build across all variants (base, gnome, kde, niri, cosmic, xfce, etc.)'
         required: true
         type: string
 

@@ -8,7 +8,7 @@ tunaOS follows a **date-based versioning** scheme with variant prefix:
 <VARIANT>-<YYYYMMDD>
 ```
 
-Examples: `gnome-20260606`, `kde-20260606`, `gnome50-20260605`
+Examples: `gnome-20260606`, `kde-20260606`, `cosmic-20260606`
 
 ## Rationale
 
@@ -31,7 +31,6 @@ tunaOS images are rebuilt daily from upstream sources. There are no feature rele
 | Tag | Description |
 |-----|-------------|
 | `gnome` | GNOME (stable) |
-| `gnome50` | GNOME 50 (latest) |
 | `kde` | KDE Plasma |
 | `cosmic` | COSMIC Desktop |
 | `niri` | Niri (tiling Wayland) |

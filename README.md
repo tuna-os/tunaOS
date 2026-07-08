@@ -46,7 +46,7 @@ Each variant ships multiple desktop environments:
 | Tag suffix | Desktop |
 |---|---|
 | `gnome` | GNOME (stable) |
-| `gnome50` | GNOME 50 (latest) |
+
 | `kde` | KDE Plasma |
 | `cosmic` | COSMIC Desktop |
 | `niri` | Niri (tiling Wayland compositor) |

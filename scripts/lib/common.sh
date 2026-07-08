@@ -126,7 +126,7 @@ tunaos_flavor_title() {
 
 	local name
 	case "$base" in
-	gnome50) name="GNOME 50" ;;
+
 	gnome) name="GNOME" ;;
 	kde) name="KDE Plasma" ;;
 	cosmic) name="COSMIC" ;;

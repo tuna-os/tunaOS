@@ -42,7 +42,7 @@ jobs:
             CONFIG_FILE=".github/build-config.yml"
             # shellcheck disable=SC2016
             JQ_DESKTOP='.variants[] | .id as $v | .flavors[] | select(
-              .build_image == true and (.id | test("^(gnome|gnome50|kde|cosmic|niri)$"))
+              .build_image == true and (.id | test("^(gnome|kde|cosmic|niri)$"))
             ) | {variant: $v, flavor: .id}'
             ALL_IMAGES=$(yq -o=json "${CONFIG_FILE}" | jq -c "${JQ_DESKTOP}")
 

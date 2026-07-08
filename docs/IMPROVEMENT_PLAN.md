@@ -52,7 +52,7 @@ Validation on every commit: `shellcheck --exclude=SC1091`, `shfmt -d`,
 
 | Variant | Root cause | Where |
 |---|---|---|
-| `skipjack` | `gnome-shell-49.4` conflicts with `gnome-shell-common-48.3` on the same files (`/usr/share/glib-2.0/schemas/org.gnome.shell.gschema.xml`). Intrinsic to upstream packaging; needs COPR coordination. | `gnome.sh` line 32–44 invokes `gnome49-el10-compat` / `gnome50-el10-compat`; both pull the new gnome-shell while CentOS Stream 10 ships the older one. |
+| `skipjack` | `gnome-shell-50.x` conflicts with `gnome-shell-common-48.3` on the same files (`/usr/share/glib-2.0/schemas/org.gnome.shell.gschema.xml`). Intrinsic to upstream packaging; needs COPR coordination. | `gnome.sh` line 32–44 invokes `gnome50-el10-compat`; both pull the new gnome-shell while CentOS Stream 10 ships the older one. |
 | `bonito` | `bootc container lint --fatal-warnings` reports `Checks failed: 3`. The `\|\| true` mask is gone (now routed through `lint_image` in `lib.sh`, which surfaces every finding into the build-log group + step summary; #272). Findings are visible but not yet build-fatal — set `BOOTC_LINT_FATAL=1` for bonito once the three are fixed. | `cleanup.sh` → `lint_image` (`lib.sh`) |
 | `yellowfin` | Actually succeeded in the last logged run (cache sync complete). The "Unknown variant" error in `build.log` was a separate invocation typo. | n/a |
 
@@ -66,7 +66,7 @@ Goal: clean baseline builds for every variant without `|| true` masking
 real failures.
 
 1. **Diagnose & fix skipjack gnome-shell conflict.** Two paths:
-   - Update `tuna-os/github-copr` `gnome49-el10-compat` / `gnome50-el10-compat`
+   - Update `tuna-os/github-copr` `gnome50-el10-compat`
      to obsolete `gnome-shell-common < 49` so DNF auto-removes the older
      conflicting package. Preferred.
    - Or, in `gnome.sh`, `dnf -y remove gnome-shell-common` before the

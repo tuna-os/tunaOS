@@ -37,7 +37,6 @@ A desktop environment shipped within an image. The build pipeline installs and c
 | Tag | Desktop Environment | Notes |
 |-----|-------------------|-------|
 | `gnome` | GNOME (distro default) | The version shipped by the upstream (GNOME 47 on EL10) |
-| `gnome50` | GNOME 50 | Backported via COPR onto EL10's GNOME 47 base |
 | `kde` | KDE Plasma | |
 | `cosmic` | COSMIC Desktop | |
 | `niri` | Niri | Tiling Wayland compositor |
