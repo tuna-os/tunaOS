@@ -54,7 +54,7 @@ if [[ "${VARIANT}" == "marlin" ]]; then
 fi
 
 if [[ "${VARIANT}" == "marlin" && "${FLAVOR}" == *"-cachyos" ]]; then
-    CONTAINERFILE="Containerfile.cachyos"
+    CONTAINERFILE="Containerfile.overlay"
     OVERLAY_TYPE="cachyos"
     DESKTOP_FLAVOR="desktop"
     PARENT_FLAVOR="${FLAVOR%-cachyos}"
