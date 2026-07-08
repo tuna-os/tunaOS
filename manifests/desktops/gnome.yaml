@@ -144,6 +144,15 @@ packages:
       - PackageKit-command-not-found
       - gnome-software-fedora-langpacks
 
+  zypper:
+    - patterns-gnome-gnome
+    - patterns-gnome-gnome_basis
+    - gdm
+
+  emerge:
+    - gnome-base/gnome
+    - gnome-base/gdm
+
 versionlock:
   - glib2
   - fontconfig

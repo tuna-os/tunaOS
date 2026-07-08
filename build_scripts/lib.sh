@@ -61,12 +61,18 @@ else
 	[[ "${BASE_IMAGE,,}" == *"debian"* && "${BASE_IMAGE,,}" != *"ubuntu"* ]] && IS_DEBIAN=true && IMAGE_NAME="flounder" && IMAGE_PRETTY_NAME="Flounder"
 	[[ "${BASE_IMAGE,,}" == *"archlinux"* || "${BASE_IMAGE,,}" == *"arch-bootc"* ]] && IS_ARCH=true && IMAGE_NAME="marlin" && IMAGE_PRETTY_NAME="Marlin"
 	[[ "${BASE_IMAGE,,}" == *"cachyos"* ]] && IS_CACHYOS=true && IS_ARCH=true && IMAGE_NAME="wahoo" && IMAGE_PRETTY_NAME="Wahoo"
+	[[ "${BASE_IMAGE,,}" == *"opensuse"* ]] && IS_OPENSUSE=true && IMAGE_NAME="opensuse" && IMAGE_PRETTY_NAME="openSUSE"
+	[[ "${BASE_IMAGE,,}" == *"gentoo"* ]] && IS_GENTOO=true && IMAGE_NAME="gentoo" && IMAGE_PRETTY_NAME="Gentoo"
 
 	# Package manager dimension
 	if [[ "$IS_UBUNTU" == true || "$IS_DEBIAN" == true ]]; then
 		PKG_MGR="apt"
 	elif [[ "$IS_ARCH" == true ]]; then
 		PKG_MGR="pacman"
+elif [[ "$IS_OPENSUSE" == true ]]; then
+		PKG_MGR="zypper"
+elif [[ "$IS_GENTOO" == true ]]; then
+		PKG_MGR="emerge"
 	else
 		PKG_MGR="dnf"
 	fi

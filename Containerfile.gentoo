@@ -1,0 +1,61 @@
+# Containerfile.gentoo — Gentoo Linux on bootc.
+# Based on bootcrew/gentoo-bootc but adapted for TunaOS manifest-driven desktop installs.
+#
+# ARG BASE_IMAGE = docker.io/gentoo/stage3:latest
+ARG BASE_IMAGE
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG SHA_HEAD_SHORT
+ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
+ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
+ARG IMAGE_REGISTRY="ghcr.io"
+ARG IMAGE_NAME_VARIANT
+
+FROM scratch AS context
+COPY manifests /run/context/manifests
+COPY build_scripts /run/context/build_scripts
+COPY system_files /run/context/files
+COPY system_files_overrides /run/context/overrides
+
+FROM docker.io/gentoo/stage3:latest AS base
+RUN emerge --sync --quiet && \
+    eselect profile list | grep -E "default.*systemd" | grep -v 32 | \
+    awk '{print $1}' | grep -o '[0-9]' | head -1 | xargs eselect profile set && \
+    echo -e 'FEATURES="-ipc-sandbox -network-sandbox -pid-sandbox"\nACCEPT_LICENSE="*"\nUSE="dracut nftables systemd"' \
+    >> /etc/portage/make.conf && \
+    echo "sys-apps/systemd boot" >> /etc/portage/package.use/systemd && \
+    emerge --verbose --deep --newuse @world && \
+    emerge --verbose \
+        app-arch/cpio btrfs-progs dev-vcs/git dosfstools \
+        linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd
+
+FROM base AS builder
+RUN emerge --verbose dev-util/ostree && \
+    git clone --depth 1 https://github.com/bootc-dev/bootc.git /tmp/bootc && \
+    make -C /tmp/bootc bin install-all install-initramfs-dracut
+
+FROM builder AS system
+RUN KVER=$(ls /usr/lib/modules | head -1) && \
+    dracut --force --no-hostonly --reproducible --zstd --kver "$KVER" \
+    "/usr/lib/modules/$KVER/initramfs.img" && \
+    rm -rf /var/db /var/cache
+RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
+    rm -rf /boot /home /root /usr/local /srv /opt /mnt /var && \
+    mkdir -p /var /sysroot /boot /usr/lib/ostree && \
+    ln -sT var/opt /opt && ln -sT var/roothome /root && \
+    ln -sT var/home /home && ln -sT sysroot/ostree /ostree && \
+    for d in /var/* /var/.[!.]*; do [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done && \
+    for dir in opt usrlocal home srv mnt; do echo "d /var/$dir 0755 root root -"; done > /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
+    echo "d /var/roothome 0700 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
+    echo "d /run/media 0755 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
+    printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf
+
+# Desktop stage — manifest-driven
+FROM system AS desktop
+ARG DESKTOP_FLAVOR
+ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/install-desktop.sh ${DESKTOP_FLAVOR}
+
+LABEL containers.bootc=1 ostree.bootable=1
+RUN bootc container lint

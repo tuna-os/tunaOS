@@ -1,0 +1,22 @@
+name: Build Opensuse [experimental]
+on:
+  workflow_dispatch:
+    inputs:
+      flavor:
+        description: 'Flavor (all, base, gnome, kde, niri, etc.)'
+        default: 'all'
+        type: string
+
+concurrency:
+  group: build-opensuse-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: 🦎-opensuse
+    uses: ./.github/workflows/build-variant.yml
+    with:
+      variant: 'opensuse'
+      flavor: ${{ inputs.flavor || 'all' }}
+    secrets:
+      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
