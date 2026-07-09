@@ -81,6 +81,8 @@ ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 # across commits that don't touch these scripts at all).
 ARG BUILD_SCRIPTS_HASH
 ENV BUILD_SCRIPTS_HASH=${BUILD_SCRIPTS_HASH}
+# Force layer cache invalidation when build scripts change
+RUN echo "${BUILD_SCRIPTS_HASH}" > /dev/null
 
 # Ensure /opt is a real directory so tmpfs mounts work in all subsequent stages
 RUN rm -rf /opt && mkdir /opt
