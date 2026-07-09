@@ -75,6 +75,11 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: true
+      - id: cosmic
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
 
       - id: kde
         stage: 2
@@ -331,6 +336,11 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: true
+      - id: cosmic
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
 
       - id: kde
         stage: 2
@@ -375,6 +385,26 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: cosmic-nvidia
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: kde-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: kde-nvidia
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: niri-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: niri-nvidia
         stage: 3
         build_image: true
         build_iso: true
