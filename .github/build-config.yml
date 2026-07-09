@@ -593,26 +593,6 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-      - id: gnome-cachyos
-        stage: 3
-        build_image: true
-        build_iso: false
-        build_qcow2: false
-      - id: kde-cachyos
-        stage: 3
-        build_image: true
-        build_iso: false
-        build_qcow2: false
-      - id: niri-cachyos
-        stage: 3
-        build_image: true
-        build_iso: false
-        build_qcow2: false
-      - id: xfce-cachyos
-        stage: 3
-        build_image: true
-        build_iso: false
-        build_qcow2: false
 
   # ── Experimental ───────────────────────────────────────────────────────────
   # RFC 010: Ubuntu 26.04 variant. x86_64-only, manual dispatch only.
