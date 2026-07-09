@@ -30,7 +30,7 @@ packages:
       - kate
       - ark
       - plasma-discover
-      - kdeconnect
+      - kde-connect
       - xdg-desktop-portal-kde
       - qt5-qtwayland
       - qt6-qtwayland
@@ -85,7 +85,7 @@ packages:
       - PackageKit-command-not-found
     # Best-effort packages — installed if available in repos, skipped otherwise
     optional:
-      - kdeconnect
+      - kde-connect
       - ksshaskpass
       - ksystemlog
       - input-remapper

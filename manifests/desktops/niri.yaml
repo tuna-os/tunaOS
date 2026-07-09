@@ -30,7 +30,6 @@ packages:
       - xdg-user-dirs
       - pipewire
       - wireplumber
-      - polkit-gnome
       - NetworkManager-tui
       - brightnessctl
       - playerctl
@@ -41,6 +40,8 @@ packages:
       - nautilus
       - adw-gtk3-theme
       - papirus-icon-theme
+    optional:
+      - polkit-gnome
 
   el10:
     copr:
@@ -101,7 +102,4 @@ versionlock:
 
 post_install_inline:
   - "glib-compile-schemas /usr/share/glib-2.0/schemas || true"
-  - |
-    if [ -f /etc/pam.d/greetd ]; then
-      sed --sandbox -i -e '/gnome_keyring.so/ s/-auth/auth/ ; /gnome_keyring.so/ s/-session/session/' /etc/pam.d/greetd
-    fi
+  - "if [ -f /etc/pam.d/greetd ]; then sed --sandbox -i -e '/gnome_keyring.so/ s/-auth/auth/ ; /gnome_keyring.so/ s/-session/session/' /etc/pam.d/greetd; fi"
