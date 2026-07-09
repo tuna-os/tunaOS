@@ -223,7 +223,7 @@ else
 		unzip
 fi
 
-dnf -y remove console-login-helper-messages setroubleshoot
+dnf -y remove console-login-helper-messages setroubleshoot || true
 
 # Install uupd from GitHub release tarball.
 # The ublue-os/packages COPR dropped epel-10 chroots (~2026-06-08);

@@ -53,7 +53,13 @@ packages:
         packages:
           - niri
       - repo: yselkowitz/wlroots-epel
-        packages: []  # just enable for deps
+        packages:
+          - swaylock
+          - SwayNotificationCenter
+          - waybar
+          - fuzzel
+          - swayidle
+          - wl-clipboard
       - repo: ligenix/enterprise-cosmic
         packages: []  # just enable for deps
       - repo: avengemedia/danklinux
@@ -65,12 +71,6 @@ packages:
           - dms-cli
           - dms-greeter
     packages:
-      - swaylock
-      - SwayNotificationCenter
-      - waybar
-      - fuzzel
-      - swayidle
-      - wl-clipboard
       - xdg-desktop-portal-gnome
       - xdg-desktop-portal-gtk
       - xdg-user-dirs
