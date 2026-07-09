@@ -45,10 +45,6 @@ packages:
 
   el10:
     copr:
-      - repo: zirconium/packages
-        packages:
-          - greetd
-          - greetd-selinux
       - repo: yalter/niri-git
         packages:
           - niri
@@ -64,21 +60,32 @@ packages:
           # packaged for EL10 in this COPR — same source as the sway stack.
           - brightnessctl
           - playerctl
-      # adw-gtk3-theme has no EL10 base/EPEL build; pull it from the same COPR
-      # the cosmic manifest uses (yselkowitz/cosmic-epel).
+      # greetd/greetd-selinux (DM) and adw-gtk3-theme have no EL10 base/EPEL
+      # build; pull them from the COPR the cosmic manifest uses. (The old
+      # zirconium/packages and ligenix/enterprise-cosmic COPRs have no EL10
+      # chroot — `dnf copr enable` hard-fails on them.)
       - repo: yselkowitz/cosmic-epel
         packages:
+          - greetd
+          - greetd-selinux
           - adw-gtk3-theme
-      - repo: ligenix/enterprise-cosmic
-        packages: []  # just enable for deps
+        options: "--nobest --allowerasing"
+      # DMS (DankMaterialShell) suite: quickshell-git + dms-greeter live in the
+      # danklinux COPR, dms/dms-cli in dms-git, and they cross-depend. Installing
+      # dms-greeter from the dms-git block alone fails ("no match") and, because
+      # copr installs are best-effort, silently drops the whole shell. Install
+      # the suite from one block with danklinux (+ cosmic-epel for the
+      # dms-greeter→greetd dep) enabled, mirroring build_scripts/niri.sh. The
+      # danklinux block is enable-only so its repo file exists for --enablerepo.
       - repo: avengemedia/danklinux
-        packages:
-          - quickshell-git
+        packages: []
       - repo: avengemedia/dms-git
         packages:
+          - quickshell-git
           - dms
           - dms-cli
           - dms-greeter
+        options: "--enablerepo=copr:copr.fedorainfracloud.org:avengemedia:danklinux --enablerepo=copr:copr.fedorainfracloud.org:yselkowitz:cosmic-epel"
     packages:
       - xdg-desktop-portal-gnome
       - xdg-desktop-portal-gtk
