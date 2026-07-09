@@ -7,7 +7,6 @@ packages:
     groups:
       - xfce-desktop
     packages:
-      - xfce4-wayland
       - gdm
       - xdg-desktop-portal-gtk
       - xdg-user-dirs-gtk
@@ -15,6 +14,8 @@ packages:
       - mousepad
       - ristretto
       - xfce4-terminal
+    optional:
+      - xfce4-wayland
 
   el10:
     groups:
