@@ -62,15 +62,14 @@ case "${1:-}" in
 		fi
 
 		# GNOME 50 requires glib2 >= 2.86.0 and fontconfig >= 2.17.0 (pango links
-			# against FcConfigSetDefaultSubstitute which is absent in EL10's 2.15.x).
-			# selinux-policy 43.x from COPR is required for GDM 50 userdb socket policy;
-			# the base EL10 42.x policy denies the Varlink socket even in permissive mode.
-			# gobject-introspection 1.84 and gjs 1.86 are also upgraded from COPR:
-			# gnome-shell links libgirepository-1.0 but gjs links libgirepository-2.0;
-			# having both loaded causes GIRepository type double-registration → crash.
-			dnf -y upgrade glib2 fontconfig gobject-introspection gjs
-			dnf_retry -y install --allowerasing gnome50-el10-compat
-		fi
+		# against FcConfigSetDefaultSubstitute which is absent in EL10's 2.15.x).
+		# selinux-policy 43.x from COPR is required for GDM 50 userdb socket policy;
+		# the base EL10 42.x policy denies the Varlink socket even in permissive mode.
+		# gobject-introspection 1.84 and gjs 1.86 are also upgraded from COPR:
+		# gnome-shell links libgirepository-1.0 but gjs links libgirepository-2.0;
+		# having both loaded causes GIRepository type double-registration → crash.
+		dnf -y upgrade glib2 fontconfig gobject-introspection gjs
+		dnf_retry -y install --allowerasing gnome50-el10-compat
 	fi
 
 	# Mask rpm-ostree kernel-install script to prevent dracut errors during container build

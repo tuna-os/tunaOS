@@ -21,10 +21,6 @@ setup() {
   [ "$(tunaos_flavor_title gnome)" = "GNOME" ]
 }
 
-@test "title: gnome50 -> GNOME 50" {
-  [ "$(tunaos_flavor_title gnome50)" = "GNOME 50" ]
-}
-
 @test "title: gnome-hwe -> GNOME (HWE)" {
   [ "$(tunaos_flavor_title gnome-hwe)" = "GNOME (HWE)" ]
 }
@@ -39,10 +35,6 @@ setup() {
 
 @test "title: gnome-nvidia-hwe -> GNOME (NVIDIA, HWE)" {
   [ "$(tunaos_flavor_title gnome-nvidia-hwe)" = "GNOME (NVIDIA, HWE)" ]
-}
-
-@test "title: gnome50-hwe -> GNOME 50 (HWE)" {
-  [ "$(tunaos_flavor_title gnome50-hwe)" = "GNOME 50 (HWE)" ]
 }
 
 # ── Desktop mapping ─────────────────────────────────────────────────────────
@@ -100,8 +92,8 @@ _select() {
   echo "${SEL[*]}"
 }
 
-@test "select: yellowfin flagship includes gnome + gnome50 + hwe" {
-  [ "$(_select '' yellowfin)" = "gnome gnome50 gnome-hwe gnome50-hwe" ]
+@test "select: yellowfin flagship includes gnome + hwe" {
+  [ "$(_select '' yellowfin)" = "gnome gnome-hwe" ]
 }
 
 @test "select: bonito flagship shrinks (no gnome50 on Fedora)" {
@@ -113,7 +105,7 @@ _select() {
 }
 
 @test "select: nvidia group resolves for yellowfin" {
-  [ "$(_select nvidia yellowfin)" = "gnome-nvidia gnome50-nvidia gnome-nvidia-hwe" ]
+  [ "$(_select nvidia yellowfin)" = "gnome-nvidia gnome-nvidia-hwe" ]
 }
 
 @test "select: grand total is 12 grouped ISOs across 4 variants" {

@@ -60,6 +60,15 @@ packages:
           - fuzzel
           - swayidle
           - wl-clipboard
+          # brightnessctl (backlight) and playerctl (media keys) are only
+          # packaged for EL10 in this COPR — same source as the sway stack.
+          - brightnessctl
+          - playerctl
+      # adw-gtk3-theme has no EL10 base/EPEL build; pull it from the same COPR
+      # the cosmic manifest uses (yselkowitz/cosmic-epel).
+      - repo: yselkowitz/cosmic-epel
+        packages:
+          - adw-gtk3-theme
       - repo: ligenix/enterprise-cosmic
         packages: []  # just enable for deps
       - repo: avengemedia/danklinux
@@ -76,18 +85,19 @@ packages:
       - xdg-user-dirs
       - pipewire
       - wireplumber
-      - polkit-gnome
+      # polkit-gnome was retired Fedora-wide and has no EL10 build; polkit-kde
+      # is the only GUI polkit authentication agent packaged for EL10 (EPEL).
+      # It runs fine under any Wayland compositor.
+      - polkit-kde
       - NetworkManager-tui
       - nautilus
-      - adw-gtk3-theme
-      - papirus-icon-theme
-    optional:
-      - brightnessctl
-      - playerctl
-      - blueman
       - pavucontrol
       - gnome-keyring
       - gnome-keyring-pam
+      - papirus-icon-theme
+      # NOTE: blueman (Bluetooth applet) has no EL10/EPEL 10 build, so it is
+      # intentionally absent here (present in the Fedora section). No packaged
+      # standalone Bluetooth GUI exists for EL10 niri yet.
 
   zypper:
     - niri
