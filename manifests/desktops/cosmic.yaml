@@ -95,11 +95,13 @@ packages:
       - wl-clipboard
       - xdg-user-dirs
       - zram-generator
+      # Keyring is essential: the greetd PAM patch below wires gnome-keyring into
+      # the login flow. Both are in EL10 appstream, so require (not best-effort).
+      - gnome-keyring
+      - gnome-keyring-pam
     optional:
       - brightnessctl
       - playerctl
-      - gnome-keyring
-      - gnome-keyring-pam
 
 post_install_inline:
   - "glib-compile-schemas /usr/share/glib-2.0/schemas || true"
