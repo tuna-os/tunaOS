@@ -11,11 +11,14 @@ ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 ARG IMAGE_REGISTRY="ghcr.io"
 ARG IMAGE_NAME_VARIANT
 
+# Context files sit at root; the build stages bind-mount this stage's / at
+# /run/context, so e.g. /build_scripts → /run/context/build_scripts. (Copying
+# to /run/context/... here would double-nest to /run/context/run/context/...)
 FROM scratch AS context
-COPY manifests /run/context/manifests
-COPY build_scripts /run/context/build_scripts
-COPY system_files /run/context/files
-COPY system_files_overrides /run/context/overrides
+COPY manifests /manifests
+COPY build_scripts /build_scripts
+COPY system_files /files
+COPY system_files_overrides /overrides
 
 FROM docker.io/gentoo/stage3:latest AS base
 RUN emerge --sync --quiet && \
