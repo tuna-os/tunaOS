@@ -100,10 +100,10 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 RUN zypper clean -a 2>/dev/null || true
 RUN rm -rf /boot /home /root /usr/local /srv /opt /mnt /var && \
     mkdir -p /sysroot /boot /usr/lib/ostree /var && \
-    ln -sT sysroot/ostree /ostree && \
-    ln -sT var/roothome /root && ln -sT var/srv /srv && \
-    ln -sT var/opt /opt && ln -sT var/mnt /mnt && \
-    ln -sT var/home /home && ln -sT ../var/usrlocal /usr/local && \
+    ln -sfT sysroot/ostree /ostree && \
+    ln -sfT var/roothome /root && ln -sfT var/srv /srv && \
+    ln -sfT var/opt /opt && ln -sfT var/mnt /mnt && \
+    ln -sfT var/home /home && ln -sfT ../var/usrlocal /usr/local && \
     for d in /var/* /var/.[!.]*; do [ -e "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done
 RUN cp -rn /usr/etc/. /etc/ 2>/dev/null; rm -rf /usr/etc
 
