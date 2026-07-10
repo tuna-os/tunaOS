@@ -22,6 +22,18 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 	fi
 	exit 0
 fi
+
+# ── Non-dnf RPM-less distros (openSUSE/Gentoo/Arch) ────────────────────
+# The source extension build below installs tooling via dnf. Those distros
+# don't have dnf, so skip the custom build (compile schemas only) rather than
+# fail with "dnf: command not found" (exit 127).
+if [[ "$PKG_MGR" != "dnf" ]]; then
+	command -v glib-compile-schemas &>/dev/null && \
+		glib-compile-schemas /usr/share/glib-2.0/schemas || true
+	echo "gnome-extensions.sh: skipping source-built extensions on ${PKG_MGR}"
+	# Sourced by install-desktop.sh's post_install; return so we don't exit it.
+	return 0 2>/dev/null || exit 0
+fi
 # ── dnf (RPM) path continues below ────────────────────────────────────
 
 printf "::group:: === GNOME Extensions Build ===\n"
