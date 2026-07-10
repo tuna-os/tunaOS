@@ -28,6 +28,15 @@
 #       reaches a graphical session (serial marker or screenshot sanity).
 #       Used to gate GHCR tag promotion on images actually booting.
 #
+#   scripts/iso-e2e.sh <iso_path> --luks
+#       Full LUKS e2e: boot the live ISO (needs ENABLE_SSHD=1), run
+#       `bootc install to-disk --block-setup tpm2-luks` against an emulated
+#       TPM 2.0 (swtpm), then reboot the installed disk with the same TPM and
+#       confirm the encrypted root auto-unlocks (reaching the login target
+#       proves it — a missing/wrong TPM would hang in the initramfs). Requires
+#       the swtpm package and an image whose bootc install config permits
+#       tpm2-luks.
+#
 # Options:
 #   --timeout SEC         Per-phase timeout (default: 300)
 #   --output DIR          Where serial logs / screenshots are written
@@ -63,6 +72,7 @@ MEMORY=4096
 CPUS=4
 NO_KVM=0
 KEEP_VM=0
+LUKS=0
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -70,6 +80,16 @@ while [[ $# -gt 0 ]]; do
 		MODE="kickstart"
 		KICKSTART="$2"
 		shift 2
+		;;
+	--luks)
+		# LUKS e2e: install to disk with tpm2-luks against an emulated TPM
+		# (swtpm), then reboot and confirm the root volume auto-unlocks. Reuses
+		# the ssh install-to-disk flow (bootc, not anaconda). Reaching the login
+		# target on reboot proves the unlock worked — a wrong/absent TPM would
+		# hang the boot in the initramfs at the cryptsetup prompt.
+		MODE="ssh"
+		LUKS=1
+		shift
 		;;
 	--app-launch)
 		MODE="app-launch"
@@ -232,6 +252,43 @@ SERIAL_LOG="${OUTPUT_DIR}/serial.log"
 INSTALL_DISK="${OUTPUT_DIR}/install-disk.qcow2"
 QEMU_PIDFILE="${OUTPUT_DIR}/qemu.pid"
 
+# ── Emulated TPM 2.0 (swtpm) — LUKS mode only ───────────────────────────────
+# The install-time enrollment (systemd-cryptenroll --tpm2-device=auto) and the
+# reboot-time unlock must see the SAME TPM state, so a single swtpm instance is
+# started once and its socket attached to every QEMU launch below. TPM_ARGS is
+# empty unless --luks is set, so non-LUKS modes are byte-for-byte unchanged.
+TPM_DIR="${OUTPUT_DIR}/swtpm"
+TPM_SOCK="${TPM_DIR}/swtpm-sock"
+TPM_PIDFILE="${TPM_DIR}/swtpm.pid"
+TPM_ARGS=""
+
+start_swtpm() {
+	command -v swtpm &>/dev/null || {
+		echo "ERROR: --luks requires swtpm (install the 'swtpm' package)" >&2
+		return 77
+	}
+	rm -rf "$TPM_DIR"
+	mkdir -p "$TPM_DIR"
+	echo "==> Starting swtpm (TPM 2.0) at ${TPM_SOCK}"
+	swtpm socket \
+		--tpmstate "dir=${TPM_DIR}" \
+		--ctrl "type=unixio,path=${TPM_SOCK}" \
+		--tpm2 \
+		--flags startup-clear \
+		--daemon \
+		--pid "file=${TPM_PIDFILE}"
+	for _ in $(seq 1 20); do
+		[[ -S "$TPM_SOCK" ]] && break
+		sleep 0.5
+	done
+	[[ -S "$TPM_SOCK" ]] || {
+		echo "ERROR: swtpm socket did not appear" >&2
+		return 1
+	}
+	# tpm-crb is the CRB interface OVMF/edk2 measures into; works on q35 and pc.
+	TPM_ARGS="-chardev socket,id=chrtpm,path=${TPM_SOCK} -tpmdev emulator,id=tpm0,chardev=chrtpm -device tpm-crb,tpmdev=tpm0"
+}
+
 # Fresh OVMF NVRAM each run — UEFI writes state during install (boot order,
 # secure-boot vars). Reusing a stale one masks regressions.
 if [[ -n "$OVMF_VARS_SRC" ]]; then
@@ -265,8 +322,20 @@ cleanup_vm() {
 			kill -KILL "$pid" 2>/dev/null || true
 		fi
 	fi
+	# Tear down the emulated TPM (LUKS mode).
+	if [[ -f "$TPM_PIDFILE" ]]; then
+		local tpid
+		tpid=$(cat "$TPM_PIDFILE" 2>/dev/null || true)
+		[[ -n "$tpid" ]] && kill "$tpid" 2>/dev/null || true
+	fi
 }
 trap cleanup_vm EXIT
+
+# Bring up the emulated TPM before any QEMU launch so both the install boot and
+# the post-install reboot attach the same TPM state.
+if [[ "$LUKS" -eq 1 ]]; then
+	start_swtpm || exit $?
+fi
 
 # ── Boot the live ISO ───────────────────────────────────────────────────────
 
@@ -299,6 +368,7 @@ boot_live_iso() {
 	echo "==> Booting ISO: ${ISO_PATH}"
 	echo "==> Accel: ${ACCEL}, CPU: ${CPU_ARG}, MEM: ${MEMORY}M, CPUS: ${CPUS}"
 
+	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
 	"$QEMU" \
 		-name "tunaos-iso-e2e" \
 		-machine pc \
@@ -306,6 +376,7 @@ boot_live_iso() {
 		-accel "$ACCEL" \
 		-m "$MEMORY" \
 		-smp "$CPUS" \
+		${TPM_ARGS} \
 		-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=iso,file=${ISO_PATH},media=cdrom,readonly=on,format=raw" \
@@ -493,6 +564,10 @@ run_kickstart() {
 	# which doesn't shell out to bootupd for bootloader management.
 	local install_args=""
 	[[ "${VARIANT:-}" == "grouper" ]] && install_args="--composefs-backend"
+	# LUKS e2e: encrypt root and seal the unlock key to the emulated TPM. The
+	# image must permit this (block = [..,"tpm2-luks"] in its bootc install
+	# config); TunaOS ships that in usr/lib/bootc/install/00-tunaos.toml.
+	[[ "$LUKS" -eq 1 ]] && install_args="${install_args} --block-setup tpm2-luks"
 
 	echo "==> Running bootc install to-disk /dev/vda ${install_args}..."
 	sshpass -p live ssh -o StrictHostKeyChecking=no -p 2222 liveuser@127.0.0.1 \
@@ -503,6 +578,18 @@ run_kickstart() {
 			return 3
 		fi
 	}
+
+	# Assert the install actually set up LUKS + TPM enrollment (bootc prints
+	# these). Guards against a silent fallback to a plain (direct) install that
+	# would still boot and pass the reached-target check below.
+	if [[ "$LUKS" -eq 1 ]]; then
+		if grep -qiE "Initializing LUKS|Enrolling.*TPM|tpm2-luks" "${SERIAL_LOG}"; then
+			echo "==> LUKS root + TPM enrollment confirmed in install output."
+		else
+			echo "ERROR: --luks set but no LUKS/TPM enrollment seen in install output"
+			return 3
+		fi
+	fi
 
 	echo "==> bootc install complete. Shutting down..."
 	sshpass -p live ssh -o StrictHostKeyChecking=no -p 2222 liveuser@127.0.0.1 \
@@ -524,6 +611,7 @@ run_kickstart() {
 
 	echo "==> Booting installed system..."
 	# Boot from the install disk (remove cdrom)
+	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
 	"$QEMU" \
 		-name "tunaos-iso-e2e-installed" \
 		-machine pc \
@@ -531,6 +619,7 @@ run_kickstart() {
 		-accel "$ACCEL" \
 		-m "$MEMORY" \
 		-smp "$CPUS" \
+		${TPM_ARGS} \
 		-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
