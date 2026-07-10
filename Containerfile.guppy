@@ -52,9 +52,10 @@ RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
 
 # Base (no desktop) — the `base` flavor targets this. resolve-flavor.sh maps
 # base → DESKTOP_FLAVOR=base-no-de, and the build does `--target=<flavor>`.
+# (Matches the main Containerfile's base stage: label it bootable, no lint —
+# the lint gate lives on the desktop stages.)
 FROM system AS base-no-de
 LABEL containers.bootc=1 ostree.bootable=1
-RUN bootc container lint
 
 # Desktop stage — manifest-driven; the DESKTOP_FLAVOR build-arg selects the DE.
 FROM system AS desktop
