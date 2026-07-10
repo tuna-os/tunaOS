@@ -14,8 +14,8 @@ source /run/context/build_scripts/lib.sh
 
 # kcm_ublue and its build tooling come from dnf/COPR. On RPM-less distros
 # (openSUSE/Gentoo/Arch) skip it rather than fail with "dnf: command not found".
-if [[ "$PKG_MGR" != "dnf" ]]; then
-	echo "kcm-ublue.sh: skipping (no dnf on ${PKG_MGR})"
+if ! command -v dnf &>/dev/null; then
+	echo "kcm-ublue.sh: skipping (no dnf available)"
 	return 0 2>/dev/null || exit 0
 fi
 
