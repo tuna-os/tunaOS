@@ -9,7 +9,7 @@ ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 ARG IMAGE_NAME_VARIANT
 # SECURITY: Defaults use placeholder tags that MUST be overridden at build time.
-# The Justfile and scripts/build-image.sh always pin these to specific SHA256
+# The Justfile and build engine always pin these to specific SHA256
 # digests (e.g., ghcr.io/projectbluefin/common@sha256:...). Direct podman build
 # without --build-arg overrides will fail with a clear error.
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
@@ -172,17 +172,6 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/install-desktop.sh cosmic
-RUN rm -rf /opt && ln -s /var/opt /opt
-
-FROM base-no-de AS gnome50
-RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
-  --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=context,source=/,target=/run/context \
-  DESKTOP_FLAVOR=gnome50 /run/context/build_scripts/install-desktop.sh gnome
-RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
-  --mount=type=tmpfs,dst=/boot \
-  --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/gnome-extensions.sh
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS kde
