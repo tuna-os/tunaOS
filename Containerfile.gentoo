@@ -77,6 +77,11 @@ RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
     echo "d /run/media 0755 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf
 
+# Cache-bust so build_scripts edits invalidate the desktop stages' install
+# layers (bind-mounted scripts aren't in the cache key). Inherited by children.
+ARG BUILD_SCRIPTS_HASH
+ENV BUILD_SCRIPTS_HASH=${BUILD_SCRIPTS_HASH}
+
 # Base (no desktop) — the `base` flavor targets this. resolve-flavor.sh maps
 # base → DESKTOP_FLAVOR=base-no-de, and the build does `--target=<flavor>`.
 # (Matches the main Containerfile's base stage: label it bootable, no lint —
