@@ -142,6 +142,11 @@ RUN rm -rf /boot /home /root /usr/local /srv /opt /mnt \
 LABEL containers.bootc 1
 RUN bootc container lint
 
+# Cache-bust so build_scripts edits invalidate the desktop stages' install
+# layers (bind-mounted scripts aren't in the cache key). Inherited by children.
+ARG BUILD_SCRIPTS_HASH
+ENV BUILD_SCRIPTS_HASH=${BUILD_SCRIPTS_HASH}
+
 # ==============================================================================
 # Base target (headless, no DE)
 # ==============================================================================

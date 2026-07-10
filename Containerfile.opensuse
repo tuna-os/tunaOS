@@ -72,6 +72,14 @@ RUN printf 'd /var/lib/chrony 0750 chrony chrony\n' >> /usr/lib/tmpfiles.d/chron
 # NOTE: runtime CA persistence across bootc's /var reset is a separate follow-up.
 RUN update-ca-certificates || true
 
+# Cache-bust: the build_scripts RUNs in the desktop stages below are invoked via
+# a bind mount, whose content is NOT part of buildah's layer cache key — so
+# editing install-desktop.sh etc. would silently reuse a stale cached layer.
+# Hashing build_scripts/ into an ENV here (inherited by the child stages) forces
+# correct invalidation. (Same mechanism as Containerfile.el10 / .ubuntu.)
+ARG BUILD_SCRIPTS_HASH
+ENV BUILD_SCRIPTS_HASH=${BUILD_SCRIPTS_HASH}
+
 # Base (no desktop) — the `base` flavor targets this. resolve-flavor.sh maps
 # base → DESKTOP_FLAVOR=base-no-de, and the build does `--target=<flavor>`.
 # (Matches the main Containerfile's base stage: label it bootable, no lint —
