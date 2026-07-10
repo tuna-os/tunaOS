@@ -27,7 +27,7 @@ fi
 # The source extension build below installs tooling via dnf. Those distros
 # don't have dnf, so skip the custom build (compile schemas only) rather than
 # fail with "dnf: command not found" (exit 127).
-if [[ "$PKG_MGR" != "dnf" ]]; then
+if ! command -v dnf &>/dev/null; then
 	command -v glib-compile-schemas &>/dev/null && \
 		glib-compile-schemas /usr/share/glib-2.0/schemas || true
 	echo "gnome-extensions.sh: skipping source-built extensions on ${PKG_MGR}"
