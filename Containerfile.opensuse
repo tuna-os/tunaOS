@@ -102,7 +102,12 @@ RUN zypper clean -a 2>/dev/null || true; \
     rm -rf /var/cache/zypp /var/log/zypp /var/lib/ca-certificates /var/tmp/* && \
     for d in /var/* /var/.[!.]*; do \
         [ -e "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; \
-    done
+    done && \
+    # The zypper desktop install repopulates the bootc-managed layout the system
+    # stage set up: openSUSE packages drop vendor config into /usr/etc, and the
+    # /ostree symlink can be shadowed. Re-assert both so bootc lint passes.
+    cp -rn /usr/etc/. /etc/ 2>/dev/null || true; rm -rf /usr/etc && \
+    { [ -L /ostree ] || { rm -rf /ostree && ln -sT sysroot/ostree /ostree; }; }
 
 LABEL containers.bootc=1 ostree.bootable=1
 RUN bootc container lint
