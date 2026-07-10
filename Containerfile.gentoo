@@ -21,14 +21,38 @@ COPY system_files /files
 COPY system_files_overrides /overrides
 
 FROM docker.io/gentoo/stage3:latest AS base
-RUN emerge --sync --quiet && \
+# Speed: pull prebuilt, gpg-verified binary packages from Gentoo's official
+# binhost instead of compiling all of @world from source (which blew past the
+# 60-min CI job timeout — tuna-os/tunaOS#644). getuto imports the shipped
+# gentoo-release key as the binpkg trust anchor. MAKEOPTS/--jobs parallelize
+# the few things that still build from source (e.g. bootc from git in the
+# builder stage, or any binpkg whose USE doesn't match).
+# 1) Sync portage, select the systemd profile, and configure the official
+#    binhost + parallel-build opts. getuto imports the gentoo-release key as the
+#    binpkg trust anchor so signed binpkgs verify.
+RUN NPROC="$(nproc)" && \
+    emerge --sync --quiet && \
     eselect profile list | grep -E "default.*systemd" | grep -v 32 | \
     awk '{print $1}' | grep -o '[0-9]' | head -1 | xargs eselect profile set && \
-    echo -e 'FEATURES="-ipc-sandbox -network-sandbox -pid-sandbox"\nACCEPT_LICENSE="*"\nUSE="dracut nftables systemd"' \
-    >> /etc/portage/make.conf && \
-    echo "sys-apps/systemd boot" >> /etc/portage/package.use/systemd && \
-    emerge --verbose --deep --newuse @world && \
-    emerge --verbose \
+    { \
+      echo 'FEATURES="-ipc-sandbox -network-sandbox -pid-sandbox getbinpkg"'; \
+      echo 'ACCEPT_LICENSE="*"'; \
+      echo 'USE="dracut nftables systemd"'; \
+      echo "MAKEOPTS=\"-j${NPROC}\""; \
+      echo "EMERGE_DEFAULT_OPTS=\"--jobs=${NPROC} --load-average=${NPROC} --getbinpkg --binpkg-respect-use=y\""; \
+    } >> /etc/portage/make.conf && \
+    mkdir -p /etc/portage/binrepos.conf && \
+    printf '[gentoobinhost]\npriority = 9999\nsync-uri = https://distfiles.gentoo.org/releases/amd64/binpackages/23.0/x86-64/\n' \
+      >/etc/portage/binrepos.conf/gentoobinhost.conf && \
+    getuto && \
+    echo "sys-apps/systemd boot" >> /etc/portage/package.use/systemd
+
+# 2) Bring @world up to date from binpkgs — own layer so a later failure reuses
+#    this (expensive) cache on retry.
+RUN emerge --verbose --deep --newuse @world
+
+# 3) Install the bootc/base tooling and the prebuilt kernel.
+RUN emerge --verbose \
         app-arch/cpio btrfs-progs dev-vcs/git dosfstools \
         linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd
 

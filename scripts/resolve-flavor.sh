@@ -44,9 +44,9 @@ if [[ "${VARIANT}" == "sailfin" ]]; then
     CONTAINERFILE="Containerfile.sailfin"
 fi
 
-# Guppy uses Containerfile.guppy
+# Guppy uses Containerfile.gentoo
 if [[ "${VARIANT}" == "guppy" ]]; then
-    CONTAINERFILE="Containerfile.guppy"
+    CONTAINERFILE="Containerfile.gentoo"
 fi
 
 if [[ "${VARIANT}" == "grouper" ]]; then
