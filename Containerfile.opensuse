@@ -94,20 +94,18 @@ ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/install-desktop.sh ${DESKTOP_FLAVOR}
 
-# The desktop zypper install repopulates /var (zypp cache/logs) and
-# update-ca-certificates writes /var/lib/ca-certificates — bootc lint requires a
-# clean /var (it's runtime state; the ca bundle regenerates at boot). Clear the
-# non-mount, non-tmpfiles content so the image lints and deploys cleanly.
-RUN zypper clean -a 2>/dev/null || true; \
-    rm -rf /var/cache/zypp /var/log/zypp /var/lib/ca-certificates /var/tmp/* && \
-    for d in /var/* /var/.[!.]*; do \
-        [ -e "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; \
-    done && \
-    # The zypper desktop install repopulates the bootc-managed layout the system
-    # stage set up: openSUSE packages drop vendor config into /usr/etc, and the
-    # /ostree symlink can be shadowed. Re-assert both so bootc lint passes.
-    cp -rn /usr/etc/. /etc/ 2>/dev/null || true; rm -rf /usr/etc && \
-    { [ -L /ostree ] || { rm -rf /ostree && ln -sT sysroot/ostree /ostree; }; }
+# The desktop zypper install repopulates /var and /usr/etc and shadows the
+# bootc ostree symlink layout the system stage set up. Re-assert the exact same
+# layout after the install so bootc lint passes (identical to the system stage).
+RUN zypper clean -a 2>/dev/null || true
+RUN rm -rf /boot /home /root /usr/local /srv /opt /mnt /var && \
+    mkdir -p /sysroot /boot /usr/lib/ostree /var && \
+    ln -sT sysroot/ostree /ostree && \
+    ln -sT var/roothome /root && ln -sT var/srv /srv && \
+    ln -sT var/opt /opt && ln -sT var/mnt /mnt && \
+    ln -sT var/home /home && ln -sT ../var/usrlocal /usr/local && \
+    for d in /var/* /var/.[!.]*; do [ -e "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done
+RUN cp -rn /usr/etc/. /etc/ 2>/dev/null; rm -rf /usr/etc
 
 LABEL containers.bootc=1 ostree.bootable=1
 RUN bootc container lint
