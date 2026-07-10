@@ -2,7 +2,7 @@
 # Unit tests for scripts/get-base-image.sh
 #
 # Tests variant → base image URI mapping. This script is sourced
-# by build-image.sh and every build variant depends on it.
+# by the build engine (build-image-inner.sh) and every build variant depends on it.
 #
 # Run: bats tests/bats/test_get_base_image.bats
 
