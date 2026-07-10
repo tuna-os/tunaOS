@@ -19,18 +19,22 @@ COPY system_files_overrides /run/context/overrides
 
 FROM ${BASE_IMAGE} AS base
 
-FROM base AS builder
-RUN zypper install -y binutils cargo git go-md2man libostree-devel make rust
-WORKDIR /home/build
-RUN git clone --depth 1 https://github.com/bootc-dev/bootc.git . && \
-    make bin && make install-all DESTDIR=/output
-
 FROM base AS system
-COPY --from=builder /output /
-RUN zypper install -y \
+# Install bootc from the openSUSE Virtualization:containers OBS project rather
+# than building it from git. The source build linked a libssl soname the
+# runtime image doesn't ship (libssl.so.60 — see #643); the packaged bootc has
+# correct runtime deps and bundles the 51bootc dracut module. Also faster (no
+# cargo compile). Verified: bootc 1.15.2 install/lint work on Tumbleweed.
+RUN zypper --non-interactive addrepo -fG \
+      "https://download.opensuse.org/repositories/Virtualization:/containers/openSUSE_Tumbleweed/" \
+      virtualization-containers && \
+    zypper --non-interactive --gpg-auto-import-keys refresh && \
+    zypper install -y \
+    bootc \
     btrfs-progs cpio dosfstools dracut e2fsprogs glib2 \
     kernel-default kernel-firmware-all openssh ostree skopeo \
     systemd systemd-boot udev xfsprogs zstd chrony && \
+    zypper --non-interactive removerepo virtualization-containers && \
     zypper install -y -t pattern enhanced_base && \
     systemctl enable sshd && \
     systemctl mask systemd-firstboot.service
