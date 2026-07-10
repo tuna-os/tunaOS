@@ -31,7 +31,7 @@ RUN zypper --non-interactive addrepo -fG \
     zypper --non-interactive --gpg-auto-import-keys refresh && \
     zypper install -y \
     bootc \
-    btrfs-progs cpio dosfstools dracut e2fsprogs glib2 \
+    btrfs-progs cpio curl dosfstools dracut e2fsprogs glib2 \
     kernel-default kernel-firmware-all openssh ostree skopeo \
     systemd systemd-boot udev xfsprogs zstd chrony && \
     zypper --non-interactive removerepo virtualization-containers && \
