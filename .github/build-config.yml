@@ -645,6 +645,12 @@ variants:
         stage: 2
         build_image: true
         build_iso: true
+      # GNOME with ZFS-root support (prebuilt zfs.ko + zfs-dracut). ISO gated
+      # off until the install-to-filesystem ZFS-root path has a boot e2e (#625).
+      - id: gnome-zfs
+        stage: 2
+        build_image: true
+        build_iso: false
       - id: kde
         stage: 2
         build_image: true
