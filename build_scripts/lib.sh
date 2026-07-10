@@ -50,7 +50,6 @@ else
 	IS_UBUNTU=false
 	IS_DEBIAN=false
 	IS_ARCH=false
-	IS_CACHYOS=false
 	IS_OPENSUSE=false
 	IS_GENTOO=false
 
@@ -62,7 +61,6 @@ else
 	[[ "${BASE_IMAGE,,}" == *"ubuntu"* ]] && IS_UBUNTU=true && IMAGE_NAME="grouper" && IMAGE_PRETTY_NAME="Grouper"
 	[[ "${BASE_IMAGE,,}" == *"debian"* && "${BASE_IMAGE,,}" != *"ubuntu"* ]] && IS_DEBIAN=true && IMAGE_NAME="flounder" && IMAGE_PRETTY_NAME="Flounder"
 	[[ "${BASE_IMAGE,,}" == *"archlinux"* || "${BASE_IMAGE,,}" == *"arch-bootc"* ]] && IS_ARCH=true && IMAGE_NAME="marlin" && IMAGE_PRETTY_NAME="Marlin"
-	[[ "${BASE_IMAGE,,}" == *"cachyos"* ]] && IS_CACHYOS=true && IS_ARCH=true && IMAGE_NAME="wahoo" && IMAGE_PRETTY_NAME="Wahoo"
 	[[ "${BASE_IMAGE,,}" == *"opensuse"* ]] && IS_OPENSUSE=true && IMAGE_NAME="opensuse" && IMAGE_PRETTY_NAME="openSUSE"
 	[[ "${BASE_IMAGE,,}" == *"gentoo"* ]] && IS_GENTOO=true && IMAGE_NAME="gentoo" && IMAGE_PRETTY_NAME="Gentoo"
 
@@ -91,7 +89,6 @@ elif [[ "$IS_GENTOO" == true ]]; then
 		IS_UBUNTU=${IS_UBUNTU}
 		IS_DEBIAN=${IS_DEBIAN}
 		IS_ARCH=${IS_ARCH}
-		IS_CACHYOS=${IS_CACHYOS}
 		PKG_MGR="${PKG_MGR}"
 		IMAGE_NAME="${IMAGE_NAME:-}"
 		IMAGE_PRETTY_NAME="${IMAGE_PRETTY_NAME:-}"
@@ -117,7 +114,6 @@ export IS_CENTOS
 export IS_UBUNTU
 export IS_DEBIAN
 export IS_ARCH
-export IS_CACHYOS
 export PKG_MGR
 export IMAGE_NAME
 export IMAGE_PRETTY_NAME

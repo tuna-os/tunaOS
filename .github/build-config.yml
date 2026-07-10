@@ -695,6 +695,14 @@ variants:
       - id: xfce
         stage: 2
         build_image: true
+      # CachyOS kernel overlay on the Arch base — like -hwe/-nvidia elsewhere
+      # (Containerfile.overlay + build_scripts/cachyos.sh, stage 3 on the parent DE).
+      - id: gnome-cachyos
+        stage: 3
+        build_image: true
+      - id: kde-cachyos
+        stage: 3
+        build_image: true
 
   # ── Debian ─────────────────────────────────────────────────────────────────
   # Flounder: Debian Trixie (13) stable. Uses Containerfile.debian.
