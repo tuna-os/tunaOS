@@ -65,6 +65,12 @@ RUN mkdir -p /sysroot /boot /usr/lib/ostree /var && \
 RUN cp -rn /usr/etc/. /etc/ 2>/dev/null; rm -rf /usr/etc
 RUN printf '# NTP pool\npool pool.ntp.org iburst\n\ndriftfile /var/lib/chrony/drift\nmakestep 1.0 3\nrtcsync\n' > /etc/chrony.conf
 RUN printf 'd /var/lib/chrony 0750 chrony chrony\n' >> /usr/lib/tmpfiles.d/chrony.conf
+# The /var wipe above destroys openSUSE's CA bundle (/var/lib/ca-certificates,
+# which /etc/ssl/ca-bundle.pem symlinks into), so build-time TLS (curl in
+# install-desktop.sh's yq fetch) fails cert verification. Regenerate it from the
+# persistent /usr trust anchors so the desktop stages (FROM system) can curl.
+# NOTE: runtime CA persistence across bootc's /var reset is a separate follow-up.
+RUN update-ca-certificates || true
 
 # Base (no desktop) — the `base` flavor targets this. resolve-flavor.sh maps
 # base → DESKTOP_FLAVOR=base-no-de, and the build does `--target=<flavor>`.
