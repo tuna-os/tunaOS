@@ -40,12 +40,23 @@ pkg_install \
 # Load zfs early.
 echo zfs >/etc/modules-load.d/zfs.conf
 
+# zfs-dracut must have dropped the 90zfs module — dracut in finalize.sh fails
+# with "Module 'zfs' cannot be found" otherwise. Verify loudly rather than ship
+# a non-bootable ZFS initramfs.
+if [[ ! -d /usr/lib/dracut/modules.d/90zfs ]]; then
+	echo "ERROR: zfs-dracut did not install the dracut 90zfs module" >&2
+	exit 1
+fi
+
 # finalize.sh runs `dracut --no-hostonly`, which won't auto-detect a ZFS root
 # at image-build time, so force the zfs module into every initramfs it builds.
+# (Mirrors the proven approach in tuna-os/ubuntu, which passes
+# `dracut --add "dmsquash-live zfs"`.)
 mkdir -p /etc/dracut.conf.d
 printf 'add_dracutmodules+=" zfs "\n' >/etc/dracut.conf.d/90-tunaos-zfs.conf
 
 depmod "${KVER}" || true
 
-echo "zfs.sh: ZFS module + tools + dracut zfs module wired for ${KVER}"
-echo "zfs.sh: finalize.sh will now build a ZFS-capable initramfs."
+echo "zfs.sh: ZFS module + tools + dracut 90zfs module wired for ${KVER}"
+echo "zfs.sh: finalize.sh will build a ZFS-capable initramfs; the ZFS-root"
+echo "        installer ships at /usr/local/bin/zfs-install (from tuna-os/ubuntu)."
