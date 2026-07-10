@@ -56,7 +56,7 @@ else
 fi
 
 BASE_FOR_BUILD=""
-CONTAINERFILE="Containerfile"
+CONTAINERFILE="Containerfile.el10"
 # RFC 010: grouper (Ubuntu) uses Containerfile.ubuntu
 if [[ "$VARIANT" == "grouper" ]]; then
 	CONTAINERFILE="Containerfile.ubuntu"

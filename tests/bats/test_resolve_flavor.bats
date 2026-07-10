@@ -14,7 +14,7 @@ get_var() {
 
 @test "base → Containerfile, base-no-de target, no parent" {
     eval "$("$SCRIPT" yellowfin base)"
-    [[ "$CONTAINERFILE" == "Containerfile" ]]
+    [[ "$CONTAINERFILE" == "Containerfile.el10" ]]
     [[ "$DESKTOP_FLAVOR" == "base-no-de" ]]
     [[ "$PARENT_FLAVOR" == "" ]]
     [[ "$ENABLE_HWE" == "0" ]]
@@ -31,7 +31,7 @@ get_var() {
 
 @test "gnome → Containerfile, gnome target, no parent" {
     eval "$("$SCRIPT" albacore gnome)"
-    [[ "$CONTAINERFILE" == "Containerfile" ]]
+    [[ "$CONTAINERFILE" == "Containerfile.el10" ]]
     [[ "$DESKTOP_FLAVOR" == "gnome" ]]
     [[ "$PARENT_FLAVOR" == "" ]]
 }
@@ -39,7 +39,7 @@ get_var() {
 @test "kde → Containerfile, kde target" {
     eval "$("$SCRIPT" skipjack kde)"
     [[ "$DESKTOP_FLAVOR" == "kde" ]]
-    [[ "$CONTAINERFILE" == "Containerfile" ]]
+    [[ "$CONTAINERFILE" == "Containerfile.el10" ]]
 }
 
 @test "niri → Containerfile, niri target" {

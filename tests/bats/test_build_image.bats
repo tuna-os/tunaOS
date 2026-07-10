@@ -82,7 +82,7 @@ setup() {
 @test "containerfile: base flavor uses Containerfile" {
   run bash -c '
     FLAVOR="base"
-    CONTAINERFILE="Containerfile"
+    CONTAINERFILE="Containerfile.el10"
     ENABLE_HWE="0"; ENABLE_GDX="0"; PARENT_FLAVOR=""; DESKTOP_FLAVOR="$FLAVOR"
     case "$FLAVOR" in
       "base") DESKTOP_FLAVOR="base-no-de" ;;
@@ -94,13 +94,13 @@ setup() {
     esac
     echo "CF=${CONTAINERFILE} DF=${DESKTOP_FLAVOR} HWE=${ENABLE_HWE} GDX=${ENABLE_GDX} PF=${PARENT_FLAVOR:-none}"
   '
-  [ "$output" = "CF=Containerfile DF=base-no-de HWE=0 GDX=0 PF=none" ]
+  [ "$output" = "CF=Containerfile.el10 DF=base-no-de HWE=0 GDX=0 PF=none" ]
 }
 
 @test "containerfile: base-hwe uses Containerfile.hwe" {
   run bash -c '
     FLAVOR="base-hwe"
-    CONTAINERFILE="Containerfile"
+    CONTAINERFILE="Containerfile.el10"
     ENABLE_HWE="0"; ENABLE_GDX="0"; PARENT_FLAVOR=""; DESKTOP_FLAVOR="$FLAVOR"
     case "$FLAVOR" in
       "base-hwe") CONTAINERFILE="Containerfile.hwe"; ENABLE_HWE="1"; DESKTOP_FLAVOR="base-hwe"; PARENT_FLAVOR="base" ;;
@@ -117,7 +117,7 @@ setup() {
 @test "containerfile: base-gdx uses Containerfile.gdx" {
   run bash -c '
     FLAVOR="base-gdx"
-    CONTAINERFILE="Containerfile"
+    CONTAINERFILE="Containerfile.el10"
     ENABLE_HWE="0"; ENABLE_GDX="0"; PARENT_FLAVOR=""; DESKTOP_FLAVOR="$FLAVOR"
     case "$FLAVOR" in
       "base-gdx") CONTAINERFILE="Containerfile.gdx"; ENABLE_GDX="1"; DESKTOP_FLAVOR="base-gdx"; PARENT_FLAVOR="base" ;;
@@ -133,7 +133,7 @@ setup() {
 @test "containerfile: gnome-hwe uses Containerfile.hwe" {
   run bash -c '
     FLAVOR="gnome-hwe"
-    CONTAINERFILE="Containerfile"
+    CONTAINERFILE="Containerfile.el10"
     ENABLE_HWE="0"; ENABLE_GDX="0"; PARENT_FLAVOR=""; DESKTOP_FLAVOR="$FLAVOR"
     case "$FLAVOR" in
       *"-gdx-hwe") DESKTOP_FLAVOR="${FLAVOR%-gdx-hwe}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_GDX="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe" ;;
@@ -148,7 +148,7 @@ setup() {
 @test "containerfile: kde-gdx uses Containerfile.gdx" {
   run bash -c '
     FLAVOR="kde-gdx"
-    CONTAINERFILE="Containerfile"
+    CONTAINERFILE="Containerfile.el10"
     ENABLE_HWE="0"; ENABLE_GDX="0"; PARENT_FLAVOR=""; DESKTOP_FLAVOR="$FLAVOR"
     case "$FLAVOR" in
       *"-gdx-hwe") DESKTOP_FLAVOR="${FLAVOR%-gdx-hwe}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_GDX="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe" ;;
@@ -163,7 +163,7 @@ setup() {
 @test "containerfile: gnome-gdx-hwe uses Containerfile.gdx with both flags" {
   run bash -c '
     FLAVOR="gnome-gdx-hwe"
-    CONTAINERFILE="Containerfile"
+    CONTAINERFILE="Containerfile.el10"
     ENABLE_HWE="0"; ENABLE_GDX="0"; PARENT_FLAVOR=""; DESKTOP_FLAVOR="$FLAVOR"
     case "$FLAVOR" in
       *"-gdx-hwe") DESKTOP_FLAVOR="${FLAVOR%-gdx-hwe}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_GDX="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe" ;;
@@ -176,7 +176,7 @@ setup() {
 @test "containerfile: kde-gdx-hwe strips suffix correctly" {
   run bash -c '
     FLAVOR="kde-gdx-hwe"
-    CONTAINERFILE="Containerfile"
+    CONTAINERFILE="Containerfile.el10"
     ENABLE_HWE="0"; ENABLE_GDX="0"; PARENT_FLAVOR=""; DESKTOP_FLAVOR="$FLAVOR"
     case "$FLAVOR" in
       *"-gdx-hwe") DESKTOP_FLAVOR="${FLAVOR%-gdx-hwe}"; CONTAINERFILE="Containerfile.gdx"; ENABLE_GDX="1"; ENABLE_HWE="1"; PARENT_FLAVOR="${DESKTOP_FLAVOR}-hwe" ;;

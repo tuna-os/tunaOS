@@ -501,7 +501,7 @@ jobs:
         id: metadata
         env:
           README_URL: https://raw.githubusercontent.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/${{ github.sha }}/README.md
-          SOURCE_URL: https://github.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/blob/${{ github.sha }}/Containerfile
+          SOURCE_URL: https://github.com/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}/blob/${{ github.sha }}/Containerfile.el10
         with:
           tags: |
             type=raw,value=${{ env.DEFAULT_TAG}}

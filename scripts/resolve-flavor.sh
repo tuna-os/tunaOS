@@ -31,7 +31,7 @@ case "${FLAVOR}" in
     "gdx-hwe") FLAVOR="gnome-nvidia-hwe" ;;
 esac
 
-CONTAINERFILE="Containerfile"
+CONTAINERFILE="Containerfile.el10"
 ENABLE_HWE="0"
 ENABLE_NVIDIA="0"
 OVERLAY_TYPE=""
@@ -39,9 +39,9 @@ PARENT_FLAVOR=""
 DESKTOP_FLAVOR="${FLAVOR}"
 
 # RFC 010: grouper (Ubuntu) uses Containerfile.ubuntu
-# Sailfin uses Containerfile.sailfin
+# Sailfin uses Containerfile.opensuse
 if [[ "${VARIANT}" == "sailfin" ]]; then
-    CONTAINERFILE="Containerfile.sailfin"
+    CONTAINERFILE="Containerfile.opensuse"
 fi
 
 # Guppy uses Containerfile.gentoo
