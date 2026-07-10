@@ -141,7 +141,11 @@ if [[ "${_TD_OS}" == "pacman" ]]; then
     exit 0
 fi
 
-# ── DNF path ─────────────────────────────────────────────────────────────────
+# ── DNF path (el10/fedora only) ──────────────────────────────────────────────
+# These sections are maps (groups/group_options/copr/optional/versionlock). The
+# list-style sections (apt/pacman/zypper/emerge) installed above and must skip
+# this — indexing an array with .group_options etc. is a hard yq error.
+if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" ]]; then
 
 # Install groups
 _TD_GROUP_OPTS=$($YQ -r ".packages.${_TD_OS}.group_options // \"\"" "${_TD_MANIFEST}")
@@ -210,7 +214,9 @@ if ((${#_TD_LOCKS[@]} > 0)); then
     done
 fi
 
-# ── Display manager ──────────────────────────────────────────────────────────
+fi  # end DNF path (el10/fedora)
+
+# ── Display manager (all OSes) ───────────────────────────────────────────────
 _TD_DM=$($YQ -r '.display_manager' "${_TD_MANIFEST}")
 if [[ -n "${_TD_DM}" ]]; then
     safe_enable "${_TD_DM}.service"
