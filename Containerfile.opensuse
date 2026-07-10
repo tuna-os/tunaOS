@@ -94,6 +94,16 @@ ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/install-desktop.sh ${DESKTOP_FLAVOR}
 
+# The desktop zypper install repopulates /var (zypp cache/logs) and
+# update-ca-certificates writes /var/lib/ca-certificates — bootc lint requires a
+# clean /var (it's runtime state; the ca bundle regenerates at boot). Clear the
+# non-mount, non-tmpfiles content so the image lints and deploys cleanly.
+RUN zypper clean -a 2>/dev/null || true; \
+    rm -rf /var/cache/zypp /var/log/zypp /var/lib/ca-certificates /var/tmp/* && \
+    for d in /var/* /var/.[!.]*; do \
+        [ -e "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; \
+    done
+
 LABEL containers.bootc=1 ostree.bootable=1
 RUN bootc container lint
 
