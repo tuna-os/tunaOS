@@ -120,8 +120,9 @@ RUN KERNEL_PKG="linux"; \
         yq && \
     pacman -Scc --noconfirm
 
-# Copy dmsquash-live module from Fedora since Arch's dracut does not package it
+# Copy dmsquash-live module (and its img-lib dependency) from Fedora since Arch's dracut does not package them
 COPY --from=fedora-dracut /usr/lib/dracut/modules.d/70dmsquash-live /usr/lib/dracut/modules.d/90dmsquash-live
+COPY --from=fedora-dracut /usr/lib/dracut/modules.d/70img-lib /usr/lib/dracut/modules.d/90img-lib
 
 # Build initramfs
 RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \

@@ -42,7 +42,7 @@ RUN NPROC="$(nproc)" && \
       echo 'ACCEPT_LICENSE="*"'; \
       echo 'USE="dracut nftables systemd X wayland dbus gtk gnome qt6 plasma opengl harfbuzz"'; \
       echo "MAKEOPTS=\"-j${NPROC}\""; \
-      echo "EMERGE_DEFAULT_OPTS=\"--jobs=${NPROC} --load-average=${NPROC} --getbinpkg --binpkg-respect-use=y\""; \
+      echo "EMERGE_DEFAULT_OPTS=\"--jobs=${NPROC} --load-average=${NPROC} --getbinpkg --binpkg-respect-use=n\""; \
     } >> /etc/portage/make.conf && \
     mkdir -p /etc/portage/binrepos.conf && \
     printf '[gentoobinhost]\npriority = 9999\nsync-uri = https://distfiles.gentoo.org/releases/amd64/binpackages/23.0/x86-64/\n' \
@@ -59,8 +59,9 @@ RUN emerge --verbose \
         app-arch/cpio btrfs-progs dev-vcs/git dosfstools \
         linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd
 
-# Copy dmsquash-live module from Fedora since Gentoo's dracut does not package it
+# Copy dmsquash-live module (and its img-lib dependency) from Fedora since Gentoo's dracut does not package them
 COPY --from=fedora-dracut /usr/lib/dracut/modules.d/70dmsquash-live /usr/lib/dracut/modules.d/90dmsquash-live
+COPY --from=fedora-dracut /usr/lib/dracut/modules.d/70img-lib /usr/lib/dracut/modules.d/90img-lib
 
 FROM base AS builder
 RUN emerge --verbose dev-util/ostree && \
