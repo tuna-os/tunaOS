@@ -211,8 +211,14 @@ ghcr.io/tuna-os/marlin:xfce
 
 **Platforms:** x86_64
 
-> [!WARNING]
-> Flounder is **blocked** on Debian Trixie due to `ostree` version requirement (Trixie ships ostree 2025.2, bootc requires >= 2025.3).
+```
+ghcr.io/tuna-os/flounder:base
+ghcr.io/tuna-os/flounder:gnome
+ghcr.io/tuna-os/flounder:kde
+ghcr.io/tuna-os/flounder:cosmic
+ghcr.io/tuna-os/flounder:niri
+ghcr.io/tuna-os/flounder:xfce
+```
 
 ---
 
