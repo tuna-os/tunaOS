@@ -1,7 +1,9 @@
 # Containerfile.gentoo — Gentoo Linux on bootc.
 # Based on bootcrew/gentoo-bootc but adapted for TunaOS manifest-driven desktop installs.
-#
-# ARG BASE_IMAGE = docker.io/gentoo/stage3:latest
+
+FROM registry.fedoraproject.org/fedora:40 AS fedora-dracut
+RUN dnf install -y dracut-live
+
 ARG BASE_IMAGE
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR
@@ -57,7 +59,7 @@ RUN emerge --verbose \
         linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd
 
 # Copy dmsquash-live module from Fedora since Gentoo's dracut does not package it
-COPY --from=registry.fedoraproject.org/fedora:40 /usr/lib/dracut/modules.d/90dmsquash-live /usr/lib/dracut/modules.d/90dmsquash-live
+COPY --from=fedora-dracut /usr/lib/dracut/modules.d/90dmsquash-live /usr/lib/dracut/modules.d/90dmsquash-live
 
 FROM base AS builder
 RUN emerge --verbose dev-util/ostree && \

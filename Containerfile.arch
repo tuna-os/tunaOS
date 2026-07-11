@@ -7,6 +7,9 @@
 #   buildah build --target=base-no-de --file Containerfile.arch .
 #   buildah build --target=kde --file Containerfile.arch .
 
+FROM registry.fedoraproject.org/fedora:40 AS fedora-dracut
+RUN dnf install -y dracut-live
+
 ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 ARG IMAGE_NAME
@@ -117,7 +120,7 @@ RUN KERNEL_PKG="linux"; \
     pacman -Scc --noconfirm
 
 # Copy dmsquash-live module from Fedora since Arch's dracut does not package it
-COPY --from=registry.fedoraproject.org/fedora:40 /usr/lib/dracut/modules.d/90dmsquash-live /usr/lib/dracut/modules.d/90dmsquash-live
+COPY --from=fedora-dracut /usr/lib/dracut/modules.d/90dmsquash-live /usr/lib/dracut/modules.d/90dmsquash-live
 
 # Build initramfs
 RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \
