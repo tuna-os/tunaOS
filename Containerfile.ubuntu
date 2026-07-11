@@ -108,7 +108,7 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
         ca-certificates curl gpg \
         ostree libostree-1-1 dracut \
         btrfs-progs dosfstools e2fsprogs xfsprogs skopeo jq \
-        systemd-boot systemd-boot-efi && \
+        systemd-boot systemd-boot-efi dmsetup && \
     cp -a /run/context/build_scripts/bootc/sandbox/. / && \
     apt-get clean -y && rm -rf /var/lib/apt/lists/*
 
