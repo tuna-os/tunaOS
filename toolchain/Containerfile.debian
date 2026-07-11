@@ -1,0 +1,88 @@
+# Containerfile.debian — bootc toolchain builder for the Debian family.
+#
+# Builds bootc, bootupd (and, when BUILD_OSTREE=1, libostree) from pinned
+# upstream source, ABI-matched to a specific Debian base, and stages the
+# install tree at /output. The build-toolchain.yml workflow exports /output,
+# tars it, and `oras push`es it to ghcr.io/tuna-os/bootc-toolchain-<base> as an
+# OCI artifact. Variants consume it instead of compiling bootc on every build.
+#
+# Versions come from image-versions.yaml (Renovate-managed) via build-args.
+#
+#   BASE_IMAGE     docker.io/library/debian:trixie | :sid
+#   BUILD_OSTREE   1 for trixie (packaged ostree 2025.2 < bootc's 2025.3), else 0
+#   BOOTC_VERSION  e.g. v1.16.3
+#   BOOTUPD_VERSION e.g. v0.2.35
+#   OSTREE_VERSION e.g. v2026.2  (only used when BUILD_OSTREE=1)
+ARG BASE_IMAGE=docker.io/library/debian:trixie
+
+FROM ${BASE_IMAGE} AS builder
+ARG BUILD_OSTREE=0
+ARG BOOTC_VERSION
+ARG BOOTUPD_VERSION
+ARG OSTREE_VERSION
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV CARGO_HOME=/tmp/rust
+ENV RUSTUP_HOME=/tmp/rust
+ENV PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
+
+# Common build tooling + bootc/bootupd deps. libostree-dev is installed here as
+# a baseline; when BUILD_OSTREE=1 we overwrite it with the newer source build so
+# bootc's `ostree-sys` (which requires ostree >= 2025.3) finds a new enough lib.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        git curl ca-certificates make build-essential go-md2man pkgconf \
+        libzstd-dev libssl-dev dracut xz-utils \
+        libostree-dev ostree \
+    && rm -rf /var/lib/apt/lists/*
+
+# Rust toolchain (minimal) for the bootc and bootupd cargo builds.
+RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+        sh -s -- --profile minimal -y
+
+# ── libostree from source (trixie only) ──────────────────────────────────────
+# Installed to both / (so pkg-config/ostree-sys see the new version while
+# building bootc) and to /output (so consumers get the matching runtime libs).
+RUN if [ "${BUILD_OSTREE}" = "1" ]; then set -eux; \
+      apt-get update && apt-get install -y --no-install-recommends \
+        autoconf automake libtool bison libglib2.0-dev libfuse3-dev \
+        libgpgme-dev libarchive-dev liblzma-dev libcurl4-openssl-dev \
+        libmount-dev libselinux1-dev libsystemd-dev e2fslibs-dev \
+        libgirepository1.0-dev gobject-introspection zlib1g-dev; \
+      rm -rf /var/lib/apt/lists/*; \
+      ver="${OSTREE_VERSION#v}"; \
+      curl -L "https://github.com/ostreedev/ostree/releases/download/${OSTREE_VERSION}/libostree-${ver}.tar.xz" \
+        | tar -xJ -C /tmp; \
+      cd "/tmp/libostree-${ver}"; \
+      ./configure --prefix=/usr --libdir=/usr/lib/x86_64-linux-gnu \
+        --with-crypto=openssl --without-soup --without-libsoup-client-certs \
+        --disable-gtk-doc --disable-man --with-composefs; \
+      make -j"$(nproc)"; \
+      make install DESTDIR=/output; \
+      make install; \
+      ldconfig; \
+    fi
+
+# ── bootc from source ────────────────────────────────────────────────────────
+RUN set -eux; . "${RUSTUP_HOME}/env"; \
+    git clone --depth 1 --branch "${BOOTC_VERSION}" \
+      https://github.com/bootc-dev/bootc.git /src/bootc; \
+    cd /src/bootc; \
+    make bin; \
+    make install-all DESTDIR=/output
+
+# ── bootupd from source ──────────────────────────────────────────────────────
+RUN set -eux; . "${RUSTUP_HOME}/env"; \
+    git clone --depth 1 --branch "${BOOTUPD_VERSION}" \
+      https://github.com/coreos/bootupd.git /src/bootupd; \
+    cd /src/bootupd; \
+    make; \
+    make install DESTDIR=/output
+
+# Record what we built for provenance/debugging.
+RUN printf 'bootc=%s\nbootupd=%s\nostree=%s\nbuild_ostree=%s\n' \
+      "${BOOTC_VERSION}" "${BOOTUPD_VERSION}" "${OSTREE_VERSION}" "${BUILD_OSTREE}" \
+      > /output/.toolchain-versions
+
+# ── Export stage: rootfs == the install tree, for `podman export` → oras ──────
+FROM scratch AS export
+COPY --from=builder /output /
