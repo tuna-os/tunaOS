@@ -1,0 +1,9 @@
+ARG BASE_IMAGE=ghcr.io/tuna-os/yellowfin:gnome
+FROM scratch AS ctx
+COPY custom /custom
+COPY build_scripts /build_scripts
+
+FROM ${BASE_IMAGE}
+RUN --mount=type=bind,from=ctx,src=/,target=/run/context \
+    /run/context/build_scripts/apply-custom.sh
+RUN bootc container lint

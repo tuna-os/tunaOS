@@ -280,6 +280,10 @@ pkg_install() {
 		}
 	elif [[ "$PKG_MGR" == "pacman" ]]; then
 		pacman -S --noconfirm --needed "$@"
+	elif [[ "$PKG_MGR" == "zypper" ]]; then
+		zypper --non-interactive in --no-recommends "$@"
+	elif [[ "$PKG_MGR" == "emerge" ]]; then
+		emerge --verbose --getbinpkg "$@"
 	else
 		dnf_retry install -y --setopt=install_weak_deps=False "$@"
 	fi
@@ -292,6 +296,10 @@ pkg_remove() {
 		apt-get purge -y "$@"
 	elif [[ "$PKG_MGR" == "pacman" ]]; then
 		pacman -Rns --noconfirm "$@" 2>/dev/null || true
+	elif [[ "$PKG_MGR" == "zypper" ]]; then
+		zypper --non-interactive rm "$@"
+	elif [[ "$PKG_MGR" == "emerge" ]]; then
+		emerge --deselect "$@"
 	else
 		dnf_retry remove -y "$@"
 	fi

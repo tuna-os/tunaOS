@@ -50,6 +50,36 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     # OVERLAY_TYPE inherited from parent shell (exported by build recipe)
     ./scripts/build-image-inner.sh
 
+# Build a custom TunaOS overlay using the configuration in custom/
+build-custom base="" tag="": _ensure-deps
+    #!/usr/bin/env bash
+    set -euo pipefail
+    BASE_IMAGE="{{ base }}"
+    if [[ -z "${BASE_IMAGE}" ]]; then
+        BASE_IMAGE=$(python3 -c "import re; open_f = open('custom/image.yaml').read(); print(re.search(r'base:\s*(\S+)', open_f).group(1))" 2>/dev/null || echo "ghcr.io/tuna-os/yellowfin:gnome")
+    fi
+    TARGET_TAG="{{ tag }}"
+    if [[ -z "${TARGET_TAG}" ]]; then
+        TARGET_TAG=$(python3 -c "import re; open_f = open('custom/image.yaml').read(); print(re.search(r'tag:\s*(\S+)', open_f).group(1))" 2>/dev/null || echo "my-custom-os")
+    fi
+    echo "==> Building custom image based on ${BASE_IMAGE} as localhost/${TARGET_TAG}..."
+    podman build \
+        --file Containerfile.custom \
+        --build-arg BASE_IMAGE="${BASE_IMAGE}" \
+        --tag "localhost/${TARGET_TAG}" \
+        .
+
+# Build QCOW2 from custom TunaOS image
+run-custom-vm tag="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    TARGET_TAG="{{ tag }}"
+    if [[ -z "${TARGET_TAG}" ]]; then
+        TARGET_TAG=$(python3 -c "import re; open_f = open('custom/image.yaml').read(); print(re.search(r'tag:\s*(\S+)', open_f).group(1))" 2>/dev/null || echo "my-custom-os")
+    fi
+    # Use scripts/build-qcow2.sh to build the QCOW2 from local image
+    ./scripts/build-qcow2.sh "localhost/${TARGET_TAG}"
+
 # Build a TunaOS variant
 build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='' enable_sshd="0": _ensure-deps
     #!/usr/bin/env bash
