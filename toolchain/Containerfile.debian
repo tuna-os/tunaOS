@@ -6,13 +6,17 @@
 # tars it, and `oras push`es it to ghcr.io/tuna-os/bootc-toolchain-<base> as an
 # OCI artifact. Variants consume it instead of compiling bootc on every build.
 #
+# Recipe follows the proven Snow Linux debian-bootc-core approach: build ostree
+# from git with its composefs submodule (composefs builds via meson) rather than
+# a dist tarball, which does not carry the submodule.
+#
 # Versions come from image-versions.yaml (Renovate-managed) via build-args.
 #
-#   BASE_IMAGE     docker.io/library/debian:trixie | :sid
-#   BUILD_OSTREE   1 for trixie (packaged ostree 2025.2 < bootc's 2025.3), else 0
-#   BOOTC_VERSION  e.g. v1.16.3
-#   BOOTUPD_VERSION e.g. v0.2.35
-#   OSTREE_VERSION e.g. v2026.2  (only used when BUILD_OSTREE=1)
+#   BASE_IMAGE       docker.io/library/debian:trixie | :sid
+#   BUILD_OSTREE     1 for trixie (packaged ostree 2025.2 < bootc's 2025.3), else 0
+#   BOOTC_VERSION    e.g. v1.16.3
+#   BOOTUPD_VERSION  e.g. v0.2.35
+#   OSTREE_VERSION   e.g. v2026.2   (only used when BUILD_OSTREE=1)
 ARG BASE_IMAGE=docker.io/library/debian:trixie
 
 FROM ${BASE_IMAGE} AS builder
@@ -24,15 +28,17 @@ ARG OSTREE_VERSION
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CARGO_HOME=/tmp/rust
 ENV RUSTUP_HOME=/tmp/rust
-ENV PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/lib/pkgconfig:/usr/share/pkgconfig
+ENV DRACUT_NO_XATTR=1
+ENV PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
 
-# Common build tooling + bootc/bootupd deps. libostree-dev is installed here as
-# a baseline; when BUILD_OSTREE=1 we overwrite it with the newer source build so
-# bootc's `ostree-sys` (which requires ostree >= 2025.3) finds a new enough lib.
+# Build tooling + ostree/bootc/bootupd deps (proven set from debian-bootc-core).
+# meson is required for ostree's vendored composefs submodule.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        git curl ca-certificates make build-essential go-md2man pkgconf \
-        libzstd-dev libssl-dev dracut xz-utils \
-        libostree-dev ostree \
+        ca-certificates curl git build-essential pkg-config go-md2man \
+        libcurl4-openssl-dev libzstd-dev libssl-dev libarchive-dev libarchive13 \
+        meson libfuse3-dev liblzma-dev libsoup2.4-dev e2fslibs-dev libext2fs-dev \
+        libgpgme-dev autoconf automake libtool libseccomp-dev libcap-dev \
+        libglib2.0-dev bison flex equivs gobject-introspection \
     && rm -rf /var/lib/apt/lists/*
 
 # Rust toolchain (minimal) for the bootc and bootupd cargo builds.
@@ -40,26 +46,25 @@ RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
         sh -s -- --profile minimal -y
 
 # ── libostree from source (trixie only) ──────────────────────────────────────
-# Installed to both / (so pkg-config/ostree-sys see the new version while
-# building bootc) and to /output (so consumers get the matching runtime libs).
+# Built from git at the pinned tag WITH submodules so the vendored composefs is
+# present (a `make dist` tarball omits it). Installed to / (so bootc's ostree-sys
+# pkg-config finds a new-enough libostree) and to /output (shipped to consumers).
 RUN if [ "${BUILD_OSTREE}" = "1" ]; then set -eux; \
-      apt-get update && apt-get install -y --no-install-recommends \
-        autoconf automake libtool bison libglib2.0-dev libfuse3-dev \
-        libgpgme-dev libarchive-dev liblzma-dev libcurl4-openssl-dev \
-        libmount-dev libselinux1-dev libsystemd-dev e2fslibs-dev \
-        libgirepository1.0-dev gobject-introspection zlib1g-dev; \
-      rm -rf /var/lib/apt/lists/*; \
-      ver="${OSTREE_VERSION#v}"; \
-      curl -L "https://github.com/ostreedev/ostree/releases/download/${OSTREE_VERSION}/libostree-${ver}.tar.xz" \
-        | tar -xJ -C /tmp; \
-      cd "/tmp/libostree-${ver}"; \
-      ./configure --prefix=/usr --libdir=/usr/lib/x86_64-linux-gnu \
-        --with-crypto=openssl --without-soup --without-libsoup-client-certs \
-        --disable-gtk-doc --disable-man --with-composefs; \
+      git clone --branch "${OSTREE_VERSION}" --depth 1 --recurse-submodules \
+        https://github.com/ostreedev/ostree.git /tmp/ostree; \
+      cd /tmp/ostree; \
+      env NOCONFIGURE=1 ./autogen.sh; \
+      ./configure --prefix=/usr --libdir=/usr/lib --sysconfdir=/etc \
+        --with-curl --with-dracut --with-composefs \
+        --disable-gtk-doc --disable-man; \
       make -j"$(nproc)"; \
       make install DESTDIR=/output; \
       make install; \
+      ln -svf /usr/lib/libostree* "/lib/$(arch)-linux-gnu/" || true; \
       ldconfig; \
+    else \
+      apt-get update && apt-get install -y --no-install-recommends libostree-dev ostree; \
+      rm -rf /var/lib/apt/lists/*; \
     fi
 
 # ── bootc from source ────────────────────────────────────────────────────────
