@@ -40,7 +40,7 @@ RUN NPROC="$(nproc)" && \
     { \
       echo 'FEATURES="-ipc-sandbox -network-sandbox -pid-sandbox getbinpkg"'; \
       echo 'ACCEPT_LICENSE="*"'; \
-      echo 'USE="dracut nftables systemd X wayland dbus gtk gnome qt6 plasma"'; \
+      echo 'USE="dracut nftables systemd X wayland dbus gtk gnome qt6 plasma opengl"'; \
       echo "MAKEOPTS=\"-j${NPROC}\""; \
       echo "EMERGE_DEFAULT_OPTS=\"--jobs=${NPROC} --load-average=${NPROC} --getbinpkg --binpkg-respect-use=y\""; \
     } >> /etc/portage/make.conf && \
