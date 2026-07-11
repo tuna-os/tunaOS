@@ -105,6 +105,7 @@ COPY --from=bootc-builder /output /
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     apt-get update -y && \
     apt-get install -y --no-install-recommends \
+        ca-certificates curl gpg \
         ostree libostree-1-1 dracut \
         btrfs-progs dosfstools e2fsprogs xfsprogs skopeo jq \
         systemd-boot systemd-boot-efi && \
