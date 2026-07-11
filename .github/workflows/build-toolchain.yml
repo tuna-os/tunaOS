@@ -62,9 +62,12 @@ jobs:
             | sudo tar -xz -C /usr/local/bin oras
           oras version
 
-      - name: Build toolchain (export stage)
+      - name: Build + export toolchain tree
         run: |
           set -euo pipefail
+          # -o type=tar exports the final (scratch) stage's filesystem == the
+          # install tree at root. (podman create/export can't run a scratch image
+          # with no CMD.)
           podman build \
             --target export \
             --build-arg BASE_IMAGE="${{ matrix.image }}" \
@@ -74,15 +77,9 @@ jobs:
             --build-arg OSTREE_VERSION="${{ steps.ver.outputs.ostree }}" \
             --build-arg COMPOSEFS_VERSION="${{ steps.ver.outputs.composefs }}" \
             -f "${{ matrix.containerfile }}" \
-            -t "toolchain-${{ matrix.base }}:local" \
+            -o "type=tar,dest=toolchain.tar" \
             .
-
-      - name: Export install tree to a tarball
-        run: |
-          set -euo pipefail
-          cid=$(podman create "toolchain-${{ matrix.base }}:local")
-          podman export "$cid" | gzip > toolchain.tar.gz
-          podman rm "$cid"
+          gzip -f toolchain.tar
           ls -la toolchain.tar.gz
 
       - name: Log in to ghcr.io
