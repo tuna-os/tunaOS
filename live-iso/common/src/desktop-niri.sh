@@ -59,6 +59,6 @@ NIRIEOF
 systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target || true
 
 # Installer frontend: niri has no XDG autostart; org.tunaos.InstallerNiri is
-# flatpak-preinstalled (build_scripts/installer-frontend.sh) and launched from
+# baked into the live squash by customize-live.sh and launched from
 # the shell / DMS launcher. Add spawn-at-startup to the niri config when the
 # live config.kdl is introduced.

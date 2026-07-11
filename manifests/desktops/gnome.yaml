@@ -171,5 +171,5 @@ versionlock:
 
 # Extensions are built in a separate layer (gnome-extensions.sh)
 post_install:
-  - installer-frontend.sh
+  - tuna-flatpak-remote.sh
   - gnome-extensions.sh

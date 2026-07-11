@@ -18,7 +18,7 @@ AutomaticLogin=liveuser
 GDMEOF
 
 # Auto-launch the TunaOS installer frontend in the live session.
-# The app is flatpak-preinstalled by build_scripts/installer-frontend.sh.
+# The app is baked into the live squash by customize-live.sh (tacklebox live_customize).
 mkdir -p /etc/xdg/autostart
 tee /etc/xdg/autostart/org.tunaos.installer-live.desktop <<'DESKEOF'
 [Desktop Entry]

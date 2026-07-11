@@ -30,4 +30,4 @@ disable_desktop_files:
 
 # Post-install scripts to source (relative to build_scripts/)
 post_install:
-  - installer-frontend.sh
+  - tuna-flatpak-remote.sh
