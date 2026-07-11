@@ -55,4 +55,5 @@ disable_desktop_files:
   - org.kde.discover.urlhandler.desktop
 
 post_install:
+  - tuna-flatpak-remote.sh
   - kcm-ublue.sh

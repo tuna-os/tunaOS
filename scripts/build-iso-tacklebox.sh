@@ -115,6 +115,7 @@ cat >"$RECIPE_FILE" <<EOF
       "id": "${VARIANT}-${FLAVOR}",
       "image": "${IMAGE_REF}",
       "desktop": "${DESKTOP}",
+      "live_customize": ["${REPO_ROOT}/live-iso/common/src/customize-live.sh"],
       "modes": ["live"]
     }
   ]
