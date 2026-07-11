@@ -35,12 +35,11 @@ FROM docker.io/gentoo/stage3:latest AS base
 #    binpkg trust anchor so signed binpkgs verify.
 RUN NPROC="$(nproc)" && \
     emerge --sync --quiet && \
-    eselect profile list | grep -E "default.*systemd" | grep -v 32 | \
-    awk '{print $1}' | grep -o '[0-9]' | head -1 | xargs eselect profile set && \
+    eselect profile list | grep -E "desktop.*systemd" | grep -v 32 | head -1 | awk '{print $2}' | xargs eselect profile set && \
     { \
       echo 'FEATURES="-ipc-sandbox -network-sandbox -pid-sandbox getbinpkg"'; \
       echo 'ACCEPT_LICENSE="*"'; \
-      echo 'USE="dracut nftables systemd X wayland dbus gtk gnome qt6 plasma opengl harfbuzz"'; \
+      echo 'USE="dracut nftables systemd X wayland dbus gtk gnome qt6 plasma opengl harfbuzz alsa pulseaudio"'; \
       echo "MAKEOPTS=\"-j${NPROC}\""; \
       echo "EMERGE_DEFAULT_OPTS=\"--jobs=${NPROC} --load-average=${NPROC} --getbinpkg --binpkg-respect-use=n\""; \
     } >> /etc/portage/make.conf && \
