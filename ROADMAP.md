@@ -16,13 +16,15 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 
 | Variant | Base | Desktops | Status |
 |---------|------|----------|--------|
-| Yellowfin | AlmaLinux Kitten 10 | GNOME, KDE, COSMIC, Niri, GNOME 50 | Stable |
-| Albacore | AlmaLinux 10 | GNOME, KDE, COSMIC, Niri, GNOME 50 | Stable |
-| Skipjack | CentOS Stream 10 | GNOME, KDE, COSMIC, Niri, GNOME 50 | Beta |
-| Bonito | Fedora 44 | GNOME, KDE, COSMIC, Niri | In progress |
-| Redfin | RHEL 10 | GNOME | Alpha (local-build only) |
-| Grouper | Ubuntu 26.04 | GNOME | Experimental (RFC 010, manual dispatch only) |
-| XFCE | Fedora 44 | XFCE Wayland | New (code added, no release yet) |
+| Yellowfin | AlmaLinux Kitten 10 | GNOME, KDE, COSMIC, Niri, XFCE | Stable |
+| Albacore | AlmaLinux 10 | GNOME, KDE, COSMIC, Niri, XFCE | Stable |
+| Skipjack | CentOS Stream 10 | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
+| Bonito / Bonito Rawhide | Fedora 44 / Rawhide | GNOME, KDE, COSMIC, Niri | Beta |
+| Sailfin | openSUSE Tumbleweed (rolling) | GNOME, KDE, Niri, XFCE | Beta |
+| Guppy | Gentoo Linux (source-based) | GNOME, KDE, Niri, XFCE | Beta |
+| Grouper | Ubuntu 26.04 | GNOME, KDE, Niri, XFCE | Beta (RFC 010) |
+| Marlin | Arch Linux (rolling), CachyOS overlay | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
+| Flounder / Flounder Sid | Debian 13 Trixie / Sid | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
 
 ### Build Health
 

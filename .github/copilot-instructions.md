@@ -12,8 +12,15 @@ Always reference these instructions first and fallback to search or bash command
 |---|---|---|
 | `yellowfin` | AlmaLinux Kitten 10 | Stable |
 | `albacore` | AlmaLinux 10 | Stable |
-| `skipjack` | CentOS Stream 10 | Experimental |
-| `bonito` | Fedora 44 | Incomplete |
+| `skipjack` | CentOS Stream 10 | Beta |
+| `bonito` / `bonito-rawhide` | Fedora 44 / Rawhide | Beta |
+| `sailfin` | openSUSE Tumbleweed | Beta |
+| `guppy` | Gentoo Linux | Beta |
+| `grouper` | Ubuntu 26.04 | Beta |
+| `marlin` | Arch Linux | Beta |
+| `flounder` / `flounder-sid` | Debian Trixie / Sid | Beta |
+
+Full variant table (fish emoji, pkg manager): [`docs/AGENT_GUIDE.md`](../docs/AGENT_GUIDE.md#variants).
 
 Flavors chain: `base` → `dx` (+ Docker/VSCode) → `nvidia` (+ NVIDIA/CUDA)
 

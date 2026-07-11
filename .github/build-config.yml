@@ -622,8 +622,8 @@ variants:
         build_iso: true
         build_qcow2: false
 
-  # ── Experimental ───────────────────────────────────────────────────────────
-  # RFC 010: Ubuntu 26.04 variant. x86_64-only, manual dispatch only.
+  # ── Ubuntu ───────────────────────────────────────────────────────────────
+  # RFC 010: Ubuntu 26.04 variant. x86_64-only.
   # Desktops: gnome/kde/niri/xfce via the apt branches in build_scripts/*.sh
   # (cosmic has no apt branch yet). No HWE/NVIDIA layers — Ubuntu ships its
   # own kernel stack and the akmods images are RPM-only.
