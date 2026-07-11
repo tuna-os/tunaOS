@@ -24,6 +24,7 @@ ARG BUILD_OSTREE=0
 ARG BOOTC_VERSION
 ARG BOOTUPD_VERSION
 ARG OSTREE_VERSION
+ARG COMPOSEFS_VERSION
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV CARGO_HOME=/tmp/rust
@@ -31,25 +32,38 @@ ENV RUSTUP_HOME=/tmp/rust
 ENV DRACUT_NO_XATTR=1
 ENV PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
 
-# Build tooling + ostree/bootc/bootupd deps (proven set from debian-bootc-core).
-# meson is required for ostree's vendored composefs submodule.
+# Build tooling + ostree/bootc/bootupd deps (based on debian-bootc-core). ostree
+# uses --with-curl (no libsoup, dropped in sid). meson+ninja+libfsverity-dev
+# build composefs from source; the rest build ostree and the Rust tools.
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates curl git build-essential pkg-config go-md2man \
         libcurl4-openssl-dev libzstd-dev libssl-dev libarchive-dev libarchive13 \
-        meson libfuse3-dev liblzma-dev libsoup2.4-dev e2fslibs-dev libext2fs-dev \
-        libgpgme-dev autoconf automake libtool libseccomp-dev libcap-dev \
-        libglib2.0-dev bison flex equivs gobject-introspection \
+        meson ninja-build python3 libfsverity-dev libfuse3-dev liblzma-dev \
+        e2fslibs-dev libext2fs-dev libgpgme-dev autoconf automake libtool \
+        libseccomp-dev libcap-dev libglib2.0-dev bison flex equivs \
+        gobject-introspection \
     && rm -rf /var/lib/apt/lists/*
 
 # Rust toolchain (minimal) for the bootc and bootupd cargo builds.
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
         sh -s -- --profile minimal -y
 
-# ── libostree from source (trixie only) ──────────────────────────────────────
-# Built from git at the pinned tag WITH submodules so the vendored composefs is
-# present (a `make dist` tarball omits it). Installed to / (so bootc's ostree-sys
-# pkg-config finds a new-enough libostree) and to /output (shipped to consumers).
+# ── composefs + libostree from source (trixie only) ──────────────────────────
+# ostree's configure finds composefs via pkg-config (not the git submodule), so
+# on bases that don't package it we build composefs first and install its .pc,
+# then build ostree --with-composefs. Everything installs to / (so bootc's
+# ostree-sys pkg-config finds a new-enough libostree) and to /output (shipped to
+# consumers so the composefs-backed runtime has matching libs).
 RUN if [ "${BUILD_OSTREE}" = "1" ]; then set -eux; \
+      git clone --branch "${COMPOSEFS_VERSION}" --depth 1 \
+        https://github.com/containers/composefs.git /tmp/composefs; \
+      cd /tmp/composefs; \
+      meson setup build --prefix=/usr --libdir=/usr/lib \
+        -Ddefault_library=shared -Dman=disabled; \
+      meson compile -C build; \
+      meson install -C build; \
+      DESTDIR=/output meson install -C build; \
+      ldconfig; \
       git clone --branch "${OSTREE_VERSION}" --depth 1 --recurse-submodules \
         https://github.com/ostreedev/ostree.git /tmp/ostree; \
       cd /tmp/ostree; \
