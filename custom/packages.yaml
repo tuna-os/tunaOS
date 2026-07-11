@@ -1,0 +1,25 @@
+# Custom package list for TunaOS overlays
+# Distro-keyed package lists
+
+apt:
+  - neofetch
+  - htop
+
+dnf:
+  - neofetch
+  - htop
+
+zypper:
+  - neofetch
+  - htop
+
+pacman:
+  - neofetch
+  - htop
+
+emerge:
+  - app-admin/neofetch
+  - sys-process/htop
+
+copr:
+  - yselkowitz/wlroots-epel

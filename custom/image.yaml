@@ -1,0 +1,4 @@
+# Custom image configuration
+base: ghcr.io/tuna-os/yellowfin:gnome
+tag: my-custom-os
+publish: false
