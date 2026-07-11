@@ -73,6 +73,14 @@ RUN printf 'd /var/lib/chrony 0750 chrony chrony\n' >> /usr/lib/tmpfiles.d/chron
 # NOTE: runtime CA persistence across bootc's /var reset is a separate follow-up.
 RUN update-ca-certificates || true
 
+# bootc install (the qcow2 Gate) needs a container signature policy; openSUSE's
+# base image doesn't ship /etc/containers/policy.json, so bootc fails with
+# "no policy.json file found". Write a permissive default (the desktop install
+# may later replace it via libcontainers-common; -n keeps that if present).
+RUN mkdir -p /etc/containers && \
+    [ -s /etc/containers/policy.json ] || \
+    printf '{ "default": [ { "type": "insecureAcceptAnything" } ] }\n' > /etc/containers/policy.json
+
 # Cache-bust: the build_scripts RUNs in the desktop stages below are invoked via
 # a bind mount, whose content is NOT part of buildah's layer cache key — so
 # editing install-desktop.sh etc. would silently reuse a stale cached layer.

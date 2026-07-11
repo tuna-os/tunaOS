@@ -95,6 +95,9 @@ RUN apt-get update -y && \
         systemd-boot \
         xfsprogs \
         dracut \
+        dmsetup \
+        squashfs-tools \
+        cryptsetup \
         network-manager \
         pipewire \
         wireplumber \
