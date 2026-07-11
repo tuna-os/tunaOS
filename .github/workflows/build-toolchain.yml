@@ -11,7 +11,7 @@ name: build-toolchain
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, fix/cache-invalidation]
     paths:
       - toolchain/**
       - image-versions.yaml
