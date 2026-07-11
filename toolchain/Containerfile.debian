@@ -39,6 +39,15 @@ ENV PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
 RUN printf '#!/bin/sh\nexit 0\n' > /usr/sbin/policy-rc.d && chmod +x /usr/sbin/policy-rc.d && \
     printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/udevadm && chmod +x /usr/local/bin/udevadm
 
+# The gnutls dev stack pulls libtss2-tcti-cmd0t64, which Depends on tpm-udev; the
+# real tpm-udev can't configure in a container (needs udev). Provide a dummy
+# tpm-udev via equivs (Snow Linux's libostree-1-1 trick) so the dep resolves
+# without the real package. equivs must be installed first.
+RUN apt-get update && apt-get install -y --no-install-recommends equivs && \
+    printf 'Package: tpm-udev\nVersion: 99:0\nArchitecture: all\nMaintainer: TunaOS <build@tunaos.org>\nDescription: build-container stub to satisfy libtss2 without udev\n' \
+      > /tmp/tpm-udev.ctl && \
+    ( cd /tmp && equivs-build tpm-udev.ctl && dpkg -i tpm-udev_*.deb )
+
 # Build tooling + ostree/bootc/bootupd deps (based on debian-bootc-core). ostree
 # uses --with-curl (no libsoup, dropped in sid). meson+ninja+libfsverity-dev
 # build composefs from source; the rest build ostree and the Rust tools.
@@ -47,8 +56,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libcurl4-openssl-dev libzstd-dev libssl-dev libarchive-dev libarchive13 \
         meson ninja-build python3 libfsverity-dev libfuse3-dev liblzma-dev \
         e2fslibs-dev libext2fs-dev libgpgme-dev autoconf automake libtool \
-        libseccomp-dev libcap-dev libglib2.0-dev bison flex equivs \
-        gobject-introspection \
+        libseccomp-dev libcap-dev libglib2.0-dev bison flex \
     && rm -rf /var/lib/apt/lists/*
 
 # Rust toolchain (minimal) for the bootc and bootupd cargo builds.
@@ -77,7 +85,7 @@ RUN if [ "${BUILD_OSTREE}" = "1" ]; then set -eux; \
       env NOCONFIGURE=1 ./autogen.sh; \
       ./configure --prefix=/usr --libdir=/usr/lib --sysconfdir=/etc \
         --with-curl --without-soup --with-dracut --with-composefs \
-        --disable-gtk-doc --disable-man; \
+        --disable-introspection --disable-gtk-doc --disable-man; \
       make -j"$(nproc)"; \
       make install DESTDIR=/output; \
       make install; \
