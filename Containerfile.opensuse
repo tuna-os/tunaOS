@@ -54,6 +54,7 @@ RUN dracut --force --no-hostonly --reproducible --zstd --kver \
     "$(ls /usr/lib/modules | head -1)" \
     "/usr/lib/modules/$(ls /usr/lib/modules | head -1)/initramfs.img"
 RUN mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var && \
+    printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf && \
     echo "HOME=/var/home" | tee -a "/etc/default/useradd" && \
     rm -rf /boot /home /root /usr/local /srv /opt /mnt /var && \
     mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var && \
