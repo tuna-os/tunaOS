@@ -19,14 +19,16 @@ set -exo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # ── 1. Desktop detection ──────────────────────────────────────────────────────
+# TUNA_SESSION_ROOT lets the bats tests point detection at a fake root.
+_SR="${TUNA_SESSION_ROOT:-}"
 DESKTOP="gnome"
-if [[ -f /usr/share/wayland-sessions/plasma.desktop ]]; then
+if [[ -f "${_SR}/usr/share/wayland-sessions/plasma.desktop" ]]; then
 	DESKTOP="kde"
-elif [[ -f /usr/share/wayland-sessions/niri.desktop ]]; then
+elif [[ -f "${_SR}/usr/share/wayland-sessions/niri.desktop" ]]; then
 	DESKTOP="niri"
-elif [[ -f /usr/share/wayland-sessions/cosmic.desktop ]]; then
+elif [[ -f "${_SR}/usr/share/wayland-sessions/cosmic.desktop" ]]; then
 	DESKTOP="cosmic"
-elif compgen -G "/usr/share/xsessions/xfce*.desktop" >/dev/null; then
+elif compgen -G "${_SR}/usr/share/xsessions/xfce*.desktop" >/dev/null; then
 	DESKTOP="xfce"
 fi
 echo "customize-live: detected desktop=${DESKTOP}"
@@ -38,6 +40,12 @@ cosmic) INSTALLER_APP="org.tunaos.InstallerCosmic" ;;
 xfce) INSTALLER_APP="org.tunaos.InstallerXfce" ;;
 *) INSTALLER_APP="" ;; # gnome: upstream bootc-installer ships via its own channel
 esac
+
+# Test hook: report detection and stop before any system mutation.
+if [[ "${TUNA_DETECT_ONLY:-0}" == "1" ]]; then
+	echo "DETECTED ${DESKTOP} ${INSTALLER_APP:-none}"
+	exit 0
+fi
 
 # ── 2. Desktop adapter (autologin, screen-lock, suspend masking) ─────────────
 # shellcheck source=/dev/null
