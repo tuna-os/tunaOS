@@ -42,7 +42,7 @@ install -m0644 "$DOWNLOADS_DIR/flathub.flatpakrepo" /etc/flatpak/remotes.d/flath
 # remora — local layering CLI (github.com/tuna-os/remora). Static Go binary,
 # works on every base (dnf/zypper/pacman/apt). Version pinned for
 # reproducible image builds; renovate can bump it.
-REMORA_VERSION="v0.1.0"
+REMORA_VERSION="v0.2.0"
 REMORA_ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 curl --retry 3 --fail -L \
 	"https://github.com/tuna-os/remora/releases/download/${REMORA_VERSION}/remora-linux-${REMORA_ARCH}" \
