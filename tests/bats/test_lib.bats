@@ -212,7 +212,7 @@ teardown() {
 @test "OS detection: base_image from image-info.json takes priority" {
   # Simulate the chained-build case: BASE_IMAGE env set to TunaOS stage image
   # but image-info.json has the original OS base
-  BASE_IMAGE="ghcr.io/tuna-os/yellowfin:gnome50"
+  BASE_IMAGE="ghcr.io/tuna-os/yellowfin:gnome"
   export BASE_IMAGE
   # Create test image-info.json and set _IMAGE_INFO so lib.sh finds it
   echo '{"base-image":"quay.io/almalinuxorg/almalinux-bootc:10"}' >"${TEST_ROOT}/usr/share/ublue-os/image-info.json"

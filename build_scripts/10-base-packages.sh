@@ -78,6 +78,17 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 fi
 # ── dnf (RPM) path continues below ────────────────────────────────────
 
+# Speed up every dnf transaction in this and all downstream RUN layers.
+# max_parallel_downloads fetches packages concurrently — the single biggest
+# win, since RPM downloads dominate build time on the EL10/Fedora variants.
+# The setting persists in /etc/dnf/dnf.conf so 20-packages, install-desktop,
+# etc. all inherit it, and it changes nothing about *what* is installed.
+# (fastestmirror is deliberately not enabled — the codebase already disables
+# it for epel-multimedia; the mirror probe can hurt more than it helps.)
+if [[ -f /etc/dnf/dnf.conf ]] && ! grep -q '^max_parallel_downloads' /etc/dnf/dnf.conf; then
+	echo 'max_parallel_downloads=10' >>/etc/dnf/dnf.conf
+fi
+
 # This thing slows down downloads A LOT for no reason
 if [[ $IS_CENTOS == true ]]; then
 	dnf remove -y subscription-manager

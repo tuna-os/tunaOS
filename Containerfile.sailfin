@@ -19,18 +19,22 @@ COPY system_files_overrides /run/context/overrides
 
 FROM ${BASE_IMAGE} AS base
 
-FROM base AS builder
-RUN zypper install -y binutils cargo git go-md2man libostree-devel make rust
-WORKDIR /home/build
-RUN git clone --depth 1 https://github.com/bootc-dev/bootc.git . && \
-    make bin && make install-all DESTDIR=/output
-
 FROM base AS system
-COPY --from=builder /output /
-RUN zypper install -y \
+# Install bootc from the openSUSE Virtualization:containers OBS project rather
+# than building it from git. The source build linked a libssl soname the
+# runtime image doesn't ship (libssl.so.60 — see #643); the packaged bootc has
+# correct runtime deps and bundles the 51bootc dracut module. Also faster (no
+# cargo compile). Verified: bootc 1.15.2 install/lint work on Tumbleweed.
+RUN zypper --non-interactive addrepo -fG \
+      "https://download.opensuse.org/repositories/Virtualization:/containers/openSUSE_Tumbleweed/" \
+      virtualization-containers && \
+    zypper --non-interactive --gpg-auto-import-keys refresh && \
+    zypper install -y \
+    bootc \
     btrfs-progs cpio dosfstools dracut e2fsprogs glib2 \
     kernel-default kernel-firmware-all openssh ostree skopeo \
     systemd systemd-boot udev xfsprogs zstd chrony && \
+    zypper --non-interactive removerepo virtualization-containers && \
     zypper install -y -t pattern enhanced_base && \
     systemctl enable sshd && \
     systemctl mask systemd-firstboot.service
@@ -58,7 +62,14 @@ RUN cp -rn /usr/etc/. /etc/ 2>/dev/null; rm -rf /usr/etc
 RUN printf '# NTP pool\npool pool.ntp.org iburst\n\ndriftfile /var/lib/chrony/drift\nmakestep 1.0 3\nrtcsync\n' > /etc/chrony.conf
 RUN printf 'd /var/lib/chrony 0750 chrony chrony\n' >> /usr/lib/tmpfiles.d/chrony.conf
 
-# Desktop stage — manifest-driven
+# Base (no desktop) — the `base` flavor targets this. resolve-flavor.sh maps
+# base → DESKTOP_FLAVOR=base-no-de, and the build does `--target=<flavor>`.
+# (Matches the main Containerfile's base stage: label it bootable, no lint —
+# the lint gate lives on the desktop stages.)
+FROM system AS base-no-de
+LABEL containers.bootc=1 ostree.bootable=1
+
+# Desktop stage — manifest-driven; the DESKTOP_FLAVOR build-arg selects the DE.
 FROM system AS desktop
 ARG DESKTOP_FLAVOR
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
@@ -67,3 +78,11 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 
 LABEL containers.bootc=1 ostree.bootable=1
 RUN bootc container lint
+
+# Per-flavor target aliases so the build's `--target=<flavor>` resolves. Each
+# resolves to the desktop stage above, specialized by the DESKTOP_FLAVOR
+# build-arg (target and build-arg always agree — see resolve-flavor.sh).
+FROM desktop AS gnome
+FROM desktop AS kde
+FROM desktop AS niri
+FROM desktop AS xfce

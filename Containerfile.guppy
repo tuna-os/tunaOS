@@ -50,7 +50,14 @@ RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
     echo "d /run/media 0755 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf
 
-# Desktop stage — manifest-driven
+# Base (no desktop) — the `base` flavor targets this. resolve-flavor.sh maps
+# base → DESKTOP_FLAVOR=base-no-de, and the build does `--target=<flavor>`.
+# (Matches the main Containerfile's base stage: label it bootable, no lint —
+# the lint gate lives on the desktop stages.)
+FROM system AS base-no-de
+LABEL containers.bootc=1 ostree.bootable=1
+
+# Desktop stage — manifest-driven; the DESKTOP_FLAVOR build-arg selects the DE.
 FROM system AS desktop
 ARG DESKTOP_FLAVOR
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
@@ -59,3 +66,9 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 
 LABEL containers.bootc=1 ostree.bootable=1
 RUN bootc container lint
+
+# Per-flavor target aliases so the build's `--target=<flavor>` resolves. Each
+# resolves to the desktop stage above, specialized by the DESKTOP_FLAVOR
+# build-arg (target and build-arg always agree — see resolve-flavor.sh).
+FROM desktop AS gnome
+FROM desktop AS kde
