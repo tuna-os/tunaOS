@@ -27,12 +27,18 @@ NAME="${GATE_NAME:-gate-${VARIANT}-${FLAVOR}-$(date +%H%M%S)}"
 DISK="${GATE_DISK:-32Gi}"
 TIMEOUT="${GATE_TIMEOUT:-1200}"
 
-command -v corral >/dev/null || { echo "corral not installed: cd ../corral && just install" >&2; exit 77; }
-corral create --help 2>&1 | grep -q -- '--bootc' || { echo "corral too old (no --bootc): cd ../corral && just install" >&2; exit 77; }
+command -v corral >/dev/null || {
+	echo "corral not installed: cd ../corral && just install" >&2
+	exit 77
+}
+corral create --help 2>&1 | grep -q -- '--bootc' || {
+	echo "corral too old (no --bootc): cd ../corral && just install" >&2
+	exit 77
+}
 
 # Display manager to assert per desktop family.
 case "$FLAVOR" in
-    kde*) DM=sddm ;; niri* | cosmic*) DM=greetd ;; xfce*) DM=lightdm ;; *) DM=gdm ;;
+kde*) DM=sddm ;; niri* | cosmic*) DM=greetd ;; xfce*) DM=lightdm ;; *) DM=gdm ;;
 esac
 
 NODE_ARGS=()
@@ -50,20 +56,26 @@ check() { corral ssh "$NAME" -u root -c "$1"; }
 # graphical.target (GDM/SDDM) can take 30-60s longer than sshd on virtual
 # hardware without GPU acceleration.
 for i in 1 2 3 4 5 6; do
-    STATE=$(check 'systemctl is-active graphical.target' 2>/dev/null | tr -d '[:space:]')
-    [[ "$STATE" == "active" ]] && break
-    sleep 10
+	STATE=$(check 'systemctl is-active graphical.target' 2>/dev/null | tr -d '[:space:]')
+	[[ "$STATE" == "active" ]] && break
+	sleep 10
 done
 
 RC=0
-[[ "$(check 'systemctl is-active graphical.target' | tr -d '[:space:]')" == active ]] || { echo "FAIL graphical.target"; RC=1; }
-[[ "$(check "systemctl is-active $DM" | tr -d '[:space:]')" == active ]] || { echo "FAIL $DM"; RC=1; }
+[[ "$(check 'systemctl is-active graphical.target' | tr -d '[:space:]')" == active ]] || {
+	echo "FAIL graphical.target"
+	RC=1
+}
+[[ "$(check "systemctl is-active $DM" | tr -d '[:space:]')" == active ]] || {
+	echo "FAIL $DM"
+	RC=1
+}
 check 'systemctl --failed --no-legend' || true
 check 'bootc status --format json' | jq -r '.status.booted.image.image.image' 2>/dev/null || true
 
 if [[ $RC -eq 0 ]]; then
-    echo "✅ boot-gate PASS: $IMG"
+	echo "✅ boot-gate PASS: $IMG"
 else
-    echo "❌ boot-gate FAIL: $IMG"
+	echo "❌ boot-gate FAIL: $IMG"
 fi
 exit $RC

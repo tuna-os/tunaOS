@@ -42,7 +42,7 @@ case "${1:-}" in
 			# are commented out in build-config until tuna-os/github-copr#65
 			# lands. This branch is the intended install path once it does.
 			curl -fsSLo /etc/yum.repos.d/tuna-os.repo \
-			  https://raw.githubusercontent.com/tuna-os/github-copr/main/contrib/tuna-os.repo
+				https://raw.githubusercontent.com/tuna-os/github-copr/main/contrib/tuna-os.repo
 
 			# xfce4-wayland is the meta package tracking the whole adapted
 			# stack (xfwl4, panel, session, xfdesktop, settings, thunar,

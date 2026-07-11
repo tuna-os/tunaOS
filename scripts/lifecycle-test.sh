@@ -21,23 +21,25 @@ BOOT_TIMEOUT="${BOOT_TIMEOUT:-600}"
 
 # Timing helper
 _time() {
-    local label=$1; shift
-    local start=$(date +%s)
-    if "$@"; then
-        local elapsed=$(($(date +%s) - start))
-        printf "  ✅ %s (%ds)\n" "$label" "$elapsed"
-        return 0
-    else
-        local elapsed=$(($(date +%s) - start))
-        printf "  ❌ %s FAILED (%ds)\n" "$label" "$elapsed"
-        return 1
-    fi
+	local label=$1
+	shift
+	local start=$(date +%s)
+	if "$@"; then
+		local elapsed=$(($(date +%s) - start))
+		printf "  ✅ %s (%ds)\n" "$label" "$elapsed"
+		return 0
+	else
+		local elapsed=$(($(date +%s) - start))
+		printf "  ❌ %s FAILED (%ds)\n" "$label" "$elapsed"
+		return 1
+	fi
 }
 
 # SSH with timeout
 _ssh() {
-    local timeout=$1; shift
-    timeout "${timeout}" corral ssh "$VM" -u fedora -c "$*" 2>/dev/null
+	local timeout=$1
+	shift
+	timeout "${timeout}" corral ssh "$VM" -u fedora -c "$*" 2>/dev/null
 }
 
 echo "╔══════════════════════════════════════════════════════╗"
@@ -47,16 +49,17 @@ echo "╚═══════════════════════�
 
 # Validate
 if [[ "$VARIANT" == "redfin" && -z "${RHSM_USER:-}" ]]; then
-    echo "ERROR: RHSM_USER required for redfin" >&2; exit 1
+	echo "ERROR: RHSM_USER required for redfin" >&2
+	exit 1
 fi
 
 # Auth
 if [[ "$VARIANT" == "redfin" ]]; then
-    AUTH_JSON=""
-    for f in "${XDG_RUNTIME_DIR:-/tmp}/containers/auth.json" "$HOME/.config/containers/auth.json" "/run/user/$(id -u)/containers/auth.json"; do
-        [[ -f "$f" ]] && AUTH_JSON="$f" && break
-    done
-    [[ -n "$AUTH_JSON" ]] && cat "$AUTH_JSON" | corral ssh "$VM" -u fedora -c "mkdir -p ~/.config/containers && cat > ~/.config/containers/auth.json && chmod 600 ~/.config/containers/auth.json" 2>/dev/null
+	AUTH_JSON=""
+	for f in "${XDG_RUNTIME_DIR:-/tmp}/containers/auth.json" "$HOME/.config/containers/auth.json" "/run/user/$(id -u)/containers/auth.json"; do
+		[[ -f "$f" ]] && AUTH_JSON="$f" && break
+	done
+	[[ -n "$AUTH_JSON" ]] && cat "$AUTH_JSON" | corral ssh "$VM" -u fedora -c "mkdir -p ~/.config/containers && cat > ~/.config/containers/auth.json && chmod 600 ~/.config/containers/auth.json" 2>/dev/null
 fi
 
 RHSM_EXPORT=""
@@ -68,7 +71,7 @@ TOTAL_START=$(date +%s)
 echo ""
 echo "━━━ Step 1: Build (timeout: ${BUILD_TIMEOUT}s) ━━━"
 _time "Build ${VARIANT}:${FLAVOR}" \
-    _ssh "$BUILD_TIMEOUT" "
+	_ssh "$BUILD_TIMEOUT" "
         cd /data/tunaos && git pull origin main 2>/dev/null || true
         sudo rm -rf /data/tmp/* 2>/dev/null; mkdir -p /data/tmp
         podman system prune -f >/dev/null 2>&1 || true
@@ -81,7 +84,7 @@ _time "Build ${VARIANT}:${FLAVOR}" \
 echo ""
 echo "━━━ Step 2: ISO (timeout: ${ISO_TIMEOUT}s) ━━━"
 _time "Generate ISO" \
-    _ssh "$ISO_TIMEOUT" "
+	_ssh "$ISO_TIMEOUT" "
         cd /data/tunaos
         export TMPDIR=/data/tmp
         sudo TMPDIR=/data/tmp bash ./scripts/build-iso-tacklebox.sh ${VARIANT} ${FLAVOR} local ${FLAVOR}
@@ -91,7 +94,7 @@ _time "Generate ISO" \
 echo ""
 echo "━━━ Step 3: Boot + Verify (timeout: ${BOOT_TIMEOUT}s) ━━━"
 _time "ISO boot → GDM → TUNAOS_LIVE_READY" \
-    _ssh "$BOOT_TIMEOUT" "
+	_ssh "$BOOT_TIMEOUT" "
         cd /data/tunaos
         ISO=\$(ls -t ${VARIANT}-${FLAVOR}-*.iso 2>/dev/null | head -1)
         mkdir -p /data/e2e-output

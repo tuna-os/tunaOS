@@ -70,7 +70,7 @@ BUILD_ARGS+=("--build-arg" "ZIRCONIUM_IMAGE_REF=ghcr.io/zirconium-dev/zirconium@
 
 # Overlay type for Containerfile.overlay
 if [[ -n "${OVERLAY_TYPE:-}" ]]; then
-    BUILD_ARGS+=("--build-arg" "OVERLAY_TYPE=${OVERLAY_TYPE}")
+	BUILD_ARGS+=("--build-arg" "OVERLAY_TYPE=${OVERLAY_TYPE}")
 fi
 
 # Akmods version selection
@@ -79,28 +79,28 @@ AKMODS_REGISTRY_BASE="$(registry_ref akmods 2>/dev/null || echo "ghcr.io/${AKMOD
 BUILD_ARGS+=("--build-arg" "AKMODS_BASE=${AKMODS_REGISTRY_BASE}")
 
 if [[ "${ENABLE_HWE}" == "1" ]] || [[ "${VARIANT}" == bonito* ]]; then
-    COREOS_STABLE="${COREOS_STABLE_VERSION:-41}"
-    BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=coreos-stable-${COREOS_STABLE}")
-    BUILD_ARGS+=("--build-arg" "AKMODS_NVIDIA_VERSION=coreos-stable-${COREOS_STABLE}")
+	COREOS_STABLE="${COREOS_STABLE_VERSION:-41}"
+	BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=coreos-stable-${COREOS_STABLE}")
+	BUILD_ARGS+=("--build-arg" "AKMODS_NVIDIA_VERSION=coreos-stable-${COREOS_STABLE}")
 else
-    BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=centos-10")
-    BUILD_ARGS+=("--build-arg" "AKMODS_NVIDIA_VERSION=centos-10")
+	BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=centos-10")
+	BUILD_ARGS+=("--build-arg" "AKMODS_NVIDIA_VERSION=centos-10")
 fi
 
 # RHSM secret (RHEL only)
 RHSM_SECRET_FILE=""
 if [[ -n "${RHSM_USER:-}${RHSM_PASSWORD:-}${RHSM_ORG:-}${RHSM_ACTIVATION_KEY:-}" ]]; then
-    RHSM_SECRET_FILE=$(mktemp)
-    # shellcheck disable=SC2064 # intentional: capture path at definition time
-    trap "rm -f '${RHSM_SECRET_FILE}'" EXIT
-    chmod 0600 "${RHSM_SECRET_FILE}"
-    {
-        printf 'export RHSM_USER=%q\n'           "${RHSM_USER:-}"
-        printf 'export RHSM_PASSWORD=%q\n'       "${RHSM_PASSWORD:-}"
-        printf 'export RHSM_ORG=%q\n'            "${RHSM_ORG:-}"
-        printf 'export RHSM_ACTIVATION_KEY=%q\n' "${RHSM_ACTIVATION_KEY:-}"
-    } > "${RHSM_SECRET_FILE}"
-    BUILD_ARGS+=("--secret" "id=rhsm,src=${RHSM_SECRET_FILE}")
+	RHSM_SECRET_FILE=$(mktemp)
+	# shellcheck disable=SC2064 # intentional: capture path at definition time
+	trap "rm -f '${RHSM_SECRET_FILE}'" EXIT
+	chmod 0600 "${RHSM_SECRET_FILE}"
+	{
+		printf 'export RHSM_USER=%q\n' "${RHSM_USER:-}"
+		printf 'export RHSM_PASSWORD=%q\n' "${RHSM_PASSWORD:-}"
+		printf 'export RHSM_ORG=%q\n' "${RHSM_ORG:-}"
+		printf 'export RHSM_ACTIVATION_KEY=%q\n' "${RHSM_ACTIVATION_KEY:-}"
+	} >"${RHSM_SECRET_FILE}"
+	BUILD_ARGS+=("--secret" "id=rhsm,src=${RHSM_SECRET_FILE}")
 fi
 
 # Build scripts hash for cache invalidation
@@ -109,15 +109,15 @@ BUILD_ARGS+=("--build-arg" "BUILD_SCRIPTS_HASH=${build_scripts_hash}")
 
 # Git SHA
 if [[ -z "$(git status -s)" ]]; then
-    BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=$(git rev-parse --short HEAD)")
+	BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=$(git rev-parse --short HEAD)")
 else
-    BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=dirty")
+	BUILD_ARGS+=("--build-arg" "SHA_HEAD_SHORT=dirty")
 fi
 
 # Local cache mounts
 if [[ "${USE_CACHE}" == "1" ]]; then
-    readarray -t CACHE_MOUNTS < <(./scripts/setup-build-cache.sh "${VARIANT}")
-    BUILD_ARGS+=("${CACHE_MOUNTS[@]}")
+	readarray -t CACHE_MOUNTS < <(./scripts/setup-build-cache.sh "${VARIANT}")
+	BUILD_ARGS+=("${CACHE_MOUNTS[@]}")
 fi
 
 # ── Pass 1: Build image ──────────────────────────────────────────────────────
@@ -126,43 +126,43 @@ PRE_CHUNK_TAG="${IMAGE_TAG}-pre-chunk"
 BUILDER="podman"
 PULL_FLAG="--pull=newer"
 if [[ "${IS_CI}" == "1" ]] && command -v buildah &>/dev/null; then
-    BUILDER="buildah"
-    PULL_FLAG="--pull-always"
+	BUILDER="buildah"
+	PULL_FLAG="--pull-always"
 fi
 
 echo "==> Building ${DESKTOP_FLAVOR} stage..."
 
 ${BUILDER} build \
-    --security-opt label=disable \
-    --dns=8.8.8.8 \
-    --platform "${PLATFORM}" \
-    --target="${DESKTOP_FLAVOR}" \
-    "${BUILD_ARGS[@]}" \
-    --tag "${PRE_CHUNK_TAG}" \
-    ${PULL_FLAG} \
-    --file "${CONTAINERFILE}" \
-    ${BUILDAH_CACHE_FLAGS:-} \
-    .
+	--security-opt label=disable \
+	--dns=8.8.8.8 \
+	--platform "${PLATFORM}" \
+	--target="${DESKTOP_FLAVOR}" \
+	"${BUILD_ARGS[@]}" \
+	--tag "${PRE_CHUNK_TAG}" \
+	${PULL_FLAG} \
+	--file "${CONTAINERFILE}" \
+	${BUILDAH_CACHE_FLAGS:-} \
+	.
 
 # ── Skip rechunk for PR builds ───────────────────────────────────────────────
 if [[ "${SKIP_RECHUNK}" == "1" ]]; then
-    echo "==> SKIP_RECHUNK=1 — tagging pre-chunk image as final"
-    ${BUILDER} tag "${PRE_CHUNK_TAG}" "${IMAGE_TAG}"
-    exit 0
+	echo "==> SKIP_RECHUNK=1 — tagging pre-chunk image as final"
+	${BUILDER} tag "${PRE_CHUNK_TAG}" "${IMAGE_TAG}"
+	exit 0
 fi
 
 # ── Pass 2: Rechunk ──────────────────────────────────────────────────────────
 echo "==> Running chunkah on ${PRE_CHUNK_TAG}..."
 
 if [[ -z "${CHUNKAH_IMAGE:-}" ]]; then
-    CHUNKAH_IMAGE="quay.io/coreos/chunkah:latest"
+	CHUNKAH_IMAGE="quay.io/coreos/chunkah:latest"
 fi
 if ! podman image inspect "${CHUNKAH_IMAGE}" &>/dev/null; then
-    if ! podman pull "${CHUNKAH_IMAGE}" 2>/dev/null; then
-        echo "==> chunkah image not pullable, building from source..."
-        ./scripts/build-chunkah.sh
-        CHUNKAH_IMAGE="localhost/chunkah:latest"
-    fi
+	if ! podman pull "${CHUNKAH_IMAGE}" 2>/dev/null; then
+		echo "==> chunkah image not pullable, building from source..."
+		./scripts/build-chunkah.sh
+		CHUNKAH_IMAGE="localhost/chunkah:latest"
+	fi
 fi
 
 CHUNK_OUT=$(mktemp -d)
@@ -179,14 +179,14 @@ CHUNK_OUT=$(mktemp -d)
 # mount of a genuinely empty host directory gets no such treatment.
 CHUNK_EMPTY_DEV=$(mktemp -d)
 podman run --rm \
-    --security-opt label=disable \
-    --network host \
-    --entrypoint="" \
-    -v "${CHUNK_OUT}:/run/out:Z" \
-    --mount "type=image,source=${PRE_CHUNK_TAG},target=/chunkah" \
-    -v "${CHUNK_EMPTY_DEV}:/chunkah/dev:Z" \
-    "${CHUNKAH_IMAGE}" \
-    sh -c 'chunkah build > /run/out/out.ociarchive'
+	--security-opt label=disable \
+	--network host \
+	--entrypoint="" \
+	-v "${CHUNK_OUT}:/run/out:Z" \
+	--mount "type=image,source=${PRE_CHUNK_TAG},target=/chunkah" \
+	-v "${CHUNK_EMPTY_DEV}:/chunkah/dev:Z" \
+	"${CHUNKAH_IMAGE}" \
+	sh -c 'chunkah build > /run/out/out.ociarchive'
 mv "${CHUNK_OUT}/out.ociarchive" out.ociarchive
 rm -rf "${CHUNK_OUT}" "${CHUNK_EMPTY_DEV}"
 
@@ -199,18 +199,18 @@ RECHUNKED_REF="localhost/${IMAGE_TAG}-rechunked-$$"
 LOADED_ID=$(TMPDIR=${TMPDIR:-/tmp} podman load --input out.ociarchive | awk '/Loaded image/{print $NF}')
 rm -f out.ociarchive
 if [[ -z "${LOADED_ID}" ]]; then
-    echo "ERROR: podman load produced no image ID" >&2
-    exit 1
+	echo "ERROR: podman load produced no image ID" >&2
+	exit 1
 fi
 podman tag "${LOADED_ID}" "${RECHUNKED_REF}"
 
 ${BUILDER} build \
-    --security-opt label=disable \
-    --dns=8.8.8.8 \
-    "${BUILD_ARGS[@]}" \
-    --build-arg "RECHUNKED_BASE=${RECHUNKED_REF}" \
-    --tag "${IMAGE_TAG}" \
-    --file "Containerfile.final" \
-    .
+	--security-opt label=disable \
+	--dns=8.8.8.8 \
+	"${BUILD_ARGS[@]}" \
+	--build-arg "RECHUNKED_BASE=${RECHUNKED_REF}" \
+	--tag "${IMAGE_TAG}" \
+	--file "Containerfile.final" \
+	.
 
 ${BUILDER} rmi "${RECHUNKED_REF}" 2>/dev/null || true
