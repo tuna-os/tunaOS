@@ -7,10 +7,11 @@
 #   buildah build --build-arg BASE_IMAGE=docker.io/library/debian:trixie \
 #     --target=kde --file Containerfile.debian .
 
+ARG BASE_IMAGE="docker.io/library/debian:trixie"
+
 FROM registry.fedoraproject.org/fedora:44 AS fedora-dracut
 RUN dnf install -y dracut-live
 
-ARG BASE_IMAGE="docker.io/library/debian:trixie"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR

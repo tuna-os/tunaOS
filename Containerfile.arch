@@ -7,10 +7,11 @@
 #   buildah build --target=base-no-de --file Containerfile.arch .
 #   buildah build --target=kde --file Containerfile.arch .
 
+ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest"
+
 FROM registry.fedoraproject.org/fedora:44 AS fedora-dracut
 RUN dnf install -y dracut-live
 
-ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR
