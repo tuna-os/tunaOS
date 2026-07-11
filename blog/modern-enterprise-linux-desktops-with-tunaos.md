@@ -35,16 +35,22 @@ That's it. One command and your Enterprise Linux desktop is online.
 
 ## Variants for Every Use Case
 
-TunaOS offers four base variants, each targeting a different audience:
+TunaOS offers a comprehensive range of variants to suit any infrastructure, developer preference, or hardware target. Here is the full landscape of options available:
 
-| Variant | Base | Best for |
-|---|---|---|
-| **Albacore** 🐟 | AlmaLinux 10 | Stable enterprise desktops |
-| **Yellowfin** 🐠 | AlmaLinux Kitten 10 | Developers and early adopters |
-| **Skipjack** 🍣 | CentOS Stream 10 | Upstream testing |
-| **Bonito** 🎣 | Fedora 44 | Bleeding-edge experimentation |
-
-Each variant comes in multiple desktop flavors: GNOME, KDE Plasma, COSMIC (Rust-based from System76), and Niri (scrollable tiling compositor).
+| Variant | Base Distribution | Desktop Environments | Core Use Case / Focus |
+| :--- | :--- | :--- | :--- |
+| 🐠 **[Yellowfin](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html)** | [AlmaLinux Kitten 10](https://almalinux.org) | [GNOME](https://gnome.org), [KDE Plasma](https://kde.org), [COSMIC](https://system76.com/cosmic), [Niri](https://github.com/YaLTeR/niri) | Upstream Enterprise Linux development |
+| 🐟 **[Albacore](https://almalinux.org/blog/2025-05-27-welcoming-almalinux-10/)** | [AlmaLinux 10](https://almalinux.org) (RHEL-compatible) | [GNOME](https://gnome.org), [KDE Plasma](https://kde.org), [COSMIC](https://system76.com/cosmic), [Niri](https://github.com/YaLTeR/niri), [XFCE](https://xfce.org) | Long-Term Stable Enterprise workstation |
+| 🍣 **[Skipjack](https://centos.org)** | [CentOS Stream 10](https://centos.org) | [GNOME](https://gnome.org), [KDE Plasma](https://kde.org), [COSMIC](https://system76.com/cosmic), [Niri](https://github.com/YaLTeR/niri) | Upstream testing of RHEL packages |
+| 🎣 **[Bonito](https://fedoraproject.org)** | [Fedora 44](https://fedoraproject.org) | [GNOME](https://gnome.org), [KDE Plasma](https://kde.org), [COSMIC](https://system76.com/cosmic), [Niri](https://github.com/YaLTeR/niri) | Cutting-edge desktop experimentation |
+| 🔒 **[Redfin](https://redhat.com)** | [Red Hat Enterprise Linux 10](https://redhat.com) | [GNOME](https://gnome.org), [KDE Plasma](https://kde.org), [COSMIC](https://system76.com/cosmic), [Niri](https://github.com/YaLTeR/niri), [XFCE](https://xfce.org) | Local-build secure workstation (Subscription required) |
+| 🐟 **[Grouper](https://ubuntu.com)** | [Ubuntu 26.04](https://ubuntu.com) | [GNOME](https://gnome.org), [KDE Plasma](https://kde.org), [Niri](https://github.com/YaLTeR/niri), [XFCE](https://xfce.org) | Immutable Debian/Ubuntu cloud-native base |
+| 🚀 **[Marlin](https://archlinux.org)** | [Arch Linux](https://archlinux.org) (Rolling) | [GNOME](https://gnome.org), [KDE Plasma](https://kde.org), [COSMIC](https://system76.com/cosmic), [Niri](https://github.com/YaLTeR/niri), [XFCE](https://xfce.org) | Rolling-release bleeding-edge immutable system |
+| 🐡 **[Flounder](https://debian.org)** | [Debian 13 Trixie](https://debian.org) (Stable) | [GNOME](https://gnome.org), [KDE Plasma](https://kde.org), [COSMIC](https://system76.com/cosmic), [Niri](https://github.com/YaLTeR/niri), [XFCE](https://xfce.org) | Stable Debian base with containerized package delivery |
+| ☢️ **[Flounder Sid](https://debian.org)** | [Debian Sid](https://debian.org) (Unstable) | [GNOME](https://gnome.org), [KDE Plasma](https://kde.org), [COSMIC](https://system76.com/cosmic), [Niri](https://github.com/YaLTeR/niri), [XFCE](https://xfce.org) | Rolling Debian development base |
+| 🐉 **[Bonito Rawhide](https://fedoraproject.org)** | [Fedora Rawhide](https://fedoraproject.org) | [GNOME](https://gnome.org), [KDE Plasma](https://kde.org), [Niri](https://github.com/YaLTeR/niri), [XFCE](https://xfce.org) | Rawhide upstream testing environment |
+| 🦎 **[Sailfin](https://opensuse.org)** | [openSUSE Tumbleweed](https://opensuse.org) | [GNOME](https://gnome.org), [KDE Plasma](https://kde.org), [Niri](https://github.com/YaLTeR/niri), [XFCE](https://xfce.org) | Transactional-style rolling package base |
+| 🐧 **[Guppy](https://gentoo.org)** | [Gentoo Linux](https://gentoo.org) | [GNOME](https://gnome.org), [KDE Plasma](https://kde.org) | Source-based package compilation on immutable layers |
 
 ## The Developer Experience
 
