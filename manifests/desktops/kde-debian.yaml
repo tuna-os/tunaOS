@@ -27,3 +27,7 @@ versionlock: []
 
 disable_desktop_files:
   - org.kde.discover.desktop
+
+# Post-install scripts to source (relative to build_scripts/)
+post_install:
+  - installer-frontend.sh

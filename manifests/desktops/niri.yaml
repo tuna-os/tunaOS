@@ -120,3 +120,7 @@ versionlock:
 post_install_inline:
   - "glib-compile-schemas /usr/share/glib-2.0/schemas || true"
   - "if [ -f /etc/pam.d/greetd ]; then sed --sandbox -i -e '/gnome_keyring.so/ s/-auth/auth/ ; /gnome_keyring.so/ s/-session/session/' /etc/pam.d/greetd; fi"
+
+# Post-install scripts to source (relative to build_scripts/)
+post_install:
+  - installer-frontend.sh

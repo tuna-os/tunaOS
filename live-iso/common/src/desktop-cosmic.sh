@@ -41,3 +41,15 @@ COSMICEOF
 
 # Mask sleep targets so the installer session cannot enter S3
 systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target || true
+
+# Auto-launch the TunaOS installer frontend in the live session.
+# The app is flatpak-preinstalled by build_scripts/installer-frontend.sh.
+mkdir -p /etc/xdg/autostart
+tee /etc/xdg/autostart/org.tunaos.installer-live.desktop <<'DESKEOF'
+[Desktop Entry]
+Type=Application
+Name=Install TunaOS
+Exec=flatpak run org.tunaos.InstallerCosmic
+Icon=org.tunaos.InstallerCosmic
+OnlyShowIn=COSMIC;
+DESKEOF

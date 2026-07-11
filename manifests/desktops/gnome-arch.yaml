@@ -48,3 +48,7 @@ packages:
       - cachyos-settings
 
 versionlock: []
+
+# Post-install scripts to source (relative to build_scripts/)
+post_install:
+  - installer-frontend.sh

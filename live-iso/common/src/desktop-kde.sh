@@ -52,3 +52,16 @@ POWEREOF
 # ignored, the systemd targets they'd trigger are masked so the
 # install session cannot enter S3.
 systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target || true
+
+# Auto-launch the TunaOS installer frontend in the live session.
+# The app is flatpak-preinstalled by build_scripts/installer-frontend.sh.
+mkdir -p /etc/xdg/autostart
+tee /etc/xdg/autostart/org.tunaos.installer-live.desktop <<'DESKEOF'
+[Desktop Entry]
+Type=Application
+Name=Install TunaOS
+Exec=flatpak run org.tunaos.InstallerKde
+Icon=org.tunaos.InstallerKde
+OnlyShowIn=KDE;
+X-KDE-autostart-phase=2
+DESKEOF
