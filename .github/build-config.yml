@@ -703,7 +703,7 @@ variants:
   # ── Debian ─────────────────────────────────────────────────────────────────
   # Flounder: Debian Trixie (13) stable. Uses Containerfile.debian.
   - id: flounder
-    emoji: "🛡️"
+    emoji: "🐡"
     description: "Based on Debian 13 Trixie (stable)"
     base_image: "docker.io/library/debian:trixie"
     platforms: ["linux/amd64"]
