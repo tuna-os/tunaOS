@@ -59,8 +59,10 @@ fi
 # Disable system sleep/suspend to prevent VMs from suspending during walkthroughs
 systemctl mask suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target || true
 
-# Add resume and dmsquash-live modules so that hibernation and live boot works
-echo "add_dracutmodules+=\" resume dmsquash-live \"" >/etc/dracut.conf.d/resume.conf 2>/dev/null || true
+# Add the resume module so hibernation works. Live boot needs nothing
+# here: tacklebox injects its embedded tbox-live/tbox-root dracut
+# modules at ISO build time (tuna-os/tacklebox#90).
+echo "add_dracutmodules+=\" resume \"" >/etc/dracut.conf.d/resume.conf 2>/dev/null || true
 # Omit optional modules that aren't available in container builds
 echo "omit_dracutmodules+=\" pcsc bluetooth pcmcia syslog \"" >/etc/dracut.conf.d/omit-optional.conf 2>/dev/null || true
 

@@ -9,9 +9,6 @@
 
 ARG BASE_IMAGE="docker.io/library/debian:trixie"
 
-FROM registry.fedoraproject.org/fedora:44 AS fedora-dracut
-RUN dnf install -y dracut-live
-
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR
@@ -118,16 +115,13 @@ RUN apt-get update -y && \
 # Copy kernel to modules directory (Debian puts it in /boot)
 RUN cp /boot/vmlinuz-* "$(find /usr/lib/modules -maxdepth 1 -type d | tail -1)/vmlinuz"
 
-# Debian's dracut does not package the dmsquash-live module (nor its
-# dependencies img-lib, initqueue, etc). Copy Fedora's dracut modules.d
-# on top of Debian's (merge, don't replace — preserves bootc module).
-COPY --from=fedora-dracut /usr/lib/dracut/modules.d /usr/lib/dracut/modules.d
-
-# Build initramfs (include dmsquash-live so tacklebox doesn't need to rebuild)
+# Build initramfs. Live-boot modules are NOT needed here: tacklebox
+# injects its own embedded tbox-live/tbox-root dracut modules at ISO
+# build time using this image's stock dracut (tuna-os/tacklebox#90).
 RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \
     printf 'systemdsystemconfdir=/etc/systemd/system\nsystemdsystemunitdir=/usr/lib/systemd/system\n' \
         > /usr/lib/dracut/dracut.conf.d/30-fix-bootc-module.conf && \
-    printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" bootc dmsquash-live "\n' \
+    printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" bootc "\n' \
         > /usr/lib/dracut/dracut.conf.d/30-bootc-container-build.conf && \
     KVER=$(basename "$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d | tail -1)") && \
     dracut --force "/usr/lib/modules/${KVER}/initramfs.img" "${KVER}"

@@ -3,9 +3,6 @@
 
 ARG BASE_IMAGE
 
-FROM registry.fedoraproject.org/fedora:44 AS fedora-dracut
-RUN dnf install -y dracut-live
-
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR
 ARG SHA_HEAD_SHORT
@@ -58,9 +55,8 @@ RUN emerge --verbose \
         app-arch/cpio btrfs-progs dev-vcs/git dosfstools \
         linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd
 
-# Copy dmsquash-live module (and its img-lib dependency) from Fedora since Gentoo's dracut does not package them
-COPY --from=fedora-dracut /usr/lib/dracut/modules.d/70dmsquash-live /usr/lib/dracut/modules.d/90dmsquash-live
-COPY --from=fedora-dracut /usr/lib/dracut/modules.d/70img-lib /usr/lib/dracut/modules.d/90img-lib
+# No live-boot dracut modules needed: tacklebox injects its embedded
+# tbox-live/tbox-root modules at ISO build time (tuna-os/tacklebox#90).
 
 FROM base AS builder
 RUN emerge --verbose dev-util/ostree && \
