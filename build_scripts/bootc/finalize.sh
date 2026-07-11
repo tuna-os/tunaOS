@@ -15,7 +15,8 @@ mkdir -p /var/tmp
 # Build a reproducible, non-host-specific initramfs (the bootc dracut module is
 # pulled in via the sandbox dracut.conf.d drop-ins) for the installed kernel.
 KVER_DIR="$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1)"
-dracut --force --zstd --reproducible --no-hostonly "${KVER_DIR}/initramfs.img"
+KVER="$(basename "${KVER_DIR}")"
+dracut --force --zstd --reproducible --no-hostonly "${KVER_DIR}/initramfs.img" "${KVER}"
 
 # Bootcify: wipe /var and lay the composefs-backed bootc filesystem. apt is
 # unusable after this point.
