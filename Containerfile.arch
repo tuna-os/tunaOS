@@ -120,15 +120,16 @@ RUN KERNEL_PKG="linux"; \
         yq && \
     pacman -Scc --noconfirm
 
-# Copy dmsquash-live module (and its img-lib dependency) from Fedora since Arch's dracut does not package them
-COPY --from=fedora-dracut /usr/lib/dracut/modules.d/70dmsquash-live /usr/lib/dracut/modules.d/90dmsquash-live
-COPY --from=fedora-dracut /usr/lib/dracut/modules.d/70img-lib /usr/lib/dracut/modules.d/90img-lib
+# Arch's dracut does not package the dmsquash-live module. Copy the entire
+# Fedora dracut modules.d tree to replace Arch's sparse set.
+RUN rm -rf /usr/lib/dracut/modules.d
+COPY --from=fedora-dracut /usr/lib/dracut/modules.d /usr/lib/dracut/modules.d
 
-# Build initramfs
+# Build initramfs (include dmsquash-live so tacklebox doesn't need to rebuild)
 RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \
     printf 'systemdsystemconfdir=/etc/systemd/system\nsystemdsystemunitdir=/usr/lib/systemd/system\n' \
         > /usr/lib/dracut/dracut.conf.d/30-fix-bootc-module.conf && \
-    printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" bootc "\n' \
+    printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" bootc dmsquash-live "\n' \
         > /usr/lib/dracut/dracut.conf.d/30-bootc-container-build.conf && \
     dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
 
