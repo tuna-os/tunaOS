@@ -39,6 +39,17 @@ rm "$DOWNLOADS_DIR/JetBrainsMono.tar.xz"
 mkdir -p /etc/flatpak/remotes.d
 install -m0644 "$DOWNLOADS_DIR/flathub.flatpakrepo" /etc/flatpak/remotes.d/flathub.flatpakrepo
 
+# remora — local layering CLI (github.com/tuna-os/remora). Static Go binary,
+# works on every base (dnf/zypper/pacman/apt). Version pinned for
+# reproducible image builds; renovate can bump it.
+REMORA_VERSION="v0.2.0"
+REMORA_ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
+curl --retry 3 --fail -L \
+	"https://github.com/tuna-os/remora/releases/download/${REMORA_VERSION}/remora-linux-${REMORA_ARCH}" \
+	-o "$DOWNLOADS_DIR/remora"
+install -Dm0755 "$DOWNLOADS_DIR/remora" /usr/bin/remora
+rm "$DOWNLOADS_DIR/remora"
+
 # Generate initramfs image after installing Yellowfin branding because of Plymouth subpackage
 # Set TunaOS Plymouth theme before rebuilding initramfs so dracut picks it up
 if command -v plymouth-set-default-theme >/dev/null 2>&1; then
