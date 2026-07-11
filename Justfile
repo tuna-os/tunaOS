@@ -237,7 +237,7 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     # systemd-boot instead and installs via bootc's composefs-native backend,
     # which doesn't shell out to bootupd for bootloader management.
     COMPOSEFS_ARGS=()
-    [[ "$OUTPUT_NAME" == grouper* || "$OUTPUT_NAME" == sailfin* || "$OUTPUT_NAME" == guppy* ]] && COMPOSEFS_ARGS=(--composefs-backend)
+    [[ "$OUTPUT_NAME" == grouper* || "$OUTPUT_NAME" == sailfin* || "$OUTPUT_NAME" == guppy* || "$OUTPUT_NAME" == marlin* || "$OUTPUT_NAME" == flounder* ]] && COMPOSEFS_ARGS=(--composefs-backend)
 
     echo "==> Running bootc install to-disk (this takes a few minutes)..."
     sudo podman run \
