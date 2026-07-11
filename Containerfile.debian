@@ -119,9 +119,8 @@ RUN apt-get update -y && \
 RUN cp /boot/vmlinuz-* "$(find /usr/lib/modules -maxdepth 1 -type d | tail -1)/vmlinuz"
 
 # Debian's dracut does not package the dmsquash-live module (nor its
-# dependencies img-lib, initqueue, etc). Copy the entire Fedora dracut
-# modules.d tree to replace Debian's sparse set.
-RUN rm -rf /usr/lib/dracut/modules.d
+# dependencies img-lib, initqueue, etc). Copy Fedora's dracut modules.d
+# on top of Debian's (merge, don't replace — preserves bootc module).
 COPY --from=fedora-dracut /usr/lib/dracut/modules.d /usr/lib/dracut/modules.d
 
 # Build initramfs (include dmsquash-live so tacklebox doesn't need to rebuild)

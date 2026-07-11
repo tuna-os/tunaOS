@@ -120,9 +120,8 @@ RUN KERNEL_PKG="linux"; \
         yq && \
     pacman -Scc --noconfirm
 
-# Arch's dracut does not package the dmsquash-live module. Copy the entire
-# Fedora dracut modules.d tree to replace Arch's sparse set.
-RUN rm -rf /usr/lib/dracut/modules.d
+# Arch's dracut does not package the dmsquash-live module. Copy Fedora's
+# dracut modules.d on top of Arch's (merge, don't replace — preserves bootc).
 COPY --from=fedora-dracut /usr/lib/dracut/modules.d /usr/lib/dracut/modules.d
 
 # Build initramfs (include dmsquash-live so tacklebox doesn't need to rebuild)
