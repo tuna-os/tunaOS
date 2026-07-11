@@ -32,6 +32,13 @@ ENV RUSTUP_HOME=/tmp/rust
 ENV DRACUT_NO_XATTR=1
 ENV PKG_CONFIG_PATH=/usr/lib/pkgconfig:/usr/share/pkgconfig
 
+# Neutralize maintainer scripts that assume a running system: policy-rc.d denies
+# service starts, and a stub udevadm (first in PATH) keeps tpm-udev's postinst
+# from failing on `udevadm control` in the build container (breaks sid's tpm2
+# stack otherwise). /usr/local/bin wins over the real udevadm dpkg installs.
+RUN printf '#!/bin/sh\nexit 0\n' > /usr/sbin/policy-rc.d && chmod +x /usr/sbin/policy-rc.d && \
+    printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/udevadm && chmod +x /usr/local/bin/udevadm
+
 # Build tooling + ostree/bootc/bootupd deps (based on debian-bootc-core). ostree
 # uses --with-curl (no libsoup, dropped in sid). meson+ninja+libfsverity-dev
 # build composefs from source; the rest build ostree and the Rust tools.
@@ -69,7 +76,7 @@ RUN if [ "${BUILD_OSTREE}" = "1" ]; then set -eux; \
       cd /tmp/ostree; \
       env NOCONFIGURE=1 ./autogen.sh; \
       ./configure --prefix=/usr --libdir=/usr/lib --sysconfdir=/etc \
-        --with-curl --with-dracut --with-composefs \
+        --with-curl --without-soup --with-dracut --with-composefs \
         --disable-gtk-doc --disable-man; \
       make -j"$(nproc)"; \
       make install DESTDIR=/output; \
