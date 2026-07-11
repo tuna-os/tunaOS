@@ -19,8 +19,8 @@ run_buildscripts_for() {
 	WHAT=$1
 	shift
 	# Complex "find" expression here since there might not be any overrides
-	find "${BUILD_SCRIPTS_PATH}/overrides/$WHAT" -maxdepth 1 -iname "*-*.sh" -type f -print0 | sort --zero-terminated --sort=human-numeric | while IFS= read -r -d $'\0' script; do
-		if [ "${CUSTOM_NAME}" != "" ]; then
+	find "${BUILD_SCRIPTS_PATH}/overrides/$WHAT" -maxdepth 1 -iname "*-*.sh" -type f -print0 | sort --zero-terminated --sort=human-numeric | while IFS= read -r -d $'\0' script ; do
+		if [ "${CUSTOM_NAME}" != "" ] ; then
 			WHAT=$CUSTOM_NAME
 		fi
 		printf "::group:: ===$WHAT-%s===\n" "$(basename "$script")"
@@ -33,13 +33,17 @@ copy_systemfiles_for() {
 	WHAT=$1
 	shift
 	DISPLAY_NAME=$WHAT
-	if [ "${CUSTOM_NAME}" != "" ]; then
+	if [ "${CUSTOM_NAME}" != "" ] ; then
 		DISPLAY_NAME=$CUSTOM_NAME
 	fi
 	printf "::group:: ===%s-file-copying===\n" "${DISPLAY_NAME}"
 	cp -avf "${CONTEXT_PATH}/overrides/$WHAT/." /
 	printf "::endgroup::\n"
 }
+
+# Satisfy dracut-install when it follows the /root → /var/roothome symlink;
+# /var is a tmpfs mount during build so the target doesn't exist yet.
+mkdir -p /var/roothome
 
 run_buildscripts_for base
 
