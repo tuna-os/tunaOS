@@ -32,271 +32,47 @@ TunaOS is a curated collection of **bootc-based desktop operating systems** buil
 - **HWE Option**: Hardware Enablement kernel for newer hardware support
 - **NVIDIA Option**: NVIDIA drivers and CUDA for graphics and AI workflows
 
-## 🐠 Images
+## 🐠 Images & Variants
 
-<div align="center">
+TunaOS provides a variety of bootc-based operating system images. Use the table below to choose your base distribution and desktop environment.
 
-<img width="328" height="318" alt="1000016351" src="https://github.com/user-attachments/assets/759fc093-baf0-4959-900a-5e9c2098f745" />
-</div>
-
-### Desktops
-
-Each variant ships multiple desktop environments:
-
-| Tag suffix | Desktop |
-|---|---|
-| `gnome` | GNOME (stable) |
-
-| `kde` | KDE Plasma |
-| `cosmic` | COSMIC Desktop |
-| `niri` | Niri (tiling Wayland compositor) |
-| `xfce` | XFCE 4.20 (Wayland, experimental) — xfwl4 compositor |
-
-### Hardware Variants
-
-Append to any desktop tag:
-
-| Suffix | Description |
-|---|---|
-| *(none)* | Standard build |
-| `-hwe` | Hardware Enablement — newer kernel stack |
-| `-nvidia` | NVIDIA drivers + CUDA |
-| `-nvidia-hwe` | NVIDIA on HWE kernel |
-
-Example: `ghcr.io/tuna-os/yellowfin:gnome-hwe`, `ghcr.io/tuna-os/albacore:kde-nvidia`
-
----
-
-### 🐠 Yellowfin (AlmaLinux Kitten 10)
-
-**Base:** [AlmaLinux Kitten 10](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#container-images) — the closest to upstream CentOS Stream
-
-**Platforms:** x86_64, x86_64/v2 (pre-2013 CPUs), ARM64
-
-```
-ghcr.io/tuna-os/yellowfin:gnome
-ghcr.io/tuna-os/yellowfin:gnome-hwe
-ghcr.io/tuna-os/yellowfin:kde
-ghcr.io/tuna-os/yellowfin:niri
-ghcr.io/tuna-os/yellowfin:cosmic
-```
-
-- ✨ **x86_64/v2** microarchitecture support
-- 🖥️ **SPICE support** for qemu/libvirt virtualization
-- 🔄 **Compatible with upstream** — Kitten tracks CentOS Stream
-
----
-
-### 🐟 Albacore (AlmaLinux 10)
-
-**Base:** [AlmaLinux 10](https://almalinux.org/blog/2025-05-27-welcoming-almalinux-10/) — stable, RHEL-compatible
-
-**Platforms:** x86_64, x86_64/v2, ARM64
-
-```
-ghcr.io/tuna-os/albacore:gnome
-ghcr.io/tuna-os/albacore:gnome-hwe
-ghcr.io/tuna-os/albacore:kde
-ghcr.io/tuna-os/albacore:niri
-ghcr.io/tuna-os/albacore:cosmic
-ghcr.io/tuna-os/albacore:xfce
-```
-
-- ✨ **x86_64/v2** microarchitecture support
-- 🖥️ **SPICE support** for qemu/libvirt virtualization
-- 🏢 **Enterprise stability** — follows RHEL lifecycle
-
----
-
-### 🍣 Skipjack (CentOS Stream 10)
-
-**Base:** CentOS Stream 10 — the upstream of RHEL
-
-**Platforms:** x86_64, ARM64
-
-```
-ghcr.io/tuna-os/skipjack:gnome
-ghcr.io/tuna-os/skipjack:kde
-ghcr.io/tuna-os/skipjack:niri
-ghcr.io/tuna-os/skipjack:cosmic
-```
-
----
+| Variant | Base OS | Registry Path | Desktops | Architectures |
+| :--- | :--- | :--- | :--- | :--- |
+| 🐠 **Yellowfin** | AlmaLinux Kitten 10 | `ghcr.io/tuna-os/yellowfin` | GNOME, KDE, COSMIC, Niri | x86_64, x86_64/v2, arm64 |
+| 🐟 **Albacore** | AlmaLinux 10 (RHEL 10) | `ghcr.io/tuna-os/albacore` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64, x86_64/v2, arm64 |
+| 🍣 **Skipjack** | CentOS Stream 10 | `ghcr.io/tuna-os/skipjack` | GNOME, KDE, COSMIC, Niri | x86_64, arm64 |
+| 🎣 **Bonito** | Fedora 44 | `ghcr.io/tuna-os/bonito` | GNOME, KDE, COSMIC, Niri | x86_64, arm64 |
+| 🔒 **Redfin** | Red Hat Enterprise Linux 10 | *Local-Build Only* | GNOME, KDE, COSMIC, Niri, XFCE | x86_64, arm64 |
+| 🐟 **Grouper** | Ubuntu 26.04 | `ghcr.io/tuna-os/grouper` | GNOME, KDE, Niri, XFCE | x86_64 |
+| 🚀 **Marlin** | Arch Linux (Rolling) | `ghcr.io/tuna-os/marlin` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64 |
+| 🛡️ **Flounder** | Debian 13 (Trixie) | `ghcr.io/tuna-os/flounder` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64 |
+| ☢️ **Flounder Sid** | Debian Sid (Unstable) | `ghcr.io/tuna-os/flounder-sid` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64 |
+| 🐉 **Bonito Rawhide** | Fedora Rawhide | `ghcr.io/tuna-os/bonito-rawhide` | GNOME, KDE, Niri, XFCE | x86_64, arm64 |
+| 🦎 **Sailfin** | openSUSE Tumbleweed | `ghcr.io/tuna-os/sailfin` | GNOME, KDE, Niri, XFCE | x86_64 |
+| 🐧 **Guppy** | Gentoo Linux | `ghcr.io/tuna-os/guppy` | GNOME, KDE | x86_64 |
 
 > [!NOTE]
-> Bonito is still a work in progress and may not be fully functional
+> **Redfin (RHEL 10)** is local-build only due to EULA restrictions. To build it locally, run `just build redfin <desktop>` (see [rhel-setup.md](docs/rhel-setup.md)).
 
-### 🎣 Bonito (Fedora 44)
+### Suffix Rules (Image Tags)
 
-**Base:** Fedora 44 — cutting-edge Fedora on bootc
+Image tags are constructed as `<desktop>[-hardware]`:
 
-**Platforms:** x86_64, ARM64
+1. **Desktop Suffixes**:
+   * `gnome`: GNOME (stable)
+   * `kde`: KDE Plasma
+   * `cosmic`: COSMIC Desktop
+   * `niri`: Niri (tiling Wayland compositor)
+   * `xfce`: XFCE (Wayland experimental)
+   * `base`: Plain system image with no desktop environment pre-installed (available for most variants)
 
-```
-ghcr.io/tuna-os/bonito:gnome
-ghcr.io/tuna-os/bonito:kde
-ghcr.io/tuna-os/bonito:niri
-ghcr.io/tuna-os/bonito:cosmic
-```
+2. **Hardware Suffixes** (append to any desktop suffix):
+   * *(none)*: Standard generic kernel build
+   * `-hwe`: Hardware Enablement (newer kernel stack)
+   * `-nvidia`: NVIDIA drivers + CUDA pre-configured
+   * `-nvidia-hwe`: NVIDIA drivers on HWE kernel stack
 
----
-
-### 🔒 Redfin (RHEL 10) — Local-Build Only
-
-**Base:** Red Hat Enterprise Linux 10 — fully supported, subscription-based
-
-**Platforms:** x86_64, ARM64
-
-**Desktops:** GNOME, GNOME 50, KDE, COSMIC, Niri, XFCE (all desktops supported)
-
-> [!IMPORTANT]
-> Due to the RHEL EULA, Redfin images **cannot be publicly distributed**. This variant is local-build only.
-> For a freely redistributable RHEL-compatible alternative, use Albacore (AlmaLinux 10).
-
-See [`docs/rhel-setup.md`](docs/rhel-setup.md) for prerequisites, authentication, and build instructions.
-
-```bash
-just build redfin gnome
-just build redfin kde
-just build redfin cosmic
-just build redfin niri
-just build redfin all
-```
-
-
-### 🐟 Grouper (Ubuntu 26.04 Resolute Raccoon)
-
-**Base:** [Ubuntu 26.04](https://ubuntu.com/) — cloud-native Ubuntu on bootc
-
-**Platforms:** x86_64
-
-**Desktops:** GNOME, KDE, Niri, XFCE (+ base)
-
-> [!NOTE]
-> Grouper is an experimental Ubuntu variant using `Containerfile.ubuntu`. COSMIC is not yet supported on Ubuntu.
-
-```
-ghcr.io/tuna-os/grouper:base
-ghcr.io/tuna-os/grouper:gnome
-ghcr.io/tuna-os/grouper:kde
-ghcr.io/tuna-os/grouper:niri
-ghcr.io/tuna-os/grouper:xfce
-```
-
-### 🚀 Marlin (Arch Linux — Rolling)
-
-**Base:** [Arch Linux](https://archlinux.org/) — rolling-release, bleeding-edge packages
-
-**Platforms:** x86_64
-
-**Desktops:** GNOME, KDE, COSMIC, Niri, XFCE (+ base)
-
-> [!NOTE]
-> Marlin compiles bootc from source (Arch doesn't package it). Builds take longer than EL10/Fedora variants.
-
-```
-ghcr.io/tuna-os/marlin:base
-ghcr.io/tuna-os/marlin:gnome
-ghcr.io/tuna-os/marlin:kde
-ghcr.io/tuna-os/marlin:cosmic
-ghcr.io/tuna-os/marlin:niri
-ghcr.io/tuna-os/marlin:xfce
-```
-
----
-
-### 🛡️ Flounder (Debian 13 Trixie)
-
-**Base:** [Debian 13 Trixie](https://www.debian.org/releases/trixie/) — stable
-
-**Platforms:** x86_64
-
-```
-ghcr.io/tuna-os/flounder:base
-ghcr.io/tuna-os/flounder:gnome
-ghcr.io/tuna-os/flounder:kde
-ghcr.io/tuna-os/flounder:cosmic
-ghcr.io/tuna-os/flounder:niri
-ghcr.io/tuna-os/flounder:xfce
-```
-
----
-
-### ☢️ Flounder Sid (Debian Sid — Unstable)
-
-**Base:** [Debian Sid](https://www.debian.org/releases/sid/) — rolling/unstable
-
-**Platforms:** x86_64
-
-```
-ghcr.io/tuna-os/flounder-sid:base
-ghcr.io/tuna-os/flounder-sid:gnome
-ghcr.io/tuna-os/flounder-sid:kde
-ghcr.io/tuna-os/flounder-sid:cosmic
-ghcr.io/tuna-os/flounder-sid:niri
-ghcr.io/tuna-os/flounder-sid:xfce
-```
-
----
-
-### 🐉 Bonito Rawhide (Fedora Rawhide)
-
-**Base:** [Fedora Rawhide](https://docs.fedoraproject.org/en-US/releases/rawhide/) — rolling Fedora development
-
-**Platforms:** x86_64, ARM64
-
-**Desktops:** GNOME, KDE, COSMIC, Niri, XFCE (including HWE and NVIDIA variants)
-
-> [!NOTE]
-> Rawhide is the development branch of Fedora — expect frequent updates and occasional breakage.
-
-```
-ghcr.io/tuna-os/bonito-rawhide:base
-ghcr.io/tuna-os/bonito-rawhide:gnome
-ghcr.io/tuna-os/bonito-rawhide:kde
-ghcr.io/tuna-os/bonito-rawhide:niri
-ghcr.io/tuna-os/bonito-rawhide:xfce
-```
-
----
-
-### 🦎 Sailfin (Tumbleweed)
-
-**Base:** [Sailfin Tumbleweed](https://www.sailfin.org/) — rolling-release, zypper-based
-
-**Platforms:** x86_64
-
-**Desktops:** GNOME, KDE, Niri, XFCE (+ base)
-
-> [!NOTE]
-> Sailfin is experimental. Builds compile bootc from source (Sailfin doesn't package it).
-
-```
-ghcr.io/tuna-os/sailfin:base
-ghcr.io/tuna-os/sailfin:gnome
-ghcr.io/tuna-os/sailfin:kde
-ghcr.io/tuna-os/sailfin:niri
-ghcr.io/tuna-os/sailfin:xfce
-```
-
----
-
-### 🐧 Gentoo Linux
-
-**Base:** [Gentoo Linux](https://www.guppy.org/) — source-based, emerge/portage
-
-**Platforms:** x86_64
-
-**Desktops:** GNOME, KDE (+ base)
-
-> [!WARNING]
-> Guppy builds compile everything from source. Expect hours-long build times.
-
-```
-ghcr.io/tuna-os/guppy:base
-ghcr.io/tuna-os/guppy:gnome
-ghcr.io/tuna-os/guppy:kde
-```
+*Example tags:* `yellowfin:gnome-hwe`, `albacore:kde-nvidia`, `marlin:cosmic`
 
 ---
 
