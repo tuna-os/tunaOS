@@ -1,7 +1,7 @@
 # Containerfile.gentoo — Gentoo Linux on bootc.
 # Based on bootcrew/gentoo-bootc but adapted for TunaOS manifest-driven desktop installs.
 
-FROM registry.fedoraproject.org/fedora:40 AS fedora-dracut
+FROM registry.fedoraproject.org/fedora:44 AS fedora-dracut
 RUN dnf install -y dracut-live
 
 ARG BASE_IMAGE
