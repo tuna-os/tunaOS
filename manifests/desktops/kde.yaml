@@ -123,7 +123,7 @@ packages:
   emerge:
     - kde-plasma/plasma-meta
     - kde-apps/kde-apps-meta
-    - kde-plasma/sddm
+    - x11-misc/sddm
 
 versionlock:
   - plasma-desktop

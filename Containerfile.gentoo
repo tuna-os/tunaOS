@@ -37,7 +37,7 @@ RUN NPROC="$(nproc)" && \
     { \
       echo 'FEATURES="-ipc-sandbox -network-sandbox -pid-sandbox getbinpkg"'; \
       echo 'ACCEPT_LICENSE="*"'; \
-      echo 'USE="dracut nftables systemd"'; \
+      echo 'USE="dracut nftables systemd X wayland dbus gtk gnome qt6 plasma"'; \
       echo "MAKEOPTS=\"-j${NPROC}\""; \
       echo "EMERGE_DEFAULT_OPTS=\"--jobs=${NPROC} --load-average=${NPROC} --getbinpkg --binpkg-respect-use=y\""; \
     } >> /etc/portage/make.conf && \
@@ -55,6 +55,9 @@ RUN emerge --verbose --deep --newuse @world
 RUN emerge --verbose \
         app-arch/cpio btrfs-progs dev-vcs/git dosfstools \
         linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd
+
+# Copy dmsquash-live module from Fedora since Gentoo's dracut does not package it
+COPY --from=registry.fedoraproject.org/fedora:40 /usr/lib/dracut/modules.d/90dmsquash-live /usr/lib/dracut/modules.d/90dmsquash-live
 
 FROM base AS builder
 RUN emerge --verbose dev-util/ostree && \

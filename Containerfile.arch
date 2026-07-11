@@ -116,6 +116,9 @@ RUN KERNEL_PKG="linux"; \
         yq && \
     pacman -Scc --noconfirm
 
+# Copy dmsquash-live module from Fedora since Arch's dracut does not package it
+COPY --from=registry.fedoraproject.org/fedora:40 /usr/lib/dracut/modules.d/90dmsquash-live /usr/lib/dracut/modules.d/90dmsquash-live
+
 # Build initramfs
 RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \
     printf 'systemdsystemconfdir=/etc/systemd/system\nsystemdsystemunitdir=/usr/lib/systemd/system\n' \

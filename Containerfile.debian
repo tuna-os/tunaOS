@@ -114,6 +114,9 @@ RUN apt-get update -y && \
 # Copy kernel to modules directory (Debian puts it in /boot)
 RUN cp /boot/vmlinuz-* "$(find /usr/lib/modules -maxdepth 1 -type d | tail -1)/vmlinuz"
 
+# Copy dmsquash-live module from Fedora since Debian's dracut does not package it
+COPY --from=registry.fedoraproject.org/fedora:40 /usr/lib/dracut/modules.d/90dmsquash-live /usr/lib/dracut/modules.d/90dmsquash-live
+
 # Build initramfs
 RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \
     printf 'systemdsystemconfdir=/etc/systemd/system\nsystemdsystemunitdir=/usr/lib/systemd/system\n' \
