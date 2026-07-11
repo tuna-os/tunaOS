@@ -49,9 +49,10 @@ jobs:
         run: |
           set -euo pipefail
           get() { grep -E "^\s*$1:" image-versions.yaml | head -1 | sed -E 's/.*:\s*"?([^"]+)"?\s*$/\1/'; }
-          echo "bootc=$(get bootc)"     >> "$GITHUB_OUTPUT"
-          echo "bootupd=$(get bootupd)" >> "$GITHUB_OUTPUT"
-          echo "ostree=$(get ostree)"   >> "$GITHUB_OUTPUT"
+          echo "bootc=$(get bootc)"         >> "$GITHUB_OUTPUT"
+          echo "bootupd=$(get bootupd)"     >> "$GITHUB_OUTPUT"
+          echo "ostree=$(get ostree)"       >> "$GITHUB_OUTPUT"
+          echo "composefs=$(get composefs)" >> "$GITHUB_OUTPUT"
 
       - name: Install oras
         run: |
@@ -71,6 +72,7 @@ jobs:
             --build-arg BOOTC_VERSION="${{ steps.ver.outputs.bootc }}" \
             --build-arg BOOTUPD_VERSION="${{ steps.ver.outputs.bootupd }}" \
             --build-arg OSTREE_VERSION="${{ steps.ver.outputs.ostree }}" \
+            --build-arg COMPOSEFS_VERSION="${{ steps.ver.outputs.composefs }}" \
             -f "${{ matrix.containerfile }}" \
             -t "toolchain-${{ matrix.base }}:local" \
             .
