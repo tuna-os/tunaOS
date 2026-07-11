@@ -28,14 +28,6 @@ fi
 find /var -mindepth 1 -maxdepth 1 ! -path '/var/cache' -delete 2>/dev/null || true
 find /var/cache -mindepth 1 -delete 2>/dev/null || true
 
-# Some package post-install scripts (or the base image itself) leave static
-# device nodes under /dev (e.g. /dev/null as a real char device rather than
-# the runtime devtmpfs entry). chunkah's rootfs walk chokes on these
-# ("special file type not supported") — same failure mode fixed for Gentoo
-# in Containerfile.gentoo. Sweep it here too, everything under /dev is
-# recreated by devtmpfs/systemd-tmpfiles at boot; keep the virtual submounts.
-find /dev -mindepth 1 -maxdepth 1 ! -name pts ! -name shm ! -name mqueue -exec rm -rf {} + 2>/dev/null || true
-
 # Declare /var/cache/dnf and /var/lib/dnf in tmpfiles.d so they're recreated on first boot (bootc lint: var-tmpfiles)
 # (dnf-only — apt uses /var/lib/apt/lists which is handled by its own tmpfiles.d)
 if [[ "$PKG_MGR" == "dnf" ]]; then

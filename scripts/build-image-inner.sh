@@ -166,12 +166,21 @@ if ! podman image inspect "${CHUNKAH_IMAGE}" &>/dev/null; then
 fi
 
 CHUNK_OUT=$(mktemp -d)
+# Some base images (e.g. Gentoo stage3) bake static device nodes into their
+# layers. Those can't be reliably deleted via `rm` in a later Containerfile
+# RUN — the container runtime supplies its own live /dev during RUN, so a
+# rm there never diffs against the base layer's committed device files, and
+# they resurface in the final flattened image. chunkah's rootfs walker
+# rejects any special file ("special file type not supported: /dev/null"),
+# so shadow /chunkah/dev with an empty tmpfs here instead of fighting layer
+# diffs — a real /dev is always populated by devtmpfs at boot anyway.
 podman run --rm \
     --security-opt label=disable \
     --network host \
     --entrypoint="" \
     -v "${CHUNK_OUT}:/run/out:Z" \
     --mount "type=image,source=${PRE_CHUNK_TAG},target=/chunkah" \
+    --mount "type=tmpfs,destination=/chunkah/dev" \
     "${CHUNKAH_IMAGE}" \
     sh -c 'chunkah build > /run/out/out.ociarchive'
 mv "${CHUNK_OUT}/out.ociarchive" out.ociarchive
