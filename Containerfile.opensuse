@@ -62,7 +62,8 @@ RUN mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var && \
     ln -sT var/roothome /root && ln -sT var/srv /srv && \
     ln -sT var/opt /opt && ln -sT var/mnt /mnt && \
     ln -sT var/home /home && ln -sT ../var/usrlocal /usr/local && \
-    for d in /var/* /var/.[!.]*; do [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done
+    for d in /var/* /var/.[!.]*; do [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done && \
+    mkdir -p /var/tmp
 RUN cp -rn /usr/etc/. /etc/ 2>/dev/null; rm -rf /usr/etc
 RUN printf '# NTP pool\npool pool.ntp.org iburst\n\ndriftfile /var/lib/chrony/drift\nmakestep 1.0 3\nrtcsync\n' > /etc/chrony.conf
 RUN printf 'd /var/lib/chrony 0750 chrony chrony\n' >> /usr/lib/tmpfiles.d/chrony.conf
@@ -108,7 +109,7 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 # layout after the install so bootc lint passes (identical to the system stage).
 RUN zypper clean -a 2>/dev/null || true
 RUN set -x && rm -rf /boot /home /root /usr/local /srv /opt /mnt /var /ostree && \
-    mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var && \
+    mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var /var/tmp && \
     ln -sT sysroot/ostree /ostree && \
     ln -sT var/roothome /root && ln -sT var/srv /srv && \
     ln -sT var/opt /opt && ln -sT var/mnt /mnt && \

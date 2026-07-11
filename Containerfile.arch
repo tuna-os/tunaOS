@@ -131,7 +131,7 @@ RUN rm -rf /boot /home /root /usr/local /srv /opt /mnt \
     # parents; none on Arch). Clean everything that isn't a mount.
     for d in /var/* /var/.[!.]*; do [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done && \
     rm -rf /usr/lib/sysimage/log /usr/lib/sysimage/cache/pacman/pkg 2>/dev/null; true && \
-    mkdir -p /sysroot /boot /usr/lib/ostree /var && \
+    mkdir -p /sysroot /boot /usr/lib/ostree /var /var/tmp && \
     ln -sT sysroot/ostree /ostree && \
     ln -sT var/roothome /root && \
     ln -sT var/srv /srv && \
@@ -139,7 +139,7 @@ RUN rm -rf /boot /home /root /usr/local /srv /opt /mnt \
     ln -sT var/mnt /mnt && \
     ln -sT var/home /home && \
     ln -sT ../var/usrlocal /usr/local && \
-    printf 'd /var/opt 0755 root root -\nd /var/home 0755 root root -\nd /var/srv 0755 root root -\nd /var/mnt 0755 root root -\nd /var/usrlocal 0755 root root -\nd /var/roothome 0700 root root -\nd /run/media 0755 root root -\n' \
+    printf 'd /var/opt 0755 root root -\nd /var/home 0755 root root -\nd /var/srv 0755 root root -\nd /var/mnt 0755 root root -\nd /var/usrlocal 0755 root root -\nd /var/roothome 0700 root root -\nd /var/tmp 1777 root root -\nd /run/media 0755 root root -\n' \
         > /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' \
         > /usr/lib/ostree/prepare-root.conf

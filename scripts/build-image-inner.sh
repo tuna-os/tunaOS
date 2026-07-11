@@ -171,20 +171,24 @@ CHUNK_OUT=$(mktemp -d)
 # RUN — the container runtime supplies its own live /dev during RUN, so a
 # rm there never diffs against the base layer's committed device files, and
 # they resurface in the final flattened image. chunkah's rootfs walker
-# rejects any special file ("special file type not supported: /dev/null"),
-# so shadow /chunkah/dev with an empty tmpfs here instead of fighting layer
-# diffs — a real /dev is always populated by devtmpfs at boot anyway.
+# rejects any special file ("special file type not supported: /dev/null").
+#
+# Shadowing /chunkah/dev with `--mount type=tmpfs` isn't enough: podman/crun
+# auto-populate any mount landing on a path named "dev" with the standard
+# console/null/zero/tty device nodes (same failure, different file). A bind
+# mount of a genuinely empty host directory gets no such treatment.
+CHUNK_EMPTY_DEV=$(mktemp -d)
 podman run --rm \
     --security-opt label=disable \
     --network host \
     --entrypoint="" \
     -v "${CHUNK_OUT}:/run/out:Z" \
     --mount "type=image,source=${PRE_CHUNK_TAG},target=/chunkah" \
-    --mount "type=tmpfs,destination=/chunkah/dev" \
+    -v "${CHUNK_EMPTY_DEV}:/chunkah/dev:Z" \
     "${CHUNKAH_IMAGE}" \
     sh -c 'chunkah build > /run/out/out.ociarchive'
 mv "${CHUNK_OUT}/out.ociarchive" out.ociarchive
-rm -rf "${CHUNK_OUT}"
+rm -rf "${CHUNK_OUT}" "${CHUNK_EMPTY_DEV}"
 
 # ── Pass 3: Relabel ──────────────────────────────────────────────────────────
 echo "==> Applying labels from OCI archive..."
