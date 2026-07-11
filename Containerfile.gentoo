@@ -68,7 +68,7 @@ RUN KVER=$(ls /usr/lib/modules | head -1) && \
     rm -rf /var/db /var/cache
 RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
     rm -rf /boot /home /root /usr/local /srv /opt /mnt /var && \
-    rm -rf /dev/* && \
+    find /dev -mindepth 1 -maxdepth 1 ! -name pts ! -name shm ! -name mqueue -exec rm -rf {} + 2>/dev/null || true && \
     mkdir -p /var /sysroot/ostree /boot /usr/lib/ostree && \
     ln -sT var/opt /opt && ln -sT var/roothome /root && \
     ln -sT var/home /home && ln -sT sysroot/ostree /ostree && \
