@@ -65,9 +65,10 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 
 	# Download binary tarball (separate, so partial download doesn't corrupt)
 	# and systemd units (parallel — small, safe to Z).
-	curl --retry 3 --fail -L \
-		"https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_${UUPD_ARCH}.tar.gz" \
-		2>/dev/null | tar -xzf - -C /usr/bin uupd
+	curl --retry 3 --fail -sSL -o /tmp/uupd.tar.gz \
+		"https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_${UUPD_ARCH}.tar.gz"
+	tar -xzf /tmp/uupd.tar.gz -C /usr/bin uupd
+	rm -f /tmp/uupd.tar.gz
 	curl --retry 3 --fail -Z -s \
 		-o /usr/lib/systemd/system/uupd.service "${UUPD_SRC_BASE}/uupd.service" \
 		-o /usr/lib/systemd/system/uupd.timer "${UUPD_SRC_BASE}/uupd.timer" \
@@ -246,9 +247,10 @@ UUPD_SRC_BASE="https://raw.githubusercontent.com/ublue-os/uupd/${UUPD_VERSION}"
 
 # Download binary tarball (separate, so partial download doesn't corrupt)
 # and systemd units (parallel — small, safe to Z).
-curl --retry 3 --fail -L \
-	"https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_${UUPD_ARCH}.tar.gz" \
-	2>/dev/null | tar -xzf - -C /usr/bin uupd
+curl --retry 3 --fail -sSL -o /tmp/uupd.tar.gz \
+	"https://github.com/ublue-os/uupd/releases/download/${UUPD_VERSION}/uupd_Linux_${UUPD_ARCH}.tar.gz"
+tar -xzf /tmp/uupd.tar.gz -C /usr/bin uupd
+rm -f /tmp/uupd.tar.gz
 curl --retry 3 --fail -Z -s \
 	-o /usr/lib/systemd/system/uupd.service "${UUPD_SRC_BASE}/uupd.service" \
 	-o /usr/lib/systemd/system/uupd.timer "${UUPD_SRC_BASE}/uupd.timer" \
