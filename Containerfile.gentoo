@@ -60,7 +60,7 @@ RUN emerge --verbose \
         linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd
 
 # Copy dmsquash-live module from Fedora since Gentoo's dracut does not package it
-COPY --from=fedora-dracut /usr/lib/dracut/modules.d/90dmsquash-live /usr/lib/dracut/modules.d/90dmsquash-live
+COPY --from=fedora-dracut /usr/lib/dracut/modules.d/70dmsquash-live /usr/lib/dracut/modules.d/90dmsquash-live
 
 FROM base AS builder
 RUN emerge --verbose dev-util/ostree && \
