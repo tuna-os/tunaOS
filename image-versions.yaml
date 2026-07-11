@@ -26,7 +26,7 @@ downloads:
   # renovate: datasource=github-releases depName=ledif/kcm_ublue
   kcm_ublue: "v0.6.1"
   # renovate: datasource=git-refs depName=tuna-os/tacklebox
-  tacklebox: "3b4598273efb2f71d17515947e442f0e6b26a6c5"
+  tacklebox: "86da45b29a8d7ade640ef669ac18100659347903"
 
   # Bootc toolchain built from source (see toolchain/) and published to
   # ghcr.io/tuna-os/bootc-toolchain-<base> as OCI artifacts via ORAS.
