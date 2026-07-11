@@ -1,0 +1,101 @@
+name: build-toolchain
+
+# Builds bootc + bootupd (+ libostree where the packaged one is too old) from
+# pinned upstream source, ABI-matched per base image, and publishes the install
+# tree to ghcr.io/tuna-os/bootc-toolchain-<base> as an OCI artifact via ORAS.
+# Variants consume these instead of compiling bootc on every build.
+#
+# Versions are pinned in image-versions.yaml (Renovate-managed); a bump there
+# triggers a rebuild here.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - toolchain/**
+      - image-versions.yaml
+      - .github/workflows/build-toolchain.yml
+  # Renovate bumps the pins on main; rebuild so the :latest artifact tracks them.
+
+concurrency:
+  group: build-toolchain-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  toolchain:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - base: trixie
+            image: docker.io/library/debian:trixie
+            containerfile: toolchain/Containerfile.debian
+            build_ostree: "1"
+          - base: sid
+            image: docker.io/library/debian:sid
+            containerfile: toolchain/Containerfile.debian
+            build_ostree: "0"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read pinned versions
+        id: ver
+        run: |
+          set -euo pipefail
+          get() { grep -E "^\s*$1:" image-versions.yaml | head -1 | sed -E 's/.*:\s*"?([^"]+)"?\s*$/\1/'; }
+          echo "bootc=$(get bootc)"     >> "$GITHUB_OUTPUT"
+          echo "bootupd=$(get bootupd)" >> "$GITHUB_OUTPUT"
+          echo "ostree=$(get ostree)"   >> "$GITHUB_OUTPUT"
+
+      - name: Install oras
+        run: |
+          set -euo pipefail
+          ORAS_VERSION=1.2.0
+          curl -fsSL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz" \
+            | sudo tar -xz -C /usr/local/bin oras
+          oras version
+
+      - name: Build toolchain (export stage)
+        run: |
+          set -euo pipefail
+          podman build \
+            --target export \
+            --build-arg BASE_IMAGE="${{ matrix.image }}" \
+            --build-arg BUILD_OSTREE="${{ matrix.build_ostree }}" \
+            --build-arg BOOTC_VERSION="${{ steps.ver.outputs.bootc }}" \
+            --build-arg BOOTUPD_VERSION="${{ steps.ver.outputs.bootupd }}" \
+            --build-arg OSTREE_VERSION="${{ steps.ver.outputs.ostree }}" \
+            -f "${{ matrix.containerfile }}" \
+            -t "toolchain-${{ matrix.base }}:local" \
+            .
+
+      - name: Export install tree to a tarball
+        run: |
+          set -euo pipefail
+          cid=$(podman create "toolchain-${{ matrix.base }}:local")
+          podman export "$cid" | gzip > toolchain.tar.gz
+          podman rm "$cid"
+          ls -la toolchain.tar.gz
+
+      - name: Log in to ghcr.io
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Push OCI artifact
+        run: |
+          set -euo pipefail
+          REPO="ghcr.io/tuna-os/bootc-toolchain-${{ matrix.base }}"
+          BOOTC="${{ steps.ver.outputs.bootc }}"
+          oras push \
+            --artifact-type application/vnd.tunaos.bootc-toolchain \
+            --annotation "org.opencontainers.image.source=https://github.com/tuna-os/tunaOS" \
+            --annotation "dev.tunaos.bootc.version=${BOOTC}" \
+            "${REPO}:${BOOTC}" \
+            toolchain.tar.gz:application/vnd.tunaos.bootc-toolchain.layer.tar+gzip
+          # Move the :latest tag to this build.
+          oras tag "${REPO}:${BOOTC}" latest

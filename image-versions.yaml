@@ -27,3 +27,16 @@ downloads:
   kcm_ublue: "v0.6.1"
   # renovate: datasource=git-refs depName=tuna-os/tacklebox
   tacklebox: "3b4598273efb2f71d17515947e442f0e6b26a6c5"
+
+  # Bootc toolchain built from source (see toolchain/) and published to
+  # ghcr.io/tuna-os/bootc-toolchain-<base> as OCI artifacts via ORAS.
+  # These pins drive both the toolchain builds and the version tags consumers
+  # request. Renovate bumps them; the toolchain workflow rebuilds on bump.
+  # renovate: datasource=github-releases depName=bootc-dev/bootc
+  bootc: "v1.16.3"
+  # renovate: datasource=github-releases depName=coreos/bootupd
+  bootupd: "v0.2.35"
+  # ostree from source only for bases whose packaged ostree is older than
+  # bootc's required libostree (e.g. Debian trixie ships 2025.2 < 2025.3).
+  # renovate: datasource=github-releases depName=ostreedev/ostree
+  ostree: "v2026.2"
