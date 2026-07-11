@@ -18,13 +18,19 @@ ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
 ARG IMAGE_REGISTRY="ghcr.io"
 ARG IMAGE_NAME_VARIANT
 
-# ── Build bootc from source (Arch doesn't package it yet) ────────────────────
+# ── Build bootc and bootupd from source (Arch doesn't package them yet) ───────
 FROM ${BASE_IMAGE} AS bootc-builder
+ARG BOOTC_VERSION
+ARG BOOTUPD_VERSION
 RUN pacman -Syu --noconfirm make git rust go-md2man ostree glibc pkgconf
-WORKDIR /home/build
-RUN git clone --depth 1 https://github.com/bootc-dev/bootc.git . && \
+RUN git clone --depth 1 --branch "${BOOTC_VERSION}" https://github.com/bootc-dev/bootc.git /tmp/bootc && \
+    cd /tmp/bootc && \
     make bin && \
     make install-all DESTDIR=/output
+RUN git clone --depth 1 --branch "${BOOTUPD_VERSION}" https://github.com/coreos/bootupd.git /tmp/bootupd && \
+    cd /tmp/bootupd && \
+    make && \
+    make install DESTDIR=/output
 
 # ── Context layer ────────────────────────────────────────────────────────────
 FROM scratch AS context

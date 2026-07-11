@@ -62,6 +62,10 @@ BUILD_ARGS+=("--build-arg" "ENABLE_NVIDIA=${ENABLE_NVIDIA}")
 BUILD_ARGS+=("--build-arg" "DESKTOP_FLAVOR=${DESKTOP_FLAVOR}")
 BUILD_ARGS+=("--build-arg" "ENABLE_SSHD=${ENABLE_SSHD}")
 BUILD_ARGS+=("--build-arg" "IMAGE_NAME_VARIANT=${VARIANT}")
+BOOTC_VERSION=$($YQ -r '.downloads.bootc' image-versions.yaml)
+BOOTUPD_VERSION=$($YQ -r '.downloads.bootupd' image-versions.yaml)
+BUILD_ARGS+=("--build-arg" "BOOTC_VERSION=${BOOTC_VERSION}")
+BUILD_ARGS+=("--build-arg" "BOOTUPD_VERSION=${BOOTUPD_VERSION}")
 BUILD_ARGS+=("--build-arg" "ZIRCONIUM_IMAGE_REF=ghcr.io/zirconium-dev/zirconium@${zirconium_image_sha}")
 
 # Overlay type for Containerfile.overlay

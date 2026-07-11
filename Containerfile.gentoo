@@ -59,7 +59,7 @@ RUN emerge --verbose \
 FROM base AS builder
 RUN emerge --verbose dev-util/ostree && \
     git clone --depth 1 https://github.com/bootc-dev/bootc.git /tmp/bootc && \
-    make -C /tmp/bootc bin install-all install-initramfs-dracut
+    make -C /tmp/bootc bin install-all
 
 FROM builder AS system
 RUN KVER=$(ls /usr/lib/modules | head -1) && \

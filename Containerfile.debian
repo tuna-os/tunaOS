@@ -16,20 +16,24 @@ ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
 ARG IMAGE_REGISTRY="ghcr.io"
 ARG IMAGE_NAME_VARIANT
 
-# ── Build bootc from source (Debian doesn't package it in stable) ─────────
+# ── Fetch the prebuilt bootc toolchain ────────────────────────────────────────
+# bootc + bootupd (+ libostree/composefs on trixie) are built from source by
+# .github/workflows/build-toolchain.yml and published to
+# ghcr.io/tuna-os/bootc-toolchain-<base> as a public OCI artifact (oras). Pull it
+# here instead of recompiling bootc on every variant build. See
+# toolchain/Containerfile.debian and image-versions.yaml (Renovate-pinned).
 FROM ${BASE_IMAGE} AS bootc-builder
+ARG BASE_IMAGE
+ARG ORAS_VERSION=1.2.0
 RUN apt-get update -y && \
-    apt-get install -y git curl ca-certificates make build-essential go-md2man \
-        libzstd-dev pkgconf dracut libostree-dev ostree
-ENV CARGO_HOME=/tmp/rust
-ENV RUSTUP_HOME=/tmp/rust
-WORKDIR /home/build
-RUN curl --proto '=https' --tlsv1.2 -sSf "https://sh.rustup.rs" | \
-        sh -s -- --profile minimal -y && \
-    . ${RUSTUP_HOME}/env && \
-    git clone --depth 1 https://github.com/bootc-dev/bootc.git . && \
-    make bin && \
-    make install-all DESTDIR=/output
+    apt-get install -y --no-install-recommends curl ca-certificates tar gzip && \
+    curl -fsSL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz" \
+      | tar -xz -C /usr/local/bin oras && \
+    case "${BASE_IMAGE}" in *sid*) TC=sid ;; *) TC=trixie ;; esac && \
+    mkdir -p /fetch /output && cd /fetch && \
+    oras pull "ghcr.io/tuna-os/bootc-toolchain-${TC}:latest" && \
+    tar -xzf toolchain.tar.gz -C /output && \
+    rm -rf /fetch
 
 # ── Context layer ────────────────────────────────────────────────────────────
 FROM scratch AS context
@@ -58,8 +62,23 @@ ENV IMAGE_REGISTRY=${IMAGE_REGISTRY}
 ENV ENABLE_SSHD=${ENABLE_SSHD}
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
-# Install bootc from builder stage
+# Install the bootc toolchain (bootc + bootupd [+ source libostree/composefs on
+# trixie]) from the fetch stage.
 COPY --from=bootc-builder /output /
+
+# libostree: sid ships one new enough (>=2025.3), so install the packaged libs.
+# trixie's packaged libostree (2025.2) is too old and would conflict with the
+# source libostree already placed by the toolchain COPY above — so instead
+# provide an equivs dummy libostree-1-1 (Snow Linux trick) to satisfy apt deps
+# (flatpak etc.) without pulling the old lib, and register the source libs.
+RUN apt-get update -y && \
+    case "${BASE_IMAGE}" in \
+      *sid*) DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends libostree-1-1 ostree ;; \
+      *) DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends equivs && \
+         printf 'Package: libostree-1-1\nVersion: 99:0\nArchitecture: %s\nMaintainer: TunaOS <build@tunaos.org>\nDescription: satisfied by source libostree from bootc-toolchain\n' "$(dpkg --print-architecture)" > /tmp/libostree.ctl && \
+         ( cd /tmp && equivs-build libostree.ctl && dpkg -i libostree-1-1_*.deb ) && \
+         apt-mark hold libostree-1-1 && ldconfig ;; \
+    esac
 
 # Install base system packages
 RUN apt-get update -y && \
@@ -75,8 +94,6 @@ RUN apt-get update -y && \
         systemd \
         systemd-boot \
         xfsprogs \
-        libostree-1-1 \
-        ostree \
         dracut \
         network-manager \
         pipewire \
