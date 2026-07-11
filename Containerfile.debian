@@ -128,7 +128,10 @@ RUN sed -i 's|^HOME=.*|HOME=/var/home|' /etc/default/useradd && \
     rm -rf /boot /home /root /usr/local /srv /opt /mnt && \
     # /var may contain mount points from overlayfs layers. Clean safely.
     for d in /var/* /var/.[!.]*; do [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done && \
-    mkdir -p /sysroot /boot /usr/lib/ostree /var && \
+    # Recreate /var/tmp: tacklebox rebuilds the live-ISO initramfs against
+    # the published image later (dracut --tmpdir defaults to /var/tmp), and
+    # an absent /var/tmp fails it with "Invalid tmpdir '/var/tmp'".
+    mkdir -p /sysroot /boot /usr/lib/ostree /var /var/tmp && \
     ln -sT sysroot/ostree /ostree && \
     ln -sT var/roothome /root && \
     ln -sT var/srv /srv && \
@@ -136,7 +139,7 @@ RUN sed -i 's|^HOME=.*|HOME=/var/home|' /etc/default/useradd && \
     ln -sT var/mnt /mnt && \
     ln -sT var/home /home && \
     ln -sT ../var/usrlocal /usr/local && \
-    printf 'd /var/opt 0755 root root -\nd /var/home 0755 root root -\nd /var/srv 0755 root root -\nd /var/mnt 0755 root root -\nd /var/usrlocal 0755 root root -\nd /var/roothome 0700 root root -\nd /run/media 0755 root root -\n' \
+    printf 'd /var/opt 0755 root root -\nd /var/home 0755 root root -\nd /var/srv 0755 root root -\nd /var/mnt 0755 root root -\nd /var/usrlocal 0755 root root -\nd /var/roothome 0700 root root -\nd /var/tmp 1777 root root -\nd /run/media 0755 root root -\n' \
         > /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' \
         > /usr/lib/ostree/prepare-root.conf

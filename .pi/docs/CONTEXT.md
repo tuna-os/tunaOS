@@ -23,10 +23,13 @@ A named product line mapping to a specific upstream distribution. Each variant h
 |---------|----------|--------|
 | Yellowfin | AlmaLinux Kitten 10 | Stable |
 | Albacore | AlmaLinux 10 | Stable |
-| Skipjack | CentOS Stream 10 | Stable |
-| Bonito | Fedora 44 | Stable |
-| Grouper | Ubuntu 26.04 | Experimental (RFC 010) |
-| Redfin | RHEL 10 | Alpha (local-build only) |
+| Skipjack | CentOS Stream 10 | Beta |
+| Bonito / Bonito Rawhide | Fedora 44 / Rawhide | Beta |
+| Sailfin | openSUSE Tumbleweed (rolling) | Beta |
+| Guppy | Gentoo Linux (source-based) | Beta |
+| Grouper | Ubuntu 26.04 | Beta (RFC 010) |
+| Marlin | Arch Linux (rolling) | Beta |
+| Flounder / Flounder Sid | Debian 13 Trixie / Sid | Beta |
 
 Variants can share desktops and flavors, but not all combinations are built for all variants.
 

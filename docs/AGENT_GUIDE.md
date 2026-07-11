@@ -46,9 +46,14 @@ The generic installer `build_scripts/install-desktop.sh` reads a manifest and in
 
 | File | Purpose |
 |------|---------|
-| `Containerfile` | Main build — base stage + all DE stages |
-| `Containerfile.overlay` | HWE/nvidia layer (parameterized by `OVERLAY_TYPE`) |
-| `Containerfile.ubuntu` | Ubuntu/Debian bootcification |
+| `Containerfile.el10` | EL10 (dnf) build — base stage + all DE stages (yellowfin, albacore, skipjack, bonito, bonito-rawhide) |
+| `Containerfile.ubuntu` | Ubuntu bootcification (grouper) |
+| `Containerfile.debian` | Debian bootcification (flounder, flounder-sid) |
+| `Containerfile.arch` | Arch Linux bootcification (marlin) |
+| `Containerfile.gentoo` | Gentoo (source-based) bootcification (guppy) |
+| `Containerfile.opensuse` | openSUSE bootcification (sailfin) |
+| `Containerfile.overlay` | HWE/nvidia/cachyos layer (parameterized by `OVERLAY_TYPE`) |
+| `Containerfile.custom` | User overlay build workflow (RFC #646) |
 | `Containerfile.final` | Rechunk relabeling (pass 3) |
 
 ### Flavor Resolution
@@ -85,12 +90,14 @@ Defined in `.github/build-config.yml`. The workflow is `build-variant.yml` → `
 | `yellowfin` | 🐠 | AlmaLinux Kitten 10 | dnf | Stable |
 | `albacore` | 🐟 | AlmaLinux 10 | dnf | Stable |
 | `skipjack` | 🍣 | CentOS Stream 10 | dnf | Beta |
-| `bonito` | 🎣 | Fedora 44 | dnf | In progress |
-| `grouper` | 🐟 | Ubuntu 26.04 | apt | Experimental |
-| `redfin` | 🔒 | RHEL 10 | dnf | Local-only |
-| `marlin` | 🐟 | Arch Linux | pacman | Planned |
-| `wahoo` | 🐟 | CachyOS | pacman | Planned |
-| `flounder` | 🐟 | Debian Trixie | apt | Planned |
+| `bonito` | 🎣 | Fedora 44 | dnf | Beta |
+| `bonito-rawhide` | 🐉 | Fedora Rawhide (rolling) | dnf | Beta |
+| `sailfin` | 🦈 | openSUSE Tumbleweed (rolling) | zypper | Beta |
+| `guppy` | 🌈 | Gentoo Linux (source-based) | portage | Beta |
+| `grouper` | 🐟 | Ubuntu 26.04 | apt | Beta |
+| `marlin` | 🚀 | Arch Linux (rolling), CachyOS kernel overlay | pacman | Beta |
+| `flounder` | 🐡 | Debian 13 Trixie (stable) | apt | Beta |
+| `flounder-sid` | ☢️ | Debian Sid (unstable, rolling) | apt | Beta |
 
 ---
 
