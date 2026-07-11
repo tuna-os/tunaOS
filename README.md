@@ -23,7 +23,7 @@
 
 TunaOS is a curated collection of **bootc-based desktop operating systems** built on modern container technology. The goal is to bring a modern desktop experience to Enterprise Linux — stable, immutable, and up-to-date. Inspired by [Bluefin](https://projectbluefin.io) and the [Universal Blue](https://universal-blue.org/) community.
 
-Read the launch announcement: **[Modern Enterprise Linux Desktops with TunaOS](blog/modern-enterprise-linux-desktops-with-tunaos.md)** and the landscape comparison: **[The Immutable Desktop Landscape: Where TunaOS Fits](blog/the-immutable-desktop-landscape-where-tunaos-fits.md)**.
+Read the launch announcement: **[Modern Enterprise Linux Desktops with TunaOS](https://tunaos.org/blog/modern-enterprise-linux-desktops-with-tunaos)** and the landscape comparison: **[The Immutable Desktop Landscape: Where TunaOS Fits](https://tunaos.org/blog/the-immutable-desktop-landscape-where-tunaos-fits)**.
 
 ### Features
 
@@ -172,7 +172,7 @@ Related Communities:
 ## 📚 Documentation
 
 ### Project Docs
-- [TunaOS Blog](blog/modern-enterprise-linux-desktops-with-tunaos.md) — launch announcement and design philosophy comparison
+- [TunaOS Blog](https://tunaos.org/blog/modern-enterprise-linux-desktops-with-tunaos) — launch announcement and design philosophy comparison
 - [Contributor Guide](CONTRIBUTING.md) — how to set up, build, and contribute
 - [Agent Guide](docs/AGENT_GUIDE.md) — complete architecture and contributor reference
 - [Build Pipeline](docs/build-pipeline.md) — CI/CD workflow overview
