@@ -117,7 +117,8 @@ RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \
         > /usr/lib/dracut/dracut.conf.d/30-fix-bootc-module.conf && \
     printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" bootc "\n' \
         > /usr/lib/dracut/dracut.conf.d/30-bootc-container-build.conf && \
-    dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | tail -1)/initramfs.img"
+    KVER=$(basename "$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d | tail -1)") && \
+    dracut --force "/usr/lib/modules/${KVER}/initramfs.img" "${KVER}"
 
 # Set up bootc/ostree filesystem layout
 RUN sed -i 's|^HOME=.*|HOME=/var/home|' /etc/default/useradd && \

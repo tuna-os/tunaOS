@@ -1,5 +1,7 @@
-name: Build Marlin [experimental]
+name: Build Marlin
 on:
+  schedule:
+    - cron: "0 1 * * *"
   workflow_dispatch:
     inputs:
       flavor:
@@ -13,7 +15,7 @@ concurrency:
 
 jobs:
   build:
-    name: 🐟-marlin
+    name: 🚀-marlin
     uses: ./.github/workflows/build-variant.yml
     with:
       variant: 'marlin'

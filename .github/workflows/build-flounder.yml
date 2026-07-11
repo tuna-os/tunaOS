@@ -1,5 +1,7 @@
-name: Build Flounder [experimental]
+name: Build Flounder
 on:
+  schedule:
+    - cron: "0 1 * * *"
   workflow_dispatch:
     inputs:
       flavor:
@@ -13,7 +15,7 @@ concurrency:
 
 jobs:
   build:
-    name: 🐟-flounder
+    name: 🛡️-flounder
     uses: ./.github/workflows/build-variant.yml
     with:
       variant: 'flounder'

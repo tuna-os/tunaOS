@@ -1,5 +1,7 @@
-name: Build Grouper [experimental]
+name: Build Grouper
 on:
+  schedule:
+    - cron: "0 1 * * *"
   workflow_dispatch:
     inputs:
       flavor:

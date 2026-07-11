@@ -24,6 +24,17 @@ ARG ZIRCONIUM_IMAGE_REF="ghcr.io/zirconium-dev/zirconium:unpinned-must-override"
 
 FROM ${ZIRCONIUM_IMAGE_REF} AS zirconium
 
+FROM ${BASE_IMAGE} AS bootc-builder
+ARG ORAS_VERSION=1.2.0
+RUN apt-get update -y && \
+    apt-get install -y --no-install-recommends curl ca-certificates tar gzip && \
+    curl -fsSL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz" \
+      | tar -xz -C /usr/local/bin oras && \
+    mkdir -p /fetch /output && cd /fetch && \
+    oras pull "ghcr.io/tuna-os/bootc-toolchain-sid:latest" && \
+    tar -xzf toolchain.tar.gz -C /output && \
+    rm -rf /fetch
+
 FROM scratch AS context
 COPY system_files /files
 COPY build_scripts /build_scripts
@@ -86,12 +97,15 @@ RUN set -eux; \
     fi; \
     apt-get update -y
 
-# Install bootc (from bootc-deb) and the bootc runtime tooling needed for
+# Install the bootc toolchain (bootc + bootupd) from the builder stage
+COPY --from=bootc-builder /output /
+
+# Install bootc dependencies and the bootc runtime tooling needed for
 # `bootc container lint`, plus the static composefs/bootc overlay. apt intact.
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
-    apt-get install -y --no-install-recommends ca-certificates curl gpg && \
-    /run/context/build_scripts/bootc/install-bootc.sh && \
+    apt-get update -y && \
     apt-get install -y --no-install-recommends \
+        ostree libostree-1-1 dracut \
         btrfs-progs dosfstools e2fsprogs xfsprogs skopeo jq \
         systemd-boot systemd-boot-efi && \
     cp -a /run/context/build_scripts/bootc/sandbox/. / && \

@@ -506,7 +506,6 @@ variants:
     description: "Based on openSUSE Tumbleweed (rolling)"
     base_image: "registry.opensuse.org/opensuse/tumbleweed:latest"
     platforms: ["linux/amd64"]
-    experimental: true
     flavors:
       - id: base
         stage: 1
@@ -531,7 +530,6 @@ variants:
     description: "Based on Gentoo Linux (source-based)"
     base_image: "docker.io/gentoo/stage3:latest"
     platforms: ["linux/amd64"]
-    experimental: true
     flavors:
       - id: base
         stage: 1
@@ -636,7 +634,6 @@ variants:
     # Built directly from stock Ubuntu and bootcified in Containerfile.ubuntu
     # (bootc from the bootc-shindig/bootc-deb apt repo). See RFC 010.
     platforms: ["linux/amd64"]
-    experimental: true
     flavors:
       - id: base
         stage: 1
@@ -673,7 +670,6 @@ variants:
     description: "Based on Arch Linux (rolling)"
     base_image: "docker.io/archlinux/archlinux:latest"
     platforms: ["linux/amd64"]
-    experimental: true
     flavors:
       - id: base
         stage: 1
@@ -711,7 +707,6 @@ variants:
     description: "Based on Debian 13 Trixie (stable)"
     base_image: "docker.io/library/debian:trixie"
     platforms: ["linux/amd64"]
-    experimental: true
     flavors:
       - id: base
         stage: 1
@@ -740,7 +735,6 @@ variants:
     description: "Based on Debian Sid (unstable, rolling)"
     base_image: "docker.io/library/debian:sid"
     platforms: ["linux/amd64"]
-    experimental: true
     flavors:
       - id: base
         stage: 1

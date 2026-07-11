@@ -1,5 +1,7 @@
-name: Build Bonito-Rawhide
+name: Build Bonito-rawhide
 on:
+  schedule:
+    - cron: "0 1 * * *"
   workflow_dispatch:
     inputs:
       flavor:

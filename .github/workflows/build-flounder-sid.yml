@@ -1,5 +1,7 @@
-name: Build Flounder-sid [experimental]
+name: Build Flounder-sid
 on:
+  schedule:
+    - cron: "0 1 * * *"
   workflow_dispatch:
     inputs:
       flavor:
@@ -13,7 +15,7 @@ concurrency:
 
 jobs:
   build:
-    name: 🐟-flounder-sid
+    name: ☢️-flounder-sid
     uses: ./.github/workflows/build-variant.yml
     with:
       variant: 'flounder-sid'
