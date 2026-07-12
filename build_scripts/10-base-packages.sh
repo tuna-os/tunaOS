@@ -52,7 +52,15 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 		x11-xserver-utils \
 		unzip \
 		powertop \
-		systemd-boot
+		systemd-boot \
+		just \
+		ffmpeg \
+		gstreamer1.0-plugins-base \
+		gstreamer1.0-plugins-good \
+		gstreamer1.0-plugins-bad \
+		gstreamer1.0-plugins-ugly \
+		gstreamer1.0-libav \
+		libavcodec-extra
 
 	# Remove unwanted packages
 	# shellcheck disable=SC2015 # intentional: A&&B||true is a guard pattern

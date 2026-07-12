@@ -36,7 +36,7 @@ RUN NPROC="$(nproc)" && \
     { \
       echo 'FEATURES="-ipc-sandbox -network-sandbox -pid-sandbox getbinpkg"'; \
       echo 'ACCEPT_LICENSE="*"'; \
-      echo 'USE="dracut nftables systemd X wayland dbus gtk gnome qt6 plasma opengl harfbuzz alsa pulseaudio"'; \
+      echo 'USE="dracut nftables systemd X wayland dbus gtk gnome qt6 plasma opengl harfbuzz alsa pulseaudio x264 x265 aac mp3 opus vpx libaom encode ffmpeg gstreamer"'; \
       echo "MAKEOPTS=\"-j${NPROC}\""; \
       echo "EMERGE_DEFAULT_OPTS=\"--jobs=${NPROC} --load-average=${NPROC} --getbinpkg --binpkg-respect-use=n\""; \
     } >> /etc/portage/make.conf && \
@@ -50,10 +50,17 @@ RUN NPROC="$(nproc)" && \
 #    this (expensive) cache on retry.
 RUN emerge --verbose --deep --newuse @world
 
-# 3) Install the bootc/base tooling and the prebuilt kernel.
+# 3) Install the bootc/base tooling, prebuilt kernel, and extra base packages.
 RUN emerge --verbose \
         app-arch/cpio btrfs-progs dev-vcs/git dosfstools \
-        linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd
+        linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd \
+        net-vpn/tailscale gui-apps/wl-clipboard media-video/ffmpeg media-plugins/gst-plugins-meta && \
+    curl -fsSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.35.0/just-1.35.0-x86_64-unknown-linux-musl.tar.gz && \
+    tar -xzf /tmp/just.tar.gz -C /usr/bin just && rm /tmp/just.tar.gz && \
+    curl -fsSL -o /tmp/glow.tar.gz https://github.com/charmbracelet/glow/releases/download/v1.5.1/glow_1.5.1_Linux_x86_64.tar.gz && \
+    tar -xzf /tmp/glow.tar.gz -C /tmp && mv /tmp/glow_1.5.1_Linux_x86_64/glow /usr/bin/ && rm -rf /tmp/glow* && \
+    curl -fsSL -o /tmp/gum.tar.gz https://github.com/charmbracelet/gum/releases/download/v0.14.3/gum_0.14.3_Linux_x86_64.tar.gz && \
+    tar -xzf /tmp/gum.tar.gz -C /tmp && mv /tmp/gum_0.14.3_Linux_x86_64/gum /usr/bin/ && rm -rf /tmp/gum*
 
 # No live-boot dracut modules needed: tacklebox injects its embedded
 # tbox-live/tbox-root modules at ISO build time (tuna-os/tacklebox#90).

@@ -11,9 +11,14 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 	# GCC for Homebrew (same rationale as RPM path)
 	pkg_install gcc
 
-	# Tailscale — Ubuntu has native apt repo support
-	curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
-	curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list
+	# Tailscale — Configure repository based on distro
+	if [[ "$IS_UBUNTU" == true ]]; then
+		curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+		curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list
+	else
+		curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+		curl -fsSL https://pkgs.tailscale.com/stable/debian/trixie.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list
+	fi
 	pkg_install tailscale
 
 	printf "::endgroup::\n"
