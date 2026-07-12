@@ -55,7 +55,7 @@ RUN NPROC="$(nproc)" && \
 RUN emerge --verbose --deep --newuse @world
 
 # 3) Install the bootc/base tooling, prebuilt kernel, and extra base packages.
-RUN emerge --verbose \
+RUN emerge --verbose --deep --newuse \
         app-arch/cpio btrfs-progs dev-vcs/git dosfstools \
         linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd \
         net-vpn/tailscale gui-apps/wl-clipboard media-video/ffmpeg media-plugins/gst-plugins-meta && \
