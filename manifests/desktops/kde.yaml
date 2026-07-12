@@ -120,10 +120,17 @@ packages:
     - patterns-kde-kde_plasma
     - sddm
 
+  # ── Emerge (Gentoo) ────────────────────────────────────────────────
+  # Curated set, NOT kde-apps/kde-apps-meta: the everything-meta drags
+  # kdemultimedia -> kamoso -> gst-plugins-meta -> 32-bit glib
+  # (abi_x86_32), which a no-multilib bootc image can't satisfy.
   emerge:
     - kde-plasma/plasma-meta
-    - kde-apps/kde-apps-meta
     - x11-misc/sddm
+    - kde-apps/dolphin
+    - kde-apps/konsole
+    - kde-apps/kate
+    - kde-apps/ark
 
 versionlock:
   - plasma-desktop
