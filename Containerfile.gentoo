@@ -111,8 +111,20 @@ ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 #    ngtcp2[gnutls], zlib[minizip]; gnome-shell[networkmanager] needs a
 #    matching gnome-control-center. These few build from source.
 COPY gentoo/package.use-binhost-multilib /etc/portage/package.use/zz-binhost-multilib
-RUN printf 'kde-plasma/kwin lock\nkde-plasma/kwin-x11 lock\nnet-libs/ngtcp2 gnutls\nsys-libs/zlib minizip\ngnome-base/gnome-control-center networkmanager\ngnome-base/gnome-shell networkmanager\n' \
-      >> /etc/portage/package.use/tunaos-desktops
+RUN NPROC="$(nproc)" && \
+    printf 'kde-plasma/kwin lock\nkde-plasma/kwin-x11 lock\nnet-libs/ngtcp2 gnutls\nsys-libs/zlib minizip\ngnome-base/gnome-control-center networkmanager\ngnome-base/gnome-shell networkmanager\n' \
+      >> /etc/portage/package.use/tunaos-desktops && \
+    # This is a systemd image: never let the resolver drift to elogind
+    # (the binhost's desktop binpkgs are built for the OpenRC/elogind
+    # profile and pull it in via xorg-server/pambase).
+    mkdir -p /etc/portage/package.mask && \
+    echo "sys-auth/elogind" >> /etc/portage/package.mask/tunaos-systemd && \
+    # Session-critical packages whose binhost binpkgs are elogind-
+    # flavored (-systemd): source-build them with our USE instead of
+    # importing a conflicting login stack. Repeats the base
+    # EMERGE_DEFAULT_OPTS because make.conf is last-assignment-wins.
+    echo "EMERGE_DEFAULT_OPTS=\"--jobs=${NPROC} --load-average=${NPROC} --getbinpkg --binpkg-respect-use=n --usepkg-exclude 'sys-apps/dbus sys-auth/pambase x11-base/xorg-server'\"" \
+      >> /etc/portage/make.conf
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/install-desktop.sh ${DESKTOP_FLAVOR}
 

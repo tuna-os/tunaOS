@@ -157,3 +157,8 @@ x11-libs/libxshmfence abi_x86_32
 x11-libs/pango abi_x86_32
 x11-libs/pixman abi_x86_32
 x11-libs/xcb-util-keysyms abi_x86_32
+
+# Gap fills: packages the binhost's own multilib binpkgs demand 32-bit
+# variants of but doesn't publish with the flag — these build from
+# source (small, seconds each).
+sys-libs/libcap abi_x86_32
