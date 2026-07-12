@@ -143,10 +143,44 @@ for pkg in "${PACKAGES[@]}"; do
 	esac
 done
 
+# 3) Verify CLI commands are present and runnable
+echo "Verifying CLI commands..."
+CLI_COMMANDS=(just glow gum tailscale skopeo git)
+for cmd in "${CLI_COMMANDS[@]}"; do
+	if ! podman run --rm --entrypoint sh "$IMAGE" -c "command -v ${cmd} &>/dev/null" &>/dev/null; then
+		echo "❌ Missing CLI command: ${cmd}"
+		FAILED=1
+	else
+		echo "✓ CLI command: ${cmd}"
+	fi
+done
+
+# 4) Verify systemd service unit files are present
+echo "Verifying systemd service unit files..."
+SYSTEMD_SERVICES=(tailscaled.service systemd-resolved.service)
+
+# Add flavor-specific display manager service
+case "${FLAVOR}" in
+gnome) SYSTEMD_SERVICES+=(gdm.service) ;;
+kde) SYSTEMD_SERVICES+=(sddm.service) ;;
+niri | cosmic) SYSTEMD_SERVICES+=(greetd.service) ;;
+esac
+
+for svc in "${SYSTEMD_SERVICES[@]}"; do
+	# Check in typical systemd system directories: /usr/lib/systemd/system/ or /lib/systemd/system/
+	CHECK_SVC_CMD="[ -f /usr/lib/systemd/system/${svc} ] || [ -f /lib/systemd/system/${svc} ]"
+	if ! podman run --rm --entrypoint sh "$IMAGE" -c "${CHECK_SVC_CMD}" &>/dev/null; then
+		echo "❌ Missing systemd service file: ${svc}"
+		FAILED=1
+	else
+		echo "✓ systemd service file: ${svc}"
+	fi
+done
+
 if [[ $FAILED -eq 1 ]]; then
-	echo "Error: Verification failed. Some packages are missing." >&2
+	echo "Error: Verification failed. Some packages, CLI commands, or service files are missing." >&2
 	exit 1
 fi
 
-echo "Success: All expected packages are present!"
+echo "Success: All expected packages, CLI commands, and service files are present!"
 exit 0

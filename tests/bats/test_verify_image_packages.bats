@@ -63,6 +63,9 @@ fi
 if [[ "$*" == *"rpm"* && "$*" == *"gdm"* ]]; then
   exit 0
 fi
+if [[ "$*" == *"command -v"* || "$*" == *"systemd/system"* ]]; then
+  exit 0
+fi
 exit 1
 MOCK
   chmod +x "${TEST_ROOT}/bin/podman"
@@ -86,6 +89,9 @@ if [[ "$*" == *"dpkg-query"* && "$*" == *"ubuntu-desktop-minimal"* ]]; then
   echo "install ok installed"
   exit 0
 fi
+if [[ "$*" == *"command -v"* || "$*" == *"systemd/system"* ]]; then
+  exit 0
+fi
 exit 1
 MOCK
   chmod +x "${TEST_ROOT}/bin/podman"
@@ -104,6 +110,9 @@ if [[ "$*" == *"os-release"* ]]; then
   exit 0
 fi
 if [[ "$*" == *"var/db/pkg"* ]]; then
+  exit 0
+fi
+if [[ "$*" == *"command -v"* || "$*" == *"systemd/system"* ]]; then
   exit 0
 fi
 exit 1
