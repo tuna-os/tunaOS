@@ -276,7 +276,11 @@ pkg_install() {
 		apt-get update -qq
 		apt-get install -y --no-install-recommends -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold" "$@" || {
 			dpkg --configure -a --force-depends || true
-			apt-get install -y -f --no-install-recommends
+			# Retry WITH the package list: a bare `apt-get -f install`
+			# succeeds without installing anything, silently swallowing
+			# real failures (e.g. a nonexistent package name shipped a
+			# desktop-less flounder:kde while the build stayed green).
+			apt-get install -y -f --no-install-recommends "$@"
 		}
 	elif [[ "$PKG_MGR" == "pacman" ]]; then
 		pacman -S --noconfirm --needed "$@"
