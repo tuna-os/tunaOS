@@ -123,7 +123,7 @@ packages:
   # ── Emerge (Gentoo) ────────────────────────────────────────────────
   # Curated set, NOT kde-apps/kde-apps-meta: the everything-meta drags
   # kdemultimedia -> kamoso -> gst-plugins-meta -> 32-bit glib
-  # (abi_x86_32), which a no-multilib bootc image can't satisfy.
+  # (abi_x86_32) on top of everything else it drags in.
   emerge:
     - kde-plasma/plasma-meta
     - x11-misc/sddm
