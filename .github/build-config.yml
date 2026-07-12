@@ -24,8 +24,8 @@ iso_groups:
   # both NVIDIA and non-NVIDIA versions in the offline store.
   # Published as `<variant>-community.iso`.
   - suffix: community
-    flavors: [kde-nvidia, kde-nvidia-hwe, cosmic-nvidia, niri-nvidia, xfce-nvidia]
-    offline_flavors: [kde, kde-hwe, cosmic, cosmic-hwe, niri, niri-hwe, xfce, kde-nvidia, kde-nvidia-hwe, cosmic-nvidia, niri-nvidia, xfce-nvidia]
+    flavors: [kde-nvidia, cosmic-nvidia, niri-nvidia, xfce-nvidia]
+    offline_flavors: [kde, kde-hwe, cosmic, cosmic-hwe, niri, niri-hwe, xfce, kde-nvidia, cosmic-nvidia, niri-nvidia, xfce-nvidia]
 
 # Build stages (for reference — enforced by the workflow job graph):
 #
