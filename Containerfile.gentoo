@@ -45,7 +45,8 @@ RUN NPROC="$(nproc)" && \
       >/etc/portage/binrepos.conf/gentoobinhost.conf && \
     getuto && \
     echo "sys-apps/systemd boot" >> /etc/portage/package.use/systemd && \
-    echo "media-video/pipewire extra -ffmpeg" >> /etc/portage/package.use/pipewire
+    echo "media-video/pipewire extra -ffmpeg" >> /etc/portage/package.use/pipewire && \
+    echo "media-libs/gst-plugins-bad -vulkan" >> /etc/portage/package.use/gst-plugins-bad
 
 # 2) Bring @world up to date from binpkgs — own layer so a later failure reuses
 #    this (expensive) cache on retry.
