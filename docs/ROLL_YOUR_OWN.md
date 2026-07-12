@@ -7,307 +7,406 @@ bootable immutable Linux images from a matrix of choices:
 base OS × desktop × kernel × drivers = image
 ```
 
-The same factory that produces the official `yellowfin:gnome-nvidia` image
-can produce *your* image — with your package selection, your config files,
-your wallpaper, your CI pipeline. This guide walks through every
-customization level, from a 5-minute overlay to a full fork with your own
-desktop environments and distro variants.
+The repo is designed to be forked. The intended workflow is: fork, turn
+off the variants and desktops you don't want, edit the manifests in place,
+and build your own images. Every shipped desktop manifest and Containerfile
+is a starting point — not a locked artifact.
+
+This guide walks through that workflow, from a minimal single-desktop fork
+to a full custom CI pipeline.
 
 ---
 
 ## Table of Contents
 
-1. [Quickest Path: the `custom/` Overlay](#quickest-path-the-custom-overlay)
-2. [Customization Recipes](#customization-recipes)
-   - [Adding and removing packages](#adding-and-removing-packages)
-   - [Overlaying custom config files](#overlaying-custom-config-files)
-   - [Running scripts at build time](#running-scripts-at-build-time)
+1. [The Fork-Edit-Build Workflow](#the-fork-edit-build-workflow)
+2. [Common Customizations (Edit in Place)](#common-customizations-edit-in-place)
+   - [Changing packages in a desktop](#changing-packages-in-a-desktop)
+   - [System-wide packages and config](#system-wide-packages-and-config)
+   - [COPR repos, PPAs, and version locks](#copr-repos-ppas-and-version-locks)
+   - [Changing branding, wallpapers, defaults](#changing-branding-wallpapers-defaults)
    - [Adding systemd services](#adding-systemd-services)
-   - [Switching the base image](#switching-the-base-image)
-   - [Changing branding and wallpapers](#changing-branding-and-wallpapers)
-3. [Going Deeper: Patching a Desktop Manifest](#going-deeper-patching-a-desktop-manifest)
-4. [Going Deeper: Adding a New Desktop Environment](#going-deeper-adding-a-new-desktop-environment)
-5. [Going Deeper: Adding a New Distro Variant](#going-deeper-adding-a-new-distro-variant)
-6. [Setting Up Your Own CI/CD](#setting-up-your-own-cicd)
+   - [Running custom build scripts](#running-custom-build-scripts)
+3. [The custom/ Overlay (Lighter Alternative)](#the-custom-overlay-lighter-alternative)
+4. [Going Deeper: Adding a Desktop](#going-deeper-adding-a-desktop)
+5. [Going Deeper: Adding a Distro Variant](#going-deeper-adding-a-distro-variant)
+6. [Running Your Own CI/CD](#running-your-own-cicd)
 7. [Reference: Directory Map](#reference-directory-map)
 
 ---
 
-## Quickest Path: the `custom/` Overlay
+## The Fork-Edit-Build Workflow
 
-You can build a fully personalized immutable OS in under five minutes
-**without touching a single line of TunaOS source**. The `custom/`
-directory is a self-contained overlay system that layers your changes on
-top of any published TunaOS image.
+This is the primary path. Fork, prune, edit, build.
 
-### What you get
-
-- Add/remove packages (any package manager: dnf, apt, pacman, zypper, emerge)
-- Override any config file in `/etc`, `/usr`, etc.
-- Add systemd services
-- Run arbitrary shell scripts at build time
-- Switch the base image (e.g. build on Fedora instead of AlmaLinux)
-- All in one directory — `custom/`
-
-### Step 1: Fork and clone
+### 1. Fork and clone
 
 ```bash
 gh repo fork tuna-os/tunaos --clone
 cd tunaos
 ```
 
-### Step 2: Edit your config
+### 2. Prune: turn off what you don't want
 
-Open `custom/image.yaml`:
+Open `.github/build-config.yml`. This file defines every variant and every
+flavor. Remove or comment out everything you don't need.
+
+**Before** — full matrix, ~60 flavors:
 
 ```yaml
-# custom/image.yaml
-base: ghcr.io/tuna-os/yellowfin:gnome   # the image you're layering on
-tag: my-custom-os                        # what to name your image
-publish: false                           # set to true when you set up CI
+variants:
+  - id: yellowfin
+    ...
+    flavors:
+      - id: base
+      - id: gnome
+      - id: cosmic
+      - id: kde
+      - id: niri
+      - id: gnome-hwe
+      - id: gnome-nvidia
+      - id: gnome-nvidia-hwe
+      - id: cosmic-hwe
+      - id: cosmic-nvidia
+      - id: kde-hwe
+      - id: kde-nvidia
+      - id: niri-hwe
+      - id: niri-nvidia
+  - id: albacore
+    ... (same shape)
+  - id: skipjack
+    ...
+  - id: bonito
+    ...
+  # ... grouper, marlin, flounder, flounder-sid, sailfin, guppy, bonito-rawhide
 ```
 
-Choose your base from any published flavor:
+**After** — one variant, one desktop, optional NVIDIA:
 
-| If you want... | Use |
+```yaml
+variants:
+  - id: yellowfin
+    emoji: "🐠"
+    description: "Based on AlmaLinux Kitten 10"
+    base_image: "quay.io/almalinuxorg/almalinux-bootc:10-kitten"
+    platforms: ["linux/amd64"]
+    flavors:
+      - id: base
+        stage: 1
+        build_image: true
+      - id: gnome
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: gnome-nvidia
+        stage: 3
+        build_image: true
+        build_iso: true
+```
+
+> **Tip:** Keep `base` — it's a shared stage that every desktop needs.
+> Delete the rest. You can always add them back from git history.
+
+What to turn off and why:
+
+| Remove this | If... |
 |---|---|
-| Latest GNOME on AlmaLinux | `ghcr.io/tuna-os/yellowfin:gnome` |
-| KDE Plasma on Fedora | `ghcr.io/tuna-os/bonito:kde` |
-| Arch Linux with GNOME | `ghcr.io/tuna-os/marlin:gnome` |
-| Rolling GNOME on Debian Sid | `ghcr.io/tuna-os/flounder-sid:gnome` |
-| NVIDIA drivers on AlmaLinux | `ghcr.io/tuna-os/yellowfin:gnome-nvidia` |
+| Variants you don't use | You don't need 11 distros |
+| Desktops you don't ship | You only care about GNOME |
+| `*-hwe` flavors | Your hardware runs fine on the stock kernel |
+| `*-nvidia` flavors | You don't have NVIDIA GPUs |
+| `build_iso: true` on flavors you test as containers | ISOs take extra CI time |
+| `linux/arm64` / `linux/amd64/v2` platforms | You only run amd64 |
 
-> See [ghcr.io/tuna-os](https://github.com/orgs/tuna-os/packages) for the
-> full list of published images.
+The smaller your matrix, the faster your CI. A single-desktop build takes
+~15 minutes cold, ~5 minutes warm.
 
-### Step 3: Add your packages
+### 3. Edit: customize the desktop manifests
 
-Edit `custom/packages.yaml`:
+Open `manifests/desktops/gnome.yaml` (or whichever desktop you kept). Add
+and remove packages, change group installs, add COPR repos. See [Common
+Customizations](#common-customizations-edit-in-place) below for recipes.
 
-```yaml
-# custom/packages.yaml — add packages for your chosen base OS's package manager
-dnf:
-  - neovim
-  - btop
-  - syncthing
-  # remove packages by prefixing with a minus
-  - "-gnome-tour"          # remove the welcome tour
-  - "-firefox"             # remove the default browser
+### 4. Edit: customize the Containerfile
+
+The Containerfile runs numbered build scripts in order. To add your own
+script, insert it into the pipeline:
+
+```dockerfile
+# Containerfile.el10 — add your own script between existing ones
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+   /run/context/build_scripts/20-packages.sh
+
+# Your custom script — runs after base packages, before desktop install
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+   /run/context/build_scripts/25-my-custom-stuff.sh
 ```
 
-The `apt` / `pacman` / `zypper` / `emerge` keys work the same way — the
-build system auto-detects the base image's package manager.
+Or edit an existing script directly — `20-packages.sh` installs
+system-wide packages, `00-workarounds.sh` applies early patches,
+`40-services.sh` enables services.
 
-### Step 4: Add your config files
-
-Drop files into `custom/files/` mirroring the target filesystem:
-
-```
-custom/files/
-└── etc/
-    └── dconf/
-        └── profile/
-            └── user          # your dconf defaults
-```
-
-Anything you place here overwrites the corresponding file in the image.
-
-### Step 5: Build
+### 5. Build locally
 
 ```bash
-just build-custom
+just build yellowfin gnome
 ```
 
-This builds a local container image tagged `localhost/my-custom-os`. To
-test it as a VM:
+This builds your customized image. Test it:
 
 ```bash
-just run-custom-vm
+just qcow2 yellowfin gnome
+just verify-disk ./yellowfin-gnome.qcow2
 ```
 
-That's it. You have your own immutable OS, built from a published TunaOS
-image plus your overlay.
+### 6. That's your distro now
+
+Push to your fork. The CI workflows in `.github/workflows/` are already
+parameterized to push to `ghcr.io/<your-username>/...`. Commit, push, and
+your images build automatically.
 
 ---
 
-## Customization Recipes
+## Common Customizations (Edit in Place)
 
-### Adding and removing packages
+All of these are edits to existing files in the repo. No overlays, no
+separate directories — you're changing the source of truth.
 
-Edit `custom/packages.yaml`. The key names (`dnf`, `apt`, `pacman`,
-`zypper`, `emerge`) match `PKG_MGR` in the build library. The build
-auto-detects which key to use from the base image.
+### Changing packages in a desktop
+
+Edit `manifests/desktops/<de>.yaml`. Each desktop manifest has per-OS
+package lists:
 
 ```yaml
-# custom/packages.yaml
+# manifests/desktops/gnome.yaml — add what you want, remove what you don't
+packages:
+  fedora:
+    packages:
+      - gdm
+      - gnome-shell
+      - gnome-terminal     # ← added
+      - nautilus
+      - gnome-text-editor   # ← added
+      # ... keep the rest ...
 
-dnf:
-  - neovim
-  - btop
-  - syncthing
-
-# Enable COPR repos (dnf only)
-copr:
-  - yselkowitz/wlroots-epel
-  - jonathanmetz/cosmic-epoch
+  el10:
+    packages:
+      - gdm
+      - gnome-shell
+      - gnome-terminal     # ← added
+      - nautilus
+      # ... keep the rest ...
 ```
 
-Package removal (prefix with `-`) runs `dnf remove` / `apt purge` etc.
-before installing the new packages, so a package you remove cannot pull
-itself back in as a dependency later.
+To remove a package, delete its line or comment it out. The installer
+reads the manifest as the canonical list — whatever's there gets
+installed.
 
-### Overlaying custom config files
+> **Which OS key do I edit?** The installer auto-detects:
+> - `el10` — AlmaLinux, CentOS Stream, RHEL
+> - `fedora` — Fedora, Rawhide
+> - `apt` — Ubuntu, Debian
+> - `pacman` — Arch Linux, CachyOS
+> - `zypper` — openSUSE
+> - `emerge` — Gentoo
+>
+> Edit the key for the variant you kept. Unused keys are skipped.
 
-The `custom/files/` directory is copied over the image root:
+### System-wide packages and config
+
+Desktop manifests only cover what goes into the DE layer. For packages
+that should be in *every* image (base layer), edit
+`build_scripts/20-packages.sh`.
+
+For system-wide config files, add them to `system_files/`:
 
 ```
-custom/files/
+system_files/
 ├── etc/
-│   ├── dconf/
-│   │   └── profile/
-│   │       └── user
-│   └── environment              # set global env vars
+│   ├── environment           # global env vars
+│   └── dconf/
+│       └── profile/
+│           └── user          # dconf defaults for all users
 └── usr/
     └── share/
         └── backgrounds/
             └── my-wallpaper.png
 ```
 
-Existing files with the same path are overwritten. Directories are merged
-(cp `-aT`).
+These are copied into every image by `build_scripts/copy-files.sh` (step
+1 of the build). To override a file that upstream already ships, use
+`system_files_overrides/` — it's applied after `system_files/`.
 
-### Running scripts at build time
+### COPR repos, PPAs, and version locks
 
-Two hook scripts run at build time:
+These go in the desktop manifest under the relevant OS key:
 
-| Script | When it runs |
-|---|---|
-| `custom/build.pre.sh` | Before any packages are installed or files copied |
-| `custom/build.post.sh` | After all packages, files, and systemd units are applied |
+```yaml
+# manifests/desktops/gnome.yaml
+packages:
+  el10:
+    copr:
+      - repo: someuser/someproject
+        packages:
+          - package-from-copr
+          - another-package
+      - repo: jonathanmetz/cosmic-epoch
+        packages: []
 
-```bash
-#!/usr/bin/env bash
-# custom/build.pre.sh — runs inside the container before anything else
-set -euo pipefail
-source /run/context/build_scripts/lib.sh
+    optional:
+      - fish            # installed if available, skipped if not
+      - neovim
 
-# Install a COPR repo the long way
-dnf copr enable -y someuser/someproject
+    optional_group:     # install all or none (checks first item availability)
+      - fcitx5
+      - fcitx5-gtk
+      - fcitx5-mozc
 
-# Fetch a binary from the internet
-curl -fsSL https://example.com/tool -o /usr/local/bin/tool
-chmod +x /usr/local/bin/tool
+  apt:
+    ppa:
+      - repo: ppa:someuser/someproject
+        condition: ubuntu        # only on Ubuntu, not Debian
+
+versionlock:
+  - gnome-shell
+  - mutter
+  - "qt6-*"
 ```
 
-The TunaOS build library (`lib.sh`) is available — `pkg_install`,
-`install_available`, `dnf_retry`, and all `IS_*` flags work.
+`versionlock` runs `dnf versionlock add` on each pattern. `optional`
+packages are best-effort — they won't fail the build if unavailable.
 
-### Adding systemd services
+### Changing branding, wallpapers, defaults
 
-Drop units into `custom/systemd/`. They're copied to
-`/etc/systemd/system/` and enabled:
+The image branding is set by environment variables in the Containerfile:
+
+```dockerfile
+ENV IMAGE_NAME="myproject"
+ENV IMAGE_VENDOR="mycompany"
+ENV IMAGE_NAME_VARIANT="myvariant"
+```
+
+For GNOME defaults, create a gschema override:
 
 ```
-custom/systemd/
-└── myservice.service
+system_files_overrides/usr/share/glib-2.0/schemas/99_my_defaults.gschema.override
 ```
 
 ```ini
-# custom/systemd/myservice.service
-[Unit]
-Description=My Custom Service
+[org.gnome.desktop.background]
+picture-uri='file:///usr/share/backgrounds/my-wallpaper.png'
 
-[Service]
-Type=oneshot
-ExecStart=/usr/local/bin/my-script.sh
-
-[Install]
-WantedBy=multi-user.target
+[org.gnome.desktop.interface]
+gtk-theme='Adwaita-dark'
 ```
 
-### Switching the base image
+The build system already runs `glib-compile-schemas`.
 
-Change one line in `custom/image.yaml` to rebase on a different variant:
+### Adding systemd services
 
-```yaml
-# Build on Fedora 44 instead of Almalinux
-base: ghcr.io/tuna-os/bonito:gnome
+Two approaches:
+
+**A) Via system_files (recommended):** Place units in
+`system_files/etc/systemd/system/` and they're copied in. Then edit
+`build_scripts/40-services.sh` to enable them:
+
+```bash
+# build_scripts/40-services.sh — add:
+safe_enable "myservice.service"
 ```
 
-You can also rebase on a non-TunaOS bootc image — any OCI image with
-`bootc` installed works as a base.
-
-### Changing branding and wallpapers
-
-Place files in `custom/files/` and set your preferred defaults:
-
-```
-custom/files/
-└── usr/
-    └── share/
-        ├── backgrounds/
-        │   └── my-wallpaper.png
-        └── glib-2.0/
-            └── schemas/
-                └── 99_my_custom_defaults.gschema.override
-```
-
-Then in `custom/build.post.sh`, compile the schemas:
+**B) Via build script:** Create `build_scripts/25-my-services.sh`:
 
 ```bash
 #!/usr/bin/env bash
-glib-compile-schemas /usr/share/glib-2.0/schemas
+set -euo pipefail
+source "$(dirname "$0")/lib.sh"
+
+cat > /etc/systemd/system/myservice.service <<'EOF'
+[Unit]
+Description=My Custom Service
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/my-script.sh
+[Install]
+WantedBy=multi-user.target
+EOF
+
+safe_enable "myservice.service"
 ```
 
----
+Then add a `RUN` step to the Containerfile (see [step 4
+above](#4-edit-customize-the-containerfile)).
 
-## Going Deeper: Patching a Desktop Manifest
+### Running custom build scripts
 
-Sometimes you want to change what goes into the desktop itself — not just
-layer on top. Desktop manifests live at `manifests/desktops/<name>.yaml`.
-
-For example, to swap GNOME's default terminal from Ptyxis to GNOME
-Terminal, edit `manifests/desktops/gnome.yaml`:
-
-```yaml
-# find the packages section for your target OS...
-  el10:
-    packages:
-      - gnome-terminal    # add this
-      # - ptyxis          # remove this (comment out, don't delete —
-      #                     you might want it back)
-```
-
-Then build locally:
+Create a script in `build_scripts/` (follow the numbered naming
+convention — scripts run in order) and add a `RUN` line in the
+Containerfile:
 
 ```bash
-just build yellowfin gnome
+#!/usr/bin/env bash
+# build_scripts/25-my-stuff.sh
+set -euo pipefail
+source "$(dirname "$0")/lib.sh"
+
+echo "installing my custom things"
+pkg_install my-package another-package
 ```
 
-Manifest fields:
-
-| Field | Purpose |
-|---|---|
-| `display_manager` | gdm, sddm, greetd, etc. |
-| `packages.<os>.packages` | packages to install |
-| `packages.<os>.groups` | dnf group install list |
-| `packages.<os>.exclude` | packages excluded from groups |
-| `packages.<os>.optional` | best-effort (installed if available) |
-| `packages.<os>.copr` | COPR repos to enable (EL10/Fedora) |
-| `packages.<os>.ppa` | PPAs to add (Ubuntu) |
-| `versionlock` | dnf versionlock patterns |
-| `disable_desktop_files` | .desktop files to hide |
-| `post_install` | scripts to source after install |
-| `post_install_inline` | shell commands to eval |
-
-The generic installer `build_scripts/install-desktop.sh` reads all of
-these — no new shell script needed.
+The build library (`lib.sh`) gives you `pkg_install`,
+`install_available`, `dnf_retry`, `safe_enable`, and all `IS_*` flags.
 
 ---
 
-## Going Deeper: Adding a New Desktop Environment
+## The custom/ Overlay (Lighter Alternative)
 
-To add a desktop environment that isn't already shipped:
+If you'd rather not edit source files at all, the `custom/` directory is a
+self-contained overlay that layers on top of a published TunaOS image.
+It's simpler but less powerful — you can't change the desktop manifest or
+build stages.
+
+```bash
+# Edit these two files:
+#   custom/image.yaml    — base image + tag
+#   custom/packages.yaml — add/remove packages
+
+just build-custom        # build your overlay
+just run-custom-vm       # boot it as a VM
+```
+
+```yaml
+# custom/image.yaml
+base: ghcr.io/tuna-os/yellowfin:gnome
+tag: my-custom-os
+```
+
+```yaml
+# custom/packages.yaml
+dnf:
+  - neovim
+  - btop
+  - syncthing
+  - "-gnome-tour"     # remove packages with a minus prefix
+```
+
+Also available: `custom/files/` (config file overlay), `custom/systemd/`
+(units to enable), `custom/build.pre.sh` / `custom/build.post.sh` (hook
+scripts), `custom/just/` (custom ujust recipes).
+
+The overlay is good for personal machines and quick experiments. For a
+project you intend to maintain and ship to others, the fork-edit-build
+workflow is the right path.
+
+---
+
+## Going Deeper: Adding a Desktop
+
+To add a desktop environment that isn't already in the repo:
 
 ### 1. Create the manifest
 
@@ -318,7 +417,7 @@ Create `manifests/desktops/<name>.yaml`:
 display_manager: lightdm
 
 packages:
-  dnf:
+  fedora:
     packages:
       - lightdm
       - myde-session
@@ -326,6 +425,12 @@ packages:
       - myde-launcher
       - myde-terminal
       - xdg-desktop-portal-gtk
+
+  el10:
+    packages:
+      - lightdm
+      - myde-session
+      - myde-panel
 
   apt:
     - lightdm
@@ -338,13 +443,12 @@ packages:
     - myde-panel
 ```
 
-Provide at least the package-manager keys your target variants use (dnf,
-apt, pacman, zypper, emerge). Unused keys are harmlessly skipped.
+Provide at least the package-manager keys your target variants use. Unused
+keys are skipped.
 
-### 2. Add a stage in the Containerfile
+### 2. Add a stage in each Containerfile you need
 
-In `Containerfile.el10` (and `Containerfile.ubuntu`,
-`Containerfile.debian`, etc. if supporting those):
+In `Containerfile.el10` (and others if supporting multiple distros):
 
 ```dockerfile
 FROM base-no-de AS myde
@@ -355,9 +459,9 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
 RUN rm -rf /opt && ln -s /var/opt /opt
 ```
 
-### 3. Register it in the build matrix
+### 3. Register in the build matrix
 
-In `.github/build-config.yml`, under each variant you want to support:
+In `.github/build-config.yml`, under your variant:
 
 ```yaml
 - id: myde
@@ -366,33 +470,31 @@ In `.github/build-config.yml`, under each variant you want to support:
   build_iso: true
 ```
 
-That's it. One YAML file, one Containerfile stage, one matrix entry. No
+That's it — one YAML file, one Containerfile stage, one matrix entry. No
 new shell scripts.
 
 ---
 
-## Going Deeper: Adding a New Distro Variant
+## Going Deeper: Adding a Distro Variant
 
-To build on an entirely new base OS (e.g. NixOS, Void, Chimera Linux):
+To build on a new base OS:
 
 ### 1. Find or build a bootc-compatible base image
 
-The base image must have `bootc` installed and working. For existing
-distributions, check if a bootc image exists. For new ones, you'll need
-to build one.
+The base image must have `bootc` installed. For existing distros, check if
+a bootc image exists. For new ones, you'll need to build one (follow the
+pattern in `Containerfile.ubuntu` or `Containerfile.debian`).
 
 ### 2. Add detection to the build library
 
-In `build_scripts/lib.sh`, add detection for your OS:
+In `build_scripts/lib.sh`, add OS detection and package-manager wiring:
 
 ```bash
+# In the OS detection section:
 IS_MYOS=false
 [[ "${BASE_IMAGE,,}" == *"myos"* ]] && IS_MYOS=true && IMAGE_NAME="myvariant" && IMAGE_PRETTY_NAME="MyVariant"
-```
 
-And wire up the package manager:
-
-```bash
+# In the package-manager section:
 if [[ "$IS_MYOS" == true ]]; then
     PKG_MGR="my-pkg-mgr"
 fi
@@ -400,9 +502,8 @@ fi
 
 ### 3. Add the variant to the build matrix
 
-In `.github/build-config.yml`:
-
 ```yaml
+# .github/build-config.yml
 - id: myvariant
   emoji: "🐟"
   description: "Based on MyOS"
@@ -420,23 +521,15 @@ In `.github/build-config.yml`:
 
 ### 4. Add package sections to desktop manifests
 
-In each desktop manifest you want to support, add your pkg-mgr key:
-
 ```yaml
-# manifests/desktops/gnome.yaml (add at the bottom of packages:)
+# manifests/desktops/gnome.yaml — add at the bottom of packages:
   my-pkg-mgr:
     - gnome-shell
     - gnome-session
     - gdm
 ```
 
-### 5. (Optional) Create a Containerfile
-
-If your base image isn't already bootc-compatible, create
-`Containerfile.myvariant` to bootcify it — follow the pattern in
-`Containerfile.ubuntu` or `Containerfile.debian`.
-
-Add build recipes to the Justfile:
+### 5. Add build commands to the Justfile
 
 ```just
 build-myvariant flavor='gnome' *args: (build "myvariant" flavor +args)
@@ -444,44 +537,32 @@ build-myvariant flavor='gnome' *args: (build "myvariant" flavor +args)
 
 ---
 
-## Setting Up Your Own CI/CD
+## Running Your Own CI/CD
 
-The TunaOS CI pipeline is public and reusable. To run your own automated
-builds that push to your registry:
+Once you've pruned the matrix and customized your manifests, push to your
+fork. The existing workflows work out of the box:
 
-### 1. Set up GitHub Container Registry
+### What's already wired up
 
-No setup needed — GHCR is available to every repo.
-
-### 2. Copy the workflow files
-
-The critical files:
-
-| File | Role |
+| File | What it does |
 |---|---|
-| `.github/workflows/build-variant.yml` | Orchestrator — reads build-config, generates matrix, runs DAG |
-| `.github/workflows/reusable-build-image.yml` | Per-image build + push + sign + boot-gate |
-| `.github/workflows/reusable-build-artifacts.yml` | ISO/QCOW2 generation |
-| `.github/build-config.yml` | Your build matrix |
+| `.github/workflows/build-variant.yml` | Reads `.github/build-config.yml`, generates a matrix of builds, runs the 4-stage DAG |
+| `.github/workflows/reusable-build-image.yml` | Per-image build → push to GHCR → cosign sign → QEMU boot gate |
+| `.github/workflows/reusable-build-artifacts.yml` | ISO and QCOW2 generation |
 
-The workflows are already parameterized — they reference
-`${{ github.repository_owner }}` for the registry. Fork and they work.
+The workflows use `${{ github.repository_owner }}` as the registry
+namespace — forked, they automatically push to `ghcr.io/<your-username>/...`.
 
-### 3. Prune the matrix to what you care about
+### What you may need to set up
 
-Edit `.github/build-config.yml` — remove variants and flavors you don't
-want, add the ones you do. CI only builds what's listed.
+- **Secrets** (optional): `COSIGN_PRIVATE_KEY` / `COSIGN_PUBLIC_KEY` for
+  image signing. Builds work without these — images are unsigned but still
+  functional.
+- **RHSM credentials**: Only needed if you added a RHEL variant.
 
-### 4. Set repository secrets
+### Triggering builds
 
-For signing (cosign) and optional features:
-
-- `COSIGN_PRIVATE_KEY` / `COSIGN_PUBLIC_KEY` — for image signing
-- RHSM credentials if you need RHEL repos
-
-### 5. Trigger your first build
-
-Push to main, or dispatch manually:
+Push to main, or manually:
 
 ```
 Actions → Build Yellowfin → Run workflow
@@ -489,10 +570,9 @@ Actions → Build Yellowfin → Run workflow
 
 ### Build costs
 
-A full build of one variant (all desktops) takes ~45 minutes on GitHub's
-free runners. With a warm container registry cache, individual builds drop
-to ~15 minutes. Most customization work should be done locally with
-`just build` — only push to CI when you're ready to publish.
+A single-desktop build on GitHub's free runners takes ~15 minutes cold,
+~5 minutes with a warm cache. Most customization work should happen
+locally with `just build` — only push when you're ready to publish.
 
 ---
 
@@ -500,60 +580,69 @@ to ~15 minutes. Most customization work should be done locally with
 
 ```
 tunaos/
-├── custom/                          ← YOUR OVERLAY (the quickest path)
-│   ├── image.yaml                   #   base image + tag + publish flag
-│   ├── packages.yaml                #   add/remove packages
-│   ├── build.pre.sh                 #   pre-build hook script
-│   ├── build.post.sh                #   post-build hook script
-│   ├── files/                       #   config file overlay (mirrors /)
-│   └── systemd/                     #   systemd units
-│
-├── manifests/desktops/              ← DESKTOP DEFINITIONS
-│   ├── gnome.yaml                   #   package lists, DM, version locks
-│   ├── gnome-debian.yaml            #   Debian-specific overrides
-│   ├── gnome-arch.yaml              #   Arch-specific overrides
+├── manifests/desktops/              ← EDIT THESE — DESKTOP DEFINITIONS
+│   ├── gnome.yaml                   #   packages, DM, copr repos, version locks
+│   ├── gnome-debian.yaml            #   Debian-specific overrides (apt package names)
+│   ├── gnome-arch.yaml              #   Arch-specific overrides (pacman package names)
 │   ├── kde.yaml
+│   ├── kde-debian.yaml
+│   ├── kde-arch.yaml
 │   ├── cosmic.yaml
 │   ├── niri.yaml
 │   └── xfce.yaml
 │
-├── build_scripts/                   ← BUILD ENGINE (shell)
+├── build_scripts/                   ← EDIT THESE — BUILD ENGINE
 │   ├── install-desktop.sh           #   generic manifest-driven DE installer
-│   ├── apply-custom.sh              #   custom/ overlay runner
 │   ├── lib.sh                       #   shared library (OS detect, pkg wrappers)
+│   ├── 00-workarounds.sh            #   early patches and workarounds
+│   ├── 10-base-packages.sh          #   base OS packages (no DE)
+│   ├── 20-packages.sh               #   system-wide packages
+│   ├── 26-packages-post.sh          #   post-package cleanup
+│   ├── 40-services.sh               #   systemd service enablement
+│   ├── 90-image-info.sh             #   image metadata stamping
 │   ├── HWE.sh                       #   HWE kernel installer
 │   ├── nvidia.sh                    #   NVIDIA driver installer
 │   ├── cachyos.sh                   #   CachyOS kernel overlay
 │   ├── gnome-extensions.sh          #   GNOME extensions compiler
-│   └── ...                          #   base packages, cleanup, etc.
+│   ├── copy-files.sh                #   system_files → image
+│   ├── cleanup.sh                   #   final cleanup
+│   └── ...
 │
-├── Containerfile.el10               ← MAIN CONTAINERFILE (EL10/Fedora)
+├── system_files/                    ← EDIT THESE — SYSTEM CONFIG
+│   ├── etc/                         #   /etc config files
+│   └── usr/                         #   /usr config files
+│
+├── system_files_overrides/          ← OVERRIDES (applied after system_files)
+│   └── ...
+│
+├── Containerfile.el10               ← EDIT THIS — MAIN BUILD (EL10/Fedora)
 ├── Containerfile.overlay            ← HWE/NVIDIA/CachyOS parameterized overlay
 ├── Containerfile.ubuntu             ← Ubuntu bootcification
 ├── Containerfile.debian             ← Debian bootcification
-├── Containerfile.arch               ← Arch Linux bootcification
+├── Containerfile.arch               ← Arch bootcification
 ├── Containerfile.gentoo             ← Gentoo bootcification
 ├── Containerfile.opensuse           ← openSUSE bootcification
-├── Containerfile.custom             ← YOUR custom overlay build
 │
-├── .github/build-config.yml         ← BUILD MATRIX (variants × flavors × platforms)
+├── custom/                          ← OVERLAY (lighter alternative)
+│   ├── image.yaml                   #   base image + tag
+│   ├── packages.yaml                #   add/remove packages
+│   ├── files/                       #   config file overlay
+│   └── systemd/                     #   systemd units
+│
+├── .github/build-config.yml         ← EDIT THIS — BUILD MATRIX
 ├── .github/workflows/               ← CI PIPELINE
-│   ├── build-variant.yml            #   orchestrator
+│   ├── build-variant.yml            #   orchestrator (works as-is on forks)
 │   ├── reusable-build-image.yml     #   per-image build+push+sign
 │   └── reusable-build-artifacts.yml #   ISO/QCOW2 generation
 │
-├── scripts/                         ← TOOL SCRIPTS
+├── scripts/                         ← TOOL SCRIPTS (usually don't need editing)
 │   ├── resolve-flavor.sh            #   flavor → Containerfile, target, flags
 │   ├── resolve-image.sh             #   image ref resolver
-│   ├── build-image-inner.sh         #   build engine (env-var driven)
-│   └── build-qcow2.sh               #   convert container → VM disk
+│   └── build-image-inner.sh         #   build engine (env-var driven)
 │
 └── Justfile                         ← TASK RUNNER
-    just build yellowfin gnome       #   build one flavor locally
-    just build-custom                #   build your overlay
-    just run-custom-vm               #   boot your overlay as a VM
-    just qcow2 yellowfin gnome       #   build QCOW2 disk
-    just iso yellowfin gnome         #   build ISO
+    just build yellowfin gnome       #   build one image locally
+    just build yellowfin all         #   build all desktops for a variant
 ```
 
 ---
@@ -570,7 +659,7 @@ just build yellowfin gnome           # build one image
 just build yellowfin all             # build all desktops for a variant
 just build yellowfin kde linux/amd64 # specific platform
 
-# ── Custom overlay ────────────────────────────────────────────
+# ── Custom overlay (lighter alternative) ───────────────────────
 just build-custom                    # build your custom/ overlay
 just run-custom-vm                   # boot it as a VM
 
