@@ -47,6 +47,7 @@ RUN NPROC="$(nproc)" && \
     echo "sys-apps/systemd boot" >> /etc/portage/package.use/systemd && \
     echo "media-video/pipewire extra -ffmpeg" >> /etc/portage/package.use/pipewire && \
     echo "media-libs/gst-plugins-bad -vulkan" >> /etc/portage/package.use/gst-plugins-bad && \
+    echo "sys-libs/minizip-ng compat" >> /etc/portage/package.use/minizip-ng && \
     echo "gui-libs/gtk -vulkan" >> /etc/portage/package.use/gtk && \
     echo "*/* -abi_x86_32" >> /etc/portage/package.use/multilib
 
@@ -56,7 +57,7 @@ RUN emerge --verbose --deep --newuse @world
 
 # 3) Install the bootc/base tooling, prebuilt kernel, and extra base packages.
 RUN emerge --verbose --deep --newuse \
-        app-arch/cpio btrfs-progs dev-vcs/git dosfstools \
+        app-arch/cpio btrfs-progs dev-vcs/git dosfstools sys-fs/xfsprogs \
         linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd \
         net-vpn/tailscale gui-apps/wl-clipboard media-video/ffmpeg media-plugins/gst-plugins-meta && \
     curl -fsSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.35.0/just-1.35.0-x86_64-unknown-linux-musl.tar.gz && \
