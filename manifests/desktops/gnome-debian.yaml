@@ -1,0 +1,24 @@
+# GNOME Desktop Manifest — Debian override (see install-desktop.sh:
+# <desktop>-debian.yaml beats <desktop>.yaml on Debian bases).
+#
+# The generic gnome.yaml apt list is Ubuntu-only (ubuntu-desktop-minimal
+# does not exist in Debian). Debian's supported GNOME baseline is the
+# gnome-core metapackage; pkg_install runs --no-install-recommends so
+# the extras we actually want are listed explicitly.
+
+display_manager: gdm3
+
+packages:
+  apt:
+    - gnome-core
+    - gnome-disk-utility
+    - gnome-system-monitor
+    - gnome-shell-extension-manager
+    - nautilus
+    - xdg-desktop-portal-gnome
+    - xdg-desktop-portal-gtk
+    - xdg-user-dirs-gtk
+    # glib-compile-schemas — live-iso customize (desktop-gnome.sh) compiles
+    # gschema overrides for autologin/no-sleep; Debian ships the tool in the
+    # dev-bin package (Fedora's glib2 includes it in the main package).
+    - libglib2.0-dev-bin

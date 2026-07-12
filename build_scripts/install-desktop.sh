@@ -15,7 +15,22 @@ set -xeuo pipefail
 
 _TD_DESKTOP="${1:?Usage: install-desktop.sh <desktop>}"
 _TD_CTX="/run/context"
+
+# lib.sh first: manifest resolution below needs IS_DEBIAN / PKG_MGR.
+source "${_TD_CTX}/build_scripts/lib.sh"
+
+# Per-distro manifest overrides: <desktop>-debian.yaml / <desktop>-arch.yaml
+# beat the generic <desktop>.yaml when they exist — package names, session
+# files, and display managers differ across distros (kde-debian.yaml
+# carries plasma-workspace-wayland + gdm3 is gdm3 not gdm, etc.). Before
+# this resolution existed the -debian/-arch manifests were dead files and
+# Debian flavors silently installed the Ubuntu package set.
 _TD_MANIFEST="${_TD_CTX}/manifests/desktops/${_TD_DESKTOP}.yaml"
+if [[ "${IS_DEBIAN:-false}" == true && -f "${_TD_CTX}/manifests/desktops/${_TD_DESKTOP}-debian.yaml" ]]; then
+	_TD_MANIFEST="${_TD_CTX}/manifests/desktops/${_TD_DESKTOP}-debian.yaml"
+elif [[ "${PKG_MGR:-}" == "pacman" && -f "${_TD_CTX}/manifests/desktops/${_TD_DESKTOP}-arch.yaml" ]]; then
+	_TD_MANIFEST="${_TD_CTX}/manifests/desktops/${_TD_DESKTOP}-arch.yaml"
+fi
 
 if [[ ! -f "${_TD_MANIFEST}" ]]; then
 	echo "ERROR: No manifest found at ${_TD_MANIFEST}" >&2
@@ -23,8 +38,6 @@ if [[ ! -f "${_TD_MANIFEST}" ]]; then
 	ls "${_TD_CTX}/manifests/desktops/"*.yaml 2>/dev/null | sed 's|.*/||;s|\.yaml||'
 	exit 1
 fi
-
-source "${_TD_CTX}/build_scripts/lib.sh"
 
 # Ensure yq is available inside the container for manifest parsing.
 # yq is a static binary — download once, use for the rest of the build.
@@ -80,8 +93,20 @@ if [[ "${_TD_OS}" == "emerge" ]]; then
 fi
 
 if [[ "${_TD_OS}" == "apt" ]]; then
+	# The apt section is either a plain package list (!!seq) or a map with
+	# .packages and optional .ppa. Branch on the type explicitly: mikefarah
+	# yq has NO if/then/else and indexing a seq with a string is an error,
+	# so the old one-liners either always failed (PPA count: type is
+	# "!!map", never "object") or errored and were swallowed by `|| true`
+	# (package list) — every apt flavor shipped a desktop-less image that
+	# still passed CI.
+	_TD_APT_TYPE=$($YQ -r '.packages.apt | type' "${_TD_MANIFEST}")
+
 	# Handle PPAs (Ubuntu only — Debian uses native repos)
-	_TD_PPA_COUNT=$($YQ -r '.packages.apt | if type == "object" then (.ppa | length // 0) else 0 end' "${_TD_MANIFEST}" 2>/dev/null || echo 0)
+	_TD_PPA_COUNT=0
+	if [[ "${_TD_APT_TYPE}" == "!!map" ]]; then
+		_TD_PPA_COUNT=$($YQ -r '.packages.apt.ppa | length' "${_TD_MANIFEST}")
+	fi
 	for ((i = 0; i < _TD_PPA_COUNT; i++)); do
 		_TD_PPA_REPO=$($YQ -r ".packages.apt.ppa[$i].repo" "${_TD_MANIFEST}")
 		_TD_PPA_COND=$($YQ -r ".packages.apt.ppa[$i].condition" "${_TD_MANIFEST}")
@@ -93,10 +118,19 @@ if [[ "${_TD_OS}" == "apt" ]]; then
 		fi
 	done
 
-	# Install packages (may be under .packages.apt[] or .packages.apt.packages[])
-	readarray -t _TD_PKGS < <($YQ -r '(.packages.apt.packages // .packages.apt)[]' "${_TD_MANIFEST}" 2>/dev/null || true)
+	# Install packages (under .packages.apt[] or .packages.apt.packages[])
+	_TD_PKGS=()
+	case "${_TD_APT_TYPE}" in
+	"!!map") readarray -t _TD_PKGS < <($YQ -r '.packages.apt.packages // [] | .[]' "${_TD_MANIFEST}") ;;
+	"!!seq") readarray -t _TD_PKGS < <($YQ -r '.packages.apt[]' "${_TD_MANIFEST}") ;;
+	esac
 	if ((${#_TD_PKGS[@]} > 0)); then
 		pkg_install "${_TD_PKGS[@]}"
+	elif [[ "${_TD_APT_TYPE}" != "!!null" ]]; then
+		# Fail loudly: an apt section exists but nothing parsed out of it.
+		# Silence here is exactly how the desktop-less-image bug shipped.
+		echo "ERROR: ${_TD_MANIFEST} has a packages.apt section but no packages parsed" >&2
+		exit 1
 	fi
 	# Enable display manager
 	_TD_DM=$($YQ -r '.display_manager' "${_TD_MANIFEST}")
