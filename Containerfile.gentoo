@@ -36,7 +36,7 @@ RUN NPROC="$(nproc)" && \
     { \
       echo 'FEATURES="-ipc-sandbox -network-sandbox -pid-sandbox getbinpkg"'; \
       echo 'ACCEPT_LICENSE="*"'; \
-      echo 'USE="networkmanager dracut nftables systemd X wayland dbus gtk gnome qt6 plasma opengl harfbuzz alsa pulseaudio"'; \
+      echo 'USE="dracut nftables systemd X wayland dbus gtk gnome qt6 plasma opengl harfbuzz alsa pulseaudio"'; \
       echo "MAKEOPTS=\"-j${NPROC}\""; \
       echo "EMERGE_DEFAULT_OPTS=\"--jobs=${NPROC} --load-average=${NPROC} --getbinpkg --binpkg-respect-use=n\""; \
     } >> /etc/portage/make.conf && \
@@ -44,18 +44,7 @@ RUN NPROC="$(nproc)" && \
     printf '[gentoobinhost]\npriority = 9999\nsync-uri = https://distfiles.gentoo.org/releases/amd64/binpackages/23.0/x86-64/\n' \
       >/etc/portage/binrepos.conf/gentoobinhost.conf && \
     getuto && \
-    echo "sys-apps/systemd boot" >> /etc/portage/package.use/systemd && \
-    # USE-dep pins the desktop flavors need: the binhost's plasma-meta
-    # binpkg requires kwin[lock], gnome's stack wants ngtcp2[gnutls] and
-    # zlib[minizip]; none are in the binhost's own builds of those four,
-    # so they build from source with the right flags.
-    printf 'kde-plasma/kwin lock\nkde-plasma/kwin-x11 lock\nnet-libs/ngtcp2 gnutls\nsys-libs/zlib minizip\n' \
-      >> /etc/portage/package.use/tunaos-desktops
-
-# The binhost's multilib binpkgs impose abi_x86_32 USE-deps on each other;
-# match our config to exactly the packages the binhost built with the flag
-# (see the file's header for why NOT a global ABI_X86 setting).
-COPY gentoo/package.use-binhost-multilib /etc/portage/package.use/zz-binhost-multilib
+    echo "sys-apps/systemd boot" >> /etc/portage/package.use/systemd
 
 # 2) Bring @world up to date from binpkgs — own layer so a later failure reuses
 #    this (expensive) cache on retry.
@@ -109,6 +98,21 @@ LABEL containers.bootc=1 ostree.bootable=1
 FROM builder AS desktop-build
 ARG DESKTOP_FLAVOR
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
+
+# Desktop-only portage config, applied AFTER the base @world so no
+# --newuse world pass re-evaluates it (a global flip at base scheduled
+# from-source multilib rebuilds and died on ncurses<->gpm/pam<->systemd
+# build cycles):
+#  - binhost-multilib: abi_x86_32 for exactly the packages the official
+#    binhost builds with the flag — its graphics-stack binpkgs impose
+#    those USE-deps on each other (cairo -> glib[abi_x86_32], ...), and
+#    every entry resolves as a binary reinstall.
+#  - pins: plasma-meta needs kwin[lock]; gnome's chain wants
+#    ngtcp2[gnutls], zlib[minizip]; gnome-shell[networkmanager] needs a
+#    matching gnome-control-center. These few build from source.
+COPY gentoo/package.use-binhost-multilib /etc/portage/package.use/zz-binhost-multilib
+RUN printf 'kde-plasma/kwin lock\nkde-plasma/kwin-x11 lock\nnet-libs/ngtcp2 gnutls\nsys-libs/zlib minizip\ngnome-base/gnome-control-center networkmanager\ngnome-base/gnome-shell networkmanager\n' \
+      >> /etc/portage/package.use/tunaos-desktops
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/install-desktop.sh ${DESKTOP_FLAVOR}
 
