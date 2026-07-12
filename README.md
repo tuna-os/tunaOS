@@ -174,6 +174,7 @@ Related Communities:
 ### Project Docs
 - [TunaOS Blog](https://tunaos.org/blog/modern-enterprise-linux-desktops-with-tunaos) — launch announcement and design philosophy comparison
 - [Contributor Guide](CONTRIBUTING.md) — how to set up, build, and contribute
+- [Roll Your Own Guide](docs/ROLL_YOUR_OWN.md) — build your own custom TunaOS variant
 - [Agent Guide](docs/AGENT_GUIDE.md) — complete architecture and contributor reference
 - [Build Pipeline](docs/build-pipeline.md) — CI/CD workflow overview
 - [Testing Guide](docs/TESTING.md) — ISO end-to-end test harness
