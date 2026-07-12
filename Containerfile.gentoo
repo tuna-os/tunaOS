@@ -99,31 +99,27 @@ FROM builder AS desktop-build
 ARG DESKTOP_FLAVOR
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
-# Desktop-only portage config, applied AFTER the base @world so no
-# --newuse world pass re-evaluates it (a global flip at base scheduled
-# from-source multilib rebuilds and died on ncurses<->gpm/pam<->systemd
-# build cycles):
-#  - binhost-multilib: abi_x86_32 for exactly the packages the official
-#    binhost builds with the flag — its graphics-stack binpkgs impose
-#    those USE-deps on each other (cairo -> glib[abi_x86_32], ...), and
-#    every entry resolves as a binary reinstall.
-#  - pins: plasma-meta needs kwin[lock]; gnome's chain wants
-#    ngtcp2[gnutls], zlib[minizip]; gnome-shell[networkmanager] needs a
-#    matching gnome-control-center. These few build from source.
-COPY gentoo/package.use-binhost-multilib /etc/portage/package.use/zz-binhost-multilib
+# Desktop-only portage config, applied AFTER the base @world (any global
+# flag change at base makes @world --newuse schedule from-source multilib
+# rebuilds that die on pam<->systemd / ncurses<->gpm build cycles):
+#
+#  - --binpkg-respect-use=y: the binhost publishes MULTIPLE builds per
+#    package (systemd- and elogind-flavored, 64-only and multilib); the
+#    base stage's respect-use=n grabs whichever is newest, which for the
+#    desktop stack meant OpenRC/elogind multilib builds — dragging in
+#    elogind and 32-bit USE-dep chains the binhost can't close. With
+#    respect-use=y the resolver picks the builds that match OUR profile.
+#  - package.mask elogind: belt-and-braces — this is a systemd image.
+#  - pins: USE combos no published build has (plasma-meta needs
+#    kwin[lock]; gnome's chain wants ngtcp2[gnutls], zlib[minizip];
+#    gnome-shell[networkmanager] needs a matching gnome-control-center).
+#    These few build from source.
 RUN NPROC="$(nproc)" && \
     printf 'kde-plasma/kwin lock\nkde-plasma/kwin-x11 lock\nnet-libs/ngtcp2 gnutls\nsys-libs/zlib minizip\ngnome-base/gnome-control-center networkmanager\ngnome-base/gnome-shell networkmanager\n' \
       >> /etc/portage/package.use/tunaos-desktops && \
-    # This is a systemd image: never let the resolver drift to elogind
-    # (the binhost's desktop binpkgs are built for the OpenRC/elogind
-    # profile and pull it in via xorg-server/pambase).
     mkdir -p /etc/portage/package.mask && \
     echo "sys-auth/elogind" >> /etc/portage/package.mask/tunaos-systemd && \
-    # Session-critical packages whose binhost binpkgs are elogind-
-    # flavored (-systemd): source-build them with our USE instead of
-    # importing a conflicting login stack. Repeats the base
-    # EMERGE_DEFAULT_OPTS because make.conf is last-assignment-wins.
-    echo "EMERGE_DEFAULT_OPTS=\"--jobs=${NPROC} --load-average=${NPROC} --getbinpkg --binpkg-respect-use=n --usepkg-exclude 'sys-apps/dbus sys-auth/pambase x11-base/xorg-server'\"" \
+    echo "EMERGE_DEFAULT_OPTS=\"--jobs=${NPROC} --load-average=${NPROC} --getbinpkg --binpkg-respect-use=y\"" \
       >> /etc/portage/make.conf
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/install-desktop.sh ${DESKTOP_FLAVOR}
