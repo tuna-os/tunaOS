@@ -14,7 +14,6 @@ packages:
     - kdeconnect
     - xdg-desktop-portal-kde
     - qt6-wayland
-    - plasma-workspace-wayland
     - network-manager
     - pipewire
     - wireplumber
