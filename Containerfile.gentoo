@@ -37,11 +37,6 @@ RUN NPROC="$(nproc)" && \
       echo 'FEATURES="-ipc-sandbox -network-sandbox -pid-sandbox getbinpkg"'; \
       echo 'ACCEPT_LICENSE="*"'; \
       echo 'USE="networkmanager dracut nftables systemd X wayland dbus gtk gnome qt6 plasma opengl harfbuzz alsa pulseaudio"'; \
-      # ABI_X86="64 32": the official binhost builds its graphics stack
-      # (cairo, freetype, libjpeg-turbo, ...) multilib. Matching it keeps
-      # binpkgs usable and lets the few from-source builds satisfy the
-      # abi_x86_32 USE-deps those binpkgs impose (see desktop manifests).
-      echo 'ABI_X86="64 32"'; \
       echo "MAKEOPTS=\"-j${NPROC}\""; \
       echo "EMERGE_DEFAULT_OPTS=\"--jobs=${NPROC} --load-average=${NPROC} --getbinpkg --binpkg-respect-use=n\""; \
     } >> /etc/portage/make.conf && \
@@ -56,6 +51,11 @@ RUN NPROC="$(nproc)" && \
     # so they build from source with the right flags.
     printf 'kde-plasma/kwin lock\nkde-plasma/kwin-x11 lock\nnet-libs/ngtcp2 gnutls\nsys-libs/zlib minizip\n' \
       >> /etc/portage/package.use/tunaos-desktops
+
+# The binhost's multilib binpkgs impose abi_x86_32 USE-deps on each other;
+# match our config to exactly the packages the binhost built with the flag
+# (see the file's header for why NOT a global ABI_X86 setting).
+COPY gentoo/package.use-binhost-multilib /etc/portage/package.use/zz-binhost-multilib
 
 # 2) Bring @world up to date from binpkgs — own layer so a later failure reuses
 #    this (expensive) cache on retry.

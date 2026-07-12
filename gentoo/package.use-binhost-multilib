@@ -1,0 +1,159 @@
+# Packages the official Gentoo binhost builds with abi_x86_32 (multilib).
+#
+# Our profile doesn't enable 32-bit ABIs, but the binhost's graphics/media
+# stack is built multilib, and its binpkgs impose abi_x86_32 USE-deps on
+# each other (cairo -> glib[abi_x86_32], ...). Under --binpkg-respect-use=n
+# emerge evaluates those deps against OUR configured USE, so the flag must
+# be set here for exactly the packages the binhost built with it — every
+# entry below has a matching binpkg, so these resolve as binary installs
+# (no from-source multilib rebuilds, no pam<->systemd build cycle, which is
+# what a global ABI_X86="64 32" caused).
+#
+# Regenerate against the current binhost with:
+#   curl -s https://distfiles.gentoo.org/releases/amd64/binpackages/23.0/x86-64/Packages \
+#     | awk '/^CPV: /{cpv=$2} /^USE: /{u=$0} /^$/{if (cpv != "" && u ~ / abi_x86_32( |$)/) print cpv; cpv=""; u=""}' \
+#     | sed -E 's|-[0-9][^/]*$||' | sort -u | sed 's/$/ abi_x86_32/'
+app-accessibility/at-spi2-core abi_x86_32
+app-arch/brotli abi_x86_32
+app-arch/bzip2 abi_x86_32
+app-arch/xz-utils abi_x86_32
+app-arch/zstd abi_x86_32
+app-emulation/wine-gecko abi_x86_32
+dev-cpp/highway abi_x86_32
+dev-lang/orc abi_x86_32
+dev-lang/rust abi_x86_32
+dev-libs/boehm-gc abi_x86_32
+dev-libs/elfutils abi_x86_32
+dev-libs/fribidi abi_x86_32
+dev-libs/glib abi_x86_32
+dev-libs/gmp abi_x86_32
+dev-libs/icu abi_x86_32
+dev-libs/json-glib abi_x86_32
+dev-libs/leancrypto abi_x86_32
+dev-libs/libatomic_ops abi_x86_32
+dev-libs/libffi abi_x86_32
+dev-libs/libgpg-error abi_x86_32
+dev-libs/libgudev abi_x86_32
+dev-libs/libgusb abi_x86_32
+dev-libs/libpcre2 abi_x86_32
+dev-libs/libtasn1 abi_x86_32
+dev-libs/libunistring abi_x86_32
+dev-libs/libusb abi_x86_32
+dev-libs/libxml2 abi_x86_32
+dev-libs/nettle abi_x86_32
+dev-libs/wayland abi_x86_32
+dev-util/glslang abi_x86_32
+dev-util/mingw64-toolchain abi_x86_32
+dev-util/spirv-tools abi_x86_32
+dev-util/sysprof-capture abi_x86_32
+llvm-core/clang abi_x86_32
+llvm-core/llvm abi_x86_32
+llvm-runtimes/clang-rtlib-config abi_x86_32
+llvm-runtimes/clang-runtime abi_x86_32
+llvm-runtimes/compiler-rt abi_x86_32
+llvm-runtimes/compiler-rt-sanitizers abi_x86_32
+llvm-runtimes/libcxx abi_x86_32
+llvm-runtimes/openmp abi_x86_32
+media-gfx/graphite2 abi_x86_32
+media-libs/a52dec abi_x86_32
+media-libs/alsa-lib abi_x86_32
+media-libs/dav1d abi_x86_32
+media-libs/faad2 abi_x86_32
+media-libs/flac abi_x86_32
+media-libs/fontconfig abi_x86_32
+media-libs/freetype abi_x86_32
+media-libs/giflib abi_x86_32
+media-libs/glu abi_x86_32
+media-libs/graphene abi_x86_32
+media-libs/gst-plugins-bad abi_x86_32
+media-libs/gst-plugins-base abi_x86_32
+media-libs/gst-plugins-good abi_x86_32
+media-libs/gst-plugins-ugly abi_x86_32
+media-libs/gstreamer abi_x86_32
+media-libs/harfbuzz abi_x86_32
+media-libs/libass abi_x86_32
+media-libs/libdca abi_x86_32
+media-libs/libdisplay-info abi_x86_32
+media-libs/libdvdcss abi_x86_32
+media-libs/libdvdnav abi_x86_32
+media-libs/libdvdread abi_x86_32
+media-libs/libepoxy abi_x86_32
+media-libs/libglvnd abi_x86_32
+media-libs/libjpeg-turbo abi_x86_32
+media-libs/libmpeg2 abi_x86_32
+media-libs/libogg abi_x86_32
+media-libs/libpng abi_x86_32
+media-libs/libpulse abi_x86_32
+media-libs/libsndfile abi_x86_32
+media-libs/libtheora abi_x86_32
+media-libs/libv4l abi_x86_32
+media-libs/libvorbis abi_x86_32
+media-libs/libvpx abi_x86_32
+media-libs/opus abi_x86_32
+media-libs/shaderc abi_x86_32
+media-libs/vulkan-loader abi_x86_32
+media-libs/x264 abi_x86_32
+media-plugins/gst-plugins-a52dec abi_x86_32
+media-plugins/gst-plugins-cdparanoia abi_x86_32
+media-plugins/gst-plugins-dts abi_x86_32
+media-plugins/gst-plugins-dvdread abi_x86_32
+media-plugins/gst-plugins-faad abi_x86_32
+media-plugins/gst-plugins-flac abi_x86_32
+media-plugins/gst-plugins-meta abi_x86_32
+media-plugins/gst-plugins-mpeg2dec abi_x86_32
+media-plugins/gst-plugins-mpg123 abi_x86_32
+media-plugins/gst-plugins-pulse abi_x86_32
+media-plugins/gst-plugins-resindvd abi_x86_32
+media-plugins/gst-plugins-v4l2 abi_x86_32
+media-plugins/gst-plugins-x264 abi_x86_32
+media-sound/cdparanoia abi_x86_32
+media-sound/lame abi_x86_32
+media-sound/mpg123-base abi_x86_32
+media-video/pipewire abi_x86_32
+net-dns/libidn2 abi_x86_32
+net-libs/gnutls abi_x86_32
+net-libs/libasyncns abi_x86_32
+sys-apps/dbus abi_x86_32
+sys-apps/sandbox abi_x86_32
+sys-apps/systemd-utils abi_x86_32
+sys-apps/util-linux abi_x86_32
+sys-libs/gdbm abi_x86_32
+sys-libs/gpm abi_x86_32
+sys-libs/libunwind abi_x86_32
+sys-libs/libxcrypt abi_x86_32
+sys-libs/ncurses abi_x86_32
+sys-libs/pam abi_x86_32
+sys-libs/readline abi_x86_32
+sys-libs/zlib abi_x86_32
+virtual/glu abi_x86_32
+virtual/libcrypt abi_x86_32
+virtual/libelf abi_x86_32
+virtual/libiconv abi_x86_32
+virtual/libintl abi_x86_32
+virtual/libudev abi_x86_32
+virtual/libusb abi_x86_32
+virtual/opengl abi_x86_32
+virtual/zlib abi_x86_32
+x11-libs/cairo abi_x86_32
+x11-libs/libX11 abi_x86_32
+x11-libs/libXau abi_x86_32
+x11-libs/libXcomposite abi_x86_32
+x11-libs/libXcursor abi_x86_32
+x11-libs/libXdamage abi_x86_32
+x11-libs/libXdmcp abi_x86_32
+x11-libs/libXext abi_x86_32
+x11-libs/libXfixes abi_x86_32
+x11-libs/libXft abi_x86_32
+x11-libs/libXi abi_x86_32
+x11-libs/libXrandr abi_x86_32
+x11-libs/libXrender abi_x86_32
+x11-libs/libXtst abi_x86_32
+x11-libs/libXv abi_x86_32
+x11-libs/libXxf86vm abi_x86_32
+x11-libs/libdrm abi_x86_32
+x11-libs/libxcb abi_x86_32
+x11-libs/libxkbcommon abi_x86_32
+x11-libs/libxshmfence abi_x86_32
+x11-libs/pango abi_x86_32
+x11-libs/pixman abi_x86_32
+x11-libs/xcb-util-keysyms abi_x86_32
