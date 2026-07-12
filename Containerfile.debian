@@ -134,7 +134,13 @@ RUN sed -i 's|^HOME=.*|HOME=/var/home|' /etc/default/useradd && \
     # Recreate /var/tmp: tacklebox rebuilds the live-ISO initramfs against
     # the published image later (dracut --tmpdir defaults to /var/tmp), and
     # an absent /var/tmp fails it with "Invalid tmpdir '/var/tmp'".
-    mkdir -p /sysroot /boot /usr/lib/ostree /var /var/tmp && \
+    # The /var targets of the aliasing symlinks below must EXIST at
+    # image-build time, not just in tmpfiles.d: apt maintainer scripts in
+    # later layers probe the aliases with `[ ! -d ... ] && mkdir` (e.g.
+    # base-files postinst on /mnt), and mkdir on a dangling symlink fails
+    # the whole layer with EEXIST.
+    mkdir -p /sysroot /boot /usr/lib/ostree /var /var/tmp \
+        /var/roothome /var/srv /var/opt /var/mnt /var/home /var/usrlocal && \
     ln -sT sysroot/ostree /ostree && \
     ln -sT var/roothome /root && \
     ln -sT var/srv /srv && \
