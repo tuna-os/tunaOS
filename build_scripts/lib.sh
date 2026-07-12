@@ -69,16 +69,16 @@ else
 		PKG_MGR="apt"
 	elif [[ "$IS_ARCH" == true ]]; then
 		PKG_MGR="pacman"
-elif [[ "$IS_OPENSUSE" == true ]]; then
+	elif [[ "$IS_OPENSUSE" == true ]]; then
 		PKG_MGR="zypper"
-elif [[ "$IS_GENTOO" == true ]]; then
+	elif [[ "$IS_GENTOO" == true ]]; then
 		PKG_MGR="emerge"
 	else
 		PKG_MGR="dnf"
 	fi
 
 	# Write cache for subsequent sources within this RUN
-	cat > "$_TUNAOS_ENV_CACHE" <<-ENVEOF
+	cat >"$_TUNAOS_ENV_CACHE" <<-ENVEOF
 		MAJOR_VERSION_NUMBER="${MAJOR_VERSION_NUMBER}"
 		BASE_IMAGE="${BASE_IMAGE}"
 		IS_FEDORA=${IS_FEDORA}
@@ -521,6 +521,7 @@ install_from_copr() {
 # _yq_array — Read YAML array into a bash array variable.
 # Usage: _yq_array <array_name> <yq_args...>
 _yq_array() {
-	local _arr_name="$1"; shift
+	local _arr_name="$1"
+	shift
 	readarray -t "$_arr_name" < <($YQ "$@" 2>/dev/null || true)
 }

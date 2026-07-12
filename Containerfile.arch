@@ -8,6 +8,7 @@
 #   buildah build --target=kde --file Containerfile.arch .
 
 ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest"
+
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR
@@ -116,7 +117,9 @@ RUN KERNEL_PKG="linux"; \
         yq && \
     pacman -Scc --noconfirm
 
-# Build initramfs
+# Build initramfs. Live-boot modules are NOT needed here: tacklebox
+# injects its own embedded tbox-live/tbox-root dracut modules at ISO
+# build time using this image's stock dracut (tuna-os/tacklebox#90).
 RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \
     printf 'systemdsystemconfdir=/etc/systemd/system\nsystemdsystemunitdir=/usr/lib/systemd/system\n' \
         > /usr/lib/dracut/dracut.conf.d/30-fix-bootc-module.conf && \

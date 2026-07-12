@@ -14,7 +14,7 @@ case "$variant" in
 "redfin") echo "registry.redhat.io/rhel10/rhel-bootc:latest" ;;
 "sailfin") echo "registry.opensuse.org/opensuse/tumbleweed:latest" ;;
 "guppy") echo "docker.io/gentoo/stage3:latest" ;;
-"marlin") echo "docker.io/archlinux/archlinux:latest" ;; 
+"marlin") echo "docker.io/archlinux/archlinux:latest" ;;
 "flounder") echo "docker.io/library/debian:trixie" ;;
 "flounder-sid") echo "docker.io/library/debian:sid" ;;
 *)

@@ -120,7 +120,7 @@ else
 		kf6-krunner-devel kf6-ki18n-devel kf6-kconfig-devel \
 		qt6-qtbase-devel qt6-qtdeclarative-devel || true
 
-	curl -fsSL "https://github.com/bazaar-org/krunner-bazaar/archive/refs/tags/${KRUNNER_BAZAAR_VERSION}.tar.gz" | \
+	curl -fsSL "https://github.com/bazaar-org/krunner-bazaar/archive/refs/tags/${KRUNNER_BAZAAR_VERSION}.tar.gz" |
 		tar -xzf - -C /tmp
 	mv "/tmp/krunner-bazaar-${KRUNNER_BAZAAR_VERSION#v}" "${KRUNNER_BAZAAR_SRC}"
 
@@ -138,7 +138,7 @@ fi
 
 # Flatpak preinstall — Bazaar will be installed on first boot
 mkdir -p /usr/share/flatpak/preinstall.d
-cat > /usr/share/flatpak/preinstall.d/bazaar.preinstall <<'EOF'
+cat >/usr/share/flatpak/preinstall.d/bazaar.preinstall <<'EOF'
 [Flatpak Preinstall io.github.kolunmi.Bazaar]
 Branch=stable
 IsRuntime=false
@@ -147,9 +147,9 @@ EOF
 # Associate .flatpakref files with Bazaar (same as Aurora)
 mkdir -p /usr/share/applications
 if [ -f /usr/share/applications/mimeapps.list ]; then
-	echo "application/vnd.flatpak.ref=io.github.kolunmi.Bazaar.desktop" >> /usr/share/applications/mimeapps.list
+	echo "application/vnd.flatpak.ref=io.github.kolunmi.Bazaar.desktop" >>/usr/share/applications/mimeapps.list
 else
-	cat > /usr/share/applications/mimeapps.list <<'EOF'
+	cat >/usr/share/applications/mimeapps.list <<'EOF'
 [Default Applications]
 application/vnd.flatpak.ref=io.github.kolunmi.Bazaar.desktop
 EOF

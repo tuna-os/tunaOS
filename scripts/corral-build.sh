@@ -32,7 +32,7 @@ FLAVORS=("${@:-gnome}")
 
 # Expand "all" to the full desktop list
 if [[ "${FLAVORS[0]}" == "all" ]]; then
-    FLAVORS=(gnome kde niri cosmic xfce)
+	FLAVORS=(gnome kde niri cosmic xfce)
 fi
 
 VM="${CORRAL_VM:-tunaos-builder}"
@@ -49,42 +49,42 @@ echo "╚═══════════════════════�
 
 # ── Ensure the builder VM exists and is running ──────────────────────────────
 if ! corral list 2>/dev/null | grep -q "^${VM}"; then
-    echo "==> Creating builder VM from tunaos-builder.yaml..."
-    corral create "$VM" -f ./tunaos-builder.yaml --node "$NODE"
+	echo "==> Creating builder VM from tunaos-builder.yaml..."
+	corral create "$VM" -f ./tunaos-builder.yaml --node "$NODE"
 fi
 
 VM_STATUS=$(corral list 2>/dev/null | grep "^${VM}" | awk '{print $3}')
 if [[ "$VM_STATUS" != "●" ]]; then
-    echo "==> Starting builder VM..."
-    corral start "$VM"
-    echo "    Waiting for boot + provisioning (90s)..."
-    sleep 90
+	echo "==> Starting builder VM..."
+	corral start "$VM"
+	echo "    Waiting for boot + provisioning (90s)..."
+	sleep 90
 fi
 
 # Wait for SSH
 for i in 1 2 3 4 5; do
-    corral ssh "$VM" -u fedora -c "true" 2>/dev/null && break
-    echo "    Waiting for SSH... ($i/5)"
-    sleep 15
+	corral ssh "$VM" -u fedora -c "true" 2>/dev/null && break
+	echo "    Waiting for SSH... ($i/5)"
+	sleep 15
 done
 
 # ── Copy registry auth (only needed for redfin/RHEL) ─────────────────────────
 if [[ "$VARIANT" == "redfin" ]]; then
-    AUTH_JSON=""
-    for f in "${XDG_RUNTIME_DIR:-/tmp}/containers/auth.json" "$HOME/.config/containers/auth.json" "/run/user/$(id -u)/containers/auth.json"; do
-        [[ -f "$f" ]] && AUTH_JSON="$f" && break
-    done
+	AUTH_JSON=""
+	for f in "${XDG_RUNTIME_DIR:-/tmp}/containers/auth.json" "$HOME/.config/containers/auth.json" "/run/user/$(id -u)/containers/auth.json"; do
+		[[ -f "$f" ]] && AUTH_JSON="$f" && break
+	done
 
-    if [[ -n "$AUTH_JSON" ]] && grep -q "registry.redhat.io" "$AUTH_JSON"; then
-        echo "==> Copying RHEL registry auth to builder..."
-        corral ssh "$VM" -u fedora -c "mkdir -p ~/.config/containers"
-        cat "$AUTH_JSON" | corral ssh "$VM" -u fedora -c "cat > ~/.config/containers/auth.json && chmod 600 ~/.config/containers/auth.json"
-        cat "$AUTH_JSON" | corral ssh "$VM" -u root -c "mkdir -p /run/containers/0 && cat > /run/containers/0/auth.json && chmod 600 /run/containers/0/auth.json" 2>/dev/null || true
-    else
-        echo "ERROR: redfin requires registry.redhat.io auth." >&2
-        echo "       Run: podman login registry.redhat.io" >&2
-        exit 1
-    fi
+	if [[ -n "$AUTH_JSON" ]] && grep -q "registry.redhat.io" "$AUTH_JSON"; then
+		echo "==> Copying RHEL registry auth to builder..."
+		corral ssh "$VM" -u fedora -c "mkdir -p ~/.config/containers"
+		cat "$AUTH_JSON" | corral ssh "$VM" -u fedora -c "cat > ~/.config/containers/auth.json && chmod 600 ~/.config/containers/auth.json"
+		cat "$AUTH_JSON" | corral ssh "$VM" -u root -c "mkdir -p /run/containers/0 && cat > /run/containers/0/auth.json && chmod 600 /run/containers/0/auth.json" 2>/dev/null || true
+	else
+		echo "ERROR: redfin requires registry.redhat.io auth." >&2
+		echo "       Run: podman login registry.redhat.io" >&2
+		exit 1
+	fi
 fi
 
 # ── Clone/update the repo on the builder ─────────────────────────────────────
@@ -98,20 +98,20 @@ corral ssh "$VM" -u fedora -c "
 # ── Build each flavor ────────────────────────────────────────────────────────
 RESULTS=()
 for flavor in "${FLAVORS[@]}"; do
-    echo ""
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  Building: ${VARIANT}:${flavor}"
-    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	echo ""
+	echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+	echo "  Building: ${VARIANT}:${flavor}"
+	echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-    BUILD_START=$(date +%s)
+	BUILD_START=$(date +%s)
 
-    # RHSM creds only for redfin; TMPDIR on persistent disk to avoid tmpfs OOM
-    RHSM_EXPORT=""
-    if [[ "$VARIANT" == "redfin" && -n "${RHSM_USER:-}" ]]; then
-        RHSM_EXPORT="export RHSM_USER='${RHSM_USER}' RHSM_PASSWORD='${RHSM_PASSWORD}'"
-    fi
+	# RHSM creds only for redfin; TMPDIR on persistent disk to avoid tmpfs OOM
+	RHSM_EXPORT=""
+	if [[ "$VARIANT" == "redfin" && -n "${RHSM_USER:-}" ]]; then
+		RHSM_EXPORT="export RHSM_USER='${RHSM_USER}' RHSM_PASSWORD='${RHSM_PASSWORD}'"
+	fi
 
-    if corral ssh "$VM" -u fedora -c "
+	if corral ssh "$VM" -u fedora -c "
         cd /data/tunaos
         export SKIP_SUBMODULES=1 SKIP_RECHUNK=${SKIP_RECHUNK}
         export TMPDIR=/data/tmp
@@ -120,15 +120,15 @@ for flavor in "${FLAVORS[@]}"; do
         podman system prune -f 2>/dev/null || true
         just build ${VARIANT} ${flavor} linux/amd64 0 latest '' 1
     " 2>&1 | tee "/tmp/corral-build-${VARIANT}-${flavor}.log" | tail -3; then
-        BUILD_SECS=$(($(date +%s) - BUILD_START))
-        RESULTS+=("✅ ${VARIANT}:${flavor} (${BUILD_SECS}s)")
-        echo "  ✅ ${VARIANT}:${flavor} built in ${BUILD_SECS}s"
-    else
-        BUILD_SECS=$(($(date +%s) - BUILD_START))
-        RESULTS+=("❌ ${VARIANT}:${flavor} (${BUILD_SECS}s)")
-        echo "  ❌ ${VARIANT}:${flavor} FAILED after ${BUILD_SECS}s"
-        echo "     Log: /tmp/corral-build-${VARIANT}-${flavor}.log"
-    fi
+		BUILD_SECS=$(($(date +%s) - BUILD_START))
+		RESULTS+=("✅ ${VARIANT}:${flavor} (${BUILD_SECS}s)")
+		echo "  ✅ ${VARIANT}:${flavor} built in ${BUILD_SECS}s"
+	else
+		BUILD_SECS=$(($(date +%s) - BUILD_START))
+		RESULTS+=("❌ ${VARIANT}:${flavor} (${BUILD_SECS}s)")
+		echo "  ❌ ${VARIANT}:${flavor} FAILED after ${BUILD_SECS}s"
+		echo "     Log: /tmp/corral-build-${VARIANT}-${flavor}.log"
+	fi
 done
 
 # ── Summary ──────────────────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ echo "╔═══════════════════════�
 echo "║  Build Results                                              ║"
 echo "╠══════════════════════════════════════════════════════════════╣"
 for r in "${RESULTS[@]}"; do
-    printf "║  %-56s  ║\n" "$r"
+	printf "║  %-56s  ║\n" "$r"
 done
 echo "╚══════════════════════════════════════════════════════════════╝"
 

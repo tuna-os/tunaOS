@@ -149,8 +149,12 @@ packages:
     - patterns-gnome-gnome_basis
     - gdm
 
+  # ── Emerge (Gentoo) ────────────────────────────────────────────────
+  # gnome-light, NOT gnome-base/gnome: the full meta pulls
+  # gnome-extra-apps -> gnome-connections -> spice-gtk -> 32-bit glib
+  # (abi_x86_32) on top of everything else it drags in.
   emerge:
-    - gnome-base/gnome
+    - gnome-base/gnome-light
     - gnome-base/gdm
 
 versionlock:

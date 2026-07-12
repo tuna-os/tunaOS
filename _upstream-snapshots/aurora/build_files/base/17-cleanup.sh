@@ -45,9 +45,9 @@ systemctl disable rpm-ostreed-automatic.timer
 
 # Hide Desktop Files. Hidden removes mime associations
 for file in htop nvtop; do
-    if [[ -f "/usr/share/applications/${file}.desktop" ]]; then
-        desktop-file-edit --set-key=Hidden --set-value=true /usr/share/applications/${file}.desktop
-    fi
+	if [[ -f "/usr/share/applications/${file}.desktop" ]]; then
+		desktop-file-edit --set-key=Hidden --set-value=true /usr/share/applications/${file}.desktop
+	fi
 done
 
 # NOTE: With isolated COPR installation, most repos are never enabled globally.
@@ -55,35 +55,35 @@ done
 
 # Disable third-party repos
 for repo in fedora-multimedia tailscale fedora-cisco-openh264; do
-    if [[ -f "/etc/yum.repos.d/${repo}.repo" ]]; then
-        sed -i 's@enabled=1@enabled=0@g' "/etc/yum.repos.d/${repo}.repo"
-    fi
+	if [[ -f "/etc/yum.repos.d/${repo}.repo" ]]; then
+		sed -i 's@enabled=1@enabled=0@g' "/etc/yum.repos.d/${repo}.repo"
+	fi
 done
 
 # Disable Terra repos (installed on F42 and earlier)
 for i in /etc/yum.repos.d/terra*.repo; do
-    if [[ -f "$i" ]]; then
-        sed -i 's@enabled=1@enabled=0@g' "$i"
-    fi
+	if [[ -f "$i" ]]; then
+		sed -i 's@enabled=1@enabled=0@g' "$i"
+	fi
 done
 
 # Disable all COPR repos (should already be disabled by helpers, but ensure)
 for i in /etc/yum.repos.d/_copr:*.repo; do
-    if [[ -f "$i" ]]; then
-        sed -i 's@enabled=1@enabled=0@g' "$i"
-    fi
+	if [[ -f "$i" ]]; then
+		sed -i 's@enabled=1@enabled=0@g' "$i"
+	fi
 done
 
 # Disable RPM Fusion repos
 for i in /etc/yum.repos.d/rpmfusion-*.repo; do
-    if [[ -f "$i" ]]; then
-        sed -i 's@enabled=1@enabled=0@g' "$i"
-    fi
+	if [[ -f "$i" ]]; then
+		sed -i 's@enabled=1@enabled=0@g' "$i"
+	fi
 done
 
 # Disable fedora-coreos-pool if it exists
 if [ -f /etc/yum.repos.d/fedora-coreos-pool.repo ]; then
-    sed -i 's@enabled=1@enabled=0@g' /etc/yum.repos.d/fedora-coreos-pool.repo
+	sed -i 's@enabled=1@enabled=0@g' /etc/yum.repos.d/fedora-coreos-pool.repo
 fi
 
 echo "::endgroup::"

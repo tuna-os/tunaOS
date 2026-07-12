@@ -143,7 +143,6 @@ if [[ $IS_FEDORA == true ]]; then
 		plymouth \
 		plymouth-system-theme \
 		plymouth-plugin-script \
-		dracut-live \
 		xdg-desktop-portal \
 		systemd-oomd-defaults \
 		unzip
@@ -220,7 +219,6 @@ else
 		plymouth \
 		plymouth-system-theme \
 		plymouth-plugin-script \
-		dracut-live \
 		libcamera-v4l2 \
 		libcamera-gstreamer \
 		libcamera-tools \

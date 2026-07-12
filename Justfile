@@ -163,7 +163,7 @@ lifecycle-test variant='albacore' flavor='gnome':
 corral-build variant='redfin' +flavors='all':
     ./scripts/corral-build.sh "{{ variant }}" {{ flavors }}
 
-# Build a TunaOS live ISO via tacklebox (no Anaconda, dmsquash-live + sd-boot)
+# Build a TunaOS live ISO via tacklebox (no Anaconda, tbox-live + sd-boot)
 # Build a live ISO via tacklebox (replaces deprecated bootc-image-builder approach)
 iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
     #!/usr/bin/env bash

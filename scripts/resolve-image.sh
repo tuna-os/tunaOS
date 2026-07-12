@@ -30,31 +30,31 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/_registry.sh" 2>/dev/null || true
 
 case "${ROLE}" in
-    base)
-        # Base image from build-config.yml
-        $YQ -r ".variants[] | select(.id == \"${VARIANT}\") | .base_image" .github/build-config.yml
-        ;;
-    common)
-        IMAGE="${COMMON_IMAGE:-ghcr.io/projectbluefin/common}"
-        DIGEST=$($YQ -r '.images[] | select(.name == "common") | .digest' image-versions.yaml)
-        # Strip any :tag from IMAGE since digest takes precedence
-        echo "${IMAGE%%:*}@${DIGEST}"
-        ;;
-    brew)
-        IMAGE="${BREW_IMAGE:-ghcr.io/ublue-os/brew}"
-        DIGEST=$($YQ -r '.images[] | select(.name == "brew") | .digest' image-versions.yaml)
-        echo "${IMAGE%%:*}@${DIGEST}"
-        ;;
-    zirconium)
-        DIGEST=$($YQ -r '.images[] | select(.name == "zirconium") | .digest' image-versions.yaml)
-        echo "ghcr.io/zirconium-dev/zirconium@${DIGEST}"
-        ;;
-    akmods)
-        AKMODS_ORG=$($YQ -r ".variants[] | select(.id == \"${VARIANT}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
-        registry_ref akmods 2>/dev/null || echo "ghcr.io/${AKMODS_ORG}"
-        ;;
-    *)
-        echo "ERROR: unknown role '${ROLE}'. Valid: base, common, brew, zirconium, akmods" >&2
-        exit 1
-        ;;
+base)
+	# Base image from build-config.yml
+	$YQ -r ".variants[] | select(.id == \"${VARIANT}\") | .base_image" .github/build-config.yml
+	;;
+common)
+	IMAGE="${COMMON_IMAGE:-ghcr.io/projectbluefin/common}"
+	DIGEST=$($YQ -r '.images[] | select(.name == "common") | .digest' image-versions.yaml)
+	# Strip any :tag from IMAGE since digest takes precedence
+	echo "${IMAGE%%:*}@${DIGEST}"
+	;;
+brew)
+	IMAGE="${BREW_IMAGE:-ghcr.io/ublue-os/brew}"
+	DIGEST=$($YQ -r '.images[] | select(.name == "brew") | .digest' image-versions.yaml)
+	echo "${IMAGE%%:*}@${DIGEST}"
+	;;
+zirconium)
+	DIGEST=$($YQ -r '.images[] | select(.name == "zirconium") | .digest' image-versions.yaml)
+	echo "ghcr.io/zirconium-dev/zirconium@${DIGEST}"
+	;;
+akmods)
+	AKMODS_ORG=$($YQ -r ".variants[] | select(.id == \"${VARIANT}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
+	registry_ref akmods 2>/dev/null || echo "ghcr.io/${AKMODS_ORG}"
+	;;
+*)
+	echo "ERROR: unknown role '${ROLE}'. Valid: base, common, brew, zirconium, akmods" >&2
+	exit 1
+	;;
 esac

@@ -26,9 +26,9 @@ IS_CI="${3:-0}"
 
 # Normalize legacy shorthand names
 case "${FLAVOR}" in
-    "hwe") FLAVOR="gnome-hwe" ;;
-    "nvidia") FLAVOR="gnome-nvidia" ;;
-    "gdx-hwe") FLAVOR="gnome-nvidia-hwe" ;;
+"hwe") FLAVOR="gnome-hwe" ;;
+"nvidia") FLAVOR="gnome-nvidia" ;;
+"gdx-hwe") FLAVOR="gnome-nvidia-hwe" ;;
 esac
 
 CONTAINERFILE="Containerfile.el10"
@@ -41,70 +41,70 @@ DESKTOP_FLAVOR="${FLAVOR}"
 # RFC 010: grouper (Ubuntu) uses Containerfile.ubuntu
 # Sailfin uses Containerfile.opensuse
 if [[ "${VARIANT}" == "sailfin" ]]; then
-    CONTAINERFILE="Containerfile.opensuse"
+	CONTAINERFILE="Containerfile.opensuse"
 fi
 
 # Guppy uses Containerfile.gentoo
 if [[ "${VARIANT}" == "guppy" ]]; then
-    CONTAINERFILE="Containerfile.gentoo"
+	CONTAINERFILE="Containerfile.gentoo"
 fi
 
 if [[ "${VARIANT}" == "grouper" ]]; then
-    CONTAINERFILE="Containerfile.ubuntu"
+	CONTAINERFILE="Containerfile.ubuntu"
 fi
 
 # Debian variants use Containerfile.debian
 if [[ "${VARIANT}" == "flounder" || "${VARIANT}" == "flounder-sid" ]]; then
-    CONTAINERFILE="Containerfile.debian"
+	CONTAINERFILE="Containerfile.debian"
 fi
 
 # Arch-based variants use Containerfile.arch
 if [[ "${VARIANT}" == "marlin" ]]; then
-    CONTAINERFILE="Containerfile.arch"
+	CONTAINERFILE="Containerfile.arch"
 fi
 
 if [[ "${VARIANT}" == "marlin" && "${FLAVOR}" == *"-cachyos" ]]; then
-    CONTAINERFILE="Containerfile.overlay"
-    OVERLAY_TYPE="cachyos"
-    DESKTOP_FLAVOR="desktop"
-    PARENT_FLAVOR="${FLAVOR%-cachyos}"
+	CONTAINERFILE="Containerfile.overlay"
+	OVERLAY_TYPE="cachyos"
+	DESKTOP_FLAVOR="desktop"
+	PARENT_FLAVOR="${FLAVOR%-cachyos}"
 elif [[ "${FLAVOR}" == "base" ]]; then
-    DESKTOP_FLAVOR="base-no-de"
-    # grouper's base-no-de is intentionally pre-bootcify
-    if [[ "${VARIANT}" == "grouper" ]]; then DESKTOP_FLAVOR="base"; fi
+	DESKTOP_FLAVOR="base-no-de"
+	# grouper's base-no-de is intentionally pre-bootcify
+	if [[ "${VARIANT}" == "grouper" ]]; then DESKTOP_FLAVOR="base"; fi
 elif [[ "${FLAVOR}" == "base-hwe" ]]; then
-    CONTAINERFILE="Containerfile.overlay"
-    OVERLAY_TYPE="hwe"
-    ENABLE_HWE="1"
-    DESKTOP_FLAVOR="desktop"
-    PARENT_FLAVOR="base"
+	CONTAINERFILE="Containerfile.overlay"
+	OVERLAY_TYPE="hwe"
+	ENABLE_HWE="1"
+	DESKTOP_FLAVOR="desktop"
+	PARENT_FLAVOR="base"
 elif [[ "${FLAVOR}" == "base-nvidia" ]]; then
-    CONTAINERFILE="Containerfile.overlay"
-    OVERLAY_TYPE="nvidia"
-    ENABLE_NVIDIA="1"
-    DESKTOP_FLAVOR="desktop"
-    PARENT_FLAVOR="base"
+	CONTAINERFILE="Containerfile.overlay"
+	OVERLAY_TYPE="nvidia"
+	ENABLE_NVIDIA="1"
+	DESKTOP_FLAVOR="desktop"
+	PARENT_FLAVOR="base"
 elif [[ "${VARIANT}" != "grouper" && "${FLAVOR}" == *"-nvidia-hwe" ]]; then
-    DESKTOP_FLAVOR="desktop"
-    CONTAINERFILE="Containerfile.overlay"
-    OVERLAY_TYPE="nvidia"
-    ENABLE_NVIDIA="1"
-    ENABLE_HWE="1"
-    PARENT_FLAVOR="${FLAVOR%-nvidia-hwe}-hwe"
+	DESKTOP_FLAVOR="desktop"
+	CONTAINERFILE="Containerfile.overlay"
+	OVERLAY_TYPE="nvidia"
+	ENABLE_NVIDIA="1"
+	ENABLE_HWE="1"
+	PARENT_FLAVOR="${FLAVOR%-nvidia-hwe}-hwe"
 elif [[ "${VARIANT}" != "grouper" && "${FLAVOR}" == *"-hwe" ]]; then
-    DESKTOP_FLAVOR="desktop"
-    CONTAINERFILE="Containerfile.overlay"
-    OVERLAY_TYPE="hwe"
-    ENABLE_HWE="1"
-    PARENT_FLAVOR="${FLAVOR%-hwe}"
+	DESKTOP_FLAVOR="desktop"
+	CONTAINERFILE="Containerfile.overlay"
+	OVERLAY_TYPE="hwe"
+	ENABLE_HWE="1"
+	PARENT_FLAVOR="${FLAVOR%-hwe}"
 elif [[ "${VARIANT}" != "grouper" && "${FLAVOR}" == *"-nvidia" ]]; then
-    DESKTOP_FLAVOR="desktop"
-    CONTAINERFILE="Containerfile.overlay"
-    OVERLAY_TYPE="nvidia"
-    ENABLE_NVIDIA="1"
-    PARENT_FLAVOR="${FLAVOR%-nvidia}"
+	DESKTOP_FLAVOR="desktop"
+	CONTAINERFILE="Containerfile.overlay"
+	OVERLAY_TYPE="nvidia"
+	ENABLE_NVIDIA="1"
+	PARENT_FLAVOR="${FLAVOR%-nvidia}"
 else
-    DESKTOP_FLAVOR="${FLAVOR}"
+	DESKTOP_FLAVOR="${FLAVOR}"
 fi
 
 # Emit structured output
