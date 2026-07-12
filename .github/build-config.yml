@@ -14,21 +14,18 @@ config:
 # Variants that lack certain desktops simply get a smaller ISO — no group
 # needs per-variant tailoring here.
 iso_groups:
-  # Flagship: the 90%-of-users ISO. GNOME + HWE share userspace (only the
-  # kernel differs) so dedup is near-total. GNOME 50 rides along on the same
-  # base. Published as `<variant>.iso`.
+  # Flagship: the 90%-of-users ISO. Boots GNOME NVIDIA by default, and embeds
+  # both NVIDIA and non-NVIDIA flavors in the offline store for installer auto-detection.
+  # Published as `<variant>.iso`.
   - suffix: ""
-    flavors: [gnome, gnome-hwe]
-  # Niche desktops grouped by audience. Each adds ~300 MB incremental.
-  # Published as `<variant>-community.iso`.
-  # xfce-hwe returns here when the EL10 xfce flavors are re-enabled
-  # (tuna-os/github-copr#65).
-  - suffix: community
-    flavors: [kde, kde-hwe, cosmic, cosmic-hwe, niri, niri-hwe, xfce]
-  # NVIDIA drivers + CUDA are large; isolate so only GPU users download them.
-  # Published as `<variant>-nvidia.iso`.
-  - suffix: nvidia
     flavors: [gnome-nvidia, gnome-nvidia-hwe]
+    offline_flavors: [gnome, gnome-hwe, gnome-nvidia, gnome-nvidia-hwe]
+  # Community: Niche desktops grouped by audience. Boots NVIDIA by default, and embeds
+  # both NVIDIA and non-NVIDIA versions in the offline store.
+  # Published as `<variant>-community.iso`.
+  - suffix: community
+    flavors: [kde-nvidia, kde-nvidia-hwe, cosmic-nvidia, niri-nvidia, xfce-nvidia]
+    offline_flavors: [kde, kde-hwe, cosmic, cosmic-hwe, niri, niri-hwe, xfce, kde-nvidia, kde-nvidia-hwe, cosmic-nvidia, niri-nvidia, xfce-nvidia]
 
 # Build stages (for reference — enforced by the workflow job graph):
 #

@@ -117,6 +117,7 @@ mkdir -p /etc/tuna-installer
 cat >/etc/tuna-installer/offline-stores <<'STORESEOF'
 # OCI store roots probed by the TunaOS installer for offline images.
 /usr/share/tuna-installer/oci-store
+/var/lib/superiso-store
 STORESEOF
 
 # ── /var/tmp headroom ─────────────────────────────────────────────────────────

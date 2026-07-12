@@ -118,7 +118,8 @@ cat >"$RECIPE_FILE" <<EOF
       "live_customize": ["${REPO_ROOT}/live-iso/common/src/customize-live.sh"],
       "modes": ["live"]
     }
-  ]
+  ],
+  "offline_payloads": ["${IMAGE_REF}"]
 }
 EOF
 
