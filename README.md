@@ -92,12 +92,9 @@ Image tags are constructed as `<desktop>[-hardware]`:
 
 ### Use a pre-built ISO
 
-ISOs are published every two weeks for `gnome` and `gnome-hwe` flavors of Yellowfin and Albacore:
+Grab a live ISO for any variant and flavor from the download page:
 
-| Variant | GNOME | GNOME (HWE) |
-|---------|-------|-------------|
-| **Albacore** | [albacore-gnome-latest.iso](https://download.tunaos.org/live-isos/albacore-gnome-latest.iso) | [albacore-gnome-hwe-latest.iso](https://download.tunaos.org/live-isos/albacore-gnome-hwe-latest.iso) |
-| **Yellowfin** | [yellowfin-gnome-latest.iso](https://download.tunaos.org/live-isos/yellowfin-gnome-latest.iso) | [yellowfin-gnome-hwe-latest.iso](https://download.tunaos.org/live-isos/yellowfin-gnome-hwe-latest.iso) |
+**[📦 tunaos.org/download](https://tunaos.org/download)**
 
 ### Build your own ISO or VM image
 
