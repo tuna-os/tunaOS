@@ -77,6 +77,7 @@ RUN emerge --verbose dev-util/ostree && \
 
 FROM builder AS system
 RUN KVER=$(ls /usr/lib/modules | head -1) && \
+    cp /boot/vmlinuz-* "/usr/lib/modules/$KVER/vmlinuz" && \
     dracut --force --no-hostonly --reproducible --zstd --kver "$KVER" \
     "/usr/lib/modules/$KVER/initramfs.img" && \
     rm -rf /var/db /var/cache
@@ -138,6 +139,7 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 
 FROM desktop-build AS desktop
 RUN KVER=$(ls /usr/lib/modules | head -1) && \
+    cp /boot/vmlinuz-* "/usr/lib/modules/$KVER/vmlinuz" && \
     dracut --force --no-hostonly --reproducible --zstd --kver "$KVER" \
     "/usr/lib/modules/$KVER/initramfs.img" && \
     rm -rf /var/db /var/cache
