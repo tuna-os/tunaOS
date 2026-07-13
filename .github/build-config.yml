@@ -27,6 +27,91 @@ iso_groups:
     flavors: [kde-nvidia, cosmic-nvidia, niri-nvidia, xfce-nvidia]
     offline_flavors: [kde, kde-hwe, cosmic, cosmic-hwe, niri, niri-hwe, xfce, kde-nvidia, cosmic-nvidia, niri-nvidia, xfce-nvidia]
 
+# ── EXPERIMENT: DE-centric cross-variant ISOs (experiment/de-grouped-isos) ────
+# Instead of grouping multiple DEs for a single variant (current approach),
+# group the same DE across multiple variants. Hypothesis: the DE packages are the
+# largest unique layer, so deduping multiple EL bases under ONE DE stack should
+# produce smaller ISOs than deduping multiple DE stacks under one EL base.
+#
+# Naming: `tuna-<de>.iso` (e.g. tuna-gnome.iso, tuna-kde.iso)
+# Each ISO boots the default/nvidia env first; installer auto-detects hardware.
+# `scripts/build-iso-de-group.sh` drives the build.
+de_iso_groups:
+  # GNOME: standard + flagship. All EL10-based variants (yellowfin, albacore,
+  # skipjack, bonito). Boots GNOME NVIDIA for the default variant first.
+  - id: gnome
+    title: "TunaOS GNOME"
+    # Ordered: (variant, flavor) pairs to include as bootable environments.
+    # Build is skipped for any (variant, flavor) that lacks build_image: true.
+    environments:
+      - {variant: yellowfin, flavor: gnome-nvidia}
+      - {variant: albacore,  flavor: gnome-nvidia}
+      - {variant: skipjack,  flavor: gnome-nvidia}
+      - {variant: bonito,    flavor: gnome-nvidia}
+    offline_environments:
+      - {variant: yellowfin, flavor: gnome}
+      - {variant: yellowfin, flavor: gnome-nvidia}
+      - {variant: albacore,  flavor: gnome}
+      - {variant: albacore,  flavor: gnome-nvidia}
+      - {variant: skipjack,  flavor: gnome}
+      - {variant: skipjack,  flavor: gnome-nvidia}
+      - {variant: bonito,    flavor: gnome}
+      - {variant: bonito,    flavor: gnome-nvidia}
+
+  # KDE: same cross-variant approach.
+  - id: kde
+    title: "TunaOS KDE"
+    environments:
+      - {variant: yellowfin, flavor: kde-nvidia}
+      - {variant: albacore,  flavor: kde-nvidia}
+      - {variant: skipjack,  flavor: kde-nvidia}
+      - {variant: bonito,    flavor: kde-nvidia}
+    offline_environments:
+      - {variant: yellowfin, flavor: kde}
+      - {variant: yellowfin, flavor: kde-nvidia}
+      - {variant: albacore,  flavor: kde}
+      - {variant: albacore,  flavor: kde-nvidia}
+      - {variant: skipjack,  flavor: kde}
+      - {variant: skipjack,  flavor: kde-nvidia}
+      - {variant: bonito,    flavor: kde}
+      - {variant: bonito,    flavor: kde-nvidia}
+
+  # COSMIC: same cross-variant approach.
+  - id: cosmic
+    title: "TunaOS COSMIC"
+    environments:
+      - {variant: yellowfin, flavor: cosmic-nvidia}
+      - {variant: albacore,  flavor: cosmic-nvidia}
+      - {variant: skipjack,  flavor: cosmic-nvidia}
+      - {variant: bonito,    flavor: cosmic-nvidia}
+    offline_environments:
+      - {variant: yellowfin, flavor: cosmic}
+      - {variant: yellowfin, flavor: cosmic-nvidia}
+      - {variant: albacore,  flavor: cosmic}
+      - {variant: albacore,  flavor: cosmic-nvidia}
+      - {variant: skipjack,  flavor: cosmic}
+      - {variant: skipjack,  flavor: cosmic-nvidia}
+      - {variant: bonito,    flavor: cosmic}
+      - {variant: bonito,    flavor: cosmic-nvidia}
+
+  # Niri: same cross-variant approach.
+  - id: niri
+    title: "TunaOS Niri"
+    environments:
+      - {variant: yellowfin, flavor: niri-nvidia}
+      - {variant: albacore,  flavor: niri-nvidia}
+      - {variant: skipjack,  flavor: niri-nvidia}
+      - {variant: bonito,    flavor: niri-nvidia}
+    offline_environments:
+      - {variant: yellowfin, flavor: niri}
+      - {variant: yellowfin, flavor: niri-nvidia}
+      - {variant: albacore,  flavor: niri}
+      - {variant: albacore,  flavor: niri-nvidia}
+      - {variant: skipjack,  flavor: niri}
+      - {variant: skipjack,  flavor: niri-nvidia}
+      - {variant: bonito,    flavor: niri}
+      - {variant: bonito,    flavor: niri-nvidia}
+
 # Build stages (for reference — enforced by the workflow job graph):
 #
 #   Stage 1:  base

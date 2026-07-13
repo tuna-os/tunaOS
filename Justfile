@@ -180,6 +180,12 @@ iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
 # group: '' / default (flagship gnome+hwe), community (kde/cosmic/niri), nvidia.
 iso-group variant='yellowfin' group='default' repo='ghcr':
     sudo bash ./scripts/build-iso-group.sh "{{ variant }}" "{{ group }}" "{{ repo }}"
+
+# EXPERIMENT: Build ONE combined DE-centric ISO spanning multiple variants.
+# de: gnome | kde | cosmic | niri  (an id in de_iso_groups in build-config.yml)
+# Produces tuna-<de>-<version>-<arch>.iso for size comparison with iso-group.
+iso-de-group de='gnome' repo='ghcr':
+    sudo bash ./scripts/build-iso-de-group.sh "{{ de }}" "{{ repo }}"
 # Generate a QCOW2 disk image using bootc install to-disk (via loopback in a privileged container)
 qcow2 variant flavor='gnome' repo='local' tag='':
     #!/usr/bin/env bash

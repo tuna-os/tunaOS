@@ -1,0 +1,163 @@
+name: "EXPERIMENT: Publish DE-grouped ISOs"
+
+# EXPERIMENT (branch: experiment/de-grouped-isos)
+# Tests whether grouping the same DE across multiple variants produces smaller
+# ISOs than the current variant-grouped (one variant, many DEs) approach.
+#
+# One ISO per de_iso_group entry in .github/build-config.yml:
+#   tuna-gnome.iso, tuna-kde.iso, tuna-cosmic.iso, tuna-niri.iso
+#
+# Results should be compared to the variant-grouped workflow output
+# (publish-iso-groups.yml) for size and dedup efficiency.
+
+on:
+  workflow_dispatch:
+    inputs:
+      de:
+        description: "Desktop environment group (all = every de_iso_group)"
+        required: false
+        default: "all"
+        type: choice
+        options:
+          - all
+          - gnome
+          - kde
+          - cosmic
+          - niri
+      skip_upload:
+        description: "Build ISOs but skip uploading (dry run)"
+        required: false
+        default: true
+        type: boolean
+
+jobs:
+  generate-matrix:
+    name: Generate DE-group matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.build.outputs.matrix }}
+      count: ${{ steps.build.outputs.count }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Install yq
+        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+
+      - name: Build matrix from de_iso_groups
+        id: build
+        env:
+          WANT_DE: ${{ inputs.de || 'all' }}
+        run: |
+          MATRIX=$(yq -o=json .github/build-config.yml | jq -c \
+            --arg wd "$WANT_DE" '
+            [ .de_iso_groups[] as $g
+              | select($wd == "all" or $g.id == $wd)
+              | { de: $g.id, title: $g.title }
+            ] | { include: . }')
+          COUNT=$(echo "$MATRIX" | jq '.include | length')
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Building $COUNT DE-grouped ISO(s):"
+          echo "$MATRIX" | jq -r '.include[] | "  tuna-\(.de).iso  (\(.title))"'
+
+  build-and-compare:
+    name: "tuna-${{ matrix.de }}"
+    needs: generate-matrix
+    if: ${{ needs.generate-matrix.outputs.count != '0' }}
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      packages: read
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: recursive
+
+      - uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y just podman jq rclone golang-go git
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build DE-grouped ISO (from published GHCR images)
+        env:
+          GITHUB_REPOSITORY_OWNER: tuna-os
+        run: |
+          sudo GITHUB_REPOSITORY_OWNER=tuna-os \
+            just iso-de-group "${{ matrix.de }}" ghcr
+
+      - name: Report ISO size
+        run: |
+          ISO=$(find . -maxdepth 1 -name "tuna-${{ matrix.de }}-*.iso" | head -1)
+          if [[ -z "$ISO" ]]; then
+            echo "ERROR: No ISO found for tuna-${{ matrix.de }}"
+            exit 1
+          fi
+          SIZE_MB=$(du -m "$ISO" | cut -f1)
+          SIZE_GB=$(echo "scale=2; $SIZE_MB / 1024" | bc)
+          echo "## ISO Size Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| ISO | Size (MB) | Size (GB) |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-----|-----------|-----------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| $(basename "$ISO") | ${SIZE_MB} | ${SIZE_GB} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Compare to variant-grouped equivalent** (from publish-iso-groups.yml):" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`yellowfin-community.iso\` (4 DEs × 1 variant)" >> "$GITHUB_STEP_SUMMARY"
+          echo "- \`tuna-${{ matrix.de }}.iso\` (1 DE × 4 variants) ← this run" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Install QEMU for boot gate
+        run: |
+          sudo apt-get install -y qemu-system-x86 qemu-utils ovmf socat imagemagick
+
+      - name: "Boot gate: verify DE-grouped ISO"
+        timeout-minutes: 25
+        run: |
+          ISO=$(find . -maxdepth 1 -name "tuna-${{ matrix.de }}-*.iso" | head -1)
+          echo "==> Boot-gating $ISO (default menu entry)"
+          mkdir -p iso-e2e-out
+          sudo ./scripts/iso-e2e.sh "$ISO" \
+            --output iso-e2e-out \
+            --timeout 900
+
+      - name: Upload boot-gate evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: "e2e-tuna-${{ matrix.de }}"
+          path: |
+            iso-e2e-out/serial.log
+            iso-e2e-out/*.ppm
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Upload ISO as artifact (for size comparison)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: "tuna-${{ matrix.de }}-iso"
+          path: "tuna-${{ matrix.de }}-*.iso"
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload ISO to Cloudflare R2
+        if: ${{ inputs.skip_upload != true }}
+        env:
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          ISO=$(find . -maxdepth 1 -name "tuna-${{ matrix.de }}-*.iso" | head -1)
+          echo "==> Uploading $ISO to R2 (experiment/de-grouped-isos)..."
+          rclone copy --log-level INFO --checksum --s3-no-check-bucket \
+            "$ISO" R2:${{ secrets.R2_BUCKET }}/live-isos/experiment-de-grouped/
+          echo "==> Upload complete: $(basename "$ISO")"
