@@ -171,6 +171,7 @@ jq -n \
 	--argjson offline "$OFFLINE_PAYLOADS_JSON" \
 	'{
 		media_name: $media_name,
+		size: "35G",
 		shared_store: { dedup: true, compression: "release" },
 		bootable_environments: $envs,
 		offline_payloads: $offline
