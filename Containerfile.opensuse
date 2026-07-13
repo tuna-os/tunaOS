@@ -40,6 +40,22 @@ RUN zypper --non-interactive addrepo -fG \
     update-ca-certificates && \
     zypper --non-interactive removerepo virtualization-containers && \
     zypper install -y -t pattern enhanced_base && \
+    zypper --non-interactive addrepo --check --refresh --priority 90 --name packman-essentials http://ftp.gwdg.de/pub/linux/misc/packman/suse/openSUSE_Tumbleweed/Essentials packman-essentials && \
+    zypper --non-interactive --gpg-auto-import-keys refresh && \
+    zypper --non-interactive dup --from packman-essentials --allow-vendor-change && \
+    zypper --non-interactive install -y \
+        ffmpeg \
+        gstreamer-plugins-good \
+        gstreamer-plugins-bad \
+        gstreamer-plugins-ugly \
+        gstreamer-plugins-libav \
+        libavcodec-full \
+        vlc-codecs \
+        glow \
+        gum \
+        just \
+        wl-clipboard \
+        tailscale && \
     systemctl enable sshd && \
     systemctl mask systemd-firstboot.service
 RUN echo "uninitialized" > /etc/machine-id

@@ -36,12 +36,7 @@ RUN NPROC="$(nproc)" && \
     { \
       echo 'FEATURES="-ipc-sandbox -network-sandbox -pid-sandbox getbinpkg"'; \
       echo 'ACCEPT_LICENSE="*"'; \
-      echo 'USE="networkmanager dracut nftables systemd X wayland dbus gtk gnome qt6 plasma opengl harfbuzz alsa pulseaudio"'; \
-      # ABI_X86="64 32": the official binhost builds its graphics stack
-      # (cairo, freetype, libjpeg-turbo, ...) multilib. Matching it keeps
-      # binpkgs usable and lets the few from-source builds satisfy the
-      # abi_x86_32 USE-deps those binpkgs impose (see desktop manifests).
-      echo 'ABI_X86="64 32"'; \
+      echo 'USE="dracut nftables systemd X wayland dbus gtk gnome qt6 plasma opengl harfbuzz alsa pulseaudio x264 x265 aac mp3 opus vpx libaom encode ffmpeg gstreamer"'; \
       echo "MAKEOPTS=\"-j${NPROC}\""; \
       echo "EMERGE_DEFAULT_OPTS=\"--jobs=${NPROC} --load-average=${NPROC} --getbinpkg --binpkg-respect-use=n\""; \
     } >> /etc/portage/make.conf && \
@@ -50,21 +45,27 @@ RUN NPROC="$(nproc)" && \
       >/etc/portage/binrepos.conf/gentoobinhost.conf && \
     getuto && \
     echo "sys-apps/systemd boot" >> /etc/portage/package.use/systemd && \
-    # USE-dep pins the desktop flavors need: the binhost's plasma-meta
-    # binpkg requires kwin[lock], gnome's stack wants ngtcp2[gnutls] and
-    # zlib[minizip]; none are in the binhost's own builds of those four,
-    # so they build from source with the right flags.
-    printf 'kde-plasma/kwin lock\nkde-plasma/kwin-x11 lock\nnet-libs/ngtcp2 gnutls\nsys-libs/zlib minizip\n' \
-      >> /etc/portage/package.use/tunaos-desktops
+    echo "media-video/pipewire extra -ffmpeg" >> /etc/portage/package.use/pipewire && \
+    echo "media-libs/gst-plugins-bad -vulkan" >> /etc/portage/package.use/gst-plugins-bad && \
+    echo "sys-libs/minizip-ng compat" >> /etc/portage/package.use/minizip-ng && \
+    echo "gui-libs/gtk -vulkan" >> /etc/portage/package.use/gtk && \
+    echo "*/* -abi_x86_32" >> /etc/portage/package.use/multilib
 
 # 2) Bring @world up to date from binpkgs — own layer so a later failure reuses
 #    this (expensive) cache on retry.
 RUN emerge --verbose --deep --newuse @world
 
-# 3) Install the bootc/base tooling and the prebuilt kernel.
-RUN emerge --verbose \
-        app-arch/cpio btrfs-progs dev-vcs/git dosfstools \
-        linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd
+# 3) Install the bootc/base tooling, prebuilt kernel, and extra base packages.
+RUN emerge --verbose --deep --newuse \
+        app-arch/cpio btrfs-progs dev-vcs/git dosfstools sys-fs/xfsprogs \
+        linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd \
+        net-vpn/tailscale gui-apps/wl-clipboard media-video/ffmpeg media-plugins/gst-plugins-meta && \
+    curl -fsSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.35.0/just-1.35.0-x86_64-unknown-linux-musl.tar.gz && \
+    tar -xzf /tmp/just.tar.gz -C /usr/bin just && rm /tmp/just.tar.gz && \
+    curl -fsSL -o /tmp/glow.tar.gz https://github.com/charmbracelet/glow/releases/download/v1.5.1/glow_Linux_x86_64.tar.gz && \
+    tar -xzf /tmp/glow.tar.gz -C /usr/bin glow && rm /tmp/glow.tar.gz && \
+    curl -fsSL -o /tmp/gum.tar.gz https://github.com/charmbracelet/gum/releases/download/v0.14.3/gum_0.14.3_Linux_x86_64.tar.gz && \
+    tar -xzf /tmp/gum.tar.gz -C /tmp && mv /tmp/gum_0.14.3_Linux_x86_64/gum /usr/bin/ && rm -rf /tmp/gum*
 
 # No live-boot dracut modules needed: tacklebox injects its embedded
 # tbox-live/tbox-root modules at ISO build time (tuna-os/tacklebox#90).
@@ -76,6 +77,8 @@ RUN emerge --verbose dev-util/ostree && \
 
 FROM builder AS system
 RUN KVER=$(ls /usr/lib/modules | head -1) && \
+    rm -f "/usr/lib/modules/$KVER/vmlinuz" && \
+    (cp /boot/vmlinuz-* "/usr/lib/modules/$KVER/vmlinuz" 2>/dev/null || cp /usr/src/linux-*/arch/x86/boot/bzImage "/usr/lib/modules/$KVER/vmlinuz") && \
     dracut --force --no-hostonly --reproducible --zstd --kver "$KVER" \
     "/usr/lib/modules/$KVER/initramfs.img" && \
     rm -rf /var/db /var/cache
@@ -109,11 +112,36 @@ LABEL containers.bootc=1 ostree.bootable=1
 FROM builder AS desktop-build
 ARG DESKTOP_FLAVOR
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
+
+# Desktop-only portage config, applied AFTER the base @world (any global
+# flag change at base makes @world --newuse schedule from-source multilib
+# rebuilds that die on pam<->systemd / ncurses<->gpm build cycles):
+#
+#  - --binpkg-respect-use=y: the binhost publishes MULTIPLE builds per
+#    package (systemd- and elogind-flavored, 64-only and multilib); the
+#    base stage's respect-use=n grabs whichever is newest, which for the
+#    desktop stack meant OpenRC/elogind multilib builds — dragging in
+#    elogind and 32-bit USE-dep chains the binhost can't close. With
+#    respect-use=y the resolver picks the builds that match OUR profile.
+#  - package.mask elogind: belt-and-braces — this is a systemd image.
+#  - pins: USE combos no published build has (plasma-meta needs
+#    kwin[lock]; gnome's chain wants ngtcp2[gnutls], zlib[minizip];
+#    gnome-shell[networkmanager] needs a matching gnome-control-center).
+#    These few build from source.
+RUN NPROC="$(nproc)" && \
+    printf 'kde-plasma/kwin lock\nkde-plasma/kwin-x11 lock\nnet-libs/ngtcp2 gnutls\nsys-libs/zlib minizip\ngnome-base/gnome-control-center networkmanager\ngnome-base/gnome-shell networkmanager\n' \
+      >> /etc/portage/package.use/tunaos-desktops && \
+    mkdir -p /etc/portage/package.mask && \
+    echo "sys-auth/elogind" >> /etc/portage/package.mask/tunaos-systemd && \
+    echo "EMERGE_DEFAULT_OPTS=\"--jobs=${NPROC} --load-average=${NPROC} --getbinpkg --binpkg-respect-use=y\"" \
+      >> /etc/portage/make.conf
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/install-desktop.sh ${DESKTOP_FLAVOR}
 
 FROM desktop-build AS desktop
 RUN KVER=$(ls /usr/lib/modules | head -1) && \
+    rm -f "/usr/lib/modules/$KVER/vmlinuz" && \
+    (cp /boot/vmlinuz-* "/usr/lib/modules/$KVER/vmlinuz" 2>/dev/null || cp /usr/src/linux-*/arch/x86/boot/bzImage "/usr/lib/modules/$KVER/vmlinuz") && \
     dracut --force --no-hostonly --reproducible --zstd --kver "$KVER" \
     "/usr/lib/modules/$KVER/initramfs.img" && \
     rm -rf /var/db /var/cache

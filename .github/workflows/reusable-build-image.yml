@@ -92,10 +92,10 @@ jobs:
   build_push:
     name: ${{ matrix.safeplatform }}
     runs-on: ${{ contains(matrix.platform, 'amd64') && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
-    # 90 (not 60) to give the source-based experimental variants headroom —
+    # 180 to give the source-based experimental variants headroom —
     # guppy (Gentoo) still compiles bootc from git even with the binhost (#644).
     # A max, not a fixed duration: RPM variants finish in ~20-40m unaffected.
-    timeout-minutes: 90
+    timeout-minutes: 180
     needs: generate_matrix
     strategy:
       fail-fast: false

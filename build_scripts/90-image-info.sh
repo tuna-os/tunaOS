@@ -48,6 +48,23 @@ EOF
 # Dynamically interpolate the specific variant name and logo path in the installer recipe.json
 RECIPE_FILE="/etc/bootc-installer/recipe.json"
 if [[ -f "${RECIPE_FILE}" ]]; then
+	BASE_OS_NAME="Enterprise Linux"
+	if [[ "$IS_FEDORA" == true ]]; then BASE_OS_NAME="Fedora"; fi
+	if [[ "$IS_ALMALINUX" == true ]]; then BASE_OS_NAME="AlmaLinux"; fi
+	if [[ "$IS_ALMALINUXKITTEN" == true ]]; then BASE_OS_NAME="AlmaLinux Kitten"; fi
+	if [[ "$IS_CENTOS" == true ]]; then BASE_OS_NAME="CentOS Stream"; fi
+	if [[ "$IS_UBUNTU" == true ]]; then BASE_OS_NAME="Ubuntu"; fi
+	if [[ "$IS_DEBIAN" == true ]]; then BASE_OS_NAME="Debian"; fi
+	if [[ "$IS_ARCH" == true ]]; then BASE_OS_NAME="Arch Linux"; fi
+	if [[ "$IS_OPENSUSE" == true ]]; then BASE_OS_NAME="openSUSE Tumbleweed"; fi
+	if [[ "$IS_GENTOO" == true ]]; then BASE_OS_NAME="Gentoo Linux"; fi
+
+	DESKTOP_PRETTY_NAME="GNOME"
+	if [[ "${IMAGE_FLAVOR}" == "kde" || "${IMAGE_FLAVOR}" == *"kde"* ]]; then DESKTOP_PRETTY_NAME="KDE Plasma"; fi
+	if [[ "${IMAGE_FLAVOR}" == "cosmic" || "${IMAGE_FLAVOR}" == *"cosmic"* ]]; then DESKTOP_PRETTY_NAME="COSMIC"; fi
+	if [[ "${IMAGE_FLAVOR}" == "niri" || "${IMAGE_FLAVOR}" == *"niri"* ]]; then DESKTOP_PRETTY_NAME="Niri"; fi
+	if [[ "${IMAGE_FLAVOR}" == "xfce" || "${IMAGE_FLAVOR}" == *"xfce"* ]]; then DESKTOP_PRETTY_NAME="XFCE"; fi
+
 	python3 -c "
 import json
 with open('${RECIPE_FILE}', 'r') as f:
@@ -57,6 +74,34 @@ recipe['welcome_title'] = 'Welcome to ${IMAGE_PRETTY_NAME}'
 recipe['distro_logo'] = 'resource:///org/bootcinstaller/Installer/images/${IMAGE_NAME}.png'
 recipe['tour']['welcome']['title'] = 'Welcome to ${IMAGE_PRETTY_NAME}'
 recipe['tour']['welcome']['description'] = '${IMAGE_PRETTY_NAME} is an immutable, container-native Linux operating system built for enterprise workstations and developers.'
+
+# Insert custom distro and desktop slides in order
+tour = recipe.get('tour', {})
+new_tour = {}
+if 'welcome' in tour:
+    new_tour['welcome'] = tour['welcome']
+if 'features' in tour:
+    new_tour['features'] = tour['features']
+
+new_tour['distro'] = {
+    'image': '/run/host/usr/share/bootc-installer/images/tunaos-install.png',
+    'title': 'Built on ${BASE_OS_NAME}',
+    'description': '${IMAGE_PRETTY_NAME} leverages the solid foundation of stable ${BASE_OS_NAME} packages to ensure maximum compatibility and package availability.'
+}
+
+new_tour['desktop'] = {
+    'image': '/run/host/usr/share/bootc-installer/images/tunaos-install.png',
+    'title': '${DESKTOP_PRETTY_NAME} Desktop',
+    'description': 'Enjoy a custom-integrated, modern ${DESKTOP_PRETTY_NAME} workspace configured for performance, accessibility, and style.'
+}
+
+if 'community' in tour:
+    new_tour['community'] = tour['community']
+if 'completed' in tour:
+    new_tour['completed'] = tour['completed']
+
+recipe['tour'] = new_tour
+
 with open('${RECIPE_FILE}', 'w') as f:
     json.dump(recipe, f, indent=2)
 " || true

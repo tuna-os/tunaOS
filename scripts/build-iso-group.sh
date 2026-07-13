@@ -78,6 +78,13 @@ fi
 mapfile -t GROUP_FLAVORS < <(echo "$CONFIG_JSON" | jq -r --arg s "$GROUP_SUFFIX" \
 	'.iso_groups[] | select((.suffix // "") == $s) | .flavors[]')
 
+mapfile -t OFFLINE_FLAVORS < <(echo "$CONFIG_JSON" | jq -r --arg s "$GROUP_SUFFIX" \
+	'.iso_groups[] | select((.suffix // "") == $s) | .offline_flavors[]' 2>/dev/null || true)
+
+if ((${#OFFLINE_FLAVORS[@]} == 0)); then
+	OFFLINE_FLAVORS=("${GROUP_FLAVORS[@]}")
+fi
+
 mapfile -t VARIANT_FLAVORS < <(echo "$CONFIG_JSON" | jq -r --arg v "$VARIANT" \
 	'.variants[] | select(.id == $v) | .flavors[] | select(.build_image == true) | .id')
 
@@ -86,12 +93,22 @@ if ((${#VARIANT_FLAVORS[@]} == 0)); then
 	exit 1
 fi
 
-# Intersect, preserving group order.
+# Intersect, preserving group/offline order.
 SELECTED=()
 for f in "${GROUP_FLAVORS[@]}"; do
 	for v in "${VARIANT_FLAVORS[@]}"; do
 		if [[ "$f" == "$v" ]]; then
 			SELECTED+=("$f")
+			break
+		fi
+	done
+done
+
+SELECTED_OFFLINE=()
+for f in "${OFFLINE_FLAVORS[@]}"; do
+	for v in "${VARIANT_FLAVORS[@]}"; do
+		if [[ "$f" == "$v" ]]; then
+			SELECTED_OFFLINE+=("$f")
 			break
 		fi
 	done
@@ -113,6 +130,7 @@ fi
 
 echo "==> Building grouped ISO '${ISO_BASENAME}' for ${VARIANT}"
 echo "    environments: ${SELECTED[*]}"
+echo "    offline payloads: ${SELECTED_OFFLINE[*]}"
 
 # ── Build the recipe ────────────────────────────────────────────────────────
 OUT_DIR=".build/iso-group/${ISO_BASENAME}"
@@ -138,13 +156,24 @@ for flavor in "${SELECTED[@]}"; do
 		<<<"$ENVS_JSON")"
 done
 
+OFFLINE_PAYLOADS_JSON="[]"
+for flavor in "${SELECTED_OFFLINE[@]}"; do
+	ref="$(tunaos_image_ref "$VARIANT" "$flavor" "$REPO" "$flavor")"
+	if [[ "$REPO" == "local" ]]; then
+		tunaos_import_to_root_storage "$ref"
+	fi
+	OFFLINE_PAYLOADS_JSON="$(jq -c --arg image "$ref" '. + [$image]' <<<"$OFFLINE_PAYLOADS_JSON")"
+done
+
 jq -n \
 	--arg media_name "$MEDIA_NAME" \
 	--argjson envs "$ENVS_JSON" \
+	--argjson offline "$OFFLINE_PAYLOADS_JSON" \
 	'{
 		media_name: $media_name,
 		shared_store: { dedup: true, compression: "release" },
-		bootable_environments: $envs
+		bootable_environments: $envs,
+		offline_payloads: $offline
 	}' >"$RECIPE_FILE"
 
 echo "==> Recipe:"

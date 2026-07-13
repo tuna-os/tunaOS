@@ -114,7 +114,15 @@ RUN KERNEL_PKG="linux"; \
         curl \
         git \
         just \
-        yq && \
+        yq \
+        glow \
+        gum \
+        tailscale \
+        ffmpeg \
+        gstreamer-plugins-base \
+        gstreamer-plugins-good \
+        gstreamer-plugins-bad \
+        gstreamer-plugins-ugly && \
     pacman -Scc --noconfirm
 
 # Build initramfs. Live-boot modules are NOT needed here: tacklebox

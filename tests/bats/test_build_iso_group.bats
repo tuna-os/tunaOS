@@ -57,10 +57,10 @@ setup() {
 
 # ── Config shape ────────────────────────────────────────────────────────────
 
-@test "config: iso_groups defines flagship, community, nvidia" {
+@test "config: iso_groups defines flagship, community" {
   json="$(yq -o=json '.' "$CONFIG")"
   suffixes="$(echo "$json" | jq -r '[.iso_groups[].suffix // ""] | sort | join(",")')"
-  [ "$suffixes" = ",community,nvidia" ]
+  [ "$suffixes" = ",community" ]
 }
 
 @test "config: every iso_group flavor exists on at least one variant" {
@@ -92,37 +92,33 @@ _select() {
   echo "${SEL[*]}"
 }
 
-@test "select: yellowfin flagship includes gnome + hwe" {
-  [ "$(_select '' yellowfin)" = "gnome gnome-hwe" ]
+@test "select: yellowfin flagship includes gnome-nvidia + hwe" {
+  [ "$(_select '' yellowfin)" = "gnome-nvidia gnome-nvidia-hwe" ]
 }
 
-@test "select: bonito flagship shrinks (no gnome50 on Fedora)" {
-  [ "$(_select '' bonito)" = "gnome gnome-hwe" ]
+@test "select: bonito flagship shrinks (no gnome-nvidia-hwe on Fedora)" {
+  [ "$(_select '' bonito)" = "gnome-nvidia" ]
 }
 
-@test "select: bonito community drops absent -hwe desktops" {
-  [ "$(_select community bonito)" = "kde cosmic niri xfce" ]
+@test "select: bonito community resolves to nvidia desktops" {
+  [ "$(_select community bonito)" = "kde-nvidia cosmic-nvidia niri-nvidia xfce-nvidia" ]
 }
 
-@test "select: nvidia group resolves for yellowfin" {
-  [ "$(_select nvidia yellowfin)" = "gnome-nvidia gnome-nvidia-hwe" ]
-}
-
-@test "select: grand total is 12 grouped ISOs across 4 variants" {
+@test "select: grand total is 8 grouped ISOs across 4 variants" {
   local count=0
-  for g in '' community nvidia; do
+  for g in '' community; do
     for v in yellowfin albacore skipjack bonito; do
       [ -n "$(_select "$g" "$v")" ] && count=$((count + 1))
     done
   done
-  [ "$count" -eq 12 ]
+  [ "$count" -eq 8 ]
 }
 
 # ── Recipe JSON ─────────────────────────────────────────────────────────────
 
 @test "recipe: combined recipe is valid dedup JSON with one env per flavor" {
   local envs="[]" ref
-  for flavor in gnome gnome-hwe; do
+  for flavor in gnome-nvidia gnome-nvidia-hwe; do
     ref="$(tunaos_image_ref yellowfin "$flavor" ghcr "$flavor")"
     envs="$(jq -c --arg id "yellowfin-$flavor" --arg image "$ref" \
       --arg title "$(tunaos_flavor_title "$flavor")" \
@@ -133,6 +129,6 @@ _select() {
     '{media_name:$m, shared_store:{dedup:true,compression:"release"}, bootable_environments:$e}')"
   [ "$(echo "$recipe" | jq -r '.shared_store.dedup')" = "true" ]
   [ "$(echo "$recipe" | jq -r '.bootable_environments | length')" = "2" ]
-  [ "$(echo "$recipe" | jq -r '.bootable_environments[0].title')" = "GNOME" ]
-  [ "$(echo "$recipe" | jq -r '.bootable_environments[1].image')" = "ghcr.io/tuna-os/yellowfin:gnome-hwe" ]
+  [ "$(echo "$recipe" | jq -r '.bootable_environments[0].title')" = "GNOME (NVIDIA)" ]
+  [ "$(echo "$recipe" | jq -r '.bootable_environments[1].image')" = "ghcr.io/tuna-os/yellowfin:gnome-nvidia-hwe" ]
 }
