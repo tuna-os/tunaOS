@@ -180,3 +180,35 @@ jobs:
           path: "${{ matrix.basename }}-*.iso"
           if-no-files-found: error
           retention-days: 7
+
+  prune-r2:
+    name: Prune R2 ISOs older than 14 days
+    needs: build-and-publish
+    # Run even if some build jobs failed so we still prune on partial runs.
+    if: ${{ always() && inputs.skip_upload != true }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install rclone
+        run: sudo apt-get install -y rclone
+
+      - name: Delete grouped ISOs older than 14 days
+        env:
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          echo "==> Pruning grouped ISOs older than 14 days from R2..."
+          # Delete versioned ISOs older than 14 days.
+          # Excludes -latest.iso pointers (always current, never pruned).
+          rclone delete --log-level INFO \
+            --min-age 14d \
+            --include "*.iso" \
+            --exclude "*-latest.iso" \
+            --s3-no-check-bucket \
+            "R2:${{ secrets.R2_BUCKET }}/live-isos/"
+          echo "==> Prune complete. Remaining objects:"
+          rclone ls --s3-no-check-bucket \
+            "R2:${{ secrets.R2_BUCKET }}/live-isos/" | sort
