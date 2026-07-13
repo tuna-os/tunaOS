@@ -227,8 +227,8 @@ tunaos_run_tacklebox() {
 			"$tacklebox_image")
 	fi
 
-	"${tb[@]}" build "$recipe_file" \
-		--iso "$iso_out" \
-		--output-base "$out_dir" \
+	"${tb[@]}" build "$(realpath "$recipe_file")" \
+		--iso "$(realpath "$iso_out")" \
+		--output-base "$(realpath "$out_dir")" \
 		--yes
 }
