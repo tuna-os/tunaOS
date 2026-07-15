@@ -88,6 +88,12 @@ detect() {
   [ "$status" -eq 0 ]
 }
 
+@test "customize-live.sh: does not require the bootc /root symlink target" {
+  grep -q 'HOME=/tmp/tuna-live-customize' "${SCRIPT}"
+  run grep -E 'mkdir -p /root' "${SCRIPT}"
+  [ "$status" -ne 0 ]
+}
+
 @test "customize-live.sh: symlinks fisherman to /usr/local/bin" {
   run grep 'ln -sf .*/usr/local/bin/fisherman' "${SCRIPT}"
   [ "$status" -eq 0 ]
