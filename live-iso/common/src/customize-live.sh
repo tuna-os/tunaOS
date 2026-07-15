@@ -113,6 +113,11 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 	ln -sf /etc/machine-id /var/lib/dbus/machine-id
 	dbus-daemon --system --fork --nopidfile || true
 
+	if ! command -v flatpak &>/dev/null; then
+		echo "ERROR: flatpak not installed; cannot pre-install ${INSTALLER_APP}" >&2
+		exit 1
+	fi
+
 	flatpak remote-add --system --if-not-exists tuna-os \
 		https://tunaos.org/flatpak/tuna-os.flatpakrepo
 	# Flatpak also opens a session-bus connection even for a system install.
