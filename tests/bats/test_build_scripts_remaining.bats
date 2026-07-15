@@ -139,3 +139,9 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   grep -q "require_command remora" \
     "${REPO_ROOT}/build_scripts/verify-desktop-experience.sh"
 }
+
+@test "EL10 KDE does not copy nonexistent Aurora files from Bluefin common" {
+  run grep -F 'COPY --from=common /system_files/aurora' \
+    "${REPO_ROOT}/Containerfile.el10"
+  [ "$status" -ne 0 ]
+}
