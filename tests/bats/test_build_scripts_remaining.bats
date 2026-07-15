@@ -132,6 +132,12 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$status" -eq 0 ]
 }
 
+@test "desktop installer makes graphical target the boot default" {
+  run grep -F 'systemctl set-default graphical.target' \
+    "${REPO_ROOT}/build_scripts/install-desktop.sh"
+  [ "$status" -eq 0 ]
+}
+
 @test "published image contract executes and records pinned Remora" {
   local post="${REPO_ROOT}/build_scripts/26-packages-post.sh"
   grep -q 'sha256sum --check --strict' "$post"
