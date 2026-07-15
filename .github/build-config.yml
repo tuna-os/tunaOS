@@ -37,21 +37,27 @@ iso_groups:
 # Each ISO boots the default/nvidia env first; installer auto-detects hardware.
 # `scripts/build-iso-de-group.sh` drives the build.
 de_iso_groups:
-  # First size experiment: one standard GNOME image for each EL10 base. Keeping
-  # standard and NVIDIA images out of the same media avoids duplicating every
-  # variant in the runner's container store before deduplication.
+  # First size experiment: standard and NVIDIA GNOME images for each EL10 base.
+  # Both stay in the offline store so the installer can select for the detected
+  # hardware without requiring network access.
   - id: gnome-el10
     title: "TunaOS GNOME — Enterprise Linux 10"
     # Ordered: (variant, flavor) pairs to include as bootable environments.
     # Build is skipped for any (variant, flavor) that lacks build_image: true.
     environments:
       - {variant: yellowfin, flavor: gnome}
+      - {variant: yellowfin, flavor: gnome-nvidia}
       - {variant: albacore,  flavor: gnome}
+      - {variant: albacore,  flavor: gnome-nvidia}
       - {variant: skipjack,  flavor: gnome}
+      - {variant: skipjack,  flavor: gnome-nvidia}
     offline_environments:
       - {variant: yellowfin, flavor: gnome}
+      - {variant: yellowfin, flavor: gnome-nvidia}
       - {variant: albacore,  flavor: gnome}
+      - {variant: albacore,  flavor: gnome-nvidia}
       - {variant: skipjack,  flavor: gnome}
+      - {variant: skipjack,  flavor: gnome-nvidia}
 
   # KDE: same cross-variant approach.
   - id: kde
