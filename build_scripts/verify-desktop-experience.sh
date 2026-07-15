@@ -47,26 +47,30 @@ if [[ "$mode" == --runtime ]]; then
 	# kill the script silently via `set -e`. The final marker is
 	# written to the serial console regardless of partial failures.
 	ok=1
-	if ! command -v remora >/dev/null 2>&1; then
-		echo "TUNAOS_DESKTOP_CONTRACT_FAIL reason=remora_not_found" >&2
+	report_fail() {
+		local reason="$1"
+		echo "TUNAOS_DESKTOP_CONTRACT_FAIL reason=${reason}" | tee /dev/ttyS0 2>/dev/null || true
 		ok=0
+	}
+	if ! command -v remora >/dev/null 2>&1; then
+		report_fail remora_not_found
 	fi
 	if ! compgen -G '/usr/share/tunaos/experience-contracts/remora' >/dev/null 2>&1; then
-		echo "TUNAOS_DESKTOP_CONTRACT_FAIL reason=remora_contract_missing" >&2
-		ok=0
+		report_fail remora_contract_missing
 	fi
 	if ! systemctl is-active --quiet graphical.target 2>/dev/null; then
-		echo "TUNAOS_DESKTOP_CONTRACT_FAIL reason=graphical_target_inactive" >&2
-		ok=0
+		report_fail graphical_target_inactive
 	fi
 	if ! systemctl is-active --quiet "$dm.service" 2>/dev/null; then
-		echo "TUNAOS_DESKTOP_CONTRACT_FAIL reason=dm_inactive dm=$dm" >&2
-		ok=0
+		report_fail "dm_inactive dm=$dm"
 	fi
 	if [[ "$ok" -eq 1 ]]; then
 		echo "TUNAOS_DESKTOP_CONTRACT_OK desktop=$desktop experience=$experience" | tee /dev/ttyS0 2>/dev/null || true
-	else
-		echo "TUNAOS_DESKTOP_CONTRACT_FAIL desktop=$desktop (see journal)" | tee /dev/ttyS0 2>/dev/null || true
+	fi
+	# Always emit a final summary marker (OK or FAIL) so the gate has a
+	# deterministic signal regardless of which individual reason fired.
+	if [[ "$ok" -eq 0 ]]; then
+		echo "TUNAOS_DESKTOP_CONTRACT_FAIL desktop=$desktop" | tee /dev/ttyS0 2>/dev/null || true
 	fi
 else
 	install -d /usr/share/tunaos/experience-contracts
