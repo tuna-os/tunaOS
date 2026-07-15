@@ -232,6 +232,9 @@ build_scripts_top=(
   grep -q 'python3-nautilus' "${REPO_ROOT}/build_scripts/niri.sh"
   grep -q 'ssh-askpass-gnome' "${REPO_ROOT}/build_scripts/niri.sh"
   grep -q 'systemd-zram-generator' "${REPO_ROOT}/build_scripts/niri.sh"
+  grep -q 'twpayne/chezmoi/releases/download' "${REPO_ROOT}/build_scripts/niri.sh"
+  grep -q 'sha256sum -c' "${REPO_ROOT}/build_scripts/niri.sh"
+  grep -q 'chezmoi --version' "${REPO_ROOT}/build_scripts/niri.sh"
   run grep -E 'pkg_install .*greetd-spawn' "${REPO_ROOT}/build_scripts/niri.sh"
   [ "$status" -ne 0 ]
 }

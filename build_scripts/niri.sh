@@ -39,6 +39,29 @@ EOF
 		apt-get update -qq
 		pkg_install niri greetd quickshell dms dms-greeter
 
+		# Ubuntu does not package chezmoi, but upstream publishes signed release
+		# artifacts including native .deb files. Keep it as system content without
+		# embedding a second package manager solely to obtain one binary.
+		CHEZMOI_VERSION=$(grep '^  chezmoi:' /run/context/image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')
+		CHEZMOI_VERSION_NUM=${CHEZMOI_VERSION#v}
+		case "$(dpkg --print-architecture)" in
+		amd64 | arm64) CHEZMOI_ARCH=$(dpkg --print-architecture) ;;
+		*)
+			echo "Unsupported chezmoi architecture: $(dpkg --print-architecture)" >&2
+			exit 1
+			;;
+		esac
+		CHEZMOI_SHA256=$(sed -n "/^  chezmoi_sha256:/,/^[^ ]/p" /run/context/image-versions.yaml |
+			awk -v arch="$CHEZMOI_ARCH" '$1 == arch ":" {gsub(/"/, "", $2); print $2}')
+		CHEZMOI_DEB="chezmoi_${CHEZMOI_VERSION_NUM}_linux_${CHEZMOI_ARCH}.deb"
+		curl --retry 3 --fail -sSL \
+			-o "/tmp/${CHEZMOI_DEB}" \
+			"https://github.com/twpayne/chezmoi/releases/download/${CHEZMOI_VERSION}/${CHEZMOI_DEB}"
+		echo "${CHEZMOI_SHA256}  /tmp/${CHEZMOI_DEB}" | sha256sum -c -
+		apt-get install -y --no-install-recommends "/tmp/${CHEZMOI_DEB}"
+		rm -f "/tmp/${CHEZMOI_DEB}"
+		chezmoi --version
+
 		# Install Niri ecosystem packages (mirrors the Fedora/EL10 set where
 		# Ubuntu packages exist — excludes Fedora/COPR-only packages like
 		# iio-niri and valent-git.)
