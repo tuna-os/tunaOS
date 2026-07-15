@@ -176,8 +176,10 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS kde
-# Aurora experience payload is scoped to KDE images.
-COPY --from=common /system_files/aurora /
+# projectbluefin/common publishes shared and Bluefin payloads; it does not
+# contain a /system_files/aurora tree on either architecture. The Aurora
+# experience is assembled by the KDE manifest and validated below rather than
+# relying on a nonexistent cross-image path.
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
