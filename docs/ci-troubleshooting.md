@@ -146,6 +146,40 @@ Sunday run (2026-07-20).
 
 ---
 
+## Glossary of Components
+
+| Tool | Role | Source |
+|------|------|--------|
+| **tacklebox** | ISO builder — takes a recipe.json with bootable environments and produces a combined ISO with dedup squashfs | `github.com/tuna-os/tacklebox` |
+| **fisherman** | Disk installer — takes a recipe.json with disk/image/encryption params and runs the full install (partition, format, bootc install, flatpaks, hostname) | `github.com/projectbluefin/fisherman` (cloned at `_upstream-snapshots/fisherman/`) |
+| **bootc-installer** | GTK/libadwaita installer frontend — wraps fisherman for GUI installs | `github.com/projectbluefin/bootc-installer` (cloned at `_upstream-snapshots/bootc-installer/`) |
+| **remora (n)** | Package layering CLI — installs additional RPMs/packages on top of a bootc base image | `github.com/tuna-os/remora` |
+| **dakota** | Bluefin buildstream — defines the Bluefin CI pipeline for building bootc images | `github.com/projectbluefin/dakota` (cloned at `_upstream-snapshots/dakota/`) |
+| **dakota-iso** | Bluefin ISO build pipeline — the full live ISO / installer / E2E test setup (luks-install-qemu.sh, fisherman-install.sh, etc.) | `github.com/projectbluefin/dakota-iso` (cloned at `_upstream-snapshots/dakota-iso/`) |
+
+### What goes where
+
+- **tacklebox** runs on the **host** (or in CI) — builds ISO from published images
+- **fisherman** runs **inside the live VM** (or container) — installs to disk
+- **bootc-installer** runs **inside the live session** as a Flatpak — shows the GUI
+- **remora** runs **inside the installed system** — layers packages
+- **dakota-iso** is the **reference pattern** for how all these fit together
+
+### Key takeaway
+
+Every place in our code that calls `bootc install to-disk` directly should be
+replaced with `fisherman recipe.json`. This is how dakota-iso does it. The
+fisherman tool:
+- Handles ostree vs composefs backend selection
+- Preserves graphical.target on EL10 (ostree) via proper kernel kargs
+- Handles LUKS/TPM encryption
+- Installs flatpaks post-install
+- Sets hostname
+- Creates user accounts
+
+See `_upstream-snapshots/dakota-iso/scripts/luks-install-qemu.sh` for end-to-end
+example including recipe generation, fisherman building, SCP upload, and SSH invocation.
+
 ## Diagnostic Commands
 
 ```bash
@@ -225,12 +259,43 @@ Containerfile.overlay (OVERLAY_TYPE=nvidia)
 A common source of confusion: `systemctl set-default graphical.target` in
 `install-desktop.sh` works during the Containerfile build, but `bootc install
 to-disk` creates a **fresh OSTree deployment** that does NOT preserve the
-default.target symlink. The kernel cmdline override `systemd.unit=graphical.target`
-is the only reliable way to ensure the installed system reaches graphical.target.
+default.target symlink **on ostree-backend variants only**.
+
+### Backend distinction
+
+| Backend | Variants | Loses graphical.target? |
+|---------|----------|------------------------|
+| **ostree** | EL10 (yellowfin, albacore, skipjack) | ✅ YES |
+| **composefs** | Fedora, Ubuntu, Arch, Debian, openSUSE, Gentoo | ❌ NO |
+
+The kernel cmdline override `systemd.unit=graphical.target` is the only reliable
+way to ensure EL10 installed systems reach graphical.target.
+
+### Fisherman recipe approach (replaces raw `bootc install to-disk`)
+
+The proper fix is to use `fisherman` (from `projectbluefin/fisherman`, cloned at
+`_upstream-snapshots/fisherman/`) with a recipe.json. The recipe selects the backend:
+
+```json
+{
+  "disk": "/dev/vda",
+  "filesystem": "xfs",
+  "image": "containers-storage:localhost/yellowfin:gnome",
+  "composeFsBackend": false,     ← false for EL10 (ostree), true for others (composefs)
+  "bootloader": "systemd",
+  "hostname": "tunaos-test",
+  "encryption": {"type": "tpm2-luks"},
+  "flatpaks": []
+}
+```
+
+See `_upstream-snapshots/fisherman/fisherman/internal/recipe/recipe.go` for the full
+Recipe struct with all fields.
 
 This means:
 - **For boot gates (disk mode):** the `--karg systemd.unit=graphical.target` in
-  the `Justfile` `qcow2` recipe is ESSENTIAL — without it, the gate always fails
+  the `Justfile` `qcow2` recipe is a short-term workaround for EL10 only. The
+  proper fix is to switch to `fisherman recipe.json` everywhere
 - **For live ISO (ready mode):** the live squashfs uses the image's default target
   directly (no OSTree deployment), so the `set-default` in install-desktop.sh works
 - **For real installed systems:** users never hit this because they bootc install
