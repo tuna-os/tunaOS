@@ -228,6 +228,10 @@ build_scripts_top=(
     "${REPO_ROOT}/build_scripts/niri.sh"
   grep -q 'pkg_install niri greetd quickshell dms dms-greeter' \
     "${REPO_ROOT}/build_scripts/niri.sh"
+  grep -q 'libpam-gnome-keyring' "${REPO_ROOT}/build_scripts/niri.sh"
+  grep -q 'python3-nautilus' "${REPO_ROOT}/build_scripts/niri.sh"
+  grep -q 'ssh-askpass-gnome' "${REPO_ROOT}/build_scripts/niri.sh"
+  grep -q 'systemd-zram-generator' "${REPO_ROOT}/build_scripts/niri.sh"
   run grep -E 'pkg_install .*greetd-spawn' "${REPO_ROOT}/build_scripts/niri.sh"
   [ "$status" -ne 0 ]
 }
