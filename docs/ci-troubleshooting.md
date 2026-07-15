@@ -84,15 +84,24 @@ The readiness markers live in two places depending on boot mode:
 Both services are WantedBy/After `graphical.target` or `display-manager.service`,
 so neither runs if the system stays at multi-user.target.
 
-**PRIMARY FIX (applied):** `build_scripts/install-desktop.sh` now calls
-`systemctl set-default graphical.target` after enabling the display manager.
-Commit `0c36e46`.
+**Three fixes were needed (all applied):**
 
-**SECONDARY FIX (applied):** `bootc install to-disk` does not preserve the
-`default.target` symlink through OSTree deployment — `graphical.target` is
-never reached despite the build-time fix. The `just qcow2` recipe now passes
-`--karg systemd.unit=graphical.target` to `bootc install to-disk`, forcing
-the correct boot target via kernel command line. Commit `40c66b8`.
+1. **Build-time: `systemctl set-default graphical.target`** in
+   `install-desktop.sh` — sets the default target in the image layer.
+   Commit `0c36e46`.
+
+2. **Bootc install: `--karg systemd.unit=graphical.target`** in the `Justfile`
+   `qcow2` recipe — `bootc install to-disk` creates a fresh OSTree deployment
+   that does NOT preserve the default.target symlink from step 1. The kernel
+   cmdline override is the only reliable way. Commit `40c66b8`.
+
+3. **Service timeout: `TimeoutStartSec=30`** on `tunaos-desktop-contract.service`
+   — prevents a hung `systemctl is-active` call from blocking boot indefinitely.
+   Commit `ebdb0cd`.
+
+**Additionally:** `verify-desktop-experience.sh --runtime` was hardened to use
+individual gated checks with diagnostic `TUNAOS_DESKTOP_CONTRACT_FAIL` markers
+instead of `set -e` killing the script silently. Commit `ebdb0cd`.
 
 **Caveat for NVIDIA images:** The grouped ISO flagship group boots
 `gnome-nvidia` by default. In QEMU with virtio-gpu (no NVIDIA hardware),
@@ -104,10 +113,8 @@ a blank framebuffer even if graphical.target is reached. Two mitigations:
    `gnome-nvidia` to `gnome` for CI boot gates, or adding a
    `--boot-entry <name>` option to `iso-e2e.sh`.
 
-**Timing note:** The fix commit was pushed 2026-07-15 ~12:00 UTC. Images built
-before that do not have the fix. The scheduled `Build Yellowfin` and manual
-workflow_dispatch runs must complete before the `gnome-testing` tag is updated.
-Boot gates on old images will continue to fail until then.
+**Timing note:** The fix commits were pushed 2026-07-15 ~14:00 UTC. A Build
+Yellowfin dispatch from the branch is needed to test the full fix chain.
 
 ---
 
@@ -155,27 +162,79 @@ gh run view <run-id> --json jobs --jq '.jobs[] | select(.conclusion=="failure") 
 gh run list --limit 20
 ```
 
+## Serial Log Deep Diagnosis
+
+For boot-gate timeouts, download the gate artifact and inspect the raw serial log:
+
+```bash
+# Download the artifact (name from the workflow log — e.g. "boot-gate-yellowfin-gnome")
+gh run download <run-id> -n boot-gate-yellowfin-gnome -D /tmp/gate-artifact
+
+# Follow the boot timeline — this tells you EXACTLY where it failed
+cat /tmp/gate-artifact/serial.log | grep -oP '\[.*?\]|TUNAOS_|gdm|display-manager|graphical|poweroff|shutdown|contract|error|fail' | uniq
+
+# Check the full timeline at key transition points:
+grep -n "Stopped\|Started\|gdm\|contract\|poweroff\\|shutdown\|TUNAOS" /tmp/gate-artifact/serial.log
+
+# See what the VM looked like at timeout:
+eog /tmp/gate-artifact/10-ready.ppm  # or similar viewer
+```
+
+### What to look for in serial.log
+
+| Pattern | Means | Action |
+|---------|-------|--------|
+| `Started gdm.service` then `localhost login:` | Display server crashed, fell back to text getty | Check GDM journal, check NVIDIA/virtio-gpu driver |
+| `Starting tunaos-desktop-contract.service` with no `Started`/`Finished` | Service hung — likely `systemctl is-active` blocking on dbus | Add `TimeoutStartSec=30` |
+| `TUNAOS_DESKTOP_CONTRACT_FAIL reason=*` | Individual check failed | Use the reason field to identify which check |
+| `Reached target initrd-switch-root.target` then `Powering off` | System booted initrd but the cleanup sent `system_powerdown` after timeout | Graphical.target was never reached |
+| `Started plymouth-poweroff.service` | System is shutting down (cleanup via monitor socket) | Timeout expired first |
+
 ## Key Files in the Boot Chain
 
 ```
 Containerfile.el10
   └── build_scripts/10-base-packages.sh    # core packages (flatpak, etc.)
-  └── build_scripts/install-desktop.sh     # DE install + graphical.target fix
-        └── creates tunaos-desktop-contract.service
+  └── build_scripts/install-desktop.sh     # DE install + graphical.target fix (BUILD LAYER ONLY!)
+        └── creates tunaos-desktop-contract.service (TimeoutStartSec=30)
               └── calls build_scripts/verify-desktop-experience.sh --runtime
-                    └── emits TUNAOS_DESKTOP_CONTRACT_OK on ttyS0
+                    └── emits TUNAOS_DESKTOP_CONTRACT_OK or FAIL on ttyS0
+
+Justfile (qcow2 recipe)
+  └── bootc install to-disk --karg systemd.unit=graphical.target  # CRITICAL — overrides OSTree default
 
 scripts/iso-e2e.sh                          # boot gate harness
   ├── ready mode: waits for TUNAOS_LIVE_READY
-  └── disk mode:  waits for TUNAOS_DESKTOP_CONTRACT_OK
+  ├── disk mode:  waits for TUNAOS_DESKTOP_CONTRACT_OK
+  └── cleanup: sends system_powerdown → serial log shows shutdown sequence
 
 live-iso/common/src/customize-live.sh       # live ISO squashfs customization
   └── creates tunaos-live-ready.service
         └── emits TUNAOS_LIVE_READY on ttyS0
 
+build_scripts/verify-desktop-experience.sh  # contract check (build + runtime)
+  ├── build mode: creates /usr/share/tunaos/experience-contracts/<desktop>
+  └── runtime mode: gated checks with diagnostic FAIL markers on ttyS0
+
 Containerfile.overlay (OVERLAY_TYPE=nvidia)
   └── build_scripts/nvidia.sh               # NVIDIA AKMOD RPM install
 ```
+
+## Critical architectural insight: IMAGE vs OSTREE DEPLOYMENT
+
+A common source of confusion: `systemctl set-default graphical.target` in
+`install-desktop.sh` works during the Containerfile build, but `bootc install
+to-disk` creates a **fresh OSTree deployment** that does NOT preserve the
+default.target symlink. The kernel cmdline override `systemd.unit=graphical.target`
+is the only reliable way to ensure the installed system reaches graphical.target.
+
+This means:
+- **For boot gates (disk mode):** the `--karg systemd.unit=graphical.target` in
+  the `Justfile` `qcow2` recipe is ESSENTIAL — without it, the gate always fails
+- **For live ISO (ready mode):** the live squashfs uses the image's default target
+  directly (no OSTree deployment), so the `set-default` in install-desktop.sh works
+- **For real installed systems:** users never hit this because they bootc install
+  and their system already runs graphical=true before install... but VERIFY this
 
 ## Build Gate Workflow
 
