@@ -42,6 +42,7 @@ COPY system_files /files
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 COPY manifests /manifests
+COPY image-versions.yaml /image-versions.yaml
 
 # ── Base system (bootc-compatible Debian) ────────────────────────────────────
 FROM ${BASE_IMAGE} AS base-no-de
