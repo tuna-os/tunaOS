@@ -304,6 +304,7 @@ Type=oneshot
 ExecStart=/usr/libexec/tunaos/verify-desktop-experience ${_TD_DESKTOP} --runtime
 StandardOutput=journal+console
 StandardError=journal+console
+TimeoutStartSec=30
 
 [Install]
 WantedBy=graphical.target
