@@ -217,6 +217,7 @@ else
 		btrfs-progs \
 		distrobox \
 		fastfetch \
+		flatpak \
 		fpaste \
 		fwupd \
 		systemd-resolved \
