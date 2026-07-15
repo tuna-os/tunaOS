@@ -20,7 +20,7 @@ on:
         type: choice
         options:
           - all
-          - gnome
+          - gnome-el10
           - kde
           - cosmic
           - niri
