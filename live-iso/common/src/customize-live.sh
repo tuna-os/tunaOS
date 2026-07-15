@@ -65,6 +65,7 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 	export XDG_CACHE_HOME="${HOME}/.cache"
 	mkdir -p "${XDG_CACHE_HOME}" /run/dbus
 	if [[ ! -s /etc/machine-id ]] || grep -qx 'uninitialized' /etc/machine-id; then
+		rm -f /etc/machine-id
 		dbus-uuidgen --ensure=/etc/machine-id
 	fi
 	mkdir -p /var/lib/dbus

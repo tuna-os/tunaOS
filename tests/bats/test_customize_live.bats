@@ -86,6 +86,7 @@ detect() {
 @test "customize-live.sh: initializes D-Bus identity before Flatpak installation" {
   run grep -n 'dbus-uuidgen --ensure=/etc/machine-id' "${SCRIPT}"
   [ "$status" -eq 0 ]
+  grep -q 'rm -f /etc/machine-id' "${SCRIPT}"
 }
 
 @test "customize-live.sh: does not require the bootc /root symlink target" {
