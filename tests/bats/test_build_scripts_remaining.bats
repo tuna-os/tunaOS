@@ -131,3 +131,11 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   run grep -F 'TUNAOS_DESKTOP_CONTRACT_OK' "${REPO_ROOT}/scripts/iso-e2e.sh"
   [ "$status" -eq 0 ]
 }
+
+@test "published image contract executes and records pinned Remora" {
+  local post="${REPO_ROOT}/build_scripts/26-packages-post.sh"
+  grep -q 'REMORA_REPORTED_VERSION="$(remora --version)"' "$post"
+  grep -q 'experience-contracts/remora' "$post"
+  grep -q "require_command remora" \
+    "${REPO_ROOT}/build_scripts/verify-desktop-experience.sh"
+}
