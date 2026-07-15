@@ -41,23 +41,23 @@ TunaOS provides a variety of bootc-based operating system images. Use the table 
 
 <!-- build-status:start -->
 
-_Generated from the latest completed main-branch build for each variant. A cell is green only when its multi-platform publish gate passed._
+_Generated from the latest completed main-branch build for each variant. A cell is green when its image was successfully promoted to the published tag._
 
 | Variant | Green image cells | Latest run | Blocked or failing tags |
 | :--- | ---: | :--- | :--- |
 | 🐠 `yellowfin` | **9/16** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304663189) | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri |
-| 🐟 `albacore` | **13/16** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304560979) | base,base-hwe,base-nvidia |
-| 🍣 `skipjack` | **12/15** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304713188) | base,base-hwe,base-nvidia |
-| 🎣 `bonito` | **11/14** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304431595) | base,base-hwe,base-nvidia |
-| 🦈 `sailfin` | **4/5** | [✅ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304766845) | base |
-| 🌈 `guppy` | **2/3** | [✅ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29305134903) | base |
-| 🐉 `bonito-rawhide` | **10/14** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304558402) | base,base-hwe,base-nvidia,gnome |
-| 🐟 `grouper` | **3/6** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304749688) | base,gnome-zfs,niri |
+| 🐟 `albacore` | **16/16** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304560979) | — |
+| 🍣 `skipjack` | **15/15** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304713188) | — |
+| 🎣 `bonito` | **14/14** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304431595) | — |
+| 🦈 `sailfin` | **5/5** | [✅ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304766845) | — |
+| 🌈 `guppy` | **3/3** | [✅ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29305134903) | — |
+| 🐉 `bonito-rawhide` | **13/14** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304558402) | gnome |
+| 🐟 `grouper` | **4/6** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304749688) | gnome-zfs,niri |
 | 🚀 `marlin` | **0/8** | [❌ 2026-07-15](https://github.com/tuna-os/tunaOS/actions/runs/29388284284) | base,gnome,kde,cosmic,niri,xfce,gnome-cachyos,kde-cachyos |
 | 🐡 `flounder` | **0/6** | [❌ 2026-07-15](https://github.com/tuna-os/tunaOS/actions/runs/29387806332) | base,gnome,kde,cosmic,niri,xfce |
 | ☢️ `flounder-sid` | **0/6** | [❌ 2026-07-15](https://github.com/tuna-os/tunaOS/actions/runs/29387743218) | base,gnome,kde,cosmic,niri,xfce |
 
-**Current image coverage: 64/109 cells (58%).** This is a point-in-time CI snapshot, not a support-tier promise.
+**Current image coverage: 79/109 cells (72%).** This is a point-in-time CI snapshot, not a support-tier promise.
 
 <!-- build-status:end -->
 
