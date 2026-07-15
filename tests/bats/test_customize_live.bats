@@ -135,6 +135,8 @@ detect() {
   grep -q '\.enable-sshd' "${REPO_ROOT}/scripts/build-iso-tacklebox.sh"
   grep -q 'tunaos-live-ssh-credentials.service' "${SCRIPT}"
   grep -q 'PasswordAuthentication yes' "${SCRIPT}"
+  grep -q 'useradd --create-home' "${SCRIPT}"
+  grep -q 'Requires=tunaos-live-ssh-credentials.service' "${SCRIPT}"
 }
 
 @test "images do not preinstall the installer (ISO-only, dakota pattern)" {

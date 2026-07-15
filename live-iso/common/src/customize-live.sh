@@ -62,7 +62,8 @@ if [[ -f "${SCRIPT_DIR}/.enable-sshd" ]]; then
 		echo "ERROR: dev ISO requested but no SSH service is installed" >&2
 		exit 1
 	fi
-	mkdir -p /etc/ssh/sshd_config.d /usr/lib/systemd/system
+	mkdir -p /etc/ssh/sshd_config.d /usr/lib/systemd/system \
+		/etc/systemd/system/tunaos-live-ready.service.d
 	cat >/etc/ssh/sshd_config.d/90-tunaos-live-e2e.conf <<'EOF'
 PasswordAuthentication yes
 PermitEmptyPasswords no
@@ -75,11 +76,18 @@ Before=${SSH_UNIT}
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -c 'echo liveuser:live | chpasswd'
+ExecStart=/bin/sh -euxc 'getent passwd liveuser >/dev/null || useradd --create-home --user-group --shell /bin/bash liveuser; echo liveuser:live | chpasswd'
 RemainAfterExit=yes
+StandardOutput=journal+console
+StandardError=journal+console
 
 [Install]
 WantedBy=${SSH_UNIT}
+EOF
+	cat >/etc/systemd/system/tunaos-live-ready.service.d/10-ssh-credentials.conf <<'EOF'
+[Unit]
+Requires=tunaos-live-ssh-credentials.service
+After=tunaos-live-ssh-credentials.service
 EOF
 	systemctl enable tunaos-live-ssh-credentials.service "$SSH_UNIT"
 fi
