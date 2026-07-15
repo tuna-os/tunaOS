@@ -55,6 +55,18 @@ setup() {
   [ "$(tunaos_flavor_desktop lxqt)" = "gnome" ]
 }
 
+@test "published refs fold Rawhide into bonito tag suffix" {
+  run tunaos_image_ref bonito-rawhide gnome ghcr gnome
+  [ "$status" -eq 0 ]
+  [ "$output" = "ghcr.io/tuna-os/bonito:gnome-rawhide" ]
+}
+
+@test "published refs fold Sid into flounder tag suffix" {
+  run tunaos_image_ref flounder-sid kde ghcr kde
+  [ "$status" -eq 0 ]
+  [ "$output" = "ghcr.io/tuna-os/flounder:kde-sid" ]
+}
+
 # ── Config shape ────────────────────────────────────────────────────────────
 
 @test "config: iso_groups defines flagship, community" {

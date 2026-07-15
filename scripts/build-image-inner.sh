@@ -51,7 +51,7 @@ zirconium_image_sha=$($YQ -r '.images[] | select(.name == "zirconium") | .digest
 
 # ── Build args ────────────────────────────────────────────────────────────────
 BUILD_ARGS=()
-BUILD_ARGS+=("--build-arg" "IMAGE_NAME=${VARIANT}")
+BUILD_ARGS+=("--build-arg" "IMAGE_NAME=${PUBLIC_IMAGE_NAME:-$VARIANT}")
 BUILD_ARGS+=("--build-arg" "IMAGE_VENDOR=${REPO_ORGANIZATION}")
 BUILD_ARGS+=("--build-arg" "IMAGE_REGISTRY=${IMAGE_REGISTRY}")
 BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${BASE_IMAGE}")

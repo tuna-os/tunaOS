@@ -29,7 +29,6 @@ FROM scratch as context
 COPY system_files /files
 COPY --from=brew /system_files /files
 COPY --from=common /system_files/shared /files
-COPY --from=common /system_files/bluefin /files
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 COPY manifests /manifests
@@ -155,6 +154,8 @@ FROM base-no-de AS base
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS gnome
+# Bluefin LTS experience payload is scoped to GNOME images.
+COPY --from=common /system_files/bluefin /
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
@@ -175,6 +176,8 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS kde
+# Aurora experience payload is scoped to KDE images.
+COPY --from=common /system_files/aurora /
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \

@@ -281,4 +281,29 @@ for cmd in "${_TD_POST_INLINE[@]}"; do
 	fi
 done
 
+# A package transaction is not sufficient evidence that the requested desktop
+# exists. Validate its session, compositor and display manager, then install a
+# runtime contract checked by the VM promotion gate.
+if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" == niri ]]; then
+	"${_TD_CTX}/build_scripts/verify-desktop-experience.sh" "${_TD_DESKTOP}"
+	install -Dm0755 "${_TD_CTX}/build_scripts/verify-desktop-experience.sh" \
+		/usr/libexec/tunaos/verify-desktop-experience
+	cat >/usr/lib/systemd/system/tunaos-desktop-contract.service <<EOF
+[Unit]
+Description=Verify TunaOS ${_TD_DESKTOP} desktop experience
+After=display-manager.service
+Requires=display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/tunaos/verify-desktop-experience ${_TD_DESKTOP} --runtime
+StandardOutput=journal+console
+StandardError=journal+console
+
+[Install]
+WantedBy=graphical.target
+EOF
+	safe_enable tunaos-desktop-contract.service
+fi
+
 printf "::endgroup::\n"

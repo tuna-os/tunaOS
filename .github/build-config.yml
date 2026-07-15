@@ -542,6 +542,8 @@ variants:
   # Fedora Rawhide (rolling development branch). Uses the same Containerfile
   # as bonito — Fedora bootc with the latest kernel and packages.
   - id: bonito-rawhide
+    publish_name: bonito
+    tag_suffix: rawhide
     emoji: "🐉"
     description: "Based on Fedora Rawhide (rolling)"
     base_image: "quay.io/fedora/fedora-bootc:rawhide"
@@ -728,6 +730,8 @@ variants:
 
   # Flounder-sid: Debian Sid (unstable/rolling). Has latest COSMIC natively.
   - id: flounder-sid
+    publish_name: flounder
+    tag_suffix: sid
     emoji: "☢️"
     description: "Based on Debian Sid (unstable, rolling)"
     base_image: "docker.io/library/debian:sid"
