@@ -214,6 +214,8 @@ build_scripts_top=(
 @test "build_scripts/niri.sh: Ubuntu uses the AvengeMedia Niri and DMS repositories" {
   grep -q 'avengemedia/danklinux/ubuntu' "${REPO_ROOT}/build_scripts/niri.sh"
   grep -q 'avengemedia/dms/ubuntu' "${REPO_ROOT}/build_scripts/niri.sh"
+  grep -q 'codename="${UBUNTU_CODENAME:-${VERSION_CODENAME' \
+    "${REPO_ROOT}/build_scripts/niri.sh"
   grep -q 'pkg_install niri greetd quickshell dms dms-greeter' \
     "${REPO_ROOT}/build_scripts/niri.sh"
   run grep -E 'pkg_install .*greetd-spawn' "${REPO_ROOT}/build_scripts/niri.sh"
