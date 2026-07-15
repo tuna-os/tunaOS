@@ -8,14 +8,37 @@ case "${1:-}" in
 "base")
 	# ── apt (Ubuntu/Debian) Niri path ──────────────────────────────────
 	if [[ "$PKG_MGR" == "apt" ]]; then
-		# Ubuntu 26.04: install Niri WM and greetd display manager from apt.
-		# DMS (DankMaterialShell) and quickshell are not yet packaged for
-		# Ubuntu; install them from the Zirconium image COPY layers instead.
-		pkg_install niri greetd greetd-spawn
+		# AvengeMedia publishes the supported Niri + DMS stack for Ubuntu
+		# 25.10+ (the same upstream desktop stack Zirconium consumes). Ubuntu
+		# itself provides greetd. `greetd-spawn` is an RPM-only package name;
+		# its PAM file is supplied by the Zirconium context in Containerfile.ubuntu.
+		# Keep the PPA key scoped to these two repositories rather than trusting
+		# it globally.
+		. /etc/os-release
+		codename="${VERSION_CODENAME:?Ubuntu VERSION_CODENAME is required}"
+		install -d -m 0755 /etc/apt/keyrings
+		curl -fsSL \
+			'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x45FECBE587307AAA3F0A4BE9FC44813D2A7788B7' |
+			gpg --dearmor --yes -o /etc/apt/keyrings/avengemedia.gpg
+		cat >/etc/apt/sources.list.d/avengemedia.sources <<EOF
+Types: deb
+URIs: https://ppa.launchpadcontent.net/avengemedia/danklinux/ubuntu
+Suites: ${codename}
+Components: main
+Signed-By: /etc/apt/keyrings/avengemedia.gpg
+
+Types: deb
+URIs: https://ppa.launchpadcontent.net/avengemedia/dms/ubuntu
+Suites: ${codename}
+Components: main
+Signed-By: /etc/apt/keyrings/avengemedia.gpg
+EOF
+		apt-get update -qq
+		pkg_install niri greetd quickshell dms dms-greeter
 
 		# Install Niri ecosystem packages (mirrors the Fedora/EL10 set where
-		# Ubuntu packages exist — excludes COPR-only packages like iio-niri,
-		# valent-git, dms, quickshell, etc.)
+		# Ubuntu packages exist — excludes Fedora/COPR-only packages like
+		# iio-niri and valent-git.)
 		if apt-cache show brightnessctl &>/dev/null 2>&1; then
 			pkg_install \
 				brightnessctl \
