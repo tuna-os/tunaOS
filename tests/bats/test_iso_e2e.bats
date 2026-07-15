@@ -30,6 +30,7 @@ setup() {
   grep -q 'TUNAOS_LUKS_E2E_ENCRYPTED_DISK_CONFIRMED' "$SCRIPT"
   grep -q 'TUNAOS_LUKS_E2E_PASS encrypted=1 tpm_unlock=1 installed_boot=1 desktop_contract=' "$SCRIPT"
   grep -q 'LUKS_EVIDENCE_LOG=' "$SCRIPT"
+  grep -q 'mv -f "$SERIAL_LOG" "$LIVE_SERIAL_LOG"' "$SCRIPT"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
