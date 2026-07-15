@@ -167,6 +167,7 @@ jobs:
           name: luks-e2e-${{ matrix.variant }}-${{ matrix.flavor }}
           path: |
             luks-out/serial.log
+            luks-out/live-serial.log
             luks-out/luks-evidence.log
             luks-out/*.png
           if-no-files-found: warn

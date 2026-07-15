@@ -249,6 +249,7 @@ fi
 OVMF_VARS="${OUTPUT_DIR}/OVMF_VARS.fd"
 MONITOR_SOCK="${OUTPUT_DIR}/monitor.sock"
 SERIAL_LOG="${OUTPUT_DIR}/serial.log"
+LIVE_SERIAL_LOG="${OUTPUT_DIR}/live-serial.log"
 LUKS_EVIDENCE_LOG="${OUTPUT_DIR}/luks-evidence.log"
 INSTALL_DISK="${OUTPUT_DIR}/install-disk.qcow2"
 QEMU_PIDFILE="${OUTPUT_DIR}/qemu.pid"
@@ -624,6 +625,12 @@ run_install() {
 			done
 		fi
 	fi
+
+	# The installed-boot gate must never match a marker emitted by the live
+	# environment. Preserve the first boot as separate evidence and give QEMU a
+	# fresh serial log for the disk boot.
+	mv -f "$SERIAL_LOG" "$LIVE_SERIAL_LOG"
+	: >"$SERIAL_LOG"
 
 	echo "==> Booting installed system..."
 	# Boot from the install disk (remove cdrom)
