@@ -1,4 +1,3 @@
-
 <div align="center">
 <picture>
   <source srcset="https://fonts.gstatic.com/s/e/notoemoji/latest/1f41f/512.webp" type="image/webp">
@@ -6,9 +5,9 @@
 </picture>
 
 ## TunaOS
-### *A Collection of Cloud-Native Enterprise Linux OS Images*
+### *Cloud-native, immutable desktop Linux images*
 
-*Bootc-based desktop Linux images built on AlmaLinux, CentOS Stream, and Fedora*
+*One bootc-native desktop experience across Enterprise Linux and community distributions*
 
 ---
 
@@ -19,11 +18,11 @@
 
 </div>
 
-## 🚀 About TunaOS
+## About TunaOS
 
-TunaOS is a curated collection of **bootc-based desktop operating systems** built on modern container technology. The goal is to bring a modern desktop experience to Enterprise Linux — stable, immutable, and up-to-date. Inspired by [Bluefin](https://projectbluefin.io) and the [Universal Blue](https://universal-blue.org/) community.
+TunaOS builds **bootc-based desktop operating systems** with atomic updates and straightforward rollbacks. Choose an Enterprise Linux base for long-term stability or a community distribution for a faster release cadence, while keeping the same image-based management model.
 
-Read the launch announcement: **[Modern Enterprise Linux Desktops with TunaOS](https://tunaos.org/blog/modern-enterprise-linux-desktops-with-tunaos)** and the landscape comparison: **[The Immutable Desktop Landscape: Where TunaOS Fits](https://tunaos.org/blog/the-immutable-desktop-landscape-where-tunaos-fits)**.
+[Visit tunaos.org](https://tunaos.org/) or read the [launch announcement](https://tunaos.org/blog/modern-enterprise-linux-desktops-with-tunaos).
 
 ### Features
 
@@ -34,7 +33,7 @@ Read the launch announcement: **[Modern Enterprise Linux Desktops with TunaOS](h
 - **HWE Option**: Hardware Enablement kernel for newer hardware support
 - **NVIDIA Option**: NVIDIA drivers and CUDA for graphics and AI workflows
 
-## 🐠 Images & Variants
+## Images and variants
 
 TunaOS provides a variety of bootc-based operating system images. Use the table below to choose your base distribution and desktop environment.
 
@@ -102,7 +101,7 @@ Image tags are constructed as `<desktop>[-hardware]`:
 
 ---
 
-## 📋 System Requirements
+## System requirements
 
 | Component | Minimum | Recommended |
 |-----------|---------|-------------|
@@ -112,11 +111,11 @@ Image tags are constructed as `<desktop>[-hardware]`:
 
 ---
 
-## 🛠️ Installation
+## Installation
 
 ### Use a pre-built ISO
 
-Grab a live ISO for any variant and flavor from the download page:
+Browse the currently published installation media on the download page:
 
 **[📦 tunaos.org/download](https://tunaos.org/download)**
 
@@ -155,7 +154,7 @@ If you're already running a compatible bootc system:
 sudo bootc switch ghcr.io/tuna-os/yellowfin:gnome
 ```
 
-## 🔐 Container Registry Authentication
+## Container registry authentication
 
 Images are published on GitHub Container Registry (GHCR). To pull images with `bootc` or `podman`:
 
@@ -169,10 +168,6 @@ gh auth token | podman login ghcr.io -u YOUR_USERNAME --password-stdin
 
 See [GitHub Container Registry docs](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) for more details.
 
-## 🧪 Current Status
-
-> **Note:** These images are in active development. Yellowfin and Albacore are the most mature variants. Bonito (Fedora) still needs work.
-
 ## Contributing
 
 Contributions welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for:
@@ -181,7 +176,7 @@ Contributions welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for:
 - Pull request guidelines
 - Architecture overview
 
-## 🤝 Community & Support
+## Community and support
 
 - 🐛 **Report Issues:** [GitHub Issues](https://github.com/tuna-os/tunaOS/issues)
 - [m] **Chat**: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia)
@@ -190,7 +185,7 @@ Related Communities:
 - 🎮 **Discord:** [Universal Blue Community](https://discord.gg/WEu6BdFEtp)
 - 💬 **AlmaLinux Atomic SIG:** [AlmaLinux Atomic SIG](https://chat.almalinux.org/almalinux/channels/sigatomic)
 
-## 📚 Documentation
+## Documentation
 
 ### Project Docs
 - [TunaOS Blog](https://tunaos.org/blog/modern-enterprise-linux-desktops-with-tunaos) — launch announcement and design philosophy comparison
