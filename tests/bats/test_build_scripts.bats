@@ -168,6 +168,16 @@ build_scripts_top=(
   fi
 }
 
+@test "build_scripts/90-image-info.sh maps variants to scientific fish names" {
+  local script="${REPO_ROOT}/build_scripts/90-image-info.sh"
+  grep -q 'yellowfin) CODE_NAME="Thunnus albacares"' "$script"
+  grep -q 'albacore) CODE_NAME="Thunnus alalunga"' "$script"
+  grep -q 'skipjack) CODE_NAME="Katsuwonus pelamis"' "$script"
+  grep -q 'grouper) CODE_NAME="Epinephelus marginatus"' "$script"
+  run grep -F 'CODE_NAME="Achillobator"' "$script"
+  [ "$status" -ne 0 ]
+}
+
 # ── Desktop flavor scripts ──────────────────────────────────────────────
 
 @test "build_scripts/gnome.sh: exists and sources lib.sh" {

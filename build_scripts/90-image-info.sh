@@ -30,7 +30,25 @@ HOME_URL="https://projectbluefin.io"
 DOCUMENTATION_URL="https://docs.projectbluefin.io"
 SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"
 BUG_SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"
-CODE_NAME="Achillobator"
+
+# TunaOS variants are named for fish. Keep VERSION_CODENAME tied to that
+# identity instead of inheriting the unrelated legacy dinosaur codename.
+# Generic common names use one stable representative species.
+case "${IMAGE_NAME}" in
+yellowfin) CODE_NAME="Thunnus albacares" ;;
+albacore) CODE_NAME="Thunnus alalunga" ;;
+skipjack) CODE_NAME="Katsuwonus pelamis" ;;
+bonito | bonito-rawhide) CODE_NAME="Sarda sarda" ;;
+sailfin) CODE_NAME="Istiophorus platypterus" ;;
+guppy) CODE_NAME="Poecilia reticulata" ;;
+grouper) CODE_NAME="Epinephelus marginatus" ;;
+marlin) CODE_NAME="Makaira nigricans" ;;
+flounder | flounder-sid) CODE_NAME="Platichthys flesus" ;;
+*)
+	echo "ERROR: no scientific fish codename defined for variant: ${IMAGE_NAME}" >&2
+	exit 1
+	;;
+esac
 
 chmod 644 $IMAGE_INFO
 
