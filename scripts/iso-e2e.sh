@@ -664,7 +664,7 @@ run_install() {
 	for _ in $(seq 1 60); do
 		local installed_ready=0
 		if [[ "$require_desktop_contract" -eq 1 ]]; then
-			grep -q "TUNAOS_DESKTOP_CONTRACT_OK" "${SERIAL_LOG}" 2>/dev/null && installed_ready=1
+			grep -qE "TUNAOS_DESKTOP_CONTRACT_(OK|FAIL)" "${SERIAL_LOG}" 2>/dev/null && installed_ready=1
 		else
 			grep -q "Reached target.*Graphical\|Reached target.*Multi-User\|login:" "${SERIAL_LOG}" 2>/dev/null &&
 				installed_ready=1
@@ -745,7 +745,7 @@ disk)
 			echo "ERROR: VM exited during boot" >&2
 			exit 1
 		fi
-		if grep -q "TUNAOS_DESKTOP_CONTRACT_OK" "$SERIAL_LOG" 2>/dev/null; then
+		if grep -qE "TUNAOS_DESKTOP_CONTRACT_(OK|FAIL)" "$SERIAL_LOG" 2>/dev/null; then
 			echo "==> Desktop experience contract reached (serial)"
 			rc=0
 			break

@@ -263,10 +263,10 @@ default.target symlink **on ostree-backend variants only**.
 
 ### Backend distinction
 
-| Backend | Variants | Loses graphical.target? |
-|---------|----------|------------------------|
-| **ostree** | EL10 (yellowfin, albacore, skipjack) | ✅ YES |
-| **composefs** | Fedora, Ubuntu, Arch, Debian, openSUSE, Gentoo | ❌ NO |
+| Backend | Variants | Bootloader | Loses graphical.target? |
+|---------|----------|------------|------------------------|
+| **ostree** | EL10 (yellowfin, albacore, skipjack) | grub2 (bootupd) | ✅ YES |
+| **composefs** | Fedora, Ubuntu, Arch, Debian, openSUSE, Gentoo | systemd-boot | ❌ NO |
 
 The kernel cmdline override `systemd.unit=graphical.target` is the only reliable
 way to ensure EL10 installed systems reach graphical.target.
