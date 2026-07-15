@@ -65,7 +65,7 @@ set -euo pipefail
 ISO_PATH=""
 KICKSTART=""
 APP_CMD=""
-MODE="ready" # ready | kickstart | ssh | app-launch
+MODE="ready" # ready | install | kickstart | ssh | app-launch
 TIMEOUT=300
 OUTPUT_DIR="./iso-e2e-out"
 MEMORY=4096
@@ -87,7 +87,7 @@ while [[ $# -gt 0 ]]; do
 		# the ssh install-to-disk flow (bootc, not anaconda). Reaching the login
 		# target on reboot proves the unlock worked — a wrong/absent TPM would
 		# hang the boot in the initramfs at the cryptsetup prompt.
-		MODE="ssh"
+		MODE="install"
 		LUKS=1
 		shift
 		;;
@@ -149,7 +149,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$ISO_PATH" ]]; then
-	echo "Usage: $0 <iso_path> [--kickstart KS] [--ssh-only] [options]" >&2
+	echo "Usage: $0 <iso_path> [--kickstart KS | --luks | --ssh-only] [options]" >&2
 	exit 1
 fi
 
@@ -249,8 +249,14 @@ fi
 OVMF_VARS="${OUTPUT_DIR}/OVMF_VARS.fd"
 MONITOR_SOCK="${OUTPUT_DIR}/monitor.sock"
 SERIAL_LOG="${OUTPUT_DIR}/serial.log"
+LUKS_EVIDENCE_LOG="${OUTPUT_DIR}/luks-evidence.log"
 INSTALL_DISK="${OUTPUT_DIR}/install-disk.qcow2"
 QEMU_PIDFILE="${OUTPUT_DIR}/qemu.pid"
+
+record_luks_evidence() {
+	[[ "$LUKS" -eq 1 ]] || return 0
+	echo "$1" | tee -a "$LUKS_EVIDENCE_LOG"
+}
 
 # ── Emulated TPM 2.0 (swtpm) — LUKS mode only ───────────────────────────────
 # The install-time enrollment (systemd-cryptenroll --tpm2-device=auto) and the
@@ -543,12 +549,10 @@ check_ssh() {
 	return 5
 }
 
-# Drive an Anaconda kickstart install. We don't (yet) interact with the
-# install — we let it run unattended and watch for completion via serial
-# log markers ("post-installation" / "reboot").
 # Run bootc install-to-disk via SSH, then reboot and verify the installed system.
 # This replaces the Anaconda kickstart approach (TunaOS uses bootc, not anaconda).
-run_kickstart() {
+run_install() {
+	record_luks_evidence "TUNAOS_LUKS_E2E_INSTALL_STARTED luks=${LUKS}"
 	echo "==> Waiting up to 60s for SSH..."
 	for _ in $(seq 1 30); do
 		check_ssh && break
@@ -585,6 +589,7 @@ run_kickstart() {
 	if [[ "$LUKS" -eq 1 ]]; then
 		if grep -qiE "Initializing LUKS|Enrolling.*TPM|tpm2-luks" "${SERIAL_LOG}"; then
 			echo "==> LUKS root + TPM enrollment confirmed in install output."
+			record_luks_evidence "TUNAOS_LUKS_E2E_TPM_ENROLLMENT_CONFIRMED"
 		else
 			echo "ERROR: --luks set but no LUKS/TPM enrollment seen in install output"
 			return 3
@@ -595,6 +600,7 @@ run_kickstart() {
 		if sshpass -p live ssh -o StrictHostKeyChecking=no -p 2222 liveuser@127.0.0.1 \
 			"sudo lsblk -rno FSTYPE /dev/vda /dev/vda* | grep -qx crypto_LUKS"; then
 			echo "==> crypto_LUKS filesystem confirmed on installed disk."
+			record_luks_evidence "TUNAOS_LUKS_E2E_ENCRYPTED_DISK_CONFIRMED"
 		else
 			echo "ERROR: installed disk has no crypto_LUKS partition"
 			return 3
@@ -643,10 +649,10 @@ run_kickstart() {
 		-pidfile "$QEMU_PIDFILE" \
 		-daemonize
 
-	local require_desktop_contract=0
-	case "${FLAVOR%%-*}" in
-	gnome | kde | niri) require_desktop_contract=1 ;;
-	esac
+	# Every ISO matrix cell is a desktop image. A boot prompt or multi-user
+	# target is insufficient evidence: require the image's display-manager and
+	# desktop-session contract before declaring the installed system healthy.
+	local require_desktop_contract=1
 	echo "==> Waiting for installed system to boot (up to 5 min)..."
 	for _ in $(seq 1 60); do
 		local installed_ready=0
@@ -658,6 +664,7 @@ run_kickstart() {
 		fi
 		if [[ "$installed_ready" -eq 1 ]]; then
 			echo "==> Installed system booted successfully!"
+			record_luks_evidence "TUNAOS_LUKS_E2E_PASS encrypted=1 tpm_unlock=1 installed_boot=1 desktop_contract=${require_desktop_contract}"
 			screenshot "30-installed"
 			# VLM verification of installed system
 			if command -v python3 &>/dev/null; then
@@ -794,7 +801,14 @@ kickstart)
 	boot_live_iso || exit 1
 	wait_for_ready || exit $?
 	screenshot "10-ready"
-	run_kickstart
+	run_install
+	exit $?
+	;;
+install)
+	boot_live_iso || exit 1
+	wait_for_ready || exit $?
+	screenshot "10-ready"
+	run_install
 	exit $?
 	;;
 app-launch)

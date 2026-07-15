@@ -138,11 +138,18 @@ jobs:
           echo "ISO_PATH=${ISO}" >> "$GITHUB_ENV"
 
       - name: LUKS install + unlock verification
+        env:
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
         run: |
           mkdir -p luks-out
           sudo ./scripts/iso-e2e.sh "${ISO_PATH}" --luks \
             --output luks-out \
             --timeout 1200
+          grep -qx 'TUNAOS_LUKS_E2E_INSTALL_STARTED luks=1' luks-out/luks-evidence.log
+          grep -qx 'TUNAOS_LUKS_E2E_TPM_ENROLLMENT_CONFIRMED' luks-out/luks-evidence.log
+          grep -qx 'TUNAOS_LUKS_E2E_ENCRYPTED_DISK_CONFIRMED' luks-out/luks-evidence.log
+          grep -qx 'TUNAOS_LUKS_E2E_PASS encrypted=1 tpm_unlock=1 installed_boot=1 desktop_contract=1' luks-out/luks-evidence.log
 
       - name: Collect evidence
         if: always()
@@ -160,6 +167,7 @@ jobs:
           name: luks-e2e-${{ matrix.variant }}-${{ matrix.flavor }}
           path: |
             luks-out/serial.log
+            luks-out/luks-evidence.log
             luks-out/*.png
           if-no-files-found: warn
           retention-days: 14
