@@ -131,6 +131,12 @@ detect() {
   [ "$status" -eq 0 ]
 }
 
+@test "dev ISO marker enables SSH without changing production images" {
+  grep -q '\.enable-sshd' "${REPO_ROOT}/scripts/build-iso-tacklebox.sh"
+  grep -q 'tunaos-live-ssh-credentials.service' "${SCRIPT}"
+  grep -q 'PasswordAuthentication yes' "${SCRIPT}"
+}
+
 @test "images do not preinstall the installer (ISO-only, dakota pattern)" {
   run grep -r 'Flatpak Preinstall org.tunaos.Installer' "${REPO_ROOT}/build_scripts/"
   [ "$status" -ne 0 ]
