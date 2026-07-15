@@ -10,7 +10,7 @@ set -xeuo pipefail
 tmpdir="$(mktemp -d)"
 curl -fsSL https://mirror.cachyos.org/cachyos-repo.tar.xz -o "$tmpdir/cachyos-repo.tar.xz"
 tar -C "$tmpdir" -xf "$tmpdir/cachyos-repo.tar.xz"
-(cd "$tmpdir/cachyos-repo" && ./cachyos-repo.sh --noconfirm)
+(cd "$tmpdir/cachyos-repo" && ./cachyos-repo.sh)
 rm -rf "$tmpdir"
 
 pacman -Syu --noconfirm --needed \
