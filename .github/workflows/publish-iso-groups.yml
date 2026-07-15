@@ -120,8 +120,12 @@ jobs:
       - name: Build combined dedup ISO (from published GHCR images)
         env:
           GITHUB_REPOSITORY_OWNER: tuna-os
+          # The low-disk offline-store implementation must be reproducible and
+          # available before the release-container workflow finishes publishing.
+          TACKLEBOX_FROM_SOURCE: '1'
+          TACKLEBOX_SHA: dd5b29b2f46aeda539ba447f6884218926788080
         run: |
-          sudo GITHUB_REPOSITORY_OWNER=tuna-os \
+          sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA \
             just iso-group "${{ matrix.variant }}" "${{ matrix.group }}" ghcr
 
       - name: Install QEMU for boot gate
