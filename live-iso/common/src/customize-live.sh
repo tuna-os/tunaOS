@@ -54,7 +54,16 @@ source "${SCRIPT_DIR}/desktop-${DESKTOP}.sh"
 # ── 3. Pre-install the installer Flatpak into the live squash ────────────────
 # dbus is needed for flatpak's system helper inside the build container.
 if [[ -n "${INSTALLER_APP}" ]]; then
-	mkdir -p /run/dbus
+	# bootc images intentionally ship an uninitialized machine-id.  Flatpak
+	# starts a private D-Bus client during live-image customization, however,
+	# and refuses to do so without a valid ID.  This only mutates the ephemeral
+	# live squashfs; installed systems still receive their own machine-id.
+	mkdir -p /root/.cache /run/dbus
+	if [[ ! -s /etc/machine-id ]] || grep -qx 'uninitialized' /etc/machine-id; then
+		dbus-uuidgen --ensure=/etc/machine-id
+	fi
+	mkdir -p /var/lib/dbus
+	ln -sf /etc/machine-id /var/lib/dbus/machine-id
 	dbus-daemon --system --fork --nopidfile || true
 
 	flatpak remote-add --system --if-not-exists tuna-os \

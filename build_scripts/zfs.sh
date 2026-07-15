@@ -26,16 +26,23 @@ echo "zfs.sh: targeting kernel ${KVER}"
 
 apt-get update -qq
 
-# - linux-modules-extra-<kver>: Ubuntu's prebuilt, signed zfs.ko (no DKMS).
+# - linux-generic already depends on the matching linux-modules-extra package,
+#   which provides Ubuntu's prebuilt, signed zfs.ko.  Do not reinstall the
+#   versioned package here: daily archive rotation can remove that exact
+#   version after the cached kernel layer was built.
 # - zfsutils-linux:             zfs/zpool userspace.
 # - zfs-dracut:                 the dracut 90zfs module (grouper builds its
 #                               initramfs with dracut in finalize.sh, not
 #                               initramfs-tools, so zfs-initramfs is the wrong
 #                               integration here).
 pkg_install \
-	"linux-modules-extra-${KVER}" \
 	zfsutils-linux \
 	zfs-dracut
+
+if ! find "/usr/lib/modules/${KVER}" -type f -name 'zfs.ko*' -print -quit | grep -q .; then
+	echo "ERROR: linux-generic did not provide a ZFS module for ${KVER}" >&2
+	exit 1
+fi
 
 # Load zfs early.
 echo zfs >/etc/modules-load.d/zfs.conf
