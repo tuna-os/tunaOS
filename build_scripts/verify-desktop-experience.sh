@@ -43,11 +43,31 @@ niri)
 esac
 
 if [[ "$mode" == --runtime ]]; then
-	require_command remora
-	require_glob '/usr/share/tunaos/experience-contracts/remora'
-	systemctl is-active --quiet graphical.target
-	systemctl is-active --quiet "$dm.service"
-	echo "TUNAOS_DESKTOP_CONTRACT_OK desktop=$desktop experience=$experience" | tee /dev/ttyS0 2>/dev/null || true
+	# Each check is individually gated so a single failure doesn't
+	# kill the script silently via `set -e`. The final marker is
+	# written to the serial console regardless of partial failures.
+	ok=1
+	if ! command -v remora >/dev/null 2>&1; then
+		echo "TUNAOS_DESKTOP_CONTRACT_FAIL reason=remora_not_found" >&2
+		ok=0
+	fi
+	if ! compgen -G '/usr/share/tunaos/experience-contracts/remora' >/dev/null 2>&1; then
+		echo "TUNAOS_DESKTOP_CONTRACT_FAIL reason=remora_contract_missing" >&2
+		ok=0
+	fi
+	if ! systemctl is-active --quiet graphical.target 2>/dev/null; then
+		echo "TUNAOS_DESKTOP_CONTRACT_FAIL reason=graphical_target_inactive" >&2
+		ok=0
+	fi
+	if ! systemctl is-active --quiet "$dm.service" 2>/dev/null; then
+		echo "TUNAOS_DESKTOP_CONTRACT_FAIL reason=dm_inactive dm=$dm" >&2
+		ok=0
+	fi
+	if [[ "$ok" -eq 1 ]]; then
+		echo "TUNAOS_DESKTOP_CONTRACT_OK desktop=$desktop experience=$experience" | tee /dev/ttyS0 2>/dev/null || true
+	else
+		echo "TUNAOS_DESKTOP_CONTRACT_FAIL desktop=$desktop (see journal)" | tee /dev/ttyS0 2>/dev/null || true
+	fi
 else
 	install -d /usr/share/tunaos/experience-contracts
 	printf 'desktop=%s\nexperience=%s\nvalidated_at_build=true\n' "$desktop" "$experience" \
