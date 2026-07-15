@@ -7,9 +7,17 @@
 #
 # Run: bats tests/bats/test_iso_e2e.bats
 
+REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
+SCRIPT="${REPO_ROOT}/scripts/iso-e2e.sh"
+
 setup() {
   # Test arg parsing, env detection, and path resolution in isolation
   :
+}
+
+@test "installed desktop gate requires experience contract and real LUKS filesystem" {
+  grep -q 'TUNAOS_DESKTOP_CONTRACT_OK' "$SCRIPT"
+  grep -q 'grep -qx crypto_LUKS' "$SCRIPT"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════

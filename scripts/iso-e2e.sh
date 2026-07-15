@@ -589,6 +589,16 @@ run_kickstart() {
 			echo "ERROR: --luks set but no LUKS/TPM enrollment seen in install output"
 			return 3
 		fi
+		# Verify the resulting disk, not only bootc's log messages. A future
+		# bootc regression could print enrollment progress and silently fall
+		# back to an unencrypted layout.
+		if sshpass -p live ssh -o StrictHostKeyChecking=no -p 2222 liveuser@127.0.0.1 \
+			"sudo lsblk -rno FSTYPE /dev/vda /dev/vda* | grep -qx crypto_LUKS"; then
+			echo "==> crypto_LUKS filesystem confirmed on installed disk."
+		else
+			echo "ERROR: installed disk has no crypto_LUKS partition"
+			return 3
+		fi
 	fi
 
 	echo "==> bootc install complete. Shutting down..."
@@ -633,9 +643,20 @@ run_kickstart() {
 		-pidfile "$QEMU_PIDFILE" \
 		-daemonize
 
+	local require_desktop_contract=0
+	case "${FLAVOR%%-*}" in
+	gnome | kde | niri) require_desktop_contract=1 ;;
+	esac
 	echo "==> Waiting for installed system to boot (up to 5 min)..."
 	for _ in $(seq 1 60); do
-		if grep -q "Reached target.*Graphical\|Reached target.*Multi-User\|login:" "${SERIAL_LOG}" 2>/dev/null; then
+		local installed_ready=0
+		if [[ "$require_desktop_contract" -eq 1 ]]; then
+			grep -q "TUNAOS_DESKTOP_CONTRACT_OK" "${SERIAL_LOG}" 2>/dev/null && installed_ready=1
+		else
+			grep -q "Reached target.*Graphical\|Reached target.*Multi-User\|login:" "${SERIAL_LOG}" 2>/dev/null &&
+				installed_ready=1
+		fi
+		if [[ "$installed_ready" -eq 1 ]]; then
 			echo "==> Installed system booted successfully!"
 			screenshot "30-installed"
 			# VLM verification of installed system
