@@ -138,6 +138,15 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$status" -eq 0 ]
 }
 
+@test "Ubuntu desktop stages configure display manager after package installation" {
+  run grep -F 'configure-desktop-runtime.sh niri' "${REPO_ROOT}/Containerfile.ubuntu"
+  [ "$status" -eq 0 ]
+  grep -q 'systemctl enable "${dm}.service"' \
+    "${REPO_ROOT}/build_scripts/configure-desktop-runtime.sh"
+  grep -q 'tunaos-desktop-contract.service' \
+    "${REPO_ROOT}/build_scripts/configure-desktop-runtime.sh"
+}
+
 @test "published image contract executes and records pinned Remora" {
   local post="${REPO_ROOT}/build_scripts/26-packages-post.sh"
   grep -q 'sha256sum --check --strict' "$post"

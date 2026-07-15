@@ -130,7 +130,9 @@ jobs:
 
       - name: Install QEMU for boot gate
         run: |
-          sudo apt-get install -y qemu-system-x86 qemu-utils ovmf socat imagemagick
+          sudo apt-get install -y \
+            qemu-system-x86 qemu-utils ovmf socat imagemagick \
+            python3-pil python3-requests
 
       - name: "Boot gate: verify grouped ISO"
         timeout-minutes: 25
@@ -138,9 +140,13 @@ jobs:
           ISO=$(find . -maxdepth 1 -name "${{ matrix.basename }}-*.iso" | head -1)
           echo "==> Boot-gating $ISO (default menu entry)"
           mkdir -p iso-e2e-out
+          set +e
           sudo ./scripts/iso-e2e.sh "$ISO" \
             --output iso-e2e-out \
             --timeout 900
+          rc=$?
+          sudo chown -R "$(id -u):$(id -g)" iso-e2e-out
+          exit "$rc"
 
       - name: Upload boot-gate evidence
         if: always()
