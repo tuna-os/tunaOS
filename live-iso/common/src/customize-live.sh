@@ -74,7 +74,11 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 
 	flatpak remote-add --system --if-not-exists tuna-os \
 		https://tunaos.org/flatpak/tuna-os.flatpakrepo
-	flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}"
+	# Flatpak also opens a session-bus connection even for a system install.
+	# The headless tacklebox container has no DISPLAY, so autolaunch cannot
+	# create one; provide an explicit short-lived session bus instead.
+	dbus-run-session -- \
+		flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}"
 
 	# ── 4a. fisherman on the host path ────────────────────────────────────
 	# The frontends escalate via `flatpak-spawn --host pkexec
