@@ -25,6 +25,11 @@ downloads:
   uupd: "v1.4.0"
   # renovate: datasource=github-releases depName=ledif/kcm_ublue
   kcm_ublue: "v0.6.1"
+  # renovate: datasource=github-releases depName=twpayne/chezmoi
+  chezmoi: "v2.71.0"
+  chezmoi_sha256:
+    amd64: "a8880a1b01e877c3e5da250b9f882ce9fa39962686d75f436fa21e021fa092b1"
+    arm64: "ea9389f4efdc26d74bf9b4cc73db8f3a529e1e6effb5703e438117ea3f095439"
   # renovate: datasource=git-refs depName=tuna-os/tacklebox
   tacklebox: "86da45b29a8d7ade640ef669ac18100659347903"
 
