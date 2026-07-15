@@ -43,6 +43,8 @@ niri)
 esac
 
 if [[ "$mode" == --runtime ]]; then
+	require_command remora
+	require_glob '/usr/share/tunaos/experience-contracts/remora'
 	systemctl is-active --quiet graphical.target
 	systemctl is-active --quiet "$dm.service"
 	echo "TUNAOS_DESKTOP_CONTRACT_OK desktop=$desktop experience=$experience" | tee /dev/ttyS0 2>/dev/null || true

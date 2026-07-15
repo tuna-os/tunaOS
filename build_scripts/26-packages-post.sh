@@ -50,6 +50,18 @@ curl --retry 3 --fail -L \
 install -Dm0755 "$DOWNLOADS_DIR/remora" /usr/bin/remora
 rm "$DOWNLOADS_DIR/remora"
 
+# Treat the downloaded binary as an image contract, not merely a successful
+# HTTP transfer. This catches wrong-architecture assets, truncated releases,
+# and version drift before an image can be published.
+REMORA_REPORTED_VERSION="$(remora --version)"
+if [[ "${REMORA_REPORTED_VERSION}" != *"${REMORA_VERSION#v}"* ]]; then
+	echo "ERROR: expected remora ${REMORA_VERSION}, got: ${REMORA_REPORTED_VERSION}" >&2
+	exit 1
+fi
+install -d /usr/share/tunaos/experience-contracts
+printf 'version=%s\nvalidated_at_build=true\n' "${REMORA_VERSION}" \
+	>/usr/share/tunaos/experience-contracts/remora
+
 # Generate initramfs image after installing Yellowfin branding because of Plymouth subpackage
 # Set TunaOS Plymouth theme before rebuilding initramfs so dracut picks it up
 if command -v plymouth-set-default-theme >/dev/null 2>&1; then
