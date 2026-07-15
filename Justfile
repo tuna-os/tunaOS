@@ -286,6 +286,7 @@ qcow2 variant flavor='gnome' repo='local' tag='':
             --generic-image \
             "${COMPOSEFS_ARGS[@]}" \
             --karg console=ttyS0 --karg console=tty0 \
+            --karg systemd.unit=graphical.target \
             "${SSH_KEY_ARGS[@]}" \
             --source-imgref "containers-storage:${IMG_REF}" \
             /disk.img
