@@ -88,6 +88,12 @@ so neither runs if the system stays at multi-user.target.
 `systemctl set-default graphical.target` after enabling the display manager.
 Commit `0c36e46`.
 
+**SECONDARY FIX (applied):** `bootc install to-disk` does not preserve the
+`default.target` symlink through OSTree deployment — `graphical.target` is
+never reached despite the build-time fix. The `just qcow2` recipe now passes
+`--karg systemd.unit=graphical.target` to `bootc install to-disk`, forcing
+the correct boot target via kernel command line. Commit `40c66b8`.
+
 **Caveat for NVIDIA images:** The grouped ISO flagship group boots
 `gnome-nvidia` by default. In QEMU with virtio-gpu (no NVIDIA hardware),
 the NVIDIA kernel modules may interfere with DRM initialisation. This produces
