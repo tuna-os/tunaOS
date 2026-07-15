@@ -44,6 +44,7 @@ VARIANT="${1:?usage: $0 <variant> <flavor> [repo] [tag]}"
 FLAVOR="${2:?usage: $0 <variant> <flavor> [repo] [tag]}"
 REPO="${3:-local}"
 TAG="${4:-$FLAVOR}"
+DEV="${5:-0}"
 
 if [[ "$EUID" -ne 0 ]]; then
 	echo "ERROR: tacklebox needs root for sgdisk / mkfs / mount" >&2
@@ -91,6 +92,17 @@ OUT_DIR="$(pwd)/.build/iso-tacklebox/${VARIANT}-${FLAVOR}"
 mkdir -p "$OUT_DIR"
 RECIPE_FILE="${OUT_DIR}/recipe.json"
 
+# Give tacklebox a private customization directory so dev-only markers never
+# alter the production source tree. The customize script detects this marker
+# and enables SSH only in the ephemeral live squashfs.
+CUSTOMIZE_DIR="${OUT_DIR}/live-customize"
+rm -rf "$CUSTOMIZE_DIR"
+mkdir -p "$CUSTOMIZE_DIR"
+cp -a "${REPO_ROOT}/live-iso/common/src/." "$CUSTOMIZE_DIR/"
+if [[ "$DEV" == "1" ]]; then
+	touch "${CUSTOMIZE_DIR}/.enable-sshd"
+fi
+
 # `desktop` maps an env to its session manager so livesys-* sets autologin
 # correctly. Approximation from build_scripts/{gnome,kde,niri,cosmic,xfce}.sh.
 DESKTOP="gnome"
@@ -115,7 +127,7 @@ cat >"$RECIPE_FILE" <<EOF
       "id": "${VARIANT}-${FLAVOR}",
       "image": "${IMAGE_REF}",
       "desktop": "${DESKTOP}",
-      "live_customize": ["${REPO_ROOT}/live-iso/common/src/customize-live.sh"],
+      "live_customize": ["${CUSTOMIZE_DIR}/customize-live.sh"],
       "modes": ["live"]
     }
   ],

@@ -51,6 +51,39 @@ fi
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/desktop-${DESKTOP}.sh"
 
+# Dev/E2E media only: the normal published-image policy keeps SSH disabled.
+# tacklebox creates liveuser during boot, so install a oneshot that sets its
+# temporary test password after livesys and before the SSH daemon starts.
+if [[ -f "${SCRIPT_DIR}/.enable-sshd" ]]; then
+	SSH_UNIT=""
+	[[ -f /usr/lib/systemd/system/sshd.service ]] && SSH_UNIT="sshd.service"
+	[[ -z "$SSH_UNIT" && -f /usr/lib/systemd/system/ssh.service ]] && SSH_UNIT="ssh.service"
+	if [[ -z "$SSH_UNIT" ]]; then
+		echo "ERROR: dev ISO requested but no SSH service is installed" >&2
+		exit 1
+	fi
+	mkdir -p /etc/ssh/sshd_config.d /usr/lib/systemd/system
+	cat >/etc/ssh/sshd_config.d/90-tunaos-live-e2e.conf <<'EOF'
+PasswordAuthentication yes
+PermitEmptyPasswords no
+EOF
+	cat >/usr/lib/systemd/system/tunaos-live-ssh-credentials.service <<EOF
+[Unit]
+Description=Configure temporary TunaOS live E2E SSH credentials
+After=livesys.service
+Before=${SSH_UNIT}
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'echo liveuser:live | chpasswd'
+RemainAfterExit=yes
+
+[Install]
+WantedBy=${SSH_UNIT}
+EOF
+	systemctl enable tunaos-live-ssh-credentials.service "$SSH_UNIT"
+fi
+
 # ── 3. Pre-install the installer Flatpak into the live squash ────────────────
 # dbus is needed for flatpak's system helper inside the build container.
 if [[ -n "${INSTALLER_APP}" ]]; then
