@@ -58,7 +58,12 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 	# starts a private D-Bus client during live-image customization, however,
 	# and refuses to do so without a valid ID.  This only mutates the ephemeral
 	# live squashfs; installed systems still receive their own machine-id.
-	mkdir -p /root/.cache /run/dbus
+	# Several bootc bases make /root a symlink into /var, whose target is not
+	# mounted in tacklebox's customization container. Give D-Bus/Flatpak a
+	# disposable, always-writable home instead of assuming /root exists.
+	export HOME=/tmp/tuna-live-customize
+	export XDG_CACHE_HOME="${HOME}/.cache"
+	mkdir -p "${XDG_CACHE_HOME}" /run/dbus
 	if [[ ! -s /etc/machine-id ]] || grep -qx 'uninitialized' /etc/machine-id; then
 		dbus-uuidgen --ensure=/etc/machine-id
 	fi
