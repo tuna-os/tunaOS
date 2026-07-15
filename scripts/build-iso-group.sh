@@ -172,7 +172,11 @@ jq -n \
 	'{
 		media_name: $media_name,
 		size: "35G",
-		shared_store: { dedup: true, compression: "release" },
+		shared_store: {
+			dedup: true,
+			compression: "release",
+			prune_source_images: true
+		},
 		bootable_environments: $envs,
 		offline_payloads: $offline
 	}' >"$RECIPE_FILE"

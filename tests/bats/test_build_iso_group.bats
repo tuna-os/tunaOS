@@ -138,8 +138,9 @@ _select() {
       '. + [{id:$id,image:$image,title:$title,desktop:$desktop,modes:["live"]}]' <<<"$envs")"
   done
   recipe="$(jq -n --arg m "TunaOS Yellowfin" --argjson e "$envs" \
-    '{media_name:$m, shared_store:{dedup:true,compression:"release"}, bootable_environments:$e}')"
+    '{media_name:$m, shared_store:{dedup:true,compression:"release",prune_source_images:true}, bootable_environments:$e}')"
   [ "$(echo "$recipe" | jq -r '.shared_store.dedup')" = "true" ]
+  [ "$(echo "$recipe" | jq -r '.shared_store.prune_source_images')" = "true" ]
   [ "$(echo "$recipe" | jq -r '.bootable_environments | length')" = "2" ]
   [ "$(echo "$recipe" | jq -r '.bootable_environments[0].title')" = "GNOME (NVIDIA)" ]
   [ "$(echo "$recipe" | jq -r '.bootable_environments[1].image')" = "ghcr.io/tuna-os/yellowfin:gnome-nvidia-hwe" ]
