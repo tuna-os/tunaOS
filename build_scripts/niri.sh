@@ -47,7 +47,6 @@ EOF
 				brightnessctl \
 				btop \
 				cava \
-				chezmoi \
 				ddcutil \
 				fastfetch \
 				fcitx5-rime \
@@ -56,12 +55,12 @@ EOF
 				fzf \
 				gnome-disk-utility \
 				gnome-keyring \
-				gnome-keyring-pam \
+				libpam-gnome-keyring \
 				just \
 				khal \
 				nautilus \
-				nautilus-python \
-				openssh-askpass \
+				python3-nautilus \
+				ssh-askpass-gnome \
 				pipewire \
 				playerctl \
 				udiskie \
@@ -73,7 +72,7 @@ EOF
 				xdg-terminal-exec \
 				xdg-user-dirs \
 				xwayland-satellite \
-				zram-generator
+				systemd-zram-generator
 		fi
 
 		# Build/install glib schemas (required for dconf/gsettings)
