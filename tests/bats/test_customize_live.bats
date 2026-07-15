@@ -83,6 +83,10 @@ detect() {
   [ "$status" -eq 0 ]
 }
 
+@test "customize-live.sh: gives headless Flatpak an explicit session bus" {
+  grep -q 'dbus-run-session --' "${SCRIPT}"
+}
+
 @test "customize-live.sh: initializes D-Bus identity before Flatpak installation" {
   run grep -n 'dbus-uuidgen --ensure=/etc/machine-id' "${SCRIPT}"
   [ "$status" -eq 0 ]
