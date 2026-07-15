@@ -254,6 +254,11 @@ fi # end DNF path (el10/fedora)
 _TD_DM=$($YQ -r '.display_manager' "${_TD_MANIFEST}")
 if [[ -n "${_TD_DM}" ]]; then
 	safe_enable "${_TD_DM}.service"
+	# Server-oriented bootc bases such as AlmaLinux default to
+	# multi-user.target. Enabling a display manager alone does not change the
+	# boot target, so an otherwise complete desktop image would only reach a
+	# console and its graphical runtime contract would never execute.
+	systemctl set-default graphical.target
 fi
 
 # ── Disable desktop files ────────────────────────────────────────────────────
