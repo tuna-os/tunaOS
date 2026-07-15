@@ -15,7 +15,10 @@ case "${1:-}" in
 		# Keep the PPA key scoped to these two repositories rather than trusting
 		# it globally.
 		. /etc/os-release
-		codename="${VERSION_CODENAME:?Ubuntu VERSION_CODENAME is required}"
+		# TunaOS branding replaces VERSION_CODENAME with the variant's fish
+		# codename. UBUNTU_CODENAME deliberately retains the actual Launchpad
+		# suite (for example, resolute) and must drive PPA source entries.
+		codename="${UBUNTU_CODENAME:-${VERSION_CODENAME:?Ubuntu codename is required}}"
 		install -d -m 0755 /etc/apt/keyrings
 		curl -fsSL \
 			'https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x45FECBE587307AAA3F0A4BE9FC44813D2A7788B7' |
