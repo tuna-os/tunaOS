@@ -48,8 +48,6 @@ packages:
       - gnome-user-docs
       - gnome-user-share
       - gvfs-afc
-      - gvfs-afp
-      - gvfs-archive
       - gvfs-fuse
       - gvfs-goa
       - gvfs-gphoto2
@@ -73,6 +71,11 @@ packages:
       - evince-thumbnailer
       - evince-previewer
       - totem-video-thumbnailer
+    # Split/retired GVfs backends are absent from Fedora 45 Rawhide. Keep
+    # them on releases that still publish them without failing Rawhide.
+    optional:
+      - gvfs-afp
+      - gvfs-archive
     exclude:
       - PackageKit
       - PackageKit-command-not-found
