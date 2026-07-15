@@ -20,6 +20,18 @@ setup() {
   grep -q 'grep -qx crypto_LUKS' "$SCRIPT"
 }
 
+@test "--luks dispatches the full encrypted install path" {
+  # Regression guard: --luks previously selected MODE=ssh, producing a green
+  # workflow after live boot + SSH without ever installing anything.
+  awk '/--luks\)/,/;;/' "$SCRIPT" | grep -q 'MODE="install"'
+  awk '/^install\)/,/;;/' "$SCRIPT" | grep -q 'run_install'
+  grep -q 'TUNAOS_LUKS_E2E_INSTALL_STARTED' "$SCRIPT"
+  grep -q 'TUNAOS_LUKS_E2E_TPM_ENROLLMENT_CONFIRMED' "$SCRIPT"
+  grep -q 'TUNAOS_LUKS_E2E_ENCRYPTED_DISK_CONFIRMED' "$SCRIPT"
+  grep -q 'TUNAOS_LUKS_E2E_PASS encrypted=1 tpm_unlock=1 installed_boot=1 desktop_contract=' "$SCRIPT"
+  grep -q 'LUKS_EVIDENCE_LOG=' "$SCRIPT"
+}
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Argument Parsing — Mode Selection
 # ═══════════════════════════════════════════════════════════════════════════
