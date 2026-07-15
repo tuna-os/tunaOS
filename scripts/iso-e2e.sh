@@ -710,8 +710,8 @@ disk)
 			echo "ERROR: VM exited during boot" >&2
 			exit 1
 		fi
-		if grep -qE "Reached target.*(Graphical|Multi-User)|login:" "$SERIAL_LOG" 2>/dev/null; then
-			echo "==> Boot target reached (serial)"
+		if grep -q "TUNAOS_DESKTOP_CONTRACT_OK" "$SERIAL_LOG" 2>/dev/null; then
+			echo "==> Desktop experience contract reached (serial)"
 			rc=0
 			break
 		fi
@@ -720,9 +720,8 @@ disk)
 	# Let the display manager finish drawing before capturing evidence.
 	sleep 30
 	screenshot "10-ready"
-	if [[ "$rc" -ne 0 ]] && screenshot_sane "10-ready"; then
-		echo "::warning::no boot marker on serial console; screenshot sanity check passed — treating as booted"
-		rc=0
+	if [[ "$rc" -ne 0 ]]; then
+		echo "ERROR: desktop experience contract marker was not emitted" >&2
 	fi
 	exit "$rc"
 	;;

@@ -116,3 +116,18 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
     skip "shellcheck not installed"
   fi
 }
+
+@test "desktop experience contract covers upstream experience families" {
+  local script="${REPO_ROOT}/build_scripts/verify-desktop-experience.sh"
+  run grep -F 'projectbluefin/bluefin-lts' "$script"
+  [ "$status" -eq 0 ]
+  run grep -F 'ublue-os/aurora' "$script"
+  [ "$status" -eq 0 ]
+  run grep -F 'zirconium-dev/zirconium' "$script"
+  [ "$status" -eq 0 ]
+}
+
+@test "disk gate requires the desktop contract marker" {
+  run grep -F 'TUNAOS_DESKTOP_CONTRACT_OK' "${REPO_ROOT}/scripts/iso-e2e.sh"
+  [ "$status" -eq 0 ]
+}

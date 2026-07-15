@@ -20,7 +20,7 @@ total_cells=0
 {
 	echo "$start"
 	echo
-  echo "_Generated from the latest completed main-branch build for each variant. A cell is green when its image was successfully promoted to the published tag._"
+	echo "_Generated from the latest completed main-branch build for each variant. A cell is green when its image was successfully promoted to the published tag._"
 	echo
 	echo '| Variant | Green image cells | Latest run | Blocked or failing tags |'
 	echo '| :--- | ---: | :--- | :--- |'
@@ -48,16 +48,16 @@ while IFS=$'\t' read -r variant emoji; do
 	conclusion=$(jq -r '.[0].conclusion' <<<"$run")
 	run_url=$(jq -r '.[0].url' <<<"$run")
 	run_date=$(jq -r '.[0].createdAt[0:10]' <<<"$run")
-  promotions=$(gh api --paginate "repos/${repo}/actions/runs/${run_id}/jobs?per_page=100" \
-    --jq '.jobs[] | select(.name | endswith(" / Promote")) | [.name, .conclusion] | @tsv')
+	promotions=$(gh api --paginate "repos/${repo}/actions/runs/${run_id}/jobs?per_page=100" \
+		--jq '.jobs[] | select(.name | endswith(" / Promote")) | [.name, .conclusion] | @tsv')
 
 	green=0
 	failed=()
 	for flavor in "${configured[@]}"; do
-    promotion=$(awk -F '\t' -v suffix="/ ${flavor} / Promote" \
-      'index($1, suffix) == length($1) - length(suffix) + 1 { result=$2 } END { print result }' <<<"$promotions")
-    promotion=${promotion:-missing}
-    if [[ "$promotion" == success ]]; then
+		promotion=$(awk -F '\t' -v suffix="/ ${flavor} / Promote" \
+			'index($1, suffix) == length($1) - length(suffix) + 1 { result=$2 } END { print result }' <<<"$promotions")
+		promotion=${promotion:-missing}
+		if [[ "$promotion" == success ]]; then
 			green=$((green + 1))
 		else
 			failed+=("$flavor")

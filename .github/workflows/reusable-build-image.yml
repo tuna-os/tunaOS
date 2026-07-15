@@ -192,6 +192,7 @@ jobs:
           FLAVOR: ${{ inputs.flavor }}
           IMAGE_VARIANT: ${{ inputs.image-variant }}
           DEFAULT_TAG: ${{ inputs.default-tag }}
+          PUBLIC_IMAGE_NAME: ${{ inputs.image-name }}
           PLATFORM: ${{ matrix.platform }}
           CHAIN_BASE_IMAGE: ${{ inputs.chain-base-image }}
           # PR builds never publish; skip the two-pass chunkah rechunk +
@@ -203,7 +204,7 @@ jobs:
           build_start=$(date +%s)
           # --preserve-env: sudo otherwise strips the cache/rechunk knobs
           # (the old layer cache never worked for exactly this reason).
-          sudo --preserve-env=BUILDAH_CACHE_FLAGS,SKIP_RECHUNK \
+          sudo --preserve-env=BUILDAH_CACHE_FLAGS,SKIP_RECHUNK,PUBLIC_IMAGE_NAME \
             "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}"
           echo "BUILD_SECONDS=$(( $(date +%s) - build_start ))" >> "$GITHUB_ENV"
 

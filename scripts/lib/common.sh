@@ -54,10 +54,10 @@ tunaos_image_ref() {
 		echo "localhost/${variant}:${tag}"
 		;;
 	ghcr)
-		echo "ghcr.io/${owner}/${variant}:${tag}"
+		GITHUB_REPOSITORY_OWNER="$owner" ./scripts/published-image-ref.sh "$variant" "$tag" ghcr
 		;;
 	registry)
-		echo "${REGISTRY:-localhost:5000}/${variant}:${tag}"
+		./scripts/published-image-ref.sh "$variant" "$tag" registry
 		;;
 	*)
 		echo "ERROR: unknown repo '${repo}' (expected: local | ghcr | registry)" >&2
