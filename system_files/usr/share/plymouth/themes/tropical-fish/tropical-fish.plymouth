@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=TunaOS Tropical Fish
+Description=TunaOS boot animation (Tropical Fish)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/tropical-fish
+ScriptFile=/usr/share/plymouth/themes/tropical-fish/tropical-fish.script

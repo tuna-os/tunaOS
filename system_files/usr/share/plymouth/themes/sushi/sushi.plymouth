@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=TunaOS Sushi
+Description=TunaOS boot animation (Sushi)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/sushi
+ScriptFile=/usr/share/plymouth/themes/sushi/sushi.script

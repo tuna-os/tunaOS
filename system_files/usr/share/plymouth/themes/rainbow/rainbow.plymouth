@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=TunaOS Rainbow
+Description=TunaOS boot animation (Rainbow)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/rainbow
+ScriptFile=/usr/share/plymouth/themes/rainbow/rainbow.script
