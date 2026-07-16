@@ -581,7 +581,7 @@ run_install() {
 	# --block-setup tpm2-luks` doesn't cover the same way and that real users
 	# never exercise directly. See docs/ci-troubleshooting.md's fisherman
 	# glossary entry.
-	"${ssh_cmd[@]}" "command -v fisherman" &>/dev/null || {
+	"${ssh_cmd[@]}" "command -v /usr/local/bin/fisherman" &>/dev/null || {
 		echo "ERROR: fisherman not found on live image (VARIANT=${VARIANT:-} FLAVOR=${FLAVOR:-})" >&2
 		return 3
 	}
@@ -620,7 +620,7 @@ EOF
 	"${scp_cmd[@]}" "$RECIPE_LOCAL" liveuser@127.0.0.1:/tmp/e2e-recipe.json
 
 	echo "==> Running fisherman /tmp/e2e-recipe.json..."
-	"${ssh_cmd[@]}" "sudo fisherman /tmp/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
+	"${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman /tmp/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
 		rc=$?
 		if [[ $rc -eq 0 ]]; then true; else
 			echo "ERROR: fisherman install failed (exit $rc)"

@@ -137,7 +137,13 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 
 	# Flatpak also opens a session-bus connection even for a system install.
 	# The headless tacklebox container has no DISPLAY, so autolaunch cannot
-	# create one; provide an explicit short-lived session bus instead.
+	# create one; provide an explicit short-lived session bus instead. Spun
+	# up directly with dbus-daemon (already required above for the system
+	# bus) rather than the dbus-run-session wrapper — some flavors (niri,
+	# cosmic) don't pull in the package that ships dbus-run-session.
+	SESSION_BUS_SOCK="${HOME}/session-bus.sock"
+	dbus-daemon --session --fork --nopidfile --address="unix:path=${SESSION_BUS_SOCK}"
+	export DBUS_SESSION_BUS_ADDRESS="unix:path=${SESSION_BUS_SOCK}"
 	if [[ "${INSTALLER_APP}" == "org.bootcinstaller.Installer" ]]; then
 		# gnome: mirrors projectbluefin/dakota-iso's install-flatpaks.sh —
 		# download the upstream release bundle and import it into a
@@ -162,8 +168,7 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		flatpak build-import-bundle "${INSTALLER_LOCAL_REPO}" "${INSTALLER_FLATPAK_FILE}"
 		rm -f "${INSTALLER_FLATPAK_FILE}"
 		flatpak remote-add --system --no-gpg-verify installer-local "file://${INSTALLER_LOCAL_REPO}"
-		dbus-run-session -- \
-			flatpak install --system --noninteractive installer-local "${INSTALLER_APP}"
+		flatpak install --system --noninteractive installer-local "${INSTALLER_APP}"
 		flatpak remote-delete --system --force installer-local || true
 		rm -rf "${INSTALLER_LOCAL_REPO}"
 
@@ -186,8 +191,7 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 	else
 		flatpak remote-add --system --if-not-exists tuna-os \
 			https://tunaos.org/flatpak/tuna-os.flatpakrepo
-		dbus-run-session -- \
-			flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}"
+		flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}"
 	fi
 
 	# ── 4a. fisherman on the host path ────────────────────────────────────
