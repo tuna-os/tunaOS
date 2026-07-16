@@ -120,7 +120,11 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 	mkdir -p "${XDG_CACHE_HOME}" /run/dbus
 	if [[ ! -s /etc/machine-id ]] || grep -qx 'uninitialized' /etc/machine-id; then
 		rm -f /etc/machine-id
-		dbus-uuidgen --ensure=/etc/machine-id
+		# systemd-machine-id-setup (core systemd, always present) rather than
+		# dbus-uuidgen — some flavors (niri, cosmic) don't pull in the dbus
+		# package that ships dbus-uuidgen, but every systemd-based image has
+		# systemd-machine-id-setup.
+		systemd-machine-id-setup
 	fi
 	mkdir -p /var/lib/dbus
 	ln -sf /etc/machine-id /var/lib/dbus/machine-id
