@@ -564,9 +564,12 @@ run_install() {
 		return 5
 	}
 
-	local -a SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222)
-	local ssh_cmd=(sshpass -p live ssh "${SSH_OPTS[@]}" liveuser@127.0.0.1)
-	local scp_cmd=(sshpass -p live scp "${SSH_OPTS[@]}")
+	# scp uses -P (capital) for the port flag; ssh uses -p. Sharing one array
+	# with the wrong flag silently makes scp treat the port number as a
+	# source-file argument ("stat local 2222: No such file or directory").
+	local -a COMMON_SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p 2222 liveuser@127.0.0.1)
+	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P 2222)
 
 	# Mirrors projectbluefin/dakota-iso's luks-install-qemu.sh: install via
 	# fisherman (the same backend every TunaOS installer frontend uses,
