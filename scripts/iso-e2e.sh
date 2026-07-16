@@ -29,13 +29,13 @@
 #       Used to gate GHCR tag promotion on images actually booting.
 #
 #   scripts/iso-e2e.sh <iso_path> --luks
-#       Full LUKS e2e: boot the live ISO (needs ENABLE_SSHD=1), run
-#       `bootc install to-disk --block-setup tpm2-luks` against an emulated
-#       TPM 2.0 (swtpm), then reboot the installed disk with the same TPM and
-#       confirm the encrypted root auto-unlocks (reaching the login target
-#       proves it — a missing/wrong TPM would hang in the initramfs). Requires
-#       the swtpm package and an image whose bootc install config permits
-#       tpm2-luks.
+#       Full LUKS e2e: boot the live ISO (needs ENABLE_SSHD=1), install via
+#       fisherman (the same backend every TunaOS installer frontend uses)
+#       with encryption.type=tpm2-luks against an emulated TPM 2.0 (swtpm),
+#       then reboot the installed disk with the same TPM and confirm the
+#       encrypted root auto-unlocks (reaching the login target proves it — a
+#       missing/wrong TPM would hang in the initramfs). Requires the swtpm
+#       package.
 #
 # Options:
 #   --timeout SEC         Per-phase timeout (default: 300)
@@ -564,53 +564,92 @@ run_install() {
 		return 5
 	}
 
-	# grouper (Ubuntu) has no bootupd package available via apt, so it ships
-	# systemd-boot instead and installs via bootc's composefs-native backend,
-	# which doesn't shell out to bootupd for bootloader management.
-	local install_args=""
-	[[ "${VARIANT:-}" == "grouper" ]] && install_args="--composefs-backend"
-	# LUKS e2e: encrypt root and seal the unlock key to the emulated TPM. The
-	# image must permit this (block = [..,"tpm2-luks"] in its bootc install
-	# config); TunaOS ships that in usr/lib/bootc/install/00-tunaos.toml.
-	[[ "$LUKS" -eq 1 ]] && install_args="${install_args} --block-setup tpm2-luks"
+	local -a SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222)
+	local ssh_cmd=(sshpass -p live ssh "${SSH_OPTS[@]}" liveuser@127.0.0.1)
+	local scp_cmd=(sshpass -p live scp "${SSH_OPTS[@]}")
 
-	echo "==> Running bootc install to-disk /dev/vda ${install_args}..."
-	sshpass -p live ssh -o StrictHostKeyChecking=no -p 2222 liveuser@127.0.0.1 \
-		"sudo bootc install to-disk ${install_args} /dev/vda 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
+	# Mirrors projectbluefin/dakota-iso's luks-install-qemu.sh: install via
+	# fisherman (the same backend every TunaOS installer frontend uses,
+	# gnome included — customize-live.sh symlinks it from each flavor's
+	# installer Flatpak), not a raw `bootc install to-disk`. fisherman does
+	# its own partitioning, LUKS setup + TPM enrollment, and BLS kernel-arg
+	# patching (rd.luks.name=...) so the installed system actually knows how
+	# to unlock at boot — logic that `bootc install to-disk
+	# --block-setup tpm2-luks` doesn't cover the same way and that real users
+	# never exercise directly. See docs/ci-troubleshooting.md's fisherman
+	# glossary entry.
+	"${ssh_cmd[@]}" "command -v fisherman" &>/dev/null || {
+		echo "ERROR: fisherman not found on live image (VARIANT=${VARIANT:-} FLAVOR=${FLAVOR:-})" >&2
+		return 3
+	}
+
+	local image_ref="ghcr.io/tuna-os/${VARIANT:-}:${FLAVOR:-}"
+	local recipe_image="" recipe_target_imgref="${image_ref}"
+	local composefs_backend="false" bootloader="grub2"
+	# grouper (Ubuntu) has no bootupd package available via apt, so it ships
+	# systemd-boot instead and installs via bootc's composefs-native backend.
+	if [[ "${VARIANT:-}" == "grouper" ]]; then
+		composefs_backend="true"
+		bootloader="systemd"
+		# Composefs needs the raw OCI blobs; fisherman exports them from
+		# containers-storage itself when given a containers-storage: ref.
+		recipe_image="containers-storage:${image_ref}"
+		recipe_target_imgref="${image_ref}"
+	fi
+	local encryption_json='{"type": "none"}'
+	[[ "$LUKS" -eq 1 ]] && encryption_json='{"type": "tpm2-luks"}'
+
+	local RECIPE_LOCAL="${OUTPUT_DIR}/e2e-recipe.json"
+	cat >"$RECIPE_LOCAL" <<EOF
+{
+  "disk": "/dev/vda",
+  "filesystem": "xfs",
+  "image": "${recipe_image}",
+  "targetImgref": "${recipe_target_imgref}",
+  "composeFsBackend": ${composefs_backend},
+  "bootloader": "${bootloader}",
+  "hostname": "tunaos-e2e",
+  "encryption": ${encryption_json},
+  "flatpaks": []
+}
+EOF
+	echo "==> Uploading fisherman recipe..."
+	"${scp_cmd[@]}" "$RECIPE_LOCAL" liveuser@127.0.0.1:/tmp/e2e-recipe.json
+
+	echo "==> Running fisherman /tmp/e2e-recipe.json..."
+	"${ssh_cmd[@]}" "sudo fisherman /tmp/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
 		rc=$?
 		if [[ $rc -eq 0 ]]; then true; else
-			echo "ERROR: bootc install failed (exit $rc)"
+			echo "ERROR: fisherman install failed (exit $rc)"
 			return 3
 		fi
 	}
 
-	# Assert the install actually set up LUKS + TPM enrollment (bootc prints
-	# these). Guards against a silent fallback to a plain (direct) install that
-	# would still boot and pass the reached-target check below.
 	if [[ "$LUKS" -eq 1 ]]; then
-		if grep -qiE "Initializing LUKS|Enrolling.*TPM|tpm2-luks" "${SERIAL_LOG}"; then
-			echo "==> LUKS root + TPM enrollment confirmed in install output."
-			record_luks_evidence "TUNAOS_LUKS_E2E_TPM_ENROLLMENT_CONFIRMED"
-		else
-			echo "ERROR: --luks set but no LUKS/TPM enrollment seen in install output"
-			return 3
-		fi
-		# Verify the resulting disk, not only bootc's log messages. A future
-		# bootc regression could print enrollment progress and silently fall
-		# back to an unencrypted layout.
-		if sshpass -p live ssh -o StrictHostKeyChecking=no -p 2222 liveuser@127.0.0.1 \
-			"sudo lsblk -rno FSTYPE /dev/vda /dev/vda* | grep -qx crypto_LUKS"; then
-			echo "==> crypto_LUKS filesystem confirmed on installed disk."
+		# Verify against the resulting disk state, not fisherman's log text —
+		# robust to log-format changes and catches a silent fallback to an
+		# unencrypted layout that would still boot and pass the checks below.
+		local luks_part
+		luks_part=$("${ssh_cmd[@]}" \
+			"sudo lsblk -prno NAME,FSTYPE /dev/vda | awk '\$2==\"crypto_LUKS\"{print \$1;exit}'")
+		if [[ -n "$luks_part" ]]; then
+			echo "==> crypto_LUKS filesystem confirmed on installed disk (${luks_part})."
 			record_luks_evidence "TUNAOS_LUKS_E2E_ENCRYPTED_DISK_CONFIRMED"
 		else
 			echo "ERROR: installed disk has no crypto_LUKS partition"
 			return 3
 		fi
+		if "${ssh_cmd[@]}" "sudo cryptsetup luksDump '${luks_part}' | grep -qi systemd-tpm2"; then
+			echo "==> TPM2 enrollment token confirmed in LUKS header."
+			record_luks_evidence "TUNAOS_LUKS_E2E_TPM_ENROLLMENT_CONFIRMED"
+		else
+			echo "ERROR: --luks set but no systemd-tpm2 token in LUKS header"
+			return 3
+		fi
 	fi
 
-	echo "==> bootc install complete. Shutting down..."
-	sshpass -p live ssh -o StrictHostKeyChecking=no -p 2222 liveuser@127.0.0.1 \
-		"sudo systemctl poweroff" 2>/dev/null || true
+	echo "==> fisherman install complete. Shutting down..."
+	"${ssh_cmd[@]}" "sudo systemctl poweroff" 2>/dev/null || true
 	sleep 10
 
 	# Wait for VM to fully stop

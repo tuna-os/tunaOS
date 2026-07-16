@@ -38,7 +38,10 @@ kde) INSTALLER_APP="org.tunaos.InstallerKde" ;;
 niri) INSTALLER_APP="org.tunaos.InstallerNiri" ;;
 cosmic) INSTALLER_APP="org.tunaos.InstallerCosmic" ;;
 xfce) INSTALLER_APP="org.tunaos.InstallerXfce" ;;
-*) INSTALLER_APP="" ;; # gnome: upstream bootc-installer ships via its own channel
+# gnome has no TunaOS-branded frontend fork; ship upstream bootc-installer
+# directly, fetched the same way projectbluefin/dakota-iso does it (see
+# install-flatpaks.sh there) rather than from the tuna-os Flatpak remote.
+*) INSTALLER_APP="org.bootcinstaller.Installer" ;;
 esac
 
 # Test hook: report detection and stop before any system mutation.
@@ -90,6 +93,16 @@ Requires=tunaos-live-ssh-credentials.service
 After=tunaos-live-ssh-credentials.service
 EOF
 	systemctl enable tunaos-live-ssh-credentials.service "$SSH_UNIT"
+
+	# fisherman (the LUKS/TPM install backend) runs as root over a
+	# non-interactive SSH command, so sudo has no TTY to prompt on. Grant
+	# liveuser NOPASSWD sudo — dev/E2E media only, matching
+	# projectbluefin/dakota-iso's debug=1 live-env setup (liveuser has
+	# NOPASSWD sudo there too). Production images never enable sshd, so
+	# liveuser never gets a login there.
+	mkdir -p /etc/sudoers.d
+	echo 'liveuser ALL=(ALL) NOPASSWD: ALL' >/etc/sudoers.d/90-tunaos-live-e2e
+	chmod 0440 /etc/sudoers.d/90-tunaos-live-e2e
 fi
 
 # ── 3. Pre-install the installer Flatpak into the live squash ────────────────
@@ -118,13 +131,60 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		exit 1
 	fi
 
-	flatpak remote-add --system --if-not-exists tuna-os \
-		https://tunaos.org/flatpak/tuna-os.flatpakrepo
 	# Flatpak also opens a session-bus connection even for a system install.
 	# The headless tacklebox container has no DISPLAY, so autolaunch cannot
 	# create one; provide an explicit short-lived session bus instead.
-	dbus-run-session -- \
-		flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}"
+	if [[ "${INSTALLER_APP}" == "org.bootcinstaller.Installer" ]]; then
+		# gnome: mirrors projectbluefin/dakota-iso's install-flatpaks.sh —
+		# download the upstream release bundle and import it into a
+		# throwaway local ostree repo. `flatpak install --bundle` in a
+		# container build only creates the installer-origin: remote ref, not
+		# the deploy/ ref that `flatpak run`/`flatpak list` need; installing
+		# from a local file:// remote goes through the full deploy pipeline.
+		# Primary source: projectbluefin/bootc-installer (upstream). Fallback:
+		# tuna-os/tuna-installer, which mirrors the same app ID as a release
+		# asset.
+		INSTALLER_FLATPAK_FILE="/tmp/bootc-installer.flatpak"
+		if ! curl --retry 3 --fail --location \
+			"https://github.com/projectbluefin/bootc-installer/releases/latest/download/org.bootcinstaller.Installer.flatpak" \
+			-o "${INSTALLER_FLATPAK_FILE}" 2>/dev/null; then
+			echo "projectbluefin/bootc-installer unavailable, falling back to tuna-os/tuna-installer..."
+			curl --retry 3 --fail --location \
+				"https://github.com/tuna-os/tuna-installer/releases/latest/download/org.bootcinstaller.Installer.flatpak" \
+				-o "${INSTALLER_FLATPAK_FILE}"
+		fi
+		INSTALLER_LOCAL_REPO="/tmp/installer-local-repo"
+		ostree init --repo="${INSTALLER_LOCAL_REPO}" --mode=archive-z2
+		flatpak build-import-bundle "${INSTALLER_LOCAL_REPO}" "${INSTALLER_FLATPAK_FILE}"
+		rm -f "${INSTALLER_FLATPAK_FILE}"
+		flatpak remote-add --system --no-gpg-verify installer-local "file://${INSTALLER_LOCAL_REPO}"
+		dbus-run-session -- \
+			flatpak install --system --noninteractive installer-local "${INSTALLER_APP}"
+		flatpak remote-delete --system --force installer-local || true
+		rm -rf "${INSTALLER_LOCAL_REPO}"
+
+		# A container-build install (no flatpak-system-helper daemon) creates
+		# the deployment directory but omits the 'active' symlink inside the
+		# branch directory, leaving the app unreachable to flatpak run/list.
+		# Reproduce the symlink a normal installation would create.
+		_app_arch_dir="/var/lib/flatpak/app/${INSTALLER_APP}/x86_64"
+		for _branch_dir in "${_app_arch_dir}"/*/; do
+			_branch_dir="${_branch_dir%/}"
+			[[ -d "${_branch_dir}" ]] || continue
+			if [[ ! -L "${_branch_dir}/active" ]]; then
+				_hash=$(find "${_branch_dir}" -maxdepth 1 -mindepth 1 -type d -printf '%f\n' | head -1)
+				if [[ -n "${_hash}" ]]; then
+					ln -sfn "${_hash}" "${_branch_dir}/active"
+					echo "Created active symlink: ${_branch_dir}/active → ${_hash}"
+				fi
+			fi
+		done
+	else
+		flatpak remote-add --system --if-not-exists tuna-os \
+			https://tunaos.org/flatpak/tuna-os.flatpakrepo
+		dbus-run-session -- \
+			flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}"
+	fi
 
 	# ── 4a. fisherman on the host path ────────────────────────────────────
 	# The frontends escalate via `flatpak-spawn --host pkexec

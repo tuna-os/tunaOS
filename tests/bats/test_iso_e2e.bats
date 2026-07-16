@@ -17,7 +17,7 @@ setup() {
 
 @test "installed desktop gate requires experience contract and real LUKS filesystem" {
   grep -q 'TUNAOS_DESKTOP_CONTRACT_OK' "$SCRIPT"
-  grep -q 'grep -qx crypto_LUKS' "$SCRIPT"
+  grep -q 'crypto_LUKS' "$SCRIPT"
 }
 
 @test "--luks dispatches the full encrypted install path" {
