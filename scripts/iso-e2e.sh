@@ -592,15 +592,19 @@ run_install() {
 		return 3
 	}
 
-	# The Justfile's `iso` recipe always rebuilds dev/E2E ISOs locally now
-	# (dev=1 forces repo=local for the ISO customize step, regardless of the
-	# repo arg passed in — see Justfile comment), so the embedded image is
-	# tagged localhost/<variant>:<flavor> in containers-storage, not
-	# ghcr.io/tuna-os/<variant>:<flavor>. Using the ghcr ref here made bootc
-	# fail with "does not resolve to an image ID" even though readiness and
-	# SSH both worked — the image just wasn't stored under that tag locally.
+	# Neither ghcr.io/tuna-os/<variant>:<flavor> nor localhost/<variant>:<flavor>
+	# resolves against the live squash's actual containers-storage (tacklebox
+	# apparently doesn't preserve either as a queryable tag). Rather than keep
+	# guessing: for the non-composefs (default) path, leave image AND
+	# targetImgref empty so fisherman's bootcDirect adds no --source-imgref at
+	# all — bootc then auto-detects the running container natively, which is
+	# exactly the documented behavior for this case ("image may be empty in
+	# live-ISO mode; bootc auto-detects the running container", see fisherman's
+	# recipe.Validate()). Composefs still needs a real ref (fisherman has to
+	# skopeo-copy from containers-storage by name before bootc ever runs), so
+	# grouper keeps guessing localhost/<variant>:<flavor> for now.
 	local image_ref="localhost/${VARIANT:-}:${FLAVOR:-}"
-	local recipe_image="" recipe_target_imgref="${image_ref}"
+	local recipe_image="" recipe_target_imgref=""
 	local composefs_backend="false" bootloader="grub2"
 	# grouper (Ubuntu) has no bootupd package available via apt, so it ships
 	# systemd-boot instead and installs via bootc's composefs-native backend.
