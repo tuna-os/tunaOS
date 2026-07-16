@@ -169,9 +169,15 @@ mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(realpath "$OUTPUT_DIR")"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# Extract VARIANT and FLAVOR from ISO filename for screenshot comparison
-# ISO filename pattern: <variant>-<flavor>-<version>-<arch>.iso
+# Extract VARIANT and FLAVOR from ISO filename for screenshot comparison and
+# for the fisherman recipe's image ref (used only as a fallback — callers
+# should set VARIANT/FLAVOR explicitly, e.g. luks-e2e.yml's env: block).
+# Two conventions exist: the promotion-flow rename
+# "<variant>-<flavor>-<version>-<arch>.iso" and build-iso-tacklebox.sh's raw
+# tacklebox output "tunaos-<variant>-<flavor>.iso" — strip a leading
+# "tunaos-" project prefix so both parse the same way.
 ISO_BASENAME="$(basename "$ISO_PATH" .iso)"
+ISO_BASENAME="${ISO_BASENAME#tunaos-}"
 ISO_VARIANT="${ISO_BASENAME%%-*}"
 ISO_FLAVOR="${ISO_BASENAME#*-}"
 ISO_FLAVOR="${ISO_FLAVOR%%-*}"

@@ -131,6 +131,14 @@ fi
 # ── 3. Pre-install the installer Flatpak into the live squash ────────────────
 # dbus is needed for flatpak's system helper inside the build container.
 if [[ -n "${INSTALLER_APP}" ]]; then
+	# Minimal containers (grouper/apt in particular) have no locale beyond
+	# POSIX/C, which is strictly ASCII. glib's path handling requires a
+	# UTF-8-capable locale even for ASCII paths in this codepath — without
+	# one, flatpak fails with "Pathname can't be converted from UTF-8 to
+	# current locale." C.UTF-8 is a built-in glibc locale, no locale-gen
+	# needed, present on both apt and dnf bases.
+	export LANG=C.UTF-8
+	export LC_ALL=C.UTF-8
 	# bootc images intentionally ship an uninitialized machine-id.  Flatpak
 	# starts a private D-Bus client during live-image customization, however,
 	# and refuses to do so without a valid ID.  This only mutates the ephemeral
