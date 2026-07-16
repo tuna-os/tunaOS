@@ -592,45 +592,34 @@ run_install() {
 		return 3
 	}
 
-	# Neither ghcr.io/tuna-os/<variant>:<flavor> nor localhost/<variant>:<flavor>
-	# resolves against the live squash's actual containers-storage, and
-	# leaving image/targetImgref empty doesn't work either — bootc install
-	# to-filesystem run natively (not wrapped in `podman run`, which is how
-	# fisherman's bootcDirect mode always runs on this live squash) has no
-	# container context to auto-detect from at all: "Either --source-imgref
-	# must be defined or this command must be executed inside a podman
-	# container." Query the live VM for its actual local image tag instead
-	# of guessing.
-	# `podman images` came back empty on the live VM — three prior guesses at
-	# how the embedded image is exposed (ghcr.io tag, localhost tag, bootc
-	# auto-detect) have all failed. Dump everything relevant instead of
-	# guessing a fourth time: default podman storage, the offline-store
-	# paths customize-live.sh wires up for the installer frontends
-	# (/etc/tuna-installer/offline-stores → likely where the embedded OCI
-	# image actually lives, per fisherman's AdditionalImageStores doc:
-	# "live-media offline image stores... baked into an installer ISO"),
-	# and bootc's own view of itself.
-	echo "==> DIAGNOSTIC: podman images -a" | tee -a "${SERIAL_LOG}"
-	"${ssh_cmd[@]}" "sudo podman images -a" 2>&1 | tee -a "${SERIAL_LOG}"
-	echo "==> DIAGNOSTIC: offline-stores contents" | tee -a "${SERIAL_LOG}"
-	"${ssh_cmd[@]}" "cat /etc/tuna-installer/offline-stores 2>&1; for d in \$(grep -v '^#' /etc/tuna-installer/offline-stores 2>/dev/null); do echo \"--- \$d ---\"; sudo find \"\$d\" -maxdepth 3 2>&1; done" 2>&1 | tee -a "${SERIAL_LOG}"
-	echo "==> DIAGNOSTIC: bootc status" | tee -a "${SERIAL_LOG}"
-	"${ssh_cmd[@]}" "sudo bootc status 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"
-	echo "==> DIAGNOSTIC: /run/.containerenv, /etc/os-release" | tee -a "${SERIAL_LOG}"
-	"${ssh_cmd[@]}" "cat /run/.containerenv 2>&1; cat /etc/os-release 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"
-	echo "ERROR: gathering diagnostics only in this round — not attempting install" >&2
-	return 3
-	local recipe_image="" recipe_target_imgref="${image_ref}"
+	# Diagnostics (previous commit) confirmed decisively: `podman images -a`
+	# on the live VM is completely empty (only the header row), and neither
+	# offline-store path customize-live.sh references even exists. There is
+	# no local copy of the image anywhere on this live squash to reference
+	# by name — TunaOS's tacklebox pipeline doesn't embed an
+	# additionalimagestore the way dakota-iso's does. The system boots as a
+	# deployed ostree/bootc filesystem directly; it never runs "as a
+	# container" with a queryable local copy.
+	#
+	# All four prior guesses failed because they all assumed SOME local
+	# image existed to reference (bugs #13/#14/#16/#18). The actual fix:
+	# set `image` (not just `targetImgref`) to a real registry ref. That
+	# makes fisherman's Image field non-empty, which triggers
+	# bootcViaContainer — fisherman's CheckImage() sees nothing local
+	# (NeedsPull=true), actually `podman pull`s the image for real, and
+	# only then runs bootc inside that freshly pulled container. This is
+	# fisherman's normal, designed, non-live-ISO install path — the one a
+	# real production install machine (with no embedded local store) uses
+	# too. Requires network access, which the LUKS E2E runner already has
+	# (and already does a GHCR login earlier in the job).
+	local image_ref="ghcr.io/tuna-os/${VARIANT:-}:${FLAVOR:-}"
+	local recipe_image="${image_ref}" recipe_target_imgref="${image_ref}"
 	local composefs_backend="false" bootloader="grub2"
 	# grouper (Ubuntu) has no bootupd package available via apt, so it ships
 	# systemd-boot instead and installs via bootc's composefs-native backend.
 	if [[ "${VARIANT:-}" == "grouper" ]]; then
 		composefs_backend="true"
 		bootloader="systemd"
-		# Composefs needs the raw OCI blobs; fisherman exports them from
-		# containers-storage itself when given a containers-storage: ref.
-		recipe_image="containers-storage:${image_ref}"
-		recipe_target_imgref="${image_ref}"
 	fi
 	local encryption_json='{"type": "none"}'
 	[[ "$LUKS" -eq 1 ]] && encryption_json='{"type": "tpm2-luks"}'
