@@ -4,12 +4,10 @@ name: LUKS E2E
 # builds an ISO. For each cell we build a *dev* ISO (ENABLE_SSHD=1 — the live
 # env needs SSH to drive the install), then scripts/iso-e2e.sh --luks:
 #   1. boots the live ISO under QEMU with an emulated TPM 2.0 (swtpm),
-#   2. runs `bootc install to-disk --block-setup tpm2-luks /dev/vda`,
+#   2. installs via fisherman (the same backend every TunaOS installer
+#      frontend uses) with a recipe.json requesting encryption.type=tpm2-luks,
 #   3. reboots the installed disk with the *same* TPM and confirms the
 #      encrypted root auto-unlocks (reaching the login target proves it).
-#
-# tpm2-luks is permitted by system_files/usr/lib/bootc/install/00-tunaos.toml
-# (block = ["direct", "tpm2-luks"]).
 #
 # This is expensive (a dev ISO build + two QEMU boots per cell), so it only
 # runs on demand or weekly — never per push. Modelled on iso-e2e.yml and

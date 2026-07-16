@@ -50,9 +50,9 @@ detect() {
   [ "$output" = "DETECTED xfce org.tunaos.InstallerXfce" ]
 }
 
-@test "detect: no session files falls back to gnome, no tuna installer app" {
+@test "detect: no session files falls back to gnome, upstream bootc-installer app" {
   run detect
-  [ "$output" = "DETECTED gnome none" ]
+  [ "$output" = "DETECTED gnome org.bootcinstaller.Installer" ]
 }
 
 @test "detect: kde wins over xfce when both present" {
