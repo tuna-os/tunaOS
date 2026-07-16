@@ -642,9 +642,20 @@ EOF
 	"${scp_cmd[@]}" "$RECIPE_LOCAL" liveuser@127.0.0.1:/tmp/e2e-recipe.json
 
 	echo "==> Running fisherman /tmp/e2e-recipe.json..."
-	"${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman /tmp/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
+	# Bound with `timeout`: the network-pull install path (bug #19 fix) has
+	# no internal deadline of its own — if the podman pull inside the QEMU
+	# guest stalls (seen in practice: runs sat "in progress" for 2+ hours
+	# with zero output), this SSH call would otherwise hang until the whole
+	# GitHub Actions job timeout kills it, producing no usable diagnostics.
+	# 1800s is generous for a real (if slow) pull while still failing fast
+	# on a genuine stall.
+	timeout 1800 "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman /tmp/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
 		rc=$?
-		if [[ $rc -eq 0 ]]; then true; else
+		if [[ $rc -eq 0 ]]; then true;
+		elif [[ $rc -eq 124 ]]; then
+			echo "ERROR: fisherman install timed out after 1800s (likely a stalled podman pull)"
+			return 3
+		else
 			echo "ERROR: fisherman install failed (exit $rc)"
 			return 3
 		fi
