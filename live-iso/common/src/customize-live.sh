@@ -54,12 +54,35 @@ fi
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/desktop-${DESKTOP}.sh"
 
+# ── 2b. containers-storage: fuse-overlayfs for overlay-on-overlay ────────────
+# The live squash's own rootfs is overlayfs (dmsquash-live-style squashfs +
+# tmpfs overlay). The default containers/storage "overlay" driver cannot
+# nest a second overlay mount on top of that without a userspace
+# mount_program — bootc (via fisherman) reading the embedded image with
+# `containers-storage:` fails with "'overlay' is not supported over
+# overlayfs, a mount_program is required". Mirrors projectbluefin/dakota-iso
+# configure-live.sh's non-composefs storage.conf (dakota's fix for the same
+# class of failure, projectbluefin/iso commit 34fe6659).
+mkdir -p /etc/containers
+if [[ -f /etc/containers/storage.conf ]] && ! grep -q 'mount_program' /etc/containers/storage.conf; then
+	cat >>/etc/containers/storage.conf <<'STOREOF'
+
+[storage.options.overlay]
+mount_program = "/usr/bin/fuse-overlayfs"
+STOREOF
+fi
+
 # Dev/E2E media only: the normal published-image policy keeps SSH disabled.
 # tacklebox creates liveuser during boot, so install a oneshot that sets its
 # temporary test password after livesys and before the SSH daemon starts.
 if [[ -f "${SCRIPT_DIR}/.enable-sshd" ]]; then
 	SSH_UNIT=""
-	[[ -f /usr/lib/systemd/system/sshd.service ]] && SSH_UNIT="sshd.service"
+	# systemctl enable refuses to operate on a "linked unit file" (a symlink
+	# under /usr/lib/systemd/system/, as opposed to an Alias= in [Install]).
+	# Debian/Ubuntu's openssh-server ships sshd.service as exactly that kind
+	# of compat symlink to the real ssh.service unit — require a real
+	# (non-symlink) file so that case falls through to ssh.service below.
+	[[ -f /usr/lib/systemd/system/sshd.service && ! -L /usr/lib/systemd/system/sshd.service ]] && SSH_UNIT="sshd.service"
 	[[ -z "$SSH_UNIT" && -f /usr/lib/systemd/system/ssh.service ]] && SSH_UNIT="ssh.service"
 	if [[ -z "$SSH_UNIT" ]]; then
 		echo "ERROR: dev ISO requested but no SSH service is installed" >&2

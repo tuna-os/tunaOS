@@ -34,6 +34,8 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 		distrobox \
 		fastfetch \
 		fwupd \
+		dbus-daemon \
+		fuse-overlayfs \
 		systemd-resolved \
 		btrfs-progs \
 		gcc \
@@ -220,6 +222,8 @@ else
 		flatpak \
 		fpaste \
 		fwupd \
+		dbus-daemon \
+		fuse-overlayfs \
 		systemd-resolved \
 		systemd-container \
 		systemd-oomd \
