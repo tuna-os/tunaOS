@@ -601,14 +601,25 @@ run_install() {
 	# must be defined or this command must be executed inside a podman
 	# container." Query the live VM for its actual local image tag instead
 	# of guessing.
-	local image_ref
-	image_ref=$("${ssh_cmd[@]}" \
-		"sudo podman images --format '{{.Repository}}:{{.Tag}}' | grep -v '<none>:<none>' | head -1")
-	if [[ -z "$image_ref" ]]; then
-		echo "ERROR: no local podman image found on live VM to install from" >&2
-		return 3
-	fi
-	echo "==> Discovered local image ref: ${image_ref}"
+	# `podman images` came back empty on the live VM — three prior guesses at
+	# how the embedded image is exposed (ghcr.io tag, localhost tag, bootc
+	# auto-detect) have all failed. Dump everything relevant instead of
+	# guessing a fourth time: default podman storage, the offline-store
+	# paths customize-live.sh wires up for the installer frontends
+	# (/etc/tuna-installer/offline-stores → likely where the embedded OCI
+	# image actually lives, per fisherman's AdditionalImageStores doc:
+	# "live-media offline image stores... baked into an installer ISO"),
+	# and bootc's own view of itself.
+	echo "==> DIAGNOSTIC: podman images -a" | tee -a "${SERIAL_LOG}"
+	"${ssh_cmd[@]}" "sudo podman images -a" 2>&1 | tee -a "${SERIAL_LOG}"
+	echo "==> DIAGNOSTIC: offline-stores contents" | tee -a "${SERIAL_LOG}"
+	"${ssh_cmd[@]}" "cat /etc/tuna-installer/offline-stores 2>&1; for d in \$(grep -v '^#' /etc/tuna-installer/offline-stores 2>/dev/null); do echo \"--- \$d ---\"; sudo find \"\$d\" -maxdepth 3 2>&1; done" 2>&1 | tee -a "${SERIAL_LOG}"
+	echo "==> DIAGNOSTIC: bootc status" | tee -a "${SERIAL_LOG}"
+	"${ssh_cmd[@]}" "sudo bootc status 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"
+	echo "==> DIAGNOSTIC: /run/.containerenv, /etc/os-release" | tee -a "${SERIAL_LOG}"
+	"${ssh_cmd[@]}" "cat /run/.containerenv 2>&1; cat /etc/os-release 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"
+	echo "ERROR: gathering diagnostics only in this round — not attempting install" >&2
+	return 3
 	local recipe_image="" recipe_target_imgref="${image_ref}"
 	local composefs_backend="false" bootloader="grub2"
 	# grouper (Ubuntu) has no bootupd package available via apt, so it ships
