@@ -577,6 +577,21 @@ run_install() {
 	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p 2222 liveuser@127.0.0.1)
 	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P 2222)
 
+	# Bug #20: fisherman's network pull stalled indefinitely mid-blob (layer
+	# 42/65, no error, no further output) after dozens of smaller layers
+	# pulled fine in under a minute. Classic QEMU SLIRP Path-MTU-Discovery
+	# blackhole: SLIRP's usermode NAT often drops the ICMP "fragmentation
+	# needed" replies PMTUD depends on — especially likely here since the
+	# QEMU guest is itself nested inside the GitHub Actions runner's own
+	# virtualized network, which may already clamp the effective MTU below
+	# what the guest assumes. Small blobs fit in a packet or two and never
+	# trigger fragmentation; a large layer does, and the connection just
+	# hangs with no error on either end. Clamp the guest's own interface
+	# MTU down before pulling anything, so packets never need fragmenting
+	# in the first place — sidesteps PMTUD entirely instead of relying on
+	# it working correctly.
+	"${ssh_cmd[@]}" 'for i in $(ls /sys/class/net | grep -v ^lo$); do sudo ip link set "$i" mtu 1400; done; ip -o link show' || true
+
 	# Mirrors projectbluefin/dakota-iso's luks-install-qemu.sh: install via
 	# fisherman (the same backend every TunaOS installer frontend uses,
 	# gnome included — customize-live.sh symlinks it from each flavor's
