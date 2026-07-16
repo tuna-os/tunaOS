@@ -141,7 +141,12 @@ jobs:
           FLAVOR: ${{ matrix.flavor }}
         run: |
           mkdir -p luks-out
-          sudo ./scripts/iso-e2e.sh "${ISO_PATH}" --luks \
+          # -E: sudo resets the environment by default, which drops VARIANT/
+          # FLAVOR (env: above) — iso-e2e.sh needs them to build the fisherman
+          # recipe's image ref. Without -E it silently falls back to parsing
+          # them from the ISO filename, which has a "tunaos-" project prefix
+          # the fallback doesn't account for, producing a bogus image ref.
+          sudo -E ./scripts/iso-e2e.sh "${ISO_PATH}" --luks \
             --output luks-out \
             --timeout 1200
           grep -qx 'TUNAOS_LUKS_E2E_INSTALL_STARTED luks=1' luks-out/luks-evidence.log
