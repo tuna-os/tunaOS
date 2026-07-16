@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=TunaOS Fishing Pole
+Description=TunaOS boot animation (Fishing Pole)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/fishing-pole
+ScriptFile=/usr/share/plymouth/themes/fishing-pole/fishing-pole.script

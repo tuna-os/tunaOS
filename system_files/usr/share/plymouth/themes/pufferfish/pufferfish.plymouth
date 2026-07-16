@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=TunaOS Pufferfish
+Description=TunaOS boot animation (Pufferfish)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/pufferfish
+ScriptFile=/usr/share/plymouth/themes/pufferfish/pufferfish.script

@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=TunaOS Rocket
+Description=TunaOS boot animation (Rocket)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/rocket
+ScriptFile=/usr/share/plymouth/themes/rocket/rocket.script
