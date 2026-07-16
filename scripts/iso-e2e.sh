@@ -593,18 +593,23 @@ run_install() {
 	}
 
 	# Neither ghcr.io/tuna-os/<variant>:<flavor> nor localhost/<variant>:<flavor>
-	# resolves against the live squash's actual containers-storage (tacklebox
-	# apparently doesn't preserve either as a queryable tag). Rather than keep
-	# guessing: for the non-composefs (default) path, leave image AND
-	# targetImgref empty so fisherman's bootcDirect adds no --source-imgref at
-	# all — bootc then auto-detects the running container natively, which is
-	# exactly the documented behavior for this case ("image may be empty in
-	# live-ISO mode; bootc auto-detects the running container", see fisherman's
-	# recipe.Validate()). Composefs still needs a real ref (fisherman has to
-	# skopeo-copy from containers-storage by name before bootc ever runs), so
-	# grouper keeps guessing localhost/<variant>:<flavor> for now.
-	local image_ref="localhost/${VARIANT:-}:${FLAVOR:-}"
-	local recipe_image="" recipe_target_imgref=""
+	# resolves against the live squash's actual containers-storage, and
+	# leaving image/targetImgref empty doesn't work either — bootc install
+	# to-filesystem run natively (not wrapped in `podman run`, which is how
+	# fisherman's bootcDirect mode always runs on this live squash) has no
+	# container context to auto-detect from at all: "Either --source-imgref
+	# must be defined or this command must be executed inside a podman
+	# container." Query the live VM for its actual local image tag instead
+	# of guessing.
+	local image_ref
+	image_ref=$("${ssh_cmd[@]}" \
+		"sudo podman images --format '{{.Repository}}:{{.Tag}}' | grep -v '<none>:<none>' | head -1")
+	if [[ -z "$image_ref" ]]; then
+		echo "ERROR: no local podman image found on live VM to install from" >&2
+		return 3
+	fi
+	echo "==> Discovered local image ref: ${image_ref}"
+	local recipe_image="" recipe_target_imgref="${image_ref}"
 	local composefs_backend="false" bootloader="grub2"
 	# grouper (Ubuntu) has no bootupd package available via apt, so it ships
 	# systemd-boot instead and installs via bootc's composefs-native backend.
