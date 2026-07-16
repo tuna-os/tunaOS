@@ -158,6 +158,15 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		exit 1
 	fi
 
+	# The installer apps (tuna-os-hosted and upstream bootc-installer alike)
+	# declare a GNOME/Freedesktop runtime dependency that isn't published on
+	# the tuna-os remote itself — only the apps are. `flatpak install`
+	# resolves missing runtime refs from any configured remote, so add
+	# flathub here too; without it, install fails with "requires the
+	# runtime org.gnome.Platform/... which was not found".
+	flatpak remote-add --system --if-not-exists flathub \
+		https://dl.flathub.org/repo/flathub.flatpakrepo
+
 	# Flatpak also opens a session-bus connection even for a system install.
 	# The headless tacklebox container has no DISPLAY, so autolaunch cannot
 	# create one; provide an explicit short-lived session bus instead. Spun
