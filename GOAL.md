@@ -55,14 +55,14 @@ re-diagnosing anything**. Condensed pointer in memory:
 `luks-e2e-fisherman-migration.md` (auto-loaded via `MEMORY.md` in future
 sessions).
 
-- **20 bugs found and fixed** as of commit `a8abe68` (most recent: wrapped
-  the fisherman install SSH call in `timeout 1800` after a run hung
-  silently for 2+ hours — the network pull appears to stall inside the
-  QEMU guest's NAT/SLIRP networking; root cause not yet diagnosed).
-- **In flight**: run `29505390021` (yellowfin:kde) on commit `a8abe68`,
-  dispatched to get real diagnostic output on the stall (timeout fires at
-  ~30 min into the install step instead of hanging indefinitely). Check
-  `gh run view 29505390021 -R tuna-os/tunaos --json status,conclusion`.
+- **20 bugs found and fixed** as of commit `2acad57`. Bug #20 (latest):
+  the `timeout 1800` wrapper (bug #19 follow-up) confirmed the network
+  pull genuinely stalls mid-blob (layer 42/65, zero output, no error) —
+  diagnosed as a QEMU SLIRP Path-MTU-Discovery blackhole. Fix applied:
+  clamp the guest's own interface MTU to 1400 before pulling anything
+  (commit `9916836`), sidestepping PMTUD entirely.
+- **Not yet dispatched/confirmed**: the MTU-clamp fix needs a fresh
+  `yellowfin:kde` (or niri/cosmic) run to verify.
 - **No cell has passed yet.** All three finish-condition boxes above are
   unchecked.
 
