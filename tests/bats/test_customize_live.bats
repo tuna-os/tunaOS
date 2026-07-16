@@ -84,7 +84,8 @@ detect() {
 }
 
 @test "customize-live.sh: gives headless Flatpak an explicit session bus" {
-  grep -q 'dbus-run-session --' "${SCRIPT}"
+  grep -q 'DBUS_SESSION_BUS_ADDRESS' "${SCRIPT}"
+  grep -q 'dbus-daemon --session' "${SCRIPT}"
 }
 
 @test "customize-live.sh: initializes D-Bus identity before Flatpak installation" {
