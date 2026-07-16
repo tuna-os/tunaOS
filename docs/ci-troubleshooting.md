@@ -1,6 +1,6 @@
 # CI Troubleshooting Playbook
 
-Last updated: 2026-07-15 (by `fix/r2-cost-reduction` investigation)
+Last updated: 2026-07-16 (by `fix/r2-cost-reduction` investigation)
 
 Quick reference for diagnosing recurring CI failures. These were surfaced during a
 branch-integration push that touched 36 files across `.github/`, `build_scripts/`,
@@ -143,6 +143,43 @@ at the build step (they fell through to the boot gate).
 **Status:** Not yet root-caused. The schedule failures have stopped since the
 config was simplified to two groups (flagship + community). Monitor the next
 Sunday run (2026-07-20).
+
+---
+
+### 4. LUKS E2E fisherman rewrite — full bug chain (2026-07-16, `fix/r2-cost-reduction`)
+
+Migrating `scripts/iso-e2e.sh --luks` from raw `sudo bootc install to-disk
+--block-setup tpm2-luks` to `sudo fisherman recipe.json` (per the Key
+Takeaway above) surfaced a chain of real, independent bugs, each only
+visible once the previous one was fixed and the run got one step further.
+Recorded here so the next similar migration doesn't have to re-discover
+each one from scratch.
+
+| # | Symptom | Root cause | Fix |
+|---|---|---|---|
+| 1 | `scp: stat local "2222": No such file or directory` | Reused ssh's `-p 2222` port flag for scp too — scp's port flag is `-P` (capital); `-p` means "preserve attributes" and consumed the port number as a filename | Separate `-P` for scp, `-p` for ssh |
+| 2 | `sudo: fisherman: command not found` | `command -v fisherman` (the gate check) ran as liveuser, whose PATH includes `/usr/local/bin`; `sudo fisherman` uses sudo's `secure_path`, which doesn't | Invoke `/usr/local/bin/fisherman` by full path under sudo |
+| 3 | gnome live ISOs had **no** installer Flatpak at all | `customize-live.sh` set `INSTALLER_APP=""` for gnome — only kde/niri/cosmic/xfce get a TunaOS-branded fork | Ship upstream `org.bootcinstaller.Installer` for gnome, fetched as a release bundle + imported into a throwaway local ostree repo (mirrors `projectbluefin/dakota-iso`'s `install-flatpaks.sh`) |
+| 4 | `dbus-uuidgen: command not found` (niri/cosmic) | Some flavors don't transitively pull in the package providing `dbus-uuidgen` | Swapped to `systemd-machine-id-setup` (core systemd, always present) |
+| 5 | `dbus-run-session: command not found` (niri/cosmic) | Same package gap, different binary | Spin up `dbus-daemon --session` directly instead of the wrapper |
+| 6 | `dbus-daemon: command not found` (niri/cosmic) | The gap was the whole `dbus` package, not just specific binaries | Added `dbus-daemon` to `10-base-packages.sh` (both apt and dnf) |
+| 7 | grouper: `ERROR: dev ISO requested but no SSH service is installed` | `Justfile`'s `iso` recipe only rebuilt with `ENABLE_SSHD=1` when `repo == "local"`; the workflow calls `... ghcr "" 1`, so the SSH-enabling rebuild never ran for `repo=ghcr` | `dev=1` now always triggers the local SSH-enabled rebuild, regardless of `repo` |
+| 8 | grouper: still no SSH after #7 | `Containerfile.ubuntu` never declared `ARG ENABLE_SSHD` — podman silently drops undeclared build-args, so it never reached `40-services.sh`'s apt branch | Added the same `ARG`/`ENV ENABLE_SSHD` pair its sibling Containerfiles (debian, el10, arch, overlay) already have |
+| 9 | grouper: `Refusing to operate on linked unit file sshd.service` | Debian/Ubuntu's `openssh-server` ships `sshd.service` as a compat **symlink** to the real `ssh.service` unit; `systemctl enable` refuses to target a linked unit directly | Require `sshd.service` to be a real (non-symlink) file before preferring it, else fall through to `ssh.service` |
+| 10 | `'overlay' is not supported over overlayfs, a mount_program is required` | The live squash's own rootfs is overlayfs (squashfs+tmpfs); containers/storage's default `overlay` driver can't nest a second overlay mount on that without a userspace mount_program | Added `fuse-overlayfs` package + `mount_program = "/usr/bin/fuse-overlayfs"` in `/etc/containers/storage.conf`, written by `customize-live.sh` into the live squash (mirrors `projectbluefin/dakota-iso`'s non-composefs storage.conf, `projectbluefin/iso` commit `34fe6659`) |
+| 11 | `requires the runtime org.gnome.Platform/x86_64/49 which was not found` | `customize-live.sh` only added the `tuna-os` Flatpak remote (hosts our apps), never `flathub` (hosts the runtimes those apps depend on) | Added `flatpak remote-add ... flathub` — flatpak resolves missing runtime refs from any configured remote |
+| 12 | `Pathname can't be converted from UTF-8 to current locale` | Minimal containers (grouper/apt) have no locale beyond POSIX/C (strictly ASCII); glib's path handling requires a UTF-8-capable locale even for ASCII paths | `export LANG=LC_ALL=C.UTF-8` before any flatpak/glib calls in `customize-live.sh` |
+| 13 | `ghcr.io/tuna-os/tunaos:yellowfin does not resolve to an image ID` (yellowfin only) | `sudo ./scripts/iso-e2e.sh` in the workflow resets the environment, dropping the `VARIANT`/`FLAVOR` env vars the recipe-building code needs; it fell back to parsing them from the ISO filename, which (for `build-iso-tacklebox.sh`'s raw output `tunaos-<variant>-<flavor>.iso`) has a `tunaos-` project prefix the fallback parser didn't strip, producing `VARIANT=tunaos FLAVOR=yellowfin` | `sudo -E` in the workflow step; also hardened the fallback parser to strip a leading `tunaos-` so a future caller that forgets `-E` degrades correctly instead of building a bogus ref |
+
+**Pattern to notice:** almost every bug here was a live-squash-specific
+environment gap (missing package, missing locale, missing remote, wrong
+storage driver) that a *normal* container build never hits — the live ISO's
+minimal customize-time container and its overlayfs-on-overlayfs runtime
+environment are much less forgiving than either a regular build or an
+already-installed system. When adding new live-squash logic, assume nothing
+beyond what `10-base-packages.sh` explicitly installs, and test the actual
+QEMU boot — a build-time success proves nothing about the live-boot
+environment.
 
 ---
 
