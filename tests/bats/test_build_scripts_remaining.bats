@@ -138,10 +138,22 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 }
 
 @test "disk gate requires the desktop contract marker" {
-  # e9fe9e5: the gate deliberately accepts OK or FAIL — either proves the
-  # contract service ran (graphical.target reached, DM started).
+  # The gate wakes on either marker (both prove the contract service ran)
+  # but only OK passes; FAIL surfaces its reason lines and exits nonzero.
   run grep -F 'TUNAOS_DESKTOP_CONTRACT_(OK|FAIL)' "${REPO_ROOT}/scripts/iso-e2e.sh"
   [ "$status" -eq 0 ]
+  grep -qF 'desktop experience contract FAILED' "${REPO_ROOT}/scripts/iso-e2e.sh"
+}
+
+@test "runtime contract never asserts graphical.target is active" {
+  # The contract service is WantedBy=graphical.target; targets gain implicit
+  # After= on their wants, so is-active graphical.target inside the service
+  # self-deadlocks into a guaranteed failure. get-default is the safe assert.
+  run grep -F 'is-active --quiet graphical.target' \
+    "${REPO_ROOT}/build_scripts/checks/verify-desktop-experience.sh"
+  [ "$status" -ne 0 ]
+  grep -qF 'systemctl get-default' \
+    "${REPO_ROOT}/build_scripts/checks/verify-desktop-experience.sh"
 }
 
 @test "desktop installer makes graphical target the boot default" {

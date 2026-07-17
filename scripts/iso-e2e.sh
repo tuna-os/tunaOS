@@ -962,9 +962,15 @@ disk)
 			exit 1
 		fi
 		if grep -qE "TUNAOS_DESKTOP_CONTRACT_(OK|FAIL)" "$SERIAL_LOG" 2>/dev/null; then
-			echo "==> Desktop experience contract reached (serial)"
-			rc=0
-			harvest_install_checks || rc=1
+			if grep -q "TUNAOS_DESKTOP_CONTRACT_OK" "$SERIAL_LOG" 2>/dev/null; then
+				echo "==> Desktop experience contract passed (serial)"
+				rc=0
+				harvest_install_checks || rc=1
+			else
+				echo "ERROR: desktop experience contract FAILED:" >&2
+				grep "TUNAOS_DESKTOP_CONTRACT_FAIL" "$SERIAL_LOG" | tr -d '\r' >&2
+				rc=1
+			fi
 			break
 		fi
 		sleep 10
@@ -972,7 +978,7 @@ disk)
 	# Let the display manager finish drawing before capturing evidence.
 	sleep 30
 	screenshot "10-ready"
-	if [[ "$rc" -ne 0 ]]; then
+	if [[ "$rc" -eq 2 ]]; then
 		echo "ERROR: desktop experience contract marker was not emitted" >&2
 	fi
 	exit "$rc"
