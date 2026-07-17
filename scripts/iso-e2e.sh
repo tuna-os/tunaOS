@@ -762,10 +762,25 @@ EOF
 	# (CheckImage()) finds it and skips its own pull.
 	if [[ "$use_offline_store" -eq 0 ]]; then
 		echo "==> Pre-pulling ${image_ref} (retry on stall, layers already fetched are cached)..."
+		# Attempts 3-4 pull through the Cloudflare Worker relay instead of
+		# ghcr.io directly: bug #20's stall is between the SLIRP guest and
+		# GHCR's CDN, and a run where all 4 direct attempts stalled shows
+		# retrying the same path isn't enough. The relay serves the same
+		# org-allowlisted content (edge-cached, digest-addressed) over a
+		# different server path; podman follows its passthrough auth.
+		# The pulled tag is retagged to the canonical ghcr.io name so
+		# fisherman's CheckImage() still finds it.
+		local shim_host="ghcr-shim.trogdor30001.workers.dev"
+		local shim_ref="${image_ref/ghcr.io/${shim_host}}"
 		local pull_ok=0
 		for pull_attempt in 1 2 3 4; do
-			echo "--> pull attempt ${pull_attempt}/4"
-			if timeout 600 "${ssh_cmd[@]}" "sudo podman pull ${image_ref} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
+			local ref="$image_ref"
+			[[ "$pull_attempt" -ge 3 ]] && ref="$shim_ref"
+			echo "--> pull attempt ${pull_attempt}/4 (${ref%%/*})"
+			if timeout 600 "${ssh_cmd[@]}" "sudo podman pull ${ref} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
+				if [[ "$ref" != "$image_ref" ]]; then
+					"${ssh_cmd[@]}" "sudo podman tag ${ref} ${image_ref}" 2>&1 | tee -a "${SERIAL_LOG}" || true
+				fi
 				pull_ok=1
 				break
 			fi
