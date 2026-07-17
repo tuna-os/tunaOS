@@ -55,16 +55,23 @@ re-diagnosing anything**. Condensed pointer in memory:
 `luks-e2e-fisherman-migration.md` (auto-loaded via `MEMORY.md` in future
 sessions).
 
-- **20 bugs found and fixed** as of commit `2acad57`. Bug #20 (latest):
-  the `timeout 1800` wrapper (bug #19 follow-up) confirmed the network
-  pull genuinely stalls mid-blob (layer 42/65, zero output, no error) —
-  diagnosed as a QEMU SLIRP Path-MTU-Discovery blackhole. Fix applied:
-  clamp the guest's own interface MTU to 1400 before pulling anything
-  (commit `9916836`), sidestepping PMTUD entirely.
-- **Not yet dispatched/confirmed**: the MTU-clamp fix needs a fresh
-  `yellowfin:kde` (or niri/cosmic) run to verify.
+- **20 bugs found and fixed.** Bug #20's first fix (guest-side MTU=1400
+  clamp, commit `9916836`, PMTUD theory) was **disproven**: a retest run
+  stalled on the exact same blob for the same ~29 minutes with the clamp
+  applied. Checked the blob's size directly via GHCR's manifest API
+  (`skopeo` unavailable locally, used `curl` + registry token endpoint) —
+  77MB, unremarkable next to several 200-400MB layers in the same image
+  that pull fine, ruling out a size-triggered fragmentation cause.
+- **New fix applied** (not yet dispatched/confirmed): instead of
+  preventing the stall, made it recoverable — `scripts/iso-e2e.sh` now
+  pre-pulls the image via `podman pull` in a 4-attempt retry loop (600s
+  each) before invoking fisherman. Already-fetched layers are cached in
+  local storage, so a retry only re-fetches what stalled; fisherman then
+  finds the image local and skips its own pull. See `docs/ci-troubleshooting.md`
+  §4 bug #20 for full detail.
 - **No cell has passed yet.** All three finish-condition boxes above are
-  unchecked.
+  unchecked. Next: dispatch a fresh `yellowfin:kde` (or niri/cosmic) run
+  to verify the retry-pull fix.
 
 ## How to continue
 
