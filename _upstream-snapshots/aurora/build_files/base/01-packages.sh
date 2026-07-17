@@ -14,18 +14,18 @@ dnf config-manager addrepo --from-repofile="https://negativo17.org/repos/fedora-
 dnf config-manager setopt fedora-multimedia.priority=90
 
 OVERRIDES=(
-	"intel-gmmlib"
-	"intel-mediasdk"
-	"intel-vpl-gpu-rt"
-	"libheif"
-	"libva"
-	"libva-intel-media-driver"
-	"mesa-dri-drivers"
-	"mesa-filesystem"
-	"mesa-libEGL"
-	"mesa-libGL"
-	"mesa-libgbm"
-	"mesa-vulkan-drivers"
+    "intel-gmmlib"
+    "intel-mediasdk"
+    "intel-vpl-gpu-rt"
+    "libheif"
+    "libva"
+    "libva-intel-media-driver"
+    "mesa-dri-drivers"
+    "mesa-filesystem"
+    "mesa-libEGL"
+    "mesa-libGL"
+    "mesa-libgbm"
+    "mesa-vulkan-drivers"
 )
 
 dnf5 distro-sync --skip-unavailable -y --repo='fedora-multimedia' "${OVERRIDES[@]}"
@@ -47,96 +47,96 @@ source /ctx/build_files/shared/copr-helpers.sh
 # https://github.com/ublue-os/aurora/issues/1227
 
 FEDORA_PACKAGES=(
-	adcli
-	alsa-firmware
-	apr{,-util}
-	autofs
-	borgbackup
-	davfs2
-	distrobox
-	evtest
-	fastfetch
-	fcitx5-{chewing,chinese-addons,configtool,gtk,hangul,libthai,m17n,mozc,qt,sayura,unikey}
-	fish
-	flatpak-spawn
-	foo2zjs
-	gcc{,-c++}
-	git-credential-libsecret
-	glow
-	google-noto-sans-balinese-fonts
-	google-noto-sans-cjk-fonts
-	google-noto-sans-javanese-fonts
-	google-noto-sans-sundanese-fonts
-	grub2-tools-extra
-	gum
-	gvfs{,-fuse}
-	htop
-	icoutils
-	ifuse
-	igt-gpu-tools
-	input-remapper
-	iwd
-	just
-	kate
-	kcm-fcitx5
-	krb5-workstation
-	ksshaskpass
-	ksystemlog
-	libavcodec
-	libcamera-gstreamer
-	libcamera-tools
-	libfdk-aac
-	libimobiledevice-utils
-	libratbag-ratbagd
-	libxcrypt-compat
-	lm_sensors
-	lshw
-	nvtop
-	oddjob-mkhomedir
-	openrgb-udev-rules
-	pam-u2f
-	pam_yubico
-	pamu2fcfg
-	plasma-wallpapers-dynamic
-	plasma-firewall-"${PLASMA_VERS}"
-	powertop
-	rclone
-	restic
-	samba-winbind{,-clients,-modules}
-	setools-console
-	solaar-udev
-	squashfs-tools
-	symlinks
-	tcpdump
-	tesseract-devel
-	tmux
-	tesseract-langpack-{eng,deu,fra,spa,por,ita,pol,fin,nld,jpn,jpn_vert,hin,chi_sim,chi_sim_vert,chi_tra,chi_tra_vert}
-	traceroute
-	vim
-	yubikey-manager
-	zsh
+    adcli
+    alsa-firmware
+    apr{,-util}
+    autofs
+    borgbackup
+    davfs2
+    distrobox
+    evtest
+    fastfetch
+    fcitx5-{chewing,chinese-addons,configtool,gtk,hangul,libthai,m17n,mozc,qt,sayura,unikey}
+    fish
+    flatpak-spawn
+    foo2zjs
+    gcc{,-c++}
+    git-credential-libsecret
+    glow
+    google-noto-sans-balinese-fonts
+    google-noto-sans-cjk-fonts
+    google-noto-sans-javanese-fonts
+    google-noto-sans-sundanese-fonts
+    grub2-tools-extra
+    gum
+    gvfs{,-fuse}
+    htop
+    icoutils
+    ifuse
+    igt-gpu-tools
+    input-remapper
+    iwd
+    just
+    kate
+    kcm-fcitx5
+    krb5-workstation
+    ksshaskpass
+    ksystemlog
+    libavcodec
+    libcamera-gstreamer
+    libcamera-tools
+    libfdk-aac
+    libimobiledevice-utils
+    libratbag-ratbagd
+    libxcrypt-compat
+    lm_sensors
+    lshw
+    nvtop
+    oddjob-mkhomedir
+    openrgb-udev-rules
+    pam-u2f
+    pam_yubico
+    pamu2fcfg
+    plasma-wallpapers-dynamic
+    plasma-firewall-"${PLASMA_VERS}"
+    powertop
+    rclone
+    restic
+    samba-winbind{,-clients,-modules}
+    setools-console
+    solaar-udev
+    squashfs-tools
+    symlinks
+    tcpdump
+    tesseract-devel
+    tmux
+    tesseract-langpack-{eng,deu,fra,spa,por,ita,pol,fin,nld,jpn,jpn_vert,hin,chi_sim,chi_sim_vert,chi_tra,chi_tra_vert}
+    traceroute
+    vim
+    yubikey-manager
+    zsh
 )
 
 FEDORA_PACKAGES_AMD64=(
-	powerstat
-)
+    powerstat
+  )
 
 NEGATIVO_PACKAGES=(
-	ffmpeg{,-libs}
-	libfdk-aac
-	libva-utils
-	pipewire-libs-extra
-	uld
-)
+    ffmpeg{,-libs}
+    libfdk-aac
+    libva-utils
+    pipewire-libs-extra
+    uld
+  )
 
 NEGATIVO_PACKAGES_AMD64=(
-	intel-vaapi-driver
-)
+    intel-vaapi-driver
+  )
 
-PACKAGES=("${FEDORA_PACKAGES[@]}" "${NEGATIVO_PACKAGES[@]}")
+PACKAGES=( "${FEDORA_PACKAGES[@]}" "${NEGATIVO_PACKAGES[@]}" )
 
 if [[ $(arch) == x86_64 ]]; then
-	PACKAGES+=("${FEDORA_PACKAGES_AMD64[@]}" "${NEGATIVO_PACKAGES_AMD64[@]}")
+  PACKAGES+=( "${FEDORA_PACKAGES_AMD64[@]}" "${NEGATIVO_PACKAGES_AMD64[@]}" )
 fi
 
 dnf -y install "${PACKAGES[@]}"
@@ -150,46 +150,46 @@ dnf -y install --enablerepo='tailscale-stable' tailscale
 # https://github.com/ublue-os/akmods/issues/537
 # From ublue-os/packages
 copr_install_isolated "ublue-os/packages" \
-	"kcm_ublue" \
-	"krunner-bazaar" \
-	"ublue-os-selinux-workarounds" \
-	"oversteer-udev" \
-	"uupd"
+    "kcm_ublue" \
+    "krunner-bazaar" \
+    "ublue-os-selinux-workarounds" \
+    "oversteer-udev" \
+    "uupd"
 
 # kAirpods from ledif/kairpods COPR
 copr_install_isolated "ledif/kairpods" \
-	"kairpods"
+    "kairpods"
 
 # Sunshine from lizardbyte/stable COPR
 copr_install_isolated "lizardbyte/stable" \
-	"sunshine"
+    "sunshine"
 
 # Packages to exclude - common to all versions
 EXCLUDED_PACKAGES=(
-	akonadi-server{,-mysql}
-	default-fonts-cjk-sans
-	fedora-bookmarks
-	fedora-chromium-config{,-kde}
-	fedora-third-party
-	ffmpegthumbnailer
-	firefox
-	firewall-config
-	kcharselect
-	khelpcenter
-	krfb{,-libs}
-	plasma-discover{,-libs}
-	plasma-welcome-fedora
-	podman-docker
+    akonadi-server{,-mysql}
+    default-fonts-cjk-sans
+    fedora-bookmarks
+    fedora-chromium-config{,-kde}
+    fedora-third-party
+    ffmpegthumbnailer
+    firefox
+    firewall-config
+    kcharselect
+    khelpcenter
+    krfb{,-libs}
+    plasma-discover{,-libs}
+    plasma-welcome-fedora
+    podman-docker
 )
 
 # Remove excluded packages if they are installed
 if [[ "${#EXCLUDED_PACKAGES[@]}" -gt 0 ]]; then
-	readarray -t INSTALLED_EXCLUDED < <(rpm -qa --queryformat='%{NAME}\n' "${EXCLUDED_PACKAGES[@]}" 2>/dev/null || true)
-	if [[ "${#INSTALLED_EXCLUDED[@]}" -gt 0 ]]; then
-		dnf5 -y remove "${INSTALLED_EXCLUDED[@]}"
-	else
-		echo "No excluded packages found to remove."
-	fi
+    readarray -t INSTALLED_EXCLUDED < <(rpm -qa --queryformat='%{NAME}\n' "${EXCLUDED_PACKAGES[@]}" 2>/dev/null || true)
+    if [[ "${#INSTALLED_EXCLUDED[@]}" -gt 0 ]]; then
+        dnf5 -y remove "${INSTALLED_EXCLUDED[@]}"
+    else
+        echo "No excluded packages found to remove."
+    fi
 fi
 
 ## Pins and Overrides
@@ -206,13 +206,13 @@ fi
 dnf -y copr enable ublue-os/staging
 dnf -y copr disable ublue-os/staging
 dnf -y swap --repo=copr:copr.fedorainfracloud.org:ublue-os:staging \
-	plasma-setup plasma-setup-"${PLASMA_VERS}"-*.aurora
+  plasma-setup plasma-setup-"${PLASMA_VERS}"-*.aurora
 
 dnf versionlock add plasma-setup
 
 # Install DX specific packages
 if [[ "${IMAGE_FLAVOR}" == "dx" ]]; then
-	/ctx/build_files/dx/00-dx.sh
+  /ctx/build_files/dx/00-dx.sh
 fi
 
 echo "::endgroup::"
