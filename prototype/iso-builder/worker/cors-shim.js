@@ -15,7 +15,7 @@ const UPSTREAM = "https://ghcr.io";
 const ORG = "tuna-os";
 
 const PATH_ALLOW = new RegExp(
-  `^/(token$|v2/${ORG}/[a-z0-9._-]+/(manifests|blobs)/[A-Za-z0-9._:@-]+$)`
+  `^/(token$|v2/?$|v2/${ORG}/[a-z0-9._-]+/(manifests|blobs)/[A-Za-z0-9._:@-]+$)`
 );
 
 const CORS = {
