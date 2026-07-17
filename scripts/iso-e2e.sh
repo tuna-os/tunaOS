@@ -701,18 +701,25 @@ EOF
 		# Verify against the resulting disk state, not fisherman's log text —
 		# robust to log-format changes and catches a silent fallback to an
 		# unencrypted layout that would still boot and pass the checks below.
-		local luks_part
-		luks_part=$("${ssh_cmd[@]}" \
-			"sudo lsblk -prno NAME,FSTYPE /dev/vda | awk '\$2==\"crypto_LUKS\"{print \$1;exit}'")
-		if [[ -n "$luks_part" ]]; then
-			echo "==> crypto_LUKS filesystem confirmed on installed disk (${luks_part})."
+		# TAP-style check script (scripts/e2e-luks-checks.sh, using the
+		# check()/print_summary() helpers in scripts/lib/e2e-assert.sh)
+		# uploaded and run over SSH, pattern borrowed from frostyard/snosi's
+		# tiered on-VM test scripts.
+		local script_dir
+		script_dir="$(dirname "${BASH_SOURCE[0]}")"
+		"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" liveuser@127.0.0.1:/tmp/e2e-assert.sh
+		"${scp_cmd[@]}" "${script_dir}/e2e-luks-checks.sh" liveuser@127.0.0.1:/tmp/e2e-luks-checks.sh
+		local luks_check_output
+		luks_check_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=/tmp bash /tmp/e2e-luks-checks.sh" 2>&1) || true
+		echo "$luks_check_output" | tee -a "$LUKS_EVIDENCE_LOG"
+
+		if echo "$luks_check_output" | grep -q "^ok - installed disk has a crypto_LUKS partition"; then
 			record_luks_evidence "TUNAOS_LUKS_E2E_ENCRYPTED_DISK_CONFIRMED"
 		else
 			echo "ERROR: installed disk has no crypto_LUKS partition"
 			return 3
 		fi
-		if "${ssh_cmd[@]}" "sudo cryptsetup luksDump '${luks_part}' | grep -qi systemd-tpm2"; then
-			echo "==> TPM2 enrollment token confirmed in LUKS header."
+		if echo "$luks_check_output" | grep -q "^ok - LUKS header has a systemd-tpm2 enrollment token"; then
 			record_luks_evidence "TUNAOS_LUKS_E2E_TPM_ENROLLMENT_CONFIRMED"
 		else
 			echo "ERROR: --luks set but no systemd-tpm2 token in LUKS header"
