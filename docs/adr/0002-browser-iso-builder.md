@@ -57,7 +57,7 @@ Explicitly rejected alternatives:
 |---|---|---|
 | 1. Pull | token → index → platform manifest → config → layer blobs, via the shim; digest-verify with WebCrypto | **Working** (prototype demo; verified against real images) |
 | 2. Unpack | streaming zstd (fzstd, 8.4 KB inlined) + incremental tar walker, layers scanned topmost-first | **Working** (kernel + initramfs located in ~13 s / 349 MB of sailfin:kde, verified in headless Chromium cross-origin through the deployed shim) |
-| 3. Live root | author erofs (preferred: `mkfs.erofs` is a clean userspace C codebase to compile to WASM) or squashfs from the merged tree | the main lift |
+| 3. Live root | pure-JS EROFS writer (`erofs.js`, uncompressed FLAT_PLAIN + compact inodes) | **Writer working** — browser-authored images pass `fsck.erofs`, kernel-mount, and diff-identical to `mkfs.erofs` output; remaining: full-rootfs unpack (whiteouts, hardlinks, xattrs) to feed it |
 | 4. Boot bits | extract kernel + initramfs from `/usr/lib/modules/<ver>/`, systemd-boot from the image's own payload; write fisherman `recipe.json` pointing back at the source image by digest | straightforward once 2 exists |
 | 5. Media | FAT ESP image + ISO9660/El Torito wrapper (JS/WASM writer) | bounded, well-specified formats |
 | 6. Deliver | stream to disk via File System Access API (`showSaveFilePicker`) — memory stays at chunk scale, not ISO scale | standard |
