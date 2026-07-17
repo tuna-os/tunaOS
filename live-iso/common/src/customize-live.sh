@@ -78,7 +78,6 @@ ConditionPathExists=/run/initramfs/live/LiveOS/store.squashfs.img
 [Mount]
 What=/run/initramfs/live/LiveOS/store.squashfs.img
 Where=/var/lib/superiso-store
-Type=squashfs
 Options=ro,nodev
 
 [Install]
