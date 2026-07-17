@@ -577,21 +577,6 @@ run_install() {
 	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p 2222 liveuser@127.0.0.1)
 	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P 2222)
 
-	# Bug #20: fisherman's network pull stalled indefinitely mid-blob (layer
-	# 42/65, no error, no further output) after dozens of smaller layers
-	# pulled fine in under a minute. Classic QEMU SLIRP Path-MTU-Discovery
-	# blackhole: SLIRP's usermode NAT often drops the ICMP "fragmentation
-	# needed" replies PMTUD depends on — especially likely here since the
-	# QEMU guest is itself nested inside the GitHub Actions runner's own
-	# virtualized network, which may already clamp the effective MTU below
-	# what the guest assumes. Small blobs fit in a packet or two and never
-	# trigger fragmentation; a large layer does, and the connection just
-	# hangs with no error on either end. Clamp the guest's own interface
-	# MTU down before pulling anything, so packets never need fragmenting
-	# in the first place — sidesteps PMTUD entirely instead of relying on
-	# it working correctly.
-	"${ssh_cmd[@]}" 'for i in $(ls /sys/class/net | grep -v ^lo$); do sudo ip link set "$i" mtu 1400; done; ip -o link show' || true
-
 	# Mirrors projectbluefin/dakota-iso's luks-install-qemu.sh: install via
 	# fisherman (the same backend every TunaOS installer frontend uses,
 	# gnome included — customize-live.sh symlinks it from each flavor's
@@ -607,28 +592,62 @@ run_install() {
 		return 3
 	}
 
-	# Diagnostics (previous commit) confirmed decisively: `podman images -a`
-	# on the live VM is completely empty (only the header row), and neither
-	# offline-store path customize-live.sh references even exists. There is
-	# no local copy of the image anywhere on this live squash to reference
-	# by name — TunaOS's tacklebox pipeline doesn't embed an
-	# additionalimagestore the way dakota-iso's does. The system boots as a
-	# deployed ostree/bootc filesystem directly; it never runs "as a
-	# container" with a queryable local copy.
+	# ── Image resolution: offline store vs. network pull ──────────────────
+	# The tacklebox-built ISO carries a LiveOS/store.squashfs.img with the
+	# payload image as an overlay-driver containers-storage additional store.
+	# customize-live.sh (2026-07) mounts it at /var/lib/superiso-store and
+	# adds it to /etc/containers/storage.conf's additionalimagestores.  Probe
+	# for both the locally-built ref (dev ISOs, `just iso … … ghcr … 1`) and
+	# the production ref (published ISOs).  If found, use
+	# `containers-storage:` transport — fisherman runs bootcViaContainer with
+	# no network pull.  Fall back to the network pull path only when the
+	# offline store is absent (older ISOs, or the mount unit failed).
 	#
-	# All four prior guesses failed because they all assumed SOME local
-	# image existed to reference (bugs #13/#14/#16/#18). The actual fix:
-	# set `image` (not just `targetImgref`) to a real registry ref. That
-	# makes fisherman's Image field non-empty, which triggers
-	# bootcViaContainer — fisherman's CheckImage() sees nothing local
-	# (NeedsPull=true), actually `podman pull`s the image for real, and
-	# only then runs bootc inside that freshly pulled container. This is
-	# fisherman's normal, designed, non-live-ISO install path — the one a
-	# real production install machine (with no embedded local store) uses
-	# too. Requires network access, which the LUKS E2E runner already has
-	# (and already does a GHCR login earlier in the job).
-	local image_ref="ghcr.io/tuna-os/${VARIANT:-}:${FLAVOR:-}"
-	local recipe_image="${image_ref}" recipe_target_imgref="${image_ref}"
+	# `targetImgref` always names the production GHCR ref so the installed
+	# system tracks the right image for updates.
+	local target_imgref="ghcr.io/tuna-os/${VARIANT:-}:${FLAVOR:-}"
+	local local_ref="localhost/${VARIANT:-}:${FLAVOR:-}"   # dev=1 ISO
+	local prod_ref="ghcr.io/tuna-os/${VARIANT:-}:${FLAVOR:-}"    # production ISO
+	local recipe_image=""  # set below after probing the VM
+
+	# Probe the guest's containers-storage for a locally-available image.
+	local found_local=0 found_ref=""
+	for candidate_ref in "$local_ref" "$prod_ref"; do
+		if "${ssh_cmd[@]}" "sudo podman image exists '${candidate_ref}'" 2>/dev/null; then
+			found_local=1
+			found_ref="$candidate_ref"
+			break
+		fi
+	done
+
+	if [[ "$found_local" -eq 1 ]]; then
+		echo "==> Found local image ${found_ref} in offline store — using containers-storage: transport"
+		recipe_image="containers-storage:${found_ref}"
+	else
+		echo "==> No local image in offline store, falling back to network pull over QEMU NAT"
+		recipe_image="${prod_ref}"
+
+		# Bug #20: the pull over QEMU SLIRP NAT can stall mid-blob. Clamp
+		# guest MTU before pulling and retry up to 4 times; podman skips
+		# already-fetched layers so each retry is incremental.
+		"${ssh_cmd[@]}" 'for i in $(ls /sys/class/net | grep -v ^lo$); do sudo ip link set "$i" mtu 1400; done' || true
+
+		echo "==> Pre-pulling ${prod_ref} (retry on stall, layers already fetched are cached)..."
+		local pull_ok=0
+		for pull_attempt in 1 2 3 4; do
+			echo "--> pull attempt ${pull_attempt}/4"
+			if timeout 600 "${ssh_cmd[@]}" "sudo podman pull ${prod_ref} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
+				pull_ok=1
+				break
+			fi
+			echo "==> pull attempt ${pull_attempt} failed or stalled; retrying..."
+		done
+		if [[ "$pull_ok" -ne 1 ]]; then
+			echo "ERROR: failed to pull ${prod_ref} after 4 attempts"
+			return 3
+		fi
+	fi
+
 	local composefs_backend="false" bootloader="grub2"
 	# grouper (Ubuntu) has no bootupd package available via apt, so it ships
 	# systemd-boot instead and installs via bootc's composefs-native backend.
@@ -645,7 +664,7 @@ run_install() {
   "disk": "/dev/vda",
   "filesystem": "xfs",
   "image": "${recipe_image}",
-  "targetImgref": "${recipe_target_imgref}",
+  "targetImgref": "${target_imgref}",
   "composeFsBackend": ${composefs_backend},
   "bootloader": "${bootloader}",
   "hostname": "tunaos-e2e",
@@ -656,40 +675,12 @@ EOF
 	echo "==> Uploading fisherman recipe..."
 	"${scp_cmd[@]}" "$RECIPE_LOCAL" liveuser@127.0.0.1:/tmp/e2e-recipe.json
 
-	# Pre-pull the image with retries before invoking fisherman. In practice
-	# (bug #20) the pull through QEMU's SLIRP NAT deterministically stalls
-	# mid-blob on one specific layer for ~29 minutes before erroring — not a
-	# PMTUD/MTU issue (an MTU=1400 guest-side clamp did not fix it, and the
-	# stalling blob isn't unusually large compared to its neighbors). Root
-	# cause not isolated further; treated as SLIRP connection flakiness.
-	# `podman pull` skips layers already present in local storage, so each
-	# retry only has to re-fetch whatever didn't finish, not the whole image.
-	# Once the image is present locally, fisherman's bootcViaContainer mode
-	# (CheckImage()) finds it and skips its own pull.
-	echo "==> Pre-pulling ${image_ref} (retry on stall, layers already fetched are cached)..."
-	local pull_ok=0
-	for pull_attempt in 1 2 3 4; do
-		echo "--> pull attempt ${pull_attempt}/4"
-		if timeout 600 "${ssh_cmd[@]}" "sudo podman pull ${image_ref} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
-			pull_ok=1
-			break
-		fi
-		echo "==> pull attempt ${pull_attempt} failed or stalled; retrying..."
-	done
-	if [[ "$pull_ok" -ne 1 ]]; then
-		echo "ERROR: failed to pull ${image_ref} after 4 attempts"
-		return 3
-	fi
-
 	echo "==> Running fisherman /tmp/e2e-recipe.json..."
-	# Bound with `timeout` as a safety net; the image is already local at
-	# this point so this should only cover the actual install steps, not a
-	# network pull.
 	timeout 1800 "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman /tmp/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
 		rc=$?
 		if [[ $rc -eq 0 ]]; then true;
 		elif [[ $rc -eq 124 ]]; then
-			echo "ERROR: fisherman install timed out after 1800s (likely a stalled podman pull)"
+			echo "ERROR: fisherman install timed out after 1800s"
 			return 3
 		else
 			echo "ERROR: fisherman install failed (exit $rc)"

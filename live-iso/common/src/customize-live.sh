@@ -54,11 +54,51 @@ fi
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/desktop-${DESKTOP}.sh"
 
-# ── 2b. containers-storage: fuse-overlayfs for overlay-on-overlay ────────────
+# ── 2b. containers-storage: offline payload store (tacklebox-built) ─────────
+# tacklebox's BuildOfflineStore() assembles an overlay-driver
+# containers-storage graphroot of the payload image into
+# LiveOS/store.squashfs.img on the ISO. Loop-mount it at
+# /var/lib/superiso-store and register it as an additionalimagestore so
+# fisherman (bootcViaContainer path) finds it with a `containers-storage:`
+# transport ref instead of pulling the same bytes over the network.
+# Pattern: projectbluefin/dakota-iso's configure-live.sh, adapted from
+# their separate-store approach (retained for reference only in their
+# build-offline-store.sh). dakota-iso has since moved to embedding the
+# store directly in the main squashfs, but the mount-based approach is
+# correct for tacklebox's current output format.
+STORE_MOUNT="/var/lib/superiso-store"
+mkdir -p "$STORE_MOUNT"
+cat >/usr/lib/systemd/system/var-lib-superiso\x2dstore.mount <<'UNITEOF'
+[Unit]
+Description=Tacklebox offline image store (ISO squashfs)
+DefaultDependencies=no
+After=initrd-root-fs.target
+Before=local-fs.target
+ConditionPathExists=/run/initramfs/live/LiveOS/store.squashfs.img
+
+[Mount]
+What=/run/initramfs/live/LiveOS/store.squashfs.img
+Where=/var/lib/superiso-store
+Type=squashfs
+Options=ro,nodev
+
+[Install]
+WantedBy=local-fs.target
+UNITEOF
+mkdir -p /etc/systemd/system/local-fs.target.wants
+ln -sf /usr/lib/systemd/system/var-lib-superiso\x2dstore.mount \
+	/etc/systemd/system/local-fs.target.wants/var-lib-superiso\x2dstore.mount
+
+mkdir -p /etc/containers/storage.conf.d
+cat >/etc/containers/storage.conf.d/99-tunaos-offline-store.conf <<'CONFEOF'
+[storage.options]
+additionalimagestores = ["/var/lib/superiso-store"]
+CONFEOF
+
 # The live squash's own rootfs is overlayfs (dmsquash-live-style squashfs +
 # tmpfs overlay). The default containers/storage "overlay" driver cannot
 # nest a second overlay mount on top of that without a userspace
-# mount_program — bootc (via fisherman) reading the embedded image with
+# mount_program — bootc (via fisherman) reading the additional store with
 # `containers-storage:` fails with "'overlay' is not supported over
 # overlayfs, a mount_program is required". Mirrors projectbluefin/dakota-iso
 # configure-live.sh's non-composefs storage.conf (dakota's fix for the same

@@ -80,12 +80,11 @@ jobs:
     name: LUKS ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate-matrix
     runs-on: ubuntu-24.04
-    # 90 min was sized for the old local-only bootc install (no network
-    # pull). fisherman now does a full image pull over the QEMU guest's NAT
-    # networking (see docs/ci-troubleshooting.md §4 bug #19) — slower than a
-    # host-level pull — on top of build + boot + install + reboot + boot
-    # verification. 150 min gives that real headroom.
-    timeout-minutes: 150
+    # The offline payload store (bug #21 fix) eliminates the in-VM network
+    # pull entirely — fisherman resolves the image via
+    # containers-storage: from the mounted store.squashfs.img. ISO build +
+    # boot + install + reboot + verify should complete well under 90 min.
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       max-parallel: 4
