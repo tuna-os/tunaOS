@@ -56,7 +56,7 @@ Explicitly rejected alternatives:
 | Stage | Mechanism | Status |
 |---|---|---|
 | 1. Pull | token → index → platform manifest → config → layer blobs, via the shim; digest-verify with WebCrypto | **Working** (prototype demo; verified against real images) |
-| 2. Unpack | streaming zstd (WASM, e.g. a compiled libzstd — small, well-trodden) + tar walker; overlay whiteout handling | next |
+| 2. Unpack | streaming zstd (fzstd, 8.4 KB inlined) + incremental tar walker, layers scanned topmost-first | **Working** (kernel + initramfs located in ~13 s / 349 MB of sailfin:kde, verified in headless Chromium cross-origin through the deployed shim) |
 | 3. Live root | author erofs (preferred: `mkfs.erofs` is a clean userspace C codebase to compile to WASM) or squashfs from the merged tree | the main lift |
 | 4. Boot bits | extract kernel + initramfs from `/usr/lib/modules/<ver>/`, systemd-boot from the image's own payload; write fisherman `recipe.json` pointing back at the source image by digest | straightforward once 2 exists |
 | 5. Media | FAT ESP image + ISO9660/El Torito wrapper (JS/WASM writer) | bounded, well-specified formats |
@@ -100,9 +100,11 @@ time in the browser — what you clicked is what installs.
 
 - [x] Configurator page + working stage-1 pull chain (prototype).
 - [x] Stateless CORS shim (`worker/cors-shim.js`), ready to deploy.
-- [ ] Deploy shim at `ghcr-shim.tunaos.org`; wire digest verification.
-- [ ] Stage 2: WASM zstd + tar walk — demo: extract and display the
-      kernel version from any variant:flavor in-browser.
+- [x] Shim deployed (temporary preview account, claimable — permanent
+      home: `npx wrangler deploy` from `worker/` after `wrangler login`);
+      digest verification still to wire.
+- [x] Stage 2: streaming zstd + tar walk extracts the kernel version from
+      any variant:flavor in-browser.
 - [ ] Stage 3–5: erofs + ESP + ISO writers; boot the result in the
       existing `iso-e2e.sh` disk gate to prove parity with CI ISOs.
 - Out of scope: any new published artifact; any stateful service.
