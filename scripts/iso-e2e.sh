@@ -620,8 +620,12 @@ run_install() {
 	"${ssh_cmd[@]}" "sudo mkdir -p /var/lib/superiso-store && sudo mount -o ro,nodev /run/initramfs/live/LiveOS/store.squashfs.img /var/lib/superiso-store 2>&1 || echo '(mount failed)'" || true
 	echo "--- mount table (superiso) ---"
 	"${ssh_cmd[@]}" "findmnt /var/lib/superiso-store 2>&1 || echo '(not mounted)'" || true
-	echo "--- storage.conf.d drop-in ---"
-	"${ssh_cmd[@]}" "cat /etc/containers/storage.conf.d/99-tunaos-offline-store.conf 2>&1 || echo '(not found)'" || true
+	echo "--- primary storage.conf ---"
+	"${ssh_cmd[@]}" "cat /etc/containers/storage.conf 2>&1 || echo '(not found)'" || true
+	echo "--- offline store layout ---"
+	"${ssh_cmd[@]}" "sudo ls -la /var/lib/superiso-store/ 2>&1 || true" || true
+	"${ssh_cmd[@]}" "sudo ls -la /var/lib/superiso-store/overlay-images/ 2>&1 || echo '(no overlay-images)'" || true
+	"${ssh_cmd[@]}" "sudo cat /var/lib/superiso-store/storage.lock 2>&1 || echo '(no storage.lock)'" || true
 	echo "--- effective storage driver ---"
 	"${ssh_cmd[@]}" "sudo podman info 2>&1 | grep -i graphdriver || echo 'podman info failed'" || true
 	echo "--- podman images (all) ---"

@@ -93,14 +93,15 @@ ln -sf /usr/lib/systemd/system/tunaos-offline-store.service \
 # customize container (bootc images ship uninitialized storage), and the
 # driver may auto-detect as "btrfs" (EL10 default). The offline store is
 # ALWAYS overlay, and additionalimagestores silently ignores stores with
-# a different driver.  Write a complete drop-in that forces overlay and
-# registers the mounted store — this works regardless of the base image's
-# storage.conf state.
-mkdir -p /etc/containers/storage.conf.d
-cat >/etc/containers/storage.conf.d/99-tunaos-offline-store.conf <<'CONFEOF'
+# a different driver.  containers/storage reads this primary configuration;
+# do not rely on a storage.conf.d drop-in here. Write the complete config so
+# every consumer (podman, skopeo, bootc, and fisherman) sees the same store.
+mkdir -p /etc/containers
+cat >/etc/containers/storage.conf <<'CONFEOF'
 [storage]
 driver = "overlay"
 runroot = "/run/containers/storage"
+graphroot = "/var/lib/containers/storage"
 
 [storage.options]
 additionalimagestores = ["/var/lib/superiso-store"]
@@ -108,22 +109,6 @@ additionalimagestores = ["/var/lib/superiso-store"]
 [storage.options.overlay]
 mount_program = "/usr/bin/fuse-overlayfs"
 CONFEOF
-
-# Also write the driver + mount_program into the main storage.conf as a
-# belt-and-suspenders measure, in case the drop-in isn't read.
-mkdir -p /etc/containers
-if [[ -f /etc/containers/storage.conf ]]; then
-	if grep -q '^driver' /etc/containers/storage.conf; then
-		sed -i 's/^driver *=.*/driver = "overlay"/' /etc/containers/storage.conf
-	fi
-fi
-if [[ -f /etc/containers/storage.conf ]] && ! grep -q 'mount_program' /etc/containers/storage.conf; then
-	cat >>/etc/containers/storage.conf <<'STOREOF'
-
-[storage.options.overlay]
-mount_program = "/usr/bin/fuse-overlayfs"
-STOREOF
-fi
 
 # Dev/E2E media only: the normal published-image policy keeps SSH disabled.
 # tacklebox creates liveuser during boot, so install a oneshot that sets its
