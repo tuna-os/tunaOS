@@ -72,6 +72,18 @@ sessions).
 - **No cell has passed yet.** All three finish-condition boxes above are
   unchecked. Next: dispatch a fresh `yellowfin:kde` (or niri/cosmic) run
   to verify the retry-pull fix.
+- **Bug #21 found (2026-07-17, PR #668):** `tunaos-desktop-contract.service`
+  asserted `is-active graphical.target` while being WantedBy that target —
+  targets gain implicit After= on their wants, so the check self-deadlocks;
+  the script exited silently under `set -e` and no marker ever reached
+  ttyS0. This broke every variant Gate on main AND explains why LUKS E2E's
+  installed-boot wait (which requires the contract marker from the *pulled
+  published image*) could never pass: no published image emits a marker.
+  Chain in flight: Build Yellowfin gnome (run 29614564619, branch
+  fix/desktop-contract-gate) proves the Gate; Build Yellowfin kde (run
+  29614735371, twin branch fix/desktop-contract-gate-kde — twin needed
+  because the concurrency group cancels same-ref dispatches) publishes a
+  marker-emitting :kde; then dispatch LUKS E2E yellowfin:kde.
 
 ## How to continue
 
