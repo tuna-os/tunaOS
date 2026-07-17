@@ -7,7 +7,7 @@
 # with a single data-driven installer.
 #
 # Usage:
-#   /run/context/build_scripts/install-desktop.sh <desktop>
+#   /run/context/build_scripts/desktop/install-desktop.sh <desktop>
 #
 # Requires yq (mikefarah/yq) available at YQ env var or in PATH.
 
@@ -272,9 +272,11 @@ done
 # ── Post-install scripts ─────────────────────────────────────────────────────
 readarray -t _TD_POST_SCRIPTS < <($YQ -r '.post_install[]' "${_TD_MANIFEST}" 2>/dev/null || true)
 for script in "${_TD_POST_SCRIPTS[@]}"; do
-	if [[ -n "$script" && -f "${_TD_CTX}/build_scripts/${script}" ]]; then
+	# Post-install helpers live alongside this installer in
+	# build_scripts/desktop/, so manifests can reference them by bare name.
+	if [[ -n "$script" && -f "${_TD_CTX}/build_scripts/desktop/${script}" ]]; then
 		echo "Running post-install: ${script}"
-		source "${_TD_CTX}/build_scripts/${script}"
+		source "${_TD_CTX}/build_scripts/desktop/${script}"
 	fi
 done
 
@@ -288,11 +290,16 @@ done
 
 # A package transaction is not sufficient evidence that the requested desktop
 # exists. Validate its session, compositor and display manager, then install a
-# runtime contract checked by the VM promotion gate.
-if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" == niri ]]; then
-	"${_TD_CTX}/build_scripts/verify-desktop-experience.sh" "${_TD_DESKTOP}"
-	install -Dm0755 "${_TD_CTX}/build_scripts/verify-desktop-experience.sh" \
+# runtime contract checked by the VM promotion gate. The contract unit also
+# runs the snosi-derived installed-system TAP checks (e2e-runtime-checks.sh)
+# as a second, non-fatal ExecStart — their markers are harvested from the
+# serial console by scripts/iso-e2e.sh.
+if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" == niri || "${_TD_DESKTOP}" == cosmic || "${_TD_DESKTOP}" == xfce ]]; then
+	"${_TD_CTX}/build_scripts/checks/verify-desktop-experience.sh" "${_TD_DESKTOP}"
+	install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-desktop-experience.sh" \
 		/usr/libexec/tunaos/verify-desktop-experience
+	install -Dm0755 "${_TD_CTX}/build_scripts/checks/e2e-runtime-checks.sh" \
+		/usr/libexec/tunaos/e2e-runtime-checks
 	cat >/usr/lib/systemd/system/tunaos-desktop-contract.service <<EOF
 [Unit]
 Description=Verify TunaOS ${_TD_DESKTOP} desktop experience
@@ -302,9 +309,10 @@ Requires=display-manager.service
 [Service]
 Type=oneshot
 ExecStart=/usr/libexec/tunaos/verify-desktop-experience ${_TD_DESKTOP} --runtime
+ExecStart=-/usr/libexec/tunaos/e2e-runtime-checks ${_TD_DESKTOP}
 StandardOutput=journal+console
 StandardError=journal+console
-TimeoutStartSec=30
+TimeoutStartSec=90
 
 [Install]
 WantedBy=graphical.target

@@ -23,6 +23,12 @@
 #       Boot, then verify SSH connectivity to the live env. ISO must have
 #       been built with ENABLE_SSHD=1 (e.g. `just iso dev=1`).
 #
+#   scripts/iso-e2e.sh <iso_path> --app-launch <app|list|auto>
+#       Boot the live env, then launch and screenshot apps: a single
+#       desktop id, a comma-separated list, or "auto" for the DE's default
+#       matrix (derived from FLAVOR; openQA apps_startstop clone, verified
+#       via VLM screenshots instead of needles). Exit = VLM failure count.
+#
 #   scripts/iso-e2e.sh <disk.qcow2> --disk
 #       Boot a disk image (qcow2/raw) instead of an ISO and verify it
 #       reaches a graphical session (serial marker or screenshot sanity).
@@ -48,6 +54,11 @@
 #   --keep-vm             Leave the QEMU instance running after exit (for
 #                         debugging — use `socat - UNIX-CONNECT:<output>/monitor.sock`
 #                         to drive it)
+#
+# Environment:
+#   E2E_SMOKE_STRICT=1    Treat failures from the live-image smoke checks
+#                         (scripts/e2e-smoke-checks.sh, TAP assertions adapted
+#                         from frostyard/snosi) as fatal. Default: warn only.
 #
 # Exit codes:
 #   0  success
@@ -556,6 +567,70 @@ check_ssh() {
 	return 5
 }
 
+# Upload and run the TAP-style live-image smoke checks (assertions adapted
+# from frostyard/snosi's tiered on-VM test scripts) over SSH. Non-fatal by
+# default — the TAP output is CI evidence; set E2E_SMOKE_STRICT=1 to turn
+# any failed assertion into a hard failure once the checks have proven
+# stable across the matrix.
+run_smoke_checks() {
+	local script_dir
+	script_dir="$(dirname "${BASH_SOURCE[0]}")"
+	local -a COMMON_SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p 2222 liveuser@127.0.0.1)
+	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P 2222)
+
+	"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" liveuser@127.0.0.1:/tmp/e2e-assert.sh
+	"${scp_cmd[@]}" "${script_dir}/e2e-smoke-checks.sh" liveuser@127.0.0.1:/tmp/e2e-smoke-checks.sh
+
+	local smoke_output smoke_rc=0
+	smoke_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=/tmp bash /tmp/e2e-smoke-checks.sh" 2>&1) || smoke_rc=$?
+	echo "$smoke_output" | tee -a "${SERIAL_LOG}"
+	if [[ "$smoke_rc" -ne 0 ]]; then
+		echo "::warning::live-image smoke checks reported ${smoke_rc} failure(s)"
+		if [[ "${E2E_SMOKE_STRICT:-0}" -eq 1 ]]; then
+			echo "ERROR: E2E_SMOKE_STRICT=1 and smoke checks failed" >&2
+			return 1
+		fi
+	fi
+	return 0
+}
+
+# Harvest the installed-system TAP checks from the serial console. The
+# installed system has no SSH user, so the snosi-derived assertions are baked
+# into the image (build_scripts/checks/e2e-runtime-checks.sh, run by
+# tunaos-desktop-contract.service) and emit grep-able markers on ttyS0:
+# TUNAOS_INSTALL_CHECKS_BEGIN ... TUNAOS_INSTALL_CHECKS_RESULT pass=N fail=M.
+# The checks ExecStart fires right after the contract marker, so wait
+# briefly for the RESULT line; images built before the checks existed emit
+# nothing — tolerate that so old tags can still be gated/promoted.
+harvest_install_checks() {
+	local deadline=$(($(date +%s) + ${INSTALL_CHECKS_WAIT:-90})) found=0
+	while true; do
+		if grep -q "TUNAOS_INSTALL_CHECKS_RESULT" "$SERIAL_LOG" 2>/dev/null; then
+			found=1
+			break
+		fi
+		(($(date +%s) < deadline)) || break
+		sleep 3
+	done
+	if [[ "$found" -ne 1 ]]; then
+		echo "==> No installed-system TAP checks on serial (image predates e2e-runtime-checks) — skipping"
+		return 0
+	fi
+	echo "==> Installed-system TAP checks (from serial console):"
+	sed -n '/TUNAOS_INSTALL_CHECKS_BEGIN/,/TUNAOS_INSTALL_CHECKS_RESULT/p' "$SERIAL_LOG" | tr -d '\r'
+	local fail
+	fail=$(grep -o "TUNAOS_INSTALL_CHECKS_RESULT pass=[0-9]* fail=[0-9]*" "$SERIAL_LOG" | tail -1 | grep -o "fail=[0-9]*" | cut -d= -f2)
+	if [[ -n "$fail" && "$fail" -gt 0 ]]; then
+		echo "::warning::installed-system checks reported ${fail} failure(s)"
+		if [[ "${E2E_SMOKE_STRICT:-0}" -eq 1 ]]; then
+			echo "ERROR: E2E_SMOKE_STRICT=1 and installed-system checks failed" >&2
+			return 1
+		fi
+	fi
+	return 0
+}
+
 # Run bootc install-to-disk via SSH, then reboot and verify the installed system.
 # This replaces the Anaconda kickstart approach (TunaOS uses bootc, not anaconda).
 run_install() {
@@ -607,6 +682,12 @@ run_install() {
 		return 3
 	}
 
+	# Pre-install evidence: the live squash boots the same bootc image that
+	# fisherman is about to install, so snosi-style smoke assertions here
+	# catch a broken image before the (much slower) install/reboot phases.
+	echo "==> Running live-image smoke checks..."
+	run_smoke_checks || return 3
+
 	# Diagnostics (previous commit) confirmed decisively: `podman images -a`
 	# on the live VM is completely empty (only the header row), and neither
 	# offline-store path customize-live.sh references even exists. There is
@@ -629,6 +710,18 @@ run_install() {
 	# (and already does a GHCR login earlier in the job).
 	local image_ref="ghcr.io/tuna-os/${VARIANT:-}:${FLAVOR:-}"
 	local recipe_image="${image_ref}" recipe_target_imgref="${image_ref}"
+	# Tacklebox ISO images with offline_payloads mount the embedded
+	# containers-storage graphroot at /var/lib/superiso-store before the live
+	# session starts.  Prefer it when it contains this exact ref: this is the
+	# same source fisherman will bind into its bootc container, so no guest-NAT
+	# pull is needed.  Keep the registry fallback for older ISOs and for a
+	# payload/tag mismatch.
+	local offline_store_json='[]' use_offline_store=0
+	if "${ssh_cmd[@]}" "sudo test -d /var/lib/superiso-store && sudo podman image exists '${image_ref}'"; then
+		use_offline_store=1
+		offline_store_json='["/var/lib/superiso-store"]'
+		echo "==> Using embedded offline image store for ${image_ref}"
+	fi
 	local composefs_backend="false" bootloader="grub2"
 	# grouper (Ubuntu) has no bootupd package available via apt, so it ships
 	# systemd-boot instead and installs via bootc's composefs-native backend.
@@ -648,6 +741,7 @@ run_install() {
   "targetImgref": "${recipe_target_imgref}",
   "composeFsBackend": ${composefs_backend},
   "bootloader": "${bootloader}",
+  "additionalImageStores": ${offline_store_json},
   "hostname": "tunaos-e2e",
   "encryption": ${encryption_json},
   "flatpaks": []
@@ -666,19 +760,21 @@ EOF
 	# retry only has to re-fetch whatever didn't finish, not the whole image.
 	# Once the image is present locally, fisherman's bootcViaContainer mode
 	# (CheckImage()) finds it and skips its own pull.
-	echo "==> Pre-pulling ${image_ref} (retry on stall, layers already fetched are cached)..."
-	local pull_ok=0
-	for pull_attempt in 1 2 3 4; do
-		echo "--> pull attempt ${pull_attempt}/4"
-		if timeout 600 "${ssh_cmd[@]}" "sudo podman pull ${image_ref} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
-			pull_ok=1
-			break
+	if [[ "$use_offline_store" -eq 0 ]]; then
+		echo "==> Pre-pulling ${image_ref} (retry on stall, layers already fetched are cached)..."
+		local pull_ok=0
+		for pull_attempt in 1 2 3 4; do
+			echo "--> pull attempt ${pull_attempt}/4"
+			if timeout 600 "${ssh_cmd[@]}" "sudo podman pull ${image_ref} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
+				pull_ok=1
+				break
+			fi
+			echo "==> pull attempt ${pull_attempt} failed or stalled; retrying..."
+		done
+		if [[ "$pull_ok" -ne 1 ]]; then
+			echo "ERROR: failed to pull ${image_ref} after 4 attempts"
+			return 3
 		fi
-		echo "==> pull attempt ${pull_attempt} failed or stalled; retrying..."
-	done
-	if [[ "$pull_ok" -ne 1 ]]; then
-		echo "ERROR: failed to pull ${image_ref} after 4 attempts"
-		return 3
 	fi
 
 	echo "==> Running fisherman /tmp/e2e-recipe.json..."
@@ -687,7 +783,8 @@ EOF
 	# network pull.
 	timeout 1800 "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman /tmp/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
 		rc=$?
-		if [[ $rc -eq 0 ]]; then true;
+		if [[ $rc -eq 0 ]]; then
+			true
 		elif [[ $rc -eq 124 ]]; then
 			echo "ERROR: fisherman install timed out after 1800s (likely a stalled podman pull)"
 			return 3
@@ -790,6 +887,7 @@ EOF
 		if [[ "$installed_ready" -eq 1 ]]; then
 			echo "==> Installed system booted successfully!"
 			record_luks_evidence "TUNAOS_LUKS_E2E_PASS encrypted=1 tpm_unlock=1 installed_boot=1 desktop_contract=${require_desktop_contract}"
+			harvest_install_checks || return 1
 			screenshot "30-installed"
 			# VLM verification of installed system
 			if command -v python3 &>/dev/null; then
@@ -866,6 +964,7 @@ disk)
 		if grep -qE "TUNAOS_DESKTOP_CONTRACT_(OK|FAIL)" "$SERIAL_LOG" 2>/dev/null; then
 			echo "==> Desktop experience contract reached (serial)"
 			rc=0
+			harvest_install_checks || rc=1
 			break
 		fi
 		sleep 10
@@ -919,6 +1018,10 @@ ssh)
 	done
 	check_ssh
 	rc=$?
+	if [[ "$rc" -eq 0 ]]; then
+		echo "==> Running live-image smoke checks..."
+		run_smoke_checks || rc=5
+	fi
 	screenshot "20-ssh"
 	exit "$rc"
 	;;
@@ -946,28 +1049,68 @@ app-launch)
 		sleep 2
 	done
 	check_ssh || exit $?
-	# Launch the app via SSH
+
+	# Per-DE app matrix (clone of openQA's apps_startstop tests, needle-free:
+	# VLM screenshot verification instead of pixel templates). APP_CMD may be
+	# a single desktop id, a comma-separated list, or "auto" to pick the
+	# matrix for this image's DE (first component of FLAVOR, e.g.
+	# gnome-nvidia-hwe -> gnome).
 	APP="${APP_CMD:-nautilus}"
-	echo "==> Launching app via SSH: $APP"
-	sshpass -p live ssh -o StrictHostKeyChecking=no -p 2222 liveuser@127.0.0.1 \
-		"gtk-launch $APP 2>&1" || echo "  (app launch may have failed)"
-	sleep 5
-	screenshot "20-app"
-	# VLM verification
-	if command -v python3 &>/dev/null; then
-		VLM_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/desktop-verify.py"
-		if [[ -f "$VLM_SCRIPT" ]]; then
-			PNG="${OUTPUT_DIR}/20-app.png"
-			[[ -f "${OUTPUT_DIR}/20-app.ppm" ]] && convert "${OUTPUT_DIR}/20-app.ppm" "$PNG" 2>/dev/null || true
+	if [[ "$APP" == "auto" ]]; then
+		flavor_de="${FLAVOR:-}"
+		case "${flavor_de%%-*}" in
+		gnome) APP="org.gnome.Nautilus,org.gnome.TextEditor" ;;
+		kde) APP="org.kde.dolphin,org.kde.konsole" ;;
+		cosmic) APP="com.system76.CosmicFiles,com.system76.CosmicTerm" ;;
+		xfce) APP="thunar,xfce4-terminal" ;;
+		*)
+			echo "==> No app matrix for FLAVOR=${FLAVOR:-unset}; capturing session only"
+			APP=""
+			;;
+		esac
+	fi
+
+	# gtk-launch needs the live session's bus/compositor; a bare SSH login
+	# has neither, which is why single-app mode historically "may have
+	# failed". liveuser is auto-logged-in, so its session bus is at the
+	# canonical /run/user/<uid>/bus path.
+	# shellcheck disable=SC2016  # $(id -u) must expand on the guest, not here
+	SSH_APP_ENV='DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus WAYLAND_DISPLAY=wayland-0 DISPLAY=:0'
+	app_failures=0
+	app_idx=0
+	VLM_SCRIPT="$(dirname "${BASH_SOURCE[0]}")/desktop-verify.py"
+	IFS=',' read -ra APP_LIST <<<"$APP"
+	for app in "${APP_LIST[@]}"; do
+		[[ -n "$app" ]] || continue
+		app_idx=$((app_idx + 1))
+		label="20-app-$(printf '%02d' "$app_idx")-${app##*.}"
+		echo "==> Launching app via SSH: $app"
+		sshpass -p live ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 liveuser@127.0.0.1 \
+			"env $SSH_APP_ENV gtk-launch $app 2>&1" || echo "  (app launch may have failed)"
+		sleep 8
+		screenshot "$label"
+		# VLM verification per app (aggregate failures; absence of the VLM
+		# path keeps this mode green, matching previous behavior).
+		if command -v python3 &>/dev/null && [[ -f "$VLM_SCRIPT" ]]; then
+			PNG="${OUTPUT_DIR}/${label}.png"
+			[[ -f "${OUTPUT_DIR}/${label}.ppm" ]] && convert "${OUTPUT_DIR}/${label}.ppm" "$PNG" 2>/dev/null || true
 			if [[ -f "$PNG" ]]; then
-				python3 "$VLM_SCRIPT" "$PNG" --mode desktop
-				rc=$?
-				echo "==> VLM verification exit code: $rc"
-				exit $rc
+				if ! python3 "$VLM_SCRIPT" "$PNG" --mode desktop; then
+					echo "::warning::VLM verification failed for ${app}"
+					app_failures=$((app_failures + 1))
+				fi
 			fi
 		fi
-	fi
-	exit 0
+		# Best-effort stop (openQA closes each app before the next): match the
+		# desktop id's last segment, lowercased, against the process table.
+		app_proc="${app##*.}"
+		sshpass -p live ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 liveuser@127.0.0.1 \
+			"pkill -f '${app_proc,,}' 2>/dev/null" || true
+		sleep 2
+	done
+	[[ "$app_idx" -eq 0 ]] && screenshot "20-app"
+	echo "==> app matrix complete: ${app_idx} app(s), ${app_failures} VLM failure(s)"
+	exit "$app_failures"
 	;;
 *)
 	echo "Unknown mode: $MODE" >&2

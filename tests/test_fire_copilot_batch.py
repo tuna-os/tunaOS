@@ -218,12 +218,12 @@ def test_issue_body_contains_porting_guide():
 def test_issue_body_contains_build_script():
     """Build script section should be included."""
     build_sh = "#!/bin/bash\necho build"
-    body = f"""## Current `build_scripts/niri.sh`
+    body = f"""## Current `build_scripts/desktop/niri.sh`
 
 ```bash
 {build_sh}
 ```"""
-    assert "build_scripts/niri.sh" in body
+    assert "build_scripts/desktop/niri.sh" in body
     assert "```bash" in body
     assert "echo build" in body
 

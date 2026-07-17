@@ -23,12 +23,16 @@ esac
 systemctl enable "${dm}.service"
 systemctl set-default graphical.target
 
-# GNOME/KDE/Niri are the experience families with explicit runtime contracts.
+# Every desktop family ships an explicit runtime contract plus the
+# snosi-derived installed-system TAP checks (harvested from the serial
+# console by scripts/iso-e2e.sh; the checks ExecStart is non-fatal).
 case "$desktop" in
-gnome | kde | niri)
-	/run/context/build_scripts/verify-desktop-experience.sh "$desktop"
-	install -Dm0755 /run/context/build_scripts/verify-desktop-experience.sh \
+gnome | kde | niri | cosmic | xfce)
+	/run/context/build_scripts/checks/verify-desktop-experience.sh "$desktop"
+	install -Dm0755 /run/context/build_scripts/checks/verify-desktop-experience.sh \
 		/usr/libexec/tunaos/verify-desktop-experience
+	install -Dm0755 /run/context/build_scripts/checks/e2e-runtime-checks.sh \
+		/usr/libexec/tunaos/e2e-runtime-checks
 	cat >/usr/lib/systemd/system/tunaos-desktop-contract.service <<EOF
 [Unit]
 Description=Verify TunaOS ${desktop} desktop experience
@@ -38,8 +42,10 @@ Requires=display-manager.service
 [Service]
 Type=oneshot
 ExecStart=/usr/libexec/tunaos/verify-desktop-experience ${desktop} --runtime
+ExecStart=-/usr/libexec/tunaos/e2e-runtime-checks ${desktop}
 StandardOutput=journal+console
 StandardError=journal+console
+TimeoutStartSec=90
 
 [Install]
 WantedBy=graphical.target

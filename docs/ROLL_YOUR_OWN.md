@@ -237,7 +237,7 @@ system_files/
             └── my-wallpaper.png
 ```
 
-These are copied into every image by `build_scripts/copy-files.sh` (step
+These are copied into every image by `build_scripts/00-copy-files.sh` (step
 1 of the build). To override a file that upstream already ships, use
 `system_files_overrides/` — it's applied after `system_files/`.
 
@@ -455,7 +455,7 @@ FROM base-no-de AS myde
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/install-desktop.sh myde
+  /run/context/build_scripts/desktop/install-desktop.sh myde
 RUN rm -rf /opt && ln -s /var/opt /opt
 ```
 

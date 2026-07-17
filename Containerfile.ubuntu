@@ -142,13 +142,13 @@ RUN rm -rf /opt && mkdir /opt
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/copy-files.sh
+  /run/context/build_scripts/00-copy-files.sh
 
 # Workarounds (IS_* flags guard all RPM-specific blocks; false on Ubuntu).
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-   /run/context/build_scripts/00-workarounds.sh
+   /run/context/build_scripts/01-workarounds.sh
 
 # Base packages WITHOUT DE (no RHSM secret mount — Ubuntu has no subscriptions).
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
@@ -186,7 +186,7 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-   /run/context/build_scripts/cleanup.sh
+   /run/context/build_scripts/99-cleanup.sh
 
 # https://bootc-dev.github.io/bootc/bootc-images.html#standard-metadata-for-bootc-compatible-images
 LABEL containers.bootc=1
@@ -204,8 +204,8 @@ FROM base-no-de AS gnome
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/gnome.sh base && \
-  /run/context/build_scripts/configure-desktop-runtime.sh gnome
+  /run/context/build_scripts/desktop/gnome.sh base && \
+  /run/context/build_scripts/desktop/configure-desktop-runtime.sh gnome
 RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/bootc/finalize.sh
@@ -214,8 +214,8 @@ FROM base-no-de AS kde
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/kde.sh base && \
-  /run/context/build_scripts/configure-desktop-runtime.sh kde
+  /run/context/build_scripts/desktop/kde.sh base && \
+  /run/context/build_scripts/desktop/configure-desktop-runtime.sh kde
 RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/bootc/finalize.sh
@@ -224,8 +224,8 @@ FROM base-no-de AS cosmic
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/cosmic.sh base && \
-  /run/context/build_scripts/configure-desktop-runtime.sh cosmic
+  /run/context/build_scripts/desktop/cosmic.sh base && \
+  /run/context/build_scripts/desktop/configure-desktop-runtime.sh cosmic
 RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/bootc/finalize.sh
@@ -234,8 +234,8 @@ FROM base-no-de AS niri
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/niri.sh base && \
-  /run/context/build_scripts/configure-desktop-runtime.sh niri
+  /run/context/build_scripts/desktop/niri.sh base && \
+  /run/context/build_scripts/desktop/configure-desktop-runtime.sh niri
 RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/bootc/finalize.sh
@@ -244,8 +244,8 @@ FROM base-no-de AS xfce
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/xfce.sh base && \
-  /run/context/build_scripts/configure-desktop-runtime.sh xfce
+  /run/context/build_scripts/desktop/xfce.sh base && \
+  /run/context/build_scripts/desktop/configure-desktop-runtime.sh xfce
 RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/bootc/finalize.sh
@@ -258,11 +258,11 @@ FROM base-no-de AS gnome-zfs
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/gnome.sh base
+  /run/context/build_scripts/desktop/gnome.sh base
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/zfs.sh
+  /run/context/build_scripts/desktop/zfs.sh
 RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/bootc/finalize.sh

@@ -59,24 +59,24 @@ build_scripts_top=(
 
 # ── Stage scripts (sourced by the build system) ──────────────────────────
 
-@test "build_scripts/00-workarounds.sh: exists" {
-  run test -f "${REPO_ROOT}/build_scripts/00-workarounds.sh"
+@test "build_scripts/01-workarounds.sh: exists" {
+  run test -f "${REPO_ROOT}/build_scripts/01-workarounds.sh"
   [ "$status" -eq 0 ]
 }
 
-@test "build_scripts/00-workarounds.sh: has bash shebang" {
-  run head -1 "${REPO_ROOT}/build_scripts/00-workarounds.sh"
+@test "build_scripts/01-workarounds.sh: has bash shebang" {
+  run head -1 "${REPO_ROOT}/build_scripts/01-workarounds.sh"
   [[ "$output" =~ ^#!/.*bash ]] || [[ "$output" =~ ^#!/.*sh ]]
 }
 
-@test "build_scripts/00-workarounds.sh: has set flags" {
-  run grep 'set -xeuo pipefail\|set -euo pipefail' "${REPO_ROOT}/build_scripts/00-workarounds.sh"
+@test "build_scripts/01-workarounds.sh: has set flags" {
+  run grep 'set -xeuo pipefail\|set -euo pipefail' "${REPO_ROOT}/build_scripts/01-workarounds.sh"
   [ "$status" -eq 0 ]
 }
 
-@test "build_scripts/00-workarounds.sh: passes shellcheck" {
+@test "build_scripts/01-workarounds.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/00-workarounds.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/01-workarounds.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
@@ -141,20 +141,20 @@ build_scripts_top=(
   fi
 }
 
-@test "build_scripts/cleanup.sh: exists and passes shellcheck" {
-  run test -f "${REPO_ROOT}/build_scripts/cleanup.sh"
+@test "build_scripts/99-cleanup.sh: exists and passes shellcheck" {
+  run test -f "${REPO_ROOT}/build_scripts/99-cleanup.sh"
   [ "$status" -eq 0 ]
   if command -v shellcheck &>/dev/null; then
-    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/cleanup.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/99-cleanup.sh"
     [ "$status" -eq 0 ]
   fi
 }
 
-@test "build_scripts/copy-files.sh: exists and passes shellcheck" {
-  run test -f "${REPO_ROOT}/build_scripts/copy-files.sh"
+@test "build_scripts/00-copy-files.sh: exists and passes shellcheck" {
+  run test -f "${REPO_ROOT}/build_scripts/00-copy-files.sh"
   [ "$status" -eq 0 ]
   if command -v shellcheck &>/dev/null; then
-    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/copy-files.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/00-copy-files.sh"
     [ "$status" -eq 0 ]
   fi
 }
@@ -180,84 +180,84 @@ build_scripts_top=(
 
 # ── Desktop flavor scripts ──────────────────────────────────────────────
 
-@test "build_scripts/gnome.sh: exists and sources lib.sh" {
-  run grep 'source.*lib.sh' "${REPO_ROOT}/build_scripts/gnome.sh"
+@test "build_scripts/desktop/gnome.sh: exists and sources lib.sh" {
+  run grep 'source.*lib.sh' "${REPO_ROOT}/build_scripts/desktop/gnome.sh"
   [ "$status" -eq 0 ]
 }
 
-@test "build_scripts/gnome.sh: passes shellcheck" {
+@test "build_scripts/desktop/gnome.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/gnome.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/desktop/gnome.sh"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
   fi
 }
 
-@test "build_scripts/kde.sh: exists and passes shellcheck" {
-  run test -f "${REPO_ROOT}/build_scripts/kde.sh"
+@test "build_scripts/desktop/kde.sh: exists and passes shellcheck" {
+  run test -f "${REPO_ROOT}/build_scripts/desktop/kde.sh"
   [ "$status" -eq 0 ]
   if command -v shellcheck &>/dev/null; then
-    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/kde.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/desktop/kde.sh"
     [ "$status" -eq 0 ]
   fi
 }
 
-@test "build_scripts/cosmic.sh: exists and passes shellcheck" {
-  run test -f "${REPO_ROOT}/build_scripts/cosmic.sh"
+@test "build_scripts/desktop/cosmic.sh: exists and passes shellcheck" {
+  run test -f "${REPO_ROOT}/build_scripts/desktop/cosmic.sh"
   [ "$status" -eq 0 ]
   if command -v shellcheck &>/dev/null; then
-    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/cosmic.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/desktop/cosmic.sh"
     [ "$status" -eq 0 ]
   fi
 }
 
-@test "build_scripts/niri.sh: exists and passes shellcheck" {
-  run test -f "${REPO_ROOT}/build_scripts/niri.sh"
+@test "build_scripts/desktop/niri.sh: exists and passes shellcheck" {
+  run test -f "${REPO_ROOT}/build_scripts/desktop/niri.sh"
   [ "$status" -eq 0 ]
   if command -v shellcheck &>/dev/null; then
-    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/niri.sh"
+    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/desktop/niri.sh"
     [ "$status" -eq 0 ]
   fi
 }
 
-@test "build_scripts/niri.sh: Ubuntu uses the AvengeMedia Niri and DMS repositories" {
-  grep -q 'avengemedia/danklinux/ubuntu' "${REPO_ROOT}/build_scripts/niri.sh"
-  grep -q 'avengemedia/dms/ubuntu' "${REPO_ROOT}/build_scripts/niri.sh"
+@test "build_scripts/desktop/niri.sh: Ubuntu uses the AvengeMedia Niri and DMS repositories" {
+  grep -q 'avengemedia/danklinux/ubuntu' "${REPO_ROOT}/build_scripts/desktop/niri.sh"
+  grep -q 'avengemedia/dms/ubuntu' "${REPO_ROOT}/build_scripts/desktop/niri.sh"
   grep -q 'codename="${UBUNTU_CODENAME:-${VERSION_CODENAME' \
-    "${REPO_ROOT}/build_scripts/niri.sh"
+    "${REPO_ROOT}/build_scripts/desktop/niri.sh"
   grep -q 'pkg_install niri greetd quickshell dms dms-greeter' \
-    "${REPO_ROOT}/build_scripts/niri.sh"
-  grep -q 'libpam-gnome-keyring' "${REPO_ROOT}/build_scripts/niri.sh"
-  grep -q 'python3-nautilus' "${REPO_ROOT}/build_scripts/niri.sh"
-  grep -q 'ssh-askpass-gnome' "${REPO_ROOT}/build_scripts/niri.sh"
-  grep -q 'systemd-zram-generator' "${REPO_ROOT}/build_scripts/niri.sh"
-  grep -q 'twpayne/chezmoi/releases/download' "${REPO_ROOT}/build_scripts/niri.sh"
-  grep -q 'sha256sum -c' "${REPO_ROOT}/build_scripts/niri.sh"
-  grep -q 'chezmoi --version' "${REPO_ROOT}/build_scripts/niri.sh"
-  run grep -E 'pkg_install .*greetd-spawn' "${REPO_ROOT}/build_scripts/niri.sh"
+    "${REPO_ROOT}/build_scripts/desktop/niri.sh"
+  grep -q 'libpam-gnome-keyring' "${REPO_ROOT}/build_scripts/desktop/niri.sh"
+  grep -q 'python3-nautilus' "${REPO_ROOT}/build_scripts/desktop/niri.sh"
+  grep -q 'ssh-askpass-gnome' "${REPO_ROOT}/build_scripts/desktop/niri.sh"
+  grep -q 'systemd-zram-generator' "${REPO_ROOT}/build_scripts/desktop/niri.sh"
+  grep -q 'twpayne/chezmoi/releases/download' "${REPO_ROOT}/build_scripts/desktop/niri.sh"
+  grep -q 'sha256sum -c' "${REPO_ROOT}/build_scripts/desktop/niri.sh"
+  grep -q 'chezmoi --version' "${REPO_ROOT}/build_scripts/desktop/niri.sh"
+  run grep -E 'pkg_install .*greetd-spawn' "${REPO_ROOT}/build_scripts/desktop/niri.sh"
   [ "$status" -ne 0 ]
 }
 
 # ── Variant-specific scripts ────────────────────────────────────────────
 
-@test "build_scripts/HWE.sh: exists" {
-  run test -f "${REPO_ROOT}/build_scripts/HWE.sh"
+@test "build_scripts/overlay/hwe.sh: exists" {
+  run test -f "${REPO_ROOT}/build_scripts/overlay/hwe.sh"
   [ "$status" -eq 0 ]
 }
 
-@test "build_scripts/nvidia.sh: exists" {
-  run test -f "${REPO_ROOT}/build_scripts/nvidia.sh"
+@test "build_scripts/overlay/nvidia.sh: exists" {
+  run test -f "${REPO_ROOT}/build_scripts/overlay/nvidia.sh"
   [ "$status" -eq 0 ]
 }
 
-@test "build_scripts/arch-customizations.sh: exists" {
-  run test -f "${REPO_ROOT}/build_scripts/arch-customizations.sh"
+@test "build_scripts/91-arch-customizations.sh: exists" {
+  run test -f "${REPO_ROOT}/build_scripts/91-arch-customizations.sh"
   [ "$status" -eq 0 ]
 }
 
-@test "build_scripts/kcm-ublue.sh: exists" {
-  run test -f "${REPO_ROOT}/build_scripts/kcm-ublue.sh"
+@test "build_scripts/desktop/kcm-ublue.sh: exists" {
+  run test -f "${REPO_ROOT}/build_scripts/desktop/kcm-ublue.sh"
   [ "$status" -eq 0 ]
 }
 

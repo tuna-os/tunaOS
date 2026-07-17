@@ -79,7 +79,7 @@ PARENT_FLAVOR="gnome"
 
 ## The Manifest Installer
 
-DE packages are installed by `build_scripts/install-desktop.sh`, which reads `manifests/desktops/<de>.yaml`:
+DE packages are installed by `build_scripts/desktop/install-desktop.sh`, which reads `manifests/desktops/<de>.yaml`:
 
 ```yaml
 # manifests/desktops/kde.yaml

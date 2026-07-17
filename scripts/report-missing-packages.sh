@@ -3,7 +3,7 @@
 #
 # Pretty-print the wishlist files that `install_available` writes
 # during builds at /usr/share/tunaos/missing-on-<image>.txt — i.e.
-# packages that were requested in build_scripts/{kde,niri,gnome,...}.sh
+# packages that were requested in build_scripts/desktop/{kde,niri,gnome,...}.sh
 # but didn't resolve against the active DNF repo set.
 #
 # Two usage modes:

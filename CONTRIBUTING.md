@@ -62,7 +62,7 @@ Key scripts:
 - `scripts/resolve-flavor.sh` — routes flavor to Containerfile + build params
 - `scripts/resolve-image.sh` — resolves image refs from 3 config sources
 - `scripts/build-image-inner.sh` — the build engine (env-var driven)
-- `build_scripts/install-desktop.sh` — generic DE installer (reads YAML)
+- `build_scripts/desktop/install-desktop.sh` — generic DE installer (reads YAML)
 - `build_scripts/lib.sh` — shared helpers (OS detection, pkg abstraction)
 
 Full architecture: [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md)

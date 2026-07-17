@@ -273,9 +273,9 @@ eog /tmp/gate-artifact/10-ready.ppm  # or similar viewer
 ```
 Containerfile.el10
   └── build_scripts/10-base-packages.sh    # core packages (flatpak, etc.)
-  └── build_scripts/install-desktop.sh     # DE install + graphical.target fix (BUILD LAYER ONLY!)
+  └── build_scripts/desktop/install-desktop.sh     # DE install + graphical.target fix (BUILD LAYER ONLY!)
         └── creates tunaos-desktop-contract.service (TimeoutStartSec=30)
-              └── calls build_scripts/verify-desktop-experience.sh --runtime
+              └── calls build_scripts/checks/verify-desktop-experience.sh --runtime
                     └── emits TUNAOS_DESKTOP_CONTRACT_OK or FAIL on ttyS0
 
 Justfile (qcow2 recipe)
@@ -290,12 +290,12 @@ live-iso/common/src/customize-live.sh       # live ISO squashfs customization
   └── creates tunaos-live-ready.service
         └── emits TUNAOS_LIVE_READY on ttyS0
 
-build_scripts/verify-desktop-experience.sh  # contract check (build + runtime)
+build_scripts/checks/verify-desktop-experience.sh  # contract check (build + runtime)
   ├── build mode: creates /usr/share/tunaos/experience-contracts/<desktop>
   └── runtime mode: gated checks with diagnostic FAIL markers on ttyS0
 
 Containerfile.overlay (OVERLAY_TYPE=nvidia)
-  └── build_scripts/nvidia.sh               # NVIDIA AKMOD RPM install
+  └── build_scripts/overlay/nvidia.sh               # NVIDIA AKMOD RPM install
 ```
 
 ## Critical architectural insight: IMAGE vs OSTREE DEPLOYMENT

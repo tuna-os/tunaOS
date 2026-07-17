@@ -118,7 +118,7 @@ FROM system AS desktop
 ARG DESKTOP_FLAVOR
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
-    /run/context/build_scripts/install-desktop.sh ${DESKTOP_FLAVOR}
+    /run/context/build_scripts/desktop/install-desktop.sh ${DESKTOP_FLAVOR}
 
 # The desktop zypper install repopulates /var and /usr/etc and shadows the
 # bootc ostree symlink layout the system stage set up. Re-assert the exact same

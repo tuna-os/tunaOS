@@ -136,7 +136,7 @@ case "${1:-}" in
 	# Previously in a separate "extra" case called from 20-packages.sh
 	# (before KDE was installed, so KF6 devel deps were missing). Now runs
 	# after the DE group install so build deps are satisfiable.
-	source /run/context/build_scripts/kcm-ublue.sh
+	source /run/context/build_scripts/desktop/kcm-ublue.sh
 
 	# Disable plasma-discover in favor of Flatpak/Bazaar (like Aurora)
 	if [ -f /usr/share/applications/org.kde.discover.desktop ]; then

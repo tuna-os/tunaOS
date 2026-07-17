@@ -42,7 +42,7 @@ fi
 dnf_retry -y install unzip
 
 if [[ "${DESKTOP_FLAVOR}" == "niri" ]]; then
-	/run/context/build_scripts/niri.sh extra
+	/run/context/build_scripts/desktop/niri.sh extra
 else
 	echo "Skipping DE-specific extra packages (DESKTOP_FLAVOR='${DESKTOP_FLAVOR}')"
 fi

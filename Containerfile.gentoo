@@ -136,7 +136,7 @@ RUN NPROC="$(nproc)" && \
     echo "EMERGE_DEFAULT_OPTS=\"--jobs=${NPROC} --load-average=${NPROC} --getbinpkg --binpkg-respect-use=y\"" \
       >> /etc/portage/make.conf
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
-    /run/context/build_scripts/install-desktop.sh ${DESKTOP_FLAVOR}
+    /run/context/build_scripts/desktop/install-desktop.sh ${DESKTOP_FLAVOR}
 
 FROM desktop-build AS desktop
 RUN KVER=$(ls /usr/lib/modules | head -1) && \
