@@ -4,6 +4,19 @@ set -euo pipefail
 desktop="${1:?usage: verify-desktop-experience.sh <gnome|kde|niri|cosmic|xfce> [--runtime]}"
 mode="${2:-build}"
 
+# At runtime the E2E gate greps ttyS0 for a contract marker; a silent early
+# exit (e.g. a require_* failing under set -e) would leave the gate waiting
+# out its full timeout with no evidence. Guarantee a terminal FAIL marker on
+# any premature death; the normal paths below disarm this trap.
+marker_emitted=0
+emit_fail_on_early_exit() {
+	local rc=$?
+	if [[ "$mode" == --runtime && "$rc" -ne 0 && "$marker_emitted" -eq 0 ]]; then
+		echo "TUNAOS_DESKTOP_CONTRACT_FAIL desktop=${desktop} reason=early_exit rc=${rc}" | tee /dev/ttyS0 2>/dev/null || true
+	fi
+}
+trap emit_fail_on_early_exit EXIT
+
 require_command() { command -v "$1" >/dev/null || {
 	echo "missing required command: $1" >&2
 	exit 1
@@ -94,8 +107,13 @@ if [[ "$mode" == --runtime ]]; then
 	if ! compgen -G '/usr/share/tunaos/experience-contracts/remora' >/dev/null 2>&1; then
 		report_fail remora_contract_missing
 	fi
-	if ! systemctl is-active --quiet graphical.target 2>/dev/null; then
-		report_fail graphical_target_inactive
+	# NB: never check `is-active graphical.target` here. This service is
+	# WantedBy=graphical.target, and targets gain implicit After= on their
+	# wants — the target cannot become active until this script exits, so
+	# that check self-deadlocks into a guaranteed failure. Assert the boot
+	# *default* instead; liveness comes from the display-manager check below.
+	if [[ "$(systemctl get-default 2>/dev/null)" != graphical.target ]]; then
+		report_fail default_target_not_graphical
 	fi
 	# Check the display-manager.service alias (every DM registers it) and
 	# verify its Id resolves to a DM this desktop's contract allows — robust
@@ -116,6 +134,7 @@ if [[ "$mode" == --runtime ]]; then
 	if [[ "$ok" -eq 0 ]]; then
 		echo "TUNAOS_DESKTOP_CONTRACT_FAIL desktop=$desktop" | tee /dev/ttyS0 2>/dev/null || true
 	fi
+	marker_emitted=1
 else
 	# ── Static unit-graph validation (pattern from secureblue's
 	# validate_systemd_unit_files.sh) ── catches unit typos, missing
