@@ -1,115 +1,108 @@
-# ADR 0002: Browser-based ISO builder — feasibility and staged architecture
+# ADR 0002: In-browser ISO builder from existing GHCR bootc images
 
 - Status: proposed
 - Date: 2026-07-17
 - Issue: [#667](https://github.com/tuna-os/tunaOS/issues/667)
-- Prototype: `prototype/iso-builder/index.html` (static configurator, no backend)
+- Prototype: `prototype/iso-builder/` (static page + stateless CORS shim;
+  pull chain — token → index → manifest → config — working)
 
 ## Context
 
-TunaOS intentionally publishes a small ISO catalogue (grouped dedup ISOs,
-issue #455) and wants everything else self-service. The target experience:
-**the browser takes a bootc image and makes an ISO** — pick any
-variant × flavor on a web page and leave with bootable media, without
-TunaOS operating build servers.
+TunaOS publishes a small ISO catalogue and wants every other
+variant × flavor to be self-service **without maintaining anything new**:
+the bootc images already exist on ghcr.io, and the user should be able to
+take one and leave with bootable media from a web page — no terminal, no
+app install, no extra published artifacts, no build servers.
 
-## Feasibility findings (verified 2026-07-17)
+## Constraints (verified 2026-07-17)
 
-**GHCR cannot feed a browser.** Tested directly: `ghcr.io/token` and
-`/v2/.../manifests/...` return 200 to non-browser clients but send **no
-`Access-Control-Allow-Origin` header**, and the `Authorization` header
-fails preflight. Browsers therefore cannot pull image layers from GHCR,
-full stop. Any in-browser pipeline must be fed from a CORS-enabled origin.
+- **ghcr.io sends no `Access-Control-Allow-Origin` headers** on its token,
+  manifest, or blob endpoints (tested directly). Browser JS cannot read
+  its responses — this is structural and applies to every registry
+  endpoint the builder needs. No client-side technique bypasses CORS.
+- Real payload (yellowfin:gnome amd64): **65 layers, 3.5 GB compressed,
+  all `tar+zstd`** (sailfin:kde: 65 layers, 1.8 GB). Unpacked roots run
+  6–8 GB.
+- Nothing in ISO authoring fundamentally needs root: squashfs/erofs
+  creation, ESP (FAT) assembly, and ISO9660/El Torito wrapping are all
+  userspace file authoring — portable to WASM in principle.
 
-**R2 is that origin.** Cloudflare R2 supports per-bucket CORS rules and
-has **zero egress fees** — serving multi-GB layer sets to browsers costs
-storage only, which is compatible with the R2 cost-reduction work. CI can
-mirror what the builder needs with `rclone`/`oras` in the existing publish
-workflows.
+## Decision
 
-**The hard parts of full in-browser assembly are payload and authoring,
-not privilege.** Everything tacklebox does can in principle be userspace
-file authoring (no loop devices needed): but squashfs/erofs creation and
-ISO9660/El Torito + ESP authoring have no maintained WASM ports today, and
-streaming 3–8 GB through browser memory needs the File System Access API
-and careful chunking. Real, but a project — not a blocker in principle.
+**Build the ISO entirely in the browser, sourced directly from the
+existing ghcr.io images.** The only server-side piece is a **stateless
+CORS shim** (`prototype/iso-builder/worker/cors-shim.js`, ~60 lines of
+Cloudflare Worker): a read-only relay for the three GHCR endpoints,
+restricted to `tuna-os/*` images, that adds the CORS headers GHCR
+refuses to send. It stores nothing, has no build pipeline, and never
+needs updating when images change. Blob responses are content-addressed,
+so the Worker lets Cloudflare's edge cache absorb repeat pulls (free
+egress) and shield ghcr.io.
 
-## Decision: three stages toward the browser builder
+Explicitly rejected alternatives:
 
-### Stage A — ship now (the "oras hack")
+- **Publishing anything extra** (shell/net-install ISOs, R2-mirrored OCI
+  layouts, ORAS-wrapped ISOs): every one of them is a second artifact
+  stream to build, gate, store, and keep in sync with GHCR — the exact
+  maintenance this ADR exists to avoid.
+- **Hosted build service**: servers to run, abuse to police, egress or
+  compute to pay for.
+- **Local CLI / fork-and-dispatch as the *primary* path**: requires a
+  terminal or a GitHub account; both stay documented as fallbacks for
+  air-gapped or exotic cases, nothing more.
 
-Store prebuilt ISOs as plain R2 objects (today's `live-isos/` layout — an
-ORAS artifact adds indirection with no browser benefit since R2 is already
-HTTP+CORS) and let the page hand out the link. This is the current
-pipeline; it is blocked only by the publish gate being red and the
-download host misconfiguration (issue #543 — `download.tunaos.org`
-currently 404s on every path).
+## In-browser pipeline
 
-### Stage B — the MVP browser builder: one shell ISO + in-browser recipe injection
+| Stage | Mechanism | Status |
+|---|---|---|
+| 1. Pull | token → index → platform manifest → config → layer blobs, via the shim; digest-verify with WebCrypto | **Working** (prototype demo; verified against real images) |
+| 2. Unpack | streaming zstd (WASM, e.g. a compiled libzstd — small, well-trodden) + tar walker; overlay whiteout handling | next |
+| 3. Live root | author erofs (preferred: `mkfs.erofs` is a clean userspace C codebase to compile to WASM) or squashfs from the merged tree | the main lift |
+| 4. Boot bits | extract kernel + initramfs from `/usr/lib/modules/<ver>/`, systemd-boot from the image's own payload; write fisherman `recipe.json` pointing back at the source image by digest | straightforward once 2 exists |
+| 5. Media | FAT ESP image + ISO9660/El Torito wrapper (JS/WASM writer) | bounded, well-specified formats |
+| 6. Deliver | stream to disk via File System Access API (`showSaveFilePicker`) — memory stays at chunk scale, not ISO scale | standard |
 
-The live ISO's installer is **fisherman driving `recipe.json`** — the
-image to install is *data inside the ISO*, not baked structure. So:
+Browser floor: a File System Access-capable browser (Chromium today,
+Firefox behind a flag) and disk headroom ~2× the ISO. Firefox/Safari
+fallback: classic download of a streamed Blob, capped by memory — detect
+and warn.
 
-1. CI publishes **one generic live/net-install ISO per arch** to R2
-   (CORS on).
-2. The browser fetches it, patches `recipe.json` to point at the chosen
-   `ghcr.io/tuna-os/<variant>:<flavor>` (installer pulls it over the
-   network at install time — the exact `bootcDirect` network-pull path the
-   LUKS E2E exercises), and streams the result to disk via the File
-   System Access API.
-3. Patching one file inside an ISO9660 image is small, bounded work
-   (rewrite one file's extents + path table, or reserve a fixed-size
-   padded config region to make it a pure in-place overwrite) — JS/WASM
-   scale, not squashfs scale.
-
-**Every variant × flavor becomes buildable in-browser with a single
-published shell ISO** (~1–2 GB fetch), which also collapses the published
-catalogue further. This is the recommended MVP.
-
-### Stage C — full offline assembly in the browser
-
-Mirror per-flavor OCI layouts to R2; in-browser: pull layers, author the
-dedup squashfs store and the hybrid ISO in WASM (`squashfs-tools-ng` or an
-erofs writer compiled to WASM; a minimal ISO9660/ESP writer). Produces
-fully *offline* installer ISOs client-side. Target state; start after
-Stage B proves the streaming/download UX.
-
-Interim fallbacks for combinations Stage B can't serve (e.g. air-gapped
-installs) stay as today: local `build-iso-group.sh` / tacklebox, or
-fork-and-dispatch on the user's own GitHub fork (free runners, their
-provenance). The prototype page presents both.
+The recipe embedded in the ISO uses the same fisherman `bootcDirect`
+contract the LUKS E2E exercises, with the image pinned by digest at build
+time in the browser — what you clicked is what installs.
 
 ## Threat model notes
 
-- No tokens or secrets in the page; GHCR stays out of the browser path
-  entirely (CORS makes this structural, not just policy).
-- The R2 mirror is read-only, versioned by digest, and only ever contains
-  artifacts CI signed/gated — the browser verifies digests before
-  patching (sha256 in JS/WebCrypto is cheap).
-- Recipe injection only interpolates values from the embedded
-  variant/flavor allowlist — never free text — so a shared "builder link"
-  cannot point a victim's installer at a hostile image.
-- Client-built ISOs are the user's provenance; the page says so, and the
-  shell ISO's own signature still covers everything except the recipe.
+- The shim is GET/HEAD-only, org-allowlisted (`tuna-os/*`), and forwards
+  only `Authorization`/`Accept` — it cannot be used as a general relay,
+  and it never sees credentials (public images, anonymous tokens).
+- The page verifies every blob against its manifest digest before use
+  (WebCrypto sha256), so a compromised shim or cache can corrupt but not
+  substitute content unnoticed.
+- Generated recipes only interpolate allowlisted variant/flavor values
+  and digests the page resolved itself — a crafted "builder link" cannot
+  aim the installer at a foreign image.
+- Client-built ISOs are the user's provenance; cosign signatures on the
+  *image* still verify at install time, which is the trust anchor that
+  matters.
 
 ## Resource estimates
 
-- Stage A: already-built pipeline + a CORS rule + fixing #543.
-- Stage B: shell-ISO recipe surface in tacklebox (padded config region
-  recommended), ~2–4 weeks of a browser ISO-patcher (JS + WebCrypto +
-  File System Access), CI job to publish the shell ISO. R2 delta: one ISO
-  per arch.
-- Stage C: WASM ports of squashfs/ISO authoring + OCI-layout mirror job;
-  months, not weeks. R2 delta: per-flavor layer storage (dedup helps —
-  layers are shared across flavors).
+- Shim: one Worker, free tier scale; edge cache does the heavy lifting.
+- User side per build: 1.8–3.5 GB download, minutes of WASM decompress/
+  author time, ~2× ISO disk headroom.
+- Engineering: stage 2 ≈ days (zstd WASM builds exist; tar is trivial);
+  stages 3+5 are the real work — an erofs writer and a minimal
+  ISO9660+ESP writer in WASM/JS; weeks-to-months, incrementally
+  shippable (each stage demos on its own).
 
-## MVP scope (Stage B)
+## MVP scope
 
-- [ ] tacklebox: reserve a padded, fixed-offset `recipe.json` region in
-      the shell ISO so browser patching is a pure in-place overwrite.
-- [ ] CI: publish `tunaos-shell-<arch>-latest.iso` to R2; enable bucket
-      CORS for `tunaos.org` origins.
-- [ ] Web: extend the prototype configurator with the fetch → patch →
-      save pipeline and digest verification.
-- [ ] E2E: boot a browser-patched ISO in the existing `iso-e2e.sh` disk
-      gate to prove parity with CI-built ISOs.
+- [x] Configurator page + working stage-1 pull chain (prototype).
+- [x] Stateless CORS shim (`worker/cors-shim.js`), ready to deploy.
+- [ ] Deploy shim at `ghcr-shim.tunaos.org`; wire digest verification.
+- [ ] Stage 2: WASM zstd + tar walk — demo: extract and display the
+      kernel version from any variant:flavor in-browser.
+- [ ] Stage 3–5: erofs + ESP + ISO writers; boot the result in the
+      existing `iso-e2e.sh` disk gate to prove parity with CI ISOs.
+- Out of scope: any new published artifact; any stateful service.

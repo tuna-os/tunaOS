@@ -176,10 +176,27 @@
   </section>
 </div>
 
+<section class="wrap" style="display:block; padding-top:0">
+  <div class="result" id="inspect">
+    <p class="label">In-browser pipeline · stage 1: read the image</p>
+    <p class="sub" style="margin-top:0">The end state builds the whole ISO right here — no terminal, no
+      app, no extra published artifacts: the source is the bootc image already on ghcr.io.
+      This demo runs the first stage live: token → manifest index → platform manifest → config.
+      It needs the CORS shim (<span class="mono">worker/cors-shim.js</span>) because ghcr.io
+      refuses browser reads.</p>
+    <div style="display:flex; gap:.5rem; flex-wrap:wrap; align-items:center; margin:.6rem 0 .8rem">
+      <input id="shimUrl" class="mono" placeholder="shim base URL, e.g. https://ghcr-shim.tunaos.org"
+        style="flex:1; min-width:260px; padding:.45rem .6rem; border:1px solid var(--line); border-radius:6px; background:var(--panel); color:var(--text); font-size:.82rem">
+      <button id="inspectBtn" class="dl" style="margin:0; border:none; cursor:pointer; font:inherit; font-weight:650">Inspect image</button>
+    </div>
+    <div id="inspectOut" class="finePrint">Pick a variant and flavor above, then inspect.</div>
+  </div>
+</section>
+
 <footer>
   Prototype for <a href="https://github.com/tuna-os/tunaOS/issues/667">tuna-os/tunaOS#667</a> ·
   data mirrors <span class="mono">.github/build-config.yml</span> ·
-  ADR 0002 stages this toward in-browser ISO assembly (shell ISO + recipe injection)
+  ADR 0002: zero-publish in-browser ISO assembly, fed by the existing ghcr.io images
 </footer>
 
 <script>
@@ -298,8 +315,8 @@ function renderResult() {
     <h2><span class="mono">${v.id}:${f}</span> is outside the published set</h2>
     <p class="sub">We publish a small catalogue and keep every other combination self-service.
       Two supported paths today — both produce a normal bootable live ISO.
-      (Planned: build it right here — the page fetches a shell ISO and injects your
-      <span class="mono">recipe.json</span> in-browser; ADR 0002, Stage B.)</p>`);
+      (The goal: build it right here in the browser, straight from the ghcr.io image —
+      see the pipeline demo below and ADR 0002.)</p>`);
 
   const tabs = document.createElement("div");
   tabs.className = "tabs";
@@ -343,4 +360,62 @@ sudo ./scripts/build-iso-tacklebox.sh ${v.id} ${f} local`));
 
 function renderAll() { renderVariants(); renderChips(); renderResult(); }
 renderAll();
+
+// ── Stage 1 of the in-browser builder: OCI pull chain ─────────────────────
+// token → index → amd64 manifest → config blob. Layers are tar+zstd; later
+// stages add a WASM zstd stream + tar walker, then erofs/ISO authoring.
+const fmtMB = (b) => (b / 1048576).toFixed(1) + " MB";
+
+async function inspectImage() {
+  const out = el("inspectOut");
+  if (!selVariant || !selFlavor) { out.textContent = "Pick a variant and flavor above first."; return; }
+  const shim = el("shimUrl").value.trim().replace(/\/+$/, "");
+  const base = shim || "https://ghcr.io";
+  const img = selVariant.id, ref = selFlavor;
+  out.textContent = `Pulling ghcr.io/tuna-os/${img}:${ref} …`;
+  try {
+    const tokRes = await fetch(`${base}/token?scope=repository:tuna-os/${img}:pull`);
+    if (!tokRes.ok) throw new Error(`token HTTP ${tokRes.status}`);
+    const token = (await tokRes.json()).token;
+    const auth = { headers: { Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.oci.image.index.v1+json, application/vnd.oci.image.manifest.v1+json" } };
+
+    const idxRes = await fetch(`${base}/v2/tuna-os/${img}/manifests/${ref}`, auth);
+    if (!idxRes.ok) throw new Error(`manifest HTTP ${idxRes.status}`);
+    let manifest = await idxRes.json();
+    let platformNote = "single-platform";
+    if (manifest.manifests) {
+      const m = manifest.manifests.find(x => x.platform.architecture === "amd64" && !x.platform.variant)
+        || manifest.manifests[0];
+      platformNote = `${m.platform.architecture}${m.platform.variant ? "/" + m.platform.variant : ""}`;
+      const mRes = await fetch(`${base}/v2/tuna-os/${img}/manifests/${m.digest}`, auth);
+      if (!mRes.ok) throw new Error(`platform manifest HTTP ${mRes.status}`);
+      manifest = await mRes.json();
+    }
+    const cfgRes = await fetch(`${base}/v2/tuna-os/${img}/blobs/${manifest.config.digest}`,
+      { headers: { Authorization: `Bearer ${token}` } });
+    if (!cfgRes.ok) throw new Error(`config blob HTTP ${cfgRes.status}`);
+    const cfg = await cfgRes.json();
+    const labels = (cfg.config && cfg.config.Labels) || {};
+    const total = manifest.layers.reduce((s, l) => s + l.size, 0);
+    const types = [...new Set(manifest.layers.map(l => l.mediaType.split(".").pop()))].join(", ");
+
+    out.innerHTML = `
+      <p style="margin:.2rem 0 .5rem"><span class="pill ok">image readable from this browser</span></p>
+      <p style="color:var(--text); font-size:.85rem; margin:0 0 .6rem">
+        <span class="mono">${img}:${ref}</span> · platform ${platformNote} ·
+        <strong>${manifest.layers.length} layers, ${fmtMB(total)}</strong> compressed (${types}) ·
+        bootc: <span class="mono">${labels["containers.bootc"] === "1" ? "yes" : "unknown"}</span> ·
+        version <span class="mono">${labels["org.opencontainers.image.version"] || "?"}</span></p>
+      <p>Next stages (not yet wired): zstd-decompress + tar-walk these layers for the kernel and
+        initramfs, author the erofs live root and ESP, wrap as ISO9660, stream to your disk.</p>`;
+  } catch (e) {
+    out.innerHTML = `<span style="color:var(--warn)">Pull failed: ${e.message}.</span>
+      Without a shim URL this is expected — ghcr.io sends no CORS headers, so the browser
+      discards its responses. Deploy <span class="mono">worker/cors-shim.js</span> and paste its URL.
+      (Hosts with a strict CSP, like this preview, block all outbound fetches either way —
+      run the page from the repo or the docs site.)`;
+  }
+}
+el("inspectBtn").addEventListener("click", inspectImage);
 </script>
