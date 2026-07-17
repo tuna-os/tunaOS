@@ -39,7 +39,9 @@
   // Incremental tar walker: feed() decompressed chunks; emits one onEntry
   // per file header. Handles GNU longnames ('L') and skips pax headers.
   class TarScanner {
-    constructor(onEntry) {
+    constructor(onEntry, shouldCapture) {
+      this.shouldCapture = shouldCapture || null;
+      this.onFile = null;
       this.pending = [];
       this.pendingLen = 0;
       this.skip = 0; // bytes of body (incl. padding) left to discard
@@ -111,6 +113,8 @@
               // strip padding + trailing NULs
               let end = this.capture.size;
               this.longname = dec.decode(body.subarray(0, end)).replace(/\0+$/, "");
+            } else if (this.capture.kind === "F" && this.onFile) {
+              this.onFile(this.capture.name, body.subarray(0, this.capture.size));
             }
             this.capture = null;
             this.captured = [];
@@ -139,6 +143,9 @@
 
         if (type === "0" || type === "\0" || type === "5" || type === "2" || type === "1") {
           this.onEntry({ name, size, type });
+          if ((type === "0" || type === "\0") && this.shouldCapture && this.shouldCapture(name)) {
+            this.capture = { kind: "F", name, size };
+          }
         }
         this.skip = padded;
       }
@@ -156,7 +163,10 @@
   const KERNEL_RE = /^(\.\/)?usr\/lib\/modules\/([^/]+)\/vmlinuz$/;
   const INITRD_RE = /^(\.\/)?usr\/lib\/modules\/([^/]+)\/initramfs\.img$/;
 
-  async function scanImage({ base, org = "tuna-os", img, ref, arch = "amd64", fzstd, onProgress = () => {} }) {
+  // captureBoot: also pull vmlinuz + initramfs.img bodies into memory
+  // (result.files = { vmlinuz, initramfs }); completion then requires both
+  // bodies, not just their headers.
+  async function scanImage({ base, org = "tuna-os", img, ref, arch = "amd64", fzstd, captureBoot = false, onProgress = () => {} }) {
     const tokRes = await fetch(`${base}/token?scope=repository:${org}/${img}:pull`);
     if (!tokRes.ok) throw new Error(`token HTTP ${tokRes.status}`);
     const token = (await tokRes.json()).token;
@@ -177,6 +187,10 @@
     const totalCompressed = manifest.layers.reduce((s, l) => s + l.size, 0);
 
     const found = { kernel: null, initramfs: null, layerIndex: -1, version: null };
+    const files = {};
+    const complete = () => captureBoot
+      ? !!(files.vmlinuz && files.initramfs)
+      : !!(found.kernel && found.initramfs);
     let bytesDownloaded = 0;
     let entriesSeen = 0;
 
@@ -197,8 +211,13 @@
         const r = e.name.match(INITRD_RE);
         if (k) { found.kernel = { path: e.name, size: e.size }; found.version = k[2]; found.layerIndex = i; }
         if (r) { found.initramfs = { path: e.name, size: e.size }; found.layerIndex = i; }
-        if (found.kernel && found.initramfs) { scanner.done = true; ctrl.abort(); }
-      });
+        if (complete()) { scanner.done = true; ctrl.abort(); }
+      }, captureBoot ? (name) => KERNEL_RE.test(name) || INITRD_RE.test(name) : null);
+      scanner.onFile = (name, body) => {
+        if (KERNEL_RE.test(name)) files.vmlinuz = body;
+        else if (INITRD_RE.test(name)) files.initramfs = body;
+        if (complete()) { scanner.done = true; ctrl.abort(); }
+      };
 
       let feed;
       let flush = () => {};
@@ -235,13 +254,14 @@
         }
         flush();
       } catch (e) {
-        if (!(found.kernel && found.initramfs)) throw e;
+        if (!complete()) throw e;
       }
-      if (found.kernel && found.initramfs) break;
+      if (complete()) break;
     }
 
     return {
       ...found,
+      files,
       layersScanned: found.layerIndex >= 0 ? found.layerIndex + 1 : manifest.layers.length,
       bytesDownloaded,
       entriesSeen,

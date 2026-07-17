@@ -250,7 +250,9 @@
   // Incremental tar walker: feed() decompressed chunks; emits one onEntry
   // per file header. Handles GNU longnames ('L') and skips pax headers.
   class TarScanner {
-    constructor(onEntry) {
+    constructor(onEntry, shouldCapture) {
+      this.shouldCapture = shouldCapture || null;
+      this.onFile = null;
       this.pending = [];
       this.pendingLen = 0;
       this.skip = 0; // bytes of body (incl. padding) left to discard
@@ -322,6 +324,8 @@
               // strip padding + trailing NULs
               let end = this.capture.size;
               this.longname = dec.decode(body.subarray(0, end)).replace(/\0+$/, "");
+            } else if (this.capture.kind === "F" && this.onFile) {
+              this.onFile(this.capture.name, body.subarray(0, this.capture.size));
             }
             this.capture = null;
             this.captured = [];
@@ -350,6 +354,9 @@
 
         if (type === "0" || type === "\0" || type === "5" || type === "2" || type === "1") {
           this.onEntry({ name, size, type });
+          if ((type === "0" || type === "\0") && this.shouldCapture && this.shouldCapture(name)) {
+            this.capture = { kind: "F", name, size };
+          }
         }
         this.skip = padded;
       }
@@ -367,7 +374,10 @@
   const KERNEL_RE = /^(\.\/)?usr\/lib\/modules\/([^/]+)\/vmlinuz$/;
   const INITRD_RE = /^(\.\/)?usr\/lib\/modules\/([^/]+)\/initramfs\.img$/;
 
-  async function scanImage({ base, org = "tuna-os", img, ref, arch = "amd64", fzstd, onProgress = () => {} }) {
+  // captureBoot: also pull vmlinuz + initramfs.img bodies into memory
+  // (result.files = { vmlinuz, initramfs }); completion then requires both
+  // bodies, not just their headers.
+  async function scanImage({ base, org = "tuna-os", img, ref, arch = "amd64", fzstd, captureBoot = false, onProgress = () => {} }) {
     const tokRes = await fetch(`${base}/token?scope=repository:${org}/${img}:pull`);
     if (!tokRes.ok) throw new Error(`token HTTP ${tokRes.status}`);
     const token = (await tokRes.json()).token;
@@ -388,6 +398,10 @@
     const totalCompressed = manifest.layers.reduce((s, l) => s + l.size, 0);
 
     const found = { kernel: null, initramfs: null, layerIndex: -1, version: null };
+    const files = {};
+    const complete = () => captureBoot
+      ? !!(files.vmlinuz && files.initramfs)
+      : !!(found.kernel && found.initramfs);
     let bytesDownloaded = 0;
     let entriesSeen = 0;
 
@@ -408,8 +422,13 @@
         const r = e.name.match(INITRD_RE);
         if (k) { found.kernel = { path: e.name, size: e.size }; found.version = k[2]; found.layerIndex = i; }
         if (r) { found.initramfs = { path: e.name, size: e.size }; found.layerIndex = i; }
-        if (found.kernel && found.initramfs) { scanner.done = true; ctrl.abort(); }
-      });
+        if (complete()) { scanner.done = true; ctrl.abort(); }
+      }, captureBoot ? (name) => KERNEL_RE.test(name) || INITRD_RE.test(name) : null);
+      scanner.onFile = (name, body) => {
+        if (KERNEL_RE.test(name)) files.vmlinuz = body;
+        else if (INITRD_RE.test(name)) files.initramfs = body;
+        if (complete()) { scanner.done = true; ctrl.abort(); }
+      };
 
       let feed;
       let flush = () => {};
@@ -446,13 +465,14 @@
         }
         flush();
       } catch (e) {
-        if (!(found.kernel && found.initramfs)) throw e;
+        if (!complete()) throw e;
       }
-      if (found.kernel && found.initramfs) break;
+      if (complete()) break;
     }
 
     return {
       ...found,
+      files,
       layersScanned: found.layerIndex >= 0 ? found.layerIndex + 1 : manifest.layers.length,
       bytesDownloaded,
       entriesSeen,
@@ -462,6 +482,219 @@
   }
 
   return { scanImage, TarScanner };
+});
+
+</script>
+<script>
+/* inlined copy of erofs.js — keep in sync */
+// Stage 3 of the in-browser ISO builder (ADR 0002): a pure-JS EROFS image
+// writer. Uncompressed only (EROFS_INODE_FLAT_PLAIN), compact 32-byte
+// inodes, no xattrs — the minimum the kernel mounts, which is all the live
+// root's first cut needs. Format per Linux fs/erofs/erofs_fs.h (v6.8).
+//
+// Input: a flat list of entries
+//   { path: "usr/bin/foo", type: "file",    mode?, uid?, gid?, data: Uint8Array }
+//   { path: "usr/bin",     type: "dir",     mode?, uid?, gid? }
+//   { path: "bin",         type: "symlink", mode?, target: "usr/bin" }
+// Intermediate directories are created implicitly. Output: Uint8Array.
+//
+// Shared between the page (global `erofsWriter`) and Node tests.
+
+(function (root, factory) {
+  if (typeof module === "object" && module.exports) module.exports = factory();
+  else root.erofsWriter = factory();
+})(typeof self !== "undefined" ? self : globalThis, function () {
+  "use strict";
+
+  const BLKSZ = 4096;
+  const BLKBITS = 12;
+  const SB_MAGIC = 0xe0f5e1e2;
+  const SB_OFFSET = 1024;
+  const SLOT = 32; // compact inode size; nid unit
+
+  const S_IFDIR = 0o040000, S_IFREG = 0o100000, S_IFLNK = 0o120000;
+  const FT = { file: 1, dir: 2, symlink: 7 };
+
+  const enc = new TextEncoder();
+
+  function normalize(entries) {
+    // Build a tree; auto-create missing parent dirs.
+    const rootNode = { type: "dir", mode: 0o755, uid: 0, gid: 0, children: new Map() };
+    const dirOf = (parts) => {
+      let n = rootNode;
+      for (const p of parts) {
+        if (!n.children.has(p)) {
+          n.children.set(p, { type: "dir", mode: 0o755, uid: 0, gid: 0, children: new Map() });
+        }
+        n = n.children.get(p);
+        if (n.type !== "dir") throw new Error(`not a directory: ${p}`);
+      }
+      return n;
+    };
+    for (const e of entries) {
+      const parts = e.path.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+      if (!parts.length) continue;
+      const name = parts.pop();
+      const parent = dirOf(parts);
+      if (e.type === "dir") {
+        const existing = parent.children.get(name);
+        if (existing && existing.type === "dir") {
+          existing.mode = e.mode ?? existing.mode;
+          existing.uid = e.uid ?? existing.uid;
+          existing.gid = e.gid ?? existing.gid;
+        } else {
+          parent.children.set(name, { type: "dir", mode: e.mode ?? 0o755, uid: e.uid ?? 0, gid: e.gid ?? 0, children: new Map() });
+        }
+      } else if (e.type === "file") {
+        parent.children.set(name, { type: "file", mode: e.mode ?? 0o644, uid: e.uid ?? 0, gid: e.gid ?? 0, data: e.data || new Uint8Array(0) });
+      } else if (e.type === "symlink") {
+        parent.children.set(name, { type: "symlink", mode: e.mode ?? 0o777, uid: e.uid ?? 0, gid: e.gid ?? 0, data: enc.encode(e.target || "") });
+      } else {
+        throw new Error(`unsupported entry type: ${e.type}`);
+      }
+    }
+    return rootNode;
+  }
+
+  // Pack a sorted child list into self-contained directory blocks.
+  // Returns { bytes: Uint8Array, size } — size is exact used bytes (the
+  // kernel derives the last name's length from the directory inode size).
+  function packDir(children /* [{name, nid, ft}] sorted */) {
+    const blocks = [];
+    let i = 0;
+    while (i < children.length) {
+      // Greedy fill: how many entries fit in this block?
+      let k = 0, used = 0;
+      while (i + k < children.length) {
+        const nameLen = enc.encode(children[i + k].name).length;
+        if (used + 12 + nameLen > BLKSZ) break;
+        used += 12 + nameLen;
+        k++;
+      }
+      if (k === 0) throw new Error(`name too long: ${children[i].name}`);
+      const blk = new Uint8Array(BLKSZ);
+      const dv = new DataView(blk.buffer);
+      let nameoff = 12 * k;
+      for (let j = 0; j < k; j++) {
+        const c = children[i + j];
+        const nb = enc.encode(c.name);
+        dv.setBigUint64(12 * j, BigInt(c.nid), true);
+        dv.setUint16(12 * j + 8, nameoff, true);
+        blk[12 * j + 10] = c.ft;
+        blk.set(nb, nameoff);
+        nameoff += nb.length;
+      }
+      blocks.push({ blk, used: nameoff });
+      i += k;
+    }
+    if (!blocks.length) blocks.push({ blk: new Uint8Array(BLKSZ), used: 0 });
+    const size = (blocks.length - 1) * BLKSZ + blocks[blocks.length - 1].used;
+    const bytes = new Uint8Array(blocks.length * BLKSZ);
+    blocks.forEach((b, n) => bytes.set(b.blk, n * BLKSZ));
+    return { bytes, size };
+  }
+
+  function build(entries, { volumeName = "tunaos-live", buildTime = Math.floor(Date.now() / 1000) } = {}) {
+    const rootNode = normalize(entries);
+
+    // Parent / name links (needed for ".." and dirent names).
+    (function link(n) {
+      if (n.type !== "dir") return;
+      for (const [name, c] of n.children) {
+        c.parent = n;
+        c.nameInParent = name;
+        link(c);
+      }
+    })(rootNode);
+
+    // Flatten: collect nodes depth-first, assign nids sequentially.
+    const nodes = [];
+    (function walk(n) {
+      n.nid = nodes.length;
+      nodes.push(n);
+      if (n.type === "dir") {
+        n.sorted = [...n.children.keys()].sort().map((name) => n.children.get(name));
+        for (const c of n.sorted) walk(c);
+      }
+    })(rootNode);
+
+    // nlink for dirs = 2 + subdirectory count.
+    for (const n of nodes) {
+      n.nlink = n.type === "dir" ? 2 + n.sorted.filter((c) => c.type === "dir").length : 1;
+    }
+
+    // Directory payloads need child nids — all assigned above.
+    for (const n of nodes) {
+      if (n.type === "dir") {
+        const list = [
+          { name: ".", nid: n.nid, ft: FT.dir },
+          { name: "..", nid: (n.parent ?? n).nid, ft: FT.dir },
+          ...n.sorted.map((c) => ({ name: c.nameInParent, nid: c.nid, ft: FT[c.type] })),
+        ].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
+        const { bytes, size } = packDir(list);
+        n.data = bytes;
+        n.size = size;
+      } else {
+        n.size = n.data.length;
+      }
+    }
+
+    // Layout: block 0 = sb; meta area = inode slots; then data blocks.
+    const metaBlk = 1;
+    const metaBytes = nodes.length * SLOT;
+    const metaBlocks = Math.ceil(metaBytes / BLKSZ);
+    let nextBlk = metaBlk + metaBlocks;
+    for (const n of nodes) {
+      n.blkaddr = n.size > 0 ? nextBlk : 0;
+      nextBlk += Math.ceil((n.type === "dir" ? n.data.length : n.size) / BLKSZ);
+    }
+    const totalBlocks = nextBlk;
+
+    const img = new Uint8Array(totalBlocks * BLKSZ);
+    const dv = new DataView(img.buffer);
+
+    // Superblock.
+    const sb = SB_OFFSET;
+    dv.setUint32(sb + 0, SB_MAGIC, true);
+    dv.setUint32(sb + 4, 0, true); // checksum unused (no SB_CHKSUM feature)
+    dv.setUint32(sb + 8, 0, true); // feature_compat
+    img[sb + 12] = BLKBITS;
+    img[sb + 13] = 0;
+    dv.setUint16(sb + 14, rootNode.nid, true);
+    dv.setBigUint64(sb + 16, BigInt(nodes.length), true); // inos
+    dv.setBigUint64(sb + 24, BigInt(buildTime), true);
+    dv.setUint32(sb + 32, 0, true); // build_time_nsec
+    dv.setUint32(sb + 36, totalBlocks, true);
+    dv.setUint32(sb + 40, metaBlk, true); // meta_blkaddr
+    dv.setUint32(sb + 44, 0, true); // xattr_blkaddr
+    // uuid[16] at +48: leave zero. volume_name[16] at +64:
+    img.set(enc.encode(volumeName).subarray(0, 15), sb + 64);
+    dv.setUint32(sb + 80, 0, true); // feature_incompat
+    img[sb + 88] = BLKBITS; // dirblkbits
+
+    // Inodes + data.
+    for (const n of nodes) {
+      const off = metaBlk * BLKSZ + n.nid * SLOT;
+      const mode =
+        n.type === "dir" ? S_IFDIR | (n.mode & 0o7777) :
+        n.type === "symlink" ? S_IFLNK | (n.mode & 0o7777) :
+        S_IFREG | (n.mode & 0o7777);
+      dv.setUint16(off + 0, 0 /* compact | FLAT_PLAIN */, true);
+      dv.setUint16(off + 2, 0, true); // no xattrs
+      dv.setUint16(off + 4, mode, true);
+      dv.setUint16(off + 6, n.nlink, true);
+      dv.setUint32(off + 8, n.size, true);
+      dv.setUint32(off + 16, n.blkaddr, true); // i_u.raw_blkaddr
+      dv.setUint32(off + 20, n.nid + 1, true); // i_ino (stat only)
+      dv.setUint16(off + 24, n.uid, true);
+      dv.setUint16(off + 26, n.gid, true);
+      if (n.size > 0) img.set(n.type === "dir" ? n.data : n.data, n.blkaddr * BLKSZ);
+    }
+
+    return img;
+  }
+
+  return { build, BLKSZ };
 });
 
 </script>
@@ -689,6 +922,43 @@ async function inspectImage() {
 }
 el("inspectBtn").addEventListener("click", inspectImage);
 
+// Stage 3: author a real EROFS filesystem image (erofs.js, inlined above)
+// holding the captured kernel + initramfs + a provenance record, entirely
+// in-page, and hand it to the user. The same writer will author the full
+// live root once the whole-rootfs unpack lands.
+function buildBootErofs(img, ref, scan) {
+  const o = document.getElementById("erofsOut");
+  const t0 = Date.now();
+  try {
+    const meta = new TextEncoder().encode(JSON.stringify({
+      image: `ghcr.io/tuna-os/${img}:${ref}`,
+      kernel: scan.version,
+      builtBy: "tunaos-browser-builder",
+      builtAt: new Date().toISOString(),
+    }, null, 2));
+    const fs = erofsWriter.build([
+      { path: `usr/lib/modules/${scan.version}/vmlinuz`, type: "file", mode: 0o755, data: scan.files.vmlinuz },
+      { path: `usr/lib/modules/${scan.version}/initramfs.img`, type: "file", mode: 0o600, data: scan.files.initramfs },
+      { path: "etc/tunaos-builder.json", type: "file", data: meta },
+    ], { volumeName: "tunaos-boot" });
+    const url = URL.createObjectURL(new Blob([fs], { type: "application/octet-stream" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${img}-${ref}-boot.erofs`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    o.innerHTML = `
+      <p style="margin:.4rem 0 .3rem"><span class="pill ok">erofs authored in-browser</span></p>
+      <p style="margin:0">Wrote a mountable EROFS filesystem (${fmtMB(fs.length)}, kernel
+        <span class="mono">${scan.version}</span>) in ${((Date.now() - t0) / 1000).toFixed(1)}s and started the
+        download — verify with <span class="mono">fsck.erofs</span> or
+        <span class="mono">sudo mount -t erofs -o loop ${img}-${ref}-boot.erofs /mnt</span>.</p>`;
+  } catch (e) {
+    o.innerHTML = `<p style="margin:.4rem 0 0"><span style="color:var(--warn)">erofs build failed: ${e.message}</span></p>`;
+  }
+}
+
 // Stage 2: stream layers topmost-first through fzstd + the tar walker until
 // vmlinuz + initramfs.img are located (see scanner.js, inlined above).
 async function runScan(img, ref, base) {
@@ -699,7 +969,7 @@ async function runScan(img, ref, base) {
     <p class="mono" id="scanStat" style="font-size:.78rem; margin:.2rem 0">starting…</p>`;
   try {
     const r = await ociScanner.scanImage({
-      base, img, ref, fzstd,
+      base, img, ref, fzstd, captureBoot: true,
       onProgress: (p) => {
         const bar = document.getElementById("scanBar"), stat = document.getElementById("scanStat");
         if (!bar) return;
@@ -715,7 +985,11 @@ async function runScan(img, ref, base) {
         initramfs ${fmtMB(r.initramfs.size)} · kernel <strong class="mono">${r.version}</strong></p>
       <p style="margin:.3rem 0 0">Streamed ${fmtMB(r.bytesDownloaded)} of ${fmtMB(r.totalCompressed)} and walked
         ${r.entriesSeen.toLocaleString()} tar entries in ${secs}s — zstd decode and tar parsing ran
-        entirely in this page; no layer was held in memory.</p>`;
+        entirely in this page; no layer was held in memory. Kernel and initramfs bodies are now in
+        page memory.</p>
+      <p style="margin:.6rem 0 0"><button id="erofsBtn" class="dl" style="margin:0; border:none; cursor:pointer; font:inherit; font-weight:650">Stage 3: build a boot erofs and download it</button></p>
+      <div id="erofsOut"></div>`;
+    document.getElementById("erofsBtn").addEventListener("click", () => buildBootErofs(img, ref, r));
   } catch (e) {
     s.innerHTML = `<p style="margin:.4rem 0 0"><span style="color:var(--warn)">Scan failed: ${e.message}</span></p>`;
   }
