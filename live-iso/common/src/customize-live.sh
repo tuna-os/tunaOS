@@ -72,7 +72,6 @@ cat >/usr/lib/systemd/system/var-lib-superiso\x2dstore.mount <<'UNITEOF'
 [Unit]
 Description=Tacklebox offline image store (ISO squashfs)
 DefaultDependencies=no
-After=initrd-root-fs.target
 Before=local-fs.target
 ConditionPathExists=/run/initramfs/live/LiveOS/store.squashfs.img
 
@@ -96,14 +95,28 @@ additionalimagestores = ["/var/lib/superiso-store"]
 CONFEOF
 
 # The live squash's own rootfs is overlayfs (dmsquash-live-style squashfs +
-# tmpfs overlay). The default containers/storage "overlay" driver cannot
-# nest a second overlay mount on top of that without a userspace
-# mount_program — bootc (via fisherman) reading the additional store with
-# `containers-storage:` fails with "'overlay' is not supported over
-# overlayfs, a mount_program is required". Mirrors projectbluefin/dakota-iso
-# configure-live.sh's non-composefs storage.conf (dakota's fix for the same
-# class of failure, projectbluefin/iso commit 34fe6659).
+# tmpfs overlay). The default containers/storage driver on the base image
+# may be "btrfs" (EL10 default) or "overlay" depending on the detected
+# filesystem. The offline payload store (store.squashfs.img) is ALWAYS
+# built with the overlay driver (tacklebox's BuildOfflineStore uses
+# `containers-storage:[overlay@...]`), and additionalimagestores silently
+# ignores stores whose driver doesn't match the primary graphroot.  Force
+# the primary driver to "overlay" so both the live working store and the
+# additional store use the same driver.
+#
+# The overlay driver cannot nest a second overlay mount on top of an
+# overlayfs rootfs without a userspace mount_program, so configure
+# fuse-overlayfs. Mirrors projectbluefin/dakota-iso configure-live.sh's
+# non-composefs storage.conf (projectbluefin/iso commit 34fe6659).
 mkdir -p /etc/containers
+if [[ -f /etc/containers/storage.conf ]]; then
+	# Override the base image's driver to overlay (matches the offline store).
+	if grep -q '^driver' /etc/containers/storage.conf; then
+		sed -i 's/^driver *=.*/driver = "overlay"/' /etc/containers/storage.conf
+	else
+		sed -i '/^\[storage\]/a driver = "overlay"' /etc/containers/storage.conf
+	fi
+fi
 if [[ -f /etc/containers/storage.conf ]] && ! grep -q 'mount_program' /etc/containers/storage.conf; then
 	cat >>/etc/containers/storage.conf <<'STOREOF'
 

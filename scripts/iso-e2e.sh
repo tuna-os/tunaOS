@@ -606,13 +606,31 @@ run_install() {
 	# `targetImgref` always names the production GHCR ref so the installed
 	# system tracks the right image for updates.
 	local target_imgref="ghcr.io/tuna-os/${VARIANT:-}:${FLAVOR:-}"
-	local local_ref="localhost/${VARIANT:-}:${FLAVOR:-}"   # dev=1 ISO
-	local prod_ref="ghcr.io/tuna-os/${VARIANT:-}:${FLAVOR:-}"    # production ISO
-	local recipe_image=""  # set below after probing the VM
+	local local_ref="localhost/${VARIANT:-}:${FLAVOR:-}"      # dev=1 ISO
+	local prod_ref="ghcr.io/tuna-os/${VARIANT:-}:${FLAVOR:-}" # production ISO
+	local recipe_image=""                                     # set below after probing the VM
+
+	# ── Offline store diagnostics (debug: remove once stable) ─────────
+	echo "==> Offline store diagnostics:"
+	echo "--- mount unit status ---"
+	"${ssh_cmd[@]}" "systemctl status var-lib-superiso\\x2dstore.mount 2>&1 || true"
+	echo "--- mount table (superiso) ---"
+	"${ssh_cmd[@]}" "findmnt /var/lib/superiso-store 2>&1 || echo '(not mounted)'"
+	echo "--- store.squashfs.img exists? ---"
+	"${ssh_cmd[@]}" "ls -la /run/initramfs/live/LiveOS/store.squashfs.img 2>&1 || echo '(not found)'"
+	echo "--- storage driver ---"
+	"${ssh_cmd[@]}" "sudo podman info --format '{{.Store.GraphDriverName}}' 2>&1 || true"
+	echo "--- podman images (all) ---"
+	"${ssh_cmd[@]}" "sudo podman images --format '{{.Repository}}:{{.Tag}} (driver: {{.ReadOnly}})' 2>&1 || echo '(empty or error)'"
+	echo "--- storage.conf additionalimagestores ---"
+	"${ssh_cmd[@]}" "grep -r additionalimagestores /etc/containers/ 2>&1 || echo '(not configured)'"
+	echo "--- store.squashfs contents (first 20 files) ---"
+	"${ssh_cmd[@]}" "test -f /run/initramfs/live/LiveOS/store.squashfs.img && sudo unsquashfs -ll /run/initramfs/live/LiveOS/store.squashfs.img 2>&1 | head -30 || echo '(store not present)'"
 
 	# Probe the guest's containers-storage for a locally-available image.
 	local found_local=0 found_ref=""
 	for candidate_ref in "$local_ref" "$prod_ref"; do
+		echo "==> Probing for ${candidate_ref}..."
 		if "${ssh_cmd[@]}" "sudo podman image exists '${candidate_ref}'" 2>/dev/null; then
 			found_local=1
 			found_ref="$candidate_ref"
@@ -678,7 +696,8 @@ EOF
 	echo "==> Running fisherman /tmp/e2e-recipe.json..."
 	timeout 1800 "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman /tmp/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
 		rc=$?
-		if [[ $rc -eq 0 ]]; then true;
+		if [[ $rc -eq 0 ]]; then
+			true
 		elif [[ $rc -eq 124 ]]; then
 			echo "ERROR: fisherman install timed out after 1800s"
 			return 3
