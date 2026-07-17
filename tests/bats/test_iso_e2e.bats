@@ -431,6 +431,11 @@ setup_luks_check_stubs() {
   [ "$output" = "/tmp/e2e-out/install-disk.qcow2" ]
 }
 
+@test "LUKS install disk defaults to 64 GiB for OCI staging headroom" {
+  grep -q 'TUNAOS_E2E_INSTALL_DISK_SIZE:-64G' "${SCRIPT}"
+  grep -q 'qemu-img create -f qcow2.*INSTALL_DISK_SIZE' "${SCRIPT}"
+}
+
 @test "paths: QEMU_PIDFILE in output dir" {
   run bash -c '
     OUTPUT_DIR="/tmp/e2e-out"

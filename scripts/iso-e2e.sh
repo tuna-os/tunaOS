@@ -73,6 +73,11 @@ CPUS=4
 NO_KVM=0
 KEEP_VM=0
 LUKS=0
+# A non-composefs installation temporarily keeps the exported OCI layout,
+# Podman's unpacked image, and the final ostree deployment on the target at
+# once. 32 GiB leaves too little headroom for chunked desktop images and
+# causes the nested podman import to block without reporting ENOSPC.
+INSTALL_DISK_SIZE="${TUNAOS_E2E_INSTALL_DISK_SIZE:-64G}"
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
@@ -364,8 +369,8 @@ boot_live_iso() {
 	fi
 	# Create install disk on first call; reuse if exists (kickstart path).
 	if [[ ! -f "$INSTALL_DISK" ]]; then
-		echo "==> Creating 32G install disk: ${INSTALL_DISK}"
-		if ! qemu-img create -f qcow2 "$INSTALL_DISK" 32G; then
+		echo "==> Creating ${INSTALL_DISK_SIZE} install disk: ${INSTALL_DISK}"
+		if ! qemu-img create -f qcow2 "$INSTALL_DISK" "$INSTALL_DISK_SIZE"; then
 			echo "ERROR: qemu-img create failed" >&2
 			return 1
 		fi
