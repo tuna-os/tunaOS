@@ -57,63 +57,64 @@ source "${SCRIPT_DIR}/desktop-${DESKTOP}.sh"
 # ── 2b. containers-storage: offline payload store (tacklebox-built) ─────────
 # tacklebox's BuildOfflineStore() assembles an overlay-driver
 # containers-storage graphroot of the payload image into
-# LiveOS/store.squashfs.img on the ISO. Loop-mount it at
+# LiveOS/store.squashfs.img on the ISO. Mount it at
 # /var/lib/superiso-store and register it as an additionalimagestore so
 # fisherman (bootcViaContainer path) finds it with a `containers-storage:`
 # transport ref instead of pulling the same bytes over the network.
-# Pattern: projectbluefin/dakota-iso's configure-live.sh, adapted from
-# their separate-store approach (retained for reference only in their
-# build-offline-store.sh). dakota-iso has since moved to embedding the
-# store directly in the main squashfs, but the mount-based approach is
-# correct for tacklebox's current output format.
+# Pattern: projectbluefin/dakota-iso's configure-live.sh, adapted for
+# tacklebox's separate-store format.
+#
+# Use a oneshot service rather than a .mount unit: the escape encoding
+# in mount unit filenames (\\x2d for hyphens) has proven fragile across
+# systemd versions. A simple ExecStart=mount is more reliable.
 STORE_MOUNT="/var/lib/superiso-store"
 mkdir -p "$STORE_MOUNT"
-cat >/usr/lib/systemd/system/var-lib-superiso\x2dstore.mount <<'UNITEOF'
+cat >/usr/lib/systemd/system/tunaos-offline-store.service <<'UNITEOF'
 [Unit]
-Description=Tacklebox offline image store (ISO squashfs)
+Description=Mount tacklebox offline image store
 DefaultDependencies=no
 Before=local-fs.target
 ConditionPathExists=/run/initramfs/live/LiveOS/store.squashfs.img
 
-[Mount]
-What=/run/initramfs/live/LiveOS/store.squashfs.img
-Where=/var/lib/superiso-store
-Options=ro,nodev
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/mount -o ro,nodev /run/initramfs/live/LiveOS/store.squashfs.img /var/lib/superiso-store
+ExecStop=/usr/bin/umount /var/lib/superiso-store
 
 [Install]
 WantedBy=local-fs.target
 UNITEOF
 mkdir -p /etc/systemd/system/local-fs.target.wants
-ln -sf /usr/lib/systemd/system/var-lib-superiso\x2dstore.mount \
-	/etc/systemd/system/local-fs.target.wants/var-lib-superiso\x2dstore.mount
+ln -sf /usr/lib/systemd/system/tunaos-offline-store.service \
+	/etc/systemd/system/local-fs.target.wants/tunaos-offline-store.service
 
+# The base image's /etc/containers/storage.conf may not exist in the
+# customize container (bootc images ship uninitialized storage), and the
+# driver may auto-detect as "btrfs" (EL10 default). The offline store is
+# ALWAYS overlay, and additionalimagestores silently ignores stores with
+# a different driver.  Write a complete drop-in that forces overlay and
+# registers the mounted store — this works regardless of the base image's
+# storage.conf state.
 mkdir -p /etc/containers/storage.conf.d
 cat >/etc/containers/storage.conf.d/99-tunaos-offline-store.conf <<'CONFEOF'
+[storage]
+driver = "overlay"
+runroot = "/run/containers/storage"
+
 [storage.options]
 additionalimagestores = ["/var/lib/superiso-store"]
+
+[storage.options.overlay]
+mount_program = "/usr/bin/fuse-overlayfs"
 CONFEOF
 
-# The live squash's own rootfs is overlayfs (dmsquash-live-style squashfs +
-# tmpfs overlay). The default containers/storage driver on the base image
-# may be "btrfs" (EL10 default) or "overlay" depending on the detected
-# filesystem. The offline payload store (store.squashfs.img) is ALWAYS
-# built with the overlay driver (tacklebox's BuildOfflineStore uses
-# `containers-storage:[overlay@...]`), and additionalimagestores silently
-# ignores stores whose driver doesn't match the primary graphroot.  Force
-# the primary driver to "overlay" so both the live working store and the
-# additional store use the same driver.
-#
-# The overlay driver cannot nest a second overlay mount on top of an
-# overlayfs rootfs without a userspace mount_program, so configure
-# fuse-overlayfs. Mirrors projectbluefin/dakota-iso configure-live.sh's
-# non-composefs storage.conf (projectbluefin/iso commit 34fe6659).
+# Also write the driver + mount_program into the main storage.conf as a
+# belt-and-suspenders measure, in case the drop-in isn't read.
 mkdir -p /etc/containers
 if [[ -f /etc/containers/storage.conf ]]; then
-	# Override the base image's driver to overlay (matches the offline store).
 	if grep -q '^driver' /etc/containers/storage.conf; then
 		sed -i 's/^driver *=.*/driver = "overlay"/' /etc/containers/storage.conf
-	else
-		sed -i '/^\[storage\]/a driver = "overlay"' /etc/containers/storage.conf
 	fi
 fi
 if [[ -f /etc/containers/storage.conf ]] && ! grep -q 'mount_program' /etc/containers/storage.conf; then

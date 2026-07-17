@@ -612,22 +612,20 @@ run_install() {
 
 	# ── Offline store diagnostics (debug: remove once stable) ─────────
 	echo "==> Offline store diagnostics:"
-	echo "--- mount unit status ---"
-	"${ssh_cmd[@]}" "systemctl status var-lib-superiso\\x2dstore.mount 2>&1 || true" || true
+	echo "--- store service status ---"
+	"${ssh_cmd[@]}" "systemctl status tunaos-offline-store.service 2>&1 || true" || true
 	echo "--- store.squashfs.img exists? ---"
 	"${ssh_cmd[@]}" "ls -la /run/initramfs/live/LiveOS/store.squashfs.img 2>&1 || echo '(not found)'" || true
 	echo "--- manual mount attempt (fallback) ---"
 	"${ssh_cmd[@]}" "sudo mkdir -p /var/lib/superiso-store && sudo mount -o ro,nodev /run/initramfs/live/LiveOS/store.squashfs.img /var/lib/superiso-store 2>&1 || echo '(mount failed)'" || true
 	echo "--- mount table (superiso) ---"
 	"${ssh_cmd[@]}" "findmnt /var/lib/superiso-store 2>&1 || echo '(not mounted)'" || true
-	echo "--- storage driver (w/ stderr) ---"
-	"${ssh_cmd[@]}" "sudo podman info 2>&1 | head -20 || echo 'podman info failed'" || true
+	echo "--- storage.conf.d drop-in ---"
+	"${ssh_cmd[@]}" "cat /etc/containers/storage.conf.d/99-tunaos-offline-store.conf 2>&1 || echo '(not found)'" || true
+	echo "--- effective storage driver ---"
+	"${ssh_cmd[@]}" "sudo podman info 2>&1 | grep -i graphdriver || echo 'podman info failed'" || true
 	echo "--- podman images (all) ---"
 	"${ssh_cmd[@]}" "sudo podman images 2>&1 || echo '(empty or error)'" || true
-	echo "--- storage.conf additionalimagestores ---"
-	"${ssh_cmd[@]}" "grep -r additionalimagestores /etc/containers/ 2>&1 || echo '(not configured)'" || true
-	echo "--- storage.conf driver ---"
-	"${ssh_cmd[@]}" "grep -rh '^driver' /etc/containers/ 2>&1 || echo '(no driver set)'" || true
 
 	# Probe the guest's containers-storage for a locally-available image.
 	local found_local=0 found_ref=""
