@@ -24,13 +24,16 @@
   const SLOT = 32; // compact inode size; nid unit
 
   const S_IFDIR = 0o040000, S_IFREG = 0o100000, S_IFLNK = 0o120000;
-  const FT = { file: 1, dir: 2, symlink: 7 };
+  const S_IFCHR = 0o020000, S_IFBLK = 0o060000, S_IFIFO = 0o010000;
+  const IFMT = { dir: S_IFDIR, file: S_IFREG, symlink: S_IFLNK, chardev: S_IFCHR, blockdev: S_IFBLK, fifo: S_IFIFO };
+  const FT = { file: 1, dir: 2, chardev: 3, blockdev: 4, fifo: 5, symlink: 7 };
 
   const enc = new TextEncoder();
 
   function normalize(entries) {
     // Build a tree; auto-create missing parent dirs.
     const rootNode = { type: "dir", mode: 0o755, uid: 0, gid: 0, children: new Map() };
+    const links = [];
     const dirOf = (parts) => {
       let n = rootNode;
       for (const p of parts) {
@@ -60,9 +63,24 @@
         parent.children.set(name, { type: "file", mode: e.mode ?? 0o644, uid: e.uid ?? 0, gid: e.gid ?? 0, data: e.data || new Uint8Array(0) });
       } else if (e.type === "symlink") {
         parent.children.set(name, { type: "symlink", mode: e.mode ?? 0o777, uid: e.uid ?? 0, gid: e.gid ?? 0, data: enc.encode(e.target || "") });
+      } else if (e.type === "chardev" || e.type === "blockdev" || e.type === "fifo") {
+        parent.children.set(name, { type: e.type, mode: e.mode ?? 0o644, uid: e.uid ?? 0, gid: e.gid ?? 0, rdev: e.rdev || 0, data: new Uint8Array(0) });
+      } else if (e.type === "link") {
+        // resolved after the first pass — record for later
+        links.push({ parts, name, linkTo: e.linkTo });
       } else {
         throw new Error(`unsupported entry type: ${e.type}`);
       }
+    }
+    // Hardlinks: point the dirent at the target's node object itself.
+    for (const l of links) {
+      let t = rootNode;
+      for (const p of l.linkTo.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean)) {
+        t = t.children && t.children.get(p);
+        if (!t) break;
+      }
+      if (!t || t.type !== "file") throw new Error(`hardlink target missing: ${l.linkTo}`);
+      dirOf(l.parts).children.set(l.name, t);
     }
     return rootNode;
   }
@@ -118,9 +136,11 @@
       }
     })(rootNode);
 
-    // Flatten: collect nodes depth-first, assign nids sequentially.
+    // Flatten: collect nodes depth-first, assign nids sequentially. A node
+    // reached through several dirents (hardlink) keeps its first nid.
     const nodes = [];
     (function walk(n) {
+      if (n.nid !== undefined) return;
       n.nid = nodes.length;
       nodes.push(n);
       if (n.type === "dir") {
@@ -129,9 +149,15 @@
       }
     })(rootNode);
 
-    // nlink for dirs = 2 + subdirectory count.
+    // nlink: dirs = 2 + subdir count; everything else = dirent references.
+    for (const n of nodes) n.refs = 0;
     for (const n of nodes) {
-      n.nlink = n.type === "dir" ? 2 + n.sorted.filter((c) => c.type === "dir").length : 1;
+      if (n.type === "dir") for (const c of n.sorted) c.refs++;
+    }
+    for (const n of nodes) {
+      n.nlink = n.type === "dir"
+        ? 2 + n.sorted.filter((c) => c.type === "dir").length
+        : Math.max(1, n.refs);
     }
 
     // Directory payloads need child nids — all assigned above.
@@ -140,7 +166,9 @@
         const list = [
           { name: ".", nid: n.nid, ft: FT.dir },
           { name: "..", nid: (n.parent ?? n).nid, ft: FT.dir },
-          ...n.sorted.map((c) => ({ name: c.nameInParent, nid: c.nid, ft: FT[c.type] })),
+          // Names come from the map keys — a hardlinked node lives under
+          // several names, so the node itself can't carry "its" name.
+          ...[...n.children.entries()].map(([name, c]) => ({ name, nid: c.nid, ft: FT[c.type] })),
         ].sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
         const { bytes, size } = packDir(list);
         n.data = bytes;
@@ -186,16 +214,18 @@
     // Inodes + data.
     for (const n of nodes) {
       const off = metaBlk * BLKSZ + n.nid * SLOT;
-      const mode =
-        n.type === "dir" ? S_IFDIR | (n.mode & 0o7777) :
-        n.type === "symlink" ? S_IFLNK | (n.mode & 0o7777) :
-        S_IFREG | (n.mode & 0o7777);
+      const mode = (IFMT[n.type] ?? S_IFREG) | (n.mode & 0o7777);
       dv.setUint16(off + 0, 0 /* compact | FLAT_PLAIN */, true);
       dv.setUint16(off + 2, 0, true); // no xattrs
       dv.setUint16(off + 4, mode, true);
       dv.setUint16(off + 6, n.nlink, true);
       dv.setUint32(off + 8, n.size, true);
-      dv.setUint32(off + 16, n.blkaddr, true); // i_u.raw_blkaddr
+      // i_u: raw data block address, or the device number for dev nodes.
+      if (n.type === "chardev" || n.type === "blockdev") {
+        dv.setUint32(off + 16, n.rdev || 0, true);
+      } else {
+        dv.setUint32(off + 16, n.blkaddr, true);
+      }
       dv.setUint32(off + 20, n.nid + 1, true); // i_ino (stat only)
       dv.setUint16(off + 24, n.uid, true);
       dv.setUint16(off + 26, n.gid, true);

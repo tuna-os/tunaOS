@@ -51,12 +51,39 @@ Explicitly rejected alternatives:
   terminal or a GitHub account; both stay documented as fallbacks for
   air-gapped or exotic cases, nothing more.
 
+## Parity requirement (added after review)
+
+The builder must produce **ISOs identical to production** — same live
+squashfs, same `live-iso/common` customize payload (bootc-installer
+Flatpak preseed, installer autostart, livesys scripts, liveuser setup),
+same recipe semantics. Production ISOs come from tacklebox, which today
+shells out to `podman`, `mksquashfs`, `sgdisk`/`mount` under sudo.
+Re-implementing that in JS guarantees drift; the sync-proof architecture
+is **one codebase, two targets**:
+
+1. Refactor tacklebox's backends onto pure-Go, root-free implementations
+   (registry client instead of podman, Go squashfs writer instead of
+   mksquashfs, go-diskfs-style partition/FAT/ISO assembly instead of
+   sgdisk+mount). CI benefits immediately: no sudo in the ISO jobs.
+2. Compile that same core to WASM for the page. The browser feeds it the
+   identical `recipe.json` and `live-iso/common` payload (fetched from
+   the repo at build time), so flatpaks/installer/autostart ride along
+   automatically and output is identical by construction.
+
+The JS pipeline below is the feasibility spike that proved the browser
+side (pull, unpack, author, deliver) — it stays as the demo and as the
+measured evidence, not as the production implementation. Note production
+live roots are **squashfs**; the erofs writer below demonstrated
+filesystem authoring is browser-tractable, but parity means squashfs via
+the shared Go core (or tacklebox itself adopting erofs).
+
 ## In-browser pipeline
 
 | Stage | Mechanism | Status |
 |---|---|---|
 | 1. Pull | token → index → platform manifest → config → layer blobs, via the shim; digest-verify with WebCrypto | **Working** (prototype demo; verified against real images) |
 | 2. Unpack | streaming zstd (fzstd, 8.4 KB inlined) + incremental tar walker, layers scanned topmost-first | **Working** (kernel + initramfs located in ~13 s / 349 MB of sailfin:kde, verified in headless Chromium cross-origin through the deployed shim) |
+| 2b. Full rootfs reconstruction | `unpack.js`: bottom-to-top overlay apply — whiteouts, opaque dirs, replacement, hardlinks, symlinks, device nodes; pluggable content store (memory now, OPFS later) | **Working** (synthetic-layer suite; resulting tree authored to erofs, kernel-mounted: whiteout/opaque honored, hardlinks share an inode with nlink=2) |
 | 3. Live root | pure-JS EROFS writer (`erofs.js`, uncompressed FLAT_PLAIN + compact inodes) | **Writer working** — browser-authored images pass `fsck.erofs`, kernel-mount, and diff-identical to `mkfs.erofs` output; remaining: full-rootfs unpack (whiteouts, hardlinks, xattrs) to feed it |
 | 4. Boot bits | extract kernel + initramfs from `/usr/lib/modules/<ver>/`, systemd-boot from the image's own payload; write fisherman `recipe.json` pointing back at the source image by digest | straightforward once 2 exists |
 | 5. Media | FAT ESP image + ISO9660/El Torito wrapper (JS/WASM writer) | bounded, well-specified formats |

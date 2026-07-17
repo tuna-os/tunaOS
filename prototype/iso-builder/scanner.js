@@ -48,6 +48,7 @@
       this.capture = null; // {kind} when the *body* of a meta entry is needed
       this.captured = [];
       this.longname = null;
+      this.longlink = null;
       this.onEntry = onEntry;
       this.done = false;
     }
@@ -113,6 +114,8 @@
               // strip padding + trailing NULs
               let end = this.capture.size;
               this.longname = dec.decode(body.subarray(0, end)).replace(/\0+$/, "");
+            } else if (this.capture.kind === "K") {
+              this.longlink = dec.decode(body.subarray(0, this.capture.size)).replace(/\0+$/, "");
             } else if (this.capture.kind === "F" && this.onFile) {
               this.onFile(this.capture.name, body.subarray(0, this.capture.size));
             }
@@ -130,20 +133,34 @@
         const size = octal(hdr, 124, 12);
         const padded = Math.ceil(size / 512) * 512;
 
-        if (type === "L") {
-          this.capture = { kind: "L", size };
+        if (type === "L" || type === "K") {
+          this.capture = { kind: type, size };
           this.skip = padded;
           continue;
         }
 
-        let name = this.longname || cstr(hdr, 0, 100);
+        const hadLongname = this.longname !== null;
+        let name = hadLongname ? this.longname : cstr(hdr, 0, 100);
         this.longname = null;
-        const prefix = cstr(hdr, 345, 155);
-        if (prefix) name = prefix + "/" + name;
+        if (!hadLongname) {
+          const prefix = cstr(hdr, 345, 155);
+          if (prefix) name = prefix + "/" + name;
+        }
 
-        if (type === "0" || type === "\0" || type === "5" || type === "2" || type === "1") {
-          this.onEntry({ name, size, type });
-          if ((type === "0" || type === "\0") && this.shouldCapture && this.shouldCapture(name)) {
+        // 0 file, 1 hardlink, 2 symlink, 3/4 char/block dev, 5 dir, 6 fifo
+        if ("0123456".includes(type)) {
+          const entry = {
+            name, size, type,
+            mode: octal(hdr, 100, 8),
+            uid: octal(hdr, 108, 8),
+            gid: octal(hdr, 116, 8),
+            linkname: (type === "1" || type === "2") ? (this.longlink || cstr(hdr, 157, 100)) : null,
+            devmajor: (type === "3" || type === "4") ? octal(hdr, 329, 8) : 0,
+            devminor: (type === "3" || type === "4") ? octal(hdr, 337, 8) : 0,
+          };
+          this.longlink = null;
+          this.onEntry(entry);
+          if (type === "0" && this.shouldCapture && this.shouldCapture(name)) {
             this.capture = { kind: "F", name, size };
           }
         }
