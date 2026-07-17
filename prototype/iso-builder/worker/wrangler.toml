@@ -1,0 +1,7 @@
+name = "ghcr-shim"
+main = "cors-shim.js"
+compatibility_date = "2026-07-01"
+
+# Deploy: npx wrangler deploy   (after: npx wrangler login)
+# Optional custom domain: add a route, e.g.
+# routes = [{ pattern = "ghcr-shim.tunaos.org", custom_domain = true }]
