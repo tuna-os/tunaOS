@@ -33,6 +33,43 @@ setup() {
   grep -q 'mv -f "$SERIAL_LOG" "$LIVE_SERIAL_LOG"' "$SCRIPT"
 }
 
+@test "run_install uploads and runs the TAP-style LUKS check script over SSH" {
+  grep -q 'scripts/e2e-luks-checks.sh\|e2e-luks-checks.sh' "$SCRIPT"
+  grep -q 'lib/e2e-assert.sh' "$SCRIPT"
+}
+
+@test "e2e-assert.sh check() records pass and fail correctly" {
+  run bash -c "source '${REPO_ROOT}/scripts/lib/e2e-assert.sh'; check 'true succeeds' true; check 'false fails' false; echo PASS=\$PASS FAIL=\$FAIL"
+  [[ "$output" == *"ok - true succeeds"* ]]
+  [[ "$output" == *"not ok - false fails"* ]]
+  [[ "$output" == *"PASS=1 FAIL=1"* ]]
+}
+
+@test "e2e-assert.sh print_summary exits with the failure count" {
+  run bash -c "source '${REPO_ROOT}/scripts/lib/e2e-assert.sh'; check 'ok one' true; check 'bad one' false; check 'bad two' false; print_summary"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"# Results: 1 passed, 2 failed, 3 total"* ]]
+}
+
+setup_luks_check_stubs() {
+  mkdir -p "${BATS_TEST_TMPDIR}/bin"
+  printf '#!/bin/bash\nshift\nexec "$@"\n' >"${BATS_TEST_TMPDIR}/bin/sudo"
+  printf '#!/bin/bash\necho "/dev/vda1 vfat"\n' >"${BATS_TEST_TMPDIR}/bin/lsblk"
+  chmod +x "${BATS_TEST_TMPDIR}/bin/sudo" "${BATS_TEST_TMPDIR}/bin/lsblk"
+}
+
+@test "e2e-luks-checks.sh reports failure cleanly when no LUKS partition exists" {
+  # Simulate the guest environment: stub sudo/lsblk so no crypto_LUKS line is
+  # ever produced, and confirm the script degrades to a clean failing summary
+  # instead of erroring out on unset variables (set -u) or unbound sudo.
+  setup_luks_check_stubs
+  PATH="${BATS_TEST_TMPDIR}/bin:${PATH}" TEST_LIB_DIR="${REPO_ROOT}/scripts/lib" \
+    run bash "${REPO_ROOT}/scripts/e2e-luks-checks.sh"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"not ok - installed disk has a crypto_LUKS partition"* ]]
+  [[ "$output" == *"not ok - LUKS header has a systemd-tpm2 enrollment token"* ]]
+}
+
 # ═══════════════════════════════════════════════════════════════════════════
 # Argument Parsing — Mode Selection
 # ═══════════════════════════════════════════════════════════════════════════
