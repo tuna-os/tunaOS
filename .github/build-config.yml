@@ -2,30 +2,28 @@ config:
   global_platforms: ["linux/amd64", "linux/arm64"]
 
 # ── Grouped dedup ISOs (issue #455) ───────────────────────────────────────────
-# Per-desktop-per-flavor ISOs are wasteful: all desktops on a variant share the
-# same Enterprise-Linux base, so tacklebox `shared_store.dedup` packs several
-# bootable environments into ONE combined squashfs (~80%+ dedup; an extra
-# desktop adds ~300 MB rather than a whole new ISO). Each group below becomes a
-# single ISO named `<variant>[-<suffix>].iso` whose systemd-boot menu lists
-# every environment by title.
+# Production ISO policy: publish two small, understandable downloads per
+# supported variant — the GNOME flagship and a KDE Community edition. All
+# other desktop, HWE, and experimental images remain published bootc refs and
+# are reached with `bootc switch`, rather than turning 52 container images
+# into 52 weekly ISO artifacts.
 #
-# `scripts/build-iso-group.sh` intersects each group's `flavors` with the
-# variant's actual `build_image: true` flavors, so a variant that lacks a
-# Variants that lack certain desktops simply get a smaller ISO — no group
-# needs per-variant tailoring here.
+# The 2026-07 DE-centric experiment exhausted a GitHub-hosted runner while
+# copying its sixth offline payload. Keep every production group to ONE live
+# environment and TWO offline payloads (standard + NVIDIA). Each group becomes
+# `<variant>[-<suffix>].iso` with one clear default boot entry.
 iso_groups:
-  # Flagship: the 90%-of-users ISO. Boots GNOME NVIDIA by default, and embeds
-  # both NVIDIA and non-NVIDIA flavors in the offline store for installer auto-detection.
+  # Flagship: GNOME, with standard + NVIDIA installer payloads.
   # Published as `<variant>.iso`.
   - suffix: ""
-    flavors: [gnome-nvidia, gnome-nvidia-hwe]
-    offline_flavors: [gnome, gnome-hwe, gnome-nvidia, gnome-nvidia-hwe]
-  # Community: Niche desktops grouped by audience. Boots NVIDIA by default, and embeds
-  # both NVIDIA and non-NVIDIA versions in the offline store.
+    flavors: [gnome-nvidia]
+    offline_flavors: [gnome, gnome-nvidia]
+  # Community: KDE live media, with standard + NVIDIA installer payloads.
+  # COSMIC, Niri, XFCE, HWE, and experimental streams are bootc-switch targets.
   # Published as `<variant>-community.iso`.
   - suffix: community
-    flavors: [kde-nvidia, cosmic-nvidia, niri-nvidia, xfce-nvidia]
-    offline_flavors: [kde, kde-hwe, cosmic, cosmic-hwe, niri, niri-hwe, xfce, kde-nvidia, cosmic-nvidia, niri-nvidia, xfce-nvidia]
+    flavors: [kde-nvidia]
+    offline_flavors: [kde, kde-nvidia]
 
 # Build stages (for reference — enforced by the workflow job graph):
 #

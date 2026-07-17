@@ -1,9 +1,9 @@
 name: Publish Grouped Dedup ISOs to R2
 
-# Builds the combined, deduplicated ISOs defined under `iso_groups:` in
-# .github/build-config.yml (issue #455): one ISO per (variant, group) that
-# packs several desktop environments into a single shared squashfs. This
-# replaces 36 per-desktop ISOs with 12 grouped ones.
+# Builds the small production ISOs defined under `iso_groups:` in
+# .github/build-config.yml: one ISO per (variant, group). The policy publishes
+# only GNOME and KDE Community media; other bootc images are selected after
+# onboarding with `bootc switch`, avoiding ISO sprawl and runner disk pressure.
 #
 # Runs separately from publish-isos.yml (the legacy per-flavor path) so the two
 # can be compared before the old one is retired.
@@ -24,7 +24,7 @@ on:
           - bonito
           - grouper
       group:
-        description: 'ISO group (all = flagship + community + nvidia)'
+        description: 'ISO group (all = GNOME flagship + KDE community)'
         required: false
         default: 'all'
         type: choice
@@ -117,15 +117,13 @@ jobs:
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
 
-      - name: Build combined dedup ISO (from published GHCR images)
+      - name: Build production ISO (from published GHCR images)
         env:
           GITHUB_REPOSITORY_OWNER: tuna-os
-          # The low-disk offline-store implementation must be reproducible and
-          # available before the release-container workflow finishes publishing.
+          # Build pinned Tacklebox source for reproducible offline-store media.
           TACKLEBOX_FROM_SOURCE: '1'
-          TACKLEBOX_SHA: dd5b29b2f46aeda539ba447f6884218926788080
         run: |
-          sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA \
+          sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE \
             just iso-group "${{ matrix.variant }}" "${{ matrix.group }}" ghcr
 
       - name: Install QEMU for boot gate

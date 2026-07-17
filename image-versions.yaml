@@ -31,7 +31,7 @@ downloads:
     amd64: "a8880a1b01e877c3e5da250b9f882ce9fa39962686d75f436fa21e021fa092b1"
     arm64: "ea9389f4efdc26d74bf9b4cc73db8f3a529e1e6effb5703e438117ea3f095439"
   # renovate: datasource=git-refs depName=tuna-os/tacklebox
-  tacklebox: "50b917d837b76753e488b03551b09284f16e4c1f"
+  tacklebox: "320a1a459511b9d056d67e9301ec5fed02858f44"
 
   # Bootc toolchain built from source (see toolchain/) and published to
   # ghcr.io/tuna-os/bootc-toolchain-<base> as OCI artifacts via ORAS.
