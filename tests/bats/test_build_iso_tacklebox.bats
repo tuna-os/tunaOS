@@ -168,6 +168,19 @@ teardown() {
   [ "$result" = "ghcr.io/tuna-os/bonito:v1.2.3" ]
 }
 
+@test "offline payload keeps a canonical installed-system ref" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/build-iso-tacklebox.sh"
+  grep -q 'PAYLOAD_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG")' "$SCRIPT_PATH"
+  grep -q '"source": "${IMAGE_REF}"' "$SCRIPT_PATH"
+  grep -q '"ref": "${PAYLOAD_REF}"' "$SCRIPT_PATH"
+  source_ref="localhost/yellowfin:kde"
+  canonical_ref="ghcr.io/tuna-os/yellowfin:kde"
+  recipe=$(printf '{"offline_payloads":[{"source":"%s","ref":"%s"}]}' "$source_ref" "$canonical_ref")
+  run jq -r '.offline_payloads[0].source + " -> " + .offline_payloads[0].ref' <<<"$recipe"
+  [ "$status" -eq 0 ]
+  [ "$output" = "localhost/yellowfin:kde -> ghcr.io/tuna-os/yellowfin:kde" ]
+}
+
 # ── Desktop detection ──────────────────────────────────────────────────────
 
 @test "desktop: flavor 'gnome' maps to desktop 'gnome'" {

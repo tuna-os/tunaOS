@@ -38,6 +38,12 @@ setup() {
   grep -q 'lib/e2e-assert.sh' "$SCRIPT"
 }
 
+@test "non-composefs canonical offline payload uses Fisherman direct mode" {
+  grep -q 'Found canonical offline image.*bootcDirect' "$SCRIPT"
+  grep -q 'recipe_image=""' "$SCRIPT"
+  grep -q 'containers-storage:<targetImgref>' "$SCRIPT"
+}
+
 @test "e2e-assert.sh check() records pass and fail correctly" {
   run bash -c "source '${REPO_ROOT}/scripts/lib/e2e-assert.sh'; check 'true succeeds' true; check 'false fails' false; echo PASS=\$PASS FAIL=\$FAIL"
   [[ "$output" == *"ok - true succeeds"* ]]

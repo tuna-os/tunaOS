@@ -65,6 +65,12 @@ REPO_ROOT="$(pwd)"
 # scripts/lib/common.sh.
 
 IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")
+# Keep the name embedded in the offline store independent of how this ISO was
+# built.  A developer can build from localhost/, but the installed system and
+# bootc's direct live-ISO path must resolve the published image reference.
+# Tacklebox copies IMAGE_REF into the store under this canonical ref; it does
+# not pull a second image or require a local podman tag.
+PAYLOAD_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" ghcr "$TAG")
 if [[ "$REPO" == "local" ]]; then
 	tunaos_import_to_root_storage "$IMAGE_REF"
 else
@@ -131,7 +137,12 @@ cat >"$RECIPE_FILE" <<EOF
       "modes": ["live"]
     }
   ],
-  "offline_payloads": ["${IMAGE_REF}"]
+  "offline_payloads": [
+    {
+      "source": "${IMAGE_REF}",
+      "ref": "${PAYLOAD_REF}"
+    }
+  ]
 }
 EOF
 
@@ -140,6 +151,7 @@ EOF
 ISO_OUT="${OUT_DIR}/tunaos-${VARIANT}-${FLAVOR}.iso"
 echo "==> Building ISO with tacklebox..."
 echo "    image:  ${IMAGE_REF}"
+echo "    payload: ${PAYLOAD_REF} (embedded offline ref)"
 echo "    recipe: ${RECIPE_FILE}"
 echo "    output: ${ISO_OUT}"
 

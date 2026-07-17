@@ -602,11 +602,11 @@ run_install() {
 	# payload image as an overlay-driver containers-storage additional store.
 	# customize-live.sh (2026-07) mounts it at /var/lib/superiso-store and
 	# adds it to /etc/containers/storage.conf's additionalimagestores.  Probe
-	# for both the locally-built ref (dev ISOs, `just iso … … ghcr … 1`) and
-	# the production ref (published ISOs).  If found, use
-	# `containers-storage:` transport — fisherman runs bootcViaContainer with
-	# no network pull.  Fall back to the network pull path only when the
-	# offline store is absent (older ISOs, or the mount unit failed).
+	# for both legacy locally-built refs and the canonical production ref. New
+	# Tacklebox media always embeds the latter, even when built from localhost/.
+	# That matters for the non-composefs direct path: bootc resolves
+	# containers-storage:<targetImgref> itself, without an OCI export or nested
+	# Podman import. Fall back to the container route only for older media.
 	#
 	# `targetImgref` always names the production GHCR ref so the installed
 	# system tracks the right image for updates.
@@ -614,6 +614,13 @@ run_install() {
 	local local_ref="localhost/${VARIANT:-}:${FLAVOR:-}"      # dev=1 ISO
 	local prod_ref="ghcr.io/tuna-os/${VARIANT:-}:${FLAVOR:-}" # production ISO
 	local recipe_image=""                                     # set below after probing the VM
+	local composefs_backend="false" bootloader="grub2"
+	# grouper (Ubuntu) has no bootupd package available via apt, so it ships
+	# systemd-boot instead and installs via bootc's composefs-native backend.
+	if [[ "${VARIANT:-}" == "grouper" ]]; then
+		composefs_backend="true"
+		bootloader="systemd"
+	fi
 
 	# ── Offline store diagnostics (debug: remove once stable) ─────────
 	echo "==> Offline store diagnostics:"
@@ -638,7 +645,7 @@ run_install() {
 
 	# Probe the guest's containers-storage for a locally-available image.
 	local found_local=0 found_ref=""
-	for candidate_ref in "$local_ref" "$prod_ref"; do
+	for candidate_ref in "$prod_ref" "$local_ref"; do
 		echo "==> Probing for ${candidate_ref}..."
 		if "${ssh_cmd[@]}" "sudo podman image exists '${candidate_ref}'" 2>/dev/null; then
 			found_local=1
@@ -648,8 +655,16 @@ run_install() {
 	done
 
 	if [[ "$found_local" -eq 1 ]]; then
-		echo "==> Found local image ${found_ref} in offline store — using containers-storage: transport"
-		recipe_image="containers-storage:${found_ref}"
+		if [[ "$composefs_backend" == "false" && "$found_ref" == "$prod_ref" ]]; then
+			echo "==> Found canonical offline image ${found_ref} — using Fisherman bootcDirect (no OCI copy)"
+			# Leave image empty. Fisherman then calls bootc directly and derives
+			# --source-imgref containers-storage:<targetImgref>, reading the
+			# embedded store without exporting/reimporting the full image.
+			recipe_image=""
+		else
+			echo "==> Found local image ${found_ref} in offline store — using containers-storage transport"
+			recipe_image="containers-storage:${found_ref}"
+		fi
 	else
 		echo "==> No local image in offline store, falling back to network pull over QEMU NAT"
 		recipe_image="${prod_ref}"
@@ -675,13 +690,6 @@ run_install() {
 		fi
 	fi
 
-	local composefs_backend="false" bootloader="grub2"
-	# grouper (Ubuntu) has no bootupd package available via apt, so it ships
-	# systemd-boot instead and installs via bootc's composefs-native backend.
-	if [[ "${VARIANT:-}" == "grouper" ]]; then
-		composefs_backend="true"
-		bootloader="systemd"
-	fi
 	local encryption_json='{"type": "none"}'
 	[[ "$LUKS" -eq 1 ]] && encryption_json='{"type": "tpm2-luks"}'
 
@@ -703,17 +711,13 @@ EOF
 	"${scp_cmd[@]}" "$RECIPE_LOCAL" liveuser@127.0.0.1:/tmp/e2e-recipe.json
 
 	echo "==> Running fisherman /tmp/e2e-recipe.json..."
-	timeout 1800 "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman /tmp/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
+	# CI's 90-minute job timeout is the safety boundary. The former 30-minute
+	# wrapper was added for the old network-pull stall; offline installs do not
+	# use that path, and the importer can legitimately need longer on slow I/O.
+	"${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman /tmp/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
 		rc=$?
-		if [[ $rc -eq 0 ]]; then
-			true
-		elif [[ $rc -eq 124 ]]; then
-			echo "ERROR: fisherman install timed out after 1800s"
-			return 3
-		else
-			echo "ERROR: fisherman install failed (exit $rc)"
-			return 3
-		fi
+		echo "ERROR: fisherman install failed (exit $rc)"
+		return 3
 	}
 
 	if [[ "$LUKS" -eq 1 ]]; then
