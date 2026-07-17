@@ -50,9 +50,9 @@ detect() {
   [ "$output" = "DETECTED xfce org.tunaos.InstallerXfce" ]
 }
 
-@test "detect: no session files falls back to gnome, no tuna installer app" {
+@test "detect: no session files falls back to gnome, upstream bootc-installer app" {
   run detect
-  [ "$output" = "DETECTED gnome none" ]
+  [ "$output" = "DETECTED gnome org.bootcinstaller.Installer" ]
 }
 
 @test "detect: kde wins over xfce when both present" {
@@ -84,11 +84,12 @@ detect() {
 }
 
 @test "customize-live.sh: gives headless Flatpak an explicit session bus" {
-  grep -q 'dbus-run-session --' "${SCRIPT}"
+  grep -q 'DBUS_SESSION_BUS_ADDRESS' "${SCRIPT}"
+  grep -q 'dbus-daemon --session' "${SCRIPT}"
 }
 
 @test "customize-live.sh: initializes D-Bus identity before Flatpak installation" {
-  run grep -n 'dbus-uuidgen --ensure=/etc/machine-id' "${SCRIPT}"
+  run grep -n 'systemd-machine-id-setup' "${SCRIPT}"
   [ "$status" -eq 0 ]
   grep -q 'rm -f /etc/machine-id' "${SCRIPT}"
 }

@@ -1,9 +1,10 @@
 name: Publish Live ISOs to R2
 
 on:
-  schedule:
-    # Runs every Sunday at 22:00 UTC (before the Monday 06:00 UTC smoke test)
-    - cron: '0 22 * * 0'
+  # DISABLED: per-flavor ISOs superseded by grouped dedup ISO pipeline
+  # (publish-iso-groups.yml). Kept for emergency manual use only.
+  # schedule:
+  #   - cron: '0 22 * * 0'
   workflow_dispatch:
     inputs:
       variant:

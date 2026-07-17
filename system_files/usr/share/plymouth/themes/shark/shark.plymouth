@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=TunaOS Shark
+Description=TunaOS boot animation (Shark)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/shark
+ScriptFile=/usr/share/plymouth/themes/shark/shark.script

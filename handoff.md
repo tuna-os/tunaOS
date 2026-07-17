@@ -42,7 +42,7 @@
 **Status**: All 4 desktop builds AND all 4 boot gates pass (run 28685978251, confirmed). The composefs-backend fix works end-to-end. Nothing left to iterate on here unless a fresh regression shows up.
 
 - Base `10-base-packages.sh` apt path: fdisk added (Debian splits it from util-linux), plasma-workspace-wayland removed (nonexistent), bootupd reverted (not an apt package).
-- `build_scripts/kde.sh`: removed `plasma-workspace-wayland` from apt install.
+- `build_scripts/desktop/kde.sh`: removed `plasma-workspace-wayland` from apt install.
 - **Root cause**: `bootc install to-disk` defaults to the ostree backend, which always shells out to `bootupd` for bootloader management — but `bootupd` isn't packaged for Ubuntu apt.
 - **Fix** (mirrors `bootc-shindig`/`bootcrew/mono`'s `ubuntu-bootc` reference, which also ships systemd-boot + no bootupd): per bootc docs (bootloaders.md, experimental-composefs.md), if `bootupd` is absent from the image, bootc falls back to systemd-boot — but only under the composefs-native storage backend (`--composefs-backend`), distinct from the `[composefs] enabled = yes` ostree-composefs mode our image already sets in `prepare-root.conf`.
   - `build_scripts/10-base-packages.sh`: added `systemd-boot` apt package (provides `bootctl` + EFI binaries).
@@ -88,7 +88,7 @@ Now cloned locally at `/home/james/dev/tuna-os/debian-copr`. Actively debugged t
 
 ## Key files
 - `build_scripts/10-base-packages.sh` — base packages per distro (apt/dnf paths)
-- `build_scripts/xfce.sh`, `kde.sh` — desktop flavor install scripts
+- `build_scripts/desktop/xfce.sh`, `kde.sh` — desktop flavor install scripts
 - `.github/build-config.yml` — variant × desktop matrix, xfce entries commented out for EL10
 - `Containerfile`, `Containerfile.ubuntu` — build stages
 - `Justfile` — `just boot-gate`, `just verify-disk`, `just qcow2`

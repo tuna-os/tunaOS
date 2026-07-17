@@ -322,7 +322,7 @@ Most impactful items first:
 
 - **`tuna-os/github-copr`** — add `Obsoletes: gnome-shell-common < %{major_version}`
   to `src/gnome-49/gnome-shell/gnome-shell.spec` and the matching
-  `gnome-50` spec. Once that lands, the workaround in `build_scripts/gnome.sh:48`
+  `gnome-50` spec. Once that lands, the workaround in `build_scripts/desktop/gnome.sh:48`
   (commit `33e11a1`) can be removed.
 - **`tuna-os/tacklebox`** — publish a release container image so we
   don't have to `go build` from source each time. The `scripts/build-iso-tacklebox.sh`

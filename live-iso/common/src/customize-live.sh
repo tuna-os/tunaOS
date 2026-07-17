@@ -38,7 +38,10 @@ kde) INSTALLER_APP="org.tunaos.InstallerKde" ;;
 niri) INSTALLER_APP="org.tunaos.InstallerNiri" ;;
 cosmic) INSTALLER_APP="org.tunaos.InstallerCosmic" ;;
 xfce) INSTALLER_APP="org.tunaos.InstallerXfce" ;;
-*) INSTALLER_APP="" ;; # gnome: upstream bootc-installer ships via its own channel
+# gnome has no TunaOS-branded frontend fork; ship upstream bootc-installer
+# directly, fetched the same way projectbluefin/dakota-iso does it (see
+# install-flatpaks.sh there) rather than from the tuna-os Flatpak remote.
+*) INSTALLER_APP="org.bootcinstaller.Installer" ;;
 esac
 
 # Test hook: report detection and stop before any system mutation.
@@ -51,12 +54,35 @@ fi
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/desktop-${DESKTOP}.sh"
 
+# ── 2b. containers-storage: fuse-overlayfs for overlay-on-overlay ────────────
+# The live squash's own rootfs is overlayfs (dmsquash-live-style squashfs +
+# tmpfs overlay). The default containers/storage "overlay" driver cannot
+# nest a second overlay mount on top of that without a userspace
+# mount_program — bootc (via fisherman) reading the embedded image with
+# `containers-storage:` fails with "'overlay' is not supported over
+# overlayfs, a mount_program is required". Mirrors projectbluefin/dakota-iso
+# configure-live.sh's non-composefs storage.conf (dakota's fix for the same
+# class of failure, projectbluefin/iso commit 34fe6659).
+mkdir -p /etc/containers
+if [[ -f /etc/containers/storage.conf ]] && ! grep -q 'mount_program' /etc/containers/storage.conf; then
+	cat >>/etc/containers/storage.conf <<'STOREOF'
+
+[storage.options.overlay]
+mount_program = "/usr/bin/fuse-overlayfs"
+STOREOF
+fi
+
 # Dev/E2E media only: the normal published-image policy keeps SSH disabled.
 # tacklebox creates liveuser during boot, so install a oneshot that sets its
 # temporary test password after livesys and before the SSH daemon starts.
 if [[ -f "${SCRIPT_DIR}/.enable-sshd" ]]; then
 	SSH_UNIT=""
-	[[ -f /usr/lib/systemd/system/sshd.service ]] && SSH_UNIT="sshd.service"
+	# systemctl enable refuses to operate on a "linked unit file" (a symlink
+	# under /usr/lib/systemd/system/, as opposed to an Alias= in [Install]).
+	# Debian/Ubuntu's openssh-server ships sshd.service as exactly that kind
+	# of compat symlink to the real ssh.service unit — require a real
+	# (non-symlink) file so that case falls through to ssh.service below.
+	[[ -f /usr/lib/systemd/system/sshd.service && ! -L /usr/lib/systemd/system/sshd.service ]] && SSH_UNIT="sshd.service"
 	[[ -z "$SSH_UNIT" && -f /usr/lib/systemd/system/ssh.service ]] && SSH_UNIT="ssh.service"
 	if [[ -z "$SSH_UNIT" ]]; then
 		echo "ERROR: dev ISO requested but no SSH service is installed" >&2
@@ -90,11 +116,29 @@ Requires=tunaos-live-ssh-credentials.service
 After=tunaos-live-ssh-credentials.service
 EOF
 	systemctl enable tunaos-live-ssh-credentials.service "$SSH_UNIT"
+
+	# fisherman (the LUKS/TPM install backend) runs as root over a
+	# non-interactive SSH command, so sudo has no TTY to prompt on. Grant
+	# liveuser NOPASSWD sudo — dev/E2E media only, matching
+	# projectbluefin/dakota-iso's debug=1 live-env setup (liveuser has
+	# NOPASSWD sudo there too). Production images never enable sshd, so
+	# liveuser never gets a login there.
+	mkdir -p /etc/sudoers.d
+	echo 'liveuser ALL=(ALL) NOPASSWD: ALL' >/etc/sudoers.d/90-tunaos-live-e2e
+	chmod 0440 /etc/sudoers.d/90-tunaos-live-e2e
 fi
 
 # ── 3. Pre-install the installer Flatpak into the live squash ────────────────
 # dbus is needed for flatpak's system helper inside the build container.
 if [[ -n "${INSTALLER_APP}" ]]; then
+	# Minimal containers (grouper/apt in particular) have no locale beyond
+	# POSIX/C, which is strictly ASCII. glib's path handling requires a
+	# UTF-8-capable locale even for ASCII paths in this codepath — without
+	# one, flatpak fails with "Pathname can't be converted from UTF-8 to
+	# current locale." C.UTF-8 is a built-in glibc locale, no locale-gen
+	# needed, present on both apt and dnf bases.
+	export LANG=C.UTF-8
+	export LC_ALL=C.UTF-8
 	# bootc images intentionally ship an uninitialized machine-id.  Flatpak
 	# starts a private D-Bus client during live-image customization, however,
 	# and refuses to do so without a valid ID.  This only mutates the ephemeral
@@ -107,19 +151,88 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 	mkdir -p "${XDG_CACHE_HOME}" /run/dbus
 	if [[ ! -s /etc/machine-id ]] || grep -qx 'uninitialized' /etc/machine-id; then
 		rm -f /etc/machine-id
-		dbus-uuidgen --ensure=/etc/machine-id
+		# systemd-machine-id-setup (core systemd, always present) rather than
+		# dbus-uuidgen — some flavors (niri, cosmic) don't pull in the dbus
+		# package that ships dbus-uuidgen, but every systemd-based image has
+		# systemd-machine-id-setup.
+		systemd-machine-id-setup
 	fi
 	mkdir -p /var/lib/dbus
 	ln -sf /etc/machine-id /var/lib/dbus/machine-id
 	dbus-daemon --system --fork --nopidfile || true
 
-	flatpak remote-add --system --if-not-exists tuna-os \
-		https://tunaos.org/flatpak/tuna-os.flatpakrepo
+	if ! command -v flatpak &>/dev/null; then
+		echo "ERROR: flatpak not installed; cannot pre-install ${INSTALLER_APP}" >&2
+		exit 1
+	fi
+
+	# The installer apps (tuna-os-hosted and upstream bootc-installer alike)
+	# declare a GNOME/Freedesktop runtime dependency that isn't published on
+	# the tuna-os remote itself — only the apps are. `flatpak install`
+	# resolves missing runtime refs from any configured remote, so add
+	# flathub here too; without it, install fails with "requires the
+	# runtime org.gnome.Platform/... which was not found".
+	flatpak remote-add --system --if-not-exists flathub \
+		https://dl.flathub.org/repo/flathub.flatpakrepo
+
 	# Flatpak also opens a session-bus connection even for a system install.
 	# The headless tacklebox container has no DISPLAY, so autolaunch cannot
-	# create one; provide an explicit short-lived session bus instead.
-	dbus-run-session -- \
+	# create one; provide an explicit short-lived session bus instead. Spun
+	# up directly with dbus-daemon (already required above for the system
+	# bus) rather than the dbus-run-session wrapper — some flavors (niri,
+	# cosmic) don't pull in the package that ships dbus-run-session.
+	SESSION_BUS_SOCK="${HOME}/session-bus.sock"
+	dbus-daemon --session --fork --nopidfile --address="unix:path=${SESSION_BUS_SOCK}"
+	export DBUS_SESSION_BUS_ADDRESS="unix:path=${SESSION_BUS_SOCK}"
+	if [[ "${INSTALLER_APP}" == "org.bootcinstaller.Installer" ]]; then
+		# gnome: mirrors projectbluefin/dakota-iso's install-flatpaks.sh —
+		# download the upstream release bundle and import it into a
+		# throwaway local ostree repo. `flatpak install --bundle` in a
+		# container build only creates the installer-origin: remote ref, not
+		# the deploy/ ref that `flatpak run`/`flatpak list` need; installing
+		# from a local file:// remote goes through the full deploy pipeline.
+		# Primary source: projectbluefin/bootc-installer (upstream). Fallback:
+		# tuna-os/tuna-installer, which mirrors the same app ID as a release
+		# asset.
+		INSTALLER_FLATPAK_FILE="/tmp/bootc-installer.flatpak"
+		if ! curl --retry 3 --fail --location \
+			"https://github.com/projectbluefin/bootc-installer/releases/latest/download/org.bootcinstaller.Installer.flatpak" \
+			-o "${INSTALLER_FLATPAK_FILE}" 2>/dev/null; then
+			echo "projectbluefin/bootc-installer unavailable, falling back to tuna-os/tuna-installer..."
+			curl --retry 3 --fail --location \
+				"https://github.com/tuna-os/tuna-installer/releases/latest/download/org.bootcinstaller.Installer.flatpak" \
+				-o "${INSTALLER_FLATPAK_FILE}"
+		fi
+		INSTALLER_LOCAL_REPO="/tmp/installer-local-repo"
+		ostree init --repo="${INSTALLER_LOCAL_REPO}" --mode=archive-z2
+		flatpak build-import-bundle "${INSTALLER_LOCAL_REPO}" "${INSTALLER_FLATPAK_FILE}"
+		rm -f "${INSTALLER_FLATPAK_FILE}"
+		flatpak remote-add --system --no-gpg-verify installer-local "file://${INSTALLER_LOCAL_REPO}"
+		flatpak install --system --noninteractive installer-local "${INSTALLER_APP}"
+		flatpak remote-delete --system --force installer-local || true
+		rm -rf "${INSTALLER_LOCAL_REPO}"
+
+		# A container-build install (no flatpak-system-helper daemon) creates
+		# the deployment directory but omits the 'active' symlink inside the
+		# branch directory, leaving the app unreachable to flatpak run/list.
+		# Reproduce the symlink a normal installation would create.
+		_app_arch_dir="/var/lib/flatpak/app/${INSTALLER_APP}/x86_64"
+		for _branch_dir in "${_app_arch_dir}"/*/; do
+			_branch_dir="${_branch_dir%/}"
+			[[ -d "${_branch_dir}" ]] || continue
+			if [[ ! -L "${_branch_dir}/active" ]]; then
+				_hash=$(find "${_branch_dir}" -maxdepth 1 -mindepth 1 -type d -printf '%f\n' | head -1)
+				if [[ -n "${_hash}" ]]; then
+					ln -sfn "${_hash}" "${_branch_dir}/active"
+					echo "Created active symlink: ${_branch_dir}/active → ${_hash}"
+				fi
+			fi
+		done
+	else
+		flatpak remote-add --system --if-not-exists tuna-os \
+			https://tunaos.org/flatpak/tuna-os.flatpakrepo
 		flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}"
+	fi
 
 	# ── 4a. fisherman on the host path ────────────────────────────────────
 	# The frontends escalate via `flatpak-spawn --host pkexec

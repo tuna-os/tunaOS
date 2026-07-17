@@ -23,8 +23,9 @@ Key scripts:
 - `scripts/resolve-flavor.sh` — flavor → build params (tested: 18 bats cases)
 - `scripts/resolve-image.sh` — consolidated image ref lookups
 - `scripts/build-image-inner.sh` — the build engine (env-var driven)
-- `build_scripts/install-desktop.sh` — generic DE installer
+- `build_scripts/desktop/install-desktop.sh` — generic DE installer
 - `build_scripts/lib.sh` — shared library (OS detection, pkg abstraction)
+- `build_scripts/README.md` — naming scheme (dirs = code path, numbers = phase order)
 
 Containerfiles:
 - `Containerfile` — main (base + all DE stages)

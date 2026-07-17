@@ -70,9 +70,28 @@ printf 'version=%s\nvalidated_at_build=true\n' "${REMORA_VERSION}" \
 	>/usr/share/tunaos/experience-contracts/remora
 
 # Generate initramfs image after installing Yellowfin branding because of Plymouth subpackage
-# Set TunaOS Plymouth theme before rebuilding initramfs so dracut picks it up
+# Set TunaOS Plymouth theme before rebuilding initramfs so dracut picks it up.
+# Each variant gets its own boot animation, matching its build-config.yml
+# emoji (see system_files/usr/share/plymouth/themes/): variants sharing an
+# emoji (albacore/grouper, both 🐟) share the "tunaos" theme; the rest map
+# 1:1 to their own theme dir. Falls back to "tunaos" for any unmapped
+# variant so a new variant without a theme yet still boots themed.
+PLYMOUTH_THEME="tunaos"
+case "${IMAGE_NAME:-}" in
+yellowfin) PLYMOUTH_THEME="tropical-fish" ;;      # 🐠
+albacore) PLYMOUTH_THEME="tunaos" ;;              # 🐟
+skipjack) PLYMOUTH_THEME="sushi" ;;               # 🍣
+bonito) PLYMOUTH_THEME="fishing-pole" ;;          # 🎣
+sailfin) PLYMOUTH_THEME="shark" ;;                # 🦈
+guppy) PLYMOUTH_THEME="rainbow" ;;                # 🌈
+bonito-rawhide) PLYMOUTH_THEME="dragon" ;;        # 🐉
+grouper) PLYMOUTH_THEME="tunaos" ;;               # 🐟
+marlin) PLYMOUTH_THEME="rocket" ;;                # 🚀
+flounder) PLYMOUTH_THEME="pufferfish" ;;          # 🐡
+flounder-sid) PLYMOUTH_THEME="radioactive" ;;     # ☢️
+esac
 if command -v plymouth-set-default-theme >/dev/null 2>&1; then
-	plymouth-set-default-theme tunaos
+	plymouth-set-default-theme "$PLYMOUTH_THEME"
 fi
 
 # Disable system sleep/suspend to prevent VMs from suspending during walkthroughs

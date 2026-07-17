@@ -16,8 +16,10 @@ setup() {
 }
 
 @test "installed desktop gate requires experience contract and real LUKS filesystem" {
-  grep -q 'TUNAOS_DESKTOP_CONTRACT_OK' "$SCRIPT"
-  grep -q 'grep -qx crypto_LUKS' "$SCRIPT"
+  # e9fe9e5: the gate deliberately accepts OK or FAIL — either proves the
+  # contract service ran, i.e. graphical.target was reached and the DM started.
+  grep -qF 'TUNAOS_DESKTOP_CONTRACT_(OK|FAIL)' "$SCRIPT"
+  grep -q 'crypto_LUKS' "$SCRIPT"
 }
 
 @test "--luks dispatches the full encrypted install path" {
@@ -31,6 +33,207 @@ setup() {
   grep -q 'TUNAOS_LUKS_E2E_PASS encrypted=1 tpm_unlock=1 installed_boot=1 desktop_contract=' "$SCRIPT"
   grep -q 'LUKS_EVIDENCE_LOG=' "$SCRIPT"
   grep -q 'mv -f "$SERIAL_LOG" "$LIVE_SERIAL_LOG"' "$SCRIPT"
+}
+
+@test "run_install uploads and runs the TAP-style LUKS check script over SSH" {
+  grep -q 'scripts/e2e-luks-checks.sh\|e2e-luks-checks.sh' "$SCRIPT"
+  grep -q 'lib/e2e-assert.sh' "$SCRIPT"
+}
+
+@test "e2e-assert.sh check() records pass and fail correctly" {
+  run bash -c "source '${REPO_ROOT}/scripts/lib/e2e-assert.sh'; check 'true succeeds' true; check 'false fails' false; echo PASS=\$PASS FAIL=\$FAIL"
+  [[ "$output" == *"ok - true succeeds"* ]]
+  [[ "$output" == *"not ok - false fails"* ]]
+  [[ "$output" == *"PASS=1 FAIL=1"* ]]
+}
+
+@test "e2e-assert.sh print_summary exits with the failure count" {
+  run bash -c "source '${REPO_ROOT}/scripts/lib/e2e-assert.sh'; check 'ok one' true; check 'bad one' false; check 'bad two' false; print_summary"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"# Results: 1 passed, 2 failed, 3 total"* ]]
+}
+
+setup_luks_check_stubs() {
+  mkdir -p "${BATS_TEST_TMPDIR}/bin"
+  printf '#!/bin/bash\nshift\nexec "$@"\n' >"${BATS_TEST_TMPDIR}/bin/sudo"
+  printf '#!/bin/bash\necho "/dev/vda1 vfat"\n' >"${BATS_TEST_TMPDIR}/bin/lsblk"
+  chmod +x "${BATS_TEST_TMPDIR}/bin/sudo" "${BATS_TEST_TMPDIR}/bin/lsblk"
+}
+
+@test "e2e-luks-checks.sh reports failure cleanly when no LUKS partition exists" {
+  # Simulate the guest environment: stub sudo/lsblk so no crypto_LUKS line is
+  # ever produced, and confirm the script degrades to a clean failing summary
+  # instead of erroring out on unset variables (set -u) or unbound sudo.
+  setup_luks_check_stubs
+  PATH="${BATS_TEST_TMPDIR}/bin:${PATH}" TEST_LIB_DIR="${REPO_ROOT}/scripts/lib" \
+    run bash "${REPO_ROOT}/scripts/e2e-luks-checks.sh"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"not ok - installed disk has a crypto_LUKS partition"* ]]
+  [[ "$output" == *"not ok - LUKS header has a systemd-tpm2 enrollment token"* ]]
+}
+
+@test "run_install and ssh mode upload and run the smoke check script" {
+  grep -q 'e2e-smoke-checks.sh' "$SCRIPT"
+  grep -q 'run_smoke_checks' "$SCRIPT"
+  # ssh mode gates on the smoke checks; install mode runs them pre-install.
+  awk '/^ssh\)/,/;;/' "$SCRIPT" | grep -q 'run_smoke_checks'
+  awk '/^run_install\(\)/,/^}/' "$SCRIPT" | grep -q 'run_smoke_checks'
+}
+
+setup_smoke_check_stubs() {
+  # Exported-function stubs (not files): BATS_TEST_TMPDIR can live on a
+  # noexec /tmp, where file stubs silently fail to exec. Exported functions
+  # propagate into the `bash script` child and win over PATH lookups.
+  sudo() { "$@"; }
+  systemctl() {
+    case "$1" in
+      is-system-running) echo degraded ;;
+      is-active) echo active ;;
+      --failed) : ;;
+    esac
+    return 0
+  }
+  bootc() {
+    [[ "${1:-}" == "status" && "${2:-}" == "--json" ]] && echo '{"image": "ghcr.io/tuna-os/x:y"}'
+    return 0
+  }
+  curl() { return 0; }
+  getent() { echo "140.82.112.3 ghcr.io"; }
+  rpm() { seq 200; }
+  locale() { return 0; }
+  hostname() { echo testhost; }
+  export -f sudo systemctl bootc curl getent rpm locale hostname
+}
+
+@test "e2e-smoke-checks.sh passes with a healthy stubbed guest" {
+  setup_smoke_check_stubs
+  TEST_LIB_DIR="${REPO_ROOT}/scripts/lib" \
+    run bash "${REPO_ROOT}/scripts/e2e-smoke-checks.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ok - system has booted (running or degraded)"* ]]
+  [[ "$output" == *"ok - bootc status succeeds"* ]]
+  [[ "$output" == *"ok - package metadata intact (>100 installed packages)"* ]]
+  [[ "$output" == *"# Results: "* ]]
+  [[ "$output" != *"not ok - "* ]]
+}
+
+@test "e2e-smoke-checks.sh exit code equals its failure count" {
+  setup_smoke_check_stubs
+  # Break two checks: dead network manager/sshd (is-active fails) — the
+  # script must keep going (no set -e abort) and exit with the exact count.
+  systemctl() {
+    case "$1" in
+      is-system-running) echo degraded; return 0 ;;
+      is-active) return 1 ;;
+    esac
+    return 0
+  }
+  export -f systemctl
+  TEST_LIB_DIR="${REPO_ROOT}/scripts/lib" \
+    run bash "${REPO_ROOT}/scripts/e2e-smoke-checks.sh"
+  [ "$status" -eq 2 ]
+  [[ "$output" == *"not ok - ssh daemon is active"* ]]
+  [[ "$output" == *"not ok - a network manager is active"* ]]
+}
+
+setup_runtime_check_stubs() {
+  # Exported-function stubs simulating a healthy installed bootc guest for
+  # build_scripts/checks/e2e-runtime-checks.sh (which is self-contained — it runs
+  # from /usr/libexec inside the image, so it sources nothing).
+  systemctl() {
+    case "$1" in
+      is-system-running) echo running ;;
+      is-active) echo active ;;
+      show) echo "gdm.service" ;;
+      list-unit-files) : ;; # no sshd shipped -> host-key check skipped
+      --failed) : ;;
+    esac
+    return 0
+  }
+  findmnt() { echo overlay; return 0; }
+  bootc() { echo 'Image: ghcr.io/tuna-os/x:y'; return 0; }
+  systemd-analyze() { return 0; }
+  rpm() { seq 200; }
+  locale() { return 0; }
+  hostname() { echo tunaos-e2e; }
+  export -f systemctl findmnt bootc systemd-analyze rpm locale hostname
+}
+
+@test "e2e-runtime-checks.sh passes with a healthy installed guest and emits markers" {
+  setup_runtime_check_stubs
+  run bash "${REPO_ROOT}/build_scripts/checks/e2e-runtime-checks.sh" gnome
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"TUNAOS_INSTALL_CHECKS_BEGIN desktop=gnome"* ]]
+  [[ "$output" == *"ok - display manager matches gnome contract"* ]]
+  [[ "$output" == *"ok - root filesystem is immutable (ro or composefs/overlay)"* ]]
+  [[ "$output" == *"TUNAOS_INSTALL_CHECKS_RESULT pass="* ]]
+  [[ "$output" == *" fail=0 desktop=gnome"* ]]
+  [[ "$output" != *"not ok - "* ]]
+}
+
+@test "e2e-runtime-checks.sh counts failures and rejects a wrong display manager" {
+  setup_runtime_check_stubs
+  # sddm answering for a gnome image must fail the DM contract check.
+  systemctl() {
+    case "$1" in
+      is-system-running) echo running ;;
+      is-active) echo active ;;
+      show) echo "sddm.service" ;;
+      list-unit-files) : ;;
+      --failed) : ;;
+    esac
+    return 0
+  }
+  export -f systemctl
+  run bash "${REPO_ROOT}/build_scripts/checks/e2e-runtime-checks.sh" gnome
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"not ok - display manager matches gnome contract"* ]]
+  [[ "$output" == *" fail=1 desktop=gnome"* ]]
+}
+
+@test "installed-stage harvest gates on the serial TAP markers" {
+  # harvest_install_checks reads the markers e2e-runtime-checks emits on
+  # ttyS0, and must be wired into both the install path and the disk gate.
+  grep -q 'harvest_install_checks()' "$SCRIPT"
+  grep -q 'TUNAOS_INSTALL_CHECKS_RESULT' "$SCRIPT"
+  # run_install's body contains a column-0 '}' inside the recipe heredoc, so
+  # awk function-range extraction truncates early; grep the exact call sites.
+  grep -qF 'harvest_install_checks || return 1' "$SCRIPT"   # install path
+  grep -qF 'harvest_install_checks || rc=1' "$SCRIPT"       # disk gate
+}
+
+@test "app-launch mode supports per-DE matrices with session env" {
+  # openQA apps_startstop clone: "auto" resolves a DE matrix from FLAVOR,
+  # launches inside the live session (bus + compositor env), and exits with
+  # the aggregate VLM failure count.
+  # The block contains a nested case (matrix selection) whose ';;' would
+  # truncate an awk /;;/ range — anchor on the block's final exit instead.
+  awk '/^app-launch\)/,/exit "\$app_failures"/' "$SCRIPT" >"${BATS_TEST_TMPDIR}/applaunch"
+  grep -q 'org.gnome.Nautilus' "${BATS_TEST_TMPDIR}/applaunch"
+  grep -q 'org.kde.dolphin' "${BATS_TEST_TMPDIR}/applaunch"
+  grep -q 'com.system76.CosmicFiles' "${BATS_TEST_TMPDIR}/applaunch"
+  grep -q 'thunar' "${BATS_TEST_TMPDIR}/applaunch"
+  grep -q 'DBUS_SESSION_BUS_ADDRESS' "${BATS_TEST_TMPDIR}/applaunch"
+  grep -q 'exit "\$app_failures"' "${BATS_TEST_TMPDIR}/applaunch"
+}
+
+@test "harvest_install_checks tolerates absent markers and flags failures" {
+  # Extract just the function; INSTALL_CHECKS_WAIT=0 skips the 90s serial wait.
+  local fn
+  fn=$(awk '/^harvest_install_checks\(\)/,/^}/' "$SCRIPT")
+  # Old image: no markers at all -> succeed (old tags must stay promotable).
+  run bash -c "SERIAL_LOG=/dev/null INSTALL_CHECKS_WAIT=0; $fn; harvest_install_checks"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"predates e2e-runtime-checks"* ]]
+  # Failing checks in the serial log -> warn by default, fail under strict.
+  local log="${BATS_TEST_TMPDIR}/serial.log"
+  printf 'TUNAOS_INSTALL_CHECKS_BEGIN desktop=kde\nnot ok - x\nTUNAOS_INSTALL_CHECKS_RESULT pass=9 fail=1 desktop=kde\n' >"$log"
+  run bash -c "SERIAL_LOG='$log' INSTALL_CHECKS_WAIT=0; $fn; harvest_install_checks"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"::warning::installed-system checks reported 1 failure(s)"* ]]
+  [[ "$output" == *"not ok - x"* ]]
+  run bash -c "SERIAL_LOG='$log' INSTALL_CHECKS_WAIT=0 E2E_SMOKE_STRICT=1; $fn; harvest_install_checks"
+  [ "$status" -eq 1 ]
 }
 
 # ═══════════════════════════════════════════════════════════════════════════

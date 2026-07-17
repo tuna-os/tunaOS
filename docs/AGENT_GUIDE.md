@@ -29,7 +29,7 @@ manifests/desktops/
 └── kde-debian.yaml  — Debian variant (apt)
 ```
 
-The generic installer `build_scripts/install-desktop.sh` reads a manifest and installs the desktop. One script, all desktops, all OS families.
+The generic installer `build_scripts/desktop/install-desktop.sh` reads a manifest and installs the desktop. One script, all desktops, all OS families.
 
 ### Key Scripts
 
@@ -38,9 +38,9 @@ The generic installer `build_scripts/install-desktop.sh` reads a manifest and in
 | `scripts/resolve-flavor.sh` | Routes flavor → Containerfile, target, parent, flags |
 | `scripts/resolve-image.sh` | Resolves image refs (base, common, brew, akmods) |
 | `scripts/build-image-inner.sh` | The build engine (env-var driven, replaces old Justfile monolith) |
-| `build_scripts/install-desktop.sh` | Generic manifest-driven DE installer |
+| `build_scripts/desktop/install-desktop.sh` | Generic manifest-driven DE installer |
 | `build_scripts/lib.sh` | Shared library (OS detection, pkg abstraction, retry logic) |
-| `build_scripts/gnome-extensions.sh` | GNOME extension compilation (separate cache layer) |
+| `build_scripts/desktop/gnome-extensions.sh` | GNOME extension compilation (separate cache layer) |
 
 ### Containerfiles
 

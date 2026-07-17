@@ -4,12 +4,10 @@ name: LUKS E2E
 # builds an ISO. For each cell we build a *dev* ISO (ENABLE_SSHD=1 — the live
 # env needs SSH to drive the install), then scripts/iso-e2e.sh --luks:
 #   1. boots the live ISO under QEMU with an emulated TPM 2.0 (swtpm),
-#   2. runs `bootc install to-disk --block-setup tpm2-luks /dev/vda`,
+#   2. installs via fisherman (the same backend every TunaOS installer
+#      frontend uses) with a recipe.json requesting encryption.type=tpm2-luks,
 #   3. reboots the installed disk with the *same* TPM and confirms the
 #      encrypted root auto-unlocks (reaching the login target proves it).
-#
-# tpm2-luks is permitted by system_files/usr/lib/bootc/install/00-tunaos.toml
-# (block = ["direct", "tpm2-luks"]).
 #
 # This is expensive (a dev ISO build + two QEMU boots per cell), so it only
 # runs on demand or weekly — never per push. Modelled on iso-e2e.yml and
@@ -82,7 +80,12 @@ jobs:
     name: LUKS ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate-matrix
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    # 90 min was sized for the old local-only bootc install (no network
+    # pull). fisherman now does a full image pull over the QEMU guest's NAT
+    # networking (see docs/ci-troubleshooting.md §4 bug #19) — slower than a
+    # host-level pull — on top of build + boot + install + reboot + boot
+    # verification. 150 min gives that real headroom.
+    timeout-minutes: 150
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -143,7 +146,12 @@ jobs:
           FLAVOR: ${{ matrix.flavor }}
         run: |
           mkdir -p luks-out
-          sudo ./scripts/iso-e2e.sh "${ISO_PATH}" --luks \
+          # -E: sudo resets the environment by default, which drops VARIANT/
+          # FLAVOR (env: above) — iso-e2e.sh needs them to build the fisherman
+          # recipe's image ref. Without -E it silently falls back to parsing
+          # them from the ISO filename, which has a "tunaos-" project prefix
+          # the fallback doesn't account for, producing a bogus image ref.
+          sudo -E ./scripts/iso-e2e.sh "${ISO_PATH}" --luks \
             --output luks-out \
             --timeout 1200
           grep -qx 'TUNAOS_LUKS_E2E_INSTALL_STARTED luks=1' luks-out/luks-evidence.log

@@ -104,7 +104,7 @@ if [[ "$DEV" == "1" ]]; then
 fi
 
 # `desktop` maps an env to its session manager so livesys-* sets autologin
-# correctly. Approximation from build_scripts/{gnome,kde,niri,cosmic,xfce}.sh.
+# correctly. Approximation from build_scripts/desktop/{gnome,kde,niri,cosmic,xfce}.sh.
 DESKTOP="gnome"
 case "$FLAVOR" in
 kde*) DESKTOP="kde" ;;

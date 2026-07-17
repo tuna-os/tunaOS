@@ -75,7 +75,7 @@ packages:
       # dms-greeter from the dms-git block alone fails ("no match") and, because
       # copr installs are best-effort, silently drops the whole shell. Install
       # the suite from one block with danklinux (+ cosmic-epel for the
-      # dms-greeter→greetd dep) enabled, mirroring build_scripts/niri.sh. The
+      # dms-greeter→greetd dep) enabled, mirroring build_scripts/desktop/niri.sh. The
       # danklinux block is enable-only so its repo file exists for --enablerepo.
       - repo: avengemedia/danklinux
         packages: []

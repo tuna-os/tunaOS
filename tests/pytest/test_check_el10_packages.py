@@ -176,7 +176,7 @@ class TestExtractCandidates:
     def test_real_world_diff_example(self):
         """Simulate a realistic upstream diff with package additions."""
         lines = [
-            " COPY build_scripts/niri.sh /src/",
+            " COPY build_scripts/desktop/niri.sh /src/",
             "+RUN dnf install -y \\",
             "+    niri \\",
             "+    xdg-desktop-portal-gnome \\",

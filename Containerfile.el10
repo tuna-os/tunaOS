@@ -90,12 +90,12 @@ RUN rm -rf /opt && mkdir /opt
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/copy-files.sh
+  /run/context/build_scripts/00-copy-files.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-   /run/context/build_scripts/00-workarounds.sh
+   /run/context/build_scripts/01-workarounds.sh
 
 # Install base packages WITHOUT DE.
 # The optional RHSM secret is mounted at /run/secrets/rhsm only inside this
@@ -137,12 +137,12 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-   /run/context/build_scripts/arch-customizations.sh
+   /run/context/build_scripts/91-arch-customizations.sh
 
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-   /run/context/build_scripts/cleanup.sh
+   /run/context/build_scripts/99-cleanup.sh
 
 # ==============================================================================
 # Desktop Variant Stages
@@ -159,20 +159,20 @@ COPY --from=common /system_files/bluefin /
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/install-desktop.sh gnome
+  /run/context/build_scripts/desktop/install-desktop.sh gnome
 # Extensions are a separate layer so DE package install caches independently
 # of submodule updates to extension sources.
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/gnome-extensions.sh
+  /run/context/build_scripts/desktop/gnome-extensions.sh
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS cosmic
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/install-desktop.sh cosmic
+  /run/context/build_scripts/desktop/install-desktop.sh cosmic
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS kde
@@ -183,7 +183,7 @@ FROM base-no-de AS kde
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/install-desktop.sh kde
+  /run/context/build_scripts/desktop/install-desktop.sh kde
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS niri
@@ -198,12 +198,12 @@ COPY --from=zirconium /usr/lib/systemd/user/chezmoi-update.service /usr/lib/syst
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/install-desktop.sh niri
+  /run/context/build_scripts/desktop/install-desktop.sh niri
 RUN rm -rf /opt && ln -s /var/opt /opt
 
 FROM base-no-de AS xfce
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/install-desktop.sh xfce
+  /run/context/build_scripts/desktop/install-desktop.sh xfce
 RUN rm -rf /opt && ln -s /var/opt /opt

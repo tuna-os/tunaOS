@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=TunaOS Dragon
+Description=TunaOS boot animation (Dragon)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/dragon
+ScriptFile=/usr/share/plymouth/themes/dragon/dragon.script

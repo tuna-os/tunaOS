@@ -1,0 +1,8 @@
+[Plymouth Theme]
+Name=TunaOS Radioactive
+Description=TunaOS boot animation (Radioactive)
+ModuleName=script
+
+[script]
+ImageDir=/usr/share/plymouth/themes/radioactive
+ScriptFile=/usr/share/plymouth/themes/radioactive/radioactive.script

@@ -34,3 +34,4 @@ out.ociarchive
 # PI Coding Agent session logs (terminal recording dumps)
 tuna.txt
 ubuntu.txt
+.pi-subagents/
