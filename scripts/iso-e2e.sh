@@ -656,14 +656,35 @@ EOF
 	echo "==> Uploading fisherman recipe..."
 	"${scp_cmd[@]}" "$RECIPE_LOCAL" liveuser@127.0.0.1:/tmp/e2e-recipe.json
 
+	# Pre-pull the image with retries before invoking fisherman. In practice
+	# (bug #20) the pull through QEMU's SLIRP NAT deterministically stalls
+	# mid-blob on one specific layer for ~29 minutes before erroring — not a
+	# PMTUD/MTU issue (an MTU=1400 guest-side clamp did not fix it, and the
+	# stalling blob isn't unusually large compared to its neighbors). Root
+	# cause not isolated further; treated as SLIRP connection flakiness.
+	# `podman pull` skips layers already present in local storage, so each
+	# retry only has to re-fetch whatever didn't finish, not the whole image.
+	# Once the image is present locally, fisherman's bootcViaContainer mode
+	# (CheckImage()) finds it and skips its own pull.
+	echo "==> Pre-pulling ${image_ref} (retry on stall, layers already fetched are cached)..."
+	local pull_ok=0
+	for pull_attempt in 1 2 3 4; do
+		echo "--> pull attempt ${pull_attempt}/4"
+		if timeout 600 "${ssh_cmd[@]}" "sudo podman pull ${image_ref} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
+			pull_ok=1
+			break
+		fi
+		echo "==> pull attempt ${pull_attempt} failed or stalled; retrying..."
+	done
+	if [[ "$pull_ok" -ne 1 ]]; then
+		echo "ERROR: failed to pull ${image_ref} after 4 attempts"
+		return 3
+	fi
+
 	echo "==> Running fisherman /tmp/e2e-recipe.json..."
-	# Bound with `timeout`: the network-pull install path (bug #19 fix) has
-	# no internal deadline of its own — if the podman pull inside the QEMU
-	# guest stalls (seen in practice: runs sat "in progress" for 2+ hours
-	# with zero output), this SSH call would otherwise hang until the whole
-	# GitHub Actions job timeout kills it, producing no usable diagnostics.
-	# 1800s is generous for a real (if slow) pull while still failing fast
-	# on a genuine stall.
+	# Bound with `timeout` as a safety net; the image is already local at
+	# this point so this should only cover the actual install steps, not a
+	# network pull.
 	timeout 1800 "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman /tmp/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
 		rc=$?
 		if [[ $rc -eq 0 ]]; then true;
