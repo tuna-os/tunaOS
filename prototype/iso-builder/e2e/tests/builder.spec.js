@@ -9,7 +9,7 @@
 // TBOX_E2E_FULL=1 additionally runs the full ISO build + download —
 // heavy (real image in browser memory); off by default in CI.
 
-const { test, expect } = require("@playwright/test");
+const { test, expect } = require("./fixtures");
 const path = require("path");
 const fs = require("fs");
 
