@@ -96,12 +96,15 @@ jobs:
           TBOX_E2E_FULL: '1'
           TBOX_E2E_KEEP: '1'
           TBOX_E2E_INITRD_URL: http://127.0.0.1:8931/initramfs-sailfin-tbox.img
-        run: npx playwright test --grep @full
+          TBOX_E2E_ISO_OUT: ${{ github.workspace }}/browser-e2e.iso
+        run: |
+          npx playwright test --grep @full
+          ls -la "${{ github.workspace }}/browser-e2e.iso"
 
       - name: boot the browser-built ISO (QEMU/OVMF, tbox live path)
         run: |
           chmod +x /tmp/tacklebox/scripts/test-live-boot.sh
-          sudo /tmp/tacklebox/scripts/test-live-boot.sh docs/iso-builder-e2e-output.iso 900
+          sudo /tmp/tacklebox/scripts/test-live-boot.sh "${{ github.workspace }}/browser-e2e.iso" 900
 
       - name: upload evidence
         if: always()

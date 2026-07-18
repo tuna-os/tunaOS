@@ -69,7 +69,7 @@ test.describe("iso builder", () => {
     await page.locator("#build").click();
     await shot(page, "05-building.png");
     const dl = await download;
-    const out = path.join(SHOTS, "..", "iso-builder-e2e-output.iso");
+    const out = process.env.TBOX_E2E_ISO_OUT || path.join(SHOTS, "..", "iso-builder-e2e-output.iso");
     await dl.saveAs(out);
     const size = fs.statSync(out).size;
     expect(size).toBeGreaterThan(100 * 1024 * 1024);
