@@ -116,12 +116,16 @@ jobs:
           for i in $(seq 1 36); do
             SESS=$($SSH 'loginctl list-sessions --no-legend 2>/dev/null; ls /run/user/$(id -u)/wayland-* /tmp/.X11-unix/X* 2>/dev/null' 2>/dev/null || true)
             # "active" graphical session or a live wayland/X socket
-            if echo "$SESS" | grep -qE "wayland-|/tmp/.X11-unix/X"; then
-              # and NOT parked at a greeter (greetd/sddm-greeter/cosmic-greeter)
-              GREETER=$($SSH 'pgrep -af "greeter|greetd" | grep -v "session\|niri-session\|cosmic-session" || true' 2>/dev/null || true)
-              WHO=$($SSH 'loginctl list-sessions --no-legend 2>/dev/null | grep -c liveuser' 2>/dev/null || echo 0)
-              if [ "${WHO:-0}" -ge 1 ]; then session_ok=1; break; fi
+            # The real desktop session process must be running — a wayland
+            # socket alone is satisfied by a greeter (cosmic-greeter) or an
+            # orphan socket (tunaOS#678). Require the actual compositor for
+            # the flavor, and reject if parked at a greeter.
+            COMP=$($SSH 'pgrep -af "niri|cosmic-comp|cosmic-session|kwin_wayland|gnome-shell|xfwm4|xfce4-session" || true' 2>/dev/null || true)
+            GREETER=$($SSH 'pgrep -af "cosmic-greeter|sddm-greeter|gtkgreet|dms-greeter|agreety" || true' 2>/dev/null || true)
+            if [ -n "$COMP" ] && [ -z "$GREETER" ] && echo "$SESS" | grep -qE "wayland-|/tmp/.X11-unix/X"; then
+              session_ok=1; echo "compositor: $COMP"; break
             fi
+            [ -n "$GREETER" ] && echo "still at greeter: $GREETER"
             sleep 10
           done
           if [ "$session_ok" -ne 1 ]; then
