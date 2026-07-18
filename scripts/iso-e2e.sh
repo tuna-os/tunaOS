@@ -750,23 +750,6 @@ EOF
 		fi
 	fi
 
-	echo "==> fisherman install complete. Shutting down..."
-	"${ssh_cmd[@]}" "sudo systemctl poweroff" 2>/dev/null || true
-	sleep 10
-
-	# Wait for VM to fully stop
-	if [[ -f "$QEMU_PIDFILE" ]]; then
-		local pid
-		pid=$(cat "$QEMU_PIDFILE" 2>/dev/null || true)
-		if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-			echo "==> Waiting for VM to shut down..."
-			for _ in $(seq 1 30); do
-				kill -0 "$pid" 2>/dev/null || break
-				sleep 2
-			done
-		fi
-	fi
-
 	# E2E visibility: the installed system must talk on ttyS0 — fisherman
 	# has no kargs surface, so append the console karg to the installed
 	# BLS entries via the still-running live env (they sit on the
@@ -790,6 +773,23 @@ EOF
 			[ "$found" = 1 ] && break
 		done
 	BLSEOF
+
+	echo "==> fisherman install complete. Shutting down..."
+	"${ssh_cmd[@]}" "sudo systemctl poweroff" 2>/dev/null || true
+	sleep 10
+
+	# Wait for VM to fully stop
+	if [[ -f "$QEMU_PIDFILE" ]]; then
+		local pid
+		pid=$(cat "$QEMU_PIDFILE" 2>/dev/null || true)
+		if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
+			echo "==> Waiting for VM to shut down..."
+			for _ in $(seq 1 30); do
+				kill -0 "$pid" 2>/dev/null || break
+				sleep 2
+			done
+		fi
+	fi
 
 	# The installed-boot gate must never match a marker emitted by the live
 	# environment. Preserve the first boot as separate evidence and give QEMU a
