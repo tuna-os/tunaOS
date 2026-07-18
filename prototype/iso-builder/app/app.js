@@ -147,11 +147,18 @@ function updateShare() {
   if (fl.length) p.set("flatpaks", fl.join(","));
   if ($("label").value && $("label").value !== "TUNAOS") p.set("label", $("label").value);
   if ($("initrdurl").value) p.set("initrd", $("initrdurl").value);
-  $("share").textContent = "?" + p.toString();
+  const qs = "?" + p.toString();
+  $("share").textContent = qs;
+  $("sharelink").href = location.origin + location.pathname + qs;
 }
 
 $("introspect").onclick = inspect;
 $("build").onclick = build;
+$("copyshare").onclick = async () => {
+  await navigator.clipboard.writeText($("sharelink").href);
+  $("copyshare").textContent = "Copied!";
+  setTimeout(() => ($("copyshare").textContent = "Copy"), 1500);
+};
 for (const id of ["image", "flatpaks", "label", "initrdurl"]) $(id).addEventListener("input", updateShare);
 
 // Apply URL params.

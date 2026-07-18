@@ -82,7 +82,10 @@
     <div id="log"></div>
   </div>
 
-  <p class="sub" style="margin-top:1rem">Share a preset: <code id="share">?image=…</code></p>
+  <p class="sub" style="margin-top:1rem">Share a preset:
+    <a id="sharelink" href="#" style="word-break:break-all"><code id="share">?image=…</code></a>
+    <button id="copyshare" class="secondary" style="padding:.2rem .6rem;font-size:.8rem;margin-left:.4rem">Copy</button>
+  </p>
 </main>
 <script src="wasm_exec.js"></script>
 <script src="app.js"></script>
