@@ -742,3 +742,4 @@ setup_runtime_check_stubs() {
   '
   [ "$output" = "CLEANUP_RUN" ]
 }
+

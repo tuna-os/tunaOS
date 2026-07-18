@@ -74,23 +74,61 @@ fi
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/desktop-${DESKTOP}.sh"
 
-# ── 2b. containers-storage: fuse-overlayfs for overlay-on-overlay ────────────
-# The live squash's own rootfs is overlayfs (dmsquash-live-style squashfs +
-# tmpfs overlay). The default containers/storage "overlay" driver cannot
-# nest a second overlay mount on top of that without a userspace
-# mount_program — bootc (via fisherman) reading the embedded image with
-# `containers-storage:` fails with "'overlay' is not supported over
-# overlayfs, a mount_program is required". Mirrors projectbluefin/dakota-iso
-# configure-live.sh's non-composefs storage.conf (dakota's fix for the same
-# class of failure, projectbluefin/iso commit 34fe6659).
+# ── 2b. containers-storage: offline payload store (tacklebox-built) ─────────
+# tacklebox's BuildOfflineStore() assembles an overlay-driver
+# containers-storage graphroot of the payload image into
+# LiveOS/store.squashfs.img on the ISO. Mount it at
+# /var/lib/superiso-store and register it as an additionalimagestore so
+# fisherman (bootcViaContainer path) finds it with a `containers-storage:`
+# transport ref instead of pulling the same bytes over the network.
+# Pattern: projectbluefin/dakota-iso's configure-live.sh, adapted for
+# tacklebox's separate-store format.
+#
+# Use a oneshot service rather than a .mount unit: the escape encoding
+# in mount unit filenames (\\x2d for hyphens) has proven fragile across
+# systemd versions. A simple ExecStart=mount is more reliable.
+STORE_MOUNT="/var/lib/superiso-store"
+mkdir -p "$STORE_MOUNT"
+cat >/usr/lib/systemd/system/tunaos-offline-store.service <<'UNITEOF'
+[Unit]
+Description=Mount tacklebox offline image store
+DefaultDependencies=no
+Before=local-fs.target
+ConditionPathExists=/run/initramfs/live/LiveOS/store.squashfs.img
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/mount -o ro,nodev /run/initramfs/live/LiveOS/store.squashfs.img /var/lib/superiso-store
+ExecStop=/usr/bin/umount /var/lib/superiso-store
+
+[Install]
+WantedBy=local-fs.target
+UNITEOF
+mkdir -p /etc/systemd/system/local-fs.target.wants
+ln -sf /usr/lib/systemd/system/tunaos-offline-store.service \
+	/etc/systemd/system/local-fs.target.wants/tunaos-offline-store.service
+
+# The base image's /etc/containers/storage.conf may not exist in the
+# customize container (bootc images ship uninitialized storage), and the
+# driver may auto-detect as "btrfs" (EL10 default). The offline store is
+# ALWAYS overlay, and additionalimagestores silently ignores stores with
+# a different driver.  containers/storage reads this primary configuration;
+# do not rely on a storage.conf.d drop-in here. Write the complete config so
+# every consumer (podman, skopeo, bootc, and fisherman) sees the same store.
 mkdir -p /etc/containers
-if [[ -f /etc/containers/storage.conf ]] && ! grep -q 'mount_program' /etc/containers/storage.conf; then
-	cat >>/etc/containers/storage.conf <<'STOREOF'
+cat >/etc/containers/storage.conf <<'CONFEOF'
+[storage]
+driver = "overlay"
+runroot = "/run/containers/storage"
+graphroot = "/var/lib/containers/storage"
+
+[storage.options]
+additionalimagestores = ["/var/lib/superiso-store"]
 
 [storage.options.overlay]
 mount_program = "/usr/bin/fuse-overlayfs"
-STOREOF
-fi
+CONFEOF
 
 # Dev/E2E media only: the normal published-image policy keeps SSH disabled.
 # tacklebox creates liveuser during boot, so install a oneshot that sets its

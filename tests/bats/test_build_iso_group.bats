@@ -104,16 +104,16 @@ _select() {
   echo "${SEL[*]}"
 }
 
-@test "select: yellowfin flagship includes gnome-nvidia + hwe" {
-  [ "$(_select '' yellowfin)" = "gnome-nvidia gnome-nvidia-hwe" ]
+@test "select: yellowfin flagship contains one GNOME live environment" {
+  [ "$(_select '' yellowfin)" = "gnome-nvidia" ]
 }
 
-@test "select: bonito flagship shrinks (no gnome-nvidia-hwe on Fedora)" {
+@test "select: bonito flagship uses the same GNOME policy" {
   [ "$(_select '' bonito)" = "gnome-nvidia" ]
 }
 
-@test "select: bonito community resolves to nvidia desktops" {
-  [ "$(_select community bonito)" = "kde-nvidia cosmic-nvidia niri-nvidia xfce-nvidia" ]
+@test "select: bonito community contains one KDE live environment" {
+  [ "$(_select community bonito)" = "kde-nvidia" ]
 }
 
 @test "select: grand total is 8 grouped ISOs across 4 variants" {
@@ -128,9 +128,9 @@ _select() {
 
 # ── Recipe JSON ─────────────────────────────────────────────────────────────
 
-@test "recipe: combined recipe is valid dedup JSON with one env per flavor" {
+@test "recipe: production recipe has one live environment" {
   local envs="[]" ref
-  for flavor in gnome-nvidia gnome-nvidia-hwe; do
+  for flavor in gnome-nvidia; do
     ref="$(tunaos_image_ref yellowfin "$flavor" ghcr "$flavor")"
     envs="$(jq -c --arg id "yellowfin-$flavor" --arg image "$ref" \
       --arg title "$(tunaos_flavor_title "$flavor")" \
@@ -141,7 +141,14 @@ _select() {
     '{media_name:$m, shared_store:{dedup:true,compression:"release",prune_source_images:true}, bootable_environments:$e}')"
   [ "$(echo "$recipe" | jq -r '.shared_store.dedup')" = "true" ]
   [ "$(echo "$recipe" | jq -r '.shared_store.prune_source_images')" = "true" ]
-  [ "$(echo "$recipe" | jq -r '.bootable_environments | length')" = "2" ]
+  [ "$(echo "$recipe" | jq -r '.bootable_environments | length')" = "1" ]
   [ "$(echo "$recipe" | jq -r '.bootable_environments[0].title')" = "GNOME (NVIDIA)" ]
-  [ "$(echo "$recipe" | jq -r '.bootable_environments[1].image')" = "ghcr.io/tuna-os/yellowfin:gnome-nvidia-hwe" ]
+}
+
+@test "config: every production group has one live and two offline payloads" {
+  json="$(yq -o=json '.' "$CONFIG")"
+  while read -r live offline; do
+    [ "$live" -eq 1 ]
+    [ "$offline" -eq 2 ]
+  done < <(echo "$json" | jq -r '.iso_groups[] | "\(.flavors | length) \(.offline_flavors | length)"')
 }
