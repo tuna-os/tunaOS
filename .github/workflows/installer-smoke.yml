@@ -116,17 +116,39 @@ jobs:
           for i in $(seq 1 36); do
             SESS=$($SSH 'loginctl list-sessions --no-legend 2>/dev/null; ls /run/user/$(id -u)/wayland-* /tmp/.X11-unix/X* 2>/dev/null' 2>/dev/null || true)
             # "active" graphical session or a live wayland/X socket
-            if echo "$SESS" | grep -qE "wayland-|/tmp/.X11-unix/X"; then
-              # and NOT parked at a greeter (greetd/sddm-greeter/cosmic-greeter)
-              GREETER=$($SSH 'pgrep -af "greeter|greetd" | grep -v "session\|niri-session\|cosmic-session" || true' 2>/dev/null || true)
-              WHO=$($SSH 'loginctl list-sessions --no-legend 2>/dev/null | grep -c liveuser' 2>/dev/null || echo 0)
-              if [ "${WHO:-0}" -ge 1 ]; then session_ok=1; break; fi
+            # The real desktop compositor must be running. pgrep -x (exact
+            # process name) avoids two false signals seen in run
+            # 29643468767: a greeter lingering alongside the live session
+            # (cosmic-comp + cosmic-greeter coexist — the desktop IS up),
+            # and pgrep -af matching its own command line. A running
+            # compositor is the reliable "desktop is up" signal regardless
+            # of any greeter still around.
+            COMP=$($SSH 'for p in niri cosmic-comp kwin_wayland gnome-shell xfwm4 Hyprland sway; do pgrep -x "$p" >/dev/null 2>&1 && { echo "$p"; break; }; done' 2>/dev/null || true)
+            if [ -n "$COMP" ]; then
+              session_ok=1; echo "compositor running: $COMP"; break
             fi
             sleep 10
           done
           if [ "$session_ok" -ne 1 ]; then
-            echo "::error::${FLAVOR}: no active graphical session for liveuser (stuck at greeter or TTY?)"
-            $SSH 'loginctl list-sessions; ls /run/user/$(id -u)/ 2>/dev/null; systemctl --user status 2>/dev/null | head' 2>/dev/null || true
+            echo "::error::${FLAVOR}: no compositor running (stuck at greeter or TTY?)"
+            echo "--- greetd journal:"
+            sudo -n true 2>/dev/null && $SSH 'sudo journalctl -u greetd --no-pager 2>/dev/null | tail -40' 2>/dev/null ||               $SSH 'journalctl --user -b --no-pager 2>/dev/null | tail -40' 2>/dev/null || true
+            echo "--- default target + greetd status:"
+            $SSH 'systemctl get-default; systemctl is-active greetd 2>/dev/null; ls -la /etc/greetd/ 2>/dev/null; cat /etc/greetd/config.toml 2>/dev/null' 2>/dev/null || true
+            echo "--- session/compositor procs:"
+            $SSH 'ps -eo pid,user,comm | grep -iE "niri|cosmic|greet|wayland|gnome-shell|kwin" || true' 2>/dev/null || true
+            # Discriminators for the niri-under-greetd failure (tunaOS#678):
+            # is greetd even installed, is the compositor binary SELinux-
+            # labelled for a DM transition, is there an actual AVC denial, and
+            # what does niri-session invoke / why does a manual run fail?
+            echo "--- SELinux mode + AVC denials (compositor/greetd):"
+            $SSH 'getenforce 2>/dev/null; sudo journalctl -b --no-pager 2>/dev/null | grep -iE "avc: *denied" | grep -iE "niri|greet|wayland|xdm|user_t" | tail -30 || sudo ausearch -m avc -ts boot 2>/dev/null | tail -30 || true' 2>/dev/null || true
+            echo "--- greetd / niri install + SELinux labels:"
+            $SSH 'command -v greetd niri niri-session dms-greeter 2>/dev/null; rpm -q greetd niri 2>/dev/null; ls -Z /usr/bin/greetd /usr/bin/niri 2>/dev/null' 2>/dev/null || true
+            echo "--- niri-session script + systemd --user state:"
+            $SSH 'cat "$(command -v niri-session)" 2>/dev/null | head -40; echo "--- user manager:"; systemctl --user is-active default.target 2>/dev/null; ls -la /run/user/$(id -u)/ 2>/dev/null | head' 2>/dev/null || true
+            echo "--- manual niri-session attempt (surfaces the real error):"
+            $SSH 'export XDG_RUNTIME_DIR=/run/user/$(id -u); timeout 8 niri-session 2>&1 | head -25 || true; echo "--- niri --validate:"; niri validate 2>&1 | head -10 || true' 2>/dev/null || true
             exit 1
           fi
           echo "== ${FLAVOR}: graphical session active for liveuser"
@@ -166,6 +188,18 @@ jobs:
           fi
           sudo pkill -f qemu-system || true
 
+      - name: Capture installer walkthrough
+        if: always()
+        run: |
+          # Drive the installer via the QEMU monitor (sudo — the sock is
+          # root-owned) and capture each screen. Compositor-agnostic.
+          if sudo test -S smoke-out/monitor.sock; then
+            sudo python3 scripts/installer-walkthrough.py \
+              smoke-out/monitor.sock smoke-out 8 "${{ matrix.flavor }}" || true
+            sudo chown -R "$(id -u)" smoke-out 2>/dev/null || true
+            ls -la smoke-out/walkthrough-* 2>/dev/null || echo "no walkthrough frames"
+          fi
+
       - name: Fix evidence ownership
         if: always()
         run: sudo chown -R "$(id -u)" smoke-out 2>/dev/null || true
@@ -179,81 +213,3 @@ jobs:
             smoke-out/*.png
             smoke-out/serial.log
           if-no-files-found: warn
-
-  publish-docs:
-    name: Publish installer screenshots to docs
-    needs: smoke
-    if: always() && github.event_name != 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download all installer screenshots
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          pattern: installer-smoke-*
-          path: shots
-          merge-multiple: true
-
-      - name: Collect PNGs
-        id: collect
-        run: |
-          mkdir -p out
-          found=0
-          for f in $(find shots -name "installer-*.png"); do
-            cp "$f" "out/$(basename "$f")"; found=1
-          done
-          echo "found=$found" >> "$GITHUB_OUTPUT"
-          ls -la out || true
-
-      - name: Checkout docs site
-        if: steps.collect.outputs.found == '1'
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-        with:
-          repository: tuna-os/docs
-          token: ${{ secrets.DOCS_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
-          path: docs-repo
-
-      - name: Update installer walkthrough page
-        if: steps.collect.outputs.found == '1'
-        run: |
-          DEST="docs-repo/docs/tunaos/installer-walkthrough"
-          mkdir -p "$DEST/img"
-          cp out/installer-*.png "$DEST/img/"
-          DATE="$(date -u +%Y-%m-%d)"
-          {
-            echo "---"
-            echo "sidebar_label: Installer Walkthrough"
-            echo "---"
-            echo
-            echo "# Installer Walkthrough"
-            echo
-            echo "Live-session screenshots of the TunaOS installer for each desktop,"
-            echo "captured automatically by the \`installer-smoke\` CI (last updated ${DATE})."
-            echo "Each proves the installer frontend autostarts in a real live boot."
-            echo
-            for png in "$DEST"/img/installer-*.png; do
-              de="$(basename "$png" .png | sed 's/installer-//')"
-              echo "## ${de^^}"
-              echo
-              echo "![${de} installer](./img/installer-${de}.png)"
-              echo
-            done
-          } > "$DEST/index.md"
-          cat "$DEST/index.md"
-
-      - name: Open docs PR
-        if: steps.collect.outputs.found == '1'
-        working-directory: docs-repo
-        env:
-          GH_TOKEN: ${{ secrets.DOCS_PUSH_TOKEN || secrets.GITHUB_TOKEN }}
-        run: |
-          git config user.name "tunaos-ci"
-          git config user.email "ci@tunaos.org"
-          BR="ci/installer-screenshots-$(date -u +%Y%m%d%H%M)"
-          git checkout -b "$BR"
-          git add docs/tunaos/installer-walkthrough
-          git diff --cached --quiet && { echo "no changes"; exit 0; }
-          git commit -m "docs: refresh installer walkthrough screenshots (CI)"
-          git push origin "$BR"
-          gh pr create --title "docs: installer walkthrough screenshots (automated)" \
-            --body "Auto-generated by the installer-smoke workflow — per-desktop live-session installer screenshots." \
-            --head "$BR" || echo "PR create skipped (token scope?)"
