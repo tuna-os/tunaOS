@@ -130,8 +130,13 @@ jobs:
             sleep 10
           done
           if [ "$session_ok" -ne 1 ]; then
-            echo "::error::${FLAVOR}: no active graphical session for liveuser (stuck at greeter or TTY?)"
-            $SSH 'loginctl list-sessions; ls /run/user/$(id -u)/ 2>/dev/null; systemctl --user status 2>/dev/null | head' 2>/dev/null || true
+            echo "::error::${FLAVOR}: no compositor running (stuck at greeter or TTY?)"
+            echo "--- greetd journal:"
+            sudo -n true 2>/dev/null && $SSH 'sudo journalctl -u greetd --no-pager 2>/dev/null | tail -40' 2>/dev/null ||               $SSH 'journalctl --user -b --no-pager 2>/dev/null | tail -40' 2>/dev/null || true
+            echo "--- default target + greetd status:"
+            $SSH 'systemctl get-default; systemctl is-active greetd 2>/dev/null; ls -la /etc/greetd/ 2>/dev/null; cat /etc/greetd/config.toml 2>/dev/null' 2>/dev/null || true
+            echo "--- session/compositor procs:"
+            $SSH 'ps -eo pid,user,comm | grep -iE "niri|cosmic|greet|wayland|gnome-shell|kwin" || true' 2>/dev/null || true
             exit 1
           fi
           echo "== ${FLAVOR}: graphical session active for liveuser"
