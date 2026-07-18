@@ -176,6 +176,18 @@ jobs:
           fi
           sudo pkill -f qemu-system || true
 
+      - name: Capture installer walkthrough
+        if: always()
+        run: |
+          # Drive the installer via the QEMU monitor (sudo — the sock is
+          # root-owned) and capture each screen. Compositor-agnostic.
+          if sudo test -S smoke-out/monitor.sock; then
+            sudo python3 scripts/installer-walkthrough.py \
+              smoke-out/monitor.sock smoke-out 8 "${{ matrix.flavor }}" || true
+            sudo chown -R "$(id -u)" smoke-out 2>/dev/null || true
+            ls -la smoke-out/walkthrough-* 2>/dev/null || echo "no walkthrough frames"
+          fi
+
       - name: Fix evidence ownership
         if: always()
         run: sudo chown -R "$(id -u)" smoke-out 2>/dev/null || true
