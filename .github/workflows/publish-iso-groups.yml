@@ -79,6 +79,9 @@ jobs:
               | select($wg == "all"
                        or ($wg == "default" and $suffix == "")
                        or $wg == $suffix)
+              # Skip publish:false groups (builder-only, e.g. community)
+              # UNLESS the dispatch names that exact suffix.
+              | select(($g.publish != false) or ($wg == $suffix))
               | {
                   variant:  $var.id,
                   group:    (if $suffix == "" then "default" else $suffix end),

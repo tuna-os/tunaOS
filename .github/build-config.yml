@@ -20,10 +20,14 @@ iso_groups:
   - suffix: ""
     flavors: [gnome-nvidia, gnome-nvidia-hwe]
     offline_flavors: [gnome, gnome-hwe, gnome-nvidia, gnome-nvidia-hwe]
-  # Community: Niche desktops grouped by audience. Boots NVIDIA by default, and embeds
-  # both NVIDIA and non-NVIDIA versions in the offline store.
-  # Published as `<variant>-community.iso`.
+  # Community: niche desktops (KDE/COSMIC/Niri/XFCE). NOT published as an
+  # ISO — the browser ISO Builder (https://iso.tunaos.org) covers these on
+  # demand from the published images, so we don't carry the cost of a
+  # 5-flavor offline-store ISO for the long tail. The images still build
+  # and publish to GHCR; only the grouped ISO is skipped.
+  # (Manually publishable via workflow_dispatch group=community if needed.)
   - suffix: community
+    publish: false
     flavors: [kde-nvidia, cosmic-nvidia, niri-nvidia, xfce-nvidia]
     offline_flavors: [kde, kde-hwe, cosmic, cosmic-hwe, niri, niri-hwe, xfce, kde-nvidia, cosmic-nvidia, niri-nvidia, xfce-nvidia]
 
