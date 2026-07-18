@@ -22,13 +22,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # TUNA_SESSION_ROOT lets the bats tests point detection at a fake root.
 _SR="${TUNA_SESSION_ROOT:-}"
 DESKTOP="gnome"
-if [[ -f "${_SR}/usr/share/wayland-sessions/plasma.desktop" ]]; then
+if [[ -f "${_SR}/usr/share/wayland-sessions/plasma.desktop" || -f "${_SR}/usr/share/wayland-sessions/plasmawayland.desktop" ]]; then
 	DESKTOP="kde"
 elif [[ -f "${_SR}/usr/share/wayland-sessions/niri.desktop" ]]; then
 	DESKTOP="niri"
 elif [[ -f "${_SR}/usr/share/wayland-sessions/cosmic.desktop" ]]; then
 	DESKTOP="cosmic"
-elif compgen -G "${_SR}/usr/share/xsessions/xfce*.desktop" >/dev/null; then
+elif compgen -G "${_SR}/usr/share/xsessions/xfce*.desktop" >/dev/null ||
+	compgen -G "${_SR}/usr/share/wayland-sessions/xfce*.desktop" >/dev/null; then
 	DESKTOP="xfce"
 fi
 echo "customize-live: detected desktop=${DESKTOP}"
@@ -48,6 +49,25 @@ esac
 if [[ "${TUNA_DETECT_ONLY:-0}" == "1" ]]; then
 	echo "DETECTED ${DESKTOP} ${INSTALLER_APP:-none}"
 	exit 0
+fi
+
+# ── 1b. Live user ────────────────────────────────────────────────────────────
+# No TunaOS image ships livesys-scripts, so nothing creates the account the
+# desktop adapters autologin to — bake it into the squash instead (pattern:
+# projectbluefin/dakota-iso configure-live.sh). uid 1000 is free on bootc
+# images. Installed systems never see this: live squash only.
+if ! getent passwd liveuser >/dev/null; then
+	useradd --create-home --uid 1000 --user-group \
+		--comment "Live User" --shell /bin/bash liveuser
+fi
+passwd --delete liveuser >/dev/null 2>&1 || true
+
+# ── 1c. Live networking ──────────────────────────────────────────────────────
+# Server-ish bases (grouper/Ubuntu) ship NetworkManager without enabling it,
+# leaving the live env with no DHCP at all (bug #17). Enabling here is a
+# no-op on variants that already enable it.
+if systemctl list-unit-files NetworkManager.service --no-legend 2>/dev/null | grep -q NetworkManager; then
+	systemctl enable NetworkManager.service || true
 fi
 
 # ── 2. Desktop adapter (autologin, screen-lock, suspend masking) ─────────────

@@ -9,7 +9,34 @@
 
 set -euo pipefail
 
-# GDM autologin straight into the live session
+# XFCE's display manager varies: lightdm (deb/EL10-x11), greetd (EL10
+# wayland fallback), gdm on odd builds. Configure all three; only the
+# active one reads its file.
+mkdir -p /etc/lightdm/lightdm.conf.d
+tee /etc/lightdm/lightdm.conf.d/50-live-autologin.conf <<'LIGHTDMEOF'
+[Seat:*]
+autologin-user=liveuser
+autologin-user-timeout=0
+LIGHTDMEOF
+# lightdm requires the autologin user in the 'autologin' group on deb.
+groupadd -f autologin && usermod -aG autologin liveuser || true
+
+_xfce_session="startxfce4"
+compgen -G "/usr/share/wayland-sessions/xfce*.desktop" >/dev/null && _xfce_session="xfce-wayland-session"
+mkdir -p /etc/greetd
+tee /etc/greetd/config.toml <<GREETDEOF
+[terminal]
+vt = 1
+
+[default_session]
+user = "liveuser"
+command = "${_xfce_session}"
+
+[initial_session]
+user = "liveuser"
+command = "${_xfce_session}"
+GREETDEOF
+
 mkdir -p /etc/gdm
 tee /etc/gdm/custom.conf <<'GDMEOF'
 [daemon]

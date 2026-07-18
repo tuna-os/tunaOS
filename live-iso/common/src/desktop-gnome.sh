@@ -9,11 +9,24 @@
 
 set -euo pipefail
 
+# GDM autologin straight into the live session. Debian/Ubuntu read
+# /etc/gdm3/, everyone else /etc/gdm/ — write whichever exists (both when
+# neither does, harmlessly).
+for _gdm_dir in /etc/gdm /etc/gdm3; do
+	[[ -d "${_gdm_dir}" || "${_gdm_dir}" == "/etc/gdm" ]] || continue
+	mkdir -p "${_gdm_dir}"
+	tee "${_gdm_dir}/custom.conf" <<'GDMEOF'
+[daemon]
+AutomaticLoginEnable=True
+AutomaticLogin=liveuser
+GDMEOF
+done
+
 # Set up the GNOME dock for the installer
 tee /usr/share/glib-2.0/schemas/zz2-tunaos-installer.gschema.override <<'EOF'
 [org.gnome.shell]
 welcome-dialog-last-shown-version='4294967295'
-favorite-apps = ['bootc-installer.desktop', 'firefox.desktop', 'org.gnome.Nautilus.desktop']
+favorite-apps = ['org.bootcinstaller.Installer.desktop', 'bootc-installer.desktop', 'firefox.desktop', 'org.gnome.Nautilus.desktop']
 EOF
 
 # Disable suspend/sleep so the installer doesn't go to sleep mid-install
