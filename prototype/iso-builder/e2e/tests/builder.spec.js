@@ -36,7 +36,7 @@ test.describe("iso builder", () => {
     await page.goto("/?image=example/os:tag&label=DEMO&flatpaks=org.example.App");
     await expect(page.locator("#image")).toHaveValue("example/os:tag");
     await expect(page.locator("#label")).toHaveValue("DEMO");
-    await expect(page.locator("#flatpaks")).toHaveValue(/org\.example\.App/);
+    await expect(page.locator("#fplist")).toContainText("org.example.App");
     await expect(page.locator("#share")).toContainText("image=example");
   });
 
@@ -52,10 +52,9 @@ test.describe("iso builder", () => {
     await expect(page.locator("#build")).toBeEnabled();
     await shot(page, "03-inspected.png");
 
-    // Advanced panel: per-DE flatpak defaults are prefilled.
+    // Advanced panel: per-DE flatpak defaults are prefilled as checkboxes.
     await page.locator("summary").click();
-    const flatpaks = await page.locator("#flatpaks").inputValue();
-    expect(flatpaks.length).toBeGreaterThan(0);
+    expect(await page.locator("#fplist input[type=checkbox]").count()).toBeGreaterThan(0);
     await shot(page, "04-advanced.png");
   });
 

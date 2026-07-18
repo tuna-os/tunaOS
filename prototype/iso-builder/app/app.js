@@ -20,6 +20,65 @@ const FLATPAK_DEFAULTS = {
 };
 
 const $ = (id) => document.getElementById(id);
+
+// ── Flatpak checklist + Flathub search ──────────────────────────────────
+const fpItems = new Map(); // appId -> { checked, name }
+
+function fpAdd(id, name = "", checked = true) {
+  if (!fpItems.has(id)) fpItems.set(id, { checked, name });
+  else fpItems.get(id).checked = checked;
+  fpRender();
+}
+
+function fpCollect() {
+  return [...fpItems.entries()].filter(([, v]) => v.checked).map(([k]) => k);
+}
+
+function fpRender() {
+  const box = $("fplist");
+  box.innerHTML = "";
+  for (const [id, v] of fpItems) {
+    const label = document.createElement("label");
+    const cb = Object.assign(document.createElement("input"), { type: "checkbox", checked: v.checked });
+    cb.onchange = () => { v.checked = cb.checked; updateShare(); };
+    label.appendChild(cb);
+    const span = document.createElement("span");
+    span.textContent = v.name || id;
+    label.appendChild(span);
+    if (v.name) {
+      const code = document.createElement("code");
+      code.textContent = id;
+      label.appendChild(code);
+    }
+    box.appendChild(label);
+  }
+  updateShare();
+}
+
+let fpTimer = null;
+async function fpSearch(q) {
+  if (!q || q.length < 3) { $("fpresults").innerHTML = ""; return; }
+  try {
+    const r = await fetch("https://flathub.org/api/v2/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: q, filters: [] }),
+    });
+    const d = await r.json();
+    const box = $("fpresults");
+    box.innerHTML = "";
+    for (const hit of (d.hits || []).slice(0, 6)) {
+      if (fpItems.has(hit.app_id) && fpItems.get(hit.app_id).checked) continue;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = `+ ${hit.name} — ${hit.app_id}`;
+      b.onclick = () => { fpAdd(hit.app_id, hit.name); $("fpresults").innerHTML = ""; $("fpsearch").value = ""; };
+      box.appendChild(b);
+    }
+  } catch {
+    $("fpresults").innerHTML = "<span style='font-size:.8rem;color:var(--dim)'>Flathub search unavailable</span>";
+  }
+}
 const log = (m) => { $("log").textContent += m + "\n"; $("log").scrollTop = 1e9; };
 
 let facts = null;
@@ -77,8 +136,8 @@ async function inspect() {
     add(`kernel <b>${facts.kernelVer || "none"}</b>`);
     add(`systemd-boot <b>${facts.hasSdBoot ? "in image" : "not shipped"}</b>`);
     add(`<b>${facts.fileCount.toLocaleString()}</b> files`);
-    if (!$("flatpaks").value.trim()) {
-      $("flatpaks").value = (FLATPAK_DEFAULTS[facts.desktop] || []).join("\n");
+    if (fpItems.size === 0) {
+      for (const id of FLATPAK_DEFAULTS[facts.desktop] || []) fpAdd(id);
     }
     $("stage").textContent = "Image inspected — ready to build.";
     $("build").disabled = false;
@@ -119,7 +178,7 @@ async function build() {
       }
     }
     const t0 = performance.now();
-    const flatpaks = $("flatpaks").value.trim().split(/\s+/).filter(Boolean);
+    const flatpaks = fpCollect();
     const bytes = await tboxBuildIso({ label, initrd, flatpaks }, (u8) => {
       if (sink) sink.write(u8); else chunks.push(u8.slice());
     });
@@ -143,7 +202,7 @@ async function build() {
 function updateShare() {
   const p = new URLSearchParams();
   if ($("image").value) p.set("image", $("image").value);
-  const fl = $("flatpaks").value.trim().split(/\s+/).filter(Boolean);
+  const fl = fpCollect();
   if (fl.length) p.set("flatpaks", fl.join(","));
   if ($("label").value && $("label").value !== "TUNAOS") p.set("label", $("label").value);
   if ($("initrdurl").value) p.set("initrd", $("initrdurl").value);
@@ -159,13 +218,17 @@ $("copyshare").onclick = async () => {
   $("copyshare").textContent = "Copied!";
   setTimeout(() => ($("copyshare").textContent = "Copy"), 1500);
 };
-for (const id of ["image", "flatpaks", "label", "initrdurl"]) $(id).addEventListener("input", updateShare);
+for (const id of ["image", "label", "initrdurl"]) $(id).addEventListener("input", updateShare);
+$("fpsearch").addEventListener("input", (e) => {
+  clearTimeout(fpTimer);
+  fpTimer = setTimeout(() => fpSearch(e.target.value.trim()), 300);
+});
 
 // Apply URL params.
 {
   const q = new URLSearchParams(location.search);
   if (q.get("image")) $("image").value = q.get("image");
-  if (q.get("flatpaks")) $("flatpaks").value = q.get("flatpaks").split(",").join("\n");
+  if (q.get("flatpaks")) for (const id of q.get("flatpaks").split(",").filter(Boolean)) fpAdd(id);
   if (q.get("label")) $("label").value = q.get("label");
   if (q.get("initrd")) $("initrdurl").value = q.get("initrd");
   updateShare();
