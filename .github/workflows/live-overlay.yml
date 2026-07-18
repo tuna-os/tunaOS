@@ -80,7 +80,7 @@ jobs:
             -c 'set -eu; cd /run/tbox-customize/0 && bash ./customize-live.sh'
 
           sudo podman commit \
-            --message "live_customize delta for ${IMG}" \
+            --change "LABEL org.tunaos.live-overlay.base=${IMG}" \
             tbx-overlay "$OUT"
           sudo podman rm -f tbx-overlay
           sudo podman push "$OUT"
