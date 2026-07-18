@@ -97,6 +97,7 @@ jobs:
 
       - name: boot the browser-built ISO (QEMU/OVMF, tbox live path)
         run: |
+          git clone --depth 1 https://github.com/tuna-os/tacklebox /tmp/tacklebox
           chmod +x /tmp/tacklebox/scripts/test-live-boot.sh
           sudo /tmp/tacklebox/scripts/test-live-boot.sh "${{ runner.temp }}/browser-e2e.iso" 900
 
