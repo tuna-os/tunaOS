@@ -137,6 +137,18 @@ jobs:
             $SSH 'systemctl get-default; systemctl is-active greetd 2>/dev/null; ls -la /etc/greetd/ 2>/dev/null; cat /etc/greetd/config.toml 2>/dev/null' 2>/dev/null || true
             echo "--- session/compositor procs:"
             $SSH 'ps -eo pid,user,comm | grep -iE "niri|cosmic|greet|wayland|gnome-shell|kwin" || true' 2>/dev/null || true
+            # Discriminators for the niri-under-greetd failure (tunaOS#678):
+            # is greetd even installed, is the compositor binary SELinux-
+            # labelled for a DM transition, is there an actual AVC denial, and
+            # what does niri-session invoke / why does a manual run fail?
+            echo "--- SELinux mode + AVC denials (compositor/greetd):"
+            $SSH 'getenforce 2>/dev/null; sudo journalctl -b --no-pager 2>/dev/null | grep -iE "avc: *denied" | grep -iE "niri|greet|wayland|xdm|user_t" | tail -30 || sudo ausearch -m avc -ts boot 2>/dev/null | tail -30 || true' 2>/dev/null || true
+            echo "--- greetd / niri install + SELinux labels:"
+            $SSH 'command -v greetd niri niri-session dms-greeter 2>/dev/null; rpm -q greetd niri 2>/dev/null; ls -Z /usr/bin/greetd /usr/bin/niri 2>/dev/null' 2>/dev/null || true
+            echo "--- niri-session script + systemd --user state:"
+            $SSH 'cat "$(command -v niri-session)" 2>/dev/null | head -40; echo "--- user manager:"; systemctl --user is-active default.target 2>/dev/null; ls -la /run/user/$(id -u)/ 2>/dev/null | head' 2>/dev/null || true
+            echo "--- manual niri-session attempt (surfaces the real error):"
+            $SSH 'export XDG_RUNTIME_DIR=/run/user/$(id -u); timeout 8 niri-session 2>&1 | head -25 || true; echo "--- niri --validate:"; niri validate 2>&1 | head -10 || true' 2>/dev/null || true
             exit 1
           fi
           echo "== ${FLAVOR}: graphical session active for liveuser"
