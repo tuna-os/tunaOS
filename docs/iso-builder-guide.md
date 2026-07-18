@@ -7,7 +7,7 @@ WebAssembly, using the exact same engine
 ([tacklebox](https://github.com/tuna-os/tacklebox)'s pure-Go core) that
 TunaOS CI uses to build release media.
 
-**Test deployment:** <https://tunaos-iso-builder.trogdor30001.workers.dev>
+**Live at:** <https://iso.tunaos.org>
 
 > Screenshots below are generated automatically by the Playwright
 > walkthrough (`prototype/iso-builder/e2e`, `npm run walkthrough`) — if
@@ -22,7 +22,7 @@ TunaOS CI uses to build release media.
 
 2. **Enter a bootable container image.** Anything OCI works as long as
    the image is bootc-style (kernel under `/usr/lib/modules`):
-   - `tuna-os/guppy:base` — a TunaOS image on GHCR (short form)
+   - `tuna-os/sailfin:base` — a TunaOS image on GHCR (short form)
    - `ghcr.io/you/your-os:tag` — any GHCR image (fetched via the
      TunaOS CORS relay)
    - `quay.io/…` / other registries — fetched directly; works when the
@@ -40,10 +40,9 @@ TunaOS CI uses to build release media.
 
 4. **Tune under Advanced (optional).**
    - **Volume label** — the ISO's `CDLABEL`.
-   - **Flatpak preload list** — prefilled per detected desktop (GNOME
-     and KDE have their own lists; niri/xfce default to GNOME's).
-     Embedded into the ISO as `/LiveOS/flatpak-preload.json` for the
-     live environment to consume.
+   - **Flatpak preload list** — a checklist prefilled per detected
+     desktop; the Flathub search box autocompletes additions. Embedded
+     into the ISO as `/LiveOS/flatpak-preload.json`.
    - **tbox initramfs URL** — see [Bootability](#bootability) below.
 
    ![Advanced panel](iso-builder/04-advanced.png)
@@ -60,7 +59,8 @@ pre-configured build:
 
 | Param | Meaning | Example |
 |---|---|---|
-| `image` | image to pre-fill and auto-inspect | `?image=tuna-os/guppy:base` |
+| `image` | image to pre-fill | `?image=tuna-os/sailfin:base` |
+| `autorun` | `1` auto-starts the inspect (links never start pulls by themselves otherwise) | `&autorun=1` |
 | `flatpaks` | comma-separated app IDs replacing the default list | `&flatpaks=org.example.App,org.mozilla.firefox` |
 | `label` | volume label | `&label=MYOS` |
 | `initrd` | URL of a tbox-enabled initramfs to embed | `&initrd=https://…/initramfs.img` |
