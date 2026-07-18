@@ -773,6 +773,31 @@ EOF
 	mv -f "$SERIAL_LOG" "$LIVE_SERIAL_LOG"
 	: >"$SERIAL_LOG"
 
+	# swtpm exits with the QEMU that was connected to it, so the reboot
+	# phase needs a fresh daemon — over the SAME tpmstate dir (it holds
+	# the enrollment from the install; a wiped state would fail the
+	# auto-unlock this phase exists to prove).
+	if [[ "$LUKS" -eq 1 ]]; then
+		if [[ ! -S "$TPM_SOCK" ]] || ! swtpm_ioctl --unix "$TPM_SOCK" -g &>/dev/null; then
+			echo "==> Restarting swtpm over existing tpmstate for reboot phase"
+			swtpm socket \
+				--tpmstate "dir=${TPM_DIR}" \
+				--ctrl "type=unixio,path=${TPM_SOCK}" \
+				--tpm2 \
+				--flags startup-clear \
+				--daemon \
+				--pid "file=${TPM_PIDFILE}"
+			for _ in $(seq 1 20); do
+				[[ -S "$TPM_SOCK" ]] && break
+				sleep 0.5
+			done
+			[[ -S "$TPM_SOCK" ]] || {
+				echo "ERROR: swtpm socket did not reappear for reboot phase" >&2
+				exit 4
+			}
+		fi
+	fi
+
 	echo "==> Booting installed system..."
 	# Boot from the install disk (remove cdrom)
 	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
