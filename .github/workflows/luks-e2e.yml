@@ -139,6 +139,12 @@ jobs:
           [[ -n "$ISO" ]] || { echo "::error::dev ISO not produced"; exit 1; }
           echo "ISO_PATH=${ISO}" >> "$GITHUB_ENV"
 
+      - name: Build fisherman from source (under-test)
+        run: |
+          git clone --depth 1 --branch main https://github.com/tuna-os/fisherman /tmp/fisherman
+          ( cd /tmp/fisherman/fisherman && go build -o /tmp/fisherman-bin ./cmd/fisherman )
+          echo "FISHERMAN_OVERRIDE=/tmp/fisherman-bin" >> "$GITHUB_ENV"
+
       - name: LUKS install + unlock verification
         env:
           VARIANT: ${{ matrix.variant }}
@@ -150,7 +156,8 @@ jobs:
           # recipe's image ref. Without -E it silently falls back to parsing
           # them from the ISO filename, which has a "tunaos-" project prefix
           # the fallback doesn't account for, producing a bogus image ref.
-          sudo -E ./scripts/iso-e2e.sh "${ISO_PATH}" --luks \
+          sudo -E env FISHERMAN_OVERRIDE="$FISHERMAN_OVERRIDE" \
+            ./scripts/iso-e2e.sh "${ISO_PATH}" --luks \
             --output luks-out \
             --timeout 1200
           grep -qx 'TUNAOS_LUKS_E2E_INSTALL_STARTED luks=1' luks-out/luks-evidence.log
