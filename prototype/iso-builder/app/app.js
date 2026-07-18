@@ -162,5 +162,7 @@ for (const id of ["image", "flatpaks", "label", "initrdurl"]) $(id).addEventList
   if (q.get("label")) $("label").value = q.get("label");
   if (q.get("initrd")) $("initrdurl").value = q.get("initrd");
   updateShare();
-  if (q.get("image")) inspect();
+  // Deep links prefill only — a page load must never start a multi-GB
+  // pull by itself. Opt into auto-run with &autorun=1.
+  if (q.get("image") && q.get("autorun") === "1") inspect();
 }
