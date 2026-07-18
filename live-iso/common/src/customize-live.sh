@@ -241,7 +241,10 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		flatpak build-import-bundle "${INSTALLER_LOCAL_REPO}" "${INSTALLER_FLATPAK_FILE}"
 		rm -f "${INSTALLER_FLATPAK_FILE}"
 		flatpak remote-add --system --no-gpg-verify installer-local "file://${INSTALLER_LOCAL_REPO}"
-		flatpak install --system --noninteractive installer-local "${INSTALLER_APP}"
+		flatpak install --system --noninteractive installer-local "${INSTALLER_APP}" \
+			|| { [[ -f "${SCRIPT_DIR}/.enable-sshd" ]] \
+				&& echo "WARN: installer flatpak install failed; continuing (dev/e2e ISO)" \
+				|| exit 1; }
 		flatpak remote-delete --system --force installer-local || true
 		rm -rf "${INSTALLER_LOCAL_REPO}"
 
@@ -274,7 +277,10 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 				https://tunaos.org/flatpak/tuna-os.flatpakrepo \
 				|| echo "WARN: could not add tuna-os remote (network?); continuing"
 		fi
-		flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}"
+		flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}" \
+			|| { [[ -f "${SCRIPT_DIR}/.enable-sshd" ]] \
+				&& echo "WARN: installer flatpak install failed; continuing (dev/e2e ISO)" \
+				|| exit 1; }
 	fi
 
 	# ── 4a. fisherman on the host path ────────────────────────────────────
