@@ -53,8 +53,10 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Install yq
-        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+      - name: Install yq + skopeo
+        run: |
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+          sudo apt-get update -q && sudo apt-get install -y skopeo
 
       - name: Build matrix from iso_groups ∩ variant flavors
         id: build
@@ -84,6 +86,26 @@ jobs:
                   basename: (if $suffix == "" then $var.id else "\($var.id)-\($suffix)" end)
                 }
             ] | { include: . }')
+          # Probe the registry: a variant whose flagship image was never
+          # published (e.g. rawhide while its image gates are red) is
+          # SKIPPED with a warning instead of hard-failing the matrix —
+          # the publish pipeline ships what exists. A variant with a
+          # published flagship keeps failing loudly if other flavors of
+          # its group are missing (that is a real regression signal).
+          PRUNED='[]'
+          for row in $(echo "$MATRIX" | jq -cr '.include[] | @base64'); do
+            entry=$(echo "$row" | base64 -d)
+            variant=$(echo "$entry" | jq -r .variant)
+            pubname=$(yq -r ".variants[] | select(.id == \"$variant\") | .publish_name // .id" .github/build-config.yml)
+            tagsuffix=$(yq -r ".variants[] | select(.id == \"$variant\") | .tag_suffix // \"\"" .github/build-config.yml)
+            probe_tag="gnome"; [ -n "$tagsuffix" ] && probe_tag="gnome-$tagsuffix"
+            if skopeo inspect --retry-times 3 --no-tags "docker://ghcr.io/tuna-os/${pubname}:${probe_tag}" >/dev/null 2>&1; then
+              PRUNED=$(echo "$PRUNED" | jq -c --argjson e "$entry" '. + [$e]')
+            else
+              echo "::warning::skipping $(echo "$entry" | jq -r .basename): ghcr.io/tuna-os/${pubname}:${probe_tag} not published (image builds red?)"
+            fi
+          done
+          MATRIX=$(echo "$PRUNED" | jq -c '{ include: . }')
           COUNT=$(echo "$MATRIX" | jq '.include | length')
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
