@@ -72,6 +72,13 @@ test.describe("iso builder", () => {
     console.log("saving iso to:", out, "(env override:", process.env.TBOX_E2E_ISO_OUT || "none", ")");
     await dl.saveAs(out);
     console.log("saved:", out, fs.statSync(out).size, "bytes");
+    // Playwright reclaims download artifacts at context close — even the
+    // saveAs copy has been observed vanishing on CI. Duplicate to a path
+    // wholly outside playwright's purview before the test ends.
+    if (process.env.TBOX_E2E_ISO_COPY) {
+      fs.copyFileSync(out, process.env.TBOX_E2E_ISO_COPY);
+      console.log("copied to:", process.env.TBOX_E2E_ISO_COPY, fs.statSync(process.env.TBOX_E2E_ISO_COPY).size, "bytes");
+    }
     const size = fs.statSync(out).size;
     expect(size).toBeGreaterThan(100 * 1024 * 1024);
     // ISO9660 PVD signature at sector 16.
