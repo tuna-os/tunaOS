@@ -136,6 +136,17 @@ jobs:
           sudo apt-get install -y just podman jq rclone golang-go git
           sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
+      - name: Relocate user podman store to /mnt
+        # Community groups pull 5+ multi-GB flavor images into the USER
+        # store (~/.local/share/containers, root disk ~14 GB) — bonito-
+        # community ENOSPC'd there twice while the ISO scratch was already
+        # on /mnt. The big disk takes both.
+        run: |
+          sudo mkdir -p /mnt/podman-user
+          sudo chown "$(id -u):$(id -g)" /mnt/podman-user
+          mkdir -p ~/.config/containers
+          printf '[storage]\ndriver = "overlay"\ngraphroot = "/mnt/podman-user"\n' > ~/.config/containers/storage.conf
+
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
 
