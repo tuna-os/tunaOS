@@ -57,6 +57,14 @@ async function inspect() {
   $("introspect").disabled = true;
   $("buildcard").classList.remove("hidden");
   try {
+    // Persistent origin storage: multi-GB images live in OPFS during the
+    // build; persist() exempts them from eviction (best-effort), and the
+    // quota estimate warns before an impossible pull.
+    if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
+    if (navigator.storage?.estimate) {
+      const { quota, usage } = await navigator.storage.estimate();
+      log(`storage quota ≈ ${((quota - usage) / 1e9).toFixed(1)} GB free`);
+    }
     await loadWasm();
     const { registry, image } = parseImage(raw);
     log(`inspecting ${image} via ${registry}`);

@@ -14,7 +14,9 @@ const path = require("path");
 const fs = require("fs");
 
 const SHOTS = path.resolve(__dirname, "../../../../docs/iso-builder");
-const IMAGE = process.env.TBOX_E2E_IMAGE || "tuna-os/guppy:base";
+// sailfin:base: smallest clean image with kernel + systemd-boot
+// (guppy:base ships a /tmp build tree — tunaOS#672).
+const IMAGE = process.env.TBOX_E2E_IMAGE || "tuna-os/sailfin:base";
 
 function shot(page, name) {
   fs.mkdirSync(SHOTS, { recursive: true });
