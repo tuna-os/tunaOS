@@ -181,6 +181,29 @@ fi
 # this — indexing an array with .group_options etc. is a hard yq error.
 if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" ]]; then
 
+	# Plain (non-COPR) baseurl repos — e.g. the tuna-os xfce-wayland repo,
+	# which lives at its own R2 path (repo.tunaos.org/xfce/...), not the main
+	# $releasever tree. Must be added BEFORE groups/packages so the
+	# transaction can see them. COPR repos still go through the copr block.
+	_TD_REPO_COUNT=$($YQ -r ".packages.${_TD_OS}.repos | length // 0" "${_TD_MANIFEST}" 2>/dev/null)
+	for ((i = 0; i < _TD_REPO_COUNT; i++)); do
+		_TD_RN=$($YQ -r ".packages.${_TD_OS}.repos[$i].name" "${_TD_MANIFEST}")
+		_TD_RB=$($YQ -r ".packages.${_TD_OS}.repos[$i].baseurl" "${_TD_MANIFEST}")
+		_TD_RP=$($YQ -r ".packages.${_TD_OS}.repos[$i].priority // \"\"" "${_TD_MANIFEST}")
+		[[ -z "${_TD_RN}" || "${_TD_RN}" == "null" ]] && continue
+		{
+			echo "[${_TD_RN}]"
+			echo "name=${_TD_RN}"
+			echo "baseurl=${_TD_RB}"
+			echo "enabled=1"
+			echo "gpgcheck=0"
+			echo "repo_gpgcheck=0"
+			echo "skip_if_unavailable=False"
+			[[ -n "${_TD_RP}" && "${_TD_RP}" != "null" ]] && echo "priority=${_TD_RP}"
+		} >"/etc/yum.repos.d/${_TD_RN}.repo"
+		echo "Added repo ${_TD_RN} -> ${_TD_RB}"
+	done
+
 	# Install groups
 	_TD_GROUP_OPTS=$($YQ -r ".packages.${_TD_OS}.group_options // \"\"" "${_TD_MANIFEST}")
 	_yq_array _TD_GROUPS -r ".packages.${_TD_OS}.groups[]" "${_TD_MANIFEST}"
@@ -251,8 +274,12 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" ]]; then
 fi # end DNF path (el10/fedora)
 
 # ── Display manager (all OSes) ───────────────────────────────────────────────
-_TD_DM=$($YQ -r '.display_manager' "${_TD_MANIFEST}")
-if [[ -n "${_TD_DM}" ]]; then
+# Per-OS-section override beats the global key: the same desktop can ship a
+# Wayland-native greeter (greetd) on one base and gdm on another during a
+# transition. apt/pacman paths handle their own DM and exit earlier; this
+# block is reached by el10/fedora/zypper/emerge.
+_TD_DM=$($YQ -r ".packages.${_TD_OS}.display_manager // .display_manager // \"\"" "${_TD_MANIFEST}")
+if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 	safe_enable "${_TD_DM}.service"
 	# Server-oriented bootc bases such as AlmaLinux default to
 	# multi-user.target. Enabling a display manager alone does not change the

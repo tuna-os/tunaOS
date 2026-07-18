@@ -18,18 +18,36 @@ packages:
       - xfce4-wayland
 
   el10:
-    groups:
-      - xfce-desktop
+    # Wayland-only XFCE — the hanthor/xfce-wayland port (xfwl4 Rust/Smithay
+    # compositor + Wayland-adapted panel/session/settings/xfdesktop/thunar).
+    # No X11 (xfce-desktop group + gdm dropped). Greeter is greetd on a VT,
+    # Wayland-native, so the whole session is X11-free.
+    #
+    # The xfce-wayland RPMs live at their own R2 path, not the main
+    # $releasever tree — add it explicitly.
+    display_manager: greetd
+    repos:
+      - name: tunaos-xfce
+        baseurl: https://repo.tunaos.org/xfce/10-stream-x86_64/
+        priority: 10
     packages:
-      - gdm
+      # Meta package: xfwl4 + the whole Wayland-adapted xfce stack (panel,
+      # session, settings, xfdesktop, thunar, terminal, plugins) via Requires.
+      - xfce4-wayland
+      # xfwl4 reads xfwm4's themes and refuses to start without them.
+      - xfwm4
+      # Wayland-native VT greeter (greetd-selinux for enforcing EL10).
+      - greetd
+      - greetd-selinux
       - xdg-desktop-portal-gtk
       - xdg-user-dirs-gtk
-      - thunar
+    optional:
+      # Best-effort niceties (base/EPEL, may be absent on minimal EL10).
       - mousepad
       - ristretto
-      - xfce4-terminal
-    optional:
-      - xfce4-wayland
+      - xfce4-whiskermenu-plugin
+      - thunar-volman
+      - thunar-archive-plugin
 
   apt:
     - xfce4

@@ -3,46 +3,60 @@
 # Sourced by live-iso/common/src/build.sh for xfce* desktop flavors.
 #
 # Configures:
-#   - GDM autologin to the XFCE session
+#   - Autologin into the XFCE session (Wayland greetd where available,
+#     X11 lightdm/gdm on bases not yet migrated to xfwl4)
 #   - Auto-launch the TunaOS installer frontend
 #   - Disable suspend/sleep (installer can't recover from S3)
 
 set -euo pipefail
 
-# XFCE's display manager varies: lightdm (deb/EL10-x11), greetd (EL10
-# wayland fallback), gdm on odd builds. Configure all three; only the
-# active one reads its file.
-mkdir -p /etc/lightdm/lightdm.conf.d
-tee /etc/lightdm/lightdm.conf.d/50-live-autologin.conf <<'LIGHTDMEOF'
-[Seat:*]
-autologin-user=liveuser
-autologin-user-timeout=0
-LIGHTDMEOF
-# lightdm requires the autologin user in the 'autologin' group on deb.
-groupadd -f autologin && usermod -aG autologin liveuser || true
-
-_xfce_session="startxfce4"
-compgen -G "/usr/share/wayland-sessions/xfce*.desktop" >/dev/null && _xfce_session="xfce-wayland-session"
-mkdir -p /etc/greetd
-tee /etc/greetd/config.toml <<GREETDEOF
+# Wayland-first: EL10 ships the xfwl4 Wayland session (startxfce4 --wayland)
+# and greetd — an X11-free stack. Detect it by the packaged Wayland session
+# and/or the xfwl4 binary. On bases still on X11 XFCE (Fedora/Debian until
+# their xfwl4 packaging lands) fall back to lightdm/gdm autologin.
+if compgen -G "/usr/share/wayland-sessions/xfce*.desktop" >/dev/null || command -v xfwl4 &>/dev/null; then
+	# ── Wayland (xfwl4) — greetd autologin, no X11 ───────────────────────
+	# greetd `command` is run by the user's shell, so it must be the actual
+	# exec, not a session-file name. dbus-run-session gives the session a
+	# message bus (portals, xfconf) the way a DM login would.
+	mkdir -p /etc/greetd
+	tee /etc/greetd/config.toml <<'GREETDEOF'
 [terminal]
 vt = 1
 
 [default_session]
 user = "liveuser"
-command = "${_xfce_session}"
+command = "dbus-run-session startxfce4 --wayland"
 
 [initial_session]
 user = "liveuser"
-command = "${_xfce_session}"
+command = "dbus-run-session startxfce4 --wayland"
 GREETDEOF
+	# Enable greetd + boot to graphical.target (server-oriented EL10 bases
+	# default to multi-user.target, which would land on a console — same
+	# root cause as tunaOS#678 for niri/cosmic).
+	systemctl enable greetd.service 2>/dev/null || true
+	ln -sf /usr/lib/systemd/system/greetd.service /etc/systemd/system/display-manager.service 2>/dev/null || true
+	systemctl set-default graphical.target 2>/dev/null || \
+		ln -sf /usr/lib/systemd/system/graphical.target /etc/systemd/system/default.target 2>/dev/null || true
+else
+	# ── X11 fallback (lightdm, gdm on odd builds) ────────────────────────
+	mkdir -p /etc/lightdm/lightdm.conf.d
+	tee /etc/lightdm/lightdm.conf.d/50-live-autologin.conf <<'LIGHTDMEOF'
+[Seat:*]
+autologin-user=liveuser
+autologin-user-timeout=0
+LIGHTDMEOF
+	# lightdm requires the autologin user in the 'autologin' group on deb.
+	groupadd -f autologin && usermod -aG autologin liveuser || true
 
-mkdir -p /etc/gdm
-tee /etc/gdm/custom.conf <<'GDMEOF'
+	mkdir -p /etc/gdm
+	tee /etc/gdm/custom.conf <<'GDMEOF'
 [daemon]
 AutomaticLoginEnable=True
 AutomaticLogin=liveuser
 GDMEOF
+fi
 
 # Auto-launch the TunaOS installer frontend in the live session.
 # The app is baked into the live squash by customize-live.sh (tacklebox live_customize).
