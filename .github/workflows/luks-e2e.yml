@@ -142,23 +142,17 @@ jobs:
       - name: Clone fisherman (under-test)
         run: git clone --depth 1 --branch dev https://github.com/tuna-os/fisherman /tmp/fisherman
 
-      - name: Set up Go for fisherman
-        uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5
-        with:
-          go-version-file: /tmp/fisherman/fisherman/go.mod
-          cache: false
-
-      - name: Build fisherman from source
-        env:
-          # Earlier sudo steps root-own the shared ~/go and ~/.cache/go-build;
-          # use build-step-private, guaranteed-writable dirs instead.
-          GOPATH: ${{ runner.temp }}/fisherman-gopath
-          GOCACHE: ${{ runner.temp }}/fisherman-gocache
-          GOMODCACHE: ${{ runner.temp }}/fisherman-gomodcache
+      - name: Build fisherman in a golang container
         run: |
-          mkdir -p "$GOPATH" "$GOCACHE" "$GOMODCACHE"
-          ( cd /tmp/fisherman/fisherman && GOTOOLCHAIN=auto go build -o /tmp/fisherman-bin ./cmd/fisherman )
-          /tmp/fisherman-bin --help >/dev/null 2>&1 || true
+          # Build inside golang:1.26 so we avoid the runner's root-owned
+          # ~/go and ~/.cache (earlier sudo steps) and the apt Go 1.24 vs
+          # fisherman's go.mod (1.26) mismatch entirely.
+          GOVER=$(awk '/^go /{print $2; exit}' /tmp/fisherman/fisherman/go.mod)
+          sudo podman run --rm -v /tmp/fisherman:/src:z -w /src/fisherman \
+            "docker.io/library/golang:${GOVER}" \
+            go build -o /src/fisherman-bin ./cmd/fisherman
+          sudo chown "$(id -u)" /tmp/fisherman/fisherman-bin
+          cp /tmp/fisherman/fisherman-bin /tmp/fisherman-bin
           echo "FISHERMAN_OVERRIDE=/tmp/fisherman-bin" >> "$GITHUB_ENV"
 
       - name: LUKS install + unlock verification
