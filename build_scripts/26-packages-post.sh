@@ -78,17 +78,17 @@ printf 'version=%s\nvalidated_at_build=true\n' "${REMORA_VERSION}" \
 # variant so a new variant without a theme yet still boots themed.
 PLYMOUTH_THEME="tunaos"
 case "${IMAGE_NAME:-}" in
-yellowfin) PLYMOUTH_THEME="tropical-fish" ;;      # 🐠
-albacore) PLYMOUTH_THEME="tunaos" ;;              # 🐟
-skipjack) PLYMOUTH_THEME="sushi" ;;               # 🍣
-bonito) PLYMOUTH_THEME="fishing-pole" ;;          # 🎣
-sailfin) PLYMOUTH_THEME="shark" ;;                # 🦈
-guppy) PLYMOUTH_THEME="rainbow" ;;                # 🌈
-bonito-rawhide) PLYMOUTH_THEME="dragon" ;;        # 🐉
-grouper) PLYMOUTH_THEME="tunaos" ;;               # 🐟
-marlin) PLYMOUTH_THEME="rocket" ;;                # 🚀
-flounder) PLYMOUTH_THEME="pufferfish" ;;          # 🐡
-flounder-sid) PLYMOUTH_THEME="radioactive" ;;     # ☢️
+yellowfin) PLYMOUTH_THEME="tropical-fish" ;;  # 🐠
+albacore) PLYMOUTH_THEME="tunaos" ;;          # 🐟
+skipjack) PLYMOUTH_THEME="sushi" ;;           # 🍣
+bonito) PLYMOUTH_THEME="fishing-pole" ;;      # 🎣
+sailfin) PLYMOUTH_THEME="shark" ;;            # 🦈
+guppy) PLYMOUTH_THEME="rainbow" ;;            # 🌈
+bonito-rawhide) PLYMOUTH_THEME="dragon" ;;    # 🐉
+grouper) PLYMOUTH_THEME="tunaos" ;;           # 🐟
+marlin) PLYMOUTH_THEME="rocket" ;;            # 🚀
+flounder) PLYMOUTH_THEME="pufferfish" ;;      # 🐡
+flounder-sid) PLYMOUTH_THEME="radioactive" ;; # ☢️
 esac
 if command -v plymouth-set-default-theme >/dev/null 2>&1; then
 	plymouth-set-default-theme "$PLYMOUTH_THEME"

@@ -35,7 +35,6 @@ pure_symbol_dirty="*"
 
 # if this value is true, remote status update will be async
 
-
 # if last command failed, change prompt color
 __pure_echo_prompt_color() {
 
@@ -53,12 +52,11 @@ __pure_update_prompt_color() {
 
 # if user is root, prompt is BRIGHT_YELLOW
 case ${UID} in
-	0) pure_user_color=${BRIGHT_BLUE} ;;
-	*) pure_user_color=${BRIGHT_BLUE} ;;
+0) pure_user_color=${BRIGHT_BLUE} ;;
+*) pure_user_color=${BRIGHT_BLUE} ;;
 esac
 
 PROMPT_COMMAND="__pure_update_prompt_color; ${PROMPT_COMMAND}"
-
 
 FIRST_LINE="${CYAN}\w \n"
 # raw using of $ANY_COLOR (or $(tput setaf ***)) here causes a creepy bug when go back history with up arrow key

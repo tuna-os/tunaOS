@@ -7,7 +7,16 @@
  *   ?initrd=<url>                       tbox-enabled initramfs to embed
  */
 
-const SHIM = "https://relay.tunaos.org";
+let SHIM = "https://relay.tunaos.org";
+
+function updateShim() {
+  const input = $("shimurl");
+  if (input && input.value.trim()) {
+    SHIM = input.value.trim().replace(/\/+$/, "");
+  } else {
+    SHIM = "https://relay.tunaos.org";
+  }
+}
 
 // Per-DE defaults distilled from the upstream curation (bluefin/common,
 // aurora/common, zirconium): every desktop ships the Bazaar store + a
@@ -103,6 +112,7 @@ function fpRender() {
 
 let fpTimer = null;
 async function fpSearch(q) {
+  updateShim();
   if (!q || q.length < 3) { $("fpresults").innerHTML = ""; return; }
   try {
     const r = await fetch(SHIM + "/flathub/search", {
@@ -157,6 +167,7 @@ function pkgCollect() { return [...pkgItems].filter(([, v]) => v.checked).map(([
 
 let pkgTimer = null;
 async function pkgSearch(q) {
+  updateShim();
   const fam = facts?.repoFamily || "fedora";
   if (!q || q.length < 2) { $("pkgresults").innerHTML = ""; return; }
   try {
@@ -226,7 +237,10 @@ globalThis.tboxOnProgress = (stage, i, n) => {
 
 // "tuna-os/x:y" → ghcr via shim; "quay.io/a/b:c" → that registry direct.
 function parseImage(raw) {
-  const s = raw.trim();
+  let s = raw.trim();
+  if (!s.includes("/")) {
+    s = "tuna-os/" + s;
+  }
   const firstSeg = s.split("/")[0];
   if (firstSeg.includes(".") || firstSeg.includes(":")) {
     const host = firstSeg;
@@ -238,6 +252,7 @@ function parseImage(raw) {
 }
 
 async function inspect() {
+  updateShim();
   const raw = $("image").value;
   if (!raw.includes(":")) { log("image must be <repo>:<tag>"); return; }
   askNotify();
@@ -287,6 +302,7 @@ async function inspect() {
 }
 
 async function build() {
+  updateShim();
   askNotify();
   $("build").disabled = true;
   const label = ($("label").value || "TUNAOS").toUpperCase().replace(/[^A-Z0-9_]/g, "_");
@@ -341,6 +357,7 @@ async function build() {
 }
 
 function updateShare() {
+  updateShim();
   const p = new URLSearchParams();
   if ($("image").value) p.set("image", $("image").value);
   const fl = fpCollect();
@@ -349,6 +366,7 @@ function updateShare() {
   if (pk.length) p.set("packages", pk.join(","));
   if ($("label").value && $("label").value !== "TUNAOS") p.set("label", $("label").value);
   if ($("initrdurl").value) p.set("initrd", $("initrdurl").value);
+  if ($("shimurl").value && $("shimurl").value !== "https://relay.tunaos.org") p.set("shim", $("shimurl").value);
   const qs = "?" + p.toString();
   $("share").textContent = qs;
   $("sharelink").href = location.origin + location.pathname + qs;
@@ -367,7 +385,7 @@ $("copyshare").onclick = async () => {
   $("copyshare").textContent = "Copied!";
   setTimeout(() => ($("copyshare").textContent = "Copy"), 1500);
 };
-for (const id of ["image", "label", "initrdurl"]) $(id).addEventListener("input", updateShare);
+for (const id of ["image", "label", "initrdurl", "shimurl"]) $(id).addEventListener("input", updateShare);
 $("fpsearch").addEventListener("input", (e) => {
   clearTimeout(fpTimer);
   fpTimer = setTimeout(() => fpSearch(e.target.value.trim()), 300);
@@ -381,8 +399,18 @@ $("fpsearch").addEventListener("input", (e) => {
   if (q.get("packages")) for (const id of q.get("packages").split(",").filter(Boolean)) pkgAdd(id);
   if (q.get("label")) $("label").value = q.get("label");
   if (q.get("initrd")) $("initrdurl").value = q.get("initrd");
+  if (q.get("shim")) $("shimurl").value = q.get("shim");
+  updateShim();
   updateShare();
   // Deep links prefill only — a page load must never start a multi-GB
   // pull by itself. Opt into auto-run with &autorun=1.
   if (q.get("image") && q.get("autorun") === "1") inspect();
+}
+
+if (!window.showSaveFilePicker) {
+  const note = $("browsernote");
+  if (note) {
+    note.textContent = "Warning: Your browser does not support streaming downloads (File System Access API). The ISO will be buffered in memory first, which might crash on large images. For best results, use a Chromium-based browser (e.g. Chrome, Edge, Brave) or enable direct file saving.";
+    note.classList.remove("hidden");
+  }
 }

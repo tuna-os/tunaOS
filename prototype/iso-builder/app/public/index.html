@@ -124,6 +124,9 @@
 
       <label for="initrdurl" style="margin-top:1rem">tbox initramfs URL (optional override — by default the builder appends the tbox live modules to the image's own initramfs automatically)</label>
       <input type="text" id="initrdurl" placeholder="https://…/initramfs-tbox.img" spellcheck="false">
+
+      <label for="shimurl" style="margin-top:1rem">Registry relay URL (CORS shim)</label>
+      <input type="text" id="shimurl" placeholder="https://relay.tunaos.org" spellcheck="false">
     </details>
   </div>
 
@@ -137,6 +140,7 @@
         <button id="build" disabled>Build ISO</button>
       </div>
     </div>
+    <div class="note hidden" id="browsernote"></div>
     <div class="note hidden" id="initrdnote"></div>
     <div id="log"></div>
   </div>
