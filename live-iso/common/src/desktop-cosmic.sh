@@ -15,12 +15,15 @@ tee /etc/greetd/config.toml <<'GREETDEOF'
 [terminal]
 vt = 1
 
-[default_session]
-type = "login_manager"
+# greetd autologin: initial_session logs liveuser straight into COSMIC on
+# boot; default_session relaunches it if the session exits (live kiosk).
+# NOTE: no 'type' key — that is not valid greetd TOML and makes greetd
+# reject the whole config, falling back to the image's greeter.
+[initial_session]
 user = "liveuser"
 command = "cosmic-session"
 
-[initial_session]
+[default_session]
 user = "liveuser"
 command = "cosmic-session"
 GREETDEOF

@@ -20,12 +20,11 @@ if command -v dms-greeter &>/dev/null; then
 [terminal]
 vt = 1
 
-[default_session]
-type = "login_manager"
-user = "liveuser"
-command = "/usr/bin/dms-greeter"
-
 [initial_session]
+user = "liveuser"
+command = "niri-session"
+
+[default_session]
 user = "liveuser"
 command = "niri-session"
 GREETDEOF
@@ -34,12 +33,11 @@ else
 [terminal]
 vt = 1
 
-[default_session]
-type = "login_manager"
+[initial_session]
 user = "liveuser"
 command = "niri-session"
 
-[initial_session]
+[default_session]
 user = "liveuser"
 command = "niri-session"
 GREETDEOF
