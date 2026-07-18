@@ -690,8 +690,22 @@ run_install() {
 		fi
 	fi
 
+	# tpm2-luks-passphrase with a KNOWN test passphrase: the first-boot
+	# enrollment (fisherman first-boot oneshot) means the first installed
+	# boot still needs a key at the prompt; a known passphrase lets the E2E
+	# inject it deterministically, after which TPM auto-unlock takes over.
 	local encryption_json='{"type": "none"}'
-	[[ "$LUKS" -eq 1 ]] && encryption_json='{"type": "tpm2-luks"}'
+	local E2E_LUKS_PASS="tunaos-e2e-luks"
+	[[ "$LUKS" -eq 1 ]] && encryption_json="{\"type\": \"tpm2-luks-passphrase\", \"passphrase\": \"${E2E_LUKS_PASS}\"}"
+
+	# Override /usr/local/bin/fisherman with a freshly-built binary (e.g.
+	# from a PR under test) before installing — the bundled installer-flatpak
+	# fisherman is pinned to a release.
+	if [[ -n "${FISHERMAN_OVERRIDE:-}" && -f "${FISHERMAN_OVERRIDE}" ]]; then
+		echo "==> Overriding fisherman with ${FISHERMAN_OVERRIDE}"
+		"${scp_cmd[@]}" "${FISHERMAN_OVERRIDE}" liveuser@127.0.0.1:/tmp/fisherman-override
+		"${ssh_cmd[@]}" "sudo install -m0755 /tmp/fisherman-override /usr/local/bin/fisherman"
+	fi
 
 	local RECIPE_LOCAL="${OUTPUT_DIR}/e2e-recipe.json"
 	cat >"$RECIPE_LOCAL" <<EOF
@@ -822,6 +836,45 @@ EOF
 		fi
 	fi
 
+	# LUKS first boot: TPM isn't enrolled yet (first-boot enrollment,
+	# fisherman#48), so inject the known passphrase, let the enrollment
+	# oneshot run, then power off. The verifying boot below must then
+	# auto-unlock with no prompt.
+	if [[ "$LUKS" -eq 1 ]]; then
+		echo "==> LUKS first boot (passphrase unlock + TPM enrollment)..."
+		local FB_SERIAL="${OUTPUT_DIR}/fb-serial.sock"
+		rm -f "$FB_SERIAL"
+		# shellcheck disable=SC2086
+		"$QEMU" -name "tunaos-iso-e2e-firstboot" -machine pc -cpu "$CPU_ARG" \
+			-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" ${TPM_ARGS} \
+			-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+			-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
+			-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
+			-device virtio-blk-pci,drive=disk \
+			-netdev "user,id=net0" -device virtio-net-pci,netdev=net0 \
+			-monitor "unix:${MONITOR_SOCK},server,nowait" \
+			-serial "unix:${FB_SERIAL},server,nowait" \
+			-vga virtio -display none -pidfile "$QEMU_PIDFILE" -daemonize
+		python3 "$(dirname "${BASH_SOURCE[0]}")/luks-first-boot.py" \
+			"$FB_SERIAL" "$MONITOR_SOCK" "$E2E_LUKS_PASS" 900 \
+			2>&1 | tee "${OUTPUT_DIR}/firstboot-serial.log" || {
+			echo "ERROR: LUKS first boot / enrollment failed"
+			[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
+			return 4
+		}
+		# Ensure the first-boot QEMU is down before the verifying boot.
+		[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
+		sleep 3
+		# swtpm restart guard again for the verifying boot.
+		if [[ ! -S "$TPM_SOCK" ]] || ! swtpm_ioctl --unix "$TPM_SOCK" -g &>/dev/null; then
+			swtpm socket --tpmstate "dir=${TPM_DIR}" --ctrl "type=unixio,path=${TPM_SOCK}" \
+				--tpm2 --flags startup-clear --daemon --pid "file=${TPM_PIDFILE}"
+			for _ in $(seq 1 20); do [[ -S "$TPM_SOCK" ]] && break; sleep 0.5; done
+		fi
+		: >"$SERIAL_LOG"
+		echo "==> LUKS verifying boot (TPM auto-unlock, no passphrase)..."
+	fi
+
 	echo "==> Booting installed system..."
 	# Boot from the install disk (remove cdrom)
 	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
@@ -862,6 +915,10 @@ EOF
 		else
 			grep -q "Reached target.*Graphical\|Reached target.*Multi-User\|login:" "${SERIAL_LOG}" 2>/dev/null &&
 				installed_ready=1
+		fi
+		if [[ "$LUKS" -eq 1 ]] && grep -qi "passphrase for disk root" "${SERIAL_LOG}" 2>/dev/null; then
+			echo "ERROR: verifying boot prompted for a passphrase — TPM auto-unlock did NOT work"
+			return 4
 		fi
 		if [[ "$installed_ready" -eq 1 ]]; then
 			echo "==> Installed system booted successfully!"
