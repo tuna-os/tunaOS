@@ -21,6 +21,21 @@ const FLATPAK_DEFAULTS = {
 
 const $ = (id) => document.getElementById(id);
 
+// Browser notifications for the long phases — users tab away during
+// multi-minute pulls/builds. Permission is requested on the action
+// click (a user gesture); notifications only fire when the tab is
+// hidden (a focused user can see the progress bar).
+function askNotify() {
+  if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission().catch(() => {});
+  }
+}
+function notify(title, body) {
+  if (!("Notification" in window)) return;
+  if (Notification.permission !== "granted" || !document.hidden) return;
+  try { new Notification(title, { body, icon: "logo.png" }); } catch {}
+}
+
 // ── Flatpak checklist + Flathub search ──────────────────────────────────
 const fpItems = new Map(); // appId -> { checked, name }
 
@@ -113,6 +128,7 @@ function parseImage(raw) {
 async function inspect() {
   const raw = $("image").value;
   if (!raw.includes(":")) { log("image must be <repo>:<tag>"); return; }
+  askNotify();
   $("introspect").disabled = true;
   $("buildcard").classList.remove("hidden");
   try {
@@ -140,17 +156,20 @@ async function inspect() {
       for (const id of FLATPAK_DEFAULTS[facts.desktop] || []) fpAdd(id);
     }
     $("stage").textContent = "Image inspected — ready to build.";
+    notify("Image inspected", `${raw}: ${facts.desktop} desktop, ready to build`);
     $("build").disabled = false;
     updateShare();
   } catch (e) {
     log("error: " + e);
     $("stage").textContent = "Inspect failed.";
+    notify("Inspect failed", String(e).slice(0, 120));
   } finally {
     $("introspect").disabled = false;
   }
 }
 
 async function build() {
+  askNotify();
   $("build").disabled = true;
   const label = ($("label").value || "TUNAOS").toUpperCase().replace(/[^A-Z0-9_]/g, "_");
   let initrd = null;
@@ -190,10 +209,12 @@ async function build() {
     }
     const dt = ((performance.now() - t0) / 1000).toFixed(1);
     $("stage").textContent = `Done — ${(bytes / 1e9).toFixed(2)} GB in ${dt}s.`;
+    notify("ISO ready 🐟", `${(bytes / 1e9).toFixed(2)} GB written in ${dt}s`);
     log(`iso written: ${bytes} bytes`);
   } catch (e) {
     log("error: " + e);
     $("stage").textContent = "Build failed.";
+    notify("ISO build failed", String(e).slice(0, 120));
   } finally {
     $("build").disabled = false;
   }
