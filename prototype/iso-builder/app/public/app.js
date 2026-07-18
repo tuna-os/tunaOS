@@ -93,7 +93,7 @@ function loadWasm() {
 }
 
 globalThis.tboxOnProgress = (stage, i, n) => {
-  $("stage").textContent = { resolve: "Resolving manifest…", unpack: `Unpacking layer ${i}/${n}`, erofs: "Authoring EROFS live root…", esp: "Authoring EFI system partition…", iso: "Streaming ISO…" }[stage] || stage;
+  $("stage").textContent = { resolve: "Resolving manifest…", unpack: `Unpacking layer ${i}/${n}`, initrd: "Appending tbox initramfs overlay…", erofs: "Authoring EROFS live root…", esp: "Authoring EFI system partition…", iso: "Streaming ISO…" }[stage] || stage;
   $("bar").max = n; $("bar").value = i;
 };
 
@@ -163,7 +163,7 @@ async function build() {
       initrd = new Uint8Array(await r.arrayBuffer());
       log(`initramfs: ${(initrd.length / 1e6).toFixed(1)} MB`);
     } else {
-      $("initrdnote").classList.remove("hidden");
+      log("initramfs: auto (tbox overlay appended to the image's own initramfs)");
     }
     const name = `tunaos-${($("image").value.split("/").pop() || "image").replace(/[:]/g, "-")}.iso`;
     let sink, chunks = [];
