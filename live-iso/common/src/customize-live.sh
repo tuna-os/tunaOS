@@ -262,8 +262,18 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 			fi
 		done
 	else
-		flatpak remote-add --system --if-not-exists tuna-os \
-			https://tunaos.org/flatpak/tuna-os.flatpakrepo
+		# The image already ships the tuna-os remote via /etc/flatpak/remotes.d/
+		# (build_scripts/desktop/tuna-flatpak-remote.sh) — prefer that
+		# locally-baked file (no network) and don't hard-fail the build on a
+		# transient tunaos.org miss, mirroring the flathub handling above.
+		if [ -f /etc/flatpak/remotes.d/tuna-os.flatpakrepo ]; then
+			flatpak remote-add --system --if-not-exists tuna-os \
+				/etc/flatpak/remotes.d/tuna-os.flatpakrepo || true
+		else
+			flatpak remote-add --system --if-not-exists tuna-os \
+				https://tunaos.org/flatpak/tuna-os.flatpakrepo \
+				|| echo "WARN: could not add tuna-os remote (network?); continuing"
+		fi
 		flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}"
 	fi
 
