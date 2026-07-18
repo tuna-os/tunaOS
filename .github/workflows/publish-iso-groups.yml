@@ -53,8 +53,10 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Install yq
-        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+      - name: Install yq + skopeo
+        run: |
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+          sudo apt-get update -q && sudo apt-get install -y skopeo
 
       - name: Build matrix from iso_groups ∩ variant flavors
         id: build
@@ -77,6 +79,9 @@ jobs:
               | select($wg == "all"
                        or ($wg == "default" and $suffix == "")
                        or $wg == $suffix)
+              # Skip publish:false groups (builder-only, e.g. community)
+              # UNLESS the dispatch names that exact suffix.
+              | select(($g.publish != false) or ($wg == $suffix))
               | {
                   variant:  $var.id,
                   group:    (if $suffix == "" then "default" else $suffix end),
@@ -84,6 +89,26 @@ jobs:
                   basename: (if $suffix == "" then $var.id else "\($var.id)-\($suffix)" end)
                 }
             ] | { include: . }')
+          # Probe the registry: a variant whose flagship image was never
+          # published (e.g. rawhide while its image gates are red) is
+          # SKIPPED with a warning instead of hard-failing the matrix —
+          # the publish pipeline ships what exists. A variant with a
+          # published flagship keeps failing loudly if other flavors of
+          # its group are missing (that is a real regression signal).
+          PRUNED='[]'
+          for row in $(echo "$MATRIX" | jq -cr '.include[] | @base64'); do
+            entry=$(echo "$row" | base64 -d)
+            variant=$(echo "$entry" | jq -r .variant)
+            pubname=$(yq -r ".variants[] | select(.id == \"$variant\") | .publish_name // .id" .github/build-config.yml)
+            tagsuffix=$(yq -r ".variants[] | select(.id == \"$variant\") | .tag_suffix // \"\"" .github/build-config.yml)
+            probe_tag="gnome"; [ -n "$tagsuffix" ] && probe_tag="gnome-$tagsuffix"
+            if skopeo inspect --retry-times 3 --no-tags "docker://ghcr.io/tuna-os/${pubname}:${probe_tag}" >/dev/null 2>&1; then
+              PRUNED=$(echo "$PRUNED" | jq -c --argjson e "$entry" '. + [$e]')
+            else
+              echo "::warning::skipping $(echo "$entry" | jq -r .basename): ghcr.io/tuna-os/${pubname}:${probe_tag} not published (image builds red?)"
+            fi
+          done
+          MATRIX=$(echo "$PRUNED" | jq -c '{ include: . }')
           COUNT=$(echo "$MATRIX" | jq '.include | length')
           echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
           echo "count=$COUNT" >> "$GITHUB_OUTPUT"
@@ -106,6 +131,17 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Maximize build disk
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # main as of 2026-06-09
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
       - uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
 
       - name: Install dependencies
@@ -123,7 +159,7 @@ jobs:
           # The low-disk offline-store implementation must be reproducible and
           # available before the release-container workflow finishes publishing.
           TACKLEBOX_FROM_SOURCE: '1'
-          TACKLEBOX_SHA: 04f3c6251062c489f807e6ba1cf8da4450c50264
+          TACKLEBOX_SHA: a105d6d3e64eef6736cf0d24e083ae51e2f6ac92
         run: |
           sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA \
             just iso-group "${{ matrix.variant }}" "${{ matrix.group }}" ghcr

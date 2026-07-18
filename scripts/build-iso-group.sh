@@ -133,7 +133,14 @@ echo "    environments: ${SELECTED[*]}"
 echo "    offline payloads: ${SELECTED_OFFLINE[*]}"
 
 # ── Build the recipe ────────────────────────────────────────────────────────
-OUT_DIR=".build/iso-group/${ISO_BASENAME}"
+# Build scratch: GitHub runners keep ~14 GB on / but ~60 GB on /mnt —
+# community groups (5+ flavors of images + embedded store + squash +
+# ISO) exhaust the root disk (run 29630690744: ENOSPC mid image-copy).
+OUT_BASE="${TUNAOS_ISO_OUT_BASE:-.build/iso-group}"
+if [[ -z "${TUNAOS_ISO_OUT_BASE:-}" && -d /mnt && -w /mnt ]]; then
+	mkdir -p /mnt/tunaos-iso-build 2>/dev/null && OUT_BASE="/mnt/tunaos-iso-build"
+fi
+OUT_DIR="${OUT_BASE}/${ISO_BASENAME}"
 mkdir -p "$OUT_DIR"
 RECIPE_FILE="${OUT_DIR}/recipe.json"
 
@@ -204,7 +211,7 @@ VERSION_ID=$(podman run --rm --security-opt label=disable "$FIRST_REF" \
 ARCH=$(podman run --rm --security-opt label=disable "$FIRST_REF" uname -m)
 
 FINAL_ISO="${REPO_ROOT}/${ISO_BASENAME}-${VERSION_ID}-${ARCH}.iso"
-cp "$ISO_OUT" "$FINAL_ISO"
+mv "$ISO_OUT" "$FINAL_ISO"
 chown_back "$FINAL_ISO"
 
 echo ""
