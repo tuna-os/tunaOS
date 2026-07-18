@@ -56,6 +56,67 @@ export default {
       return out;
     }
 
+    // Cross-distro package search relay: repology maps a package across
+    // every distro family (dnf/zypper/pacman/apt/...), so one search box
+    // works for any base image. No CORS on repology → proxy it here.
+    // ?q=<term>&family=<fedora|opensuse|arch|debian|...>
+    if (url.pathname === "/pkgsearch") {
+      const q = (url.searchParams.get("q") || "").toLowerCase().replace(/[^a-z0-9._+-]/g, "");
+      const family = url.searchParams.get("family") || "";
+      if (q.length < 2) {
+        return new Response(JSON.stringify([]), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
+      }
+      const UA = { "User-Agent": "tunaos-iso-builder (+https://iso.tunaos.org)", "Accept": "application/json" };
+      let projects = {};
+      try {
+        const rr = await fetch(`https://repology.org/api/v1/projects/?search=${encodeURIComponent(q)}`, { headers: UA });
+        if (rr.ok) projects = await rr.json();
+      } catch (_) { projects = {}; }
+      // The exact-name project is often buried under plugins in search;
+      // fetch it directly so the base package always surfaces first.
+      try {
+        const er = await fetch(`https://repology.org/api/v1/project/${encodeURIComponent(q)}`, { headers: UA });
+        if (er.ok) {
+          const ee = await er.json();
+          if (Array.isArray(ee) && ee.length) projects = { [q]: ee, ...projects };
+        }
+      } catch (_) {}
+      // repology repo prefixes per family (best-effort match).
+      const prefixes = {
+        fedora: ["fedora"], opensuse: ["opensuse"], arch: ["arch"],
+        debian: ["debian", "ubuntu"], gentoo: ["gentoo"], alpine: ["alpine"],
+      }[family] || [];
+      let out = [];
+      for (const [name, entries] of Object.entries(projects || {})) {
+        let pick = null;
+        for (const e of entries) {
+          if (prefixes.some((p) => (e.repo || "").startsWith(p))) { pick = e; break; }
+        }
+        const any = pick || entries[0];
+        if (!any) continue;
+        out.push({
+          project: name,
+          pkg: (pick && (pick.binname || pick.srcname || pick.visiblename)) || name,
+          summary: any.summary || "",
+          available: !!pick,
+          version: any.version || "",
+        });
+      }
+      // Rank: available-in-this-family first, then exact/prefix name match,
+      // then shorter names (the base package over its plugins).
+      out.sort((a, b) => {
+        if (a.available !== b.available) return a.available ? -1 : 1;
+        const ax = a.project === q ? 0 : a.project.startsWith(q) ? 1 : 2;
+        const bx = b.project === q ? 0 : b.project.startsWith(q) ? 1 : 2;
+        if (ax !== bx) return ax - bx;
+        return a.project.length - b.project.length;
+      });
+      out = out.slice(0, 12);
+      const o = new Response(JSON.stringify(out), { status: 200, headers: { ...CORS, "Content-Type": "application/json" } });
+      o.headers.set("Cache-Control", "public, max-age=600");
+      return o;
+    }
+
     if (request.method !== "GET" && request.method !== "HEAD") {
       return new Response("method not allowed", { status: 405, headers: CORS });
     }

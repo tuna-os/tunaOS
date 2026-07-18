@@ -50,6 +50,11 @@
   .fpresults { display: flex; flex-direction: column; gap: .2rem; margin-top: .3rem; }
   .fpresults button { text-align: left; background: var(--panel); color: var(--fg); border: 1px solid var(--border); font-weight: 400; font-size: .85rem; padding: .35rem .6rem; }
   .fpresults button:hover { border-color: var(--accent); }
+  .fpresults button .avail { color: var(--ok); font-size: .75rem; margin-left: .3rem; }
+  .fpresults button .unavail { color: var(--warn); font-size: .75rem; margin-left: .3rem; }
+  .repohelp { display: flex; gap: .4rem; margin-top: .4rem; flex-wrap: wrap; }
+  .repohelp select, .repohelp input { padding: .35rem .5rem; border-radius: 6px; border: 1px solid var(--border); background: var(--bg); color: var(--fg); }
+  .repohelp input { flex: 1; min-width: 140px; }
   summary { cursor: pointer; color: var(--dim); font-size: .9rem; }
   textarea { width: 100%; min-height: 90px; margin-top: .5rem; font: 13px ui-monospace, monospace; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 8px; padding: .5rem; }
   .note { font-size: .82rem; color: var(--warn); margin-top: .6rem; }
@@ -99,7 +104,25 @@
         <button type="button" id="curated" class="secondary" style="white-space:nowrap">+ Curated set</button>
       </div>
       <div id="fpresults" class="fpresults"></div>
-      <label for="initrdurl" style="margin-top:.6rem">tbox initramfs URL (optional override — by default the builder appends the tbox live modules to the image's own initramfs automatically)</label>
+      <label style="margin-top:1rem">System packages (layered on the installed system via <a href="https://github.com/tuna-os/remora" target="_blank" rel="noopener">remora</a> — persists across updates)</label>
+      <div id="pkglist" class="fplist"></div>
+      <input type="text" id="pkgsearch" placeholder="Search packages for this image's distro…" spellcheck="false" autocomplete="off" style="margin-top:.4rem">
+      <div id="pkgresults" class="fpresults"></div>
+
+      <label style="margin-top:1rem">Custom repositories &amp; setup (advanced)</label>
+      <div class="repohelp">
+        <select id="repokind">
+          <option value="copr">Fedora COPR</option>
+          <option value="ppa">Ubuntu PPA</option>
+          <option value="obs">openSUSE OBS</option>
+          <option value="raw">Raw command</option>
+        </select>
+        <input type="text" id="reporef" placeholder="e.g. atim/starship" spellcheck="false">
+        <button type="button" id="addrepo" class="secondary">Add</button>
+      </div>
+      <div id="repolist" class="fplist"></div>
+
+      <label for="initrdurl" style="margin-top:1rem">tbox initramfs URL (optional override — by default the builder appends the tbox live modules to the image's own initramfs automatically)</label>
       <input type="text" id="initrdurl" placeholder="https://…/initramfs-tbox.img" spellcheck="false">
     </details>
   </div>

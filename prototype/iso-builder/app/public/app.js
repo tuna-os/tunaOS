@@ -130,6 +130,87 @@ const log = (m) => { $("log").textContent += m + "\n"; $("log").scrollTop = 1e9;
 let facts = null;
 let wasmReady = null;
 
+// System packages (remora) + custom repo/setup commands (extra_run).
+const pkgItems = new Map();  // pkg -> {checked, summary}
+const repoCmds = [];         // extra_run lines
+
+function pkgAdd(id, summary = "") {
+  if (!pkgItems.has(id)) pkgItems.set(id, { checked: true, summary });
+  pkgRender();
+}
+function pkgRender() {
+  const box = $("pkglist");
+  box.innerHTML = "";
+  for (const [id, v] of pkgItems) {
+    const label = document.createElement("label");
+    const cb = Object.assign(document.createElement("input"), { type: "checkbox", checked: v.checked });
+    cb.onchange = () => { v.checked = cb.checked; updateShare(); };
+    label.appendChild(cb);
+    const span = document.createElement("span");
+    span.textContent = id;
+    label.appendChild(span);
+    box.appendChild(label);
+  }
+  updateShare();
+}
+function pkgCollect() { return [...pkgItems].filter(([, v]) => v.checked).map(([k]) => k); }
+
+let pkgTimer = null;
+async function pkgSearch(q) {
+  const fam = facts?.repoFamily || "fedora";
+  if (!q || q.length < 2) { $("pkgresults").innerHTML = ""; return; }
+  try {
+    const r = await fetch(`${SHIM}/pkgsearch?q=${encodeURIComponent(q)}&family=${fam}`);
+    const hits = await r.json();
+    const box = $("pkgresults");
+    box.innerHTML = "";
+    for (const h of hits) {
+      if (pkgItems.has(h.pkg)) continue;
+      const b = document.createElement("button");
+      b.type = "button";
+      b.innerHTML = `+ <b>${h.pkg}</b> ${h.summary ? "— " + h.summary.slice(0, 60) : ""}` +
+        (h.available ? `<span class="avail">✓ ${fam}</span>` : `<span class="unavail">not in ${fam}</span>`);
+      b.onclick = () => { pkgAdd(h.pkg, h.summary); $("pkgresults").innerHTML = ""; $("pkgsearch").value = ""; };
+      box.appendChild(b);
+    }
+  } catch (e) {
+    $("pkgresults").innerHTML = "<span style='font-size:.8rem;color:var(--dim)'>package search unavailable</span>";
+  }
+}
+
+function repoRender() {
+  const box = $("repolist");
+  box.innerHTML = "";
+  repoCmds.forEach((cmd, i) => {
+    const label = document.createElement("label");
+    const rm = Object.assign(document.createElement("button"), { type: "button", textContent: "✕" });
+    rm.className = "secondary";
+    rm.style.cssText = "padding:0 .4rem;font-size:.75rem";
+    rm.onclick = () => { repoCmds.splice(i, 1); repoRender(); };
+    label.appendChild(rm);
+    const code = document.createElement("code");
+    code.textContent = cmd;
+    label.appendChild(code);
+    box.appendChild(label);
+  });
+  updateShare();
+}
+function addRepo() {
+  const kind = $("repokind").value;
+  const ref = $("reporef").value.trim();
+  if (!ref) return;
+  let cmd;
+  switch (kind) {
+    case "copr": cmd = `dnf -y copr enable ${ref}`; break;
+    case "ppa": cmd = `add-apt-repository -y ppa:${ref}`; break;
+    case "obs": cmd = `zypper -n ar -f obs://${ref} ${ref.replace(/[:/]/g, "_")}`; break;
+    default: cmd = ref;
+  }
+  repoCmds.push(cmd);
+  $("reporef").value = "";
+  repoRender();
+}
+
 function loadWasm() {
   if (wasmReady) return wasmReady;
   const go = new Go();
@@ -182,9 +263,15 @@ async function inspect() {
     add(`desktop <b>${facts.desktop}</b>`, "badge de");
     add(`kernel <b>${facts.kernelVer || "none"}</b>`);
     add(`systemd-boot <b>${facts.hasSdBoot ? "in image" : "not shipped"}</b>`);
+    if (facts.pkgManager) add(`packaging <b>${facts.pkgManager}</b>`);
     add(`<b>${facts.fileCount.toLocaleString()}</b> files`);
     if (fpItems.size === 0) {
       for (const id of FLATPAK_DEFAULTS[facts.desktop] || []) fpAdd(id);
+    }
+    if (facts.pkgManager) {
+      $("pkgsearch").placeholder = `Search packages (${facts.pkgManager} · ${facts.repoFamily})…`;
+      const kinds = { fedora: "copr", debian: "ppa", opensuse: "obs" };
+      if (kinds[facts.repoFamily]) $("repokind").value = kinds[facts.repoFamily];
     }
     $("stage").textContent = "Image inspected — ready to build.";
     notify("Image inspected", `${raw}: ${facts.desktop} desktop, ready to build`);
@@ -229,7 +316,9 @@ async function build() {
     }
     const t0 = performance.now();
     const flatpaks = fpCollect();
-    const bytes = await tboxBuildIso({ label, initrd, flatpaks }, (u8) => {
+    const packages = pkgCollect();
+    const extraRun = repoCmds.slice();
+    const bytes = await tboxBuildIso({ label, initrd, flatpaks, packages, extraRun }, (u8) => {
       if (sink) sink.write(u8); else chunks.push(u8.slice());
     });
     if (sink) await sink.close();
@@ -256,6 +345,8 @@ function updateShare() {
   if ($("image").value) p.set("image", $("image").value);
   const fl = fpCollect();
   if (fl.length) p.set("flatpaks", fl.join(","));
+  const pk = pkgCollect();
+  if (pk.length) p.set("packages", pk.join(","));
   if ($("label").value && $("label").value !== "TUNAOS") p.set("label", $("label").value);
   if ($("initrdurl").value) p.set("initrd", $("initrdurl").value);
   const qs = "?" + p.toString();
@@ -266,6 +357,11 @@ function updateShare() {
 $("introspect").onclick = inspect;
 $("build").onclick = build;
 $("curated").onclick = loadCuratedSet;
+$("addrepo").onclick = addRepo;
+$("pkgsearch").addEventListener("input", (e) => {
+  clearTimeout(pkgTimer);
+  pkgTimer = setTimeout(() => pkgSearch(e.target.value.trim()), 350);
+});
 $("copyshare").onclick = async () => {
   await navigator.clipboard.writeText($("sharelink").href);
   $("copyshare").textContent = "Copied!";
@@ -282,6 +378,7 @@ $("fpsearch").addEventListener("input", (e) => {
   const q = new URLSearchParams(location.search);
   if (q.get("image")) $("image").value = q.get("image");
   if (q.get("flatpaks")) for (const id of q.get("flatpaks").split(",").filter(Boolean)) fpAdd(id);
+  if (q.get("packages")) for (const id of q.get("packages").split(",").filter(Boolean)) pkgAdd(id);
   if (q.get("label")) $("label").value = q.get("label");
   if (q.get("initrd")) $("initrdurl").value = q.get("initrd");
   updateShare();
