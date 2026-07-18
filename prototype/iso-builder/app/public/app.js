@@ -7,7 +7,7 @@
  *   ?initrd=<url>                       tbox-enabled initramfs to embed
  */
 
-const SHIM = "https://ghcr-shim.trogdor30001.workers.dev";
+const SHIM = "https://relay.tunaos.org";
 
 const FLATPAK_DEFAULTS = {
   gnome: ["org.bootcinstaller.Installer", "org.mozilla.firefox"],
@@ -59,7 +59,7 @@ let fpTimer = null;
 async function fpSearch(q) {
   if (!q || q.length < 3) { $("fpresults").innerHTML = ""; return; }
   try {
-    const r = await fetch("https://flathub.org/api/v2/search", {
+    const r = await fetch(SHIM + "/flathub/search", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ query: q, filters: [] }),

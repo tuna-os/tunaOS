@@ -34,6 +34,28 @@ export default {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 204, headers: CORS });
     }
+
+    // Flathub search relay: flathub.org's API only answers CORS for its
+    // own origins, so the builder's Flathub autocomplete goes through
+    // here. POST, tiny JSON bodies, generously cacheable per query.
+    if (url.pathname === "/flathub/search") {
+      if (request.method !== "POST") {
+        return new Response("method not allowed", { status: 405, headers: CORS });
+      }
+      const body = await request.text();
+      if (body.length > 2048) {
+        return new Response("query too large", { status: 413, headers: CORS });
+      }
+      const resp = await fetch("https://flathub.org/api/v2/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body,
+      });
+      const out = new Response(resp.body, { status: resp.status, headers: CORS });
+      out.headers.set("Content-Type", "application/json");
+      return out;
+    }
+
     if (request.method !== "GET" && request.method !== "HEAD") {
       return new Response("method not allowed", { status: 405, headers: CORS });
     }
