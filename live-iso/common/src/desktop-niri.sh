@@ -20,12 +20,11 @@ if command -v dms-greeter &>/dev/null; then
 [terminal]
 vt = 1
 
-[default_session]
-type = "login_manager"
-user = "liveuser"
-command = "/usr/bin/dms-greeter"
-
 [initial_session]
+user = "liveuser"
+command = "niri-session"
+
+[default_session]
 user = "liveuser"
 command = "niri-session"
 GREETDEOF
@@ -34,16 +33,23 @@ else
 [terminal]
 vt = 1
 
-[default_session]
-type = "login_manager"
+[initial_session]
 user = "liveuser"
 command = "niri-session"
 
-[initial_session]
+[default_session]
 user = "liveuser"
 command = "niri-session"
 GREETDEOF
 fi
+
+# Ensure greetd actually runs on boot: enable the service and make
+# graphical.target the default. Without this the live env boots to
+# multi-user.target and lands on a text console (tunaOS#678).
+systemctl enable greetd.service 2>/dev/null || true
+ln -sf /usr/lib/systemd/system/greetd.service /etc/systemd/system/display-manager.service 2>/dev/null || true
+systemctl set-default graphical.target 2>/dev/null || \
+  ln -sf /usr/lib/systemd/system/graphical.target /etc/systemd/system/default.target 2>/dev/null || true
 
 # Disable screen lock for the live session
 mkdir -p /etc/xdg

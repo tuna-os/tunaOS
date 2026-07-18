@@ -192,8 +192,21 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 	# resolves missing runtime refs from any configured remote, so add
 	# flathub here too; without it, install fails with "requires the
 	# runtime org.gnome.Platform/... which was not found".
-	flatpak remote-add --system --if-not-exists flathub \
-		https://dl.flathub.org/repo/flathub.flatpakrepo
+	#
+	# The image already ships flathub via /etc/flatpak/remotes.d/ (see
+	# build_scripts/26-packages-post.sh), so prefer that locally-baked
+	# .flatpakrepo — it needs no network. Only fall back to fetching from
+	# dl.flathub.org, and never hard-fail the whole ISO build if flathub is
+	# unreachable at build time (e.g. IPv6-only egress on a build host):
+	# runtime resolution still has the tuna-os remote + the baked remotes.d.
+	if [ -f /etc/flatpak/remotes.d/flathub.flatpakrepo ]; then
+		flatpak remote-add --system --if-not-exists flathub \
+			/etc/flatpak/remotes.d/flathub.flatpakrepo || true
+	else
+		flatpak remote-add --system --if-not-exists flathub \
+			https://dl.flathub.org/repo/flathub.flatpakrepo \
+			|| echo "WARN: could not add flathub remote (network?); continuing"
+	fi
 
 	# Flatpak also opens a session-bus connection even for a system install.
 	# The headless tacklebox container has no DISPLAY, so autolaunch cannot
@@ -228,7 +241,10 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		flatpak build-import-bundle "${INSTALLER_LOCAL_REPO}" "${INSTALLER_FLATPAK_FILE}"
 		rm -f "${INSTALLER_FLATPAK_FILE}"
 		flatpak remote-add --system --no-gpg-verify installer-local "file://${INSTALLER_LOCAL_REPO}"
-		flatpak install --system --noninteractive installer-local "${INSTALLER_APP}"
+		flatpak install --system --noninteractive installer-local "${INSTALLER_APP}" \
+			|| { [[ -f "${SCRIPT_DIR}/.enable-sshd" ]] \
+				&& echo "WARN: installer flatpak install failed; continuing (dev/e2e ISO)" \
+				|| exit 1; }
 		flatpak remote-delete --system --force installer-local || true
 		rm -rf "${INSTALLER_LOCAL_REPO}"
 
@@ -249,9 +265,22 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 			fi
 		done
 	else
-		flatpak remote-add --system --if-not-exists tuna-os \
-			https://tunaos.org/flatpak/tuna-os.flatpakrepo
-		flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}"
+		# The image already ships the tuna-os remote via /etc/flatpak/remotes.d/
+		# (build_scripts/desktop/tuna-flatpak-remote.sh) — prefer that
+		# locally-baked file (no network) and don't hard-fail the build on a
+		# transient tunaos.org miss, mirroring the flathub handling above.
+		if [ -f /etc/flatpak/remotes.d/tuna-os.flatpakrepo ]; then
+			flatpak remote-add --system --if-not-exists tuna-os \
+				/etc/flatpak/remotes.d/tuna-os.flatpakrepo || true
+		else
+			flatpak remote-add --system --if-not-exists tuna-os \
+				https://tunaos.org/flatpak/tuna-os.flatpakrepo \
+				|| echo "WARN: could not add tuna-os remote (network?); continuing"
+		fi
+		flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}" \
+			|| { [[ -f "${SCRIPT_DIR}/.enable-sshd" ]] \
+				&& echo "WARN: installer flatpak install failed; continuing (dev/e2e ISO)" \
+				|| exit 1; }
 	fi
 
 	# ── 4a. fisherman on the host path ────────────────────────────────────
