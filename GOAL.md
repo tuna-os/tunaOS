@@ -69,6 +69,15 @@ sessions).
   local storage, so a retry only re-fetches what stalled; fisherman then
   finds the image local and skips its own pull. See `docs/ci-troubleshooting.md`
   §4 bug #20 for full detail.
+- **Bug #20 closed as 'guest-side, unfixable by retry/relay' (2026-07-18):**
+  two more yellowfin:kde runs failed with ALL FOUR pull attempts stalling
+  at the 600s timeout — including two attempts routed through a
+  Cloudflare Worker relay (ghcr-shim.trogdor30001.workers.dev, different
+  server/CDN path entirely). The stall is therefore in the guest's SLIRP
+  networking for bulk transfers, not GHCR's CDN. Conclusion: network
+  pulls inside the live guest cannot be made reliable; the embedded
+  offline store (PR #666, ci/assess-image-pull-flows) is the required
+  path. LUKS E2E dispatched from that branch: run 29623199186.
 - **No cell has passed yet.** All three finish-condition boxes above are
   unchecked. Next: dispatch a fresh `yellowfin:kde` (or niri/cosmic) run
   to verify the retry-pull fix.
