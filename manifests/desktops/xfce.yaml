@@ -40,22 +40,32 @@ packages:
           - greetd-selinux
         options: "--nobest --allowerasing"
     packages:
-      # Meta package: xfwl4 + the whole Wayland-adapted xfce stack (panel,
-      # session, settings, xfdesktop, thunar, terminal, plugins) via Requires.
-      # Its Requires pull whatever theme/runtime deps xfwl4 needs — do NOT
-      # list xfwm4 explicitly (it is X11 and not built for EL10 / not in the
-      # xfce-wayland repo, which is what broke run 29646563977).
-      - xfce4-wayland
-      - xdg-desktop-portal-gtk
-      - xdg-user-dirs-gtk
-    optional:
-      # Best-effort niceties. Plugins/apps live in the xfce-wayland repo;
-      # mousepad/ristretto may come from EPEL. install_available skips any
-      # that do not resolve, so a miss never fails the build.
+      # Install the core xfwl4 stack EXPLICITLY rather than the xfce4-wayland
+      # meta: the meta pulls xfce4-pulseaudio-plugin, which Requires the real
+      # 'pulseaudio' and conflicts with the base image's pipewire-pulseaudio
+      # (depsolve failure, run 29651035650). Listing the pieces keeps the
+      # pipewire audio stack intact. Do NOT list xfwm4 (X11, not built for
+      # EL10). Volume control comes from the panel's pipewire/pavucontrol path.
+      - xfwl4
+      - xfce4-session
+      - xfce4-panel
+      - xfce4-settings
+      - xfdesktop
+      - thunar
+      - tumbler
+      - xfce4-terminal
+      - xfce4-appfinder
       - xfce4-notifyd
       - xfce4-power-manager
       - xfce4-screenshooter
-      - xfce4-appfinder
+      - xdg-desktop-portal-gtk
+      - xdg-user-dirs-gtk
+    optional:
+      # Best-effort niceties. install_available skips any that do not resolve,
+      # so a miss never fails the build. NOT xfce4-pulseaudio-plugin — it
+      # Requires real pulseaudio (conflicts with pipewire-pulseaudio).
+      - xfce4-whiskermenu-plugin
+      - xfce4-clipman-plugin
       - mousepad
       - ristretto
 
