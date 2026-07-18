@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TunaOS ISO Builder</title>
+<link rel="icon" type="image/png" href="favicon-32.png">
+<style>
+  :root {
+    --bg: #00152e; --panel: #002b5c; --border: #1a4a7a; --fg: #e6f3ff;
+    --dim: #94b8dc; --accent: #47a1ff; --ok: #3fb950; --warn: #ffb347; --err: #f85149;
+    --header-bg: #001a38;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f5f9ff; --panel: #ffffff; --border: #cfe3f7; --fg: #1c1e21;
+      --dim: #5a7492; --accent: #0056b3; --header-bg: #002b5c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif; background: var(--bg); color: var(--fg); }
+  main { max-width: 780px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  .site-header { background: var(--header-bg); border-bottom: 1px solid var(--border); }
+  .site-header .inner { max-width: 1140px; margin: 0 auto; display: flex; align-items: center; gap: .75rem; padding: .55rem 1rem; }
+  .site-header img { width: 32px; height: 32px; border-radius: 6px; }
+  .site-header .brand { font-weight: 700; font-size: 1.05rem; color: #fff; text-decoration: none; }
+  .site-header nav { margin-left: auto; display: flex; gap: 1.1rem; flex-wrap: wrap; }
+  .site-header nav a { color: #cfe3f7; text-decoration: none; font-size: .92rem; }
+  .site-header nav a:hover, .site-header nav a.active { color: #fff; }
+  .site-header nav a.active { border-bottom: 2px solid var(--accent); padding-bottom: 2px; }
+  h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+  h1 .fish { margin-right: .4rem; }
+  .sub { color: var(--dim); margin: 0 0 1.5rem; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 1.1rem 1.2rem; margin-bottom: 1rem; }
+  label { display: block; font-weight: 600; font-size: .85rem; margin-bottom: .3rem; }
+  input[type=text] { width: 100%; padding: .55rem .7rem; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--fg); font: inherit; }
+  .row { display: flex; gap: .75rem; flex-wrap: wrap; align-items: end; }
+  .row > div { flex: 1 1 220px; }
+  button { padding: .55rem 1.1rem; border-radius: 8px; border: 1px solid var(--border); background: var(--accent); color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.secondary { background: var(--panel); color: var(--fg); }
+  .facts { display: flex; gap: .6rem; flex-wrap: wrap; margin-top: .8rem; }
+  .badge { border: 1px solid var(--border); border-radius: 999px; padding: .15rem .7rem; font-size: .85rem; color: var(--dim); }
+  .badge b { color: var(--fg); }
+  .badge.de { border-color: var(--accent); color: var(--accent); }
+  progress { width: 100%; height: 8px; accent-color: var(--accent); }
+  #log { font: 12px/1.6 ui-monospace, monospace; color: var(--dim); white-space: pre-wrap; max-height: 180px; overflow-y: auto; margin-top: .8rem; }
+  details { margin-top: .9rem; }
+  .fplist { display: flex; flex-direction: column; gap: .25rem; margin-top: .4rem; }
+  .fplist label { display: flex; align-items: center; gap: .5rem; font-weight: 400; font-size: .88rem; margin: 0; }
+  .fplist code { color: var(--dim); font-size: .8rem; }
+  .fpresults { display: flex; flex-direction: column; gap: .2rem; margin-top: .3rem; }
+  .fpresults button { text-align: left; background: var(--panel); color: var(--fg); border: 1px solid var(--border); font-weight: 400; font-size: .85rem; padding: .35rem .6rem; }
+  .fpresults button:hover { border-color: var(--accent); }
+  summary { cursor: pointer; color: var(--dim); font-size: .9rem; }
+  textarea { width: 100%; min-height: 90px; margin-top: .5rem; font: 13px ui-monospace, monospace; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 8px; padding: .5rem; }
+  .note { font-size: .82rem; color: var(--warn); margin-top: .6rem; }
+  .hidden { display: none; }
+  a { color: var(--accent); }
+</style>
+</head>
+<body>
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="https://tunaos.org" style="display:flex;align-items:center;gap:.55rem">
+      <img src="logo.png" alt="TunaOS"> TunaOS
+    </a>
+    <nav>
+      <a href="https://tunaos.org/download">Download</a>
+      <a href="https://iso.tunaos.org" class="active">ISO Builder</a>
+      <a href="https://tunaos.org/docs/iso-builder">Docs</a>
+      <a href="https://tunaos.org/projects">Projects</a>
+      <a href="https://github.com/tuna-os">GitHub</a>
+    </nav>
+  </div>
+</header>
+<main>
+  <h1><span class="fish">🐟</span>TunaOS ISO Builder</h1>
+  <p class="sub">Build a live ISO from any bootable container image — entirely in your browser.
+     Same engine as CI (<a href="https://github.com/tuna-os/tacklebox" target="_blank" rel="noopener">tacklebox</a>, compiled to WebAssembly). Nothing is uploaded anywhere.</p>
+
+  <div class="card">
+    <div class="row">
+      <div>
+        <label for="image">Bootable container image</label>
+        <input type="text" id="image" placeholder="tuna-os/yellowfin:kde" spellcheck="false">
+      </div>
+      <div style="flex:0 0 auto">
+        <button id="introspect">Inspect image</button>
+      </div>
+    </div>
+    <div class="facts hidden" id="facts"></div>
+    <details>
+      <summary>Advanced</summary>
+      <label for="label" style="margin-top:.6rem">Volume label</label>
+      <input type="text" id="label" value="TUNAOS" spellcheck="false">
+      <label style="margin-top:.6rem">Flatpak preload list (embedded as <code>/LiveOS/flatpak-preload.json</code> for the live env)</label>
+      <div id="fplist" class="fplist"></div>
+      <input type="text" id="fpsearch" placeholder="Search Flathub to add more apps…" spellcheck="false" autocomplete="off" style="margin-top:.4rem">
+      <div id="fpresults" class="fpresults"></div>
+      <label for="initrdurl" style="margin-top:.6rem">tbox initramfs URL (optional — without it the ISO carries the image's stock initramfs and won't complete a live boot)</label>
+      <input type="text" id="initrdurl" placeholder="https://…/initramfs-tbox.img" spellcheck="false">
+    </details>
+  </div>
+
+  <div class="card hidden" id="buildcard">
+    <div class="row">
+      <div>
+        <div id="stage" style="font-weight:600">Ready.</div>
+        <progress id="bar" max="1" value="0"></progress>
+      </div>
+      <div style="flex:0 0 auto">
+        <button id="build" disabled>Build ISO</button>
+      </div>
+    </div>
+    <div class="note hidden" id="initrdnote">⚠️ No tbox initramfs supplied — this ISO boots its kernel but stops before the live desktop. Supply an initramfs URL under Advanced for a fully bootable ISO.</div>
+    <div id="log"></div>
+  </div>
+
+  <p class="sub" style="margin-top:1rem">Share a preset:
+    <a id="sharelink" href="#" style="word-break:break-all"><code id="share">?image=…</code></a>
+    <button id="copyshare" class="secondary" style="padding:.2rem .6rem;font-size:.8rem;margin-left:.4rem">Copy</button>
+  </p>
+</main>
+<script src="wasm_exec.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
