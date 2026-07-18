@@ -94,7 +94,10 @@
       <input type="text" id="label" value="TUNAOS" spellcheck="false">
       <label style="margin-top:.6rem">Flatpak preload list (embedded as <code>/LiveOS/flatpak-preload.json</code> for the live env)</label>
       <div id="fplist" class="fplist"></div>
-      <input type="text" id="fpsearch" placeholder="Search Flathub to add more apps…" spellcheck="false" autocomplete="off" style="margin-top:.4rem">
+      <div style="display:flex;gap:.5rem;margin-top:.4rem;align-items:center">
+        <input type="text" id="fpsearch" placeholder="Search Flathub to add more apps…" spellcheck="false" autocomplete="off" style="flex:1">
+        <button type="button" id="curated" class="secondary" style="white-space:nowrap">+ Curated set</button>
+      </div>
       <div id="fpresults" class="fpresults"></div>
       <label for="initrdurl" style="margin-top:.6rem">tbox initramfs URL (optional override — by default the builder appends the tbox live modules to the image's own initramfs automatically)</label>
       <input type="text" id="initrdurl" placeholder="https://…/initramfs-tbox.img" spellcheck="false">

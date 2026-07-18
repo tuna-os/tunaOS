@@ -9,15 +9,46 @@
 
 const SHIM = "https://relay.tunaos.org";
 
+// Per-DE defaults distilled from the upstream curation (bluefin/common,
+// aurora/common, zirconium): every desktop ships the Bazaar store + a
+// browser; editors follow the desktop's family. The full upstream sets
+// are one click away (loadCuratedSet fetches the live Brewfiles).
 const FLATPAK_DEFAULTS = {
-  gnome: ["org.bootcinstaller.Installer", "org.mozilla.firefox"],
-  kde: ["org.tunaos.InstallerKde", "org.mozilla.firefox"],
-  // niri/xfce/cosmic default to the GNOME list until they grow their own
-  niri: ["org.bootcinstaller.Installer", "org.mozilla.firefox"],
-  xfce: ["org.bootcinstaller.Installer", "org.mozilla.firefox"],
-  cosmic: ["org.tunaos.InstallerCosmic", "org.mozilla.firefox"],
+  gnome: ["io.github.kolunmi.Bazaar", "org.mozilla.firefox", "org.gnome.TextEditor"],
+  kde: ["io.github.kolunmi.Bazaar", "org.mozilla.firefox", "org.kde.kate"],
+  xfce: ["io.github.kolunmi.Bazaar", "org.mozilla.firefox", "org.gnome.TextEditor"],
+  cosmic: ["io.github.kolunmi.Bazaar", "org.mozilla.firefox"],
+  niri: ["io.github.kolunmi.Bazaar", "org.mozilla.firefox"],
   none: [],
 };
+
+// Upstream curated sets, parsed live from the Brewfiles (flatpak "id"
+// lines) so they track upstream without redeploys.
+const CURATED_SETS = {
+  kde: {
+    label: "Aurora full-desktop set",
+    url: "https://raw.githubusercontent.com/get-aurora-dev/common/main/system_files/shared/usr/share/ublue-os/homebrew/full-desktop.Brewfile",
+  },
+  default: {
+    label: "Bluefin full-desktop set",
+    url: "https://raw.githubusercontent.com/projectbluefin/common/main/system_files/bluefin/usr/share/ublue-os/homebrew/full-desktop.Brewfile",
+  },
+};
+
+async function loadCuratedSet() {
+  const set = CURATED_SETS[facts?.desktop] || CURATED_SETS.default;
+  $("curated").disabled = true;
+  try {
+    const r = await fetch(set.url);
+    const ids = [...(await r.text()).matchAll(/^flatpak "([^"]+)"/gm)].map((m) => m[1]);
+    for (const id of ids) fpAdd(id);
+    log(`added ${ids.length} apps from the ${set.label}`);
+  } catch (e) {
+    log("curated set fetch failed: " + e);
+  } finally {
+    $("curated").disabled = false;
+  }
+}
 
 const $ = (id) => document.getElementById(id);
 
@@ -234,6 +265,7 @@ function updateShare() {
 
 $("introspect").onclick = inspect;
 $("build").onclick = build;
+$("curated").onclick = loadCuratedSet;
 $("copyshare").onclick = async () => {
   await navigator.clipboard.writeText($("sharelink").href);
   $("copyshare").textContent = "Copied!";
