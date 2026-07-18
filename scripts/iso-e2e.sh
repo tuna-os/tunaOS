@@ -774,19 +774,22 @@ EOF
 	# minutes at a black serial because the installed cmdline had no
 	# console=.
 	echo "==> Appending console=ttyS0 karg to installed BLS entries..."
-	"${ssh_cmd[@]}" 'sudo sh -c '"'"'
+	"${ssh_cmd[@]}" 'sudo bash -s' <<-'BLSEOF' 2>&1 | tee -a "$SERIAL_LOG" || echo "WARN: BLS karg append failed (continuing)"
 		for p in /dev/vda1 /dev/vda2 /dev/vda3; do
 			[ -b "$p" ] || continue
-			mkdir -p /mnt/tbx-bls && mount "$p" /mnt/tbx-bls 2>/dev/null || continue
+			mkdir -p /mnt/tbx-bls
+			mount "$p" /mnt/tbx-bls 2>/dev/null || continue
 			found=0
 			for f in /mnt/tbx-bls/loader/entries/*.conf /mnt/tbx-bls/boot/loader/entries/*.conf; do
 				[ -f "$f" ] || continue
-				grep -q "console=ttyS0" "$f" || sed -i "s/^options \(.*\)$/options  console=ttyS0,115200n8/" "$f"
-				echo "karg appended: $f"; found=1
+				grep -q "console=ttyS0" "$f" || sed -i "s/^options \(.*\)$/options \1 console=ttyS0,115200n8/" "$f"
+				echo "karg appended: $f"
+				found=1
 			done
 			umount /mnt/tbx-bls
 			[ "$found" = 1 ] && break
-		done'"'"'' 2>&1 | tee -a "$SERIAL_LOG" || echo "WARN: BLS karg append failed (continuing)"
+		done
+	BLSEOF
 
 	# The installed-boot gate must never match a marker emitted by the live
 	# environment. Preserve the first boot as separate evidence and give QEMU a
