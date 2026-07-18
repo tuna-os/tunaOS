@@ -185,7 +185,10 @@ iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
 # Build ONE combined dedup ISO containing every desktop in an iso_group (#455).
 # group: '' / default (flagship gnome+hwe), community (kde/cosmic/niri), nvidia.
 iso-group variant='yellowfin' group='default' repo='ghcr':
-    sudo bash ./scripts/build-iso-group.sh "{{ variant }}" "{{ group }}" "{{ repo }}"
+    # --preserve-env: the inner sudo must not strip the CI-pinned tacklebox
+    # source build vars (a plain sudo here silently fell back to the stale
+    # ghcr tacklebox image while CI believed it was testing pinned fixes).
+    sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA,TACKLEBOX_IMAGE,TACKLEBOX_CACHE bash ./scripts/build-iso-group.sh "{{ variant }}" "{{ group }}" "{{ repo }}"
 # Generate a QCOW2 disk image using bootc install to-disk (via loopback in a privileged container)
 qcow2 variant flavor='gnome' repo='local' tag='':
     #!/usr/bin/env bash

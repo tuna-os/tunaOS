@@ -111,7 +111,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y just podman jq rclone golang-go git
+          sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk
           sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
       - name: Log in to GHCR
@@ -123,7 +123,7 @@ jobs:
           # The low-disk offline-store implementation must be reproducible and
           # available before the release-container workflow finishes publishing.
           TACKLEBOX_FROM_SOURCE: '1'
-          TACKLEBOX_SHA: dd5b29b2f46aeda539ba447f6884218926788080
+          TACKLEBOX_SHA: 04f3c6251062c489f807e6ba1cf8da4450c50264
         run: |
           sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA \
             just iso-group "${{ matrix.variant }}" "${{ matrix.group }}" ghcr
