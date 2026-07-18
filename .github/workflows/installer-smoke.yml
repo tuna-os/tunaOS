@@ -107,29 +107,34 @@ jobs:
           FLAVOR: ${{ matrix.flavor }}
         run: |
           SSH="sshpass -p live ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null liveuser@127.0.0.1"
-          # A real graphical session must exist FIRST — the old check only
-          # pgrep'd for the installer process, which passed even when COSMIC
-          # sat at the greeter and Niri fell through to a TTY (run
-          # 29640376787). Require an active graphical session for liveuser
-          # (loginctl) AND a Wayland/X socket in its runtime dir.
-          session_ok=0
+          # GROUND TRUTH = the compositor process is actually running. The
+          # old check accepted "a wayland socket + any liveuser session",
+          # which a bare greetd VT with a stale socket satisfies — so Niri
+          # falling through to a TTY still PASSED (run 29645108966: gate
+          # green, screenshot showed a black console). pgrep -x the exact
+          # compositor binary is the only signal that survives that.
+          COMPS="niri xfwl4 cosmic-comp kwin_wayland gnome-shell xfwm4 sway Hyprland labwc wayfire"
+          session_ok=0; COMP=""
           for i in $(seq 1 36); do
-            SESS=$($SSH 'loginctl list-sessions --no-legend 2>/dev/null; ls /run/user/$(id -u)/wayland-* /tmp/.X11-unix/X* 2>/dev/null' 2>/dev/null || true)
-            # "active" graphical session or a live wayland/X socket
-            if echo "$SESS" | grep -qE "wayland-|/tmp/.X11-unix/X"; then
-              # and NOT parked at a greeter (greetd/sddm-greeter/cosmic-greeter)
-              GREETER=$($SSH 'pgrep -af "greeter|greetd" | grep -v "session\|niri-session\|cosmic-session" || true' 2>/dev/null || true)
-              WHO=$($SSH 'loginctl list-sessions --no-legend 2>/dev/null | grep -c liveuser' 2>/dev/null || echo 0)
-              if [ "${WHO:-0}" -ge 1 ]; then session_ok=1; break; fi
-            fi
+            COMP=$($SSH "for p in $COMPS; do pgrep -x \"\$p\" >/dev/null 2>&1 && { echo \"\$p\"; break; }; done" 2>/dev/null || true)
+            if [ -n "$COMP" ]; then session_ok=1; break; fi
             sleep 10
           done
           if [ "$session_ok" -ne 1 ]; then
-            echo "::error::${FLAVOR}: no active graphical session for liveuser (stuck at greeter or TTY?)"
+            echo "::error::${FLAVOR}: no compositor process running (stuck at greeter or TTY?)"
+            echo "--- loginctl / runtime / user manager:"
             $SSH 'loginctl list-sessions; ls /run/user/$(id -u)/ 2>/dev/null; systemctl --user status 2>/dev/null | head' 2>/dev/null || true
+            echo "--- greetd journal:"
+            $SSH 'sudo journalctl -u greetd --no-pager 2>/dev/null | tail -40' 2>/dev/null || true
+            echo "--- SELinux mode + AVC denials (compositor/greetd):"
+            $SSH 'getenforce 2>/dev/null; sudo journalctl -b --no-pager 2>/dev/null | grep -iE "avc: *denied" | grep -iE "niri|greet|xfwl|wayland|xdm" | tail -30 || true' 2>/dev/null || true
+            echo "--- DM install + labels + session exec:"
+            $SSH 'command -v greetd niri xfwl4 startxfce4 2>/dev/null; rpm -q greetd 2>/dev/null; ls -Z /usr/bin/greetd /usr/bin/niri /usr/bin/xfwl4 2>/dev/null; systemctl get-default; systemctl is-active greetd 2>/dev/null; cat /etc/greetd/config.toml 2>/dev/null' 2>/dev/null || true
+            echo "--- compositor procs:"
+            $SSH 'ps -eo pid,user,comm | grep -iE "niri|xfwl|cosmic|greet|wayland|gnome-shell|kwin|xfce" || true' 2>/dev/null || true
             exit 1
           fi
-          echo "== ${FLAVOR}: graphical session active for liveuser"
+          echo "== ${FLAVOR}: compositor running: ${COMP}"
 
           # Then the installer frontend must be running in that session.
           for i in $(seq 1 18); do
