@@ -1,0 +1,46 @@
+# E2E for the browser ISO builder: Playwright drives the real WASM
+# engine (real registry pulls through the relay). The walkthrough
+# screenshots double as the user-guide imagery — the artifact from this
+# workflow is what docs/iso-builder-guide.md embeds; refresh via the
+# workflow_dispatch and commit the artifact when the UI changes.
+name: ISO Builder E2E
+
+on:
+  pull_request:
+    paths:
+      - 'prototype/iso-builder/**'
+      - '.github/workflows/iso-builder-e2e.yml'
+  workflow_dispatch:
+  schedule:
+    # Weekly: the app talks to live infrastructure (relay, GHCR) that
+    # can drift under it.
+    - cron: '40 5 * * 1'
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-node@6044e13b5dbe4571f16533c9751a3f4e2e3e5ed4 # v6
+        with:
+          node-version: 22
+
+      - name: install deps + chromium
+        working-directory: prototype/iso-builder/e2e
+        run: |
+          npm ci || npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: run e2e (inspect flow, real network)
+        working-directory: prototype/iso-builder/e2e
+        run: npx playwright test --grep-invert @full
+
+      - name: upload walkthrough screenshots
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: iso-builder-walkthrough
+          path: docs/iso-builder/
+          if-no-files-found: warn

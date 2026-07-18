@@ -1,0 +1,11 @@
+{
+  "name": "iso-builder-e2e",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "walkthrough": "playwright test --grep @walkthrough"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
