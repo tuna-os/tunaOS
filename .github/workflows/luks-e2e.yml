@@ -151,7 +151,7 @@ jobs:
           GOVER=$(awk '/^go /{print $2; exit}' /tmp/fisherman/fisherman/go.mod)
           sudo podman run --rm -v /tmp/fisherman:/src:z -w /src/fisherman \
             "docker.io/library/golang:${GOVER}" \
-            go build -o /src/fisherman-bin ./cmd/fisherman
+            go build -buildvcs=false -o /src/fisherman-bin ./cmd/fisherman
           sudo chown "$(id -u)" /tmp/fisherman/fisherman-bin
           cp /tmp/fisherman/fisherman-bin /tmp/fisherman-bin
           echo "FISHERMAN_OVERRIDE=/tmp/fisherman-bin" >> "$GITHUB_ENV"
