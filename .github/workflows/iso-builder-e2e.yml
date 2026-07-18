@@ -99,6 +99,8 @@ jobs:
           TBOX_E2E_ISO_OUT: ${{ github.workspace }}/browser-e2e.iso
         run: |
           npx playwright test --grep @full
+          echo "--- iso search:"
+          find "${{ github.workspace }}" -maxdepth 3 -name "*.iso" -exec ls -la {} + || true
           ls -la "${{ github.workspace }}/browser-e2e.iso"
 
       - name: boot the browser-built ISO (QEMU/OVMF, tbox live path)

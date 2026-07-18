@@ -70,7 +70,9 @@ test.describe("iso builder", () => {
     await shot(page, "05-building.png");
     const dl = await download;
     const out = process.env.TBOX_E2E_ISO_OUT || path.join(SHOTS, "..", "iso-builder-e2e-output.iso");
+    console.log("saving iso to:", out, "(env override:", process.env.TBOX_E2E_ISO_OUT || "none", ")");
     await dl.saveAs(out);
+    console.log("saved:", out, fs.statSync(out).size, "bytes");
     const size = fs.statSync(out).size;
     expect(size).toBeGreaterThan(100 * 1024 * 1024);
     // ISO9660 PVD signature at sector 16.
