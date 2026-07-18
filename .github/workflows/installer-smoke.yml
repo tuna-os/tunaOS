@@ -102,21 +102,44 @@ jobs:
           sudo -E ./scripts/iso-e2e.sh "$ISO_PATH" --ssh-only --keep-vm \
             --timeout 1200 --output smoke-out
 
-      - name: Assert installer frontend is running
+      - name: Assert live desktop session + installer frontend
         env:
           FLAVOR: ${{ matrix.flavor }}
         run: |
-          SSH="ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null liveuser@127.0.0.1"
-          # Autostart can lag the ready marker on first paint — poll.
-          for i in $(seq 1 30); do
-            PROCS=$(sshpass -p live $SSH 'pgrep -af "Installer|bootc-installer|flatpak run" || true' 2>/dev/null || true)
+          SSH="sshpass -p live ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null liveuser@127.0.0.1"
+          # A real graphical session must exist FIRST — the old check only
+          # pgrep'd for the installer process, which passed even when COSMIC
+          # sat at the greeter and Niri fell through to a TTY (run
+          # 29640376787). Require an active graphical session for liveuser
+          # (loginctl) AND a Wayland/X socket in its runtime dir.
+          session_ok=0
+          for i in $(seq 1 36); do
+            SESS=$($SSH 'loginctl list-sessions --no-legend 2>/dev/null; ls /run/user/$(id -u)/wayland-* /tmp/.X11-unix/X* 2>/dev/null' 2>/dev/null || true)
+            # "active" graphical session or a live wayland/X socket
+            if echo "$SESS" | grep -qE "wayland-|/tmp/.X11-unix/X"; then
+              # and NOT parked at a greeter (greetd/sddm-greeter/cosmic-greeter)
+              GREETER=$($SSH 'pgrep -af "greeter|greetd" | grep -v "session\|niri-session\|cosmic-session" || true' 2>/dev/null || true)
+              WHO=$($SSH 'loginctl list-sessions --no-legend 2>/dev/null | grep -c liveuser' 2>/dev/null || echo 0)
+              if [ "${WHO:-0}" -ge 1 ]; then session_ok=1; break; fi
+            fi
+            sleep 10
+          done
+          if [ "$session_ok" -ne 1 ]; then
+            echo "::error::${FLAVOR}: no active graphical session for liveuser (stuck at greeter or TTY?)"
+            $SSH 'loginctl list-sessions; ls /run/user/$(id -u)/ 2>/dev/null; systemctl --user status 2>/dev/null | head' 2>/dev/null || true
+            exit 1
+          fi
+          echo "== ${FLAVOR}: graphical session active for liveuser"
+
+          # Then the installer frontend must be running in that session.
+          for i in $(seq 1 18); do
+            PROCS=$($SSH 'pgrep -af "Installer|bootc-installer|flatpak run" || true' 2>/dev/null || true)
             [ -n "$PROCS" ] && break
             sleep 10
           done
-          echo "installer processes:"
-          echo "$PROCS"
+          echo "installer processes: $PROCS"
           if [ -z "$PROCS" ]; then
-            echo "::error::no installer frontend process found in the ${FLAVOR} live session"
+            echo "::error::${FLAVOR}: no installer frontend process in the live session"
             exit 1
           fi
 
