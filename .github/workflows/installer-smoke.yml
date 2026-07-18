@@ -213,3 +213,16 @@ jobs:
             smoke-out/*.png
             smoke-out/serial.log
           if-no-files-found: warn
+
+      # The built dev ISO, so a GPU host (e.g. an iGPU tailnet laptop) can
+      # boot it under virgl and render-verify Smithay compositors (niri/xfwl4)
+      # that a GPU-less runner can't. Short retention — it is large.
+      - name: Upload dev ISO
+        if: always() && env.ISO_PATH != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dev-iso-${{ matrix.variant }}-${{ matrix.flavor }}
+          path: ${{ env.ISO_PATH }}
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: warn
