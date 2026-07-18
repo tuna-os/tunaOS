@@ -136,16 +136,24 @@ jobs:
           sudo apt-get install -y just podman jq rclone golang-go git
           sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
-      - name: Relocate user podman store to /mnt
-        # Community groups pull 5+ multi-GB flavor images into the USER
-        # store (~/.local/share/containers, root disk ~14 GB) — bonito-
-        # community ENOSPC'd there twice while the ISO scratch was already
-        # on /mnt. The big disk takes both.
+      - name: Relocate podman stores to /mnt (root + user)
+        # Community groups pull 5+ multi-GB flavor images plus build the
+        # embedded offline store — exhausting the runner's ~14 GB root
+        # disk. tacklebox runs via sudo, so the ROOT store
+        # (/var/lib/containers) is what fills; relocate BOTH stores to
+        # /mnt's 60 GB. bonito-community ENOSPC'd on /usr/share/rpm during
+        # the offline-store image copy (root store) three times.
         run: |
-          sudo mkdir -p /mnt/podman-user
+          sudo systemctl stop podman.socket 2>/dev/null || true
+          sudo mkdir -p /mnt/podman-root /mnt/podman-user
           sudo chown "$(id -u):$(id -g)" /mnt/podman-user
+          # Root store: point /etc/containers/storage.conf at /mnt.
+          sudo mkdir -p /etc/containers
+          printf '[storage]\ndriver = "overlay"\ngraphroot = "/mnt/podman-root"\n' | sudo tee /etc/containers/storage.conf >/dev/null
+          # User store (for any non-sudo podman ops).
           mkdir -p ~/.config/containers
           printf '[storage]\ndriver = "overlay"\ngraphroot = "/mnt/podman-user"\n' > ~/.config/containers/storage.conf
+          sudo df -h /mnt /
 
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
