@@ -30,24 +30,34 @@ packages:
       - name: tunaos-xfce
         baseurl: https://repo.tunaos.org/xfce/10-stream-x86_64/
         priority: 10
+    copr:
+      # greetd/greetd-selinux have no EL10 base/EPEL build — same COPR the
+      # cosmic/niri manifests pull greetd from. --nobest/--allowerasing
+      # mirrors those (avoids depsolve conflicts on EL10).
+      - repo: yselkowitz/cosmic-epel
+        packages:
+          - greetd
+          - greetd-selinux
+        options: "--nobest --allowerasing"
     packages:
       # Meta package: xfwl4 + the whole Wayland-adapted xfce stack (panel,
       # session, settings, xfdesktop, thunar, terminal, plugins) via Requires.
+      # Its Requires pull whatever theme/runtime deps xfwl4 needs — do NOT
+      # list xfwm4 explicitly (it is X11 and not built for EL10 / not in the
+      # xfce-wayland repo, which is what broke run 29646563977).
       - xfce4-wayland
-      # xfwl4 reads xfwm4's themes and refuses to start without them.
-      - xfwm4
-      # Wayland-native VT greeter (greetd-selinux for enforcing EL10).
-      - greetd
-      - greetd-selinux
       - xdg-desktop-portal-gtk
       - xdg-user-dirs-gtk
     optional:
-      # Best-effort niceties (base/EPEL, may be absent on minimal EL10).
+      # Best-effort niceties. Plugins/apps live in the xfce-wayland repo;
+      # mousepad/ristretto may come from EPEL. install_available skips any
+      # that do not resolve, so a miss never fails the build.
+      - xfce4-notifyd
+      - xfce4-power-manager
+      - xfce4-screenshooter
+      - xfce4-appfinder
       - mousepad
       - ristretto
-      - xfce4-whiskermenu-plugin
-      - thunar-volman
-      - thunar-archive-plugin
 
   apt:
     - xfce4
