@@ -130,6 +130,10 @@ jobs:
           fi
           sudo pkill -f qemu-system || true
 
+      - name: Fix evidence ownership
+        if: always()
+        run: sudo chown -R "$(id -u)" smoke-out 2>/dev/null || true
+
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
