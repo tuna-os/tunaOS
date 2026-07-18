@@ -141,7 +141,7 @@ jobs:
 
       - name: Build fisherman from source (under-test)
         run: |
-          git clone --depth 1 --branch main https://github.com/tuna-os/fisherman /tmp/fisherman
+          git clone --depth 1 --branch dev https://github.com/tuna-os/fisherman /tmp/fisherman
           ( cd /tmp/fisherman/fisherman && go build -o /tmp/fisherman-bin ./cmd/fisherman )
           echo "FISHERMAN_OVERRIDE=/tmp/fisherman-bin" >> "$GITHUB_ENV"
 
