@@ -210,6 +210,25 @@ if [[ -z "$QEMU" ]]; then
 	exit 77
 fi
 
+# GPU/display selection. niri (and other Smithay compositors like xfwl4)
+# hard-require EGL_EXT_device_drm, which QEMU's plain virtio-gpu does NOT
+# provide — they start but render nothing headless (blank screen, niri
+# #322/#2567). If a DRM render node is present (an iGPU/dGPU host, e.g. the
+# tailnet laptops) and this QEMU has virtio-vga-gl, use virgl + egl-headless
+# so those compositors get real GL and actually render. GPU-less CI runners
+# fall back to -vga virtio: fine for cosmic/kde/gnome (software fallbacks),
+# but niri/xfwl4 will correctly show blank there. Override with
+# TBOX_E2E_GPU=virgl|plain.
+_gpu_mode="${TBOX_E2E_GPU:-auto}"
+QEMU_GPU_ARGS=(-vga virtio -display none)
+if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /dev/dri/renderD128 ]]; } \
+	&& "$QEMU" -device help 2>/dev/null | grep -q "virtio-vga-gl"; then
+	QEMU_GPU_ARGS=(-device virtio-vga-gl -display "egl-headless,rendernode=/dev/dri/renderD128")
+	echo "==> GPU: virgl (virtio-vga-gl + egl-headless /dev/dri/renderD128) — Smithay compositors can render"
+else
+	echo "==> GPU: -vga virtio headless (no render node/virgl) — niri/xfwl4 will not render here"
+fi
+
 # Locate OVMF firmware. Path varies across distros (Debian/Ubuntu, Fedora,
 # RHEL, Brew). We also need a writable copy of OVMF_VARS for UEFI to persist
 # its NVRAM during boot.
@@ -412,8 +431,7 @@ boot_live_iso() {
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
 		-serial "file:${SERIAL_LOG}" \
-		-vga virtio \
-		-display none \
+		"${QEMU_GPU_ARGS[@]}" \
 		-pidfile "$QEMU_PIDFILE" \
 		-daemonize
 
@@ -866,8 +884,7 @@ EOF
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
 		-serial "file:${SERIAL_LOG}" \
-		-vga virtio \
-		-display none \
+		"${QEMU_GPU_ARGS[@]}" \
 		-pidfile "$QEMU_PIDFILE" \
 		-daemonize
 
@@ -931,8 +948,7 @@ boot_disk_image() {
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
 		-serial "file:${SERIAL_LOG}" \
-		-vga virtio \
-		-display none \
+		"${QEMU_GPU_ARGS[@]}" \
 		-pidfile "$QEMU_PIDFILE" \
 		-daemonize
 
