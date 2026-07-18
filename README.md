@@ -121,7 +121,15 @@ Browse the currently published installation media on the download page:
 
 ### Build your own ISO or VM image
 
-Use [tacklebox](https://github.com/tuna-os/tacklebox) to build ISOs:
+**In your browser — no tools, no root, nothing uploaded:**
+
+**[🛠️ tunaos.org/iso-builder](https://tunaos.org/iso-builder)** — point it
+at any TunaOS image (or your own bootc image), pick your flatpaks, and it
+authors a bootable live ISO entirely in WebAssembly using the same
+[tacklebox](https://github.com/tuna-os/tacklebox) engine CI uses.
+[User guide](https://tunaos.org/docs/iso-builder).
+
+**Or locally with [tacklebox](https://github.com/tuna-os/tacklebox):**
 
 ```bash
 # ISO (requires root)
