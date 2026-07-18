@@ -1,0 +1,87 @@
+# Live-overlay parity artifacts (tunaOS#673): run the production
+# live_customize (installer flatpak preseed, autologin, polkit, ready
+# marker) in a container of each published flavor image and publish the
+# result as ghcr.io/tuna-os/live-overlay:<variant>-<flavor>.
+#
+# The pushed image's layers ABOVE the base image are exactly the
+# customize delta — the browser ISO builder applies those extra layers
+# onto its unpacked base tree (same digests, same content), giving
+# browser-built ISOs the identical live payload CI media carry.
+name: Live Overlay Artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "Variant"
+        required: false
+        default: "yellowfin"
+        type: string
+      flavors:
+        description: "Comma-separated flavors"
+        required: false
+        default: "gnome,kde"
+        type: string
+  schedule:
+    # Weekly, after image builds.
+    - cron: "30 9 * * 3"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  generate-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - id: gen
+        env:
+          FLAVORS: ${{ inputs.flavors || 'gnome,kde' }}
+          VARIANT: ${{ inputs.variant || 'yellowfin' }}
+        run: |
+          M=$(jq -cn --arg v "$VARIANT" --arg f "$FLAVORS" \
+            '{include: ($f | split(",") | map({variant: $v, flavor: .}))}')
+          echo "matrix=$M" >> "$GITHUB_OUTPUT"
+
+  overlay:
+    name: ${{ matrix.variant }}:${{ matrix.flavor }}
+    needs: generate-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Run live customize and publish overlay
+        env:
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+        run: |
+          set -euo pipefail
+          IMG="ghcr.io/tuna-os/${VARIANT}:${FLAVOR}"
+          OUT="ghcr.io/tuna-os/live-overlay:${VARIANT}-${FLAVOR}"
+
+          for i in 1 2 3; do sudo podman pull "$IMG" && break; sleep $((i*15)); done
+
+          # Exactly tacklebox's CustomizeLive invocation (cap SYS_ADMIN +
+          # network; script dir mounted read-only, cwd inside it).
+          sudo podman rm -f tbx-overlay 2>/dev/null || true
+          sudo podman run --name tbx-overlay \
+            --cap-add sys_admin --security-opt label=disable \
+            -v "$PWD/live-iso/common/src:/run/tbox-customize/0:ro" \
+            --entrypoint /bin/bash "$IMG" \
+            -c 'set -eu; cd /run/tbox-customize/0 && bash ./customize-live.sh'
+
+          sudo podman commit \
+            --change "LABEL org.tunaos.live-overlay.base=${IMG}" \
+            tbx-overlay "$OUT"
+          sudo podman rm -f tbx-overlay
+          sudo podman push "$OUT"
+          echo "published $OUT"

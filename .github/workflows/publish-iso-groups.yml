@@ -147,7 +147,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y just podman jq rclone golang-go git
+          sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk
           sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
       - name: Log in to GHCR

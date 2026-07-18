@@ -201,6 +201,17 @@ jobs:
         run: |
           set -x
           just=$(which just)
+          # Pre-pull the OS base with retries: quay's CDN drops blobs
+          # mid-transfer often enough to kill nightly builds (rawhide:
+          # #675). podman build then finds the base in local storage.
+          BASE=$(yq -r ".variants[] | select(.id == \"${IMAGE_VARIANT}\") | .base_image // \"\"" .github/build-config.yml)
+          if [ -n "$BASE" ] && [ -z "${CHAIN_BASE_IMAGE}" ]; then
+            for i in 1 2 3 4; do
+              sudo podman pull --platform "${PLATFORM}" "$BASE" && break
+              echo "base pull attempt $i failed; retrying..."
+              sleep $((i * 15))
+            done
+          fi
           build_start=$(date +%s)
           # --preserve-env: sudo otherwise strips the cache/rechunk knobs
           # (the old layer cache never worked for exactly this reason).

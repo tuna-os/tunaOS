@@ -1,0 +1,154 @@
+# Installer GUI smoke (tunaOS#678 phase 1): per-desktop proof that the
+# live ISO autologins and the installer frontend actually starts.
+#
+# For each flavor: build the dev ISO (SSH enabled), boot it under OVMF,
+# wait for TUNAOS_LIVE_READY, then over SSH assert the installer process
+# is running (flatpak run org.tunaos.Installer* / bootc-installer) and
+# capture a desktop screenshot as reviewable evidence.
+#
+# Phase 2 (per-DE install path) extends the LUKS E2E matrix; phase 3
+# (VLM screen assertions) is blocked on a CI-reachable VLM endpoint.
+name: Installer Smoke
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "Variant"
+        required: false
+        default: "yellowfin"
+        type: string
+      flavors:
+        description: "Comma-separated flavors"
+        required: false
+        default: "kde,cosmic,niri,xfce"
+        type: string
+  schedule:
+    # Weekly, after the Tuesday image builds settle.
+    - cron: "0 9 * * 3"
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  generate-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - id: gen
+        env:
+          FLAVORS: ${{ inputs.flavors || 'kde,cosmic,niri,xfce' }}
+          VARIANT: ${{ inputs.variant || 'yellowfin' }}
+        run: |
+          M=$(jq -cn --arg v "$VARIANT" --arg f "$FLAVORS" \
+            '{include: ($f | split(",") | map({variant: $v, flavor: .}))}')
+          echo "matrix=$M" >> "$GITHUB_OUTPUT"
+          echo "$M" | jq .
+
+  smoke:
+    name: ${{ matrix.variant }}:${{ matrix.flavor }}
+    needs: generate-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          submodules: recursive
+
+      - name: free disk space
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # main as of 2026-06-09
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y just podman jq golang-go git socat imagemagick sshpass \
+            qemu-system-x86 qemu-utils ovmf \
+            systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build dev ISO
+        env:
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+        run: |
+          export TACKLEBOX_FROM_SOURCE=1
+          just iso "${VARIANT}" "${FLAVOR}" ghcr "" 1
+          ISO=$(find .build -maxdepth 3 -name "*.iso" | head -1)
+          [[ -n "$ISO" ]] || { echo "::error::dev ISO not produced"; exit 1; }
+          echo "ISO_PATH=${ISO}" >> "$GITHUB_ENV"
+
+      - name: Boot live env (SSH mode, keep VM)
+        env:
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+        run: |
+          mkdir -p smoke-out
+          sudo -E ./scripts/iso-e2e.sh "$ISO_PATH" --ssh-only --keep-vm \
+            --timeout 1200 --output smoke-out
+
+      - name: Assert installer frontend is running
+        env:
+          FLAVOR: ${{ matrix.flavor }}
+        run: |
+          SSH="ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null liveuser@127.0.0.1"
+          # Autostart can lag the ready marker on first paint — poll.
+          for i in $(seq 1 30); do
+            PROCS=$(sshpass -p live $SSH 'pgrep -af "Installer|bootc-installer|flatpak run" || true' 2>/dev/null || true)
+            [ -n "$PROCS" ] && break
+            sleep 10
+          done
+          echo "installer processes:"
+          echo "$PROCS"
+          if [ -z "$PROCS" ]; then
+            echo "::error::no installer frontend process found in the ${FLAVOR} live session"
+            exit 1
+          fi
+
+      - name: Screenshot desktop evidence
+        if: always()
+        run: |
+          # Prefer the QEMU monitor screendump; fall back to grim/scrot over
+          # SSH inside the live session (ssh-only mode has no monitor sock).
+          shot="smoke-out/installer-${{ matrix.flavor }}"
+          if [ -S smoke-out/monitor.sock ]; then
+            echo "screendump ${shot}.ppm" | socat - UNIX-CONNECT:smoke-out/monitor.sock || true
+            sleep 2
+            [ -f "${shot}.ppm" ] && convert "${shot}.ppm" "${shot}.png" || true
+          fi
+          if [ ! -f "${shot}.png" ]; then
+            SSH="sshpass -p live ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null liveuser@127.0.0.1"
+            $SSH 'XDG_RUNTIME_DIR=/run/user/$(id -u) grim /tmp/s.png 2>/dev/null || scrot /tmp/s.png 2>/dev/null || true' || true
+            $SSH 'cat /tmp/s.png' > "${shot}.png" 2>/dev/null || true
+            [ -s "${shot}.png" ] || rm -f "${shot}.png"
+          fi
+          sudo pkill -f qemu-system || true
+
+      - name: Fix evidence ownership
+        if: always()
+        run: sudo chown -R "$(id -u)" smoke-out 2>/dev/null || true
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: installer-smoke-${{ matrix.variant }}-${{ matrix.flavor }}
+          path: |
+            smoke-out/*.png
+            smoke-out/serial.log
+          if-no-files-found: warn
