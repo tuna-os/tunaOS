@@ -139,10 +139,18 @@ jobs:
           [[ -n "$ISO" ]] || { echo "::error::dev ISO not produced"; exit 1; }
           echo "ISO_PATH=${ISO}" >> "$GITHUB_ENV"
 
-      - name: Build fisherman from source (under-test)
+      - name: Clone fisherman (under-test)
+        run: git clone --depth 1 --branch dev https://github.com/tuna-os/fisherman /tmp/fisherman
+
+      - name: Set up Go for fisherman
+        uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5
+        with:
+          go-version-file: /tmp/fisherman/fisherman/go.mod
+
+      - name: Build fisherman from source
         run: |
-          git clone --depth 1 --branch dev https://github.com/tuna-os/fisherman /tmp/fisherman
-          ( cd /tmp/fisherman/fisherman && go build -o /tmp/fisherman-bin ./cmd/fisherman )
+          ( cd /tmp/fisherman/fisherman && GOTOOLCHAIN=auto go build -o /tmp/fisherman-bin ./cmd/fisherman )
+          /tmp/fisherman-bin --help >/dev/null 2>&1 || true
           echo "FISHERMAN_OVERRIDE=/tmp/fisherman-bin" >> "$GITHUB_ENV"
 
       - name: LUKS install + unlock verification
