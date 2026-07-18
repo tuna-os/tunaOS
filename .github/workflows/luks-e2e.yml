@@ -142,6 +142,9 @@ jobs:
       - name: Clone fisherman (under-test)
         run: git clone --depth 1 --branch dev https://github.com/tuna-os/fisherman /tmp/fisherman
 
+      - name: Reclaim Go dirs (earlier sudo steps root-owned them)
+        run: sudo chown -R "$(id -u):$(id -g)" /home/runner/go 2>/dev/null || true
+
       - name: Set up Go for fisherman
         uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5
         with:
