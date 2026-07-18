@@ -123,10 +123,19 @@ jobs:
       - name: Screenshot desktop evidence
         if: always()
         run: |
+          # Prefer the QEMU monitor screendump; fall back to grim/scrot over
+          # SSH inside the live session (ssh-only mode has no monitor sock).
+          shot="smoke-out/installer-${{ matrix.flavor }}"
           if [ -S smoke-out/monitor.sock ]; then
-            echo "screendump smoke-out/installer-${{ matrix.flavor }}.ppm" | socat - UNIX-CONNECT:smoke-out/monitor.sock || true
+            echo "screendump ${shot}.ppm" | socat - UNIX-CONNECT:smoke-out/monitor.sock || true
             sleep 2
-            [ -f "smoke-out/installer-${{ matrix.flavor }}.ppm" ] && convert "smoke-out/installer-${{ matrix.flavor }}.ppm" "smoke-out/installer-${{ matrix.flavor }}.png" || true
+            [ -f "${shot}.ppm" ] && convert "${shot}.ppm" "${shot}.png" || true
+          fi
+          if [ ! -f "${shot}.png" ]; then
+            SSH="sshpass -p live ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null liveuser@127.0.0.1"
+            $SSH 'XDG_RUNTIME_DIR=/run/user/$(id -u) grim /tmp/s.png 2>/dev/null || scrot /tmp/s.png 2>/dev/null || true' || true
+            $SSH 'cat /tmp/s.png' > "${shot}.png" 2>/dev/null || true
+            [ -s "${shot}.png" ] || rm -f "${shot}.png"
           fi
           sudo pkill -f qemu-system || true
 
