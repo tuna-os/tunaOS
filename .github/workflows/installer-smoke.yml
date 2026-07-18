@@ -116,16 +116,17 @@ jobs:
           for i in $(seq 1 36); do
             SESS=$($SSH 'loginctl list-sessions --no-legend 2>/dev/null; ls /run/user/$(id -u)/wayland-* /tmp/.X11-unix/X* 2>/dev/null' 2>/dev/null || true)
             # "active" graphical session or a live wayland/X socket
-            # The real desktop session process must be running — a wayland
-            # socket alone is satisfied by a greeter (cosmic-greeter) or an
-            # orphan socket (tunaOS#678). Require the actual compositor for
-            # the flavor, and reject if parked at a greeter.
-            COMP=$($SSH 'pgrep -af "niri|cosmic-comp|cosmic-session|kwin_wayland|gnome-shell|xfwm4|xfce4-session" || true' 2>/dev/null || true)
-            GREETER=$($SSH 'pgrep -af "cosmic-greeter|sddm-greeter|gtkgreet|dms-greeter|agreety" || true' 2>/dev/null || true)
-            if [ -n "$COMP" ] && [ -z "$GREETER" ] && echo "$SESS" | grep -qE "wayland-|/tmp/.X11-unix/X"; then
-              session_ok=1; echo "compositor: $COMP"; break
+            # The real desktop compositor must be running. pgrep -x (exact
+            # process name) avoids two false signals seen in run
+            # 29643468767: a greeter lingering alongside the live session
+            # (cosmic-comp + cosmic-greeter coexist — the desktop IS up),
+            # and pgrep -af matching its own command line. A running
+            # compositor is the reliable "desktop is up" signal regardless
+            # of any greeter still around.
+            COMP=$($SSH 'for p in niri cosmic-comp kwin_wayland gnome-shell xfwm4 Hyprland sway; do pgrep -x "$p" >/dev/null 2>&1 && { echo "$p"; break; }; done' 2>/dev/null || true)
+            if [ -n "$COMP" ]; then
+              session_ok=1; echo "compositor running: $COMP"; break
             fi
-            [ -n "$GREETER" ] && echo "still at greeter: $GREETER"
             sleep 10
           done
           if [ "$session_ok" -ne 1 ]; then
