@@ -4,17 +4,28 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>TunaOS ISO Builder</title>
+<link rel="icon" type="image/png" href="favicon-32.png">
 <style>
   :root {
-    --bg: #0d1117; --panel: #161b22; --border: #30363d; --fg: #e6edf3;
-    --dim: #8b949e; --accent: #2f81f7; --ok: #3fb950; --warn: #d29922; --err: #f85149;
+    --bg: #00152e; --panel: #002b5c; --border: #1a4a7a; --fg: #e6f3ff;
+    --dim: #94b8dc; --accent: #47a1ff; --ok: #3fb950; --warn: #ffb347; --err: #f85149;
+    --header-bg: #001a38;
   }
   @media (prefers-color-scheme: light) {
-    :root { --bg: #f6f8fa; --panel: #fff; --border: #d0d7de; --fg: #1f2328; --dim: #656d76; }
+    :root { --bg: #f5f9ff; --panel: #ffffff; --border: #cfe3f7; --fg: #1c1e21;
+      --dim: #5a7492; --accent: #0056b3; --header-bg: #002b5c; }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 15px/1.5 system-ui, sans-serif; background: var(--bg); color: var(--fg); }
+  body { margin: 0; font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif; background: var(--bg); color: var(--fg); }
   main { max-width: 780px; margin: 0 auto; padding: 2rem 1rem 4rem; }
+  .site-header { background: var(--header-bg); border-bottom: 1px solid var(--border); }
+  .site-header .inner { max-width: 1140px; margin: 0 auto; display: flex; align-items: center; gap: .75rem; padding: .55rem 1rem; }
+  .site-header img { width: 32px; height: 32px; border-radius: 6px; }
+  .site-header .brand { font-weight: 700; font-size: 1.05rem; color: #fff; text-decoration: none; }
+  .site-header nav { margin-left: auto; display: flex; gap: 1.1rem; flex-wrap: wrap; }
+  .site-header nav a { color: #cfe3f7; text-decoration: none; font-size: .92rem; }
+  .site-header nav a:hover, .site-header nav a.active { color: #fff; }
+  .site-header nav a.active { border-bottom: 2px solid var(--accent); padding-bottom: 2px; }
   h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
   h1 .fish { margin-right: .4rem; }
   .sub { color: var(--dim); margin: 0 0 1.5rem; }
@@ -47,6 +58,20 @@
 </style>
 </head>
 <body>
+<header class="site-header">
+  <div class="inner">
+    <a class="brand" href="https://tunaos.org" style="display:flex;align-items:center;gap:.55rem">
+      <img src="logo.png" alt="TunaOS"> TunaOS
+    </a>
+    <nav>
+      <a href="https://tunaos.org/download">Download</a>
+      <a href="https://iso.tunaos.org" class="active">ISO Builder</a>
+      <a href="https://tunaos.org/docs/iso-builder">Docs</a>
+      <a href="https://tunaos.org/projects">Projects</a>
+      <a href="https://github.com/tuna-os">GitHub</a>
+    </nav>
+  </div>
+</header>
 <main>
   <h1><span class="fish">🐟</span>TunaOS ISO Builder</h1>
   <p class="sub">Build a live ISO from any bootable container image — entirely in your browser.
