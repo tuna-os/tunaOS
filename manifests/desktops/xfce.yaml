@@ -18,18 +18,56 @@ packages:
       - xfce4-wayland
 
   el10:
-    groups:
-      - xfce-desktop
+    # Wayland-only XFCE — the hanthor/xfce-wayland port (xfwl4 Rust/Smithay
+    # compositor + Wayland-adapted panel/session/settings/xfdesktop/thunar).
+    # No X11 (xfce-desktop group + gdm dropped). Greeter is greetd on a VT,
+    # Wayland-native, so the whole session is X11-free.
+    #
+    # The xfce-wayland RPMs live at their own R2 path, not the main
+    # $releasever tree — add it explicitly.
+    display_manager: greetd
+    repos:
+      - name: tunaos-xfce
+        baseurl: https://repo.tunaos.org/xfce/10-stream-x86_64/
+        priority: 10
+    copr:
+      # greetd/greetd-selinux have no EL10 base/EPEL build — same COPR the
+      # cosmic/niri manifests pull greetd from. --nobest/--allowerasing
+      # mirrors those (avoids depsolve conflicts on EL10).
+      - repo: yselkowitz/cosmic-epel
+        packages:
+          - greetd
+          - greetd-selinux
+        options: "--nobest --allowerasing"
     packages:
-      - gdm
+      # Install the core xfwl4 stack EXPLICITLY rather than the xfce4-wayland
+      # meta: the meta pulls xfce4-pulseaudio-plugin, which Requires the real
+      # 'pulseaudio' and conflicts with the base image's pipewire-pulseaudio
+      # (depsolve failure, run 29651035650). Listing the pieces keeps the
+      # pipewire audio stack intact. Do NOT list xfwm4 (X11, not built for
+      # EL10). Volume control comes from the panel's pipewire/pavucontrol path.
+      - xfwl4
+      - xfce4-session
+      - xfce4-panel
+      - xfce4-settings
+      - xfdesktop
+      - thunar
+      - tumbler
+      - xfce4-terminal
+      - xfce4-appfinder
+      - xfce4-notifyd
+      - xfce4-power-manager
+      - xfce4-screenshooter
       - xdg-desktop-portal-gtk
       - xdg-user-dirs-gtk
-      - thunar
+    optional:
+      # Best-effort niceties. install_available skips any that do not resolve,
+      # so a miss never fails the build. NOT xfce4-pulseaudio-plugin — it
+      # Requires real pulseaudio (conflicts with pipewire-pulseaudio).
+      - xfce4-whiskermenu-plugin
+      - xfce4-clipman-plugin
       - mousepad
       - ristretto
-      - xfce4-terminal
-    optional:
-      - xfce4-wayland
 
   apt:
     - xfce4
