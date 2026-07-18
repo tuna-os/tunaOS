@@ -826,8 +826,12 @@ EOF
 	# target is insufficient evidence: require the image's display-manager and
 	# desktop-session contract before declaring the installed system healthy.
 	local require_desktop_contract=1
-	echo "==> Waiting for installed system to boot (up to 5 min)..."
-	for _ in $(seq 1 60); do
+	# Honor --timeout: KDE first boot plus a possible boot-assessment
+	# retry cycle exceeds a hard 5 minutes (run 29626667071: system
+	# reached login:, then rebooted itself before graphical came up —
+	# the 300s window closed mid-second-cycle).
+	echo "==> Waiting for installed system to boot (up to ${TIMEOUT}s)..."
+	for _ in $(seq 1 $((TIMEOUT / 5))); do
 		local installed_ready=0
 		if [[ "$require_desktop_contract" -eq 1 ]]; then
 			grep -qE "TUNAOS_DESKTOP_CONTRACT_(OK|FAIL)" "${SERIAL_LOG}" 2>/dev/null && installed_ready=1
