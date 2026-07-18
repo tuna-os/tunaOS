@@ -145,7 +145,7 @@ jobs:
           # The low-disk offline-store implementation must be reproducible and
           # available before the release-container workflow finishes publishing.
           TACKLEBOX_FROM_SOURCE: '1'
-          TACKLEBOX_SHA: dd5b29b2f46aeda539ba447f6884218926788080
+          TACKLEBOX_SHA: a105d6d3e64eef6736cf0d24e083ae51e2f6ac92
         run: |
           sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA \
             just iso-group "${{ matrix.variant }}" "${{ matrix.group }}" ghcr
