@@ -35,4 +35,4 @@ out.ociarchive
 tuna.txt
 ubuntu.txt
 .pi-subagents/
-prototype/iso-builder/app/initramfs-*.img
+prototype/iso-builder/app/**/initramfs-*.img

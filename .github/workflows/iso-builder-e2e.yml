@@ -87,8 +87,8 @@ jobs:
       - name: build tbox initramfs from the image
         run: |
           git clone --depth 1 https://github.com/tuna-os/tacklebox /tmp/tacklebox
-          sudo podman run --rm             -v /tmp/tacklebox/src/dracut/90tbox-live:/usr/lib/dracut/modules.d/90tbox-live:ro             -v /tmp/tacklebox/src/dracut/95tbox-root:/usr/lib/dracut/modules.d/95tbox-root:ro             -v "$PWD/prototype/iso-builder/app:/out"             ghcr.io/tuna-os/sailfin:base sh -c             'kver=$(ls /usr/lib/modules | head -1); dracut --force --no-hostonly --reproducible --add "tbox-live tbox-root" --kver "$kver" /out/initramfs-sailfin-tbox.img'
-          sudo chown "$(id -u)" prototype/iso-builder/app/initramfs-sailfin-tbox.img
+          sudo podman run --rm             -v /tmp/tacklebox/src/dracut/90tbox-live:/usr/lib/dracut/modules.d/90tbox-live:ro             -v /tmp/tacklebox/src/dracut/95tbox-root:/usr/lib/dracut/modules.d/95tbox-root:ro             -v "$PWD/prototype/iso-builder/app/public:/out"             ghcr.io/tuna-os/sailfin:base sh -c             'kver=$(ls /usr/lib/modules | head -1); dracut --force --no-hostonly --reproducible --add "tbox-live tbox-root" --kver "$kver" /out/initramfs-sailfin-tbox.img'
+          sudo chown "$(id -u)" prototype/iso-builder/app/public/initramfs-sailfin-tbox.img
 
       - name: full in-browser build
         working-directory: prototype/iso-builder/e2e

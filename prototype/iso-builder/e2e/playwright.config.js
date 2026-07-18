@@ -18,7 +18,7 @@ module.exports = defineConfig({
     launchOptions: { args: ["--disable-dev-shm-usage"] },
   },
   webServer: {
-    command: "python3 -m http.server 8931 --directory ../app",
+    command: "python3 -m http.server 8931 --directory ../app/public",
     url: "http://127.0.0.1:8931",
     reuseExistingServer: true,
   },
