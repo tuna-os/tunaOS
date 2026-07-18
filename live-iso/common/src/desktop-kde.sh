@@ -15,15 +15,20 @@ set -euo pipefail
 # (an installer mid-run can't recover from S3), and mask suspend
 # targets so KDE's own power-management prefs can't override.
 
+# openSUSE names the session plasmawayland.desktop; everyone else plasma.
+_kde_session="plasma"
+if [[ -f /usr/share/wayland-sessions/plasmawayland.desktop && ! -f /usr/share/wayland-sessions/plasma.desktop ]]; then
+	_kde_session="plasmawayland"
+fi
 mkdir -p /etc/sddm.conf.d
-tee /etc/sddm.conf.d/live-autologin.conf <<'SDDMEOF'
+tee /etc/sddm.conf.d/live-autologin.conf <<SDDMEOF
 [General]
 DisplayServer=wayland
 CompositorCommand=kwin_wayland --no-lockscreen
 
 [Autologin]
 User=liveuser
-Session=plasma
+Session=${_kde_session}
 Relogin=false
 SDDMEOF
 
