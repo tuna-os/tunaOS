@@ -767,6 +767,27 @@ EOF
 		fi
 	fi
 
+	# E2E visibility: the installed system must talk on ttyS0 — fisherman
+	# has no kargs surface, so append the console karg to the installed
+	# BLS entries via the still-running live env (they sit on the
+	# unencrypted ESP/boot partition). Run 29628345330 spent 20 silent
+	# minutes at a black serial because the installed cmdline had no
+	# console=.
+	echo "==> Appending console=ttyS0 karg to installed BLS entries..."
+	"${ssh_cmd[@]}" 'sudo sh -c '"'"'
+		for p in /dev/vda1 /dev/vda2 /dev/vda3; do
+			[ -b "$p" ] || continue
+			mkdir -p /mnt/tbx-bls && mount "$p" /mnt/tbx-bls 2>/dev/null || continue
+			found=0
+			for f in /mnt/tbx-bls/loader/entries/*.conf /mnt/tbx-bls/boot/loader/entries/*.conf; do
+				[ -f "$f" ] || continue
+				grep -q "console=ttyS0" "$f" || sed -i "s/^options \(.*\)$/options  console=ttyS0,115200n8/" "$f"
+				echo "karg appended: $f"; found=1
+			done
+			umount /mnt/tbx-bls
+			[ "$found" = 1 ] && break
+		done'"'"'' 2>&1 | tee -a "$SERIAL_LOG" || echo "WARN: BLS karg append failed (continuing)"
+
 	# The installed-boot gate must never match a marker emitted by the live
 	# environment. Preserve the first boot as separate evidence and give QEMU a
 	# fresh serial log for the disk boot.
@@ -858,6 +879,10 @@ EOF
 	done
 
 	echo "ERROR: installed system did not boot within timeout"
+	if [[ -S "$MONITOR_SOCK" ]]; then
+		echo "screendump ${OUTPUT_DIR}/installed-timeout.ppm" | socat - "UNIX-CONNECT:${MONITOR_SOCK}" >/dev/null 2>&1 || true
+		sleep 1
+	fi
 	return 4
 }
 
