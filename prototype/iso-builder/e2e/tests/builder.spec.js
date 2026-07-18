@@ -62,7 +62,7 @@ test.describe("iso builder", () => {
   test("full build streams a bootable ISO @full", async ({ page }) => {
     test.skip(!process.env.TBOX_E2E_FULL, "set TBOX_E2E_FULL=1 for the full build");
     const initrd = process.env.TBOX_E2E_INITRD_URL || "";
-    await page.goto(`/?image=${encodeURIComponent(IMAGE)}${initrd ? `&initrd=${encodeURIComponent(initrd)}` : ""}`);
+    await page.goto(`/?image=${encodeURIComponent(IMAGE)}&autodl=1${initrd ? `&initrd=${encodeURIComponent(initrd)}` : ""}`);
     await expect(page.locator("#build")).toBeEnabled({ timeout: 600_000 });
 
     const download = page.waitForEvent("download", { timeout: 600_000 });

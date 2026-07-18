@@ -108,9 +108,15 @@ async function build() {
     }
     const name = `tunaos-${($("image").value.split("/").pop() || "image").replace(/[:]/g, "-")}.iso`;
     let sink, chunks = [];
-    if (window.showSaveFilePicker) {
-      const h = await showSaveFilePicker({ suggestedName: name, types: [{ description: "ISO image", accept: { "application/x-iso9660-image": [".iso"] } }] });
-      sink = await (await h.createWritable());
+    const autodl = new URLSearchParams(location.search).get("autodl");
+    if (window.showSaveFilePicker && !autodl) {
+      try {
+        const h = await showSaveFilePicker({ suggestedName: name, types: [{ description: "ISO image", accept: { "application/x-iso9660-image": [".iso"] } }] });
+        sink = await h.createWritable();
+      } catch (e) {
+        if (e.name === "AbortError") { log("save dialog dismissed — using download fallback"); }
+        else throw e;
+      }
     }
     const t0 = performance.now();
     const flatpaks = $("flatpaks").value.trim().split(/\s+/).filter(Boolean);
