@@ -74,7 +74,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y just podman jq golang-go git socat imagemagick sshpass \
+          sudo apt-get install -y just podman jq golang-go git socat imagemagick sshpass tesseract-ocr \
             qemu-system-x86 qemu-utils ovmf \
             systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk
           sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
@@ -166,6 +166,33 @@ jobs:
             exit 1
           fi
 
+      # Capturing frames proves nothing on its own, so this also asserts the
+      # installer RENDERS (non-blank), ADVANCES (frames differ), and WHICH
+      # spec'd screens it reached (OCR vs tests/installer-screens.yaml) — the
+      # signal that catches feature drift between the five independent
+      # frontend forks. Must run before the screenshot step kills QEMU.
+      - name: Installer walkthrough + verification
+        env:
+          FLAVOR: ${{ matrix.flavor }}
+        run: |
+          # Smithay compositors (niri, xfwl4) cannot render without virgl, so a
+          # GPU-less runner shows blank frames legitimately — enforce only where
+          # rendering is possible; elsewhere still record screens for the matrix.
+          STRICT=""
+          case "${FLAVOR}" in kde|cosmic|gnome) STRICT="--strict" ;; esac
+          if sudo test -S smoke-out/monitor.sock; then
+            set +e
+            sudo python3 scripts/installer-walkthrough.py \
+              smoke-out/monitor.sock smoke-out 8 "${FLAVOR}" $STRICT \
+              2>&1 | tee "smoke-out/walkthrough-${FLAVOR}.tap"
+            rc=${PIPESTATUS[0]}
+            set -e
+            sudo chown -R "$(id -u)" smoke-out 2>/dev/null || true
+            exit "$rc"
+          else
+            echo "::warning::no QEMU monitor socket — walkthrough skipped"
+          fi
+
       - name: Screenshot desktop evidence
         if: always()
         run: |
@@ -200,5 +227,7 @@ jobs:
           name: installer-smoke-${{ matrix.variant }}-${{ matrix.flavor }}
           path: |
             smoke-out/*.png
+            smoke-out/*.json
+            smoke-out/*.tap
             smoke-out/serial.log
           if-no-files-found: warn
