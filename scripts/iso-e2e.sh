@@ -894,6 +894,31 @@ EOF
 		fi
 	fi
 
+	# E2E-only kargs on the installed system's BLS entries (the live env can
+	# still mount the unencrypted ESP/boot). console=ttyS0 puts kernel output on
+	# the serial the gate reads; plymouth.enable=0 makes the initramfs
+	# cryptsetup PASSWORD PROMPT appear as serial text ("Please enter
+	# passphrase for disk ...") instead of a graphical plymouth prompt — without
+	# it luks-first-boot.py never sees the prompt (run 29670982740). Real users
+	# still get the plymouth prompt on a display; this is test media only.
+	echo "==> Appending console=ttyS0 + plymouth.enable=0 to installed BLS entries..."
+	"${ssh_cmd[@]}" 'sudo bash -s' <<-'BLSEOF' 2>&1 | tee -a "$SERIAL_LOG" || echo "WARN: BLS karg append failed (continuing)"
+		for p in /dev/vda1 /dev/vda2 /dev/vda3; do
+			[ -b "$p" ] || continue
+			mkdir -p /mnt/tbx-bls
+			mount "$p" /mnt/tbx-bls 2>/dev/null || continue
+			found=0
+			for f in /mnt/tbx-bls/loader/entries/*.conf /mnt/tbx-bls/boot/loader/entries/*.conf; do
+				[ -f "$f" ] || continue
+				grep -q "console=ttyS0" "$f" || sed -i "s/^options \(.*\)$/options \1 console=ttyS0,115200n8 rd.plymouth=0 plymouth.enable=0/" "$f"
+				echo "karg appended: $f"
+				found=1
+			done
+			umount /mnt/tbx-bls
+			[ "$found" = 1 ] && break
+		done
+	BLSEOF
+
 	echo "==> fisherman install complete. Shutting down..."
 	"${ssh_cmd[@]}" "sudo systemctl poweroff" 2>/dev/null || true
 	sleep 10
