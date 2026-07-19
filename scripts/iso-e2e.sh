@@ -928,9 +928,11 @@ EOF
 		echo "==> LUKS passphrase gate: booting installed disk, injecting passphrase, expecting login..."
 		local FB_SERIAL="${OUTPUT_DIR}/installed-serial.sock"
 		rm -f "$FB_SERIAL"
-		# shellcheck disable=SC2086
+		# No TPM here: the passphrase gate doesn't need one, and the
+		# install-phase swtpm has already exited (its socket is gone). TPM
+		# auto-unlock is the separate post-install test.
 		"$QEMU" -name "tunaos-iso-e2e-installed" -machine pc -cpu "$CPU_ARG" \
-			-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" ${TPM_ARGS} \
+			-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
 			-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
 			-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 			-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
