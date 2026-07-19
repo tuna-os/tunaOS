@@ -38,7 +38,7 @@ downloads:
   # These pins drive both the toolchain builds and the version tags consumers
   # request. Renovate bumps them; the toolchain workflow rebuilds on bump.
   # renovate: datasource=github-releases depName=bootc-dev/bootc
-  bootc: "v1.16.3"
+  bootc: "v1.16.4"
   # renovate: datasource=github-releases depName=coreos/bootupd
   bootupd: "v0.2.35"
   # ostree from source only for bases whose packaged ostree is older than
