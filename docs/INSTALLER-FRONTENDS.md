@@ -68,13 +68,37 @@ Filled from each run's `walkthrough-<flavor>.json`.
 
 | Frontend | Launches | Renders | Advances | welcome | disk | encryption | summary | install | done |
 |----------|----------|---------|----------|---------|------|------------|---------|---------|------|
-| KDE | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
+| KDE | ✅ | ✅ 9/9 | ⚠️ space only | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
 | COSMIC | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
 | Niri | _pending_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ |
 | XFCE | _pending_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ |
 | GNOME | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
 
 _GPU_ = needs a virgl-capable host to evaluate; blank on GPU-less CI is expected.
+
+### KDE — run 29681255102 (yellowfin, strict)
+
+First frontend measured end to end. It launches, and renders on all 9 frames.
+
+**⚠️ Advances by space only.** Enter does nothing on any page: no button in
+`tuna-installer-kde` is a Qt *default* button and nothing handles
+`Qt::Key_Return`, so a focused `QPushButton` responds to space alone. That is a
+real defect, not a harness artifact — a keyboard-only user cannot leave the
+welcome screen. Filed as tuna-os/tuna-installer-kde#4. The walkthrough now
+escalates `ret` → `spc` and reports which key worked, so this stays visible
+instead of being papered over.
+
+**Reached `welcome` and `disk` only.** The run stalled on Select Target Disk:
+focus starts in the disk list, and a fixed two tabs never reached *Continue*, so
+space just re-toggled the list. The driver now widens its focus search each time
+a step produces no change. Until a run gets past that page, `encryption`,
+`summary`, `install` and `done` are **unmeasured, not absent** — do not read the
+❌ as "the frontend lacks these screens".
+
+An earlier run (29675493401) reported `disk`, `encryption` and `install` as
+reached while every frame was the welcome screen; the welcome copy mentions all
+three. Screen matching is now per visual state, so prose can no longer
+manufacture a row here.
 
 ## Design review
 

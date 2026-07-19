@@ -196,23 +196,38 @@ if p:
 # step produces no visual change — and report which key worked, because
 # "Return does not activate the primary action" is itself a UX finding worth
 # seeing rather than silently working around.
+# The tab count is escalated too. A fixed two tabs cannot work across pages
+# with different widget counts: run 29681255102 advanced welcome -> disk with
+# 'spc', then stalled for seven steps on Select Target Disk, where focus starts
+# in the disk list and Continue is several widgets away — space just re-toggled
+# the list selection. Each step with no visual change adds a tab, so focus
+# sweeps outward until it lands on the primary action, and resets once a page
+# advances.
 activation = "ret"
 switched = False
+tabs = 2
+MAX_TABS = 8
 for i in range(1, steps + 1):
-    send_keys("tab", "tab", activation)
+    send_keys(*(["tab"] * tabs), activation)
     time.sleep(3)
     p = shot(i, f"after advance {i}")
     if p:
         prev = frames[-1] if frames else None
         frames.append(p)
-        if (prev and not switched
-                and changed_pixels(prev, p) <= DIFF_PIXELS
-                and activation == "ret"):
-            activation = "spc"
-            switched = True
-            print("  # 'ret' did not advance the installer — "
-                  "escalating to 'spc' (space) for the remaining steps",
-                  flush=True)
+        moved = bool(prev) and changed_pixels(prev, p) > DIFF_PIXELS
+        if moved:
+            tabs = 2          # new page, start over from the usual position
+        elif prev:
+            if not switched and activation == "ret":
+                activation = "spc"
+                switched = True
+                print("  # 'ret' did not advance the installer — "
+                      "escalating to 'spc' (space) for the remaining steps",
+                      flush=True)
+            elif tabs < MAX_TABS:
+                tabs += 1
+                print(f"  # no change — widening focus search to {tabs} tabs",
+                      flush=True)
 
 print(f"\n# walkthrough verification ({flavor}) — {len(frames)} frames, "
       f"strict={strict}\n", flush=True)
