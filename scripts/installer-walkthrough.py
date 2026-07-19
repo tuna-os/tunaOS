@@ -61,11 +61,20 @@ def tap(ok, desc, diagnostic="", enforced=True):
     """Record a TAP assertion. Non-enforced ones report but never fail."""
     global _fails
     print(f"{'ok' if ok else 'not ok'} - {desc}", flush=True)
-    if diagnostic:
+    # Only explain failures. Printing the diagnostic unconditionally produced
+    # self-contradicting output like "ok - reached 'welcome' screen" followed
+    # by "# not found in any frame's text", which made a passing run read as a
+    # failing one.
+    if diagnostic and not ok:
         print(f"  # {diagnostic}", flush=True)
     _tap.append({"ok": bool(ok), "desc": desc, "enforced": enforced})
     if not ok and enforced:
         _fails += 1
+
+
+def note(msg):
+    """Print a neutral TAP comment that is true regardless of pass/fail."""
+    print(f"  # {msg}", flush=True)
 
 
 def hmp(cmd):
@@ -177,13 +186,33 @@ if p:
     frames.append(p)
 
 # Walk forward: nudge focus to the primary action and advance, capturing the
-# resulting screen. Tab reaches Next/Continue in GTK/Qt layouts; Return fires it.
+# resulting screen. Tab reaches Next/Continue in GTK/Qt layouts.
+#
+# Activation is escalated rather than assumed. Run 29675493401 sent
+# "tab tab ret" eight times against the KDE frontend and never left the
+# welcome screen: the captured frames show a focus ring appearing on "Get
+# Started", so Tab was landing but Return was not firing the button. Space
+# activates a focused button in both GTK and Qt, so fall back to it when a
+# step produces no visual change — and report which key worked, because
+# "Return does not activate the primary action" is itself a UX finding worth
+# seeing rather than silently working around.
+activation = "ret"
+switched = False
 for i in range(1, steps + 1):
-    send_keys("tab", "tab", "ret")
+    send_keys("tab", "tab", activation)
     time.sleep(3)
     p = shot(i, f"after advance {i}")
     if p:
+        prev = frames[-1] if frames else None
         frames.append(p)
+        if (prev and not switched
+                and changed_pixels(prev, p) <= DIFF_PIXELS
+                and activation == "ret"):
+            activation = "spc"
+            switched = True
+            print("  # 'ret' did not advance the installer — "
+                  "escalating to 'spc' (space) for the remaining steps",
+                  flush=True)
 
 print(f"\n# walkthrough verification ({flavor}) — {len(frames)} frames, "
       f"strict={strict}\n", flush=True)
@@ -202,6 +231,7 @@ tap(rendered > 0, f"{flavor}: installer renders actual content",
     f"{rendered}/{len(frames)} frames above stddev {BLANK_STDDEV} "
     f"(blank everywhere usually means no GL — niri/xfwl4 need virgl)",
     enforced=strict)
+note(f"{rendered}/{len(frames)} frames above stddev {BLANK_STDDEV}")
 
 # ── 2. ADVANCES ──────────────────────────────────────────────────────────
 advanced = sum(1 for a, b in zip(frames, frames[1:])
@@ -210,26 +240,71 @@ tap(advanced > 0, f"{flavor}: installer advances between screens",
     f"{advanced}/{max(len(frames) - 1, 0)} transitions changed >{DIFF_PIXELS}px "
     f"(0 means it never left the first screen — stuck, modal, or crashed)",
     enforced=strict)
+note(f"{advanced}/{max(len(frames) - 1, 0)} transitions changed >{DIFF_PIXELS}px"
+     + (f"; primary action activated with '{activation}'" if advanced else ""))
 
 # ── 3. SCREENS (feature parity) ──────────────────────────────────────────
+# OCR is matched PER FRAME, and a frame only counts for a screen if the
+# installer actually moved there.
+#
+# The previous version concatenated every frame's text and asked whether a
+# keyword appeared anywhere. That reports screens the installer never showed:
+# TunaOS's welcome page reads "You'll select a target disk, configure
+# filesystem and encryption options, and the installer will do the rest",
+# which alone matched the 'disk', 'encryption' AND 'install' keyword lists. Run
+# 29675493401 duly recorded three screens as reached while every frame was the
+# welcome screen — a parity matrix full of screens nobody has seen.
+#
+# Prose describing a screen is indistinguishable from that screen's heading in
+# raw OCR, so the fix is positional rather than lexical: group the frames into
+# distinct visual states, and refuse to credit any screen beyond the first to
+# state 0. If the installer never advanced there is exactly one state, and the
+# only screen that can honestly be claimed is the one it opened on.
 spec = load_spec(spec_path)
-text = ""
 have_ocr = shutil.which("tesseract") is not None
+
+# Group frames into distinct visual states (consecutive near-identical frames
+# are the same screen). state_of[i] is the state index of frame i.
+state_of, state = [], 0
+for i, f in enumerate(frames):
+    if i > 0 and changed_pixels(frames[i - 1], f) > DIFF_PIXELS:
+        state += 1
+    state_of.append(state)
+n_states = (state_of[-1] + 1) if state_of else 0
+
+frame_text = []
 if have_ocr:
-    for f in frames:
-        text += (ocr(f) or "") + "\n"
+    frame_text = [(ocr(f) or "") for f in frames]
 else:
-    print("  # tesseract not installed — screen detection skipped", flush=True)
+    note("tesseract not installed — screen detection skipped")
+
+note(f"{n_states} distinct visual state(s) across {len(frames)} frames")
+if n_states <= 1 and have_ocr:
+    note("installer never advanced, so only its opening screen can be "
+         "credited — later screens are reported unverified, not absent")
 
 reached = {}
-for sc in spec:
-    hit = any(k.lower() in text for k in sc.get("keywords", [])) if have_ocr else None
+for idx, sc in enumerate(spec):
+    if not have_ocr:
+        reached[sc["id"]] = None
+        continue
+    kws = [k.lower() for k in sc.get("keywords", [])]
+    hit_states = {state_of[i] for i, t in enumerate(frame_text)
+                  if any(k in t for k in kws)}
+    # Screens after the first must be seen on a state the installer actually
+    # advanced to; a match confined to state 0 is prose on the opening screen.
+    if idx > 0:
+        hit_states.discard(0)
+    hit = bool(hit_states)
     reached[sc["id"]] = hit
-    if have_ocr:
-        tap(bool(hit),
-            f"{flavor}: reached '{sc['id']}' screen ({sc.get('title', '')})",
-            "not found in any frame's text",
-            enforced=strict and sc.get("required", False))
+    where = (f"seen on visual state(s) {sorted(hit_states)}" if hit
+             else "not found on any state the installer advanced to")
+    tap(hit,
+        f"{flavor}: reached '{sc['id']}' screen ({sc.get('title', '')})",
+        where,
+        enforced=strict and sc.get("required", False))
+    if hit:
+        note(where)
 
 # ── Result for the parity matrix ─────────────────────────────────────────
 summary = {
@@ -237,6 +312,10 @@ summary = {
     "frames": len(frames),
     "rendered_frames": rendered,
     "advanced_transitions": advanced,
+    # How many genuinely different screens were seen. 1 means the installer
+    # never advanced, which caps how much the "screens" map below can claim.
+    "visual_states": n_states,
+    "activation_key": activation,
     "ocr": have_ocr,
     "screens": reached,
     "strict": strict,
