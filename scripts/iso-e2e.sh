@@ -917,6 +917,41 @@ EOF
 	mv -f "$SERIAL_LOG" "$LIVE_SERIAL_LOG"
 	: >"$SERIAL_LOG"
 
+	# ── LUKS passphrase gate ─────────────────────────────────────────────
+	# The gate is: the encrypted root unlocks with the install PASSPHRASE and
+	# reaches userspace. That is fisherman's job and works on every variant.
+	# TPM2 auto-unlock is a SEPARATE, post-install, per-variant test (it seals
+	# to PCRs that only exist on the installed system — see docs/LUKS-TPM.md),
+	# so it is NOT required here. Boot with a serial socket and inject the
+	# passphrase at the cryptsetup prompt; reaching login proves the unlock.
+	if [[ "$LUKS" -eq 1 ]]; then
+		echo "==> LUKS passphrase gate: booting installed disk, injecting passphrase, expecting login..."
+		local FB_SERIAL="${OUTPUT_DIR}/installed-serial.sock"
+		rm -f "$FB_SERIAL"
+		# shellcheck disable=SC2086
+		"$QEMU" -name "tunaos-iso-e2e-installed" -machine pc -cpu "$CPU_ARG" \
+			-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" ${TPM_ARGS} \
+			-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+			-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
+			-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
+			-device virtio-blk-pci,drive=disk \
+			-netdev "user,id=net0" -device virtio-net-pci,netdev=net0 \
+			-monitor "unix:${MONITOR_SOCK},server,nowait" \
+			-serial "unix:${FB_SERIAL},server,nowait" \
+			"${QEMU_GPU_ARGS[@]}" -pidfile "$QEMU_PIDFILE" -daemonize
+		python3 "$(dirname "${BASH_SOURCE[0]}")/luks-first-boot.py" \
+			"$FB_SERIAL" "$MONITOR_SOCK" "$E2E_LUKS_PASS" 900 \
+			2>&1 | tee "${OUTPUT_DIR}/installed-serial.log" || {
+			echo "ERROR: encrypted disk did not unlock with the passphrase / reach login"
+			[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
+			return 4
+		}
+		[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
+		record_luks_evidence "TUNAOS_LUKS_E2E_PASS encrypted=1 passphrase_unlock=1 installed_boot=1"
+		echo "==> LUKS passphrase gate PASSED for ${VARIANT:-}:${FLAVOR:-}"
+		return 0
+	fi
+
 	echo "==> Booting installed system..."
 	# Boot from the install disk (remove cdrom)
 	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
