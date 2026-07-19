@@ -121,13 +121,13 @@ jobs:
             podman
 
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
           submodules: recursive
         if: ${{ !startsWith(inputs.flavor, 'base') }}
 
       - name: Checkout (no submodules)
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         if: ${{ startsWith(inputs.flavor, 'base') }}
 
       - name: Setup runner
@@ -728,7 +728,7 @@ jobs:
       DEFAULT_TAG: ${{ inputs.default-tag }}
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
 
       # Reclaim ~25 GB of preinstalled toolchains from the main disk. The qcow2
       # is written to the workspace (main disk), not the container-storage
