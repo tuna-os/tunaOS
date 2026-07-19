@@ -37,7 +37,14 @@ screens:
   - id: install
     title: Install progress
     required: false
-    keywords: ["installing", "progress", "copying", "deploying", "%"]
+    # NOT "%" — a single character matches OCR noise from anywhere on screen
+    # (taskbar, clock, window chrome). Run 29681255102 credited 'install' to
+    # the Select Target Disk screen because of it, which is exactly the kind of
+    # phantom row the parity matrix must never publish.
+    # NOT bare "install" either: the disk page reads "where TunaOS will be
+    # installed", and the welcome page describes the whole flow.
+    keywords: ["installing tunaos", "installation progress", "copying files",
+               "deploying", "please wait"]
 
   - id: done
     title: Finished / reboot
