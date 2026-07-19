@@ -68,13 +68,30 @@ Filled from each run's `walkthrough-<flavor>.json`.
 
 | Frontend | Launches | Renders | Advances | welcome | disk | encryption | summary | install | done |
 |----------|----------|---------|----------|---------|------|------------|---------|---------|------|
-| KDE | ✅ | ✅ 9/9 | ⚠️ space only | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| KDE | ✅ | ✅ 9/9 | ⚠️ space only | ✅ | ✅ | ❌ none | ✅ | ⬜ | ⬜ |
 | COSMIC | ✅ proc | ⚠️ desktop only | ❌ 0/8 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Niri | _pending_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ |
 | XFCE | _pending_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ |
 | GNOME | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
 
 _GPU_ = needs a virgl-capable host to evaluate; blank on GPU-less CI is expected.
+
+### KDE — run 29684495194 (yellowfin, strict) — PASSES
+
+With the widened focus search the run reaches **6/8 transitions, 7 visual
+states**, and satisfies every required screen: welcome, disk and summary.
+Still space-only until tuna-os/tuna-installer-kde#5 lands.
+
+**KDE has no encryption screen.** Its pages are welcome, diskselection,
+confirm, progress, done — there is no LUKS step, even though fisherman
+supports encryption. An earlier run reported `encryption: reached`, which was
+the matcher hitting the string "Encryption: None" in the summary page's field
+list. The keywords now match headings rather than bare nouns, so this shows as
+the genuine feature gap it is. This is precisely the drift the matrix exists
+to expose, and the matcher was concealing it.
+
+`install` and `done` are unmeasured: the walkthrough stops before starting a
+real install, by design.
 
 ### COSMIC — run 29684495194 (yellowfin, strict)
 
