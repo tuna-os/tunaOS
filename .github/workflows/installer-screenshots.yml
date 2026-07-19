@@ -134,7 +134,7 @@ jobs:
           fi
 
       - name: Upload walkthrough artifact
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: installer-shots-${{ matrix.flavor }}
           path: staged/*.png
@@ -143,7 +143,7 @@ jobs:
 
       - name: Upload debug evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: installer-debug-${{ matrix.flavor }}
           path: walkthrough-out/serial.log
