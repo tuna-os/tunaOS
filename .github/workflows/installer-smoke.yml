@@ -136,15 +136,33 @@ jobs:
           fi
           echo "== ${FLAVOR}: compositor running: ${COMP}"
 
-          # Then the installer frontend must be running in that session.
+          # Then the DESKTOP-MATCHED installer frontend must actually be running.
+          # The old check (`pgrep -af "Installer|..."`) ran through `bash -c`, so
+          # the pattern matched its OWN command line and passed unconditionally —
+          # it never verified anything (run 29645820128 "installer processes:
+          # 2330 bash -c pgrep -af ..."). Assert the specific app id for this
+          # desktop via `flatpak ps`, with a self-match-proof pgrep fallback.
+          case "${FLAVOR}" in
+            kde)    APP=org.tunaos.InstallerKde ;;
+            cosmic) APP=org.tunaos.InstallerCosmic ;;
+            niri)   APP=org.tunaos.InstallerNiri ;;
+            xfce)   APP=org.tunaos.InstallerXfce ;;
+            *)      APP=org.bootcinstaller.Installer ;;
+          esac
+          echo "expecting installer frontend: ${APP}"
+          PROCS=""
           for i in $(seq 1 18); do
-            PROCS=$($SSH 'pgrep -af "Installer|bootc-installer|flatpak run" || true' 2>/dev/null || true)
+            # flatpak ps is authoritative (app id, not a substring guess); the
+            # bracket trick ([o]rg) keeps the fallback from matching itself.
+            PROCS=$($SSH "flatpak ps --columns=application 2>/dev/null | grep -Fx '${APP}' || pgrep -af '[o]rg\.(tunaos|bootcinstaller)\.Installer' || true" 2>/dev/null || true)
             [ -n "$PROCS" ] && break
             sleep 10
           done
-          echo "installer processes: $PROCS"
+          echo "installer frontend: ${PROCS:-<none>}"
           if [ -z "$PROCS" ]; then
-            echo "::error::${FLAVOR}: no installer frontend process in the live session"
+            echo "::error::${FLAVOR}: installer frontend ${APP} is not running in the live session"
+            echo "--- running flatpaks:"; $SSH 'flatpak ps 2>/dev/null; flatpak list --app --columns=application 2>/dev/null' 2>/dev/null || true
+            echo "--- autostart + session procs:"; $SSH 'ls -la /etc/xdg/autostart/ 2>/dev/null | head; ps -eo pid,comm | grep -iE "install|bwrap|flatpak" || true' 2>/dev/null || true
             exit 1
           fi
 
