@@ -193,6 +193,40 @@ jobs:
             echo "::warning::no QEMU monitor socket — walkthrough skipped"
           fi
 
+      # The installer's own stderr is the one thing this workflow never
+      # captured, and it is exactly what distinguishes "no window" causes.
+      # cosmic launches, connects to Wayland, then loses its GPU path:
+      #   libEGL warning: failed to get driver name for fd -1
+      #   MESA: error: ZINK: failed to choose pdev
+      #   libEGL warning: egl: failed to create dri2 screen
+      # Reproduced on real hardware; there it survived by falling back to
+      # Vulkan llvmpipe. Under plain virtio-vga that fallback may not exist,
+      # which would leave a live process with no surface — precisely the state
+      # observed in run 29684495194. Without this capture the gate can only
+      # report "process running, nothing on screen".
+      - name: Capture installer stderr and session journal
+        if: always()
+        env:
+          FLAVOR: ${{ matrix.flavor }}
+        run: |
+          SSH="sshpass -p live ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null liveuser@127.0.0.1"
+          out="smoke-out/installer-stderr-${FLAVOR}.log"
+          {
+            echo "=== user journal (installer + portal + flatpak) ==="
+            $SSH 'journalctl --user -b --no-pager 2>/dev/null | grep -iE "installer|flatpak|portal|wgpu|EGL|MESA|wayland|vulkan" | tail -120' 2>/dev/null || true
+            echo
+            echo "=== system journal (compositor / greetd / GPU) ==="
+            $SSH 'sudo journalctl -b --no-pager 2>/dev/null | grep -iE "EGL|MESA|drm|vulkan|llvmpipe|virtio|cosmic|niri|xfwl4" | tail -80' 2>/dev/null || true
+            echo
+            echo "=== rendering capability in the live session ==="
+            $SSH 'ls -l /dev/dri/ 2>/dev/null; echo "--- eglinfo/vulkaninfo ---"; (eglinfo 2>&1 | head -20) || true; (vulkaninfo --summary 2>&1 | head -20) || true' 2>/dev/null || true
+            echo
+            echo "=== windows the compositor actually has ==="
+            $SSH 'pgrep -xl "cosmic-comp|niri|xfwl4|kwin_wayland" 2>/dev/null || pgrep -l -x cosmic-comp || pgrep -l -x niri || pgrep -l -x xfwl4 || pgrep -l -x kwin_wayland || echo "(no compositor matched)"; ps -eo pid,comm,args | grep -iE "[I]nstaller" || echo "(no installer process)"' 2>/dev/null || true
+          } > "$out" 2>&1
+          echo "--- captured $(wc -l < "$out") lines ---"
+          tail -30 "$out"
+
       - name: Screenshot desktop evidence
         if: always()
         run: |
