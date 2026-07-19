@@ -23,7 +23,7 @@ Nothing about "it built" or "it launched" catches that — this page does.
 |---|-------|-----|---------|
 | 1 | **Desktop is up** | `pgrep -x` the exact compositor binary | greeter loops, TTY fallback |
 | 2 | **Frontend launched** | `flatpak ps` matches the desktop's app id | wrong/missing frontend, autostart broken |
-| 3 | **It renders** | grayscale stddev of each frame > 0.02 | blank window, crashed-on-start |
+| 3 | **Screen is not blank** | grayscale stddev of each frame > 0.02 | black screen, no GL, dead compositor |
 | 4 | **It advances** | consecutive frames differ > 500px | stuck on one screen, modal error |
 | 5 | **Which screens** | OCR each frame vs `tests/installer-screens.yaml` | **feature drift between forks** |
 
@@ -69,12 +69,30 @@ Filled from each run's `walkthrough-<flavor>.json`.
 | Frontend | Launches | Renders | Advances | welcome | disk | encryption | summary | install | done |
 |----------|----------|---------|----------|---------|------|------------|---------|---------|------|
 | KDE | ✅ | ✅ 9/9 | ⚠️ space only | ✅ | ✅ | ❌ | ❌ | ❌ | ❌ |
-| COSMIC | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
+| COSMIC | ✅ proc | ⚠️ desktop only | ❌ 0/8 | ❌ | ❌ | ❌ | ❌ | ❌ | ❌ |
 | Niri | _pending_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ |
 | XFCE | _pending_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ | _GPU_ |
 | GNOME | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ | _pending_ |
 
 _GPU_ = needs a virgl-capable host to evaluate; blank on GPU-less CI is expected.
+
+### COSMIC — run 29684495194 (yellowfin, strict)
+
+**The process runs but no window ever appears.** The compositor+frontend gate
+passes (`flatpak ps` matches `org.tunaos.InstallerCosmic`), yet every frame is
+the bare COSMIC desktop; between frame 00 and frame 08, six minutes apart, the
+only thing that changes is the clock. 0/8 transitions, 1 visual state, and OCR
+matched no screen at all — not even `welcome`. Filed as
+tuna-os/tuna-installer-cosmic#4.
+
+This exposed a flaw in check 3. It was called "installer renders actual
+content" while measuring stddev over the **whole framebuffer**, so a booted
+desktop with no installer window passes it — cosmic scored 9/9. It is now named
+"screen is not blank", which is what it measures. Proving the installer window
+specifically is mapped is what checks 4 and 5 do, and here they correctly
+failed. The walkthrough now also prints an explicit diagnosis when the gate
+passed but nothing advanced and no screen matched, rather than leaving six
+identical "not reached" lines to interpret.
 
 ### KDE — run 29681255102 (yellowfin, strict)
 
