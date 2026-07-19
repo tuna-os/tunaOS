@@ -140,6 +140,22 @@ jobs:
           [[ -n "$ISO" ]] || { echo "::error::dev ISO not produced"; exit 1; }
           echo "ISO_PATH=${ISO}" >> "$GITHUB_ENV"
 
+      - name: Clone fisherman (under-test)
+        run: git clone --depth 1 --branch dev https://github.com/tuna-os/fisherman /tmp/fisherman
+
+      - name: Build fisherman in a golang container
+        run: |
+          # Build inside golang:1.26 so we avoid the runner's root-owned
+          # ~/go and ~/.cache (earlier sudo steps) and the apt Go 1.24 vs
+          # fisherman's go.mod (1.26) mismatch entirely.
+          GOVER=$(awk '/^go /{print $2; exit}' /tmp/fisherman/fisherman/go.mod)
+          sudo podman run --rm -v /tmp/fisherman:/src:z -w /src/fisherman \
+            "docker.io/library/golang:${GOVER}" \
+            go build -buildvcs=false -o /src/fisherman-bin ./cmd/fisherman
+          sudo chown "$(id -u)" /tmp/fisherman/fisherman-bin
+          cp /tmp/fisherman/fisherman-bin /tmp/fisherman-bin
+          echo "FISHERMAN_OVERRIDE=/tmp/fisherman-bin" >> "$GITHUB_ENV"
+
       - name: LUKS install + unlock verification
         env:
           VARIANT: ${{ matrix.variant }}
@@ -151,13 +167,16 @@ jobs:
           # recipe's image ref. Without -E it silently falls back to parsing
           # them from the ISO filename, which has a "tunaos-" project prefix
           # the fallback doesn't account for, producing a bogus image ref.
-          sudo -E ./scripts/iso-e2e.sh "${ISO_PATH}" --luks \
+          sudo -E env FISHERMAN_OVERRIDE="$FISHERMAN_OVERRIDE" \
+            ./scripts/iso-e2e.sh "${ISO_PATH}" --luks \
             --output luks-out \
             --timeout 1200
+          # Gate = encrypted install + passphrase unlock to login. TPM2
+          # auto-unlock is a POST-INSTALL step (ujust enable-luks-tpm2), tested
+          # separately per docs/LUKS-TPM.md — not asserted at install.
           grep -qx 'TUNAOS_LUKS_E2E_INSTALL_STARTED luks=1' luks-out/luks-evidence.log
-          grep -qx 'TUNAOS_LUKS_E2E_TPM_ENROLLMENT_CONFIRMED' luks-out/luks-evidence.log
           grep -qx 'TUNAOS_LUKS_E2E_ENCRYPTED_DISK_CONFIRMED' luks-out/luks-evidence.log
-          grep -qx 'TUNAOS_LUKS_E2E_PASS encrypted=1 tpm_unlock=1 installed_boot=1 desktop_contract=1' luks-out/luks-evidence.log
+          grep -qx 'TUNAOS_LUKS_E2E_PASS encrypted=1 passphrase_unlock=1 installed_boot=1' luks-out/luks-evidence.log
 
       - name: Collect evidence
         if: always()

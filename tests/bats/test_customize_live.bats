@@ -120,6 +120,16 @@ detect() {
   grep -q '/usr/share/tuna-installer/oci-store' "${SCRIPT}"
 }
 
+@test "customize-live.sh: writes complete primary storage config for the overlay offline store" {
+  grep -q 'cat >/etc/containers/storage.conf' "${SCRIPT}"
+  grep -q 'driver = "overlay"' "${SCRIPT}"
+  grep -q 'graphroot = "/var/lib/containers/storage"' "${SCRIPT}"
+  grep -q 'additionalimagestores = \["/var/lib/superiso-store"\]' "${SCRIPT}"
+  grep -q 'mount_program = "/usr/bin/fuse-overlayfs"' "${SCRIPT}"
+  run grep 'storage.conf.d/99-tunaos-offline-store.conf' "${SCRIPT}"
+  [ "$status" -ne 0 ]
+}
+
 @test "customize-live.sh: sources the matching desktop adapter" {
   run grep 'desktop-\${DESKTOP}.sh' "${SCRIPT}"
   [ "$status" -eq 0 ]
