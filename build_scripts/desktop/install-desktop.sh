@@ -278,7 +278,20 @@ fi # end DNF path (el10/fedora)
 # Wayland-native greeter (greetd) on one base and gdm on another during a
 # transition. apt/pacman paths handle their own DM and exit earlier; this
 # block is reached by el10/fedora/zypper/emerge.
-_TD_DM=$($YQ -r ".packages.${_TD_OS}.display_manager // .display_manager // \"\"" "${_TD_MANIFEST}")
+# The per-OS section is only a map for some OSes: el10/fedora carry
+# `display_manager:` alongside `packages:`, while zypper/emerge/apt/pacman are
+# plain package LISTS. Indexing a list with a key makes yq exit non-zero —
+#   Error: cannot index array with 'display_manager'
+# — and `//` cannot rescue an error, only a null. That aborted the desktop
+# install on every list-shaped base (sailfin, flounder, grouper, marlin,
+# guppy), so check the node kind before reaching into it.
+_TD_DM=""
+if [[ "$($YQ -r ".packages.${_TD_OS} | type" "${_TD_MANIFEST}" 2>/dev/null)" == "!!map" ]]; then
+	_TD_DM=$($YQ -r ".packages.${_TD_OS}.display_manager // \"\"" "${_TD_MANIFEST}" 2>/dev/null)
+fi
+if [[ -z "${_TD_DM}" || "${_TD_DM}" == "null" ]]; then
+	_TD_DM=$($YQ -r '.display_manager // ""' "${_TD_MANIFEST}" 2>/dev/null)
+fi
 if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 	safe_enable "${_TD_DM}.service"
 	# Server-oriented bootc bases such as AlmaLinux default to
