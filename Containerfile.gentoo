@@ -71,9 +71,22 @@ RUN emerge --verbose --deep --newuse \
 # tbox-live/tbox-root modules at ISO build time (tuna-os/tacklebox#90).
 
 FROM base AS builder
+# The cleanup below MUST stay in this RUN. Unlike Containerfile.arch — which
+# builds bootc in a throwaway stage and COPY --from=bootc-builder /output / —
+# this file is linear (base -> builder -> system), so every file created here
+# ships in the published image. Deleting the tree in a later RUN would only
+# write a whiteout; the layer would still carry the data.
+#
+# Without this, guppy:base shipped the whole bootc compile tree —
+# /tmp/bootc/target/release/deps/*.rmeta and friends — inflating pulls and
+# unpacked size, and it exhausted the browser builder's storage quota (#672).
+#
+# Gentoo cannot simply copy Arch's throwaway-builder pattern: this stage also
+# emerges dev-util/ostree, which the final system needs at runtime.
 RUN emerge --verbose dev-util/ostree && \
     git clone --depth 1 https://github.com/bootc-dev/bootc.git /tmp/bootc && \
-    make -C /tmp/bootc bin install-all
+    make -C /tmp/bootc bin install-all && \
+    rm -rf /tmp/bootc /root/.cargo /root/.rustup /var/tmp/portage
 
 FROM builder AS system
 RUN KVER=$(ls /usr/lib/modules | head -1) && \
