@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# tunaos-luks-tpm2-enroll — enroll this machine's TPM2 for automatic LUKS
+# unlock, so the encrypted root opens at boot without typing a passphrase.
+#
+# Run this ONCE, as root, AFTER installing and booting TunaOS:
+#     sudo tunaos-luks-tpm2-enroll          # TPM only
+#     sudo tunaos-luks-tpm2-enroll --pin    # TPM + a PIN you choose
+#
+# WHY THIS ISN'T DONE BY THE INSTALLER: TPM2 sealing binds the unlock key to
+# the machine's measured firmware/bootloader state (PCRs 7+14). Those
+# measurements only exist on the *real installed system* — an installer
+# running in the live/ISO environment measures different PCRs, so install-time
+# enrollment seals against the wrong state and the disk won't auto-unlock.
+# This is the same model Universal Blue (ublue-os-luks) and Fedora Silverblue
+# use: the installer sets a LUKS passphrase; TPM auto-unlock is a post-install
+# step the owner opts into here.
+#
+# KEEP YOUR PASSPHRASE. PCR 7 (Secure Boot state) and 14 (MokList/shim) change
+# if you update firmware, toggle Secure Boot, or re-enroll MOK keys — the TPM
+# then refuses to unseal and you fall back to the passphrase. That's by design.
+set -euo pipefail
+
+PCRS="${TUNAOS_LUKS_PCRS:-7+14}" # 7 = Secure Boot state, 14 = MokList/shim
+WITH_PIN=0
+[[ "${1:-}" == "--pin" ]] && WITH_PIN=1
+
+[[ $EUID -eq 0 ]] || { echo "Run as root: sudo $0 ${*}" >&2; exit 1; }
+command -v systemd-cryptenroll >/dev/null 2>&1 ||
+	{ echo "ERROR: systemd-cryptenroll not found (systemd too old?)" >&2; exit 1; }
+
+# Find the encrypted root device from the kernel cmdline — the same discovery
+# ublue-os-luks uses. fisherman writes rd.luks.name/rd.luks.uuid kargs.
+uuid=""
+for tok in $(< /proc/cmdline); do
+	case "$tok" in
+	rd.luks.uuid=luks-*) uuid="${tok#rd.luks.uuid=luks-}" ;;
+	rd.luks.uuid=*) uuid="${tok#rd.luks.uuid=}" ;;
+	rd.luks.name=*)
+		uuid="${tok#rd.luks.name=}"
+		uuid="${uuid%%=*}"
+		;;
+	esac
+done
+[[ -n "$uuid" ]] ||
+	{ echo "ERROR: no LUKS device on the kernel cmdline — is the root actually encrypted?" >&2; exit 1; }
+
+dev="/dev/disk/by-uuid/${uuid}"
+[[ -b "$dev" ]] || dev="$(blkid -U "$uuid" 2>/dev/null || true)"
+[[ -n "$dev" && -b "$dev" ]] ||
+	{ echo "ERROR: could not resolve a block device for LUKS UUID ${uuid}" >&2; exit 1; }
+
+echo "==> Enrolling TPM2 (PCRs ${PCRS}) for ${dev}"
+echo "    You will be prompted for your current LUKS passphrase."
+enroll_args=(--tpm2-device=auto "--tpm2-pcrs=${PCRS}")
+[[ "$WITH_PIN" -eq 1 ]] && enroll_args+=(--tpm2-with-pin=yes)
+systemd-cryptenroll "${enroll_args[@]}" "$dev"
+
+# Ensure systemd-cryptsetup actually tries the TPM at boot: the crypttab entry
+# must carry tpm2-device=auto. On bootc/composefs images the initramfs already
+# ships the systemd TPM2 unlock modules, so (unlike rpm-ostree) no initramfs
+# rebuild is needed here.
+if [[ -f /etc/crypttab ]] && grep -q "$uuid" /etc/crypttab &&
+	! grep -E "${uuid}.*tpm2-device" /etc/crypttab >/dev/null 2>&1; then
+	sed -i -E "s#(^[^#].*${uuid}[^[:space:]]*[[:space:]]+[^[:space:]]+[[:space:]]+[^[:space:]]+[[:space:]]+)([^[:space:]]*)#\1\2,tpm2-device=auto#" /etc/crypttab ||
+		echo "NOTE: add 'tpm2-device=auto' to the /etc/crypttab options for ${uuid} yourself."
+fi
+
+echo "==> TPM2 enrolled. Reboot to confirm the disk unlocks with no passphrase prompt."
+echo "    Your passphrase still works and is required after firmware/Secure-Boot changes."

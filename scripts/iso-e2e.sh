@@ -882,8 +882,15 @@ EOF
 		if echo "$luks_check_output" | grep -q "^ok - LUKS header has a systemd-tpm2 enrollment token"; then
 			record_luks_evidence "TUNAOS_LUKS_E2E_TPM_ENROLLMENT_CONFIRMED"
 		else
-			echo "ERROR: --luks set but no systemd-tpm2 token in LUKS header"
-			return 3
+			# TPM2 auto-unlock is a POST-INSTALL step by design, not the
+			# installer's job: systemd-cryptenroll seals to PCRs (7+14) that
+			# only exist on the real installed+booted system, so install-time
+			# enrollment seals against the wrong state (same model as
+			# ublue-os-luks / Fedora Silverblue; bootc-dev/bootc#421). fisherman
+			# produces a passphrase-encrypted disk (confirmed above); the owner
+			# opts into TPM via `ujust enable-luks-tpm2`. Don't fail install
+			# verification on the (correct) absence of an install-time token.
+			echo "NOTE: no systemd-tpm2 token yet — TPM auto-unlock is post-install (ujust enable-luks-tpm2)."
 		fi
 	fi
 
