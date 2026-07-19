@@ -129,7 +129,7 @@ jobs:
 
       - name: Upload boot-gate evidence
         if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: "e2e-tuna-${{ matrix.de }}"
           path: |
@@ -139,7 +139,7 @@ jobs:
           retention-days: 7
 
       - name: Upload ISO as artifact (for size comparison)
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: "tuna-${{ matrix.de }}-iso"
           path: "tuna-${{ matrix.de }}-*.iso"
