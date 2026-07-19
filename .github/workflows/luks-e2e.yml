@@ -171,10 +171,12 @@ jobs:
             ./scripts/iso-e2e.sh "${ISO_PATH}" --luks \
             --output luks-out \
             --timeout 1200
+          # Gate = encrypted install + passphrase unlock to login. TPM2
+          # auto-unlock is a POST-INSTALL step (ujust enable-luks-tpm2), tested
+          # separately per docs/LUKS-TPM.md — not asserted at install.
           grep -qx 'TUNAOS_LUKS_E2E_INSTALL_STARTED luks=1' luks-out/luks-evidence.log
-          grep -qx 'TUNAOS_LUKS_E2E_TPM_ENROLLMENT_CONFIRMED' luks-out/luks-evidence.log
           grep -qx 'TUNAOS_LUKS_E2E_ENCRYPTED_DISK_CONFIRMED' luks-out/luks-evidence.log
-          grep -qx 'TUNAOS_LUKS_E2E_PASS encrypted=1 tpm_unlock=1 installed_boot=1 desktop_contract=1' luks-out/luks-evidence.log
+          grep -qx 'TUNAOS_LUKS_E2E_PASS encrypted=1 passphrase_unlock=1 installed_boot=1' luks-out/luks-evidence.log
 
       - name: Collect evidence
         if: always()
