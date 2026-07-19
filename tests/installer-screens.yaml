@@ -1,0 +1,45 @@
+# Expected installer screen sequence — the contract every TunaOS installer
+# frontend must satisfy.
+#
+# There are five independently-forked frontends (org.tunaos.Installer{Kde,
+# Cosmic,Niri,Xfce} + upstream org.bootcinstaller.Installer for gnome), so
+# feature DRIFT is the default failure mode: a screen added or a recipe field
+# wired up in one fork silently never lands in the others. This spec is what
+# catches that — scripts/installer-walkthrough.py OCRs each captured frame and
+# records which screens each frontend actually reached.
+#
+# keywords: case-insensitive; a screen counts as reached if ANY keyword appears
+#           in the OCR text of ANY frame.
+# required: true  → a frontend missing it FAILS the walkthrough (core flow)
+#           false → recorded in the parity matrix but not fatal (feature drift
+#                   we want visible before we make it mandatory)
+screens:
+  - id: welcome
+    title: Welcome
+    required: true
+    keywords: ["welcome", "get started", "let's get", "begin", "install tunaos"]
+
+  - id: disk
+    title: Disk / target selection
+    required: true
+    keywords: ["disk", "drive", "storage", "partition", "target", "/dev/"]
+
+  - id: encryption
+    title: Disk encryption (LUKS)
+    required: false
+    keywords: ["encrypt", "luks", "passphrase", "password protect"]
+
+  - id: summary
+    title: Summary / confirm
+    required: true
+    keywords: ["summary", "review", "confirm", "ready to install", "about to"]
+
+  - id: install
+    title: Install progress
+    required: false
+    keywords: ["installing", "progress", "copying", "deploying", "%"]
+
+  - id: done
+    title: Finished / reboot
+    required: false
+    keywords: ["complete", "finished", "reboot", "restart", "success"]
