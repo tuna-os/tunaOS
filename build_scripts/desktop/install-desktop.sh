@@ -185,7 +185,15 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" ]]; then
 	# which lives at its own R2 path (repo.tunaos.org/xfce/...), not the main
 	# $releasever tree. Must be added BEFORE groups/packages so the
 	# transaction can see them. COPR repos still go through the copr block.
-	_TD_REPO_COUNT=$($YQ -r ".packages.${_TD_OS}.repos | length // 0" "${_TD_MANIFEST}" 2>/dev/null)
+	# Same list-vs-map trap as the display_manager lookup below: indexing a
+	# list-shaped section makes yq exit 1, and under `set -e` the assignment
+	# aborts the whole install even with stderr suppressed. No dnf-path section
+	# is list-shaped today, so this is latent rather than broken — guarded so
+	# it stays that way if someone writes `el10:` as a plain package list.
+	_TD_REPO_COUNT=0
+	if [[ "$($YQ -r ".packages.${_TD_OS} | type" "${_TD_MANIFEST}" 2>/dev/null)" == "!!map" ]]; then
+		_TD_REPO_COUNT=$($YQ -r ".packages.${_TD_OS}.repos | length // 0" "${_TD_MANIFEST}" 2>/dev/null || echo 0)
+	fi
 	for ((i = 0; i < _TD_REPO_COUNT; i++)); do
 		_TD_RN=$($YQ -r ".packages.${_TD_OS}.repos[$i].name" "${_TD_MANIFEST}")
 		_TD_RB=$($YQ -r ".packages.${_TD_OS}.repos[$i].baseurl" "${_TD_MANIFEST}")
