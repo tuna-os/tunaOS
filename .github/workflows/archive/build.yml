@@ -62,7 +62,7 @@ jobs:
       hwe_gdx_related: ${{ steps.filter.outputs.hwe_gdx_related }}
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
       - name: Detect HWE/GDX-related changes
         id: filter
         uses: dorny/paths-filter@d1c1ffe0248fe513906c8e24db8ea791d46f8590 # v3.0.3
@@ -91,7 +91,7 @@ jobs:
       niri_hwe_gdx_matrix: ${{ steps.set-matrix.outputs.niri_hwe_gdx_matrix }}
     steps:
       - name: Checkout for config
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
 
       - name: Generate image variant build matrix
         id: set-matrix
