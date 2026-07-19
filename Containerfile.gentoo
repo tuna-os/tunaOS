@@ -20,7 +20,7 @@ COPY build_scripts /build_scripts
 COPY system_files /files
 COPY system_files_overrides /overrides
 
-FROM docker.io/gentoo/stage3:latest AS base
+FROM docker.io/gentoo/stage3:latest@sha256:9d03b48eda632da09f469d384ce77ec05618060ed4e9ac295f8192a196e7539a AS base
 # Speed: pull prebuilt, gpg-verified binary packages from Gentoo's official
 # binhost instead of compiling all of @world from source (which blew past the
 # 60-min CI job timeout — tuna-os/tunaOS#644). getuto imports the shipped
