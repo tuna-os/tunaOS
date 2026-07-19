@@ -743,3 +743,9 @@ setup_runtime_check_stubs() {
   [ "$output" = "CLEANUP_RUN" ]
 }
 
+
+@test "non-composefs canonical offline payload uses Fisherman direct mode" {
+  grep -q 'Found canonical offline image.*bootcDirect' "$SCRIPT"
+  grep -q 'recipe_image=""' "$SCRIPT"
+  grep -q 'containers-storage:<targetImgref>' "$SCRIPT"
+}
