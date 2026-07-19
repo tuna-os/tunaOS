@@ -529,7 +529,14 @@ variants:
   - id: guppy
     emoji: "🌈"
     description: "Based on Gentoo Linux (source-based)"
-    base_image: "docker.io/gentoo/stage3:latest"
+    # Digest-pinned to match Containerfile.gentoo's FROM exactly. This value
+    # is not decorative: reusable-build-image.yml pre-pulls it to warm local
+    # storage before the build (a workaround for quay/docker CDN blob drops,
+    # #675). With a bare :latest here it warmed whatever latest happened to be
+    # while the Containerfile built from the pinned digest, so the pre-pull
+    # fetched an image the build never used and the workaround silently did
+    # nothing for guppy. Keep the two in lockstep when bumping.
+    base_image: "docker.io/gentoo/stage3:latest@sha256:9d03b48eda632da09f469d384ce77ec05618060ed4e9ac295f8192a196e7539a"
     platforms: ["linux/amd64"]
     flavors:
       - id: base
