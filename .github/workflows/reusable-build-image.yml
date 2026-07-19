@@ -434,7 +434,7 @@ jobs:
 
       - name: Upload Output Artifacts
         if: ${{ inputs.publish }}
-        uses: actions/upload-artifact@330a01c490aca151604b8cf639adc76d48f6c5d4 # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ env.IMAGE_NAME }}-${{ env.DEFAULT_TAG }}-${{ matrix.safeplatform }}-${{ github.run_id }}
           retention-days: 1
@@ -449,7 +449,7 @@ jobs:
       - generate_matrix
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:0b5fd36c9f36ecc95bf6dbe049fe0a211410e1ba8a9801db0fbe25c7561d81c1  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:f7b8a6213d3d730683dca3e0f5afdd72f2f8823c19e10659a0185ce3da909d9d  # :latest linux/amd64 as of 2026-06-13
       options: --privileged --security-opt seccomp=unconfined
     permissions:
       contents: read
