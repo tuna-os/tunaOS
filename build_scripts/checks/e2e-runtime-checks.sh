@@ -115,6 +115,35 @@ if [[ -n "$dm_pattern" ]]; then
 		bash -c "[[ '${dm_id}' =~ ${dm_pattern} ]]"
 fi
 
+# greetd active is NOT the same as greetd usable. Its stock config runs
+# `agreety --cmd /bin/sh` — a text prompt into a bare shell, with no session
+# picker and no way to reach the desktop. That state still satisfies every
+# check above: graphical.target is active, display-manager.service is active,
+# and the DM matches the contract. XFCE shipped exactly this until gtkgreet
+# was packaged, and nothing here caught it.
+#
+# So when greetd is the DM, assert its configured session is a real greeter.
+#
+# Scoped to xfce deliberately. cosmic-greeter ships /etc/greetd/
+# cosmic-greeter.toml (plus its own cosmic-greeter.service) rather than
+# config.toml, so reading config.toml on cosmic/niri would test a file their
+# greeter does not use and fail two currently-green flavors. Extending this to
+# them needs their real config path confirmed first — see tunaOS#636.
+if [[ "$dm_id" == "greetd.service" && "$DESKTOP" == "xfce" ]]; then
+	greetd_cmd=$(sed -n '/^\[default_session\]/,/^\[/p' /etc/greetd/config.toml 2>/dev/null |
+		sed -n 's/^[[:space:]]*command[[:space:]]*=[[:space:]]*"\(.*\)".*/\1/p' | head -1)
+	emit "# greetd session command: ${greetd_cmd:-<none>}"
+	check "greetd launches a graphical greeter (not agreety/shell)" \
+		bash -c "[[ -n '${greetd_cmd}' ]] && [[ ! '${greetd_cmd}' =~ agreety ]]"
+	# The command is run by greetd, so a typo'd or unpackaged greeter binary
+	# fails at login with nothing in the image to show for it.
+	greetd_bin=${greetd_cmd%% *}
+	if [[ -n "$greetd_bin" ]]; then
+		check "greetd session binary exists (${greetd_bin})" \
+			command -v "$greetd_bin"
+	fi
+fi
+
 check "a network manager is active" \
 	bash -c 'systemctl is-active NetworkManager 2>/dev/null || systemctl is-active systemd-networkd'
 
