@@ -92,18 +92,16 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-      # DISABLED: xfce4-wayland stack not yet published to repo.tunaos.org.
-      # Re-enable when tuna-os/github-copr#65 lands (specs + build-order tier).
-      # - id: xfce
-      #   stage: 2
-      #   build_image: true
-      #   build_iso: true
-      #   build_qcow2: false
-      #   # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
-      #   # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
-      #   platforms:
-      #     - linux/amd64
-      #     - linux/amd64/v2
+      - id: xfce
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
 
       # ── Stage 3 ────────────────────────────────────────────────────────────
       # HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
@@ -152,30 +150,26 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-      # DISABLED: xfce4-wayland stack not yet published to repo.tunaos.org.
-      # Re-enable when tuna-os/github-copr#65 lands (specs + build-order tier).
-      # - id: xfce-hwe
-      #   stage: 3
-      #   build_image: true
-      #   build_iso: false
-      #   build_qcow2: false
-      #   # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
-      #   # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
-      #   platforms:
-      #     - linux/amd64
-      #     - linux/amd64/v2
-      # DISABLED: xfce4-wayland stack not yet published to repo.tunaos.org.
-      # Re-enable when tuna-os/github-copr#65 lands (specs + build-order tier).
-      # - id: xfce-nvidia
-      #   stage: 3
-      #   build_image: true
-      #   build_iso: true
-      #   build_qcow2: false
-      #   # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
-      #   # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
-      #   platforms:
-      #     - linux/amd64
-      #     - linux/amd64/v2
+      - id: xfce-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
+      - id: xfce-nvidia
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
 
   - id: albacore
     emoji: "🐟"
@@ -222,18 +216,16 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-      # DISABLED: xfce4-wayland stack not yet published to repo.tunaos.org.
-      # Re-enable when tuna-os/github-copr#65 lands (specs + build-order tier).
-      # - id: xfce
-      #   stage: 2
-      #   build_image: true
-      #   build_iso: true
-      #   build_qcow2: false
-      #   # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
-      #   # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
-      #   platforms:
-      #     - linux/amd64
-      #     - linux/amd64/v2
+      - id: xfce
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
 
       # ── Stage 3 ────────────────────────────────────────────────────────────
       # HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
@@ -282,30 +274,26 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-      # DISABLED: xfce4-wayland stack not yet published to repo.tunaos.org.
-      # Re-enable when tuna-os/github-copr#65 lands (specs + build-order tier).
-      # - id: xfce-hwe
-      #   stage: 3
-      #   build_image: true
-      #   build_iso: false
-      #   build_qcow2: false
-      #   # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
-      #   # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
-      #   platforms:
-      #     - linux/amd64
-      #     - linux/amd64/v2
-      # DISABLED: xfce4-wayland stack not yet published to repo.tunaos.org.
-      # Re-enable when tuna-os/github-copr#65 lands (specs + build-order tier).
-      # - id: xfce-nvidia
-      #   stage: 3
-      #   build_image: true
-      #   build_iso: true
-      #   build_qcow2: false
-      #   # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
-      #   # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
-      #   platforms:
-      #     - linux/amd64
-      #     - linux/amd64/v2
+      - id: xfce-hwe
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
+      - id: xfce-nvidia
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+        platforms:
+          - linux/amd64
+          - linux/amd64/v2
 
   - id: skipjack
     emoji: "🍣"
@@ -353,17 +341,15 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-      # DISABLED: xfce4-wayland stack not yet published to repo.tunaos.org.
-      # Re-enable when tuna-os/github-copr#65 lands (specs + build-order tier).
-      # - id: xfce
-      #   stage: 2
-      #   build_image: true
-      #   build_iso: true
-      #   build_qcow2: false
-      #   # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
-      #   # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
-      #   platforms:
-      #     - linux/amd64
+      - id: xfce
+        stage: 2
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
+        platforms:
+          - linux/amd64
 
       # ── Stage 3 ────────────────────────────────────────────────────────────
       # HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
