@@ -59,6 +59,19 @@ packages:
       - pop-icon-theme
 
   el10:
+    # cosmic-greeter hard-requires fprintd-pam, which CentOS Stream 10 only
+    # builds for x86_64 -- that gap is why aarch64 cosmic was pinned off in
+    # tunaOS's build-config.yml (tunaOS#732). It's now built
+    # (tuna-os/github-copr#110, same pinned version as x86_64's 1.94.5) and
+    # published at its own R2 path, separate from the main tuna-os.repo.
+    # baseurl is not $basearch-templated (only aarch64 RPMs are published
+    # here), so this is harmless to enable unconditionally on x86_64 --
+    # dnf just finds no matching-arch packages and falls back to CentOS
+    # Stream's own x86_64 fprintd-pam as before.
+    repos:
+      - name: tuna-os-fprintd
+        baseurl: https://repo.tunaos.org/fprintd/10-stream-aarch64/
+        priority: 10
     copr:
       - repo: yselkowitz/cosmic-epel
         packages:

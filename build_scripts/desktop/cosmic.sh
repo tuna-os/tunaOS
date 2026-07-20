@@ -65,27 +65,6 @@ case "${1:-}" in
 		xdg-desktop-portal-cosmic \
 		adw-gtk3-theme
 
-	# cosmic-greeter hard-requires fprintd-pam, which CentOS Stream 10 only
-	# builds for x86_64 — that gap is why aarch64 cosmic was pinned off in
-	# build-config.yml (tunaOS#732). It's now built (tuna-os/github-copr#110,
-	# same pinned version as x86_64's 1.94.5) and published at its own R2
-	# path, separate from the main tuna-os.repo used above — enable it only
-	# on aarch64, only for this one install.
-	if [[ "$(uname -m)" == "aarch64" ]]; then
-		cat >/etc/yum.repos.d/tuna-os-fprintd.repo <<-'EOF'
-		[tuna-os-fprintd]
-		name=Tuna OS - fprintd (aarch64)
-		baseurl=https://repo.tunaos.org/fprintd/10-stream-aarch64/
-		enabled=1
-		gpgcheck=0
-		gpgkey=https://repo.tunaos.org/public.gpg
-		repo_gpgcheck=0
-		metadata_expire=3600
-		priority=10
-		skip_if_unavailable=False
-		EOF
-	fi
-
 	# Install COSMIC session, greetd and COSMIC greeter separately (handles greetd-selinux conflict)
 	# Use --nobest and --allowerasing to resolve EL10 policy conflicts
 	dnf -y --enablerepo copr:copr.fedorainfracloud.org:yselkowitz:cosmic-epel \
