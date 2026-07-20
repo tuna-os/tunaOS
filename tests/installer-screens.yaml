@@ -8,8 +8,16 @@
 # catches that — scripts/installer-walkthrough.py OCRs each captured frame and
 # records which screens each frontend actually reached.
 #
-# keywords: case-insensitive; a screen counts as reached if ANY keyword appears
-#           in the OCR text of ANY frame.
+# keywords: case-insensitive, matched per visual state (see
+#           scripts/installer-walkthrough.py). Write them as HEADINGS or
+#           prompts unique to that screen — never bare nouns.
+#
+#           A bare noun matches the same word used as a field label somewhere
+#           else. "encrypt" matched "Encryption: None" on KDE's Confirm
+#           Installation page, reporting an encryption screen that frontend
+#           does not have at all (its pages are welcome, diskselection,
+#           confirm, progress, done). Likewise "target" matches both the disk
+#           page's heading and the summary's "Target Disk: vda" row.
 # required: true  → a frontend missing it FAILS the walkthrough (core flow)
 #           false → recorded in the parity matrix but not fatal (feature drift
 #                   we want visible before we make it mandatory)
@@ -22,22 +30,39 @@ screens:
   - id: disk
     title: Disk / target selection
     required: true
-    keywords: ["disk", "drive", "storage", "partition", "target", "/dev/"]
+    # Heading/prompt text, not the "Target Disk: vda" row on the summary.
+    keywords: ["select target disk", "select a disk", "choose the disk",
+               "available disks", "where tunaos will be installed"]
 
   - id: encryption
     title: Disk encryption (LUKS)
     required: false
-    keywords: ["encrypt", "luks", "passphrase", "password protect"]
+    # NOT bare "encrypt": that matches the summary page's "Encryption: None"
+    # field label, which is the opposite of having reached an encryption
+    # screen. Require the screen's own heading or its passphrase prompt.
+    keywords: ["disk encryption", "encrypt this disk", "enter passphrase",
+               "luks passphrase", "encryption passphrase"]
 
   - id: summary
     title: Summary / confirm
     required: true
-    keywords: ["summary", "review", "confirm", "ready to install", "about to"]
+    keywords: ["confirm installation", "review your choices", "summary",
+               "ready to install", "about to install"]
 
   - id: install
     title: Install progress
     required: false
-    keywords: ["installing", "progress", "copying", "deploying", "%"]
+    # NOT "%" — a single character matches OCR noise from anywhere on screen
+    # (taskbar, clock, window chrome). Run 29681255102 credited 'install' to
+    # the Select Target Disk screen because of it, which is exactly the kind of
+    # phantom row the parity matrix must never publish.
+    # NOT bare "install" either: the disk page reads "where TunaOS will be
+    # installed", and the welcome page describes the whole flow.
+    # NOT "installing tunaos": the welcome page says "guide you through
+    # installing TunaOS onto your computer". Progress screens say what they
+    # are DOING, so match that instead.
+    keywords: ["installation progress", "copying files", "deploying",
+               "please wait", "writing image"]
 
   - id: done
     title: Finished / reboot

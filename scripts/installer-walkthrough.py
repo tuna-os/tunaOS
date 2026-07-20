@@ -196,23 +196,38 @@ if p:
 # step produces no visual change — and report which key worked, because
 # "Return does not activate the primary action" is itself a UX finding worth
 # seeing rather than silently working around.
+# The tab count is escalated too. A fixed two tabs cannot work across pages
+# with different widget counts: run 29681255102 advanced welcome -> disk with
+# 'spc', then stalled for seven steps on Select Target Disk, where focus starts
+# in the disk list and Continue is several widgets away — space just re-toggled
+# the list selection. Each step with no visual change adds a tab, so focus
+# sweeps outward until it lands on the primary action, and resets once a page
+# advances.
 activation = "ret"
 switched = False
+tabs = 2
+MAX_TABS = 8
 for i in range(1, steps + 1):
-    send_keys("tab", "tab", activation)
+    send_keys(*(["tab"] * tabs), activation)
     time.sleep(3)
     p = shot(i, f"after advance {i}")
     if p:
         prev = frames[-1] if frames else None
         frames.append(p)
-        if (prev and not switched
-                and changed_pixels(prev, p) <= DIFF_PIXELS
-                and activation == "ret"):
-            activation = "spc"
-            switched = True
-            print("  # 'ret' did not advance the installer — "
-                  "escalating to 'spc' (space) for the remaining steps",
-                  flush=True)
+        moved = bool(prev) and changed_pixels(prev, p) > DIFF_PIXELS
+        if moved:
+            tabs = 2          # new page, start over from the usual position
+        elif prev:
+            if not switched and activation == "ret":
+                activation = "spc"
+                switched = True
+                print("  # 'ret' did not advance the installer — "
+                      "escalating to 'spc' (space) for the remaining steps",
+                      flush=True)
+            elif tabs < MAX_TABS:
+                tabs += 1
+                print(f"  # no change — widening focus search to {tabs} tabs",
+                      flush=True)
 
 print(f"\n# walkthrough verification ({flavor}) — {len(frames)} frames, "
       f"strict={strict}\n", flush=True)
@@ -227,11 +242,16 @@ for f in frames:
     sd = stddev(f)
     if sd > BLANK_STDDEV:
         rendered += 1
-tap(rendered > 0, f"{flavor}: installer renders actual content",
+# NOT "the installer renders": this measures the whole framebuffer, so a
+# booted desktop with no installer window at all passes it. cosmic did exactly
+# that (run 29684495194) — 9/9 frames "rendered" while every frame was the bare
+# COSMIC desktop, clock ticking, no window. Named for what it actually checks.
+tap(rendered > 0, f"{flavor}: screen is not blank",
     f"{rendered}/{len(frames)} frames above stddev {BLANK_STDDEV} "
     f"(blank everywhere usually means no GL — niri/xfwl4 need virgl)",
     enforced=strict)
-note(f"{rendered}/{len(frames)} frames above stddev {BLANK_STDDEV}")
+note(f"{rendered}/{len(frames)} frames above stddev {BLANK_STDDEV} "
+     f"(whole screen, not the installer window)")
 
 # ── 2. ADVANCES ──────────────────────────────────────────────────────────
 advanced = sum(1 for a, b in zip(frames, frames[1:])
@@ -305,6 +325,19 @@ for idx, sc in enumerate(spec):
         enforced=strict and sc.get("required", False))
     if hit:
         note(where)
+
+# ── No-window diagnosis ──────────────────────────────────────────────────
+# The compositor+frontend gate in installer-smoke.yml already proved the
+# process is alive before this script runs. So if the screen is not blank, yet
+# nothing ever advanced AND no screen matched, the most likely explanation is
+# that the process is running without a mapped window — the desktop is what is
+# being photographed. Say so, rather than leaving six identical "screen not
+# reached" lines for someone to interpret.
+if have_ocr and n_states <= 1 and not any(reached.values()) and rendered > 0:
+    print(f"  # DIAGNOSIS: {flavor} — process is running (gate passed) but no "
+          f"installer screen was ever detected and nothing responded to input; "
+          f"the frames are most likely the bare desktop with no installer "
+          f"window mapped", flush=True)
 
 # ── Result for the parity matrix ─────────────────────────────────────────
 summary = {
