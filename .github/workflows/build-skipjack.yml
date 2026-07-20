@@ -1,7 +1,7 @@
 name: Build Skipjack
 on:
   schedule:
-    - cron: "0 1 * * *"
+    - cron: "15 3 * * *"
   workflow_dispatch:
     inputs:
       flavor:
