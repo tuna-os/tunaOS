@@ -81,13 +81,6 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-        # cosmic-greeter hard-requires fprintd-pam, which EL10 does not
-        # build for aarch64 (present on x86_64 as 1.94.5, absent on arm64),
-        # so cosmic-session is unsatisfiable there. Pin to x86_64 until the
-        # dependency exists for arm64.
-        platforms:
-          - linux/amd64
-          - linux/amd64/v2
 
       - id: kde
         stage: 2
@@ -132,25 +125,11 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-        # cosmic-greeter hard-requires fprintd-pam, which EL10 does not
-        # build for aarch64 (present on x86_64 as 1.94.5, absent on arm64),
-        # so cosmic-session is unsatisfiable there. Pin to x86_64 until the
-        # dependency exists for arm64.
-        platforms:
-          - linux/amd64
-          - linux/amd64/v2
       - id: cosmic-nvidia
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
-        # cosmic-greeter hard-requires fprintd-pam, which EL10 does not
-        # build for aarch64 (present on x86_64 as 1.94.5, absent on arm64),
-        # so cosmic-session is unsatisfiable there. Pin to x86_64 until the
-        # dependency exists for arm64.
-        platforms:
-          - linux/amd64
-          - linux/amd64/v2
       - id: kde-hwe
         stage: 3
         build_image: true
@@ -227,13 +206,6 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-        # cosmic-greeter hard-requires fprintd-pam, which EL10 does not
-        # build for aarch64 (present on x86_64 as 1.94.5, absent on arm64),
-        # so cosmic-session is unsatisfiable there. Pin to x86_64 until the
-        # dependency exists for arm64.
-        platforms:
-          - linux/amd64
-          - linux/amd64/v2
       - id: kde
         stage: 2
         build_image: true
@@ -277,25 +249,11 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-        # cosmic-greeter hard-requires fprintd-pam, which EL10 does not
-        # build for aarch64 (present on x86_64 as 1.94.5, absent on arm64),
-        # so cosmic-session is unsatisfiable there. Pin to x86_64 until the
-        # dependency exists for arm64.
-        platforms:
-          - linux/amd64
-          - linux/amd64/v2
       - id: cosmic-nvidia
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
-        # cosmic-greeter hard-requires fprintd-pam, which EL10 does not
-        # build for aarch64 (present on x86_64 as 1.94.5, absent on arm64),
-        # so cosmic-session is unsatisfiable there. Pin to x86_64 until the
-        # dependency exists for arm64.
-        platforms:
-          - linux/amd64
-          - linux/amd64/v2
       - id: kde-hwe
         stage: 3
         build_image: true
@@ -372,12 +330,6 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-        # cosmic-greeter hard-requires fprintd-pam, which EL10 does not
-        # build for aarch64 (present on x86_64 as 1.94.5, absent on arm64),
-        # so cosmic-session is unsatisfiable there. Pin to x86_64 until the
-        # dependency exists for arm64.
-        platforms:
-          - linux/amd64
 
       - id: kde
         stage: 2
@@ -419,23 +371,11 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-        # cosmic-greeter hard-requires fprintd-pam, which EL10 does not
-        # build for aarch64 (present on x86_64 as 1.94.5, absent on arm64),
-        # so cosmic-session is unsatisfiable there. Pin to x86_64 until the
-        # dependency exists for arm64.
-        platforms:
-          - linux/amd64
       - id: cosmic-nvidia
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
-        # cosmic-greeter hard-requires fprintd-pam, which EL10 does not
-        # build for aarch64 (present on x86_64 as 1.94.5, absent on arm64),
-        # so cosmic-session is unsatisfiable there. Pin to x86_64 until the
-        # dependency exists for arm64.
-        platforms:
-          - linux/amd64
       - id: kde-hwe
         stage: 3
         build_image: true
