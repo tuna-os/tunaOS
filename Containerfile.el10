@@ -144,6 +144,18 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/99-cleanup.sh
 
+# EL10 is meant to stay traditional ostree (bootupctl + GRUB), not composefs
+# (tunaOS#748). Unlike the non-Fedora bases (see
+# build_scripts/bootc/sandbox/usr/lib/ostree/prepare-root.conf, copied by
+# Containerfile.ubuntu et al. to explicitly turn composefs ON), nothing in
+# this Containerfile ever touched prepare-root.conf — so whatever
+# quay.io/almalinuxorg/almalinux-bootc ships by default silently won any
+# time upstream's default changed. Pin it explicitly instead of inheriting
+# a default that already drifted once and broke wootc's Phase-2 boot
+# (tuna-os/wootc#28: composefs images skip bootupctl/GRUB entirely, so a
+# boot without the composefs karg drops to an emergency shell).
+RUN printf '[composefs]\nenabled = no\n\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf
+
 # ==============================================================================
 # Desktop Variant Stages
 # Each stage ends with the /opt symlink so chunkah can be run against them.
