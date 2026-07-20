@@ -68,6 +68,11 @@
       "matchManagers": ["git-submodules"],
       "groupName": "submodules",
       "automerge": true
+    },
+    {
+      "description": "ghcr.io/projectbluefin/common:latest moves upstream multiple times a day, and digest-tracking PRs get superseded rather than updated in place — three separate PRs (each a full CI run) landed in ~33 hours (tunaOS#753). Debounce: wait for a digest to sit still for a few days before opening a PR, so rapid upstream churn coalesces into one PR instead of several.",
+      "matchPackageNames": ["ghcr.io/projectbluefin/common"],
+      "minimumReleaseAge": "3 days"
     }
   ]
 }
