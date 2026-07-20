@@ -21,10 +21,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@d8f871c0ca7a868339d3c175200a7319492473c7 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@9f3b74b49b6023bd4401ae1bb81d1c3c02709716 # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"
