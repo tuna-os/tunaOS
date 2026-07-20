@@ -363,9 +363,16 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-      # gnome-nvidia-hwe (stage 4) omitted — blocked by gnome-shell-49 vs
-      # gnome-shell-common-48 file conflict on CentOS Stream 10.
-      # See: tuna-os/github-copr#23, IMPROVEMENT_PLAN Phase 1.1
+      # gnome-nvidia-hwe re-enabled (tunaOS#639): the gnome-shell-49 vs
+      # gnome-shell-common-48 file conflict is fixed upstream in the spec
+      # (tuna-os/github-copr#23 merged: Obsoletes: gnome-shell-common <
+      # %{major_version}), verified live in the published spec, not just
+      # by the PR having merged.
+      - id: gnome-nvidia-hwe
+        stage: 4
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: cosmic-hwe
         stage: 3
         build_image: true
