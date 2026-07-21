@@ -20,7 +20,7 @@ on:
       flavors:
         description: "Comma-separated flavors"
         required: false
-        default: "gnome,kde"
+        default: "gnome,kde,cosmic,niri,xfce"
         type: string
   schedule:
     # Weekly, after image builds.
@@ -38,7 +38,7 @@ jobs:
     steps:
       - id: gen
         env:
-          FLAVORS: ${{ inputs.flavors || 'gnome,kde' }}
+          FLAVORS: ${{ inputs.flavors || 'gnome,kde,cosmic,niri,xfce' }}
           VARIANT: ${{ inputs.variant || 'yellowfin' }}
         run: |
           M=$(jq -cn --arg v "$VARIANT" --arg f "$FLAVORS" \
