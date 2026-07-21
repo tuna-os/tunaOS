@@ -4,7 +4,9 @@ on:
   pull_request:
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  # A branch push and its pull_request event represent the same work; use the
+  # source branch for both so the later event replaces the duplicate run.
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 jobs:
