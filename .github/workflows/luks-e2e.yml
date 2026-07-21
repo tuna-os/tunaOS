@@ -10,7 +10,7 @@ name: LUKS E2E
 #      encrypted root auto-unlocks (reaching the login target proves it).
 #
 # This is expensive (a dev ISO build + two QEMU boots per cell), so it only
-# runs on demand or weekly — never per push. Modelled on iso-e2e.yml and
+# runs on demand or monthly — never per push. Modelled on iso-e2e.yml and
 # projectbluefin/dakota-iso's luks-*-qemu recipes.
 
 on:
@@ -27,8 +27,8 @@ on:
         default: "all"
         type: string
   schedule:
-    # Weekly, Tuesday 07:00 UTC — after the Monday iso-e2e smoke run.
-    - cron: "0 7 * * 2"
+    # Full variant x installable-desktop sweep on the first day of each month.
+    - cron: "0 7 1 * *"
 
 permissions:
   contents: read
@@ -75,6 +75,31 @@ jobs:
             exit 1
           fi
           echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+
+          # Keep the scheduled coverage auditable. A variant with no
+          # build_iso:true flavor cannot be exercised by this ISO-based E2E;
+          # list it explicitly instead of silently dropping the base.
+          {
+            echo "## LUKS E2E coverage"
+            echo
+            echo "Testing **${count}** installable variant/flavor combinations."
+            echo
+            echo "| Base variant | ISO desktop flavors |"
+            echo "|---|---|"
+            echo "$json" | jq -r '
+              .variants[]
+              | [.id, ([.flavors[] | select(.build_iso == true) | .id] | join(", "))]
+              | select(.[1] != "")
+              | "| `\(.[0])` | \(.[1]) |"'
+            echo
+            echo "### Bases not testable by this workflow"
+            echo
+            echo "$json" | jq -r '
+              [.variants[]
+               | select([.flavors[] | select(.build_iso == true)] | length == 0)
+               | "- `\(.id)`: no flavor has `build_iso: true`"]
+              | if length == 0 then "- None" else .[] end'
+          } >> "$GITHUB_STEP_SUMMARY"
 
   luks:
     name: LUKS ${{ matrix.variant }}:${{ matrix.flavor }}
