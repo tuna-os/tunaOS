@@ -10,7 +10,7 @@
 # as the asahi-scripts dracut vendoring in overlay/asahi.sh).
 set -euo pipefail
 
-BOOTBIN_SYNC_REF=f9dbe4a3d98af94e3317eb420c0a5ecbfdac8368
+BOOTBIN_SYNC_REF=b263b74083d8000736aef7fbb2bf20e610ebbca0
 BASE="https://raw.githubusercontent.com/tuna-os/bootc-installer-asahi/${BOOTBIN_SYNC_REF}/components/asahi-bootbin-sync"
 
 install -d /usr/libexec /usr/lib/systemd/system /usr/lib/systemd/system-preset
