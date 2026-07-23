@@ -1,0 +1,35 @@
+name: Verify Asahi image
+
+# Static verification of an asahi-flavor image against the golden manifest
+# derived from the known-working Fedora Asahi Silverblue image: 16K asahi
+# kernel, the 12 hardware-critical modules, Apple DTBs, m1n1/U-Boot payloads,
+# the dracut ESP-firmware flow, and the audio stack (speakers stay disabled if
+# any piece is missing). No Mac needed; catches regressions before hardware.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Asahi image ref to verify"
+        default: "ghcr.io/tuna-os/bonito:gnome-asahi-testing"
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Login to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GH_TOKEN" | podman login ghcr.io --username "${{ github.actor }}" --password-stdin
+
+      - name: Verify image against Asahi golden manifest
+        run: ./scripts/verify-asahi-image.sh "${{ inputs.image }}"

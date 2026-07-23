@@ -467,6 +467,15 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+      # Apple Silicon (M1/M2, Asahi Linux) — overlay/asahi.sh; aarch64 only.
+      # No ISO: Apple Silicon cannot external-boot; installs go through the
+      # asahi-installer path from macOS.
+      - id: gnome-asahi
+        stage: 3
+        platforms: ["linux/arm64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: gnome-nvidia
         stage: 3
         build_image: true
@@ -648,6 +657,14 @@ variants:
         stage: 2
         build_image: true
         build_iso: true
+      # Apple Silicon (M1/M2, Asahi Linux) — full build with ENABLE_ASAHI=1
+      # (the kernel decision lives in Containerfile.ubuntu's base stage, so
+      # this is not an overlay). aarch64 only; no ISO (asahi-installer path).
+      - id: gnome-asahi
+        stage: 1
+        platforms: ["linux/arm64"]
+        build_image: true
+        build_iso: false
       # GNOME with ZFS-root support (prebuilt zfs.ko + zfs-dracut). ISO gated
       # off until the install-to-filesystem ZFS-root path has a boot e2e (#625).
       - id: gnome-zfs
