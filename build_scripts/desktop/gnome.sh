@@ -10,7 +10,13 @@ case "${1:-}" in
 	if [[ "$PKG_MGR" == "apt" ]]; then
 		# Ubuntu 26.04 ships GNOME 48 via ubuntu-desktop-minimal.
 		# --no-install-recommends avoids bringing in games, LibreOffice, etc.
-		pkg_install ubuntu-desktop-minimal gnome-shell-extension-manager
+		# gnome-session + ubuntu-session are explicit: since resolute's
+		# GNOME 50.1 update they are no longer dragged in without
+		# recommends, and without them /usr/share/wayland-sessions has no
+		# *gnome*.desktop — configure-desktop-runtime.sh hard-fails
+		# (grouper gnome red since 2026-07-21).
+		pkg_install ubuntu-desktop-minimal gnome-shell-extension-manager \
+			gnome-session ubuntu-session
 
 		# Additional GNOME utilities (mirrors the RPM set where possible)
 		pkg_install \
