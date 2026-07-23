@@ -14,7 +14,8 @@
 #   DESKTOP_FLAVOR   — the --target stage name
 #   ENABLE_HWE       — 0 or 1
 #   ENABLE_NVIDIA    — 0 or 1
-#   OVERLAY_TYPE     — hwe, nvidia, or empty
+#   OVERLAY_TYPE     — hwe, nvidia, cachyos, asahi, or empty
+#   ENABLE_ASAHI     — 0 or 1 (grouper full-build asahi path)
 #   PARENT_FLAVOR    — parent image tag (for chained builds)
 
 set -euo pipefail
@@ -34,6 +35,7 @@ esac
 CONTAINERFILE="Containerfile.el10"
 ENABLE_HWE="0"
 ENABLE_NVIDIA="0"
+ENABLE_ASAHI="0"
 OVERLAY_TYPE=""
 PARENT_FLAVOR=""
 DESKTOP_FLAVOR="${FLAVOR}"
@@ -63,7 +65,21 @@ if [[ "${VARIANT}" == "marlin" ]]; then
 	CONTAINERFILE="Containerfile.arch"
 fi
 
-if [[ "${VARIANT}" == "marlin" && "${FLAVOR}" == *"-cachyos" ]]; then
+if [[ "${VARIANT}" == "grouper" && "${FLAVOR}" == *"-asahi" ]]; then
+	# grouper's kernel decision happens in the base stage of Containerfile.ubuntu,
+	# so the asahi flavor is a full (stage-1 style) build with ENABLE_ASAHI=1,
+	# not an overlay on the stock-kernel base. aarch64 only.
+	CONTAINERFILE="Containerfile.ubuntu"
+	ENABLE_ASAHI="1"
+	DESKTOP_FLAVOR="${FLAVOR%-asahi}"
+elif [[ "${VARIANT}" != "grouper" && "${FLAVOR}" == *"-asahi" ]]; then
+	# Apple Silicon overlay on a DE image (build_scripts/overlay/asahi.sh);
+	# aarch64 only — the overlay hard-fails on other arches.
+	CONTAINERFILE="Containerfile.overlay"
+	OVERLAY_TYPE="asahi"
+	DESKTOP_FLAVOR="desktop"
+	PARENT_FLAVOR="${FLAVOR%-asahi}"
+elif [[ "${VARIANT}" == "marlin" && "${FLAVOR}" == *"-cachyos" ]]; then
 	CONTAINERFILE="Containerfile.overlay"
 	OVERLAY_TYPE="cachyos"
 	DESKTOP_FLAVOR="desktop"
@@ -114,6 +130,7 @@ DESKTOP_FLAVOR="${DESKTOP_FLAVOR}"
 ENABLE_HWE="${ENABLE_HWE}"
 ENABLE_NVIDIA="${ENABLE_NVIDIA}"
 OVERLAY_TYPE="${OVERLAY_TYPE}"
+ENABLE_ASAHI="${ENABLE_ASAHI}"
 PARENT_FLAVOR="${PARENT_FLAVOR}"
 FLAVOR="${FLAVOR}"
 EOF
