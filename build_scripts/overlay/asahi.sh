@@ -15,8 +15,9 @@
 #   debian (flounder)  — official Bananas-team userspace from the Debian
 #                        archive (trixie+); kernel + mesa from the team's side
 #                        archive. EXPERIMENTAL.
-#   opensuse (sailfin) — no maintained Asahi packaging exists; explicit error
-#                        with pointers (greenfield).
+#   opensuse (sailfin) — OBS home:mrkcee full stack (kernel-asahi 7.0.13,
+#                        current, m1n1/u-boot/audio incl.); EXPERIMENTAL,
+#                        single-maintainer home: project.
 #   gentoo (guppy)     — chadmed's asahi overlay is excellent but source-based;
 #                        needs binhost infra before an image build makes sense.
 #                        Explicit error with pointers.
@@ -145,11 +146,22 @@ debian)
 	apt-get clean -y && rm -rf /var/lib/apt/lists/*
 	;;
 opensuse* | *suse*)
-	echo "ERROR: sailfin has no maintained Asahi packaging to build on" >&2
-	echo "  (no OBS project exists; nearest prior art is the semi-abandoned" >&2
-	echo "  github.com/mrkcee/asahi-opensuse). This path is greenfield —" >&2
-	echo "  packaging must be created before an image can." >&2
-	exit 1
+	printf "::group:: === Asahi (openSUSE OBS home:mrkcee) — EXPERIMENTAL ===\n"
+	# OBS home:mrkcee is a real, current full-stack Asahi set for Factory ARM:
+	# kernel-asahi 7.0.13 (matches Fedora Asahi), m1n1, u-boot-asahi, audio,
+	# 158+ revisions, updated 2026-06. Caveat: a single-maintainer home:
+	# project, not a devel project — treat as upstream-worth-adopting
+	# (hardware:asahi would be the graduation path).
+	zypper --non-interactive --gpg-auto-import-keys addrepo \
+		"https://download.opensuse.org/repositories/home:/mrkcee/openSUSE_Factory_ARM/home:mrkcee.repo"
+	zypper --non-interactive --gpg-auto-import-keys refresh
+	zypper --non-interactive remove --no-confirm kernel-default || true
+	zypper --non-interactive install --no-confirm --no-recommends \
+		kernel-asahi m1n1 u-boot-asahi asahi-scripts
+	install_best_effort "zypper --non-interactive install --no-confirm --no-recommends" \
+		asahi-fwextract asahi-audio alsa-ucm-conf-asahi speakersafetyd \
+		triforce-lv2 bankstown-lv2 asahi-nvram tiny-dfr
+	zypper clean --all || true
 	;;
 gentoo)
 	echo "ERROR: guppy asahi needs binhost infrastructure first" >&2
