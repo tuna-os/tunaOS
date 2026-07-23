@@ -718,9 +718,16 @@ jobs:
   verify_boot:
     name: Gate
     needs: manifest
+    # amd64-only: this gate is an x86 QEMU/KVM boot (qemu-system-x86 +
+    # OVMF), so arm64-only flavors (gnome-asahi) can never pass it —
+    # skopeo dies with "no image for architecture amd64" before qemu even
+    # starts. Promote treats a skipped gate as pass; asahi images are
+    # verified by the dispatched "Verify Asahi image" 35-point harness
+    # instead (no aarch64 KVM on GH runners — TCG boot gate is future work).
     if: >-
       inputs.publish && github.event_name != 'pull_request' &&
-      !startsWith(inputs.flavor, 'base')
+      !startsWith(inputs.flavor, 'base') &&
+      contains(inputs.platforms, 'amd64')
     runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
