@@ -26,13 +26,14 @@ ARG IMAGE_NAME_VARIANT
 FROM ${BASE_IMAGE} AS bootc-builder
 ARG BASE_IMAGE
 ARG ORAS_VERSION=1.2.0
+ARG TARGETARCH
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends curl ca-certificates tar gzip && \
-    curl -fsSL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz" \
+    curl -fsSL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_${TARGETARCH}.tar.gz" \
       | tar -xz -C /usr/local/bin oras && \
     case "${BASE_IMAGE}" in *sid*) TC=sid ;; *) TC=trixie ;; esac && \
     mkdir -p /fetch /output && cd /fetch && \
-    oras pull "ghcr.io/tuna-os/bootc-toolchain-${TC}:latest" && \
+    oras pull "ghcr.io/tuna-os/bootc-toolchain-${TC}:latest-${TARGETARCH}" && \
     tar -xzf toolchain.tar.gz -C /output && \
     rm -rf /fetch
 
