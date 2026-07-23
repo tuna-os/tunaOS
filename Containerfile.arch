@@ -80,6 +80,10 @@ RUN grep "= */var" /etc/pacman.conf | sed "/= *\/var/s/.*=// ; s/ //" | \
 # for the cachyos repo in pacman.conf and install linux-cachyos instead of
 # stock linux.
 RUN KERNEL_PKG="linux"; \
+    # Arch Linux ARM names its stock kernel linux-aarch64
+    if [ "$(uname -m)" = "aarch64" ]; then \
+        KERNEL_PKG="linux-aarch64"; \
+    fi; \
     if grep -q "^\[cachyos\]" /etc/pacman.conf 2>/dev/null; then \
         KERNEL_PKG="linux-cachyos"; \
     fi && \

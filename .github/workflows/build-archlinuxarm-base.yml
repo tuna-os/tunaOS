@@ -1,0 +1,85 @@
+name: Build Arch Linux ARM base
+
+# Builds ghcr.io/tuna-os/archlinuxarm from the official Arch Linux ARM
+# aarch64 rootfs tarball (os.archlinuxarm.org) — the marlin arm64 /
+# asahi (#778) base. docker.io/archlinux is x86_64-only and ALARM
+# publishes no OCI image, so we make our own from their canonical
+# tarball, verified against their published MD5 (all they sign tarballs
+# with; the pacman keyring takes over from first sync onward).
+#
+# Weekly rebuild keeps the snapshot fresh; consumers run pacman -Syu at
+# build time anyway, so staleness only costs download time.
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "40 2 * * 1"
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/build-archlinuxarm-base.yml
+
+concurrency:
+  group: build-archlinuxarm-base-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Fetch and verify ALARM rootfs
+        run: |
+          set -euo pipefail
+          curl -fsSL -o rootfs.tar.gz \
+            "http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz"
+          curl -fsSL -o rootfs.tar.gz.md5 \
+            "http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz.md5"
+          # The .md5 references the canonical filename
+          sed 's/ArchLinuxARM-aarch64-latest.tar.gz/rootfs.tar.gz/' rootfs.tar.gz.md5 | md5sum -c -
+
+      - name: Build image from rootfs
+        run: |
+          set -euo pipefail
+          ctr=$(sudo buildah from scratch)
+          mnt=$(sudo buildah mount "$ctr")
+          sudo tar -xpf rootfs.tar.gz -C "$mnt" --numeric-owner
+          # The tarball is a device rootfs: drop the board bits a container
+          # never uses; alarm/root users stay (standard ALARM accounts).
+          sudo rm -rf "$mnt/boot"/* "$mnt/etc/fstab"
+          # Initialize pacman inside the rootfs (native arm64 runner).
+          sudo buildah run "$ctr" -- pacman-key --init
+          sudo buildah run "$ctr" -- pacman-key --populate archlinuxarm
+          sudo buildah run "$ctr" -- pacman -Syu --noconfirm
+          sudo buildah run "$ctr" -- pacman -Scc --noconfirm
+          sudo buildah config \
+            --arch arm64 --os linux \
+            --env LANG=C.UTF-8 \
+            --cmd /usr/bin/bash \
+            --label org.opencontainers.image.title="Arch Linux ARM base" \
+            --label org.opencontainers.image.description="Arch Linux ARM aarch64 rootfs as an OCI base image (marlin arm64/asahi prerequisite)" \
+            --label org.opencontainers.image.source="https://github.com/${{ github.repository }}" \
+            "$ctr"
+          sudo buildah commit --format oci "$ctr" archlinuxarm:build
+
+      - name: Smoke test
+        run: |
+          set -euo pipefail
+          sudo podman run --rm archlinuxarm:build bash -c \
+            'pacman -Q base >/dev/null && [ "$(uname -m)" = aarch64 ] && pacman -Sp --noconfirm linux-aarch64 >/dev/null'
+
+      - name: Push to GHCR
+        run: |
+          set -euo pipefail
+          echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          REF="ghcr.io/${{ github.repository_owner }}/archlinuxarm"
+          DATE=$(date -u +%Y%m%d)
+          sudo podman tag archlinuxarm:build "$REF:latest" "$REF:$DATE"
+          sudo podman push "$REF:latest"
+          sudo podman push "$REF:$DATE"

@@ -732,15 +732,28 @@ variants:
     emoji: "🚀"
     description: "Based on Arch Linux (rolling)"
     base_image: "docker.io/archlinux/archlinux:latest"
+    # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
+    # is x86_64-only) — see get-base-image.sh + build-archlinuxarm-base.yml
+    # (#778). Only the gnome-asahi parent chain builds arm64.
     platforms: ["linux/amd64"]
     flavors:
       - id: base
         stage: 1
+        platforms: ["linux/amd64", "linux/arm64"]
         build_image: true
       - id: gnome
         stage: 2
+        platforms: ["linux/amd64", "linux/arm64"]
         build_image: true
         build_iso: true
+      # Apple Silicon (M1/M2, Asahi Linux) — overlay/asahi.sh, Asahi-ALARM
+      # repos. aarch64 only; no ISO (asahi-installer path).
+      - id: gnome-asahi
+        stage: 3
+        platforms: ["linux/arm64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: kde
         stage: 2
         build_image: true

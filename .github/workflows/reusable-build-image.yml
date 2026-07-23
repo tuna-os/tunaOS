@@ -204,7 +204,11 @@ jobs:
           # Pre-pull the OS base with retries: quay's CDN drops blobs
           # mid-transfer often enough to kill nightly builds (rawhide:
           # #675). podman build then finds the base in local storage.
-          BASE=$(yq -r ".variants[] | select(.id == \"${IMAGE_VARIANT}\") | .base_image // \"\"" .github/build-config.yml)
+          # Platform-aware: single-arch bases (marlin/archlinux) have an
+          # arm64 override in get-base-image.sh; keep the pre-pull in sync
+          # with what the build will actually use.
+          BASE=$(./scripts/get-base-image.sh "${IMAGE_VARIANT}" "${PLATFORM}" 2>/dev/null || \
+            yq -r ".variants[] | select(.id == \"${IMAGE_VARIANT}\") | .base_image // \"\"" .github/build-config.yml)
           if [ -n "$BASE" ] && [ -z "${CHAIN_BASE_IMAGE}" ]; then
             for i in 1 2 3 4; do
               sudo podman pull --platform "${PLATFORM}" "$BASE" && break

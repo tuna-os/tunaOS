@@ -123,7 +123,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
 
     # Resolve BASE_FOR_BUILD based on PARENT_FLAVOR
     if [[ -z "${PARENT_FLAVOR}" ]]; then
-        BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}")
+        BASE_FOR_BUILD=$(./scripts/get-base-image.sh "{{ variant }}" "${PLATFORM}")
     elif [[ "{{ is_ci }}" = "1" ]]; then
         # CI chains on the -testing stream tag
         BASE_FOR_BUILD=$(./scripts/published-image-ref.sh "{{ variant }}" "${PARENT_FLAVOR}-testing" ghcr)

@@ -5,13 +5,17 @@
 #   fedora (bonito)    — @asahi COPRs, same package set as Fedora Asahi Remix /
 #                        the fedora-asahi-remix-atomic-desktops images. Most
 #                        mature path.
-#   EL10 family        — CentOS Hyperscale SIG packages-asahi repo (skipjack,
-#                        yellowfin, albacore, redfin — centos/almalinux/rhel
-#                        IDs all take this branch). The SIG repo lags upstream
-#                        (~6.16 era) and lacks m1n1/u-boot/audio packages;
-#                        EXPERIMENTAL, expect loud warnings.
-#   arch (marlin)      — community Asahi-ALARM repo. Requires an Arch Linux ARM
-#                        base (Arch proper is x86_64-only); EXPERIMENTAL.
+#   EL10 family        — CentOS Hyperscale SIG packages-asahi (kernel-16k,
+#                        glue, metapackages) + EPEL10 (m1n1, audio stack) +
+#                        @asahi/u-boot COPR (apple_m1 uboot-images-armv8).
+#                        Complete stack as of 2026-07 except tiny-dfr; kernel
+#                        lags upstream (6.16 era vs 7.0). skipjack, yellowfin,
+#                        albacore, redfin — centos/almalinux/rhel IDs all take
+#                        this branch.
+#   arch (marlin)      — community Asahi-ALARM repo on the tuna-os ALARM base
+#                        (ghcr.io/tuna-os/archlinuxarm, built by
+#                        build-archlinuxarm-base.yml from the official rootfs
+#                        tarball — #778); EXPERIMENTAL.
 #   debian (flounder)  — official Bananas-team userspace from the Debian
 #                        archive (trixie+); kernel + mesa from the team's side
 #                        archive. EXPERIMENTAL.
@@ -66,7 +70,14 @@ fedora)
 		asahi-fwupdate dracut-asahi update-m1n1
 	;;
 centos)
-	printf "::group:: === Asahi (CentOS Hyperscale SIG) — EXPERIMENTAL ===\n"
+	printf "::group:: === Asahi (CentOS Hyperscale SIG + EPEL10 + @asahi/u-boot) ===\n"
+	# Full stack, three sources (verified 2026-07-23):
+	#   Hyperscale packages-asahi — kernel-16k, dracut-asahi, update-m1n1,
+	#     asahi-scripts/-fwupdate/-battery, linux-firmware-vendor, metapackages
+	#   EPEL10 — m1n1, asahi-audio, alsa-ucm-asahi, speakersafetyd
+	#   @asahi/u-boot COPR (epel-10-aarch64) — uboot-images-armv8 with the
+	#     apple_m1 payload update-m1n1 hard-requires (in no EL repo yet)
+	# Still unpackaged for EL10: tiny-dfr (Touch Bar; best-effort below).
 	KEY=/etc/pki/rpm-gpg/RPM-GPG-KEY-CentOS-SIG-HyperScale
 	if [ ! -f "$KEY" ]; then
 		curl -fsSL "https://www.centos.org/keys/RPM-GPG-KEY-CentOS-SIG-HyperScale" -o "$KEY"
@@ -81,21 +92,32 @@ centos)
 			gpgkey=file://${KEY}
 		EOF
 	done
+	# TunaOS EL10 bases enable EPEL in 10-base-packages.sh; make sure anyway
+	# (m1n1 + the audio stack resolve from there).
+	rpm -q epel-release >/dev/null 2>&1 || dnf -y install epel-release || true
+	COPR_UBOOT="https://download.copr.fedorainfracloud.org/results/@asahi/u-boot"
+	cat >/etc/yum.repos.d/asahi-u-boot-copr.repo <<-EOF
+		[copr-asahi-u-boot]
+		name=Copr @asahi/u-boot (apple_m1 uboot-images-armv8 for EL10)
+		baseurl=${COPR_UBOOT}/epel-10-\$basearch/
+		enabled=1
+		gpgcheck=1
+		gpgkey=${COPR_UBOOT}/pubkey.gpg
+	EOF
 	dnf -y remove --no-autoremove kernel kernel-core kernel-modules \
 		kernel-modules-core kernel-modules-extra || true
-	# The SIG builds 16k asahi kernel flavors + the dracut/update-m1n1 glue.
-	dnf -y install kernel-16k dracut-asahi update-m1n1
+	# metapackage-core pulls kernel-16k, dracut-asahi, update-m1n1 (-> m1n1 +
+	# uboot-images-armv8), alsa-ucm-asahi, asahi-fwupdate.
+	dnf -y install kernel-16k kernel-16k-modules-extra \
+		asahi-platform-metapackage-core
 	install_best_effort "dnf -y install" \
-		asahi-platform-metapackage-core asahi-fwupdate asahi-scripts \
-		linux-firmware-vendor asahi-battery
-	echo "WARNING: the Hyperscale SIG asahi repo has no m1n1/u-boot-asahi/asahi-audio" \
-		"packages as of 2026-07 — boot payloads and audio need another source" \
-		"before this image can run on hardware."
+		asahi-platform-metapackage-audio asahi-scripts \
+		linux-firmware-vendor asahi-battery tiny-dfr
 	;;
 arch | archarm)
 	printf "::group:: === Asahi (Asahi-ALARM) — EXPERIMENTAL ===\n"
-	# Requires an Arch Linux ARM base image; marlin's default base
-	# (docker.io/archlinux) is x86_64-only and never reaches this branch
+	# Runs on the tuna-os ALARM base (ghcr.io/tuna-os/archlinuxarm);
+	# marlin's amd64 base (docker.io/archlinux) never reaches this branch
 	# (aarch64 guard above).
 	cat >/etc/pacman.d/mirrorlist.asahi-alarm <<-'EOF'
 		Server = https://github.com/asahi-alarm/asahi-alarm/releases/download/$arch
@@ -115,7 +137,8 @@ arch | archarm)
 	install_best_effort "pacman -S --noconfirm --needed" \
 		m1n1 uboot-asahi asahi-audio alsa-ucm-conf-asahi \
 		speakersafetyd tiny-dfr asahi-fwextract
-	mkinitcpio -P
+	# No mkinitcpio here: marlin images are dracut-based like every other
+	# TunaOS variant; the common section below rebuilds the initramfs.
 	pacman -Scc --noconfirm || true
 	;;
 debian)
@@ -177,8 +200,8 @@ gentoo)
 	;;
 esac
 
-# ── Common verification + staging (dracut families; Arch uses mkinitcpio) ────
-if [ "${ID}" != "arch" ] && [ "${ID}" != "archarm" ]; then
+# ── Common verification + staging (all families are dracut-based) ────────────
+{
 	KVER=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1 | xargs basename)
 	case "$KVER" in
 	*asahi* | *16k*) ;;
@@ -188,9 +211,16 @@ if [ "${ID}" != "arch" ] && [ "${ID}" != "archarm" ]; then
 		;;
 	esac
 	# Stage vmlinuz where bootc expects it (Fedora/EL RPMs do this natively;
-	# Debian kernels put it in /boot).
-	[ -f "/usr/lib/modules/${KVER}/vmlinuz" ] ||
-		cp "/boot/vmlinuz-${KVER}" "/usr/lib/modules/${KVER}/vmlinuz"
+	# Debian kernels put it in /boot; Arch names it after the package).
+	if [ ! -f "/usr/lib/modules/${KVER}/vmlinuz" ]; then
+		for cand in "/boot/vmlinuz-${KVER}" /boot/vmlinuz-linux-asahi /boot/Image; do
+			[ -f "$cand" ] && cp "$cand" "/usr/lib/modules/${KVER}/vmlinuz" && break
+		done
+	fi
+	[ -f "/usr/lib/modules/${KVER}/vmlinuz" ] || {
+		echo "ERROR: no kernel image found for ${KVER}" >&2
+		exit 1
+	}
 	# Debian-family kernels ship DTBs under /usr/lib/linux-image-<kver>/;
 	# stage the Apple ones at the layout update-m1n1 harvests.
 	if [ ! -d "/usr/lib/modules/${KVER}/dtb/apple" ] && [ -d "/usr/lib/linux-image-${KVER}/apple" ]; then
@@ -220,6 +250,6 @@ if [ "${ID}" != "arch" ] && [ "${ID}" != "archarm" ]; then
 	dracut --force --no-hostonly --reproducible \
 		--kver "${KVER}" "/usr/lib/modules/${KVER}/initramfs.img"
 	command -v dnf >/dev/null 2>&1 && dnf clean all || true
-fi
+}
 
 printf "::endgroup::\n"
