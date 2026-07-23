@@ -110,6 +110,15 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+      # Apple Silicon (M1/M2, Asahi Linux) — overlay/asahi.sh, CentOS
+      # Hyperscale SIG packages-asahi (EXPERIMENTAL: kernel + glue only; boot
+      # payloads pending #777). aarch64 only; no ISO (asahi-installer path).
+      - id: gnome-asahi
+        stage: 3
+        platforms: ["linux/arm64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: gnome-nvidia
         stage: 3
         build_image: true
@@ -234,6 +243,15 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+      # Apple Silicon (M1/M2, Asahi Linux) — overlay/asahi.sh, CentOS
+      # Hyperscale SIG packages-asahi (EXPERIMENTAL: kernel + glue only; boot
+      # payloads pending #777). aarch64 only; no ISO (asahi-installer path).
+      - id: gnome-asahi
+        stage: 3
+        platforms: ["linux/arm64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: gnome-nvidia
         stage: 3
         build_image: true
@@ -355,6 +373,15 @@ variants:
       # HWE: no ISO — install the standard ISO then `bootc switch` to *-hwe
       - id: gnome-hwe
         stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      # Apple Silicon (M1/M2, Asahi Linux) — overlay/asahi.sh, CentOS
+      # Hyperscale SIG packages-asahi (EXPERIMENTAL: kernel + glue only; boot
+      # payloads pending #777). aarch64 only; no ISO (asahi-installer path).
+      - id: gnome-asahi
+        stage: 3
+        platforms: ["linux/arm64"]
         build_image: true
         build_iso: false
         build_qcow2: false
@@ -510,12 +537,25 @@ variants:
     base_image: "registry.opensuse.org/opensuse/tumbleweed:latest"
     platforms: ["linux/amd64"]
     flavors:
+      # base + gnome carry an arm64 leg solely as the parent chain for
+      # gnome-asahi (Tumbleweed is multiarch; bootc comes from zypper).
+      # Other DEs stay amd64 until someone asks for them on arm64.
       - id: base
         stage: 1
+        platforms: ["linux/amd64", "linux/arm64"]
         build_image: true
       - id: gnome
         stage: 2
+        platforms: ["linux/amd64", "linux/arm64"]
         build_image: true
+      # Apple Silicon (M1/M2, Asahi Linux) — overlay/asahi.sh, OBS
+      # home:mrkcee full stack. aarch64 only; no ISO (asahi-installer path).
+      - id: gnome-asahi
+        stage: 3
+        platforms: ["linux/arm64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: kde
         stage: 2
         build_image: true
@@ -731,13 +771,26 @@ variants:
     base_image: "docker.io/library/debian:trixie"
     platforms: ["linux/amd64"]
     flavors:
+      # base + gnome carry an arm64 leg solely as the parent chain for
+      # gnome-asahi (debian:trixie is multiarch; the bootc toolchain
+      # publishes latest-arm64). Other DEs stay amd64 for now.
       - id: base
         stage: 1
+        platforms: ["linux/amd64", "linux/arm64"]
         build_image: true
       - id: gnome
         stage: 2
+        platforms: ["linux/amd64", "linux/arm64"]
         build_image: true
         build_iso: true
+      # Apple Silicon (M1/M2, Asahi Linux) — overlay/asahi.sh, Debian
+      # Bananas archive. aarch64 only; no ISO (asahi-installer path).
+      - id: gnome-asahi
+        stage: 3
+        platforms: ["linux/arm64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: kde
         stage: 2
         build_image: true
