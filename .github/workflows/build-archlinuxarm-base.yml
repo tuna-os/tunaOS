@@ -53,6 +53,12 @@ jobs:
           # The tarball is a device rootfs: drop the board bits a container
           # never uses; alarm/root users stay (standard ALARM accounts).
           sudo rm -rf "$mnt/boot"/* "$mnt/etc/fstab"
+          # pacman's Landlock/alpm-user sandbox cannot apply inside a
+          # buildah run container ("switching to sandbox user 'alpm'
+          # failed") — disable it in the image; consumers building FROM
+          # this base need it off for the same reason.
+          sudo sed -i '/^\[options\]/a DisableSandbox' "$mnt/etc/pacman.conf"
+          grep -q '^DisableSandbox' "$mnt/etc/pacman.conf"
           # Initialize pacman inside the rootfs (native arm64 runner).
           sudo buildah run "$ctr" -- pacman-key --init
           sudo buildah run "$ctr" -- pacman-key --populate archlinuxarm
