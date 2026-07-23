@@ -105,4 +105,8 @@ if ! grep -rqs "asahi-firmware" /usr/lib/dracut/dracut.conf.d/ /etc/dracut.conf.
         > /usr/lib/dracut/dracut.conf.d/10-asahi.conf
 fi
 
+# boot.bin lifecycle on bootc (update-m1n1 scriptlets never re-run on
+# deploys) — tunaOS#779.
+"$(dirname "$0")/asahi/install-bootbin-sync.sh"
+
 apt-get clean -y && rm -rf /var/lib/apt/lists/*

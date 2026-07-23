@@ -244,6 +244,10 @@ esac
 		printf 'add_dracutmodules+=" asahi-firmware kernel-modules-asahi "\n' \
 			> /usr/lib/dracut/dracut.conf.d/10-asahi.conf
 	fi
+	# boot.bin lifecycle on bootc (update-m1n1 scriptlets never re-run on
+	# deploys) — tunaOS#779.
+	"$(dirname "$0")/../asahi/install-bootbin-sync.sh"
+
 	# (Re)build the initramfs with the asahi modules in scope — package
 	# postinst hooks do not reliably run dracut in container builds, and the
 	# ESP vendor-firmware flow silently dies without these modules.
