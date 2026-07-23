@@ -26,12 +26,13 @@ FROM ${ZIRCONIUM_IMAGE_REF} AS zirconium
 
 FROM ${BASE_IMAGE} AS bootc-builder
 ARG ORAS_VERSION=1.2.0
+ARG TARGETARCH
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends curl ca-certificates tar gzip && \
-    curl -fsSL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz" \
+    curl -fsSL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_${TARGETARCH}.tar.gz" \
       | tar -xz -C /usr/local/bin oras && \
     mkdir -p /fetch /output && cd /fetch && \
-    oras pull "ghcr.io/tuna-os/bootc-toolchain-sid:latest" && \
+    oras pull "ghcr.io/tuna-os/bootc-toolchain-sid:latest-${TARGETARCH}" && \
     tar -xzf toolchain.tar.gz -C /output && \
     rm -rf /fetch
 
@@ -127,12 +128,14 @@ RUN printf '#!/bin/sh\nexit 0\n' | tee \
     chmod +x /etc/kernel/postinst.d/kdump-tools
 
 # Install the kernel + firmware and stage vmlinuz where bootc expects it.
-RUN apt-get update -y && \
-    apt-get -o Dpkg::Options::="--force-confold" install -y --no-install-recommends \
-        linux-generic linux-firmware && \
-    KVER=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1 | xargs basename) && \
-    cp "/boot/vmlinuz-${KVER}" "/usr/lib/modules/${KVER}/vmlinuz" && \
-    apt-get clean -y && rm -rf /var/lib/apt/lists/*
+# ENABLE_ASAHI=1 (arm64 only) swaps in the UbuntuAsahi PPA 16K-page Apple
+# Silicon kernel + platform userspace instead of linux-generic — see
+# build_scripts/ubuntu-kernel.sh.
+ARG ENABLE_ASAHI="${ENABLE_ASAHI:-0}"
+ENV ENABLE_ASAHI=${ENABLE_ASAHI}
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/ubuntu-kernel.sh
 
 # Ensure /opt is a real directory for the build scripts (finalize.sh turns it
 # into a bind-mount target later).
