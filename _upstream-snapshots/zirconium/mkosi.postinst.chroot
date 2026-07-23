@@ -7,7 +7,6 @@ install -Dpm0644 -t /usr/share/flatpak/remotes.d/ "$SRCDIR/cache/flathub.flatpak
 niri --version | grep -i -E "niri [[:digit:]]*\.[[:digit:]]* (.*\.git\..*)"
 
 install -d /usr/share/zirconium/
-install -Dpm0644 -t /usr/lib/pam.d/ /usr/share/quickshell/dms/assets/pam/* # Fixes long login times on fingerprint auth
 sed --sandbox -i -e '/gnome_keyring.so/ s/-auth/auth/ ; /gnome_keyring.so/ s/-session/session/' /etc/pam.d/greetd
 install -d /usr/share/bash-completion/completions /usr/share/zsh/site-functions /usr/share/fish/vendor_completions.d/
 just --completions bash | sed -E 's/([\(_" ])just/\1zjust/g' > /usr/share/bash-completion/completions/zjust
@@ -35,7 +34,7 @@ ln -s fedora-release /usr/lib/system-release
 
     tee /usr/lib/os-release <<EOF
 NAME="${IMAGE_NAME^}"
-ID="$ID"
+ID="${IMAGE_NAME}"
 ID_LIKE="$ID"
 PRETTY_NAME="${IMAGE_NAME^}"
 FANCY_NAME="\033[0;38:2:252:186:3;1;49m⸭\033[0;38:2:252:186:3;49m ${IMAGE_NAME^} \033[0m"
@@ -44,13 +43,13 @@ VERSION_ID="$VERSION_ID"
 VERSION_CODENAME="Pibble"
 ANSI_COLOR="38:2:252:186:3;1;49"
 ANSI_COLOR_REVERSE="48;2;252;186;3;1;30"
-DEFAULT_HOSTNAME="${IMAGE_NAME}-????-????"
+LOGO="${IMAGE_NAME}"
 HOME_URL="${HOME_URL}"
 BUG_REPORT_URL="${HOME_URL}/issues"
 SUPPORT_URL=\"${HOME_URL}/issues
 CPE_NAME="cpe:/o:${IMAGE_NAME}-dev:${IMAGE_NAME}"
 DOCUMENTATION_URL="${HOME_URL}"
-DEFAULT_HOSTNAME="${IMAGE_NAME}"
+DEFAULT_HOSTNAME="${IMAGE_NAME}-????-????"
 EOF
 
     tee /usr/lib/issue <<EOF
