@@ -58,7 +58,7 @@ jobs:
           # failed") — disable it in the image; consumers building FROM
           # this base need it off for the same reason.
           sudo sed -i '/^\[options\]/a DisableSandbox' "$mnt/etc/pacman.conf"
-          grep -q '^DisableSandbox' "$mnt/etc/pacman.conf"
+          sudo grep -q '^DisableSandbox' "$mnt/etc/pacman.conf"
           # Initialize pacman inside the rootfs (native arm64 runner).
           sudo buildah run "$ctr" -- pacman-key --init
           sudo buildah run "$ctr" -- pacman-key --populate archlinuxarm
