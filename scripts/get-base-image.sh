@@ -3,6 +3,19 @@
 set -euo pipefail
 
 variant="$1"
+# Optional: target platform (e.g. linux/arm64). Variants whose default base
+# is single-arch declare an arm64-specific base here (docker.io/archlinux is
+# x86_64-only; the ALARM base comes from build-archlinuxarm-base.yml — #778).
+platform="${2:-}"
+
+if [[ "$platform" == *arm64* ]]; then
+	case "$variant" in
+	"marlin")
+		echo "ghcr.io/tuna-os/archlinuxarm:latest"
+		exit 0
+		;;
+	esac
+fi
 
 case "$variant" in
 "yellowfin") echo "quay.io/almalinuxorg/almalinux-bootc:10-kitten" ;;
