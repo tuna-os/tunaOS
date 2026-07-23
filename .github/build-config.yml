@@ -635,8 +635,11 @@ variants:
     description: "Based on Ubuntu 26.04 Resolute Raccoon"
     base_image: "docker.io/library/ubuntu:resolute"
     # Built directly from stock Ubuntu and bootcified in Containerfile.ubuntu
-    # (bootc from the bootc-shindig/bootc-deb apt repo). See RFC 010.
-    platforms: ["linux/amd64"]
+    # (bootc from the tuna-os bootc-toolchain-sid oras artifact). See RFC 010.
+    # arm64: toolchain publishes latest-{amd64,arm64}; Containerfile.ubuntu is
+    # TARGETARCH-aware. Apple Silicon (Asahi) support gated behind
+    # ENABLE_ASAHI=1 (build_scripts/ubuntu-kernel.sh) — flavor wiring TBD.
+    platforms: ["linux/amd64", "linux/arm64"]
     flavors:
       - id: base
         stage: 1

@@ -28,10 +28,12 @@ permissions:
 
 jobs:
   toolchain:
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     strategy:
       fail-fast: false
       matrix:
+        arch: [amd64, arm64]
+        base: [trixie, sid]
         include:
           - base: trixie
             image: docker.io/library/debian:trixie
@@ -58,7 +60,7 @@ jobs:
         run: |
           set -euo pipefail
           ORAS_VERSION=1.2.0
-          curl -fsSL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz" \
+          curl -fsSL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_${{ matrix.arch }}.tar.gz" \
             | sudo tar -xz -C /usr/local/bin oras
           oras version
 
@@ -90,11 +92,17 @@ jobs:
           set -euo pipefail
           REPO="ghcr.io/tuna-os/bootc-toolchain-${{ matrix.base }}"
           BOOTC="${{ steps.ver.outputs.bootc }}"
+          ARCH="${{ matrix.arch }}"
+          # Arch-suffixed tags are canonical (Containerfiles pull
+          # :latest-${TARGETARCH}); amd64 keeps the historical unsuffixed
+          # tags so pre-multiarch consumers don't break.
           oras push \
             --artifact-type application/vnd.tunaos.bootc-toolchain \
             --annotation "org.opencontainers.image.source=https://github.com/tuna-os/tunaOS" \
             --annotation "dev.tunaos.bootc.version=${BOOTC}" \
-            "${REPO}:${BOOTC}" \
+            "${REPO}:${BOOTC}-${ARCH}" \
             toolchain.tar.gz:application/vnd.tunaos.bootc-toolchain.layer.tar+gzip
-          # Move the :latest tag to this build.
-          oras tag "${REPO}:${BOOTC}" latest
+          oras tag "${REPO}:${BOOTC}-${ARCH}" "latest-${ARCH}"
+          if [ "$ARCH" = "amd64" ]; then
+            oras tag "${REPO}:${BOOTC}-${ARCH}" "${BOOTC}" latest
+          fi
