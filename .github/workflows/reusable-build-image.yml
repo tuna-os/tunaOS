@@ -580,10 +580,17 @@ jobs:
         run: |
           set -e
 
-          # Use strenv() for robust environment variable access in yq
-          DEFAULT_PLATFORMS=$(yq -r '.variants[] | select(.id == strenv(IMAGE_VARIANT)) | .platforms | join(",")' .github/build-config.yml)
-
-
+          # Expected platforms = what this flavor actually declares. The
+          # build matrix resolves per-flavor platform overrides into
+          # inputs.platforms (gnome-asahi is arm64-only; judging it against
+          # the variant's amd64+arm64 list made Promote silently skip
+          # forever). Fall back to the variant list only if the input is
+          # somehow empty. PR builds force amd64 here but never promote.
+          DEFAULT_PLATFORMS="${PLATFORMS}"
+          if [ -z "$DEFAULT_PLATFORMS" ]; then
+            # Use strenv() for robust environment variable access in yq
+            DEFAULT_PLATFORMS=$(yq -r '.variants[] | select(.id == strenv(IMAGE_VARIANT)) | .platforms | join(",")' .github/build-config.yml)
+          fi
           if [ -z "$DEFAULT_PLATFORMS" ]; then
             echo "Unknown variant: ${IMAGE_VARIANT}"
             DEFAULT_PLATFORMS="linux/arm64,linux/amd64"
