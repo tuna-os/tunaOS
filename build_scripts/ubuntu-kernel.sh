@@ -77,14 +77,24 @@ cp "/boot/vmlinuz-${KVER}" "/usr/lib/modules/${KVER}/vmlinuz"
 
 # DTBs: Debian-family kernels ship devicetrees under /usr/lib/linux-image-<kver>/.
 # Stage the Apple ones at /usr/lib/modules/<kver>/dtb/ — the layout update-m1n1
-# harvests and our verify harness checks.
-if [ -d "/usr/lib/linux-image-${KVER}" ]; then
-    mkdir -p "/usr/lib/modules/${KVER}/dtb"
-    cp -r "/usr/lib/linux-image-${KVER}/apple" "/usr/lib/modules/${KVER}/dtb/" 2>/dev/null \
-        || cp -r "/usr/lib/linux-image-${KVER}/." "/usr/lib/modules/${KVER}/dtb/"
+# harvests and our verify harness checks. Ubuntu kernels ship DTBs in
+# linux-modules at /lib/firmware/<kver>/device-tree/ (that's also Ubuntu's
+# own update-m1n1 DTBS default); Debian-style packages use
+# /usr/lib/linux-image-<kver>/.
+if [ ! -d "/usr/lib/modules/${KVER}/dtb/apple" ]; then
+    for src in \
+        "/usr/lib/firmware/${KVER}/device-tree" \
+        "/lib/firmware/${KVER}/device-tree" \
+        "/usr/lib/linux-image-${KVER}"; do
+        if [ -d "${src}/apple" ]; then
+            mkdir -p "/usr/lib/modules/${KVER}/dtb"
+            cp -r "${src}/apple" "/usr/lib/modules/${KVER}/dtb/"
+            break
+        fi
+    done
 fi
 ls "/usr/lib/modules/${KVER}/dtb/apple/" >/dev/null 2>&1 \
-    || echo "WARNING: no apple DTBs staged — check /usr/lib/linux-image-${KVER} layout"
+    || echo "WARNING: no apple DTBs staged — checked firmware/device-tree and linux-image layouts for ${KVER}"
 
 # Dracut modules: finalize.sh builds the initramfs with dracut. If the deb
 # packaging didn't ship the asahi dracut modules (Debian/Ubuntu default to
