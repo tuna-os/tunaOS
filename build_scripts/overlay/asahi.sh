@@ -244,28 +244,42 @@ esac
 
 # ── Common verification + staging (all families are dracut-based) ────────────
 {
-	# Prefer a directory that's actually asahi/16k-tagged over "whatever
-	# sorts highest" — package removal of the base distro kernel (e.g.
-	# zypper's `remove kernel-default`) doesn't reliably clean up its
-	# /usr/lib/modules/<kver>/ directory, and a leftover base-kernel
-	# version string can easily out-sort the asahi one on point release
-	# alone (sailfin: leftover "7.1.3-1-default" beat "kernel-asahi-7.0.13"
-	# even after kernel-default was successfully removed as a package).
-	KVER=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d -exec basename {} \; \
-		| grep -E 'asahi|16k' | sort -V | tail -1)
+	# Select by mtime, not by version-string sort or an "asahi"/"16k"
+	# substring: neither is reliable across families.
+	#   - version-string sort: package removal of the base distro kernel
+	#     (e.g. zypper's `remove kernel-default`) doesn't reliably clean up
+	#     its /usr/lib/modules/<kver>/ directory, and a leftover base-kernel
+	#     version can out-sort the asahi one on point release alone
+	#     (sailfin: leftover "7.1.3-1-default" beat "kernel-asahi-7.0.13").
+	#   - "asahi"/"16k" substring: proven false on marlin — Arch's
+	#     linux-asahi package's actual KERNELRELEASE is "7.0.13-1-1-ARCH",
+	#     no "asahi" substring at all; a substring check on that name is
+	#     not just imprecise, it's wrong, and (worse) a pipeline ending in
+	#     `grep -E 'asahi|16k'` matching nothing exits 1 under
+	#     pipefail/set -e and kills the whole script before any fallback
+	#     runs.
+	# Each family branch above already installs its named asahi kernel
+	# package LAST, after removing/purging any base-distro kernel first —
+	# so the asahi kernel's module directory is always the most recently
+	# created, regardless of what its version string looks like.
+	KVER=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d -printf '%T@ %f\n' \
+		| sort -rn | head -1 | cut -d' ' -f2-)
 	if [ -z "$KVER" ]; then
-		KVER=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1 | xargs basename)
+		echo "ERROR: no kernel module directory found under /usr/lib/modules" >&2
+		exit 1
 	fi
 	case "$KVER" in
 	*asahi* | *16k*) ;;
 	*)
-		echo "ERROR: newest kernel '${KVER}' is not an asahi/16k build" >&2
-		exit 1
+		# Not fatal — see above, this naming convention doesn't hold for
+		# every family — but worth a loud, visible warning since it was a
+		# real safety net for a while.
+		echo "WARNING: newest-by-mtime kernel '${KVER}' doesn't look asahi/16k-tagged by name; trusting mtime ordering anyway" >&2
 		;;
 	esac
-	# Leftover non-asahi module directories (see above) are guaranteed dead
-	# weight in the final image — no vmlinuz/initramfs gets built for them
-	# and bootc only ever deploys $KVER. Drop them.
+	# Leftover non-selected module directories (see above) are guaranteed
+	# dead weight in the final image — no vmlinuz/initramfs gets built for
+	# them and bootc only ever deploys $KVER. Drop them.
 	find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d ! -name "$KVER" -exec rm -rf {} +
 	# Stage vmlinuz where bootc expects it (Fedora/EL RPMs do this natively;
 	# Debian kernels put it in /boot; Arch names it after the package).
