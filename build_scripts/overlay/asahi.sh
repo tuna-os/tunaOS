@@ -284,7 +284,14 @@ esac
 	# Stage vmlinuz where bootc expects it (Fedora/EL RPMs do this natively;
 	# Debian kernels put it in /boot; Arch names it after the package).
 	if [ ! -f "/usr/lib/modules/${KVER}/vmlinuz" ]; then
-		for cand in "/boot/vmlinuz-${KVER}" /boot/vmlinuz-linux-asahi /boot/Image; do
+		# kernel-asahi's %post tries to symlink a generic /boot/Image ->
+		# /boot/Image-<KVER> alias, but that fails when /boot has no real
+		# backing in this container build ("ERROR: cannot create symlinks
+		# /boot/Image and /boot/initrd" — non-fatal to the package install,
+		# but means the generic alias never exists here). The versioned
+		# file underneath (openSUSE aarch64 kernels are named "Image", not
+		# "vmlinuz") is always present regardless; check for it explicitly.
+		for cand in "/boot/vmlinuz-${KVER}" "/boot/Image-${KVER}" /boot/vmlinuz-linux-asahi /boot/Image; do
 			[ -f "$cand" ] && cp "$cand" "/usr/lib/modules/${KVER}/vmlinuz" && break
 		done
 	fi
