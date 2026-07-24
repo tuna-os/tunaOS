@@ -61,6 +61,11 @@ fedora)
 	dnf -y copr enable @asahi/fedora-remix-branding
 	dnf -y install asahi-repos
 	# Swap the stock 4K kernel for the 16K asahi build.
+	# kernel-core's %preun runs kernel-install remove hooks; the
+	# 10-devicetree.install plugin does `ln ... /boot/dtb` and hard-fails
+	# ("No such file or directory") when /boot/dtb's parent doesn't exist
+	# — true in this build (/boot is an empty tmpfs mount). Pre-create it.
+	mkdir -p /boot/dtb
 	dnf -y remove --noautoremove kernel kernel-core kernel-modules \
 		kernel-modules-core kernel-modules-extra || true
 	dnf -y install kernel-16k kernel-16k-modules-extra \
@@ -104,6 +109,9 @@ centos)
 		gpgcheck=1
 		gpgkey=${COPR_UBOOT}/pubkey.gpg
 	EOF
+	# See the fedora branch above: kernel-core's %preun devicetree hook
+	# fails hard if /boot/dtb's parent doesn't exist yet.
+	mkdir -p /boot/dtb
 	dnf -y remove --noautoremove kernel kernel-core kernel-modules \
 		kernel-modules-core kernel-modules-extra || true
 	# metapackage-core pulls kernel-16k, dracut-asahi, update-m1n1 (-> m1n1 +
