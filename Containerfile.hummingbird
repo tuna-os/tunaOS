@@ -1,0 +1,10 @@
+# Fedora Hummingbird is intentionally a minimal, image-native base. It does
+# not currently expose a supported package-install workflow for composing the
+# desktop stacks that TunaOS builds for the other variants. Keep this a
+# transparent base integration until project-owned RPM repositories exist.
+ARG BASE_IMAGE
+
+FROM ${BASE_IMAGE} AS base-no-de
+
+# Retain a direct-build target without implying desktop support.
+FROM base-no-de AS base

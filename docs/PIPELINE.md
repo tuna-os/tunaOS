@@ -14,6 +14,7 @@ How images and ISOs get built, verified, and published. If you change CI, read t
 | albacore | AlmaLinux 10 | gnome, cosmic, kde, niri, xfce | yes | amd64, amd64/v2, arm64 |
 | skipjack | CentOS Stream 10 | gnome, cosmic, kde, niri | gnome/cosmic families | amd64, arm64 |
 | bonito | Fedora 44 | gnome, cosmic, kde, niri, xfce | nvidia only | amd64, arm64 |
+| hummingbird | Fedora Hummingbird (experimental) | base only | none | amd64, arm64 |
 | grouper | Ubuntu 26.04 | gnome, kde, niri, xfce | none | amd64 |
 
 ---

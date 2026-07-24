@@ -46,6 +46,13 @@ if [[ "${VARIANT}" == "sailfin" ]]; then
 	CONTAINERFILE="Containerfile.opensuse"
 fi
 
+# Fedora Hummingbird is currently deliberately base-only. Its minimal,
+# image-native package set cannot install TunaOS desktops until the
+# project-owned RPM pipeline is available.
+if [[ "${VARIANT}" == "hummingbird" ]]; then
+	CONTAINERFILE="Containerfile.hummingbird"
+fi
+
 # Guppy uses Containerfile.gentoo
 if [[ "${VARIANT}" == "guppy" ]]; then
 	CONTAINERFILE="Containerfile.gentoo"

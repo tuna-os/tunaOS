@@ -529,6 +529,22 @@ variants:
         build_iso: true
         build_qcow2: false
 
+  # Fedora Hummingbird is an experimental image-native rolling base. Its
+  # package set is not available through normal Fedora DNF repositories, so
+  # this remains base-only until project-owned RPMs can compose a desktop.
+  # Do not add COPR dependencies here.
+  - id: hummingbird
+    emoji: "🐦"
+    description: "Based on Fedora Hummingbird (experimental, base only)"
+    base_image: "quay.io/hummingbird-community/bootc-os:latest"
+    platforms: ["linux/amd64", "linux/arm64"]
+    flavors:
+      - id: base
+        stage: 1
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
   # ── Sailfin ──────────────────────────────────────────────────────────────
   # Sailfin Tumbleweed: rolling-release, zypper-based.
   - id: sailfin

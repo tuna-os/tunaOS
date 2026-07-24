@@ -51,6 +51,7 @@ The generic installer `build_scripts/desktop/install-desktop.sh` reads a manifes
 | `Containerfile.debian` | Debian bootcification (flounder, flounder-sid) |
 | `Containerfile.arch` | Arch Linux bootcification (marlin) |
 | `Containerfile.gentoo` | Gentoo (source-based) bootcification (guppy) |
+| `Containerfile.hummingbird` | Fedora Hummingbird transparent bootc base (base-only) |
 | `Containerfile.opensuse` | openSUSE bootcification (sailfin) |
 | `Containerfile.overlay` | HWE/nvidia/cachyos layer (parameterized by `OVERLAY_TYPE`) |
 | `Containerfile.custom` | User overlay build workflow (RFC #646) |
@@ -92,6 +93,7 @@ Defined in `.github/build-config.yml`. The workflow is `build-variant.yml` → `
 | `skipjack` | 🍣 | CentOS Stream 10 | dnf | Beta |
 | `bonito` | 🎣 | Fedora 44 | dnf | Beta |
 | `bonito-rawhide` | 🐉 | Fedora Rawhide (rolling) | dnf | Beta |
+| `hummingbird` | 🐦 | Fedora Hummingbird (rolling) | image-native | Experimental, base only |
 | `sailfin` | 🦈 | openSUSE Tumbleweed (rolling) | zypper | Beta |
 | `guppy` | 🌈 | Gentoo Linux (source-based) | portage | Beta |
 | `grouper` | 🐟 | Ubuntu 26.04 | apt | Beta |

@@ -27,6 +27,13 @@ get_var() {
     [[ "$DESKTOP_FLAVOR" == "base" ]]
 }
 
+@test "base on hummingbird → its base-only Containerfile" {
+    eval "$("$SCRIPT" hummingbird base)"
+    [[ "$CONTAINERFILE" == "Containerfile.hummingbird" ]]
+    [[ "$DESKTOP_FLAVOR" == "base-no-de" ]]
+    [[ "$PARENT_FLAVOR" == "" ]]
+}
+
 # ─── Plain desktop flavors ────────────────────────────────────────────────────
 
 @test "gnome → Containerfile, gnome target, no parent" {
