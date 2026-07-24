@@ -157,8 +157,12 @@ debian)
 	apt-get update -y
 	apt-get install -y --no-install-recommends curl ca-certificates
 	BANANAS=https://bananas-archive.debian.net/bananas-archive
+	# The team's own .sources file hardcodes Signed-By: /etc/apt/keyrings/...
+	# (verified by fetching it) — not /usr/share/keyrings/ like most other
+	# third-party repos in this codebase. Match it exactly.
+	install -d /etc/apt/keyrings
 	curl -fsSL "${BANANAS}/bananas-archive-keyring.gpg" \
-		-o /usr/share/keyrings/bananas-archive-keyring.gpg
+		-o /etc/apt/keyrings/bananas-archive-keyring.gpg
 	SUITE=trixie
 	grep -q sid /etc/debian_version 2>/dev/null && SUITE=unstable
 	curl -fsSL "${BANANAS}/bananas-${SUITE}.sources" -o /etc/apt/sources.list.d/bananas.sources
