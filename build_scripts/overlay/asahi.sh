@@ -141,6 +141,13 @@ arch | archarm)
 		echo "WARNING: asahi-alarm-keyring unavailable — repo stays at SigLevel Optional"
 	pacman-key --populate asahi-alarm || true
 	sed -i -e '/^SigLevel = Optional TrustAll$/d' /etc/pacman.conf
+	# marlin's aarch64 base (Containerfile.arch's KERNEL_PKG=linux-aarch64)
+	# already has a kernel installed; linux-asahi conflicts with it (both
+	# provide "linux") and --noconfirm defaults conflict-removal prompts to
+	# "No", so pacman -Syu would hang/fail instead of swapping the kernel.
+	# Remove it with -Rdd (no dep cascade — asahi-scripts/etc. below pull in
+	# their own deps fresh) before installing linux-asahi.
+	pacman -Rdd --noconfirm linux-aarch64 linux-aarch64-headers 2>/dev/null || true
 	pacman -Syu --noconfirm --needed linux-asahi asahi-scripts
 	install_best_effort "pacman -S --noconfirm --needed" \
 		m1n1 uboot-asahi asahi-audio alsa-ucm-conf-asahi \
@@ -173,6 +180,14 @@ debian)
 		echo "ERROR: no linux-image-*asahi package found in the Bananas archive" >&2
 		exit 1
 	fi
+	# The base image's linux-image-generic (Containerfile.debian) already
+	# pulled in a concrete non-asahi kernel (e.g. 6.12.96+deb13-arm64).
+	# Debian doesn't swap kernels the way dnf does — both would coexist
+	# under /usr/lib/modules, and the common verification below (which
+	# picks the highest-sorting version) can pick the non-asahi one since
+	# its point-release number sorts higher regardless of asahi-ness.
+	# Purge it first so only the asahi kernel remains.
+	apt-get purge -y --allow-remove-essential 'linux-image-*' 'linux-headers-*' 2>/dev/null || true
 	apt-get -o Dpkg::Options::="--force-confold" install -y --no-install-recommends \
 		"${KERNEL_PKG}"
 	install_best_effort "apt-get install -y --no-install-recommends" \
@@ -229,18 +244,54 @@ esac
 
 # ── Common verification + staging (all families are dracut-based) ────────────
 {
-	KVER=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1 | xargs basename)
+	# Select by mtime, not by version-string sort or an "asahi"/"16k"
+	# substring: neither is reliable across families.
+	#   - version-string sort: package removal of the base distro kernel
+	#     (e.g. zypper's `remove kernel-default`) doesn't reliably clean up
+	#     its /usr/lib/modules/<kver>/ directory, and a leftover base-kernel
+	#     version can out-sort the asahi one on point release alone
+	#     (sailfin: leftover "7.1.3-1-default" beat "kernel-asahi-7.0.13").
+	#   - "asahi"/"16k" substring: proven false on marlin — Arch's
+	#     linux-asahi package's actual KERNELRELEASE is "7.0.13-1-1-ARCH",
+	#     no "asahi" substring at all; a substring check on that name is
+	#     not just imprecise, it's wrong, and (worse) a pipeline ending in
+	#     `grep -E 'asahi|16k'` matching nothing exits 1 under
+	#     pipefail/set -e and kills the whole script before any fallback
+	#     runs.
+	# Each family branch above already installs its named asahi kernel
+	# package LAST, after removing/purging any base-distro kernel first —
+	# so the asahi kernel's module directory is always the most recently
+	# created, regardless of what its version string looks like.
+	KVER=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d -printf '%T@ %f\n' \
+		| sort -rn | head -1 | cut -d' ' -f2-)
+	if [ -z "$KVER" ]; then
+		echo "ERROR: no kernel module directory found under /usr/lib/modules" >&2
+		exit 1
+	fi
 	case "$KVER" in
 	*asahi* | *16k*) ;;
 	*)
-		echo "ERROR: newest kernel '${KVER}' is not an asahi/16k build" >&2
-		exit 1
+		# Not fatal — see above, this naming convention doesn't hold for
+		# every family — but worth a loud, visible warning since it was a
+		# real safety net for a while.
+		echo "WARNING: newest-by-mtime kernel '${KVER}' doesn't look asahi/16k-tagged by name; trusting mtime ordering anyway" >&2
 		;;
 	esac
+	# Leftover non-selected module directories (see above) are guaranteed
+	# dead weight in the final image — no vmlinuz/initramfs gets built for
+	# them and bootc only ever deploys $KVER. Drop them.
+	find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d ! -name "$KVER" -exec rm -rf {} +
 	# Stage vmlinuz where bootc expects it (Fedora/EL RPMs do this natively;
 	# Debian kernels put it in /boot; Arch names it after the package).
 	if [ ! -f "/usr/lib/modules/${KVER}/vmlinuz" ]; then
-		for cand in "/boot/vmlinuz-${KVER}" /boot/vmlinuz-linux-asahi /boot/Image; do
+		# kernel-asahi's %post tries to symlink a generic /boot/Image ->
+		# /boot/Image-<KVER> alias, but that fails when /boot has no real
+		# backing in this container build ("ERROR: cannot create symlinks
+		# /boot/Image and /boot/initrd" — non-fatal to the package install,
+		# but means the generic alias never exists here). The versioned
+		# file underneath (openSUSE aarch64 kernels are named "Image", not
+		# "vmlinuz") is always present regardless; check for it explicitly.
+		for cand in "/boot/vmlinuz-${KVER}" "/boot/Image-${KVER}" /boot/vmlinuz-linux-asahi /boot/Image; do
 			[ -f "$cand" ] && cp "$cand" "/usr/lib/modules/${KVER}/vmlinuz" && break
 		done
 	fi
