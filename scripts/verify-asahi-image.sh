@@ -39,7 +39,18 @@ if [[ ${#kvers[@]} -eq 1 ]]; then ok "exactly one kernel: ${kvers[0]}"
 else bad "expected exactly 1 kernel in /usr/lib/modules, found ${#kvers[@]}: ${kvers[*]:-none}"; fi
 kver="${kvers[0]:-}"
 M="$mnt/usr/lib/modules/$kver"
-[[ "$kver" == *+16k ]]     && ok "16K page-size kernel flavor (+16k)" || bad "kernel is not the 16k flavor: $kver"
+# 16K pages are a hard requirement of Apple Silicon's DART IOMMU, not a
+# distro naming convention — Fedora encodes it in the version (+16k),
+# Ubuntu's asahi-arm kernels don't but do carry CONFIG_ARM64_16K_PAGES=y
+# (verified against the linux-buildinfo config, 2026-07-24). Trust the
+# version suffix where present; fall back to the shipped kernel config.
+if [[ "$kver" == *+16k ]]; then
+    ok "16K page-size kernel flavor (+16k)"
+elif [[ -f "$M/config" ]] && grep -qx "CONFIG_ARM64_16K_PAGES=y" "$M/config"; then
+    ok "16K page-size kernel (CONFIG_ARM64_16K_PAGES=y)"
+else
+    bad "kernel is not confirmed 16K-page: $kver"
+fi
 [[ "$kver" == *asahi* ]]   && ok "asahi kernel build" || bad "kernel version lacks 'asahi': $kver"
 [[ -f "$M/vmlinuz" ]]      && ok "vmlinuz present" || bad "vmlinuz missing"
 [[ -f "$M/initramfs.img" ]] && ok "initramfs.img present" || bad "initramfs.img missing (bootc images must ship a prebuilt initramfs)"
@@ -71,7 +82,7 @@ check_any() { # label, candidate paths...
 check_any "m1n1 payload" /usr/lib64/m1n1/m1n1.bin /usr/lib/m1n1/m1n1.bin /usr/lib/asahi-boot/m1n1.bin /boot/m1n1.bin
 check_any "Apple U-Boot payload" /usr/share/uboot/apple_m1/u-boot-nodtb.bin /usr/lib/u-boot/apple_m1/u-boot-nodtb.bin /usr/lib/asahi-boot/u-boot.bin
 check_file /usr/bin/update-m1n1
-check_any "update-m1n1 kernel hook" /usr/lib/kernel/install.d/15-update-m1n1.install /etc/kernel/postinst.d/update-m1n1
+check_any "update-m1n1 kernel hook" /usr/lib/kernel/install.d/15-update-m1n1.install /etc/kernel/postinst.d/update-m1n1 /etc/kernel/postinst.d/zz-update-m1n1
 
 echo "== firmware handling =="
 check_file /usr/bin/asahi-fwextract

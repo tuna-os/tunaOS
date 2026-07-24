@@ -75,6 +75,15 @@ case "$KVER" in
 esac
 cp "/boot/vmlinuz-${KVER}" "/usr/lib/modules/${KVER}/vmlinuz"
 
+# linux-buildinfo ships the kernel .config — the only distro-independent
+# proof that this build actually has CONFIG_ARM64_16K_PAGES=y (Apple
+# Silicon's DART IOMMU requires 16K pages; Ubuntu's asahi-arm version
+# string doesn't encode it the way Fedora's +16k suffix does). Optional:
+# don't fail the build if it's missing, the verify harness will catch it.
+apt-get install -y --no-install-recommends "linux-buildinfo-${KVER}" 2>/dev/null &&
+    cp "/usr/lib/linux/${KVER}/config" "/usr/lib/modules/${KVER}/config" 2>/dev/null ||
+    echo "WARNING: linux-buildinfo-${KVER} unavailable — kernel config not staged"
+
 # DTBs: Debian-family kernels ship devicetrees under /usr/lib/linux-image-<kver>/.
 # Stage the Apple ones at /usr/lib/modules/<kver>/dtb/ — the layout update-m1n1
 # harvests and our verify harness checks. Ubuntu kernels ship DTBs in
