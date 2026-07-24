@@ -302,6 +302,20 @@ if [[ -z "${_TD_DM}" || "${_TD_DM}" == "null" ]]; then
 fi
 if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 	safe_enable "${_TD_DM}.service"
+	# openSUSE's gdm.service ships only `[Install] Alias=display-manager.service`
+	# with no `WantedBy=graphical.target` (it relies on a distro preset +
+	# openSUSE's own display-manager.service launcher, which our cross-distro
+	# gdm alias replaces). So `systemctl enable gdm` creates the alias but leaves
+	# graphical.target.wants empty — nothing pulls the DM at boot, and the image
+	# comes up to a bare console (sailfin desktop Gate: "no graphical session",
+	# contract service never runs because it Requires=display-manager.service).
+	# Force the wants link so graphical.target starts the DM, matching the
+	# WantedBy the rpm/deb DMs carry. Idempotent where enable already made it.
+	if [[ -f "/usr/lib/systemd/system/${_TD_DM}.service" ]]; then
+		mkdir -p /etc/systemd/system/graphical.target.wants
+		ln -sf "/usr/lib/systemd/system/${_TD_DM}.service" \
+			"/etc/systemd/system/graphical.target.wants/${_TD_DM}.service"
+	fi
 	# Server-oriented bootc bases such as AlmaLinux default to
 	# multi-user.target. Enabling a display manager alone does not change the
 	# boot target, so an otherwise complete desktop image would only reach a
