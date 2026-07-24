@@ -13,14 +13,14 @@ on:
   workflow_dispatch:
     inputs:
       variant:
-        description: "Variant"
+        description: "Variant id, or 'all'"
         required: false
-        default: "yellowfin"
+        default: "all"
         type: string
       flavors:
-        description: "Comma-separated flavors"
+        description: "Single desktop flavor id (gnome/kde/cosmic/niri/xfce), or 'all'"
         required: false
-        default: "gnome,kde,cosmic,niri,xfce"
+        default: "all"
         type: string
   schedule:
     # Weekly, after image builds.
@@ -35,19 +35,46 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
+      count: ${{ steps.gen.outputs.count }}
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install yq
+        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
       - id: gen
         env:
-          FLAVORS: ${{ inputs.flavors || 'gnome,kde,cosmic,niri,xfce' }}
-          VARIANT: ${{ inputs.variant || 'yellowfin' }}
+          WANT_VARIANT: ${{ inputs.variant || 'all' }}
+          WANT_FLAVOR: ${{ inputs.flavors || 'all' }}
         run: |
-          M=$(jq -cn --arg v "$VARIANT" --arg f "$FLAVORS" \
-            '{include: ($f | split(",") | map({variant: $v, flavor: .}))}')
-          echo "matrix=$M" >> "$GITHUB_OUTPUT"
+          # Overlays carry the per-desktop live payload (installer flatpak,
+          # autologin, polkit) the browser ISO builder grafts in as
+          # live-overlay:<variant>-<flavor>. Filter on build_image (NOT
+          # build_iso): the browser builds ISOs from any published *image*,
+          # including image-only variants CI never cuts an ISO for — sailfin
+          # is exactly that case, so it had no overlay and booted with no
+          # installer. Restrict to the plain desktop tags the browser offers
+          # (gnome/kde/cosmic/niri/xfce, no -nvidia/-hwe); new variants are
+          # picked up automatically instead of the old yellowfin-only default.
+          MATRIX=$(yq -o json .github/build-config.yml | jq -c \
+            --arg v "$WANT_VARIANT" --arg f "$WANT_FLAVOR" '{
+              include: [
+                .variants[] as $var | $var.flavors[]
+                | select(.build_image == true)
+                | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$"))
+                | select($v == "all" or $var.id == $v)
+                | select($f == "all" or .id == $f)
+                | {variant: $var.id, flavor: .id}
+              ]
+            }')
+          COUNT=$(echo "$MATRIX" | jq '.include | length')
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Building $COUNT overlay(s):"
+          echo "$MATRIX" | jq -r '.include[] | "  \(.variant):\(.flavor)"'
 
   overlay:
     name: ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate-matrix
+    if: ${{ needs.generate-matrix.outputs.count != '0' }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     strategy:
