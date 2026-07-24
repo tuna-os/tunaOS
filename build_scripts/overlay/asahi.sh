@@ -192,8 +192,18 @@ opensuse* | *suse*)
 		"https://download.opensuse.org/repositories/home:/mrkcee/openSUSE_Factory_ARM/home:mrkcee.repo"
 	zypper --non-interactive --gpg-auto-import-keys refresh
 	zypper --non-interactive remove --no-confirm kernel-default || true
-	zypper --non-interactive install --no-confirm --no-recommends \
-		kernel-asahi m1n1 u-boot-asahi asahi-scripts
+	# home:mrkcee's OBS mirror occasionally 404s individual rpms mid-sync
+	# (single-maintainer project, no CDN warmup guarantee) — retry the
+	# required transaction a few times before giving up; `zypper refresh`
+	# re-reads the repo metadata, which is usually what clears a stale 404.
+	for attempt in 1 2 3; do
+		zypper --non-interactive install --no-confirm --no-recommends \
+			kernel-asahi m1n1 u-boot-asahi asahi-scripts && break
+		[ "$attempt" -eq 3 ] && { echo "ERROR: home:mrkcee install failed after 3 attempts" >&2; exit 1; }
+		echo "WARNING: required asahi package install failed (attempt ${attempt}/3) — refreshing repo and retrying" >&2
+		sleep $((attempt * 20))
+		zypper --non-interactive --gpg-auto-import-keys refresh
+	done
 	install_best_effort "zypper --non-interactive install --no-confirm --no-recommends" \
 		asahi-fwextract asahi-audio alsa-ucm-conf-asahi speakersafetyd \
 		triforce-lv2 bankstown-lv2 asahi-nvram tiny-dfr
