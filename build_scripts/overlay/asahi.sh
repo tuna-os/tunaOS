@@ -183,6 +183,11 @@ opensuse* | *suse*)
 	# 158+ revisions, updated 2026-06. Caveat: a single-maintainer home:
 	# project, not a devel project — treat as upstream-worth-adopting
 	# (hardware:asahi would be the graduation path).
+	# Sailfin's base wipes /var (which owns openSUSE's CA bundle) and
+	# regenerates it for curl's benefit (see Containerfile.opensuse); zypper
+	# hit the same gap ("unable to get local issuer certificate") on its
+	# own libcurl instance against download.opensuse.org. Idempotent.
+	update-ca-certificates || true
 	zypper --non-interactive --gpg-auto-import-keys addrepo \
 		"https://download.opensuse.org/repositories/home:/mrkcee/openSUSE_Factory_ARM/home:mrkcee.repo"
 	zypper --non-interactive --gpg-auto-import-keys refresh
