@@ -141,6 +141,13 @@ arch | archarm)
 		echo "WARNING: asahi-alarm-keyring unavailable — repo stays at SigLevel Optional"
 	pacman-key --populate asahi-alarm || true
 	sed -i -e '/^SigLevel = Optional TrustAll$/d' /etc/pacman.conf
+	# marlin's aarch64 base (Containerfile.arch's KERNEL_PKG=linux-aarch64)
+	# already has a kernel installed; linux-asahi conflicts with it (both
+	# provide "linux") and --noconfirm defaults conflict-removal prompts to
+	# "No", so pacman -Syu would hang/fail instead of swapping the kernel.
+	# Remove it with -Rdd (no dep cascade — asahi-scripts/etc. below pull in
+	# their own deps fresh) before installing linux-asahi.
+	pacman -Rdd --noconfirm linux-aarch64 linux-aarch64-headers 2>/dev/null || true
 	pacman -Syu --noconfirm --needed linux-asahi asahi-scripts
 	install_best_effort "pacman -S --noconfirm --needed" \
 		m1n1 uboot-asahi asahi-audio alsa-ucm-conf-asahi \
@@ -173,6 +180,14 @@ debian)
 		echo "ERROR: no linux-image-*asahi package found in the Bananas archive" >&2
 		exit 1
 	fi
+	# The base image's linux-image-generic (Containerfile.debian) already
+	# pulled in a concrete non-asahi kernel (e.g. 6.12.96+deb13-arm64).
+	# Debian doesn't swap kernels the way dnf does — both would coexist
+	# under /usr/lib/modules, and the common verification below (which
+	# picks the highest-sorting version) can pick the non-asahi one since
+	# its point-release number sorts higher regardless of asahi-ness.
+	# Purge it first so only the asahi kernel remains.
+	apt-get purge -y --allow-remove-essential 'linux-image-*' 'linux-headers-*' 2>/dev/null || true
 	apt-get -o Dpkg::Options::="--force-confold" install -y --no-install-recommends \
 		"${KERNEL_PKG}"
 	install_best_effort "apt-get install -y --no-install-recommends" \
@@ -229,7 +244,18 @@ esac
 
 # ── Common verification + staging (all families are dracut-based) ────────────
 {
-	KVER=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1 | xargs basename)
+	# Prefer a directory that's actually asahi/16k-tagged over "whatever
+	# sorts highest" — package removal of the base distro kernel (e.g.
+	# zypper's `remove kernel-default`) doesn't reliably clean up its
+	# /usr/lib/modules/<kver>/ directory, and a leftover base-kernel
+	# version string can easily out-sort the asahi one on point release
+	# alone (sailfin: leftover "7.1.3-1-default" beat "kernel-asahi-7.0.13"
+	# even after kernel-default was successfully removed as a package).
+	KVER=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d -exec basename {} \; \
+		| grep -E 'asahi|16k' | sort -V | tail -1)
+	if [ -z "$KVER" ]; then
+		KVER=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1 | xargs basename)
+	fi
 	case "$KVER" in
 	*asahi* | *16k*) ;;
 	*)
@@ -237,6 +263,10 @@ esac
 		exit 1
 		;;
 	esac
+	# Leftover non-asahi module directories (see above) are guaranteed dead
+	# weight in the final image — no vmlinuz/initramfs gets built for them
+	# and bootc only ever deploys $KVER. Drop them.
+	find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d ! -name "$KVER" -exec rm -rf {} +
 	# Stage vmlinuz where bootc expects it (Fedora/EL RPMs do this natively;
 	# Debian kernels put it in /boot; Arch names it after the package).
 	if [ ! -f "/usr/lib/modules/${KVER}/vmlinuz" ]; then
