@@ -1,7 +1,9 @@
 name: LUKS E2E
 
-# Full disk-encryption end-to-end test for every variant+flavor combo that
-# builds an ISO. For each cell we build a *dev* ISO (ENABLE_SSHD=1 — the live
+# Full disk-encryption end-to-end test for every variant x desktop-flavor
+# combo that has a published image (build_image — so image-only variants like
+# sailfin, which the browser builder makes ISOs from, are covered too, not
+# just build_iso). For each cell we build a *dev* ISO (ENABLE_SSHD=1 — the live
 # env needs SSH to drive the install), then scripts/iso-e2e.sh --luks:
 #   1. boots the live ISO under QEMU with an emulated TPM 2.0 (swtpm),
 #   2. installs via fisherman (the same backend every TunaOS installer
@@ -35,8 +37,8 @@ permissions:
   packages: read
 
 jobs:
-  # Build the {variant, flavor} matrix from build-config.yml (every build_iso
-  # flavor), optionally narrowed by the workflow_dispatch filters.
+  # Build the {variant, flavor} matrix from build-config.yml (every variant x
+  # desktop flavor with a published image), narrowed by the dispatch filters.
   generate-matrix:
     name: Generate matrix
     runs-on: ubuntu-latest
@@ -60,10 +62,18 @@ jobs:
         run: |
           set -euo pipefail
           json="$(yq -o=json '.' .github/build-config.yml)"
+          # Every variant x desktop flavor that has a published image
+          # (build_image, NOT build_iso): the browser ISO builder makes ISOs
+          # from any image, so image-only variants (sailfin, guppy,
+          # flounder-sid) need boot+install coverage too. Restrict to the
+          # plain desktop tags (gnome/kde/cosmic/niri/xfce) — -nvidia takes
+          # the identical LUKS path in headless QEMU (no GPU), and base has no
+          # graphical login target to gate on.
           matrix="$(echo "$json" | jq -c \
             --arg fv "$FILTER_VARIANT" --arg ff "$FILTER_FLAVOR" \
             '{include: [ .variants[] | .id as $v | .flavors[]
-               | select(.build_iso == true)
+               | select(.build_image == true)
+               | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$"))
                | {variant: $v, flavor: .id}
                | select($fv == "all" or .variant == $fv)
                | select($ff == "all" or .flavor == $ff) ]}')"
@@ -76,9 +86,9 @@ jobs:
           fi
           echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
 
-          # Keep the scheduled coverage auditable. A variant with no
-          # build_iso:true flavor cannot be exercised by this ISO-based E2E;
-          # list it explicitly instead of silently dropping the base.
+          # Keep the scheduled coverage auditable. A variant with no desktop
+          # image cannot be exercised by this ISO-based E2E; list it
+          # explicitly instead of silently dropping it.
           {
             echo "## LUKS E2E coverage"
             echo
@@ -88,16 +98,16 @@ jobs:
             echo "|---|---|"
             echo "$json" | jq -r '
               .variants[]
-              | [.id, ([.flavors[] | select(.build_iso == true) | .id] | join(", "))]
+              | [.id, ([.flavors[] | select(.build_image == true) | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$")) | .id] | join(", "))]
               | select(.[1] != "")
               | "| `\(.[0])` | \(.[1]) |"'
             echo
-            echo "### Bases not testable by this workflow"
+            echo "### Variants not testable by this workflow"
             echo
             echo "$json" | jq -r '
               [.variants[]
-               | select([.flavors[] | select(.build_iso == true)] | length == 0)
-               | "- `\(.id)`: no flavor has `build_iso: true`"]
+               | select([.flavors[] | select(.build_image == true) | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$"))] | length == 0)
+               | "- `\(.id)`: no desktop image (`build_image: true`)"]
               | if length == 0 then "- None" else .[] end'
           } >> "$GITHUB_STEP_SUMMARY"
 
