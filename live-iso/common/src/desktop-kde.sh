@@ -16,9 +16,16 @@ set -euo pipefail
 # targets so KDE's own power-management prefs can't override.
 
 # openSUSE names the session plasmawayland.desktop; everyone else plasma.
-_kde_session="plasma"
+#
+# Use the session FILE NAME, extension included. Both SDDM and PlasmaLogin
+# document Session= as "name of session file", and Fedora's own
+# livesys-scripts (/usr/libexec/livesys/sessions.d/livesys-kde, the reference
+# this image's KDE contract points at via ublue-os/aurora) writes
+# Session=plasma.desktop. A bare stem relies on lenient resolution that is
+# nowhere documented.
+_kde_session="plasma.desktop"
 if [[ -f /usr/share/wayland-sessions/plasmawayland.desktop && ! -f /usr/share/wayland-sessions/plasma.desktop ]]; then
-	_kde_session="plasmawayland"
+	_kde_session="plasmawayland.desktop"
 fi
 
 # Plasma 6.6 renamed SDDM to PlasmaLogin: on EL10 the `plasma-login-manager`
@@ -110,12 +117,59 @@ systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target 
 # Written to /etc/xdg rather than ~liveuser/.config so it applies however the
 # live user is created — livesys-scripts, tacklebox's baseline, or neither.
 if [[ -f /usr/share/applications/org.kde.plasma-welcome.desktop ]]; then
+    # LiveInstaller names a desktop file in /usr/share/applications — Fedora
+    # points it at liveinst, which is a real file there. Our installer is a
+    # Flatpak, so its exported desktop file lives under
+    # /var/lib/flatpak/exports/share/applications and may not resolve. Ship a
+    # launcher in the documented location and name that instead.
+    mkdir -p /usr/share/applications
+    tee /usr/share/applications/org.tunaos.installer-live.desktop <<DESKEOF
+[Desktop Entry]
+Type=Application
+Name=Install TunaOS
+Comment=Install this system to disk
+Exec=flatpak run ${INSTALLER_APP:-org.tunaos.InstallerKde}
+Icon=${INSTALLER_APP:-org.tunaos.InstallerKde}
+Terminal=false
+Categories=System;
+DESKEOF
+    chmod +x /usr/share/applications/org.tunaos.installer-live.desktop
+
     mkdir -p /etc/xdg
     tee /etc/xdg/plasma-welcomerc <<'WELCOMEEOF'
 [General]
 LiveEnvironment=true
-LiveInstaller=org.tunaos.InstallerKde
+LiveInstaller=org.tunaos.installer-live
 WELCOMEEOF
+fi
+
+# Live-session hygiene, mirroring Fedora's livesys-kde. These are not polish:
+# on a live installer image the file indexer and the device automounter are
+# actively harmful.
+#
+#   - baloo indexes the whole squash on first login, burning CPU and IO in a
+#     VM that exists to run an installer.
+#   - kded_device_automounter mounts "known" devices on login/plug. The
+#     installer's target disk is exactly such a device, and having it mounted
+#     underneath a partitioning step is a real hazard
+#     (rhbz#2073708 is the same class of bug).
+#   - discover's update notifier nags about updates to a system that ceases
+#     to exist at reboot.
+mkdir -p /etc/xdg
+tee /etc/xdg/baloofilerc <<'BALOOEOF'
+[Basic Settings]
+Indexing-Enabled=false
+BALOOEOF
+
+tee /etc/xdg/kded_device_automounterrc <<'AUTOMOUNTEOF'
+[General]
+AutomountEnabled=false
+AutomountOnLogin=false
+AutomountOnPlugin=false
+AUTOMOUNTEOF
+
+if [[ -f /etc/xdg/autostart/org.kde.discover.notifier.desktop ]]; then
+    echo 'Hidden=true' >>/etc/xdg/autostart/org.kde.discover.notifier.desktop
 fi
 
 # Auto-launch the TunaOS installer frontend in the live session.
