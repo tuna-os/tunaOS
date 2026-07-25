@@ -210,15 +210,26 @@ if [[ -z "$QEMU" ]]; then
 	exit 77
 fi
 
-# GPU/display selection. niri (and other Smithay compositors like xfwl4)
-# hard-require EGL_EXT_device_drm, which QEMU's plain virtio-gpu does NOT
-# provide — they start but render nothing headless (blank screen, niri
-# #322/#2567). If a DRM render node is present (an iGPU/dGPU host, e.g. the
-# tailnet laptops) and this QEMU has virtio-vga-gl, use virgl + egl-headless
-# so those compositors get real GL and actually render. GPU-less CI runners
-# fall back to -vga virtio: fine for cosmic/kde/gnome (software fallbacks),
-# but niri/xfwl4 will correctly show blank there. Override with
-# TBOX_E2E_GPU=virgl|plain.
+# GPU/display selection. niri (and the other Smithay compositors — xfwl4,
+# cosmic-comp) hard-require EGL_EXT_device_drm, which QEMU's plain virtio-gpu
+# does NOT provide (blank screen, niri #322/#2567). If a DRM render node is
+# present (an iGPU/dGPU host, e.g. the tailnet laptops) and this QEMU has
+# virtio-vga-gl, use virgl + egl-headless so those compositors get real GL and
+# actually render. Override with TBOX_E2E_GPU=virgl|plain.
+#
+# On a GPU-less runner we fall back to -vga virtio. This comment used to say
+# that was "fine for cosmic/kde/gnome (software fallbacks)". It is not, and
+# the claim cost weeks of misdirected debugging: cosmic and xfce are Smithay
+# too, so on hosted runners they don't render blank — they never start at
+# all. installer-smoke run 29914643652:
+#
+#   cosmic: libEGL: failed to create dri2 screen
+#   xfce:   greetd: check_children: greeter exited without creating a session
+#           greetd.service: Failed with result 'start-limit-hit'
+#
+# There is no software fallback for any of them. Only gnome and kde are
+# genuinely verifiable without a render node. For the rest, use
+# scripts/iso-e2e-gpu.sh on a host that has one.
 _gpu_mode="${TBOX_E2E_GPU:-auto}"
 QEMU_GPU_ARGS=(-vga virtio -display none)
 if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /dev/dri/renderD128 ]]; } \
