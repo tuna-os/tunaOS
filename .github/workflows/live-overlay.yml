@@ -86,10 +86,30 @@ jobs:
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
 
+      # Pinned to image-versions.yaml the same way scripts/lib/common.sh
+      # pins it, so the overlay publisher and the ISO build use the same
+      # tacklebox — the whole point of routing through its CLI.
+      - name: Build tacklebox
+        id: tbx
+        run: |
+          set -euo pipefail
+          SHA="$(grep '^\s*tacklebox:' image-versions.yaml | sed 's/.*"\(.*\)".*/\1/')"
+          echo "tacklebox @ ${SHA}"
+          src="$RUNNER_TEMP/tacklebox"
+          git clone --quiet https://github.com/tuna-os/tacklebox.git "$src"
+          git -C "$src" checkout --quiet "$SHA"
+          ( cd "$src" && go build -o "$RUNNER_TEMP/tacklebox-bin" ./cmd/tacklebox )
+          "$RUNNER_TEMP/tacklebox-bin" customize-live --help >/dev/null || {
+            echo "::error::tacklebox @ ${SHA} has no customize-live command — bump the pin in image-versions.yaml to a commit that includes tuna-os/tacklebox#149"
+            exit 1
+          }
+          echo "bin=$RUNNER_TEMP/tacklebox-bin" >> "$GITHUB_OUTPUT"
+
       - name: Run live customize and publish overlay
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
+          TACKLEBOX_BIN: ${{ steps.tbx.outputs.bin }}
         run: |
           set -euo pipefail
           IMG="ghcr.io/tuna-os/${VARIANT}:${FLAVOR}"
@@ -107,26 +127,29 @@ jobs:
           BASE_DIGEST="$(sudo podman image inspect --format '{{.Digest}}' "$IMG")"
           echo "base digest: ${BASE_DIGEST}"
 
-          # NOTE: this runs ONLY customize-live.sh. tacklebox's CustomizeLive
-          # additionally prepends its embedded src/live/baseline.sh (live
-          # user, DM autologin, live networking, sleep masking), so what we
-          # publish is base + customize-live.sh — NOT the full live payload a
-          # CI-built ISO gets. The browser path compensates by calling
-          # EnsureLiveUser / EnsureAutologin after grafting the overlay, which
-          # is why the gap went unnoticed. Recorded in the baseline label
-          # below so no consumer mistakes this for a complete live image.
-          sudo podman rm -f tbx-overlay 2>/dev/null || true
-          sudo podman run --name tbx-overlay \
-            --cap-add sys_admin --security-opt label=disable \
-            -v "$PWD/live-iso/common/src:/run/tbox-customize/0:ro" \
-            --entrypoint /bin/bash "$IMG" \
-            -c 'set -eu; cd /run/tbox-customize/0 && bash ./customize-live.sh'
+          # Use tacklebox's own customize pipeline rather than reimplementing
+          # it here (tacklebox#149).
+          #
+          # This step used to be a hand-rolled `podman run ... bash
+          # ./customize-live.sh`, and the reimplementation had silently
+          # diverged: it ran only customize-live.sh, while tacklebox's
+          # CustomizeLive additionally prepends its embedded
+          # src/live/baseline.sh — live user, DM autologin, live networking,
+          # sleep masking. The published overlay was therefore base +
+          # customize-live.sh, NOT the live payload a CI-built ISO gets, and
+          # nothing compared the two. The browser path masked it further by
+          # applying its own EnsureLiveUser/EnsureAutologin after grafting.
+          #
+          # Calling the same code the ISO build calls makes that class of
+          # drift impossible rather than merely fixed, which is why the
+          # baseline label below can now honestly say true.
+          sudo -E "${TACKLEBOX_BIN}" customize-live \
+            --image "$IMG" \
+            --script "$PWD/live-iso/common/src/customize-live.sh" \
+            --tag "$OUT" \
+            --label "org.tunaos.live-overlay.base=${IMG}" \
+            --label "org.tunaos.live-overlay.base-digest=${BASE_DIGEST}" \
+            --label "org.tunaos.live-overlay.baseline=true"
 
-          sudo podman commit \
-            --change "LABEL org.tunaos.live-overlay.base=${IMG}" \
-            --change "LABEL org.tunaos.live-overlay.base-digest=${BASE_DIGEST}" \
-            --change "LABEL org.tunaos.live-overlay.baseline=false" \
-            tbx-overlay "$OUT"
-          sudo podman rm -f tbx-overlay
           sudo podman push "$OUT"
           echo "published $OUT"
