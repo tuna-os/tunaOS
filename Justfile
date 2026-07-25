@@ -341,6 +341,42 @@ qcow2 variant flavor='gnome' repo='local' tag='':
 
     [[ -n "$SSH_PUBKEYS_FILE" ]] && rm -f "$SSH_PUBKEYS_FILE"
 
+    # bootc's composefs backend writes the ESP kernel/initrd out of the EROFS
+    # store, which zero-fills files past its inline threshold — so the 70MB+
+    # initramfs that lands on the ESP is NOT the one in the image. The boot then
+    # runs a stale/garbled initrd: bootc-root-setup.service is absent from it, so
+    # nothing consumes the composefs= karg, /sysroot is mounted but never
+    # prepared, and initrd-switch-root fails into a dracut emergency shell.
+    # Re-extract the real bytes over the ESP copies (same workaround corral's
+    # KubeVirt builder applies, pkg/kubevirt/bootc.go).
+    if grep -q '^BACKEND=composefs-native$' <<<"$PROBE"; then
+        echo "==> composefs: re-extracting real kernel/initrd onto the ESP..."
+        LOOP=$(sudo losetup --find --show --partscan "$RAW_ABS")
+        ESP_MNT=$(mktemp -d)
+        for P in 1 2 3; do
+            if sudo mount "${LOOP}p${P}" "$ESP_MNT" 2>/dev/null; then
+                [[ -d "$ESP_MNT/EFI" ]] && break
+                sudo umount "$ESP_MNT"
+            fi
+        done
+        UKI_DIR=$(sudo sh -c "ls -d '$ESP_MNT'/EFI/Linux/bootc_composefs-* 2>/dev/null" | head -1)
+        if [[ -n "$UKI_DIR" ]]; then
+            KDIR=$(mktemp -d)
+            sudo podman run --rm --entrypoint="" -v "$KDIR:/out:z" "$IMG_REF" \
+                sh -c 'KV=$(ls /usr/lib/modules | head -1); cp "/usr/lib/modules/$KV/vmlinuz" /out/vmlinuz; cp "/usr/lib/modules/$KV/initramfs.img" /out/initrd'
+            sudo cp -f "$KDIR/vmlinuz" "$UKI_DIR/vmlinuz"
+            sudo cp -f "$KDIR/initrd"  "$UKI_DIR/initrd"
+            sudo sync
+            echo "==> re-extracted kernel+initrd into $(basename "$UKI_DIR")"
+            rm -rf "$KDIR"
+        else
+            echo "WARNING: no bootc_composefs-* UKI dir found on the ESP; skipping re-extract" >&2
+        fi
+        sudo umount "$ESP_MNT" 2>/dev/null || true
+        rmdir "$ESP_MNT" 2>/dev/null || true
+        sudo losetup -d "$LOOP" 2>/dev/null || true
+    fi
+
     # Convert raw → qcow2 for Lima/QEMU consumption
     echo "==> Converting raw → qcow2..."
     if ! command -v qemu-img &>/dev/null; then
