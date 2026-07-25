@@ -83,20 +83,13 @@ packages:
       - gnome-software-fedora-langpacks
 
   el10:
-    # COPR repos for GNOME 50 backport — EL10 ships GNOME 48 natively.
-    # Brings modern GNOME to Enterprise Linux without waiting 3 years.
-    copr:
-      - repo: jreilly1821/c10s-gnome-50-fresh
-        extra_repos:
-          - jreilly1821/c10s-gnome-50
-        pre_install:
-          - "dnf -y upgrade glib2 fontconfig gobject-introspection gjs"
-          - "dnf_retry -y install --allowerasing gnome50-el10-compat"
-        packages: []
-
-    # Remove conflicting packages before COPR install
-    pre_install:
-      - "warn_on_fail dnf_retry -y remove --noautoremove gnome-shell-common"
+    # Project-owned RPMs, built by tuna-os/github-copr in GitHub Actions and
+    # published as signed rpm-md on R2.  EL10's stock GNOME is older, so this
+    # repository supplies the complete GNOME 50 backport and its compat RPM.
+    repos:
+      - name: tunaos-gnome50
+        baseurl: https://repo.tunaos.org/gnome50/10-stream-x86_64/
+        priority: 10
 
     groups:
       - "Common NetworkManager submodules"
@@ -113,6 +106,8 @@ packages:
       - PackageKit-command-not-found
 
     packages:
+      # Owns the EL10 transition/Obsoletes rules for the GNOME 50 backport.
+      - gnome50-el10-compat
       - gdm
       - glib2
       - gnome-bluetooth
