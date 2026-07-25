@@ -1,0 +1,167 @@
+# Precomputed image facts for the browser ISO builder's curated catalog.
+#
+# iso.tunaos.org shows desktop / kernel / packaging / systemd-boot for an image
+# by unpacking its layers in the browser (tbox.wasm Introspect). For OUR OWN
+# catalog images that is hundreds of MB pulled just to display facts CI already
+# knows — so publish them as a small JSON the app can read instantly.
+#
+# The heavy pull still happens when the user actually builds (the ISO is
+# authored from the same unpacked tree), but it no longer blocks the choice.
+#
+# Entries carry the manifest digest they were derived from, so the app can fall
+# back to live introspection whenever the published digest has moved on.
+name: Catalog Facts
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "Variant id, or 'all'"
+        required: false
+        default: "all"
+        type: string
+  schedule:
+    # Daily, after the nightly image builds.
+    - cron: "0 6 * * *"
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  # One job per VARIANT so the ~50 image probes run concurrently rather than
+  # serially; the merge job stitches the shards into one file.
+  generate-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install yq
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+      - id: gen
+        env:
+          WANT_VARIANT: ${{ inputs.variant || 'all' }}
+        run: |
+          set -euo pipefail
+          MATRIX=$(yq -o=json '.' .github/build-config.yml | jq -c --arg v "$WANT_VARIANT" '{
+            include: [ .variants[]
+              | select([.flavors[] | select(.build_image == true)
+                        | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$"))] | length > 0)
+              | select($v == "all" or .id == $v)
+              | {variant: .id} ]
+          }')
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "$MATRIX" | jq -r '.include[] | "  \(.variant)"'
+
+  facts:
+    name: facts ${{ matrix.variant }}
+    needs: generate-matrix
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install yq
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Probe this variant's catalog images
+        env:
+          WANT_VARIANT: ${{ matrix.variant }}
+        run: |
+          set -euo pipefail
+          # Same selection the browser catalog offers: published desktop images
+          # (build_image, plain desktop tags — no -nvidia/-hwe, no base).
+          mapfile -t CELLS < <(yq -o=json '.' .github/build-config.yml | jq -r \
+            --arg v "$WANT_VARIANT" '
+              .variants[] | .id as $var | .flavors[]
+              | select(.build_image == true)
+              | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$"))
+              | select($var == $v)
+              | "\($var):\(.id)"')
+          echo "probing ${#CELLS[@]} images for ${WANT_VARIANT}"
+
+          echo '{}' > shard.json
+          for CELL in "${CELLS[@]}"; do
+            IMG="ghcr.io/tuna-os/${CELL}"
+            echo "::group::${CELL}"
+            # Digest first: it is what the app validates its cache against, and
+            # a miss means the image is not published — skip rather than emit
+            # a stale entry.
+            DIGEST=$(skopeo inspect --format '{{.Digest}}' "docker://${IMG}" 2>/dev/null || true)
+            if [[ -z "$DIGEST" ]] || ! podman pull -q "$IMG" >/dev/null 2>&1; then
+              echo "unavailable; skipping"; echo "::endgroup::"; continue
+            fi
+
+            # Probe the same signals purefs.Introspect derives from the
+            # unpacked tree, so the app shows identical facts.
+            PROBE=$(podman run --rm --entrypoint="" "$IMG" sh -c '
+              echo "kernelVer=$(ls /usr/lib/modules 2>/dev/null | head -1)"
+              if   [ -f /usr/share/wayland-sessions/plasma.desktop ] \
+                || [ -f /usr/share/wayland-sessions/plasmawayland.desktop ]; then echo "desktop=kde"
+              elif [ -f /usr/share/wayland-sessions/niri.desktop ];   then echo "desktop=niri"
+              elif [ -f /usr/share/wayland-sessions/cosmic.desktop ]; then echo "desktop=cosmic"
+              elif ls /usr/share/xsessions/xfce*.desktop >/dev/null 2>&1 \
+                || ls /usr/share/wayland-sessions/xfce*.desktop >/dev/null 2>&1; then echo "desktop=xfce"
+              else echo "desktop=gnome"; fi
+              [ -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi ] && echo "hasSdBoot=true" || echo "hasSdBoot=false"
+              if   command -v dnf >/dev/null 2>&1 || command -v dnf5 >/dev/null 2>&1; then echo "pkgManager=dnf"; echo "repoFamily=fedora"
+              elif command -v zypper >/dev/null 2>&1; then echo "pkgManager=zypper"; echo "repoFamily=opensuse"
+              elif command -v pacman >/dev/null 2>&1; then echo "pkgManager=pacman"; echo "repoFamily=arch"
+              elif command -v apt >/dev/null 2>&1 || command -v apt-get >/dev/null 2>&1; then echo "pkgManager=apt"; echo "repoFamily=debian"
+              elif command -v apk >/dev/null 2>&1; then echo "pkgManager=apk"; echo "repoFamily=alpine"
+              else echo "pkgManager="; echo "repoFamily="; fi
+            ' 2>/dev/null || true)
+
+            get() { echo "$PROBE" | grep "^$1=" | head -1 | cut -d= -f2-; }
+            jq --arg k "tuna-os/${CELL}" --arg d "$DIGEST" \
+               --arg de "$(get desktop)" --arg kv "$(get kernelVer)" \
+               --arg sb "$(get hasSdBoot)" --arg pm "$(get pkgManager)" \
+               --arg rf "$(get repoFamily)" \
+               '.[$k] = {digest:$d, desktop:$de, kernelVer:$kv,
+                         hasSdBoot:($sb=="true"), pkgManager:$pm, repoFamily:$rf}' \
+               shard.json > shard.tmp && mv shard.tmp shard.json
+
+            podman rmi "$IMG" >/dev/null 2>&1 || true
+            echo "::endgroup::"
+          done
+          jq . shard.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: facts-${{ matrix.variant }}
+          path: shard.json
+
+  merge:
+    name: Merge and publish
+    needs: facts
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: facts-*
+          path: shards
+      - name: Merge shards
+        run: |
+          set -euo pipefail
+          jq -s 'add // {}' shards/*/shard.json > merged.json
+          jq --arg t "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+             '{generated:$t, images:.}' merged.json > catalog-facts.json
+          echo "entries: $(jq '.images | length' catalog-facts.json)"
+          jq -r '.images | to_entries[] | "  \(.key): \(.value.desktop) \(.value.kernelVer)"' catalog-facts.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: catalog-facts
+          path: catalog-facts.json
