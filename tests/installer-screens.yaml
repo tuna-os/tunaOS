@@ -21,11 +21,35 @@
 # required: true  → a frontend missing it FAILS the walkthrough (core flow)
 #           false → recorded in the parity matrix but not fatal (feature drift
 #                   we want visible before we make it mandatory)
+# Phrases identifying a frame as some OTHER application's window. A frame
+# matching any of these cannot credit an installer screen, however well its
+# text otherwise matches.
+#
+# OCR reads the whole framebuffer, not the installer's window. Run
+# 30166081962: KDE's Welcome Center autostarted on top of the installer and
+# its "Welcome to the Yellowfin operating system running KDE Plasma!" matched
+# the bare "welcome" keyword below, reporting welcome=true and verified=true
+# for a run in which the installer was never on screen. Blind keystrokes then
+# wandered into the taskbar and opened Kate, which is why an editor's chrome
+# is listed here too.
+not_installer:
+  - "plasma is a free and open-source"
+  - "the kde mascot konqi"
+  - "learn more about the kde community"
+  - "welcome center"
+  - "soft tabs"
+
 screens:
   - id: welcome
     title: Welcome
     required: true
-    keywords: ["welcome", "get started", "let's get", "begin", "install tunaos"]
+    # NOT bare "welcome"/"begin"/"get started": every desktop ships a welcome
+    # app, and KDE's matched this list while covering the installer. Per this
+    # file's own rule — headings or prompts unique to the screen, never bare
+    # nouns.
+    keywords: ["install tunaos", "welcome to tunaos",
+               "you'll select a target disk", "let's get tunaos",
+               "get started with tunaos"]
 
   - id: disk
     title: Disk / target selection

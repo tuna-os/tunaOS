@@ -151,18 +151,34 @@ def ocr(png):
 
 
 def load_spec(path):
-    """Minimal parser for the screens spec (avoids a hard PyYAML dependency)."""
+    """Minimal parser for the screens spec (avoids a hard PyYAML dependency).
+
+    Returns (screens, exclusions). Exclusions are phrases that identify a
+    frame as belonging to some OTHER application, disqualifying it from
+    scoring any installer screen at all — see the not_installer note below.
+    """
     try:
         import yaml  # noqa
         with open(path) as f:
-            return yaml.safe_load(f).get("screens", [])
+            doc = yaml.safe_load(f)
+            return doc.get("screens", []), doc.get("not_installer", [])
     except Exception:
         pass
-    screens, cur = [], None
+    screens, cur, exclusions, in_excl, in_kws = [], None, [], False, False
     try:
         with open(path) as f:
             for line in f:
                 s = line.strip()
+                if s.startswith("not_installer:"):
+                    in_excl = True
+                    exclusions += re.findall(r'"([^"]+)"', s)
+                    continue
+                if in_excl:
+                    if s.startswith("- ") or s.startswith('"'):
+                        exclusions += re.findall(r'"([^"]+)"', s)
+                        continue
+                    if s and not s.startswith("#"):
+                        in_excl = False
                 if s.startswith("- id:"):
                     cur = {"id": s.split(":", 1)[1].strip(), "required": False,
                            "keywords": [], "title": ""}
@@ -173,9 +189,19 @@ def load_spec(path):
                     cur["required"] = s.split(":", 1)[1].strip() == "true"
                 elif cur and s.startswith("keywords:"):
                     cur["keywords"] = re.findall(r'"([^"]+)"', s)
+                    # A keyword list may wrap across lines. Reading only the
+                    # first line silently dropped most of 'disk' and
+                    # 'encryption', so without PyYAML those screens were far
+                    # harder to detect than the spec says — a weaker check
+                    # that still reports as a pass.
+                    in_kws = True
+                elif cur and in_kws and (s.startswith('"') or s.startswith("'")):
+                    cur["keywords"] += re.findall(r'"([^"]+)"', s)
+                else:
+                    in_kws = False
     except FileNotFoundError:
         pass
-    return screens
+    return screens, exclusions
 
 
 # ── Capture ──────────────────────────────────────────────────────────────
@@ -280,7 +306,7 @@ note(f"{advanced}/{max(len(frames) - 1, 0)} transitions changed >{DIFF_PIXELS}px
 # distinct visual states, and refuse to credit any screen beyond the first to
 # state 0. If the installer never advanced there is exactly one state, and the
 # only screen that can honestly be claimed is the one it opened on.
-spec = load_spec(spec_path)
+spec, exclusions = load_spec(spec_path)
 have_ocr = shutil.which("tesseract") is not None
 
 # Group frames into distinct visual states (consecutive near-identical frames
@@ -303,6 +329,24 @@ if n_states <= 1 and have_ocr:
     note("installer never advanced, so only its opening screen can be "
          "credited — later screens are reported unverified, not absent")
 
+# OCR reads the whole framebuffer, not the installer's window, so text
+# belonging to a DIFFERENT application scores installer screens. Run
+# 30166081962: KDE's own Welcome Center autostarted on top of the installer,
+# its "Welcome to the Yellowfin operating system running KDE Plasma!" matched
+# the welcome screen's bare "welcome" keyword, and the walkthrough reported
+# welcome=true and verified=true while the installer was never on screen at
+# all. The spec's own comment already warned against bare nouns; this makes
+# the rule enforceable rather than advisory.
+#
+# A frame carrying any not_installer phrase is some other app's window and
+# cannot credit ANY installer screen.
+not_installer = [e.lower() for e in exclusions]
+foreign = [bool(not_installer) and any(e in t for e in not_installer)
+           for t in frame_text]
+if any(foreign):
+    note(f"{sum(foreign)}/{len(frame_text)} frame(s) show a non-installer "
+         f"window (matched not_installer) and cannot credit a screen")
+
 reached = {}
 for idx, sc in enumerate(spec):
     if not have_ocr:
@@ -310,7 +354,7 @@ for idx, sc in enumerate(spec):
         continue
     kws = [k.lower() for k in sc.get("keywords", [])]
     hit_states = {state_of[i] for i, t in enumerate(frame_text)
-                  if any(k in t for k in kws)}
+                  if not foreign[i] and any(k in t for k in kws)}
     # Screens after the first must be seen on a state the installer actually
     # advanced to; a match confined to state 0 is prose on the opening screen.
     if idx > 0:

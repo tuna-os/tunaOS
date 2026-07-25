@@ -95,6 +95,29 @@ POWEREOF
 # install session cannot enter S3.
 systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target || true
 
+# KDE's Welcome Center (plasma-welcome) launches itself on first login and
+# lands ON TOP of the installer — run 30166081962 photographed its generic
+# onboarding tour, not the installer, and the installer window was never
+# raised. Its default content is also wrong for a live session: it teaches
+# you to customize a system that disappears on reboot.
+#
+# plasma-welcome supports this case explicitly (see its README, shipped at
+# /usr/share/doc/plasma-welcome/README.md): LiveEnvironment=true swaps the
+# settings pages for a reduced wizard with a live installer page, and
+# LiveInstaller names a desktop file in the applications path to offer as the
+# launch shortcut.
+#
+# Written to /etc/xdg rather than ~liveuser/.config so it applies however the
+# live user is created — livesys-scripts, tacklebox's baseline, or neither.
+if [[ -f /usr/share/applications/org.kde.plasma-welcome.desktop ]]; then
+    mkdir -p /etc/xdg
+    tee /etc/xdg/plasma-welcomerc <<'WELCOMEEOF'
+[General]
+LiveEnvironment=true
+LiveInstaller=org.tunaos.InstallerKde
+WELCOMEEOF
+fi
+
 # Auto-launch the TunaOS installer frontend in the live session.
 # The app is baked into the live squash by customize-live.sh (tacklebox live_customize).
 mkdir -p /etc/xdg/autostart
