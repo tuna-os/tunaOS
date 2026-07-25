@@ -180,6 +180,32 @@ jobs:
           # rendering is possible; elsewhere still record screens for the matrix.
           STRICT=""
           case "${FLAVOR}" in kde|cosmic|gnome) STRICT="--strict" ;; esac
+
+          # Put the INSTALLER in front before driving it.
+          #
+          # Desktops autostart their own welcome/tour app on first login, and
+          # it lands on top of the installer. In run 30166081962 the
+          # walkthrough spent all nine frames driving KDE's Welcome Center —
+          # its Skip/Next buttons, then the taskbar, then Kate — while the
+          # installer sat behind it the whole time, running but never seen.
+          #
+          # This is test setup, not a product change: the live ISO still ships
+          # plasma-welcome in its live-environment mode (with the installer
+          # shortcut) for real users. The walkthrough exists to check the five
+          # independently-forked frontends for feature drift, so it needs the
+          # installer's own window, deterministically, rather than whatever
+          # keyboard nav happens to land on.
+          #
+          # Closing over SSH beats sendkey guesswork: no window manager
+          # scripting, no Wayland raise API, and it either worked or it did
+          # not. The installer is already running and autostarted, so it
+          # becomes the top window once the welcome app is gone.
+          SSH="sshpass -p live ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null liveuser@127.0.0.1"
+          $SSH 'pkill -f plasma-welcome || true; pkill -f gnome-tour || true; pkill -f "gnome-initial-setup" || true' 2>/dev/null || true
+          sleep 3
+          echo "foreground after closing welcome apps:"
+          $SSH 'ps -eo comm,args | grep -iE "[I]nstaller|[p]lasma-welcome|[g]nome-tour" || echo "(none)"' 2>/dev/null || true
+
           if sudo test -S smoke-out/monitor.sock; then
             set +e
             sudo python3 scripts/installer-walkthrough.py \
