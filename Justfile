@@ -276,8 +276,40 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     # grouper (Ubuntu) has no bootupd package available via apt, so it ships
     # systemd-boot instead and installs via bootc's composefs-native backend,
     # which doesn't shell out to bootupd for bootloader management.
+    #
+    # Two INDEPENDENT signals, probed from the image rather than guessed from
+    # its name (the name-based heuristic is exactly what tuna-os/wootc had to
+    # rip out — see payload/deployer/deploy.sh "the crux fix"):
+    #
+    #   BACKEND=composefs-native → ships systemd-boot and no bootupctl, so
+    #     bootloader management can't go through bootupd: needs
+    #     --composefs-backend.
+    #   SEALED → prepare-root.conf has [composefs] enabled: the rootfs is
+    #     composefs-sealed and needs fs-verity, which XFS LACKS. On the xfs
+    #     default from 00-tunaos.toml the initramfs fails initrd-switch-root
+    #     and drops to dracut emergency mode — every composefs variant's
+    #     desktop Gate timed out at "no graphical session" (confirmed on
+    #     sailfin and grouper). ext4 is the proven sealed filesystem
+    #     (wootc deploy.sh:809-821); btrfs also has fs-verity but its ostree
+    #     deployment fails to mount (sysroot.mount timeout, wootc#35), so it
+    #     is deliberately NOT used here.
+    #
+    # Sealed is what drives the filesystem, and it is independent of the
+    # backend: traditional-ostree images can be sealed too.
+    PROBE=$(sudo podman run --rm --entrypoint="" "$IMG_REF" sh -c '
+        if test -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi && ! command -v bootupctl >/dev/null 2>&1; then
+            echo BACKEND=composefs-native
+        else
+            echo BACKEND=ostree
+        fi
+        grep -A8 "^\[composefs\]" /usr/lib/ostree/prepare-root.conf 2>/dev/null \
+          | grep -qiE "enabled[[:space:]]*=[[:space:]]*(yes|true|1|signed)" && echo SEALED=1 || echo SEALED=0
+    ' 2>/dev/null) || PROBE=$(printf 'BACKEND=ostree\nSEALED=0\n')
+    echo "==> image probe: $(echo "$PROBE" | tr '\n' ' ')"
+
     COMPOSEFS_ARGS=()
-    [[ "$OUTPUT_NAME" == grouper* || "$OUTPUT_NAME" == sailfin* || "$OUTPUT_NAME" == guppy* || "$OUTPUT_NAME" == marlin* || "$OUTPUT_NAME" == flounder* ]] && COMPOSEFS_ARGS=(--composefs-backend)
+    grep -q '^BACKEND=composefs-native$' <<<"$PROBE" && COMPOSEFS_ARGS+=(--composefs-backend)
+    grep -q '^SEALED=1$' <<<"$PROBE" && COMPOSEFS_ARGS+=(--filesystem ext4)
 
     echo "==> Running bootc install to-disk (this takes a few minutes)..."
     sudo podman run \
