@@ -97,8 +97,24 @@ jobs:
 
           for i in 1 2 3; do sudo podman pull "$IMG" && break; sleep $((i*15)); done
 
-          # Exactly tacklebox's CustomizeLive invocation (cap SYS_ADMIN +
-          # network; script dir mounted read-only, cwd inside it).
+          # The digest of the base we ACTUALLY built from. The base label
+          # below records only a tag, and tags move — so on its own it cannot
+          # tell a consumer whether this overlay came from the base image a
+          # build currently points at, or one from three weeks ago. Anything
+          # that consumes overlays instead of re-running the customize
+          # scripts needs this to detect staleness; without it a stale
+          # overlay silently ships an old rootfs.
+          BASE_DIGEST="$(sudo podman image inspect --format '{{.Digest}}' "$IMG")"
+          echo "base digest: ${BASE_DIGEST}"
+
+          # NOTE: this runs ONLY customize-live.sh. tacklebox's CustomizeLive
+          # additionally prepends its embedded src/live/baseline.sh (live
+          # user, DM autologin, live networking, sleep masking), so what we
+          # publish is base + customize-live.sh — NOT the full live payload a
+          # CI-built ISO gets. The browser path compensates by calling
+          # EnsureLiveUser / EnsureAutologin after grafting the overlay, which
+          # is why the gap went unnoticed. Recorded in the baseline label
+          # below so no consumer mistakes this for a complete live image.
           sudo podman rm -f tbx-overlay 2>/dev/null || true
           sudo podman run --name tbx-overlay \
             --cap-add sys_admin --security-opt label=disable \
@@ -108,6 +124,8 @@ jobs:
 
           sudo podman commit \
             --change "LABEL org.tunaos.live-overlay.base=${IMG}" \
+            --change "LABEL org.tunaos.live-overlay.base-digest=${BASE_DIGEST}" \
+            --change "LABEL org.tunaos.live-overlay.baseline=false" \
             tbx-overlay "$OUT"
           sudo podman rm -f tbx-overlay
           sudo podman push "$OUT"
