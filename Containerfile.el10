@@ -202,11 +202,17 @@ FROM base-no-de AS niri
 # Zirconium (DMS/Niri upstream) config payload — niri images only.
 COPY --from=zirconium /usr/share/zirconium /usr/share/zirconium
 COPY --from=zirconium /usr/share/xdg-terminal-exec /usr/share/xdg-terminal-exec
+COPY --from=zirconium /usr/share/factory/etc/greetd /etc/greetd
+COPY --from=zirconium /usr/share/factory/etc/profile.d /etc/profile.d
 COPY --from=zirconium /usr/share/greetd /usr/share/greetd
 COPY --from=zirconium /usr/share/dms /usr/share/dms
-COPY --from=zirconium /usr/lib/pam.d /usr/lib/pam.d
+COPY --from=zirconium /usr/lib/pam.d/greetd-spawn /usr/lib/pam.d/greetd-spawn
+COPY --from=zirconium /usr/lib/sysusers.d/dms-greeter.conf /usr/lib/sysusers.d/dms-greeter.conf
+COPY --from=zirconium /usr/lib/tmpfiles.d/99-dms-greeter.conf /usr/lib/tmpfiles.d/99-dms-greeter.conf
 COPY --from=zirconium /usr/lib/systemd/user/chezmoi-init.service /usr/lib/systemd/user/chezmoi-init.service
 COPY --from=zirconium /usr/lib/systemd/user/chezmoi-update.service /usr/lib/systemd/user/chezmoi-update.service
+COPY --from=zirconium /usr/lib/systemd/user/dms.service.d /usr/lib/systemd/user/dms.service.d
+COPY --from=zirconium /usr/share/flatpak/preinstall.d /usr/share/flatpak/preinstall.d
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \

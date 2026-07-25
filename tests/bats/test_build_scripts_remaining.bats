@@ -216,3 +216,16 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
     "${REPO_ROOT}/Containerfile.el10"
   [ "$status" -ne 0 ]
 }
+
+@test "Sailfin installs shared Bluefin config and GNOME-only Bluefin branding" {
+  local containerfile="${REPO_ROOT}/Containerfile.opensuse"
+  grep -qF 'FROM ${COMMON_IMAGE_REF} AS common' "$containerfile"
+  grep -qF 'COPY --from=common /system_files/shared /' "$containerfile"
+  grep -qF 'COPY --from=common /system_files/bluefin /' "$containerfile"
+
+  # GNOME branding must remain at the GNOME target, not the shared system base.
+  local gnome_line shared_line
+  gnome_line=$(grep -nF 'FROM desktop AS gnome' "$containerfile" | cut -d: -f1)
+  shared_line=$(grep -nF 'COPY --from=common /system_files/shared /' "$containerfile" | cut -d: -f1)
+  [ "$gnome_line" -gt "$shared_line" ]
+}
