@@ -2,6 +2,7 @@
 # Based on bootcrew/gentoo-bootc but adapted for TunaOS manifest-driven desktop installs.
 
 ARG BASE_IMAGE
+ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR
@@ -19,6 +20,8 @@ COPY manifests /manifests
 COPY build_scripts /build_scripts
 COPY system_files /files
 COPY system_files_overrides /overrides
+
+FROM ${COMMON_IMAGE_REF} AS common
 
 FROM docker.io/gentoo/stage3:latest@sha256:b5317fd2127e15ace5ff7a2c8aab1ed37a22736a8218546f3b00b4d94b78e500 AS base
 # Speed: pull prebuilt, gpg-verified binary packages from Gentoo's official
@@ -173,10 +176,13 @@ RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf
 
 LABEL containers.bootc=1 ostree.bootable=1
+COPY --from=context /files /
+COPY --from=common /system_files/shared /
 RUN bootc container lint
 
 # Per-flavor target aliases so the build's `--target=<flavor>` resolves. Each
 # resolves to the desktop stage above, specialized by the DESKTOP_FLAVOR
 # build-arg (target and build-arg always agree — see resolve-flavor.sh).
 FROM desktop AS gnome
+COPY --from=common /system_files/bluefin /
 FROM desktop AS kde

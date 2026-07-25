@@ -350,6 +350,15 @@ for cmd in "${_TD_POST_INLINE[@]}"; do
 	fi
 done
 
+# Desktop communities own their curated defaults as plain files. This keeps
+# opinions reviewable and portable without creating a package for a few config
+# files; any contributor can maintain experiences/<desktop>/files/.
+_TD_EXPERIENCE_FILES="${_TD_CTX}/experiences/${_TD_DESKTOP}/files"
+if [[ -d "${_TD_EXPERIENCE_FILES}" ]]; then
+	echo "Applying curated ${_TD_DESKTOP} experience defaults"
+	cp -a "${_TD_EXPERIENCE_FILES}/." /
+fi
+
 # A package transaction is not sufficient evidence that the requested desktop
 # exists. Validate its session, compositor and display manager, then install a
 # runtime contract checked by the VM promotion gate. The contract unit also
