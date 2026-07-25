@@ -3,14 +3,14 @@
 # Sourced by live-iso/common/src/build.sh for kde* desktop flavors.
 #
 # Configures:
-#   - SDDM autologin to Plasma session (Wayland, no lockscreen)
+#   - SDDM/PlasmaLogin autologin to Plasma session (Wayland, no lockscreen)
 #   - Disable screen lock + power suspend
 #   - Mask suspend targets (installer can't recover from S3)
 
 set -euo pipefail
 
 # livesys-scripts (configured further down in build.sh) creates the
-# `liveuser` account; we only need to wire up SDDM autologin to land
+# `liveuser` account; we only need to wire up DM autologin to land
 # in the Plasma session immediately, disable screen-lock + power-suspend
 # (an installer mid-run can't recover from S3), and mask suspend
 # targets so KDE's own power-management prefs can't override.
@@ -20,8 +20,35 @@ _kde_session="plasma"
 if [[ -f /usr/share/wayland-sessions/plasmawayland.desktop && ! -f /usr/share/wayland-sessions/plasma.desktop ]]; then
 	_kde_session="plasmawayland"
 fi
-mkdir -p /etc/sddm.conf.d
-tee /etc/sddm.conf.d/live-autologin.conf <<SDDMEOF
+
+# Plasma 6.6 renamed SDDM to PlasmaLogin: on EL10 the `plasma-login-manager`
+# package ships plasmalogin.service and reads /etc/plasmalogin.conf.d, and it
+# arrives as a plasma-group dependency *before* our explicit `sddm` install.
+# It does not Obsolete sddm, so both units exist and plasmalogin wins the
+# display-manager.service alias. Dropping autologin only into /etc/sddm.conf.d
+# therefore silently did nothing and the live ISO stopped at a password prompt
+# (installer-smoke run 29914643652: 4 minutes of greeter, no installer).
+#
+# The two read the same [Autologin] schema, so write whichever conf.d dirs
+# this image actually has. PlasmaLogin is Wayland-only and has no equivalent
+# of SDDM's [General] DisplayServer/CompositorCommand, so those stay
+# sddm-only rather than being emitted as keys it would ignore.
+_wrote_autologin=false
+
+if [[ -d /usr/lib/plasmalogin || -e /usr/lib/systemd/system/plasmalogin.service ]]; then
+	mkdir -p /etc/plasmalogin.conf.d
+	tee /etc/plasmalogin.conf.d/live-autologin.conf <<PLEOF
+[Autologin]
+User=liveuser
+Session=${_kde_session}
+Relogin=false
+PLEOF
+	_wrote_autologin=true
+fi
+
+if [[ -d /usr/lib/sddm || -e /usr/lib/systemd/system/sddm.service ]]; then
+	mkdir -p /etc/sddm.conf.d
+	tee /etc/sddm.conf.d/live-autologin.conf <<SDDMEOF
 [General]
 DisplayServer=wayland
 CompositorCommand=kwin_wayland --no-lockscreen
@@ -31,6 +58,16 @@ User=liveuser
 Session=${_kde_session}
 Relogin=false
 SDDMEOF
+	_wrote_autologin=true
+fi
+
+# A KDE live ISO whose greeter never auto-logs in cannot reach the installer,
+# which is precisely the failure this guards against — fail the build loudly
+# rather than shipping an ISO that stops at a password prompt.
+if [[ "${_wrote_autologin}" != true ]]; then
+	echo "desktop-kde: no SDDM or PlasmaLogin install found — cannot configure live autologin" >&2
+	exit 1
+fi
 
 mkdir -p /etc/xdg
 tee /etc/xdg/kscreenlockerrc <<'LOCKEOF'

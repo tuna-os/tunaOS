@@ -339,7 +339,26 @@ if have_ocr and n_states <= 1 and not any(reached.values()) and rendered > 0:
           f"the frames are most likely the bare desktop with no installer "
           f"window mapped", flush=True)
 
-# ── Result for the parity matrix ─────────────────────────────────────────
+# ── Verified vs merely not-failed ────────────────────────────────────────
+# Non-strict exists so Smithay-on-GPU-less (niri/xfwl4/cosmic without a DRM
+# render node) doesn't fail on a blank frame it cannot possibly render. But
+# `enforced=strict` means those checks never counted into _fails, so such a
+# cell exited 0 and the job reported SUCCESS while proving nothing at all.
+#
+# That is how run 29914643652 shipped a green niri whose own TAP said 7 failed:
+# 964-byte greyscale frames, advanced_transitions=0, visual_states=1. Weeks of
+# installer breakage stayed invisible behind it.
+#
+# Matching a named installer screen is the ONLY positive evidence that an
+# installer was on screen. "Advanced" is not: the kde cell in that same run
+# scored 8/8 transitions >500px purely because the greeter's clock was
+# ticking behind a password prompt. So a non-strict cell that merely changed
+# pixels must not be allowed to claim a pass.
+#
+# No OCR means no evidence either, which correctly lands as unverified.
+verified = any(reached.values())
+unverified = not verified
+
 summary = {
     "flavor": flavor,
     "frames": len(frames),
@@ -353,6 +372,9 @@ summary = {
     "screens": reached,
     "strict": strict,
     "failures": _fails,
+    # False on any cell that proved nothing — do not read `failures: 0` alone
+    # as evidence the installer works.
+    "verified": verified,
 }
 with open(os.path.join(outdir, f"walkthrough-{flavor}.json"), "w") as f:
     json.dump(summary, f, indent=2)
@@ -361,4 +383,14 @@ print(f"\n# Results: {sum(1 for t in _tap if t['ok'])} passed, "
       f"{sum(1 for t in _tap if not t['ok'])} failed, {len(_tap)} total", flush=True)
 print(f"# screens reached: "
       f"{', '.join(k for k, v in reached.items() if v) or '(none detected)'}", flush=True)
-sys.exit(1 if _fails else 0)
+
+if _fails:
+    sys.exit(1)
+if unverified:
+    print(f"# UNVERIFIED: {flavor} — the installer never advanced and no screen "
+          f"was ever detected, so this cell proves nothing. Not counted as a "
+          f"pass. On a GPU-less runner this is expected for Smithay "
+          f"compositors (niri/xfwl4/cosmic need a DRM render node); run it on "
+          f"a host with /dev/dri/renderD128 to get a real result.", flush=True)
+    sys.exit(2)
+sys.exit(0)

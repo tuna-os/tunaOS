@@ -8,7 +8,17 @@ desktop="${1:?usage: configure-desktop-runtime.sh <gnome|kde|niri|cosmic|xfce>}"
 # service setup. Enable their display manager only after its unit exists.
 case "$desktop" in
 gnome) dm=gdm ;;
-kde) dm=sddm ;;
+kde)
+	# Plasma 6.6 renamed SDDM to PlasmaLogin. On EL10, plasma-login-manager
+	# arrives as a plasma-group dependency and claims the
+	# display-manager.service alias before our explicit `sddm` install can,
+	# so prefer it wherever it exists; Fedora/Debian/Ubuntu still ship sddm.
+	if systemctl list-unit-files plasmalogin.service --no-legend 2>/dev/null | grep -q '^plasmalogin.service'; then
+		dm=plasmalogin
+	else
+		dm=sddm
+	fi
+	;;
 niri | cosmic) dm=greetd ;;
 xfce)
 	if systemctl list-unit-files lightdm.service --no-legend 2>/dev/null | grep -q '^lightdm.service'; then

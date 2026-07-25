@@ -37,8 +37,10 @@ corral create --help 2>&1 | grep -q -- '--bootc' || {
 }
 
 # Display manager to assert per desktop family.
+# Plasma 6.6 renamed SDDM to PlasmaLogin, so kde accepts either unit: EL10
+# ships plasmalogin.service, Fedora/Debian/Ubuntu still ship sddm.service.
 case "$FLAVOR" in
-kde*) DM=sddm ;; niri* | cosmic*) DM=greetd ;; xfce*) DM=lightdm ;; *) DM=gdm ;;
+kde*) DM_CANDIDATES=(sddm plasmalogin) ;; niri* | cosmic*) DM_CANDIDATES=(greetd) ;; xfce*) DM_CANDIDATES=(lightdm) ;; *) DM_CANDIDATES=(gdm) ;;
 esac
 
 NODE_ARGS=()
@@ -66,8 +68,15 @@ RC=0
 	echo "FAIL graphical.target"
 	RC=1
 }
-[[ "$(check "systemctl is-active $DM" | tr -d '[:space:]')" == active ]] || {
-	echo "FAIL $DM"
+dm_active=""
+for _dm in "${DM_CANDIDATES[@]}"; do
+	if [[ "$(check "systemctl is-active $_dm" | tr -d '[:space:]')" == active ]]; then
+		dm_active="$_dm"
+		break
+	fi
+done
+[[ -n "$dm_active" ]] || {
+	echo "FAIL ${DM_CANDIDATES[*]}"
 	RC=1
 }
 check 'systemctl --failed --no-legend' || true

@@ -159,10 +159,14 @@ done
 echo "Verifying systemd service unit files..."
 SYSTEMD_SERVICES=(tailscaled.service systemd-resolved.service)
 
-# Add flavor-specific display manager service
+# Add flavor-specific display manager service.
+# SYSTEMD_SERVICES_ANY entries are space-separated alternatives — at least one
+# must exist. KDE needs this because Plasma 6.6 renamed SDDM to PlasmaLogin:
+# EL10 ships plasmalogin.service, Fedora/Debian/Ubuntu still ship sddm.service.
+SYSTEMD_SERVICES_ANY=()
 case "${FLAVOR}" in
 gnome) SYSTEMD_SERVICES+=(gdm.service) ;;
-kde) SYSTEMD_SERVICES+=(sddm.service) ;;
+kde) SYSTEMD_SERVICES_ANY+=("sddm.service plasmalogin.service") ;;
 niri | cosmic) SYSTEMD_SERVICES+=(greetd.service) ;;
 esac
 
@@ -174,6 +178,23 @@ for svc in "${SYSTEMD_SERVICES[@]}"; do
 		FAILED=1
 	else
 		echo "✓ systemd service file: ${svc}"
+	fi
+done
+
+for group in "${SYSTEMD_SERVICES_ANY[@]}"; do
+	found=""
+	for svc in ${group}; do
+		CHECK_SVC_CMD="[ -f /usr/lib/systemd/system/${svc} ] || [ -f /lib/systemd/system/${svc} ]"
+		if podman run --rm --entrypoint sh "$IMAGE" -c "${CHECK_SVC_CMD}" &>/dev/null; then
+			found="${svc}"
+			break
+		fi
+	done
+	if [[ -n "${found}" ]]; then
+		echo "✓ systemd service file: ${found}"
+	else
+		echo "❌ Missing systemd service file: none of [${group}]"
+		FAILED=1
 	fi
 done
 

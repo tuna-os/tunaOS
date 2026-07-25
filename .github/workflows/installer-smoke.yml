@@ -188,6 +188,14 @@ jobs:
             rc=${PIPESTATUS[0]}
             set -e
             sudo chown -R "$(id -u)" smoke-out 2>/dev/null || true
+            # exit 2 == UNVERIFIED: the cell neither advanced nor matched a
+            # screen, so it proved nothing. It used to exit 0 here and report
+            # SUCCESS, which is how a green niri hid weeks of installer
+            # breakage (run 29914643652). Distinguish it from a regression in
+            # the message, but do NOT let it pass.
+            if [ "$rc" = 2 ]; then
+              echo "::error title=${FLAVOR}: installer UNVERIFIED::the installer never advanced and no screen was detected — this cell proves nothing. Smithay compositors (niri/xfwl4/cosmic) need a DRM render node; run on a host with /dev/dri/renderD128."
+            fi
             exit "$rc"
           else
             echo "::warning::no QEMU monitor socket — walkthrough skipped"
