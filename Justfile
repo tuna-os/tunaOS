@@ -311,6 +311,12 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     grep -q '^BACKEND=composefs-native$' <<<"$PROBE" && COMPOSEFS_ARGS+=(--composefs-backend)
     grep -q '^SEALED=1$' <<<"$PROBE" && COMPOSEFS_ARGS+=(--filesystem ext4)
 
+    # Console ORDER matters: the LAST console= is the primary /dev/console, and
+    # that is where dracut/systemd (all userspace) writes. With tty0 last,
+    # initramfs failures were visible only on the VGA screen (the Gate's
+    # screenshot) while the captured serial.log held nothing but kernel printk —
+    # an emergency-mode boot with no recorded reason. ttyS0 last puts the boot
+    # log the Gate captures where it is actually useful.
     echo "==> Running bootc install to-disk (this takes a few minutes)..."
     sudo podman run \
         --rm \
@@ -327,7 +333,7 @@ qcow2 variant flavor='gnome' repo='local' tag='':
             --via-loopback \
             --generic-image \
             "${COMPOSEFS_ARGS[@]}" \
-            --karg console=ttyS0 --karg console=tty0 \
+            --karg console=tty0 --karg console=ttyS0 \
             --karg systemd.unit=graphical.target \
             "${SSH_KEY_ARGS[@]}" \
             --source-imgref "containers-storage:${IMG_REF}" \
