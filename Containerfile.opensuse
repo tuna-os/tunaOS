@@ -66,9 +66,27 @@ RUN printf '[Match]\nType=ether\n\n[Network]\nDHCP=yes\n' \
     > /usr/lib/systemd/network/20-wired.network
 RUN printf 'L! /etc/resolv.conf - - - - /run/systemd/resolve/stub-resolv.conf\n' \
     > /usr/lib/tmpfiles.d/resolv-conf.conf
+# Opt the 51bootc dracut module in BEFORE building the initramfs. Its check()
+# returns 255 ("never installed by default; see 10-bootc-base.conf for how base
+# images can opt in"), so without this the initramfs ships no
+# bootc-root-setup.service — and nothing in it handles the composefs= karg that
+# a composefs-native deployment boots with.
+#
+# ostree-prepare-root.service cannot cover for it: that unit is
+# ConditionKernelCommandLine=ostree, and composefs deployments have composefs=
+# with no ostree= karg, so it is silently skipped. The result was /sysroot
+# mounted but never prepared → initrd-switch-root fails → dracut emergency
+# shell, which is what made every sailfin desktop Gate time out waiting for a
+# graphical session.
+RUN mkdir -p /usr/lib/dracut/dracut.conf.d && \
+    printf 'add_dracutmodules+=" bootc "\n' \
+    > /usr/lib/dracut/dracut.conf.d/10-bootc-base.conf
 RUN dracut --force --no-hostonly --reproducible --zstd --kver \
     "$(ls /usr/lib/modules | head -1)" \
-    "/usr/lib/modules/$(ls /usr/lib/modules | head -1)/initramfs.img"
+    "/usr/lib/modules/$(ls /usr/lib/modules | head -1)/initramfs.img" && \
+    lsinitrd "/usr/lib/modules/$(ls /usr/lib/modules | head -1)/initramfs.img" \
+      | grep -q bootc-root-setup.service || \
+      { echo "ERROR: initramfs has no bootc-root-setup.service — composefs boot would fail" >&2; exit 1; }
 RUN mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var && \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf && \
     echo "HOME=/var/home" | tee -a "/etc/default/useradd" && \
