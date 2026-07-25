@@ -79,14 +79,27 @@ RUN printf 'L! /etc/resolv.conf - - - - /run/systemd/resolve/stub-resolv.conf\n'
 # shell, which is what made every sailfin desktop Gate time out waiting for a
 # graphical session.
 RUN mkdir -p /usr/lib/dracut/dracut.conf.d && \
-    printf 'add_dracutmodules+=" bootc "\n' \
+    printf 'add_dracutmodules+=" bootc "\ninstall_items+=" /usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service "\n' \
     > /usr/lib/dracut/dracut.conf.d/10-bootc-base.conf
+# ...and place the wants-symlink ourselves, because 51bootc's install() puts it
+# at ${systemdsystemconfdir}/initrd-root-fs.target.wants/ — and openSUSE's
+# dracut leaves systemdsystemconfdir EMPTY, so the link lands at the initramfs
+# ROOT (/initrd-root-fs.target.wants/), a directory systemd never scans. The
+# unit was therefore present in the initramfs but never pulled in, so nothing
+# consumed composefs= and switch-root had no prepared root.
+# projectbluefin/dakota (the working composefs reference) carries it at
+# /usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service
+# -> ../bootc-root-setup.service; match that exactly. dracut copies unit
+# wants-links from /usr/lib (that is how ostree-prepare-root's link gets in).
+RUN mkdir -p /usr/lib/systemd/system/initrd-root-fs.target.wants && \
+    ln -sf ../bootc-root-setup.service \
+      /usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service
 RUN dracut --force --no-hostonly --reproducible --zstd --kver \
     "$(ls /usr/lib/modules | head -1)" \
     "/usr/lib/modules/$(ls /usr/lib/modules | head -1)/initramfs.img" && \
     lsinitrd "/usr/lib/modules/$(ls /usr/lib/modules | head -1)/initramfs.img" \
-      | grep -q bootc-root-setup.service || \
-      { echo "ERROR: initramfs has no bootc-root-setup.service — composefs boot would fail" >&2; exit 1; }
+      | grep -q 'usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service' || \
+      { echo "ERROR: initramfs lacks the bootc-root-setup wants-link under /usr/lib/systemd/system — composefs boot would emergency-shell" >&2; exit 1; }
 RUN mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var && \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf && \
     echo "HOME=/var/home" | tee -a "/etc/default/useradd" && \
