@@ -231,6 +231,36 @@ jobs:
             echo
             echo "=== windows the compositor actually has ==="
             $SSH 'pgrep -xl "cosmic-comp|niri|xfwl4|kwin_wayland" 2>/dev/null || pgrep -l -x cosmic-comp || pgrep -l -x niri || pgrep -l -x xfwl4 || pgrep -l -x kwin_wayland || echo "(no compositor matched)"; ps -eo pid,comm,args | grep -iE "[I]nstaller" || echo "(no installer process)"' 2>/dev/null || true
+            echo
+            # THE display manager, whatever it is — resolved from the
+            # display-manager.service alias rather than guessed by name.
+            #
+            # Everything above greps for greetd, so when a NON-greetd DM
+            # fails we captured nothing at all. Run 30160664460: the serial
+            # console said only "[FAILED] Failed to start plasmalogin.service"
+            # and the diagnostics dutifully reported "greetd journal: -- No
+            # entries --" plus "package greetd is not installed". The one log
+            # that would have explained the failure was never collected, and
+            # a full ~2h CI cycle produced no diagnosis.
+            echo "=== display manager: unit, config, journal ==="
+            $SSH 'sudo bash -s' <<'DMEOF' 2>/dev/null || true
+              set +e
+              dm=$(systemctl show -P Id display-manager.service 2>/dev/null)
+              echo "display-manager.service -> ${dm:-<unresolved>}"
+              systemctl status --no-pager -l "${dm:-display-manager.service}" 2>&1 | head -30
+              echo "--- journal for ${dm:-display-manager.service} ---"
+              journalctl -u "${dm:-display-manager.service}" -b --no-pager 2>&1 | tail -80
+              echo "--- autologin config actually present ---"
+              for d in /etc/sddm.conf.d /etc/plasmalogin.conf.d /etc/gdm/custom.conf \
+                       /etc/gdm3/custom.conf /etc/lightdm/lightdm.conf.d /etc/greetd/config.toml; do
+                [ -e "$d" ] || continue
+                echo "### $d"
+                if [ -d "$d" ]; then for f in "$d"/*; do [ -f "$f" ] && { echo "--- $f"; cat "$f"; }; done
+                else cat "$d"; fi
+              done
+              echo "--- sessions the image ships ---"
+              ls -1 /usr/share/wayland-sessions/ /usr/share/xsessions/ 2>/dev/null
+          DMEOF
           } > "$out" 2>&1
           echo "--- captured $(wc -l < "$out") lines ---"
           tail -30 "$out"
