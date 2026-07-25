@@ -131,7 +131,7 @@ jobs:
         if: ${{ startsWith(inputs.flavor, 'base') }}
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@ee03f0689a60b54bdb2d0e7ac398d78490a817b4 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@edf8773321239d6a6ecb15ad3fd60bd0b99ccec5 # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
           update-podman: "true"
