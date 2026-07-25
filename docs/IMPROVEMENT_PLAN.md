@@ -43,7 +43,7 @@ Validation on every commit: `shellcheck --exclude=SC1091`, `shfmt -d`,
 
 ## Shipped upstream
 
-- **`tuna-os/github-copr#23`** (merged): `Obsoletes: gnome-shell-common < %{major_version}` + matching `Provides:` in both gnome-49 and gnome-50 specs. Replaces the local workaround in commit `33e11a1`; that workaround can be removed once the COPR rebuilds and a fresh skipjack build confirms the file-conflict is gone.
+- **`tuna-os/tunaos-packages#23`** (merged): `Obsoletes: gnome-shell-common < %{major_version}` + matching `Provides:` in both gnome-49 and gnome-50 specs. Replaces the local workaround in commit `33e11a1`; that workaround can be removed once the package factory rebuilds and a fresh skipjack build confirms the file-conflict is gone.
 - **`tuna-os/tacklebox#1`** (merged): two-stage `Containerfile` + `release-image.yml` publishing `ghcr.io/tuna-os/tacklebox:latest` on every main push and `:vX.Y.Z` on tags. Multi-arch (linux/amd64 + linux/arm64) with build-provenance attestation. Downstream `build-iso-tacklebox.sh` switched to the published image in commit `bbf6691`.
 
 ---
@@ -66,7 +66,7 @@ Goal: clean baseline builds for every variant without `|| true` masking
 real failures.
 
 1. **Diagnose & fix skipjack gnome-shell conflict.** Two paths:
-   - Update `tuna-os/github-copr` `gnome50-el10-compat`
+   - Update `tuna-os/tunaos-packages` `gnome50-el10-compat`
      to obsolete `gnome-shell-common < 49` so DNF auto-removes the older
      conflicting package. Preferred.
    - Or, in `gnome.sh`, `dnf -y remove gnome-shell-common` before the
@@ -320,7 +320,7 @@ Most impactful items first:
 
 ## Upstream work (separate repos)
 
-- **`tuna-os/github-copr`** — add `Obsoletes: gnome-shell-common < %{major_version}`
+- **`tuna-os/tunaos-packages`** — add `Obsoletes: gnome-shell-common < %{major_version}`
   to `src/gnome-49/gnome-shell/gnome-shell.spec` and the matching
   `gnome-50` spec. Once that lands, the workaround in `build_scripts/desktop/gnome.sh:48`
   (commit `33e11a1`) can be removed.

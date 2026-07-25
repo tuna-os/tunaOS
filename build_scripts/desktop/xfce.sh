@@ -36,13 +36,13 @@ case "${1:-}" in
 			# EL10 (AlmaLinux/CentOS Stream): the hanthor/xfce-wayland port —
 			# xfwl4 (Rust/Smithay compositor) plus Wayland-adapted
 			# panel/session/xfdesktop/settings/thunar. Packaged from
-			# tuna-os/github-copr src/xfce-wayland, served by repo.tunaos.org
+			# tuna-os/tunaos-packages src/xfce-wayland, served by repo.tunaos.org
 			# (EL10 x86_64 only — build-config restricts xfce* platforms).
 			# NOTE: the stack is not published yet — the EL10 xfce flavors
-			# are commented out in build-config until tuna-os/github-copr#65
+			# are commented out in build-config until tuna-os/tunaos-packages#65
 			# lands. This branch is the intended install path once it does.
 			curl -fsSLo /etc/yum.repos.d/tuna-os.repo \
-				https://raw.githubusercontent.com/tuna-os/github-copr/main/contrib/tuna-os.repo
+				https://raw.githubusercontent.com/tuna-os/tunaos-packages/main/contrib/tuna-os.repo
 
 			# xfce4-wayland is the meta package tracking the whole adapted
 			# stack (xfwl4, panel, session, xfdesktop, settings, thunar,

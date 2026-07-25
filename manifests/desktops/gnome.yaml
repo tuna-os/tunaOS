@@ -83,7 +83,7 @@ packages:
       - gnome-software-fedora-langpacks
 
   el10:
-    # Project-owned RPMs, built by tuna-os/github-copr in GitHub Actions and
+    # Project-owned RPMs, built by tuna-os/tunaos-packages in GitHub Actions and
     # published as signed rpm-md on R2.  EL10's stock GNOME is older, so this
     # repository supplies the complete GNOME 50 backport and its compat RPM.
     repos:

@@ -59,7 +59,7 @@ case "${1:-}" in
 		# been the root cause of skipjack base-flavor build failures.
 		# `--allowerasing` resolves dependency conflicts but does NOT resolve
 		# file-ownership conflicts; only an explicit remove (or upstream
-		# `Obsoletes:`) does. Tracked: tuna-os/github-copr should add
+		# `Obsoletes:`) does. Tracked: tuna-os/tunaos-packages should add
 		# `Obsoletes: gnome-shell-common < %{major_version}` to its spec.
 		# --noautoremove keeps reverse-deps alive; they'll re-resolve to the
 		# COPR's gnome-shell-49 in the next install.

@@ -34,7 +34,7 @@
 | Commit-pin Source0s | 5 specs had whitespace-sensitive gitlab-archive URL replacement failures |
 | `libxfce4ui`, `libxfce4windowing`, `garcon` | see tier-3 root-cause notes above |
 
-**Repo**: `tuna-os/github-copr` main branch (checked out at `/home/james/dev/tuna-os/github-copr`)
+**Repo**: `tuna-os/tunaos-packages` main branch (checked out at `/home/james/dev/tuna-os/github-copr`)
 **Dispatch**: `gh workflow run build-xfce-distributed.yml`
 **Debugging tip**: `gh run view <id> --json jobs -q '.jobs[] | select(.conclusion=="failure") | .name'` then `gh run view <id> --log --job=<databaseId>` — grep the saved log for `error:|ERROR:|Bad exit status`, the mock debug noise drowns everything else.
 
