@@ -300,6 +300,21 @@ fi
 if [[ -z "${_TD_DM}" || "${_TD_DM}" == "null" ]]; then
 	_TD_DM=$($YQ -r '.display_manager // ""' "${_TD_MANIFEST}" 2>/dev/null)
 fi
+# Plasma 6.6 renamed SDDM to PlasmaLogin. The manifests declare the DM
+# family ("sddm"), but on EL10 the image actually ships plasma-login-manager,
+# whose scriptlet claims display-manager.service. Resolve the declared name to
+# the unit this image really has, rather than editing every kde*.yaml — the
+# manifest states intent, the build resolves it.
+#
+# Getting this wrong is not a no-op. The block below FORCE-LINKS the resolved
+# unit into graphical.target.wants, so leaving it as "sddm" pulls sddm.service
+# into graphical.target while display-manager.service points at plasmalogin —
+# two display managers racing for seat0/VT1, and the loser fails to start.
+if [[ "${_TD_DM}" == "sddm" && -f /usr/lib/systemd/system/plasmalogin.service ]]; then
+	echo "install-desktop: manifest declares sddm but image ships plasmalogin.service — resolving to plasmalogin"
+	_TD_DM="plasmalogin"
+fi
+
 if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 	safe_enable "${_TD_DM}.service"
 	# openSUSE's gdm.service ships only `[Install] Alias=display-manager.service`
@@ -315,6 +330,14 @@ if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 		mkdir -p /etc/systemd/system/graphical.target.wants
 		ln -sf "/usr/lib/systemd/system/${_TD_DM}.service" \
 			"/etc/systemd/system/graphical.target.wants/${_TD_DM}.service"
+		# Exactly one DM may be pulled into graphical.target. sddm and
+		# plasmalogin both ship on EL10 KDE (plasma-login-manager does not
+		# Obsolete sddm), and if both are wanted they race for seat0/VT1 and
+		# whichever loses reports "Failed to start". Drop the sibling's link.
+		case "${_TD_DM}" in
+		plasmalogin) rm -f /etc/systemd/system/graphical.target.wants/sddm.service ;;
+		sddm) rm -f /etc/systemd/system/graphical.target.wants/plasmalogin.service ;;
+		esac
 	fi
 	# Server-oriented bootc bases such as AlmaLinux default to
 	# multi-user.target. Enabling a display manager alone does not change the
