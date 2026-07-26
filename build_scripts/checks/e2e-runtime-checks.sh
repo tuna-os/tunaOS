@@ -105,7 +105,7 @@ dm_id=$(systemctl show -P Id display-manager.service 2>/dev/null || true)
 emit "# display manager: ${dm_id:-unknown}"
 case "$DESKTOP" in
 gnome) dm_pattern='^(gdm|gdm3)\.service$' ;;
-kde) dm_pattern='^sddm\.service$' ;;
+kde) dm_pattern='^(sddm|plasmalogin)\.service$' ;; # KDE 6.5+ renamed sddm
 niri | cosmic) dm_pattern='^greetd\.service$' ;;
 xfce) dm_pattern='^(gdm|gdm3|lightdm|greetd)\.service$' ;;
 *) dm_pattern='' ;;
