@@ -234,8 +234,30 @@ _gpu_mode="${TBOX_E2E_GPU:-auto}"
 QEMU_GPU_ARGS=(-vga virtio -display none)
 if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /dev/dri/renderD128 ]]; } \
 	&& "$QEMU" -device help 2>/dev/null | grep -q "virtio-vga-gl"; then
+	# egl-headless is NOT a display in its own right — it renders GL locally and
+	# expects another UI to present the result. On its own it exposes no
+	# console surface, so every `screendump` fails with:
+	#
+	#   (qemu) screendump /path/shot.ppm
+	#   Error: no surface
+	#
+	# That is silent in practice: iso-e2e.sh, installer-walkthrough.py,
+	# run-walkthrough.sh and the weekly screenshot workflows are ALL built on
+	# screendump, and their callers `|| true` past a failure — so switching to
+	# a GPU host would have produced zero screenshots while still reporting
+	# success. The gap never showed up because virgl only engages on a host
+	# with a render node, which CI runners do not have.
+	#
+	# Attaching VNC gives QEMU a surface to dump. A unix socket rather than a
+	# :N display keeps it off the network entirely and avoids port collisions
+	# between concurrent runs; nothing ever connects to it, it exists so the
+	# framebuffer is materialised. Verified on hardware 2026-07-26: identical
+	# 864015-byte PPM with either `-vnc :19` or `-vnc unix:...`.
+	# The -vnc argument needs OUTPUT_DIR, which is defined further down, so it
+	# is appended there rather than here.
 	QEMU_GPU_ARGS=(-device virtio-vga-gl -display "egl-headless,rendernode=/dev/dri/renderD128")
-	echo "==> GPU: virgl (virtio-vga-gl + egl-headless /dev/dri/renderD128) — Smithay compositors can render"
+	QEMU_NEEDS_VNC_SURFACE=1
+	echo "==> GPU: virgl (virtio-vga-gl + egl-headless /dev/dri/renderD128 + vnc surface) — Smithay compositors can render"
 else
 	echo "==> GPU: -vga virtio headless (no render node/virgl) — niri/xfwl4 will not render here"
 fi
@@ -300,6 +322,13 @@ LIVE_SERIAL_LOG="${OUTPUT_DIR}/live-serial.log"
 LUKS_EVIDENCE_LOG="${OUTPUT_DIR}/luks-evidence.log"
 INSTALL_DISK="${OUTPUT_DIR}/install-disk.qcow2"
 QEMU_PIDFILE="${OUTPUT_DIR}/qemu.pid"
+
+# See the egl-headless block above: it renders GL but presents nothing, so
+# screendump has no surface and every screenshot in this repo silently fails.
+# VNC on a unix socket materialises the framebuffer without opening a port.
+if [[ "${QEMU_NEEDS_VNC_SURFACE:-0}" == "1" ]]; then
+	QEMU_GPU_ARGS+=(-vnc "unix:${OUTPUT_DIR}/vnc.sock")
+fi
 
 record_luks_evidence() {
 	[[ "$LUKS" -eq 1 ]] || return 0
