@@ -138,7 +138,7 @@ jobs:
           done
           jq . shard.json
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: facts-${{ matrix.variant }}
           path: shard.json
@@ -161,7 +161,7 @@ jobs:
              '{generated:$t, images:.}' merged.json > catalog-facts.json
           echo "entries: $(jq '.images | length' catalog-facts.json)"
           jq -r '.images | to_entries[] | "  \(.key): \(.value.desktop) \(.value.kernelVer)"' catalog-facts.json
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: catalog-facts
           path: catalog-facts.json
