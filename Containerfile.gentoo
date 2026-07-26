@@ -59,9 +59,17 @@ RUN NPROC="$(nproc)" && \
 RUN emerge --verbose --deep --newuse @world
 
 # 3) Install the bootc/base tooling, prebuilt kernel, and extra base packages.
+# sys-apps/flatpak is not optional despite looking like a desktop nicety:
+# live-iso/common/src/customize-live.sh pre-installs the TunaOS installer as
+# a flatpak, and without it every guppy live-overlay build fails with
+#   ERROR: flatpak not installed; cannot pre-install org.tunaos.Installer<DE>
+# (runs 30159027680, 30196443189). Gentoo was the last Containerfile without
+# it — every other base already installs flatpak. Same class as #809, which
+# added it to the openSUSE base.
 RUN emerge --verbose --deep --newuse \
         app-arch/cpio btrfs-progs dev-vcs/git dosfstools sys-fs/xfsprogs \
         linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd \
+        sys-apps/flatpak \
         net-vpn/tailscale gui-apps/wl-clipboard media-video/ffmpeg media-plugins/gst-plugins-meta && \
     curl -fsSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.35.0/just-1.35.0-x86_64-unknown-linux-musl.tar.gz && \
     tar -xzf /tmp/just.tar.gz -C /usr/bin just && rm /tmp/just.tar.gz && \
