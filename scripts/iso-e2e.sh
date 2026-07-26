@@ -234,8 +234,30 @@ _gpu_mode="${TBOX_E2E_GPU:-auto}"
 QEMU_GPU_ARGS=(-vga virtio -display none)
 if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /dev/dri/renderD128 ]]; } \
 	&& "$QEMU" -device help 2>/dev/null | grep -q "virtio-vga-gl"; then
+	# egl-headless is NOT a display in its own right — it renders GL locally and
+	# expects another UI to present the result. Without one, `screendump` fails:
+	#
+	#   (qemu) screendump /path/shot.ppm
+	#   Error: no surface
+	#
+	# That is silent in practice: iso-e2e.sh, installer-walkthrough.py,
+	# run-walkthrough.sh and the weekly screenshot workflows are ALL built on
+	# screendump, and their callers `|| true` past a failure — so switching to
+	# a GPU host would have produced zero screenshots while still reporting
+	# success. The gap never showed up because virgl only engages on a host
+	# with a render node, which CI runners do not have.
+	#
+	# -vnc is what makes capture possible at all, but note it does NOT rescue
+	# screendump: under GL scanout the monitor still answers "no surface". It
+	# is the VNC *client* path that works, because the server reads the texture
+	# back for its clients — see screenshot() below. A unix socket rather than
+	# a :N display keeps this off the network and avoids collisions between
+	# concurrent runs.
+	# The -vnc argument needs OUTPUT_DIR, which is defined further down, so it
+	# is appended there rather than here.
 	QEMU_GPU_ARGS=(-device virtio-vga-gl -display "egl-headless,rendernode=/dev/dri/renderD128")
-	echo "==> GPU: virgl (virtio-vga-gl + egl-headless /dev/dri/renderD128) — Smithay compositors can render"
+	QEMU_NEEDS_VNC_SURFACE=1
+	echo "==> GPU: virgl (virtio-vga-gl + egl-headless /dev/dri/renderD128 + vnc surface) — Smithay compositors can render"
 else
 	echo "==> GPU: -vga virtio headless (no render node/virgl) — niri/xfwl4 will not render here"
 fi
@@ -300,6 +322,14 @@ LIVE_SERIAL_LOG="${OUTPUT_DIR}/live-serial.log"
 LUKS_EVIDENCE_LOG="${OUTPUT_DIR}/luks-evidence.log"
 INSTALL_DISK="${OUTPUT_DIR}/install-disk.qcow2"
 QEMU_PIDFILE="${OUTPUT_DIR}/qemu.pid"
+
+# See the egl-headless block above: it renders GL but presents nothing, so
+# screendump has no surface and every screenshot in this repo silently fails.
+# (VNC alone does not fix screendump under GL scanout — see screenshot().)
+# VNC on a unix socket materialises the framebuffer without opening a port.
+if [[ "${QEMU_NEEDS_VNC_SURFACE:-0}" == "1" ]]; then
+	QEMU_GPU_ARGS+=(-vnc "unix:${OUTPUT_DIR}/vnc.sock")
+fi
 
 record_luks_evidence() {
 	[[ "$LUKS" -eq 1 ]] || return 0
@@ -458,13 +488,56 @@ boot_live_iso() {
 	return 1
 }
 
-# Take a screenshot via QEMU monitor. Best-effort.
+# Take a screenshot. Best-effort, and deliberately two-path.
+#
+# `screendump` cannot capture a guest that is scanning out through virgl. Once
+# a Wayland compositor takes over, the framebuffer lives in a GL texture that
+# QEMU's console layer never sees, and the monitor answers:
+#
+#   (qemu) screendump /path/shot.ppm
+#   Error: no surface
+#
+# Attaching -vnc is necessary but NOT sufficient: with VNC listening,
+# screendump still reports "no surface" under GL scanout. Verified on hardware
+# 2026-07-26 — it succeeds at the pre-GL text console and fails the moment
+# cosmic-comp starts, which is precisely the window we care about.
+#
+# The VNC *client* path does work, because the VNC server reads the texture
+# back for its clients. Capturing through it produced the first image ever
+# taken of the cosmic live session with the installer on screen.
+#
+# So: prefer VNC capture whenever the socket exists, and keep screendump as
+# the fallback for the plain -vga virtio path, where it is perfectly good.
 screenshot() {
 	local label="$1"
 	local out="${OUTPUT_DIR}/${label}.ppm"
+	local png="${OUTPUT_DIR}/${label}.png"
+	local vnc_sock="${OUTPUT_DIR}/vnc.sock"
+
+	if [[ -S "$vnc_sock" ]] && command -v vncdo &>/dev/null && command -v socat &>/dev/null; then
+		# vncdo speaks TCP, so bridge the unix socket for the moment of capture.
+		local port="${TBOX_E2E_VNC_PORT:-5999}"
+		socat "TCP-LISTEN:${port},reuseaddr,fork" "UNIX-CONNECT:${vnc_sock}" &
+		local bridge=$!
+		sleep 1
+		vncdo -s "127.0.0.1::${port}" capture "$png" >/dev/null 2>&1 || true
+		kill "$bridge" 2>/dev/null || true
+		if [[ -s "$png" ]]; then
+			echo "==> Screenshot saved: ${png} (vnc)"
+			return 0
+		fi
+		echo "==> VNC capture failed; falling back to screendump" >&2
+	fi
+
 	if [[ -S "$MONITOR_SOCK" ]] && command -v socat &>/dev/null; then
 		echo "screendump ${out}" | socat - "UNIX-CONNECT:${MONITOR_SOCK}" >/dev/null 2>&1 || true
-		[[ -f "$out" ]] && echo "==> Screenshot saved: ${out}"
+		if [[ -f "$out" ]]; then
+			echo "==> Screenshot saved: ${out}"
+		else
+			# Say so rather than leaving a silently absent artifact: on the
+			# virgl path this is expected, and vncdo is the missing piece.
+			echo "==> No screenshot captured (screendump found no surface; install vncdotool for the virgl path)" >&2
+		fi
 	fi
 }
 
