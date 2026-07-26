@@ -102,6 +102,20 @@ fi
 
 # Auto-launch the TunaOS installer frontend in the live session.
 # The app is baked into the live squash by customize-live.sh (tacklebox live_customize).
+# NOTE: deliberately no OnlyShowIn=. systemd-xdg-autostart-generator turns
+# each entry into a unit whose ExecCondition is
+# `systemd-xdg-autostart-condition "<desktop>"`, evaluated against
+# $XDG_CURRENT_DESKTOP in the *user manager's* environment. cosmic-session
+# does not export it, so on a live cosmic ISO every OnlyShowIn entry is
+# generated and then skipped:
+#
+#   app-org.tunaos.installer\x2dlive@autostart.service: Skipped due to
+#   'exec-condition'  (verified on hardware, 2026-07-26)
+#
+# gnome-keyring and CosmicInitialSetup were skipped the same way, which is
+# the tell: it is not our entry that is wrong, it is the filter. A live ISO
+# runs exactly one desktop, so OnlyShowIn buys nothing and costs the whole
+# feature.
 mkdir -p /etc/xdg/autostart
 tee /etc/xdg/autostart/org.tunaos.installer-live.desktop <<'DESKEOF'
 [Desktop Entry]
@@ -109,7 +123,6 @@ Type=Application
 Name=Install TunaOS
 Exec=flatpak run org.tunaos.InstallerXfce
 Icon=org.tunaos.InstallerXfce
-OnlyShowIn=XFCE;
 DESKEOF
 
 # Disable xfce4-screensaver locking and power suspend for the live session
