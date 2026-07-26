@@ -103,6 +103,10 @@ if [[ "${TBOX_E2E_REBUILD:-}" == "1" ]] || ! podman image exists "$IMAGE"; then
 	echo "==> building $IMAGE"
 	podman build -t "$IMAGE" -f - "$REPO_ROOT" <<'CONTAINERFILE'
 FROM registry.fedoraproject.org/fedora:41
+# vncdotool: screendump cannot capture a virgl guest once a Wayland
+# compositor scans out through GL ("Error: no surface"), so the VNC client
+# path in iso-e2e.sh's screenshot() is the only way to get an image of the
+# very sessions this GPU harness exists to test.
 RUN dnf -y install --setopt=install_weak_deps=False \
       qemu-system-x86-core \
       qemu-img \
@@ -113,8 +117,9 @@ RUN dnf -y install --setopt=install_weak_deps=False \
       virglrenderer \
       mesa-dri-drivers \
       mesa-libEGL \
-      socat sshpass swtpm swtpm-tools python3 openssh-clients \
+      socat sshpass swtpm swtpm-tools python3 python3-pip openssh-clients \
       bash coreutils util-linux procps-ng \
+ && python3 -m pip install --no-cache-dir vncdotool \
  && dnf clean all
 CONTAINERFILE
 fi
