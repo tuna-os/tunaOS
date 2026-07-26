@@ -21,24 +21,23 @@ set -euo pipefail
 #   "Please either install labwc or specify another compositor as argument"
 # onto a black screen — which is exactly how yellowfin:xfce failed.
 #
-# Only labwc and wayfire qualify. xfwl4 does NOT, even though the EL10
-# manifest installs it as the xfce compositor: startxfce4 hands its argument
-# no startup command (the labwc default path appends `--session
-# xfce4-session`), and `xfwl4 --help` has no equivalent option — so
-# `startxfce4 --wayland xfwl4` would come up as a bare compositor with no
-# session inside it. labwc has no EL10 build in any configured repo, so on
-# those images this correctly falls through to the X11 branch rather than
-# claiming a Wayland session we cannot start. See tunaOS#834.
+# xfwl4 is listed first: it is what the EL10 manifest installs, and run
+# 30191933429 shows `startxfce4 --wayland xfwl4` really does launch it —
+# xfwl4 came up on renderD128 and created wayland-1 before panicking on
+# "Failed to find theme named Default" (missing xfwm4 theme data,
+# tunaos-packages#123). An earlier revision of this file excluded xfwl4 on
+# the theory that startxfce4 appends no startup command to a named
+# compositor; that reasoning was not borne out, and excluding it was
+# strictly worse — the X11 branch is a dead end on a base that ships no
+# /usr/share/xsessions at all. Whether xfce4-session follows xfwl4 up is
+# still unproven: xfwl4 dies before we find out.
 _xfce_compositor=""
-for _c in labwc wayfire; do
+for _c in xfwl4 labwc wayfire; do
 	command -v "${_c}" &>/dev/null && {
 		_xfce_compositor="${_c}"
 		break
 	}
 done
-if [[ -z "${_xfce_compositor}" ]] && command -v xfwl4 &>/dev/null; then
-	echo "desktop-xfce: xfwl4 present but startxfce4 cannot drive it (no startup-command option) and labwc/wayfire are absent; falling back to X11" >&2
-fi
 
 if [[ -n "${_xfce_compositor}" ]] && command -v greetd &>/dev/null; then
 	# ── Wayland (xfwl4) — greetd autologin, no X11 ───────────────────────
