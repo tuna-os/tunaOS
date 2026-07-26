@@ -200,11 +200,21 @@ jobs:
           # scripting, no Wayland raise API, and it either worked or it did
           # not. The installer is already running and autostarted, so it
           # becomes the top window once the welcome app is gone.
+          # pkill -x matches the process NAME exactly. The earlier -f form
+          # matched any command line CONTAINING the string, which is far too
+          # broad to aim at a session you are about to photograph — and when
+          # the installer vanished in run 30179891979 there was no way to
+          # tell whether this killed it or it died on its own. Record the
+          # installer before and after so that question is answerable.
           SSH="sshpass -p live ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null liveuser@127.0.0.1"
-          $SSH 'pkill -f plasma-welcome || true; pkill -f gnome-tour || true; pkill -f "gnome-initial-setup" || true' 2>/dev/null || true
+          echo "installer BEFORE closing welcome apps:"
+          $SSH 'pgrep -af "[o]rg\.tunaos\.Installer|[b]ootcinstaller" || echo "(no installer process)"' 2>/dev/null || true
+          $SSH 'pkill -x plasma-welcome || true; pkill -x gnome-tour || true; pkill -x gnome-initial-setup || true' 2>/dev/null || true
           sleep 3
-          echo "foreground after closing welcome apps:"
-          $SSH 'ps -eo comm,args | grep -iE "[I]nstaller|[p]lasma-welcome|[g]nome-tour" || echo "(none)"' 2>/dev/null || true
+          echo "installer AFTER closing welcome apps:"
+          $SSH 'pgrep -af "[o]rg\.tunaos\.Installer|[b]ootcinstaller" || echo "(no installer process)"' 2>/dev/null || true
+          echo "welcome apps still running:"
+          $SSH 'pgrep -af "[p]lasma-welcome|[g]nome-tour" || echo "(none — closed)"' 2>/dev/null || true
 
           if sudo test -S smoke-out/monitor.sock; then
             set +e
@@ -327,7 +337,13 @@ jobs:
             smoke-out/*.png
             smoke-out/*.json
             smoke-out/*.tap
-            smoke-out/serial.log
+            # Every *.log, not just serial.log. installer-stderr-<flavor>.log
+            # is the richest diagnostic this workflow produces — the user
+            # journal, the DM journal, the autologin config actually on the
+            # booted system — and it was written, tail -30'd into the run log,
+            # and then discarded unuploaded. Run 30179891979 needed the 253
+            # lines that did not survive.
+            smoke-out/*.log
           if-no-files-found: warn
 
   # Publishes the walkthrough-*.png frames captured above to docs, the same
