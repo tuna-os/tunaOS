@@ -177,6 +177,36 @@ teardown() {
 
 # ── tunaos_import_to_root_storage tests ─────────────────────────────────────
 
+# Regression: the import ran `sudo -u "$real_user" podman save` with no
+# XDG_RUNTIME_DIR. With no user session inherited, rootless podman falls back
+# to root's /run/containers/storage, can't write there, and dies on
+# /run/libpod/alive.lck — so every local `just iso` off a rootless image
+# failed. Unlike the neighbouring tests this exercises the REAL function.
+@test "tunaos_import_to_root_storage: passes XDG_RUNTIME_DIR to the invoking user's podman" {
+  local spy="${BATS_TEST_TMPDIR}/sudo-args"
+  run bash -c '
+    set +e
+    source "'"${BATS_TEST_DIRNAME}"'/../../scripts/lib/common.sh"
+    SUDO_USER=testuser
+    id() { echo 4242; }
+    sudo() { echo "$*" >>"'"${spy}"'"; return 0; }
+    _calls=0
+    podman() {
+      if [[ "$1 $2" == "image exists" ]]; then
+        # Absent the first time (forces the import), present afterwards.
+        _calls=$((_calls + 1))
+        [[ $_calls -gt 1 ]] && return 0
+        return 1
+      fi
+      cat >/dev/null 2>&1
+      return 0
+    }
+    tunaos_import_to_root_storage "localhost/yellowfin:cosmic"
+  '
+  [ "$status" -eq 0 ]
+  grep -q "XDG_RUNTIME_DIR=/run/user/4242" "$spy"
+}
+
 @test "tunaos_import_to_root_storage: returns 0 when image already exists" {
   run bash -c '
     tunaos_import_to_root_storage() {
