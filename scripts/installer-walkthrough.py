@@ -256,9 +256,16 @@ note(f"{rendered}/{len(frames)} frames above stddev {BLANK_STDDEV} "
 # ── 2. ADVANCES ──────────────────────────────────────────────────────────
 advanced = sum(1 for a, b in zip(frames, frames[1:])
                if changed_pixels(a, b) > DIFF_PIXELS)
-tap(advanced > 0, f"{flavor}: installer advances between screens",
+# NOT "the installer advances": like the render check above, this measures the
+# whole framebuffer, so anything that animates satisfies it. kde did exactly
+# that (run 29914643652) — 8/8 transitions and 9 "distinct visual states" while
+# every frame was the SDDM greeter's password prompt and the only thing moving
+# was its clock. Named for what it actually checks; the screens section below
+# is what decides whether the installer was ever on screen.
+tap(advanced > 0, f"{flavor}: screen changes between steps",
     f"{advanced}/{max(len(frames) - 1, 0)} transitions changed >{DIFF_PIXELS}px "
-    f"(0 means it never left the first screen — stuck, modal, or crashed)",
+    f"(0 means nothing on screen responded at all — stuck, modal, or crashed; "
+    f">0 is not by itself evidence the installer moved — a clock will do it)",
     enforced=strict)
 note(f"{advanced}/{max(len(frames) - 1, 0)} transitions changed >{DIFF_PIXELS}px"
      + (f"; primary action activated with '{activation}'" if advanced else ""))
@@ -327,17 +334,24 @@ for idx, sc in enumerate(spec):
         note(where)
 
 # ── No-window diagnosis ──────────────────────────────────────────────────
-# The compositor+frontend gate in installer-smoke.yml already proved the
-# process is alive before this script runs. So if the screen is not blank, yet
-# nothing ever advanced AND no screen matched, the most likely explanation is
-# that the process is running without a mapped window — the desktop is what is
-# being photographed. Say so, rather than leaving six identical "screen not
-# reached" lines for someone to interpret.
-if have_ocr and n_states <= 1 and not any(reached.values()) and rendered > 0:
+# If the screen is not blank yet no screen ever matched, the installer was
+# never photographed, whatever the pixels did. Say so, rather than leaving six
+# identical "screen not reached" lines for someone to interpret.
+#
+# This used to also require n_states <= 1, which silently disabled it in the
+# case that needed it most: kde's greeter clock produced 9 states, so the
+# diagnosis never printed and the run read as "advanced 8 times, found
+# nothing". Movement is not evidence of an installer, so it is not a reason to
+# withhold the diagnosis.
+if have_ocr and not any(reached.values()) and rendered > 0:
+    _moved = "nothing responded to input" if n_states <= 1 else (
+        f"the screen changed {n_states - 1}x, but no change was an installer "
+        f"screen (a greeter clock or desktop animation looks identical here)")
     print(f"  # DIAGNOSIS: {flavor} — process is running (gate passed) but no "
-          f"installer screen was ever detected and nothing responded to input; "
-          f"the frames are most likely the bare desktop with no installer "
-          f"window mapped", flush=True)
+          f"installer screen was ever detected and {_moved}; the frames are "
+          f"most likely a login greeter or the bare desktop, with no installer "
+          f"window mapped. Check the captured PNGs before assuming a UI bug.",
+          flush=True)
 
 # ── Result for the parity matrix ─────────────────────────────────────────
 summary = {

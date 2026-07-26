@@ -14,23 +14,39 @@ set -euo pipefail
 # and greetd — an X11-free stack. Detect it by the packaged Wayland session
 # and/or the xfwl4 binary. On bases still on X11 XFCE (Fedora/Debian until
 # their xfwl4 packaging lands) fall back to lightdm/gdm autologin.
-if compgen -G "/usr/share/wayland-sessions/xfce*.desktop" >/dev/null || command -v xfwl4 &>/dev/null; then
+#
+# Gate on a *compositor binary*, not on the packaged session file: several
+# bases ship /usr/share/wayland-sessions/xfce-wayland.desktop with no
+# compositor behind it, and `startxfce4 --wayland` then dies with
+#   "Please either install labwc or specify another compositor as argument"
+# onto a black screen — which is exactly how yellowfin:xfce failed.
+# startxfce4 only auto-discovers labwc/wayfire, so name it explicitly.
+_xfce_compositor=""
+for _c in xfwl4 labwc wayfire; do
+	command -v "${_c}" &>/dev/null && {
+		_xfce_compositor="${_c}"
+		break
+	}
+done
+
+if [[ -n "${_xfce_compositor}" ]] && command -v greetd &>/dev/null; then
 	# ── Wayland (xfwl4) — greetd autologin, no X11 ───────────────────────
 	# greetd `command` is run by the user's shell, so it must be the actual
 	# exec, not a session-file name. dbus-run-session gives the session a
 	# message bus (portals, xfconf) the way a DM login would.
+	echo "desktop-xfce: wayland session via compositor=${_xfce_compositor}"
 	mkdir -p /etc/greetd
-	tee /etc/greetd/config.toml <<'GREETDEOF'
+	tee /etc/greetd/config.toml <<GREETDEOF
 [terminal]
 vt = 1
 
 [default_session]
 user = "liveuser"
-command = "dbus-run-session startxfce4 --wayland"
+command = "dbus-run-session startxfce4 --wayland ${_xfce_compositor}"
 
 [initial_session]
 user = "liveuser"
-command = "dbus-run-session startxfce4 --wayland"
+command = "dbus-run-session startxfce4 --wayland ${_xfce_compositor}"
 GREETDEOF
 	# Enable greetd + boot to graphical.target (server-oriented EL10 bases
 	# default to multi-user.target, which would land on a console — same

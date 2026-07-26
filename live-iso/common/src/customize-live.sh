@@ -54,10 +54,18 @@ fi
 # ── 1b. Live user ────────────────────────────────────────────────────────────
 # No TunaOS image ships livesys-scripts, so nothing creates the account the
 # desktop adapters autologin to — bake it into the squash instead (pattern:
-# projectbluefin/dakota-iso configure-live.sh). uid 1000 is free on bootc
-# images. Installed systems never see this: live squash only.
+# projectbluefin/dakota-iso configure-live.sh). Installed systems never see
+# this: live squash only.
+#
+# uid 1000 is free on *most* bootc images, but not all — grouper ships a
+# packaged user there, and the unconditional `--uid 1000` failed the whole
+# overlay build with "useradd: UID 1000 is not unique" (exit 4). Ask for
+# 1000 when it is free (desktop sessions and flatpak expect it) and let
+# useradd pick otherwise; nothing here depends on the exact number.
 if ! getent passwd liveuser >/dev/null; then
-	useradd --create-home --uid 1000 --user-group \
+	_uid_args=()
+	getent passwd 1000 >/dev/null || _uid_args=(--uid 1000)
+	useradd --create-home "${_uid_args[@]}" --user-group \
 		--comment "Live User" --shell /bin/bash liveuser
 fi
 passwd --delete liveuser >/dev/null 2>&1 || true
