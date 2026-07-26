@@ -36,9 +36,12 @@ corral create --help 2>&1 | grep -q -- '--bootc' || {
 	exit 77
 }
 
-# Display manager to assert per desktop family.
+# Display manager to assert per desktop family. Space-separated candidates:
+# the same DE ships different DM units per base (KDE 6.5+ renamed sddm to
+# plasmalogin; xfce is lightdm on X11 bases and greetd on the Wayland ones).
+# Any one active counts as a pass.
 case "$FLAVOR" in
-kde*) DM=sddm ;; niri* | cosmic*) DM=greetd ;; xfce*) DM=lightdm ;; *) DM=gdm ;;
+kde*) DM="sddm plasmalogin" ;; niri* | cosmic*) DM=greetd ;; xfce*) DM="lightdm greetd gdm" ;; *) DM="gdm gdm3" ;;
 esac
 
 NODE_ARGS=()
@@ -66,8 +69,16 @@ RC=0
 	echo "FAIL graphical.target"
 	RC=1
 }
-[[ "$(check "systemctl is-active $DM" | tr -d '[:space:]')" == active ]] || {
-	echo "FAIL $DM"
+DM_OK=0
+for _dm in $DM; do
+	if [[ "$(check "systemctl is-active ${_dm}" | tr -d '[:space:]')" == active ]]; then
+		DM_OK=1
+		echo "ok display-manager: ${_dm}"
+		break
+	fi
+done
+[[ "$DM_OK" == 1 ]] || {
+	echo "FAIL display manager (tried: $DM)"
 	RC=1
 }
 check 'systemctl --failed --no-legend' || true

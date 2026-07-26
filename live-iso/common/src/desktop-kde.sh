@@ -20,8 +20,16 @@ _kde_session="plasma"
 if [[ -f /usr/share/wayland-sessions/plasmawayland.desktop && ! -f /usr/share/wayland-sessions/plasma.desktop ]]; then
 	_kde_session="plasmawayland"
 fi
-mkdir -p /etc/sddm.conf.d
-tee /etc/sddm.conf.d/live-autologin.conf <<SDDMEOF
+# KDE 6.5+ renames the SDDM binary/unit to plasmalogin, and with it the
+# config directory (/etc/plasmalogin.conf.d). Both names are in the wild —
+# yellowfin:kde shipped sddm in July 2026 and plasmalogin days later — so
+# write the drop-in to every candidate directory rather than detecting.
+# A drop-in in a directory no DM reads is inert, so this is free.
+# Getting this wrong is silent: the greeter simply prompts for a password
+# and the live session (and installer) never starts.
+for _kde_confd in /etc/sddm.conf.d /etc/plasmalogin.conf.d; do
+	mkdir -p "${_kde_confd}"
+	tee "${_kde_confd}/live-autologin.conf" <<SDDMEOF
 [General]
 DisplayServer=wayland
 CompositorCommand=kwin_wayland --no-lockscreen
@@ -31,6 +39,7 @@ User=liveuser
 Session=${_kde_session}
 Relogin=false
 SDDMEOF
+done
 
 mkdir -p /etc/xdg
 tee /etc/xdg/kscreenlockerrc <<'LOCKEOF'

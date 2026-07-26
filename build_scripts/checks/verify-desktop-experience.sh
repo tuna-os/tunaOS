@@ -64,8 +64,9 @@ kde)
 	experience="ublue-os/aurora"
 	require_command plasmashell
 	require_glob '/usr/share/wayland-sessions/*plasma*.desktop'
-	require_unit sddm
-	dm_pattern='^sddm\.service$'
+	# KDE 6.5+ renames SDDM to plasmalogin; both are in the wild.
+	require_any_unit sddm plasmalogin
+	dm_pattern='^(sddm|plasmalogin)\.service$'
 	;;
 niri)
 	experience="zirconium-dev/zirconium"
