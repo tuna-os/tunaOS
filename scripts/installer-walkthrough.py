@@ -48,6 +48,14 @@ strict = "--strict" in flags
 spec_path = next((f.split("=", 1)[1] for f in flags if f.startswith("--spec=")),
                  os.path.join(os.path.dirname(os.path.abspath(__file__)),
                               "..", "tests", "installer-screens.yaml"))
+# QEMU's screendump answers "Error: no surface" the moment a Wayland compositor
+# scans out through virgl — which is every session this harness exists to
+# photograph on a GPU host. So on the one path where cosmic, niri and xfwl4
+# actually render, screendump captures nothing at all. The VNC *client* path
+# still works; iso-e2e.sh has done it this way since #844.
+vnc_sock = next((f.split("=", 1)[1] for f in flags if f.startswith("--vnc=")),
+                os.path.join(outdir, "vnc.sock"))
+vnc_port = int(os.environ.get("TBOX_WALKTHROUGH_VNC_PORT", "5998"))
 os.makedirs(outdir, exist_ok=True)
 
 BLANK_STDDEV = 0.02   # same floor iso-e2e.sh uses for "screen looks blank"
@@ -102,17 +110,58 @@ def hmp(cmd):
     return out.decode("utf-8", "replace")
 
 
+def vnc_capture(png):
+    """Capture via the VNC client. Returns True if a non-empty PNG landed.
+
+    vncdo speaks TCP, so bridge the unix socket for the moment of capture —
+    the same trick iso-e2e.sh's screenshot() uses. Silent-and-false when the
+    socket or tooling is absent, so the screendump path can still run.
+    """
+    if not (os.path.exists(vnc_sock)
+            and shutil.which("vncdo") and shutil.which("socat")):
+        return False
+    bridge = subprocess.Popen(
+        ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr,fork",
+         f"UNIX-CONNECT:{vnc_sock}"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        time.sleep(1)
+        subprocess.run(["vncdo", "-s", f"127.0.0.1::{vnc_port}", "capture", png],
+                       check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    finally:
+        bridge.terminate()
+        try:
+            bridge.wait(timeout=5)
+        except Exception:
+            bridge.kill()
+    return os.path.exists(png) and os.path.getsize(png) > 0
+
+
 def shot(idx, label):
-    ppm = os.path.abspath(f"{outdir}/walkthrough-{flavor}-{idx:02d}.ppm")
-    png = ppm[:-4] + ".png"
+    png = os.path.abspath(f"{outdir}/walkthrough-{flavor}-{idx:02d}.png")
+
+    # VNC first: on the virgl path it is the only thing that works, and on the
+    # non-GL path there is no vnc.sock so this costs one os.path.exists().
+    if vnc_capture(png):
+        print(f"captured step {idx}: {label} -> {png} (vnc)", flush=True)
+        return png
+
+    ppm = png[:-4] + ".ppm"
     hmp(f"screendump {ppm}")
     time.sleep(1.5)
     if os.path.exists(ppm):
         subprocess.run(["convert", ppm, png], check=False)
         os.remove(ppm)
-        print(f"captured step {idx}: {label} -> {png}", flush=True)
+        print(f"captured step {idx}: {label} -> {png} (screendump)", flush=True)
         return png
-    print(f"!!! no screendump at step {idx} ({label})", flush=True)
+
+    # Say which path failed and why. A silently missing frame here used to be
+    # indistinguishable from a blank one, and blank-vs-absent is the difference
+    # between "the compositor did not start" and "we cannot photograph it".
+    print(f"!!! no capture at step {idx} ({label}): screendump found no surface "
+          f"and no usable VNC at {vnc_sock}. On the virgl path start QEMU with "
+          f"-vnc unix:<sock> and install vncdotool.", flush=True)
     return None
 
 
