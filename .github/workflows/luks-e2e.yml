@@ -41,7 +41,7 @@ jobs:
   # desktop flavor with a published image), narrowed by the dispatch filters.
   generate-matrix:
     name: Generate matrix
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
@@ -114,7 +114,7 @@ jobs:
   luks:
     name: LUKS ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate-matrix
-    runs-on: ubuntu-24.04
+    runs-on: blacksmith-4vcpu-ubuntu-2404
     # 90 min was sized for the old local-only bootc install (no network
     # pull). fisherman now does a full image pull over the QEMU guest's NAT
     # networking (see docs/ci-troubleshooting.md §4 bug #19) — slower than a
