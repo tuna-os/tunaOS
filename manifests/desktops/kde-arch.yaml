@@ -17,7 +17,11 @@ packages:
     - qt5-wayland
     - ksshaskpass
     - ksystemlog
-    - input-remapper
+    # input-remapper is AUR-only — not in any official Arch repo, so pacman
+    # fails the whole kde build with "target not found: input-remapper"
+    # and marlin:kde has been serving a stale image ever since.
+    # Tracked for packaging in tuna-os/tunaos-packages#126.
+    # - input-remapper
     - libratbag
     - solaar
     - pam-u2f
