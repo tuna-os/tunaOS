@@ -277,6 +277,24 @@ for i in range(1, steps + 1):
                 tabs += 1
                 print(f"  # no change — widening focus search to {tabs} tabs",
                       flush=True)
+            elif os.path.exists(vnc_sock) and shutil.which("vncdo") and shutil.which("socat"):
+                # Fallback to mouse click on primary button location via VNC if keyboard navigation stalls
+                # Primary action buttons ("Get Started", "Next", "Continue") sit near bottom right / center bottom
+                print("  # keyboard navigation exhausted — attempting VNC mouse click on primary action button", flush=True)
+                bridge = subprocess.Popen(
+                    ["socat", f"TCP-LISTEN:{vnc_port},reuseaddr,fork", f"UNIX-CONNECT:{vnc_sock}"],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                try:
+                    time.sleep(1)
+                    # Click center-right / bottom-right region (x=700, y=550 for 1024x768 framebuffer)
+                    subprocess.run(["vncdo", "-s", f"127.0.0.1::{vnc_port}", "move", "700", "550", "click", "1"],
+                                   check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                finally:
+                    bridge.terminate()
+                    try:
+                        bridge.wait(timeout=5)
+                    except Exception:
+                        bridge.kill()
 
 print(f"\n# walkthrough verification ({flavor}) — {len(frames)} frames, "
       f"strict={strict}\n", flush=True)
