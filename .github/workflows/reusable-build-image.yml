@@ -447,7 +447,7 @@ jobs:
             /tmp/outputs/digests/*.txt
   manifest:
     name: Manifest
-    runs-on: ubuntu-latest
+    runs-on: runs-on=${{ github.run_id }}/runner=build-amd64
     if: always()
     needs:
       - generate_matrix
@@ -705,7 +705,7 @@ jobs:
     name: Sign
     needs: manifest
     if: ${{ inputs.publish && github.event_name != 'pull_request' }}
-    runs-on: ubuntu-latest
+    runs-on: runs-on=${{ github.run_id }}/runner=build-amd64
     permissions:
       contents: read
       packages: write
@@ -735,7 +735,7 @@ jobs:
       inputs.publish && github.event_name != 'pull_request' &&
       !startsWith(inputs.flavor, 'base') &&
       contains(inputs.platforms, 'amd64')
-    runs-on: ubuntu-latest
+    runs-on: runs-on=${{ github.run_id }}/runner=build-amd64
     timeout-minutes: 60
     permissions:
       contents: read
@@ -814,7 +814,7 @@ jobs:
       !cancelled() && github.event_name != 'pull_request' &&
       needs.manifest.result == 'success' &&
       (needs.verify_boot.result == 'success' || needs.verify_boot.result == 'skipped')
-    runs-on: ubuntu-latest
+    runs-on: runs-on=${{ github.run_id }}/runner=build-amd64
     permissions:
       contents: read
       packages: write
