@@ -7,5 +7,18 @@ block = ["direct", "tpm2-luks"]
 kargs = ["audit=0"]
 
 [install.filesystem.root]
-# Default to XFS for root, matching standard enterprise Linux patterns.
+# XFS matches standard enterprise Linux patterns and is correct for the
+# traditional-ostree variants (el10: composefs explicitly disabled).
+#
+# WARNING: XFS is WRONG for composefs-SEALED images (prepare-root.conf
+# [composefs] enabled = yes — every non-el10 base). A sealed rootfs needs
+# fs-verity, which XFS lacks: the initramfs then fails initrd-switch-root and
+# the system drops to a dracut emergency shell. Those variants must install on
+# ext4 (the proven sealed filesystem — see tuna-os/wootc
+# payload/deployer/deploy.sh; btrfs also has fs-verity but its ostree
+# deployment fails to mount, wootc#35).
+#
+# The qcow2/Gate path probes the image and passes --filesystem ext4 for sealed
+# images, which overrides this key. Per-variant overrides belong in a
+# higher-sorting drop-in (e.g. 50-<variant>.toml) so they win over this file.
 type = "xfs"

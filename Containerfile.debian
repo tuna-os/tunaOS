@@ -8,6 +8,7 @@
 #     --target=kde --file Containerfile.debian .
 
 ARG BASE_IMAGE="docker.io/library/debian:trixie@sha256:fac46bff2e02f51425b6e33b0e1169f55dfb053d83511ca28aa50c09fd5ed7a4"
+ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 ARG IMAGE_NAME
@@ -44,6 +45,8 @@ COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 COPY manifests /manifests
 COPY image-versions.yaml /image-versions.yaml
+
+FROM ${COMMON_IMAGE_REF} AS common
 
 # ── Base system (bootc-compatible Debian) ────────────────────────────────────
 FROM ${BASE_IMAGE} AS base-no-de
@@ -162,6 +165,8 @@ RUN sed -i 's|^HOME=.*|HOME=/var/home|' /etc/default/useradd && \
         > /usr/lib/ostree/prepare-root.conf
 
 LABEL containers.bootc 1
+COPY --from=context /files /
+COPY --from=common /system_files/shared /
 RUN bootc container lint
 
 # Cache-bust so build_scripts edits invalidate the desktop stages' install
@@ -176,6 +181,7 @@ FROM base-no-de AS base
 RUN ln -sf /var/opt /opt 2>/dev/null || true
 
 FROM base-no-de AS gnome
+COPY --from=common /system_files/bluefin /
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/desktop/install-desktop.sh gnome
 RUN ln -sf /var/opt /opt 2>/dev/null || true

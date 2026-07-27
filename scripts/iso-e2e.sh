@@ -81,6 +81,12 @@ TIMEOUT=300
 OUTPUT_DIR="./iso-e2e-out"
 MEMORY=4096
 CPUS=4
+# Host port forwarded to the guest's sshd. Overridable because the harness
+# otherwise cannot coexist with anything else on 2222 — on a shared GPU host
+# a rootless container already held it and QEMU died with
+# "Could not set up host forwarding rule 'tcp::2222-:22'" — and because two
+# runs on one host would collide with each other.
+SSH_PORT="${TBOX_E2E_SSH_PORT:-2222}"
 NO_KVM=0
 KEEP_VM=0
 LUKS=0
@@ -210,21 +216,67 @@ if [[ -z "$QEMU" ]]; then
 	exit 77
 fi
 
-# GPU/display selection. niri (and other Smithay compositors like xfwl4)
-# hard-require EGL_EXT_device_drm, which QEMU's plain virtio-gpu does NOT
-# provide — they start but render nothing headless (blank screen, niri
-# #322/#2567). If a DRM render node is present (an iGPU/dGPU host, e.g. the
-# tailnet laptops) and this QEMU has virtio-vga-gl, use virgl + egl-headless
-# so those compositors get real GL and actually render. GPU-less CI runners
-# fall back to -vga virtio: fine for cosmic/kde/gnome (software fallbacks),
-# but niri/xfwl4 will correctly show blank there. Override with
-# TBOX_E2E_GPU=virgl|plain.
+# GPU/display selection. niri (and the other Smithay compositors — xfwl4,
+# cosmic-comp) hard-require EGL_EXT_device_drm, which QEMU's plain virtio-gpu
+# does NOT provide (blank screen, niri #322/#2567). If a DRM render node is
+# present (an iGPU/dGPU host, e.g. the tailnet laptops) and this QEMU has
+# virtio-vga-gl, use virgl + egl-headless so those compositors get real GL and
+# actually render. Override with TBOX_E2E_GPU=virgl|plain.
+#
+# On a GPU-less runner we fall back to -vga virtio. This comment used to say
+# that was "fine for cosmic/kde/gnome (software fallbacks)". It is not, and
+# the claim cost weeks of misdirected debugging: cosmic and xfce are Smithay
+# too, so on hosted runners they don't render blank — they never start at
+# all. installer-smoke run 29914643652:
+#
+#   cosmic: libEGL: failed to create dri2 screen
+#   xfce:   greetd: check_children: greeter exited without creating a session
+#           greetd.service: Failed with result 'start-limit-hit'
+#
+# There is no software fallback for any of them. KDE is NOT the exception this
+# comment previously claimed: plasmalogin's autologin session and its greeter
+# both die instantly on a hosted runner (installer-smoke run 30234237855):
+#
+#   plasmalogin-helper: Starting Wayland user session ... startplasma-wayland
+#   plasmalogin-helper: pam_unix(plasmalogin-autologin:session): session closed
+#   plasmalogin: Auth: plasmalogin-helper exited with 5
+#   ... then the same for the greeter, in a restart loop
+#
+# `eglinfo` on that runner lists no EGL_EXT_device_drm at all, so kwin_wayland
+# is in the same position as the Smithay compositors.
+#
+# GNOME is the only desktop still believed verifiable without a render node,
+# and that belief is now untested rather than demonstrated — the smoke matrix
+# has never run gnome. For everything else use scripts/iso-e2e-gpu.sh on a
+# host with a real render node.
 _gpu_mode="${TBOX_E2E_GPU:-auto}"
 QEMU_GPU_ARGS=(-vga virtio -display none)
 if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /dev/dri/renderD128 ]]; } \
 	&& "$QEMU" -device help 2>/dev/null | grep -q "virtio-vga-gl"; then
+	# egl-headless is NOT a display in its own right — it renders GL locally and
+	# expects another UI to present the result. Without one, `screendump` fails:
+	#
+	#   (qemu) screendump /path/shot.ppm
+	#   Error: no surface
+	#
+	# That is silent in practice: iso-e2e.sh, installer-walkthrough.py,
+	# run-walkthrough.sh and the weekly screenshot workflows are ALL built on
+	# screendump, and their callers `|| true` past a failure — so switching to
+	# a GPU host would have produced zero screenshots while still reporting
+	# success. The gap never showed up because virgl only engages on a host
+	# with a render node, which CI runners do not have.
+	#
+	# -vnc is what makes capture possible at all, but note it does NOT rescue
+	# screendump: under GL scanout the monitor still answers "no surface". It
+	# is the VNC *client* path that works, because the server reads the texture
+	# back for its clients — see screenshot() below. A unix socket rather than
+	# a :N display keeps this off the network and avoids collisions between
+	# concurrent runs.
+	# The -vnc argument needs OUTPUT_DIR, which is defined further down, so it
+	# is appended there rather than here.
 	QEMU_GPU_ARGS=(-device virtio-vga-gl -display "egl-headless,rendernode=/dev/dri/renderD128")
-	echo "==> GPU: virgl (virtio-vga-gl + egl-headless /dev/dri/renderD128) — Smithay compositors can render"
+	QEMU_NEEDS_VNC_SURFACE=1
+	echo "==> GPU: virgl (virtio-vga-gl + egl-headless /dev/dri/renderD128 + vnc surface) — Smithay compositors can render"
 else
 	echo "==> GPU: -vga virtio headless (no render node/virgl) — niri/xfwl4 will not render here"
 fi
@@ -280,6 +332,17 @@ else
 	CPU_ARG="qemu64,+sse4.1,+sse4.2,+aes,+xsave,+xsaveopt,+xsavec,+xsaves,+popcnt,+avx,+avx2"
 fi
 
+# Fail early and legibly if the forward port is taken. QEMU's own error —
+# "Could not set up host forwarding rule 'tcp::2222-:22'" — arrives after the
+# disk image is created and reads like a QEMU fault rather than "something
+# else is already listening".
+if command -v ss &>/dev/null && ss -tln 2>/dev/null | grep -q ":${SSH_PORT} "; then
+	echo "ERROR: port ${SSH_PORT} is already in use; the guest SSH forward cannot bind." >&2
+	echo "       Set TBOX_E2E_SSH_PORT to a free port, e.g.:" >&2
+	echo "         TBOX_E2E_SSH_PORT=2322 $0 $*" >&2
+	exit 77
+fi
+
 # ── Per-run scratch files ───────────────────────────────────────────────────
 
 OVMF_VARS="${OUTPUT_DIR}/OVMF_VARS.fd"
@@ -289,6 +352,14 @@ LIVE_SERIAL_LOG="${OUTPUT_DIR}/live-serial.log"
 LUKS_EVIDENCE_LOG="${OUTPUT_DIR}/luks-evidence.log"
 INSTALL_DISK="${OUTPUT_DIR}/install-disk.qcow2"
 QEMU_PIDFILE="${OUTPUT_DIR}/qemu.pid"
+
+# See the egl-headless block above: it renders GL but presents nothing, so
+# screendump has no surface and every screenshot in this repo silently fails.
+# (VNC alone does not fix screendump under GL scanout — see screenshot().)
+# VNC on a unix socket materialises the framebuffer without opening a port.
+if [[ "${QEMU_NEEDS_VNC_SURFACE:-0}" == "1" ]]; then
+	QEMU_GPU_ARGS+=(-vnc "unix:${OUTPUT_DIR}/vnc.sock")
+fi
 
 record_luks_evidence() {
 	[[ "$LUKS" -eq 1 ]] || return 0
@@ -427,7 +498,7 @@ boot_live_iso() {
 		-device scsi-cd,drive=iso \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 		-device virtio-blk-pci,drive=disk \
-		-netdev "user,id=net0,hostfwd=tcp::2222-:22" \
+		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
 		-serial "file:${SERIAL_LOG}" \
@@ -447,13 +518,56 @@ boot_live_iso() {
 	return 1
 }
 
-# Take a screenshot via QEMU monitor. Best-effort.
+# Take a screenshot. Best-effort, and deliberately two-path.
+#
+# `screendump` cannot capture a guest that is scanning out through virgl. Once
+# a Wayland compositor takes over, the framebuffer lives in a GL texture that
+# QEMU's console layer never sees, and the monitor answers:
+#
+#   (qemu) screendump /path/shot.ppm
+#   Error: no surface
+#
+# Attaching -vnc is necessary but NOT sufficient: with VNC listening,
+# screendump still reports "no surface" under GL scanout. Verified on hardware
+# 2026-07-26 — it succeeds at the pre-GL text console and fails the moment
+# cosmic-comp starts, which is precisely the window we care about.
+#
+# The VNC *client* path does work, because the VNC server reads the texture
+# back for its clients. Capturing through it produced the first image ever
+# taken of the cosmic live session with the installer on screen.
+#
+# So: prefer VNC capture whenever the socket exists, and keep screendump as
+# the fallback for the plain -vga virtio path, where it is perfectly good.
 screenshot() {
 	local label="$1"
 	local out="${OUTPUT_DIR}/${label}.ppm"
+	local png="${OUTPUT_DIR}/${label}.png"
+	local vnc_sock="${OUTPUT_DIR}/vnc.sock"
+
+	if [[ -S "$vnc_sock" ]] && command -v vncdo &>/dev/null && command -v socat &>/dev/null; then
+		# vncdo speaks TCP, so bridge the unix socket for the moment of capture.
+		local port="${TBOX_E2E_VNC_PORT:-5999}"
+		socat "TCP-LISTEN:${port},reuseaddr,fork" "UNIX-CONNECT:${vnc_sock}" &
+		local bridge=$!
+		sleep 1
+		vncdo -s "127.0.0.1::${port}" capture "$png" >/dev/null 2>&1 || true
+		kill "$bridge" 2>/dev/null || true
+		if [[ -s "$png" ]]; then
+			echo "==> Screenshot saved: ${png} (vnc)"
+			return 0
+		fi
+		echo "==> VNC capture failed; falling back to screendump" >&2
+	fi
+
 	if [[ -S "$MONITOR_SOCK" ]] && command -v socat &>/dev/null; then
 		echo "screendump ${out}" | socat - "UNIX-CONNECT:${MONITOR_SOCK}" >/dev/null 2>&1 || true
-		[[ -f "$out" ]] && echo "==> Screenshot saved: ${out}"
+		if [[ -f "$out" ]]; then
+			echo "==> Screenshot saved: ${out}"
+		else
+			# Say so rather than leaving a silently absent artifact: on the
+			# virgl path this is expected, and vncdo is the missing piece.
+			echo "==> No screenshot captured (screendump found no surface; install vncdotool for the virgl path)" >&2
+		fi
 	fi
 }
 
@@ -577,7 +691,7 @@ check_ssh() {
 	fi
 	local opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10"
 	# shellcheck disable=SC2086
-	if sshpass -p live ssh $opts liveuser@127.0.0.1 -p 2222 true 2>/dev/null; then
+	if sshpass -p live ssh $opts liveuser@127.0.0.1 -p "$SSH_PORT" true 2>/dev/null; then
 		echo "==> SSH OK"
 		return 0
 	fi
@@ -594,8 +708,8 @@ run_smoke_checks() {
 	local script_dir
 	script_dir="$(dirname "${BASH_SOURCE[0]}")"
 	local -a COMMON_SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
-	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p 2222 liveuser@127.0.0.1)
-	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P 2222)
+	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
+	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_PORT")
 
 	"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" liveuser@127.0.0.1:/tmp/e2e-assert.sh
 	"${scp_cmd[@]}" "${script_dir}/e2e-smoke-checks.sh" liveuser@127.0.0.1:/tmp/e2e-smoke-checks.sh
@@ -667,8 +781,8 @@ run_install() {
 	# with the wrong flag silently makes scp treat the port number as a
 	# source-file argument ("stat local 2222: No such file or directory").
 	local -a COMMON_SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
-	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p 2222 liveuser@127.0.0.1)
-	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P 2222)
+	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
+	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_PORT")
 
 	# Bug #20: fisherman's network pull stalled indefinitely mid-blob (layer
 	# 42/65, no error, no further output) after dozens of smaller layers
@@ -994,7 +1108,7 @@ EOF
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 		-device virtio-blk-pci,drive=disk \
-		-netdev "user,id=net0,hostfwd=tcp::2222-:22" \
+		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
 		-serial "file:${SERIAL_LOG}" \
@@ -1058,7 +1172,7 @@ boot_disk_image() {
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${ISO_PATH},format=${fmt}" \
 		-device virtio-blk-pci,drive=disk \
-		-netdev "user,id=net0,hostfwd=tcp::2222-:22" \
+		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
 		-serial "file:${SERIAL_LOG}" \
@@ -1221,7 +1335,7 @@ app-launch)
 		app_idx=$((app_idx + 1))
 		label="20-app-$(printf '%02d' "$app_idx")-${app##*.}"
 		echo "==> Launching app via SSH: $app"
-		sshpass -p live ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 liveuser@127.0.0.1 \
+		sshpass -p live ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "$SSH_PORT" liveuser@127.0.0.1 \
 			"env $SSH_APP_ENV gtk-launch $app 2>&1" || echo "  (app launch may have failed)"
 		sleep 8
 		screenshot "$label"
@@ -1240,7 +1354,7 @@ app-launch)
 		# Best-effort stop (openQA closes each app before the next): match the
 		# desktop id's last segment, lowercased, against the process table.
 		app_proc="${app##*.}"
-		sshpass -p live ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 liveuser@127.0.0.1 \
+		sshpass -p live ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "$SSH_PORT" liveuser@127.0.0.1 \
 			"pkill -f '${app_proc,,}' 2>/dev/null" || true
 		sleep 2
 	done

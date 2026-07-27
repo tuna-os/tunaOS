@@ -128,7 +128,25 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         # CI chains on the -testing stream tag
         BASE_FOR_BUILD=$(./scripts/published-image-ref.sh "{{ variant }}" "${PARENT_FLAVOR}-testing" ghcr)
     else
+        # Stage-3 flavors (-nvidia, -hwe) chain on their parent flavor's image.
+        # Locally that is normally in podman storage from an earlier `just
+        # build`, but it is NOT there for a dev/e2e ISO: `just iso ... dev=1`
+        # calls build with is_ci="0" hardcoded, so on a CI runner this branch
+        # asked for an image nobody had built and buildah tried to resolve
+        # "localhost" as a registry:
+        #
+        #   Error: initializing source docker://localhost/yellowfin:gnome:
+        #   pinging container registry localhost
+        #
+        # That is the single cause of all 24 NVIDIA cells failing LUKS E2E
+        # (run 29978067348) — one systemic issue, not 24. Fall back to the
+        # published parent when the local one is absent, which also makes
+        # `just iso <variant> <flavor>-nvidia ... 1` work on a clean machine.
         BASE_FOR_BUILD="localhost/{{ variant }}:${PARENT_FLAVOR}"
+        if ! podman image exists "${BASE_FOR_BUILD}" 2>/dev/null; then
+            echo "==> ${BASE_FOR_BUILD} not in local storage; chaining on the published parent instead"
+            BASE_FOR_BUILD=$(./scripts/published-image-ref.sh "{{ variant }}" "${PARENT_FLAVOR}-testing" ghcr)
+        fi
     fi
 
     if [[ -n "{{ chain_base_image }}" ]] && [[ "${FLAVOR}" != "base" ]]; then
@@ -276,9 +294,47 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     # grouper (Ubuntu) has no bootupd package available via apt, so it ships
     # systemd-boot instead and installs via bootc's composefs-native backend,
     # which doesn't shell out to bootupd for bootloader management.
-    COMPOSEFS_ARGS=()
-    [[ "$OUTPUT_NAME" == grouper* || "$OUTPUT_NAME" == sailfin* || "$OUTPUT_NAME" == guppy* || "$OUTPUT_NAME" == marlin* || "$OUTPUT_NAME" == flounder* ]] && COMPOSEFS_ARGS=(--composefs-backend)
+    #
+    # Two INDEPENDENT signals, probed from the image rather than guessed from
+    # its name (the name-based heuristic is exactly what tuna-os/wootc had to
+    # rip out — see payload/deployer/deploy.sh "the crux fix"):
+    #
+    #   BACKEND=composefs-native → ships systemd-boot and no bootupctl, so
+    #     bootloader management can't go through bootupd: needs
+    #     --composefs-backend.
+    #   SEALED → prepare-root.conf has [composefs] enabled: the rootfs is
+    #     composefs-sealed and needs fs-verity, which XFS LACKS. On the xfs
+    #     default from 00-tunaos.toml the initramfs fails initrd-switch-root
+    #     and drops to dracut emergency mode — every composefs variant's
+    #     desktop Gate timed out at "no graphical session" (confirmed on
+    #     sailfin and grouper). ext4 is the proven sealed filesystem
+    #     (wootc deploy.sh:809-821); btrfs also has fs-verity but its ostree
+    #     deployment fails to mount (sysroot.mount timeout, wootc#35), so it
+    #     is deliberately NOT used here.
+    #
+    # Sealed is what drives the filesystem, and it is independent of the
+    # backend: traditional-ostree images can be sealed too.
+    PROBE=$(sudo podman run --rm --entrypoint="" "$IMG_REF" sh -c '
+        if test -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi && ! command -v bootupctl >/dev/null 2>&1; then
+            echo BACKEND=composefs-native
+        else
+            echo BACKEND=ostree
+        fi
+        grep -A8 "^\[composefs\]" /usr/lib/ostree/prepare-root.conf 2>/dev/null \
+          | grep -qiE "enabled[[:space:]]*=[[:space:]]*(yes|true|1|signed)" && echo SEALED=1 || echo SEALED=0
+    ' 2>/dev/null) || PROBE=$(printf 'BACKEND=ostree\nSEALED=0\n')
+    echo "==> image probe: $(echo "$PROBE" | tr '\n' ' ')"
 
+    COMPOSEFS_ARGS=()
+    grep -q '^BACKEND=composefs-native$' <<<"$PROBE" && COMPOSEFS_ARGS+=(--composefs-backend)
+    grep -q '^SEALED=1$' <<<"$PROBE" && COMPOSEFS_ARGS+=(--filesystem ext4)
+
+    # Console ORDER matters: the LAST console= is the primary /dev/console, and
+    # that is where dracut/systemd (all userspace) writes. With tty0 last,
+    # initramfs failures were visible only on the VGA screen (the Gate's
+    # screenshot) while the captured serial.log held nothing but kernel printk —
+    # an emergency-mode boot with no recorded reason. ttyS0 last puts the boot
+    # log the Gate captures where it is actually useful.
     echo "==> Running bootc install to-disk (this takes a few minutes)..."
     sudo podman run \
         --rm \
@@ -295,13 +351,49 @@ qcow2 variant flavor='gnome' repo='local' tag='':
             --via-loopback \
             --generic-image \
             "${COMPOSEFS_ARGS[@]}" \
-            --karg console=ttyS0 --karg console=tty0 \
+            --karg console=tty0 --karg console=ttyS0 \
             --karg systemd.unit=graphical.target \
             "${SSH_KEY_ARGS[@]}" \
             --source-imgref "containers-storage:${IMG_REF}" \
             /disk.img
 
     [[ -n "$SSH_PUBKEYS_FILE" ]] && rm -f "$SSH_PUBKEYS_FILE"
+
+    # bootc's composefs backend writes the ESP kernel/initrd out of the EROFS
+    # store, which zero-fills files past its inline threshold — so the 70MB+
+    # initramfs that lands on the ESP is NOT the one in the image. The boot then
+    # runs a stale/garbled initrd: bootc-root-setup.service is absent from it, so
+    # nothing consumes the composefs= karg, /sysroot is mounted but never
+    # prepared, and initrd-switch-root fails into a dracut emergency shell.
+    # Re-extract the real bytes over the ESP copies (same workaround corral's
+    # KubeVirt builder applies, pkg/kubevirt/bootc.go).
+    if grep -q '^BACKEND=composefs-native$' <<<"$PROBE"; then
+        echo "==> composefs: re-extracting real kernel/initrd onto the ESP..."
+        LOOP=$(sudo losetup --find --show --partscan "$RAW_ABS")
+        ESP_MNT=$(mktemp -d)
+        for P in 1 2 3; do
+            if sudo mount "${LOOP}p${P}" "$ESP_MNT" 2>/dev/null; then
+                [[ -d "$ESP_MNT/EFI" ]] && break
+                sudo umount "$ESP_MNT"
+            fi
+        done
+        UKI_DIR=$(sudo sh -c "ls -d '$ESP_MNT'/EFI/Linux/bootc_composefs-* 2>/dev/null" | head -1)
+        if [[ -n "$UKI_DIR" ]]; then
+            KDIR=$(mktemp -d)
+            sudo podman run --rm --entrypoint="" -v "$KDIR:/out:z" "$IMG_REF" \
+                sh -c 'KV=$(ls /usr/lib/modules | head -1); cp "/usr/lib/modules/$KV/vmlinuz" /out/vmlinuz; cp "/usr/lib/modules/$KV/initramfs.img" /out/initrd'
+            sudo cp -f "$KDIR/vmlinuz" "$UKI_DIR/vmlinuz"
+            sudo cp -f "$KDIR/initrd"  "$UKI_DIR/initrd"
+            sudo sync
+            echo "==> re-extracted kernel+initrd into $(basename "$UKI_DIR")"
+            rm -rf "$KDIR"
+        else
+            echo "WARNING: no bootc_composefs-* UKI dir found on the ESP; skipping re-extract" >&2
+        fi
+        sudo umount "$ESP_MNT" 2>/dev/null || true
+        rmdir "$ESP_MNT" 2>/dev/null || true
+        sudo losetup -d "$LOOP" 2>/dev/null || true
+    fi
 
     # Convert raw → qcow2 for Lima/QEMU consumption
     echo "==> Converting raw → qcow2..."

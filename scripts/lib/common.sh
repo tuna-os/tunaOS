@@ -92,10 +92,35 @@ tunaos_import_to_root_storage() {
 	fi
 
 	echo "==> Importing ${image} from ${real_user}'s podman storage into root's..."
-	if ! sudo -u "$real_user" podman save "$image" 2>/dev/null | podman load; then
-		echo "ERROR: failed to import ${image} from ${real_user}" >&2
+
+	# XDG_RUNTIME_DIR must be set explicitly. `sudo -u "$real_user"` from a
+	# root context inherits no user session, so rootless podman falls back to
+	# root's /run/containers/storage, cannot write there, and dies with
+	#   "RunRoot ... is not writable ... acquiring runtime init lock:
+	#    open /run/libpod/alive.lck: permission denied"
+	# Its stderr was being sent to /dev/null, so all the caller ever saw was
+	# `podman load` choking on an empty stream ("index.json: not a directory"),
+	# which points at the wrong end of the pipe entirely.
+	local real_uid
+	real_uid=$(id -u "$real_user" 2>/dev/null || echo)
+	if [[ -z "$real_uid" ]]; then
+		echo "ERROR: cannot resolve uid for ${real_user}" >&2
 		return 1
 	fi
+
+	local save_err
+	save_err=$(mktemp)
+	if ! sudo -u "$real_user" env "XDG_RUNTIME_DIR=/run/user/${real_uid}" \
+		podman save "$image" 2>"$save_err" | podman load; then
+		echo "ERROR: failed to import ${image} from ${real_user}" >&2
+		[[ -s "$save_err" ]] && {
+			echo "--- podman save (as ${real_user}) said:" >&2
+			cat "$save_err" >&2
+		}
+		rm -f "$save_err"
+		return 1
+	fi
+	rm -f "$save_err"
 
 	if ! podman image exists "$image"; then
 		echo "ERROR: ${image} still not present after import" >&2

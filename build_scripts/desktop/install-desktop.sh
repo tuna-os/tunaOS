@@ -162,17 +162,34 @@ if [[ "${_TD_OS}" == "pacman" ]]; then
 	fi
 
 	readarray -t _TD_PKGS < <($YQ -r ".packages.pacman[]" "${_TD_MANIFEST}" 2>/dev/null || true)
-	if ((${#_TD_PKGS[@]} > 0)); then
-		pacman -S --noconfirm --needed "${_TD_PKGS[@]}"
+	# An empty list here is a misconfigured manifest, not "nothing to do".
+	# cosmic.yaml, niri.yaml and xfce.yaml have no `pacman` section and no
+	# -arch sibling, so on Arch this silently installed NOTHING and the script
+	# still exited 0 — producing images tagged cosmic/niri/xfce with no
+	# desktop in them at all (tunaOS#858). The VM boot Gate caught it much
+	# later, after the image had already been built and pushed.
+	if ((${#_TD_PKGS[@]} == 0)); then
+		echo "ERROR: ${_TD_MANIFEST} has no .packages.pacman list." >&2
+		echo "       Installing no packages would yield an image tagged" >&2
+		echo "       '${_TD_DESKTOP}' with no desktop in it. Add a pacman" >&2
+		echo "       section, or a manifests/desktops/${_TD_DESKTOP}-arch.yaml." >&2
+		exit 1
 	fi
+	pacman -S --noconfirm --needed "${_TD_PKGS[@]}"
 
 	# Enable display manager
 	_TD_DM=$($YQ -r '.display_manager' "${_TD_MANIFEST}")
 	if [[ -n "${_TD_DM}" ]]; then
-		systemctl enable "${_TD_DM}" || true
+		# Not `|| true`: a manifest naming a DM that the packages did not
+		# provide means the package set is wrong. This printed "Failed to
+		# enable unit: Unit greetd.service does not exist" and carried on.
+		systemctl enable "${_TD_DM}"
 	fi
 	printf "::endgroup::\n"
-	exit 0
+	# Deliberately NO `exit 0` here. The pacman branch used to return early,
+	# skipping the desktop-experience contract check below — which is exactly
+	# the check that would have caught an image with no session files. Arch
+	# now runs the same gate every other package manager does.
 fi
 
 # ── DNF path (el10/fedora only) ──────────────────────────────────────────────
@@ -349,6 +366,15 @@ for cmd in "${_TD_POST_INLINE[@]}"; do
 		eval "$cmd"
 	fi
 done
+
+# Desktop communities own their curated defaults as plain files. This keeps
+# opinions reviewable and portable without creating a package for a few config
+# files; any contributor can maintain experiences/<desktop>/files/.
+_TD_EXPERIENCE_FILES="${_TD_CTX}/experiences/${_TD_DESKTOP}/files"
+if [[ -d "${_TD_EXPERIENCE_FILES}" ]]; then
+	echo "Applying curated ${_TD_DESKTOP} experience defaults"
+	cp -a "${_TD_EXPERIENCE_FILES}/." /
+fi
 
 # A package transaction is not sufficient evidence that the requested desktop
 # exists. Validate its session, compositor and display manager, then install a

@@ -41,4 +41,12 @@ sleep-inactive-battery-timeout=0
 idle-delay=uint32 0
 EOF
 
-glib-compile-schemas /usr/share/glib-2.0/schemas
+# Not every base ships glib2-devel, and an unguarded call aborts the whole
+# customize step under `set -e` (exit 127) — this is what broke the
+# flounder/flounder-sid overlays. The override file above is still written;
+# without recompilation it is simply inert.
+if command -v glib-compile-schemas &>/dev/null; then
+	glib-compile-schemas /usr/share/glib-2.0/schemas
+else
+	echo "desktop-gnome: glib-compile-schemas missing; power-settings override left uncompiled" >&2
+fi

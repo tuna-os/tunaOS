@@ -3,6 +3,7 @@
 #
 # ARG BASE_IMAGE = registry.opensuse.org/opensuse/tumbleweed:latest
 ARG BASE_IMAGE
+ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR
 ARG SHA_HEAD_SHORT
@@ -19,6 +20,8 @@ COPY manifests /manifests
 COPY build_scripts /build_scripts
 COPY system_files /files
 COPY system_files_overrides /overrides
+
+FROM ${COMMON_IMAGE_REF} AS common
 
 FROM ${BASE_IMAGE} AS base
 
@@ -66,9 +69,40 @@ RUN printf '[Match]\nType=ether\n\n[Network]\nDHCP=yes\n' \
     > /usr/lib/systemd/network/20-wired.network
 RUN printf 'L! /etc/resolv.conf - - - - /run/systemd/resolve/stub-resolv.conf\n' \
     > /usr/lib/tmpfiles.d/resolv-conf.conf
+# Opt the 51bootc dracut module in BEFORE building the initramfs. Its check()
+# returns 255 ("never installed by default; see 10-bootc-base.conf for how base
+# images can opt in"), so without this the initramfs ships no
+# bootc-root-setup.service — and nothing in it handles the composefs= karg that
+# a composefs-native deployment boots with.
+#
+# ostree-prepare-root.service cannot cover for it: that unit is
+# ConditionKernelCommandLine=ostree, and composefs deployments have composefs=
+# with no ostree= karg, so it is silently skipped. The result was /sysroot
+# mounted but never prepared → initrd-switch-root fails → dracut emergency
+# shell, which is what made every sailfin desktop Gate time out waiting for a
+# graphical session.
+RUN mkdir -p /usr/lib/dracut/dracut.conf.d && \
+    printf 'add_dracutmodules+=" bootc "\ninstall_items+=" /usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service "\n' \
+    > /usr/lib/dracut/dracut.conf.d/10-bootc-base.conf
+# ...and place the wants-symlink ourselves, because 51bootc's install() puts it
+# at ${systemdsystemconfdir}/initrd-root-fs.target.wants/ — and openSUSE's
+# dracut leaves systemdsystemconfdir EMPTY, so the link lands at the initramfs
+# ROOT (/initrd-root-fs.target.wants/), a directory systemd never scans. The
+# unit was therefore present in the initramfs but never pulled in, so nothing
+# consumed composefs= and switch-root had no prepared root.
+# projectbluefin/dakota (the working composefs reference) carries it at
+# /usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service
+# -> ../bootc-root-setup.service; match that exactly. dracut copies unit
+# wants-links from /usr/lib (that is how ostree-prepare-root's link gets in).
+RUN mkdir -p /usr/lib/systemd/system/initrd-root-fs.target.wants && \
+    ln -sf ../bootc-root-setup.service \
+      /usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service
 RUN dracut --force --no-hostonly --reproducible --zstd --kver \
     "$(ls /usr/lib/modules | head -1)" \
-    "/usr/lib/modules/$(ls /usr/lib/modules | head -1)/initramfs.img"
+    "/usr/lib/modules/$(ls /usr/lib/modules | head -1)/initramfs.img" && \
+    lsinitrd "/usr/lib/modules/$(ls /usr/lib/modules | head -1)/initramfs.img" \
+      | grep -q 'usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service' || \
+      { echo "ERROR: initramfs lacks the bootc-root-setup wants-link under /usr/lib/systemd/system — composefs boot would emergency-shell" >&2; exit 1; }
 RUN mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var && \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf && \
     echo "HOME=/var/home" | tee -a "/etc/default/useradd" && \
@@ -97,6 +131,12 @@ RUN update-ca-certificates || true
 RUN mkdir -p /etc/containers && \
     [ -s /etc/containers/policy.json ] || \
     printf '{ "default": [ { "type": "insecureAcceptAnything" } ] }\n' > /etc/containers/policy.json
+
+# The shared Bluefin layer is configuration and hardware integration, not a
+# package dependency. Keep it as a transparent, pinned build-time file copy so
+# Sailfin has the same curated base experience as the EL10 variants.
+COPY --from=context /files /
+COPY --from=common /system_files/shared /
 
 # Cache-bust: the build_scripts RUNs in the desktop stages below are invoked via
 # a bind mount, whose content is NOT part of buildah's layer cache key — so
@@ -143,7 +183,10 @@ RUN bootc container lint
 # Per-flavor target aliases so the build's `--target=<flavor>` resolves. Each
 # resolves to the desktop stage above, specialized by the DESKTOP_FLAVOR
 # build-arg (target and build-arg always agree — see resolve-flavor.sh).
+# Bluefin's GNOME branding/defaults are deliberately scoped to the GNOME image;
+# do not leak them into KDE, Niri, or XFCE targets.
 FROM desktop AS gnome
+COPY --from=common /system_files/bluefin /
 FROM desktop AS kde
 FROM desktop AS niri
 FROM desktop AS xfce

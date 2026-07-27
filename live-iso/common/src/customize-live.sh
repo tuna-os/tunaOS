@@ -54,10 +54,31 @@ fi
 # ── 1b. Live user ────────────────────────────────────────────────────────────
 # No TunaOS image ships livesys-scripts, so nothing creates the account the
 # desktop adapters autologin to — bake it into the squash instead (pattern:
-# projectbluefin/dakota-iso configure-live.sh). uid 1000 is free on bootc
-# images. Installed systems never see this: live squash only.
+# projectbluefin/dakota-iso configure-live.sh). Installed systems never see
+# this: live squash only.
+#
+# uid 1000 is free on *most* bootc images, but not all — grouper ships a
+# packaged user there, and the unconditional `--uid 1000` failed the whole
+# overlay build with "useradd: UID 1000 is not unique" (exit 4). Ask for
+# 1000 when it is free (desktop sessions and flatpak expect it) and let
+# useradd pick otherwise; nothing here depends on the exact number.
 if ! getent passwd liveuser >/dev/null; then
-	useradd --create-home --uid 1000 --user-group \
+	# bootc images ship /home as a symlink to var/home, but /var is empty in
+	# the container layer, so useradd --create-home follows the symlink to a
+	# directory that does not exist and dies:
+	#
+	#   useradd: cannot create directory /home        (exit 12)
+	#
+	# That is what actually broke the marlin:kde overlay — misread as a
+	# transient registry blob error three separate times, because exit 12 was
+	# the only thing surfaced. readlink -f resolves a dangling symlink to its
+	# intended target, so this materialises whichever base the image means.
+	_home_base="$(readlink -f /home 2>/dev/null || echo /home)"
+	mkdir -p "${_home_base}"
+
+	_uid_args=()
+	getent passwd 1000 >/dev/null || _uid_args=(--uid 1000)
+	useradd --create-home "${_uid_args[@]}" --user-group \
 		--comment "Live User" --shell /bin/bash liveuser
 fi
 passwd --delete liveuser >/dev/null 2>&1 || true
@@ -215,8 +236,33 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		# systemd-machine-id-setup.
 		systemd-machine-id-setup
 	fi
+
+# Modern desktop images ship dbus-broker as the bus implementation and no
+# longer pull in the classic `dbus-daemon` binary (nor dbus-run-session — see
+# the machine-id note above). flatpak still needs a real bus for both the
+# system helper and its session connection, so make sure the binary exists
+# rather than assuming it: every cosmic flavor plus sailfin/grouper/guppy/
+# marlin died here with "dbus-daemon: command not found" (exit 127) while the
+# 20 images that happen to ship it built fine.
+ensure_dbus_daemon() {
+	command -v dbus-daemon >/dev/null 2>&1 && return 0
+	echo "dbus-daemon missing; installing the classic bus for the customize step"
+	if   command -v dnf5   >/dev/null 2>&1; then dnf5 install -y dbus-daemon || dnf5 install -y dbus
+	elif command -v dnf    >/dev/null 2>&1; then dnf  install -y dbus-daemon || dnf  install -y dbus
+	elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install -y dbus-1-daemon || zypper --non-interactive install -y dbus-1
+	elif command -v pacman >/dev/null 2>&1; then pacman -Sy --noconfirm --needed dbus
+	elif command -v apt-get>/dev/null 2>&1; then apt-get update -qq && apt-get install -y --no-install-recommends dbus
+	elif command -v apk    >/dev/null 2>&1; then apk add --no-cache dbus
+	fi
+	command -v dbus-daemon >/dev/null 2>&1 || {
+		echo "ERROR: dbus-daemon unavailable and could not be installed; flatpak preinstall would fail" >&2
+		return 1
+	}
+}
+
 	mkdir -p /var/lib/dbus
 	ln -sf /etc/machine-id /var/lib/dbus/machine-id
+	ensure_dbus_daemon
 	dbus-daemon --system --fork --nopidfile || true
 
 	if ! command -v flatpak &>/dev/null; then

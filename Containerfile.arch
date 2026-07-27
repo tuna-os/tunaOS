@@ -7,7 +7,8 @@
 #   buildah build --target=base-no-de --file Containerfile.arch .
 #   buildah build --target=kde --file Containerfile.arch .
 
-ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest@sha256:c9bb62ee977703c2792c999ddf9c4bf96d5e6fb2c15011e3771bcfb1cd767b97"
+ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest@sha256:93e350e4b9c1b9938e15c1b8ea6acc562d623b830a5b6661e0e9699cb5544363"
+ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 ARG IMAGE_NAME
@@ -39,6 +40,8 @@ COPY system_files /files
 COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
 COPY manifests /manifests
+
+FROM ${COMMON_IMAGE_REF} AS common
 
 # ── Base system (bootc-compatible Arch) ──────────────────────────────────────
 FROM ${BASE_IMAGE} AS base-no-de
@@ -161,6 +164,8 @@ RUN rm -rf /boot /home /root /usr/local /srv /opt /mnt \
 
 # Validate
 LABEL containers.bootc 1
+COPY --from=context /files /
+COPY --from=common /system_files/shared /
 RUN bootc container lint
 
 # Cache-bust so build_scripts edits invalidate the desktop stages' install
@@ -178,6 +183,7 @@ RUN ln -sf /var/opt /opt 2>/dev/null || true
 # Desktop stages — manifest-driven via install-desktop.sh
 # ==============================================================================
 FROM base-no-de AS gnome
+COPY --from=common /system_files/bluefin /
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/desktop/install-desktop.sh gnome
 RUN ln -sf /var/opt /opt 2>/dev/null || true

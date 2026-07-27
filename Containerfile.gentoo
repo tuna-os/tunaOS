@@ -2,6 +2,7 @@
 # Based on bootcrew/gentoo-bootc but adapted for TunaOS manifest-driven desktop installs.
 
 ARG BASE_IMAGE
+ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR
@@ -20,7 +21,9 @@ COPY build_scripts /build_scripts
 COPY system_files /files
 COPY system_files_overrides /overrides
 
-FROM docker.io/gentoo/stage3:latest@sha256:b5317fd2127e15ace5ff7a2c8aab1ed37a22736a8218546f3b00b4d94b78e500 AS base
+FROM ${COMMON_IMAGE_REF} AS common
+
+FROM docker.io/gentoo/stage3:latest@sha256:3c0c14e5391329e05497a5fe9cfa02317e572d4e072309b496b4b9f7429be282 AS base
 # Speed: pull prebuilt, gpg-verified binary packages from Gentoo's official
 # binhost instead of compiling all of @world from source (which blew past the
 # 60-min CI job timeout — tuna-os/tunaOS#644). getuto imports the shipped
@@ -56,9 +59,17 @@ RUN NPROC="$(nproc)" && \
 RUN emerge --verbose --deep --newuse @world
 
 # 3) Install the bootc/base tooling, prebuilt kernel, and extra base packages.
+# sys-apps/flatpak is not optional despite looking like a desktop nicety:
+# live-iso/common/src/customize-live.sh pre-installs the TunaOS installer as
+# a flatpak, and without it every guppy live-overlay build fails with
+#   ERROR: flatpak not installed; cannot pre-install org.tunaos.Installer<DE>
+# (runs 30159027680, 30196443189). Gentoo was the last Containerfile without
+# it — every other base already installs flatpak. Same class as #809, which
+# added it to the openSUSE base.
 RUN emerge --verbose --deep --newuse \
         app-arch/cpio btrfs-progs dev-vcs/git dosfstools sys-fs/xfsprogs \
         linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd \
+        sys-apps/flatpak \
         net-vpn/tailscale gui-apps/wl-clipboard media-video/ffmpeg media-plugins/gst-plugins-meta && \
     curl -fsSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.35.0/just-1.35.0-x86_64-unknown-linux-musl.tar.gz && \
     tar -xzf /tmp/just.tar.gz -C /usr/bin just && rm /tmp/just.tar.gz && \
@@ -173,10 +184,13 @@ RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf
 
 LABEL containers.bootc=1 ostree.bootable=1
+COPY --from=context /files /
+COPY --from=common /system_files/shared /
 RUN bootc container lint
 
 # Per-flavor target aliases so the build's `--target=<flavor>` resolves. Each
 # resolves to the desktop stage above, specialized by the DESKTOP_FLAVOR
 # build-arg (target and build-arg always agree — see resolve-flavor.sh).
 FROM desktop AS gnome
+COPY --from=common /system_files/bluefin /
 FROM desktop AS kde

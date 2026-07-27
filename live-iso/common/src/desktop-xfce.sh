@@ -14,23 +14,49 @@ set -euo pipefail
 # and greetd — an X11-free stack. Detect it by the packaged Wayland session
 # and/or the xfwl4 binary. On bases still on X11 XFCE (Fedora/Debian until
 # their xfwl4 packaging lands) fall back to lightdm/gdm autologin.
-if compgen -G "/usr/share/wayland-sessions/xfce*.desktop" >/dev/null || command -v xfwl4 &>/dev/null; then
+#
+# Gate on a *compositor binary*, not on the packaged session file: several
+# bases ship /usr/share/wayland-sessions/xfce-wayland.desktop with no
+# compositor behind it, and `startxfce4 --wayland` then dies with
+#   "Please either install labwc or specify another compositor as argument"
+# onto a black screen — which is exactly how yellowfin:xfce failed.
+#
+# xfwl4 is listed first: it is what the EL10 manifest installs, and run
+# 30191933429 shows `startxfce4 --wayland xfwl4` really does launch it —
+# xfwl4 came up on renderD128 and created wayland-1 before panicking on
+# "Failed to find theme named Default" (missing xfwm4 theme data,
+# tunaos-packages#123). An earlier revision of this file excluded xfwl4 on
+# the theory that startxfce4 appends no startup command to a named
+# compositor; that reasoning was not borne out, and excluding it was
+# strictly worse — the X11 branch is a dead end on a base that ships no
+# /usr/share/xsessions at all. Whether xfce4-session follows xfwl4 up is
+# still unproven: xfwl4 dies before we find out.
+_xfce_compositor=""
+for _c in xfwl4 labwc wayfire; do
+	command -v "${_c}" &>/dev/null && {
+		_xfce_compositor="${_c}"
+		break
+	}
+done
+
+if [[ -n "${_xfce_compositor}" ]] && command -v greetd &>/dev/null; then
 	# ── Wayland (xfwl4) — greetd autologin, no X11 ───────────────────────
 	# greetd `command` is run by the user's shell, so it must be the actual
 	# exec, not a session-file name. dbus-run-session gives the session a
 	# message bus (portals, xfconf) the way a DM login would.
+	echo "desktop-xfce: wayland session via compositor=${_xfce_compositor}"
 	mkdir -p /etc/greetd
-	tee /etc/greetd/config.toml <<'GREETDEOF'
+	tee /etc/greetd/config.toml <<GREETDEOF
 [terminal]
 vt = 1
 
 [default_session]
 user = "liveuser"
-command = "dbus-run-session startxfce4 --wayland"
+command = "dbus-run-session startxfce4 --wayland ${_xfce_compositor}"
 
 [initial_session]
 user = "liveuser"
-command = "dbus-run-session startxfce4 --wayland"
+command = "dbus-run-session startxfce4 --wayland ${_xfce_compositor}"
 GREETDEOF
 	# Enable greetd + boot to graphical.target (server-oriented EL10 bases
 	# default to multi-user.target, which would land on a console — same
@@ -56,10 +82,40 @@ LIGHTDMEOF
 AutomaticLoginEnable=True
 AutomaticLogin=liveuser
 GDMEOF
+
+	# This branch used to write its configs and stop there, which was only
+	# survivable while it ran on bases that already enable a DM and default
+	# to graphical.target. Now that a missing compositor can route an EL10
+	# image here, do the same enable + set-default the Wayland branch does,
+	# or the image boots to a console with a perfectly good autologin config.
+	for _dm in lightdm gdm greetd; do
+		_unit="/usr/lib/systemd/system/${_dm}.service"
+		[[ -f "${_unit}" ]] || continue
+		systemctl enable "${_dm}.service" 2>/dev/null || true
+		ln -sf "${_unit}" /etc/systemd/system/display-manager.service 2>/dev/null || true
+		echo "desktop-xfce: X11 fallback display manager=${_dm}"
+		break
+	done
+	systemctl set-default graphical.target 2>/dev/null ||
+		ln -sf /usr/lib/systemd/system/graphical.target /etc/systemd/system/default.target 2>/dev/null || true
 fi
 
 # Auto-launch the TunaOS installer frontend in the live session.
 # The app is baked into the live squash by customize-live.sh (tacklebox live_customize).
+# NOTE: deliberately no OnlyShowIn=. systemd-xdg-autostart-generator turns
+# each entry into a unit whose ExecCondition is
+# `systemd-xdg-autostart-condition "<desktop>"`, evaluated against
+# $XDG_CURRENT_DESKTOP in the *user manager's* environment. cosmic-session
+# does not export it, so on a live cosmic ISO every OnlyShowIn entry is
+# generated and then skipped:
+#
+#   app-org.tunaos.installer\x2dlive@autostart.service: Skipped due to
+#   'exec-condition'  (verified on hardware, 2026-07-26)
+#
+# gnome-keyring and CosmicInitialSetup were skipped the same way, which is
+# the tell: it is not our entry that is wrong, it is the filter. A live ISO
+# runs exactly one desktop, so OnlyShowIn buys nothing and costs the whole
+# feature.
 mkdir -p /etc/xdg/autostart
 tee /etc/xdg/autostart/org.tunaos.installer-live.desktop <<'DESKEOF'
 [Desktop Entry]
@@ -67,7 +123,6 @@ Type=Application
 Name=Install TunaOS
 Exec=flatpak run org.tunaos.InstallerXfce
 Icon=org.tunaos.InstallerXfce
-OnlyShowIn=XFCE;
 DESKEOF
 
 # Disable xfce4-screensaver locking and power suspend for the live session

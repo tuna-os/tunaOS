@@ -22,6 +22,7 @@ user-facing site:
 | [build-pipeline.md](build-pipeline.md) | CI/CD workflow and build-stage overview |
 | [CI_SPEC.md](CI_SPEC.md) | CI behavior specification |
 | [TESTING.md](TESTING.md) | ISO end-to-end test harness |
+| [MATRIX-STATUS.md](MATRIX-STATUS.md) | Which variant×desktop combinations are actually verified — and which have never been tested |
 | [rhel-setup.md](rhel-setup.md) | RHEL 10 (Redfin) local-build instructions |
 | [ROLL_YOUR_OWN.md](ROLL_YOUR_OWN.md) | Guide to building custom TunaOS variants for your own use |
 | [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) | Historical record of the May 2026 sprint + remaining roadmap items |

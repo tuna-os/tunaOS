@@ -159,16 +159,23 @@ done
 echo "Verifying systemd service unit files..."
 SYSTEMD_SERVICES=(tailscaled.service systemd-resolved.service)
 
-# Add flavor-specific display manager service
+# Add flavor-specific display manager service. A '|' separates interchangeable
+# unit names — the same DE ships different DM units per base (KDE 6.5+ renamed
+# sddm to plasmalogin), and any one of them satisfies the check.
 case "${FLAVOR}" in
-gnome) SYSTEMD_SERVICES+=(gdm.service) ;;
-kde) SYSTEMD_SERVICES+=(sddm.service) ;;
+gnome) SYSTEMD_SERVICES+=("gdm.service|gdm3.service") ;;
+kde) SYSTEMD_SERVICES+=("sddm.service|plasmalogin.service") ;;
 niri | cosmic) SYSTEMD_SERVICES+=(greetd.service) ;;
 esac
 
 for svc in "${SYSTEMD_SERVICES[@]}"; do
 	# Check in typical systemd system directories: /usr/lib/systemd/system/ or /lib/systemd/system/
-	CHECK_SVC_CMD="[ -f /usr/lib/systemd/system/${svc} ] || [ -f /lib/systemd/system/${svc} ]"
+	CHECK_SVC_CMD=""
+	IFS='|' read -ra _svc_alts <<<"${svc}"
+	for _alt in "${_svc_alts[@]}"; do
+		[[ -n "${CHECK_SVC_CMD}" ]] && CHECK_SVC_CMD+=" || "
+		CHECK_SVC_CMD+="[ -f /usr/lib/systemd/system/${_alt} ] || [ -f /lib/systemd/system/${_alt} ]"
+	done
 	if ! podman run --rm --entrypoint sh "$IMAGE" -c "${CHECK_SVC_CMD}" &>/dev/null; then
 		echo "❌ Missing systemd service file: ${svc}"
 		FAILED=1

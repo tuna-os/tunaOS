@@ -124,7 +124,14 @@ jobs:
             echo "::error::${FLAVOR}: no compositor process running (stuck at greeter or TTY?)"
             echo "--- loginctl / runtime / user manager:"
             $SSH 'loginctl list-sessions; ls /run/user/$(id -u)/ 2>/dev/null; systemctl --user status 2>/dev/null | head' 2>/dev/null || true
-            echo "--- greetd journal:"
+            # Dump the DM that actually got resolved, not a hardcoded guess.
+            # This step used to only ever dump greetd's journal, so when kde's
+            # plasmalogin.service failed to start (run 30191933429) the reason
+            # was nowhere in the artifacts and the failure was undiagnosable
+            # from CI alone.
+            echo "--- display-manager journal:"
+            $SSH 'DM=$(systemctl show -P Id display-manager.service 2>/dev/null); echo "resolved display-manager.service -> ${DM:-<unresolved>}"; sudo journalctl -u "${DM:-display-manager.service}" -b --no-pager 2>/dev/null | tail -60; echo "--- unit state:"; systemctl status --no-pager "${DM:-display-manager.service}" 2>/dev/null | head -20' 2>/dev/null || true
+            echo "--- greetd journal (if in use):"
             $SSH 'sudo journalctl -u greetd --no-pager 2>/dev/null | tail -40' 2>/dev/null || true
             echo "--- SELinux mode + AVC denials (compositor/greetd):"
             $SSH 'getenforce 2>/dev/null; sudo journalctl -b --no-pager 2>/dev/null | grep -iE "avc: *denied" | grep -iE "niri|greet|xfwl|wayland|xdm" | tail -30 || true' 2>/dev/null || true
@@ -222,7 +229,13 @@ jobs:
             $SSH 'ls -l /dev/dri/ 2>/dev/null; echo "--- eglinfo/vulkaninfo ---"; (eglinfo 2>&1 | head -20) || true; (vulkaninfo --summary 2>&1 | head -20) || true' 2>/dev/null || true
             echo
             echo "=== windows the compositor actually has ==="
-            $SSH 'pgrep -xl "cosmic-comp|niri|xfwl4|kwin_wayland" 2>/dev/null || pgrep -l -x cosmic-comp || pgrep -l -x niri || pgrep -l -x xfwl4 || pgrep -l -x kwin_wayland || echo "(no compositor matched)"; ps -eo pid,comm,args | grep -iE "[I]nstaller" || echo "(no installer process)"' 2>/dev/null || true
+            # -x matches comm exactly, so this cannot self-match the way a
+            # bare `pgrep -f` does — but the fallbacks below it were reporting
+            # this very command line as a running compositor (run 30234237855
+            # line 11046: "bash -c pgrep -xl \"cosmic-comp|niri|...\"").
+            # Bracket the first letter so the pattern never matches its own
+            # argv, the same defence the frontend check above already uses.
+            $SSH 'pgrep -xl "[c]osmic-comp|[n]iri|[x]fwl4|[k]win_wayland" 2>/dev/null || echo "(no compositor matched)"; ps -eo pid,comm,args | grep -iE "[I]nstaller" || echo "(no installer process)"' 2>/dev/null || true
           } > "$out" 2>&1
           echo "--- captured $(wc -l < "$out") lines ---"
           tail -30 "$out"
