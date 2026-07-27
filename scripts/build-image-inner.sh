@@ -166,6 +166,34 @@ if ! podman image inspect "${CHUNKAH_IMAGE}" &>/dev/null; then
 	fi
 fi
 
+# chunkah is a CoreOS tool and unconditionally loads an rpmdb from the rootfs it
+# is given. On an image that has none it does not degrade — it aborts:
+#
+#   error: cannot open Packages database in /proc/self/fd/4/var/lib/rpm
+#   Error: loading components
+#   Caused by: 0: loading rpmdb  1: loading rpmdb from rootfs
+#
+# That killed 9 cells of LUKS sweep 30249218614: flounder and flounder-sid
+# (Debian) and marlin (Arch). Rechunking is a layer-layout optimisation, so
+# skipping it costs some dedup on those variants and nothing else — whereas
+# attempting it costs the entire build.
+#
+# Probe the image rather than hardcoding a variant list: a new distro then gets
+# the right behaviour without anyone remembering to update this file. Both rpmdb
+# locations are checked because rpm-based distros are mid-migration from
+# /var/lib/rpm to /usr/lib/sysimage/rpm. Emptiness, not existence, is the test —
+# a bind mount during the build leaves an empty /var/lib/rpm directory committed
+# in the image even though its contents were never part of it.
+if ! podman run --rm --entrypoint="" \
+	--mount "type=image,source=${PRE_CHUNK_TAG},target=/img" \
+	"${CHUNKAH_IMAGE}" sh -c '
+		[ -n "$(ls -A /img/usr/lib/sysimage/rpm 2>/dev/null)" ] ||
+		[ -n "$(ls -A /img/var/lib/rpm 2>/dev/null)" ]'; then
+	echo "==> ${PRE_CHUNK_TAG} has no rpmdb — skipping chunkah (not an rpm image)"
+	${BUILDER} tag "${PRE_CHUNK_TAG}" "${IMAGE_TAG}"
+	exit 0
+fi
+
 CHUNK_OUT=$(mktemp -d)
 # Some base images (e.g. Gentoo stage3) bake static device nodes into their
 # layers. Those can't be reliably deleted via `rm` in a later Containerfile
