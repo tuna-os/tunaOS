@@ -182,18 +182,17 @@ teardown() {
 # to root's /run/containers/storage, can't write there, and dies on
 # /run/libpod/alive.lck — so every local `just iso` off a rootless image
 # failed. Unlike the neighbouring tests this exercises the REAL function.
-@test "tunaos_import_to_root_storage: passes XDG_RUNTIME_DIR to the invoking user's podman" {
+@test "tunaos_import_to_root_storage: passes a usable XDG_RUNTIME_DIR" {
   local spy="${BATS_TEST_TMPDIR}/sudo-args"
   run bash -c '
     set +e
     source "'"${BATS_TEST_DIRNAME}"'/../../scripts/lib/common.sh"
-    SUDO_USER=testuser
-    id() { echo 4242; }
+    SUDO_USER=$(id -un)
     sudo() { echo "$*" >>"'"${spy}"'"; return 0; }
+    install() { command install "$@"; }
     _calls=0
     podman() {
       if [[ "$1 $2" == "image exists" ]]; then
-        # Absent the first time (forces the import), present afterwards.
         _calls=$((_calls + 1))
         [[ $_calls -gt 1 ]] && return 0
         return 1
@@ -204,7 +203,13 @@ teardown() {
     tunaos_import_to_root_storage "localhost/yellowfin:cosmic"
   '
   [ "$status" -eq 0 ]
-  grep -q "XDG_RUNTIME_DIR=/run/user/4242" "$spy"
+  # The contract is that a runtime dir is passed AND that it exists. Asserting
+  # the literal /run/user/<uid> was wrong: that path only exists where
+  # systemd-logind made a session, which Blacksmith runners do not.
+  grep -q "XDG_RUNTIME_DIR=" "$spy"
+  local dir
+  dir=$(grep -o 'XDG_RUNTIME_DIR=[^ ]*' "$spy" | head -1 | cut -d= -f2)
+  [ -d "$dir" ]
 }
 
 @test "tunaos_import_to_root_storage: returns 0 when image already exists" {
