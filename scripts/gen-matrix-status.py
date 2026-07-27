@@ -239,7 +239,14 @@ def build() -> str:
 
     # ── LUKS ────────────────────────────────────────────────────────────────
     total, tested, passed = tally(lmatrix, luks, luks_key)
-    nv_stale = nvidia_tally(lmatrix, luks, luks_key)
+    # NOT lmatrix: it is desktops_only, so no flavor in it can ever contain
+    # "nvidia" and the stale count would be a permanent 0 — silently deleting
+    # the out-of-scope disclosure below, while section 3 still points at it.
+    # That is exactly the absence-of-evidence failure this document exists to
+    # prevent, so count over every published flavor instead.
+    nv_stale = nvidia_tally(
+        _matrix("build_image", desktops_only=False), luks, luks_key
+    )
     out += [
         "## LUKS E2E",
         "",

@@ -60,6 +60,8 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
+NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 24 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
+
 Newest result 2026-07-27, oldest still-authoritative result 2026-07-23. Results older than the most recent round of fixes are the best available data, not current data.
 
 ## Installer smoke
