@@ -81,6 +81,12 @@ TIMEOUT=300
 OUTPUT_DIR="./iso-e2e-out"
 MEMORY=4096
 CPUS=4
+# Host port forwarded to the guest's sshd. Overridable because the harness
+# otherwise cannot coexist with anything else on 2222 — on a shared GPU host
+# a rootless container already held it and QEMU died with
+# "Could not set up host forwarding rule 'tcp::2222-:22'" — and because two
+# runs on one host would collide with each other.
+SSH_PORT="${TBOX_E2E_SSH_PORT:-2222}"
 NO_KVM=0
 KEEP_VM=0
 LUKS=0
@@ -326,6 +332,17 @@ else
 	CPU_ARG="qemu64,+sse4.1,+sse4.2,+aes,+xsave,+xsaveopt,+xsavec,+xsaves,+popcnt,+avx,+avx2"
 fi
 
+# Fail early and legibly if the forward port is taken. QEMU's own error —
+# "Could not set up host forwarding rule 'tcp::2222-:22'" — arrives after the
+# disk image is created and reads like a QEMU fault rather than "something
+# else is already listening".
+if command -v ss &>/dev/null && ss -tln 2>/dev/null | grep -q ":${SSH_PORT} "; then
+	echo "ERROR: port ${SSH_PORT} is already in use; the guest SSH forward cannot bind." >&2
+	echo "       Set TBOX_E2E_SSH_PORT to a free port, e.g.:" >&2
+	echo "         TBOX_E2E_SSH_PORT=2322 $0 $*" >&2
+	exit 77
+fi
+
 # ── Per-run scratch files ───────────────────────────────────────────────────
 
 OVMF_VARS="${OUTPUT_DIR}/OVMF_VARS.fd"
@@ -481,7 +498,7 @@ boot_live_iso() {
 		-device scsi-cd,drive=iso \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 		-device virtio-blk-pci,drive=disk \
-		-netdev "user,id=net0,hostfwd=tcp::2222-:22" \
+		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
 		-serial "file:${SERIAL_LOG}" \
@@ -674,7 +691,7 @@ check_ssh() {
 	fi
 	local opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10"
 	# shellcheck disable=SC2086
-	if sshpass -p live ssh $opts liveuser@127.0.0.1 -p 2222 true 2>/dev/null; then
+	if sshpass -p live ssh $opts liveuser@127.0.0.1 -p "$SSH_PORT" true 2>/dev/null; then
 		echo "==> SSH OK"
 		return 0
 	fi
@@ -691,8 +708,8 @@ run_smoke_checks() {
 	local script_dir
 	script_dir="$(dirname "${BASH_SOURCE[0]}")"
 	local -a COMMON_SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
-	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p 2222 liveuser@127.0.0.1)
-	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P 2222)
+	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
+	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_PORT")
 
 	"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" liveuser@127.0.0.1:/tmp/e2e-assert.sh
 	"${scp_cmd[@]}" "${script_dir}/e2e-smoke-checks.sh" liveuser@127.0.0.1:/tmp/e2e-smoke-checks.sh
@@ -764,8 +781,8 @@ run_install() {
 	# with the wrong flag silently makes scp treat the port number as a
 	# source-file argument ("stat local 2222: No such file or directory").
 	local -a COMMON_SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
-	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p 2222 liveuser@127.0.0.1)
-	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P 2222)
+	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
+	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_PORT")
 
 	# Bug #20: fisherman's network pull stalled indefinitely mid-blob (layer
 	# 42/65, no error, no further output) after dozens of smaller layers
@@ -1091,7 +1108,7 @@ EOF
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 		-device virtio-blk-pci,drive=disk \
-		-netdev "user,id=net0,hostfwd=tcp::2222-:22" \
+		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
 		-serial "file:${SERIAL_LOG}" \
@@ -1155,7 +1172,7 @@ boot_disk_image() {
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${ISO_PATH},format=${fmt}" \
 		-device virtio-blk-pci,drive=disk \
-		-netdev "user,id=net0,hostfwd=tcp::2222-:22" \
+		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
 		-serial "file:${SERIAL_LOG}" \
@@ -1318,7 +1335,7 @@ app-launch)
 		app_idx=$((app_idx + 1))
 		label="20-app-$(printf '%02d' "$app_idx")-${app##*.}"
 		echo "==> Launching app via SSH: $app"
-		sshpass -p live ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 liveuser@127.0.0.1 \
+		sshpass -p live ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "$SSH_PORT" liveuser@127.0.0.1 \
 			"env $SSH_APP_ENV gtk-launch $app 2>&1" || echo "  (app launch may have failed)"
 		sleep 8
 		screenshot "$label"
@@ -1337,7 +1354,7 @@ app-launch)
 		# Best-effort stop (openQA closes each app before the next): match the
 		# desktop id's last segment, lowercased, against the process table.
 		app_proc="${app##*.}"
-		sshpass -p live ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p 2222 liveuser@127.0.0.1 \
+		sshpass -p live ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "$SSH_PORT" liveuser@127.0.0.1 \
 			"pkill -f '${app_proc,,}' 2>/dev/null" || true
 		sleep 2
 	done
