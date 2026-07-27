@@ -1,0 +1,71 @@
+# XFCE Desktop Manifest — Arch Linux / CachyOS
+#
+# xfce.yaml installs Fedora's `xfce-desktop` group. Arch has an `xfce4` group
+# too, but groups expand to whatever the mirror holds on the day and pacman
+# --noconfirm takes all of it, so the set is listed explicitly here instead —
+# a build should not change shape because a group gained a member upstream.
+#
+# Note this is the X11 xfwm4 session. tunaOS prefers a Wayland compositor for
+# XFCE where one exists (xfwl4/labwc, see live-iso/common/src/desktop-xfce.sh),
+# and Arch has no xfwl4 package — so on marlin, XFCE is X11 only until
+# tuna-os/tunaos-packages#123 lands.
+#
+# Every package below was verified present in core/extra for x86_64.
+
+display_manager: gdm
+
+packages:
+  pacman:
+    # Core session
+    - xfce4-session
+    - xfwm4
+    - xfce4-panel
+    - xfce4-settings
+    - xfce4-appfinder
+    - xfconf
+    - xfdesktop
+    - gdm
+    # Panel plugins and daemons
+    - xfce4-power-manager
+    - xfce4-notifyd
+    - xfce4-screenshooter
+    - xfce4-taskmanager
+    - xfce4-pulseaudio-plugin
+    # Applications
+    - thunar
+    - thunar-volman
+    - thunar-archive-plugin
+    - xfce4-terminal
+    - mousepad
+    - ristretto
+    - file-roller
+    # Integration
+    - xdg-desktop-portal-gtk
+    - xdg-user-dirs
+    - xdg-user-dirs-gtk
+    - network-manager-applet
+    - networkmanager
+    - pipewire
+    - wireplumber
+    - flatpak
+    - wl-clipboard
+    - power-profiles-daemon
+    - fwupd
+    - plymouth
+
+  cachyos:
+    repos:
+      - name: cachyos
+        url: "https://mirror.cachyos.org/repo/$arch/cachyos"
+      - name: cachyos-extra
+        url: "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+    packages:
+      - linux-cachyos
+      - linux-cachyos-headers
+      - cachyos-settings
+
+versionlock: []
+
+# Post-install scripts to source (relative to build_scripts/)
+post_install:
+  - tuna-flatpak-remote.sh
