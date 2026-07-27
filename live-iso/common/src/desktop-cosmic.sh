@@ -36,7 +36,31 @@ ln -sf /usr/lib/systemd/system/greetd.service /etc/systemd/system/display-manage
 systemctl set-default graphical.target 2>/dev/null || \
   ln -sf /usr/lib/systemd/system/graphical.target /etc/systemd/system/default.target 2>/dev/null || true
 
-# Disable screen lock for the live session
+# Disable idle screen-off / lock / suspend for the live session.
+#
+# cosmic-idle is what actually locks the session: its binary contains both
+# `loginctl lock-session` and `systemctl suspend`, and it reads its timers from
+# the cosmic-config store `com.system76.CosmicIdle` (keys: screen_off_time,
+# suspend_on_ac_time, suspend_on_battery_time) — NOT from the
+# cosmic-settings-daemon override written below, which it never opens. So the
+# override alone left a live ISO able to lock itself, and liveuser is
+# passwordless, which is a poor place to end up.
+#
+# cosmic-config is one file per key holding a RON value; `None` disables an
+# Option-typed timer (see /usr/share/cosmic/com.system76.CosmicAppList/v1/
+# filter_top_levels, which is literally "None"). Written to /usr/share/cosmic
+# because that is where this image's defaults demonstrably live, and to
+# /etc/cosmic as the sysadmin-override location, so this does not depend on
+# which of the two libcosmic happens to consult first.
+for _cosmic_root in /usr/share/cosmic /etc/cosmic; do
+	mkdir -p "${_cosmic_root}/com.system76.CosmicIdle/v1"
+	for _k in screen_off_time suspend_on_ac_time suspend_on_battery_time; do
+		echo "None" >"${_cosmic_root}/com.system76.CosmicIdle/v1/${_k}"
+	done
+done
+
+# Kept as well: this is the right home for the power/time settings the
+# settings daemon itself owns, even though it is not what gates the lock.
 mkdir -p /etc/xdg
 tee /etc/xdg/cosmic-settings-daemon.override <<'COSMICEOF'
 [time]
