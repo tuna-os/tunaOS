@@ -14,7 +14,7 @@ ARG IMAGE_NAME_VARIANT
 # without --build-arg overrides will fail with a clear error.
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 ARG BREW_IMAGE_REF="ghcr.io/ublue-os/brew:unpinned-must-override"
-ARG ZIRCONIUM_IMAGE_REF="ghcr.io/zirconium-dev/zirconium:latest@sha256:1f120b2dc5a14d9d8f6939c3ac6d125f6cba207c0c9e261100b327a5744efe83"
+ARG ZIRCONIUM_IMAGE_REF="ghcr.io/zirconium-dev/zirconium:latest@sha256:9a61388e92c12b8d47cfad26a65b99b63e0edc5d3bc0a991f99a703ac9edfb01"
 
 FROM ${COMMON_IMAGE_REF} AS common
 FROM ${BREW_IMAGE_REF} AS brew
