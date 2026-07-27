@@ -169,33 +169,38 @@ take_screenshot() {
 
 echo "Waiting for installer boot (45 seconds)..."
 sleep 45
-take_screenshot "01_welcome"
 
-# Go from Page 0 (Welcome) -> Page 1 (Disk Select)
-send_key "ret"
-take_screenshot "02_disk_select"
+# Drive the installer with installer-walkthrough.py rather than the fixed
+# sendkey choreography this script used to carry.
+#
+# That choreography was `ret / tab tab ret / tab ret`, and it named the frames
+# 01_welcome, 02_disk_select, 03_confirm... as though it knew which screen it
+# was on. It did not. On a GPU run against yellowfin:cosmic every frame it
+# labelled disk_select and confirm was still the welcome screen — only the
+# panel clock had changed between them. Fixed key counts cannot work across
+# pages with different widget counts, and installer-smoke.yml already says so
+# (it reuses the Python harness for exactly this reason).
+#
+# installer-walkthrough.py escalates ret -> spc when a step produces no visual
+# change, widens the tab sweep until focus lands on the primary action, and
+# OCRs each frame against tests/installer-screens.yaml — so frames are named
+# by what they actually show, and drift between the five forked frontends is
+# reported instead of assumed.
+WALKTHROUGH_PY="$(dirname "${BASH_SOURCE[0]}")/installer-walkthrough.py"
+if [[ ! -f "$WALKTHROUGH_PY" ]]; then
+	echo "ERROR: $WALKTHROUGH_PY not found" >&2
+	exit 1
+fi
 
-# Select default disk and Continue to Page 2 (Confirm)
-send_key "tab"
-send_key "tab"
-send_key "ret"
-take_screenshot "03_confirm"
+STEPS="${TBOX_WALKTHROUGH_STEPS:-10}"
+FLAVOR="${FLAVOR:-de}"
+echo "==> Driving installer via installer-walkthrough.py (flavor=${FLAVOR}, steps=${STEPS})"
+python3 "$WALKTHROUGH_PY" \
+	"$MONITOR_SOCK" "$OUTPUT_DIR" "$STEPS" "$FLAVOR" \
+	--vnc="$VNC_SOCK" \
+	${TBOX_WALKTHROUGH_STRICT:+--strict}
+rc=$?
 
-# Confirm and start install Page 3 (Installing)
-send_key "tab"
-send_key "ret"
-take_screenshot "04_installing"
-
-echo "Waiting for installation progress (60 seconds)..."
-sleep 60
-take_screenshot "05_installing_progress"
-
-echo "Waiting for installation to finish (60 seconds)..."
-sleep 60
-take_screenshot "06_done"
-
-# Quit/Restart
-send_key "ret"
-
-echo "==> Walkthrough automation complete!"
+echo "==> Walkthrough automation complete (exit ${rc})"
 ls -lh "$OUTPUT_DIR"
+exit "$rc"
