@@ -253,12 +253,14 @@ def build() -> str:
         f"**{passed} of {total}** cells green "
         f"({tested} tested, {total - tested} never tested).",
         "",
-        "Measured against the set `luks-e2e.yml` schedules: every published "
-        "desktop image (`build_image`), not only the ones that ship an ISO. "
-        "That is wider than the ISO matrix below on purpose — the browser ISO "
-        "builder can make an ISO from any image, so image-only variants "
-        "(`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage "
-        "too.",
+        (
+            "Measured against the set `luks-e2e.yml` schedules: every published "
+            "desktop image (`build_image`), not only the ones that ship an ISO. "
+            "That is wider than the ISO matrix below on purpose — the browser ISO "
+            "builder can make an ISO from any image, so image-only variants "
+            "(`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage "
+            "too."
+        ),
         "",
     ]
     out += desktop_table(lmatrix, luks, luks_key)
