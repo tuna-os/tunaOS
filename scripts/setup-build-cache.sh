@@ -23,9 +23,22 @@ BASE_VARIANT="${BASE_VARIANT%-hwe}"
 BASE_VARIANT="${BASE_VARIANT%-kde}"
 BASE_VARIANT="${BASE_VARIANT%-dx}"
 
-if [[ "$BASE_VARIANT" == "grouper" ]]; then
-	exit 0
-fi
+# Only dnf-based variants get these mounts. The mounts land on /var/cache/dnf,
+# /var/cache/libdnf5 and /var/lib/rpm, which are meaningless to zypper, portage,
+# pacman and apt — but they are still *mounts under /var*, and the bootc layout
+# step later does an unguarded `rm -rf /var`. rm cannot unlink a mountpoint, so
+# it exits non-zero and `set -e` kills the build. That is why sailfin (zypper)
+# and guppy (portage) died at "Device or resource busy" on /var/cache/libdnf5 —
+# a Gentoo build has no dnf at all, yet was being handed a dnf cache.
+#
+# This was previously a denylist naming only grouper, which meant every non-dnf
+# variant added since then silently inherited mounts it could not use.
+# An allowlist fails safe: a new variant gets no cache until someone opts it in,
+# which costs a slower build rather than a broken one.
+case "$BASE_VARIANT" in
+yellowfin | albacore | skipjack | bonito | bonito-rawhide) ;;
+*) exit 0 ;;
+esac
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CACHE_BASE="${REPO_ROOT}/.rpm-cache/shared"
