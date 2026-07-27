@@ -180,6 +180,17 @@ jobs:
             qemu-system-x86 qemu-utils ovmf swtpm socat sshpass imagemagick \
             systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk
 
+      # iso-e2e.sh resolves the published image ref through
+      # scripts/published-image-ref.sh, which needs yq. Without it the script
+      # falls back to a guessed ref that is wrong for bonito-rawhide and
+      # flounder-sid. The matrix job installs yq the same way.
+      - name: Install yq
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
+
       - name: Log in to GHCR
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | \

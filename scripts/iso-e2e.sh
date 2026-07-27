@@ -840,10 +840,35 @@ run_install() {
 	# real production install machine (with no embedded local store) uses
 	# too. Requires network access, which the LUKS E2E runner already has
 	# (and already does a GHCR login earlier in the job).
-	local target_imgref="ghcr.io/tuna-os/${VARIANT:-}:${FLAVOR:-}"
-	local local_ref="localhost/${VARIANT:-}:${FLAVOR:-}"      # dev=1 ISO
-	local prod_ref="ghcr.io/tuna-os/${VARIANT:-}:${FLAVOR:-}" # production ISO
-	local recipe_image=""                                     # set below after probing the VM
+	# The published ref is NOT always ghcr.io/tuna-os/<variant>:<flavor>.
+	# build-config.yml gives bonito-rawhide `publish_name: bonito` +
+	# `tag_suffix: rawhide`, so it ships as bonito:<flavor>-rawhide; flounder-sid
+	# is flounder:<flavor>-sid. Constructing the ref by hand here meant we probed
+	# the embedded offline store for a name it never contained, concluded the
+	# image was absent, and fell back to a network pull of a tag that does not
+	# exist — four retries ten minutes apart, then a 40-minute-late failure that
+	# looked like a flaky registry. All nine such cells had already passed their
+	# live-ISO checks ("13 passed, 0 failed") before this hit.
+	#
+	# published-image-ref.sh is the same resolver build-variant.yml and
+	# publish-iso-groups.yml use, so there is one definition of the mapping.
+	local published_ref=""
+	if ! published_ref=$(
+		TUNAOS_BUILD_CONFIG="${SCRIPT_DIR}/../.github/build-config.yml" \
+			"${SCRIPT_DIR}/published-image-ref.sh" "${VARIANT:-}" "${FLAVOR:-}" ghcr 2>/dev/null
+	) || [[ -z "$published_ref" ]]; then
+		published_ref="ghcr.io/tuna-os/${VARIANT:-}:${FLAVOR:-}"
+		# Loud, because this fallback is silently wrong for exactly the variants
+		# the resolver exists to handle, and a quiet wrong ref costs 40 minutes.
+		echo "WARNING: published-image-ref.sh failed (is yq installed?);" >&2
+		echo "WARNING: guessing ${published_ref}. This is WRONG for any variant" >&2
+		echo "WARNING: with publish_name/tag_suffix set in build-config.yml." >&2
+	fi
+
+	local target_imgref="$published_ref"
+	local local_ref="localhost/${VARIANT:-}:${FLAVOR:-}" # dev=1 ISO
+	local prod_ref="$published_ref"                      # production ISO
+	local recipe_image=""                                # set below after probing the VM
 	local composefs_backend="false" bootloader="grub2"
 	# grouper (Ubuntu) has no bootupd package available via apt, so it ships
 	# systemd-boot instead and installs via bootc's composefs-native backend.
