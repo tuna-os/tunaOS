@@ -11,6 +11,13 @@
 #
 # Every package below was verified present in core/extra for x86_64.
 
+# CAVEAT: greetd here has no greeter UI. Fedora gets dms-greeter from COPR;
+# Arch has no official equivalent, so greetd.service exists (which is what the
+# #857 desktop-contract gate checks) but nothing draws a login screen. LUKS E2E
+# never looks at the screen — it drives fisherman over SSH — so marlin:niri can
+# go green while booting to a blank greetd. Do not read a green LUKS cell here
+# as "the session is usable"; that needs installer smoke on a GPU host.
+# Tracked alongside the other niri packaging gaps.
 display_manager: greetd
 
 packages:
