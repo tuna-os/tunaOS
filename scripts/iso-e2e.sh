@@ -898,6 +898,24 @@ run_install() {
 	echo "--- podman images (all) ---"
 	"${ssh_cmd[@]}" "sudo podman images 2>&1 || echo '(empty or error)'" || true
 
+	# skipjack fails here in a way the dump above cannot explain: the store is
+	# mounted, storage.conf lists it in additionalimagestores, overlay-images/
+	# holds an image directory and images.json — and `podman images` is still
+	# empty. Structurally identical to a passing cell, so comparing the two
+	# dumps does not converge.
+	#
+	# These two do. podman logs at debug level *why* it drops an additional
+	# image store (driver mismatch, unreadable lock, version skew); images.json
+	# is ~1 KB and states the names actually recorded, which distinguishes
+	# "store ignored" from "image recorded under a name we never probe".
+	echo "--- why podman does or does not see the additional store ---"
+	"${ssh_cmd[@]}" "sudo podman --log-level=debug images 2>&1 \
+		| grep -iE 'additional|superiso|store|driver' | head -40 \
+		|| echo '(no matching debug lines)'" || true
+	echo "--- names recorded in the offline store ---"
+	"${ssh_cmd[@]}" "sudo cat /var/lib/superiso-store/overlay-images/images.json 2>&1 \
+		|| echo '(unreadable)'" || true
+
 	# Probe the guest's containers-storage for a locally-available image.
 	local found_local=0 found_ref=""
 	for candidate_ref in "$prod_ref" "$local_ref"; do
