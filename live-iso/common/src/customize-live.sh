@@ -63,6 +63,19 @@ fi
 # 1000 when it is free (desktop sessions and flatpak expect it) and let
 # useradd pick otherwise; nothing here depends on the exact number.
 if ! getent passwd liveuser >/dev/null; then
+	# bootc images ship /home as a symlink to var/home, but /var is empty in
+	# the container layer, so useradd --create-home follows the symlink to a
+	# directory that does not exist and dies:
+	#
+	#   useradd: cannot create directory /home        (exit 12)
+	#
+	# That is what actually broke the marlin:kde overlay — misread as a
+	# transient registry blob error three separate times, because exit 12 was
+	# the only thing surfaced. readlink -f resolves a dangling symlink to its
+	# intended target, so this materialises whichever base the image means.
+	_home_base="$(readlink -f /home 2>/dev/null || echo /home)"
+	mkdir -p "${_home_base}"
+
 	_uid_args=()
 	getent passwd 1000 >/dev/null || _uid_args=(--uid 1000)
 	useradd --create-home "${_uid_args[@]}" --user-group \
