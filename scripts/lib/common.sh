@@ -108,9 +108,30 @@ tunaos_import_to_root_storage() {
 		return 1
 	fi
 
+	# /run/user/<uid> only exists where systemd-logind has created a session.
+	# Blacksmith runners have none, so pointing at it produced:
+	#
+	#   Failed to get rootless runtime dir: lstat /run/user/1001: no such file
+	#   error creating temporary file: No such file or directory
+	#   invalid internal status, try resetting the pause process with
+	#   "podman system migrate"
+	#
+	# and the pipe then fed `podman load` nothing, which reported the useless
+	# "payload does not match any of the supported image formats". Fall back to
+	# a private directory owned by the user — the same shape
+	# build-iso-tacklebox.sh already uses for its dropped-privilege podman ops.
+	local xdg_dir="/run/user/${real_uid}"
+	if [[ ! -d "$xdg_dir" ]]; then
+		xdg_dir="/tmp/tbox-xdg-${real_user}"
+		install -d -o "$real_user" -g "$(id -g "$real_user")" -m 700 "$xdg_dir" || {
+			echo "ERROR: cannot create a runtime dir for ${real_user} at ${xdg_dir}" >&2
+			return 1
+		}
+	fi
+
 	local save_err
 	save_err=$(mktemp)
-	if ! sudo -u "$real_user" env "XDG_RUNTIME_DIR=/run/user/${real_uid}" \
+	if ! sudo -u "$real_user" env "XDG_RUNTIME_DIR=${xdg_dir}" \
 		podman save "$image" 2>"$save_err" | podman load; then
 		echo "ERROR: failed to import ${image} from ${real_user}" >&2
 		[[ -s "$save_err" ]] && {
