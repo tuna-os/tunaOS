@@ -165,16 +165,24 @@ def tally(matrix, results, key_fmt):
 
 
 def nvidia_tally(matrix, results, key_fmt):
-    total = passed = 0
+    """Count NVIDIA cells that still carry a stale result.
+
+    luks-e2e.yml deliberately excludes -nvidia (commit 5c730e9, 2026-07-24):
+    "-nvidia takes the identical LUKS path in headless QEMU (no GPU)". That is
+    a sound scoping decision, so these cells are OUT OF SCOPE, not failing.
+
+    Reporting them as "0 of 24 green" implied a 24-cell gap that nobody was
+    ever going to close, which is its own kind of dishonest status page — the
+    mirror image of the problem this document exists to fix. What is worth
+    surfacing is only how many stale pre-exclusion results are still lying
+    around, so the number shrinks to zero as they age out.
+    """
+    stale = 0
     for variant, flavors in matrix.items():
         for f in flavors:
-            if "nvidia" not in f:
-                continue
-            total += 1
-            hit = results.get(key_fmt(variant, f))
-            if hit and hit[0] == "success":
-                passed += 1
-    return total, passed
+            if "nvidia" in f and results.get(key_fmt(variant, f)):
+                stale += 1
+    return stale
 
 
 def build() -> str:
@@ -202,7 +210,7 @@ def build() -> str:
 
     # ── LUKS ────────────────────────────────────────────────────────────────
     total, tested, passed = tally(matrix, luks, luks_key)
-    nv_total, nv_pass = nvidia_tally(matrix, luks, luks_key)
+    nv_stale = nvidia_tally(matrix, luks, luks_key)
     out += [
         "## LUKS E2E",
         "",
@@ -211,12 +219,16 @@ def build() -> str:
         "",
     ]
     out += desktop_table(matrix, luks, luks_key)
-    out += [
-        "",
-        f"NVIDIA: **{nv_pass} of {nv_total}** cells green. A uniform block of "
-        "red is one systemic issue, not N issues.",
-        "",
-    ]
+    if nv_stale:
+        out += [
+            "",
+            f"NVIDIA cells are **out of scope** for this workflow — "
+            f"`luks-e2e.yml` excludes them deliberately, because `-nvidia` "
+            f"takes the identical LUKS path in headless QEMU. "
+            f"{nv_stale} stale pre-exclusion result(s) remain from before "
+            "that change; they are not a gap and will age out.",
+            "",
+        ]
 
     dates = sorted({v[1] for v in luks.values()})
     if dates:

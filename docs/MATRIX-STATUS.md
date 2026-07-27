@@ -56,7 +56,7 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 | **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-NVIDIA: **0 of 24** cells green. A uniform block of red is one systemic issue, not N issues.
+NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 24 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
 
 Newest result 2026-07-26, oldest still-authoritative result 2026-07-23. Results older than the most recent round of fixes are the best available data, not current data.
 
@@ -99,8 +99,15 @@ Missing for 1 ISO cell(s): `marlin-kde`
 
 ## 3. Known systemic gaps
 
-**NVIDIA.** Every NVIDIA cell fails, across every variant — see the generated
-tally above. Untouched, and the single biggest uniform block of red.
+**NVIDIA is out of scope, not failing.** `luks-e2e.yml` excludes `-nvidia`
+deliberately (commit `5c730e9`): those flavors take the identical LUKS path in
+headless QEMU, so testing them there exercises nothing NVIDIA-specific. The
+stale results still visible above predate that change and will age out.
+
+The honest position is that **NVIDIA is untested rather than broken**, and no
+current workflow is designed to test it. Doing so needs a host with a real
+NVIDIA GPU — a different problem from the render-node gap above, and not one
+`iso-e2e-gpu.sh` solves.
 
 **CI cannot test four of five desktops.** cosmic, niri, xfwl4 **and kde** need a
 DRM render node. GitHub runners have none, so on hosted CI the compositor never
