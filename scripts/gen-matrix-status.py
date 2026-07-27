@@ -244,7 +244,7 @@ def build() -> str:
     out += desktop_table(matrix, smoke, smoke_key)
     out += [
         "",
-        "cosmic, niri and xfwl4 need a DRM render node; a ❌ for those on "
+        "cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on "
         "hosted CI may be a harness limitation rather than a product failure. "
         "See *Known systemic gaps*.",
         "",

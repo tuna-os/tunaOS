@@ -227,9 +227,22 @@ fi
 #   xfce:   greetd: check_children: greeter exited without creating a session
 #           greetd.service: Failed with result 'start-limit-hit'
 #
-# There is no software fallback for any of them. Only gnome and kde are
-# genuinely verifiable without a render node. For the rest, use
-# scripts/iso-e2e-gpu.sh on a host that has one.
+# There is no software fallback for any of them. KDE is NOT the exception this
+# comment previously claimed: plasmalogin's autologin session and its greeter
+# both die instantly on a hosted runner (installer-smoke run 30234237855):
+#
+#   plasmalogin-helper: Starting Wayland user session ... startplasma-wayland
+#   plasmalogin-helper: pam_unix(plasmalogin-autologin:session): session closed
+#   plasmalogin: Auth: plasmalogin-helper exited with 5
+#   ... then the same for the greeter, in a restart loop
+#
+# `eglinfo` on that runner lists no EGL_EXT_device_drm at all, so kwin_wayland
+# is in the same position as the Smithay compositors.
+#
+# GNOME is the only desktop still believed verifiable without a render node,
+# and that belief is now untested rather than demonstrated — the smoke matrix
+# has never run gnome. For everything else use scripts/iso-e2e-gpu.sh on a
+# host with a real render node.
 _gpu_mode="${TBOX_E2E_GPU:-auto}"
 QEMU_GPU_ARGS=(-vga virtio -display none)
 if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /dev/dri/renderD128 ]]; } \

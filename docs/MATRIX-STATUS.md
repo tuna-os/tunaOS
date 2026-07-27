@@ -77,20 +77,20 @@ This is the only axis that checks a human could actually install. For 29 combina
 | **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **yellowfin** | ⬜ | ❌ | ❌ | ✅ | ❌ |
 
-cosmic, niri and xfwl4 need a DRM render node; a ❌ for those on hosted CI may be a harness limitation rather than a product failure. See *Known systemic gaps*.
+cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on hosted CI may be a harness limitation rather than a product failure. See *Known systemic gaps*.
 
 ## Live overlay
 
-**37** tags published.
+**38** tags published.
 
-Missing for 2 ISO cell(s): `albacore-xfce`, `marlin-kde`
+Missing for 1 ISO cell(s): `marlin-kde`
 
 ## Provenance
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-07-27 | [30234237855](https://github.com/tuna-os/tunaOS/actions/runs/30234237855) | 2 |
 | 2026-07-26 | [30198679407](https://github.com/tuna-os/tunaOS/actions/runs/30198679407) | 1 |
-| 2026-07-26 | [30191933429](https://github.com/tuna-os/tunaOS/actions/runs/30191933429) | 2 |
 | 2026-07-24 | [30098218493](https://github.com/tuna-os/tunaOS/actions/runs/30098218493) | 4 |
 | 2026-07-23 | [29978067348](https://github.com/tuna-os/tunaOS/actions/runs/29978067348) | 56 |
 | 2026-07-22 | [29914643652](https://github.com/tuna-os/tunaOS/actions/runs/29914643652) | 2 |
@@ -102,11 +102,22 @@ Missing for 2 ISO cell(s): `albacore-xfce`, `marlin-kde`
 **NVIDIA.** Every NVIDIA cell fails, across every variant — see the generated
 tally above. Untouched, and the single biggest uniform block of red.
 
-**CI cannot test three of five desktops.** cosmic, niri and xfwl4 need a DRM
-render node. GitHub runners have none, so on hosted CI the compositor never
-starts — no configuration change alters this. `scripts/iso-e2e-gpu.sh` runs the
-harness on a GPU host and is the intended answer; it currently has to be driven
-by hand.
+**CI cannot test four of five desktops.** cosmic, niri, xfwl4 **and kde** need a
+DRM render node. GitHub runners have none, so on hosted CI the compositor never
+starts — no configuration change alters this.
+
+kde was previously believed to be the exception. It is not: on run
+`30234237855`, plasmalogin's autologin session and its greeter both exit
+immediately (`plasmalogin-helper exited with 5`) in a restart loop, and
+`eglinfo` on that runner lists **no `EGL_EXT_device_drm` at all**, putting
+kwin_wayland in the same position as the Smithay compositors.
+
+That leaves **gnome** as the only desktop still thought verifiable without a
+render node — and that is now an untested assumption rather than a
+demonstrated fact, because the smoke matrix has never run gnome.
+
+`scripts/iso-e2e-gpu.sh` runs the harness on a GPU host and is the intended
+answer; it currently has to be driven by hand.
 
 **Screenshots on the GPU path.** `screendump` returns `Error: no surface` once a
 guest scans out through virgl, and attaching VNC does not rescue it — the VNC
@@ -114,6 +125,12 @@ guest scans out through virgl, and attaching VNC does not rescue it — the VNC
 `installer-walkthrough.py`, `run-walkthrough.sh` and the weekly screenshot
 workflows still call `screendump` directly and will silently produce nothing on
 a GPU host.
+
+**Confirmed working, so nobody re-debugs it.** The plasmalogin autologin
+drop-in (#833) *is* being read — run `30234237855` shows
+`pam_unix(plasmalogin-autologin:session): session opened for user liveuser`
+before the session dies on the GPU limitation above. Autologin is not the kde
+blocker.
 
 **Failures that look like successes.** Recurring shape, worth checking for in
 any new harness code:
