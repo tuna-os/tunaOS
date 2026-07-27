@@ -56,7 +56,7 @@ jobs:
   iso:
     name: "ISO ${{ inputs.variant }}:${{ inputs.flavor }}"
     if: inputs.build-iso
-    runs-on: ubuntu-latest
+    runs-on: runs-on=${{ github.run_id }}/runner=build-amd64
     timeout-minutes: 90
     # No explicit permissions: inherit the caller's grant. publish-isos.yml
     # grants contents:write (release attach); build-variant.yml grants only
