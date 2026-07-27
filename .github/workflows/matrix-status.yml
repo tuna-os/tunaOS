@@ -1,0 +1,93 @@
+# Regenerate docs/MATRIX-STATUS.md from the actual state of CI.
+#
+# The document exists so that "never tested" is distinguishable from "passing".
+# Maintaining it by hand defeats that: a stale status page asserts things that
+# stopped being true, which is the same failure it was written to prevent. So
+# it regenerates daily and pushes only when a cell actually moved — which makes
+# the file's git history a record of when each combination flipped.
+name: Matrix Status
+
+on:
+  schedule:
+    # 06:00 UTC — after the nightly image builds settle, before the working day.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+  pull_request:
+    # Drift check only (no push): catches a hand-edit inside the generated
+    # block, and catches the generator breaking on a build-config change.
+    paths:
+      - "scripts/gen-matrix-status.py"
+      - ".github/build-config.yml"
+      - "docs/MATRIX-STATUS.md"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: matrix-status
+  cancel-in-progress: false
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5.6.0
+        with:
+          python-version: "3.12"
+
+      - name: Install deps
+        run: pip install --quiet pyyaml
+
+      - name: Regenerate
+        env:
+          # gh needs a token; the default one can read Actions runs in-repo.
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # No `|| true`: if the API is unreachable the script raises and this
+          # job fails loudly. Silently rewriting cells to "never tested" would
+          # be worse than not updating at all.
+          ./scripts/gen-matrix-status.py
+
+      - name: Fail on drift (pull_request only)
+        if: github.event_name == 'pull_request'
+        run: |
+          set -euo pipefail
+          if ! git diff --quiet -- docs/MATRIX-STATUS.md; then
+            echo "::error::docs/MATRIX-STATUS.md is out of date, or its"
+            echo "::error::generated block was hand-edited. Run"
+            echo "::error::scripts/gen-matrix-status.py and commit the result."
+            git --no-pager diff -- docs/MATRIX-STATUS.md
+            exit 1
+          fi
+          echo "MATRIX-STATUS.md is current"
+
+      - name: Commit and push
+        if: github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- docs/MATRIX-STATUS.md; then
+            echo "No cells moved — nothing to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/MATRIX-STATUS.md
+          # [skip ci] matches the convention used by the screenshot workflows;
+          # this commit touches only a generated doc and needs no CI.
+          git commit -m "docs: refresh matrix status ($(date -u +%Y-%m-%d)) [skip ci]"
+          git push origin HEAD:main
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Matrix status"
+            echo
+            sed -n '/BEGIN GENERATED/,/END GENERATED/p' \
+              docs/MATRIX-STATUS.md \
+              | grep -E '^\*\*|^NVIDIA|^Missing' || true
+          } >> "$GITHUB_STEP_SUMMARY"
