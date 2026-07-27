@@ -1,7 +1,7 @@
 name: Build Sailfin
 on:
   schedule:
-    - cron: "0 3 * * *"
+    - cron: "00 20 * * 0"
   workflow_dispatch:
     inputs:
       flavor:

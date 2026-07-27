@@ -1,7 +1,7 @@
 name: Build Guppy
 on:
   schedule:
-    - cron: "30 2 * * *"
+    - cron: "00 20 * * 1"
   workflow_dispatch:
     inputs:
       flavor:
