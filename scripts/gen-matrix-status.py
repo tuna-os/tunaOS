@@ -53,8 +53,8 @@ def gh_json(*args: str):
     return json.loads(out) if out.strip() else None
 
 
-def iso_matrix() -> dict[str, set[str]]:
-    """variant -> {flavors with build_iso: true}, from build-config.yml."""
+def _matrix(key: str, desktops_only: bool) -> dict[str, set[str]]:
+    """variant -> {flavors where <key> is true}, from build-config.yml."""
     try:
         import yaml
     except ImportError:
@@ -63,11 +63,34 @@ def iso_matrix() -> dict[str, set[str]]:
     out: dict[str, set[str]] = {}
     for variant in cfg.get("variants", []):
         flavors = {
-            f["id"] for f in variant.get("flavors", []) if f.get("build_iso")
+            f["id"]
+            for f in variant.get("flavors", [])
+            if f.get(key) and (not desktops_only or f["id"] in DESKTOPS)
         }
         if flavors:
             out[variant["id"]] = flavors
     return out
+
+
+def iso_matrix() -> dict[str, set[str]]:
+    """Cells that ship an ISO. The denominator for installer smoke."""
+    return _matrix("build_iso", desktops_only=False)
+
+
+def luks_matrix() -> dict[str, set[str]]:
+    """Cells LUKS E2E actually covers — the denominator for that axis.
+
+    luks-e2e.yml builds its matrix from build_image, NOT build_iso, and says
+    why: the browser ISO builder makes an ISO from any published image, so
+    image-only variants (sailfin, guppy, flounder-sid) need boot+install
+    coverage too. Measuring that axis against build_iso understated the work
+    being done and forced a "promote any result over not-built" special case
+    in cell() to stop sailfin's four tested cells from vanishing.
+
+    Using the workflow's own definition removes the special case: a cell is in
+    the LUKS denominator exactly when luks-e2e.yml would schedule it.
+    """
+    return _matrix("build_image", desktops_only=True)
 
 
 def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str]]:
@@ -186,7 +209,13 @@ def nvidia_tally(matrix, results, key_fmt):
 
 
 def build() -> str:
+    # Two different denominators on purpose — each axis is measured against the
+    # set of cells that axis actually schedules. Sharing one matrix made the
+    # LUKS numbers wrong in both directions: image-only variants were missing
+    # from the total, while cells that ship no ISO were counted once a run
+    # happened to touch them.
     matrix = iso_matrix()
+    lmatrix = luks_matrix()
     luks = latest_results("luks-e2e.yml", r"^LUKS ")
     smoke = latest_results("installer-smoke.yml", r":")
     tags = overlay_tags()
@@ -209,19 +238,29 @@ def build() -> str:
     ]
 
     # ── LUKS ────────────────────────────────────────────────────────────────
-    total, tested, passed = tally(matrix, luks, luks_key)
-    nv_stale = nvidia_tally(matrix, luks, luks_key)
+    total, tested, passed = tally(lmatrix, luks, luks_key)
+    nv_stale = nvidia_tally(lmatrix, luks, luks_key)
     out += [
         "## LUKS E2E",
         "",
-        f"**{passed} of {total}** non-NVIDIA ISO cells green "
+        f"**{passed} of {total}** cells green "
         f"({tested} tested, {total - tested} never tested).",
         "",
+        "Measured against the set `luks-e2e.yml` schedules: every published "
+        "desktop image (`build_image`), not only the ones that ship an ISO. "
+        "That is wider than the ISO matrix below on purpose — the browser ISO "
+        "builder can make an ISO from any image, so image-only variants "
+        "(`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage "
+        "too.",
+        "",
     ]
-    out += desktop_table(matrix, luks, luks_key)
+    out += desktop_table(lmatrix, luks, luks_key)
+    # Unconditional: the blank line used to live inside the NVIDIA block, so
+    # when no stale NVIDIA results remained the next paragraph butted straight
+    # up against the table.
+    out += [""]
     if nv_stale:
         out += [
-            "",
             f"NVIDIA cells are **out of scope** for this workflow — "
             f"`luks-e2e.yml` excludes them deliberately, because `-nvidia` "
             f"takes the identical LUKS path in headless QEMU. "

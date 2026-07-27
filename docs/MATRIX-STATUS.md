@@ -42,23 +42,25 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 
 ## LUKS E2E
 
-**12 of 37** non-NVIDIA ISO cells green (37 tested, 0 never tested).
+**15 of 50** cells green (50 tested, 0 never tested).
+
+Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
 | **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **bonito** | ❌ | ✅ | ❌ | ❌ | ✅ |
+| **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **flounder** | ❌ | ❌ | — | — | — |
+| **flounder** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **flounder-sid** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **grouper** | ❌ | ❌ | — | ❌ | ❌ |
-| **marlin** | ❌ | ❌ | — | — | — |
+| **guppy** | ❌ | ❌ | — | — | — |
+| **marlin** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **sailfin** | ❌ | ❌ | — | ❌ | ❌ |
 | **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 24 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
-
-Newest result 2026-07-26, oldest still-authoritative result 2026-07-23. Results older than the most recent round of fixes are the best available data, not current data.
+Newest result 2026-07-27, oldest still-authoritative result 2026-07-23. Results older than the most recent round of fixes are the best available data, not current data.
 
 ## Installer smoke
 
@@ -89,10 +91,9 @@ Missing for 1 ISO cell(s): `marlin-kde`
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-07-27 | [30249218614](https://github.com/tuna-os/tunaOS/actions/runs/30249218614) | 50 |
 | 2026-07-27 | [30234237855](https://github.com/tuna-os/tunaOS/actions/runs/30234237855) | 2 |
-| 2026-07-26 | [30198679407](https://github.com/tuna-os/tunaOS/actions/runs/30198679407) | 1 |
-| 2026-07-24 | [30098218493](https://github.com/tuna-os/tunaOS/actions/runs/30098218493) | 4 |
-| 2026-07-23 | [29978067348](https://github.com/tuna-os/tunaOS/actions/runs/29978067348) | 56 |
+| 2026-07-23 | [29978067348](https://github.com/tuna-os/tunaOS/actions/runs/29978067348) | 24 |
 | 2026-07-22 | [29914643652](https://github.com/tuna-os/tunaOS/actions/runs/29914643652) | 2 |
 
 <!-- END GENERATED -->
@@ -162,6 +163,29 @@ any new harness code:
   `/usr/share/tunaos/missing-on-*.txt` inside the built image, which nothing
   reads on a schedule. Three package gaps were found this way in one morning:
   `tunaos-packages#120`, `#121`, `#122`.
+- **A failing install cell blames the registry when the real fault is 90 lines
+  earlier.** `iso-e2e.sh` probes the ISO's embedded offline store and falls back
+  to a network pull when it misses. That fallback fails after four retries ten
+  minutes apart, so the last line of the log is a TLS timeout against ghcr.io —
+  40 minutes after the actual mistake, which was that the probe looked for the
+  wrong name. Nine cells in run `30249218614` looked like a flaky registry and
+  were not; all nine had already passed their live-ISO checks. One grep
+  separates the two:
+
+  ```
+  passing: ==> Found canonical offline image ghcr.io/... — bootcDirect
+  failing: ==> No local image in offline store, falling back to network pull
+  ```
+
+  Note also that `(mount failed)` in the offline-store diagnostics is **benign**
+  — it means "already mounted", and passing cells print it too.
+
+**Two different denominators, on purpose.** LUKS E2E is measured against
+`build_image` (every published desktop image), because `luks-e2e.yml` builds its
+matrix that way: the browser ISO builder can make an ISO from any image, so
+image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install
+coverage too. Installer smoke is measured against `build_iso`. The two totals
+answer different questions and should not be compared directly.
 
 ---
 
