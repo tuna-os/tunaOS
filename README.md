@@ -15,6 +15,7 @@
 [![GitHub Stars](https://img.shields.io/github/stars/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/stargazers)
 [![Issues](https://img.shields.io/github/issues/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/issues)
 [![Adopters](https://img.shields.io/badge/adopters-0_entries-2ea44f?style=for-the-badge)](ADOPTERS.md)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/MXSTqB8Nv)
 
 </div>
 
@@ -189,6 +190,7 @@ Contributions welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for:
 
 - 🐛 **Report Issues:** [GitHub Issues](https://github.com/tuna-os/tunaOS/issues)
 - [m] **Chat**: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia)
+- 🎮 **Discord:** [TunaOS](https://discord.gg/MXSTqB8Nv)
 
 Related Communities:
 - 🎮 **Discord:** [Universal Blue Community](https://discord.gg/WEu6BdFEtp)
