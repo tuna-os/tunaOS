@@ -104,10 +104,17 @@ deliberately (commit `5c730e9`): those flavors take the identical LUKS path in
 headless QEMU, so testing them there exercises nothing NVIDIA-specific. The
 stale results still visible above predate that change and will age out.
 
-The honest position is that **NVIDIA is untested rather than broken**, and no
-current workflow is designed to test it. Doing so needs a host with a real
-NVIDIA GPU — a different problem from the render-node gap above, and not one
-`iso-e2e-gpu.sh` solves.
+The honest position is that **NVIDIA is untested rather than broken**. No
+current workflow is designed to test it, because doing so needs a host with a
+real NVIDIA GPU — a different problem from the render-node gap above, and not
+one `iso-e2e-gpu.sh` solves.
+
+**This is planned, not abandoned.** NVIDIA coverage is expected once GPU
+capacity lands (AWS grant, driven through runs-on). When it does, the work is
+to add `-nvidia` back to `luks-e2e.yml`'s matrix filter and point it at those
+runners — and tuna-os/tunaOS#848 is a prerequisite, since stage-3 flavors
+currently cannot build a dev ISO at all. Until then the ⬜/stale cells above
+should be read as *not yet covered*, not as a backlog of broken cells.
 
 **CI cannot test four of five desktops.** cosmic, niri, xfwl4 **and kde** need a
 DRM render node. GitHub runners have none, so on hosted CI the compositor never
