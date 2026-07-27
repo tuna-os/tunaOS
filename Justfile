@@ -128,7 +128,25 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
         # CI chains on the -testing stream tag
         BASE_FOR_BUILD=$(./scripts/published-image-ref.sh "{{ variant }}" "${PARENT_FLAVOR}-testing" ghcr)
     else
+        # Stage-3 flavors (-nvidia, -hwe) chain on their parent flavor's image.
+        # Locally that is normally in podman storage from an earlier `just
+        # build`, but it is NOT there for a dev/e2e ISO: `just iso ... dev=1`
+        # calls build with is_ci="0" hardcoded, so on a CI runner this branch
+        # asked for an image nobody had built and buildah tried to resolve
+        # "localhost" as a registry:
+        #
+        #   Error: initializing source docker://localhost/yellowfin:gnome:
+        #   pinging container registry localhost
+        #
+        # That is the single cause of all 24 NVIDIA cells failing LUKS E2E
+        # (run 29978067348) — one systemic issue, not 24. Fall back to the
+        # published parent when the local one is absent, which also makes
+        # `just iso <variant> <flavor>-nvidia ... 1` work on a clean machine.
         BASE_FOR_BUILD="localhost/{{ variant }}:${PARENT_FLAVOR}"
+        if ! podman image exists "${BASE_FOR_BUILD}" 2>/dev/null; then
+            echo "==> ${BASE_FOR_BUILD} not in local storage; chaining on the published parent instead"
+            BASE_FOR_BUILD=$(./scripts/published-image-ref.sh "{{ variant }}" "${PARENT_FLAVOR}-testing" ghcr)
+        fi
     fi
 
     if [[ -n "{{ chain_base_image }}" ]] && [[ "${FLAVOR}" != "base" ]]; then
