@@ -1,0 +1,68 @@
+# niri Desktop Manifest — Arch Linux / CachyOS
+#
+# niri.yaml builds the Fedora set out of three COPRs (yalter/niri-git,
+# avengemedia/danklinux, avengemedia/dms-git). Arch ships niri itself in
+# [extra], so no third-party repo is needed here — but the DankMaterialShell
+# pieces (quickshell, dms, dms-greeter) have no Arch equivalent in the official
+# repos, so this is a plain niri session rather than a DMS one.
+#
+# Two name differences from the Fedora list: SwayNotificationCenter is `swaync`
+# and adw-gtk3-theme is `adw-gtk-theme`.
+#
+# Every package below was verified present in core/extra for x86_64.
+
+display_manager: greetd
+
+packages:
+  pacman:
+    # Compositor and session
+    - niri
+    - greetd
+    - xwayland-satellite
+    # Shell surfaces
+    - waybar
+    - fuzzel
+    - swaync
+    - swaylock
+    - swayidle
+    # Integration
+    - xdg-desktop-portal-gnome
+    - xdg-desktop-portal-gtk
+    - xdg-user-dirs
+    - xdg-user-dirs-gtk
+    - polkit-gnome
+    - gnome-keyring
+    - wl-clipboard
+    # Hardware and media controls
+    - networkmanager
+    - pipewire
+    - wireplumber
+    - pavucontrol
+    - brightnessctl
+    - playerctl
+    - blueman
+    - power-profiles-daemon
+    - fwupd
+    - plymouth
+    # Applications and theming
+    - nautilus
+    - flatpak
+    - adw-gtk-theme
+    - papirus-icon-theme
+
+  cachyos:
+    repos:
+      - name: cachyos
+        url: "https://mirror.cachyos.org/repo/$arch/cachyos"
+      - name: cachyos-extra
+        url: "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+    packages:
+      - linux-cachyos
+      - linux-cachyos-headers
+      - cachyos-settings
+
+versionlock: []
+
+# Post-install scripts to source (relative to build_scripts/)
+post_install:
+  - tuna-flatpak-remote.sh

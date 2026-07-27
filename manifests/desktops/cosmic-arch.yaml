@@ -1,0 +1,74 @@
+# COSMIC Desktop Manifest — Arch Linux / CachyOS
+#
+# Arch ships COSMIC in [extra], but two names differ from the Fedora set in
+# cosmic.yaml: cosmic-term is `cosmic-terminal` and cosmic-edit is
+# `cosmic-text-editor`. Using the Fedora names fails the whole build, because
+# pacman aborts the transaction on the first unknown target — the same way an
+# AUR-only package took marlin:kde down (tuna-os/tunaos-packages#126).
+#
+# Every package below was verified present in core/extra for x86_64.
+
+display_manager: greetd
+
+packages:
+  pacman:
+    # Session and compositor
+    - cosmic-session
+    - cosmic-comp
+    - cosmic-greeter
+    - greetd
+    # Shell surfaces
+    - cosmic-panel
+    - cosmic-app-library
+    - cosmic-applets
+    - cosmic-bg
+    - cosmic-launcher
+    - cosmic-notifications
+    - cosmic-osd
+    - cosmic-workspaces
+    - cosmic-idle
+    # Settings and tooling
+    - cosmic-settings
+    - cosmic-settings-daemon
+    - cosmic-randr
+    - cosmic-screenshot
+    # Applications
+    - cosmic-files
+    - cosmic-terminal
+    - cosmic-text-editor
+    - cosmic-store
+    # Theming
+    - cosmic-icon-theme
+    - cosmic-wallpapers
+    - pop-icon-theme
+    # Integration
+    - xdg-desktop-portal-cosmic
+    - xdg-desktop-portal-gtk
+    - xdg-user-dirs
+    - networkmanager
+    - pipewire
+    - wireplumber
+    - flatpak
+    - wl-clipboard
+    - power-profiles-daemon
+    - fwupd
+    - plymouth
+
+  # CachyOS adds its own repos on top of Arch — same pacman packages
+  # but with performance-optimized builds.
+  cachyos:
+    repos:
+      - name: cachyos
+        url: "https://mirror.cachyos.org/repo/$arch/cachyos"
+      - name: cachyos-extra
+        url: "https://mirror.cachyos.org/repo/$arch/cachyos-extra"
+    packages:
+      - linux-cachyos
+      - linux-cachyos-headers
+      - cachyos-settings
+
+versionlock: []
+
+# Post-install scripts to source (relative to build_scripts/)
+post_install:
+  - tuna-flatpak-remote.sh
