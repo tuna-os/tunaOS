@@ -887,6 +887,12 @@ run_install() {
 	"${ssh_cmd[@]}" "sudo mkdir -p /var/lib/superiso-store && sudo mount -o ro,nodev /run/initramfs/live/LiveOS/store.squashfs.img /var/lib/superiso-store 2>&1 || echo '(mount failed)'" || true
 	echo "--- mount table (superiso) ---"
 	"${ssh_cmd[@]}" "findmnt /var/lib/superiso-store 2>&1 || echo '(not mounted)'" || true
+	# Force podman to re-read storage backends after the offline store is
+	# mounted. Without this, podman may still use stale in-memory state
+	# from before the mount, causing image exists / pull to miss the
+	# additional store entirely (observed on Gentoo-based variants where
+	# the offline-store.service sometimes races with podman's init).
+	"${ssh_cmd[@]}" "sudo podman system renumber 2>&1 || true" || true
 	echo "--- primary storage.conf ---"
 	"${ssh_cmd[@]}" "cat /etc/containers/storage.conf 2>&1 || echo '(not found)'" || true
 	echo "--- offline store layout ---"
@@ -917,10 +923,23 @@ run_install() {
 		|| echo '(unreadable)'" || true
 
 	# Probe the guest's containers-storage for a locally-available image.
+	# Try podman image exists first (primary store), then fall back to
+	# inspecting the offline store's images.json directly.  podman image
+	# exists sometimes misses images in additional stores when the overlay
+	# driver / fuse-overlayfs configuration inside the VM differs from the
+	# host that packed the store (observed on Gentoo-based variants).
 	local found_local=0 found_ref=""
 	for candidate_ref in "$prod_ref" "$local_ref"; do
 		echo "==> Probing for ${candidate_ref}..."
 		if "${ssh_cmd[@]}" "sudo podman image exists '${candidate_ref}'" 2>/dev/null; then
+			found_local=1
+			found_ref="$candidate_ref"
+			break
+		fi
+		# Fallback: check the offline store images.json directly.
+		local img_json="/var/lib/superiso-store/overlay-images/images.json"
+		if "${ssh_cmd[@]}" "sudo test -f ${img_json} && sudo jq -e --arg ref '${candidate_ref}' '.[] | select(.names != null) | select(.names | index(\$ref))' ${img_json} >/dev/null 2>&1" 2>/dev/null; then
+			echo "==> Found ${candidate_ref} in offline store images.json (podman query missed it)"
 			found_local=1
 			found_ref="$candidate_ref"
 			break

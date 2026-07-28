@@ -202,6 +202,7 @@ jobs:
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
+          TACKLEBOX_SHA: 2c5870a97a4171e064bced8f3c76b935b9e0ab87
         run: |
           export TACKLEBOX_FROM_SOURCE=1
           just iso "${VARIANT}" "${FLAVOR}" ghcr "" 1
