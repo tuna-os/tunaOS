@@ -959,27 +959,32 @@ run_install() {
 			recipe_image="containers-storage:${found_ref}"
 		fi
 	else
-		echo "==> No local image in offline store, falling back to network pull over QEMU NAT"
-		recipe_image="${prod_ref}"
-
-		# QEMU SLIRP usermode NAT often drops Path-MTU-Discovery ICMP
-		# replies, causing large blobs to stall indefinitely. Clamp MTU
-		# aggressively (1200, below the typical VPN/tunnel MTU floor) and
-		# give each pull attempt generous headroom (900 s).
-		"${ssh_cmd[@]}" 'for i in $(ls /sys/class/net | grep -v ^lo$ || true); do sudo ip link set "$i" mtu 1200 2>/dev/null || true; done' || true
-
-		echo "==> Pre-pulling ${prod_ref} (retry on stall, layers already fetched are cached)..."
-		local pull_ok=0
-		for pull_attempt in 1 2 3 4 5 6; do
-			echo "--> pull attempt ${pull_attempt}/6"
-			if timeout 900 "${ssh_cmd[@]}" "sudo podman pull ${prod_ref} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
-				pull_ok=1
-				break
+		# The offline store is inaccessible to the guest's containers/storage
+		# library (overlay driver / fuse-overlayfs mismatch). QEMU SLIRP NAT
+		# stalls on large blobs (PMTU blackhole). Instead, save the image
+		# from the HOST's podman (where 'just iso' built it) and transfer it
+		# over SSH. SSH port-forwarding is a TCP tunnel, immune to SLIRP NAT
+		# PMTU issues.
+		echo "==> No local image in offline store — transferring from host via SSH"
+		local host_img="localhost/${VARIANT:-}:${FLAVOR:-}"
+		local host_tar="/tmp/luks-image-${VARIANT:-}-${FLAVOR:-}.tar"
+		if podman image exists "$host_img" 2>/dev/null; then
+			echo "==> Saving $host_img on host..."
+			podman save "$host_img" -o "$host_tar"
+			echo "==> Transferring image to guest (this may take a few minutes)..."
+			"${scp_cmd[@]}" "$host_tar" "liveuser@127.0.0.1:/tmp/"
+			echo "==> Loading image into guest podman..."
+			if "${ssh_cmd[@]}" "sudo podman load -i /tmp/${host_tar##*/} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
+				echo "==> Image loaded, using local containers-storage ref"
+				recipe_image="containers-storage:${host_img}"
+			else
+				echo "ERROR: podman load failed on guest"
+				return 3
 			fi
-			echo "==> pull attempt ${pull_attempt} failed or stalled; retrying..."
-		done
-		if [[ "$pull_ok" -ne 1 ]]; then
-			echo "ERROR: failed to pull ${prod_ref} after 6 attempts"
+			"${ssh_cmd[@]}" "rm -f /tmp/${host_tar##*/}" || true
+			rm -f "$host_tar" || true
+		else
+			echo "ERROR: host image $host_img not found — was ISO build successful?"
 			return 3
 		fi
 	fi

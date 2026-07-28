@@ -97,7 +97,7 @@ RUN mkdir -p /usr/lib/dracut/dracut.conf.d && \
 RUN mkdir -p /usr/lib/systemd/system/initrd-root-fs.target.wants && \
     ln -sf ../bootc-root-setup.service \
       /usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service
-RUN dracut --force --no-hostonly --reproducible --zstd --kver \
+RUN dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss" --kver \
     "$(ls /usr/lib/modules | head -1)" \
     "/usr/lib/modules/$(ls /usr/lib/modules | head -1)/initramfs.img" && \
     lsinitrd "/usr/lib/modules/$(ls /usr/lib/modules | head -1)/initramfs.img" \
