@@ -1003,7 +1003,7 @@ run_install() {
 	if [[ -n "${FISHERMAN_OVERRIDE:-}" && -f "${FISHERMAN_OVERRIDE}" ]]; then
 		echo "==> Overriding fisherman with ${FISHERMAN_OVERRIDE}"
 		"${scp_cmd[@]}" "${FISHERMAN_OVERRIDE}" liveuser@127.0.0.1:/home/liveuser/fisherman-override
-		"${ssh_cmd[@]}" "sudo install -m0755 /tmp/fisherman-override /usr/local/bin/fisherman"
+		"${ssh_cmd[@]}" "sudo install -m0755 /home/liveuser/fisherman-override /usr/local/bin/fisherman"
 	fi
 
 	local RECIPE_LOCAL="${OUTPUT_DIR}/e2e-recipe.json"
@@ -1023,11 +1023,11 @@ EOF
 	echo "==> Uploading fisherman recipe..."
 	"${scp_cmd[@]}" "$RECIPE_LOCAL" liveuser@127.0.0.1:/home/liveuser/e2e-recipe.json
 
-	echo "==> Running fisherman /tmp/e2e-recipe.json..."
+	echo "==> Running fisherman /home/liveuser/e2e-recipe.json..."
 	# Bound with `timeout` as a safety net; the image is already local at
 	# this point so this should only cover the actual install steps, not a
 	# network pull.
-	timeout 1800 "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman /tmp/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
+	timeout 1800 "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman /home/liveuser/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
 		rc=$?
 		if [[ $rc -eq 0 ]]; then
 			true
