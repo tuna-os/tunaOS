@@ -940,9 +940,18 @@ run_install() {
 		local img_json="/var/lib/superiso-store/overlay-images/images.json"
 		if "${ssh_cmd[@]}" "sudo test -f ${img_json} && sudo jq -e --arg ref '${candidate_ref}' '.[] | select(.names != null) | select(.names | index(\$ref))' ${img_json} >/dev/null 2>&1" 2>/dev/null; then
 			echo "==> Found ${candidate_ref} in offline store images.json (podman query missed it)"
-			found_local=1
-			found_ref="$candidate_ref"
-			break
+			# Skopeo can read from the combined store (primary + additional)
+			# and write the metadata into the writable primary store. Layers
+			# in the read-only additional store don't need to be copied —
+			# the primary store only needs the image manifest/config.
+			echo "==> Copying image metadata into primary store..."
+			if "${ssh_cmd[@]}" "sudo skopeo copy --insecure-policy containers-storage:${candidate_ref} containers-storage:${candidate_ref} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
+				found_local=1
+				found_ref="$candidate_ref"
+				break
+			else
+				echo "==> skopeo copy failed (exit $?) — falling back to other candidates"
+			fi
 		fi
 	done
 
