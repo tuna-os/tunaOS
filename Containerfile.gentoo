@@ -94,7 +94,7 @@ FROM base AS builder
 #
 # Gentoo cannot simply copy Arch's throwaway-builder pattern: this stage also
 # emerges dev-util/ostree, which the final system needs at runtime.
-RUN emerge --verbose dev-util/ostree && \
+RUN emerge --verbose dev-util/ostree net-misc/openssh && \
     git clone --depth 1 https://github.com/bootc-dev/bootc.git /tmp/bootc && \
     make -C /tmp/bootc bin install-all && \
     rm -rf /tmp/bootc /root/.cargo /root/.rustup /var/tmp/portage
@@ -106,8 +106,6 @@ RUN KVER=$(ls /usr/lib/modules | head -1) && \
     dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" --kver "$KVER" \
     "/usr/lib/modules/$KVER/initramfs.img" && \
     rm -rf /var/db /var/cache
-# Dev/E2E ISOs: install SSH for test harness (production images never build with ENABLE_SSHD=1)
-RUN sh -c 'if [ "${ENABLE_SSHD}" = "1" ]; then emerge --verbose net-misc/openssh && systemctl enable sshd.service 2>/dev/null || true; fi'
 RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
     rm -rf /boot /home /root /usr/local /srv /opt /mnt /var && \
     find /dev -mindepth 1 -maxdepth 1 ! -name pts ! -name shm ! -name mqueue -exec rm -rf {} + 2>/dev/null || true && \
@@ -171,8 +169,6 @@ RUN KVER=$(ls /usr/lib/modules | head -1) && \
     dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" --kver "$KVER" \
     "/usr/lib/modules/$KVER/initramfs.img" && \
     rm -rf /var/db /var/cache
-# Dev/E2E ISOs: install SSH for test harness (production images never build with ENABLE_SSHD=1)
-RUN sh -c 'if [ "${ENABLE_SSHD}" = "1" ]; then emerge --verbose net-misc/openssh && systemctl enable sshd.service 2>/dev/null || true; fi'
 RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
     rm -rf /boot /home /root /usr/local /srv /opt /mnt /var && \
     find /dev -mindepth 1 -maxdepth 1 ! -name pts ! -name shm ! -name mqueue -exec rm -rf {} + 2>/dev/null || true && \
