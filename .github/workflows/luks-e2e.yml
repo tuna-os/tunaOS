@@ -136,6 +136,29 @@ jobs:
             /usr/local/share/boost /opt/hostedtoolcache/CodeQL || true
           df -h /
 
+      # Blacksmith runners provide no systemd user session, so rootless
+      # podman's default cgroup manager cannot create a scope and every
+      # container build dies before running anything:
+      #
+      #   error running container: from /usr/bin/crun creating container for
+      #   [/bin/sh -c echo "${BUILD_SCRIPTS_HASH}" > /dev/null]:
+      #   sd-bus call: Interactive authentication required.: Permission denied
+      #
+      # That is polkit refusing a sd-bus call with no active session behind
+      # it — not a build error, though it surfaces as one at a random RUN
+      # step. All 50 cells of run 30243113215 failed this way. cgroupfs needs
+      # no session; GitHub-hosted images happen to ship a session, which is
+      # why this never appeared there.
+      - name: Use the cgroupfs cgroup manager (no user session on this runner)
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.config/containers
+          cat >~/.config/containers/containers.conf <<'CONF'
+          [engine]
+          cgroup_manager = "cgroupfs"
+          CONF
+          podman info --format '{{.Host.CgroupManager}}'
+
       - name: Maximize build space
         uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
 
@@ -156,6 +179,13 @@ jobs:
             just podman jq \
             qemu-system-x86 qemu-utils ovmf swtpm socat sshpass imagemagick \
             systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk
+
+      - name: Install yq
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+          yq --version
 
       - name: Log in to GHCR
         run: |
