@@ -103,9 +103,15 @@ FROM builder AS system
 RUN KVER=$(ls /usr/lib/modules | head -1) && \
     rm -f "/usr/lib/modules/$KVER/vmlinuz" && \
     (cp /boot/vmlinuz-* "/usr/lib/modules/$KVER/vmlinuz" 2>/dev/null || cp /usr/src/linux-*/arch/x86/boot/bzImage "/usr/lib/modules/$KVER/vmlinuz") && \
-    dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss" --kver "$KVER" \
+    dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" --kver "$KVER" \
     "/usr/lib/modules/$KVER/initramfs.img" && \
     rm -rf /var/db /var/cache
+# Dev/E2E ISOs need SSH for the test harness to drive the install.
+# Production images never build with ENABLE_SSHD=1.
+RUN if [ "${ENABLE_SSHD}" = "1" ]; then 
+      emerge --verbose net-misc/openssh && 
+      systemctl enable sshd.service 2>/dev/null || true; 
+    fi
 RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
     rm -rf /boot /home /root /usr/local /srv /opt /mnt /var && \
     find /dev -mindepth 1 -maxdepth 1 ! -name pts ! -name shm ! -name mqueue -exec rm -rf {} + 2>/dev/null || true && \
@@ -166,9 +172,15 @@ FROM desktop-build AS desktop
 RUN KVER=$(ls /usr/lib/modules | head -1) && \
     rm -f "/usr/lib/modules/$KVER/vmlinuz" && \
     (cp /boot/vmlinuz-* "/usr/lib/modules/$KVER/vmlinuz" 2>/dev/null || cp /usr/src/linux-*/arch/x86/boot/bzImage "/usr/lib/modules/$KVER/vmlinuz") && \
-    dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss" --kver "$KVER" \
+    dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" --kver "$KVER" \
     "/usr/lib/modules/$KVER/initramfs.img" && \
     rm -rf /var/db /var/cache
+# Dev/E2E ISOs need SSH for the test harness to drive the install.
+# Production images never build with ENABLE_SSHD=1.
+RUN if [ "${ENABLE_SSHD}" = "1" ]; then 
+      emerge --verbose net-misc/openssh && 
+      systemctl enable sshd.service 2>/dev/null || true; 
+    fi
 RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
     rm -rf /boot /home /root /usr/local /srv /opt /mnt /var && \
     find /dev -mindepth 1 -maxdepth 1 ! -name pts ! -name shm ! -name mqueue -exec rm -rf {} + 2>/dev/null || true && \
