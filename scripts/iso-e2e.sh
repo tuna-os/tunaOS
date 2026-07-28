@@ -711,8 +711,8 @@ run_smoke_checks() {
 	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
 	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_PORT")
 
-	"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" liveuser@127.0.0.1:/tmp/e2e-assert.sh
-	"${scp_cmd[@]}" "${script_dir}/e2e-smoke-checks.sh" liveuser@127.0.0.1:/tmp/e2e-smoke-checks.sh
+	"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" liveuser@127.0.0.1:/home/liveuser/e2e-assert.sh
+	"${scp_cmd[@]}" "${script_dir}/e2e-smoke-checks.sh" liveuser@127.0.0.1:/home/liveuser/e2e-smoke-checks.sh
 
 	local smoke_output smoke_rc=0
 	smoke_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=/tmp bash /tmp/e2e-smoke-checks.sh" 2>&1) || smoke_rc=$?
@@ -972,16 +972,16 @@ run_install() {
 			echo "==> Saving $host_img on host..."
 			podman save "$host_img" -o "$host_tar"
 			echo "==> Transferring image to guest (this may take a few minutes)..."
-			"${scp_cmd[@]}" "$host_tar" "liveuser@127.0.0.1:/tmp/"
+			"${scp_cmd[@]}" "$host_tar" "liveuser@127.0.0.1:/home/liveuser/"
 			echo "==> Loading image into guest podman..."
-			if "${ssh_cmd[@]}" "sudo podman load -i /tmp/${host_tar##*/} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
+			if "${ssh_cmd[@]}" "sudo podman load -i /home/liveuser/${host_tar##*/} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
 				echo "==> Image loaded, using local containers-storage ref"
 				recipe_image="containers-storage:${host_img}"
 			else
 				echo "ERROR: podman load failed on guest"
 				return 3
 			fi
-			"${ssh_cmd[@]}" "rm -f /tmp/${host_tar##*/}" || true
+			"${ssh_cmd[@]}" "rm -f /home/liveuser/${host_tar##*/}" || true
 			rm -f "$host_tar" || true
 		else
 			echo "ERROR: host image $host_img not found — was ISO build successful?"
@@ -1002,7 +1002,7 @@ run_install() {
 	# fisherman is pinned to a release.
 	if [[ -n "${FISHERMAN_OVERRIDE:-}" && -f "${FISHERMAN_OVERRIDE}" ]]; then
 		echo "==> Overriding fisherman with ${FISHERMAN_OVERRIDE}"
-		"${scp_cmd[@]}" "${FISHERMAN_OVERRIDE}" liveuser@127.0.0.1:/tmp/fisherman-override
+		"${scp_cmd[@]}" "${FISHERMAN_OVERRIDE}" liveuser@127.0.0.1:/home/liveuser/fisherman-override
 		"${ssh_cmd[@]}" "sudo install -m0755 /tmp/fisherman-override /usr/local/bin/fisherman"
 	fi
 
@@ -1021,7 +1021,7 @@ run_install() {
 }
 EOF
 	echo "==> Uploading fisherman recipe..."
-	"${scp_cmd[@]}" "$RECIPE_LOCAL" liveuser@127.0.0.1:/tmp/e2e-recipe.json
+	"${scp_cmd[@]}" "$RECIPE_LOCAL" liveuser@127.0.0.1:/home/liveuser/e2e-recipe.json
 
 	echo "==> Running fisherman /tmp/e2e-recipe.json..."
 	# Bound with `timeout` as a safety net; the image is already local at
@@ -1050,8 +1050,8 @@ EOF
 		# tiered on-VM test scripts.
 		local script_dir
 		script_dir="$(dirname "${BASH_SOURCE[0]}")"
-		"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" liveuser@127.0.0.1:/tmp/e2e-assert.sh
-		"${scp_cmd[@]}" "${script_dir}/e2e-luks-checks.sh" liveuser@127.0.0.1:/tmp/e2e-luks-checks.sh
+		"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" liveuser@127.0.0.1:/home/liveuser/e2e-assert.sh
+		"${scp_cmd[@]}" "${script_dir}/e2e-luks-checks.sh" liveuser@127.0.0.1:/home/liveuser/e2e-luks-checks.sh
 		local luks_check_output
 		luks_check_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=/tmp bash /tmp/e2e-luks-checks.sh" 2>&1) || true
 		echo "$luks_check_output" | tee -a "$LUKS_EVIDENCE_LOG"
