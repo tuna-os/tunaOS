@@ -110,6 +110,6 @@ depmod -a "$(find /lib/modules/ -maxdepth 1 -mindepth 1 -type d -printf '%f\n' |
 KERNEL_SUFFIX=""
 QUALIFIED_KERNEL="$(rpm -qa | grep -P 'kernel-(|'"$KERNEL_SUFFIX"'-)(\d+\.\d+\.\d+)' | sed -E 's/kernel-(|'"$KERNEL_SUFFIX"'-)//' | tail -n 1)"
 export DRACUT_NO_XATTR=1
-/usr/bin/dracut --tmpdir /tmp --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible --zstd -v --add ostree --omit "tpm2-tss" -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
+/usr/bin/dracut --tmpdir /tmp --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible --zstd -v --add ostree --omit "tpm2-tss pcsc" -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
 
 printf "::endgroup::\n"
