@@ -715,7 +715,7 @@ run_smoke_checks() {
 	"${scp_cmd[@]}" "${script_dir}/e2e-smoke-checks.sh" liveuser@127.0.0.1:/home/liveuser/e2e-smoke-checks.sh
 
 	local smoke_output smoke_rc=0
-	smoke_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=/tmp bash /tmp/e2e-smoke-checks.sh" 2>&1) || smoke_rc=$?
+	smoke_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=/home/liveuser bash /home/liveuser/e2e-smoke-checks.sh" 2>&1) || smoke_rc=$?
 	echo "$smoke_output" | tee -a "${SERIAL_LOG}"
 	if [[ "$smoke_rc" -ne 0 ]]; then
 		echo "::warning::live-image smoke checks reported ${smoke_rc} failure(s)"
@@ -1053,7 +1053,7 @@ EOF
 		"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" liveuser@127.0.0.1:/home/liveuser/e2e-assert.sh
 		"${scp_cmd[@]}" "${script_dir}/e2e-luks-checks.sh" liveuser@127.0.0.1:/home/liveuser/e2e-luks-checks.sh
 		local luks_check_output
-		luks_check_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=/tmp bash /tmp/e2e-luks-checks.sh" 2>&1) || true
+		luks_check_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=/home/liveuser bash /home/liveuser/e2e-luks-checks.sh" 2>&1) || true
 		echo "$luks_check_output" | tee -a "$LUKS_EVIDENCE_LOG"
 
 		if echo "$luks_check_output" | grep -q "^ok - installed disk has a crypto_LUKS partition"; then
