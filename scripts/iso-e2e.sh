@@ -940,18 +940,10 @@ run_install() {
 		local img_json="/var/lib/superiso-store/overlay-images/images.json"
 		if "${ssh_cmd[@]}" "sudo test -f ${img_json} && sudo jq -e --arg ref '${candidate_ref}' '.[] | select(.names != null) | select(.names | index(\$ref))' ${img_json} >/dev/null 2>&1" 2>/dev/null; then
 			echo "==> Found ${candidate_ref} in offline store images.json (podman query missed it)"
-			# Skopeo can read from the combined store (primary + additional)
-			# and write the metadata into the writable primary store. Layers
-			# in the read-only additional store don't need to be copied —
-			# the primary store only needs the image manifest/config.
-			echo "==> Copying image metadata into primary store..."
-			if "${ssh_cmd[@]}" "sudo skopeo copy --insecure-policy containers-storage:${candidate_ref} containers-storage:${candidate_ref} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
-				found_local=1
-				found_ref="$candidate_ref"
-				break
-			else
-				echo "==> skopeo copy failed (exit $?) — falling back to other candidates"
-			fi
+			# The image exists but podman/bootc can't resolve it from the
+			# additional store (overlay driver mismatch). Don't set
+			# found_local here — let the code fall through to the network
+			# pull, which now uses aggressive MTU clamping + retries.
 		fi
 	done
 
@@ -970,23 +962,24 @@ run_install() {
 		echo "==> No local image in offline store, falling back to network pull over QEMU NAT"
 		recipe_image="${prod_ref}"
 
-		# Bug #20: the pull over QEMU SLIRP NAT can stall mid-blob. Clamp
-		# guest MTU before pulling and retry up to 4 times; podman skips
-		# already-fetched layers so each retry is incremental.
-		"${ssh_cmd[@]}" 'for i in $(ls /sys/class/net | grep -v ^lo$); do sudo ip link set "$i" mtu 1400; done' || true
+		# QEMU SLIRP usermode NAT often drops Path-MTU-Discovery ICMP
+		# replies, causing large blobs to stall indefinitely. Clamp MTU
+		# aggressively (1200, below the typical VPN/tunnel MTU floor) and
+		# give each pull attempt generous headroom (900 s).
+		"${ssh_cmd[@]}" 'for i in $(ls /sys/class/net | grep -v ^lo$ || true); do sudo ip link set "$i" mtu 1200 2>/dev/null || true; done' || true
 
 		echo "==> Pre-pulling ${prod_ref} (retry on stall, layers already fetched are cached)..."
 		local pull_ok=0
-		for pull_attempt in 1 2 3 4; do
-			echo "--> pull attempt ${pull_attempt}/4"
-			if timeout 600 "${ssh_cmd[@]}" "sudo podman pull ${prod_ref} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
+		for pull_attempt in 1 2 3 4 5 6; do
+			echo "--> pull attempt ${pull_attempt}/6"
+			if timeout 900 "${ssh_cmd[@]}" "sudo podman pull ${prod_ref} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
 				pull_ok=1
 				break
 			fi
 			echo "==> pull attempt ${pull_attempt} failed or stalled; retrying..."
 		done
 		if [[ "$pull_ok" -ne 1 ]]; then
-			echo "ERROR: failed to pull ${prod_ref} after 4 attempts"
+			echo "ERROR: failed to pull ${prod_ref} after 6 attempts"
 			return 3
 		fi
 	fi
