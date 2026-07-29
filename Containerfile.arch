@@ -82,6 +82,15 @@ RUN grep "= */var" /etc/pacman.conf | sed "/= *\/var/s/.*=// ; s/ //" | \
 # will pull optimized packages automatically. We detect CachyOS by checking
 # for the cachyos repo in pacman.conf and install linux-cachyos instead of
 # stock linux.
+#
+# openssh is in the list because the dev/E2E ISO path needs a real
+# sshd.service to enable (live-iso/common/src/customize-live.sh hard-fails
+# with "no SSH service is installed" otherwise — that is how LUKS
+# marlin:{kde,cosmic,niri,xfce} died, while marlin:gnome only built because
+# the GNOME manifest happened to pull openssh in transitively). Arch enables
+# nothing on install (99-default.preset disables everything), so shipping the
+# package keeps sshd closed on installed systems, matching the openSUSE and
+# Gentoo bases, which already install openssh in their base stage.
 RUN KERNEL_PKG="linux"; \
     # Arch Linux ARM names its stock kernel linux-aarch64
     if [ "$(uname -m)" = "aarch64" ]; then \
@@ -109,6 +118,7 @@ RUN KERNEL_PKG="linux"; \
         shadow \
         systemd \
         networkmanager \
+        openssh \
         pipewire \
         wireplumber \
         flatpak \

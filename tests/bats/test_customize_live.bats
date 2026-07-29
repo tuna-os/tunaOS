@@ -139,6 +139,15 @@ detect() {
   grep -q 'additionalimagestores = \["/var/lib/superiso-store", "/usr/lib/containers/storage"\]' "${SCRIPT}"
 }
 
+# Only Containerfile.{el10,ubuntu} run build_scripts/40-services.sh, which is
+# the sole place tunaos-live-ready.service gets enabled — the arch, opensuse,
+# gentoo and debian bases shipped it disabled, so the e2e harness waited out
+# its full ready timeout on a live session that was already up.
+@test "customize-live.sh: enables the readiness marker in the live squash" {
+  grep -q 'systemctl enable tunaos-live-ready.service' "${SCRIPT}"
+  grep -q 'install -Dm644 "${SCRIPT_DIR}/tunaos-live-ready.service"' "${SCRIPT}"
+}
+
 @test "customize-live.sh: sources the matching desktop adapter" {
   run grep 'desktop-\${DESKTOP}.sh' "${SCRIPT}"
   [ "$status" -eq 0 ]

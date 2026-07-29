@@ -91,6 +91,23 @@ if systemctl list-unit-files NetworkManager.service --no-legend 2>/dev/null | gr
 	systemctl enable NetworkManager.service || true
 fi
 
+# ── 1d. Live readiness marker ────────────────────────────────────────────────
+# scripts/iso-e2e.sh waits for TUNAOS_LIVE_READY on the serial console before
+# it does anything else, and tunaos-live-ready.service is what prints it.
+# Only build_scripts/40-services.sh enables that unit, and only
+# Containerfile.{el10,ubuntu} run it — the arch, opensuse, gentoo and debian
+# bootcifications never do, so they shipped the unit (system_files) disabled.
+# `LUKS marlin:gnome` burned its whole 1200s ready timeout on a live session
+# that was up and idle at a login prompt, having never queued the marker (its
+# Wants=NetworkManager-wait-online.service never appears in that boot's
+# journal). Enable it here: the marker exists for live media, this is the live
+# squash, and it is a no-op where 40-services.sh already enabled it.
+if [[ ! -f /usr/lib/systemd/system/tunaos-live-ready.service ]]; then
+	install -Dm644 "${SCRIPT_DIR}/tunaos-live-ready.service" \
+		/usr/lib/systemd/system/tunaos-live-ready.service
+fi
+systemctl enable tunaos-live-ready.service
+
 # ── 2. Desktop adapter (autologin, screen-lock, suspend masking) ─────────────
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/desktop-${DESKTOP}.sh"
