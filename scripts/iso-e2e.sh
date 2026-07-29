@@ -808,6 +808,15 @@ run_install() {
 	done
 	check_ssh || {
 		echo "ERROR: SSH not available"
+		# Every attempt above goes through QEMU's hostfwd, which needs the
+		# guest to hold a DHCP lease. An image shipping no network manager
+		# therefore fails all 30 tries while its own sshd is perfectly
+		# healthy, which is indistinguishable from a broken sshd unless the
+		# live TAP checks are surfaced. That was `LUKS grouper:*`: 30 opaque
+		# "SSH check failed" lines, with the answer ("not ok - a network
+		# manager is active") sitting in the serial log the whole time.
+		echo "--- live-env TAP failures from the serial console ---" >&2
+		grep -a "not ok -" "$SERIAL_LOG" 2>/dev/null | tr -d '\r' >&2 || true
 		return 5
 	}
 

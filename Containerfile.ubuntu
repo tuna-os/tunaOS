@@ -111,18 +111,38 @@ COPY --from=bootc-builder /output /
 #
 # The t64 suffixes are Ubuntu's 64-bit time_t transition; the unsuffixed names
 # do not exist in resolute. All five were verified against the base image.
+#
+# network-manager is explicit (Containerfile.debian does the same) because
+# ubuntu-desktop-minimal only *recommends* it and every apt install in this
+# repo passes --no-install-recommends: grouper images shipped with no network
+# manager and no enabled systemd-networkd, so nothing ever configured a NIC.
+# The installed system had no network, and in the live ISO the missing DHCP
+# lease meant QEMU's hostfwd had nothing to forward to, which is how
+# `LUKS grouper:gnome` spent five minutes on "ERROR: SSH check failed" while
+# the guest's own sshd was up and its e2e-runtime-checks reported
+# "not ok - a network manager is active".
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     apt-get update -y && \
     apt-get install -y --no-install-recommends \
         ca-certificates curl gpg \
         ostree libostree-1-1 dracut \
         btrfs-progs dosfstools e2fsprogs xfsprogs skopeo jq \
-        systemd-boot systemd-boot-efi dmsetup \
+        systemd-boot systemd-boot-efi dmsetup network-manager \
         tpm2-tools libtss2-tcti-device0t64 libtss2-tctildr0t64 \
         libtss2-rc0t64 libtss2-esys-3.0.2-0t64 && \
     # pcsc (smart card daemon) dracut module is part of Ubuntu's default
     # module set but the pcscd package isn't needed for the initramfs.
     echo 'omit_dracutmodules+=" pcsc "' > /etc/dracut.conf.d/omit-pcsc.conf && \
+    # Installing NetworkManager is not enough on Ubuntu: its package ships
+    # /usr/lib/NetworkManager/conf.d/10-globally-managed-devices.conf with
+    #   unmanaged-devices=*,except:type:wifi,except:type:gsm,except:type:cdma
+    # so ethernet stays unmanaged unless netplan hands the device over. A
+    # same-named file under /etc shadows the vendor one outright (this is how
+    # Ubuntu Desktop globally manages devices), leaving NM to auto-configure
+    # wired links over DHCP with no netplan YAML in the image.
+    mkdir -p /etc/NetworkManager/conf.d && \
+    printf '# Intentionally sets no unmanaged-devices: this file shadows the\n# vendor one of the same name in /usr/lib/NetworkManager/conf.d, so\n# NetworkManager manages ethernet as well as wifi/wwan.\n' \
+        > /etc/NetworkManager/conf.d/10-globally-managed-devices.conf && \
     cp -a /run/context/build_scripts/bootc/sandbox/. / && \
     apt-get clean -y && rm -rf /var/lib/apt/lists/*
 
