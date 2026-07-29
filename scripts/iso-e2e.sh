@@ -932,10 +932,33 @@ run_install() {
 	local local_ref="localhost/${VARIANT:-}:${FLAVOR:-}" # dev=1 ISO
 	local prod_ref="$published_ref"                      # production ISO
 	local recipe_image=""                                # set below after probing the VM
+	# Mirror bootc's own bootloader decision rather than naming variants.
+	# install.rs (PostFetchState::new) picks GRUB only when
+	# bootloader::supports_bootupd() holds, i.e. bootupctl is on PATH AND the
+	# image contains the update payload dir usr/lib/bootupd/updates; otherwise
+	# it falls back to systemd-boot. Its ostree-based install path then refuses
+	# systemd-boot outright:
+	#   error: Installing to filesystem: bootupd is required for ostree-based installs
+	# which is how `LUKS flounder-sid:gnome` died after deploying all 4.2 GB.
+	#
+	# The Debian, Arch and openSUSE bases build bootupd from source, and
+	# bootupd's `make install` ships only the binary plus the bootupctl
+	# symlink. Nothing ever runs `bootupctl backend generate-update-metadata`,
+	# so bootupctl exists while the payload never does. Those bases install
+	# systemd-boot and set composefs enabled = yes precisely so bootc's
+	# composefs-native backend performs the install, exactly like grouper
+	# (Ubuntu), which was the only variant this check used to cover.
+	#
+	# Probing the image keeps the harness from ever disagreeing with bootc:
+	# the dev ISO's live squash is the image being installed, and Fedora/EL10,
+	# which do ship the payload, still resolve to GRUB. These two combinations
+	# are the only ones the recipe supports, so deriving both flags from the
+	# one signal cannot produce an untested mix.
 	local composefs_backend="false" bootloader="grub2"
-	# grouper (Ubuntu) has no bootupd package available via apt, so it ships
-	# systemd-boot instead and installs via bootc's composefs-native backend.
-	if [[ "${VARIANT:-}" == "grouper" ]]; then
+	if "${ssh_cmd[@]}" "test -d /usr/lib/bootupd/updates" &>/dev/null; then
+		echo "==> Image ships the bootupd update payload: installing via GRUB/bootupd"
+	else
+		echo "==> No bootupd update payload in the image: using bootc's composefs-native backend with systemd-boot"
 		composefs_backend="true"
 		bootloader="systemd"
 	fi
