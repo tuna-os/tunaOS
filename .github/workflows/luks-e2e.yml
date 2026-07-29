@@ -123,9 +123,11 @@ jobs:
   luks:
     name: LUKS ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate-matrix
-    # RunsOn's nested-virtualization profile supplies /dev/kvm and dedicated
-    # AWS capacity; GitHub-hosted concurrency was throttling this full matrix.
-    runs-on: runs-on=${{ github.run_id }}/runner=build-kvm
+    # Use direct labels while this branch is under test. RunsOn reads custom
+    # runner profiles from a public repository's default branch, so the
+    # build-kvm profile in .github/runs-on.yml becomes usable after merge.
+    # These equivalent constraints work immediately and provide /dev/kvm.
+    runs-on: runs-on=${{ github.run_id }}/family=c8i+m8i+r8i/cpu=8/image=ubuntu24-full-x64/volume=80gb:gp3/nested-virt/spot=capacity-optimized
     # 90 min was sized for the old local-only bootc install (no network
     # pull). fisherman now does a full image pull over the QEMU guest's NAT
     # networking (see docs/ci-troubleshooting.md §4 bug #19) — slower than a
