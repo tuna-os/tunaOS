@@ -151,6 +151,28 @@ additionalimagestores = ["/var/lib/superiso-store"]
 mount_program = "/usr/bin/fuse-overlayfs"
 CONFEOF
 
+# ...but the primary config is no longer the last word. containers/storage 1.60+
+# (Fedora Rawhide's container-libs rebase) reads drop-ins from
+# storage{,.rootful}.conf.d AFTER the main file, and Fedora's containers-common
+# ships /usr/share/containers/storage.rootful.conf.d/00-vendor-rootful.conf with
+#   additionalimagestores = ["/usr/lib/containers/storage"]
+# which REPLACES the list above. On rawhide the live VM therefore never saw
+# /var/lib/superiso-store: `podman image exists` missed the payload image that
+# images.json plainly listed, and iso-e2e.sh fell back to SCP'ing the ~7 GB
+# image tar into the guest, onto the RAM-backed live overlay, which thrashed
+# for an hour and then took sshd down with it.
+#
+# Drop-ins are applied in filename order across all directories, so a 99-
+# prefixed admin drop-in wins over the vendor one. Re-declare both stores (the
+# vendor entry is where bootc keeps logically-bound images, so keep it).
+# Older containers/storage releases have no drop-in support and simply ignore
+# this file, where the primary config above is already correct.
+mkdir -p /etc/containers/storage.conf.d
+cat >/etc/containers/storage.conf.d/99-tunaos-offline-store.conf <<'CONFEOF'
+[storage.options]
+additionalimagestores = ["/var/lib/superiso-store", "/usr/lib/containers/storage"]
+CONFEOF
+
 # Dev/E2E media only: the normal published-image policy keeps SSH disabled.
 # tacklebox creates liveuser during boot, so install a oneshot that sets its
 # temporary test password after livesys and before the SSH daemon starts.

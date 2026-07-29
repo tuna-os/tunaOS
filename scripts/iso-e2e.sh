@@ -974,10 +974,24 @@ run_install() {
 		local img_json="/var/lib/superiso-store/overlay-images/images.json"
 		if "${ssh_cmd[@]}" "sudo test -f ${img_json} && sudo jq -e --arg ref '${candidate_ref}' '.[] | select(.names != null) | select(.names | index(\$ref))' ${img_json} >/dev/null 2>&1" 2>/dev/null; then
 			echo "==> Found ${candidate_ref} in offline store images.json (podman query missed it)"
-			# The image exists but podman/bootc can't resolve it from the
-			# additional store (overlay driver mismatch). Don't set
-			# found_local here — let the code fall through to the network
-			# pull, which now uses aggressive MTU clamping + retries.
+			# The store holds the image but this podman does not have
+			# /var/lib/superiso-store in its additional-store list. On
+			# Rawhide because containers-common's
+			# storage.rootful.conf.d/00-vendor-rootful.conf drop-in replaces
+			# the list our /etc/containers/storage.conf sets (fixed in
+			# customize-live.sh with a 99- admin drop-in; kept here so an
+			# ISO built before that fix still installs). Re-assert the store
+			# and re-probe: bootc reads the same config, so if podman sees
+			# the image after this, so will the install.
+			"${ssh_cmd[@]}" "sudo mkdir -p /etc/containers/storage.conf.d && \
+				printf '[storage.options]\nadditionalimagestores = [\"/var/lib/superiso-store\", \"/usr/lib/containers/storage\"]\n' \
+				| sudo tee /etc/containers/storage.conf.d/99-tunaos-offline-store.conf >/dev/null" || true
+			if "${ssh_cmd[@]}" "sudo podman image exists '${candidate_ref}'" 2>/dev/null; then
+				echo "==> Store re-registered: ${candidate_ref} is now visible to podman"
+				found_local=1
+				found_ref="$candidate_ref"
+				break
+			fi
 		fi
 	done
 
@@ -1005,6 +1019,25 @@ run_install() {
 		if podman image exists "$host_img" 2>/dev/null; then
 			echo "==> Saving $host_img on host..."
 			podman save "$host_img" -o "$host_tar"
+			# The live root is a RAM-backed overlay, so the tar plus the
+			# loaded copy have to fit in what little the guest can write.
+			# Without this check an oversized transfer does not fail, it
+			# thrashes until the kernel kills sshd, which is how
+			# bonito-rawhide:cosmic burned 61 minutes before reporting
+			# "Connection closed by remote host" with no visible cause.
+			local tar_kb avail_kb need_kb
+			tar_kb=$(du -k "$host_tar" | cut -f1)
+			avail_kb=$("${ssh_cmd[@]}" "df -Pk /home/liveuser | awk 'NR==2 {print \$4}'" 2>/dev/null | tr -dc '0-9')
+			need_kb=$((tar_kb * 9 / 4)) # tar + podman load's unpacked copy
+			echo "==> Guest writable space: ${avail_kb:-unknown} KiB, image tar: ${tar_kb} KiB"
+			if [[ -n "$avail_kb" && "$avail_kb" -lt "$need_kb" ]]; then
+				echo "ERROR: guest has ${avail_kb} KiB writable but staging ${host_img}" >&2
+				echo "ERROR: needs ~${need_kb} KiB. The offline store on the ISO is the" >&2
+				echo "ERROR: only viable source for an image this size. Check that" >&2
+				echo "ERROR: /var/lib/superiso-store is registered in the guest's" >&2
+				echo "ERROR: containers-storage config (storage.conf.d drop-ins win)." >&2
+				return 3
+			fi
 			echo "==> Transferring image to guest (this may take a few minutes)..."
 			"${scp_cmd[@]}" "$host_tar" "liveuser@127.0.0.1:/home/liveuser/"
 			echo "==> Loading image into guest podman..."
