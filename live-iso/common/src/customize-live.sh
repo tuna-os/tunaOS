@@ -269,6 +269,13 @@ ensure_dbus_daemon() {
 		echo "ERROR: flatpak not installed; cannot pre-install ${INSTALLER_APP}" >&2
 		exit 1
 	fi
+	# openSUSE's CA bundle is generated under /var, while bootc image stages
+	# intentionally reset /var. Rebuild it in the live customization container
+	# before Flatpak contacts any HTTPS remote; this is a harmless no-op on
+	# other bases and prevents curl/Flatpak certificate error 60 on Sailfin.
+	if command -v update-ca-certificates >/dev/null 2>&1; then
+		update-ca-certificates || echo "WARN: could not regenerate CA bundle"
+	fi
 
 	# The installer apps (tuna-os-hosted and upstream bootc-installer alike)
 	# declare a GNOME/Freedesktop runtime dependency that isn't published on
