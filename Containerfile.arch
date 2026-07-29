@@ -106,6 +106,23 @@ RUN grep "= */var" /etc/pacman.conf | sed "/= *\/var/s/.*=// ; s/ //" | \
 #   (sudo is not installed on this image)
 # The live session drives the whole install through sudo, and ujust recipes
 # plus the desktop admin flows need it on installed systems too.
+#
+# fuse-overlayfs is in the list because the live env's storage.conf sets
+# overlay's mount_program to /usr/bin/fuse-overlayfs
+# (live-iso/common/src/customize-live.sh), and containers/storage stats that
+# program at startup and hard-fails the whole config when it is absent:
+#   Error: configure storage: overlay: can't stat program
+#   "/usr/bin/fuse-overlayfs": no such file or directory
+# That took every podman call in the marlin live guest down, so the
+# offline-store probe found nothing and the e2e aborted on the staging-space
+# preflight ("guest has ... writable but staging localhost/marlin:cosmic").
+# The mount_program is not optional there: the live root is itself an
+# overlayfs, and the overlay driver refuses to stack on one without it
+# ("'overlay' is not supported over overlayfs, a mount_program is required").
+# Arch's podman does not depend on fuse-overlayfs (verified with pacman -Qo on
+# a stock archlinux image, which has no fuse-overlayfs binary after installing
+# podman). The apt and dnf bases already get it from
+# build_scripts/10-base-packages.sh, which this Containerfile does not run.
 RUN KERNEL_PKG="linux"; \
     # Arch Linux ARM names its stock kernel linux-aarch64
     if [ "$(uname -m)" = "aarch64" ]; then \
@@ -129,6 +146,7 @@ RUN KERNEL_PKG="linux"; \
         dosfstools \
         skopeo \
         podman \
+        fuse-overlayfs \
         dbus \
         glib2 \
         shadow \

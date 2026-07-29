@@ -168,6 +168,22 @@ additionalimagestores = ["/var/lib/superiso-store"]
 mount_program = "/usr/bin/fuse-overlayfs"
 CONFEOF
 
+# mount_program above is mandatory, not an optimization: the live root is
+# itself an overlayfs, and the overlay driver refuses to stack on one
+# ("'overlay' is not supported over overlayfs, a mount_program is required").
+# But containers/storage also stats the program at startup and hard-fails the
+# entire config when it is missing, which takes down every podman call in the
+# live guest and surfaces far away as the staging-space preflight abort. Warn
+# loudly here, at build time, instead of leaving that to be rediscovered from
+# an e2e log. The base package lists own the fix (the apt and dnf bases get it
+# from build_scripts/10-base-packages.sh; Arch and openSUSE list it directly).
+if [[ ! -x /usr/bin/fuse-overlayfs ]]; then
+	echo "WARNING: /usr/bin/fuse-overlayfs is missing from this image." >&2
+	echo "WARNING: podman will fail in the live env with \"can't stat program\"" >&2
+	echo "WARNING: and the offline store will be unusable. Add fuse-overlayfs" >&2
+	echo "WARNING: to this base's package list." >&2
+fi
+
 # ...but the primary config is no longer the last word. containers/storage 1.60+
 # (Fedora Rawhide's container-libs rebase) reads drop-ins from
 # storage{,.rootful}.conf.d AFTER the main file, and Fedora's containers-common

@@ -45,6 +45,16 @@ FROM base AS system
 # live session drives the entire install through sudo, and `LUKS marlin:gnome`
 # showed what its absence costs: "liveuser has no working passwordless sudo in
 # the live env".
+#
+# fuse-overlayfs is explicit for the same reason it is on the Arch base: the
+# live env's storage.conf points overlay's mount_program at
+# /usr/bin/fuse-overlayfs, and containers/storage hard-fails its whole config
+# when that program is missing, taking every podman call in the live guest with
+# it ("can't stat program \"/usr/bin/fuse-overlayfs\""). Dropping the
+# mount_program is not an option: the live root is an overlayfs and the overlay
+# driver will not stack on one without it. Neither this list nor the
+# enhanced_base pattern pulls it in (checked with zypper --dry-run on a stock
+# Tumbleweed image, which has no fuse-overlayfs binary).
 RUN set -eu; \
     retry_zypper() { \
       attempt=1; \
@@ -64,7 +74,7 @@ RUN set -eu; \
     retry_zypper --non-interactive --gpg-auto-import-keys refresh && \
     retry_zypper install -y \
     bootc \
-    btrfs-progs ca-certificates ca-certificates-mozilla cpio curl cryptsetup dosfstools dracut e2fsprogs flatpak glib2 \
+    btrfs-progs ca-certificates ca-certificates-mozilla cpio curl cryptsetup dosfstools dracut e2fsprogs flatpak fuse-overlayfs glib2 \
     kernel-default kernel-firmware-all openssh ostree skopeo sudo \
     systemd systemd-boot udev xfsprogs zstd chrony && \
     update-ca-certificates && \
