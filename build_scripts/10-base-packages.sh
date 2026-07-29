@@ -27,12 +27,13 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 	# sudo is explicit because the stock ubuntu/debian container bases do not
 	# ship it (only the `sudo` group), nothing here pulls it as a hard
 	# dependency, and every apt install in this repo passes
-	# --no-install-recommends. Fedora/openSUSE/Arch bases all have it, so its
-	# absence only showed up on grouper: `LUKS grouper:niri` ran the entire
+	# --no-install-recommends. `LUKS grouper:niri` ran the entire
 	# offline-store probe with every privileged command answering
 	# "bash: line 1: sudo: command not found", concluded the payload image was
 	# missing and fell back to SCP'ing a 4 GB tar. ujust recipes and the
 	# desktop's own admin flows need it on installed systems too.
+	# (The Arch and openSUSE bases turned out to be missing sudo as well; they
+	# install it from their own Containerfile package lists.)
 	pkg_install \
 		buildah \
 		podman \

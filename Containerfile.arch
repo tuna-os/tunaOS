@@ -97,6 +97,15 @@ RUN grep "= */var" /etc/pacman.conf | sed "/= *\/var/s/.*=// ; s/ //" | \
 # nothing on install (99-default.preset disables everything), so shipping the
 # package keeps sshd closed on installed systems, matching the openSUSE and
 # Gentoo bases, which already install openssh in their base stage.
+#
+# sudo is in the list because Arch's `base` does not depend on it (verified
+# with pacman -Qi base on the stock archlinux image, which has no sudo binary
+# at all) and no desktop manifest pulls it in either. That is how
+# `LUKS marlin:gnome` died before the installer ran:
+#   ERROR: liveuser has no working passwordless sudo in the live env.
+#   (sudo is not installed on this image)
+# The live session drives the whole install through sudo, and ujust recipes
+# plus the desktop admin flows need it on installed systems too.
 RUN KERNEL_PKG="linux"; \
     # Arch Linux ARM names its stock kernel linux-aarch64
     if [ "$(uname -m)" = "aarch64" ]; then \
@@ -123,6 +132,7 @@ RUN KERNEL_PKG="linux"; \
         dbus \
         glib2 \
         shadow \
+        sudo \
         systemd \
         networkmanager \
         openssh \

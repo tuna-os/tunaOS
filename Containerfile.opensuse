@@ -38,6 +38,13 @@ FROM base AS system
 # That is the same gate that failed the Ubuntu and Arch LUKS cells.
 # systemd-cryptenroll, the other tpm2-luks requirement, comes from `udev` on
 # Tumbleweed (not `systemd`), and that is already in the list below.
+#
+# sudo is explicit for the same reason it is on the Arch and apt bases: the
+# stock Tumbleweed image has no sudo binary and neither this list nor the
+# enhanced_base pattern pulls it in (both checked with zypper --dry-run). The
+# live session drives the entire install through sudo, and `LUKS marlin:gnome`
+# showed what its absence costs: "liveuser has no working passwordless sudo in
+# the live env".
 RUN set -eu; \
     retry_zypper() { \
       attempt=1; \
@@ -58,7 +65,7 @@ RUN set -eu; \
     retry_zypper install -y \
     bootc \
     btrfs-progs ca-certificates ca-certificates-mozilla cpio curl cryptsetup dosfstools dracut e2fsprogs flatpak glib2 \
-    kernel-default kernel-firmware-all openssh ostree skopeo \
+    kernel-default kernel-firmware-all openssh ostree skopeo sudo \
     systemd systemd-boot udev xfsprogs zstd chrony && \
     update-ca-certificates && \
     retry_zypper --non-interactive removerepo virtualization-containers && \
