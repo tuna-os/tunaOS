@@ -405,14 +405,58 @@ start_swtpm() {
 
 # Fresh OVMF NVRAM each run — UEFI writes state during install (boot order,
 # secure-boot vars). Reusing a stale one masks regressions.
-if [[ -n "$OVMF_VARS_SRC" ]]; then
-	cp -f "$OVMF_VARS_SRC" "$OVMF_VARS"
-else
-	# Some packaging only ships a combined OVMF.fd; create empty vars file
-	# as a fallback (UEFI will populate it).
-	truncate -s 4M "$OVMF_VARS"
-fi
+mint_ovmf_vars() {
+	local dest="$1"
+	# Always start from nothing: `truncate` only extends an existing file, so
+	# reusing one would carry its old contents into the "fresh" varstore.
+	rm -f "$dest"
+	if [[ -n "$OVMF_VARS_SRC" ]]; then
+		cp -f "$OVMF_VARS_SRC" "$dest"
+	else
+		# Some packaging only ships a combined OVMF.fd; create empty vars file
+		# as a fallback (UEFI will populate it).
+		truncate -s 4M "$dest"
+	fi
+}
+mint_ovmf_vars "$OVMF_VARS"
 rm -f "$MONITOR_SOCK" "$SERIAL_LOG" "$QEMU_PIDFILE"
+
+# Which NVRAM the installed-disk boot should use. OVMF persists its enumerated
+# boot options and BootOrder into the varstore, and the live boot is what fills
+# it in: at that point the only bootable device is the ISO's virtio-scsi
+# CD-ROM, because the install disk is still a blank qcow2 with no ESP to
+# enumerate. Handing that same varstore to the installed boot, which attaches
+# neither the CD-ROM nor its controller, leaves the firmware walking stale
+# entries for hardware that is gone and then giving up into the shell:
+#   BdsDxe: starting Boot0007 "EFI Internal Shell"
+#   !!! passphrase prompt never appeared
+# That is how `LUKS flounder-sid:gnome` died with exit 4 after a completely
+# successful install (LUKS partition confirmed, "Installation complete!").
+#
+# The GRUB/bootupd path hides this because its install writes an NVRAM entry
+# into the shared varstore, so a valid entry is always waiting. bootc's
+# composefs-native systemd-boot path does not: it installs with
+# `--no-variables` and writes no boot variable at all, leaving the firmware to
+# discover the default loader by enumeration. `bootctl install` does always
+# place that loader at \EFI\BOOT\BOOTX64.EFI (in systemd 261 the copy is
+# guarded only by the architecture suffix, not by --no-variables), so a
+# pristine varstore boots it the same way this media boots off a USB stick on
+# real hardware.
+#
+# Only the systemd-boot images change behaviour here; GRUB images keep using
+# the varstore their bootupd install just wrote to.
+installed_boot_ovmf_vars() {
+	local bootloader="$1"
+	if [[ "$bootloader" != "systemd" ]]; then
+		printf '%s' "$OVMF_VARS"
+		return 0
+	fi
+	local fresh="${OUTPUT_DIR}/OVMF_VARS.installed.fd"
+	mint_ovmf_vars "$fresh"
+	echo "==> systemd-boot image: booting the installed disk with a pristine" \
+		"UEFI varstore so the firmware enumerates its default loader" >&2
+	printf '%s' "$fresh"
+}
 
 # ── Cleanup on exit ─────────────────────────────────────────────────────────
 
@@ -1223,6 +1267,13 @@ EOF
 				echo "karg appended: $f"
 				found=1
 			done
+			# Evidence for the installed boot: the firmware can only find the
+			# installed system by enumerating the default loader, so record
+			# whether it is actually on the ESP before we hand over to QEMU.
+			if [ -d /mnt/tbx-bls/EFI ]; then
+				echo "ESP EFI binaries on ${p}:"
+				find /mnt/tbx-bls/EFI -iname '*.efi' -printf '  %p\n' 2>/dev/null | sed 's|/mnt/tbx-bls||'
+			fi
 			umount /mnt/tbx-bls
 			[ "$found" = 1 ] && break
 		done
@@ -1262,13 +1313,15 @@ EOF
 		echo "==> LUKS passphrase gate: booting installed disk, injecting passphrase, expecting login..."
 		local FB_SERIAL="${OUTPUT_DIR}/installed-serial.sock"
 		rm -f "$FB_SERIAL"
+		local FB_VARS
+		FB_VARS="$(installed_boot_ovmf_vars "$bootloader")"
 		# No TPM here: the passphrase gate doesn't need one, and the
 		# install-phase swtpm has already exited (its socket is gone). TPM
 		# auto-unlock is the separate post-install test.
 		"$QEMU" -name "tunaos-iso-e2e-installed" -machine pc -cpu "$CPU_ARG" \
 			-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
 			-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
-			-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
+			-drive "if=pflash,format=raw,file=${FB_VARS}" \
 			-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 			-device virtio-blk-pci,drive=disk \
 			-netdev "user,id=net0" -device virtio-net-pci,netdev=net0 \
@@ -1289,6 +1342,8 @@ EOF
 	fi
 
 	echo "==> Booting installed system..."
+	local INSTALLED_VARS
+	INSTALLED_VARS="$(installed_boot_ovmf_vars "$bootloader")"
 	# Boot from the install disk (remove cdrom)
 	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
 	"$QEMU" \
@@ -1300,7 +1355,7 @@ EOF
 		-smp "$CPUS" \
 		${TPM_ARGS} \
 		-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
-		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
+		-drive "if=pflash,format=raw,file=${INSTALLED_VARS}" \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 		-device virtio-blk-pci,drive=disk \
 		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
