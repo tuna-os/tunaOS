@@ -119,8 +119,11 @@ jobs:
     # pull). fisherman now does a full image pull over the QEMU guest's NAT
     # networking (see docs/ci-troubleshooting.md §4 bug #19) — slower than a
     # host-level pull — on top of build + boot + install + reboot + boot
-    # verification. 150 min gives that real headroom.
-    timeout-minutes: 150
+    # verification. The host-side OCI archive transfer added for image-store
+    # compatibility can add tens of minutes on the larger variants; 150 min
+    # cancelled skipjack cells during install despite no test failure. Keep
+    # the per-QEMU wait bounded below, but allow the complete job four hours.
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       max-parallel: 4

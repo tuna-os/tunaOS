@@ -31,22 +31,35 @@ FROM base AS system
 # runtime image doesn't ship (libssl.so.60 — see #643); the packaged bootc has
 # correct runtime deps and bundles the 51bootc dracut module. Also faster (no
 # cargo compile). Verified: bootc 1.15.2 install/lint work on Tumbleweed.
-RUN zypper --non-interactive addrepo -fG \
+RUN set -eu; \
+    retry_zypper() { \
+      attempt=1; \
+      until zypper "$@"; do \
+        if [ "$attempt" -ge 4 ]; then \
+          echo "zypper failed after ${attempt} attempts: zypper $*" >&2; \
+          return 1; \
+        fi; \
+        echo "zypper attempt ${attempt} failed; retrying in $((attempt * 5))s..." >&2; \
+        sleep "$((attempt * 5))"; \
+        attempt=$((attempt + 1)); \
+      done; \
+    }; \
+    retry_zypper --non-interactive addrepo -fG \
       "https://download.opensuse.org/repositories/Virtualization:/containers/openSUSE_Tumbleweed/" \
       virtualization-containers && \
-    zypper --non-interactive --gpg-auto-import-keys refresh && \
-    zypper install -y \
+    retry_zypper --non-interactive --gpg-auto-import-keys refresh && \
+    retry_zypper install -y \
     bootc \
     btrfs-progs ca-certificates ca-certificates-mozilla cpio curl dosfstools dracut e2fsprogs flatpak glib2 \
     kernel-default kernel-firmware-all openssh ostree skopeo \
     systemd systemd-boot udev xfsprogs zstd chrony && \
     update-ca-certificates && \
-    zypper --non-interactive removerepo virtualization-containers && \
-    zypper install -y -t pattern enhanced_base && \
-    zypper --non-interactive addrepo --check --refresh --priority 90 --name packman-essentials http://ftp.gwdg.de/pub/linux/misc/packman/suse/openSUSE_Tumbleweed/Essentials packman-essentials && \
-    zypper --non-interactive --gpg-auto-import-keys refresh && \
-    zypper --non-interactive dup --from packman-essentials --allow-vendor-change && \
-    zypper --non-interactive install -y \
+    retry_zypper --non-interactive removerepo virtualization-containers && \
+    retry_zypper install -y -t pattern enhanced_base && \
+    retry_zypper --non-interactive addrepo --check --refresh --priority 90 --name packman-essentials http://ftp.gwdg.de/pub/linux/misc/packman/suse/openSUSE_Tumbleweed/Essentials packman-essentials && \
+    retry_zypper --non-interactive --gpg-auto-import-keys refresh && \
+    retry_zypper --non-interactive dup --from packman-essentials --allow-vendor-change && \
+    retry_zypper --non-interactive install -y \
         ffmpeg \
         gstreamer-plugins-good \
         gstreamer-plugins-bad \

@@ -133,17 +133,34 @@ fi
 
 echo "==> Building ${DESKTOP_FLAVOR} stage..."
 
-${BUILDER} build \
-	--security-opt label=disable \
-	--dns=8.8.8.8 \
-	--platform "${PLATFORM}" \
-	--target="${DESKTOP_FLAVOR}" \
-	"${BUILD_ARGS[@]}" \
-	--tag "${PRE_CHUNK_TAG}" \
-	${PULL_FLAG} \
-	--file "${CONTAINERFILE}" \
-	${BUILDAH_CACHE_FLAGS:-} \
-	.
+build_primary_image() {
+	${BUILDER} build \
+		--security-opt label=disable \
+		--dns=8.8.8.8 \
+		--platform "${PLATFORM}" \
+		--target="${DESKTOP_FLAVOR}" \
+		"${BUILD_ARGS[@]}" \
+		--tag "${PRE_CHUNK_TAG}" \
+		${PULL_FLAG} \
+		--file "${CONTAINERFILE}" \
+		${BUILDAH_CACHE_FLAGS:-} \
+		.
+}
+
+# Blacksmith's amd64/v2 runners intermittently fail before a Buildah build
+# starts with `open out/index.json: no such file or directory`. The same
+# inputs reliably succeed on a fresh invocation, so retry the whole build
+# rather than making a transient storage race fail the flavor/manifest job.
+build_attempt=1
+until build_primary_image; do
+	if [[ "${BUILDER}" != "buildah" || "${build_attempt}" -ge 3 ]]; then
+		echo "ERROR: image build failed after ${build_attempt} attempt(s)" >&2
+		exit 1
+	fi
+	echo "Buildah build attempt ${build_attempt} failed; retrying in $((build_attempt * 10))s..." >&2
+	sleep "$((build_attempt * 10))"
+	build_attempt=$((build_attempt + 1))
+done
 
 # ── Skip rechunk for PR builds ───────────────────────────────────────────────
 if [[ "${SKIP_RECHUNK}" == "1" ]]; then
