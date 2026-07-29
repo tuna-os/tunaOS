@@ -11,12 +11,16 @@ set -xeuo pipefail
 pacman-key --init || true
 pacman-key --populate archlinux || true
 
+# Fetch and lsign CachyOS key from key server
+pacman-key --recv-keys F3B607488DB35A47 --keyserver keyserver.ubuntu.com || true
+pacman-key --lsign-key F3B607488DB35A47 || true
+
 # Fetch and install CachyOS keyring and mirrorlists directly
 mirror_url="https://mirror.cachyos.org/repo/x86_64/cachyos"
-pacman -U --noconfirm \
+pacman -U --noconfirm --config <(echo -e "[options]\nSigLevel = Never") \
 	"${mirror_url}/cachyos-keyring-20240331-1-any.pkg.tar.zst" \
 	"${mirror_url}/cachyos-mirrorlist-27-1-any.pkg.tar.zst" \
-	"${mirror_url}/cachyos-v3-mirrorlist-27-1-any.pkg.tar.zst" || true
+	"${mirror_url}/cachyos-v3-mirrorlist-27-1-any.pkg.tar.zst"
 
 # Add cachyos repository definitions to pacman.conf if missing
 if ! grep -q "^\[cachyos\]" /etc/pacman.conf; then
