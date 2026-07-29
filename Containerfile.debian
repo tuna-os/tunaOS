@@ -87,6 +87,11 @@ RUN apt-get update -y && \
     esac
 
 # Install base system packages
+#
+# systemd-cryptsetup provides systemd-cryptenroll, which fisherman's pre-flight
+# requires for tpm2-luks installs. Debian splits it out of the systemd package
+# (dpkg -L systemd on trixie has no cryptenroll), so `systemd` below is not
+# enough. This is the same gap that failed `LUKS grouper:niri` on Ubuntu.
 RUN apt-get update -y && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         btrfs-progs \
@@ -99,6 +104,7 @@ RUN apt-get update -y && \
         podman \
         systemd \
         systemd-boot \
+        systemd-cryptsetup \
         xfsprogs \
         dracut \
         dmsetup \
