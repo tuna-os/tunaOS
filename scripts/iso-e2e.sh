@@ -948,9 +948,16 @@ run_install() {
 	# image store (driver mismatch, unreadable lock, version skew); images.json
 	# is ~1 KB and states the names actually recorded, which distinguishes
 	# "store ignored" from "image recorded under a name we never probe".
+	#
+	# Keep 'config' in the filter: containers-storage logs `Read config file
+	# "<path>"` for every main file and drop-in it merges, in merge order. That
+	# list is what distinguishes "our config is wrong" from "our config was
+	# overridden by a later drop-in" — the actual bonito-rawhide failure, where
+	# the effective additionalimagestores was the vendor drop-in's value and the
+	# printed /etc/containers/storage.conf was a red herring.
 	echo "--- why podman does or does not see the additional store ---"
 	"${ssh_cmd[@]}" "sudo podman --log-level=debug images 2>&1 \
-		| grep -iE 'additional|superiso|store|driver' | head -40 \
+		| grep -iE 'additional|superiso|store|driver|config file' | head -40 \
 		|| echo '(no matching debug lines)'" || true
 	echo "--- names recorded in the offline store ---"
 	"${ssh_cmd[@]}" "sudo cat /var/lib/superiso-store/overlay-images/images.json 2>&1 \
