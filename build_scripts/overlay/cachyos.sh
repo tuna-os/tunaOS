@@ -7,6 +7,10 @@ set -xeuo pipefail
 # Register it the same way CachyOS's own installer (cachyos-repo.sh) does:
 # fetch their repo bootstrap tarball, which imports the signing key and adds
 # the [cachyos] section (+ v3/v4 variants) to pacman.conf itself.
+# Initialize pacman keyring if not already initialized
+pacman-key --init
+pacman-key --populate archlinux || true
+
 tmpdir="$(mktemp -d)"
 curl -fsSL https://mirror.cachyos.org/cachyos-repo.tar.xz -o "$tmpdir/cachyos-repo.tar.xz"
 tar -C "$tmpdir" -xf "$tmpdir/cachyos-repo.tar.xz"
