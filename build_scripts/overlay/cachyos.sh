@@ -15,12 +15,19 @@ pacman-key --populate archlinux || true
 pacman-key --recv-keys F3B607488DB35A47 --keyserver keyserver.ubuntu.com || true
 pacman-key --lsign-key F3B607488DB35A47 || true
 
+# Ensure pacman database directory structure exists
+mkdir -p /var/lib/pacman /usr/lib/sysimage/lib/pacman
+
 # Fetch and install CachyOS keyring and mirrorlists directly
 mirror_url="https://mirror.cachyos.org/repo/x86_64/cachyos"
-pacman -U --noconfirm --config <(echo -e "[options]\nSigLevel = Never") \
+tmpconf="$(mktemp)"
+cp /etc/pacman.conf "$tmpconf"
+sed -i 's/SigLevel *=.*/SigLevel = Never/' "$tmpconf" || true
+pacman -U --noconfirm --config "$tmpconf" \
 	"${mirror_url}/cachyos-keyring-20240331-1-any.pkg.tar.zst" \
 	"${mirror_url}/cachyos-mirrorlist-27-1-any.pkg.tar.zst" \
 	"${mirror_url}/cachyos-v3-mirrorlist-27-1-any.pkg.tar.zst"
+rm -f "$tmpconf"
 
 # Add cachyos repository definitions to pacman.conf if missing
 if ! grep -q "^\[cachyos\]" /etc/pacman.conf; then
