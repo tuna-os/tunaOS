@@ -147,17 +147,28 @@ build_primary_image() {
 		.
 }
 
-# Blacksmith's amd64/v2 runners intermittently fail before a Buildah build
-# starts with `open out/index.json: no such file or directory`. The same
-# inputs reliably succeed on a fresh invocation, so retry the whole build
-# rather than making a transient storage race fail the flavor/manifest job.
+# Runners intermittently fail a build for reasons that have nothing to do with
+# the inputs, and the same inputs then succeed on a fresh invocation:
+#   open out/index.json: no such file or directory        (Blacksmith amd64/v2)
+#   error running container: from /usr/bin/crun creating container for
+#     [/bin/sh -c pacman -Syu ...]: unknown version specified
+# so retry the whole build rather than failing the flavor/manifest job.
+#
+# This deliberately does not test BUILDER. The gate used to require "buildah"
+# as a stand-in for "running in CI", but BUILDER only becomes buildah when the
+# binary is present (see above), and the RunsOn KVM runners the LUKS matrix
+# uses do not ship it. Every build there ran as podman and so was excluded from
+# the retry it needed: the crun error above killed `LUKS marlin:xfce` and
+# `LUKS flounder:kde` on attempt 1, seconds into the first RUN step. Both
+# builders shell out to the same crun, so the transience is not builder
+# specific.
 build_attempt=1
 until build_primary_image; do
-	if [[ "${BUILDER}" != "buildah" || "${build_attempt}" -ge 3 ]]; then
+	if [[ "${build_attempt}" -ge 3 ]]; then
 		echo "ERROR: image build failed after ${build_attempt} attempt(s)" >&2
 		exit 1
 	fi
-	echo "Buildah build attempt ${build_attempt} failed; retrying in $((build_attempt * 10))s..." >&2
+	echo "Build attempt ${build_attempt} failed; retrying in $((build_attempt * 10))s..." >&2
 	sleep "$((build_attempt * 10))"
 	build_attempt=$((build_attempt + 1))
 done
