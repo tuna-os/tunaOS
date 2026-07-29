@@ -827,6 +827,26 @@ run_install() {
 	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
 	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_PORT")
 
+	# Everything below runs privileged commands over non-interactive SSH and
+	# stages files in liveuser's home. Both preconditions failed silently on
+	# `LUKS grouper:niri`: the Ubuntu image shipped no sudo package, so every
+	# probe in the offline-store dump answered "sudo: command not found" and
+	# degraded to "(empty or error)" — the harness concluded the payload image
+	# was absent and tried to SCP a 4 GB tar into /home/liveuser, which did
+	# not exist either. Assert them up front so the ISO's actual defect is
+	# the error message.
+	if ! "${ssh_cmd[@]}" "sudo -n true" 2>/dev/null; then
+		echo "ERROR: liveuser has no working passwordless sudo in the live env." >&2
+		"${ssh_cmd[@]}" "command -v sudo || echo '(sudo is not installed on this image)'" >&2 || true
+		return 3
+	fi
+	if ! "${ssh_cmd[@]}" "test -w /home/liveuser" 2>/dev/null; then
+		echo "ERROR: /home/liveuser is missing or not writable in the live env;" >&2
+		echo "ERROR: the install path stages the recipe and image tar there." >&2
+		"${ssh_cmd[@]}" "ls -ld /home /home/liveuser 2>&1; getent passwd liveuser" >&2 || true
+		return 3
+	fi
+
 	# Bug #20: fisherman's network pull stalled indefinitely mid-blob (layer
 	# 42/65, no error, no further output) after dozens of smaller layers
 	# pulled fine in under a minute. Classic QEMU SLIRP Path-MTU-Discovery

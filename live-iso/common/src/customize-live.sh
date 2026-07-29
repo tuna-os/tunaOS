@@ -189,21 +189,52 @@ if [[ -f "${SCRIPT_DIR}/.enable-sshd" ]]; then
 		echo "ERROR: dev ISO requested but no SSH service is installed" >&2
 		exit 1
 	fi
-	mkdir -p /etc/ssh/sshd_config.d /usr/lib/systemd/system \
+	mkdir -p /etc/ssh/sshd_config.d /usr/lib/systemd/system /usr/libexec \
 		/etc/systemd/system/tunaos-live-ready.service.d
 	cat >/etc/ssh/sshd_config.d/90-tunaos-live-e2e.conf <<'EOF'
 PasswordAuthentication yes
 PermitEmptyPasswords no
 EOF
+	# The account may already exist from the image build (40-services.sh's
+	# ENABLE_SSHD path runs `useradd -m`), so section 1b above skips creating
+	# it — but a home directory made at build time does not necessarily
+	# survive to the live session. grouper bootcifies with
+	# build_scripts/bootc/mount-system.sh, which wipes /var and turns /home
+	# into a bind mount of /var/home, and /var/home is (re)created empty by
+	# tmpfiles at boot. `LUKS grouper:niri` failed exactly there: sshd logged
+	# "Could not chdir to home directory /home/liveuser" on every connection
+	# and each `scp ... liveuser@...:/home/liveuser/` died with
+	# `dest open "/home/liveuser/": Failure`. Materialise the home at boot,
+	# from the account's own passwd entry, instead of trusting the build-time
+	# directory. A separate script rather than an inline ExecStart so the
+	# quoting stays readable.
+	cat >/usr/libexec/tunaos-live-ssh-credentials <<'CREDEOF'
+#!/bin/sh
+# Live/dev media only: make sure liveuser exists, owns a usable home, and
+# carries the temporary E2E password. Runs before the SSH daemon.
+set -eux
+getent passwd liveuser >/dev/null ||
+	useradd --create-home --user-group --shell /bin/bash liveuser
+live_home="$(getent passwd liveuser | cut -d: -f6)"
+[ -n "$live_home" ] || live_home=/home/liveuser
+mkdir -p "$live_home"
+chown "$(id -u liveuser):$(id -g liveuser)" "$live_home"
+chmod 0700 "$live_home"
+echo liveuser:live | chpasswd
+CREDEOF
+	chmod 0755 /usr/libexec/tunaos-live-ssh-credentials
+	# local-fs.target: home.mount (grouper's /var/home → /home bind) is
+	# ordered Before=local-fs.target, so waiting for it keeps the directory
+	# below from being created underneath the mount that then hides it.
 	cat >/usr/lib/systemd/system/tunaos-live-ssh-credentials.service <<EOF
 [Unit]
 Description=Configure temporary TunaOS live E2E SSH credentials
-After=livesys.service
+After=livesys.service local-fs.target
 Before=${SSH_UNIT}
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -euxc 'getent passwd liveuser >/dev/null || useradd --create-home --user-group --shell /bin/bash liveuser; echo liveuser:live | chpasswd'
+ExecStart=/usr/libexec/tunaos-live-ssh-credentials
 RemainAfterExit=yes
 StandardOutput=journal+console
 StandardError=journal+console
