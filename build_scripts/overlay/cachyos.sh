@@ -46,5 +46,6 @@ pacman -Syu --noconfirm --needed \
 install -D /dev/null /etc/cachyos-release
 printf 'CachyOS\n' >/etc/cachyos-release
 
-mkinitcpio -P
+# Rebuild initramfs via dracut
+dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
 pacman -Scc --noconfirm || true
