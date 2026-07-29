@@ -370,8 +370,13 @@ ensure_dbus_daemon() {
 	# ── 4a. fisherman on the host path ────────────────────────────────────
 	# The frontends escalate via `flatpak-spawn --host pkexec
 	# /usr/local/bin/fisherman`; expose the flatpak-bundled binary there.
+	# `|| true`: this script runs under `set -o pipefail`, so when the installer
+	# app directory does not exist (the dev/E2E path above warns and continues
+	# instead of installing it) find exits 1, the whole substitution fails, and
+	# `set -e` kills the script before the intended warning below — the ISO build
+	# then dies with a bare "exit status 1". Keep the lookup non-fatal.
 	FISHERMAN_BIN=$(find "/var/lib/flatpak/app/${INSTALLER_APP}" \
-		-path '*/files/bin/fisherman' -type f 2>/dev/null | head -1)
+		-path '*/files/bin/fisherman' -type f 2>/dev/null | head -1 || true)
 	if [[ -n "${FISHERMAN_BIN}" ]]; then
 		mkdir -p /usr/local/bin
 		ln -sf "${FISHERMAN_BIN}" /usr/local/bin/fisherman

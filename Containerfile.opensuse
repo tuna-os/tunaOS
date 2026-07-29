@@ -185,6 +185,22 @@ RUN set -x && rm -rf /boot /home /root /usr/local /srv /opt /mnt /var /ostree &&
     ln -sT var/home /home && ln -sT ../var/usrlocal /usr/local
 RUN cp -rn /usr/etc/. /etc/ 2>/dev/null; rm -rf /usr/etc && rm -rf /usr/share/doc/bootc/baseimage
 
+# The re-assert above wipes /var a second time, so it takes openSUSE's generated
+# trust store (/var/lib/ca-certificates, which both /etc/ssl/ca-bundle.pem and
+# /etc/ssl/certs symlink into) with it — undoing the system stage's regeneration
+# and shipping an image whose TLS trust is two dangling symlinks. Every in-image
+# TLS client then fails with "unable to get local issuer certificate", which is
+# what broke the live-ISO customize step on sailfin: `flatpak install` against
+# tunaos.org and the installer-bundle curl against github.com both died there,
+# taking out all four sailfin cells of the LUKS matrix. Regenerate the store and
+# assert it exists, so a trust-less image fails the build instead of shipping.
+# The tmpfiles.d entries keep the directories after bootc's /var reset; actually
+# repopulating them at runtime is the follow-up noted in the system stage.
+RUN update-ca-certificates && \
+    test -s /var/lib/ca-certificates/ca-bundle.pem && \
+    printf 'd /var/lib/ca-certificates 0755 root root - -\nd /var/lib/ca-certificates/pem 0755 root root - -\nd /var/lib/ca-certificates/openssl 0755 root root - -\n' \
+      > /usr/lib/tmpfiles.d/tunaos-ca-certificates.conf
+
 # DEBUG: dump the exact root state bootc lint will see (remove once green).
 RUN echo "=== PRE-LINT ROOT STATE ===" && ls -la / && \
     { test -L /ostree && echo "OSTREE-SYMLINK-TARGET: [$(readlink /ostree)]"; } || echo "OSTREE: NOT A SYMLINK / MISSING" && \
