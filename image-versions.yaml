@@ -27,9 +27,14 @@ downloads:
   kcm_ublue: "v0.6.1"
   # renovate: datasource=github-releases depName=twpayne/chezmoi
   chezmoi: "v2.71.1"
+  # Renovate bumps `chezmoi` above but has no idea this digest map exists, so
+  # it must be updated in the same breath or every apt-based niri build dies on
+  # `sha256sum -c` (v2.71.1 shipped with v2.71.0's digests here and broke
+  # grouper:niri). Values come from the release's own
+  # chezmoi_<version>_checksums.txt.
   chezmoi_sha256:
-    amd64: "a8880a1b01e877c3e5da250b9f882ce9fa39962686d75f436fa21e021fa092b1"
-    arm64: "ea9389f4efdc26d74bf9b4cc73db8f3a529e1e6effb5703e438117ea3f095439"
+    amd64: "49b68f441f60fbf84a79928e35076ccd4d0d7d5c050924c27d03bda25a7024eb"
+    arm64: "feed3a214511619f7b6a167b3d7d8cee6146a44a19ea0f1705af9a84b7205ed7"
   # renovate: datasource=git-refs depName=tuna-os/tacklebox
   tacklebox: "320a1a459511b9d056d67e9301ec5fed02858f44"
 
