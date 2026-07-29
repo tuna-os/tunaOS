@@ -126,8 +126,17 @@ detect() {
   grep -q 'graphroot = "/var/lib/containers/storage"' "${SCRIPT}"
   grep -q 'additionalimagestores = \["/var/lib/superiso-store"\]' "${SCRIPT}"
   grep -q 'mount_program = "/usr/bin/fuse-overlayfs"' "${SCRIPT}"
-  run grep 'storage.conf.d/99-tunaos-offline-store.conf' "${SCRIPT}"
-  [ "$status" -ne 0 ]
+}
+
+# The primary config above is necessary but no longer sufficient:
+# containers/storage 1.60+ (Rawhide) applies storage{,.rootful}.conf.d drop-ins
+# after it, and containers-common's vendor drop-in replaces
+# additionalimagestores with just /usr/lib/containers/storage. A 99- admin
+# drop-in is applied last (drop-ins run in filename order), so it must re-list
+# the offline store while keeping the vendor path bootc uses for bound images.
+@test "customize-live.sh: re-asserts the offline store in a late drop-in" {
+  grep -q 'storage.conf.d/99-tunaos-offline-store.conf' "${SCRIPT}"
+  grep -q 'additionalimagestores = \["/var/lib/superiso-store", "/usr/lib/containers/storage"\]' "${SCRIPT}"
 }
 
 @test "customize-live.sh: sources the matching desktop adapter" {
