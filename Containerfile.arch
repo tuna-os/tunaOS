@@ -180,12 +180,43 @@ RUN KERNEL_PKG="linux"; \
 # Build initramfs. Live-boot modules are NOT needed here: tacklebox
 # injects its own embedded tbox-live/tbox-root dracut modules at ISO
 # build time using this image's stock dracut (tuna-os/tacklebox#90).
+#
+# filesystems= and add_drivers= are spelled out because Arch's dracut never
+# performs its own "not hostonly -> install every filesystem module" step:
+# 70kernel-modules implements it as `dracut_instmods -o -P ... '=fs'`, and
+# this dracut-install expands the `=path` form to nothing at all. Verified in
+# a container on the same base image: '=fs', '=drivers/block' and '=crypto'
+# each install 0 modules (identically on dracut 107/109/110/111), while
+# openSUSE's patched dracut installs 152 for the very same '=fs' call — which
+# is why only the Arch base is affected. Everything the initramfs did contain
+# came from modules dracut names explicitly, so xfs.ko was absent from every
+# marlin image, and xfs is what fisherman formats the root with.
+#
+# That is how `LUKS marlin:cosmic` died after a fully successful install: the
+# passphrase gate unlocked the disk and then dropped into emergency mode,
+#   Please enter passphrase for disk root   <- unlock OK
+#   [FAILED] Failed to mount /sysroot.
+#   [DEPEND] Dependency failed for bootc setup root.
+# ext4, btrfs and virtio_blk are built into Arch's kernel, which is why the
+# disk was found at all and only the xfs mount failed. erofs and loop are
+# modules too and are needed one step later, for the composefs deployment
+# ostree-prepare-root mounts on top of /sysroot; overlay is already pulled in
+# transitively and is listed to keep it that way.
 RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \
     printf 'systemdsystemconfdir=/etc/systemd/system\nsystemdsystemunitdir=/usr/lib/systemd/system\n' \
         > /usr/lib/dracut/dracut.conf.d/30-fix-bootc-module.conf && \
-    printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" bootc "\nomit_dracutmodules+=" tpm2-tss pcsc "\n' \
+    printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" bootc "\nomit_dracutmodules+=" tpm2-tss pcsc "\nfilesystems+=" xfs erofs overlay "\nadd_drivers+=" loop "\n' \
         > /usr/lib/dracut/dracut.conf.d/30-bootc-container-build.conf && \
-    dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
+    KVER_DIR="$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)" && \
+    dracut --force "${KVER_DIR}/initramfs.img" && \
+    # Never ship an initramfs that cannot mount the installed root: the
+    # failure only surfaces an hour later, in a QEMU emergency shell.
+    for m in xfs erofs overlay loop; do \
+        lsinitrd "${KVER_DIR}/initramfs.img" | grep -q "/${m}\.ko" && continue; \
+        grep -q "/${m}\.ko\$" "${KVER_DIR}/modules.builtin" && continue; \
+        echo "ERROR: initramfs has no ${m} support (neither a module in the image nor built into the kernel)" >&2; \
+        exit 1; \
+    done
 
 # Set up bootc/ostree filesystem layout
 RUN rm -rf /boot /home /root /usr/local /srv /opt /mnt \
