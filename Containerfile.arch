@@ -83,6 +83,12 @@ RUN grep "= */var" /etc/pacman.conf | sed "/= *\/var/s/.*=// ; s/ //" | \
 # for the cachyos repo in pacman.conf and install linux-cachyos instead of
 # stock linux.
 #
+# cryptsetup is in the list because fisherman refuses to install with
+# encryption when it is missing from the live env ("missing required host
+# tool") and because dracut's crypt module needs it to build an initramfs
+# that can unlock the installed root. Arch's `base` does not pull it in
+# (systemd only optdepends on it).
+#
 # openssh is in the list because the dev/E2E ISO path needs a real
 # sshd.service to enable (live-iso/common/src/customize-live.sh hard-fails
 # with "no SSH service is installed" otherwise — that is how LUKS
@@ -108,6 +114,7 @@ RUN KERNEL_PKG="linux"; \
         linux-firmware \
         ostree \
         btrfs-progs \
+        cryptsetup \
         e2fsprogs \
         xfsprogs \
         dosfstools \
