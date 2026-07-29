@@ -180,14 +180,31 @@ CONFEOF
 # for an hour and then took sshd down with it.
 #
 # Drop-ins are applied in filename order across all directories, so a 99-
-# prefixed admin drop-in wins over the vendor one. Re-declare both stores (the
-# vendor entry is where bootc keeps logically-bound images, so keep it).
+# prefixed admin drop-in wins over the vendor one. Re-declare the offline store
+# there, keeping the vendor entry alongside it where that path exists (it is
+# where bootc keeps logically-bound images).
 # Older containers/storage releases have no drop-in support and simply ignore
 # this file, where the primary config above is already correct.
+#
+# The vendor path is Fedora-specific and must only be listed where it exists:
+# containers/storage stats every additionalimagestores entry at startup and
+# hard-fails the whole config if one is missing, taking podman down with it:
+#   Error: configure storage: overlay: can't stat imageStore dir
+#   /usr/lib/containers/storage: no such file or directory
+# containers-common ships that directory on Fedora, but Arch's containers
+# package does not, so listing it unconditionally broke every podman call in
+# the marlin live guest: the offline-store probe then found nothing and the
+# e2e aborted on the staging-space preflight. Keep /var/lib/superiso-store
+# unconditional: tunaos-offline-store.service mounts it during boot, so it is
+# legitimately absent here at customize time.
 mkdir -p /etc/containers/storage.conf.d
-cat >/etc/containers/storage.conf.d/99-tunaos-offline-store.conf <<'CONFEOF'
+STORE_LIST='"/var/lib/superiso-store"'
+if [[ -d /usr/lib/containers/storage ]]; then
+	STORE_LIST="${STORE_LIST}, \"/usr/lib/containers/storage\""
+fi
+cat >/etc/containers/storage.conf.d/99-tunaos-offline-store.conf <<CONFEOF
 [storage.options]
-additionalimagestores = ["/var/lib/superiso-store", "/usr/lib/containers/storage"]
+additionalimagestores = [${STORE_LIST}]
 CONFEOF
 
 # Dev/E2E media only: the normal published-image policy keeps SSH disabled.
