@@ -5,6 +5,16 @@ runners:
     image: ubuntu24-full-x64
     volume: 80gb:gp3
     spot: capacity-optimized
+  # QEMU/KVM workflows need nested virtualization. Keep this separate from
+  # build-amd64 so ordinary image builds can continue using lower-cost spot
+  # capacity while LUKS and boot gates request hardware that exposes /dev/kvm.
+  build-kvm:
+    family: ["c8i", "m8i", "r8i"]
+    cpu: [8]
+    image: ubuntu24-full-x64
+    volume: 80gb:gp3
+    spot: capacity-optimized
+    nested-virt: true
   build-arm64:
     family: ["c6g", "c7g"]
     cpu: [8]

@@ -123,7 +123,9 @@ jobs:
   luks:
     name: LUKS ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate-matrix
-    runs-on: ubuntu-latest
+    # RunsOn's nested-virtualization profile supplies /dev/kvm and dedicated
+    # AWS capacity; GitHub-hosted concurrency was throttling this full matrix.
+    runs-on: runs-on=${{ github.run_id }}/runner=build-kvm
     # 90 min was sized for the old local-only bootc install (no network
     # pull). fisherman now does a full image pull over the QEMU guest's NAT
     # networking (see docs/ci-troubleshooting.md §4 bug #19) — slower than a
