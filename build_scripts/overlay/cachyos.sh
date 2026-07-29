@@ -40,7 +40,7 @@ fi
 
 pacman -Syu --noconfirm --needed \
 	cachyos-keyring cachyos-mirrorlist cachyos-settings \
-	linux-cachyos linux-cachyos-headers
+	linux-cachyos linux-cachyos-headers tpm2-tss
 
 # Mark as CachyOS-augmented for install-desktop.sh detection
 install -D /dev/null /etc/cachyos-release
