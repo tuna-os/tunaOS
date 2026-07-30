@@ -186,13 +186,30 @@ jobs:
           sudo udevadm trigger --name-match=kvm || true
           ls -la /dev/kvm 2>/dev/null && echo "KVM available" || echo "Warning: no /dev/kvm — TCG (slow)"
 
+      # crun is installed explicitly and in the same transaction as podman.
+      # Without it, podman comes from Ubuntu while crun comes from whatever
+      # the runner image happens to ship, and a mismatched pair fails every
+      # build at the first RUN with:
+      #
+      #   error running container: from /usr/bin/crun creating container for
+      #   [/bin/sh -c echo "${BUILD_SCRIPTS_HASH}" > /dev/null]:
+      #   unknown version specified
+      #
+      # That is crun rejecting the OCI spec version podman generated, not a
+      # build error, though it surfaces as one at a random RUN step — the
+      # same shape as the cgroup-manager failure documented below. It took
+      # out every cell of run 30520334279. reusable-build-image.yml dodges
+      # this by letting setup-runner install a matched podman stack
+      # (update-podman: "true"); this job installs from apt, so the pair has
+      # to be pinned together here.
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            just podman jq \
+            just podman crun jq \
             qemu-system-x86 qemu-utils ovmf swtpm socat sshpass imagemagick \
             systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk
+          podman --version; crun --version | head -1
 
       # iso-e2e.sh resolves the published image ref through
       # scripts/published-image-ref.sh, which needs yq. Without it the script
