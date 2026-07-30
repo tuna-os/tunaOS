@@ -230,24 +230,41 @@ jobs:
       # by absolute path. The candidate list is printed either way, so if this
       # is still wrong the log says which cruns existed and which was chosen
       # instead of leaving another crun error to interpret.
-      - name: Point root podman at a crun new enough for it
+      # podman on these runners is not a fixed version: some jobs get
+      # Ubuntu's 4.9.3, others get 5.8.4 from the setup actions. crun is
+      # always Ubuntu's 1.14.1, which 4.9.3 is happy with and 5.8.4 is not:
+      #
+      #   error running container: from /usr/bin/crun creating container for
+      #   [...]: unknown version specified
+      #
+      # That is the whole "flakiness" — albacore failed in run 30522159277
+      # under podman 5.8.4 and passed in run 30524767610 under 4.9.3, same
+      # workflow, same runner image. Selecting among the cruns already present
+      # cannot fix it, because when 5.8.4 lands 1.14.1 is the only one there.
+      #
+      # So install a crun that satisfies the newer podman and pin root's
+      # podman to it by absolute path. Root scope matters: the ISO build runs
+      # under sudo, and the existing cgroup-manager workaround writes
+      # ~/.config/containers/containers.conf, which sudo podman never reads.
+      #
+      # Versions and the resolved runtime are printed either way, so if this
+      # is still wrong the log says what was installed and what podman
+      # actually picked.
+      - name: Install a crun matching podman and pin root podman to it
+        env:
+          CRUN_VERSION: "1.28"
         run: |
           set -euo pipefail
           echo "podman: $(command -v podman) — $(podman --version)"
-          best=""; bestv=""
-          for c in $(type -a -P crun 2>/dev/null || true) /usr/local/bin/crun /usr/bin/crun /usr/sbin/crun; do
-            [ -x "$c" ] || continue
-            v=$("$c" --version 2>/dev/null | head -1 | grep -oE '[0-9]+(\.[0-9]+)+' | head -1) || true
-            [ -n "$v" ] || continue
-            echo "  candidate: $c -> $v"
-            if [ -z "$bestv" ] || [ "$(printf '%s\n%s\n' "$bestv" "$v" | sort -V | tail -1)" = "$v" ]; then
-              best="$c"; bestv="$v"
-            fi
-          done
-          [ -n "$best" ] || { echo "::error::no crun found on this runner"; exit 1; }
-          echo "chosen: $best ($bestv)"
+          echo "distro crun: $(crun --version 2>/dev/null | head -1 || echo none)"
+
+          sudo curl -fsSL -o /usr/local/bin/crun \
+            "https://github.com/containers/crun/releases/download/${CRUN_VERSION}/crun-${CRUN_VERSION}-linux-amd64"
+          sudo chmod +x /usr/local/bin/crun
+          echo "installed: $(/usr/local/bin/crun --version | head -1)"
+
           sudo mkdir -p /etc/containers/containers.conf.d
-          printf '[engine]\nruntime = "crun"\n\n[engine.runtimes]\ncrun = ["%s"]\n' "$best" \
+          printf '[engine]\nruntime = "crun"\n\n[engine.runtimes]\ncrun = ["/usr/local/bin/crun"]\n' \
             | sudo tee /etc/containers/containers.conf.d/99-crun-path.conf
           echo "root podman now reports:"
           sudo podman info --format '  runtime={{.Host.OCIRuntime.Path}} version={{.Host.OCIRuntime.Version}}'
