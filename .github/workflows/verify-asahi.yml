@@ -38,7 +38,11 @@ jobs:
   # Sweep mode: every flavor that publishes a :gnome-asahi tag.
   # guppy is intentionally absent — its asahi overlay is stubbed, not broken.
   sweep:
-    if: inputs.image == ''
+    # Explicit on the schedule path: a `schedule` event has no `inputs` context
+    # at all, and relying on null == '' to pick the sweep is exactly how you get
+    # a daily run where BOTH jobs skip and the workflow reports success with
+    # zero legs executed — coverage that looks green and checks nothing.
+    if: github.event_name == 'schedule' || inputs.image == ''
     strategy:
       fail-fast: false
       matrix:
@@ -57,7 +61,7 @@ jobs:
 
   # Triage mode: one explicit ref.
   single:
-    if: inputs.image != ''
+    if: github.event_name == 'workflow_dispatch' && inputs.image != ''
     uses: ./.github/workflows/verify-asahi-one.yml
     with:
       image: ${{ inputs.image }}
