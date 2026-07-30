@@ -59,6 +59,30 @@ gnome)
 	require_glob '/usr/share/wayland-sessions/*gnome*.desktop'
 	require_any_unit gdm gdm3
 	dm_pattern='^(gdm|gdm3)\.service$'
+	# Session-can-start is not the same as desktop-is-usable, and the gap
+	# between them is exactly how sailfin:gnome shipped. openSUSE's
+	# patterns-gnome-gnome provides gnome-shell, a wayland session and gdm
+	# — every check above — while providing no file manager, no portal
+	# backend, no keyring and no gvfs. It passed this gate with 192
+	# packages against yellowfin:gnome's 576 (tunaos-packages#132).
+	#
+	# These four are required because without them the desktop is not
+	# merely sparse, it is broken in ways a user hits immediately: no way
+	# to browse files, Flatpak file dialogs and screenshots fail (portal),
+	# saved credentials fail (keyring), removable media and network shares
+	# do not mount (gvfs).
+	#
+	# Deliberately scoped to GNOME. Every one was verified present in
+	# yellowfin:gnome and albacore:gnome before being made mandatory — a
+	# requirement that has not been checked against a known-good image
+	# turns working builds red instead of catching broken ones. Extend to
+	# kde/xfce/niri/cosmic the same way: measure a healthy image first.
+	require_command nautilus
+	require_any_glob '/usr/libexec/gvfsd' '/usr/lib/gvfs/gvfsd' '/usr/lib/*/gvfs/gvfsd'
+	require_any_glob '/usr/libexec/xdg-desktop-portal-gnome' \
+		'/usr/lib/xdg-desktop-portal-gnome' \
+		'/usr/lib/*/xdg-desktop-portal-gnome'
+	require_any_glob '/usr/bin/gnome-keyring-daemon' '/usr/libexec/gnome-keyring-daemon'
 	;;
 kde)
 	experience="ublue-os/aurora"
