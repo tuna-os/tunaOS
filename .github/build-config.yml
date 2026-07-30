@@ -811,9 +811,13 @@ variants:
       - id: cosmic
         stage: 2
         build_image: true
-      - id: niri
-        stage: 2
-        build_image: true
+      # No niri: it is not packaged for apt in Debian trixie, Debian sid or
+      # Ubuntu 26.04 (all three checked), and manifests/desktops/niri.yaml
+      # has no apt section as a result. Building it produced a PUBLISHED,
+      # installable image with no compositor at all — `command -v niri` was
+      # empty in ghcr.io/tuna-os/flounder:niri. See tunaOS#915; packaging it
+      # ourselves is tracked in tunaos-packages#136 and needs a whole deb
+      # toolchain this org does not have yet. Do not re-add without one.
       - id: xfce
         stage: 2
         build_image: true
@@ -839,9 +843,7 @@ variants:
       - id: cosmic
         stage: 2
         build_image: true
-      - id: niri
-        stage: 2
-        build_image: true
+      # No niri — same reason as flounder above (absent from Debian sid too).
       - id: xfce
         stage: 2
         build_image: true
