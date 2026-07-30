@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+# Point greetd at gtkgreet, for desktops whose base has no greeter of its own.
+#
+# greetd ships no graphical greeter: its stock config runs `agreety --cmd
+# /bin/sh`, i.e. a text prompt into a bare shell with no session picker. The
+# COSMIC and DMS variants never hit this because cosmic-greeter and dms-greeter
+# ship their own config.toml. openSUSE has neither packaged (quickshell, which
+# DMS needs, is not in Tumbleweed at all), so sailfin:niri installed greetd and
+# got the text prompt.
+#
+# This is sourced by install-desktop.sh via a manifest's post_install list, so
+# it must never call `exit` — that would end the whole desktop install.
+#
+# Deliberately a no-op unless gtkgreet AND cage both landed: if packaging
+# regresses, leaving greetd's own config in place fails loudly at a text prompt
+# rather than silently launching a greeter that is not installed. That also
+# makes it safe to list on manifests shared with variants that use a different
+# greeter — on Fedora/EL10 niri, dms-greeter is installed and gtkgreet is not,
+# so this block does nothing and the DMS config survives.
+if command -v gtkgreet &>/dev/null && command -v cage &>/dev/null; then
+	echo "Configuring greetd to use gtkgreet"
+	# gtkgreet is a plain Wayland client and cannot own a VT, so cage hosts
+	# it. -s keeps VT switching available (without it a greeter crash locks
+	# you out of the machine entirely).
+	mkdir -p /etc/greetd
+	cat >/etc/greetd/config.toml <<'GREETD_EOF'
+[terminal]
+vt = 1
+
+[default_session]
+command = "cage -s -- gtkgreet -l -s /etc/greetd/gtkgreet.css"
+user = "greetd"
+GREETD_EOF
+
+	# Greeter styling. Kept deliberately small: gtkgreet is GTK3, so it
+	# already picks up the session's GTK theme, icons, cursor and font — this
+	# only supplies the pieces a theme cannot know about (the layer-shell
+	# background behind the login window).
+	cat >/etc/greetd/gtkgreet.css <<'CSS_EOF'
+/* TunaOS greeter.
+ *
+ * gtkgreet inherits the system GTK3 theme, which is the whole reason it is the
+ * fallback greeter: the login screen and the session it launches are styled by
+ * the same theme. Only the layer-shell background and the login window's
+ * framing are set here — everything else is intentionally left to the theme so
+ * retheming the desktop rethemes the greeter too.
+ */
+window {
+	background-image: linear-gradient(to bottom, #2b3d4f, #1b2733);
+	background-color: #1b2733;
+}
+
+/* The login box: lift it off the background, otherwise the themed widgets
+ * float on the gradient with no visual container. */
+box#window-box {
+	background-color: @theme_bg_color;
+	border-radius: 8px;
+	padding: 24px;
+}
+CSS_EOF
+
+	# greetd runs the greeter as its own unprivileged user; it must be able to
+	# read both files.
+	chmod 0644 /etc/greetd/config.toml /etc/greetd/gtkgreet.css
+fi

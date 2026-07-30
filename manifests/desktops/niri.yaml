@@ -106,9 +106,77 @@ packages:
       # intentionally absent here (present in the Fedora section). No packaged
       # standalone Bluetooth GUI exists for EL10 niri yet.
 
+  # ── Zypper (openSUSE Tumbleweed) ───────────────────────────────────
+  # This was the thinnest list in the tree and the only genuinely bare one:
+  # `niri greetd` installs a compositor and a login daemon and nothing else.
+  # No bar, no launcher, no notifications, no lock screen, no terminal, no
+  # file manager, no portal, no polkit agent, no keyring, no pipewire — a
+  # user who logged in got a blank compositor with no way to start anything.
+  # Confirmed on the published image: only `niri` was present; waybar,
+  # fuzzel, swaylock, alacritty, nautilus, gvfs, gnome-keyring,
+  # xdg-desktop-portal and pavucontrol were all absent.
+  #
+  # DMS (DankMaterialShell) — what the fedora/el10 sections use as the shell
+  # — cannot be used here: quickshell is not packaged for Tumbleweed, and
+  # dms/dms-cli/dms-greeter exist only in the avengemedia COPRs, which are
+  # RPM/dnf-only. So openSUSE gets the conventional wlroots-style stack
+  # (waybar + fuzzel + swaync + swaylock) instead. The session differs from
+  # the DMS variants by necessity; the component contract is the same.
+  #
+  # Every name verified with `zypper se -x -t package`; the whole list
+  # dry-runs clean (exit 0, no unresolved names, no vendor changes, no
+  # removals) against a base matching Containerfile.opensuse — pattern
+  # enhanced_base plus packman-essentials at priority 90.
   zypper:
     - niri
     - greetd
+    # greetd's stock config runs `agreety --cmd /bin/sh` — a text prompt into
+    # a bare shell with no session picker. gtkgreet is the graphical greeter;
+    # it is a plain Wayland client and cannot own a VT, so cage hosts it.
+    # Wired up in post_install_inline below, mirroring build_scripts/desktop/xfce.sh.
+    - gtkgreet
+    - cage
+    # X11 applications under niri (niri is Wayland-only)
+    - xwayland-satellite
+    # Shell: bar, launcher, notifications, idle and lock
+    - waybar
+    - fuzzel
+    - SwayNotificationCenter
+    - swayidle
+    - swaylock
+    - wl-clipboard
+    # Terminal — niri's default binding is alacritty, so shipping anything
+    # else leaves Mod+T dead on a stock config
+    - alacritty
+    # Files, mounting and secrets
+    - nautilus
+    - gvfs
+    - gvfs-backends
+    - gvfs-fuse
+    - gnome-keyring
+    - gnome-keyring-pam
+    - polkit-gnome
+    # Portals — the GNOME backend is what the fedora/el10 sections use for
+    # screencast and file chooser under niri
+    - xdg-desktop-portal
+    - xdg-desktop-portal-gnome
+    - xdg-desktop-portal-gtk
+    - xdg-user-dirs
+    # Audio
+    - pipewire
+    - pipewire-pulseaudio
+    - wireplumber
+    - pavucontrol
+    # Network, bluetooth and hardware keys
+    - NetworkManager-applet
+    - blueman
+    - brightnessctl
+    - playerctl
+    # Theming
+    - papirus-icon-theme
+    - adwaita-icon-theme
+    - Mesa-dri
+    - Mesa-libEGL1
 
   emerge:
     - gui-wm/niri
@@ -124,3 +192,7 @@ post_install_inline:
 # Post-install scripts to source (relative to build_scripts/)
 post_install:
   - tuna-flatpak-remote.sh
+  # No-op wherever a real greeter is already configured (Fedora/EL10 use
+  # dms-greeter); on openSUSE it is the difference between a login screen and
+  # greetd's stock text prompt into a bare shell.
+  - greetd-gtkgreet.sh

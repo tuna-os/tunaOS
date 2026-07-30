@@ -77,10 +77,82 @@ packages:
     - thunar
     - mousepad
 
+  # ── Zypper (openSUSE Tumbleweed) ───────────────────────────────────
+  # Map-shaped, not a plain list, so it can carry its own display_manager:
+  # openSUSE's XFCE is lightdm, while the top-level key is gdm (right for
+  # Fedora/EL10). With a list-shaped section the installer fell back to gdm,
+  # which is not installed here — safe_enable no-ops on a missing unit and
+  # the graphical.target.wants link is guarded by the unit file existing, so
+  # sailfin:xfce booted to graphical.target with NO display manager enabled
+  # and no error anywhere in the build. Verified on the published image:
+  # /etc/systemd/system/graphical.target.wants/ did not exist.
+  #
+  # The patterns do resolve to a real session (xfce4-session, panel,
+  # settings, xfdesktop, thunar, whiskermenu, power-manager, notifyd — 293
+  # packages), so this is not the GNOME skeleton case. What was missing is
+  # the application and integration layer: no terminal, no text editor, no
+  # image viewer, no tumbler (so Thunar showed no thumbnails), no archive
+  # manager, no gvfs (so Thunar could not mount removable media or browse
+  # the network), no portal at all (so Flatpak file dialogs were broken),
+  # and no network/bluetooth/volume applets for the panel. Confirmed absent
+  # on the published image: xfce4-terminal, tumbler, mousepad, ristretto,
+  # gvfs, xdg-desktop-portal.
+  #
+  # Every name verified with `zypper se -x -t package`; the whole list
+  # dry-runs clean (exit 0, no unresolved names, no vendor changes, no
+  # removals) against a base matching Containerfile.opensuse — pattern
+  # enhanced_base plus packman-essentials at priority 90.
+  #
+  # NOTE: xfce4-pulseaudio-plugin IS safe here, unlike on EL10 (see the el10
+  # section above). openSUSE's pipewire-pulseaudio satisfies its pulseaudio
+  # dependency, so the plugin coexists with the pipewire stack — dry-run
+  # confirms no conflict and no vendor change.
   zypper:
-    - patterns-xfce-xfce
-    - patterns-xfce-xfce_basis
-    - lightdm
+    display_manager: lightdm
+    packages:
+      - patterns-xfce-xfce
+      - patterns-xfce-xfce_basis
+      - lightdm
+      - lightdm-gtk-greeter
+      # File manager, thumbnails and archives
+      - thunar
+      - thunar-volman
+      - thunar-archive-plugin
+      - tumbler
+      - engrampa
+      # Core applications
+      - xfce4-terminal
+      - mousepad
+      - ristretto
+      - xfce4-screenshooter
+      - xfce4-taskmanager
+      - xfce4-appfinder
+      # Session services and panel plugins
+      - xfce4-notifyd
+      - xfce4-power-manager
+      - xfce4-clipman-plugin
+      - xfce4-whiskermenu-plugin
+      - xfce4-pulseaudio-plugin
+      - xfce4-battery-plugin
+      # Mounting, portals and XDG integration
+      - gvfs
+      - gvfs-backends
+      - gvfs-fuse
+      - xdg-desktop-portal
+      - xdg-desktop-portal-gtk
+      - xdg-user-dirs
+      - xdg-user-dirs-gtk
+      # Network, bluetooth, audio, secrets and privilege escalation
+      - NetworkManager-applet
+      - blueman
+      - pavucontrol
+      - gnome-keyring
+      - gnome-keyring-pam
+      - polkit-gnome
+      # Graphics and theming
+      - Mesa-dri
+      - Mesa-libEGL1
+      - adwaita-icon-theme
 
   emerge:
     - xfce-base/xfce4-meta
