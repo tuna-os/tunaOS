@@ -5,13 +5,29 @@ name: Verify Asahi image
 # kernel, the 12 hardware-critical modules, Apple DTBs, m1n1/U-Boot payloads,
 # the dracut ESP-firmware flow, and the audio stack (speakers stay disabled if
 # any piece is missing). No Mac needed; catches regressions before hardware.
+#
+# Two modes:
+#   - Sweep (schedule, or dispatch with no image): every promoted asahi flavor,
+#     one matrix leg each. This is the mode that matters. A tag existing in
+#     ghcr only means some build promoted it once; when all eight promoted tags
+#     were swept on 2026-07-30, six were unbootable (#776). Green decays
+#     silently unless something re-checks it on a timer.
+#   - Triage (dispatch with an explicit image): one arbitrary ref, for
+#     iterating on a single variant or on a -testing tag before promotion.
+#
+# fail-fast is off so one red flavor cannot hide the other seven, and the legs
+# are deliberately NOT continue-on-error: a leg that fails must fail the run,
+# or the conclusion lies about the fleet's state.
 
 on:
+  schedule:
+    # 05:40 UTC daily — after the nightly image builds have promoted.
+    - cron: "40 5 * * *"
   workflow_dispatch:
     inputs:
       image:
-        description: "Asahi image ref to verify"
-        default: "ghcr.io/tuna-os/bonito:gnome-asahi-testing"
+        description: "Single asahi image ref to verify (leave empty to sweep every flavor)"
+        default: ""
         type: string
 
 permissions:
@@ -19,22 +35,33 @@ permissions:
   packages: read
 
 jobs:
-  verify:
-    runs-on: ubuntu-24.04-arm
-    timeout-minutes: 30
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+  # Sweep mode: every flavor that publishes a :gnome-asahi tag.
+  # guppy is intentionally absent — its asahi overlay is stubbed, not broken.
+  sweep:
+    # Explicit on the schedule path: a `schedule` event has no `inputs` context
+    # at all, and relying on null == '' to pick the sweep is exactly how you get
+    # a daily run where BOTH jobs skip and the workflow reports success with
+    # zero legs executed — coverage that looks green and checks nothing.
+    if: github.event_name == 'schedule' || inputs.image == ''
+    strategy:
+      fail-fast: false
+      matrix:
+        flavor:
+          - bonito
+          - grouper
+          - albacore
+          - yellowfin
+          - sailfin
+          - flounder
+          - marlin
+          - skipjack
+    uses: ./.github/workflows/verify-asahi-one.yml
+    with:
+      image: ghcr.io/tuna-os/${{ matrix.flavor }}:gnome-asahi
 
-      - name: Install lsinitrd
-        # dracut-core provides lsinitrd; without it the harness skips the
-        # initramfs-content checks with a warning instead of verifying them.
-        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends dracut-core
-
-      - name: Login to GHCR
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GH_TOKEN" | podman login ghcr.io --username "${{ github.actor }}" --password-stdin
-
-      - name: Verify image against Asahi golden manifest
-        run: ./scripts/verify-asahi-image.sh "${{ inputs.image }}"
+  # Triage mode: one explicit ref.
+  single:
+    if: github.event_name == 'workflow_dispatch' && inputs.image != ''
+    uses: ./.github/workflows/verify-asahi-one.yml
+    with:
+      image: ${{ inputs.image }}

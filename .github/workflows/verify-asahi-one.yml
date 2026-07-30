@@ -1,0 +1,64 @@
+name: Verify Asahi image (one)
+
+# Reusable single-image leg of the Asahi golden-manifest harness. Called by
+# verify-asahi.yml, once per flavor in sweep mode and once for an explicit ref
+# in triage mode. Not meant to be dispatched directly — use "Verify Asahi
+# image", which drives this.
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: "Asahi image ref to verify"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install lsinitrd
+        # dracut-core provides lsinitrd; without it the harness skips the
+        # initramfs-content checks with a warning instead of verifying them.
+        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends dracut-core
+
+      - name: Login to GHCR
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GH_TOKEN" | podman login ghcr.io --username "${{ github.actor }}" --password-stdin
+
+      - name: Verify image against Asahi golden manifest
+        id: verify
+        run: |
+          set -o pipefail
+          ./scripts/verify-asahi-image.sh "${{ inputs.image }}" 2>&1 | tee /tmp/verify.log
+
+      - name: Summarize
+        # Always runs, so a red leg reports its score and failing checks in the
+        # run summary rather than only in the raw log. This step must not mask
+        # the failure — the verify step's own exit code decides the leg.
+        if: always()
+        run: |
+          {
+            echo "### \`${{ inputs.image }}\`"
+            echo
+            if result=$(grep -oE 'RESULT: .*' /tmp/verify.log 2>/dev/null); then
+              echo "**${result}**"
+            else
+              echo "**harness did not report a result — it failed before scoring**"
+            fi
+            echo
+            if grep -qE '^\s+(FAIL|WARN)' /tmp/verify.log 2>/dev/null; then
+              echo '```'
+              grep -E '^\s+(FAIL|WARN)' /tmp/verify.log
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
