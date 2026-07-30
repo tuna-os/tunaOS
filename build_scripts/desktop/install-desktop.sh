@@ -355,6 +355,25 @@ if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 		mkdir -p /etc/systemd/system/graphical.target.wants
 		ln -sf "/usr/lib/systemd/system/${_TD_DM}.service" \
 			"/etc/systemd/system/graphical.target.wants/${_TD_DM}.service"
+		# ...and take over the display-manager.service alias. openSUSE's
+		# displaymanager-sysconfig package ships
+		# /etc/systemd/system/display-manager.service already, pointing at
+		# display-manager-legacy.service (its own sysconfig-driven launcher).
+		# systemd refuses to create an [Install] Alias over an existing
+		# symlink, so `systemctl enable <dm>` does not merely skip the alias —
+		# it FAILS outright:
+		#   Failed to enable unit: File '/etc/systemd/system/display-manager.service'
+		#   already exists and is a symlink to /usr/lib/systemd/system/display-manager-legacy.service
+		# safe_enable swallows that (|| true). The wants-link above still
+		# starts the DM, so the desktop comes up, but the alias keeps
+		# resolving to the legacy launcher — and the runtime contract asserts
+		# on the alias (`systemctl show -P Id display-manager.service` against
+		# ^(gdm|gdm3|lightdm|greetd)\.service$). A working desktop would fail
+		# its own contract. Point the alias at the DM we actually installed.
+		# Idempotent and a no-op on rpm/deb bases, where enable already made
+		# this exact link.
+		ln -sf "/usr/lib/systemd/system/${_TD_DM}.service" \
+			/etc/systemd/system/display-manager.service
 	fi
 	# Server-oriented bootc bases such as AlmaLinux default to
 	# multi-user.target. Enabling a display manager alone does not change the

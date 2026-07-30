@@ -162,6 +162,19 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$status" -eq 0 ]
 }
 
+@test "desktop installer claims the display-manager.service alias" {
+  # openSUSE's displaymanager-sysconfig owns /etc/systemd/system/display-manager.service
+  # and points it at its own legacy launcher. systemd refuses to write an
+  # [Install] Alias over an existing symlink, so `systemctl enable <dm>` fails
+  # outright and safe_enable swallows it — the alias keeps resolving to
+  # display-manager-legacy.service. The runtime contract asserts on that alias,
+  # so a working desktop fails its own contract unless the installer forces it.
+  local script="${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
+  grep -qF '/etc/systemd/system/display-manager.service' "$script"
+  # It must be forced (ln -sf), not left to systemctl enable.
+  grep -qF 'ln -sf "/usr/lib/systemd/system/${_TD_DM}.service" \' "$script"
+}
+
 @test "desktop installer reads both shapes of a zypper section" {
   # The zypper section is a plain list on most desktops and a map (packages +
   # display_manager) on XFCE. mikefarah yq ERRORS when indexing a sequence
