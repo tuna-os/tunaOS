@@ -48,10 +48,23 @@ jobs:
       - name: Maximize build space
         uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
 
+      # crun is installed explicitly and in the same transaction as podman.
+      # The runner image ships podman (and buildah, and a matching crun)
+      # outside dpkg, so apt installs Ubuntu's podman over it while
+      # /usr/bin/crun stays the image's, and a mismatched pair fails the
+      # first `podman run` with:
+      #
+      #   Error: OCI runtime error: crun: unknown version specified
+      #
+      # That is crun rejecting the OCI spec version podman generated, not a
+      # build error, though it surfaces as one: run 30521960737 built the
+      # whole image with the image's buildah (matched, so fine) and only
+      # died when chunkah ran under apt's podman. Same fix as luks-e2e.yml.
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
+          sudo apt-get install -y just podman crun jq rclone golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
+          podman --version; crun --version | head -1
 
       - name: Setup rootless podman (subuid/subgid for runner)
         run: |
