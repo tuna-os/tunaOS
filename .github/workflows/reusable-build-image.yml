@@ -329,6 +329,92 @@ jobs:
             echo "::warning::pushed manifest ${REF} has no ostree/chunkah layer annotations — rechunk metadata may have been stripped"
           fi
 
+      # Publish the installed package set alongside the image so parity
+      # between editions is diffable directly, instead of being inferred.
+      #
+      # This exists because inference is unreliable. A size-based audit of all
+      # 37 editions (tuna-os/tunaos-packages#133) flagged 24 as "too small to
+      # contain their desktop" — and the EL-family XFCE flags were wrong:
+      # those ship a lean XFCE *Wayland* stack (xfwl4 + greetd), which is
+      # legitimately far smaller than Fedora's X11 XFCE. Compressed size
+      # cannot tell "packages missing" from "different architecture". A
+      # package list can, and it also confirms the real failures: marlin:kde
+      # carries 338 packages against its base's 480, and zero KDE packages.
+      #
+      # Not derived from the Syft SBOM below: that step is continue-on-error
+      # and time-boxed because Syft mmaps the whole image and OOMs on desktop
+      # sizes, so the SBOM is frequently absent. Asking the package manager
+      # directly costs a second and always works. Its artifact also expires in
+      # 7 days and needs GitHub auth, which is no good for comparing editions
+      # built weeks apart.
+      #
+      # Pushed as an OCI artifact next to the image, so it is durable, is
+      # versioned with the image, and is readable by anyone who can pull it.
+      - name: Publish package manifest
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        env:
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          DEFAULT_TAG: ${{ inputs.default-tag }}
+          SAFE_PLATFORM: ${{ matrix.safeplatform }}
+        run: |
+          set -euo pipefail
+          REF="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
+          OUT="packages-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.txt"
+
+          # The image is already in local storage from the push step, so this
+          # runs against local layers rather than pulling anything back.
+          # Every TunaOS base is covered: rpm (yellowfin/bonito/skipjack/
+          # albacore/sailfin), dpkg (flounder/grouper), pacman (marlin),
+          # portage (guppy).
+          sudo podman run --rm --entrypoint sh "$REF" -c '
+            if   command -v rpm        >/dev/null 2>&1; then rpm -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\n"
+            elif command -v dpkg-query >/dev/null 2>&1; then dpkg-query -W -f "${Package}\t${Version}\n"
+            elif command -v pacman     >/dev/null 2>&1; then pacman -Q | tr " " "\t"
+            elif command -v qlist      >/dev/null 2>&1; then qlist -ICv
+            else echo "UNKNOWN-PACKAGE-MANAGER" >&2; exit 1
+            fi' | LC_ALL=C sort -u > "$OUT"
+
+          # An empty manifest is worse than none: it reads as "this edition has
+          # no packages" and would make a parity diff show everything missing.
+          #
+          # It is a real state, not a hypothetical. flounder (Debian) and guppy
+          # (Gentoo) ship *no package database*: /var/lib/dpkg and /var/db/pkg
+          # are both empty and there is no dpkg `status` file anywhere in the
+          # image. Those DBs live under /var, which bootc images empty — rpm
+          # escapes it only because its DB moved to /usr/lib/sysimage/rpm, and
+          # pacman's happens to survive. So those systems cannot enumerate
+          # their own packages either (tuna-os/tunaos-packages#135).
+          COUNT=$(wc -l < "$OUT")
+          if [ "$COUNT" -lt 20 ]; then
+            echo "::warning::${REF} reported only ${COUNT} packages — the package database is likely absent (see tunaos-packages#135). Publishing a marker instead of an empty manifest."
+            printf '# NO PACKAGE DATABASE IN IMAGE\n# %s\n# see https://github.com/tuna-os/tunaos-packages/issues/135\n' "$REF" > "$OUT"
+          fi
+
+          echo "${COUNT} packages recorded for ${REF}"
+          head -3 "$OUT"
+
+          # oras is already used elsewhere in this pipeline for toolchain
+          # payloads. The .packages suffix keeps it out of the image tag
+          # namespace while staying trivially discoverable.
+          command -v oras >/dev/null 2>&1 || {
+            curl -fsSL "https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz" \
+              | sudo tar -xz -C /usr/local/bin oras
+          }
+          oras push "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}.packages" \
+            --artifact-type application/vnd.tunaos.packages.v1 \
+            "${OUT}:text/plain"
+
+      - name: Upload package manifest
+        if: github.event_name != 'pull_request'
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: packages-${{ env.IMAGE_NAME }}-${{ inputs.default-tag }}-${{ matrix.safeplatform }}
+          path: packages-*.txt
+          if-no-files-found: warn
+
       - name: Setup Syft
         if: inputs.sbom && github.event_name != 'pull_request'
         id: setup-syft
