@@ -140,6 +140,28 @@ RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \
 # Set up bootc/ostree filesystem layout
 RUN sed -i 's|^HOME=.*|HOME=/var/home|' /etc/default/useradd && \
     rm -rf /boot /home /root /usr/local /srv /opt /mnt && \
+    # Move the dpkg database out of /var BEFORE the wipe below, or the image
+    # ships with no record of its own packages.
+    #
+    # /var/lib/dpkg is where dpkg keeps `status`, and the wipe on the next
+    # line takes it. That is not a TunaOS quirk — every Debian/Ubuntu bootc
+    # image does this (bootcrew/ubuntu-bootc: `rm -rf ... /var`), and the
+    # result is measurable: ghcr.io/tuna-os/flounder:base answers
+    # `dpkg-query -W` with zero packages and has no `status` file anywhere.
+    # A running flounder box therefore cannot enumerate its own packages,
+    # which blinds remora layering, update tooling and support diagnostics
+    # (tuna-os/tunaos-packages#135).
+    #
+    # Fedora hit the identical problem with rpm and solved it by relocating
+    # the database into /usr, where it belongs anyway: the package database
+    # describes /usr, and keeping it there means it snapshots and rolls back
+    # with the image (Changes/RelocateRPMToUsr). Same move here.
+    #
+    # The tmpfiles symlink below points /var/lib/dpkg back at it, so dpkg,
+    # apt and dpkg-query all keep working through their default paths with no
+    # --admindir plumbing.
+    mkdir -p /usr/lib/sysimage && \
+    if [ -d /var/lib/dpkg ]; then cp -a /var/lib/dpkg /usr/lib/sysimage/dpkg; fi && \
     # /var may contain mount points from overlayfs layers. Clean safely.
     for d in /var/* /var/.[!.]*; do [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done && \
     # Recreate /var/tmp: tacklebox rebuilds the live-ISO initramfs against
@@ -161,6 +183,15 @@ RUN sed -i 's|^HOME=.*|HOME=/var/home|' /etc/default/useradd && \
     ln -sT ../var/usrlocal /usr/local && \
     printf 'd /var/opt 0755 root root -\nd /var/home 0755 root root -\nd /var/srv 0755 root root -\nd /var/mnt 0755 root root -\nd /var/usrlocal 0755 root root -\nd /var/roothome 0700 root root -\nd /var/tmp 1777 root root -\nd /run/media 0755 root root -\n' \
         > /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
+    # Restore the dpkg database path at runtime. L+ replaces whatever is
+    # there, so a /var reset re-establishes the link rather than leaving apt
+    # pointing at an empty directory. /var/lib must be created first —
+    # tmpfiles does not build parents for L+.
+    printf 'd /var/lib 0755 root root -\nL+ /var/lib/dpkg - - - - ../../usr/lib/sysimage/dpkg\n' \
+        > /usr/lib/tmpfiles.d/dpkg-sysimage.conf && \
+    # Image-build time too: apt/dpkg run in later layers (and in
+    # live_customize) before tmpfiles has ever executed.
+    mkdir -p /var/lib && ln -sT ../../usr/lib/sysimage/dpkg /var/lib/dpkg && \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' \
         > /usr/lib/ostree/prepare-root.conf
 

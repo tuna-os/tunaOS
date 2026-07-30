@@ -105,7 +105,22 @@ RUN KVER=$(ls /usr/lib/modules | head -1) && \
     (cp /boot/vmlinuz-* "/usr/lib/modules/$KVER/vmlinuz" 2>/dev/null || cp /usr/src/linux-*/arch/x86/boot/bzImage "/usr/lib/modules/$KVER/vmlinuz") && \
     dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" --kver "$KVER" \
     "/usr/lib/modules/$KVER/initramfs.img" && \
-    rm -rf /var/db /var/cache
+    rm -rf /var/cache && \
+    # Keep portage's package database; drop only its caches.
+    #
+    # /var/db/pkg is the record of what is installed, and deleting it here
+    # (plus the /var wipe below) is why ghcr.io/tuna-os/guppy:base answers
+    # `qlist -ICv` with nothing — qlist is installed, the database simply
+    # isn't there, so the running system cannot enumerate its own packages
+    # (tuna-os/tunaos-packages#135).
+    #
+    # Relocated into /usr for the reason Fedora moved the rpmdb there
+    # (Changes/RelocateRPMToUsr): the database describes /usr, so keeping it
+    # under /usr makes it snapshot and roll back with the image instead of
+    # being erased with /var. The tmpfiles link restores the default path.
+    mkdir -p /usr/lib/sysimage && \
+    if [ -d /var/db/pkg ]; then rm -rf /usr/lib/sysimage/portage; cp -a /var/db /usr/lib/sysimage/portage; fi && \
+    rm -rf /var/db
 RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
     rm -rf /boot /home /root /usr/local /srv /opt /mnt /var && \
     find /dev -mindepth 1 -maxdepth 1 ! -name pts ! -name shm ! -name mqueue -exec rm -rf {} + 2>/dev/null || true && \
@@ -118,6 +133,9 @@ RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
     echo "d /var/roothome 0700 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
     echo "d /var/tmp 1777 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
     echo "d /run/media 0755 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
+    printf 'd /var/db 0755 root root -\nL+ /var/db/pkg - - - - ../../usr/lib/sysimage/portage/pkg\n' \
+        > /usr/lib/tmpfiles.d/portage-sysimage.conf && \
+    mkdir -p /var/db && ln -sT ../../usr/lib/sysimage/portage/pkg /var/db/pkg && \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf
 
 # Cache-bust so build_scripts edits invalidate the desktop stages' install
@@ -168,7 +186,22 @@ RUN KVER=$(ls /usr/lib/modules | head -1) && \
     (cp /boot/vmlinuz-* "/usr/lib/modules/$KVER/vmlinuz" 2>/dev/null || cp /usr/src/linux-*/arch/x86/boot/bzImage "/usr/lib/modules/$KVER/vmlinuz") && \
     dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" --kver "$KVER" \
     "/usr/lib/modules/$KVER/initramfs.img" && \
-    rm -rf /var/db /var/cache
+    rm -rf /var/cache && \
+    # Keep portage's package database; drop only its caches.
+    #
+    # /var/db/pkg is the record of what is installed, and deleting it here
+    # (plus the /var wipe below) is why ghcr.io/tuna-os/guppy:base answers
+    # `qlist -ICv` with nothing — qlist is installed, the database simply
+    # isn't there, so the running system cannot enumerate its own packages
+    # (tuna-os/tunaos-packages#135).
+    #
+    # Relocated into /usr for the reason Fedora moved the rpmdb there
+    # (Changes/RelocateRPMToUsr): the database describes /usr, so keeping it
+    # under /usr makes it snapshot and roll back with the image instead of
+    # being erased with /var. The tmpfiles link restores the default path.
+    mkdir -p /usr/lib/sysimage && \
+    if [ -d /var/db/pkg ]; then rm -rf /usr/lib/sysimage/portage; cp -a /var/db /usr/lib/sysimage/portage; fi && \
+    rm -rf /var/db
 RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
     rm -rf /boot /home /root /usr/local /srv /opt /mnt /var && \
     find /dev -mindepth 1 -maxdepth 1 ! -name pts ! -name shm ! -name mqueue -exec rm -rf {} + 2>/dev/null || true && \
@@ -181,6 +214,9 @@ RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
     echo "d /var/roothome 0700 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
     echo "d /var/tmp 1777 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
     echo "d /run/media 0755 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
+    printf 'd /var/db 0755 root root -\nL+ /var/db/pkg - - - - ../../usr/lib/sysimage/portage/pkg\n' \
+        > /usr/lib/tmpfiles.d/portage-sysimage.conf && \
+    mkdir -p /var/db && ln -sT ../../usr/lib/sysimage/portage/pkg /var/db/pkg && \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf
 
 LABEL containers.bootc=1 ostree.bootable=1
