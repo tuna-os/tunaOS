@@ -47,5 +47,5 @@ install -D /dev/null /etc/cachyos-release
 printf 'CachyOS\n' >/etc/cachyos-release
 
 # Rebuild initramfs via dracut
-dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
+dracut --force --omit "tpm2-tss" "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
 pacman -Scc --noconfirm || true
