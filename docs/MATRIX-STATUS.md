@@ -42,27 +42,25 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 
 ## LUKS E2E
 
-**15 of 50** cells green (50 tested, 0 never tested).
+**5 of 48** cells green (12 tested, 36 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **flounder** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **flounder-sid** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **grouper** | ❌ | ❌ | — | ❌ | ❌ |
-| **guppy** | ❌ | ❌ | — | — | — |
-| **marlin** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **sailfin** | ❌ | ❌ | — | ❌ | ❌ |
-| **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **albacore** | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **bonito** | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **flounder** | ❌ | ✅ | ⬜ | — | ⬜ |
+| **flounder-sid** | ❌ | ⬜ | ⬜ | — | ⬜ |
+| **grouper** | ❌ | ⬜ | — | ⬜ | ⬜ |
+| **guppy** | ❌ | ⬜ | — | — | — |
+| **marlin** | ❌ | ⬜ | ✅ | ⬜ | ❌ |
+| **sailfin** | ❌ | ⬜ | — | ⬜ | ⬜ |
+| **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **yellowfin** | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 
-NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 24 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
-
-Newest result 2026-07-27, oldest still-authoritative result 2026-07-23. Results older than the most recent round of fixes are the best available data, not current data.
+Newest result 2026-07-30, oldest still-authoritative result 2026-07-29. Results older than the most recent round of fixes are the best available data, not current data.
 
 ## Installer smoke
 
@@ -85,7 +83,7 @@ cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on hoste
 
 ## Live overlay
 
-**38** tags published.
+**39** tags published.
 
 Missing for 1 ISO cell(s): `marlin-kde`
 
@@ -93,10 +91,12 @@ Missing for 1 ISO cell(s): `marlin-kde`
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-07-27 | [30249218614](https://github.com/tuna-os/tunaOS/actions/runs/30249218614) | 50 |
-| 2026-07-27 | [30234237855](https://github.com/tuna-os/tunaOS/actions/runs/30234237855) | 2 |
-| 2026-07-23 | [29978067348](https://github.com/tuna-os/tunaOS/actions/runs/29978067348) | 24 |
-| 2026-07-22 | [29914643652](https://github.com/tuna-os/tunaOS/actions/runs/29914643652) | 2 |
+| 2026-07-30 | [30524767610](https://github.com/tuna-os/tunaOS/actions/runs/30524767610) | 1 |
+| 2026-07-30 | [30522159277](https://github.com/tuna-os/tunaOS/actions/runs/30522159277) | 8 |
+| 2026-07-29 | [30484849112](https://github.com/tuna-os/tunaOS/actions/runs/30484849112) | 1 |
+| 2026-07-29 | [30472017143](https://github.com/tuna-os/tunaOS/actions/runs/30472017143) | 1 |
+| 2026-07-29 | [30467796102](https://github.com/tuna-os/tunaOS/actions/runs/30467796102) | 1 |
+| 2026-07-29 | [30447516312](https://github.com/tuna-os/tunaOS/actions/runs/30447516312) | 4 |
 
 <!-- END GENERATED -->
 
