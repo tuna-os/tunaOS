@@ -147,10 +147,96 @@ packages:
       - PackageKit-command-not-found
       - gnome-software-fedora-langpacks
 
+  # ── Zypper (openSUSE Tumbleweed) ───────────────────────────────────
+  # The patterns alone are a session skeleton, NOT a desktop. Measured on
+  # Tumbleweed, patterns-gnome-gnome resolves to gdm, gnome-shell and
+  # mutter plus dependencies — it contains no nautilus, no gvfs, no
+  # gnome-keyring and no xdg-desktop-portal-gnome. That is why
+  # sailfin:gnome shipped +192 packages against yellowfin:gnome's +576,
+  # with no file manager and no portals (tunaos-packages#132).
+  #
+  # Note this is NOT a --no-recommends artifact: the pattern resolves to
+  # the same 475 packages with and without recommends. The list was simply
+  # incomplete, so the packages below are explicit.
+  #
+  # Every name here was verified to resolve with `zypper se -x -t package`
+  # against Tumbleweed. Do not add unverified names — an unresolvable name
+  # is what silently shipped a desktop-less image in the first place, and
+  # several obvious guesses are wrong on openSUSE:
+  #   NetworkManager-openvpn-gnome → NetworkManager-openvpn (no -gnome)
+  #   gnome-shell-extensions       → gnome-shell-extensions-common
+  #   tracker / tracker-miners     → tinysparql / localsearch
+  #   librsvg                      → librsvg-2-2
   zypper:
     - patterns-gnome-gnome
     - patterns-gnome-gnome_basis
     - gdm
+    # Session and control surface
+    - gnome-session
+    - gnome-settings-daemon
+    - gnome-control-center
+    - gnome-shell-extensions-common
+    - gnome-browser-connector
+    - gnome-menus
+    - gnome-backgrounds
+    # Files, mounting and secrets — the actual gap
+    - nautilus
+    - gvfs
+    - gvfs-backends
+    - gvfs-fuse
+    - gnome-keyring
+    - gnome-keyring-pam
+    - xdg-desktop-portal-gnome
+    - xdg-desktop-portal-gtk
+    - xdg-user-dirs-gtk
+    # Hardware, network and power integration
+    - ModemManager
+    - NetworkManager-openvpn
+    - NetworkManager-openconnect
+    - NetworkManager-vpnc
+    - gnome-bluetooth
+    - power-profiles-daemon
+    - switcheroo-control
+    - fwupd
+    - fprintd-pam
+    - gnome-color-manager
+    - gnome-disk-utility
+    - simple-scan
+    # Core apps and first-run
+    - gnome-initial-setup
+    - gnome-software
+    - gnome-system-monitor
+    - gnome-console
+    - gnome-text-editor
+    - gnome-calculator
+    - gnome-font-viewer
+    - gnome-characters
+    - gnome-logs
+    - loupe
+    - evince
+    - file-roller
+    - baobab
+    - seahorse
+    - gnome-online-accounts
+    - gnome-remote-desktop
+    - gnome-user-share
+    # Search indexing (tracker's successors)
+    - localsearch
+    - tinysparql
+    # Accessibility and help
+    - orca
+    - yelp
+    - gnome-user-docs
+    # Graphics and rendering
+    - Mesa-dri
+    - Mesa-libEGL1
+    - Mesa-vulkan-device-select
+    - librsvg-2-2
+    - glib-networking
+    - avahi
+    - dconf
+    - polkit
+    - pinentry-gnome3
 
   # ── Emerge (Gentoo) ────────────────────────────────────────────────
   # gnome-light, NOT gnome-base/gnome: the full meta pulls
