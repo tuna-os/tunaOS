@@ -269,6 +269,13 @@ ensure_dbus_daemon() {
 		echo "ERROR: flatpak not installed; cannot pre-install ${INSTALLER_APP}" >&2
 		exit 1
 	fi
+	# openSUSE's CA bundle is generated under /var, while bootc image stages
+	# intentionally reset /var. Rebuild it in the live customization container
+	# before Flatpak contacts any HTTPS remote; this is a harmless no-op on
+	# other bases and prevents curl/Flatpak certificate error 60 on Sailfin.
+	if command -v update-ca-certificates >/dev/null 2>&1; then
+		update-ca-certificates || echo "WARN: could not regenerate CA bundle"
+	fi
 
 	# The installer apps (tuna-os-hosted and upstream bootc-installer alike)
 	# declare a GNOME/Freedesktop runtime dependency that isn't published on
@@ -370,8 +377,13 @@ ensure_dbus_daemon() {
 	# ── 4a. fisherman on the host path ────────────────────────────────────
 	# The frontends escalate via `flatpak-spawn --host pkexec
 	# /usr/local/bin/fisherman`; expose the flatpak-bundled binary there.
+	# `|| true`: this script runs under `set -o pipefail`, so when the installer
+	# app directory does not exist (the dev/E2E path above warns and continues
+	# instead of installing it) find exits 1, the whole substitution fails, and
+	# `set -e` kills the script before the intended warning below — the ISO build
+	# then dies with a bare "exit status 1". Keep the lookup non-fatal.
 	FISHERMAN_BIN=$(find "/var/lib/flatpak/app/${INSTALLER_APP}" \
-		-path '*/files/bin/fisherman' -type f 2>/dev/null | head -1)
+		-path '*/files/bin/fisherman' -type f 2>/dev/null | head -1 || true)
 	if [[ -n "${FISHERMAN_BIN}" ]]; then
 		mkdir -p /usr/local/bin
 		ln -sf "${FISHERMAN_BIN}" /usr/local/bin/fisherman

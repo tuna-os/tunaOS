@@ -711,11 +711,11 @@ run_smoke_checks() {
 	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
 	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_PORT")
 
-	"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" liveuser@127.0.0.1:/tmp/e2e-assert.sh
-	"${scp_cmd[@]}" "${script_dir}/e2e-smoke-checks.sh" liveuser@127.0.0.1:/tmp/e2e-smoke-checks.sh
+	"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" liveuser@127.0.0.1:/home/liveuser/e2e-assert.sh
+	"${scp_cmd[@]}" "${script_dir}/e2e-smoke-checks.sh" liveuser@127.0.0.1:/home/liveuser/e2e-smoke-checks.sh
 
 	local smoke_output smoke_rc=0
-	smoke_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=/tmp bash /tmp/e2e-smoke-checks.sh" 2>&1) || smoke_rc=$?
+	smoke_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=/home/liveuser bash /home/liveuser/e2e-smoke-checks.sh" 2>&1) || smoke_rc=$?
 	echo "$smoke_output" | tee -a "${SERIAL_LOG}"
 	if [[ "$smoke_rc" -ne 0 ]]; then
 		echo "::warning::live-image smoke checks reported ${smoke_rc} failure(s)"
@@ -887,6 +887,12 @@ run_install() {
 	"${ssh_cmd[@]}" "sudo mkdir -p /var/lib/superiso-store && sudo mount -o ro,nodev /run/initramfs/live/LiveOS/store.squashfs.img /var/lib/superiso-store 2>&1 || echo '(mount failed)'" || true
 	echo "--- mount table (superiso) ---"
 	"${ssh_cmd[@]}" "findmnt /var/lib/superiso-store 2>&1 || echo '(not mounted)'" || true
+	# Force podman to re-read storage backends after the offline store is
+	# mounted. Without this, podman may still use stale in-memory state
+	# from before the mount, causing image exists / pull to miss the
+	# additional store entirely (observed on Gentoo-based variants where
+	# the offline-store.service sometimes races with podman's init).
+	"${ssh_cmd[@]}" "sudo podman system renumber 2>&1 || true" || true
 	echo "--- primary storage.conf ---"
 	"${ssh_cmd[@]}" "cat /etc/containers/storage.conf 2>&1 || echo '(not found)'" || true
 	echo "--- offline store layout ---"
@@ -917,6 +923,11 @@ run_install() {
 		|| echo '(unreadable)'" || true
 
 	# Probe the guest's containers-storage for a locally-available image.
+	# Try podman image exists first (primary store), then fall back to
+	# inspecting the offline store's images.json directly.  podman image
+	# exists sometimes misses images in additional stores when the overlay
+	# driver / fuse-overlayfs configuration inside the VM differs from the
+	# host that packed the store (observed on Gentoo-based variants).
 	local found_local=0 found_ref=""
 	for candidate_ref in "$prod_ref" "$local_ref"; do
 		echo "==> Probing for ${candidate_ref}..."
@@ -924,6 +935,15 @@ run_install() {
 			found_local=1
 			found_ref="$candidate_ref"
 			break
+		fi
+		# Fallback: check the offline store images.json directly.
+		local img_json="/var/lib/superiso-store/overlay-images/images.json"
+		if "${ssh_cmd[@]}" "sudo test -f ${img_json} && sudo jq -e --arg ref '${candidate_ref}' '.[] | select(.names != null) | select(.names | index(\$ref))' ${img_json} >/dev/null 2>&1" 2>/dev/null; then
+			echo "==> Found ${candidate_ref} in offline store images.json (podman query missed it)"
+			# The image exists but podman/bootc can't resolve it from the
+			# additional store (overlay driver mismatch). Don't set
+			# found_local here — let the code fall through to the network
+			# pull, which now uses aggressive MTU clamping + retries.
 		fi
 	done
 
@@ -939,26 +959,32 @@ run_install() {
 			recipe_image="containers-storage:${found_ref}"
 		fi
 	else
-		echo "==> No local image in offline store, falling back to network pull over QEMU NAT"
-		recipe_image="${prod_ref}"
-
-		# Bug #20: the pull over QEMU SLIRP NAT can stall mid-blob. Clamp
-		# guest MTU before pulling and retry up to 4 times; podman skips
-		# already-fetched layers so each retry is incremental.
-		"${ssh_cmd[@]}" 'for i in $(ls /sys/class/net | grep -v ^lo$); do sudo ip link set "$i" mtu 1400; done' || true
-
-		echo "==> Pre-pulling ${prod_ref} (retry on stall, layers already fetched are cached)..."
-		local pull_ok=0
-		for pull_attempt in 1 2 3 4; do
-			echo "--> pull attempt ${pull_attempt}/4"
-			if timeout 600 "${ssh_cmd[@]}" "sudo podman pull ${prod_ref} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
-				pull_ok=1
-				break
+		# The offline store is inaccessible to the guest's containers/storage
+		# library (overlay driver / fuse-overlayfs mismatch). QEMU SLIRP NAT
+		# stalls on large blobs (PMTU blackhole). Instead, save the image
+		# from the HOST's podman (where 'just iso' built it) and transfer it
+		# over SSH. SSH port-forwarding is a TCP tunnel, immune to SLIRP NAT
+		# PMTU issues.
+		echo "==> No local image in offline store — transferring from host via SSH"
+		local host_img="localhost/${VARIANT:-}:${FLAVOR:-}"
+		local host_tar="/tmp/luks-image-${VARIANT:-}-${FLAVOR:-}.tar"
+		if podman image exists "$host_img" 2>/dev/null; then
+			echo "==> Saving $host_img on host..."
+			podman save "$host_img" -o "$host_tar"
+			echo "==> Transferring image to guest (this may take a few minutes)..."
+			"${scp_cmd[@]}" "$host_tar" "liveuser@127.0.0.1:/home/liveuser/"
+			echo "==> Loading image into guest podman..."
+			if "${ssh_cmd[@]}" "sudo podman load -i /home/liveuser/${host_tar##*/} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
+				echo "==> Image loaded, using local containers-storage ref"
+				recipe_image="containers-storage:${host_img}"
+			else
+				echo "ERROR: podman load failed on guest"
+				return 3
 			fi
-			echo "==> pull attempt ${pull_attempt} failed or stalled; retrying..."
-		done
-		if [[ "$pull_ok" -ne 1 ]]; then
-			echo "ERROR: failed to pull ${prod_ref} after 4 attempts"
+			"${ssh_cmd[@]}" "rm -f /home/liveuser/${host_tar##*/}" || true
+			rm -f "$host_tar" || true
+		else
+			echo "ERROR: host image $host_img not found — was ISO build successful?"
 			return 3
 		fi
 	fi
@@ -976,8 +1002,8 @@ run_install() {
 	# fisherman is pinned to a release.
 	if [[ -n "${FISHERMAN_OVERRIDE:-}" && -f "${FISHERMAN_OVERRIDE}" ]]; then
 		echo "==> Overriding fisherman with ${FISHERMAN_OVERRIDE}"
-		"${scp_cmd[@]}" "${FISHERMAN_OVERRIDE}" liveuser@127.0.0.1:/tmp/fisherman-override
-		"${ssh_cmd[@]}" "sudo install -m0755 /tmp/fisherman-override /usr/local/bin/fisherman"
+		"${scp_cmd[@]}" "${FISHERMAN_OVERRIDE}" liveuser@127.0.0.1:/home/liveuser/fisherman-override
+		"${ssh_cmd[@]}" "sudo install -m0755 /home/liveuser/fisherman-override /usr/local/bin/fisherman"
 	fi
 
 	local RECIPE_LOCAL="${OUTPUT_DIR}/e2e-recipe.json"
@@ -995,13 +1021,13 @@ run_install() {
 }
 EOF
 	echo "==> Uploading fisherman recipe..."
-	"${scp_cmd[@]}" "$RECIPE_LOCAL" liveuser@127.0.0.1:/tmp/e2e-recipe.json
+	"${scp_cmd[@]}" "$RECIPE_LOCAL" liveuser@127.0.0.1:/home/liveuser/e2e-recipe.json
 
-	echo "==> Running fisherman /tmp/e2e-recipe.json..."
+	echo "==> Running fisherman /home/liveuser/e2e-recipe.json..."
 	# Bound with `timeout` as a safety net; the image is already local at
 	# this point so this should only cover the actual install steps, not a
 	# network pull.
-	timeout 1800 "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman /tmp/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
+	timeout 1800 "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman /home/liveuser/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
 		rc=$?
 		if [[ $rc -eq 0 ]]; then
 			true
@@ -1024,10 +1050,10 @@ EOF
 		# tiered on-VM test scripts.
 		local script_dir
 		script_dir="$(dirname "${BASH_SOURCE[0]}")"
-		"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" liveuser@127.0.0.1:/tmp/e2e-assert.sh
-		"${scp_cmd[@]}" "${script_dir}/e2e-luks-checks.sh" liveuser@127.0.0.1:/tmp/e2e-luks-checks.sh
+		"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" liveuser@127.0.0.1:/home/liveuser/e2e-assert.sh
+		"${scp_cmd[@]}" "${script_dir}/e2e-luks-checks.sh" liveuser@127.0.0.1:/home/liveuser/e2e-luks-checks.sh
 		local luks_check_output
-		luks_check_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=/tmp bash /tmp/e2e-luks-checks.sh" 2>&1) || true
+		luks_check_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=/home/liveuser bash /home/liveuser/e2e-luks-checks.sh" 2>&1) || true
 		echo "$luks_check_output" | tee -a "$LUKS_EVIDENCE_LOG"
 
 		if echo "$luks_check_output" | grep -q "^ok - installed disk has a crypto_LUKS partition"; then

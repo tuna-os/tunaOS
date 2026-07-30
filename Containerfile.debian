@@ -150,7 +150,7 @@ RUN sed -i 's|^HOME=.*|HOME=/var/home|' /etc/default/useradd && \
     # later layers probe the aliases with `[ ! -d ... ] && mkdir` (e.g.
     # base-files postinst on /mnt), and mkdir on a dangling symlink fails
     # the whole layer with EEXIST.
-    mkdir -p /sysroot /boot /usr/lib/ostree /var /var/tmp \
+    mkdir -p /sysroot /boot /usr/lib/ostree /var /var/tmp /var/log/apt \
         /var/roothome /var/srv /var/opt /var/mnt /var/home /var/usrlocal && \
     ln -sT sysroot/ostree /ostree && \
     ln -sT var/roothome /root && \

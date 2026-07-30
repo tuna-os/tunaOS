@@ -94,7 +94,7 @@ FROM base AS builder
 #
 # Gentoo cannot simply copy Arch's throwaway-builder pattern: this stage also
 # emerges dev-util/ostree, which the final system needs at runtime.
-RUN emerge --verbose dev-util/ostree && \
+RUN emerge --verbose dev-util/ostree net-misc/openssh && \
     git clone --depth 1 https://github.com/bootc-dev/bootc.git /tmp/bootc && \
     make -C /tmp/bootc bin install-all && \
     rm -rf /tmp/bootc /root/.cargo /root/.rustup /var/tmp/portage
@@ -103,7 +103,7 @@ FROM builder AS system
 RUN KVER=$(ls /usr/lib/modules | head -1) && \
     rm -f "/usr/lib/modules/$KVER/vmlinuz" && \
     (cp /boot/vmlinuz-* "/usr/lib/modules/$KVER/vmlinuz" 2>/dev/null || cp /usr/src/linux-*/arch/x86/boot/bzImage "/usr/lib/modules/$KVER/vmlinuz") && \
-    dracut --force --no-hostonly --reproducible --zstd --kver "$KVER" \
+    dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" --kver "$KVER" \
     "/usr/lib/modules/$KVER/initramfs.img" && \
     rm -rf /var/db /var/cache
 RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
@@ -166,7 +166,7 @@ FROM desktop-build AS desktop
 RUN KVER=$(ls /usr/lib/modules | head -1) && \
     rm -f "/usr/lib/modules/$KVER/vmlinuz" && \
     (cp /boot/vmlinuz-* "/usr/lib/modules/$KVER/vmlinuz" 2>/dev/null || cp /usr/src/linux-*/arch/x86/boot/bzImage "/usr/lib/modules/$KVER/vmlinuz") && \
-    dracut --force --no-hostonly --reproducible --zstd --kver "$KVER" \
+    dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" --kver "$KVER" \
     "/usr/lib/modules/$KVER/initramfs.img" && \
     rm -rf /var/db /var/cache
 RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \

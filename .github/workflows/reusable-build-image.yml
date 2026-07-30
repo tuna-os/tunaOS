@@ -447,7 +447,12 @@ jobs:
             /tmp/outputs/digests/*.txt
   manifest:
     name: Manifest
-    runs-on: runs-on=${{ github.run_id }}/runner=build-amd64
+    # Temporarily off RunsOn: the tuna-os AWS account is capped to Free Tier,
+    # so CreateFleet rejects every 8-vCPU type it tries and the job dies in
+    # "Set up runner" before a single step executes. This is registry and
+    # signing work with no special hardware needs, so a GitHub runner does it
+    # fine. Restore the RunsOn label once AWS credits are back.
+    runs-on: ubuntu-latest
     if: always()
     needs:
       - generate_matrix
@@ -705,7 +710,12 @@ jobs:
     name: Sign
     needs: manifest
     if: ${{ inputs.publish && github.event_name != 'pull_request' }}
-    runs-on: runs-on=${{ github.run_id }}/runner=build-amd64
+    # Temporarily off RunsOn: the tuna-os AWS account is capped to Free Tier,
+    # so CreateFleet rejects every 8-vCPU type it tries and the job dies in
+    # "Set up runner" before a single step executes. This is registry and
+    # signing work with no special hardware needs, so a GitHub runner does it
+    # fine. Restore the RunsOn label once AWS credits are back.
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
@@ -735,7 +745,15 @@ jobs:
       inputs.publish && github.event_name != 'pull_request' &&
       !startsWith(inputs.flavor, 'base') &&
       contains(inputs.platforms, 'amd64')
-    runs-on: runs-on=${{ github.run_id }}/runner=build-amd64
+    # Temporarily off RunsOn (see the manifest job) while the AWS account is
+    # Free-Tier capped. This gate is the one with real hardware needs — an
+    # x86 QEMU/KVM boot with OVMF — so it is the likeliest of the four to
+    # need its dedicated runner back. GitHub-hosted Linux runners do expose
+    # /dev/kvm, and the job already reclaims disk and uses
+    # container-storage-action, so it is worth trying; if it flakes on
+    # capacity rather than on the image, that is the reason, not a
+    # regression in the image.
+    runs-on: ubuntu-latest
     timeout-minutes: 60
     permissions:
       contents: read
@@ -814,7 +832,12 @@ jobs:
       !cancelled() && github.event_name != 'pull_request' &&
       needs.manifest.result == 'success' &&
       (needs.verify_boot.result == 'success' || needs.verify_boot.result == 'skipped')
-    runs-on: runs-on=${{ github.run_id }}/runner=build-amd64
+    # Temporarily off RunsOn: the tuna-os AWS account is capped to Free Tier,
+    # so CreateFleet rejects every 8-vCPU type it tries and the job dies in
+    # "Set up runner" before a single step executes. This is registry and
+    # signing work with no special hardware needs, so a GitHub runner does it
+    # fine. Restore the RunsOn label once AWS credits are back.
+    runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write

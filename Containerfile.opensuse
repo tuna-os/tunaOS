@@ -31,22 +31,35 @@ FROM base AS system
 # runtime image doesn't ship (libssl.so.60 — see #643); the packaged bootc has
 # correct runtime deps and bundles the 51bootc dracut module. Also faster (no
 # cargo compile). Verified: bootc 1.15.2 install/lint work on Tumbleweed.
-RUN zypper --non-interactive addrepo -fG \
+RUN set -eu; \
+    retry_zypper() { \
+      attempt=1; \
+      until zypper "$@"; do \
+        if [ "$attempt" -ge 4 ]; then \
+          echo "zypper failed after ${attempt} attempts: zypper $*" >&2; \
+          return 1; \
+        fi; \
+        echo "zypper attempt ${attempt} failed; retrying in $((attempt * 5))s..." >&2; \
+        sleep "$((attempt * 5))"; \
+        attempt=$((attempt + 1)); \
+      done; \
+    }; \
+    retry_zypper --non-interactive addrepo -fG \
       "https://download.opensuse.org/repositories/Virtualization:/containers/openSUSE_Tumbleweed/" \
       virtualization-containers && \
-    zypper --non-interactive --gpg-auto-import-keys refresh && \
-    zypper install -y \
+    retry_zypper --non-interactive --gpg-auto-import-keys refresh && \
+    retry_zypper install -y \
     bootc \
     btrfs-progs ca-certificates ca-certificates-mozilla cpio curl dosfstools dracut e2fsprogs flatpak glib2 \
     kernel-default kernel-firmware-all openssh ostree skopeo \
     systemd systemd-boot udev xfsprogs zstd chrony && \
     update-ca-certificates && \
-    zypper --non-interactive removerepo virtualization-containers && \
-    zypper install -y -t pattern enhanced_base && \
-    zypper --non-interactive addrepo --check --refresh --priority 90 --name packman-essentials http://ftp.gwdg.de/pub/linux/misc/packman/suse/openSUSE_Tumbleweed/Essentials packman-essentials && \
-    zypper --non-interactive --gpg-auto-import-keys refresh && \
-    zypper --non-interactive dup --from packman-essentials --allow-vendor-change && \
-    zypper --non-interactive install -y \
+    retry_zypper --non-interactive removerepo virtualization-containers && \
+    retry_zypper install -y -t pattern enhanced_base && \
+    retry_zypper --non-interactive addrepo --check --refresh --priority 90 --name packman-essentials http://ftp.gwdg.de/pub/linux/misc/packman/suse/openSUSE_Tumbleweed/Essentials packman-essentials && \
+    retry_zypper --non-interactive --gpg-auto-import-keys refresh && \
+    retry_zypper --non-interactive dup --from packman-essentials --allow-vendor-change && \
+    retry_zypper --non-interactive install -y \
         ffmpeg \
         gstreamer-plugins-good \
         gstreamer-plugins-bad \
@@ -97,7 +110,7 @@ RUN mkdir -p /usr/lib/dracut/dracut.conf.d && \
 RUN mkdir -p /usr/lib/systemd/system/initrd-root-fs.target.wants && \
     ln -sf ../bootc-root-setup.service \
       /usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service
-RUN dracut --force --no-hostonly --reproducible --zstd --kver \
+RUN dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" --kver \
     "$(ls /usr/lib/modules | head -1)" \
     "/usr/lib/modules/$(ls /usr/lib/modules | head -1)/initramfs.img" && \
     lsinitrd "/usr/lib/modules/$(ls /usr/lib/modules | head -1)/initramfs.img" \
@@ -171,6 +184,22 @@ RUN set -x && rm -rf /boot /home /root /usr/local /srv /opt /mnt /var /ostree &&
     ln -sT var/opt /opt && ln -sT var/mnt /mnt && \
     ln -sT var/home /home && ln -sT ../var/usrlocal /usr/local
 RUN cp -rn /usr/etc/. /etc/ 2>/dev/null; rm -rf /usr/etc && rm -rf /usr/share/doc/bootc/baseimage
+
+# The re-assert above wipes /var a second time, so it takes openSUSE's generated
+# trust store (/var/lib/ca-certificates, which both /etc/ssl/ca-bundle.pem and
+# /etc/ssl/certs symlink into) with it — undoing the system stage's regeneration
+# and shipping an image whose TLS trust is two dangling symlinks. Every in-image
+# TLS client then fails with "unable to get local issuer certificate", which is
+# what broke the live-ISO customize step on sailfin: `flatpak install` against
+# tunaos.org and the installer-bundle curl against github.com both died there,
+# taking out all four sailfin cells of the LUKS matrix. Regenerate the store and
+# assert it exists, so a trust-less image fails the build instead of shipping.
+# The tmpfiles.d entries keep the directories after bootc's /var reset; actually
+# repopulating them at runtime is the follow-up noted in the system stage.
+RUN update-ca-certificates && \
+    test -s /var/lib/ca-certificates/ca-bundle.pem && \
+    printf 'd /var/lib/ca-certificates 0755 root root - -\nd /var/lib/ca-certificates/pem 0755 root root - -\nd /var/lib/ca-certificates/openssl 0755 root root - -\n' \
+      > /usr/lib/tmpfiles.d/tunaos-ca-certificates.conf
 
 # DEBUG: dump the exact root state bootc lint will see (remove once green).
 RUN echo "=== PRE-LINT ROOT STATE ===" && ls -la / && \

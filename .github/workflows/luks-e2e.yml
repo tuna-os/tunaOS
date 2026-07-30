@@ -41,7 +41,7 @@ jobs:
   # desktop flavor with a published image), narrowed by the dispatch filters.
   generate-matrix:
     name: Generate matrix
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
@@ -65,15 +65,17 @@ jobs:
           # Every variant x desktop flavor that has a published image
           # (build_image, NOT build_iso): the browser ISO builder makes ISOs
           # from any image, so image-only variants (sailfin, guppy,
-          # flounder-sid) need boot+install coverage too. Restrict to the
-          # plain desktop tags (gnome/kde/cosmic/niri/xfce) — -nvidia takes
-          # the identical LUKS path in headless QEMU (no GPU), and base has no
-          # graphical login target to gate on.
+          # flounder-sid) need boot+install coverage too. Cover every amd64
+          # graphical image: standard desktops, overlays (NVIDIA/CachyOS),
+          # and any future desktop tag. `base` has no login target to gate;
+          # arm64-only flavors require an arm64 QEMU runner and are reported
+          # separately in the job summary.
           matrix="$(echo "$json" | jq -c \
             --arg fv "$FILTER_VARIANT" --arg ff "$FILTER_FLAVOR" \
-            '{include: [ .variants[] | .id as $v | .flavors[]
+            '{include: [ .variants[] | . as $variant | .id as $v | .flavors[]
                | select(.build_image == true)
-               | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$"))
+               | select(.id != "base")
+               | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
                | {variant: $v, flavor: .id}
                | select($fv == "all" or .variant == $fv)
                | select($ff == "all" or .flavor == $ff) ]}')"
@@ -94,33 +96,45 @@ jobs:
             echo
             echo "Testing **${count}** installable variant/flavor combinations."
             echo
-            echo "| Base variant | ISO desktop flavors |"
+            echo "| Base variant | amd64 graphical flavors |"
             echo "|---|---|"
             echo "$json" | jq -r '
-              .variants[]
-              | [.id, ([.flavors[] | select(.build_image == true) | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$")) | .id] | join(", "))]
+              .variants[] | . as $variant
+              | [.id, ([.flavors[]
+                 | select(.build_image == true)
+                 | select(.id != "base")
+                 | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
+                 | .id] | join(", "))]
               | select(.[1] != "")
               | "| `\(.[0])` | \(.[1]) |"'
             echo
             echo "### Variants not testable by this workflow"
             echo
             echo "$json" | jq -r '
-              [.variants[]
-               | select([.flavors[] | select(.build_image == true) | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$"))] | length == 0)
-               | "- `\(.id)`: no desktop image (`build_image: true`)"]
+              [.variants[] | . as $variant
+               | select([.flavors[]
+                 | select(.build_image == true)
+                 | select(.id != "base")
+                 | select((.platforms // $variant.platforms // []) | index("linux/amd64"))] | length == 0)
+               | "- `\(.id)`: no amd64 graphical image (`build_image: true`)"]
               | if length == 0 then "- None" else .[] end'
           } >> "$GITHUB_STEP_SUMMARY"
 
   luks:
     name: LUKS ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate-matrix
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Hosted runners provide KVM. AWS Free Tier instances do not support the
+    # nested virtualization required for this QEMU-based install gate.
+    runs-on: ubuntu-latest
     # 90 min was sized for the old local-only bootc install (no network
     # pull). fisherman now does a full image pull over the QEMU guest's NAT
     # networking (see docs/ci-troubleshooting.md §4 bug #19) — slower than a
     # host-level pull — on top of build + boot + install + reboot + boot
-    # verification. 150 min gives that real headroom.
-    timeout-minutes: 150
+    # verification. The host-side OCI archive transfer added for image-store
+    # compatibility can add tens of minutes on the larger variants; 150 min
+    # cancelled skipjack cells during install despite no test failure. Keep
+    # the per-QEMU wait bounded below, but allow the complete job four hours.
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -202,6 +216,7 @@ jobs:
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
+          TACKLEBOX_SHA: e7d76b2a56cf99f2f353847fbcd0e3d487e5b8d2
         run: |
           export TACKLEBOX_FROM_SOURCE=1
           just iso "${VARIANT}" "${FLAVOR}" ghcr "" 1
