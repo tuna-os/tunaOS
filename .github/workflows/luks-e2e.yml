@@ -211,6 +211,47 @@ jobs:
             systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk
           podman --version; crun --version | head -1
 
+      # podman resolves its OCI runtime as root (the ISO build runs under
+      # sudo), and sudo resets PATH to secure_path — so it takes
+      # /usr/bin/crun, Ubuntu's 1.14.1, even when a newer crun is first in the
+      # interactive PATH. podman here is 5.8.4, whose generated OCI config
+      # 1.14.1 rejects outright:
+      #
+      #   error running container: from /usr/bin/crun creating container for
+      #   [...]: unknown version specified
+      #
+      # That killed every cell of run 30520334279 and four of run
+      # 30522159277, always in "Build dev ISO", always before LUKS was
+      # exercised at all. The existing cgroup-manager workaround below has the
+      # same blind spot: it writes ~/.config/containers/containers.conf, which
+      # a sudo podman never reads.
+      #
+      # So pick the newest crun actually present and pin root's podman to it
+      # by absolute path. The candidate list is printed either way, so if this
+      # is still wrong the log says which cruns existed and which was chosen
+      # instead of leaving another crun error to interpret.
+      - name: Point root podman at a crun new enough for it
+        run: |
+          set -euo pipefail
+          echo "podman: $(command -v podman) — $(podman --version)"
+          best=""; bestv=""
+          for c in $(type -a -P crun 2>/dev/null || true) /usr/local/bin/crun /usr/bin/crun /usr/sbin/crun; do
+            [ -x "$c" ] || continue
+            v=$("$c" --version 2>/dev/null | head -1 | grep -oE '[0-9]+(\.[0-9]+)+' | head -1) || true
+            [ -n "$v" ] || continue
+            echo "  candidate: $c -> $v"
+            if [ -z "$bestv" ] || [ "$(printf '%s\n%s\n' "$bestv" "$v" | sort -V | tail -1)" = "$v" ]; then
+              best="$c"; bestv="$v"
+            fi
+          done
+          [ -n "$best" ] || { echo "::error::no crun found on this runner"; exit 1; }
+          echo "chosen: $best ($bestv)"
+          sudo mkdir -p /etc/containers/containers.conf.d
+          printf '[engine]\nruntime = "crun"\n\n[engine.runtimes]\ncrun = ["%s"]\n' "$best" \
+            | sudo tee /etc/containers/containers.conf.d/99-crun-path.conf
+          echo "root podman now reports:"
+          sudo podman info --format '  runtime={{.Host.OCIRuntime.Path}} version={{.Host.OCIRuntime.Version}}'
+
       # iso-e2e.sh resolves the published image ref through
       # scripts/published-image-ref.sh, which needs yq. Without it the script
       # falls back to a guessed ref that is wrong for bonito-rawhide and
