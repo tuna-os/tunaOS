@@ -162,6 +162,45 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$status" -eq 0 ]
 }
 
+@test "every contract-required application is declared in its manifests" {
+  # The contract runs at BUILD time, so a requirement that some variant's
+  # manifest never asks for turns a working build red. Each application the
+  # contract demands must therefore be named in every manifest that builds
+  # that desktop. This is the check that keeps the gate honest as manifests
+  # drift — it is why the KDE contract asserts dolphin and konsole but not
+  # xdg-desktop-portal-kde (absent from the emerge list, and guppy builds KDE).
+  local script="${REPO_ROOT}/build_scripts/checks/verify-desktop-experience.sh"
+  local fail=0
+  # desktop:command:manifest,manifest,...
+  local specs=(
+    "kde:dolphin:kde.yaml,kde-arch.yaml,kde-debian.yaml"
+    "kde:konsole:kde.yaml,kde-arch.yaml,kde-debian.yaml"
+    "xfce:thunar:xfce.yaml,xfce-arch.yaml"
+  )
+  # NB: a plain-list match is the point. cosmic-files is declared inside
+  # cosmic.yaml's el10 COPR block, where installs are best-effort — indentation
+  # alone would match it and wrongly imply the package is guaranteed. That is
+  # why cosmic is absent from this table and from the contract.
+  for spec in "${specs[@]}"; do
+    local de="${spec%%:*}" rest="${spec#*:}"
+    local cmd="${rest%%:*}" manifests="${rest#*:}"
+    # The contract must actually require it...
+    if ! grep -qF "require_command $cmd" "$script"; then
+      echo "FAIL: contract does not require $cmd for $de" >&2
+      fail=1
+    fi
+    # ...and every manifest that builds this desktop must declare it.
+    local IFS=,
+    for m in $manifests; do
+      if ! grep -qE "^\s*-\s+${cmd}\s*$" "${REPO_ROOT}/manifests/desktops/${m}"; then
+        echo "FAIL: contract requires $cmd for $de but ${m} never installs it" >&2
+        fail=1
+      fi
+    done
+  done
+  [ "$fail" -eq 0 ]
+}
+
 @test "desktop installer claims the display-manager.service alias" {
   # openSUSE's displaymanager-sysconfig owns /etc/systemd/system/display-manager.service
   # and points it at its own legacy launcher. systemd refuses to write an
