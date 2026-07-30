@@ -385,7 +385,22 @@ ensure_dbus_daemon() {
 	FISHERMAN_BIN=$(find "/var/lib/flatpak/app/${INSTALLER_APP}" \
 		-path '*/files/bin/fisherman' -type f 2>/dev/null | head -1 || true)
 	if [[ -n "${FISHERMAN_BIN}" ]]; then
-		mkdir -p /usr/local/bin
+		# `mkdir -p /usr/local/bin` is not safe here. On the ostree/bootc layout
+		# /usr/local is a symlink to ../var/usrlocal, and /var/usrlocal does not
+		# exist in the image — mkdir -p refuses to create *through* a dangling
+		# symlink and dies with the confusing:
+		#
+		#   mkdir: cannot create directory ‘/usr/local’: File exists
+		#
+		# which killed the whole ISO build for sailfin:gnome in LUKS run
+		# 30522159277. Not every variant has it: sailfin:base and yellowfin:base
+		# ship a real /usr/local directory, so this only bites the flavors built
+		# on the symlinked layout.
+		#
+		# readlink -m canonicalises without requiring the path to exist, so this
+		# creates /var/usrlocal/bin on the symlinked layout and /usr/local/bin on
+		# the plain one. The ln below then resolves through the symlink either way.
+		mkdir -p "$(readlink -m /usr/local/bin)"
 		ln -sf "${FISHERMAN_BIN}" /usr/local/bin/fisherman
 	else
 		echo "WARNING: fisherman not found inside ${INSTALLER_APP}" >&2
