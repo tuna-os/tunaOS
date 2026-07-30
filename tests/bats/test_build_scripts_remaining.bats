@@ -162,6 +162,59 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$status" -eq 0 ]
 }
 
+@test "desktop installer reads both shapes of a zypper section" {
+  # The zypper section is a plain list on most desktops and a map (packages +
+  # display_manager) on XFCE. mikefarah yq ERRORS when indexing a sequence
+  # with a string, and `//` rescues a null, not an error — so the shape has to
+  # be branched on explicitly, exactly as the apt and el10 paths do.
+  local script="${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
+  grep -qF ".packages.zypper | type" "$script"
+  grep -qF '.packages.zypper.packages[]' "$script"
+  grep -qF '.packages.zypper[]' "$script"
+}
+
+@test "desktop installer refuses to build a zypper image with no desktop" {
+  # Parsing zero packages used to produce a desktop-flavored image containing
+  # no desktop, and still exit 0. The pacman and apt paths already fail loudly
+  # here; zypper must too.
+  run grep -F 'This would yield an image tagged ${_TD_DESKTOP} with no desktop in it.' \
+    "${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
+  [ "$status" -eq 0 ]
+}
+
+@test "every zypper desktop installs the display manager it enables" {
+  # sailfin:xfce shipped with NO display manager enabled: the manifest's
+  # top-level display_manager is gdm (right for Fedora/EL10) but openSUSE's
+  # XFCE installs lightdm. safe_enable no-ops on a missing unit and the
+  # graphical.target.wants link is guarded by the unit file existing, so the
+  # image booted to graphical.target with no greeter and no build error.
+  # Resolve the DM the same way install-desktop.sh does — per-section override
+  # beats the top-level key — and assert the list actually installs it.
+  command -v yq &>/dev/null || skip "yq not installed"
+  for manifest in "${REPO_ROOT}"/manifests/desktops/*.yaml; do
+    local shape dm pkgs
+    # yq reports a missing node as the tag "!!null", not "null".
+    shape="$(yq -r '.packages.zypper | type' "$manifest")"
+    [ "$shape" = "!!null" ] && continue
+
+    if [ "$shape" = "!!map" ]; then
+      pkgs="$(yq -r '.packages.zypper.packages[]' "$manifest")"
+      dm="$(yq -r '.packages.zypper.display_manager // ""' "$manifest")"
+    else
+      pkgs="$(yq -r '.packages.zypper[]' "$manifest")"
+      dm=""
+    fi
+    [ -n "$dm" ] || dm="$(yq -r '.display_manager // ""' "$manifest")"
+    [ -n "$dm" ] || continue
+
+    # On openSUSE the display manager's package name matches its unit name.
+    if ! grep -qx -- "$dm" <<<"$pkgs"; then
+      echo "FAIL: $(basename "$manifest") enables ${dm}.service but its zypper list never installs ${dm}" >&2
+      return 1
+    fi
+  done
+}
+
 @test "Ubuntu desktop stages configure display manager after package installation" {
   run grep -F 'configure-desktop-runtime.sh niri' "${REPO_ROOT}/Containerfile.ubuntu"
   [ "$status" -eq 0 ]

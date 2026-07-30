@@ -77,11 +77,34 @@ echo "Installing ${_TD_DESKTOP} desktop (OS section: ${_TD_OS})..."
 # ── APT path ─────────────────────────────────────────────────────────────────
 
 # ── Zypper path ────────────────────────────────────────────────────────────────
+# The zypper section is either a plain package list (!!seq) or a map with
+# .packages and an optional .display_manager — the same two shapes the apt
+# section supports, and the shape el10/fedora already use. XFCE needs the map
+# form: openSUSE's XFCE ships lightdm, while the manifest's top-level
+# display_manager is gdm (correct for Fedora/EL10), so a list-shaped section
+# left sailfin:xfce enabling a DM that is not installed. safe_enable no-ops on
+# a missing unit and the graphical.target.wants link is guarded by the unit
+# file existing, so the image booted to graphical.target with no display
+# manager at all — no error, no greeter.
+#
+# Branch on the node kind rather than relying on `.packages.zypper.packages[]
+# // .packages.zypper[]`: mikefarah yq errors on indexing a sequence with a
+# string, and `//` rescues a null, not an error.
 if [[ "${_TD_OS}" == "zypper" ]]; then
-	readarray -t _TD_ZYPPER_PKGS < <($YQ -r '.packages.zypper[]' "${_TD_MANIFEST}" 2>/dev/null || true)
-	if ((${#_TD_ZYPPER_PKGS[@]} > 0)); then
-		zypper install -y "${_TD_ZYPPER_PKGS[@]}"
+	if [[ "$($YQ -r '.packages.zypper | type' "${_TD_MANIFEST}" 2>/dev/null)" == "!!map" ]]; then
+		readarray -t _TD_ZYPPER_PKGS < <($YQ -r '.packages.zypper.packages[]' "${_TD_MANIFEST}" 2>/dev/null || true)
+	else
+		readarray -t _TD_ZYPPER_PKGS < <($YQ -r '.packages.zypper[]' "${_TD_MANIFEST}" 2>/dev/null || true)
 	fi
+	# A zypper base that parsed no packages would build a desktop-flavored
+	# image with no desktop in it and still exit 0 — the failure mode that
+	# shipped sailfin. Match the pacman/apt paths and fail loudly instead.
+	if ((${#_TD_ZYPPER_PKGS[@]} == 0)); then
+		echo "ERROR: no zypper packages parsed from ${_TD_MANIFEST}" >&2
+		echo "       This would yield an image tagged ${_TD_DESKTOP} with no desktop in it." >&2
+		exit 1
+	fi
+	zypper install -y "${_TD_ZYPPER_PKGS[@]}"
 fi
 
 # ── Emerge path ────────────────────────────────────────────────────────────────
