@@ -625,6 +625,40 @@ screenshot_compare() {
 	fi
 }
 
+# Did the serial log say, in so many words, that the boot failed?
+#
+# The screenshot fallback below exists because bootc base kernels ship
+# CONFIG_SERIAL_8250=m and a healthy live session often cannot get
+# TUNAOS_LIVE_READY onto the serial console. What it cannot distinguish is a
+# healthy session from a dracut emergency shell: that renders text too, so
+# the framebuffer is "sane" and the run passes.
+#
+# That is not hypothetical. marlin:kde-cachyos sat in `Dracut Emergency
+# Shell` after `/run/tacklebox-live-done does not exist` / `Could not boot`,
+# and this script still exited 0. A gate that green-lights an ISO in an
+# emergency shell is worse than no gate, especially as the input to a LUKS
+# matrix where every cell would inherit the same false pass.
+#
+# So: absence of the marker stays recoverable, but *evidence of failure* does
+# not. These signatures are unambiguous — no healthy boot prints them.
+boot_failed_on_serial() {
+	[[ -f "$SERIAL_LOG" ]] || return 1
+	local sig
+	for sig in \
+		"Entering emergency mode" \
+		"Dracut Emergency Shell" \
+		"Warning: Could not boot" \
+		"Kernel panic" \
+		"You are in emergency mode"; do
+		if grep -qF "$sig" "$SERIAL_LOG" 2>/dev/null; then
+			echo "ERROR: serial log shows a failed boot: ${sig}" >&2
+			echo "       refusing to pass on the screenshot fallback." >&2
+			return 0
+		fi
+	done
+	return 1
+}
+
 # Sanity-check a captured screenshot: it must exist and show actual content
 # (not a black/blank framebuffer). Used as the readiness fallback when the
 # serial marker never arrives — the bootc base kernels ship
@@ -1311,7 +1345,7 @@ ready)
 	# console support; fall back to verifying the framebuffer actually
 	# rendered a screen. Hard failures (blank/absent screenshot) stay fatal
 	# so this exit code can gate publishing.
-	if [[ "$rc" -ne 0 ]] && screenshot_sane "10-ready"; then
+	if [[ "$rc" -ne 0 ]] && ! boot_failed_on_serial && screenshot_sane "10-ready"; then
 		echo "::warning::readiness marker not seen on serial console; screenshot sanity check passed — treating as ready"
 		rc=0
 	fi
