@@ -48,18 +48,9 @@ jobs:
       - name: Maximize build space
         uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
 
-      # crun is installed explicitly and in the same transaction as podman.
-      # The runner image ships podman (and buildah, and a matching crun)
-      # outside dpkg, so apt installs Ubuntu's podman over it while
-      # /usr/bin/crun stays the image's, and a mismatched pair fails the
-      # first `podman run` with:
-      #
-      #   Error: OCI runtime error: crun: unknown version specified
-      #
-      # That is crun rejecting the OCI spec version podman generated, not a
-      # build error, though it surfaces as one: run 30521960737 built the
-      # whole image with the image's buildah (matched, so fine) and only
-      # died when chunkah ran under apt's podman. Same fix as luks-e2e.yml.
+      # crun is listed so a runtime is guaranteed present, but note it does
+      # nothing on runner images that already ship one — which crun podman
+      # picks is decided by the pinning step below, not by apt.
       - name: Install dependencies
         run: |
           sudo apt-get update
@@ -78,6 +69,53 @@ jobs:
           if ! grep -q "^${USER}:" /etc/subgid 2>/dev/null; then
             echo "${USER}:100000:65536" | sudo tee -a /etc/subgid
           fi
+
+      # podman does not find crun on PATH; it walks a hardcoded list that puts
+      # /usr/bin/crun ahead of /usr/local/bin/crun (containers/common
+      # pkg/config/default.go). So on a runner image that installs its own
+      # podman stack under /usr/local while dpkg still owns an older
+      # /usr/bin/crun, every `podman run` dies with:
+      #
+      #   Error: OCI runtime error: crun: unknown version specified
+      #
+      # crun <= 1.14 rejects any OCI spec version whose string does not
+      # contain "1.0" (libcrun/container.c), podman 5.x generates "1.2.0",
+      # and the image's own crun that would have accepted it sits later in
+      # the search list and is never reached. Image ubuntu24/20260726.254 is
+      # exactly that shape — podman 5.8.4 and crun 1.28 in /usr/local/bin,
+      # dpkg crun 1.14.1 in /usr/bin — so `crun --version` prints 1.28 while
+      # podman runs 1.14.1. That is what killed run 30522938645 at the
+      # chunkah `podman run`, after buildah had already built the whole
+      # image. Newer crun dropped the version check, so the newest crun on
+      # the box is safe for whichever podman ends up running.
+      - name: Pin podman to the newest crun on the runner
+        run: |
+          set -euo pipefail
+          best="" bestv=""
+          for c in /usr/bin/crun /usr/sbin/crun /usr/local/bin/crun \
+                   /usr/local/sbin/crun /sbin/crun /bin/crun; do
+            [ -x "$c" ] || continue
+            v=$("$c" --version | awk 'NR==1{print $3}')
+            echo "candidate: $c -> $v"
+            newest=$(printf '%s\n%s\n' "$bestv" "$v" | sort -V | tail -1)
+            if [ -z "$bestv" ] || [ "$newest" = "$v" ]; then
+              best="$c" bestv="$v"
+            fi
+          done
+          [ -n "$best" ] || { echo "no crun found on this runner" >&2; exit 1; }
+          echo "==> pinning crun ${bestv} (${best})"
+          sudo mkdir -p /etc/containers/containers.conf.d
+          sudo tee /etc/containers/containers.conf.d/99-crun.conf >/dev/null <<CONF
+          [engine]
+          runtime = "crun"
+
+          [engine.runtimes]
+          crun = ["${best}"]
+          CONF
+          # Both stores matter: the build runs under sudo, the ISO squashfs
+          # step runs rootless as the runner user.
+          sudo podman info --format 'root: {{.Host.OCIRuntime.Path}}'
+          podman info --format 'rootless: {{.Host.OCIRuntime.Path}}'
 
       - name: Build OS image
         run: |
