@@ -405,58 +405,14 @@ start_swtpm() {
 
 # Fresh OVMF NVRAM each run — UEFI writes state during install (boot order,
 # secure-boot vars). Reusing a stale one masks regressions.
-mint_ovmf_vars() {
-	local dest="$1"
-	# Always start from nothing: `truncate` only extends an existing file, so
-	# reusing one would carry its old contents into the "fresh" varstore.
-	rm -f "$dest"
-	if [[ -n "$OVMF_VARS_SRC" ]]; then
-		cp -f "$OVMF_VARS_SRC" "$dest"
-	else
-		# Some packaging only ships a combined OVMF.fd; create empty vars file
-		# as a fallback (UEFI will populate it).
-		truncate -s 4M "$dest"
-	fi
-}
-mint_ovmf_vars "$OVMF_VARS"
+if [[ -n "$OVMF_VARS_SRC" ]]; then
+	cp -f "$OVMF_VARS_SRC" "$OVMF_VARS"
+else
+	# Some packaging only ships a combined OVMF.fd; create empty vars file
+	# as a fallback (UEFI will populate it).
+	truncate -s 4M "$OVMF_VARS"
+fi
 rm -f "$MONITOR_SOCK" "$SERIAL_LOG" "$QEMU_PIDFILE"
-
-# Which NVRAM the installed-disk boot should use. OVMF persists its enumerated
-# boot options and BootOrder into the varstore, and the live boot is what fills
-# it in: at that point the only bootable device is the ISO's virtio-scsi
-# CD-ROM, because the install disk is still a blank qcow2 with no ESP to
-# enumerate. Handing that same varstore to the installed boot, which attaches
-# neither the CD-ROM nor its controller, leaves the firmware walking stale
-# entries for hardware that is gone and then giving up into the shell:
-#   BdsDxe: starting Boot0007 "EFI Internal Shell"
-#   !!! passphrase prompt never appeared
-# That is how `LUKS flounder-sid:gnome` died with exit 4 after a completely
-# successful install (LUKS partition confirmed, "Installation complete!").
-#
-# The GRUB/bootupd path hides this because its install writes an NVRAM entry
-# into the shared varstore, so a valid entry is always waiting. bootc's
-# composefs-native systemd-boot path does not: it installs with
-# `--no-variables` and writes no boot variable at all, leaving the firmware to
-# discover the default loader by enumeration. `bootctl install` does always
-# place that loader at \EFI\BOOT\BOOTX64.EFI (in systemd 261 the copy is
-# guarded only by the architecture suffix, not by --no-variables), so a
-# pristine varstore boots it the same way this media boots off a USB stick on
-# real hardware.
-#
-# Only the systemd-boot images change behaviour here; GRUB images keep using
-# the varstore their bootupd install just wrote to.
-installed_boot_ovmf_vars() {
-	local bootloader="$1"
-	if [[ "$bootloader" != "systemd" ]]; then
-		printf '%s' "$OVMF_VARS"
-		return 0
-	fi
-	local fresh="${OUTPUT_DIR}/OVMF_VARS.installed.fd"
-	mint_ovmf_vars "$fresh"
-	echo "==> systemd-boot image: booting the installed disk with a pristine" \
-		"UEFI varstore so the firmware enumerates its default loader" >&2
-	printf '%s' "$fresh"
-}
 
 # ── Cleanup on exit ─────────────────────────────────────────────────────────
 
@@ -852,15 +808,6 @@ run_install() {
 	done
 	check_ssh || {
 		echo "ERROR: SSH not available"
-		# Every attempt above goes through QEMU's hostfwd, which needs the
-		# guest to hold a DHCP lease. An image shipping no network manager
-		# therefore fails all 30 tries while its own sshd is perfectly
-		# healthy, which is indistinguishable from a broken sshd unless the
-		# live TAP checks are surfaced. That was `LUKS grouper:*`: 30 opaque
-		# "SSH check failed" lines, with the answer ("not ok - a network
-		# manager is active") sitting in the serial log the whole time.
-		echo "--- live-env TAP failures from the serial console ---" >&2
-		grep -a "not ok -" "$SERIAL_LOG" 2>/dev/null | tr -d '\r' >&2 || true
 		return 5
 	}
 
@@ -870,26 +817,6 @@ run_install() {
 	local -a COMMON_SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
 	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
 	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_PORT")
-
-	# Everything below runs privileged commands over non-interactive SSH and
-	# stages files in liveuser's home. Both preconditions failed silently on
-	# `LUKS grouper:niri`: the Ubuntu image shipped no sudo package, so every
-	# probe in the offline-store dump answered "sudo: command not found" and
-	# degraded to "(empty or error)" — the harness concluded the payload image
-	# was absent and tried to SCP a 4 GB tar into /home/liveuser, which did
-	# not exist either. Assert them up front so the ISO's actual defect is
-	# the error message.
-	if ! "${ssh_cmd[@]}" "sudo -n true" 2>/dev/null; then
-		echo "ERROR: liveuser has no working passwordless sudo in the live env." >&2
-		"${ssh_cmd[@]}" "command -v sudo || echo '(sudo is not installed on this image)'" >&2 || true
-		return 3
-	fi
-	if ! "${ssh_cmd[@]}" "test -w /home/liveuser" 2>/dev/null; then
-		echo "ERROR: /home/liveuser is missing or not writable in the live env;" >&2
-		echo "ERROR: the install path stages the recipe and image tar there." >&2
-		"${ssh_cmd[@]}" "ls -ld /home /home/liveuser 2>&1; getent passwd liveuser" >&2 || true
-		return 3
-	fi
 
 	# Bug #20: fisherman's network pull stalled indefinitely mid-blob (layer
 	# 42/65, no error, no further output) after dozens of smaller layers
@@ -976,33 +903,10 @@ run_install() {
 	local local_ref="localhost/${VARIANT:-}:${FLAVOR:-}" # dev=1 ISO
 	local prod_ref="$published_ref"                      # production ISO
 	local recipe_image=""                                # set below after probing the VM
-	# Mirror bootc's own bootloader decision rather than naming variants.
-	# install.rs (PostFetchState::new) picks GRUB only when
-	# bootloader::supports_bootupd() holds, i.e. bootupctl is on PATH AND the
-	# image contains the update payload dir usr/lib/bootupd/updates; otherwise
-	# it falls back to systemd-boot. Its ostree-based install path then refuses
-	# systemd-boot outright:
-	#   error: Installing to filesystem: bootupd is required for ostree-based installs
-	# which is how `LUKS flounder-sid:gnome` died after deploying all 4.2 GB.
-	#
-	# The Debian, Arch and openSUSE bases build bootupd from source, and
-	# bootupd's `make install` ships only the binary plus the bootupctl
-	# symlink. Nothing ever runs `bootupctl backend generate-update-metadata`,
-	# so bootupctl exists while the payload never does. Those bases install
-	# systemd-boot and set composefs enabled = yes precisely so bootc's
-	# composefs-native backend performs the install, exactly like grouper
-	# (Ubuntu), which was the only variant this check used to cover.
-	#
-	# Probing the image keeps the harness from ever disagreeing with bootc:
-	# the dev ISO's live squash is the image being installed, and Fedora/EL10,
-	# which do ship the payload, still resolve to GRUB. These two combinations
-	# are the only ones the recipe supports, so deriving both flags from the
-	# one signal cannot produce an untested mix.
 	local composefs_backend="false" bootloader="grub2"
-	if "${ssh_cmd[@]}" "test -d /usr/lib/bootupd/updates" &>/dev/null; then
-		echo "==> Image ships the bootupd update payload: installing via GRUB/bootupd"
-	else
-		echo "==> No bootupd update payload in the image: using bootc's composefs-native backend with systemd-boot"
+	# grouper (Ubuntu) has no bootupd package available via apt, so it ships
+	# systemd-boot instead and installs via bootc's composefs-native backend.
+	if [[ "${VARIANT:-}" == "grouper" ]]; then
 		composefs_backend="true"
 		bootloader="systemd"
 	fi
@@ -1044,16 +948,9 @@ run_install() {
 	# image store (driver mismatch, unreadable lock, version skew); images.json
 	# is ~1 KB and states the names actually recorded, which distinguishes
 	# "store ignored" from "image recorded under a name we never probe".
-	#
-	# Keep 'config' in the filter: containers-storage logs `Read config file
-	# "<path>"` for every main file and drop-in it merges, in merge order. That
-	# list is what distinguishes "our config is wrong" from "our config was
-	# overridden by a later drop-in" — the actual bonito-rawhide failure, where
-	# the effective additionalimagestores was the vendor drop-in's value and the
-	# printed /etc/containers/storage.conf was a red herring.
 	echo "--- why podman does or does not see the additional store ---"
 	"${ssh_cmd[@]}" "sudo podman --log-level=debug images 2>&1 \
-		| grep -iE 'additional|superiso|store|driver|config file' | head -40 \
+		| grep -iE 'additional|superiso|store|driver' | head -40 \
 		|| echo '(no matching debug lines)'" || true
 	echo "--- names recorded in the offline store ---"
 	"${ssh_cmd[@]}" "sudo cat /var/lib/superiso-store/overlay-images/images.json 2>&1 \
@@ -1077,24 +974,10 @@ run_install() {
 		local img_json="/var/lib/superiso-store/overlay-images/images.json"
 		if "${ssh_cmd[@]}" "sudo test -f ${img_json} && sudo jq -e --arg ref '${candidate_ref}' '.[] | select(.names != null) | select(.names | index(\$ref))' ${img_json} >/dev/null 2>&1" 2>/dev/null; then
 			echo "==> Found ${candidate_ref} in offline store images.json (podman query missed it)"
-			# The store holds the image but this podman does not have
-			# /var/lib/superiso-store in its additional-store list. On
-			# Rawhide because containers-common's
-			# storage.rootful.conf.d/00-vendor-rootful.conf drop-in replaces
-			# the list our /etc/containers/storage.conf sets (fixed in
-			# customize-live.sh with a 99- admin drop-in; kept here so an
-			# ISO built before that fix still installs). Re-assert the store
-			# and re-probe: bootc reads the same config, so if podman sees
-			# the image after this, so will the install.
-			"${ssh_cmd[@]}" "sudo mkdir -p /etc/containers/storage.conf.d && \
-				printf '[storage.options]\nadditionalimagestores = [\"/var/lib/superiso-store\", \"/usr/lib/containers/storage\"]\n' \
-				| sudo tee /etc/containers/storage.conf.d/99-tunaos-offline-store.conf >/dev/null" || true
-			if "${ssh_cmd[@]}" "sudo podman image exists '${candidate_ref}'" 2>/dev/null; then
-				echo "==> Store re-registered: ${candidate_ref} is now visible to podman"
-				found_local=1
-				found_ref="$candidate_ref"
-				break
-			fi
+			# The image exists but podman/bootc can't resolve it from the
+			# additional store (overlay driver mismatch). Don't set
+			# found_local here — let the code fall through to the network
+			# pull, which now uses aggressive MTU clamping + retries.
 		fi
 	done
 
@@ -1122,25 +1005,6 @@ run_install() {
 		if podman image exists "$host_img" 2>/dev/null; then
 			echo "==> Saving $host_img on host..."
 			podman save "$host_img" -o "$host_tar"
-			# The live root is a RAM-backed overlay, so the tar plus the
-			# loaded copy have to fit in what little the guest can write.
-			# Without this check an oversized transfer does not fail, it
-			# thrashes until the kernel kills sshd, which is how
-			# bonito-rawhide:cosmic burned 61 minutes before reporting
-			# "Connection closed by remote host" with no visible cause.
-			local tar_kb avail_kb need_kb
-			tar_kb=$(du -k "$host_tar" | cut -f1)
-			avail_kb=$("${ssh_cmd[@]}" "df -Pk /home/liveuser | awk 'NR==2 {print \$4}'" 2>/dev/null | tr -dc '0-9')
-			need_kb=$((tar_kb * 9 / 4)) # tar + podman load's unpacked copy
-			echo "==> Guest writable space: ${avail_kb:-unknown} KiB, image tar: ${tar_kb} KiB"
-			if [[ -n "$avail_kb" && "$avail_kb" -lt "$need_kb" ]]; then
-				echo "ERROR: guest has ${avail_kb} KiB writable but staging ${host_img}" >&2
-				echo "ERROR: needs ~${need_kb} KiB. The offline store on the ISO is the" >&2
-				echo "ERROR: only viable source for an image this size. Check that" >&2
-				echo "ERROR: /var/lib/superiso-store is registered in the guest's" >&2
-				echo "ERROR: containers-storage config (storage.conf.d drop-ins win)." >&2
-				return 3
-			fi
 			echo "==> Transferring image to guest (this may take a few minutes)..."
 			"${scp_cmd[@]}" "$host_tar" "liveuser@127.0.0.1:/home/liveuser/"
 			echo "==> Loading image into guest podman..."
@@ -1267,13 +1131,6 @@ EOF
 				echo "karg appended: $f"
 				found=1
 			done
-			# Evidence for the installed boot: the firmware can only find the
-			# installed system by enumerating the default loader, so record
-			# whether it is actually on the ESP before we hand over to QEMU.
-			if [ -d /mnt/tbx-bls/EFI ]; then
-				echo "ESP EFI binaries on ${p}:"
-				find /mnt/tbx-bls/EFI -iname '*.efi' -printf '  %p\n' 2>/dev/null | sed 's|/mnt/tbx-bls||'
-			fi
 			umount /mnt/tbx-bls
 			[ "$found" = 1 ] && break
 		done
@@ -1313,15 +1170,13 @@ EOF
 		echo "==> LUKS passphrase gate: booting installed disk, injecting passphrase, expecting login..."
 		local FB_SERIAL="${OUTPUT_DIR}/installed-serial.sock"
 		rm -f "$FB_SERIAL"
-		local FB_VARS
-		FB_VARS="$(installed_boot_ovmf_vars "$bootloader")"
 		# No TPM here: the passphrase gate doesn't need one, and the
 		# install-phase swtpm has already exited (its socket is gone). TPM
 		# auto-unlock is the separate post-install test.
 		"$QEMU" -name "tunaos-iso-e2e-installed" -machine pc -cpu "$CPU_ARG" \
 			-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
 			-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
-			-drive "if=pflash,format=raw,file=${FB_VARS}" \
+			-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 			-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 			-device virtio-blk-pci,drive=disk \
 			-netdev "user,id=net0" -device virtio-net-pci,netdev=net0 \
@@ -1342,8 +1197,6 @@ EOF
 	fi
 
 	echo "==> Booting installed system..."
-	local INSTALLED_VARS
-	INSTALLED_VARS="$(installed_boot_ovmf_vars "$bootloader")"
 	# Boot from the install disk (remove cdrom)
 	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
 	"$QEMU" \
@@ -1355,7 +1208,7 @@ EOF
 		-smp "$CPUS" \
 		${TPM_ARGS} \
 		-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
-		-drive "if=pflash,format=raw,file=${INSTALLED_VARS}" \
+		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 		-device virtio-blk-pci,drive=disk \
 		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \

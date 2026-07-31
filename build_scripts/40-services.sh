@@ -64,11 +64,6 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 	fi
 
 	# Units that exist on Ubuntu once their packages are installed.
-	# NetworkManager explicitly: the deb postinst enables it via preset, but
-	# an image whose only network manager silently failed to come up has no
-	# way to be fixed after install (grouper booted with no managed NIC at
-	# all), so state the dependency instead of inheriting it.
-	safe_enable NetworkManager.service
 	safe_enable tailscaled.service
 	safe_enable fwupd.service
 	systemctl enable podman-auto-update.timer 2>/dev/null || true
