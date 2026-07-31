@@ -78,7 +78,14 @@ gnome)
 	# turns working builds red instead of catching broken ones. Extend to
 	# kde/xfce/niri/cosmic the same way: measure a healthy image first.
 	require_command nautilus
-	require_any_glob '/usr/libexec/gvfsd' '/usr/lib/gvfs/gvfsd' '/usr/lib/*/gvfs/gvfsd'
+	# gvfsd's location is pure distro drift: Fedora/EL put it directly in
+	# /usr/libexec, openSUSE nests it under /usr/libexec/gvfs, and Debian
+	# uses /usr/lib/<triplet>/gvfs. Verified from the shipped rpm:
+	# gvfs-1.60.1 on Tumbleweed owns /usr/libexec/gvfs/gvfsd, which none of
+	# the original three patterns matched — sailfin:gnome installed gvfs,
+	# gvfs-backends and gvfs-fuse and still failed this gate.
+	require_any_glob '/usr/libexec/gvfsd' '/usr/libexec/gvfs/gvfsd' \
+		'/usr/lib/gvfs/gvfsd' '/usr/lib*/gvfs/gvfsd' '/usr/lib/*/gvfs/gvfsd'
 	require_any_glob '/usr/libexec/xdg-desktop-portal-gnome' \
 		'/usr/lib/xdg-desktop-portal-gnome' \
 		'/usr/lib/*/xdg-desktop-portal-gnome'
