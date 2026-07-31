@@ -383,8 +383,30 @@ if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 		# its own contract. Point the alias at the DM we actually installed.
 		# Idempotent and a no-op on rpm/deb bases, where enable already made
 		# this exact link.
-		ln -sf "/usr/lib/systemd/system/${_TD_DM}.service" \
-			/etc/systemd/system/display-manager.service
+		#
+		# But do NOT stomp an alias the distro has already pointed at a REAL
+		# display manager. Measured on the published yellowfin:kde: Plasma 6.6
+		# renamed SDDM to PlasmaLogin, plasma-login-manager's scriptlet sets
+		# display-manager.service -> plasmalogin.service, and it does not
+		# obsolete sddm, so BOTH units exist. kde.yaml says display_manager:
+		# sddm, so an unconditional force here would repoint every EL10/Fedora
+		# KDE image away from the DM the distro chose — silently changing which
+		# greeter boots, and re-creating the conditions behind tunaOS#824
+		# (autologin written for one DM, a different one running).
+		#
+		# Only claim the alias when it is absent, dangling, or held by
+		# openSUSE's display-manager-legacy launcher — which is a sysconfig
+		# shim, not a display manager, and is the case this exists for.
+		_TD_ALIAS=/etc/systemd/system/display-manager.service
+		_TD_ALIAS_TARGET="$(readlink -f "${_TD_ALIAS}" 2>/dev/null || true)"
+		if [[ ! -e "${_TD_ALIAS}" ]] ||
+			[[ -z "${_TD_ALIAS_TARGET}" ]] ||
+			[[ ! -e "${_TD_ALIAS_TARGET}" ]] ||
+			[[ "$(basename "${_TD_ALIAS_TARGET}")" == "display-manager-legacy.service" ]]; then
+			ln -sf "/usr/lib/systemd/system/${_TD_DM}.service" "${_TD_ALIAS}"
+		else
+			echo "display-manager.service already points at $(basename "${_TD_ALIAS_TARGET}"); leaving it"
+		fi
 	fi
 	# Server-oriented bootc bases such as AlmaLinux default to
 	# multi-user.target. Enabling a display manager alone does not change the

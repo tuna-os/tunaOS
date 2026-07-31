@@ -310,6 +310,22 @@ STUB
   grep -qF 'ln -sf "/usr/lib/systemd/system/${_TD_DM}.service" \' "$script"
 }
 
+@test "desktop installer does not stomp a valid display-manager alias" {
+  # Plasma 6.6 renamed SDDM to PlasmaLogin. plasma-login-manager sets
+  # display-manager.service -> plasmalogin.service and does NOT obsolete sddm,
+  # so both units exist on yellowfin:kde while kde.yaml still says
+  # display_manager: sddm. Forcing the alias unconditionally would repoint
+  # every EL10/Fedora KDE image away from the DM the distro picked and
+  # re-create tunaOS#824 (autologin written for one DM, another one running).
+  # The force must be scoped to absent/dangling/legacy-shim only.
+  local script="${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
+  grep -qF 'display-manager-legacy.service' "$script"
+  grep -qF 'leaving it' "$script"
+  # The bare unconditional force must be gone.
+  run grep -cE '^\t\tln -sf "/usr/lib/systemd/system/\$\{_TD_DM\}\.service" \\$' "$script"
+  [ "$output" -le 1 ]
+}
+
 @test "desktop installer reads both shapes of a zypper section" {
   # The zypper section is a plain list on most desktops and a map (packages +
   # display_manager) on XFCE. mikefarah yq ERRORS when indexing a sequence
