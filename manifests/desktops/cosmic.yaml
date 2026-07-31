@@ -116,6 +116,75 @@ packages:
       - brightnessctl
       - playerctl
 
+  # ── Zypper (openSUSE Tumbleweed) ───────────────────────────────────
+  # sailfin:cosmic did not exist: this manifest had no zypper section, so the
+  # flavor could not be declared. Tumbleweed does package COSMIC, and richly —
+  # every name below was listed by `zypper se cosmic` and the whole set
+  # installs cleanly (`zypper install -y`, exit 0) on a Tumbleweed base.
+  #
+  # Two things are NOT packaged, and both change the shape of this list:
+  #
+  #   cosmic-settings   Does not exist on Tumbleweed under that name or any
+  #                     other — there is no settings binary after installing
+  #                     the full set (checked /usr/bin). Do NOT list it: the
+  #                     Fedora name would fail to resolve. cosmic-ext-tweaks
+  #                     is a third-party tweak tool, not the settings app, so
+  #                     it is not a substitute. The session is usable without
+  #                     it; the gap is upstream packaging.
+  #   cosmic-greeter    Also absent, so COSMIC's own greeter cannot be used.
+  #                     greetd is here instead, with gtkgreet+cage supplied by
+  #                     the shared greetd-gtkgreet.sh post_install script (the
+  #                     same one sailfin:niri uses). Without it greetd falls
+  #                     back to `agreety --cmd /bin/sh` — a text prompt into a
+  #                     bare shell.
+  #
+  # Verified after a real install: /usr/share/wayland-sessions/cosmic.desktop
+  # exists and cosmic-comp is on PATH, so the desktop contract is satisfiable.
+  zypper:
+    # Session and compositor
+    - cosmic-comp
+    - cosmic-session
+    - cosmic-panel
+    - cosmic-launcher
+    - cosmic-applets
+    - cosmic-bg
+    - cosmic-idle
+    - cosmic-notifications
+    - cosmic-osd
+    - cosmic-randr
+    - cosmic-workspaces
+    # Applications
+    - cosmic-files
+    - cosmic-term
+    - cosmic-edit
+    - cosmic-store
+    - cosmic-screenshot
+    # Theming
+    - cosmic-icons
+    - cosmic-wallpapers
+    # Greeter — cosmic-greeter is not packaged here; see above
+    - greetd
+    - gtkgreet
+    - cage
+    # Portals: COSMIC ships its own backend, with gtk alongside for GTK apps
+    - xdg-desktop-portal
+    - xdg-desktop-portal-cosmic
+    - xdg-desktop-portal-gtk
+    - xdg-user-dirs
+    # Files, secrets and audio
+    - gvfs
+    - gvfs-backends
+    - gvfs-fuse
+    - gnome-keyring
+    - gnome-keyring-pam
+    - pipewire
+    - pipewire-pulseaudio
+    - wireplumber
+    - pavucontrol
+    - wl-clipboard
+    - Mesa-dri
+    - Mesa-libEGL1
+
 post_install_inline:
   - "glib-compile-schemas /usr/share/glib-2.0/schemas || true"
   - "if [ -f /etc/pam.d/greetd ]; then sed --sandbox -i -e '/gnome_keyring.so/ s/-auth/auth/ ; /gnome_keyring.so/ s/-session/session/' /etc/pam.d/greetd; fi"
@@ -123,3 +192,8 @@ post_install_inline:
 # Post-install scripts to source (relative to build_scripts/)
 post_install:
   - tuna-flatpak-remote.sh
+  # No-op wherever cosmic-greeter is installed (Fedora/EL10/Ubuntu), because it
+  # only acts when gtkgreet AND cage are both present. On openSUSE, where
+  # cosmic-greeter is not packaged, it is the difference between a login screen
+  # and greetd's stock `agreety --cmd /bin/sh` text prompt into a bare shell.
+  - greetd-gtkgreet.sh

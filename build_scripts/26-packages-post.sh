@@ -39,35 +39,10 @@ rm "$DOWNLOADS_DIR/JetBrainsMono.tar.xz"
 mkdir -p /etc/flatpak/remotes.d
 install -m0644 "$DOWNLOADS_DIR/flathub.flatpakrepo" /etc/flatpak/remotes.d/flathub.flatpakrepo
 
-# remora — local layering CLI (github.com/tuna-os/remora). Static Go binary,
-# works on every base (dnf/zypper/pacman/apt). Version pinned for
-# reproducible image builds; renovate can bump it.
-REMORA_VERSION="v0.2.0"
-REMORA_ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
-case "${REMORA_ARCH}" in
-amd64) REMORA_SHA256="39c774ab76dbdbf95ff11a32e5083e24fa01f88804161c24998c0a21e368175a" ;;
-arm64) REMORA_SHA256="3454ac72a376c974f433b5c8db14470d908dd43fc3ddc27e19e47e70c5ab2c3b" ;;
-*)
-	echo "ERROR: unsupported Remora architecture: ${REMORA_ARCH}" >&2
-	exit 1
-	;;
-esac
-curl --retry 3 --fail -L \
-	"https://github.com/tuna-os/remora/releases/download/${REMORA_VERSION}/remora-linux-${REMORA_ARCH}" \
-	-o "$DOWNLOADS_DIR/remora"
-printf '%s  %s\n' "${REMORA_SHA256}" "$DOWNLOADS_DIR/remora" | sha256sum --check --strict
-install -Dm0755 "$DOWNLOADS_DIR/remora" /usr/bin/remora
-rm "$DOWNLOADS_DIR/remora"
-
-# Treat the downloaded binary as an image contract, not merely a successful
-# HTTP transfer. This catches wrong-architecture assets, truncated releases,
-# and release drift before an image can be published. Remora v0.2.0 has no
-# version subcommand, so its pinned release checksum proves the version while
-# this smoke test proves the installed binary can execute on the target arch.
-remora --help | grep -Fq 'Usage: remora <command> [args]'
-install -d /usr/share/tunaos/experience-contracts
-printf 'version=%s\nvalidated_at_build=true\n' "${REMORA_VERSION}" \
-	>/usr/share/tunaos/experience-contracts/remora
+# remora — local layering CLI. Lives in its own script so bases that cannot
+# run this one (Containerfile.opensuse skips the numbered scripts entirely —
+# see install-remora.sh) can still install it from a single source of truth.
+"$(dirname "$0")/install-remora.sh"
 
 # Generate initramfs image after installing Yellowfin branding because of Plymouth subpackage
 # Set TunaOS Plymouth theme before rebuilding initramfs so dracut picks it up.

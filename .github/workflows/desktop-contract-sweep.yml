@@ -1,0 +1,210 @@
+# Desktop contract sweep — establish and maintain the per-cell baseline.
+#
+# Runs build_scripts/checks/verify-desktop-experience.sh against every
+# PUBLISHED variant x desktop image and records one result per cell. The
+# contract gate runs at build time, but it only ever ran on the artifact being
+# built — never against what is actually published, which is how sailfin:gnome
+# (no file manager), sailfin:xfce (no display manager enabled) and
+# flounder:niri (no compositor at all) all shipped green.
+#
+# Four outcomes, deliberately distinct — "never tested" must never look like
+# "passing", and infrastructure trouble must never look like a broken desktop:
+#   pass     the image exists and satisfies the contract
+#   fail     the image exists and does NOT satisfy it (reason recorded)
+#   missing  no such published image — NOT a pass and NOT a fail
+#   error    the pull or the runner failed — the cell is still UNTESTED
+#
+# Heavy work belongs on runners, not in a session: each cell pulls a multi-GB
+# image, so this is one job per cell with a bounded fan-out.
+name: Desktop Contract Sweep
+
+on:
+  workflow_dispatch:
+    inputs:
+      filter:
+        description: 'Only sweep cells matching this substring (e.g. "sailfin" or ":kde"). Empty = all.'
+        default: ''
+        type: string
+  schedule:
+    # After the nightly variant builds, so it reads the freshest images.
+    - cron: "0 8 * * *"
+
+concurrency:
+  group: desktop-contract-sweep-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  generate_matrix:
+    name: cells
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.cells.outputs.matrix }}
+      count: ${{ steps.cells.outputs.count }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - id: cells
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Derive cells from build-config so the sweep cannot drift from what
+          # the factory actually declares. Base desktops only: the -hwe,
+          # -nvidia, -asahi, -cachyos and -zfs variants are the same desktop
+          # on different hardware and would triple the matrix without testing
+          # a different contract.
+          # shellcheck disable=SC2016  # $v is yq's binding, not a shell var
+          cells=$(yq -r '.variants[] | .id as $v | .flavors[]
+              | select(.build_image == true)
+              | select(.id | test("^(gnome|kde|niri|xfce|cosmic)$"))
+              | "\($v):\(.id)"' .github/build-config.yml \
+            | jq -R -s -c 'split("\n") | map(select(length > 0))
+              | map(split(":")) | map({variant: .[0], desktop: .[1]})')
+          if [[ -n "${{ inputs.filter }}" ]]; then
+            cells=$(jq -c --arg f "${{ inputs.filter }}" \
+              '[.[] | select("\(.variant):\(.desktop)" | contains($f))]' <<<"$cells")
+          fi
+          echo "matrix=$(jq -c '{include: .}' <<<"$cells")" >> "$GITHUB_OUTPUT"
+          echo "count=$(jq 'length' <<<"$cells")" >> "$GITHUB_OUTPUT"
+          jq -r '.[] | "\(.variant):\(.desktop)"' <<<"$cells"
+
+  sweep:
+    name: "${{ matrix.variant }}:${{ matrix.desktop }}"
+    needs: generate_matrix
+    if: fromJson(needs.generate_matrix.outputs.matrix).include[0]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # Bounded so the sweep does not starve the build workflows of runners.
+      max-parallel: 8
+      matrix: ${{ fromJson(needs.generate_matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/share/boost /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - name: Run the contract against the published image
+        id: check
+        shell: bash
+        env:
+          REF: ghcr.io/tuna-os/${{ matrix.variant }}:${{ matrix.desktop }}
+          CELL: ${{ matrix.variant }}:${{ matrix.desktop }}
+        run: |
+          set -uo pipefail   # NOT -e: a contract failure is data, not an error
+          # Do NOT apt-install podman on a runner that already ships one under
+          # /usr/local — mixing it with Ubuntu's produces
+          # "crun: unknown version specified" (see reusable-build-image.yml).
+          if ! sudo sh -c 'command -v podman' >/dev/null 2>&1; then
+            sudo apt-get update -qq && sudo apt-get install -y -qq podman
+          fi
+
+          status=missing; exitcode=""; reason="no published image"
+          # Existence check WITHOUT pulling: a cell with no image is untested,
+          # not failing, and must not cost a multi-GB download to discover.
+          #
+          # RETRY, and do not let a transient registry error masquerade as
+          # "no such image". A single un-retried inspect failure wrongly marked
+          # flounder:cosmic, flounder:gnome and marlin:gnome as unpublished in
+          # the first baseline sweep; two of those actually PASS and one is a
+          # real shipped-image bug. "Never tested" is only honest when the
+          # probe actually succeeded in saying so.
+          exists=no
+          for _try in 1 2 3; do
+            if sudo podman manifest inspect "$REF" >/dev/null 2>&1 \
+               || sudo podman image inspect "$REF" >/dev/null 2>&1 \
+               || sudo skopeo inspect "docker://$REF" >/dev/null 2>&1; then
+              exists=yes; break
+            fi
+            sleep $((_try * 5))
+          done
+          if [[ "$exists" == yes ]]; then
+            # Pull as its own step. A registry/disk failure is an ERROR, not a
+            # contract failure — folding the two together would report a
+            # perfectly good desktop as broken, the same conflation this sweep
+            # exists to prevent.
+            if ! sudo podman pull -q "$REF" >/dev/null 2>&1; then
+              status=error; reason="image exists but pull failed (infrastructure, not the contract)"
+            else
+              out=$(sudo podman run --rm \
+                -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
+                --entrypoint /bin/bash "$REF" /vde.sh "${{ matrix.desktop }}" 2>&1)
+              exitcode=$?        # capture directly; `| tail` would mask it
+              if [[ "$exitcode" -eq 0 ]]; then
+                status=pass; reason="contract satisfied"
+              else
+                status=fail
+                # The script prints one "missing required ..." line on failure.
+                reason=$(grep -m1 -E "^missing (required|unit)" <<<"$out" || echo "exit ${exitcode}")
+              fi
+              echo "$out" | tail -40
+            fi
+          fi
+
+          echo "::notice title=${CELL}::${status} — ${reason}"
+          jq -n --arg cell "$CELL" --arg variant "${{ matrix.variant }}" \
+                --arg desktop "${{ matrix.desktop }}" --arg status "$status" \
+                --arg reason "$reason" --arg exitcode "${exitcode:-}" \
+             '{cell:$cell,variant:$variant,desktop:$desktop,status:$status,reason:$reason,exit:$exitcode}' \
+             > "result.json"
+
+      - name: Upload cell result
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: contract-${{ matrix.variant }}-${{ matrix.desktop }}
+          path: result.json
+          retention-days: 30
+
+  collate:
+    name: Baseline
+    needs: [generate_matrix, sweep]
+    if: always() && needs.generate_matrix.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0 # v5.0.0
+        with:
+          pattern: contract-*
+          path: results
+          merge-multiple: false
+      - name: Build the baseline table
+        shell: bash
+        run: |
+          set -euo pipefail
+          find results -name result.json -exec cat {} + | jq -s -c 'sort_by(.cell)' > all.json
+          pass=$(jq '[.[]|select(.status=="pass")]|length' all.json)
+          fail=$(jq '[.[]|select(.status=="fail")]|length' all.json)
+          miss=$(jq '[.[]|select(.status=="missing")]|length' all.json)
+          err=$(jq '[.[]|select(.status=="error")]|length' all.json)
+          total=$(jq 'length' all.json)
+
+          {
+            echo "# Desktop contract baseline"
+            echo
+            echo "**${pass} / ${total} cells pass.** ${fail} fail, ${miss} have no published image, ${err} errored."
+            echo
+            echo "⬜ never tested (no image) — not a pass. ⚠️ infrastructure error, the cell is still untested."
+            echo
+            echo "| cell | result | reason |"
+            echo "|---|:--:|---|"
+            jq -r '.[] | "| \(.cell) | " +
+              (if .status=="pass" then "✅"
+               elif .status=="fail" then "❌"
+               elif .status=="error" then "⚠️"
+               else "⬜" end) +
+              " | \(.reason) |"' all.json
+          } | tee -a "$GITHUB_STEP_SUMMARY" > baseline.md
+
+          echo "DESKTOP CONTRACT BASELINE: ${pass}/${total} pass, ${fail} fail, ${miss} no image, ${err} error"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: desktop-contract-baseline
+          path: |
+            all.json
+            baseline.md
+          retention-days: 90

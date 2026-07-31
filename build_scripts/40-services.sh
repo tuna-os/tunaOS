@@ -37,7 +37,7 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 	case "${DESKTOP_FLAVOR}" in
 	kde)
 		safe_disable gdm.service
-		safe_enable sddm.service
+		safe_enable "$(kde_dm_unit)"
 		;;
 	niri | cosmic)
 		safe_disable gdm.service
@@ -90,7 +90,7 @@ safe_enable brew-setup.service
 safe_enable tunaos-var-home-restorecon.service
 if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
 	safe_disable gdm.service
-	safe_enable sddm.service
+	safe_enable "$(kde_dm_unit)"
 elif [[ "${DESKTOP_FLAVOR}" == "niri" || "${DESKTOP_FLAVOR}" == "cosmic" ]]; then
 	safe_disable gdm.service
 	safe_enable greetd.service

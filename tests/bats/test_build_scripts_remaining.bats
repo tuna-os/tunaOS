@@ -162,6 +162,223 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$status" -eq 0 ]
 }
 
+@test "every contract-required application is declared in its manifests" {
+  # The contract runs at BUILD time, so a requirement that some variant's
+  # manifest never asks for turns a working build red. Each application the
+  # contract demands must therefore be named in every manifest that builds
+  # that desktop. This is the check that keeps the gate honest as manifests
+  # drift — it is why the KDE contract asserts dolphin and konsole but not
+  # xdg-desktop-portal-kde (absent from the emerge list, and guppy builds KDE).
+  local script="${REPO_ROOT}/build_scripts/checks/verify-desktop-experience.sh"
+  local fail=0
+  # desktop:command:manifest,manifest,...
+  local specs=(
+    "kde:dolphin:kde.yaml,kde-arch.yaml,kde-debian.yaml"
+    "kde:konsole:kde.yaml,kde-arch.yaml,kde-debian.yaml"
+    "xfce:thunar:xfce.yaml,xfce-arch.yaml"
+  )
+  # NB: a plain-list match is the point. cosmic-files is declared inside
+  # cosmic.yaml's el10 COPR block, where installs are best-effort — indentation
+  # alone would match it and wrongly imply the package is guaranteed. That is
+  # why cosmic is absent from this table and from the contract.
+  for spec in "${specs[@]}"; do
+    local de="${spec%%:*}" rest="${spec#*:}"
+    local cmd="${rest%%:*}" manifests="${rest#*:}"
+    # The contract must actually require it...
+    if ! grep -qF "require_command $cmd" "$script"; then
+      echo "FAIL: contract does not require $cmd for $de" >&2
+      fail=1
+    fi
+    # ...and every manifest that builds this desktop must declare it.
+    local IFS=,
+    for m in $manifests; do
+      if ! grep -qE "^\s*-\s+${cmd}\s*$" "${REPO_ROOT}/manifests/desktops/${m}"; then
+        echo "FAIL: contract requires $cmd for $de but ${m} never installs it" >&2
+        fail=1
+      fi
+    done
+  done
+  [ "$fail" -eq 0 ]
+}
+
+@test "greetd greeter degrades to software rendering without a render node" {
+  # cage is wlroots-based: on a VM with virtio-gpu but no virgl there is a DRM
+  # card and NO render node, GL init fails, cage exits and greetd restart-loops
+  # on a black screen. Boot-time detection is required — a baked-in renderer
+  # either breaks virgl-less VMs or needlessly softens every GPU machine.
+  local script="${REPO_ROOT}/build_scripts/desktop/greetd-gtkgreet.sh"
+  grep -qF '/dev/dri/renderD*' "$script"
+  grep -qF 'WLR_RENDERER=pixman' "$script"
+  # greetd must launch the wrapper, not cage directly, or the detection never runs.
+  grep -qF 'command = "/usr/libexec/tunaos/greetd-session"' "$script"
+  run grep -F 'command = "cage -s --' "$script"
+  [ "$status" -ne 0 ]
+
+  # Behavioural: extract the wrapper and prove BOTH branches. The probed path
+  # is redirected into the test tmpdir so the result does not depend on whether
+  # the machine running the tests happens to have a GPU.
+  local base="${BATS_TEST_TMPDIR}/dri"
+  local w="${BATS_TEST_TMPDIR}/greetd-session"
+  awk '/<<.SESSION_EOF.$/{f=1;next} /^SESSION_EOF$/{f=0} f' "$script" \
+    | sed -e "s|/dev/dri/renderD\*|${base}/renderD*|" \
+      -e "s|/dev/dri/card\*|${base}/card*|" \
+      -e 's|^\tsleep 0.5|\t:|' \
+      -e 's|^exec cage.*|echo "R=${WLR_RENDERER:-hw}"|' > "$w"
+
+  # No render node (virgl-less VM) -> software renderer. card* present so the
+  # wait loop does not spin.
+  mkdir -p "$base"
+  touch "${base}/card0"
+  run bash "$w"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"R=pixman"* ]]
+
+  # Render node present (real GPU) -> left on hardware GL.
+  touch "${base}/renderD128"
+  run bash "$w"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"R=hw"* ]]
+
+  # The wait loop must be bounded: with no DRM device at all it still has to
+  # exec the greeter rather than hang greetd forever.
+  rm -f "${base}"/card0 "${base}"/renderD128
+  run bash "$w"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"R=pixman"* ]]
+}
+
+@test "greetd greeter account is resolved, not hardcoded" {
+  # greetd getpwnam()s the configured user and chowns its socket to it during
+  # startup, so a name that does not resolve kills it in milliseconds: "unable
+  # to get user info", exit 1, Restart=always, display-manager.service never
+  # active. Fedora/EL name that account `greetd`; openSUSE moved it into
+  # system-user-greeter, which creates `greeter` and no `greetd` user at all —
+  # which is why sailfin:niri booted to a black screen with zero failed units.
+  local script="${REPO_ROOT}/build_scripts/desktop/greetd-gtkgreet.sh"
+  run grep -F 'user = "greetd"' "$script"
+  [ "$status" -ne 0 ]
+  grep -qF 'user = "${_GG_USER}"' "$script"
+  # An unquoted heredoc, or the name is written literally.
+  grep -qE '<<GREETD_EOF$' "$script"
+
+  # Behavioural: extract the probe and drive all three cases against a stub
+  # getent, so the result does not depend on the accounts that happen to exist
+  # on the machine running the suite.
+  local probe="${BATS_TEST_TMPDIR}/probe.sh"
+  sed -n '/^\t_GG_USER=""$/,/^\techo "greetd greeter account/p' "$script" \
+    | sed -e 's/^\t//' -e 's/^\treturn 1$/exit 1/' -e 's/^return 1$/exit 1/' >"$probe"
+  grep -q 'getent passwd' "$probe"
+
+  local stub="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "$stub"
+  cat >"${stub}/getent" <<'STUB'
+#!/usr/bin/env bash
+# Only the accounts named in EXISTING_USERS resolve.
+for u in ${EXISTING_USERS:-}; do
+  [[ "$2" == "$u" ]] && { echo "$u:x:900:900::/var/lib/greetd:/usr/sbin/nologin"; exit 0; }
+done
+exit 2
+STUB
+  chmod +x "${stub}/getent"
+
+  # openSUSE: only `greeter` exists.
+  run env EXISTING_USERS=greeter PATH="${stub}:${PATH}" bash "$probe"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"greetd greeter account: greeter"* ]]
+
+  # Fedora/EL: only `greetd` exists.
+  run env EXISTING_USERS=greetd PATH="${stub}:${PATH}" bash "$probe"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"greetd greeter account: greetd"* ]]
+
+  # Neither: fail the build instead of shipping a greeter that cannot start.
+  run env EXISTING_USERS= PATH="${stub}:${PATH}" bash "$probe"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no greetd greeter account found"* ]]
+}
+
+@test "desktop installer claims the display-manager.service alias" {
+  # openSUSE's displaymanager-sysconfig owns /etc/systemd/system/display-manager.service
+  # and points it at its own legacy launcher. systemd refuses to write an
+  # [Install] Alias over an existing symlink, so `systemctl enable <dm>` fails
+  # outright and safe_enable swallows it — the alias keeps resolving to
+  # display-manager-legacy.service. The runtime contract asserts on that alias,
+  # so a working desktop fails its own contract unless the installer forces it.
+  local script="${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
+  grep -qF '/etc/systemd/system/display-manager.service' "$script"
+  # It must be forced (ln -sf), not left to systemctl enable.
+  grep -qF 'ln -sf "/usr/lib/systemd/system/${_TD_DM}.service" \' "$script"
+}
+
+@test "desktop installer does not stomp a valid display-manager alias" {
+  # Plasma 6.6 renamed SDDM to PlasmaLogin. plasma-login-manager sets
+  # display-manager.service -> plasmalogin.service and does NOT obsolete sddm,
+  # so both units exist on yellowfin:kde while kde.yaml still says
+  # display_manager: sddm. Forcing the alias unconditionally would repoint
+  # every EL10/Fedora KDE image away from the DM the distro picked and
+  # re-create tunaOS#824 (autologin written for one DM, another one running).
+  # The force must be scoped to absent/dangling/legacy-shim only.
+  local script="${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
+  grep -qF 'display-manager-legacy.service' "$script"
+  grep -qF 'leaving it' "$script"
+  # The bare unconditional force must be gone.
+  run grep -cE '^\t\tln -sf "/usr/lib/systemd/system/\$\{_TD_DM\}\.service" \\$' "$script"
+  [ "$output" -le 1 ]
+}
+
+@test "desktop installer reads both shapes of a zypper section" {
+  # The zypper section is a plain list on most desktops and a map (packages +
+  # display_manager) on XFCE. mikefarah yq ERRORS when indexing a sequence
+  # with a string, and `//` rescues a null, not an error — so the shape has to
+  # be branched on explicitly, exactly as the apt and el10 paths do.
+  local script="${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
+  grep -qF ".packages.zypper | type" "$script"
+  grep -qF '.packages.zypper.packages[]' "$script"
+  grep -qF '.packages.zypper[]' "$script"
+}
+
+@test "desktop installer refuses to build a zypper image with no desktop" {
+  # Parsing zero packages used to produce a desktop-flavored image containing
+  # no desktop, and still exit 0. The pacman and apt paths already fail loudly
+  # here; zypper must too.
+  run grep -F 'This would yield an image tagged ${_TD_DESKTOP} with no desktop in it.' \
+    "${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
+  [ "$status" -eq 0 ]
+}
+
+@test "every zypper desktop installs the display manager it enables" {
+  # sailfin:xfce shipped with NO display manager enabled: the manifest's
+  # top-level display_manager is gdm (right for Fedora/EL10) but openSUSE's
+  # XFCE installs lightdm. safe_enable no-ops on a missing unit and the
+  # graphical.target.wants link is guarded by the unit file existing, so the
+  # image booted to graphical.target with no greeter and no build error.
+  # Resolve the DM the same way install-desktop.sh does — per-section override
+  # beats the top-level key — and assert the list actually installs it.
+  command -v yq &>/dev/null || skip "yq not installed"
+  for manifest in "${REPO_ROOT}"/manifests/desktops/*.yaml; do
+    local shape dm pkgs
+    # yq reports a missing node as the tag "!!null", not "null".
+    shape="$(yq -r '.packages.zypper | type' "$manifest")"
+    [ "$shape" = "!!null" ] && continue
+
+    if [ "$shape" = "!!map" ]; then
+      pkgs="$(yq -r '.packages.zypper.packages[]' "$manifest")"
+      dm="$(yq -r '.packages.zypper.display_manager // ""' "$manifest")"
+    else
+      pkgs="$(yq -r '.packages.zypper[]' "$manifest")"
+      dm=""
+    fi
+    [ -n "$dm" ] || dm="$(yq -r '.display_manager // ""' "$manifest")"
+    [ -n "$dm" ] || continue
+
+    # On openSUSE the display manager's package name matches its unit name.
+    if ! grep -qx -- "$dm" <<<"$pkgs"; then
+      echo "FAIL: $(basename "$manifest") enables ${dm}.service but its zypper list never installs ${dm}" >&2
+      return 1
+    fi
+  done
+}
+
 @test "Ubuntu desktop stages configure display manager after package installation" {
   run grep -F 'configure-desktop-runtime.sh niri' "${REPO_ROOT}/Containerfile.ubuntu"
   [ "$status" -eq 0 ]
@@ -172,13 +389,29 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 }
 
 @test "published image contract executes and records pinned Remora" {
-  local post="${REPO_ROOT}/build_scripts/26-packages-post.sh"
-  grep -q 'sha256sum --check --strict' "$post"
-  grep -q "remora --help" "$post"
-  grep -q 'experience-contracts/remora' "$post"
+  # The remora install moved out of 26-packages-post.sh into its own script so
+  # Containerfile.opensuse — which runs none of the numbered scripts — can
+  # install it too. The pin, the checksum gate and the smoke test must survive
+  # that move.
+  local remora="${REPO_ROOT}/build_scripts/install-remora.sh"
+  grep -q 'sha256sum --check --strict' "$remora"
+  grep -q "remora --help" "$remora"
+  grep -q 'experience-contracts/remora' "$remora"
   # Runtime contract still gates on remora being present in the image.
   grep -q 'remora_not_found' \
     "${REPO_ROOT}/build_scripts/checks/verify-desktop-experience.sh"
+}
+
+@test "every base that ships images installs Remora" {
+  # sailfin shipped with no remora at all and every sailfin Gate failed on
+  # reason=remora_not_found — a desktop that booted fine reported as broken.
+  # The dnf/apt/pacman bases get it via 26-packages-post.sh; openSUSE cannot
+  # run that script (it would rebuild the initramfs with Fedora kernel naming
+  # and clobber the composefs/bootc one) so it calls the split-out script
+  # directly. Both routes must stay wired up.
+  grep -q 'install-remora.sh' "${REPO_ROOT}/build_scripts/26-packages-post.sh"
+  grep -q 'install-remora.sh' "${REPO_ROOT}/Containerfile.opensuse"
+  [ -x "${REPO_ROOT}/build_scripts/install-remora.sh" ]
 }
 
 @test "desktop contract unit runs the installed-system TAP checks on all DEs" {

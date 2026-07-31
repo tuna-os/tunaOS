@@ -329,8 +329,30 @@ esac
 	# (Re)build the initramfs with the asahi modules in scope — package
 	# postinst hooks do not reliably run dracut in container builds, and the
 	# ESP vendor-firmware flow silently dies without these modules.
-	dracut --force --no-hostonly --reproducible \
-		--kver "${KVER}" "/usr/lib/modules/${KVER}/initramfs.img"
+	#
+	# tpm2-tss and pcsc get pulled in as hard dependencies of systemd's
+	# measured-boot/smartcard modules, and their checks are
+	# `require_binaries tpm2` / `require_binaries pcscd`. Absent those
+	# binaries the WHOLE rebuild dies with "Module 'tpm2-tss' cannot be
+	# installed", which is what has failed every sailfin gnome-asahi build
+	# (tunaOS#878, the same reason Containerfile.opensuse and
+	# Containerfile.gentoo already pass --omit "tpm2-tss pcsc"). openSUSE arm
+	# ships neither binary, and Apple Silicon has no TPM2 device to unlock
+	# with anyway.
+	#
+	# Omit by capability, not unconditionally: the RPM asahi variants DO ship
+	# tpm2/pcscd, and blanket-omitting there would quietly strip TPM2
+	# auto-unlock out of their initramfs (#714). That is exactly why the same
+	# --omit was reverted from build_scripts/bootc/finalize.sh.
+	DRACUT_ARGS=(--force --no-hostonly --reproducible --kver "${KVER}")
+	DRACUT_OMIT=""
+	command -v tpm2 >/dev/null 2>&1 || DRACUT_OMIT="${DRACUT_OMIT}tpm2-tss "
+	command -v pcscd >/dev/null 2>&1 || DRACUT_OMIT="${DRACUT_OMIT}pcsc "
+	if [ -n "${DRACUT_OMIT}" ]; then
+		echo "dracut: omitting unavailable modules: ${DRACUT_OMIT% }"
+		DRACUT_ARGS+=(--omit "${DRACUT_OMIT% }")
+	fi
+	dracut "${DRACUT_ARGS[@]}" "/usr/lib/modules/${KVER}/initramfs.img"
 	command -v dnf >/dev/null 2>&1 && dnf clean all || true
 }
 

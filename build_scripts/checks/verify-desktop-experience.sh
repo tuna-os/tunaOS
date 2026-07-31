@@ -52,11 +52,35 @@ require_any_glob() {
 	exit 1
 }
 
+# PORTAL/KEYRING/GVFS PATHS — measured, one container per packaging family.
+# Never add a glob you have not seen resolve on a real distro: an invented
+# pattern that matches nothing turns a working desktop red, which is exactly
+# what '/usr/lib/*/gvfs/gvfsd' did to sailfin and marlin.
+#
+#   family          gvfsd                          portal-gnome / portal-gtk
+#   Fedora / EL     /usr/libexec/gvfsd             /usr/libexec/...
+#   Debian/Ubuntu   /usr/libexec/gvfsd AND         /usr/libexec/...
+#                   /usr/lib/gvfs/gvfsd
+#                   (package is gvfs-daemons, NOT gvfs — plain gvfs ships
+#                    only libgvfsdbus.so, so probing gvfs finds nothing)
+#   openSUSE        /usr/libexec/gvfs/gvfsd        /usr/libexec/...
+#   Arch            /usr/lib/gvfsd                 /usr/lib/...
+#
+# gnome-keyring-daemon is /usr/bin/gnome-keyring-daemon on all five.
+#
 case "$desktop" in
 gnome)
 	experience="projectbluefin/bluefin-lts"
 	require_command gnome-shell
-	require_glob '/usr/share/wayland-sessions/*gnome*.desktop'
+	# Ubuntu names its GNOME session `ubuntu.desktop`, not `gnome*.desktop`.
+	# Measured on the published grouper:gnome: /usr/share/wayland-sessions
+	# contains exactly `ubuntu.desktop`, /usr/share/xsessions does not exist,
+	# and gnome-shell IS installed — so the old glob reported a working GNOME
+	# desktop as broken. A contract that fails a healthy image is worse than no
+	# contract: it trains people to ignore it.
+	require_any_glob \
+		'/usr/share/wayland-sessions/*gnome*.desktop' \
+		'/usr/share/wayland-sessions/ubuntu*.desktop'
 	require_any_unit gdm gdm3
 	dm_pattern='^(gdm|gdm3)\.service$'
 	# Session-can-start is not the same as desktop-is-usable, and the gap
@@ -78,11 +102,25 @@ gnome)
 	# turns working builds red instead of catching broken ones. Extend to
 	# kde/xfce/niri/cosmic the same way: measure a healthy image first.
 	require_command nautilus
-	require_any_glob '/usr/libexec/gvfsd' '/usr/lib/gvfs/gvfsd' '/usr/lib/*/gvfs/gvfsd'
-	require_any_glob '/usr/libexec/xdg-desktop-portal-gnome' \
-		'/usr/lib/xdg-desktop-portal-gnome' \
-		'/usr/lib/*/xdg-desktop-portal-gnome'
-	require_any_glob '/usr/bin/gnome-keyring-daemon' '/usr/libexec/gnome-keyring-daemon'
+	# One glob per packaging family — see the measured table above the case.
+	# openSUSE (/usr/libexec/gvfs/gvfsd, owned by gvfs-1.60.1 on Tumbleweed)
+	# and Arch (/usr/lib/gvfsd) were the two real paths missing: sailfin:gnome
+	# installed gvfs, gvfs-backends and gvfs-fuse and still failed this gate.
+	# NB Debian does NOT use a multiarch triplet here — measured, it is plain
+	# /usr/lib/gvfs/gvfsd (plus /usr/libexec/gvfsd), so no /usr/lib/*/ arm is
+	# needed and none is kept.
+	require_any_glob \
+		'/usr/libexec/gvfsd' \
+		'/usr/libexec/gvfs/gvfsd' \
+		'/usr/lib/gvfsd' \
+		'/usr/lib/gvfs/gvfsd'
+	# Portal backend and keyring, measured the same way (table above the case):
+	# /usr/libexec on Fedora, EL, Debian, Ubuntu and openSUSE; /usr/lib on Arch.
+	# gnome-keyring-daemon is /usr/bin on all five.
+	require_any_glob \
+		'/usr/libexec/xdg-desktop-portal-gnome' \
+		'/usr/lib/xdg-desktop-portal-gnome'
+	require_any_glob '/usr/bin/gnome-keyring-daemon'
 	;;
 kde)
 	experience="ublue-os/aurora"
@@ -90,6 +128,19 @@ kde)
 	require_glob '/usr/share/wayland-sessions/*plasma*.desktop'
 	# KDE 6.5+ renames SDDM to plasmalogin; both are in the wild.
 	require_any_unit sddm plasmalogin
+	# A Plasma session is not a usable desktop on its own. sailfin:kde
+	# shipped plasmashell, kwin6 and systemsettings with NO file manager and
+	# NO terminal, because patterns-kde-kde resolves to the shell only.
+	# dolphin and konsole are the two the user cannot work without, and they
+	# are the only KDE applications listed EXPLICITLY in every manifest
+	# section that builds KDE — kde.yaml apt/fedora/el10/zypper/emerge plus
+	# kde-arch.yaml and kde-debian.yaml — so requiring them cannot redden a
+	# variant that is building correctly. Deliberately NOT asserted:
+	# xdg-desktop-portal-kde (absent from the emerge list, and guppy builds
+	# KDE) and plasma6-nm/kwallet (nowhere explicit; they arrive as
+	# dependencies, which differ per distro).
+	require_command dolphin
+	require_command konsole
 	dm_pattern='^(sddm|plasmalogin)\.service$'
 	;;
 niri)
@@ -97,6 +148,21 @@ niri)
 	require_command niri
 	require_glob '/usr/share/wayland-sessions/*niri*.desktop'
 	require_unit greetd
+	# niri is only a compositor: it has no portal, no secret store and no
+	# shell of its own. sailfin:niri shipped `niri` and `greetd` and nothing
+	# else. The shell itself cannot be asserted — Fedora and EL10 use DMS
+	# (quickshell) while openSUSE uses the wlroots stack (waybar/fuzzel),
+	# because quickshell and dms are not built for the opensuse-tumbleweed
+	# target yet: it IS declared in manifests/package-factory.yaml, but has no
+	# cells in the package build gate (tunaos-packages#139). Revisit when it
+	# does. The portal and the keyring ARE common:
+	# both are explicit in every niri section that builds (fedora, el10,
+	# zypper, pacman). Accept the gtk backend alongside gnome — a variant may
+	# reasonably ship only the former.
+	require_any_glob \
+		'/usr/libexec/xdg-desktop-portal-gnome' '/usr/lib/xdg-desktop-portal-gnome' \
+		'/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
+	require_any_glob '/usr/bin/gnome-keyring-daemon'
 	dm_pattern='^greetd\.service$'
 	;;
 cosmic)
@@ -104,6 +170,12 @@ cosmic)
 	require_command cosmic-comp
 	require_glob '/usr/share/wayland-sessions/*cosmic*.desktop'
 	require_unit greetd
+	# NOT extended. cosmic-files and xdg-desktop-portal-cosmic look like the
+	# obvious requirements, but on el10 they are installed from a COPR, and
+	# copr installs are best-effort — a flaky COPR would turn a requirement
+	# into a hard build failure on a variant that has always built. Nor is
+	# either path measured on any published cosmic image yet. Measure
+	# bonito:cosmic (fedora) and flounder:cosmic (apt) first, then decide.
 	dm_pattern='^greetd\.service$'
 	;;
 xfce)
@@ -111,6 +183,15 @@ xfce)
 	require_command xfce4-session
 	require_any_glob '/usr/share/xsessions/*xfce*.desktop' '/usr/share/wayland-sessions/*xfce*.desktop'
 	require_any_unit gdm gdm3 lightdm greetd
+	# sailfin:xfce shipped a session with no file manager thumbnails, no
+	# gvfs and NO portal at all — Flatpak file dialogs were simply broken.
+	# thunar and xdg-desktop-portal-gtk are explicit in every xfce section
+	# that builds (fedora, el10, apt, zypper, pacman). NOT asserted:
+	# xfce4-terminal — Debian gets it via the `xfce4` metapackage's
+	# Recommends, which an apt build may legitimately not install.
+	require_command thunar
+	require_any_glob \
+		'/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
 	dm_pattern='^(gdm|gdm3|lightdm|greetd)\.service$'
 	;;
 *) exit 0 ;;
@@ -143,13 +224,24 @@ if [[ "$mode" == --runtime ]]; then
 	# Check the display-manager.service alias (every DM registers it) and
 	# verify its Id resolves to a DM this desktop's contract allows — robust
 	# to per-distro unit names (gdm vs gdm3, lightdm vs greetd for xfce).
+	dm_id=$(systemctl show -P Id display-manager.service 2>/dev/null || true)
 	if ! systemctl is-active --quiet display-manager.service 2>/dev/null; then
 		report_fail "dm_inactive desktop=$desktop"
-	else
-		dm_id=$(systemctl show -P Id display-manager.service 2>/dev/null || true)
-		if [[ ! "$dm_id" =~ $dm_pattern ]]; then
-			report_fail "dm_mismatch dm=${dm_id:-unknown} expected=${dm_pattern}"
-		fi
+		# `dm_inactive` alone is not a diagnosis, and the reason why is
+		# structural: the DM logs to the journal, while the E2E gate can only
+		# read the serial console, so the actual error is invisible and every
+		# hypothesis costs a full image build. Ship the evidence with the
+		# failure — this is how a greetd exiting instantly on a missing
+		# greeter account looked identical to one whose greeter could not
+		# render.
+		{
+			systemctl show \
+				--property=Id,ActiveState,SubState,Result,ExecMainStatus,NRestarts \
+				display-manager.service
+			[[ -n "$dm_id" ]] && journalctl -b --no-pager -n 25 -u "$dm_id"
+		} 2>&1 | sed 's/^/dm_diag: /' | tee /dev/ttyS0 2>/dev/null || true
+	elif [[ ! "$dm_id" =~ $dm_pattern ]]; then
+		report_fail "dm_mismatch dm=${dm_id:-unknown} expected=${dm_pattern}"
 	fi
 	if [[ "$ok" -eq 1 ]]; then
 		echo "TUNAOS_DESKTOP_CONTRACT_OK desktop=$desktop experience=$experience" | tee /dev/ttyS0 2>/dev/null || true

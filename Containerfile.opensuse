@@ -74,6 +74,17 @@ RUN set -eu; \
         tailscale && \
     systemctl enable sshd && \
     systemctl mask systemd-firstboot.service
+# remora. This stage runs NONE of the numbered build_scripts (10-base-packages,
+# 26-packages-post, 40-services...) — 26-packages-post.sh, which installs
+# remora on the dnf variants, finishes by rebuilding the initramfs using
+# Fedora kernel naming (`rpm -qa | grep -P 'kernel-...'` finds no
+# kernel-default on openSUSE) and would clobber the composefs/bootc initramfs
+# this file builds and verifies below. So sailfin shipped without remora, and
+# every sailfin Gate failed on reason=remora_not_found — flagging a desktop
+# that had actually booted fine as broken. Install just remora, from the
+# script both paths now share.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/install-remora.sh
 RUN echo "uninitialized" > /etc/machine-id
 RUN mkdir -p /usr/lib/systemd/system/sshd.service.d && \
     printf '[Unit]\nBefore=ssh-access.target\nWants=ssh-access.target\n' \

@@ -565,6 +565,14 @@ variants:
       - id: xfce
         stage: 2
         build_image: true
+      # COSMIC: newly buildable. Tumbleweed packages the session richly and the
+      # whole zypper list installs clean (exit 0), producing cosmic-comp and
+      # /usr/share/wayland-sessions/cosmic.desktop — both measured on a real
+      # install, not inferred. Note cosmic-settings and cosmic-greeter are NOT
+      # packaged on openSUSE; see the manifest for what is used instead.
+      - id: cosmic
+        stage: 2
+        build_image: true
 
   # ── Guppy ────────────────────────────────────────────────────────────────
   # Guppy: source-based, emerge/portage. Compiles everything from source.
@@ -590,6 +598,23 @@ variants:
       - id: kde
         stage: 2
         build_image: true
+      # XFCE: every atom in the emerge list was verified to exist in the Gentoo
+      # main tree before this was declared. The list previously named
+      # xfce-base/lightdm, which does not exist (it is x11-misc/lightdm) — so
+      # declaring this flavor earlier would have failed on an unresolvable atom.
+      - id: xfce
+        stage: 2
+        build_image: true
+      # NOT declared, and not an oversight:
+      #   niri    — no ebuild in the Gentoo main tree at all. A search returns
+      #             only dev-ruby/niceogiri. Declaring it would publish an
+      #             installable image with no compositor, exactly as
+      #             flounder:niri did (tunaOS#915).
+      #   cosmic  — same: no cosmic-comp or cosmic-session ebuild in the tree,
+      #             and cosmic.yaml has no emerge section.
+      # Both measured and tracked in tunaOS#923.
+      # Do not add either until the packages exist; the emerge path now fails
+      # loudly on an empty list rather than shipping a desktop-less image.
 
   # ── Rawhide ────────────────────────────────────────────────────────────────
   # Fedora Rawhide (rolling development branch). Uses the same Containerfile
@@ -715,10 +740,31 @@ variants:
         stage: 2
         build_image: true
         build_iso: true
-      - id: niri
+      # No niri — same reason as flounder and flounder-sid (#918): niri is not
+      # packaged for apt in Debian trixie, Debian sid or Ubuntu 26.04, and
+      # manifests/desktops/niri.yaml has no apt section. grouper is Ubuntu, so
+      # it was covered by that evidence but missed by the change.
+      #
+      # Nothing would have caught it either. With no packages.apt section the
+      # installer skips the install without error, and the apt path `exit 0`s
+      # before the shared tail — so the desktop experience contract never runs
+      # on an apt variant at all. That is the mechanism that published
+      # flounder:niri with no compositor (tunaOS#915); grouper:niri is not in
+      # the published set, so it evidently never completed, but the
+      # declaration was wrong either way.
+      # Packaging it ourselves is tunaos-packages#136. Do not re-add without it.
+      #
+      # COSMIC, by contrast, IS buildable here and is now declared. Ubuntu has
+      # no COSMIC in its own repos, but cosmic.yaml carries
+      # ppa:hepp3n/cosmic-epoch with condition: ubuntu, and install-desktop.sh
+      # adds a PPA when IS_UBUNTU — measured WITH the PPA enabled,
+      # cosmic-session, cosmic-comp, cosmic-settings and cosmic-greeter all
+      # resolve. (Measuring in a bare ubuntu container says nothing here: the
+      # installer adds repositories before it installs, so a probe that skips
+      # that step is answering a question about the wrong system.)
+      - id: cosmic
         stage: 2
         build_image: true
-        build_iso: true
       - id: xfce
         stage: 2
         build_image: true

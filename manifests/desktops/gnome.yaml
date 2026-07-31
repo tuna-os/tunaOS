@@ -3,6 +3,7 @@
 display_manager: gdm
 
 packages:
+  # This section serves Ubuntu (grouper). Debian uses gnome-debian.yaml.
   apt:
     - ubuntu-desktop-minimal
     - gnome-shell-extension-manager
@@ -16,6 +17,12 @@ packages:
     - xdg-desktop-portal-gnome
     - xdg-desktop-portal-gtk
     - xdg-user-dirs-gtk
+    # gnome-keyring is NOT pulled by ubuntu-desktop-minimal. Measured on the
+    # published grouper:gnome: zero gnome-keyring packages installed and no
+    # gnome-keyring-daemon binary, so saved credentials, SSH/GPG agents and
+    # every app that stores a secret silently fail. Present in Ubuntu 26.04
+    # main (50.0-1), so this is an omission in the list, not an upstream gap.
+    - gnome-keyring
 
   fedora:
     packages:

@@ -77,19 +77,53 @@ echo "Installing ${_TD_DESKTOP} desktop (OS section: ${_TD_OS})..."
 # ── APT path ─────────────────────────────────────────────────────────────────
 
 # ── Zypper path ────────────────────────────────────────────────────────────────
+# The zypper section is either a plain package list (!!seq) or a map with
+# .packages and an optional .display_manager — the same two shapes the apt
+# section supports, and the shape el10/fedora already use. XFCE needs the map
+# form: openSUSE's XFCE ships lightdm, while the manifest's top-level
+# display_manager is gdm (correct for Fedora/EL10), so a list-shaped section
+# left sailfin:xfce enabling a DM that is not installed. safe_enable no-ops on
+# a missing unit and the graphical.target.wants link is guarded by the unit
+# file existing, so the image booted to graphical.target with no display
+# manager at all — no error, no greeter.
+#
+# Branch on the node kind rather than relying on `.packages.zypper.packages[]
+# // .packages.zypper[]`: mikefarah yq errors on indexing a sequence with a
+# string, and `//` rescues a null, not an error.
 if [[ "${_TD_OS}" == "zypper" ]]; then
-	readarray -t _TD_ZYPPER_PKGS < <($YQ -r '.packages.zypper[]' "${_TD_MANIFEST}" 2>/dev/null || true)
-	if ((${#_TD_ZYPPER_PKGS[@]} > 0)); then
-		zypper install -y "${_TD_ZYPPER_PKGS[@]}"
+	if [[ "$($YQ -r '.packages.zypper | type' "${_TD_MANIFEST}" 2>/dev/null)" == "!!map" ]]; then
+		readarray -t _TD_ZYPPER_PKGS < <($YQ -r '.packages.zypper.packages[]' "${_TD_MANIFEST}" 2>/dev/null || true)
+	else
+		readarray -t _TD_ZYPPER_PKGS < <($YQ -r '.packages.zypper[]' "${_TD_MANIFEST}" 2>/dev/null || true)
 	fi
+	# A zypper base that parsed no packages would build a desktop-flavored
+	# image with no desktop in it and still exit 0 — the failure mode that
+	# shipped sailfin. Match the pacman/apt paths and fail loudly instead.
+	if ((${#_TD_ZYPPER_PKGS[@]} == 0)); then
+		echo "ERROR: no zypper packages parsed from ${_TD_MANIFEST}" >&2
+		echo "       This would yield an image tagged ${_TD_DESKTOP} with no desktop in it." >&2
+		exit 1
+	fi
+	zypper install -y "${_TD_ZYPPER_PKGS[@]}"
 fi
 
 # ── Emerge path ────────────────────────────────────────────────────────────────
 if [[ "${_TD_OS}" == "emerge" ]]; then
 	readarray -t _TD_EMERGE_PKGS < <($YQ -r '.packages.emerge[]' "${_TD_MANIFEST}" 2>/dev/null || true)
-	if ((${#_TD_EMERGE_PKGS[@]} > 0)); then
-		emerge --verbose "${_TD_EMERGE_PKGS[@]}"
+	# Same guard as the zypper/pacman/apt paths, and for the same reason: a
+	# desktop with no emerge section would otherwise install nothing and still
+	# exit 0, publishing a desktop-flavored image with no desktop in it. That
+	# is what shipped as flounder:niri (tunaOS#915). It is a live risk on
+	# Gentoo specifically — niri and cosmic have no ebuilds in the main tree,
+	# so their emerge sections are deliberately absent, and the only thing
+	# stopping guppy:niri from repeating flounder:niri is that nobody has
+	# declared the flavor. Fail loudly instead of relying on that.
+	if ((${#_TD_EMERGE_PKGS[@]} == 0)); then
+		echo "ERROR: no emerge packages parsed from ${_TD_MANIFEST}" >&2
+		echo "       This would yield an image tagged ${_TD_DESKTOP} with no desktop in it." >&2
+		exit 1
 	fi
+	emerge --verbose "${_TD_EMERGE_PKGS[@]}"
 fi
 
 if [[ "${_TD_OS}" == "apt" ]]; then
@@ -317,6 +351,27 @@ fi
 if [[ -z "${_TD_DM}" || "${_TD_DM}" == "null" ]]; then
 	_TD_DM=$($YQ -r '.display_manager // ""' "${_TD_MANIFEST}" 2>/dev/null)
 fi
+# Plasma 6.6 renamed SDDM to PlasmaLogin. The manifests declare the DM family
+# ("sddm"), but on EL10 the image actually ships plasma-login-manager, whose
+# scriptlet claims display-manager.service. Resolve the declared name to the
+# unit this image really has, rather than editing every kde*.yaml -- the
+# manifest states intent, the build resolves it.
+#
+# Getting this wrong is not a no-op. The block below FORCE-LINKS the resolved
+# unit into graphical.target.wants, so leaving it as "sddm" pulls sddm.service
+# into graphical.target while display-manager.service points at plasmalogin --
+# two display managers racing for seat0/VT1, and the loser fails to start.
+#
+# _TD_DM is a BARE name here (".service" is appended at each use below), so
+# this cannot call kde_dm_unit(), which returns a full unit name. Assigning
+# "plasmalogin.service" would yield "plasmalogin.service.service": safe_enable
+# swallows the failure, the -f test below is false so nothing is force-linked,
+# and the image ships with no display manager enabled at all.
+if [[ "${_TD_DM}" == "sddm" && -f /usr/lib/systemd/system/plasmalogin.service ]]; then
+	echo "install-desktop: manifest declares sddm but image ships plasmalogin.service — resolving to plasmalogin"
+	_TD_DM="plasmalogin"
+fi
+
 if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 	safe_enable "${_TD_DM}.service"
 	# openSUSE's gdm.service ships only `[Install] Alias=display-manager.service`
@@ -332,6 +387,55 @@ if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 		mkdir -p /etc/systemd/system/graphical.target.wants
 		ln -sf "/usr/lib/systemd/system/${_TD_DM}.service" \
 			"/etc/systemd/system/graphical.target.wants/${_TD_DM}.service"
+		# Exactly one DM may be pulled into graphical.target. sddm and
+		# plasmalogin both ship on EL10 KDE (plasma-login-manager does not
+		# Obsolete sddm), and if both are wanted they race for seat0/VT1 and
+		# whichever loses reports "Failed to start". Drop the sibling's link.
+		case "${_TD_DM}" in
+		plasmalogin) rm -f /etc/systemd/system/graphical.target.wants/sddm.service ;;
+		sddm) rm -f /etc/systemd/system/graphical.target.wants/plasmalogin.service ;;
+		esac
+		# ...and take over the display-manager.service alias. openSUSE's
+		# displaymanager-sysconfig package ships
+		# /etc/systemd/system/display-manager.service already, pointing at
+		# display-manager-legacy.service (its own sysconfig-driven launcher).
+		# systemd refuses to create an [Install] Alias over an existing
+		# symlink, so `systemctl enable <dm>` does not merely skip the alias —
+		# it FAILS outright:
+		#   Failed to enable unit: File '/etc/systemd/system/display-manager.service'
+		#   already exists and is a symlink to /usr/lib/systemd/system/display-manager-legacy.service
+		# safe_enable swallows that (|| true). The wants-link above still
+		# starts the DM, so the desktop comes up, but the alias keeps
+		# resolving to the legacy launcher — and the runtime contract asserts
+		# on the alias (`systemctl show -P Id display-manager.service` against
+		# ^(gdm|gdm3|lightdm|greetd)\.service$). A working desktop would fail
+		# its own contract. Point the alias at the DM we actually installed.
+		# Idempotent and a no-op on rpm/deb bases, where enable already made
+		# this exact link.
+		#
+		# But do NOT stomp an alias the distro has already pointed at a REAL
+		# display manager. Measured on the published yellowfin:kde: Plasma 6.6
+		# renamed SDDM to PlasmaLogin, plasma-login-manager's scriptlet sets
+		# display-manager.service -> plasmalogin.service, and it does not
+		# obsolete sddm, so BOTH units exist. kde.yaml says display_manager:
+		# sddm, so an unconditional force here would repoint every EL10/Fedora
+		# KDE image away from the DM the distro chose — silently changing which
+		# greeter boots, and re-creating the conditions behind tunaOS#824
+		# (autologin written for one DM, a different one running).
+		#
+		# Only claim the alias when it is absent, dangling, or held by
+		# openSUSE's display-manager-legacy launcher — which is a sysconfig
+		# shim, not a display manager, and is the case this exists for.
+		_TD_ALIAS=/etc/systemd/system/display-manager.service
+		_TD_ALIAS_TARGET="$(readlink -f "${_TD_ALIAS}" 2>/dev/null || true)"
+		if [[ ! -e "${_TD_ALIAS}" ]] ||
+			[[ -z "${_TD_ALIAS_TARGET}" ]] ||
+			[[ ! -e "${_TD_ALIAS_TARGET}" ]] ||
+			[[ "$(basename "${_TD_ALIAS_TARGET}")" == "display-manager-legacy.service" ]]; then
+			ln -sf "/usr/lib/systemd/system/${_TD_DM}.service" "${_TD_ALIAS}"
+		else
+			echo "display-manager.service already points at $(basename "${_TD_ALIAS_TARGET}"); leaving it"
+		fi
 	fi
 	# Server-oriented bootc bases such as AlmaLinux default to
 	# multi-user.target. Enabling a display manager alone does not change the
