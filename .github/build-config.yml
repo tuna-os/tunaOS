@@ -715,10 +715,19 @@ variants:
         stage: 2
         build_image: true
         build_iso: true
-      - id: niri
-        stage: 2
-        build_image: true
-        build_iso: true
+      # No niri — same reason as flounder and flounder-sid (#918): niri is not
+      # packaged for apt in Debian trixie, Debian sid or Ubuntu 26.04, and
+      # manifests/desktops/niri.yaml has no apt section. grouper is Ubuntu, so
+      # it was covered by that evidence but missed by the change.
+      #
+      # Nothing would have caught it either. With no packages.apt section the
+      # installer skips the install without error, and the apt path `exit 0`s
+      # before the shared tail — so the desktop experience contract never runs
+      # on an apt variant at all. That is the mechanism that published
+      # flounder:niri with no compositor (tunaOS#915); grouper:niri is not in
+      # the published set, so it evidently never completed, but the
+      # declaration was wrong either way.
+      # Packaging it ourselves is tunaos-packages#136. Do not re-add without it.
       - id: xfce
         stage: 2
         build_image: true

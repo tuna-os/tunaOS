@@ -113,8 +113,9 @@ niri)
 	# niri is only a compositor: it has no portal, no secret store and no
 	# shell of its own. sailfin:niri shipped `niri` and `greetd` and nothing
 	# else. The shell itself cannot be asserted — Fedora and EL10 use DMS
-	# (quickshell), openSUSE the wlroots stack (waybar/fuzzel), and neither
-	# component exists on the other. The portal and the keyring ARE common:
+	# (quickshell) while openSUSE uses the wlroots stack (waybar/fuzzel),
+	# because openSUSE is not yet a Tideforge target (tunaos-packages#111).
+	# Revisit if the shells converge. The portal and the keyring ARE common:
 	# both are explicit in every niri section that builds (fedora, el10,
 	# zypper, pacman). Accept the gtk backend alongside gnome — a variant may
 	# reasonably ship only the former.

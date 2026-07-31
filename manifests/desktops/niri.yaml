@@ -116,12 +116,17 @@ packages:
   # fuzzel, swaylock, alacritty, nautilus, gvfs, gnome-keyring,
   # xdg-desktop-portal and pavucontrol were all absent.
   #
-  # DMS (DankMaterialShell) — what the fedora/el10 sections use as the shell
-  # — cannot be used here: quickshell is not packaged for Tumbleweed, and
-  # dms/dms-cli/dms-greeter exist only in the avengemedia COPRs, which are
-  # RPM/dnf-only. So openSUSE gets the conventional wlroots-style stack
-  # (waybar + fuzzel + swaync + swaylock) instead. The session differs from
-  # the DMS variants by necessity; the component contract is the same.
+  # DMS (DankMaterialShell) — what the fedora/el10 sections use as the shell —
+  # is not available here YET. quickshell, dms, dms-cli and dms-greeter are
+  # becoming first-class Tideforge packages (tunaos-packages#125 builds them
+  # for el10 RPM plus Debian and Ubuntu DEB); what is missing is an openSUSE
+  # TARGET in the factory, which is tunaos-packages#111. So this is a
+  # not-yet, not a can't: when openSUSE becomes a Tideforge target, revisit
+  # this section and align it with the DMS variants.
+  #
+  # Until then openSUSE gets the conventional wlroots stack (waybar + fuzzel
+  # + swaync + swaylock). The session differs from the DMS variants; the
+  # component contract is the same.
   #
   # Every name verified with `zypper se -x -t package`; the whole list
   # dry-runs clean (exit 0, no unresolved names, no vendor changes, no
