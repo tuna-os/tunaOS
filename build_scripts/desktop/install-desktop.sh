@@ -110,9 +110,20 @@ fi
 # ── Emerge path ────────────────────────────────────────────────────────────────
 if [[ "${_TD_OS}" == "emerge" ]]; then
 	readarray -t _TD_EMERGE_PKGS < <($YQ -r '.packages.emerge[]' "${_TD_MANIFEST}" 2>/dev/null || true)
-	if ((${#_TD_EMERGE_PKGS[@]} > 0)); then
-		emerge --verbose "${_TD_EMERGE_PKGS[@]}"
+	# Same guard as the zypper/pacman/apt paths, and for the same reason: a
+	# desktop with no emerge section would otherwise install nothing and still
+	# exit 0, publishing a desktop-flavored image with no desktop in it. That
+	# is what shipped as flounder:niri (tunaOS#915). It is a live risk on
+	# Gentoo specifically — niri and cosmic have no ebuilds in the main tree,
+	# so their emerge sections are deliberately absent, and the only thing
+	# stopping guppy:niri from repeating flounder:niri is that nobody has
+	# declared the flavor. Fail loudly instead of relying on that.
+	if ((${#_TD_EMERGE_PKGS[@]} == 0)); then
+		echo "ERROR: no emerge packages parsed from ${_TD_MANIFEST}" >&2
+		echo "       This would yield an image tagged ${_TD_DESKTOP} with no desktop in it." >&2
+		exit 1
 	fi
+	emerge --verbose "${_TD_EMERGE_PKGS[@]}"
 fi
 
 if [[ "${_TD_OS}" == "apt" ]]; then

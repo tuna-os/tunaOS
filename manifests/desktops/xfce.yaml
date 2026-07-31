@@ -154,9 +154,33 @@ packages:
       - Mesa-libEGL1
       - adwaita-icon-theme
 
+  # ── Emerge (Gentoo) ────────────────────────────────────────────────
+  # Every atom below was checked against the Gentoo main tree
+  # (packages.gentoo.org/packages/<cat>/<pkg>.json returns 200) BEFORE being
+  # listed. The previous list named `xfce-base/lightdm`, which does not exist
+  # in any category — the display manager is x11-misc/lightdm. guppy:xfce was
+  # never declared as a flavor, so it never failed out loud; had it been, the
+  # build would have died on an unresolvable atom.
+  #
+  # xfce4-meta already pulls thunar, the terminal and tumbler (Gentoo
+  # metapackages pull their trees — guppy ships 2 atoms and gets the largest
+  # desktop of any variant). They are listed explicitly anyway because the
+  # desktop contract asserts them: a requirement satisfied only as a
+  # transitive dependency is one upstream revbump away from disappearing.
+  #
+  # NOTE the portal category: it is sys-apps/xdg-desktop-portal-gtk, NOT
+  # gui-libs/ (which is where -wlr and -lxqt live). The contract requires a
+  # gtk portal backend, so getting this wrong would fail the build.
   emerge:
     - xfce-base/xfce4-meta
-    - xfce-base/lightdm
+    - x11-misc/lightdm
+    - xfce-base/thunar
+    - xfce-base/tumbler
+    - x11-terms/xfce4-terminal
+    - sys-apps/xdg-desktop-portal
+    - sys-apps/xdg-desktop-portal-gtk
+    - gnome-base/gvfs
+    - gnome-base/gnome-keyring
 
 versionlock:
   - glib2

@@ -187,9 +187,27 @@ packages:
     - Mesa-dri
     - Mesa-libEGL1
 
-  emerge:
-    - gui-wm/niri
-    - gui-apps/greetd
+  # ── Emerge (Gentoo) ────────────────────────────────────────────────
+  # DELIBERATELY ABSENT. niri is not packaged in the Gentoo main tree at all —
+  # a search for "niri" on packages.gentoo.org returns only dev-ruby/niceogiri.
+  # There is no gui-wm/niri, and no ebuild under any other category.
+  #
+  # This section previously read:
+  #     - gui-wm/niri        does not exist
+  #     - gui-apps/greetd    wrong category; the daemon is gui-libs/greetd
+  # Neither atom resolves. guppy:niri is not declared as a flavor in
+  # build-config.yml, so it never ran — but had anyone declared it on the
+  # strength of "there is an emerge section", it would have produced exactly
+  # what flounder:niri did: a published, installable image with no compositor
+  # (tunaOS#915).
+  #
+  # What IS in the tree, for whoever packages niri later: gui-libs/greetd,
+  # gui-apps/gtkgreet. Missing alongside niri: cage.
+  #
+  # Do not add an emerge list here until niri has an ebuild. Tracked in
+  # tunaOS#923. Leaving the key absent is intentional: the installer's emerge
+  # path now fails loudly on an empty list rather than shipping a desktop-less
+  # image.
 
 versionlock:
   - glib2

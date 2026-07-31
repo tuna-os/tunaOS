@@ -590,6 +590,23 @@ variants:
       - id: kde
         stage: 2
         build_image: true
+      # XFCE: every atom in the emerge list was verified to exist in the Gentoo
+      # main tree before this was declared. The list previously named
+      # xfce-base/lightdm, which does not exist (it is x11-misc/lightdm) — so
+      # declaring this flavor earlier would have failed on an unresolvable atom.
+      - id: xfce
+        stage: 2
+        build_image: true
+      # NOT declared, and not an oversight:
+      #   niri    — no ebuild in the Gentoo main tree at all. A search returns
+      #             only dev-ruby/niceogiri. Declaring it would publish an
+      #             installable image with no compositor, exactly as
+      #             flounder:niri did (tunaOS#915).
+      #   cosmic  — same: no cosmic-comp or cosmic-session ebuild in the tree,
+      #             and cosmic.yaml has no emerge section.
+      # Both measured and tracked in tunaOS#923.
+      # Do not add either until the packages exist; the emerge path now fails
+      # loudly on an empty list rather than shipping a desktop-less image.
 
   # ── Rawhide ────────────────────────────────────────────────────────────────
   # Fedora Rawhide (rolling development branch). Uses the same Containerfile
