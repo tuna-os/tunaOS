@@ -31,30 +31,6 @@ FROM base AS system
 # runtime image doesn't ship (libssl.so.60 — see #643); the packaged bootc has
 # correct runtime deps and bundles the 51bootc dracut module. Also faster (no
 # cargo compile). Verified: bootc 1.15.2 install/lint work on Tumbleweed.
-#
-# cryptsetup is explicit because nothing in this list pulls it in (verified with
-# a zypper --dry-run of exactly these packages plus the enhanced_base pattern),
-# and fisherman's pre-flight refuses to install with encryption without it.
-# That is the same gate that failed the Ubuntu and Arch LUKS cells.
-# systemd-cryptenroll, the other tpm2-luks requirement, comes from `udev` on
-# Tumbleweed (not `systemd`), and that is already in the list below.
-#
-# sudo is explicit for the same reason it is on the Arch and apt bases: the
-# stock Tumbleweed image has no sudo binary and neither this list nor the
-# enhanced_base pattern pulls it in (both checked with zypper --dry-run). The
-# live session drives the entire install through sudo, and `LUKS marlin:gnome`
-# showed what its absence costs: "liveuser has no working passwordless sudo in
-# the live env".
-#
-# fuse-overlayfs is explicit for the same reason it is on the Arch base: the
-# live env's storage.conf points overlay's mount_program at
-# /usr/bin/fuse-overlayfs, and containers/storage hard-fails its whole config
-# when that program is missing, taking every podman call in the live guest with
-# it ("can't stat program \"/usr/bin/fuse-overlayfs\""). Dropping the
-# mount_program is not an option: the live root is an overlayfs and the overlay
-# driver will not stack on one without it. Neither this list nor the
-# enhanced_base pattern pulls it in (checked with zypper --dry-run on a stock
-# Tumbleweed image, which has no fuse-overlayfs binary).
 RUN set -eu; \
     retry_zypper() { \
       attempt=1; \
@@ -74,8 +50,8 @@ RUN set -eu; \
     retry_zypper --non-interactive --gpg-auto-import-keys refresh && \
     retry_zypper install -y \
     bootc \
-    btrfs-progs ca-certificates ca-certificates-mozilla cpio curl cryptsetup dosfstools dracut e2fsprogs flatpak fuse-overlayfs glib2 \
-    kernel-default kernel-firmware-all openssh ostree skopeo sudo \
+    btrfs-progs ca-certificates ca-certificates-mozilla cpio curl dosfstools dracut e2fsprogs flatpak glib2 \
+    kernel-default kernel-firmware-all openssh ostree skopeo \
     systemd systemd-boot udev xfsprogs zstd chrony && \
     update-ca-certificates && \
     retry_zypper --non-interactive removerepo virtualization-containers && \

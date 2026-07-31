@@ -198,9 +198,10 @@ jobs:
       # That is crun rejecting the OCI spec version podman generated, not a
       # build error, though it surfaces as one at a random RUN step — the
       # same shape as the cgroup-manager failure documented below. It took
-      # out every cell of run 30520334279. Listing crun here only guarantees
-      # one exists; which one podman actually runs is settled by the pinning
-      # step below, since apt is a no-op on images that already ship a crun.
+      # out every cell of run 30520334279. reusable-build-image.yml dodges
+      # this by letting setup-runner install a matched podman stack
+      # (update-podman: "true"); this job installs from apt, so the pair has
+      # to be pinned together here.
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
@@ -209,47 +210,6 @@ jobs:
             qemu-system-x86 qemu-utils ovmf swtpm socat sshpass imagemagick \
             systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk
           podman --version; crun --version | head -1
-
-      # podman does not find crun on PATH; it walks a hardcoded list that puts
-      # /usr/bin/crun ahead of /usr/local/bin/crun (containers/common
-      # pkg/config/default.go). On a runner image that installs its own podman
-      # stack under /usr/local while dpkg still owns an older /usr/bin/crun,
-      # `crun --version` prints the new one while podman silently runs the old
-      # one and every container dies with the "unknown version specified"
-      # above: crun <= 1.14 rejects any OCI spec version whose string does not
-      # contain "1.0" (libcrun/container.c) and podman 5.x generates "1.2.0".
-      # Image ubuntu24/20260726.254 is exactly that shape — podman 5.8.4 and
-      # crun 1.28 in /usr/local/bin, dpkg crun 1.14.1 in /usr/bin. Newer crun
-      # dropped the version check, so the newest crun on the box is safe for
-      # whichever podman ends up running.
-      - name: Pin podman to the newest crun on the runner
-        run: |
-          set -euo pipefail
-          best="" bestv=""
-          for c in /usr/bin/crun /usr/sbin/crun /usr/local/bin/crun \
-                   /usr/local/sbin/crun /sbin/crun /bin/crun; do
-            [ -x "$c" ] || continue
-            v=$("$c" --version | awk 'NR==1{print $3}')
-            echo "candidate: $c -> $v"
-            newest=$(printf '%s\n%s\n' "$bestv" "$v" | sort -V | tail -1)
-            if [ -z "$bestv" ] || [ "$newest" = "$v" ]; then
-              best="$c" bestv="$v"
-            fi
-          done
-          [ -n "$best" ] || { echo "no crun found on this runner" >&2; exit 1; }
-          echo "==> pinning crun ${bestv} (${best})"
-          sudo mkdir -p /etc/containers/containers.conf.d
-          sudo tee /etc/containers/containers.conf.d/99-crun.conf >/dev/null <<CONF
-          [engine]
-          runtime = "crun"
-
-          [engine.runtimes]
-          crun = ["${best}"]
-          CONF
-          # Both stores matter: the ISO build runs rootless, iso-e2e.sh and the
-          # fisherman build run under sudo.
-          podman info --format 'rootless: {{.Host.OCIRuntime.Path}}'
-          sudo podman info --format 'root: {{.Host.OCIRuntime.Path}}'
 
       # iso-e2e.sh resolves the published image ref through
       # scripts/published-image-ref.sh, which needs yq. Without it the script
