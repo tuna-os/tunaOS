@@ -704,6 +704,34 @@ variants:
   # Desktops: gnome/kde/niri/xfce via the apt branches in build_scripts/*.sh
   # (cosmic has no apt branch yet). No HWE/NVIDIA layers — Ubuntu ships its
   # own kernel stack and the akmods images are RPM-only.
+  # ── elementary / Pantheon ──────────────────────────────────────────
+  # A SEPARATE variant rather than a grouper flavour, and the base image is
+  # why. Pantheon is absent from the Ubuntu archive entirely (verified on
+  # ubuntu:resolute with main+universe+restricted+multiverse enabled: gala,
+  # wingpanel, pantheon-session and switchboard all ABSENT, only `plank`
+  # present). It comes solely from ppa:elementary-os/stable, which publishes
+  # for **noble and jammy only** — nothing for resolute. grouper is Ubuntu
+  # 26.04, so Pantheon cannot be installed there at any version today.
+  #
+  # Revisit collapsing this into grouper when elementary publishes for 26.04.
+  - id: gurnard
+    emoji: "🐟"
+    description: "Based on Ubuntu 24.04 Noble Numbat with the Pantheon desktop"
+    base_image: "docker.io/library/ubuntu:noble"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [elementary]
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    flavors:
+      - id: base
+        stage: 1
+        build_image: true
+      - id: pantheon
+        stage: 2
+        build_image: true
+        build_iso: true
+
   - id: grouper
     emoji: "🐟"
     description: "Based on Ubuntu 26.04 Resolute Raccoon"

@@ -1,0 +1,61 @@
+# Pantheon Desktop Manifest (elementary OS)
+#
+# Pantheon is NOT in the Ubuntu archive. Verified against ubuntu:resolute with
+# main+universe+restricted+multiverse all enabled: gala, wingpanel,
+# pantheon-session and switchboard are all ABSENT; only `plank` exists. The
+# desktop comes exclusively from elementary's own PPA.
+#
+# That PPA publishes for **noble (24.04) and jammy (22.04) only** — there is
+# nothing for resolute (26.04). This is why Pantheon is a variant on a noble
+# base rather than a grouper flavour: grouper is Ubuntu 26.04, where this
+# desktop cannot be installed at all today.
+#
+# Every package name below was verified published for noble via the Launchpad
+# API (getPublishedBinaries, exact_match, status=Published) rather than
+# guessed. Names in this ecosystem are not guessable — the reverse-DNS
+# `io.elementary.*` scheme is used for some components and bare names for
+# others, and several obvious guesses resolve to nothing:
+#   pantheon-desktop            -> does not exist
+#   pantheon-session            -> does not exist (see io.elementary.session)
+#   io.elementary.files         -> not published for noble in this PPA
+#   pantheon-session-settings   -> not published for noble in this PPA
+# Do not add an unverified name here. An unresolvable name is what shipped a
+# desktop-less image in tunaos-packages#132.
+
+display_manager: lightdm
+
+packages:
+  apt:
+    ppa:
+      - repo: "ppa:elementary-os/stable"
+        condition: "ubuntu"  # Pantheon is not in the Ubuntu archive at all
+    packages:
+    # Compositor and shell — the parts that make it Pantheon rather than GTK
+    - gala                          # 8.5.1 — window manager / compositor
+    - io.elementary.wingpanel       # 8.0.4 — top panel
+    - wingpanel                     # panel indicators metapackage
+    - io.elementary.greeter         # 8.1.2 — LightDM greeter
+    - pantheon-agent-polkit         # polkit agent; without it every
+                                    # privileged action silently fails
+    # Look and feel
+    - elementary-default-settings
+    - elementary-icon-theme
+    # Core apps
+    - io.elementary.terminal
+    - io.elementary.settings-daemon
+    # Display manager itself comes from the Ubuntu archive, not the PPA.
+    - lightdm
+    # Portals and secrets — the gap that made sailfin:gnome ship without a
+    # file manager or working credentials (tunaos-packages#132). Pantheon is
+    # GTK, so it needs the GTK portal explicitly.
+    - xdg-desktop-portal
+    - xdg-desktop-portal-gtk
+    - xdg-user-dirs-gtk
+    - gnome-keyring
+    # Mounting and removable media
+    - gvfs
+    - gvfs-backends
+    - gvfs-fuse
+
+post_install:
+  - tuna-flatpak-remote.sh
