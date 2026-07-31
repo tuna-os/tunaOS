@@ -185,6 +185,33 @@ fi
 mkdir -p "$OUTPUT_DIR"
 OUTPUT_DIR="$(realpath "$OUTPUT_DIR")"
 
+# ConnectTimeout bounds the handshake; ServerAlive* bounds an already-open
+# connection to a guest that stopped answering. Without the latter, ssh/scp
+# block on a dead socket forever — three LUKS runs on 07-31 each burned
+# 2h14m-2h42m of a runner inside one scp and had to be cancelled by hand
+# (#939).
+#
+# Defined ONCE, at file scope, because the drift is the actual bug: check_ssh()
+# carried ConnectTimeout=10 while the two arrays inside run_smoke_checks() and
+# run_install() carried neither guard, so the same file behaved both ways
+# depending on which path you were on. Two copies that must agree will stop
+# agreeing; #940 fixed the values in both places and left the shape that let
+# them diverge.
+#
+# ServerAliveCountMax=8 (~120s to declare a dead peer) rather than 4 (~60s):
+# during a multi-GB transfer into a nested QEMU on a shared runner, sshd can
+# plausibly go unresponsive for a minute under I/O pressure without being
+# dead, and a false positive here kills a *working* run. Against a hang that
+# previously ran for two hours, the extra 60s of detection latency costs
+# nothing. Matches the value #940 landed.
+E2E_SSH_OPTS=(
+	-o StrictHostKeyChecking=no
+	-o UserKnownHostsFile=/dev/null
+	-o ConnectTimeout=10
+	-o ServerAliveInterval=15
+	-o ServerAliveCountMax=8
+)
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Extract VARIANT and FLAVOR from ISO filename for screenshot comparison and
 # for the fisherman recipe's image ref (used only as a fallback — callers
@@ -418,6 +445,14 @@ rm -f "$MONITOR_SOCK" "$SERIAL_LOG" "$QEMU_PIDFILE"
 
 # shellcheck disable=SC2329  # invoked via `trap cleanup_vm EXIT`
 cleanup_vm() {
+	# `|| true` is load-bearing under `set -e`: once the watchdog has FIRED it
+	# has already exited, so this kill fails, and without the guard the
+	# non-zero status aborts cleanup_vm right here — skipping the QEMU and
+	# swtpm teardown below in precisely the case that needs it most, leaving
+	# both orphaned on the runner. Verified by running the pattern both ways.
+	if [[ -n "${WATCHDOG_PID:-}" ]]; then
+		kill "$WATCHDOG_PID" 2>/dev/null || true
+	fi
 	if [[ "$KEEP_VM" -eq 1 ]]; then
 		echo "==> --keep-vm set; VM left running (monitor: ${MONITOR_SOCK})"
 		return
@@ -444,6 +479,43 @@ cleanup_vm() {
 	fi
 }
 trap cleanup_vm EXIT
+# Without this, SIGTERM kills the shell outright and the EXIT trap never runs,
+# so the watchdog below would leave QEMU and swtpm orphaned on the runner.
+trap 'exit 143' TERM
+
+# ── Wall-clock backstop ───────────────────────────────────────────────────
+# #940 bounded the scp and added keepalives, which fixes the hang we know
+# about. This bounds the harness as a WHOLE, which is a different guarantee:
+# per-call `timeout` wrappers keep getting missed one at a time, and that is
+# precisely how the scp in run_install() went unguarded while both its
+# neighbours — the `podman load` after it and `timeout 1800` on fisherman —
+# were bounded. Nobody omitted it on purpose.
+#
+# `--timeout 1200` does not cover this: it is per-phase, consulted only at the
+# readiness marker and the graphical-session wait, so the workflow passing it
+# bought nothing during the transfer.
+#
+# The point is the failure MODE, not the specific bug. With this, the next
+# missed guard produces a red cell with evidence and a pointer to the line it
+# hung on. Without it, three runs held runners for 2h14m-2h42m and left no
+# diagnosis at all — the log had to be recovered by cancelling them by hand,
+# because GitHub returns BlobNotFound for a running job.
+#
+# Deliberately generous, and well under luks-e2e.yml's `timeout-minutes: 240`:
+# firing must leave time for the Collect/Upload evidence steps, because a
+# backstop that trips without preserving evidence just reproduces the failure
+# it exists to prevent. Set E2E_WALL_CLOCK_LIMIT=0 to disable.
+E2E_WALL_CLOCK_LIMIT="${E2E_WALL_CLOCK_LIMIT:-10800}"
+WATCHDOG_PID=""
+if [[ "$E2E_WALL_CLOCK_LIMIT" -gt 0 ]]; then
+	(
+		sleep "$E2E_WALL_CLOCK_LIMIT"
+		echo "ERROR: iso-e2e.sh exceeded its ${E2E_WALL_CLOCK_LIMIT}s wall-clock limit — terminating" >&2
+		echo "       The last '==>' line above is where it hung. See tunaOS#939." >&2
+		kill -TERM "$$" 2>/dev/null || true
+	) &
+	WATCHDOG_PID=$!
+fi
 
 # Bring up the emulated TPM before any QEMU launch so both the install boot and
 # the post-install reboot attach the same TPM state.
@@ -758,16 +830,8 @@ check_ssh() {
 run_smoke_checks() {
 	local script_dir
 	script_dir="$(dirname "${BASH_SOURCE[0]}")"
-	# ConnectTimeout bounds the handshake; ServerAlive* bounds an already-open
-	# connection to a guest that stopped answering. Without the latter, ssh/scp
-	# block on a dead socket forever — three LUKS runs on 07-31 each burned
-	# 2h14m-2h42m of a runner inside one scp and had to be cancelled by hand
-	# (#939). check_ssh() a few lines up already set ConnectTimeout=10; these
-	# two arrays did not, which is why the same file behaved both ways.
-	local -a COMMON_SSH_OPTS=(
-		-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
-		-o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=8
-	)
+	# Keepalives and their rationale live on E2E_SSH_OPTS at file scope.
+	local -a COMMON_SSH_OPTS=("${E2E_SSH_OPTS[@]}")
 	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
 	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_PORT")
 
@@ -840,13 +904,10 @@ run_install() {
 	# scp uses -P (capital) for the port flag; ssh uses -p. Sharing one array
 	# with the wrong flag silently makes scp treat the port number as a
 	# source-file argument ("stat local 2222: No such file or directory").
-	# Keepalives: see run_smoke_checks() for why these are not optional. This
+	# Keepalives and their rationale live on E2E_SSH_OPTS at file scope. This
 	# is the array the multi-GB image transfer below uses, so it is the one
 	# that actually hung the runners in #939.
-	local -a COMMON_SSH_OPTS=(
-		-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
-		-o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=8
-	)
+	local -a COMMON_SSH_OPTS=("${E2E_SSH_OPTS[@]}")
 	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
 	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_PORT")
 
