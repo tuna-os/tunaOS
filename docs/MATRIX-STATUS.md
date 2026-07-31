@@ -42,7 +42,7 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 
 ## LUKS E2E
 
-**13 of 50** cells green (25 tested, 25 never tested).
+**13 of 50** cells green (20 tested, 30 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
@@ -51,11 +51,11 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **flounder** | ❌ | ⬜ | ⬜ | — | ⬜ |
-| **flounder-sid** | ❌ | ⬜ | ⬜ | — | ⬜ |
-| **grouper** | ❌ | ⬜ | ⬜ | — | ⬜ |
-| **guppy** | ❌ | ⬜ | — | — | ⬜ |
-| **marlin** | ❌ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **flounder** | ⬜ | ⬜ | ⬜ | — | ⬜ |
+| **flounder-sid** | ⬜ | ⬜ | ⬜ | — | ⬜ |
+| **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
+| **guppy** | ⬜ | ⬜ | — | — | ⬜ |
+| **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **sailfin** | ❌ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **yellowfin** | ❌ | ✅ | ⬜ | ✅ | ✅ |
@@ -77,6 +77,7 @@ This is the only axis that checks a human could actually install. For 17 combina
 | **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **flounder** | ⬜ | ⬜ | — | — | — |
 | **grouper** | ⬜ | ⬜ | — | — | ⬜ |
+| **gurnard** | — | — | — | — | — |
 | **marlin** | ⬜ | ⬜ | — | — | — |
 | **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **yellowfin** | ❌ | ❌ | ❌ | ✅ | ❌ |
@@ -87,12 +88,13 @@ cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on hoste
 
 **39** tags published.
 
-Missing for 1 ISO cell(s): `marlin-kde`
+Missing for 2 ISO cell(s): `gurnard-pantheon`, `marlin-kde`
 
 ## Provenance
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-07-31 | [30624963765](https://github.com/tuna-os/tunaOS/actions/runs/30624963765) | 1 |
 | 2026-07-31 | [30618509841](https://github.com/tuna-os/tunaOS/actions/runs/30618509841) | 1 |
 | 2026-07-31 | [30618282287](https://github.com/tuna-os/tunaOS/actions/runs/30618282287) | 1 |
 | 2026-07-31 | [30605644812](https://github.com/tuna-os/tunaOS/actions/runs/30605644812) | 1 |
@@ -102,9 +104,8 @@ Missing for 1 ISO cell(s): `marlin-kde`
 | 2026-07-31 | [30595701955](https://github.com/tuna-os/tunaOS/actions/runs/30595701955) | 1 |
 | 2026-07-31 | [30595700827](https://github.com/tuna-os/tunaOS/actions/runs/30595700827) | 1 |
 | 2026-07-31 | [30595699610](https://github.com/tuna-os/tunaOS/actions/runs/30595699610) | 1 |
-| 2026-07-31 | [30595698386](https://github.com/tuna-os/tunaOS/actions/runs/30595698386) | 13 |
+| 2026-07-31 | [30595698386](https://github.com/tuna-os/tunaOS/actions/runs/30595698386) | 12 |
 | 2026-07-31 | [30595697324](https://github.com/tuna-os/tunaOS/actions/runs/30595697324) | 4 |
-| 2026-07-31 | [30595695828](https://github.com/tuna-os/tunaOS/actions/runs/30595695828) | 18 |
 
 <!-- END GENERATED -->
 
