@@ -1049,6 +1049,42 @@ run_install() {
 	"${ssh_cmd[@]}" "sudo cat /var/lib/superiso-store/overlay-images/images.json 2>&1 \
 		|| echo '(unreadable)'" || true
 
+	# WHICH storage.conf is actually in effect, and what it resolves to.
+	#
+	# Neither tacklebox nor customize-live.sh sets `imagestore` anywhere — the
+	# key does not exist in either repo, they both use the additionalimagestores
+	# form. Yet a failing run traced `overlay: imagestore=/usr/lib/containers/
+	# storage` while a passing run on other hardware traced `imagestore=/var/
+	# lib/superiso-store`, from a byte-identical /etc/containers/storage.conf.
+	# So the failing process is reading configuration from somewhere we do not
+	# write, and these are the places it can come from. See #881.
+	echo "--- effective store paths ---"
+	"${ssh_cmd[@]}" "sudo podman info --format \
+		'GraphRoot={{.Store.GraphRoot}} ImageStore={{.Store.ImageStore}}'; \
+		sudo podman info --format '{{json .Store.GraphOptions}}'" || true
+	echo "--- every storage.conf on the box, and the env override ---"
+	"${ssh_cmd[@]}" "echo \"CONTAINERS_STORAGE_CONF=\${CONTAINERS_STORAGE_CONF:-<unset>}\"; \
+		sudo env | grep -i containers_ || echo '(no CONTAINERS_* in root env)'; \
+		for f in /etc/containers/storage.conf /usr/share/containers/storage.conf \
+			/usr/lib/containers/storage.conf; do \
+			echo \"== \$f\"; sudo test -f \"\$f\" && sudo grep -nE \
+				'^\s*(driver|imagestore|additionalimagestores|mount_program|graphroot)' \
+				\"\$f\" || echo '  (absent)'; done; \
+		echo '== drop-ins'; sudo ls /etc/containers/storage.conf.d/ \
+			/usr/share/containers/storage.conf.d/ 2>&1 | head -10" || true
+	# A store registered in the wrong FORMAT is silently ignored:
+	# additionalimagestores drops any store whose driver differs (ours is
+	# overlay; the dakota-iso convention embeds a VFS-format store). If
+	# overlay-images/ is missing here the squashfs is not a valid overlay
+	# graphroot at all, which is a tacklebox packing bug rather than a config
+	# one — so record it either way.
+	echo "--- superiso store: mount + overlay graphroot validity ---"
+	"${ssh_cmd[@]}" "findmnt -no FSTYPE,SOURCE,TARGET,OPTIONS /var/lib/superiso-store \
+		2>&1 || echo '(not a mountpoint)'; \
+		sudo ls -la /var/lib/superiso-store/ 2>&1 | head -10; \
+		echo '== /usr/lib/containers/storage (the store the failing trace named)'; \
+		sudo ls -laR /usr/lib/containers/storage 2>&1 | head -20" || true
+
 	# Probe the guest's containers-storage for a locally-available image.
 	# Try podman image exists first (primary store), then fall back to
 	# inspecting the offline store's images.json directly.  podman image
