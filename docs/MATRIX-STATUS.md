@@ -42,14 +42,14 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 
 ## LUKS E2E
 
-**8 of 47** cells green (14 tested, 33 never tested).
+**12 of 47** cells green (18 tested, 29 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
 | **albacore** | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **bonito** | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **flounder** | ❌ | ✅ | ⬜ | — | ⬜ |
 | **flounder-sid** | ❌ | ⬜ | ⬜ | — | ⬜ |
@@ -59,6 +59,8 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **sailfin** | ❌ | ⬜ | — | ⬜ | ⬜ |
 | **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **yellowfin** | ✅ | ✅ | ⬜ | ✅ | ✅ |
+
+NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 6 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
 
 Newest result 2026-07-31, oldest still-authoritative result 2026-07-29. Results older than the most recent round of fixes are the best available data, not current data.
 
@@ -94,10 +96,11 @@ Missing for 1 ISO cell(s): `marlin-kde`
 | 2026-07-31 | [30595701955](https://github.com/tuna-os/tunaOS/actions/runs/30595701955) | 1 |
 | 2026-07-31 | [30595700827](https://github.com/tuna-os/tunaOS/actions/runs/30595700827) | 1 |
 | 2026-07-31 | [30595699610](https://github.com/tuna-os/tunaOS/actions/runs/30595699610) | 1 |
+| 2026-07-31 | [30595698386](https://github.com/tuna-os/tunaOS/actions/runs/30595698386) | 13 |
 | 2026-07-31 | [30594079979](https://github.com/tuna-os/tunaOS/actions/runs/30594079979) | 1 |
 | 2026-07-30 | [30590446007](https://github.com/tuna-os/tunaOS/actions/runs/30590446007) | 1 |
 | 2026-07-30 | [30524767610](https://github.com/tuna-os/tunaOS/actions/runs/30524767610) | 1 |
-| 2026-07-30 | [30522159277](https://github.com/tuna-os/tunaOS/actions/runs/30522159277) | 6 |
+| 2026-07-30 | [30522159277](https://github.com/tuna-os/tunaOS/actions/runs/30522159277) | 5 |
 | 2026-07-29 | [30484849112](https://github.com/tuna-os/tunaOS/actions/runs/30484849112) | 1 |
 | 2026-07-29 | [30472017143](https://github.com/tuna-os/tunaOS/actions/runs/30472017143) | 1 |
 | 2026-07-29 | [30447516312](https://github.com/tuna-os/tunaOS/actions/runs/30447516312) | 4 |
