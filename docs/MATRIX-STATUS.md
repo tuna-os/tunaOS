@@ -77,6 +77,7 @@ This is the only axis that checks a human could actually install. For 17 combina
 | **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **flounder** | ⬜ | ⬜ | — | — | — |
 | **grouper** | ⬜ | ⬜ | — | — | ⬜ |
+| **gurnard** | — | — | — | — | — |
 | **marlin** | ⬜ | ⬜ | — | — | — |
 | **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **yellowfin** | ❌ | ❌ | ❌ | ✅ | ❌ |
@@ -87,7 +88,7 @@ cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on hoste
 
 **39** tags published.
 
-Missing for 1 ISO cell(s): `marlin-kde`
+Missing for 2 ISO cell(s): `gurnard-pantheon`, `marlin-kde`
 
 ## Provenance
 
