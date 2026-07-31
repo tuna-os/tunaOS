@@ -32,10 +32,23 @@ downloads:
     arm64: "ea9389f4efdc26d74bf9b4cc73db8f3a529e1e6effb5703e438117ea3f095439"
   # renovate: datasource=git-refs depName=tuna-os/tacklebox
   # This is the fallback every caller that does not set TACKLEBOX_SHA gets
-  # (scripts/lib/common.sh:229) — installer-smoke.yml among them. Held below
-  # fd95174 it bakes in `--omit "tpm2-tss pcsc"`, which aborts the dracut
-  # rebuild on any EL image that force-adds clevis. See luks-e2e.yml.
-  tacklebox: "fd95174432b854a6135600b6c321b3ef01b4bc2d"
+  # (scripts/lib/common.sh:229) — installer-smoke.yml among them.
+  #
+  # FLOOR, not a ceiling: below fd95174, tacklebox bakes `--omit "tpm2-tss
+  # pcsc"` into the dracut command line, which aborts the rebuild on any EL
+  # image that force-adds clevis (see luks-e2e.yml). fd95174 is the commit
+  # that replaced it with a per-image probe, and initramfs_test.go pins the
+  # baked-in form gone. So never move this pin below fd95174 — moving it
+  # ABOVE has always been fine, and a Renovate bump to an older-but-clean
+  # digest is the thing to watch (tuna-os/iso-builder#43).
+  #
+  # At 4fa6041 for the live-boot fix: below it, the embedded initrd overlay
+  # cannot mount the live root at all. $hookdir is on the image's read-only
+  # /usr, so the queue directories cannot be created, tbox-live-root never
+  # runs, and the boot dies in emergency on `overlayfs: failed to resolve
+  # '/run/rootfsbase'`. Proven both ways by named runs: broken at
+  # tacklebox 30629145076, booting to login at 30630284339.
+  tacklebox: "4fa604115dfa2e6356c68bde85a191c6620ebea1"
 
   # Bootc toolchain built from source (see toolchain/) and published to
   # ghcr.io/tuna-os/bootc-toolchain-<base> as OCI artifacts via ORAS.
