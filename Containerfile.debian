@@ -87,6 +87,21 @@ RUN apt-get update -y && \
     esac
 
 # Install base system packages
+#
+# systemd-cryptsetup provides systemd-cryptenroll, which fisherman's pre-flight
+# requires for tpm2-luks installs. Debian splits it out of the systemd package
+# (dpkg -L systemd on trixie has no cryptenroll), so `systemd` below is not
+# enough. This is the same gap that failed `LUKS grouper:niri` on Ubuntu.
+#
+# openssh-server is in the list because the dev/E2E ISO path needs a real SSH
+# unit to enable: live-iso/common/src/customize-live.sh hard-fails with
+# "dev ISO requested but no SSH service is installed" otherwise, which is how
+# `LUKS flounder:{gnome,kde}` died. `just iso dev=1` builds with ENABLE_SSHD=1
+# to cover exactly this, but that ARG is only consumed by
+# build_scripts/40-services.sh, and this Containerfile never runs it (unlike
+# Containerfile.ubuntu), so on Debian ENABLE_SSHD installed nothing. Ship the
+# package unconditionally, the way the Arch/openSUSE/Gentoo bases do, and close
+# it below.
 RUN apt-get update -y && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         btrfs-progs \
@@ -99,12 +114,14 @@ RUN apt-get update -y && \
         podman \
         systemd \
         systemd-boot \
+        systemd-cryptsetup \
         xfsprogs \
         dracut \
         dmsetup \
         squashfs-tools \
         cryptsetup \
         network-manager \
+        openssh-server \
         pipewire \
         wireplumber \
         flatpak \
@@ -115,6 +132,14 @@ RUN apt-get update -y && \
         unzip \
         git \
         ca-certificates && \
+    # Security default: sshd closed, matching the apt policy in
+    # build_scripts/40-services.sh (which this Containerfile does not run).
+    # Arch's preset enables nothing, but openssh-server's postinst links
+    # ssh.service into multi-user.target.wants and drops an /etc sshd.service
+    # compat alias, so installing the package would otherwise ship published
+    # Debian images with SSH listening. customize-live.sh re-enables the unit
+    # on dev/E2E media only.
+    systemctl disable ssh.service ssh.socket && \
     apt-get clean -y
 
 RUN --mount=type=bind,from=context,source=/,target=/run/context \

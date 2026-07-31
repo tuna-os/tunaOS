@@ -126,8 +126,38 @@ detect() {
   grep -q 'graphroot = "/var/lib/containers/storage"' "${SCRIPT}"
   grep -q 'additionalimagestores = \["/var/lib/superiso-store"\]' "${SCRIPT}"
   grep -q 'mount_program = "/usr/bin/fuse-overlayfs"' "${SCRIPT}"
-  run grep 'storage.conf.d/99-tunaos-offline-store.conf' "${SCRIPT}"
-  [ "$status" -ne 0 ]
+}
+
+# The primary config above is necessary but no longer sufficient:
+# containers/storage 1.60+ (Rawhide) applies storage{,.rootful}.conf.d drop-ins
+# after it, and containers-common's vendor drop-in replaces
+# additionalimagestores with just /usr/lib/containers/storage. A 99- admin
+# drop-in is applied last (drop-ins run in filename order), so it must re-list
+# the offline store while keeping the vendor path bootc uses for bound images.
+@test "customize-live.sh: re-asserts the offline store in a late drop-in" {
+  grep -q 'storage.conf.d/99-tunaos-offline-store.conf' "${SCRIPT}"
+  grep -q 'additionalimagestores = \[\${STORE_LIST}\]' "${SCRIPT}"
+  grep -q "STORE_LIST='\"/var/lib/superiso-store\"'" "${SCRIPT}"
+}
+
+# ...but the vendor path only gets listed where it exists. containers/storage
+# stats every additionalimagestores entry and fails the entire config when one
+# is missing, so hardcoding Fedora's /usr/lib/containers/storage took podman
+# down on Arch ("can't stat imageStore dir"). The offline store itself stays
+# unconditional: it is mounted during boot, so it is absent at customize time.
+@test "customize-live.sh: gates the vendor image store on it existing" {
+  grep -q 'if \[\[ -d /usr/lib/containers/storage \]\]; then' "${SCRIPT}"
+  # the heredoc delimiter must stay unquoted or STORE_LIST won't expand
+  grep -q "cat >/etc/containers/storage.conf.d/99-tunaos-offline-store.conf <<CONFEOF" "${SCRIPT}"
+}
+
+# Only Containerfile.{el10,ubuntu} run build_scripts/40-services.sh, which is
+# the sole place tunaos-live-ready.service gets enabled — the arch, opensuse,
+# gentoo and debian bases shipped it disabled, so the e2e harness waited out
+# its full ready timeout on a live session that was already up.
+@test "customize-live.sh: enables the readiness marker in the live squash" {
+  grep -q 'systemctl enable tunaos-live-ready.service' "${SCRIPT}"
+  grep -q 'install -Dm644 "${SCRIPT_DIR}/tunaos-live-ready.service"' "${SCRIPT}"
 }
 
 @test "customize-live.sh: sources the matching desktop adapter" {

@@ -91,6 +91,23 @@ if systemctl list-unit-files NetworkManager.service --no-legend 2>/dev/null | gr
 	systemctl enable NetworkManager.service || true
 fi
 
+# ── 1d. Live readiness marker ────────────────────────────────────────────────
+# scripts/iso-e2e.sh waits for TUNAOS_LIVE_READY on the serial console before
+# it does anything else, and tunaos-live-ready.service is what prints it.
+# Only build_scripts/40-services.sh enables that unit, and only
+# Containerfile.{el10,ubuntu} run it — the arch, opensuse, gentoo and debian
+# bootcifications never do, so they shipped the unit (system_files) disabled.
+# `LUKS marlin:gnome` burned its whole 1200s ready timeout on a live session
+# that was up and idle at a login prompt, having never queued the marker (its
+# Wants=NetworkManager-wait-online.service never appears in that boot's
+# journal). Enable it here: the marker exists for live media, this is the live
+# squash, and it is a no-op where 40-services.sh already enabled it.
+if [[ ! -f /usr/lib/systemd/system/tunaos-live-ready.service ]]; then
+	install -Dm644 "${SCRIPT_DIR}/tunaos-live-ready.service" \
+		/usr/lib/systemd/system/tunaos-live-ready.service
+fi
+systemctl enable tunaos-live-ready.service
+
 # ── 2. Desktop adapter (autologin, screen-lock, suspend masking) ─────────────
 # shellcheck source=/dev/null
 source "${SCRIPT_DIR}/desktop-${DESKTOP}.sh"
@@ -151,6 +168,61 @@ additionalimagestores = ["/var/lib/superiso-store"]
 mount_program = "/usr/bin/fuse-overlayfs"
 CONFEOF
 
+# mount_program above is mandatory, not an optimization: the live root is
+# itself an overlayfs, and the overlay driver refuses to stack on one
+# ("'overlay' is not supported over overlayfs, a mount_program is required").
+# But containers/storage also stats the program at startup and hard-fails the
+# entire config when it is missing, which takes down every podman call in the
+# live guest and surfaces far away as the staging-space preflight abort. Warn
+# loudly here, at build time, instead of leaving that to be rediscovered from
+# an e2e log. The base package lists own the fix (the apt and dnf bases get it
+# from build_scripts/10-base-packages.sh; Arch and openSUSE list it directly).
+if [[ ! -x /usr/bin/fuse-overlayfs ]]; then
+	echo "WARNING: /usr/bin/fuse-overlayfs is missing from this image." >&2
+	echo "WARNING: podman will fail in the live env with \"can't stat program\"" >&2
+	echo "WARNING: and the offline store will be unusable. Add fuse-overlayfs" >&2
+	echo "WARNING: to this base's package list." >&2
+fi
+
+# ...but the primary config is no longer the last word. containers/storage 1.60+
+# (Fedora Rawhide's container-libs rebase) reads drop-ins from
+# storage{,.rootful}.conf.d AFTER the main file, and Fedora's containers-common
+# ships /usr/share/containers/storage.rootful.conf.d/00-vendor-rootful.conf with
+#   additionalimagestores = ["/usr/lib/containers/storage"]
+# which REPLACES the list above. On rawhide the live VM therefore never saw
+# /var/lib/superiso-store: `podman image exists` missed the payload image that
+# images.json plainly listed, and iso-e2e.sh fell back to SCP'ing the ~7 GB
+# image tar into the guest, onto the RAM-backed live overlay, which thrashed
+# for an hour and then took sshd down with it.
+#
+# Drop-ins are applied in filename order across all directories, so a 99-
+# prefixed admin drop-in wins over the vendor one. Re-declare the offline store
+# there, keeping the vendor entry alongside it where that path exists (it is
+# where bootc keeps logically-bound images).
+# Older containers/storage releases have no drop-in support and simply ignore
+# this file, where the primary config above is already correct.
+#
+# The vendor path is Fedora-specific and must only be listed where it exists:
+# containers/storage stats every additionalimagestores entry at startup and
+# hard-fails the whole config if one is missing, taking podman down with it:
+#   Error: configure storage: overlay: can't stat imageStore dir
+#   /usr/lib/containers/storage: no such file or directory
+# containers-common ships that directory on Fedora, but Arch's containers
+# package does not, so listing it unconditionally broke every podman call in
+# the marlin live guest: the offline-store probe then found nothing and the
+# e2e aborted on the staging-space preflight. Keep /var/lib/superiso-store
+# unconditional: tunaos-offline-store.service mounts it during boot, so it is
+# legitimately absent here at customize time.
+mkdir -p /etc/containers/storage.conf.d
+STORE_LIST='"/var/lib/superiso-store"'
+if [[ -d /usr/lib/containers/storage ]]; then
+	STORE_LIST="${STORE_LIST}, \"/usr/lib/containers/storage\""
+fi
+cat >/etc/containers/storage.conf.d/99-tunaos-offline-store.conf <<CONFEOF
+[storage.options]
+additionalimagestores = [${STORE_LIST}]
+CONFEOF
+
 # Dev/E2E media only: the normal published-image policy keeps SSH disabled.
 # tacklebox creates liveuser during boot, so install a oneshot that sets its
 # temporary test password after livesys and before the SSH daemon starts.
@@ -167,21 +239,52 @@ if [[ -f "${SCRIPT_DIR}/.enable-sshd" ]]; then
 		echo "ERROR: dev ISO requested but no SSH service is installed" >&2
 		exit 1
 	fi
-	mkdir -p /etc/ssh/sshd_config.d /usr/lib/systemd/system \
+	mkdir -p /etc/ssh/sshd_config.d /usr/lib/systemd/system /usr/libexec \
 		/etc/systemd/system/tunaos-live-ready.service.d
 	cat >/etc/ssh/sshd_config.d/90-tunaos-live-e2e.conf <<'EOF'
 PasswordAuthentication yes
 PermitEmptyPasswords no
 EOF
+	# The account may already exist from the image build (40-services.sh's
+	# ENABLE_SSHD path runs `useradd -m`), so section 1b above skips creating
+	# it — but a home directory made at build time does not necessarily
+	# survive to the live session. grouper bootcifies with
+	# build_scripts/bootc/mount-system.sh, which wipes /var and turns /home
+	# into a bind mount of /var/home, and /var/home is (re)created empty by
+	# tmpfiles at boot. `LUKS grouper:niri` failed exactly there: sshd logged
+	# "Could not chdir to home directory /home/liveuser" on every connection
+	# and each `scp ... liveuser@...:/home/liveuser/` died with
+	# `dest open "/home/liveuser/": Failure`. Materialise the home at boot,
+	# from the account's own passwd entry, instead of trusting the build-time
+	# directory. A separate script rather than an inline ExecStart so the
+	# quoting stays readable.
+	cat >/usr/libexec/tunaos-live-ssh-credentials <<'CREDEOF'
+#!/bin/sh
+# Live/dev media only: make sure liveuser exists, owns a usable home, and
+# carries the temporary E2E password. Runs before the SSH daemon.
+set -eux
+getent passwd liveuser >/dev/null ||
+	useradd --create-home --user-group --shell /bin/bash liveuser
+live_home="$(getent passwd liveuser | cut -d: -f6)"
+[ -n "$live_home" ] || live_home=/home/liveuser
+mkdir -p "$live_home"
+chown "$(id -u liveuser):$(id -g liveuser)" "$live_home"
+chmod 0700 "$live_home"
+echo liveuser:live | chpasswd
+CREDEOF
+	chmod 0755 /usr/libexec/tunaos-live-ssh-credentials
+	# local-fs.target: home.mount (grouper's /var/home → /home bind) is
+	# ordered Before=local-fs.target, so waiting for it keeps the directory
+	# below from being created underneath the mount that then hides it.
 	cat >/usr/lib/systemd/system/tunaos-live-ssh-credentials.service <<EOF
 [Unit]
 Description=Configure temporary TunaOS live E2E SSH credentials
-After=livesys.service
+After=livesys.service local-fs.target
 Before=${SSH_UNIT}
 
 [Service]
 Type=oneshot
-ExecStart=/bin/sh -euxc 'getent passwd liveuser >/dev/null || useradd --create-home --user-group --shell /bin/bash liveuser; echo liveuser:live | chpasswd'
+ExecStart=/usr/libexec/tunaos-live-ssh-credentials
 RemainAfterExit=yes
 StandardOutput=journal+console
 StandardError=journal+console
