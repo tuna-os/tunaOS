@@ -495,6 +495,32 @@ safe_disable() {
 	fi
 }
 
+# Which unit actually is the KDE display manager on this image.
+#
+# Plasma 6.6 renamed SDDM to PlasmaLogin. EL10 pulls plasma-login-manager in
+# as a plasma-group dependency, and its scriptlet claims the
+# display-manager.service alias *before* the later explicit `sddm` install --
+# whose own enable then fails with "already exists and is a symlink to
+# plasmalogin.service" and is swallowed by safe_enable's `|| true`. The image
+# consequently booted plasmalogin while every check asserted sddm.
+#
+# Fedora/Debian/Ubuntu/Arch still ship real sddm, so this resolves per image
+# rather than renaming across the board.
+#
+# _KDE_DM_ROOT exists so the bats tests can point this at a fake tree. It is
+# never set during a build; without it a test would just inherit whatever the
+# host happens to have installed and pass for the wrong reason.
+kde_dm_unit() {
+	if [[ -e "${_KDE_DM_ROOT:-}/usr/lib/systemd/system/plasmalogin.service" ]] ||
+		{ [[ -z "${_KDE_DM_ROOT:-}" ]] &&
+			systemctl list-unit-files plasmalogin.service --no-legend 2>/dev/null |
+			grep -q '^plasmalogin.service'; }; then
+		echo plasmalogin.service
+	else
+		echo sddm.service
+	fi
+}
+
 install_from_copr() {
 	COPR_NAME=$1
 	shift

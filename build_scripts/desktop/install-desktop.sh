@@ -351,6 +351,27 @@ fi
 if [[ -z "${_TD_DM}" || "${_TD_DM}" == "null" ]]; then
 	_TD_DM=$($YQ -r '.display_manager // ""' "${_TD_MANIFEST}" 2>/dev/null)
 fi
+# Plasma 6.6 renamed SDDM to PlasmaLogin. The manifests declare the DM family
+# ("sddm"), but on EL10 the image actually ships plasma-login-manager, whose
+# scriptlet claims display-manager.service. Resolve the declared name to the
+# unit this image really has, rather than editing every kde*.yaml -- the
+# manifest states intent, the build resolves it.
+#
+# Getting this wrong is not a no-op. The block below FORCE-LINKS the resolved
+# unit into graphical.target.wants, so leaving it as "sddm" pulls sddm.service
+# into graphical.target while display-manager.service points at plasmalogin --
+# two display managers racing for seat0/VT1, and the loser fails to start.
+#
+# _TD_DM is a BARE name here (".service" is appended at each use below), so
+# this cannot call kde_dm_unit(), which returns a full unit name. Assigning
+# "plasmalogin.service" would yield "plasmalogin.service.service": safe_enable
+# swallows the failure, the -f test below is false so nothing is force-linked,
+# and the image ships with no display manager enabled at all.
+if [[ "${_TD_DM}" == "sddm" && -f /usr/lib/systemd/system/plasmalogin.service ]]; then
+	echo "install-desktop: manifest declares sddm but image ships plasmalogin.service — resolving to plasmalogin"
+	_TD_DM="plasmalogin"
+fi
+
 if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 	safe_enable "${_TD_DM}.service"
 	# openSUSE's gdm.service ships only `[Install] Alias=display-manager.service`
@@ -366,6 +387,14 @@ if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 		mkdir -p /etc/systemd/system/graphical.target.wants
 		ln -sf "/usr/lib/systemd/system/${_TD_DM}.service" \
 			"/etc/systemd/system/graphical.target.wants/${_TD_DM}.service"
+		# Exactly one DM may be pulled into graphical.target. sddm and
+		# plasmalogin both ship on EL10 KDE (plasma-login-manager does not
+		# Obsolete sddm), and if both are wanted they race for seat0/VT1 and
+		# whichever loses reports "Failed to start". Drop the sibling's link.
+		case "${_TD_DM}" in
+		plasmalogin) rm -f /etc/systemd/system/graphical.target.wants/sddm.service ;;
+		sddm) rm -f /etc/systemd/system/graphical.target.wants/plasmalogin.service ;;
+		esac
 		# ...and take over the display-manager.service alias. openSUSE's
 		# displaymanager-sysconfig package ships
 		# /etc/systemd/system/display-manager.service already, pointing at
