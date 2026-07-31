@@ -64,13 +64,20 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 # and asserted against its own copy, so it passed with lib.sh's version
 # deleted. If _KDE_DM_ROOT is ever removed from lib.sh these fail rather than
 # silently falling through to the host's own systemd tree.
+#
+# The sourcing's own stdout is discarded on purpose: on a cache miss (no
+# /tmp/tunaos-build-env) lib.sh prints its OS-detection banner to stdout, so
+# whichever test sources it first would otherwise capture eight lines of
+# "FEDORA: false…" ahead of the unit name. That made these tests depend on
+# suite order — test_lib.bats deletes that cache in setup() — and it is how
+# this file went red in CI while passing locally against a warm cache.
 
 @test "kde_dm_unit: prefers plasmalogin when its unit exists" {
   root="${BATS_TEST_TMPDIR}/plasma"
   mkdir -p "${root}/usr/lib/systemd/system"
   touch "${root}/usr/lib/systemd/system/plasmalogin.service"
   touch "${root}/usr/lib/systemd/system/sddm.service"
-  run bash -c "source '${REPO_ROOT}/build_scripts/lib.sh' 2>/dev/null; _KDE_DM_ROOT='${root}' kde_dm_unit"
+  run bash -c "source '${REPO_ROOT}/build_scripts/lib.sh' >/dev/null 2>&1; _KDE_DM_ROOT='${root}' kde_dm_unit"
   [ "$output" = "plasmalogin.service" ]
 }
 
@@ -78,7 +85,7 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   root="${BATS_TEST_TMPDIR}/sddm-only"
   mkdir -p "${root}/usr/lib/systemd/system"
   touch "${root}/usr/lib/systemd/system/sddm.service"
-  run bash -c "source '${REPO_ROOT}/build_scripts/lib.sh' 2>/dev/null; _KDE_DM_ROOT='${root}' kde_dm_unit"
+  run bash -c "source '${REPO_ROOT}/build_scripts/lib.sh' >/dev/null 2>&1; _KDE_DM_ROOT='${root}' kde_dm_unit"
   [ "$output" = "sddm.service" ]
 }
 
@@ -89,7 +96,7 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   root="${BATS_TEST_TMPDIR}/suffix"
   mkdir -p "${root}/usr/lib/systemd/system"
   touch "${root}/usr/lib/systemd/system/plasmalogin.service"
-  run bash -c "source '${REPO_ROOT}/build_scripts/lib.sh' 2>/dev/null; _KDE_DM_ROOT='${root}' kde_dm_unit"
+  run bash -c "source '${REPO_ROOT}/build_scripts/lib.sh' >/dev/null 2>&1; _KDE_DM_ROOT='${root}' kde_dm_unit"
   [[ "$output" != *".service.service" ]]
   run grep -q 'safe_enable "\${_TD_DM}.service"' "${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
   [ "$status" -eq 0 ]
