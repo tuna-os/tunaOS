@@ -6,6 +6,16 @@ on:
         description: "The name of the image to build"
         required: true
         type: string
+      image-aliases:
+        description: >-
+          Comma-separated friendly names to publish the same digest under, so
+          users need not know the fish names (e.g. "ubuntu" for grouper).
+          Additive: the canonical image-name tags are written exactly as
+          before. Aliases are written only in the promote step, so they can
+          never point at an image that failed the boot gate.
+        required: false
+        default: ""
+        type: string
       image-desc:
         description: "The description of the image to build"
         required: false
@@ -974,6 +984,7 @@ jobs:
         id: tag
         env:
           IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          IMAGE_ALIASES: ${{ inputs.image-aliases }}
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           DEFAULT_TAG: ${{ env.DEFAULT_TAG }}
           MAJOR_VERSION: ${{ env.MAJOR_VERSION }}
@@ -1004,6 +1015,22 @@ jobs:
               sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${arch}"
               sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${arch}-${DATE_TAG}"
             done
+
+            # Friendly aliases: the same digest under a name users can guess
+            # without knowing the fish names (grouper -> ubuntu, and so on).
+            # Deliberately inside the ALL_PLATFORMS_BUILT branch and after the
+            # canonical tags: an alias must never be the reason an unverified
+            # image looks published, and must never be the only tag written.
+            if [ -n "${IMAGE_ALIASES}" ]; then
+              IFS=',' read -r -a ALIASES <<< "${IMAGE_ALIASES}"
+              for alias_name in "${ALIASES[@]}"; do
+                alias_name="$(echo "${alias_name}" | tr -d '[:space:]')"
+                [ -n "${alias_name}" ] || continue
+                echo "Publishing alias ${alias_name}:${DEFAULT_TAG}"
+                sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${alias_name}:${DEFAULT_TAG}"
+                sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${alias_name}:${DEFAULT_TAG}-${DATE_TAG}"
+              done
+            fi
 
             echo "tag=${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}" >> $GITHUB_OUTPUT
           else
