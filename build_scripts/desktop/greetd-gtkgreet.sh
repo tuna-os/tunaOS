@@ -19,6 +19,40 @@
 # so this block does nothing and the DMS config survives.
 if command -v gtkgreet &>/dev/null && command -v cage &>/dev/null; then
 	echo "Configuring greetd to use gtkgreet"
+	# The account greetd runs the greeter as is NOT named the same on every
+	# distro, and getting it wrong is fatal in milliseconds: greetd chowns its
+	# IPC socket to that user and getpwnam()s it during startup, so an
+	# unresolvable name means "unable to get user info", exit(1), and — with
+	# the packaged unit's Restart=always — a display manager that never
+	# becomes active. That is the black screen behind
+	# TUNAOS_DESKTOP_CONTRACT_FAIL reason=dm_inactive on sailfin:niri, with
+	# zero failed units and nothing on the console, because greetd was already
+	# dead before the contract sampled it.
+	#
+	# Fedora and EL package the account with greetd itself and call it
+	# `greetd`. openSUSE moved it out into system-user-greeter, which creates
+	# `greeter` (home /var/lib/greetd, member of video) — greetd there
+	# Requires user(greeter) and there is no `greetd` user on Tumbleweed at
+	# all. So resolve the account instead of hardcoding one.
+	_GG_USER=""
+	for _GG_CANDIDATE in greetd greeter; do
+		if getent passwd "${_GG_CANDIDATE}" >/dev/null 2>&1; then
+			_GG_USER="${_GG_CANDIDATE}"
+			break
+		fi
+	done
+	if [[ -z "${_GG_USER}" ]]; then
+		# Every distro that packages greetd creates one of these two. If
+		# neither exists the greeter cannot run at all, and writing a config
+		# naming a missing user would ship the restart loop described above.
+		# Fail the build rather than the login screen. (`return`, not `exit`:
+		# this file is sourced by install-desktop.sh, which runs under set -e
+		# and so aborts on a non-zero return.)
+		echo "ERROR: no greetd greeter account found (tried: greetd, greeter)" >&2
+		echo "       greetd would exit at startup with 'unable to get user info'." >&2
+		return 1
+	fi
+	echo "greetd greeter account: ${_GG_USER}"
 	# gtkgreet is a plain Wayland client and cannot own a VT, so cage hosts
 	# it. -s keeps VT switching available (without it a greeter crash locks
 	# you out of the machine entirely).
@@ -67,13 +101,13 @@ exec cage -s -- gtkgreet -l -s /etc/greetd/gtkgreet.css
 SESSION_EOF
 
 	mkdir -p /etc/greetd
-	cat >/etc/greetd/config.toml <<'GREETD_EOF'
+	cat >/etc/greetd/config.toml <<GREETD_EOF
 [terminal]
 vt = 1
 
 [default_session]
 command = "/usr/libexec/tunaos/greetd-session"
-user = "greetd"
+user = "${_GG_USER}"
 GREETD_EOF
 
 	# Greeter styling. Kept deliberately small: gtkgreet is GTK3, so it

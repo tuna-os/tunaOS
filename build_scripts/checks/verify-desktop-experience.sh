@@ -216,13 +216,24 @@ if [[ "$mode" == --runtime ]]; then
 	# Check the display-manager.service alias (every DM registers it) and
 	# verify its Id resolves to a DM this desktop's contract allows — robust
 	# to per-distro unit names (gdm vs gdm3, lightdm vs greetd for xfce).
+	dm_id=$(systemctl show -P Id display-manager.service 2>/dev/null || true)
 	if ! systemctl is-active --quiet display-manager.service 2>/dev/null; then
 		report_fail "dm_inactive desktop=$desktop"
-	else
-		dm_id=$(systemctl show -P Id display-manager.service 2>/dev/null || true)
-		if [[ ! "$dm_id" =~ $dm_pattern ]]; then
-			report_fail "dm_mismatch dm=${dm_id:-unknown} expected=${dm_pattern}"
-		fi
+		# `dm_inactive` alone is not a diagnosis, and the reason why is
+		# structural: the DM logs to the journal, while the E2E gate can only
+		# read the serial console, so the actual error is invisible and every
+		# hypothesis costs a full image build. Ship the evidence with the
+		# failure — this is how a greetd exiting instantly on a missing
+		# greeter account looked identical to one whose greeter could not
+		# render.
+		{
+			systemctl show \
+				--property=Id,ActiveState,SubState,Result,ExecMainStatus,NRestarts \
+				display-manager.service
+			[[ -n "$dm_id" ]] && journalctl -b --no-pager -n 25 -u "$dm_id"
+		} 2>&1 | sed 's/^/dm_diag: /' | tee /dev/ttyS0 2>/dev/null || true
+	elif [[ ! "$dm_id" =~ $dm_pattern ]]; then
+		report_fail "dm_mismatch dm=${dm_id:-unknown} expected=${dm_pattern}"
 	fi
 	if [[ "$ok" -eq 1 ]]; then
 		echo "TUNAOS_DESKTOP_CONTRACT_OK desktop=$desktop experience=$experience" | tee /dev/ttyS0 2>/dev/null || true

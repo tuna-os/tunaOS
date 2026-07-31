@@ -247,6 +247,56 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [[ "$output" == *"R=pixman"* ]]
 }
 
+@test "greetd greeter account is resolved, not hardcoded" {
+  # greetd getpwnam()s the configured user and chowns its socket to it during
+  # startup, so a name that does not resolve kills it in milliseconds: "unable
+  # to get user info", exit 1, Restart=always, display-manager.service never
+  # active. Fedora/EL name that account `greetd`; openSUSE moved it into
+  # system-user-greeter, which creates `greeter` and no `greetd` user at all —
+  # which is why sailfin:niri booted to a black screen with zero failed units.
+  local script="${REPO_ROOT}/build_scripts/desktop/greetd-gtkgreet.sh"
+  run grep -F 'user = "greetd"' "$script"
+  [ "$status" -ne 0 ]
+  grep -qF 'user = "${_GG_USER}"' "$script"
+  # An unquoted heredoc, or the name is written literally.
+  grep -qE '<<GREETD_EOF$' "$script"
+
+  # Behavioural: extract the probe and drive all three cases against a stub
+  # getent, so the result does not depend on the accounts that happen to exist
+  # on the machine running the suite.
+  local probe="${BATS_TEST_TMPDIR}/probe.sh"
+  sed -n '/^\t_GG_USER=""$/,/^\techo "greetd greeter account/p' "$script" \
+    | sed -e 's/^\t//' -e 's/^\treturn 1$/exit 1/' -e 's/^return 1$/exit 1/' >"$probe"
+  grep -q 'getent passwd' "$probe"
+
+  local stub="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "$stub"
+  cat >"${stub}/getent" <<'STUB'
+#!/usr/bin/env bash
+# Only the accounts named in EXISTING_USERS resolve.
+for u in ${EXISTING_USERS:-}; do
+  [[ "$2" == "$u" ]] && { echo "$u:x:900:900::/var/lib/greetd:/usr/sbin/nologin"; exit 0; }
+done
+exit 2
+STUB
+  chmod +x "${stub}/getent"
+
+  # openSUSE: only `greeter` exists.
+  run env EXISTING_USERS=greeter PATH="${stub}:${PATH}" bash "$probe"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"greetd greeter account: greeter"* ]]
+
+  # Fedora/EL: only `greetd` exists.
+  run env EXISTING_USERS=greetd PATH="${stub}:${PATH}" bash "$probe"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"greetd greeter account: greetd"* ]]
+
+  # Neither: fail the build instead of shipping a greeter that cannot start.
+  run env EXISTING_USERS= PATH="${stub}:${PATH}" bash "$probe"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no greetd greeter account found"* ]]
+}
+
 @test "desktop installer claims the display-manager.service alias" {
   # openSUSE's displaymanager-sysconfig owns /etc/systemd/system/display-manager.service
   # and points it at its own legacy launcher. systemd refuses to write an
