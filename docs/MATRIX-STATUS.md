@@ -42,7 +42,7 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 
 ## LUKS E2E
 
-**5 of 48** cells green (12 tested, 36 never tested).
+**5 of 47** cells green (11 tested, 36 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
@@ -53,20 +53,20 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **flounder** | ❌ | ✅ | ⬜ | — | ⬜ |
 | **flounder-sid** | ❌ | ⬜ | ⬜ | — | ⬜ |
-| **grouper** | ❌ | ⬜ | — | ⬜ | ⬜ |
+| **grouper** | ❌ | ⬜ | — | — | ⬜ |
 | **guppy** | ❌ | ⬜ | — | — | — |
-| **marlin** | ❌ | ⬜ | ✅ | ⬜ | ❌ |
+| **marlin** | ❌ | ⬜ | ✅ | ⬜ | ⬜ |
 | **sailfin** | ❌ | ⬜ | — | ⬜ | ⬜ |
 | **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **yellowfin** | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 
-Newest result 2026-07-30, oldest still-authoritative result 2026-07-29. Results older than the most recent round of fixes are the best available data, not current data.
+Newest result 2026-07-31, oldest still-authoritative result 2026-07-29. Results older than the most recent round of fixes are the best available data, not current data.
 
 ## Installer smoke
 
-**4 of 33** non-NVIDIA ISO cells have *ever* been tested — 12% coverage. 1 of those pass.
+**4 of 32** non-NVIDIA ISO cells have *ever* been tested — 12% coverage. 1 of those pass.
 
-This is the only axis that checks a human could actually install. For 29 combinations, nobody has confirmed the installer appears on screen.
+This is the only axis that checks a human could actually install. For 28 combinations, nobody has confirmed the installer appears on screen.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -74,7 +74,7 @@ This is the only axis that checks a human could actually install. For 29 combina
 | **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **flounder** | ⬜ | ⬜ | — | — | — |
-| **grouper** | ⬜ | ⬜ | — | ⬜ | ⬜ |
+| **grouper** | ⬜ | ⬜ | — | — | ⬜ |
 | **marlin** | ⬜ | ⬜ | — | — | — |
 | **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **yellowfin** | ⬜ | ❌ | ❌ | ✅ | ❌ |
@@ -91,11 +91,12 @@ Missing for 1 ISO cell(s): `marlin-kde`
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-07-31 | [30594079979](https://github.com/tuna-os/tunaOS/actions/runs/30594079979) | 1 |
+| 2026-07-30 | [30590446007](https://github.com/tuna-os/tunaOS/actions/runs/30590446007) | 1 |
 | 2026-07-30 | [30524767610](https://github.com/tuna-os/tunaOS/actions/runs/30524767610) | 1 |
-| 2026-07-30 | [30522159277](https://github.com/tuna-os/tunaOS/actions/runs/30522159277) | 8 |
+| 2026-07-30 | [30522159277](https://github.com/tuna-os/tunaOS/actions/runs/30522159277) | 6 |
 | 2026-07-29 | [30484849112](https://github.com/tuna-os/tunaOS/actions/runs/30484849112) | 1 |
 | 2026-07-29 | [30472017143](https://github.com/tuna-os/tunaOS/actions/runs/30472017143) | 1 |
-| 2026-07-29 | [30467796102](https://github.com/tuna-os/tunaOS/actions/runs/30467796102) | 1 |
 | 2026-07-29 | [30447516312](https://github.com/tuna-os/tunaOS/actions/runs/30447516312) | 4 |
 
 <!-- END GENERATED -->
