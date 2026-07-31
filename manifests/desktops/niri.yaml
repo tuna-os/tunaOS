@@ -119,10 +119,13 @@ packages:
   # DMS (DankMaterialShell) — what the fedora/el10 sections use as the shell —
   # is not available here YET. quickshell, dms, dms-cli and dms-greeter are
   # becoming first-class Tideforge packages (tunaos-packages#125 builds them
-  # for el10 RPM plus Debian and Ubuntu DEB); what is missing is an openSUSE
-  # TARGET in the factory, which is tunaos-packages#111. So this is a
-  # not-yet, not a can't: when openSUSE becomes a Tideforge target, revisit
-  # this section and align it with the DMS variants.
+  # for el10 RPM plus Debian and Ubuntu DEB), but they are not built for the
+  # opensuse-tumbleweed target. That target IS declared in
+  # manifests/package-factory.yaml with architectures and an R2 path — it just
+  # has no cells in the package build gate, so no openSUSE package has ever
+  # been built or installed by that pipeline (tunaos-packages#139). So this is
+  # a not-yet, not a can't: when openSUSE is exercised there, revisit this
+  # section and align it with the DMS variants.
   #
   # Until then openSUSE gets the conventional wlroots stack (waybar + fuzzel
   # + swaync + swaylock). The session differs from the DMS variants; the
@@ -138,7 +141,8 @@ packages:
     # greetd's stock config runs `agreety --cmd /bin/sh` — a text prompt into
     # a bare shell with no session picker. gtkgreet is the graphical greeter;
     # it is a plain Wayland client and cannot own a VT, so cage hosts it.
-    # Wired up in post_install_inline below, mirroring build_scripts/desktop/xfce.sh.
+    # Wired up by the greetd-gtkgreet.sh post_install script below, extracted
+    # from build_scripts/desktop/xfce.sh where the same block was already proven.
     - gtkgreet
     - cage
     # X11 applications under niri (niri is Wayland-only)

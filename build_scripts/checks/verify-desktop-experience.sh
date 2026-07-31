@@ -52,6 +52,22 @@ require_any_glob() {
 	exit 1
 }
 
+# PORTAL/KEYRING/GVFS PATHS — measured, one container per packaging family.
+# Never add a glob you have not seen resolve on a real distro: an invented
+# pattern that matches nothing turns a working desktop red, which is exactly
+# what '/usr/lib/*/gvfs/gvfsd' did to sailfin and marlin.
+#
+#   family          gvfsd                          portal-gnome / portal-gtk
+#   Fedora / EL     /usr/libexec/gvfsd             /usr/libexec/...
+#   Debian/Ubuntu   /usr/libexec/gvfsd AND         /usr/libexec/...
+#                   /usr/lib/gvfs/gvfsd
+#                   (package is gvfs-daemons, NOT gvfs — plain gvfs ships
+#                    only libgvfsdbus.so, so probing gvfs finds nothing)
+#   openSUSE        /usr/libexec/gvfs/gvfsd        /usr/libexec/...
+#   Arch            /usr/lib/gvfsd                 /usr/lib/...
+#
+# gnome-keyring-daemon is /usr/bin/gnome-keyring-daemon on all five.
+#
 case "$desktop" in
 gnome)
 	experience="projectbluefin/bluefin-lts"
@@ -78,18 +94,25 @@ gnome)
 	# turns working builds red instead of catching broken ones. Extend to
 	# kde/xfce/niri/cosmic the same way: measure a healthy image first.
 	require_command nautilus
-	# gvfsd's location is pure distro drift: Fedora/EL put it directly in
-	# /usr/libexec, openSUSE nests it under /usr/libexec/gvfs, and Debian
-	# uses /usr/lib/<triplet>/gvfs. Verified from the shipped rpm:
-	# gvfs-1.60.1 on Tumbleweed owns /usr/libexec/gvfs/gvfsd, which none of
-	# the original three patterns matched — sailfin:gnome installed gvfs,
-	# gvfs-backends and gvfs-fuse and still failed this gate.
-	require_any_glob '/usr/libexec/gvfsd' '/usr/libexec/gvfs/gvfsd' \
-		'/usr/lib/gvfs/gvfsd' '/usr/lib*/gvfs/gvfsd' '/usr/lib/*/gvfs/gvfsd'
-	require_any_glob '/usr/libexec/xdg-desktop-portal-gnome' \
-		'/usr/lib/xdg-desktop-portal-gnome' \
-		'/usr/lib/*/xdg-desktop-portal-gnome'
-	require_any_glob '/usr/bin/gnome-keyring-daemon' '/usr/libexec/gnome-keyring-daemon'
+	# One glob per packaging family — see the measured table above the case.
+	# openSUSE (/usr/libexec/gvfs/gvfsd, owned by gvfs-1.60.1 on Tumbleweed)
+	# and Arch (/usr/lib/gvfsd) were the two real paths missing: sailfin:gnome
+	# installed gvfs, gvfs-backends and gvfs-fuse and still failed this gate.
+	# NB Debian does NOT use a multiarch triplet here — measured, it is plain
+	# /usr/lib/gvfs/gvfsd (plus /usr/libexec/gvfsd), so no /usr/lib/*/ arm is
+	# needed and none is kept.
+	require_any_glob \
+		'/usr/libexec/gvfsd' \
+		'/usr/libexec/gvfs/gvfsd' \
+		'/usr/lib/gvfsd' \
+		'/usr/lib/gvfs/gvfsd'
+	# Portal backend and keyring, measured the same way (table above the case):
+	# /usr/libexec on Fedora, EL, Debian, Ubuntu and openSUSE; /usr/lib on Arch.
+	# gnome-keyring-daemon is /usr/bin on all five.
+	require_any_glob \
+		'/usr/libexec/xdg-desktop-portal-gnome' \
+		'/usr/lib/xdg-desktop-portal-gnome'
+	require_any_glob '/usr/bin/gnome-keyring-daemon'
 	;;
 kde)
 	experience="ublue-os/aurora"
@@ -121,16 +144,17 @@ niri)
 	# shell of its own. sailfin:niri shipped `niri` and `greetd` and nothing
 	# else. The shell itself cannot be asserted — Fedora and EL10 use DMS
 	# (quickshell) while openSUSE uses the wlroots stack (waybar/fuzzel),
-	# because openSUSE is not yet a Tideforge target (tunaos-packages#111).
-	# Revisit if the shells converge. The portal and the keyring ARE common:
+	# because quickshell and dms are not built for the opensuse-tumbleweed
+	# target yet: it IS declared in manifests/package-factory.yaml, but has no
+	# cells in the package build gate (tunaos-packages#139). Revisit when it
+	# does. The portal and the keyring ARE common:
 	# both are explicit in every niri section that builds (fedora, el10,
 	# zypper, pacman). Accept the gtk backend alongside gnome — a variant may
 	# reasonably ship only the former.
 	require_any_glob \
-		'/usr/libexec/xdg-desktop-portal-gnome' '/usr/lib*/xdg-desktop-portal-gnome' '/usr/lib/*/xdg-desktop-portal-gnome' \
-		'/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib*/xdg-desktop-portal-gtk' '/usr/lib/*/xdg-desktop-portal-gtk'
-	require_any_glob \
-		'/usr/bin/gnome-keyring-daemon' '/usr/libexec/gnome-keyring-daemon' '/usr/lib*/gnome-keyring-daemon'
+		'/usr/libexec/xdg-desktop-portal-gnome' '/usr/lib/xdg-desktop-portal-gnome' \
+		'/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
+	require_any_glob '/usr/bin/gnome-keyring-daemon'
 	dm_pattern='^greetd\.service$'
 	;;
 cosmic)
@@ -159,7 +183,7 @@ xfce)
 	# Recommends, which an apt build may legitimately not install.
 	require_command thunar
 	require_any_glob \
-		'/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib*/xdg-desktop-portal-gtk' '/usr/lib/*/xdg-desktop-portal-gtk'
+		'/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
 	dm_pattern='^(gdm|gdm3|lightdm|greetd)\.service$'
 	;;
 *) exit 0 ;;
