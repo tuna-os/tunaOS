@@ -7,11 +7,12 @@
 # (no file manager), sailfin:xfce (no display manager enabled) and
 # flounder:niri (no compositor at all) all shipped green.
 #
-# Three outcomes, deliberately distinct — "never tested" must never look like
-# "passing":
+# Four outcomes, deliberately distinct — "never tested" must never look like
+# "passing", and infrastructure trouble must never look like a broken desktop:
 #   pass     the image exists and satisfies the contract
 #   fail     the image exists and does NOT satisfy it (reason recorded)
 #   missing  no such published image — NOT a pass and NOT a fail
+#   error    the pull or the runner failed — the cell is still UNTESTED
 #
 # Heavy work belongs on runners, not in a session: each cell pulls a multi-GB
 # image, so this is one job per cell with a bounded fan-out.
@@ -109,18 +110,26 @@ jobs:
           if sudo podman manifest inspect "$REF" >/dev/null 2>&1 \
              || sudo podman image inspect "$REF" >/dev/null 2>&1 \
              || sudo skopeo inspect "docker://$REF" >/dev/null 2>&1; then
-            out=$(sudo podman run --rm \
-              -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
-              --entrypoint /bin/bash "$REF" /vde.sh "${{ matrix.desktop }}" 2>&1)
-            exitcode=$?          # capture directly; `| tail` would mask it
-            if [[ "$exitcode" -eq 0 ]]; then
-              status=pass; reason="contract satisfied"
+            # Pull as its own step. A registry/disk failure is an ERROR, not a
+            # contract failure — folding the two together would report a
+            # perfectly good desktop as broken, the same conflation this sweep
+            # exists to prevent.
+            if ! sudo podman pull -q "$REF" >/dev/null 2>&1; then
+              status=error; reason="image exists but pull failed (infrastructure, not the contract)"
             else
-              status=fail
-              # The script prints one "missing required ..." line on failure.
-              reason=$(grep -m1 -E "^missing (required|unit)" <<<"$out" || echo "exit ${exitcode}")
+              out=$(sudo podman run --rm \
+                -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
+                --entrypoint /bin/bash "$REF" /vde.sh "${{ matrix.desktop }}" 2>&1)
+              exitcode=$?        # capture directly; `| tail` would mask it
+              if [[ "$exitcode" -eq 0 ]]; then
+                status=pass; reason="contract satisfied"
+              else
+                status=fail
+                # The script prints one "missing required ..." line on failure.
+                reason=$(grep -m1 -E "^missing (required|unit)" <<<"$out" || echo "exit ${exitcode}")
+              fi
+              echo "$out" | tail -40
             fi
-            echo "$out" | tail -40
           fi
 
           echo "::notice title=${CELL}::${status} — ${reason}"
@@ -157,23 +166,27 @@ jobs:
           pass=$(jq '[.[]|select(.status=="pass")]|length' all.json)
           fail=$(jq '[.[]|select(.status=="fail")]|length' all.json)
           miss=$(jq '[.[]|select(.status=="missing")]|length' all.json)
+          err=$(jq '[.[]|select(.status=="error")]|length' all.json)
           total=$(jq 'length' all.json)
 
           {
             echo "# Desktop contract baseline"
             echo
-            echo "**${pass} / ${total} cells pass.** ${fail} fail, ${miss} have no published image."
+            echo "**${pass} / ${total} cells pass.** ${fail} fail, ${miss} have no published image, ${err} errored."
             echo
-            echo "⬜ means never tested — no image exists. It is not a pass."
+            echo "⬜ never tested (no image) — not a pass. ⚠️ infrastructure error, the cell is still untested."
             echo
             echo "| cell | result | reason |"
             echo "|---|:--:|---|"
             jq -r '.[] | "| \(.cell) | " +
-              (if .status=="pass" then "✅" elif .status=="fail" then "❌" else "⬜" end) +
+              (if .status=="pass" then "✅"
+               elif .status=="fail" then "❌"
+               elif .status=="error" then "⚠️"
+               else "⬜" end) +
               " | \(.reason) |"' all.json
           } | tee -a "$GITHUB_STEP_SUMMARY" > baseline.md
 
-          echo "DESKTOP CONTRACT BASELINE: ${pass}/${total} pass, ${fail} fail, ${miss} no image"
+          echo "DESKTOP CONTRACT BASELINE: ${pass}/${total} pass, ${fail} fail, ${miss} no image, ${err} error"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: desktop-contract-baseline
