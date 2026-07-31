@@ -201,6 +201,41 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$fail" -eq 0 ]
 }
 
+@test "greetd greeter degrades to software rendering without a render node" {
+  # cage is wlroots-based: on a VM with virtio-gpu but no virgl there is a DRM
+  # card and NO render node, GL init fails, cage exits and greetd restart-loops
+  # on a black screen. Boot-time detection is required — a baked-in renderer
+  # either breaks virgl-less VMs or needlessly softens every GPU machine.
+  local script="${REPO_ROOT}/build_scripts/desktop/greetd-gtkgreet.sh"
+  grep -qF '/dev/dri/renderD*' "$script"
+  grep -qF 'WLR_RENDERER=pixman' "$script"
+  # greetd must launch the wrapper, not cage directly, or the detection never runs.
+  grep -qF 'command = "/usr/libexec/tunaos/greetd-session"' "$script"
+  run grep -F 'command = "cage -s --' "$script"
+  [ "$status" -ne 0 ]
+
+  # Behavioural: extract the wrapper and prove BOTH branches. The probed path
+  # is redirected into the test tmpdir so the result does not depend on whether
+  # the machine running the tests happens to have a GPU.
+  local base="${BATS_TEST_TMPDIR}/dri"
+  local w="${BATS_TEST_TMPDIR}/greetd-session"
+  awk '/<<.SESSION_EOF.$/{f=1;next} /^SESSION_EOF$/{f=0} f' "$script" \
+    | sed -e "s|/dev/dri/renderD\*|${base}/renderD*|" \
+      -e 's|^exec cage.*|echo "R=${WLR_RENDERER:-hw}"|' > "$w"
+
+  # No render node (virgl-less VM) -> software renderer.
+  mkdir -p "$base"
+  run bash "$w"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"R=pixman"* ]]
+
+  # Render node present (real GPU) -> left on hardware GL.
+  touch "${base}/renderD128"
+  run bash "$w"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"R=hw"* ]]
+}
+
 @test "desktop installer claims the display-manager.service alias" {
   # openSUSE's displaymanager-sysconfig owns /etc/systemd/system/display-manager.service
   # and points it at its own legacy launcher. systemd refuses to write an

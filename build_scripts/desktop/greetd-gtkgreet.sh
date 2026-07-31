@@ -22,13 +22,38 @@ if command -v gtkgreet &>/dev/null && command -v cage &>/dev/null; then
 	# gtkgreet is a plain Wayland client and cannot own a VT, so cage hosts
 	# it. -s keeps VT switching available (without it a greeter crash locks
 	# you out of the machine entirely).
+	# cage is wlroots-based and needs a renderer. A VM without virgl has a DRM
+	# card (virtio-gpu) but NO render node, so GL initialisation fails, cage
+	# exits, greetd restarts it forever and never reaches active — a black
+	# screen with no login. That is not a CI artefact: it is GNOME Boxes,
+	# VirtualBox and every plain `-vga virtio` guest, which is exactly how
+	# most people will first try TunaOS. scripts/iso-e2e.sh:281 says the same
+	# thing about this runner ("no render node/virgl — niri/xfwl4 will not
+	# render here").
+	#
+	# So pick the renderer at boot rather than baking one in: software
+	# (pixman) only when there is no render node, hardware GL everywhere else.
+	# A login screen is cheap to render, so the fallback costs nothing where
+	# it is used, and machines with a GPU are unaffected.
+	install -Dm0755 /dev/stdin /usr/libexec/tunaos/greetd-session <<'SESSION_EOF'
+#!/usr/bin/env bash
+# Launch gtkgreet under cage, degrading to software rendering when the GPU
+# offers no render node (virgl-less VMs). Without this the greeter never
+# starts there and greetd restart-loops on a black screen.
+if ! compgen -G '/dev/dri/renderD*' >/dev/null 2>&1; then
+	export WLR_RENDERER=pixman
+	export LIBGL_ALWAYS_SOFTWARE=1
+fi
+exec cage -s -- gtkgreet -l -s /etc/greetd/gtkgreet.css
+SESSION_EOF
+
 	mkdir -p /etc/greetd
 	cat >/etc/greetd/config.toml <<'GREETD_EOF'
 [terminal]
 vt = 1
 
 [default_session]
-command = "cage -s -- gtkgreet -l -s /etc/greetd/gtkgreet.css"
+command = "/usr/libexec/tunaos/greetd-session"
 user = "greetd"
 GREETD_EOF
 
