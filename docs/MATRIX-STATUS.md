@@ -42,7 +42,7 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 
 ## LUKS E2E
 
-**16 of 47** cells green (22 tested, 25 never tested).
+**16 of 48** cells green (22 tested, 26 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
@@ -54,7 +54,7 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **flounder** | ❌ | ✅ | ⬜ | — | ⬜ |
 | **flounder-sid** | ❌ | ⬜ | ⬜ | — | ⬜ |
 | **grouper** | ❌ | ⬜ | — | — | ⬜ |
-| **guppy** | ❌ | ⬜ | — | — | — |
+| **guppy** | ❌ | ⬜ | — | — | ⬜ |
 | **marlin** | ❌ | ⬜ | ✅ | ⬜ | ⬜ |
 | **sailfin** | ❌ | ⬜ | — | ⬜ | ⬜ |
 | **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -66,14 +66,14 @@ Newest result 2026-07-31, oldest still-authoritative result 2026-07-29. Results 
 
 ## Installer smoke
 
-**5 of 32** non-NVIDIA ISO cells have *ever* been tested — 16% coverage. 1 of those pass.
+**10 of 32** non-NVIDIA ISO cells have *ever* been tested — 31% coverage. 2 of those pass.
 
-This is the only axis that checks a human could actually install. For 27 combinations, nobody has confirmed the installer appears on screen.
+This is the only axis that checks a human could actually install. For 22 combinations, nobody has confirmed the installer appears on screen.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
 | **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **bonito** | ❌ | ❌ | ❌ | ✅ | ❌ |
 | **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **flounder** | ⬜ | ⬜ | — | — | — |
 | **grouper** | ⬜ | ⬜ | — | — | ⬜ |
@@ -93,6 +93,7 @@ Missing for 1 ISO cell(s): `marlin-kde`
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-07-31 | [30601507789](https://github.com/tuna-os/tunaOS/actions/runs/30601507789) | 5 |
 | 2026-07-31 | [30601505643](https://github.com/tuna-os/tunaOS/actions/runs/30601505643) | 1 |
 | 2026-07-31 | [30595701955](https://github.com/tuna-os/tunaOS/actions/runs/30595701955) | 1 |
 | 2026-07-31 | [30595700827](https://github.com/tuna-os/tunaOS/actions/runs/30595700827) | 1 |
@@ -104,7 +105,6 @@ Missing for 1 ISO cell(s): `marlin-kde`
 | 2026-07-30 | [30522159277](https://github.com/tuna-os/tunaOS/actions/runs/30522159277) | 5 |
 | 2026-07-29 | [30484849112](https://github.com/tuna-os/tunaOS/actions/runs/30484849112) | 1 |
 | 2026-07-29 | [30472017143](https://github.com/tuna-os/tunaOS/actions/runs/30472017143) | 1 |
-| 2026-07-29 | [30447516312](https://github.com/tuna-os/tunaOS/actions/runs/30447516312) | 4 |
 
 <!-- END GENERATED -->
 
