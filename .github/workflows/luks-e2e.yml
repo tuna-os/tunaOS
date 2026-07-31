@@ -233,7 +233,15 @@ jobs:
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
-          TACKLEBOX_SHA: e7d76b2a56cf99f2f353847fbcd0e3d487e5b8d2
+          # Pinned past tacklebox's baked-in `--omit "tpm2-tss pcsc"`
+          # (e7d76b2a, added for Gentoo, which ships neither module). EL
+          # images ship both and force-add clevis on top of
+          # systemd-cryptsetup, so that omit turned clevis into "Module
+          # 'clevis' cannot be installed" and dracut exited 1: every EL LUKS
+          # cell died in Build dev ISO. fd95174 probes for the two modules
+          # inside the image instead of omitting them unconditionally, so do
+          # not pin back below it. Same pin as #929, which fixes this on main.
+          TACKLEBOX_SHA: fd95174432b854a6135600b6c321b3ef01b4bc2d
         run: |
           export TACKLEBOX_FROM_SOURCE=1
           just iso "${VARIANT}" "${FLAVOR}" ghcr "" 1
