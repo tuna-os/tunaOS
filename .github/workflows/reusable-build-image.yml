@@ -872,10 +872,30 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
 
+      # Do NOT apt-install podman on a runner that already has one. Newer
+      # ubuntu-latest images ship podman under /usr/local (its units land in
+      # /usr/local/lib/systemd/system), which dpkg knows nothing about, so
+      # `apt-get install podman` happily adds Ubuntu's podman 4.9.3 on top of
+      # it. sudo's secure_path then prefers /usr/local/bin/podman while the
+      # apt-installed conmon/OCI-runtime bits win elsewhere, and the mixed
+      # stack cannot start a container at all:
+      #
+      #   Error: OCI runtime error: crun: unknown version specified
+      #
+      # That killed sailfin niri's Gate in run 30594521039 while kde/xfce/gnome
+      # passed in the same run, purely because their runners already had podman
+      # apt-installed, making the install a no-op. It looks like a flake and is
+      # not: it fires whenever a job lands on the newer image.
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y just podman jq qemu-system-x86 qemu-utils ovmf socat imagemagick
+          pkgs=(just jq qemu-system-x86 qemu-utils ovmf socat imagemagick)
+          if sudo sh -c 'command -v podman' >/dev/null 2>&1; then
+            echo "podman already present: $(sudo sh -c 'command -v podman') ($(sudo podman --version))"
+          else
+            pkgs+=(podman)
+          fi
+          sudo apt-get install -y "${pkgs[@]}"
 
       - name: Build qcow2 from testing image
         env:
