@@ -667,13 +667,26 @@ boot_failed_on_serial() {
 # Returns 0 if the screenshot looks like a rendered screen, 1 otherwise.
 screenshot_sane() {
 	local label="$1"
-	local cap="${OUTPUT_DIR}/${label}.ppm"
+	# screenshot() writes .png on the VNC path and .ppm on the screendump
+	# path, and this only ever looked for .ppm — so on the virgl path, where
+	# VNC is the ONLY thing that captures anything at all, a perfectly good
+	# screenshot read as "no screenshot ... cannot verify". Take whichever
+	# landed; ImageMagick measures both the same way.
+	local cap="${OUTPUT_DIR}/${label}.png"
+	[[ -s "$cap" ]] || cap="${OUTPUT_DIR}/${label}.ppm"
 	if [[ ! -s "$cap" ]]; then
-		echo "==> No screenshot at ${cap} — cannot verify via fallback" >&2
+		echo "==> No screenshot at ${OUTPUT_DIR}/${label}.{png,ppm} — cannot verify via fallback" >&2
 		return 1
 	fi
 	if ! command -v convert &>/dev/null; then
-		# Without ImageMagick we can only check the file is non-trivial.
+		# Without ImageMagick we can only check the file is non-trivial. The
+		# 100kB floor assumes an uncompressed PPM; PNG of a near-blank screen
+		# compresses far below it, so this heuristic cannot judge a PNG at all
+		# and must not answer for one.
+		if [[ "$cap" == *.png ]]; then
+			echo "==> ImageMagick absent; cannot judge PNG ${cap} for blankness" >&2
+			return 1
+		fi
 		local size
 		size=$(stat -c%s "$cap" 2>/dev/null || echo 0)
 		[[ "$size" -gt 100000 ]] && return 0
@@ -683,6 +696,10 @@ screenshot_sane() {
 	# DM/desktop always has structure. fx output is 0..1.
 	local stddev
 	stddev=$(convert "$cap" -colorspace Gray -format "%[fx:standard_deviation]" info: 2>/dev/null || echo 0)
+	# Published so callers can record the measurement itself, not just the
+	# verdict: "blank" and "stddev=0.0007" answer different questions when the
+	# result is being weighed as evidence rather than used as a gate.
+	SCREENSHOT_STDDEV="$stddev"
 	echo "==> Screenshot ${label} stddev=${stddev}"
 	if awk -v s="$stddev" 'BEGIN{exit !(s > 0.02)}'; then
 		return 0
@@ -1189,11 +1206,53 @@ EOF
 			"$FB_SERIAL" "$MONITOR_SOCK" "$E2E_LUKS_PASS" 900 300 \
 			2>&1 | tee "${OUTPUT_DIR}/installed-serial.log" || {
 			echo "ERROR: encrypted disk did not unlock with the passphrase / reach login"
+			# Photograph the failure before killing the guest. "Unlock failed"
+			# and "unlock failed, and the screen was sitting at a cryptsetup
+			# passphrase prompt" are different bugs, and the second one is only
+			# ever visible here — the guest is gone one line later.
+			screenshot "installed-desktop-failed" || true
 			[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
 			return 4
 		}
+		# ── Photograph the installed desktop, BEFORE killing the guest ────
+		# The desktop contract's liveness test is `systemctl is-active
+		# display-manager.service`, which for niri resolves to greetd — so it
+		# passes whenever greetd is ACTIVE, whether or not the greeter ever
+		# draws a pixel. That is instrumentation, not proof, and it is exactly
+		# how run 29645108966 reported a green gate over a black console.
+		# A framebuffer capture is the cheapest thing that can contradict it.
+		#
+		# Ordering matters twice: luks-first-boot.py only returns after its
+		# 300s post-login drain, so by here the session has had time to come
+		# up; and the kill below destroys the only surface there is to capture.
+		screenshot "installed-desktop" || true
+		local _shot="absent"
+		SCREENSHOT_STDDEV=""
+		if screenshot_sane "installed-desktop"; then
+			_shot="drawn"
+		elif [[ -s "${OUTPUT_DIR}/installed-desktop.png" || -s "${OUTPUT_DIR}/installed-desktop.ppm" ]]; then
+			# A capture exists but did not clear the floor. Only call that
+			# "blank" if it was actually measured — without ImageMagick
+			# screenshot_sane declines to judge, and recording that refusal as
+			# a blank screen would invent a product failure out of a missing
+			# host package.
+			if [[ -n "$SCREENSHOT_STDDEV" ]]; then
+				_shot="blank"
+			else
+				_shot="unmeasured"
+			fi
+		fi
 		[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
 		record_luks_evidence "TUNAOS_LUKS_E2E_PASS encrypted=1 passphrase_unlock=1 installed_boot=1"
+
+		# `drawn` means SOMETHING rendered — not that this desktop's session is
+		# up. A greetd greeter that draws, or a text login prompt, clears the
+		# same stddev floor. So this closes the black-console hole and leaves
+		# the greeter-drew-but-no-session hole open; the installed system has
+		# no SSH, so the `pgrep -x <compositor>` discriminator the live path
+		# uses (installer-smoke.yml) is not available here. Score accordingly.
+		record_luks_evidence \
+			"TUNAOS_LUKS_E2E_INSTALLED_SCREENSHOT rendered=${_shot} stddev=${SCREENSHOT_STDDEV:-na} fatal=0"
 
 		# ── Desktop contract on the INSTALLED system ──────────────────
 		# Recorded as its own evidence line, NOT folded into the line above:
