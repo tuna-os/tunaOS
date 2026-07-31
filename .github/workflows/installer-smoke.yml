@@ -295,7 +295,18 @@ jobs:
     permissions:
       contents: write
     steps:
+      # This job commits to main, so it must start FROM main — not from the
+      # dispatched ref. Checking out a feature branch made `git pull --rebase
+      # origin main` replay that branch's commits onto main: it conflicted
+      # (run 30618282287, add/add on luks-e2e.yml + image-versions.yaml, since
+      # the shallow clone has no merge base) and, had it succeeded, would have
+      # pushed unreviewed PR commits straight to main. fetch-depth: 0 gives the
+      # rebase real history so a concurrent push to main is handled instead of
+      # degenerating into add/add conflicts again.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
 
       - name: Download walkthrough artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1

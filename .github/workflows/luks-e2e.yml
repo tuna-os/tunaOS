@@ -233,7 +233,14 @@ jobs:
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
-          TACKLEBOX_SHA: e7d76b2a56cf99f2f353847fbcd0e3d487e5b8d2
+          # fd95174 probes for tpm2-tss/pcsc inside the image instead of
+          # omitting them unconditionally. e7d76b2a baked in
+          # `--omit "tpm2-tss pcsc"` to fix Gentoo (which ships neither
+          # module); on EL images, which ship both and force-add clevis on
+          # top, that omit turns clevis into "cannot be installed" and
+          # dracut exits 1 — every EL LUKS cell died at Build dev ISO.
+          # Do not pin this back below fd95174 without re-reading that.
+          TACKLEBOX_SHA: fd95174432b854a6135600b6c321b3ef01b4bc2d
         run: |
           export TACKLEBOX_FROM_SOURCE=1
           just iso "${VARIANT}" "${FLAVOR}" ghcr "" 1
