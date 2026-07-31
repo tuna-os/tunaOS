@@ -1067,10 +1067,23 @@ run_install() {
 		local img_json="/var/lib/superiso-store/overlay-images/images.json"
 		if "${ssh_cmd[@]}" "sudo test -f ${img_json} && sudo jq -e --arg ref '${candidate_ref}' '.[] | select(.names != null) | select(.names | index(\$ref))' ${img_json} >/dev/null 2>&1" 2>/dev/null; then
 			echo "==> Found ${candidate_ref} in offline store images.json (podman query missed it)"
-			# The image exists but podman/bootc can't resolve it from the
-			# additional store (overlay driver mismatch). Don't set
-			# found_local here — let the code fall through to the network
-			# pull, which now uses aggressive MTU clamping + retries.
+			# This used to deliberately NOT set found_local, on the theory that
+			# podman/bootc could not resolve the image from the additional
+			# store anyway, so it was better to "fall through to the network
+			# pull". Two things were wrong with that. The else branch has not
+			# been a network pull for some time — it is an SSH copy of a
+			# multi-GB tar. And that copy cannot succeed: it lands in
+			# /home/liveuser, which is the live overlay's upperdir, which is a
+			# tmpfs (`tbox-overlay ... size=8388608k`) on a 4096M guest with no
+			# swap. Pushing a ~4.9G image into ~2.9G of real memory OOMs the
+			# guest every time. Measured, not inferred — see #941.
+			#
+			# So preferring the store is strictly better even when podman's
+			# query missed: if bootc cannot read it either we get a fast, clear
+			# failure, instead of a guaranteed dead guest ~2.5 minutes in.
+			found_local=1
+			found_ref="$candidate_ref"
+			break
 		fi
 	done
 
@@ -1086,12 +1099,35 @@ run_install() {
 			recipe_image="containers-storage:${found_ref}"
 		fi
 	else
-		# The offline store is inaccessible to the guest's containers/storage
-		# library (overlay driver / fuse-overlayfs mismatch). QEMU SLIRP NAT
-		# stalls on large blobs (PMTU blackhole). Instead, save the image
-		# from the HOST's podman (where 'just iso' built it) and transfer it
-		# over SSH. SSH port-forwarding is a TCP tunnel, immune to SLIRP NAT
-		# PMTU issues.
+		# LAST RESORT, AND IT USUALLY FAILS. Read this before relying on it.
+		#
+		# The comment here used to claim SSH port-forwarding is "a TCP tunnel,
+		# immune to SLIRP NAT PMTU issues". Both halves are wrong. Port 2222 is
+		# a QEMU `hostfwd` on `-netdev user`, so it traverses SLIRP like
+		# everything else — and SLIRP is not what breaks this anyway.
+		#
+		# What breaks it is the destination. The tar lands in /home/liveuser,
+		# i.e. the live overlay's upperdir, which is a tmpfs:
+		#
+		#   tbox-overlay /run/tbox-overlay tmpfs rw,size=8388608k
+		#   LiveOS_rootfs / overlay ... upperdir=/run/tbox-overlay/upper
+		#
+		# df reports 8.0G free on / because that is the tmpfs's ADVERTISED
+		# size. The guest has 3903M of RAM and no swap. Copying a ~4.9G image
+		# into ~2.9G of usable memory invokes the OOM killer, every time,
+		# regardless of transport or MTU:
+		#
+		#   rtkit-daemon invoked oom-killer: ... global_oom
+		#   Out of memory: Killed process 1622 (niri)
+		#
+		# Reproduced on hosted CI (2m34s, 2m35s) and on bare metal with no
+		# SLIRP pathology and a far faster link (2m54s) — the timing tracks
+		# bytes written, not network conditions. See #941.
+		#
+		# Do not "fix" this with a longer timeout, MTU clamping (already
+		# applied above) or retries. Any image larger than guest RAM cannot be
+		# delivered this way. Make the offline store resolve, or raise --memory
+		# above the image size.
 		echo "==> No local image in offline store — transferring from host via SSH"
 		local host_img="localhost/${VARIANT:-}:${FLAVOR:-}"
 		local host_tar="/tmp/luks-image-${VARIANT:-}-${FLAVOR:-}.tar"
