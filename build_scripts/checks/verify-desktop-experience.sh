@@ -72,7 +72,15 @@ case "$desktop" in
 gnome)
 	experience="projectbluefin/bluefin-lts"
 	require_command gnome-shell
-	require_glob '/usr/share/wayland-sessions/*gnome*.desktop'
+	# Ubuntu names its GNOME session `ubuntu.desktop`, not `gnome*.desktop`.
+	# Measured on the published grouper:gnome: /usr/share/wayland-sessions
+	# contains exactly `ubuntu.desktop`, /usr/share/xsessions does not exist,
+	# and gnome-shell IS installed — so the old glob reported a working GNOME
+	# desktop as broken. A contract that fails a healthy image is worse than no
+	# contract: it trains people to ignore it.
+	require_any_glob \
+		'/usr/share/wayland-sessions/*gnome*.desktop' \
+		'/usr/share/wayland-sessions/ubuntu*.desktop'
 	require_any_unit gdm gdm3
 	dm_pattern='^(gdm|gdm3)\.service$'
 	# Session-can-start is not the same as desktop-is-usable, and the gap

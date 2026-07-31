@@ -107,9 +107,23 @@ jobs:
           status=missing; exitcode=""; reason="no published image"
           # Existence check WITHOUT pulling: a cell with no image is untested,
           # not failing, and must not cost a multi-GB download to discover.
-          if sudo podman manifest inspect "$REF" >/dev/null 2>&1 \
-             || sudo podman image inspect "$REF" >/dev/null 2>&1 \
-             || sudo skopeo inspect "docker://$REF" >/dev/null 2>&1; then
+          #
+          # RETRY, and do not let a transient registry error masquerade as
+          # "no such image". A single un-retried inspect failure wrongly marked
+          # flounder:cosmic, flounder:gnome and marlin:gnome as unpublished in
+          # the first baseline sweep; two of those actually PASS and one is a
+          # real shipped-image bug. "Never tested" is only honest when the
+          # probe actually succeeded in saying so.
+          exists=no
+          for _try in 1 2 3; do
+            if sudo podman manifest inspect "$REF" >/dev/null 2>&1 \
+               || sudo podman image inspect "$REF" >/dev/null 2>&1 \
+               || sudo skopeo inspect "docker://$REF" >/dev/null 2>&1; then
+              exists=yes; break
+            fi
+            sleep $((_try * 5))
+          done
+          if [[ "$exists" == yes ]]; then
             # Pull as its own step. A registry/disk failure is an ERROR, not a
             # contract failure — folding the two together would report a
             # perfectly good desktop as broken, the same conflation this sweep
