@@ -96,7 +96,17 @@ jobs:
           REF: ghcr.io/tuna-os/${{ matrix.variant }}:${{ matrix.desktop }}
           CELL: ${{ matrix.variant }}:${{ matrix.desktop }}
         run: |
-          set -uo pipefail   # NOT -e: a contract failure is data, not an error
+          # `set +e` EXPLICITLY, and it is load-bearing. GitHub launches this
+          # step as `bash --noprofile --norc -e -o pipefail`, so -e is already
+          # on before the first line runs, and `set -uo pipefail` does NOT
+          # clear it. The previous version said "NOT -e" in a comment and ran
+          # with -e anyway: the contract's own non-zero exit killed the step
+          # before `exitcode=$?`, so result.json was never written and the
+          # failing cell vanished from the baseline instead of counting as a
+          # failure. Sweep 30627663051 reported "40/43 pass, 0 fail" while
+          # seven cells had genuinely failed.
+          set +e
+          set -uo pipefail   # a contract failure is data, not an error
           # Do NOT apt-install podman on a runner that already ships one under
           # /usr/local — mixing it with Ubuntu's produces
           # "crun: unknown version specified" (see reusable-build-image.yml).
@@ -176,19 +186,42 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          find results -name result.json -exec cat {} + | jq -s -c 'sort_by(.cell)' > all.json
+          find results -name result.json -exec cat {} + | jq -s -c 'sort_by(.cell)' > found.json
+
+          # RECONCILE against the dispatched matrix. A cell whose job died
+          # before writing result.json used to be silently absent from this
+          # table, and the totals were computed from what arrived rather than
+          # from what was asked for — so seven genuinely failing cells read as
+          # "0 fail" in sweep 30627663051. Absence of evidence was rendered as
+          # evidence of absence, in the one file that is supposed to be
+          # coverage truth.
+          #
+          # `lost` is its own status, distinct from fail and from missing: we
+          # know the cell was dispatched and we do NOT know what it did.
+          jq -c '[.include[] | {cell: (.variant + ":" + .desktop)}]' \
+            <<<'${{ needs.generate_matrix.outputs.matrix }}' > expected.json
+          jq -s -c '
+            (.[0] | map(.cell)) as $got
+            | .[0] + [ .[1][] | select(.cell as $c | $got | index($c) | not)
+                       | {cell: .cell, variant: (.cell|split(":")[0]),
+                          desktop: (.cell|split(":")[1]), status: "lost",
+                          reason: "job produced no result (see its log)", exit: ""} ]
+            | sort_by(.cell)' found.json expected.json > all.json
+
           pass=$(jq '[.[]|select(.status=="pass")]|length' all.json)
           fail=$(jq '[.[]|select(.status=="fail")]|length' all.json)
           miss=$(jq '[.[]|select(.status=="missing")]|length' all.json)
           err=$(jq '[.[]|select(.status=="error")]|length' all.json)
+          lost=$(jq '[.[]|select(.status=="lost")]|length' all.json)
           total=$(jq 'length' all.json)
 
           {
             echo "# Desktop contract baseline"
             echo
-            echo "**${pass} / ${total} cells pass.** ${fail} fail, ${miss} have no published image, ${err} errored."
+            echo "**${pass} / ${total} cells pass.** ${fail} fail, ${miss} have no published image, ${err} errored, ${lost} lost."
             echo
             echo "⬜ never tested (no image) — not a pass. ⚠️ infrastructure error, the cell is still untested."
+            echo "❓ dispatched but reported nothing — also not a pass, and worth chasing: it means the job died."
             echo
             echo "| cell | result | reason |"
             echo "|---|:--:|---|"
@@ -196,11 +229,20 @@ jobs:
               (if .status=="pass" then "✅"
                elif .status=="fail" then "❌"
                elif .status=="error" then "⚠️"
+               elif .status=="lost" then "❓"
                else "⬜" end) +
               " | \(.reason) |"' all.json
           } | tee -a "$GITHUB_STEP_SUMMARY" > baseline.md
 
-          echo "DESKTOP CONTRACT BASELINE: ${pass}/${total} pass, ${fail} fail, ${miss} no image, ${err} error"
+          echo "DESKTOP CONTRACT BASELINE: ${pass}/${total} pass, ${fail} fail, ${miss} no image, ${err} error, ${lost} lost"
+
+          # Every cell must be accounted for. If the reconciliation itself is
+          # wrong the totals are meaningless, so fail loudly rather than
+          # publish a table that quietly does not add up.
+          if (( pass + fail + miss + err + lost != total )); then
+            echo "::error::baseline does not reconcile: ${pass}+${fail}+${miss}+${err}+${lost} != ${total}"
+            exit 1
+          fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: desktop-contract-baseline
