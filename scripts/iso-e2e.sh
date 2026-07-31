@@ -1183,8 +1183,10 @@ EOF
 			-monitor "unix:${MONITOR_SOCK},server,nowait" \
 			-serial "unix:${FB_SERIAL},server,nowait" \
 			"${QEMU_GPU_ARGS[@]}" -pidfile "$QEMU_PIDFILE" -daemonize
+		# 5th arg: keep draining the serial for up to 300s past login waiting
+		# for the desktop contract. See luks-first-boot.py for why.
 		python3 "$(dirname "${BASH_SOURCE[0]}")/luks-first-boot.py" \
-			"$FB_SERIAL" "$MONITOR_SOCK" "$E2E_LUKS_PASS" 900 \
+			"$FB_SERIAL" "$MONITOR_SOCK" "$E2E_LUKS_PASS" 900 300 \
 			2>&1 | tee "${OUTPUT_DIR}/installed-serial.log" || {
 			echo "ERROR: encrypted disk did not unlock with the passphrase / reach login"
 			[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
@@ -1192,6 +1194,35 @@ EOF
 		}
 		[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
 		record_luks_evidence "TUNAOS_LUKS_E2E_PASS encrypted=1 passphrase_unlock=1 installed_boot=1"
+
+		# ── Desktop contract on the INSTALLED system ──────────────────
+		# Recorded as its own evidence line, NOT folded into the line above:
+		# the workflow gate is `grep -qx 'TUNAOS_LUKS_E2E_PASS encrypted=1
+		# passphrase_unlock=1 installed_boot=1'` -- exact-match and anchored,
+		# so appending a field would turn every currently-green LUKS cell red
+		# on a string mismatch, across every variant and several sessions'
+		# work.
+		#
+		# Deliberately NOT fatal in this commit. This is the first time the
+		# assertion has ever run post-install on any edition, so a red result
+		# would be ambiguous between "the desktop does not come up" and "the
+		# harvest is wrong". Get one named run first, then gate on it.
+		local _dc="absent"
+		if grep -q "LUKS_FIRST_BOOT_DESKTOP_CONTRACT=ok" "${OUTPUT_DIR}/installed-serial.log" 2>/dev/null; then
+			_dc="ok"
+		elif grep -q "LUKS_FIRST_BOOT_DESKTOP_CONTRACT=fail" "${OUTPUT_DIR}/installed-serial.log" 2>/dev/null; then
+			_dc="fail"
+		fi
+		record_luks_evidence "TUNAOS_LUKS_E2E_DESKTOP_CONTRACT desktop_contract=${_dc} fatal=0"
+		case "$_dc" in
+		ok) echo "==> Desktop contract PASSED on the installed encrypted system" ;;
+		fail)
+			echo "WARNING: desktop contract FAILED on the installed system:" >&2
+			grep -a "TUNAOS_DESKTOP_CONTRACT_FAIL" "${OUTPUT_DIR}/installed-serial.log" | tr -d '\r' >&2 || true
+			;;
+		*) echo "WARNING: no desktop contract marker on the installed system (DM likely never started)" >&2 ;;
+		esac
+
 		echo "==> LUKS passphrase gate PASSED for ${VARIANT:-}:${FLAVOR:-}"
 		return 0
 	fi

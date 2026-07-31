@@ -296,6 +296,12 @@ jobs:
           path: |
             luks-out/serial.log
             luks-out/live-serial.log
+            # The installed system's serial. The passphrase gate writes here,
+            # not to serial.log -- which is why serial.log is 0 bytes in every
+            # passphrase-path artifact and the only desktop-contract marker in
+            # them comes from live-serial.log, i.e. the live ISO. Without this
+            # file there is no record of what the INSTALLED system did.
+            luks-out/installed-serial.log
             luks-out/luks-evidence.log
             luks-out/*.png
           if-no-files-found: warn
