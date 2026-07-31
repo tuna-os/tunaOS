@@ -51,6 +51,8 @@ variants:
     emoji: "🐠"
     description: "Based on AlmaLinux Kitten 10"
     base_image: "quay.io/almalinuxorg/almalinux-bootc:10-kitten"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [almalinux-kitten]
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
     flavors:
       # ── Stage 1 ────────────────────────────────────────────────────────────
@@ -184,6 +186,8 @@ variants:
     emoji: "🐟"
     description: "Based on AlmaLinux 10"
     base_image: "quay.io/almalinuxorg/almalinux-bootc:10"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [almalinux]
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
     flavors:
       # ── Stage 1 ────────────────────────────────────────────────────────────
@@ -317,6 +321,8 @@ variants:
     emoji: "🍣"
     description: "Based on CentOS Stream 10"
     base_image: "quay.io/centos-bootc/centos-bootc:stream10"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [centos]
     # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
     platforms: ["linux/amd64", "linux/arm64"]
     flavors:
@@ -435,6 +441,8 @@ variants:
     emoji: "🎣"
     description: "Based on Fedora 44"
     base_image: "quay.io/fedora/fedora-bootc:44"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [fedora]
     akmods: "ublue-os"
     # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
     platforms: ["linux/amd64", "linux/arm64"]
@@ -535,6 +543,8 @@ variants:
     emoji: "🦈"
     description: "Based on openSUSE Tumbleweed (rolling)"
     base_image: "registry.opensuse.org/opensuse/tumbleweed:latest"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [opensuse, tumbleweed]
     platforms: ["linux/amd64"]
     flavors:
       # base + gnome carry an arm64 leg solely as the parent chain for
@@ -587,6 +597,8 @@ variants:
     # fetched an image the build never used and the workaround silently did
     # nothing for guppy. Keep the two in lockstep when bumping.
     base_image: "docker.io/gentoo/stage3:latest@sha256:9d03b48eda632da09f469d384ce77ec05618060ed4e9ac295f8192a196e7539a"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [gentoo]
     platforms: ["linux/amd64"]
     flavors:
       - id: base
@@ -625,6 +637,8 @@ variants:
     emoji: "🐉"
     description: "Based on Fedora Rawhide (rolling)"
     base_image: "quay.io/fedora/fedora-bootc:rawhide"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [fedora]
     akmods: "ublue-os"
     platforms: ["linux/amd64", "linux/arm64"]
     flavors:
@@ -708,6 +722,8 @@ variants:
     emoji: "🐟"
     description: "Based on Ubuntu 26.04 Resolute Raccoon"
     base_image: "docker.io/library/ubuntu:resolute"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [ubuntu]
     # Built directly from stock Ubuntu and bootcified in Containerfile.ubuntu
     # (bootc from the tuna-os bootc-toolchain-sid oras artifact). See RFC 010.
     # arm64: toolchain publishes latest-{amd64,arm64}; Containerfile.ubuntu is
@@ -778,6 +794,8 @@ variants:
     emoji: "🚀"
     description: "Based on Arch Linux (rolling)"
     base_image: "docker.io/archlinux/archlinux:latest"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [arch, archlinux]
     # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
     # is x86_64-only) — see get-base-image.sh + build-archlinuxarm-base.yml
     # (#778). Only the gnome-asahi parent chain builds arm64.
@@ -828,6 +846,8 @@ variants:
     emoji: "🐡"
     description: "Based on Debian 13 Trixie (stable)"
     base_image: "docker.io/library/debian:trixie"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [debian]
     platforms: ["linux/amd64"]
     flavors:
       # base + gnome carry an arm64 leg solely as the parent chain for
@@ -875,6 +895,8 @@ variants:
     emoji: "☢️"
     description: "Based on Debian Sid (unstable, rolling)"
     base_image: "docker.io/library/debian:sid"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [debian]
     platforms: ["linux/amd64"]
     flavors:
       - id: base

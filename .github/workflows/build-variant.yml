@@ -91,6 +91,7 @@ jobs:
             | {
                 variant:       $v.id,
                 image_name:    ($v.publish_name // $v.id),
+                image_aliases: (($v.aliases // []) | join(",")),
                 published_tag: (.id + (if ($v.tag_suffix // "") == "" then "" else "-" + $v.tag_suffix end)),
                 variant_emoji: ($v.emoji // "❓"),
                 base_image:    $v.base_image,
@@ -109,6 +110,7 @@ jobs:
               include: map(select(.stage == $stage) | {
                 variant:       .variant,
                 image_name:    .image_name,
+                image_aliases: .image_aliases,
                 published_tag: .published_tag,
                 variant_emoji: .variant_emoji,
                 flavor:        .flavor,
@@ -175,6 +177,7 @@ jobs:
     uses: ./.github/workflows/reusable-build-image.yml
     with:
       image-name: ${{ matrix.image_name }}
+      image-aliases: ${{ matrix.image_aliases }}
       image-variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
       platforms: ${{ matrix.platforms }}
@@ -209,6 +212,7 @@ jobs:
     uses: ./.github/workflows/reusable-build-image.yml
     with:
       image-name: ${{ matrix.image_name }}
+      image-aliases: ${{ matrix.image_aliases }}
       image-variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
       platforms: ${{ matrix.platforms }}
@@ -243,6 +247,7 @@ jobs:
     uses: ./.github/workflows/reusable-build-image.yml
     with:
       image-name: ${{ matrix.image_name }}
+      image-aliases: ${{ matrix.image_aliases }}
       image-variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
       platforms: ${{ matrix.platforms }}
@@ -271,6 +276,7 @@ jobs:
     uses: ./.github/workflows/reusable-build-image.yml
     with:
       image-name: ${{ matrix.image_name }}
+      image-aliases: ${{ matrix.image_aliases }}
       image-variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
       platforms: ${{ matrix.platforms }}
