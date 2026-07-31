@@ -134,9 +134,24 @@ ln -sf /usr/lib/systemd/system/tunaos-offline-store.service \
 # customize container (bootc images ship uninitialized storage), and the
 # driver may auto-detect as "btrfs" (EL10 default). The offline store is
 # ALWAYS overlay, and additionalimagestores silently ignores stores with
-# a different driver.  containers/storage reads this primary configuration;
-# do not rely on a storage.conf.d drop-in here. Write the complete config so
-# every consumer (podman, skopeo, bootc, and fisherman) sees the same store.
+# a different driver. So write the complete primary config.
+#
+# CORRECTION (tunaOS#881). An earlier version of this comment said "do not
+# rely on a storage.conf.d drop-in here", which guarded the wrong direction
+# and cost a day of LUKS cells. Writing the primary config is necessary and
+# NOT sufficient: containers/storage applies storage.conf.d drop-ins AFTER
+# the primary file, and `additionalimagestores` is an array that is REPLACED
+# wholesale rather than merged. The base image ships
+# /usr/share/containers/storage.conf.d/00-vendor.conf, which sets its own
+# additionalimagestores and therefore deletes /var/lib/superiso-store from
+# the effective config — while `cat /etc/containers/storage.conf` still
+# shows it, which is exactly why this took five hypotheses to find.
+# Symptom: `podman images -a` empty on the live root despite the squashfs
+# being mounted and a valid overlay graphroot (5493 layer entries).
+#
+# Hence the drop-in below, and hence it lists BOTH stores: last writer wins
+# on an array, so whoever writes last has to enumerate everything, or the
+# vendor's own store is what disappears instead.
 mkdir -p /etc/containers
 cat >/etc/containers/storage.conf <<'CONFEOF'
 [storage]
@@ -145,11 +160,46 @@ runroot = "/run/containers/storage"
 graphroot = "/var/lib/containers/storage"
 
 [storage.options]
-additionalimagestores = ["/var/lib/superiso-store"]
+additionalimagestores = ["/var/lib/superiso-store", "/usr/lib/containers/storage"]
 
 [storage.options.overlay]
 mount_program = "/usr/bin/fuse-overlayfs"
 CONFEOF
+
+# Higher-precedence drop-in: /etc drop-ins are applied after /usr/share
+# ones, and within a directory in lexical order, so 99- beats the vendor's
+# 00-. This is the file that actually decides the effective value.
+#
+# Chosen over deleting /usr/share/containers/storage.conf.d/00-vendor.conf:
+# removing a vendor file makes the live image silently diverge from the
+# base, and a base rebuild would restore it without restoring our fix. An
+# additive higher-precedence drop-in keeps the vendor's store working (it
+# is listed here) and keeps the change visible in one place.
+mkdir -p /etc/containers/storage.conf.d
+cat >/etc/containers/storage.conf.d/99-tbox-offline-store.conf <<'DROPEOF'
+# Written by tunaOS customize-live.sh — see tunaOS#881.
+# Must outrank /usr/share/containers/storage.conf.d/00-vendor.conf, whose
+# additionalimagestores REPLACES (not merges with) the primary config's and
+# would otherwise drop /var/lib/superiso-store entirely.
+# Both stores are listed deliberately: array values replace, so omitting
+# the vendor path here would break the vendor's store the same way.
+[storage.options]
+additionalimagestores = ["/var/lib/superiso-store", "/usr/lib/containers/storage"]
+DROPEOF
+
+# Second, independent mechanism — required for the bootcViaContainer path.
+# A container gets its /etc from the IMAGE, not from the live root, and
+# /var/lib/superiso-store is not present inside it at all, so fisherman's
+# in-container `bootc` cannot resolve containers-storage:<ref> no matter
+# what the live root's config says. mounts.conf bind-mounts the store into
+# every container podman starts. This is the half of dakota-iso's pattern
+# (_upstream-snapshots/dakota-iso/live/src/configure-live.sh) that was not
+# carried over when this script was written; its comment there states the
+# same reason. bootcDirect never needed it, which is why yellowfin:xfce
+# passed while every bootcViaContainer cell failed.
+cat >/etc/containers/mounts.conf <<'MOUNTSEOF'
+/var/lib/superiso-store:/var/lib/superiso-store
+MOUNTSEOF
 
 # Dev/E2E media only: the normal published-image policy keeps SSH disabled.
 # tacklebox creates liveuser during boot, so install a oneshot that sets its
