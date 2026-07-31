@@ -758,7 +758,16 @@ check_ssh() {
 run_smoke_checks() {
 	local script_dir
 	script_dir="$(dirname "${BASH_SOURCE[0]}")"
-	local -a COMMON_SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+	# ConnectTimeout bounds the handshake; ServerAlive* bounds an already-open
+	# connection to a guest that stopped answering. Without the latter, ssh/scp
+	# block on a dead socket forever — three LUKS runs on 07-31 each burned
+	# 2h14m-2h42m of a runner inside one scp and had to be cancelled by hand
+	# (#939). check_ssh() a few lines up already set ConnectTimeout=10; these
+	# two arrays did not, which is why the same file behaved both ways.
+	local -a COMMON_SSH_OPTS=(
+		-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+		-o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=8
+	)
 	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
 	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_PORT")
 
@@ -831,7 +840,13 @@ run_install() {
 	# scp uses -P (capital) for the port flag; ssh uses -p. Sharing one array
 	# with the wrong flag silently makes scp treat the port number as a
 	# source-file argument ("stat local 2222: No such file or directory").
-	local -a COMMON_SSH_OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null)
+	# Keepalives: see run_smoke_checks() for why these are not optional. This
+	# is the array the multi-GB image transfer below uses, so it is the one
+	# that actually hung the runners in #939.
+	local -a COMMON_SSH_OPTS=(
+		-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+		-o ConnectTimeout=10 -o ServerAliveInterval=15 -o ServerAliveCountMax=8
+	)
 	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
 	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_PORT")
 
@@ -1022,10 +1037,22 @@ run_install() {
 		if podman image exists "$host_img" 2>/dev/null; then
 			echo "==> Saving $host_img on host..."
 			podman save "$host_img" -o "$host_tar"
+			# Bounded, like the fisherman call below. This is a multi-GB copy
+			# over a QEMU SLIRP hostfwd, so it is legitimately slow — but the
+			# failure mode it had was not slowness, it was silence: no output
+			# between the line above and the runner being killed hours later.
+			# The workflow's --timeout does not cover this; that is a PER-PHASE
+			# timeout (see the usage text above) consulted only by the
+			# readiness wait and the installed-boot wait.
 			echo "==> Transferring image to guest (this may take a few minutes)..."
-			"${scp_cmd[@]}" "$host_tar" "liveuser@127.0.0.1:/home/liveuser/"
+			if ! timeout 1800 "${scp_cmd[@]}" "$host_tar" \
+				"liveuser@127.0.0.1:/home/liveuser/"; then
+				echo "ERROR: image transfer to guest timed out or failed" >&2
+				rm -f "$host_tar" || true
+				return 3
+			fi
 			echo "==> Loading image into guest podman..."
-			if "${ssh_cmd[@]}" "sudo podman load -i /home/liveuser/${host_tar##*/} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
+			if timeout 1800 "${ssh_cmd[@]}" "sudo podman load -i /home/liveuser/${host_tar##*/} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
 				echo "==> Image loaded, using local containers-storage ref"
 				recipe_image="containers-storage:${host_img}"
 			else
