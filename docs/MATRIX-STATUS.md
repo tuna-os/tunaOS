@@ -42,7 +42,7 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 
 ## LUKS E2E
 
-**5 of 47** cells green (11 tested, 36 never tested).
+**8 of 47** cells green (14 tested, 33 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
@@ -58,7 +58,7 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **marlin** | ❌ | ⬜ | ✅ | ⬜ | ⬜ |
 | **sailfin** | ❌ | ⬜ | — | ⬜ | ⬜ |
 | **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **yellowfin** | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **yellowfin** | ✅ | ✅ | ⬜ | ✅ | ✅ |
 
 Newest result 2026-07-31, oldest still-authoritative result 2026-07-29. Results older than the most recent round of fixes are the best available data, not current data.
 
@@ -91,6 +91,9 @@ Missing for 1 ISO cell(s): `marlin-kde`
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-07-31 | [30595701955](https://github.com/tuna-os/tunaOS/actions/runs/30595701955) | 1 |
+| 2026-07-31 | [30595700827](https://github.com/tuna-os/tunaOS/actions/runs/30595700827) | 1 |
+| 2026-07-31 | [30595699610](https://github.com/tuna-os/tunaOS/actions/runs/30595699610) | 1 |
 | 2026-07-31 | [30594079979](https://github.com/tuna-os/tunaOS/actions/runs/30594079979) | 1 |
 | 2026-07-30 | [30590446007](https://github.com/tuna-os/tunaOS/actions/runs/30590446007) | 1 |
 | 2026-07-30 | [30524767610](https://github.com/tuna-os/tunaOS/actions/runs/30524767610) | 1 |
