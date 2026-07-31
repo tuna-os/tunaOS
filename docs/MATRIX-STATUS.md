@@ -42,13 +42,13 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 
 ## LUKS E2E
 
-**12 of 47** cells green (18 tested, 29 never tested).
+**16 of 47** cells green (22 tested, 25 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **flounder** | ❌ | ✅ | ⬜ | — | ⬜ |
@@ -60,15 +60,15 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **yellowfin** | ✅ | ✅ | ⬜ | ✅ | ✅ |
 
-NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 6 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
+NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 13 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
 
 Newest result 2026-07-31, oldest still-authoritative result 2026-07-29. Results older than the most recent round of fixes are the best available data, not current data.
 
 ## Installer smoke
 
-**4 of 32** non-NVIDIA ISO cells have *ever* been tested — 12% coverage. 1 of those pass.
+**5 of 32** non-NVIDIA ISO cells have *ever* been tested — 16% coverage. 1 of those pass.
 
-This is the only axis that checks a human could actually install. For 28 combinations, nobody has confirmed the installer appears on screen.
+This is the only axis that checks a human could actually install. For 27 combinations, nobody has confirmed the installer appears on screen.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -79,7 +79,7 @@ This is the only axis that checks a human could actually install. For 28 combina
 | **grouper** | ⬜ | ⬜ | — | — | ⬜ |
 | **marlin** | ⬜ | ⬜ | — | — | — |
 | **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **yellowfin** | ⬜ | ❌ | ❌ | ✅ | ❌ |
+| **yellowfin** | ❌ | ❌ | ❌ | ✅ | ❌ |
 
 cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on hosted CI may be a harness limitation rather than a product failure. See *Known systemic gaps*.
 
@@ -93,13 +93,14 @@ Missing for 1 ISO cell(s): `marlin-kde`
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-07-31 | [30601505643](https://github.com/tuna-os/tunaOS/actions/runs/30601505643) | 1 |
 | 2026-07-31 | [30595701955](https://github.com/tuna-os/tunaOS/actions/runs/30595701955) | 1 |
 | 2026-07-31 | [30595700827](https://github.com/tuna-os/tunaOS/actions/runs/30595700827) | 1 |
 | 2026-07-31 | [30595699610](https://github.com/tuna-os/tunaOS/actions/runs/30595699610) | 1 |
 | 2026-07-31 | [30595698386](https://github.com/tuna-os/tunaOS/actions/runs/30595698386) | 13 |
+| 2026-07-31 | [30595695828](https://github.com/tuna-os/tunaOS/actions/runs/30595695828) | 18 |
 | 2026-07-31 | [30594079979](https://github.com/tuna-os/tunaOS/actions/runs/30594079979) | 1 |
 | 2026-07-30 | [30590446007](https://github.com/tuna-os/tunaOS/actions/runs/30590446007) | 1 |
-| 2026-07-30 | [30524767610](https://github.com/tuna-os/tunaOS/actions/runs/30524767610) | 1 |
 | 2026-07-30 | [30522159277](https://github.com/tuna-os/tunaOS/actions/runs/30522159277) | 5 |
 | 2026-07-29 | [30484849112](https://github.com/tuna-os/tunaOS/actions/runs/30484849112) | 1 |
 | 2026-07-29 | [30472017143](https://github.com/tuna-os/tunaOS/actions/runs/30472017143) | 1 |
