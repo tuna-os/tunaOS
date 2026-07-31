@@ -565,6 +565,14 @@ variants:
       - id: xfce
         stage: 2
         build_image: true
+      # COSMIC: newly buildable. Tumbleweed packages the session richly and the
+      # whole zypper list installs clean (exit 0), producing cosmic-comp and
+      # /usr/share/wayland-sessions/cosmic.desktop — both measured on a real
+      # install, not inferred. Note cosmic-settings and cosmic-greeter are NOT
+      # packaged on openSUSE; see the manifest for what is used instead.
+      - id: cosmic
+        stage: 2
+        build_image: true
 
   # ── Guppy ────────────────────────────────────────────────────────────────
   # Guppy: source-based, emerge/portage. Compiles everything from source.
@@ -745,6 +753,18 @@ variants:
       # the published set, so it evidently never completed, but the
       # declaration was wrong either way.
       # Packaging it ourselves is tunaos-packages#136. Do not re-add without it.
+      #
+      # COSMIC, by contrast, IS buildable here and is now declared. Ubuntu has
+      # no COSMIC in its own repos, but cosmic.yaml carries
+      # ppa:hepp3n/cosmic-epoch with condition: ubuntu, and install-desktop.sh
+      # adds a PPA when IS_UBUNTU — measured WITH the PPA enabled,
+      # cosmic-session, cosmic-comp, cosmic-settings and cosmic-greeter all
+      # resolve. (Measuring in a bare ubuntu container says nothing here: the
+      # installer adds repositories before it installs, so a probe that skips
+      # that step is answering a question about the wrong system.)
+      - id: cosmic
+        stage: 2
+        build_image: true
       - id: xfce
         stage: 2
         build_image: true
