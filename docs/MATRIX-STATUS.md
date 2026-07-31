@@ -42,7 +42,7 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 
 ## LUKS E2E
 
-**14 of 50** cells green (26 tested, 24 never tested).
+**14 of 48** cells green (26 tested, 22 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
@@ -53,10 +53,10 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **flounder** | ❌ | ⬜ | ⬜ | — | ⬜ |
 | **flounder-sid** | ❌ | ⬜ | ⬜ | — | ⬜ |
-| **grouper** | ❌ | ⬜ | ⬜ | — | ⬜ |
-| **guppy** | ❌ | ⬜ | — | — | ⬜ |
+| **grouper** | ❌ | ⬜ | — | ⬜ | ⬜ |
+| **guppy** | ❌ | ⬜ | — | — | — |
 | **marlin** | ❌ | ⬜ | ✅ | ⬜ | ⬜ |
-| **sailfin** | ❌ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **sailfin** | ❌ | ⬜ | — | ⬜ | ⬜ |
 | **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **yellowfin** | ❌ | ✅ | ⬜ | ✅ | ✅ |
 
@@ -66,9 +66,9 @@ Newest result 2026-07-31, oldest still-authoritative result 2026-07-29. Results 
 
 ## Installer smoke
 
-**15 of 32** non-NVIDIA ISO cells have *ever* been tested — 47% coverage. 3 of those pass.
+**15 of 33** non-NVIDIA ISO cells have *ever* been tested — 45% coverage. 3 of those pass.
 
-This is the only axis that checks a human could actually install. For 17 combinations, nobody has confirmed the installer appears on screen.
+This is the only axis that checks a human could actually install. For 18 combinations, nobody has confirmed the installer appears on screen.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -76,7 +76,7 @@ This is the only axis that checks a human could actually install. For 17 combina
 | **bonito** | ❌ | ❌ | ❌ | ✅ | ❌ |
 | **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **flounder** | ⬜ | ⬜ | — | — | — |
-| **grouper** | ⬜ | ⬜ | — | — | ⬜ |
+| **grouper** | ⬜ | ⬜ | — | ⬜ | ⬜ |
 | **marlin** | ⬜ | ⬜ | — | — | — |
 | **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **yellowfin** | ❌ | ❌ | ❌ | ✅ | ❌ |
