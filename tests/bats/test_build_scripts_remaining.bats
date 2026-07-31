@@ -312,13 +312,29 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 }
 
 @test "published image contract executes and records pinned Remora" {
-  local post="${REPO_ROOT}/build_scripts/26-packages-post.sh"
-  grep -q 'sha256sum --check --strict' "$post"
-  grep -q "remora --help" "$post"
-  grep -q 'experience-contracts/remora' "$post"
+  # The remora install moved out of 26-packages-post.sh into its own script so
+  # Containerfile.opensuse — which runs none of the numbered scripts — can
+  # install it too. The pin, the checksum gate and the smoke test must survive
+  # that move.
+  local remora="${REPO_ROOT}/build_scripts/install-remora.sh"
+  grep -q 'sha256sum --check --strict' "$remora"
+  grep -q "remora --help" "$remora"
+  grep -q 'experience-contracts/remora' "$remora"
   # Runtime contract still gates on remora being present in the image.
   grep -q 'remora_not_found' \
     "${REPO_ROOT}/build_scripts/checks/verify-desktop-experience.sh"
+}
+
+@test "every base that ships images installs Remora" {
+  # sailfin shipped with no remora at all and every sailfin Gate failed on
+  # reason=remora_not_found — a desktop that booted fine reported as broken.
+  # The dnf/apt/pacman bases get it via 26-packages-post.sh; openSUSE cannot
+  # run that script (it would rebuild the initramfs with Fedora kernel naming
+  # and clobber the composefs/bootc one) so it calls the split-out script
+  # directly. Both routes must stay wired up.
+  grep -q 'install-remora.sh' "${REPO_ROOT}/build_scripts/26-packages-post.sh"
+  grep -q 'install-remora.sh' "${REPO_ROOT}/Containerfile.opensuse"
+  [ -x "${REPO_ROOT}/build_scripts/install-remora.sh" ]
 }
 
 @test "desktop contract unit runs the installed-system TAP checks on all DEs" {
