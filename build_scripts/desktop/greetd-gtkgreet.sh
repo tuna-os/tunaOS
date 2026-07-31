@@ -37,9 +37,28 @@ if command -v gtkgreet &>/dev/null && command -v cage &>/dev/null; then
 	# it is used, and machines with a GPU are unaffected.
 	install -Dm0755 /dev/stdin /usr/libexec/tunaos/greetd-session <<'SESSION_EOF'
 #!/usr/bin/env bash
-# Launch gtkgreet under cage, degrading to software rendering when the GPU
-# offers no render node (virgl-less VMs). Without this the greeter never
-# starts there and greetd restart-loops on a black screen.
+# Launch gtkgreet under cage on hardware that may have neither 3D nor a GPU
+# ready yet. Two distinct failures, both measured in the sailfin niri Gate:
+#
+#   1. The DRM device appears LATE. greetd is ordered only after
+#      systemd-user-sessions, not after the GPU, and the boot log shows
+#      virtio_gpu registering at 50.62s — the same instant greetd started.
+#      cage with no /dev/dri/card* exits immediately, greetd restarts it, and
+#      the unit never settles: "Started Greeter daemon" appears, yet
+#      `systemctl is-active display-manager.service` is false a fraction of a
+#      second later, with zero failed units. That is a restart loop, not a
+#      crash, which is why it reads as dm_inactive rather than a failure.
+#   2. There may be no 3D at all: the same log shows
+#      "[drm] features: -virgl", so GL initialisation cannot succeed even once
+#      the device exists. wlroots' pixman renderer draws fine on dumb buffers.
+#
+# Waiting for card* fixes (1); forcing pixman when no render node exists fixes
+# (2). A render node is the honest test for 3D here — virtio-gpu without virgl
+# exposes card* but no renderD*.
+for _ in $(seq 1 30); do
+	compgen -G '/dev/dri/card*' >/dev/null 2>&1 && break
+	sleep 0.5
+done
 if ! compgen -G '/dev/dri/renderD*' >/dev/null 2>&1; then
 	export WLR_RENDERER=pixman
 	export LIBGL_ALWAYS_SOFTWARE=1

@@ -221,10 +221,14 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   local w="${BATS_TEST_TMPDIR}/greetd-session"
   awk '/<<.SESSION_EOF.$/{f=1;next} /^SESSION_EOF$/{f=0} f' "$script" \
     | sed -e "s|/dev/dri/renderD\*|${base}/renderD*|" \
+      -e "s|/dev/dri/card\*|${base}/card*|" \
+      -e 's|^\tsleep 0.5|\t:|' \
       -e 's|^exec cage.*|echo "R=${WLR_RENDERER:-hw}"|' > "$w"
 
-  # No render node (virgl-less VM) -> software renderer.
+  # No render node (virgl-less VM) -> software renderer. card* present so the
+  # wait loop does not spin.
   mkdir -p "$base"
+  touch "${base}/card0"
   run bash "$w"
   [ "$status" -eq 0 ]
   [[ "$output" == *"R=pixman"* ]]
@@ -234,6 +238,13 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   run bash "$w"
   [ "$status" -eq 0 ]
   [[ "$output" == *"R=hw"* ]]
+
+  # The wait loop must be bounded: with no DRM device at all it still has to
+  # exec the greeter rather than hang greetd forever.
+  rm -f "${base}"/card0 "${base}"/renderD128
+  run bash "$w"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"R=pixman"* ]]
 }
 
 @test "desktop installer claims the display-manager.service alias" {
