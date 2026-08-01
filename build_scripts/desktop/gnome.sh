@@ -15,8 +15,27 @@ case "${1:-}" in
 		# recommends, and without them /usr/share/wayland-sessions has no
 		# *gnome*.desktop — configure-desktop-runtime.sh hard-fails
 		# (grouper gnome red since 2026-07-21).
+		# gnome-keyring is the next casualty of the same --no-install-recommends
+		# rule as gnome-session above: apt lists it only as a RECOMMEND of
+		# ubuntu-desktop-minimal, so it is silently dropped and
+		# verify-desktop-experience.sh's gnome branch fails its
+		# `/usr/bin/gnome-keyring-daemon` requirement:
+		#
+		#   missing required path: none of [/usr/bin/gnome-keyring-daemon] exist
+		#
+		# That is what kills grouper gnome-asahi (run 30684297227). It is NOT
+		# an asahi or arm64 problem — measured on the PUBLISHED images,
+		# grouper:gnome (amd64) is missing it too while flounder:gnome
+		# (Debian) has it, because only Ubuntu demotes it to a recommend.
+		# gnome-asahi merely surfaced it first, since base and asahi build in
+		# the same workflow while the amd64 desktop flavors are a later stage.
+		#
+		# libpam-gnome-keyring comes too, matching niri.sh and cosmic.sh: the
+		# daemon alone satisfies the contract check but leaves the keyring
+		# locked at login, which is the user-visible half of the feature.
 		pkg_install ubuntu-desktop-minimal gnome-shell-extension-manager \
-			gnome-session ubuntu-session
+			gnome-session ubuntu-session \
+			gnome-keyring libpam-gnome-keyring
 
 		# Additional GNOME utilities (mirrors the RPM set where possible)
 		pkg_install \
