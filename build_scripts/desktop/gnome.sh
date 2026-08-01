@@ -19,7 +19,15 @@ case "${1:-}" in
 			gnome-session ubuntu-session
 
 		# Additional GNOME utilities (mirrors the RPM set where possible)
+		# gnome-keyring is explicit: ubuntu-desktop-minimal only recommends
+		# it and pkg_install runs --no-install-recommends, so without it the
+		# image ships no /usr/bin/gnome-keyring-daemon and
+		# verify-desktop-experience.sh fails the gnome case (grouper
+		# gnome/gnome-asahi red since the check landed). This is the same
+		# omission manifests/desktops/gnome.yaml documents; Ubuntu builds
+		# take this script path, not the manifest, so both must list it.
 		pkg_install \
+			gnome-keyring \
 			gnome-browser-connector \
 			gnome-disk-utility \
 			gnome-system-monitor \
