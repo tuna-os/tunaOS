@@ -222,6 +222,21 @@ RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
 LABEL containers.bootc=1 ostree.bootable=1
 COPY --from=context /files /
 COPY --from=common /system_files/shared /
+
+# remora — the desktop experience contract requires it, and this base does
+# not run 26-packages-post.sh, which is what installs remora on the dnf
+# variants. Containerfile.opensuse already hit this and calls
+# install-remora.sh directly for the same reason (see the comment there).
+# Without it every Gate on this base fails with
+#
+#   TUNAOS_DESKTOP_CONTRACT_FAIL reason=remora_contract_missing
+#
+# which reads as a broken desktop when the desktop booted fine — grouper gnome,
+# kde, xfce and gnome-zfs all died this way in run 30692866756. The binary is
+# static Go, so there is nothing distro-specific to guard.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/install-remora.sh
+
 RUN bootc container lint
 
 # Per-flavor target aliases so the build's `--target=<flavor>` resolves. Each

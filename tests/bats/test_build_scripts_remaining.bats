@@ -405,12 +405,13 @@ STUB
 @test "every base that ships images installs Remora" {
   # sailfin shipped with no remora at all and every sailfin Gate failed on
   # reason=remora_not_found — a desktop that booted fine reported as broken.
-  # The dnf/apt/pacman bases get it via 26-packages-post.sh; openSUSE cannot
-  # run that script (it would rebuild the initramfs with Fedora kernel naming
-  # and clobber the composefs/bootc one) so it calls the split-out script
-  # directly. Both routes must stay wired up.
+  # The dnf bases get it via 26-packages-post.sh; every base that does not run
+  # that script (openSUSE, Ubuntu, Debian, Arch, Gentoo) must call the
+  # split-out script directly. Every route must stay wired up.
   grep -q 'install-remora.sh' "${REPO_ROOT}/build_scripts/26-packages-post.sh"
-  grep -q 'install-remora.sh' "${REPO_ROOT}/Containerfile.opensuse"
+  for base in opensuse ubuntu debian arch gentoo; do
+    grep -q 'install-remora.sh' "${REPO_ROOT}/Containerfile.${base}"
+  done
   [ -x "${REPO_ROOT}/build_scripts/install-remora.sh" ]
 }
 
