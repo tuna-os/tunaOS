@@ -299,9 +299,36 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     # its name (the name-based heuristic is exactly what tuna-os/wootc had to
     # rip out — see payload/deployer/deploy.sh "the crux fix"):
     #
-    #   BACKEND=composefs-native → ships systemd-boot and no bootupctl, so
-    #     bootloader management can't go through bootupd: needs
-    #     --composefs-backend.
+    #   BACKEND=composefs-native → ships systemd-boot and has no bootupd
+    #     UPDATE PAYLOAD, so bootloader management can't go through bootupd:
+    #     needs --composefs-backend.
+    #
+    #     The payload (/usr/lib/bootupd/updates), NOT the bootupctl binary, is
+    #     the discriminator, and getting that wrong is tunaOS#954. This used to
+    #     test `! command -v bootupctl`, which was true back when non-rpm
+    #     images shipped no bootupd at all. They now build bootc/ostree/bootupd
+    #     from source, so bootupctl is present on EVERY variant — the clause
+    #     silently inverted and every non-rpm image began probing as
+    #     BACKEND=ostree. bootc then did an ostree install and demanded the
+    #     payload that source-built bootupd does not generate:
+    #
+    #       error: Installing to disk: bootupd is required for ostree-based installs
+    #
+    #     Measured across published images, which is why the payload test is
+    #     the right one:
+    #
+    #       yellowfin (rpm)     no systemd-boot   payload PRESENT   composefs=no
+    #       grouper   (ubuntu)  systemd-bootx64   payload ABSENT    composefs=yes
+    #       marlin    (arch)    systemd-bootx64   payload ABSENT    composefs=yes
+    #       flounder  (debian)  ...efi.signed     payload ABSENT    composefs=yes
+    #
+    #     rpm variants keep BACKEND=ostree on the payload test and are
+    #     unaffected — which matches the observed split, where only they were
+    #     still publishing.
+    #
+    #     The glob is load-bearing too: Debian ships the EFI binary as
+    #     systemd-bootx64.efi.SIGNED, so an exact-name test misses it even
+    #     where the bootloader is plainly there.
     #   SEALED → prepare-root.conf has [composefs] enabled: the rootfs is
     #     composefs-sealed and needs fs-verity, which XFS LACKS. On the xfs
     #     default from 00-tunaos.toml the initramfs fails initrd-switch-root
@@ -325,7 +352,7 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     # an image its kde/xfce siblings probed as composefs-native/SEALED=1.
     PROBE_ERR=$(mktemp)
     if ! PROBE=$(sudo podman run --rm --entrypoint="" "$IMG_REF" sh -c '
-        if test -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi && ! command -v bootupctl >/dev/null 2>&1; then
+        if ls /usr/lib/systemd/boot/efi/systemd-boot*.efi* >/dev/null 2>&1 && ! test -d /usr/lib/bootupd/updates; then
             echo BACKEND=composefs-native
         else
             echo BACKEND=ostree
