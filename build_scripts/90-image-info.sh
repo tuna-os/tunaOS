@@ -150,7 +150,7 @@ fi
 osr_set() {
 	local key="$1" value="$2"
 	if grep -q "^${key}=" /usr/lib/os-release; then
-		# `|` delimiter: every value here is a URL.
+		# `|` delimiter rather than `/`: values may contain slashes (URLs).
 		sed -i "s|^${key}=.*|${key}=\"${value}\"|" /usr/lib/os-release
 	else
 		echo "${key}=\"${value}\"" >>/usr/lib/os-release
