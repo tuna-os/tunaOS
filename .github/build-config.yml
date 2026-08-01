@@ -769,8 +769,21 @@ variants:
       # Apple Silicon (M1/M2, Asahi Linux) — full build with ENABLE_ASAHI=1
       # (the kernel decision lives in Containerfile.ubuntu's base stage, so
       # this is not an overlay). aarch64 only; no ISO (asahi-installer path).
+      #
+      # stage 3, NOT stage 1, and the distinction matters: `stage` is build
+      # ORDER, not parentage. This flavor has no PARENT_FLAVOR, so it still
+      # builds straight from base wherever it is placed — but at stage 1 it
+      # shared a matrix with base, and a stage does not advance until every
+      # cell in it passes. One arm64-only Apple Silicon flavor therefore gated
+      # gnome, kde, gnome-zfs, cosmic and xfce, which all live in stage 2:
+      # run 30688732984 promoted base and then never started them.
+      #
+      # Every other variant already places gnome-asahi at stage 3; grouper was
+      # the lone exception, because there asahi is a full build rather than an
+      # overlay and the stage number was read as "has no parent" rather than
+      # "runs first".
       - id: gnome-asahi
-        stage: 1
+        stage: 3
         platforms: ["linux/arm64"]
         build_image: true
         build_iso: false

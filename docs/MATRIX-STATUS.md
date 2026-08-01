@@ -42,27 +42,25 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 
 ## LUKS E2E
 
-**13 of 50** cells green (20 tested, 30 never tested).
+**2 of 50** cells green (25 tested, 25 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **bonito** | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **flounder** | ⬜ | ⬜ | ⬜ | — | ⬜ |
-| **flounder-sid** | ⬜ | ⬜ | ⬜ | — | ⬜ |
-| **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
+| **flounder** | ❌ | ❌ | ❌ | — | ❌ |
+| **flounder-sid** | ❌ | ❌ | ❌ | — | ❌ |
+| **grouper** | ❌ | ❌ | ❌ | — | ❌ |
 | **guppy** | ⬜ | ⬜ | — | — | ⬜ |
-| **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **sailfin** | ❌ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **yellowfin** | ❌ | ✅ | ⬜ | ✅ | ✅ |
+| **marlin** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **sailfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **yellowfin** | ❌ | ⬜ | ⬜ | ✅ | ⬜ |
 
-NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 13 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
-
-Newest result 2026-07-31, oldest still-authoritative result 2026-07-30. Results older than the most recent round of fixes are the best available data, not current data.
+Newest result 2026-08-01, oldest still-authoritative result 2026-07-31. Results older than the most recent round of fixes are the best available data, not current data.
 
 ## Installer smoke
 
@@ -94,18 +92,18 @@ Missing for 2 ISO cell(s): `gurnard-pantheon`, `marlin-kde`
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-08-01 | [30680381500](https://github.com/tuna-os/tunaOS/actions/runs/30680381500) | 5 |
+| 2026-08-01 | [30680379297](https://github.com/tuna-os/tunaOS/actions/runs/30680379297) | 7 |
+| 2026-08-01 | [30680376995](https://github.com/tuna-os/tunaOS/actions/runs/30680376995) | 5 |
+| 2026-08-01 | [30680374962](https://github.com/tuna-os/tunaOS/actions/runs/30680374962) | 4 |
+| 2026-08-01 | [30680372927](https://github.com/tuna-os/tunaOS/actions/runs/30680372927) | 4 |
+| 2026-08-01 | [30674606103](https://github.com/tuna-os/tunaOS/actions/runs/30674606103) | 1 |
 | 2026-07-31 | [30624963765](https://github.com/tuna-os/tunaOS/actions/runs/30624963765) | 1 |
 | 2026-07-31 | [30618509841](https://github.com/tuna-os/tunaOS/actions/runs/30618509841) | 1 |
 | 2026-07-31 | [30618282287](https://github.com/tuna-os/tunaOS/actions/runs/30618282287) | 1 |
-| 2026-07-31 | [30605644812](https://github.com/tuna-os/tunaOS/actions/runs/30605644812) | 1 |
 | 2026-07-31 | [30601507789](https://github.com/tuna-os/tunaOS/actions/runs/30601507789) | 5 |
 | 2026-07-31 | [30601506679](https://github.com/tuna-os/tunaOS/actions/runs/30601506679) | 5 |
 | 2026-07-31 | [30601505643](https://github.com/tuna-os/tunaOS/actions/runs/30601505643) | 1 |
-| 2026-07-31 | [30595701955](https://github.com/tuna-os/tunaOS/actions/runs/30595701955) | 1 |
-| 2026-07-31 | [30595700827](https://github.com/tuna-os/tunaOS/actions/runs/30595700827) | 1 |
-| 2026-07-31 | [30595699610](https://github.com/tuna-os/tunaOS/actions/runs/30595699610) | 1 |
-| 2026-07-31 | [30595698386](https://github.com/tuna-os/tunaOS/actions/runs/30595698386) | 12 |
-| 2026-07-31 | [30595697324](https://github.com/tuna-os/tunaOS/actions/runs/30595697324) | 4 |
 
 <!-- END GENERATED -->
 
