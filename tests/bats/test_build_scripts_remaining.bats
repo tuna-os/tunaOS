@@ -463,3 +463,66 @@ STUB
   shared_line=$(grep -nF 'COPY --from=common /system_files/shared /' "$containerfile" | cut -d: -f1)
   [ "$gnome_line" -gt "$shared_line" ]
 }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# build_scripts/checks/verify-branding.sh
+# ═══════════════════════════════════════════════════════════════════════════
+
+@test "build_scripts/checks/verify-branding.sh: has bash shebang and set flags" {
+  local script="${REPO_ROOT}/build_scripts/checks/verify-branding.sh"
+  run head -1 "$script"
+  [[ "$output" =~ ^#!/.*bash ]]
+  grep -q 'set -euo pipefail' "$script"
+}
+
+@test "verify-branding.sh: reads /usr/lib/os-release when /etc/os-release is absent" {
+  # /etc/os-release is only conventionally present; /usr/lib/os-release is the
+  # canonical file. Reading only /etc would report every field unset.
+  local script="${REPO_ROOT}/build_scripts/checks/verify-branding.sh"
+  grep -qF '/usr/lib/os-release' "$script"
+  grep -qF 'os_release_file' "$script"
+}
+
+@test "verify-branding.sh: upstream denylist covers every shipped base family" {
+  # el10, Ubuntu, Debian, openSUSE, Gentoo and Arch are all built from
+  # scripts/resolve-flavor.sh; a family missing here lets an unbranded image
+  # ship its upstream PRETTY_NAME and LOGO through the check.
+  local script="${REPO_ROOT}/build_scripts/checks/verify-branding.sh"
+  for name in ubuntu debian fedora centos almalinux rocky rhel opensuse suse gentoo arch; do
+    grep -qE "\b${name}\b" "$script" || {
+      echo "FAIL: upstream denylist missing ${name}" >&2
+      return 1
+    }
+  done
+  # Both the name check and the logo check must use the shared denylist.
+  [ "$(grep -c 'names_upstream' "$script")" -ge 3 ]
+}
+
+@test "verify-branding.sh: reports unset fields instead of exiting at the first one" {
+  # The bug class this script exists to catch: dying under set -e at the first
+  # absent field, so the run produces no verdict. A near-empty os-release must
+  # still walk every section and emit the FAIL marker.
+  local script="${REPO_ROOT}/build_scripts/checks/verify-branding.sh"
+  local fixture="${BATS_TEST_TMPDIR}/os-release"
+  printf 'PRETTY_NAME="AlmaLinux 10"\nLOGO=archlinux-logo\n' >"$fixture"
+
+  run env TUNAOS_OS_RELEASE="$fixture" bash "$script" grouper
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"VERSION_CODENAME is ''"* ]]
+  [[ "$output" == *"PRETTY_NAME is 'AlmaLinux 10'"* ]]
+  [[ "$output" == *"LOGO=archlinux-logo — upstream logo, not ours"* ]]
+  [[ "$output" == *"IMAGE_VERSION is unset"* ]]
+  [[ "$output" == *"== desktop assets =="* ]]
+  [[ "$output" == *"TUNAOS_BRANDING_FAIL variant=grouper"* ]]
+}
+
+@test "verify-branding.sh: passes shellcheck" {
+  if command -v shellcheck &>/dev/null; then
+    # Same severity and excludes as .github/workflows/lint.yml.
+    run shellcheck --severity=error --exclude=SC1091,SC2114 \
+      "${REPO_ROOT}/build_scripts/checks/verify-branding.sh"
+    [ "$status" -eq 0 ]
+  else
+    skip "shellcheck not installed"
+  fi
+}

@@ -53,12 +53,44 @@ fail() {
 }
 pass() { echo "  ok: $*"; }
 
+# /etc/os-release is conventionally a symlink to /usr/lib/os-release, but the
+# latter is the canonical file: an image can ship it without the /etc link.
+# Reading only /etc/os-release there would report *every* field as unset and
+# bury the real findings under noise. TUNAOS_OS_RELEASE overrides for tests.
+os_release_file=""
+for candidate in "${TUNAOS_OS_RELEASE:-}" /etc/os-release /usr/lib/os-release; do
+	if [[ -n "$candidate" && -r "$candidate" ]]; then
+		os_release_file="$candidate"
+		break
+	fi
+done
+
 # Must not fail when a field is absent: an absent field is a FINDING, and
 # under `set -e` a non-zero return here kills the run before it can report one.
 # Measured: the first version of this script died silently at the first unset
 # field (VARIANT), which is exactly the class of silent-exit bug it exists to
 # catch elsewhere.
-osr() { grep -E "^${1}=" /etc/os-release 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' || true; }
+osr() {
+	[[ -n "$os_release_file" ]] || return 0
+	grep -E "^${1}=" "$os_release_file" 2>/dev/null | head -1 | cut -d= -f2- | tr -d '"' || true
+}
+
+# Every base family TunaOS builds on (el10, Ubuntu, Debian, openSUSE, Gentoo,
+# Arch — see scripts/resolve-flavor.sh), plus the rebuilds of each. A name we
+# forget here is a name an unbranded image can ship while passing this check.
+UPSTREAM_NAMES=(
+	ubuntu debian fedora centos almalinux rocky rhel "red hat" redhat
+	opensuse suse gentoo arch
+)
+
+# Case-insensitive substring match against the upstream denylist.
+names_upstream() {
+	local haystack="${1,,}" name
+	for name in "${UPSTREAM_NAMES[@]}"; do
+		[[ "$haystack" == *"$name"* ]] && return 0
+	done
+	return 1
+}
 
 # ---------------------------------------------------------------- identity --
 
@@ -75,6 +107,11 @@ declare -A FISH=(
 )
 
 echo "== identity =="
+if [[ -z "$os_release_file" ]]; then
+	fail "no readable os-release (/etc/os-release or /usr/lib/os-release) — every field below reads as unset"
+else
+	pass "os-release=${os_release_file}"
+fi
 want_codename="${FISH[$variant]:-}"
 got_codename="$(osr VERSION_CODENAME)"
 if [[ -z "$want_codename" ]]; then
@@ -86,9 +123,13 @@ else
 fi
 
 got_pretty="$(osr PRETTY_NAME)"
-[[ -n "$got_pretty" && "$got_pretty" != *Ubuntu* && "$got_pretty" != *Debian* && "$got_pretty" != *Fedora* ]] \
-	&& pass "PRETTY_NAME=${got_pretty}" \
-	|| fail "PRETTY_NAME is '${got_pretty}' — still names the upstream distro"
+if [[ -z "$got_pretty" ]]; then
+	fail "PRETTY_NAME is unset"
+elif names_upstream "$got_pretty"; then
+	fail "PRETTY_NAME is '${got_pretty}' — still names the upstream distro"
+else
+	pass "PRETTY_NAME=${got_pretty}"
+fi
 
 # Every URL must point at us. help.ubuntu.com sends our users to a project
 # that cannot help them with our image.
@@ -114,7 +155,7 @@ echo "== logos =="
 logo="$(osr LOGO)"
 if [[ -z "$logo" ]]; then
 	fail "LOGO is unset"
-elif [[ "$logo" == ubuntu-logo || "$logo" == debian-logo || "$logo" == fedora-logo* ]]; then
+elif names_upstream "$logo"; then
 	fail "LOGO=${logo} — upstream logo, not ours"
 else
 	pass "LOGO=${logo}"
