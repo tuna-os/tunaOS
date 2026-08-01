@@ -131,11 +131,51 @@ if ! grep -q "^VARIANT_ID=" /usr/lib/os-release; then
 	echo "VARIANT_ID=${IMAGE_NAME}" >>/usr/lib/os-release
 fi
 
-tee -a /usr/lib/os-release <<EOF
-DOCUMENTATION_URL="${DOCUMENTATION_URL}"
-SUPPORT_URL="${SUPPORT_URL}"
-DEFAULT_HOSTNAME="${IMAGE_NAME}"
-BUILD_ID="${SHA_HEAD_SHORT:-testing}"
-EOF
+# Replace-or-append, never blind append.
+#
+# These four used to be written with `tee -a`, which is only correct when the
+# base does not already define the key. Ubuntu DOES define SUPPORT_URL, so
+# grouper shipped os-release containing BOTH
+#
+#   SUPPORT_URL="https://help.ubuntu.com/"          <- upstream, line 1
+#   SUPPORT_URL="https://github.com/tuna-os/..."    <- ours, appended
+#
+# and which one wins depends entirely on the reader. Shell sourcing takes the
+# last; every `grep ... | head -1` parser — including
+# build_scripts/checks/verify-branding.sh:74 — takes the FIRST, i.e. Ubuntu's.
+# So the field was never "lost": it was set correctly and then out-voted by the
+# copy already there. A duplicate key is worse than a missing one, because both
+# readings are defensible and the file looks right to whoever greps it the way
+# that agrees with them.
+osr_set() {
+	local key="$1" value="$2"
+	if grep -q "^${key}=" /usr/lib/os-release; then
+		# `|` delimiter: every value here is a URL.
+		sed -i "s|^${key}=.*|${key}=\"${value}\"|" /usr/lib/os-release
+	else
+		echo "${key}=\"${value}\"" >>/usr/lib/os-release
+	fi
+}
+
+osr_set DOCUMENTATION_URL "${DOCUMENTATION_URL}"
+osr_set SUPPORT_URL "${SUPPORT_URL}"
+osr_set DEFAULT_HOSTNAME "${IMAGE_NAME}"
+osr_set BUILD_ID "${SHA_HEAD_SHORT:-testing}"
+
+# Set by bluefin and read by desktop UIs, bootc and fastfetch to name the
+# system; we set none of them, so those surfaces fell back to the upstream
+# identity. IMAGE_VERSION carries the flavor as well as the build, because a
+# grouper:kde and a grouper:gnome from the same commit are not interchangeable
+# and "which image is this" is the question the field exists to answer.
+osr_set VARIANT "${IMAGE_PRETTY_NAME} ${IMAGE_FLAVOR}"
+osr_set IMAGE_ID "${IMAGE_NAME}"
+osr_set IMAGE_VERSION "${IMAGE_FLAVOR}-${SHA_HEAD_SHORT:-testing}"
+
+# LOGO is deliberately NOT set here. verify-branding.sh also asserts the
+# referenced asset exists under /usr/share/pixmaps or hicolor, and this repo
+# ships no logo file at all — so naming one would swap "LOGO is upstream" for
+# "LOGO names a file that does not exist", which renders as a blank icon in
+# GNOME About, GDM and fastfetch. That needs an actual asset, not an
+# os-release line.
 
 printf "::endgroup::\n"
