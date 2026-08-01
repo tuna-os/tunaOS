@@ -15,8 +15,15 @@ case "${1:-}" in
 		# recommends, and without them /usr/share/wayland-sessions has no
 		# *gnome*.desktop — configure-desktop-runtime.sh hard-fails
 		# (grouper gnome red since 2026-07-21).
+		# gnome-keyring falls to the same --no-install-recommends rule: Ubuntu
+		# lists it only as a recommend of ubuntu-desktop-minimal, so it is
+		# dropped and verify-desktop-experience.sh fails its
+		# /usr/bin/gnome-keyring-daemon requirement. libpam-gnome-keyring comes
+		# too (matching niri.sh and cosmic.sh) so the keyring unlocks at login.
+		# Full investigation: tuna-os/tunaOS#956.
 		pkg_install ubuntu-desktop-minimal gnome-shell-extension-manager \
-			gnome-session ubuntu-session
+			gnome-session ubuntu-session \
+			gnome-keyring libpam-gnome-keyring
 
 		# Additional GNOME utilities (mirrors the RPM set where possible)
 		# gnome-keyring is explicit: ubuntu-desktop-minimal only recommends
