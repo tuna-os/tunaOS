@@ -123,11 +123,11 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/20-packages.sh
 
-# remora — the desktop experience contract requires it, and this base runs
-# none of the numbered build_scripts that install it. 26-packages-post.sh
-# provides remora on the dnf variants only; Containerfile.opensuse already hit
-# this and calls install-remora.sh directly for the same reason (see the
-# comment there). Without it every Gate on this base fails with
+# remora — the desktop experience contract requires it, and this base does
+# not run 26-packages-post.sh, which is what installs remora on the dnf
+# variants. Containerfile.opensuse already hit this and calls
+# install-remora.sh directly for the same reason (see the comment there).
+# Without it every Gate on this base fails with
 #
 #   TUNAOS_DESKTOP_CONTRACT_FAIL reason=remora_contract_missing
 #
