@@ -901,7 +901,15 @@ check_ssh() {
 	# what the client saw, so the same wall has now been hit three times and
 	# three separate hypotheses were proposed against zero client-side
 	# evidence.
-	echo "ERROR: SSH check failed: $(tr -d '\r' <"$err" | grep -v '^Warning: Permanently added' | tr '\n' ' ' | sed 's/  */ /g')" >&2
+	#
+	# The filter can legitimately match nothing (empty stderr, or nothing but
+	# the known-hosts warning), and under `pipefail` that grep exits 1. Keep
+	# the status off the caller's path with `|| true`, and never emit the bare
+	# "SSH check failed:" this whole change exists to eliminate.
+	local why=""
+	why=$(tr -d '\r' <"$err" | grep -v '^Warning: Permanently added' | tr '\n' ' ' | sed 's/  */ /g') || true
+	[[ -n "${why// /}" ]] || why="(no ssh stderr beyond the known-hosts warning)"
+	echo "ERROR: SSH check failed: $why" >&2
 	rm -f "$err"
 	return 5
 }
