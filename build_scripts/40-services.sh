@@ -12,6 +12,48 @@ export MAJOR_VERSION_NUMBER
 
 source /run/context/build_scripts/lib.sh
 
+# Make sure an SSH server EXISTS on every variant, whatever it is packaged as.
+#
+# tunaOS#951. openssh-server was installed in exactly one place in this file —
+# the apt branch, under ENABLE_SSHD=1. Nothing installed it for pacman or
+# zypper at all. The rpm variants only ever worked because their BASE IMAGES
+# happen to ship the package, so "sshd closed by default" meant a disabled
+# SERVICE there and a MISSING PACKAGE everywhere else.
+#
+# The consequence was structural, not cosmetic: customize-live.sh:217 needs a
+# real unit file to enable when building a dev ISO, and aborts with
+#
+#   ERROR: dev ISO requested but no SSH service is installed
+#
+# The dev ISO gates every LUKS and installer cell, so flounder, flounder-sid,
+# grouper, marlin and sailfin were not under-exercised in the matrix — they
+# were UNBUILDABLE for those axes. That is why LUKS coverage clusters entirely
+# on the rpm family; it was a property of this function's absence, not of the
+# variants.
+#
+# Presence-guarded rather than unconditional, so this is a no-op on the rpm and
+# gentoo bases that already ship a server: no extra build time, no behaviour
+# change, and no new failure mode on images this was never broken for.
+ensure_openssh_installed() {
+	if [[ -f /usr/lib/systemd/system/sshd.service ]] ||
+		[[ -f /usr/lib/systemd/system/ssh.service ]] ||
+		[[ -f /lib/systemd/system/sshd.service ]] ||
+		[[ -f /lib/systemd/system/ssh.service ]]; then
+		echo "openssh already present — nothing to install"
+		return 0
+	fi
+	# Package names differ; the unit does not. Arch calls it plain `openssh`,
+	# and Gentoo needs the full atom.
+	case "${PKG_MGR:-dnf}" in
+	pacman) pkg_install openssh ;;
+	emerge) pkg_install net-misc/openssh ;;
+	# openSUSE split openssh-server out of openssh; older bases still only
+	# have the combined package, so try the split name and fall back.
+	zypper) pkg_install openssh-server || pkg_install openssh ;;
+	*) pkg_install openssh-server ;;
+	esac
+}
+
 # safe_enable / safe_disable are defined in lib.sh — they're called from
 # multiple build scripts, so the definition lives with the other shared
 # helpers (install_available, install_from_copr, etc.).
@@ -66,7 +108,7 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 	# (runs 30675951080, 30675954952) without reaching the install layer, and
 	# the dev ISO gates the installer axis too — so one packaging asymmetry
 	# was holding a large share of the never-tested cells on both axes.
-	apt-get install -y --no-install-recommends openssh-server
+	ensure_openssh_installed
 	if [[ "${ENABLE_SSHD:-0}" == "1" ]]; then
 		# Debian/Ubuntu ship the real unit as ssh.service, with sshd.service a
 		# compat symlink that `systemctl enable` refuses to operate on ("linked
@@ -136,6 +178,12 @@ safe_enable tunaos-live-ready.service
 # it via the ENABLE_SSHD=1 build arg for local dev testing, but production
 # installs default closed.
 # (Aligned with zirconium-dev/zirconium dd9f2789 — Disable sshd by default.)
+#
+# This path is not dnf-only: the apt branch above exits early, so everything
+# below also runs for pacman, zypper and emerge. marlin (pacman) failed with
+# "no SSH service is installed" for exactly that reason — the package was
+# never installed for it, only assumed. See ensure_openssh_installed.
+ensure_openssh_installed
 if [[ "${ENABLE_SSHD:-0}" == "1" ]]; then
 	safe_enable sshd.service
 	if ! id liveuser &>/dev/null; then
