@@ -446,6 +446,22 @@ rm -f "$MONITOR_SOCK" "$SERIAL_LOG" "$QEMU_PIDFILE"
 # ── Cleanup on exit ─────────────────────────────────────────────────────────
 
 # shellcheck disable=SC2329  # invoked via `trap cleanup_vm EXIT`
+# Clear the unix sockets a previous QEMU left behind, immediately before
+# launching the next one. This is bug 1 of #946.
+#
+# QEMU does not unlink a stale unix socket before binding, and — critically —
+# it does not fail either: it logs nothing and boots on with no VNC server.
+# So the installed-boot VM silently had no VNC at all, socat got "Connection
+# refused", the capture fell back to screendump, and screendump cannot read a
+# GL scanout — hence `rendered=absent` on the only host configuration where
+# the render path can work at all.
+#
+# Called from every launcher rather than from cleanup_vm: cleanup runs on the
+# way out, and the run that matters is the one that starts next.
+reset_qemu_sockets() {
+	rm -f "${OUTPUT_DIR}/vnc.sock" "$MONITOR_SOCK"
+}
+
 cleanup_vm() {
 	# `|| true` is load-bearing under `set -e`: once the watchdog has FIRED it
 	# has already exited, so this kill fails, and without the guard the
@@ -557,6 +573,7 @@ boot_live_iso() {
 	echo "==> Accel: ${ACCEL}, CPU: ${CPU_ARG}, MEM: ${MEMORY}M, CPUS: ${CPUS}"
 
 	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
+	reset_qemu_sockets
 	"$QEMU" \
 		-name "tunaos-iso-e2e" \
 		-machine pc \
@@ -618,19 +635,50 @@ screenshot() {
 	local png="${OUTPUT_DIR}/${label}.png"
 	local vnc_sock="${OUTPUT_DIR}/vnc.sock"
 
+	local cap_log="${OUTPUT_DIR}/vnc-capture-${label}.log"
+
 	if [[ -S "$vnc_sock" ]] && command -v vncdo &>/dev/null && command -v socat &>/dev/null; then
 		# vncdo speaks TCP, so bridge the unix socket for the moment of capture.
-		local port="${TBOX_E2E_VNC_PORT:-5999}"
-		socat "TCP-LISTEN:${port},reuseaddr,fork" "UNIX-CONNECT:${vnc_sock}" &
+		#
+		# A FRESH PORT PER CAPTURE, and no `fork` — this is bug 2 of #946.
+		# The old bridge was `TCP-LISTEN:...,fork`, which forks a child per
+		# connection; `kill $bridge` reaps only the listener, so children
+		# bridging to a socket whose QEMU has since been killed survive and
+		# keep the port warm. The next capture then connects to one of those
+		# corpses and vncdo reads ECONNRESET — which is exactly the reported
+		# signature: the live capture (first use of the port) succeeds, the
+		# installed capture (always second) fails with "Connection reset by
+		# peer". One capture is one connection, so `fork` bought nothing.
+		VNC_BRIDGE_PORT=$((${VNC_BRIDGE_PORT:-${TBOX_E2E_VNC_PORT:-5999}} + 1))
+		local port="$VNC_BRIDGE_PORT"
+		socat "TCP-LISTEN:${port},reuseaddr" "UNIX-CONNECT:${vnc_sock}" >>"$cap_log" 2>&1 &
 		local bridge=$!
-		sleep 1
-		vncdo -s "127.0.0.1::${port}" capture "$png" >/dev/null 2>&1 || true
+		# Wait for the listener instead of sleeping at it: on a loaded host
+		# 1s was sometimes short, and the failure was indistinguishable from
+		# a real capture failure.
+		local ready=0
+		for _ in $(seq 1 20); do
+			if command -v ss &>/dev/null; then
+				ss -ltn 2>/dev/null | grep -q ":${port}\b" && { ready=1; break; }
+			else
+				sleep 1
+				ready=1
+				break
+			fi
+			sleep 0.25
+		done
+		[[ "$ready" == 1 ]] || echo "==> VNC bridge never listened on ${port}" >>"$cap_log"
+		# Errors go to a per-label log, not /dev/null. #946 bug 2 sat
+		# undiagnosed because this line discarded both vncdo's and socat's
+		# output, so a failed capture said only "rendered=absent".
+		vncdo -s "127.0.0.1::${port}" capture "$png" >>"$cap_log" 2>&1 || true
 		kill "$bridge" 2>/dev/null || true
+		wait "$bridge" 2>/dev/null || true
 		if [[ -s "$png" ]]; then
 			echo "==> Screenshot saved: ${png} (vnc)"
 			return 0
 		fi
-		echo "==> VNC capture failed; falling back to screendump" >&2
+		echo "==> VNC capture failed; falling back to screendump (see ${cap_log})" >&2
 	fi
 
 	if [[ -S "$MONITOR_SOCK" ]] && command -v socat &>/dev/null; then
@@ -1333,6 +1381,7 @@ EOF
 		# No TPM here: the passphrase gate doesn't need one, and the
 		# install-phase swtpm has already exited (its socket is gone). TPM
 		# auto-unlock is the separate post-install test.
+		reset_qemu_sockets
 		"$QEMU" -name "tunaos-iso-e2e-installed" -machine pc -cpu "$CPU_ARG" \
 			-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
 			-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
@@ -1432,6 +1481,7 @@ EOF
 	echo "==> Booting installed system..."
 	# Boot from the install disk (remove cdrom)
 	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
+	reset_qemu_sockets
 	"$QEMU" \
 		-name "tunaos-iso-e2e-installed" \
 		-machine pc \
@@ -1497,6 +1547,7 @@ boot_disk_image() {
 	echo "==> Booting disk image: ${ISO_PATH} (${fmt})"
 	echo "==> Accel: ${ACCEL}, CPU: ${CPU_ARG}, MEM: ${MEMORY}M, CPUS: ${CPUS}"
 
+	reset_qemu_sockets
 	"$QEMU" \
 		-name "tunaos-disk-e2e" \
 		-machine pc \
