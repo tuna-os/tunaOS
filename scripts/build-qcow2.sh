@@ -8,6 +8,8 @@
 #   tag      - image tag (default: <flavor>)
 
 set -euo pipefail
+# shellcheck source=lib/common.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 VARIANT="${1:-}"
@@ -110,11 +112,21 @@ if sudo podman run --rm "${AUTH_VOL_ARGS[@]}" --security-opt label=disable \
 	UNIFIED_STORAGE_ARGS=(--experimental-unified-storage)
 fi
 
-# grouper (Ubuntu) has no bootupd package available via apt, so it ships
-# systemd-boot instead and installs via bootc's composefs-native backend,
-# which doesn't shell out to bootupd for bootloader management.
+# Storage backend, probed from IMAGE CONTENT — never from the variant name.
+# This was a hardcoded allowlist of five prefixes that had already gone stale:
+# gurnard (#943) was missing and would have failed its first build with
+# "bootupd is required for ostree-based installs". See probe_image_backend.
 COMPOSEFS_ARGS=()
-[[ "$OUTPUT_NAME" == grouper* || "$OUTPUT_NAME" == sailfin* || "$OUTPUT_NAME" == guppy* || "$OUTPUT_NAME" == marlin* || "$OUTPUT_NAME" == flounder* ]] && COMPOSEFS_ARGS=(--composefs-backend)
+if ! PROBE=$(probe_image_backend "$IMG_REF" sudo podman); then
+	echo "ERROR: could not probe $IMG_REF for its bootc backend" >&2
+	exit 1
+fi
+echo "==> image probe: $(echo "$PROBE" | tr '\n' ' ')"
+grep -q '^BACKEND=composefs-native$' <<<"$PROBE" && COMPOSEFS_ARGS=(--composefs-backend)
+# SEALED is independent of the backend: a composefs-sealed rootfs needs
+# fs-verity, which XFS lacks. On the xfs default from 00-tunaos.toml the
+# initramfs fails initrd-switch-root and drops to a dracut emergency shell.
+grep -q '^SEALED=1$' <<<"$PROBE" && COMPOSEFS_ARGS+=(--filesystem ext4)
 
 sudo podman run \
 	--rm \

@@ -213,6 +213,8 @@ E2E_SSH_OPTS=(
 )
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+. "${SCRIPT_DIR}/lib/common.sh"
 # Extract VARIANT and FLAVOR from ISO filename for screenshot comparison and
 # for the fisherman recipe's image ref (used only as a fallback — callers
 # should set VARIANT/FLAVOR explicitly, e.g. luks-e2e.yml's env: block).
@@ -997,11 +999,28 @@ run_install() {
 	local prod_ref="$published_ref"                      # production ISO
 	local recipe_image=""                                # set below after probing the VM
 	local composefs_backend="false" bootloader="grub2"
-	# grouper (Ubuntu) has no bootupd package available via apt, so it ships
-	# systemd-boot instead and installs via bootc's composefs-native backend.
-	if [[ "${VARIANT:-}" == "grouper" ]]; then
-		composefs_backend="true"
-		bootloader="systemd"
+	# Probed from IMAGE CONTENT, never from the variant name. This used to be
+	# `[[ "$VARIANT" == "grouper" ]]`, so sailfin, marlin, flounder,
+	# flounder-sid, guppy and gurnard — every other composefs variant — were
+	# installed down the ostree/grub2 path they cannot boot. See
+	# probe_image_backend() in scripts/lib/common.sh (tunaOS#954).
+	# Probe the image that will actually be INSTALLED. In the dev/e2e flow that
+	# is the locally rebuilt one, and the published tag may be months stale or
+	# absent entirely for a variant whose Gate has been failing — probing it
+	# would answer for an artifact nobody is testing.
+	local _probe _probe_ref="$target_imgref"
+	if podman image exists "$local_ref" 2>/dev/null; then
+		_probe_ref="$local_ref"
+	fi
+	if _probe=$(probe_image_backend "$_probe_ref" 2>/dev/null); then
+		echo "==> image probe: $(echo "$_probe" | tr '\n' ' ')"
+		if grep -q '^BACKEND=composefs-native$' <<<"$_probe"; then
+			composefs_backend="true"
+			bootloader="systemd"
+		fi
+	else
+		echo "ERROR: could not probe ${_probe_ref} for its bootc backend" >&2
+		return 3
 	fi
 
 	# ── Offline store diagnostics (debug: remove once stable) ─────────
