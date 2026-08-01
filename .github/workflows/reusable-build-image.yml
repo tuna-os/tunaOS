@@ -31,6 +31,17 @@ on:
         required: false
         type: string
         default: "linux/amd64,linux/arm64"
+      platforms-json:
+        description: >-
+          The same platform list as a JSON matrix include —
+          [{"platform":"linux/amd64","safeplatform":"linux-amd64"},...].
+          Must stay in sync with `platforms`. Passed pre-computed by the
+          caller so this workflow needs no matrix-generation job: at a
+          20-concurrent-job org limit, a 5-second generate_matrix job per
+          flavor was measurably starving real builds of slots.
+        required: false
+        type: string
+        default: '[{"platform":"linux/amd64","safeplatform":"linux-amd64"},{"platform":"linux/arm64","safeplatform":"linux-arm64"}]'
       major-version:
         description: "The version of CentOS to build the image on"
         required: false
@@ -78,27 +89,6 @@ on:
 
 
 jobs:
-  generate_matrix:
-    runs-on: ubuntu-latest
-    outputs:
-      matrix: ${{ steps.set-matrix.outputs.matrix }}
-    steps:
-      - name: Set matrix
-        id: set-matrix
-        env:
-          PLATFORMS: "${{ inputs.platforms }}"
-        run: |
-          # turn the comma separated string into a list
-          platforms=()
-          IFS=',' read -r -a platforms <<< "${PLATFORMS}"
-
-          MATRIX="{\"include\":[]}"
-          for platform in "${platforms[@]}"; do
-            safeplatform="${platform//\//-}" # Replace all / with -
-            MATRIX="$(echo "${MATRIX}" | jq ".include += [{\"platform\": \"${platform}\", \"safeplatform\": \"${safeplatform}\"}]")"
-          done
-          echo "matrix=$(echo "${MATRIX}" | jq -c '.')" >> $GITHUB_OUTPUT
-
   build_push:
     name: ${{ matrix.safeplatform }}
     runs-on: ${{ contains(matrix.platform, 'amd64') && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
@@ -106,10 +96,10 @@ jobs:
     # guppy (Gentoo) still compiles bootc from git even with the binhost (#644).
     # A max, not a fixed duration: RPM variants finish in ~20-40m unaffected.
     timeout-minutes: 180
-    needs: generate_matrix
     strategy:
       fail-fast: false
-      matrix: ${{fromJson(needs.generate_matrix.outputs.matrix)}}
+      matrix:
+        include: ${{ fromJson(inputs.platforms-json) }}
     permissions:
       contents: read
       packages: write
@@ -551,7 +541,6 @@ jobs:
     runs-on: ubuntu-latest
     if: always()
     needs:
-      - generate_matrix
       - build_push
     container:
       image: cgr.dev/chainguard/wolfi-base@sha256:d2ad9a742d38e1ab550fbb20911056339632a5ca2f01777a32422a4c944fcb99  # :latest linux/amd64 as of 2026-06-13
@@ -800,28 +789,11 @@ jobs:
           echo "DIGEST=$DIGEST" >> $GITHUB_OUTPUT
           echo "IMAGE=$IMAGE_REGISTRY/$IMAGE_NAME" >> $GITHUB_OUTPUT
 
-  # Cosign throws errors when ran inside the Fedora container for one reason or another
-  # so we move this to another step in order to run on Ubuntu
-  sign:
-    name: Sign
-    needs: manifest
-    if: ${{ inputs.publish && github.event_name != 'pull_request' }}
-    # Temporarily off RunsOn: the tuna-os AWS account is capped to Free Tier,
-    # so CreateFleet rejects every 8-vCPU type it tries and the job dies in
-    # "Set up runner" before a single step executes. This is registry and
-    # signing work with no special hardware needs, so a GitHub runner does it
-    # fine. Restore the RunsOn label once AWS credits are back.
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-      id-token: write
-      attestations: write
-    steps:
-      # TODO: reinstate sign-and-publish for manifest when key propagation
-      # through composite actions is resolved. Same issue as per-arch signing.
-      - run: |
-          echo "Manifest signing skipped"
+  # NOTE: the former `sign` job is gone. It had been reduced to a single
+  # `echo "Manifest signing skipped"` while cosign key propagation is broken
+  # (see the TODO above Promote), yet still spun up a runner per flavor —
+  # at a 20-concurrent-job org limit that slot starves real builds. When
+  # signing is reinstated, add it back between manifest and tag-image.
   # ── Boot gate ───────────────────────────────────────────────────────────────
   # Pull the just-pushed :<tag>-testing manifest, install it to a qcow2 with
   # bootc, boot it in QEMU, and require a graphical session (serial marker or
