@@ -172,7 +172,27 @@ if [[ "${_TD_OS}" == "apt" ]]; then
 		systemctl enable "${_TD_DM}" || true
 	fi
 	printf "::endgroup::\n"
-	exit 0
+	# Deliberately NO `exit 0` here, for the same reason the pacman branch
+	# below says so. This branch DID return early, and everything after it was
+	# silently skipped on every apt image: disable_desktop_files, post_install
+	# hooks, post_install_inline, the curated experiences/<desktop>/files
+	# overlay, and — the one that surfaced — the desktop-experience contract.
+	#
+	# So verify-desktop-experience.sh was never installed to
+	# /usr/libexec/tunaos and tunaos-desktop-contract.service was never
+	# written, which is why the Gate reported
+	#
+	#   ERROR: desktop experience contract marker was not emitted
+	#
+	# for flounder-sid gnome, kde and xfce (run 30685667161). NEITHER
+	# TUNAOS_DESKTOP_CONTRACT_OK nor _FAIL appeared because nothing was there
+	# to emit one — silence rather than a verdict, which reads as a hung check
+	# instead of a missing one. That blocked every desktop flavor on the apt
+	# variants from publishing while base promoted fine, base having no
+	# desktop and so never running this check.
+	#
+	# Confirmed by inspecting the built image: no /usr/libexec/tunaos at all,
+	# and by the build log ending at `systemctl enable gdm3` -> `exit 0`.
 fi
 
 # ── Pacman path (Arch Linux / CachyOS) ───────────────────────────────────────
