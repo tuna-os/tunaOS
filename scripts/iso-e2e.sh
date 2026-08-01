@@ -445,7 +445,6 @@ rm -f "$MONITOR_SOCK" "$SERIAL_LOG" "$QEMU_PIDFILE"
 
 # ── Cleanup on exit ─────────────────────────────────────────────────────────
 
-# shellcheck disable=SC2329  # invoked via `trap cleanup_vm EXIT`
 # Clear the unix sockets a previous QEMU left behind, immediately before
 # launching the next one. This is bug 1 of #946.
 #
@@ -462,6 +461,7 @@ reset_qemu_sockets() {
 	rm -f "${OUTPUT_DIR}/vnc.sock" "$MONITOR_SOCK"
 }
 
+# shellcheck disable=SC2329  # invoked via `trap cleanup_vm EXIT`
 cleanup_vm() {
 	# `|| true` is load-bearing under `set -e`: once the watchdog has FIRED it
 	# has already exited, so this kill fails, and without the guard the
@@ -651,15 +651,29 @@ screenshot() {
 		# peer". One capture is one connection, so `fork` bought nothing.
 		VNC_BRIDGE_PORT=$((${VNC_BRIDGE_PORT:-${TBOX_E2E_VNC_PORT:-5999}} + 1))
 		local port="$VNC_BRIDGE_PORT"
-		socat "TCP-LISTEN:${port},reuseaddr" "UNIX-CONNECT:${vnc_sock}" >>"$cap_log" 2>&1 &
+		# bind=127.0.0.1: vncdo connects to loopback, so there is no reason to
+		# expose the guest console on every host interface, however briefly —
+		# these runs happen on bare-metal hosts on a real LAN.
+		socat "TCP-LISTEN:${port},bind=127.0.0.1,reuseaddr" "UNIX-CONNECT:${vnc_sock}" >>"$cap_log" 2>&1 &
 		local bridge=$!
 		# Wait for the listener instead of sleeping at it: on a loaded host
 		# 1s was sometimes short, and the failure was indistinguishable from
 		# a real capture failure.
+		#
+		# Liveness of *this* socat is checked first: a listening port alone
+		# proves nothing, since a leftover bridge or an unrelated service can
+		# hold it while our socat failed to bind and exited. And the port match
+		# is anchored on whitespace/end-of-line — `\b` is not a word boundary
+		# in grep's default BRE, so ":5999\b" never matched `ss` output as
+		# intended (and a bare ":5999" would also match ":59990").
 		local ready=0
 		for _ in $(seq 1 20); do
+			if ! kill -0 "$bridge" 2>/dev/null; then
+				echo "==> VNC bridge exited before listening on ${port}" >>"$cap_log"
+				break
+			fi
 			if command -v ss &>/dev/null; then
-				ss -ltn 2>/dev/null | grep -q ":${port}\b" && { ready=1; break; }
+				ss -ltn 2>/dev/null | grep -Eq "127\.0\.0\.1:${port}([[:space:]]|$)" && { ready=1; break; }
 			else
 				sleep 1
 				ready=1
