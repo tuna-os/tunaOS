@@ -39,9 +39,11 @@ on:
           caller so this workflow needs no matrix-generation job: at a
           20-concurrent-job org limit, a 5-second generate_matrix job per
           flavor was measurably starving real builds of slots.
-        required: false
+          Required, deliberately with no default: this input alone drives the
+          build matrix, so a caller that forgot it would silently build a
+          different platform set than the one it asked for in `platforms`.
+        required: true
         type: string
-        default: '[{"platform":"linux/amd64","safeplatform":"linux-amd64"},{"platform":"linux/arm64","safeplatform":"linux-arm64"}]'
       major-version:
         description: "The version of CentOS to build the image on"
         required: false
