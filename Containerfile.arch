@@ -162,6 +162,31 @@ RUN rm -rf /boot /home /root /usr/local /srv /opt /mnt \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' \
         > /usr/lib/ostree/prepare-root.conf
 
+# systemd-firstboot asks the CONSOLE for a timezone and blocks there forever.
+#
+# Arch ships systemd-firstboot.service enabled, and a bootc image has an
+# uninitialized machine-id by design, which is exactly its trigger condition.
+# So every marlin desktop booted into
+#
+#   Starting Initial Setup...
+#   Please enter the new timezone name or number ("list" to list options...)
+#
+# and never reached graphical.target. tunaos-desktop-contract.service is
+# WantedBy=graphical.target, so it never ran and emitted nothing — the Gate
+# reported "desktop experience contract marker was not emitted" for all five
+# desktops in run 30707799065 while the image itself was complete and
+# correctly wired.
+#
+# Confirmed from the Gate's own serial.log: the last thing marlin does is
+# print the timezone prompt, and "Reached target Graphical Interface" never
+# appears. Nothing was broken about the desktop; the boot was waiting for a
+# human.
+#
+# Containerfile.opensuse already masks this for the same reason. Masking
+# rather than disabling: the unit is pulled in by sysinit.target on Arch, and
+# a disabled unit that something Wants= still starts.
+RUN systemctl mask systemd-firstboot.service
+
 # Validate
 LABEL containers.bootc 1
 COPY --from=context /files /
