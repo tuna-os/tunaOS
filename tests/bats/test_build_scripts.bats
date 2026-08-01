@@ -141,6 +141,34 @@ build_scripts_top=(
   fi
 }
 
+# tunaOS#951. openssh-server used to be apt-installed only under
+# ENABLE_SSHD=1, so on Debian/Ubuntu the package was absent rather than the
+# service merely disabled — and customize-live.sh then aborted every dev ISO
+# with "no SSH service is installed", taking every flounder/flounder-sid LUKS
+# and installer cell with it. The install must not sit inside that branch.
+@test "build_scripts/40-services.sh: apt installs openssh-server unconditionally" {
+  run awk '/^if \[\[ "\$\{PKG_MGR:-\}" == "apt" \]\]/,/^fi$/' \
+    "${REPO_ROOT}/build_scripts/40-services.sh"
+  [ "$status" -eq 0 ]
+  # The install line exists in the apt block...
+  echo "$output" | grep -q 'apt-get install .*openssh-server'
+  # ...and is NOT indented under the ENABLE_SSHD test (two tabs or deeper).
+  ! echo "$output" | grep -qE '^\t\t+apt-get install .*openssh-server'
+}
+
+# The unconditional install above is only safe if the disabled path actually
+# disables it: Debian's openssh-server postinst ENABLES ssh.service, and the
+# real unit is ssh.service (sshd.service is a compat symlink). Missing the
+# Debian spelling would ship published images with sshd running.
+@test "build_scripts/40-services.sh: apt disables both Debian SSH unit names" {
+  run awk '/^if \[\[ "\$\{PKG_MGR:-\}" == "apt" \]\]/,/^fi$/' \
+    "${REPO_ROOT}/build_scripts/40-services.sh"
+  [ "$status" -eq 0 ]
+  for unit in sshd.service ssh.service sshd.socket ssh.socket; do
+    echo "$output" | grep -q "safe_disable ${unit}"
+  done
+}
+
 @test "build_scripts/99-cleanup.sh: exists and passes shellcheck" {
   run test -f "${REPO_ROOT}/build_scripts/99-cleanup.sh"
   [ "$status" -eq 0 ]

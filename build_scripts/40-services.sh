@@ -51,16 +51,45 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 	safe_enable tunaos-live-ready.service
 
 	# Security default: sshd closed (live ISOs may re-enable for dev).
+	#
+	# openssh-server is installed UNCONDITIONALLY, matching the rpm path.
+	# The rpm bases already ship it, so on those images "sshd closed" has
+	# always meant the SERVICE is disabled. Gating the apt install on
+	# ENABLE_SSHD made the apt path do something stricter than the comment
+	# claimed — the package was absent entirely — and that is not a harmless
+	# extra bit of hardening: customize-live.sh:217 needs a real unit file to
+	# enable for a dev ISO, finds none, and aborts with
+	#
+	#   ERROR: dev ISO requested but no SSH service is installed
+	#
+	# Every flounder and flounder-sid cell in the 00:36 LUKS sweep died there
+	# (runs 30675951080, 30675954952) without reaching the install layer, and
+	# the dev ISO gates the installer axis too — so one packaging asymmetry
+	# was holding a large share of the never-tested cells on both axes.
+	apt-get install -y --no-install-recommends openssh-server
 	if [[ "${ENABLE_SSHD:-0}" == "1" ]]; then
-		apt-get install -y openssh-server
+		# Debian/Ubuntu ship the real unit as ssh.service, with sshd.service a
+		# compat symlink that `systemctl enable` refuses to operate on ("linked
+		# unit file"). safe_enable swallows that failure, so name both and let
+		# the one that exists win — the same fallthrough customize-live.sh does
+		# deliberately at :212-216.
 		safe_enable sshd.service
+		safe_enable ssh.service
 		if ! id liveuser &>/dev/null; then
 			useradd -m -s /bin/bash -G sudo liveuser
 		fi
 		echo 'liveuser:live' | chpasswd
 	else
+		# Now load-bearing rather than belt-and-braces: Debian's
+		# openssh-server postinst ENABLES ssh.service on install, so with the
+		# unconditional install above, a disable that misses the Debian unit
+		# names would ship published flounder images with sshd running. That
+		# would turn a build fix into a security regression, which is why both
+		# spellings and both socket units are named here.
 		safe_disable sshd.service
-		safe_disable sshd.socket 2>/dev/null || systemctl mask sshd.socket || true
+		safe_disable ssh.service
+		safe_disable sshd.socket
+		safe_disable ssh.socket
 	fi
 
 	# Units that exist on Ubuntu once their packages are installed.
