@@ -172,7 +172,11 @@ if [[ "${_TD_OS}" == "apt" ]]; then
 		systemctl enable "${_TD_DM}" || true
 	fi
 	printf "::endgroup::\n"
-	exit 0
+	# Deliberately NO `exit 0` here, for the same reason the pacman branch
+	# below says so. Returning early skips everything shared that follows:
+	# disable_desktop_files, post_install hooks, post_install_inline, the
+	# curated experiences/<desktop>/files overlay, and the installation of the
+	# desktop-experience contract (tunaOS#959).
 fi
 
 # ── Pacman path (Arch Linux / CachyOS) ───────────────────────────────────────
