@@ -124,10 +124,18 @@ detect() {
   grep -q 'cat >/etc/containers/storage.conf' "${SCRIPT}"
   grep -q 'driver = "overlay"' "${SCRIPT}"
   grep -q 'graphroot = "/var/lib/containers/storage"' "${SCRIPT}"
-  grep -q 'additionalimagestores = \["/var/lib/superiso-store"\]' "${SCRIPT}"
+  grep -q 'additionalimagestores = \["/var/lib/superiso-store", "/usr/lib/containers/storage"\]' "${SCRIPT}"
   grep -q 'mount_program = "/usr/bin/fuse-overlayfs"' "${SCRIPT}"
-  run grep 'storage.conf.d/99-tunaos-offline-store.conf' "${SCRIPT}"
-  [ "$status" -ne 0 ]
+}
+
+# tunaOS#881: the primary config is necessary but not sufficient —
+# /usr/share/containers/storage.conf.d/00-vendor.conf is applied after it and
+# REPLACES additionalimagestores wholesale. The 99- drop-in must outrank it and
+# must enumerate both stores, since the last writer of an array wins.
+@test "customize-live.sh: outranks the vendor drop-in and keeps both stores" {
+  grep -q 'cat >/etc/containers/storage.conf.d/99-tbox-offline-store.conf' "${SCRIPT}"
+  run grep -c 'additionalimagestores = \["/var/lib/superiso-store", "/usr/lib/containers/storage"\]' "${SCRIPT}"
+  [ "$output" -eq 2 ]
 }
 
 @test "customize-live.sh: sources the matching desktop adapter" {
