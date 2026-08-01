@@ -141,6 +141,50 @@ build_scripts_top=(
   fi
 }
 
+# tunaOS#951. openssh-server was installed in exactly ONE place — the apt
+# branch, under ENABLE_SSHD=1 — and nowhere at all for pacman or zypper. The
+# rpm variants only worked because their base images ship it. customize-live.sh
+# then aborted every dev ISO with "no SSH service is installed", which gates
+# every LUKS and installer cell: flounder, flounder-sid, grouper, marlin and
+# sailfin were structurally untestable, not merely under-tested.
+@test "build_scripts/40-services.sh: every package manager can install openssh" {
+  local f="${REPO_ROOT}/build_scripts/40-services.sh"
+  # Arch calls it `openssh`, Gentoo needs the atom, the rest use openssh-server.
+  # Anchored past the package name so `openssh` cannot be satisfied by a line
+  # that actually says `openssh-server` — on Arch that package does not exist.
+  grep -qE 'pacman\)[[:space:]]*pkg_install openssh[[:space:]]*;;' "$f"
+  grep -qE 'emerge\)[[:space:]]*pkg_install net-misc/openssh' "$f"
+  grep -qE 'zypper\)[[:space:]]*pkg_install openssh-server' "$f"
+  grep -qE '\*\)[[:space:]]*pkg_install openssh-server' "$f"
+}
+
+# Both branches must call it: the apt branch exits early, so a single call
+# sited in either one silently skips the other family. That asymmetry is the
+# original bug, not an incidental detail of it.
+@test "build_scripts/40-services.sh: both the apt and non-apt paths ensure openssh" {
+  local f="${REPO_ROOT}/build_scripts/40-services.sh"
+  run bash -c "grep -c '^[[:space:]]*ensure_openssh_installed$' '$f'"
+  [ "$status" -eq 0 ]
+  [ "$output" -ge 2 ]
+  # ...and neither call may be nested under an ENABLE_SSHD test. A call
+  # indented two tabs or more is inside that branch, which is the bug.
+  ! grep -qE '^\t\t+ensure_openssh_installed$' "$f"
+}
+
+# The unconditional install above is only safe if the disabled path actually
+# disables it: Debian's openssh-server postinst ENABLES ssh.service, and the
+# real unit is ssh.service (sshd.service is a compat symlink). Missing the
+# Debian spelling would ship published images with sshd running.
+@test "build_scripts/40-services.sh: apt disables both Debian SSH unit names" {
+  run awk '/^if \[\[ "\$\{PKG_MGR:-\}" == "apt" \]\]/,/^fi$/' \
+    "${REPO_ROOT}/build_scripts/40-services.sh"
+  [ "$status" -eq 0 ]
+  for unit in sshd.service ssh.service sshd.socket ssh.socket; do
+    # -F: the dots are literal, so ssh.service must not match e.g. sshXservice.
+    echo "$output" | grep -qF "safe_disable ${unit}"
+  done
+}
+
 @test "build_scripts/99-cleanup.sh: exists and passes shellcheck" {
   run test -f "${REPO_ROOT}/build_scripts/99-cleanup.sh"
   [ "$status" -eq 0 ]
