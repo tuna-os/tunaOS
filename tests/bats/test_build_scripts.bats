@@ -165,7 +165,8 @@ build_scripts_top=(
     "${REPO_ROOT}/build_scripts/40-services.sh"
   [ "$status" -eq 0 ]
   for unit in sshd.service ssh.service sshd.socket ssh.socket; do
-    echo "$output" | grep -q "safe_disable ${unit}"
+    # -F: the dots are literal, so ssh.service must not match e.g. sshXservice.
+    echo "$output" | grep -qF "safe_disable ${unit}"
   done
 }
 
