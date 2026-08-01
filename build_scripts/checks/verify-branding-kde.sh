@@ -91,20 +91,34 @@ fi
 echo "== login screen =="
 # SDDM is what a user sees before Plasma starts. Ours ships no themes at all,
 # so the login screen is stock regardless of what the session looks like.
-if compgen -G "/usr/share/sddm/themes/*tuna*" >/dev/null; then
-	pass "TunaOS SDDM theme present"
+#
+# KDE 6.5+ renames SDDM to plasma-login-manager, and the theme and config
+# directories move with it (/usr/share/plasmalogin/themes,
+# /etc/plasmalogin.conf.d). Both names are in the wild — yellowfin:kde shipped
+# sddm in July 2026 and plasmalogin days later — so look in every candidate
+# location rather than detecting which DM is installed. A directory that does
+# not exist simply contributes nothing.
+theme_dirs=(/usr/share/sddm/themes /usr/share/plasmalogin/themes)
+conf_paths=(
+	/etc/sddm.conf.d/ /usr/lib/sddm/sddm.conf.d/ /etc/sddm.conf
+	/etc/plasmalogin.conf.d/ /usr/lib/plasmalogin.conf.d/ /etc/plasmalogin.conf
+)
+
+if compgen -G "/usr/share/sddm/themes/*tuna*" >/dev/null ||
+	compgen -G "/usr/share/plasmalogin/themes/*tuna*" >/dev/null; then
+	pass "TunaOS greeter theme present"
 else
-	have=$(ls /usr/share/sddm/themes/ 2>/dev/null | tr '\n' ' ' || true)
-	fail "no TunaOS SDDM theme — only: ${have:-<none, directory is empty>}"
+	have=$(ls "${theme_dirs[@]}" 2>/dev/null | tr '\n' ' ' || true)
+	fail "no TunaOS SDDM/plasmalogin theme — only: ${have:-<none, directory is empty>}"
 fi
 
-sddm_theme="$(grep -rh '^Current=' /etc/sddm.conf.d/ /usr/lib/sddm/sddm.conf.d/ /etc/sddm.conf 2>/dev/null | head -1 | cut -d= -f2- || true)"
-if [[ -z "$sddm_theme" ]]; then
-	fail "no SDDM Current= theme configured"
-elif [[ "$sddm_theme" != *tuna* ]]; then
-	fail "SDDM Current=${sddm_theme} — not ours"
+greeter_theme="$(grep -rh '^Current=' "${conf_paths[@]}" 2>/dev/null | head -1 | cut -d= -f2- || true)"
+if [[ -z "$greeter_theme" ]]; then
+	fail "no SDDM/plasmalogin Current= theme configured"
+elif [[ "$greeter_theme" != *tuna* ]]; then
+	fail "greeter Current=${greeter_theme} — not ours"
 else
-	pass "SDDM Current=${sddm_theme}"
+	pass "greeter Current=${greeter_theme}"
 fi
 
 echo
