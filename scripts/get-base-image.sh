@@ -30,6 +30,7 @@ case "$variant" in
 "marlin") echo "docker.io/archlinux/archlinux:latest" ;;
 "flounder") echo "docker.io/library/debian:trixie" ;;
 "flounder-sid") echo "docker.io/library/debian:sid" ;;
+"hummingbird") echo "quay.io/hummingbird-community/bootc-os:latest" ;;
 *)
 	echo "Unknown variant: $variant" >&2
 	exit 1
