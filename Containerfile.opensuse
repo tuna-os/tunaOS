@@ -105,8 +105,12 @@ RUN printf 'L! /etc/resolv.conf - - - - /run/systemd/resolve/stub-resolv.conf\n'
 # mounted but never prepared → initrd-switch-root fails → dracut emergency
 # shell, which is what made every sailfin desktop Gate time out waiting for a
 # graphical session.
+#
+# omit_dracutmodules is declared here too, not just on the dracut command line
+# below: any in-image rebuild (dev-ISO creation, kernel update) re-runs dracut
+# without our flags, and tpm2-tss/pcsc fail the openSUSE base's module checks.
 RUN mkdir -p /usr/lib/dracut/dracut.conf.d && \
-    printf 'add_dracutmodules+=" bootc "\ninstall_items+=" /usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service "\n' \
+    printf 'add_dracutmodules+=" bootc "\nomit_dracutmodules+=" tpm2-tss pcsc "\ninstall_items+=" /usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service "\n' \
     > /usr/lib/dracut/dracut.conf.d/10-bootc-base.conf
 # ...and place the wants-symlink ourselves, because 51bootc's install() puts it
 # at ${systemdsystemconfdir}/initrd-root-fs.target.wants/ — and openSUSE's
