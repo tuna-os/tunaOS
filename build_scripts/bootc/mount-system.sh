@@ -41,7 +41,7 @@ rm -rf /boot /home /root /srv /var /media
 # /var/lib needs creating first — tmpfiles does not build parents for L+.
 mkdir -p /usr/lib/tmpfiles.d
 printf 'd /var/lib 0755 root root -\nL+ /var/lib/dpkg - - - - ../../usr/lib/sysimage/dpkg\n' \
-	> /usr/lib/tmpfiles.d/dpkg-sysimage.conf
+	>/usr/lib/tmpfiles.d/dpkg-sysimage.conf
 mkdir -p /var/lib
 ln -sT ../../usr/lib/sysimage/dpkg /var/lib/dpkg
 

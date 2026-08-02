@@ -31,7 +31,7 @@ rm -f "$tmpconf"
 
 # Add cachyos repository definitions to pacman.conf if missing
 if ! grep -q "^\[cachyos\]" /etc/pacman.conf; then
-	cat << 'EOF' >> /etc/pacman.conf
+	cat <<'EOF' >>/etc/pacman.conf
 
 [cachyos]
 Include = /etc/pacman.d/cachyos-mirrorlist

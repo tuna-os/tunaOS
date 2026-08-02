@@ -218,7 +218,10 @@ opensuse* | *suse*)
 	for attempt in 1 2 3; do
 		zypper --non-interactive install --no-confirm --no-recommends \
 			kernel-asahi m1n1 u-boot-asahi asahi-scripts && break
-		[ "$attempt" -eq 3 ] && { echo "ERROR: home:mrkcee install failed after 3 attempts" >&2; exit 1; }
+		[ "$attempt" -eq 3 ] && {
+			echo "ERROR: home:mrkcee install failed after 3 attempts" >&2
+			exit 1
+		}
 		echo "WARNING: required asahi package install failed (attempt ${attempt}/3) — refreshing repo and retrying" >&2
 		sleep $((attempt * 20))
 		zypper --non-interactive --gpg-auto-import-keys refresh
@@ -262,8 +265,8 @@ esac
 	# package LAST, after removing/purging any base-distro kernel first —
 	# so the asahi kernel's module directory is always the most recently
 	# created, regardless of what its version string looks like.
-	KVER=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d -printf '%T@ %f\n' \
-		| sort -rn | head -1 | cut -d' ' -f2-)
+	KVER=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d -printf '%T@ %f\n' |
+		sort -rn | head -1 | cut -d' ' -f2-)
 	if [ -z "$KVER" ]; then
 		echo "ERROR: no kernel module directory found under /usr/lib/modules" >&2
 		exit 1
@@ -320,7 +323,7 @@ esac
 	fi
 	if ! grep -rqs "asahi-firmware" /usr/lib/dracut/dracut.conf.d/ /etc/dracut.conf.d/ 2>/dev/null; then
 		printf 'add_dracutmodules+=" asahi-firmware kernel-modules-asahi "\n' \
-			> /usr/lib/dracut/dracut.conf.d/10-asahi.conf
+			>/usr/lib/dracut/dracut.conf.d/10-asahi.conf
 	fi
 	# boot.bin lifecycle on bootc (update-m1n1 scriptlets never re-run on
 	# deploys) — tunaOS#779.

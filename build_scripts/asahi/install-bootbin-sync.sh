@@ -19,7 +19,7 @@ chmod 0755 /usr/libexec/asahi-bootbin-sync
 curl -fsSL "${BASE}/asahi-bootbin-sync.service" \
 	-o /usr/lib/systemd/system/asahi-bootbin-sync.service
 printf 'enable asahi-bootbin-sync.service\n' \
-	> /usr/lib/systemd/system-preset/90-asahi-bootbin-sync.preset
+	>/usr/lib/systemd/system-preset/90-asahi-bootbin-sync.preset
 
 # Verify the vendored pair is coherent (unit must exec what we installed).
 grep -q "ExecStart=/usr/libexec/asahi-bootbin-sync" \

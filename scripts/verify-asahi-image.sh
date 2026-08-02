@@ -16,7 +16,7 @@ IMAGE="${1:?usage: verify-asahi-image.sh <image-ref> [--no-pull]}"
 NO_PULL="${2:-}"
 
 if [[ "$NO_PULL" != "--no-pull" ]]; then
-    podman pull --platform linux/arm64 "$IMAGE" >/dev/null || exit 2
+	podman pull --platform linux/arm64 "$IMAGE" >/dev/null || exit 2
 fi
 
 CTR=$(podman create --platform linux/arm64 "$IMAGE" true) || exit 2

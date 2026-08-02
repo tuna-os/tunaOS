@@ -25,7 +25,7 @@ rm -f /usr/lib64/qt6/plugins/kf6/krunner/krunner_appstream.so
 
 # Use Bazaar for Flatpak refs
 # https://github.com/ublue-os/bazzite/pull/3620
-echo "application/vnd.flatpak.ref=io.github.kolunmi.Bazaar.desktop" >> /usr/share/applications/mimeapps.list
+echo "application/vnd.flatpak.ref=io.github.kolunmi.Bazaar.desktop" >>/usr/share/applications/mimeapps.list
 
 rm -f /etc/profile.d/gnome-ssh-askpass.{csh,sh} # This shouldn't be pulled in
 

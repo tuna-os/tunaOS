@@ -280,8 +280,8 @@ fi
 # host with a real render node.
 _gpu_mode="${TBOX_E2E_GPU:-auto}"
 QEMU_GPU_ARGS=(-vga virtio -display none)
-if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /dev/dri/renderD128 ]]; } \
-	&& "$QEMU" -device help 2>/dev/null | grep -q "virtio-vga-gl"; then
+if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /dev/dri/renderD128 ]]; } &&
+	"$QEMU" -device help 2>/dev/null | grep -q "virtio-vga-gl"; then
 	# egl-headless is NOT a display in its own right — it renders GL locally and
 	# expects another UI to present the result. Without one, `screendump` fails:
 	#
@@ -741,7 +741,10 @@ screenshot() {
 				break
 			fi
 			if command -v ss &>/dev/null; then
-				ss -ltn 2>/dev/null | grep -Eq "127\.0\.0\.1:${port}([[:space:]]|$)" && { ready=1; break; }
+				ss -ltn 2>/dev/null | grep -Eq "127\.0\.0\.1:${port}([[:space:]]|$)" && {
+					ready=1
+					break
+				}
 			else
 				sleep 1
 				ready=1

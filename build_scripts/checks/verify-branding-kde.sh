@@ -62,8 +62,8 @@ if compgen -G "${LNF}/*tunaos*" >/dev/null || compgen -G "${LNF}/*tuna-os*" >/de
 	# A dark and a light variant, as Aurora ships both. A single theme means
 	# the Plasma appearance switcher has nothing to switch to.
 	n=$(compgen -G "${LNF}/*tuna*" | wc -l)
-	[[ "$n" -ge 2 ]] && pass "${n} TunaOS look-and-feel variants" \
-		|| fail "only ${n} TunaOS look-and-feel package (Aurora ships light + dark)"
+	[[ "$n" -ge 2 ]] && pass "${n} TunaOS look-and-feel variants" ||
+		fail "only ${n} TunaOS look-and-feel package (Aurora ships light + dark)"
 else
 	have=$(ls "${LNF}" 2>/dev/null | tr '\n' ' ' || true)
 	fail "no TunaOS look-and-feel package — only: ${have:-<none>}"

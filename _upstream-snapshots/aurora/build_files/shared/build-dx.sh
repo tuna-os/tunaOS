@@ -22,4 +22,4 @@ iptable_nat
 EOF
 
 # Branding Changes
-echo "Variant=Developer Experience" >> /usr/share/kde-settings/kde-profile/default/xdg/kcm-about-distrorc
+echo "Variant=Developer Experience" >>/usr/share/kde-settings/kde-profile/default/xdg/kcm-about-distrorc

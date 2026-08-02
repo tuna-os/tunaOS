@@ -27,7 +27,6 @@ packages:
       - cosmic-term
       - cosmic-wallpapers
       - cosmic-workspaces
-      - cosmic-greeter
       - cosmic-icon-theme
       - greetd
       - xdg-desktop-portal-cosmic

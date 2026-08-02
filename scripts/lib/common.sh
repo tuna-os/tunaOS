@@ -279,7 +279,6 @@ tunaos_run_tacklebox() {
 		--yes
 }
 
-
 # ── bootc storage backend detection (tunaOS#954) ──────────────────────────
 #
 # Ported from tuna-os/wootc payload/deployer/deploy.sh:867-949, deliberately

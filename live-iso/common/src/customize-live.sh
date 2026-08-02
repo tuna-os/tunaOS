@@ -320,28 +320,34 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		systemd-machine-id-setup
 	fi
 
-# Modern desktop images ship dbus-broker as the bus implementation and no
-# longer pull in the classic `dbus-daemon` binary (nor dbus-run-session — see
-# the machine-id note above). flatpak still needs a real bus for both the
-# system helper and its session connection, so make sure the binary exists
-# rather than assuming it: every cosmic flavor plus sailfin/grouper/guppy/
-# marlin died here with "dbus-daemon: command not found" (exit 127) while the
-# 20 images that happen to ship it built fine.
-ensure_dbus_daemon() {
-	command -v dbus-daemon >/dev/null 2>&1 && return 0
-	echo "dbus-daemon missing; installing the classic bus for the customize step"
-	if   command -v dnf5   >/dev/null 2>&1; then dnf5 install -y dbus-daemon || dnf5 install -y dbus
-	elif command -v dnf    >/dev/null 2>&1; then dnf  install -y dbus-daemon || dnf  install -y dbus
-	elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install -y dbus-1-daemon || zypper --non-interactive install -y dbus-1
-	elif command -v pacman >/dev/null 2>&1; then pacman -Sy --noconfirm --needed dbus
-	elif command -v apt-get>/dev/null 2>&1; then apt-get update -qq && apt-get install -y --no-install-recommends dbus
-	elif command -v apk    >/dev/null 2>&1; then apk add --no-cache dbus
-	fi
-	command -v dbus-daemon >/dev/null 2>&1 || {
-		echo "ERROR: dbus-daemon unavailable and could not be installed; flatpak preinstall would fail" >&2
-		return 1
+	# Modern desktop images ship dbus-broker as the bus implementation and no
+	# longer pull in the classic `dbus-daemon` binary (nor dbus-run-session — see
+	# the machine-id note above). flatpak still needs a real bus for both the
+	# system helper and its session connection, so make sure the binary exists
+	# rather than assuming it: every cosmic flavor plus sailfin/grouper/guppy/
+	# marlin died here with "dbus-daemon: command not found" (exit 127) while the
+	# 20 images that happen to ship it built fine.
+	ensure_dbus_daemon() {
+		command -v dbus-daemon >/dev/null 2>&1 && return 0
+		echo "dbus-daemon missing; installing the classic bus for the customize step"
+		if command -v dnf5 >/dev/null 2>&1; then
+			dnf5 install -y dbus-daemon || dnf5 install -y dbus
+		elif command -v dnf >/dev/null 2>&1; then
+			dnf install -y dbus-daemon || dnf install -y dbus
+		elif command -v zypper >/dev/null 2>&1; then
+			zypper --non-interactive install -y dbus-1-daemon || zypper --non-interactive install -y dbus-1
+		elif command -v pacman >/dev/null 2>&1; then
+			pacman -Sy --noconfirm --needed dbus
+		elif command -v apt-get >/dev/null 2>&1; then
+			apt-get update -qq && apt-get install -y --no-install-recommends dbus
+		elif command -v apk >/dev/null 2>&1; then
+			apk add --no-cache dbus
+		fi
+		command -v dbus-daemon >/dev/null 2>&1 || {
+			echo "ERROR: dbus-daemon unavailable and could not be installed; flatpak preinstall would fail" >&2
+			return 1
+		}
 	}
-}
 
 	mkdir -p /var/lib/dbus
 	ln -sf /etc/machine-id /var/lib/dbus/machine-id
@@ -378,8 +384,8 @@ ensure_dbus_daemon() {
 			/etc/flatpak/remotes.d/flathub.flatpakrepo || true
 	else
 		flatpak remote-add --system --if-not-exists flathub \
-			https://dl.flathub.org/repo/flathub.flatpakrepo \
-			|| echo "WARN: could not add flathub remote (network?); continuing"
+			https://dl.flathub.org/repo/flathub.flatpakrepo ||
+			echo "WARN: could not add flathub remote (network?); continuing"
 	fi
 
 	# Flatpak also opens a session-bus connection even for a system install.
@@ -415,10 +421,10 @@ ensure_dbus_daemon() {
 		flatpak build-import-bundle "${INSTALLER_LOCAL_REPO}" "${INSTALLER_FLATPAK_FILE}"
 		rm -f "${INSTALLER_FLATPAK_FILE}"
 		flatpak remote-add --system --no-gpg-verify installer-local "file://${INSTALLER_LOCAL_REPO}"
-		flatpak install --system --noninteractive installer-local "${INSTALLER_APP}" \
-			|| { [[ -f "${SCRIPT_DIR}/.enable-sshd" ]] \
-				&& echo "WARN: installer flatpak install failed; continuing (dev/e2e ISO)" \
-				|| exit 1; }
+		flatpak install --system --noninteractive installer-local "${INSTALLER_APP}" ||
+			{ [[ -f "${SCRIPT_DIR}/.enable-sshd" ]] &&
+				echo "WARN: installer flatpak install failed; continuing (dev/e2e ISO)" ||
+				exit 1; }
 		flatpak remote-delete --system --force installer-local || true
 		rm -rf "${INSTALLER_LOCAL_REPO}"
 
@@ -448,13 +454,13 @@ ensure_dbus_daemon() {
 				/etc/flatpak/remotes.d/tuna-os.flatpakrepo || true
 		else
 			flatpak remote-add --system --if-not-exists tuna-os \
-				https://tunaos.org/flatpak/tuna-os.flatpakrepo \
-				|| echo "WARN: could not add tuna-os remote (network?); continuing"
+				https://tunaos.org/flatpak/tuna-os.flatpakrepo ||
+				echo "WARN: could not add tuna-os remote (network?); continuing"
 		fi
-		flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}" \
-			|| { [[ -f "${SCRIPT_DIR}/.enable-sshd" ]] \
-				&& echo "WARN: installer flatpak install failed; continuing (dev/e2e ISO)" \
-				|| exit 1; }
+		flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}" ||
+			{ [[ -f "${SCRIPT_DIR}/.enable-sshd" ]] &&
+				echo "WARN: installer flatpak install failed; continuing (dev/e2e ISO)" ||
+				exit 1; }
 	fi
 
 	# ── 4a. fisherman on the host path ────────────────────────────────────

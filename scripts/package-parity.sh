@@ -22,13 +22,17 @@ REGISTRY="${TUNA_REGISTRY:-ghcr.io/tuna-os}"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/tuna-parity"
 mkdir -p "$CACHE"
 
-die() { echo "package-parity: $*" >&2; exit 1; }
+die() {
+	echo "package-parity: $*" >&2
+	exit 1
+}
 
 # NAME<TAB>VERSION, sorted. Artifact first; image query only if we must.
 fetch() {
 	local ref="$1" out="$CACHE/${ref//[:\/]/_}.txt"
 	if [[ -s "$out" && -z "${TUNA_PARITY_REFRESH:-}" ]]; then
-		echo "$out"; return
+		echo "$out"
+		return
 	fi
 	local repo="${ref%%:*}" tag="${ref##*:}"
 	if command -v oras >/dev/null &&
@@ -43,7 +47,7 @@ fetch() {
 			elif command -v dpkg-query >/dev/null 2>&1; then dpkg-query -W -f "${Package}\t${Version}\n"
 			elif command -v pacman     >/dev/null 2>&1; then pacman -Q | tr " " "\t"
 			elif command -v qlist      >/dev/null 2>&1; then qlist -ICv
-			fi' 2>/dev/null | LC_ALL=C sort -u > "$out"
+			fi' 2>/dev/null | LC_ALL=C sort -u >"$out"
 	fi
 	[[ -s "$out" ]] || die "could not obtain a package list for $ref"
 	echo "$out"
@@ -56,15 +60,20 @@ names() { cut -f1 "$1" | LC_ALL=C sort -u; }
 if [[ "${1:-}" == "--audit" ]]; then
 	de="${2:?usage: --audit <desktop>}"
 	printf '%-12s %8s %8s %9s   %s\n' variant base "$de" delta verdict
-	printf -- '-%.0s' {1..72}; echo
+	printf -- '-%.0s' {1..72}
+	echo
 	for v in yellowfin bonito sailfin flounder grouper marlin skipjack albacore guppy; do
-		b=$(fetch "$v:base" 2>/dev/null) || { printf '%-12s   (no base)\n' "$v"; continue; }
+		b=$(fetch "$v:base" 2>/dev/null) || {
+			printf '%-12s   (no base)\n' "$v"
+			continue
+		}
 		d=$(fetch "$v:$de" 2>/dev/null) || continue
-		nb=$(names "$b" | wc -l); nd=$(names "$d" | wc -l)
+		nb=$(names "$b" | wc -l)
+		nd=$(names "$d" | wc -l)
 		delta=$((nd - nb))
 		verdict="ok"
-		(( delta <= 0 )) && verdict="BROKEN: no more packages than base"
-		(( delta > 0 && delta < 25 )) && verdict="suspect: only $delta added"
+		((delta <= 0)) && verdict="BROKEN: no more packages than base"
+		((delta > 0 && delta < 25)) && verdict="suspect: only $delta added"
 		printf '%-12s %8d %8d %+9d   %s\n' "$v" "$nb" "$nd" "$delta" "$verdict"
 	done
 	exit 0
@@ -73,8 +82,10 @@ fi
 A="${1:?usage: package-parity.sh <edition-a> <edition-b>}"
 B="${2:?usage: package-parity.sh <edition-a> <edition-b>}"
 
-fa=$(fetch "$A"); fb=$(fetch "$B")
-na=$(names "$fa"); nb=$(names "$fb")
+fa=$(fetch "$A")
+fb=$(fetch "$B")
+na=$(names "$fa")
+nb=$(names "$fb")
 
 echo "=== $A: $(echo "$na" | wc -l) packages | $B: $(echo "$nb" | wc -l) packages"
 echo
