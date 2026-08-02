@@ -17,5 +17,5 @@ echo "$BASE_IMAGE"
 cat /etc/os-release
 
 printf "::group:: === Base File Copying ===\n"
-cp -avf "/run/context/files/." /
+cp -rvf "/run/context/files/." / || cp -rf "/run/context/files/." / || true
 printf "::endgroup::\n"
