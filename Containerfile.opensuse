@@ -38,6 +38,20 @@ FROM base AS system
 # authorise — every `sudo` iso-e2e.sh runs in the sailfin guest failed with
 # "bash: line 1: sudo: command not found", killing the LUKS E2E at
 # `sudo podman load` (defect 3 of tunaOS#953).
+#
+# `cryptsetup` and `device-mapper` are listed for the INITRAMFS, not for the
+# running system: dracut's `dm` module is `require_binaries dmsetup` and its
+# `crypt` module is `require_binaries cryptsetup` + a dependency on `dm`. The
+# base ships neither, so the dracut run below silently dropped all LUKS
+# support —
+#   dracut[E]: Module 'crypt' depends on module 'dm', which can't be installed
+#   dracut[E]: Module 'systemd-cryptsetup' depends on module 'crypt', ...
+# — and the installed encrypted disk had no way to unlock: the initrd ignored
+# fisherman's rd.luks.name karg, never prompted for a passphrase, and sat in
+# dracut-initqueue waiting for a root UUID that only appears after the LUKS
+# volume opens, until it dropped to the emergency shell (defect 8 of
+# tunaOS#953, run 30733919804). The GNOME pattern pulls cryptsetup in later,
+# but the initramfs is built here, and no other flavor's package set does.
 RUN set -eu; \
     retry_zypper() { \
       attempt=1; \
@@ -57,7 +71,7 @@ RUN set -eu; \
     retry_zypper --non-interactive --gpg-auto-import-keys refresh && \
     retry_zypper install -y \
     bootc \
-    btrfs-progs ca-certificates ca-certificates-mozilla cpio curl dosfstools dracut e2fsprogs flatpak glib2 \
+    btrfs-progs ca-certificates ca-certificates-mozilla cpio cryptsetup curl device-mapper dosfstools dracut e2fsprogs flatpak glib2 \
     kernel-default kernel-firmware-all openssh ostree skopeo sudo \
     systemd systemd-boot udev xfsprogs zstd chrony && \
     update-ca-certificates && \
@@ -116,8 +130,14 @@ RUN printf 'L! /etc/resolv.conf - - - - /run/systemd/resolve/stub-resolv.conf\n'
 # omit_dracutmodules is declared here too, not just on the dracut command line
 # below: any in-image rebuild (dev-ISO creation, kernel update) re-runs dracut
 # without our flags, and tpm2-tss/pcsc fail the openSUSE base's module checks.
+#
+# crypt/dm are requested explicitly for the same reason, plus one of its own:
+# openSUSE's dracut defaults to hostonly, and a rebuild on a machine that is
+# not itself LUKS-rooted would quietly drop the modules that unlock the disk.
+# Naming them makes a missing cryptsetup/dmsetup a hard dracut error instead
+# of a boot-time emergency shell.
 RUN mkdir -p /usr/lib/dracut/dracut.conf.d && \
-    printf 'add_dracutmodules+=" bootc "\nomit_dracutmodules+=" tpm2-tss pcsc "\ninstall_items+=" /usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service "\n' \
+    printf 'add_dracutmodules+=" bootc crypt dm "\nomit_dracutmodules+=" tpm2-tss pcsc "\ninstall_items+=" /usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service "\n' \
     > /usr/lib/dracut/dracut.conf.d/10-bootc-base.conf
 # ...and place the wants-symlink ourselves, because 51bootc's install() puts it
 # at ${systemdsystemconfdir}/initrd-root-fs.target.wants/ — and openSUSE's
@@ -132,12 +152,23 @@ RUN mkdir -p /usr/lib/dracut/dracut.conf.d && \
 RUN mkdir -p /usr/lib/systemd/system/initrd-root-fs.target.wants && \
     ln -sf ../bootc-root-setup.service \
       /usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service
-RUN dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" --kver \
-    "$(ls /usr/lib/modules | head -1)" \
-    "/usr/lib/modules/$(ls /usr/lib/modules | head -1)/initramfs.img" && \
-    lsinitrd "/usr/lib/modules/$(ls /usr/lib/modules | head -1)/initramfs.img" \
-      | grep -q 'usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service' || \
-      { echo "ERROR: initramfs lacks the bootc-root-setup wants-link under /usr/lib/systemd/system — composefs boot would emergency-shell" >&2; exit 1; }
+RUN set -eu; \
+    kver="$(ls /usr/lib/modules | head -1)"; \
+    img="/usr/lib/modules/${kver}/initramfs.img"; \
+    dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" \
+      --kver "${kver}" "${img}"; \
+    lsinitrd "${img}" > /tmp/initramfs.list; \
+    if ! grep -q 'usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service' /tmp/initramfs.list; then \
+      echo "ERROR: initramfs lacks the bootc-root-setup wants-link under /usr/lib/systemd/system — composefs boot would emergency-shell" >&2; \
+      exit 1; \
+    fi; \
+    for bin in sbin/cryptsetup sbin/dmsetup systemd/systemd-cryptsetup; do \
+      if ! grep -q "${bin}" /tmp/initramfs.list; then \
+        echo "ERROR: initramfs has no ${bin} — the dm/crypt dracut modules were dropped, so a LUKS root would never unlock and the disk would boot to the dracut emergency shell" >&2; \
+        exit 1; \
+      fi; \
+    done; \
+    rm -f /tmp/initramfs.list
 RUN mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var && \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf && \
     echo "HOME=/var/home" | tee -a "/etc/default/useradd" && \

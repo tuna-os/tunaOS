@@ -451,6 +451,32 @@ STUB
   [ "$status" -ne 0 ]
 }
 
+@test "Sailfin's initramfs is built with LUKS support (cryptsetup + device-mapper)" {
+  # dracut's dm module is `require_binaries dmsetup` and its crypt module is
+  # `require_binaries cryptsetup` plus a dependency on dm. The openSUSE base
+  # ships neither, so the system stage's dracut run dropped crypt and
+  # systemd-cryptsetup, and the installed encrypted disk had no way to unlock:
+  # the initrd ignored fisherman's rd.luks.name karg, never prompted for a
+  # passphrase, and dropped to the dracut emergency shell waiting for a root
+  # UUID that only appears once the LUKS volume opens (tunaOS#953).
+  local containerfile="${REPO_ROOT}/Containerfile.opensuse"
+  local pkg_line dracut_line
+  pkg_line=$(grep -nE '^ +btrfs-progs .*cryptsetup.* device-mapper ' "$containerfile" | cut -d: -f1)
+  [ -n "$pkg_line" ]
+  # The packages must land BEFORE the initramfs is built, not via the desktop
+  # stage's pattern (which only the GNOME flavor happens to pull them in with).
+  dracut_line=$(grep -nF 'dracut --force --no-hostonly' "$containerfile" | cut -d: -f1)
+  [ "$dracut_line" -gt "$pkg_line" ]
+
+  # Requested by name so an in-image rebuild (dev ISO, kernel update) with
+  # openSUSE's hostonly default cannot silently drop them either.
+  grep -qF 'add_dracutmodules+=" bootc crypt dm "' "$containerfile"
+
+  # And the build fails loudly if the modules are missing from the initramfs.
+  grep -qF 'for bin in sbin/cryptsetup sbin/dmsetup systemd/systemd-cryptsetup' \
+    "$containerfile"
+}
+
 @test "Sailfin installs shared Bluefin config and GNOME-only Bluefin branding" {
   local containerfile="${REPO_ROOT}/Containerfile.opensuse"
   grep -qF 'FROM ${COMMON_IMAGE_REF} AS common' "$containerfile"
