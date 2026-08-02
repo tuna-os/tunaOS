@@ -877,12 +877,40 @@ check_ssh() {
 		return 77
 	fi
 	local opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10"
+	local err
+	err=$(mktemp)
 	# shellcheck disable=SC2086
-	if sshpass -p live ssh $opts liveuser@127.0.0.1 -p "$SSH_PORT" true 2>/dev/null; then
+	if sshpass -p live ssh $opts liveuser@127.0.0.1 -p "$SSH_PORT" true 2>"$err"; then
+		rm -f "$err"
 		echo "==> SSH OK"
 		return 0
 	fi
-	echo "ERROR: SSH check failed" >&2
+	# Say WHY. This used to be `2>/dev/null` with a bare "SSH check failed",
+	# repeated up to 30 times — 30 identical lines carrying no more
+	# information than one, and none of it the reason.
+	#
+	# The distinction the discarded stderr carries is the whole diagnosis:
+	#   Connection refused   -> nothing listening: port-forward or sshd down
+	#   Connection reset     -> sshd is there and rejected the connection
+	#   Permission denied    -> reached sshd, auth failed (user/password)
+	#   Operation timed out  -> the guest is wedged, not the daemon
+	#
+	# Measured need: grouper LUKS cells fail here while the guest serial shows
+	# "Started ssh.service - OpenBSD Secure Shell server" and the host keys
+	# generated (run 30692913767). The daemon is UP and we still cannot say
+	# what the client saw, so the same wall has now been hit three times and
+	# three separate hypotheses were proposed against zero client-side
+	# evidence.
+	#
+	# The filter can legitimately match nothing (empty stderr, or nothing but
+	# the known-hosts warning), and under `pipefail` that grep exits 1. Keep
+	# the status off the caller's path with `|| true`, and never emit the bare
+	# "SSH check failed:" this whole change exists to eliminate.
+	local why=""
+	why=$(tr -d '\r' <"$err" | grep -v '^Warning: Permanently added' | tr '\n' ' ' | sed 's/  */ /g') || true
+	[[ -n "${why// /}" ]] || why="(no ssh stderr beyond the known-hosts warning)"
+	echo "ERROR: SSH check failed: $why" >&2
+	rm -f "$err"
 	return 5
 }
 
@@ -961,7 +989,18 @@ run_install() {
 		sleep 2
 	done
 	check_ssh || {
-		echo "ERROR: SSH not available"
+		echo "ERROR: SSH not available" >&2
+		# One shot with full verbosity before giving up. The retry loop above
+		# is deliberately quiet-ish; this is the frame that gets read when the
+		# cell is triaged, and it costs one connection attempt.
+		echo "--- ssh -vvv (final attempt, for diagnosis) ---" >&2
+		sshpass -p live ssh -vvv \
+			-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null \
+			-o ConnectTimeout=10 liveuser@127.0.0.1 -p "$SSH_PORT" true 2>&1 |
+			tail -30 >&2 || true
+		echo "--- guest-side sshd evidence from serial ---" >&2
+		grep -aiE "ssh\.service|sshd|host keys" "$SERIAL_LOG" 2>/dev/null |
+			tr -d '\r' | tail -10 >&2 || true
 		return 5
 	}
 
