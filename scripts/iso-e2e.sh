@@ -382,6 +382,62 @@ LUKS_EVIDENCE_LOG="${OUTPUT_DIR}/luks-evidence.log"
 INSTALL_DISK="${OUTPUT_DIR}/install-disk.qcow2"
 QEMU_PIDFILE="${OUTPUT_DIR}/qemu.pid"
 
+# A dedicated swap disk for the live guest, attached only to the install boot.
+#
+# The composefs install path cannot use fisherman's bootcDirect shortcut: bootc
+# has to run in a container, so podman first copies the exported OCI layout
+# into a scratch store, and podman's anonymous memory during that copy scales
+# with the image, not with a fixed buffer. Measured on run 30730744132
+# (sailfin:gnome, 8192 MiB guest, no swap):
+#
+#   Out of memory: Killed process 2978 (podman) total-vm:9250052kB,
+#   anon-rss:7147396kB ... Free swap = 0kB / Total swap = 0kB
+#
+# It was still growing when the kernel killed it, i.e. raising --memory alone
+# only moves the cliff: the guest has to have somewhere to push cold pages.
+#
+# CORRECTION (tunaOS#972). That allocation was not the OCI copy. The live root
+# listed /var/lib/superiso-store in /etc/containers/mounts.conf, and podman's
+# mounts.conf handling reads the entire source tree into memory and copies it
+# into the container's runroot — a tmpfs here — so every install container
+# duplicated the payload store twice over. Run 30731534696 (10240 MiB + this
+# swap disk) proved it by failing the same way with ENOSPC on /run instead of
+# an OOM. customize-live.sh no longer writes that file. The swap disk stays as
+# cheap headroom for the real staging copies, but it is no longer load-bearing.
+# The live root cannot hold a swapfile (its writable layer is a tmpfs, so a
+# swapfile there is memory backed by memory), and the target disk is about to
+# be repartitioned, so swap needs a disk of its own. Sparse qcow2: it only
+# occupies what the guest actually pages out.
+#
+# Addressed by serial (/dev/disk/by-id/virtio-e2eswap), never by /dev/vdX: the
+# fisherman recipe installs to /dev/vda and this disk must never be confused
+# with it.
+SWAP_DISK="${OUTPUT_DIR}/swap-disk.qcow2"
+SWAP_DISK_SERIAL="e2eswap"
+SWAP_DISK_BYID="/dev/disk/by-id/virtio-${SWAP_DISK_SERIAL}"
+
+# QEMU writes the guest console into SERIAL_LOG, and several code paths below
+# tee ssh output into that same file. `-serial file:PATH` opens the file
+# O_WRONLY|O_CREAT|O_TRUNC and writes at QEMU's OWN offset, so the moment a
+# tee appends, every later console write lands back in the middle of the file
+# and overwrites whatever the tee put there (and vice versa).
+#
+# That is not theoretical. run 30729902967's serial.log carries a shredded
+# `ot ok - network connectivity` line, and the guest console goes silent from
+# the first tee onward, which is exactly the window (the bootc install) where
+# an OOM report, hung-task splat or panic would have explained why the guest
+# stopped answering ssh. The evidence was overwritten, so the failure could
+# not be diagnosed from the artifact at all.
+#
+# append=on opens O_APPEND instead: both writers always land at EOF, so the
+# console and the ssh transcript interleave instead of eating each other.
+# Nothing relies on QEMU truncating: the log is rm -f'd per run below and
+# explicitly truncated before the installed boot.
+E2E_SERIAL_ARGS=(
+	-chardev "file,id=e2eserial,path=${SERIAL_LOG},append=on"
+	-serial chardev:e2eserial
+)
+
 # See the egl-headless block above: it renders GL but presents nothing, so
 # screendump has no surface and every screenshot in this repo silently fails.
 # (VNC alone does not fix screendump under GL scanout — see screenshot().)
@@ -562,6 +618,16 @@ boot_live_iso() {
 		fi
 	fi
 
+	# See SWAP_DISK above. Attached to the live/install boot only; the
+	# installed system is booted without it and never records it in fstab.
+	if [[ ! -f "$SWAP_DISK" ]]; then
+		echo "==> Creating 8G swap disk: ${SWAP_DISK}"
+		if ! qemu-img create -f qcow2 "$SWAP_DISK" 8G; then
+			echo "ERROR: qemu-img create failed for the swap disk" >&2
+			return 1
+		fi
+	fi
+
 	# Kernel cmdline override: append `console=ttyS0` so the live env's
 	# tunaos-live-ready.service marker reaches the serial log. We do this
 	# via the OVMF boot menu's cmdline editing path, which the ISO's
@@ -589,10 +655,12 @@ boot_live_iso() {
 		-device scsi-cd,drive=iso \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 		-device virtio-blk-pci,drive=disk \
+		-drive "if=none,id=swapdisk,file=${SWAP_DISK},format=qcow2" \
+		-device "virtio-blk-pci,drive=swapdisk,serial=${SWAP_DISK_SERIAL}" \
 		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
-		-serial "file:${SERIAL_LOG}" \
+		"${E2E_SERIAL_ARGS[@]}" \
 		"${QEMU_GPU_ARGS[@]}" \
 		-pidfile "$QEMU_PIDFILE" \
 		-daemonize
@@ -1318,6 +1386,60 @@ EOF
 	echo "==> Uploading fisherman recipe..."
 	"${scp_cmd[@]}" "$RECIPE_LOCAL" liveuser@127.0.0.1:/home/liveuser/e2e-recipe.json
 
+	# ── Swap on, before anything allocates ───────────────────────────────
+	# See SWAP_DISK: podman's copy of the exported OCI layout into the
+	# install-time scratch store allocates on the order of the image size,
+	# and a live guest has no swap at all, so the OOM killer takes podman
+	# and fisherman reports the install as `signal: killed`. Give the kernel
+	# somewhere to page those cold buffers before fisherman starts.
+	#
+	# Best-effort by design: a guest without the disk (an older ISO booted by
+	# hand, a future topology change) should still install, just with the old
+	# no-swap headroom. Never write this into the guest's fstab: the disk is
+	# attached to the install boot only.
+	echo "==> Enabling guest swap on ${SWAP_DISK_BYID}..."
+	"${ssh_cmd[@]}" "sudo sh -c 'test -b ${SWAP_DISK_BYID} && mkswap -L tunaos-e2e-swap ${SWAP_DISK_BYID} >/dev/null && swapon ${SWAP_DISK_BYID}' && free -m" ||
+		echo "WARN: guest swap not enabled (continuing without it)"
+
+	# ── Guest heartbeat, on the console rather than over ssh ─────────────
+	# The install is the one phase where the guest can stop answering while
+	# QEMU stays up, and `Timeout, server 127.0.0.1 not responding.` on its
+	# own does not say why: a wedged guest and a live guest whose sshd
+	# stalled under I/O look identical from the host. Everything else we log
+	# here comes back over the same ssh channel that just died, so it stops
+	# exactly when the interesting part starts.
+	#
+	# This writes to /dev/console (i.e. the serial log) from a process
+	# setsid'd out of the ssh session, so it keeps reporting after that
+	# channel is gone. The last line before the silence is the diagnosis:
+	# memavail collapsing means the guest is out of RAM (raise --memory),
+	# memavail AND swapfree both collapsing means it is genuinely out of
+	# memory rather than merely short of it (run 30730744132 killed podman
+	# that way), target_free collapsing means the disk is, and one that keeps
+	# ticking through the timeout means the guest was alive all along and
+	# only sshd stalled.
+	local HB_LOCAL="${OUTPUT_DIR}/e2e-heartbeat.sh"
+	cat >"$HB_LOCAL" <<-'HBEOF'
+		#!/bin/sh
+		while :; do
+			printf 'TUNAOS_E2E_HEARTBEAT memavail_kb=%s swapfree_kb=%s dirty_kb=%s writeback_kb=%s target_free_kb=%s load=%s\n' \
+				"$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)" \
+				"$(awk '/^SwapFree:/{print $2}' /proc/meminfo)" \
+				"$(awk '/^Dirty:/{print $2}' /proc/meminfo)" \
+				"$(awk '/^Writeback:/{print $2}' /proc/meminfo)" \
+				"$(df -Pk /mnt/fisherman-target 2>/dev/null | awk 'NR==2{print $4}')" \
+				"$(cut -d' ' -f1-3 /proc/loadavg)" >/dev/console 2>/dev/null
+			sleep 15
+		done
+	HBEOF
+	if "${scp_cmd[@]}" "$HB_LOCAL" liveuser@127.0.0.1:/home/liveuser/e2e-heartbeat.sh; then
+		"${ssh_cmd[@]}" "sudo install -m0755 /home/liveuser/e2e-heartbeat.sh /usr/local/bin/tunaos-e2e-heartbeat && \
+			sudo setsid --fork /usr/local/bin/tunaos-e2e-heartbeat </dev/null >/dev/null 2>&1" ||
+			echo "WARN: guest heartbeat did not start (continuing)"
+	else
+		echo "WARN: guest heartbeat could not be uploaded (continuing)"
+	fi
+
 	echo "==> Running fisherman /home/liveuser/e2e-recipe.json..."
 	# Bound with `timeout` as a safety net; the image is already local at
 	# this point so this should only cover the actual install steps, not a
@@ -1334,6 +1456,12 @@ EOF
 			return 3
 		fi
 	}
+
+	# Install is done; stop the heartbeat so it cannot bleed into the serial
+	# log the passphrase gate greps. On the failure paths above we return
+	# without this: the VM is torn down there anyway, and a heartbeat that
+	# keeps printing right up to the shutdown is the evidence we came for.
+	"${ssh_cmd[@]}" "sudo pkill -f tunaos-e2e-heartbeat" >/dev/null 2>&1 || true
 
 	if [[ "$LUKS" -eq 1 ]]; then
 		# Verify against the resulting disk state, not fisherman's log text —
@@ -1392,6 +1520,26 @@ EOF
 				echo "karg appended: $f"
 				found=1
 			done
+			if [ "$found" = 1 ]; then
+				# The ESP is the only evidence of whether the install
+				# produced a *bootable* disk, and it is gone the moment
+				# this VM powers off. sailfin (composefs + systemd-boot)
+				# gets no NVRAM entry: bootctl refuses to touch efivars
+				# from inside the install container ("Not booted with EFI
+				# or running in a container, skipping EFI variable
+				# modifications"), so the firmware can only find it via
+				# the removable fallback \EFI\BOOT\BOOTX64.EFI. If that
+				# file is missing, the disk is unbootable no matter what
+				# the boot order says, and the failure looks identical to
+				# a boot-order bug from the serial log alone.
+				echo "--- ESP contents ($p) ---"
+				find /mnt/tbx-bls -maxdepth 3 2>/dev/null | sort || ls -lR /mnt/tbx-bls || true
+				if [ -f /mnt/tbx-bls/EFI/BOOT/BOOTX64.EFI ]; then
+					echo "esp: removable fallback present (EFI/BOOT/BOOTX64.EFI)"
+				else
+					echo "WARN: esp has NO EFI/BOOT/BOOTX64.EFI; firmware has no fallback to boot"
+				fi
+			fi
 			umount /mnt/tbx-bls
 			[ "$found" = 1 ] && break
 		done
@@ -1434,13 +1582,27 @@ EOF
 		# No TPM here: the passphrase gate doesn't need one, and the
 		# install-phase swtpm has already exited (its socket is gone). TPM
 		# auto-unlock is the separate post-install test.
+		#
+		# bootindex=0 on the disk (see also boot_installed) is what makes
+		# "boot the thing we just installed" deterministic. Both boots share
+		# one OVMF_VARS file, so the installed boot inherits the BootOrder
+		# the live-ISO boot left behind, including OVMF's "EFI Internal
+		# Shell" entry. An install that writes an EFI variable of its own
+		# (bootupd/grub2 variants call efibootmgr, which prepends) lands
+		# ahead of the shell and boots; an install that cannot (sailfin:
+		# bootctl skips efivars inside the install container) is left with
+		# only the auto-enumerated disk option, which BDS appends *after*
+		# the shell, so the firmware drops to `Shell>` and the passphrase
+		# prompt never appears (run 30732193680). bootindex publishes a
+		# QEMU fw_cfg boot order that OVMF applies over the stale NVRAM,
+		# putting this disk first and leaving the shell as the last resort.
 		reset_qemu_sockets
 		"$QEMU" -name "tunaos-iso-e2e-installed" -machine pc -cpu "$CPU_ARG" \
 			-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
 			-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
 			-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 			-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
-			-device virtio-blk-pci,drive=disk \
+			-device virtio-blk-pci,drive=disk,bootindex=0 \
 			-netdev "user,id=net0" -device virtio-net-pci,netdev=net0 \
 			-monitor "unix:${MONITOR_SOCK},server,nowait" \
 			-serial "unix:${FB_SERIAL},server,nowait" \
@@ -1532,7 +1694,9 @@ EOF
 	fi
 
 	echo "==> Booting installed system..."
-	# Boot from the install disk (remove cdrom)
+	# Boot from the install disk (remove cdrom). bootindex=0 overrides the
+	# BootOrder the live-ISO boot left in the shared OVMF_VARS; see the
+	# LUKS passphrase gate above for why the shell wins without it.
 	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
 	reset_qemu_sockets
 	"$QEMU" \
@@ -1546,11 +1710,11 @@ EOF
 		-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
-		-device virtio-blk-pci,drive=disk \
+		-device virtio-blk-pci,drive=disk,bootindex=0 \
 		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
-		-serial "file:${SERIAL_LOG}" \
+		"${E2E_SERIAL_ARGS[@]}" \
 		"${QEMU_GPU_ARGS[@]}" \
 		-pidfile "$QEMU_PIDFILE" \
 		-daemonize
@@ -1615,7 +1779,7 @@ boot_disk_image() {
 		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
-		-serial "file:${SERIAL_LOG}" \
+		"${E2E_SERIAL_ARGS[@]}" \
 		"${QEMU_GPU_ARGS[@]}" \
 		-pidfile "$QEMU_PIDFILE" \
 		-daemonize

@@ -31,6 +31,27 @@ FROM base AS system
 # runtime image doesn't ship (libssl.so.60 — see #643); the packaged bootc has
 # correct runtime deps and bundles the 51bootc dracut module. Also faster (no
 # cargo compile). Verified: bootc 1.15.2 install/lint work on Tumbleweed.
+#
+# `sudo` is listed explicitly: unlike the Fedora/EL bases, the openSUSE
+# Tumbleweed base (and the enhanced_base pattern) ships none, so the live-ISO
+# NOPASSWD sudoers drop-in that customize-live.sh writes had nothing to
+# authorise — every `sudo` iso-e2e.sh runs in the sailfin guest failed with
+# "bash: line 1: sudo: command not found", killing the LUKS E2E at
+# `sudo podman load` (defect 3 of tunaOS#953).
+#
+# `cryptsetup` and `device-mapper` are listed for the INITRAMFS, not for the
+# running system: dracut's `dm` module is `require_binaries dmsetup` and its
+# `crypt` module is `require_binaries cryptsetup` + a dependency on `dm`. The
+# base ships neither, so the dracut run below silently dropped all LUKS
+# support —
+#   dracut[E]: Module 'crypt' depends on module 'dm', which can't be installed
+#   dracut[E]: Module 'systemd-cryptsetup' depends on module 'crypt', ...
+# — and the installed encrypted disk had no way to unlock: the initrd ignored
+# fisherman's rd.luks.name karg, never prompted for a passphrase, and sat in
+# dracut-initqueue waiting for a root UUID that only appears after the LUKS
+# volume opens, until it dropped to the emergency shell (defect 8 of
+# tunaOS#953, run 30733919804). The GNOME pattern pulls cryptsetup in later,
+# but the initramfs is built here, and no other flavor's package set does.
 RUN set -eu; \
     retry_zypper() { \
       attempt=1; \
@@ -50,8 +71,8 @@ RUN set -eu; \
     retry_zypper --non-interactive --gpg-auto-import-keys refresh && \
     retry_zypper install -y \
     bootc \
-    btrfs-progs ca-certificates ca-certificates-mozilla cpio curl dosfstools dracut e2fsprogs flatpak glib2 \
-    kernel-default kernel-firmware-all openssh ostree skopeo \
+    btrfs-progs ca-certificates ca-certificates-mozilla cpio cryptsetup curl device-mapper dosfstools dracut e2fsprogs flatpak glib2 \
+    kernel-default kernel-firmware-all openssh ostree skopeo sudo \
     systemd systemd-boot udev xfsprogs zstd chrony && \
     update-ca-certificates && \
     retry_zypper --non-interactive removerepo virtualization-containers && \
@@ -105,8 +126,18 @@ RUN printf 'L! /etc/resolv.conf - - - - /run/systemd/resolve/stub-resolv.conf\n'
 # mounted but never prepared → initrd-switch-root fails → dracut emergency
 # shell, which is what made every sailfin desktop Gate time out waiting for a
 # graphical session.
+#
+# omit_dracutmodules is declared here too, not just on the dracut command line
+# below: any in-image rebuild (dev-ISO creation, kernel update) re-runs dracut
+# without our flags, and tpm2-tss/pcsc fail the openSUSE base's module checks.
+#
+# crypt/dm are requested explicitly for the same reason, plus one of its own:
+# openSUSE's dracut defaults to hostonly, and a rebuild on a machine that is
+# not itself LUKS-rooted would quietly drop the modules that unlock the disk.
+# Naming them makes a missing cryptsetup/dmsetup a hard dracut error instead
+# of a boot-time emergency shell.
 RUN mkdir -p /usr/lib/dracut/dracut.conf.d && \
-    printf 'add_dracutmodules+=" bootc "\ninstall_items+=" /usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service "\n' \
+    printf 'add_dracutmodules+=" bootc crypt dm "\nomit_dracutmodules+=" tpm2-tss pcsc "\ninstall_items+=" /usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service "\n' \
     > /usr/lib/dracut/dracut.conf.d/10-bootc-base.conf
 # ...and place the wants-symlink ourselves, because 51bootc's install() puts it
 # at ${systemdsystemconfdir}/initrd-root-fs.target.wants/ — and openSUSE's
@@ -121,12 +152,37 @@ RUN mkdir -p /usr/lib/dracut/dracut.conf.d && \
 RUN mkdir -p /usr/lib/systemd/system/initrd-root-fs.target.wants && \
     ln -sf ../bootc-root-setup.service \
       /usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service
-RUN dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" --kver \
-    "$(ls /usr/lib/modules | head -1)" \
-    "/usr/lib/modules/$(ls /usr/lib/modules | head -1)/initramfs.img" && \
-    lsinitrd "/usr/lib/modules/$(ls /usr/lib/modules | head -1)/initramfs.img" \
-      | grep -q 'usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service' || \
-      { echo "ERROR: initramfs lacks the bootc-root-setup wants-link under /usr/lib/systemd/system — composefs boot would emergency-shell" >&2; exit 1; }
+# The LUKS assertions below check the systemd unlock path, not a `cryptsetup`
+# binary: dracut's crypt module needs cryptsetup at BUILD time (its check() is
+# `require_binaries cryptsetup`, which is why the package is installed above),
+# but in a systemd initrd dracut-ng 110 deliberately ships only
+# systemd-cryptsetup + systemd-cryptsetup-generator + crypt-run-generator and
+# leaves the standalone CLI out. Asserting on `sbin/cryptsetup` therefore failed
+# a perfectly good initramfs (run 30735665323); verified against the real
+# lsinitrd output for Tumbleweed's dracut 110+suse.45.
+RUN set -eu; \
+    kver="$(ls /usr/lib/modules | head -1)"; \
+    img="/usr/lib/modules/${kver}/initramfs.img"; \
+    dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" \
+      --kver "${kver}" "${img}"; \
+    lsinitrd "${img}" > /tmp/initramfs.list; \
+    if ! grep -q 'usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service' /tmp/initramfs.list; then \
+      echo "ERROR: initramfs lacks the bootc-root-setup wants-link under /usr/lib/systemd/system — composefs boot would emergency-shell" >&2; \
+      exit 1; \
+    fi; \
+    for mod in crypt dm; do \
+      if ! grep -qx "${mod}" /tmp/initramfs.list; then \
+        echo "ERROR: initramfs has no '${mod}' dracut module — a LUKS root would never unlock and the disk would boot to the dracut emergency shell" >&2; \
+        exit 1; \
+      fi; \
+    done; \
+    for path in usr/bin/systemd-cryptsetup usr/sbin/dmsetup dm-crypt.ko; do \
+      if ! grep -q "${path}" /tmp/initramfs.list; then \
+        echo "ERROR: initramfs has no ${path} — the dm/crypt dracut modules shipped incomplete, so a LUKS root would never unlock" >&2; \
+        exit 1; \
+      fi; \
+    done; \
+    rm -f /tmp/initramfs.list
 RUN mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var && \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf && \
     echo "HOME=/var/home" | tee -a "/etc/default/useradd" && \
@@ -137,7 +193,18 @@ RUN mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var && \
     ln -sT var/opt /opt && ln -sT var/mnt /mnt && \
     ln -sT var/home /home && ln -sT ../var/usrlocal /usr/local && \
     for d in /var/* /var/.[!.]*; do [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done && \
-    mkdir -p /var/tmp
+    # The /var targets of the aliasing symlinks above must EXIST, both in the
+    # image and at runtime. Sailfin shipped them dangling, so anything that
+    # did `mkdir /mnt` got EEXIST (mkdir on a dangling symlink), which is how
+    # the live-ISO E2E died: fisherman's "creating mount point
+    # /mnt/fisherman-target: mkdir /mnt: file exists" (defect 3 of tunaOS#953).
+    # Create them here for the image (the live ISO's /var comes straight from
+    # it) and declare them in tmpfiles.d so they survive bootc's /var reset,
+    # identical to Containerfile.debian / Containerfile.arch.
+    mkdir -p /var/tmp /var/mnt /var/home /var/opt /var/srv /var/roothome \
+        /var/usrlocal && \
+    printf 'd /var/opt 0755 root root -\nd /var/home 0755 root root -\nd /var/srv 0755 root root -\nd /var/mnt 0755 root root -\nd /var/usrlocal 0755 root root -\nd /var/roothome 0700 root root -\nd /var/tmp 1777 root root -\nd /run/media 0755 root root -\n' \
+        > /usr/lib/tmpfiles.d/bootc-base-dirs.conf
 RUN cp -rn /usr/etc/. /etc/ 2>/dev/null; rm -rf /usr/etc
 RUN printf '# NTP pool\npool pool.ntp.org iburst\n\ndriftfile /var/lib/chrony/drift\nmakestep 1.0 3\nrtcsync\n' > /etc/chrony.conf
 RUN printf 'd /var/lib/chrony 0750 chrony chrony\n' >> /usr/lib/tmpfiles.d/chrony.conf
@@ -161,6 +228,16 @@ RUN mkdir -p /etc/containers && \
 # Sailfin has the same curated base experience as the EL10 variants.
 COPY --from=context /files /
 COPY --from=common /system_files/shared /
+
+# Enable the e2e readiness marker explicitly. On the dnf/apt/pacman variants
+# this is done by build_scripts/40-services.sh, which this Containerfile
+# deliberately never runs (see the system stage) — so sailfin shipped the unit
+# file from /files without ever enabling it. The live ISO then booted all the
+# way to graphical.target and simply never printed TUNAOS_LIVE_READY, and
+# iso-e2e.sh timed out ("readiness marker not seen within 1200s"), which is
+# defect 2 of tunaOS#953. Placed after the COPY because the unit arrives with
+# it.
+RUN systemctl enable tunaos-live-ready.service
 
 # Cache-bust: the build_scripts RUNs in the desktop stages below are invoked via
 # a bind mount, whose content is NOT part of buildah's layer cache key — so
@@ -189,7 +266,8 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 # layout after the install so bootc lint passes (identical to the system stage).
 RUN zypper clean -a 2>/dev/null || true
 RUN set -x && rm -rf /boot /home /root /usr/local /srv /opt /mnt /var /ostree && \
-    mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var /var/tmp && \
+    mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var /var/tmp /var/mnt \
+        /var/home /var/opt /var/srv /var/roothome /var/usrlocal && \
     ln -sT sysroot/ostree /ostree && \
     ln -sT var/roothome /root && ln -sT var/srv /srv && \
     ln -sT var/opt /opt && ln -sT var/mnt /mnt && \
@@ -227,6 +305,8 @@ RUN bootc container lint
 # do not leak them into KDE, Niri, or XFCE targets.
 FROM desktop AS gnome
 COPY --from=common /system_files/bluefin /
+RUN if command -v glib-compile-schemas &>/dev/null; then glib-compile-schemas /usr/share/glib-2.0/schemas; fi && \
+    if command -v dconf &>/dev/null; then dconf update; fi
 FROM desktop AS kde
 FROM desktop AS niri
 FROM desktop AS xfce

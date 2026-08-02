@@ -152,15 +152,33 @@ ln -sf /usr/lib/systemd/system/tunaos-offline-store.service \
 # Hence the drop-in below, and hence it lists BOTH stores: last writer wins
 # on an array, so whoever writes last has to enumerate everything, or the
 # vendor's own store is what disappears instead.
+#
+# ...but only the stores that actually exist in this rootfs. The vendor
+# store is a Fedora/EL bootc convention; openSUSE (sailfin) ships no
+# /usr/lib/containers/storage, and the overlay driver hard-fails on a
+# listed store it cannot stat ("overlay: can't stat imageStore dir
+# /usr/lib/containers/storage"), which takes down every podman invocation
+# in the live root — including fisherman's `podman pull
+# containers-storage:<ref>`. Enumerating existing directories only keeps
+# the vendor store working where it exists and degrades to the offline
+# store alone where it does not.
+VENDOR_STORE="/usr/lib/containers/storage"
+IMAGE_STORES=("$STORE_MOUNT")
+if [[ -d "$VENDOR_STORE" ]]; then
+	IMAGE_STORES+=("$VENDOR_STORE")
+fi
+STORE_LIST="$(printf '"%s", ' "${IMAGE_STORES[@]}")"
+STORE_LIST="[${STORE_LIST%, }]"
+
 mkdir -p /etc/containers
-cat >/etc/containers/storage.conf <<'CONFEOF'
+cat >/etc/containers/storage.conf <<CONFEOF
 [storage]
 driver = "overlay"
 runroot = "/run/containers/storage"
 graphroot = "/var/lib/containers/storage"
 
 [storage.options]
-additionalimagestores = ["/var/lib/superiso-store", "/usr/lib/containers/storage"]
+additionalimagestores = ${STORE_LIST}
 
 [storage.options.overlay]
 mount_program = "/usr/bin/fuse-overlayfs"
@@ -176,30 +194,45 @@ CONFEOF
 # additive higher-precedence drop-in keeps the vendor's store working (it
 # is listed here) and keeps the change visible in one place.
 mkdir -p /etc/containers/storage.conf.d
-cat >/etc/containers/storage.conf.d/99-tbox-offline-store.conf <<'DROPEOF'
+cat >/etc/containers/storage.conf.d/99-tbox-offline-store.conf <<DROPEOF
 # Written by tunaOS customize-live.sh — see tunaOS#881.
 # Must outrank /usr/share/containers/storage.conf.d/00-vendor.conf, whose
 # additionalimagestores REPLACES (not merges with) the primary config's and
 # would otherwise drop /var/lib/superiso-store entirely.
-# Both stores are listed deliberately: array values replace, so omitting
-# the vendor path here would break the vendor's store the same way.
+# The vendor store is listed too when it exists: array values replace, so
+# omitting it here would break the vendor's store the same way.
 [storage.options]
-additionalimagestores = ["/var/lib/superiso-store", "/usr/lib/containers/storage"]
+additionalimagestores = ${STORE_LIST}
 DROPEOF
 
-# Second, independent mechanism — required for the bootcViaContainer path.
-# A container gets its /etc from the IMAGE, not from the live root, and
-# /var/lib/superiso-store is not present inside it at all, so fisherman's
-# in-container `bootc` cannot resolve containers-storage:<ref> no matter
-# what the live root's config says. mounts.conf bind-mounts the store into
-# every container podman starts. This is the half of dakota-iso's pattern
-# (_upstream-snapshots/dakota-iso/live/src/configure-live.sh) that was not
-# carried over when this script was written; its comment there states the
-# same reason. bootcDirect never needed it, which is why yellowfin:xfce
-# passed while every bootcViaContainer cell failed.
-cat >/etc/containers/mounts.conf <<'MOUNTSEOF'
-/var/lib/superiso-store:/var/lib/superiso-store
-MOUNTSEOF
+# DO NOT add /var/lib/superiso-store to /etc/containers/mounts.conf.
+#
+# An earlier revision did, on the theory that a container gets its /etc from
+# the IMAGE and therefore cannot see the store, and that mounts.conf
+# "bind-mounts the store into every container podman starts". It does not.
+# mounts.conf is containers/common's *subscriptions* mechanism: for a
+# directory source it walks the tree, reads every file into memory, and
+# writes a full copy into the container's runroot
+# (/run/containers/storage/overlay-containers/<id>/userdata/<dest>) before
+# bind-mounting that copy. On live media the runroot is a tmpfs, so an entry
+# there duplicates the whole payload store into RAM twice over — once as the
+# reader's buffers, once as tmpfs pages.
+#
+# That is what killed sailfin:gnome twice. Run 30730744132: `Out of memory:
+# Killed process 2978 (podman) anon-rss:7147396kB` on an 8192 MiB guest, read
+# as OCI-copy pressure at the time. Run 30731534696, after the guest grew to
+# 10240 MiB and gained swap: `Failed to mount subscriptions, skipping entry in
+# /etc/containers/mounts.conf: ... /userdata/var/lib/superiso-store/overlay/
+# .../usr/lib/firmware/nvidia/.../gsp-570.144.bin.xz: no space left on
+# device`, then the container failed to start at all because /run was full.
+#
+# It is also unnecessary: fisherman bind-mounts the store itself when a path
+# needs it (appendImageStoreArgs in internal/install/bootc.go adds
+# `-v /var/lib/superiso-store:/var/lib/superiso-store:ro` plus a generated
+# storage.conf), and the composefs path does not need it at all — bootc reads
+# the exported OCI layout at /run/fisherman/oci-cache. The storage.conf and
+# drop-in above are what the *live root's* podman needs; the container's view
+# is fisherman's job.
 
 # Dev/E2E media only: the normal published-image policy keeps SSH disabled.
 # tacklebox creates liveuser during boot, so install a oneshot that sets its

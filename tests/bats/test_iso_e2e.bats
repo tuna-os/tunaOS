@@ -687,6 +687,82 @@ setup_runtime_check_stubs() {
   [ "$output" = "READY_NOT_FOUND" ]
 }
 
+@test "serial: every QEMU boot opens the console log in append mode" {
+  # `-serial file:PATH` truncates and then writes at QEMU's own offset, so
+  # once run_install tees ssh output into the same file, later console writes
+  # overwrite the transcript (and vice versa). That silently destroyed the
+  # guest console for the whole install window in run 30729902967, the one
+  # place an OOM report or hung-task splat would have been. Keep every boot
+  # on the shared append-mode chardev.
+  grep -q 'append=on' "$SCRIPT"
+  ! grep -q -- '-serial "file:${SERIAL_LOG}"' "$SCRIPT"
+  [ "$(grep -c '"${E2E_SERIAL_ARGS\[@\]}"' "$SCRIPT")" -eq 3 ]
+}
+
+@test "install: a console heartbeat outlives the ssh channel" {
+  # The install phase is where the guest can stop answering while QEMU stays
+  # up. The heartbeat reports memory/disk pressure to /dev/console from a
+  # setsid'd process, so evidence survives the ssh session dying.
+  grep -q 'TUNAOS_E2E_HEARTBEAT' "$SCRIPT"
+  grep -q 'setsid --fork /usr/local/bin/tunaos-e2e-heartbeat' "$SCRIPT"
+  grep -q 'pkill -f tunaos-e2e-heartbeat' "$SCRIPT"
+  # Swap exhaustion is the other half of the diagnosis, so the heartbeat has
+  # to report it alongside MemAvailable.
+  grep -q 'swapfree_kb' "$SCRIPT"
+}
+
+@test "install: the live guest gets a swap disk, addressed by serial" {
+  # podman's copy of the exported OCI layout into the install-time scratch
+  # store allocates on the order of the image size. With no swap the kernel
+  # can only kill it: run 30730744132 lost podman at anon-rss 7147396kB on
+  # an 8192 MiB guest. The swap disk is attached to the install boot and
+  # addressed by /dev/disk/by-id, never /dev/vdX, because the recipe installs to
+  # /dev/vda and the two must never be confused.
+  grep -q 'SWAP_DISK="${OUTPUT_DIR}/swap-disk.qcow2"' "$SCRIPT"
+  grep -q 'qemu-img create -f qcow2 "\$SWAP_DISK" 8G' "$SCRIPT"
+  grep -q 'serial=${SWAP_DISK_SERIAL}' "$SCRIPT"
+  grep -q 'SWAP_DISK_BYID="/dev/disk/by-id/virtio-${SWAP_DISK_SERIAL}"' "$SCRIPT"
+  grep -q "mkswap -L tunaos-e2e-swap" "$SCRIPT"
+  grep -q "swapon \${SWAP_DISK_BYID}" "$SCRIPT"
+  # Install boot only: the installed system must never see it (no fstab
+  # entry, no dangling swap device on the post-install boots).
+  [ "$(grep -c 'drive=swapdisk' "$SCRIPT")" -eq 1 ]
+}
+
+@test "installed boot: the disk is pinned first in the firmware boot order" {
+  # The live-ISO boot and the installed boot share one OVMF_VARS file, so the
+  # installed boot inherits OVMF's "EFI Internal Shell" NVRAM entry. Variants
+  # whose install writes its own EFI variable (efibootmgr prepends) boot
+  # anyway; sailfin's composefs/systemd-boot install cannot write efivars from
+  # inside the install container, so its auto-enumerated disk option lands
+  # after the shell and the guest sits at `Shell>` (run 30732193680).
+  # bootindex publishes a QEMU fw_cfg boot order OVMF applies over the stale
+  # NVRAM. Both post-install boots need it; the live boot must NOT have it
+  # (the ISO has to win there).
+  [ "$(grep -c 'device virtio-blk-pci,drive=disk,bootindex=0' "$SCRIPT")" -eq 2 ]
+  grep -q -- '-device virtio-blk-pci,drive=disk \\' "$SCRIPT"
+}
+
+@test "installed boot: the ESP is dumped before the install VM is destroyed" {
+  # Whether the install produced a bootable disk is only knowable from the
+  # ESP, and the ESP is unreachable once the live guest powers off. Dump it
+  # while the BLS kargs are being appended, and say so explicitly when the
+  # removable fallback the firmware needs is missing.
+  grep -q 'ESP contents' "$SCRIPT"
+  grep -q 'esp: removable fallback present' "$SCRIPT"
+  grep -q 'WARN: esp has NO EFI/BOOT/BOOTX64.EFI' "$SCRIPT"
+}
+
+@test "install: the LUKS workflow gives the guest more RAM than the image" {
+  # The composefs install path stages the image through podman, so the guest
+  # needs headroom over the image, not a hair under it. Keep the LUKS job's
+  # --memory above the script default and the recipe's disk pinned to vda so
+  # the swap disk can never become the install target.
+  local wf="${REPO_ROOT}/.github/workflows/luks-e2e.yml"
+  grep -q -- '--memory 10240' "$wf"
+  grep -q '"disk": "/dev/vda"' "$SCRIPT"
+}
+
 @test "ready: serial log file growth detection" {
   run bash -c '
     log="/tmp/test-serial3.log"
