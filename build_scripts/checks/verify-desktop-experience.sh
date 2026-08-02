@@ -328,6 +328,21 @@ else
 				fi
 			fi
 		fi
+	# ── Branding & Asset Contract ──
+	# Wallpapers: shipping only upstream artwork means a user sees upstream background on login.
+	if ! compgen -G "/usr/share/backgrounds/tunaos*" >/dev/null && \
+	   ! compgen -G "/usr/share/backgrounds/*/tunaos*" >/dev/null && \
+	   ! compgen -G "/usr/share/backgrounds/bluefin*" >/dev/null; then
+		echo "missing required path: /usr/share/backgrounds/tunaos* (branding wallpaper)" >&2
+		exit 1
+	fi
+
+	# dconf compiled database: desktop branding keyfiles in /etc/dconf/db/*.d must be compiled.
+	if compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
+		if [[ ! -s /etc/dconf/db/local && ! -s /etc/dconf/db/gdm ]]; then
+			echo "missing compiled dconf database: keyfiles exist under /etc/dconf/db/*.d/ but /etc/dconf/db/local and gdm are missing or empty (run dconf update)" >&2
+			exit 1
+		fi
 	fi
 
 	install -d /usr/share/tunaos/experience-contracts
