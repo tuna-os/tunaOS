@@ -65,6 +65,11 @@ if [[ "${VARIANT}" == "marlin" ]]; then
 	CONTAINERFILE="Containerfile.arch"
 fi
 
+# Fedora-based variants use Containerfile.fedora
+if [[ "${VARIANT}" == "bonito" || "${VARIANT}" == "bonito-rawhide" || "${VARIANT}" == "hummingbird" ]]; then
+	CONTAINERFILE="Containerfile.fedora"
+fi
+
 if [[ "${VARIANT}" == "grouper" && "${FLAVOR}" == *"-asahi" ]]; then
 	# grouper's kernel decision happens in the base stage of Containerfile.ubuntu,
 	# so the asahi flavor is a full (stage-1 style) build with ENABLE_ASAHI=1,
