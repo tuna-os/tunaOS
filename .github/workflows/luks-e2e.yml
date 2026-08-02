@@ -275,9 +275,28 @@ jobs:
           # recipe's image ref. Without -E it silently falls back to parsing
           # them from the ISO filename, which has a "tunaos-" project prefix
           # the fallback doesn't account for, producing a bogus image ref.
+          # --memory 8192 (the script's default is 4096). Every cell that
+          # passes today takes fisherman's bootcDirect path: bootc reads the
+          # embedded offline store and writes the target, once. Composefs
+          # images (sailfin, marlin, flounder, gentoo) cannot: bootc has to
+          # run inside a container, so fisherman exports the image to an OCI
+          # layout, has podman copy that into a scratch store, and only then
+          # installs. That stages a 3.24 GB image three times, all of it
+          # dirty page cache flushing through dm-crypt, on a guest with
+          # 3903 MB of RAM and no swap.
+          #
+          # sailfin:gnome wedged there in run 30729902967: the guest stopped
+          # answering ssh ~15s into `bootc install` and never came back,
+          # with no OOM report, no hung-task splat and no panic on the
+          # console, the signature of a guest thrashing in reclaim rather
+          # than one being killed. The runner has 16 GB, so give the guest
+          # headroom over the image instead of a hair under it. iso-e2e.sh's
+          # own offline-store comment says the same thing: raise --memory
+          # above the image size.
           sudo -E env FISHERMAN_OVERRIDE="$FISHERMAN_OVERRIDE" \
             ./scripts/iso-e2e.sh "${ISO_PATH}" --luks \
             --output luks-out \
+            --memory 8192 \
             --timeout 1200
           # Gate = encrypted install + passphrase unlock to login. TPM2
           # auto-unlock is a POST-INSTALL step (ujust enable-luks-tpm2), tested

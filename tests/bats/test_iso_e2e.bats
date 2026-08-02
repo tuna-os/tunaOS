@@ -687,6 +687,27 @@ setup_runtime_check_stubs() {
   [ "$output" = "READY_NOT_FOUND" ]
 }
 
+@test "serial: every QEMU boot opens the console log in append mode" {
+  # `-serial file:PATH` truncates and then writes at QEMU's own offset, so
+  # once run_install tees ssh output into the same file, later console writes
+  # overwrite the transcript (and vice versa). That silently destroyed the
+  # guest console for the whole install window in run 30729902967, the one
+  # place an OOM report or hung-task splat would have been. Keep every boot
+  # on the shared append-mode chardev.
+  grep -q 'append=on' "$SCRIPT"
+  ! grep -q -- '-serial "file:${SERIAL_LOG}"' "$SCRIPT"
+  [ "$(grep -c '"${E2E_SERIAL_ARGS\[@\]}"' "$SCRIPT")" -eq 3 ]
+}
+
+@test "install: a console heartbeat outlives the ssh channel" {
+  # The install phase is where the guest can stop answering while QEMU stays
+  # up. The heartbeat reports memory/disk pressure to /dev/console from a
+  # setsid'd process, so evidence survives the ssh session dying.
+  grep -q 'TUNAOS_E2E_HEARTBEAT' "$SCRIPT"
+  grep -q 'setsid --fork /usr/local/bin/tunaos-e2e-heartbeat' "$SCRIPT"
+  grep -q 'pkill -f tunaos-e2e-heartbeat' "$SCRIPT"
+}
+
 @test "ready: serial log file growth detection" {
   run bash -c '
     log="/tmp/test-serial3.log"

@@ -382,6 +382,28 @@ LUKS_EVIDENCE_LOG="${OUTPUT_DIR}/luks-evidence.log"
 INSTALL_DISK="${OUTPUT_DIR}/install-disk.qcow2"
 QEMU_PIDFILE="${OUTPUT_DIR}/qemu.pid"
 
+# QEMU writes the guest console into SERIAL_LOG, and several code paths below
+# tee ssh output into that same file. `-serial file:PATH` opens the file
+# O_WRONLY|O_CREAT|O_TRUNC and writes at QEMU's OWN offset, so the moment a
+# tee appends, every later console write lands back in the middle of the file
+# and overwrites whatever the tee put there (and vice versa).
+#
+# That is not theoretical. run 30729902967's serial.log carries a shredded
+# `ot ok - network connectivity` line, and the guest console goes silent from
+# the first tee onward, which is exactly the window (the bootc install) where
+# an OOM report, hung-task splat or panic would have explained why the guest
+# stopped answering ssh. The evidence was overwritten, so the failure could
+# not be diagnosed from the artifact at all.
+#
+# append=on opens O_APPEND instead: both writers always land at EOF, so the
+# console and the ssh transcript interleave instead of eating each other.
+# Nothing relies on QEMU truncating: the log is rm -f'd per run below and
+# explicitly truncated before the installed boot.
+E2E_SERIAL_ARGS=(
+	-chardev "file,id=e2eserial,path=${SERIAL_LOG},append=on"
+	-serial chardev:e2eserial
+)
+
 # See the egl-headless block above: it renders GL but presents nothing, so
 # screendump has no surface and every screenshot in this repo silently fails.
 # (VNC alone does not fix screendump under GL scanout — see screenshot().)
@@ -592,7 +614,7 @@ boot_live_iso() {
 		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
-		-serial "file:${SERIAL_LOG}" \
+		"${E2E_SERIAL_ARGS[@]}" \
 		"${QEMU_GPU_ARGS[@]}" \
 		-pidfile "$QEMU_PIDFILE" \
 		-daemonize
@@ -1279,6 +1301,42 @@ EOF
 	echo "==> Uploading fisherman recipe..."
 	"${scp_cmd[@]}" "$RECIPE_LOCAL" liveuser@127.0.0.1:/home/liveuser/e2e-recipe.json
 
+	# ── Guest heartbeat, on the console rather than over ssh ─────────────
+	# The install is the one phase where the guest can stop answering while
+	# QEMU stays up, and `Timeout, server 127.0.0.1 not responding.` on its
+	# own does not say why: a wedged guest and a live guest whose sshd
+	# stalled under I/O look identical from the host. Everything else we log
+	# here comes back over the same ssh channel that just died, so it stops
+	# exactly when the interesting part starts.
+	#
+	# This writes to /dev/console (i.e. the serial log) from a process
+	# setsid'd out of the ssh session, so it keeps reporting after that
+	# channel is gone. The last line before the silence is the diagnosis:
+	# memavail collapsing means the guest is out of RAM (raise --memory),
+	# target_free collapsing means the disk is, and a heartbeat that keeps
+	# ticking through the timeout means the guest was alive all along and
+	# only sshd stalled.
+	local HB_LOCAL="${OUTPUT_DIR}/e2e-heartbeat.sh"
+	cat >"$HB_LOCAL" <<-'HBEOF'
+		#!/bin/sh
+		while :; do
+			printf 'TUNAOS_E2E_HEARTBEAT memavail_kb=%s dirty_kb=%s writeback_kb=%s target_free_kb=%s load=%s\n' \
+				"$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)" \
+				"$(awk '/^Dirty:/{print $2}' /proc/meminfo)" \
+				"$(awk '/^Writeback:/{print $2}' /proc/meminfo)" \
+				"$(df -Pk /mnt/fisherman-target 2>/dev/null | awk 'NR==2{print $4}')" \
+				"$(cut -d' ' -f1-3 /proc/loadavg)" >/dev/console 2>/dev/null
+			sleep 15
+		done
+	HBEOF
+	if "${scp_cmd[@]}" "$HB_LOCAL" liveuser@127.0.0.1:/home/liveuser/e2e-heartbeat.sh; then
+		"${ssh_cmd[@]}" "sudo install -m0755 /home/liveuser/e2e-heartbeat.sh /usr/local/bin/tunaos-e2e-heartbeat && \
+			sudo setsid --fork /usr/local/bin/tunaos-e2e-heartbeat </dev/null >/dev/null 2>&1" ||
+			echo "WARN: guest heartbeat did not start (continuing)"
+	else
+		echo "WARN: guest heartbeat could not be uploaded (continuing)"
+	fi
+
 	echo "==> Running fisherman /home/liveuser/e2e-recipe.json..."
 	# Bound with `timeout` as a safety net; the image is already local at
 	# this point so this should only cover the actual install steps, not a
@@ -1295,6 +1353,12 @@ EOF
 			return 3
 		fi
 	}
+
+	# Install is done; stop the heartbeat so it cannot bleed into the serial
+	# log the passphrase gate greps. On the failure paths above we return
+	# without this: the VM is torn down there anyway, and a heartbeat that
+	# keeps printing right up to the shutdown is the evidence we came for.
+	"${ssh_cmd[@]}" "sudo pkill -f tunaos-e2e-heartbeat" >/dev/null 2>&1 || true
 
 	if [[ "$LUKS" -eq 1 ]]; then
 		# Verify against the resulting disk state, not fisherman's log text —
@@ -1511,7 +1575,7 @@ EOF
 		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
-		-serial "file:${SERIAL_LOG}" \
+		"${E2E_SERIAL_ARGS[@]}" \
 		"${QEMU_GPU_ARGS[@]}" \
 		-pidfile "$QEMU_PIDFILE" \
 		-daemonize
@@ -1576,7 +1640,7 @@ boot_disk_image() {
 		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
-		-serial "file:${SERIAL_LOG}" \
+		"${E2E_SERIAL_ARGS[@]}" \
 		"${QEMU_GPU_ARGS[@]}" \
 		-pidfile "$QEMU_PIDFILE" \
 		-daemonize
