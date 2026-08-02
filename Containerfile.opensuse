@@ -305,6 +305,8 @@ RUN bootc container lint
 # do not leak them into KDE, Niri, or XFCE targets.
 FROM desktop AS gnome
 COPY --from=common /system_files/bluefin /
+RUN if command -v glib-compile-schemas &>/dev/null; then glib-compile-schemas /usr/share/glib-2.0/schemas; fi && \
+    if command -v dconf &>/dev/null; then dconf update; fi
 FROM desktop AS kde
 FROM desktop AS niri
 FROM desktop AS xfce
