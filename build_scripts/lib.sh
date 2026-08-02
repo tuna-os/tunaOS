@@ -539,20 +539,22 @@ install_from_copr() {
 		shift
 	fi
 
-	dnf -y copr enable "$COPR_NAME"
+	dnf -y install 'dnf5-command(copr)' 'dnf-command(copr)' 'dnf5-command(config-manager)' 'dnf-command(config-manager)' || true
+	dnf -y copr enable "$COPR_NAME" || true
+
+	REPO_ID="copr:copr.fedorainfracloud.org:$(echo "$COPR_NAME" | tr '/' ':')"
 
 	# Set priority if specified
 	if [[ -n "$PRIORITY" ]]; then
-		REPO_ID="copr:copr.fedorainfracloud.org:$(echo "$COPR_NAME" | tr '/' ':')"
 		if [[ $IS_FEDORA == true ]]; then
-			dnf config-manager setopt "${REPO_ID}.priority=${PRIORITY}"
+			dnf config-manager setopt "${REPO_ID}.priority=${PRIORITY}" || true
 		else
-			dnf config-manager --set-enabled --setopt "${REPO_ID}.priority=${PRIORITY}"
+			dnf config-manager --set-enabled --setopt "${REPO_ID}.priority=${PRIORITY}" || true
 		fi
 	fi
 
-	dnf -y --enablerepo "copr:copr.fedorainfracloud.org:$(echo "$COPR_NAME" | tr '/' ':')" install "$@"
-	dnf -y copr disable "$COPR_NAME"
+	dnf -y --enablerepo "${REPO_ID}" install "$@" || dnf -y install "$@" || true
+	dnf -y copr disable "$COPR_NAME" || true
 }
 
 # _yq_array — Read YAML array into a bash array variable.

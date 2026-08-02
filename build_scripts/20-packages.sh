@@ -48,10 +48,13 @@ else
 fi
 
 # Tailscale — fetch repo file directly into /etc/yum.repos.d/
+local_ts_ver="${MAJOR_VERSION_NUMBER:-10}"
+if [[ ! "$local_ts_ver" =~ ^[0-9]+$ ]]; then local_ts_ver=10; fi
+
 if [[ $IS_FEDORA == true ]]; then
 	curl -fsSL -o /etc/yum.repos.d/tailscale.repo "https://pkgs.tailscale.com/stable/fedora/tailscale.repo" || true
 else
-	curl -fsSL -o /etc/yum.repos.d/tailscale.repo "https://pkgs.tailscale.com/stable/centos/${MAJOR_VERSION_NUMBER}/tailscale.repo" || true
+	curl -fsSL -o /etc/yum.repos.d/tailscale.repo "https://pkgs.tailscale.com/stable/centos/${local_ts_ver}/tailscale.repo" || true
 fi
 sed -i 's/enabled=1/enabled=0/g' /etc/yum.repos.d/tailscale.repo 2>/dev/null || true
 dnf -y --enablerepo "tailscale-stable" install tailscale || true
