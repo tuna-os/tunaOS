@@ -1,9 +1,2 @@
-# Blacksmith-hosted runner labels. actionlint only knows GitHub's own labels
-# and treats anything else as a typo, so without this every workflow moved to
-# Blacksmith fails `Lint (actionlint)` with "label ... is unknown".
-self-hosted-runner:
-  labels:
-    - blacksmith-2vcpu-ubuntu-2404
-    - blacksmith-4vcpu-ubuntu-2404
-    - blacksmith-8vcpu-ubuntu-2404
-    - blacksmith-16vcpu-ubuntu-2404
+# Standard GitHub-hosted runner configuration.
+# All jobs run on GitHub-hosted runners (ubuntu-latest, ubuntu-24.04, ubuntu-24.04-arm).

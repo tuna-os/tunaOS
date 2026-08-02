@@ -365,6 +365,8 @@ else
 				fi
 			fi
 		fi
+	fi
+
 	# ── Branding & Asset Contract ──
 	# Wallpapers: shipping only upstream artwork means a user sees upstream background on login.
 	if ! compgen -G "/usr/share/backgrounds/tunaos*" >/dev/null && \
