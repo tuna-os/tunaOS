@@ -43,6 +43,7 @@ else
 
 	# OS Detection Flags
 	IS_FEDORA=false
+	IS_HUMMINGBIRD=false
 	IS_RHEL=false
 	IS_ALMALINUX=false
 	IS_ALMALINUXKITTEN=false
@@ -53,7 +54,8 @@ else
 	IS_OPENSUSE=false
 	IS_GENTOO=false
 
-	[[ "${BASE_IMAGE,,}" == *"fedora"* || "${BASE_IMAGE,,}" == *"hummingbird"* ]] && IS_FEDORA=true && IMAGE_NAME="bonito" && IMAGE_PRETTY_NAME="Bonito"
+	[[ "${BASE_IMAGE,,}" == *"hummingbird"* ]] && IS_HUMMINGBIRD=true && IMAGE_NAME="hummingbird" && IMAGE_PRETTY_NAME="Hummingbird"
+	[[ "${BASE_IMAGE,,}" == *"fedora"* && "${BASE_IMAGE,,}" != *"hummingbird"* ]] && IS_FEDORA=true && IMAGE_NAME="bonito" && IMAGE_PRETTY_NAME="Bonito"
 	[[ "${BASE_IMAGE,,}" == *"red hat"* || "${BASE_IMAGE,,}" == *"rhel"* || "${BASE_IMAGE,,}" == *"redhat"* ]] && IS_RHEL=true && IMAGE_NAME="redfin" && IMAGE_PRETTY_NAME="Redfin"
 	[[ "${BASE_IMAGE,,}" == *"almalinux"* && "${BASE_IMAGE,,}" != *"-kitten"* ]] && IS_ALMALINUX=true && IMAGE_NAME="albacore" && IMAGE_PRETTY_NAME="Albacore"
 	[[ "${BASE_IMAGE,,}" == *"-kitten"* ]] && IS_ALMALINUXKITTEN=true && IMAGE_NAME="yellowfin" && IMAGE_PRETTY_NAME="Yellowfin"
@@ -107,6 +109,7 @@ fi
 export MAJOR_VERSION_NUMBER
 export BASE_IMAGE
 export IS_FEDORA
+export IS_HUMMINGBIRD
 export IS_RHEL
 export IS_ALMALINUX
 export IS_ALMALINUXKITTEN

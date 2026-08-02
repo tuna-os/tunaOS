@@ -123,7 +123,18 @@ if dnf versionlock --help >/dev/null 2>&1; then
 	dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt || true
 fi
 
-if [[ $IS_FEDORA == true ]]; then
+if [[ $IS_HUMMINGBIRD == true ]]; then
+	echo "Hummingbird base detected; using --skip-unavailable for base packages..."
+	dnf -y install --skip-unavailable \
+		buildah \
+		podman \
+		skopeo \
+		systemd-container \
+		btrfs-progs \
+		gcc \
+		gcc-c++ \
+		just || true
+elif [[ $IS_FEDORA == true ]]; then
 	FEDORA_VER="$(rpm -E %fedora)"
 	if [[ -z "${FEDORA_VER}" || "${FEDORA_VER}" == "%fedora" ]]; then
 		FEDORA_VER="rawhide"
