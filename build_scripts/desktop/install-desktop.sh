@@ -278,7 +278,7 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" ]]; then
 			[[ -n "$exc" ]] && _TD_EXCL_ARGS+=("-x" "$exc")
 		done
 		# shellcheck disable=SC2086 # _TD_GROUP_OPTS may be empty or contain flags
-		dnf group install -y ${_TD_GROUP_OPTS} "${_TD_EXCL_ARGS[@]}" "${_TD_GROUPS[@]}"
+		dnf group install -y --skip-unavailable ${_TD_GROUP_OPTS} "${_TD_EXCL_ARGS[@]}" "${_TD_GROUPS[@]}" || true
 	fi
 
 	# Install packages
@@ -290,7 +290,11 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" ]]; then
 		for exc in "${_TD_EXCLUDES[@]}"; do
 			[[ -n "$exc" ]] && _TD_EXCL_ARGS+=("-x" "$exc")
 		done
-		dnf_retry -y install "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}"
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
+			dnf_retry -y --skip-unavailable install "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}" || install_available "${_TD_PKGS[@]}"
+		else
+			dnf_retry -y install "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}"
+		fi
 	fi
 
 	# COPR packages (EL10 primarily)
