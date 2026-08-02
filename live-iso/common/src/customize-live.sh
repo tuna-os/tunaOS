@@ -205,19 +205,34 @@ cat >/etc/containers/storage.conf.d/99-tbox-offline-store.conf <<DROPEOF
 additionalimagestores = ${STORE_LIST}
 DROPEOF
 
-# Second, independent mechanism — required for the bootcViaContainer path.
-# A container gets its /etc from the IMAGE, not from the live root, and
-# /var/lib/superiso-store is not present inside it at all, so fisherman's
-# in-container `bootc` cannot resolve containers-storage:<ref> no matter
-# what the live root's config says. mounts.conf bind-mounts the store into
-# every container podman starts. This is the half of dakota-iso's pattern
-# (_upstream-snapshots/dakota-iso/live/src/configure-live.sh) that was not
-# carried over when this script was written; its comment there states the
-# same reason. bootcDirect never needed it, which is why yellowfin:xfce
-# passed while every bootcViaContainer cell failed.
-cat >/etc/containers/mounts.conf <<'MOUNTSEOF'
-/var/lib/superiso-store:/var/lib/superiso-store
-MOUNTSEOF
+# DO NOT add /var/lib/superiso-store to /etc/containers/mounts.conf.
+#
+# An earlier revision did, on the theory that a container gets its /etc from
+# the IMAGE and therefore cannot see the store, and that mounts.conf
+# "bind-mounts the store into every container podman starts". It does not.
+# mounts.conf is containers/common's *subscriptions* mechanism: for a
+# directory source it walks the tree, reads every file into memory, and
+# writes a full copy into the container's runroot
+# (/run/containers/storage/overlay-containers/<id>/userdata/<dest>) before
+# bind-mounting that copy. On live media the runroot is a tmpfs, so an entry
+# there duplicates the whole payload store into RAM twice over — once as the
+# reader's buffers, once as tmpfs pages.
+#
+# That is what killed sailfin:gnome twice. Run 30730744132: `Out of memory:
+# Killed process 2978 (podman) anon-rss:7147396kB` on an 8192 MiB guest, read
+# as OCI-copy pressure at the time. Run 30731534696, after the guest grew to
+# 10240 MiB and gained swap: `Failed to mount subscriptions, skipping entry in
+# /etc/containers/mounts.conf: ... /userdata/var/lib/superiso-store/overlay/
+# .../usr/lib/firmware/nvidia/.../gsp-570.144.bin.xz: no space left on
+# device`, then the container failed to start at all because /run was full.
+#
+# It is also unnecessary: fisherman bind-mounts the store itself when a path
+# needs it (appendImageStoreArgs in internal/install/bootc.go adds
+# `-v /var/lib/superiso-store:/var/lib/superiso-store:ro` plus a generated
+# storage.conf), and the composefs path does not need it at all — bootc reads
+# the exported OCI layout at /run/fisherman/oci-cache. The storage.conf and
+# drop-in above are what the *live root's* podman needs; the container's view
+# is fisherman's job.
 
 # Dev/E2E media only: the normal published-image policy keeps SSH disabled.
 # tacklebox creates liveuser during boot, so install a oneshot that sets its

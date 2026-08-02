@@ -395,6 +395,15 @@ QEMU_PIDFILE="${OUTPUT_DIR}/qemu.pid"
 #
 # It was still growing when the kernel killed it, i.e. raising --memory alone
 # only moves the cliff: the guest has to have somewhere to push cold pages.
+#
+# CORRECTION (tunaOS#972). That allocation was not the OCI copy. The live root
+# listed /var/lib/superiso-store in /etc/containers/mounts.conf, and podman's
+# mounts.conf handling reads the entire source tree into memory and copies it
+# into the container's runroot — a tmpfs here — so every install container
+# duplicated the payload store twice over. Run 30731534696 (10240 MiB + this
+# swap disk) proved it by failing the same way with ENOSPC on /run instead of
+# an OOM. customize-live.sh no longer writes that file. The swap disk stays as
+# cheap headroom for the real staging copies, but it is no longer load-bearing.
 # The live root cannot hold a swapfile (its writable layer is a tmpfs, so a
 # swapfile there is memory backed by memory), and the target disk is about to
 # be repartitioned, so swap needs a disk of its own. Sparse qcow2: it only

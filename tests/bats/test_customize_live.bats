@@ -148,6 +148,18 @@ detect() {
   [ "$output" -eq 2 ]
 }
 
+# tunaOS#972: mounts.conf is the subscriptions mechanism, not a bind mount —
+# containers/common copies the whole source directory into the container's
+# runroot, which on live media is a tmpfs. Listing the payload store there
+# duplicated a 3 GB image into RAM and took out sailfin:gnome twice (OOM in run
+# 30730744132, ENOSPC on /run in run 30731534696). fisherman bind-mounts the
+# store itself when a path needs it, so this file must not be written.
+@test "customize-live.sh: never lists the offline store in mounts.conf" {
+  # The comment explaining why may name the file; a write to it must not exist.
+  run grep -n '^[^#]*>[[:space:]]*[^ ]*mounts\.conf' "${SCRIPT}"
+  [ "$status" -ne 0 ]
+}
+
 @test "customize-live.sh: sources the matching desktop adapter" {
   run grep 'desktop-\${DESKTOP}.sh' "${SCRIPT}"
   [ "$status" -eq 0 ]
