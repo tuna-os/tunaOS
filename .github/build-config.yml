@@ -532,11 +532,12 @@ variants:
         build_iso: true
         build_qcow2: false
   # ── Hummingbird ────────────────────────────────────────────────────────────
-  # Experimental minimal Fedora 44 base image (no desktop environment).
+  # Fedora Hummingbird: container-native, hardened bootc distribution
+  # (Konflux hermetic build model, CKI ARK kernel).
   - id: hummingbird
     emoji: "🐦"
-    description: "Fedora Hummingbird minimal base"
-    base_image: "quay.io/fedora/fedora-bootc:44"
+    description: "Fedora Hummingbird (bootc container-native OS)"
+    base_image: "quay.io/hummingbird-community/bootc-os:latest"
     platforms: ["linux/amd64", "linux/arm64"]
     flavors:
       - id: base
