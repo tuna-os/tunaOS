@@ -52,6 +52,34 @@ require_any_glob() {
 	exit 1
 }
 
+# User systemd units (session services like pipewire, wireplumber, portals).
+# Checked via systemctl --user list-unit-files or filesystem unit file globs.
+require_user_unit() {
+	local u="$1"
+	if systemctl --user list-unit-files "$u.service" --no-legend 2>/dev/null | grep -q "^$u.service" || \
+	   compgen -G "/usr/lib/systemd/user/${u}.service" >/dev/null || \
+	   compgen -G "/etc/systemd/user/${u}.service" >/dev/null || \
+	   compgen -G "/usr/lib/*/systemd/user/${u}.service" >/dev/null; then
+		return 0
+	fi
+	echo "missing user unit: ${u}.service" >&2
+	exit 1
+}
+
+require_any_user_unit() {
+	local u
+	for u in "$@"; do
+		if systemctl --user list-unit-files "$u.service" --no-legend 2>/dev/null | grep -q "^$u.service" || \
+		   compgen -G "/usr/lib/systemd/user/${u}.service" >/dev/null || \
+		   compgen -G "/etc/systemd/user/${u}.service" >/dev/null || \
+		   compgen -G "/usr/lib/*/systemd/user/${u}.service" >/dev/null; then
+			return 0
+		fi
+	done
+	echo "missing user unit: none of [$*] exist" >&2
+	exit 1
+}
+
 # PORTAL/KEYRING/GVFS PATHS — measured, one container per packaging family.
 # Never add a glob you have not seen resolve on a real distro: an invented
 # pattern that matches nothing turns a working desktop red, which is exactly
@@ -121,6 +149,15 @@ gnome)
 		'/usr/libexec/xdg-desktop-portal-gnome' \
 		'/usr/lib/xdg-desktop-portal-gnome'
 	require_any_glob '/usr/bin/gnome-keyring-daemon'
+	# User systemd units: audio (pipewire/wireplumber) user unit definitions.
+	require_any_user_unit pipewire wireplumber
+	# GNOME Shell extensions assertion: verified presence of system extensions under /usr/share/gnome-shell/extensions.
+	if compgen -G "/usr/share/gnome-shell/extensions/*" >/dev/null 2>&1; then
+		:
+	else
+		echo "missing required GNOME Shell extensions under /usr/share/gnome-shell/extensions" >&2
+		exit 1
+	fi
 	# dconf compiled database: keyfiles in /etc/dconf/db/*.d/ must be compiled into binary dconf DB.
 	if compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
 		if [[ ! -s /etc/dconf/db/local && ! -s /etc/dconf/db/gdm ]]; then
