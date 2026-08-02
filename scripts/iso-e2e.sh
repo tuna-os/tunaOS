@@ -1481,6 +1481,26 @@ EOF
 				echo "karg appended: $f"
 				found=1
 			done
+			if [ "$found" = 1 ]; then
+				# The ESP is the only evidence of whether the install
+				# produced a *bootable* disk, and it is gone the moment
+				# this VM powers off. sailfin (composefs + systemd-boot)
+				# gets no NVRAM entry: bootctl refuses to touch efivars
+				# from inside the install container ("Not booted with EFI
+				# or running in a container, skipping EFI variable
+				# modifications"), so the firmware can only find it via
+				# the removable fallback \EFI\BOOT\BOOTX64.EFI. If that
+				# file is missing, the disk is unbootable no matter what
+				# the boot order says, and the failure looks identical to
+				# a boot-order bug from the serial log alone.
+				echo "--- ESP contents ($p) ---"
+				find /mnt/tbx-bls -maxdepth 3 2>/dev/null | sort || ls -lR /mnt/tbx-bls || true
+				if [ -f /mnt/tbx-bls/EFI/BOOT/BOOTX64.EFI ]; then
+					echo "esp: removable fallback present (EFI/BOOT/BOOTX64.EFI)"
+				else
+					echo "WARN: esp has NO EFI/BOOT/BOOTX64.EFI; firmware has no fallback to boot"
+				fi
+			fi
 			umount /mnt/tbx-bls
 			[ "$found" = 1 ] && break
 		done
@@ -1523,13 +1543,27 @@ EOF
 		# No TPM here: the passphrase gate doesn't need one, and the
 		# install-phase swtpm has already exited (its socket is gone). TPM
 		# auto-unlock is the separate post-install test.
+		#
+		# bootindex=0 on the disk (see also boot_installed) is what makes
+		# "boot the thing we just installed" deterministic. Both boots share
+		# one OVMF_VARS file, so the installed boot inherits the BootOrder
+		# the live-ISO boot left behind, including OVMF's "EFI Internal
+		# Shell" entry. An install that writes an EFI variable of its own
+		# (bootupd/grub2 variants call efibootmgr, which prepends) lands
+		# ahead of the shell and boots; an install that cannot (sailfin:
+		# bootctl skips efivars inside the install container) is left with
+		# only the auto-enumerated disk option, which BDS appends *after*
+		# the shell, so the firmware drops to `Shell>` and the passphrase
+		# prompt never appears (run 30732193680). bootindex publishes a
+		# QEMU fw_cfg boot order that OVMF applies over the stale NVRAM,
+		# putting this disk first and leaving the shell as the last resort.
 		reset_qemu_sockets
 		"$QEMU" -name "tunaos-iso-e2e-installed" -machine pc -cpu "$CPU_ARG" \
 			-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
 			-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
 			-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 			-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
-			-device virtio-blk-pci,drive=disk \
+			-device virtio-blk-pci,drive=disk,bootindex=0 \
 			-netdev "user,id=net0" -device virtio-net-pci,netdev=net0 \
 			-monitor "unix:${MONITOR_SOCK},server,nowait" \
 			-serial "unix:${FB_SERIAL},server,nowait" \
@@ -1621,7 +1655,9 @@ EOF
 	fi
 
 	echo "==> Booting installed system..."
-	# Boot from the install disk (remove cdrom)
+	# Boot from the install disk (remove cdrom). bootindex=0 overrides the
+	# BootOrder the live-ISO boot left in the shared OVMF_VARS; see the
+	# LUKS passphrase gate above for why the shell wins without it.
 	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
 	reset_qemu_sockets
 	"$QEMU" \
@@ -1635,7 +1671,7 @@ EOF
 		-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
-		-device virtio-blk-pci,drive=disk \
+		-device virtio-blk-pci,drive=disk,bootindex=0 \
 		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \

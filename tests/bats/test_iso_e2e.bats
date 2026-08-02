@@ -729,6 +729,30 @@ setup_runtime_check_stubs() {
   [ "$(grep -c 'drive=swapdisk' "$SCRIPT")" -eq 1 ]
 }
 
+@test "installed boot: the disk is pinned first in the firmware boot order" {
+  # The live-ISO boot and the installed boot share one OVMF_VARS file, so the
+  # installed boot inherits OVMF's "EFI Internal Shell" NVRAM entry. Variants
+  # whose install writes its own EFI variable (efibootmgr prepends) boot
+  # anyway; sailfin's composefs/systemd-boot install cannot write efivars from
+  # inside the install container, so its auto-enumerated disk option lands
+  # after the shell and the guest sits at `Shell>` (run 30732193680).
+  # bootindex publishes a QEMU fw_cfg boot order OVMF applies over the stale
+  # NVRAM. Both post-install boots need it; the live boot must NOT have it
+  # (the ISO has to win there).
+  [ "$(grep -c 'device virtio-blk-pci,drive=disk,bootindex=0' "$SCRIPT")" -eq 2 ]
+  grep -q -- '-device virtio-blk-pci,drive=disk \\' "$SCRIPT"
+}
+
+@test "installed boot: the ESP is dumped before the install VM is destroyed" {
+  # Whether the install produced a bootable disk is only knowable from the
+  # ESP, and the ESP is unreachable once the live guest powers off. Dump it
+  # while the BLS kargs are being appended, and say so explicitly when the
+  # removable fallback the firmware needs is missing.
+  grep -q 'ESP contents' "$SCRIPT"
+  grep -q 'esp: removable fallback present' "$SCRIPT"
+  grep -q 'WARN: esp has NO EFI/BOOT/BOOTX64.EFI' "$SCRIPT"
+}
+
 @test "install: the LUKS workflow gives the guest more RAM than the image" {
   # The composefs install path stages the image through podman, so the guest
   # needs headroom over the image, not a hair under it. Keep the LUKS job's
