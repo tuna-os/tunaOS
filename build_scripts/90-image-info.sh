@@ -43,6 +43,7 @@ sailfin) CODE_NAME="Istiophorus platypterus" ;;
 guppy) CODE_NAME="Poecilia reticulata" ;;
 grouper) CODE_NAME="Epinephelus marginatus" ;;
 marlin) CODE_NAME="Makaira nigricans" ;;
+hummingbird) CODE_NAME="Trochilidae" ;;
 flounder | flounder-sid) CODE_NAME="Platichthys flesus" ;;
 *)
 	echo "ERROR: no scientific fish codename defined for variant: ${IMAGE_NAME}" >&2
@@ -68,6 +69,7 @@ RECIPE_FILE="/etc/bootc-installer/recipe.json"
 if [[ -f "${RECIPE_FILE}" ]]; then
 	BASE_OS_NAME="Enterprise Linux"
 	if [[ "$IS_FEDORA" == true ]]; then BASE_OS_NAME="Fedora"; fi
+	if [[ "$IS_HUMMINGBIRD" == true ]]; then BASE_OS_NAME="Fedora Hummingbird"; fi
 	if [[ "$IS_ALMALINUX" == true ]]; then BASE_OS_NAME="AlmaLinux"; fi
 	if [[ "$IS_ALMALINUXKITTEN" == true ]]; then BASE_OS_NAME="AlmaLinux Kitten"; fi
 	if [[ "$IS_CENTOS" == true ]]; then BASE_OS_NAME="CentOS Stream"; fi
