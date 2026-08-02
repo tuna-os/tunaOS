@@ -880,6 +880,15 @@ variants:
       - id: kde-cachyos
         stage: 3
         build_image: true
+      - id: cosmic-cachyos
+        stage: 3
+        build_image: true
+      - id: niri-cachyos
+        stage: 3
+        build_image: true
+      - id: xfce-cachyos
+        stage: 3
+        build_image: true
 
   # ── Debian ─────────────────────────────────────────────────────────────────
   # Flounder: Debian Trixie (13) stable. Uses Containerfile.debian.
