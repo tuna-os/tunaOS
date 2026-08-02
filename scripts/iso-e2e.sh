@@ -382,6 +382,31 @@ LUKS_EVIDENCE_LOG="${OUTPUT_DIR}/luks-evidence.log"
 INSTALL_DISK="${OUTPUT_DIR}/install-disk.qcow2"
 QEMU_PIDFILE="${OUTPUT_DIR}/qemu.pid"
 
+# A dedicated swap disk for the live guest, attached only to the install boot.
+#
+# The composefs install path cannot use fisherman's bootcDirect shortcut: bootc
+# has to run in a container, so podman first copies the exported OCI layout
+# into a scratch store, and podman's anonymous memory during that copy scales
+# with the image, not with a fixed buffer. Measured on run 30730744132
+# (sailfin:gnome, 8192 MiB guest, no swap):
+#
+#   Out of memory: Killed process 2978 (podman) total-vm:9250052kB,
+#   anon-rss:7147396kB ... Free swap = 0kB / Total swap = 0kB
+#
+# It was still growing when the kernel killed it, i.e. raising --memory alone
+# only moves the cliff: the guest has to have somewhere to push cold pages.
+# The live root cannot hold a swapfile (its writable layer is a tmpfs, so a
+# swapfile there is memory backed by memory), and the target disk is about to
+# be repartitioned, so swap needs a disk of its own. Sparse qcow2: it only
+# occupies what the guest actually pages out.
+#
+# Addressed by serial (/dev/disk/by-id/virtio-e2eswap), never by /dev/vdX: the
+# fisherman recipe installs to /dev/vda and this disk must never be confused
+# with it.
+SWAP_DISK="${OUTPUT_DIR}/swap-disk.qcow2"
+SWAP_DISK_SERIAL="e2eswap"
+SWAP_DISK_BYID="/dev/disk/by-id/virtio-${SWAP_DISK_SERIAL}"
+
 # QEMU writes the guest console into SERIAL_LOG, and several code paths below
 # tee ssh output into that same file. `-serial file:PATH` opens the file
 # O_WRONLY|O_CREAT|O_TRUNC and writes at QEMU's OWN offset, so the moment a
@@ -584,6 +609,16 @@ boot_live_iso() {
 		fi
 	fi
 
+	# See SWAP_DISK above. Attached to the live/install boot only; the
+	# installed system is booted without it and never records it in fstab.
+	if [[ ! -f "$SWAP_DISK" ]]; then
+		echo "==> Creating 8G swap disk: ${SWAP_DISK}"
+		if ! qemu-img create -f qcow2 "$SWAP_DISK" 8G; then
+			echo "ERROR: qemu-img create failed for the swap disk" >&2
+			return 1
+		fi
+	fi
+
 	# Kernel cmdline override: append `console=ttyS0` so the live env's
 	# tunaos-live-ready.service marker reaches the serial log. We do this
 	# via the OVMF boot menu's cmdline editing path, which the ISO's
@@ -611,6 +646,8 @@ boot_live_iso() {
 		-device scsi-cd,drive=iso \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 		-device virtio-blk-pci,drive=disk \
+		-drive "if=none,id=swapdisk,file=${SWAP_DISK},format=qcow2" \
+		-device "virtio-blk-pci,drive=swapdisk,serial=${SWAP_DISK_SERIAL}" \
 		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
@@ -1301,6 +1338,21 @@ EOF
 	echo "==> Uploading fisherman recipe..."
 	"${scp_cmd[@]}" "$RECIPE_LOCAL" liveuser@127.0.0.1:/home/liveuser/e2e-recipe.json
 
+	# ── Swap on, before anything allocates ───────────────────────────────
+	# See SWAP_DISK: podman's copy of the exported OCI layout into the
+	# install-time scratch store allocates on the order of the image size,
+	# and a live guest has no swap at all, so the OOM killer takes podman
+	# and fisherman reports the install as `signal: killed`. Give the kernel
+	# somewhere to page those cold buffers before fisherman starts.
+	#
+	# Best-effort by design: a guest without the disk (an older ISO booted by
+	# hand, a future topology change) should still install, just with the old
+	# no-swap headroom. Never write this into the guest's fstab: the disk is
+	# attached to the install boot only.
+	echo "==> Enabling guest swap on ${SWAP_DISK_BYID}..."
+	"${ssh_cmd[@]}" "sudo sh -c 'test -b ${SWAP_DISK_BYID} && mkswap -L tunaos-e2e-swap ${SWAP_DISK_BYID} >/dev/null && swapon ${SWAP_DISK_BYID}' && free -m" ||
+		echo "WARN: guest swap not enabled (continuing without it)"
+
 	# ── Guest heartbeat, on the console rather than over ssh ─────────────
 	# The install is the one phase where the guest can stop answering while
 	# QEMU stays up, and `Timeout, server 127.0.0.1 not responding.` on its
@@ -1313,15 +1365,18 @@ EOF
 	# setsid'd out of the ssh session, so it keeps reporting after that
 	# channel is gone. The last line before the silence is the diagnosis:
 	# memavail collapsing means the guest is out of RAM (raise --memory),
-	# target_free collapsing means the disk is, and a heartbeat that keeps
+	# memavail AND swapfree both collapsing means it is genuinely out of
+	# memory rather than merely short of it (run 30730744132 killed podman
+	# that way), target_free collapsing means the disk is, and one that keeps
 	# ticking through the timeout means the guest was alive all along and
 	# only sshd stalled.
 	local HB_LOCAL="${OUTPUT_DIR}/e2e-heartbeat.sh"
 	cat >"$HB_LOCAL" <<-'HBEOF'
 		#!/bin/sh
 		while :; do
-			printf 'TUNAOS_E2E_HEARTBEAT memavail_kb=%s dirty_kb=%s writeback_kb=%s target_free_kb=%s load=%s\n' \
+			printf 'TUNAOS_E2E_HEARTBEAT memavail_kb=%s swapfree_kb=%s dirty_kb=%s writeback_kb=%s target_free_kb=%s load=%s\n' \
 				"$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)" \
+				"$(awk '/^SwapFree:/{print $2}' /proc/meminfo)" \
 				"$(awk '/^Dirty:/{print $2}' /proc/meminfo)" \
 				"$(awk '/^Writeback:/{print $2}' /proc/meminfo)" \
 				"$(df -Pk /mnt/fisherman-target 2>/dev/null | awk 'NR==2{print $4}')" \

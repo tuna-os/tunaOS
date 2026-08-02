@@ -706,6 +706,37 @@ setup_runtime_check_stubs() {
   grep -q 'TUNAOS_E2E_HEARTBEAT' "$SCRIPT"
   grep -q 'setsid --fork /usr/local/bin/tunaos-e2e-heartbeat' "$SCRIPT"
   grep -q 'pkill -f tunaos-e2e-heartbeat' "$SCRIPT"
+  # Swap exhaustion is the other half of the diagnosis, so the heartbeat has
+  # to report it alongside MemAvailable.
+  grep -q 'swapfree_kb' "$SCRIPT"
+}
+
+@test "install: the live guest gets a swap disk, addressed by serial" {
+  # podman's copy of the exported OCI layout into the install-time scratch
+  # store allocates on the order of the image size. With no swap the kernel
+  # can only kill it: run 30730744132 lost podman at anon-rss 7147396kB on
+  # an 8192 MiB guest. The swap disk is attached to the install boot and
+  # addressed by /dev/disk/by-id, never /dev/vdX, because the recipe installs to
+  # /dev/vda and the two must never be confused.
+  grep -q 'SWAP_DISK="${OUTPUT_DIR}/swap-disk.qcow2"' "$SCRIPT"
+  grep -q 'qemu-img create -f qcow2 "\$SWAP_DISK" 8G' "$SCRIPT"
+  grep -q 'serial=${SWAP_DISK_SERIAL}' "$SCRIPT"
+  grep -q 'SWAP_DISK_BYID="/dev/disk/by-id/virtio-${SWAP_DISK_SERIAL}"' "$SCRIPT"
+  grep -q "mkswap -L tunaos-e2e-swap" "$SCRIPT"
+  grep -q "swapon \${SWAP_DISK_BYID}" "$SCRIPT"
+  # Install boot only: the installed system must never see it (no fstab
+  # entry, no dangling swap device on the post-install boots).
+  [ "$(grep -c 'drive=swapdisk' "$SCRIPT")" -eq 1 ]
+}
+
+@test "install: the LUKS workflow gives the guest more RAM than the image" {
+  # The composefs install path stages the image through podman, so the guest
+  # needs headroom over the image, not a hair under it. Keep the LUKS job's
+  # --memory above the script default and the recipe's disk pinned to vda so
+  # the swap disk can never become the install target.
+  local wf="${REPO_ROOT}/.github/workflows/luks-e2e.yml"
+  grep -q -- '--memory 10240' "$wf"
+  grep -q '"disk": "/dev/vda"' "$SCRIPT"
 }
 
 @test "ready: serial log file growth detection" {

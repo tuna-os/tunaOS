@@ -275,7 +275,7 @@ jobs:
           # recipe's image ref. Without -E it silently falls back to parsing
           # them from the ISO filename, which has a "tunaos-" project prefix
           # the fallback doesn't account for, producing a bogus image ref.
-          # --memory 8192 (the script's default is 4096). Every cell that
+          # --memory 10240 (the script's default is 4096). Every cell that
           # passes today takes fisherman's bootcDirect path: bootc reads the
           # embedded offline store and writes the target, once. Composefs
           # images (sailfin, marlin, flounder, gentoo) cannot: bootc has to
@@ -293,10 +293,18 @@ jobs:
           # headroom over the image instead of a hair under it. iso-e2e.sh's
           # own offline-store comment says the same thing: raise --memory
           # above the image size.
+          #
+          # 8192 was not enough, and the heartbeat added with it caught why:
+          # the copy allocates on the order of the image, so run 30730744132
+          # died with `Out of memory: Killed process 2978 (podman)
+          # anon-rss:7147396kB` and `Total swap = 0kB`; podman was still
+          # growing when the kernel picked it. 10240 keeps QEMU well inside
+          # the runner's 16 GB while iso-e2e.sh attaches a swap disk to the
+          # install boot, so an overshoot pages out instead of being killed.
           sudo -E env FISHERMAN_OVERRIDE="$FISHERMAN_OVERRIDE" \
             ./scripts/iso-e2e.sh "${ISO_PATH}" --luks \
             --output luks-out \
-            --memory 8192 \
+            --memory 10240 \
             --timeout 1200
           # Gate = encrypted install + passphrase unlock to login. TPM2
           # auto-unlock is a POST-INSTALL step (ujust enable-luks-tpm2), tested
