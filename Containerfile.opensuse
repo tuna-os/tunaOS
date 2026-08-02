@@ -148,7 +148,18 @@ RUN mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var && \
     ln -sT var/opt /opt && ln -sT var/mnt /mnt && \
     ln -sT var/home /home && ln -sT ../var/usrlocal /usr/local && \
     for d in /var/* /var/.[!.]*; do [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done && \
-    mkdir -p /var/tmp
+    # The /var targets of the aliasing symlinks above must EXIST, both in the
+    # image and at runtime. Sailfin shipped them dangling, so anything that
+    # did `mkdir /mnt` got EEXIST (mkdir on a dangling symlink), which is how
+    # the live-ISO E2E died: fisherman's "creating mount point
+    # /mnt/fisherman-target: mkdir /mnt: file exists" (defect 3 of tunaOS#953).
+    # Create them here for the image (the live ISO's /var comes straight from
+    # it) and declare them in tmpfiles.d so they survive bootc's /var reset,
+    # identical to Containerfile.debian / Containerfile.arch.
+    mkdir -p /var/tmp /var/mnt /var/home /var/opt /var/srv /var/roothome \
+        /var/usrlocal && \
+    printf 'd /var/opt 0755 root root -\nd /var/home 0755 root root -\nd /var/srv 0755 root root -\nd /var/mnt 0755 root root -\nd /var/usrlocal 0755 root root -\nd /var/roothome 0700 root root -\nd /var/tmp 1777 root root -\nd /run/media 0755 root root -\n' \
+        > /usr/lib/tmpfiles.d/bootc-base-dirs.conf
 RUN cp -rn /usr/etc/. /etc/ 2>/dev/null; rm -rf /usr/etc
 RUN printf '# NTP pool\npool pool.ntp.org iburst\n\ndriftfile /var/lib/chrony/drift\nmakestep 1.0 3\nrtcsync\n' > /etc/chrony.conf
 RUN printf 'd /var/lib/chrony 0750 chrony chrony\n' >> /usr/lib/tmpfiles.d/chrony.conf
@@ -210,7 +221,8 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 # layout after the install so bootc lint passes (identical to the system stage).
 RUN zypper clean -a 2>/dev/null || true
 RUN set -x && rm -rf /boot /home /root /usr/local /srv /opt /mnt /var /ostree && \
-    mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var /var/tmp && \
+    mkdir -p /sysroot/ostree /boot /usr/lib/ostree /var /var/tmp /var/mnt \
+        /var/home /var/opt /var/srv /var/roothome /var/usrlocal && \
     ln -sT sysroot/ostree /ostree && \
     ln -sT var/roothome /root && ln -sT var/srv /srv && \
     ln -sT var/opt /opt && ln -sT var/mnt /mnt && \
