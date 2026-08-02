@@ -35,7 +35,11 @@ else
 	# available — it records the true OS base from stage 1.
 	_IMAGE_INFO="/usr/share/ublue-os/image-info.json"
 	if [[ -f "${_IMAGE_INFO}" ]]; then
-		BASE_IMAGE="$(jq -r '.["base-image"] // empty' "${_IMAGE_INFO}" 2>/dev/null)"
+		if command -v jq >/dev/null 2>&1; then
+			BASE_IMAGE="$(jq -r '.["base-image"] // empty' "${_IMAGE_INFO}" 2>/dev/null || true)"
+		else
+			BASE_IMAGE="$(sed -n 's/.*"base-image": *"\([^"]*\)".*/\1/p' "${_IMAGE_INFO}" 2>/dev/null || true)"
+		fi
 	fi
 	if [[ -z "${BASE_IMAGE:-}" ]]; then
 		BASE_IMAGE="$(sh -c '. /etc/os-release 2>/dev/null || true; echo "${BASE_IMAGE:-}"' 2>/dev/null || true)"
