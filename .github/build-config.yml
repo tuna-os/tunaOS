@@ -544,6 +544,22 @@ variants:
         stage: 1
         build_image: true
         build_iso: true
+      - id: gnome
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: kde
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: niri
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: cosmic
+        stage: 2
+        build_image: true
+        build_iso: true
 
   # ── Sailfin ──────────────────────────────────────────────────────────────
   # Sailfin Tumbleweed: rolling-release, zypper-based.
