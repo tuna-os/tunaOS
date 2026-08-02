@@ -118,17 +118,23 @@ elif [[ $IS_RHEL == true ]]; then
 	warn_on_fail subscription-manager repos --enable "rhel-10-for-x86_64-appstream-rpms"
 fi
 
-dnf -y install 'dnf-command(versionlock)'
-dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt
+dnf -y install 'dnf-command(versionlock)' || true
+if dnf versionlock --help >/dev/null 2>&1; then
+	dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt || true
+fi
 
 if [[ $IS_FEDORA == true ]]; then
+	FEDORA_VER="$(rpm -E %fedora)"
+	if [[ -z "${FEDORA_VER}" || "${FEDORA_VER}" == "%fedora" ]]; then
+		FEDORA_VER="rawhide"
+	fi
 	# Install config-manager, RPM Fusion, multimedia, and common packages
 	# in as few transactions as possible (each dnf invocation incurs ~10-20s
 	# metadata resolution overhead).
-	dnf -y "do" \
-		--action=install 'dnf5-command(config-manager)' \
-		"https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-$(rpm -E %fedora).noarch.rpm" \
-		"https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-$(rpm -E %fedora).noarch.rpm"
+	dnf -y install 'dnf5-command(config-manager)' || true
+	dnf -y install \
+		"https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-${FEDORA_VER}.noarch.rpm" \
+		"https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${FEDORA_VER}.noarch.rpm" || true
 
 	# Multimedia + common desktop packages in one transaction
 	dnf -y install \
