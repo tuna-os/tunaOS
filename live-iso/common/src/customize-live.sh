@@ -152,15 +152,33 @@ ln -sf /usr/lib/systemd/system/tunaos-offline-store.service \
 # Hence the drop-in below, and hence it lists BOTH stores: last writer wins
 # on an array, so whoever writes last has to enumerate everything, or the
 # vendor's own store is what disappears instead.
+#
+# ...but only the stores that actually exist in this rootfs. The vendor
+# store is a Fedora/EL bootc convention; openSUSE (sailfin) ships no
+# /usr/lib/containers/storage, and the overlay driver hard-fails on a
+# listed store it cannot stat ("overlay: can't stat imageStore dir
+# /usr/lib/containers/storage"), which takes down every podman invocation
+# in the live root — including fisherman's `podman pull
+# containers-storage:<ref>`. Enumerating existing directories only keeps
+# the vendor store working where it exists and degrades to the offline
+# store alone where it does not.
+VENDOR_STORE="/usr/lib/containers/storage"
+IMAGE_STORES=("$STORE_MOUNT")
+if [[ -d "$VENDOR_STORE" ]]; then
+	IMAGE_STORES+=("$VENDOR_STORE")
+fi
+STORE_LIST="$(printf '"%s", ' "${IMAGE_STORES[@]}")"
+STORE_LIST="[${STORE_LIST%, }]"
+
 mkdir -p /etc/containers
-cat >/etc/containers/storage.conf <<'CONFEOF'
+cat >/etc/containers/storage.conf <<CONFEOF
 [storage]
 driver = "overlay"
 runroot = "/run/containers/storage"
 graphroot = "/var/lib/containers/storage"
 
 [storage.options]
-additionalimagestores = ["/var/lib/superiso-store", "/usr/lib/containers/storage"]
+additionalimagestores = ${STORE_LIST}
 
 [storage.options.overlay]
 mount_program = "/usr/bin/fuse-overlayfs"
@@ -176,15 +194,15 @@ CONFEOF
 # additive higher-precedence drop-in keeps the vendor's store working (it
 # is listed here) and keeps the change visible in one place.
 mkdir -p /etc/containers/storage.conf.d
-cat >/etc/containers/storage.conf.d/99-tbox-offline-store.conf <<'DROPEOF'
+cat >/etc/containers/storage.conf.d/99-tbox-offline-store.conf <<DROPEOF
 # Written by tunaOS customize-live.sh — see tunaOS#881.
 # Must outrank /usr/share/containers/storage.conf.d/00-vendor.conf, whose
 # additionalimagestores REPLACES (not merges with) the primary config's and
 # would otherwise drop /var/lib/superiso-store entirely.
-# Both stores are listed deliberately: array values replace, so omitting
-# the vendor path here would break the vendor's store the same way.
+# The vendor store is listed too when it exists: array values replace, so
+# omitting it here would break the vendor's store the same way.
 [storage.options]
-additionalimagestores = ["/var/lib/superiso-store", "/usr/lib/containers/storage"]
+additionalimagestores = ${STORE_LIST}
 DROPEOF
 
 # Second, independent mechanism — required for the bootcViaContainer path.

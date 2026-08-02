@@ -124,17 +124,27 @@ detect() {
   grep -q 'cat >/etc/containers/storage.conf' "${SCRIPT}"
   grep -q 'driver = "overlay"' "${SCRIPT}"
   grep -q 'graphroot = "/var/lib/containers/storage"' "${SCRIPT}"
-  grep -q 'additionalimagestores = \["/var/lib/superiso-store", "/usr/lib/containers/storage"\]' "${SCRIPT}"
+  grep -q 'additionalimagestores = ${STORE_LIST}' "${SCRIPT}"
   grep -q 'mount_program = "/usr/bin/fuse-overlayfs"' "${SCRIPT}"
+}
+
+# tunaOS#972: the vendor store is a Fedora/EL bootc convention. openSUSE ships
+# no /usr/lib/containers/storage and the overlay driver hard-fails on a store
+# it cannot stat, so the list must be composed from directories that exist.
+@test "customize-live.sh: enumerates only image stores that exist" {
+  grep -q 'VENDOR_STORE="/usr/lib/containers/storage"' "${SCRIPT}"
+  grep -q 'IMAGE_STORES=("\$STORE_MOUNT")' "${SCRIPT}"
+  grep -q 'if \[\[ -d "\$VENDOR_STORE" \]\]; then' "${SCRIPT}"
+  grep -q 'IMAGE_STORES+=("\$VENDOR_STORE")' "${SCRIPT}"
 }
 
 # tunaOS#881: the primary config is necessary but not sufficient —
 # /usr/share/containers/storage.conf.d/00-vendor.conf is applied after it and
 # REPLACES additionalimagestores wholesale. The 99- drop-in must outrank it and
-# must enumerate both stores, since the last writer of an array wins.
+# must enumerate the same stores, since the last writer of an array wins.
 @test "customize-live.sh: outranks the vendor drop-in and keeps both stores" {
   grep -q 'cat >/etc/containers/storage.conf.d/99-tbox-offline-store.conf' "${SCRIPT}"
-  run grep -c 'additionalimagestores = \["/var/lib/superiso-store", "/usr/lib/containers/storage"\]' "${SCRIPT}"
+  run grep -c 'additionalimagestores = ${STORE_LIST}' "${SCRIPT}"
   [ "$output" -eq 2 ]
 }
 
