@@ -473,8 +473,15 @@ STUB
   grep -qF 'add_dracutmodules+=" bootc crypt dm "' "$containerfile"
 
   # And the build fails loudly if the modules are missing from the initramfs.
-  grep -qF 'for bin in sbin/cryptsetup sbin/dmsetup systemd/systemd-cryptsetup' \
+  # The assertion targets the systemd unlock path (systemd-cryptsetup and the
+  # dm-crypt module), NOT a standalone `cryptsetup` binary: dracut-ng 110 keeps
+  # the CLI out of a systemd initrd, so checking for it failed an initramfs
+  # that could unlock fine.
+  grep -qF 'for mod in crypt dm' "$containerfile"
+  grep -qF 'for path in usr/bin/systemd-cryptsetup usr/sbin/dmsetup dm-crypt.ko' \
     "$containerfile"
+  run grep -qF 'sbin/cryptsetup ' "$containerfile"
+  [ "$status" -ne 0 ]
 }
 
 @test "Sailfin installs shared Bluefin config and GNOME-only Bluefin branding" {

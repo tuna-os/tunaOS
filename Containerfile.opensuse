@@ -152,6 +152,14 @@ RUN mkdir -p /usr/lib/dracut/dracut.conf.d && \
 RUN mkdir -p /usr/lib/systemd/system/initrd-root-fs.target.wants && \
     ln -sf ../bootc-root-setup.service \
       /usr/lib/systemd/system/initrd-root-fs.target.wants/bootc-root-setup.service
+# The LUKS assertions below check the systemd unlock path, not a `cryptsetup`
+# binary: dracut's crypt module needs cryptsetup at BUILD time (its check() is
+# `require_binaries cryptsetup`, which is why the package is installed above),
+# but in a systemd initrd dracut-ng 110 deliberately ships only
+# systemd-cryptsetup + systemd-cryptsetup-generator + crypt-run-generator and
+# leaves the standalone CLI out. Asserting on `sbin/cryptsetup` therefore failed
+# a perfectly good initramfs (run 30735665323); verified against the real
+# lsinitrd output for Tumbleweed's dracut 110+suse.45.
 RUN set -eu; \
     kver="$(ls /usr/lib/modules | head -1)"; \
     img="/usr/lib/modules/${kver}/initramfs.img"; \
@@ -162,9 +170,15 @@ RUN set -eu; \
       echo "ERROR: initramfs lacks the bootc-root-setup wants-link under /usr/lib/systemd/system — composefs boot would emergency-shell" >&2; \
       exit 1; \
     fi; \
-    for bin in sbin/cryptsetup sbin/dmsetup systemd/systemd-cryptsetup; do \
-      if ! grep -q "${bin}" /tmp/initramfs.list; then \
-        echo "ERROR: initramfs has no ${bin} — the dm/crypt dracut modules were dropped, so a LUKS root would never unlock and the disk would boot to the dracut emergency shell" >&2; \
+    for mod in crypt dm; do \
+      if ! grep -qx "${mod}" /tmp/initramfs.list; then \
+        echo "ERROR: initramfs has no '${mod}' dracut module — a LUKS root would never unlock and the disk would boot to the dracut emergency shell" >&2; \
+        exit 1; \
+      fi; \
+    done; \
+    for path in usr/bin/systemd-cryptsetup usr/sbin/dmsetup dm-crypt.ko; do \
+      if ! grep -q "${path}" /tmp/initramfs.list; then \
+        echo "ERROR: initramfs has no ${path} — the dm/crypt dracut modules shipped incomplete, so a LUKS root would never unlock" >&2; \
         exit 1; \
       fi; \
     done; \
