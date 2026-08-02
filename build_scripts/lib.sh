@@ -26,7 +26,7 @@ if [[ -f "$_TUNAOS_ENV_CACHE" ]]; then
 	# shellcheck disable=SC1090
 	source "$_TUNAOS_ENV_CACHE"
 else
-	MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release ; echo ${VERSION_ID%.*}')"
+	MAJOR_VERSION_NUMBER="$(sh -c '. /usr/lib/os-release 2>/dev/null || true; echo "${VERSION_ID:-10}"' | cut -d. -f1)"
 
 	# Determine the true OS base image for OS detection.
 	# For chained builds (nvidia, HWE) the BASE_IMAGE env var is set via Containerfile
@@ -38,7 +38,7 @@ else
 		BASE_IMAGE="$(jq -r '.["base-image"] // empty' "${_IMAGE_INFO}" 2>/dev/null)"
 	fi
 	if [[ -z "${BASE_IMAGE:-}" ]]; then
-		BASE_IMAGE="$(sh -c '. /etc/os-release ; echo ${BASE_IMAGE}')"
+		BASE_IMAGE="$(sh -c '. /etc/os-release 2>/dev/null || true; echo "${BASE_IMAGE:-}"' 2>/dev/null || true)"
 	fi
 
 	# OS Detection Flags
@@ -53,7 +53,7 @@ else
 	IS_OPENSUSE=false
 	IS_GENTOO=false
 
-	[[ "${BASE_IMAGE,,}" == *"fedora"* ]] && IS_FEDORA=true && IMAGE_NAME="bonito" && IMAGE_PRETTY_NAME="Bonito"
+	[[ "${BASE_IMAGE,,}" == *"fedora"* || "${BASE_IMAGE,,}" == *"hummingbird"* ]] && IS_FEDORA=true && IMAGE_NAME="bonito" && IMAGE_PRETTY_NAME="Bonito"
 	[[ "${BASE_IMAGE,,}" == *"red hat"* || "${BASE_IMAGE,,}" == *"rhel"* || "${BASE_IMAGE,,}" == *"redhat"* ]] && IS_RHEL=true && IMAGE_NAME="redfin" && IMAGE_PRETTY_NAME="Redfin"
 	[[ "${BASE_IMAGE,,}" == *"almalinux"* && "${BASE_IMAGE,,}" != *"-kitten"* ]] && IS_ALMALINUX=true && IMAGE_NAME="albacore" && IMAGE_PRETTY_NAME="Albacore"
 	[[ "${BASE_IMAGE,,}" == *"-kitten"* ]] && IS_ALMALINUXKITTEN=true && IMAGE_NAME="yellowfin" && IMAGE_PRETTY_NAME="Yellowfin"
