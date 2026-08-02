@@ -195,7 +195,7 @@ copy_systemfiles_for() {
 		return 0
 	fi
 	printf "::group:: ===%s-file-copying===\n" "${DISPLAY_NAME}"
-	cp -avf "$override_path/." /
+	cp -rvf "$override_path/." / || cp -rf "$override_path/." / || true
 	printf "::endgroup::\n"
 }
 
