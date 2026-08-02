@@ -1,7 +1,7 @@
 name: Build Guppy
 on:
   schedule:
-    - cron: "20 23 * * *"
+    - cron: "0 1 * * *"
   workflow_dispatch:
     inputs:
       flavor:
@@ -11,11 +11,7 @@ on:
 
 concurrency:
   group: build-guppy-${{ github.ref }}
-  # false: a re-dispatch or late cron must QUEUE behind a running build, not
-  # kill it 22 minutes in (2026-07-31: a Flounder nightly was cancelled mid-
-  # build by a re-dispatch). GitHub still dedupes: only the newest PENDING
-  # run per group is kept, so dispatch storms collapse to one queued run.
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
