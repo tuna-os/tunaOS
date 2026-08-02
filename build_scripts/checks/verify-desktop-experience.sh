@@ -121,6 +121,13 @@ gnome)
 		'/usr/libexec/xdg-desktop-portal-gnome' \
 		'/usr/lib/xdg-desktop-portal-gnome'
 	require_any_glob '/usr/bin/gnome-keyring-daemon'
+	# dconf compiled database: keyfiles in /etc/dconf/db/*.d/ must be compiled into binary dconf DB.
+	if compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
+		if [[ ! -s /etc/dconf/db/local && ! -s /etc/dconf/db/gdm ]]; then
+			echo "missing compiled dconf database: keyfiles exist under /etc/dconf/db/*.d/ but /etc/dconf/db/local and gdm are missing or empty (run dconf update)" >&2
+			exit 1
+		fi
+	fi
 	;;
 kde)
 	experience="ublue-os/aurora"

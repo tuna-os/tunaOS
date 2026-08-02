@@ -100,10 +100,10 @@ names_upstream() {
 declare -A FISH=(
 	[yellowfin]="Thunnus albacares" [albacore]="Thunnus alalunga"
 	[skipjack]="Katsuwonus pelamis" [bonito]="Sarda sarda"
-	[bonito-rawhide]="Sarda sarda" [sailfin]="Istiophorus platypterus"
+	[bonito - rawhide]="Sarda sarda" [sailfin]="Istiophorus platypterus"
 	[guppy]="Poecilia reticulata" [grouper]="Epinephelus marginatus"
 	[marlin]="Makaira nigricans" [flounder]="Platichthys flesus"
-	[flounder-sid]="Platichthys flesus" [gurnard]="Chelidonichthys lucerna"
+	[flounder - sid]="Platichthys flesus" [gurnard]="Chelidonichthys lucerna"
 )
 
 echo "== identity =="
@@ -183,11 +183,11 @@ else
 	# It must agree with os-release. Two sources of truth that disagree is how
 	# an image ends up reporting one identity to bootc and another to the user.
 	jname="$(python3 -c "import json;print(json.load(open('${info}')).get('image-name',''))" 2>/dev/null || echo)"
-	[[ "$jname" == "$variant" ]] && pass "image-name=${jname}" \
-		|| fail "image-name is '${jname}', want '${variant}'"
+	[[ "$jname" == "$variant" ]] && pass "image-name=${jname}" ||
+		fail "image-name is '${jname}', want '${variant}'"
 	jvendor="$(python3 -c "import json;print(json.load(open('${info}')).get('image-vendor',''))" 2>/dev/null || echo)"
-	[[ "$jvendor" == tuna-os ]] && pass "image-vendor=${jvendor}" \
-		|| fail "image-vendor is '${jvendor}', want 'tuna-os'"
+	[[ "$jvendor" == tuna-os ]] && pass "image-vendor=${jvendor}" ||
+		fail "image-vendor is '${jvendor}', want 'tuna-os'"
 fi
 
 # ------------------------------------------------------------ desktop look --
@@ -197,10 +197,20 @@ echo "== desktop assets =="
 # Wallpapers: shipping only the upstream set means a user sees Ubuntu's or
 # Fedora's artwork on first login.
 if compgen -G "/usr/share/backgrounds/tunaos*" >/dev/null ||
-	compgen -G "/usr/share/backgrounds/*/tunaos*" >/dev/null; then
+	compgen -G "/usr/share/backgrounds/*/tunaos*" >/dev/null ||
+	compgen -G "/usr/share/backgrounds/bluefin*" >/dev/null; then
 	pass "TunaOS wallpaper present"
 else
 	fail "no TunaOS wallpaper under /usr/share/backgrounds (only upstream artwork)"
+fi
+
+# dconf compiled database: desktop branding keyfiles in /etc/dconf/db/*.d must be compiled.
+if compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
+	if [[ -s /etc/dconf/db/local || -s /etc/dconf/db/gdm ]]; then
+		pass "dconf compiled database present"
+	else
+		fail "dconf keyfiles present in /etc/dconf/db/*.d/ but compiled database (/etc/dconf/db/local or gdm) is missing or empty (run dconf update)"
+	fi
 fi
 
 # Plymouth: the boot splash is the first branded thing a user sees.
