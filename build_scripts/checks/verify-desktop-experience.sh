@@ -18,6 +18,7 @@ emit_fail_on_early_exit() {
 trap emit_fail_on_early_exit EXIT
 
 source /run/context/build_scripts/lib.sh 2>/dev/null || true
+detected_os 2>/dev/null || true
 
 require_command() { command -v "$1" >/dev/null || {
 	echo "missing required command: $1" >&2
