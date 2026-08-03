@@ -58,7 +58,11 @@ else
 	IS_OPENSUSE=false
 	IS_GENTOO=false
 
-	[[ "${BASE_IMAGE,,}" == *"hummingbird"* ]] && IS_HUMMINGBIRD=true && IMAGE_NAME="hummingbird" && IMAGE_PRETTY_NAME="Hummingbird"
+	if [[ "${BASE_IMAGE,,}" == *"hummingbird"* ]] || grep -qi "hummingbird" /etc/os-release /usr/lib/os-release 2>/dev/null; then
+		IS_HUMMINGBIRD=true
+		IMAGE_NAME="hummingbird"
+		IMAGE_PRETTY_NAME="Hummingbird"
+	fi
 	[[ "${BASE_IMAGE,,}" == *"fedora"* && "${BASE_IMAGE,,}" != *"hummingbird"* ]] && IS_FEDORA=true && IMAGE_NAME="bonito" && IMAGE_PRETTY_NAME="Bonito"
 	[[ "${BASE_IMAGE,,}" == *"red hat"* || "${BASE_IMAGE,,}" == *"rhel"* || "${BASE_IMAGE,,}" == *"redhat"* ]] && IS_RHEL=true && IMAGE_NAME="redfin" && IMAGE_PRETTY_NAME="Redfin"
 	[[ "${BASE_IMAGE,,}" == *"almalinux"* && "${BASE_IMAGE,,}" != *"-kitten"* ]] && IS_ALMALINUX=true && IMAGE_NAME="albacore" && IMAGE_PRETTY_NAME="Albacore"
