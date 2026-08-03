@@ -304,11 +304,16 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" ]]; then
 		readarray -t _TD_COPR_PKGS < <($YQ -r ".packages.${_TD_OS}.copr[$i].packages[]" "${_TD_MANIFEST}" 2>/dev/null || true)
 		_TD_COPR_OPTS=$($YQ -r ".packages.${_TD_OS}.copr[$i].options // \"\"" "${_TD_MANIFEST}")
 
-		dnf -y copr enable "${_TD_COPR_REPO}"
-		dnf -y copr disable "${_TD_COPR_REPO}"
+		dnf -y install 'dnf5-command(copr)' 'dnf-command(copr)' 2>/dev/null || true
+		dnf -y copr enable "${_TD_COPR_REPO}" || true
+		dnf -y copr disable "${_TD_COPR_REPO}" || true
 		_TD_REPO_ID="copr:copr.fedorainfracloud.org:$(echo "${_TD_COPR_REPO}" | tr '/' ':')"
 		# shellcheck disable=SC2086
-		dnf -y --enablerepo="${_TD_REPO_ID}" install ${_TD_COPR_OPTS} "${_TD_COPR_PKGS[@]}" || true
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
+			dnf -y --enablerepo="${_TD_REPO_ID}" --skip-unavailable install ${_TD_COPR_OPTS} "${_TD_COPR_PKGS[@]}" || install_available "${_TD_COPR_PKGS[@]}" || true
+		else
+			dnf -y --enablerepo="${_TD_REPO_ID}" install ${_TD_COPR_OPTS} "${_TD_COPR_PKGS[@]}" || true
+		fi
 	done
 
 	# Optional packages (best-effort)
