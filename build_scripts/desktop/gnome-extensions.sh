@@ -42,7 +42,7 @@ printf "::group:: === GNOME Extensions Build ===\n"
 warn_on_fail dnf versionlock delete glib2
 
 # Install build tooling
-dnf_retry -y install glib2-devel meson sassc cmake dbus-devel unzip
+install_available glib2-devel meson sassc cmake dbus-devel unzip
 
 # AppIndicator Support (not present in all GNOME versions/COPRs)
 if [ -d /usr/share/gnome-shell/extensions/appindicatorsupport@rgcjonas.gmail.com/schemas ]; then
