@@ -19,7 +19,7 @@ IMAGE_REF="ostree-image-signed:docker://ghcr.io/$IMAGE_VENDOR/$IMAGE_NAME"
 # Image Flavor
 image_flavor="main"
 if [[ "${IMAGE_NAME}" =~ nvidia-open ]]; then
-	image_flavor="nvidia-open"
+  image_flavor="nvidia-open"
 fi
 
 cat >$IMAGE_INFO <<EOF
@@ -39,7 +39,7 @@ sed -i "s|^VARIANT_ID=.*|VARIANT_ID=$IMAGE_NAME|" /usr/lib/os-release
 sed -i "s|^PRETTY_NAME=.*|PRETTY_NAME=\"${IMAGE_PRETTY_NAME} (Version: ${VERSION})\"|" /usr/lib/os-release
 
 if [[ "${UBLUE_IMAGE_TAG}" == "beta" ]]; then
-	sed -i "s|^RELEASE_TYPE=.*|RELEASE_TYPE=${UBLUE_IMAGE_TAG}|" /usr/lib/os-release
+  sed -i "s|^RELEASE_TYPE=.*|RELEASE_TYPE=${UBLUE_IMAGE_TAG}|" /usr/lib/os-release
 fi
 
 sed -i "s|^NAME=.*|NAME=\"$IMAGE_PRETTY_NAME\"|" /usr/lib/os-release
@@ -56,13 +56,13 @@ sed -i "s|^VERSION=.*|VERSION=\"${VERSION} (${BASE_IMAGE_NAME^})\"|" /usr/lib/os
 sed -i "s|^OSTREE_VERSION=.*|OSTREE_VERSION=\'${VERSION}\'|" /usr/lib/os-release
 
 if [[ -n "${SHA_HEAD_SHORT:-}" ]]; then
-	echo "BUILD_ID=\"$SHA_HEAD_SHORT\"" >>/usr/lib/os-release
+echo "BUILD_ID=\"$SHA_HEAD_SHORT\"" >>/usr/lib/os-release
 fi
 
 # Added in systemd 249.
 # https://www.freedesktop.org/software/systemd/man/latest/os-release.html#IMAGE_ID=
-echo "IMAGE_ID=\"${IMAGE_NAME}\"" >>/usr/lib/os-release
-echo "IMAGE_VERSION=\"${VERSION}\"" >>/usr/lib/os-release
+echo "IMAGE_ID=\"${IMAGE_NAME}\"" >> /usr/lib/os-release
+echo "IMAGE_VERSION=\"${VERSION}\"" >> /usr/lib/os-release
 
 # Debugging
 cat /usr/lib/os-release
