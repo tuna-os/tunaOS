@@ -53,10 +53,14 @@ fi
 # We build it and then unzip it into its final location to ensure the structure is correct
 if [ -d /usr/share/gnome-shell/extensions/blur-my-shell@aunetx ]; then
 	if [ -f /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/Makefile ]; then
-		make -C /usr/share/gnome-shell/extensions/blur-my-shell@aunetx build
-		unzip -o /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/build/blur-my-shell@aunetx.shell-extension.zip -d /usr/share/gnome-shell/extensions/blur-my-shell@aunetx
-		glib-compile-schemas --strict /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/schemas
-		rm -rf /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/build
+		make -C /usr/share/gnome-shell/extensions/blur-my-shell@aunetx build || true
+		if [ -f /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/build/blur-my-shell@aunetx.shell-extension.zip ]; then
+			unzip -o /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/build/blur-my-shell@aunetx.shell-extension.zip -d /usr/share/gnome-shell/extensions/blur-my-shell@aunetx || true
+			rm -rf /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/build
+		fi
+		if [ -d /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/schemas ]; then
+			glib-compile-schemas --strict /usr/share/gnome-shell/extensions/blur-my-shell@aunetx/schemas || true
+		fi
 	else
 		echo "Skipping blur-my-shell build (Makefile not found)"
 	fi
@@ -66,14 +70,18 @@ fi
 # The Caffeine extension is in system_files/usr/share/gnome-shell/extensions/tmp/caffeine/caffeine@patapon.info
 if [ -d /usr/share/gnome-shell/extensions/tmp/caffeine/caffeine@patapon.info ]; then
 	mv /usr/share/gnome-shell/extensions/tmp/caffeine/caffeine@patapon.info /usr/share/gnome-shell/extensions/caffeine@patapon.info
-	glib-compile-schemas --strict /usr/share/gnome-shell/extensions/caffeine@patapon.info/schemas
+	if [ -d /usr/share/gnome-shell/extensions/caffeine@patapon.info/schemas ]; then
+		glib-compile-schemas --strict /usr/share/gnome-shell/extensions/caffeine@patapon.info/schemas || true
+	fi
 fi
 
 # Dash to Dock
 if [ -d /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com ]; then
 	if [ -f /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/Makefile ]; then
-		make -C /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com
-		glib-compile-schemas --strict /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/schemas
+		make -C /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com || true
+		if [ -d /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/schemas ]; then
+			glib-compile-schemas --strict /usr/share/gnome-shell/extensions/dash-to-dock@micxgx.gmail.com/schemas || true
+		fi
 	else
 		echo "Skipping dash-to-dock build (Makefile not found)"
 	fi
@@ -82,9 +90,8 @@ fi
 # GSConnect
 if [ -d /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io ]; then
 	if [ -f /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/meson.build ]; then
-		meson setup --prefix=/usr /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/_build
-		meson install -C /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/_build --skip-subprojects
-		# GSConnect installs schemas to /usr/share/glib-2.0/schemas and meson compiles them automatically
+		(meson setup --prefix=/usr /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/_build &&
+			meson install -C /usr/share/gnome-shell/extensions/gsconnect@andyholmes.github.io/_build --skip-subprojects) || true
 	else
 		echo "Skipping GSConnect build (meson.build not found)"
 	fi
@@ -97,11 +104,15 @@ fi
 # place, then compile the schemas.
 if [ -d /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io ]; then
 	if [ -f /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/build.sh ]; then
-		bash /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/build.sh
-		unzip -o /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/gradia-integration@alexandervanhee.github.io.shell-extension.zip \
-			-d /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io
-		rm -f /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/gradia-integration@alexandervanhee.github.io.shell-extension.zip
-		glib-compile-schemas --strict /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/schemas
+		bash /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/build.sh || true
+		if [ -f /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/gradia-integration@alexandervanhee.github.io.shell-extension.zip ]; then
+			unzip -o /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/gradia-integration@alexandervanhee.github.io.shell-extension.zip \
+				-d /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io || true
+			rm -f /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/gradia-integration@alexandervanhee.github.io.shell-extension.zip
+		fi
+		if [ -d /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/schemas ]; then
+			glib-compile-schemas --strict /usr/share/gnome-shell/extensions/gradia-integration@alexandervanhee.github.io/schemas || true
+		fi
 	else
 		echo "Skipping gradia-capture build (build.sh not found)"
 	fi
