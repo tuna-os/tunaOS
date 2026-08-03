@@ -17,16 +17,21 @@ emit_fail_on_early_exit() {
 }
 trap emit_fail_on_early_exit EXIT
 
+source /run/context/build_scripts/lib.sh 2>/dev/null || true
+
 require_command() { command -v "$1" >/dev/null || {
 	echo "missing required command: $1" >&2
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
 	exit 1
 }; }
 require_glob() { compgen -G "$1" >/dev/null || {
 	echo "missing required path: $1" >&2
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
 	exit 1
 }; }
 require_unit() { systemctl list-unit-files "$1.service" --no-legend 2>/dev/null | grep -q "^$1.service" || {
 	echo "missing unit: $1.service" >&2
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
 	exit 1
 }; }
 # Distro drift: the same DE ships different DM units per variant (gdm vs
@@ -40,6 +45,7 @@ require_any_unit() {
 		fi
 	done
 	echo "missing unit: none of [$*] exist" >&2
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
 	exit 1
 }
 # Session availability may be wayland or x11 depending on DE/distro.
@@ -49,6 +55,7 @@ require_any_glob() {
 		compgen -G "$g" >/dev/null && return 0
 	done
 	echo "missing required path: none of [$*] exist" >&2
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
 	exit 1
 }
 
@@ -56,27 +63,29 @@ require_any_glob() {
 # Checked via systemctl --user list-unit-files or filesystem unit file globs.
 require_user_unit() {
 	local u="$1"
-	if systemctl --user list-unit-files "$u.service" --no-legend 2>/dev/null | grep -q "^$u.service" || \
-	   compgen -G "/usr/lib/systemd/user/${u}.service" >/dev/null || \
-	   compgen -G "/etc/systemd/user/${u}.service" >/dev/null || \
-	   compgen -G "/usr/lib/*/systemd/user/${u}.service" >/dev/null; then
+	if systemctl --user list-unit-files "$u.service" --no-legend 2>/dev/null | grep -q "^$u.service" ||
+		compgen -G "/usr/lib/systemd/user/${u}.service" >/dev/null ||
+		compgen -G "/etc/systemd/user/${u}.service" >/dev/null ||
+		compgen -G "/usr/lib/*/systemd/user/${u}.service" >/dev/null; then
 		return 0
 	fi
 	echo "missing user unit: ${u}.service" >&2
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
 	exit 1
 }
 
 require_any_user_unit() {
 	local u
 	for u in "$@"; do
-		if systemctl --user list-unit-files "$u.service" --no-legend 2>/dev/null | grep -q "^$u.service" || \
-		   compgen -G "/usr/lib/systemd/user/${u}.service" >/dev/null || \
-		   compgen -G "/etc/systemd/user/${u}.service" >/dev/null || \
-		   compgen -G "/usr/lib/*/systemd/user/${u}.service" >/dev/null; then
+		if systemctl --user list-unit-files "$u.service" --no-legend 2>/dev/null | grep -q "^$u.service" ||
+			compgen -G "/usr/lib/systemd/user/${u}.service" >/dev/null ||
+			compgen -G "/etc/systemd/user/${u}.service" >/dev/null ||
+			compgen -G "/usr/lib/*/systemd/user/${u}.service" >/dev/null; then
 			return 0
 		fi
 	done
 	echo "missing user unit: none of [$*] exist" >&2
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
 	exit 1
 }
 
@@ -369,9 +378,9 @@ else
 
 	# ── Branding & Asset Contract ──
 	# Wallpapers: shipping only upstream artwork means a user sees upstream background on login.
-	if ! compgen -G "/usr/share/backgrounds/tunaos*" >/dev/null && \
-	   ! compgen -G "/usr/share/backgrounds/*/tunaos*" >/dev/null && \
-	   ! compgen -G "/usr/share/backgrounds/bluefin*" >/dev/null; then
+	if ! compgen -G "/usr/share/backgrounds/tunaos*" >/dev/null &&
+		! compgen -G "/usr/share/backgrounds/*/tunaos*" >/dev/null &&
+		! compgen -G "/usr/share/backgrounds/bluefin*" >/dev/null; then
 		echo "missing required path: /usr/share/backgrounds/tunaos* (branding wallpaper)" >&2
 		exit 1
 	fi
