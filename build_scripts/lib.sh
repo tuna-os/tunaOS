@@ -470,7 +470,14 @@ install_available() {
 		done
 		dnf -y install --setopt=install_weak_deps=False \
 			"${enablerepo_args[@]}" \
-			"${available[@]}"
+			"${available[@]}" ||
+			dnf -y install --skip-broken --setopt=install_weak_deps=False \
+				"${enablerepo_args[@]}" \
+				"${available[@]}" || {
+			for single_pkg in "${available[@]}"; do
+				dnf -y install --skip-broken "${enablerepo_args[@]}" "$single_pkg" 2>/dev/null || true
+			done
+		}
 	fi
 
 	# Take the COPRs back out of the repo set so we don't leave them
