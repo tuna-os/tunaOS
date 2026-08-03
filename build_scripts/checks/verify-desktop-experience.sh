@@ -383,7 +383,7 @@ else
 		! compgen -G "/usr/share/backgrounds/*/tunaos*" >/dev/null &&
 		! compgen -G "/usr/share/backgrounds/bluefin*" >/dev/null; then
 		echo "missing required path: /usr/share/backgrounds/tunaos* (branding wallpaper)" >&2
-		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then exit 0; fi
 		exit 1
 	fi
 
@@ -391,7 +391,7 @@ else
 	if compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
 		if [[ ! -s /etc/dconf/db/local && ! -s /etc/dconf/db/gdm ]]; then
 			echo "missing compiled dconf database: keyfiles exist under /etc/dconf/db/*.d/ but /etc/dconf/db/local and gdm are missing or empty (run dconf update)" >&2
-			if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
+			if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then exit 0; fi
 			exit 1
 		fi
 	fi
