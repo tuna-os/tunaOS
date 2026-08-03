@@ -23,7 +23,7 @@ COPY system_files_overrides /overrides
 
 FROM ${COMMON_IMAGE_REF} AS common
 
-FROM docker.io/gentoo/stage3:latest@sha256:3c0c14e5391329e05497a5fe9cfa02317e572d4e072309b496b4b9f7429be282 AS base
+FROM docker.io/gentoo/stage3:latest@sha256:08914e15d306bfdb251262ca3f7e3489b77ca32604ad1928cbb21dc94587261c AS base
 # Speed: pull prebuilt, gpg-verified binary packages from Gentoo's official
 # binhost instead of compiling all of @world from source (which blew past the
 # 60-min CI job timeout — tuna-os/tunaOS#644). getuto imports the shipped
