@@ -500,6 +500,13 @@ fi
 # as a second, non-fatal ExecStart — their markers are harvested from the
 # serial console by scripts/iso-e2e.sh.
 if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" == niri || "${_TD_DESKTOP}" == cosmic || "${_TD_DESKTOP}" == xfce ]]; then
+	# Compile dconf databases now so verify-desktop-experience.sh doesn't
+	# fail on uncompiled keyfiles. dconf-update.service handles this at
+	# first boot, but the verify check runs during image build. Required
+	# for Containerfile.arch which never calls 40-services.sh.
+	if command -v dconf &>/dev/null && compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
+		dconf update || true
+	fi
 	"${_TD_CTX}/build_scripts/checks/verify-desktop-experience.sh" "${_TD_DESKTOP}"
 	install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-desktop-experience.sh" \
 		/usr/libexec/tunaos/verify-desktop-experience
