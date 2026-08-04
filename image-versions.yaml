@@ -57,7 +57,7 @@ downloads:
   # renovate: datasource=github-releases depName=bootc-dev/bootc
   bootc: "v1.16.6"
   # renovate: datasource=github-releases depName=coreos/bootupd
-  bootupd: "v0.2.35"
+  bootupd: "v0.2.36"
   # ostree from source only for bases whose packaged ostree is older than
   # bootc's required libostree (e.g. Debian trixie ships 2025.2 < 2025.3).
   # ostree is built from source (with its vendored composefs submodule) only for
