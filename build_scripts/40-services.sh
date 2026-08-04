@@ -209,6 +209,12 @@ systemctl --global enable speech-dispatcher.socket 2>/dev/null || true
 safe_enable rpm-ostree-countme.service
 safe_disable rpm-ostree.service
 safe_enable dconf-update.service
+# dconf-update.service compiles /etc/dconf/db/*.d/ keyfiles at boot.
+# Compile them NOW so the verify-desktop-experience.sh check passes
+# during image build — it sees the build-time state, not first-boot.
+if command -v dconf &>/dev/null && compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
+	dconf update || true
+fi
 safe_disable mcelog.service
 safe_enable tailscaled.service
 safe_enable uupd.timer

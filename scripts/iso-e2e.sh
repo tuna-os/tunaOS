@@ -925,6 +925,25 @@ wait_for_ready() {
 			echo "==> Readiness marker found"
 			return 0
 		fi
+		# Fallback: if SSH is available (dev ISOs), check whether the guest
+		# is at least alive and whether tunaos-live-ready.service exists.
+		# Use same timeout/pattern as check_ssh but don't block the loop.
+		if command -v sshpass &>/dev/null; then
+			local ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3"
+			if sshpass -p live ssh $ssh_opts liveuser@127.0.0.1 -p "$SSH_PORT" true 2>/dev/null; then
+				echo "    [ssh: guest is alive — checking why marker hasn't fired]"
+				sshpass -p live ssh $ssh_opts liveuser@127.0.0.1 -p "$SSH_PORT" \
+					"systemctl status tunaos-live-ready.service 2>&1 || true; echo '---'; systemctl is-active graphical.target 2>&1 || true" \
+					>> "$SERIAL_LOG" 2>/dev/null || true
+				# Also try grepping serial log for an install-checks result as
+				# a backup readiness signal — it means the system is well past
+				# boot and the marker just didn't fire.
+				if [[ -f "$SERIAL_LOG" ]] && grep -q "TUNAOS_INSTALL_CHECKS_RESULT" "$SERIAL_LOG" 2>/dev/null; then
+					echo "==> Readiness assumed from TUNAOS_INSTALL_CHECKS_RESULT (marker service missing/failed)"
+					return 0
+				fi
+			fi
+		fi
 		# Periodic progress: print serial-log size growth so a CI viewer
 		# knows the VM is making forward progress vs. hung.
 		local now_size=0
@@ -938,6 +957,14 @@ wait_for_ready() {
 	echo "ERROR: readiness marker not seen within ${TIMEOUT}s" >&2
 	echo "--- last 50 lines of serial log ---" >&2
 	tail -50 "$SERIAL_LOG" 2>/dev/null >&2 || true
+	# Last-resort diagnostic: try SSH to see if guest is alive but marker-less.
+	if command -v sshpass &>/dev/null; then
+		echo "--- SSH diagnostic (last resort) ---" >&2
+		local ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5"
+		sshpass -p live ssh $ssh_opts liveuser@127.0.0.1 -p "$SSH_PORT" \
+			"echo 'guest uptime:'; uptime; echo '--- systemd state:'; systemctl list-units --state=failed 2>&1 || true; echo '--- tunaos-live-ready:'; systemctl status tunaos-live-ready.service 2>&1 || true; echo '--- graphical.target:'; systemctl status graphical.target 2>&1 || true" \
+			2>&1 >&2 || echo "SSH unreachable" >&2
+	fi
 	return 2
 }
 

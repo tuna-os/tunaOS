@@ -5,15 +5,17 @@
 #
 # Ordering: After=livesys.service so liveuser exists and the live overlay is
 # set up; After=NetworkManager-wait-online.service so DNS works for any
-# follow-up step (flatpak remote check, package fetch, etc.); After=
-# graphical.target on DE builds so gdm/sddm/greetd has actually started.
+# follow-up step (flatpak remote check, package fetch, etc.).
+# graphical.target is Wants= not After= because greetd-based DEs (COSMIC,
+# Niri) never signal it as active — and the harness doesn't need a display
+# manager to be running, it only needs multi-user.target and SSH.
 #
 # StandardOutput=journal+console so the marker reaches /dev/ttyS0 when the
 # kernel is booted with `console=ttyS0`, which the e2e harness sets.
 Description=TunaOS live environment ready marker
 Documentation=https://github.com/tuna-os/tunaos/blob/main/docs/IMPROVEMENT_PLAN.md
-After=livesys.service NetworkManager-wait-online.service graphical.target multi-user.target
-Wants=NetworkManager-wait-online.service
+After=livesys.service NetworkManager-wait-online.service multi-user.target
+Wants=NetworkManager-wait-online.service graphical.target
 
 [Service]
 Type=oneshot
