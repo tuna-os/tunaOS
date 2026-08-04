@@ -84,5 +84,12 @@ FROM overlay-base AS desktop
 ARG DESKTOP_FLAVOR
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
+# The published base image may predate the sudo addition in Containerfile.arch.
+# Install it here so the live ISO's e2e harness (which runs sudo podman load)
+# works on Arch-based overlays until new base images are published.
+RUN if command -v pacman &>/dev/null && ! command -v sudo &>/dev/null; then \
+        pacman -Syu --noconfirm sudo; \
+    fi
+
 RUN dnf versionlock add glib2 2>/dev/null || true
 RUN rm -rf /opt && ln -s /var/opt /opt
