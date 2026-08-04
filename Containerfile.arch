@@ -210,6 +210,26 @@ COPY --from=common /system_files/shared /
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/install-remora.sh
 
+# The numbered base scripts (40-services, 90-image-info, 99-cleanup) that
+# other Containerfiles run are NOT wired into this base. 90-image-info.sh is
+# load-bearing for the branding contract: without it os-release keeps the
+# upstream identity (Arch URLs, archlinux-logo, no VARIANT/IMAGE_ID) and
+# /usr/share/ublue-os/image-info.json is absent — the exact failures
+# verify-branding.sh reported on the first wired build. Run it here, plus
+# 40-services (service enablement + dconf update) and 99-cleanup.
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/40-services.sh
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/90-image-info.sh
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/99-cleanup.sh
+
 RUN bootc container lint
 
 # Cache-bust so build_scripts edits invalidate the desktop stages' install
