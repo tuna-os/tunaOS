@@ -38,14 +38,19 @@ Include = /etc/pacman.d/cachyos-mirrorlist
 EOF
 fi
 
+# cryptsetup/device-mapper for the LUKS-capable initramfs: the published
+# base image may predate Containerfile.arch adding them, and without them
+# dracut silently drops the crypt/dm modules (sailfin tunaOS#953 defect 8).
 pacman -Syu --noconfirm --needed \
 	cachyos-keyring cachyos-mirrorlist cachyos-settings \
-	linux-cachyos linux-cachyos-headers tpm2-tss
+	linux-cachyos linux-cachyos-headers tpm2-tss \
+	cryptsetup device-mapper
 
 # Mark as CachyOS-augmented for install-desktop.sh detection
 install -D /dev/null /etc/cachyos-release
 printf 'CachyOS\n' >/etc/cachyos-release
 
-# Rebuild initramfs via dracut
-dracut --force --omit "tpm2-tss" "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
+# Rebuild initramfs via dracut. --add crypt dm forces LUKS support in even
+# when the base's 30-bootc-container-build.conf predates the crypt addition.
+dracut --force --add "crypt dm" --omit "tpm2-tss" "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
 pacman -Scc --noconfirm || true

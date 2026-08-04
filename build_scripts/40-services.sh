@@ -150,13 +150,22 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 fi
 # ── dnf (RPM / Universal-Blue) path continues below ───────────────────
 
-sed -i 's|uupd|& --disable-module-distrobox|' /usr/lib/systemd/system/uupd.service
+# uupd and the stock logind.conf are Fedora/EL artifacts. This path also
+# runs for pacman, zypper and emerge (see the note by ensure_openssh_installed),
+# and sed on an absent file exits non-zero — which under set -e kills the
+# whole script (marlin builds died exactly there). Guard every sed on the
+# file existing first.
+if [[ -f /usr/lib/systemd/system/uupd.service ]]; then
+	sed -i 's|uupd|& --disable-module-distrobox|' /usr/lib/systemd/system/uupd.service
+fi
 
 # Enable sleep then hibernation by DEFAULT!
-sed -i 's/#HandleLidSwitch=.*/HandleLidSwitch=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
-sed -i 's/#HandleLidSwitchDocked=.*/HandleLidSwitchDocked=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
-sed -i 's/#HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
-sed -i 's/#SleepOperation=.*/SleepOperation=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
+if [[ -f /usr/lib/systemd/logind.conf ]]; then
+	sed -i 's/#HandleLidSwitch=.*/HandleLidSwitch=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
+	sed -i 's/#HandleLidSwitchDocked=.*/HandleLidSwitchDocked=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
+	sed -i 's/#HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
+	sed -i 's/#SleepOperation=.*/SleepOperation=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
+fi
 safe_enable brew-setup.service
 safe_enable tunaos-var-home-restorecon.service
 if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
