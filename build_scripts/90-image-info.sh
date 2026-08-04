@@ -70,7 +70,7 @@ RECIPE_FILE="/etc/bootc-installer/recipe.json"
 if [[ -f "${RECIPE_FILE}" ]]; then
 	BASE_OS_NAME="Enterprise Linux"
 	if [[ "$IS_FEDORA" == true ]]; then BASE_OS_NAME="Fedora"; fi
-	if [[ "$IS_HUMMINGBIRD" == true ]]; then BASE_OS_NAME="Fedora Hummingbird"; fi
+	if [[ "${IS_HUMMINGBIRD:-false}" == true ]]; then BASE_OS_NAME="Fedora Hummingbird"; fi
 	if [[ "$IS_ALMALINUX" == true ]]; then BASE_OS_NAME="AlmaLinux"; fi
 	if [[ "$IS_ALMALINUXKITTEN" == true ]]; then BASE_OS_NAME="AlmaLinux Kitten"; fi
 	if [[ "$IS_CENTOS" == true ]]; then BASE_OS_NAME="CentOS Stream"; fi
