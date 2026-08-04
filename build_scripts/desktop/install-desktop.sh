@@ -512,6 +512,29 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 		/usr/libexec/tunaos/verify-desktop-experience
 	install -Dm0755 "${_TD_CTX}/build_scripts/checks/e2e-runtime-checks.sh" \
 		/usr/libexec/tunaos/e2e-runtime-checks
+
+	# Branding contract — common to every desktop, plus per-desktop surfaces.
+	# Same pattern as the desktop-experience check: run at build time, install
+	# as a runtime unit for the VM promotion gate. The branding scripts take
+	# the VARIANT (fish codename lookup), not the desktop flavor.
+	"${_TD_CTX}/build_scripts/checks/verify-branding.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"
+	install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding.sh" \
+		/usr/libexec/tunaos/verify-branding
+	BRANDING_EXTRA=""
+	case "${_TD_DESKTOP}" in
+	kde)
+		"${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"
+		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" \
+			/usr/libexec/tunaos/verify-branding-kde
+		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-kde ${IMAGE_NAME:-${_TD_DESKTOP}} --runtime"
+		;;
+	niri)
+		"${_TD_CTX}/build_scripts/checks/verify-branding-niri.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"
+		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-niri.sh" \
+			/usr/libexec/tunaos/verify-branding-niri
+		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-niri ${IMAGE_NAME:-${_TD_DESKTOP}} --runtime"
+		;;
+	esac
 	cat >/usr/lib/systemd/system/tunaos-desktop-contract.service <<EOF
 [Unit]
 Description=Verify TunaOS ${_TD_DESKTOP} desktop experience
@@ -521,6 +544,8 @@ Requires=display-manager.service
 [Service]
 Type=oneshot
 ExecStart=/usr/libexec/tunaos/verify-desktop-experience ${_TD_DESKTOP} --runtime
+ExecStart=-/usr/libexec/tunaos/verify-branding ${_TD_DESKTOP} --runtime
+${BRANDING_EXTRA}
 ExecStart=-/usr/libexec/tunaos/e2e-runtime-checks ${_TD_DESKTOP}
 StandardOutput=journal+console
 StandardError=journal+console

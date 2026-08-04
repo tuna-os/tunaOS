@@ -24,6 +24,8 @@ packages:
       - waybar
       - fuzzel
       - swayidle
+      # Wallpaper: niri draws none itself; swaybg renders the branded one.
+      - swaybg
       - wl-clipboard
       - xdg-desktop-portal-gnome
       - xdg-desktop-portal-gtk
