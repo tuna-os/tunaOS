@@ -17,7 +17,7 @@ images:
   - name: zirconium
     image: ghcr.io/zirconium-dev/zirconium
     tag: latest
-    digest: sha256:8a170c363041235122c8eea8a364fe0397a1ea0bbcd83b1fe29cc644d7208ee4
+    digest: sha256:051ab061c0e805b9f69dd82bbecb0840e94a6dea80bf0c4aceaa1caf53d60518
 
 # Pinned binary downloads (managed by Renovate)
 downloads:
