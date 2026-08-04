@@ -217,6 +217,8 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 # /usr/share/ublue-os/image-info.json is absent — the exact failures
 # verify-branding.sh reported on the first wired build. Run it here, plus
 # 40-services (service enablement + dconf update) and 99-cleanup.
+# /opt must exist for the tmpfs mounts below (el10 does the same mkdir).
+RUN rm -rf /opt && mkdir /opt
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \

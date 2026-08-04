@@ -69,16 +69,16 @@ EOF
 RECIPE_FILE="/etc/bootc-installer/recipe.json"
 if [[ -f "${RECIPE_FILE}" ]]; then
 	BASE_OS_NAME="Enterprise Linux"
-	if [[ "$IS_FEDORA" == true ]]; then BASE_OS_NAME="Fedora"; fi
+	if [[ "${IS_FEDORA:-false}" == true ]]; then BASE_OS_NAME="Fedora"; fi
 	if [[ "${IS_HUMMINGBIRD:-false}" == true ]]; then BASE_OS_NAME="Fedora Hummingbird"; fi
-	if [[ "$IS_ALMALINUX" == true ]]; then BASE_OS_NAME="AlmaLinux"; fi
-	if [[ "$IS_ALMALINUXKITTEN" == true ]]; then BASE_OS_NAME="AlmaLinux Kitten"; fi
-	if [[ "$IS_CENTOS" == true ]]; then BASE_OS_NAME="CentOS Stream"; fi
-	if [[ "$IS_UBUNTU" == true ]]; then BASE_OS_NAME="Ubuntu"; fi
-	if [[ "$IS_DEBIAN" == true ]]; then BASE_OS_NAME="Debian"; fi
-	if [[ "$IS_ARCH" == true ]]; then BASE_OS_NAME="Arch Linux"; fi
-	if [[ "$IS_OPENSUSE" == true ]]; then BASE_OS_NAME="openSUSE Tumbleweed"; fi
-	if [[ "$IS_GENTOO" == true ]]; then BASE_OS_NAME="Gentoo Linux"; fi
+	if [[ "${IS_ALMALINUX:-false}" == true ]]; then BASE_OS_NAME="AlmaLinux"; fi
+	if [[ "${IS_ALMALINUXKITTEN:-false}" == true ]]; then BASE_OS_NAME="AlmaLinux Kitten"; fi
+	if [[ "${IS_CENTOS:-false}" == true ]]; then BASE_OS_NAME="CentOS Stream"; fi
+	if [[ "${IS_UBUNTU:-false}" == true ]]; then BASE_OS_NAME="Ubuntu"; fi
+	if [[ "${IS_DEBIAN:-false}" == true ]]; then BASE_OS_NAME="Debian"; fi
+	if [[ "${IS_ARCH:-false}" == true ]]; then BASE_OS_NAME="Arch Linux"; fi
+	if [[ "${IS_OPENSUSE:-false}" == true ]]; then BASE_OS_NAME="openSUSE Tumbleweed"; fi
+	if [[ "${IS_GENTOO:-false}" == true ]]; then BASE_OS_NAME="Gentoo Linux"; fi
 
 	DESKTOP_PRETTY_NAME="GNOME"
 	if [[ "${IMAGE_FLAVOR}" == "kde" || "${IMAGE_FLAVOR}" == *"kde"* ]]; then DESKTOP_PRETTY_NAME="KDE Plasma"; fi
