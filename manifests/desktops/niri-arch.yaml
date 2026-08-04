@@ -32,6 +32,9 @@ packages:
     - swaync
     - swaylock
     - swayidle
+    # Wallpaper: niri draws none itself; swaybg renders the branded one.
+    - swaybg
+    - cliphist
     # Integration
     - xdg-desktop-portal-gnome
     - xdg-desktop-portal-gtk
