@@ -94,5 +94,11 @@ RUN if command -v pacman &>/dev/null; then \
         pacman -S --needed --noconfirm sudo fuse-overlayfs; \
     fi
 
+# The published base may predate 90-image-info.sh (identity/logo/image-info),
+# so re-run it on the overlay to guarantee the branding contract passes
+# regardless of base freshness.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/90-image-info.sh
+
 RUN dnf versionlock add glib2 2>/dev/null || true
 RUN rm -rf /opt && ln -s /var/opt /opt
