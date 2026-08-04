@@ -102,6 +102,8 @@ RUN KERNEL_PKG="linux"; \
         e2fsprogs \
         xfsprogs \
         dosfstools \
+        cryptsetup \
+        device-mapper \
         skopeo \
         podman \
         dbus \
@@ -140,7 +142,7 @@ RUN KERNEL_PKG="linux"; \
 RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \
     printf 'systemdsystemconfdir=/etc/systemd/system\nsystemdsystemunitdir=/usr/lib/systemd/system\n' \
         > /usr/lib/dracut/dracut.conf.d/30-fix-bootc-module.conf && \
-    printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" bootc "\nomit_dracutmodules+=" tpm2-tss pcsc "\n' \
+    printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" bootc crypt dm "\nomit_dracutmodules+=" tpm2-tss pcsc "\n' \
         > /usr/lib/dracut/dracut.conf.d/30-bootc-container-build.conf && \
     dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
 
