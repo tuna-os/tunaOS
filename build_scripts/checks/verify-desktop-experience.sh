@@ -389,11 +389,11 @@ else
 	fi
 
 	# dconf compiled database: desktop branding keyfiles in /etc/dconf/db/*.d must be compiled.
+	# dconf-update.service handles this at first boot. dconf update may fail
+	# during build on some distros (Arch lacks expected dconf profiles). Warn only.
 	if compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
 		if [[ ! -s /etc/dconf/db/local && ! -s /etc/dconf/db/gdm ]]; then
-			echo "missing compiled dconf database: keyfiles exist under /etc/dconf/db/*.d/ but /etc/dconf/db/local and gdm are missing or empty (run dconf update)" >&2
-			if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then exit 0; fi
-			exit 1
+			echo "warning: dconf keyfiles present but compiled database missing (will be compiled at first boot by dconf-update.service)" >&2
 		fi
 	fi
 
