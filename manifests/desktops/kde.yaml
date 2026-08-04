@@ -72,6 +72,8 @@ packages:
       - plasma-workspace-geolocation
       - plasma-drkonqi
     packages:
+      - plasma-desktop
+      - plasma-workspace
       - sddm
       - dolphin
       - konsole

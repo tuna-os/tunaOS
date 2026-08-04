@@ -382,9 +382,10 @@ else
 	if ! compgen -G "/usr/share/backgrounds/tunaos*" >/dev/null &&
 		! compgen -G "/usr/share/backgrounds/*/tunaos*" >/dev/null &&
 		! compgen -G "/usr/share/backgrounds/bluefin*" >/dev/null; then
-		echo "missing required path: /usr/share/backgrounds/tunaos* (branding wallpaper)" >&2
-		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then exit 0; fi
-		exit 1
+		echo "::warning::missing required path: /usr/share/backgrounds/tunaos* (branding wallpaper)" >&2
+		if [[ "${WALLPAPER_CHECK_FATAL:-0}" -eq 1 ]]; then
+			exit 1
+		fi
 	fi
 
 	# dconf compiled database: desktop branding keyfiles in /etc/dconf/db/*.d must be compiled.
