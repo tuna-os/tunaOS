@@ -107,6 +107,7 @@ RUN KERNEL_PKG="linux"; \
         dbus \
         glib2 \
         shadow \
+        sudo \
         systemd \
         networkmanager \
         pipewire \
