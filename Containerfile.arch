@@ -108,6 +108,7 @@ RUN KERNEL_PKG="linux"; \
         glib2 \
         shadow \
         sudo \
+        fuse-overlayfs \
         systemd \
         networkmanager \
         pipewire \
