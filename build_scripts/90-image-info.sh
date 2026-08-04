@@ -44,6 +44,7 @@ guppy) CODE_NAME="Poecilia reticulata" ;;
 grouper) CODE_NAME="Epinephelus marginatus" ;;
 marlin) CODE_NAME="Makaira nigricans" ;;
 hummingbird) CODE_NAME="Trochilidae" ;;
+gurnard) CODE_NAME="Chelidonichthys lucerna" ;;
 flounder | flounder-sid) CODE_NAME="Platichthys flesus" ;;
 *)
 	echo "ERROR: no scientific fish codename defined for variant: ${IMAGE_NAME}" >&2
