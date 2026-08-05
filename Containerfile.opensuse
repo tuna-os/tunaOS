@@ -232,15 +232,15 @@ COPY --from=common /system_files/shared /
 # Enable the e2e readiness marker explicitly. On the dnf/apt/pacman variants
 # this is done by build_scripts/40-services.sh — run it here too for
 # standardization (service enablement, dconf update, readiness marker).
-RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/40-services.sh
-RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/90-image-info.sh
-RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/99-cleanup.sh

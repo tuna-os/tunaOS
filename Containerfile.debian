@@ -217,15 +217,15 @@ COPY --from=common /system_files/shared /
 # 40-services (service enablement, dconf), 90-image-info (branding/os-release),
 # 99-cleanup (ostree prep). Without these, flounder ships upstream Debian
 # identity and fails the branding contract.
-RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/40-services.sh
-RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/90-image-info.sh
-RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/99-cleanup.sh
