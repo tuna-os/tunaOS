@@ -40,6 +40,12 @@ systemctl set-default graphical.target
 # console by scripts/iso-e2e.sh; the checks ExecStart is non-fatal).
 case "$desktop" in
 gnome | kde | niri | cosmic | xfce)
+	# Compile dconf databases before verify checks — desktop stages lay down
+	# keyfiles after the base stage's dconf update, so recompile here.
+	if command -v dconf &>/dev/null && compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
+		dconf update || true
+	fi
+
 	/run/context/build_scripts/checks/verify-desktop-experience.sh "$desktop"
 	install -Dm0755 /run/context/build_scripts/checks/verify-desktop-experience.sh \
 		/usr/libexec/tunaos/verify-desktop-experience

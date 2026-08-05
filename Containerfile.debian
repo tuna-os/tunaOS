@@ -212,6 +212,24 @@ RUN sed -i 's|^HOME=.*|HOME=/var/home|' /etc/default/useradd && \
 LABEL containers.bootc 1
 COPY --from=context /files /
 COPY --from=common /system_files/shared /
+
+# Run the standard numbered base scripts (matching el10/arch/ubuntu convention):
+# 40-services (service enablement, dconf), 90-image-info (branding/os-release),
+# 99-cleanup (ostree prep). Without these, flounder ships upstream Debian
+# identity and fails the branding contract.
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/40-services.sh
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/90-image-info.sh
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/99-cleanup.sh
+
 RUN bootc container lint
 
 # Cache-bust so build_scripts edits invalidate the desktop stages' install

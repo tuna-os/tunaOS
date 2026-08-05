@@ -230,14 +230,20 @@ COPY --from=context /files /
 COPY --from=common /system_files/shared /
 
 # Enable the e2e readiness marker explicitly. On the dnf/apt/pacman variants
-# this is done by build_scripts/40-services.sh, which this Containerfile
-# deliberately never runs (see the system stage) — so sailfin shipped the unit
-# file from /files without ever enabling it. The live ISO then booted all the
-# way to graphical.target and simply never printed TUNAOS_LIVE_READY, and
-# iso-e2e.sh timed out ("readiness marker not seen within 1200s"), which is
-# defect 2 of tunaOS#953. Placed after the COPY because the unit arrives with
-# it.
-RUN systemctl enable tunaos-live-ready.service
+# this is done by build_scripts/40-services.sh — run it here too for
+# standardization (service enablement, dconf update, readiness marker).
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/40-services.sh
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/90-image-info.sh
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/99-cleanup.sh
 
 # Cache-bust: the build_scripts RUNs in the desktop stages below are invoked via
 # a bind mount, whose content is NOT part of buildah's layer cache key — so
