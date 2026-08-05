@@ -148,15 +148,84 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 	printf "::endgroup::\n"
 	exit 0
 fi
+# ── pacman / zypper / emerge path ─────────────────────────────────────
+# These package managers indicate Arch, openSUSE or Gentoo bases. They share
+# the service enablement pattern with the apt path (safe_enable, drop-ins)
+# rather than the dnf path (in-place sed on shipped unit files). The dnf
+# path below has Fedora/EL-specific tools (uupd, authselect, rpm-ostree,
+# ublue-system-setup) that do not exist on these bases.
+if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command -v emerge &>/dev/null; then
+	# Sleep-then-hibernate via drop-in (no /usr/lib/systemd/logind.conf on some bases)
+	mkdir -p /usr/lib/systemd/logind.conf.d
+	cat >/usr/lib/systemd/logind.conf.d/10-tunaos-sleep.conf <<-'LOGIND'
+		[Login]
+		HandleLidSwitch=suspend-then-hibernate
+		HandleLidSwitchDocked=suspend-then-hibernate
+		HandleLidSwitchExternalPower=suspend-then-hibernate
+		SleepOperation=suspend-then-hibernate
+	LOGIND
+
+	# Display manager per desktop flavor
+	case "${DESKTOP_FLAVOR}" in
+	kde)
+		safe_disable gdm.service
+		safe_enable "$(kde_dm_unit)"
+		;;
+	niri | cosmic)
+		safe_disable gdm.service
+		safe_enable greetd.service
+		;;
+	gnome) safe_enable gdm.service ;;
+	*) echo "Skipping DE-specific display-manager service setup (DESKTOP_FLAVOR='${DESKTOP_FLAVOR}')" ;;
+	esac
+
+	safe_enable tunaos-live-ready.service
+
+	# SSH handling (matching apt path logic)
+	ensure_openssh_installed
+	if [[ "${ENABLE_SSHD:-0}" == "1" ]]; then
+		safe_enable sshd.service
+		if ! id liveuser &>/dev/null; then
+			useradd -m -s /bin/bash -G wheel liveuser 2>/dev/null || \
+			useradd -m -s /bin/bash liveuser 2>/dev/null || true
+		fi
+		echo 'liveuser:live' | chpasswd
+	else
+		safe_disable sshd.service
+		safe_disable sshd.socket 2>/dev/null || true
+	fi
+
+	safe_enable tailscaled.service
+	safe_enable fwupd.service
+	systemctl --global enable podman-auto-update.timer 2>/dev/null || true
+	systemctl --global enable speech-dispatcher.socket 2>/dev/null || true
+
+	# dconf compilation
+	safe_enable dconf-update.service
+	if command -v dconf &>/dev/null && compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
+		dconf update || true
+	fi
+
+	# systemd-resolved
+	if [[ -f /usr/lib/systemd/system/systemd-resolved.service ]]; then
+		sed -i -e "s@PrivateTmp=.*@PrivateTmp=no@g" /usr/lib/systemd/system/systemd-resolved.service
+		systemctl enable systemd-resolved.service
+	fi
+
+	printf "::endgroup::\n"
+	exit 0
+fi
 # ── dnf (RPM / Universal-Blue) path continues below ───────────────────
 
-sed -i 's|uupd|& --disable-module-distrobox|' /usr/lib/systemd/system/uupd.service
+sed -i 's|uupd|& --disable-module-distrobox|' /usr/lib/systemd/system/uupd.service 2>/dev/null || true
 
 # Enable sleep then hibernation by DEFAULT!
-sed -i 's/#HandleLidSwitch=.*/HandleLidSwitch=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
-sed -i 's/#HandleLidSwitchDocked=.*/HandleLidSwitchDocked=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
-sed -i 's/#HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
-sed -i 's/#SleepOperation=.*/SleepOperation=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
+if [[ -f /usr/lib/systemd/logind.conf ]]; then
+	sed -i 's/#HandleLidSwitch=.*/HandleLidSwitch=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
+	sed -i 's/#HandleLidSwitchDocked=.*/HandleLidSwitchDocked=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
+	sed -i 's/#HandleLidSwitchExternalPower=.*/HandleLidSwitchExternalPower=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
+	sed -i 's/#SleepOperation=.*/SleepOperation=suspend-then-hibernate/g' /usr/lib/systemd/logind.conf
+fi
 safe_enable brew-setup.service
 safe_enable tunaos-var-home-restorecon.service
 if [[ "${DESKTOP_FLAVOR}" == "kde" ]]; then
@@ -223,24 +292,26 @@ systemctl --global enable ublue-user-setup.service
 systemctl mask bootc-fetch-apply-updates.timer bootc-fetch-apply-updates.service auditd.service audit-rules.service
 safe_enable check-sb-key.service
 
-# Authselect configuration
-if [[ "$IS_FEDORA" == true ]]; then
-	# Fedora uses 'local' as the base profile for standard setups
-	authselect select local --force
-else
-	# RHEL/AlmaLinux/CentOS require sssd for GDM/login to function correctly
-	authselect select sssd --force
+# Authselect configuration (Fedora/EL-only; guard for safety)
+if command -v authselect &>/dev/null; then
+	if [[ "$IS_FEDORA" == true ]]; then
+		# Fedora uses 'local' as the base profile for standard setups
+		authselect select local --force
+	else
+		# RHEL/AlmaLinux/CentOS require sssd for GDM/login to function correctly
+		authselect select sssd --force
+	fi
+
+	# Disable lastlog display on previous failed login in GDM (This makes logins slow)
+	authselect enable-feature with-silent-lastlog
+
+	# Enable polkit rules for fingerprint sensors via fprintd
+	authselect enable-feature with-fingerprint
+
+	# Cleanup authselect backups and checksum to satisfy bootc lint
+	rm -rf /var/lib/authselect/backups/*
+	rm -f /var/lib/authselect/checksum
 fi
-
-# Disable lastlog display on previous failed login in GDM (This makes logins slow)
-authselect enable-feature with-silent-lastlog
-
-# Enable polkit rules for fingerprint sensors via fprintd
-authselect enable-feature with-fingerprint
-
-# Cleanup authselect backups and checksum to satisfy bootc lint
-rm -rf /var/lib/authselect/backups/*
-rm -f /var/lib/authselect/checksum
 
 if [[ -f /usr/lib/systemd/system/systemd-resolved.service ]]; then
 	sed -i -e "s@PrivateTmp=.*@PrivateTmp=no@g" /usr/lib/systemd/system/systemd-resolved.service
