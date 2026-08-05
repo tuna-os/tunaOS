@@ -54,16 +54,80 @@ esac
 
 chmod 644 $IMAGE_INFO
 
+# Which os-release files to write.
+#
+# /usr/lib/os-release is the canonical one, but writing ONLY it is not enough:
+# a base can ship a second, *real* /etc/os-release rather than the conventional
+# symlink into /usr/lib. Arch is exactly that case — its `filesystem` package
+# installs only usr/lib/os-release (verified against filesystem-2025.10.12),
+# and the archlinux container image adds an independent /etc copy on top.
+#
+# Everything that asks "what OS is this" — systemd, GNOME About, GDM,
+# fastfetch, and build_scripts/checks/verify-branding.sh:61 — looks at
+# /etc/os-release first. So marlin's /usr/lib/os-release said "Marlin" while
+# the file every reader consulted still said Arch Linux, with Arch's support
+# URLs and archlinux-logo. Run 31013418173 reported all ten branding fields as
+# upstream for exactly this reason, while image-info.json (a separate file,
+# written by this same script) was correct — which is what made it look like
+# the script had not run at all.
+#
+# `-ef` compares device+inode through symlinks, so the conventional
+# /etc/os-release -> ../usr/lib/os-release layout adds nothing here and is
+# left as a symlink. Only a genuinely separate file gets written twice.
+#
+# The two paths are overridable for tests only, the same way
+# verify-branding.sh takes TUNAOS_OS_RELEASE; builds never set them.
+OS_RELEASE_USR="${TUNAOS_OS_RELEASE_USR:-/usr/lib/os-release}"
+OS_RELEASE_ETC="${TUNAOS_OS_RELEASE_ETC:-/etc/os-release}"
+OS_RELEASE_FILES=("$OS_RELEASE_USR")
+if [[ -e "$OS_RELEASE_ETC" ]] && ! [[ "$OS_RELEASE_ETC" -ef "$OS_RELEASE_USR" ]]; then
+	OS_RELEASE_FILES+=("$OS_RELEASE_ETC")
+fi
+
+# Replace-or-append, never blind append, and never substitute-only.
+#
+# These used to be written two different wrong ways.
+#
+# `tee -a` is only correct when the base does not already define the key.
+# Ubuntu DOES define SUPPORT_URL, so grouper shipped os-release containing BOTH
+#
+#   SUPPORT_URL="https://help.ubuntu.com/"          <- upstream, line 1
+#   SUPPORT_URL="https://github.com/tuna-os/..."    <- ours, appended
+#
+# and which one wins depends entirely on the reader. Shell sourcing takes the
+# last; every `grep ... | head -1` parser — including
+# build_scripts/checks/verify-branding.sh — takes the FIRST, i.e. Ubuntu's. So
+# the field was never "lost": it was set correctly and then out-voted by the
+# copy already there. A duplicate key is worse than a missing one, because both
+# readings are defensible and the file looks right to whoever greps it the way
+# that agrees with them.
+#
+# A bare `sed s|^KEY=.*|...|` has the mirror-image flaw: it is only correct
+# when the base ALREADY defines the key, and silently does nothing when it
+# does not. No RPM base defines VERSION_CODENAME and Arch defines neither it
+# nor VARIANT_ID, so the fish codename never landed on yellowfin, skipjack,
+# albacore (#1007) or marlin (#1015) — the substitution matched no line and
+# exited 0.
+osr_set() {
+	local key="$1" value="$2" file
+	for file in "${OS_RELEASE_FILES[@]}"; do
+		if grep -q "^${key}=" "$file"; then
+			# `|` delimiter rather than `/`: values may contain slashes (URLs).
+			sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$file"
+		else
+			echo "${key}=\"${value}\"" >>"$file"
+		fi
+	done
+}
+
 # OS Release File (changed in order with upstream)
-sed -i -f - /usr/lib/os-release <<EOF
-s/^NAME=.*/NAME=\"${IMAGE_PRETTY_NAME}\"/
-s|^VERSION_CODENAME=.*|VERSION_CODENAME=\"${CODE_NAME}\"|
-s/^VARIANT_ID=.*/VARIANT_ID=${IMAGE_NAME}/
-s|^PRETTY_NAME=.*|PRETTY_NAME=\"${IMAGE_PRETTY_NAME}\"|
-s|^HOME_URL=.*|HOME_URL=\"${HOME_URL}\"|
-s|^BUG_REPORT_URL=.*|BUG_REPORT_URL=\"${BUG_SUPPORT_URL}\"|
-s|^CPE_NAME=.*|CPE_NAME=\"cpe:/o:jamesreilly:${IMAGE_NAME}-tunaos\"|
-EOF
+osr_set NAME "${IMAGE_PRETTY_NAME}"
+osr_set VERSION_CODENAME "${CODE_NAME}"
+osr_set VARIANT_ID "${IMAGE_NAME}"
+osr_set PRETTY_NAME "${IMAGE_PRETTY_NAME}"
+osr_set HOME_URL "${HOME_URL}"
+osr_set BUG_REPORT_URL "${BUG_SUPPORT_URL}"
+osr_set CPE_NAME "cpe:/o:jamesreilly:${IMAGE_NAME}-tunaos"
 
 # Dynamically interpolate the specific variant name and logo path in the installer recipe.json
 RECIPE_FILE="/etc/bootc-installer/recipe.json"
@@ -128,38 +192,6 @@ with open('${RECIPE_FILE}', 'w') as f:
 " || true
 fi
 
-# Ensure VARIANT_ID is set — the sed substitution above only replaces an
-# existing line; AlmaLinux base images omit it entirely.
-if ! grep -q "^VARIANT_ID=" /usr/lib/os-release; then
-	echo "VARIANT_ID=${IMAGE_NAME}" >>/usr/lib/os-release
-fi
-
-# Replace-or-append, never blind append.
-#
-# These four used to be written with `tee -a`, which is only correct when the
-# base does not already define the key. Ubuntu DOES define SUPPORT_URL, so
-# grouper shipped os-release containing BOTH
-#
-#   SUPPORT_URL="https://help.ubuntu.com/"          <- upstream, line 1
-#   SUPPORT_URL="https://github.com/tuna-os/..."    <- ours, appended
-#
-# and which one wins depends entirely on the reader. Shell sourcing takes the
-# last; every `grep ... | head -1` parser — including
-# build_scripts/checks/verify-branding.sh:74 — takes the FIRST, i.e. Ubuntu's.
-# So the field was never "lost": it was set correctly and then out-voted by the
-# copy already there. A duplicate key is worse than a missing one, because both
-# readings are defensible and the file looks right to whoever greps it the way
-# that agrees with them.
-osr_set() {
-	local key="$1" value="$2"
-	if grep -q "^${key}=" /usr/lib/os-release; then
-		# `|` delimiter rather than `/`: values may contain slashes (URLs).
-		sed -i "s|^${key}=.*|${key}=\"${value}\"|" /usr/lib/os-release
-	else
-		echo "${key}=\"${value}\"" >>/usr/lib/os-release
-	fi
-}
-
 osr_set DOCUMENTATION_URL "${DOCUMENTATION_URL}"
 osr_set SUPPORT_URL "${SUPPORT_URL}"
 osr_set DEFAULT_HOSTNAME "${IMAGE_NAME}"
@@ -173,16 +205,6 @@ osr_set BUILD_ID "${SHA_HEAD_SHORT:-testing}"
 osr_set VARIANT "${IMAGE_PRETTY_NAME} ${IMAGE_FLAVOR}"
 osr_set IMAGE_ID "${IMAGE_NAME}"
 osr_set IMAGE_VERSION "${IMAGE_FLAVOR}-${SHA_HEAD_SHORT:-testing}"
-
-# NAME, PRETTY_NAME, VERSION_CODENAME, BUG_REPORT_URL — these are handled by
-# the sed block at the top for distros that already ship the keys. For distros
-# that omit them (Arch, Gentoo, openSUSE have no VERSION_CODENAME etc.), the
-# sed is a no-op and osr_set appends them.
-osr_set NAME "${IMAGE_PRETTY_NAME}"
-osr_set PRETTY_NAME "${IMAGE_PRETTY_NAME}"
-osr_set VERSION_CODENAME "${CODE_NAME}"
-osr_set BUG_REPORT_URL "${BUG_SUPPORT_URL}"
-osr_set HOME_URL "${HOME_URL}"
 
 # LOGO names the distro icon read by GNOME About, GDM, KDE and fastfetch.
 # We ship the asset at /usr/share/pixmaps/tunaos.svg (repo system_files), so

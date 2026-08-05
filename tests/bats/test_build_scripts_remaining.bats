@@ -559,3 +559,83 @@ STUB
     skip "shellcheck not installed"
   fi
 }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# build_scripts/90-image-info.sh — os-release writing
+#
+# 90-image-info.sh cannot be run end to end outside a build (it sources
+# /run/context/build_scripts/lib.sh and needs the image env), so these tests
+# extract the os-release block from the real script and run it against
+# fixtures. Extracting rather than restating means the tests track the script:
+# rename the function or change the file-selection rule and they stop matching.
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Everything from the file-selection block through the end of osr_set().
+_osr_block() {
+  sed -n '/^OS_RELEASE_USR=/,/^}$/p' "${REPO_ROOT}/build_scripts/90-image-info.sh"
+}
+
+@test "90-image-info.sh: writes keys the base omits entirely" {
+  # No RPM base defines VERSION_CODENAME and Arch defines neither it nor
+  # VARIANT_ID. The old `sed s|^KEY=.*|...|` matched no line and exited 0, so
+  # the fish codename never landed on yellowfin/skipjack/albacore (#1007) or
+  # marlin (#1015) while the build reported success.
+  local usr="${BATS_TEST_TMPDIR}/usr-os-release"
+  printf 'NAME="Arch Linux"\nPRETTY_NAME="Arch Linux"\nID=arch\nLOGO=archlinux-logo\n' >"$usr"
+
+  run env TUNAOS_OS_RELEASE_USR="$usr" TUNAOS_OS_RELEASE_ETC=/nonexistent \
+    bash -c "$(_osr_block)"$'\n''osr_set VERSION_CODENAME "Makaira nigricans"; osr_set VARIANT_ID marlin; osr_set PRETTY_NAME Marlin; osr_set LOGO tunaos'
+  [ "$status" -eq 0 ]
+
+  grep -qF 'VERSION_CODENAME="Makaira nigricans"' "$usr"
+  grep -qF 'VARIANT_ID="marlin"' "$usr"
+  grep -qF 'PRETTY_NAME="Marlin"' "$usr"
+  grep -qF 'LOGO="tunaos"' "$usr"
+  # Replaced, not appended: a second PRETTY_NAME makes both readings defensible.
+  [ "$(grep -c '^PRETTY_NAME=' "$usr")" -eq 1 ]
+  [ "$(grep -c '^LOGO=' "$usr")" -eq 1 ]
+}
+
+@test "90-image-info.sh: brands a base that ships a real /etc/os-release" {
+  # Arch's filesystem package installs only usr/lib/os-release; the container
+  # image adds an independent /etc copy. Writing only /usr/lib left every
+  # reader — systemd, GNOME About, fastfetch, verify-branding.sh — looking at
+  # a file that still said Arch Linux (run 31013418173).
+  local usr="${BATS_TEST_TMPDIR}/usr-os-release"
+  local etc="${BATS_TEST_TMPDIR}/etc-os-release"
+  printf 'PRETTY_NAME="Arch Linux"\nSUPPORT_URL="https://bbs.archlinux.org/"\n' >"$usr"
+  printf 'PRETTY_NAME="Arch Linux"\nSUPPORT_URL="https://bbs.archlinux.org/"\nBASE_IMAGE="docker.io/archlinux/archlinux:latest"\n' >"$etc"
+
+  run env TUNAOS_OS_RELEASE_USR="$usr" TUNAOS_OS_RELEASE_ETC="$etc" \
+    bash -c "$(_osr_block)"$'\n''osr_set PRETTY_NAME Marlin; osr_set SUPPORT_URL "https://github.com/tuna-os/tunaos/issues/"'
+  [ "$status" -eq 0 ]
+
+  local f
+  for f in "$usr" "$etc"; do
+    grep -qF 'PRETTY_NAME="Marlin"' "$f"
+    grep -qF 'SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"' "$f"
+    run grep -F 'archlinux.org' "$f"
+    [ "$status" -ne 0 ]
+  done
+  # Keys written by other build steps survive — lib.sh reads BASE_IMAGE back
+  # out of /etc/os-release.
+  grep -qF 'BASE_IMAGE="docker.io/archlinux/archlinux:latest"' "$etc"
+}
+
+@test "90-image-info.sh: leaves the conventional /etc symlink alone" {
+  # On RPM bases /etc/os-release is a symlink into /usr/lib. `sed -i` replaces
+  # a symlink with a regular file, so writing both paths blindly would quietly
+  # convert it and split the two files apart on the next boot.
+  local usr="${BATS_TEST_TMPDIR}/sym-usr-os-release"
+  local etc="${BATS_TEST_TMPDIR}/sym-etc-os-release"
+  printf 'PRETTY_NAME="AlmaLinux Kitten 10"\n' >"$usr"
+  ln -s "$usr" "$etc"
+
+  run env TUNAOS_OS_RELEASE_USR="$usr" TUNAOS_OS_RELEASE_ETC="$etc" \
+    bash -c "$(_osr_block)"$'\n''osr_set PRETTY_NAME Yellowfin; echo "FILES=${#OS_RELEASE_FILES[@]}"'
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"FILES=1"* ]]
+  [ -L "$etc" ]
+  grep -qF 'PRETTY_NAME="Yellowfin"' "$etc"
+  [ "$(grep -c '^PRETTY_NAME=' "$usr")" -eq 1 ]
+}
