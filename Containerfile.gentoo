@@ -223,6 +223,22 @@ LABEL containers.bootc=1 ostree.bootable=1
 COPY --from=context /files /
 COPY --from=common /system_files/shared /
 
+# Run the standard numbered base scripts (matching el10/arch/debian/opensuse
+# convention): 40-services (service enablement, dconf), 90-image-info
+# (branding/os-release), 99-cleanup (ostree prep).
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/40-services.sh
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/90-image-info.sh
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/99-cleanup.sh
+
 # remora — the desktop experience contract requires it, and this base does
 # not run 26-packages-post.sh, which is what installs remora on the dnf
 # variants. Containerfile.opensuse already hit this and calls

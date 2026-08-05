@@ -500,11 +500,41 @@ fi
 # as a second, non-fatal ExecStart — their markers are harvested from the
 # serial console by scripts/iso-e2e.sh.
 if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" == niri || "${_TD_DESKTOP}" == cosmic || "${_TD_DESKTOP}" == xfce ]]; then
+	# Compile dconf databases now so verify-desktop-experience.sh doesn't
+	# fail on uncompiled keyfiles. dconf-update.service handles this at
+	# first boot, but the verify check runs during image build. Required
+	# for Containerfile.arch which never calls 40-services.sh.
+	if command -v dconf &>/dev/null && compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
+		dconf update || true
+	fi
 	"${_TD_CTX}/build_scripts/checks/verify-desktop-experience.sh" "${_TD_DESKTOP}"
 	install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-desktop-experience.sh" \
 		/usr/libexec/tunaos/verify-desktop-experience
 	install -Dm0755 "${_TD_CTX}/build_scripts/checks/e2e-runtime-checks.sh" \
 		/usr/libexec/tunaos/e2e-runtime-checks
+
+	# Branding contract — common to every desktop, plus per-desktop surfaces.
+	# Same pattern as the desktop-experience check: run at build time, install
+	# as a runtime unit for the VM promotion gate. The branding scripts take
+	# the VARIANT (fish codename lookup), not the desktop flavor.
+	"${_TD_CTX}/build_scripts/checks/verify-branding.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"
+	install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding.sh" \
+		/usr/libexec/tunaos/verify-branding
+	BRANDING_EXTRA=""
+	case "${_TD_DESKTOP}" in
+	kde)
+		"${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"
+		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" \
+			/usr/libexec/tunaos/verify-branding-kde
+		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-kde ${IMAGE_NAME:-${_TD_DESKTOP}} --runtime"
+		;;
+	niri)
+		"${_TD_CTX}/build_scripts/checks/verify-branding-niri.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"
+		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-niri.sh" \
+			/usr/libexec/tunaos/verify-branding-niri
+		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-niri ${IMAGE_NAME:-${_TD_DESKTOP}} --runtime"
+		;;
+	esac
 	cat >/usr/lib/systemd/system/tunaos-desktop-contract.service <<EOF
 [Unit]
 Description=Verify TunaOS ${_TD_DESKTOP} desktop experience
@@ -514,6 +544,8 @@ Requires=display-manager.service
 [Service]
 Type=oneshot
 ExecStart=/usr/libexec/tunaos/verify-desktop-experience ${_TD_DESKTOP} --runtime
+ExecStart=-/usr/libexec/tunaos/verify-branding ${_TD_DESKTOP} --runtime
+${BRANDING_EXTRA}
 ExecStart=-/usr/libexec/tunaos/e2e-runtime-checks ${_TD_DESKTOP}
 StandardOutput=journal+console
 StandardError=journal+console

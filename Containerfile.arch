@@ -102,11 +102,15 @@ RUN KERNEL_PKG="linux"; \
         e2fsprogs \
         xfsprogs \
         dosfstools \
+        cryptsetup \
+        device-mapper \
         skopeo \
         podman \
         dbus \
         glib2 \
         shadow \
+        sudo \
+        fuse-overlayfs \
         systemd \
         networkmanager \
         pipewire \
@@ -138,7 +142,7 @@ RUN KERNEL_PKG="linux"; \
 RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \
     printf 'systemdsystemconfdir=/etc/systemd/system\nsystemdsystemunitdir=/usr/lib/systemd/system\n' \
         > /usr/lib/dracut/dracut.conf.d/30-fix-bootc-module.conf && \
-    printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" bootc "\nomit_dracutmodules+=" tpm2-tss pcsc "\n' \
+    printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" bootc crypt dm "\nomit_dracutmodules+=" tpm2-tss pcsc "\n' \
         > /usr/lib/dracut/dracut.conf.d/30-bootc-container-build.conf && \
     dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
 
@@ -205,6 +209,26 @@ COPY --from=common /system_files/shared /
 # static Go, so there is nothing distro-specific to guard.
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/install-remora.sh
+
+# The numbered base scripts (40-services, 90-image-info, 99-cleanup) that
+# other Containerfiles run are NOT wired into this base. 90-image-info.sh is
+# load-bearing for the branding contract: without it os-release keeps the
+# upstream identity (Arch URLs, archlinux-logo, no VARIANT/IMAGE_ID) and
+# /usr/share/ublue-os/image-info.json is absent — the exact failures
+# verify-branding.sh reported on the first wired build. Run it here, plus
+# 40-services (service enablement + dconf update) and 99-cleanup.
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/40-services.sh
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/90-image-info.sh
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/99-cleanup.sh
 
 RUN bootc container lint
 

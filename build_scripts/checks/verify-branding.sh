@@ -204,14 +204,22 @@ else
 	fail "no TunaOS wallpaper under /usr/share/backgrounds (only upstream artwork)"
 fi
 
-# dconf compiled database: desktop branding keyfiles in /etc/dconf/db/*.d must be compiled.
-if compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
-	if [[ -s /etc/dconf/db/local || -s /etc/dconf/db/gdm ]]; then
-		pass "dconf compiled database present"
-	else
-		fail "dconf keyfiles present in /etc/dconf/db/*.d/ but compiled database (/etc/dconf/db/local or gdm) is missing or empty (run dconf update)"
+# dconf compiled database: every keyfile dir /etc/dconf/db/<name>.d/ must have
+# a compiled /etc/dconf/db/<name>. Iterate instead of hardcoding local/gdm —
+# distros ship their own keyfile dirs (ibus.d on Arch) already compiled by
+# package postinst; hardcoding local/gdm fails those falsely.
+for _dcf_dir in /etc/dconf/db/*.d; do
+	[[ -d "$_dcf_dir" ]] || continue
+	if compgen -G "$_dcf_dir/*" >/dev/null 2>&1; then
+		_dcf_name="${_dcf_dir%.d}"
+		_dcf_name="${_dcf_name##*/}"
+		if [[ -s "/etc/dconf/db/${_dcf_name}" ]]; then
+			pass "dconf compiled database present (${_dcf_name})"
+		else
+			fail "dconf keyfiles in ${_dcf_dir} but compiled database /etc/dconf/db/${_dcf_name} is missing or empty (run dconf update)"
+		fi
 	fi
-fi
+done
 
 # Plymouth: the boot splash is the first branded thing a user sees.
 if [[ -d /usr/share/plymouth/themes/tunaos ]] ||

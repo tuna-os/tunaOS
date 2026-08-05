@@ -21,10 +21,8 @@ ARG ENABLE_HWE="${ENABLE_HWE:-0}"
 ARG ENABLE_NVIDIA="${ENABLE_NVIDIA:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
-ARG ZIRCONIUM_IMAGE_REF="ghcr.io/zirconium-dev/zirconium:unpinned-must-override"
 
 FROM ${COMMON_IMAGE_REF} AS common
-FROM ${ZIRCONIUM_IMAGE_REF} AS zirconium
 
 FROM ${BASE_IMAGE} AS bootc-builder
 ARG ORAS_VERSION=1.2.0
@@ -262,15 +260,12 @@ RUN --mount=type=tmpfs,dst=/tmp \
 FROM base-no-de AS niri
 # Zirconium's curated DMS/Niri integration is session-specific. Keep its
 # config, policy, and greeter files out of every other desktop image.
-COPY --from=zirconium /usr/share/factory/etc/greetd /etc/greetd
-COPY --from=zirconium /usr/share/factory/etc/profile.d /etc/profile.d
-COPY --from=zirconium /usr/share/dms /usr/share/dms
-COPY --from=zirconium /usr/share/greetd /usr/share/greetd
-COPY --from=zirconium /usr/lib/pam.d/greetd-spawn /usr/lib/pam.d/greetd-spawn
-COPY --from=zirconium /usr/lib/sysusers.d/dms-greeter.conf /usr/lib/sysusers.d/dms-greeter.conf
-COPY --from=zirconium /usr/lib/tmpfiles.d/99-dms-greeter.conf /usr/lib/tmpfiles.d/99-dms-greeter.conf
-COPY --from=zirconium /usr/lib/systemd/user/dms.service.d /usr/lib/systemd/user/dms.service.d
-COPY --from=zirconium /usr/share/flatpak/preinstall.d /usr/share/flatpak/preinstall.d
+# Sourced from the zirconium-dev/zirconium source tarball (mkosi.extra)
+# via install-zirconium.sh — no OCI stage, no digest pin.
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/install-zirconium.sh
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \

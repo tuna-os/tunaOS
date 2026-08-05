@@ -40,11 +40,38 @@ systemctl set-default graphical.target
 # console by scripts/iso-e2e.sh; the checks ExecStart is non-fatal).
 case "$desktop" in
 gnome | kde | niri | cosmic | xfce)
+	# Compile dconf databases before verify checks — desktop stages lay down
+	# keyfiles after the base stage's dconf update, so recompile here.
+	if command -v dconf &>/dev/null && compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
+		dconf update || true
+	fi
+
 	/run/context/build_scripts/checks/verify-desktop-experience.sh "$desktop"
 	install -Dm0755 /run/context/build_scripts/checks/verify-desktop-experience.sh \
 		/usr/libexec/tunaos/verify-desktop-experience
 	install -Dm0755 /run/context/build_scripts/checks/e2e-runtime-checks.sh \
 		/usr/libexec/tunaos/e2e-runtime-checks
+
+	# Branding contract — common to every desktop, plus per-desktop surfaces.
+	# The branding scripts take the VARIANT (fish codename), not the desktop.
+	/run/context/build_scripts/checks/verify-branding.sh "${IMAGE_NAME:-$desktop}"
+	install -Dm0755 /run/context/build_scripts/checks/verify-branding.sh \
+		/usr/libexec/tunaos/verify-branding
+	BRANDING_EXTRA=""
+	case "$desktop" in
+	kde)
+		/run/context/build_scripts/checks/verify-branding-kde.sh "${IMAGE_NAME:-$desktop}"
+		install -Dm0755 /run/context/build_scripts/checks/verify-branding-kde.sh \
+			/usr/libexec/tunaos/verify-branding-kde
+		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-kde ${IMAGE_NAME:-$desktop} --runtime"
+		;;
+	niri)
+		/run/context/build_scripts/checks/verify-branding-niri.sh "${IMAGE_NAME:-$desktop}"
+		install -Dm0755 /run/context/build_scripts/checks/verify-branding-niri.sh \
+			/usr/libexec/tunaos/verify-branding-niri
+		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-niri ${IMAGE_NAME:-$desktop} --runtime"
+		;;
+	esac
 	cat >/usr/lib/systemd/system/tunaos-desktop-contract.service <<EOF
 [Unit]
 Description=Verify TunaOS ${desktop} desktop experience
@@ -54,6 +81,8 @@ Requires=display-manager.service
 [Service]
 Type=oneshot
 ExecStart=/usr/libexec/tunaos/verify-desktop-experience ${desktop} --runtime
+ExecStart=-/usr/libexec/tunaos/verify-branding ${IMAGE_NAME:-${desktop}} --runtime
+${BRANDING_EXTRA}
 ExecStart=-/usr/libexec/tunaos/e2e-runtime-checks ${desktop}
 StandardOutput=journal+console
 StandardError=journal+console

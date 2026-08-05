@@ -44,6 +44,7 @@ guppy) CODE_NAME="Poecilia reticulata" ;;
 grouper) CODE_NAME="Epinephelus marginatus" ;;
 marlin) CODE_NAME="Makaira nigricans" ;;
 hummingbird) CODE_NAME="Trochilidae" ;;
+gurnard) CODE_NAME="Chelidonichthys lucerna" ;;
 flounder | flounder-sid) CODE_NAME="Platichthys flesus" ;;
 *)
 	echo "ERROR: no scientific fish codename defined for variant: ${IMAGE_NAME}" >&2
@@ -173,11 +174,9 @@ osr_set VARIANT "${IMAGE_PRETTY_NAME} ${IMAGE_FLAVOR}"
 osr_set IMAGE_ID "${IMAGE_NAME}"
 osr_set IMAGE_VERSION "${IMAGE_FLAVOR}-${SHA_HEAD_SHORT:-testing}"
 
-# LOGO is deliberately NOT set here. verify-branding.sh also asserts the
-# referenced asset exists under /usr/share/pixmaps or hicolor, and this repo
-# ships no logo file at all — so naming one would swap "LOGO is upstream" for
-# "LOGO names a file that does not exist", which renders as a blank icon in
-# GNOME About, GDM and fastfetch. That needs an actual asset, not an
-# os-release line.
+# LOGO names the distro icon read by GNOME About, GDM, KDE and fastfetch.
+# We ship the asset at /usr/share/pixmaps/tunaos.svg (repo system_files), so
+# the verify-branding.sh asset check passes too.
+osr_set LOGO "tunaos"
 
 printf "::endgroup::\n"
