@@ -174,6 +174,16 @@ osr_set VARIANT "${IMAGE_PRETTY_NAME} ${IMAGE_FLAVOR}"
 osr_set IMAGE_ID "${IMAGE_NAME}"
 osr_set IMAGE_VERSION "${IMAGE_FLAVOR}-${SHA_HEAD_SHORT:-testing}"
 
+# NAME, PRETTY_NAME, VERSION_CODENAME, BUG_REPORT_URL — these are handled by
+# the sed block at the top for distros that already ship the keys. For distros
+# that omit them (Arch, Gentoo, openSUSE have no VERSION_CODENAME etc.), the
+# sed is a no-op and osr_set appends them.
+osr_set NAME "${IMAGE_PRETTY_NAME}"
+osr_set PRETTY_NAME "${IMAGE_PRETTY_NAME}"
+osr_set VERSION_CODENAME "${CODE_NAME}"
+osr_set BUG_REPORT_URL "${BUG_SUPPORT_URL}"
+osr_set HOME_URL "${HOME_URL}"
+
 # LOGO names the distro icon read by GNOME About, GDM, KDE and fastfetch.
 # We ship the asset at /usr/share/pixmaps/tunaos.svg (repo system_files), so
 # the verify-branding.sh asset check passes too.
