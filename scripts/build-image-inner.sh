@@ -47,7 +47,6 @@ common_image_sha=$($YQ -r '.images[] | select(.name == "common") | .digest' imag
 common_image_ref="${common_image}@${common_image_sha}"
 brew_image_sha=$($YQ -r '.images[] | select(.name == "brew") | .digest' image-versions.yaml)
 brew_image_ref="${brew_image}@${brew_image_sha}"
-zirconium_image_sha=$($YQ -r '.images[] | select(.name == "zirconium") | .digest' image-versions.yaml)
 
 # ── Build args ────────────────────────────────────────────────────────────────
 BUILD_ARGS=()
@@ -67,7 +66,6 @@ BOOTC_VERSION=$($YQ -r '.downloads.bootc' image-versions.yaml)
 BOOTUPD_VERSION=$($YQ -r '.downloads.bootupd' image-versions.yaml)
 BUILD_ARGS+=("--build-arg" "BOOTC_VERSION=${BOOTC_VERSION}")
 BUILD_ARGS+=("--build-arg" "BOOTUPD_VERSION=${BOOTUPD_VERSION}")
-BUILD_ARGS+=("--build-arg" "ZIRCONIUM_IMAGE_REF=ghcr.io/zirconium-dev/zirconium@${zirconium_image_sha}")
 
 # Overlay type for Containerfile.overlay
 if [[ -n "${OVERLAY_TYPE:-}" ]]; then

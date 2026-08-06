@@ -222,6 +222,64 @@ build_scripts_top=(
   [ "$status" -ne 0 ]
 }
 
+# The codename table is keyed on the canonical variant id, not IMAGE_NAME.
+# IMAGE_NAME is the *publish* name (bonito for bonito-rawhide) and, on bases
+# whose Containerfile does not pin it, whatever lib.sh derived from the base
+# image, which is the friendly alias: `opensuse` for sailfin and `gentoo` for
+# guppy. Keyed on IMAGE_NAME alone, those two hit the abort branch and failed
+# the build for a variant the table knows perfectly well.
+@test "build_scripts/90-image-info.sh keys codenames on the canonical variant id" {
+  local script="${REPO_ROOT}/build_scripts/90-image-info.sh"
+  local harness="${BATS_TEST_TMPDIR}/codename.sh"
+  {
+    echo 'set -euo pipefail'
+    awk '/^canonical_variant\(\) \{/,/^\}/' "$script"
+    awk '/^VARIANT_KEY=/,/^esac/' "$script"
+    echo 'echo "${VARIANT_KEY}:${CODE_NAME}"'
+  } >"$harness"
+
+  # Canonical variant id wins over an alias in IMAGE_NAME.
+  run env IMAGE_NAME_VARIANT=sailfin IMAGE_NAME=opensuse bash "$harness"
+  [ "$status" -eq 0 ]
+  [ "$output" = "sailfin:Istiophorus platypterus" ]
+
+  # Alias only (lib.sh-derived IMAGE_NAME, no variant arg) still resolves.
+  run env -u IMAGE_NAME_VARIANT IMAGE_NAME=gentoo bash "$harness"
+  [ "$status" -eq 0 ]
+  [ "$output" = "guppy:Poecilia reticulata" ]
+
+  # A suffixed variant published under a shorter name still resolves.
+  run env IMAGE_NAME_VARIANT=bonito-rawhide IMAGE_NAME=bonito bash "$harness"
+  [ "$status" -eq 0 ]
+  [ "$output" = "bonito-rawhide:Sarda sarda" ]
+
+  # A genuinely unknown variant must still be fatal.
+  run env IMAGE_NAME_VARIANT=tunafish IMAGE_NAME=tunafish bash "$harness"
+  [ "$status" -ne 0 ]
+}
+
+# The archlinux/archlinux container overwrites /etc/os-release with a regular
+# file holding stock Arch identity, shadowing the `filesystem` package symlink
+# to /usr/lib/os-release. Branding only the canonical file left marlin shipping
+# two identities, and verify-branding.sh (which prefers /etc/os-release) failed
+# all ten identity/logo checks against a correctly branded /usr/lib/os-release.
+@test "build_scripts/90-image-info.sh brands every distinct os-release path" {
+  local script="${REPO_ROOT}/build_scripts/90-image-info.sh"
+  # The two paths default to the real ones and are overridable for the
+  # behavioural fixtures in test_build_scripts_remaining.bats only.
+  grep -q 'OS_RELEASE_USR="\${TUNAOS_OS_RELEASE_USR:-/usr/lib/os-release}"' "$script"
+  grep -q 'OS_RELEASE_ETC="\${TUNAOS_OS_RELEASE_ETC:-/etc/os-release}"' "$script"
+  grep -q 'OS_RELEASE_FILES=("\$OS_RELEASE_USR")' "$script"
+  grep -q 'OS_RELEASE_FILES+=("\$OS_RELEASE_ETC")' "$script"
+  # Every write goes through osr_set, which iterates the list.
+  run grep -cE '\$\{OS_RELEASE_FILES\[@\]\}' "$script"
+  [ "$status" -eq 0 ]
+  [ "$output" -ge 1 ]
+  # No write may target /usr/lib/os-release directly any more.
+  run grep -nE '(sed -i[^|]*|>>)[[:space:]]*/usr/lib/os-release' "$script"
+  [ "$status" -ne 0 ]
+}
+
 # ── Desktop flavor scripts ──────────────────────────────────────────────
 
 @test "build_scripts/desktop/gnome.sh: exists and sources lib.sh" {

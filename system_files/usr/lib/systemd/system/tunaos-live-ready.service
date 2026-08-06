@@ -5,15 +5,17 @@
 #
 # Ordering: After=livesys.service so liveuser exists and the live overlay is
 # set up; After=NetworkManager-wait-online.service so DNS works for any
-# follow-up step (flatpak remote check, package fetch, etc.); After=
-# graphical.target on DE builds so gdm/sddm/greetd has actually started.
+# follow-up step (flatpak remote check, package fetch, etc.).
+# graphical.target is Wants= not After= because greetd-based DEs (COSMIC,
+# Niri) never signal it as active — and the harness doesn't need a display
+# manager to be running, it only needs multi-user.target and SSH.
 #
 # StandardOutput=journal+console so the marker reaches /dev/ttyS0 when the
 # kernel is booted with `console=ttyS0`, which the e2e harness sets.
 Description=TunaOS live environment ready marker
 Documentation=https://github.com/tuna-os/tunaos/blob/main/docs/IMPROVEMENT_PLAN.md
-After=livesys.service NetworkManager-wait-online.service graphical.target multi-user.target
-Wants=NetworkManager-wait-online.service
+After=livesys.service NetworkManager-wait-online.service multi-user.target
+Wants=NetworkManager-wait-online.service graphical.target
 
 [Service]
 Type=oneshot
@@ -25,6 +27,21 @@ StandardError=journal+console
 # correlate with the QEMU launch timestamp.
 ExecStart=/bin/sh -c 'echo "TUNAOS_LIVE_READY uptime=$(awk "{print \\$1}" /proc/uptime)"'
 ExecStart=/bin/sh -c 'sleep 2 && echo "TUNAOS_LIVE_READY uptime=$(awk "{print \\$1}" /proc/uptime)"'
+# Kept identical to live-iso/common/src/tunaos-live-ready.service, which is
+# the copy the dev ISO installs. The two files already disagree about how they
+# reach the serial console (tty + TTYPath there, journal+console here) — that
+# difference is deliberate and documented above, but it is exactly the kind of
+# drift that leaves a marker present in one path and missing in the other, so
+# the ExecStart set is kept in step.
+#
+# Rationale in full lives in the other copy. Briefly: grouper:kde reported an
+# EMPTY address list next to a healthy "0.0.0.0:22" listener, which is why the
+# harness sees "Connection timed out during banner exchange" — QEMU accepts
+# the connection host-side and has no guest address to hand it to. Emitted
+# here rather than from e2e-runtime-checks.sh because that script only runs on
+# graphical.target, so the cells that fail hardest never reached it.
+ExecStart=/bin/sh -c 'echo "TUNAOS_LIVE_NET ipv4=$(command -v ip >/dev/null 2>&1 && ip -4 -o addr show scope global 2>/dev/null | tr -s " " | cut -d" " -f4 | tr "\\n" "," || echo ip-unavailable)"'
+ExecStart=/bin/sh -c 'echo "TUNAOS_LIVE_NET listeners=$(command -v ss >/dev/null 2>&1 && ss -Hltn 2>/dev/null | tr -s " " | cut -d" " -f4 | sort -u | tr "\\n" " " || echo ss-unavailable)"'
 
 [Install]
 WantedBy=multi-user.target

@@ -168,13 +168,21 @@ gnome)
 		echo "missing required GNOME Shell extensions under /usr/share/gnome-shell/extensions" >&2
 		exit 1
 	fi
-	# dconf compiled database: keyfiles in /etc/dconf/db/*.d/ must be compiled into binary dconf DB.
-	if compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
-		if [[ ! -s /etc/dconf/db/local && ! -s /etc/dconf/db/gdm ]]; then
-			echo "missing compiled dconf database: keyfiles exist under /etc/dconf/db/*.d/ but /etc/dconf/db/local and gdm are missing or empty (run dconf update)" >&2
-			exit 1
+	# dconf compiled database: every keyfile dir /etc/dconf/db/<name>.d/ must have
+	# a compiled /etc/dconf/db/<name>. Iterate instead of hardcoding local/gdm —
+	# distros ship their own keyfile dirs (ibus.d on Arch) already compiled by
+	# package postinst; hardcoding local/gdm fails those falsely.
+	for _dcf_dir in /etc/dconf/db/*.d; do
+		[[ -d "$_dcf_dir" ]] || continue
+		if compgen -G "$_dcf_dir/*" >/dev/null 2>&1; then
+			_dcf_name="${_dcf_dir%.d}"
+			_dcf_name="${_dcf_name##*/}"
+			if [[ ! -s "/etc/dconf/db/${_dcf_name}" ]]; then
+				echo "missing compiled dconf database: keyfiles in ${_dcf_dir} but /etc/dconf/db/${_dcf_name} is missing or empty (run dconf update)" >&2
+				exit 1
+			fi
 		fi
-	fi
+	done
 	;;
 kde)
 	experience="ublue-os/aurora"
@@ -388,14 +396,21 @@ else
 		fi
 	fi
 
-	# dconf compiled database: desktop branding keyfiles in /etc/dconf/db/*.d must be compiled.
-	if compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
-		if [[ ! -s /etc/dconf/db/local && ! -s /etc/dconf/db/gdm ]]; then
-			echo "missing compiled dconf database: keyfiles exist under /etc/dconf/db/*.d/ but /etc/dconf/db/local and gdm are missing or empty (run dconf update)" >&2
-			if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then exit 0; fi
-			exit 1
+	# dconf compiled database: every keyfile dir /etc/dconf/db/<name>.d/ must have
+	# a compiled /etc/dconf/db/<name>. Iterate instead of hardcoding local/gdm —
+	# distros ship their own keyfile dirs (ibus.d on Arch) already compiled by
+	# package postinst; hardcoding local/gdm fails those falsely.
+	for _dcf_dir in /etc/dconf/db/*.d; do
+		[[ -d "$_dcf_dir" ]] || continue
+		if compgen -G "$_dcf_dir/*" >/dev/null 2>&1; then
+			_dcf_name="${_dcf_dir%.d}"
+			_dcf_name="${_dcf_name##*/}"
+			if [[ ! -s "/etc/dconf/db/${_dcf_name}" ]]; then
+				echo "missing compiled dconf database: keyfiles in ${_dcf_dir} but /etc/dconf/db/${_dcf_name} is missing or empty (run dconf update)" >&2
+				exit 1
+			fi
 		fi
-	fi
+	done
 
 	install -d /usr/share/tunaos/experience-contracts
 	printf 'desktop=%s\nexperience=%s\nvalidated_at_build=true\n' "$desktop" "$experience" \

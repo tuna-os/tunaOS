@@ -35,3 +35,7 @@ out.ociarchive
 tuna.txt
 ubuntu.txt
 .pi-subagents/
+
+# Python bytecode
+__pycache__/
+*.py[cod]

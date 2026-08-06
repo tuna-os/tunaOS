@@ -88,6 +88,35 @@ check "machine-id is committed (32-hex, not uninitialized)" \
 if systemctl list-unit-files sshd.service ssh.service --no-legend 2>/dev/null | grep -q .; then
 	check "SSH host keys were generated" \
 		bash -c 'ls /etc/ssh/ssh_host_*_key >/dev/null 2>&1'
+
+	# Host keys existing, and the unit reporting Started, do not add up to
+	# "the daemon is REACHABLE" — and when it isn't, the serial log is the
+	# only channel out, so whatever it doesn't say is unknowable after the
+	# fact. guppy:xfce fails the LUKS gate at "Connection timed out during
+	# banner exchange" (runs 31101520694, 31101896534) having logged
+	# "Started OpenSSH server daemon", no failed unit, and a passing
+	# "a network manager is active" — evidence that is equally consistent
+	# with the guest holding no address and with nothing bound to :22. The
+	# serial cannot currently tell those apart, so a diagnosis from it is a
+	# guess. These two lines make it tell.
+	#
+	# Informational, not assertions: a production image legitimately ships
+	# sshd off with nothing listening, and this script runs on every real
+	# user boot. Both reads are local — no packets — so they stay inside
+	# this file's "read-only and network-free" contract.
+	if command -v ip >/dev/null 2>&1; then
+		emit "# ipv4: $(ip -brief -4 addr show scope global 2>/dev/null | tr '\n' ';')"
+	else
+		emit "# ipv4: ip(8) unavailable"
+	fi
+	# Report the failure rather than an empty string when ss is absent: a
+	# blank listener list reads as "nothing is listening", which is the very
+	# conclusion this line exists to establish.
+	if command -v ss >/dev/null 2>&1; then
+		emit "# tcp listeners: $(ss -H -ltn 2>/dev/null | awk '{print $4}' | sort -u | tr '\n' ' ')"
+	else
+		emit "# tcp listeners: ss(8) unavailable"
+	fi
 fi
 
 # ── Service health (snosi 02, DE-aware) ────────────────────────────────────

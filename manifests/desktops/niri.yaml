@@ -8,14 +8,33 @@ packages:
       - repo: yalter/niri-git
         packages:
           - niri
+      # DMS (DankMaterialShell) suite. Which COPR holds which binary RPM,
+      # read off the repos themselves (fedora-44-x86_64 repodata, 2026-08-06):
+      #
+      #   avengemedia/dms-git   dms, dms-cli
+      #   avengemedia/danklinux dms-greeter, quickshell, quickshell-git,
+      #                         dgop, danksearch, matugen, ...
+      #
+      # dms-greeter was listed under dms-git, where it does not exist. dnf
+      # fails the whole transaction on one unmatched name, and COPR installs
+      # are best-effort (`|| true` in install-desktop.sh), so bonito lost dms
+      # and dms-cli along with it and shipped a niri image with no shell at
+      # all — tunaOS#1009 and #637. The el10 section below already had this
+      # right; the fedora section never got the same treatment.
+      #
+      # Install the suite in ONE transaction with both repos enabled, the
+      # shape el10 uses, so a cross-repo dependency can never split it again.
+      # The danklinux block is enable-only so its repo file exists for
+      # --enablerepo.
       - repo: avengemedia/danklinux
-        packages:
-          - quickshell-git
+        packages: []
       - repo: avengemedia/dms-git
         packages:
+          - quickshell-git
           - dms
           - dms-cli
           - dms-greeter
+        options: "--enablerepo=copr:copr.fedorainfracloud.org:avengemedia:danklinux"
     packages:
       - greetd
       - greetd-selinux
@@ -24,6 +43,8 @@ packages:
       - waybar
       - fuzzel
       - swayidle
+      # Wallpaper: niri draws none itself; swaybg renders the branded one.
+      - swaybg
       - wl-clipboard
       - xdg-desktop-portal-gnome
       - xdg-desktop-portal-gtk
@@ -145,6 +166,19 @@ packages:
     # from build_scripts/desktop/xfce.sh where the same block was already proven.
     - gtkgreet
     - cage
+    # Wallpaper: niri draws none itself; swaybg renders the branded one.
+    # The fedora and pacman sections have carried this since niri landed; this
+    # one did not, and openSUSE is the single base with nothing to fall back
+    # on — verify-branding-niri.sh accepts dms/quickshell drawing its own
+    # background instead, which is how el10 passes without swaybg, and neither
+    # dms-greeter nor cosmic-greeter is packaged for Tumbleweed (hence the
+    # gtkgreet-under-cage greeter above). So:
+    #   FAIL: no wallpaper daemon (swaybg/swww/wpaperd) and no dms
+    # sailfin:niri, LUKS run 31087934571 — the ONLY failure in that run, with
+    # greeter, session file, niri config and the wallpaper asset all passing.
+    # swaybg 1.2.2 is in openSUSE:Factory (checked via the OBS public API, not
+    # assumed — the package is named plainly, unlike SwayNotificationCenter).
+    - swaybg
     # X11 applications under niri (niri is Wayland-only)
     - xwayland-satellite
     # Shell: bar, launcher, notifications, idle and lock
