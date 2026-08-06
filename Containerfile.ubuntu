@@ -171,6 +171,18 @@ COPY --from=bootc-builder /output /
 # tidier long-term arrangement — it would move this build off the image's
 # critical path — but it is not required for correctness, and building against
 # the base we actually ship on is what makes the ABI match by construction.
+#
+# One thing to know before attempting that: toolchain/Containerfile.debian does
+# not build on noble as written. Two of its build deps are absent there, and
+# both are redundant rather than renamed-in-place, so dropping them keeps one
+# list for every base instead of a case whose arms drift:
+#
+#   libarchive13   the runtime lib; libarchive-dev already depends on it, and
+#                  noble's time_t64 transition renamed it libarchive13t64.
+#   e2fslibs-dev   transitional, depends on libext2fs-dev, which is listed.
+#
+# Every other name in that list is published for noble, trixie and sid —
+# checked against the archives, not assumed.
 RUN set -eux; \
     apt-get update -y; \
     export DEBIAN_FRONTEND=noninteractive; \
