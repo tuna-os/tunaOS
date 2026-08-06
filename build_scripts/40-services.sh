@@ -110,27 +110,27 @@ tunaos_enable_network_manager() {
 			net_unit=systemd-networkd.service
 	fi
 
+	# One if/elif/else, and the else EXITS. A networkless image must fail the
+	# build: it presents 40 minutes later as an SSH banner-exchange timeout
+	# against a guest with no address, which reads as broken SSH and sends
+	# whoever debugs it to the wrong subsystem.
 	if [[ -n "$net_unit" ]]; then
 		# Explicit, not safe_enable: both openSUSE and Arch ship `disable *`
 		# presets, so this is the only thing turning networking on, and a
 		# swallowed failure ships an image with no network and no complaint.
 		systemctl enable "$net_unit"
-		return 0
-	fi
-
-	if command -v emerge &>/dev/null; then
+	elif command -v emerge &>/dev/null; then
 		# Gentoo builds from source, so naming an atom here is an unbounded
 		# compile rather than a package fetch, and guppy's networking has not
 		# been measured the way openSUSE's and Arch's have. Say so instead of
 		# guessing, and leave the build passing as it does today.
 		echo "WARNING: no network manager on the emerge path; guppy may boot without networking" >&2
-		return 0
+	else
+		echo "ERROR: no NetworkManager or systemd-networkd unit on this image." >&2
+		echo "       It would boot with a NIC and no address, and sshd would" >&2
+		echo "       accept the port forward while answering nothing." >&2
+		exit 1
 	fi
-
-	echo "ERROR: no NetworkManager or systemd-networkd unit on this image." >&2
-	echo "       It would boot with a NIC and no address, and sshd would" >&2
-	echo "       accept the port forward while answering nothing." >&2
-	return 1
 }
 
 if [[ "${PKG_MGR:-}" == "apt" ]]; then
