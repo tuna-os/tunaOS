@@ -93,7 +93,11 @@ cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on hoste
 
 Missing for 6 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-cosmic`, `hummingbird-gnome`, `hummingbird-kde`, `hummingbird-niri`
 
+<!-- BEGIN VOLATILE — advances on re-runs; not drift -->
+
 ## Provenance
+
+The run that last asserted each verdict above. Re-running a cell moves a row here without moving the cell, so this table is refreshed only when a verdict actually changes — treat the dates as "no older than".
 
 | Date | Run | Cells |
 |---|---|---|
@@ -102,13 +106,15 @@ Missing for 6 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-
 | 2026-08-06 | [31100113432](https://github.com/tuna-os/tunaOS/actions/runs/31100113432) | 1 |
 | 2026-08-06 | [31100103368](https://github.com/tuna-os/tunaOS/actions/runs/31100103368) | 1 |
 | 2026-08-06 | [31100096864](https://github.com/tuna-os/tunaOS/actions/runs/31100096864) | 1 |
+| 2026-08-06 | [31099697401](https://github.com/tuna-os/tunaOS/actions/runs/31099697401) | 1 |
 | 2026-08-06 | [31093981917](https://github.com/tuna-os/tunaOS/actions/runs/31093981917) | 1 |
 | 2026-08-06 | [31092676972](https://github.com/tuna-os/tunaOS/actions/runs/31092676972) | 1 |
 | 2026-08-06 | [31092670802](https://github.com/tuna-os/tunaOS/actions/runs/31092670802) | 1 |
 | 2026-08-06 | [31092664411](https://github.com/tuna-os/tunaOS/actions/runs/31092664411) | 1 |
 | 2026-08-06 | [31092657612](https://github.com/tuna-os/tunaOS/actions/runs/31092657612) | 1 |
-| 2026-08-06 | [31091141499](https://github.com/tuna-os/tunaOS/actions/runs/31091141499) | 1 |
 | 2026-08-06 | [31090026607](https://github.com/tuna-os/tunaOS/actions/runs/31090026607) | 1 |
+
+<!-- END VOLATILE -->
 
 <!-- END GENERATED -->
 

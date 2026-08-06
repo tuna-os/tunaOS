@@ -14,7 +14,11 @@ a status page that quietly downgrades itself is worse than no status page.
 Usage:
     scripts/gen-matrix-status.py [--check]
 
-    --check  exit 1 if the file would change (for CI drift detection)
+    --check  exit 1 if a cell moved (for CI drift detection)
+
+"A cell moved" is narrower than "the bytes differ": the Provenance table names
+the run behind each verdict, so it advances on any re-run, verdict unchanged.
+That churn is fenced off as volatile and ignored here — see VOLATILE_BEGIN.
 """
 
 from __future__ import annotations
@@ -35,6 +39,38 @@ CONFIG = Path(".github/build-config.yml")
 
 BEGIN = "<!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->"
 END = "<!-- END GENERATED -->"
+
+# Provenance names the run that asserted each verdict, so it advances whenever a
+# cell is RE-RUN — even to the identical verdict. That is the same property the
+# wall-clock timestamp was removed for (see build()), just spelled as run IDs:
+# `LUKS guppy:xfce` went ❌ -> ❌ across runs 31091141499 and 31099697401, no
+# cell moved, and the generated block still changed. Both things the timestamp
+# removal protected broke with it — the pull_request drift gate failed on a diff
+# of one provenance row (run 31109653582), and the daily job would commit and
+# open a PR on days when nothing moved.
+#
+# So provenance is fenced off as volatile and excluded from the comparison that
+# decides whether the document is stale. It is still regenerated in full; it is
+# simply not evidence that a cell moved. Everything outside this fence keeps the
+# contract the block advertises: it changes only when a verdict changes.
+VOLATILE_BEGIN = "<!-- BEGIN VOLATILE — advances on re-runs; not drift -->"
+VOLATILE_END = "<!-- END VOLATILE -->"
+
+_VOLATILE_RE = re.compile(
+    re.escape(VOLATILE_BEGIN) + ".*?" + re.escape(VOLATILE_END), re.S
+)
+
+
+def stable_view(text: str) -> str:
+    """`text` with every volatile region's body collapsed away.
+
+    Two documents with the same stable view assert the same thing about every
+    cell; they may disagree only about which run last said so. `--check` and the
+    write decision in main() both compare through this, which is what keeps a
+    bare re-run from reading as drift.
+    """
+    return _VOLATILE_RE.sub(VOLATILE_BEGIN + VOLATILE_END, text)
+
 
 # How many recent COMPLETED runs to walk per workflow.
 #
@@ -296,6 +332,10 @@ def build() -> str:
     # produce a daily commit even when no cell moved. The commit date already
     # records when it ran; what matters here is how fresh the DATA is, which
     # is stated per-axis below and in Provenance.
+    #
+    # Provenance turned out to carry that same "as of <now>" property in
+    # disguise, which is why it is fenced as volatile and compared through
+    # stable_view rather than byte-for-byte. See VOLATILE_BEGIN.
     out: list[str] = [
         BEGIN,
         "",
@@ -401,11 +441,19 @@ def build() -> str:
         out += ["Every non-NVIDIA ISO cell has an overlay.", ""]
 
     # ── Provenance ──────────────────────────────────────────────────────────
+    # Fenced as volatile: re-running a cell to the same verdict rewrites this
+    # table and nothing else, which is not drift. See VOLATILE_BEGIN.
     runs = defaultdict(list)
     for name, (_, date, run_id) in {**luks, **smoke}.items():
         runs[(date, run_id)].append(name)
     out += [
+        VOLATILE_BEGIN,
+        "",
         "## Provenance",
+        "",
+        "The run that last asserted each verdict above. Re-running a cell moves "
+        "a row here without moving the cell, so this table is refreshed only "
+        "when a verdict actually changes — treat the dates as \"no older than\".",
         "",
         "| Date | Run | Cells |",
         "|---|---|---|",
@@ -413,7 +461,7 @@ def build() -> str:
     for (date, run_id), names in sorted(runs.items(), reverse=True)[:12]:
         url = f"https://github.com/{REPO}/actions/runs/{run_id}"
         out.append(f"| {date} | [{run_id}]({url}) | {len(names)} |")
-    out += ["", END]
+    out += ["", VOLATILE_END, "", END]
     return "\n".join(out)
 
 
@@ -433,8 +481,18 @@ def main() -> int:
     _, tail = rest.split(END, 1)
     updated = head + build() + tail
 
-    if updated == text:
-        print("MATRIX-STATUS.md already current")
+    # Compare through stable_view, not byte-for-byte. A byte comparison counts a
+    # refreshed provenance row as staleness, which made the drift gate fail on
+    # re-runs that changed no verdict and would have committed a no-op refresh
+    # daily. Leaving the file untouched in that case is what makes `git diff
+    # --quiet` in matrix-status.yml mean "a cell moved" — the thing both the
+    # gate and the daily commit guard actually want to know.
+    if stable_view(updated) == stable_view(text):
+        if updated != text:
+            print("no cell moved (only provenance advanced) — leaving the file "
+                  "as committed")
+        else:
+            print("MATRIX-STATUS.md already current")
         return 0
     if args.check:
         print("MATRIX-STATUS.md is out of date", file=sys.stderr)
