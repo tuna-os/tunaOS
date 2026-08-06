@@ -14,6 +14,17 @@
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 SCRIPT="${REPO_ROOT}/build_scripts/checks/e2e-runtime-checks.sh"
 
+# Absolute, because a `PATH=<dir> cmd` prefix also governs the lookup of `cmd`
+# itself: with the block's PATH set to the stub directory alone, a bare `bash`
+# would have to live in there too.
+BASH_BIN="$(command -v bash)"
+
+# The utilities the extracted block itself shells out to. They have to be
+# reachable or the block cannot run, but they must arrive through the test's own
+# bin directory: the moment /usr/bin is on the block's PATH to supply them, it
+# supplies the host's real ip(8) and ss(8) as well. See setup().
+BLOCK_UTILS=(tr awk sort)
+
 # Extract the reachability block verbatim from the real script, so these tests
 # run the shipped code and not a copy that can drift away from it.
 #
@@ -37,12 +48,29 @@ run_block() {
 	local block
 	block="$(extract_block)"
 	[ -n "$block" ] || return 90
-	PATH="$path" bash -c "emit() { echo \"\$1\"; }; $block"
+	PATH="$path" "$BASH_BIN" -c "emit() { echo \"\$1\"; }; $block"
 }
 
 setup() {
 	STUBS="$BATS_TEST_TMPDIR/stubs"
 	mkdir -p "$STUBS"
+	# $STUBS is the block's ENTIRE PATH. It used to be "$STUBS:/usr/bin:/bin",
+	# which meant the two "unavailable" cases below asserted nothing on any host
+	# that has iproute2: `command -v ss` found /usr/bin/ss even though the test
+	# installs no ss stub, so the else-branch never ran and the real listener
+	# list was reported instead. That is a host-dependent test: it passed only
+	# where iproute2 is absent, and failed on GitHub's runners, which ship it.
+	#
+	# So the helper utilities the block needs are symlinked in individually
+	# rather than borrowed from a directory that also holds ip(8) and ss(8).
+	local u bin
+	for u in "${BLOCK_UTILS[@]}"; do
+		bin="$(command -v "$u")" || {
+			echo "missing utility the reachability block needs: $u" >&2
+			return 1
+		}
+		ln -sf "$bin" "$STUBS/$u"
+	done
 }
 
 @test "reachability block is present and extractable" {
@@ -50,6 +78,24 @@ setup() {
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"ipv4:"* ]]
 	[[ "$output" == *"tcp listeners:"* ]]
+}
+
+# The guard for the bug that made the two "unavailable" tests below vacuous:
+# with neither tool stubbed, BOTH must report unavailable. If anything ever puts
+# a directory holding the host's iproute2 back on the block's PATH, this fails
+# immediately and says so, instead of the negative cases quietly passing on the
+# hosts that lack it and failing on the ones that don't.
+@test "with neither tool stubbed, the block finds no ip(8) and no ss(8)" {
+	# Positive control first: a PATH that resolves nothing at all would make
+	# every `command -v` fail and satisfy the two assertions below for the wrong
+	# reason, the same vacuous pass in mirror image. Proving a planted utility
+	# IS found makes the absences below a real negative.
+	PATH="$STUBS" "$BASH_BIN" -c 'command -v tr' >/dev/null
+
+	run run_block "$STUBS"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"ip(8) unavailable"* ]]
+	[[ "$output" == *"ss(8) unavailable"* ]]
 }
 
 @test "reports the guest's address and listeners when ip and ss exist" {
@@ -63,7 +109,7 @@ setup() {
 	EOF
 	chmod +x "$STUBS/ip" "$STUBS/ss"
 
-	run run_block "$STUBS:/usr/bin:/bin"
+	run run_block "$STUBS"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"10.0.2.15/24"* ]]
 	[[ "$output" == *"0.0.0.0:22"* ]]
@@ -80,7 +126,7 @@ setup() {
 	EOF
 	chmod +x "$STUBS/ip"
 
-	run run_block "$STUBS:/usr/bin:/bin"
+	run run_block "$STUBS"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"ss(8) unavailable"* ]]
 	# and must not emit a bare, empty listener list
@@ -94,7 +140,7 @@ setup() {
 	EOF
 	chmod +x "$STUBS/ss"
 
-	run run_block "$STUBS:/usr/bin:/bin"
+	run run_block "$STUBS"
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"ip(8) unavailable"* ]]
 }
