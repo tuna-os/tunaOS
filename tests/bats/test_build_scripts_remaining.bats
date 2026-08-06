@@ -1124,3 +1124,133 @@ _greeter_lines() {
   calls=$(grep -c '^[[:space:]]*tunaos_enable_systemd_resolved$' <<<"$code")
   [ "$calls" -ge 2 ]
 }
+
+@test "40-services.sh declares the privsep directory sshd cannot start without" {
+  # Gentoo's sshd chroots into /var/empty, and both /var wipes in the build
+  # (bootc/ostree-layout.sh's `rm -rf`, 99-cleanup.sh's `find /var -delete`)
+  # delete it. guppy's live ISO then booted with "[FAILED] Failed to start
+  # OpenSSH server daemon." and never opened port 22, so iso-e2e.sh logged 21 x
+  # "Connection timed out during banner exchange" and the cell died just after
+  # TUNAOS_LUKS_E2E_INSTALL_STARTED (LUKS run 31091141499, guppy:xfce) with
+  # every other guest check green.
+  #
+  # This asserts the BEHAVIOUR against a stub sshd that answers the way the
+  # real one does, because the failure was invisible in the script's text: the
+  # directory is compiled into sshd and named nowhere in this repo.
+  local script="${REPO_ROOT}/build_scripts/40-services.sh"
+  local blk
+  # One awk, not two piped ones: the second exiting early SIGPIPEs the first,
+  # and this file's assertions run under a shell that would take that status.
+  blk="$(awk '/^tunaos_sshd_missing_privsep_dir\(\) \{/{p=1} p{print} p&&/^\}$/{n++; if (n==2) exit}' "$script")"
+  grep -qF 'tunaos_declare_sshd_privsep_dir() {' <<<"$blk"
+
+  local root="${BATS_TEST_TMPDIR}/root"
+  local bin="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "$root/var" "$bin"
+
+  # Every probe below runs under `set -euo pipefail`, exactly as
+  # 40-services.sh does, because the stub exits non-zero in the case being
+  # detected: under pipefail a probe that does not absorb that status kills
+  # the build on the line that asks the question.
+  #
+  # A stub that reproduces the two answers the real sshd gives: it refuses to
+  # look at anything else until it has a host key (which is why the caller
+  # generates a throwaway one — without -h the real probe only ever says
+  # "no hostkeys available" and would declare nothing), and it names the
+  # missing directory by its unprefixed path.
+  cat >"$bin/sshd" <<STUB
+#!/usr/bin/env bash
+key=""
+while [ \$# -gt 0 ]; do
+  case "\$1" in
+  -h) key="\$2"; shift 2 ;;
+  *) shift ;;
+  esac
+done
+if [ -z "\$key" ] || [ ! -s "\$key" ]; then
+  echo "sshd: no hostkeys available -- exiting." >&2
+  exit 1
+fi
+if [ -d "${root}/var/empty" ]; then exit 0; fi
+# CRLF, because sshd logs to stderr in the SSH protocol's line ending. A
+# probe that keeps the CR writes a tmpfiles rule for a path with a carriage
+# return in it, which systemd-tmpfiles never creates.
+printf 'Missing privilege separation directory: /var/empty\r\n' >&2
+exit 255
+STUB
+  chmod +x "$bin/sshd"
+
+  run env \
+    PATH="$bin:$PATH" \
+    TUNAOS_SYSROOT="$root" \
+    TUNAOS_TMPFILES_DIR="$root/usr/lib/tmpfiles.d" \
+    bash -c "set -euo pipefail
+      $blk
+      tunaos_declare_sshd_privsep_dir"
+  [ "$status" -eq 0 ]
+
+  # The rule has to name the directory sshd asked for, unprefixed — it is
+  # resolved at boot, not at build time.
+  local rule
+  rule="$(cat "$root/usr/lib/tmpfiles.d/tunaos-sshd-privsep.conf")"
+  [[ "$rule" == "d /var/empty 0755 root root -" ]]
+  # And it has to be created now too, root-owned and not group/world writable.
+  [ -d "$root/var/empty" ]
+
+  # The property, end to end: fed the rule and a wiped /var, systemd-tmpfiles
+  # must put the directory back — that is what runs before sshd.service on the
+  # live boot.
+  if command -v systemd-tmpfiles >/dev/null 2>&1; then
+    rm -rf "$root/var/empty"
+    systemd-tmpfiles --create --root="$root" >/dev/null 2>&1 || true
+    [ -d "$root/var/empty" ]
+  fi
+
+  # A path outside /var must be left alone: /usr ships with the image, and
+  # creating /run/sshd would leave a non-empty /run, which bootc lint rejects.
+  cat >"$bin/sshd" <<'STUB'
+#!/usr/bin/env bash
+printf 'Missing privilege separation directory: /run/sshd\r\n' >&2
+exit 255
+STUB
+  chmod +x "$bin/sshd"
+  rm -rf "${root:?}/usr/lib/tmpfiles.d" "${root:?}/run"
+  run env \
+    PATH="$bin:$PATH" \
+    TUNAOS_SYSROOT="$root" \
+    TUNAOS_TMPFILES_DIR="$root/usr/lib/tmpfiles.d" \
+    bash -c "set -euo pipefail
+      $blk
+      tunaos_declare_sshd_privsep_dir"
+  [ "$status" -eq 0 ]
+  [ ! -e "$root/run/sshd" ]
+  [ ! -e "$root/usr/lib/tmpfiles.d/tunaos-sshd-privsep.conf" ]
+
+  # And a declaration that does not fix the start must fail the build, not warn
+  # — a swallowed failure here is the original defect.
+  cat >"$bin/sshd" <<'STUB'
+#!/usr/bin/env bash
+printf 'Missing privilege separation directory: /var/empty\r\n' >&2
+exit 255
+STUB
+  chmod +x "$bin/sshd"
+  run env \
+    PATH="$bin:$PATH" \
+    TUNAOS_SYSROOT="$root" \
+    TUNAOS_TMPFILES_DIR="$root/usr/lib/tmpfiles.d" \
+    bash -c "set -euo pipefail
+      $blk
+      tunaos_declare_sshd_privsep_dir"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"still cannot find its privilege separation directory"* ]]
+
+  # All three package-manager branches install an SSH server, so all three
+  # need the directory it starts in — a fix landing in one of them has been
+  # this branch's most repeated bug.
+  local code installs declares
+  code="$(grep -v '^[[:space:]]*#' "$script")"
+  installs=$(grep -c '^[[:space:]]*ensure_openssh_installed$' <<<"$code")
+  declares=$(grep -c '^[[:space:]]*tunaos_declare_sshd_privsep_dir$' <<<"$code")
+  [ "$installs" -ge 3 ]
+  [ "$declares" -ge "$installs" ]
+}

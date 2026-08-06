@@ -88,6 +88,122 @@ tunaos_declare_liveuser_home() {
 	install -d -m 0700 -o liveuser -g liveuser /var/home/liveuser 2>/dev/null || true
 }
 
+# Print the privilege-separation directory sshd says it cannot find, if any.
+#
+# `sshd -t` names the path in its own words — "Missing privilege separation
+# directory: /var/empty" — which is the only source that cannot be wrong about
+# it: the path is compiled in with --with-privsep-path and no config file can
+# move it. $2 is a throwaway host key; see the caller for why it is needed.
+#
+# `tr -d '\r'` is load-bearing, not tidying: sshd logs to stderr in the SSH
+# protocol's line ending, so the message really arrives as "…/var/empty\r\n".
+# Measured, not assumed — the first version of this wrote the CR into the
+# tmpfiles rule, where it became a path that systemd-tmpfiles never created.
+#
+# The trailing `|| true` is load-bearing too: this script runs under
+# `pipefail`, `sshd -t` exits 255 in exactly the case being detected, and
+# `dir="$(...)"` inherits that — so without it the probe does not report the
+# missing directory, it kills the build on the line that asks about it.
+tunaos_sshd_missing_privsep_dir() {
+	"$1" -t -h "$2" 2>&1 | tr -d '\r' |
+		sed -n 's/^Missing privilege separation directory: //p' | head -1 || true
+}
+
+# Make sshd's privilege-separation directory survive the /var wipe.
+#
+# sshd chroots an unprivileged child into that directory and refuses to start
+# without it. Gentoo's is /var/empty (the acct-user/sshd home), and BOTH wipes
+# in this build delete it — bootc/ostree-layout.sh's `rm -rf` and
+# 99-cleanup.sh's `find /var -mindepth 1 -maxdepth 1 -delete`. Nothing puts it
+# back, so guppy's live ISO boots with
+#
+#   [FAILED] Failed to start OpenSSH server daemon.
+#   See 'systemctl status sshd.service' for details.
+#
+# and never opens port 22. iso-e2e.sh then logs 21 x "Connection timed out
+# during banner exchange" and the cell dies right after
+# TUNAOS_LUKS_E2E_INSTALL_STARTED, having never reached fisherman: LUKS run
+# 31091141499's guppy:xfce. Everything else in that boot was green — branding
+# OK, lightdm active, "failed systemd units: 0" because the contract ran
+# before sshd's failure was collected — which is why it reads as a networking
+# or port-forward problem rather than a missing directory. Verified in a real
+# gentoo/stage3 container at the digest build-config pins: with /var wiped the
+# way this build wipes it, `sshd -t` exits 255 on the missing directory; with
+# the rule below applied by systemd-tmpfiles, sshd listens and a password
+# login as liveuser succeeds.
+#
+# The directory is asked for, not hardcoded, because it differs per base:
+# /usr/share/empty.sshd on Arch and Fedora, /run/sshd on Debian, /var/empty on
+# Gentoo. Only a path under /var needs anything — /usr ships with the image,
+# and /run is the unit's own RuntimeDirectory, which is also why this must not
+# create it (`bootc container lint` rejects a non-empty /run).
+tunaos_declare_sshd_privsep_dir() {
+	local tmpfiles_dir="${TUNAOS_TMPFILES_DIR:-/usr/lib/tmpfiles.d}"
+	# Prefix for the directory this creates, so a test can point it at a
+	# fixture tree. Same hook as TUNAOS_SYSROOT in ostree-layout.sh; the path
+	# inside the tmpfiles rule is resolved at boot, not here.
+	local root="${TUNAOS_SYSROOT:-}"
+	local sshd_bin="" candidate keydir dir still_missing
+
+	# /usr/sbin is not on every PATH this script runs under, and a silent skip
+	# here would reproduce the defect exactly.
+	for candidate in "$(command -v sshd 2>/dev/null || true)" /usr/sbin/sshd /usr/bin/sshd; do
+		if [[ -n "$candidate" && -x "$candidate" ]]; then
+			sshd_bin="$candidate"
+			break
+		fi
+	done
+	if [[ -z "$sshd_bin" ]]; then
+		echo "WARNING: no sshd binary found; cannot check its privsep directory" >&2
+		return 0
+	fi
+
+	# `sshd -t` exits at the first missing host key BEFORE it reaches the
+	# privsep check, and the image ships none — sshd.service generates them at
+	# boot with `ssh-keygen -A`. Without a throwaway key the probe only ever
+	# answers "sshd: no hostkeys available -- exiting." and this would declare
+	# nothing while looking like it had checked.
+	keydir="$(mktemp -d)"
+	if ! ssh-keygen -q -t ed25519 -N '' -f "${keydir}/probe" >/dev/null 2>&1; then
+		echo "WARNING: could not generate a probe host key; skipping privsep check" >&2
+		rm -rf "$keydir"
+		return 0
+	fi
+
+	dir="$(tunaos_sshd_missing_privsep_dir "$sshd_bin" "${keydir}/probe")"
+	if [[ -z "$dir" ]]; then
+		rm -rf "$keydir"
+		return 0
+	fi
+	case "$dir" in
+	/var/*) ;;
+	*)
+		echo "sshd privsep directory ${dir} is outside /var — nothing to declare"
+		rm -rf "$keydir"
+		return 0
+		;;
+	esac
+
+	install -d -m 0755 "$tmpfiles_dir"
+	printf 'd %s 0755 root root -\n' "$dir" \
+		>"${tmpfiles_dir}/tunaos-sshd-privsep.conf"
+	# root-owned and not group/world-writable, or sshd rejects it anyway.
+	install -d -m 0755 "${root}${dir}"
+
+	# Prove the declaration is the one sshd asked for, here rather than 20
+	# minutes into an E2E cell. A bare call under `set -e` makes this fail the
+	# build; a warning would be swallowed exactly the way the original failure
+	# was.
+	still_missing="$(tunaos_sshd_missing_privsep_dir "$sshd_bin" "${keydir}/probe")"
+	rm -rf "$keydir"
+	if [[ -n "$still_missing" ]]; then
+		echo "ERROR: sshd still cannot find its privilege separation directory" >&2
+		echo "       (${still_missing}) after declaring ${dir}." >&2
+		return 1
+	fi
+	echo "declared sshd privsep directory ${dir}"
+}
+
 # Enable a network manager, or the image boots with a NIC and no address.
 #
 # Called from BOTH the apt branch and the pacman/zypper/emerge branch. The apt
@@ -260,6 +376,10 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 	# the dev ISO gates the installer axis too — so one packaging asymmetry
 	# was holding a large share of the never-tested cells on both axes.
 	ensure_openssh_installed
+	# Not gated on ENABLE_SSHD: the published images keep the service off, but
+	# an installed system enabling it later needs the same directory, and the
+	# rule is one line.
+	tunaos_declare_sshd_privsep_dir
 	if [[ "${ENABLE_SSHD:-0}" == "1" ]]; then
 		# Debian/Ubuntu ship the real unit as ssh.service, with sshd.service a
 		# compat symlink that `systemctl enable` refuses to operate on ("linked
@@ -334,6 +454,8 @@ if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command 
 
 	# SSH handling (matching apt path logic)
 	ensure_openssh_installed
+	# This is the path guppy takes, and the one the missing /var/empty killed.
+	tunaos_declare_sshd_privsep_dir
 	if [[ "${ENABLE_SSHD:-0}" == "1" ]]; then
 		safe_enable sshd.service
 		if ! id liveuser &>/dev/null; then
@@ -447,6 +569,7 @@ safe_enable tunaos-live-ready.service
 # "no SSH service is installed" for exactly that reason — the package was
 # never installed for it, only assumed. See ensure_openssh_installed.
 ensure_openssh_installed
+tunaos_declare_sshd_privsep_dir
 if [[ "${ENABLE_SSHD:-0}" == "1" ]]; then
 	safe_enable sshd.service
 	if ! id liveuser &>/dev/null; then
