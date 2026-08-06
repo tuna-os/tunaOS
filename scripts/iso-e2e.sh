@@ -45,13 +45,9 @@
 #
 # Options:
 #   --timeout SEC         Per-phase timeout (default: 300)
-#   --live-marker RE      Extended regex the serial log must match to count
-#                         as ready. Default accepts both TUNAOS_LIVE_READY
-#                         (our images' tunaos-live-ready.service) and
-#                         TBOX_LIVE_READY (tacklebox's generic marker, which
-#                         its builders bake into non-tunaOS images — the
-#                         reference cells in iso-builder). Also settable via
-#                         the LIVE_MARKER env var.
+#   --live-marker RE      Readiness regex for the serial log (env: LIVE_MARKER).
+#                         Default TUNAOS_LIVE_READY|TBOX_LIVE_READY — ours and
+#                         tacklebox's generic marker for non-tunaOS images.
 #   --output DIR          Where serial logs / screenshots are written
 #                         (default: ./iso-e2e-out)
 #   --memory MIB          QEMU guest RAM (default: 4096)
@@ -933,7 +929,7 @@ wait_for_ready() {
 	local last_size=0
 	echo "==> Waiting up to ${TIMEOUT}s for readiness marker (${LIVE_MARKER})..."
 	while (($(date +%s) < deadline)); do
-		if [[ -f "$SERIAL_LOG" ]] && grep -qE "$LIVE_MARKER" "$SERIAL_LOG" 2>/dev/null; then
+		if [[ -f "$SERIAL_LOG" ]] && grep -qE -- "$LIVE_MARKER" "$SERIAL_LOG" 2>/dev/null; then
 			echo "==> Readiness marker found"
 			return 0
 		fi
