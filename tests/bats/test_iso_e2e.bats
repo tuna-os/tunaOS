@@ -713,7 +713,8 @@ setup_runtime_check_stubs() {
   # on the shared append-mode chardev.
   grep -q 'append=on' "$SCRIPT"
   ! grep -q -- '-serial "file:${SERIAL_LOG}"' "$SCRIPT"
-  [ "$(grep -c '"${E2E_SERIAL_ARGS\[@\]}"' "$SCRIPT")" -eq 3 ]
+  # live boot, fisherman installed boot, generic installed boot, --disk boot
+  [ "$(grep -c '"${E2E_SERIAL_ARGS\[@\]}"' "$SCRIPT")" -eq 4 ]
 }
 
 @test "install: a console heartbeat outlives the ssh channel" {
@@ -756,7 +757,8 @@ setup_runtime_check_stubs() {
   # bootindex publishes a QEMU fw_cfg boot order OVMF applies over the stale
   # NVRAM. Both post-install boots need it; the live boot must NOT have it
   # (the ISO has to win there).
-  [ "$(grep -c 'device virtio-blk-pci,drive=disk,bootindex=0' "$SCRIPT")" -eq 2 ]
+  # fisherman passphrase gate, fisherman installed boot, generic TPM gate
+  [ "$(grep -c 'device virtio-blk-pci,drive=disk,bootindex=0' "$SCRIPT")" -eq 3 ]
   grep -q -- '-device virtio-blk-pci,drive=disk \\' "$SCRIPT"
 }
 
@@ -858,6 +860,56 @@ setup_runtime_check_stubs() {
   grep -qF 'tcp: ${why} | vsock: ${VSOCK_WHY}' "$SCRIPT"
   # The fallback is gated on the device actually having been attached.
   grep -qF '[[ ${#VSOCK_ARGS[@]} -gt 0 ]] && check_ssh_vsock' "$SCRIPT"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Generic (no-fisherman) bootc install path
+# ═══════════════════════════════════════════════════════════════════════════
+
+@test "generic: qualify_imgref prefixes bare refs and passes qualified ones through" {
+  run bash -c '
+    set -euo pipefail
+    eval "$(sed -n "/^qualify_imgref()/,/^}/p" "'"$SCRIPT"'")"
+    [ "$(qualify_imgref ublue-os/aurora:stable)" = "ghcr.io/ublue-os/aurora:stable" ]
+    [ "$(qualify_imgref quay.io/fedora/fedora-bootc:42)" = "quay.io/fedora/fedora-bootc:42" ]
+    [ "$(qualify_imgref registry.example.com:5000/x/y:z)" = "registry.example.com:5000/x/y:z" ]
+    echo REFS_OK
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" == *REFS_OK* ]]
+}
+
+@test "generic: fisherman absence falls back to bootc only when an image is named" {
+  # Guessing a registry ref from an ISO filename is how #1006's 40-minute
+  # failures happened; the generic path refuses to guess.
+  grep -qF 'if [[ -n "${TBOX_E2E_IMAGE:-}" ]]; then' "$SCRIPT"
+  grep -q 'run_install_generic' "$SCRIPT"
+  grep -q 'TBOX_E2E_IMAGE is unset' "$SCRIPT"
+}
+
+@test "generic: container storage lands on the scratch disk, not the tmpfs root" {
+  # The live overlay upperdir is an 8G tmpfs; a stock image pull (aurora ≈
+  # 9G uncompressed) cannot land there (#941, from the other direction).
+  # The scratch disk is by-serial like the swap disk, attached to the live
+  # boot only, and formatted/mounted only by the generic path.
+  grep -q 'SCRATCH_DISK="${OUTPUT_DIR}/scratch-disk.qcow2"' "$SCRIPT"
+  grep -q 'SCRATCH_DISK_BYID="/dev/disk/by-id/virtio-${SCRATCH_DISK_SERIAL}"' "$SCRIPT"
+  [ "$(grep -c 'drive=scratchdisk' "$SCRIPT")" -eq 1 ]
+  grep -q 'mkfs.ext4 -q -L tbxscratch ${SCRATCH_DISK_BYID}' "$SCRIPT"
+  grep -q 'mount ${SCRATCH_DISK_BYID} /var/lib/containers' "$SCRIPT"
+}
+
+@test "generic: bootc install bakes serial kargs and tpm2-luks under --luks" {
+  grep -q 'bootc install to-disk --wipe' "$SCRIPT"
+  grep -qF 'block_setup="--block-setup tpm2-luks"' "$SCRIPT"
+  grep -q -- '--karg console=ttyS0,115200n8 --karg rd.plymouth=0 --karg plymouth.enable=0' "$SCRIPT"
+}
+
+@test "generic: the unlock gate restarts swtpm on preserved state" {
+  # swtpm exits with its QEMU; bootc sealed the LUKS key against that TPM's
+  # state, so the reboot gate must restart it WITHOUT wiping the state dir.
+  grep -q 'start_swtpm keep' "$SCRIPT"
+  grep -qF '[[ "$keep" == "keep" ]] || rm -rf "$TPM_DIR"' "$SCRIPT"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
