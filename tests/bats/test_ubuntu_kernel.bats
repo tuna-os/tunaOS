@@ -111,12 +111,22 @@ fi
 exec "$(command -v dpkg)" "\$@"
 EOF
 
+  # The script's cleanup is `rm -rf "${APT_LISTS_DIR}"/*`. Left at its default
+  # that is the HOST's /var/lib/apt/lists: unwritable on the GitHub runner, so
+  # rm exits non-zero and `set -e` failed every success-path test here; and
+  # writable anywhere the suite runs as root, where it silently deleted them.
+  APT_LISTS="${BATS_TEST_TMPDIR}/apt-lists"
+  mkdir -p "$APT_LISTS"
+  : >"${APT_LISTS}/keep"
+
   chmod +x "${BIN}/apt-get" "${BIN}/apt-cache" "${BIN}/dpkg-deb" "${BIN}/dpkg"
   PATH="${BIN}:${PATH}"
-  export PATH MODULES_DIR="${MODULES}" BOOT_DIR="${BOOT}"
+  export PATH MODULES_DIR="${MODULES}" BOOT_DIR="${BOOT}" APT_LISTS_DIR="${APT_LISTS}"
 }
 
-run_script() { run env MODULES_DIR="$MODULES" BOOT_DIR="$BOOT" bash "$SCRIPT"; }
+run_script() {
+  run env MODULES_DIR="$MODULES" BOOT_DIR="$BOOT" APT_LISTS_DIR="$APT_LISTS" bash "$SCRIPT"
+}
 
 installed_pkg() {
   # The meta-package the (non-simulated) install was asked for.
@@ -187,4 +197,17 @@ installed_pkg() {
   # point is where: before any generic-kernel selection.
   [[ "$output" == *"requires an arm64 build"* ]]
   [ -z "$(installed_pkg)" ]
+}
+
+# The harness above can only protect the host if the script honours the
+# override. A hardcoded path would make every test here run against the real
+# /var/lib/apt/lists again — unwritable on CI (so `set -e` kills the success
+# paths) and writable under root (so the suite deletes them).
+@test "the apt-lists cleanup is overridable, not a hardcoded host path" {
+  run grep -n 'rm -rf /var/lib/apt/lists' "$SCRIPT"
+  [ "$status" -ne 0 ]
+  # Both exits from the script clean up; both must go through the variable.
+  # Anchored on the whole command so the comment explaining it does not count.
+  run bash -c "grep -cF 'apt-get clean -y && rm -rf \"\${APT_LISTS_DIR}\"/*' '$SCRIPT'"
+  [ "$output" -eq 2 ]
 }
