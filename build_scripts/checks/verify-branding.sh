@@ -97,13 +97,32 @@ names_upstream() {
 # The fish codename is the whole point of the case statement in
 # 90-image-info.sh. If VERSION_CODENAME is a dinosaur, the script's output was
 # overwritten by a later step or never applied.
+# Keys are QUOTED, and the hyphenated ones must stay that way. Unquoted,
+# shfmt reads `[bonito-rawhide]` as an arithmetic subscript and reformats it to
+# `[bonito - rawhide]` — which bash then stores as a key containing spaces, so
+# the lookup for the real variant id silently misses:
+#
+#   FAIL: no fish codename defined for variant 'flounder-sid'
+#        — add it here and in 90-image-info.sh
+#
+# flounder-sid:gnome, LUKS run 31093350820, with all thirteen other branding
+# assertions passing. bonito-rawhide carried the identical corruption and had
+# simply never been run. 90-image-info.sh was unaffected because it spells the
+# same thing as a `case` pattern, which shfmt leaves alone — so the two sources
+# of the codename disagreed with no diff between them to see.
 declare -A FISH=(
-	[yellowfin]="Thunnus albacares" [albacore]="Thunnus alalunga"
-	[skipjack]="Katsuwonus pelamis" [bonito]="Sarda sarda"
-	[bonito - rawhide]="Sarda sarda" [sailfin]="Istiophorus platypterus"
-	[guppy]="Poecilia reticulata" [grouper]="Epinephelus marginatus"
-	[marlin]="Makaira nigricans" [flounder]="Platichthys flesus"
-	[flounder - sid]="Platichthys flesus" [gurnard]="Chelidonichthys lucerna"
+	["yellowfin"]="Thunnus albacares" ["albacore"]="Thunnus alalunga"
+	["skipjack"]="Katsuwonus pelamis" ["bonito"]="Sarda sarda"
+	["bonito-rawhide"]="Sarda sarda" ["sailfin"]="Istiophorus platypterus"
+	["guppy"]="Poecilia reticulata" ["grouper"]="Epinephelus marginatus"
+	["marlin"]="Makaira nigricans" ["flounder"]="Platichthys flesus"
+	["flounder-sid"]="Platichthys flesus" ["gurnard"]="Chelidonichthys lucerna"
+	# Not a fish, and the only one: hummingbird is named for the bird, so the
+	# codename is the family. 90-image-info.sh has always WRITTEN Trochilidae;
+	# this table never had it to CHECK, so every hummingbird build would fail
+	# the branding contract the moment one ran. All four of its declared
+	# flavours are untested, which is the only reason it has not.
+	["hummingbird"]="Trochilidae"
 )
 
 echo "== identity =="
