@@ -641,23 +641,44 @@ _osr_block() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
-# configure-desktop-runtime.sh — KDE LookAndFeelPackage (#1008)
+# kde-set-look-and-feel.sh — KDE LookAndFeelPackage (#1008)
 #
-# Extracts the real _kde_set_lnf out of the script and runs it against
-# fixtures, so the tests track the implementation rather than restating it.
+# Runs the real script against fixtures via its file arguments, so the tests
+# exercise the shipped code path rather than a restatement of it.
 # ═══════════════════════════════════════════════════════════════════════════
 
-# tunaos_kde_write_lookandfeel lives in lib.sh so install-desktop.sh and
-# configure-desktop-runtime.sh share one definition — the first version of this
-# fix went into configure-desktop-runtime.sh only, and bonito:kde (which reaches
-# the contract through install-desktop.sh) still shipped Fedora's theme in LUKS
-# run 31059172678. Extract the real function so the tests track it; if it is
-# renamed the extraction yields nothing and these fail rather than pass.
 _run_lnf() { # $1 = file
-  local fn
-  fn="$(sed -n '/^tunaos_kde_write_lookandfeel() {$/,/^}$/p' "${REPO_ROOT}/build_scripts/lib.sh")"
-  [ -n "$fn" ] || return 1
-  bash -c "$fn"$'\n'"tunaos_kde_write_lookandfeel '$1' org.tunaos.desktop"
+  "${REPO_ROOT}/build_scripts/desktop/kde-set-look-and-feel.sh" "$1"
+}
+
+@test "kde LookAndFeel: both desktop install paths re-assert it" {
+  # The fix is only correct if BOTH paths run it. install-desktop.sh covers the
+  # dnf/zypper/pacman/portage bases (bonito among them) and
+  # configure-desktop-runtime.sh covers Ubuntu/Debian; applying it to one left
+  # the other shipping Fedora's theme, which is how bonito:kde kept failing
+  # verify-branding-kde.sh with the fix nominally in the tree.
+  [ -x "${REPO_ROOT}/build_scripts/desktop/kde-set-look-and-feel.sh" ]
+  local script
+  for script in install-desktop.sh configure-desktop-runtime.sh; do
+    grep -qF 'kde-set-look-and-feel.sh' \
+      "${REPO_ROOT}/build_scripts/desktop/${script}"
+    # ...and before the check that would otherwise fail on Fedora's value.
+    local set_line check_line
+    set_line=$(grep -nF 'kde-set-look-and-feel.sh' \
+      "${REPO_ROOT}/build_scripts/desktop/${script}" | head -1 | cut -d: -f1)
+    check_line=$(grep -nF 'verify-branding-kde.sh' \
+      "${REPO_ROOT}/build_scripts/desktop/${script}" | head -1 | cut -d: -f1)
+    [ "$set_line" -lt "$check_line" ]
+  done
+}
+
+@test "kde LookAndFeel: default writes both config locations" {
+  # kde-settings' profile dir precedes /etc/xdg in XDG_CONFIG_DIRS on
+  # Fedora/EL, so branding only /etc/xdg passes the check (it greps /etc/xdg
+  # first) while Plasma still loads Fedora's theme.
+  local script="${REPO_ROOT}/build_scripts/desktop/kde-set-look-and-feel.sh"
+  grep -qF '/etc/xdg/kdeglobals' "$script"
+  grep -qF '/usr/share/kde-settings/kde-profile/default/xdg/kdeglobals' "$script"
 }
 
 @test "kde LookAndFeel: overwrites Fedora's value (bonito, #1008)" {
@@ -725,36 +746,6 @@ _run_lnf() { # $1 = file
   grep -qF '/usr/bin/sddm' "$script"
   # Debian/Ubuntu newer sddm puts its defaults under /usr/share, not /usr/lib.
   grep -qF '/usr/share/sddm/sddm.conf.d/' "$script"
-}
-
-@test "kde LookAndFeel: BOTH branding callers set it before checking" {
-  # install-desktop.sh and configure-desktop-runtime.sh each run the KDE
-  # branding contract in near-duplicate blocks. The first version of this fix
-  # patched only configure-desktop-runtime.sh, so bonito:kde — which reaches
-  # the contract via install-desktop.sh — still failed with Fedora's theme.
-  # Both callers must set it, and must set it BEFORE running the check.
-  local f
-  for f in build_scripts/desktop/install-desktop.sh \
-    build_scripts/desktop/configure-desktop-runtime.sh; do
-    local path="${REPO_ROOT}/${f}"
-    grep -qF 'tunaos_set_kde_lookandfeel' "$path" || {
-      echo "FAIL: ${f} runs the KDE branding contract without setting the theme" >&2
-      return 1
-    }
-    # Order matters: setting it after the check would pass the build and ship
-    # the wrong theme.
-    local set_line check_line
-    set_line="$(grep -n 'tunaos_set_kde_lookandfeel' "$path" | head -1 | cut -d: -f1)"
-    check_line="$(grep -n 'verify-branding-kde' "$path" | head -1 | cut -d: -f1)"
-    [ -n "$set_line" ] && [ -n "$check_line" ] || return 1
-    [ "$set_line" -lt "$check_line" ] || {
-      echo "FAIL: ${f} sets the theme at line ${set_line}, after the check at ${check_line}" >&2
-      return 1
-    }
-  done
-  # And both must have lib.sh in scope for the call to resolve at all.
-  grep -qE 'source .*lib\.sh' "${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
-  grep -qE 'source .*lib\.sh' "${REPO_ROOT}/build_scripts/desktop/configure-desktop-runtime.sh"
 }
 
 @test "99-cleanup.sh recreates /var/tmp after wiping /var (#1010)" {

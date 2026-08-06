@@ -42,26 +42,29 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 
 ## LUKS E2E
 
-**1 of 54** cells green (2 tested, 52 never tested).
+**3 of 54** cells green (41 tested, 13 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **albacore** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **bonito** | ✅ | ❌ | ✅ | ❌ | ✅ |
 | **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **flounder** | ⬜ | ⬜ | ⬜ | — | ⬜ |
+| **flounder** | ❌ | ❌ | ❌ | — | ❌ |
 | **flounder-sid** | ⬜ | ⬜ | ⬜ | — | ⬜ |
-| **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
-| **guppy** | ⬜ | ⬜ | — | — | ⬜ |
+| **grouper** | ❌ | ❌ | ❌ | — | ❌ |
+| **guppy** | ❌ | ❌ | — | — | ❌ |
+| **gurnard** | — | — | — | — | — |
 | **hummingbird** | ⬜ | ⬜ | ⬜ | ⬜ | — |
-| **marlin** | ⬜ | ⬜ | ❌ | ⬜ | ⬜ |
-| **sailfin** | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **yellowfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **marlin** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **sailfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **yellowfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
 
-Newest result 2026-08-02, oldest still-authoritative result 2026-08-02. Results older than the most recent round of fixes are the best available data, not current data.
+NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 25 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
+
+Newest result 2026-08-05, oldest still-authoritative result 2026-08-05. Results older than the most recent round of fixes are the best available data, not current data.
 
 ## Installer smoke
 
@@ -86,22 +89,26 @@ cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on hoste
 
 ## Live overlay
 
-**39** tags published.
+**47** tags published.
 
-Missing for 7 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-cosmic`, `hummingbird-gnome`, `hummingbird-kde`, `hummingbird-niri`, `marlin-kde`
+Missing for 6 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-cosmic`, `hummingbird-gnome`, `hummingbird-kde`, `hummingbird-niri`
 
 ## Provenance
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-08-02 | [30751141508](https://github.com/tuna-os/tunaOS/actions/runs/30751141508) | 1 |
-| 2026-08-02 | [30751140068](https://github.com/tuna-os/tunaOS/actions/runs/30751140068) | 1 |
-| 2026-08-02 | [30738570002](https://github.com/tuna-os/tunaOS/actions/runs/30738570002) | 1 |
-| 2026-07-31 | [30618282287](https://github.com/tuna-os/tunaOS/actions/runs/30618282287) | 1 |
-| 2026-07-31 | [30601507789](https://github.com/tuna-os/tunaOS/actions/runs/30601507789) | 5 |
-| 2026-07-31 | [30601506679](https://github.com/tuna-os/tunaOS/actions/runs/30601506679) | 5 |
-| 2026-07-31 | [30601505643](https://github.com/tuna-os/tunaOS/actions/runs/30601505643) | 1 |
-| 2026-07-29 | [30447516312](https://github.com/tuna-os/tunaOS/actions/runs/30447516312) | 3 |
+| 2026-08-05 | [31013418173](https://github.com/tuna-os/tunaOS/actions/runs/31013418173) | 1 |
+| 2026-08-05 | [31010736963](https://github.com/tuna-os/tunaOS/actions/runs/31010736963) | 18 |
+| 2026-08-05 | [31010734487](https://github.com/tuna-os/tunaOS/actions/runs/31010734487) | 5 |
+| 2026-08-05 | [31010732206](https://github.com/tuna-os/tunaOS/actions/runs/31010732206) | 3 |
+| 2026-08-05 | [31010721185](https://github.com/tuna-os/tunaOS/actions/runs/31010721185) | 5 |
+| 2026-08-05 | [31010718896](https://github.com/tuna-os/tunaOS/actions/runs/31010718896) | 16 |
+| 2026-08-05 | [31010716720](https://github.com/tuna-os/tunaOS/actions/runs/31010716720) | 12 |
+| 2026-08-05 | [31010714483](https://github.com/tuna-os/tunaOS/actions/runs/31010714483) | 18 |
+| 2026-08-05 | [31010712188](https://github.com/tuna-os/tunaOS/actions/runs/31010712188) | 4 |
+| 2026-08-05 | [31010701104](https://github.com/tuna-os/tunaOS/actions/runs/31010701104) | 9 |
+| 2026-08-05 | [31003453631](https://github.com/tuna-os/tunaOS/actions/runs/31003453631) | 1 |
+| 2026-08-05 | [31001067341](https://github.com/tuna-os/tunaOS/actions/runs/31001067341) | 4 |
 
 <!-- END GENERATED -->
 

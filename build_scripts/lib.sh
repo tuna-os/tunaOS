@@ -589,57 +589,6 @@ install_dnf_plugin_providers() {
 	done
 }
 
-# Point Plasma's system-wide defaults at the TunaOS look-and-feel package.
-#
-# Must run AFTER the desktop packages install. system_files ships kdeglobals
-# with LookAndFeelPackage=org.tunaos.desktop, but it is copied in during the
-# base stage and Fedora's kde-settings RPM owns the same path, so installing
-# Plasma overwrote it — bonito:kde shipped
-# LookAndFeelPackage=org.fedoraproject.fedora.desktop (#1008).
-#
-# Lives in lib.sh because BOTH install-desktop.sh and
-# configure-desktop-runtime.sh run the KDE branding contract, in near-duplicate
-# blocks. The first version of this fix went into configure-desktop-runtime.sh
-# only, and bonito — which reaches the check through install-desktop.sh — still
-# failed with the Fedora theme in LUKS run 31059172678. One definition, two
-# callers, so the next edit cannot land in only half the builds.
-#
-# Writes both locations on purpose. On Fedora/EL the kde-settings profile dir
-# precedes /etc/xdg in XDG_CONFIG_DIRS, so writing only /etc/xdg would satisfy
-# verify-branding-kde.sh (it greps /etc/xdg first) while Plasma still loaded
-# Fedora's theme — a green check on an unbranded image, which is worse than a
-# red one.
-
-# Set LookAndFeelPackage in one kdeglobals file. Split out from the caller so
-# it can be tested against a fixture instead of /etc.
-#   $1 = file, $2 = look-and-feel package id
-tunaos_kde_write_lookandfeel() {
-	local file="$1" want="$2"
-	mkdir -p "$(dirname "$file")"
-	if [[ ! -f "$file" ]]; then
-		printf '[KDE]\nLookAndFeelPackage=%s\n' "$want" >"$file"
-		return
-	fi
-	# Replace the key inside [KDE] if present, else add it to that section,
-	# else append the section — leaving everything else (fonts, colour scheme,
-	# widget style) untouched.
-	awk -v want="$want" '
-		/^\[/ { if (insec && !set) { print "LookAndFeelPackage=" want; set=1 } insec = ($0 == "[KDE]") }
-		/^[ \t]*LookAndFeelPackage[ \t]*=/ { if (insec) { print "LookAndFeelPackage=" want; set=1; next } }
-		{ print }
-		END { if (!set) { if (!insec) print "[KDE]"; print "LookAndFeelPackage=" want } }
-	' "$file" >"${file}.tunaos.tmp" && mv "${file}.tunaos.tmp" "$file"
-}
-
-tunaos_set_kde_lookandfeel() {
-	local want="${1:-org.tunaos.desktop}"
-	tunaos_kde_write_lookandfeel /etc/xdg/kdeglobals "$want"
-	if [[ -d /usr/share/kde-settings/kde-profile/default/xdg ]]; then
-		tunaos_kde_write_lookandfeel \
-			/usr/share/kde-settings/kde-profile/default/xdg/kdeglobals "$want"
-	fi
-}
-
 # apt counterpart to install_available: install only the names this release
 # actually has, and say loudly which it skipped.
 #

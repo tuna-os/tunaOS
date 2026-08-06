@@ -4,11 +4,6 @@ set -euo pipefail
 
 desktop="${1:?usage: configure-desktop-runtime.sh <gnome|kde|niri|cosmic|xfce>}"
 
-# For tunaos_set_kde_lookandfeel (and the OS detection it shares with every
-# other build script). install-desktop.sh already sources this.
-# shellcheck disable=SC1091
-source /run/context/build_scripts/lib.sh
-
 # Desktop packages are installed in later Containerfile stages than the base
 # service setup. Enable their display manager only after its unit exists.
 case "$desktop" in
@@ -65,9 +60,10 @@ gnome | kde | niri | cosmic | xfce)
 	BRANDING_EXTRA=""
 	case "$desktop" in
 	kde)
-		# After the Plasma packages, before the check — see lib.sh. Shared with
-		# install-desktop.sh, which runs the same contract on other bases.
-		tunaos_set_kde_lookandfeel
+		# Plasma's packages own /etc/xdg/kdeglobals and overwrite the copy
+		# system_files laid down in the base stage, so the look-and-feel has to
+		# be re-asserted here, after the install (#1008).
+		/run/context/build_scripts/desktop/kde-set-look-and-feel.sh
 
 		/run/context/build_scripts/checks/verify-branding-kde.sh "${IMAGE_NAME:-$desktop}"
 		install -Dm0755 /run/context/build_scripts/checks/verify-branding-kde.sh \

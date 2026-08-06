@@ -540,8 +540,9 @@ fi
 if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" == niri || "${_TD_DESKTOP}" == cosmic || "${_TD_DESKTOP}" == xfce ]]; then
 	# Compile dconf databases now so verify-desktop-experience.sh doesn't
 	# fail on uncompiled keyfiles. dconf-update.service handles this at
-	# first boot, but the verify check runs during image build. Required
-	# for Containerfile.arch which never calls 40-services.sh.
+	# first boot and 40-services.sh runs `dconf update` in the base stage,
+	# but desktop keyfiles land after that, so recompile here for the
+	# build-time verify check.
 	if command -v dconf &>/dev/null && compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
 		dconf update || true
 	fi
@@ -561,8 +562,10 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 	BRANDING_EXTRA=""
 	case "${_TD_DESKTOP}" in
 	kde)
-		# After the Plasma packages, before the check — see lib.sh.
-		tunaos_set_kde_lookandfeel
+		# Plasma's packages own /etc/xdg/kdeglobals and overwrite the copy
+		# system_files laid down in the base stage, so the look-and-feel has to
+		# be re-asserted here, after the install (#1008).
+		"${_TD_CTX}/build_scripts/desktop/kde-set-look-and-feel.sh"
 		"${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"
 		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" \
 			/usr/libexec/tunaos/verify-branding-kde
@@ -584,7 +587,7 @@ Requires=display-manager.service
 [Service]
 Type=oneshot
 ExecStart=/usr/libexec/tunaos/verify-desktop-experience ${_TD_DESKTOP} --runtime
-ExecStart=-/usr/libexec/tunaos/verify-branding ${_TD_DESKTOP} --runtime
+ExecStart=-/usr/libexec/tunaos/verify-branding ${IMAGE_NAME:-${_TD_DESKTOP}} --runtime
 ${BRANDING_EXTRA}
 ExecStart=-/usr/libexec/tunaos/e2e-runtime-checks ${_TD_DESKTOP}
 StandardOutput=journal+console
