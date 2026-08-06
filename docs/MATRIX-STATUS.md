@@ -42,7 +42,7 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 
 ## LUKS E2E
 
-**38 of 54** cells green (51 tested, 3 never tested).
+**39 of 54** cells green (51 tested, 3 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
@@ -52,7 +52,7 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito-rawhide** | ✅ | ❌ | ✅ | ✅ | ✅ |
 | **flounder** | ✅ | ✅ | ❌ | — | ✅ |
-| **flounder-sid** | ✅ | ✅ | ❌ | — | ❌ |
+| **flounder-sid** | ✅ | ✅ | ❌ | — | ✅ |
 | **grouper** | ✅ | ❌ | ❌ | — | ❌ |
 | **guppy** | ❌ | ❌ | — | — | ❌ |
 | **gurnard** | — | — | — | — | — |
