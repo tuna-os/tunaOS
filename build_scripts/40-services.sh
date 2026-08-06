@@ -168,16 +168,21 @@ tunaos_enable_network_manager() {
 # no-op, but sailfin runs none of the numbered build_scripts and never enables
 # resolved at all, so it needs its own change rather than this one.)
 tunaos_enable_systemd_resolved() {
-	[[ -f /usr/lib/systemd/system/systemd-resolved.service ]] || return 0
+	# Both directories are variables for the same reason /usr/lib/os-release is
+	# one in 90-image-info.sh: so a test can run this function against the files
+	# it really writes, instead of grepping the source for a rule whose whole
+	# defect was that it looked right. Only the write locations are redirected —
+	# the paths INSIDE the rule are resolved at boot, not here.
+	local unit_dir="${TUNAOS_SYSTEMD_SYSTEM_DIR:-/usr/lib/systemd/system}"
+	local tmpfiles_dir="${TUNAOS_TMPFILES_DIR:-/usr/lib/tmpfiles.d}"
 
-	sed -i -e "s@PrivateTmp=.*@PrivateTmp=no@g" /usr/lib/systemd/system/systemd-resolved.service
+	[[ -f "${unit_dir}/systemd-resolved.service" ]] || return 0
+
+	sed -i -e "s@PrivateTmp=.*@PrivateTmp=no@g" "${unit_dir}/systemd-resolved.service"
 	systemctl enable systemd-resolved.service
 
 	# Written only here, next to the enable, so the symlink can never point at
-	# a stub that nothing populates. The directory is a variable for the same
-	# reason /usr/lib/os-release is in 90-image-info.sh: so a test can run this
-	# against the rule it really writes instead of grepping for it.
-	local tmpfiles_dir="${TUNAOS_TMPFILES_DIR:-/usr/lib/tmpfiles.d}"
+	# a stub that nothing populates.
 	install -d -m 0755 "$tmpfiles_dir"
 	printf 'L+! /etc/resolv.conf - - - - ../run/systemd/resolve/stub-resolv.conf\n' \
 		>"${tmpfiles_dir}/tunaos-resolv-conf.conf"

@@ -1075,19 +1075,25 @@ _greeter_lines() {
   printf '[Service]\nPrivateTmp=yes\n' \
     >"$root/usr/lib/systemd/system/systemd-resolved.service"
 
-  # Stub out the parts that need a real system, keeping the tmpfiles write real.
+  # systemctl is the only thing here that needs a real system; every path the
+  # function writes is redirected into $root, so this runs as an unprivileged
+  # user and touches nothing outside BATS_TEST_TMPDIR.
   local bin="${BATS_TEST_TMPDIR}/bin"
   mkdir -p "$bin"
   printf '#!/usr/bin/env bash\nexit 0\n' >"$bin/systemctl"
   chmod +x "$bin/systemctl"
 
-  TUNAOS_TMPFILES_DIR="$root/usr/lib/tmpfiles.d" \
-  PATH="$bin:$PATH" \
+  run env \
+    TUNAOS_SYSTEMD_SYSTEM_DIR="$root/usr/lib/systemd/system" \
+    TUNAOS_TMPFILES_DIR="$root/usr/lib/tmpfiles.d" \
+    PATH="$bin:$PATH" \
     bash -c "set -e
-      sed() { command sed \"\$@\"; }
       $blk
-      tunaos_enable_systemd_resolved" \
-    || false
+      tunaos_enable_systemd_resolved"
+  [ "$status" -eq 0 ]
+
+  # The unit tweak has to land in the redirected tree, not on the host.
+  grep -qF 'PrivateTmp=no' "$root/usr/lib/systemd/system/systemd-resolved.service"
 
   local rule
   rule="$(cat "$root/usr/lib/tmpfiles.d/"*.conf)"
