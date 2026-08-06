@@ -803,3 +803,19 @@ _run_lnf() { # $1 = file
   run grep -cE 'if command -v add-apt-repository' <<<"$code"
   [ "$output" -eq 0 ]
 }
+
+@test "40-services.sh enables a network manager on the pacman/zypper/emerge path" {
+  # sailfin:cosmic booted its live ISO with sshd running and zero failed units,
+  # and was still unreachable: "Connection timed out during banner exchange"
+  # x21. Its own contract had the answer — "not ok - a network manager is
+  # active" — with the NIC present and unconfigured (LUKS run 31060731552).
+  # No path here enabled one for pacman/zypper/emerge.
+  local script="${REPO_ROOT}/build_scripts/40-services.sh"
+  local code
+  code="$(grep -v '^[[:space:]]*#' "$script")"
+  grep -qF 'safe_enable NetworkManager.service' <<<"$code"
+  grep -qF 'safe_enable systemd-networkd.service' <<<"$code"
+  # Either/or, never both — two daemons on one link is its own failure mode,
+  # and the contract accepts whichever is active.
+  grep -qF 'if [[ -f /usr/lib/systemd/system/NetworkManager.service ]]' <<<"$code"
+}

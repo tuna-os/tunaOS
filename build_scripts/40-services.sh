@@ -195,6 +195,34 @@ if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command 
 		safe_disable sshd.socket 2>/dev/null || true
 	fi
 
+	# A network manager, or the live ISO has a NIC and no address.
+	#
+	# sailfin:cosmic reached the live boot with sshd running and ZERO failed
+	# units, and the host still could not reach it — "Connection timed out
+	# during banner exchange", 21 attempts, then the run gave up. The guest's
+	# own contract had already said why:
+	#
+	#   not ok - a network manager is active
+	#   virtio_net virtio4 ens6: renamed from eth0
+	#
+	# The NIC was there and nothing configured it, so sshd was listening on a
+	# machine with no address (LUKS run 31060731552). Nothing on this path
+	# enabled a network manager on any of pacman/zypper/emerge.
+	#
+	# Prefer NetworkManager where it exists, else systemd-networkd — the same
+	# either/or the contract itself accepts
+	# (checks/e2e-runtime-checks.sh: `is-active NetworkManager || is-active
+	# systemd-networkd`). Enabling both invites two daemons managing one link;
+	# Containerfile.opensuse already ships a networkd DHCP profile
+	# (/usr/lib/systemd/network/20-wired.network) plus the resolved stub
+	# symlink, so networkd is the intended stack there and only needed
+	# switching on.
+	if [[ -f /usr/lib/systemd/system/NetworkManager.service ]]; then
+		safe_enable NetworkManager.service
+	else
+		safe_enable systemd-networkd.service
+	fi
+
 	safe_enable tailscaled.service
 	safe_enable fwupd.service
 	systemctl --global enable podman-auto-update.timer 2>/dev/null || true
