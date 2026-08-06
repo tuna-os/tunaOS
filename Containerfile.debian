@@ -211,6 +211,29 @@ RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \
         > /usr/lib/dracut/dracut.conf.d/30-fix-bootc-module.conf && \
     printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" bootc "\n' \
         > /usr/lib/dracut/dracut.conf.d/30-bootc-container-build.conf && \
+    # Omit the default-set modules whose userspace this image does not have.
+    # dracut treats a requested-but-unsatisfiable module as FATAL:
+    #
+    #   dracut[E]: Module 'pcsc' cannot be installed.
+    #
+    # and it bites at ISO-build time, not here — tacklebox rebuilds the
+    # initramfs against the published image to inject tbox-live/tbox-root, and
+    # its omit-detection only drops a module whose modules.d directory is
+    # ABSENT. Debian ships the directory and not pcscd. Containerfile.ubuntu
+    # has omitted pcsc since it was first debugged; Debian never had the line,
+    # which is why flounder:gnome died in `just iso` (run 31073039837) with a
+    # fully built image. flounder:kde survives only because the Plasma set
+    # happens to pull enough of the stack in transitively.
+    #
+    # Probed rather than hardcoded, matching build_scripts/bootc/dracut-config.sh:
+    # the tpm2 userspace IS installed above, so tpm2-tss must stay.
+    OMIT="" && \
+    command -v tpm2_pcrread >/dev/null 2>&1 || OMIT="${OMIT} tpm2-tss"; \
+    command -v pcscd >/dev/null 2>&1 || OMIT="${OMIT} pcsc"; \
+    if [ -n "$OMIT" ]; then \
+        printf 'omit_dracutmodules+=" %s "\n' "${OMIT# }" \
+            > /usr/lib/dracut/dracut.conf.d/30-omit-unsatisfiable.conf; \
+    fi && \
     KVER=$(basename "$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d | tail -1)") && \
     dracut --force "/usr/lib/modules/${KVER}/initramfs.img" "${KVER}"
 
