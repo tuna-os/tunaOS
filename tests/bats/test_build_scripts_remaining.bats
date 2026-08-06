@@ -851,11 +851,31 @@ _run_lnf() { # $1 = file
   # failed, because adding an atom there is a source compile and guppy's
   # networking has not been measured.
   local script="${REPO_ROOT}/build_scripts/40-services.sh"
+
+  # The selection and the failure both live in tunaos_enable_network_manager
+  # now, because the apt branch needed them too and it returns before the
+  # pacman/zypper/emerge branch runs.
   local blk
-  blk="$(awk '/^\tif \[\[ -n "\$net_unit" \]\]/,/^\tfi$/' "$script")"
+  blk="$(awk '/^tunaos_enable_network_manager\(\) \{/,/^\}$/' "$script")"
   [ -n "$blk" ]
-  grep -qF 'exit 1' <<<"$blk"
+
+  # Gentoo warns and carries on; everything else is a hard failure.
   grep -qF 'WARNING: no network manager on the emerge path' <<<"$blk"
+  grep -qE '^[[:space:]]*return 1$' <<<"$blk"
+  # …and the failure must be the last word, i.e. after both `return 0` exits,
+  # so a missing stack cannot fall through to a success.
+  local rets
+  rets="$(grep -oE 'return [01]$' <<<"$blk" | tr '\n' ',')"
+  [ "$rets" = "return 0,return 0,return 1," ]
+
+  # `return 1` only fails the build if the call is a bare command under
+  # `set -e`: a `|| true`, an `if`, or a `!` would swallow it exactly the way
+  # safe_enable did.
+  local code
+  code="$(grep -v '^[[:space:]]*#' "$script")"
+  [ "$(grep -c '^[[:space:]]*tunaos_enable_network_manager$' <<<"$code")" -ge 2 ]
+  run grep -cE 'tunaos_enable_network_manager[[:space:]]*(\|\||&&|;)|(if|!|until|while)[[:space:]]+tunaos_enable_network_manager' <<<"$code"
+  [ "$output" -eq 0 ]
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
