@@ -225,3 +225,43 @@ setup() {
     }
   done
 }
+
+@test "every base can bring up a network, and both service paths enable it" {
+  # An image with a NIC and no address presents as an SSH failure, not a
+  # network one: sshd starts and generates host keys, QEMU's user networking
+  # accepts the host-side connect, and nothing answers inside — "Connection
+  # timed out during banner exchange". That signature cost sailfin:cosmic
+  # (run 31060731552) and grouper:gnome (run 31061486055) before anyone read
+  # the guest's own "not ok - a network manager is active".
+  #
+  # Two ways to satisfy it, both legitimate:
+  #   - ship a package in the Containerfile (arch, debian, gentoo, ubuntu)
+  #   - install it at service-setup time where the base splits it out
+  #     (opensuse: systemd-network, via tunaos_enable_network_manager)
+  # el10 needs neither: its bootc base ships NetworkManager, proven by
+  # yellowfin:gnome passing end to end.
+  local services="${REPO_ROOT}/build_scripts/40-services.sh"
+  local cf missing=""
+  for cf in "${REPO_ROOT}"/Containerfile.*; do
+    local b; b="$(basename "$cf")"
+    case "$b" in
+      Containerfile.el10|Containerfile.custom|Containerfile.final|Containerfile.overlay) continue ;;
+      Containerfile.opensuse) continue ;;  # runtime install, asserted below
+    esac
+    local body; body="$(grep -v '^[[:space:]]*#' "$cf")"
+    grep -qE '(^|[[:space:]])(network-manager|networkmanager|NetworkManager)([[:space:]]|\\|$)' <<<"$body" ||
+      missing="${missing} ${b}"
+  done
+  [ -z "$missing" ] || { echo "FAIL: no network manager package —${missing}" >&2; return 1; }
+
+  # opensuse's runtime path.
+  grep -qF 'pkg_install systemd-network' "$services"
+
+  # And the invariant that actually broke: BOTH service branches must enable
+  # one. The apt branch exits early, so logic living only in the
+  # pacman/zypper/emerge branch never runs for Ubuntu/Debian — which is how
+  # grouper stayed unreachable after sailfin was fixed.
+  local code; code="$(grep -v '^[[:space:]]*#' "$services")"
+  grep -qF 'tunaos_enable_network_manager() {' <<<"$code"
+  [ "$(grep -c '^[[:space:]]*tunaos_enable_network_manager$' <<<"$code")" -ge 2 ]
+}

@@ -63,6 +63,80 @@ ensure_openssh_installed() {
 # rpm-ostree, ublue-* units, the Fedora /usr/lib/systemd/logind.conf path).
 # On Ubuntu we set up only the units that actually exist; safe_enable/
 # safe_disable already no-op on missing units.
+# Make liveuser's home survive the /var wipe.
+#
+# `useradd -m` creates /var/home/liveuser at BUILD time, and 99-cleanup.sh then
+# deletes everything under /var. The bootc-base-dirs tmpfiles entry recreates
+# the PARENT (/var/home) at boot and nothing recreates the user's own
+# directory, so the live ISO boots with an account whose home does not exist:
+#
+#   Could not chdir to home directory /var/home/liveuser: No such file or directory
+#   scp: dest open "/home/liveuser/fisherman-override": No such file or directory
+#
+# SSH still authenticates, which is why this presents as a scp failure rather
+# than a login failure — sailfin:gnome reached the installer and died handing it
+# the fisherman binary (LUKS run 31061836333).
+#
+# A tmpfiles entry is the fix rather than re-running useradd: /var is stateful
+# and recreated per boot by design, so anything under it that the image needs
+# has to be declared, not created once at build time.
+tunaos_declare_liveuser_home() {
+	install -d -m 0755 /usr/lib/tmpfiles.d
+	printf 'd /var/home/liveuser 0700 liveuser liveuser -\n' \
+		>/usr/lib/tmpfiles.d/tunaos-liveuser-home.conf
+	# Also create it now, for anything that runs before the first boot.
+	install -d -m 0700 -o liveuser -g liveuser /var/home/liveuser 2>/dev/null || true
+}
+
+# Enable a network manager, or the image boots with a NIC and no address.
+#
+# Called from BOTH the apt branch and the pacman/zypper/emerge branch. The apt
+# branch exits early, so logic placed only in the latter never runs for
+# Ubuntu/Debian — which is exactly how grouper:gnome ended up unreachable with
+# sshd running and host keys generated (LUKS run 31061486055), the same
+# signature sailfin had. flounder passes because Containerfile.debian installs
+# network-manager and Ubuntu's base ships nothing; the difference was never
+# deliberate.
+tunaos_enable_network_manager() {
+	local net_unit=""
+	if [[ -f /usr/lib/systemd/system/NetworkManager.service ]]; then
+		net_unit=NetworkManager.service
+	elif [[ -f /usr/lib/systemd/system/systemd-networkd.service ]]; then
+		net_unit=systemd-networkd.service
+	elif [[ "${PKG_MGR:-}" == "zypper" ]] || command -v zypper &>/dev/null; then
+		# openSUSE splits networkd into its own package.
+		pkg_install systemd-network
+		[[ -f /usr/lib/systemd/system/systemd-networkd.service ]] &&
+			net_unit=systemd-networkd.service
+	fi
+
+	if [[ -n "$net_unit" ]]; then
+		# Explicit, not safe_enable: both openSUSE and Arch ship `disable *`
+		# presets, so this is the only thing turning networking on, and a
+		# swallowed failure ships an image with no network and no complaint.
+		systemctl enable "$net_unit"
+		return 0
+	fi
+
+	if command -v emerge &>/dev/null; then
+		# Gentoo builds from source, so naming an atom here is an unbounded
+		# compile rather than a package fetch, and guppy's networking has not
+		# been measured the way openSUSE's and Arch's have. Say so instead of
+		# guessing, and leave the build passing as it does today.
+		echo "WARNING: no network manager on the emerge path; guppy may boot without networking" >&2
+		return 0
+	fi
+
+	# Last, so a missing stack cannot fall through to a success. `return 1`
+	# fails the build because every call site is a bare command under `set -e`
+	# — a `|| true`, an `if`, or a `!` would swallow it exactly the way
+	# safe_enable swallowed the absent unit that started all this.
+	echo "ERROR: no NetworkManager or systemd-networkd unit on this image." >&2
+	echo "       It would boot with a NIC and no address, and sshd would" >&2
+	echo "       accept the port forward while answering nothing." >&2
+	return 1
+}
+
 if [[ "${PKG_MGR:-}" == "apt" ]]; then
 	# Sleep-then-hibernate defaults via a logind drop-in (Ubuntu ships no
 	# stock /usr/lib/systemd/logind.conf; a drop-in is honoured everywhere).
@@ -121,6 +195,7 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 			useradd -m -s /bin/bash -G sudo liveuser
 		fi
 		echo 'liveuser:live' | chpasswd
+		tunaos_declare_liveuser_home
 	else
 		# Now load-bearing rather than belt-and-braces: Debian's
 		# openssh-server postinst ENABLES ssh.service on install, so with the
@@ -133,6 +208,8 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 		safe_disable sshd.socket
 		safe_disable ssh.socket
 	fi
+
+	tunaos_enable_network_manager
 
 	# Units that exist on Ubuntu once their packages are installed.
 	safe_enable tailscaled.service
@@ -190,6 +267,7 @@ if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command 
 			useradd -m -s /bin/bash liveuser 2>/dev/null || true
 		fi
 		echo 'liveuser:live' | chpasswd
+		tunaos_declare_liveuser_home
 	else
 		safe_disable sshd.service
 		safe_disable sshd.socket 2>/dev/null || true
@@ -217,11 +295,28 @@ if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command 
 	# (/usr/lib/systemd/network/20-wired.network) plus the resolved stub
 	# symlink, so networkd is the intended stack there and only needed
 	# switching on.
-	if [[ -f /usr/lib/systemd/system/NetworkManager.service ]]; then
-		safe_enable NetworkManager.service
-	else
-		safe_enable systemd-networkd.service
-	fi
+	#
+	# Except openSUSE ships networkd in a SEPARATE package, so naming the unit
+	# was not enough there. Measured in a tumbleweed container, installing what
+	# the image installs:
+	#
+	#   # zypper install systemd            (Containerfile.opensuse's list)
+	#   systemd-networkd.service   ABSENT
+	#   # zypper install systemd-network
+	#   systemd-networkd.service   PRESENT, and `is-enabled` says disabled
+	#
+	# So on sailfin the unit enabled here did not exist, safe_enable swallowed
+	# that with its `|| true`, and the guest still booted with a NIC and no
+	# address: 20-wired.network was a DHCP profile with no daemon to read it.
+	#
+	# Hence install the daemon where the base omits it, and enable it
+	# EXPLICITLY. Both bases here disable by default (openSUSE's
+	# 99-default-disable.preset, Arch's 99-default.preset are both `disable *`),
+	# so this enable is the only thing that turns networking on and a swallowed
+	# failure ships an image with no network and no build-time complaint. Arch
+	# needs no install: Containerfile.arch has networkmanager in base-no-de,
+	# which is built before this script runs.
+	tunaos_enable_network_manager
 
 	safe_enable tailscaled.service
 	safe_enable fwupd.service
@@ -287,6 +382,10 @@ if [[ "${ENABLE_SSHD:-0}" == "1" ]]; then
 		useradd -m -s /bin/bash -G wheel liveuser
 	fi
 	echo 'liveuser:live' | chpasswd
+	# No-op where the home already survives (yellowfin:gnome passes today), but
+	# the /var wipe is common to every base, so declaring it is not conditional
+	# on which path happens to have been caught out.
+	tunaos_declare_liveuser_home
 else
 	safe_disable sshd.service
 	safe_disable sshd.socket 2>/dev/null || systemctl mask sshd.socket || true

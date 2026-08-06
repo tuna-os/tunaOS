@@ -374,6 +374,15 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" ]]; then
 		fi
 		dnf -y copr disable "${_TD_COPR_REPO}" || true
 		_TD_REPO_ID="copr:copr.fedorainfracloud.org:$(echo "${_TD_COPR_REPO}" | tr '/' ':')"
+		# `packages: []` is the enable-only idiom: the block exists so the
+		# repo FILE is written and a later block can name it in --enablerepo.
+		# Running `dnf install` with no arguments there is a guaranteed error
+		# swallowed by `|| true`, which buries a real failure in noise the
+		# reader has learned to ignore. Skip it and say why.
+		if ((${#_TD_COPR_PKGS[@]} == 0)); then
+			echo "Enabled ${_TD_COPR_REPO} (no packages listed — repo enabled for a later --enablerepo)"
+			continue
+		fi
 		# shellcheck disable=SC2086
 		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
 			dnf -y --enablerepo="${_TD_REPO_ID}" --skip-unavailable install ${_TD_COPR_OPTS} "${_TD_COPR_PKGS[@]}" || install_available "${_TD_COPR_PKGS[@]}" || true

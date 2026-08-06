@@ -8,14 +8,33 @@ packages:
       - repo: yalter/niri-git
         packages:
           - niri
+      # DMS (DankMaterialShell) suite. Which COPR holds which binary RPM,
+      # read off the repos themselves (fedora-44-x86_64 repodata, 2026-08-06):
+      #
+      #   avengemedia/dms-git   dms, dms-cli
+      #   avengemedia/danklinux dms-greeter, quickshell, quickshell-git,
+      #                         dgop, danksearch, matugen, ...
+      #
+      # dms-greeter was listed under dms-git, where it does not exist. dnf
+      # fails the whole transaction on one unmatched name, and COPR installs
+      # are best-effort (`|| true` in install-desktop.sh), so bonito lost dms
+      # and dms-cli along with it and shipped a niri image with no shell at
+      # all — tunaOS#1009 and #637. The el10 section below already had this
+      # right; the fedora section never got the same treatment.
+      #
+      # Install the suite in ONE transaction with both repos enabled, the
+      # shape el10 uses, so a cross-repo dependency can never split it again.
+      # The danklinux block is enable-only so its repo file exists for
+      # --enablerepo.
       - repo: avengemedia/danklinux
-        packages:
-          - quickshell-git
+        packages: []
       - repo: avengemedia/dms-git
         packages:
+          - quickshell-git
           - dms
           - dms-cli
           - dms-greeter
+        options: "--enablerepo=copr:copr.fedorainfracloud.org:avengemedia:danklinux"
     packages:
       - greetd
       - greetd-selinux
