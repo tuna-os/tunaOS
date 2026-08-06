@@ -74,3 +74,63 @@ EOF
     return 1
   }
 }
+
+@test "the daemon each section ships is the one the shipped niri config spawns" {
+  # The test above asks whether SOMETHING can draw a background. It cannot ask
+  # whether anything ever starts it, and that is a separate hole: the config we
+  # install as the compositor default names its daemon literally —
+  #
+  #   spawn-at-startup "swaybg" "-i" ".../tunaos-default.png" "-m" "fill"
+  #
+  # niri does not fail a build, exit non-zero, or log anything when a
+  # spawn-at-startup binary is absent. So a section that swapped swaybg for
+  # another daemon on this list would satisfy verify-branding-niri.sh AND the
+  # assertion above, and still boot to a solid colour with the artwork sitting
+  # unused on disk — a green check over the exact defect sailfin:niri had.
+  #
+  # Sections that ship no daemon at all are not this bug: they are the dms
+  # branch (el10), which the check accepts deliberately, so they are left to
+  # the assertion above rather than double-judged here.
+  local config="${REPO_ROOT}/system_files/usr/share/niri/config.kdl"
+  local exempt="cachyos"
+
+  # Which daemon the config starts, read off the config, not restated.
+  local spawned="" d
+  for d in $(tr '|' ' ' <<<"$DAEMONS"); do
+    if grep -qE "^spawn-at-startup \"${d}\"" "$config"; then spawned="$d"; break; fi
+  done
+  # No spawn line at all would mean the manifests ship a daemon nothing starts,
+  # which is the same blank screen from the other end.
+  [ -n "$spawned" ] || {
+    echo "no spawn-at-startup for any of ($(tr '|' ' ' <<<"$DAEMONS")) in ${config#"$REPO_ROOT"/}" >&2
+    return 1
+  }
+
+  run python3 - "${REPO_ROOT}" "${DAEMONS}" "${exempt}" "${spawned}" <<'EOF'
+import json, sys, glob, os
+import yaml
+
+root, daemons, exempt, spawned = sys.argv[1], sys.argv[2].split('|'), sys.argv[3].split(), sys.argv[4]
+bad = []
+for path in sorted(glob.glob(os.path.join(root, 'manifests/desktops/niri*.yaml'))):
+    doc = yaml.safe_load(open(path)) or {}
+    for section, body in (doc.get('packages') or {}).items():
+        if section in exempt:
+            continue
+        text = json.dumps(body)
+        shipped = [d for d in daemons if d in text]
+        if not shipped or spawned in shipped:
+            continue
+        bad.append(f"{os.path.basename(path)}:{section} ships {', '.join(shipped)}")
+
+for b in bad:
+    print(f"FAIL: {b}, but the config we install spawns {spawned!r},")
+    print(f"      which that section does not. niri is silent about a")
+    print(f"      spawn-at-startup it cannot exec, so the background stays blank.")
+sys.exit(1 if bad else 0)
+EOF
+  [ "$status" -eq 0 ] || {
+    echo "$output" >&2
+    return 1
+  }
+}
