@@ -55,7 +55,6 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **flounder-sid** | ⬜ | ⬜ | ⬜ | — | ⬜ |
 | **grouper** | ❌ | ❌ | ❌ | — | ❌ |
 | **guppy** | ❌ | ❌ | — | — | ❌ |
-| **gurnard** | — | — | — | — | — |
 | **hummingbird** | ⬜ | ⬜ | ⬜ | ⬜ | — |
 | **marlin** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **sailfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -97,7 +96,7 @@ Missing for 6 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-08-05 | [31013418173](https://github.com/tuna-os/tunaOS/actions/runs/31013418173) | 1 |
+| 2026-08-05 | [31057471311](https://github.com/tuna-os/tunaOS/actions/runs/31057471311) | 1 |
 | 2026-08-05 | [31010736963](https://github.com/tuna-os/tunaOS/actions/runs/31010736963) | 18 |
 | 2026-08-05 | [31010734487](https://github.com/tuna-os/tunaOS/actions/runs/31010734487) | 5 |
 | 2026-08-05 | [31010732206](https://github.com/tuna-os/tunaOS/actions/runs/31010732206) | 3 |
@@ -107,8 +106,8 @@ Missing for 6 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-
 | 2026-08-05 | [31010714483](https://github.com/tuna-os/tunaOS/actions/runs/31010714483) | 18 |
 | 2026-08-05 | [31010712188](https://github.com/tuna-os/tunaOS/actions/runs/31010712188) | 4 |
 | 2026-08-05 | [31010701104](https://github.com/tuna-os/tunaOS/actions/runs/31010701104) | 9 |
-| 2026-08-05 | [31003453631](https://github.com/tuna-os/tunaOS/actions/runs/31003453631) | 1 |
 | 2026-08-05 | [31001067341](https://github.com/tuna-os/tunaOS/actions/runs/31001067341) | 4 |
+| 2026-07-31 | [30601507789](https://github.com/tuna-os/tunaOS/actions/runs/30601507789) | 5 |
 
 <!-- END GENERATED -->
 
