@@ -415,11 +415,18 @@ RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/bootc/finalize.sh
 
+# KDE goes through the manifest installer. kde.sh's apt branch was a verbatim
+# copy of manifests/desktops/kde.yaml's `packages.apt` list plus
+# `systemctl enable sddm`, which is what `display_manager: sddm` already means
+# — a second copy of the same nine package names, kept in sync by hand. The
+# manifest path additionally applies disable_desktop_files (Discover, replaced
+# by Bazaar/Flatpak) and the post_install hooks, both of which the script's
+# apt branch exited before ever reaching. kcm-ublue.sh self-skips without dnf.
 FROM base-no-de AS kde
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/desktop/kde.sh base && \
+  /run/context/build_scripts/desktop/install-desktop.sh kde && \
   /run/context/build_scripts/desktop/configure-desktop-runtime.sh kde
 RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \

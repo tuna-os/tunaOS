@@ -7,15 +7,6 @@
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
-# Test ALL build_scripts/*.sh files (not subdirectories)
-build_scripts_top=(
-  "00-workarounds" "10-base-packages" "20-packages"
-  "26-packages-post" "40-services" "90-image-info"
-  "DX" "HWE" "arch-customizations" "cleanup"
-  "copy-files" "cosmic" "gnome" "kcm-ublue"
-  "kde" "lib" "niri" "nvidia"
-)
-
 # ── Basic validation for all top-level build_scripts ──────────────────────
 
 @test "build_scripts/lib.sh: exists" {
@@ -257,15 +248,6 @@ build_scripts_top=(
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
-  fi
-}
-
-@test "build_scripts/desktop/kde.sh: exists and passes shellcheck" {
-  run test -f "${REPO_ROOT}/build_scripts/desktop/kde.sh"
-  [ "$status" -eq 0 ]
-  if command -v shellcheck &>/dev/null; then
-    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/desktop/kde.sh"
-    [ "$status" -eq 0 ]
   fi
 }
 

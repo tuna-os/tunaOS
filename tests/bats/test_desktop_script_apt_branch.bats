@@ -72,6 +72,24 @@ desktop_script_calls() {
   [ "$fail" -eq 0 ]
 }
 
+@test "the retired per-DE scripts stay retired" {
+  # cosmic.sh had no apt branch at all; kde.sh's apt branch was a verbatim copy
+  # of kde.yaml's packages.apt plus the `systemctl enable sddm` that
+  # `display_manager: sddm` already means. Both are deleted and every base now
+  # installs those two desktops from the manifest. Re-adding either file is a
+  # regression even if nothing calls it, because the duplicate package list is
+  # the thing that drifts.
+  local s
+  for s in cosmic kde; do
+    run test -e "${REPO_ROOT}/build_scripts/desktop/${s}.sh"
+    [ "$status" -ne 0 ]
+    run grep -q "desktop/${s}\.sh" "${REPO_ROOT}/Containerfile.ubuntu"
+    [ "$status" -ne 0 ]
+    run grep -q "install-desktop\.sh ${s}" "${REPO_ROOT}/Containerfile.ubuntu"
+    [ "$status" -eq 0 ]
+  done
+}
+
 @test "COSMIC on apt is manifest-driven, and names packages that exist there" {
   local manifest="${REPO_ROOT}/manifests/desktops/cosmic.yaml"
 
