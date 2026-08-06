@@ -30,19 +30,36 @@ extract_block() {
 	' "$SCRIPT"
 }
 
-# Run the block with `emit` stubbed to plain echo and PATH set to $1, so the
-# presence or absence of ip(8)/ss(8) is what the test controls.
+# Run the block with `emit` stubbed to plain echo, against a PATH containing
+# nothing but $STUBS, so the presence or absence of ip(8)/ss(8) is what the test
+# controls and not what the host happens to have installed.
+#
+# This used to append /usr/bin:/bin, which handed the block the host's real
+# iproute2 whenever it had one: `command -v ss` succeeded no matter what the
+# test did or did not stub, so the two "unavailable" cases asserted a branch
+# that never ran. They passed on a machine without iproute2 and failed on the
+# CI runner, which carries /usr/bin/ip and /usr/bin/ss.
+#
+# bash is invoked by absolute path because a PATH= prefix assignment applies to
+# the command search for that very command.
 run_block() {
-	local path="$1"
 	local block
 	block="$(extract_block)"
 	[ -n "$block" ] || return 90
-	PATH="$path" bash -c "emit() { echo \"\$1\"; }; $block"
+	PATH="$STUBS" "$BASH_BIN" -c "emit() { echo \"\$1\"; }; $block"
 }
 
 setup() {
 	STUBS="$BATS_TEST_TMPDIR/stubs"
 	mkdir -p "$STUBS"
+	# The block pipes its output through these. They are plumbing, not a
+	# subject of any test, so link the host's — while still keeping them out
+	# of the stub PATH's *directories*, so nothing else leaks in with them.
+	local tool
+	for tool in awk sort tr; do
+		ln -s "$(command -v "$tool")" "$STUBS/$tool"
+	done
+	BASH_BIN="$(command -v bash)"
 }
 
 @test "reachability block is present and extractable" {
@@ -63,7 +80,7 @@ setup() {
 	EOF
 	chmod +x "$STUBS/ip" "$STUBS/ss"
 
-	run run_block "$STUBS:/usr/bin:/bin"
+	run run_block
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"10.0.2.15/24"* ]]
 	[[ "$output" == *"0.0.0.0:22"* ]]
@@ -80,7 +97,7 @@ setup() {
 	EOF
 	chmod +x "$STUBS/ip"
 
-	run run_block "$STUBS:/usr/bin:/bin"
+	run run_block
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"ss(8) unavailable"* ]]
 	# and must not emit a bare, empty listener list
@@ -94,7 +111,7 @@ setup() {
 	EOF
 	chmod +x "$STUBS/ss"
 
-	run run_block "$STUBS:/usr/bin:/bin"
+	run run_block
 	[ "$status" -eq 0 ]
 	[[ "$output" == *"ip(8) unavailable"* ]]
 }
