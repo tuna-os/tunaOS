@@ -561,6 +561,8 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 	BRANDING_EXTRA=""
 	case "${_TD_DESKTOP}" in
 	kde)
+		# After the Plasma packages, before the check — see lib.sh.
+		tunaos_set_kde_lookandfeel
 		"${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"
 		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" \
 			/usr/libexec/tunaos/verify-branding-kde

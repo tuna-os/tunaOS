@@ -647,14 +647,17 @@ _osr_block() {
 # fixtures, so the tests track the implementation rather than restating it.
 # ═══════════════════════════════════════════════════════════════════════════
 
-_lnf_fn() {
-  sed -n '/^\t\t_kde_set_lnf() {$/,/^\t\t}$/p' \
-    "${REPO_ROOT}/build_scripts/desktop/configure-desktop-runtime.sh" |
-    sed 's/^\t\t//'
-}
-
+# tunaos_kde_write_lookandfeel lives in lib.sh so install-desktop.sh and
+# configure-desktop-runtime.sh share one definition — the first version of this
+# fix went into configure-desktop-runtime.sh only, and bonito:kde (which reaches
+# the contract through install-desktop.sh) still shipped Fedora's theme in LUKS
+# run 31059172678. Extract the real function so the tests track it; if it is
+# renamed the extraction yields nothing and these fail rather than pass.
 _run_lnf() { # $1 = file
-  bash -c "$(_lnf_fn)"$'\n'"_kde_set_lnf '$1'"
+  local fn
+  fn="$(sed -n '/^tunaos_kde_write_lookandfeel() {$/,/^}$/p' "${REPO_ROOT}/build_scripts/lib.sh")"
+  [ -n "$fn" ] || return 1
+  bash -c "$fn"$'\n'"tunaos_kde_write_lookandfeel '$1' org.tunaos.desktop"
 }
 
 @test "kde LookAndFeel: overwrites Fedora's value (bonito, #1008)" {
@@ -722,4 +725,64 @@ _run_lnf() { # $1 = file
   grep -qF '/usr/bin/sddm' "$script"
   # Debian/Ubuntu newer sddm puts its defaults under /usr/share, not /usr/lib.
   grep -qF '/usr/share/sddm/sddm.conf.d/' "$script"
+}
+
+@test "kde LookAndFeel: BOTH branding callers set it before checking" {
+  # install-desktop.sh and configure-desktop-runtime.sh each run the KDE
+  # branding contract in near-duplicate blocks. The first version of this fix
+  # patched only configure-desktop-runtime.sh, so bonito:kde — which reaches
+  # the contract via install-desktop.sh — still failed with Fedora's theme.
+  # Both callers must set it, and must set it BEFORE running the check.
+  local f
+  for f in build_scripts/desktop/install-desktop.sh \
+    build_scripts/desktop/configure-desktop-runtime.sh; do
+    local path="${REPO_ROOT}/${f}"
+    grep -qF 'tunaos_set_kde_lookandfeel' "$path" || {
+      echo "FAIL: ${f} runs the KDE branding contract without setting the theme" >&2
+      return 1
+    }
+    # Order matters: setting it after the check would pass the build and ship
+    # the wrong theme.
+    local set_line check_line
+    set_line="$(grep -n 'tunaos_set_kde_lookandfeel' "$path" | head -1 | cut -d: -f1)"
+    check_line="$(grep -n 'verify-branding-kde' "$path" | head -1 | cut -d: -f1)"
+    [ -n "$set_line" ] && [ -n "$check_line" ] || return 1
+    [ "$set_line" -lt "$check_line" ] || {
+      echo "FAIL: ${f} sets the theme at line ${set_line}, after the check at ${check_line}" >&2
+      return 1
+    }
+  done
+  # And both must have lib.sh in scope for the call to resolve at all.
+  grep -qE 'source .*lib\.sh' "${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
+  grep -qE 'source .*lib\.sh' "${REPO_ROOT}/build_scripts/desktop/configure-desktop-runtime.sh"
+}
+
+@test "99-cleanup.sh recreates /var/tmp after wiping /var (#1010)" {
+  # tacklebox runs dracut inside the built image to rebuild the live-ISO
+  # initramfs. No boot happens there, so systemd-tmpfiles never creates
+  # /var/tmp, and dracut's --tmpdir default fails with
+  # "dracut[F]: Invalid tmpdir '/var/tmp'" — which tacklebox surfaces as
+  # "does the image ship dracut?" (that is how #1010 got filed as a missing
+  # dracut). The base stages of Containerfile.debian and .arch create it; this
+  # script's /var wipe removed it again.
+  local script="${REPO_ROOT}/build_scripts/99-cleanup.sh"
+  local wipe_line recreate_line
+  wipe_line="$(grep -n 'find /var -mindepth 1 -maxdepth 1' "$script" | head -1 | cut -d: -f1)"
+  recreate_line="$(grep -n 'mkdir -p /var/tmp' "$script" | head -1 | cut -d: -f1)"
+  [ -n "$wipe_line" ] || skip "the /var wipe this guards is gone"
+  [ -n "$recreate_line" ] || {
+    echo "FAIL: /var is wiped at line ${wipe_line} and /var/tmp never recreated" >&2
+    return 1
+  }
+  # Order matters — recreating before the wipe accomplishes nothing.
+  [ "$recreate_line" -gt "$wipe_line" ]
+  grep -qF 'chmod 1777 /var/tmp' "$script"
+}
+
+@test "base stages that pre-create /var/tmp still do (#1010 belt and braces)" {
+  # These were added because the ISO build needs the directory present in the
+  # image. 99-cleanup.sh now also recreates it, but dropping them would leave
+  # any path that skips 99-cleanup uncovered.
+  grep -qF '/var/tmp' "${REPO_ROOT}/Containerfile.debian"
+  grep -qF '/var/tmp' "${REPO_ROOT}/Containerfile.arch"
 }

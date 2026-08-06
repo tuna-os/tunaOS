@@ -26,6 +26,38 @@ FROM ${COMMON_IMAGE_REF} AS common
 FROM ${BASE_IMAGE} AS base
 
 FROM base AS system
+
+# Re-declare the identity args INSIDE this stage and promote them to ENV.
+#
+# The ARG lines at the top of this file are global: they are visible to `FROM`
+# interpolation and nothing else. A build stage sees an ARG only if it declares
+# it, and an ARG is never automatically an ENV. So when 40-services /
+# 90-image-info / 99-cleanup were wired into this stage, they ran with
+# IMAGE_VENDOR unset and died under `set -u`:
+#
+#   /run/context/build_scripts/90-image-info.sh: line 8: IMAGE_VENDOR: unbound variable
+#
+# That took out every sailfin cell, not just the cosmic one that surfaced it.
+# Containerfile.ubuntu:53-66 and Containerfile.arch already do this; opensuse
+# and gentoo declared the args globally and stopped there.
+ARG BASE_IMAGE
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG IMAGE_REGISTRY="ghcr.io"
+ARG IMAGE_NAME_VARIANT
+ARG SHA_HEAD_SHORT
+ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
+ARG DESKTOP_FLAVOR
+
+ENV BASE_IMAGE=${BASE_IMAGE} \
+    IMAGE_NAME=${IMAGE_NAME} \
+    IMAGE_VENDOR=${IMAGE_VENDOR} \
+    IMAGE_REGISTRY=${IMAGE_REGISTRY} \
+    IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT} \
+    SHA_HEAD_SHORT=${SHA_HEAD_SHORT} \
+    ENABLE_SSHD=${ENABLE_SSHD} \
+    DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
+
 # Install bootc from the openSUSE Virtualization:containers OBS project rather
 # than building it from git. The source build linked a libssl soname the
 # runtime image doesn't ship (libssl.so.60 — see #643); the packaged bootc has

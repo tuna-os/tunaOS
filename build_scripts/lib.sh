@@ -63,16 +63,36 @@ else
 		IMAGE_NAME="hummingbird"
 		IMAGE_PRETTY_NAME="Hummingbird"
 	fi
-	[[ "${BASE_IMAGE,,}" == *"fedora"* && "${BASE_IMAGE,,}" != *"hummingbird"* ]] && IS_FEDORA=true && IMAGE_NAME="bonito" && IMAGE_PRETTY_NAME="Bonito"
-	[[ "${BASE_IMAGE,,}" == *"red hat"* || "${BASE_IMAGE,,}" == *"rhel"* || "${BASE_IMAGE,,}" == *"redhat"* ]] && IS_RHEL=true && IMAGE_NAME="redfin" && IMAGE_PRETTY_NAME="Redfin"
-	[[ "${BASE_IMAGE,,}" == *"almalinux"* && "${BASE_IMAGE,,}" != *"-kitten"* ]] && IS_ALMALINUX=true && IMAGE_NAME="albacore" && IMAGE_PRETTY_NAME="Albacore"
-	[[ "${BASE_IMAGE,,}" == *"-kitten"* ]] && IS_ALMALINUXKITTEN=true && IMAGE_NAME="yellowfin" && IMAGE_PRETTY_NAME="Yellowfin"
-	[[ "${BASE_IMAGE,,}" == *"centos"* ]] && IS_CENTOS=true && IMAGE_NAME="skipjack" && IMAGE_PRETTY_NAME="Skipjack"
-	[[ "${BASE_IMAGE,,}" == *"ubuntu"* ]] && IS_UBUNTU=true && IMAGE_NAME="grouper" && IMAGE_PRETTY_NAME="Grouper"
-	[[ "${BASE_IMAGE,,}" == *"debian"* && "${BASE_IMAGE,,}" != *"ubuntu"* ]] && IS_DEBIAN=true && IMAGE_NAME="flounder" && IMAGE_PRETTY_NAME="Flounder"
-	[[ "${BASE_IMAGE,,}" == *"archlinux"* || "${BASE_IMAGE,,}" == *"arch-bootc"* ]] && IS_ARCH=true && IMAGE_NAME="marlin" && IMAGE_PRETTY_NAME="Marlin"
-	[[ "${BASE_IMAGE,,}" == *"opensuse"* ]] && IS_OPENSUSE=true && IMAGE_NAME="opensuse" && IMAGE_PRETTY_NAME="openSUSE"
-	[[ "${BASE_IMAGE,,}" == *"gentoo"* ]] && IS_GENTOO=true && IMAGE_NAME="gentoo" && IMAGE_PRETTY_NAME="Gentoo"
+	# The IS_* flags below are derived from the base image. The variant NAME is
+	# not derivable from it — several variants share a base family — so the
+	# names here are a FALLBACK for builds that pass no IMAGE_NAME, never an
+	# override of one that did.
+	#
+	# They used to be plain assignments, which clobbered the real value:
+	# gurnard (ubuntu:noble) built with IMAGE_NAME=grouper, so it would have
+	# taken grouper's name, pretty name and fish codename into os-release and
+	# image-info.json — an image that calls itself another variant. Verified in
+	# LUKS run 31059184838, which logged IMAGE_NAME=grouper while building
+	# gurnard:pantheon.
+	#
+	# For sailfin and guppy the old fallbacks were not even variant names —
+	# "opensuse" and "gentoo" — which 90-image-info.sh rejects outright ("no
+	# scientific fish codename defined for variant"). That was latent until
+	# those two Containerfiles started running 90-image-info.sh.
+	_derive_name() { # family-default name, family-default pretty name
+		IMAGE_NAME="${IMAGE_NAME:-$1}"
+		IMAGE_PRETTY_NAME="${IMAGE_PRETTY_NAME:-$2}"
+	}
+	[[ "${BASE_IMAGE,,}" == *"fedora"* && "${BASE_IMAGE,,}" != *"hummingbird"* ]] && IS_FEDORA=true && _derive_name "bonito" "Bonito"
+	[[ "${BASE_IMAGE,,}" == *"red hat"* || "${BASE_IMAGE,,}" == *"rhel"* || "${BASE_IMAGE,,}" == *"redhat"* ]] && IS_RHEL=true && _derive_name "redfin" "Redfin"
+	[[ "${BASE_IMAGE,,}" == *"almalinux"* && "${BASE_IMAGE,,}" != *"-kitten"* ]] && IS_ALMALINUX=true && _derive_name "albacore" "Albacore"
+	[[ "${BASE_IMAGE,,}" == *"-kitten"* ]] && IS_ALMALINUXKITTEN=true && _derive_name "yellowfin" "Yellowfin"
+	[[ "${BASE_IMAGE,,}" == *"centos"* ]] && IS_CENTOS=true && _derive_name "skipjack" "Skipjack"
+	[[ "${BASE_IMAGE,,}" == *"ubuntu"* ]] && IS_UBUNTU=true && _derive_name "grouper" "Grouper"
+	[[ "${BASE_IMAGE,,}" == *"debian"* && "${BASE_IMAGE,,}" != *"ubuntu"* ]] && IS_DEBIAN=true && _derive_name "flounder" "Flounder"
+	[[ "${BASE_IMAGE,,}" == *"archlinux"* || "${BASE_IMAGE,,}" == *"arch-bootc"* ]] && IS_ARCH=true && _derive_name "marlin" "Marlin"
+	[[ "${BASE_IMAGE,,}" == *"opensuse"* ]] && IS_OPENSUSE=true && _derive_name "sailfin" "Sailfin"
+	[[ "${BASE_IMAGE,,}" == *"gentoo"* ]] && IS_GENTOO=true && _derive_name "guppy" "Guppy"
 
 	# Package manager dimension
 	if [[ "$IS_UBUNTU" == true || "$IS_DEBIAN" == true ]]; then
@@ -567,6 +587,87 @@ install_dnf_plugin_providers() {
 		'dnf5-command(config-manager)' 'dnf-command(config-manager)'; do
 		dnf -y install "$_pkg" 2>/dev/null || true
 	done
+}
+
+# Point Plasma's system-wide defaults at the TunaOS look-and-feel package.
+#
+# Must run AFTER the desktop packages install. system_files ships kdeglobals
+# with LookAndFeelPackage=org.tunaos.desktop, but it is copied in during the
+# base stage and Fedora's kde-settings RPM owns the same path, so installing
+# Plasma overwrote it — bonito:kde shipped
+# LookAndFeelPackage=org.fedoraproject.fedora.desktop (#1008).
+#
+# Lives in lib.sh because BOTH install-desktop.sh and
+# configure-desktop-runtime.sh run the KDE branding contract, in near-duplicate
+# blocks. The first version of this fix went into configure-desktop-runtime.sh
+# only, and bonito — which reaches the check through install-desktop.sh — still
+# failed with the Fedora theme in LUKS run 31059172678. One definition, two
+# callers, so the next edit cannot land in only half the builds.
+#
+# Writes both locations on purpose. On Fedora/EL the kde-settings profile dir
+# precedes /etc/xdg in XDG_CONFIG_DIRS, so writing only /etc/xdg would satisfy
+# verify-branding-kde.sh (it greps /etc/xdg first) while Plasma still loaded
+# Fedora's theme — a green check on an unbranded image, which is worse than a
+# red one.
+
+# Set LookAndFeelPackage in one kdeglobals file. Split out from the caller so
+# it can be tested against a fixture instead of /etc.
+#   $1 = file, $2 = look-and-feel package id
+tunaos_kde_write_lookandfeel() {
+	local file="$1" want="$2"
+	mkdir -p "$(dirname "$file")"
+	if [[ ! -f "$file" ]]; then
+		printf '[KDE]\nLookAndFeelPackage=%s\n' "$want" >"$file"
+		return
+	fi
+	# Replace the key inside [KDE] if present, else add it to that section,
+	# else append the section — leaving everything else (fonts, colour scheme,
+	# widget style) untouched.
+	awk -v want="$want" '
+		/^\[/ { if (insec && !set) { print "LookAndFeelPackage=" want; set=1 } insec = ($0 == "[KDE]") }
+		/^[ \t]*LookAndFeelPackage[ \t]*=/ { if (insec) { print "LookAndFeelPackage=" want; set=1; next } }
+		{ print }
+		END { if (!set) { if (!insec) print "[KDE]"; print "LookAndFeelPackage=" want } }
+	' "$file" >"${file}.tunaos.tmp" && mv "${file}.tunaos.tmp" "$file"
+}
+
+tunaos_set_kde_lookandfeel() {
+	local want="${1:-org.tunaos.desktop}"
+	tunaos_kde_write_lookandfeel /etc/xdg/kdeglobals "$want"
+	if [[ -d /usr/share/kde-settings/kde-profile/default/xdg ]]; then
+		tunaos_kde_write_lookandfeel \
+			/usr/share/kde-settings/kde-profile/default/xdg/kdeglobals "$want"
+	fi
+}
+
+# apt counterpart to install_available: install only the names this release
+# actually has, and say loudly which it skipped.
+#
+# Use this ONLY for packages that legitimately vary across releases. apt fails
+# the whole transaction on one unknown name, so a single package that landed in
+# Ubuntu after 24.04 takes the entire base install down with it — which is what
+# `E: Unable to locate package fastfetch/glow/gum` did to every gurnard build
+# (noble) even though they resolve fine on grouper (resolute).
+#
+# Deliberately NOT applied to the whole base list. Silently reducing a required
+# package set is how an image ships without something it needs and still exits
+# 0; the skip has to be visible and the required list has to stay strict.
+apt_install_available() {
+	local want=("$@") have=() pkg
+	for pkg in "${want[@]}"; do
+		# `apt-cache show` prints nothing and exits 0 for an unknown name, so
+		# test for the Package: stanza rather than the exit status.
+		if apt-cache show "$pkg" 2>/dev/null | grep -q '^Package:'; then
+			have+=("$pkg")
+		else
+			echo "apt_install_available: not in this release, skipping: ${pkg}" >&2
+		fi
+	done
+	if ((${#have[@]} == 0)); then
+		echo "apt_install_available: none of the requested packages exist here" >&2
+		return 0
+	fi
+	pkg_install "${have[@]}"
 }
 
 install_from_copr() {
