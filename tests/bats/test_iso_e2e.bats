@@ -908,6 +908,13 @@ setup_runtime_check_stubs() {
   grep -q 'bootc install to-disk --wipe' "$SCRIPT"
   grep -qF 'block_setup="--block-setup tpm2-luks"' "$SCRIPT"
   grep -q -- '--karg console=ttyS0,115200n8 --karg rd.plymouth=0 --karg plymouth.enable=0' "$SCRIPT"
+  # bootc gates --block-setup tpm2-luks on the image's install config
+  # ("Block setup Tpm2Luks is not enabled in installation config", attempt
+  # 11 / run 31125136026). The opt-in is install-time policy, delivered as
+  # a drop-in bind-mounted into the installing container — never baked
+  # into the image. "direct" must stay enabled alongside it.
+  grep -qF 'block = [\"direct\", \"tpm2-luks\"]' "$SCRIPT"
+  grep -qF '/usr/lib/bootc/install/90-tbox-luks.toml:ro' "$SCRIPT"
 }
 
 @test "generic: the unlock gate restarts swtpm on preserved state" {
