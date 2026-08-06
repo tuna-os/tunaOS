@@ -12,14 +12,18 @@ and an API failure raises rather than silently degrading a cell to unknown —
 a status page that quietly downgrades itself is worse than no status page.
 
 Usage:
-    scripts/gen-matrix-status.py [--check]
+    scripts/gen-matrix-status.py [--check | --check-structure]
 
-    --check  exit 1 if the file would change (for CI drift detection)
+    --check            exit 1 if the file would change (for CI drift detection)
+    --check-structure  exit 1 only if the block differs in ways a pull request
+                       controls — hand-edits and build-config drift — ignoring
+                       content that is a function of live CI state
 """
 
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import re
@@ -36,9 +40,16 @@ CONFIG = Path(".github/build-config.yml")
 BEGIN = "<!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->"
 END = "<!-- END GENERATED -->"
 
-# How many recent runs to walk per workflow. Newest wins per cell, so this only
-# needs to be deep enough to reach the last full sweep.
+# How many *completed* runs to walk per workflow. Newest wins per cell, so this
+# only needs to be deep enough to reach the last full sweep.
 RUN_DEPTH = 20
+
+# Queued and in-progress runs carry no results, so they must not consume window
+# slots: during a dispatch sweep half the newest runs are in flight, and letting
+# them eat the window silently demoted cells a completed run had already
+# asserted back to "never tested" — the exact absence-of-evidence failure this
+# document exists to prevent. So fetch wider and count only completed runs.
+FETCH_DEPTH = RUN_DEPTH * 4
 
 DESKTOPS = ["gnome", "kde", "cosmic", "niri", "xfce"]
 
@@ -102,14 +113,18 @@ def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str
     """
     runs = gh_json(
         "run", "list", "--repo", REPO, "--workflow", workflow,
-        "--limit", str(RUN_DEPTH),
+        "--limit", str(FETCH_DEPTH),
         "--json", "databaseId,createdAt,status",
     ) or []
     pattern = re.compile(name_re)
     found: dict[str, tuple[str, str, str]] = {}
+    walked = 0
     for run in runs:
         if run.get("status") != "completed":
             continue
+        if walked >= RUN_DEPTH:
+            break
+        walked += 1
         run_id, date = str(run["databaseId"]), run["createdAt"][:10]
         detail = gh_json(
             "run", "view", run_id, "--repo", REPO, "--json", "jobs"
@@ -349,10 +364,91 @@ def build() -> str:
     return "\n".join(out)
 
 
+# Lines whose whole content is a readout of live CI or registry state.
+VOLATILE_LINE = re.compile(
+    r"^(?:"
+    r"\| \d{4}-\d\d-\d\d \| \["          # provenance row
+    r"|Newest result "                    # freshness of the LUKS data
+    r"|NVIDIA cells are "                 # present only while stale results remain
+    r"|Missing for "                      # depends on published overlay tags
+    r"|Every non-NVIDIA ISO cell has an overlay"
+    r")"
+)
+
+# A result glyph is live state; NA is structure, because it means build-config
+# does not schedule that cell at all.
+LIVE_GLYPH = re.compile(f"[{PASS}{FAIL}{UNTESTED}]")
+
+ROW = re.compile(r"^\| \*\*(?P<variant>[^*]+)\*\* \|")
+
+
+def table_rows(block: str) -> set[tuple[str, str]]:
+    """(section, variant) for every table row in the block.
+
+    Row *existence* is partly live state: variants_in_scope() adds a row for any
+    variant a run touched, even one the matrix does not schedule, so gurnard
+    appears and vanishes with nothing but the run window moving.
+    """
+    section, rows = "", set()
+    for line in block.splitlines():
+        if line.startswith("## "):
+            section = line
+        match = ROW.match(line)
+        if match:
+            rows.add((section, match["variant"]))
+    return rows
+
+
+def structural(block: str, keep_rows: set[tuple[str, str]] | None = None) -> str:
+    """The part of the generated block a pull request is answerable for.
+
+    The pull_request drift check exists to catch two things, per matrix-status.yml:
+    a hand-edit inside the generated block, and a generator that breaks on a
+    build-config change. It was instead failing on repo-wide CI churn — a LUKS
+    run completing mid-review moves cells, tallies and the provenance table, so
+    the gate went red for reasons the PR neither caused nor can fix, and the only
+    "fix" available was committing another snapshot that went stale in minutes.
+
+    So compare with live-derived content masked: cell results, every count, the
+    data-freshness dates, the provenance rows, the overlay inventory. What
+    survives is the shape of the document — its prose, its sections, and which
+    cells build-config schedules at all (NA versus scheduled) — which is exactly
+    the surface a PR can break. Byte-exact drift is still enforced on the
+    scheduled run, which is what actually keeps the file fresh.
+
+    keep_rows limits table rows to those both sides agree exist; pass the
+    intersection of table_rows() from each side.
+    """
+    section, lines = "", []
+    for line in block.splitlines():
+        if line.startswith("## "):
+            section = line
+        if VOLATILE_LINE.match(line):
+            continue
+        match = ROW.match(line)
+        if (
+            match
+            and keep_rows is not None
+            and (section, match["variant"]) not in keep_rows
+        ):
+            continue
+        line = LIVE_GLYPH.sub("?", line)
+        line = re.sub(r"\d+", "N", line)
+        if not line.strip() and lines and not lines[-1].strip():
+            continue  # dropped lines leave double blanks behind
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--check", action="store_true",
-                    help="exit 1 if the document would change")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true",
+                      help="exit 1 if the document would change")
+    mode.add_argument("--check-structure", action="store_true",
+                      help="exit 1 only on differences a pull request controls "
+                           "— hand-edits and build-config drift — ignoring "
+                           "content derived from live CI state")
     args = ap.parse_args()
 
     if not DOC.exists():
@@ -362,8 +458,34 @@ def main() -> int:
         sys.exit(f"{DOC} is missing the GENERATED markers")
 
     head, rest = text.split(BEGIN, 1)
-    _, tail = rest.split(END, 1)
-    updated = head + build() + tail
+    committed, tail = rest.split(END, 1)
+    generated = build()
+    updated = head + generated + tail
+
+    if args.check_structure:
+        committed = BEGIN + committed + END
+        shared = table_rows(committed) & table_rows(generated)
+        want = structural(committed, shared)
+        got = structural(generated, shared)
+        if want == got:
+            print("MATRIX-STATUS.md structure is current "
+                  "(live CI values deliberately ignored)")
+            return 0
+        print(
+            "docs/MATRIX-STATUS.md differs from the generator in content a pull "
+            "request controls: either the generated block was hand-edited, or a "
+            "build-config change moved rows the committed doc has not caught up "
+            "with. Run scripts/gen-matrix-status.py and commit the result.",
+            file=sys.stderr,
+        )
+        diff = difflib.unified_diff(
+            want.splitlines(), got.splitlines(),
+            fromfile="committed (live values masked)",
+            tofile="generated (live values masked)",
+            lineterm="",
+        )
+        print("\n".join(diff), file=sys.stderr)
+        return 1
 
     if updated == text:
         print("MATRIX-STATUS.md already current")
