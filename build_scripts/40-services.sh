@@ -115,6 +115,32 @@ tunaos_enable_network_manager() {
 		# presets, so this is the only thing turning networking on, and a
 		# swallowed failure ships an image with no network and no complaint.
 		systemctl enable "$net_unit"
+
+		# ...and networkd, unlike NetworkManager, configures NOTHING without a
+		# .network profile. openSUSE ships one (20-wired.network), which is why
+		# enabling the unit was the whole fix there. Gentoo's stage3 ships none,
+		# so guppy booted with networkd running, a NIC, and no address — sshd
+		# up with host keys generated and the guest unreachable, the identical
+		# signature grouper and sailfin had for different reasons (LUKS run
+		# 31091141499).
+		#
+		# Only written when the base supplies no profile of its own, so this is
+		# a no-op on openSUSE rather than a competing second policy.
+		if [[ "$net_unit" == systemd-networkd.service ]] &&
+			! compgen -G '/usr/lib/systemd/network/*.network' >/dev/null 2>&1 &&
+			! compgen -G '/etc/systemd/network/*.network' >/dev/null 2>&1; then
+			install -d -m 0755 /usr/lib/systemd/network
+			cat >/usr/lib/systemd/network/20-wired.network <<'NETEOF'
+# Wired DHCP. Written by build_scripts/40-services.sh for bases that enable
+# systemd-networkd but ship no profile for it to read.
+[Match]
+Name=en* eth*
+
+[Network]
+DHCP=yes
+NETEOF
+			chmod 0644 /usr/lib/systemd/network/20-wired.network
+		fi
 		return 0
 	fi
 
