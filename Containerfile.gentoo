@@ -98,6 +98,36 @@ RUN emerge --verbose --deep --newuse \
 
 # No live-boot dracut modules needed: tacklebox injects its embedded
 # tbox-live/tbox-root modules at ISO build time (tuna-os/tacklebox#90).
+#
+# It injects them by re-running THIS image's dracut with flags of its own, so an
+# omit that only exists on our own dracut command lines below is not an omit at
+# ISO time. tacklebox decides what to drop by probing for the module DIRECTORY
+# (/usr/lib/dracut/modules.d/[0-9][0-9]<mod>), and sys-kernel/dracut ships the
+# whole upstream modules.d tree whether or not the userspace behind a module was
+# ever emerged — so the probe finds tpm2-tss "present", omits nothing, and
+# dracut then rejects it because `require_binaries tpm2` cannot be met. guppy
+# has no app-crypt/tpm2-tools and no pcscd. guppy:gnome, LUKS run 31111959946,
+# after a completely successful image build:
+#
+#   dracut[E]: Module 'tpm2-tss' cannot be installed.
+#   Error: prepare initramfs for guppy-gnome ... (does the image ship dracut?)
+#
+# Flavor-dependent, which is what let it hide: guppy:xfce came through the same
+# rebuild ("rebuilt, added: tbox-live tbox-root", nothing omitted — run
+# 31091141499), so a green cell was never evidence this base was covered. Same
+# trap tests/bats/test_dracut_tpm2_userspace.bats documents for the apt bases,
+# where flounder:kde was green while flounder:gnome died here.
+#
+# Declared in the image the way Containerfile.arch and .opensuse declare it, so
+# every in-image rebuild inherits it — tacklebox's, and a kernel update's on the
+# installed system. It goes in the `base` stage, not in the two stages that run
+# dracut: `desktop-build` is FROM builder, not FROM system, so a drop-in written
+# in `system` would reach base-no-de and no desktop image. TPM2 auto-unlock is
+# enrolled post-install (`ujust enable-luks-tpm2`) and both dracut runs below
+# have always passed this same omit, so nothing that worked stops working.
+RUN mkdir -p /usr/lib/dracut/dracut.conf.d && \
+    printf 'omit_dracutmodules+=" tpm2-tss pcsc "\n' \
+        > /usr/lib/dracut/dracut.conf.d/30-omit-unsatisfiable.conf
 
 FROM base AS builder
 # The cleanup below MUST stay in this RUN. Unlike Containerfile.arch — which
