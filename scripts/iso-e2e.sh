@@ -571,9 +571,27 @@ setup_vsock() {
 	# alphabet contains no commas, so no QEMU option-escaping is needed.
 	local pub_b64
 	pub_b64=$(base64 <"${VSOCK_SSH_KEY}.pub" | tr -d '\n')
+	# The key rides under TWO credential names because they are consumed by
+	# different mechanisms and only the second one is known to work on the
+	# aurora-shaped images this fallback exists for:
+	#
+	#   ssh.authorized_keys.root — tmpfiles provision.conf writes it to
+	#     /root/.ssh/authorized_keys. On bootc/ostree images /root is a
+	#     symlink into /var/roothome, and aurora attempt 7 (iso-builder run
+	#     31115116876) proved the file never lands: the vsock handshake
+	#     completed and sshd answered "Permission denied (publickey)".
+	#     Kept because it is the documented generic mechanism and costs one
+	#     SMBIOS string.
+	#   ssh.ephemeral-authorized_keys-all — imported by the generated
+	#     sshd-vsock/sshd-unix-local instances themselves (verified in
+	#     aurora's systemd-ssh-generator: AuthorizedKeysFile
+	#     ${CREDENTIALS_DIRECTORY}/ssh.ephemeral-authorized_keys-all),
+	#     valid for every user with no home-directory involvement — exactly
+	#     the listener this fallback dials.
 	VSOCK_ARGS=(
 		-device "vhost-vsock-pci,guest-cid=${VSOCK_CID}"
 		-smbios "type=11,value=io.systemd.credential.binary:ssh.authorized_keys.root=${pub_b64}"
+		-smbios "type=11,value=io.systemd.credential.binary:ssh.ephemeral-authorized_keys-all=${pub_b64}"
 	)
 	echo "==> vsock SSH fallback armed (guest-cid=${VSOCK_CID})"
 }

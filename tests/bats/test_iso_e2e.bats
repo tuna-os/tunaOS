@@ -839,12 +839,17 @@ setup_runtime_check_stubs() {
 }
 
 @test "vsock: root key rides the SMBIOS credential, device on the live boot only" {
-  # The whole fallback is contract: systemd's tmpfiles provision.conf imports
-  # ssh.authorized_keys.root from SMBIOS type 11 into /root/.ssh, and
-  # systemd-ssh-generator answers on the vsock the device provides. Both
-  # halves have to stay on the QEMU command line of the LIVE boot (the
+  # The whole fallback is contract: the key must reach the guest under BOTH
+  # credential names. provision.conf's ssh.authorized_keys.root writes
+  # /root/.ssh/authorized_keys — which never lands on bootc images, where
+  # /root is a symlink into /var/roothome (aurora attempt 7, run
+  # 31115116876: vsock handshake completed, "Permission denied (publickey)").
+  # ssh.ephemeral-authorized_keys-all is consumed by the generated
+  # sshd-vsock instance itself and is the one that actually authenticates
+  # there. Both must stay on the QEMU command line of the LIVE boot (the
   # installed boots are serial-gated and get no vsock device).
   grep -q 'io.systemd.credential.binary:ssh.authorized_keys.root=' "$SCRIPT"
+  grep -q 'io.systemd.credential.binary:ssh.ephemeral-authorized_keys-all=' "$SCRIPT"
   grep -q 'vhost-vsock-pci,guest-cid=' "$SCRIPT"
   # Absent host support must leave the command line untouched (VSOCK_ARGS
   # stays empty), so the expansion needs the set -u-safe guard form.
