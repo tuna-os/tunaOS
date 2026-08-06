@@ -36,9 +36,29 @@ CONFIG = Path(".github/build-config.yml")
 BEGIN = "<!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->"
 END = "<!-- END GENERATED -->"
 
-# How many recent runs to walk per workflow. Newest wins per cell, so this only
-# needs to be deep enough to reach the last full sweep.
-RUN_DEPTH = 20
+# How many recent COMPLETED runs to walk per workflow.
+#
+# This was 20, with the reasoning "newest wins per cell, so this only needs to
+# be deep enough to reach the last full sweep". That holds while cells are
+# tested in sweeps. It breaks the moment they are dispatched one at a time:
+# ~15 single-cell luks-e2e runs in one morning pushed every earlier result out
+# of the window, and the generator reported
+#
+#   -**3 of 54** cells green (41 tested, 13 never tested).
+#   +**7 of 53** cells green (10 tested, 43 never tested).
+#
+# flipping whole rows — every marlin cell, most of yellowfin and albacore —
+# from a real ❌ or ✅ to ⬜ "never tested". Those results had not been
+# superseded; they had scrolled off. This file's own header argues that a
+# status page which quietly downgrades itself is worse than no status page,
+# and that is exactly what happened.
+#
+# Depth is cheap in correctness and linear in API calls (one `run view` each),
+# so it is set to cover a heavy debugging day rather than a sweep. The
+# `--status completed` filter below matters as much: in-progress runs used to
+# occupy window slots and contribute nothing, so a morning with six runs in
+# flight silently lost another 30% of the depth.
+RUN_DEPTH = 80
 
 DESKTOPS = ["gnome", "kde", "cosmic", "niri", "xfce"]
 
@@ -102,6 +122,7 @@ def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str
     """
     runs = gh_json(
         "run", "list", "--repo", REPO, "--workflow", workflow,
+        "--status", "completed",
         "--limit", str(RUN_DEPTH),
         "--json", "databaseId,createdAt,status",
     ) or []
