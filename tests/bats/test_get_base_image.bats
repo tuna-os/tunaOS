@@ -189,30 +189,39 @@ setup() {
   fi
 }
 
-@test "apt-based Containerfiles install the LUKS host tools" {
+@test "apt-based Containerfiles guarantee systemd-cryptenroll is present" {
   # fisherman aborts before touching the disk without systemd-cryptenroll:
   #   fatal: missing required host tool: "systemd-cryptenroll" not found in
   #   PATH — install the "systemd" package on the host
   #
-  # That hint is wrong for Debian/Ubuntu, where the binary ships in
-  # systemd-cryptsetup, not systemd — verified against the trixie and
-  # noble/resolute package lists. flounder had cryptsetup but not
-  # systemd-cryptsetup and died in LUKS run 31060069809; Ubuntu had neither,
-  # so grouper and gurnard were queued up to fail the same way.
-  local cf missing=""
+  # Which package ships it is NOT stable across releases, so asserting a
+  # package name here is wrong. Measured against the archives:
+  #   Debian trixie              -> systemd-cryptsetup
+  #   Ubuntu noble    (gurnard)  -> systemd            (no systemd-cryptsetup)
+  #   Ubuntu resolute (grouper)  -> systemd-cryptsetup (systemd dropped it)
+  #
+  # Containerfile.ubuntu serves BOTH Ubuntu releases, so naming either package
+  # unconditionally breaks the other — hardcoding systemd-cryptsetup is what
+  # made gurnard fail with "E: Unable to locate package systemd-cryptsetup"
+  # (LUKS run 31061160416).
+  #
+  # The invariant that actually matters is that the binary exists in the built
+  # image, and that the build says so rather than deferring the discovery to a
+  # VM 40 minutes later. Assert the guard, not the package.
+  local cf
   for cf in Containerfile.debian Containerfile.ubuntu; do
     local path="${REPO_ROOT}/${cf}" body
-    # Strip comments first. Both names appear in the prose explaining WHY they
-    # are needed, so matching the raw file passes even with the packages
-    # removed — the first version of this test did exactly that.
+    # Strip comments: both the package names and the binary name appear in the
+    # prose explaining this, so matching the raw file passes even when the
+    # check is deleted. An earlier version of this test did exactly that.
     body="$(grep -v '^[[:space:]]*#' "$path")"
-    grep -qE '(^|[[:space:]])cryptsetup([[:space:]]|\\|$)' <<<"$body" ||
-      missing="${missing} ${cf}:cryptsetup"
-    grep -qE '(^|[[:space:]])systemd-cryptsetup([[:space:]]|\\|$)' <<<"$body" ||
-      missing="${missing} ${cf}:systemd-cryptsetup"
+    grep -qE '(^|[[:space:]])cryptsetup([[:space:]]|\\|$)' <<<"$body" || {
+      echo "FAIL: ${cf} does not install cryptsetup" >&2
+      return 1
+    }
+    grep -qF 'command -v systemd-cryptenroll' <<<"$body" || {
+      echo "FAIL: ${cf} never asserts systemd-cryptenroll is present" >&2
+      return 1
+    }
   done
-  if [ -n "$missing" ]; then
-    echo "FAIL: apt base missing LUKS host tooling —${missing}" >&2
-    return 1
-  fi
 }

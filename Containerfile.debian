@@ -88,17 +88,23 @@ RUN apt-get update -y && \
 
 # Install base system packages
 #
-# systemd-cryptsetup is what ships /usr/bin/systemd-cryptenroll on
-# Debian/Ubuntu — NOT the systemd package, verified against the trixie package
-# file lists. fisherman requires it on the installing host and aborts before
-# touching the disk without it:
+# systemd-cryptsetup ships /usr/bin/systemd-cryptenroll on trixie and sid — NOT
+# the systemd package, verified against the trixie file list. fisherman requires
+# it on the installing host and aborts before touching the disk without it:
 #
 #   fatal: missing required host tool: "systemd-cryptenroll" not found in PATH
 #     — install the "systemd" package on the host
 #
-# That hint is Fedora-shaped and misleading here: systemd is already in the
-# list below. This killed flounder:kde in LUKS run 31060069809 after the image,
-# the ISO and the live boot had all succeeded.
+# That hint is Fedora-shaped and misleading here: systemd is already in the list
+# below. This killed flounder:kde in LUKS run 31060069809 after the image, the
+# ISO and the live boot had all succeeded.
+#
+# The package name is release-specific, so do NOT copy it elsewhere without
+# checking: Ubuntu noble ships the binary in systemd and has no
+# systemd-cryptsetup at all, and assuming otherwise broke gurnard (run
+# 31061160416). This Containerfile only ever builds trixie and sid, where the
+# split package is correct; the assertion after the install is what makes a
+# future move fail loudly instead of silently.
 RUN apt-get update -y && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         btrfs-progs \
@@ -128,6 +134,15 @@ RUN apt-get update -y && \
         unzip \
         git \
         ca-certificates && \
+    # Assert the binary, not the package. fisherman aborts before touching the
+    # disk without it, and which package ships it is not stable across releases
+    # (trixie: systemd-cryptsetup; Ubuntu noble: systemd). Failing here names
+    # the problem; failing in fisherman surfaces 40 minutes later inside a VM.
+    if ! command -v systemd-cryptenroll >/dev/null 2>&1; then \
+        echo "ERROR: systemd-cryptenroll missing after install." >&2; \
+        echo "       fisherman needs it to enrol the LUKS TPM2 keyslot and aborts without it." >&2; \
+        exit 1; \
+    fi && \
     apt-get clean -y
 
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
