@@ -672,6 +672,24 @@ setup_runtime_check_stubs() {
   [ "$output" = "READY_FOUND" ]
 }
 
+@test "ready: default LIVE_MARKER accepts tacklebox's generic TBOX_LIVE_READY" {
+  # iso-builder's reference cells (aurora et al.) are built by tacklebox,
+  # which is a generic bootc ISO maker and bakes its own neutral marker
+  # rather than a tunaOS-branded one. The harness owns the contract, so
+  # its default accepts both.
+  run bash -c '
+    LIVE_MARKER="${LIVE_MARKER:-TUNAOS_LIVE_READY|TBOX_LIVE_READY}"
+    SERIAL_LOG="/tmp/test-serial3.log"
+    echo "some boot output" > "$SERIAL_LOG"
+    echo "TBOX_LIVE_READY uptime=12.3" >> "$SERIAL_LOG"
+    if grep -qE "$LIVE_MARKER" "$SERIAL_LOG" 2>/dev/null; then
+      echo "READY_FOUND"
+    fi
+    rm -f "$SERIAL_LOG"
+  '
+  [ "$output" = "READY_FOUND" ]
+}
+
 @test "ready: marker not found when absent" {
   run bash -c '
     SERIAL_LOG="/tmp/test-serial2.log"
