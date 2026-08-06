@@ -73,10 +73,21 @@ RUN emerge --verbose --deep --newuse @world
 # (runs 30159027680, 30196443189). Gentoo was the last Containerfile without
 # it — every other base already installs flatpak. Same class as #809, which
 # added it to the openSUSE base.
+#
+# app-admin/sudo for the same reason, one class over. The stage3 tarball has no
+# sudo — the rpm and apt bases either ship it or install it explicitly, and
+# Gentoo was the last one without. customize-live.sh writes a NOPASSWD sudoers
+# drop-in for liveuser whenever ENABLE_SSHD=1, which authorises nothing without
+# the binary; its assertion catches that at ISO-build time rather than letting
+# every `sudo` in the E2E guest die with "command not found":
+#
+#   ERROR: ENABLE_SSHD=1 grants liveuser NOPASSWD sudo, but this image has no sudo.
+#
+# guppy:xfce, LUKS run 31082460289 — after a complete, correct image build.
 RUN emerge --verbose --deep --newuse \
         app-arch/cpio btrfs-progs dev-vcs/git dosfstools sys-fs/xfsprogs \
         linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd \
-        sys-apps/flatpak \
+        sys-apps/flatpak app-admin/sudo \
         net-vpn/tailscale gui-apps/wl-clipboard media-video/ffmpeg media-plugins/gst-plugins-meta && \
     curl -fsSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.35.0/just-1.35.0-x86_64-unknown-linux-musl.tar.gz && \
     tar -xzf /tmp/just.tar.gz -C /usr/bin just && rm /tmp/just.tar.gz && \
