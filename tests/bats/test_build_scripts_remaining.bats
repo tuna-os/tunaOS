@@ -810,14 +810,164 @@ _run_lnf() { # $1 = file
   # x21. Its own contract had the answer — "not ok - a network manager is
   # active" — with the NIC present and unconfigured (LUKS run 31060731552).
   # No path here enabled one for pacman/zypper/emerge.
+  #
+  # Either/or, never both: two daemons on one link is its own failure mode, and
+  # the contract accepts whichever is active.
   local script="${REPO_ROOT}/build_scripts/40-services.sh"
   local code
   code="$(grep -v '^[[:space:]]*#' "$script")"
-  grep -qF 'safe_enable NetworkManager.service' <<<"$code"
-  grep -qF 'safe_enable systemd-networkd.service' <<<"$code"
-  # Either/or, never both — two daemons on one link is its own failure mode,
-  # and the contract accepts whichever is active.
-  grep -qF 'if [[ -f /usr/lib/systemd/system/NetworkManager.service ]]' <<<"$code"
+  grep -qF 'net_unit=NetworkManager.service' <<<"$code"
+  grep -qF 'net_unit=systemd-networkd.service' <<<"$code"
+  grep -qF 'systemctl enable "$net_unit"' <<<"$code"
+
+  # Not safe_enable: it swallows failures with `|| true`, which is right for
+  # units that legitimately may not exist and wrong here, where the enable is
+  # the only thing turning networking on.
+  run grep -cE 'safe_enable (NetworkManager|systemd-networkd)' <<<"$code"
+  [ "$output" -eq 0 ]
+}
+
+@test "40-services.sh installs networkd on zypper, which splits it out" {
+  # The unit openSUSE needs is not in the `systemd` package. Measured in a
+  # tumbleweed container: after `zypper install systemd` there is no
+  # systemd-networkd.service, and after `zypper install systemd-network` there
+  # is. So sailfin enabled a unit that did not exist, safe_enable hid it, and
+  # /usr/lib/systemd/network/20-wired.network sat there as a DHCP profile with
+  # no daemon to read it.
+  local script="${REPO_ROOT}/build_scripts/40-services.sh"
+  local code
+  code="$(grep -v '^[[:space:]]*#' "$script")"
+  grep -qF 'pkg_install systemd-network' <<<"$code"
+
+  # And the profile it reads must still be shipped, or installing the daemon
+  # buys nothing: it would come up with no configured link.
+  grep -qF '/usr/lib/systemd/network/20-wired.network' "${REPO_ROOT}/Containerfile.opensuse"
+}
+
+@test "40-services.sh fails the build when no network stack is present" {
+  # A networkless image presents as an SSH fault 40 minutes later in a VM
+  # (banner-exchange timeouts against a guest with no address). Catch it at
+  # build time instead. Gentoo is the one exception, warned about rather than
+  # failed, because adding an atom there is a source compile and guppy's
+  # networking has not been measured.
+  local script="${REPO_ROOT}/build_scripts/40-services.sh"
+  local blk
+  blk="$(awk '/^\tif \[\[ -n "\$net_unit" \]\]/,/^\tfi$/' "$script")"
+  [ -n "$blk" ]
+  grep -qF 'exit 1' <<<"$blk"
+  grep -qF 'WARNING: no network manager on the emerge path' <<<"$blk"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# build_scripts/checks/verify-branding-niri.sh: greeter assertion
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Fixture helper: a greetd config whose default_session runs $1.
+_greetd_fixture() {
+  local out="${BATS_TEST_TMPDIR}/greetd-$$.toml"
+  cat >"$out" <<EOF
+[terminal]
+vt = 1
+
+[default_session]
+command = "$1"
+user = "greeter"
+EOF
+  echo "$out"
+}
+
+# Only the greeter section is under test; the compositor/session/background
+# sections read absolute paths that do not exist on a test host, so assert on
+# the greeter lines rather than the exit status.
+_greeter_lines() {
+  TUNAOS_GREETD_CONFIG="$1" bash \
+    "${REPO_ROOT}/build_scripts/checks/verify-branding-niri.sh" marlin 2>&1 |
+    sed -n '/== greeter ==/,/== compositor/p'
+}
+
+@test "verify-branding-niri.sh: flags a greeter greetd cannot exec" {
+  # marlin:niri shipped greetd with its packaged config, which runs `agreety`.
+  # On Arch agreety is NOT in the greetd package (it is greetd-agreety), so the
+  # config named a binary that was not on the image. With Restart=always that
+  # is a restart loop, so this must fail rather than be treated as a text-mode
+  # fallback.
+  local fixture
+  fixture="$(_greetd_fixture 'agreety --cmd /bin/sh')"
+  run _greeter_lines "$fixture"
+  [[ "$output" == *"'agreety', which is NOT installed"* ]]
+  [[ "$output" == *"no graphical greeter configured"* ]]
+}
+
+@test "verify-branding-niri.sh: flags a greeter wrapper that was never installed" {
+  # greetd-gtkgreet.sh writes an absolute path into the config. If the script
+  # it points at is missing the login screen never comes up.
+  local fixture
+  fixture="$(_greetd_fixture '/usr/libexec/tunaos/greetd-session')"
+  run _greeter_lines "$fixture"
+  [[ "$output" == *"/usr/libexec/tunaos/greetd-session, which is not executable"* ]]
+}
+
+@test "verify-branding-niri.sh: accepts any greeter that is actually present" {
+  # The point of the fix: three greeters are legitimate here (dms-greeter on
+  # Fedora/EL10, gtkgreet under cage on openSUSE and Arch, cosmic-greeter), so
+  # the check must assert presence, not one variant's shell.
+  local fixture
+  fixture="$(_greetd_fixture '/bin/cat')"
+  run _greeter_lines "$fixture"
+  [[ "$output" == *"ok: greeter command /bin/cat present"* ]]
+  [[ "$output" != *FAIL* ]]
+}
+
+@test "verify-branding-niri.sh: asserts the DMS shell only where DMS is the greeter" {
+  # Hardcoding DMSGreeter.qml is what reddened marlin:niri, which has no DMS
+  # packaging at all. A non-DMS greeter must not be measured against it.
+  local fixture
+  fixture="$(_greetd_fixture '/bin/cat')"
+  run _greeter_lines "$fixture"
+  [[ "$output" != *DMSGreeter.qml* ]]
+
+  # ...but a config that DOES launch dms-greeter still has to ship it.
+  fixture="$(_greetd_fixture 'dms-greeter --command niri')"
+  run _greeter_lines "$fixture"
+  [[ "$output" == *"DMSGreeter.qml is missing"* ]]
+}
+
+@test "verify-branding-niri.sh: passes shellcheck" {
+  if command -v shellcheck &>/dev/null; then
+    run shellcheck --severity=error --exclude=SC1091,SC2114 \
+      "${REPO_ROOT}/build_scripts/checks/verify-branding-niri.sh"
+    [ "$status" -eq 0 ]
+  else
+    skip "shellcheck not installed"
+  fi
+}
+
+@test "every greetd manifest installs a greeter greetd can actually exec" {
+  # greetd packages no greeter frontend with itself on any distro, and its
+  # stock config names agreety. So a manifest that sets display_manager: greetd
+  # has to declare a greeter AND wire it up, or the image boots to a restart
+  # loop. niri-arch.yaml did neither (marlin:niri, LUKS run 31060133575).
+  local fail=0 m
+  for m in "${REPO_ROOT}"/manifests/desktops/*.yaml; do
+    grep -qE '^display_manager:[[:space:]]*greetd[[:space:]]*$' "$m" || continue
+    local body name
+    name="$(basename "$m")"
+    body="$(grep -v '^[[:space:]]*#' "$m")"
+    # A greeter frontend, under any of its packaging names.
+    if ! grep -qE '^[[:space:]]*-[[:space:]]+(greetd-)?(gtkgreet|dms-greeter|cosmic-greeter|regreet|tuigreet)[[:space:]]*$' <<<"$body"; then
+      echo "FAIL: ${name} uses greetd but declares no greeter package" >&2
+      fail=1
+    fi
+    # gtkgreet cannot own a VT, so it is only usable with cage, and it is
+    # greetd-gtkgreet.sh that replaces the stock agreety config.
+    if grep -qE '^[[:space:]]*-[[:space:]]+(greetd-)?gtkgreet[[:space:]]*$' <<<"$body"; then
+      grep -qE '^[[:space:]]*-[[:space:]]+cage[[:space:]]*$' <<<"$body" ||
+        { echo "FAIL: ${name} installs gtkgreet without cage" >&2; fail=1; }
+      grep -qF 'greetd-gtkgreet.sh' <<<"$body" ||
+        { echo "FAIL: ${name} installs gtkgreet but never sources greetd-gtkgreet.sh" >&2; fail=1; }
+    fi
+  done
+  [ "$fail" -eq 0 ]
 }
 
 @test "40-services.sh declares liveuser's home so it survives the /var wipe" {
