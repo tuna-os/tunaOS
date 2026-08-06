@@ -794,6 +794,73 @@ setup_runtime_check_stubs() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
+# vsock SSH fallback (tacklebox#178)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@test "vsock: transport helpers switch user, home directory and proxy" {
+  # Generic (non-tunaOS) images ship no TCP sshd on live media — only
+  # systemd-ssh-generator's AF_VSOCK listener. The harness swaps every guest
+  # ssh/scp to root-over-vsock through one pair of helper functions; evaluate
+  # them out of the script so this fails if the shipped shapes drift.
+  run bash -c '
+    set -euo pipefail
+    src="'"$SCRIPT"'"
+    E2E_SSH_OPTS=(-o StrictHostKeyChecking=no)
+    SSH_PORT=2222 VSOCK_CID=3222 VSOCK_SSH_KEY=/tmp/never-read
+    eval "$(sed -n "/^use_tcp_transport()/,/^}/p" "$src")"
+    eval "$(sed -n "/^use_vsock_transport()/,/^}/p" "$src")"
+    use_tcp_transport
+    [[ "${GUEST_SSH[*]}" == *"liveuser@127.0.0.1"* ]]
+    [[ "${GUEST_SCP[*]}" == *"-P 2222"* ]]
+    [[ "$GUEST_HOME" == /home/liveuser ]]
+    use_vsock_transport
+    [[ "${GUEST_SSH[*]}" == *"VSOCK-CONNECT:3222:22"* ]]
+    [[ "${GUEST_SSH[*]}" == *"root@"* ]]
+    [[ "${GUEST_SCP[*]}" != *"-P "* ]]
+    [[ "$GUEST_HOME" == /root ]]
+    [[ "$SSH_TRANSPORT" == vsock ]]
+    echo SHAPES_OK
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" == *SHAPES_OK* ]]
+}
+
+@test "vsock: guest CID defaults to SSH_PORT+1000 and honors the env override" {
+  # CIDs collide across concurrent runs exactly like TCP ports do; deriving
+  # from the already collision-managed SSH_PORT keeps one knob. Evaluated out
+  # of the script, like the LIVE_MARKER default above.
+  local derived override
+  derived=$(unset TBOX_E2E_VSOCK_CID; SSH_PORT=2222; eval "$(grep '^VSOCK_CID=' "$SCRIPT")"; echo "$VSOCK_CID")
+  [ "$derived" = "3222" ]
+  override=$(TBOX_E2E_VSOCK_CID=77 SSH_PORT=2222 bash -c "$(grep '^VSOCK_CID=' "$SCRIPT"); echo \$VSOCK_CID")
+  [ "$override" = "77" ]
+}
+
+@test "vsock: root key rides the SMBIOS credential, device on the live boot only" {
+  # The whole fallback is contract: systemd's tmpfiles provision.conf imports
+  # ssh.authorized_keys.root from SMBIOS type 11 into /root/.ssh, and
+  # systemd-ssh-generator answers on the vsock the device provides. Both
+  # halves have to stay on the QEMU command line of the LIVE boot (the
+  # installed boots are serial-gated and get no vsock device).
+  grep -q 'io.systemd.credential.binary:ssh.authorized_keys.root=' "$SCRIPT"
+  grep -q 'vhost-vsock-pci,guest-cid=' "$SCRIPT"
+  # Absent host support must leave the command line untouched (VSOCK_ARGS
+  # stays empty), so the expansion needs the set -u-safe guard form.
+  grep -q '\${VSOCK_ARGS\[@\]+"\${VSOCK_ARGS\[@\]}"}' "$SCRIPT"
+}
+
+@test "vsock: check_ssh probes tcp first and reports both failures" {
+  # tunaOS images must keep the exact tcp path they always had — the vsock
+  # probe only runs after tcp fails. And when both fail, both stderrs are
+  # reported: on generic images the tcp reset is expected noise and the vsock
+  # line is the actual diagnosis.
+  grep -q 'check_ssh_vsock' "$SCRIPT"
+  grep -qF 'tcp: ${why} | vsock: ${VSOCK_WHY}' "$SCRIPT"
+  # The fallback is gated on the device actually having been attached.
+  grep -qF '[[ ${#VSOCK_ARGS[@]} -gt 0 ]] && check_ssh_vsock' "$SCRIPT"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Kickstart Stub
 # ═══════════════════════════════════════════════════════════════════════════
 
