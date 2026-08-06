@@ -128,6 +128,14 @@ COPY --from=bootc-builder /output /
 #
 # cryptsetup: the LUKS install path needs it on the installing host.
 #
+# sudo: the Ubuntu bootc base ships none, unlike the Fedora/EL ones.
+# customize-live.sh writes a NOPASSWD sudoers drop-in for liveuser on dev
+# ISOs, which authorises nothing without the binary — every `sudo` in the E2E
+# guest then dies with "command not found", killing the run at
+# `sudo podman load`. That is tunaOS#953 defect 3, fixed on sailfin by naming
+# sudo in Containerfile.opensuse and never carried to the apt bases, so it
+# recurred on grouper. customize-live.sh now asserts it at ISO-build time.
+#
 # software-properties-common is deliberately NOT here. It was added for
 # add-apt-repository, which no manifest-declared PPA uses any more: it resolves
 # the suite through python-apt's os-release lookup, and TunaOS branding puts a
@@ -150,6 +158,7 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
         ca-certificates curl gpg \
         ostree libostree-1-1 dracut \
         btrfs-progs dosfstools e2fsprogs xfsprogs skopeo jq \
+        sudo \
         systemd-boot systemd-boot-efi dmsetup \
         cryptsetup \
         network-manager \
