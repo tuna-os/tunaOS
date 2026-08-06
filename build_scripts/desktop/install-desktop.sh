@@ -562,6 +562,10 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 	BRANDING_EXTRA=""
 	case "${_TD_DESKTOP}" in
 	kde)
+		# Plasma's packages own /etc/xdg/kdeglobals and overwrite the copy
+		# system_files laid down in the base stage, so the look-and-feel has to
+		# be re-asserted here, after the install (#1008).
+		"${_TD_CTX}/build_scripts/desktop/kde-set-look-and-feel.sh"
 		"${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"
 		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" \
 			/usr/libexec/tunaos/verify-branding-kde

@@ -641,20 +641,44 @@ _osr_block() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
-# configure-desktop-runtime.sh — KDE LookAndFeelPackage (#1008)
+# kde-set-look-and-feel.sh — KDE LookAndFeelPackage (#1008)
 #
-# Extracts the real _kde_set_lnf out of the script and runs it against
-# fixtures, so the tests track the implementation rather than restating it.
+# Runs the real script against fixtures via its file arguments, so the tests
+# exercise the shipped code path rather than a restatement of it.
 # ═══════════════════════════════════════════════════════════════════════════
 
-_lnf_fn() {
-  sed -n '/^\t\t_kde_set_lnf() {$/,/^\t\t}$/p' \
-    "${REPO_ROOT}/build_scripts/desktop/configure-desktop-runtime.sh" |
-    sed 's/^\t\t//'
+_run_lnf() { # $1 = file
+  "${REPO_ROOT}/build_scripts/desktop/kde-set-look-and-feel.sh" "$1"
 }
 
-_run_lnf() { # $1 = file
-  bash -c "$(_lnf_fn)"$'\n'"_kde_set_lnf '$1'"
+@test "kde LookAndFeel: both desktop install paths re-assert it" {
+  # The fix is only correct if BOTH paths run it. install-desktop.sh covers the
+  # dnf/zypper/pacman/portage bases (bonito among them) and
+  # configure-desktop-runtime.sh covers Ubuntu/Debian; applying it to one left
+  # the other shipping Fedora's theme, which is how bonito:kde kept failing
+  # verify-branding-kde.sh with the fix nominally in the tree.
+  [ -x "${REPO_ROOT}/build_scripts/desktop/kde-set-look-and-feel.sh" ]
+  local script
+  for script in install-desktop.sh configure-desktop-runtime.sh; do
+    grep -qF 'kde-set-look-and-feel.sh' \
+      "${REPO_ROOT}/build_scripts/desktop/${script}"
+    # ...and before the check that would otherwise fail on Fedora's value.
+    local set_line check_line
+    set_line=$(grep -nF 'kde-set-look-and-feel.sh' \
+      "${REPO_ROOT}/build_scripts/desktop/${script}" | head -1 | cut -d: -f1)
+    check_line=$(grep -nF 'verify-branding-kde.sh' \
+      "${REPO_ROOT}/build_scripts/desktop/${script}" | head -1 | cut -d: -f1)
+    [ "$set_line" -lt "$check_line" ]
+  done
+}
+
+@test "kde LookAndFeel: default writes both config locations" {
+  # kde-settings' profile dir precedes /etc/xdg in XDG_CONFIG_DIRS on
+  # Fedora/EL, so branding only /etc/xdg passes the check (it greps /etc/xdg
+  # first) while Plasma still loads Fedora's theme.
+  local script="${REPO_ROOT}/build_scripts/desktop/kde-set-look-and-feel.sh"
+  grep -qF '/etc/xdg/kdeglobals' "$script"
+  grep -qF '/usr/share/kde-settings/kde-profile/default/xdg/kdeglobals' "$script"
 }
 
 @test "kde LookAndFeel: overwrites Fedora's value (bonito, #1008)" {
