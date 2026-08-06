@@ -66,3 +66,37 @@ strip_comments() { grep -v '^[[:space:]]*#' || true; }
     }
   done
 }
+
+# The other half of the same trap. pcsc is in the default module set on both
+# apt bases and neither installs pcscd — but only Containerfile.ubuntu carried
+# an omit line, because that is the variant the failure was first chased on.
+# flounder:gnome died in `just iso` (run 31073039837) after a completely
+# successful image build; flounder:kde survives because the Plasma set drags
+# enough of the stack in by accident, which is exactly why a green cell is not
+# evidence here either.
+@test "every apt base omits the dracut modules whose userspace it lacks" {
+  local f code fail=0
+  for f in "${APT_CONTAINERFILES[@]}"; do
+    code="$(strip_comments <"${REPO_ROOT}/$f")"
+    # Two acceptable shapes. Delegating is the preferred one: the shared script
+    # runs the same two `command -v` probes and has its own tests, so a base on
+    # it cannot drift. Writing the line inline is fine for a base not yet moved.
+    if grep -qE 'bootc/dracut-config\.sh' <<<"$code"; then
+      continue
+    fi
+    if ! grep -qE 'omit_dracutmodules' <<<"$code"; then
+      echo "FAIL: ${f} neither calls bootc/dracut-config.sh nor writes an" >&2
+      echo "      omit_dracutmodules line. dracut's pcsc module is in the" >&2
+      echo "      default set and neither apt base installs pcscd. An" >&2
+      echo "      unsatisfiable module is fatal, and the failure surfaces at" >&2
+      echo "      ISO build, not image build." >&2
+      fail=1
+      continue
+    fi
+    grep -qE 'pcsc' <<<"$code" || {
+      echo "FAIL: ${f} omits something, but never pcsc." >&2
+      fail=1
+    }
+  done
+  [ "$fail" -eq 0 ]
+}
