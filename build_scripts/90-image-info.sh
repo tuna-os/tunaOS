@@ -5,6 +5,33 @@ printf "::group:: === 90 Image Info ===\n"
 
 source /run/context/build_scripts/lib.sh
 
+# Fold a friendly alias tag onto the canonical variant id it belongs to.
+#
+# Mirrors the `aliases:` lists in .github/build-config.yml. An alias is only a
+# second tag for the same digest, so it must never become the image's identity
+# (VARIANT_ID/hostname) and it is not a valid key for the codename table below.
+canonical_variant() {
+	case "$1" in
+	almalinux-kitten) echo yellowfin ;;
+	almalinux) echo albacore ;;
+	centos) echo skipjack ;;
+	fedora) echo bonito ;;
+	opensuse | tumbleweed) echo sailfin ;;
+	gentoo) echo guppy ;;
+	elementary) echo gurnard ;;
+	ubuntu) echo grouper ;;
+	arch | archlinux) echo marlin ;;
+	debian) echo flounder ;;
+	*) echo "$1" ;;
+	esac
+}
+
+# lib.sh derives IMAGE_NAME from the detected base whenever the Containerfile
+# does not pin it, and that derivation hands back the distro alias (sailfin
+# builds arrive here as "opensuse" and guppy as "gentoo"), which would brand the
+# image with the alias and abort the codename lookup below. Canonicalize first.
+IMAGE_NAME="$(canonical_variant "${IMAGE_NAME:-${IMAGE_NAME_VARIANT:-}}")"
+
 IMAGE_REF="ostree-image-signed:docker://${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_VENDOR}/${IMAGE_NAME}"
 IMAGE_INFO="/usr/share/ublue-os/image-info.json"
 IMAGE_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
@@ -34,7 +61,14 @@ BUG_SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"
 # TunaOS variants are named for fish. Keep VERSION_CODENAME tied to that
 # identity instead of inheriting the unrelated legacy dinosaur codename.
 # Generic common names use one stable representative species.
-case "${IMAGE_NAME}" in
+#
+# Keyed on the canonical variant id, not on IMAGE_NAME: IMAGE_NAME carries the
+# *publish* name (`bonito` for bonito-rawhide, `flounder` for flounder-sid) and,
+# on bases where the Containerfile does not pin it, whatever lib.sh derived from
+# the base image. IMAGE_NAME_VARIANT is the variant id build-image-inner.sh
+# passes verbatim, so prefer it and fall back to the canonicalized IMAGE_NAME.
+VARIANT_KEY="$(canonical_variant "${IMAGE_NAME_VARIANT:-${IMAGE_NAME}}")"
+case "${VARIANT_KEY}" in
 yellowfin) CODE_NAME="Thunnus albacares" ;;
 albacore) CODE_NAME="Thunnus alalunga" ;;
 skipjack) CODE_NAME="Katsuwonus pelamis" ;;
@@ -47,7 +81,8 @@ hummingbird) CODE_NAME="Trochilidae" ;;
 gurnard) CODE_NAME="Chelidonichthys lucerna" ;;
 flounder | flounder-sid) CODE_NAME="Platichthys flesus" ;;
 *)
-	echo "ERROR: no scientific fish codename defined for variant: ${IMAGE_NAME}" >&2
+	echo "ERROR: no scientific fish codename defined for variant: ${VARIANT_KEY}" \
+		"(IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT:-unset}, IMAGE_NAME=${IMAGE_NAME})" >&2
 	exit 1
 	;;
 esac

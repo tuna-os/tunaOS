@@ -26,6 +26,25 @@ FROM ${COMMON_IMAGE_REF} AS common
 FROM ${BASE_IMAGE} AS base
 
 FROM base AS system
+
+# Identity for the numbered base scripts run in this stage. 90-image-info.sh
+# dereferences IMAGE_VENDOR under `set -u` and keys the codename table on
+# IMAGE_NAME_VARIANT (the canonical variant id, `sailfin`), so these have to be
+# ENV here, not just top-level ARGs: without them the script sees no vendor and
+# falls back to lib.sh's base-derived name, `opensuse`.
+ARG BASE_IMAGE
+ARG IMAGE_NAME
+ARG IMAGE_NAME_VARIANT
+ARG IMAGE_VENDOR
+ARG IMAGE_REGISTRY
+ARG SHA_HEAD_SHORT
+ENV BASE_IMAGE=${BASE_IMAGE}
+ENV IMAGE_NAME=${IMAGE_NAME}
+ENV IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT}
+ENV IMAGE_VENDOR=${IMAGE_VENDOR}
+ENV IMAGE_REGISTRY=${IMAGE_REGISTRY}
+ENV SHA_HEAD_SHORT=${SHA_HEAD_SHORT}
+
 # Install bootc from the openSUSE Virtualization:containers OBS project rather
 # than building it from git. The source build linked a libssl soname the
 # runtime image doesn't ship (libssl.so.60 — see #643); the packaged bootc has
