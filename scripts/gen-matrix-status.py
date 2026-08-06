@@ -58,7 +58,35 @@ END = "<!-- END GENERATED -->"
 # `--status completed` filter below matters as much: in-progress runs used to
 # occupy window slots and contribute nothing, so a morning with six runs in
 # flight silently lost another 30% of the depth.
-RUN_DEPTH = 80
+#
+# 80 was measured against live data and lands ON the cliff edge rather than past
+# it: walking it, cells were still being discovered at positions 74, 75, 76, 78,
+# 79 and 80 — the window ends part-way through the last sweep, not after it. Two
+# walks minutes apart disagreed about `yellowfin:xfce`, ❌ in one and ⬜ "never
+# tested" in the other, because a run completing at the head pushed its result
+# past the boundary. A depth that reports a different table depending on the
+# minute it runs is the same silent downgrade, just intermittent, and it also
+# drifts the generated prose (the stale-NVIDIA count) with it.
+#
+# Measured tallies for the same repo, minutes apart, varying only this number:
+#
+#    20 →  8 of 53 green (11 tested, 42 never tested)
+#    80 → 24 of 53 green (41 tested, 12 never tested)
+#   150 → 24 of 53 green (41 tested, 12 never tested)
+#   200 → 29 of 54 green (50 tested,  4 never tested)
+#
+# The plateau between 80 and 150 is why 80 looked sufficient: the next sweep
+# worth reaching sits past 150, so a spot check at any depth in between agrees
+# with itself and still misses two thirds of the untested cells. 200 reaches it
+# — the oldest still-authoritative result moves from 2026-08-05 back to
+# 2026-08-01 — and whole rows (bonito-rawhide, flounder-sid) come back with it.
+#
+# Do not read 200 as the saturation point; read it as the depth at which the
+# walk stopped telling us it was truncating. latest_results warns on stderr
+# when the oldest run it examined was still producing first-time results, which
+# is the condition that made 20 and then 80 wrong, and it is silent at 200.
+# Raise this when that warning appears rather than when a row looks wrong.
+RUN_DEPTH = 200
 
 DESKTOPS = ["gnome", "kde", "cosmic", "niri", "xfce"]
 
@@ -128,6 +156,7 @@ def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str
     ) or []
     pattern = re.compile(name_re)
     found: dict[str, tuple[str, str, str]] = {}
+    deepest_was_new = False
     for run in runs:
         if run.get("status") != "completed":
             continue
@@ -135,11 +164,29 @@ def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str
         detail = gh_json(
             "run", "view", run_id, "--repo", REPO, "--json", "jobs"
         ) or {}
+        deepest_was_new = False
         for job in detail.get("jobs", []):
             name, conclusion = job.get("name", ""), job.get("conclusion")
             if not pattern.search(name) or conclusion not in ("success", "failure"):
                 continue
+            if name not in found:
+                deepest_was_new = True
             found.setdefault(name, (conclusion, date, run_id))
+
+    # Say so when the window is the thing deciding the answer. RUN_DEPTH has now
+    # been outgrown twice, and both times the only symptom was cells quietly
+    # reading ⬜ "never tested" — the walk stopped mid-discovery and the page
+    # reported the shortfall as fact. If the oldest run we looked at was still
+    # handing us cells we had not seen, there is no reason to believe the next
+    # one would not have too, so the depth is a lower bound, not a sweep.
+    if deepest_was_new and len(runs) >= RUN_DEPTH:
+        print(
+            f"warning: {workflow}: the oldest of {len(runs)} runs examined still "
+            "contained results not seen in any newer run, so RUN_DEPTH is "
+            "cutting the walk short and cells may read as never tested when "
+            "they have in fact been tested. Raise RUN_DEPTH.",
+            file=sys.stderr,
+        )
     return found
 
 
