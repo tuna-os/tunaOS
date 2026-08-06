@@ -104,7 +104,40 @@ if [[ "${_TD_OS}" == "zypper" ]]; then
 		echo "       This would yield an image tagged ${_TD_DESKTOP} with no desktop in it." >&2
 		exit 1
 	fi
-	zypper install -y "${_TD_ZYPPER_PKGS[@]}"
+	# Refresh before installing, and retry by refreshing again.
+	#
+	# #1011 read the 404 storm on sailfin —
+	#   Preloading: libwebpmux3-1.6.0-2.3.x86_64.rpm [Error: 404 ...]
+	# — as manifests pinning versions that Tumbleweed had rotated out. The
+	# zypper sections pin nothing: gnome 62 packages, kde 47, xfce 37,
+	# cosmic 41, niri 40, zero version constraints among them.
+	#
+	# The actual mechanism is stale metadata. This stage installs with the
+	# repo index cached by the BASE stage, and layer caching makes that index
+	# arbitrarily old — while Tumbleweed deletes superseded builds within
+	# days. zypper therefore resolves an exact version the mirrors no longer
+	# carry, and every mirror 404s because none of them has it. Nothing is
+	# wrong with the package list; the index describing it has expired.
+	#
+	# So a plain retry is useless here — retrying the same stale resolution
+	# 404s identically. Refreshing between attempts is what fixes it. The
+	# `|| true` on refresh keeps a single unreachable mirror from failing the
+	# build before the install has even been tried.
+	_td_zypper_install_retry() {
+		local attempt=1
+		until zypper --non-interactive install -y "$@"; do
+			if ((attempt >= 3)); then
+				echo "ERROR: zypper install failed after ${attempt} attempts" >&2
+				return 1
+			fi
+			echo "zypper install attempt ${attempt} failed; refreshing metadata and retrying" >&2
+			zypper --non-interactive --gpg-auto-import-keys refresh --force || true
+			attempt=$((attempt + 1))
+			sleep $((attempt * 5))
+		done
+	}
+	zypper --non-interactive --gpg-auto-import-keys refresh || true
+	_td_zypper_install_retry "${_TD_ZYPPER_PKGS[@]}"
 fi
 
 # ── Emerge path ────────────────────────────────────────────────────────────────
