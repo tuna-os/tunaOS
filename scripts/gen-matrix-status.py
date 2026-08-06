@@ -14,10 +14,19 @@ a status page that quietly downgrades itself is worse than no status page.
 Usage:
     scripts/gen-matrix-status.py [--check] [--shape FILE]
 
-    --check  exit 1 if the file would change (for CI drift detection)
+    --check  exit 1 if a cell moved (for CI drift detection)
     --shape  print FILE's generated block with every CI-result-derived line
              removed, for comparing two copies of the document without
              comparing their data. See shape().
+
+"A cell moved" is narrower than "the bytes differ": the Provenance table names
+the run behind each verdict, so it advances on any re-run, verdict unchanged.
+That churn is fenced off as volatile and ignored here — see VOLATILE_BEGIN.
+
+`--check` is still a comparison against live CI data, so it only answers "is the
+committed document stale" on a machine that can reach the API. `--shape` answers
+the weaker question a pull request can actually be held to — did anyone hand-edit
+the generated block — without consulting the API at all. See shape().
 """
 
 from __future__ import annotations
@@ -38,6 +47,38 @@ CONFIG = Path(".github/build-config.yml")
 
 BEGIN = "<!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->"
 END = "<!-- END GENERATED -->"
+
+# Provenance names the run that asserted each verdict, so it advances whenever a
+# cell is RE-RUN — even to the identical verdict. That is the same property the
+# wall-clock timestamp was removed for (see build()), just spelled as run IDs:
+# `LUKS guppy:xfce` went ❌ -> ❌ across runs 31091141499 and 31099697401, no
+# cell moved, and the generated block still changed. Both things the timestamp
+# removal protected broke with it — the pull_request drift gate failed on a diff
+# of one provenance row (run 31109653582), and the daily job would commit and
+# open a PR on days when nothing moved.
+#
+# So provenance is fenced off as volatile and excluded from the comparison that
+# decides whether the document is stale. It is still regenerated in full; it is
+# simply not evidence that a cell moved. Everything outside this fence keeps the
+# contract the block advertises: it changes only when a verdict changes.
+VOLATILE_BEGIN = "<!-- BEGIN VOLATILE — advances on re-runs; not drift -->"
+VOLATILE_END = "<!-- END VOLATILE -->"
+
+_VOLATILE_RE = re.compile(
+    re.escape(VOLATILE_BEGIN) + ".*?" + re.escape(VOLATILE_END), re.S
+)
+
+
+def stable_view(text: str) -> str:
+    """`text` with every volatile region's body collapsed away.
+
+    Two documents with the same stable view assert the same thing about every
+    cell; they may disagree only about which run last said so. `--check` and the
+    write decision in main() both compare through this, which is what keeps a
+    bare re-run from reading as drift.
+    """
+    return _VOLATILE_RE.sub(VOLATILE_BEGIN + VOLATILE_END, text)
+
 
 # How many recent COMPLETED runs to walk per workflow.
 #
@@ -61,7 +102,35 @@ END = "<!-- END GENERATED -->"
 # `--status completed` filter below matters as much: in-progress runs used to
 # occupy window slots and contribute nothing, so a morning with six runs in
 # flight silently lost another 30% of the depth.
-RUN_DEPTH = 80
+#
+# 80 was measured against live data and lands ON the cliff edge rather than past
+# it: walking it, cells were still being discovered at positions 74, 75, 76, 78,
+# 79 and 80 — the window ends part-way through the last sweep, not after it. Two
+# walks minutes apart disagreed about `yellowfin:xfce`, ❌ in one and ⬜ "never
+# tested" in the other, because a run completing at the head pushed its result
+# past the boundary. A depth that reports a different table depending on the
+# minute it runs is the same silent downgrade, just intermittent, and it also
+# drifts the generated prose (the stale-NVIDIA count) with it.
+#
+# Measured tallies for the same repo, minutes apart, varying only this number:
+#
+#    20 →  8 of 53 green (11 tested, 42 never tested)
+#    80 → 24 of 53 green (41 tested, 12 never tested)
+#   150 → 24 of 53 green (41 tested, 12 never tested)
+#   200 → 29 of 54 green (50 tested,  4 never tested)
+#
+# The plateau between 80 and 150 is why 80 looked sufficient: the next sweep
+# worth reaching sits past 150, so a spot check at any depth in between agrees
+# with itself and still misses two thirds of the untested cells. 200 reaches it
+# — the oldest still-authoritative result moves from 2026-08-05 back to
+# 2026-08-01 — and whole rows (bonito-rawhide, flounder-sid) come back with it.
+#
+# Do not read 200 as the saturation point; read it as the depth at which the
+# walk stopped telling us it was truncating. latest_results warns on stderr
+# when the oldest run it examined was still producing first-time results, which
+# is the condition that made 20 and then 80 wrong, and it is silent at 200.
+# Raise this when that warning appears rather than when a row looks wrong.
+RUN_DEPTH = 200
 
 DESKTOPS = ["gnome", "kde", "cosmic", "niri", "xfce"]
 
@@ -131,6 +200,7 @@ def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str
     ) or []
     pattern = re.compile(name_re)
     found: dict[str, tuple[str, str, str]] = {}
+    deepest_was_new = False
     for run in runs:
         if run.get("status") != "completed":
             continue
@@ -138,11 +208,29 @@ def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str
         detail = gh_json(
             "run", "view", run_id, "--repo", REPO, "--json", "jobs"
         ) or {}
+        deepest_was_new = False
         for job in detail.get("jobs", []):
             name, conclusion = job.get("name", ""), job.get("conclusion")
             if not pattern.search(name) or conclusion not in ("success", "failure"):
                 continue
+            if name not in found:
+                deepest_was_new = True
             found.setdefault(name, (conclusion, date, run_id))
+
+    # Say so when the window is the thing deciding the answer. RUN_DEPTH has now
+    # been outgrown twice, and both times the only symptom was cells quietly
+    # reading ⬜ "never tested" — the walk stopped mid-discovery and the page
+    # reported the shortfall as fact. If the oldest run we looked at was still
+    # handing us cells we had not seen, there is no reason to believe the next
+    # one would not have too, so the depth is a lower bound, not a sweep.
+    if deepest_was_new and len(runs) >= RUN_DEPTH:
+        print(
+            f"warning: {workflow}: the oldest of {len(runs)} runs examined still "
+            "contained results not seen in any newer run, so RUN_DEPTH is "
+            "cutting the walk short and cells may read as never tested when "
+            "they have in fact been tested. Raise RUN_DEPTH.",
+            file=sys.stderr,
+        )
     return found
 
 
@@ -252,6 +340,10 @@ def build() -> str:
     # produce a daily commit even when no cell moved. The commit date already
     # records when it ran; what matters here is how fresh the DATA is, which
     # is stated per-axis below and in Provenance.
+    #
+    # Provenance turned out to carry that same "as of <now>" property in
+    # disguise, which is why it is fenced as volatile and compared through
+    # stable_view rather than byte-for-byte. See VOLATILE_BEGIN.
     out: list[str] = [
         BEGIN,
         "",
@@ -357,11 +449,19 @@ def build() -> str:
         out += ["Every non-NVIDIA ISO cell has an overlay.", ""]
 
     # ── Provenance ──────────────────────────────────────────────────────────
+    # Fenced as volatile: re-running a cell to the same verdict rewrites this
+    # table and nothing else, which is not drift. See VOLATILE_BEGIN.
     runs = defaultdict(list)
     for name, (_, date, run_id) in {**luks, **smoke}.items():
         runs[(date, run_id)].append(name)
     out += [
+        VOLATILE_BEGIN,
+        "",
         "## Provenance",
+        "",
+        "The run that last asserted each verdict above. Re-running a cell moves "
+        "a row here without moving the cell, so this table is refreshed only "
+        "when a verdict actually changes — treat the dates as \"no older than\".",
         "",
         "| Date | Run | Cells |",
         "|---|---|---|",
@@ -369,7 +469,7 @@ def build() -> str:
     for (date, run_id), names in sorted(runs.items(), reverse=True)[:12]:
         url = f"https://github.com/{REPO}/actions/runs/{run_id}"
         out.append(f"| {date} | [{run_id}]({url}) | {len(names)} |")
-    out += ["", END]
+    out += ["", VOLATILE_END, "", END]
     return "\n".join(out)
 
 
@@ -466,8 +566,18 @@ def main() -> int:
     _, tail = rest.split(END, 1)
     updated = head + build() + tail
 
-    if updated == text:
-        print("MATRIX-STATUS.md already current")
+    # Compare through stable_view, not byte-for-byte. A byte comparison counts a
+    # refreshed provenance row as staleness, which made the drift gate fail on
+    # re-runs that changed no verdict and would have committed a no-op refresh
+    # daily. Leaving the file untouched in that case is what makes `git diff
+    # --quiet` in matrix-status.yml mean "a cell moved" — the thing both the
+    # gate and the daily commit guard actually want to know.
+    if stable_view(updated) == stable_view(text):
+        if updated != text:
+            print("no cell moved (only provenance advanced) — leaving the file "
+                  "as committed")
+        else:
+            print("MATRIX-STATUS.md already current")
         return 0
     if args.check:
         print("MATRIX-STATUS.md is out of date", file=sys.stderr)
