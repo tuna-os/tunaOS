@@ -20,8 +20,14 @@
 set -xeuo pipefail
 
 # Overridable so the selection below can be exercised in a tree the test owns.
+# APT_LISTS_DIR matters as much as the other two: the cleanup at the end of the
+# generic path is `rm -rf "${APT_LISTS_DIR}"/*`, and rm exits non-zero on
+# permission denied. Under `set -e` that made every success-path test fail on
+# the GitHub runner, where tests run unprivileged, while passing anywhere the
+# suite happened to run as root — and there it deleted the host's apt lists.
 MODULES_DIR="${MODULES_DIR:-/usr/lib/modules}"
 BOOT_DIR="${BOOT_DIR:-/boot}"
+APT_LISTS_DIR="${APT_LISTS_DIR:-/var/lib/apt/lists}"
 
 # CONFIG_EROFS_FS_BACKED_BY_FILE landed in Linux 6.12. Only consulted when the
 # archive publishes no .config for a kernel (see kernel_can_mount_composefs).
@@ -139,7 +145,7 @@ if [ "${ENABLE_ASAHI:-0}" != "1" ]; then
 		"$KERNEL_PKG" linux-firmware
 	KVER=$(find "$MODULES_DIR" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1 | xargs basename)
 	cp "${BOOT_DIR}/vmlinuz-${KVER}" "${MODULES_DIR}/${KVER}/vmlinuz"
-	apt-get clean -y && rm -rf /var/lib/apt/lists/*
+	apt-get clean -y && rm -rf "${APT_LISTS_DIR}"/*
 	exit 0
 fi
 
@@ -248,4 +254,4 @@ fi
 # deploys) — tunaOS#779.
 "$(dirname "$0")/asahi/install-bootbin-sync.sh"
 
-apt-get clean -y && rm -rf /var/lib/apt/lists/*
+apt-get clean -y && rm -rf "${APT_LISTS_DIR}"/*
