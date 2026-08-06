@@ -27,23 +27,42 @@ FROM ${BASE_IMAGE} AS base
 
 FROM base AS system
 
-# Identity for the numbered base scripts run in this stage. 90-image-info.sh
-# dereferences IMAGE_VENDOR under `set -u` and keys the codename table on
-# IMAGE_NAME_VARIANT (the canonical variant id, `sailfin`), so these have to be
-# ENV here, not just top-level ARGs: without them the script sees no vendor and
-# falls back to lib.sh's base-derived name, `opensuse`.
+# Re-declare the identity args INSIDE this stage and promote them to ENV.
+#
+# The ARG lines at the top of this file are global: they are visible to `FROM`
+# interpolation and nothing else. A build stage sees an ARG only if it declares
+# it, and an ARG is never automatically an ENV. So when 40-services /
+# 90-image-info / 99-cleanup were wired into this stage, they ran with
+# IMAGE_VENDOR unset and died under `set -u`:
+#
+#   /run/context/build_scripts/90-image-info.sh: line 8: IMAGE_VENDOR: unbound variable
+#
+# That took out every sailfin cell, not just the cosmic one that surfaced it.
+# Containerfile.ubuntu:53-66 and Containerfile.arch already do this; opensuse
+# and gentoo declared the args globally and stopped there.
+#
+# IMAGE_NAME_VARIANT specifically: 90-image-info.sh keys its codename table on
+# the canonical variant id (`sailfin`), and openSUSE is one of the bases whose
+# Containerfile does not pin IMAGE_NAME, so lib.sh derives it from the detected
+# base image and hands back the distro alias `opensuse`. Passing the variant id
+# through is what keeps the alias from becoming the image's identity.
 ARG BASE_IMAGE
 ARG IMAGE_NAME
-ARG IMAGE_NAME_VARIANT
 ARG IMAGE_VENDOR
-ARG IMAGE_REGISTRY
+ARG IMAGE_REGISTRY="ghcr.io"
+ARG IMAGE_NAME_VARIANT
 ARG SHA_HEAD_SHORT
-ENV BASE_IMAGE=${BASE_IMAGE}
-ENV IMAGE_NAME=${IMAGE_NAME}
-ENV IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT}
-ENV IMAGE_VENDOR=${IMAGE_VENDOR}
-ENV IMAGE_REGISTRY=${IMAGE_REGISTRY}
-ENV SHA_HEAD_SHORT=${SHA_HEAD_SHORT}
+ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
+ARG DESKTOP_FLAVOR
+
+ENV BASE_IMAGE=${BASE_IMAGE} \
+    IMAGE_NAME=${IMAGE_NAME} \
+    IMAGE_VENDOR=${IMAGE_VENDOR} \
+    IMAGE_REGISTRY=${IMAGE_REGISTRY} \
+    IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT} \
+    SHA_HEAD_SHORT=${SHA_HEAD_SHORT} \
+    ENABLE_SSHD=${ENABLE_SSHD} \
+    DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
 # Install bootc from the openSUSE Virtualization:containers OBS project rather
 # than building it from git. The source build linked a libssl soname the
@@ -236,11 +255,15 @@ RUN update-ca-certificates || true
 
 # bootc install (the qcow2 Gate) needs a container signature policy; openSUSE's
 # base image doesn't ship /etc/containers/policy.json, so bootc fails with
-# "no policy.json file found". Write a permissive default (the desktop install
-# may later replace it via libcontainers-common; -n keeps that if present).
-RUN mkdir -p /etc/containers && \
-    [ -s /etc/containers/policy.json ] || \
-    printf '{ "default": [ { "type": "insecureAcceptAnything" } ] }\n' > /etc/containers/policy.json
+# "no policy.json file found".
+#
+# This used to be an inline printf here. gurnard then hit the other half of the
+# same problem — a policy that EXISTS but this image's skopeo cannot parse,
+# which fails every skopeo operation just as thoroughly — so both live in
+# build_scripts/bootc/containers-policy.sh now. Writing the default when the
+# file is missing is still the first thing it does.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/bootc/containers-policy.sh
 
 # The shared Bluefin layer is configuration and hardware integration, not a
 # package dependency. Keep it as a transparent, pinned build-time file copy so
@@ -335,3 +358,9 @@ RUN if command -v glib-compile-schemas &>/dev/null; then glib-compile-schemas /u
 FROM desktop AS kde
 FROM desktop AS niri
 FROM desktop AS xfce
+# cosmic is declared build_image: true for sailfin in build-config.yml, and
+# manifests/desktops/cosmic.yaml carries a zypper section added specifically
+# for it. Only this alias was missing, so every sailfin:cosmic build died with
+# `The target "cosmic" was not found in the provided Dockerfile` (#1012)
+# before it could reach the packages that were already staged for it.
+FROM desktop AS cosmic

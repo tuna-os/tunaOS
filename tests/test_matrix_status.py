@@ -11,7 +11,9 @@ of that contract: live churn is ignored, and the things a PR really can break
 still caught.
 """
 
+import contextlib
 import importlib.util
+import io
 import sys
 import unittest
 from pathlib import Path
@@ -192,6 +194,59 @@ class RunWindowCountsCompletedRuns(unittest.TestCase):
         self.assertEqual(len(viewed), gms.RUN_DEPTH)
         self.assertEqual(len(results), gms.RUN_DEPTH)
         self.assertTrue(all(int(r) < 900 for r in viewed))
+
+
+class TruncationWarningTracksTheWindow(unittest.TestCase):
+    """The "raise RUN_DEPTH" warning must key off the walk, not the fetch.
+
+    RUN_DEPTH has been outgrown twice, and both times the only symptom was cells
+    quietly reading ⬜ "never tested", so the warning is the thing that decides
+    when to raise it. Now that the fetch is deliberately wider than the window
+    (FETCH_DEPTH), the size of the fetched list says nothing about whether the
+    walk was cut short — only hitting the RUN_DEPTH cap does.
+    """
+
+    def _walk(self, listed):
+        def fake_gh_json(*args):
+            if args[1] == "list":
+                limit = int(args[args.index("--limit") + 1])
+                return listed[:limit]
+            run_id = args[2]
+            return {"jobs": [{"name": f"LUKS v{run_id}:gnome",
+                              "conclusion": "success"}]}
+
+        original, err = gms.gh_json, io.StringIO()
+        gms.gh_json = fake_gh_json
+        try:
+            with contextlib.redirect_stderr(err):
+                gms.latest_results("luks-e2e.yml", r"^LUKS ")
+        finally:
+            gms.gh_json = original
+        return err.getvalue()
+
+    @staticmethod
+    def _runs(count, status, first_id):
+        return [
+            {"databaseId": first_id + i, "createdAt": "2026-08-06T00:00:00Z",
+             "status": status}
+            for i in range(count)
+        ]
+
+    def test_warns_when_the_cap_cut_the_walk_short(self):
+        # Every run contributes a cell no newer run had, so the deepest one we
+        # were allowed to look at was still mid-discovery.
+        err = self._walk(self._runs(gms.RUN_DEPTH + 25, "completed", 100))
+        self.assertIn("Raise RUN_DEPTH", err)
+
+    def test_silent_when_completed_runs_ran_out_before_the_cap(self):
+        # A wide fetch that is mostly in-flight: the walk ends because there is
+        # nothing left to walk, not because the window truncated it, so there is
+        # no reason to believe a deeper window would find more. Keying the guard
+        # off len(runs) instead of the walked count warns here spuriously.
+        listed = (self._runs(gms.RUN_DEPTH - 1, "completed", 100)
+                  + self._runs(50, "in_progress", 900))
+        self.assertGreaterEqual(len(listed), gms.RUN_DEPTH)
+        self.assertEqual(self._walk(listed), "")
 
 
 if __name__ == "__main__":

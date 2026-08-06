@@ -104,7 +104,40 @@ if [[ "${_TD_OS}" == "zypper" ]]; then
 		echo "       This would yield an image tagged ${_TD_DESKTOP} with no desktop in it." >&2
 		exit 1
 	fi
-	zypper install -y "${_TD_ZYPPER_PKGS[@]}"
+	# Refresh before installing, and retry by refreshing again.
+	#
+	# #1011 read the 404 storm on sailfin —
+	#   Preloading: libwebpmux3-1.6.0-2.3.x86_64.rpm [Error: 404 ...]
+	# — as manifests pinning versions that Tumbleweed had rotated out. The
+	# zypper sections pin nothing: gnome 62 packages, kde 47, xfce 37,
+	# cosmic 41, niri 40, zero version constraints among them.
+	#
+	# The actual mechanism is stale metadata. This stage installs with the
+	# repo index cached by the BASE stage, and layer caching makes that index
+	# arbitrarily old — while Tumbleweed deletes superseded builds within
+	# days. zypper therefore resolves an exact version the mirrors no longer
+	# carry, and every mirror 404s because none of them has it. Nothing is
+	# wrong with the package list; the index describing it has expired.
+	#
+	# So a plain retry is useless here — retrying the same stale resolution
+	# 404s identically. Refreshing between attempts is what fixes it. The
+	# `|| true` on refresh keeps a single unreachable mirror from failing the
+	# build before the install has even been tried.
+	_td_zypper_install_retry() {
+		local attempt=1
+		until zypper --non-interactive install -y "$@"; do
+			if ((attempt >= 3)); then
+				echo "ERROR: zypper install failed after ${attempt} attempts" >&2
+				return 1
+			fi
+			echo "zypper install attempt ${attempt} failed; refreshing metadata and retrying" >&2
+			zypper --non-interactive --gpg-auto-import-keys refresh --force || true
+			attempt=$((attempt + 1))
+			sleep $((attempt * 5))
+		done
+	}
+	zypper --non-interactive --gpg-auto-import-keys refresh || true
+	_td_zypper_install_retry "${_TD_ZYPPER_PKGS[@]}"
 fi
 
 # ── Emerge path ────────────────────────────────────────────────────────────────
@@ -126,6 +159,82 @@ if [[ "${_TD_OS}" == "emerge" ]]; then
 	emerge --verbose "${_TD_EMERGE_PKGS[@]}"
 fi
 
+# Add a Launchpad PPA as a deb822 source, WITHOUT add-apt-repository.
+#
+# add-apt-repository cannot be used here, and the reason is a collision between
+# two things this repo does deliberately:
+#
+#   * 90-image-info.sh rewrites VERSION_CODENAME in os-release to the variant's
+#     fish codename, and keeps UBUNTU_CODENAME as the real Launchpad suite.
+#   * add-apt-repository resolves the suite through python-apt's aptsources,
+#     which looks the codename up in /usr/share/python-apt/templates/Ubuntu.info.
+#
+# So on a branded image it dies:
+#
+#   aptsources.distro.NoDistroTemplateException: Error: could not find a
+#   distribution template for Ubuntu/Chelidonichthys lucerna
+#
+# That is tunaOS#1014 — gurnard:pantheon, whose desktop exists only in
+# ppa:elementary-os/stable and nowhere in the Ubuntu archive, so the failure is
+# total rather than cosmetic. There is no flag to tell add-apt-repository which
+# suite to use; it always asks os-release.
+#
+# A PPA is a fully specified URL shape, so write the source ourselves from
+# UBUNTU_CODENAME. build_scripts/desktop/niri.sh already does exactly this for
+# the avengemedia PPAs, with the same comment about UBUNTU_CODENAME — this is
+# that knowledge moved somewhere every manifest-declared PPA gets it.
+#
+# The signing key is fetched armored and referenced as .asc rather than
+# dearmored, so no gnupg is needed in the image.
+_td_add_ppa() {
+	local ppa="$1"
+	local spec="${ppa#ppa:}"
+	local owner="${spec%%/*}"
+	local name="${spec#*/}"
+	# `ppa:owner` with no archive means owner's default archive, named "ppa".
+	[[ "$name" == "$spec" ]] && name="ppa"
+
+	local suite=""
+	if [[ -r /etc/os-release ]]; then
+		# shellcheck disable=SC1091
+		suite="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-}")"
+	fi
+	if [[ -z "$suite" ]]; then
+		echo "ERROR: ${_TD_MANIFEST} declares PPA ${ppa}, but this image's os-release has no" >&2
+		echo "       UBUNTU_CODENAME. VERSION_CODENAME is the TunaOS fish name and cannot" >&2
+		echo "       name a Launchpad suite. Every package that exists only in that PPA" >&2
+		echo "       would be silently missing." >&2
+		return 1
+	fi
+
+	local fp
+	fp="$(curl -fsSL --retry 3 "https://api.launchpad.net/devel/~${owner}/+archive/ubuntu/${name}" |
+		grep -o '"signing_key_fingerprint": *"[^"]*"' | head -1 | cut -d'"' -f4 || true)"
+	if [[ -z "$fp" ]]; then
+		echo "ERROR: could not read a signing key fingerprint for ${ppa} from Launchpad." >&2
+		return 1
+	fi
+
+	install -d -m 0755 /etc/apt/keyrings
+	local keyring="/etc/apt/keyrings/${owner}-${name}.asc"
+	curl -fsSL --retry 3 \
+		"https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x${fp}" -o "$keyring"
+	grep -q 'BEGIN PGP PUBLIC KEY BLOCK' "$keyring" || {
+		echo "ERROR: key fetched for ${ppa} (${fp}) is not an armored PGP key." >&2
+		return 1
+	}
+	chmod 0644 "$keyring"
+
+	cat >"/etc/apt/sources.list.d/${owner}-${name}.sources" <<EOF
+Types: deb
+URIs: https://ppa.launchpadcontent.net/${owner}/${name}/ubuntu
+Suites: ${suite}
+Components: main
+Signed-By: ${keyring}
+EOF
+	echo "Added PPA ${ppa} for suite ${suite}"
+}
+
 if [[ "${_TD_OS}" == "apt" ]]; then
 	# The apt section is either a plain package list (!!seq) or a map with
 	# .packages and optional .ppa. Branch on the type explicitly: mikefarah
@@ -146,9 +255,9 @@ if [[ "${_TD_OS}" == "apt" ]]; then
 		_TD_PPA_COND=$($YQ -r ".packages.apt.ppa[$i].condition" "${_TD_MANIFEST}")
 		# Only add PPA if condition matches (e.g. "ubuntu" only on Ubuntu)
 		if [[ -z "${_TD_PPA_COND}" ]] || [[ "$IS_UBUNTU" == true && "${_TD_PPA_COND}" == "ubuntu" ]]; then
-			if command -v add-apt-repository &>/dev/null; then
-				add-apt-repository -y "${_TD_PPA_REPO}"
-			fi
+			_td_add_ppa "${_TD_PPA_REPO}"
+			# The new repo's index has to be visible to the install below.
+			apt-get update -qq
 		fi
 	done
 
@@ -304,10 +413,24 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" ]]; then
 		readarray -t _TD_COPR_PKGS < <($YQ -r ".packages.${_TD_OS}.copr[$i].packages[]" "${_TD_MANIFEST}" 2>/dev/null || true)
 		_TD_COPR_OPTS=$($YQ -r ".packages.${_TD_OS}.copr[$i].options // \"\"" "${_TD_MANIFEST}")
 
-		dnf -y install 'dnf5-command(copr)' 'dnf-command(copr)' 2>/dev/null || true
-		dnf -y copr enable "${_TD_COPR_REPO}" || true
+		# One transaction per provider name — listing them together made dnf
+		# discard all of them whenever one was unmatched, which on EL10 is
+		# always (#1016). See install_dnf_plugin_providers in lib.sh.
+		install_dnf_plugin_providers
+		if ! dnf -y copr enable "${_TD_COPR_REPO}"; then
+			echo "TUNAOS_COPR_ENABLE_FAILED repo=${_TD_COPR_REPO} — packages from it will fall back to base repos" >&2
+		fi
 		dnf -y copr disable "${_TD_COPR_REPO}" || true
 		_TD_REPO_ID="copr:copr.fedorainfracloud.org:$(echo "${_TD_COPR_REPO}" | tr '/' ':')"
+		# `packages: []` is the enable-only idiom: the block exists so the
+		# repo FILE is written and a later block can name it in --enablerepo.
+		# Running `dnf install` with no arguments there is a guaranteed error
+		# swallowed by `|| true`, which buries a real failure in noise the
+		# reader has learned to ignore. Skip it and say why.
+		if ((${#_TD_COPR_PKGS[@]} == 0)); then
+			echo "Enabled ${_TD_COPR_REPO} (no packages listed — repo enabled for a later --enablerepo)"
+			continue
+		fi
 		# shellcheck disable=SC2086
 		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
 			dnf -y --enablerepo="${_TD_REPO_ID}" --skip-unavailable install ${_TD_COPR_OPTS} "${_TD_COPR_PKGS[@]}" || install_available "${_TD_COPR_PKGS[@]}" || true
@@ -524,6 +647,10 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 	BRANDING_EXTRA=""
 	case "${_TD_DESKTOP}" in
 	kde)
+		# Plasma's packages own /etc/xdg/kdeglobals and overwrite the copy
+		# system_files laid down in the base stage, so the look-and-feel has to
+		# be re-asserted here, after the install (#1008).
+		"${_TD_CTX}/build_scripts/desktop/kde-set-look-and-feel.sh"
 		"${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"
 		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-kde.sh" \
 			/usr/libexec/tunaos/verify-branding-kde

@@ -60,6 +60,11 @@ gnome | kde | niri | cosmic | xfce)
 	BRANDING_EXTRA=""
 	case "$desktop" in
 	kde)
+		# Plasma's packages own /etc/xdg/kdeglobals and overwrite the copy
+		# system_files laid down in the base stage, so the look-and-feel has to
+		# be re-asserted here, after the install (#1008).
+		/run/context/build_scripts/desktop/kde-set-look-and-feel.sh
+
 		/run/context/build_scripts/checks/verify-branding-kde.sh "${IMAGE_NAME:-$desktop}"
 		install -Dm0755 /run/context/build_scripts/checks/verify-branding-kde.sh \
 			/usr/libexec/tunaos/verify-branding-kde

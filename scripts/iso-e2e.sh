@@ -1910,12 +1910,31 @@ EOF
 	# Bound with `timeout` as a safety net; the image is already local at
 	# this point so this should only cover the actual install steps, not a
 	# network pull.
-	timeout 1800 "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman ${GUEST_HOME}/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
+	#
+	# 1800s was too tight for the largest images. bonito:kde is 9.1 GB in 64
+	# layers, and `bootc install to-filesystem` writing that into an encrypted
+	# xfs volume inside a nested QEMU guest ran for 25 minutes and was still
+	# going when the timer fired — no stall, just a big image on slow virtual
+	# storage. Raised, and overridable for a cell that legitimately needs more.
+	local install_timeout="${TUNAOS_E2E_INSTALL_TIMEOUT:-3600}"
+	timeout "$install_timeout" "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman ${GUEST_HOME}/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
 		rc=$?
 		if [[ $rc -eq 0 ]]; then
 			true
 		elif [[ $rc -eq 124 ]]; then
-			echo "ERROR: fisherman install timed out after 1800s (likely a stalled podman pull)"
+			# Do NOT name a cause here. This used to read "(likely a stalled
+			# podman pull)", directly contradicting the comment above saying
+			# the image is already local — and it sent the bonito:kde
+			# investigation looking for a network problem that did not exist.
+			# The install's own progress lines are the evidence; print the
+			# last one instead of guessing.
+			echo "ERROR: fisherman install timed out after ${install_timeout}s"
+			echo "       last progress line from the guest:"
+			grep -E '"type":"(step|substep)"' "${SERIAL_LOG}" | tail -1 |
+				sed 's/^/         /' || echo "         (none recorded)"
+			echo "       If that line shows work in flight, the image is too big for the"
+			echo "       budget — raise TUNAOS_E2E_INSTALL_TIMEOUT. If it is unchanged from"
+			echo "       minutes earlier, it is a genuine stall."
 			return 3
 		else
 			echo "ERROR: fisherman install failed (exit $rc)"

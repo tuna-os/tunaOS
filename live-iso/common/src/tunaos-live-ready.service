@@ -30,6 +30,28 @@ StandardError=tty
 # correlate with the QEMU launch timestamp.
 ExecStart=/bin/sh -c 'echo "TUNAOS_LIVE_READY uptime=$(awk "{print \\$1}" /proc/uptime)"'
 ExecStart=/bin/sh -c 'sleep 2 && echo "TUNAOS_LIVE_READY uptime=$(awk "{print \\$1}" /proc/uptime)"'
+# Why the harness could not reach a guest that was, by every other marker,
+# ready. grouper:kde emitted an EMPTY address list beside a healthy
+# "0.0.0.0:22" listener, which is the whole explanation for "Connection timed
+# out during banner exchange": QEMU user-mode networking accepts the TCP
+# connection at the host end and then has no guest address to deliver it to.
+# sshd was never the problem, and "a network manager is active" never meant a
+# lease was obtained.
+#
+# These lines live HERE rather than in e2e-runtime-checks.sh, where they
+# started. That script runs from tunaos-desktop-contract.service on
+# graphical.target, so on grouper:xfce — a cell that fails exactly this way —
+# it never ran and the serial recorded nothing at all. This unit is
+# WantedBy=multi-user.target and fired even there, which is the property the
+# diagnostic needs: it must speak loudest when the rest of the boot is
+# failing.
+#
+# A missing ip(8)/ss(8) says so rather than rendering empty. An empty listener
+# list asserts "nothing is listening", which is the conclusion these lines
+# exist to establish, so stating it because the tool was absent would be the
+# wrong diagnosis stated confidently.
+ExecStart=/bin/sh -c 'echo "TUNAOS_LIVE_NET ipv4=$(command -v ip >/dev/null 2>&1 && ip -4 -o addr show scope global 2>/dev/null | tr -s " " | cut -d" " -f4 | tr "\\n" "," || echo ip-unavailable)"'
+ExecStart=/bin/sh -c 'echo "TUNAOS_LIVE_NET listeners=$(command -v ss >/dev/null 2>&1 && ss -Hltn 2>/dev/null | tr -s " " | cut -d" " -f4 | sort -u | tr "\\n" " " || echo ss-unavailable)"'
 
 [Install]
 WantedBy=multi-user.target

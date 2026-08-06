@@ -63,6 +63,32 @@ SRC="${_roots[0]}mkosi.extra"
 # Factory etc -> /etc (greetd, profile.d, kmscon, taidan.toml).
 cp -av "$SRC/usr/share/factory/etc/." /etc/
 
+# The greeter's own niri config, which the factory tree does NOT contain.
+#
+# /etc/greetd/config.toml (just copied above) launches:
+#     dms-greeter --command niri --cache-dir /var/cache/dms-greeter \
+#         -C /etc/greetd/niri/config.kdl
+#
+# Upstream never ships that file either — it materialises it at first boot
+# from the tail of usr/lib/tmpfiles.d/99-zirconium-factory.conf:
+#     d /etc/greetd/niri
+#     f /etc/greetd/niri/config.kdl
+# We deliberately do not install 99-zirconium-factory.conf (its other lines
+# symlink /etc back into the factory tree, which is exactly what the cp above
+# replaces with real files), so that pair was silently lost and the greeter
+# came up pointed at a path that did not exist — tunaOS#1009, and the reason
+# verify-branding-niri.sh asserts the -C target rather than trusting it.
+#
+# `f` with no argument creates an empty file, so an empty config is upstream's
+# actual behaviour, not a placeholder: the greeter wants niri's built-in
+# defaults. The comment line is valid KDL and changes nothing but discoverability.
+install -d -m 0755 /etc/greetd/niri
+cat >/etc/greetd/niri/config.kdl <<'EOF'
+// Greeter session config. Intentionally empty: dms-greeter runs niri with
+// its built-in defaults here. Laid down by build_scripts/install-zirconium.sh.
+EOF
+chmod 0644 /etc/greetd/niri/config.kdl
+
 # The niri/DMS payload -> /usr. Explicit paths (not the whole usr/ tree, which
 # carries zirconium-branded zfetch/zmotd and extra services we don't ship).
 install -Dm0644 "$SRC/usr/share/greetd/greetd-spawn.pam_env.conf" /usr/share/greetd/greetd-spawn.pam_env.conf
