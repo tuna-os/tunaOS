@@ -446,7 +446,8 @@ FROM base-no-de AS niri
 # Zirconium's curated DMS/Niri integration is session-specific. Keep its
 # config, policy, and greeter files out of every other desktop image.
 # Sourced from the zirconium-dev/zirconium source tarball (mkosi.extra)
-# via install-zirconium.sh — no OCI stage, no digest pin.
+# via install-zirconium.sh — no OCI stage, pinned to the commit in
+# image-versions.yaml (downloads.zirconium_src) rather than a branch tip.
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \

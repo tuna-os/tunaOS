@@ -201,7 +201,8 @@ RUN rm -rf /opt && ln -s /var/opt /opt
 FROM base-no-de AS niri
 # Zirconium (DMS/Niri upstream) config payload — niri images only. Sourced
 # from the zirconium-dev/zirconium source tarball (mkosi.extra tree) rather
-# than the published OCI image, so no digest pin to keep fresh.
+# than the published OCI image, pinned to the commit in image-versions.yaml
+# (downloads.zirconium_src) so niri builds are reproducible.
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
