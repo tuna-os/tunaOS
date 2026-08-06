@@ -43,6 +43,7 @@ jobs:
         run: pip install --quiet pyyaml
 
       - name: Regenerate
+        if: github.event_name != 'pull_request'
         env:
           # gh needs a token; the default one can read Actions runs in-repo.
           GH_TOKEN: ${{ github.token }}
@@ -53,42 +54,20 @@ jobs:
           # be worse than not updating at all.
           ./scripts/gen-matrix-status.py
 
-      # This used to be `git diff --quiet -- docs/MATRIX-STATUS.md` after the
-      # regeneration above, i.e. "the committed document must equal a fresh
-      # one". It cannot. The block is a function of build-config.yml AND of the
-      # last RUN_DEPTH runs of two workflows, and only the first is in the
-      # repo: runs 31089215592 and 31089333089, two minutes apart on the same
-      # tree, regenerated "7 of 53" and "8 of 53" respectively, because one
-      # single-cell LUKS rerun both lands its own result and pushes the oldest
-      # full sweep out of the window.
-      #
-      # So the check went red on every PR that touched build-config.yml, and
-      # committing a regeneration did not fix it — the next LUKS run, minutes
-      # later, made the committed copy wrong again. #1020 and #1021 were both
-      # failing it simultaneously with nothing wrong in either.
-      #
-      # Content freshness is the nightly refresh PR's job (below), which is why
-      # it exists. What a PR can be held to is the *shape*: sections, prose,
-      # table headers, the do-not-edit notice — everything the generator
-      # writes from the repo rather than from the API. That is what the PR
-      # check was for ("catches a hand-edit inside the generated block") and
-      # `--shape` is what makes it checkable.
-      - name: Fail on hand-edits inside the generated block (pull_request only)
+      # Byte-exact drift is enforced on the scheduled run (which pushes the
+      # refresh PR), NOT here: the cells, tallies and provenance rows are a
+      # readout of repo-wide CI state, so any LUKS run completing during review
+      # turned this gate red for something the PR neither caused nor could fix,
+      # and the only available "fix" was committing a snapshot that went stale
+      # again within minutes. --check-structure still runs the generator against
+      # the PR's build-config — so a broken generator or a hand-edit inside the
+      # generated block fails exactly as before — while masking values that only
+      # live CI can move.
+      - name: Check generated block (pull_request only)
         if: github.event_name == 'pull_request'
-        run: |
-          set -euo pipefail
-          # HEAD is the PR merge commit, so this is the document as committed,
-          # before the regeneration step above overwrote the working tree.
-          git show HEAD:docs/MATRIX-STATUS.md > /tmp/committed.md
-          ./scripts/gen-matrix-status.py --shape /tmp/committed.md > /tmp/committed.shape
-          ./scripts/gen-matrix-status.py --shape docs/MATRIX-STATUS.md > /tmp/fresh.shape
-          if ! diff -u /tmp/committed.shape /tmp/fresh.shape; then
-            echo "::error::docs/MATRIX-STATUS.md's generated block was"
-            echo "::error::hand-edited, or the generator's own prose changed."
-            echo "::error::Run scripts/gen-matrix-status.py and commit it."
-            exit 1
-          fi
-          echo "MATRIX-STATUS.md's generated block is machine-shaped"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/gen-matrix-status.py --check-structure
 
       # `main` is protected by a "changes must be made through the merge queue"
       # rule, so the direct `git push origin HEAD:main` this used to do was

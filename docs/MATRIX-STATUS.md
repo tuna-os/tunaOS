@@ -42,7 +42,7 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 
 ## LUKS E2E
 
-**38 of 54** cells green (51 tested, 3 never tested).
+**39 of 54** cells green (51 tested, 3 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
@@ -52,7 +52,7 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito-rawhide** | ✅ | ❌ | ✅ | ✅ | ✅ |
 | **flounder** | ✅ | ✅ | ❌ | — | ✅ |
-| **flounder-sid** | ✅ | ✅ | ❌ | — | ❌ |
+| **flounder-sid** | ✅ | ✅ | ❌ | — | ✅ |
 | **grouper** | ✅ | ❌ | ❌ | — | ❌ |
 | **guppy** | ❌ | ❌ | — | — | ❌ |
 | **gurnard** | — | — | — | — | — |
@@ -93,28 +93,24 @@ cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on hoste
 
 Missing for 6 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-cosmic`, `hummingbird-gnome`, `hummingbird-kde`, `hummingbird-niri`
 
-<!-- BEGIN VOLATILE — advances on re-runs; not drift -->
-
 ## Provenance
 
 The run that last asserted each verdict above. Re-running a cell moves a row here without moving the cell, so this table is refreshed only when a verdict actually changes — treat the dates as "no older than".
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-08-06 | [31111988299](https://github.com/tuna-os/tunaOS/actions/runs/31111988299) | 1 |
+| 2026-08-06 | [31110117972](https://github.com/tuna-os/tunaOS/actions/runs/31110117972) | 1 |
+| 2026-08-06 | [31101896534](https://github.com/tuna-os/tunaOS/actions/runs/31101896534) | 1 |
 | 2026-08-06 | [31100129320](https://github.com/tuna-os/tunaOS/actions/runs/31100129320) | 1 |
 | 2026-08-06 | [31100122430](https://github.com/tuna-os/tunaOS/actions/runs/31100122430) | 1 |
 | 2026-08-06 | [31100113432](https://github.com/tuna-os/tunaOS/actions/runs/31100113432) | 1 |
 | 2026-08-06 | [31100103368](https://github.com/tuna-os/tunaOS/actions/runs/31100103368) | 1 |
 | 2026-08-06 | [31100096864](https://github.com/tuna-os/tunaOS/actions/runs/31100096864) | 1 |
-| 2026-08-06 | [31099697401](https://github.com/tuna-os/tunaOS/actions/runs/31099697401) | 1 |
 | 2026-08-06 | [31093981917](https://github.com/tuna-os/tunaOS/actions/runs/31093981917) | 1 |
 | 2026-08-06 | [31092676972](https://github.com/tuna-os/tunaOS/actions/runs/31092676972) | 1 |
 | 2026-08-06 | [31092670802](https://github.com/tuna-os/tunaOS/actions/runs/31092670802) | 1 |
 | 2026-08-06 | [31092664411](https://github.com/tuna-os/tunaOS/actions/runs/31092664411) | 1 |
-| 2026-08-06 | [31092657612](https://github.com/tuna-os/tunaOS/actions/runs/31092657612) | 1 |
-| 2026-08-06 | [31090026607](https://github.com/tuna-os/tunaOS/actions/runs/31090026607) | 1 |
-
-<!-- END VOLATILE -->
 
 <!-- END GENERATED -->
 
