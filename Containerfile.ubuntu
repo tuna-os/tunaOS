@@ -36,6 +36,25 @@ RUN apt-get update -y && \
     tar -xzf toolchain.tar.gz -C /output && \
     rm -rf /fetch
 
+# The sid toolchain ships bootc but no libostree, because sid packages one new
+# enough (build-toolchain.yml gives it build_ostree: "0"). That assumption holds
+# on resolute and fails on noble, whose 2024.5 lacks the LIBOSTREE_2025.* symbol
+# versions bootc is linked against — gurnard:pantheon got all the way to
+# `bootc install to-filesystem` inside the VM before finding out.
+#
+# So probe it: run the bootc we are about to ship against this base's packaged
+# libostree and, ONLY when it cannot load, build an ABI-matched one from the
+# pinned source into the toolchain tree. A no-op on resolute, and on any future
+# base whose archive catches up. Deciding this behaviourally rather than from a
+# release-name case is what keeps the two releases from needing a table here.
+#
+# COPY, not the usual context bind mount: a bind mount's content is not part of
+# the layer's cache key (see the BUILD_SCRIPTS_HASH comment below), so editing
+# the script or moving the ostree pin would silently reuse a stale toolchain
+# tree. This stage is discarded, so the extra layer costs nothing.
+COPY build_scripts/bootc/build-libostree.sh image-versions.yaml /tmp/bootc/
+RUN VERSIONS_FILE=/tmp/bootc/image-versions.yaml /tmp/bootc/build-libostree.sh
+
 # Context layer. There is no way to share a stage between Containerfiles, so
 # the four core COPYs below are duplicated in all six — and duplication that
 # cannot be factored out is duplication that has to be ASSERTED instead. Two
@@ -117,7 +136,8 @@ RUN set -eux; \
     fi; \
     apt-get update -y
 
-# Install the bootc toolchain (bootc + bootupd) from the builder stage
+# Install the bootc toolchain (bootc + bootupd, plus a source libostree on bases
+# whose packaged one cannot load bootc) from the builder stage
 COPY --from=bootc-builder /output /
 
 # libostree. The bootc COPYed above is linked against LIBOSTREE_2025.2 /
@@ -127,43 +147,64 @@ COPY --from=bootc-builder /output /
 #   noble    (24.04, gurnard)   ostree 2024.5-1build2   -> too old
 #   resolute (26.04, grouper)   ostree 2025.7-3build1   -> fine
 #
-# resolute works. noble does not, and CANNOT be fixed from this file, which is
-# the part worth writing down because the obvious fix looks like it should
-# work and does not:
+# So resolute installs the archive library and noble must not: apt would put
+# 2024.5 on the same path the source-built one occupies, and bootc would be
+# right back to "version LIBOSTREE_2025.2 not found".
 #
-# Containerfile.debian solves the same problem on trixie with an equivs dummy
-# that keeps apt from installing the old library, because its toolchain is
-# built with BUILD_OSTREE=1 and SHIPS a source libostree for exactly that case.
-# This file pulls bootc-toolchain-sid, which is built with BUILD_OSTREE=0 —
-# sid's packaged ostree is new enough, so it carries none. Copying debian's
-# dummy here therefore replaces "wrong version" with nothing at all:
+# Containerfile.debian keeps the archive out on trixie with an equivs dummy, and
+# the trap worth writing down is that the dummy is only half of that pattern:
+# debian's toolchain is built with BUILD_OSTREE=1 and SHIPS a libostree for
+# exactly this case. Copying the dummy alone into a file whose toolchain carries
+# none replaces "wrong version" with nothing at all —
 #
 #   bootc: error while loading shared libraries: libostree-1.so.1:
 #     cannot open shared object file: No such file or directory
 #
-# The real fix is a noble entry in .github/workflows/build-toolchain.yml's
-# matrix with build_ostree: "1", and selecting the toolchain by base here the
-# way Containerfile.debian already does (`case "${BASE_IMAGE}" in *sid*`).
-# That needs the noble artifact published first, and noble's time_t64
-# transition renames some of the toolchain's build deps (libarchive13 ->
-# libarchive13t64), so it wants a real build behind it rather than a guess.
+# — which is what gurnard did when that was tried. The dummy is therefore
+# conditioned on the source library being present, not on the release name: the
+# bootc-builder stage above builds one when and only when the packaged lib
+# cannot load bootc, so `ls /usr/lib/*/libostree-1.so.1` is the honest test for
+# which of the two situations we are in.
 #
-# Until then the packaged library goes in as before, and the assertion below
-# turns noble's failure into a three-minute build error that names the cause
-# instead of a linker error twenty minutes into a QEMU guest, reported by
-# fisherman as "bootc install to-filesystem (via container): exit status 1".
-RUN apt-get update -y && \
-    DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-        libostree-1-1 ostree && \
-    if ! bootc --version; then \
-        echo "ERROR: bootc cannot start against this base's libostree." >&2; \
-        echo "       archive libostree-1-1: $(apt-cache policy libostree-1-1 | awk '/Installed:/{print $2}')" >&2; \
-        echo "       bootc from the sid toolchain needs >= 2025.3." >&2; \
-        echo "       Fix: add this base to build-toolchain.yml with build_ostree=1" >&2; \
-        echo "       and select that toolchain above, as Containerfile.debian does" >&2; \
-        echo "       for trixie. An equivs dummy alone leaves NO libostree here." >&2; \
-        exit 1; \
-    fi
+# Publishing a bootc-toolchain-noble with build_ostree: "1" and selecting the
+# toolchain by base (as Containerfile.debian does for trixie) would be the
+# tidier long-term arrangement — it would move this build off the image's
+# critical path — but it is not required for correctness, and building against
+# the base we actually ship on is what makes the ABI match by construction.
+#
+# One thing to know before attempting that: toolchain/Containerfile.debian does
+# not build on noble as written. Two of its build deps are absent there, and
+# both are redundant rather than renamed-in-place, so dropping them keeps one
+# list for every base instead of a case whose arms drift:
+#
+#   libarchive13   the runtime lib; libarchive-dev already depends on it, and
+#                  noble's time_t64 transition renamed it libarchive13t64.
+#   e2fslibs-dev   transitional, depends on libext2fs-dev, which is listed.
+#
+# Every other name in that list is published for noble, trixie and sid —
+# checked against the archives, not assumed.
+RUN set -eux; \
+    apt-get update -y; \
+    export DEBIAN_FRONTEND=noninteractive; \
+    apt-get install -y --no-install-recommends curl ca-certificates; \
+    if ls /usr/lib/*/libostree-1.so.1 >/dev/null 2>&1; then \
+        apt-get install -y --no-install-recommends \
+            equivs libglib2.0-0t64 libgpgme11t64 libarchive13t64 libfuse3-3; \
+        printf 'Package: libostree-1-1\nVersion: 99:0\nArchitecture: %s\nMaintainer: TunaOS <build@tunaos.org>\nDescription: satisfied by the source libostree from bootc-toolchain\n' \
+            "$(dpkg --print-architecture)" > /tmp/libostree.ctl; \
+        ( cd /tmp && equivs-build libostree.ctl && dpkg -i libostree-1-1_*.deb ); \
+        apt-mark hold libostree-1-1; \
+        ldconfig; \
+    else \
+        apt-get install -y --no-install-recommends ostree libostree-1-1; \
+    fi; \
+    # Both paths must end with a loadable bootc and ostree. LD_BIND_NOW binds
+    # every symbol now, so an ABI mismatch fails the build here — a three-minute
+    # error naming the cause — instead of surviving to `bootc install` in a QEMU
+    # guest forty minutes later, where fisherman reports it as the uninformative
+    # "bootc install to-filesystem (via container): exit status 1".
+    ostree --version; \
+    LD_BIND_NOW=1 bootc --version
 
 # Install bootc dependencies and the bootc runtime tooling needed for
 # `bootc container lint`, plus the static composefs/bootc overlay. apt intact.

@@ -117,3 +117,83 @@ PY
     }
   done
 }
+
+@test "install-desktop.sh never runs before the image is branded" {
+  # install-desktop.sh ends by running the branding contract, which reads
+  # os-release. Every Containerfile but one satisfies that by running
+  # 90-image-info.sh in the base stage first. Containerfile.gentoo's desktop
+  # branch (builder -> desktop-build) skipped it — `system`, which has it, is a
+  # sibling — so the contract ran against stock Gentoo:
+  #
+  #   FAIL: PRETTY_NAME is 'Gentoo Linux' — still names the upstream distro
+  #   TUNAOS_BRANDING_FAIL variant=xfce failures=14
+  #
+  # "variant 'xfce'" because install-desktop.sh falls back to the desktop name
+  # when IMAGE_NAME is unset, so the codename lookup is asked for a variant
+  # that does not exist.
+  local f
+  for f in "${CONTAINERFILES[@]}"; do
+    run python3 - "${REPO_ROOT}/$f" <<'PY'
+import re, sys
+path = sys.argv[1]
+lines = open(path).read().split('\n')
+
+bounds = []
+for i, l in enumerate(lines):
+    m = re.match(r'^FROM\s+(\S+)(?:\s+[Aa][Ss]\s+(\S+))?', l)
+    if m:
+        bounds.append((i, m.group(2) or f'<anon{i}>', m.group(1)))
+bounds.append((len(lines), '<eof>', None))
+
+stages = {}
+for k in range(len(bounds) - 1):
+    s, e = bounds[k][0], bounds[k + 1][0]
+    name, parent = bounds[k][1], bounds[k][2]
+    code = [l for l in lines[s:e] if not l.lstrip().startswith('#')]
+    def first(pat):
+        for off, l in enumerate(code):
+            if pat in l:
+                return off
+        return None
+    stages[name] = dict(parent=parent, brand=first('90-image-info.sh'),
+                        desk=first('install-desktop.sh'))
+
+def branded_before(name, seen=None):
+    """Did 90-image-info.sh run anywhere at or above this stage?"""
+    seen = seen or set()
+    st = stages.get(name)
+    if not st or name in seen:
+        return False
+    seen.add(name)
+    if st['brand'] is not None:
+        return True
+    parent = st['parent'] if st['parent'] in stages else None
+    return branded_before(parent, seen) if parent else False
+
+bad = []
+for name, st in stages.items():
+    if st['desk'] is None:
+        continue
+    # Branded in an ancestor is fine. Branded in THIS stage is fine only if it
+    # comes first.
+    if st['brand'] is not None:
+        if st['brand'] < st['desk']:
+            continue
+        bad.append(f"{name}: 90-image-info.sh runs AFTER install-desktop.sh")
+        continue
+    parent = st['parent'] if st['parent'] in stages else None
+    if not (parent and branded_before(parent)):
+        bad.append(f"{name}: install-desktop.sh runs with no branding anywhere above it")
+
+if bad:
+    print(f"{path}:")
+    for b in bad:
+        print(f"  {b}")
+    sys.exit(1)
+PY
+    [ "$status" -eq 0 ] || {
+      echo "$output" >&2
+      return 1
+    }
+  done
+}

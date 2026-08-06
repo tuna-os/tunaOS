@@ -191,6 +191,50 @@ FROM builder AS desktop-build
 ARG DESKTOP_FLAVOR
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
+# Identity, and branding, BEFORE install-desktop.sh.
+#
+# install-desktop.sh ends by running the branding contract, and every other
+# Containerfile satisfies it the same way: the base stage runs the numbered
+# scripts — 90-image-info.sh among them — and the desktop stages build on top
+# of an already-branded image. This branch does not. It goes
+# builder -> desktop-build, while 90-image-info.sh lives in `system`, which is
+# a sibling. So the contract ran against stock Gentoo and reported fourteen
+# failures at once:
+#
+#   FAIL: no fish codename defined for variant 'xfce'
+#   FAIL: PRETTY_NAME is 'Gentoo Linux' — still names the upstream distro
+#   FAIL: SUPPORT_URL is 'https://www.gentoo.org/support/'
+#   TUNAOS_BRANDING_FAIL variant=xfce failures=14
+#
+# "variant 'xfce'" is the same gap seen twice: install-desktop.sh passes
+# `${IMAGE_NAME:-${_TD_DESKTOP}}`, so an unset IMAGE_NAME silently becomes the
+# desktop name and the codename lookup is asked for a variant that does not
+# exist. guppy:xfce only reached this once the libdbusmenu USE pin let the
+# emerge finish.
+#
+# SHA_HEAD_SHORT is deliberately NOT here: it changes every commit, and an ENV
+# above the emerge would invalidate the desktop package build on every push.
+# 90-image-info.sh defaults it to "testing", and the `desktop` stage below
+# re-runs the script with the real value — osr_set rewrites in place, so the
+# second pass corrects BUILD_ID and IMAGE_VERSION rather than duplicating them.
+ARG BASE_IMAGE
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG IMAGE_REGISTRY="ghcr.io"
+ARG IMAGE_NAME_VARIANT
+ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
+
+ENV BASE_IMAGE=${BASE_IMAGE} \
+    IMAGE_NAME=${IMAGE_NAME} \
+    IMAGE_VENDOR=${IMAGE_VENDOR} \
+    IMAGE_REGISTRY=${IMAGE_REGISTRY} \
+    IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT} \
+    ENABLE_SSHD=${ENABLE_SSHD}
+
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/90-image-info.sh
+
 # Desktop-only portage config, applied AFTER the base @world (any global
 # flag change at base makes @world --newuse schedule from-source multilib
 # rebuilds that die on pam<->systemd / ncurses<->gpm build cycles):
