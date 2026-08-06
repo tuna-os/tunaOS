@@ -285,6 +285,23 @@ RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/bootc/finalize.sh
 
+# Pantheon (gurnard, Ubuntu noble). Unlike the stages above there is no
+# desktop/pantheon.sh — Pantheon is manifest-only, so this goes through the
+# generic manifest-driven installer, which is also the only path that handles
+# the `packages.apt.ppa` block the manifest needs (Pantheon is not in the
+# Ubuntu archive at all; it comes exclusively from ppa:elementary-os/stable).
+# gurnard resolved to Containerfile.el10 until #1014, so this stage had never
+# been reachable to notice it was missing.
+FROM base-no-de AS pantheon
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/desktop/install-desktop.sh pantheon && \
+  /run/context/build_scripts/desktop/configure-desktop-runtime.sh pantheon
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/bootc/finalize.sh
+
 # GNOME + ZFS-root support. zfs.sh installs the prebuilt zfs.ko, the userspace
 # tools and the dracut 90zfs module BEFORE finalize.sh builds the initramfs and
 # bootcifies (apt is unusable afterwards). Enables `bootc install to-filesystem`

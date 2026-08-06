@@ -23,7 +23,14 @@ COPY system_files_overrides /overrides
 
 FROM ${COMMON_IMAGE_REF} AS common
 
-FROM docker.io/gentoo/stage3:latest@sha256:08914e15d306bfdb251262ca3f7e3489b77ca32604ad1928cbb21dc94587261c AS base
+# BASE_IMAGE, not a hardcoded ref. This line used to pin
+# stage3@sha256:08914e15… while build-config.yml pinned
+# stage3@sha256:9d03b48… for guppy — the ARG above was declared and then
+# ignored, so every guppy build used this digest no matter what the config,
+# renovate, or `just build` said. Same drift class as the base-image table in
+# scripts/get-base-image.sh (#1014); build-config.yml is the source of truth
+# and build-image-inner.sh already passes it through as a build-arg.
+FROM ${BASE_IMAGE} AS base
 # Speed: pull prebuilt, gpg-verified binary packages from Gentoo's official
 # binhost instead of compiling all of @world from source (which blew past the
 # 60-min CI job timeout — tuna-os/tunaOS#644). getuto imports the shipped
@@ -261,3 +268,10 @@ RUN bootc container lint
 FROM desktop AS gnome
 COPY --from=common /system_files/bluefin /
 FROM desktop AS kde
+# xfce is declared build_image: true for guppy in build-config.yml and
+# manifests/desktops/xfce.yaml has an emerge section, but this alias was
+# missing — `The target "xfce" was not found in the provided Dockerfile`
+# (#1012). niri and cosmic are deliberately NOT added: they have no ebuilds in
+# the Gentoo main tree (#923), so an alias would only move their failure from
+# "no target" to "no package".
+FROM desktop AS xfce

@@ -316,3 +316,9 @@ RUN if command -v glib-compile-schemas &>/dev/null; then glib-compile-schemas /u
 FROM desktop AS kde
 FROM desktop AS niri
 FROM desktop AS xfce
+# cosmic is declared build_image: true for sailfin in build-config.yml, and
+# manifests/desktops/cosmic.yaml carries a zypper section added specifically
+# for it. Only this alias was missing, so every sailfin:cosmic build died with
+# `The target "cosmic" was not found in the provided Dockerfile` (#1012)
+# before it could reach the packages that were already staged for it.
+FROM desktop AS cosmic

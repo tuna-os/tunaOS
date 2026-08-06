@@ -51,7 +51,13 @@ if [[ "${VARIANT}" == "guppy" ]]; then
 	CONTAINERFILE="Containerfile.gentoo"
 fi
 
-if [[ "${VARIANT}" == "grouper" ]]; then
+# grouper (Ubuntu resolute) and gurnard (Ubuntu noble) both build from
+# Containerfile.ubuntu. gurnard was never added here, so it fell through to the
+# Containerfile.el10 default and every build died — "Unknown variant: gurnard"
+# (#1014). It is a separate variant rather than a grouper flavour because
+# Pantheon's PPA publishes for noble and jammy only, nothing for resolute
+# (see the header of manifests/desktops/pantheon.yaml).
+if [[ "${VARIANT}" == "grouper" || "${VARIANT}" == "gurnard" ]]; then
 	CONTAINERFILE="Containerfile.ubuntu"
 fi
 
@@ -86,8 +92,9 @@ elif [[ "${VARIANT}" == "marlin" && "${FLAVOR}" == *"-cachyos" ]]; then
 	PARENT_FLAVOR="${FLAVOR%-cachyos}"
 elif [[ "${FLAVOR}" == "base" ]]; then
 	DESKTOP_FLAVOR="base-no-de"
-	# grouper's base-no-de is intentionally pre-bootcify
-	if [[ "${VARIANT}" == "grouper" ]]; then DESKTOP_FLAVOR="base"; fi
+	# grouper's base-no-de is intentionally pre-bootcify. gurnard shares
+	# Containerfile.ubuntu, so it shares that stage layout too.
+	if [[ "${VARIANT}" == "grouper" || "${VARIANT}" == "gurnard" ]]; then DESKTOP_FLAVOR="base"; fi
 elif [[ "${FLAVOR}" == "base-hwe" ]]; then
 	CONTAINERFILE="Containerfile.overlay"
 	OVERLAY_TYPE="hwe"
