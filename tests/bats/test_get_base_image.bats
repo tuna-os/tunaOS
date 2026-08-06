@@ -188,3 +188,31 @@ setup() {
     return 1
   fi
 }
+
+@test "apt-based Containerfiles install the LUKS host tools" {
+  # fisherman aborts before touching the disk without systemd-cryptenroll:
+  #   fatal: missing required host tool: "systemd-cryptenroll" not found in
+  #   PATH — install the "systemd" package on the host
+  #
+  # That hint is wrong for Debian/Ubuntu, where the binary ships in
+  # systemd-cryptsetup, not systemd — verified against the trixie and
+  # noble/resolute package lists. flounder had cryptsetup but not
+  # systemd-cryptsetup and died in LUKS run 31060069809; Ubuntu had neither,
+  # so grouper and gurnard were queued up to fail the same way.
+  local cf missing=""
+  for cf in Containerfile.debian Containerfile.ubuntu; do
+    local path="${REPO_ROOT}/${cf}" body
+    # Strip comments first. Both names appear in the prose explaining WHY they
+    # are needed, so matching the raw file passes even with the packages
+    # removed — the first version of this test did exactly that.
+    body="$(grep -v '^[[:space:]]*#' "$path")"
+    grep -qE '(^|[[:space:]])cryptsetup([[:space:]]|\\|$)' <<<"$body" ||
+      missing="${missing} ${cf}:cryptsetup"
+    grep -qE '(^|[[:space:]])systemd-cryptsetup([[:space:]]|\\|$)' <<<"$body" ||
+      missing="${missing} ${cf}:systemd-cryptsetup"
+  done
+  if [ -n "$missing" ]; then
+    echo "FAIL: apt base missing LUKS host tooling —${missing}" >&2
+    return 1
+  fi
+}

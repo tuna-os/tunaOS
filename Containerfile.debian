@@ -87,6 +87,18 @@ RUN apt-get update -y && \
     esac
 
 # Install base system packages
+#
+# systemd-cryptsetup is what ships /usr/bin/systemd-cryptenroll on
+# Debian/Ubuntu — NOT the systemd package, verified against the trixie package
+# file lists. fisherman requires it on the installing host and aborts before
+# touching the disk without it:
+#
+#   fatal: missing required host tool: "systemd-cryptenroll" not found in PATH
+#     — install the "systemd" package on the host
+#
+# That hint is Fedora-shaped and misleading here: systemd is already in the
+# list below. This killed flounder:kde in LUKS run 31060069809 after the image,
+# the ISO and the live boot had all succeeded.
 RUN apt-get update -y && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
         btrfs-progs \
@@ -104,6 +116,7 @@ RUN apt-get update -y && \
         dmsetup \
         squashfs-tools \
         cryptsetup \
+        systemd-cryptsetup \
         network-manager \
         pipewire \
         wireplumber \
