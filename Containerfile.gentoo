@@ -271,6 +271,48 @@ LABEL containers.bootc=1 ostree.bootable=1
 COPY --from=context /files /
 COPY --from=common /system_files/shared /
 
+# The identity args again, for THIS stage.
+#
+# The `system` stage already re-declares and promotes them, with a comment
+# explaining that the global ARGs at the top of the file reach `FROM`
+# interpolation and nothing else. But `system` is a SIBLING of this stage, not
+# an ancestor: the chain here is base -> builder -> desktop-build -> desktop,
+# and none of those three set them. ENV is inherited by child stages; the
+# `system` block is on a branch this one never touches.
+#
+# So 90-image-info.sh below runs with IMAGE_NAME, IMAGE_VENDOR and BASE_IMAGE
+# unset. It is `set -euo pipefail` and those three are the ones with no `:-`
+# default (IMAGE_REGISTRY, SHA_HEAD_SHORT and DESKTOP_FLAVOR all have one), so
+# it dies on its eighth line:
+#
+#   IMAGE_REF="ostree-image-signed:docker://${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_VENDOR}/${IMAGE_NAME}"
+#   /run/context/build_scripts/90-image-info.sh: line 8: IMAGE_VENDOR: unbound variable
+#
+# guppy:base never hit it — base-no-de branches off `system`. Only the desktop
+# flavors reach here, and until the libdbusmenu USE pin two commits ago they
+# died earlier, in the emerge. Same fix as the `system` stage, one branch over.
+#
+# Declared HERE rather than in desktop-build so SHA_HEAD_SHORT, which changes
+# every commit, does not invalidate the emerge layers above it — the reason
+# Containerfile.ubuntu declares it late too.
+ARG BASE_IMAGE
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG IMAGE_REGISTRY="ghcr.io"
+ARG IMAGE_NAME_VARIANT
+ARG SHA_HEAD_SHORT
+ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
+ARG DESKTOP_FLAVOR
+
+ENV BASE_IMAGE=${BASE_IMAGE} \
+    IMAGE_NAME=${IMAGE_NAME} \
+    IMAGE_VENDOR=${IMAGE_VENDOR} \
+    IMAGE_REGISTRY=${IMAGE_REGISTRY} \
+    IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT} \
+    SHA_HEAD_SHORT=${SHA_HEAD_SHORT} \
+    ENABLE_SSHD=${ENABLE_SSHD} \
+    DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
+
 # Run the standard numbered base scripts (matching el10/arch/debian/opensuse
 # convention): 40-services (service enablement, dconf), 90-image-info
 # (branding/os-release), 99-cleanup (ostree prep).
