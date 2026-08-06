@@ -790,29 +790,51 @@ _run_lnf() { # $1 = file
   done
 }
 
-@test "install-desktop.sh fails loudly when a declared PPA cannot be added" {
-  # Pantheon exists only in ppa:elementary-os/stable — nothing in the Ubuntu
-  # archive. add-apt-repository ships in software-properties-common, which the
-  # base did not carry, and the old code skipped the PPA silently on a missing
-  # tool. The build then died ~40 lines later with "Unable to locate package
-  # gala", naming every package and never the repo (LUKS run 31060730479).
+@test "install-desktop.sh resolves a PPA suite from UBUNTU_CODENAME, not VERSION_CODENAME" {
+  # 90-image-info.sh rewrites VERSION_CODENAME to the variant's fish name and
+  # keeps UBUNTU_CODENAME as the Launchpad suite. Anything that resolves a PPA
+  # through VERSION_CODENAME therefore asks Launchpad for a suite called
+  # "Chelidonichthys lucerna" — which is how gurnard:pantheon died (#1014):
+  #
+  #   aptsources.distro.NoDistroTemplateException: Error: could not find a
+  #   distribution template for Ubuntu/Chelidonichthys lucerna
+  #
+  # Strip comments before matching: the paragraph above quotes both names.
   local script="${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
-
-  # It must try to install the tool rather than give up...
-  grep -qF 'software-properties-common' "$script"
-  # ...and must exit rather than continue if it still is not there.
-  local blk
-  blk="$(sed -n '/add-apt-repository is unavailable\|declares PPA/,/^\t\t\tfi$/p' "$script")"
-  [ -n "$blk" ]
-  grep -qF 'exit 1' <<<"$blk"
-
-  # A bare `if command -v add-apt-repository` with no else branch is the
-  # regression: it means a missing tool silently drops the repo again.
-  # Strip comments first — the paragraph above describing the old shape
-  # contains that exact string, and matching the raw file flags it.
   local code
   code="$(grep -v '^[[:space:]]*#' "$script")"
-  run grep -cE 'if command -v add-apt-repository' <<<"$code"
+
+  # add-apt-repository always asks os-release for the suite and takes no flag
+  # to override it, so it must not be the mechanism.
+  run grep -c 'add-apt-repository' <<<"$code"
+  [ "$output" -eq 0 ]
+
+  # The suite must come from UBUNTU_CODENAME...
+  grep -qF '${UBUNTU_CODENAME' <<<"$code"
+  # ...and the branded VERSION_CODENAME must never be EXPANDED. Naming it in
+  # the error message is fine and useful; substituting its value is the bug.
+  run grep -cE '\$\{?VERSION_CODENAME' <<<"$code"
+  [ "$output" -eq 0 ]
+}
+
+@test "install-desktop.sh fails loudly when a declared PPA cannot be added" {
+  # Pantheon exists only in ppa:elementary-os/stable — nothing in the Ubuntu
+  # archive — so a silently-skipped PPA is not a degraded desktop, it is no
+  # desktop. The old code skipped it and the build died ~40 lines later with
+  # "Unable to locate package gala", naming every package and never the repo
+  # (LUKS run 31060730479).
+  local script="${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
+  local body
+  body="$(sed -n '/^_td_add_ppa() {/,/^}/p' "$script")"
+  [ -n "$body" ]
+
+  # Every step that can fail must stop the build rather than continue:
+  # no codename, no fingerprint, not actually a key.
+  [ "$(grep -c 'return 1' <<<"$body")" -ge 3 ]
+  # curl must not swallow HTTP errors into a zero-byte keyring.
+  grep -qF -- '-fsSL' <<<"$body"
+  # And nothing in it may be best-effort.
+  run grep -c '|| true' <<<"$(grep -v 'signing_key_fingerprint' <<<"$body")"
   [ "$output" -eq 0 ]
 }
 

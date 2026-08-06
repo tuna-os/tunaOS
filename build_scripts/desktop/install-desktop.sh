@@ -159,6 +159,82 @@ if [[ "${_TD_OS}" == "emerge" ]]; then
 	emerge --verbose "${_TD_EMERGE_PKGS[@]}"
 fi
 
+# Add a Launchpad PPA as a deb822 source, WITHOUT add-apt-repository.
+#
+# add-apt-repository cannot be used here, and the reason is a collision between
+# two things this repo does deliberately:
+#
+#   * 90-image-info.sh rewrites VERSION_CODENAME in os-release to the variant's
+#     fish codename, and keeps UBUNTU_CODENAME as the real Launchpad suite.
+#   * add-apt-repository resolves the suite through python-apt's aptsources,
+#     which looks the codename up in /usr/share/python-apt/templates/Ubuntu.info.
+#
+# So on a branded image it dies:
+#
+#   aptsources.distro.NoDistroTemplateException: Error: could not find a
+#   distribution template for Ubuntu/Chelidonichthys lucerna
+#
+# That is tunaOS#1014 — gurnard:pantheon, whose desktop exists only in
+# ppa:elementary-os/stable and nowhere in the Ubuntu archive, so the failure is
+# total rather than cosmetic. There is no flag to tell add-apt-repository which
+# suite to use; it always asks os-release.
+#
+# A PPA is a fully specified URL shape, so write the source ourselves from
+# UBUNTU_CODENAME. build_scripts/desktop/niri.sh already does exactly this for
+# the avengemedia PPAs, with the same comment about UBUNTU_CODENAME — this is
+# that knowledge moved somewhere every manifest-declared PPA gets it.
+#
+# The signing key is fetched armored and referenced as .asc rather than
+# dearmored, so no gnupg is needed in the image.
+_td_add_ppa() {
+	local ppa="$1"
+	local spec="${ppa#ppa:}"
+	local owner="${spec%%/*}"
+	local name="${spec#*/}"
+	# `ppa:owner` with no archive means owner's default archive, named "ppa".
+	[[ "$name" == "$spec" ]] && name="ppa"
+
+	local suite=""
+	if [[ -r /etc/os-release ]]; then
+		# shellcheck disable=SC1091
+		suite="$(. /etc/os-release && echo "${UBUNTU_CODENAME:-}")"
+	fi
+	if [[ -z "$suite" ]]; then
+		echo "ERROR: ${_TD_MANIFEST} declares PPA ${ppa}, but this image's os-release has no" >&2
+		echo "       UBUNTU_CODENAME. VERSION_CODENAME is the TunaOS fish name and cannot" >&2
+		echo "       name a Launchpad suite. Every package that exists only in that PPA" >&2
+		echo "       would be silently missing." >&2
+		return 1
+	fi
+
+	local fp
+	fp="$(curl -fsSL --retry 3 "https://api.launchpad.net/devel/~${owner}/+archive/ubuntu/${name}" |
+		grep -o '"signing_key_fingerprint": *"[^"]*"' | head -1 | cut -d'"' -f4 || true)"
+	if [[ -z "$fp" ]]; then
+		echo "ERROR: could not read a signing key fingerprint for ${ppa} from Launchpad." >&2
+		return 1
+	fi
+
+	install -d -m 0755 /etc/apt/keyrings
+	local keyring="/etc/apt/keyrings/${owner}-${name}.asc"
+	curl -fsSL --retry 3 \
+		"https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x${fp}" -o "$keyring"
+	grep -q 'BEGIN PGP PUBLIC KEY BLOCK' "$keyring" || {
+		echo "ERROR: key fetched for ${ppa} (${fp}) is not an armored PGP key." >&2
+		return 1
+	}
+	chmod 0644 "$keyring"
+
+	cat >"/etc/apt/sources.list.d/${owner}-${name}.sources" <<EOF
+Types: deb
+URIs: https://ppa.launchpadcontent.net/${owner}/${name}/ubuntu
+Suites: ${suite}
+Components: main
+Signed-By: ${keyring}
+EOF
+	echo "Added PPA ${ppa} for suite ${suite}"
+}
+
 if [[ "${_TD_OS}" == "apt" ]]; then
 	# The apt section is either a plain package list (!!seq) or a map with
 	# .packages and optional .ppa. Branch on the type explicitly: mikefarah
@@ -179,35 +255,7 @@ if [[ "${_TD_OS}" == "apt" ]]; then
 		_TD_PPA_COND=$($YQ -r ".packages.apt.ppa[$i].condition" "${_TD_MANIFEST}")
 		# Only add PPA if condition matches (e.g. "ubuntu" only on Ubuntu)
 		if [[ -z "${_TD_PPA_COND}" ]] || [[ "$IS_UBUNTU" == true && "${_TD_PPA_COND}" == "ubuntu" ]]; then
-			# add-apt-repository ships in software-properties-common, which the
-			# base images do not all carry. This used to be a bare
-			# `if command -v add-apt-repository` with no else: a missing tool
-			# skipped the PPA silently, and the build then died ~40 lines later
-			# with
-			#
-			#   E: Unable to locate package gala
-			#   E: Unable to locate package io.elementary.wingpanel
-			#
-			# naming every package but never the repo that was never added.
-			# Pantheon exists ONLY in ppa:elementary-os/stable — nothing in the
-			# Ubuntu archive — so gurnard:pantheon could not build at all
-			# (LUKS run 31060730479).
-			#
-			# Install the tool if it is missing, and fail loudly if it still
-			# is: a manifest that declares a PPA and does not get it produces a
-			# desktop-less image, which is the failure this file already guards
-			# against a few lines below.
-			if ! command -v add-apt-repository &>/dev/null; then
-				apt-get update -qq || true
-				apt-get install -y --no-install-recommends software-properties-common || true
-			fi
-			if ! command -v add-apt-repository &>/dev/null; then
-				echo "ERROR: ${_TD_MANIFEST} declares PPA ${_TD_PPA_REPO}, but add-apt-repository" >&2
-				echo "       is unavailable and software-properties-common could not be installed." >&2
-				echo "       Every package that exists only in that PPA would be silently missing." >&2
-				exit 1
-			fi
-			add-apt-repository -y "${_TD_PPA_REPO}"
+			_td_add_ppa "${_TD_PPA_REPO}"
 			# The new repo's index has to be visible to the install below.
 			apt-get update -qq
 		fi
