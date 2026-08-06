@@ -55,6 +55,7 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **flounder-sid** | ⬜ | ⬜ | ⬜ | — | ⬜ |
 | **grouper** | ❌ | ❌ | ❌ | — | ❌ |
 | **guppy** | ❌ | ❌ | — | — | ❌ |
+| **gurnard** | — | — | — | — | — |
 | **hummingbird** | ⬜ | ⬜ | ⬜ | ⬜ | — |
 | **marlin** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **sailfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
@@ -63,7 +64,7 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 
 NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 25 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
 
-Newest result 2026-08-05, oldest still-authoritative result 2026-08-05. Results older than the most recent round of fixes are the best available data, not current data.
+Newest result 2026-08-06, oldest still-authoritative result 2026-08-05. Results older than the most recent round of fixes are the best available data, not current data.
 
 ## Installer smoke
 
@@ -96,18 +97,18 @@ Missing for 6 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-08-06 | [31059184838](https://github.com/tuna-os/tunaOS/actions/runs/31059184838) | 1 |
+| 2026-08-06 | [31059175449](https://github.com/tuna-os/tunaOS/actions/runs/31059175449) | 1 |
 | 2026-08-05 | [31057471311](https://github.com/tuna-os/tunaOS/actions/runs/31057471311) | 1 |
 | 2026-08-05 | [31010736963](https://github.com/tuna-os/tunaOS/actions/runs/31010736963) | 18 |
 | 2026-08-05 | [31010734487](https://github.com/tuna-os/tunaOS/actions/runs/31010734487) | 5 |
 | 2026-08-05 | [31010732206](https://github.com/tuna-os/tunaOS/actions/runs/31010732206) | 3 |
-| 2026-08-05 | [31010721185](https://github.com/tuna-os/tunaOS/actions/runs/31010721185) | 5 |
+| 2026-08-05 | [31010721185](https://github.com/tuna-os/tunaOS/actions/runs/31010721185) | 4 |
 | 2026-08-05 | [31010718896](https://github.com/tuna-os/tunaOS/actions/runs/31010718896) | 16 |
 | 2026-08-05 | [31010716720](https://github.com/tuna-os/tunaOS/actions/runs/31010716720) | 12 |
 | 2026-08-05 | [31010714483](https://github.com/tuna-os/tunaOS/actions/runs/31010714483) | 18 |
 | 2026-08-05 | [31010712188](https://github.com/tuna-os/tunaOS/actions/runs/31010712188) | 4 |
 | 2026-08-05 | [31010701104](https://github.com/tuna-os/tunaOS/actions/runs/31010701104) | 9 |
-| 2026-08-05 | [31001067341](https://github.com/tuna-os/tunaOS/actions/runs/31001067341) | 4 |
-| 2026-07-31 | [30601507789](https://github.com/tuna-os/tunaOS/actions/runs/30601507789) | 5 |
 
 <!-- END GENERATED -->
 
