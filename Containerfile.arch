@@ -136,37 +136,11 @@ RUN KERNEL_PKG="linux"; \
         gst-plugins-ugly && \
     pacman -Scc --noconfirm
 
-# Build initramfs. Live-boot modules are NOT needed here: tacklebox
-# injects its own embedded tbox-live/tbox-root dracut modules at ISO
-# build time using this image's stock dracut (tuna-os/tacklebox#90).
-RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \
-    printf 'systemdsystemconfdir=/etc/systemd/system\nsystemdsystemunitdir=/usr/lib/systemd/system\n' \
-        > /usr/lib/dracut/dracut.conf.d/30-fix-bootc-module.conf && \
-    # add_drivers erofs/overlay: the composefs root IS an EROFS image with an
-    # overlayfs on top (prepare-root.conf below sets composefs enabled = yes),
-    # so the initramfs has to be able to mount both before it can hand off to
-    # the real root.
-    #
-    # marlin:gnome LUKS E2E run 31057676424 unlocked the disk correctly and
-    # then died in the initramfs:
-    #
-    #   Please enter passphrase for disk root: ...
-    #   [FAILED] Failed to mount /sysroot.
-    #   [DEPEND] Dependency failed for Initrd Root File System.
-    #   Entering emergency mode.
-    #
-    # So crypt and dm are working — cryptsetup opened the volume — and the
-    # thing that failed is mounting the composefs on top of it. The install
-    # itself was correct: bootc ran with --composefs-backend --bootloader
-    # systemd and reported success, onto an XFS root.
-    #
-    # Arch ships CONFIG_EROFS_FS as a module, and hostonly=no does not sweep in
-    # every filesystem driver — erofs is niche enough that dracut has no reason
-    # to guess it. It is named nowhere else in this repo.
-    printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" bootc crypt dm "\nadd_drivers+=" erofs overlay xfs "\nomit_dracutmodules+=" tpm2-tss pcsc "\n' \
-        > /usr/lib/dracut/dracut.conf.d/30-bootc-container-build.conf && \
-    dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
-
+# NOTE: this MUST precede the dracut step below. dracut-config.sh derives the
+# driver set from prepare-root.conf — written at the end of this block — so
+# running dracut first would read no composefs declaration and silently build an
+# initramfs with no erofs, which is the exact failure the shared script exists
+# to prevent.
 # Set up bootc/ostree filesystem layout
 RUN rm -rf /boot /home /root /usr/local /srv /opt /mnt \
         /usr/lib/sysimage/log /usr/lib/sysimage/cache/pacman/pkg && \
@@ -186,6 +160,21 @@ RUN rm -rf /boot /home /root /usr/local /srv /opt /mnt \
         > /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' \
         > /usr/lib/ostree/prepare-root.conf
+
+# Build initramfs. Live-boot modules are NOT needed here: tacklebox
+# injects its own embedded tbox-live/tbox-root dracut modules at ISO
+# build time using this image's stock dracut (tuna-os/tacklebox#90).
+# dracut config comes from build_scripts/bootc/dracut-config.sh, shared with
+# every other bootc variant. It derives the driver set from the image (composefs
+# => erofs + overlay) and probes each driver against this kernel's module tree,
+# because add_drivers on a name the kernel lacks fails the dracut run outright.
+#
+# It used to be a printf here. That is how five composefs variants ended up with
+# one erofs driver between them: the fix was made while chasing marlin and had
+# nowhere shared to live.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/bootc/dracut-config.sh && \
+    dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
 
 # systemd-firstboot asks the CONSOLE for a timezone and blocks there forever.
 #
