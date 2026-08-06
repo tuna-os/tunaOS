@@ -252,6 +252,15 @@ RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/99-cleanup.sh
 
+# Same COPY of projectbluefin/common's shared tree as Containerfile.ubuntu, so
+# the same signature-policy exposure: it pins sigstore requirements with
+# `keyPaths`, which only skopeo >= 1.14 parses. trixie's skopeo is new enough
+# today and noble's is not — that is a version accident, not a property of
+# apt, so validate here too rather than waiting for the accident to change.
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/bootc/containers-policy.sh
+
 RUN bootc container lint
 
 # Cache-bust so build_scripts edits invalidate the desktop stages' install
