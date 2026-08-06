@@ -42,25 +42,25 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 
 ## LUKS E2E
 
-**29 of 54** cells green (50 tested, 4 never tested).
+**34 of 54** cells green (50 tested, 4 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ✅ | ❌ | ❌ | ❌ | ❌ |
+| **albacore** | ✅ | ✅ | ❌ | ❌ | ❌ |
 | **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito-rawhide** | ✅ | ❌ | ✅ | ✅ | ✅ |
 | **flounder** | ✅ | ✅ | ❌ | — | ✅ |
-| **flounder-sid** | ❌ | ❌ | ❌ | — | ❌ |
+| **flounder-sid** | ✅ | ❌ | ❌ | — | ❌ |
 | **grouper** | ✅ | ❌ | ❌ | — | ❌ |
 | **guppy** | ❌ | ❌ | — | — | ❌ |
 | **gurnard** | — | — | — | — | — |
 | **hummingbird** | ⬜ | ⬜ | ⬜ | ⬜ | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **sailfin** | ✅ | ✅ | ✅ | ✅ | ❌ |
-| **skipjack** | ✅ | ✅ | ❌ | ❌ | ❌ |
-| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **skipjack** | ✅ | ✅ | ❌ | ✅ | ❌ |
+| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 32 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
 
@@ -97,6 +97,11 @@ Missing for 6 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-08-06 | [31093981917](https://github.com/tuna-os/tunaOS/actions/runs/31093981917) | 1 |
+| 2026-08-06 | [31092676972](https://github.com/tuna-os/tunaOS/actions/runs/31092676972) | 1 |
+| 2026-08-06 | [31092670802](https://github.com/tuna-os/tunaOS/actions/runs/31092670802) | 1 |
+| 2026-08-06 | [31092664411](https://github.com/tuna-os/tunaOS/actions/runs/31092664411) | 1 |
+| 2026-08-06 | [31092657612](https://github.com/tuna-os/tunaOS/actions/runs/31092657612) | 1 |
 | 2026-08-06 | [31090026607](https://github.com/tuna-os/tunaOS/actions/runs/31090026607) | 1 |
 | 2026-08-06 | [31087954678](https://github.com/tuna-os/tunaOS/actions/runs/31087954678) | 1 |
 | 2026-08-06 | [31087948099](https://github.com/tuna-os/tunaOS/actions/runs/31087948099) | 1 |
@@ -104,11 +109,6 @@ Missing for 6 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-
 | 2026-08-06 | [31087927879](https://github.com/tuna-os/tunaOS/actions/runs/31087927879) | 1 |
 | 2026-08-06 | [31082460289](https://github.com/tuna-os/tunaOS/actions/runs/31082460289) | 1 |
 | 2026-08-06 | [31074526310](https://github.com/tuna-os/tunaOS/actions/runs/31074526310) | 1 |
-| 2026-08-06 | [31074522687](https://github.com/tuna-os/tunaOS/actions/runs/31074522687) | 1 |
-| 2026-08-06 | [31074518614](https://github.com/tuna-os/tunaOS/actions/runs/31074518614) | 1 |
-| 2026-08-06 | [31074188677](https://github.com/tuna-os/tunaOS/actions/runs/31074188677) | 1 |
-| 2026-08-06 | [31074182816](https://github.com/tuna-os/tunaOS/actions/runs/31074182816) | 1 |
-| 2026-08-06 | [31071844598](https://github.com/tuna-os/tunaOS/actions/runs/31071844598) | 1 |
 
 <!-- END GENERATED -->
 
