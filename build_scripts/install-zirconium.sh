@@ -24,7 +24,17 @@ curl -fsSL --retry 3 \
 	"https://github.com/zirconium-dev/zirconium/archive/refs/heads/${ZIRCONIUM_REF}.tar.gz" |
 	tar -xz -C "$TMP"
 
-SRC="$TMP/zirconium-${ZIRCONIUM_REF}/mkosi.extra"
+# GitHub names the archive's top-level directory after the ref with slashes
+# flattened (feat/x -> zirconium-feat-x), so don't reconstruct it from the ref —
+# take whatever single directory the tarball extracted.
+shopt -s nullglob
+_roots=("$TMP"/*/)
+shopt -u nullglob
+[[ "${#_roots[@]}" -eq 1 ]] || {
+	echo "ERROR: expected one top-level dir in zirconium@${ZIRCONIUM_REF} tarball, got ${#_roots[@]}" >&2
+	exit 1
+}
+SRC="${_roots[0]}mkosi.extra"
 [[ -d "$SRC" ]] || { echo "ERROR: mkosi.extra not found in zirconium@${ZIRCONIUM_REF}" >&2; exit 1; }
 
 # Factory etc -> /etc (greetd, profile.d, kmscon, taidan.toml).

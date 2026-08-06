@@ -540,8 +540,9 @@ fi
 if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" == niri || "${_TD_DESKTOP}" == cosmic || "${_TD_DESKTOP}" == xfce ]]; then
 	# Compile dconf databases now so verify-desktop-experience.sh doesn't
 	# fail on uncompiled keyfiles. dconf-update.service handles this at
-	# first boot, but the verify check runs during image build. Required
-	# for Containerfile.arch which never calls 40-services.sh.
+	# first boot and 40-services.sh runs `dconf update` in the base stage,
+	# but desktop keyfiles land after that, so recompile here for the
+	# build-time verify check.
 	if command -v dconf &>/dev/null && compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
 		dconf update || true
 	fi
@@ -582,7 +583,7 @@ Requires=display-manager.service
 [Service]
 Type=oneshot
 ExecStart=/usr/libexec/tunaos/verify-desktop-experience ${_TD_DESKTOP} --runtime
-ExecStart=-/usr/libexec/tunaos/verify-branding ${_TD_DESKTOP} --runtime
+ExecStart=-/usr/libexec/tunaos/verify-branding ${IMAGE_NAME:-${_TD_DESKTOP}} --runtime
 ${BRANDING_EXTRA}
 ExecStart=-/usr/libexec/tunaos/e2e-runtime-checks ${_TD_DESKTOP}
 StandardOutput=journal+console
