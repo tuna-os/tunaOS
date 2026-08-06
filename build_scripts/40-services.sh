@@ -137,6 +137,52 @@ tunaos_enable_network_manager() {
 	return 1
 }
 
+# Enable systemd-resolved, AND connect it to the file glibc actually reads.
+#
+# Enabling the unit is only half of name resolution. resolved publishes its
+# nameserver in /run/systemd/resolve/stub-resolv.conf, glibc reads
+# /etc/resolv.conf, and the two are joined by a symlink the image has to ship.
+# It does not, and nothing in the build noticed: systemd-resolved's postinst
+# tries to create it and cannot, because podman bind-mounts /etc/resolv.conf
+# for the duration of the build —
+#
+#   Converting /etc/resolv.conf to a symlink to /run/systemd/resolve/stub-resolv.conf...
+#   ln: failed to create symbolic link '/etc/resolv.conf': Device or resource busy
+#
+# which is a warning, not a failure. So the image ships the base's 0-byte
+# /etc/resolv.conf, resolved answers on 127.0.0.53 that nobody asks, and every
+# lookup fails. That is gurnard:pantheon's
+#
+#   not ok - DNS resolution (ghcr.io)
+#   not ok - network connectivity
+#
+# in LUKS run 31065556710, and why the run could not pull its own image from
+# ghcr.io and fell back to pushing 1.6 GB over SSH instead.
+#
+# The vendor tmpfiles rule meant to cover this cannot, and neither can a copy
+# of it: systemd-resolved's own /usr/lib/tmpfiles.d/systemd-resolve.conf spells
+# it `L!`, and plain `L` creates a symlink only when nothing is at the path.
+# The Ubuntu, Debian and openSUSE bases all ship a 0-byte /etc/resolv.conf, so
+# `L!` is a silent no-op on every one of them. `L+!` removes what is there
+# first, which is the entire fix. (Containerfile.opensuse has the same `L!`
+# no-op, but sailfin runs none of the numbered build_scripts and never enables
+# resolved at all, so it needs its own change rather than this one.)
+tunaos_enable_systemd_resolved() {
+	[[ -f /usr/lib/systemd/system/systemd-resolved.service ]] || return 0
+
+	sed -i -e "s@PrivateTmp=.*@PrivateTmp=no@g" /usr/lib/systemd/system/systemd-resolved.service
+	systemctl enable systemd-resolved.service
+
+	# Written only here, next to the enable, so the symlink can never point at
+	# a stub that nothing populates. The directory is a variable for the same
+	# reason /usr/lib/os-release is in 90-image-info.sh: so a test can run this
+	# against the rule it really writes instead of grepping for it.
+	local tmpfiles_dir="${TUNAOS_TMPFILES_DIR:-/usr/lib/tmpfiles.d}"
+	install -d -m 0755 "$tmpfiles_dir"
+	printf 'L+! /etc/resolv.conf - - - - ../run/systemd/resolve/stub-resolv.conf\n' \
+		>"${tmpfiles_dir}/tunaos-resolv-conf.conf"
+}
+
 if [[ "${PKG_MGR:-}" == "apt" ]]; then
 	# Sleep-then-hibernate defaults via a logind drop-in (Ubuntu ships no
 	# stock /usr/lib/systemd/logind.conf; a drop-in is honoured everywhere).
@@ -217,10 +263,7 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 	systemctl enable podman-auto-update.timer 2>/dev/null || true
 
 	# systemd-resolved for name resolution.
-	if [[ -f /usr/lib/systemd/system/systemd-resolved.service ]]; then
-		sed -i -e "s@PrivateTmp=.*@PrivateTmp=no@g" /usr/lib/systemd/system/systemd-resolved.service
-		systemctl enable systemd-resolved.service
-	fi
+	tunaos_enable_systemd_resolved
 
 	printf "::endgroup::\n"
 	exit 0
@@ -330,10 +373,7 @@ if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command 
 	fi
 
 	# systemd-resolved
-	if [[ -f /usr/lib/systemd/system/systemd-resolved.service ]]; then
-		sed -i -e "s@PrivateTmp=.*@PrivateTmp=no@g" /usr/lib/systemd/system/systemd-resolved.service
-		systemctl enable systemd-resolved.service
-	fi
+	tunaos_enable_systemd_resolved
 
 	printf "::endgroup::\n"
 	exit 0
