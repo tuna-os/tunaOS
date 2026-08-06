@@ -40,6 +40,12 @@ FROM base AS system
 # That took out every sailfin cell, not just the cosmic one that surfaced it.
 # Containerfile.ubuntu:53-66 and Containerfile.arch already do this; opensuse
 # and gentoo declared the args globally and stopped there.
+#
+# IMAGE_NAME_VARIANT specifically: 90-image-info.sh keys its codename table on
+# the canonical variant id (`sailfin`), and openSUSE is one of the bases whose
+# Containerfile does not pin IMAGE_NAME, so lib.sh derives it from the detected
+# base image and hands back the distro alias `opensuse`. Passing the variant id
+# through is what keeps the alias from becoming the image's identity.
 ARG BASE_IMAGE
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR
