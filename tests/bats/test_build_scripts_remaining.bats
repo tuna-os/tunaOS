@@ -819,3 +819,28 @@ _run_lnf() { # $1 = file
   # and the contract accepts whichever is active.
   grep -qF 'if [[ -f /usr/lib/systemd/system/NetworkManager.service ]]' <<<"$code"
 }
+
+@test "40-services.sh declares liveuser's home so it survives the /var wipe" {
+  # `useradd -m` makes /var/home/liveuser at BUILD time; 99-cleanup.sh then
+  # deletes everything under /var, and bootc-base-dirs only recreates the
+  # PARENT. The live ISO booted with an account whose home did not exist:
+  #   Could not chdir to home directory /var/home/liveuser
+  #   scp: dest open "/home/liveuser/fisherman-override": No such file
+  # SSH still authenticated, so it surfaced as a scp failure handing the
+  # installer its binary, not as a login failure (LUKS run 31061836333).
+  local script="${REPO_ROOT}/build_scripts/40-services.sh"
+  local code
+  code="$(grep -v '^[[:space:]]*#' "$script")"
+  grep -qF 'tunaos_declare_liveuser_home() {' <<<"$code"
+  grep -qF '/var/home/liveuser' <<<"$code"
+
+  # Every branch that creates liveuser must also declare its home — the paths
+  # for apt, pacman/zypper/emerge and dnf are separate, and a fix landing in
+  # one of them has already been this session's most repeated bug.
+  local creates declares
+  creates=$(grep -c 'useradd -m .*liveuser' <<<"$code")
+  declares=$(grep -c 'tunaos_declare_liveuser_home$' <<<"$code")
+  [ "$creates" -ge 3 ]
+  # -1 for the function definition line itself.
+  [ "$((declares))" -ge 3 ]
+}

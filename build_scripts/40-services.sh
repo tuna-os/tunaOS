@@ -63,6 +63,31 @@ ensure_openssh_installed() {
 # rpm-ostree, ublue-* units, the Fedora /usr/lib/systemd/logind.conf path).
 # On Ubuntu we set up only the units that actually exist; safe_enable/
 # safe_disable already no-op on missing units.
+# Make liveuser's home survive the /var wipe.
+#
+# `useradd -m` creates /var/home/liveuser at BUILD time, and 99-cleanup.sh then
+# deletes everything under /var. The bootc-base-dirs tmpfiles entry recreates
+# the PARENT (/var/home) at boot and nothing recreates the user's own
+# directory, so the live ISO boots with an account whose home does not exist:
+#
+#   Could not chdir to home directory /var/home/liveuser: No such file or directory
+#   scp: dest open "/home/liveuser/fisherman-override": No such file or directory
+#
+# SSH still authenticates, which is why this presents as a scp failure rather
+# than a login failure — sailfin:gnome reached the installer and died handing it
+# the fisherman binary (LUKS run 31061836333).
+#
+# A tmpfiles entry is the fix rather than re-running useradd: /var is stateful
+# and recreated per boot by design, so anything under it that the image needs
+# has to be declared, not created once at build time.
+tunaos_declare_liveuser_home() {
+	install -d -m 0755 /usr/lib/tmpfiles.d
+	printf 'd /var/home/liveuser 0700 liveuser liveuser -\n' \
+		>/usr/lib/tmpfiles.d/tunaos-liveuser-home.conf
+	# Also create it now, for anything that runs before the first boot.
+	install -d -m 0700 -o liveuser -g liveuser /var/home/liveuser 2>/dev/null || true
+}
+
 if [[ "${PKG_MGR:-}" == "apt" ]]; then
 	# Sleep-then-hibernate defaults via a logind drop-in (Ubuntu ships no
 	# stock /usr/lib/systemd/logind.conf; a drop-in is honoured everywhere).
@@ -121,6 +146,7 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 			useradd -m -s /bin/bash -G sudo liveuser
 		fi
 		echo 'liveuser:live' | chpasswd
+		tunaos_declare_liveuser_home
 	else
 		# Now load-bearing rather than belt-and-braces: Debian's
 		# openssh-server postinst ENABLES ssh.service on install, so with the
@@ -190,6 +216,7 @@ if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command 
 			useradd -m -s /bin/bash liveuser 2>/dev/null || true
 		fi
 		echo 'liveuser:live' | chpasswd
+		tunaos_declare_liveuser_home
 	else
 		safe_disable sshd.service
 		safe_disable sshd.socket 2>/dev/null || true
@@ -287,6 +314,10 @@ if [[ "${ENABLE_SSHD:-0}" == "1" ]]; then
 		useradd -m -s /bin/bash -G wheel liveuser
 	fi
 	echo 'liveuser:live' | chpasswd
+	# No-op where the home already survives (yellowfin:gnome passes today), but
+	# the /var wipe is common to every base, so declaring it is not conditional
+	# on which path happens to have been caught out.
+	tunaos_declare_liveuser_home
 else
 	safe_disable sshd.service
 	safe_disable sshd.socket 2>/dev/null || systemctl mask sshd.socket || true
