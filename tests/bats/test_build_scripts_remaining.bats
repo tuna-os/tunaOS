@@ -639,3 +639,87 @@ _osr_block() {
   grep -qF 'PRETTY_NAME="Yellowfin"' "$etc"
   [ "$(grep -c '^PRETTY_NAME=' "$usr")" -eq 1 ]
 }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# configure-desktop-runtime.sh — KDE LookAndFeelPackage (#1008)
+#
+# Extracts the real _kde_set_lnf out of the script and runs it against
+# fixtures, so the tests track the implementation rather than restating it.
+# ═══════════════════════════════════════════════════════════════════════════
+
+_lnf_fn() {
+  sed -n '/^\t\t_kde_set_lnf() {$/,/^\t\t}$/p' \
+    "${REPO_ROOT}/build_scripts/desktop/configure-desktop-runtime.sh" |
+    sed 's/^\t\t//'
+}
+
+_run_lnf() { # $1 = file
+  bash -c "$(_lnf_fn)"$'\n'"_kde_set_lnf '$1'"
+}
+
+@test "kde LookAndFeel: overwrites Fedora's value (bonito, #1008)" {
+  # kde-settings ships this file and owns the path, so installing Plasma
+  # replaced our base-stage copy. Measured on bonito:kde:
+  # LookAndFeelPackage=org.fedoraproject.fedora.desktop.
+  local f="${BATS_TEST_TMPDIR}/kdeglobals"
+  printf '[KDE]\nLookAndFeelPackage=org.fedoraproject.fedora.desktop\nSingleClick=false\n\n[General]\nfont=Noto Sans,10\n' >"$f"
+
+  _run_lnf "$f"
+
+  [ "$(grep -c '^LookAndFeelPackage=' "$f")" -eq 1 ]
+  grep -qF 'LookAndFeelPackage=org.tunaos.desktop' "$f"
+  # The file also carries fonts, colour scheme and widget style — a fix that
+  # drops those trades one branding defect for several.
+  grep -qF 'SingleClick=false' "$f"
+  grep -qF 'font=Noto Sans,10' "$f"
+}
+
+@test "kde LookAndFeel: adds the key to an existing [KDE] section" {
+  local f="${BATS_TEST_TMPDIR}/kdeglobals"
+  printf '[KDE]\nSingleClick=false\n\n[General]\nfont=X\n' >"$f"
+  _run_lnf "$f"
+  [ "$(grep -c '^LookAndFeelPackage=org.tunaos.desktop$' "$f")" -eq 1 ]
+  grep -qF 'font=X' "$f"
+}
+
+@test "kde LookAndFeel: handles no [KDE] section, [KDE] last, and no file" {
+  local f="${BATS_TEST_TMPDIR}/a" g="${BATS_TEST_TMPDIR}/b" h="${BATS_TEST_TMPDIR}/c"
+  printf '[General]\nfont=X\n' >"$f"
+  printf '[General]\nfont=X\n\n[KDE]\nSingleClick=false\n' >"$g"
+
+  _run_lnf "$f"
+  _run_lnf "$g"
+  _run_lnf "$h"
+
+  local each
+  for each in "$f" "$g" "$h"; do
+    [ "$(grep -c '^LookAndFeelPackage=org.tunaos.desktop$' "$each")" -eq 1 ]
+  done
+}
+
+@test "kde LookAndFeel: idempotent, and leaves other sections alone" {
+  local f="${BATS_TEST_TMPDIR}/kdeglobals"
+  printf '[Greeter]\nLookAndFeelPackage=org.kde.breeze.desktop\n\n[KDE]\nSingleClick=false\n' >"$f"
+
+  _run_lnf "$f"
+  _run_lnf "$f"
+
+  # Ours set once in [KDE]...
+  [ "$(grep -c '^LookAndFeelPackage=org.tunaos.desktop$' "$f")" -eq 1 ]
+  # ...and the unrelated [Greeter] key untouched.
+  grep -qF 'LookAndFeelPackage=org.kde.breeze.desktop' "$f"
+}
+
+@test "verify-branding-kde.sh: a greeter with no themes dir still counts (flounder, #1008)" {
+  # Debian trixie's sddm package ships /usr/bin/sddm and
+  # /usr/lib/systemd/system/sddm.service but NO /usr/share/sddm/themes and no
+  # sddm.conf.d — verified against the package file list. The old check looked
+  # only for themes/conf, so it reported "greeter not installed" for an image
+  # that had one.
+  local script="${REPO_ROOT}/build_scripts/checks/verify-branding-kde.sh"
+  grep -qF '/usr/lib/systemd/system/sddm.service' "$script"
+  grep -qF '/usr/lib/systemd/system/plasmalogin.service' "$script"
+  grep -qF '/usr/bin/sddm' "$script"
+  # Debian/Ubuntu newer sddm puts its defaults under /usr/share, not /usr/lib.
+  grep -qF '/usr/share/sddm/sddm.conf.d/' "$script"
+}

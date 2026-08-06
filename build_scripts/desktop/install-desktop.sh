@@ -304,8 +304,13 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" ]]; then
 		readarray -t _TD_COPR_PKGS < <($YQ -r ".packages.${_TD_OS}.copr[$i].packages[]" "${_TD_MANIFEST}" 2>/dev/null || true)
 		_TD_COPR_OPTS=$($YQ -r ".packages.${_TD_OS}.copr[$i].options // \"\"" "${_TD_MANIFEST}")
 
-		dnf -y install 'dnf5-command(copr)' 'dnf-command(copr)' 2>/dev/null || true
-		dnf -y copr enable "${_TD_COPR_REPO}" || true
+		# One transaction per provider name — listing them together made dnf
+		# discard all of them whenever one was unmatched, which on EL10 is
+		# always (#1016). See install_dnf_plugin_providers in lib.sh.
+		install_dnf_plugin_providers
+		if ! dnf -y copr enable "${_TD_COPR_REPO}"; then
+			echo "TUNAOS_COPR_ENABLE_FAILED repo=${_TD_COPR_REPO} — packages from it will fall back to base repos" >&2
+		fi
 		dnf -y copr disable "${_TD_COPR_REPO}" || true
 		_TD_REPO_ID="copr:copr.fedorainfracloud.org:$(echo "${_TD_COPR_REPO}" | tr '/' ':')"
 		# shellcheck disable=SC2086

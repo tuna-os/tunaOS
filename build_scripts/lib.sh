@@ -544,6 +544,31 @@ kde_dm_unit() {
 	fi
 }
 
+# Install the dnf copr/config-manager plugin providers, one transaction each.
+#
+# These used to be listed in a single `dnf -y install A B C D`. dnf fails the
+# WHOLE transaction when any one name is unmatched, and the dnf5-* virtual
+# provides do not exist on EL10 — so AlmaLinux Kitten and CentOS Stream 10
+# installed NONE of the four, including dnf-command(copr), which is the one
+# they do have. That is the "Unable to find a match: dnf5-command(copr)
+# dnf5-command(config-manager)" in #1016: dnf names only the unmatched ones,
+# and the `|| true` then hides that nothing was installed at all.
+#
+# The consequence was not log noise. With no copr plugin, the `dnf copr
+# enable` below fails, the COPR repo is never enabled, and the install falls
+# back to the base repos — so a package that only exists in COPR goes missing
+# from the image with every step reporting success.
+#
+# One transaction per name costs a few seconds of metadata resolution and
+# lets each distro install whichever names it actually has.
+install_dnf_plugin_providers() {
+	local _pkg
+	for _pkg in 'dnf5-command(copr)' 'dnf-command(copr)' \
+		'dnf5-command(config-manager)' 'dnf-command(config-manager)'; do
+		dnf -y install "$_pkg" 2>/dev/null || true
+	done
+}
+
 install_from_copr() {
 	COPR_NAME=$1
 	shift
@@ -555,8 +580,14 @@ install_from_copr() {
 		shift
 	fi
 
-	dnf -y install 'dnf5-command(copr)' 'dnf-command(copr)' 'dnf5-command(config-manager)' 'dnf-command(config-manager)' || true
-	dnf -y copr enable "$COPR_NAME" || true
+	install_dnf_plugin_providers
+
+	# A COPR repo that never enabled is the failure mode #1016 describes, and
+	# the fallback below hides it. Say so in the build log, greppably, so the
+	# next "package mysteriously absent" starts from evidence.
+	if ! dnf -y copr enable "$COPR_NAME"; then
+		echo "TUNAOS_COPR_ENABLE_FAILED repo=${COPR_NAME} — packages from it will fall back to base repos" >&2
+	fi
 
 	REPO_ID="copr:copr.fedorainfracloud.org:$(echo "$COPR_NAME" | tr '/' ':')"
 

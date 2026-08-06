@@ -102,15 +102,37 @@ echo "== login screen =="
 # sddm in July 2026 and plasmalogin days later — so look in every candidate
 # location rather than detecting which DM is installed. A directory that does
 # not exist simply contributes nothing.
+#
+# Themes and conf.d are the WRONG thing to look for on their own. Verified
+# against the Debian trixie `sddm` package file list: it ships
+# /usr/bin/sddm, /usr/lib/systemd/system/sddm.service, /etc/pam.d/sddm,
+# /etc/sddm/Xsession, /usr/share/sddm/faces and /usr/share/sddm/flags — and
+# NO /usr/share/sddm/themes and NO sddm.conf or sddm.conf.d anywhere. So
+# flounder:kde had a perfectly good greeter installed and this check called it
+# "not installed" (#1008). That is a false negative, and a false negative on a
+# contract check is expensive twice: it burns a matrix cell and it sends
+# someone looking for a packaging bug that does not exist.
+#
+# The unit and the binary are what actually prove a greeter is installed;
+# themes and config are incidental to the distro's packaging split. Check the
+# load-bearing evidence first and keep the rest as additional signal.
+unit_paths=(
+	/usr/lib/systemd/system/sddm.service /lib/systemd/system/sddm.service
+	/usr/lib/systemd/system/plasmalogin.service /lib/systemd/system/plasmalogin.service
+)
+bin_paths=(/usr/bin/sddm /usr/bin/plasmalogin)
 theme_dirs=(/usr/share/sddm/themes /usr/share/plasmalogin/themes)
 conf_paths=(
 	/etc/sddm.conf.d/ /usr/lib/sddm/sddm.conf.d/ /etc/sddm.conf
+	/usr/share/sddm/sddm.conf.d/
 	/etc/plasmalogin.conf.d/ /usr/lib/plasmalogin.conf.d/ /etc/plasmalogin.conf
 )
 
 found_greeter=""
 for _d in "${theme_dirs[@]}"; do [[ -d "$_d" ]] && found_greeter="$_d"; done
 for _c in "${conf_paths[@]}"; do [[ -e "$_c" ]] && found_greeter="$_c"; done
+for _b in "${bin_paths[@]}"; do [[ -x "$_b" ]] && found_greeter="$_b"; done
+for _u in "${unit_paths[@]}"; do [[ -f "$_u" ]] && found_greeter="$_u"; done
 if [[ -n "$found_greeter" ]]; then
 	pass "greeter installed (${found_greeter})"
 else
