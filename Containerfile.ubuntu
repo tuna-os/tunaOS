@@ -120,6 +120,47 @@ RUN set -eux; \
 # Install the bootc toolchain (bootc + bootupd) from the builder stage
 COPY --from=bootc-builder /output /
 
+# libostree: the bootc COPYed above comes from the sid toolchain and is linked
+# against LIBOSTREE_2025.2 / LIBOSTREE_2025.3. Whether the Ubuntu archive's
+# libostree provides those symbols is a per-release accident — read off
+# Launchpad, not assumed:
+#
+#   noble    (24.04, gurnard)   ostree 2024.5-1build2   -> too old
+#   resolute (26.04, grouper)   ostree 2025.7-3build1   -> fine
+#
+# apt-installing the archive package on noble overwrites the toolchain's source
+# libostree, and bootc then cannot start at all:
+#
+#   bootc: /lib/x86_64-linux-gnu/libostree-1.so.1: version `LIBOSTREE_2025.2'
+#     not found (required by bootc)
+#
+# which fisherman reports twenty minutes into a VM as "bootc install
+# to-filesystem (via container): exit status 1", naming nothing useful.
+#
+# Containerfile.debian hit exactly this on trixie and solved it with an equivs
+# dummy that satisfies apt's dependencies without pulling the old library. Same
+# fix here — this file serves two releases where debian's serves trixie and
+# sid, and it never got it. Keyed on the version rather than a codename, so a
+# release bump cannot silently select the wrong branch.
+RUN apt-get update -y && \
+    cand="$(apt-cache policy libostree-1-1 | awk '/Candidate:/{print $2}')" && \
+    echo "archive libostree-1-1 candidate: ${cand:-<none>}" && \
+    if [ -n "$cand" ] && dpkg --compare-versions "$cand" ge 2025.3; then \
+      echo "new enough — using the packaged libostree"; \
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+        libostree-1-1 ostree; \
+    else \
+      echo "too old — keeping the toolchain's source libostree behind an equivs dummy"; \
+      DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends equivs && \
+      printf 'Package: libostree-1-1\nVersion: 99:0\nArchitecture: %s\nMaintainer: TunaOS <build@tunaos.org>\nDescription: satisfied by source libostree from bootc-toolchain\n' \
+        "$(dpkg --print-architecture)" > /tmp/libostree.ctl && \
+      ( cd /tmp && equivs-build libostree.ctl && dpkg -i libostree-1-1_*.deb ) && \
+      apt-mark hold libostree-1-1 && ldconfig; \
+    fi && \
+    # Whichever branch ran, bootc has to actually start. Without this the
+    # linker error surfaces inside a QEMU guest instead of here.
+    bootc --version
+
 # Install bootc dependencies and the bootc runtime tooling needed for
 # `bootc container lint`, plus the static composefs/bootc overlay. apt intact.
 #
@@ -177,7 +218,7 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
     apt-get update -y && \
     apt-get install -y --no-install-recommends \
         ca-certificates curl gpg \
-        ostree libostree-1-1 dracut \
+        dracut \
         btrfs-progs dosfstools e2fsprogs xfsprogs skopeo jq \
         sudo \
         systemd-boot systemd-boot-efi dmsetup \
