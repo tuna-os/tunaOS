@@ -32,11 +32,24 @@ CONTAINERFILES=(
 # Variables 90-image-info.sh dereferences with NO `:-` fallback. These are the
 # ones that turn into "unbound variable" under set -u; the rest degrade to a
 # default and are not this test's business.
-REQUIRED=(IMAGE_NAME IMAGE_VENDOR BASE_IMAGE)
+REQUIRED=(IMAGE_VENDOR BASE_IMAGE)
+
+# IMAGE_NAME is deliberately NOT in REQUIRED. The script defaults each of the
+# identity pair to the other:
+#
+#   IMAGE_NAME="$(canonical_variant "${IMAGE_NAME:-${IMAGE_NAME_VARIANT:-}}")"
+#   VARIANT_KEY="$(canonical_variant "${IMAGE_NAME_VARIANT:-${IMAGE_NAME}}")"
+#
+# so neither one alone is an "unbound variable" risk, and demanding both would
+# fail Containerfiles that legitimately pass only IMAGE_NAME. But supplying
+# NEITHER is still a build failure — just a different one: the codename lookup
+# gets an empty key and hits its abort branch. So the property for this pair is
+# "at least one", checked separately below rather than dropped.
+IDENTITY=(IMAGE_NAME IMAGE_NAME_VARIANT)
 
 @test "the required set still is the set with no default" {
-  # If someone gives IMAGE_VENDOR a `:-` fallback, or drops one on IMAGE_NAME,
-  # this test's list is wrong and the failure it guards changes shape.
+  # If someone gives IMAGE_VENDOR a `:-` fallback, or drops one, this test's
+  # list is wrong and the failure it guards changes shape.
   local v
   for v in "${REQUIRED[@]}"; do
     grep -qE "\\\$\{${v}\}" "$INFO" || {
@@ -52,12 +65,30 @@ REQUIRED=(IMAGE_NAME IMAGE_VENDOR BASE_IMAGE)
   grep -qE '^set -[a-z]*u' "$INFO"
 }
 
+@test "the identity pair still defaults to each other, so neither is required alone" {
+  # This is what justifies IMAGE_NAME sitting in IDENTITY instead of REQUIRED.
+  # If the mutual fallback is ever removed, the var that loses it becomes an
+  # "unbound variable" risk again and belongs back in REQUIRED — fail loudly
+  # here rather than let the strict per-stage check silently stop applying.
+  local v
+  for v in "${IDENTITY[@]}"; do
+    grep -qE "\\\$\{${v}:-" "$INFO" || {
+      echo "FAIL: ${v} no longer has a fallback in 90-image-info.sh —" >&2
+      echo "      move it from IDENTITY to REQUIRED" >&2
+      return 1
+    }
+  done
+}
+
 @test "every stage that runs 90-image-info.sh can resolve them" {
   local f
   for f in "${CONTAINERFILES[@]}"; do
-    run python3 - "${REPO_ROOT}/$f" "${REQUIRED[@]}" <<'PY'
+    run python3 - "${REPO_ROOT}/$f" "${REQUIRED[@]}" --any-of "${IDENTITY[@]}" <<'PY'
 import re, sys
-path, required = sys.argv[1], sys.argv[2:]
+path, rest = sys.argv[1], sys.argv[2:]
+# Everything before --any-of must be present; at least one of what follows it.
+split = rest.index('--any-of')
+required, any_of = rest[:split], rest[split + 1:]
 lines = open(path).read().split('\n')
 
 bounds = []
@@ -104,6 +135,10 @@ for name in order:
     missing = [v for v in required if v not in available]
     if missing:
         bad.append(f"{name}: {', '.join(missing)}")
+    # The identity pair defaults to each other, so one is enough — but zero
+    # leaves the codename lookup with an empty key and aborts the build.
+    if any_of and not (set(any_of) & available):
+        bad.append(f"{name}: none of {' / '.join(any_of)}")
 
 if bad:
     print(f"{path}: stages running 90-image-info.sh without the vars it cannot default:")

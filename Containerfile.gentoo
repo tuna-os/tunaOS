@@ -121,10 +121,17 @@ FROM builder AS system
 
 # Re-declare the identity args INSIDE this stage and promote them to ENV — the
 # ARG lines at the top of this file are global, so they reach `FROM`
-# interpolation and nothing else. Without this, 90-image-info.sh (wired into
-# this stage) runs with IMAGE_VENDOR unset and dies under `set -u` with
-# "IMAGE_VENDOR: unbound variable", taking out every guppy cell. Same gap
+# interpolation and nothing else. A stage sees an ARG only if it declares it,
+# and an ARG is never automatically an ENV. Without this, 90-image-info.sh
+# (wired into this stage) runs with IMAGE_VENDOR unset and dies under `set -u`
+# with "IMAGE_VENDOR: unbound variable", taking out every guppy cell. Same gap
 # Containerfile.opensuse had; Containerfile.ubuntu and .arch already do it.
+#
+# IMAGE_NAME_VARIANT specifically: 90-image-info.sh keys its codename table on
+# the canonical variant id (`guppy`), and gentoo is one of the bases whose
+# Containerfile does not pin IMAGE_NAME, so lib.sh derives it from the detected
+# base image and hands back the distro alias `gentoo`. Passing the variant id
+# through is what keeps the alias from becoming the image's identity.
 ARG BASE_IMAGE
 ARG IMAGE_NAME
 ARG IMAGE_VENDOR
@@ -142,6 +149,7 @@ ENV BASE_IMAGE=${BASE_IMAGE} \
     SHA_HEAD_SHORT=${SHA_HEAD_SHORT} \
     ENABLE_SSHD=${ENABLE_SSHD} \
     DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
+
 RUN KVER=$(ls /usr/lib/modules | head -1) && \
     rm -f "/usr/lib/modules/$KVER/vmlinuz" && \
     (cp /boot/vmlinuz-* "/usr/lib/modules/$KVER/vmlinuz" 2>/dev/null || cp /usr/src/linux-*/arch/x86/boot/bzImage "/usr/lib/modules/$KVER/vmlinuz") && \

@@ -536,6 +536,7 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
+
   # ── Hummingbird ────────────────────────────────────────────────────────────
   # Fedora Hummingbird: container-native, hardened bootc distribution
   # (Konflux hermetic build model, CKI ARK kernel).
