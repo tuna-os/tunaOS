@@ -30,6 +30,14 @@ desktop_script_calls() {
     sed 's|build_scripts/desktop/||' || true
 }
 
+# A Containerfile with its comments blanked out. The stages that moved onto the
+# manifest say so in prose that names the script they replaced, so "does this
+# file still call cosmic.sh" has to be asked of the instructions only —
+# otherwise the comment explaining the removal reads as the removal undone.
+containerfile_code() {
+  sed 's/^[[:space:]]*#.*//' "$1"
+}
+
 @test "no Containerfile invokes a per-DE script that has no branch for its package manager" {
   # Only Containerfile.ubuntu still calls the per-DE scripts, and it is apt.
   local line script fail=0
@@ -79,24 +87,27 @@ desktop_script_calls() {
   # installs those two desktops from the manifest. Re-adding either file is a
   # regression even if nothing calls it, because the duplicate package list is
   # the thing that drifts.
-  local s
+  local s ubuntu_code
+  ubuntu_code="$(containerfile_code "${REPO_ROOT}/Containerfile.ubuntu")"
   for s in cosmic kde; do
     run test -e "${REPO_ROOT}/build_scripts/desktop/${s}.sh"
     [ "$status" -ne 0 ]
-    run grep -q "desktop/${s}\.sh" "${REPO_ROOT}/Containerfile.ubuntu"
+    run grep -q "desktop/${s}\.sh" <<<"$ubuntu_code"
     [ "$status" -ne 0 ]
-    run grep -q "install-desktop\.sh ${s}" "${REPO_ROOT}/Containerfile.ubuntu"
+    run grep -q "install-desktop\.sh ${s}" <<<"$ubuntu_code"
     [ "$status" -eq 0 ]
   done
 }
 
 @test "COSMIC on apt is manifest-driven, and names packages that exist there" {
   local manifest="${REPO_ROOT}/manifests/desktops/cosmic.yaml"
+  local ubuntu_code
+  ubuntu_code="$(containerfile_code "${REPO_ROOT}/Containerfile.ubuntu")"
 
   # Containerfile.ubuntu must not have regrown a cosmic.sh call.
-  run grep -q 'desktop/cosmic\.sh' "${REPO_ROOT}/Containerfile.ubuntu"
+  run grep -q 'desktop/cosmic\.sh' <<<"$ubuntu_code"
   [ "$status" -ne 0 ]
-  run grep -q 'install-desktop\.sh cosmic' "${REPO_ROOT}/Containerfile.ubuntu"
+  run grep -q 'install-desktop\.sh cosmic' <<<"$ubuntu_code"
   [ "$status" -eq 0 ]
 
   # The apt section must carry the PPA — COSMIC is not in the Ubuntu archive.
