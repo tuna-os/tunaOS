@@ -45,6 +45,13 @@
 #
 # Options:
 #   --timeout SEC         Per-phase timeout (default: 300)
+#   --live-marker RE      Extended regex the serial log must match to count
+#                         as ready. Default accepts both TUNAOS_LIVE_READY
+#                         (our images' tunaos-live-ready.service) and
+#                         TBOX_LIVE_READY (tacklebox's generic marker, which
+#                         its builders bake into non-tunaOS images — the
+#                         reference cells in iso-builder). Also settable via
+#                         the LIVE_MARKER env var.
 #   --output DIR          Where serial logs / screenshots are written
 #                         (default: ./iso-e2e-out)
 #   --memory MIB          QEMU guest RAM (default: 4096)
@@ -78,6 +85,7 @@ KICKSTART=""
 APP_CMD=""
 MODE="ready" # ready | install | kickstart | ssh | app-launch
 TIMEOUT=300
+LIVE_MARKER="${LIVE_MARKER:-TUNAOS_LIVE_READY|TBOX_LIVE_READY}"
 OUTPUT_DIR="./iso-e2e-out"
 MEMORY=4096
 CPUS=4
@@ -123,6 +131,10 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--timeout)
 		TIMEOUT="$2"
+		shift 2
+		;;
+	--live-marker)
+		LIVE_MARKER="$2"
 		shift 2
 		;;
 	--output)
@@ -836,7 +848,7 @@ screenshot_compare() {
 #
 # The screenshot fallback below exists because bootc base kernels ship
 # CONFIG_SERIAL_8250=m and a healthy live session often cannot get
-# TUNAOS_LIVE_READY onto the serial console. What it cannot distinguish is a
+# the readiness marker onto the serial console. What it cannot distinguish is a
 # healthy session from a dracut emergency shell: that renders text too, so
 # the framebuffer is "sane" and the run passes.
 #
@@ -869,7 +881,7 @@ boot_failed_on_serial() {
 # Sanity-check a captured screenshot: it must exist and show actual content
 # (not a black/blank framebuffer). Used as the readiness fallback when the
 # serial marker never arrives — the bootc base kernels ship
-# CONFIG_SERIAL_8250=m, so TUNAOS_LIVE_READY often can't reach the serial
+# CONFIG_SERIAL_8250=m, so the readiness marker often cannot reach the serial
 # console even though the live session is up (see research.md).
 # Returns 0 if the screenshot looks like a rendered screen, 1 otherwise.
 screenshot_sane() {
@@ -919,9 +931,9 @@ screenshot_sane() {
 wait_for_ready() {
 	local deadline=$(($(date +%s) + TIMEOUT))
 	local last_size=0
-	echo "==> Waiting up to ${TIMEOUT}s for TUNAOS_LIVE_READY..."
+	echo "==> Waiting up to ${TIMEOUT}s for readiness marker (${LIVE_MARKER})..."
 	while (($(date +%s) < deadline)); do
-		if [[ -f "$SERIAL_LOG" ]] && grep -q "TUNAOS_LIVE_READY" "$SERIAL_LOG" 2>/dev/null; then
+		if [[ -f "$SERIAL_LOG" ]] && grep -qE "$LIVE_MARKER" "$SERIAL_LOG" 2>/dev/null; then
 			echo "==> Readiness marker found"
 			return 0
 		fi
