@@ -7,6 +7,14 @@ packages:
   apt:
     - ubuntu-desktop-minimal
     - gnome-shell-extension-manager
+    # gnome-session and ubuntu-session are explicit because pkg_install runs
+    # --no-install-recommends: since resolute's GNOME 50.1 update they are no
+    # longer pulled in without recommends, and without them
+    # /usr/share/wayland-sessions has no *gnome*.desktop at all, which
+    # configure-desktop-runtime.sh hard-fails on (grouper:gnome red from
+    # 2026-07-21). Same rule as gnome-keyring below.
+    - gnome-session
+    - ubuntu-session
     - gnome-browser-connector
     - gnome-disk-utility
     - gnome-system-monitor
@@ -23,6 +31,9 @@ packages:
     # every app that stores a secret silently fail. Present in Ubuntu 26.04
     # main (50.0-1), so this is an omission in the list, not an upstream gap.
     - gnome-keyring
+    # ...and the PAM module, so the keyring is unlocked by the login password
+    # instead of prompting again on first use (matches niri and cosmic).
+    - libpam-gnome-keyring
 
   fedora:
     packages:

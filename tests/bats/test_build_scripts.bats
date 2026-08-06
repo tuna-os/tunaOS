@@ -237,24 +237,11 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
 # ── Desktop flavor scripts ──────────────────────────────────────────────
 
-@test "build_scripts/desktop/gnome.sh: exists and sources lib.sh" {
-  run grep 'source.*lib.sh' "${REPO_ROOT}/build_scripts/desktop/gnome.sh"
-  [ "$status" -eq 0 ]
-}
-
-@test "build_scripts/desktop/gnome.sh: passes shellcheck" {
-  if command -v shellcheck &>/dev/null; then
-    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/desktop/gnome.sh"
-    [ "$status" -eq 0 ]
-  else
-    skip "shellcheck not installed"
-  fi
-}
-
-# desktop/cosmic.sh is gone: every Containerfile now installs COSMIC through
-# the manifest installer, so the script had no callers left. See
-# tests/bats/test_desktop_script_apt_branch.bats for the check that keeps the
-# remaining per-DE scripts honest about the bases that call them.
+# desktop/cosmic.sh, kde.sh and gnome.sh are gone: every Containerfile now
+# installs those desktops through the manifest installer, so none of the three
+# had a caller left. See tests/bats/test_desktop_script_apt_branch.bats for the
+# check that keeps the remaining per-DE scripts honest about the bases that
+# call them.
 
 @test "build_scripts/desktop/niri.sh: exists and passes shellcheck" {
   run test -f "${REPO_ROOT}/build_scripts/desktop/niri.sh"

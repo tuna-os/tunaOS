@@ -83,13 +83,14 @@ containerfile_code() {
 @test "the retired per-DE scripts stay retired" {
   # cosmic.sh had no apt branch at all; kde.sh's apt branch was a verbatim copy
   # of kde.yaml's packages.apt plus the `systemctl enable sddm` that
-  # `display_manager: sddm` already means. Both are deleted and every base now
-  # installs those two desktops from the manifest. Re-adding either file is a
-  # regression even if nothing calls it, because the duplicate package list is
-  # the thing that drifts.
+  # `display_manager: sddm` already means; gnome.sh's apt branch held the same
+  # sixteen names as gnome.yaml's and said in its own comment that "both must
+  # list it". All three are deleted and every base now installs those desktops
+  # from the manifest. Re-adding any of them is a regression even if nothing
+  # calls it, because the duplicate package list is the thing that drifts.
   local s ubuntu_code
   ubuntu_code="$(containerfile_code "${REPO_ROOT}/Containerfile.ubuntu")"
-  for s in cosmic kde; do
+  for s in cosmic kde gnome; do
     run test -e "${REPO_ROOT}/build_scripts/desktop/${s}.sh"
     [ "$status" -ne 0 ]
     run grep -q "desktop/${s}\.sh" <<<"$ubuntu_code"
