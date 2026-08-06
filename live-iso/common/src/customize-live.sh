@@ -285,6 +285,26 @@ EOF
 	# projectbluefin/dakota-iso's debug=1 live-env setup (liveuser has
 	# NOPASSWD sudo there too). Production images never enable sshd, so
 	# liveuser never gets a login there.
+	#
+	# The drop-in authorises a binary that has to BE there. The Fedora and EL
+	# bases ship sudo; the openSUSE, Ubuntu and Debian ones do not, and a
+	# sudoers file granting rights to a missing binary is completely silent —
+	# the ISO builds, the live image boots, and every `sudo` iso-e2e.sh runs in
+	# the guest fails with
+	#
+	#   bash: line 1: sudo: command not found
+	#
+	# killing the run at `sudo podman load` with no clue where it came from.
+	# That was defect 3 of tunaOS#953 on sailfin, fixed by naming sudo in
+	# Containerfile.opensuse — and it came back on grouper because the apt
+	# bases never got the same line. Assert it here instead, where the
+	# assumption is actually made, so the next base to omit sudo fails the ISO
+	# build rather than a 20-minute E2E cell.
+	if ! command -v sudo >/dev/null 2>&1; then
+		echo "ERROR: ENABLE_SSHD=1 grants liveuser NOPASSWD sudo, but this image has no sudo." >&2
+		echo "       Add it to this variant's Containerfile base package list." >&2
+		exit 1
+	fi
 	mkdir -p /etc/sudoers.d
 	echo 'liveuser ALL=(ALL) NOPASSWD: ALL' >/etc/sudoers.d/90-tunaos-live-e2e
 	chmod 0440 /etc/sudoers.d/90-tunaos-live-e2e

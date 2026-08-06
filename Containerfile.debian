@@ -115,6 +115,13 @@ RUN apt-get update -y && \
         linux-image-generic \
         skopeo \
         podman \
+        # The Debian/Ubuntu bootc bases ship no sudo, unlike the Fedora/EL
+        # ones. customize-live.sh writes a NOPASSWD sudoers drop-in for
+        # liveuser on dev ISOs, which authorises nothing without the binary —
+        # every `sudo` in the E2E guest then dies with "command not found"
+        # (tunaOS#953 defect 3 on sailfin, again on grouper). The assertion in
+        # customize-live.sh now catches its absence at ISO-build time.
+        sudo \
         systemd \
         systemd-boot \
         xfsprogs \

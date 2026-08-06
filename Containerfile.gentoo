@@ -204,10 +204,17 @@ ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 #  - package.mask elogind: belt-and-braces — this is a systemd image.
 #  - pins: USE combos no published build has (plasma-meta needs
 #    kwin[lock]; gnome's chain wants ngtcp2[gnutls], zlib[minizip];
-#    gnome-shell[networkmanager] needs a matching gnome-control-center).
+#    gnome-shell[networkmanager] needs a matching gnome-control-center;
+#    xfce4-panel wants libdbusmenu[gtk3], and the global USE list carries
+#    `gtk` but no `gtk3`, so guppy:xfce died in the resolver with
+#      emerge: there are no ebuilds built with USE flags to satisfy
+#      ">=dev-libs/libdbusmenu-16.04.0[gtk3]"
+#    reached via thunar[trash-panel-plugin] -> xfce4-panel. Pinned here
+#    rather than adding gtk3 globally, which would reschedule from-source
+#    rebuilds across the whole @world set for one panel dependency).
 #    These few build from source.
 RUN NPROC="$(nproc)" && \
-    printf 'kde-plasma/kwin lock\nkde-plasma/kwin-x11 lock\nnet-libs/ngtcp2 gnutls\nsys-libs/zlib minizip\ngnome-base/gnome-control-center networkmanager\ngnome-base/gnome-shell networkmanager\n' \
+    printf 'kde-plasma/kwin lock\nkde-plasma/kwin-x11 lock\nnet-libs/ngtcp2 gnutls\nsys-libs/zlib minizip\ngnome-base/gnome-control-center networkmanager\ngnome-base/gnome-shell networkmanager\ndev-libs/libdbusmenu gtk3\n' \
       >> /etc/portage/package.use/tunaos-desktops && \
     mkdir -p /etc/portage/package.mask && \
     echo "sys-auth/elogind" >> /etc/portage/package.mask/tunaos-systemd && \
