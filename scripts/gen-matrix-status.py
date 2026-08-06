@@ -12,9 +12,12 @@ and an API failure raises rather than silently degrading a cell to unknown —
 a status page that quietly downgrades itself is worse than no status page.
 
 Usage:
-    scripts/gen-matrix-status.py [--check]
+    scripts/gen-matrix-status.py [--check] [--shape FILE]
 
     --check  exit 1 if the file would change (for CI drift detection)
+    --shape  print FILE's generated block with every CI-result-derived line
+             removed, for comparing two copies of the document without
+             comparing their data. See shape().
 """
 
 from __future__ import annotations
@@ -370,11 +373,88 @@ def build() -> str:
     return "\n".join(out)
 
 
+# ── Shape ───────────────────────────────────────────────────────────────────
+# Lines that exist because of what CI measured, not because of what the repo
+# declares. Every one of them changes without a commit:
+#
+#   a variant row      a cell flips as runs land, and reverts to ⬜ when the
+#                      run that measured it falls out of the RUN_DEPTH window
+#   a provenance row   the newest twelve runs, by definition
+#   Newest result …    the date of the newest run in that window
+#   NVIDIA cells …     printed only while stale pre-exclusion results remain
+#   Missing for … /    two branches of one if/else over published overlay tags
+#   Every non-NVIDIA …
+LIVE_LINE = re.compile(
+    r"^(\| \*\*"                    # variant row in a desktop table
+    r"|\| \d{4}-\d\d-\d\d \|"       # provenance row
+    r"|Newest result "
+    r"|NVIDIA cells are "
+    r"|Missing for "
+    r"|Every non-NVIDIA ISO cell)"
+)
+
+
+def generated_block(text: str) -> str:
+    """The text between the GENERATED markers, markers included."""
+    if BEGIN not in text or END not in text:
+        raise ValueError("missing the GENERATED markers")
+    return BEGIN + text.split(BEGIN, 1)[1].split(END, 1)[0] + END
+
+
+def shape(text: str) -> str:
+    """The generated block with everything CI-result-derived removed.
+
+    A committed copy of this document cannot be expected to equal a fresh
+    regeneration, and asserting that it does made the pull_request drift check
+    fail on every PR that touched build-config.yml. The block is a function of
+    two inputs, and only one of them is in the repo:
+
+      build-config.yml   which cells exist, what the sections say
+      the last RUN_DEPTH runs of two workflows   what each cell measured
+
+    The second changes minute by minute with no commit. Runs 31089215592 and
+    31089333089 are two minutes apart on the same tree and regenerate
+    different documents ("7 of 53" vs "8 of 53"), because a single-cell LUKS
+    rerun both adds its own result and pushes the oldest full sweep out of the
+    window. No commit can satisfy a check against that.
+
+    What a PR *can* be held to is the shape: the sections, their prose, the
+    table headers, and the do-not-edit notice, all of which come from this
+    script rather than from the API. Digits are masked for the same reason the
+    result lines are dropped — every count in the block is a tally of live
+    data. Comparing shapes still catches a hand-edit inside the block (the
+    stated purpose of the PR check) and a generator whose prose changed
+    without the document being regenerated.
+    """
+    lines = []
+    for line in generated_block(text).splitlines():
+        line = line.strip()
+        # Blank lines go too: dropping a conditional paragraph would otherwise
+        # leave a blank behind and register as a difference by itself.
+        if not line or LIVE_LINE.match(line):
+            continue
+        # Standalone numbers only: every one of them is a tally of live data.
+        # `E2E`, `luks-e2e.yml` and `xfwl4` keep their digits, so a hand-edited
+        # heading or workflow name still shows up as a difference.
+        lines.append(re.sub(r"(?<![0-9A-Za-z])\d+(?![0-9A-Za-z])", "N", line))
+    return "\n".join(lines) + "\n"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--check", action="store_true",
                     help="exit 1 if the document would change")
+    ap.add_argument("--shape", metavar="FILE",
+                    help="print FILE's generated block with every "
+                         "CI-result-derived line removed, and exit")
     args = ap.parse_args()
+
+    if args.shape:
+        try:
+            sys.stdout.write(shape(Path(args.shape).read_text()))
+        except ValueError as exc:
+            sys.exit(f"{args.shape}: {exc}")
+        return 0
 
     if not DOC.exists():
         sys.exit(f"{DOC} not found — run from the repo root")
