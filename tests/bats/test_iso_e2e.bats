@@ -677,10 +677,12 @@ setup_runtime_check_stubs() {
   # which is a generic bootc ISO maker and bakes its own neutral marker
   # rather than a tunaOS-branded one. The harness owns the contract, so
   # its default accepts both. The default is EVALUATED out of the script
-  # itself so this test fails if the shipped default ever drifts.
+  # itself so this test fails if the shipped default ever drifts, and the
+  # contract value is asserted explicitly so a drift is a failure here
+  # rather than a silently weakened assertion.
   local default
-  default=$(unset LIVE_MARKER; eval "$(grep '^LIVE_MARKER=' "$BATS_TEST_DIRNAME/../../scripts/iso-e2e.sh")"; echo "$LIVE_MARKER")
-  [ -n "$default" ]
+  default=$(unset LIVE_MARKER; eval "$(grep '^LIVE_MARKER=' "$SCRIPT")"; echo "$LIVE_MARKER")
+  [ "$default" = 'TUNAOS_LIVE_READY|TBOX_LIVE_READY' ]
   SERIAL_LOG="$BATS_TEST_TMPDIR/test-serial3.log"
   echo "some boot output" > "$SERIAL_LOG"
   echo "TBOX_LIVE_READY uptime=12.3" >> "$SERIAL_LOG"
