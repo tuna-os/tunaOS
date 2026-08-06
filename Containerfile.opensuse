@@ -249,11 +249,15 @@ RUN update-ca-certificates || true
 
 # bootc install (the qcow2 Gate) needs a container signature policy; openSUSE's
 # base image doesn't ship /etc/containers/policy.json, so bootc fails with
-# "no policy.json file found". Write a permissive default (the desktop install
-# may later replace it via libcontainers-common; -n keeps that if present).
-RUN mkdir -p /etc/containers && \
-    [ -s /etc/containers/policy.json ] || \
-    printf '{ "default": [ { "type": "insecureAcceptAnything" } ] }\n' > /etc/containers/policy.json
+# "no policy.json file found".
+#
+# This used to be an inline printf here. gurnard then hit the other half of the
+# same problem — a policy that EXISTS but this image's skopeo cannot parse,
+# which fails every skopeo operation just as thoroughly — so both live in
+# build_scripts/bootc/containers-policy.sh now. Writing the default when the
+# file is missing is still the first thing it does.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/bootc/containers-policy.sh
 
 # The shared Bluefin layer is configuration and hardware integration, not a
 # package dependency. Keep it as a transparent, pinned build-time file copy so

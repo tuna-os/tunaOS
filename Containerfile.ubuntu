@@ -275,6 +275,16 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/99-cleanup.sh
 
+# The signature policy that arrived with projectbluefin/common's shared tree
+# pins sigstore requirements using `keyPaths`, a field skopeo 1.14 introduced.
+# Ubuntu noble ships 1.13.3, which rejects the whole file — and a policy that
+# does not parse makes EVERY skopeo operation fail, including the one bootc
+# install uses. gurnard:pantheon died there. Validate against this image's own
+# skopeo rather than assuming the base's is new enough.
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+   /run/context/build_scripts/bootc/containers-policy.sh
+
 # https://bootc-dev.github.io/bootc/bootc-images.html#standard-metadata-for-bootc-compatible-images
 LABEL containers.bootc=1
 
