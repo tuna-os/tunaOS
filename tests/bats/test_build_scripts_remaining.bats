@@ -1063,3 +1063,76 @@ _greeter_lines() {
   # -1 for the function definition line itself.
   [ "$((declares))" -ge 3 ]
 }
+
+@test "40-services.sh points /etc/resolv.conf at the stub resolved actually writes" {
+  # Enabling systemd-resolved is only half of name resolution: glibc reads
+  # /etc/resolv.conf, resolved writes /run/systemd/resolve/stub-resolv.conf,
+  # and the symlink joining them cannot be made at build time because podman
+  # bind-mounts /etc/resolv.conf ("ln: failed to create symbolic link:
+  # Device or resource busy" — a warning the build ignores). gurnard:pantheon
+  # shipped the base's 0-byte file and reported `not ok - DNS resolution
+  # (ghcr.io)` and `not ok - network connectivity` (LUKS run 31065556710).
+  #
+  # This asserts the rule's BEHAVIOUR, not its spelling, because the spelling
+  # that looks right is the bug: the vendor rule and Containerfile.opensuse
+  # both use `L!`, and plain `L` will not replace an existing path.
+  local script="${REPO_ROOT}/build_scripts/40-services.sh"
+  local blk
+  blk="$(awk '/^tunaos_enable_systemd_resolved\(\) \{/,/^\}$/' "$script")"
+  [ -n "$blk" ]
+
+  local root="${BATS_TEST_TMPDIR}/root"
+  mkdir -p "$root/usr/lib/systemd/system" "$root/etc" "$root/run/systemd/resolve"
+  # The unit has to exist or the function correctly does nothing.
+  printf '[Service]\nPrivateTmp=yes\n' \
+    >"$root/usr/lib/systemd/system/systemd-resolved.service"
+
+  # systemctl is the only thing here that needs a real system; every path the
+  # function writes is redirected into $root, so this runs as an unprivileged
+  # user and touches nothing outside BATS_TEST_TMPDIR.
+  local bin="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "$bin"
+  printf '#!/usr/bin/env bash\nexit 0\n' >"$bin/systemctl"
+  chmod +x "$bin/systemctl"
+
+  run env \
+    TUNAOS_SYSTEMD_SYSTEM_DIR="$root/usr/lib/systemd/system" \
+    TUNAOS_TMPFILES_DIR="$root/usr/lib/tmpfiles.d" \
+    PATH="$bin:$PATH" \
+    bash -c "set -e
+      $blk
+      tunaos_enable_systemd_resolved"
+  [ "$status" -eq 0 ]
+
+  # The unit tweak has to land in the redirected tree, not on the host.
+  grep -qF 'PrivateTmp=no' "$root/usr/lib/systemd/system/systemd-resolved.service"
+
+  local rule
+  rule="$(cat "$root/usr/lib/tmpfiles.d/"*.conf)"
+  # It must name resolved's stub, not some other file.
+  grep -qF '/etc/resolv.conf' <<<"$rule"
+  grep -qF 'run/systemd/resolve/stub-resolv.conf' <<<"$rule"
+
+  # The property: fed a 0-byte /etc/resolv.conf exactly as every apt and
+  # openSUSE base ships one, the rule must end with a symlink. `L!` leaves the
+  # file alone and DNS stays broken; `L+!` replaces it.
+  if command -v systemd-tmpfiles >/dev/null 2>&1; then
+    : >"$root/etc/resolv.conf"
+    echo "nameserver 127.0.0.53" >"$root/run/systemd/resolve/stub-resolv.conf"
+    mkdir -p "$root/usr/lib/tmpfiles.d"
+    systemd-tmpfiles --create --boot --root="$root" >/dev/null 2>&1 || true
+    [ -L "$root/etc/resolv.conf" ]
+    [ "$(cat "$root/etc/resolv.conf")" = "nameserver 127.0.0.53" ]
+  else
+    # Same property, statically: a plain `L` cannot replace an existing path.
+    grep -qE '^L\+' <<<"$rule"
+  fi
+
+  # Both branches that enable resolved must go through the helper — the apt
+  # branch returns before the pacman/zypper/emerge one, so a fix in only one
+  # of them has been this branch's most repeated bug.
+  local code calls
+  code="$(grep -v '^[[:space:]]*#' "$script")"
+  calls=$(grep -c '^[[:space:]]*tunaos_enable_systemd_resolved$' <<<"$code")
+  [ "$calls" -ge 2 ]
+}
