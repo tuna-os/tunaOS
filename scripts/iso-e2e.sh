@@ -62,6 +62,17 @@
 #   E2E_SMOKE_STRICT=1    Treat failures from the live-image smoke checks
 #                         (scripts/e2e-smoke-checks.sh, TAP assertions adapted
 #                         from frostyard/snosi) as fatal. Default: warn only.
+#   TBOX_E2E_SSH_PORT     Host TCP port forwarded to the guest's sshd
+#                         (default 2222; see SSH_PORT below).
+#   TBOX_E2E_VSOCK_CID    AF_VSOCK guest CID for the SSH fallback (default
+#                         SSH_PORT+1000). The harness reaches the guest over
+#                         TCP as liveuser first; when nothing listens on guest
+#                         TCP 22 (stock Fedora ships sshd.service disabled, so
+#                         live media only has systemd-ssh-generator's AF_UNIX
+#                         and AF_VSOCK listeners) it falls back to root over
+#                         vsock, authenticated by a per-run keypair injected
+#                         through the SMBIOS credential ssh.authorized_keys.root
+#                         (tacklebox#178). See the Guest SSH transport section.
 #
 # Exit codes:
 #   0  success
@@ -454,6 +465,101 @@ if [[ "${QEMU_NEEDS_VNC_SURFACE:-0}" == "1" ]]; then
 	QEMU_GPU_ARGS+=(-vnc "unix:${OUTPUT_DIR}/vnc.sock")
 fi
 
+# ── Guest SSH transport ─────────────────────────────────────────────────────
+# Everything that talks to the guest goes through GUEST_SSH/GUEST_SCP, set
+# here once (the per-function copies used to drift — see E2E_SSH_OPTS above).
+# Two transports exist:
+#
+#   tcp   (default) sshpass as liveuser through QEMU's hostfwd on
+#         127.0.0.1:${SSH_PORT}. Requires the image to ship a TCP sshd and a
+#         liveuser with password "live" — true for every tunaOS live ISO.
+#   vsock root over AF_VSOCK. Stock Fedora — and therefore the non-tunaOS
+#         reference images (aurora, bluefin) — ships sshd.service disabled;
+#         on live media only systemd-ssh-generator's AF_UNIX + AF_VSOCK
+#         listeners exist, so every hostfwd connection is reset and the tcp
+#         probe loops to timeout (tacklebox#178, iso-builder run 31105807882).
+#         The generator's vsock listener is purpose-built for exactly this
+#         kind of VM access, and systemd's tmpfiles provision.conf (v254+)
+#         imports the SMBIOS credential ssh.authorized_keys.root into
+#         /root/.ssh/authorized_keys at boot — so a per-run keypair passed on
+#         the QEMU command line authenticates root with zero image changes.
+#
+# check_ssh() probes tcp first and only switches to vsock when tcp fails but
+# the vsock listener answers, so tunaOS images keep the exact path they have
+# always had. Once chosen, the transport sticks for the rest of the run.
+SSH_TRANSPORT="tcp"
+GUEST_HOME="/home/liveuser"
+GUEST_SCP_DEST="liveuser@127.0.0.1"
+GUEST_SSH=()
+GUEST_SCP=()
+VSOCK_WHY=""
+
+# Guest CIDs 0-2 are reserved (hypervisor/loopback/host). Deriving the CID
+# from the (already collision-managed) SSH port keeps two concurrent runs on
+# one host from fighting over a CID the same way they would over port 2222.
+VSOCK_CID="${TBOX_E2E_VSOCK_CID:-$((SSH_PORT + 1000))}"
+VSOCK_SSH_KEY="${OUTPUT_DIR}/vsock-ssh-key"
+VSOCK_ARGS=()
+
+use_tcp_transport() {
+	SSH_TRANSPORT="tcp"
+	GUEST_HOME="/home/liveuser"
+	GUEST_SCP_DEST="liveuser@127.0.0.1"
+	GUEST_SSH=(sshpass -p live ssh "${E2E_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
+	# scp takes -P (capital) for the port; sharing one array with ssh's -p
+	# is how #941's "stat local 2222" bug happened. Keep them separate.
+	GUEST_SCP=(sshpass -p live scp "${E2E_SSH_OPTS[@]}" -P "$SSH_PORT")
+}
+
+use_vsock_transport() {
+	SSH_TRANSPORT="vsock"
+	GUEST_HOME="/root"
+	# The hostname is never resolved (ProxyCommand carries the connection);
+	# it only names the guest in known-hosts noise and scp destinations.
+	GUEST_SCP_DEST="root@e2e-vsock"
+	local -a common=(
+		-i "$VSOCK_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes
+		-o "ProxyCommand=socat - VSOCK-CONNECT:${VSOCK_CID}:22"
+	)
+	GUEST_SSH=(ssh "${common[@]}" "${E2E_SSH_OPTS[@]}" root@e2e-vsock)
+	GUEST_SCP=(scp "${common[@]}" "${E2E_SSH_OPTS[@]}")
+}
+use_tcp_transport
+
+# Host-side requirements for the fallback: a writable /dev/vhost-vsock (the
+# module is usually shipped but not loaded — in CI this script runs as root,
+# so load it here rather than asking every workflow to), a vsock-capable
+# socat for the ProxyCommand, and ssh-keygen for the per-run key. Missing any
+# of them just leaves VSOCK_ARGS empty: the QEMU command line is unchanged
+# and the harness behaves exactly as before the fallback existed.
+setup_vsock() {
+	if [[ ! -e /dev/vhost-vsock ]]; then
+		modprobe vhost_vsock 2>/dev/null || sudo -n modprobe vhost_vsock 2>/dev/null || true
+	fi
+	if [[ ! -w /dev/vhost-vsock ]]; then
+		echo "==> vsock SSH fallback unavailable (no writable /dev/vhost-vsock) — TCP only"
+		return 0
+	fi
+	if ! command -v socat &>/dev/null || ! socat -V 2>/dev/null | grep -qi vsock; then
+		echo "==> vsock SSH fallback unavailable (no vsock-capable socat) — TCP only"
+		return 0
+	fi
+	command -v ssh-keygen &>/dev/null || return 0
+	rm -f "$VSOCK_SSH_KEY" "${VSOCK_SSH_KEY}.pub"
+	ssh-keygen -q -t ed25519 -N "" -C "tunaos-iso-e2e" -f "$VSOCK_SSH_KEY"
+	# base64 without -w0 for macOS compatibility; the credential value must
+	# be one SMBIOS string, so strip the wrapping newlines. The base64
+	# alphabet contains no commas, so no QEMU option-escaping is needed.
+	local pub_b64
+	pub_b64=$(base64 <"${VSOCK_SSH_KEY}.pub" | tr -d '\n')
+	VSOCK_ARGS=(
+		-device "vhost-vsock-pci,guest-cid=${VSOCK_CID}"
+		-smbios "type=11,value=io.systemd.credential.binary:ssh.authorized_keys.root=${pub_b64}"
+	)
+	echo "==> vsock SSH fallback armed (guest-cid=${VSOCK_CID})"
+}
+setup_vsock
+
 record_luks_evidence() {
 	[[ "$LUKS" -eq 1 ]] || return 0
 	echo "$1" | tee -a "$LUKS_EVIDENCE_LOG"
@@ -667,6 +773,7 @@ boot_live_iso() {
 		-device "virtio-blk-pci,drive=swapdisk,serial=${SWAP_DISK_SERIAL}" \
 		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
 		-device virtio-net-pci,netdev=net0 \
+		${VSOCK_ARGS[@]+"${VSOCK_ARGS[@]}"} \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
 		"${E2E_SERIAL_ARGS[@]}" \
 		"${QEMU_GPU_ARGS[@]}" \
@@ -949,19 +1056,52 @@ wait_for_ready() {
 	return 2
 }
 
-# Verify SSH connectivity. ISO must have ENABLE_SSHD=1.
+# Probe the vsock listener as root with the SMBIOS-provisioned key. On
+# success the transport is switched (and sticks) for everything downstream.
+check_ssh_vsock() {
+	local err
+	err=$(mktemp)
+	if ssh -i "$VSOCK_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes \
+		-o "ProxyCommand=socat - VSOCK-CONNECT:${VSOCK_CID}:22" \
+		"${E2E_SSH_OPTS[@]}" root@e2e-vsock true 2>"$err"; then
+		rm -f "$err"
+		if [[ "$SSH_TRANSPORT" != "vsock" ]]; then
+			echo "==> no TCP sshd on guest; switching to root over AF_VSOCK (systemd-ssh-generator image — tacklebox#178)"
+			use_vsock_transport
+		fi
+		echo "==> SSH OK (vsock cid=${VSOCK_CID})"
+		return 0
+	fi
+	VSOCK_WHY=$(tr -d '\r' <"$err" | grep -v '^Warning: Permanently added' | tr '\n' ' ' | sed 's/  */ /g') || true
+	rm -f "$err"
+	return 5
+}
+
+# Verify SSH connectivity and pick the transport. The tcp path needs an ISO
+# built with ENABLE_SSHD=1 (tunaOS live media); generic images without a TCP
+# sshd fall back to vsock — see the Guest SSH transport section.
 check_ssh() {
+	if [[ "$SSH_TRANSPORT" == "vsock" ]]; then
+		check_ssh_vsock
+		return $?
+	fi
 	if ! command -v sshpass &>/dev/null; then
 		echo "ERROR: sshpass required for --ssh-only; install it" >&2
 		return 77
 	fi
-	local opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10"
 	local err
 	err=$(mktemp)
-	# shellcheck disable=SC2086
-	if sshpass -p live ssh $opts liveuser@127.0.0.1 -p "$SSH_PORT" true 2>"$err"; then
+	if sshpass -p live ssh "${E2E_SSH_OPTS[@]}" liveuser@127.0.0.1 -p "$SSH_PORT" true 2>"$err"; then
 		rm -f "$err"
 		echo "==> SSH OK"
+		return 0
+	fi
+	# tcp failed. Before reporting, try the vsock fallback: a guest whose
+	# only listeners are systemd-ssh-generator's resets every hostfwd
+	# connection, and without this the loop above just replays that failure
+	# to timeout. Success here flips the transport for the whole run.
+	if [[ ${#VSOCK_ARGS[@]} -gt 0 ]] && check_ssh_vsock; then
+		rm -f "$err"
 		return 0
 	fi
 	# Say WHY. This used to be `2>/dev/null` with a bare "SSH check failed",
@@ -988,6 +1128,12 @@ check_ssh() {
 	local why=""
 	why=$(tr -d '\r' <"$err" | grep -v '^Warning: Permanently added' | tr '\n' ' ' | sed 's/  */ /g') || true
 	[[ -n "${why// /}" ]] || why="(no ssh stderr beyond the known-hosts warning)"
+	# Both transports were tried; report both reasons or the diagnosis is
+	# half-blind (the tcp reset is expected on generic images — the vsock
+	# line is the one that says what actually went wrong there).
+	if [[ ${#VSOCK_ARGS[@]} -gt 0 && -n "${VSOCK_WHY// /}" ]]; then
+		why="tcp: ${why} | vsock: ${VSOCK_WHY}"
+	fi
 	echo "ERROR: SSH check failed: $why" >&2
 	rm -f "$err"
 	return 5
@@ -1001,16 +1147,16 @@ check_ssh() {
 run_smoke_checks() {
 	local script_dir
 	script_dir="$(dirname "${BASH_SOURCE[0]}")"
-	# Keepalives and their rationale live on E2E_SSH_OPTS at file scope.
-	local -a COMMON_SSH_OPTS=("${E2E_SSH_OPTS[@]}")
-	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
-	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_PORT")
+	# Transport-aware guest access (keepalive rationale on E2E_SSH_OPTS;
+	# transport selection in the Guest SSH transport section).
+	local ssh_cmd=("${GUEST_SSH[@]}")
+	local scp_cmd=("${GUEST_SCP[@]}")
 
-	"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" liveuser@127.0.0.1:/home/liveuser/e2e-assert.sh
-	"${scp_cmd[@]}" "${script_dir}/e2e-smoke-checks.sh" liveuser@127.0.0.1:/home/liveuser/e2e-smoke-checks.sh
+	"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-assert.sh"
+	"${scp_cmd[@]}" "${script_dir}/e2e-smoke-checks.sh" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-smoke-checks.sh"
 
 	local smoke_output smoke_rc=0
-	smoke_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=/home/liveuser bash /home/liveuser/e2e-smoke-checks.sh" 2>&1) || smoke_rc=$?
+	smoke_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=${GUEST_HOME} bash ${GUEST_HOME}/e2e-smoke-checks.sh" 2>&1) || smoke_rc=$?
 	echo "$smoke_output" | tee -a "${SERIAL_LOG}"
 	if [[ "$smoke_rc" -ne 0 ]]; then
 		echo "::warning::live-image smoke checks reported ${smoke_rc} failure(s)"
@@ -1083,15 +1229,13 @@ run_install() {
 		return 5
 	}
 
-	# scp uses -P (capital) for the port flag; ssh uses -p. Sharing one array
-	# with the wrong flag silently makes scp treat the port number as a
-	# source-file argument ("stat local 2222: No such file or directory").
-	# Keepalives and their rationale live on E2E_SSH_OPTS at file scope. This
-	# is the array the multi-GB image transfer below uses, so it is the one
+	# Transport-aware guest access, resolved by the check_ssh loop above
+	# (keepalive rationale on E2E_SSH_OPTS; the ssh -p / scp -P split and
+	# transport selection live in the Guest SSH transport section). This is
+	# the command the multi-GB image transfer below uses, so it is the one
 	# that actually hung the runners in #939.
-	local -a COMMON_SSH_OPTS=("${E2E_SSH_OPTS[@]}")
-	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
-	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_PORT")
+	local ssh_cmd=("${GUEST_SSH[@]}")
+	local scp_cmd=("${GUEST_SCP[@]}")
 
 	# Bug #20: fisherman's network pull stalled indefinitely mid-blob (layer
 	# 42/65, no error, no further output) after dozens of smaller layers
@@ -1342,20 +1486,20 @@ run_install() {
 			# readiness wait and the installed-boot wait.
 			echo "==> Transferring image to guest (this may take a few minutes)..."
 			if ! timeout 1800 "${scp_cmd[@]}" "$host_tar" \
-				"liveuser@127.0.0.1:/home/liveuser/"; then
+				"${GUEST_SCP_DEST}:${GUEST_HOME}/"; then
 				echo "ERROR: image transfer to guest timed out or failed" >&2
 				rm -f "$host_tar" || true
 				return 3
 			fi
 			echo "==> Loading image into guest podman..."
-			if timeout 1800 "${ssh_cmd[@]}" "sudo podman load -i /home/liveuser/${host_tar##*/} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
+			if timeout 1800 "${ssh_cmd[@]}" "sudo podman load -i ${GUEST_HOME}/${host_tar##*/} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
 				echo "==> Image loaded, using local containers-storage ref"
 				recipe_image="containers-storage:${host_img}"
 			else
 				echo "ERROR: podman load failed on guest"
 				return 3
 			fi
-			"${ssh_cmd[@]}" "rm -f /home/liveuser/${host_tar##*/}" || true
+			"${ssh_cmd[@]}" "rm -f ${GUEST_HOME}/${host_tar##*/}" || true
 			rm -f "$host_tar" || true
 		else
 			echo "ERROR: host image $host_img not found — was ISO build successful?"
@@ -1376,8 +1520,8 @@ run_install() {
 	# fisherman is pinned to a release.
 	if [[ -n "${FISHERMAN_OVERRIDE:-}" && -f "${FISHERMAN_OVERRIDE}" ]]; then
 		echo "==> Overriding fisherman with ${FISHERMAN_OVERRIDE}"
-		"${scp_cmd[@]}" "${FISHERMAN_OVERRIDE}" liveuser@127.0.0.1:/home/liveuser/fisherman-override
-		"${ssh_cmd[@]}" "sudo install -m0755 /home/liveuser/fisherman-override /usr/local/bin/fisherman"
+		"${scp_cmd[@]}" "${FISHERMAN_OVERRIDE}" "${GUEST_SCP_DEST}:${GUEST_HOME}/fisherman-override"
+		"${ssh_cmd[@]}" "sudo install -m0755 ${GUEST_HOME}/fisherman-override /usr/local/bin/fisherman"
 	fi
 
 	local RECIPE_LOCAL="${OUTPUT_DIR}/e2e-recipe.json"
@@ -1395,7 +1539,7 @@ run_install() {
 }
 EOF
 	echo "==> Uploading fisherman recipe..."
-	"${scp_cmd[@]}" "$RECIPE_LOCAL" liveuser@127.0.0.1:/home/liveuser/e2e-recipe.json
+	"${scp_cmd[@]}" "$RECIPE_LOCAL" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-recipe.json"
 
 	# ── Swap on, before anything allocates ───────────────────────────────
 	# See SWAP_DISK: podman's copy of the exported OCI layout into the
@@ -1443,19 +1587,19 @@ EOF
 			sleep 15
 		done
 	HBEOF
-	if "${scp_cmd[@]}" "$HB_LOCAL" liveuser@127.0.0.1:/home/liveuser/e2e-heartbeat.sh; then
-		"${ssh_cmd[@]}" "sudo install -m0755 /home/liveuser/e2e-heartbeat.sh /usr/local/bin/tunaos-e2e-heartbeat && \
+	if "${scp_cmd[@]}" "$HB_LOCAL" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-heartbeat.sh"; then
+		"${ssh_cmd[@]}" "sudo install -m0755 ${GUEST_HOME}/e2e-heartbeat.sh /usr/local/bin/tunaos-e2e-heartbeat && \
 			sudo setsid --fork /usr/local/bin/tunaos-e2e-heartbeat </dev/null >/dev/null 2>&1" ||
 			echo "WARN: guest heartbeat did not start (continuing)"
 	else
 		echo "WARN: guest heartbeat could not be uploaded (continuing)"
 	fi
 
-	echo "==> Running fisherman /home/liveuser/e2e-recipe.json..."
+	echo "==> Running fisherman ${GUEST_HOME}/e2e-recipe.json..."
 	# Bound with `timeout` as a safety net; the image is already local at
 	# this point so this should only cover the actual install steps, not a
 	# network pull.
-	timeout 1800 "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman /home/liveuser/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
+	timeout 1800 "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman ${GUEST_HOME}/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
 		rc=$?
 		if [[ $rc -eq 0 ]]; then
 			true
@@ -1484,10 +1628,10 @@ EOF
 		# tiered on-VM test scripts.
 		local script_dir
 		script_dir="$(dirname "${BASH_SOURCE[0]}")"
-		"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" liveuser@127.0.0.1:/home/liveuser/e2e-assert.sh
-		"${scp_cmd[@]}" "${script_dir}/e2e-luks-checks.sh" liveuser@127.0.0.1:/home/liveuser/e2e-luks-checks.sh
+		"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-assert.sh"
+		"${scp_cmd[@]}" "${script_dir}/e2e-luks-checks.sh" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-luks-checks.sh"
 		local luks_check_output
-		luks_check_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=/home/liveuser bash /home/liveuser/e2e-luks-checks.sh" 2>&1) || true
+		luks_check_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=${GUEST_HOME} bash ${GUEST_HOME}/e2e-luks-checks.sh" 2>&1) || true
 		echo "$luks_check_output" | tee -a "$LUKS_EVIDENCE_LOG"
 
 		if echo "$luks_check_output" | grep -q "^ok - installed disk has a crypto_LUKS partition"; then
@@ -1950,7 +2094,7 @@ app-launch)
 		app_idx=$((app_idx + 1))
 		label="20-app-$(printf '%02d' "$app_idx")-${app##*.}"
 		echo "==> Launching app via SSH: $app"
-		sshpass -p live ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "$SSH_PORT" liveuser@127.0.0.1 \
+		"${GUEST_SSH[@]}" \
 			"env $SSH_APP_ENV gtk-launch $app 2>&1" || echo "  (app launch may have failed)"
 		sleep 8
 		screenshot "$label"
@@ -1969,7 +2113,7 @@ app-launch)
 		# Best-effort stop (openQA closes each app before the next): match the
 		# desktop id's last segment, lowercased, against the process table.
 		app_proc="${app##*.}"
-		sshpass -p live ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "$SSH_PORT" liveuser@127.0.0.1 \
+		"${GUEST_SSH[@]}" \
 			"pkill -f '${app_proc,,}' 2>/dev/null" || true
 		sleep 2
 	done
