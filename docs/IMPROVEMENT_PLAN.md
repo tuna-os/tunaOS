@@ -322,8 +322,12 @@ Most impactful items first:
 
 - **`tuna-os/github-copr`** — add `Obsoletes: gnome-shell-common < %{major_version}`
   to `src/gnome-49/gnome-shell/gnome-shell.spec` and the matching
-  `gnome-50` spec. Once that lands, the workaround in `build_scripts/desktop/gnome.sh:48`
-  (commit `33e11a1`) can be removed.
+  `gnome-50` spec. Once that lands, the `pre_install` workaround under
+  `packages.el10` in `manifests/desktops/gnome.yaml` — the
+  `dnf remove --noautoremove gnome-shell-common` that clears the way for the
+  COPR's newer gnome-shell — can be removed. (It lived at
+  `build_scripts/desktop/gnome.sh:48`, commit `33e11a1`, until GNOME moved onto
+  the manifest installer.)
 - **`tuna-os/tacklebox`** — publish a release container image so we
   don't have to `go build` from source each time. The `scripts/build-iso-tacklebox.sh`
   fallback to building from source will still work as a development
