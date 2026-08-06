@@ -54,8 +54,36 @@ esac
 
 chmod 644 $IMAGE_INFO
 
+# Every os-release path a reader can resolve, not just the canonical one.
+#
+# /etc/os-release is *conventionally* a symlink to ../usr/lib/os-release, and on
+# the dnf, apt, zypper and portage bases it is, so writing the canonical file was
+# enough. The official archlinux/archlinux container is the exception: the
+# `filesystem` package ships only /usr/lib/os-release plus that symlink, but the
+# image's second layer overwrites /etc/os-release with a 411-byte *regular file*
+# holding stock Arch identity. Editing /usr/lib/os-release therefore left marlin
+# with two different identities on disk, and every consumer that reads
+# /etc/os-release (`. /etc/os-release`, and verify-branding.sh, which prefers it)
+# saw the upstream one:
+#
+#   PRETTY_NAME="Arch Linux"   SUPPORT_URL="https://bbs.archlinux.org/"
+#   LOGO=archlinux-logo        BUG_REPORT_URL="https://gitlab.archlinux.org/..."
+#
+# i.e. all ten TUNAOS_BRANDING_FAIL findings on the marlin:gnome LUKS build,
+# reported against an image whose /usr/lib/os-release was branded correctly.
+#
+# Rather than replace the file with a symlink (which would drop the keys the
+# container adds only there, e.g. Arch's dated VERSION_ID), brand every distinct
+# file so both readings agree.
+OS_RELEASE_FILES=(/usr/lib/os-release)
+if [[ -e /etc/os-release ]] &&
+	[[ "$(readlink -f /etc/os-release)" != "$(readlink -f /usr/lib/os-release)" ]]; then
+	OS_RELEASE_FILES+=(/etc/os-release)
+fi
+
 # OS Release File (changed in order with upstream)
-sed -i -f - /usr/lib/os-release <<EOF
+OSR_SED_PROGRAM="$(
+	cat <<EOF
 s/^NAME=.*/NAME=\"${IMAGE_PRETTY_NAME}\"/
 s|^VERSION_CODENAME=.*|VERSION_CODENAME=\"${CODE_NAME}\"|
 s/^VARIANT_ID=.*/VARIANT_ID=${IMAGE_NAME}/
@@ -64,6 +92,10 @@ s|^HOME_URL=.*|HOME_URL=\"${HOME_URL}\"|
 s|^BUG_REPORT_URL=.*|BUG_REPORT_URL=\"${BUG_SUPPORT_URL}\"|
 s|^CPE_NAME=.*|CPE_NAME=\"cpe:/o:jamesreilly:${IMAGE_NAME}-tunaos\"|
 EOF
+)"
+for osr_file in "${OS_RELEASE_FILES[@]}"; do
+	printf '%s\n' "${OSR_SED_PROGRAM}" | sed -i -f - "${osr_file}"
+done
 
 # Dynamically interpolate the specific variant name and logo path in the installer recipe.json
 RECIPE_FILE="/etc/bootc-installer/recipe.json"
@@ -130,9 +162,11 @@ fi
 
 # Ensure VARIANT_ID is set — the sed substitution above only replaces an
 # existing line; AlmaLinux base images omit it entirely.
-if ! grep -q "^VARIANT_ID=" /usr/lib/os-release; then
-	echo "VARIANT_ID=${IMAGE_NAME}" >>/usr/lib/os-release
-fi
+for osr_file in "${OS_RELEASE_FILES[@]}"; do
+	if ! grep -q "^VARIANT_ID=" "${osr_file}"; then
+		echo "VARIANT_ID=${IMAGE_NAME}" >>"${osr_file}"
+	fi
+done
 
 # Replace-or-append, never blind append.
 #
@@ -151,13 +185,15 @@ fi
 # readings are defensible and the file looks right to whoever greps it the way
 # that agrees with them.
 osr_set() {
-	local key="$1" value="$2"
-	if grep -q "^${key}=" /usr/lib/os-release; then
-		# `|` delimiter rather than `/`: values may contain slashes (URLs).
-		sed -i "s|^${key}=.*|${key}=\"${value}\"|" /usr/lib/os-release
-	else
-		echo "${key}=\"${value}\"" >>/usr/lib/os-release
-	fi
+	local key="$1" value="$2" file
+	for file in "${OS_RELEASE_FILES[@]}"; do
+		if grep -q "^${key}=" "${file}"; then
+			# `|` delimiter rather than `/`: values may contain slashes (URLs).
+			sed -i "s|^${key}=.*|${key}=\"${value}\"|" "${file}"
+		else
+			echo "${key}=\"${value}\"" >>"${file}"
+		fi
+	done
 }
 
 osr_set DOCUMENTATION_URL "${DOCUMENTATION_URL}"

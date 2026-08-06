@@ -222,6 +222,24 @@ build_scripts_top=(
   [ "$status" -ne 0 ]
 }
 
+# The archlinux/archlinux container overwrites /etc/os-release with a regular
+# file holding stock Arch identity, shadowing the `filesystem` package symlink
+# to /usr/lib/os-release. Branding only the canonical file left marlin shipping
+# two identities, and verify-branding.sh (which prefers /etc/os-release) failed
+# all ten identity/logo checks against a correctly branded /usr/lib/os-release.
+@test "build_scripts/90-image-info.sh brands every distinct os-release path" {
+  local script="${REPO_ROOT}/build_scripts/90-image-info.sh"
+  grep -q 'OS_RELEASE_FILES=(/usr/lib/os-release)' "$script"
+  grep -q 'OS_RELEASE_FILES+=(/etc/os-release)' "$script"
+  # osr_set and the sed program must both iterate the list, not hardcode one file.
+  run grep -cE '\$\{OS_RELEASE_FILES\[@\]\}' "$script"
+  [ "$status" -eq 0 ]
+  [ "$output" -ge 3 ]
+  # No write may target /usr/lib/os-release directly any more.
+  run grep -nE '(sed -i[^|]*|>>)[[:space:]]*/usr/lib/os-release' "$script"
+  [ "$status" -ne 0 ]
+}
+
 # ── Desktop flavor scripts ──────────────────────────────────────────────
 
 @test "build_scripts/desktop/gnome.sh: exists and sources lib.sh" {
