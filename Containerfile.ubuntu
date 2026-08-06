@@ -40,6 +40,12 @@ FROM scratch AS context
 COPY system_files /files
 COPY build_scripts /build_scripts
 COPY image-versions.yaml /image-versions.yaml
+# The desktop stages above pantheon each call their own build_scripts/desktop
+# script and never read a manifest, so this context stage never carried them —
+# every other Containerfile does. pantheon is manifest-only, so install-desktop.sh
+# looked for /run/context/manifests/desktops/pantheon.yaml in a directory that
+# did not exist and gurnard died with "No manifest found" (#1014).
+COPY manifests /manifests
 COPY --from=common /system_files/shared /files
 
 # ==============================================================================

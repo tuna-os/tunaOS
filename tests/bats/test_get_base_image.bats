@@ -169,3 +169,22 @@ setup() {
     return 1
   fi
 }
+
+@test "every Containerfile whose stages use install-desktop.sh ships manifests" {
+  # install-desktop.sh reads /run/context/manifests/desktops/<flavor>.yaml.
+  # Containerfile.ubuntu's desktop stages each called their own
+  # build_scripts/desktop script and never needed a manifest, so its context
+  # stage never copied them — until pantheon (manifest-only) was added and
+  # gurnard died with "No manifest found" (#1014). A Containerfile that calls
+  # the manifest-driven installer must carry the manifests.
+  local cf missing=""
+  for cf in "${REPO_ROOT}"/Containerfile.*; do
+    grep -q 'install-desktop\.sh' "$cf" 2>/dev/null || continue
+    grep -q '^COPY manifests' "$cf" ||
+      missing="${missing} $(basename "$cf")"
+  done
+  if [ -n "$missing" ]; then
+    echo "FAIL: calls install-desktop.sh but never COPY manifests —${missing}" >&2
+    return 1
+  fi
+}

@@ -80,8 +80,19 @@ else
 	# scientific fish codename defined for variant"). That was latent until
 	# those two Containerfiles started running 90-image-info.sh.
 	_derive_name() { # family-default name, family-default pretty name
-		IMAGE_NAME="${IMAGE_NAME:-$1}"
-		IMAGE_PRETTY_NAME="${IMAGE_PRETTY_NAME:-$2}"
+		if [[ -n "${IMAGE_NAME:-}" ]]; then
+			# The build told us the name, so the pretty name has to come from
+			# THAT, not from the family default — otherwise gurnard, whose name
+			# survives, still picks up "Grouper" here. Observed in run
+			# 31059184838: IMAGE_NAME=gurnard, IMAGE_PRETTY_NAME=Grouper.
+			# 90-image-info.sh independently computes "${IMAGE_NAME^}", so the
+			# family default would disagree with what actually reaches
+			# os-release. Match it.
+			IMAGE_PRETTY_NAME="${IMAGE_PRETTY_NAME:-${IMAGE_NAME^}}"
+		else
+			IMAGE_NAME="$1"
+			IMAGE_PRETTY_NAME="${IMAGE_PRETTY_NAME:-$2}"
+		fi
 	}
 	[[ "${BASE_IMAGE,,}" == *"fedora"* && "${BASE_IMAGE,,}" != *"hummingbird"* ]] && IS_FEDORA=true && _derive_name "bonito" "Bonito"
 	[[ "${BASE_IMAGE,,}" == *"red hat"* || "${BASE_IMAGE,,}" == *"rhel"* || "${BASE_IMAGE,,}" == *"redhat"* ]] && IS_RHEL=true && _derive_name "redfin" "Redfin"
@@ -324,8 +335,11 @@ pkg_install() {
 		zypper --non-interactive in --no-recommends "$@"
 	elif [[ "$PKG_MGR" == "emerge" ]]; then
 		emerge --verbose --getbinpkg "$@"
-	else
+	elif [[ "$PKG_MGR" == "dnf" ]]; then
 		dnf_retry install -y --setopt=install_weak_deps=False "$@"
+	else
+		echo "pkg_install: unknown PKG_MGR '${PKG_MGR}'" >&2
+		return 1
 	fi
 }
 
@@ -340,31 +354,57 @@ pkg_remove() {
 		zypper --non-interactive rm "$@"
 	elif [[ "$PKG_MGR" == "emerge" ]]; then
 		emerge --deselect "$@"
-	else
+	elif [[ "$PKG_MGR" == "dnf" ]]; then
 		dnf_retry remove -y "$@"
+	else
+		echo "pkg_remove: unknown PKG_MGR '${PKG_MGR}'" >&2
+		return 1
 	fi
 }
 
 # Refresh package metadata.
+#
+# Every branch is explicit and dnf is one of them rather than the fallthrough.
+# An `else dnf ...` tail reads as "the default" and is really "everything I did
+# not think about": it is how 40-services.sh sent Arch down the dnf path
+# (#1015) and how pkg_clean below killed every sailfin build with
+# "lib.sh: line 366: dnf: command not found" after 99-cleanup.sh was wired into
+# Containerfile.opensuse. An unknown manager should say so, not run dnf.
 pkg_refresh() {
-	if [[ "$PKG_MGR" == "apt" ]]; then
-		apt-get update
-	else
-		dnf makecache
-	fi
+	case "$PKG_MGR" in
+	apt) apt-get update ;;
+	pacman) pacman -Sy --noconfirm ;;
+	zypper) zypper --non-interactive --gpg-auto-import-keys refresh ;;
+	emerge) emerge --sync --quiet || emaint sync -a ;;
+	dnf) dnf makecache ;;
+	*)
+		echo "pkg_refresh: unknown PKG_MGR '${PKG_MGR}'" >&2
+		return 1
+		;;
+	esac
 }
 
 # Clean package manager caches to minimize final image size.
 pkg_clean() {
-	if [[ "$PKG_MGR" == "apt" ]]; then
+	case "$PKG_MGR" in
+	apt)
 		apt-get clean
 		rm -rf /var/lib/apt/lists/*
 		mkdir -p /var/lib/apt/lists/partial
-	elif [[ "$PKG_MGR" == "pacman" ]]; then
-		pacman -Scc --noconfirm 2>/dev/null || true
-	else
-		dnf clean all
-	fi
+		;;
+	pacman) pacman -Scc --noconfirm 2>/dev/null || true ;;
+	zypper) zypper clean --all 2>/dev/null || true ;;
+	# Gentoo's caches are the distfiles and the binpkg tree; portage has no
+	# "clean" verb for them, and eclean is in gentoolkit which the stage3 does
+	# not ship. Remove the paths directly, as Containerfile.gentoo:107 already
+	# does for /var/tmp/portage.
+	emerge) rm -rf /var/cache/distfiles/* /var/tmp/portage/* 2>/dev/null || true ;;
+	dnf) dnf clean all ;;
+	*)
+		echo "pkg_clean: unknown PKG_MGR '${PKG_MGR}'" >&2
+		return 1
+		;;
+	esac
 }
 
 # Run `dnf` with retries to absorb transient mirror flakes (EPEL / AlmaLinux /
