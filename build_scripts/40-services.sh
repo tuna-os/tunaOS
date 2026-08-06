@@ -88,6 +88,51 @@ tunaos_declare_liveuser_home() {
 	install -d -m 0700 -o liveuser -g liveuser /var/home/liveuser 2>/dev/null || true
 }
 
+# Enable a network manager, or the image boots with a NIC and no address.
+#
+# Called from BOTH the apt branch and the pacman/zypper/emerge branch. The apt
+# branch exits early, so logic placed only in the latter never runs for
+# Ubuntu/Debian — which is exactly how grouper:gnome ended up unreachable with
+# sshd running and host keys generated (LUKS run 31061486055), the same
+# signature sailfin had. flounder passes because Containerfile.debian installs
+# network-manager and Ubuntu's base ships nothing; the difference was never
+# deliberate.
+tunaos_enable_network_manager() {
+	local net_unit=""
+	if [[ -f /usr/lib/systemd/system/NetworkManager.service ]]; then
+		net_unit=NetworkManager.service
+	elif [[ -f /usr/lib/systemd/system/systemd-networkd.service ]]; then
+		net_unit=systemd-networkd.service
+	elif [[ "${PKG_MGR:-}" == "zypper" ]] || command -v zypper &>/dev/null; then
+		# openSUSE splits networkd into its own package.
+		pkg_install systemd-network
+		[[ -f /usr/lib/systemd/system/systemd-networkd.service ]] &&
+			net_unit=systemd-networkd.service
+	fi
+
+	if [[ -n "$net_unit" ]]; then
+		# Explicit, not safe_enable: both openSUSE and Arch ship `disable *`
+		# presets, so this is the only thing turning networking on, and a
+		# swallowed failure ships an image with no network and no complaint.
+		systemctl enable "$net_unit"
+		return 0
+	fi
+
+	if command -v emerge &>/dev/null; then
+		# Gentoo builds from source, so naming an atom here is an unbounded
+		# compile rather than a package fetch, and guppy's networking has not
+		# been measured the way openSUSE's and Arch's have. Say so instead of
+		# guessing, and leave the build passing as it does today.
+		echo "WARNING: no network manager on the emerge path; guppy may boot without networking" >&2
+		return 0
+	fi
+
+	echo "ERROR: no NetworkManager or systemd-networkd unit on this image." >&2
+	echo "       It would boot with a NIC and no address, and sshd would" >&2
+	echo "       accept the port forward while answering nothing." >&2
+	return 1
+}
+
 if [[ "${PKG_MGR:-}" == "apt" ]]; then
 	# Sleep-then-hibernate defaults via a logind drop-in (Ubuntu ships no
 	# stock /usr/lib/systemd/logind.conf; a drop-in is honoured everywhere).
@@ -159,6 +204,8 @@ if [[ "${PKG_MGR:-}" == "apt" ]]; then
 		safe_disable sshd.socket
 		safe_disable ssh.socket
 	fi
+
+	tunaos_enable_network_manager
 
 	# Units that exist on Ubuntu once their packages are installed.
 	safe_enable tailscaled.service
@@ -265,32 +312,7 @@ if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command 
 	# failure ships an image with no network and no build-time complaint. Arch
 	# needs no install: Containerfile.arch has networkmanager in base-no-de,
 	# which is built before this script runs.
-	net_unit=""
-	if [[ -f /usr/lib/systemd/system/NetworkManager.service ]]; then
-		net_unit=NetworkManager.service
-	elif [[ -f /usr/lib/systemd/system/systemd-networkd.service ]]; then
-		net_unit=systemd-networkd.service
-	elif [[ "${PKG_MGR:-}" == "zypper" ]] || command -v zypper &>/dev/null; then
-		pkg_install systemd-network
-		if [[ -f /usr/lib/systemd/system/systemd-networkd.service ]]; then
-			net_unit=systemd-networkd.service
-		fi
-	fi
-
-	if [[ -n "$net_unit" ]]; then
-		systemctl enable "$net_unit"
-	elif command -v emerge &>/dev/null; then
-		# Gentoo builds from source, so naming an atom here is an unbounded
-		# compile rather than a package fetch, and guppy's networking has not
-		# been measured the way openSUSE's and Arch's have. Say so instead of
-		# guessing, and leave the build passing as it does today.
-		echo "WARNING: no network manager on the emerge path; guppy may boot without networking" >&2
-	else
-		echo "ERROR: no NetworkManager or systemd-networkd unit on this image." >&2
-		echo "       It would boot with a NIC and no address, and sshd would" >&2
-		echo "       look broken instead: see LUKS run 31060731552." >&2
-		exit 1
-	fi
+	tunaos_enable_network_manager
 
 	safe_enable tailscaled.service
 	safe_enable fwupd.service
