@@ -862,17 +862,35 @@ _run_lnf() { # $1 = file
   # Gentoo warns and carries on; everything else is a hard failure.
   grep -qF 'WARNING: no network manager on the emerge path' <<<"$blk"
 
-  # `exit 1`, not `return 1`: inside a function a non-zero return only kills
-  # the build while every call site stays a bare command, so `|| true` or an
-  # `if` around it would swallow the failure the way safe_enable did.
-  grep -qE '^[[:space:]]*exit 1$' <<<"$blk"
+  # Two spellings of that hard failure are both correct, and this test asserts
+  # the property rather than picking one — pinning a spelling is what made this
+  # test and the script disagree twice while the behaviour never changed:
+  #
+  #   exit 1    — fails whatever the call site does
+  #   return 1  — fails only while every call site is a bare command under
+  #               `set -e`, so that is checked below when this is the spelling
+  local fail_ln
+  fail_ln="$(grep -nE '^[[:space:]]*(exit|return) 1$' <<<"$blk" | cut -d: -f1 | tail -1)"
+  [ -n "$fail_ln" ]
 
-  # And the exit must be the fallback, after the emerge warning — otherwise a
-  # base with no stack at all could land on warn-and-carry-on.
-  local warn_ln exit_ln
+  if ! grep -qE '^[[:space:]]*exit 1$' <<<"$blk"; then
+    # A `|| true`, an `if`, or a `!` would swallow the return exactly the way
+    # safe_enable swallowed the absent unit that started all this.
+    local code
+    code="$(grep -v '^[[:space:]]*#' "$script")"
+    [ "$(grep -c '^[[:space:]]*tunaos_enable_network_manager$' <<<"$code")" -ge 2 ]
+    run grep -cE 'tunaos_enable_network_manager[[:space:]]*(\|\||&&|;)|(if|!|until|while)[[:space:]]+tunaos_enable_network_manager' <<<"$code"
+    [ "$output" -eq 0 ]
+  fi
+
+  # The failure must come last, after the emerge warning and after any
+  # success return, so a base with no stack at all cannot fall through to
+  # warn-and-carry-on or to a bare success.
+  local warn_ln last_ok_ln
   warn_ln="$(grep -nF 'WARNING: no network manager on the emerge path' <<<"$blk" | cut -d: -f1 | head -1)"
-  exit_ln="$(grep -nE '^[[:space:]]*exit 1$' <<<"$blk" | cut -d: -f1 | tail -1)"
-  [ "$warn_ln" -lt "$exit_ln" ]
+  last_ok_ln="$(grep -nE '^[[:space:]]*return 0$' <<<"$blk" | cut -d: -f1 | tail -1)"
+  [ "$warn_ln" -lt "$fail_ln" ]
+  [ -z "$last_ok_ln" ] || [ "$last_ok_ln" -lt "$fail_ln" ]
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
