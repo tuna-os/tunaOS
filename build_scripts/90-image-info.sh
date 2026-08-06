@@ -5,6 +5,33 @@ printf "::group:: === 90 Image Info ===\n"
 
 source /run/context/build_scripts/lib.sh
 
+# Fold a friendly alias tag onto the canonical variant id it belongs to.
+#
+# Mirrors the `aliases:` lists in .github/build-config.yml. An alias is only a
+# second tag for the same digest, so it must never become the image's identity
+# (VARIANT_ID/hostname) and it is not a valid key for the codename table below.
+canonical_variant() {
+	case "$1" in
+	almalinux-kitten) echo yellowfin ;;
+	almalinux) echo albacore ;;
+	centos) echo skipjack ;;
+	fedora) echo bonito ;;
+	opensuse | tumbleweed) echo sailfin ;;
+	gentoo) echo guppy ;;
+	elementary) echo gurnard ;;
+	ubuntu) echo grouper ;;
+	arch | archlinux) echo marlin ;;
+	debian) echo flounder ;;
+	*) echo "$1" ;;
+	esac
+}
+
+# lib.sh derives IMAGE_NAME from the detected base whenever the Containerfile
+# does not pin it, and that derivation hands back the distro alias (sailfin
+# builds arrive here as "opensuse" and guppy as "gentoo"), which would brand the
+# image with the alias and abort the codename lookup below. Canonicalize first.
+IMAGE_NAME="$(canonical_variant "${IMAGE_NAME:-${IMAGE_NAME_VARIANT:-}}")"
+
 IMAGE_REF="ostree-image-signed:docker://${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_VENDOR}/${IMAGE_NAME}"
 IMAGE_INFO="/usr/share/ublue-os/image-info.json"
 IMAGE_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
@@ -34,7 +61,14 @@ BUG_SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"
 # TunaOS variants are named for fish. Keep VERSION_CODENAME tied to that
 # identity instead of inheriting the unrelated legacy dinosaur codename.
 # Generic common names use one stable representative species.
-case "${IMAGE_NAME}" in
+#
+# Keyed on the canonical variant id, not on IMAGE_NAME: IMAGE_NAME carries the
+# *publish* name (`bonito` for bonito-rawhide, `flounder` for flounder-sid) and,
+# on bases where the Containerfile does not pin it, whatever lib.sh derived from
+# the base image. IMAGE_NAME_VARIANT is the variant id build-image-inner.sh
+# passes verbatim, so prefer it and fall back to the canonicalized IMAGE_NAME.
+VARIANT_KEY="$(canonical_variant "${IMAGE_NAME_VARIANT:-${IMAGE_NAME}}")"
+case "${VARIANT_KEY}" in
 yellowfin) CODE_NAME="Thunnus albacares" ;;
 albacore) CODE_NAME="Thunnus alalunga" ;;
 skipjack) CODE_NAME="Katsuwonus pelamis" ;;
@@ -44,25 +78,91 @@ guppy) CODE_NAME="Poecilia reticulata" ;;
 grouper) CODE_NAME="Epinephelus marginatus" ;;
 marlin) CODE_NAME="Makaira nigricans" ;;
 hummingbird) CODE_NAME="Trochilidae" ;;
+gurnard) CODE_NAME="Chelidonichthys lucerna" ;;
 flounder | flounder-sid) CODE_NAME="Platichthys flesus" ;;
 *)
-	echo "ERROR: no scientific fish codename defined for variant: ${IMAGE_NAME}" >&2
+	echo "ERROR: no scientific fish codename defined for variant: ${VARIANT_KEY}" \
+		"(IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT:-unset}, IMAGE_NAME=${IMAGE_NAME})" >&2
 	exit 1
 	;;
 esac
 
 chmod 644 $IMAGE_INFO
 
+# Which os-release files to write.
+#
+# /usr/lib/os-release is the canonical one, but writing ONLY it is not enough:
+# a base can ship a second, *real* /etc/os-release rather than the conventional
+# symlink into /usr/lib. Arch is exactly that case — its `filesystem` package
+# installs only usr/lib/os-release (verified against filesystem-2025.10.12),
+# and the archlinux container image adds an independent /etc copy on top.
+#
+# Everything that asks "what OS is this" — systemd, GNOME About, GDM,
+# fastfetch, and build_scripts/checks/verify-branding.sh:61 — looks at
+# /etc/os-release first. So marlin's /usr/lib/os-release said "Marlin" while
+# the file every reader consulted still said Arch Linux, with Arch's support
+# URLs and archlinux-logo. Run 31013418173 reported all ten branding fields as
+# upstream for exactly this reason, while image-info.json (a separate file,
+# written by this same script) was correct — which is what made it look like
+# the script had not run at all.
+#
+# `-ef` compares device+inode through symlinks, so the conventional
+# /etc/os-release -> ../usr/lib/os-release layout adds nothing here and is
+# left as a symlink. Only a genuinely separate file gets written twice.
+#
+# The two paths are overridable for tests only, the same way
+# verify-branding.sh takes TUNAOS_OS_RELEASE; builds never set them.
+OS_RELEASE_USR="${TUNAOS_OS_RELEASE_USR:-/usr/lib/os-release}"
+OS_RELEASE_ETC="${TUNAOS_OS_RELEASE_ETC:-/etc/os-release}"
+OS_RELEASE_FILES=("$OS_RELEASE_USR")
+if [[ -e "$OS_RELEASE_ETC" ]] && ! [[ "$OS_RELEASE_ETC" -ef "$OS_RELEASE_USR" ]]; then
+	OS_RELEASE_FILES+=("$OS_RELEASE_ETC")
+fi
+
+# Replace-or-append, never blind append, and never substitute-only.
+#
+# These used to be written two different wrong ways.
+#
+# `tee -a` is only correct when the base does not already define the key.
+# Ubuntu DOES define SUPPORT_URL, so grouper shipped os-release containing BOTH
+#
+#   SUPPORT_URL="https://help.ubuntu.com/"          <- upstream, line 1
+#   SUPPORT_URL="https://github.com/tuna-os/..."    <- ours, appended
+#
+# and which one wins depends entirely on the reader. Shell sourcing takes the
+# last; every `grep ... | head -1` parser — including
+# build_scripts/checks/verify-branding.sh — takes the FIRST, i.e. Ubuntu's. So
+# the field was never "lost": it was set correctly and then out-voted by the
+# copy already there. A duplicate key is worse than a missing one, because both
+# readings are defensible and the file looks right to whoever greps it the way
+# that agrees with them.
+#
+# A bare `sed s|^KEY=.*|...|` has the mirror-image flaw: it is only correct
+# when the base ALREADY defines the key, and silently does nothing when it
+# does not. No RPM base defines VERSION_CODENAME and Arch defines neither it
+# nor VARIANT_ID, so the fish codename never landed on yellowfin, skipjack,
+# albacore (#1007) or marlin (#1015) — the substitution matched no line and
+# exited 0.
+osr_set() {
+	local key="$1" value="$2" file
+	for file in "${OS_RELEASE_FILES[@]}"; do
+		if grep -q "^${key}=" "$file"; then
+			# `|` delimiter rather than `/`: values may contain slashes (URLs).
+			sed -i "s|^${key}=.*|${key}=\"${value}\"|" "$file"
+		else
+			echo "${key}=\"${value}\"" >>"$file"
+		fi
+	done
+}
+
 # OS Release File (changed in order with upstream)
-sed -i -f - /usr/lib/os-release <<EOF
-s/^NAME=.*/NAME=\"${IMAGE_PRETTY_NAME}\"/
-s|^VERSION_CODENAME=.*|VERSION_CODENAME=\"${CODE_NAME}\"|
-s/^VARIANT_ID=.*/VARIANT_ID=${IMAGE_NAME}/
-s|^PRETTY_NAME=.*|PRETTY_NAME=\"${IMAGE_PRETTY_NAME}\"|
-s|^HOME_URL=.*|HOME_URL=\"${HOME_URL}\"|
-s|^BUG_REPORT_URL=.*|BUG_REPORT_URL=\"${BUG_SUPPORT_URL}\"|
-s|^CPE_NAME=.*|CPE_NAME=\"cpe:/o:jamesreilly:${IMAGE_NAME}-tunaos\"|
-EOF
+osr_set NAME "${IMAGE_PRETTY_NAME}"
+osr_set VERSION_CODENAME "${CODE_NAME}"
+osr_set VARIANT_ID "${IMAGE_NAME}"
+osr_set PRETTY_NAME "${IMAGE_PRETTY_NAME}"
+osr_set HOME_URL "${HOME_URL}"
+osr_set BUG_REPORT_URL "${BUG_SUPPORT_URL}"
+osr_set CPE_NAME "cpe:/o:jamesreilly:${IMAGE_NAME}-tunaos"
 
 # Dynamically interpolate the specific variant name and logo path in the installer recipe.json
 RECIPE_FILE="/etc/bootc-installer/recipe.json"
@@ -127,38 +227,6 @@ with open('${RECIPE_FILE}', 'w') as f:
 " || true
 fi
 
-# Ensure VARIANT_ID is set — the sed substitution above only replaces an
-# existing line; AlmaLinux base images omit it entirely.
-if ! grep -q "^VARIANT_ID=" /usr/lib/os-release; then
-	echo "VARIANT_ID=${IMAGE_NAME}" >>/usr/lib/os-release
-fi
-
-# Replace-or-append, never blind append.
-#
-# These four used to be written with `tee -a`, which is only correct when the
-# base does not already define the key. Ubuntu DOES define SUPPORT_URL, so
-# grouper shipped os-release containing BOTH
-#
-#   SUPPORT_URL="https://help.ubuntu.com/"          <- upstream, line 1
-#   SUPPORT_URL="https://github.com/tuna-os/..."    <- ours, appended
-#
-# and which one wins depends entirely on the reader. Shell sourcing takes the
-# last; every `grep ... | head -1` parser — including
-# build_scripts/checks/verify-branding.sh:74 — takes the FIRST, i.e. Ubuntu's.
-# So the field was never "lost": it was set correctly and then out-voted by the
-# copy already there. A duplicate key is worse than a missing one, because both
-# readings are defensible and the file looks right to whoever greps it the way
-# that agrees with them.
-osr_set() {
-	local key="$1" value="$2"
-	if grep -q "^${key}=" /usr/lib/os-release; then
-		# `|` delimiter rather than `/`: values may contain slashes (URLs).
-		sed -i "s|^${key}=.*|${key}=\"${value}\"|" /usr/lib/os-release
-	else
-		echo "${key}=\"${value}\"" >>/usr/lib/os-release
-	fi
-}
-
 osr_set DOCUMENTATION_URL "${DOCUMENTATION_URL}"
 osr_set SUPPORT_URL "${SUPPORT_URL}"
 osr_set DEFAULT_HOSTNAME "${IMAGE_NAME}"
@@ -173,11 +241,9 @@ osr_set VARIANT "${IMAGE_PRETTY_NAME} ${IMAGE_FLAVOR}"
 osr_set IMAGE_ID "${IMAGE_NAME}"
 osr_set IMAGE_VERSION "${IMAGE_FLAVOR}-${SHA_HEAD_SHORT:-testing}"
 
-# LOGO is deliberately NOT set here. verify-branding.sh also asserts the
-# referenced asset exists under /usr/share/pixmaps or hicolor, and this repo
-# ships no logo file at all — so naming one would swap "LOGO is upstream" for
-# "LOGO names a file that does not exist", which renders as a blank icon in
-# GNOME About, GDM and fastfetch. That needs an actual asset, not an
-# os-release line.
+# LOGO names the distro icon read by GNOME About, GDM, KDE and fastfetch.
+# We ship the asset at /usr/share/pixmaps/tunaos.svg (repo system_files), so
+# the verify-branding.sh asset check passes too.
+osr_set LOGO "tunaos"
 
 printf "::endgroup::\n"

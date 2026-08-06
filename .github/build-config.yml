@@ -954,9 +954,20 @@ variants:
         stage: 2
         build_image: true
         build_iso: true
-      - id: cosmic
-        stage: 2
-        build_image: true
+      # No cosmic: COSMIC is not packaged in Debian AT ALL. Checked every
+      # suite via ftp-master's madison API (oldoldstable through unstable and
+      # experimental) for cosmic-session, cosmic-comp, cosmic-panel,
+      # cosmic-files, cosmic-term, cosmic-settings, cosmic-greeter and
+      # xdg-desktop-portal-cosmic — every one returns empty, while a control
+      # (kde-plasma-desktop) returns suites. The apt section of
+      # manifests/desktops/cosmic.yaml is served by ppa:hepp3n/cosmic-epoch,
+      # which is `condition: ubuntu` and publishes for resolute only, so on a
+      # Debian base the package list has no source at all:
+      #   E: Unable to locate package cosmic-comp   (and 18 more)
+      # flounder:cosmic, LUKS run 31087927879. Same reason niri is absent
+      # below; it fails louder only because apt exits 100 on an unknown name
+      # while niri.yaml had no apt section at all, so that one installed
+      # nothing and exited 0. Do not re-add without a Debian source for COSMIC.
       # No niri: it is not packaged for apt in Debian trixie, Debian sid or
       # Ubuntu 26.04 (all three checked), and manifests/desktops/niri.yaml
       # has no apt section as a result. Building it produced a PUBLISHED,
@@ -968,7 +979,7 @@ variants:
         stage: 2
         build_image: true
 
-  # Flounder-sid: Debian Sid (unstable/rolling). Has latest COSMIC natively.
+  # Flounder-sid: Debian Sid (unstable/rolling).
   - id: flounder-sid
     publish_name: flounder
     tag_suffix: sid
@@ -988,9 +999,9 @@ variants:
       - id: kde
         stage: 2
         build_image: true
-      - id: cosmic
-        stage: 2
-        build_image: true
+      # No cosmic — same reason as flounder above. The header on this variant
+      # used to read "Has latest COSMIC natively"; it does not. sid returns
+      # empty from madison for every cosmic binary, exactly like trixie.
       # No niri — same reason as flounder above (absent from Debian sid too).
       - id: xfce
         stage: 2

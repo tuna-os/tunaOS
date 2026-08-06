@@ -1,0 +1,44 @@
+// TunaOS niri default configuration.
+//
+// Shipped as the compositor's built-in default (first boot gets this, not
+// niri's upstream defaults). User overrides land in
+// ~/.config/niri/config.kdl and win via niri's config-file layering.
+//
+// Keybinds follow niri's upstream defaults (Super+Shift+/ for the keybind
+// list) with TunaOS extras where the upstream has no default.
+
+input {
+    keyboard {
+        xkb {
+            rules "evdev"
+            model "pc105"
+        }
+    }
+    touchpad {
+        tap
+        natural-scroll
+    }
+}
+
+output "eDP-1" {
+    scale 1.0
+}
+
+// TunaOS branded wallpaper via swaybg. niri draws no wallpaper itself;
+// swaybg is the lightweight daemon the image ships for that.
+spawn-at-startup "swaybg" "-i" "/usr/share/backgrounds/tunaos/tunaos-default.png" "-m" "fill"
+
+// Session infrastructure.
+spawn-at-startup "waybar"
+spawn-at-startup "nm-applet"
+spawn-at-startup "swaync"
+
+// Clipboard and notifications.
+spawn-at-startup "wl-paste" "--watch" "cliphist" "store"
+
+preferred-scale 1.0
+
+window-rule {
+    match app-id="org.gnome.Nautilus" is-active
+    default-column-width { fixed 900 }
+}

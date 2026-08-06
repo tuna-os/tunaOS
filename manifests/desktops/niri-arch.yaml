@@ -11,13 +11,26 @@
 #
 # Every package below was verified present in core/extra for x86_64.
 
-# CAVEAT: greetd here has no greeter UI. Fedora gets dms-greeter from COPR;
-# Arch has no official equivalent, so greetd.service exists (which is what the
-# #857 desktop-contract gate checks) but nothing draws a login screen. LUKS E2E
-# never looks at the screen — it drives fisherman over SSH — so marlin:niri can
-# go green while booting to a blank greetd. Do not read a green LUKS cell here
-# as "the session is usable"; that needs installer smoke on a GPU host.
-# Tracked alongside the other niri packaging gaps.
+# GREETER: there is no DMS greeter here, but there IS an official graphical one.
+#
+# This file used to claim "Arch has no official equivalent" and left greetd on
+# its packaged config. That config runs `agreety --cmd /bin/sh`, and agreety is
+# NOT part of Arch's greetd package: it ships in greetd-agreety, which nothing
+# installed. So greetd came up pointed at a binary that was not on the image:
+#
+#   $ pacman -Ql greetd | grep bin/
+#   greetd /usr/bin/greetd          <- and nothing else
+#   $ pacman -F usr/bin/agreety
+#   usr/bin/agreety is owned by extra/greetd-agreety
+#
+# With Restart=always in the packaged unit that is a restart loop, not the text
+# prompt the old comment assumed. Arch does carry the same fallback stack
+# openSUSE uses, greetd-gtkgreet (/usr/bin/gtkgreet) and cage, both in
+# [extra], so wire that up instead, via the shared greetd-gtkgreet.sh below.
+#
+# Still absent, and still a real gap: the DankMaterialShell session (quickshell,
+# dms, dms-greeter) has no official Arch packaging, so this is a plain niri
+# session with a gtkgreet login rather than a DMS one.
 display_manager: greetd
 
 packages:
@@ -25,6 +38,13 @@ packages:
     # Compositor and session
     - niri
     - greetd
+    # The greeter. Arch splits every greetd frontend into its own package and
+    # installs none of them with greetd itself, so naming one is mandatory:
+    # without it greetd's stock config points at an absent agreety. gtkgreet is
+    # a plain Wayland client and cannot own a VT, so cage hosts it; the pair
+    # greetd-gtkgreet.sh expects, matching the zypper section of niri.yaml.
+    - greetd-gtkgreet
+    - cage
     - xwayland-satellite
     # Shell surfaces
     - waybar
@@ -32,6 +52,9 @@ packages:
     - swaync
     - swaylock
     - swayidle
+    # Wallpaper: niri draws none itself; swaybg renders the branded one.
+    - swaybg
+    - cliphist
     # Integration
     - xdg-desktop-portal-gnome
     - xdg-desktop-portal-gtk
@@ -73,3 +96,7 @@ versionlock: []
 # Post-install scripts to source (relative to build_scripts/)
 post_install:
   - tuna-flatpak-remote.sh
+  # Replaces greetd's stock agreety config with gtkgreet under cage. Self-gating
+  # on `command -v gtkgreet && command -v cage`, so it is a no-op if that
+  # packaging ever regresses rather than writing a config for a missing greeter.
+  - greetd-gtkgreet.sh

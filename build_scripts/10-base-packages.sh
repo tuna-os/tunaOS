@@ -32,7 +32,6 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 		fdisk \
 		flatpak \
 		distrobox \
-		fastfetch \
 		fwupd \
 		dbus-daemon \
 		fuse-overlayfs \
@@ -46,9 +45,7 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 		systemd-oomd \
 		power-profiles-daemon \
 		fzf \
-		glow \
 		wl-clipboard \
-		gum \
 		wayland-utils \
 		grim \
 		x11-xserver-utils \
@@ -63,6 +60,24 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 		gstreamer1.0-plugins-ugly \
 		gstreamer1.0-libav \
 		libavcodec-extra
+
+	# Release-dependent extras, best-effort.
+	#
+	# These three are in Ubuntu resolute (grouper) but NOT in noble (gurnard):
+	# fastfetch landed after 24.04, and glow/gum (charmbracelet) later still.
+	# apt fails the entire transaction on one unknown name, so listing them
+	# above took the whole base install down with
+	#
+	#   E: Unable to locate package fastfetch
+	#   E: Unable to locate package glow
+	#   E: Unable to locate package gum
+	#
+	# and gurnard could not build at all (LUKS run 31059184838) — the other 40
+	# packages were fine. They are conveniences (a fetch tool and two TUI
+	# helpers), not part of any contract, so a release that lacks them should
+	# lose them and nothing else. apt_install_available names each one it skips
+	# rather than dropping them quietly.
+	apt_install_available fastfetch glow gum
 
 	# Remove unwanted packages
 	# shellcheck disable=SC2015 # intentional: A&&B||true is a guard pattern

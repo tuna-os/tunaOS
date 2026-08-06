@@ -1,0 +1,15 @@
+# TunaOS KDE defaults — derived from ublue-os/aurora (the KDE reference
+# image): LookAndFeelPackage + BreezeDark are exactly what Aurora ships.
+[KDE]
+LookAndFeelPackage=org.tunaos.desktop
+SingleClick=false
+ColorScheme=BreezeDark
+widgetStyle=Breeze
+
+[General]
+desktopFont=Noto Sans,10,-1,5,50,0,0,0,0,0
+fixed=Monospace,10,-1,5,50,0,0,0,0,0
+font=Noto Sans,10,-1,5,50,0,0,0,0,0
+menuFont=Noto Sans,10,-1,5,50,0,0,0,0,0
+smallestReadableFont=Noto Sans,8,-1,5,50,0,0,0,0,0
+toolBarFont=Noto Sans,9,-1,5,50,0,0,0,0,0
