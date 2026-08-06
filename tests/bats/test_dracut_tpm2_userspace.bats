@@ -82,6 +82,17 @@ strip_comments() { grep -v '^[[:space:]]*#' || true; }
     # runs the same two `command -v` probes and has its own tests, so a base on
     # it cannot drift. Writing the line inline is fine for a base not yet moved.
     if grep -qE 'bootc/dracut-config\.sh' <<<"$code"; then
+      # Delegation only covers this base while the script still does the thing
+      # delegated to it. Assert the probe, or the omission can be deleted one
+      # file away from every Containerfile that depends on it.
+      local shared="${REPO_ROOT}/build_scripts/bootc/dracut-config.sh"
+      grep -qE 'omit_dracutmodules' "$shared" &&
+        grep -qE 'command -v pcscd([[:space:]]|$)' "$shared" || {
+        echo "FAIL: ${f} delegates its dracut config to dracut-config.sh, but" >&2
+        echo "      that script no longer probes pcscd and omits what is" >&2
+        echo "      missing — so nothing omits pcsc on this base any more." >&2
+        fail=1
+      }
       continue
     fi
     if ! grep -qE 'omit_dracutmodules' <<<"$code"; then
