@@ -197,3 +197,88 @@ PY
     }
   done
 }
+
+@test "install-desktop.sh never runs before the branding assets are in place" {
+  # Branding is not only os-release. Three of the contract's fourteen
+  # assertions are about files, and running 90-image-info.sh does not put them
+  # there:
+  #
+  #   FAIL: LOGO=tunaos but no matching file under /usr/share/pixmaps or hicolor
+  #   FAIL: no TunaOS wallpaper under /usr/share/backgrounds (only upstream artwork)
+  #   FAIL: plymouth default is not a TunaOS theme
+  #   TUNAOS_BRANDING_FAIL variant=guppy failures=3
+  #
+  # That is what Containerfile.gentoo's desktop-build measured once it was
+  # branded but before it had system_files: the assets are
+  # /usr/share/pixmaps/tunaos.svg, /usr/share/backgrounds/tunaos and the
+  # default.plymouth symlink into themes/tunaos, and they arrive one of exactly
+  # two ways — `COPY --from=context /files /`, or 00-copy-files.sh, which
+  # copies the same tree (Containerfile.ubuntu and .el10 fold common's shared
+  # files into /files at the context stage and take that path).
+  local f
+  for f in "${CONTAINERFILES[@]}"; do
+    run python3 - "${REPO_ROOT}/$f" <<'PY'
+import re, sys
+path = sys.argv[1]
+lines = open(path).read().split('\n')
+
+bounds = []
+for i, l in enumerate(lines):
+    m = re.match(r'^FROM\s+(\S+)(?:\s+[Aa][Ss]\s+(\S+))?', l)
+    if m:
+        bounds.append((i, m.group(2) or f'<anon{i}>', m.group(1)))
+bounds.append((len(lines), '<eof>', None))
+
+def is_asset_copy(l):
+    # The image-side copy, not the context stage assembling /files from
+    # `COPY system_files /files` (which has no --from=context).
+    if re.match(r'^\s*COPY\s+--from=context\s+/files\s+/\s*$', l):
+        return True
+    return '00-copy-files.sh' in l
+
+stages = {}
+for k in range(len(bounds) - 1):
+    s, e = bounds[k][0], bounds[k + 1][0]
+    name, parent = bounds[k][1], bounds[k][2]
+    code = [l for l in lines[s:e] if not l.lstrip().startswith('#')]
+    assets = next((off for off, l in enumerate(code) if is_asset_copy(l)), None)
+    desk = next((off for off, l in enumerate(code)
+                 if 'install-desktop.sh' in l), None)
+    stages[name] = dict(parent=parent, assets=assets, desk=desk)
+
+def assets_above(name, seen=None):
+    seen = seen or set()
+    st = stages.get(name)
+    if not st or name in seen:
+        return False
+    seen.add(name)
+    if st['assets'] is not None:
+        return True
+    parent = st['parent'] if st['parent'] in stages else None
+    return assets_above(parent, seen) if parent else False
+
+bad = []
+for name, st in stages.items():
+    if st['desk'] is None:
+        continue
+    if st['assets'] is not None:
+        if st['assets'] < st['desk']:
+            continue
+        bad.append(f"{name}: the branding assets are copied AFTER install-desktop.sh")
+        continue
+    parent = st['parent'] if st['parent'] in stages else None
+    if not (parent and assets_above(parent)):
+        bad.append(f"{name}: install-desktop.sh runs with no branding assets anywhere above it")
+
+if bad:
+    print(f"{path}:")
+    for b in bad:
+        print(f"  {b}")
+    sys.exit(1)
+PY
+    [ "$status" -eq 0 ] || {
+      echo "$output" >&2
+      return 1
+    }
+  done
+}

@@ -235,6 +235,26 @@ RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/90-image-info.sh
 
+# The branding contract is not satisfied by os-release alone: three of its
+# fourteen assertions are about files, and those files come from system_files,
+# which this stage did not have. Running 90-image-info.sh here takes the
+# failures from fourteen to three, all of them assets:
+#
+#   FAIL: LOGO=tunaos but no matching file under /usr/share/pixmaps or hicolor
+#   FAIL: no TunaOS wallpaper under /usr/share/backgrounds (only upstream artwork)
+#   FAIL: plymouth default is not a TunaOS theme
+#   TUNAOS_BRANDING_FAIL variant=guppy failures=3
+#
+# (measured in a gentoo/stage3 container against this tree: os-release branded,
+# system_files absent). They are /usr/share/pixmaps/tunaos.svg,
+# /usr/share/backgrounds/tunaos, and the default.plymouth symlink into
+# themes/tunaos — all three carried by these two copies and nothing else. The
+# `desktop` stage below copies them a second time, deliberately: its /var wipe
+# and portage relocation come between, and that stage's copy is what ends up in
+# the shipped image.
+COPY --from=context /files /
+COPY --from=common /system_files/shared /
+
 # Desktop-only portage config, applied AFTER the base @world (any global
 # flag change at base makes @world --newuse schedule from-source multilib
 # rebuilds that die on pam<->systemd / ncurses<->gpm build cycles):
