@@ -41,7 +41,7 @@ corral create --help 2>&1 | grep -q -- '--bootc' || {
 # plasmalogin; xfce is lightdm on X11 bases and greetd on the Wayland ones).
 # Any one active counts as a pass.
 case "$FLAVOR" in
-kde*) DM="sddm plasmalogin" ;; niri* | cosmic*) DM=greetd ;; xfce*) DM="lightdm greetd gdm" ;; *) DM="gdm gdm3" ;;
+kde*) DM="sddm plasmalogin" ;; cosmic*) DM="greetd cosmic-greeter" ;; niri*) DM=greetd ;; xfce*) DM="lightdm greetd gdm" ;; *) DM="gdm gdm3" ;;
 esac
 
 NODE_ARGS=()

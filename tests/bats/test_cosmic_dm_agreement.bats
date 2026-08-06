@@ -1,10 +1,17 @@
 #!/usr/bin/env bats
-# Which display manager COSMIC uses is encoded in three places, and they have
+# Which display manager COSMIC uses is encoded in five places, and they have
 # to agree or the image fails somewhere between build and boot:
 #
 #   1. configure-desktop-runtime.sh   which unit gets `systemctl enable`d
 #   2. verify-desktop-experience.sh   dm_pattern, checked in the booted VM
 #   3. manifests/desktops/cosmic.yaml which greeter is installed at all
+#   4. e2e-runtime-checks.sh          the installed-system TAP DM assertion
+#   5. scripts/boot-gate.sh           the local corral boot gate
+#
+# (4) and (5) assert the same fact as (2) against the same booted image, so a
+# fix that only widens (2) leaves the gate emitting
+# "not ok - display manager matches cosmic contract" as a ::warning:: — and a
+# hard failure under E2E_SMOKE_STRICT=1 — for an image that is working.
 #
 # Adding cosmic-greeter to the Ubuntu package list broke (1) — its postinst
 # claims display-manager.service, so enabling greetd failed the build. Fixing
@@ -64,4 +71,28 @@ cosmic_contract_block() {
   [ "$output" -ge 1 ]
   run bash -c "$(declare -f cosmic_contract_block); CONTRACT='$CONTRACT'; cosmic_contract_block"
   [[ "$output" == *'cosmic-greeter'* ]]
+}
+
+# ── The two other assertions on the same booted image ─────────────────────
+
+@test "the installed-system TAP checks accept both greeters" {
+  # e2e-runtime-checks.sh runs from /usr/libexec in the booted VM alongside the
+  # desktop contract, and iso-e2e.sh harvests its fail count off the serial
+  # console. Its cosmic arm has to say what the contract says.
+  run grep -E '^cosmic\) dm_pattern=' "${REPO_ROOT}/build_scripts/checks/e2e-runtime-checks.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *cosmic-greeter* ]]
+  [[ "$output" == *greetd* ]]
+  # niri must not have been dragged along by the split.
+  run grep -qE '^niri \| cosmic\)' "${REPO_ROOT}/build_scripts/checks/e2e-runtime-checks.sh"
+  [ "$status" -ne 0 ]
+  run grep -qE "^niri\) dm_pattern='\^greetd" "${REPO_ROOT}/build_scripts/checks/e2e-runtime-checks.sh"
+  [ "$status" -eq 0 ]
+}
+
+@test "boot-gate.sh accepts both greeters for cosmic" {
+  run grep -oE 'cosmic\*\) DM="[^"]*"' "${REPO_ROOT}/scripts/boot-gate.sh"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *cosmic-greeter* ]]
+  [[ "$output" == *greetd* ]]
 }
