@@ -308,6 +308,13 @@ RUN printf '#!/bin/sh\nexit 0\n' | tee \
 # ENABLE_ASAHI=1 (arm64 only) swaps in the UbuntuAsahi PPA 16K-page Apple
 # Silicon kernel + platform userspace instead of linux-generic — see
 # build_scripts/ubuntu-kernel.sh.
+#
+# The generic path is not "install linux-generic": these images are
+# composefs-native and bootc mounts the composefs image from an open file
+# (CONFIG_EROFS_FS_BACKED_BY_FILE, Linux 6.12+), which noble's GA 6.8 kernel
+# cannot do and its HWE kernel can. ubuntu-kernel.sh reads the config of the
+# kernel it is about to install and picks accordingly — the same "ask, don't
+# assume the release" shape as the libostree build above.
 ARG ENABLE_ASAHI="${ENABLE_ASAHI:-0}"
 ENV ENABLE_ASAHI=${ENABLE_ASAHI}
 RUN --mount=type=tmpfs,dst=/tmp \

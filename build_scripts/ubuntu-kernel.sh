@@ -1,7 +1,11 @@
 #!/usr/bin/env bash
 # Kernel + firmware install for grouper (Ubuntu). Two paths:
 #
-#   default          — stock linux-generic + linux-firmware (all arches)
+#   default          — generic kernel + linux-firmware (all arches). linux-generic
+#                      unless its kernel cannot mount a composefs image from a
+#                      file, in which case the release's HWE kernel — see
+#                      select_kernel_pkg() for why that is a correctness
+#                      requirement and not a hardware preference.
 #   ENABLE_ASAHI=1   — Apple Silicon (M1/M2) support from the UbuntuAsahi PPA:
 #                      16K-page asahi kernel, m1n1 + U-Boot payloads,
 #                      update-m1n1, ESP firmware extraction, audio DSP stack.
@@ -15,13 +19,126 @@
 # only works if 99asahi-firmware + 91kernel-modules-asahi are in that build.
 set -xeuo pipefail
 
+# Overridable so the selection below can be exercised in a tree the test owns.
+MODULES_DIR="${MODULES_DIR:-/usr/lib/modules}"
+BOOT_DIR="${BOOT_DIR:-/boot}"
+
+# CONFIG_EROFS_FS_BACKED_BY_FILE landed in Linux 6.12. Only consulted when the
+# archive publishes no .config for a kernel (see kernel_can_mount_composefs).
+EROFS_FILE_BACKED_SINCE="6.12"
+
+# stderr, not stdout: select_kernel_pkg's answer is read by the caller through a
+# command substitution, and a log line on stdout becomes part of the package
+# name apt is then asked to install.
+log() { echo "ubuntu-kernel: $*" >&2; }
+
+# The kernel version a meta-package would pull in, without installing it.
+kernel_pkg_kver() {
+	apt-get install -s -y --no-install-recommends "$1" 2>/dev/null |
+		sed -n 's/^Inst linux-image-\([0-9][^ ]*\) .*/\1/p' | head -1
+}
+
+# 0 = this kernel's .config has CONFIG_EROFS_FS_BACKED_BY_FILE, 1 = it does not,
+# 2 = the archive publishes no .config for it (no linux-buildinfo on this arch).
+kernel_config_has_file_backed_erofs() {
+	local kver="$1" dir config rc=1
+	dir="$(mktemp -d)"
+	# linux-buildinfo ships only the .config (~600 KB) — the same package the
+	# asahi path below uses to prove CONFIG_ARM64_16K_PAGES.
+	if ! (cd "$dir" && apt-get download -y "linux-buildinfo-${kver}" >/dev/null 2>&1); then
+		rm -rf "$dir"
+		return 2
+	fi
+	dpkg-deb -x "$dir"/linux-buildinfo-*.deb "${dir}/x"
+	config="$(find "${dir}/x" -type f -name config | head -1)"
+	if [ -z "$config" ]; then
+		rm -rf "$dir"
+		return 2
+	fi
+	grep -q '^CONFIG_EROFS_FS_BACKED_BY_FILE=y$' "$config" && rc=0
+	rm -rf "$dir"
+	return "$rc"
+}
+
+# Can this kernel mount the composefs image bootc installs? Asks the shipped
+# .config, and only falls back to a version comparison when there is none.
+kernel_can_mount_composefs() {
+	local kver="$1" rc=0
+	kernel_config_has_file_backed_erofs "$kver" || rc=$?
+	case "$rc" in
+	0) return 0 ;;
+	1) return 1 ;;
+	esac
+	log "no linux-buildinfo-${kver} to read; comparing ${kver} against ${EROFS_FILE_BACKED_SINCE}"
+	dpkg --compare-versions "${kver%%-*}" ge "$EROFS_FILE_BACKED_SINCE"
+}
+
+# Which kernel meta-package to install.
+#
+# THIS IS NOT A HARDWARE-ENABLEMENT PREFERENCE. Our images are composefs-native
+# (prepare-root.conf sets [composefs] enabled), and bootc mounts the composefs
+# image by handing EROFS an open file: `source=/proc/self/fd/<n>`. That is a
+# file-backed mount, CONFIG_EROFS_FS_BACKED_BY_FILE, Linux 6.12+. A kernel
+# without it has no way to mount an image that is not a block device, so EROFS
+# falls through to get_tree_bdev and the install dies:
+#
+#   e /proc/self/fd/19: Can't lookup blockdev
+#   error: Installing to filesystem: Setting up composefs boot: Failed to mount
+#          composefs image: ... Creating filesystem mount: Block device
+#          required (os error 15)
+#
+# (gurnard:pantheon, LUKS run 31071830439 — after 12 minutes of ISO build and a
+# fully partitioned, LUKS-formatted disk.) The releases this file serves differ
+# on exactly this symbol:
+#
+#   resolute (26.04, grouper)  GA 7.0.0   CONFIG_EROFS_FS_BACKED_BY_FILE=y
+#   noble    (24.04, gurnard)  GA 6.8.0   absent — HWE 7.0.0 has it
+#
+# so the choice is made by reading the config of the kernel we are about to
+# install, not by branching on a release name and not by a version table that
+# goes stale the next time either release moves.
+select_kernel_pkg() {
+	local ga_pkg="linux-generic" ga_kver hwe_pkg hwe_kver
+	ga_kver="$(kernel_pkg_kver "$ga_pkg")"
+	[ -n "$ga_kver" ] || {
+		echo "ERROR: apt offers no ${ga_pkg} to install" >&2
+		exit 1
+	}
+	if kernel_can_mount_composefs "$ga_kver"; then
+		echo "$ga_pkg"
+		return 0
+	fi
+
+	# The HWE meta-package name comes from the archive rather than from
+	# /etc/os-release, whose VERSION_ID and VERSION_CODENAME 90-image-info.sh
+	# rebrands (that rebranding is what broke add-apt-repository in #1014).
+	hwe_pkg="$(apt-cache search --names-only '^linux-generic-hwe-[0-9]+\.[0-9]+$' |
+		awk '{print $1}' | sort -V | tail -1)"
+	if [ -n "$hwe_pkg" ]; then
+		hwe_kver="$(kernel_pkg_kver "$hwe_pkg")"
+		if [ -n "$hwe_kver" ] && kernel_can_mount_composefs "$hwe_kver"; then
+			log "${ga_pkg} (${ga_kver}) cannot mount a composefs image from a file; using ${hwe_pkg} (${hwe_kver})"
+			echo "$hwe_pkg"
+			return 0
+		fi
+	fi
+
+	echo "ERROR: no kernel available to this base can mount a composefs image" >&2
+	echo "       from a file: ${ga_pkg} gives ${ga_kver}${hwe_kver:+ and ${hwe_pkg} gives ${hwe_kver}}," >&2
+	echo "       none with CONFIG_EROFS_FS_BACKED_BY_FILE (Linux ${EROFS_FILE_BACKED_SINCE}+)." >&2
+	echo "       bootc's composefs backend needs it; failing here rather than" >&2
+	echo "       shipping an image whose install dies in a QEMU guest." >&2
+	exit 1
+}
+
 apt-get update -y
 
 if [ "${ENABLE_ASAHI:-0}" != "1" ]; then
+	KERNEL_PKG="$(select_kernel_pkg)"
 	apt-get -o Dpkg::Options::="--force-confold" install -y --no-install-recommends \
-		linux-generic linux-firmware
-	KVER=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1 | xargs basename)
-	cp "/boot/vmlinuz-${KVER}" "/usr/lib/modules/${KVER}/vmlinuz"
+		"$KERNEL_PKG" linux-firmware
+	KVER=$(find "$MODULES_DIR" -maxdepth 1 -mindepth 1 -type d | sort -V | tail -1 | xargs basename)
+	cp "${BOOT_DIR}/vmlinuz-${KVER}" "${MODULES_DIR}/${KVER}/vmlinuz"
 	apt-get clean -y && rm -rf /var/lib/apt/lists/*
 	exit 0
 fi
