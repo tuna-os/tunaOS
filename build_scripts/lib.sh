@@ -332,7 +332,7 @@ pkg_install() {
 	elif [[ "$PKG_MGR" == "pacman" ]]; then
 		pacman -S --noconfirm --needed "$@"
 	elif [[ "$PKG_MGR" == "zypper" ]]; then
-		zypper --non-interactive in --no-recommends "$@"
+		zypper_retry --non-interactive in --no-recommends "$@"
 	elif [[ "$PKG_MGR" == "emerge" ]]; then
 		emerge --verbose --getbinpkg "$@"
 	elif [[ "$PKG_MGR" == "dnf" ]]; then
@@ -374,7 +374,7 @@ pkg_refresh() {
 	case "$PKG_MGR" in
 	apt) apt-get update ;;
 	pacman) pacman -Sy --noconfirm ;;
-	zypper) zypper --non-interactive --gpg-auto-import-keys refresh ;;
+	zypper) zypper_retry --non-interactive --gpg-auto-import-keys refresh ;;
 	emerge) emerge --sync --quiet || emaint sync -a ;;
 	dnf) dnf makecache ;;
 	*)
@@ -431,6 +431,50 @@ dnf_retry() {
 		attempt=$((attempt + 1))
 	done
 	echo "dnf failed after ${max_attempts} attempts" >&2
+	return "$rc"
+}
+
+# zypper's counterpart to dnf_retry, and for the same reason.
+#
+# Tumbleweed publishes snapshots continuously, and a build that lands mid-sync
+# gets a repomd.xml pointing at a primary.xml that the mirror has already
+# rotated away:
+#
+#   Repository 'openSUSE-Tumbleweed-Oss' is invalid.
+#   [repo-oss|...] Failed to retrieve new repository metadata.
+#    - File './repodata/<hash>-primary.xml.zst' not found on medium ...
+#   Warning: Skipping repository 'openSUSE-Tumbleweed-Oss' because of the above error.
+#
+# zypper treats that as a WARNING and carries on with the repositories that did
+# refresh — so the build continues with the main repository silently absent and
+# dies later somewhere unrelated, wearing a misleading message:
+#
+#   Package 'systemd-network' not found.        (it is in repo-oss)
+#   ...40-services.sh... exit status 104
+#
+# That killed sailfin:niri in LUKS run 31089226102 with nothing wrong in the
+# tree. dnf has had dnf_retry for exactly this class since #1015; the zypper
+# path never got one, which is the same one-of-N-package-managers gap as the
+# openssh install and the pcsc omit line.
+#
+# Like dnf_retry this does NOT mask intrinsic errors — an unresolvable package
+# fails identically every attempt and the last exit code is returned.
+#
+# Usage: zypper_retry --non-interactive in --no-recommends foo bar
+zypper_retry() {
+	local max_attempts="${ZYPPER_RETRY_ATTEMPTS:-4}"
+	local attempt=1
+	local rc=0
+	while ((attempt <= max_attempts)); do
+		zypper "$@" && return 0 || rc=$?
+		echo "zypper attempt ${attempt}/${max_attempts} failed (exit ${rc}); refreshing metadata and retrying..." >&2
+		# Force a full re-download rather than trusting the cache that just
+		# failed — the stale-repomd case above is invisible otherwise.
+		zypper --non-interactive --gpg-auto-import-keys refresh --force || true
+		sleep "$((attempt * 5))"
+		attempt=$((attempt + 1))
+	done
+	echo "zypper failed after ${max_attempts} attempts" >&2
 	return "$rc"
 }
 
