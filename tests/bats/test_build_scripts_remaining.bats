@@ -777,3 +777,29 @@ _run_lnf() { # $1 = file
   grep -qF '/var/tmp' "${REPO_ROOT}/Containerfile.debian"
   grep -qF '/var/tmp' "${REPO_ROOT}/Containerfile.arch"
 }
+
+@test "install-desktop.sh fails loudly when a declared PPA cannot be added" {
+  # Pantheon exists only in ppa:elementary-os/stable — nothing in the Ubuntu
+  # archive. add-apt-repository ships in software-properties-common, which the
+  # base did not carry, and the old code skipped the PPA silently on a missing
+  # tool. The build then died ~40 lines later with "Unable to locate package
+  # gala", naming every package and never the repo (LUKS run 31060730479).
+  local script="${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
+
+  # It must try to install the tool rather than give up...
+  grep -qF 'software-properties-common' "$script"
+  # ...and must exit rather than continue if it still is not there.
+  local blk
+  blk="$(sed -n '/add-apt-repository is unavailable\|declares PPA/,/^\t\t\tfi$/p' "$script")"
+  [ -n "$blk" ]
+  grep -qF 'exit 1' <<<"$blk"
+
+  # A bare `if command -v add-apt-repository` with no else branch is the
+  # regression: it means a missing tool silently drops the repo again.
+  # Strip comments first — the paragraph above describing the old shape
+  # contains that exact string, and matching the raw file flags it.
+  local code
+  code="$(grep -v '^[[:space:]]*#' "$script")"
+  run grep -cE 'if command -v add-apt-repository' <<<"$code"
+  [ "$output" -eq 0 ]
+}

@@ -179,9 +179,37 @@ if [[ "${_TD_OS}" == "apt" ]]; then
 		_TD_PPA_COND=$($YQ -r ".packages.apt.ppa[$i].condition" "${_TD_MANIFEST}")
 		# Only add PPA if condition matches (e.g. "ubuntu" only on Ubuntu)
 		if [[ -z "${_TD_PPA_COND}" ]] || [[ "$IS_UBUNTU" == true && "${_TD_PPA_COND}" == "ubuntu" ]]; then
-			if command -v add-apt-repository &>/dev/null; then
-				add-apt-repository -y "${_TD_PPA_REPO}"
+			# add-apt-repository ships in software-properties-common, which the
+			# base images do not all carry. This used to be a bare
+			# `if command -v add-apt-repository` with no else: a missing tool
+			# skipped the PPA silently, and the build then died ~40 lines later
+			# with
+			#
+			#   E: Unable to locate package gala
+			#   E: Unable to locate package io.elementary.wingpanel
+			#
+			# naming every package but never the repo that was never added.
+			# Pantheon exists ONLY in ppa:elementary-os/stable — nothing in the
+			# Ubuntu archive — so gurnard:pantheon could not build at all
+			# (LUKS run 31060730479).
+			#
+			# Install the tool if it is missing, and fail loudly if it still
+			# is: a manifest that declares a PPA and does not get it produces a
+			# desktop-less image, which is the failure this file already guards
+			# against a few lines below.
+			if ! command -v add-apt-repository &>/dev/null; then
+				apt-get update -qq || true
+				apt-get install -y --no-install-recommends software-properties-common || true
 			fi
+			if ! command -v add-apt-repository &>/dev/null; then
+				echo "ERROR: ${_TD_MANIFEST} declares PPA ${_TD_PPA_REPO}, but add-apt-repository" >&2
+				echo "       is unavailable and software-properties-common could not be installed." >&2
+				echo "       Every package that exists only in that PPA would be silently missing." >&2
+				exit 1
+			fi
+			add-apt-repository -y "${_TD_PPA_REPO}"
+			# The new repo's index has to be visible to the install below.
+			apt-get update -qq
 		fi
 	done
 
