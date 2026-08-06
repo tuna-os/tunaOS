@@ -676,6 +676,18 @@ reset_qemu_sockets() {
 
 # shellcheck disable=SC2329  # invoked via `trap cleanup_vm EXIT`
 cleanup_vm() {
+	# Stop the timelapse FIRST, while QEMU is still alive: the recorder reads
+	# frames through the monitor socket, and everything below this point is
+	# dedicated to killing the process that serves it. Assembly itself needs
+	# no VM, but a recorder still looping against a dead socket would spin
+	# until the trap finished.
+	#
+	# Unconditional and non-fatal. record-timelapse.sh returns 0 when there is
+	# nothing to assemble, and this runs on the EXIT trap — an error here would
+	# overwrite the exit status of the test that actually ran.
+	if [[ -n "${TIMELAPSE_DIR:-}" ]]; then
+		bash "${SCRIPT_DIR}/record-timelapse.sh" stop "$TIMELAPSE_DIR" || true
+	fi
 	# `|| true` is load-bearing under `set -e`: once the watchdog has FIRED it
 	# has already exited, so this kill fails, and without the guard the
 	# non-zero status aborts cleanup_vm right here — skipping the QEMU and
@@ -1564,6 +1576,15 @@ run_install_generic() {
 # This replaces the Anaconda kickstart approach (TunaOS uses bootc, not anaconda).
 run_install() {
 	record_luks_evidence "TUNAOS_LUKS_E2E_INSTALL_STARTED luks=${LUKS}"
+	# Film the install. Started here rather than at boot so the recording is
+	# the install itself, not the minutes of live-ISO boot that precede it,
+	# and stopped by cleanup_vm's EXIT trap so it ends however the cell ends.
+	#
+	# Best-effort throughout: record-timelapse.sh returns 0 when it cannot
+	# capture (no ffmpeg, or a virgl host where screendump has no surface), so
+	# a cell that installs correctly but cannot be filmed stays green.
+	TIMELAPSE_DIR="${OUTPUT_DIR}/timelapse"
+	bash "${SCRIPT_DIR}/record-timelapse.sh" start "$MONITOR_SOCK" "$TIMELAPSE_DIR" || true
 	echo "==> Waiting up to 60s for SSH..."
 	for _ in $(seq 1 30); do
 		check_ssh && break
