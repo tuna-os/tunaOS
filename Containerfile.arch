@@ -141,25 +141,12 @@ RUN KERNEL_PKG="linux"; \
 # running dracut first would read no composefs declaration and silently build an
 # initramfs with no erofs, which is the exact failure the shared script exists
 # to prevent.
-# Set up bootc/ostree filesystem layout
-RUN rm -rf /boot /home /root /usr/local /srv /opt /mnt \
-        /usr/lib/sysimage/log /usr/lib/sysimage/cache/pacman/pkg && \
-    # /var may contain mount points from overlayfs layers (rpm, dnf on Fedora
-    # parents; none on Arch). Clean everything that isn't a mount.
-    for d in /var/* /var/.[!.]*; do [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done && \
-    rm -rf /usr/lib/sysimage/log /usr/lib/sysimage/cache/pacman/pkg 2>/dev/null; true && \
-    mkdir -p /sysroot /boot /usr/lib/ostree /var /var/tmp && \
-    ln -sT sysroot/ostree /ostree && \
-    ln -sT var/roothome /root && \
-    ln -sT var/srv /srv && \
-    ln -sT var/opt /opt && \
-    ln -sT var/mnt /mnt && \
-    ln -sT var/home /home && \
-    ln -sT ../var/usrlocal /usr/local && \
-    printf 'd /var/opt 0755 root root -\nd /var/home 0755 root root -\nd /var/srv 0755 root root -\nd /var/mnt 0755 root root -\nd /var/usrlocal 0755 root root -\nd /var/roothome 0700 root root -\nd /var/tmp 1777 root root -\nd /run/media 0755 root root -\n' \
-        > /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
-    printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' \
-        > /usr/lib/ostree/prepare-root.conf
+# Set up bootc/ostree filesystem layout. The shared layout (the /var wipe, the
+# alias symlinks, tmpfiles.d and prepare-root.conf) lives in ostree-layout.sh;
+# only the pacman-specific cache removal is left here.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    rm -rf /usr/lib/sysimage/log /usr/lib/sysimage/cache/pacman/pkg && \
+    /run/context/build_scripts/bootc/ostree-layout.sh
 
 # Build initramfs. Live-boot modules are NOT needed here: tacklebox
 # injects its own embedded tbox-live/tbox-root dracut modules at ISO

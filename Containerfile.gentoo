@@ -134,6 +134,12 @@ ENV BASE_IMAGE=${BASE_IMAGE} \
 RUN KVER=$(ls /usr/lib/modules | head -1) && \
     rm -f "/usr/lib/modules/$KVER/vmlinuz" && \
     (cp /boot/vmlinuz-* "/usr/lib/modules/$KVER/vmlinuz" 2>/dev/null || cp /usr/src/linux-*/arch/x86/boot/bzImage "/usr/lib/modules/$KVER/vmlinuz") && \
+    # NOT yet on build_scripts/bootc/dracut-config.sh, unlike every other
+    # composefs variant. That script names the crypt and dm dracut modules,
+    # which require cryptsetup and dmsetup binaries; Gentoo emerges neither, and
+    # dracut treats a requested-but-unsatisfiable module as fatal. So guppy's
+    # initramfs still carries no bootc module and no erofs driver. Packaging
+    # sys-fs/cryptsetup and sys-fs/lvm2 is the prerequisite, not this refactor.
     dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" --kver "$KVER" \
     "/usr/lib/modules/$KVER/initramfs.img" && \
     rm -rf /var/cache && \
@@ -152,22 +158,21 @@ RUN KVER=$(ls /usr/lib/modules | head -1) && \
     mkdir -p /usr/lib/sysimage && \
     if [ -d /var/db/pkg ]; then rm -rf /usr/lib/sysimage/portage; cp -a /var/db /usr/lib/sysimage/portage; fi && \
     rm -rf /var/db
-RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
-    rm -rf /boot /home /root /usr/local /srv /opt /mnt /var && \
+# Shared bootc/ostree layout (the /var wipe, alias symlinks, tmpfiles.d and
+# prepare-root.conf) — build_scripts/bootc/ostree-layout.sh. What stays here is
+# Gentoo-specific: pruning /dev, and linking portage's relocated database back
+# into place after the wipe.
+#
+# This block used to be duplicated verbatim in the `system` and `desktop`
+# stages, and its symlink list was missing /srv, /mnt and /usr/local — all
+# three removed on the way in and never put back. The shared script restores
+# them; see its header.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
     find /dev -mindepth 1 -maxdepth 1 ! -name pts ! -name shm ! -name mqueue -exec rm -rf {} + 2>/dev/null || true && \
-    mkdir -p /var /var/tmp /sysroot/ostree /boot /usr/lib/ostree && \
-    ln -sT var/opt /opt && ln -sT var/roothome /root && \
-    ln -sT var/home /home && ln -sT sysroot/ostree /ostree && \
-    for d in /var/* /var/.[!.]*; do [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done && \
-    mkdir -p /var/tmp && \
-    for dir in opt usrlocal home srv mnt; do echo "d /var/$dir 0755 root root -"; done > /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
-    echo "d /var/roothome 0700 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
-    echo "d /var/tmp 1777 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
-    echo "d /run/media 0755 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
+    /run/context/build_scripts/bootc/ostree-layout.sh && \
     printf 'd /var/db 0755 root root -\nL+ /var/db/pkg - - - - ../../usr/lib/sysimage/portage/pkg\n' \
         > /usr/lib/tmpfiles.d/portage-sysimage.conf && \
-    mkdir -p /var/db && ln -sT ../../usr/lib/sysimage/portage/pkg /var/db/pkg && \
-    printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf
+    mkdir -p /var/db && ln -sfnT ../../usr/lib/sysimage/portage/pkg /var/db/pkg
 
 # Cache-bust so build_scripts edits invalidate the desktop stages' install
 # layers (bind-mounted scripts aren't in the cache key). Inherited by children.
@@ -215,6 +220,12 @@ FROM desktop-build AS desktop
 RUN KVER=$(ls /usr/lib/modules | head -1) && \
     rm -f "/usr/lib/modules/$KVER/vmlinuz" && \
     (cp /boot/vmlinuz-* "/usr/lib/modules/$KVER/vmlinuz" 2>/dev/null || cp /usr/src/linux-*/arch/x86/boot/bzImage "/usr/lib/modules/$KVER/vmlinuz") && \
+    # NOT yet on build_scripts/bootc/dracut-config.sh, unlike every other
+    # composefs variant. That script names the crypt and dm dracut modules,
+    # which require cryptsetup and dmsetup binaries; Gentoo emerges neither, and
+    # dracut treats a requested-but-unsatisfiable module as fatal. So guppy's
+    # initramfs still carries no bootc module and no erofs driver. Packaging
+    # sys-fs/cryptsetup and sys-fs/lvm2 is the prerequisite, not this refactor.
     dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" --kver "$KVER" \
     "/usr/lib/modules/$KVER/initramfs.img" && \
     rm -rf /var/cache && \
@@ -233,22 +244,21 @@ RUN KVER=$(ls /usr/lib/modules | head -1) && \
     mkdir -p /usr/lib/sysimage && \
     if [ -d /var/db/pkg ]; then rm -rf /usr/lib/sysimage/portage; cp -a /var/db /usr/lib/sysimage/portage; fi && \
     rm -rf /var/db
-RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
-    rm -rf /boot /home /root /usr/local /srv /opt /mnt /var && \
+# Shared bootc/ostree layout (the /var wipe, alias symlinks, tmpfiles.d and
+# prepare-root.conf) — build_scripts/bootc/ostree-layout.sh. What stays here is
+# Gentoo-specific: pruning /dev, and linking portage's relocated database back
+# into place after the wipe.
+#
+# This block used to be duplicated verbatim in the `system` and `desktop`
+# stages, and its symlink list was missing /srv, /mnt and /usr/local — all
+# three removed on the way in and never put back. The shared script restores
+# them; see its header.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
     find /dev -mindepth 1 -maxdepth 1 ! -name pts ! -name shm ! -name mqueue -exec rm -rf {} + 2>/dev/null || true && \
-    mkdir -p /var /var/tmp /sysroot/ostree /boot /usr/lib/ostree && \
-    ln -sT var/opt /opt && ln -sT var/roothome /root && \
-    ln -sT var/home /home && ln -sT sysroot/ostree /ostree && \
-    for d in /var/* /var/.[!.]*; do [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done && \
-    mkdir -p /var/tmp && \
-    for dir in opt usrlocal home srv mnt; do echo "d /var/$dir 0755 root root -"; done > /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
-    echo "d /var/roothome 0700 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
-    echo "d /var/tmp 1777 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
-    echo "d /run/media 0755 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
+    /run/context/build_scripts/bootc/ostree-layout.sh && \
     printf 'd /var/db 0755 root root -\nL+ /var/db/pkg - - - - ../../usr/lib/sysimage/portage/pkg\n' \
         > /usr/lib/tmpfiles.d/portage-sysimage.conf && \
-    mkdir -p /var/db && ln -sT ../../usr/lib/sysimage/portage/pkg /var/db/pkg && \
-    printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf
+    mkdir -p /var/db && ln -sfnT ../../usr/lib/sysimage/portage/pkg /var/db/pkg
 
 LABEL containers.bootc=1 ostree.bootable=1
 COPY --from=context /files /

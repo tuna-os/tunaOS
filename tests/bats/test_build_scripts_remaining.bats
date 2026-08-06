@@ -771,11 +771,23 @@ _run_lnf() { # $1 = file
 }
 
 @test "base stages that pre-create /var/tmp still do (#1010 belt and braces)" {
-  # These were added because the ISO build needs the directory present in the
-  # image. 99-cleanup.sh now also recreates it, but dropping them would leave
-  # any path that skips 99-cleanup uncovered.
-  grep -qF '/var/tmp' "${REPO_ROOT}/Containerfile.debian"
-  grep -qF '/var/tmp' "${REPO_ROOT}/Containerfile.arch"
+  # The ISO build needs the directory present in the image (dracut --tmpdir
+  # defaults to /var/tmp). 99-cleanup.sh also recreates it, but a path that
+  # skips 99-cleanup would be uncovered without this.
+  #
+  # The base stages no longer spell it out themselves — build_scripts/bootc/
+  # ostree-layout.sh does, once, for all of them. So follow the wiring instead
+  # of grepping each Containerfile for a literal that has moved: a stage is
+  # covered if it creates /var/tmp itself OR calls the script that does.
+  local layout="${REPO_ROOT}/build_scripts/bootc/ostree-layout.sh"
+  grep -qF '"${R}/var/tmp"' "$layout"
+  grep -qF 'chmod 1777 "${R}/var/tmp"' "$layout"
+
+  local f
+  for f in Containerfile.debian Containerfile.arch Containerfile.gentoo; do
+    grep -qF '/var/tmp' "${REPO_ROOT}/$f" ||
+      grep -qF 'bootc/ostree-layout.sh' "${REPO_ROOT}/$f"
+  done
 }
 
 @test "install-desktop.sh fails loudly when a declared PPA cannot be added" {
