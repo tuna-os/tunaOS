@@ -425,11 +425,18 @@ RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/bootc/finalize.sh
 
+# COSMIC goes through the manifest installer, not a desktop/cosmic.sh. That
+# script never had an apt branch at all: on this base it fell straight through
+# to `dnf -y copr enable yselkowitz/cosmic-epel`, and there is no dnf in this
+# image, so grouper:cosmic could not build. The manifest path is also the only
+# one that handles the `packages.apt.ppa` block COSMIC needs — it is not in the
+# Ubuntu archive, it comes from ppa:hepp3n/cosmic-epoch (same shape as the
+# pantheon stage below).
 FROM base-no-de AS cosmic
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/desktop/cosmic.sh base && \
+  /run/context/build_scripts/desktop/install-desktop.sh cosmic && \
   /run/context/build_scripts/desktop/configure-desktop-runtime.sh cosmic
 RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \

@@ -28,7 +28,11 @@ build_scripts/
 │   ├── install-desktop.sh     #   manifest-driven installer (dnf/pacman/…)
 │   │                          #   reads manifests/desktops/<de>.yaml
 │   ├── configure-desktop-runtime.sh  # Ubuntu path: DM + contract wiring
-│   ├── gnome.sh kde.sh cosmic.sh niri.sh xfce.sh  # Ubuntu per-DE installers
+│   ├── gnome.sh kde.sh niri.sh xfce.sh  # Ubuntu per-DE installers; being
+│   │                          #   retired in favour of install-desktop.sh
+│   │                          #   (VISION.md). Containerfile.ubuntu is their
+│   │                          #   only caller — cosmic and pantheon are
+│   │                          #   already on the manifest path.
 │   ├── zfs.sh                 #   grouper gnome-zfs flavor add-on
 │   └── gnome-extensions.sh kcm-ublue.sh tuna-flatpak-remote.sh
 │                              #   post-install helpers; manifests reference

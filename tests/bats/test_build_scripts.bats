@@ -269,14 +269,10 @@ build_scripts_top=(
   fi
 }
 
-@test "build_scripts/desktop/cosmic.sh: exists and passes shellcheck" {
-  run test -f "${REPO_ROOT}/build_scripts/desktop/cosmic.sh"
-  [ "$status" -eq 0 ]
-  if command -v shellcheck &>/dev/null; then
-    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/desktop/cosmic.sh"
-    [ "$status" -eq 0 ]
-  fi
-}
+# desktop/cosmic.sh is gone: every Containerfile now installs COSMIC through
+# the manifest installer, so the script had no callers left. See
+# tests/bats/test_desktop_script_apt_branch.bats for the check that keeps the
+# remaining per-DE scripts honest about the bases that call them.
 
 @test "build_scripts/desktop/niri.sh: exists and passes shellcheck" {
   run test -f "${REPO_ROOT}/build_scripts/desktop/niri.sh"

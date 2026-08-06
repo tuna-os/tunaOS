@@ -4,6 +4,14 @@ display_manager: greetd
 
 packages:
   # ── APT (Ubuntu via PPA, Debian Sid has native packages) ───────────
+  # Every name below was checked against the PPA's published binaries for
+  # **resolute** (Launchpad getPublishedBinaries, exact_match, status=Published)
+  # — grouper's series, and the only one this PPA publishes for. greetd is not
+  # in the PPA; it comes from the Ubuntu archive (resolute has 0.10.3-5).
+  #
+  # The icon theme is `cosmic-icons` here, NOT the `cosmic-icon-theme` the
+  # Fedora and EL10 sections use. That name is published by neither the PPA
+  # nor the Ubuntu archive, so it would have failed the whole apt transaction.
   apt:
     ppa:
       - repo: "ppa:hepp3n/cosmic-epoch"
@@ -27,7 +35,11 @@ packages:
       - cosmic-term
       - cosmic-wallpapers
       - cosmic-workspaces
-      - cosmic-icon-theme
+      - cosmic-icons
+      - pop-icon-theme
+      # COSMIC's own greeter. The PPA publishes it for resolute, so unlike
+      # openSUSE this does not fall back to greetd-gtkgreet.sh.
+      - cosmic-greeter
       - greetd
       - xdg-desktop-portal-cosmic
 
