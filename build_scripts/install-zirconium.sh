@@ -11,17 +11,40 @@
 # same way the Containerfile COPYs did — greetd needs its config present at
 # first boot, not only after the 99-zirconium-factory tmpfiles run.
 #
-# ZIRCONIUM_REF overrides the ref (default: main). Run as root inside a
-# container build (context bind-mounted, no network isolation for this RUN).
+# The ref is PINNED to a commit in image-versions.yaml (downloads.zirconium_src,
+# tracked by Renovate like every other download). Fetching a branch tip instead
+# would make niri images non-reproducible — two builds of the same tunaOS commit
+# would ship whatever upstream happened to have merged in between — and would
+# hand anything that lands on that branch a path straight into the image. A
+# checksum of the tarball is deliberately not layered on top: GitHub generates
+# these archives on demand and their bytes are not stable, so such a pin would
+# break spontaneously, whereas the commit is already content-addressed.
+#
+# ZIRCONIUM_REF overrides the pin for local testing against an unmerged branch.
+# Run as root inside a container build (context bind-mounted, no network
+# isolation for this RUN).
 set -euo pipefail
 
-ZIRCONIUM_REF="${ZIRCONIUM_REF:-main}"
+VERSIONS="${VERSIONS_FILE:-/run/context/image-versions.yaml}"
+if [[ -z "${ZIRCONIUM_REF:-}" ]]; then
+	# Same grep/sed reader the other pinned downloads use (10-base-packages.sh,
+	# niri.sh) so no yq is needed inside the build.
+	ZIRCONIUM_REF=$(grep '^\s*zirconium_src:' "$VERSIONS" 2>/dev/null |
+		sed 's/.*"\(.*\)".*/\1/')
+	[[ -n "$ZIRCONIUM_REF" ]] || {
+		echo "ERROR: downloads.zirconium_src not found in $VERSIONS — refusing to" >&2
+		echo "       fall back to a moving branch tip. Set ZIRCONIUM_REF to override." >&2
+		exit 1
+	}
+fi
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
 
 echo "==> Fetching zirconium-dev/zirconium@${ZIRCONIUM_REF}"
+# /archive/<ref>.tar.gz resolves commits, tags and branch names alike, so an
+# override does not need a different URL shape than the pinned commit.
 curl -fsSL --retry 3 \
-	"https://github.com/zirconium-dev/zirconium/archive/refs/heads/${ZIRCONIUM_REF}.tar.gz" |
+	"https://github.com/zirconium-dev/zirconium/archive/${ZIRCONIUM_REF}.tar.gz" |
 	tar -xz -C "$TMP"
 
 # GitHub names the archive's top-level directory after the ref with slashes
