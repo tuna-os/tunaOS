@@ -21,7 +21,26 @@ kde)
 		dm=sddm
 	fi
 	;;
-niri | cosmic) dm=greetd ;;
+niri) dm=greetd ;;
+cosmic)
+	# Same trap the kde branch above documents, and the same answer. Where
+	# cosmic-greeter is installed, ITS postinst claims the
+	# display-manager.service alias first:
+	#
+	#   Failed to enable unit: File '/etc/systemd/system/display-manager.service'
+	#   already exists and is a symlink to /lib/systemd/system/cosmic-greeter.service
+	#
+	# so enabling greetd here fails the build after the desktop, the branding
+	# and the contract have all succeeded (grouper:cosmic amd64, run
+	# 31088031074). cosmic-greeter IS the COSMIC greeter and greetd is the
+	# fallback for bases that do not package it (openSUSE), so prefer whichever
+	# the image actually has rather than naming one.
+	if systemctl list-unit-files cosmic-greeter.service --no-legend 2>/dev/null | grep -q '^cosmic-greeter.service'; then
+		dm=cosmic-greeter
+	else
+		dm=greetd
+	fi
+	;;
 xfce)
 	if systemctl list-unit-files lightdm.service --no-legend 2>/dev/null | grep -q '^lightdm.service'; then
 		dm=lightdm
