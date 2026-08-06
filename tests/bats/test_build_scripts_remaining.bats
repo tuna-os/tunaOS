@@ -861,21 +861,18 @@ _run_lnf() { # $1 = file
 
   # Gentoo warns and carries on; everything else is a hard failure.
   grep -qF 'WARNING: no network manager on the emerge path' <<<"$blk"
-  grep -qE '^[[:space:]]*return 1$' <<<"$blk"
-  # …and the failure must be the last word, i.e. after both `return 0` exits,
-  # so a missing stack cannot fall through to a success.
-  local rets
-  rets="$(grep -oE 'return [01]$' <<<"$blk" | tr '\n' ',')"
-  [ "$rets" = "return 0,return 0,return 1," ]
 
-  # `return 1` only fails the build if the call is a bare command under
-  # `set -e`: a `|| true`, an `if`, or a `!` would swallow it exactly the way
-  # safe_enable did.
-  local code
-  code="$(grep -v '^[[:space:]]*#' "$script")"
-  [ "$(grep -c '^[[:space:]]*tunaos_enable_network_manager$' <<<"$code")" -ge 2 ]
-  run grep -cE 'tunaos_enable_network_manager[[:space:]]*(\|\||&&|;)|(if|!|until|while)[[:space:]]+tunaos_enable_network_manager' <<<"$code"
-  [ "$output" -eq 0 ]
+  # `exit 1`, not `return 1`: inside a function a non-zero return only kills
+  # the build while every call site stays a bare command, so `|| true` or an
+  # `if` around it would swallow the failure the way safe_enable did.
+  grep -qE '^[[:space:]]*exit 1$' <<<"$blk"
+
+  # And the exit must be the fallback, after the emerge warning — otherwise a
+  # base with no stack at all could land on warn-and-carry-on.
+  local warn_ln exit_ln
+  warn_ln="$(grep -nF 'WARNING: no network manager on the emerge path' <<<"$blk" | cut -d: -f1 | head -1)"
+  exit_ln="$(grep -nE '^[[:space:]]*exit 1$' <<<"$blk" | cut -d: -f1 | tail -1)"
+  [ "$warn_ln" -lt "$exit_ln" ]
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
