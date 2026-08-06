@@ -36,16 +36,37 @@ RUN apt-get update -y && \
     tar -xzf toolchain.tar.gz -C /output && \
     rm -rf /fetch
 
+# Context layer. There is no way to share a stage between Containerfiles, so
+# the four core COPYs below are duplicated in all six — and duplication that
+# cannot be factored out is duplication that has to be ASSERTED instead. Two
+# entries had already gone missing from this one:
+#
+#   manifests   the desktop stages above pantheon each call their own
+#               build_scripts/desktop script and never read a manifest, so this
+#               stage never carried them. pantheon is manifest-only, so
+#               install-desktop.sh looked for
+#               /run/context/manifests/desktops/pantheon.yaml in a directory
+#               that did not exist and gurnard died with "No manifest found"
+#               (#1014).
+#   overrides   still missing until now, and latent rather than live: the only
+#               thing under system_files_overrides/niri is an SELinux config,
+#               which Ubuntu has no use for, and the nvidia/hwe overrides are
+#               applied from Containerfile.overlay's own context stage. The
+#               next override added for a desktop this file builds would have
+#               been silently skipped — copy_systemfiles_for() returns 0 with
+#               "No system file overrides" when the directory is absent.
+#
+# tests/bats/test_containerfile_context.bats asserts all six agree.
 FROM scratch AS context
 COPY system_files /files
+COPY system_files_overrides /overrides
 COPY build_scripts /build_scripts
-COPY image-versions.yaml /image-versions.yaml
-# The desktop stages above pantheon each call their own build_scripts/desktop
-# script and never read a manifest, so this context stage never carried them —
-# every other Containerfile does. pantheon is manifest-only, so install-desktop.sh
-# looked for /run/context/manifests/desktops/pantheon.yaml in a directory that
-# did not exist and gurnard died with "No manifest found" (#1014).
 COPY manifests /manifests
+# Per-file, and correctly so: only the Containerfiles whose build scripts read
+# it carry image-versions.yaml (el10, debian, ubuntu run 10-base-packages.sh;
+# kcm-ublue.sh guards on dnf, so the pacman/zypper/emerge files never reach
+# its read). Adding it everywhere for symmetry would be cargo cult.
+COPY image-versions.yaml /image-versions.yaml
 COPY --from=common /system_files/shared /files
 
 # ==============================================================================
