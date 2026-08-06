@@ -810,14 +810,52 @@ _run_lnf() { # $1 = file
   # x21. Its own contract had the answer — "not ok - a network manager is
   # active" — with the NIC present and unconfigured (LUKS run 31060731552).
   # No path here enabled one for pacman/zypper/emerge.
+  #
+  # Either/or, never both: two daemons on one link is its own failure mode, and
+  # the contract accepts whichever is active.
   local script="${REPO_ROOT}/build_scripts/40-services.sh"
   local code
   code="$(grep -v '^[[:space:]]*#' "$script")"
-  grep -qF 'safe_enable NetworkManager.service' <<<"$code"
-  grep -qF 'safe_enable systemd-networkd.service' <<<"$code"
-  # Either/or, never both — two daemons on one link is its own failure mode,
-  # and the contract accepts whichever is active.
-  grep -qF 'if [[ -f /usr/lib/systemd/system/NetworkManager.service ]]' <<<"$code"
+  grep -qF 'net_unit=NetworkManager.service' <<<"$code"
+  grep -qF 'net_unit=systemd-networkd.service' <<<"$code"
+  grep -qF 'systemctl enable "$net_unit"' <<<"$code"
+
+  # Not safe_enable: it swallows failures with `|| true`, which is right for
+  # units that legitimately may not exist and wrong here, where the enable is
+  # the only thing turning networking on.
+  run grep -cE 'safe_enable (NetworkManager|systemd-networkd)' <<<"$code"
+  [ "$output" -eq 0 ]
+}
+
+@test "40-services.sh installs networkd on zypper, which splits it out" {
+  # The unit openSUSE needs is not in the `systemd` package. Measured in a
+  # tumbleweed container: after `zypper install systemd` there is no
+  # systemd-networkd.service, and after `zypper install systemd-network` there
+  # is. So sailfin enabled a unit that did not exist, safe_enable hid it, and
+  # /usr/lib/systemd/network/20-wired.network sat there as a DHCP profile with
+  # no daemon to read it.
+  local script="${REPO_ROOT}/build_scripts/40-services.sh"
+  local code
+  code="$(grep -v '^[[:space:]]*#' "$script")"
+  grep -qF 'pkg_install systemd-network' <<<"$code"
+
+  # And the profile it reads must still be shipped, or installing the daemon
+  # buys nothing: it would come up with no configured link.
+  grep -qF '/usr/lib/systemd/network/20-wired.network' "${REPO_ROOT}/Containerfile.opensuse"
+}
+
+@test "40-services.sh fails the build when no network stack is present" {
+  # A networkless image presents as an SSH fault 40 minutes later in a VM
+  # (banner-exchange timeouts against a guest with no address). Catch it at
+  # build time instead. Gentoo is the one exception, warned about rather than
+  # failed, because adding an atom there is a source compile and guppy's
+  # networking has not been measured.
+  local script="${REPO_ROOT}/build_scripts/40-services.sh"
+  local blk
+  blk="$(awk '/^\tif \[\[ -n "\$net_unit" \]\]/,/^\tfi$/' "$script")"
+  [ -n "$blk" ]
+  grep -qF 'exit 1' <<<"$blk"
+  grep -qF 'WARNING: no network manager on the emerge path' <<<"$blk"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════

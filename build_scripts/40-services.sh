@@ -217,10 +217,52 @@ if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command 
 	# (/usr/lib/systemd/network/20-wired.network) plus the resolved stub
 	# symlink, so networkd is the intended stack there and only needed
 	# switching on.
+	#
+	# Except openSUSE ships networkd in a SEPARATE package, so naming the unit
+	# was not enough there. Measured in a tumbleweed container, installing what
+	# the image installs:
+	#
+	#   # zypper install systemd            (Containerfile.opensuse's list)
+	#   systemd-networkd.service   ABSENT
+	#   # zypper install systemd-network
+	#   systemd-networkd.service   PRESENT, and `is-enabled` says disabled
+	#
+	# So on sailfin the unit enabled here did not exist, safe_enable swallowed
+	# that with its `|| true`, and the guest still booted with a NIC and no
+	# address: 20-wired.network was a DHCP profile with no daemon to read it.
+	#
+	# Hence install the daemon where the base omits it, and enable it
+	# EXPLICITLY. Both bases here disable by default (openSUSE's
+	# 99-default-disable.preset, Arch's 99-default.preset are both `disable *`),
+	# so this enable is the only thing that turns networking on and a swallowed
+	# failure ships an image with no network and no build-time complaint. Arch
+	# needs no install: Containerfile.arch has networkmanager in base-no-de,
+	# which is built before this script runs.
+	net_unit=""
 	if [[ -f /usr/lib/systemd/system/NetworkManager.service ]]; then
-		safe_enable NetworkManager.service
+		net_unit=NetworkManager.service
+	elif [[ -f /usr/lib/systemd/system/systemd-networkd.service ]]; then
+		net_unit=systemd-networkd.service
+	elif [[ "${PKG_MGR:-}" == "zypper" ]] || command -v zypper &>/dev/null; then
+		pkg_install systemd-network
+		if [[ -f /usr/lib/systemd/system/systemd-networkd.service ]]; then
+			net_unit=systemd-networkd.service
+		fi
+	fi
+
+	if [[ -n "$net_unit" ]]; then
+		systemctl enable "$net_unit"
+	elif command -v emerge &>/dev/null; then
+		# Gentoo builds from source, so naming an atom here is an unbounded
+		# compile rather than a package fetch, and guppy's networking has not
+		# been measured the way openSUSE's and Arch's have. Say so instead of
+		# guessing, and leave the build passing as it does today.
+		echo "WARNING: no network manager on the emerge path; guppy may boot without networking" >&2
 	else
-		safe_enable systemd-networkd.service
+		echo "ERROR: no NetworkManager or systemd-networkd unit on this image." >&2
+		echo "       It would boot with a NIC and no address, and sshd would" >&2
+		echo "       look broken instead: see LUKS run 31060731552." >&2
+		exit 1
 	fi
 
 	safe_enable tailscaled.service
