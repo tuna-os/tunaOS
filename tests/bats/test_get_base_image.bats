@@ -252,6 +252,16 @@ setup() {
     echo "      USE entry is a no-op" >&2
     return 1
   }
+  # --usepkg=n alone is not a source build: make.conf's --getbinpkg (and
+  # FEATURES=getbinpkg) still lets emerge take the binhost package, which is
+  # exactly what happened in run 31164551903 — a two-second "rebuild" that
+  # installed the flagless binpkg and failed the cryptenroll assert 2h45m in.
+  grep -qE 'emerge[^&]*--usepkg=n[^&]*--getbinpkg=n[^&]*sys-apps/systemd' <<<"$body" || {
+    echo "FAIL: the forced systemd rebuild does not pass --getbinpkg=n;" >&2
+    echo "      make.conf's getbinpkg lets the binhost binpkg satisfy it and" >&2
+    echo "      the source build never happens (run 31164551903)" >&2
+    return 1
+  }
   # fisherman needs the cryptsetup and dmsetup binaries right behind the
   # enroll tool; lvm2 is what ships dmsetup on Gentoo.
   grep -qE 'sys-fs/cryptsetup' <<<"$body" || {
