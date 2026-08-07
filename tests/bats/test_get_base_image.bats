@@ -226,6 +226,53 @@ setup() {
   done
 }
 
+@test "the Gentoo base builds systemd-cryptenroll, and proves it at build time" {
+  # Same fisherman gate as the apt case above, different mechanism: on Gentoo
+  # the binary is not a packaging split but a USE flag. The desktop/systemd
+  # profile does not enable cryptsetup for sys-apps/systemd, so the profile
+  # default silently omits systemd-cryptenroll — guppy:gnome died on it one
+  # line into the install, 3h20m into LUKS run 31144015274, with every earlier
+  # stage finally green.
+  #
+  # Two halves, both required:
+  #   * the package.use entry granting systemd USE=cryptsetup, AND
+  #   * a source rebuild of systemd with --usepkg=n. make.conf runs emerge
+  #     with --binpkg-respect-use=n, so without the forced source build the
+  #     binhost's systemd (built without cryptsetup) satisfies the dep and the
+  #     USE entry does nothing. The flag alone LOOKS like the fix and is not.
+  local path="${REPO_ROOT}/Containerfile.gentoo" body
+  body="$(grep -v '^[[:space:]]*#' "$path")"
+  grep -qE 'sys-apps/systemd[^"]*cryptsetup' <<<"$body" || {
+    echo "FAIL: no package.use entry granting sys-apps/systemd USE=cryptsetup" >&2
+    return 1
+  }
+  grep -qE 'emerge[^&]*--usepkg=n[^&]*sys-apps/systemd' <<<"$body" || {
+    echo "FAIL: systemd is never source-rebuilt; --binpkg-respect-use=n means" >&2
+    echo "      the binhost's cryptsetup-less binpkg satisfies the dep and the" >&2
+    echo "      USE entry is a no-op" >&2
+    return 1
+  }
+  # fisherman needs the cryptsetup and dmsetup binaries right behind the
+  # enroll tool; lvm2 is what ships dmsetup on Gentoo.
+  grep -qE 'sys-fs/cryptsetup' <<<"$body" || {
+    echo "FAIL: sys-fs/cryptsetup is not emerged" >&2
+    return 1
+  }
+  grep -qE 'sys-fs/lvm2' <<<"$body" || {
+    echo "FAIL: sys-fs/lvm2 (dmsetup) is not emerged" >&2
+    return 1
+  }
+  # And the build must assert all three, so the next USE-flag regression fails
+  # in the image build, not a matrix cell hours later.
+  local tool
+  for tool in systemd-cryptenroll cryptsetup dmsetup; do
+    grep -qF "command -v ${tool}" <<<"$body" || {
+      echo "FAIL: the build never asserts ${tool} is present" >&2
+      return 1
+    }
+  done
+}
+
 @test "every base can bring up a network, and both service paths enable it" {
   # An image with a NIC and no address presents as an SSH failure, not a
   # network one: sshd starts and generates host keys, QEMU's user networking

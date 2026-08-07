@@ -54,7 +54,7 @@ RUN NPROC="$(nproc)" && \
     printf '[gentoobinhost]\npriority = 9999\nsync-uri = https://distfiles.gentoo.org/releases/amd64/binpackages/23.0/x86-64/\n' \
       >/etc/portage/binrepos.conf/gentoobinhost.conf && \
     getuto && \
-    echo "sys-apps/systemd boot" >> /etc/portage/package.use/systemd && \
+    echo "sys-apps/systemd boot cryptsetup tpm" >> /etc/portage/package.use/systemd && \
     echo "media-video/pipewire extra -ffmpeg" >> /etc/portage/package.use/pipewire && \
     echo "media-libs/gst-plugins-bad -vulkan" >> /etc/portage/package.use/gst-plugins-bad && \
     echo "sys-libs/minizip-ng compat" >> /etc/portage/package.use/minizip-ng && \
@@ -102,11 +102,41 @@ RUN emerge --verbose --deep --newuse @world
 # podman — the rpm and apt ones from build_scripts/10-base-packages.sh,
 # Containerfile.arch and .debian by name — and Gentoo runs none of those, which
 # is why guppy was the only variant without it.
+#
+# sys-fs/cryptsetup and sys-fs/lvm2, fourth of the same kind, found the same
+# way: with podman in place the guppy cells got past the store probe for the
+# first time and died one line into the install instead —
+#
+#   fisherman: fatal: missing required host tool: "systemd-cryptenroll" not
+#   found in PATH — install the "systemd" package on the host
+#
+# guppy:gnome, LUKS run 31144015274, 3h20m in. "Install systemd" is the right
+# advice on every OTHER base, where the systemd package unconditionally ships
+# the binary. Gentoo only builds systemd-cryptenroll when systemd has
+# USE=cryptsetup, which neither the desktop/systemd profile nor the make.conf
+# USE line enables — hence `boot cryptsetup tpm` in package.use above (tpm so
+# the enroll tool can at least attempt the TPM2 path the recipe asks for; it
+# falls back to passphrase everywhere today). cryptsetup and lvm2 are named
+# here explicitly because fisherman's LUKS path needs the cryptsetup and
+# dmsetup binaries themselves right after the enroll tool — the bootc-install
+# refactor comments further down have said "Gentoo emerges neither" for a
+# while; this is the run that made it cost a cell.
 RUN emerge --verbose --deep --newuse \
         app-arch/cpio btrfs-progs dev-vcs/git dosfstools sys-fs/xfsprogs \
         linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd \
         sys-apps/flatpak app-admin/sudo app-containers/podman \
+        sys-fs/cryptsetup sys-fs/lvm2 \
         net-vpn/tailscale gui-apps/wl-clipboard media-video/ffmpeg media-plugins/gst-plugins-meta && \
+    # make.conf runs emerge with --binpkg-respect-use=n, so the binhost's
+    # systemd (built WITHOUT cryptsetup) satisfies the install above even with
+    # the package.use entry in place, and the flag silently does nothing. Force
+    # the one package whose USE actually matters to build from source. The
+    # assertion afterwards is the point: a binary this image exists to provide
+    # must fail the BUILD when absent, not a matrix cell three hours later.
+    emerge --oneshot --verbose --usepkg=n sys-apps/systemd && \
+    command -v systemd-cryptenroll && \
+    command -v cryptsetup && \
+    command -v dmsetup && \
     curl -fsSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.35.0/just-1.35.0-x86_64-unknown-linux-musl.tar.gz && \
     tar -xzf /tmp/just.tar.gz -C /usr/bin just && rm /tmp/just.tar.gz && \
     curl -fsSL -o /tmp/glow.tar.gz https://github.com/charmbracelet/glow/releases/download/v1.5.1/glow_Linux_x86_64.tar.gz && \
