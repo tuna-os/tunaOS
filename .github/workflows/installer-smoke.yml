@@ -234,6 +234,29 @@ jobs:
             echo "=== rendering capability in the live session ==="
             $SSH 'ls -l /dev/dri/ 2>/dev/null; echo "--- eglinfo/vulkaninfo ---"; (eglinfo 2>&1 | head -20) || true; (vulkaninfo --summary 2>&1 | head -20) || true' 2>/dev/null || true
             echo
+            echo "=== who the display manager is, and which greetd config it reads ==="
+            # Added because run 31183217981's cosmic leg sat on the
+            # cosmic-greeter LOGIN SCREEN — liveuser, password prompt — so the
+            # installer never launched. desktop-cosmic.sh writes
+            # /etc/greetd/config.toml with [initial_session] user=liveuser
+            # command=cosmic-session, which should bypass any greeter, and the
+            # symptom says it did not take. The evidence to tell WHY was not
+            # collected: greetd logs to the journal, not to ttyS0, and the
+            # serial log we upload has nothing about the session at all.
+            #
+            # install-desktop.sh documents the shape that would explain it —
+            # cosmic-greeter.service IS greetd, wrapped, started as
+            #   ExecStart=greetd --config /etc/greetd/cosmic-greeter.toml
+            # i.e. a DIFFERENT file from the one the live adapter writes. That
+            # is a hypothesis, not a finding: this run reported the display
+            # manager as greetd.service, not cosmic-greeter.service. Rather
+            # than change autologin on a guess, collect what settles it.
+            $SSH 'echo "-- display-manager.service ->"; readlink -f /etc/systemd/system/display-manager.service 2>/dev/null; \
+                  echo "-- greetd config files present --"; ls -l /etc/greetd/ 2>/dev/null; \
+                  echo "-- ExecStart of the active DM --"; systemctl cat "$(basename "$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null)" 2>/dev/null)" 2>/dev/null | grep -E "^ExecStart|^\[" | head -20; \
+                  echo "-- /etc/greetd/config.toml as installed --"; cat /etc/greetd/config.toml 2>/dev/null; \
+                  echo "-- greetd journal --"; sudo journalctl -u greetd -u cosmic-greeter --no-pager 2>/dev/null | tail -40' 2>/dev/null || true
+            echo
             echo "=== windows the compositor actually has ==="
             # -x matches comm exactly, so this cannot self-match the way a
             # bare `pgrep -f` does — but the fallbacks below it were reporting
