@@ -50,43 +50,11 @@ case "${1:-}" in
 			# so image contents follow the spec's Requires.
 			dnf_retry -y install xfce4-wayland
 
-			# xfwl4 reads xfwm4's theme DATA and aborts without it —
-			# a panic before the session exists, not a warning:
-			#
-			#   thread 'main' panicked at src/core/state.rs:260:74:
-			#   Failed to load initial config: Failed to find theme named Default
-			#
-			# It needs /usr/share/themes/Default/xfwm4/. themerc alone is not
-			# enough: load_title_textures() propagates with `?`, so the
-			# title/border/button images are load-bearing too.
-			#
-			# NOTHING on EL10 ships them. xfwm4 is X11 and has no EL10 build;
-			# the whole repo.tunaos.org/xfce tree owns exactly one path under
-			# /usr/share/themes/Default (xfce4-notifyd's gtk.css) and xfwl4's
-			# own package ships two files, neither a theme. install_available
-			# is best-effort by design, so it skipped silently and yellowfin:xfce
-			# booted to a console of that backtrace (run 31183217981).
-			#
-			# So vendor the theme from the xfwm4 release tarball, pinned and
-			# checksummed, and only when the packaged one is genuinely absent.
+			# The Default xfwm4 theme xfwl4 needs is provisioned by
+			# desktop/xfwm4-theme.sh, listed in xfce.yaml's post_install —
+			# NOT here. install-desktop.sh never sources this file for the
+			# manifest-driven flavors, so a fix placed here does not run.
 			install_available xfwm4
-			if [[ ! -f /usr/share/themes/Default/xfwm4/themerc ]]; then
-				_xfwm4_ver=4.20.0
-				_xfwm4_sha=a58b63e49397aa0d8d1dcf0636be93c8bb5926779aef5165e0852890190dcf06
-				_xfwm4_tar=/tmp/xfwm4-${_xfwm4_ver}.tar.bz2
-				curl -fsSLo "$_xfwm4_tar" \
-					"https://archive.xfce.org/src/xfce/xfwm4/${_xfwm4_ver%.*}/xfwm4-${_xfwm4_ver}.tar.bz2"
-				echo "${_xfwm4_sha}  ${_xfwm4_tar}" | sha256sum -c -
-				mkdir -p /usr/share/themes/Default/xfwm4
-				# --exclude the build files; keep xpm (the base layer
-				# load_compose_image reads) alongside png/svg (the overlays).
-				tar -xjf "$_xfwm4_tar" -C /usr/share/themes/Default/xfwm4 \
-					--strip-components=3 --exclude='Makefile*' \
-					"xfwm4-${_xfwm4_ver}/themes/default"
-				rm -f "$_xfwm4_tar"
-				# Fail loudly rather than leave the gate to find it later.
-				test -f /usr/share/themes/Default/xfwm4/themerc
-			fi
 
 			install_available \
 				xfce4-whiskermenu-plugin \
