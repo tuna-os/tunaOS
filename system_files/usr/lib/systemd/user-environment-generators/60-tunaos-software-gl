@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Force software GL for the user session when the machine has no 3D.
+#
+# WHY THIS EXISTS, from measured evidence rather than folklore:
+#
+# installer-smoke run 31218951003 booted cosmic and kde on the SAME virtual
+# GPU. Both serial logs report, character for character:
+#
+#   [drm] features: -virgl +edid -resource_blob -host_visible
+#   [drm] features: -context_init
+#   [drm] number of cap sets: 0
+#
+# cosmic rendered a full desktop. kde produced nine 282-byte black frames,
+# with zero OOM kills and sddm.service active. Same hardware, opposite
+# outcome — so "these compositors cannot render without virgl" was never
+# true. cosmic-comp falls back to software on its own; kwin_wayland does not.
+#
+# greetd-gtkgreet.sh already does exactly this for the GREETER, which is why
+# the login screen renders on machines where the session does not. This is
+# that same fix, moved to where every Wayland session picks it up.
+#
+# A render node is the honest test for 3D: virtio-gpu without virgl exposes
+# card* but no renderD*. Where a render node exists this generator prints
+# nothing at all, so hardware with working GL is untouched.
+
+if compgen -G '/dev/dri/renderD*' >/dev/null 2>&1; then
+	exit 0
+fi
+
+# Mesa's generic software-rasteriser switch — honoured by kwin_wayland,
+# mutter, and anything else going through libGL/EGL.
+echo "LIBGL_ALWAYS_SOFTWARE=1"
+# wlroots compositors (niri, xfwl4) select their renderer separately.
+echo "WLR_RENDERER=pixman"
+# kwin's own escape hatch: QPainter compositing instead of OpenGL. Set
+# alongside, not instead of, the Mesa switch — kwin consults this before it
+# ever reaches GL.
+echo "KWIN_COMPOSE=Q"
