@@ -249,5 +249,103 @@ class TruncationWarningTracksTheWindow(unittest.TestCase):
         self.assertEqual(self._walk(listed), "")
 
 
+class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
+    """A cell build-config no longer schedules is out of scope, not failing.
+
+    flounder:cosmic and flounder-sid:cosmic were removed on purpose in 491544d1
+    ("drop the COSMIC flavours Debian cannot build"). Their last results are
+    still in the run window, and tally() used to enter any cell with a result
+    into the denominator — so the LUKS line read "39 of 54" when the live set
+    was 52, with two cells no run could ever turn green.
+
+    That is the failure nvidia_tally() already documents: a gap reported as if
+    someone should close it, which is its own kind of dishonest status page.
+    These tests hold the line in both directions — undeclared cells leave the
+    count, and declared ones stay in it however they did.
+    """
+
+    KEY = staticmethod(lambda v, d: f"LUKS {v}:{d}")
+
+    # flounder ships gnome/kde/xfce and no longer ships cosmic.
+    MATRIX = {"flounder": {"gnome", "kde", "xfce"}}
+
+    def test_a_removed_flavor_leaves_the_denominator(self):
+        results = {
+            "LUKS flounder:gnome": ("success", "2026-08-06"),
+            "LUKS flounder:kde": ("success", "2026-08-06"),
+            "LUKS flounder:xfce": ("success", "2026-08-06"),
+            "LUKS flounder:cosmic": ("failure", "2026-08-01"),
+        }
+        total, tested, passed = gms.tally(self.MATRIX, results, self.KEY)
+        self.assertEqual((total, tested, passed), (3, 3, 3))
+
+    def test_a_declared_failing_cell_still_counts(self):
+        """The guard against reading this as 'hide the reds'."""
+        results = {
+            "LUKS flounder:gnome": ("success", "2026-08-06"),
+            "LUKS flounder:kde": ("failure", "2026-08-06"),
+        }
+        total, tested, passed = gms.tally(self.MATRIX, results, self.KEY)
+        # xfce is declared and untested: in the total, not in tested.
+        self.assertEqual((total, tested, passed), (3, 2, 1))
+
+    def test_the_removed_flavor_is_still_disclosed(self):
+        """Dropped from the count, but named — not silently forgotten."""
+        results = {
+            "LUKS flounder:gnome": ("success", "2026-08-06"),
+            "LUKS flounder:cosmic": ("failure", "2026-08-01"),
+        }
+        self.assertEqual(
+            gms.undeclared_tally(self.MATRIX, results, self.KEY),
+            ["flounder:cosmic"],
+        )
+
+    def test_nothing_is_disclosed_once_the_result_ages_out(self):
+        """The count has to be able to reach zero, or it is just noise."""
+        results = {"LUKS flounder:gnome": ("success", "2026-08-06")}
+        self.assertEqual(
+            gms.undeclared_tally(self.MATRIX, results, self.KEY), []
+        )
+
+    def test_an_undeclared_cell_with_no_result_is_not_disclosed(self):
+        """Never-tested and never-scheduled is not a stale result."""
+        self.assertEqual(gms.undeclared_tally(self.MATRIX, {}, self.KEY), [])
+
+    def test_the_disclosure_does_not_trip_the_drift_gate(self):
+        """It appears and vanishes with the run window, like the NVIDIA note.
+
+        The pull_request gate compares structure with live-derived content
+        masked. A paragraph that exists only while a stale result does is live
+        content: without a VOLATILE_LINE entry it would fail every PR opened
+        while such a result sits in the window, for something no PR caused.
+        """
+        line = (
+            "The table above still shows a result for `flounder:cosmic`. "
+            "`.github/build-config.yml` no longer declares that flavour, so "
+            "..."
+        )
+        self.assertRegex(line, gms.VOLATILE_LINE)
+        # Control: an ordinary narrative line is NOT masked, so this is not
+        # passing because the regex matches everything.
+        self.assertNotRegex(
+            "This is the only axis that checks a human could actually install.",
+            gms.VOLATILE_LINE,
+        )
+
+    def test_the_real_build_config_declares_52_luks_cells(self):
+        """Ties the unit tests above to the actual denominator on disk.
+
+        If this number moves, the LUKS total moves with it, and that should be
+        a deliberate build-config edit rather than a surprise.
+        """
+        matrix = gms.luks_matrix()
+        self.assertEqual(sum(len(v) for v in matrix.values()), 52)
+        self.assertNotIn("cosmic", matrix.get("flounder", set()))
+        self.assertNotIn("cosmic", matrix.get("flounder-sid", set()))
+        # A control: the flavours flounder DOES declare are still there, so
+        # this is not passing because the matrix came back empty.
+        self.assertEqual(matrix.get("flounder"), {"gnome", "kde", "xfce"})
+
+
 if __name__ == "__main__":
     unittest.main()
