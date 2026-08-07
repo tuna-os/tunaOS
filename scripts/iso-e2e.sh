@@ -1380,20 +1380,80 @@ append_installed_serial_kargs() {
 	BLSEOF
 }
 
+# Wait up to $2 seconds for pid $1 to leave the process table. 0 = it is gone.
+wait_pid_gone() {
+	local pid="$1" secs="$2" i
+	for ((i = 0; i < secs; i++)); do
+		kill -0 "$pid" 2>/dev/null || return 0
+		sleep 1
+	done
+	! kill -0 "$pid" 2>/dev/null
+}
+
+# Shut the guest down and do not return while its QEMU is still alive.
+#
+# Both callers launch the installed-disk boot immediately afterwards, reusing
+# $QEMU_PIDFILE — and QEMU holds an exclusive lock on that file for its entire
+# life. So a guest that overstays its poweroff does not merely delay the next
+# boot, it makes it impossible:
+#
+#   qemu-system-x86_64: cannot create PID file: Cannot lock pid file:
+#   Resource temporarily unavailable
+#
+# which under `set -e` ends the cell right there, minutes after the install it
+# was testing had already reported "Installation complete!" (run 31140233496,
+# albacore:cosmic). The generic path has a second stake in this: swtpm only
+# exits when its QEMU disconnects, and the TPM gate below restarts it.
+#
+# A guest can overstay for reasons that have nothing to do with the install.
+# In that run fisherman had just logged `cryptsetup luksClose: Device
+# fisherman-root is still in use`, and a busy dm device is exactly what
+# systemd-shutdown spends its shutdown retrying — on top of systemd's own 90s
+# DefaultTimeoutStopSec, which the previous 70s window could not outlast.
+# Hence: wait long enough for a slow-but-healthy shutdown, then stop asking.
+POWEROFF_WAIT_SECS="${TUNAOS_E2E_POWEROFF_WAIT:-180}"
+
 poweroff_and_wait_vm() {
-	"${GUEST_SSH[@]}" "sudo systemctl poweroff" 2>/dev/null || true
-	sleep 10
-	if [[ -f "$QEMU_PIDFILE" ]]; then
-		local pid
-		pid=$(cat "$QEMU_PIDFILE" 2>/dev/null || true)
-		if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-			echo "==> Waiting for VM to shut down..."
-			for _ in $(seq 1 30); do
-				kill -0 "$pid" 2>/dev/null || break
-				sleep 2
-			done
-		fi
+	if ! "${GUEST_SSH[@]}" "sudo systemctl poweroff" 2>/dev/null; then
+		# Not fatal: the guest may be going down already (sshd dies mid-command
+		# often enough), and ACPI below is a second way in. But it changes what
+		# a long wait MEANS, so it must not be silent.
+		echo "==> note: 'systemctl poweroff' over ssh did not return cleanly" >&2
 	fi
+	sleep 10
+	[[ -f "$QEMU_PIDFILE" ]] || return 0
+	local pid
+	pid=$(cat "$QEMU_PIDFILE" 2>/dev/null || true)
+	[[ -n "$pid" ]] || return 0
+	kill -0 "$pid" 2>/dev/null || return 0
+
+	echo "==> Waiting for VM to shut down..."
+	wait_pid_gone "$pid" "$POWEROFF_WAIT_SECS" && return 0
+
+	# The install is finished by here — fisherman/bootc have unmounted, frozen
+	# and flushed the target filesystem — so ending the guest ourselves costs
+	# nothing the following boot needs. The ladder still gives it two chances
+	# to end itself first, and only escalates when it will not.
+	echo "==> VM did not power off within ${POWEROFF_WAIT_SECS}s; forcing it down" >&2
+	if [[ -S "$MONITOR_SOCK" ]] && command -v socat &>/dev/null; then
+		echo "system_powerdown" | socat - "UNIX-CONNECT:${MONITOR_SOCK}" 2>/dev/null || true
+		wait_pid_gone "$pid" 20 && return 0
+	fi
+	kill -TERM "$pid" 2>/dev/null || true
+	if ! wait_pid_gone "$pid" 10; then
+		kill -KILL "$pid" 2>/dev/null || true
+		wait_pid_gone "$pid" 5 || true
+	fi
+	if kill -0 "$pid" 2>/dev/null; then
+		echo "ERROR: QEMU pid ${pid} survived SIGKILL; the installed-disk boot cannot" >&2
+		echo "       take the ${QEMU_PIDFILE} lock while it holds it." >&2
+		return 6
+	fi
+	# QEMU unlinks its own pidfile when it exits normally and did not get the
+	# chance here. Leaving a dead pid behind would have cleanup_vm signalling
+	# whatever recycles the number, and would hide that the next launch is
+	# starting from a corpse.
+	rm -f "$QEMU_PIDFILE"
 }
 
 # Prefix a bare "org/name:tag" image path with the default registry; a ref
@@ -2165,7 +2225,16 @@ EOF
 			-netdev "user,id=net0" -device virtio-net-pci,netdev=net0 \
 			-monitor "unix:${MONITOR_SOCK},server,nowait" \
 			-serial "unix:${FB_SERIAL},server,nowait" \
-			"${QEMU_GPU_ARGS[@]}" -pidfile "$QEMU_PIDFILE" -daemonize
+			"${QEMU_GPU_ARGS[@]}" -pidfile "$QEMU_PIDFILE" -daemonize || {
+			# Without this the launch failure is a bare qemu message and a
+			# `set -e` exit, which is how run 31140233496 reported a pidfile
+			# collision as an unexplained "exit code 1" with no ERROR line to
+			# search for. Name it, and name the usual reason.
+			echo "ERROR: QEMU would not start for the LUKS passphrase gate (message above)" >&2
+			echo "       A 'cannot lock pid file' there means the install VM outlived" >&2
+			echo "       poweroff_and_wait_vm and still holds ${QEMU_PIDFILE}." >&2
+			return 5
+		}
 		# 5th arg: keep draining the serial for up to 300s past login waiting
 		# for the desktop contract. See luks-first-boot.py for why.
 		python3 "$(dirname "${BASH_SOURCE[0]}")/luks-first-boot.py" \

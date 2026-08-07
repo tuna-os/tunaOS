@@ -324,6 +324,50 @@ media is dev/E2E. The cell continues on the caller's binary and emits a
 
 ---
 
+### 7. A guest that overstays its poweroff makes the next boot impossible (2026-08-07)
+
+**Affected:** any LUKS cell whose guest is slow to shut down. Measured on
+`albacore:cosmic`, run 31140233496 — where `yellowfin:cosmic` passed on the
+same commit, so this presents as one flaky cell.
+
+**Symptom:**
+
+```
+==> fisherman install complete. Shutting down...
+==> Waiting for VM to shut down...
+==> LUKS passphrase gate: booting installed disk, injecting passphrase, expecting login...
+qemu-system-x86_64: cannot create PID file: Cannot lock pid file: Resource temporarily unavailable
+##[error]Process completed with exit code 1
+```
+
+**The misleading part.** The install had already logged `Installation
+complete!` and the encrypted-disk evidence had already passed. The cell died
+70 seconds later with no `ERROR:` line of its own — just qemu's one-liner and
+a bare `exit 1` — which reads like a harness bug in whatever ran last (here,
+the timelapse, which was merely the next thing to print).
+
+**Root cause.** `poweroff_and_wait_vm` waited 30 × 2s and then returned
+regardless. Its callers immediately launch the installed-disk boot on the
+**same** `-pidfile`, and QEMU holds an exclusive lock on that file for its
+entire life, so a guest still running at the end of the window does not delay
+the gate, it forbids it. Two lines earlier in that run fisherman had reported
+`cryptsetup luksClose: Device fisherman-root is still in use`, and a busy dm
+device is exactly what `systemd-shutdown` spends its shutdown retrying — on
+top of systemd's own 90s `DefaultTimeoutStopSec`, which 70s cannot outlast.
+The generic path has a second stake in this: `swtpm` only exits when its QEMU
+disconnects, and the TPM gate restarts it.
+
+**Fix.** Wait long enough for a slow-but-healthy shutdown
+(`TUNAOS_E2E_POWEROFF_WAIT`, default 180s), then stop asking: ACPI
+`system_powerdown` over the monitor, then `SIGTERM`, then `SIGKILL`, and do
+not return until the process is actually gone. The install is finished and its
+target filesystem is already unmounted, frozen and flushed by then, so ending
+the guest ourselves costs the following boot nothing. If it survives `SIGKILL`
+the function now fails with that as the reason, and the passphrase gate's own
+launch names a QEMU it could not start instead of exiting silently.
+
+---
+
 ## Glossary of Components
 
 | Tool | Role | Source |
