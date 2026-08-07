@@ -80,19 +80,34 @@ else
 	# module every kernel ships, and modinfo rightly found no driver version
 	# in it. A name glob also passes on an image with no kmod at all, which
 	# inverts the check's whole purpose.
+	# UsrMove: the kmod RPM RECORDS its payload under /lib/modules — measured
+	# from the actual akmods bundle (rpm -qlp on
+	# kmod-nvidia-6.12.0-254.el10.x86_64-610.43.03-1.el10.x86_64.rpm prints
+	# ./lib/modules/<kver>/extra/nvidia/nvidia*.ko.xz) — while the files
+	# resolve on disk through the /lib -> /usr/lib symlink. Demanding the
+	# /usr-prefixed form in the rpm -ql output is how proof build #3 (run
+	# 31202648166) failed with a fully installed, version-locked driver.
+	# Match the kernel-dir substring either way, then resolve the on-disk
+	# location with a /usr fallback for roots without the symlink.
 	MODULE_FILE="$(rpm -ql kmod-nvidia 2>/dev/null |
 		grep -E '\.ko(\.[a-z0-9]+)?$' |
-		grep -F "/usr/lib/modules/${KERNEL_VRA}/" |
+		grep -F "lib/modules/${KERNEL_VRA}/" |
 		head -1 || true)"
+	if [[ -n "$MODULE_FILE" && ! -e "${NV_ROOT}${MODULE_FILE}" && -e "${NV_ROOT}/usr${MODULE_FILE}" ]]; then
+		MODULE_FILE="/usr${MODULE_FILE}"
+	fi
 	if [[ -n "$MODULE_FILE" && -e "${NV_ROOT}${MODULE_FILE}" ]]; then
 		MODULE_FILE="${NV_ROOT}${MODULE_FILE}"
 		pass "kmod-nvidia ships a module for ${KERNEL_VRA} (${MODULE_FILE#"${NV_ROOT}"})"
 	elif [[ -n "$MODULE_FILE" ]]; then
 		MODULE_FILE=""
-		fail "kmod-nvidia's module list names files absent on disk under /usr/lib/modules/${KERNEL_VRA}"
+		fail "kmod-nvidia's module list names files absent on disk under lib/modules/${KERNEL_VRA}"
 	else
+		# Evidence with the failure: what rpm actually owns, so the next
+		# mismatch names itself instead of costing a diagnosis round.
+		rpm -ql kmod-nvidia 2>/dev/null | head -10 | sed 's/^/    rpm -ql: /' || true
 		MODULE_FILE=""
-		fail "kmod-nvidia owns no .ko under /usr/lib/modules/${KERNEL_VRA} — kmod built for a different kernel?"
+		fail "kmod-nvidia owns no .ko under lib/modules/${KERNEL_VRA} — kmod built for a different kernel?"
 	fi
 fi
 
