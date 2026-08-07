@@ -393,6 +393,41 @@ else
 		fi
 	fi
 
+	# ── Flatpak baseline (store + browser + a remote that can serve them) ──
+	# Asserts exactly what the build now lays down, nothing aspirational:
+	# tuna-flatpak-remote.sh bakes the Flathub remote on every base, and
+	# flatpak-preinstall.sh declares the curated set (io.github.kolunmi.Bazaar
+	# as the store, org.mozilla.firefox as the browser — Bluefin's choices)
+	# and enables flatpak-preinstall.service where the base's flatpak ships
+	# it. Guarded on flatpak existing so a hypothetical flatpak-less image is
+	# out of scope rather than red. The per-app grep list below is kept in
+	# lockstep with flatpak-preinstall.sh by
+	# tests/bats/test_build_scripts_remaining.bats — change both together.
+	if command -v flatpak >/dev/null 2>&1; then
+		require_glob '/etc/flatpak/remotes.d/flathub.flatpakrepo'
+		require_glob '/usr/share/flatpak/preinstall.d/*.preinstall'
+		for _fp_app in io.github.kolunmi.Bazaar org.mozilla.firefox; do
+			if ! grep -rqs "^\[Flatpak Preinstall ${_fp_app}\]" /usr/share/flatpak/preinstall.d; then
+				echo "missing flatpak preinstall declaration: ${_fp_app}" >&2
+				if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
+					exit 1
+				fi
+			fi
+		done
+		# Where the unit exists, declarations without the service are inert —
+		# that combination shipped: preinstall files with nothing to run them.
+		if [[ -f /usr/lib/systemd/system/flatpak-preinstall.service ]]; then
+			if ! systemctl is-enabled flatpak-preinstall.service >/dev/null 2>&1; then
+				echo "flatpak-preinstall.service is shipped but not enabled — the declared flatpaks would never install" >&2
+				if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
+					exit 1
+				fi
+			fi
+		else
+			echo "info: this base's flatpak ships no flatpak-preinstall.service; declarations are documentation until it does"
+		fi
+	fi
+
 	# ── Branding & Asset Contract ──
 	# Wallpapers: shipping only upstream artwork means a user sees upstream background on login.
 	if ! compgen -G "/usr/share/backgrounds/tunaos*" >/dev/null &&

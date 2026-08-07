@@ -59,3 +59,6 @@ packages:
 
 post_install:
   - tuna-flatpak-remote.sh
+  # Curated Flatpak set (store + browser) + preinstall service — see the
+  # script header; asserts live in verify-desktop-experience.sh.
+  - flatpak-preinstall.sh

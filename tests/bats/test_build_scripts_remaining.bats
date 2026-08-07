@@ -201,6 +201,51 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$fail" -eq 0 ]
 }
 
+@test "flatpak baseline: manifests, preinstall script and contract cannot drift" {
+  # Same discipline as the contract-required-application table above: every
+  # piece of curated Flatpak content is (a) laid down by a post_install
+  # script every desktop manifest lists, and (b) asserted by the build
+  # contract — change any one of the three and this test names the others.
+  local contract="${REPO_ROOT}/build_scripts/checks/verify-desktop-experience.sh"
+  local preinstall="${REPO_ROOT}/build_scripts/desktop/flatpak-preinstall.sh"
+  local remote="${REPO_ROOT}/build_scripts/desktop/tuna-flatpak-remote.sh"
+  local fail=0
+
+  # (a) every desktop manifest runs both post_install scripts.
+  local m
+  for m in "${REPO_ROOT}"/manifests/desktops/*.yaml; do
+    for script in tuna-flatpak-remote.sh flatpak-preinstall.sh; do
+      if ! grep -qE "^\s*-\s+${script}\s*$" "$m"; then
+        echo "FAIL: $(basename "$m") post_install never runs ${script}" >&2
+        fail=1
+      fi
+    done
+  done
+
+  # (b) the remote script bakes Flathub, and the contract requires it.
+  grep -qF 'flathub.flatpakrepo' "$remote" || { echo "FAIL: tuna-flatpak-remote.sh no longer bakes flathub" >&2; fail=1; }
+  grep -qF "require_glob '/etc/flatpak/remotes.d/flathub.flatpakrepo'" "$contract" || { echo "FAIL: contract does not require the flathub remote" >&2; fail=1; }
+  grep -qF "require_glob '/usr/share/flatpak/preinstall.d/*.preinstall'" "$contract" || { echo "FAIL: contract does not require a preinstall declaration" >&2; fail=1; }
+
+  # (c) the app set is identical in the script that declares it and the
+  # contract that asserts it — extracted from both, compared as sets.
+  local declared asserted
+  declared="$(grep -oE '^_fp_add_app [A-Za-z0-9._-]+' "$preinstall" | awk '{print $2}' | sort)"
+  asserted="$(grep -oE 'for _fp_app in [A-Za-z0-9._ -]+;' "$contract" | sed 's/for _fp_app in //; s/;$//' | tr ' ' '\n' | sed '/^$/d' | sort)"
+  [ -n "$declared" ] || { echo "FAIL: no _fp_add_app lines found in flatpak-preinstall.sh" >&2; fail=1; }
+  if [ "$declared" != "$asserted" ]; then
+    echo "FAIL: preinstall set drifted — script declares [$declared] but contract asserts [$asserted]" >&2
+    fail=1
+  fi
+
+  # (d) the service that makes declarations real is enabled by the script
+  # and enforced by the contract wherever the unit exists.
+  grep -qF 'systemctl enable flatpak-preinstall.service' "$preinstall" || { echo "FAIL: flatpak-preinstall.sh does not enable the service" >&2; fail=1; }
+  grep -qF 'flatpak-preinstall.service is shipped but not enabled' "$contract" || { echo "FAIL: contract does not enforce the preinstall service" >&2; fail=1; }
+
+  [ "$fail" -eq 0 ]
+}
+
 @test "greetd greeter degrades to software rendering without a render node" {
   # cage is wlroots-based: on a VM with virtio-gpu but no virgl there is a DRM
   # card and NO render node, GL init fails, cage exits and greetd restart-loops
