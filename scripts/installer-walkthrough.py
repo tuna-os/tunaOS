@@ -138,6 +138,37 @@ def vnc_capture(png):
     return os.path.exists(png) and os.path.getsize(png) > 0
 
 
+# PPM -> PNG converter, resolved once.
+#
+# The screendump path hardcoded `convert`, under a `check=False` that reads as
+# tolerance but is not: check=False only suppresses a NONZERO EXIT, while a
+# missing binary raises FileNotFoundError out of Popen before any exit code
+# exists. So an absent ImageMagick did not degrade — it crashed the harness
+# with a traceback on the very first frame (run 31168173594), after the VM had
+# booted and was sitting on the installer's first screen.
+#
+# ImageMagick 7 ships `magick`; 6 ships `convert`; netpbm's `pnmtopng` reads
+# PPM natively and is already a dependency of every caller. Prefer whichever
+# exists, and say so once rather than per frame.
+def _resolve_ppm_converter():
+    for exe in ("magick", "convert"):
+        if shutil.which(exe):
+            return lambda ppm, png, exe=exe: subprocess.run(
+                [exe, ppm, png], check=False)
+    if shutil.which("pnmtopng"):
+        def _pnmtopng(ppm, png):
+            with open(png, "wb") as out:
+                subprocess.run(["pnmtopng", ppm], stdout=out, check=False)
+        return _pnmtopng
+    return None
+
+
+_ppm_to_png = _resolve_ppm_converter()
+if _ppm_to_png is None:
+    note("no PPM converter found (magick / convert / pnmtopng) — screendump "
+         "frames cannot be saved; install imagemagick or netpbm")
+
+
 def shot(idx, label):
     png = os.path.abspath(f"{outdir}/walkthrough-{flavor}-{idx:02d}.png")
 
@@ -151,7 +182,8 @@ def shot(idx, label):
     hmp(f"screendump {ppm}")
     time.sleep(1.5)
     if os.path.exists(ppm):
-        subprocess.run(["convert", ppm, png], check=False)
+        if _ppm_to_png is not None:
+            _ppm_to_png(ppm, png)
         os.remove(ppm)
         print(f"captured step {idx}: {label} -> {png} (screendump)", flush=True)
         return png

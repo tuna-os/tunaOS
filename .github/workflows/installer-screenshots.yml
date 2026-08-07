@@ -88,7 +88,7 @@ jobs:
             just podman jq golang-go git \
             systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk \
             qemu-system-x86 qemu-utils ovmf socat netpbm python3-pil \
-            tesseract-ocr
+            tesseract-ocr imagemagick
           sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
       - name: Log in to GHCR
@@ -142,9 +142,21 @@ jobs:
           # falls back to FLAVOR=de and both matrix legs write the same
           # walkthrough-de.json — a parity report that names neither frontend
           # it came from.
+          # `|| true` so a walkthrough failure still reaches the chown below.
+          # run-walkthrough.sh runs as root, so everything it writes —
+          # serial.log included — is root-owned; without the chown the
+          # if: always() debug upload dies with EACCES and destroys the one
+          # piece of evidence a failed run produces. Run 31168173594 did
+          # exactly that: the walkthrough failed, `set -e` skipped the chown,
+          # and the serial log could not be uploaded.
+          rc=0
           sudo -E FLAVOR="${{ matrix.flavor }}" \
-            bash scripts/run-walkthrough.sh "$ISO" walkthrough-out
-          sudo chown -R "$USER:$(id -gn)" walkthrough-out
+            bash scripts/run-walkthrough.sh "$ISO" walkthrough-out || rc=$?
+          sudo chown -R "$USER:$(id -gn)" walkthrough-out || true
+          if [[ "$rc" -ne 0 ]]; then
+            echo "::error::run-walkthrough.sh exited $rc"
+            exit "$rc"
+          fi
 
           # Fail loudly rather than publish a report with the screen rows
           # unfilled. installer-walkthrough.py degrades to "screen detection
