@@ -42,29 +42,31 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 
 ## LUKS E2E
 
-**39 of 54** cells green (51 tested, 3 never tested).
+**42 of 52** cells green (47 tested, 5 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ✅ | ✅ | ✅ | ❌ | ✅ |
+| **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **bonito-rawhide** | ✅ | ❌ | ✅ | ✅ | ✅ |
+| **bonito-rawhide** | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | **flounder** | ✅ | ✅ | ❌ | — | ✅ |
 | **flounder-sid** | ✅ | ✅ | — | — | ✅ |
-| **grouper** | ✅ | ❌ | ❌ | — | ❌ |
+| **grouper** | ✅ | ✅ | ❌ | — | ✅ |
 | **guppy** | ❌ | ❌ | — | — | ❌ |
 | **gurnard** | — | — | — | — | — |
 | **hummingbird** | ❌ | ⬜ | ⬜ | ⬜ | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **skipjack** | ✅ | ✅ | ❌ | ✅ | ✅ |
+| **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 32 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
+NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 25 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
 
-Newest result 2026-08-06, oldest still-authoritative result 2026-08-01. Results older than the most recent round of fixes are the best available data, not current data.
+The table above still shows a result for `flounder:cosmic`. `.github/build-config.yml` no longer declares that flavour, so `luks-e2e.yml` cannot schedule it and no run will ever turn it green. It is excluded from the count above — a last-measured verdict kept visible, not a gap. Same reasoning as the NVIDIA note.
+
+Newest result 2026-08-07, oldest still-authoritative result 2026-08-05. Results older than the most recent round of fixes are the best available data, not current data.
 
 ## Installer smoke
 
@@ -99,18 +101,18 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-08-06 | [31111988299](https://github.com/tuna-os/tunaOS/actions/runs/31111988299) | 1 |
-| 2026-08-06 | [31110117972](https://github.com/tuna-os/tunaOS/actions/runs/31110117972) | 1 |
-| 2026-08-06 | [31101896534](https://github.com/tuna-os/tunaOS/actions/runs/31101896534) | 1 |
-| 2026-08-06 | [31100129320](https://github.com/tuna-os/tunaOS/actions/runs/31100129320) | 1 |
-| 2026-08-06 | [31100122430](https://github.com/tuna-os/tunaOS/actions/runs/31100122430) | 1 |
-| 2026-08-06 | [31100113432](https://github.com/tuna-os/tunaOS/actions/runs/31100113432) | 1 |
-| 2026-08-06 | [31100103368](https://github.com/tuna-os/tunaOS/actions/runs/31100103368) | 1 |
-| 2026-08-06 | [31100096864](https://github.com/tuna-os/tunaOS/actions/runs/31100096864) | 1 |
-| 2026-08-06 | [31093981917](https://github.com/tuna-os/tunaOS/actions/runs/31093981917) | 1 |
-| 2026-08-06 | [31092676972](https://github.com/tuna-os/tunaOS/actions/runs/31092676972) | 1 |
-| 2026-08-06 | [31092670802](https://github.com/tuna-os/tunaOS/actions/runs/31092670802) | 1 |
-| 2026-08-06 | [31092664411](https://github.com/tuna-os/tunaOS/actions/runs/31092664411) | 1 |
+| 2026-08-07 | [31144015274](https://github.com/tuna-os/tunaOS/actions/runs/31144015274) | 3 |
+| 2026-08-07 | [31142505455](https://github.com/tuna-os/tunaOS/actions/runs/31142505455) | 1 |
+| 2026-08-07 | [31140248804](https://github.com/tuna-os/tunaOS/actions/runs/31140248804) | 1 |
+| 2026-08-07 | [31140243067](https://github.com/tuna-os/tunaOS/actions/runs/31140243067) | 1 |
+| 2026-08-07 | [31140241727](https://github.com/tuna-os/tunaOS/actions/runs/31140241727) | 1 |
+| 2026-08-07 | [31140234902](https://github.com/tuna-os/tunaOS/actions/runs/31140234902) | 1 |
+| 2026-08-07 | [31139552584](https://github.com/tuna-os/tunaOS/actions/runs/31139552584) | 1 |
+| 2026-08-07 | [31138898336](https://github.com/tuna-os/tunaOS/actions/runs/31138898336) | 1 |
+| 2026-08-07 | [31135980478](https://github.com/tuna-os/tunaOS/actions/runs/31135980478) | 1 |
+| 2026-08-07 | [31135620513](https://github.com/tuna-os/tunaOS/actions/runs/31135620513) | 1 |
+| 2026-08-07 | [31135619058](https://github.com/tuna-os/tunaOS/actions/runs/31135619058) | 1 |
+| 2026-08-07 | [31135530844](https://github.com/tuna-os/tunaOS/actions/runs/31135530844) | 1 |
 
 <!-- END GENERATED -->
 
