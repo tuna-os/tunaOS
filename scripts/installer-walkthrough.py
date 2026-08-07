@@ -388,7 +388,8 @@ for f in frames:
 # COSMIC desktop, clock ticking, no window. Named for what it actually checks.
 tap(rendered > 0, f"{flavor}: screen is not blank",
     f"{rendered}/{len(frames)} frames above stddev {BLANK_STDDEV} "
-    f"(blank everywhere usually means no GL — niri/xfwl4 need virgl)",
+    f"(blank everywhere: check the serial log for an OOM kill FIRST — "
+    f"a compositor the kernel keeps killing looks exactly like a GL failure)",
     enforced=strict)
 note(f"{rendered}/{len(frames)} frames above stddev {BLANK_STDDEV} "
      f"(whole screen, not the installer window)")
@@ -507,8 +508,12 @@ if have_ocr and not any(reached.values()) and rendered > 0:
           f"live-iso/common/src/desktop-{flavor}.sh arranges an autostart "
           f"entry, a systemd user unit or a spawn-at-startup line\n"
           f"  #   2. it launched and exited — check the user journal\n"
-          f"  #   3. its window is mapped but not drawing (no GL path)\n"
-          f"  #   4. the frames are a greeter, so the session never started\n"
+          f"  #   3. the COMPOSITOR is being OOM-killed — grep the serial log "
+          f"for 'Out of memory: Killed process'. This is what a 4G guest does "
+          f"to cosmic-comp, and every frame is black, which reads as a GL "
+          f"failure and is not one\n"
+          f"  #   4. its window is mapped but not drawing (no GL path)\n"
+          f"  #   5. the frames are a greeter, so the session never started\n"
           f"  # These look identical in the numbers and completely different in "
           f"the PNGs. Look at the captured frames first — an empty desktop with "
           f"the app merely pinned to a dock or launcher is case 1, not a UI bug.",

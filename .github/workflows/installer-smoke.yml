@@ -105,8 +105,30 @@ jobs:
           FLAVOR: ${{ matrix.flavor }}
         run: |
           mkdir -p smoke-out
+          # --memory 8192, not the 4096 default. Run 31216208138's cosmic leg
+          # had cosmic-comp OOM-killed THREE times:
+          #
+          #   Out of memory: Killed process 2146 (cosmic-comp)
+          #   total-vm:2697460kB ... task_memcg=/user.slice/user-974.slice
+          #
+          # Every captured frame was 282 bytes of black, and the harness
+          # reported "0/9 frames above stddev" — which reads as a GL failure and
+          # is not one. The live overlay's upperdir alone is an 8G tmpfs backed
+          # by guest RAM; a Wayland compositor on top of that does not fit in 4G.
+          # ubuntu-latest runners have 16G, so 8G guest leaves ample host.
           sudo -E ./scripts/iso-e2e.sh "$ISO_PATH" --ssh-only --keep-vm \
-            --timeout 1200 --output smoke-out
+            --memory 8192 --timeout 1200 --output smoke-out
+
+          # An OOM kill must never reach the walkthrough as "blank screen".
+          # It is the one failure that looks identical to missing GL, costs a
+          # full 25-minute leg to misdiagnose, and is one grep away from
+          # certainty. Fail here, naming the process the kernel killed.
+          if grep -q 'Out of memory: Killed process' smoke-out/serial.log 2>/dev/null; then
+            echo "::error::guest ran out of memory — the kernel killed:"
+            grep 'Out of memory: Killed process' smoke-out/serial.log | sed 's/^/  /'
+            echo "Raise --memory above 8192 rather than reading the black frames as a GPU problem."
+            exit 1
+          fi
 
       - name: Assert live desktop session + installer frontend
         env:
