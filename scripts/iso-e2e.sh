@@ -89,6 +89,10 @@
 #   3  kickstart install failed
 #   4  installed system did not boot
 #   5  SSH check failed
+#   6  pixel gate failed — the installed system reached login but nothing
+#      provably rendered (blank/absent capture, or zero timelapse frames on
+#      a host where capture works). TUNAOS_PIXEL_GATE=0 downgrades to
+#      advisory. See scripts/lib/pixel-gate.sh for the decision table.
 #   77 missing dependency (qemu, ovmf, etc.) — distinguishable for CI skip
 
 set -euo pipefail
@@ -245,6 +249,8 @@ E2E_SSH_OPTS=(
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 . "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/pixel-gate.sh
+. "${SCRIPT_DIR}/lib/pixel-gate.sh"
 # Extract VARIANT and FLAVOR from ISO filename for screenshot comparison and
 # for the fisherman recipe's image ref (used only as a fallback — callers
 # should set VARIANT/FLAVOR explicitly, e.g. luks-e2e.yml's env: block).
@@ -2394,6 +2400,38 @@ EOF
 			;;
 		*) echo "WARNING: no desktop contract marker on the installed system (DM likely never started)" >&2 ;;
 		esac
+
+		# ── Pixel gate: "DM active" must become "something actually drew" ──
+		# All the evidence above this line already exists on every run — the
+		# stddev-measured screenshot and the timelapse frames — but it was
+		# recorded fatal=0 and gated nothing, which is how a black console
+		# shipped under a green cell (run 29645108966). pixel_gate
+		# (scripts/lib/pixel-gate.sh) turns the measurable cases into a
+		# verdict and names the unmeasurable ones (virgl, no ImageMagick)
+		# instead of silently passing them.
+		#
+		# Stop the timelapse NOW rather than leaving it to cleanup_vm's EXIT
+		# trap: the gate needs frame-count.txt while the verdict is being
+		# decided. stop is idempotent (the pidfile is consumed; a second
+		# assemble recounts the same frames), so cleanup's later stop stays
+		# harmless.
+		local _frames="" _pixel_line="" _pixel_rc=0
+		if [[ -n "${TIMELAPSE_DIR:-}" ]]; then
+			bash "${SCRIPT_DIR}/record-timelapse.sh" stop "$TIMELAPSE_DIR" || true
+			_frames="$(cat "${TIMELAPSE_DIR}/frame-count.txt" 2>/dev/null || true)"
+		fi
+		_pixel_line="$(pixel_gate "$_shot" "${SCREENSHOT_STDDEV:-}" "$_frames" "${QEMU_NEEDS_VNC_SURFACE:-0}")" || _pixel_rc=$?
+		record_luks_evidence "$_pixel_line"
+		if [[ "$_pixel_rc" -ne 0 ]]; then
+			if [[ "${TUNAOS_PIXEL_GATE:-1}" == "1" ]]; then
+				echo "ERROR: pixel gate FAILED — the encrypted install unlocked and reached" >&2
+				echo "       login, but nothing provably rendered (${_pixel_line})." >&2
+				echo "       The screenshot and timelapse artifacts are the evidence;" >&2
+				echo "       TUNAOS_PIXEL_GATE=0 downgrades this to advisory." >&2
+				return 6
+			fi
+			echo "::warning::pixel gate failed but TUNAOS_PIXEL_GATE=0 — advisory only (${_pixel_line})"
+		fi
 
 		echo "==> LUKS passphrase gate PASSED for ${VARIANT:-}:${FLAVOR:-}"
 		return 0
