@@ -43,7 +43,10 @@ jobs:
   walkthrough:
     name: ${{ inputs.variant || 'skipjack' }}:${{ matrix.flavor }} installer flow
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    # Must exceed the sum of the step ceilings below (70 ISO + 30 walkthrough
+    # + 20 install-verify), or the job clock kills a step that is still inside
+    # its own budget — which reads as a hang rather than as the timeout it is.
+    timeout-minutes: 130
     strategy:
       fail-fast: false
       matrix:
@@ -68,11 +71,22 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
 
+      # The second line is the ISO-BUILD toolchain, and it is required now that
+      # tacklebox runs as a host binary rather than in a container: the
+      # container carried these tools, the runner does not. Without them the
+      # build runs all the way to the end and then dies with
+      #
+      #   Error: no systemd-boot EFI binary on host ...; install
+      #   systemd-boot-efi or systemd-boot-unsigned
+      #
+      # This is the same list installer-smoke.yml installs, and for the same
+      # reason — it has always built its ISOs from source.
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             just podman jq golang-go git \
+            systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk \
             qemu-system-x86 qemu-utils ovmf socat netpbm python3-pil \
             tesseract-ocr
           sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
@@ -103,8 +117,13 @@ jobs:
       # whole thing in another sudo dropped the environment, which is why the
       # variable had to be re-stated inline. installer-smoke.yml calls `just
       # iso` unsudoed for exactly this reason.
+      # 45 was not enough once tacklebox moved to the host: the gnome leg of run
+      # 31162836652 was killed mid-build at exactly 45 minutes, having got
+      # past every previous failure point. The cosmic leg finished its build in
+      # ~7 minutes, so this is headroom for the large images, not a general
+      # slowdown.
       - name: Build live ISO (from published GHCR image)
-        timeout-minutes: 45
+        timeout-minutes: 70
         env:
           GITHUB_REPOSITORY_OWNER: tuna-os
           TACKLEBOX_FROM_SOURCE: "1"
