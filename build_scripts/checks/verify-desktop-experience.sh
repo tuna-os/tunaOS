@@ -238,7 +238,15 @@ cosmic)
 	# into a hard build failure on a variant that has always built. Nor is
 	# either path measured on any published cosmic image yet. Measure
 	# bonito:cosmic (fedora) and flounder:cosmic (apt) first, then decide.
-	dm_pattern='^greetd\.service$'
+	#
+	# cosmic-greeter.service is accepted alongside greetd.service because it is
+	# greetd: `ExecStart=greetd --config /etc/greetd/cosmic-greeter.toml`, with
+	# `Provides: x-display-manager` and `Pre-Depends: greetd` on the deb. On
+	# Ubuntu its postinst claims the display-manager.service alias, so
+	# `systemctl show -P Id display-manager.service` reports cosmic-greeter
+	# there while Fedora/EL10 report greetd. Pinning only greetd would fail
+	# grouper:cosmic on a correctly-wired COSMIC login screen.
+	dm_pattern='^(greetd|cosmic-greeter)\.service$'
 	;;
 xfce)
 	experience="tunaos/xfce"

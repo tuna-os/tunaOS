@@ -135,7 +135,12 @@ emit "# display manager: ${dm_id:-unknown}"
 case "$DESKTOP" in
 gnome) dm_pattern='^(gdm|gdm3)\.service$' ;;
 kde) dm_pattern='^(sddm|plasmalogin)\.service$' ;; # KDE 6.5+ renamed sddm
-niri | cosmic) dm_pattern='^greetd\.service$' ;;
+niri) dm_pattern='^greetd\.service$' ;;
+# cosmic-greeter IS greetd (ExecStart=greetd --config
+# /etc/greetd/cosmic-greeter.toml), and on Ubuntu its postinst owns the
+# display-manager.service alias, so dm_id is cosmic-greeter there and greetd on
+# Fedora/EL10. Both are the same greeter.
+cosmic) dm_pattern='^(greetd|cosmic-greeter)\.service$' ;;
 xfce) dm_pattern='^(gdm|gdm3|lightdm|greetd)\.service$' ;;
 *) dm_pattern='' ;;
 esac

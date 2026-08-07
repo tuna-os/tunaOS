@@ -257,19 +257,54 @@ def desktop_table(matrix, results, key_fmt) -> list[str]:
 
 
 def tally(matrix, results, key_fmt):
+    """Count only cells build-config actually schedules.
+
+    A stale result for a cell the matrix no longer declares used to be counted,
+    because `hit` alone was enough to enter the denominator. That put
+    flounder:cosmic and flounder-sid:cosmic in the LUKS totals as permanent
+    failures: both flavours were removed on purpose in 491544d1 ("drop the
+    COSMIC flavours Debian cannot build"), so no run will ever turn them green,
+    and the board read 39 of 54 when the live set was 52.
+
+    Two cells is small; the dishonesty is not. It is the same one nvidia_tally
+    below was written to fix — a gap nobody is ever going to close, reported as
+    if someone should. Undeclared cells now get the same treatment: out of the
+    tally, and disclosed by count so the number visibly shrinks as they age out
+    rather than vanishing silently.
+
+    This does NOT hide a failing cell. A cell build-config still declares is
+    counted whether it passes, fails or has never run.
+    """
     total = tested = passed = 0
     for variant in variants_in_scope(matrix, results):
         flavors = matrix.get(variant, set())
         for d in DESKTOPS:
-            hit = results.get(key_fmt(variant, d))
-            if d not in flavors and not hit:
+            if d not in flavors:
                 continue
+            hit = results.get(key_fmt(variant, d))
             total += 1
             if hit:
                 tested += 1
                 if hit[0] == "success":
                     passed += 1
     return total, tested, passed
+
+
+def undeclared_tally(matrix, results, key_fmt):
+    """Stale results for cells build-config no longer schedules.
+
+    Deliberately reported rather than dropped: a flavour that disappears from
+    build-config while red should not simply stop being mentioned. Returns the
+    "variant:flavor" names so the disclosure can say which, and so the count
+    reaching zero is checkable.
+    """
+    stale = []
+    for variant in variants_in_scope(matrix, results):
+        flavors = matrix.get(variant, set())
+        for d in DESKTOPS:
+            if d not in flavors and results.get(key_fmt(variant, d)):
+                stale.append(f"{variant}:{d}")
+    return sorted(stale)
 
 
 def nvidia_tally(matrix, results, key_fmt):
@@ -337,6 +372,10 @@ def build() -> str:
     nv_stale = nvidia_tally(
         _matrix("build_image", desktops_only=False), luks, luks_key
     )
+    # lmatrix here, unlike the NVIDIA count above: this asks which of the
+    # DESKTOPS columns the table renders are no longer scheduled, and that is
+    # exactly the desktops_only matrix the table itself is built from.
+    undeclared = undeclared_tally(lmatrix, luks, luks_key)
     out += [
         "## LUKS E2E",
         "",
@@ -365,6 +404,27 @@ def build() -> str:
             f"takes the identical LUKS path in headless QEMU. "
             f"{nv_stale} stale pre-exclusion result(s) remain from before "
             "that change; they are not a gap and will age out.",
+            "",
+        ]
+
+    # Named, not just counted, and left visible in the table above: a flavour
+    # that leaves build-config while red must not simply stop being mentioned.
+    # It is out of the tally because no run can ever move it, which is a
+    # different statement from "it passed".
+    if undeclared:
+        out += [
+            "The table above still shows a result for "
+            + ", ".join(f"`{c}`" for c in undeclared)
+            + ". `.github/build-config.yml` no longer declares "
+            + ("that flavour" if len(undeclared) == 1 else "those flavours")
+            + ", so `luks-e2e.yml` cannot schedule "
+            + ("it" if len(undeclared) == 1 else "them")
+            + " and no run will ever turn "
+            + ("it" if len(undeclared) == 1 else "them")
+            + " green. "
+            + ("It is" if len(undeclared) == 1 else "They are")
+            + " excluded from the count above — a last-measured verdict kept "
+            "visible, not a gap. Same reasoning as the NVIDIA note.",
             "",
         ]
 
@@ -452,6 +512,7 @@ VOLATILE_LINE = re.compile(
     r"\| \d{4}-\d\d-\d\d \| \["          # provenance row
     r"|Newest result "                    # freshness of the LUKS data
     r"|NVIDIA cells are "                 # present only while stale results remain
+    r"|The table above still shows a result for "  # same: only while they remain
     r"|Missing for "                      # depends on published overlay tags
     r"|Every non-NVIDIA ISO cell has an overlay"
     r")"

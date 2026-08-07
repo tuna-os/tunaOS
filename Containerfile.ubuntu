@@ -432,11 +432,23 @@ RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
   /run/context/build_scripts/bootc/finalize.sh
 
+# COSMIC goes through the manifest-driven installer, not desktop/cosmic.sh.
+# cosmic.sh has no apt branch — gnome.sh, kde.sh, xfce.sh and niri.sh all open
+# with `if [[ "$PKG_MGR" == "apt" ]]`, cosmic.sh goes straight to
+# `dnf -y copr enable`, so this stage died at `dnf: command not found` on every
+# grouper:cosmic build (LUKS run 31134394662, and the flavour has never
+# published). Every other Containerfile already calls install-desktop.sh for
+# cosmic; only this one still reached for the per-DE script.
+#
+# The manifest path is also the only one that can install COSMIC on Ubuntu at
+# all: it comes solely from ppa:hepp3n/cosmic-epoch, and `packages.apt.ppa`
+# with `condition: ubuntu` is handled by install-desktop.sh (_td_add_ppa) and
+# nowhere else. That is the same reason the pantheon stage below uses it.
 FROM base-no-de AS cosmic
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
-  /run/context/build_scripts/desktop/cosmic.sh base && \
+  /run/context/build_scripts/desktop/install-desktop.sh cosmic && \
   /run/context/build_scripts/desktop/configure-desktop-runtime.sh cosmic
 RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
