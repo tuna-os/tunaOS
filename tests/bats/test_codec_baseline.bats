@@ -100,8 +100,18 @@ done
 GEN
   chmod +x "${BATS_TEST_TMPDIR}/fake-decoders"
   # Old (piped) form under pipefail: fails despite the decoder being there.
-  run bash -c "set -o pipefail; '${BATS_TEST_TMPDIR}/fake-decoders' | grep -q ' h264 '"
-  [ "$status" -eq 141 ]
+  #
+  # The exact code depends on the SIGPIPE disposition the harness inherited,
+  # so this asserts "nonzero", not "141". With SIGPIPE at its default the
+  # writer dies of the signal and bash reports 141 (128+13) — that is the
+  # container-build case the contract actually runs in. When some ancestor
+  # already set SIGPIPE to SIG_IGN, children inherit the ignore, writes fail
+  # with EPIPE instead, and the pipeline reports 1 — that is the GitHub
+  # Actions case, whose Node-based runner ignores SIGPIPE. Same bug either
+  # way: the pipeline fails WITH the decoder present. Pinning 141 made this
+  # test itself a false failure on CI.
+  run bash -c "set -o pipefail; '${BATS_TEST_TMPDIR}/fake-decoders' 2>/dev/null | grep -q ' h264 '"
+  [ "$status" -ne 0 ]
   # New (captured) form: passes.
   run bash -c "set -o pipefail; d=\"\$('${BATS_TEST_TMPDIR}/fake-decoders')\"; grep -q ' h264 ' <<<\"\$d\""
   [ "$status" -eq 0 ]
