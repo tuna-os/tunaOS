@@ -2,7 +2,7 @@
 
 set -euo pipefail
 
-desktop="${1:?usage: configure-desktop-runtime.sh <gnome|kde|niri|cosmic|xfce>}"
+desktop="${1:?usage: configure-desktop-runtime.sh <gnome|kde|niri|cosmic|xfce|pantheon>}"
 
 # Desktop packages are installed in later Containerfile stages than the base
 # service setup. Enable their display manager only after its unit exists.
@@ -85,6 +85,16 @@ xfce)
 		dm=greetd
 	fi
 	;;
+pantheon)
+	# manifests/desktops/pantheon.yaml pins display_manager: lightdm and the
+	# elementary PPA's greeter (io.elementary.greeter) is a LightDM greeter.
+	# Until 2026-08-07 pantheon fell through to the `*) exit 0` below: no DM
+	# enable, no graphical.target default, and — the part the matrix could
+	# not see — no tunaos-desktop-contract.service, so gurnard:pantheon was
+	# green with desktop_contract=absent (run 31074188677). Landing here also
+	# puts pantheon in the contract family case further down.
+	dm=lightdm
+	;;
 *) exit 0 ;;
 esac
 
@@ -129,7 +139,7 @@ systemctl set-default graphical.target
 # snosi-derived installed-system TAP checks (harvested from the serial
 # console by scripts/iso-e2e.sh; the checks ExecStart is non-fatal).
 case "$desktop" in
-gnome | kde | niri | cosmic | xfce)
+gnome | kde | niri | cosmic | xfce | pantheon)
 	# Compile dconf databases before verify checks — desktop stages lay down
 	# keyfiles after the base stage's dconf update, so recompile here.
 	if command -v dconf &>/dev/null && compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
