@@ -479,14 +479,42 @@ else
 		# and keep "ffmpeg would not run" distinct from "ffmpeg runs but
 		# cannot decode", because their fixes live in different places
 		# (packaging deps vs codec sourcing).
+		# Both failure branches dump the evidence that names the cause,
+		# because this check fired on guppy:xfce (run 31201546516) with a
+		# freshly source-built ffmpeg 8.1.2 whose USE line showed x264 —
+		# a build where the native h264 decoder should be unconditional —
+		# while the same check passes inside the July guppy:gnome image
+		# and against Alpine's 8.1.2. Three container reproductions of the
+		# tooling stage could not replicate it (portage tree drift), so
+		# the next failing run must answer for itself: WHICH ffmpeg ran,
+		# what its configure line disabled, what it printed to stderr
+		# (previously discarded), and what the decoder list actually held.
+		_ffmpeg_diag() {
+			{
+				echo "codec_diag: ffmpeg=$(command -v ffmpeg)"
+				ffmpeg -version 2>&1 | head -2 | sed 's/^/codec_diag: /'
+				ffmpeg -version 2>&1 | tr ' ' '\n' | grep -- '--disable-\(everything\|decoders\|decoder=[a-z0-9_]*\)' | sed 's/^/codec_diag: configure /'
+				echo "codec_diag: decoders_stdout_bytes=${#_ffmpeg_decoders}"
+				echo "codec_diag: decoders_stderr: ${_ffmpeg_stderr:-<empty>}"
+				grep -i 'h26' <<<"$_ffmpeg_decoders" | head -5 | sed 's/^/codec_diag: h26x /'
+			} >&2 || true
+		}
 		_ffmpeg_decoders=""
-		if ! _ffmpeg_decoders="$(ffmpeg -hide_banner -decoders 2>/dev/null)"; then
+		_ffmpeg_stderr=""
+		_ffmpeg_rc=0
+		_ffmpeg_stderr_file="$(mktemp)"
+		_ffmpeg_decoders="$(ffmpeg -hide_banner -decoders 2>"$_ffmpeg_stderr_file")" || _ffmpeg_rc=$?
+		_ffmpeg_stderr="$(head -c 2048 "$_ffmpeg_stderr_file")"
+		rm -f "$_ffmpeg_stderr_file"
+		if ((_ffmpeg_rc != 0)); then
 			echo "ffmpeg is installed but would not run (broken dependencies?) — cannot verify codecs" >&2
+			_ffmpeg_diag
 			if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
 				exit 1
 			fi
 		elif ! grep -q ' h264 ' <<<"$_ffmpeg_decoders"; then
 			echo "ffmpeg cannot decode h264 — a free/crippled libavcodec is installed" >&2
+			_ffmpeg_diag
 			if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
 				exit 1
 			fi
