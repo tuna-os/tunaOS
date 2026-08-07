@@ -21,7 +21,38 @@ kde)
 		dm=sddm
 	fi
 	;;
-niri | cosmic) dm=greetd ;;
+niri) dm=greetd ;;
+cosmic)
+	# Same shape as the kde case above: a package can claim the
+	# display-manager.service alias before we get here, and `systemctl
+	# enable` on a different DM then hard-fails rather than winning.
+	#
+	# The PPA's cosmic-greeter deb enables cosmic-greeter.service and points
+	# display-manager.service at it in its postinst, so the greetd line blew
+	# up the whole grouper:cosmic build:
+	#
+	#   Failed to enable unit: File '/etc/systemd/system/display-manager.service'
+	#   already exists and is a symlink to /lib/systemd/system/cosmic-greeter.service
+	#
+	# (LUKS run 31135761136.) Deferring to the claim is also right on the
+	# merits — cosmic-greeter IS COSMIC's greeter, and it is already enabled
+	# at this point.
+	#
+	# This tests the CLAIM, not the package, and that distinction is the
+	# whole safety argument. Fedora and EL10 install cosmic-greeter too, and
+	# their cosmic cells are green today *because* `systemctl enable greetd`
+	# succeeds there — which is direct evidence their scriptlets leave the
+	# alias alone. Keying off "is cosmic-greeter installed" would have
+	# repointed those images; keying off the symlink cannot.
+	#
+	# NOT `systemctl enable --force`: the kde comment above records why
+	# forcing the alias is the wrong instrument (tunaOS#824).
+	if [[ "$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null)" == *cosmic-greeter.service ]]; then
+		dm=cosmic-greeter
+	else
+		dm=greetd
+	fi
+	;;
 xfce)
 	if systemctl list-unit-files lightdm.service --no-legend 2>/dev/null | grep -q '^lightdm.service'; then
 		dm=lightdm
