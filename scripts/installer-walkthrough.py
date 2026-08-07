@@ -446,10 +446,31 @@ if have_ocr and not any(reached.values()) and rendered > 0:
     _moved = "nothing responded to input" if n_states <= 1 else (
         f"the screen changed {n_states - 1}x, but no change was an installer "
         f"screen (a greeter clock or desktop animation looks identical here)")
-    print(f"  # DIAGNOSIS: {flavor} — process is running (gate passed) but no "
-          f"installer screen was ever detected and {_moved}; the frames are "
-          f"most likely a login greeter or the bare desktop, with no installer "
-          f"window mapped. Check the captured PNGs before assuming a UI bug.",
+    # Deliberately lists the causes instead of naming a favourite.
+    #
+    # It used to end "most likely a login greeter or the bare desktop, with no
+    # installer window mapped". On run 31171184497 that was wrong on every
+    # count: the session was a fully drawn GNOME desktop, and the reason no
+    # installer screen appeared is that the gnome live adapter never launched
+    # one — it had no autostart entry at all, while kde, cosmic and xfce did.
+    # A confident wrong guess is worse than no guess: it sent the investigation
+    # looking for a greeter, then for a GTK renderer bug, before anyone read
+    # the five desktop adapters and saw the asymmetry.
+    #
+    # "process is running" is also weaker evidence than it sounds. That gate
+    # lives in installer-smoke.yml and does not run here, so on this harness it
+    # is an assumption, not a check.
+    print(f"  # DIAGNOSIS: {flavor} — no installer screen was ever detected "
+          f"and {_moved}. Causes, in the order they are worth checking:\n"
+          f"  #   1. the installer was never LAUNCHED — check that "
+          f"live-iso/common/src/desktop-{flavor}.sh arranges an autostart "
+          f"entry, a systemd user unit or a spawn-at-startup line\n"
+          f"  #   2. it launched and exited — check the user journal\n"
+          f"  #   3. its window is mapped but not drawing (no GL path)\n"
+          f"  #   4. the frames are a greeter, so the session never started\n"
+          f"  # These look identical in the numbers and completely different in "
+          f"the PNGs. Look at the captured frames first — an empty desktop with "
+          f"the app merely pinned to a dock or launcher is case 1, not a UI bug.",
           flush=True)
 
 # ── Result for the parity matrix ─────────────────────────────────────────
