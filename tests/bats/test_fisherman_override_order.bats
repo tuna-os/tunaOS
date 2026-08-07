@@ -33,15 +33,21 @@ code_line() {
 @test "the override and the presence check are both still present" {
 	run sh -c "grep -c 'Overriding fisherman with' '$SCRIPT'"
 	[ "$output" -eq 1 ]
+	# Two reads of /usr/local/bin/fisherman, and they are not interchangeable:
+	# the first asks what the IMAGE shipped (which is what the TBOX_E2E_IMAGE
+	# generic-path decision turns on), the second verifies the override landed.
+	# See test_iso_e2e_fisherman_override.bats for what each one decides.
 	run sh -c "grep -c 'command -v /usr/local/bin/fisherman' '$SCRIPT'"
-	[ "$output" -eq 1 ]
+	[ "$output" -eq 2 ]
 }
 
 # The assertion this file exists for.
 @test "the override is installed before the presence check" {
 	local override check
 	override=$(grep -n 'Overriding fisherman with' "$SCRIPT" | head -1 | cut -d: -f1)
-	check=$(grep -n 'command -v /usr/local/bin/fisherman' "$SCRIPT" | head -1 | cut -d: -f1)
+	# The *verifying* check — the one that returns 3 — is the last read, after
+	# the override. The first read is the pre-override image probe.
+	check=$(grep -n 'command -v /usr/local/bin/fisherman' "$SCRIPT" | tail -1 | cut -d: -f1)
 	[ -n "$override" ]
 	[ -n "$check" ]
 	if [ "$override" -ge "$check" ]; then
@@ -64,7 +70,7 @@ code_line() {
 	end=$(grep -n '^[a-z_]*() {' "$SCRIPT" | awk -F: -v s="$start" '$1>s {print $1; exit}')
 	[ -n "$end" ] || end=$(wc -l <"$SCRIPT")
 	override=$(grep -n 'Overriding fisherman with' "$SCRIPT" | head -1 | cut -d: -f1)
-	check=$(grep -n 'command -v /usr/local/bin/fisherman' "$SCRIPT" | head -1 | cut -d: -f1)
+	check=$(grep -n 'command -v /usr/local/bin/fisherman' "$SCRIPT" | tail -1 | cut -d: -f1)
 	[ "$override" -gt "$start" ] && [ "$override" -lt "$end" ]
 	[ "$check" -gt "$start" ] && [ "$check" -lt "$end" ]
 }

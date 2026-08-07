@@ -1655,11 +1655,38 @@ run_install() {
 	# --block-setup tpm2-luks` doesn't cover the same way and that real users
 	# never exercise directly. See docs/ci-troubleshooting.md's fisherman
 	# glossary entry.
+	# Does THIS IMAGE ship fisherman? Probed once, before the override lands,
+	# because two separate decisions read it and they need different answers.
+	#
 	# Generic (non-tunaOS) images ship no fisherman. When the caller names
 	# the image (TBOX_E2E_IMAGE), install it with plain bootc instead — see
 	# run_install_generic. Without a named image the hard error stands:
 	# guessing a registry ref from an ISO filename is exactly the mistake
 	# the published-image-ref.sh resolver below exists to prevent.
+	#
+	# That choice is about the image, not about what this function copied onto
+	# it a moment ago. Reading it off /usr/local/bin/fisherman *after* the
+	# override installs would hand every TBOX_E2E_IMAGE caller the fisherman
+	# path instead, and recipe_image below resolves a *tunaOS* ref from
+	# VARIANT/FLAVOR — so a caller-named generic image would be silently
+	# swapped for a tunaOS one. Probe first, decide, then override.
+	local image_has_fisherman=1
+	"${ssh_cmd[@]}" "command -v /usr/local/bin/fisherman" &>/dev/null || image_has_fisherman=0
+	if [[ "$image_has_fisherman" -eq 0 && -n "${TBOX_E2E_IMAGE:-}" ]]; then
+		run_install_generic
+		return $?
+	fi
+
+	# An image that ships no fisherman ships no installer GUI either: the
+	# flatpak that carries the binary is the same one that carries the
+	# frontend, and customize-live.sh downgrades a failed install of it to a
+	# warning on dev/E2E media (`.enable-sshd`). The override below makes the
+	# LUKS install path testable anyway, which is right — but say out loud
+	# what this cell then does NOT cover.
+	if [[ "$image_has_fisherman" -eq 0 ]]; then
+		echo "::warning::live image ships no /usr/local/bin/fisherman (the installer flatpak is missing from the squash) — this cell tests the LUKS install with the caller's binary, not that ISO's own installer"
+	fi
+
 	# Install the override BEFORE the presence check below, not after it.
 	#
 	# This block used to live ~260 lines further down, next to the recipe.
@@ -1683,16 +1710,32 @@ run_install() {
 	if [[ -n "${FISHERMAN_OVERRIDE:-}" && -f "${FISHERMAN_OVERRIDE}" ]]; then
 		echo "==> Overriding fisherman with ${FISHERMAN_OVERRIDE}"
 		"${scp_cmd[@]}" "${FISHERMAN_OVERRIDE}" "${GUEST_SCP_DEST}:${GUEST_HOME}/fisherman-override"
-		"${ssh_cmd[@]}" "sudo install -D -m0755 ${GUEST_HOME}/fisherman-override /usr/local/bin/fisherman"
+		# Create the directory separately rather than letting `install -D` do
+		# it. Now that the override also has to work on an image that shipped
+		# none, /usr/local/bin may not exist — and on the ostree layout
+		# /usr/local is a symlink to a ../var/usrlocal that the image does not
+		# contain, where mkdir -p (which is what -D uses) refuses to create
+		# *through* a dangling symlink and dies with the confusing
+		#
+		#   mkdir: cannot create directory '/usr/local': File exists
+		#
+		# `readlink -m` canonicalises without requiring the path to exist, so
+		# this creates /var/usrlocal/bin on the symlinked layout and
+		# /usr/local/bin on the plain one, and the install below resolves
+		# through the symlink either way. Same trick, same reason, as the
+		# symlink customize-live.sh makes at build time.
+		"${ssh_cmd[@]}" "sudo mkdir -p \$(readlink -m /usr/local/bin)"
+		"${ssh_cmd[@]}" "sudo install -m0755 ${GUEST_HOME}/fisherman-override /usr/local/bin/fisherman"
 	fi
 
 	if ! "${ssh_cmd[@]}" "command -v /usr/local/bin/fisherman" &>/dev/null; then
-		if [[ -n "${TBOX_E2E_IMAGE:-}" ]]; then
-			run_install_generic
-			return $?
-		fi
 		echo "ERROR: fisherman not found on live image (VARIANT=${VARIANT:-} FLAVOR=${FLAVOR:-})" >&2
-		echo "ERROR: and TBOX_E2E_IMAGE is unset, so the generic bootc path cannot name an image ref" >&2
+		# Only true when the caller named no image: with TBOX_E2E_IMAGE set,
+		# an image that shipped no fisherman took the generic path above, so
+		# reaching here means the override clobbered a binary that was there.
+		if [[ -z "${TBOX_E2E_IMAGE:-}" ]]; then
+			echo "ERROR: and TBOX_E2E_IMAGE is unset, so the generic bootc path cannot name an image ref" >&2
+		fi
 		if [[ -n "${FISHERMAN_OVERRIDE:-}" ]]; then
 			echo "ERROR: FISHERMAN_OVERRIDE=${FISHERMAN_OVERRIDE} was set but did not land —" >&2
 			echo "ERROR: $([[ -f "${FISHERMAN_OVERRIDE}" ]] && echo 'the file exists, so the scp/install above failed' || echo 'that path does not exist on the runner')" >&2
