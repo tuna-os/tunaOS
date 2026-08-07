@@ -38,12 +38,37 @@ cosmic)
 	# merits — cosmic-greeter IS COSMIC's greeter, and it is already enabled
 	# at this point.
 	#
-	# This tests the CLAIM, not the package, and that distinction is the
-	# whole safety argument. Fedora and EL10 install cosmic-greeter too, and
-	# their cosmic cells are green today *because* `systemctl enable greetd`
-	# succeeds there — which is direct evidence their scriptlets leave the
-	# alias alone. Keying off "is cosmic-greeter installed" would have
-	# repointed those images; keying off the symlink cannot.
+	# This tests the CLAIM, not the package, which is what makes it correct
+	# on every base rather than just the one it was written for.
+	#
+	# An earlier version of this comment claimed EL10 leaves the alias alone,
+	# inferring it from `systemctl enable greetd` succeeding there. That
+	# inference was WRONG, and the artifacts say so: albacore:cosmic on head
+	# c277780f — before any of this — already reported
+	#
+	#   # display manager: cosmic-greeter.service
+	#   reason=dm_mismatch dm=cosmic-greeter.service
+	#
+	# EL10's COPR cosmic-greeter claims the alias exactly like the deb does.
+	# greetd enables cleanly there for a different reason: Fedora/EL ship
+	# greetd.service with `[Install] WantedBy=graphical.target` and no Alias=,
+	# while Debian/Ubuntu ship `Alias=display-manager.service` and no
+	# WantedBy=. No alias, no conflict — so the EL10 build SUCCEEDS and ships
+	# both units, which is worse than failing: greetd and cosmic-greeter both
+	# run `greetd` on vt1 with Restart=always, greetd takes the terminal
+	# first, and cosmic-greeter crash-loops on
+	#
+	#   unable to start greeter: terminal: unable to take controlling
+	#   terminal: EPERM: Operation not permitted
+	#
+	# (skipjack:cosmic, run 31136849989 — a cell the board counts GREEN,
+	# because the desktop contract that catches it is fatal=0. albacore:cosmic
+	# fails the same contract. skipjack:niri passes it on the identical base,
+	# so the check works and this is COSMIC-specific.)
+	#
+	# Keying off the symlink handles that case too: on EL10 the symlink is
+	# already cosmic-greeter, so this picks cosmic-greeter and the sibling
+	# guard in install-desktop.sh stops force-linking greetd beside it.
 	#
 	# NOT `systemctl enable --force`: the kde comment above records why
 	# forcing the alias is the wrong instrument (tunaOS#824).
