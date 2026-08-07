@@ -980,3 +980,16 @@ setup_runtime_check_stubs() {
   grep -q 'recipe_image=""' "$SCRIPT"
   grep -q 'containers-storage:<targetImgref>' "$SCRIPT"
 }
+
+@test "first-boot harness harvests the emergency shell instead of timing out past it" {
+  # guppy:xfce (run 31182709691): "Failed to start Switch Root", dracut
+  # emergency shell, and an artifact that proved the failure happened while
+  # containing nothing about why — rdsosreport.txt lives inside the guest and
+  # died with it. The harness must detect the shell and cat the report to the
+  # serial it already captures. Pinned on the CODE strings (the send commands
+  # and the detection literal), not the rationale comments.
+  local harness="${REPO_ROOT}/scripts/luks-first-boot.py"
+  grep -qF '"Entering emergency mode" in text' "$harness"
+  grep -qF 'cat /run/initramfs/rdsosreport.txt 2>/dev/null' "$harness"
+  grep -qF 'journalctl -b --no-pager -n 120' "$harness"
+}
