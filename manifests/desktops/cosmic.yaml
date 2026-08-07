@@ -36,7 +36,15 @@ packages:
       - cosmic-term
       - cosmic-wallpapers
       - cosmic-workspaces
-      - cosmic-icon-theme
+      # cosmic-ICONS, not cosmic-icon-theme. The RPM name is the theme one and
+      # it is what this list said, so apt exited 100 on the single name it
+      # could not find and took the whole transaction with it:
+      #   E: Unable to locate package cosmic-icon-theme
+      # (grouper:cosmic, LUKS run 31135209477 — the other 20 names resolved).
+      # ppa:hepp3n/cosmic-epoch publishes 46 binaries for resolute; the icon
+      # set among them is `cosmic-icons` 1.5.0~b78b059, and no package whose
+      # name contains "icon-theme" exists there at all except pop-icon-theme.
+      - cosmic-icons
       - greetd
       - xdg-desktop-portal-cosmic
 
