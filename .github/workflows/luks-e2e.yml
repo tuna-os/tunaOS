@@ -208,7 +208,15 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             just podman crun jq \
             qemu-system-x86 qemu-utils ovmf swtpm socat sshpass imagemagick \
-            systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk
+            systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk \
+            ffmpeg
+          # ffmpeg is what turns record-timelapse.sh's frames into the video.
+          # Without it the recorder captures normally and then has nothing to
+          # assemble with, which is deliberately NOT a failure — the first
+          # green cell to run with the recorder (skipjack:cosmic, run
+          # 31135333873) shipped `timelapse/frame-count.txt` reading 203 and
+          # no timelapse.webm, and stayed green. That is the contract working;
+          # it is also 203 frames nobody can watch.
           podman --version; crun --version | head -1
 
       # iso-e2e.sh resolves the published image ref through
