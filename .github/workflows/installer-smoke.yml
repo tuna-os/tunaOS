@@ -210,11 +210,21 @@ jobs:
         env:
           FLAVOR: ${{ matrix.flavor }}
         run: |
-          # Smithay compositors (niri, xfwl4) cannot render without virgl, so a
-          # GPU-less runner shows blank frames legitimately — enforce only where
-          # rendering is possible; elsewhere still record screens for the matrix.
-          STRICT=""
-          case "${FLAVOR}" in kde|cosmic|gnome) STRICT="--strict" ;; esac
+          # Every flavor is strict. This used to exempt niri and xfce on the
+          # premise that "Smithay compositors cannot render without virgl, so a
+          # GPU-less runner shows blank frames legitimately" — which is false on
+          # both halves. The kernel in these very runs reports
+          #   [drm] pci: virtio-vga detected
+          # so a render node exists; and the blank frames that motivated the
+          # carve-out were the COMPOSITOR BEING OOM-KILLED (run 31216208138:
+          # cosmic-comp killed three times), fixed by the 8G guest above.
+          #
+          # An exemption granted on a wrong premise is worse than no gate: it
+          # made two of the five frontends permanently unable to fail the render
+          # and screen-coverage checks, which is exactly the drift this workflow
+          # exists to catch. If niri or xfce genuinely cannot render here, that
+          # must show up as a red leg with frames to look at, not as silence.
+          STRICT="--strict"
           if sudo test -S smoke-out/monitor.sock; then
             set +e
             sudo python3 scripts/installer-walkthrough.py \
