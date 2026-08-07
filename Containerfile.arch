@@ -133,8 +133,15 @@ RUN KERNEL_PKG="linux"; \
         gst-plugins-base \
         gst-plugins-good \
         gst-plugins-bad \
-        gst-plugins-ugly && \
+        gst-plugins-ugly \
+        gst-libav && \
     pacman -Scc --noconfirm
+# gst-libav above is not optional garnish: the ugly set only carries the
+# x264 ENcoder — H.264/H.265 DEcode in GStreamer apps goes through
+# libgstlibav.so (measured: Arch's gst-libav ships
+# /usr/lib/gstreamer-1.0/libgstlibav.so). Without it marlin played no
+# mainstream video. Asserted by verify-desktop-experience.sh's codec
+# baseline.
 
 # NOTE: this MUST precede the dracut step below. dracut-config.sh derives the
 # driver set from prepare-root.conf — written at the end of this block — so

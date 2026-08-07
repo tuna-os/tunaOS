@@ -382,6 +382,36 @@ else
 		fi
 	fi
 
+	# ── Codec baseline ──
+	# "Codecs installed" was promised on every family and verified on none —
+	# the EL10 x86_64_v2 leg shipped ffmpeg-free only (no H.264/H.265 at
+	# all) and marlin shipped gst-plugins-ugly without gst-libav (x264
+	# ENcoder present, no mainstream DEcoder), and both were green. Two
+	# file-level proofs, both cheap and network-free:
+	#
+	# 1. The GStreamer libav plugin exists — the piece that lets totem,
+	#    thumbnailers and WebKit decode through libavcodec. One measured
+	#    path per packaging family (repo rule: no unmeasured globs):
+	#      rpm/openSUSE/Gentoo  /usr/lib64/gstreamer-1.0/libgstlibav.so
+	#      Arch                 /usr/lib/gstreamer-1.0/libgstlibav.so
+	#      Debian/Ubuntu        /usr/lib/<triplet>/gstreamer-1.0/libgstlibav.so
+	# 2. `ffmpeg -decoders` actually lists h264 — the plugin above routes
+	#    into libavcodec, so a free-codec libavcodec (the exact v2 failure)
+	#    is caught here even though the plugin file exists.
+	require_any_glob \
+		'/usr/lib64/gstreamer-1.0/libgstlibav.so' \
+		'/usr/lib/gstreamer-1.0/libgstlibav.so' \
+		'/usr/lib/*/gstreamer-1.0/libgstlibav.so'
+	require_command ffmpeg
+	if command -v ffmpeg >/dev/null 2>&1; then
+		if ! ffmpeg -hide_banner -decoders 2>/dev/null | grep -q ' h264 '; then
+			echo "ffmpeg cannot decode h264 — a free/crippled libavcodec is installed" >&2
+			if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
+				exit 1
+			fi
+		fi
+	fi
+
 	# ── KDE version-skew guard (pattern from ublue-os/aurora's 20-tests.sh) ──
 	# Mid-compose repo skew can ship kwin/kscreen from a newer Plasma than
 	# plasma-desktop; the session then crashes at login while every package
