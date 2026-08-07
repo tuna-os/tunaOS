@@ -1115,7 +1115,7 @@ wait_for_ready() {
 				echo "    [ssh: guest is alive — checking why marker hasn't fired]"
 				sshpass -p live ssh $ssh_opts liveuser@127.0.0.1 -p "$SSH_PORT" \
 					"systemctl status tunaos-live-ready.service 2>&1 || true; echo '---'; systemctl is-active graphical.target 2>&1 || true" \
-					>> "$SERIAL_LOG" 2>/dev/null || true
+					>>"$SERIAL_LOG" 2>/dev/null || true
 				# Also try grepping serial log for an install-checks result as
 				# a backup readiness signal — it means the system is well past
 				# boot and the marker just didn't fire.
@@ -1467,8 +1467,23 @@ run_install_generic() {
 		return 3
 	fi
 
-	local block_setup=""
-	[[ "$LUKS" -eq 1 ]] && block_setup="--block-setup tpm2-luks"
+	local block_setup="" luks_cfg_mount=""
+	if [[ "$LUKS" -eq 1 ]]; then
+		block_setup="--block-setup tpm2-luks"
+		# bootc refuses --block-setup tpm2-luks unless the image's install
+		# config opts in: "Block setup Tpm2Luks is not enabled in
+		# installation config" (attempt 11, iso-builder run 31125136026 —
+		# it wiped /dev/vda and stopped one line later). Stock images ship
+		# no such opt-in, and it is install-time POLICY, not image content:
+		# stage a config drop-in on the scratch disk and bind-mount it into
+		# the installing container instead of mutating the image. "direct"
+		# stays in the list so the default path remains enabled too.
+		"${ssh_cmd[@]}" "printf '[install]\nblock = [\"direct\", \"tpm2-luks\"]\n' | sudo tee /var/lib/containers/tbox-install-luks.toml >/dev/null" || {
+			echo "ERROR: could not stage the bootc install-config drop-in" >&2
+			return 3
+		}
+		luks_cfg_mount="-v /var/lib/containers/tbox-install-luks.toml:/usr/lib/bootc/install/90-tbox-luks.toml:ro"
+	fi
 	echo "==> Running bootc install to-disk on /dev/vda..."
 	# The canonical containerized install (bootc docs): privileged, host pid,
 	# /dev and the store bind-mounted. The kargs the passphrase-gate path
@@ -1476,6 +1491,7 @@ run_install_generic() {
 	# entries it writes, and --karg is the supported way in.
 	if ! timeout 1800 "${ssh_cmd[@]}" "sudo podman run --rm --privileged --pid=host \
 		-v /var/lib/containers:/var/lib/containers -v /dev:/dev \
+		${luks_cfg_mount} \
 		--security-opt label=type:unconfined_t \
 		${imgref} \
 		bootc install to-disk --wipe ${block_setup} \
