@@ -299,6 +299,9 @@ switched = False
 # picks up from 1 exactly as before — and saves the run when it does.
 tabs = 0
 MAX_TABS = 8
+# Set once the escape hatch below has been spent; cleared by any real
+# advance so a long run can escape more than one modal.
+escaped = False
 for i in range(1, steps + 1):
     send_keys(*(["tab"] * tabs), activation)
     time.sleep(3)
@@ -309,6 +312,7 @@ for i in range(1, steps + 1):
         moved = bool(prev) and changed_pixels(prev, p) > DIFF_PIXELS
         if moved:
             tabs = 0          # new page: try its default action first, again
+            escaped = False   # re-arm the modal escape for the next stall
         elif prev:
             if not switched and activation == "ret":
                 activation = "spc"
@@ -320,6 +324,32 @@ for i in range(1, steps + 1):
                 tabs += 1
                 print(f"  # no change — widening focus search to {tabs} tabs",
                       flush=True)
+            elif not escaped:
+                # A modal swallows the whole sweep. Starting the tab count at
+                # 0 (above) stops the harness WALKING into GNOME's Credits
+                # dialog, but nothing stops a dialog that opens for any other
+                # reason — and once inside, every escalation is spent on the
+                # modal's own widgets while the wizard behind it never moves.
+                #
+                # Run 31216208138's gnome leg is the shape: frame 02 is the
+                # Credits modal, frame 03 is byte-identical to it, and the
+                # remaining five steps produced no new screen. The harness
+                # reported "6/8 transitions changed >500px" — opening and
+                # scrolling a dialog counts as movement — so the stall was
+                # invisible in every metric except the pictures.
+                #
+                # Escape is the one key that means "close this" in both GTK
+                # and Qt, and it does nothing to a wizard page that has no
+                # dialog open, so it is safe to spend a step on. Once only
+                # per stall: re-armed by the next real advance, so a run
+                # cannot sit in an Escape loop.
+                escaped = True
+                tabs = 0
+                print("  # focus sweep exhausted — sending 'esc' in case a "
+                      "modal (Credits, About, a file chooser) is on top",
+                      flush=True)
+                send_keys("esc")
+                time.sleep(2)
             elif os.path.exists(vnc_sock) and shutil.which("vncdo") and shutil.which("socat"):
                 # Fallback to mouse click on primary button location via VNC if keyboard navigation stalls
                 # Primary action buttons ("Get Started", "Next", "Continue") sit near bottom right / center bottom
