@@ -887,7 +887,12 @@ setup_runtime_check_stubs() {
 @test "generic: fisherman absence falls back to bootc only when an image is named" {
   # Guessing a registry ref from an ISO filename is how #1006's 40-minute
   # failures happened; the generic path refuses to guess.
-  grep -qF 'if [[ -n "${TBOX_E2E_IMAGE:-}" ]]; then' "$SCRIPT"
+  #
+  # Both halves sit in one condition, and it reads the image probe rather than
+  # /usr/local/bin/fisherman: FISHERMAN_OVERRIDE now lands on the guest before
+  # the verifying check, so a later read would find a fisherman on every image
+  # and divert nothing. See test_iso_e2e_fisherman_override.bats.
+  grep -qF 'if [[ "$image_has_fisherman" -eq 0 && -n "${TBOX_E2E_IMAGE:-}" ]]; then' "$SCRIPT"
   grep -q 'run_install_generic' "$SCRIPT"
   grep -q 'TBOX_E2E_IMAGE is unset' "$SCRIPT"
 }

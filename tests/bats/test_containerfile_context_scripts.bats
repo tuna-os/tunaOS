@@ -78,6 +78,67 @@ executed_script_refs() {
   [ "$fail" -eq 0 ]
 }
 
+# Per-DE desktop scripts a single Containerfile invokes, comments blanked.
+# Not install-desktop.sh (manifest-driven, handles every package manager) and
+# not configure-desktop-runtime.sh (post-install wiring, no package install).
+per_de_scripts() {
+  sed 's/^[[:space:]]*#.*//' "$1" |
+    grep -ohE '/run/context/build_scripts/desktop/[A-Za-z0-9_-]+\.sh' |
+    sed 's|.*/||' |
+    grep -vE '^(install-desktop|configure-desktop-runtime)\.sh$' |
+    sort -u
+}
+
+# An apt-based Containerfile must not invoke a per-DE script that has no apt
+# branch. desktop/cosmic.sh goes straight to `dnf -y copr enable`, so
+# Containerfile.ubuntu's cosmic stage died at
+#
+#   /run/context/build_scripts/desktop/cosmic.sh: line 41: dnf: command not found
+#   Error: building at STEP "RUN ...": while running runtime: exit status 127
+#
+# on every grouper:cosmic build (LUKS run 31134394662). It now uses
+# install-desktop.sh, which is what every other Containerfile already did for
+# cosmic and the only path that handles the `condition: ubuntu` PPA the Ubuntu
+# package list needs.
+#
+# test_declared_flavors_installable.bats could not catch this: cosmic.yaml's
+# apt section is present and non-empty, so the flavour looks installable — the
+# gap was the Containerfile reaching for a script that never consults it. This
+# is the structural half of that invariant, on the other side.
+@test "apt Containerfiles only invoke per-DE scripts that have an apt branch" {
+  local cf script base fail=0
+  for cf in "${REPO_ROOT}/Containerfile.ubuntu" "${REPO_ROOT}/Containerfile.debian"; do
+    while read -r script; do
+      [ -n "$script" ] || continue
+      base="${REPO_ROOT}/build_scripts/desktop/${script}"
+      [ -f "$base" ] || continue # covered by the missing-file test above
+      if ! grep -qE 'PKG_MGR.*[!=]=[[:space:]]*"apt"' "$base"; then
+        echo "FAIL: $(basename "$cf") runs desktop/${script}, which has no apt" >&2
+        echo "      branch. On an apt base it falls through to its dnf/pacman" >&2
+        echo "      path and the build dies with 'dnf: command not found'." >&2
+        echo "      Use install-desktop.sh (manifest-driven) instead, or give" >&2
+        echo "      the script a \$PKG_MGR == apt branch." >&2
+        fail=1
+      fi
+    done < <(per_de_scripts "$cf")
+  done
+  [ "$fail" -eq 0 ]
+}
+
+# The test above passes trivially if the extraction finds nothing, and would
+# have passed on the broken tree if cosmic.sh had been mis-filtered out.
+@test "the apt per-DE check sees real scripts, and would reject a dnf-only one" {
+  run bash -c "$(declare -f per_de_scripts); per_de_scripts '${REPO_ROOT}/Containerfile.ubuntu'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"gnome.sh"* ]]
+  [[ "$output" == *"kde.sh"* ]]
+
+  # cosmic.sh is still in the tree (el10 documents its package set); assert it
+  # is genuinely dnf-only, so the rule above is rejecting something real.
+  run grep -qE 'PKG_MGR.*[!=]=[[:space:]]*"apt"' "${REPO_ROOT}/build_scripts/desktop/cosmic.sh"
+  [ "$status" -ne 0 ]
+}
+
 @test "the checks actually look at something, and tell sourced from executed" {
   # A regex that silently matched nothing would make both tests above pass
   # forever.

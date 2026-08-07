@@ -60,6 +60,25 @@ elif command -v zypper &>/dev/null; then
 	_TD_OS="zypper"
 elif command -v emerge &>/dev/null; then
 	_TD_OS="emerge"
+elif [[ "${IS_HUMMINGBIRD:-false}" == true ]]; then
+	# Hummingbird gets its own section rather than borrowing fedora's.
+	#
+	# It IS a Fedora Rawhide rebuild — 30 of 38 core packages carry Rawhide's
+	# exact version AND release, differing only in the .hum1 dist tag — so
+	# routing it to el10, which lib.sh's substring test does, is a
+	# misclassification. But `fedora` is equally wrong, and that is the part
+	# worth stating: of the 58 packages the GNOME manifest installs on a
+	# Fedora-family host, Hummingbird's 3384-package repository ships exactly
+	# ONE (avahi). No cairo, no wayland, no mesa, no gtk, no pipewire; its own
+	# SBOM lists 444 names, none of them desktop. It publishes a base OS and
+	# no desktop, so the fedora: section would fail exactly as el10: did —
+	# just further along. Measured in tuna-os/tunaos-packages#250.
+	#
+	# Rawhide's own binaries cannot be substituted either: glibc 2.43 vs 2.44
+	# (637 Rawhide binaries need GLIBC_2.44), libxml2.so.16 vs .so.2,
+	# libcrypto.so.3 vs .so.4. They have to be rebuilt against Hummingbird's
+	# buildroot, which is what the hummingbird: manifest sections point at.
+	_TD_OS="hummingbird"
 elif [[ "$IS_FEDORA" == true ]]; then
 	_TD_OS="fedora"
 else
@@ -339,11 +358,16 @@ if [[ "${_TD_OS}" == "pacman" ]]; then
 	# now runs the same gate every other package manager does.
 fi
 
-# ── DNF path (el10/fedora only) ──────────────────────────────────────────────
+# ── DNF path (el10/fedora/hummingbird) ───────────────────────────────────────
 # These sections are maps (groups/group_options/copr/optional/versionlock). The
 # list-style sections (apt/pacman/zypper/emerge) installed above and must skip
 # this — indexing an array with .group_options etc. is a hard yq error.
-if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" ]]; then
+#
+# hummingbird belongs here because it is dnf-driven like the other two; what
+# differs is only WHICH repository satisfies the names, which the manifest's
+# hummingbird: section supplies. Leaving it out would route a dnf base down
+# the list-style path and produce that same yq error.
+if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummingbird" ]]; then
 
 	# Plain (non-COPR) baseurl repos — e.g. the tuna-os xfce-wayland repo,
 	# which lives at its own R2 path (repo.tunaos.org/xfce/...), not the main
@@ -506,6 +530,39 @@ fi
 if [[ "${_TD_DM}" == "sddm" && -f /usr/lib/systemd/system/plasmalogin.service ]]; then
 	echo "install-desktop: manifest declares sddm but image ships plasmalogin.service — resolving to plasmalogin"
 	_TD_DM="plasmalogin"
+fi
+# Same shape, for COSMIC on apt. cosmic-greeter is not a rival display manager
+# to greetd -- it IS greetd, wrapped:
+#   ExecStart=greetd --config /etc/greetd/cosmic-greeter.toml   (vt = "1")
+# and the deb declares `Provides: x-display-manager`, `Pre-Depends: greetd`.
+# Its postinst then points /etc/systemd/system/display-manager.service at
+# cosmic-greeter.service via debconf (the unit's own `[Install] Alias=` is
+# commented out and debconf-managed), and it arrives as a cosmic-session
+# dependency, so it is installed even though cosmic.yaml's apt list never names
+# it.
+#
+# configure-desktop-runtime.sh already defers to that claim (it has to: its
+# `systemctl enable` is not `|| true`, and the conflict killed the whole
+# grouper:cosmic build in LUKS run 31135761136). This is the other half, and it
+# is not cosmetic: leaving _TD_DM as the manifest's "greetd" force-links
+# greetd.service into graphical.target.wants below, and Ubuntu's greetd.service
+# carries `[Install] Alias=display-manager.service` and NO WantedBy=, so that
+# link is the only thing that would ever start it. Two units then run `greetd`
+# on vt1 -- both with Restart=always -- which is the two-DMs-racing-for-seat0
+# failure the sibling-link cleanup below exists to prevent.
+#
+# Narrow on purpose, for the same reason as configure-desktop-runtime.sh: keyed
+# on the alias the distro's own packaging has ALREADY set, not on
+# cosmic-greeter.service merely existing. Fedora and EL10 install cosmic-greeter
+# too, and their cosmic cells are green with greetd as the DM, so a
+# package-presence test would repoint them; the symlink test cannot.
+if [[ "${_TD_DM}" == "greetd" ]]; then
+	_TD_DM_ALIAS_NOW="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
+	if [[ -n "${_TD_DM_ALIAS_NOW}" && -e "${_TD_DM_ALIAS_NOW}" ]] &&
+		[[ "$(basename "${_TD_DM_ALIAS_NOW}")" == "cosmic-greeter.service" ]]; then
+		echo "install-desktop: display-manager.service is already cosmic-greeter (greetd wrapper) — resolving greetd to cosmic-greeter"
+		_TD_DM="cosmic-greeter"
+	fi
 fi
 
 if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
