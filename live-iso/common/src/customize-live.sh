@@ -452,11 +452,11 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		# tuna-os/tuna-installer, which mirrors the same app ID as a release
 		# asset.
 		INSTALLER_FLATPAK_FILE="/tmp/bootc-installer.flatpak"
-		if ! curl --retry 3 --fail --location \
+		if ! curl --retry 3 --fail --location --max-time 300 \
 			"https://github.com/projectbluefin/bootc-installer/releases/latest/download/org.bootcinstaller.Installer.flatpak" \
 			-o "${INSTALLER_FLATPAK_FILE}" 2>/dev/null; then
 			echo "projectbluefin/bootc-installer unavailable, falling back to tuna-os/tuna-installer..."
-			curl --retry 3 --fail --location \
+			curl --retry 3 --fail --location --max-time 300 \
 				"https://github.com/tuna-os/tuna-installer/releases/latest/download/org.bootcinstaller.Installer.flatpak" \
 				-o "${INSTALLER_FLATPAK_FILE}"
 		fi
@@ -465,7 +465,7 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		flatpak build-import-bundle "${INSTALLER_LOCAL_REPO}" "${INSTALLER_FLATPAK_FILE}"
 		rm -f "${INSTALLER_FLATPAK_FILE}"
 		flatpak remote-add --system --no-gpg-verify installer-local "file://${INSTALLER_LOCAL_REPO}"
-		flatpak install --system --noninteractive installer-local "${INSTALLER_APP}" ||
+		timeout 900 flatpak install --system --noninteractive installer-local "${INSTALLER_APP}" ||
 			{ [[ -f "${SCRIPT_DIR}/.enable-sshd" ]] &&
 				echo "WARN: installer flatpak install failed; continuing (dev/e2e ISO)" ||
 				exit 1; }
@@ -497,13 +497,22 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 			flatpak remote-add --system --if-not-exists tuna-os \
 				/etc/flatpak/remotes.d/tuna-os.flatpakrepo || true
 		else
-			flatpak remote-add --system --if-not-exists tuna-os \
+			timeout 120 flatpak remote-add --system --if-not-exists tuna-os \
 				https://tunaos.org/flatpak/tuna-os.flatpakrepo ||
 				echo "WARN: could not add tuna-os remote (network?); continuing"
 		fi
-		flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}" ||
+		# timeout: flatpak has no network deadline of its own, and a stalled
+		# fetch here is indistinguishable from progress in the build log,
+		# because tacklebox does not surface customize output. grouper:cosmic
+		# sat in [customize] for 3h52m until the 240-min job cap killed the
+		# run (31144135208) — twice, where every other flavor clears this
+		# phase in ~2 minutes. Bounded, a stall lands in the WARN arm below on
+		# dev/E2E media (which never run this flatpak anyway — the harness
+		# installs fisherman via FISHERMAN_OVERRIDE) instead of eating the
+		# job. On release media it stays fatal, exactly as before.
+		timeout 900 flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}" ||
 			{ [[ -f "${SCRIPT_DIR}/.enable-sshd" ]] &&
-				echo "WARN: installer flatpak install failed; continuing (dev/e2e ISO)" ||
+				echo "WARN: installer flatpak install failed or timed out; continuing (dev/e2e ISO)" ||
 				exit 1; }
 	fi
 
