@@ -236,6 +236,7 @@ else
 	# Disable fastestmirror for this repo to avoid corrupted mirrors
 	sed -i '/^\[epel-multimedia\]$/a fastestmirror=0' /etc/yum.repos.d/epel-multimedia.repo
 	if is_x86_64_v2; then
+		# shellcheck disable=SC2016  # $basearch is a dnf repo variable, not a shell one
 		sed -i 's|/\$basearch/|/x86_64/|' /etc/yum.repos.d/epel-multimedia.repo
 	fi
 
