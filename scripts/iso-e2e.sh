@@ -173,7 +173,10 @@ while [[ $# -gt 0 ]]; do
 		shift
 		;;
 	-h | --help)
-		sed -n '2,50p' "$0"
+		# Print the entire leading comment block instead of a fixed line
+		# range, which silently truncated help mid-sentence whenever the
+		# docs above grew.
+		awk 'NR > 1 { if (!/^#/) exit; print }' "$0"
 		exit 0
 		;;
 	-*)
