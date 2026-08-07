@@ -175,6 +175,41 @@ jobs:
           fi
           jq -r '.screens | to_entries[] | "  \(.key): \(.value)"' "$json"
 
+          # ocr:true only proves tesseract RAN. It says nothing about whether
+          # anything was recognised, and on run 31171184497 that gap was the
+          # whole story: the step went green while the harness's own TAP output
+          # read
+          #
+          #   not ok - gnome: screen changes between steps
+          #     # 0/10 transitions changed >500px
+          #     # 1 distinct visual state(s) across 11 frames
+          #   # Results: 2 passed, 7 failed, 9 total
+          #   # screens reached: (none detected)
+          #
+          # and every screen row came back false. installer-walkthrough.py
+          # reports those failures and exits 0 unless --strict is passed, so
+          # the assertion above — mine — was a gate that could not fire on the
+          # only question the job exists to answer.
+          #
+          # A run that detected NO screen at all has not produced a parity
+          # report; it has produced an empty one, which is worse, because the
+          # matrix cannot tell "we looked and found nothing" from "we never
+          # looked". Blank frames on the GPU-less runner are a known and
+          # expected limitation for cosmic/niri/xfwl4 — but the correct
+          # response to a limitation is to say so out loud, not to publish a
+          # green tick over six false rows.
+          reached=$(jq -r '[.screens[] | select(. == true)] | length' "$json")
+          total=$(jq -r '.screens | length' "$json")
+          echo "screens detected: ${reached}/${total}"
+          if [[ "$reached" -eq 0 ]]; then
+            echo "::error::the walkthrough detected NONE of the ${total} spec'd"
+            echo "::error::screens. The installer UI was never reached, so this"
+            echo "::error::report would fill the parity matrix with six false"
+            echo "::error::rows. See the DIAGNOSIS line above and the captured"
+            echo "::error::PNGs in the installer-shots-${{ matrix.flavor }} artifact."
+            exit 1
+          fi
+
       # The walkthrough performed a real install onto install-disk.qcow2.
       # Boot that disk to verify the install flow actually produced a
       # bootable system — this is the end-to-end check on the ISO install
