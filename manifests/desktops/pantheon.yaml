@@ -55,6 +55,21 @@ packages:
     - pantheon-xsession-settings
     # Display manager itself comes from the Ubuntu archive, not the PPA.
     - lightdm
+    # The X server lightdm's seat spawns. Nothing else on this list pulls it
+    # under the installer's --no-install-recommends — lightdm only Recommends
+    # an X server, and Pantheon's session is X11 (pantheon-xsession-settings
+    # ships xsessions/pantheon.desktop; its xwayland dep is not a display
+    # server lightdm can seat). Without it the daemon logs "Seat seat0:
+    # Can't create display server for greeter" to /var/log/lightdm/
+    # lightdm.log only — the journal shows a bare exit 1 — and
+    # display-manager.service crash-loops. That silent loop is exactly what
+    # LUKS run 31215923156 measured on gurnard:pantheon; reproduced and
+    # bisected on ubuntu with this package set minus/plus these two.
+    - xserver-xorg
+    # Queried by every lightdm greeter for the user list; a lightdm
+    # Recommends, so it never arrives implicitly. Absent, each greeter start
+    # first warns "Error getting user list from org.freedesktop.Accounts".
+    - accountsservice
     # Portals and secrets — the gap that made sailfin:gnome ship without a
     # file manager or working credentials (tunaos-packages#132). Pantheon is
     # GTK, so it needs the GTK portal explicitly.
