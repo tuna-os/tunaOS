@@ -159,6 +159,32 @@ systemctl set-default graphical.target
 # console by scripts/iso-e2e.sh; the checks ExecStart is non-fatal).
 case "$desktop" in
 gnome | kde | niri | cosmic | xfce | pantheon)
+	# ── Flatpak baseline, BEFORE the contract that asserts it ─────────────
+	# The baseline (Flathub remote + curated preinstall declarations +
+	# preinstall service) normally arrives through install-desktop.sh's
+	# post_install hooks — but not every desktop stage is manifest-driven.
+	# Containerfile.ubuntu's niri and xfce stages run their per-DE scripts
+	# (niri.sh/xfce.sh) plus THIS script and never touch install-desktop.sh,
+	# so grouper:xfce failed its own contract at build time:
+	#
+	#   missing required path: /etc/flatpak/remotes.d/flathub.flatpakrepo
+	#   (run 31192228329)
+	#
+	# The assert was right — the image genuinely lacked the remote. Laying
+	# the baseline down HERE, inside the same block that runs the contract,
+	# makes that drift impossible: any desktop path that verifies the
+	# experience has just installed the baseline it verifies, and a stage
+	# that skips both this script and install-desktop.sh is refused by
+	# tests/bats/test_containerfile_context_scripts.bats. Both scripts are
+	# idempotent (the remote fetch is guarded by the baked file, the
+	# preinstall writer dedups, the service enable re-runs clean), so the
+	# manifest-driven stages that already ran them lose nothing.
+	export DESKTOP_FLAVOR="$desktop"
+	# shellcheck source=/dev/null
+	source /run/context/build_scripts/desktop/tuna-flatpak-remote.sh
+	# shellcheck source=/dev/null
+	source /run/context/build_scripts/desktop/flatpak-preinstall.sh
+
 	# Compile dconf databases before verify checks — desktop stages lay down
 	# keyfiles after the base stage's dconf update, so recompile here.
 	if command -v dconf &>/dev/null && compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then

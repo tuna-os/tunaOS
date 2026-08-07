@@ -170,3 +170,67 @@ per_de_scripts() {
   run bash -c "$(declare -f containerfile_code executed_script_refs); REPO_ROOT='${REPO_ROOT}'; executed_script_refs"
   [[ "$output" != *"build_scripts/lib.sh"* ]]
 }
+
+# ── Every desktop stage must lead to the flatpak baseline ──────────────────
+#
+# The baseline (Flathub remote + curated preinstall + preinstall service) has
+# exactly two carriers: install-desktop.sh's manifest post_install hooks, and
+# configure-desktop-runtime.sh's contract-family block. A desktop stage that
+# runs a per-DE session script WITHOUT either carrier ships a desktop whose
+# own build contract fails — grouper:xfce did exactly that (run 31192228329:
+# "missing required path: /etc/flatpak/remotes.d/flathub.flatpakrepo")
+# because Containerfile.ubuntu's xfce stage ran xfce.sh + the contract but
+# the baseline only existed in manifest post_install. Stage lists are DERIVED
+# from the Containerfiles, not hardcoded, so a new stage cannot dodge this.
+
+# Print "file:stage_start_line" for every stage in $1 that invokes a per-DE
+# SESSION script (a desktop id's own .sh) without install-desktop.sh or
+# configure-desktop-runtime.sh in the same stage.
+stages_missing_baseline() {
+  sed 's/^[[:space:]]*#.*//' "$1" | awk -v file="$1" '
+    /^FROM /            { if (bad && !ok) print file ":" start; start=NR; bad=0; ok=0 }
+    /\/run\/context\/build_scripts\/desktop\/(gnome|kde|cosmic|niri|xfce|pantheon)\.sh/ { bad=1 }
+    /install-desktop\.sh|configure-desktop-runtime\.sh/ { ok=1 }
+    END                 { if (bad && !ok) print file ":" start }
+  '
+}
+
+@test "every desktop stage runs install-desktop.sh or configure-desktop-runtime.sh" {
+  local fail=0 f
+  for f in "${REPO_ROOT}"/Containerfile.*; do
+    [[ "$f" == *Containerfile.overlay || "$f" == *Containerfile.final || "$f" == *Containerfile.custom ]] && continue
+    while IFS= read -r hit; do
+      [ -n "$hit" ] || continue
+      echo "FAIL: desktop stage without a baseline/contract carrier at $hit" >&2
+      fail=1
+    done < <(stages_missing_baseline "$f")
+  done
+  [ "$fail" -eq 0 ]
+}
+
+@test "the script-driven stages actually exist and rely on configure-desktop-runtime" {
+  # Sanity for the test above: Containerfile.ubuntu's niri and xfce stages
+  # are the known script-driven pair. If they migrate to install-desktop.sh
+  # this test documents the change; if they lose configure-desktop-runtime
+  # the test above turns red.
+  run grep -A1 'desktop/xfce.sh base' "${REPO_ROOT}/Containerfile.ubuntu"
+  [[ "$output" == *"configure-desktop-runtime.sh xfce"* ]]
+  run grep -A1 'desktop/niri.sh base' "${REPO_ROOT}/Containerfile.ubuntu"
+  [[ "$output" == *"configure-desktop-runtime.sh niri"* ]]
+}
+
+@test "configure-desktop-runtime lays down the flatpak baseline before verifying it" {
+  local script="${REPO_ROOT}/build_scripts/desktop/configure-desktop-runtime.sh"
+  local remote_line preinstall_line verify_line
+  remote_line=$(grep -n 'source /run/context/build_scripts/desktop/tuna-flatpak-remote.sh' "$script" | head -1 | cut -d: -f1)
+  preinstall_line=$(grep -n 'source /run/context/build_scripts/desktop/flatpak-preinstall.sh' "$script" | head -1 | cut -d: -f1)
+  verify_line=$(grep -n '/run/context/build_scripts/checks/verify-desktop-experience.sh "\$desktop"' "$script" | head -1 | cut -d: -f1)
+  [ -n "$remote_line" ] && [ -n "$preinstall_line" ] && [ -n "$verify_line" ]
+  # Install first, verify second — the contract asserts what was just laid down.
+  [ "$remote_line" -lt "$verify_line" ]
+  [ "$preinstall_line" -lt "$verify_line" ]
+  # DESKTOP_FLAVOR must be exported first: flatpak-preinstall.sh names its
+  # preinstall file after it.
+  run grep -B10 'source /run/context/build_scripts/desktop/flatpak-preinstall.sh' "$script"
+  [[ "$output" == *'export DESKTOP_FLAVOR="$desktop"'* ]]
+}
