@@ -129,12 +129,44 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
 @test "desktop experience contract covers every shipped DE" {
   local script="${REPO_ROOT}/build_scripts/checks/verify-desktop-experience.sh"
-  for de in gnome kde niri cosmic xfce; do
+  for de in gnome kde niri cosmic xfce pantheon; do
     grep -qE "^${de}\)|\| ${de}\)|${de} \|" "$script"
   done
   # Runtime DM validation must use the distro-agnostic alias, not raw unit
   # names (gdm vs gdm3 vs lightdm drift across variants).
   grep -qF 'display-manager.service' "$script"
+}
+
+@test "every desktop with a Containerfile runtime-config call is in the contract family" {
+  # configure-desktop-runtime.sh's DM case ends in `*) exit 0` — a desktop
+  # that reaches it gets NO display-manager enable, NO graphical.target
+  # default, and NO tunaos-desktop-contract.service, silently. That is not a
+  # hypothetical: pantheon fell through it from its introduction until
+  # 2026-08-07, so gurnard:pantheon passed every LUKS gate with
+  # desktop_contract=absent (run 31074188677) — a green cell whose desktop
+  # was never proven. Every desktop any Containerfile passes to the script
+  # must therefore appear BOTH in its DM case and in the contract-family
+  # case, so a new desktop stage cannot re-open the hole.
+  local runtime="${REPO_ROOT}/build_scripts/desktop/configure-desktop-runtime.sh"
+  local de fail=0
+  while read -r de; do
+    grep -qE "^${de}\)|\| ${de}\)|${de} \|" "$runtime" || {
+      echo "FAIL: ${de} is passed to configure-desktop-runtime.sh by a" >&2
+      echo "      Containerfile but has no DM branch — it exits 0 silently" >&2
+      fail=1
+    }
+    # The contract-family case is the single pipe-separated line; the DM
+    # branches are one-per-desktop. Require two distinct mentions so being
+    # in the DM case alone (or the family alone) is not enough.
+    [ "$(grep -cE "^${de}\)|\| ${de}\)|${de} \|" "$runtime")" -ge 2 ] || {
+      echo "FAIL: ${de} appears in only one of the two cases in" >&2
+      echo "      configure-desktop-runtime.sh (DM branch + contract family" >&2
+      echo "      are both required)" >&2
+      fail=1
+    }
+  done < <(grep -hoE 'configure-desktop-runtime\.sh [a-z]+' "${REPO_ROOT}"/Containerfile.* |
+    awk '{print $2}' | sort -u)
+  [ "$fail" -eq 0 ]
 }
 
 @test "disk gate requires the desktop contract marker" {

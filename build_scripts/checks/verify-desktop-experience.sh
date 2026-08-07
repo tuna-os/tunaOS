@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-desktop="${1:?usage: verify-desktop-experience.sh <gnome|kde|niri|cosmic|xfce> [--runtime]}"
+desktop="${1:?usage: verify-desktop-experience.sh <gnome|kde|niri|cosmic|xfce|pantheon> [--runtime]}"
 mode="${2:-build}"
 
 # At runtime the E2E gate greps ttyS0 for a contract marker; a silent early
@@ -263,6 +263,23 @@ xfce)
 	require_any_glob \
 		'/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
 	dm_pattern='^(gdm|gdm3|lightdm|greetd)\.service$'
+	;;
+pantheon)
+	# gurnard only: Pantheon comes exclusively from ppa:elementary-os/stable
+	# (manifests/desktops/pantheon.yaml). Until 2026-08-07 this case did not
+	# exist, so gurnard:pantheon sailed through the LUKS gates with
+	# desktop_contract=absent — a green cell whose desktop was never proven
+	# (run 31074188677, found by the full-matrix contract audit). The asserts
+	# mirror what the manifest actually installs, nothing invented: `gala` is
+	# the compositor package and its binary keeps that name, the session
+	# entry ships as pantheon.desktop, and the manifest pins
+	# display_manager: lightdm.
+	experience="tunaos/pantheon"
+	require_command gala
+	require_any_glob '/usr/share/xsessions/pantheon.desktop' \
+		'/usr/share/wayland-sessions/pantheon.desktop'
+	require_any_unit lightdm
+	dm_pattern='^lightdm\.service$'
 	;;
 *) exit 0 ;;
 esac
