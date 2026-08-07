@@ -286,7 +286,18 @@ if p:
 # advances.
 activation = "ret"
 switched = False
-tabs = 2
+# Start at 0: try the DEFAULT ACTION before tabbing anywhere.
+#
+# This used to start at 2, so the harness never once pressed Enter on the
+# focused widget — it always tabbed twice first. On a wizard whose primary
+# action has focus that skips straight past it, and on GNOME's welcome screen
+# tab order is install -> bluetooth -> recovery -> poweroff -> credits, so
+# sweeping outward walks toward Credits and away from Install. Run
+# 31183217981 opened the Credits modal and never left the welcome screen.
+#
+# Costs one step when the app sets no default focus — the existing widen loop
+# picks up from 1 exactly as before — and saves the run when it does.
+tabs = 0
 MAX_TABS = 8
 for i in range(1, steps + 1):
     send_keys(*(["tab"] * tabs), activation)
@@ -297,7 +308,7 @@ for i in range(1, steps + 1):
         frames.append(p)
         moved = bool(prev) and changed_pixels(prev, p) > DIFF_PIXELS
         if moved:
-            tabs = 2          # new page, start over from the usual position
+            tabs = 0          # new page: try its default action first, again
         elif prev:
             if not switched and activation == "ret":
                 activation = "spc"
