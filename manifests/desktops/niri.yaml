@@ -257,3 +257,6 @@ post_install:
   # dms-greeter); on openSUSE it is the difference between a login screen and
   # greetd's stock text prompt into a bare shell.
   - greetd-gtkgreet.sh
+  # Curated Flatpak set (store + browser) + preinstall service — see the
+  # script header; asserts live in verify-desktop-experience.sh.
+  - flatpak-preinstall.sh

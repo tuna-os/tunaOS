@@ -129,12 +129,44 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
 @test "desktop experience contract covers every shipped DE" {
   local script="${REPO_ROOT}/build_scripts/checks/verify-desktop-experience.sh"
-  for de in gnome kde niri cosmic xfce; do
+  for de in gnome kde niri cosmic xfce pantheon; do
     grep -qE "^${de}\)|\| ${de}\)|${de} \|" "$script"
   done
   # Runtime DM validation must use the distro-agnostic alias, not raw unit
   # names (gdm vs gdm3 vs lightdm drift across variants).
   grep -qF 'display-manager.service' "$script"
+}
+
+@test "every desktop with a Containerfile runtime-config call is in the contract family" {
+  # configure-desktop-runtime.sh's DM case ends in `*) exit 0` — a desktop
+  # that reaches it gets NO display-manager enable, NO graphical.target
+  # default, and NO tunaos-desktop-contract.service, silently. That is not a
+  # hypothetical: pantheon fell through it from its introduction until
+  # 2026-08-07, so gurnard:pantheon passed every LUKS gate with
+  # desktop_contract=absent (run 31074188677) — a green cell whose desktop
+  # was never proven. Every desktop any Containerfile passes to the script
+  # must therefore appear BOTH in its DM case and in the contract-family
+  # case, so a new desktop stage cannot re-open the hole.
+  local runtime="${REPO_ROOT}/build_scripts/desktop/configure-desktop-runtime.sh"
+  local de fail=0
+  while read -r de; do
+    grep -qE "^${de}\)|\| ${de}\)|${de} \|" "$runtime" || {
+      echo "FAIL: ${de} is passed to configure-desktop-runtime.sh by a" >&2
+      echo "      Containerfile but has no DM branch — it exits 0 silently" >&2
+      fail=1
+    }
+    # The contract-family case is the single pipe-separated line; the DM
+    # branches are one-per-desktop. Require two distinct mentions so being
+    # in the DM case alone (or the family alone) is not enough.
+    [ "$(grep -cE "^${de}\)|\| ${de}\)|${de} \|" "$runtime")" -ge 2 ] || {
+      echo "FAIL: ${de} appears in only one of the two cases in" >&2
+      echo "      configure-desktop-runtime.sh (DM branch + contract family" >&2
+      echo "      are both required)" >&2
+      fail=1
+    }
+  done < <(grep -hoE 'configure-desktop-runtime\.sh [a-z]+' "${REPO_ROOT}"/Containerfile.* |
+    awk '{print $2}' | sort -u)
+  [ "$fail" -eq 0 ]
 }
 
 @test "disk gate requires the desktop contract marker" {
@@ -198,6 +230,51 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
       fi
     done
   done
+  [ "$fail" -eq 0 ]
+}
+
+@test "flatpak baseline: manifests, preinstall script and contract cannot drift" {
+  # Same discipline as the contract-required-application table above: every
+  # piece of curated Flatpak content is (a) laid down by a post_install
+  # script every desktop manifest lists, and (b) asserted by the build
+  # contract — change any one of the three and this test names the others.
+  local contract="${REPO_ROOT}/build_scripts/checks/verify-desktop-experience.sh"
+  local preinstall="${REPO_ROOT}/build_scripts/desktop/flatpak-preinstall.sh"
+  local remote="${REPO_ROOT}/build_scripts/desktop/tuna-flatpak-remote.sh"
+  local fail=0
+
+  # (a) every desktop manifest runs both post_install scripts.
+  local m
+  for m in "${REPO_ROOT}"/manifests/desktops/*.yaml; do
+    for script in tuna-flatpak-remote.sh flatpak-preinstall.sh; do
+      if ! grep -qE "^\s*-\s+${script}\s*$" "$m"; then
+        echo "FAIL: $(basename "$m") post_install never runs ${script}" >&2
+        fail=1
+      fi
+    done
+  done
+
+  # (b) the remote script bakes Flathub, and the contract requires it.
+  grep -qF 'flathub.flatpakrepo' "$remote" || { echo "FAIL: tuna-flatpak-remote.sh no longer bakes flathub" >&2; fail=1; }
+  grep -qF "require_glob '/etc/flatpak/remotes.d/flathub.flatpakrepo'" "$contract" || { echo "FAIL: contract does not require the flathub remote" >&2; fail=1; }
+  grep -qF "require_glob '/usr/share/flatpak/preinstall.d/*.preinstall'" "$contract" || { echo "FAIL: contract does not require a preinstall declaration" >&2; fail=1; }
+
+  # (c) the app set is identical in the script that declares it and the
+  # contract that asserts it — extracted from both, compared as sets.
+  local declared asserted
+  declared="$(grep -oE '^_fp_add_app [A-Za-z0-9._-]+' "$preinstall" | awk '{print $2}' | sort)"
+  asserted="$(grep -oE 'for _fp_app in [A-Za-z0-9._ -]+;' "$contract" | sed 's/for _fp_app in //; s/;$//' | tr ' ' '\n' | sed '/^$/d' | sort)"
+  [ -n "$declared" ] || { echo "FAIL: no _fp_add_app lines found in flatpak-preinstall.sh" >&2; fail=1; }
+  if [ "$declared" != "$asserted" ]; then
+    echo "FAIL: preinstall set drifted — script declares [$declared] but contract asserts [$asserted]" >&2
+    fail=1
+  fi
+
+  # (d) the service that makes declarations real is enabled by the script
+  # and enforced by the contract wherever the unit exists.
+  grep -qF 'systemctl enable flatpak-preinstall.service' "$preinstall" || { echo "FAIL: flatpak-preinstall.sh does not enable the service" >&2; fail=1; }
+  grep -qF 'flatpak-preinstall.service is shipped but not enabled' "$contract" || { echo "FAIL: contract does not enforce the preinstall service" >&2; fail=1; }
+
   [ "$fail" -eq 0 ]
 }
 
