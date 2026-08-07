@@ -1660,6 +1660,32 @@ run_install() {
 	# run_install_generic. Without a named image the hard error stands:
 	# guessing a registry ref from an ISO filename is exactly the mistake
 	# the published-image-ref.sh resolver below exists to prevent.
+	# Install the override BEFORE the presence check below, not after it.
+	#
+	# This block used to live ~260 lines further down, next to the recipe.
+	# That is too late: the check is a hard `return 3`, so on any image that
+	# ships no fisherman the run died without ever installing the binary the
+	# job had just built for it. guppy:xfce, LUKS run 31131624108:
+	#
+	#   ERROR: fisherman not found on live image (VARIANT=guppy FLAVOR=xfce)
+	#   ERROR: and TBOX_E2E_IMAGE is unset, so the generic bootc path cannot
+	#          name an image ref
+	#
+	# 55 seconds into the LUKS step, after a 65-minute Gentoo build, with
+	# FISHERMAN_OVERRIDE=/tmp/fisherman-bin sitting on the runner and the
+	# workflow's own "Build fisherman in a golang container" step green
+	# immediately above it. All three guppy cells fail this way.
+	#
+	# Overriding first is also what the flag means: "use this fisherman", not
+	# "use this fisherman provided the image already had one". The bundled
+	# installer-flatpak fisherman is pinned to a release, which is why the
+	# override exists at all.
+	if [[ -n "${FISHERMAN_OVERRIDE:-}" && -f "${FISHERMAN_OVERRIDE}" ]]; then
+		echo "==> Overriding fisherman with ${FISHERMAN_OVERRIDE}"
+		"${scp_cmd[@]}" "${FISHERMAN_OVERRIDE}" "${GUEST_SCP_DEST}:${GUEST_HOME}/fisherman-override"
+		"${ssh_cmd[@]}" "sudo install -D -m0755 ${GUEST_HOME}/fisherman-override /usr/local/bin/fisherman"
+	fi
+
 	if ! "${ssh_cmd[@]}" "command -v /usr/local/bin/fisherman" &>/dev/null; then
 		if [[ -n "${TBOX_E2E_IMAGE:-}" ]]; then
 			run_install_generic
@@ -1667,6 +1693,10 @@ run_install() {
 		fi
 		echo "ERROR: fisherman not found on live image (VARIANT=${VARIANT:-} FLAVOR=${FLAVOR:-})" >&2
 		echo "ERROR: and TBOX_E2E_IMAGE is unset, so the generic bootc path cannot name an image ref" >&2
+		if [[ -n "${FISHERMAN_OVERRIDE:-}" ]]; then
+			echo "ERROR: FISHERMAN_OVERRIDE=${FISHERMAN_OVERRIDE} was set but did not land —" >&2
+			echo "ERROR: $([[ -f "${FISHERMAN_OVERRIDE}" ]] && echo 'the file exists, so the scp/install above failed' || echo 'that path does not exist on the runner')" >&2
+		fi
 		return 3
 	fi
 
@@ -1918,14 +1948,10 @@ run_install() {
 	local E2E_LUKS_PASS="tunaos-e2e-luks"
 	[[ "$LUKS" -eq 1 ]] && encryption_json="{\"type\": \"tpm2-luks-passphrase\", \"passphrase\": \"${E2E_LUKS_PASS}\"}"
 
-	# Override /usr/local/bin/fisherman with a freshly-built binary (e.g.
-	# from a PR under test) before installing — the bundled installer-flatpak
-	# fisherman is pinned to a release.
-	if [[ -n "${FISHERMAN_OVERRIDE:-}" && -f "${FISHERMAN_OVERRIDE}" ]]; then
-		echo "==> Overriding fisherman with ${FISHERMAN_OVERRIDE}"
-		"${scp_cmd[@]}" "${FISHERMAN_OVERRIDE}" "${GUEST_SCP_DEST}:${GUEST_HOME}/fisherman-override"
-		"${ssh_cmd[@]}" "sudo install -m0755 ${GUEST_HOME}/fisherman-override /usr/local/bin/fisherman"
-	fi
+	# (The FISHERMAN_OVERRIDE install used to be here. It now runs before the
+	# presence check near the top of this function — see the comment there.
+	# Doing it at this point meant an image that shipped no fisherman never
+	# reached it, which is exactly the case the override is for.)
 
 	local RECIPE_LOCAL="${OUTPUT_DIR}/e2e-recipe.json"
 	cat >"$RECIPE_LOCAL" <<EOF
