@@ -169,6 +169,37 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$fail" -eq 0 ]
 }
 
+@test "xfce DM selection defers to the apt family's default-display-manager claim" {
+  # Debian-family DMs (gdm3, lightdm) consult /etc/X11/default-display-manager
+  # at startup and refuse to run when it names the other. Preferring
+  # lightdm-if-present enabled a Recommends-pulled, debconf-rejected lightdm
+  # on grouper:xfce — six crash-loops in the installed serial, gdm3 unenabled,
+  # desktop_contract=absent under green LUKS gates (run 31181743606). The
+  # branch must read the distro's own claim first; unit-existence fallbacks
+  # only apply when no claim exists.
+  #
+  # Comments stripped before every grep: the rationale comments in the script
+  # name the same file, and a test the comment can satisfy pins nothing.
+  local runtime="${REPO_ROOT}/build_scripts/desktop/configure-desktop-runtime.sh"
+  local code
+  code="$(grep -v '^[[:space:]]*#' "$runtime")"
+  grep -qF 'cat /etc/X11/default-display-manager' <<<"$code" || {
+    echo "FAIL: xfce DM selection no longer reads default-display-manager;" >&2
+    echo "      a Recommends-pulled lightdm will again beat the debconf DM" >&2
+    return 1
+  }
+  # The claim must be consulted BEFORE the lightdm unit-existence preference.
+  local xfce_branch claim_line lightdm_line
+  xfce_branch="$(awk '/^xfce\)/{f=1} f{print} f&&/;;/{exit}' "$runtime" | grep -v '^[[:space:]]*#')"
+  claim_line="$(grep -n 'default-display-manager' <<<"$xfce_branch" | head -1 | cut -d: -f1)"
+  lightdm_line="$(grep -n 'list-unit-files lightdm' <<<"$xfce_branch" | head -1 | cut -d: -f1)"
+  [ -n "$claim_line" ] && [ -n "$lightdm_line" ] && [ "$claim_line" -lt "$lightdm_line" ] || {
+    echo "FAIL: the default-display-manager claim must be checked before the" >&2
+    echo "      lightdm unit-existence fallback in the xfce branch" >&2
+    return 1
+  }
+}
+
 @test "disk gate requires the desktop contract marker" {
   # The gate wakes on either marker (both prove the contract service ran)
   # but only OK passes; FAIL surfaces its reason lines and exits nonzero.

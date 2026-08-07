@@ -79,7 +79,26 @@ cosmic)
 	fi
 	;;
 xfce)
-	if systemctl list-unit-files lightdm.service --no-legend 2>/dev/null | grep -q '^lightdm.service'; then
+	# Debian-family packaging records the DM debconf chose in
+	# /etc/X11/default-display-manager, and BOTH gdm3 and lightdm consult it
+	# at startup — each refuses to run when the file names the other. That
+	# turned "prefer lightdm when its unit exists" into a broken desktop on
+	# grouper:xfce (run 31181743606): the manifest installs gdm3, Ubuntu's
+	# xfce4 metapackage pulls lightdm in via Recommends, this branch enabled
+	# the lightdm it found, and the installed system's serial shows lightdm
+	# crash-looping six times against default-display-manager=gdm3 while
+	# gdm3 — the DM debconf actually configured — sat unenabled. The
+	# contract service correctly reported DEPEND-failed, so the cell read
+	# desktop_contract=absent while the LUKS gates stayed green.
+	#
+	# Defer to the file: it is the apt-family equivalent of the
+	# display-manager.service alias claim the cosmic branch above defers to
+	# — the distro's packaging has already decided, and enabling anything
+	# else just loses a fight at boot. The unit-existence fallbacks remain
+	# for bases that never write the file.
+	if [[ -r /etc/X11/default-display-manager ]]; then
+		dm="$(basename "$(cat /etc/X11/default-display-manager)")"
+	elif systemctl list-unit-files lightdm.service --no-legend 2>/dev/null | grep -q '^lightdm.service'; then
 		dm=lightdm
 	else
 		dm=greetd
