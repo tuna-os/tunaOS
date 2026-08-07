@@ -29,6 +29,31 @@ welcome-dialog-last-shown-version='4294967295'
 favorite-apps = ['org.bootcinstaller.Installer.desktop', 'bootc-installer.desktop', 'firefox.desktop', 'org.gnome.Nautilus.desktop']
 EOF
 
+# Launch the installer at session start.
+#
+# GNOME had NO autostart entry while kde, cosmic and xfce all did, so on the
+# gnome live ISO the installer was never started — the session came up in the
+# empty Activities overview with the app merely pinned to the dash. Run
+# 31171184497 recorded the result: 11 frames, 1 distinct visual state, 0/10
+# transitions, and all six screen rows false. Nothing was broken; nothing had
+# been launched.
+#
+# It went unnoticed because gnome was absent from installer-smoke.yml's flavor
+# matrix (added in #1039), and that is the workflow whose whole job is to
+# assert the installer process is running.
+#
+# Deliberately no OnlyShowIn=, for the reason spelled out in desktop-cosmic.sh:
+# systemd-xdg-autostart-generator gates on systemd-xdg-autostart-condition
+# against XDG_CURRENT_DESKTOP, and a mismatch silently skips the unit.
+mkdir -p /etc/xdg/autostart
+tee /etc/xdg/autostart/org.tunaos.installer-live.desktop <<'DESKEOF'
+[Desktop Entry]
+Type=Application
+Name=Install TunaOS
+Exec=flatpak run org.bootcinstaller.Installer
+Icon=org.bootcinstaller.Installer
+DESKEOF
+
 # Disable suspend/sleep so the installer doesn't go to sleep mid-install
 tee /usr/share/glib-2.0/schemas/zz3-tunaos-installer-power.gschema.override <<'EOF'
 [org.gnome.settings-daemon.plugins.power]
