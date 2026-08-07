@@ -191,6 +191,118 @@ environment.
 
 ---
 
+### 5. COSMIC cells pass the LUKS gate while shipping a greeter that never starts (2026-08-07)
+
+**Affected:** every cosmic cell where both `greetd` and `cosmic-greeter` are
+installed. Measured on `skipjack:cosmic` (run 31136849989) and
+`albacore:cosmic` (run 31100129320). **Both are ticked green on
+`docs/MATRIX-STATUS.md`.**
+
+**Symptom.** The gate passes outright —
+
+```
+TUNAOS_LUKS_E2E_PASS encrypted=1 passphrase_unlock=1 installed_boot=1
+```
+
+— and the desktop contract fails beside it, non-fatally, so nothing goes red:
+
+```
+TUNAOS_LUKS_E2E_DESKTOP_CONTRACT desktop_contract=fail fatal=0
+```
+
+The `dm_diag` block `verify-desktop-experience.sh` ships with `dm_inactive`
+(added exactly because the DM logs to the journal while the gate can only read
+the serial console) gives the mechanism:
+
+```
+greetd: unable to start greeter: terminal: unable to take controlling
+        terminal: EPERM: Operation not permitted
+cosmic-greeter.service: Main process exited, code=exited, status=1/FAILURE
+cosmic-greeter.service: Scheduled restart job, restart counter is at 1.
+Id=cosmic-greeter.service  SubState=auto-restart  NRestarts=1
+```
+
+**Root cause chain.**
+
+```
+cosmic-greeter (COPR on EL10, deb on Ubuntu) claims display-manager.service
+  → the manifest also declares display_manager: greetd, which
+    install-desktop.sh force-links into graphical.target.wants
+      → two units, both running `greetd` on vt = 1, both Restart=always
+        → greetd takes the controlling terminal first
+          → cosmic-greeter gets EPERM and crash-loops forever
+```
+
+Ubuntu FAILED THE BUILD on this (greetd.service there carries
+`[Install] Alias=display-manager.service` and no `WantedBy=`, so
+`systemctl enable greetd` collides with the existing alias). Fedora/EL ship
+`WantedBy=` and no `Alias=`, so there is no collision, the build SUCCEEDS, and
+the race ships. Succeeding is the worse outcome.
+
+**Controls** — same EL10 base, same headless QEMU, same harness:
+
+| cell | display-manager.service | contract |
+|---|---|---|
+| skipjack:cosmic | cosmic-greeter.service | **fail** |
+| albacore:cosmic | cosmic-greeter.service | **fail** |
+| skipjack:niri | greetd.service | ok |
+| skipjack:xfce | greetd.service | ok |
+| bonito-rawhide:kde | plasmalogin.service | ok |
+
+So the contract is a working check that a desktop can pass, and cosmic is the
+outlier. Two hypotheses were killed getting here and are recorded so nobody
+re-runs them: it is **not** the contract racing its own `graphical.target`
+(the unit reaches `auto-restart` with `ExecMainStatus=1` — it starts and
+dies), and `rendered=absent` is **not** a signal of a broken desktop — it
+appears on niri and xfce cells whose contract passes, because the harness runs
+headless with no render node (`GPU: -vga virtio headless (no
+render node/virgl)`). Only Plasma draws in this environment.
+
+**Fix.** Both halves key off the symlink, never off whether cosmic-greeter is
+installed: `configure-desktop-runtime.sh` picks whichever greeter already owns
+the alias, and `install-desktop.sh` stops force-linking greetd beside it.
+
+**Why it stayed invisible.** `desktop_contract` is `fatal=0`. The LUKS gate
+asserts encryption, passphrase unlock and installed boot — all genuinely true
+here — and `docs/MATRIX-STATUS.md` §1 already states that LUKS "does not
+prove ... that a desktop session starts". Nothing was lying; there was simply
+no axis reporting the contract, so a dead greeter and a working one look
+identical from the board.
+
+### 6. `FISHERMAN_OVERRIDE` never installed on images that ship no fisherman (2026-08-07)
+
+**Affected:** all three `guppy` cells (Gentoo). Measured on `guppy:xfce`,
+run 31131624108.
+
+**Symptom:**
+
+```
+ERROR: fisherman not found on live image (VARIANT=guppy FLAVOR=xfce)
+ERROR: and TBOX_E2E_IMAGE is unset, so the generic bootc path cannot name
+       an image ref
+exit code 3
+```
+
+**The misleading part.** The run spans 23:34 to 01:44, which reads exactly
+like a 65-minute Gentoo build plus the 3600s `TUNAOS_E2E_INSTALL_TIMEOUT`. It
+is not: the LUKS step ran for **55 seconds**. Everything before it was the
+build. Check the step's own start/end times before concluding a timeout.
+
+**Root cause.** `run_install()` in `scripts/iso-e2e.sh` had two statements
+~260 lines apart: a hard `return 3` if `/usr/local/bin/fisherman` is absent,
+and — far below it — the `scp` + `install` that puts `FISHERMAN_OVERRIDE`
+at exactly that path. The check ran first, so an image shipping no fisherman
+died without ever installing the binary the workflow had just built for it,
+with "Build fisherman in a golang container" green immediately above.
+
+**Fix.** Install the override before the check. That is also what the flag
+means: *use this fisherman*, not *use this fisherman provided the image
+already had one*. The error path now also distinguishes "the override path
+does not exist on the runner" from "the file exists, so the scp/install
+failed".
+
+---
+
 ## Glossary of Components
 
 | Tool | Role | Source |
