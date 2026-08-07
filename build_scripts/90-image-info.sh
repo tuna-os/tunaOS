@@ -185,13 +185,37 @@ if [[ -f "${RECIPE_FILE}" ]]; then
 	if [[ "${IMAGE_FLAVOR}" == "niri" || "${IMAGE_FLAVOR}" == *"niri"* ]]; then DESKTOP_PRETTY_NAME="Niri"; fi
 	if [[ "${IMAGE_FLAVOR}" == "xfce" || "${IMAGE_FLAVOR}" == *"xfce"* ]]; then DESKTOP_PRETTY_NAME="XFCE"; fi
 
+	# Pick the variant mark that ACTUALLY EXISTS in the installer's GResource.
+	#
+	# This line used to build 'images/${IMAGE_NAME}.png' unconditionally. Every
+	# TunaOS mark in that bundle is an .svg — only bluefin, bluefin-lts and
+	# dakota are .png — so the path never resolved. bootc-installer's
+	# apply_icon() catches the failure and logs a warning, so the welcome
+	# screen silently showed GTK's broken-image placeholder above a correctly
+	# branded "Welcome to Skipjack". Seen on the live-ISO screenshot for
+	# tuna-os/tunaOS#1056.
+	#
+	# The set below is upstream's, from bootc_installer/bootc-installer.gresource.xml:
+	#   images/tunaos.svg  bonito.svg  skipjack.svg  albacore.svg  yellowfin.svg
+	# grouper, marlin, redfin and sailfin have no mark of their own, and would
+	# hit exactly the same broken placeholder — they fall back to the TunaOS
+	# mark, which is branding rather than breakage.
+	case "${IMAGE_NAME}" in
+	tunaos | bonito | skipjack | albacore | yellowfin)
+		DISTRO_LOGO_RES="resource:///org/bootcinstaller/Installer/images/${IMAGE_NAME}.svg"
+		;;
+	*)
+		DISTRO_LOGO_RES="resource:///org/bootcinstaller/Installer/images/tunaos.svg"
+		;;
+	esac
+
 	python3 -c "
 import json
 with open('${RECIPE_FILE}', 'r') as f:
     recipe = json.load(f)
 recipe['distro_name'] = '${IMAGE_PRETTY_NAME}'
 recipe['welcome_title'] = 'Welcome to ${IMAGE_PRETTY_NAME}'
-recipe['distro_logo'] = 'resource:///org/bootcinstaller/Installer/images/${IMAGE_NAME}.png'
+recipe['distro_logo'] = '${DISTRO_LOGO_RES}'
 recipe['tour']['welcome']['title'] = 'Welcome to ${IMAGE_PRETTY_NAME}'
 recipe['tour']['welcome']['description'] = '${IMAGE_PRETTY_NAME} is an immutable, container-native Linux operating system built for enterprise workstations and developers.'
 
