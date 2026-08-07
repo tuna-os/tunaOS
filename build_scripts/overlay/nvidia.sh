@@ -22,6 +22,16 @@ fi
 copy_systemfiles_for nvidia
 run_buildscripts_for nvidia
 
+# Independent audit of what the overlay just did. run_buildscripts_for
+# returns 0 when its overrides directory is missing — exactly how driverless
+# "*-nvidia" images shipped for months — so the contract below is a bare call
+# under `set -e`: an nvidia overlay that did not actually install the driver
+# stack fails the build here rather than publishing. Installed into the image
+# too, so desktop-contract-sweep can re-run it against published tags.
+/run/context/build_scripts/checks/verify-nvidia.sh
+install -Dm0755 /run/context/build_scripts/checks/verify-nvidia.sh \
+	/usr/libexec/tunaos/verify-nvidia
+
 if command -v jq >/dev/null 2>&1; then
 	jq . /usr/share/ublue-os/image-info.json || true
 else
