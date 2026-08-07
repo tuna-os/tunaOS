@@ -134,4 +134,23 @@ screens:
   - id: done
     title: Finished / reboot
     required: false
-    keywords: ["complete", "finished", "reboot", "restart", "success"]
+    # NOT "reboot" or "restart", and NOT bare "complete"/"finished"/"success".
+    #
+    # A LOGIN GREETER satisfies those. cosmic-greeter's power menu offers
+    # Restart, Power Off and Suspend, so run 31183217981 — which never got past
+    # the greeter, with the installer not running at all — was still credited
+    # with reaching the FINISHED screen. That is the worst phantom row
+    # available: it reports an install that completed on a machine where the
+    # installer never started.
+    #
+    # Every keyword below needs a sentence a greeter has no reason to contain.
+    # Checked against the frontends' real done-screen text: KDE renders
+    # "Installation complete" and "TunaOS has been installed. Remove the
+    # installation media and restart to boot into your new system"; upstream
+    # bootc-installer renders "<product> is installed" (done.py). Note
+    # "restart to boot" is admitted where bare "restart" is not — the phrase
+    # cannot appear in a power menu.
+    keywords: ["installation complete", "installation finished",
+               "is installed", "has been installed",
+               "remove the installation media",
+               "restart to boot", "reboot into"]
