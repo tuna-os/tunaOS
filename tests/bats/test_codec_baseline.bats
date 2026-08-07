@@ -59,8 +59,10 @@ CONTRACT="${REPO_ROOT}/build_scripts/checks/verify-desktop-experience.sh"
   # The plugin file existing is satisfiable by a free-codec libavcodec — the
   # exact v2 failure — so the contract must interrogate ffmpeg itself. The
   # probe must use the capture-first form: the output is captured into a
-  # variable, then grepped.
-  run grep -F '_ffmpeg_decoders="$(ffmpeg -hide_banner -decoders 2>/dev/null)"' "$CONTRACT"
+  # variable, then grepped. stderr goes to a file, not /dev/null — discarding
+  # it is how guppy:xfce (run 31201546516) failed this check with no evidence
+  # of what ffmpeg actually said.
+  run grep -F '_ffmpeg_decoders="$(ffmpeg -hide_banner -decoders 2>"$_ffmpeg_stderr_file")"' "$CONTRACT"
   [ "$status" -eq 0 ]
   run grep -F "grep -q ' h264 ' <<<\"\$_ffmpeg_decoders\"" "$CONTRACT"
   [ "$status" -eq 0 ]
@@ -115,4 +117,73 @@ GEN
   # New (captured) form: passes.
   run bash -c "set -o pipefail; d=\"\$('${BATS_TEST_TMPDIR}/fake-decoders')\"; grep -q ' h264 ' <<<\"\$d\""
   [ "$status" -eq 0 ]
+}
+
+# ── Failure-evidence dump ────────────────────────────────────────────────────
+# When the h264 probe fires, the contract must name its evidence: which ffmpeg
+# ran, its configure line's decoder kill-switches, what it wrote to stderr,
+# and what the decoder list held. guppy:xfce (run 31201546516) failed this
+# check against a source-built ffmpeg whose USE line said the decoder should
+# exist, and three container reproductions could not replicate it — the next
+# failing run has to answer for itself.
+
+# Extract the codec-baseline block and run it against a fake ffmpeg on PATH.
+run_codec_block() {
+  local bin="${BATS_TEST_TMPDIR}/bin"
+  mkdir -p "$bin"
+  cp "${BATS_TEST_TMPDIR}/fake-ffmpeg" "${bin}/ffmpeg"
+  chmod +x "${bin}/ffmpeg"
+  local block
+  block="$(awk '/── Codec baseline ──/,/── KDE version-skew guard/' "$CONTRACT" | sed '$d')"
+  PATH="${bin}:/usr/bin:/bin" bash -c "
+    set -euo pipefail
+    require_any_glob() { :; }
+    require_command() { :; }
+    IS_HUMMINGBIRD=false
+    ${block}
+  "
+}
+
+@test "a decoder-less ffmpeg fails AND dumps codec_diag evidence" {
+  cat > "${BATS_TEST_TMPDIR}/fake-ffmpeg" <<'FAKE'
+#!/usr/bin/env bash
+case "$*" in
+*-decoders*) echo " V....D vp9    Google VP9"; echo "warning: h264 decoder disabled at configure time" >&2 ;;
+*-version*)  echo "ffmpeg version 9.9-test"; echo "built with test"; echo "configuration: --disable-decoder=h264" ;;
+esac
+FAKE
+  run run_codec_block
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"cannot decode h264"* ]]
+  [[ "$output" == *"codec_diag: ffmpeg="* ]]
+  [[ "$output" == *"codec_diag: configure --disable-decoder=h264"* ]]
+  [[ "$output" == *"codec_diag: decoders_stderr: warning: h264 decoder disabled at configure time"* ]]
+  [[ "$output" == *"ffmpeg version 9.9-test"* ]]
+}
+
+@test "an ffmpeg that will not run fails on its own branch with evidence" {
+  cat > "${BATS_TEST_TMPDIR}/fake-ffmpeg" <<'FAKE'
+#!/usr/bin/env bash
+case "$*" in
+*-decoders*) echo "error while loading shared libraries: libavcodec.so.62" >&2; exit 127 ;;
+*-version*)  echo "ffmpeg version 9.9-test"; echo "built with test" ;;
+esac
+FAKE
+  run run_codec_block
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"would not run"* ]]
+  [[ "$output" == *"codec_diag: decoders_stderr: error while loading shared libraries"* ]]
+}
+
+@test "a healthy ffmpeg passes silently — no codec_diag noise on green" {
+  cat > "${BATS_TEST_TMPDIR}/fake-ffmpeg" <<'FAKE'
+#!/usr/bin/env bash
+case "$*" in
+*-decoders*) echo " V....D h264                 H.264 / AVC" ;;
+*-version*)  echo "ffmpeg version 9.9-test" ;;
+esac
+FAKE
+  run run_codec_block
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"codec_diag"* ]]
 }
