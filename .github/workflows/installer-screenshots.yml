@@ -80,13 +80,36 @@ jobs:
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
 
+      # TACKLEBOX_FROM_SOURCE=1 is what every other ISO-building workflow in
+      # this repo already sets — reusable-build-artifacts, live-iso-bootc,
+      # luks-e2e, publish-iso-groups and installer-smoke. This job was the only
+      # one that did not, and it is the reason it has never once gone green.
+      #
+      # Without it, tunaos_run_tacklebox() runs tacklebox INSIDE a podman
+      # container (scripts/lib/common.sh). Tacklebox then issues its own
+      # `podman run` for the live-customize step, so that step is
+      # podman-in-podman — and the nested container's DNS does not resolve:
+      #
+      #   Error: Failed to download metadata for repo 'baseos': Cannot prepare
+      #   internal mirrorlist: Curl error (6): Could not resolve hostname for
+      #   https://mirrors.centos.org/... [Could not resolve host: mirrors.centos.org]
+      #
+      # With it, tacklebox is built and run as a HOST binary at the SHA pinned
+      # in image-versions.yaml, so live-customize is an ordinary host container
+      # with working DNS. golang-go is already in this job's dependency list.
+      #
+      # The outer `sudo` goes with it. The Justfile's `iso` recipe already does
+      # `sudo -E bash ./scripts/build-iso-tacklebox.sh` itself; wrapping the
+      # whole thing in another sudo dropped the environment, which is why the
+      # variable had to be re-stated inline. installer-smoke.yml calls `just
+      # iso` unsudoed for exactly this reason.
       - name: Build live ISO (from published GHCR image)
         timeout-minutes: 45
         env:
           GITHUB_REPOSITORY_OWNER: tuna-os
+          TACKLEBOX_FROM_SOURCE: "1"
         run: |
-          sudo GITHUB_REPOSITORY_OWNER=tuna-os \
-            just iso "${VARIANT}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
+          just iso "${VARIANT}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
 
       - name: Run installer walkthrough
         timeout-minutes: 30
