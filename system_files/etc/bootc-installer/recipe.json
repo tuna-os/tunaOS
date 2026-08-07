@@ -3,6 +3,7 @@
   "distro_name": "TunaOS",
   "welcome_title": "Welcome to TunaOS",
   "distro_logo": "resource:///org/bootcinstaller/Installer/images/tunaos.png",
+  "credits_data": "/run/host/usr/share/bootc-installer/credits.json",
   "imgref": "ghcr.io/tuna-os/tunaos:latest",
   "local_imgref": "containers-storage:ghcr.io/tuna-os/tunaos:latest",
   "bootloader": "systemd",
