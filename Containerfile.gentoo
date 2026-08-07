@@ -54,7 +54,17 @@ RUN NPROC="$(nproc)" && \
     printf '[gentoobinhost]\npriority = 9999\nsync-uri = https://distfiles.gentoo.org/releases/amd64/binpackages/23.0/x86-64/\n' \
       >/etc/portage/binrepos.conf/gentoobinhost.conf && \
     getuto && \
-    echo "sys-apps/systemd boot cryptsetup tpm" >> /etc/portage/package.use/systemd && \
+    # boot only, here. The cryptsetup and tpm flags systemd also needs are
+    # granted AFTER @world, in the tooling layer below: with them visible to
+    # the first @world resolve, portage schedules the systemd source rebuild
+    # and the initial cryptsetup install in ONE transaction and dies on
+    #   * Error: circular dependencies:
+    #   (sys-fs/cryptsetup, binary) depends on (virtual/libudev) (runtime)
+    #    (sys-apps/systemd, ebuild) depends on (sys-fs/cryptsetup) (buildtime)
+    # (all three guppy cells, run 31158591954, ~4 min in). Once cryptsetup is
+    # installed the buildtime edge is satisfied by the live system instead of
+    # the transaction, and the same flags resolve without a cycle.
+    echo "sys-apps/systemd boot" >> /etc/portage/package.use/systemd && \
     echo "media-video/pipewire extra -ffmpeg" >> /etc/portage/package.use/pipewire && \
     echo "media-libs/gst-plugins-bad -vulkan" >> /etc/portage/package.use/gst-plugins-bad && \
     echo "sys-libs/minizip-ng compat" >> /etc/portage/package.use/minizip-ng && \
@@ -114,19 +124,29 @@ RUN emerge --verbose --deep --newuse @world
 # advice on every OTHER base, where the systemd package unconditionally ships
 # the binary. Gentoo only builds systemd-cryptenroll when systemd has
 # USE=cryptsetup, which neither the desktop/systemd profile nor the make.conf
-# USE line enables — hence `boot cryptsetup tpm` in package.use above (tpm so
+# USE line enables — hence the `cryptsetup tpm` grant mid-layer below (tpm so
 # the enroll tool can at least attempt the TPM2 path the recipe asks for; it
-# falls back to passphrase everywhere today). cryptsetup and lvm2 are named
-# here explicitly because fisherman's LUKS path needs the cryptsetup and
-# dmsetup binaries themselves right after the enroll tool — the bootc-install
-# refactor comments further down have said "Gentoo emerges neither" for a
-# while; this is the run that made it cost a cell.
+# falls back to passphrase everywhere today). The grant happens here and not
+# in the package.use layer above because systemd[cryptsetup] build-depends on
+# the cryptsetup this very list installs — flag first meant a circular-
+# dependency abort at @world (run 31158591954, see the package.use comment).
+# cryptsetup and lvm2 are named here explicitly because fisherman's LUKS path
+# needs the cryptsetup and dmsetup binaries themselves right after the enroll
+# tool — the bootc-install refactor comments further down have said "Gentoo
+# emerges neither" for a while; this is the run that made it cost a cell.
+# tpm2-tss is named so the tpm dep is already installed (as a binpkg) when the
+# forced source rebuild runs, keeping --usepkg=n's blast radius to systemd
+# itself.
 RUN emerge --verbose --deep --newuse \
         app-arch/cpio btrfs-progs dev-vcs/git dosfstools sys-fs/xfsprogs \
         linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd \
         sys-apps/flatpak app-admin/sudo app-containers/podman \
-        sys-fs/cryptsetup sys-fs/lvm2 \
+        sys-fs/cryptsetup sys-fs/lvm2 app-crypt/tpm2-tss \
         net-vpn/tailscale gui-apps/wl-clipboard media-video/ffmpeg media-plugins/gst-plugins-meta && \
+    # Now — and only now — grant systemd the flags that need those packages
+    # installed first (see the cycle comment above). Overwrite, not append:
+    # this line replaces the boot-only grant from the base layer.
+    echo "sys-apps/systemd boot cryptsetup tpm" > /etc/portage/package.use/systemd && \
     # make.conf runs emerge with --binpkg-respect-use=n, so the binhost's
     # systemd (built WITHOUT cryptsetup) satisfies the install above even with
     # the package.use entry in place, and the flag silently does nothing. Force

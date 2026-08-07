@@ -271,6 +271,19 @@ setup() {
       return 1
     }
   done
+  # Ordering is load-bearing, not style. systemd[cryptsetup] build-depends on
+  # sys-fs/cryptsetup, so granting the flag before the first @world resolve
+  # puts the systemd source rebuild and the initial cryptsetup install in one
+  # transaction — portage aborts on the circular dependency and every guppy
+  # cell dies four minutes in (run 31158591954). The grant must sit BELOW the
+  # @world emerge, where the already-installed cryptsetup satisfies the edge.
+  local above_world
+  above_world="$(sed '/--newuse @world/q' "$path" | grep -v '^[[:space:]]*#')"
+  if grep -E 'sys-apps/systemd[^"]*cryptsetup' <<<"$above_world"; then
+    echo "FAIL: systemd USE=cryptsetup is visible to the @world emerge —" >&2
+    echo "      that recreates the circular-dependency abort of run 31158591954" >&2
+    return 1
+  fi
 }
 
 @test "every base can bring up a network, and both service paths enable it" {
