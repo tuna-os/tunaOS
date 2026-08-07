@@ -276,8 +276,15 @@ pantheon)
 	# display_manager: lightdm.
 	experience="tunaos/pantheon"
 	require_command gala
-	require_any_glob '/usr/share/xsessions/pantheon.desktop' \
-		'/usr/share/wayland-sessions/pantheon.desktop'
+	# Session entries measured from the PPA deb itself (pantheon-xsession-
+	# settings 8.1.0+r419, dpkg -c, 2026-08-07): xsessions/pantheon.desktop
+	# and wayland-sessions/pantheon-wayland.desktop. The first run of this
+	# contract (31187758113) failed here and the failure was REAL: no package
+	# in the manifest shipped any session entry at all — the greeter had
+	# nothing to launch. pantheon-xsession-settings is that package; the
+	# manifest now installs it.
+	require_any_glob '/usr/share/xsessions/pantheon*.desktop' \
+		'/usr/share/wayland-sessions/pantheon*.desktop'
 	require_any_unit lightdm
 	dm_pattern='^lightdm\.service$'
 	;;
