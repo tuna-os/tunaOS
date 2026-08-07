@@ -60,6 +60,25 @@ elif command -v zypper &>/dev/null; then
 	_TD_OS="zypper"
 elif command -v emerge &>/dev/null; then
 	_TD_OS="emerge"
+elif [[ "${IS_HUMMINGBIRD:-false}" == true ]]; then
+	# Hummingbird gets its own section rather than borrowing fedora's.
+	#
+	# It IS a Fedora Rawhide rebuild — 30 of 38 core packages carry Rawhide's
+	# exact version AND release, differing only in the .hum1 dist tag — so
+	# routing it to el10, which lib.sh's substring test does, is a
+	# misclassification. But `fedora` is equally wrong, and that is the part
+	# worth stating: of the 58 packages the GNOME manifest installs on a
+	# Fedora-family host, Hummingbird's 3384-package repository ships exactly
+	# ONE (avahi). No cairo, no wayland, no mesa, no gtk, no pipewire; its own
+	# SBOM lists 444 names, none of them desktop. It publishes a base OS and
+	# no desktop, so the fedora: section would fail exactly as el10: did —
+	# just further along. Measured in tuna-os/tunaos-packages#250.
+	#
+	# Rawhide's own binaries cannot be substituted either: glibc 2.43 vs 2.44
+	# (637 Rawhide binaries need GLIBC_2.44), libxml2.so.16 vs .so.2,
+	# libcrypto.so.3 vs .so.4. They have to be rebuilt against Hummingbird's
+	# buildroot, which is what the hummingbird: manifest sections point at.
+	_TD_OS="hummingbird"
 elif [[ "$IS_FEDORA" == true ]]; then
 	_TD_OS="fedora"
 else
@@ -339,11 +358,16 @@ if [[ "${_TD_OS}" == "pacman" ]]; then
 	# now runs the same gate every other package manager does.
 fi
 
-# ── DNF path (el10/fedora only) ──────────────────────────────────────────────
+# ── DNF path (el10/fedora/hummingbird) ───────────────────────────────────────
 # These sections are maps (groups/group_options/copr/optional/versionlock). The
 # list-style sections (apt/pacman/zypper/emerge) installed above and must skip
 # this — indexing an array with .group_options etc. is a hard yq error.
-if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" ]]; then
+#
+# hummingbird belongs here because it is dnf-driven like the other two; what
+# differs is only WHICH repository satisfies the names, which the manifest's
+# hummingbird: section supplies. Leaving it out would route a dnf base down
+# the list-style path and produce that same yq error.
+if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummingbird" ]]; then
 
 	# Plain (non-COPR) baseurl repos — e.g. the tuna-os xfce-wayland repo,
 	# which lives at its own R2 path (repo.tunaos.org/xfce/...), not the main
