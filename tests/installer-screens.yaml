@@ -25,7 +25,10 @@ screens:
   - id: welcome
     title: Welcome
     required: true
-    keywords: ["welcome", "get started", "let's get", "begin", "install tunaos"]
+    # "install tunaos" dropped: same product-name coupling as the disk and
+    # install lists. The four remaining keywords are what a welcome screen
+    # says regardless of what it is installing.
+    keywords: ["welcome", "get started", "let's get", "begin"]
 
   - id: disk
     title: Disk / target selection
@@ -43,9 +46,25 @@ screens:
     # "destination" is admitted as a bare-ish noun deliberately: it is the
     # entire heading on Niri, and it does not appear as a field label on any
     # other screen in any of the four frontends.
+    #
+    # PRODUCT-NAME-FREE from here on. The three keywords that embedded
+    # "tunaos" are gone: the frontends are being changed to show the VARIANT
+    # name the branding pipeline already computes (90-image-info.sh sets
+    # distro_name = PRETTY_NAME, which is why gnome says "Welcome to
+    # Skipjack"), so a keyword containing "tunaos" would stop matching the
+    # moment a frontend is branded correctly — the contract would punish the
+    # fix. Every keyword below is a heading or prompt that holds whatever the
+    # product is called.
+    #
+    # "be installed" rather than "will be installed" / "where tunaos will be
+    # installed": the product name sits INSIDE those phrases, so no
+    # product-free keyword can span it. XFCE's heading is "Where should
+    # <name> be installed?" and KDE's is "Choose the disk where <name> will
+    # be installed." — "be installed" is the longest contiguous run common to
+    # both that contains no product name. Verified against all four forks'
+    # source: it appears on their disk screens and on no other screen.
     keywords: ["select target disk", "select a disk", "choose the disk",
-               "available disks", "where tunaos will be installed",
-               "where should tunaos be installed", "destination"]
+               "available disks", "be installed", "destination"]
 
   - id: encryption
     title: Disk encryption (LUKS)
@@ -102,9 +121,14 @@ screens:
     # evidence available that an install is actually under way, which is the
     # principle this list already states ("progress screens say what they are
     # DOING").
+    #
+    # "installing tunaos" removed for the same reason as the disk keywords.
+    # The fisherman step lines carry this screen instead: every frontend
+    # streams the same backend, so "partitioning" and "installing image"
+    # appear on the progress screen of all five and on no other screen, and
+    # they do not contain a product name at all.
     keywords: ["installation progress", "copying files", "deploying",
-               "please wait", "writing image",
-               "installing tunaos", "installing\u2026",
+               "please wait", "writing image", "installing\u2026",
                "partitioning", "installing image"]
 
   - id: done
