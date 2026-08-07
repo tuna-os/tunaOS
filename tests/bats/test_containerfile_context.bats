@@ -104,8 +104,12 @@ strip_comments() { grep -v '^[[:space:]]*#' || true; }
     body="$(context_stage "${REPO_ROOT}/$f" | strip_comments)"
     has=0
     grep -q 'COPY[[:space:]]\+image-versions.yaml' <<<"$body" && has=1
+    # Strip comments, same as `has` above: Containerfile.gentoo's podman
+    # comment NAMES 10-base-packages.sh in prose ("the rpm and apt ones from
+    # build_scripts/10-base-packages.sh") and the unstripped grep read that
+    # as the script being run, failing every PR after #1038 merged.
     needs=0
-    grep -q '10-base-packages.sh' "${REPO_ROOT}/$f" && needs=1
+    strip_comments <"${REPO_ROOT}/$f" | grep -q '10-base-packages.sh' && needs=1
     if [ "$has" -ne "$needs" ]; then
       echo "FAIL: ${f} carries image-versions.yaml=${has} but runs 10-base-packages.sh=${needs}" >&2
       return 1
