@@ -167,7 +167,23 @@ EOF
 	if [[ "$PKG_MGR" == "apt" ]]; then
 		# xfwl4 (Wayland compositor) is not packaged for Ubuntu; ship the
 		# standard X11 XFCE stack with lightdm instead.
+		#
+		# xserver-xorg is NOT implied by anything else on this list under
+		# pkg_install's --no-install-recommends: lightdm only Recommends an
+		# X server, and this is an X11 session, so without it lightdm's seat
+		# has no display server to spawn. Measured on ubuntu:resolute with
+		# exactly this package set (LUKS runs 31215925331/31215923156): the
+		# daemon logs "Seat seat0: Can't create display server for greeter"
+		# to its own /var/log/lightdm/lightdm.log — nothing to the journal —
+		# and exits 1 within a second, crash-looping display-manager.service.
+		# The gdm/wayland images never hit this because mutter is its own
+		# display server. accountsservice is the same story one notch down:
+		# a Recommends of lightdm that every greeter queries for the user
+		# list; absent, each start warns "Error getting user list from
+		# org.freedesktop.Accounts" before the seat failure kills the daemon.
 		pkg_install \
+			xserver-xorg \
+			accountsservice \
 			xfce4-session \
 			xfwm4 \
 			xfce4-panel \
