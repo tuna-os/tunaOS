@@ -1,8 +1,11 @@
 ---
 name: Watch Aurora Upstream
 
-# Aurora is Fedora-only KDE. Catch-up flows into build_scripts/kde.sh and
-# system_files_overrides/kde/. Thin caller of the shared workflow; all
+# Aurora is Fedora-only KDE. Catch-up flows into manifests/desktops/kde.yaml
+# and system_files_overrides/kde/. This pointed at build_scripts/kde.sh, which
+# was both the wrong path (the script lived under build_scripts/desktop/) and,
+# by the time it was noticed, a file no Containerfile called any more — every
+# base installs KDE from the manifest. Thin caller of the shared workflow; all
 # logic lives in .github/workflows/watch-upstream.yml.
 
 "on":
@@ -31,7 +34,7 @@ jobs:
       branch_prefix: aurora-port
       label: upstream-aurora
       flavor: kde
-      build_script: build_scripts/kde.sh
+      build_script: manifests/desktops/kde.yaml
       overrides_dir: system_files_overrides/kde
       prompt_file: .github/prompts/aurora-port.md
       lookback_days: ${{ inputs.lookback_days || '7' }}

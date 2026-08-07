@@ -127,15 +127,31 @@ per_de_scripts() {
 
 # The test above passes trivially if the extraction finds nothing, and would
 # have passed on the broken tree if cosmic.sh had been mis-filtered out.
+#
+# The controls cannot name gnome.sh, kde.sh or cosmic.sh any more: all three
+# moved onto install-desktop.sh and were deleted, which is the direction the
+# rule above pushes. niri.sh and xfce.sh are the per-DE scripts still invoked,
+# so they are what proves the extraction sees something, and the dnf-only
+# rejection is proved against a script written here rather than whichever
+# in-tree script happens to still lack an apt branch — a check keyed on a file
+# that no longer exists passes for the wrong reason (grep exits 2).
 @test "the apt per-DE check sees real scripts, and would reject a dnf-only one" {
   run bash -c "$(declare -f per_de_scripts); per_de_scripts '${REPO_ROOT}/Containerfile.ubuntu'"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"gnome.sh"* ]]
-  [[ "$output" == *"kde.sh"* ]]
+  [[ "$output" == *"niri.sh"* ]]
+  [[ "$output" == *"xfce.sh"* ]]
 
-  # cosmic.sh is still in the tree (el10 documents its package set); assert it
-  # is genuinely dnf-only, so the rule above is rejecting something real.
-  run grep -qE 'PKG_MGR.*[!=]=[[:space:]]*"apt"' "${REPO_ROOT}/build_scripts/desktop/cosmic.sh"
+  # Both of those must satisfy the rule, or the test above is red for real.
+  local s
+  for s in niri xfce; do
+    run grep -qE 'PKG_MGR.*[!=]=[[:space:]]*"apt"' "${REPO_ROOT}/build_scripts/desktop/${s}.sh"
+    [ "$status" -eq 0 ]
+  done
+
+  # And the predicate must still reject a script shaped like cosmic.sh was.
+  local dnf_only="${BATS_TEST_TMPDIR}/dnf-only.sh"
+  printf '#!/usr/bin/env bash\ndnf -y copr enable yselkowitz/cosmic-epel\n' >"$dnf_only"
+  run grep -qE 'PKG_MGR.*[!=]=[[:space:]]*"apt"' "$dnf_only"
   [ "$status" -ne 0 ]
 }
 

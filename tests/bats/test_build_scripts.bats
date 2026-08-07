@@ -7,15 +7,6 @@
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
-# Test ALL build_scripts/*.sh files (not subdirectories)
-build_scripts_top=(
-  "00-workarounds" "10-base-packages" "20-packages"
-  "26-packages-post" "40-services" "90-image-info"
-  "DX" "HWE" "arch-customizations" "cleanup"
-  "copy-files" "cosmic" "gnome" "kcm-ublue"
-  "kde" "lib" "niri" "nvidia"
-)
-
 # ── Basic validation for all top-level build_scripts ──────────────────────
 
 @test "build_scripts/lib.sh: exists" {
@@ -282,37 +273,11 @@ build_scripts_top=(
 
 # ── Desktop flavor scripts ──────────────────────────────────────────────
 
-@test "build_scripts/desktop/gnome.sh: exists and sources lib.sh" {
-  run grep 'source.*lib.sh' "${REPO_ROOT}/build_scripts/desktop/gnome.sh"
-  [ "$status" -eq 0 ]
-}
-
-@test "build_scripts/desktop/gnome.sh: passes shellcheck" {
-  if command -v shellcheck &>/dev/null; then
-    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/desktop/gnome.sh"
-    [ "$status" -eq 0 ]
-  else
-    skip "shellcheck not installed"
-  fi
-}
-
-@test "build_scripts/desktop/kde.sh: exists and passes shellcheck" {
-  run test -f "${REPO_ROOT}/build_scripts/desktop/kde.sh"
-  [ "$status" -eq 0 ]
-  if command -v shellcheck &>/dev/null; then
-    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/desktop/kde.sh"
-    [ "$status" -eq 0 ]
-  fi
-}
-
-@test "build_scripts/desktop/cosmic.sh: exists and passes shellcheck" {
-  run test -f "${REPO_ROOT}/build_scripts/desktop/cosmic.sh"
-  [ "$status" -eq 0 ]
-  if command -v shellcheck &>/dev/null; then
-    run shellcheck --exclude=SC1091 "${REPO_ROOT}/build_scripts/desktop/cosmic.sh"
-    [ "$status" -eq 0 ]
-  fi
-}
+# desktop/cosmic.sh, kde.sh and gnome.sh are gone: every Containerfile now
+# installs those desktops through the manifest installer, so none of the three
+# had a caller left. See tests/bats/test_desktop_script_apt_branch.bats for the
+# check that keeps the remaining per-DE scripts honest about the bases that
+# call them.
 
 @test "build_scripts/desktop/niri.sh: exists and passes shellcheck" {
   run test -f "${REPO_ROOT}/build_scripts/desktop/niri.sh"

@@ -48,9 +48,11 @@ jobs:
         variant: [yellowfin, albacore, skipjack, bonito, grouper]
         flavor: [gnome, kde, niri, cosmic, xfce]
         exclude:
-          # grouper (Ubuntu) has no cosmic image — cosmic.sh has no apt branch
+          # grouper declares no niri flavour (see .github/build-config.yml:
+          # base, gnome, gnome-asahi, gnome-zfs, kde, cosmic, xfce), so there
+          # is no grouper:niri image to screenshot.
           - variant: grouper
-            flavor: cosmic
+            flavor: niri
     steps:
       - name: Check matrix filter
         id: filter

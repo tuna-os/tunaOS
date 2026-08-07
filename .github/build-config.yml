@@ -849,8 +849,15 @@ variants:
       # resolve. (Measuring in a bare ubuntu container says nothing here: the
       # installer adds repositories before it installs, so a probe that skips
       # that step is answering a question about the wrong system.)
+      # amd64 only: ppa:hepp3n/cosmic-epoch publishes amd64 and amd64v3 and
+      # nothing else — no arm64 build of cosmic-session/cosmic-comp/etc exists
+      # for any series (Launchpad getPublishedBinaries). grouper otherwise
+      # builds both arches, so the arm64 job was the ONLY failure in run
+      # 31088031074 while amd64 built clean. Same shape as the aarch64 cosmic
+      # pin on the EL10 variants for fprintd-pam (tunaOS#732).
       - id: cosmic
         stage: 2
+        platforms: ["linux/amd64"]
         build_image: true
       - id: xfce
         stage: 2

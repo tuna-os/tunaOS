@@ -79,16 +79,32 @@ strip_comments() { grep -v '^[[:space:]]*#' || true; }
   local f code fail=0
   for f in "${APT_CONTAINERFILES[@]}"; do
     code="$(strip_comments <"${REPO_ROOT}/$f")"
+    # Two acceptable shapes. Delegating is the preferred one: the shared script
+    # runs the same two `command -v` probes and has its own tests, so a base on
+    # it cannot drift. Writing the line inline is fine for a base not yet moved.
+    if grep -qE 'bootc/dracut-config\.sh' <<<"$code"; then
+      # Delegation only covers this base while the script still does the thing
+      # delegated to it. Assert the probe, or the omission can be deleted one
+      # file away from every Containerfile that depends on it.
+      local shared="${REPO_ROOT}/build_scripts/bootc/dracut-config.sh"
+      grep -qE 'omit_dracutmodules' "$shared" &&
+        grep -qE 'command -v pcscd([[:space:]]|$)' "$shared" || {
+        echo "FAIL: ${f} delegates its dracut config to dracut-config.sh, but" >&2
+        echo "      that script no longer probes pcscd and omits what is" >&2
+        echo "      missing — so nothing omits pcsc on this base any more." >&2
+        fail=1
+      }
+      continue
+    fi
     if ! grep -qE 'omit_dracutmodules' <<<"$code"; then
-      echo "FAIL: ${f} never writes an omit_dracutmodules line." >&2
-      echo "      dracut's pcsc module is in the default set and neither apt" >&2
-      echo "      base installs pcscd. An unsatisfiable module is fatal, and" >&2
-      echo "      the failure surfaces at ISO build, not image build." >&2
+      echo "FAIL: ${f} neither calls bootc/dracut-config.sh nor writes an" >&2
+      echo "      omit_dracutmodules line. dracut's pcsc module is in the" >&2
+      echo "      default set and neither apt base installs pcscd. An" >&2
+      echo "      unsatisfiable module is fatal, and the failure surfaces at" >&2
+      echo "      ISO build, not image build." >&2
       fail=1
       continue
     fi
-    # Either named outright (ubuntu) or reached through the pcscd probe
-    # (debian, matching build_scripts/bootc/dracut-config.sh).
     grep -qE 'pcsc' <<<"$code" || {
       echo "FAIL: ${f} omits something, but never pcsc." >&2
       fail=1

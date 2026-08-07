@@ -2,7 +2,7 @@
 name: Watch bluefin-lts Upstream
 
 # Bluefin-LTS is Fedora-based GNOME LTS. Catch-up flows into
-# build_scripts/gnome.sh and system_files_overrides/gnome/. Thin
+# manifests/desktops/gnome.yaml and system_files_overrides/gnome/. Thin
 # caller of .github/workflows/watch-upstream.yml.
 
 "on":
@@ -30,7 +30,7 @@ jobs:
       branch_prefix: bluefin-lts-port
       label: upstream-bluefin-lts
       flavor: gnome
-      build_script: build_scripts/gnome.sh
+      build_script: manifests/desktops/gnome.yaml
       overrides_dir: system_files_overrides/gnome
       prompt_file: .github/prompts/bluefin-lts-port.md
       lookback_days: ${{ inputs.lookback_days || '7' }}
