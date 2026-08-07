@@ -118,7 +118,12 @@ case "\$args" in
   # -ql answers with the module files the kmod OWNS — the probe the contract
   # uses since the wmi-ec-backlight false match (run 31196251408): a name
   # glob found a mainline nvidia-prefixed module and failed modinfo on it.
-  *"-ql kmod-nvidia"*) echo "/usr/lib/modules/${KVER}/extra/nvidia/nvidia.ko.xz"; exit 0 ;;
+  # The REAL recorded form, measured from the akmods bundle (rpm -qlp): the
+  # kmod RPM records /lib/modules/... (UsrMove), while the files resolve to
+  # /usr/lib/modules on disk. The fixture must model that mismatch — a stub
+  # answering /usr/lib/... is how the probe's /usr-demanding filter passed
+  # 23/23 locally while failing on the real image (run 31202648166).
+  *"-ql kmod-nvidia"*) echo "/lib/modules/${KVER}/extra/nvidia/nvidia.ko.xz"; exit 0 ;;
   *kmod-nvidia*|*nvidia-driver-cuda*|*nvidia-container-toolkit*) printf '580.10.01'; exit 0 ;;
   *nvidia-driver*) printf '580.10.01'; exit 0 ;;
 esac
