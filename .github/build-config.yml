@@ -69,6 +69,13 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: base-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 2
         build_image: true
         build_iso: false
@@ -122,11 +129,25 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: gnome-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
       - id: gnome-nvidia-hwe
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 4
         build_image: true
         build_iso: false
@@ -137,6 +158,13 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: cosmic-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
@@ -147,6 +175,13 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: kde-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
@@ -157,6 +192,13 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: niri-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
@@ -176,11 +218,12 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
-        # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
-        platforms:
-          - linux/amd64
-          - linux/amd64/v2
+        # x86_64 only. The xfce-wayland repo constraint (no aarch64) applied
+        # already; the nvidia overlay narrows further — no amd64/v2, because
+        # Kitten v2 kernels are ARCH=x86_64_v2 and the akmods kmods are
+        # x86_64 builds, so the exact-EVR kmod install can never match there
+        # (overrides/nvidia/10-kernel-swap.sh hard-fails off x86_64).
+        platforms: ["linux/amd64"]
 
   - id: albacore
     emoji: "🐟"
@@ -204,6 +247,13 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: base-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 2
         build_image: true
         build_iso: false
@@ -257,11 +307,25 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: gnome-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
       - id: gnome-nvidia-hwe
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 4
         build_image: true
         build_iso: false
@@ -272,6 +336,13 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: cosmic-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
@@ -282,6 +353,13 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: kde-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
@@ -292,6 +370,13 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: niri-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
@@ -311,11 +396,12 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
-        # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
-        platforms:
-          - linux/amd64
-          - linux/amd64/v2
+        # x86_64 only. The xfce-wayland repo constraint (no aarch64) applied
+        # already; the nvidia overlay narrows further — no amd64/v2, because
+        # Kitten v2 kernels are ARCH=x86_64_v2 and the akmods kmods are
+        # x86_64 builds, so the exact-EVR kmod install can never match there
+        # (overrides/nvidia/10-kernel-swap.sh hard-fails off x86_64).
+        platforms: ["linux/amd64"]
 
   - id: skipjack
     emoji: "🍣"
@@ -340,6 +426,13 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: base-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 2
         build_image: true
         build_iso: false
@@ -392,6 +485,13 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: gnome-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
@@ -402,6 +502,13 @@ variants:
       # %{major_version}), verified live in the published spec, not just
       # by the PR having merged.
       - id: gnome-nvidia-hwe
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 4
         build_image: true
         build_iso: false
@@ -412,6 +519,13 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: cosmic-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
@@ -422,6 +536,13 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: kde-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
@@ -432,6 +553,13 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: niri-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
@@ -465,6 +593,13 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: base-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 2
         build_image: true
         build_iso: false
@@ -512,26 +647,61 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: gnome-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
       - id: cosmic-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
       - id: kde-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
       - id: niri-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
       - id: xfce-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
@@ -683,6 +853,13 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: base-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 2
         build_image: true
         build_iso: false
@@ -718,26 +895,61 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: gnome-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
       - id: cosmic-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
       - id: kde-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
       - id: niri-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
         build_qcow2: false
       - id: xfce-nvidia
+        # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
+        # any other platform the exact-EVR kmod install can never match and
+        # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
+        # than shipping a driverless "nvidia" image. Also excludes amd64/v2:
+        # Kitten v2 kernels are ARCH=x86_64_v2, which no published kmod
+        # matches. Same shape as bluefin's x86_64-only GDX.
+        platforms: ["linux/amd64"]
         stage: 3
         build_image: true
         build_iso: true
