@@ -839,12 +839,17 @@ setup_runtime_check_stubs() {
 }
 
 @test "vsock: root key rides the SMBIOS credential, device on the live boot only" {
-  # The whole fallback is contract: systemd's tmpfiles provision.conf imports
-  # ssh.authorized_keys.root from SMBIOS type 11 into /root/.ssh, and
-  # systemd-ssh-generator answers on the vsock the device provides. Both
-  # halves have to stay on the QEMU command line of the LIVE boot (the
+  # The whole fallback is contract: the key must reach the guest under BOTH
+  # credential names. provision.conf's ssh.authorized_keys.root writes
+  # /root/.ssh/authorized_keys — which never lands on bootc images, where
+  # /root is a symlink into /var/roothome (aurora attempt 7, run
+  # 31115116876: vsock handshake completed, "Permission denied (publickey)").
+  # ssh.ephemeral-authorized_keys-all is consumed by the generated
+  # sshd-vsock instance itself and is the one that actually authenticates
+  # there. Both must stay on the QEMU command line of the LIVE boot (the
   # installed boots are serial-gated and get no vsock device).
   grep -q 'io.systemd.credential.binary:ssh.authorized_keys.root=' "$SCRIPT"
+  grep -q 'io.systemd.credential.binary:ssh.ephemeral-authorized_keys-all=' "$SCRIPT"
   grep -q 'vhost-vsock-pci,guest-cid=' "$SCRIPT"
   # Absent host support must leave the command line untouched (VSOCK_ARGS
   # stays empty), so the expansion needs the set -u-safe guard form.
@@ -882,7 +887,12 @@ setup_runtime_check_stubs() {
 @test "generic: fisherman absence falls back to bootc only when an image is named" {
   # Guessing a registry ref from an ISO filename is how #1006's 40-minute
   # failures happened; the generic path refuses to guess.
-  grep -qF 'if [[ -n "${TBOX_E2E_IMAGE:-}" ]]; then' "$SCRIPT"
+  #
+  # Both halves sit in one condition, and it reads the image probe rather than
+  # /usr/local/bin/fisherman: FISHERMAN_OVERRIDE now lands on the guest before
+  # the verifying check, so a later read would find a fisherman on every image
+  # and divert nothing. See test_iso_e2e_fisherman_override.bats.
+  grep -qF 'if [[ "$image_has_fisherman" -eq 0 && -n "${TBOX_E2E_IMAGE:-}" ]]; then' "$SCRIPT"
   grep -q 'run_install_generic' "$SCRIPT"
   grep -q 'TBOX_E2E_IMAGE is unset' "$SCRIPT"
 }
@@ -903,6 +913,13 @@ setup_runtime_check_stubs() {
   grep -q 'bootc install to-disk --wipe' "$SCRIPT"
   grep -qF 'block_setup="--block-setup tpm2-luks"' "$SCRIPT"
   grep -q -- '--karg console=ttyS0,115200n8 --karg rd.plymouth=0 --karg plymouth.enable=0' "$SCRIPT"
+  # bootc gates --block-setup tpm2-luks on the image's install config
+  # ("Block setup Tpm2Luks is not enabled in installation config", attempt
+  # 11 / run 31125136026). The opt-in is install-time policy, delivered as
+  # a drop-in bind-mounted into the installing container — never baked
+  # into the image. "direct" must stay enabled alongside it.
+  grep -qF 'block = [\"direct\", \"tpm2-luks\"]' "$SCRIPT"
+  grep -qF '/usr/lib/bootc/install/90-tbox-luks.toml:ro' "$SCRIPT"
 }
 
 @test "generic: the unlock gate restarts swtpm on preserved state" {

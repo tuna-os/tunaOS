@@ -136,9 +136,10 @@ case "$DESKTOP" in
 gnome) dm_pattern='^(gdm|gdm3)\.service$' ;;
 kde) dm_pattern='^(sddm|plasmalogin)\.service$' ;; # KDE 6.5+ renamed sddm
 niri) dm_pattern='^greetd\.service$' ;;
-# Same duality as the desktop contract: cosmic-greeter where it is packaged
-# (Ubuntu PPA, Fedora, EL10), greetd where it is not (openSUSE). niri stays
-# greetd-only — it has no greeter of its own to fall back from.
+# cosmic-greeter IS greetd (ExecStart=greetd --config
+# /etc/greetd/cosmic-greeter.toml), and on Ubuntu its postinst owns the
+# display-manager.service alias, so dm_id is cosmic-greeter there and greetd on
+# Fedora/EL10. Both are the same greeter.
 cosmic) dm_pattern='^(greetd|cosmic-greeter)\.service$' ;;
 xfce) dm_pattern='^(gdm|gdm3|lightdm|greetd)\.service$' ;;
 *) dm_pattern='' ;;

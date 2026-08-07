@@ -571,9 +571,27 @@ setup_vsock() {
 	# alphabet contains no commas, so no QEMU option-escaping is needed.
 	local pub_b64
 	pub_b64=$(base64 <"${VSOCK_SSH_KEY}.pub" | tr -d '\n')
+	# The key rides under TWO credential names because they are consumed by
+	# different mechanisms and only the second one is known to work on the
+	# aurora-shaped images this fallback exists for:
+	#
+	#   ssh.authorized_keys.root — tmpfiles provision.conf writes it to
+	#     /root/.ssh/authorized_keys. On bootc/ostree images /root is a
+	#     symlink into /var/roothome, and aurora attempt 7 (iso-builder run
+	#     31115116876) proved the file never lands: the vsock handshake
+	#     completed and sshd answered "Permission denied (publickey)".
+	#     Kept because it is the documented generic mechanism and costs one
+	#     SMBIOS string.
+	#   ssh.ephemeral-authorized_keys-all — imported by the generated
+	#     sshd-vsock/sshd-unix-local instances themselves (verified in
+	#     aurora's systemd-ssh-generator: AuthorizedKeysFile
+	#     ${CREDENTIALS_DIRECTORY}/ssh.ephemeral-authorized_keys-all),
+	#     valid for every user with no home-directory involvement — exactly
+	#     the listener this fallback dials.
 	VSOCK_ARGS=(
 		-device "vhost-vsock-pci,guest-cid=${VSOCK_CID}"
 		-smbios "type=11,value=io.systemd.credential.binary:ssh.authorized_keys.root=${pub_b64}"
+		-smbios "type=11,value=io.systemd.credential.binary:ssh.ephemeral-authorized_keys-all=${pub_b64}"
 	)
 	echo "==> vsock SSH fallback armed (guest-cid=${VSOCK_CID})"
 }
@@ -658,6 +676,18 @@ reset_qemu_sockets() {
 
 # shellcheck disable=SC2329  # invoked via `trap cleanup_vm EXIT`
 cleanup_vm() {
+	# Stop the timelapse FIRST, while QEMU is still alive: the recorder reads
+	# frames through the monitor socket, and everything below this point is
+	# dedicated to killing the process that serves it. Assembly itself needs
+	# no VM, but a recorder still looping against a dead socket would spin
+	# until the trap finished.
+	#
+	# Unconditional and non-fatal. record-timelapse.sh returns 0 when there is
+	# nothing to assemble, and this runs on the EXIT trap — an error here would
+	# overwrite the exit status of the test that actually ran.
+	if [[ -n "${TIMELAPSE_DIR:-}" ]]; then
+		bash "${SCRIPT_DIR}/record-timelapse.sh" stop "$TIMELAPSE_DIR" || true
+	fi
 	# `|| true` is load-bearing under `set -e`: once the watchdog has FIRED it
 	# has already exited, so this kill fails, and without the guard the
 	# non-zero status aborts cleanup_vm right here — skipping the QEMU and
@@ -1085,7 +1115,7 @@ wait_for_ready() {
 				echo "    [ssh: guest is alive — checking why marker hasn't fired]"
 				sshpass -p live ssh $ssh_opts liveuser@127.0.0.1 -p "$SSH_PORT" \
 					"systemctl status tunaos-live-ready.service 2>&1 || true; echo '---'; systemctl is-active graphical.target 2>&1 || true" \
-					>> "$SERIAL_LOG" 2>/dev/null || true
+					>>"$SERIAL_LOG" 2>/dev/null || true
 				# Also try grepping serial log for an install-checks result as
 				# a backup readiness signal — it means the system is well past
 				# boot and the marker just didn't fire.
@@ -1350,20 +1380,80 @@ append_installed_serial_kargs() {
 	BLSEOF
 }
 
+# Wait up to $2 seconds for pid $1 to leave the process table. 0 = it is gone.
+wait_pid_gone() {
+	local pid="$1" secs="$2" i
+	for ((i = 0; i < secs; i++)); do
+		kill -0 "$pid" 2>/dev/null || return 0
+		sleep 1
+	done
+	! kill -0 "$pid" 2>/dev/null
+}
+
+# Shut the guest down and do not return while its QEMU is still alive.
+#
+# Both callers launch the installed-disk boot immediately afterwards, reusing
+# $QEMU_PIDFILE — and QEMU holds an exclusive lock on that file for its entire
+# life. So a guest that overstays its poweroff does not merely delay the next
+# boot, it makes it impossible:
+#
+#   qemu-system-x86_64: cannot create PID file: Cannot lock pid file:
+#   Resource temporarily unavailable
+#
+# which under `set -e` ends the cell right there, minutes after the install it
+# was testing had already reported "Installation complete!" (run 31140233496,
+# albacore:cosmic). The generic path has a second stake in this: swtpm only
+# exits when its QEMU disconnects, and the TPM gate below restarts it.
+#
+# A guest can overstay for reasons that have nothing to do with the install.
+# In that run fisherman had just logged `cryptsetup luksClose: Device
+# fisherman-root is still in use`, and a busy dm device is exactly what
+# systemd-shutdown spends its shutdown retrying — on top of systemd's own 90s
+# DefaultTimeoutStopSec, which the previous 70s window could not outlast.
+# Hence: wait long enough for a slow-but-healthy shutdown, then stop asking.
+POWEROFF_WAIT_SECS="${TUNAOS_E2E_POWEROFF_WAIT:-180}"
+
 poweroff_and_wait_vm() {
-	"${GUEST_SSH[@]}" "sudo systemctl poweroff" 2>/dev/null || true
-	sleep 10
-	if [[ -f "$QEMU_PIDFILE" ]]; then
-		local pid
-		pid=$(cat "$QEMU_PIDFILE" 2>/dev/null || true)
-		if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-			echo "==> Waiting for VM to shut down..."
-			for _ in $(seq 1 30); do
-				kill -0 "$pid" 2>/dev/null || break
-				sleep 2
-			done
-		fi
+	if ! "${GUEST_SSH[@]}" "sudo systemctl poweroff" 2>/dev/null; then
+		# Not fatal: the guest may be going down already (sshd dies mid-command
+		# often enough), and ACPI below is a second way in. But it changes what
+		# a long wait MEANS, so it must not be silent.
+		echo "==> note: 'systemctl poweroff' over ssh did not return cleanly" >&2
 	fi
+	sleep 10
+	[[ -f "$QEMU_PIDFILE" ]] || return 0
+	local pid
+	pid=$(cat "$QEMU_PIDFILE" 2>/dev/null || true)
+	[[ -n "$pid" ]] || return 0
+	kill -0 "$pid" 2>/dev/null || return 0
+
+	echo "==> Waiting for VM to shut down..."
+	wait_pid_gone "$pid" "$POWEROFF_WAIT_SECS" && return 0
+
+	# The install is finished by here — fisherman/bootc have unmounted, frozen
+	# and flushed the target filesystem — so ending the guest ourselves costs
+	# nothing the following boot needs. The ladder still gives it two chances
+	# to end itself first, and only escalates when it will not.
+	echo "==> VM did not power off within ${POWEROFF_WAIT_SECS}s; forcing it down" >&2
+	if [[ -S "$MONITOR_SOCK" ]] && command -v socat &>/dev/null; then
+		echo "system_powerdown" | socat - "UNIX-CONNECT:${MONITOR_SOCK}" 2>/dev/null || true
+		wait_pid_gone "$pid" 20 && return 0
+	fi
+	kill -TERM "$pid" 2>/dev/null || true
+	if ! wait_pid_gone "$pid" 10; then
+		kill -KILL "$pid" 2>/dev/null || true
+		wait_pid_gone "$pid" 5 || true
+	fi
+	if kill -0 "$pid" 2>/dev/null; then
+		echo "ERROR: QEMU pid ${pid} survived SIGKILL; the installed-disk boot cannot" >&2
+		echo "       take the ${QEMU_PIDFILE} lock while it holds it." >&2
+		return 6
+	fi
+	# QEMU unlinks its own pidfile when it exits normally and did not get the
+	# chance here. Leaving a dead pid behind would have cleanup_vm signalling
+	# whatever recycles the number, and would hide that the next launch is
+	# starting from a corpse.
+	rm -f "$QEMU_PIDFILE"
 }
 
 # Prefix a bare "org/name:tag" image path with the default registry; a ref
@@ -1437,8 +1527,23 @@ run_install_generic() {
 		return 3
 	fi
 
-	local block_setup=""
-	[[ "$LUKS" -eq 1 ]] && block_setup="--block-setup tpm2-luks"
+	local block_setup="" luks_cfg_mount=""
+	if [[ "$LUKS" -eq 1 ]]; then
+		block_setup="--block-setup tpm2-luks"
+		# bootc refuses --block-setup tpm2-luks unless the image's install
+		# config opts in: "Block setup Tpm2Luks is not enabled in
+		# installation config" (attempt 11, iso-builder run 31125136026 —
+		# it wiped /dev/vda and stopped one line later). Stock images ship
+		# no such opt-in, and it is install-time POLICY, not image content:
+		# stage a config drop-in on the scratch disk and bind-mount it into
+		# the installing container instead of mutating the image. "direct"
+		# stays in the list so the default path remains enabled too.
+		"${ssh_cmd[@]}" "printf '[install]\nblock = [\"direct\", \"tpm2-luks\"]\n' | sudo tee /var/lib/containers/tbox-install-luks.toml >/dev/null" || {
+			echo "ERROR: could not stage the bootc install-config drop-in" >&2
+			return 3
+		}
+		luks_cfg_mount="-v /var/lib/containers/tbox-install-luks.toml:/usr/lib/bootc/install/90-tbox-luks.toml:ro"
+	fi
 	echo "==> Running bootc install to-disk on /dev/vda..."
 	# The canonical containerized install (bootc docs): privileged, host pid,
 	# /dev and the store bind-mounted. The kargs the passphrase-gate path
@@ -1446,6 +1551,7 @@ run_install_generic() {
 	# entries it writes, and --karg is the supported way in.
 	if ! timeout 1800 "${ssh_cmd[@]}" "sudo podman run --rm --privileged --pid=host \
 		-v /var/lib/containers:/var/lib/containers -v /dev:/dev \
+		${luks_cfg_mount} \
 		--security-opt label=type:unconfined_t \
 		${imgref} \
 		bootc install to-disk --wipe ${block_setup} \
@@ -1546,6 +1652,15 @@ run_install_generic() {
 # This replaces the Anaconda kickstart approach (TunaOS uses bootc, not anaconda).
 run_install() {
 	record_luks_evidence "TUNAOS_LUKS_E2E_INSTALL_STARTED luks=${LUKS}"
+	# Film the install. Started here rather than at boot so the recording is
+	# the install itself, not the minutes of live-ISO boot that precede it,
+	# and stopped by cleanup_vm's EXIT trap so it ends however the cell ends.
+	#
+	# Best-effort throughout: record-timelapse.sh returns 0 when it cannot
+	# capture (no ffmpeg, or a virgl host where screendump has no surface), so
+	# a cell that installs correctly but cannot be filmed stays green.
+	TIMELAPSE_DIR="${OUTPUT_DIR}/timelapse"
+	bash "${SCRIPT_DIR}/record-timelapse.sh" start "$MONITOR_SOCK" "$TIMELAPSE_DIR" || true
 	echo "==> Waiting up to 60s for SSH..."
 	for _ in $(seq 1 30); do
 		check_ssh && break
@@ -1600,18 +1715,91 @@ run_install() {
 	# --block-setup tpm2-luks` doesn't cover the same way and that real users
 	# never exercise directly. See docs/ci-troubleshooting.md's fisherman
 	# glossary entry.
+	# Does THIS IMAGE ship fisherman? Probed once, before the override lands,
+	# because two separate decisions read it and they need different answers.
+	#
 	# Generic (non-tunaOS) images ship no fisherman. When the caller names
 	# the image (TBOX_E2E_IMAGE), install it with plain bootc instead — see
 	# run_install_generic. Without a named image the hard error stands:
 	# guessing a registry ref from an ISO filename is exactly the mistake
 	# the published-image-ref.sh resolver below exists to prevent.
+	#
+	# That choice is about the image, not about what this function copied onto
+	# it a moment ago. Reading it off /usr/local/bin/fisherman *after* the
+	# override installs would hand every TBOX_E2E_IMAGE caller the fisherman
+	# path instead, and recipe_image below resolves a *tunaOS* ref from
+	# VARIANT/FLAVOR — so a caller-named generic image would be silently
+	# swapped for a tunaOS one. Probe first, decide, then override.
+	local image_has_fisherman=1
+	"${ssh_cmd[@]}" "command -v /usr/local/bin/fisherman" &>/dev/null || image_has_fisherman=0
+	if [[ "$image_has_fisherman" -eq 0 && -n "${TBOX_E2E_IMAGE:-}" ]]; then
+		run_install_generic
+		return $?
+	fi
+
+	# An image that ships no fisherman ships no installer GUI either: the
+	# flatpak that carries the binary is the same one that carries the
+	# frontend, and customize-live.sh downgrades a failed install of it to a
+	# warning on dev/E2E media (`.enable-sshd`). The override below makes the
+	# LUKS install path testable anyway, which is right — but say out loud
+	# what this cell then does NOT cover.
+	if [[ "$image_has_fisherman" -eq 0 ]]; then
+		echo "::warning::live image ships no /usr/local/bin/fisherman (the installer flatpak is missing from the squash) — this cell tests the LUKS install with the caller's binary, not that ISO's own installer"
+	fi
+
+	# Install the override BEFORE the presence check below, not after it.
+	#
+	# This block used to live ~260 lines further down, next to the recipe.
+	# That is too late: the check is a hard `return 3`, so on any image that
+	# ships no fisherman the run died without ever installing the binary the
+	# job had just built for it. guppy:xfce, LUKS run 31131624108:
+	#
+	#   ERROR: fisherman not found on live image (VARIANT=guppy FLAVOR=xfce)
+	#   ERROR: and TBOX_E2E_IMAGE is unset, so the generic bootc path cannot
+	#          name an image ref
+	#
+	# 55 seconds into the LUKS step, after a 65-minute Gentoo build, with
+	# FISHERMAN_OVERRIDE=/tmp/fisherman-bin sitting on the runner and the
+	# workflow's own "Build fisherman in a golang container" step green
+	# immediately above it. All three guppy cells fail this way.
+	#
+	# Overriding first is also what the flag means: "use this fisherman", not
+	# "use this fisherman provided the image already had one". The bundled
+	# installer-flatpak fisherman is pinned to a release, which is why the
+	# override exists at all.
+	if [[ -n "${FISHERMAN_OVERRIDE:-}" && -f "${FISHERMAN_OVERRIDE}" ]]; then
+		echo "==> Overriding fisherman with ${FISHERMAN_OVERRIDE}"
+		"${scp_cmd[@]}" "${FISHERMAN_OVERRIDE}" "${GUEST_SCP_DEST}:${GUEST_HOME}/fisherman-override"
+		# Create the directory separately rather than letting `install -D` do
+		# it. Now that the override also has to work on an image that shipped
+		# none, /usr/local/bin may not exist — and on the ostree layout
+		# /usr/local is a symlink to a ../var/usrlocal that the image does not
+		# contain, where mkdir -p (which is what -D uses) refuses to create
+		# *through* a dangling symlink and dies with the confusing
+		#
+		#   mkdir: cannot create directory '/usr/local': File exists
+		#
+		# `readlink -m` canonicalises without requiring the path to exist, so
+		# this creates /var/usrlocal/bin on the symlinked layout and
+		# /usr/local/bin on the plain one, and the install below resolves
+		# through the symlink either way. Same trick, same reason, as the
+		# symlink customize-live.sh makes at build time.
+		"${ssh_cmd[@]}" "sudo mkdir -p \$(readlink -m /usr/local/bin)"
+		"${ssh_cmd[@]}" "sudo install -m0755 ${GUEST_HOME}/fisherman-override /usr/local/bin/fisherman"
+	fi
+
 	if ! "${ssh_cmd[@]}" "command -v /usr/local/bin/fisherman" &>/dev/null; then
-		if [[ -n "${TBOX_E2E_IMAGE:-}" ]]; then
-			run_install_generic
-			return $?
-		fi
 		echo "ERROR: fisherman not found on live image (VARIANT=${VARIANT:-} FLAVOR=${FLAVOR:-})" >&2
-		echo "ERROR: and TBOX_E2E_IMAGE is unset, so the generic bootc path cannot name an image ref" >&2
+		# Only true when the caller named no image: with TBOX_E2E_IMAGE set,
+		# an image that shipped no fisherman took the generic path above, so
+		# reaching here means the override clobbered a binary that was there.
+		if [[ -z "${TBOX_E2E_IMAGE:-}" ]]; then
+			echo "ERROR: and TBOX_E2E_IMAGE is unset, so the generic bootc path cannot name an image ref" >&2
+		fi
+		if [[ -n "${FISHERMAN_OVERRIDE:-}" ]]; then
+			echo "ERROR: FISHERMAN_OVERRIDE=${FISHERMAN_OVERRIDE} was set but did not land —" >&2
+			echo "ERROR: $([[ -f "${FISHERMAN_OVERRIDE}" ]] && echo 'the file exists, so the scp/install above failed' || echo 'that path does not exist on the runner')" >&2
+		fi
 		return 3
 	fi
 
@@ -1863,14 +2051,10 @@ run_install() {
 	local E2E_LUKS_PASS="tunaos-e2e-luks"
 	[[ "$LUKS" -eq 1 ]] && encryption_json="{\"type\": \"tpm2-luks-passphrase\", \"passphrase\": \"${E2E_LUKS_PASS}\"}"
 
-	# Override /usr/local/bin/fisherman with a freshly-built binary (e.g.
-	# from a PR under test) before installing — the bundled installer-flatpak
-	# fisherman is pinned to a release.
-	if [[ -n "${FISHERMAN_OVERRIDE:-}" && -f "${FISHERMAN_OVERRIDE}" ]]; then
-		echo "==> Overriding fisherman with ${FISHERMAN_OVERRIDE}"
-		"${scp_cmd[@]}" "${FISHERMAN_OVERRIDE}" "${GUEST_SCP_DEST}:${GUEST_HOME}/fisherman-override"
-		"${ssh_cmd[@]}" "sudo install -m0755 ${GUEST_HOME}/fisherman-override /usr/local/bin/fisherman"
-	fi
+	# (The FISHERMAN_OVERRIDE install used to be here. It now runs before the
+	# presence check near the top of this function — see the comment there.
+	# Doing it at this point meant an image that shipped no fisherman never
+	# reached it, which is exactly the case the override is for.)
 
 	local RECIPE_LOCAL="${OUTPUT_DIR}/e2e-recipe.json"
 	cat >"$RECIPE_LOCAL" <<EOF
@@ -2041,7 +2225,16 @@ EOF
 			-netdev "user,id=net0" -device virtio-net-pci,netdev=net0 \
 			-monitor "unix:${MONITOR_SOCK},server,nowait" \
 			-serial "unix:${FB_SERIAL},server,nowait" \
-			"${QEMU_GPU_ARGS[@]}" -pidfile "$QEMU_PIDFILE" -daemonize
+			"${QEMU_GPU_ARGS[@]}" -pidfile "$QEMU_PIDFILE" -daemonize || {
+			# Without this the launch failure is a bare qemu message and a
+			# `set -e` exit, which is how run 31140233496 reported a pidfile
+			# collision as an unexplained "exit code 1" with no ERROR line to
+			# search for. Name it, and name the usual reason.
+			echo "ERROR: QEMU would not start for the LUKS passphrase gate (message above)" >&2
+			echo "       A 'cannot lock pid file' there means the install VM outlived" >&2
+			echo "       poweroff_and_wait_vm and still holds ${QEMU_PIDFILE}." >&2
+			return 5
+		}
 		# 5th arg: keep draining the serial for up to 300s past login waiting
 		# for the desktop contract. See luks-first-boot.py for why.
 		python3 "$(dirname "${BASH_SOURCE[0]}")/luks-first-boot.py" \

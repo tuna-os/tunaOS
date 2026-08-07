@@ -118,8 +118,14 @@ containerfile_code() {
   # cosmic-icon-theme is the Fedora/EL10 name and is published by neither the
   # PPA nor the Ubuntu archive; apt's name is cosmic-icons. A single
   # unresolvable name fails the whole transaction, so this is not cosmetic.
+  #
+  # Comments are stripped for the same reason containerfile_code strips them:
+  # the note recording that cosmic-icon-theme was the name that failed quotes
+  # apt's own `E: Unable to locate package cosmic-icon-theme`, and asking the
+  # raw block reads that explanation as the regression itself.
   local apt_block
-  apt_block="$(awk '/^  apt:/{f=1;next} /^  [a-z]+:/{f=0} f' "$manifest")"
+  apt_block="$(awk '/^  apt:/{f=1;next} /^  [a-z]+:/{f=0} f' "$manifest" |
+    sed 's/^[[:space:]]*#.*//')"
   run grep -q 'cosmic-icons' <<<"$apt_block"
   [ "$status" -eq 0 ]
   run grep -q 'cosmic-icon-theme' <<<"$apt_block"

@@ -208,7 +208,15 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             just podman crun jq \
             qemu-system-x86 qemu-utils ovmf swtpm socat sshpass imagemagick \
-            systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk
+            systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk \
+            ffmpeg
+          # ffmpeg is what turns record-timelapse.sh's frames into the video.
+          # Without it the recorder captures normally and then has nothing to
+          # assemble with, which is deliberately NOT a failure — the first
+          # green cell to run with the recorder (skipjack:cosmic, run
+          # 31135333873) shipped `timelapse/frame-count.txt` reading 203 and
+          # no timelapse.webm, and stayed green. That is the contract working;
+          # it is also 203 frames nobody can watch.
           podman --version; crun --version | head -1
 
       # iso-e2e.sh resolves the published image ref through
@@ -344,5 +352,18 @@ jobs:
             luks-out/installed-serial.log
             luks-out/luks-evidence.log
             luks-out/*.png
+            # The install timelapse (scripts/record-timelapse.sh). Recording it
+            # and then not collecting it is how the first two cells that ran
+            # with the recorder produced nothing to look at: the frames were
+            # captured and discarded with the runner.
+            #
+            # frame-count.txt comes too, and is the part that stays useful when
+            # there is no video: 0 means screendump found no surface (the virgl
+            # path) or QEMU died before the first capture, which is a different
+            # story from "ffmpeg was missing" and neither should be guessed at
+            # from an absent file.
+            luks-out/timelapse/timelapse.webm
+            luks-out/timelapse/timelapse-poster.webp
+            luks-out/timelapse/frame-count.txt
           if-no-files-found: warn
           retention-days: 14

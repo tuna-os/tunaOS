@@ -231,18 +231,21 @@ cosmic)
 	experience="tunaos/cosmic"
 	require_command cosmic-comp
 	require_glob '/usr/share/wayland-sessions/*cosmic*.desktop'
-	# COSMIC's own greeter where it is packaged, greetd where it is not —
-	# both are in the wild, exactly like sddm/plasmalogin for kde above.
-	# openSUSE packages no cosmic-greeter, so sailfin runs greetd with
-	# gtkgreet+cage; the Ubuntu PPA and the Fedora/EL10 repos all ship
-	# cosmic-greeter, whose postinst claims display-manager.service.
-	require_any_unit greetd cosmic-greeter
+	require_unit greetd
 	# NOT extended. cosmic-files and xdg-desktop-portal-cosmic look like the
 	# obvious requirements, but on el10 they are installed from a COPR, and
 	# copr installs are best-effort — a flaky COPR would turn a requirement
 	# into a hard build failure on a variant that has always built. Nor is
 	# either path measured on any published cosmic image yet. Measure
 	# bonito:cosmic (fedora) and flounder:cosmic (apt) first, then decide.
+	#
+	# cosmic-greeter.service is accepted alongside greetd.service because it is
+	# greetd: `ExecStart=greetd --config /etc/greetd/cosmic-greeter.toml`, with
+	# `Provides: x-display-manager` and `Pre-Depends: greetd` on the deb. On
+	# Ubuntu its postinst claims the display-manager.service alias, so
+	# `systemctl show -P Id display-manager.service` reports cosmic-greeter
+	# there while Fedora/EL10 report greetd. Pinning only greetd would fail
+	# grouper:cosmic on a correctly-wired COSMIC login screen.
 	dm_pattern='^(greetd|cosmic-greeter)\.service$'
 	;;
 xfce)
