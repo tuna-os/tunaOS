@@ -90,6 +90,29 @@ require_any_user_unit() {
 	exit 1
 }
 
+# xfce's greeter is the one desktop piece NO other gate can see missing.
+# xfce.sh installs its DM stack via install_available: lightdm first, greetd
+# as the fallback — and greetd's stock config runs `agreety --cmd /bin/sh`,
+# a text prompt into a bare shell. If gtkgreet (or cage, its kiosk host)
+# fails to land, xfce.sh deliberately leaves that stock config in place, the
+# installed system still reaches graphical.target with an ACTIVE
+# display-manager.service, and both the runtime contract's dm check and the
+# LUKS gate read green — xfce.sh's own comment documents the blindness.
+# So assert the greeter statically, on exactly the branch xfce.sh's enable
+# logic takes: greetd is this image's DM if and only if lightdm did not land.
+xfce_greetd_greeter_contract() {
+	command -v lightdm >/dev/null 2>&1 && return 0
+	command -v greetd >/dev/null 2>&1 || return 0
+	require_command gtkgreet
+	require_command cage
+	local greetd_conf="${TUNAOS_VERIFY_ROOT:-}/etc/greetd/config.toml"
+	if ! grep -qs 'gtkgreet' "$greetd_conf"; then
+		echo "greetd is the display manager but ${greetd_conf} does not launch gtkgreet — stock agreety boots users to a text prompt, not a login screen" >&2
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
+		exit 1
+	fi
+}
+
 # PORTAL/KEYRING/GVFS PATHS — measured, one container per packaging family.
 # Never add a glob you have not seen resolve on a real distro: an invented
 # pattern that matches nothing turns a working desktop red, which is exactly
@@ -292,6 +315,7 @@ xfce)
 			'/usr/share/themes/Default/xfwm4'
 	fi
 
+	xfce_greetd_greeter_contract
 	dm_pattern='^(gdm|gdm3|lightdm|greetd)\.service$'
 	;;
 pantheon)

@@ -159,6 +159,14 @@ chmod 644 /usr/share/ublue-os/image-info.json
 # once its findings are cleared.
 lint_image
 
+# Fatal gate over the install_available wishlist: every package a
+# best-effort installer skipped must be declared acceptable in
+# checks/package-miss-allowlist.txt. Runs here because 99-cleanup is the
+# one script every family's Containerfile runs last, i.e. after every
+# install_available call has had its say. See the check's header for why
+# a warn-only wishlist quietly made every probed package optional forever.
+/run/context/build_scripts/checks/verify-package-wishlist.sh
+
 if command -v jq >/dev/null 2>&1; then
 	jq . /usr/share/ublue-os/image-info.json || true
 else
