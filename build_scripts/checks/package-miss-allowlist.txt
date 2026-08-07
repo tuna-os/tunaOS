@@ -1,0 +1,111 @@
+# package-miss-allowlist.txt — packages that MAY legitimately be absent.
+#
+# checks/verify-package-wishlist.sh fails any build whose wishlist
+# (/usr/share/tunaos/missing-on-<image>.txt, written by install_available /
+# apt_install_available) contains a package NOT listed here. Listing a name
+# here is a reviewed declaration: "this is a nice-to-have; an image without
+# it is still correct". Anything load-bearing must instead be installed
+# strictly or asserted by a verify-* contract — a DM, a greeter, a portal,
+# a session package do not belong in this file even if they appear in an
+# install_available probe, because their absence is caught by
+# verify-desktop-experience.sh, not tolerated by this list.
+#
+# Deliberately NO test forces this file to mirror the install_available
+# call sites. That sync is the point of the gate: adding a package to a
+# best-effort list does NOT automatically make it optional — the build goes
+# red until the author either packages it or adds it here, on purpose, in
+# the same reviewed PR.
+#
+# Seeded 2026-08-07 from every best-effort request then in tree. Entries
+# whose packages have since been packaged for EL10 can and should be
+# removed — the gate only fires on actual misses, so deletion is safe the
+# moment the package resolves everywhere.
+#
+# Format: one package name per line; blank lines and # comments ignored.
+
+# ── build_scripts/desktop/niri.sh — zirconium-parity extras (EL10 gets
+#    them via EPEL/CRB when built; Fedora ships them natively) ──
+bolt
+btop
+gst-thumbnailers
+input-remapper
+librime-lua
+lshw
+nano-default-editor
+nm-connection-editor
+NetworkManager-tui
+openrgb-udev-rules
+qt6-qtimageformats
+tesseract
+xdg-desktop-portal-gnome
+xorg-x11-server-Xwayland
+fcitx5-rime
+# niri.sh EL10 Kitten/CentOS probe via ligenix/enterprise-cosmic COPR
+brightnessctl
+playerctl
+
+# ── build_scripts/desktop/xfce.sh — nice-to-haves around the adapted
+#    Wayland stack ──
+xfwm4
+xfce4-whiskermenu-plugin
+thunar-volman
+thunar-archive-plugin
+ristretto
+mousepad
+xfce4-dict
+catfish
+# The DM/greeter probe. Tolerated HERE only because their absence is
+# asserted elsewhere: require_any_unit in verify-desktop-experience.sh
+# fails a no-DM image, and the xfce greetd-greeter contract fails a
+# greetd image without gtkgreet+cage. This list must never be the only
+# thing standing between a missing login screen and a green build.
+lightdm
+lightdm-gtk-greeter
+greetd
+greetd-selinux
+gtkgreet
+
+# ── build_scripts/desktop/gnome-extensions.sh — extension build tooling.
+#    A miss here fails the build later at compile time (set -e), so these
+#    are tolerated only to keep THIS gate's failure from shadowing the
+#    clearer compile error.
+glib2-devel
+meson
+sassc
+cmake
+dbus-devel
+unzip
+
+# ── manifests/desktops/*.yaml `optional:` tiers (install-desktop.sh) ──
+# cosmic.yaml el10
+#   brightnessctl / playerctl already listed above
+# gnome.yaml fedora
+gvfs-afp
+gvfs-archive
+# kde.yaml el10
+kde-connect
+ksshaskpass
+ksystemlog
+evtest
+libratbag-ratbagd
+solaar-udev
+pam-u2f
+pam_yubico
+pamu2fcfg
+yubikey-manager
+nvtop
+#   input-remapper / tesseract / openrgb-udev-rules already listed above
+# niri.yaml fedora
+polkit-gnome
+# xfce.yaml fedora
+xfce4-wayland
+# xfce.yaml el10
+xfce4-clipman-plugin
+#   xfce4-whiskermenu-plugin / mousepad / ristretto already listed above
+
+# ── build_scripts/10-base-packages.sh apt path — conveniences absent on
+#    Ubuntu noble, present on resolute (the miss that killed gurnard
+#    builds before apt_install_available existed) ──
+fastfetch
+glow
+gum
