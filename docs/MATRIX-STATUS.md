@@ -52,7 +52,7 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito-rawhide** | ✅ | ❌ | ✅ | ✅ | ✅ |
 | **flounder** | ✅ | ✅ | ❌ | — | ✅ |
-| **flounder-sid** | ✅ | ✅ | ❌ | — | ✅ |
+| **flounder-sid** | ✅ | ✅ | — | — | ✅ |
 | **grouper** | ✅ | ❌ | ❌ | — | ❌ |
 | **guppy** | ❌ | ❌ | — | — | ❌ |
 | **gurnard** | — | — | — | — | — |

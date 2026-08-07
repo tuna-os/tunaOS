@@ -63,7 +63,41 @@ xfce)
 *) exit 0 ;;
 esac
 
-systemctl enable "${dm}.service"
+# Still a hard failure — an image with no display manager is worse than a
+# failed build, which is why none of the branches above use `|| true`. But say
+# what happened before dying. systemd's own message names a FILE:
+#
+#   Failed to enable unit: File '/etc/systemd/system/display-manager.service'
+#   already exists and is a symlink to /lib/systemd/system/cosmic-greeter.service
+#
+# which does not mention the desktop, the package that claimed it, or what to
+# do. Reading that cost three separate 20-minute grouper:cosmic builds
+# (LUKS run 31135761136). The two cases have opposite fixes, so name which one
+# this is.
+if ! systemctl enable "${dm}.service"; then
+	# -L first: `readlink -f` prints the canonical path even when the file
+	# does not exist, so testing its output for emptiness reports "claimed by
+	# display-manager.service" on a system where nothing claimed anything —
+	# the opposite diagnosis, with the opposite fix. Caught by the
+	# unclaimed-alias case below before this shipped.
+	_dm_claim=""
+	if [[ -L /etc/systemd/system/display-manager.service ]]; then
+		_dm_claim="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
+	fi
+	echo "ERROR: cannot enable ${dm}.service as ${desktop}'s display manager." >&2
+	if [[ -n "${_dm_claim}" && "${_dm_claim##*/}" != "${dm}.service" ]]; then
+		echo "       display-manager.service is already claimed by ${_dm_claim##*/}," >&2
+		echo "       set by that package's post-install before this script ran." >&2
+		echo "       Defer to it (see how the kde and cosmic branches above pick" >&2
+		echo "       a DM) rather than forcing the alias — forcing it repoints" >&2
+		echo "       every image that shares this path (tunaOS#824)." >&2
+	else
+		echo "       Nothing else claims the alias, so ${dm}.service is most" >&2
+		echo "       likely not installed. Check that the ${desktop} manifest" >&2
+		echo "       actually pulls in the package providing it." >&2
+	fi
+	exit 1
+fi
 systemctl set-default graphical.target
 
 # Every desktop family ships an explicit runtime contract plus the

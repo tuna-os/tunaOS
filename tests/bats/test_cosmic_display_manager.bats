@@ -113,3 +113,77 @@ choose_dm() {
 	[[ "$output" == *"display-manager.service"* ]]
 	[[ "$output" != *"list-unit-files cosmic-greeter"* ]]
 }
+
+# ── The diagnostic on the enable itself ─────────────────────────────────────
+#
+# The selection above prevents the known collision. This covers the next one:
+# when `systemctl enable` fails, the build must say WHICH case it is, because
+# the two have opposite fixes (defer to the claimant vs install the missing
+# package) and systemd's own message distinguishes neither.
+
+# Run just the enable-and-diagnose block against a fake sysroot, with
+# systemctl stubbed to fail the way the real one does.
+run_enable() {
+	local link_target="$1"
+	local root="${BATS_TEST_TMPDIR}/enable-${BATS_TEST_NUMBER}"
+	rm -rf "$root"
+	mkdir -p "$root/etc/systemd/system" "$root/lib/systemd/system"
+	if [ -n "$link_target" ]; then
+		touch "$root/lib/systemd/system/${link_target}"
+		ln -sf "$root/lib/systemd/system/${link_target}" \
+			"$root/etc/systemd/system/display-manager.service"
+	fi
+
+	local block
+	block="$(awk '/^if ! systemctl enable /{f=1} f{print} f&&/^fi$/{exit}' "$SCRIPT" |
+		sed "s#/etc/systemd/system/display-manager.service#${root}/etc/systemd/system/display-manager.service#")"
+
+	bash -c "
+		set -euo pipefail
+		desktop=cosmic
+		dm=greetd
+		systemctl() { return 1; }
+		${block}
+	" 2>&1
+}
+
+@test "the enable block was actually extracted" {
+	run awk '/^if ! systemctl enable /{f=1} f{print} f&&/^fi$/{exit}' "$SCRIPT"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"readlink"* ]]
+	[ "$(wc -l <<<"$output")" -ge 8 ]
+}
+
+@test "a claimed alias names the claimant and points at deferring" {
+	run run_enable cosmic-greeter.service
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"already claimed by cosmic-greeter.service"* ]]
+	[[ "$output" == *"Defer to it"* ]]
+	# The other diagnosis must NOT also be printed — two contradictory
+	# suggestions is no better than none.
+	[[ "$output" != *"not installed"* ]]
+}
+
+@test "an unclaimed alias points at the missing package instead" {
+	run run_enable ""
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"not installed"* ]]
+	[[ "$output" != *"already claimed by"* ]]
+}
+
+# If display-manager.service already points at the very unit we are enabling,
+# the failure is not a collision — saying "claimed by greetd.service, defer to
+# it" would be nonsense advice to defer to yourself.
+@test "the alias pointing at our own unit is not reported as a collision" {
+	run run_enable greetd.service
+	[ "$status" -ne 0 ]
+	[[ "$output" != *"already claimed by"* ]]
+	[[ "$output" == *"not installed"* ]]
+}
+
+# The whole point of not using `|| true`: an image with no display manager is
+# worse than a failed build.
+@test "a failed enable still fails the build" {
+	run run_enable cosmic-greeter.service
+	[ "$status" -eq 1 ]
+}
