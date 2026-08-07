@@ -185,6 +185,55 @@ else
 	fail "99-nvidia.conf does not force_drivers — black screen at boot on nvidia desktops"
 fi
 
+echo "== exactly one kernel tree =="
+# The kernel swap must leave exactly ONE /usr/lib/modules entry. rpm --erase
+# keeps a directory alive when it holds generated (unowned) files, and a
+# stale half-alive tree is a landmine for every consumer that scans
+# /usr/lib/modules: the yellowfin:kde-nvidia live ISO resolved its kernel
+# version against the leftover 6.12.0-250 husk (no vmlinuz, no initramfs,
+# empty modules.dep), generated an initrd with tacklebox hooks and zero
+# drivers, and hung in dracut with no sr0 ever appearing (run 31208526159)
+# — while the swapped kernel's own initramfs, one directory over, carried
+# every driver the boot needed.
+_tree_count=0
+_tree_name=""
+for _tree in "${NV_ROOT}"/usr/lib/modules/*/; do
+	[[ -d "$_tree" ]] || continue
+	_tree_count=$((_tree_count + 1))
+	_tree_name="$(basename "$_tree")"
+done
+if [[ "$_tree_count" -eq 1 && "$_tree_name" == "$KERNEL_VRA" ]]; then
+	pass "single kernel module tree (${_tree_name})"
+elif [[ "$_tree_count" -eq 1 ]]; then
+	fail "single module tree ${_tree_name} does not match the installed kernel ${KERNEL_VRA}"
+else
+	fail "${_tree_count} kernel module trees under /usr/lib/modules — a stale tree breaks kernel/initrd selection downstream (expected exactly ${KERNEL_VRA})"
+fi
+
+echo "== initramfs boot-driver parity =="
+# The rebuilt initramfs must serve BOTH boots: the live ISO (virtio-scsi CD:
+# virtio_scsi + sr_mod + cdrom + isofs, squashfs/overlay/loop for the live
+# root) and the installed disk (virtio_blk). Names measured with lsinitrd on
+# the PASSING parent image (yellowfin:kde, 705 modules) and confirmed
+# present in the nvidia image's swapped-kernel initramfs (720 modules) —
+# this is a parity floor, not a wish list; dm_crypt is deliberately absent
+# because the parent's initramfs does not carry it either.
+INITRAMFS="${NV_ROOT}/usr/lib/modules/${KERNEL_VRA}/initramfs.img"
+if [[ ! -s "$INITRAMFS" ]]; then
+	fail "missing or empty initramfs for the installed kernel: /usr/lib/modules/${KERNEL_VRA}/initramfs.img"
+elif ! command -v lsinitrd >/dev/null 2>&1; then
+	fail "lsinitrd is unavailable — cannot prove the initramfs carries the boot drivers"
+else
+	_initrd_list="$(lsinitrd "$INITRAMFS" 2>/dev/null || true)"
+	for _drv in sr_mod cdrom isofs squashfs virtio_scsi virtio_blk overlay loop; do
+		if grep -qE "/${_drv}\.ko" <<<"$_initrd_list"; then
+			pass "initramfs carries ${_drv}"
+		else
+			fail "initramfs is missing ${_drv} — the live ISO or installed boot cannot mount its root"
+		fi
+	done
+fi
+
 echo "== suspend units (conditional — see header) =="
 for unit in nvidia-suspend nvidia-resume nvidia-hibernate; do
 	if [[ -f "${NV_ROOT}/usr/lib/systemd/system/${unit}.service" ]]; then

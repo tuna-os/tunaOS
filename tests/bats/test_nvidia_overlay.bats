@@ -137,6 +137,14 @@ STUB
 #!/usr/bin/env bash
 exit 0
 STUB
+  # lsinitrd stub: emits the boot-driver set the parity check demands
+  # (paths as the real lsinitrd prints them, measured on yellowfin:kde).
+  cat > "${BATS_TEST_TMPDIR}/bin/lsinitrd" <<STUB
+#!/usr/bin/env bash
+for d in sr_mod cdrom isofs squashfs virtio_scsi virtio_blk overlay loop; do
+  echo "usr/lib/modules/${KVER}/kernel/drivers/misc/\${d}.ko.xz"
+done
+STUB
   chmod +x "${BATS_TEST_TMPDIR}/bin/"*
 }
 
@@ -152,6 +160,7 @@ make_good_root() {
     "$r/usr/lib/dracut/dracut.conf.d" \
     "$r/usr/lib/systemd/system"
   touch "$r/usr/lib/modules/${KVER}/extra/nvidia/nvidia.ko.xz"
+  echo initrd > "$r/usr/lib/modules/${KVER}/initramfs.img"
   echo "blacklist nouveau" > "$r/usr/lib/modprobe.d/00-nouveau-blacklist.conf"
   echo 'kargs = ["rd.driver.blacklist=nouveau", "modprobe.blacklist=nouveau", "nvidia-drm.modeset=1"]' \
     > "$r/usr/lib/bootc/kargs.d/00-nvidia.toml"
@@ -308,10 +317,14 @@ make_swap_fixture() {
 }
 
 run_swap() {
+  # TUNAOS_MODULES_ROOT is not optional here: the stale-tree cleanup would
+  # otherwise iterate the TEST HOST's real /usr/lib/modules.
+  mkdir -p "${BATS_TEST_TMPDIR}/modules"
   PATH="${BATS_TEST_TMPDIR}/bin:$PATH" \
     TUNAOS_AKMODS_DIR="${BATS_TEST_TMPDIR}/akmods" \
     TUNAOS_KERNEL_RPMS_DIR="${BATS_TEST_TMPDIR}/kernel-rpms" \
     TUNAOS_AKMODS_CERT_DIR="${BATS_TEST_TMPDIR}/certs" \
+    TUNAOS_MODULES_ROOT="${BATS_TEST_TMPDIR}/modules" \
     run bash "$SWAP_SH"
 }
 
@@ -397,4 +410,73 @@ assert not bad, bad
 print('ok')
 "
   [ "$status" -eq 0 ]
+}
+
+# ── stale kernel trees and initramfs parity (run 31208526159) ──────────────
+#
+# rpm --erase keeps a module directory alive when it holds generated
+# (unowned) files, and later driver scriptlets repopulate its metadata. The
+# yellowfin:kde-nvidia live ISO resolved its kernel version against that
+# husk, generated an initrd with tacklebox hooks and ZERO drivers, and hung
+# in dracut with no sr0 — while the swapped kernel's own initramfs, one
+# directory over, carried every driver the boot needed (measured: parent
+# 705 modules, nvidia 720, both including sr_mod/cdrom/isofs/virtio_scsi).
+
+@test "kernel-swap removes the stale kernel tree the erase leaves behind" {
+  make_swap_stubs "6.12.0-250.el10.x86_64"
+  make_swap_fixture
+  # The husk: generated files survive the rpm erase.
+  mkdir -p "${BATS_TEST_TMPDIR}/modules/6.12.0-250.el10.x86_64/kernel"
+  touch "${BATS_TEST_TMPDIR}/modules/6.12.0-250.el10.x86_64/modules.dep"
+  mkdir -p "${BATS_TEST_TMPDIR}/modules/${AKMODS_KVER}"
+  run_swap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"removing stale kernel module tree"* ]]
+  [ ! -d "${BATS_TEST_TMPDIR}/modules/6.12.0-250.el10.x86_64" ]
+  [ -d "${BATS_TEST_TMPDIR}/modules/${AKMODS_KVER}" ]
+}
+
+@test "kernel-swap leaves the module root alone when already aligned" {
+  make_swap_stubs "$AKMODS_KVER"
+  make_swap_fixture
+  mkdir -p "${BATS_TEST_TMPDIR}/modules/${AKMODS_KVER}"
+  run_swap
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"removing stale kernel module tree"* ]]
+  [ -d "${BATS_TEST_TMPDIR}/modules/${AKMODS_KVER}" ]
+}
+
+@test "verify-nvidia fails when a stale second kernel tree survives" {
+  make_stub_tools
+  root="$(make_good_root)"
+  mkdir -p "$root/usr/lib/modules/6.12.0-250.el10.x86_64"
+  run_verify "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"kernel module trees under /usr/lib/modules"* ]]
+}
+
+@test "verify-nvidia fails when the initramfs lacks a boot-critical driver" {
+  make_stub_tools
+  root="$(make_good_root)"
+  # lsinitrd that forgot the CD/SCSI path — the exact live-ISO hang shape.
+  cat > "${BATS_TEST_TMPDIR}/bin/lsinitrd" <<STUB
+#!/usr/bin/env bash
+for d in squashfs virtio_blk overlay loop; do
+  echo "usr/lib/modules/${KVER}/kernel/drivers/misc/\${d}.ko.xz"
+done
+STUB
+  chmod +x "${BATS_TEST_TMPDIR}/bin/lsinitrd"
+  run_verify "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"initramfs is missing sr_mod"* ]]
+  [[ "$output" == *"initramfs is missing virtio_scsi"* ]]
+}
+
+@test "verify-nvidia fails when the installed kernel has no initramfs at all" {
+  make_stub_tools
+  root="$(make_good_root)"
+  rm "$root/usr/lib/modules/${KVER}/initramfs.img"
+  run_verify "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"missing or empty initramfs"* ]]
 }

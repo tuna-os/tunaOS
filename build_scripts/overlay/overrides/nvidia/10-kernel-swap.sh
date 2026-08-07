@@ -31,6 +31,7 @@ set -xeuo pipefail
 # fixture directories with rpm/dnf/curl/uname stubbed on PATH.
 AKMODS_DIR="${TUNAOS_AKMODS_DIR:-/tmp/akmods-nvidia-open-rpms}"
 KERNEL_RPMS_DIR="${TUNAOS_KERNEL_RPMS_DIR:-/tmp/kernel-rpms}"
+MODULES_ROOT="${TUNAOS_MODULES_ROOT:-/usr/lib/modules}"
 
 # x86_64 only, as a belt behind the build-config platform gate: the akmods
 # kmods are x86_64 builds, so an arm64 or x86_64_v2 overlay could only ship
@@ -94,6 +95,32 @@ else
 		exit 1
 	fi
 	dnf -y install "${RPM_FILES[@]}"
+
+	# Remove the OLD kernel's module directory outright. `rpm --erase` above
+	# removes only rpm-OWNED files; generated ones (initramfs.img, depmod
+	# output) are unowned, so /usr/lib/modules/<old-ver> survives as a husk —
+	# and later scriptlets from the driver install cheerfully repopulate its
+	# metadata. That husk is what broke the yellowfin:kde-nvidia live ISO
+	# (run 31208526159): with TWO module dirs present, the ISO build resolved
+	# its kernel version against the stale one, generated an initrd from a
+	# tree holding no drivers at all, and paired it with the new kernel — the
+	# serial showed the swapped kernel booting, tacklebox hooks present in
+	# the initrd, and no sr0/cdrom ever appearing. Measured on the published
+	# images: the parent ships ONE modules dir whose initramfs carries
+	# sr_mod/cdrom/isofs/virtio_scsi (705 modules); the nvidia image's own
+	# 6.12.0-254 initramfs carries the same set plus nvidia (720 modules) —
+	# the delta was never the dracut rebuild, only the stale
+	# 6.12.0-250 husk (no vmlinuz, no initramfs, empty modules.dep) sitting
+	# beside it. verify-nvidia.sh now fails the build if more than one
+	# module tree survives to the end.
+	for _mod_dir in "${MODULES_ROOT}"/*/; do
+		[[ -d "$_mod_dir" ]] || continue
+		_mod_ver="$(basename "$_mod_dir")"
+		if [[ "$_mod_ver" != "$CACHED_VERSION" ]]; then
+			echo "==> removing stale kernel module tree ${_mod_dir}"
+			rm -rf "$_mod_dir"
+		fi
+	done
 fi
 
 # Lock what we just aligned — a later transaction pulling a different kernel
