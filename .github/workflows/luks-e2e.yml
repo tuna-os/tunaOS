@@ -344,5 +344,18 @@ jobs:
             luks-out/installed-serial.log
             luks-out/luks-evidence.log
             luks-out/*.png
+            # The install timelapse (scripts/record-timelapse.sh). Recording it
+            # and then not collecting it is how the first two cells that ran
+            # with the recorder produced nothing to look at: the frames were
+            # captured and discarded with the runner.
+            #
+            # frame-count.txt comes too, and is the part that stays useful when
+            # there is no video: 0 means screendump found no surface (the virgl
+            # path) or QEMU died before the first capture, which is a different
+            # story from "ffmpeg was missing" and neither should be guessed at
+            # from an absent file.
+            luks-out/timelapse/timelapse.webm
+            luks-out/timelapse/timelapse-poster.webp
+            luks-out/timelapse/frame-count.txt
           if-no-files-found: warn
           retention-days: 14
