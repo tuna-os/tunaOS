@@ -301,6 +301,27 @@ already had one*. The error path now also distinguishes "the override path
 does not exist on the runner" from "the file exists, so the scp/install
 failed".
 
+**What the reorder took with it.** The generic (non-tunaOS) bootc path keyed
+off that same check — *no fisherman on the image* **and** `TBOX_E2E_IMAGE` set.
+Once the override lands first, the first half is never true again, so a caller
+naming a generic image would have taken the fisherman path and installed a
+tunaOS ref resolved from `VARIANT`/`FLAVOR` instead. The image is therefore
+probed **once, before** the override, and that probe is what the diversion
+reads; the check after the override is only there to prove the override landed.
+
+**Two more consequences of an image that ships nothing.** `install -D` cannot
+create `/usr/local/bin` on the ostree layout: `-D` uses `mkdir -p`, `/usr/local`
+is a symlink to a `../var/usrlocal` the image does not contain, and `mkdir -p`
+refuses to create *through* a dangling symlink (`cannot create directory
+'/usr/local': File exists` — the same failure `customize-live.sh` documents at
+the symlink it makes at build time). Canonicalise with `readlink -m` first.
+
+And the missing fisherman is itself a defect worth naming: the flatpak carrying
+it carries the installer GUI, so that ISO has no installer a human could use —
+`customize-live.sh` only downgrades the failed install to a warning because the
+media is dev/E2E. The cell continues on the caller's binary and emits a
+`::warning::` saying it did **not** cover that ISO's own installer.
+
 ---
 
 ## Glossary of Components
