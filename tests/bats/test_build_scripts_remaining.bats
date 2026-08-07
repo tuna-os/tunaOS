@@ -1374,3 +1374,34 @@ STUB
   [ "$installs" -ge 3 ]
   [ "$declares" -ge "$installs" ]
 }
+
+@test "the desktop contract Wants (not Requires) the display manager" {
+  # Requires= made a failed DM take the contract down as DEPEND — silencing
+  # the dm_inactive branch that ships the DM's journal to the serial, which
+  # is the only diagnosis channel the E2E has. Both proof cells of run pair
+  # 31204811851/31204818233 crash-looped lightdm and left zero journal
+  # evidence for exactly this reason. Comments stripped: the rationale names
+  # both directives.
+  local runtime="${REPO_ROOT}/build_scripts/desktop/configure-desktop-runtime.sh" code
+  code="$(grep -v '^[[:space:]]*#' "$runtime")"
+  grep -qF 'Wants=display-manager.service' <<<"$code"
+  ! grep -qF 'Requires=display-manager.service' <<<"$code"
+}
+
+@test "lightdm gets tmpfiles.d for its /var state on bootc systems" {
+  # Debian's lightdm ships /var dirs via dpkg/postinst and no tmpfiles.d
+  # (measured on ubuntu:noble); a bootc install starts with fresh /var and
+  # the DM crash-loops (runs 31204811851, 31204818233). All four measured
+  # dirs must be declared, with the lightdm-owned pair owned by lightdm.
+  local runtime="${REPO_ROOT}/build_scripts/desktop/configure-desktop-runtime.sh" code
+  code="$(grep -v '^[[:space:]]*#' "$runtime")"
+  grep -qF 'tunaos-lightdm-state.conf' <<<"$code"
+  local d
+  for d in /var/lib/lightdm /var/lib/lightdm-data /var/cache/lightdm /var/log/lightdm; do
+    grep -qE "^d ${d} " "$runtime" || {
+      echo "FAIL: tmpfiles entry for ${d} missing" >&2
+      return 1
+    }
+  done
+  grep -qE '^d /var/lib/lightdm 0750 lightdm lightdm' "$runtime"
+}

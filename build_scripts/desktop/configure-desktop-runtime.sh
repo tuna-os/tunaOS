@@ -154,6 +154,31 @@ if ! systemctl enable "${dm}.service"; then
 fi
 systemctl set-default graphical.target
 
+# Debian's lightdm expects /var state that a bootc install never has. The
+# package ships /var/cache/lightdm, /var/lib/lightdm-data and
+# /var/log/lightdm as dpkg directories and creates /var/lib/lightdm in its
+# postinst (adduser --home) — and ships NO tmpfiles.d entries at all
+# (measured on ubuntu:noble, dpkg -L lightdm; gdm3 self-creates its dirs at
+# runtime, which is why grouper:gnome never hit this). ostree/bootc installs
+# start with a fresh machine-local /var, so every one of those directories
+# is missing on first boot; lightdm dies, Restart=always loops it, and both
+# proof cells (gurnard:pantheon 31204811851, grouper:xfce 31204818233)
+# showed six FAILED lines and desktop_contract=absent. Give the dirs the
+# mechanism the package forgot: tmpfiles.d, ownership and modes as measured
+# from the installed package.
+if systemctl list-unit-files lightdm.service --no-legend 2>/dev/null | grep -q '^lightdm.service'; then
+	cat >/usr/lib/tmpfiles.d/tunaos-lightdm-state.conf <<'EOF'
+# lightdm ships these as dpkg dirs / postinst artifacts, with no tmpfiles.d
+# of its own — on a bootc system machine-local /var starts empty and the DM
+# crash-loops without them. Ownership/modes measured on ubuntu:noble.
+d /var/lib/lightdm 0750 lightdm lightdm -
+d /var/lib/lightdm-data 0755 lightdm lightdm -
+d /var/cache/lightdm 0755 root root -
+d /var/log/lightdm 0755 root root -
+EOF
+	echo "configure-desktop-runtime: wrote tmpfiles.d for lightdm /var state (bootc fresh-/var)"
+fi
+
 # Every desktop family ships an explicit runtime contract plus the
 # snosi-derived installed-system TAP checks (harvested from the serial
 # console by scripts/iso-e2e.sh; the checks ExecStart is non-fatal).
@@ -222,11 +247,22 @@ gnome | kde | niri | cosmic | xfce | pantheon)
 		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-niri ${IMAGE_NAME:-$desktop} --runtime"
 		;;
 	esac
+	# Wants=, NOT Requires=. With Requires=, a failed display manager takes
+	# the contract down as DEPEND — which silences the one service built to
+	# diagnose that exact failure: verify-desktop-experience --runtime has a
+	# dm_inactive branch that ships `systemctl show` and the DM's journal
+	# tail to the serial console. Both proof cells of run pair
+	# 31204811851/31204818233 crash-looped lightdm and produced
+	# desktop_contract=absent with zero journal evidence, because the
+	# diagnostician was skipped alongside its patient. Wants= keeps the
+	# pull-in and the After= ordering; a dead DM now yields
+	# TUNAOS_DESKTOP_CONTRACT_FAIL reason=dm_inactive plus the journal,
+	# instead of silence.
 	cat >/usr/lib/systemd/system/tunaos-desktop-contract.service <<EOF
 [Unit]
 Description=Verify TunaOS ${desktop} desktop experience
 After=display-manager.service
-Requires=display-manager.service
+Wants=display-manager.service
 
 [Service]
 Type=oneshot
