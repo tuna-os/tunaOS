@@ -74,11 +74,25 @@ if [[ -z "$KERNEL_VRA" ]]; then
 elif [[ ! -d "${NV_ROOT}/usr/lib/modules/${KERNEL_VRA}" ]]; then
 	fail "no module directory for the shipped kernel: /usr/lib/modules/${KERNEL_VRA}"
 else
-	MODULE_FILE="$(find "${NV_ROOT}/usr/lib/modules/${KERNEL_VRA}" -name 'nvidia*.ko*' -print 2>/dev/null | head -1 || true)"
-	if [[ -n "$MODULE_FILE" ]]; then
-		pass "nvidia kernel module present for ${KERNEL_VRA} (${MODULE_FILE#"${NV_ROOT}"})"
+	# Ask rpm which module files the kmod package OWNS — never glob by name.
+	# The first proof build (run 31196251408) failed on exactly that: the
+	# nvidia*.ko* glob matched nvidia-wmi-ec-backlight.ko.xz, a mainline
+	# module every kernel ships, and modinfo rightly found no driver version
+	# in it. A name glob also passes on an image with no kmod at all, which
+	# inverts the check's whole purpose.
+	MODULE_FILE="$(rpm -ql kmod-nvidia 2>/dev/null |
+		grep -E '\.ko(\.[a-z0-9]+)?$' |
+		grep -F "/usr/lib/modules/${KERNEL_VRA}/" |
+		head -1 || true)"
+	if [[ -n "$MODULE_FILE" && -e "${NV_ROOT}${MODULE_FILE}" ]]; then
+		MODULE_FILE="${NV_ROOT}${MODULE_FILE}"
+		pass "kmod-nvidia ships a module for ${KERNEL_VRA} (${MODULE_FILE#"${NV_ROOT}"})"
+	elif [[ -n "$MODULE_FILE" ]]; then
+		MODULE_FILE=""
+		fail "kmod-nvidia's module list names files absent on disk under /usr/lib/modules/${KERNEL_VRA}"
 	else
-		fail "no nvidia*.ko* under /usr/lib/modules/${KERNEL_VRA} — kmod built for a different kernel?"
+		MODULE_FILE=""
+		fail "kmod-nvidia owns no .ko under /usr/lib/modules/${KERNEL_VRA} — kmod built for a different kernel?"
 	fi
 fi
 

@@ -115,6 +115,10 @@ make_stub_tools() {
 args="\$*"
 case "\$args" in
   *"-q kernel"*) echo "${KVER}"; exit 0 ;;
+  # -ql answers with the module files the kmod OWNS — the probe the contract
+  # uses since the wmi-ec-backlight false match (run 31196251408): a name
+  # glob found a mainline nvidia-prefixed module and failed modinfo on it.
+  *"-ql kmod-nvidia"*) echo "/usr/lib/modules/${KVER}/extra/nvidia/nvidia.ko.xz"; exit 0 ;;
   *kmod-nvidia*|*nvidia-driver-cuda*|*nvidia-container-toolkit*) printf '580.10.01'; exit 0 ;;
   *nvidia-driver*) printf '580.10.01'; exit 0 ;;
 esac
