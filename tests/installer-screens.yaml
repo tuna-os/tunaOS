@@ -31,8 +31,21 @@ screens:
     title: Disk / target selection
     required: true
     # Heading/prompt text, not the "Target Disk: vda" row on the summary.
+    #
+    # MEASURED 2026-08-07 against the frontends' real headings. The list below
+    # was evidently written from KDE's wording — KDE matches three of these
+    # outright while Niri and XFCE matched none, which read as "no disk screen"
+    # for two frontends that plainly have one:
+    #     KDE     "Select Target Disk"                  matched
+    #     Niri    "Destination"                         no match
+    #     XFCE    "Where should TunaOS be installed?"   no match ("should be"
+    #                                                    vs "will be")
+    # "destination" is admitted as a bare-ish noun deliberately: it is the
+    # entire heading on Niri, and it does not appear as a field label on any
+    # other screen in any of the four frontends.
     keywords: ["select target disk", "select a disk", "choose the disk",
-               "available disks", "where tunaos will be installed"]
+               "available disks", "where tunaos will be installed",
+               "where should tunaos be installed", "destination"]
 
   - id: encryption
     title: Disk encryption (LUKS)
@@ -61,8 +74,38 @@ screens:
     # NOT "installing tunaos": the welcome page says "guide you through
     # installing TunaOS onto your computer". Progress screens say what they
     # are DOING, so match that instead.
+    #
+    # MEASURED 2026-08-07: ZERO of the four frontends matched this list.
+    #     KDE     (no contract keyword present)
+    #     Niri    "Installing…"
+    #     XFCE    "Installing TunaOS"
+    #     COSMIC  "Installing"
+    # Four frontends failing the same optional screen is one wrong list, not
+    # four wording bugs.
+    #
+    # NOT bare "installing", which was the obvious fix and is wrong. Niri's
+    # ENCRYPTION page reads "cannot be turned on later without reinstalling",
+    # and "installing" is a substring of "reinstalling". Encryption is not the
+    # first state, so the crediting rule would NOT have caught it: bare
+    # "installing" manufactures a phantom install row on the encryption screen.
+    # Exactly the failure the notes above this list were written about.
+    #
+    # "installing tunaos" IS safe, and the comment above rejects it because
+    # Niri's WELCOME prose says "guide you through installing TunaOS onto your
+    # computer" — correct, but that prose lives on the FIRST state, which the
+    # crediting rule already defends. So it is admitted, with the ellipsis form
+    # for Niri's own heading.
+    #
+    # The fisherman step lines are included too. Every frontend streams the
+    # same backend, so "partitioning" and "installing image" appear on the
+    # progress screen of all four and on no other screen — the strongest
+    # evidence available that an install is actually under way, which is the
+    # principle this list already states ("progress screens say what they are
+    # DOING").
     keywords: ["installation progress", "copying files", "deploying",
-               "please wait", "writing image"]
+               "please wait", "writing image",
+               "installing tunaos", "installing\u2026",
+               "partitioning", "installing image"]
 
   - id: done
     title: Finished / reboot

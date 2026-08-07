@@ -285,9 +285,53 @@ EOF
 	# projectbluefin/dakota-iso's debug=1 live-env setup (liveuser has
 	# NOPASSWD sudo there too). Production images never enable sshd, so
 	# liveuser never gets a login there.
+	#
+	# The drop-in authorises a binary that has to BE there. The Fedora and EL
+	# bases ship sudo; the openSUSE, Ubuntu and Debian ones do not, and a
+	# sudoers file granting rights to a missing binary is completely silent —
+	# the ISO builds, the live image boots, and every `sudo` iso-e2e.sh runs in
+	# the guest fails with
+	#
+	#   bash: line 1: sudo: command not found
+	#
+	# killing the run at `sudo podman load` with no clue where it came from.
+	# That was defect 3 of tunaOS#953 on sailfin, fixed by naming sudo in
+	# Containerfile.opensuse — and it came back on grouper because the apt
+	# bases never got the same line. Assert it here instead, where the
+	# assumption is actually made, so the next base to omit sudo fails the ISO
+	# build rather than a 20-minute E2E cell.
+	if ! command -v sudo >/dev/null 2>&1; then
+		echo "ERROR: ENABLE_SSHD=1 grants liveuser NOPASSWD sudo, but this image has no sudo." >&2
+		echo "       Add it to this variant's Containerfile base package list." >&2
+		exit 1
+	fi
 	mkdir -p /etc/sudoers.d
 	echo 'liveuser ALL=(ALL) NOPASSWD: ALL' >/etc/sudoers.d/90-tunaos-live-e2e
 	chmod 0440 /etc/sudoers.d/90-tunaos-live-e2e
+
+	# Same shape, one binary over. The storage.conf and drop-in written above
+	# exist so that the live root's PODMAN can see the offline store, and a
+	# composefs image cannot be installed without one at all: fisherman's
+	# bootcDirect shortcut is unavailable there, so bootc runs inside a
+	# container podman starts.
+	#
+	# guppy had skopeo (bootc's containers-image-proxy) and no podman, which
+	# looks close enough to be missed. It is not: every store probe answered
+	# `sudo: podman: command not found`, the harness read a store that holds the
+	# image as empty, and the cell died 2h30m in on the SSH image transfer that
+	# is its last resort. guppy:gnome, LUKS run 31134373523.
+	#
+	# Fatal here rather than a warning, and only on ENABLE_SSHD media, for the
+	# same reason as sudo above: this is the dev/E2E ISO, the assumption is made
+	# right here, and 10 seconds of ISO build is a better place to learn it than
+	# hour three of a matrix cell.
+	if ! command -v podman >/dev/null 2>&1; then
+		echo "ERROR: this image has no podman, but the offline image store above" >&2
+		echo "       is configured for one and the composefs install path runs" >&2
+		echo "       bootc inside a container." >&2
+		echo "       Add it to this variant's Containerfile base package list." >&2
+		exit 1
+	fi
 fi
 
 # ── 3. Pre-install the installer Flatpak into the live squash ────────────────

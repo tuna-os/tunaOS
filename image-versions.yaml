@@ -17,7 +17,7 @@ images:
   - name: zirconium
     image: ghcr.io/zirconium-dev/zirconium
     tag: latest
-    digest: sha256:051ab061c0e805b9f69dd82bbecb0840e94a6dea80bf0c4aceaa1caf53d60518
+    digest: sha256:a6dc5dad2f2a7f2ded4f324d1a3c1ccd882f43f466be16ad16dc11a51e0b6e69
 
 # Pinned binary downloads (managed by Renovate)
 downloads:
@@ -49,6 +49,17 @@ downloads:
   # '/run/rootfsbase'`. Proven both ways by named runs: broken at
   # tacklebox 30629145076, booting to login at 30630284339.
   tacklebox: "4fa604115dfa2e6356c68bde85a191c6620ebea1"
+
+  # Zirconium's mkosi.extra payload, fetched as a source tarball by
+  # build_scripts/install-zirconium.sh (niri stages only). Pinned to a commit
+  # for the same reason every other download here is: `main` moves, so an
+  # unpinned fetch makes niri builds non-reproducible and puts whatever landed
+  # upstream in the last hour into the image. A tarball checksum is not an
+  # option on top of this — GitHub generates the archive on demand and its
+  # bytes are not stable — but the commit itself is content-addressed, so the
+  # pin is what fixes the file set.
+  # renovate: datasource=git-refs depName=zirconium-dev/zirconium
+  zirconium_src: "d2cfb176433cd214a26d02abe572c1b9d9fcc72e"
 
   # Bootc toolchain built from source (see toolchain/) and published to
   # ghcr.io/tuna-os/bootc-toolchain-<base> as OCI artifacts via ORAS.

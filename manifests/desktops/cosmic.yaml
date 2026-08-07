@@ -3,11 +3,20 @@
 display_manager: greetd
 
 packages:
-  # ── APT (Ubuntu via PPA, Debian Sid has native packages) ───────────
+  # ── APT (Ubuntu only, via PPA) ─────────────────────────────────────
+  # NOT Debian. This block used to say "Debian Sid has native packages"; it
+  # does not, and neither does any other suite. Checked with ftp-master's
+  # madison API across oldoldstable..experimental for cosmic-session,
+  # cosmic-comp, cosmic-panel, cosmic-files, cosmic-term, cosmic-settings,
+  # cosmic-greeter and xdg-desktop-portal-cosmic — all empty, against a
+  # control that is not. The `condition: ubuntu` on the PPA below is therefore
+  # the whole story: on a Debian base this list has no source and apt exits
+  # 100 with "Unable to locate package" (flounder:cosmic, run 31087927879).
+  # flounder and flounder-sid no longer declare a cosmic flavour as a result.
   apt:
     ppa:
       - repo: "ppa:hepp3n/cosmic-epoch"
-        condition: "ubuntu"  # only add PPA on Ubuntu; Debian Sid has native pkgs
+        condition: "ubuntu"  # Ubuntu only — Debian has no COSMIC anywhere (see above)
     packages:
       - cosmic-session
       - cosmic-comp
@@ -27,7 +36,15 @@ packages:
       - cosmic-term
       - cosmic-wallpapers
       - cosmic-workspaces
-      - cosmic-icon-theme
+      # cosmic-ICONS, not cosmic-icon-theme. The RPM name is the theme one and
+      # it is what this list said, so apt exited 100 on the single name it
+      # could not find and took the whole transaction with it:
+      #   E: Unable to locate package cosmic-icon-theme
+      # (grouper:cosmic, LUKS run 31135209477 — the other 20 names resolved).
+      # ppa:hepp3n/cosmic-epoch publishes 46 binaries for resolute; the icon
+      # set among them is `cosmic-icons` 1.5.0~b78b059, and no package whose
+      # name contains "icon-theme" exists there at all except pop-icon-theme.
+      - cosmic-icons
       - greetd
       - xdg-desktop-portal-cosmic
 

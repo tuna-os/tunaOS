@@ -12,14 +12,18 @@ and an API failure raises rather than silently degrading a cell to unknown —
 a status page that quietly downgrades itself is worse than no status page.
 
 Usage:
-    scripts/gen-matrix-status.py [--check]
+    scripts/gen-matrix-status.py [--check | --check-structure]
 
-    --check  exit 1 if the file would change (for CI drift detection)
+    --check            exit 1 if the file would change (for CI drift detection)
+    --check-structure  exit 1 only if the block differs in ways a pull request
+                       controls — hand-edits and build-config drift — ignoring
+                       content that is a function of live CI state
 """
 
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import os
 import re
@@ -36,9 +40,62 @@ CONFIG = Path(".github/build-config.yml")
 BEGIN = "<!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->"
 END = "<!-- END GENERATED -->"
 
-# How many recent runs to walk per workflow. Newest wins per cell, so this only
-# needs to be deep enough to reach the last full sweep.
-RUN_DEPTH = 20
+# How many recent COMPLETED runs to walk per workflow.
+#
+# This was 20, with the reasoning "newest wins per cell, so this only needs to
+# be deep enough to reach the last full sweep". That holds while cells are
+# tested in sweeps. It breaks the moment they are dispatched one at a time:
+# ~15 single-cell luks-e2e runs in one morning pushed every earlier result out
+# of the window, and the generator reported
+#
+#   -**3 of 54** cells green (41 tested, 13 never tested).
+#   +**7 of 53** cells green (10 tested, 43 never tested).
+#
+# flipping whole rows — every marlin cell, most of yellowfin and albacore —
+# from a real ❌ or ✅ to ⬜ "never tested". Those results had not been
+# superseded; they had scrolled off. This file's own header argues that a
+# status page which quietly downgrades itself is worse than no status page,
+# and that is exactly what happened.
+#
+# Depth is cheap in correctness and linear in API calls (one `run view` each),
+# so it is set to cover a heavy debugging day rather than a sweep. Counting only
+# completed runs (see FETCH_DEPTH below) matters as much, for the same reason.
+#
+# 80 was measured against live data and lands ON the cliff edge rather than past
+# it: walking it, cells were still being discovered at positions 74, 75, 76, 78,
+# 79 and 80 — the window ends part-way through the last sweep, not after it. Two
+# walks minutes apart disagreed about `yellowfin:xfce`, ❌ in one and ⬜ "never
+# tested" in the other, because a run completing at the head pushed its result
+# past the boundary. A depth that reports a different table depending on the
+# minute it runs is the same silent downgrade, just intermittent, and it also
+# drifts the generated prose (the stale-NVIDIA count) with it.
+#
+# Measured tallies for the same repo, minutes apart, varying only this number:
+#
+#    20 →  8 of 53 green (11 tested, 42 never tested)
+#    80 → 24 of 53 green (41 tested, 12 never tested)
+#   150 → 24 of 53 green (41 tested, 12 never tested)
+#   200 → 29 of 54 green (50 tested,  4 never tested)
+#
+# The plateau between 80 and 150 is why 80 looked sufficient: the next sweep
+# worth reaching sits past 150, so a spot check at any depth in between agrees
+# with itself and still misses two thirds of the untested cells. 200 reaches it
+# — the oldest still-authoritative result moves from 2026-08-05 back to
+# 2026-08-01 — and whole rows (bonito-rawhide, flounder-sid) come back with it.
+#
+# Do not read 200 as the saturation point; read it as the depth at which the
+# walk stopped telling us it was truncating. latest_results warns on stderr
+# when the oldest run it examined was still producing first-time results, which
+# is the condition that made 20 and then 80 wrong, and it is silent at 200.
+# Raise this when that warning appears rather than when a row looks wrong.
+RUN_DEPTH = 200
+
+# Queued and in-progress runs carry no results, so they must not consume window
+# slots: during a dispatch sweep half the newest runs are in flight, and letting
+# them eat the window silently demoted cells a completed run had already
+# asserted back to "never tested" — the exact absence-of-evidence failure this
+# document exists to prevent. So fetch wider and count only completed runs.
+FETCH_DEPTH = RUN_DEPTH * 4
 
 DESKTOPS = ["gnome", "kde", "cosmic", "niri", "xfce"]
 
@@ -102,23 +159,51 @@ def latest_results(workflow: str, name_re: str) -> dict[str, tuple[str, str, str
     """
     runs = gh_json(
         "run", "list", "--repo", REPO, "--workflow", workflow,
-        "--limit", str(RUN_DEPTH),
+        "--limit", str(FETCH_DEPTH),
         "--json", "databaseId,createdAt,status",
     ) or []
     pattern = re.compile(name_re)
     found: dict[str, tuple[str, str, str]] = {}
+    walked = 0
+    deepest_was_new = False
     for run in runs:
         if run.get("status") != "completed":
             continue
+        if walked >= RUN_DEPTH:
+            break
+        walked += 1
         run_id, date = str(run["databaseId"]), run["createdAt"][:10]
         detail = gh_json(
             "run", "view", run_id, "--repo", REPO, "--json", "jobs"
         ) or {}
+        deepest_was_new = False
         for job in detail.get("jobs", []):
             name, conclusion = job.get("name", ""), job.get("conclusion")
             if not pattern.search(name) or conclusion not in ("success", "failure"):
                 continue
+            if name not in found:
+                deepest_was_new = True
             found.setdefault(name, (conclusion, date, run_id))
+
+    # Say so when the window is the thing deciding the answer. RUN_DEPTH has now
+    # been outgrown twice, and both times the only symptom was cells quietly
+    # reading ⬜ "never tested" — the walk stopped mid-discovery and the page
+    # reported the shortfall as fact. If the oldest run we looked at was still
+    # handing us cells we had not seen, there is no reason to believe the next
+    # one would not have too, so the depth is a lower bound, not a sweep.
+    #
+    # The test is `walked`, not len(runs): the fetch is deliberately wider than
+    # the window (FETCH_DEPTH) so that in-flight runs cannot eat slots, so
+    # len(runs) says nothing about whether the walk was cut short. Only hitting
+    # the RUN_DEPTH cap does.
+    if deepest_was_new and walked >= RUN_DEPTH:
+        print(
+            f"warning: {workflow}: the oldest of {walked} completed runs examined "
+            "still contained results not seen in any newer run, so RUN_DEPTH is "
+            "cutting the walk short and cells may read as never tested when "
+            "they have in fact been tested. Raise RUN_DEPTH.",
+            file=sys.stderr,
+        )
     return found
 
 
@@ -172,19 +257,54 @@ def desktop_table(matrix, results, key_fmt) -> list[str]:
 
 
 def tally(matrix, results, key_fmt):
+    """Count only cells build-config actually schedules.
+
+    A stale result for a cell the matrix no longer declares used to be counted,
+    because `hit` alone was enough to enter the denominator. That put
+    flounder:cosmic and flounder-sid:cosmic in the LUKS totals as permanent
+    failures: both flavours were removed on purpose in 491544d1 ("drop the
+    COSMIC flavours Debian cannot build"), so no run will ever turn them green,
+    and the board read 39 of 54 when the live set was 52.
+
+    Two cells is small; the dishonesty is not. It is the same one nvidia_tally
+    below was written to fix — a gap nobody is ever going to close, reported as
+    if someone should. Undeclared cells now get the same treatment: out of the
+    tally, and disclosed by count so the number visibly shrinks as they age out
+    rather than vanishing silently.
+
+    This does NOT hide a failing cell. A cell build-config still declares is
+    counted whether it passes, fails or has never run.
+    """
     total = tested = passed = 0
     for variant in variants_in_scope(matrix, results):
         flavors = matrix.get(variant, set())
         for d in DESKTOPS:
-            hit = results.get(key_fmt(variant, d))
-            if d not in flavors and not hit:
+            if d not in flavors:
                 continue
+            hit = results.get(key_fmt(variant, d))
             total += 1
             if hit:
                 tested += 1
                 if hit[0] == "success":
                     passed += 1
     return total, tested, passed
+
+
+def undeclared_tally(matrix, results, key_fmt):
+    """Stale results for cells build-config no longer schedules.
+
+    Deliberately reported rather than dropped: a flavour that disappears from
+    build-config while red should not simply stop being mentioned. Returns the
+    "variant:flavor" names so the disclosure can say which, and so the count
+    reaching zero is checkable.
+    """
+    stale = []
+    for variant in variants_in_scope(matrix, results):
+        flavors = matrix.get(variant, set())
+        for d in DESKTOPS:
+            if d not in flavors and results.get(key_fmt(variant, d)):
+                stale.append(f"{variant}:{d}")
+    return sorted(stale)
 
 
 def nvidia_tally(matrix, results, key_fmt):
@@ -228,6 +348,11 @@ def build() -> str:
     # produce a daily commit even when no cell moved. The commit date already
     # records when it ran; what matters here is how fresh the DATA is, which
     # is stated per-axis below and in Provenance.
+    #
+    # Provenance carries that same "as of <now>" property in disguise, since it
+    # names the run behind each verdict and so advances on any re-run. That is
+    # why the pull_request gate compares through structural() with provenance
+    # masked, rather than byte-for-byte.
     out: list[str] = [
         BEGIN,
         "",
@@ -247,6 +372,10 @@ def build() -> str:
     nv_stale = nvidia_tally(
         _matrix("build_image", desktops_only=False), luks, luks_key
     )
+    # lmatrix here, unlike the NVIDIA count above: this asks which of the
+    # DESKTOPS columns the table renders are no longer scheduled, and that is
+    # exactly the desktops_only matrix the table itself is built from.
+    undeclared = undeclared_tally(lmatrix, luks, luks_key)
     out += [
         "## LUKS E2E",
         "",
@@ -275,6 +404,27 @@ def build() -> str:
             f"takes the identical LUKS path in headless QEMU. "
             f"{nv_stale} stale pre-exclusion result(s) remain from before "
             "that change; they are not a gap and will age out.",
+            "",
+        ]
+
+    # Named, not just counted, and left visible in the table above: a flavour
+    # that leaves build-config while red must not simply stop being mentioned.
+    # It is out of the tally because no run can ever move it, which is a
+    # different statement from "it passed".
+    if undeclared:
+        out += [
+            "The table above still shows a result for "
+            + ", ".join(f"`{c}`" for c in undeclared)
+            + ". `.github/build-config.yml` no longer declares "
+            + ("that flavour" if len(undeclared) == 1 else "those flavours")
+            + ", so `luks-e2e.yml` cannot schedule "
+            + ("it" if len(undeclared) == 1 else "them")
+            + " and no run will ever turn "
+            + ("it" if len(undeclared) == 1 else "them")
+            + " green. "
+            + ("It is" if len(undeclared) == 1 else "They are")
+            + " excluded from the count above — a last-measured verdict kept "
+            "visible, not a gap. Same reasoning as the NVIDIA note.",
             "",
         ]
 
@@ -333,11 +483,18 @@ def build() -> str:
         out += ["Every non-NVIDIA ISO cell has an overlay.", ""]
 
     # ── Provenance ──────────────────────────────────────────────────────────
+    # Re-running a cell to the same verdict rewrites this table and nothing
+    # else, which is not something a pull request can be answerable for, so
+    # VOLATILE_LINE masks these rows out of the structural comparison.
     runs = defaultdict(list)
     for name, (_, date, run_id) in {**luks, **smoke}.items():
         runs[(date, run_id)].append(name)
     out += [
         "## Provenance",
+        "",
+        "The run that last asserted each verdict above. Re-running a cell moves "
+        "a row here without moving the cell, so this table is refreshed only "
+        "when a verdict actually changes — treat the dates as \"no older than\".",
         "",
         "| Date | Run | Cells |",
         "|---|---|---|",
@@ -349,10 +506,92 @@ def build() -> str:
     return "\n".join(out)
 
 
+# Lines whose whole content is a readout of live CI or registry state.
+VOLATILE_LINE = re.compile(
+    r"^(?:"
+    r"\| \d{4}-\d\d-\d\d \| \["          # provenance row
+    r"|Newest result "                    # freshness of the LUKS data
+    r"|NVIDIA cells are "                 # present only while stale results remain
+    r"|The table above still shows a result for "  # same: only while they remain
+    r"|Missing for "                      # depends on published overlay tags
+    r"|Every non-NVIDIA ISO cell has an overlay"
+    r")"
+)
+
+# A result glyph is live state; NA is structure, because it means build-config
+# does not schedule that cell at all.
+LIVE_GLYPH = re.compile(f"[{PASS}{FAIL}{UNTESTED}]")
+
+ROW = re.compile(r"^\| \*\*(?P<variant>[^*]+)\*\* \|")
+
+
+def table_rows(block: str) -> set[tuple[str, str]]:
+    """(section, variant) for every table row in the block.
+
+    Row *existence* is partly live state: variants_in_scope() adds a row for any
+    variant a run touched, even one the matrix does not schedule, so gurnard
+    appears and vanishes with nothing but the run window moving.
+    """
+    section, rows = "", set()
+    for line in block.splitlines():
+        if line.startswith("## "):
+            section = line
+        match = ROW.match(line)
+        if match:
+            rows.add((section, match["variant"]))
+    return rows
+
+
+def structural(block: str, keep_rows: set[tuple[str, str]] | None = None) -> str:
+    """The part of the generated block a pull request is answerable for.
+
+    The pull_request drift check exists to catch two things, per matrix-status.yml:
+    a hand-edit inside the generated block, and a generator that breaks on a
+    build-config change. It was instead failing on repo-wide CI churn — a LUKS
+    run completing mid-review moves cells, tallies and the provenance table, so
+    the gate went red for reasons the PR neither caused nor can fix, and the only
+    "fix" available was committing another snapshot that went stale in minutes.
+
+    So compare with live-derived content masked: cell results, every count, the
+    data-freshness dates, the provenance rows, the overlay inventory. What
+    survives is the shape of the document — its prose, its sections, and which
+    cells build-config schedules at all (NA versus scheduled) — which is exactly
+    the surface a PR can break. Byte-exact drift is still enforced on the
+    scheduled run, which is what actually keeps the file fresh.
+
+    keep_rows limits table rows to those both sides agree exist; pass the
+    intersection of table_rows() from each side.
+    """
+    section, lines = "", []
+    for line in block.splitlines():
+        if line.startswith("## "):
+            section = line
+        if VOLATILE_LINE.match(line):
+            continue
+        match = ROW.match(line)
+        if (
+            match
+            and keep_rows is not None
+            and (section, match["variant"]) not in keep_rows
+        ):
+            continue
+        line = LIVE_GLYPH.sub("?", line)
+        line = re.sub(r"\d+", "N", line)
+        if not line.strip() and lines and not lines[-1].strip():
+            continue  # dropped lines leave double blanks behind
+        lines.append(line)
+    return "\n".join(lines)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--check", action="store_true",
-                    help="exit 1 if the document would change")
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true",
+                      help="exit 1 if the document would change")
+    mode.add_argument("--check-structure", action="store_true",
+                      help="exit 1 only on differences a pull request controls "
+                           "— hand-edits and build-config drift — ignoring "
+                           "content derived from live CI state")
     args = ap.parse_args()
 
     if not DOC.exists():
@@ -362,8 +601,34 @@ def main() -> int:
         sys.exit(f"{DOC} is missing the GENERATED markers")
 
     head, rest = text.split(BEGIN, 1)
-    _, tail = rest.split(END, 1)
-    updated = head + build() + tail
+    committed, tail = rest.split(END, 1)
+    generated = build()
+    updated = head + generated + tail
+
+    if args.check_structure:
+        committed = BEGIN + committed + END
+        shared = table_rows(committed) & table_rows(generated)
+        want = structural(committed, shared)
+        got = structural(generated, shared)
+        if want == got:
+            print("MATRIX-STATUS.md structure is current "
+                  "(live CI values deliberately ignored)")
+            return 0
+        print(
+            "docs/MATRIX-STATUS.md differs from the generator in content a pull "
+            "request controls: either the generated block was hand-edited, or a "
+            "build-config change moved rows the committed doc has not caught up "
+            "with. Run scripts/gen-matrix-status.py and commit the result.",
+            file=sys.stderr,
+        )
+        diff = difflib.unified_diff(
+            want.splitlines(), got.splitlines(),
+            fromfile="committed (live values masked)",
+            tofile="generated (live values masked)",
+            lineterm="",
+        )
+        print("\n".join(diff), file=sys.stderr)
+        return 1
 
     if updated == text:
         print("MATRIX-STATUS.md already current")
