@@ -1468,6 +1468,36 @@ qualify_imgref() {
 	fi
 }
 
+# Does the embedded offline store's image index record this exact ref?
+#
+# Takes the index as text rather than a path because it is read out of the guest
+# once, over SSH, and answered on the HOST. The guest side of that is `cat`;
+# everything that needs a parser runs here, where jq is a declared dependency.
+# The previous form asked the guest for `jq`, and a guest that ships neither jq
+# nor podman — guppy, whose Gentoo base emerges skopeo for bootc's
+# containers-image-proxy and neither of those two — could not answer either
+# probe, so a store holding the image read as empty.
+#
+# `names`, never `names-history`: containers-storage resolves a ref only while
+# it is a current name, and a ref that appears solely in the history was
+# retagged away. Answering yes for one would send bootc after an image it
+# cannot resolve, which is the same dead end by a different road.
+store_records_image() {
+	local images_json="$1" ref="$2"
+	[[ -n "$images_json" && -n "$ref" ]] || return 1
+	if command -v jq >/dev/null 2>&1; then
+		jq -e --arg ref "$ref" \
+			'.[]? | select(.names != null) | select(.names | index($ref))' \
+			>/dev/null 2>&1 <<<"$images_json"
+		return
+	fi
+	# No jq on this host either (a bare local run). Match the `names` arrays
+	# textually — `"names":` cannot match `"names-history":`, whose next
+	# character is `-` — so a missing jq degrades the probe instead of
+	# silently turning it off.
+	grep -o '"names":\[[^]]*\]' <<<"$images_json" | grep -Fq "\"${ref}\""
+}
+
 # Generic install path for live media built from images that ship no
 # fisherman — the reference cells (aurora, bluefin) and any stock bootc
 # image (tacklebox#178's ladder). Everything tunaOS-specific is skipped: no
@@ -1883,6 +1913,27 @@ run_install() {
 		return 3
 	fi
 
+	# Does this guest have podman at all? Not a rhetorical question: guppy's
+	# base (Containerfile.gentoo) emerges app-containers/skopeo — which is what
+	# bootc's containers-image-proxy actually shells out to — and never emerges
+	# app-containers/podman or app-misc/jq. So on guppy every `sudo podman ...`
+	# below answers
+	#
+	#   sudo: podman: command not found
+	#
+	# That is not a broken image; bootc reads containers-storage through skopeo
+	# and installs fine. But it silently defeated the store probe further down,
+	# which had only podman- and jq-shaped questions to ask. Ask once, here, so
+	# the dump names the situation instead of printing it a dozen times and
+	# leaving the reader to infer it from a missing "Found" line.
+	local guest_has_podman=0
+	if "${ssh_cmd[@]}" "command -v podman >/dev/null 2>&1" 2>/dev/null; then
+		guest_has_podman=1
+	else
+		echo "==> guest ships no podman (skopeo-only base) — skipping podman store queries;" \
+			"the offline store index is read host-side below"
+	fi
+
 	# ── Offline store diagnostics (debug: remove once stable) ─────────
 	echo "==> Offline store diagnostics:"
 	echo "--- store service status ---"
@@ -1898,17 +1949,21 @@ run_install() {
 	# from before the mount, causing image exists / pull to miss the
 	# additional store entirely (observed on Gentoo-based variants where
 	# the offline-store.service sometimes races with podman's init).
-	"${ssh_cmd[@]}" "sudo podman system renumber 2>&1 || true" || true
+	if [[ "$guest_has_podman" -eq 1 ]]; then
+		"${ssh_cmd[@]}" "sudo podman system renumber 2>&1 || true" || true
+	fi
 	echo "--- primary storage.conf ---"
 	"${ssh_cmd[@]}" "cat /etc/containers/storage.conf 2>&1 || echo '(not found)'" || true
 	echo "--- offline store layout ---"
 	"${ssh_cmd[@]}" "sudo ls -la /var/lib/superiso-store/ 2>&1 || true" || true
 	"${ssh_cmd[@]}" "sudo ls -la /var/lib/superiso-store/overlay-images/ 2>&1 || echo '(no overlay-images)'" || true
 	"${ssh_cmd[@]}" "sudo cat /var/lib/superiso-store/storage.lock 2>&1 || echo '(no storage.lock)'" || true
-	echo "--- effective storage driver ---"
-	"${ssh_cmd[@]}" "sudo podman info 2>&1 | grep -i graphdriver || echo 'podman info failed'" || true
-	echo "--- podman images (all) ---"
-	"${ssh_cmd[@]}" "sudo podman images 2>&1 || echo '(empty or error)'" || true
+	if [[ "$guest_has_podman" -eq 1 ]]; then
+		echo "--- effective storage driver ---"
+		"${ssh_cmd[@]}" "sudo podman info 2>&1 | grep -i graphdriver || echo 'podman info failed'" || true
+		echo "--- podman images (all) ---"
+		"${ssh_cmd[@]}" "sudo podman images 2>&1 || echo '(empty or error)'" || true
+	fi
 
 	# skipjack fails here in a way the dump above cannot explain: the store is
 	# mounted, storage.conf lists it in additionalimagestores, overlay-images/
@@ -1920,13 +1975,21 @@ run_install() {
 	# image store (driver mismatch, unreadable lock, version skew); images.json
 	# is ~1 KB and states the names actually recorded, which distinguishes
 	# "store ignored" from "image recorded under a name we never probe".
-	echo "--- why podman does or does not see the additional store ---"
-	"${ssh_cmd[@]}" "sudo podman --log-level=debug images 2>&1 \
-		| grep -iE 'additional|superiso|store|driver' | head -40 \
-		|| echo '(no matching debug lines)'" || true
+	if [[ "$guest_has_podman" -eq 1 ]]; then
+		echo "--- why podman does or does not see the additional store ---"
+		"${ssh_cmd[@]}" "sudo podman --log-level=debug images 2>&1 \
+			| grep -iE 'additional|superiso|store|driver' | head -40 \
+			|| echo '(no matching debug lines)'" || true
+	fi
+
+	# Read the store's index ONCE, and keep it: this is both the diagnostic dump
+	# and the input to the probe below, so what the log shows is exactly what
+	# the decision was made from.
+	local img_json="/var/lib/superiso-store/overlay-images/images.json"
+	local store_images_json=""
+	store_images_json="$("${ssh_cmd[@]}" "sudo cat ${img_json} 2>/dev/null" 2>/dev/null || true)"
 	echo "--- names recorded in the offline store ---"
-	"${ssh_cmd[@]}" "sudo cat /var/lib/superiso-store/overlay-images/images.json 2>&1 \
-		|| echo '(unreadable)'" || true
+	printf '%s\n' "${store_images_json:-(unreadable)}"
 
 	# Probe the guest's containers-storage for a locally-available image.
 	# Try podman image exists first (primary store), then fall back to
@@ -1937,14 +2000,26 @@ run_install() {
 	local found_local=0 found_ref=""
 	for candidate_ref in "$prod_ref" "$local_ref"; do
 		echo "==> Probing for ${candidate_ref}..."
-		if "${ssh_cmd[@]}" "sudo podman image exists '${candidate_ref}'" 2>/dev/null; then
+		if [[ "$guest_has_podman" -eq 1 ]] &&
+			"${ssh_cmd[@]}" "sudo podman image exists '${candidate_ref}'" 2>/dev/null; then
 			found_local=1
 			found_ref="$candidate_ref"
 			break
 		fi
-		# Fallback: check the offline store images.json directly.
-		local img_json="/var/lib/superiso-store/overlay-images/images.json"
-		if "${ssh_cmd[@]}" "sudo test -f ${img_json} && sudo jq -e --arg ref '${candidate_ref}' '.[] | select(.names != null) | select(.names | index(\$ref))' ${img_json} >/dev/null 2>&1" 2>/dev/null; then
+		# Fallback: the offline store's own index, parsed on the HOST.
+		#
+		# This used to run `sudo jq` in the guest, which asks the guest for a jq
+		# it may not have. guppy has neither jq nor podman (see the
+		# skopeo-only note above), so on that variant BOTH probes were
+		# unrunnable — each exiting 127 — and a store that records
+		# `ghcr.io/tuna-os/guppy:gnome` verbatim read as "image absent". The
+		# cell then spent four minutes on the SSH transfer the block below
+		# documents as impossible and died on `scp: write remote ...: Failure`,
+		# ~2.5 hours into the job. guppy:gnome, LUKS run 31134373523.
+		#
+		# The guest only has to supply `cat`, which the dump above proves it
+		# can; jq runs where jq is a declared dependency.
+		if store_records_image "$store_images_json" "$candidate_ref"; then
 			echo "==> Found ${candidate_ref} in offline store images.json (podman query missed it)"
 			# This used to deliberately NOT set found_local, on the theory that
 			# podman/bootc could not resolve the image from the additional
