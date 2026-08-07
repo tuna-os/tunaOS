@@ -1,7 +1,10 @@
 name: Installer Walkthrough Screenshots
 
 # Boots a freshly built live ISO in QEMU, drives the bootc-install GUI with
-# scripts/run-walkthrough.sh (sendkey choreography + screendumps), and commits
+# scripts/run-walkthrough.sh (which delegates the driving to
+# scripts/installer-walkthrough.py — the fixed sendkey choreography this
+# comment used to describe was removed after it labelled three welcome-screen
+# frames as disk_select and confirm), and commits
 # the resulting flow screenshots to docs/images/installer/ — replacing the
 # repo's installer imagery with real captures on a schedule.
 #
@@ -70,7 +73,8 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             just podman jq golang-go git \
-            qemu-system-x86 qemu-utils ovmf socat netpbm python3-pil
+            qemu-system-x86 qemu-utils ovmf socat netpbm python3-pil \
+            tesseract-ocr
           sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
       - name: Log in to GHCR
@@ -92,8 +96,30 @@ jobs:
             echo "::error::No ISO found for ${VARIANT}-${{ matrix.flavor }}"
             exit 1
           fi
-          sudo bash scripts/run-walkthrough.sh "$ISO" walkthrough-out
+          # FLAVOR must be set AND must survive sudo (-E), or run-walkthrough.sh
+          # falls back to FLAVOR=de and both matrix legs write the same
+          # walkthrough-de.json — a parity report that names neither frontend
+          # it came from.
+          sudo -E FLAVOR="${{ matrix.flavor }}" \
+            bash scripts/run-walkthrough.sh "$ISO" walkthrough-out
           sudo chown -R "$USER:$(id -gn)" walkthrough-out
+
+          # Fail loudly rather than publish a report with the screen rows
+          # unfilled. installer-walkthrough.py degrades to "screen detection
+          # skipped" when tesseract is missing and still exits 0, so a missing
+          # dependency looked exactly like a passing run — which is how this
+          # job produced ocr:false reports for months while green.
+          json="walkthrough-out/walkthrough-${{ matrix.flavor }}.json"
+          if [[ ! -f "$json" ]]; then
+            echo "::error::$json was not written"
+            exit 1
+          fi
+          if [[ "$(jq -r .ocr "$json")" != "true" ]]; then
+            echo "::error::walkthrough ran without OCR — every screen row in"
+            echo "::error::this report is unfilled. tesseract-ocr missing?"
+            exit 1
+          fi
+          jq -r '.screens | to_entries[] | "  \(.key): \(.value)"' "$json"
 
       # The walkthrough performed a real install onto install-disk.qcow2.
       # Boot that disk to verify the install flow actually produced a
@@ -137,7 +163,12 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: installer-shots-${{ matrix.flavor }}
-          path: staged/*.png
+          # The parity report ships alongside the PNGs. It was being written
+          # into walkthrough-out/ and then uploaded by nothing, so the file
+          # tunaOS's own installer matrix consumes never left the runner.
+          path: |
+            staged/*.png
+            walkthrough-out/walkthrough-*.json
           if-no-files-found: error
           retention-days: 14
 
