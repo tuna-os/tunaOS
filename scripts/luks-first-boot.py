@@ -86,6 +86,8 @@ def harvest_emergency(ser):
                 sys.stdout.buffer.write(d)
                 sys.stdout.flush()
         except socket.timeout:
+            # Expected: the guest is simply quiet right now. Keep polling until
+            # drain_until rather than cutting the harvest short.
             pass
 
 while time.time() < deadline:
