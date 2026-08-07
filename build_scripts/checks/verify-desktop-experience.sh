@@ -402,6 +402,8 @@ else
 	#      rpm/openSUSE/Gentoo  /usr/lib64/gstreamer-1.0/libgstlibav.so
 	#      Arch                 /usr/lib/gstreamer-1.0/libgstlibav.so
 	#      Debian/Ubuntu        /usr/lib/<triplet>/gstreamer-1.0/libgstlibav.so
+	#      (the apt path MEASURED on ubuntu:noble — gstreamer1.0-libav ships
+	#      /usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgstlibav.so)
 	# 2. `ffmpeg -decoders` actually lists h264 — the plugin above routes
 	#    into libavcodec, so a free-codec libavcodec (the exact v2 failure)
 	#    is caught here even though the plugin file exists.
@@ -411,7 +413,25 @@ else
 		'/usr/lib/*/gstreamer-1.0/libgstlibav.so'
 	require_command ffmpeg
 	if command -v ffmpeg >/dev/null 2>&1; then
-		if ! ffmpeg -hide_banner -decoders 2>/dev/null | grep -q ' h264 '; then
+		# NEVER pipe ffmpeg straight into `grep -q` here. grep -q exits at the
+		# first match, ffmpeg is still writing its ~30 KB decoder list, gets
+		# SIGPIPE, exits 141 — and under this script's `set -o pipefail` the
+		# pipeline reports failure WITH the decoder present. That is not a
+		# race in practice: measured on ubuntu:noble (ffmpeg 6.1.1, h264
+		# decoder confirmed in the output), the piped form returned 141 on
+		# five out of five runs and failed gurnard:pantheon's proof build
+		# (run 31196812732) with a message blaming a "crippled libavcodec"
+		# the image did not have. Capture first, then grep the variable —
+		# and keep "ffmpeg would not run" distinct from "ffmpeg runs but
+		# cannot decode", because their fixes live in different places
+		# (packaging deps vs codec sourcing).
+		_ffmpeg_decoders=""
+		if ! _ffmpeg_decoders="$(ffmpeg -hide_banner -decoders 2>/dev/null)"; then
+			echo "ffmpeg is installed but would not run (broken dependencies?) — cannot verify codecs" >&2
+			if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
+				exit 1
+			fi
+		elif ! grep -q ' h264 ' <<<"$_ffmpeg_decoders"; then
 			echo "ffmpeg cannot decode h264 — a free/crippled libavcodec is installed" >&2
 			if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
 				exit 1
