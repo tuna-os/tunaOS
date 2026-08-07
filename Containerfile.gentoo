@@ -150,10 +150,19 @@ RUN emerge --verbose --deep --newuse \
     # make.conf runs emerge with --binpkg-respect-use=n, so the binhost's
     # systemd (built WITHOUT cryptsetup) satisfies the install above even with
     # the package.use entry in place, and the flag silently does nothing. Force
-    # the one package whose USE actually matters to build from source. The
-    # assertion afterwards is the point: a binary this image exists to provide
-    # must fail the BUILD when absent, not a matrix cell three hours later.
-    emerge --oneshot --verbose --usepkg=n sys-apps/systemd && \
+    # the one package whose USE actually matters to build from source.
+    #
+    # BOTH binpkg switches must be off. --usepkg=n alone does not do it:
+    # make.conf also sets --getbinpkg (and FEATURES=getbinpkg), and with
+    # getbinpkg still active emerge fetched the binhost package and "rebuilt"
+    # systemd in two seconds flat — the merge log's `<<< dir
+    # /usr/lib/systemd/boot` (removed, never replaced) is the binhost's
+    # flagless build erasing even the stage3's boot support, and all three
+    # guppy cells then died on the cryptenroll assert 2h45m in (run
+    # 31164551903). The assertion afterwards is the point: a binary this
+    # image exists to provide must fail the BUILD when absent, not a matrix
+    # cell three hours later.
+    emerge --oneshot --verbose --usepkg=n --getbinpkg=n sys-apps/systemd && \
     command -v systemd-cryptenroll && \
     command -v cryptsetup && \
     command -v dmsetup && \
