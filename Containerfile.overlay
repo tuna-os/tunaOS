@@ -72,8 +72,21 @@ RUN \
   --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=akmods_nvidia_open,src=/rpms,dst=/tmp/akmods-nvidia-open-rpms \
+  --mount=type=bind,from=akmods_nvidia_open,src=/kernel-rpms,dst=/tmp/kernel-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
     bash -c 'if [ "${OVERLAY_TYPE}" = "hwe" ]; then /run/context/build_scripts/overlay/hwe.sh; elif [ "${OVERLAY_TYPE}" = "cachyos" ]; then /run/context/build_scripts/overlay/cachyos.sh; elif [ "${OVERLAY_TYPE}" = "asahi" ]; then /run/context/build_scripts/overlay/asahi.sh; else /run/context/build_scripts/overlay/nvidia.sh; fi'
+# The second akmods mount above is the kmod↔kernel alignment mechanism: every
+# ublue akmods image ships BOTH /rpms (the kmods) and /kernel-rpms (the exact
+# kernel those kmods were built against — akmods' Containerfile.in copies
+# both into the final scratch stage). The nvidia overlay swaps the image's
+# kernel to that one (overrides/nvidia/10-kernel-swap.sh) BEFORE installing
+# the kmod, so the exact-EVR install cannot miss: equality by construction,
+# the same shape bluefin-lts uses (its base build runs kernel-swap.sh from
+# the akmods kernel-rpms mount). First-contact evidence for why hoping the
+# base kernel matches does not work: yellowfin ships AlmaLinux Kitten
+# 6.12.0-250.el10 while akmods-nvidia-open:centos-10 carried kmods for a
+# different CentOS kernel, and the kde-nvidia proof build died on the glob
+# (run 31189433990).
 
 # ==============================================================================
 # Desktop target — single parameterized stage replaces the per-DE copy-paste.

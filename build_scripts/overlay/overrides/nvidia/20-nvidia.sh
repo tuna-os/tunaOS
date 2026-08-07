@@ -50,24 +50,47 @@ KERNEL_SUFFIX=""
 QUALIFIED_KERNEL="$(rpm -qa | grep -P 'kernel-(|'"$KERNEL_SUFFIX"'-)(\d+\.\d+\.\d+)' | sed -E 's/kernel-(|'"$KERNEL_SUFFIX"'-)//' | tail -n 1)"
 
 ### install Nvidia driver packages and dependencies
-# kmod-nvidia requires nvidia-kmod-common from negativo17's fedora-nvidia
-# repo. Detect the Fedora release embedded in the akmods RPMs and download
-# the matching repo file so DNF can resolve it. On the centos-10 akmods the
-# RPMs carry no .fcNN tag, so the pinned default applies — the same release
-# bluefin-lts pins for the same bundle.
-FEDORA_VERSION="${FEDORA_AKMODS_VERSION:-43}"
+# kmod-nvidia requires nvidia-kmod-common (and the userspace below requires
+# the whole driver set) from negativo17, which publishes parallel trees per
+# family. Derive the family from the akmods RPM dist tags so kmod and
+# userspace come from the same world:
+#   *.elNN → epel-nvidia.repo (epel-NN). Measured for epel-10: the repo
+#            exists and carries the full set this script installs
+#            (nvidia-driver{,-cuda}, nvidia-settings, libnvidia-fbc,
+#            nvidia-kmod-common, all .el10 builds). The centos-10 akmods
+#            RPMs are .el10-tagged — first contact showed
+#            ublue-os-nvidia-addons-0.14-1.el10.noarch.rpm in the bundle —
+#            so the EL10 variants land here, not on Fedora userspace.
+#   *.fcNN → fedora-nvidia.repo (fedora-NN) — bluefin-lts's arm, right for
+#            bonito's coreos-stable akmods.
+# Fallback when neither tag is readable: fedora-43, bluefin-lts's pinned
+# default, kept so an unexpected bundle still names a real repo.
+AKMODS_EL_VERSION="$(find /tmp/akmods-nvidia-open-rpms -name "*.rpm" -print | grep -oPm1 '(?<=\.el)\d+' || true)"
 AKMODS_FEDORA_VERSION="$(find /tmp/akmods-nvidia-open-rpms -name "*.rpm" -print | grep -oPm1 '(?<=\.fc)\d+' || true)"
-if [[ -n "${AKMODS_FEDORA_VERSION}" ]]; then
-	FEDORA_VERSION="${AKMODS_FEDORA_VERSION}"
+if [[ -n "${AKMODS_EL_VERSION}" ]]; then
+	NVIDIA_REPO_ID="epel-nvidia"
+	NVIDIA_RELEASEVER="${AKMODS_EL_VERSION}"
+elif [[ -n "${AKMODS_FEDORA_VERSION}" ]]; then
+	NVIDIA_REPO_ID="fedora-nvidia"
+	NVIDIA_RELEASEVER="${AKMODS_FEDORA_VERSION}"
+else
+	NVIDIA_REPO_ID="fedora-nvidia"
+	NVIDIA_RELEASEVER="${FEDORA_AKMODS_VERSION:-43}"
 fi
-curl --retry 3 -fsSLo - "https://negativo17.org/repos/fedora-nvidia.repo" |
-	sed "s/\$releasever/${FEDORA_VERSION}/g" |
-	tee "/etc/yum.repos.d/fedora-nvidia.repo"
+echo "==> NVIDIA userspace repo: ${NVIDIA_REPO_ID} releasever=${NVIDIA_RELEASEVER}"
+curl --retry 3 -fsSLo - "https://negativo17.org/repos/${NVIDIA_REPO_ID}.repo" |
+	sed "s/\$releasever/${NVIDIA_RELEASEVER}/g" |
+	tee "/etc/yum.repos.d/${NVIDIA_REPO_ID}.repo"
 # Disabled at rest; enabled per-transaction below (see header for why this
 # is not `dnf config-manager`).
-sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/fedora-nvidia.repo
+sed -i 's/^enabled=1/enabled=0/' "/etc/yum.repos.d/${NVIDIA_REPO_ID}.repo"
 
-dnf -y install --enablerepo="fedora-nvidia" \
+# Say what the bundle holds right where the exact-EVR glob consumes it —
+# 10-kernel-swap.sh printed the full listing, but this is the line a
+# truncated log gets read from (the first mismatch's log showed only the
+# unexpanded glob, which cost a diagnosis step).
+ls -l /tmp/akmods-nvidia-open-rpms/kmods/ || true
+dnf -y install --enablerepo="${NVIDIA_REPO_ID}" \
 	/tmp/akmods-nvidia-open-rpms/kmods/kmod-nvidia-"${KERNEL_VRA}"-*.rpm \
 	/tmp/akmods-nvidia-open-rpms/ublue-os/*.rpm
 
@@ -78,13 +101,13 @@ NVIDIA_PKG_VERSION="3:${KMOD_VERSION}"
 
 # The nvidia-container-toolkit repo file ships in the ublue-os addons RPMs
 # installed above; enable it for this transaction only.
-dnf -y install --enablerepo="fedora-nvidia" --enablerepo="nvidia-container-toolkit" \
+dnf -y install --enablerepo="${NVIDIA_REPO_ID}" --enablerepo="nvidia-container-toolkit" \
 	"libnvidia-fbc-${NVIDIA_PKG_VERSION}" \
 	"nvidia-driver-${NVIDIA_PKG_VERSION}" \
 	"nvidia-driver-cuda-${NVIDIA_PKG_VERSION}" \
 	"nvidia-settings-${NVIDIA_PKG_VERSION}" \
 	nvidia-container-toolkit
-# Leave the toolkit repo disabled at rest, matching the fedora-nvidia repo.
+# Leave the toolkit repo disabled at rest, matching the driver repo above.
 if [[ -f /etc/yum.repos.d/nvidia-container-toolkit.repo ]]; then
 	sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/nvidia-container-toolkit.repo
 fi

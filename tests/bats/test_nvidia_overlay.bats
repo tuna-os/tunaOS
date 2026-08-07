@@ -86,7 +86,9 @@ OVERLAY_SH="${REPO_ROOT}/build_scripts/overlay/nvidia.sh"
   # Match only code, not the header comment that documents this rule.
   run grep -E '^[^#]*dnf config-manager' "$INSTALL_SH"
   [ "$status" -ne 0 ]
-  run grep -F -- '--enablerepo="fedora-nvidia"' "$INSTALL_SH"
+  # The repo is derived (epel-nvidia vs fedora-nvidia) and enabled
+  # per-transaction through the variable, never hardcoded.
+  run grep -F -- '--enablerepo="${NVIDIA_REPO_ID}"' "$INSTALL_SH"
   [ "$status" -eq 0 ]
 }
 
@@ -231,4 +233,159 @@ STUB
   run_verify "$root"
   [ "$status" -ne 0 ]
   [[ "$output" == *"nvidia-suspend.service is shipped but not enabled"* ]]
+}
+
+# ── kernel alignment (10-kernel-swap.sh) ───────────────────────────────────
+#
+# First contact (kde-nvidia proof run 31189433990): the exact-EVR gate fired
+# because yellowfin's Kitten kernel and the akmods kmod kernel disagreed.
+# The fix is bluefin-lts's mechanism — swap the image kernel to the one in
+# the akmods /kernel-rpms cache, mounted from the SAME image as the kmods —
+# so equality holds by construction. These tests run the real script against
+# fixtures (TUNAOS_AKMODS_DIR / TUNAOS_KERNEL_RPMS_DIR / TUNAOS_AKMODS_CERT_DIR)
+# with rpm/dnf/curl/uname stubbed on PATH.
+
+SWAP_SH="${NVIDIA_DIR}/10-kernel-swap.sh"
+AKMODS_KVER="6.12.0-247.el10.x86_64"
+
+@test "kernel-swap exists, is executable, and sorts before the driver install" {
+  [ -x "$SWAP_SH" ]
+  # run_buildscripts_for sorts human-numerically; 10- must precede 20-.
+  local first
+  first="$(find "$NVIDIA_DIR" -maxdepth 1 -iname '*-*.sh' -type f | sort | head -1)"
+  [ "$(basename "$first")" = "10-kernel-swap.sh" ]
+}
+
+@test "Containerfile.overlay mounts the akmods kernel cache alongside the kmods" {
+  # Both mounts must come from the SAME akmods stage — that identity is the
+  # by-construction guarantee.
+  grep -qF 'from=akmods_nvidia_open,src=/rpms,dst=/tmp/akmods-nvidia-open-rpms' "${REPO_ROOT}/Containerfile.overlay"
+  grep -qF 'from=akmods_nvidia_open,src=/kernel-rpms,dst=/tmp/kernel-rpms' "${REPO_ROOT}/Containerfile.overlay"
+}
+
+make_swap_stubs() {
+  # $1 = EVR.ARCH that stubbed `rpm -q kernel` reports as installed
+  mkdir -p "${BATS_TEST_TMPDIR}/bin"
+  cat > "${BATS_TEST_TMPDIR}/bin/uname" <<'STUB'
+#!/usr/bin/env bash
+echo x86_64
+STUB
+  cat > "${BATS_TEST_TMPDIR}/bin/rpm" <<STUB
+#!/usr/bin/env bash
+echo "rpm \$*" >> "${BATS_TEST_TMPDIR}/tool.log"
+case "\$*" in
+  *"-q kernel"*) echo "$1"; exit 0 ;;
+esac
+exit 0
+STUB
+  cat > "${BATS_TEST_TMPDIR}/bin/dnf" <<STUB
+#!/usr/bin/env bash
+echo "dnf \$*" >> "${BATS_TEST_TMPDIR}/tool.log"
+exit 0
+STUB
+  cat > "${BATS_TEST_TMPDIR}/bin/curl" <<STUB
+#!/usr/bin/env bash
+exit 0
+STUB
+  chmod +x "${BATS_TEST_TMPDIR}/bin/"*
+}
+
+make_swap_fixture() {
+  mkdir -p "${BATS_TEST_TMPDIR}/akmods/kmods" "${BATS_TEST_TMPDIR}/kernel-rpms"
+  touch "${BATS_TEST_TMPDIR}/akmods/kmods/kmod-nvidia-${AKMODS_KVER}-580.10.01-1.el10.x86_64.rpm"
+  for p in kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra; do
+    touch "${BATS_TEST_TMPDIR}/kernel-rpms/${p}-${AKMODS_KVER}.rpm"
+  done
+}
+
+run_swap() {
+  PATH="${BATS_TEST_TMPDIR}/bin:$PATH" \
+    TUNAOS_AKMODS_DIR="${BATS_TEST_TMPDIR}/akmods" \
+    TUNAOS_KERNEL_RPMS_DIR="${BATS_TEST_TMPDIR}/kernel-rpms" \
+    TUNAOS_AKMODS_CERT_DIR="${BATS_TEST_TMPDIR}/certs" \
+    run bash "$SWAP_SH"
+}
+
+@test "kernel-swap prints both bundle listings before touching anything" {
+  make_swap_stubs "$AKMODS_KVER"
+  make_swap_fixture
+  run_swap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"akmods bundle contents"* ]]
+  [[ "$output" == *"kmod-nvidia-${AKMODS_KVER}"* ]]
+  [[ "$output" == *"akmods kernel cache contents"* ]]
+  [[ "$output" == *"kernel-core-${AKMODS_KVER}.rpm"* ]]
+}
+
+@test "kernel-swap is a no-op when the image kernel already matches" {
+  make_swap_stubs "$AKMODS_KVER"
+  make_swap_fixture
+  run_swap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"no swap needed"* ]]
+  # No erase and no kernel install happened.
+  ! grep -q 'rpm --erase' "${BATS_TEST_TMPDIR}/tool.log"
+  ! grep -q 'dnf -y install' "${BATS_TEST_TMPDIR}/tool.log"
+}
+
+@test "kernel-swap replaces a mismatched kernel with the akmods one" {
+  make_swap_stubs "6.12.0-250.el10.x86_64"  # the first-contact Kitten kernel
+  make_swap_fixture
+  run_swap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"swapping image kernel"* ]]
+  grep -q -- '--erase kernel' "${BATS_TEST_TMPDIR}/tool.log"
+  grep -q "dnf -y install .*kernel-core-${AKMODS_KVER}.rpm" "${BATS_TEST_TMPDIR}/tool.log"
+}
+
+@test "kernel-swap fails loudly when the cache holds no kernel at all" {
+  make_swap_stubs "$AKMODS_KVER"
+  make_swap_fixture
+  rm "${BATS_TEST_TMPDIR}/kernel-rpms/"*
+  run_swap
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"could not detect a kernel version"* ]]
+}
+
+@test "kernel-swap refuses to run on non-x86_64" {
+  make_swap_stubs "$AKMODS_KVER"
+  make_swap_fixture
+  cat > "${BATS_TEST_TMPDIR}/bin/uname" <<'STUB'
+#!/usr/bin/env bash
+echo aarch64
+STUB
+  chmod +x "${BATS_TEST_TMPDIR}/bin/uname"
+  run_swap
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"only supports x86_64"* ]]
+}
+
+@test "20-nvidia.sh derives the userspace repo family from the akmods dist tag" {
+  # .elNN → epel-nvidia, .fcNN → fedora-nvidia, fallback fedora-43. The el
+  # arm must be checked FIRST (an .el10 bundle must never land on Fedora
+  # userspace — first contact showed the centos-10 bundle is .el10-tagged).
+  grep -qF 'AKMODS_EL_VERSION=' "$INSTALL_SH"
+  grep -qF 'NVIDIA_REPO_ID="epel-nvidia"' "$INSTALL_SH"
+  run awk '/AKMODS_EL_VERSION.\}. \]\]/{print NR; exit}' "$INSTALL_SH"
+  local el_line="$output"
+  run awk '/AKMODS_FEDORA_VERSION.\}. \]\]/{print NR; exit}' "$INSTALL_SH"
+  [ -n "$el_line" ] && [ -n "$output" ] && [ "$el_line" -lt "$output" ]
+  # Both driver transactions must enable the derived repo, not a hardcoded one.
+  run grep -c -- '--enablerepo="${NVIDIA_REPO_ID}"' "$INSTALL_SH"
+  [ "$output" -eq 2 ]
+}
+
+@test "every *-nvidia flavor in build-config is linux/amd64 only" {
+  command -v python3 >/dev/null || skip "python3 not installed"
+  python3 -c "import yaml" 2>/dev/null || skip "pyyaml not installed"
+  run python3 -c "
+import yaml
+d = yaml.safe_load(open('${REPO_ROOT}/.github/build-config.yml'))
+bad = [(v['id'], f['id'], f.get('platforms'))
+       for v in d['variants'] for f in v['flavors']
+       if 'nvidia' in f['id'] and f.get('platforms') != ['linux/amd64']]
+assert not bad, bad
+print('ok')
+"
+  [ "$status" -eq 0 ]
 }
