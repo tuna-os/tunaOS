@@ -134,22 +134,105 @@ ln -sf /usr/lib/systemd/system/tunaos-offline-store.service \
 # customize container (bootc images ship uninitialized storage), and the
 # driver may auto-detect as "btrfs" (EL10 default). The offline store is
 # ALWAYS overlay, and additionalimagestores silently ignores stores with
-# a different driver.  containers/storage reads this primary configuration;
-# do not rely on a storage.conf.d drop-in here. Write the complete config so
-# every consumer (podman, skopeo, bootc, and fisherman) sees the same store.
+# a different driver. So write the complete primary config.
+#
+# CORRECTION (tunaOS#881). An earlier version of this comment said "do not
+# rely on a storage.conf.d drop-in here", which guarded the wrong direction
+# and cost a day of LUKS cells. Writing the primary config is necessary and
+# NOT sufficient: containers/storage applies storage.conf.d drop-ins AFTER
+# the primary file, and `additionalimagestores` is an array that is REPLACED
+# wholesale rather than merged. The base image ships
+# /usr/share/containers/storage.conf.d/00-vendor.conf, which sets its own
+# additionalimagestores and therefore deletes /var/lib/superiso-store from
+# the effective config — while `cat /etc/containers/storage.conf` still
+# shows it, which is exactly why this took five hypotheses to find.
+# Symptom: `podman images -a` empty on the live root despite the squashfs
+# being mounted and a valid overlay graphroot (5493 layer entries).
+#
+# Hence the drop-in below, and hence it lists BOTH stores: last writer wins
+# on an array, so whoever writes last has to enumerate everything, or the
+# vendor's own store is what disappears instead.
+#
+# ...but only the stores that actually exist in this rootfs. The vendor
+# store is a Fedora/EL bootc convention; openSUSE (sailfin) ships no
+# /usr/lib/containers/storage, and the overlay driver hard-fails on a
+# listed store it cannot stat ("overlay: can't stat imageStore dir
+# /usr/lib/containers/storage"), which takes down every podman invocation
+# in the live root — including fisherman's `podman pull
+# containers-storage:<ref>`. Enumerating existing directories only keeps
+# the vendor store working where it exists and degrades to the offline
+# store alone where it does not.
+VENDOR_STORE="/usr/lib/containers/storage"
+IMAGE_STORES=("$STORE_MOUNT")
+if [[ -d "$VENDOR_STORE" ]]; then
+	IMAGE_STORES+=("$VENDOR_STORE")
+fi
+STORE_LIST="$(printf '"%s", ' "${IMAGE_STORES[@]}")"
+STORE_LIST="[${STORE_LIST%, }]"
+
 mkdir -p /etc/containers
-cat >/etc/containers/storage.conf <<'CONFEOF'
+cat >/etc/containers/storage.conf <<CONFEOF
 [storage]
 driver = "overlay"
 runroot = "/run/containers/storage"
 graphroot = "/var/lib/containers/storage"
 
 [storage.options]
-additionalimagestores = ["/var/lib/superiso-store"]
+additionalimagestores = ${STORE_LIST}
 
 [storage.options.overlay]
 mount_program = "/usr/bin/fuse-overlayfs"
 CONFEOF
+
+# Higher-precedence drop-in: /etc drop-ins are applied after /usr/share
+# ones, and within a directory in lexical order, so 99- beats the vendor's
+# 00-. This is the file that actually decides the effective value.
+#
+# Chosen over deleting /usr/share/containers/storage.conf.d/00-vendor.conf:
+# removing a vendor file makes the live image silently diverge from the
+# base, and a base rebuild would restore it without restoring our fix. An
+# additive higher-precedence drop-in keeps the vendor's store working (it
+# is listed here) and keeps the change visible in one place.
+mkdir -p /etc/containers/storage.conf.d
+cat >/etc/containers/storage.conf.d/99-tbox-offline-store.conf <<DROPEOF
+# Written by tunaOS customize-live.sh — see tunaOS#881.
+# Must outrank /usr/share/containers/storage.conf.d/00-vendor.conf, whose
+# additionalimagestores REPLACES (not merges with) the primary config's and
+# would otherwise drop /var/lib/superiso-store entirely.
+# The vendor store is listed too when it exists: array values replace, so
+# omitting it here would break the vendor's store the same way.
+[storage.options]
+additionalimagestores = ${STORE_LIST}
+DROPEOF
+
+# DO NOT add /var/lib/superiso-store to /etc/containers/mounts.conf.
+#
+# An earlier revision did, on the theory that a container gets its /etc from
+# the IMAGE and therefore cannot see the store, and that mounts.conf
+# "bind-mounts the store into every container podman starts". It does not.
+# mounts.conf is containers/common's *subscriptions* mechanism: for a
+# directory source it walks the tree, reads every file into memory, and
+# writes a full copy into the container's runroot
+# (/run/containers/storage/overlay-containers/<id>/userdata/<dest>) before
+# bind-mounting that copy. On live media the runroot is a tmpfs, so an entry
+# there duplicates the whole payload store into RAM twice over — once as the
+# reader's buffers, once as tmpfs pages.
+#
+# That is what killed sailfin:gnome twice. Run 30730744132: `Out of memory:
+# Killed process 2978 (podman) anon-rss:7147396kB` on an 8192 MiB guest, read
+# as OCI-copy pressure at the time. Run 30731534696, after the guest grew to
+# 10240 MiB and gained swap: `Failed to mount subscriptions, skipping entry in
+# /etc/containers/mounts.conf: ... /userdata/var/lib/superiso-store/overlay/
+# .../usr/lib/firmware/nvidia/.../gsp-570.144.bin.xz: no space left on
+# device`, then the container failed to start at all because /run was full.
+#
+# It is also unnecessary: fisherman bind-mounts the store itself when a path
+# needs it (appendImageStoreArgs in internal/install/bootc.go adds
+# `-v /var/lib/superiso-store:/var/lib/superiso-store:ro` plus a generated
+# storage.conf), and the composefs path does not need it at all — bootc reads
+# the exported OCI layout at /run/fisherman/oci-cache. The storage.conf and
+# drop-in above are what the *live root's* podman needs; the container's view
+# is fisherman's job.
 
 # Dev/E2E media only: the normal published-image policy keeps SSH disabled.
 # tacklebox creates liveuser during boot, so install a oneshot that sets its
@@ -202,9 +285,53 @@ EOF
 	# projectbluefin/dakota-iso's debug=1 live-env setup (liveuser has
 	# NOPASSWD sudo there too). Production images never enable sshd, so
 	# liveuser never gets a login there.
+	#
+	# The drop-in authorises a binary that has to BE there. The Fedora and EL
+	# bases ship sudo; the openSUSE, Ubuntu and Debian ones do not, and a
+	# sudoers file granting rights to a missing binary is completely silent —
+	# the ISO builds, the live image boots, and every `sudo` iso-e2e.sh runs in
+	# the guest fails with
+	#
+	#   bash: line 1: sudo: command not found
+	#
+	# killing the run at `sudo podman load` with no clue where it came from.
+	# That was defect 3 of tunaOS#953 on sailfin, fixed by naming sudo in
+	# Containerfile.opensuse — and it came back on grouper because the apt
+	# bases never got the same line. Assert it here instead, where the
+	# assumption is actually made, so the next base to omit sudo fails the ISO
+	# build rather than a 20-minute E2E cell.
+	if ! command -v sudo >/dev/null 2>&1; then
+		echo "ERROR: ENABLE_SSHD=1 grants liveuser NOPASSWD sudo, but this image has no sudo." >&2
+		echo "       Add it to this variant's Containerfile base package list." >&2
+		exit 1
+	fi
 	mkdir -p /etc/sudoers.d
 	echo 'liveuser ALL=(ALL) NOPASSWD: ALL' >/etc/sudoers.d/90-tunaos-live-e2e
 	chmod 0440 /etc/sudoers.d/90-tunaos-live-e2e
+
+	# Same shape, one binary over. The storage.conf and drop-in written above
+	# exist so that the live root's PODMAN can see the offline store, and a
+	# composefs image cannot be installed without one at all: fisherman's
+	# bootcDirect shortcut is unavailable there, so bootc runs inside a
+	# container podman starts.
+	#
+	# guppy had skopeo (bootc's containers-image-proxy) and no podman, which
+	# looks close enough to be missed. It is not: every store probe answered
+	# `sudo: podman: command not found`, the harness read a store that holds the
+	# image as empty, and the cell died 2h30m in on the SSH image transfer that
+	# is its last resort. guppy:gnome, LUKS run 31134373523.
+	#
+	# Fatal here rather than a warning, and only on ENABLE_SSHD media, for the
+	# same reason as sudo above: this is the dev/E2E ISO, the assumption is made
+	# right here, and 10 seconds of ISO build is a better place to learn it than
+	# hour three of a matrix cell.
+	if ! command -v podman >/dev/null 2>&1; then
+		echo "ERROR: this image has no podman, but the offline image store above" >&2
+		echo "       is configured for one and the composefs install path runs" >&2
+		echo "       bootc inside a container." >&2
+		echo "       Add it to this variant's Containerfile base package list." >&2
+		exit 1
+	fi
 fi
 
 # ── 3. Pre-install the installer Flatpak into the live squash ────────────────
@@ -237,28 +364,34 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		systemd-machine-id-setup
 	fi
 
-# Modern desktop images ship dbus-broker as the bus implementation and no
-# longer pull in the classic `dbus-daemon` binary (nor dbus-run-session — see
-# the machine-id note above). flatpak still needs a real bus for both the
-# system helper and its session connection, so make sure the binary exists
-# rather than assuming it: every cosmic flavor plus sailfin/grouper/guppy/
-# marlin died here with "dbus-daemon: command not found" (exit 127) while the
-# 20 images that happen to ship it built fine.
-ensure_dbus_daemon() {
-	command -v dbus-daemon >/dev/null 2>&1 && return 0
-	echo "dbus-daemon missing; installing the classic bus for the customize step"
-	if   command -v dnf5   >/dev/null 2>&1; then dnf5 install -y dbus-daemon || dnf5 install -y dbus
-	elif command -v dnf    >/dev/null 2>&1; then dnf  install -y dbus-daemon || dnf  install -y dbus
-	elif command -v zypper >/dev/null 2>&1; then zypper --non-interactive install -y dbus-1-daemon || zypper --non-interactive install -y dbus-1
-	elif command -v pacman >/dev/null 2>&1; then pacman -Sy --noconfirm --needed dbus
-	elif command -v apt-get>/dev/null 2>&1; then apt-get update -qq && apt-get install -y --no-install-recommends dbus
-	elif command -v apk    >/dev/null 2>&1; then apk add --no-cache dbus
-	fi
-	command -v dbus-daemon >/dev/null 2>&1 || {
-		echo "ERROR: dbus-daemon unavailable and could not be installed; flatpak preinstall would fail" >&2
-		return 1
+	# Modern desktop images ship dbus-broker as the bus implementation and no
+	# longer pull in the classic `dbus-daemon` binary (nor dbus-run-session — see
+	# the machine-id note above). flatpak still needs a real bus for both the
+	# system helper and its session connection, so make sure the binary exists
+	# rather than assuming it: every cosmic flavor plus sailfin/grouper/guppy/
+	# marlin died here with "dbus-daemon: command not found" (exit 127) while the
+	# 20 images that happen to ship it built fine.
+	ensure_dbus_daemon() {
+		command -v dbus-daemon >/dev/null 2>&1 && return 0
+		echo "dbus-daemon missing; installing the classic bus for the customize step"
+		if command -v dnf5 >/dev/null 2>&1; then
+			dnf5 install -y dbus-daemon || dnf5 install -y dbus
+		elif command -v dnf >/dev/null 2>&1; then
+			dnf install -y dbus-daemon || dnf install -y dbus
+		elif command -v zypper >/dev/null 2>&1; then
+			zypper --non-interactive install -y dbus-1-daemon || zypper --non-interactive install -y dbus-1
+		elif command -v pacman >/dev/null 2>&1; then
+			pacman -Sy --noconfirm --needed dbus
+		elif command -v apt-get >/dev/null 2>&1; then
+			apt-get update -qq && apt-get install -y --no-install-recommends dbus
+		elif command -v apk >/dev/null 2>&1; then
+			apk add --no-cache dbus
+		fi
+		command -v dbus-daemon >/dev/null 2>&1 || {
+			echo "ERROR: dbus-daemon unavailable and could not be installed; flatpak preinstall would fail" >&2
+			return 1
+		}
 	}
-}
 
 	mkdir -p /var/lib/dbus
 	ln -sf /etc/machine-id /var/lib/dbus/machine-id
@@ -268,6 +401,13 @@ ensure_dbus_daemon() {
 	if ! command -v flatpak &>/dev/null; then
 		echo "ERROR: flatpak not installed; cannot pre-install ${INSTALLER_APP}" >&2
 		exit 1
+	fi
+	# openSUSE's CA bundle is generated under /var, while bootc image stages
+	# intentionally reset /var. Rebuild it in the live customization container
+	# before Flatpak contacts any HTTPS remote; this is a harmless no-op on
+	# other bases and prevents curl/Flatpak certificate error 60 on Sailfin.
+	if command -v update-ca-certificates >/dev/null 2>&1; then
+		update-ca-certificates || echo "WARN: could not regenerate CA bundle"
 	fi
 
 	# The installer apps (tuna-os-hosted and upstream bootc-installer alike)
@@ -288,8 +428,8 @@ ensure_dbus_daemon() {
 			/etc/flatpak/remotes.d/flathub.flatpakrepo || true
 	else
 		flatpak remote-add --system --if-not-exists flathub \
-			https://dl.flathub.org/repo/flathub.flatpakrepo \
-			|| echo "WARN: could not add flathub remote (network?); continuing"
+			https://dl.flathub.org/repo/flathub.flatpakrepo ||
+			echo "WARN: could not add flathub remote (network?); continuing"
 	fi
 
 	# Flatpak also opens a session-bus connection even for a system install.
@@ -312,11 +452,11 @@ ensure_dbus_daemon() {
 		# tuna-os/tuna-installer, which mirrors the same app ID as a release
 		# asset.
 		INSTALLER_FLATPAK_FILE="/tmp/bootc-installer.flatpak"
-		if ! curl --retry 3 --fail --location \
+		if ! curl --retry 3 --fail --location --max-time 300 \
 			"https://github.com/projectbluefin/bootc-installer/releases/latest/download/org.bootcinstaller.Installer.flatpak" \
 			-o "${INSTALLER_FLATPAK_FILE}" 2>/dev/null; then
 			echo "projectbluefin/bootc-installer unavailable, falling back to tuna-os/tuna-installer..."
-			curl --retry 3 --fail --location \
+			curl --retry 3 --fail --location --max-time 300 \
 				"https://github.com/tuna-os/tuna-installer/releases/latest/download/org.bootcinstaller.Installer.flatpak" \
 				-o "${INSTALLER_FLATPAK_FILE}"
 		fi
@@ -325,10 +465,10 @@ ensure_dbus_daemon() {
 		flatpak build-import-bundle "${INSTALLER_LOCAL_REPO}" "${INSTALLER_FLATPAK_FILE}"
 		rm -f "${INSTALLER_FLATPAK_FILE}"
 		flatpak remote-add --system --no-gpg-verify installer-local "file://${INSTALLER_LOCAL_REPO}"
-		flatpak install --system --noninteractive installer-local "${INSTALLER_APP}" \
-			|| { [[ -f "${SCRIPT_DIR}/.enable-sshd" ]] \
-				&& echo "WARN: installer flatpak install failed; continuing (dev/e2e ISO)" \
-				|| exit 1; }
+		timeout 900 flatpak install --system --noninteractive installer-local "${INSTALLER_APP}" ||
+			{ [[ -f "${SCRIPT_DIR}/.enable-sshd" ]] &&
+				echo "WARN: installer flatpak install failed; continuing (dev/e2e ISO)" ||
+				exit 1; }
 		flatpak remote-delete --system --force installer-local || true
 		rm -rf "${INSTALLER_LOCAL_REPO}"
 
@@ -357,23 +497,52 @@ ensure_dbus_daemon() {
 			flatpak remote-add --system --if-not-exists tuna-os \
 				/etc/flatpak/remotes.d/tuna-os.flatpakrepo || true
 		else
-			flatpak remote-add --system --if-not-exists tuna-os \
-				https://tunaos.org/flatpak/tuna-os.flatpakrepo \
-				|| echo "WARN: could not add tuna-os remote (network?); continuing"
+			timeout 120 flatpak remote-add --system --if-not-exists tuna-os \
+				https://tunaos.org/flatpak/tuna-os.flatpakrepo ||
+				echo "WARN: could not add tuna-os remote (network?); continuing"
 		fi
-		flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}" \
-			|| { [[ -f "${SCRIPT_DIR}/.enable-sshd" ]] \
-				&& echo "WARN: installer flatpak install failed; continuing (dev/e2e ISO)" \
-				|| exit 1; }
+		# timeout: flatpak has no network deadline of its own, and a stalled
+		# fetch here is indistinguishable from progress in the build log,
+		# because tacklebox does not surface customize output. grouper:cosmic
+		# sat in [customize] for 3h52m until the 240-min job cap killed the
+		# run (31144135208) — twice, where every other flavor clears this
+		# phase in ~2 minutes. Bounded, a stall lands in the WARN arm below on
+		# dev/E2E media (which never run this flatpak anyway — the harness
+		# installs fisherman via FISHERMAN_OVERRIDE) instead of eating the
+		# job. On release media it stays fatal, exactly as before.
+		timeout 900 flatpak install --system --noninteractive -y tuna-os "${INSTALLER_APP}" ||
+			{ [[ -f "${SCRIPT_DIR}/.enable-sshd" ]] &&
+				echo "WARN: installer flatpak install failed or timed out; continuing (dev/e2e ISO)" ||
+				exit 1; }
 	fi
 
 	# ── 4a. fisherman on the host path ────────────────────────────────────
 	# The frontends escalate via `flatpak-spawn --host pkexec
 	# /usr/local/bin/fisherman`; expose the flatpak-bundled binary there.
+	# `|| true`: this script runs under `set -o pipefail`, so when the installer
+	# app directory does not exist (the dev/E2E path above warns and continues
+	# instead of installing it) find exits 1, the whole substitution fails, and
+	# `set -e` kills the script before the intended warning below — the ISO build
+	# then dies with a bare "exit status 1". Keep the lookup non-fatal.
 	FISHERMAN_BIN=$(find "/var/lib/flatpak/app/${INSTALLER_APP}" \
-		-path '*/files/bin/fisherman' -type f 2>/dev/null | head -1)
+		-path '*/files/bin/fisherman' -type f 2>/dev/null | head -1 || true)
 	if [[ -n "${FISHERMAN_BIN}" ]]; then
-		mkdir -p /usr/local/bin
+		# `mkdir -p /usr/local/bin` is not safe here. On the ostree/bootc layout
+		# /usr/local is a symlink to ../var/usrlocal, and /var/usrlocal does not
+		# exist in the image — mkdir -p refuses to create *through* a dangling
+		# symlink and dies with the confusing:
+		#
+		#   mkdir: cannot create directory ‘/usr/local’: File exists
+		#
+		# which killed the whole ISO build for sailfin:gnome in LUKS run
+		# 30522159277. Not every variant has it: sailfin:base and yellowfin:base
+		# ship a real /usr/local directory, so this only bites the flavors built
+		# on the symlinked layout.
+		#
+		# readlink -m canonicalises without requiring the path to exist, so this
+		# creates /var/usrlocal/bin on the symlinked layout and /usr/local/bin on
+		# the plain one. The ln below then resolves through the symlink either way.
+		mkdir -p "$(readlink -m /usr/local/bin)"
 		ln -sf "${FISHERMAN_BIN}" /usr/local/bin/fisherman
 	else
 		echo "WARNING: fisherman not found inside ${INSTALLER_APP}" >&2

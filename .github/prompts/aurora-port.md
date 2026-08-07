@@ -18,20 +18,26 @@ Always run `just fix && just check` after making changes to validate the build c
 
 | aurora (build_files) | TunaOS equivalent |
 |---|---|
-| `build_files/base/01-packages.sh` `FEDORA_PACKAGES[]` | `build_scripts/kde.sh` — `dnf install` block for Fedora (`IS_FEDORA == true`) |
-| `build_files/base/01-packages.sh` `EXCLUDED_PACKAGES[]` | `build_scripts/kde.sh` — `dnf remove` / exclusion (`-x`) flags |
-| `build_files/base/01-packages.sh` `NEGATIVO_PACKAGES[]` | `build_scripts/kde.sh` — negativo17 multimedia packages section |
-| `build_files/dx/00-dx.sh` | `build_scripts/kde.sh` or `system_files_overrides/kde/` (DX is a separate flavor in TunaOS) |
+| `build_files/base/01-packages.sh` `FEDORA_PACKAGES[]` | `manifests/desktops/kde.yaml` — `packages.fedora.packages` |
+| `build_files/base/01-packages.sh` `EXCLUDED_PACKAGES[]` | `manifests/desktops/kde.yaml` — `packages.fedora.exclude` |
+| `build_files/base/01-packages.sh` `NEGATIVO_PACKAGES[]` | `manifests/desktops/kde.yaml` — `packages.fedora.packages` |
+| `build_files/dx/00-dx.sh` | `manifests/desktops/kde.yaml` or `system_files_overrides/kde/` (DX is a separate flavor in TunaOS) |
 | `system_files/shared/` | `system_files/` |
-| `build_files/base/0X-*.sh` post-install steps | `build_scripts/kde.sh` `"post"` case block |
-| `build_files/base/nvidia.sh` | `build_scripts/kde.sh` or a dedicated nvidia script (check `system_files_overrides/niri-nvidia/`) |
+| `build_files/base/0X-*.sh` post-install steps | `manifests/desktops/kde.yaml` — `post_install` / `post_install_inline` |
+| `build_files/base/nvidia.sh` | `build_scripts/overlay/nvidia.sh` (nvidia is an overlay, not a KDE concern) |
 
 ## Key Files to Read First
 
-- `build_scripts/kde.sh` — all KDE package installs and post-setup
+KDE is installed from a **declarative manifest**, not a shell script. There is no
+`build_scripts/kde.sh` — it was deleted once every base moved onto the generic
+installer. Edit the manifest; the installer needs no changes to pick up a new
+package, a new exclude, or a new COPR.
+
+- `manifests/desktops/kde.yaml` — all KDE package sets, per package manager
+- `build_scripts/desktop/install-desktop.sh` — the generic installer that reads it
 - `system_files_overrides/kde/` — KDE-specific config files
 - `system_files/` — shared config files for all flavors
-- `Containerfile` lines ~140–155 — kde flavor build stage
+- `Containerfile.el10` / `Containerfile.ubuntu` — the `kde` build stages
 - `build_scripts/lib.sh` — `IS_FEDORA`, `MAJOR_VERSION_NUMBER`, etc.
 
 ## Porting Rules
@@ -49,15 +55,18 @@ Always run `just fix && just check` after making changes to validate the build c
 
    | Result | Action |
    |---|---|
-   | ✅ Available in EL10 | Add to **both** the `IS_FEDORA == true` block **and** the `else` (EL10) block in `build_scripts/kde.sh` |
-   | ❌ Not available in EL10 | Add **only** inside `if [[ $IS_FEDORA == true ]]; then` — a tracking issue has already been opened |
+   | ✅ Available in EL10 | Add to **both** `packages.fedora.packages` **and** `packages.el10.packages` in `manifests/desktops/kde.yaml` |
+   | ❌ Not available in EL10 | Add **only** under `packages.fedora.packages` — a tracking issue has already been opened |
+
+   For a package that may or may not resolve, `packages.el10.optional` is
+   installed best-effort and never fails the build.
 
    Active EL10 repos in TunaOS: base AlmaLinux/CentOS Stream 10, EPEL 10, CRB,
    `ublue-os/packages` COPR, `tuna-os/github-copr` COPR (see `build_scripts/lib.sh`).
 
 2. **COPR packages**: Aurora uses `ublue-os/packages`, `ublue-os/staging`, `ledif/kairpods`,
    `lizardbyte/beta`. TunaOS has `ublue-os/packages` for EL10. Add Fedora-only COPRs
-   inside the `IS_FEDORA == true` block only.
+   under `packages.fedora.copr`, EL10-only ones under `packages.el10.copr`.
 
 3. **Config files**: Mirror aurora's `system_files/shared/` → TunaOS `system_files/`,
    and KDE-specific overrides → `system_files_overrides/kde/`.

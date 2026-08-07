@@ -42,7 +42,7 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 
 ## LUKS E2E
 
-**15 of 50** cells green (50 tested, 0 never tested).
+**42 of 52** cells green (47 tested, 5 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
@@ -50,53 +50,69 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 |---|:--:|:--:|:--:|:--:|:--:|
 | **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **flounder** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **flounder-sid** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **grouper** | ❌ | ❌ | — | ❌ | ❌ |
-| **guppy** | ❌ | ❌ | — | — | — |
-| **marlin** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **sailfin** | ❌ | ❌ | — | ❌ | ❌ |
-| **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **bonito-rawhide** | ✅ | ✅ | ✅ | ⬜ | ⬜ |
+| **flounder** | ✅ | ✅ | ❌ | — | ✅ |
+| **flounder-sid** | ✅ | ✅ | — | — | ✅ |
+| **grouper** | ✅ | ✅ | ❌ | — | ✅ |
+| **guppy** | ❌ | ❌ | — | — | ❌ |
+| **gurnard** | — | — | — | — | — |
+| **hummingbird** | ❌ | ⬜ | ⬜ | ⬜ | — |
+| **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 24 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
+NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 25 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
 
-Newest result 2026-07-27, oldest still-authoritative result 2026-07-23. Results older than the most recent round of fixes are the best available data, not current data.
+The table above still shows a result for `flounder:cosmic`. `.github/build-config.yml` no longer declares that flavour, so `luks-e2e.yml` cannot schedule it and no run will ever turn it green. It is excluded from the count above — a last-measured verdict kept visible, not a gap. Same reasoning as the NVIDIA note.
+
+Newest result 2026-08-07, oldest still-authoritative result 2026-08-05. Results older than the most recent round of fixes are the best available data, not current data.
 
 ## Installer smoke
 
-**4 of 33** non-NVIDIA ISO cells have *ever* been tested — 12% coverage. 1 of those pass.
+**15 of 36** non-NVIDIA ISO cells have *ever* been tested — 42% coverage. 3 of those pass.
 
-This is the only axis that checks a human could actually install. For 29 combinations, nobody has confirmed the installer appears on screen.
+This is the only axis that checks a human could actually install. For 21 combinations, nobody has confirmed the installer appears on screen.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **albacore** | ❌ | ❌ | ❌ | ✅ | ❌ |
+| **bonito** | ❌ | ❌ | ❌ | ✅ | ❌ |
 | **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **flounder** | ⬜ | ⬜ | — | — | — |
-| **grouper** | ⬜ | ⬜ | — | ⬜ | ⬜ |
+| **grouper** | ⬜ | ⬜ | — | — | ⬜ |
+| **gurnard** | — | — | — | — | — |
+| **hummingbird** | ⬜ | ⬜ | ⬜ | ⬜ | — |
 | **marlin** | ⬜ | ⬜ | — | — | — |
 | **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **yellowfin** | ⬜ | ❌ | ❌ | ✅ | ❌ |
+| **yellowfin** | ❌ | ❌ | ❌ | ✅ | ❌ |
 
 cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on hosted CI may be a harness limitation rather than a product failure. See *Known systemic gaps*.
 
 ## Live overlay
 
-**38** tags published.
+**47** tags published.
 
-Missing for 1 ISO cell(s): `marlin-kde`
+Missing for 6 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-cosmic`, `hummingbird-gnome`, `hummingbird-kde`, `hummingbird-niri`
 
 ## Provenance
 
+The run that last asserted each verdict above. Re-running a cell moves a row here without moving the cell, so this table is refreshed only when a verdict actually changes — treat the dates as "no older than".
+
 | Date | Run | Cells |
 |---|---|---|
-| 2026-07-27 | [30249218614](https://github.com/tuna-os/tunaOS/actions/runs/30249218614) | 50 |
-| 2026-07-27 | [30234237855](https://github.com/tuna-os/tunaOS/actions/runs/30234237855) | 2 |
-| 2026-07-23 | [29978067348](https://github.com/tuna-os/tunaOS/actions/runs/29978067348) | 24 |
-| 2026-07-22 | [29914643652](https://github.com/tuna-os/tunaOS/actions/runs/29914643652) | 2 |
+| 2026-08-07 | [31144015274](https://github.com/tuna-os/tunaOS/actions/runs/31144015274) | 3 |
+| 2026-08-07 | [31142505455](https://github.com/tuna-os/tunaOS/actions/runs/31142505455) | 1 |
+| 2026-08-07 | [31140248804](https://github.com/tuna-os/tunaOS/actions/runs/31140248804) | 1 |
+| 2026-08-07 | [31140243067](https://github.com/tuna-os/tunaOS/actions/runs/31140243067) | 1 |
+| 2026-08-07 | [31140241727](https://github.com/tuna-os/tunaOS/actions/runs/31140241727) | 1 |
+| 2026-08-07 | [31140234902](https://github.com/tuna-os/tunaOS/actions/runs/31140234902) | 1 |
+| 2026-08-07 | [31139552584](https://github.com/tuna-os/tunaOS/actions/runs/31139552584) | 1 |
+| 2026-08-07 | [31138898336](https://github.com/tuna-os/tunaOS/actions/runs/31138898336) | 1 |
+| 2026-08-07 | [31135980478](https://github.com/tuna-os/tunaOS/actions/runs/31135980478) | 1 |
+| 2026-08-07 | [31135620513](https://github.com/tuna-os/tunaOS/actions/runs/31135620513) | 1 |
+| 2026-08-07 | [31135619058](https://github.com/tuna-os/tunaOS/actions/runs/31135619058) | 1 |
+| 2026-08-07 | [31135530844](https://github.com/tuna-os/tunaOS/actions/runs/31135530844) | 1 |
 
 <!-- END GENERATED -->
 

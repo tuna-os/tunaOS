@@ -125,6 +125,14 @@ jobs:
             -exec just --unstable --fmt --check -f {} \;
 
   # Summary job: aggregates results and posts a single status check
+  #
+  # A cancelled shard is NOT a lint failure. `cancel-in-progress` cancels this
+  # workflow on every superseding push, and treating anything != success as a
+  # failure turned each of those into a red "Lint Summary" check reporting
+  # lint problems that did not exist: six consecutive cancelled runs on one PR
+  # branch (30596589325 through 30598179346), every one of them red, each
+  # sending autofix chasing a phantom. Only a real failure fails this job;
+  # cancelled and skipped are reported as-is.
   lint-summary:
     name: Lint Summary
     needs: lint
@@ -132,11 +140,19 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check lint results
+        env:
+          LINT_RESULT: ${{ needs.lint.result }}
         run: |
           echo "## Lint Results" >> "$GITHUB_STEP_SUMMARY"
-          if [[ "${{ needs.lint.result }}" == "success" ]]; then
-            echo "✅ All lint checks passed" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "❌ Some lint checks failed — see job details above" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
+          case "${LINT_RESULT}" in
+            success)
+              echo "✅ All lint checks passed" >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            cancelled | skipped)
+              echo "⚪ Lint shards were ${LINT_RESULT} (superseded by a newer run); nothing was linted, so nothing failed." >> "$GITHUB_STEP_SUMMARY"
+              ;;
+            *)
+              echo "❌ Some lint checks failed, see job details above" >> "$GITHUB_STEP_SUMMARY"
+              exit 1
+              ;;
+          esac

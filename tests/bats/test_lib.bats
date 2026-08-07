@@ -712,3 +712,50 @@ BOOTC
   grep -q "bootc container lint" "$SUMMARY"
   grep -q "Checks failed: 3" "$SUMMARY"
 }
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Package-manager dispatch completeness
+# ═══════════════════════════════════════════════════════════════════════════
+
+@test "every pkg_* dispatcher handles all five package managers" {
+  # This bug class has now landed three times, each costing a full LUKS cell:
+  #   40-services.sh sent Arch down the dnf path                      (#1015)
+  #   pkg_clean fell through to dnf, killing sailfin with
+  #     "lib.sh: line 366: dnf: command not found"
+  #   pkg_refresh had only apt, with dnf as the tail
+  #
+  # The shape is always an `else dnf ...` that reads as "the default" and is
+  # really "every manager I did not think about". lib.sh knows five managers
+  # (see the PKG_MGR assignment); each dispatcher must name all five.
+  local lib="${REPO_ROOT}/build_scripts/lib.sh"
+  local fn mgr body missing=""
+
+  for fn in pkg_install pkg_remove pkg_refresh pkg_clean; do
+    body="$(sed -n "/^${fn}() {/,/^}/p" "$lib")"
+    [ -n "$body" ] || { echo "FAIL: ${fn} not found in lib.sh" >&2; return 1; }
+    for mgr in apt pacman zypper emerge dnf; do
+      grep -qE "(^|[^a-z_])${mgr}([^a-z_]|$)" <<<"$body" ||
+        missing="${missing} ${fn}:${mgr}"
+    done
+  done
+
+  if [ -n "$missing" ]; then
+    echo "FAIL: package managers unhandled —${missing}" >&2
+    return 1
+  fi
+}
+
+@test "every pkg_* dispatcher rejects an unknown manager instead of running dnf" {
+  # Naming dnf explicitly is only half the fix. The tail must be an error, so a
+  # sixth base added later fails loudly here rather than silently shelling out
+  # to a package manager it does not have.
+  local lib="${REPO_ROOT}/build_scripts/lib.sh"
+  local fn body
+  for fn in pkg_install pkg_remove pkg_refresh pkg_clean; do
+    body="$(sed -n "/^${fn}() {/,/^}/p" "$lib")"
+    grep -qF "unknown PKG_MGR" <<<"$body" || {
+      echo "FAIL: ${fn} has no unknown-manager guard" >&2
+      return 1
+    }
+  done
+}

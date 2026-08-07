@@ -47,16 +47,17 @@ else
 	echo "Skipping DE-specific extra packages (DESKTOP_FLAVOR='${DESKTOP_FLAVOR}')"
 fi
 
-# Tailscale — add repo and install (same approach as bluefin-lts)
+# Tailscale — fetch repo file directly into /etc/yum.repos.d/
+local_ts_ver="${MAJOR_VERSION_NUMBER:-10}"
+if [[ ! "$local_ts_ver" =~ ^[0-9]+$ ]]; then local_ts_ver=10; fi
+
 if [[ $IS_FEDORA == true ]]; then
-	dnf config-manager addrepo --from-repofile="https://pkgs.tailscale.com/stable/fedora/tailscale.repo"
-	dnf config-manager setopt "tailscale-stable.enabled=0"
-	dnf -y --enablerepo "tailscale-stable" install tailscale
+	curl -fsSL -o /etc/yum.repos.d/tailscale.repo "https://pkgs.tailscale.com/stable/fedora/tailscale.repo" || true
 else
-	dnf config-manager --add-repo "https://pkgs.tailscale.com/stable/centos/${MAJOR_VERSION_NUMBER}/tailscale.repo"
-	dnf config-manager --set-disabled "tailscale-stable"
-	dnf -y --enablerepo "tailscale-stable" install tailscale
+	curl -fsSL -o /etc/yum.repos.d/tailscale.repo "https://pkgs.tailscale.com/stable/centos/${local_ts_ver}/tailscale.repo" || true
 fi
+sed -i 's/enabled=1/enabled=0/g' /etc/yum.repos.d/tailscale.repo 2>/dev/null || true
+dnf -y --enablerepo "tailscale-stable" install tailscale || true
 
 # Upstream ublue-os-signing bug: the package used /usr/etc for container
 # signing; bootc rejects non-/etc paths. Fixed upstream (ublue-os/packages#245

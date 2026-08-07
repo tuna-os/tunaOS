@@ -191,6 +191,244 @@ environment.
 
 ---
 
+### 5. COSMIC cells pass the LUKS gate while shipping a greeter that never starts (2026-08-07)
+
+**Affected:** every cosmic cell where both `greetd` and `cosmic-greeter` are
+installed. Measured on `skipjack:cosmic` (run 31136849989) and
+`albacore:cosmic` (run 31100129320). **Both are ticked green on
+`docs/MATRIX-STATUS.md`.**
+
+**Symptom.** The gate passes outright —
+
+```
+TUNAOS_LUKS_E2E_PASS encrypted=1 passphrase_unlock=1 installed_boot=1
+```
+
+— and the desktop contract fails beside it, non-fatally, so nothing goes red:
+
+```
+TUNAOS_LUKS_E2E_DESKTOP_CONTRACT desktop_contract=fail fatal=0
+```
+
+The `dm_diag` block `verify-desktop-experience.sh` ships with `dm_inactive`
+(added exactly because the DM logs to the journal while the gate can only read
+the serial console) gives the mechanism:
+
+```
+greetd: unable to start greeter: terminal: unable to take controlling
+        terminal: EPERM: Operation not permitted
+cosmic-greeter.service: Main process exited, code=exited, status=1/FAILURE
+cosmic-greeter.service: Scheduled restart job, restart counter is at 1.
+Id=cosmic-greeter.service  SubState=auto-restart  NRestarts=1
+```
+
+**Root cause chain.**
+
+```
+cosmic-greeter (COPR on EL10, deb on Ubuntu) claims display-manager.service
+  → the manifest also declares display_manager: greetd, which
+    install-desktop.sh force-links into graphical.target.wants
+      → two units, both running `greetd` on vt = 1, both Restart=always
+        → greetd takes the controlling terminal first
+          → cosmic-greeter gets EPERM and crash-loops forever
+```
+
+Ubuntu FAILED THE BUILD on this (greetd.service there carries
+`[Install] Alias=display-manager.service` and no `WantedBy=`, so
+`systemctl enable greetd` collides with the existing alias). Fedora/EL ship
+`WantedBy=` and no `Alias=`, so there is no collision, the build SUCCEEDS, and
+the race ships. Succeeding is the worse outcome.
+
+**Controls** — same EL10 base, same headless QEMU, same harness:
+
+| cell | display-manager.service | contract |
+|---|---|---|
+| skipjack:cosmic | cosmic-greeter.service | **fail** |
+| albacore:cosmic | cosmic-greeter.service | **fail** |
+| skipjack:niri | greetd.service | ok |
+| skipjack:xfce | greetd.service | ok |
+| bonito-rawhide:kde | plasmalogin.service | ok |
+
+So the contract is a working check that a desktop can pass, and cosmic is the
+outlier. Two hypotheses were killed getting here and are recorded so nobody
+re-runs them: it is **not** the contract racing its own `graphical.target`
+(the unit reaches `auto-restart` with `ExecMainStatus=1` — it starts and
+dies), and `rendered=absent` is **not** a signal of a broken desktop — it
+appears on niri and xfce cells whose contract passes, because the harness runs
+headless with no render node (`GPU: -vga virtio headless (no
+render node/virgl)`). Only Plasma draws in this environment.
+
+**Fix.** Both halves key off the symlink, never off whether cosmic-greeter is
+installed: `configure-desktop-runtime.sh` picks whichever greeter already owns
+the alias, and `install-desktop.sh` stops force-linking greetd beside it.
+
+**Why it stayed invisible.** `desktop_contract` is `fatal=0`. The LUKS gate
+asserts encryption, passphrase unlock and installed boot — all genuinely true
+here — and `docs/MATRIX-STATUS.md` §1 already states that LUKS "does not
+prove ... that a desktop session starts". Nothing was lying; there was simply
+no axis reporting the contract, so a dead greeter and a working one look
+identical from the board.
+
+### 6. `FISHERMAN_OVERRIDE` never installed on images that ship no fisherman (2026-08-07)
+
+**Affected:** all three `guppy` cells (Gentoo). Measured on `guppy:xfce`,
+run 31131624108.
+
+**Symptom:**
+
+```
+ERROR: fisherman not found on live image (VARIANT=guppy FLAVOR=xfce)
+ERROR: and TBOX_E2E_IMAGE is unset, so the generic bootc path cannot name
+       an image ref
+exit code 3
+```
+
+**The misleading part.** The run spans 23:34 to 01:44, which reads exactly
+like a 65-minute Gentoo build plus the 3600s `TUNAOS_E2E_INSTALL_TIMEOUT`. It
+is not: the LUKS step ran for **55 seconds**. Everything before it was the
+build. Check the step's own start/end times before concluding a timeout.
+
+**Root cause.** `run_install()` in `scripts/iso-e2e.sh` had two statements
+~260 lines apart: a hard `return 3` if `/usr/local/bin/fisherman` is absent,
+and — far below it — the `scp` + `install` that puts `FISHERMAN_OVERRIDE`
+at exactly that path. The check ran first, so an image shipping no fisherman
+died without ever installing the binary the workflow had just built for it,
+with "Build fisherman in a golang container" green immediately above.
+
+**Fix.** Install the override before the check. That is also what the flag
+means: *use this fisherman*, not *use this fisherman provided the image
+already had one*. The error path now also distinguishes "the override path
+does not exist on the runner" from "the file exists, so the scp/install
+failed".
+
+**What the reorder took with it.** The generic (non-tunaOS) bootc path keyed
+off that same check — *no fisherman on the image* **and** `TBOX_E2E_IMAGE` set.
+Once the override lands first, the first half is never true again, so a caller
+naming a generic image would have taken the fisherman path and installed a
+tunaOS ref resolved from `VARIANT`/`FLAVOR` instead. The image is therefore
+probed **once, before** the override, and that probe is what the diversion
+reads; the check after the override is only there to prove the override landed.
+
+**Two more consequences of an image that ships nothing.** `install -D` cannot
+create `/usr/local/bin` on the ostree layout: `-D` uses `mkdir -p`, `/usr/local`
+is a symlink to a `../var/usrlocal` the image does not contain, and `mkdir -p`
+refuses to create *through* a dangling symlink (`cannot create directory
+'/usr/local': File exists` — the same failure `customize-live.sh` documents at
+the symlink it makes at build time). Canonicalise with `readlink -m` first.
+
+And the missing fisherman is itself a defect worth naming: the flatpak carrying
+it carries the installer GUI, so that ISO has no installer a human could use —
+`customize-live.sh` only downgrades the failed install to a warning because the
+media is dev/E2E. The cell continues on the caller's binary and emits a
+`::warning::` saying it did **not** cover that ISO's own installer.
+
+---
+
+### 7. A guest that overstays its poweroff makes the next boot impossible (2026-08-07)
+
+**Affected:** any LUKS cell whose guest is slow to shut down. Measured on
+`albacore:cosmic`, run 31140233496 — where `yellowfin:cosmic` passed on the
+same commit, so this presents as one flaky cell.
+
+**Symptom:**
+
+```
+==> fisherman install complete. Shutting down...
+==> Waiting for VM to shut down...
+==> LUKS passphrase gate: booting installed disk, injecting passphrase, expecting login...
+qemu-system-x86_64: cannot create PID file: Cannot lock pid file: Resource temporarily unavailable
+##[error]Process completed with exit code 1
+```
+
+**The misleading part.** The install had already logged `Installation
+complete!` and the encrypted-disk evidence had already passed. The cell died
+70 seconds later with no `ERROR:` line of its own — just qemu's one-liner and
+a bare `exit 1` — which reads like a harness bug in whatever ran last (here,
+the timelapse, which was merely the next thing to print).
+
+**Root cause.** `poweroff_and_wait_vm` waited 30 × 2s and then returned
+regardless. Its callers immediately launch the installed-disk boot on the
+**same** `-pidfile`, and QEMU holds an exclusive lock on that file for its
+entire life, so a guest still running at the end of the window does not delay
+the gate, it forbids it. Two lines earlier in that run fisherman had reported
+`cryptsetup luksClose: Device fisherman-root is still in use`, and a busy dm
+device is exactly what `systemd-shutdown` spends its shutdown retrying — on
+top of systemd's own 90s `DefaultTimeoutStopSec`, which 70s cannot outlast.
+The generic path has a second stake in this: `swtpm` only exits when its QEMU
+disconnects, and the TPM gate restarts it.
+
+**Fix.** Wait long enough for a slow-but-healthy shutdown
+(`TUNAOS_E2E_POWEROFF_WAIT`, default 180s), then stop asking: ACPI
+`system_powerdown` over the monitor, then `SIGTERM`, then `SIGKILL`, and do
+not return until the process is actually gone. The install is finished and its
+target filesystem is already unmounted, frozen and flushed by then, so ending
+the guest ourselves costs the following boot nothing. If it survives `SIGKILL`
+the function now fails with that as the reason, and the passphrase gate's own
+launch names a QEMU it could not start instead of exiting silently.
+
+### 8. `guppy` shipped skopeo instead of podman, so its offline store read as empty (2026-08-07)
+
+**Affected:** both `guppy` cells (Gentoo). Measured on `guppy:gnome`, run
+31134373523 — 2h30m in, after a complete and correct image build, a green live
+squash and 13 passing live-ISO checks.
+
+**Symptom:**
+
+```
+--- names recorded in the offline store ---
+[{... "names":["ghcr.io/tuna-os/guppy:gnome"] ...}]
+==> Probing for ghcr.io/tuna-os/guppy:gnome...
+==> Probing for localhost/guppy:gnome...
+==> No local image in offline store — transferring from host via SSH
+...
+scp: write remote "/home/liveuser/luks-image-guppy-gnome.tar": Failure
+ERROR: image transfer to guest timed out or failed
+```
+
+**The contradiction is the whole clue.** The dump prints the store's own index,
+recording the exact ref the very next line fails to find. Fifteen lines above
+it, twice: `sudo: podman: command not found`.
+
+**Root cause, two layers.**
+
+*The image.* `Containerfile.gentoo` emerged `app-containers/skopeo` and never
+`app-containers/podman`. Skopeo looks like coverage — it is what bootc's
+containers-image-proxy shells out to — but it cannot *start* a container, and
+`guppy` probes `BACKEND=composefs-native`, whose install path cannot take
+fisherman's `bootcDirect` shortcut: bootc runs inside a container podman
+starts. Every other base has podman (the rpm and apt ones via
+`build_scripts/10-base-packages.sh`, `Containerfile.arch` and `.debian` by
+name) and Gentoo runs none of those scripts. Third time Gentoo was the last
+base without something — see `sudo` (§ `test_live_sudo_every_base.bats`) and
+flatpak before it.
+
+*The harness.* Both offline-store probes were answered **inside** the guest:
+`sudo podman image exists <ref>`, then `sudo jq -e ... images.json` as the
+fallback. guppy has neither binary, so both exited 127 and the harness
+concluded "image absent" — then fell through to the SSH image transfer that
+`scripts/iso-e2e.sh` documents at length as physically impossible (a ~4.9G tar
+into a tmpfs upperdir on a 4096M guest, #941). A missing tool read as a missing
+image.
+
+**Fix, matching the two layers.**
+
+- `Containerfile.gentoo` emerges `app-containers/podman`.
+- `customize-live.sh` asserts `command -v podman` next to its `sudo`
+  assertion, so the next base to omit it fails the ISO build in seconds rather
+  than hour three of a matrix cell.
+- The store index is read out of the guest once with `cat` and parsed on the
+  **host** (`store_records_image`), so the probe needs nothing from the guest
+  that the diagnostic dump has not already proven it can do. Matching is on
+  `names` only, never `names-history`: containers-storage will not resolve a
+  ref that was retagged away, so answering yes for one is the same dead end by
+  another road.
+- Podman-shaped diagnostics are gated on the guest actually having podman, so
+  a skopeo-only base says so once instead of printing `command not found` a
+  dozen times and leaving the cause to be inferred from an absent `Found`
+  line.
+
+---
+
 ## Glossary of Components
 
 | Tool | Role | Source |

@@ -72,6 +72,8 @@ packages:
       - plasma-workspace-geolocation
       - plasma-drkonqi
     packages:
+      - plasma-desktop
+      - plasma-workspace
       - sddm
       - dolphin
       - konsole
@@ -113,12 +115,87 @@ packages:
       - fcitx5-unikey
       - kcm-fcitx5
 
-# Version locks — prevent partial upgrades causing black screens
-# Ref: https://github.com/ublue-os/aurora/issues/1227
+  # ── Zypper (openSUSE Tumbleweed) ───────────────────────────────────
+  # Unlike GNOME's pattern, patterns-kde-kde{,_plasma} DO resolve to a real
+  # session: plasma6-desktop, plasma6-workspace, kwin6, systemsettings6,
+  # kscreen6, powerdevil6, kwallet, polkit-kde-agent-6 and
+  # xdg-desktop-portal-kde6 all come in (833 packages on bare Tumbleweed).
+  # What they do NOT bring is the application and integration layer — no
+  # file manager, no terminal, no editor, no archiver, and critically no
+  # plasma6-nm / plasma6-pa, so the panel had neither a network nor a volume
+  # applet. Everything below closes that gap and mirrors what the el10 and
+  # fedora sections already ask for.
+  #
+  # Every name is verified against Tumbleweed with `zypper se -x -t package`,
+  # and the whole list dry-runs clean (exit 0, no unresolved names, no vendor
+  # changes, no removals) on a base matching Containerfile.opensuse — pattern
+  # enhanced_base plus the packman-essentials repo at priority 90. Plain
+  # Tumbleweed is NOT a sufficient test bed: packman ships rival multimedia
+  # builds, and a package that forces a vendor change makes `zypper install
+  # -y` exit non-zero, which under `set -euo pipefail` fails the build.
+  # openSUSE names that differ from the obvious guess:
+  #   plasma-nm            → plasma6-nm       (likewise plasma6-pa)
+  #   xdg-desktop-portal-kde → xdg-desktop-portal-kde6
+  #   kwalletmanager5/6    → kwalletmanager (unsuffixed)
+  #   discover             → discover6 (deliberately NOT installed — the el10
+  #                          section excludes plasma-discover and
+  #                          disable_desktop_files hides it; Bazaar/Flatpak
+  #                          is the software centre)
   zypper:
     - patterns-kde-kde
     - patterns-kde-kde_plasma
     - sddm
+    # Applications — the layer the patterns omit entirely
+    - dolphin
+    - konsole
+    - kate
+    - ark
+    - gwenview
+    - okular
+    - spectacle
+    - kcalc
+    - filelight
+    - kfind
+    - kwalletmanager
+    - khelpcenter
+    - kdeconnect-kde
+    - partitionmanager
+    # Panel applets and system settings modules — network and volume were
+    # the two most visible omissions
+    - plasma6-nm
+    - plasma6-pa
+    - plasma6-systemmonitor
+    - plasma6-disks
+    - plasma6-firewall
+    - plasma6-thunderbolt
+    - bluedevil6
+    - kdeplasma6-addons
+    - plasma6-workspace-wallpapers
+    # Portals and XDG integration
+    - xdg-desktop-portal
+    - xdg-desktop-portal-kde6
+    - xdg-desktop-portal-gtk
+    - xdg-user-dirs
+    - xdg-user-dirs-gtk
+    # File handling: KIO slaves, thumbnailers, and gvfs so GTK apps can
+    # mount and browse the same things Dolphin can
+    - kio-extras
+    - kdegraphics-thumbnailers
+    - ffmpegthumbs
+    - kf6-kimageformats
+    - kdenetwork-filesharing
+    - gvfs
+    - gvfs-backends
+    - gvfs-fuse
+    # Hardware, network and power integration
+    - NetworkManager-openvpn
+    - NetworkManager-openconnect
+    - NetworkManager-vpnc
+    - power-profiles-daemon
+    - switcheroo-control
+    - fwupd
+    - Mesa-dri
+    - Mesa-libEGL1
 
   # ── Emerge (Gentoo) ────────────────────────────────────────────────
   # Curated set, NOT kde-apps/kde-apps-meta: the everything-meta drags
@@ -132,6 +209,8 @@ packages:
     - kde-apps/kate
     - kde-apps/ark
 
+# Version locks — prevent partial upgrades causing black screens
+# Ref: https://github.com/ublue-os/aurora/issues/1227
 versionlock:
   - plasma-desktop
   - "qt6-*"

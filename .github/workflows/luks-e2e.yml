@@ -41,7 +41,7 @@ jobs:
   # desktop flavor with a published image), narrowed by the dispatch filters.
   generate-matrix:
     name: Generate matrix
-    runs-on: blacksmith-2vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
@@ -65,15 +65,17 @@ jobs:
           # Every variant x desktop flavor that has a published image
           # (build_image, NOT build_iso): the browser ISO builder makes ISOs
           # from any image, so image-only variants (sailfin, guppy,
-          # flounder-sid) need boot+install coverage too. Restrict to the
-          # plain desktop tags (gnome/kde/cosmic/niri/xfce) — -nvidia takes
-          # the identical LUKS path in headless QEMU (no GPU), and base has no
-          # graphical login target to gate on.
+          # flounder-sid) need boot+install coverage too. Cover every amd64
+          # graphical image: standard desktops, overlays (NVIDIA/CachyOS),
+          # and any future desktop tag. `base` has no login target to gate;
+          # arm64-only flavors require an arm64 QEMU runner and are reported
+          # separately in the job summary.
           matrix="$(echo "$json" | jq -c \
             --arg fv "$FILTER_VARIANT" --arg ff "$FILTER_FLAVOR" \
-            '{include: [ .variants[] | .id as $v | .flavors[]
+            '{include: [ .variants[] | . as $variant | .id as $v | .flavors[]
                | select(.build_image == true)
-               | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$"))
+               | select(.id != "base")
+               | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
                | {variant: $v, flavor: .id}
                | select($fv == "all" or .variant == $fv)
                | select($ff == "all" or .flavor == $ff) ]}')"
@@ -94,33 +96,45 @@ jobs:
             echo
             echo "Testing **${count}** installable variant/flavor combinations."
             echo
-            echo "| Base variant | ISO desktop flavors |"
+            echo "| Base variant | amd64 graphical flavors |"
             echo "|---|---|"
             echo "$json" | jq -r '
-              .variants[]
-              | [.id, ([.flavors[] | select(.build_image == true) | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$")) | .id] | join(", "))]
+              .variants[] | . as $variant
+              | [.id, ([.flavors[]
+                 | select(.build_image == true)
+                 | select(.id != "base")
+                 | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
+                 | .id] | join(", "))]
               | select(.[1] != "")
               | "| `\(.[0])` | \(.[1]) |"'
             echo
             echo "### Variants not testable by this workflow"
             echo
             echo "$json" | jq -r '
-              [.variants[]
-               | select([.flavors[] | select(.build_image == true) | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$"))] | length == 0)
-               | "- `\(.id)`: no desktop image (`build_image: true`)"]
+              [.variants[] | . as $variant
+               | select([.flavors[]
+                 | select(.build_image == true)
+                 | select(.id != "base")
+                 | select((.platforms // $variant.platforms // []) | index("linux/amd64"))] | length == 0)
+               | "- `\(.id)`: no amd64 graphical image (`build_image: true`)"]
               | if length == 0 then "- None" else .[] end'
           } >> "$GITHUB_STEP_SUMMARY"
 
   luks:
     name: LUKS ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate-matrix
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Hosted runners provide KVM. AWS Free Tier instances do not support the
+    # nested virtualization required for this QEMU-based install gate.
+    runs-on: ubuntu-latest
     # 90 min was sized for the old local-only bootc install (no network
     # pull). fisherman now does a full image pull over the QEMU guest's NAT
     # networking (see docs/ci-troubleshooting.md §4 bug #19) — slower than a
     # host-level pull — on top of build + boot + install + reboot + boot
-    # verification. 150 min gives that real headroom.
-    timeout-minutes: 150
+    # verification. The host-side OCI archive transfer added for image-store
+    # compatibility can add tens of minutes on the larger variants; 150 min
+    # cancelled skipjack cells during install despite no test failure. Keep
+    # the per-QEMU wait bounded below, but allow the complete job four hours.
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       max-parallel: 4
@@ -172,13 +186,38 @@ jobs:
           sudo udevadm trigger --name-match=kvm || true
           ls -la /dev/kvm 2>/dev/null && echo "KVM available" || echo "Warning: no /dev/kvm — TCG (slow)"
 
+      # crun is installed explicitly and in the same transaction as podman.
+      # Without it, podman comes from Ubuntu while crun comes from whatever
+      # the runner image happens to ship, and a mismatched pair fails every
+      # build at the first RUN with:
+      #
+      #   error running container: from /usr/bin/crun creating container for
+      #   [/bin/sh -c echo "${BUILD_SCRIPTS_HASH}" > /dev/null]:
+      #   unknown version specified
+      #
+      # That is crun rejecting the OCI spec version podman generated, not a
+      # build error, though it surfaces as one at a random RUN step — the
+      # same shape as the cgroup-manager failure documented below. It took
+      # out every cell of run 30520334279. reusable-build-image.yml dodges
+      # this by letting setup-runner install a matched podman stack
+      # (update-podman: "true"); this job installs from apt, so the pair has
+      # to be pinned together here.
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            just podman jq \
+            just podman crun jq \
             qemu-system-x86 qemu-utils ovmf swtpm socat sshpass imagemagick \
-            systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk
+            systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk \
+            ffmpeg
+          # ffmpeg is what turns record-timelapse.sh's frames into the video.
+          # Without it the recorder captures normally and then has nothing to
+          # assemble with, which is deliberately NOT a failure — the first
+          # green cell to run with the recorder (skipjack:cosmic, run
+          # 31135333873) shipped `timelapse/frame-count.txt` reading 203 and
+          # no timelapse.webm, and stayed green. That is the contract working;
+          # it is also 203 frames nobody can watch.
+          podman --version; crun --version | head -1
 
       # iso-e2e.sh resolves the published image ref through
       # scripts/published-image-ref.sh, which needs yq. Without it the script
@@ -202,6 +241,14 @@ jobs:
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
+          # fd95174 probes for tpm2-tss/pcsc inside the image instead of
+          # omitting them unconditionally. e7d76b2a baked in
+          # `--omit "tpm2-tss pcsc"` to fix Gentoo (which ships neither
+          # module); on EL images, which ship both and force-add clevis on
+          # top, that omit turns clevis into "cannot be installed" and
+          # dracut exits 1 — every EL LUKS cell died at Build dev ISO.
+          # Do not pin this back below fd95174 without re-reading that.
+          TACKLEBOX_SHA: fd95174432b854a6135600b6c321b3ef01b4bc2d
         run: |
           export TACKLEBOX_FROM_SOURCE=1
           just iso "${VARIANT}" "${FLAVOR}" ghcr "" 1
@@ -236,9 +283,42 @@ jobs:
           # recipe's image ref. Without -E it silently falls back to parsing
           # them from the ISO filename, which has a "tunaos-" project prefix
           # the fallback doesn't account for, producing a bogus image ref.
+          # --memory 10240 (the script's default is 4096). Every cell that
+          # passes today takes fisherman's bootcDirect path: bootc reads the
+          # embedded offline store and writes the target, once. Composefs
+          # images (sailfin, marlin, flounder, gentoo) cannot: bootc has to
+          # run inside a container, so fisherman exports the image to an OCI
+          # layout, has podman copy that into a scratch store, and only then
+          # installs. That stages a 3.24 GB image three times, all of it
+          # dirty page cache flushing through dm-crypt, on a guest with
+          # 3903 MB of RAM and no swap.
+          #
+          # sailfin:gnome wedged there in run 30729902967: the guest stopped
+          # answering ssh ~15s into `bootc install` and never came back,
+          # with no OOM report, no hung-task splat and no panic on the
+          # console, the signature of a guest thrashing in reclaim rather
+          # than one being killed. The runner has 16 GB, so give the guest
+          # headroom over the image instead of a hair under it. iso-e2e.sh's
+          # own offline-store comment says the same thing: raise --memory
+          # above the image size.
+          #
+          # 8192 was not enough, and the heartbeat added with it caught why:
+          # the copy allocates on the order of the image, so run 30730744132
+          # died with `Out of memory: Killed process 2978 (podman)
+          # anon-rss:7147396kB` and `Total swap = 0kB`; podman was still
+          # growing when the kernel picked it. 10240 keeps QEMU well inside
+          # the runner's 16 GB while iso-e2e.sh attaches a swap disk to the
+          # install boot, so an overshoot pages out instead of being killed.
+          #
+          # The allocation itself turned out to be the live root's
+          # /etc/containers/mounts.conf entry for the payload store, which
+          # podman copies into a tmpfs runroot rather than bind-mounting
+          # (tunaOS#972 — see customize-live.sh). This headroom is kept for
+          # the genuine staging copies, not because that copy still happens.
           sudo -E env FISHERMAN_OVERRIDE="$FISHERMAN_OVERRIDE" \
             ./scripts/iso-e2e.sh "${ISO_PATH}" --luks \
             --output luks-out \
+            --memory 10240 \
             --timeout 1200
           # Gate = encrypted install + passphrase unlock to login. TPM2
           # auto-unlock is a POST-INSTALL step (ujust enable-luks-tpm2), tested
@@ -264,7 +344,26 @@ jobs:
           path: |
             luks-out/serial.log
             luks-out/live-serial.log
+            # The installed system's serial. The passphrase gate writes here,
+            # not to serial.log -- which is why serial.log is 0 bytes in every
+            # passphrase-path artifact and the only desktop-contract marker in
+            # them comes from live-serial.log, i.e. the live ISO. Without this
+            # file there is no record of what the INSTALLED system did.
+            luks-out/installed-serial.log
             luks-out/luks-evidence.log
             luks-out/*.png
+            # The install timelapse (scripts/record-timelapse.sh). Recording it
+            # and then not collecting it is how the first two cells that ran
+            # with the recorder produced nothing to look at: the frames were
+            # captured and discarded with the runner.
+            #
+            # frame-count.txt comes too, and is the part that stays useful when
+            # there is no video: 0 means screendump found no surface (the virgl
+            # path) or QEMU died before the first capture, which is a different
+            # story from "ffmpeg was missing" and neither should be guessed at
+            # from an absent file.
+            luks-out/timelapse/timelapse.webm
+            luks-out/timelapse/timelapse-poster.webp
+            luks-out/timelapse/frame-count.txt
           if-no-files-found: warn
           retention-days: 14

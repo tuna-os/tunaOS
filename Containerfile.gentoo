@@ -23,7 +23,14 @@ COPY system_files_overrides /overrides
 
 FROM ${COMMON_IMAGE_REF} AS common
 
-FROM docker.io/gentoo/stage3:latest@sha256:3c0c14e5391329e05497a5fe9cfa02317e572d4e072309b496b4b9f7429be282 AS base
+# BASE_IMAGE, not a hardcoded ref. This line used to pin
+# stage3@sha256:08914e15… while build-config.yml pinned
+# stage3@sha256:9d03b48… for guppy — the ARG above was declared and then
+# ignored, so every guppy build used this digest no matter what the config,
+# renovate, or `just build` said. Same drift class as the base-image table in
+# scripts/get-base-image.sh (#1014); build-config.yml is the source of truth
+# and build-image-inner.sh already passes it through as a build-arg.
+FROM ${BASE_IMAGE} AS base
 # Speed: pull prebuilt, gpg-verified binary packages from Gentoo's official
 # binhost instead of compiling all of @world from source (which blew past the
 # 60-min CI job timeout — tuna-os/tunaOS#644). getuto imports the shipped
@@ -47,7 +54,7 @@ RUN NPROC="$(nproc)" && \
     printf '[gentoobinhost]\npriority = 9999\nsync-uri = https://distfiles.gentoo.org/releases/amd64/binpackages/23.0/x86-64/\n' \
       >/etc/portage/binrepos.conf/gentoobinhost.conf && \
     getuto && \
-    echo "sys-apps/systemd boot" >> /etc/portage/package.use/systemd && \
+    echo "sys-apps/systemd boot cryptsetup tpm" >> /etc/portage/package.use/systemd && \
     echo "media-video/pipewire extra -ffmpeg" >> /etc/portage/package.use/pipewire && \
     echo "media-libs/gst-plugins-bad -vulkan" >> /etc/portage/package.use/gst-plugins-bad && \
     echo "sys-libs/minizip-ng compat" >> /etc/portage/package.use/minizip-ng && \
@@ -66,11 +73,70 @@ RUN emerge --verbose --deep --newuse @world
 # (runs 30159027680, 30196443189). Gentoo was the last Containerfile without
 # it — every other base already installs flatpak. Same class as #809, which
 # added it to the openSUSE base.
+#
+# app-admin/sudo for the same reason, one class over. The stage3 tarball has no
+# sudo — the rpm and apt bases either ship it or install it explicitly, and
+# Gentoo was the last one without. customize-live.sh writes a NOPASSWD sudoers
+# drop-in for liveuser whenever ENABLE_SSHD=1, which authorises nothing without
+# the binary; its assertion catches that at ISO-build time rather than letting
+# every `sudo` in the E2E guest die with "command not found":
+#
+#   ERROR: ENABLE_SSHD=1 grants liveuser NOPASSWD sudo, but this image has no sudo.
+#
+# guppy:xfce, LUKS run 31082460289 — after a complete, correct image build.
+#
+# app-containers/podman, third of the same kind, and the one that skopeo looks
+# like it covers but does not. guppy probes BACKEND=composefs-native, and the
+# composefs install path cannot take fisherman's bootcDirect shortcut — bootc
+# has to run in a container, which means podman in the live guest (see the
+# SWAP_DISK comment in scripts/iso-e2e.sh, written from a sailfin OOM of that
+# very process). skopeo is here for bootc's containers-image-proxy and answers a
+# different question, so the gap read as "image absent" rather than "no podman":
+# the offline store held ghcr.io/tuna-os/guppy:gnome and every probe of it was
+# `sudo: podman: command not found`, so the cell fell through to the SSH image
+# transfer that scripts/iso-e2e.sh documents as impossible and died on
+#
+#   scp: write remote "/home/liveuser/luks-image-guppy-gnome.tar": Failure
+#
+# 2h30m into the job. guppy:gnome, LUKS run 31134373523. Every other base has
+# podman — the rpm and apt ones from build_scripts/10-base-packages.sh,
+# Containerfile.arch and .debian by name — and Gentoo runs none of those, which
+# is why guppy was the only variant without it.
+#
+# sys-fs/cryptsetup and sys-fs/lvm2, fourth of the same kind, found the same
+# way: with podman in place the guppy cells got past the store probe for the
+# first time and died one line into the install instead —
+#
+#   fisherman: fatal: missing required host tool: "systemd-cryptenroll" not
+#   found in PATH — install the "systemd" package on the host
+#
+# guppy:gnome, LUKS run 31144015274, 3h20m in. "Install systemd" is the right
+# advice on every OTHER base, where the systemd package unconditionally ships
+# the binary. Gentoo only builds systemd-cryptenroll when systemd has
+# USE=cryptsetup, which neither the desktop/systemd profile nor the make.conf
+# USE line enables — hence `boot cryptsetup tpm` in package.use above (tpm so
+# the enroll tool can at least attempt the TPM2 path the recipe asks for; it
+# falls back to passphrase everywhere today). cryptsetup and lvm2 are named
+# here explicitly because fisherman's LUKS path needs the cryptsetup and
+# dmsetup binaries themselves right after the enroll tool — the bootc-install
+# refactor comments further down have said "Gentoo emerges neither" for a
+# while; this is the run that made it cost a cell.
 RUN emerge --verbose --deep --newuse \
         app-arch/cpio btrfs-progs dev-vcs/git dosfstools sys-fs/xfsprogs \
         linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd \
-        sys-apps/flatpak \
+        sys-apps/flatpak app-admin/sudo app-containers/podman \
+        sys-fs/cryptsetup sys-fs/lvm2 \
         net-vpn/tailscale gui-apps/wl-clipboard media-video/ffmpeg media-plugins/gst-plugins-meta && \
+    # make.conf runs emerge with --binpkg-respect-use=n, so the binhost's
+    # systemd (built WITHOUT cryptsetup) satisfies the install above even with
+    # the package.use entry in place, and the flag silently does nothing. Force
+    # the one package whose USE actually matters to build from source. The
+    # assertion afterwards is the point: a binary this image exists to provide
+    # must fail the BUILD when absent, not a matrix cell three hours later.
+    emerge --oneshot --verbose --usepkg=n sys-apps/systemd && \
+    command -v systemd-cryptenroll && \
+    command -v cryptsetup && \
+    command -v dmsetup && \
     curl -fsSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.35.0/just-1.35.0-x86_64-unknown-linux-musl.tar.gz && \
     tar -xzf /tmp/just.tar.gz -C /usr/bin just && rm /tmp/just.tar.gz && \
     curl -fsSL -o /tmp/glow.tar.gz https://github.com/charmbracelet/glow/releases/download/v1.5.1/glow_Linux_x86_64.tar.gz && \
@@ -80,6 +146,36 @@ RUN emerge --verbose --deep --newuse \
 
 # No live-boot dracut modules needed: tacklebox injects its embedded
 # tbox-live/tbox-root modules at ISO build time (tuna-os/tacklebox#90).
+#
+# It injects them by re-running THIS image's dracut with flags of its own, so an
+# omit that only exists on our own dracut command lines below is not an omit at
+# ISO time. tacklebox decides what to drop by probing for the module DIRECTORY
+# (/usr/lib/dracut/modules.d/[0-9][0-9]<mod>), and sys-kernel/dracut ships the
+# whole upstream modules.d tree whether or not the userspace behind a module was
+# ever emerged — so the probe finds tpm2-tss "present", omits nothing, and
+# dracut then rejects it because `require_binaries tpm2` cannot be met. guppy
+# has no app-crypt/tpm2-tools and no pcscd. guppy:gnome, LUKS run 31111959946,
+# after a completely successful image build:
+#
+#   dracut[E]: Module 'tpm2-tss' cannot be installed.
+#   Error: prepare initramfs for guppy-gnome ... (does the image ship dracut?)
+#
+# Flavor-dependent, which is what let it hide: guppy:xfce came through the same
+# rebuild ("rebuilt, added: tbox-live tbox-root", nothing omitted — run
+# 31091141499), so a green cell was never evidence this base was covered. Same
+# trap tests/bats/test_dracut_tpm2_userspace.bats documents for the apt bases,
+# where flounder:kde was green while flounder:gnome died here.
+#
+# Declared in the image the way Containerfile.arch and .opensuse declare it, so
+# every in-image rebuild inherits it — tacklebox's, and a kernel update's on the
+# installed system. It goes in the `base` stage, not in the two stages that run
+# dracut: `desktop-build` is FROM builder, not FROM system, so a drop-in written
+# in `system` would reach base-no-de and no desktop image. TPM2 auto-unlock is
+# enrolled post-install (`ujust enable-luks-tpm2`) and both dracut runs below
+# have always passed this same omit, so nothing that worked stops working.
+RUN mkdir -p /usr/lib/dracut/dracut.conf.d && \
+    printf 'omit_dracutmodules+=" tpm2-tss pcsc "\n' \
+        > /usr/lib/dracut/dracut.conf.d/30-omit-unsatisfiable.conf
 
 FROM base AS builder
 # The cleanup below MUST stay in this RUN. Unlike Containerfile.arch — which
@@ -94,31 +190,86 @@ FROM base AS builder
 #
 # Gentoo cannot simply copy Arch's throwaway-builder pattern: this stage also
 # emerges dev-util/ostree, which the final system needs at runtime.
-RUN emerge --verbose dev-util/ostree && \
+RUN emerge --verbose dev-util/ostree net-misc/openssh && \
     git clone --depth 1 https://github.com/bootc-dev/bootc.git /tmp/bootc && \
     make -C /tmp/bootc bin install-all && \
     rm -rf /tmp/bootc /root/.cargo /root/.rustup /var/tmp/portage
 
 FROM builder AS system
+
+# Re-declare the identity args INSIDE this stage and promote them to ENV — the
+# ARG lines at the top of this file are global, so they reach `FROM`
+# interpolation and nothing else. A stage sees an ARG only if it declares it,
+# and an ARG is never automatically an ENV. Without this, 90-image-info.sh
+# (wired into this stage) runs with IMAGE_VENDOR unset and dies under `set -u`
+# with "IMAGE_VENDOR: unbound variable", taking out every guppy cell. Same gap
+# Containerfile.opensuse had; Containerfile.ubuntu and .arch already do it.
+#
+# IMAGE_NAME_VARIANT specifically: 90-image-info.sh keys its codename table on
+# the canonical variant id (`guppy`), and gentoo is one of the bases whose
+# Containerfile does not pin IMAGE_NAME, so lib.sh derives it from the detected
+# base image and hands back the distro alias `gentoo`. Passing the variant id
+# through is what keeps the alias from becoming the image's identity.
+ARG BASE_IMAGE
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG IMAGE_REGISTRY="ghcr.io"
+ARG IMAGE_NAME_VARIANT
+ARG SHA_HEAD_SHORT
+ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
+ARG DESKTOP_FLAVOR
+
+ENV BASE_IMAGE=${BASE_IMAGE} \
+    IMAGE_NAME=${IMAGE_NAME} \
+    IMAGE_VENDOR=${IMAGE_VENDOR} \
+    IMAGE_REGISTRY=${IMAGE_REGISTRY} \
+    IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT} \
+    SHA_HEAD_SHORT=${SHA_HEAD_SHORT} \
+    ENABLE_SSHD=${ENABLE_SSHD} \
+    DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
+
 RUN KVER=$(ls /usr/lib/modules | head -1) && \
     rm -f "/usr/lib/modules/$KVER/vmlinuz" && \
     (cp /boot/vmlinuz-* "/usr/lib/modules/$KVER/vmlinuz" 2>/dev/null || cp /usr/src/linux-*/arch/x86/boot/bzImage "/usr/lib/modules/$KVER/vmlinuz") && \
-    dracut --force --no-hostonly --reproducible --zstd --kver "$KVER" \
+    # NOT yet on build_scripts/bootc/dracut-config.sh, unlike every other
+    # composefs variant. That script names the crypt and dm dracut modules,
+    # which require cryptsetup and dmsetup binaries; Gentoo emerges neither, and
+    # dracut treats a requested-but-unsatisfiable module as fatal. So guppy's
+    # initramfs still carries no bootc module and no erofs driver. Packaging
+    # sys-fs/cryptsetup and sys-fs/lvm2 is the prerequisite, not this refactor.
+    dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" --kver "$KVER" \
     "/usr/lib/modules/$KVER/initramfs.img" && \
-    rm -rf /var/db /var/cache
-RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
-    rm -rf /boot /home /root /usr/local /srv /opt /mnt /var && \
+    rm -rf /var/cache && \
+    # Keep portage's package database; drop only its caches.
+    #
+    # /var/db/pkg is the record of what is installed, and deleting it here
+    # (plus the /var wipe below) is why ghcr.io/tuna-os/guppy:base answers
+    # `qlist -ICv` with nothing — qlist is installed, the database simply
+    # isn't there, so the running system cannot enumerate its own packages
+    # (tuna-os/tunaos-packages#135).
+    #
+    # Relocated into /usr for the reason Fedora moved the rpmdb there
+    # (Changes/RelocateRPMToUsr): the database describes /usr, so keeping it
+    # under /usr makes it snapshot and roll back with the image instead of
+    # being erased with /var. The tmpfiles link restores the default path.
+    mkdir -p /usr/lib/sysimage && \
+    if [ -d /var/db/pkg ]; then rm -rf /usr/lib/sysimage/portage; cp -a /var/db /usr/lib/sysimage/portage; fi && \
+    rm -rf /var/db
+# Shared bootc/ostree layout (the /var wipe, alias symlinks, tmpfiles.d and
+# prepare-root.conf) — build_scripts/bootc/ostree-layout.sh. What stays here is
+# Gentoo-specific: pruning /dev, and linking portage's relocated database back
+# into place after the wipe.
+#
+# This block used to be duplicated verbatim in the `system` and `desktop`
+# stages, and its symlink list was missing /srv, /mnt and /usr/local — all
+# three removed on the way in and never put back. The shared script restores
+# them; see its header.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
     find /dev -mindepth 1 -maxdepth 1 ! -name pts ! -name shm ! -name mqueue -exec rm -rf {} + 2>/dev/null || true && \
-    mkdir -p /var /var/tmp /sysroot/ostree /boot /usr/lib/ostree && \
-    ln -sT var/opt /opt && ln -sT var/roothome /root && \
-    ln -sT var/home /home && ln -sT sysroot/ostree /ostree && \
-    for d in /var/* /var/.[!.]*; do [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done && \
-    mkdir -p /var/tmp && \
-    for dir in opt usrlocal home srv mnt; do echo "d /var/$dir 0755 root root -"; done > /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
-    echo "d /var/roothome 0700 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
-    echo "d /var/tmp 1777 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
-    echo "d /run/media 0755 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
-    printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf
+    /run/context/build_scripts/bootc/ostree-layout.sh && \
+    printf 'd /var/db 0755 root root -\nL+ /var/db/pkg - - - - ../../usr/lib/sysimage/portage/pkg\n' \
+        > /usr/lib/tmpfiles.d/portage-sysimage.conf && \
+    mkdir -p /var/db && ln -sfnT ../../usr/lib/sysimage/portage/pkg /var/db/pkg
 
 # Cache-bust so build_scripts edits invalidate the desktop stages' install
 # layers (bind-mounted scripts aren't in the cache key). Inherited by children.
@@ -137,6 +288,70 @@ FROM builder AS desktop-build
 ARG DESKTOP_FLAVOR
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
+# Identity, and branding, BEFORE install-desktop.sh.
+#
+# install-desktop.sh ends by running the branding contract, and every other
+# Containerfile satisfies it the same way: the base stage runs the numbered
+# scripts — 90-image-info.sh among them — and the desktop stages build on top
+# of an already-branded image. This branch does not. It goes
+# builder -> desktop-build, while 90-image-info.sh lives in `system`, which is
+# a sibling. So the contract ran against stock Gentoo and reported fourteen
+# failures at once:
+#
+#   FAIL: no fish codename defined for variant 'xfce'
+#   FAIL: PRETTY_NAME is 'Gentoo Linux' — still names the upstream distro
+#   FAIL: SUPPORT_URL is 'https://www.gentoo.org/support/'
+#   TUNAOS_BRANDING_FAIL variant=xfce failures=14
+#
+# "variant 'xfce'" is the same gap seen twice: install-desktop.sh passes
+# `${IMAGE_NAME:-${_TD_DESKTOP}}`, so an unset IMAGE_NAME silently becomes the
+# desktop name and the codename lookup is asked for a variant that does not
+# exist. guppy:xfce only reached this once the libdbusmenu USE pin let the
+# emerge finish.
+#
+# SHA_HEAD_SHORT is deliberately NOT here: it changes every commit, and an ENV
+# above the emerge would invalidate the desktop package build on every push.
+# 90-image-info.sh defaults it to "testing", and the `desktop` stage below
+# re-runs the script with the real value — osr_set rewrites in place, so the
+# second pass corrects BUILD_ID and IMAGE_VERSION rather than duplicating them.
+ARG BASE_IMAGE
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG IMAGE_REGISTRY="ghcr.io"
+ARG IMAGE_NAME_VARIANT
+ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
+
+ENV BASE_IMAGE=${BASE_IMAGE} \
+    IMAGE_NAME=${IMAGE_NAME} \
+    IMAGE_VENDOR=${IMAGE_VENDOR} \
+    IMAGE_REGISTRY=${IMAGE_REGISTRY} \
+    IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT} \
+    ENABLE_SSHD=${ENABLE_SSHD}
+
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/90-image-info.sh
+
+# The branding contract is not satisfied by os-release alone: three of its
+# fourteen assertions are about files, and those files come from system_files,
+# which this stage did not have. Running 90-image-info.sh here takes the
+# failures from fourteen to three, all of them assets:
+#
+#   FAIL: LOGO=tunaos but no matching file under /usr/share/pixmaps or hicolor
+#   FAIL: no TunaOS wallpaper under /usr/share/backgrounds (only upstream artwork)
+#   FAIL: plymouth default is not a TunaOS theme
+#   TUNAOS_BRANDING_FAIL variant=guppy failures=3
+#
+# (measured in a gentoo/stage3 container against this tree: os-release branded,
+# system_files absent). They are /usr/share/pixmaps/tunaos.svg,
+# /usr/share/backgrounds/tunaos, and the default.plymouth symlink into
+# themes/tunaos — all three carried by these two copies and nothing else. The
+# `desktop` stage below copies them a second time, deliberately: its /var wipe
+# and portage relocation come between, and that stage's copy is what ends up in
+# the shipped image.
+COPY --from=context /files /
+COPY --from=common /system_files/shared /
+
 # Desktop-only portage config, applied AFTER the base @world (any global
 # flag change at base makes @world --newuse schedule from-source multilib
 # rebuilds that die on pam<->systemd / ncurses<->gpm build cycles):
@@ -150,10 +365,17 @@ ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 #  - package.mask elogind: belt-and-braces — this is a systemd image.
 #  - pins: USE combos no published build has (plasma-meta needs
 #    kwin[lock]; gnome's chain wants ngtcp2[gnutls], zlib[minizip];
-#    gnome-shell[networkmanager] needs a matching gnome-control-center).
+#    gnome-shell[networkmanager] needs a matching gnome-control-center;
+#    xfce4-panel wants libdbusmenu[gtk3], and the global USE list carries
+#    `gtk` but no `gtk3`, so guppy:xfce died in the resolver with
+#      emerge: there are no ebuilds built with USE flags to satisfy
+#      ">=dev-libs/libdbusmenu-16.04.0[gtk3]"
+#    reached via thunar[trash-panel-plugin] -> xfce4-panel. Pinned here
+#    rather than adding gtk3 globally, which would reschedule from-source
+#    rebuilds across the whole @world set for one panel dependency).
 #    These few build from source.
 RUN NPROC="$(nproc)" && \
-    printf 'kde-plasma/kwin lock\nkde-plasma/kwin-x11 lock\nnet-libs/ngtcp2 gnutls\nsys-libs/zlib minizip\ngnome-base/gnome-control-center networkmanager\ngnome-base/gnome-shell networkmanager\n' \
+    printf 'kde-plasma/kwin lock\nkde-plasma/kwin-x11 lock\nnet-libs/ngtcp2 gnutls\nsys-libs/zlib minizip\ngnome-base/gnome-control-center networkmanager\ngnome-base/gnome-shell networkmanager\ndev-libs/libdbusmenu gtk3\n' \
       >> /etc/portage/package.use/tunaos-desktops && \
     mkdir -p /etc/portage/package.mask && \
     echo "sys-auth/elogind" >> /etc/portage/package.mask/tunaos-systemd && \
@@ -166,26 +388,122 @@ FROM desktop-build AS desktop
 RUN KVER=$(ls /usr/lib/modules | head -1) && \
     rm -f "/usr/lib/modules/$KVER/vmlinuz" && \
     (cp /boot/vmlinuz-* "/usr/lib/modules/$KVER/vmlinuz" 2>/dev/null || cp /usr/src/linux-*/arch/x86/boot/bzImage "/usr/lib/modules/$KVER/vmlinuz") && \
-    dracut --force --no-hostonly --reproducible --zstd --kver "$KVER" \
+    # NOT yet on build_scripts/bootc/dracut-config.sh, unlike every other
+    # composefs variant. That script names the crypt and dm dracut modules,
+    # which require cryptsetup and dmsetup binaries; Gentoo emerges neither, and
+    # dracut treats a requested-but-unsatisfiable module as fatal. So guppy's
+    # initramfs still carries no bootc module and no erofs driver. Packaging
+    # sys-fs/cryptsetup and sys-fs/lvm2 is the prerequisite, not this refactor.
+    dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" --kver "$KVER" \
     "/usr/lib/modules/$KVER/initramfs.img" && \
-    rm -rf /var/db /var/cache
-RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
-    rm -rf /boot /home /root /usr/local /srv /opt /mnt /var && \
+    rm -rf /var/cache && \
+    # Keep portage's package database; drop only its caches.
+    #
+    # /var/db/pkg is the record of what is installed, and deleting it here
+    # (plus the /var wipe below) is why ghcr.io/tuna-os/guppy:base answers
+    # `qlist -ICv` with nothing — qlist is installed, the database simply
+    # isn't there, so the running system cannot enumerate its own packages
+    # (tuna-os/tunaos-packages#135).
+    #
+    # Relocated into /usr for the reason Fedora moved the rpmdb there
+    # (Changes/RelocateRPMToUsr): the database describes /usr, so keeping it
+    # under /usr makes it snapshot and roll back with the image instead of
+    # being erased with /var. The tmpfiles link restores the default path.
+    mkdir -p /usr/lib/sysimage && \
+    if [ -d /var/db/pkg ]; then rm -rf /usr/lib/sysimage/portage; cp -a /var/db /usr/lib/sysimage/portage; fi && \
+    rm -rf /var/db
+# Shared bootc/ostree layout (the /var wipe, alias symlinks, tmpfiles.d and
+# prepare-root.conf) — build_scripts/bootc/ostree-layout.sh. What stays here is
+# Gentoo-specific: pruning /dev, and linking portage's relocated database back
+# into place after the wipe.
+#
+# This block used to be duplicated verbatim in the `system` and `desktop`
+# stages, and its symlink list was missing /srv, /mnt and /usr/local — all
+# three removed on the way in and never put back. The shared script restores
+# them; see its header.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
     find /dev -mindepth 1 -maxdepth 1 ! -name pts ! -name shm ! -name mqueue -exec rm -rf {} + 2>/dev/null || true && \
-    mkdir -p /var /var/tmp /sysroot/ostree /boot /usr/lib/ostree && \
-    ln -sT var/opt /opt && ln -sT var/roothome /root && \
-    ln -sT var/home /home && ln -sT sysroot/ostree /ostree && \
-    for d in /var/* /var/.[!.]*; do [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done && \
-    mkdir -p /var/tmp && \
-    for dir in opt usrlocal home srv mnt; do echo "d /var/$dir 0755 root root -"; done > /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
-    echo "d /var/roothome 0700 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
-    echo "d /var/tmp 1777 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
-    echo "d /run/media 0755 root root -" >> /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
-    printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' > /usr/lib/ostree/prepare-root.conf
+    /run/context/build_scripts/bootc/ostree-layout.sh && \
+    printf 'd /var/db 0755 root root -\nL+ /var/db/pkg - - - - ../../usr/lib/sysimage/portage/pkg\n' \
+        > /usr/lib/tmpfiles.d/portage-sysimage.conf && \
+    mkdir -p /var/db && ln -sfnT ../../usr/lib/sysimage/portage/pkg /var/db/pkg
 
 LABEL containers.bootc=1 ostree.bootable=1
 COPY --from=context /files /
 COPY --from=common /system_files/shared /
+
+# The identity args again, for THIS stage.
+#
+# The `system` stage already re-declares and promotes them, with a comment
+# explaining that the global ARGs at the top of the file reach `FROM`
+# interpolation and nothing else. But `system` is a SIBLING of this stage, not
+# an ancestor: the chain here is base -> builder -> desktop-build -> desktop,
+# and none of those three set them. ENV is inherited by child stages; the
+# `system` block is on a branch this one never touches.
+#
+# So 90-image-info.sh below runs with IMAGE_NAME, IMAGE_VENDOR and BASE_IMAGE
+# unset. It is `set -euo pipefail` and those three are the ones with no `:-`
+# default (IMAGE_REGISTRY, SHA_HEAD_SHORT and DESKTOP_FLAVOR all have one), so
+# it dies on its eighth line:
+#
+#   IMAGE_REF="ostree-image-signed:docker://${IMAGE_REGISTRY:-ghcr.io}/${IMAGE_VENDOR}/${IMAGE_NAME}"
+#   /run/context/build_scripts/90-image-info.sh: line 8: IMAGE_VENDOR: unbound variable
+#
+# guppy:base never hit it — base-no-de branches off `system`. Only the desktop
+# flavors reach here, and until the libdbusmenu USE pin two commits ago they
+# died earlier, in the emerge. Same fix as the `system` stage, one branch over.
+#
+# Declared HERE rather than in desktop-build so SHA_HEAD_SHORT, which changes
+# every commit, does not invalidate the emerge layers above it — the reason
+# Containerfile.ubuntu declares it late too.
+ARG BASE_IMAGE
+ARG IMAGE_NAME
+ARG IMAGE_VENDOR
+ARG IMAGE_REGISTRY="ghcr.io"
+ARG IMAGE_NAME_VARIANT
+ARG SHA_HEAD_SHORT
+ARG ENABLE_SSHD="${ENABLE_SSHD:-0}"
+ARG DESKTOP_FLAVOR
+
+ENV BASE_IMAGE=${BASE_IMAGE} \
+    IMAGE_NAME=${IMAGE_NAME} \
+    IMAGE_VENDOR=${IMAGE_VENDOR} \
+    IMAGE_REGISTRY=${IMAGE_REGISTRY} \
+    IMAGE_NAME_VARIANT=${IMAGE_NAME_VARIANT} \
+    SHA_HEAD_SHORT=${SHA_HEAD_SHORT} \
+    ENABLE_SSHD=${ENABLE_SSHD} \
+    DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
+
+# Run the standard numbered base scripts (matching el10/arch/debian/opensuse
+# convention): 40-services (service enablement, dconf), 90-image-info
+# (branding/os-release), 99-cleanup (ostree prep).
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/40-services.sh
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/90-image-info.sh
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/99-cleanup.sh
+
+# remora — the desktop experience contract requires it, and this base does
+# not run 26-packages-post.sh, which is what installs remora on the dnf
+# variants. Containerfile.opensuse already hit this and calls
+# install-remora.sh directly for the same reason (see the comment there).
+# Without it every Gate on this base fails with
+#
+#   TUNAOS_DESKTOP_CONTRACT_FAIL reason=remora_contract_missing
+#
+# which reads as a broken desktop when the desktop booted fine — grouper gnome,
+# kde, xfce and gnome-zfs all died this way in run 30692866756. The binary is
+# static Go, so there is nothing distro-specific to guard.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/install-remora.sh
+
 RUN bootc container lint
 
 # Per-flavor target aliases so the build's `--target=<flavor>` resolves. Each
@@ -194,3 +512,10 @@ RUN bootc container lint
 FROM desktop AS gnome
 COPY --from=common /system_files/bluefin /
 FROM desktop AS kde
+# xfce is declared build_image: true for guppy in build-config.yml and
+# manifests/desktops/xfce.yaml has an emerge section, but this alias was
+# missing — `The target "xfce" was not found in the provided Dockerfile`
+# (#1012). niri and cosmic are deliberately NOT added: they have no ebuilds in
+# the Gentoo main tree (#923), so an alias would only move their failure from
+# "no target" to "no package".
+FROM desktop AS xfce

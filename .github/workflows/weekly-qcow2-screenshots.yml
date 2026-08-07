@@ -2,7 +2,10 @@ name: Weekly QCOW2 Boot Screenshots
 
 on:
   schedule:
-    - cron: "0 23 * * 0" # Every Sunday at 23:00 UTC (ready for Monday report)
+    # Sunday 20:00 UTC — still ready for the Monday 10:00 boot report, but no
+    # longer double-booked with publish-iso-groups at Sunday 23:00 (both
+    # contending for the same 20-job org concurrency budget).
+    - cron: "0 20 * * 0"
   workflow_dispatch:
     inputs:
       variant:

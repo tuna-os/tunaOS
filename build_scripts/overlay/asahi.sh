@@ -218,7 +218,10 @@ opensuse* | *suse*)
 	for attempt in 1 2 3; do
 		zypper --non-interactive install --no-confirm --no-recommends \
 			kernel-asahi m1n1 u-boot-asahi asahi-scripts && break
-		[ "$attempt" -eq 3 ] && { echo "ERROR: home:mrkcee install failed after 3 attempts" >&2; exit 1; }
+		[ "$attempt" -eq 3 ] && {
+			echo "ERROR: home:mrkcee install failed after 3 attempts" >&2
+			exit 1
+		}
 		echo "WARNING: required asahi package install failed (attempt ${attempt}/3) — refreshing repo and retrying" >&2
 		sleep $((attempt * 20))
 		zypper --non-interactive --gpg-auto-import-keys refresh
@@ -262,8 +265,8 @@ esac
 	# package LAST, after removing/purging any base-distro kernel first —
 	# so the asahi kernel's module directory is always the most recently
 	# created, regardless of what its version string looks like.
-	KVER=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d -printf '%T@ %f\n' \
-		| sort -rn | head -1 | cut -d' ' -f2-)
+	KVER=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d -printf '%T@ %f\n' |
+		sort -rn | head -1 | cut -d' ' -f2-)
 	if [ -z "$KVER" ]; then
 		echo "ERROR: no kernel module directory found under /usr/lib/modules" >&2
 		exit 1
@@ -320,7 +323,7 @@ esac
 	fi
 	if ! grep -rqs "asahi-firmware" /usr/lib/dracut/dracut.conf.d/ /etc/dracut.conf.d/ 2>/dev/null; then
 		printf 'add_dracutmodules+=" asahi-firmware kernel-modules-asahi "\n' \
-			> /usr/lib/dracut/dracut.conf.d/10-asahi.conf
+			>/usr/lib/dracut/dracut.conf.d/10-asahi.conf
 	fi
 	# boot.bin lifecycle on bootc (update-m1n1 scriptlets never re-run on
 	# deploys) — tunaOS#779.
@@ -329,8 +332,30 @@ esac
 	# (Re)build the initramfs with the asahi modules in scope — package
 	# postinst hooks do not reliably run dracut in container builds, and the
 	# ESP vendor-firmware flow silently dies without these modules.
-	dracut --force --no-hostonly --reproducible \
-		--kver "${KVER}" "/usr/lib/modules/${KVER}/initramfs.img"
+	#
+	# tpm2-tss and pcsc get pulled in as hard dependencies of systemd's
+	# measured-boot/smartcard modules, and their checks are
+	# `require_binaries tpm2` / `require_binaries pcscd`. Absent those
+	# binaries the WHOLE rebuild dies with "Module 'tpm2-tss' cannot be
+	# installed", which is what has failed every sailfin gnome-asahi build
+	# (tunaOS#878, the same reason Containerfile.opensuse and
+	# Containerfile.gentoo already pass --omit "tpm2-tss pcsc"). openSUSE arm
+	# ships neither binary, and Apple Silicon has no TPM2 device to unlock
+	# with anyway.
+	#
+	# Omit by capability, not unconditionally: the RPM asahi variants DO ship
+	# tpm2/pcscd, and blanket-omitting there would quietly strip TPM2
+	# auto-unlock out of their initramfs (#714). That is exactly why the same
+	# --omit was reverted from build_scripts/bootc/finalize.sh.
+	DRACUT_ARGS=(--force --no-hostonly --reproducible --kver "${KVER}")
+	DRACUT_OMIT=""
+	command -v tpm2 >/dev/null 2>&1 || DRACUT_OMIT="${DRACUT_OMIT}tpm2-tss "
+	command -v pcscd >/dev/null 2>&1 || DRACUT_OMIT="${DRACUT_OMIT}pcsc "
+	if [ -n "${DRACUT_OMIT}" ]; then
+		echo "dracut: omitting unavailable modules: ${DRACUT_OMIT% }"
+		DRACUT_ARGS+=(--omit "${DRACUT_OMIT% }")
+	fi
+	dracut "${DRACUT_ARGS[@]}" "/usr/lib/modules/${KVER}/initramfs.img"
 	command -v dnf >/dev/null 2>&1 && dnf clean all || true
 }
 

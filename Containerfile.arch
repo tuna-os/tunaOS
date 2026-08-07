@@ -7,7 +7,7 @@
 #   buildah build --target=base-no-de --file Containerfile.arch .
 #   buildah build --target=kde --file Containerfile.arch .
 
-ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest@sha256:93e350e4b9c1b9938e15c1b8ea6acc562d623b830a5b6661e0e9699cb5544363"
+ARG BASE_IMAGE="docker.io/archlinux/archlinux:latest@sha256:4e27667b0a4b693d10925f74eb5bbd262a97977d02e6a76f46ce5c366b4698fb"
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
@@ -102,11 +102,15 @@ RUN KERNEL_PKG="linux"; \
         e2fsprogs \
         xfsprogs \
         dosfstools \
+        cryptsetup \
+        device-mapper \
         skopeo \
         podman \
         dbus \
         glib2 \
         shadow \
+        sudo \
+        fuse-overlayfs \
         systemd \
         networkmanager \
         pipewire \
@@ -132,40 +136,97 @@ RUN KERNEL_PKG="linux"; \
         gst-plugins-ugly && \
     pacman -Scc --noconfirm
 
+# NOTE: this MUST precede the dracut step below. dracut-config.sh derives the
+# driver set from prepare-root.conf — written at the end of this block — so
+# running dracut first would read no composefs declaration and silently build an
+# initramfs with no erofs, which is the exact failure the shared script exists
+# to prevent.
+# Set up bootc/ostree filesystem layout. The shared layout (the /var wipe, the
+# alias symlinks, tmpfiles.d and prepare-root.conf) lives in ostree-layout.sh;
+# only the pacman-specific cache removal is left here.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    rm -rf /usr/lib/sysimage/log /usr/lib/sysimage/cache/pacman/pkg && \
+    /run/context/build_scripts/bootc/ostree-layout.sh
+
 # Build initramfs. Live-boot modules are NOT needed here: tacklebox
 # injects its own embedded tbox-live/tbox-root dracut modules at ISO
 # build time using this image's stock dracut (tuna-os/tacklebox#90).
-RUN mkdir -p /usr/lib/dracut/dracut.conf.d/ && \
-    printf 'systemdsystemconfdir=/etc/systemd/system\nsystemdsystemunitdir=/usr/lib/systemd/system\n' \
-        > /usr/lib/dracut/dracut.conf.d/30-fix-bootc-module.conf && \
-    printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" bootc "\n' \
-        > /usr/lib/dracut/dracut.conf.d/30-bootc-container-build.conf && \
+# dracut config comes from build_scripts/bootc/dracut-config.sh, shared with
+# every other bootc variant. It derives the driver set from the image (composefs
+# => erofs + overlay) and probes each driver against this kernel's module tree,
+# because add_drivers on a name the kernel lacks fails the dracut run outright.
+#
+# It used to be a printf here. That is how five composefs variants ended up with
+# one erofs driver between them: the fix was made while chasing marlin and had
+# nowhere shared to live.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/bootc/dracut-config.sh && \
     dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
 
-# Set up bootc/ostree filesystem layout
-RUN rm -rf /boot /home /root /usr/local /srv /opt /mnt \
-        /usr/lib/sysimage/log /usr/lib/sysimage/cache/pacman/pkg && \
-    # /var may contain mount points from overlayfs layers (rpm, dnf on Fedora
-    # parents; none on Arch). Clean everything that isn't a mount.
-    for d in /var/* /var/.[!.]*; do [ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true; done && \
-    rm -rf /usr/lib/sysimage/log /usr/lib/sysimage/cache/pacman/pkg 2>/dev/null; true && \
-    mkdir -p /sysroot /boot /usr/lib/ostree /var /var/tmp && \
-    ln -sT sysroot/ostree /ostree && \
-    ln -sT var/roothome /root && \
-    ln -sT var/srv /srv && \
-    ln -sT var/opt /opt && \
-    ln -sT var/mnt /mnt && \
-    ln -sT var/home /home && \
-    ln -sT ../var/usrlocal /usr/local && \
-    printf 'd /var/opt 0755 root root -\nd /var/home 0755 root root -\nd /var/srv 0755 root root -\nd /var/mnt 0755 root root -\nd /var/usrlocal 0755 root root -\nd /var/roothome 0700 root root -\nd /var/tmp 1777 root root -\nd /run/media 0755 root root -\n' \
-        > /usr/lib/tmpfiles.d/bootc-base-dirs.conf && \
-    printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' \
-        > /usr/lib/ostree/prepare-root.conf
+# systemd-firstboot asks the CONSOLE for a timezone and blocks there forever.
+#
+# Arch ships systemd-firstboot.service enabled, and a bootc image has an
+# uninitialized machine-id by design, which is exactly its trigger condition.
+# So every marlin desktop booted into
+#
+#   Starting Initial Setup...
+#   Please enter the new timezone name or number ("list" to list options...)
+#
+# and never reached graphical.target. tunaos-desktop-contract.service is
+# WantedBy=graphical.target, so it never ran and emitted nothing — the Gate
+# reported "desktop experience contract marker was not emitted" for all five
+# desktops in run 30707799065 while the image itself was complete and
+# correctly wired.
+#
+# Confirmed from the Gate's own serial.log: the last thing marlin does is
+# print the timezone prompt, and "Reached target Graphical Interface" never
+# appears. Nothing was broken about the desktop; the boot was waiting for a
+# human.
+#
+# Containerfile.opensuse already masks this for the same reason. Masking
+# rather than disabling: the unit is pulled in by sysinit.target on Arch, and
+# a disabled unit that something Wants= still starts.
+RUN systemctl mask systemd-firstboot.service
 
 # Validate
 LABEL containers.bootc 1
 COPY --from=context /files /
 COPY --from=common /system_files/shared /
+
+# remora — the desktop experience contract requires it, and this base does
+# not run 26-packages-post.sh, which is what installs remora on the dnf
+# variants. Containerfile.opensuse already hit this and calls
+# install-remora.sh directly for the same reason (see the comment there).
+# Without it every Gate on this base fails with
+#
+#   TUNAOS_DESKTOP_CONTRACT_FAIL reason=remora_contract_missing
+#
+# which reads as a broken desktop when the desktop booted fine — grouper gnome,
+# kde, xfce and gnome-zfs all died this way in run 30692866756. The binary is
+# static Go, so there is nothing distro-specific to guard.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/install-remora.sh
+
+# The numbered base scripts (40-services, 90-image-info, 99-cleanup) that
+# other Containerfiles run are NOT wired into this base. 90-image-info.sh is
+# load-bearing for the branding contract: without it os-release keeps the
+# upstream identity (Arch URLs, archlinux-logo, no VARIANT/IMAGE_ID) and
+# /usr/share/ublue-os/image-info.json is absent — the exact failures
+# verify-branding.sh reported on the first wired build. Run it here, plus
+# 40-services (service enablement + dconf update) and 99-cleanup.
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/40-services.sh
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/90-image-info.sh
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/99-cleanup.sh
+
 RUN bootc container lint
 
 # Cache-bust so build_scripts edits invalidate the desktop stages' install

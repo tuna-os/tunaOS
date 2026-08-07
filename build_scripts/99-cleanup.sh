@@ -105,6 +105,34 @@ PYEOF
 
 mkdir -p /var /boot
 
+# /var/tmp must EXIST in the built image, not merely be declared in tmpfiles.d.
+#
+# tacklebox rebuilds the live-ISO initramfs by running dracut inside the
+# published image (`podman run ... --entrypoint /bin/sh <image>`). There is no
+# boot in that path, so systemd-tmpfiles never runs and never creates it, and
+# dracut's --tmpdir defaults to /var/tmp:
+#
+#   realpath: /var/tmp: No such file or directory
+#   dracut[F]: Invalid tmpdir '/var/tmp'.
+#
+# tacklebox reports that as "does the image ship dracut?", which is why #1010
+# was filed as flounder missing dracut. dracut is installed and running — it is
+# the tmpdir that is absent.
+#
+# Containerfile.debian:181 and Containerfile.arch:156 already create it in
+# their base stages for exactly this reason. Then this script's `find /var
+# -mindepth 1 -maxdepth 1 -delete` above removes it again, and the `mkdir -p
+# /var /boot` on the line above does not put it back — so wiring 99-cleanup.sh
+# into those Containerfiles silently undid a fix that was already there.
+#
+# Recreate it here, where it is deleted, so every variant gets it rather than
+# each base stage having to re-solve it. 1777 is the standard mode; the
+# symlink guard matches how the rest of this script treats /var entries.
+if [[ ! -L /var/tmp ]]; then
+	mkdir -p /var/tmp
+	chmod 1777 /var/tmp
+fi
+
 # Make /usr/local writeable, if /usr/local exists skip
 ls /usr/local || ln -s /var/usrlocal /usr/local
 
@@ -131,7 +159,11 @@ chmod 644 /usr/share/ublue-os/image-info.json
 # once its findings are cleared.
 lint_image
 
-jq . /usr/share/ublue-os/image-info.json
+if command -v jq >/dev/null 2>&1; then
+	jq . /usr/share/ublue-os/image-info.json || true
+else
+	cat /usr/share/ublue-os/image-info.json || true
+fi
 
 detected_os
 

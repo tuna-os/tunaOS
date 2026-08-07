@@ -299,9 +299,11 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     # its name (the name-based heuristic is exactly what tuna-os/wootc had to
     # rip out — see payload/deployer/deploy.sh "the crux fix"):
     #
-    #   BACKEND=composefs-native → ships systemd-boot and no bootupctl, so
-    #     bootloader management can't go through bootupd: needs
-    #     --composefs-backend.
+    #   BACKEND is probed from IMAGE CONTENT by probe_image_backend() in
+    #     scripts/lib/common.sh — a faithful port of tuna-os/wootc
+    #     deploy.sh:867-949. The variant name is not a signal and neither is
+    #     the bootloader; see that function for the ordering rationale and for
+    #     why the previous `! command -v bootupctl` test mis-classified marlin.
     #   SEALED → prepare-root.conf has [composefs] enabled: the rootfs is
     #     composefs-sealed and needs fs-verity, which XFS LACKS. On the xfs
     #     default from 00-tunaos.toml the initramfs fails initrd-switch-root
@@ -314,15 +316,23 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     #
     # Sealed is what drives the filesystem, and it is independent of the
     # backend: traditional-ostree images can be sealed too.
-    PROBE=$(sudo podman run --rm --entrypoint="" "$IMG_REF" sh -c '
-        if test -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi && ! command -v bootupctl >/dev/null 2>&1; then
-            echo BACKEND=composefs-native
-        else
-            echo BACKEND=ostree
-        fi
-        grep -A8 "^\[composefs\]" /usr/lib/ostree/prepare-root.conf 2>/dev/null \
-          | grep -qiE "enabled[[:space:]]*=[[:space:]]*(yes|true|1|signed)" && echo SEALED=1 || echo SEALED=0
-    ' 2>/dev/null) || PROBE=$(printf 'BACKEND=ostree\nSEALED=0\n')
+    #
+    # A probe that cannot run is FATAL, never a silent default. It used to
+    # swallow stderr and fall back to BACKEND=ostree/SEALED=0, which is the
+    # worst possible guess: on a sealed composefs image that drops
+    # --composefs-backend and leaves the rootfs on xfs, and the resulting disk
+    # boots straight into a dracut emergency shell with nothing in the log
+    # explaining why. Exactly that happened on sailfin niri (run 30594521039):
+    # a broken podman on the runner made the probe report ostree/unsealed for
+    # an image its kde/xfce siblings probed as composefs-native/SEALED=1.
+    PROBE_ERR=$(mktemp)
+    if ! PROBE=$(. scripts/lib/common.sh && probe_image_backend "$IMG_REF" sudo podman 2>"$PROBE_ERR"); then
+        echo "ERROR: could not probe $IMG_REF for its bootc backend:" >&2
+        cat "$PROBE_ERR" >&2
+        rm -f "$PROBE_ERR"
+        exit 1
+    fi
+    rm -f "$PROBE_ERR"
     echo "==> image probe: $(echo "$PROBE" | tr '\n' ' ')"
 
     COMPOSEFS_ARGS=()

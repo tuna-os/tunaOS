@@ -47,7 +47,6 @@ common_image_sha=$($YQ -r '.images[] | select(.name == "common") | .digest' imag
 common_image_ref="${common_image}@${common_image_sha}"
 brew_image_sha=$($YQ -r '.images[] | select(.name == "brew") | .digest' image-versions.yaml)
 brew_image_ref="${brew_image}@${brew_image_sha}"
-zirconium_image_sha=$($YQ -r '.images[] | select(.name == "zirconium") | .digest' image-versions.yaml)
 
 # ── Build args ────────────────────────────────────────────────────────────────
 BUILD_ARGS=()
@@ -67,7 +66,6 @@ BOOTC_VERSION=$($YQ -r '.downloads.bootc' image-versions.yaml)
 BOOTUPD_VERSION=$($YQ -r '.downloads.bootupd' image-versions.yaml)
 BUILD_ARGS+=("--build-arg" "BOOTC_VERSION=${BOOTC_VERSION}")
 BUILD_ARGS+=("--build-arg" "BOOTUPD_VERSION=${BOOTUPD_VERSION}")
-BUILD_ARGS+=("--build-arg" "ZIRCONIUM_IMAGE_REF=ghcr.io/zirconium-dev/zirconium@${zirconium_image_sha}")
 
 # Overlay type for Containerfile.overlay
 if [[ -n "${OVERLAY_TYPE:-}" ]]; then
@@ -133,17 +131,49 @@ fi
 
 echo "==> Building ${DESKTOP_FLAVOR} stage..."
 
-${BUILDER} build \
-	--security-opt label=disable \
-	--dns=8.8.8.8 \
-	--platform "${PLATFORM}" \
-	--target="${DESKTOP_FLAVOR}" \
-	"${BUILD_ARGS[@]}" \
-	--tag "${PRE_CHUNK_TAG}" \
-	${PULL_FLAG} \
-	--file "${CONTAINERFILE}" \
-	${BUILDAH_CACHE_FLAGS:-} \
-	.
+build_primary_image() {
+	${BUILDER} build \
+		--security-opt label=disable \
+		--dns=8.8.8.8 \
+		--platform "${PLATFORM}" \
+		--target="${DESKTOP_FLAVOR}" \
+		"${BUILD_ARGS[@]}" \
+		--tag "${PRE_CHUNK_TAG}" \
+		${PULL_FLAG} \
+		--file "${CONTAINERFILE}" \
+		${BUILDAH_CACHE_FLAGS:-} \
+		.
+}
+
+# Retry the whole build on failure. Two distinct transients, both of which
+# reliably succeed on a fresh invocation of the same inputs:
+#
+#   * Blacksmith's amd64/v2 runners intermittently fail before a Buildah build
+#     starts with `open out/index.json: no such file or directory`.
+#   * Pulling the base image dies mid-blob against the registry CDN:
+#
+#       Error: creating build container: copying system image from manifest
+#       list: writing blob ...: happened during read: unexpected EOF (while
+#       reconnecting: Get "https://cdn01.quay.io/...": EOF)
+#
+#     LUKS albacore:niri, run 31135329021 — 6 seconds in, on almalinux-bootc.
+#
+# The retry used to be gated on `BUILDER == buildah`, which is where the
+# second one got through: the ISO path builds with podman, so it took the
+# `!= buildah` branch and exited after ONE attempt. That is what the log said
+# ("image build failed after 1 attempt(s)"), and it reads like an exhausted
+# retry rather than an absent one. Nothing about a half-transferred blob is
+# specific to a builder, so the gate is gone; the loop is the same otherwise.
+build_attempt=1
+until build_primary_image; do
+	if [[ "${build_attempt}" -ge 3 ]]; then
+		echo "ERROR: image build failed after ${build_attempt} attempt(s)" >&2
+		exit 1
+	fi
+	echo "${BUILDER} build attempt ${build_attempt} failed; retrying in $((build_attempt * 10))s..." >&2
+	sleep "$((build_attempt * 10))"
+	build_attempt=$((build_attempt + 1))
+done
 
 # ── Skip rechunk for PR builds ───────────────────────────────────────────────
 if [[ "${SKIP_RECHUNK}" == "1" ]]; then

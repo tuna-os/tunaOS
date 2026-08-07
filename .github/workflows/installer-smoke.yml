@@ -1,7 +1,8 @@
 # Installer GUI smoke (tunaOS#678 phase 1): per-desktop proof that the
 # live ISO autologins and the installer frontend actually starts.
 #
-# For each flavor: build the dev ISO (SSH enabled), boot it under OVMF,
+# For each flavor (gnome and the four forks): build the dev ISO (SSH enabled),
+# boot it under OVMF,
 # wait for TUNAOS_LIVE_READY, then over SSH assert the installer process
 # is running (flatpak run org.tunaos.Installer* / bootc-installer) and
 # capture a desktop screenshot as reviewable evidence.
@@ -21,7 +22,12 @@ on:
       flavors:
         description: "Comma-separated flavors"
         required: false
-        default: "kde,cosmic,niri,xfce"
+        # gnome included: it is the flow the four forks are asked to match, and
+        # it was the only frontend with no per-DE smoke leg at all. The APP
+        # mapping below already falls through to org.bootcinstaller.Installer
+        # for it, and the walkthrough's --strict list already names it — only
+        # this default kept it from ever running.
+        default: "gnome,kde,cosmic,niri,xfce"
         type: string
   schedule:
     # Weekly, after the Tuesday image builds settle.
@@ -39,7 +45,7 @@ jobs:
     steps:
       - id: gen
         env:
-          FLAVORS: ${{ inputs.flavors || 'kde,cosmic,niri,xfce' }}
+          FLAVORS: ${{ inputs.flavors || 'gnome,kde,cosmic,niri,xfce' }}
           VARIANT: ${{ inputs.variant || 'yellowfin' }}
         run: |
           M=$(jq -cn --arg v "$VARIANT" --arg f "$FLAVORS" \
@@ -295,7 +301,18 @@ jobs:
     permissions:
       contents: write
     steps:
+      # This job commits to main, so it must start FROM main — not from the
+      # dispatched ref. Checking out a feature branch made `git pull --rebase
+      # origin main` replay that branch's commits onto main: it conflicted
+      # (run 30618282287, add/add on luks-e2e.yml + image-versions.yaml, since
+      # the shallow clone has no merge base) and, had it succeeded, would have
+      # pushed unreviewed PR commits straight to main. fetch-depth: 0 gives the
+      # rebase real history so a concurrent push to main is handled instead of
+      # degenerating into add/add conflicts again.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
 
       - name: Download walkthrough artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1

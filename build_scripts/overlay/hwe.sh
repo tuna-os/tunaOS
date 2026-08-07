@@ -20,6 +20,10 @@ fi
 copy_systemfiles_for hwe
 run_buildscripts_for hwe
 
-jq . /usr/share/ublue-os/image-info.json
+if command -v jq >/dev/null 2>&1; then
+	jq . /usr/share/ublue-os/image-info.json || true
+else
+	cat /usr/share/ublue-os/image-info.json || true
+fi
 detected_os
 printf "::endgroup::\n"

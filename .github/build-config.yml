@@ -51,6 +51,8 @@ variants:
     emoji: "🐠"
     description: "Based on AlmaLinux Kitten 10"
     base_image: "quay.io/almalinuxorg/almalinux-bootc:10-kitten"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [almalinux-kitten]
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
     flavors:
       # ── Stage 1 ────────────────────────────────────────────────────────────
@@ -184,6 +186,8 @@ variants:
     emoji: "🐟"
     description: "Based on AlmaLinux 10"
     base_image: "quay.io/almalinuxorg/almalinux-bootc:10"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [almalinux]
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
     flavors:
       # ── Stage 1 ────────────────────────────────────────────────────────────
@@ -317,6 +321,8 @@ variants:
     emoji: "🍣"
     description: "Based on CentOS Stream 10"
     base_image: "quay.io/centos-bootc/centos-bootc:stream10"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [centos]
     # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
     platforms: ["linux/amd64", "linux/arm64"]
     flavors:
@@ -435,6 +441,8 @@ variants:
     emoji: "🎣"
     description: "Based on Fedora 44"
     base_image: "quay.io/fedora/fedora-bootc:44"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [fedora]
     akmods: "ublue-os"
     # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
     platforms: ["linux/amd64", "linux/arm64"]
@@ -529,12 +537,44 @@ variants:
         build_iso: true
         build_qcow2: false
 
+  # ── Hummingbird ────────────────────────────────────────────────────────────
+  # Fedora Hummingbird: container-native, hardened bootc distribution
+  # (Konflux hermetic build model, CKI ARK kernel).
+  - id: hummingbird
+    emoji: "🐦"
+    description: "Fedora Hummingbird (bootc container-native OS)"
+    base_image: "quay.io/hummingbird-community/bootc-os:latest"
+    platforms: ["linux/amd64", "linux/arm64"]
+    flavors:
+      - id: base
+        stage: 1
+        build_image: true
+        build_iso: true
+      - id: gnome
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: kde
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: niri
+        stage: 2
+        build_image: true
+        build_iso: true
+      - id: cosmic
+        stage: 2
+        build_image: true
+        build_iso: true
+
   # ── Sailfin ──────────────────────────────────────────────────────────────
   # Sailfin Tumbleweed: rolling-release, zypper-based.
   - id: sailfin
     emoji: "🦈"
     description: "Based on openSUSE Tumbleweed (rolling)"
     base_image: "registry.opensuse.org/opensuse/tumbleweed:latest"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [opensuse, tumbleweed]
     platforms: ["linux/amd64"]
     flavors:
       # base + gnome carry an arm64 leg solely as the parent chain for
@@ -565,6 +605,14 @@ variants:
       - id: xfce
         stage: 2
         build_image: true
+      # COSMIC: newly buildable. Tumbleweed packages the session richly and the
+      # whole zypper list installs clean (exit 0), producing cosmic-comp and
+      # /usr/share/wayland-sessions/cosmic.desktop — both measured on a real
+      # install, not inferred. Note cosmic-settings and cosmic-greeter are NOT
+      # packaged on openSUSE; see the manifest for what is used instead.
+      - id: cosmic
+        stage: 2
+        build_image: true
 
   # ── Guppy ────────────────────────────────────────────────────────────────
   # Guppy: source-based, emerge/portage. Compiles everything from source.
@@ -579,6 +627,8 @@ variants:
     # fetched an image the build never used and the workaround silently did
     # nothing for guppy. Keep the two in lockstep when bumping.
     base_image: "docker.io/gentoo/stage3:latest@sha256:9d03b48eda632da09f469d384ce77ec05618060ed4e9ac295f8192a196e7539a"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [gentoo]
     platforms: ["linux/amd64"]
     flavors:
       - id: base
@@ -590,6 +640,23 @@ variants:
       - id: kde
         stage: 2
         build_image: true
+      # XFCE: every atom in the emerge list was verified to exist in the Gentoo
+      # main tree before this was declared. The list previously named
+      # xfce-base/lightdm, which does not exist (it is x11-misc/lightdm) — so
+      # declaring this flavor earlier would have failed on an unresolvable atom.
+      - id: xfce
+        stage: 2
+        build_image: true
+      # NOT declared, and not an oversight:
+      #   niri    — no ebuild in the Gentoo main tree at all. A search returns
+      #             only dev-ruby/niceogiri. Declaring it would publish an
+      #             installable image with no compositor, exactly as
+      #             flounder:niri did (tunaOS#915).
+      #   cosmic  — same: no cosmic-comp or cosmic-session ebuild in the tree,
+      #             and cosmic.yaml has no emerge section.
+      # Both measured and tracked in tunaOS#923.
+      # Do not add either until the packages exist; the emerge path now fails
+      # loudly on an empty list rather than shipping a desktop-less image.
 
   # ── Rawhide ────────────────────────────────────────────────────────────────
   # Fedora Rawhide (rolling development branch). Uses the same Containerfile
@@ -600,6 +667,8 @@ variants:
     emoji: "🐉"
     description: "Based on Fedora Rawhide (rolling)"
     base_image: "quay.io/fedora/fedora-bootc:rawhide"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [fedora]
     akmods: "ublue-os"
     platforms: ["linux/amd64", "linux/arm64"]
     flavors:
@@ -679,10 +748,40 @@ variants:
   # Desktops: gnome/kde/niri/xfce via the apt branches in build_scripts/*.sh
   # (cosmic has no apt branch yet). No HWE/NVIDIA layers — Ubuntu ships its
   # own kernel stack and the akmods images are RPM-only.
+  # ── elementary / Pantheon ──────────────────────────────────────────
+  # A SEPARATE variant rather than a grouper flavour, and the base image is
+  # why. Pantheon is absent from the Ubuntu archive entirely (verified on
+  # ubuntu:resolute with main+universe+restricted+multiverse enabled: gala,
+  # wingpanel, pantheon-session and switchboard all ABSENT, only `plank`
+  # present). It comes solely from ppa:elementary-os/stable, which publishes
+  # for **noble and jammy only** — nothing for resolute. grouper is Ubuntu
+  # 26.04, so Pantheon cannot be installed there at any version today.
+  #
+  # Revisit collapsing this into grouper when elementary publishes for 26.04.
+  - id: gurnard
+    emoji: "🐟"
+    description: "Based on Ubuntu 24.04 Noble Numbat with the Pantheon desktop"
+    base_image: "docker.io/library/ubuntu:noble"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [elementary]
+    platforms:
+      - linux/amd64
+      - linux/arm64
+    flavors:
+      - id: base
+        stage: 1
+        build_image: true
+      - id: pantheon
+        stage: 2
+        build_image: true
+        build_iso: true
+
   - id: grouper
     emoji: "🐟"
     description: "Based on Ubuntu 26.04 Resolute Raccoon"
     base_image: "docker.io/library/ubuntu:resolute"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [ubuntu]
     # Built directly from stock Ubuntu and bootcified in Containerfile.ubuntu
     # (bootc from the tuna-os bootc-toolchain-sid oras artifact). See RFC 010.
     # arm64: toolchain publishes latest-{amd64,arm64}; Containerfile.ubuntu is
@@ -700,8 +799,21 @@ variants:
       # Apple Silicon (M1/M2, Asahi Linux) — full build with ENABLE_ASAHI=1
       # (the kernel decision lives in Containerfile.ubuntu's base stage, so
       # this is not an overlay). aarch64 only; no ISO (asahi-installer path).
+      #
+      # stage 3, NOT stage 1, and the distinction matters: `stage` is build
+      # ORDER, not parentage. This flavor has no PARENT_FLAVOR, so it still
+      # builds straight from base wherever it is placed — but at stage 1 it
+      # shared a matrix with base, and a stage does not advance until every
+      # cell in it passes. One arm64-only Apple Silicon flavor therefore gated
+      # gnome, kde, gnome-zfs, cosmic and xfce, which all live in stage 2:
+      # run 30688732984 promoted base and then never started them.
+      #
+      # Every other variant already places gnome-asahi at stage 3; grouper was
+      # the lone exception, because there asahi is a full build rather than an
+      # overlay and the stage number was read as "has no parent" rather than
+      # "runs first".
       - id: gnome-asahi
-        stage: 1
+        stage: 3
         platforms: ["linux/arm64"]
         build_image: true
         build_iso: false
@@ -715,10 +827,38 @@ variants:
         stage: 2
         build_image: true
         build_iso: true
-      - id: niri
+      # No niri — same reason as flounder and flounder-sid (#918): niri is not
+      # packaged for apt in Debian trixie, Debian sid or Ubuntu 26.04, and
+      # manifests/desktops/niri.yaml has no apt section. grouper is Ubuntu, so
+      # it was covered by that evidence but missed by the change.
+      #
+      # Nothing would have caught it either. With no packages.apt section the
+      # installer skips the install without error, and the apt path `exit 0`s
+      # before the shared tail — so the desktop experience contract never runs
+      # on an apt variant at all. That is the mechanism that published
+      # flounder:niri with no compositor (tunaOS#915); grouper:niri is not in
+      # the published set, so it evidently never completed, but the
+      # declaration was wrong either way.
+      # Packaging it ourselves is tunaos-packages#136. Do not re-add without it.
+      #
+      # COSMIC, by contrast, IS buildable here and is now declared. Ubuntu has
+      # no COSMIC in its own repos, but cosmic.yaml carries
+      # ppa:hepp3n/cosmic-epoch with condition: ubuntu, and install-desktop.sh
+      # adds a PPA when IS_UBUNTU — measured WITH the PPA enabled,
+      # cosmic-session, cosmic-comp, cosmic-settings and cosmic-greeter all
+      # resolve. (Measuring in a bare ubuntu container says nothing here: the
+      # installer adds repositories before it installs, so a probe that skips
+      # that step is answering a question about the wrong system.)
+      # amd64 only: ppa:hepp3n/cosmic-epoch publishes amd64 and amd64v3 and
+      # nothing else — no arm64 build of cosmic-session/cosmic-comp/etc exists
+      # for any series (Launchpad getPublishedBinaries). grouper otherwise
+      # builds both arches, so the arm64 job was the ONLY failure in run
+      # 31088031074 while amd64 built clean. Same shape as the aarch64 cosmic
+      # pin on the EL10 variants for fprintd-pam (tunaOS#732).
+      - id: cosmic
         stage: 2
+        platforms: ["linux/amd64"]
         build_image: true
-        build_iso: true
       - id: xfce
         stage: 2
         build_image: true
@@ -732,6 +872,8 @@ variants:
     emoji: "🚀"
     description: "Based on Arch Linux (rolling)"
     base_image: "docker.io/archlinux/archlinux:latest"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [arch, archlinux]
     # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
     # is x86_64-only) — see get-base-image.sh + build-archlinuxarm-base.yml
     # (#778). Only the gnome-asahi parent chain builds arm64.
@@ -775,6 +917,15 @@ variants:
       - id: kde-cachyos
         stage: 3
         build_image: true
+      - id: cosmic-cachyos
+        stage: 3
+        build_image: true
+      - id: niri-cachyos
+        stage: 3
+        build_image: true
+      - id: xfce-cachyos
+        stage: 3
+        build_image: true
 
   # ── Debian ─────────────────────────────────────────────────────────────────
   # Flounder: Debian Trixie (13) stable. Uses Containerfile.debian.
@@ -782,6 +933,8 @@ variants:
     emoji: "🐡"
     description: "Based on Debian 13 Trixie (stable)"
     base_image: "docker.io/library/debian:trixie"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [debian]
     platforms: ["linux/amd64"]
     flavors:
       # base + gnome carry an arm64 leg solely as the parent chain for
@@ -808,23 +961,40 @@ variants:
         stage: 2
         build_image: true
         build_iso: true
-      - id: cosmic
-        stage: 2
-        build_image: true
-      - id: niri
-        stage: 2
-        build_image: true
+      # No cosmic: COSMIC is not packaged in Debian AT ALL. Checked every
+      # suite via ftp-master's madison API (oldoldstable through unstable and
+      # experimental) for cosmic-session, cosmic-comp, cosmic-panel,
+      # cosmic-files, cosmic-term, cosmic-settings, cosmic-greeter and
+      # xdg-desktop-portal-cosmic — every one returns empty, while a control
+      # (kde-plasma-desktop) returns suites. The apt section of
+      # manifests/desktops/cosmic.yaml is served by ppa:hepp3n/cosmic-epoch,
+      # which is `condition: ubuntu` and publishes for resolute only, so on a
+      # Debian base the package list has no source at all:
+      #   E: Unable to locate package cosmic-comp   (and 18 more)
+      # flounder:cosmic, LUKS run 31087927879. Same reason niri is absent
+      # below; it fails louder only because apt exits 100 on an unknown name
+      # while niri.yaml had no apt section at all, so that one installed
+      # nothing and exited 0. Do not re-add without a Debian source for COSMIC.
+      # No niri: it is not packaged for apt in Debian trixie, Debian sid or
+      # Ubuntu 26.04 (all three checked), and manifests/desktops/niri.yaml
+      # has no apt section as a result. Building it produced a PUBLISHED,
+      # installable image with no compositor at all — `command -v niri` was
+      # empty in ghcr.io/tuna-os/flounder:niri. See tunaOS#915; packaging it
+      # ourselves is tracked in tunaos-packages#136 and needs a whole deb
+      # toolchain this org does not have yet. Do not re-add without one.
       - id: xfce
         stage: 2
         build_image: true
 
-  # Flounder-sid: Debian Sid (unstable/rolling). Has latest COSMIC natively.
+  # Flounder-sid: Debian Sid (unstable/rolling).
   - id: flounder-sid
     publish_name: flounder
     tag_suffix: sid
     emoji: "☢️"
     description: "Based on Debian Sid (unstable, rolling)"
     base_image: "docker.io/library/debian:sid"
+    # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
+    aliases: [debian]
     platforms: ["linux/amd64"]
     flavors:
       - id: base
@@ -836,12 +1006,10 @@ variants:
       - id: kde
         stage: 2
         build_image: true
-      - id: cosmic
-        stage: 2
-        build_image: true
-      - id: niri
-        stage: 2
-        build_image: true
+      # No cosmic — same reason as flounder above. The header on this variant
+      # used to read "Has latest COSMIC natively"; it does not. sid returns
+      # empty from madison for every cosmic binary, exactly like trixie.
+      # No niri — same reason as flounder above (absent from Debian sid too).
       - id: xfce
         stage: 2
         build_image: true

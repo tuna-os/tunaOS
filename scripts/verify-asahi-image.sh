@@ -16,7 +16,7 @@ IMAGE="${1:?usage: verify-asahi-image.sh <image-ref> [--no-pull]}"
 NO_PULL="${2:-}"
 
 if [[ "$NO_PULL" != "--no-pull" ]]; then
-    podman pull --platform linux/arm64 "$IMAGE" >/dev/null || exit 2
+	podman pull --platform linux/arm64 "$IMAGE" >/dev/null || exit 2
 fi
 
 CTR=$(podman create --platform linux/arm64 "$IMAGE" true) || exit 2
@@ -37,7 +37,17 @@ echo "== kernel =="
 mapfile -t kvers < <(ls "$mnt/usr/lib/modules/" 2>/dev/null)
 if [[ ${#kvers[@]} -eq 1 ]]; then ok "exactly one kernel: ${kvers[0]}"
 else bad "expected exactly 1 kernel in /usr/lib/modules, found ${#kvers[@]}: ${kvers[*]:-none}"; fi
+# Grade the asahi kernel where one exists, not simply the first entry `ls`
+# returns. Shipping two kernels stays a hard failure above — it is a real
+# ambiguous-boot defect — but it must not also decide WHICH kernel the rest of
+# the checks grade. albacore shipped a correct asahi kernel alongside an
+# unremoved stock one; `6.12.0-…el10_2` sorts before `6.16.4-…asahi…+16k`, so
+# every subsequent check graded the stock kernel and 24 cascading failures
+# buried the single real defect (#776).
 kver="${kvers[0]:-}"
+for k in "${kvers[@]}"; do
+    if [[ "$k" == *asahi* ]]; then kver="$k"; break; fi
+done
 M="$mnt/usr/lib/modules/$kver"
 # 16K pages are a hard requirement of Apple Silicon's DART IOMMU, not a
 # distro naming convention — Fedora encodes it in the version (+16k),

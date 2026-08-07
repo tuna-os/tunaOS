@@ -22,6 +22,10 @@ fi
 copy_systemfiles_for nvidia
 run_buildscripts_for nvidia
 
-jq . /usr/share/ublue-os/image-info.json
+if command -v jq >/dev/null 2>&1; then
+	jq . /usr/share/ublue-os/image-info.json || true
+else
+	cat /usr/share/ublue-os/image-info.json || true
+fi
 detected_os
 printf "::endgroup::\n"

@@ -8,8 +8,76 @@ desktop="${1:?usage: configure-desktop-runtime.sh <gnome|kde|niri|cosmic|xfce>}"
 # service setup. Enable their display manager only after its unit exists.
 case "$desktop" in
 gnome) dm=gdm ;;
-kde) dm=sddm ;;
-niri | cosmic) dm=greetd ;;
+kde)
+	# Plasma 6.6 renamed SDDM to PlasmaLogin. On EL10, plasma-login-manager
+	# arrives as a plasma-group dependency and claims the
+	# display-manager.service alias before our explicit `sddm` install can,
+	# so prefer it wherever it exists; Fedora/Debian/Ubuntu/Arch still ship
+	# sddm. `systemctl enable` below is NOT `|| true` -- enabling the unit
+	# the image does not have would fail here rather than at boot.
+	if systemctl list-unit-files plasmalogin.service --no-legend 2>/dev/null | grep -q '^plasmalogin.service'; then
+		dm=plasmalogin
+	else
+		dm=sddm
+	fi
+	;;
+niri) dm=greetd ;;
+cosmic)
+	# Same shape as the kde case above: a package can claim the
+	# display-manager.service alias before we get here, and `systemctl
+	# enable` on a different DM then hard-fails rather than winning.
+	#
+	# The PPA's cosmic-greeter deb enables cosmic-greeter.service and points
+	# display-manager.service at it in its postinst, so the greetd line blew
+	# up the whole grouper:cosmic build:
+	#
+	#   Failed to enable unit: File '/etc/systemd/system/display-manager.service'
+	#   already exists and is a symlink to /lib/systemd/system/cosmic-greeter.service
+	#
+	# (LUKS run 31135761136.) Deferring to the claim is also right on the
+	# merits — cosmic-greeter IS COSMIC's greeter, and it is already enabled
+	# at this point.
+	#
+	# This tests the CLAIM, not the package, which is what makes it correct
+	# on every base rather than just the one it was written for.
+	#
+	# An earlier version of this comment claimed EL10 leaves the alias alone,
+	# inferring it from `systemctl enable greetd` succeeding there. That
+	# inference was WRONG, and the artifacts say so: albacore:cosmic on head
+	# c277780f — before any of this — already reported
+	#
+	#   # display manager: cosmic-greeter.service
+	#   reason=dm_mismatch dm=cosmic-greeter.service
+	#
+	# EL10's COPR cosmic-greeter claims the alias exactly like the deb does.
+	# greetd enables cleanly there for a different reason: Fedora/EL ship
+	# greetd.service with `[Install] WantedBy=graphical.target` and no Alias=,
+	# while Debian/Ubuntu ship `Alias=display-manager.service` and no
+	# WantedBy=. No alias, no conflict — so the EL10 build SUCCEEDS and ships
+	# both units, which is worse than failing: greetd and cosmic-greeter both
+	# run `greetd` on vt1 with Restart=always, greetd takes the terminal
+	# first, and cosmic-greeter crash-loops on
+	#
+	#   unable to start greeter: terminal: unable to take controlling
+	#   terminal: EPERM: Operation not permitted
+	#
+	# (skipjack:cosmic, run 31136849989 — a cell the board counts GREEN,
+	# because the desktop contract that catches it is fatal=0. albacore:cosmic
+	# fails the same contract. skipjack:niri passes it on the identical base,
+	# so the check works and this is COSMIC-specific.)
+	#
+	# Keying off the symlink handles that case too: on EL10 the symlink is
+	# already cosmic-greeter, so this picks cosmic-greeter and the sibling
+	# guard in install-desktop.sh stops force-linking greetd beside it.
+	#
+	# NOT `systemctl enable --force`: the kde comment above records why
+	# forcing the alias is the wrong instrument (tunaOS#824).
+	if [[ "$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null)" == *cosmic-greeter.service ]]; then
+		dm=cosmic-greeter
+	else
+		dm=greetd
+	fi
+	;;
 xfce)
 	if systemctl list-unit-files lightdm.service --no-legend 2>/dev/null | grep -q '^lightdm.service'; then
 		dm=lightdm
@@ -20,7 +88,41 @@ xfce)
 *) exit 0 ;;
 esac
 
-systemctl enable "${dm}.service"
+# Still a hard failure — an image with no display manager is worse than a
+# failed build, which is why none of the branches above use `|| true`. But say
+# what happened before dying. systemd's own message names a FILE:
+#
+#   Failed to enable unit: File '/etc/systemd/system/display-manager.service'
+#   already exists and is a symlink to /lib/systemd/system/cosmic-greeter.service
+#
+# which does not mention the desktop, the package that claimed it, or what to
+# do. Reading that cost three separate 20-minute grouper:cosmic builds
+# (LUKS run 31135761136). The two cases have opposite fixes, so name which one
+# this is.
+if ! systemctl enable "${dm}.service"; then
+	# -L first: `readlink -f` prints the canonical path even when the file
+	# does not exist, so testing its output for emptiness reports "claimed by
+	# display-manager.service" on a system where nothing claimed anything —
+	# the opposite diagnosis, with the opposite fix. Caught by the
+	# unclaimed-alias case below before this shipped.
+	_dm_claim=""
+	if [[ -L /etc/systemd/system/display-manager.service ]]; then
+		_dm_claim="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
+	fi
+	echo "ERROR: cannot enable ${dm}.service as ${desktop}'s display manager." >&2
+	if [[ -n "${_dm_claim}" && "${_dm_claim##*/}" != "${dm}.service" ]]; then
+		echo "       display-manager.service is already claimed by ${_dm_claim##*/}," >&2
+		echo "       set by that package's post-install before this script ran." >&2
+		echo "       Defer to it (see how the kde and cosmic branches above pick" >&2
+		echo "       a DM) rather than forcing the alias — forcing it repoints" >&2
+		echo "       every image that shares this path (tunaOS#824)." >&2
+	else
+		echo "       Nothing else claims the alias, so ${dm}.service is most" >&2
+		echo "       likely not installed. Check that the ${desktop} manifest" >&2
+		echo "       actually pulls in the package providing it." >&2
+	fi
+	exit 1
+fi
 systemctl set-default graphical.target
 
 # Every desktop family ships an explicit runtime contract plus the
@@ -28,11 +130,43 @@ systemctl set-default graphical.target
 # console by scripts/iso-e2e.sh; the checks ExecStart is non-fatal).
 case "$desktop" in
 gnome | kde | niri | cosmic | xfce)
+	# Compile dconf databases before verify checks — desktop stages lay down
+	# keyfiles after the base stage's dconf update, so recompile here.
+	if command -v dconf &>/dev/null && compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
+		dconf update || true
+	fi
+
 	/run/context/build_scripts/checks/verify-desktop-experience.sh "$desktop"
 	install -Dm0755 /run/context/build_scripts/checks/verify-desktop-experience.sh \
 		/usr/libexec/tunaos/verify-desktop-experience
 	install -Dm0755 /run/context/build_scripts/checks/e2e-runtime-checks.sh \
 		/usr/libexec/tunaos/e2e-runtime-checks
+
+	# Branding contract — common to every desktop, plus per-desktop surfaces.
+	# The branding scripts take the VARIANT (fish codename), not the desktop.
+	/run/context/build_scripts/checks/verify-branding.sh "${IMAGE_NAME:-$desktop}"
+	install -Dm0755 /run/context/build_scripts/checks/verify-branding.sh \
+		/usr/libexec/tunaos/verify-branding
+	BRANDING_EXTRA=""
+	case "$desktop" in
+	kde)
+		# Plasma's packages own /etc/xdg/kdeglobals and overwrite the copy
+		# system_files laid down in the base stage, so the look-and-feel has to
+		# be re-asserted here, after the install (#1008).
+		/run/context/build_scripts/desktop/kde-set-look-and-feel.sh
+
+		/run/context/build_scripts/checks/verify-branding-kde.sh "${IMAGE_NAME:-$desktop}"
+		install -Dm0755 /run/context/build_scripts/checks/verify-branding-kde.sh \
+			/usr/libexec/tunaos/verify-branding-kde
+		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-kde ${IMAGE_NAME:-$desktop} --runtime"
+		;;
+	niri)
+		/run/context/build_scripts/checks/verify-branding-niri.sh "${IMAGE_NAME:-$desktop}"
+		install -Dm0755 /run/context/build_scripts/checks/verify-branding-niri.sh \
+			/usr/libexec/tunaos/verify-branding-niri
+		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-niri ${IMAGE_NAME:-$desktop} --runtime"
+		;;
+	esac
 	cat >/usr/lib/systemd/system/tunaos-desktop-contract.service <<EOF
 [Unit]
 Description=Verify TunaOS ${desktop} desktop experience
@@ -42,6 +176,8 @@ Requires=display-manager.service
 [Service]
 Type=oneshot
 ExecStart=/usr/libexec/tunaos/verify-desktop-experience ${desktop} --runtime
+ExecStart=-/usr/libexec/tunaos/verify-branding ${IMAGE_NAME:-${desktop}} --runtime
+${BRANDING_EXTRA}
 ExecStart=-/usr/libexec/tunaos/e2e-runtime-checks ${desktop}
 StandardOutput=journal+console
 StandardError=journal+console

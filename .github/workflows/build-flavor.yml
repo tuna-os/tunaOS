@@ -1,7 +1,10 @@
 name: Build Flavor
+# Dispatch-only. The weekly Sunday "all flavors x all variants" schedule was
+# removed 2026-08-01: every nightly variant build already runs flavor=all, so
+# the weekly sweep rebuilt the exact same ~137 images a 12th time — as one
+# ~600-job wave against a 20-concurrent-job org limit. Zero coverage lost;
+# use workflow_dispatch to rebuild one flavor across all variants.
 on:
-  schedule:
-    - cron: "0 6 * * 0"  # weekly Sunday 6am UTC — build all flavors across all variants
   workflow_dispatch:
     inputs:
       flavor:

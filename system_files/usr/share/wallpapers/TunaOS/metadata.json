@@ -1,0 +1,17 @@
+{
+    "KPackageStructure": "Plasma/Wallpaper",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "",
+                "Name": "TunaOS Contributors"
+            }
+        ],
+        "Category": "Abstract",
+        "Description": "TunaOS default wallpaper",
+        "Id": "org.tunaos.wallpaper",
+        "License": "CC-BY-SA-4.0",
+        "Name": "TunaOS",
+        "Version": "1.0"
+    }
+}

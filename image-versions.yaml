@@ -2,7 +2,7 @@ images:
   - name: centos-bootc
     image: quay.io/centos-bootc/centos-bootc
     tag: c10s
-    digest: sha256:06f4983c79867df60ce28efb6caf4901c64238dc490e1d3f03ad694e6ab678c6
+    digest: sha256:2b7e3b1abf8db094d1efb083721dc0f72e6feeef2355fc16ea010d0266b2bb95
   - name: common
     image: ghcr.io/projectbluefin/common
     tag: latest
@@ -10,14 +10,14 @@ images:
   - name: brew
     image: ghcr.io/ublue-os/brew
     tag: latest
-    digest: sha256:14ad3acb89bea0a7d98cacc206a4f590efcb794b7da7385bbeba4ed943289ad4
+    digest: sha256:8855464e5c150974c5edf4343ffef50ca37b1c4d96a648dce28927033010a372
 
   # RFC 010: pre-built Zirconium image for DMS/Niri system files
   # on grouper (Ubuntu) — not available from Ubuntu apt.
   - name: zirconium
     image: ghcr.io/zirconium-dev/zirconium
     tag: latest
-    digest: sha256:9a61388e92c12b8d47cfad26a65b99b63e0edc5d3bc0a991f99a703ac9edfb01
+    digest: sha256:a6dc5dad2f2a7f2ded4f324d1a3c1ccd882f43f466be16ad16dc11a51e0b6e69
 
 # Pinned binary downloads (managed by Renovate)
 downloads:
@@ -26,28 +26,56 @@ downloads:
   # renovate: datasource=github-releases depName=ledif/kcm_ublue
   kcm_ublue: "v0.6.1"
   # renovate: datasource=github-releases depName=twpayne/chezmoi
-  chezmoi: "v2.71.1"
+  chezmoi: "v2.72.0"
   chezmoi_sha256:
     amd64: "a8880a1b01e877c3e5da250b9f882ce9fa39962686d75f436fa21e021fa092b1"
     arm64: "ea9389f4efdc26d74bf9b4cc73db8f3a529e1e6effb5703e438117ea3f095439"
   # renovate: datasource=git-refs depName=tuna-os/tacklebox
-  tacklebox: "320a1a459511b9d056d67e9301ec5fed02858f44"
+  # This is the fallback every caller that does not set TACKLEBOX_SHA gets
+  # (scripts/lib/common.sh:229) — installer-smoke.yml among them.
+  #
+  # FLOOR, not a ceiling: below fd95174, tacklebox bakes `--omit "tpm2-tss
+  # pcsc"` into the dracut command line, which aborts the rebuild on any EL
+  # image that force-adds clevis (see luks-e2e.yml). fd95174 is the commit
+  # that replaced it with a per-image probe, and initramfs_test.go pins the
+  # baked-in form gone. So never move this pin below fd95174 — moving it
+  # ABOVE has always been fine, and a Renovate bump to an older-but-clean
+  # digest is the thing to watch (tuna-os/iso-builder#43).
+  #
+  # At 4fa6041 for the live-boot fix: below it, the embedded initrd overlay
+  # cannot mount the live root at all. $hookdir is on the image's read-only
+  # /usr, so the queue directories cannot be created, tbox-live-root never
+  # runs, and the boot dies in emergency on `overlayfs: failed to resolve
+  # '/run/rootfsbase'`. Proven both ways by named runs: broken at
+  # tacklebox 30629145076, booting to login at 30630284339.
+  tacklebox: "4fa604115dfa2e6356c68bde85a191c6620ebea1"
+
+  # Zirconium's mkosi.extra payload, fetched as a source tarball by
+  # build_scripts/install-zirconium.sh (niri stages only). Pinned to a commit
+  # for the same reason every other download here is: `main` moves, so an
+  # unpinned fetch makes niri builds non-reproducible and puts whatever landed
+  # upstream in the last hour into the image. A tarball checksum is not an
+  # option on top of this — GitHub generates the archive on demand and its
+  # bytes are not stable — but the commit itself is content-addressed, so the
+  # pin is what fixes the file set.
+  # renovate: datasource=git-refs depName=zirconium-dev/zirconium
+  zirconium_src: "d2cfb176433cd214a26d02abe572c1b9d9fcc72e"
 
   # Bootc toolchain built from source (see toolchain/) and published to
   # ghcr.io/tuna-os/bootc-toolchain-<base> as OCI artifacts via ORAS.
   # These pins drive both the toolchain builds and the version tags consumers
   # request. Renovate bumps them; the toolchain workflow rebuilds on bump.
   # renovate: datasource=github-releases depName=bootc-dev/bootc
-  bootc: "v1.16.6"
+  bootc: "v1.16.7"
   # renovate: datasource=github-releases depName=coreos/bootupd
-  bootupd: "v0.2.35"
+  bootupd: "v0.2.36"
   # ostree from source only for bases whose packaged ostree is older than
   # bootc's required libostree (e.g. Debian trixie ships 2025.2 < 2025.3).
   # ostree is built from source (with its vendored composefs submodule) only for
   # bases whose packaged libostree is older than bootc's required 2025.3 — e.g.
   # Debian trixie ships 2025.2. Newer bases (sid) use the packaged libostree.
   # renovate: datasource=github-releases depName=ostreedev/ostree
-  ostree: "v2026.2"
+  ostree: "v2026.3"
   # composefs: built from source (meson) and pkg-config-installed so the source
   # ostree can configure --with-composefs, on bases that don't package it (trixie).
   # renovate: datasource=github-releases depName=containers/composefs

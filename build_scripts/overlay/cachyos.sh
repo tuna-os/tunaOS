@@ -31,7 +31,7 @@ rm -f "$tmpconf"
 
 # Add cachyos repository definitions to pacman.conf if missing
 if ! grep -q "^\[cachyos\]" /etc/pacman.conf; then
-	cat << 'EOF' >> /etc/pacman.conf
+	cat <<'EOF' >>/etc/pacman.conf
 
 [cachyos]
 Include = /etc/pacman.d/cachyos-mirrorlist
@@ -40,12 +40,12 @@ fi
 
 pacman -Syu --noconfirm --needed \
 	cachyos-keyring cachyos-mirrorlist cachyos-settings \
-	linux-cachyos linux-cachyos-headers
+	linux-cachyos linux-cachyos-headers tpm2-tss
 
 # Mark as CachyOS-augmented for install-desktop.sh detection
 install -D /dev/null /etc/cachyos-release
 printf 'CachyOS\n' >/etc/cachyos-release
 
 # Rebuild initramfs via dracut
-dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
+dracut --force --omit "tpm2-tss" "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
 pacman -Scc --noconfirm || true

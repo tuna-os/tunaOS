@@ -65,7 +65,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Detect HWE/GDX-related changes
         id: filter
-        uses: dorny/paths-filter@7b450fff21473bca461d4b92ce414b9d0420d706 # v4.0.2
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           filters: |
             hwe_gdx_related:
@@ -208,11 +208,18 @@ jobs:
               esac
             fi
 
+            # reusable-build-image.yml drives its build matrix from
+            # platforms-json (it no longer runs its own generate_matrix job),
+            # so every call site below must pass this alongside platforms.
+            PLATFORMS_JSON="$(printf '%s' "${PLATFORMS}" | jq -Rc 'split(",")
+              | map({platform: ., safeplatform: (gsub("/"; "-"))}) | tostring')"
+
             MATRIX="$(echo "${MATRIX}" | jq ".include += [{
               \"image_variant\": \"${image_variant}\",
               \"image_name\": \"${IMAGE_NAME}\",
               \"default_tag\": \"${TAG}\",
               \"platforms\": \"${PLATFORMS}\",
+              \"platforms_json\": ${PLATFORMS_JSON},
               \"description\": \"${DESCRIPTION}\",
               \"run_hwe_gdx\": ${RUN_HWE_GDX},
               \"run_kde\": ${RUN_KDE},
@@ -249,6 +256,7 @@ jobs:
       image-variant: ${{ matrix.image_variant }}
       flavor: base
       platforms: ${{ matrix.platforms }}
+      platforms-json: ${{ matrix.platforms_json }}
       major-version: ${{ matrix.major_version }}
       default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-base', github.event.pull_request.number) || 'base' }}
       rechunk: ${{ matrix.rechunk }}
@@ -276,6 +284,7 @@ jobs:
       image-variant: ${{ matrix.image_variant }}
       flavor: hwe-base
       platforms: ${{ matrix.platforms }}
+      platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-hwe-base', github.event.pull_request.number) || 'hwe-base' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
@@ -306,6 +315,7 @@ jobs:
       image-variant: ${{ matrix.image_variant }}
       flavor: gdx-base
       platforms: ${{ matrix.platforms }}
+      platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-gdx-base', github.event.pull_request.number) || 'gdx-base' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
@@ -338,6 +348,7 @@ jobs:
       image-variant: ${{ matrix.image_variant }}
       flavor: gnome
       platforms: ${{ matrix.platforms }}
+      platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-gnome', github.event.pull_request.number) || 'gnome' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
@@ -369,6 +380,7 @@ jobs:
       image-variant: ${{ matrix.image_variant }}
       flavor: kde
       platforms: ${{ matrix.platforms }}
+      platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-kde', github.event.pull_request.number) || 'kde' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
@@ -400,6 +412,7 @@ jobs:
       image-variant: ${{ matrix.image_variant }}
       flavor: niri
       platforms: ${{ matrix.platforms }}
+      platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-niri', github.event.pull_request.number) || 'niri' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
@@ -430,6 +443,7 @@ jobs:
       image-variant: ${{ matrix.image_variant }}
       flavor: gnome-hwe
       platforms: ${{ matrix.platforms }}
+      platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-gnome-hwe', github.event.pull_request.number) || 'gnome-hwe' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
@@ -460,6 +474,7 @@ jobs:
       image-variant: ${{ matrix.image_variant }}
       flavor: gnome-gdx
       platforms: ${{ matrix.platforms }}
+      platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-gnome-gdx', github.event.pull_request.number) || 'gnome-gdx' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
@@ -491,6 +506,7 @@ jobs:
       image-variant: ${{ matrix.image_variant }}
       flavor: kde-hwe
       platforms: ${{ matrix.platforms }}
+      platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-kde-hwe', github.event.pull_request.number) || 'kde-hwe' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
@@ -521,6 +537,7 @@ jobs:
       image-variant: ${{ matrix.image_variant }}
       flavor: kde-gdx
       platforms: ${{ matrix.platforms }}
+      platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-kde-gdx', github.event.pull_request.number) || 'kde-gdx' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
@@ -552,6 +569,7 @@ jobs:
       image-variant: ${{ matrix.image_variant }}
       flavor: niri-hwe
       platforms: ${{ matrix.platforms }}
+      platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-niri-hwe', github.event.pull_request.number) || 'niri-hwe' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}
@@ -582,6 +600,7 @@ jobs:
       image-variant: ${{ matrix.image_variant }}
       flavor: niri-gdx
       platforms: ${{ matrix.platforms }}
+      platforms-json: ${{ matrix.platforms_json }}
       default-tag: ${{ github.event_name == 'pull_request' && format('pr-{0}-niri-gdx', github.event.pull_request.number) || 'niri-gdx' }}
       rechunk: ${{ matrix.rechunk }}
       sbom: ${{ matrix.sbom }}

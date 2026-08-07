@@ -48,8 +48,8 @@ fi
 # multi-user.target and lands on a text console (tunaOS#678).
 systemctl enable greetd.service 2>/dev/null || true
 ln -sf /usr/lib/systemd/system/greetd.service /etc/systemd/system/display-manager.service 2>/dev/null || true
-systemctl set-default graphical.target 2>/dev/null || \
-  ln -sf /usr/lib/systemd/system/graphical.target /etc/systemd/system/default.target 2>/dev/null || true
+systemctl set-default graphical.target 2>/dev/null ||
+	ln -sf /usr/lib/systemd/system/graphical.target /etc/systemd/system/default.target 2>/dev/null || true
 
 # Disable screen lock for the live session
 mkdir -p /etc/xdg
