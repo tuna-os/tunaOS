@@ -187,3 +187,105 @@ run_enable() {
 	run run_enable cosmic-greeter.service
 	[ "$status" -eq 1 ]
 }
+
+# ── The other half: install-desktop.sh ──────────────────────────────────────
+#
+# Deferring in configure-desktop-runtime.sh stops the build from dying, but
+# install-desktop.sh resolves the manifest's display_manager independently and
+# then FORCE-LINKS it into graphical.target.wants. Ubuntu's greetd.service
+# carries `[Install] Alias=display-manager.service` and no WantedBy=, so that
+# link is the only thing that would ever start greetd on an image where
+# cosmic-greeter owns the alias -- and cosmic-greeter.service is itself
+# `ExecStart=greetd --config /etc/greetd/cosmic-greeter.toml` with `vt = "1"`.
+# Two units running greetd on vt1, both Restart=always, is the
+# two-DMs-racing-for-seat0 state that file's own sibling-link cleanup exists to
+# prevent.
+INSTALLER="${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
+
+# Run install-desktop.sh's greetd-resolution block against a fake sysroot.
+resolve_installer_dm() {
+	local link_target="$1" declared="${2:-greetd}"
+	local root="${BATS_TEST_TMPDIR}/inst-${BATS_TEST_NUMBER}"
+	rm -rf "$root"
+	mkdir -p "$root/etc/systemd/system" "$root/usr/lib/systemd/system"
+	if [ -n "$link_target" ]; then
+		touch "$root/usr/lib/systemd/system/${link_target}"
+		ln -sf "$root/usr/lib/systemd/system/${link_target}" \
+			"$root/etc/systemd/system/display-manager.service"
+	fi
+
+	local block
+	block="$(awk '/^if \[\[ "\$\{_TD_DM\}" == "greetd" \]\]; then$/{f=1} f{print} f&&/^fi$/{exit}' "$INSTALLER" |
+		sed "s#/etc/systemd/system/display-manager.service#${root}/etc/systemd/system/display-manager.service#")"
+
+	bash -c "
+		_TD_DM='${declared}'
+		${block}
+		echo \"\${_TD_DM}\"
+	" | tail -1
+}
+
+@test "the installer's resolution block was actually extracted" {
+	run awk '/^if \[\[ "\$\{_TD_DM\}" == "greetd" \]\]; then$/{f=1} f{print} f&&/^fi$/{exit}' "$INSTALLER"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"cosmic-greeter.service"* ]]
+	[[ "$output" == *"readlink"* ]]
+}
+
+@test "install-desktop.sh wants cosmic-greeter, not a second greetd on vt1" {
+	run resolve_installer_dm cosmic-greeter.service
+	[ "$output" = "cosmic-greeter" ]
+}
+
+@test "install-desktop.sh leaves greetd alone when nothing claimed the alias" {
+	run resolve_installer_dm ""
+	[ "$output" = "greetd" ]
+
+	run resolve_installer_dm gdm.service
+	[ "$output" = "greetd" ]
+}
+
+# A dangling alias is the openSUSE-shaped case the block below this one in
+# install-desktop.sh reclaims. It must not be read as a cosmic-greeter claim.
+@test "install-desktop.sh ignores an alias pointing at a unit that is gone" {
+	local root="${BATS_TEST_TMPDIR}/dangling"
+	mkdir -p "$root/etc/systemd/system"
+	ln -sf "$root/usr/lib/systemd/system/cosmic-greeter.service" \
+		"$root/etc/systemd/system/display-manager.service"
+	local block
+	block="$(awk '/^if \[\[ "\$\{_TD_DM\}" == "greetd" \]\]; then$/{f=1} f{print} f&&/^fi$/{exit}' "$INSTALLER" |
+		sed "s#/etc/systemd/system/display-manager.service#${root}/etc/systemd/system/display-manager.service#")"
+	run bash -c "_TD_DM='greetd'; ${block}; echo \"\${_TD_DM}\""
+	[ "$output" = "greetd" ]
+}
+
+# ── And the contracts that judge the result ─────────────────────────────────
+#
+# dm_id is `systemctl show -P Id display-manager.service`, so on Ubuntu it
+# reads cosmic-greeter.service and on Fedora/EL10 greetd.service. A pattern
+# pinned to greetd alone would fail grouper:cosmic at boot -- fatally in
+# verify-desktop-experience.sh (dm_mismatch), and as a TAP failure harvested
+# from the serial console in e2e-runtime-checks.sh -- on a COSMIC login screen
+# that is working exactly as intended.
+@test "both runtime contracts accept either greeter as cosmic's DM" {
+	local f
+	for f in "${REPO_ROOT}/build_scripts/checks/verify-desktop-experience.sh" \
+		"${REPO_ROOT}/build_scripts/checks/e2e-runtime-checks.sh"; do
+		run grep -c "greetd|cosmic-greeter" "$f"
+		[ "$status" -eq 0 ]
+		[ "$output" -ge 1 ]
+	done
+}
+
+# niri keeps the strict pattern: it has no cosmic-greeter, and widening it
+# there would accept a greeter that variant never installs.
+@test "niri's contracts still pin greetd alone" {
+	local f
+	for f in "${REPO_ROOT}/build_scripts/checks/verify-desktop-experience.sh" \
+		"${REPO_ROOT}/build_scripts/checks/e2e-runtime-checks.sh"; do
+		run grep -E "^niri\)? *(\)|dm_pattern)" "$f"
+		[ "$status" -eq 0 ]
+	done
+	run grep -E "^niri\) dm_pattern='\^greetd" "${REPO_ROOT}/build_scripts/checks/e2e-runtime-checks.sh"
+	[ "$status" -eq 0 ]
+}

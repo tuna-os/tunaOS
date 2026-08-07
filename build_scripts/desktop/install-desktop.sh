@@ -531,6 +531,39 @@ if [[ "${_TD_DM}" == "sddm" && -f /usr/lib/systemd/system/plasmalogin.service ]]
 	echo "install-desktop: manifest declares sddm but image ships plasmalogin.service — resolving to plasmalogin"
 	_TD_DM="plasmalogin"
 fi
+# Same shape, for COSMIC on apt. cosmic-greeter is not a rival display manager
+# to greetd -- it IS greetd, wrapped:
+#   ExecStart=greetd --config /etc/greetd/cosmic-greeter.toml   (vt = "1")
+# and the deb declares `Provides: x-display-manager`, `Pre-Depends: greetd`.
+# Its postinst then points /etc/systemd/system/display-manager.service at
+# cosmic-greeter.service via debconf (the unit's own `[Install] Alias=` is
+# commented out and debconf-managed), and it arrives as a cosmic-session
+# dependency, so it is installed even though cosmic.yaml's apt list never names
+# it.
+#
+# configure-desktop-runtime.sh already defers to that claim (it has to: its
+# `systemctl enable` is not `|| true`, and the conflict killed the whole
+# grouper:cosmic build in LUKS run 31135761136). This is the other half, and it
+# is not cosmetic: leaving _TD_DM as the manifest's "greetd" force-links
+# greetd.service into graphical.target.wants below, and Ubuntu's greetd.service
+# carries `[Install] Alias=display-manager.service` and NO WantedBy=, so that
+# link is the only thing that would ever start it. Two units then run `greetd`
+# on vt1 -- both with Restart=always -- which is the two-DMs-racing-for-seat0
+# failure the sibling-link cleanup below exists to prevent.
+#
+# Narrow on purpose, for the same reason as configure-desktop-runtime.sh: keyed
+# on the alias the distro's own packaging has ALREADY set, not on
+# cosmic-greeter.service merely existing. Fedora and EL10 install cosmic-greeter
+# too, and their cosmic cells are green with greetd as the DM, so a
+# package-presence test would repoint them; the symlink test cannot.
+if [[ "${_TD_DM}" == "greetd" ]]; then
+	_TD_DM_ALIAS_NOW="$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null || true)"
+	if [[ -n "${_TD_DM_ALIAS_NOW}" && -e "${_TD_DM_ALIAS_NOW}" ]] &&
+		[[ "$(basename "${_TD_DM_ALIAS_NOW}")" == "cosmic-greeter.service" ]]; then
+		echo "install-desktop: display-manager.service is already cosmic-greeter (greetd wrapper) — resolving greetd to cosmic-greeter"
+		_TD_DM="cosmic-greeter"
+	fi
+fi
 
 if [[ -n "${_TD_DM}" && "${_TD_DM}" != "null" ]]; then
 	safe_enable "${_TD_DM}.service"
