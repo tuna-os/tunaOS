@@ -262,6 +262,36 @@ xfce)
 	require_command thunar
 	require_any_glob \
 		'/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
+
+	# xfwl4 reads xfwm4's THEME DATA and panics without it — not a warning, a
+	# hard abort before the session exists:
+	#
+	#   xfwl4::backend::udev: Using renderD128 as primary GPU
+	#   smithay::wayland::socket: Created new socket name="wayland-1"
+	#   thread 'main' panicked at src/core/state.rs:260:74:
+	#   Failed to load initial config: Failed to find theme named Default
+	#
+	# yellowfin:xfce in installer-smoke run 31183217981 booted to a console of
+	# that backtrace: no desktop, no installer, nothing to screenshot. It reads
+	# like the GPU-less runner limitation and is not — the same log line says a
+	# render node WAS found.
+	#
+	# xfce.sh already pulls xfwm4 for this reason, but through
+	# install_available, which is best-effort by design and skips silently when
+	# the package does not resolve on a base. So the theme data can be absent
+	# with nothing in the build log to say so, and the first symptom is a
+	# compositor panic on a user's machine. Assert it here instead: an image
+	# whose compositor cannot start is not a shippable image.
+	#
+	# Guarded on xfwl4 being present because the X11 branch (xfwm4 as the WM on
+	# bases without the Wayland stack) pulls the same package as a dependency
+	# and would never reach this state.
+	if command -v xfwl4 >/dev/null 2>&1; then
+		require_any_glob \
+			'/usr/share/themes/Default/xfwm4/themerc' \
+			'/usr/share/themes/Default/xfwm4'
+	fi
+
 	dm_pattern='^(gdm|gdm3|lightdm|greetd)\.service$'
 	;;
 pantheon)
