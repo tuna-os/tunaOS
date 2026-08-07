@@ -366,6 +366,67 @@ the guest ourselves costs the following boot nothing. If it survives `SIGKILL`
 the function now fails with that as the reason, and the passphrase gate's own
 launch names a QEMU it could not start instead of exiting silently.
 
+### 8. `guppy` shipped skopeo instead of podman, so its offline store read as empty (2026-08-07)
+
+**Affected:** both `guppy` cells (Gentoo). Measured on `guppy:gnome`, run
+31134373523 — 2h30m in, after a complete and correct image build, a green live
+squash and 13 passing live-ISO checks.
+
+**Symptom:**
+
+```
+--- names recorded in the offline store ---
+[{... "names":["ghcr.io/tuna-os/guppy:gnome"] ...}]
+==> Probing for ghcr.io/tuna-os/guppy:gnome...
+==> Probing for localhost/guppy:gnome...
+==> No local image in offline store — transferring from host via SSH
+...
+scp: write remote "/home/liveuser/luks-image-guppy-gnome.tar": Failure
+ERROR: image transfer to guest timed out or failed
+```
+
+**The contradiction is the whole clue.** The dump prints the store's own index,
+recording the exact ref the very next line fails to find. Fifteen lines above
+it, twice: `sudo: podman: command not found`.
+
+**Root cause, two layers.**
+
+*The image.* `Containerfile.gentoo` emerged `app-containers/skopeo` and never
+`app-containers/podman`. Skopeo looks like coverage — it is what bootc's
+containers-image-proxy shells out to — but it cannot *start* a container, and
+`guppy` probes `BACKEND=composefs-native`, whose install path cannot take
+fisherman's `bootcDirect` shortcut: bootc runs inside a container podman
+starts. Every other base has podman (the rpm and apt ones via
+`build_scripts/10-base-packages.sh`, `Containerfile.arch` and `.debian` by
+name) and Gentoo runs none of those scripts. Third time Gentoo was the last
+base without something — see `sudo` (§ `test_live_sudo_every_base.bats`) and
+flatpak before it.
+
+*The harness.* Both offline-store probes were answered **inside** the guest:
+`sudo podman image exists <ref>`, then `sudo jq -e ... images.json` as the
+fallback. guppy has neither binary, so both exited 127 and the harness
+concluded "image absent" — then fell through to the SSH image transfer that
+`scripts/iso-e2e.sh` documents at length as physically impossible (a ~4.9G tar
+into a tmpfs upperdir on a 4096M guest, #941). A missing tool read as a missing
+image.
+
+**Fix, matching the two layers.**
+
+- `Containerfile.gentoo` emerges `app-containers/podman`.
+- `customize-live.sh` asserts `command -v podman` next to its `sudo`
+  assertion, so the next base to omit it fails the ISO build in seconds rather
+  than hour three of a matrix cell.
+- The store index is read out of the guest once with `cat` and parsed on the
+  **host** (`store_records_image`), so the probe needs nothing from the guest
+  that the diagnostic dump has not already proven it can do. Matching is on
+  `names` only, never `names-history`: containers-storage will not resolve a
+  ref that was retagged away, so answering yes for one is the same dead end by
+  another road.
+- Podman-shaped diagnostics are gated on the guest actually having podman, so
+  a skopeo-only base says so once instead of printing `command not found` a
+  dozen times and leaving the cause to be inferred from an absent `Found`
+  line.
+
 ---
 
 ## Glossary of Components

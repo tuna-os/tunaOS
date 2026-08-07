@@ -84,10 +84,28 @@ RUN emerge --verbose --deep --newuse @world
 #   ERROR: ENABLE_SSHD=1 grants liveuser NOPASSWD sudo, but this image has no sudo.
 #
 # guppy:xfce, LUKS run 31082460289 — after a complete, correct image build.
+#
+# app-containers/podman, third of the same kind, and the one that skopeo looks
+# like it covers but does not. guppy probes BACKEND=composefs-native, and the
+# composefs install path cannot take fisherman's bootcDirect shortcut — bootc
+# has to run in a container, which means podman in the live guest (see the
+# SWAP_DISK comment in scripts/iso-e2e.sh, written from a sailfin OOM of that
+# very process). skopeo is here for bootc's containers-image-proxy and answers a
+# different question, so the gap read as "image absent" rather than "no podman":
+# the offline store held ghcr.io/tuna-os/guppy:gnome and every probe of it was
+# `sudo: podman: command not found`, so the cell fell through to the SSH image
+# transfer that scripts/iso-e2e.sh documents as impossible and died on
+#
+#   scp: write remote "/home/liveuser/luks-image-guppy-gnome.tar": Failure
+#
+# 2h30m into the job. guppy:gnome, LUKS run 31134373523. Every other base has
+# podman — the rpm and apt ones from build_scripts/10-base-packages.sh,
+# Containerfile.arch and .debian by name — and Gentoo runs none of those, which
+# is why guppy was the only variant without it.
 RUN emerge --verbose --deep --newuse \
         app-arch/cpio btrfs-progs dev-vcs/git dosfstools sys-fs/xfsprogs \
         linux-firmware rust skopeo sys-kernel/gentoo-kernel-bin systemd \
-        sys-apps/flatpak app-admin/sudo \
+        sys-apps/flatpak app-admin/sudo app-containers/podman \
         net-vpn/tailscale gui-apps/wl-clipboard media-video/ffmpeg media-plugins/gst-plugins-meta && \
     curl -fsSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.35.0/just-1.35.0-x86_64-unknown-linux-musl.tar.gz && \
     tar -xzf /tmp/just.tar.gz -C /usr/bin just && rm /tmp/just.tar.gz && \
