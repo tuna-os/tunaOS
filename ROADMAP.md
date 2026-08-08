@@ -30,7 +30,7 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 
 CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
-⚠️ **ISO incident REOPENED** (2026-08-08): download pipeline still broken. 'Publish Live ISOs to R2' failed 12 consecutive runs since 06-28; only 3 of 10 releases since 07-01 carry ISO assets (all KDE/COSMIC/-nvidia tags are empty shells). Last downloadable asset 2026-07-12. Root cause lead: #936 (tacklebox pin blocks live-boot fix). See #1106.
+✅ **Downloads VERIFIED WORKING** (2026-08-08): tunaos.org/download serves 170 ISOs from R2 (newest 08-07, HTTP 200 GB-scale). ⚠️ **Remaining gap**: GitHub Releases page silently stale since 07-12 — daily Generate Release skips on SBOM artifact-name mismatch (`sbom-*-gnome-*` → `sbom-*-<flavor>-*`); release tags are empty shells. See #1106. #936 (tacklebox pin) still open as live-boot fix hold.
 
 ### Community
 
@@ -70,13 +70,14 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
 **Theme**: Expand variant coverage, harden architecture, grow community.
 
-**Mid-quarter update (2026-08-08)**: Q3 milestone populated; CI green. ⚠️ ISO download pipeline still failing (#1106) — tags exist but most releases have no assets; do not treat as shipping until assets are verifiable on the download page. Remaining gaps: Bonito (Fedora 44) GA (#272), external contributor onboarding, ISO publishing (#1106).
+**Mid-quarter update (2026-08-08)**: Q3 milestone populated; CI green; **downloads verified working** (170 ISOs, newest 08-07). Remaining gaps: Bonito (Fedora 44) GA (#272), external contributor onboarding, GitHub Releases page asset gap (#1106).
 
 | Goal | Owner | Tracking | Status |
 |------|-------|----------|--------|
-| **Fix ISO downloads** | ci-maintainer | #543, #561, #1106 | 🔴 REGRESSED (R2 publish failing since 06-28) |
+| **Fix ISO downloads** | ci-maintainer | #543, #561 | ✅ Done — downloads verified working (R2, 08-07) |
 | Bonito (Fedora 44) GA | ci-maintainer | #272 | 🟡 In progress (Q3 milestone) |
-| Ship KDE, COSMIC, Niri, XFCE variants | ci-maintainer | #285, #1106 | 🔴 Blocked (tags yes, assets no) |
+| Ship KDE, COSMIC, Niri, XFCE variants | ci-maintainer | #285 | ✅ Done — all desktops downloadable on tunaos.org |
+| GitHub Releases page carries ISO assets | ci-maintainer | #1106 | 🟡 Gap — SBOM-name skip since 07-12 |
 | Containerfile deduplication | architect | #305 | ✅ Done |
 | Hardcoded registry → configurable | architect | #304 | ✅ Done |
 | Justfile modular decomposition | architect | #308 | ✅ Done |
