@@ -82,6 +82,38 @@ Test outputs are uploaded as GitHub Actions artifacts:
 | `tests/live-iso-verify.yaml` | Live ISO verification manifest |
 | `scripts/iso-e2e.sh` | Main QEMU-based end-to-end test runner |
 | `.github/workflows/iso-e2e.yml` | CI workflow for automated ISO testing |
+| `tests/functional/run.sh` | Tier-1 functional checks for a booted image (per-desktop SSH assertions, tuna-os/tunaos#576) |
+| `tests/bats/test_functional_run.bats` | Unit tests for the functional-check dispatcher (stubbed systemctl/bootc/flatpak) |
+
+## Functional Checks (per-image, per-desktop)
+
+The boot gate proves an image *boots*; `tests/functional/run.sh` proves features
+a user needs are present and working on the **running** system (tuna-os/tunaos#576).
+It runs over SSH against a booted image — corral VM, gate VM, or local install —
+and emits TAP-style `ok`/`not ok` lines; the exit code is the failure count.
+
+Checks: system running + `graphical.target`; no failed units outside the
+VM-noise allowlist (`libstoragemgmt`, `mcelog`); the desktop's display manager
+active; the desktop's session binary and a session entry present; `bootc
+status` healthy; Flathub configured; and (when a variant is given) `image-info.json`
++ installer `recipe.json` branding.
+
+```bash
+# Against a corral VM running a booted image
+corral ssh <vm> -u root -c 'bash -s' < tests/functional/run.sh gnome yellowfin
+
+# Or copy it in and run inside the guest
+scp tests/functional/run.sh root@<guest>:/tmp/ && ssh root@<guest> bash /tmp/run.sh kde yellowfin
+
+# Composefs variant (e.g. grouper): opt in to the composefs assertion
+FUNCTIONAL_EXPECT_COMPOSEFS=1 tests/functional/run.sh gnome grouper
+```
+
+Run the dispatcher's unit tests with the rest of the suite:
+
+```bash
+bats tests/bats/test_functional_run.bats
+```
 
 ## Writing New Tests
 
