@@ -30,7 +30,7 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 
 CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
-✅ **Downloads VERIFIED WORKING** (2026-08-08): tunaos.org/download serves 170 ISOs from R2 (newest 08-07, HTTP 200 GB-scale). ⚠️ **Remaining gap**: GitHub Releases page silently stale since 07-12 — daily Generate Release skips on SBOM artifact-name mismatch (`sbom-*-gnome-*` → `sbom-*-<flavor>-*`); release tags are empty shells. See #1106. #936 (tacklebox pin) still open as live-boot fix hold.
+✅ **Downloads VERIFIED WORKING** (2026-08-08): tunaos.org/download serves 179 ISOs from R2 (newest 08-07, HTTP 200 GB-scale). ⚠️ **Remaining gap**: GitHub Releases page stale since 07-12 — 27 consecutive green Generate Release runs silently skipped (SBOM artifact-name mismatch); release tags are empty shells. See #1106 (fix) + #1147 (cadence health gate). #936 (tacklebox pin) still open as live-boot fix hold.
 
 ### Community
 
@@ -79,6 +79,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | Redfin (RHEL 10) alpha | ci-maintainer | #609, #1123 | 🔴 DROPPED — restored to roadmap 2026-08-08 |
 | Ship KDE, COSMIC, Niri, XFCE variants | ci-maintainer | #285 | ✅ Done — all desktops downloadable on tunaos.org |
 | GitHub Releases page carries ISO assets | ci-maintainer | #1106 | 🟡 Gap — SBOM-name skip since 07-12 |
+| Release-cadence health gate (no silent skip) | ci-maintainer | #1147 | ⬜ Not started |
 | Containerfile deduplication | architect | #305 | ✅ Done |
 | Hardcoded registry → configurable | architect | #304 | ✅ Done |
 | Justfile modular decomposition | architect | #308 | ✅ Done |
