@@ -93,6 +93,12 @@
 #      provably rendered (blank/absent capture, or zero timelapse frames on
 #      a host where capture works). TUNAOS_PIXEL_GATE=0 downgrades to
 #      advisory. See scripts/lib/pixel-gate.sh for the decision table.
+#   7  desktop contract failed on the installed system — the DM/session
+#      assertions run INSIDE the guest did not pass. Distinct from 6 on
+#      purpose: 6 says nothing drew, 7 says the guest itself reports no
+#      working desktop, and the two catch different holes (a greeter that
+#      draws satisfies 6 and still fails 7). TUNAOS_DESKTOP_CONTRACT=0
+#      downgrades to advisory.
 #   77 missing dependency (qemu, ovmf, etc.) — distinguishable for CI skip
 
 set -euo pipefail
@@ -2381,17 +2387,26 @@ EOF
 		# on a string mismatch, across every variant and several sessions'
 		# work.
 		#
-		# Deliberately NOT fatal in this commit. This is the first time the
-		# assertion has ever run post-install on any edition, so a red result
-		# would be ambiguous between "the desktop does not come up" and "the
-		# harvest is wrong". Get one named run first, then gate on it.
+		# FATAL as of this commit. The rule the earlier revision set for
+		# itself was "get one named run first, then gate on it", because a
+		# red result would otherwise be ambiguous between "the desktop does
+		# not come up" and "the harvest is wrong". That run now exists twice,
+		# on two different families and package managers:
+		#
+		#   gurnard:pantheon (31232163933)  desktop_contract=ok  apt/lightdm
+		#   grouper:xfce     (31232166865)  desktop_contract=ok  apt/lightdm
+		#
+		# and the harvest was proven in the same arc by its failures: it
+		# reported dm_inactive with the DM's own journal tail while lightdm
+		# was genuinely crash-looping (#1073), and flipped to ok once the
+		# missing X server was installed (#1086). It measures what it claims.
 		local _dc="absent"
 		if grep -q "LUKS_FIRST_BOOT_DESKTOP_CONTRACT=ok" "${OUTPUT_DIR}/installed-serial.log" 2>/dev/null; then
 			_dc="ok"
 		elif grep -q "LUKS_FIRST_BOOT_DESKTOP_CONTRACT=fail" "${OUTPUT_DIR}/installed-serial.log" 2>/dev/null; then
 			_dc="fail"
 		fi
-		record_luks_evidence "TUNAOS_LUKS_E2E_DESKTOP_CONTRACT desktop_contract=${_dc} fatal=0"
+		record_luks_evidence "TUNAOS_LUKS_E2E_DESKTOP_CONTRACT desktop_contract=${_dc} fatal=1"
 		case "$_dc" in
 		ok) echo "==> Desktop contract PASSED on the installed encrypted system" ;;
 		fail)
@@ -2431,6 +2446,28 @@ EOF
 				return 6
 			fi
 			echo "::warning::pixel gate failed but TUNAOS_PIXEL_GATE=0 — advisory only (${_pixel_line})"
+		fi
+
+		# ── Desktop contract verdict ──────────────────────────────────
+		# Checked HERE, after the pixel gate, for two reasons. Both evidence
+		# lines land on every run regardless of outcome — returning earlier
+		# would drop TUNAOS_LUKS_E2E_PIXEL_GATE from exactly the artifacts
+		# someone debugging a contract failure needs. And this is the
+		# placement that closes the hole the pixel gate cannot see: a greeter
+		# that draws clears the stddev floor and passes the pixel gate, while
+		# the in-guest contract still reports no session (the
+		# greeter-drew-but-no-session case named in the screenshot comment
+		# above). That case reaches this line with _pixel_rc=0.
+		if [[ "$_dc" != "ok" ]]; then
+			if [[ "${TUNAOS_DESKTOP_CONTRACT:-1}" == "1" ]]; then
+				echo "ERROR: desktop contract FAILED on the installed system" >&2
+				echo "       (desktop_contract=${_dc}) — the encrypted install booted, but the" >&2
+				echo "       guest's own DM/session assertions did not pass. installed-serial.log" >&2
+				echo "       carries the dm_diag detail; TUNAOS_DESKTOP_CONTRACT=0 downgrades" >&2
+				echo "       this to advisory." >&2
+				return 7
+			fi
+			echo "::warning::desktop contract ${_dc} but TUNAOS_DESKTOP_CONTRACT=0 — advisory only"
 		fi
 
 		echo "==> LUKS passphrase gate PASSED for ${VARIANT:-}:${FLAVOR:-}"
