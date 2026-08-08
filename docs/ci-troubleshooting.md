@@ -613,3 +613,29 @@ All failing gates share the same root cause — images built before the
 
 Once new images are published with the `graphical.target` fix, all three boot-gate
 timeouts should resolve (assuming no NVIDIA-driver interaction in §2 caveat).
+
+---
+
+### 9. GHCR `permission_denied: write_package` on experimental variants
+
+**Affected workflows:** `Build Flounder-sid` (`flounder-sid`), `Build Guppy` (`guppy`), `Build Sailfin` (`sailfin`), `Build Marlin` (`marlin`), `Build Flounder` (`flounder`), `Build Grouper` (`grouper`).
+
+**Symptom:**
+```
+Error: writing blob: initiating layer upload to /v2/tuna-os/flounder-sid/blobs/uploads/ in ghcr.io: denied: permission_denied: write_package
+```
+
+**Root cause:**
+When new experimental variant container images are pushed to GitHub Container Registry (`ghcr.io/tuna-os/<variant>`) for the first time, GitHub automatically creates the package under the organization namespace. By default, newly created GHCR packages do NOT inherit write permissions for the repository's `GITHUB_TOKEN` from GitHub Actions workflows.
+
+Even though `reusable-build-image.yml` declares `permissions: packages: write`, GitHub Container Registry enforces package-level access controls. If the `tuna-os/<variant>` package settings do not explicitly grant Actions access to `tuna-os/tunaOS`, `podman push` fails with `permission_denied: write_package`.
+
+**Resolution (GitHub Org Admin / Package Owner Settings):**
+For each variant package published to `ghcr.io/tuna-os/<package>`:
+1. Navigate to **GitHub Org (`tuna-os`) → Packages → `<variant>`** (or `https://github.com/orgs/tuna-os/packages/container/<variant>/settings`).
+2. Scroll to **Manage Actions access**.
+3. Click **Add repository**, search for `tuna-os/tunaOS`, and set role to **Write**.
+4. Save changes.
+
+Applies to all experimental variant packages: `flounder-sid`, `flounder`, `guppy`, `sailfin`, `marlin`, `grouper`.
+
