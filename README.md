@@ -247,7 +247,7 @@ Related Communities:
 
 ### 🤖 Powered by KubeStellar / Hive
 
-This repository and many of the [tuna-os](https://github.com/tuna-os) repositories are developed and maintained using **[Hive](https://github.com/hanthor/hive)** — an AI-driven development platform orchestrated via [KubeStellar](https://kubestellar.io/).
+This repository and many of the [tuna-os](https://github.com/tuna-os) repositories are developed and maintained using **[Hive](https://hive.tunaos.org)** — an AI-driven development platform orchestrated via [KubeStellar](https://kubestellar.io/).
 
 Hive deploys a suite of specialized AI agents (guide, architect, sec-check, quality, ci-maintainer, strategist) onto a local Kubernetes cluster. These agents triage issues, implement fixes, review PRs, manage CI pipelines, and maintain documentation — all working autonomously through GitHub.
 
@@ -255,7 +255,7 @@ Hive deploys a suite of specialized AI agents (guide, architect, sec-check, qual
 
 Every commit, PR, and issue in this repo benefits from multi-agent collaboration coordinated through Hive.
 
-*Learn more: [hanthor/hive](https://github.com/hanthor/hive) | [KubeStellar](https://kubestellar.io/)*
+*Learn more: [hive.tunaos.org](https://hive.tunaos.org) | [KubeStellar](https://kubestellar.io/)*
 
 ---
 
