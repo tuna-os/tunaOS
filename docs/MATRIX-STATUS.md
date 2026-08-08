@@ -52,7 +52,7 @@ it.
 
 ## LUKS E2E
 
-**35 of 52** cells green (47 tested, 5 never tested).
+**36 of 52** cells green (47 tested, 5 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
@@ -64,7 +64,7 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **flounder** | ✅ | ✅ | ❌ | — | ✅ |
 | **flounder-sid** | ✅ | ✅ | — | — | ✅ |
 | **grouper** | ✅ | ✅ | ✅ | — | ✅ |
-| **guppy** | ❌ | ❌ | — | — | ❌ |
+| **guppy** | ❌ | ❌ | — | — | ✅ |
 | **gurnard** | — | — | — | — | — |
 | **hummingbird** | ❌ | ⬜ | ⬜ | ⬜ | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -77,6 +77,31 @@ NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes 
 The table above still shows a result for `flounder:cosmic`. `.github/build-config.yml` no longer declares that flavour, so `luks-e2e.yml` cannot schedule it and no run will ever turn it green. It is excluded from the count above — a last-measured verdict kept visible, not a gap. Same reasoning as the NVIDIA note.
 
 Newest result 2026-08-08, oldest still-authoritative result 2026-08-05. Results older than the most recent round of fixes are the best available data, not current data.
+
+## Desktop Contract Sweep
+
+**34 of 52** cells satisfy `build_scripts/checks/verify-desktop-experience.sh` (46 tested, 6 never tested).
+
+Pulls the **published** image and runs the contract script against it directly (`podman run`, no boot required) — the same denominator as LUKS E2E above (`build_image`, restricted to the five desktop flavors). This is what catches a desktop whose packages silently never landed, independent of whether anything can actually boot it on hosted CI.
+
+| Variant | gnome | kde | cosmic | niri | xfce |
+|---|:--:|:--:|:--:|:--:|:--:|
+| **albacore** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **flounder** | ✅ | ✅ | — | — | ✅ |
+| **flounder-sid** | ❌ | ❌ | — | — | ❌ |
+| **grouper** | ✅ | ✅ | ✅ | — | ✅ |
+| **guppy** | ❌ | ✅ | — | — | ⬜ |
+| **hummingbird** | ⬜ | ⬜ | ⬜ | ⬜ | — |
+| **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **skipjack** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **yellowfin** | ✅ | ✅ | ⬜ | ✅ | ❌ |
+
+7 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
+
+Newest result 2026-08-08.
 
 ## Installer smoke
 
@@ -111,18 +136,18 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-08-08 | [31253325888](https://github.com/tuna-os/tunaOS/actions/runs/31253325888) | 1 |
+| 2026-08-08 | [31248624588](https://github.com/tuna-os/tunaOS/actions/runs/31248624588) | 46 |
+| 2026-08-08 | [31242742608](https://github.com/tuna-os/tunaOS/actions/runs/31242742608) | 1 |
 | 2026-08-08 | [31236474250](https://github.com/tuna-os/tunaOS/actions/runs/31236474250) | 1 |
 | 2026-08-08 | [31236469036](https://github.com/tuna-os/tunaOS/actions/runs/31236469036) | 1 |
 | 2026-08-08 | [31232833237](https://github.com/tuna-os/tunaOS/actions/runs/31232833237) | 1 |
-| 2026-08-08 | [31232170155](https://github.com/tuna-os/tunaOS/actions/runs/31232170155) | 1 |
-| 2026-08-08 | [31229915708](https://github.com/tuna-os/tunaOS/actions/runs/31229915708) | 5 |
+| 2026-08-08 | [31229915708](https://github.com/tuna-os/tunaOS/actions/runs/31229915708) | 4 |
 | 2026-08-07 | [31226672079](https://github.com/tuna-os/tunaOS/actions/runs/31226672079) | 18 |
 | 2026-08-07 | [31224494825](https://github.com/tuna-os/tunaOS/actions/runs/31224494825) | 2 |
 | 2026-08-07 | [31224487929](https://github.com/tuna-os/tunaOS/actions/runs/31224487929) | 2 |
 | 2026-08-07 | [31182709691](https://github.com/tuna-os/tunaOS/actions/runs/31182709691) | 2 |
 | 2026-08-07 | [31159853110](https://github.com/tuna-os/tunaOS/actions/runs/31159853110) | 1 |
-| 2026-08-07 | [31140248804](https://github.com/tuna-os/tunaOS/actions/runs/31140248804) | 1 |
-| 2026-08-07 | [31140243067](https://github.com/tuna-os/tunaOS/actions/runs/31140243067) | 1 |
 
 <!-- END GENERATED -->
 
