@@ -1,6 +1,6 @@
 # tunaOS Roadmap
 
-**Last updated**: 2026-08-08 | **Maintainer**: tuna-os (hanthor)
+**Last updated**: 2026-08-08 (correction) | **Maintainer**: tuna-os (hanthor)
 
 ---
 
@@ -30,7 +30,7 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 
 CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
-✅ **ISO incident RESOLVED** (2026-07-19, #543/#561 closed). Weekly releases resumed 2026-07-05 — GNOME, KDE, COSMIC, Niri, XFCE all shipping (20260705, 20260712 tags). KDE/COSMIC/Niri/XFCE installer repos are live and publishing.
+⚠️ **ISO incident REOPENED** (2026-08-08): download pipeline still broken. 'Publish Live ISOs to R2' failed 12 consecutive runs since 06-28; only 3 of 10 releases since 07-01 carry ISO assets (all KDE/COSMIC/-nvidia tags are empty shells). Last downloadable asset 2026-07-12. Root cause lead: #936 (tacklebox pin blocks live-boot fix). See #1106.
 
 ### Community
 
@@ -70,13 +70,13 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
 **Theme**: Expand variant coverage, harden architecture, grow community.
 
-**Mid-quarter update (2026-08-08)**: ISO incident resolved, all five desktops shipping weekly, milestone populated. Remaining gaps: Bonito (Fedora 44) GA (#272) and external contributor onboarding.
+**Mid-quarter update (2026-08-08)**: Q3 milestone populated; CI green. ⚠️ ISO download pipeline still failing (#1106) — tags exist but most releases have no assets; do not treat as shipping until assets are verifiable on the download page. Remaining gaps: Bonito (Fedora 44) GA (#272), external contributor onboarding, ISO publishing (#1106).
 
 | Goal | Owner | Tracking | Status |
 |------|-------|----------|--------|
-| **Fix ISO downloads** | ci-maintainer | #543, #561 | ✅ Done (2026-07-19) |
+| **Fix ISO downloads** | ci-maintainer | #543, #561, #1106 | 🔴 REGRESSED (R2 publish failing since 06-28) |
 | Bonito (Fedora 44) GA | ci-maintainer | #272 | 🟡 In progress (Q3 milestone) |
-| Ship KDE, COSMIC, Niri, XFCE variants | ci-maintainer | #285 | ✅ Done (weekly tags since 07-05) |
+| Ship KDE, COSMIC, Niri, XFCE variants | ci-maintainer | #285, #1106 | 🔴 Blocked (tags yes, assets no) |
 | Containerfile deduplication | architect | #305 | ✅ Done |
 | Hardcoded registry → configurable | architect | #304 | ✅ Done |
 | Justfile modular decomposition | architect | #308 | ✅ Done |
