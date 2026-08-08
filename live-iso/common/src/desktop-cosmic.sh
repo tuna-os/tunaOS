@@ -3,7 +3,8 @@
 # Sourced by live-iso/common/src/build.sh for cosmic* desktop flavors.
 #
 # Configures:
-#   - greetd + cosmic-greeter autologin
+#   - greetd + cosmic-session autologin (masking the packaged
+#     cosmic-greeter.service, which otherwise races it for vt1)
 #   - Disable screen lock + power suspend
 #   - Mask suspend targets
 
@@ -35,6 +36,44 @@ systemctl enable greetd.service 2>/dev/null || true
 ln -sf /usr/lib/systemd/system/greetd.service /etc/systemd/system/display-manager.service 2>/dev/null || true
 systemctl set-default graphical.target 2>/dev/null ||
 	ln -sf /usr/lib/systemd/system/graphical.target /etc/systemd/system/default.target 2>/dev/null || true
+
+# Mask the packaged cosmic-greeter.service (tunaOS#678). On EL10 (yellowfin)
+# it ships with `[Install] WantedBy=graphical.target` and NO
+# `Alias=display-manager.service` — unlike Debian/Ubuntu's cosmic-greeter
+# deb, which claims the alias and would at least get overridden by the
+# `ln -sf` above. Without an alias to override, re-pointing
+# display-manager.service does nothing to it: it is independently pulled in
+# by graphical.target and starts anyway, alongside our greetd.service,
+# racing it for vt1.
+#
+# CONFIRMED via installer-smoke run 31229915708 (yellowfin:cosmic): both
+# units start in the same second —
+#
+#   Started cosmic-greeter.service - COSMIC Greeter.
+#   Started greetd.service - Greeter daemon.
+#   greetd[1235]: pam_unix(greetd-greeter:session): session opened for user
+#     cosmic-greeter(uid=974) ...
+#   greetd[1207]: error: check_children: greeter exited without creating a
+#     session
+#   cosmic-greeter.service: Scheduled restart job, restart counter is at 1.
+#   ...
+#   greetd[2680]: pam_unix(cosmic-greeter:auth): authentication failure;
+#     ... user=liveuser
+#
+# — and cosmic-greeter.service wins vt1: every captured screenshot across
+# a full 9-step walkthrough showed its GUI login prompt for liveuser (never
+# the desktop), crash-looping and re-showing the password field each
+# restart. That is also why prior "compositor is running" checks passed —
+# `pgrep -x cosmic-comp` matches cosmic-greeter's OWN compositor, which it
+# uses to render its greeter UI, indistinguishably from a real session's.
+#
+# `mask` (not `disable`): disable only removes the WantedBy symlink and
+# still lets something else start it by name; mask hard-links it to
+# /dev/null so nothing — not graphical.target, not a dependency, not a
+# manual `systemctl start` from another script run later in this same
+# pipeline — can bring it up again.
+systemctl mask cosmic-greeter.service 2>/dev/null ||
+	ln -sf /dev/null /etc/systemd/system/cosmic-greeter.service 2>/dev/null || true
 
 # Disable idle screen-off / lock / suspend for the live session.
 #
