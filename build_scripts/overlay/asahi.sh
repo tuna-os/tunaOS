@@ -303,10 +303,33 @@ esac
 		exit 1
 	}
 	# Debian-family kernels ship DTBs under /usr/lib/linux-image-<kver>/;
-	# stage the Apple ones at the layout update-m1n1 harvests.
+	# stage the Apple ones at the layout update-m1n1 harvests. openSUSE's
+	# kernel-asahi package uses /boot/dtb-<kver>/apple instead, so without this
+	# normalization Sailfin has a correct kernel but no DTBs for m1n1 to pass
+	# into it (tunaOS#914).
 	if [ ! -d "/usr/lib/modules/${KVER}/dtb/apple" ] && [ -d "/usr/lib/linux-image-${KVER}/apple" ]; then
 		mkdir -p "/usr/lib/modules/${KVER}/dtb"
 		cp -r "/usr/lib/linux-image-${KVER}/apple" "/usr/lib/modules/${KVER}/dtb/"
+	fi
+	if [ ! -d "/usr/lib/modules/${KVER}/dtb/apple" ]; then
+		for DTB_SRC in \
+			"/boot/dtb-${KVER}/apple" \
+			"/usr/lib/modules/${KVER}/dtbs/apple" \
+			"/lib/firmware/${KVER}/device-tree/apple" \
+			"/boot/dtb/apple"; do
+			if [ -d "$DTB_SRC" ]; then
+				mkdir -p "/usr/lib/modules/${KVER}/dtb"
+				cp -r "$DTB_SRC" "/usr/lib/modules/${KVER}/dtb/apple"
+				break
+			fi
+		done
+	fi
+	# OBS's u-boot-asahi package installs the payload as /boot/u-boot-nodtb.bin,
+	# while update-m1n1/asahi-bootbin-sync use the shared /usr/lib/asahi-boot
+	# location. Normalize that packaging choice before installing the sync unit.
+	if [ ! -f /usr/lib/asahi-boot/u-boot-nodtb.bin ] && [ -f /boot/u-boot-nodtb.bin ]; then
+		mkdir -p /usr/lib/asahi-boot
+		cp /boot/u-boot-nodtb.bin /usr/lib/asahi-boot/u-boot-nodtb.bin
 	fi
 	# Debian/Ubuntu asahi-scripts packaging may target initramfs-tools; vendor
 	# the upstream dracut modules if absent (all TunaOS images build their
