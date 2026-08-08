@@ -257,17 +257,12 @@ ENV BASE_IMAGE=${BASE_IMAGE} \
     ENABLE_SSHD=${ENABLE_SSHD} \
     DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 
+# Stage the kernel image into /usr/lib/modules, and move portage's database out
+# of /var. Both must happen BEFORE the ostree layout below, which deletes /boot
+# outright and wipes /var.
 RUN KVER=$(ls /usr/lib/modules | head -1) && \
     rm -f "/usr/lib/modules/$KVER/vmlinuz" && \
     (cp /boot/vmlinuz-* "/usr/lib/modules/$KVER/vmlinuz" 2>/dev/null || cp /usr/src/linux-*/arch/x86/boot/bzImage "/usr/lib/modules/$KVER/vmlinuz") && \
-    # NOT yet on build_scripts/bootc/dracut-config.sh, unlike every other
-    # composefs variant. That script names the crypt and dm dracut modules,
-    # which require cryptsetup and dmsetup binaries; Gentoo emerges neither, and
-    # dracut treats a requested-but-unsatisfiable module as fatal. So guppy's
-    # initramfs still carries no bootc module and no erofs driver. Packaging
-    # sys-fs/cryptsetup and sys-fs/lvm2 is the prerequisite, not this refactor.
-    dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" --kver "$KVER" \
-    "/usr/lib/modules/$KVER/initramfs.img" && \
     rm -rf /var/cache && \
     # Keep portage's package database; drop only its caches.
     #
@@ -284,6 +279,7 @@ RUN KVER=$(ls /usr/lib/modules | head -1) && \
     mkdir -p /usr/lib/sysimage && \
     if [ -d /var/db/pkg ]; then rm -rf /usr/lib/sysimage/portage; cp -a /var/db /usr/lib/sysimage/portage; fi && \
     rm -rf /var/db
+
 # Shared bootc/ostree layout (the /var wipe, alias symlinks, tmpfiles.d and
 # prepare-root.conf) — build_scripts/bootc/ostree-layout.sh. What stays here is
 # Gentoo-specific: pruning /dev, and linking portage's relocated database back
@@ -299,6 +295,69 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
     printf 'd /var/db 0755 root root -\nL+ /var/db/pkg - - - - ../../usr/lib/sysimage/portage/pkg\n' \
         > /usr/lib/tmpfiles.d/portage-sysimage.conf && \
     mkdir -p /var/db && ln -sfnT ../../usr/lib/sysimage/portage/pkg /var/db/pkg
+
+# Build the initramfs.
+#
+# On build_scripts/bootc/dracut-config.sh, like every other bootc variant, and
+# AFTER ostree-layout.sh above — that script writes prepare-root.conf, which is
+# where dracut-config.sh reads whether this image is composefs and therefore
+# whether the initramfs needs the erofs driver. Reversed, every step still
+# exits 0 and the initramfs silently cannot mount its own root. Same ordering
+# note as Containerfile.debian and Containerfile.arch carry.
+#
+# It was NOT on the shared script, and the comment here said why: it names the
+# crypt and dm dracut modules, "which require cryptsetup and dmsetup binaries;
+# Gentoo emerges neither", so requesting them would be fatal, and packaging
+# sys-fs/cryptsetup and sys-fs/lvm2 was the stated prerequisite. That is no
+# longer true, measured inside the published ghcr.io/tuna-os/guppy:gnome:
+#
+#   /usr/sbin/cryptsetup      present
+#   /usr/sbin/dmsetup         present
+#   dracut modules 51bootc, 70crypt, 70dm   all installed
+#
+# so every module the shared config asks for is satisfiable on this base today.
+#
+# What the gap cost: with no drop-in, dracut never added 51bootc, and `lsinitrd`
+# on that same image's initramfs matched ZERO ostree/bootc files. Nothing then
+# prepared the deployment at boot, so /sysroot stayed the PHYSICAL root and
+# switch-root refused it --
+#
+#   Failed to switch root: Specified switch root path '/sysroot' does not seem
+#   to be an OS tree. os-release file is missing.
+#
+# -- dropping guppy:xfce to an emergency shell with the disk already unlocked
+# and /sysroot already mounted (LUKS run 31232170155). Every other variant was
+# immune because they all run this script.
+#
+# The --omit on the command line stays: it covers this build, while the drop-in
+# written near the top of the file is what reaches tacklebox's ISO-time rebuild
+# and post-install kernel updates.
+RUN --mount=type=bind,from=context,source=/,target=/run/context set -eu; \
+    KVER="$(ls /usr/lib/modules | head -1)"; \
+    IMG="/usr/lib/modules/${KVER}/initramfs.img"; \
+    /run/context/build_scripts/bootc/dracut-config.sh "$KVER"; \
+    dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" \
+      --kver "$KVER" "$IMG"; \
+    # Assert the module actually landed, the way Containerfile.opensuse does.
+    # A missing 51bootc costs nothing at build time and everything at boot, and
+    # this exact absence shipped undetected through a green image build, a green
+    # ISO build and a successful disk unlock before failing in switch-root.
+    #
+    # Only the two things measured absent are asserted. The crypt/dm payload is
+    # deliberately NOT pinned here: opensuse asserted `sbin/cryptsetup` on the
+    # same reasoning and failed a perfectly good initramfs (run 30735665323),
+    # because a systemd initrd ships systemd-cryptsetup instead. Assert what was
+    # measured, not what seems like it ought to be there.
+    lsinitrd "$IMG" > /tmp/initramfs.list; \
+    if ! grep -qx bootc /tmp/initramfs.list; then \
+      echo "ERROR: initramfs has no 'bootc' dracut module — nothing prepares the composefs deployment, so switch-root gets the physical root and drops to an emergency shell" >&2; \
+      exit 1; \
+    fi; \
+    if ! grep -qEi 'ostree|bootc' /tmp/initramfs.list; then \
+      echo "ERROR: initramfs contains no ostree/bootc files at all" >&2; \
+      exit 1; \
+    fi; \
+    rm -f /tmp/initramfs.list
 
 # Cache-bust so build_scripts edits invalidate the desktop stages' install
 # layers (bind-mounted scripts aren't in the cache key). Inherited by children.
@@ -414,17 +473,12 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/desktop/install-desktop.sh ${DESKTOP_FLAVOR}
 
 FROM desktop-build AS desktop
+# Stage the kernel image into /usr/lib/modules, and move portage's database out
+# of /var. Both must happen BEFORE the ostree layout below, which deletes /boot
+# outright and wipes /var.
 RUN KVER=$(ls /usr/lib/modules | head -1) && \
     rm -f "/usr/lib/modules/$KVER/vmlinuz" && \
     (cp /boot/vmlinuz-* "/usr/lib/modules/$KVER/vmlinuz" 2>/dev/null || cp /usr/src/linux-*/arch/x86/boot/bzImage "/usr/lib/modules/$KVER/vmlinuz") && \
-    # NOT yet on build_scripts/bootc/dracut-config.sh, unlike every other
-    # composefs variant. That script names the crypt and dm dracut modules,
-    # which require cryptsetup and dmsetup binaries; Gentoo emerges neither, and
-    # dracut treats a requested-but-unsatisfiable module as fatal. So guppy's
-    # initramfs still carries no bootc module and no erofs driver. Packaging
-    # sys-fs/cryptsetup and sys-fs/lvm2 is the prerequisite, not this refactor.
-    dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" --kver "$KVER" \
-    "/usr/lib/modules/$KVER/initramfs.img" && \
     rm -rf /var/cache && \
     # Keep portage's package database; drop only its caches.
     #
@@ -441,6 +495,7 @@ RUN KVER=$(ls /usr/lib/modules | head -1) && \
     mkdir -p /usr/lib/sysimage && \
     if [ -d /var/db/pkg ]; then rm -rf /usr/lib/sysimage/portage; cp -a /var/db /usr/lib/sysimage/portage; fi && \
     rm -rf /var/db
+
 # Shared bootc/ostree layout (the /var wipe, alias symlinks, tmpfiles.d and
 # prepare-root.conf) — build_scripts/bootc/ostree-layout.sh. What stays here is
 # Gentoo-specific: pruning /dev, and linking portage's relocated database back
@@ -456,6 +511,69 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
     printf 'd /var/db 0755 root root -\nL+ /var/db/pkg - - - - ../../usr/lib/sysimage/portage/pkg\n' \
         > /usr/lib/tmpfiles.d/portage-sysimage.conf && \
     mkdir -p /var/db && ln -sfnT ../../usr/lib/sysimage/portage/pkg /var/db/pkg
+
+# Build the initramfs.
+#
+# On build_scripts/bootc/dracut-config.sh, like every other bootc variant, and
+# AFTER ostree-layout.sh above — that script writes prepare-root.conf, which is
+# where dracut-config.sh reads whether this image is composefs and therefore
+# whether the initramfs needs the erofs driver. Reversed, every step still
+# exits 0 and the initramfs silently cannot mount its own root. Same ordering
+# note as Containerfile.debian and Containerfile.arch carry.
+#
+# It was NOT on the shared script, and the comment here said why: it names the
+# crypt and dm dracut modules, "which require cryptsetup and dmsetup binaries;
+# Gentoo emerges neither", so requesting them would be fatal, and packaging
+# sys-fs/cryptsetup and sys-fs/lvm2 was the stated prerequisite. That is no
+# longer true, measured inside the published ghcr.io/tuna-os/guppy:gnome:
+#
+#   /usr/sbin/cryptsetup      present
+#   /usr/sbin/dmsetup         present
+#   dracut modules 51bootc, 70crypt, 70dm   all installed
+#
+# so every module the shared config asks for is satisfiable on this base today.
+#
+# What the gap cost: with no drop-in, dracut never added 51bootc, and `lsinitrd`
+# on that same image's initramfs matched ZERO ostree/bootc files. Nothing then
+# prepared the deployment at boot, so /sysroot stayed the PHYSICAL root and
+# switch-root refused it --
+#
+#   Failed to switch root: Specified switch root path '/sysroot' does not seem
+#   to be an OS tree. os-release file is missing.
+#
+# -- dropping guppy:xfce to an emergency shell with the disk already unlocked
+# and /sysroot already mounted (LUKS run 31232170155). Every other variant was
+# immune because they all run this script.
+#
+# The --omit on the command line stays: it covers this build, while the drop-in
+# written near the top of the file is what reaches tacklebox's ISO-time rebuild
+# and post-install kernel updates.
+RUN --mount=type=bind,from=context,source=/,target=/run/context set -eu; \
+    KVER="$(ls /usr/lib/modules | head -1)"; \
+    IMG="/usr/lib/modules/${KVER}/initramfs.img"; \
+    /run/context/build_scripts/bootc/dracut-config.sh "$KVER"; \
+    dracut --force --no-hostonly --reproducible --zstd --omit "tpm2-tss pcsc" \
+      --kver "$KVER" "$IMG"; \
+    # Assert the module actually landed, the way Containerfile.opensuse does.
+    # A missing 51bootc costs nothing at build time and everything at boot, and
+    # this exact absence shipped undetected through a green image build, a green
+    # ISO build and a successful disk unlock before failing in switch-root.
+    #
+    # Only the two things measured absent are asserted. The crypt/dm payload is
+    # deliberately NOT pinned here: opensuse asserted `sbin/cryptsetup` on the
+    # same reasoning and failed a perfectly good initramfs (run 30735665323),
+    # because a systemd initrd ships systemd-cryptsetup instead. Assert what was
+    # measured, not what seems like it ought to be there.
+    lsinitrd "$IMG" > /tmp/initramfs.list; \
+    if ! grep -qx bootc /tmp/initramfs.list; then \
+      echo "ERROR: initramfs has no 'bootc' dracut module — nothing prepares the composefs deployment, so switch-root gets the physical root and drops to an emergency shell" >&2; \
+      exit 1; \
+    fi; \
+    if ! grep -qEi 'ostree|bootc' /tmp/initramfs.list; then \
+      echo "ERROR: initramfs contains no ostree/bootc files at all" >&2; \
+      exit 1; \
+    fi; \
+    rm -f /tmp/initramfs.list
 
 LABEL containers.bootc=1 ostree.bootable=1
 COPY --from=context /files /

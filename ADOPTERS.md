@@ -33,6 +33,14 @@ _(None listed yet — be the first!)_
 | [KDE Community](https://kde.org) | Desktop environment — Tromsø variant built on KDE Plasma 6 | [kde.org](https://kde.org) |
 | [XFCE Community](https://xfce.org) | Desktop environment — XFCE Linux variant built on XFCE 4.20 | [xfce.org](https://xfce.org) |
 | [Project Bluefin (Dakota)](https://github.com/projectbluefin/dakota) | Reference implementation — Tromsø and XFCE Linux modeled on Dakota's BuildStream approach | [github.com/projectbluefin/dakota](https://github.com/projectbluefin/dakota) |
+| [Debian](https://www.debian.org) | Base OS — Flounder / Flounder Sid variants built on Debian | [debian.org](https://www.debian.org) |
+| [Gentoo](https://www.gentoo.org) | Base OS — Guppy variant built on Gentoo | [gentoo.org](https://www.gentoo.org) |
+| [Arch Linux](https://archlinux.org) | Base OS — Marlin variant built on Arch Linux | [archlinux.org](https://archlinux.org) |
+| [Ubuntu](https://ubuntu.com) | Base OS — Ubuntu variant image | [ubuntu.com](https://ubuntu.com) |
+| [Niri](https://github.com/YaLTeR/niri) | Desktop environment — scrollable-tiling Wayland compositor (Bonito variant) | [github.com/YaLTeR/niri](https://github.com/YaLTeR/niri) |
+| [Fedora COPR](https://copr.fedorainfracloud.org) | Package distribution — GNOME 49/50 backports for CentOS Stream 10 / Fedora bases | [copr.fedorainfracloud.org](https://copr.fedorainfracloud.org) |
+| [Tideforge](https://tideforge.org) | Build service — COSMIC packages built from source for the EL10 desktop cells | [tideforge.org](https://tideforge.org) |
+| [GHCR](https://ghcr.io) | Image registry — all published TunaOS image flavors | [github.com/orgs/tuna-os/packages](https://github.com/orgs/tuna-os/packages) |
 
 ## Adding Your Organization
 
@@ -46,4 +54,4 @@ Questions? Reach out on [Matrix](https://matrix.to/#/%23tunaos:reilly.asia) or o
 
 ---
 
-*Maintained by the TunaOS community. Last updated: 2026-06-30.*
+*Maintained by the TunaOS community. Last updated: 2026-08-08.*

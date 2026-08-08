@@ -201,6 +201,3 @@ Umbrella initiative for making TunaOS bootable on M1/M2 Apple Silicon Macs via t
   - D3: macOS SwiftUI frontend application.
   - D4: recoveryOS UX, LUKS, and Wi-Fi configuration.
 - **Constraints**: M1/M2 hardware targets only; no live-ISO path on Apple Silicon; no Apple firmware redistribution; GitHub arm64 runners use TCG emulation.
-
-
-

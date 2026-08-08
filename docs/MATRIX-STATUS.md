@@ -42,35 +42,35 @@ green on 2026-07-23, while the installer GUI had never once been observed.
 
 ## LUKS E2E
 
-**42 of 52** cells green (47 tested, 5 never tested).
+**35 of 52** cells green (47 tested, 5 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **albacore** | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito-rawhide** | ✅ | ✅ | ✅ | ⬜ | ⬜ |
 | **flounder** | ✅ | ✅ | ❌ | — | ✅ |
 | **flounder-sid** | ✅ | ✅ | — | — | ✅ |
-| **grouper** | ✅ | ✅ | ❌ | — | ✅ |
+| **grouper** | ✅ | ✅ | ✅ | — | ✅ |
 | **guppy** | ❌ | ❌ | — | — | ❌ |
 | **gurnard** | — | — | — | — | — |
 | **hummingbird** | ❌ | ⬜ | ⬜ | ⬜ | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **yellowfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 25 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
 
 The table above still shows a result for `flounder:cosmic`. `.github/build-config.yml` no longer declares that flavour, so `luks-e2e.yml` cannot schedule it and no run will ever turn it green. It is excluded from the count above — a last-measured verdict kept visible, not a gap. Same reasoning as the NVIDIA note.
 
-Newest result 2026-08-07, oldest still-authoritative result 2026-08-05. Results older than the most recent round of fixes are the best available data, not current data.
+Newest result 2026-08-08, oldest still-authoritative result 2026-08-05. Results older than the most recent round of fixes are the best available data, not current data.
 
 ## Installer smoke
 
-**15 of 36** non-NVIDIA ISO cells have *ever* been tested — 42% coverage. 3 of those pass.
+**15 of 36** non-NVIDIA ISO cells have *ever* been tested — 42% coverage. 2 of those pass.
 
 This is the only axis that checks a human could actually install. For 21 combinations, nobody has confirmed the installer appears on screen.
 
@@ -85,7 +85,7 @@ This is the only axis that checks a human could actually install. For 21 combina
 | **hummingbird** | ⬜ | ⬜ | ⬜ | ⬜ | — |
 | **marlin** | ⬜ | ⬜ | — | — | — |
 | **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **yellowfin** | ❌ | ❌ | ❌ | ✅ | ❌ |
+| **yellowfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on hosted CI may be a harness limitation rather than a product failure. See *Known systemic gaps*.
 
@@ -101,18 +101,18 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-08-07 | [31144015274](https://github.com/tuna-os/tunaOS/actions/runs/31144015274) | 3 |
-| 2026-08-07 | [31142505455](https://github.com/tuna-os/tunaOS/actions/runs/31142505455) | 1 |
+| 2026-08-08 | [31236474250](https://github.com/tuna-os/tunaOS/actions/runs/31236474250) | 1 |
+| 2026-08-08 | [31236469036](https://github.com/tuna-os/tunaOS/actions/runs/31236469036) | 1 |
+| 2026-08-08 | [31232833237](https://github.com/tuna-os/tunaOS/actions/runs/31232833237) | 1 |
+| 2026-08-08 | [31232170155](https://github.com/tuna-os/tunaOS/actions/runs/31232170155) | 1 |
+| 2026-08-08 | [31229915708](https://github.com/tuna-os/tunaOS/actions/runs/31229915708) | 5 |
+| 2026-08-07 | [31226672079](https://github.com/tuna-os/tunaOS/actions/runs/31226672079) | 18 |
+| 2026-08-07 | [31224494825](https://github.com/tuna-os/tunaOS/actions/runs/31224494825) | 2 |
+| 2026-08-07 | [31224487929](https://github.com/tuna-os/tunaOS/actions/runs/31224487929) | 2 |
+| 2026-08-07 | [31182709691](https://github.com/tuna-os/tunaOS/actions/runs/31182709691) | 2 |
+| 2026-08-07 | [31159853110](https://github.com/tuna-os/tunaOS/actions/runs/31159853110) | 1 |
 | 2026-08-07 | [31140248804](https://github.com/tuna-os/tunaOS/actions/runs/31140248804) | 1 |
 | 2026-08-07 | [31140243067](https://github.com/tuna-os/tunaOS/actions/runs/31140243067) | 1 |
-| 2026-08-07 | [31140241727](https://github.com/tuna-os/tunaOS/actions/runs/31140241727) | 1 |
-| 2026-08-07 | [31140234902](https://github.com/tuna-os/tunaOS/actions/runs/31140234902) | 1 |
-| 2026-08-07 | [31139552584](https://github.com/tuna-os/tunaOS/actions/runs/31139552584) | 1 |
-| 2026-08-07 | [31138898336](https://github.com/tuna-os/tunaOS/actions/runs/31138898336) | 1 |
-| 2026-08-07 | [31135980478](https://github.com/tuna-os/tunaOS/actions/runs/31135980478) | 1 |
-| 2026-08-07 | [31135620513](https://github.com/tuna-os/tunaOS/actions/runs/31135620513) | 1 |
-| 2026-08-07 | [31135619058](https://github.com/tuna-os/tunaOS/actions/runs/31135619058) | 1 |
-| 2026-08-07 | [31135530844](https://github.com/tuna-os/tunaOS/actions/runs/31135530844) | 1 |
 
 <!-- END GENERATED -->
 
@@ -207,7 +207,51 @@ answer different questions and should not be compared directly.
 
 ---
 
-## 4. Regenerating this document
+## 4. Apple Silicon (Asahi) hardware support
+
+None of the axes above say anything about this — they run in QEMU/KVM on x86,
+and Apple Silicon needs its own kernel, DTBs, and boot chain
+(`build_scripts/overlay/asahi.sh`) that no x86 guest ever exercises. That gap is
+exactly how six of the eight promoted `:gnome-asahi` tags turned out to be
+unbootable on real hardware despite every other axis being green
+([tunaOS#776](https://github.com/tuna-os/tunaOS/issues/776)) — a tag existing in
+`ghcr` only means some build promoted it once, never that the image boots on a
+Mac.
+
+`scripts/verify-asahi-image.sh` is the check that actually looks: it unpacks
+the image and inspects it for the asahi kernel, the 12 hardware-critical
+modules, Apple DTBs, the m1n1/U-Boot payloads, and the audio stack, graded
+against a known-working Fedora Asahi Remix image. `.github/workflows/
+verify-asahi.yml` runs it in **sweep** mode daily at 05:40 UTC against every
+promoted `:gnome-asahi` tag (`workflow_dispatch` for one flavor at a time), so
+— same principle as the rest of this document — a result decays on its own if
+nobody re-runs it; [the workflow's run history](https://github.com/tuna-os/tunaOS/actions/workflows/verify-asahi.yml)
+is the live, current answer. This document does not attempt to mirror it into
+a generated table: unlike the three axes above, only two flavors are wired up
+at all, and per-check state on this axis is why the numbers below have
+individual tracking issues rather than a matrix cell each.
+
+As of the last full sweep:
+
+| Variant | Harness | Status |
+|---|:--:|---|
+| **bonito** | 36 / 0 | ✅ verified |
+| **grouper** | 36 / 0 | ✅ verified |
+| yellowfin, skipjack | 29 / 7 | ❌ no `update-m1n1` — [tunaOS#777](https://github.com/tuna-os/tunaOS/issues/777) |
+| sailfin | 27 / 9 | ❌ no Apple DTBs, no U-Boot payload — [tunaOS#914](https://github.com/tuna-os/tunaOS/issues/914) |
+| marlin, flounder | 23 / 13, 21 / 15 | ❌ overlay never applied — stock kernel — [tunaOS#911](https://github.com/tuna-os/tunaOS/issues/911) |
+| albacore | 11 / 25 | ❌ stock kernel not removed — [tunaOS#912](https://github.com/tuna-os/tunaOS/issues/912) |
+| guppy | — | not offered — overlay is stubbed, not broken, and deliberately excluded from the sweep matrix |
+
+Only `bonito` and `grouper` are safe to hand to a user today. The installer
+catalog agrees — `bootc-installer-asahi`'s `catalog.json` ships with exactly
+one hand-written entry (`bonito`) rather than enumerating every `*-asahi` tag,
+and its README documents the same six-of-eight gap
+([tuna-os/bootc-installer-asahi#42](https://github.com/tuna-os/bootc-installer-asahi/pull/42)).
+
+---
+
+## 5. Regenerating this document
 
 The tables between the `GENERATED` markers are rewritten by
 `scripts/gen-matrix-status.py`; everything else is hand-written and the

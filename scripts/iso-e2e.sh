@@ -37,11 +37,18 @@
 #   scripts/iso-e2e.sh <iso_path> --luks
 #       Full LUKS e2e: boot the live ISO (needs ENABLE_SSHD=1), install via
 #       fisherman (the same backend every TunaOS installer frontend uses)
-#       with encryption.type=tpm2-luks against an emulated TPM 2.0 (swtpm),
-#       then reboot the installed disk with the same TPM and confirm the
-#       encrypted root auto-unlocks (reaching the login target proves it — a
-#       missing/wrong TPM would hang in the initramfs). Requires the swtpm
+#       with encryption.type=tpm2-luks-passphrase against an emulated TPM
+#       2.0 (swtpm), then reboot the installed disk and confirm the
+#       passphrase unlocks it and login is reached. Requires the swtpm
 #       package.
+#
+#       TPM2 auto-unlock is enrolled by a fisherman#48 first-boot oneshot
+#       against the INSTALLED system's own PCR 7 (not at install time — an
+#       install-time seal measures the live ISO's boot chain instead, and
+#       never unseals afterward; tunaOS#679/#680), so it is not proven by
+#       the passphrase gate above. Set TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK=1
+#       to additionally reboot a third time with no passphrase and confirm
+#       the TPM unlocks it unattended — see Environment below.
 #
 # Options:
 #   --timeout SEC         Per-phase timeout (default: 300)
@@ -81,6 +88,18 @@
 #                         with `bootc install to-disk` (tpm2-luks under
 #                         --luks; the reboot gate then proves TPM auto-unlock
 #                         instead of passphrase injection).
+#   TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK=1
+#                         --luks only. After the passphrase gate passes,
+#                         reboot the fisherman-installed disk a third time
+#                         with the same swtpm and NO passphrase injected,
+#                         and require it to reach login unattended (proving
+#                         the fisherman#48 first-boot enrollment oneshot
+#                         actually sealed a working key against the
+#                         installed system's real PCR 7). Default: 0 (off) —
+#                         this is real added runtime + a new failure mode,
+#                         so it is opt-in rather than folded into every
+#                         --luks cell; docs/LUKS-TPM.md calls this "the
+#                         per-variant TPM-enrollment test".
 #
 # Exit codes:
 #   0  success
@@ -99,6 +118,11 @@
 #      working desktop, and the two catch different holes (a greeter that
 #      draws satisfies 6 and still fails 7). TUNAOS_DESKTOP_CONTRACT=0
 #      downgrades to advisory.
+#   8  TPM auto-unlock verification failed (only reachable with
+#      TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK=1) — the third, no-passphrase boot
+#      either still showed the cryptsetup passphrase prompt (the first-boot
+#      enrollment oneshot did not seal a working key) or never reached
+#      login within --timeout. See installed-tpm-autounlock-serial.log.
 #   77 missing dependency (qemu, ovmf, etc.) — distinguishable for CI skip
 
 set -euo pipefail
@@ -618,10 +642,15 @@ record_luks_evidence() {
 }
 
 # ── Emulated TPM 2.0 (swtpm) — LUKS mode only ───────────────────────────────
-# The install-time enrollment (systemd-cryptenroll --tpm2-device=auto) and the
-# reboot-time unlock must see the SAME TPM state, so a single swtpm instance is
-# started once and its socket attached to every QEMU launch below. TPM_ARGS is
-# empty unless --luks is set, so non-LUKS modes are byte-for-byte unchanged.
+# Every boot that needs the TPM — the generic (--block-setup tpm2-luks)
+# path's install-time enrollment, fisherman's first-boot enrollment oneshot
+# (tunaOS#680), and any later unlock/verification boot — must see the SAME
+# swtpm STATE, so TPM_DIR is created once and reused (start_swtpm keep)
+# across boots. The swtpm PROCESS itself does not survive a boot on its own,
+# though: it exits when the QEMU it is attached to disconnects, so each
+# caller that needs it on a later boot restarts it against the preserved
+# state dir rather than assuming it is still running. TPM_ARGS is empty
+# unless --luks is set, so non-LUKS modes are byte-for-byte unchanged.
 TPM_DIR="${OUTPUT_DIR}/swtpm"
 TPM_SOCK="${TPM_DIR}/swtpm-sock"
 TPM_PIDFILE="${TPM_DIR}/swtpm.pid"
@@ -2103,6 +2132,42 @@ run_install() {
 		if podman image exists "$host_img" 2>/dev/null; then
 			echo "==> Saving $host_img on host..."
 			podman save "$host_img" -o "$host_tar"
+
+			# Pre-flight: refuse a transfer the comment above already proves is
+			# doomed, instead of discovering it the same way #941 did — a
+			# silent multi-hour hang ending in the kernel OOM-killing the
+			# guest. The scp destination is GUEST_HOME (/home/liveuser), which
+			# is the live overlay's upperdir: a RAM-backed tmpfs, not disk.
+			# `df` on the guest reports 8G free there because that is the
+			# tmpfs's ADVERTISED size, not real backing store — every byte
+			# written to it is guest RAM. Compare the tar we are about to ship
+			# against the guest's live MemAvailable (not MemTotal: some RAM is
+			# already spoken for by the live session before we start copying)
+			# and fail fast with an actionable message if it cannot possibly
+			# fit, rather than burning the rest of the job's timeout budget on
+			# a transfer that ends in `scp: write remote ...: Failure`.
+			#
+			# 70% headroom, not 100%: podman load on the guest side still has
+			# to hold the tar AND unpack layers concurrently, plus whatever
+			# the live session itself needs to keep running. The one measured
+			# data point (#941) was a ~4.9G image against ~2.9G available —
+			# 169% of available, nowhere near this line — so 70% is a
+			# deliberately conservative guess, not a proven boundary.
+			local host_tar_bytes guest_mem_avail_kb
+			host_tar_bytes="$(stat -c%s "$host_tar" 2>/dev/null || echo 0)"
+			guest_mem_avail_kb="$("${ssh_cmd[@]}" "awk '/^MemAvailable:/{print \$2}' /proc/meminfo" 2>/dev/null || echo 0)"
+			if [[ "$host_tar_bytes" -gt 0 && "$guest_mem_avail_kb" -gt 0 ]]; then
+				local guest_mem_avail_bytes=$((guest_mem_avail_kb * 1024))
+				local safe_limit_bytes=$((guest_mem_avail_bytes * 70 / 100))
+				if [[ "$host_tar_bytes" -ge "$safe_limit_bytes" ]]; then
+					echo "ERROR: image tar (${host_tar_bytes} bytes / $((host_tar_bytes / 1024 / 1024))M) is too large for the guest's available RAM ($((guest_mem_avail_bytes / 1024 / 1024))M) to receive safely." >&2
+					echo "The SSH-transfer fallback writes into a RAM-backed tmpfs (${GUEST_HOME}) and will OOM-kill the guest partway through — this is a measured failure mode, not a guess (see #941)." >&2
+					echo "This path should not have been taken at all: make the offline store resolve so Fisherman can install directly from containers-storage (#941), or re-run with --memory well above the image size." >&2
+					rm -f "$host_tar" || true
+					return 3
+				fi
+			fi
+
 			# Bounded, like the fisherman call below. This is a multi-GB copy
 			# over a QEMU SLIRP hostfwd, so it is legitimately slow — but the
 			# failure mode it had was not slowness, it was silence: no output
@@ -2282,15 +2347,33 @@ EOF
 	# reaches userspace. That is fisherman's job and works on every variant.
 	# TPM2 auto-unlock is a SEPARATE, post-install, per-variant test (it seals
 	# to PCRs that only exist on the installed system — see docs/LUKS-TPM.md),
-	# so it is NOT required here. Boot with a serial socket and inject the
+	# so it is NOT gated here (see TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK below for
+	# the opt-in that does gate it). Boot with a serial socket and inject the
 	# passphrase at the cryptsetup prompt; reaching login proves the unlock.
 	if [[ "$LUKS" -eq 1 ]]; then
 		echo "==> LUKS passphrase gate: booting installed disk, injecting passphrase, expecting login..."
 		local FB_SERIAL="${OUTPUT_DIR}/installed-serial.sock"
 		rm -f "$FB_SERIAL"
-		# No TPM here: the passphrase gate doesn't need one, and the
-		# install-phase swtpm has already exited (its socket is gone). TPM
-		# auto-unlock is the separate post-install test.
+		# A TPM IS needed on THIS boot (tunaOS#680): fisherman#48 stages a
+		# ConditionFirstBoot oneshot that enrolls systemd-cryptenroll
+		# --tpm2-device=auto against the REAL installed system's PCR 7 —
+		# measured during exactly this boot, which is the whole point (the
+		# old install-time enrollment sealed against the live ISO's PCR 7
+		# instead, and never unsealed on the installed system — tunaOS#679/
+		# #680). Without a TPM attached here, that oneshot has nothing to
+		# enroll against and TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK's later boot
+		# would only ever see the passphrase prompt.
+		#
+		# The install-phase swtpm has already exited — it dies when its own
+		# QEMU (fisherman's install VM, just powered off above) disconnects
+		# — so it must be restarted against the SAME state dir, exactly like
+		# run_install_generic's TPM auto-unlock gate does.
+		local tpid
+		tpid=$(cat "$TPM_PIDFILE" 2>/dev/null || true)
+		if [[ -z "$tpid" ]] || ! kill -0 "$tpid" 2>/dev/null; then
+			echo "==> Restarting swtpm with preserved state for the first installed boot..."
+			start_swtpm keep || return 77
+		fi
 		#
 		# bootindex=0 on the disk (see also boot_installed) is what makes
 		# "boot the thing we just installed" deterministic. Both boots share
@@ -2306,8 +2389,10 @@ EOF
 		# QEMU fw_cfg boot order that OVMF applies over the stale NVRAM,
 		# putting this disk first and leaving the shell as the last resort.
 		reset_qemu_sockets
+		# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
 		"$QEMU" -name "tunaos-iso-e2e-installed" -machine pc -cpu "$CPU_ARG" \
 			-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
+			${TPM_ARGS} \
 			-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
 			-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 			-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
@@ -2471,6 +2556,97 @@ EOF
 		fi
 
 		echo "==> LUKS passphrase gate PASSED for ${VARIANT:-}:${FLAVOR:-}"
+
+		# ── Opt-in: TPM2 auto-unlock verification (tunaOS#680) ──────────
+		# The passphrase gate above proves fisherman's install-time
+		# encryption works; it does NOT prove the first-boot enrollment
+		# oneshot (fisherman#48) actually seals a working key, because it
+		# never boots the disk a second time. luks-first-boot.py's own
+		# docstring says as much: "The SECOND boot (driven by iso-e2e.sh)
+		# then proves TPM auto-unlock: no passphrase prompt" — that second
+		# boot did not exist until this block. docs/LUKS-TPM.md's variant
+		# table has read "_pending E2E_" for TPM2 auto-unlock on every
+		# variant because of exactly this gap.
+		#
+		# Opt-in (default off) rather than folded into the gate above: the
+		# passphrase gate alone already runs on every {variant, flavor} cell
+		# with build_image=true (luks-e2e.yml's monthly sweep), and a third
+		# boot per cell is real added cost + a new failure mode across ~50
+		# cells at once. docs/LUKS-TPM.md already describes this as "the
+		# per-variant TPM-enrollment test", run separately — this flag is
+		# that test, callable from the same harness instead of a
+		# reimplementation. A maintainer can wire it into luks-e2e.yml (a
+		# workflow_dispatch boolean, or its own scheduled job over a smaller
+		# variant set) once satisfied with the added runtime.
+		if [[ "${TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK:-0}" == "1" ]]; then
+			echo "==> TPM auto-unlock verification: rebooting the installed disk with no passphrase..."
+			local tpid2
+			tpid2=$(cat "$TPM_PIDFILE" 2>/dev/null || true)
+			if [[ -z "$tpid2" ]] || ! kill -0 "$tpid2" 2>/dev/null; then
+				echo "==> Restarting swtpm with preserved state for the TPM auto-unlock boot..."
+				start_swtpm keep || return 77
+			fi
+			# $SERIAL_LOG was truncated before the passphrase-gate boot
+			# above and never reopened (that boot used its own FB_SERIAL
+			# socket instead), so it is still empty here — safe to reuse
+			# via the same file-chardev E2E_SERIAL_ARGS the generic path's
+			# TPM auto-unlock gate uses.
+			reset_qemu_sockets
+			# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
+			"$QEMU" -name "tunaos-iso-e2e-installed" -machine pc -cpu "$CPU_ARG" \
+				-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
+				${TPM_ARGS} \
+				-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+				-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
+				-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
+				-device virtio-blk-pci,drive=disk,bootindex=0 \
+				-netdev "user,id=net0" -device virtio-net-pci,netdev=net0 \
+				-monitor "unix:${MONITOR_SOCK},server,nowait" \
+				"${E2E_SERIAL_ARGS[@]}" \
+				"${QEMU_GPU_ARGS[@]}" -pidfile "$QEMU_PIDFILE" -daemonize || {
+				echo "ERROR: QEMU would not start for the TPM auto-unlock verification boot" >&2
+				record_luks_evidence "TUNAOS_LUKS_E2E_TPM_AUTOUNLOCK_FAILED reason=qemu-launch"
+				return 5
+			}
+			local tpm_deadline=$(($(date +%s) + TIMEOUT))
+			local tpm_ok=0 tpm_saw_prompt=0
+			while (($(date +%s) < tpm_deadline)); do
+				if grep -qaE "login:|Reached target.*(Graphical|Multi-User)" "$SERIAL_LOG" 2>/dev/null; then
+					tpm_ok=1
+					break
+				fi
+				# A passphrase prompt here means the disk is STILL sealed to
+				# a passphrase, not the TPM — the oneshot did not enroll (or
+				# enrolled against the wrong PCR state). That is a distinct,
+				# more actionable failure than a bare timeout, so name it
+				# rather than waiting out the full deadline for a boot that
+				# is truthfully just stuck at a prompt no one will answer.
+				if [[ "$tpm_saw_prompt" -eq 0 ]] && grep -qai "passphrase for disk root" "$SERIAL_LOG" 2>/dev/null; then
+					tpm_saw_prompt=1
+					echo "==> (still shows a passphrase prompt — TPM enrollment did not take; waiting out the deadline for a clean report)"
+				fi
+				if [[ -f "$QEMU_PIDFILE" ]] && ! kill -0 "$(cat "$QEMU_PIDFILE")" 2>/dev/null; then
+					echo "ERROR: TPM auto-unlock verification VM exited during boot" >&2
+					break
+				fi
+				sleep 5
+			done
+			screenshot "installed-tpm-autounlock" || true
+			[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
+			mv -f "$SERIAL_LOG" "${OUTPUT_DIR}/installed-tpm-autounlock-serial.log" 2>/dev/null || true
+			: >"$SERIAL_LOG"
+			if [[ "$tpm_ok" -eq 1 ]]; then
+				echo "==> TPM auto-unlock verification PASSED — no passphrase prompt, login reached"
+				record_luks_evidence "TUNAOS_LUKS_E2E_TPM_AUTOUNLOCK_CONFIRMED"
+			else
+				local reason="timeout"
+				[[ "$tpm_saw_prompt" -eq 1 ]] && reason="passphrase-still-required"
+				echo "ERROR: TPM auto-unlock verification FAILED (${reason}) — see installed-tpm-autounlock-serial.log" >&2
+				record_luks_evidence "TUNAOS_LUKS_E2E_TPM_AUTOUNLOCK_FAILED reason=${reason}"
+				return 8
+			fi
+		fi
+
 		return 0
 	fi
 

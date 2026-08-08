@@ -760,10 +760,3 @@ Published container images built green in CI but shipped missing essential deskt
    - `missing`: No published image tag in registry.
    - `error`: Network or registry pull failure.
 3. **Display Manager Enablement Assertion**: Verifies display manager units (`gdm`, `sddm`, `plasmalogin`, `greetd`) are actively enabled in the image layer rather than merely present as installed unit files.
-
-
-
-
-
-
-

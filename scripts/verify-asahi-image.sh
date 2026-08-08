@@ -90,13 +90,43 @@ check_any() { # label, candidate paths...
 }
 # Paths differ per packaging family (Fedora lib64, Debian/Ubuntu lib, Arch boot)
 check_any "m1n1 payload" /usr/lib64/m1n1/m1n1.bin /usr/lib/m1n1/m1n1.bin /usr/lib/asahi-boot/m1n1.bin /boot/m1n1.bin
-check_any "Apple U-Boot payload" /usr/share/uboot/apple_m1/u-boot-nodtb.bin /usr/lib/u-boot/apple_m1/u-boot-nodtb.bin /usr/lib/asahi-boot/u-boot.bin
-check_file /usr/bin/update-m1n1
+# /usr/lib/asahi-boot/u-boot.bin was a guess at Arch's filename under that
+# directory; the real uboot-asahi package (asahi-alarm/asahi-alarm, verified
+# by downloading uboot-asahi-2026.04.asahi2-1-aarch64.pkg.tar.xz and listing
+# its contents directly) ships u-boot-nodtb.bin there instead, matching the
+# other two families' filename — only the directory differs by family.
+check_any "Apple U-Boot payload" /usr/share/uboot/apple_m1/u-boot-nodtb.bin /usr/lib/u-boot/apple_m1/u-boot-nodtb.bin /usr/lib/asahi-boot/u-boot-nodtb.bin
+# CentOS Hyperscale SIG's update-m1n1 RPM (EL10: skipjack/yellowfin/albacore)
+# installs to /usr/sbin, not /usr/bin like Fedora's — verified by downloading
+# update-m1n1-20250426.1-1.hs+asahi.el10.noarch.rpm from the Hyperscale
+# packages-asahi repo and reading its file list directly (tunaOS#777). This
+# was a hard-coded single-path check missing that family split, unlike the
+# two checks above it — every yellowfin/skipjack sweep was scoring a FAIL for
+# a binary that was actually present the whole time.
+check_any "update-m1n1" /usr/bin/update-m1n1 /usr/sbin/update-m1n1
+# Hyperscale's update-m1n1 RPM genuinely does not ship a kernel-install.d (or
+# postinst.d) hook — confirmed the same way, by reading its actual file list;
+# there is no plausible alternate path to add here for this family. This is a
+# real, still-open EL10 packaging gap (tunaOS#777), not a harness bug like the
+# path above. It does not leave EL10 boot-chain updates unmaintained in
+# practice: this repo ships asahi-bootbin-sync.service
+# (build_scripts/asahi/install-bootbin-sync.sh) specifically because bootc
+# deploys never run package scriptlets anyway, on every family, Fedora
+# included — a working kernel-install hook would never fire after a `bootc
+# switch` regardless of which family's kernel it came from. So this FAIL
+# tracks upstream packaging completeness, not "does this image regenerate its
+# boot.bin after an upgrade" — that question is asahi-bootbin-sync.service's,
+# and it does not depend on this hook existing.
 check_any "update-m1n1 kernel hook" /usr/lib/kernel/install.d/15-update-m1n1.install /etc/kernel/postinst.d/update-m1n1 /etc/kernel/postinst.d/zz-update-m1n1
 
 echo "== firmware handling =="
 check_file /usr/bin/asahi-fwextract
-check_file /usr/bin/asahi-fwupdate
+# Same family split as update-m1n1 above, same verification method: Hyperscale
+# SIG's asahi-fwupdate RPM (asahi-fwupdate-20250426.1-1.hs+asahi.el10.noarch)
+# installs to /usr/sbin/asahi-fwupdate. asahi-fwextract, checked just above,
+# really is at /usr/bin in the same RPM family — the split is per-binary, not
+# uniformly bin-vs-sbin, so it is not safe to assume from one to the other.
+check_any "asahi-fwupdate" /usr/bin/asahi-fwupdate /usr/sbin/asahi-fwupdate
 [[ -d "$mnt/usr/lib/dracut/modules.d/99asahi-firmware" ]] && ok "dracut 99asahi-firmware" || bad "dracut module 99asahi-firmware missing"
 [[ -d "$mnt/usr/lib/dracut/modules.d/91kernel-modules-asahi" ]] && ok "dracut 91kernel-modules-asahi" || bad "dracut module 91kernel-modules-asahi missing"
 if grep -qs "asahi-firmware" "$mnt"/usr/lib/dracut/dracut.conf.d/*; then

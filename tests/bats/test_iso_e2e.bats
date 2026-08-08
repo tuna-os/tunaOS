@@ -715,8 +715,9 @@ setup_runtime_check_stubs() {
   # on the shared append-mode chardev.
   grep -q 'append=on' "$SCRIPT"
   ! grep -q -- '-serial "file:${SERIAL_LOG}"' "$SCRIPT"
-  # live boot, fisherman installed boot, generic installed boot, --disk boot
-  [ "$(grep -c '"${E2E_SERIAL_ARGS\[@\]}"' "$SCRIPT")" -eq 4 ]
+  # live boot, fisherman installed boot, TPM auto-unlock verify boot,
+  # generic installed boot, --disk boot
+  [ "$(grep -c '"${E2E_SERIAL_ARGS\[@\]}"' "$SCRIPT")" -eq 5 ]
 }
 
 @test "install: a console heartbeat outlives the ssh channel" {
@@ -759,8 +760,9 @@ setup_runtime_check_stubs() {
   # bootindex publishes a QEMU fw_cfg boot order OVMF applies over the stale
   # NVRAM. Both post-install boots need it; the live boot must NOT have it
   # (the ISO has to win there).
-  # fisherman passphrase gate, fisherman installed boot, generic TPM gate
-  [ "$(grep -c 'device virtio-blk-pci,drive=disk,bootindex=0' "$SCRIPT")" -eq 3 ]
+  # fisherman passphrase gate, TPM auto-unlock verify boot, fisherman
+  # installed boot, generic TPM gate
+  [ "$(grep -c 'device virtio-blk-pci,drive=disk,bootindex=0' "$SCRIPT")" -eq 4 ]
   grep -q -- '-device virtio-blk-pci,drive=disk \\' "$SCRIPT"
 }
 
@@ -992,4 +994,62 @@ setup_runtime_check_stubs() {
   grep -qF '"Entering emergency mode" in text' "$harness"
   grep -qF 'cat /run/initramfs/rdsosreport.txt 2>/dev/null' "$harness"
   grep -qF 'journalctl -b --no-pager -n 120' "$harness"
+}
+
+# ── TPM2 auto-unlock verification opt-in (tunaOS#680) ──────────────────────
+#
+# fisherman#48 moved TPM2 enrollment from install time (sealed against the
+# wrong PCR 7 — the live ISO's, not the installed system's; tunaOS#679/#680)
+# to a first-boot oneshot on the installed system. The LUKS passphrase gate
+# above proves the passphrase-encrypted install works; it never reboots a
+# second time with no passphrase, so it cannot prove the oneshot actually
+# enrolled a working key. These tests pin the opt-in that closes that gap.
+
+@test "TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK is off by default" {
+  grep -qF '${TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK:-0}' "$SCRIPT"
+}
+
+@test "TPM auto-unlock verification restarts swtpm for the first installed boot" {
+  # fisherman's first-boot oneshot needs /dev/tpmrm0 present on THIS boot to
+  # enroll against — without it there is nothing for the later verification
+  # boot to ever unlock with. Scoped to the LUKS passphrase gate block (the
+  # first `start_swtpm keep` call after the fisherman install, ahead of the
+  # TPM auto-unlock verification block below it).
+  awk '/LUKS passphrase gate ─/,/TPM auto-unlock verification/' "$SCRIPT" |
+    grep -q 'start_swtpm keep'
+}
+
+@test "the LUKS passphrase gate boot attaches TPM_ARGS" {
+  awk '/LUKS passphrase gate: booting installed disk, injecting passphrase/,/-pidfile "\$QEMU_PIDFILE" -daemonize \|\| \{/' "$SCRIPT" |
+    grep -qF '${TPM_ARGS}'
+}
+
+@test "TPM auto-unlock verification reboots with no passphrase and requires login" {
+  awk '/TPM auto-unlock verification: rebooting/,/^\t\tfi$/' "$SCRIPT" > "${BATS_TEST_TMPDIR}/block.txt"
+  grep -q 'start_swtpm keep' "${BATS_TEST_TMPDIR}/block.txt"
+  grep -qF '${TPM_ARGS}' "${BATS_TEST_TMPDIR}/block.txt"
+  grep -q 'login:|Reached target.*(Graphical|Multi-User)' "${BATS_TEST_TMPDIR}/block.txt"
+  # And it must NOT inject anything at a passphrase prompt — the whole point
+  # is proving the TPM unlocks it unattended.
+  ! grep -q 'sendall(passphrase' "${BATS_TEST_TMPDIR}/block.txt"
+}
+
+@test "TPM auto-unlock verification distinguishes a still-passphrase-locked disk from a bare timeout" {
+  grep -qF 'passphrase for disk root' "$SCRIPT"
+  grep -qF 'reason="passphrase-still-required"' "$SCRIPT"
+  grep -qF 'reason="timeout"' "$SCRIPT"
+}
+
+@test "TPM auto-unlock verification records confirm/fail evidence markers" {
+  grep -qF 'TUNAOS_LUKS_E2E_TPM_AUTOUNLOCK_CONFIRMED' "$SCRIPT"
+  grep -qF 'TUNAOS_LUKS_E2E_TPM_AUTOUNLOCK_FAILED' "$SCRIPT"
+}
+
+@test "TPM auto-unlock verification failure returns a distinct, documented exit code" {
+  awk '/TPM auto-unlock verification FAILED/,/return 8/' "$SCRIPT" | grep -q 'return 8'
+  grep -qF '#   8  TPM auto-unlock verification failed' "$SCRIPT"
+}
+
+@test "TPM auto-unlock verification preserves its own serial log rather than clobbering others" {
+  grep -qF 'installed-tpm-autounlock-serial.log' "$SCRIPT"
 }
