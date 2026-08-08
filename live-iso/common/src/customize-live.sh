@@ -595,6 +595,67 @@ cat >/etc/tuna-installer/offline-stores <<'STORESEOF'
 /var/lib/superiso-store
 STORESEOF
 
+# ── 5b. Installer recipe: backend keys, from the image rather than a guess ───
+#
+# /etc/bootc-installer/recipe.json is what the GUI frontends install FROM. It
+# ships three keys that describe the target's on-disk layout —
+#
+#     "bootloader": "systemd", "composeFsBackend": true, "filesystem": "xfs"
+#
+# — and until now nothing ever set them per variant. build_scripts/90-image-info.sh
+# is the only thing that rewrites that file and it touches branding only
+# (distro_name, welcome_title, distro_logo, tour), so every one of the 13
+# variants shipped that same hardcoded triple.
+#
+# It is wrong for the EL10 variants. yellowfin, albacore and skipjack are
+# traditional ostree + bootupd + GRUB with composefs explicitly disabled
+# (Containerfile.el10 pins `[composefs] enabled = no`), so the GUI was telling
+# fisherman to do a composefs/systemd-boot install on three images that cannot
+# take one. The headless path never hit this because scripts/iso-e2e.sh probes
+# the image and builds its own recipe — which is exactly why LUKS E2E can be
+# green on a cell whose GUI install has never once been proven.
+#
+# WHY HERE and not in 90-image-info.sh, which already owns this file: on EL10
+# the prepare-root.conf pin is written AFTER 90-image-info.sh runs
+# (Containerfile.el10 — 90-image-info at line 134, the pin at line 156), so a
+# probe there reads whatever the upstream base happens to ship. That default
+# has already drifted once (tuna-os/wootc#28). By live-ISO customize time the
+# payload image is final, which makes this the first point where the answer is
+# trustworthy.
+#
+# Same probe as scripts/lib/common.sh TUNAOS_BACKEND_PROBE_SH, and the order is
+# load-bearing for the same reason documented there: bootupd payload first, so
+# a SEALED image that still ships bootupd stays on the ostree path.
+RECIPE_FILE="/etc/bootc-installer/recipe.json"
+if [[ -f "$RECIPE_FILE" ]]; then
+	# Fatal on failure, deliberately. An image we cannot classify must not get
+	# a guessed recipe: 10 seconds of ISO build is a better place to learn this
+	# than hour three of a matrix cell, the same rule the sudo and podman
+	# assertions above follow.
+	_backend_kv="$("${SCRIPT_DIR}/installer-recipe-backend.sh")"
+	_bootloader="$(sed -n 's/^bootloader=//p' <<<"$_backend_kv")"
+	_composefs_backend="$(sed -n 's/^composeFsBackend=//p' <<<"$_backend_kv")"
+	_filesystem="$(sed -n 's/^filesystem=//p' <<<"$_backend_kv")"
+
+	python3 - "$RECIPE_FILE" "$_bootloader" "$_composefs_backend" "$_filesystem" <<'PYEOF'
+import json
+import sys
+
+path, bootloader, composefs, filesystem = sys.argv[1:5]
+with open(path) as f:
+    recipe = json.load(f)
+recipe["bootloader"] = bootloader
+recipe["composeFsBackend"] = composefs == "true"
+recipe["filesystem"] = filesystem
+with open(path, "w") as f:
+    json.dump(recipe, f, indent=2)
+    f.write("\n")
+PYEOF
+
+	echo "customize-live: installer recipe bootloader=${_bootloader}" \
+		"composefs=${_composefs_backend} filesystem=${_filesystem}"
+fi
+
 # ── /var/tmp headroom ─────────────────────────────────────────────────────────
 # The live overlay puts /var on a small RAM overlay; bootc needs real space
 # in /var/tmp when staging an install (dakota-iso pattern).
