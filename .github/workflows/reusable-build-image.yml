@@ -545,7 +545,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:195c8853f52e0463d217aa8bdf14f6730ae97305de399559d86b76403f9528af  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:6db0999b1bbb8db10bf0e25b5166abaa5134c453f6e966f7b395af28101bd345  # :latest linux/amd64 as of 2026-06-13
       options: --privileged --security-opt seccomp=unconfined
     permissions:
       contents: read
