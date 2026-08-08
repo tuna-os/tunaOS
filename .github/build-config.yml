@@ -1100,14 +1100,26 @@ variants:
         platforms: ["linux/amd64", "linux/arm64"]
         build_image: true
         build_iso: true
-      # Apple Silicon (M1/M2, Asahi Linux) — overlay/asahi.sh, Asahi-ALARM
-      # repos. aarch64 only; no ISO (asahi-installer path).
-      - id: gnome-asahi
-        stage: 3
-        platforms: ["linux/arm64"]
-        build_image: true
-        build_iso: false
-        build_qcow2: false
+      # gnome-asahi: NOT declared, and not an oversight.
+      #
+      # The Asahi-ALARM repo's linux-asahi package is real (verified by
+      # downloading it directly: asahi-alarm/asahi-alarm release "aarch64",
+      # linux-asahi-7.1.5.asahi2-1-aarch64.pkg.tar.xz), but it ships only 5
+      # T8103 (M1) device trees — nowhere near the ~50 the asahi-verify
+      # harness requires for real hardware coverage — and is missing several
+      # Apple SoC kernel modules the harness checks for, most importantly
+      # asahi.ko itself (the GPU driver; appledrm.ko, the older
+      # display-only driver, IS present). The published
+      # ghcr.io/tuna-os/marlin:gnome-asahi tag scored 23/36 on the harness
+      # (run 31243787771, 2026-08-08) — an ordinary arm64 image with a
+      # differently-named kernel, not a bootable Apple Silicon image.
+      #
+      # tunaOS#911: "until fixed, [this] should stop being promoted rather
+      # than shipping as unbootable" — a user selecting it in the installer
+      # catalog gets a Mac that does not boot. Re-add once asahi-alarm's
+      # linux-asahi actually ships the missing modules and device trees, or
+      # once TunaOS has its own source of a complete Apple Silicon kernel
+      # for Arch. Same pattern as guppy's absent niri/cosmic flavors above.
       - id: kde
         stage: 2
         build_image: true
@@ -1161,14 +1173,33 @@ variants:
         platforms: ["linux/amd64", "linux/arm64"]
         build_image: true
         build_iso: true
-      # Apple Silicon (M1/M2, Asahi Linux) — overlay/asahi.sh, Debian
-      # Bananas archive. aarch64 only; no ISO (asahi-installer path).
-      - id: gnome-asahi
-        stage: 3
-        platforms: ["linux/arm64"]
-        build_image: true
-        build_iso: false
-        build_qcow2: false
+      # gnome-asahi: NOT declared, and not an oversight.
+      #
+      # build_scripts/overlay/asahi.sh's debian branch resolves a real
+      # linux-image-*-asahi package from the Bananas team's archive, but the
+      # published ghcr.io/tuna-os/flounder:gnome-asahi tag currently ships
+      # stock 6.12.100+deb13-arm64 — the purge-then-install of the asahi
+      # kernel never runs, because it is not even reached: this flavor's
+      # arm64 build fails outright at Containerfile.overlay's `pacman`
+      # detection step. That step uses bash-only `command -v pacman
+      # &>/dev/null` in a RUN instruction with no `bash -c` wrapper, so it
+      # runs under the image's default shell — dash on this (Debian) base,
+      # which does not understand `&>` and mis-parses it as `command -v
+      # pacman &` (backgrounded) `>/dev/null` (redirecting nothing), always
+      # entering the `then` branch and invoking a `pacman` that does not
+      # exist on Debian (build 93057902527, 2026-08-08: "pacman: not
+      # found", exit 127). Fixed in this same change (Containerfile.overlay
+      # now uses portable redirection), but with that fixed the harness
+      # still needs to confirm the Bananas kernel actually boots and covers
+      # real Apple Silicon hardware before this is safe to publish again —
+      # unverified as of this writing.
+      #
+      # tunaOS#911: "until fixed, [this] should stop being promoted rather
+      # than shipping as unbootable" — a user selecting it in the installer
+      # catalog gets a Mac that does not boot. Re-add once a build with the
+      # portability fix has actually produced and verified an asahi kernel
+      # here. Same pattern as guppy's absent niri/cosmic flavors elsewhere
+      # in this file.
       - id: kde
         stage: 2
         build_image: true
