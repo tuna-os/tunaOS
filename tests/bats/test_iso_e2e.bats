@@ -913,6 +913,17 @@ setup_runtime_check_stubs() {
   grep -q 'mount ${SCRATCH_DISK_BYID} /var/lib/containers' "$SCRIPT"
 }
 
+@test "fisherman fallback transfers the image onto the scratch disk" {
+  # /home/liveuser is the live overlay upperdir and therefore RAM-backed. The
+  # fallback must stage the tar under the disk already mounted at
+  # /var/lib/containers, or a multi-GB image will exhaust the guest tmpfs.
+  grep -q 'guest_tar_dir="/var/lib/containers/tunaos-e2e-transfer"' "$SCRIPT"
+  grep -q 'sudo install -d -o liveuser -g liveuser ${guest_tar_dir}' "$SCRIPT"
+  grep -q '"${GUEST_SCP_DEST}:${guest_tar}"' "$SCRIPT"
+  grep -q 'sudo podman load -i ${guest_tar}' "$SCRIPT"
+  ! grep -q '"${GUEST_SCP_DEST}:${GUEST_HOME}/"' "$SCRIPT"
+}
+
 @test "generic: bootc install bakes serial kargs and tpm2-luks under --luks" {
   grep -q 'bootc install to-disk --wipe' "$SCRIPT"
   grep -qF 'block_setup="--block-setup tpm2-luks"' "$SCRIPT"
