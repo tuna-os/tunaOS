@@ -17,14 +17,19 @@ name: LUKS E2E
 # against the live ISO's boot chain instead and never unseal afterward
 # (tunaOS#679/#680) — so step 3 above does NOT prove it; that would need a
 # fourth boot with no passphrase. scripts/iso-e2e.sh's
-# TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK=1 does that boot when set, but this
-# workflow does not set it: docs/LUKS-TPM.md tracks that as "the per-variant
-# TPM-enrollment test", a smaller-scope check, since a fourth boot on every
-# cell here would materially raise this workflow's already-expensive cost.
+# TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK=1 does that boot, and this workflow's
+# `tpm_autounlock` dispatch input (or the quarterly cron below) sets it — but
+# only for the default run does it stay unset: a fourth boot on every cell of
+# the monthly full sweep would materially raise its already-expensive cost, so
+# `tpm_autounlock` mode instead narrows the matrix to one flavor per variant
+# (docs/LUKS-TPM.md calls this "the per-variant TPM-enrollment test") and
+# skips the variants whose initramfs cannot carry the tpm2-tss module at all
+# (see the support matrix in that doc — sailfin/marlin/guppy, as of tunaOS#714).
 #
-# This is expensive (a dev ISO build + two QEMU boots per cell), so it only
-# runs on demand or monthly — never per push. Modelled on iso-e2e.yml and
-# projectbluefin/dakota-iso's luks-*-qemu recipes.
+# This is expensive (a dev ISO build + two QEMU boots per cell — three with
+# tpm_autounlock), so it only runs on demand or on a schedule — never per
+# push. Modelled on iso-e2e.yml and projectbluefin/dakota-iso's luks-*-qemu
+# recipes.
 
 on:
   workflow_dispatch:
@@ -39,9 +44,26 @@ on:
         required: false
         default: "all"
         type: string
+      tpm_autounlock:
+        description: >-
+          Also verify TPM2 auto-unlock (a third QEMU boot per cell, no
+          passphrase). Narrows the matrix to one flavor per variant to keep
+          cost bounded, and skips variants that cannot carry the tpm2-tss
+          dracut module at all (see docs/LUKS-TPM.md).
+        required: false
+        default: false
+        type: boolean
   schedule:
-    # Full variant x installable-desktop sweep on the first day of each month.
+    # Full variant x installable-desktop sweep on the first day of each month
+    # (passphrase-unlock only — see the header comment above).
     - cron: "0 7 1 * *"
+    # TPM2 auto-unlock sweep, one flavor per variant, quarterly: the fourth
+    # boot this adds is real extra cost, so it runs far less often than the
+    # passphrase-only sweep above. github.event.schedule (the exact cron
+    # string that fired) is how the generate-matrix step tells the two
+    # schedules apart — workflow_dispatch inputs don't apply to `schedule`
+    # events, so there is no `inputs.tpm_autounlock` to read here.
+    - cron: "0 7 1 */3 *"
 
 permissions:
   contents: read
@@ -55,6 +77,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
+      tpm_autounlock: ${{ steps.gen.outputs.tpm_autounlock }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -70,28 +93,73 @@ jobs:
         env:
           FILTER_VARIANT: ${{ inputs.variant || 'all' }}
           FILTER_FLAVOR: ${{ inputs.flavor || 'all' }}
+          # inputs.tpm_autounlock is only populated on workflow_dispatch —
+          # schedule events carry no `inputs` context, so the second cron
+          # above is identified by github.event.schedule instead. Compared
+          # as a string, not booleans, because event.schedule IS the literal
+          # cron expression from the `on.schedule` list.
+          TPM_DISPATCH: ${{ inputs.tpm_autounlock || false }}
+          TPM_SCHEDULE: ${{ github.event.schedule == '0 7 1 */3 *' }}
         run: |
           set -euo pipefail
           json="$(yq -o=json '.' .github/build-config.yml)"
-          # Every variant x desktop flavor that has a published image
-          # (build_image, NOT build_iso): the browser ISO builder makes ISOs
-          # from any image, so image-only variants (sailfin, guppy,
-          # flounder-sid) need boot+install coverage too. Cover every amd64
-          # graphical image: standard desktops, overlays (NVIDIA/CachyOS),
-          # and any future desktop tag. `base` has no login target to gate;
-          # arm64-only flavors require an arm64 QEMU runner and are reported
-          # separately in the job summary.
-          matrix="$(echo "$json" | jq -c \
-            --arg fv "$FILTER_VARIANT" --arg ff "$FILTER_FLAVOR" \
-            '{include: [ .variants[] | . as $variant | .id as $v | .flavors[]
-               | select(.build_image == true)
-               | select(.id != "base")
-               | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
-               | {variant: $v, flavor: .id}
-               | select($fv == "all" or .variant == $fv)
-               | select($ff == "all" or .flavor == $ff) ]}')"
+
+          if [[ "$TPM_DISPATCH" == "true" || "$TPM_SCHEDULE" == "true" ]]; then
+            TPM_AUTOUNLOCK=true
+          else
+            TPM_AUTOUNLOCK=false
+          fi
+          echo "tpm_autounlock=${TPM_AUTOUNLOCK}" >> "$GITHUB_OUTPUT"
+
+          if [[ "$TPM_AUTOUNLOCK" == "true" ]]; then
+            # docs/LUKS-TPM.md's support matrix: these three never get the
+            # tpm2-tss dracut module built in at all (unconditional omit on
+            # openSUSE/Gentoo, no tpm2-tools package on Arch), so no boot
+            # could ever confirm auto-unlock there — spending a third QEMU
+            # boot on them would only ever reproduce a known, static fact.
+            # tests/bats/test_luks_tpm2_support_matrix.bats keeps this list
+            # honest against the actual Containerfiles.
+            NO_TPM_USERSPACE="sailfin marlin guppy"
+            # One flavor per variant, so a 13-variant sweep costs 13 extra
+            # boots instead of one per every desktop x variant cell — see the
+            # header comment. `gnome` when the variant ships it (the flavor
+            # every non-Arch/apt/RPM base tests already lean on), else
+            # whatever amd64 graphical flavor sorts first.
+            matrix="$(echo "$json" | jq -c \
+              --arg fv "$FILTER_VARIANT" --arg skip "$NO_TPM_USERSPACE" \
+              '($skip | split(" ")) as $skiplist
+               | {include: [ .variants[] | . as $variant | .id as $v
+                   | select($skiplist | index($v) | not)
+                   | ([$variant.flavors[]
+                       | select(.build_image == true)
+                       | select(.id != "base")
+                       | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
+                     ] | sort_by(.id)) as $eligible
+                   | (($eligible | map(select(.id == "gnome")) | .[0]) // $eligible[0]) as $pick
+                   | select($pick != null)
+                   | {variant: $v, flavor: $pick.id}
+                   | select($fv == "all" or .variant == $fv) ]}')"
+          else
+            # Every variant x desktop flavor that has a published image
+            # (build_image, NOT build_iso): the browser ISO builder makes ISOs
+            # from any image, so image-only variants (sailfin, guppy,
+            # flounder-sid) need boot+install coverage too. Cover every amd64
+            # graphical image: standard desktops, overlays (NVIDIA/CachyOS),
+            # and any future desktop tag. `base` has no login target to gate;
+            # arm64-only flavors require an arm64 QEMU runner and are reported
+            # separately in the job summary.
+            matrix="$(echo "$json" | jq -c \
+              --arg fv "$FILTER_VARIANT" --arg ff "$FILTER_FLAVOR" \
+              '{include: [ .variants[] | . as $variant | .id as $v | .flavors[]
+                 | select(.build_image == true)
+                 | select(.id != "base")
+                 | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
+                 | {variant: $v, flavor: .id}
+                 | select($fv == "all" or .variant == $fv)
+                 | select($ff == "all" or .flavor == $ff) ]}')"
+          fi
           count="$(echo "$matrix" | jq '.include | length')"
-          echo "Matrix has ${count} cell(s)"
+          echo "Matrix has ${count} cell(s) (tpm_autounlock=${TPM_AUTOUNLOCK})"
           echo "$matrix" | jq .
           if [[ "$count" -eq 0 ]]; then
             echo "::error::No matching variant/flavor cells"
@@ -352,6 +420,11 @@ jobs:
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
+          # Set only in tpm_autounlock mode (generate-matrix already excluded
+          # the variants that can never pass this — see docs/LUKS-TPM.md).
+          # iso-e2e.sh itself fails the step (exit 8) on a bad unlock, so this
+          # is what actually drives the third boot, not just a label.
+          TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK: ${{ needs.generate-matrix.outputs.tpm_autounlock == 'true' && '1' || '0' }}
         run: |
           mkdir -p luks-out
           # -E: sudo resets the environment by default, which drops VARIANT/
@@ -392,27 +465,36 @@ jobs:
           # (tunaOS#972 — see customize-live.sh). This headroom is kept for
           # the genuine staging copies, not because that copy still happens.
           #
-          # E2E_WALL_CLOCK_DEADLINE is named on the `env` line rather than
-          # left to `sudo -E` for the same reason FISHERMAN_OVERRIDE is: -E
-          # is subject to sudoers env_keep/env_reset, and a deadline that
-          # silently fails to arrive would put the harness straight back on
-          # its relative 10800s backstop — the exact thing that could not
-          # fire in time on the slow cells. Passed explicitly, it either
-          # arrives or the script says so.
+          # E2E_WALL_CLOCK_DEADLINE and TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK are
+          # named on the `env` line rather than left to `sudo -E` for the
+          # same reason FISHERMAN_OVERRIDE is: -E is subject to sudoers
+          # env_keep/env_reset, and either silently failing to arrive is
+          # the wrong kind of failure — a deadline that never arrives puts
+          # the harness back on its relative 10800s backstop (the exact
+          # thing that could not fire in time on the slow cells), and a
+          # TPM flag that never arrives would silently skip the one boot
+          # this whole workflow input exists to add. Passed explicitly,
+          # each either arrives or the script says so.
           sudo -E env FISHERMAN_OVERRIDE="$FISHERMAN_OVERRIDE" \
             E2E_WALL_CLOCK_DEADLINE="$E2E_WALL_CLOCK_DEADLINE" \
+            TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK="$TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK" \
             ./scripts/iso-e2e.sh "${ISO_PATH}" --luks \
             --output luks-out \
             --memory 10240 \
             --timeout 1200
           # Gate = encrypted install + passphrase unlock to login. TPM2
           # auto-unlock is enrolled automatically by a first-boot oneshot
-          # (fisherman#48) rather than a manual `ujust enable-luks-tpm2` step,
-          # but it is still not asserted here — see docs/LUKS-TPM.md and the
-          # header comment above for why (tested separately, per-variant).
+          # (fisherman#48) rather than a manual `ujust enable-luks-tpm2` step;
+          # asserted below only when TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK=1 (the
+          # tpm_autounlock dispatch input / quarterly schedule) — see
+          # docs/LUKS-TPM.md and the header comment above for why it isn't
+          # part of every cell.
           grep -qx 'TUNAOS_LUKS_E2E_INSTALL_STARTED luks=1' luks-out/luks-evidence.log
           grep -qx 'TUNAOS_LUKS_E2E_ENCRYPTED_DISK_CONFIRMED' luks-out/luks-evidence.log
           grep -qx 'TUNAOS_LUKS_E2E_PASS encrypted=1 passphrase_unlock=1 installed_boot=1' luks-out/luks-evidence.log
+          if [[ "$TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK" == "1" ]]; then
+            grep -qx 'TUNAOS_LUKS_E2E_TPM_AUTOUNLOCK_CONFIRMED' luks-out/luks-evidence.log
+          fi
 
       - name: Collect evidence
         if: always()
