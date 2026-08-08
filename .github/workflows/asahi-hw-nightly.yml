@@ -1,0 +1,90 @@
+name: Asahi hardware smoke (Tier 2 rental)
+
+# Real-hardware boot smoke for the two flavors verify-asahi.yml has actually
+# proven correct at the image level (bonito, grouper — see MATRIX-STATUS.md
+# §4 and tunaOS#776). verify-asahi.yml only inspects the image; it never
+# boots it, and GitHub-hosted arm64 runners have no /dev/kvm and no Apple SoC
+# emulation exists anywhere. This is Tier 2 of tunaOS#780 — a rented Scaleway
+# Mac mini M2 Pro — driven entirely over SSH from an ordinary GitHub-hosted
+# runner via scripts/asahi-remote-switch.sh (asahi-hw-nightly-one.yml). See
+# docs/ASAHI-HARDWARE-TIERS.md for why: the rental is never registered as a
+# self-hosted runner at all, so it never holds a standing credential of its
+# own — only an SSH server this workflow connects out to.
+#
+# Same sweep/single split as verify-asahi.yml, on purpose: schedule or an
+# empty `image` input tests every flavor this tier actually trusts with real
+# rental time; an explicit `image` input tests exactly that one ref.
+#
+# Safe to merge with no rental configured: the `configured` job is the only
+# thing that runs until ASAHI_HW_TIER2_HOST is set, and it does nothing but
+# report that clearly — visible in the Actions tab as "waiting to be wired
+# up" rather than invisible, without ever failing the run.
+
+on:
+  schedule:
+    # Same slot as verify-asahi.yml's sweep (05:40 UTC) plus a 20-minute
+    # offset, so a fresh promoted tag from the nightly builds and a fresh
+    # image-level sweep both land before this tries to boot one of them.
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Single image ref to boot-test (leave empty to test both bonito and grouper)"
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  configured:
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - name: Check whether a Tier 2 rental is configured
+        id: check
+        run: |
+          if [ -n "${{ secrets.ASAHI_HW_TIER2_HOST }}" ]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+            echo "ASAHI_HW_TIER2_HOST is set — running the real boot smoke."
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### No Tier 2 rental configured"
+              echo
+              echo "\`ASAHI_HW_TIER2_HOST\` is not set, so there is nothing to boot-test yet."
+              echo "See \`docs/ASAHI-HARDWARE-TIERS.md\` — this is expected until someone"
+              echo "with a funded Scaleway account provisions the rental and sets"
+              echo "\`ASAHI_HW_TIER2_HOST\` / \`ASAHI_HW_TIER2_SSH_KEY\` as repository secrets."
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+  # Sweep mode: every flavor this tier trusts with real rental time.
+  sweep:
+    needs: configured
+    if: needs.configured.outputs.ready == 'true' && (github.event_name == 'schedule' || inputs.image == '')
+    strategy:
+      fail-fast: false
+      matrix:
+        # Only bonito and grouper — the two flavors verify-asahi.yml's sweep
+        # has actually proven bootable at the image level (tunaOS#776). The
+        # other six have known, tracked defects (#777, #911, #912, #914);
+        # spending rental minutes to re-discover them on real hardware would
+        # tell us nothing verify-asahi.yml hasn't already. Add a flavor here
+        # once its own verify-asahi.yml leg goes green.
+        flavor: [bonito, grouper]
+    uses: ./.github/workflows/asahi-hw-nightly-one.yml
+    with:
+      image: ghcr.io/tuna-os/${{ matrix.flavor }}:gnome-asahi
+    secrets: inherit
+
+  # Dispatch mode: one explicit ref, for iterating on a single build (e.g. a
+  # -testing tag) before it's promoted.
+  single:
+    needs: configured
+    if: needs.configured.outputs.ready == 'true' && github.event_name == 'workflow_dispatch' && inputs.image != ''
+    uses: ./.github/workflows/asahi-hw-nightly-one.yml
+    with:
+      image: ${{ inputs.image }}
+    secrets: inherit
