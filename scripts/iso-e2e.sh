@@ -100,6 +100,18 @@
 #                         so it is opt-in rather than folded into every
 #                         --luks cell; docs/LUKS-TPM.md calls this "the
 #                         per-variant TPM-enrollment test".
+#   E2E_WALL_CLOCK_LIMIT  Seconds before the whole harness gives up and
+#                         terminates itself with a diagnosis (default 10800,
+#                         0 to disable). Relative to when this script starts.
+#   E2E_WALL_CLOCK_DEADLINE
+#                         Absolute epoch-seconds by which the harness must
+#                         have given up, clamping E2E_WALL_CLOCK_LIMIT down
+#                         when less time than that remains. Set this from a
+#                         CI job's own timeout so the harness fails with
+#                         evidence instead of being cancelled without it —
+#                         a relative limit cannot do that, because it does
+#                         not know how much of the job budget was already
+#                         spent before it was called (#1100).
 #
 # Exit codes:
 #   0  success
@@ -123,6 +135,10 @@
 #      either still showed the cryptsetup passphrase prompt (the first-boot
 #      enrollment oneshot did not seal a working key) or never reached
 #      login within --timeout. See installed-tpm-autounlock-serial.log.
+#   75 the job budget was already exhausted before the harness started
+#      (E2E_WALL_CLOCK_DEADLINE in the past) — nothing was tested, and the
+#      fix is upstream of here: whatever ran first is too slow, or the
+#      caller's timeout is too small.
 #   77 missing dependency (qemu, ovmf, etc.) — distinguishable for CI skip
 
 set -euo pipefail
@@ -447,6 +463,22 @@ LIVE_SERIAL_LOG="${OUTPUT_DIR}/live-serial.log"
 LUKS_EVIDENCE_LOG="${OUTPUT_DIR}/luks-evidence.log"
 INSTALL_DISK="${OUTPUT_DIR}/install-disk.qcow2"
 QEMU_PIDFILE="${OUTPUT_DIR}/qemu.pid"
+
+# What the run is currently waiting on, as a file rather than a variable: the
+# wall-clock watchdog below runs in a background subshell forked before any of
+# this happens, so it has a frozen copy of every variable and can only learn
+# the current phase by reading it back off disk. Without that, a watchdog
+# firing can say "it hung" but not "it hung waiting for X", which is most of
+# the value (#1100).
+PHASE_FILE="${OUTPUT_DIR}/current-phase.txt"
+: >"$PHASE_FILE"
+
+# Announce a phase AND record it for the watchdog. Same output as the plain
+# `echo "==> ..."` it replaces, so nothing that greps this log changes.
+e2e_phase() {
+	printf '%s | %s\n' "$(date -u +%H:%M:%SZ)" "$*" >"$PHASE_FILE"
+	echo "==> $*"
+}
 
 # A dedicated swap disk for the live guest, attached only to the install boot.
 #
@@ -788,17 +820,86 @@ trap 'exit 143' TERM
 # diagnosis at all — the log had to be recovered by cancelling them by hand,
 # because GitHub returns BlobNotFound for a running job.
 #
-# Deliberately generous, and well under luks-e2e.yml's `timeout-minutes: 240`:
-# firing must leave time for the Collect/Upload evidence steps, because a
-# backstop that trips without preserving evidence just reproduces the failure
-# it exists to prevent. Set E2E_WALL_CLOCK_LIMIT=0 to disable.
+# Deliberately generous. 10800 is not arbitrary: it is what this script's own
+# per-call guards can legitimately add up to on the slowest path (1800 pull +
+# 1800 podman run + 1800 scp + 1800 podman load + 3600 fisherman install), so
+# anything shorter as a fixed value could cut off a working-but-slow run.
+# Set E2E_WALL_CLOCK_LIMIT=0 to disable.
 E2E_WALL_CLOCK_LIMIT="${E2E_WALL_CLOCK_LIMIT:-10800}"
+
+# ...but "generous" is only safe if the job actually has that much time left,
+# and the old comment here reasoned that 10800s sits "well under
+# timeout-minutes: 240" — comparing the script's budget against the WHOLE
+# job's budget while ignoring everything the job does before calling us.
+# luks-e2e.yml spends a dev-ISO build first, and that is not small: guppy:xfce
+# takes ~133 min there (runs 31232170155 and 31242742608, 133m30s and
+# 132m18s), leaving ~105 min of the 240. A 180-minute relative backstop cannot
+# fire inside 105 minutes, so on those cells this watchdog was dead code and
+# the job-level timeout won instead — which cancels the job and takes the
+# `if: always()` Collect/Upload evidence steps with it. That is precisely the
+# outcome this backstop exists to prevent (#1100).
+#
+# So take an ABSOLUTE deadline from the caller and clamp to whichever comes
+# first. This can only ever shorten the budget to something the job was never
+# going to grant anyway — the job would have been killed at that point
+# regardless, just without a diagnosis — so it introduces no risk of failing a
+# run that would otherwise have passed.
+if [[ -n "${E2E_WALL_CLOCK_DEADLINE:-}" ]]; then
+	_remaining=$((E2E_WALL_CLOCK_DEADLINE - $(date +%s)))
+	if ((_remaining <= 0)); then
+		echo "ERROR: no time left in the job budget before iso-e2e.sh even started" >&2
+		echo "       (E2E_WALL_CLOCK_DEADLINE=${E2E_WALL_CLOCK_DEADLINE} is already past)." >&2
+		echo "       Everything before this step consumed the job's timeout-minutes." >&2
+		exit 75
+	fi
+	# A deadline arms the watchdog even when the relative limit was disabled:
+	# E2E_WALL_CLOCK_LIMIT=0 says "I don't want an arbitrary cap", not "let
+	# the job get killed undiagnosed".
+	if [[ "$E2E_WALL_CLOCK_LIMIT" -eq 0 ]]; then
+		echo "==> Wall-clock backstop armed at ${_remaining}s by the job deadline (relative limit disabled)"
+		E2E_WALL_CLOCK_LIMIT="$_remaining"
+	elif ((_remaining < E2E_WALL_CLOCK_LIMIT)); then
+		echo "==> Wall-clock backstop clamped to ${_remaining}s by the job deadline (was ${E2E_WALL_CLOCK_LIMIT}s)"
+		E2E_WALL_CLOCK_LIMIT="$_remaining"
+	fi
+fi
+
+# What the watchdog prints when it fires. Defined HERE, above the fork, because
+# the subshell only has the functions and variables that existed when it was
+# forked. "It hung" is not a diagnosis; the phase it hung in and the tail of
+# the console it went quiet on are.
+dump_hang_diagnosis() {
+	local phase="(never recorded)" log
+	[[ -s "$PHASE_FILE" ]] && phase="$(cat "$PHASE_FILE")"
+	echo "===== iso-e2e.sh hang diagnosis ====================================="
+	echo "waiting on : ${phase}"
+	echo "mode       : ${MODE}  luks=${LUKS}  variant=${VARIANT:-?}:${FLAVOR:-?}"
+	if [[ -f "$QEMU_PIDFILE" ]] && kill -0 "$(cat "$QEMU_PIDFILE" 2>/dev/null)" 2>/dev/null; then
+		echo "qemu       : alive (pid $(cat "$QEMU_PIDFILE")) — the guest stopped talking, not QEMU"
+	else
+		echo "qemu       : not running — the guest died or was never started"
+	fi
+	for log in "$SERIAL_LOG" "$LIVE_SERIAL_LOG" \
+		"${OUTPUT_DIR}/installed-serial.log" \
+		"${OUTPUT_DIR}/installed-tpm-autounlock-serial.log"; do
+		[[ -s "$log" ]] || continue
+		echo "----- last 40 lines of ${log##*/} ($(wc -c <"$log") bytes) -----"
+		tail -n 40 "$log" | tr -d '\r'
+	done
+	echo "====================================================================="
+}
+
 WATCHDOG_PID=""
 if [[ "$E2E_WALL_CLOCK_LIMIT" -gt 0 ]]; then
 	(
 		sleep "$E2E_WALL_CLOCK_LIMIT"
 		echo "ERROR: iso-e2e.sh exceeded its ${E2E_WALL_CLOCK_LIMIT}s wall-clock limit — terminating" >&2
-		echo "       The last '==>' line above is where it hung. See tunaOS#939." >&2
+		# Both destinations on purpose: stderr reaches the job log, and the
+		# evidence log reaches the uploaded artifact. The job log is the one
+		# that is NOT retrievable while a run is still going (GitHub answers
+		# BlobNotFound), which is how the 07-31 hangs left nothing behind.
+		dump_hang_diagnosis 2>&1 | tee -a "$LUKS_EVIDENCE_LOG" >&2
+		echo "       See tunaOS#939 and tunaOS#1100." >&2
 		kill -TERM "$$" 2>/dev/null || true
 	) &
 	WATCHDOG_PID=$!
@@ -857,7 +958,7 @@ boot_live_iso() {
 	# we instead rely on the ISO's default cmdline already enabling
 	# console=ttyS0 (livesys-config does this in upstream).
 
-	echo "==> Booting ISO: ${ISO_PATH}"
+	e2e_phase "Booting ISO: ${ISO_PATH}"
 	echo "==> Accel: ${ACCEL}, CPU: ${CPU_ARG}, MEM: ${MEMORY}M, CPUS: ${CPUS}"
 
 	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
@@ -1144,7 +1245,7 @@ screenshot_sane() {
 wait_for_ready() {
 	local deadline=$(($(date +%s) + TIMEOUT))
 	local last_size=0
-	echo "==> Waiting up to ${TIMEOUT}s for readiness marker (${LIVE_MARKER})..."
+	e2e_phase "Waiting up to ${TIMEOUT}s for readiness marker (${LIVE_MARKER})..."
 	while (($(date +%s) < deadline)); do
 		if [[ -f "$SERIAL_LOG" ]] && grep -qE -- "$LIVE_MARKER" "$SERIAL_LOG" 2>/dev/null; then
 			echo "==> Readiness marker found"
@@ -1471,7 +1572,7 @@ poweroff_and_wait_vm() {
 	[[ -n "$pid" ]] || return 0
 	kill -0 "$pid" 2>/dev/null || return 0
 
-	echo "==> Waiting for VM to shut down..."
+	e2e_phase "Waiting for VM to shut down..."
 	wait_pid_gone "$pid" "$POWEROFF_WAIT_SECS" && return 0
 
 	# The install is finished by here — fisherman/bootc have unmounted, frozen
@@ -1595,7 +1696,7 @@ run_install_generic() {
 
 	start_guest_heartbeat
 
-	echo "==> Pulling ${imgref} in the guest (bounded 1800s)..."
+	e2e_phase "Pulling ${imgref} in the guest (bounded 1800s)..."
 	if ! timeout 1800 "${ssh_cmd[@]}" "sudo podman pull ${imgref} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
 		echo "ERROR: podman pull failed or timed out" >&2
 		return 3
@@ -1681,7 +1782,7 @@ run_install_generic() {
 			start_swtpm keep || return 77
 		fi
 	fi
-	echo "==> Booting installed disk (TPM auto-unlock), expecting a login prompt..."
+	e2e_phase "Booting installed disk (TPM auto-unlock), expecting a login prompt..."
 	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
 	reset_qemu_sockets
 	"$QEMU" -name "tunaos-iso-e2e-installed" -machine pc -cpu "$CPU_ARG" \
@@ -2175,7 +2276,7 @@ run_install() {
 			# The workflow's --timeout does not cover this; that is a PER-PHASE
 			# timeout (see the usage text above) consulted only by the
 			# readiness wait and the installed-boot wait.
-			echo "==> Transferring image to guest (this may take a few minutes)..."
+			e2e_phase "Transferring image to guest (this may take a few minutes)..."
 			if ! timeout 1800 "${scp_cmd[@]}" "$host_tar" \
 				"${GUEST_SCP_DEST}:${GUEST_HOME}/"; then
 				echo "ERROR: image transfer to guest timed out or failed" >&2
@@ -2245,7 +2346,7 @@ EOF
 
 	start_guest_heartbeat
 
-	echo "==> Running fisherman ${GUEST_HOME}/e2e-recipe.json..."
+	e2e_phase "Running fisherman ${GUEST_HOME}/e2e-recipe.json..."
 	# Bound with `timeout` as a safety net; the image is already local at
 	# this point so this should only cover the actual install steps, not a
 	# network pull.
@@ -2351,7 +2452,7 @@ EOF
 	# the opt-in that does gate it). Boot with a serial socket and inject the
 	# passphrase at the cryptsetup prompt; reaching login proves the unlock.
 	if [[ "$LUKS" -eq 1 ]]; then
-		echo "==> LUKS passphrase gate: booting installed disk, injecting passphrase, expecting login..."
+		e2e_phase "LUKS passphrase gate: booting installed disk, injecting passphrase, expecting login..."
 		local FB_SERIAL="${OUTPUT_DIR}/installed-serial.sock"
 		rm -f "$FB_SERIAL"
 		# A TPM IS needed on THIS boot (tunaOS#680): fisherman#48 stages a
@@ -2579,7 +2680,7 @@ EOF
 		# workflow_dispatch boolean, or its own scheduled job over a smaller
 		# variant set) once satisfied with the added runtime.
 		if [[ "${TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK:-0}" == "1" ]]; then
-			echo "==> TPM auto-unlock verification: rebooting the installed disk with no passphrase..."
+			e2e_phase "TPM auto-unlock verification: rebooting the installed disk with no passphrase..."
 			local tpid2
 			tpid2=$(cat "$TPM_PIDFILE" 2>/dev/null || true)
 			if [[ -z "$tpid2" ]] || ! kill -0 "$tpid2" 2>/dev/null; then
@@ -2650,7 +2751,7 @@ EOF
 		return 0
 	fi
 
-	echo "==> Booting installed system..."
+	e2e_phase "Booting installed system..."
 	# Boot from the install disk (remove cdrom). bootindex=0 overrides the
 	# BootOrder the live-ISO boot left in the shared OVMF_VARS; see the
 	# LUKS passphrase gate above for why the shell wins without it.
@@ -2718,7 +2819,7 @@ EOF
 boot_disk_image() {
 	local fmt="qcow2"
 	[[ "$ISO_PATH" == *.raw || "$ISO_PATH" == *.img ]] && fmt="raw"
-	echo "==> Booting disk image: ${ISO_PATH} (${fmt})"
+	e2e_phase "Booting disk image: ${ISO_PATH} (${fmt})"
 	echo "==> Accel: ${ACCEL}, CPU: ${CPU_ARG}, MEM: ${MEMORY}M, CPUS: ${CPUS}"
 
 	reset_qemu_sockets
@@ -2757,7 +2858,7 @@ boot_disk_image() {
 case "$MODE" in
 disk)
 	boot_disk_image || exit 1
-	echo "==> Waiting up to ${TIMEOUT}s for a graphical session..."
+	e2e_phase "Waiting up to ${TIMEOUT}s for a graphical session..."
 	deadline=$(($(date +%s) + TIMEOUT))
 	rc=2
 	while (($(date +%s) < deadline)); do
