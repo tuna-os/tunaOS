@@ -13,12 +13,14 @@
 # fatal=0 and gated nothing. This turns the measurable cases into a gate and
 # names the unmeasurable ones instead of silently passing them.
 #
-# pixel_gate <shot> <stddev> <frames> <virgl>
+# pixel_gate <shot> <stddev> <frames> <virgl> [contract]
 #   shot    drawn | blank | unmeasured | absent — screenshot_sane's verdict
 #           on the installed-desktop capture (iso-e2e.sh computes it)
 #   stddev  the measured grayscale stddev, or empty when not measured
 #   frames  content of the timelapse frame-count.txt, or empty when absent
 #   virgl   1 when QEMU runs GL scanout (egl-headless), else 0
+#   contract  the installed system's desktop-contract verdict (ok|fail|absent),
+#           empty when unknown — the in-guest second opinion, see below
 #
 # Prints exactly one evidence line:
 #   TUNAOS_LUKS_E2E_PIXEL_GATE result=<r> frames=<n> stddev=<s> fatal=<0|1>
@@ -44,13 +46,35 @@
 #   shot=absent    → absent, FATAL failure: on the plain path screendump
 #                    works whenever QEMU is alive, so no capture at all means
 #                    the surface was never there to photograph.
+#                    ...UNLESS the installed system's own desktop contract
+#                    passed. That premise — no capture implies no surface —
+#                    is falsifiable, and two cells falsified it: gurnard:
+#                    pantheon (run 31232163933) and grouper:xfce (run
+#                    31232166865) both recorded desktop_contract=ok with
+#                    141-153 timelapse frames, while the installed-desktop
+#                    capture never appeared. The contract is measured INSIDE
+#                    the guest (verify-desktop-experience --runtime: the DM
+#                    is active and the session's own assertions passed), so
+#                    it cannot be satisfied by a machine that never drew.
+#                    When it vouches, a missing capture is a host-side
+#                    capture-path failure, and failing the build on it
+#                    reports a product defect that the evidence contradicts.
+#                    Advisory, and named absent_contract_ok so it can never
+#                    be mistaken for a clean pass.
+#
+#                    Deliberately NOT extended to shot=blank: blank means the
+#                    capture worked and measured nothing on screen, which is
+#                    exactly the black-console-under-a-live-session hole this
+#                    gate exists to close. "We measured and saw nothing" stays
+#                    fatal; only "we failed to measure at all, and the guest
+#                    says it is up" is downgraded.
 #
 # `drawn` still only means SOMETHING rendered — a greeter that draws, or a
 # text login, clears the same stddev floor; the greeter-drew-but-no-session
 # hole stays open and documented (iso-e2e.sh). This gate closes the
 # black-console hole, which is the one that has actually shipped.
 pixel_gate() {
-	local shot="$1" stddev="$2" frames="$3" virgl="$4"
+	local shot="$1" stddev="$2" frames="$3" virgl="$4" contract="${5:-}"
 	local result fatal rc
 
 	if [[ "$virgl" == "1" ]]; then
@@ -63,6 +87,8 @@ pixel_gate() {
 		result="pass" fatal=1 rc=0
 	elif [[ "$shot" == "blank" ]]; then
 		result="blank" fatal=1 rc=1
+	elif [[ "$contract" == "ok" ]]; then
+		result="absent_contract_ok" fatal=0 rc=0
 	else
 		result="absent" fatal=1 rc=1
 	fi
