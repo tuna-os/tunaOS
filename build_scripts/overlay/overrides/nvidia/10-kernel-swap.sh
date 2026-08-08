@@ -113,9 +113,19 @@ else
 	# 6.12.0-250 husk (no vmlinuz, no initramfs, empty modules.dep) sitting
 	# beside it. verify-nvidia.sh now fails the build if more than one
 	# module tree survives to the end.
+	#
+	# Only kernel-release-named entries (uname -r: <maj>.<min>.<patch>…) are
+	# kernel trees. /usr/lib/modules also holds kernel-abi-stablelists'
+	# rpm-owned kabi-current symlink and kabi-rhel10* directories (#1118);
+	# rm -rf'ing those deletes files an installed package still owns and
+	# removes nothing a kernel selector could ever pick.
 	for _mod_dir in "${MODULES_ROOT}"/*/; do
 		[[ -d "$_mod_dir" ]] || continue
 		_mod_ver="$(basename "$_mod_dir")"
+		if [[ ! "$_mod_ver" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+			echo "==> keeping non-kernel /usr/lib/modules entry ${_mod_ver}"
+			continue
+		fi
 		if [[ "$_mod_ver" != "$CACHED_VERSION" ]]; then
 			echo "==> removing stale kernel module tree ${_mod_dir}"
 			rm -rf "$_mod_dir"

@@ -455,6 +455,67 @@ print('ok')
   [[ "$output" == *"kernel module trees under /usr/lib/modules"* ]]
 }
 
+# ── kabi entries are not kernel trees (#1118, run 31235806989) ─────────────
+#
+# The driver transaction pulls kernel-abi-stablelists from baseos. Its whole
+# payload under /lib/modules is the five entries reproduced below (read out
+# of the rpm header of kernel-abi-stablelists-6.12.0-254.el10.noarch):
+# kabi-current, a symlink to the kabi-rhel103 DIRECTORY, plus kabi-rhel100
+# through kabi-rhel103. Counting every /usr/lib/modules entry read that as
+# "6 kernel module trees" and failed six *-nvidia amd64 variants whose other
+# assertions all passed. They hold kabi_stablelist_<arch> text files: no
+# vmlinuz, no modules.dep, no kernel-release name.
+
+make_kabi_entries() {
+  local r="$1"
+  mkdir -p "$r/usr/lib/modules/kabi-rhel10"{0,1,2,3}
+  for n in 0 1 2 3; do
+    touch "$r/usr/lib/modules/kabi-rhel10${n}/kabi_stablelist_x86_64"
+  done
+  ln -sfn kabi-rhel103 "$r/usr/lib/modules/kabi-current"
+}
+
+@test "verify-nvidia passes with kernel-abi-stablelists' kabi entries present" {
+  make_stub_tools
+  root="$(make_good_root)"
+  make_kabi_entries "$root"
+  run_verify "$root"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"single kernel module tree (${KVER})"* ]]
+  # Reported as evidence, not counted — a silent skip would hide a real
+  # surprise entry the next time one appears.
+  [[ "$output" == *"non-kernel /usr/lib/modules entries"* ]]
+  [[ "$output" == *"kabi-current"* ]]
+}
+
+@test "verify-nvidia still fails on a stale kernel tree beside the kabi entries" {
+  make_stub_tools
+  root="$(make_good_root)"
+  make_kabi_entries "$root"
+  mkdir -p "$root/usr/lib/modules/6.12.0-250.el10.x86_64"
+  run_verify "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"2 kernel module trees under /usr/lib/modules"* ]]
+  # The names, so the next failure diagnoses itself.
+  [[ "$output" == *"6.12.0-250.el10.x86_64"* ]]
+}
+
+@test "kernel-swap does not delete the rpm-owned kabi entries" {
+  make_swap_stubs "6.12.0-250.el10.x86_64"
+  make_swap_fixture
+  mkdir -p "${BATS_TEST_TMPDIR}/modules/6.12.0-250.el10.x86_64"
+  mkdir -p "${BATS_TEST_TMPDIR}/modules/${AKMODS_KVER}"
+  mkdir -p "${BATS_TEST_TMPDIR}/modules/kabi-rhel103"
+  touch "${BATS_TEST_TMPDIR}/modules/kabi-rhel103/kabi_stablelist_x86_64"
+  ln -sfn kabi-rhel103 "${BATS_TEST_TMPDIR}/modules/kabi-current"
+  run_swap
+  [ "$status" -eq 0 ]
+  [ ! -d "${BATS_TEST_TMPDIR}/modules/6.12.0-250.el10.x86_64" ]
+  [ -f "${BATS_TEST_TMPDIR}/modules/kabi-rhel103/kabi_stablelist_x86_64" ]
+  [ -L "${BATS_TEST_TMPDIR}/modules/kabi-current" ]
+  [[ "$output" == *"keeping non-kernel /usr/lib/modules entry kabi-rhel103"* ]]
+}
+
 @test "verify-nvidia fails when the initramfs lacks a boot-critical driver" {
   make_stub_tools
   root="$(make_good_root)"
