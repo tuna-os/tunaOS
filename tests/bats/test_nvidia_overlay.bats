@@ -42,12 +42,33 @@ OVERLAY_SH="${REPO_ROOT}/build_scripts/overlay/nvidia.sh"
 @test "overlay nvidia.sh runs the overrides and then the fatal contract" {
   run grep -F 'run_buildscripts_for nvidia' "$OVERLAY_SH"
   [ "$status" -eq 0 ]
-  # Bare call (no `|| true`, no `-`): under set -e a failed contract fails
-  # the build.
-  run grep -E '^/run/context/build_scripts/checks/verify-nvidia\.sh$' "$OVERLAY_SH"
+  # Bare call (no `|| true`, no `-`, only leading whitespace allowed): under
+  # set -e a failed contract fails the build. tunaOS#624 split this into a
+  # per-family dispatch (rpm/pacman/apt), so each family's own contract
+  # script must appear this way, not just the rpm one.
+  run grep -E '^[[:space:]]*/run/context/build_scripts/checks/verify-nvidia\.sh$' "$OVERLAY_SH"
   [ "$status" -eq 0 ]
-  # And the auditor ships in the image for the published-image sweep.
-  run grep -F '/usr/libexec/tunaos/verify-nvidia' "$OVERLAY_SH"
+  run grep -E '^[[:space:]]*/run/context/build_scripts/checks/verify-nvidia-arch\.sh$' "$OVERLAY_SH"
+  [ "$status" -eq 0 ]
+  run grep -E '^[[:space:]]*/run/context/build_scripts/checks/verify-nvidia-debian\.sh$' "$OVERLAY_SH"
+  [ "$status" -eq 0 ]
+  # And each auditor ships in the image for the published-image sweep.
+  run grep -c -F '/usr/libexec/tunaos/verify-nvidia' "$OVERLAY_SH"
+  [ "$status" -eq 0 ]
+  [ "$output" -eq 3 ]
+}
+
+@test "overlay nvidia.sh dispatches by package family, never runs two families' overrides" {
+  # Each branch must call exactly one of nvidia / nvidia-arch / nvidia-debian
+  # overrides — running the rpm overrides on a pacman or apt base would fail
+  # outright (they invoke rpm/dnf directly), not silently no-op.
+  run grep -F 'IS_ARCH' "$OVERLAY_SH"
+  [ "$status" -eq 0 ]
+  run grep -F 'IS_DEBIAN' "$OVERLAY_SH"
+  [ "$status" -eq 0 ]
+  run grep -F 'run_buildscripts_for nvidia-arch' "$OVERLAY_SH"
+  [ "$status" -eq 0 ]
+  run grep -F 'run_buildscripts_for nvidia-debian' "$OVERLAY_SH"
   [ "$status" -eq 0 ]
 }
 
