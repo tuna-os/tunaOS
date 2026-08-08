@@ -99,16 +99,16 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
 **Theme**: Enterprise readiness, community governance, ecosystem integration.
 
-**Planning started (2026-08-08)**: Q4 milestone #3 created; tracking issue #1159 open — 4/9 goals untracked (Branch protection, Community governance, Release automation, Package signing/SBOM), stale dependency refs (#306/#307/#212/#301 closed).
+**Planning started (2026-08-08)**: Q4 milestone #3 created; tracking issue #1159 open. Strategist-owned goals now tracked (#1167 branch protection, #1168 governance); Release automation + Package signing/SBOM remain untracked for ci-maintainer/sec-check. Stale dependency refs (#306/#307/#212/#301 closed) flagged in #1159.
 
 | Goal | Owner | Dependencies |
 |------|-------|--------------|
 | Tacklebox decoupling | architect | #306 |
 | Upstream snapshot automation | ci-maintainer | #307 |
-| Branch protection + required CI | strategist | CI health |
+| Branch protection + required CI | strategist | CI health, #1167 |
 | Supply chain hardening | sec-check | #212, #301 |
 | Release automation | ci-maintainer | CI health, VERSIONING.md |
-| Community governance model | strategist | — |
+| Community governance model | strategist | #1168 |
 | Package signing / SBOM | sec-check | Supply chain |
 | Bonito (Fedora 44) GA carryover | ci-maintainer | #272 |
 | Redfin (RHEL 10) alpha GA | ci-maintainer | #609 |
