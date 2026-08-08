@@ -30,7 +30,7 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 
 CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
-✅ **Downloads VERIFIED WORKING** (2026-08-08): tunaos.org/download serves 179 ISOs from R2 (newest 08-07, HTTP 200 GB-scale). ⚠️ **Remaining gap**: GitHub Releases page stale since 07-12 — 27 consecutive green Generate Release runs silently skipped (SBOM artifact-name mismatch); release tags are empty shells. See #1106 (fix) + #1147 (cadence health gate). #936 (tacklebox pin) still open as live-boot fix hold.
+✅ **Downloads VERIFIED WORKING** (2026-08-08): tunaos.org/download serves 179 ISOs from R2 (newest 08-07, HTTP 200 GB-scale). ⚠️ **Remaining gap**: GitHub Releases page stale since 07-12 — 27 consecutive green Generate Release runs silently skipped; release tags are empty shells. Root cause was **build-run selection, not the artifact name**: the SBOM lookup asked the API for `status=success` runs of `build-yellowfin.yml`, but a nightly fans out to ~40 matrix cells with `fail-fast: false`, so one unrelated flavour failing marks the whole run `failure`. The only "successful" runs on main were single-flavour dispatches, which carry that one flavour's SBOM and nothing else — while `sbom-yellowfin-gnome-linux-amd64` sat in each night's (failed) run all along. See #1106 (fix) + #1147 (cadence health gate). #936 (tacklebox pin) still open as live-boot fix hold.
 
 ### Community
 
