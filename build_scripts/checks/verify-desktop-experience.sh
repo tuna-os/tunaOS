@@ -255,13 +255,51 @@ cosmic)
 	require_command cosmic-comp
 	require_glob '/usr/share/wayland-sessions/*cosmic*.desktop'
 	require_unit greetd
-	# NOT extended. cosmic-files and xdg-desktop-portal-cosmic look like the
-	# obvious requirements, but on el10 they are installed from a COPR, and
-	# copr installs are best-effort — a flaky COPR would turn a requirement
-	# into a hard build failure on a variant that has always built. Nor is
-	# either path measured on any published cosmic image yet. Measure
-	# bonito:cosmic (fedora) and flounder:cosmic (apt) first, then decide.
+	# Extended per tunaOS#916's own checklist item, with the same discipline
+	# GNOME/KDE/XFCE were held to: measure the manifest first, then require.
 	#
+	# cosmic-files and xdg-desktop-portal-cosmic are explicit, non-optional
+	# entries in manifests/desktops/cosmic.yaml's apt, fedora and zypper
+	# sections, and in cosmic-arch.yaml's pacman section — the same bar
+	# dolphin/konsole (kde) and thunar (xfce) were required on ("explicit in
+	# every manifest section that builds"). Without a file manager COSMIC is
+	# not merely sparse, it is unusable the same way sailfin:gnome was
+	# (tunaos-packages#132, the issue that started this whole contract).
+	#
+	# el10 (yellowfin/albacore/skipjack/redfin) is deliberately excluded:
+	# there both packages come from the yselkowitz/cosmic-epel COPR
+	# (cosmic.yaml's el10.copr section), and install-desktop.sh installs
+	# every copr block with `|| true` (the exact "COPR packages" step,
+	# distinct from the regular `dnf_retry -y install` used for fedora/apt/
+	# zypper/pacman, which has no such fallback) — a flaky COPR there can
+	# legitimately produce a build that has always shipped correctly. The
+	# condition below reproduces install-desktop.sh's own _TD_OS="el10"
+	# fallback exactly (dnf-based, not Fedora, not Hummingbird) rather than
+	# re-deriving it from a distro-name enumeration that could drift out of
+	# sync with the real branching logic.
+	#
+	# Binary path for cosmic-files confirmed live (mdapi.fedoraproject.org
+	# rawhide file list, 2026-08-08): /usr/bin/cosmic-files, so a plain PATH
+	# check is correct. xdg-desktop-portal-cosmic confirmed the same way:
+	# /usr/libexec/xdg-desktop-portal-cosmic on Fedora — matching this same
+	# file's already-twice-measured portal convention (libexec on Fedora/EL/
+	# Debian/Ubuntu/openSUSE, lib on Arch, see the table above the case
+	# statement), which xdg-desktop-portal-cosmic packaging follows for the
+	# same reason its sibling backends (-gnome, -gtk) do: all three build
+	# from the same upstream xdg-desktop-portal libexecdir convention per
+	# distro. Not independently re-measured on Ubuntu/openSUSE/Arch in this
+	# change (no zstd tooling available to read their repodata here) — recorded
+	# so the next person knows which half of this is live-verified and which
+	# is carried over from an already-established pattern, same as this
+	# file's own stated rule asks for.
+	if [[ "${PKG_MGR:-}" == "dnf" && "${IS_FEDORA:-false}" != true && "${IS_HUMMINGBIRD:-false}" != true ]]; then
+		echo "info: skipping cosmic-files/xdg-desktop-portal-cosmic on the el10 family — cosmic.yaml sources them from a best-effort COPR here (tunaOS#916)"
+	else
+		require_command cosmic-files
+		require_any_glob \
+			'/usr/libexec/xdg-desktop-portal-cosmic' \
+			'/usr/lib/xdg-desktop-portal-cosmic'
+	fi
 	# cosmic-greeter.service is accepted alongside greetd.service because it is
 	# greetd: `ExecStart=greetd --config /etc/greetd/cosmic-greeter.toml`, with
 	# `Provides: x-display-manager` and `Pre-Depends: greetd` on the deb. On
