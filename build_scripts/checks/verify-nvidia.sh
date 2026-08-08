@@ -186,7 +186,7 @@ else
 fi
 
 echo "== exactly one kernel tree =="
-# The kernel swap must leave exactly ONE /usr/lib/modules entry. rpm --erase
+# The kernel swap must leave exactly ONE kernel module tree. rpm --erase
 # keeps a directory alive when it holds generated (unowned) files, and a
 # stale half-alive tree is a landmine for every consumer that scans
 # /usr/lib/modules: the yellowfin:kde-nvidia live ISO resolved its kernel
@@ -195,19 +195,49 @@ echo "== exactly one kernel tree =="
 # drivers, and hung in dracut with no sr0 ever appearing (run 31208526159)
 # — while the swapped kernel's own initramfs, one directory over, carried
 # every driver the boot needed.
-_tree_count=0
-_tree_name=""
+#
+# WHAT COUNTS AS A KERNEL TREE. Not every /usr/lib/modules entry is one, and
+# counting them all is how this check failed six correct images (#1118, run
+# 31235806989: "6 kernel module trees ... expected exactly
+# 6.12.0-254.el10.x86_64", while every other assertion in the same log
+# passed — kmod built for 6.12.0-254, module version matched, initramfs
+# carried all eight boot drivers). Measured cause: the driver transaction
+# pulls kernel-abi-stablelists from baseos, whose entire payload under
+# /lib/modules is
+#     kabi-current -> kabi-rhel103   (symlink to a directory)
+#     kabi-rhel100 kabi-rhel101 kabi-rhel102 kabi-rhel103
+# (rpm header of kernel-abi-stablelists-6.12.0-254.el10.noarch — 5 entries,
+# holding kabi_stablelist_<arch> text files only). One real tree plus those
+# five is the 6. A kabi directory has no vmlinuz, no modules.dep and no
+# kernel-release name, so nothing that resolves a kernel version out of
+# /usr/lib/modules can select one — they are reported, never counted.
+#
+# A kernel module tree is an entry named for a kernel release (uname -r,
+# always <maj>.<min>.<patch>…) — which is exactly the shape of the husk this
+# check exists to catch (6.12.0-250.el10.x86_64), so the failure mode is
+# still fatal here.
+_kernel_trees=()
+_other_entries=()
 for _tree in "${NV_ROOT}"/usr/lib/modules/*/; do
 	[[ -d "$_tree" ]] || continue
-	_tree_count=$((_tree_count + 1))
 	_tree_name="$(basename "$_tree")"
+	if [[ "$_tree_name" =~ ^[0-9]+\.[0-9]+\.[0-9]+ ]]; then
+		_kernel_trees+=("$_tree_name")
+	else
+		_other_entries+=("$_tree_name")
+	fi
 done
-if [[ "$_tree_count" -eq 1 && "$_tree_name" == "$KERNEL_VRA" ]]; then
-	pass "single kernel module tree (${_tree_name})"
-elif [[ "$_tree_count" -eq 1 ]]; then
-	fail "single module tree ${_tree_name} does not match the installed kernel ${KERNEL_VRA}"
+# Evidence with the verdict: name the entries, so the next mismatch does not
+# cost a diagnosis round the way #1118 did (its log printed only the count).
+if [[ "${#_other_entries[@]}" -gt 0 ]]; then
+	echo "  info: non-kernel /usr/lib/modules entries (not kernel trees): ${_other_entries[*]}"
+fi
+if [[ "${#_kernel_trees[@]}" -ne 1 ]]; then
+	fail "${#_kernel_trees[@]} kernel module trees under /usr/lib/modules (${_kernel_trees[*]:-none}) — a stale tree breaks kernel/initrd selection downstream (expected exactly ${KERNEL_VRA})"
+elif [[ "${_kernel_trees[0]}" == "$KERNEL_VRA" ]]; then
+	pass "single kernel module tree (${_kernel_trees[0]})"
 else
-	fail "${_tree_count} kernel module trees under /usr/lib/modules — a stale tree breaks kernel/initrd selection downstream (expected exactly ${KERNEL_VRA})"
+	fail "single module tree ${_kernel_trees[0]} does not match the installed kernel ${KERNEL_VRA}"
 fi
 
 echo "== initramfs boot-driver parity =="
