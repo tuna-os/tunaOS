@@ -178,6 +178,28 @@ gh auth token | podman login ghcr.io -u YOUR_USERNAME --password-stdin
 
 See [GitHub Container Registry docs](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) for more details.
 
+### Troubleshooting: `501 Unsupported client range` on pull
+
+TunaOS images publish as `zstd:chunked` for faster delta pulls, but GHCR's
+blob CDN doesn't support the multi-range HTTP requests that chunked pulls
+use. Most `podman`/`bootc` builds fall back to a normal full-blob pull
+automatically, but some do not and hard-fail with:
+
+```
+Error: copying system image from manifest list: partial pull of blob sha256:...:
+read zstd:chunked manifest: fetching partial blob: received unexpected HTTP status: 501 Unsupported client range
+```
+
+If you hit this, disable partial/chunked pulls client-side in
+`/etc/containers/storage.conf`:
+
+```toml
+[storage.options.pull_options]
+enable_partial_images = "false"
+```
+
+Tracked in [tuna-os/tunaos#579](https://github.com/tuna-os/tunaos/issues/579).
+
 ## Contributing
 
 Contributions welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for:

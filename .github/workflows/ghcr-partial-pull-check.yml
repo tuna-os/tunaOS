@@ -1,0 +1,88 @@
+name: GHCR Partial-Pull Compatibility Canary
+
+# All TunaOS images publish with --compression-format=zstd:chunked
+# (reusable-build-image.yml). Partial (chunked) pulls fetch blob segments
+# with multi-range HTTP GETs, and GHCR's blob CDN answers those with
+# `501 Unsupported client range` instead of a normal 206 — confirmed with:
+#
+#   curl -r 0-99 <blob>                       -> 206
+#   curl -H 'Range: bytes=0-99,200-299' <blob> -> 501
+#
+# containers/image versions that lack a fallback for that 501 hard-fail the
+# whole pull ("read zstd:chunked manifest: fetching partial blob: received
+# unexpected HTTP status: 501 Unsupported client range") instead of falling
+# back to a full-blob pull. podman 5.4.2 falls back fine; the podman build
+# reported in #579 (bundled inside quay.io/containerdisks/fedora:42, a
+# KubeVirt containerDisk — not something `podman run`-able to reproduce that
+# client's behavior directly from another job) does not. Since bootc's
+# ostree-container pull stack and podman/skopeo evolve independently, and
+# GHCR could change its CDN's range support at any time, the underlying GHCR
+# behavior needs to be watched rather than fixed once — see
+# tuna-os/tunaos#579.
+#
+# This is advisory (no PR/build ever fails because of it): it exists so the
+# failure is caught by CI instead of by a user's `bootc upgrade` or a
+# downstream builder's `podman pull` (tuna-os/corral#76 hit exactly this).
+
+"on":
+  schedule:
+    - cron: "30 8 * * 1" # Mondays 08:30 UTC — ahead of the 10:00 boot report
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Image ref to test (must be zstd:chunked on GHCR)"
+        required: false
+        default: "ghcr.io/tuna-os/yellowfin:gnome"
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  canary:
+    runs-on: ubuntu-24.04
+    env:
+      IMAGE: ${{ inputs.image || 'ghcr.io/tuna-os/yellowfin:gnome' }}
+    steps:
+      - name: Raw HTTP range-request check
+        # Reproduces the exact repro from #579 against the image's own
+        # blobs, so the underlying GHCR CDN behavior (not just one podman
+        # build's tolerance of it) is tracked over time. Anonymous GET: GHCR
+        # serves public blob layers without auth.
+        run: |
+          set -x
+          NAMETAG="${IMAGE#ghcr.io/}"     # tuna-os/yellowfin:gnome
+          REPO="${NAMETAG%%:*}"           # tuna-os/yellowfin
+          TAG="${NAMETAG##*:}"            # gnome
+
+          TOKEN=$(curl -fsSL "https://ghcr.io/token?scope=repository:${REPO}:pull" | jq -r .token)
+          MANIFEST=$(curl -fsSL -H "Authorization: Bearer ${TOKEN}" \
+            -H 'Accept: application/vnd.oci.image.index.v1+json,application/vnd.docker.distribution.manifest.list.v2+json' \
+            "https://ghcr.io/v2/${REPO}/manifests/${TAG}")
+          # Resolve to one platform manifest if this was an index/list.
+          DIGEST=$(echo "$MANIFEST" | jq -r '.manifests[0].digest // empty')
+          if [ -n "$DIGEST" ]; then
+            MANIFEST=$(curl -fsSL -H "Authorization: Bearer ${TOKEN}" \
+              -H 'Accept: application/vnd.oci.image.manifest.v1+json,application/vnd.docker.distribution.manifest.v2+json' \
+              "https://ghcr.io/v2/${REPO}/manifests/${DIGEST}")
+          fi
+          BLOB=$(echo "$MANIFEST" | jq -r '.layers[0].digest')
+          if [ -z "$BLOB" ] || [ "$BLOB" = "null" ]; then
+            echo "::warning::could not resolve a blob digest for ${IMAGE} — skipping range check"
+            exit 0
+          fi
+          BLOB_URL="https://ghcr.io/v2/${REPO}/blobs/${BLOB}"
+
+          single_code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${TOKEN}" \
+            -L -r 0-99 "$BLOB_URL")
+          multi_code=$(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${TOKEN}" \
+            -L -H 'Range: bytes=0-99,200-299' "$BLOB_URL")
+          echo "single-range: ${single_code}  multi-range: ${multi_code}"
+
+          if [ "$multi_code" = "501" ]; then
+            echo "::warning::GHCR still answers multi-range blob requests with 501 for ${IMAGE} (tuna-os/tunaos#579). Clients without a chunked-pull fallback (e.g. podman builds matching quay.io/containerdisks/fedora:42) will hard-fail pulling this image. Workaround: enable_partial_images = \"false\" in [storage.options.pull_options]."
+          elif [ "$multi_code" != "200" ] && [ "$multi_code" != "206" ]; then
+            echo "::warning::unexpected multi-range status ${multi_code} for ${IMAGE} — investigate"
+          else
+            echo "GHCR now accepts multi-range blob requests for ${IMAGE} (${multi_code}) — the zstd:chunked hard-fail class in #579 may no longer apply."
+          fi
