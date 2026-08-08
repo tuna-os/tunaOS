@@ -7,9 +7,20 @@ name: LUKS E2E
 # env needs SSH to drive the install), then scripts/iso-e2e.sh --luks:
 #   1. boots the live ISO under QEMU with an emulated TPM 2.0 (swtpm),
 #   2. installs via fisherman (the same backend every TunaOS installer
-#      frontend uses) with a recipe.json requesting encryption.type=tpm2-luks,
-#   3. reboots the installed disk with the *same* TPM and confirms the
-#      encrypted root auto-unlocks (reaching the login target proves it).
+#      frontend uses) with a recipe.json requesting
+#      encryption.type=tpm2-luks-passphrase,
+#   3. reboots the installed disk and confirms the passphrase unlocks it and
+#      login is reached (proving fisherman's install-time encryption works).
+#
+# TPM2 auto-unlock is enrolled by a fisherman#48 first-boot oneshot against
+# the INSTALLED system's own PCR 7 — not at install time, which used to seal
+# against the live ISO's boot chain instead and never unseal afterward
+# (tunaOS#679/#680) — so step 3 above does NOT prove it; that would need a
+# fourth boot with no passphrase. scripts/iso-e2e.sh's
+# TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK=1 does that boot when set, but this
+# workflow does not set it: docs/LUKS-TPM.md tracks that as "the per-variant
+# TPM-enrollment test", a smaller-scope check, since a fourth boot on every
+# cell here would materially raise this workflow's already-expensive cost.
 #
 # This is expensive (a dev ISO build + two QEMU boots per cell), so it only
 # runs on demand or monthly — never per push. Modelled on iso-e2e.yml and
@@ -321,8 +332,10 @@ jobs:
             --memory 10240 \
             --timeout 1200
           # Gate = encrypted install + passphrase unlock to login. TPM2
-          # auto-unlock is a POST-INSTALL step (ujust enable-luks-tpm2), tested
-          # separately per docs/LUKS-TPM.md — not asserted at install.
+          # auto-unlock is enrolled automatically by a first-boot oneshot
+          # (fisherman#48) rather than a manual `ujust enable-luks-tpm2` step,
+          # but it is still not asserted here — see docs/LUKS-TPM.md and the
+          # header comment above for why (tested separately, per-variant).
           grep -qx 'TUNAOS_LUKS_E2E_INSTALL_STARTED luks=1' luks-out/luks-evidence.log
           grep -qx 'TUNAOS_LUKS_E2E_ENCRYPTED_DISK_CONFIRMED' luks-out/luks-evidence.log
           grep -qx 'TUNAOS_LUKS_E2E_PASS encrypted=1 passphrase_unlock=1 installed_boot=1' luks-out/luks-evidence.log
