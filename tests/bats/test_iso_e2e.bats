@@ -715,8 +715,9 @@ setup_runtime_check_stubs() {
   # on the shared append-mode chardev.
   grep -q 'append=on' "$SCRIPT"
   ! grep -q -- '-serial "file:${SERIAL_LOG}"' "$SCRIPT"
-  # live boot, fisherman installed boot, generic installed boot, --disk boot
-  [ "$(grep -c '"${E2E_SERIAL_ARGS\[@\]}"' "$SCRIPT")" -eq 4 ]
+  # live boot, fisherman installed boot, TPM auto-unlock verify boot,
+  # generic installed boot, --disk boot
+  [ "$(grep -c '"${E2E_SERIAL_ARGS\[@\]}"' "$SCRIPT")" -eq 5 ]
 }
 
 @test "install: a console heartbeat outlives the ssh channel" {
@@ -759,8 +760,9 @@ setup_runtime_check_stubs() {
   # bootindex publishes a QEMU fw_cfg boot order OVMF applies over the stale
   # NVRAM. Both post-install boots need it; the live boot must NOT have it
   # (the ISO has to win there).
-  # fisherman passphrase gate, fisherman installed boot, generic TPM gate
-  [ "$(grep -c 'device virtio-blk-pci,drive=disk,bootindex=0' "$SCRIPT")" -eq 3 ]
+  # fisherman passphrase gate, TPM auto-unlock verify boot, fisherman
+  # installed boot, generic TPM gate
+  [ "$(grep -c 'device virtio-blk-pci,drive=disk,bootindex=0' "$SCRIPT")" -eq 4 ]
   grep -q -- '-device virtio-blk-pci,drive=disk \\' "$SCRIPT"
 }
 
