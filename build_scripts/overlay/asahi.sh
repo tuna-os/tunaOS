@@ -68,7 +68,17 @@ fedora)
 	mkdir -p /boot/dtb
 	dnf -y remove --noautoremove kernel kernel-core kernel-modules \
 		kernel-modules-core kernel-modules-extra || true
-	dnf -y install kernel-16k kernel-16k-modules-extra \
+	# --allowerasing: asahi-platform-metapackage Conflicts with kernel-core
+	# (and kernel-devel, kernel-debug-core, …) — verified directly against
+	# the real package's Conflicts list. Without --allowerasing, dnf will
+	# not erase a conflicting already-installed package to satisfy an
+	# install (that requires explicit permission); with it, if the removal
+	# above didn't fully take (silently, via the `|| true` — e.g. a stock
+	# kernel-core the removal step couldn't drop), this install step still
+	# forces the stock kernel out here instead of installing the asahi
+	# kernel *alongside* it. Belt-and-braces with the hard verification
+	# below, which is the actual guarantee (tunaOS#912).
+	dnf -y install --allowerasing kernel-16k kernel-16k-modules-extra \
 		asahi-platform-metapackage \
 		alsa-ucm-asahi tiny-dfr \
 		grub2-efi-aa64-modules uboot-images-armv8 \
@@ -116,7 +126,26 @@ centos)
 		kernel-modules-core kernel-modules-extra || true
 	# metapackage-core pulls kernel-16k, dracut-asahi, update-m1n1 (-> m1n1 +
 	# uboot-images-armv8), alsa-ucm-asahi, asahi-fwupdate.
-	dnf -y install kernel-16k kernel-16k-modules-extra \
+	#
+	# --allowerasing: fetched the real Hyperscale packages-asahi repodata
+	# (repo.almalinux.org / mirror.stream.centos.org, 2026-08-08) and
+	# confirmed asahi-platform-metapackage-core's rpm:conflicts list
+	# includes kernel-core, kernel-devel, kernel-debug-core,
+	# kernel-64k-core, and their kernel-rt-* counterparts — but NOT plain
+	# kernel-modules/-core/-extra. dnf5 does not auto-erase a conflicting
+	# already-installed package during `install` without this flag (would
+	# instead fail outright with "problem: conflicting requests", or on
+	# some solver paths just silently leave the stock kernel-core in
+	# place alongside the new one — tunaOS#912, the AlmaLinux-10-stable
+	# case where the earlier `remove --noautoremove ... || true` step's
+	# silently-swallowed failure meant kernel-core was still installed
+	# right here). Real fix belongs upstream in the earlier removal step
+	# too, but that failure is opaque from outside a live build; forcing
+	# the conflict to resolve here — where we know exactly what must not
+	# coexist with the asahi kernel — is the actionable half. The hard
+	# verification a few lines down (common to every family) is the actual
+	# guarantee that two kernels can never again ship silently.
+	dnf -y install --allowerasing kernel-16k kernel-16k-modules-extra \
 		asahi-platform-metapackage-core
 	install_best_effort "dnf -y install" \
 		asahi-platform-metapackage-audio asahi-scripts \
@@ -284,6 +313,26 @@ esac
 	# dead weight in the final image — no vmlinuz/initramfs gets built for
 	# them and bootc only ever deploys $KVER. Drop them.
 	find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d ! -name "$KVER" -exec rm -rf {} +
+	# Hard verification, not a hope: tunaOS#912 is exactly this rm -rf line
+	# *not* actually leaving only one kernel — on albacore (AlmaLinux 10
+	# stable) the stock EL10 kernel-core rpm survived the earlier
+	# `dnf remove ... || true` (silently, package-manager-level) and the
+	# published image shipped two full /usr/lib/modules/<kver> trees, an
+	# ambiguous-boot hazard on hardware with no working stock-kernel path.
+	# The asahi-verify harness caught it after publish; that is one build
+	# too late. Fail the build itself instead: after the cleanup above,
+	# exactly one directory may remain, and it must be the one we selected.
+	# A silently-wrong image is worse than a loud build failure — same
+	# reasoning as every other hard gate in this file (the KVER-naming
+	# WARNING above, the "no kernel image found" checks below).
+	REMAINING_KVERS=$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d -printf '%f\n')
+	REMAINING_COUNT=$(printf '%s\n' "$REMAINING_KVERS" | grep -c .)
+	if [ "$REMAINING_COUNT" -ne 1 ] || [ "$REMAINING_KVERS" != "$KVER" ]; then
+		echo "ERROR: expected exactly 1 kernel in /usr/lib/modules (${KVER}) after cleanup, found ${REMAINING_COUNT}:" >&2
+		printf '%s\n' "$REMAINING_KVERS" >&2
+		echo "ERROR: this means a stock/base-distro kernel package survived removal (see the dnf remove/install above) even though its module directory should have been deleted — an ambiguous-boot image must not be published (tunaOS#912)." >&2
+		exit 1
+	fi
 	# Stage vmlinuz where bootc expects it (Fedora/EL RPMs do this natively;
 	# Debian kernels put it in /boot; Arch names it after the package).
 	if [ ! -f "/usr/lib/modules/${KVER}/vmlinuz" ]; then
