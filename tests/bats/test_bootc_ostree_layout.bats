@@ -142,11 +142,16 @@ run_layout() {
   done
 }
 
-@test "arch and debian lay out the filesystem before building the initramfs" {
+@test "every variant lays out the filesystem before building the initramfs" {
   # dracut-config.sh reads prepare-root.conf, which ostree-layout.sh writes.
   # Reversed, the initramfs is built with composefs undetected and no erofs
   # driver — an image that cannot mount its own root, and silent about it.
-  for f in Containerfile.arch Containerfile.debian; do
+  #
+  # Gentoo was excluded here while it built its initramfs first and called no
+  # dracut-config.sh at all. It now does both, in this order, and the per-stage
+  # version of this check lives in test_gentoo_dracut_config.bats — that file
+  # also records what the omission cost (LUKS run 31232170155).
+  for f in Containerfile.arch Containerfile.debian Containerfile.gentoo; do
     local layout dracut
     layout=$(grep -n 'bootc/ostree-layout.sh' "${REPO_ROOT}/$f" | head -1 | cut -d: -f1)
     dracut=$(grep -n 'bootc/dracut-config.sh' "${REPO_ROOT}/$f" | head -1 | cut -d: -f1)
