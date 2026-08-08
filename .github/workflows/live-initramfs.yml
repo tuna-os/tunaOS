@@ -1,0 +1,208 @@
+# Live-initramfs parity artifacts (tunaOS#673): rebuild each published
+# flavor image's boot initramfs with tacklebox's tbox-live/tbox-root dracut
+# modules — the same rebuild `tacklebox build --iso` performs for every
+# CI-built ISO — and publish it as
+# ghcr.io/tuna-os/live-initramfs:<variant>-<flavor>.
+#
+# This is the second of #673's parity artifacts, pairing with
+# live-overlay.yml (the customize-content delta). Together they let the
+# browser ISO builder assemble from the *same inputs* a CI-built ISO uses:
+#   - live-overlay:<variant>-<flavor>    → the customize-live delta (layers)
+#   - live-initramfs:<variant>-<flavor>  → the tbox dracut initramfs (this)
+# Both apply on top of the published base image via the shared pure-Go
+# writers tacklebox itself uses — identity by construction, not convention.
+# (The offline containers-storage payload, #673's third bullet, is tracked
+# separately — it is LUKS-testable dev media only.)
+#
+# Why harvest instead of rebuild-in-bash: tacklebox caches the rebuilt
+# initramfs under .build/.../initramfs-cache/ as a side effect of a normal
+# ISO build (internal/install/initramfs.go — keyed by image ID + dracut
+# module set, so a stale image or module change never reuses an old file).
+# Reimplementing that dracut invocation here instead would risk exactly the
+# reimplementation drift that bit the live-overlay artifact before it
+# switched to calling tacklebox's own `customize-live` (see live-overlay.yml's
+# history) — tacklebox has no standalone "just build the initramfs" command
+# yet, so a full (throwaway) ISO build via the existing
+# scripts/build-iso-tacklebox.sh is the only way to get the real artifact
+# without adding a second, divergent implementation. The ISO output itself
+# is discarded; only the harvested initramfs is published.
+#
+# workflow_dispatch only for now — no schedule. A full ISO build per flavor
+# is the same cost as reusable-build-artifacts.yml's ISO job, which is
+# heavier than live-overlay.yml's customize-only run, so this is left as a
+# manual/on-demand trigger until a maintainer decides the recurring cost is
+# worth a cron (flip on a `schedule:` trigger here once satisfied).
+name: Live Initramfs Artifacts
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "Variant id, or 'all'"
+        required: false
+        default: "all"
+        type: string
+      flavors:
+        description: "Single desktop flavor id (gnome/kde/cosmic/niri/xfce), or 'all'"
+        required: false
+        default: "all"
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  generate-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+      count: ${{ steps.gen.outputs.count }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install yq
+        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+      - id: gen
+        env:
+          WANT_VARIANT: ${{ inputs.variant || 'all' }}
+          WANT_FLAVOR: ${{ inputs.flavors || 'all' }}
+        run: |
+          # Same selection as live-overlay.yml: filter on build_image (NOT
+          # build_iso) so image-only variants the browser can still build an
+          # ISO for (e.g. sailfin) get an initramfs artifact too, restricted
+          # to the plain desktop tags the browser offers.
+          MATRIX=$(yq -o json .github/build-config.yml | jq -c \
+            --arg v "$WANT_VARIANT" --arg f "$WANT_FLAVOR" '{
+              include: [
+                .variants[] as $var | $var.flavors[]
+                | select(.build_image == true)
+                | select(.id | test("^(gnome|kde|cosmic|niri|xfce)$"))
+                | select($v == "all" or $var.id == $v)
+                | select($f == "all" or .id == $f)
+                | {variant: $var.id, flavor: .id}
+              ]
+            }')
+          COUNT=$(echo "$MATRIX" | jq '.include | length')
+          echo "matrix=$MATRIX" >> "$GITHUB_OUTPUT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "Building $COUNT initramfs artifact(s):"
+          echo "$MATRIX" | jq -r '.include[] | "  \(.variant):\(.flavor)"'
+
+  initramfs:
+    name: ${{ matrix.variant }}:${{ matrix.flavor }}
+    needs: generate-matrix
+    if: ${{ needs.generate-matrix.outputs.count != '0' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install yq
+        run: sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+
+      # Same disk-space reclaim as reusable-build-artifacts.yml — the ISO is
+      # assembled under .build/ on the main disk, and xorriso can overflow
+      # the default free space on larger desktop images.
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/share/boost /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - name: Maximize build space
+        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y just podman jq golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
+
+      - name: Setup rootless podman (subuid/subgid for runner)
+        run: |
+          # tacklebox uses 'sudo -u runner podman unshare' for squashfs.
+          # podman unshare needs subuid/subgid entries for the unprivileged user.
+          if ! grep -q "^${USER}:" /etc/subuid 2>/dev/null; then
+            echo "${USER}:100000:65536" | sudo tee -a /etc/subuid
+          fi
+          if ! grep -q "^${USER}:" /etc/subgid 2>/dev/null; then
+            echo "${USER}:100000:65536" | sudo tee -a /etc/subgid
+          fi
+
+      # Throwaway ISO build — its only purpose is to make tacklebox rebuild
+      # and cache the tbox-modules initramfs (see header). The ISO itself is
+      # never uploaded anywhere.
+      - name: Build (throwaway) Live ISO
+        env:
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+        run: |
+          export TACKLEBOX_FROM_SOURCE=1
+          sudo -E bash ./scripts/build-iso-tacklebox.sh \
+            "${VARIANT}" "${FLAVOR}" ghcr "${FLAVOR}-linux-amd64"
+
+      - name: Harvest & publish tbox initramfs artifact
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+        run: |
+          set -euo pipefail
+
+          # Reconstruct the exact ref build-iso-tacklebox.sh pulled/built
+          # from, via the same script it uses — not re-derived by hand, so
+          # a variant alias/tag-suffix in build-config.yml can never make
+          # this workflow inspect a different image than the one that was
+          # actually rebuilt.
+          IMG="$(bash ./scripts/published-image-ref.sh "$VARIANT" "${FLAVOR}-linux-amd64" ghcr)"
+          OUT="ghcr.io/tuna-os/live-initramfs:${VARIANT}-${FLAVOR}"
+
+          # tacklebox keys its initramfs cache by image ID + dracut module
+          # set + embedded-module digest (internal/install/initramfs.go), so
+          # exactly one file is written per (variant, flavor) recipe here —
+          # our recipe has a single bootable_environment.
+          CACHE_DIR=".build/iso-tacklebox/${VARIANT}-${FLAVOR}/initramfs-cache"
+          IMG_FILE="$(sudo find "$CACHE_DIR" -maxdepth 1 -name '*.img' -print -quit 2>/dev/null || true)"
+          if [[ -z "$IMG_FILE" ]]; then
+            echo "::error::no cached initramfs found under ${CACHE_DIR} — tacklebox may not have rebuilt one; check the 'Build (throwaway) Live ISO' log above"
+            exit 1
+          fi
+
+          # The cache file is root-owned (the whole build ran under sudo).
+          # Copy it out to a path oras (running as the normal runner user)
+          # can read.
+          WORK="$(mktemp -d)"
+          sudo cp "$IMG_FILE" "$WORK/initramfs.img"
+          sudo chown "$(id -u):$(id -g)" "$WORK/initramfs.img"
+          echo "harvested $(du -h "$WORK/initramfs.img" | cut -f1) initramfs from ${IMG_FILE}"
+
+          # Digest of the base actually rebuilt from, for staleness
+          # detection by anything consuming this artifact instead of
+          # re-running the rebuild — same rationale as live-overlay.yml's
+          # base-digest label. build-iso-tacklebox.sh pre-pulls the registry
+          # image into the invoking (non-root) user's rootless store only —
+          # tacklebox's own `build` command never mirrors it into root's
+          # store the way `add`/`update` do (see tacklebox
+          # internal/install/bootc.go Pull vs PullUser) — so try the
+          # unprivileged store first and fall back to root's. This is
+          # metadata only: never fail the artifact publish over it.
+          BASE_DIGEST="$(podman image inspect --format '{{.Digest}}' "$IMG" 2>/dev/null \
+            || sudo podman image inspect --format '{{.Digest}}' "$IMG" 2>/dev/null \
+            || echo unknown)"
+          echo "base: ${IMG} (${BASE_DIGEST})"
+
+          command -v oras >/dev/null 2>&1 || {
+            curl -fsSL "https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz" \
+              | sudo tar -xz -C /usr/local/bin oras
+          }
+          echo "${GITHUB_TOKEN}" | oras login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+          oras push "$OUT" \
+            --artifact-type application/vnd.tunaos.live-initramfs.v1 \
+            --annotation "org.tunaos.live-initramfs.base=${IMG}" \
+            --annotation "org.tunaos.live-initramfs.base-digest=${BASE_DIGEST}" \
+            --annotation "org.tunaos.live-initramfs.modules=tbox-live,tbox-root" \
+            "$WORK/initramfs.img:application/octet-stream"
+          echo "published ${OUT}"
