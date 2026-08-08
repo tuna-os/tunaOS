@@ -99,7 +99,25 @@ cells it replaces. So the import fills the screen columns only, and tags them.
 
 <!-- BEGIN GENERATED — scripts/import-frontend-parity.py -->
 
-_Not yet imported — run `scripts/import-frontend-parity.py`._
+| Frontend | Source | welcome | disk | encryption | summary | install | done |
+|----------|--------|---------|------|------------|---------|---------|------|
+| KDE | [capture](https://github.com/tuna-os/tuna-installer-kde/actions/runs/31217241114) | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
+| COSMIC | — | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| Niri | [capture](https://github.com/tuna-os/tuna-installer-niri/actions/runs/31231402559) | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
+| XFCE | [capture](https://github.com/tuna-os/tuna-installer-xfce/actions/runs/31233209558) | ✅ᶜ | ✅ᶜ | ⬜ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
+
+ᶜ = GPU-less offscreen capture in the frontend's own repo.
+**It attests to screen parity only.** It drives pages in-process,
+so it cannot observe whether the app launches under the real
+desktop, whether a GL-less compositor can draw it, or whether a
+keypress advances the wizard — the first three columns of the
+matrix above remain the VM walkthrough's job, and a green row
+here is not a substitute for one.
+
+- **KDE** — 6 pages, 6 passed the pixel audit, 5 transitions. Text from `qml-item-tree`.
+- **COSMIC** — no parity report imported (no run carried a parity report).
+- **Niri** — 6 pages, 6 passed the pixel audit, 5 transitions. Text from `widget-tree`.
+- **XFCE** — 8 pages, 8 passed the pixel audit, 7 transitions. Text from `widget-tree`.
 
 <!-- END GENERATED — scripts/import-frontend-parity.py -->
 
