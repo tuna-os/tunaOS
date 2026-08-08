@@ -188,8 +188,15 @@ jobs:
           path: screenshot.png
           if-no-files-found: warn
 
+      # Only same-repo PRs can comment. On a fork `pull_request` run GITHUB_TOKEN
+      # is read-only no matter what the `permissions:` block above asks for, so
+      # `issues.createComment` 403s — which used to fail this job *after* the ISO
+      # had already built and booted, throwing away a successful verification.
+      # Forks get the same text in the run summary instead (see next step).
       - name: Post boot screenshot to PR
-        if: github.event_name == 'pull_request'
+        if: >-
+          github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name == github.repository
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
         env:
           VARIANT: ${{ env.VARIANT }}
@@ -222,3 +229,30 @@ jobs:
               issue_number: context.issue.number,
               body,
             });
+
+      # Fork PRs cannot be commented on, but the verification still ran and its
+      # result still matters — put it where a fork contributor can actually see
+      # it rather than dropping it on the floor.
+      - name: Report boot verification in run summary (fork PR)
+        if: >-
+          github.event_name == 'pull_request'
+          && github.event.pull_request.head.repo.full_name != github.repository
+        env:
+          VARIANT: ${{ env.VARIANT }}
+          FLAVOR: ${{ env.FLAVOR }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          {
+            echo "## Live ISO Boot Verification"
+            echo ""
+            echo "The live ISO built and booted successfully to the GNOME desktop."
+            echo ""
+            echo "**Variant:** \`${VARIANT}\` | **Flavor:** \`${FLAVOR}\` | **Commit:** \`${HEAD_SHA:0:7}\`"
+            echo ""
+            echo "📸 [Download desktop screenshot](${RUN_URL}) — expand **Artifacts**"
+            echo "and download \`desktop-screenshot\`."
+            echo ""
+            echo "> Posted here rather than as a PR comment: this run is from a fork,"
+            echo "> so \`GITHUB_TOKEN\` is read-only and cannot comment."
+          } >> "$GITHUB_STEP_SUMMARY"
