@@ -821,7 +821,11 @@ variants:
       #   niri    — no ebuild in the Gentoo main tree at all. A search returns
       #             only dev-ruby/niceogiri. Declaring it would publish an
       #             installable image with no compositor, exactly as
-      #             flounder:niri did (tunaOS#915).
+      #             flounder:niri did (tunaOS#915). It IS packaged in the
+      #             community GURU overlay (gui-wm/niri, ~amd64) — see
+      #             manifests/desktops/niri.yaml for the full finding. Not
+      #             enabled here: an untested source build, and ~amd64
+      #             keywording that can shift under guppy without warning.
       #   cosmic  — same: no cosmic-comp or cosmic-session ebuild in the tree,
       #             and cosmic.yaml has no emerge section.
       # Both measured and tracked in tunaOS#923.
