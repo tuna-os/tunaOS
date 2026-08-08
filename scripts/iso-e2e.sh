@@ -1932,7 +1932,7 @@ run_install() {
 	local local_ref="localhost/${VARIANT:-}:${FLAVOR:-}" # dev=1 ISO
 	local prod_ref="$published_ref"                      # production ISO
 	local recipe_image=""                                # set below after probing the VM
-	local composefs_backend="false" bootloader="grub2"
+	local composefs_backend="false" bootloader="grub2" root_filesystem="xfs"
 	# Probed from IMAGE CONTENT, never from the variant name. This used to be
 	# `[[ "$VARIANT" == "grouper" ]]`, so sailfin, marlin, flounder,
 	# flounder-sid, guppy and gurnard — every other composefs variant — were
@@ -1952,6 +1952,33 @@ run_install() {
 			composefs_backend="true"
 			bootloader="systemd"
 		fi
+		# SEALED decides the ROOT FILESYSTEM, and it is a separate question
+		# from the backend — which is why it gets its own branch rather than
+		# riding along inside the one above.
+		#
+		# A composefs-sealed rootfs is verified with fs-verity. XFS has no
+		# fs-verity, so a sealed image installed onto XFS fails
+		# initrd-switch-root and lands in a dracut emergency shell — see the
+		# warning in system_files/usr/lib/bootc/install/00-tunaos.toml and
+		# tuna-os/wootc payload/deployer/deploy.sh. ext4 is the proven sealed
+		# filesystem (btrfs has fs-verity but its ostree deployment fails to
+		# mount, wootc#35).
+		#
+		# Sealing does NOT imply composefs-native: branch 1 of the probe
+		# deliberately keeps sealed images that ship a bootupd payload on the
+		# ostree path, so `BACKEND=ostree SEALED=1` is a real combination and
+		# it still needs ext4. Keying the filesystem off the backend would get
+		# exactly those images wrong.
+		#
+		# scripts/build-qcow2.sh:126-129 has always done this for the Gate's
+		# disk image. This recipe hardcoded "xfs" regardless, so the ISO
+		# install path and the qcow2 install path disagreed about the same
+		# image — the ISO path being the one a user actually takes.
+		if grep -q '^SEALED=1$' <<<"$_probe"; then
+			root_filesystem="ext4"
+		fi
+		echo "==> install target: filesystem=${root_filesystem}" \
+			"bootloader=${bootloader} composefs=${composefs_backend}"
 	else
 		echo "ERROR: could not probe ${_probe_ref} for its bootc backend" >&2
 		return 3
@@ -2215,7 +2242,7 @@ run_install() {
 	cat >"$RECIPE_LOCAL" <<EOF
 {
   "disk": "/dev/vda",
-  "filesystem": "xfs",
+  "filesystem": "${root_filesystem}",
   "image": "${recipe_image}",
   "targetImgref": "${target_imgref}",
   "composeFsBackend": ${composefs_backend},
