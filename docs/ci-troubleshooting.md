@@ -695,3 +695,22 @@ Drift in fixed-sleep sendkey choreography (ret/tab/tab/ret) causing screenshot c
 2. **State-aware stepping driver**: Replaced blind choreography in `scripts/run-walkthrough.sh` with the state-aware driver in `scripts/installer-walkthrough.py`. It polls QEMU screendumps, detects framebuffer stabilization (hash/stddev delta), performs OCR matching against `tests/installer-screens.yaml`, and advances screens dynamically (`welcome -> disk -> encryption -> summary -> install -> done`).
 3. **Per-desktop frontend keymaps & assertions**: Frontends (`org.bootcinstaller.Installer`, `org.tunaos.InstallerKde`, etc.) declare per-desktop keymaps and screen contracts. Framebuffer stddev assertions are enforced on compositors with GL rendering (GNOME, KDE, COSMIC) while recorded for virgl-dependent compositors (Niri, XFCE).
 4. **Hardened installed-disk gate**: After UI installation completes, `iso-e2e.sh --disk` boots `install-disk.qcow2`, injects the test passphrase, and verifies both LUKS encryption and desktop experience contract (`TUNAOS_DESKTOP_CONTRACT_OK`) as a blocking gate.
+
+---
+
+### 13. Debian COSMIC Desktop Package Gap (`flounder:cosmic` & `flounder-sid:cosmic`) (#924)
+
+**Affected variants:** `flounder:cosmic`, `flounder-sid:cosmic`.
+
+**Symptom:**
+```
+flounder:cosmic exit=1 missing required command: cosmic-comp
+flounder-sid:cosmic exit=1 missing required command: cosmic-comp
+```
+
+**Root cause:**
+Debian 13 (Trixie), Sid (unstable), and experimental repos do not ship COSMIC desktop packages (`cosmic-comp`, `cosmic-session`, etc.) natively in Debian archives. The `manifests/desktops/cosmic.yaml` PPA declaration `ppa:hepp3n/cosmic-epoch` specifies `condition: ubuntu`, which is skipped on Debian builds to prevent ABI-skewed Ubuntu binary package installation. As a result, apt soft-fails missing package names, producing published container images with no compositor.
+
+**Resolution Strategy & Upstream Packaging:**
+1. **Upstream DEB packaging track**: Tracked under `tuna-os/tunaos-packages#152` to build native Debian DEB packages for COSMIC (`trixie` and `sid`) via Tideforge.
+2. **Matrix Visibility**: The flavor remains declared in `.github/build-config.yml` and reported as red in post-publish contract sweeps (`desktop-contract-sweep.yml` / #921) to maintain transparent tracking rather than silently shrinking matrix coverage. Rebuilding after packaging updates will replace existing tags cleanly without destructive registry actions.
