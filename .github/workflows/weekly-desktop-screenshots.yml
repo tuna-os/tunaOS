@@ -97,7 +97,9 @@ jobs:
 
       - name: Log in to GHCR
         if: steps.filter.outputs.skip != 'true'
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+        run: echo "${{ env.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Build live ISO (from published GHCR image)
         if: steps.filter.outputs.skip != 'true'
