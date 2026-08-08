@@ -1,0 +1,71 @@
+name: Asahi hardware smoke (one)
+
+# Reusable single-image leg of the Tier 2 hardware smoke (tunaOS#780). Called
+# by asahi-hw-nightly.yml, once per flavor in sweep mode and once for an
+# explicit ref in dispatch mode. Not meant to be dispatched directly.
+#
+# Runs on an ordinary GitHub-hosted runner and drives the rental entirely
+# over SSH via scripts/asahi-remote-switch.sh — see that script's header and
+# docs/ASAHI-HARDWARE-TIERS.md for why the rental itself is never registered
+# as a self-hosted runner. The caller is responsible for checking
+# ASAHI_HW_TIER2_HOST is actually set before invoking this at all.
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        description: "Asahi image ref to boot-test"
+        required: true
+        type: string
+    secrets:
+      ASAHI_HW_TIER2_HOST:
+        required: true
+      ASAHI_HW_TIER2_SSH_KEY:
+        required: true
+      ASAHI_HW_TIER2_USER:
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    # bootc switch + reboot + Apple Silicon's boot chain + polling for SSH to
+    # come back is generously covered by asahi-remote-switch.sh's own
+    # ASAHI_HW_REBOOT_TIMEOUT (420s default); this bounds the whole job
+    # against a rental that's gone unresponsive for a reason the script's own
+    # timeout won't catch (e.g. the SSH agent step itself hanging).
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Start an SSH agent with the rental's key
+        run: |
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> "$GITHUB_ENV"
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> "$GITHUB_ENV"
+          ssh-add - <<< "${{ secrets.ASAHI_HW_TIER2_SSH_KEY }}"
+
+      - name: Switch the rental and confirm it survives reboot
+        id: switch
+        env:
+          ASAHI_HW_HOST: ${{ secrets.ASAHI_HW_TIER2_HOST }}
+          ASAHI_HW_USER: ${{ secrets.ASAHI_HW_TIER2_USER || 'root' }}
+        run: |
+          set -o pipefail
+          scripts/asahi-remote-switch.sh "${{ inputs.image }}" 2>&1 | tee /tmp/switch.log
+
+      - name: Summarize
+        # Always runs, so a rollback or a timeout reports clearly in the run
+        # summary — this step must not mask the switch step's own exit code.
+        if: always()
+        run: |
+          {
+            echo "### \`${{ inputs.image }}\`"
+            echo
+            echo '```'
+            tail -20 /tmp/switch.log 2>/dev/null || echo "(no log captured)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
