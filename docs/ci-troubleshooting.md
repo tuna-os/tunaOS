@@ -678,3 +678,20 @@ Older versions of `crun` / `podman` on certain runner environments (e.g. Blacksm
 **Fix & Prevention:**
 1. **Omit explicit `rw` in cache mounts**: When specifying buildah/podman cache mounts in Containerfiles or build scripts, omit the redundant `rw` modifier (e.g. use `--mount=type=cache,id=...` instead of `--mount=type=cache,rw,id=...`).
 2. **Runner `crun` version alignment**: Ensure GitHub Actions runner environments update `crun` to `v1.14.1+` where mount option parsing deduplicates default access modes.
+
+---
+
+### 12. Installer Walkthrough Automation & Conductor Drivers (#577)
+
+**Affected workflows:** `Installer Walkthrough / Screenshots` (`installer-screenshots.yml`), `Installer Smoke` (`installer-smoke.yml`).
+
+**Symptom:**
+```
+Drift in fixed-sleep sendkey choreography (ret/tab/tab/ret) causing screenshot capture drift or installer navigation failure across different desktop frontends.
+```
+
+**Root cause & Modernized Driver Design:**
+1. **Blind sendkey choreography drift**: Fixed sleeps (`sleep 45/60/60`s) and fixed key counts break when GUI installers (`bootc-installer`, per-DE conductor wizards) change screen layouts or load times.
+2. **State-aware stepping driver**: Replaced blind choreography in `scripts/run-walkthrough.sh` with the state-aware driver in `scripts/installer-walkthrough.py`. It polls QEMU screendumps, detects framebuffer stabilization (hash/stddev delta), performs OCR matching against `tests/installer-screens.yaml`, and advances screens dynamically (`welcome -> disk -> encryption -> summary -> install -> done`).
+3. **Per-desktop frontend keymaps & assertions**: Frontends (`org.bootcinstaller.Installer`, `org.tunaos.InstallerKde`, etc.) declare per-desktop keymaps and screen contracts. Framebuffer stddev assertions are enforced on compositors with GL rendering (GNOME, KDE, COSMIC) while recorded for virgl-dependent compositors (Niri, XFCE).
+4. **Hardened installed-disk gate**: After UI installation completes, `iso-e2e.sh --disk` boots `install-disk.qcow2`, injects the test passphrase, and verifies both LUKS encryption and desktop experience contract (`TUNAOS_DESKTOP_CONTRACT_OK`) as a blocking gate.
