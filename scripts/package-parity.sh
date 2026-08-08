@@ -43,7 +43,13 @@ fetch() {
 		echo "  (no published manifest for $ref — querying the image)" >&2
 		command -v podman >/dev/null || die "podman needed to query $ref"
 		podman run --rm --entrypoint sh "${REGISTRY}/${repo}:${tag}" -c '
-			if   command -v rpm        >/dev/null 2>&1; then rpm -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\n"
+			if [ -s /usr/share/tunaos/packages.json ]; then
+				if command -v jq >/dev/null 2>&1; then
+					jq -r ".packages[] | \(.name)\t\(.version)" /usr/share/tunaos/packages.json
+				elif command -v python3 >/dev/null 2>&1; then
+					python3 -c "import json; [print(f\"{p[\"name\"]}\t{p.get(\"version\", \"\")}\") for p in json.load(open(\"/usr/share/tunaos/packages.json\")).get(\"packages\", [])]"
+				fi
+			elif command -v rpm        >/dev/null 2>&1; then rpm -qa --qf "%{NAME}\t%{VERSION}-%{RELEASE}\n"
 			elif command -v dpkg-query >/dev/null 2>&1; then dpkg-query -W -f "${Package}\t${Version}\n"
 			elif command -v pacman     >/dev/null 2>&1; then pacman -Q | tr " " "\t"
 			elif command -v qlist      >/dev/null 2>&1; then qlist -ICv
