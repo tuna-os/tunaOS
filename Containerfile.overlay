@@ -107,6 +107,31 @@ RUN if command -v pacman &>/dev/null; then \
         pacman -S --needed --noconfirm sudo fuse-overlayfs; \
     fi
 
+# Re-lay the repo's system_files, for the same reason 90-image-info.sh is
+# re-run below: an overlay flavor does NOT rebuild its parent. It chains on
+# the PUBLISHED parent tag (Justfile: `localhost/<variant>:<parent>` when
+# present, else `<parent>-testing` from ghcr), so every file the base stage
+# copies is frozen at whatever that published image happened to carry —
+# while the desktop scripts, live-ISO adapters and contracts that read those
+# files are always current-tree.
+#
+# Measured, not assumed: ghcr.io/tuna-os/yellowfin:niri-testing
+# (IMAGE_VERSION niri-3505bf2) ships /usr/bin/niri but has no
+# /usr/share/niri/ directory and no /usr/share/backgrounds/tunaos/ — its
+# commit is not a descendant of 453f15b7, which added both. So the
+# niri-nvidia and niri-hwe LUKS cells (run 31226672079) died in live
+# customize on "config.kdl missing; cannot arrange installer autostart",
+# while plain niri passed: the dev ISO rebuilds THAT one from the current
+# tree. Same staleness applies to hwe/cachyos/asahi overlays, and to every
+# system_files asset, not just niri's.
+#
+# Ordering: before 90-image-info.sh, which reads assets this copy provides
+# (the logo it asserts lives at /usr/share/pixmaps/tunaos.svg, from
+# system_files).
+RUN --mount=type=tmpfs,dst=/tmp \
+    --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/00-copy-files.sh
+
 # The published base may predate 90-image-info.sh (identity/logo/image-info),
 # so re-run it on the overlay to guarantee the branding contract passes
 # regardless of base freshness.

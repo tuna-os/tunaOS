@@ -14,12 +14,12 @@ setfattr -n user.component -v "aurora-offline-docs" /usr/share/doc/aurora/aurora
 cp /usr/share/applications/dev.getaurora.offline-docs.desktop /usr/share/kglobalaccel/
 
 # Weekly user count for fastfetch
-ghcurl https://raw.githubusercontent.com/ublue-os/countme/main/badge-endpoints/aurora.json | jq -r ".message" >/usr/share/ublue-os/fastfetch-user-count
+ghcurl https://raw.githubusercontent.com/ublue-os/countme/main/badge-endpoints/aurora.json | jq -r ".message" > /usr/share/ublue-os/fastfetch-user-count
 
 # bazaar weekly downloads used for fastfetch
 curl -X 'GET' \
-	'https://flathub.org/api/v2/stats/io.github.kolunmi.Bazaar?all=false&days=1' \
-	-H 'accept: application/json' | jq -r ".installs_last_7_days" | numfmt --to=si --round=nearest >/usr/share/ublue-os/bazaar-install-count
+'https://flathub.org/api/v2/stats/io.github.kolunmi.Bazaar?all=false&days=1' \
+-H 'accept: application/json' | jq -r ".installs_last_7_days" | numfmt --to=si --round=nearest > /usr/share/ublue-os/bazaar-install-count
 
 # Nerdfont symbols
 # to fix motd and prompt atleast temporarily
@@ -42,3 +42,4 @@ chmod +x /usr/lib/systemd/system-generators/coreos-sulogin-force-generator
 setfattr -n user.component -v "aurora-config" /usr/lib/systemd/system-generators/coreos-sulogin-force-generator
 
 echo "::endgroup::"
+
