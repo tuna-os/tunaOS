@@ -6,6 +6,17 @@ version-script framework-lts system 1 || exit 0
 
 set -euo pipefail
 
+# VEN_ID and CPU_VENDOR were referenced below without ever being assigned —
+# under `set -u` that is an immediate "unbound variable" crash on the very
+# first `[[ ... =~ ... ]]` check, on EVERY machine (not just Framework
+# hardware, since the crash happens before the vendor check can even
+# short-circuit). This is why ublue-system-setup.service showed as failed
+# on a plain yellowfin:gnome VM boot with no Framework chassis at all
+# (tunaOS#576). user-setup.hooks.d/10-theming.sh already reads VEN_ID
+# correctly; CPU_VENDOR mirrors bluefin's equivalent hook.
+VEN_ID="$(cat /sys/devices/virtual/dmi/id/chassis_vendor)"
+CPU_VENDOR="$(grep "vendor_id" /proc/cpuinfo | uniq | awk -F": " '{ print $2 }')"
+
 # GLOBAL
 KARGS=$(rpm-ostree kargs)
 NEEDED_KARGS=()
@@ -25,11 +36,18 @@ if [[ ":Framework:" =~ :$VEN_ID: ]]; then
 	fi
 fi
 
-#shellcheck disable=SC2128
-if [[ -n "$NEEDED_KARGS" ]]; then
+# Bare `$NEEDED_KARGS` (SC2128, previously suppressed) only ever expands
+# element 0 — with zero elements that is itself an unbound-variable crash
+# under `set -u` (the common case: no karg changes needed at all). Test the
+# array's length instead, which is well-defined for zero, one, or many
+# elements. Passing `"${NEEDED_KARGS[*]}"` as a single rpm-ostree argument
+# was also wrong once there could be more than one entry — each
+# --delete-if-present=/--append-if-missing= flag must be its own argv
+# entry, not one space-joined string. tunaOS#576.
+if [[ "${#NEEDED_KARGS[@]}" -gt 0 ]]; then
 	echo "Found needed karg changes, applying the following: ${NEEDED_KARGS[*]}"
 	plymouth display-message --text="Updating kargs - Please wait, this may take a while" || true
-	rpm-ostree kargs "${NEEDED_KARGS[*]}" --reboot || exit 1
+	rpm-ostree kargs "${NEEDED_KARGS[@]}" --reboot || exit 1
 else
 	echo "No karg changes needed"
 fi
