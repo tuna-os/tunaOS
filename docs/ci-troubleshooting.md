@@ -734,6 +734,34 @@ An experimental variant (`experimental: true`) is eligible for promotion to the 
 - `guppy` (Gentoo) & `sailfin` (openSUSE TW): Promoted upon green image builds following target-stage fixes.
 - `flounder` (Debian Trixie): Stays experimental until ostree base requirements (`≥ 2025.3`) land.
 
+---
+
+### 15. Post-Publish Desktop Contract Sweep & Published Artifact Verification (#925)
+
+**Affected workflows:** `Post-Publish Desktop Contract Sweep` (`desktop-contract-sweep.yml` / #921).
+
+**Symptom & Defect Class:**
+Published container images built green in CI but shipped missing essential desktop components:
+- `flounder:niri`: Missing `niri` compositor (no apt branch).
+- `sailfin:gnome`: Missing `nautilus`, file manager, keyring (minimal pattern skeleton).
+- `flounder:cosmic` & `flounder-sid:cosmic`: Missing `cosmic-comp` (Ubuntu PPA condition skipped on Debian).
+- `grouper:gnome`: Missing `gnome-keyring` (absent from apt list).
+- `KDE on PlasmaLogin`: Display manager unit enablement skipped due to hardcoded DM name or base-stage timing.
+
+**Root cause:**
+1. **Build-time vs Published Artifact Gating**: Build-time checks run only during initial image assembly, not against published registry tags on GHCR (`ghcr.io/tuna-os/*`). Stale tags or un-gated apt builds could be published despite missing binaries.
+2. **Apt Soft Failures**: Package managers on apt paths didn't hard-fail on missing optional packages, soft-skipping missing compositors or desktop utilities.
+
+**Solution Architecture:**
+1. **Scheduled Post-Publish Sweep (`desktop-contract-sweep.yml`)**: Executes `build_scripts/checks/verify-desktop-experience.sh` nightly against all 47 published matrix cells.
+2. **Four Explicit Cell Verdicts**:
+   - `pass`: Image pulled, verified, and satisfies full desktop contract.
+   - `fail`: Image pulled but fails required binary or unit assertions.
+   - `missing`: No published image tag in registry.
+   - `error`: Network or registry pull failure.
+3. **Display Manager Enablement Assertion**: Verifies display manager units (`gdm`, `sddm`, `plasmalogin`, `greetd`) are actively enabled in the image layer rather than merely present as installed unit files.
+
+
 
 
 
