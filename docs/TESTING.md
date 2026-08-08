@@ -99,8 +99,10 @@ status` healthy; Flathub configured; and (when a variant is given) `image-info.j
 + installer `recipe.json` branding.
 
 ```bash
-# Against a corral VM running a booted image
-corral ssh <vm> -u root -c 'bash -s' < tests/functional/run.sh gnome yellowfin
+# Against a corral VM running a booted image. `corral ssh` takes at most one
+# positional arg (the VM name) — its -c flag is a SINGLE command string, so
+# the desktop/variant args go inside that string, not after the redirection.
+corral ssh <vm> -u root -c 'bash -s gnome yellowfin' < tests/functional/run.sh
 
 # Or copy it in and run inside the guest
 scp tests/functional/run.sh root@<guest>:/tmp/ && ssh root@<guest> bash /tmp/run.sh kde yellowfin
@@ -108,6 +110,12 @@ scp tests/functional/run.sh root@<guest>:/tmp/ && ssh root@<guest> bash /tmp/run
 # Composefs variant (e.g. grouper): opt in to the composefs assertion
 FUNCTIONAL_EXPECT_COMPOSEFS=1 tests/functional/run.sh gnome grouper
 ```
+
+`just boot-gate <variant> [flavor]` / `scripts/boot-gate.sh` already run this
+dispatcher automatically after their own graphical.target/display-manager
+checks (advisory only for now — see the comment in `boot-gate.sh` for the
+overlay-suffix-to-desktop-name mapping and why `*-nvidia`/`*-hwe`/etc. flavors
+still resolve to a bare desktop name run.sh understands).
 
 Run the dispatcher's unit tests with the rest of the suite:
 
