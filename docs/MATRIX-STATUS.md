@@ -207,7 +207,51 @@ answer different questions and should not be compared directly.
 
 ---
 
-## 4. Regenerating this document
+## 4. Apple Silicon (Asahi) hardware support
+
+None of the axes above say anything about this — they run in QEMU/KVM on x86,
+and Apple Silicon needs its own kernel, DTBs, and boot chain
+(`build_scripts/overlay/asahi.sh`) that no x86 guest ever exercises. That gap is
+exactly how six of the eight promoted `:gnome-asahi` tags turned out to be
+unbootable on real hardware despite every other axis being green
+([tunaOS#776](https://github.com/tuna-os/tunaOS/issues/776)) — a tag existing in
+`ghcr` only means some build promoted it once, never that the image boots on a
+Mac.
+
+`scripts/verify-asahi-image.sh` is the check that actually looks: it unpacks
+the image and inspects it for the asahi kernel, the 12 hardware-critical
+modules, Apple DTBs, the m1n1/U-Boot payloads, and the audio stack, graded
+against a known-working Fedora Asahi Remix image. `.github/workflows/
+verify-asahi.yml` runs it in **sweep** mode daily at 05:40 UTC against every
+promoted `:gnome-asahi` tag (`workflow_dispatch` for one flavor at a time), so
+— same principle as the rest of this document — a result decays on its own if
+nobody re-runs it; [the workflow's run history](https://github.com/tuna-os/tunaOS/actions/workflows/verify-asahi.yml)
+is the live, current answer. This document does not attempt to mirror it into
+a generated table: unlike the three axes above, only two flavors are wired up
+at all, and per-check state on this axis is why the numbers below have
+individual tracking issues rather than a matrix cell each.
+
+As of the last full sweep:
+
+| Variant | Harness | Status |
+|---|:--:|---|
+| **bonito** | 36 / 0 | ✅ verified |
+| **grouper** | 36 / 0 | ✅ verified |
+| yellowfin, skipjack | 29 / 7 | ❌ no `update-m1n1` — [tunaOS#777](https://github.com/tuna-os/tunaOS/issues/777) |
+| sailfin | 27 / 9 | ❌ no Apple DTBs, no U-Boot payload — [tunaOS#914](https://github.com/tuna-os/tunaOS/issues/914) |
+| marlin, flounder | 23 / 13, 21 / 15 | ❌ overlay never applied — stock kernel — [tunaOS#911](https://github.com/tuna-os/tunaOS/issues/911) |
+| albacore | 11 / 25 | ❌ stock kernel not removed — [tunaOS#912](https://github.com/tuna-os/tunaOS/issues/912) |
+| guppy | — | not offered — overlay is stubbed, not broken, and deliberately excluded from the sweep matrix |
+
+Only `bonito` and `grouper` are safe to hand to a user today. The installer
+catalog agrees — `bootc-installer-asahi`'s `catalog.json` ships with exactly
+one hand-written entry (`bonito`) rather than enumerating every `*-asahi` tag,
+and its README documents the same six-of-eight gap
+([tuna-os/bootc-installer-asahi#42](https://github.com/tuna-os/bootc-installer-asahi/pull/42)).
+
+---
+
+## 5. Regenerating this document
 
 The tables between the `GENERATED` markers are rewritten by
 `scripts/gen-matrix-status.py`; everything else is hand-written and the
