@@ -2420,7 +2420,7 @@ EOF
 			bash "${SCRIPT_DIR}/record-timelapse.sh" stop "$TIMELAPSE_DIR" || true
 			_frames="$(cat "${TIMELAPSE_DIR}/frame-count.txt" 2>/dev/null || true)"
 		fi
-		_pixel_line="$(pixel_gate "$_shot" "${SCREENSHOT_STDDEV:-}" "$_frames" "${QEMU_NEEDS_VNC_SURFACE:-0}")" || _pixel_rc=$?
+		_pixel_line="$(pixel_gate "$_shot" "${SCREENSHOT_STDDEV:-}" "$_frames" "${QEMU_NEEDS_VNC_SURFACE:-0}" "$_dc")" || _pixel_rc=$?
 		record_luks_evidence "$_pixel_line"
 		if [[ "$_pixel_rc" -ne 0 ]]; then
 			if [[ "${TUNAOS_PIXEL_GATE:-1}" == "1" ]]; then
