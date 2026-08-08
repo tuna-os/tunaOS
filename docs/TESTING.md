@@ -98,4 +98,4 @@ For desktop environment changes:
 | ISO doesn't boot | Missing KVM support; try adding `--no-kvm` to the QEMU command |
 | Timeout waiting for desktop | Desktop environment failed to start; check serial logs |
 | `qemu-img` not found | Install `qemu-utils` package |
-| Screenshot is blank | Display manager may not have started; increase timeout |
+| Screenshot is blank | **Not necessarily a failure.** Under plain virtio-vga (no render node) the guest paints with Mesa's llvmpipe software rasteriser, and first paint can trail the serial markers by a minute or more on a 2-4 vCPU runner (tunaOS#581). The gates key off the serial markers (`TUNAOS_DESKTOP_CONTRACT_OK` / readiness marker); `iso-e2e.sh` waits for the framebuffer to actually paint before the evidence screenshot (`wait_for_paint`, bounded by `TBOX_E2E_PAINT_TIMEOUT`, default 120s) instead of a fixed sleep. A still-blank capture after that cap means the image genuinely never painted — check `serial.log` for whether the display manager started |

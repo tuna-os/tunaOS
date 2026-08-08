@@ -360,6 +360,20 @@ fi
 # and that belief is now untested rather than demonstrated — the smoke matrix
 # has never run gnome. For everything else use scripts/iso-e2e-gpu.sh on a
 # host with a real render node.
+#
+# WHETHER OR NOT virgl engages, "GDM slow or black" under this GPU-less path
+# is expected and is NOT a boot failure (tunaOS#581). The guest's display
+# stack falls back to Mesa's llvmpipe software rasteriser, whose first frame
+# can trail the serial contract markers by a minute or more on a 2-4 vCPU
+# runner — the VM is healthy and simply has not painted yet. The boot gates
+# therefore key off the serial markers (the #575 mitigation), and the
+# evidence screenshot waits for paint (wait_for_paint / TBOX_E2E_PAINT_TIMEOUT)
+# instead of a fixed sleep. Screendump reads the current scanout buffer, so
+# while llvmpipe is mid-frame the capture is black; VT-switching to a tty
+# other than the compositor's shows black for a different reason — the live
+# squash runs getty only on tty1 and the serial console (ttyS0), so tty3 has
+# no console to switch to; the Wayland compositor holds tty1. The serial log
+# is the source of truth for "is it up", pixels are only for the gallery.
 _gpu_mode="${TBOX_E2E_GPU:-auto}"
 QEMU_GPU_ARGS=(-vga virtio -display none)
 if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /dev/dri/renderD128 ]]; } &&
@@ -1238,6 +1252,43 @@ screenshot_sane() {
 		return 0
 	fi
 	echo "==> Screenshot ${label} looks blank (stddev=${stddev} <= 0.02)" >&2
+	return 1
+}
+
+# Give the display manager/desktop time to actually PAINT before the evidence
+# screenshot. Under QEMU's plain virtio-vga there is no render node, so the
+# guest composites with Mesa's llvmpipe software rasteriser; its first frame
+# can trail the serial contract marker by a minute or more on a 2-4 vCPU
+# runner (tunaOS#581). A fixed sleep before the screenshot therefore produced
+# a black "10-ready" in the evidence gallery for an otherwise-healthy gate,
+# and the screenshot-sanity fallback could not tell "slow" from "failed".
+#
+# Poll the framebuffer instead: screenshot, measure (screenshot_sane), retry
+# until the image has structure or the cap is reached. The LAST screenshot is
+# always left on disk as evidence. This is evidence, not a gate — pass/fail
+# stays with the serial marker (the #575 mitigation) — so a machine that
+# genuinely cannot paint extends the wait, it does not fail the run. The
+# per-attempt stddev is logged so a blank result stays diagnosable.
+wait_for_paint() {
+	local label="$1"
+	local cap="${TBOX_E2E_PAINT_TIMEOUT:-120}"
+	local deadline=$(($(date +%s) + cap))
+	local attempt=0
+	while (($(date +%s) < deadline)); do
+		attempt=$((attempt + 1))
+		screenshot "$label"
+		if screenshot_sane "$label"; then
+			echo "==> ${label} painted on attempt ${attempt} (stddev=${SCREENSHOT_STDDEV})"
+			return 0
+		fi
+		sleep 15
+	done
+	# One final capture after the cap so the freshest frame is the evidence.
+	screenshot "$label"
+	if screenshot_sane "$label"; then
+		return 0
+	fi
+	echo "==> ${label} still blank after ${cap}s (stddev=${SCREENSHOT_STDDEV}) — the serial marker, not pixels, is the gate" >&2
 	return 1
 }
 
@@ -2909,8 +2960,12 @@ disk)
 		sleep 10
 	done
 	# Let the display manager finish drawing before capturing evidence.
-	sleep 30
-	screenshot "10-ready"
+	# Poll for paint instead of a fixed 30s sleep: under plain virtio-vga the
+	# guest renders via llvmpipe and first paint can lag the contract marker
+	# by minutes on a 2-4 vCPU runner (tunaOS#581). The verdict above already
+	# came from the serial marker, so this is evidence work — a slow or absent
+	# paint extends the run, it cannot fail it.
+	wait_for_paint "10-ready" || true
 	if [[ "$rc" -eq 2 ]]; then
 		echo "ERROR: desktop experience contract marker was not emitted" >&2
 	fi
@@ -2926,7 +2981,11 @@ ready)
 	# whole recovery story for serial-less kernels. A bare call here
 	# historically aborted the script at exit 2 with only 00-boot captured.
 	wait_for_ready && rc=0 || rc=$?
-	screenshot "10-ready"
+	# Poll for paint so the evidence screenshot — and the screenshot-sanity
+	# fallback below, which re-measures the same file — sees the desktop
+	# rather than a still-llvmpipe black frame (tunaOS#581). Bounded by
+	# TBOX_E2E_PAINT_TIMEOUT; the serial marker, not pixels, stays the gate.
+	wait_for_paint "10-ready" || true
 	# Serial marker missing is expected when the guest kernel has no serial
 	# console support; fall back to verifying the framebuffer actually
 	# rendered a screen. Hard failures (blank/absent screenshot) stay fatal
