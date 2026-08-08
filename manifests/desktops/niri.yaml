@@ -238,6 +238,21 @@ packages:
   # What IS in the tree, for whoever packages niri later: gui-libs/greetd,
   # gui-apps/gtkgreet. Missing alongside niri: cage.
   #
+  # Update (tunaOS#923, 2026-08-08): niri IS packaged, just not in ::gentoo.
+  # The community GURU overlay (github.com/gentoo/guru — the one enabled via
+  # `eselect repository`/app-eselect/eselect-repository, not a bespoke
+  # third-party repo) carries gui-wm/niri (niri-26.04.ebuild and a -9999 live
+  # ebuild), KEYWORDS="~amd64" (testing, not stable), cargo-based with real
+  # deps (libinput, wayland, mesa, seatd, libxkbcommon; pipewire optional for
+  # screencast). cage and gtkgreet are still not there, so the greeter story
+  # is unchanged either way. Not wired into Containerfile.gentoo/guppy here:
+  # it is an untested source build against this pipeline's time budget, and
+  # ~amd64 keywording means the rest of the overlay's dependency graph can
+  # shift under guppy with no warning. Enabling the overlay is the "bigger
+  # decision" tunaOS#923 already flagged — this just removes the "does an
+  # ebuild exist anywhere" unknown for whoever makes that call. cosmic-comp
+  # and cosmic-session were checked the same way and are 404 in GURU too.
+  #
   # Do not add an emerge list here until niri has an ebuild. Tracked in
   # tunaOS#923. Leaving the key absent is intentional: the installer's emerge
   # path now fails loudly on an empty list rather than shipping a desktop-less

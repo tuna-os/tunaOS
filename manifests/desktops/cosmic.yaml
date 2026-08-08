@@ -223,6 +223,21 @@ packages:
     - Mesa-dri
     - Mesa-libEGL1
 
+  # ── Emerge (Gentoo) ────────────────────────────────────────────────
+  # DELIBERATELY ABSENT — no emerge section at all, same treatment as
+  # apt's flounder/flounder-sid non-declaration above. Checked
+  # (packages.gentoo.org/packages/<cat>/<pkg>.json, 200 = present) for
+  # cosmic-comp and cosmic-session under both gui-wm/ and gui-apps/: all
+  # four return 404, and no other category has a match either.
+  #
+  # Also checked the community GURU overlay (github.com/gentoo/guru,
+  # enabled via `eselect repository` — not a bespoke third-party repo):
+  # zero cosmic-* ebuilds there either, unlike niri (see niri.yaml), which
+  # GURU does carry. guppy does not declare a cosmic flavor in
+  # build-config.yml, so this never fails out loud; recorded here so a
+  # future manifest edit doesn't add one on the strength of "there might
+  # be an emerge section for this". tunaOS#923.
+
 post_install_inline:
   - "glib-compile-schemas /usr/share/glib-2.0/schemas || true"
   - "if [ -f /etc/pam.d/greetd ]; then sed --sandbox -i -e '/gnome_keyring.so/ s/-auth/auth/ ; /gnome_keyring.so/ s/-session/session/' /etc/pam.d/greetd; fi"
