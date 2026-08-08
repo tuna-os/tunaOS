@@ -174,3 +174,16 @@ Outreach and community growth initiatives are tracked centrally in [#687](https:
   - Documentation and technical blog posts (e.g. Modern Enterprise Desktop & bootc on AlmaLinux).
 - **External / Human Initiatives**: CFPs (All Things Open, KubeCon, Flock to Fedora), external blog/social posts, and community platform hosting require an authorized team member's external account and identity.
 
+---
+
+## User-Proven ISO Installs Roadmap (#763)
+
+Canonical rollout plan for verifying end-to-end user ISO installation experience across matrix cells:
+
+1. **Phase 1 — Monthly Backend LUKS Coverage**: Monthly 57-cell LUKS matrix sweep (#761), proving `crypto_LUKS` disk formatting, passphrase unlock, and installed boot contract.
+2. **Phase 2 — Production-Quality GUI Install Driver**: OCR & framebuffer transition driver (`installer-walkthrough.py` / #577) replacing fixed sleeps.
+3. **Phase 3 — One Known-Good End-to-End GUI Pilot**: Yellowfin GNOME frontend installation gate through visible GUI to installed contract.
+4. **Phase 4 — Frontend Expansion**: Progressive extension across GNOME, KDE, COSMIC, Niri, and XFCE frontends.
+5. **Phase 5 — ISO Builder Parity**: Unified verification contract for both CI-built and browser-built (ISO Builder #673) media via required experience manifests.
+
+
