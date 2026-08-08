@@ -23,6 +23,7 @@ Nothing about "it built" or "it launched" catches that — this page does.
 |---|-------|-----|---------|
 | 1 | **Desktop is up** | `pgrep -x` the exact compositor binary | greeter loops, TTY fallback |
 | 2 | **Frontend launched** | `flatpak ps` matches the desktop's app id | wrong/missing frontend, autostart broken |
+| 2b | **A window reached the screen** | readiness stamp in `$XDG_RUNTIME_DIR` | **a frontend that runs and shows nothing** |
 | 3 | **Screen is not blank** | grayscale stddev of each frame > 0.02 | black screen, no GL, dead compositor |
 | 4 | **It advances** | consecutive frames differ > 500px | stuck on one screen, modal error |
 | 5 | **Which screens** | OCR each frame vs `tests/installer-screens.yaml` | **feature drift between forks** |
@@ -35,6 +36,59 @@ screendumps each screen, and emits TAP plus `walkthrough-<flavor>.json`.
 > `bash -c` — the pattern matched its own command line, so it passed
 > unconditionally and never verified anything. Assertions that can match
 > themselves are worse than no assertion: they read as green forever.
+
+### The readiness stamp (check 2b)
+
+Check 2 answers *"is the process alive"*. That is not *"did the user get a
+window"*, and the two have already diverged: the cosmic leg ran the installer
+with no window ever appearing and check 2 stayed green. A human looking at a
+screenshot was the only thing that caught it.
+
+Checks 3–5 would have caught it too — but they need a compositor that renders,
+and cosmic, niri, xfwl4 and kwin_wayland all require a DRM render node that
+GitHub-hosted runners do not have. On exactly the runners where this matters
+most, the rendering checks are the ones that cannot run.
+
+So each frontend says it itself, in
+`$XDG_RUNTIME_DIR/tuna-installer-ready` — readable over SSH with no GPU and no
+OCR. Inside the Flatpak sandbox the host sees it at
+`/run/user/<uid>/app/<app-id>/`.
+
+```
+app_id=org.tunaos.InstallerKde
+window=ApplicationWindow
+signal=frame-swapped
+mapped_at=1786215232.825
+page=welcome
+```
+
+| Field | Meaning |
+|-------|---------|
+| `app_id` | Must match the desktop's expected frontend. The wrong frontend autostarting is silent otherwise — each desktop's entry comes from a different `desktop-*.sh` adapter. |
+| `window` | The class that mapped. Not decoration: `bootc-installer` can present `BootcRamWindow`/`BootcCpuWindow`/`BootcUnsupportedWindow` instead of the wizard, and `flatpak ps` reports all of them as a healthy install. |
+| `signal` | **How the stamp was earned** — see below. |
+| `mapped_at` | Unix seconds, 3dp. |
+| `page` | Wizard page showing at map time. `unknown` if unavailable — never a bare `page=`, which would parse as a page named `""`. |
+
+#### `signal` — the five toolkits cannot make the same claim
+
+| Value | Proves | Frontends |
+|-------|--------|-----------|
+| `frame-swapped` | A frame actually reached the compositor (`QQuickWindow::frameSwapped`). Strongest. | kde, niri |
+| `gtk-map` | The widget was mapped (GTK `map`). | gnome/bootc-installer, xfce |
+| `first-frame` | The toolkit asked for a frame. Proves the event loop runs; **not** that a surface was presented. | cosmic |
+
+cosmic is weaker because libcosmic is iced-on-wgpu and offers no `map`
+equivalent — `first-frame` is the strongest claim it can honestly make. The
+smoke test reports it rather than failing it: rejecting it would fail the one
+frontend this check exists for. An **unrecognised** value does fail, because
+that means a frontend invented a claim the workflow has not reasoned about.
+
+Flattening these into one boolean would let the check believe a frame callback
+proves a mapped window — on the very frontend whose window never appeared.
+
+The stamp is best-effort in every frontend: one that cannot write it must still
+install. Observability must not be able to take down the installer.
 
 ### Rendering caveat (why strictness differs per desktop)
 
