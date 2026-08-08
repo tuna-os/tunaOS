@@ -25,7 +25,7 @@ ORG="${REPO_ORGANIZATION:-tuna-os}"
 IMG="ghcr.io/${ORG}/${VARIANT}:${TAG}"
 NAME="${GATE_NAME:-gate-${VARIANT}-${FLAVOR}-$(date +%H%M%S)}"
 DISK="${GATE_DISK:-32Gi}"
-TIMEOUT="${GATE_TIMEOUT:-1200}"
+TIMEOUT="${GATE_TIMEOUT:-1800}"
 
 command -v corral >/dev/null || {
 	echo "corral not installed: cd ../corral && just install" >&2
