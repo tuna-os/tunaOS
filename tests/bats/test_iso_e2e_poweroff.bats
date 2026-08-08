@@ -28,14 +28,23 @@ setup() {
 	BIN="$BATS_TEST_TMPDIR/bin"
 	mkdir -p "$BIN"
 
-	# The driver evaluates the shipped function and its helper, then runs it
+	PHASE_FILE="$BATS_TEST_TMPDIR/current-phase.txt"
+
+	# The driver evaluates the shipped function and its helpers, then runs it
 	# against whatever the test has staged. `sleep` becomes a token delay so a
 	# 180-iteration poll finishes in milliseconds without turning the polls
 	# into a busy race.
+	#
+	# e2e_phase comes along because the function announces its wait through it
+	# (#1100): it prints the same `==> ...` line the plain echo did and also
+	# records the phase for the wall-clock watchdog, so the driver has to give
+	# it a $PHASE_FILE to write to the way the real script does.
 	cat >"$BATS_TEST_TMPDIR/drive.sh" <<-'EOF'
 		set -Eeuo pipefail
 		SCRIPT="$1"
+		: >"$PHASE_FILE"
 		eval "$(grep '^POWEROFF_WAIT_SECS=' "$SCRIPT")"
+		eval "$(sed -n '/^e2e_phase()/,/^}/p' "$SCRIPT")"
 		eval "$(sed -n '/^wait_pid_gone()/,/^}/p' "$SCRIPT")"
 		eval "$(sed -n '/^poweroff_and_wait_vm()/,/^}/p' "$SCRIPT")"
 		GUEST_SSH=("$SSH_STUB")
@@ -92,6 +101,7 @@ drive() {
 	run env \
 		SSH_STUB="$1" \
 		QEMU_PIDFILE="$PIDFILE" \
+		PHASE_FILE="$PHASE_FILE" \
 		MONITOR_SOCK="${MONITOR_SOCK_OVERRIDE:-$MONSOCK}" \
 		PATH="$BIN:$PATH" \
 		bash "$BATS_TEST_TMPDIR/drive.sh" "$SCRIPT"

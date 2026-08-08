@@ -154,6 +154,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # The absolute time by which iso-e2e.sh must have given up, so that the
+      # job ends by failing a step rather than by hitting `timeout-minutes`
+      # above.
+      #
+      # The difference matters. A step that fails leaves `if: always()` steps
+      # to run, so Collect/Upload evidence still happen and the run is
+      # diagnosable. A job-level timeout CANCELS the job, evidence steps
+      # included, which is how #1100's cells burned hours and left nothing to
+      # look at.
+      #
+      # iso-e2e.sh's own backstop could not deliver that on its own: it is a
+      # RELATIVE limit (default 10800s) started when the script starts, and it
+      # was sized against this job's 240 minutes as though nothing ran before
+      # it. Plenty does — guppy:xfce spends ~133 min in Build dev ISO below —
+      # so on the slow cells the 180-minute backstop could never fire inside
+      # the ~105 minutes left and the job timeout won instead. An absolute
+      # deadline is the same guarantee that survives a slow build.
+      #
+      # 10 minutes of reserve: Collect evidence + Upload evidence measure 1-3s
+      # together, and the script's own teardown (stop recorder, ladder QEMU
+      # down, assemble the timelapse) under a minute. The reserve is mostly
+      # slack, deliberately — running the deadline close would trade a
+      # diagnosable failure back for the undiagnosable one.
+      - name: Set the job deadline
+        run: |
+          set -euo pipefail
+          reserve=$((10 * 60))
+          echo "E2E_WALL_CLOCK_DEADLINE=$(($(date +%s) + JOB_TIMEOUT_SECONDS - reserve))" \
+            >> "$GITHUB_ENV"
+        env:
+          # Must track `timeout-minutes: 240` on this job.
+          JOB_TIMEOUT_SECONDS: 14400
+
       # The dev ISO and install disk are large; reclaim ~25 GB first.
       - name: Free up disk space
         run: |
@@ -213,7 +246,14 @@ jobs:
       # this by letting setup-runner install a matched podman stack
       # (update-podman: "true"); this job installs from apt, so the pair has
       # to be pinned together here.
+      #
+      # This step and the next four are bounded because they reach the network. Each limit is an order of
+      # magnitude above the measured cost (apt ~20-40s, yq ~1s, GHCR login
+      # ~1s, clone ~1-6s, the golang build ~15-17s) — they exist to turn a
+      # wedged mirror or registry into a named step failure, not to police
+      # duration.
       - name: Install dependencies
+        timeout-minutes: 15
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
@@ -235,6 +275,7 @@ jobs:
       # falls back to a guessed ref that is wrong for bonito-rawhide and
       # flounder-sid. The matrix job installs yq the same way.
       - name: Install yq
+        timeout-minutes: 5
         run: |
           sudo curl -fsSL -o /usr/local/bin/yq \
             https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
@@ -242,13 +283,35 @@ jobs:
           yq --version
 
       - name: Log in to GHCR
+        timeout-minutes: 5
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | \
             podman login ghcr.io -u "${{ github.actor }}" --password-stdin
 
       # Build a dev (SSHD-enabled) live ISO for this cell. dev=1 wires the
       # liveuser SSH login that iso-e2e.sh --luks drives the install over.
+      #
+      # `just iso` was the one genuinely unbounded thing in this job, and it
+      # is also where #1100's "hang" actually was: guppy:xfce spends 2h13m
+      # here (133m30s on run 31232170155, 132m18s on 31242742608 — the two
+      # cells reported as hung, both of which went on to finish the LUKS
+      # phase normally in 14-17 min). It is slow rather than stuck because
+      # TACKLEBOX_FROM_SOURCE=1 on Gentoo compiles bootc from source; the
+      # 9m26s `Finished release profile` line is visible in the run log.
+      #
+      # 170 min is ~1.27x that worst measured build. The rest of the matrix
+      # is nowhere near it — grouper:xfce 10m33s (twice), yellowfin:niri-nvidia
+      # 15m12s — so this only ever bites the Gentoo cells, and only if they
+      # get ~27% slower than they have ever been observed to be. Sized this
+      # loosely on purpose: a bound tight enough to flake is worse than none,
+      # because the gate stops being trusted.
+      #
+      # It still leaves the deadline above with room. Worst case this step
+      # ends at T+170, the two fisherman steps add ~1 min, and iso-e2e.sh
+      # starts around T+174 against a T+230 deadline — 56 min for a phase
+      # whose worst measured run is 17m09s.
       - name: Build dev ISO
+        timeout-minutes: 170
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
@@ -268,9 +331,11 @@ jobs:
           echo "ISO_PATH=${ISO}" >> "$GITHUB_ENV"
 
       - name: Clone fisherman (under-test)
+        timeout-minutes: 10
         run: git clone --depth 1 --branch dev https://github.com/tuna-os/fisherman /tmp/fisherman
 
       - name: Build fisherman in a golang container
+        timeout-minutes: 25
         run: |
           # Build inside golang:1.26 so we avoid the runner's root-owned
           # ~/go and ~/.cache (earlier sudo steps) and the apt Go 1.24 vs
@@ -326,7 +391,16 @@ jobs:
           # podman copies into a tmpfs runroot rather than bind-mounting
           # (tunaOS#972 — see customize-live.sh). This headroom is kept for
           # the genuine staging copies, not because that copy still happens.
+          #
+          # E2E_WALL_CLOCK_DEADLINE is named on the `env` line rather than
+          # left to `sudo -E` for the same reason FISHERMAN_OVERRIDE is: -E
+          # is subject to sudoers env_keep/env_reset, and a deadline that
+          # silently fails to arrive would put the harness straight back on
+          # its relative 10800s backstop — the exact thing that could not
+          # fire in time on the slow cells. Passed explicitly, it either
+          # arrives or the script says so.
           sudo -E env FISHERMAN_OVERRIDE="$FISHERMAN_OVERRIDE" \
+            E2E_WALL_CLOCK_DEADLINE="$E2E_WALL_CLOCK_DEADLINE" \
             ./scripts/iso-e2e.sh "${ISO_PATH}" --luks \
             --output luks-out \
             --memory 10240 \
