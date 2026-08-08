@@ -160,3 +160,17 @@ No new shell script needed. `install-desktop.sh` handles it.
 | `image-versions.yaml` | Pinned image digests + download versions |
 | `registry-map.yaml` | Registry mirror overrides |
 | `renovate.json` | Automated dependency updates (automerge all) |
+
+---
+
+## Community & Outreach Initiatives (#687)
+
+Outreach and community growth initiatives are tracked centrally in [#687](https://github.com/tuna-os/tunaOS/issues/687):
+
+- **Prerequisites & Gating**: Community outreach is gated on working ISO downloads (#561), which is confirmed operational.
+- **Automated / Repository Actions**:
+  - Discussions release announcements & triage response.
+  - Triage and tagging of `good-first-issue` items across sub-repositories (`gtk-office-suite`, `Tavern`, `letters`).
+  - Documentation and technical blog posts (e.g. Modern Enterprise Desktop & bootc on AlmaLinux).
+- **External / Human Initiatives**: CFPs (All Things Open, KubeCon, Flock to Fedora), external blog/social posts, and community platform hosting require an authorized team member's external account and identity.
+
