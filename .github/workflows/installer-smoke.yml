@@ -228,7 +228,7 @@ jobs:
           # both rather than assuming which one this ISO produced.
           echo "expecting readiness stamp from: ${APP}"
           STAMP=""
-          for i in $(seq 1 18); do
+          for _ in $(seq 1 18); do
             STAMP=$($SSH "cat /run/user/*/app/${APP}/tuna-installer-ready /run/user/*/tuna-installer-ready 2>/dev/null | head -20" 2>/dev/null || true)
             [ -n "$STAMP" ] && break
             sleep 10
@@ -245,7 +245,9 @@ jobs:
             exit 1
           fi
 
-          echo "readiness stamp:"; echo "$STAMP" | sed 's/^/  /'
+          # awk rather than `sed 's/^/  /'`: shellcheck's SC2001 fires on
+          # echo-into-sed, and this file is actionlint-clean.
+          echo "readiness stamp:"; echo "$STAMP" | awk '{print "  " $0}'
 
           # The stamp must come from the frontend we asked for. A stale stamp
           # from a previous boot cannot survive ($XDG_RUNTIME_DIR is tmpfs),
