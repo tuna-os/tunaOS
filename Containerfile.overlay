@@ -103,7 +103,19 @@ ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
 # fuse-overlayfs is the live ISO storage.conf's hardcoded mount_program
 # (customize-live.sh) — without it podman fails with "can't stat program
 # /usr/bin/fuse-overlayfs".
-RUN if command -v pacman &>/dev/null; then \
+#
+# `&>/dev/null` is bash-only redirection syntax. This RUN has no `bash -c`
+# wrapper (unlike the OVERLAY_TYPE dispatch above), so it runs under the
+# image's default shell — dash on a Debian base, which does not understand
+# `&>` and mis-parses it as `command -v pacman &` (backgrounded, exits 0
+# immediately) followed by a separate, argument-less `>/dev/null`
+# redirection. The `if` then sees that trivial success and ALWAYS enters the
+# `then` branch, regardless of whether pacman actually exists — invoking a
+# `pacman` that is not installed on non-Arch bases and killing the whole
+# build with "pacman: not found" (exit 127). Measured on flounder:gnome-asahi
+# linux-arm64, build 93057902527, 2026-08-08. `>/dev/null 2>&1` is the
+# POSIX-portable equivalent and needs no shell-specific wrapper.
+RUN if command -v pacman >/dev/null 2>&1; then \
         pacman -S --needed --noconfirm sudo fuse-overlayfs; \
     fi
 
