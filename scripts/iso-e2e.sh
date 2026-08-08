@@ -2132,6 +2132,42 @@ run_install() {
 		if podman image exists "$host_img" 2>/dev/null; then
 			echo "==> Saving $host_img on host..."
 			podman save "$host_img" -o "$host_tar"
+
+			# Pre-flight: refuse a transfer the comment above already proves is
+			# doomed, instead of discovering it the same way #941 did — a
+			# silent multi-hour hang ending in the kernel OOM-killing the
+			# guest. The scp destination is GUEST_HOME (/home/liveuser), which
+			# is the live overlay's upperdir: a RAM-backed tmpfs, not disk.
+			# `df` on the guest reports 8G free there because that is the
+			# tmpfs's ADVERTISED size, not real backing store — every byte
+			# written to it is guest RAM. Compare the tar we are about to ship
+			# against the guest's live MemAvailable (not MemTotal: some RAM is
+			# already spoken for by the live session before we start copying)
+			# and fail fast with an actionable message if it cannot possibly
+			# fit, rather than burning the rest of the job's timeout budget on
+			# a transfer that ends in `scp: write remote ...: Failure`.
+			#
+			# 70% headroom, not 100%: podman load on the guest side still has
+			# to hold the tar AND unpack layers concurrently, plus whatever
+			# the live session itself needs to keep running. The one measured
+			# data point (#941) was a ~4.9G image against ~2.9G available —
+			# 169% of available, nowhere near this line — so 70% is a
+			# deliberately conservative guess, not a proven boundary.
+			local host_tar_bytes guest_mem_avail_kb
+			host_tar_bytes="$(stat -c%s "$host_tar" 2>/dev/null || echo 0)"
+			guest_mem_avail_kb="$("${ssh_cmd[@]}" "awk '/^MemAvailable:/{print \$2}' /proc/meminfo" 2>/dev/null || echo 0)"
+			if [[ "$host_tar_bytes" -gt 0 && "$guest_mem_avail_kb" -gt 0 ]]; then
+				local guest_mem_avail_bytes=$((guest_mem_avail_kb * 1024))
+				local safe_limit_bytes=$((guest_mem_avail_bytes * 70 / 100))
+				if [[ "$host_tar_bytes" -ge "$safe_limit_bytes" ]]; then
+					echo "ERROR: image tar (${host_tar_bytes} bytes / $((host_tar_bytes / 1024 / 1024))M) is too large for the guest's available RAM ($((guest_mem_avail_bytes / 1024 / 1024))M) to receive safely." >&2
+					echo "The SSH-transfer fallback writes into a RAM-backed tmpfs (${GUEST_HOME}) and will OOM-kill the guest partway through — this is a measured failure mode, not a guess (see #941)." >&2
+					echo "This path should not have been taken at all: make the offline store resolve so Fisherman can install directly from containers-storage (#941), or re-run with --memory well above the image size." >&2
+					rm -f "$host_tar" || true
+					return 3
+				fi
+			fi
+
 			# Bounded, like the fisherman call below. This is a multi-GB copy
 			# over a QEMU SLIRP hostfwd, so it is legitimately slow — but the
 			# failure mode it had was not slowness, it was silence: no output
