@@ -51,7 +51,36 @@ cleanup() { corral delete "$NAME" -f >/dev/null 2>&1 || true; }
 trap cleanup EXIT
 
 echo "==> boot-gate ${IMG}  (vm=${NAME}${CORRAL_NODE:+ node=$CORRAL_NODE})"
-corral create "$NAME" --bootc "$IMG" --disk "$DISK" --wait-ssh --timeout "$TIMEOUT" "${NODE_ARGS[@]}"
+if ! corral create "$NAME" --bootc "$IMG" --disk "$DISK" --wait-ssh --timeout "$TIMEOUT" "${NODE_ARGS[@]}"; then
+	# tuna-os/tunaOS#627: KubeVirt virt-launcher teardown can destroy the
+	# builder's serial log before corral reads the build-success marker, so a
+	# build that actually finished reports "builder VM ended (Succeeded)
+	# without a build marker" (the disk-size fallback has the same race via a
+	# separate size-check pod). The disk PVC is valid — resume the build from
+	# the completed disk instead of failing the gate. --resume errors cleanly
+	# when there is genuinely nothing to resume (no completed builder + disk
+	# PVC), so attempting it on any bootc-build failure is safe.
+	echo "==> corral build failed; attempting --resume from the completed disk (#627)"
+	if ! corral bootc create "$NAME" --image "$IMG" --resume "${NODE_ARGS[@]}"; then
+		echo "FAIL: bootc build failed and no resumable build was found" >&2
+		exit 1
+	fi
+	corral start "$NAME"
+	# --resume finishes the VM but does not start it or wait for SSH;
+	# replicate the --wait-ssh loop from the main CLI.
+	ssh_ok=0
+	for _ in $(seq 1 $((TIMEOUT / 10))); do
+		if corral ssh "$NAME" -u root -c true 2>/dev/null; then
+			ssh_ok=1
+			break
+		fi
+		sleep 10
+	done
+	[[ "$ssh_ok" == 1 ]] || {
+		echo "FAIL: SSH not reachable after --resume (timeout ${TIMEOUT}s)" >&2
+		exit 1
+	}
+fi
 
 check() { corral ssh "$NAME" -u root -c "$1"; }
 
