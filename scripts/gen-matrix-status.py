@@ -29,6 +29,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import urllib.request
 from collections import defaultdict
 from pathlib import Path
@@ -223,6 +224,64 @@ def overlay_tags() -> set[str]:
     return {t for t in tags if not t.startswith("sha256-")}
 
 
+def contract_results() -> dict[str, tuple[str, str, str]]:
+    """Newest per-cell verdict from desktop-contract-sweep.yml (tunaOS#858).
+
+    Deliberately NOT built on latest_results(): that helper reads a job's
+    GitHub *conclusion* as the pass/fail signal, which is exactly wrong here.
+    desktop-contract-sweep.yml's per-cell step runs under `set +e` on purpose
+    ("a contract failure is data, not an error" — see its own comment, and
+    sweep 30627663051, where the opposite bug silently dropped seven real
+    failures from the baseline) specifically so a failing contract does not
+    read as infrastructure trouble. That means every dispatched job's
+    `conclusion` is "success" whether its cell passed, failed, or found no
+    image at all — reading it the way LUKS/installer-smoke are read would
+    make marlin:kde-style failures render as a green ✅ in this very document,
+    which is worse than the missing section this function replaces: a status
+    page that actively lies is worse than one with a known gap.
+
+    The real per-cell verdict lives where the workflow's own `collate` job
+    puts it — the `desktop-contract-baseline` artifact's `all.json`, already
+    built for exactly this purpose. Read that instead.
+
+    Returns {cell: (status, iso_date, run_id)} with status one of this
+    workflow's five real outcomes (pass/fail/missing/error/lost) — not
+    translated to success/failure here, so callers can tell "no image
+    published" apart from "published and broken" if they need to.
+    """
+    runs = gh_json(
+        "run", "list", "--repo", REPO, "--workflow", "desktop-contract-sweep.yml",
+        "--limit", "10", "--json", "databaseId,createdAt,status,conclusion",
+    ) or []
+    for run in runs:
+        # The workflow's own conclusion (not the per-cell jobs') is a real
+        # signal here: `collate` fails the run if the baseline does not
+        # reconcile (see its "every cell must be accounted for" check), so a
+        # non-success run's artifact — if it even uploaded one — is not
+        # trustworthy data to read as a baseline.
+        if run.get("status") != "completed" or run.get("conclusion") != "success":
+            continue
+        run_id, date = str(run["databaseId"]), run["createdAt"][:10]
+        with tempfile.TemporaryDirectory() as tmp:
+            try:
+                subprocess.run(
+                    ["gh", "run", "download", run_id, "--repo", REPO,
+                     "--name", "desktop-contract-baseline", "--dir", tmp],
+                    capture_output=True, text=True, check=True,
+                )
+            except subprocess.CalledProcessError:
+                # Artifact expired (30/90-day retention) or this particular
+                # run predates the artifact existing — try the next-newest
+                # successful run rather than giving up on the whole section.
+                continue
+            all_json = Path(tmp) / "all.json"
+            if not all_json.exists():
+                continue
+            cells = json.loads(all_json.read_text())
+            return {c["cell"]: (c["status"], date, run_id) for c in cells}
+    return {}
+
+
 def cell(results: dict, key: str, in_matrix: bool) -> str:
     """A real result always wins over "not built".
 
@@ -340,8 +399,32 @@ def build() -> str:
     smoke = latest_results("installer-smoke.yml", r":")
     tags = overlay_tags()
 
+    # desktop-contract-sweep.yml schedules from the identical build_image /
+    # desktops-only set luks-e2e.yml does (both select build_image==true
+    # flavors restricted to gnome/kde/cosmic/niri/xfce from build-config.yml)
+    # — no separate matrix function needed, lmatrix already is that set.
+    contract_raw = contract_results()
+    # Translated to the same success/failure vocabulary latest_results()
+    # produces, so cell()/desktop_table()/tally() below don't need a second
+    # code path — but only for the two outcomes that vocabulary can actually
+    # represent. "missing" (no published image), "error" (infra trouble) and
+    # "lost" (job died) are none of them a pass OR a demonstrated failure, so
+    # they are dropped here rather than forced into one; cell() then reports
+    # them as UNTESTED, same as a cell no run has ever touched — which is
+    # honest for all three. contract_other below keeps the dropped count
+    # visible instead of silently shrinking the denominator.
+    contract = {
+        k: ("success" if v[0] == "pass" else "failure", v[1], v[2])
+        for k, v in contract_raw.items()
+        if v[0] in ("pass", "fail")
+    }
+    contract_other = sum(
+        1 for v in contract_raw.values() if v[0] not in ("pass", "fail")
+    )
+
     luks_key = lambda v, d: f"LUKS {v}:{d}"          # noqa: E731
     smoke_key = lambda v, d: f"{v}:{d}"              # noqa: E731
+    contract_key = lambda v, d: f"{v}:{d}"           # noqa: E731
 
     # Deliberately NO wall-clock timestamp. A generated "as of <now>" line
     # changes on every run, which would (a) make --check always fail and (b)
@@ -437,6 +520,49 @@ def build() -> str:
             "",
         ]
 
+    # ── Desktop Contract Sweep ──────────────────────────────────────────────
+    # tunaOS#858: marlin:kde published with no /usr/share/wayland-sessions/
+    # at all — the live payload's desktop detection silently fell back to
+    # gnome — and desktop-contract-sweep.yml had been running daily, and
+    # catching exactly this class of bug, for two weeks before anyone
+    # noticed, because nothing here ever showed its results. Runs directly
+    # against the published image (no boot, no DRM render node needed), so
+    # it is not subject to the "CI cannot test four of five desktops" gap
+    # documented in *Known systemic gaps* below — it is the one axis that
+    # gap does not apply to.
+    total, tested, passed = tally(lmatrix, contract, contract_key)
+    out += [
+        "## Desktop Contract Sweep",
+        "",
+        f"**{passed} of {total}** cells satisfy "
+        "`build_scripts/checks/verify-desktop-experience.sh` "
+        f"({tested} tested, {total - tested} never tested).",
+        "",
+        (
+            "Pulls the **published** image and runs the contract script "
+            "against it directly (`podman run`, no boot required) — the "
+            "same denominator as LUKS E2E above (`build_image`, restricted "
+            "to the five desktop flavors). This is what catches a desktop "
+            "whose packages silently never landed, independent of whether "
+            "anything can actually boot it on hosted CI."
+        ),
+        "",
+    ]
+    out += desktop_table(lmatrix, contract, contract_key)
+    out += [""]
+    if contract_other:
+        out += [
+            f"{contract_other} cell(s) in the most recent sweep are "
+            "missing (no published image), errored (registry/runner "
+            "trouble), or lost (job produced no result) rather than a "
+            "clean pass or fail — not counted above; see that sweep's own "
+            "`desktop-contract-baseline` artifact for which.",
+            "",
+        ]
+    dates = sorted({v[1] for v in contract.values()})
+    if dates:
+        out += [f"Newest result {dates[-1]}.", ""]
+
     # ── Installer smoke ─────────────────────────────────────────────────────
     total, tested, passed = tally(matrix, smoke, smoke_key)
     pct = round(100 * tested / total) if total else 0
@@ -486,9 +612,14 @@ def build() -> str:
     # Re-running a cell to the same verdict rewrites this table and nothing
     # else, which is not something a pull request can be answerable for, so
     # VOLATILE_LINE masks these rows out of the structural comparison.
+    # Iterated as separate dicts, not merged with `**` — smoke and contract
+    # use the identical "variant:desktop" key format (LUKS is alone in
+    # prefixing "LUKS "), so a merge would let one silently overwrite the
+    # other on every cell they share and undercount both in the table below.
     runs = defaultdict(list)
-    for name, (_, date, run_id) in {**luks, **smoke}.items():
-        runs[(date, run_id)].append(name)
+    for results in (luks, smoke, contract):
+        for name, (_, date, run_id) in results.items():
+            runs[(date, run_id)].append(name)
     out += [
         "## Provenance",
         "",

@@ -26,6 +26,7 @@ so it is stated first.
 | Workflow | Proves | Does **not** prove |
 |---|---|---|
 | **Build** | The image builds and pushes | That it boots |
+| **Desktop Contract Sweep** | The **published** image's desktop packages/session/DM actually landed (`verify-desktop-experience.sh` against the pulled image, no boot) | That it boots, or that the session actually starts on real hardware |
 | **LUKS E2E** | ISO boots, installs to an encrypted disk, the installed system boots and unlocks | That a desktop session starts, or that the installer GUI works — it drives fisherman over SSH |
 | **Installer smoke** | The compositor starts, autologin works, the installer frontend is running | That the install completes |
 | **Live overlay** | The live payload (installer flatpak, autologin, polkit) builds for that variant | That it works at runtime |
@@ -33,6 +34,15 @@ so it is stated first.
 A variant can be green on LUKS E2E and still ship an ISO nobody can use, because
 LUKS E2E never looks at the screen. `yellowfin:cosmic` was exactly that: LUKS
 green on 2026-07-23, while the installer GUI had never once been observed.
+
+A variant can also be green on Build and still ship the **wrong desktop**
+entirely, with nothing else here positioned to catch it: `marlin:kde`
+published with no `/usr/share/wayland-sessions/` at all (the AUR-only
+`input-remapper` package failed the whole `kde` package set, silently —
+tunaOS#858), and neither LUKS E2E nor Installer smoke inspects *which*
+desktop is present, only that *something* boots. Desktop Contract Sweep is
+the axis built to catch exactly that gap, and it does not need a boot to do
+it.
 
 ---
 

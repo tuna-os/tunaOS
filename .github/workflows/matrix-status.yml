@@ -24,6 +24,18 @@ permissions:
   contents: write
   # Needed to open the refresh PR; `main` only accepts merge-queue changes.
   pull-requests: write
+  # gen-matrix-status.py's Desktop Contract Sweep section (tunaOS#858) reads
+  # desktop-contract-sweep.yml's `desktop-contract-baseline` artifact via
+  # `gh run download` — a cross-run artifact fetch, unlike the `gh run
+  # list`/`run view --json jobs` calls the LUKS/installer-smoke sections
+  # already made, which return run/job metadata rather than artifact
+  # contents. Listing an explicit `permissions:` block restricts every
+  # unlisted scope to none, and GitHub's own docs gate artifact download
+  # specifically behind `actions: read` — without this, the `pull_request`
+  # drift check below (which regenerates the whole document, including this
+  # section, before masking the volatile parts) would fail on that call
+  # alone, on every PR, regardless of what it actually changed.
+  actions: read
 
 concurrency:
   group: matrix-status
