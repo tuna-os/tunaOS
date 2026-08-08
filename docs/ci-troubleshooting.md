@@ -661,4 +661,20 @@ ERROR: desktop experience contract marker was not emitted
    - Gate artifacts (`serial.log`, `10-ready.png`) uploaded to the Actions run provide diagnostic evidence to identify whether failure is due to display manager startup (`gdm`, `greetd`, `sddm`), missing systemd units (`graphical.target`), or package breakage.
    - Unpublished/failing `bonito-rawhide` tags are automatically skipped from the published ISO matrix (`publish-iso-groups.yml`) via `#674` so a broken Rawhide build does not block stable ISO releases.
 
+---
 
+### 11. Podman/crun cache mount options rejected (`rw + bind conflict`)
+
+**Affected workflows:** `LUKS E2E`, Containerfile builds utilizing `--mount=type=cache,rw,...` options.
+
+**Symptom:**
+```
+resolving mountpoints: invalid options "rw, shared, rw, bind", can only specify 1 'rw' or 'ro' option
+```
+
+**Root cause:**
+Older versions of `crun` / `podman` on certain runner environments (e.g. Blacksmith or legacy GitHub runners) exhibit a mount-parsing bug when explicit `rw` options are passed to `--mount=type=cache,rw,...`. Because `type=cache` mounts default to read-write (`rw`) mode automatically, specifying an explicit `rw` flag causes `crun` to concatenate duplicate `rw` flags (`rw, shared, rw, bind`), causing `crun` to reject the mount initialization.
+
+**Fix & Prevention:**
+1. **Omit explicit `rw` in cache mounts**: When specifying buildah/podman cache mounts in Containerfiles or build scripts, omit the redundant `rw` modifier (e.g. use `--mount=type=cache,id=...` instead of `--mount=type=cache,rw,id=...`).
+2. **Runner `crun` version alignment**: Ensure GitHub Actions runner environments update `crun` to `v1.14.1+` where mount option parsing deduplicates default access modes.
