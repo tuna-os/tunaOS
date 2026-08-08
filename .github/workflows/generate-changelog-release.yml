@@ -27,6 +27,22 @@ on:
 
 env:
   IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
+  # How many recent completed build runs to scan for a usable SBOM.
+  MAX_BUILD_RUNS: "20"
+  # How far back a build run may be and still be worth scanning. Matches the
+  # `retention-days: 7` on the SBOM upload in reusable-build-image.yml —
+  # anything older has already been deleted by GitHub, so scanning further
+  # back only burns API calls.
+  SBOM_LOOKBACK_DAYS: "7"
+  # Syft runs continue-on-error and occasionally emits a near-empty SPDX
+  # document (a ~200-byte artifact). A release card built from one lists no
+  # packages at all, so anything under this many packages is a stub, not an
+  # inventory.
+  SBOM_MIN_PACKAGES: "50"
+  # Cadence backstop (#1147): having nothing to release is fine for a day,
+  # not for a fortnight. If nothing shipped AND the newest published release
+  # is older than this, the Releases page is rotting and the run goes red.
+  MAX_RELEASE_AGE_DAYS: "8"
 
 jobs:
   generate-release:
@@ -49,93 +65,164 @@ jobs:
         env:
           STREAM: ${{ matrix.stream }}
           VARIANT: ${{ inputs.variant || 'yellowfin' }}
-          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           DATE=$(date -u +%Y%m%d)
-          TAG="${STREAM}-${DATE}"
-          echo "tag=${TAG}"           >> "$GITHUB_OUTPUT"
-          echo "variant=${VARIANT}"   >> "$GITHUB_OUTPUT"
-          echo "stream=${STREAM}"     >> "$GITHUB_OUTPUT"
-          echo "date=${DATE}"         >> "$GITHUB_OUTPUT"
+          {
+            echo "tag=${STREAM}-${DATE}"
+            echo "variant=${VARIANT}"
+            echo "stream=${STREAM}"
+            echo "date=${DATE}"
+            # Full image ref (no tag — create-release appends it)
+            echo "image=${IMAGE_REGISTRY}/${VARIANT}"
+          } >> "$GITHUB_OUTPUT"
 
-          # Construct the full image ref (no tag — create-release appends it)
-          IMAGE="${IMAGE_REGISTRY}/${VARIANT}"
-          echo "image=${IMAGE}" >> "$GITHUB_OUTPUT"
-
-          # Find the latest successful build run for this variant+stream combo
-          # Looks for the build-<variant> workflow that ran on main
-          WORKFLOW="build-${VARIANT}.yml"
-          RUN_ID=$(gh api \
-            "repos/${{ github.repository }}/actions/workflows/${WORKFLOW}/runs" \
-            --method GET \
-            -f branch=main \
-            -f status=success \
-            -f per_page=5 \
-            --jq '.workflow_runs | map(select(.head_branch == "main")) | first | .id' \
-            2>/dev/null || echo "")
-
-          if [[ -z "${RUN_ID}" || "${RUN_ID}" == "null" ]]; then
-            echo "::warning::No successful build run found for ${WORKFLOW} on main"
-            echo "run_id=" >> "$GITHUB_OUTPUT"
-          else
-            echo "run_id=${RUN_ID}" >> "$GITHUB_OUTPUT"
-            echo "Found build run: ${RUN_ID}"
-          fi
-
-      # ── Download SBOM from latest build run ───────────────────────────────
-      - name: Download SBOM artifact
+      # ── Locate an SBOM produced by a recent build ─────────────────────────
+      # Deliberately does NOT filter build runs by conclusion.
+      #
+      # A nightly `build-<variant>` run fans out to ~40 matrix cells with
+      # fail-fast: false, so one unrelated flavour failing marks the entire
+      # run `failure` even though the amd64 SBOM this release needs was
+      # uploaded and is perfectly good. The old lookup asked the API for
+      # `status=success` runs only, and on main those are almost exclusively
+      # single-flavour workflow_dispatches — which carry the SBOM for that
+      # one flavour and nothing else. Result: 27 consecutive scheduled runs
+      # pinned themselves to a kde-nvidia dispatch, failed to find
+      # `sbom-yellowfin-gnome-linux-amd64` there, warned, and exited 0 while
+      # that very artifact sat in each night's build run (#1106).
+      #
+      # The artifact name was never wrong. Where we looked for it was.
+      # So: walk recent completed runs newest-first and take the first one
+      # that actually carries a usable SBOM for this variant+stream.
+      - name: Locate SBOM from a recent build run
         id: sbom
-        if: steps.vars.outputs.run_id != ''
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN_ID:   ${{ steps.vars.outputs.run_id }}
+          REPO:     ${{ github.repository }}
           VARIANT:  ${{ steps.vars.outputs.variant }}
           STREAM:   ${{ steps.vars.outputs.stream }}
         run: |
           set -euo pipefail
-          mkdir -p _sbom
 
-          # Primary artifact: amd64 SBOM for the given variant+stream
+          WORKFLOW="build-${VARIANT}.yml"
           ARTIFACT_NAME="sbom-${VARIANT}-${STREAM}-linux-amd64"
-          echo "Looking for artifact: ${ARTIFACT_NAME} in run ${RUN_ID}"
+          CUTOFF=$(date -u -d "${SBOM_LOOKBACK_DAYS} days ago" +%s)
 
-          if gh api \
-            "repos/${{ github.repository }}/actions/runs/${RUN_ID}/artifacts" \
-            --jq ".artifacts[] | select(.name == \"${ARTIFACT_NAME}\") | .id" \
-            2>/dev/null | grep -q .; then
+          echo "artifact=${ARTIFACT_NAME}" >> "$GITHUB_OUTPUT"
+          echo "Looking for '${ARTIFACT_NAME}' in the ${MAX_BUILD_RUNS} most recent"
+          echo "completed ${WORKFLOW} runs on main (at most ${SBOM_LOOKBACK_DAYS} days old)."
 
-            gh run download "${RUN_ID}" \
-              --repo "${{ github.repository }}" \
-              --name "${ARTIFACT_NAME}" \
-              --dir _sbom
-            SBOM_FILE=$(find _sbom -name "*.spdx.json" | head -1)
-            if [[ -n "${SBOM_FILE}" ]]; then
-              echo "found=true"          >> "$GITHUB_OUTPUT"
-              echo "path=${SBOM_FILE}"   >> "$GITHUB_OUTPUT"
-              echo "SBOM: ${SBOM_FILE}"
-            else
-              echo "::warning::Artifact downloaded but no .spdx.json found"
-              echo "found=false" >> "$GITHUB_OUTPUT"
+          RUNS=$(gh api \
+            "repos/${REPO}/actions/workflows/${WORKFLOW}/runs" \
+            --method GET \
+            -f branch=main \
+            -f status=completed \
+            -f per_page="${MAX_BUILD_RUNS}" \
+            --jq '.workflow_runs[]
+                  | select(.head_branch == "main")
+                  | [.id, .created_at, .conclusion]
+                  | @tsv' \
+            2>/dev/null || echo "")
+
+          CANDIDATES=0
+          FOUND=false
+
+          while IFS=$'\t' read -r RUN_ID CREATED_AT CONCLUSION; do
+            [[ -n "${RUN_ID}" ]] || continue
+
+            RUN_EPOCH=$(date -u -d "${CREATED_AT}" +%s)
+            if [[ "${RUN_EPOCH}" -lt "${CUTOFF}" ]]; then
+              continue
             fi
-          else
-            echo "::warning::SBOM artifact '${ARTIFACT_NAME}' not found in run ${RUN_ID}"
+            CANDIDATES=$((CANDIDATES + 1))
+
+            # --paginate as well as name=: a nightly run uploads ~140
+            # artifacts and the one we want is not reliably on page 1, so a
+            # single unpaginated page can miss it outright if the API ever
+            # stops honouring the name filter. The jq select re-checks the
+            # name so the filter is never load-bearing on its own.
+            ART_IDS=$(gh api --paginate \
+              "repos/${REPO}/actions/runs/${RUN_ID}/artifacts?per_page=100&name=${ARTIFACT_NAME}" \
+              --jq ".artifacts[]
+                    | select(.name == \"${ARTIFACT_NAME}\" and .expired == false)
+                    | .id" \
+              2>/dev/null || echo "")
+            ART_ID=$(printf '%s\n' "${ART_IDS}" | head -1)
+            if [[ -z "${ART_ID}" ]]; then
+              echo "  run ${RUN_ID} (${CONCLUSION}, ${CREATED_AT}): no ${ARTIFACT_NAME}"
+              continue
+            fi
+
+            rm -rf _sbom && mkdir -p _sbom
+            if ! gh run download "${RUN_ID}" \
+                   --repo "${REPO}" \
+                   --name "${ARTIFACT_NAME}" \
+                   --dir _sbom; then
+              echo "::warning::run ${RUN_ID}: ${ARTIFACT_NAME} listed but not downloadable"
+              continue
+            fi
+
+            SBOM_FILE=$(find _sbom -name '*.spdx.json' -print -quit)
+            if [[ -z "${SBOM_FILE}" ]]; then
+              echo "::warning::run ${RUN_ID}: artifact contains no .spdx.json"
+              continue
+            fi
+
+            # Syft is continue-on-error upstream and does sometimes emit a
+            # near-empty document. Shipping one would produce a release card
+            # listing no packages, so treat it as a miss and keep walking back
+            # — a single flaky Syft night degrades to yesterday's SBOM rather
+            # than to no release at all.
+            PKG_COUNT=$(jq '(.packages // []) | length' "${SBOM_FILE}" 2>/dev/null || echo 0)
+            if [[ "${PKG_COUNT}" -lt "${SBOM_MIN_PACKAGES}" ]]; then
+              echo "::warning::run ${RUN_ID}: SBOM lists ${PKG_COUNT} packages (< ${SBOM_MIN_PACKAGES}) — unusable stub"
+              continue
+            fi
+
+            echo "Using SBOM from run ${RUN_ID} (${CONCLUSION}, ${CREATED_AT}) — ${PKG_COUNT} packages"
+            {
+              echo "found=true"
+              echo "path=${SBOM_FILE}"
+              echo "packages=${PKG_COUNT}"
+              echo "run_id=${RUN_ID}"
+              echo "run_url=https://github.com/${REPO}/actions/runs/${RUN_ID}"
+            } >> "$GITHUB_OUTPUT"
+            FOUND=true
+            break
+          done <<< "${RUNS}"
+
+          if [[ "${FOUND}" != "true" ]]; then
             echo "found=false" >> "$GITHUB_OUTPUT"
           fi
+          echo "candidates=${CANDIDATES}" >> "$GITHUB_OUTPUT"
 
-      # ── Skip if no SBOM ───────────────────────────────────────────────────
+      # ── Decide whether this run can ship ──────────────────────────────────
+      # Three outcomes, and the difference between the last two is the whole
+      # point of #1147:
+      #   ok       — we have an SBOM, proceed to publish
+      #   no-build — no build ran at all, there is genuinely nothing to
+      #              release; the build workflow owns that signal, not us
+      #   no-sbom  — builds DID run and we still could not ship. That is a
+      #              dropped release and must not be green.
       - name: Check SBOM availability
         id: check
         env:
           SBOM_FOUND: ${{ steps.sbom.outputs.found }}
-          RUN_ID:     ${{ steps.vars.outputs.run_id }}
+          CANDIDATES: ${{ steps.sbom.outputs.candidates }}
+          ARTIFACT:   ${{ steps.sbom.outputs.artifact }}
         run: |
           set -euo pipefail
-          if [[ "${RUN_ID}" == "" || "${SBOM_FOUND}" != "true" ]]; then
-            echo "skip=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::No SBOM available — skipping release generation"
-          else
+          if [[ "${SBOM_FOUND}" == "true" ]]; then
             echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "reason=ok"  >> "$GITHUB_OUTPUT"
+          elif [[ "${CANDIDATES}" == "0" ]]; then
+            echo "skip=true"       >> "$GITHUB_OUTPUT"
+            echo "reason=no-build" >> "$GITHUB_OUTPUT"
+            echo "::notice::No build run in the lookback window — nothing to release"
+          else
+            echo "skip=true"      >> "$GITHUB_OUTPUT"
+            echo "reason=no-sbom" >> "$GITHUB_OUTPUT"
+            echo "::error::${CANDIDATES} build run(s) in the lookback window, none carrying a usable '${ARTIFACT}'"
           fi
 
       # ── Fetch image digest ────────────────────────────────────────────────
@@ -175,6 +262,7 @@ jobs:
 
       # ── Create GitHub Release with SBOM diff + release card ──────────────
       - name: Create Release
+        id: release
         if: |
           steps.check.outputs.skip == 'false' &&
           steps.existing.outputs.exists == 'false' &&
@@ -207,3 +295,89 @@ jobs:
             ]
           handwritten:  ${{ inputs.handwritten || '' }}
           github-token: ${{ github.token }}
+
+      # ── Release cadence health gate (#1147) ───────────────────────────────
+      # Before this existed, "we shipped nothing" and "we shipped" were the
+      # same colour. 27 scheduled runs exited 0 having published nothing and
+      # nobody noticed for a month.
+      #
+      # The gate has to hold a line: fail when a release was dropped, stay
+      # green when there was legitimately nothing to drop. A gate that reds
+      # on a genuine no-op gets muted by the first person it wakes up, and
+      # then we are back to no signal at all — so no-build passes, and only
+      # a *prolonged* drought (MAX_RELEASE_AGE_DAYS) escalates it.
+      - name: Release cadence health gate
+        if: ${{ !cancelled() }}
+        env:
+          GH_TOKEN:        ${{ github.token }}
+          REPO:            ${{ github.repository }}
+          REASON:          ${{ steps.check.outputs.reason }}
+          CANDIDATES:      ${{ steps.sbom.outputs.candidates }}
+          ARTIFACT:        ${{ steps.sbom.outputs.artifact }}
+          SBOM_RUN_URL:    ${{ steps.sbom.outputs.run_url }}
+          SBOM_PACKAGES:   ${{ steps.sbom.outputs.packages }}
+          RELEASE_OUTCOME: ${{ steps.release.outcome }}
+          EXISTS:          ${{ steps.existing.outputs.exists }}
+          DRY_RUN:         ${{ inputs.dry_run }}
+          TAG:             ${{ steps.vars.outputs.tag }}
+          VARIANT:         ${{ steps.vars.outputs.variant }}
+          STREAM:          ${{ steps.vars.outputs.stream }}
+        run: |
+          set -euo pipefail
+
+          STATUS="ok"
+          case "${REASON}" in
+            ok)
+              if [[ "${DRY_RUN}" == "true" ]]; then
+                OUTCOME="dry run — notes generated from a valid SBOM, nothing published"
+              elif [[ "${EXISTS}" == "true" ]]; then
+                OUTCOME="release ${TAG} already exists — nothing to do"
+              elif [[ "${RELEASE_OUTCOME}" == "success" ]]; then
+                OUTCOME="published ${TAG} with a ${SBOM_PACKAGES}-package SBOM from ${SBOM_RUN_URL}"
+              else
+                OUTCOME="SBOM was available but Create Release did not succeed (${RELEASE_OUTCOME})"
+                STATUS="fail"
+              fi
+              ;;
+            no-build)
+              OUTCOME="no ${VARIANT} build ran in the lookback window — nothing to release"
+              LATEST=$(gh api "repos/${REPO}/releases?per_page=1" \
+                --jq '.[0].published_at // ""' 2>/dev/null || echo "")
+              if [[ -z "${LATEST}" ]]; then
+                OUTCOME="${OUTCOME}; and no published release exists at all"
+                STATUS="fail"
+              else
+                AGE_DAYS=$(( ( $(date -u +%s) - $(date -u -d "${LATEST}" +%s) ) / 86400 ))
+                OUTCOME="${OUTCOME}; newest release is ${AGE_DAYS} day(s) old"
+                if [[ "${AGE_DAYS}" -gt "${MAX_RELEASE_AGE_DAYS}" ]]; then
+                  OUTCOME="${OUTCOME} (limit ${MAX_RELEASE_AGE_DAYS}) — the Releases page has gone stale"
+                  STATUS="fail"
+                fi
+              fi
+              ;;
+            no-sbom)
+              OUTCOME="${CANDIDATES} ${VARIANT} build run(s) available but none carried a usable"
+              OUTCOME="${OUTCOME} '${ARTIFACT}' — a release was dropped, not skipped"
+              STATUS="fail"
+              ;;
+            *)
+              OUTCOME="release pipeline reached no decision (reason='${REASON}')"
+              STATUS="fail"
+              ;;
+          esac
+
+          {
+            echo "## Release cadence — ${VARIANT}:${STREAM}"
+            echo
+            if [[ "${STATUS}" == "ok" ]]; then
+              echo "✅ ${OUTCOME}"
+            else
+              echo "❌ ${OUTCOME}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [[ "${STATUS}" != "ok" ]]; then
+            echo "::error::${OUTCOME}"
+            exit 1
+          fi
+          echo "${OUTCOME}"
