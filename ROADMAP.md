@@ -99,6 +99,8 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
 **Theme**: Enterprise readiness, community governance, ecosystem integration.
 
+**Planning started (2026-08-08)**: Q4 milestone #3 created; tracking issue #1159 open — 4/9 goals untracked (Branch protection, Community governance, Release automation, Package signing/SBOM), stale dependency refs (#306/#307/#212/#301 closed).
+
 | Goal | Owner | Dependencies |
 |------|-------|--------------|
 | Tacklebox decoupling | architect | #306 |
