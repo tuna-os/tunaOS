@@ -715,6 +715,26 @@ Debian 13 (Trixie), Sid (unstable), and experimental repos do not ship COSMIC de
 1. **Upstream DEB packaging track**: Tracked under `tuna-os/tunaos-packages#152` to build native Debian DEB packages for COSMIC (`trixie` and `sid`) via Tideforge.
 2. **Matrix Visibility**: The flavor remains declared in `.github/build-config.yml` and reported as red in post-publish contract sweeps (`desktop-contract-sweep.yml` / #921) to maintain transparent tracking rather than silently shrinking matrix coverage. Rebuilding after packaging updates will replace existing tags cleanly without destructive registry actions.
 
+---
+
+### 14. Promotion Criteria for Experimental Variants to Nightly Build Schedule (#641)
+
+**Affected variants:** `grouper`, `marlin`, `flounder-sid`, `guppy`, `sailfin`, `flounder`.
+
+**Policy & Criteria:**
+An experimental variant (`experimental: true`) is eligible for promotion to the nightly build schedule (`schedule: cron: "0 1 * * *"`) once it meets the following criteria:
+1. **Clean Image Build**: All declared DE/flavor stages build green without failures.
+2. **ISO & Disk Boot Gate**: For variants with `build_iso: true` (e.g. `grouper`, `marlin`), the ISO build and QEMU disk boot gate (`iso-e2e.sh --disk`) complete cleanly emitting `TUNAOS_DESKTOP_CONTRACT_OK`.
+3. **No Soft Failures / Missing Compositors**: Post-publish desktop contract sweep verifies essential desktop commands (e.g. `niri`, `cosmic-comp`, `nautilus`, `sddm`) are present and functional.
+
+**Variant Status & Promotion Tracking:**
+- `grouper` (Ubuntu 26.04): Promoted once image and ISO e2e boot gates pass cleanly.
+- `marlin` (Arch): Promoted upon passing image and ISO e2e gates.
+- `flounder-sid` (Debian Sid): Promoted upon green image builds (no ISOs).
+- `guppy` (Gentoo) & `sailfin` (openSUSE TW): Promoted upon green image builds following target-stage fixes.
+- `flounder` (Debian Trixie): Stays experimental until ostree base requirements (`≥ 2025.3`) land.
+
+
 
 
 
