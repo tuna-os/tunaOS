@@ -28,6 +28,35 @@ fi
 find /var -mindepth 1 -maxdepth 1 ! -path '/var/cache' -delete 2>/dev/null || true
 find /var/cache -mindepth 1 -delete 2>/dev/null || true
 
+# Restore the dpkg database path and apt's log directory, for apt-based
+# variants, immediately after the wipe above — for the exact reason
+# Containerfile.debian's own comment on the FIRST /var wipe gives ("apt/dpkg
+# run in later layers ... before tmpfiles has ever executed"), which applies
+# here too, one wipe later.
+#
+# ostree-layout.sh (source: Containerfile.debian's dpkg relocation step)
+# already relocates /var/lib/dpkg to /usr/lib/sysimage/dpkg and symlinks it
+# back, and creates /var/log/apt, specifically so apt/dpkg keep working
+# through their default paths at BUILD time — not just after boot, when
+# systemd-tmpfiles would apply the tmpfiles.d entry it also writes. But this
+# script runs in base-no-de AFTER that, does its own `find /var ... -delete`
+# above, and base-no-de is the base every desktop flavor (gnome/kde/xfce/
+# cosmic/niri) is built FROM — each running its own `apt-get install` via
+# install-desktop.sh in a LATER layer, still at build time, with no boot
+# (and so no systemd-tmpfiles) in between. Without this, that install runs
+# against a /var with no dpkg database at the path apt/dpkg actually look at,
+# and no /var/log/apt for them to write to (tunaOS#880 — flounder-sid's
+# python3 postinst failed running fwupd's rtupdate hook with exit status 4;
+# that hook's only command without a `|| true` is `py3clean -p fwupd
+# /usr/share/fwupd`, and py3clean resolves a package's files via `dpkg -L`).
+#
+# Guard on the symlink's REAL target rather than PKG_MGR: cheap, and correct
+# even if this script is ever reordered relative to ostree-layout.sh.
+if [[ -d /usr/lib/sysimage/dpkg ]]; then
+	mkdir -p /var/lib /var/log/apt
+	ln -sfnT ../../usr/lib/sysimage/dpkg /var/lib/dpkg
+fi
+
 # Declare /var/cache/dnf and /var/lib/dnf in tmpfiles.d so they're recreated on first boot (bootc lint: var-tmpfiles)
 # (dnf-only — apt uses /var/lib/apt/lists which is handled by its own tmpfiles.d)
 if [[ "$PKG_MGR" == "dnf" ]]; then
