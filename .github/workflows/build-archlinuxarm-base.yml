@@ -81,9 +81,11 @@ jobs:
             'pacman -Q base >/dev/null && [ "$(uname -m)" = aarch64 ] && pacman -Sp --noconfirm linux-aarch64 >/dev/null'
 
       - name: Push to GHCR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "${{ env.GITHUB_TOKEN }}" | sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin
           REF="ghcr.io/${{ github.repository_owner }}/archlinuxarm"
           DATE=$(date -u +%Y%m%d)
           sudo podman tag archlinuxarm:build "$REF:latest" "$REF:$DATE"
