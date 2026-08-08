@@ -23,6 +23,14 @@
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 SCRIPT="${REPO_ROOT}/scripts/build-image-inner.sh"
 
+setup() {
+	TEST_ROOT="$(mktemp -d)"
+}
+
+teardown() {
+	rm -rf "${TEST_ROOT}"
+}
+
 # The until-loop as it appears in the script: from the `build_attempt=1`
 # initialiser through the closing `done`. Extracted rather than restated so a
 # future edit to the loop is what these tests run.
@@ -96,9 +104,56 @@ run_loop() {
 
 # The builder-specific gate is what caused the bug. Assert it is gone from the
 # source, so reintroducing it fails here with an explanation rather than
-# silently halving the retry coverage again.
+# silently halving the retry coverage again. (A buildah-only storage clean
+# inside the loop is fine — see the next test — what must not return is the
+# `!= buildah` early-exit that gave podman zero retries.)
 @test "the retry is not gated on the builder name" {
 	run retry_loop
 	[[ "$output" != *'!= "buildah"'* ]]
-	[[ "$output" != *'== "buildah"'* ]]
+}
+
+@test "buildah storage is cleaned before a retry, not on first success" {
+	cat >"${TEST_ROOT}/buildah" <<'EOF'
+#!/usr/bin/env bash
+echo "buildah $*" >> "${BUILDAH_LOG:?}"
+EOF
+	chmod +x "${TEST_ROOT}/buildah"
+	export BUILDAH_LOG="${TEST_ROOT}/buildah.log"
+	export PATH="${TEST_ROOT}:${PATH}"
+	run bash -c "
+		BUILDER=buildah
+		attempts=0
+		sleep() { :; }
+		build_primary_image() {
+			attempts=\$((attempts + 1))
+			[ \$attempts -gt 1 ]
+		}
+		$(retry_loop)
+	"
+	[ "$status" -eq 0 ]
+	run cat "${BUILDAH_LOG}"
+	# exactly one clean, between attempt 1 and attempt 2
+	[ "$(wc -l <<<"$output")" -eq 1 ]
+	[[ "$output" == *"rm -a"* ]]
+}
+
+@test "podman retries do not invoke buildah rm" {
+	cat >"${TEST_ROOT}/buildah" <<'EOF'
+#!/usr/bin/env bash
+echo "buildah called" > "${TEST_ROOT}/buildah.log"
+EOF
+	chmod +x "${TEST_ROOT}/buildah"
+	export PATH="${TEST_ROOT}:${PATH}"
+	run bash -c "
+		BUILDER=podman
+		attempts=0
+		sleep() { :; }
+		build_primary_image() {
+			attempts=\$((attempts + 1))
+			[ \$attempts -gt 1 ]
+		}
+		$(retry_loop)
+	"
+	[ "$status" -eq 0 ]
+	[[ ! -f "${TEST_ROOT}/buildah.log" ]]
 }
