@@ -639,3 +639,26 @@ For each variant package published to `ghcr.io/tuna-os/<package>`:
 
 Applies to all experimental variant packages: `flounder-sid`, `flounder`, `guppy`, `sailfin`, `marlin`, `grouper`.
 
+---
+
+### 10. `bonito-rawhide` build failures (Quay CDN flakes & desktop contract gate failures)
+
+**Affected workflows:** `Build Bonito Rawhide` (`bonito-rawhide`).
+
+**Symptom 1 (Base image pull EOF):**
+```
+Error: pulling image quay.io/fedora/fedora-bootc:rawhide: unexpected EOF / CDN blob transfer dropped mid-pull
+```
+**Symptom 2 (Desktop contract gate failure):**
+```
+ERROR: desktop experience contract marker was not emitted
+==> Screenshot 10-ready stddev=0
+```
+
+**Root cause & Mitigations:**
+1. **Quay CDN blob drop:** `reusable-build-image.yml` includes an explicit 4-attempt retry loop with exponential backoff (`sudo podman pull --platform "${PLATFORM}" "$BASE"`) before invoking `just build`. If `quay.io` drops a blob transfer, local podman retries the pull instead of failing the job.
+2. **Desktop contract gate / Rawhide desktop breakage:** Rawhide packages rolling Fedora development builds. When desktop packages or display manager defaults temporarily break in Rawhide, or when systemd target initialization changes, the boot gate in `reusable-build-image.yml` times out waiting for `TUNAOS_DESKTOP_CONTRACT_OK`.
+   - Gate artifacts (`serial.log`, `10-ready.png`) uploaded to the Actions run provide diagnostic evidence to identify whether failure is due to display manager startup (`gdm`, `greetd`, `sddm`), missing systemd units (`graphical.target`), or package breakage.
+   - Unpublished/failing `bonito-rawhide` tags are automatically skipped from the published ISO matrix (`publish-iso-groups.yml`) via `#674` so a broken Rawhide build does not block stable ISO releases.
+
+
