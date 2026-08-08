@@ -187,4 +187,19 @@ versionlock:
 
 # Post-install scripts to source (relative to build_scripts/)
 post_install:
+  # The greeter stack (greetd/lightdm probe, gtkgreet + cage, the
+  # wayland-sessions fallback and greetd's config). Lived in
+  # desktop/xfce.sh, which install-desktop.sh never sources — so
+  # verify-desktop-experience.sh failed with "missing required command:
+  # gtkgreet" in run 31224115663, the gate immediately after the theme one.
+  - xfce-greeter.sh
+  # xfwl4 panics without xfwm4's theme data and nothing on EL10 ships it.
+  # MUST be listed here: install-desktop.sh sources only the scripts a
+  # manifest names, so logic living in desktop/xfce.sh never runs for this
+  # flavor — which is exactly how the first attempt at this fix shipped
+  # without taking effect.
+  - xfwm4-theme.sh
   - tuna-flatpak-remote.sh
+  # Curated Flatpak set (store + browser) + preinstall service — see the
+  # script header; asserts live in verify-desktop-experience.sh.
+  - flatpak-preinstall.sh

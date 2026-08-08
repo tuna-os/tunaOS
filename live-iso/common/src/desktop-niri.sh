@@ -51,20 +51,52 @@ ln -sf /usr/lib/systemd/system/greetd.service /etc/systemd/system/display-manage
 systemctl set-default graphical.target 2>/dev/null ||
 	ln -sf /usr/lib/systemd/system/graphical.target /etc/systemd/system/default.target 2>/dev/null || true
 
-# Disable screen lock for the live session
-mkdir -p /etc/xdg
-tee /etc/xdg/niri-session.override <<'NIRIEOF'
-[idle]
-inhibit-when-fullscreen = false
-
-[bind]
-mod = Super
-NIRIEOF
+# The block that used to be here wrote /etc/xdg/niri-session.override with
+# INI-style [idle] and [bind] sections. niri has no such file and no such
+# format — its configuration is KDL, at ~/.config/niri/config.kdl,
+# /etc/niri/config.kdl or (on TunaOS) /usr/share/niri/config.kdl. Nothing in
+# the image or in niri read that path, so it configured nothing; it only made
+# the live session look configured. Removed rather than ported, because there
+# is nothing to port to: the config.kdl this image ships spawns no swayidle or
+# swaylock, so there is no screen lock to disable in the first place. Sleep is
+# handled for real by the systemctl mask below.
 
 # Mask sleep targets so the installer session cannot enter S3
 systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target || true
 
-# Installer frontend: niri has no XDG autostart; org.tunaos.InstallerNiri is
-# baked into the live squash by customize-live.sh and launched from
-# the shell / DMS launcher. Add spawn-at-startup to the niri config when the
-# live config.kdl is introduced.
+# Installer frontend: launch it at session start.
+#
+# This used to be a TODO — "add spawn-at-startup to the niri config when the
+# live config.kdl is introduced" — and the effect was that
+# org.tunaos.InstallerNiri got baked into the live squash and then never
+# started, on an ISO whose only purpose is to run it. gnome had the same gap;
+# see desktop-gnome.sh.
+#
+# The TODO is stale: the config.kdl already exists. TunaOS ships one at
+# /usr/share/niri/config.kdl (system_files/) as the compositor default, and it
+# already drives the whole session this way — swaybg, waybar, nm-applet,
+# swaync and cliphist are all spawn-at-startup lines in it. So this appends one
+# more to the file that is already there, rather than creating
+# /etc/niri/config.kdl, which would REPLACE that default and take the keybinds,
+# output setup and window rules with it.
+#
+# Appending to the shipped default is also why this is preferred over a systemd
+# user unit: spawn-at-startup is niri's own idiom and is demonstrably working
+# in this exact image, whereas a user unit would rest on an assumption about
+# how far niri-session takes graphical-session.target.
+NIRI_CONFIG=/usr/share/niri/config.kdl
+if [[ -f "${NIRI_CONFIG}" ]]; then
+	tee -a "${NIRI_CONFIG}" <<'NIRIEOF'
+
+// ── live ISO only ────────────────────────────────────────────────────────────
+// Appended by live-iso/common/src/desktop-niri.sh. Installed systems never see
+// this line: it is written into the live squash, not into the deployed image.
+spawn-at-startup "flatpak" "run" "org.tunaos.InstallerNiri"
+NIRIEOF
+else
+	# Fatal on purpose. A live niri ISO with no installer launcher is the exact
+	# defect this block exists to close, and it is invisible from outside — the
+	# ISO builds, the VM boots, the desktop comes up, and nothing runs.
+	echo "desktop-niri: ${NIRI_CONFIG} missing; cannot arrange installer autostart" >&2
+	exit 1
+fi

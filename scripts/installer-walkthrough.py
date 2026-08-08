@@ -138,6 +138,37 @@ def vnc_capture(png):
     return os.path.exists(png) and os.path.getsize(png) > 0
 
 
+# PPM -> PNG converter, resolved once.
+#
+# The screendump path hardcoded `convert`, under a `check=False` that reads as
+# tolerance but is not: check=False only suppresses a NONZERO EXIT, while a
+# missing binary raises FileNotFoundError out of Popen before any exit code
+# exists. So an absent ImageMagick did not degrade — it crashed the harness
+# with a traceback on the very first frame (run 31168173594), after the VM had
+# booted and was sitting on the installer's first screen.
+#
+# ImageMagick 7 ships `magick`; 6 ships `convert`; netpbm's `pnmtopng` reads
+# PPM natively and is already a dependency of every caller. Prefer whichever
+# exists, and say so once rather than per frame.
+def _resolve_ppm_converter():
+    for exe in ("magick", "convert"):
+        if shutil.which(exe):
+            return lambda ppm, png, exe=exe: subprocess.run(
+                [exe, ppm, png], check=False)
+    if shutil.which("pnmtopng"):
+        def _pnmtopng(ppm, png):
+            with open(png, "wb") as out:
+                subprocess.run(["pnmtopng", ppm], stdout=out, check=False)
+        return _pnmtopng
+    return None
+
+
+_ppm_to_png = _resolve_ppm_converter()
+if _ppm_to_png is None:
+    note("no PPM converter found (magick / convert / pnmtopng) — screendump "
+         "frames cannot be saved; install imagemagick or netpbm")
+
+
 def shot(idx, label):
     png = os.path.abspath(f"{outdir}/walkthrough-{flavor}-{idx:02d}.png")
 
@@ -151,7 +182,8 @@ def shot(idx, label):
     hmp(f"screendump {ppm}")
     time.sleep(1.5)
     if os.path.exists(ppm):
-        subprocess.run(["convert", ppm, png], check=False)
+        if _ppm_to_png is not None:
+            _ppm_to_png(ppm, png)
         os.remove(ppm)
         print(f"captured step {idx}: {label} -> {png} (screendump)", flush=True)
         return png
@@ -254,8 +286,22 @@ if p:
 # advances.
 activation = "ret"
 switched = False
-tabs = 2
+# Start at 0: try the DEFAULT ACTION before tabbing anywhere.
+#
+# This used to start at 2, so the harness never once pressed Enter on the
+# focused widget — it always tabbed twice first. On a wizard whose primary
+# action has focus that skips straight past it, and on GNOME's welcome screen
+# tab order is install -> bluetooth -> recovery -> poweroff -> credits, so
+# sweeping outward walks toward Credits and away from Install. Run
+# 31183217981 opened the Credits modal and never left the welcome screen.
+#
+# Costs one step when the app sets no default focus — the existing widen loop
+# picks up from 1 exactly as before — and saves the run when it does.
+tabs = 0
 MAX_TABS = 8
+# Set once the escape hatch below has been spent; cleared by any real
+# advance so a long run can escape more than one modal.
+escaped = False
 for i in range(1, steps + 1):
     send_keys(*(["tab"] * tabs), activation)
     time.sleep(3)
@@ -265,7 +311,8 @@ for i in range(1, steps + 1):
         frames.append(p)
         moved = bool(prev) and changed_pixels(prev, p) > DIFF_PIXELS
         if moved:
-            tabs = 2          # new page, start over from the usual position
+            tabs = 0          # new page: try its default action first, again
+            escaped = False   # re-arm the modal escape for the next stall
         elif prev:
             if not switched and activation == "ret":
                 activation = "spc"
@@ -277,6 +324,32 @@ for i in range(1, steps + 1):
                 tabs += 1
                 print(f"  # no change — widening focus search to {tabs} tabs",
                       flush=True)
+            elif not escaped:
+                # A modal swallows the whole sweep. Starting the tab count at
+                # 0 (above) stops the harness WALKING into GNOME's Credits
+                # dialog, but nothing stops a dialog that opens for any other
+                # reason — and once inside, every escalation is spent on the
+                # modal's own widgets while the wizard behind it never moves.
+                #
+                # Run 31216208138's gnome leg is the shape: frame 02 is the
+                # Credits modal, frame 03 is byte-identical to it, and the
+                # remaining five steps produced no new screen. The harness
+                # reported "6/8 transitions changed >500px" — opening and
+                # scrolling a dialog counts as movement — so the stall was
+                # invisible in every metric except the pictures.
+                #
+                # Escape is the one key that means "close this" in both GTK
+                # and Qt, and it does nothing to a wizard page that has no
+                # dialog open, so it is safe to spend a step on. Once only
+                # per stall: re-armed by the next real advance, so a run
+                # cannot sit in an Escape loop.
+                escaped = True
+                tabs = 0
+                print("  # focus sweep exhausted — sending 'esc' in case a "
+                      "modal (Credits, About, a file chooser) is on top",
+                      flush=True)
+                send_keys("esc")
+                time.sleep(2)
             elif os.path.exists(vnc_sock) and shutil.which("vncdo") and shutil.which("socat"):
                 # Fallback to mouse click on primary button location via VNC if keyboard navigation stalls
                 # Primary action buttons ("Get Started", "Next", "Continue") sit near bottom right / center bottom
@@ -315,7 +388,8 @@ for f in frames:
 # COSMIC desktop, clock ticking, no window. Named for what it actually checks.
 tap(rendered > 0, f"{flavor}: screen is not blank",
     f"{rendered}/{len(frames)} frames above stddev {BLANK_STDDEV} "
-    f"(blank everywhere usually means no GL — niri/xfwl4 need virgl)",
+    f"(blank everywhere: check the serial log for an OOM kill FIRST — "
+    f"a compositor the kernel keeps killing looks exactly like a GL failure)",
     enforced=strict)
 note(f"{rendered}/{len(frames)} frames above stddev {BLANK_STDDEV} "
      f"(whole screen, not the installer window)")
@@ -414,10 +488,35 @@ if have_ocr and not any(reached.values()) and rendered > 0:
     _moved = "nothing responded to input" if n_states <= 1 else (
         f"the screen changed {n_states - 1}x, but no change was an installer "
         f"screen (a greeter clock or desktop animation looks identical here)")
-    print(f"  # DIAGNOSIS: {flavor} — process is running (gate passed) but no "
-          f"installer screen was ever detected and {_moved}; the frames are "
-          f"most likely a login greeter or the bare desktop, with no installer "
-          f"window mapped. Check the captured PNGs before assuming a UI bug.",
+    # Deliberately lists the causes instead of naming a favourite.
+    #
+    # It used to end "most likely a login greeter or the bare desktop, with no
+    # installer window mapped". On run 31171184497 that was wrong on every
+    # count: the session was a fully drawn GNOME desktop, and the reason no
+    # installer screen appeared is that the gnome live adapter never launched
+    # one — it had no autostart entry at all, while kde, cosmic and xfce did.
+    # A confident wrong guess is worse than no guess: it sent the investigation
+    # looking for a greeter, then for a GTK renderer bug, before anyone read
+    # the five desktop adapters and saw the asymmetry.
+    #
+    # "process is running" is also weaker evidence than it sounds. That gate
+    # lives in installer-smoke.yml and does not run here, so on this harness it
+    # is an assumption, not a check.
+    print(f"  # DIAGNOSIS: {flavor} — no installer screen was ever detected "
+          f"and {_moved}. Causes, in the order they are worth checking:\n"
+          f"  #   1. the installer was never LAUNCHED — check that "
+          f"live-iso/common/src/desktop-{flavor}.sh arranges an autostart "
+          f"entry, a systemd user unit or a spawn-at-startup line\n"
+          f"  #   2. it launched and exited — check the user journal\n"
+          f"  #   3. the COMPOSITOR is being OOM-killed — grep the serial log "
+          f"for 'Out of memory: Killed process'. This is what a 4G guest does "
+          f"to cosmic-comp, and every frame is black, which reads as a GL "
+          f"failure and is not one\n"
+          f"  #   4. its window is mapped but not drawing (no GL path)\n"
+          f"  #   5. the frames are a greeter, so the session never started\n"
+          f"  # These look identical in the numbers and completely different in "
+          f"the PNGs. Look at the captured frames first — an empty desktop with "
+          f"the app merely pinned to a dock or launcher is case 1, not a UI bug.",
           flush=True)
 
 # ── Result for the parity matrix ─────────────────────────────────────────

@@ -45,6 +45,9 @@
 #
 # Options:
 #   --timeout SEC         Per-phase timeout (default: 300)
+#   --live-marker RE      Readiness regex for the serial log (env: LIVE_MARKER).
+#                         Default TUNAOS_LIVE_READY|TBOX_LIVE_READY — ours and
+#                         tacklebox's generic marker for non-tunaOS images.
 #   --output DIR          Where serial logs / screenshots are written
 #                         (default: ./iso-e2e-out)
 #   --memory MIB          QEMU guest RAM (default: 4096)
@@ -59,6 +62,25 @@
 #   E2E_SMOKE_STRICT=1    Treat failures from the live-image smoke checks
 #                         (scripts/e2e-smoke-checks.sh, TAP assertions adapted
 #                         from frostyard/snosi) as fatal. Default: warn only.
+#   TBOX_E2E_SSH_PORT     Host TCP port forwarded to the guest's sshd
+#                         (default 2222; see SSH_PORT below).
+#   TBOX_E2E_VSOCK_CID    AF_VSOCK guest CID for the SSH fallback (default
+#                         SSH_PORT+1000). The harness reaches the guest over
+#                         TCP as liveuser first; when nothing listens on guest
+#                         TCP 22 (stock Fedora ships sshd.service disabled, so
+#                         live media only has systemd-ssh-generator's AF_UNIX
+#                         and AF_VSOCK listeners) it falls back to root over
+#                         vsock, authenticated by a per-run keypair injected
+#                         through the SMBIOS credential ssh.authorized_keys.root
+#                         (tacklebox#178). See the Guest SSH transport section.
+#   TBOX_E2E_IMAGE        Image ref for the generic (no-fisherman) install
+#                         path, e.g. "ublue-os/aurora:stable" (bare org/name
+#                         gets a ghcr.io/ prefix) or a fully qualified ref.
+#                         When the live image ships no fisherman and this is
+#                         set, run_install pulls it in the guest and installs
+#                         with `bootc install to-disk` (tpm2-luks under
+#                         --luks; the reboot gate then proves TPM auto-unlock
+#                         instead of passphrase injection).
 #
 # Exit codes:
 #   0  success
@@ -67,6 +89,10 @@
 #   3  kickstart install failed
 #   4  installed system did not boot
 #   5  SSH check failed
+#   6  pixel gate failed — the installed system reached login but nothing
+#      provably rendered (blank/absent capture, or zero timelapse frames on
+#      a host where capture works). TUNAOS_PIXEL_GATE=0 downgrades to
+#      advisory. See scripts/lib/pixel-gate.sh for the decision table.
 #   77 missing dependency (qemu, ovmf, etc.) — distinguishable for CI skip
 
 set -euo pipefail
@@ -78,6 +104,7 @@ KICKSTART=""
 APP_CMD=""
 MODE="ready" # ready | install | kickstart | ssh | app-launch
 TIMEOUT=300
+LIVE_MARKER="${LIVE_MARKER:-TUNAOS_LIVE_READY|TBOX_LIVE_READY}"
 OUTPUT_DIR="./iso-e2e-out"
 MEMORY=4096
 CPUS=4
@@ -125,6 +152,10 @@ while [[ $# -gt 0 ]]; do
 		TIMEOUT="$2"
 		shift 2
 		;;
+	--live-marker)
+		LIVE_MARKER="$2"
+		shift 2
+		;;
 	--output)
 		OUTPUT_DIR="$2"
 		shift 2
@@ -146,7 +177,10 @@ while [[ $# -gt 0 ]]; do
 		shift
 		;;
 	-h | --help)
-		sed -n '2,50p' "$0"
+		# Print the entire leading comment block instead of a fixed line
+		# range, which silently truncated help mid-sentence whenever the
+		# docs above grew.
+		awk 'NR > 1 { if (!/^#/) exit; print }' "$0"
 		exit 0
 		;;
 	-*)
@@ -215,6 +249,8 @@ E2E_SSH_OPTS=(
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/common.sh
 . "${SCRIPT_DIR}/lib/common.sh"
+# shellcheck source=lib/pixel-gate.sh
+. "${SCRIPT_DIR}/lib/pixel-gate.sh"
 # Extract VARIANT and FLAVOR from ISO filename for screenshot comparison and
 # for the fisherman recipe's image ref (used only as a fallback — callers
 # should set VARIANT/FLAVOR explicitly, e.g. luks-e2e.yml's env: block).
@@ -416,6 +452,17 @@ SWAP_DISK="${OUTPUT_DIR}/swap-disk.qcow2"
 SWAP_DISK_SERIAL="e2eswap"
 SWAP_DISK_BYID="/dev/disk/by-id/virtio-${SWAP_DISK_SERIAL}"
 
+# A scratch disk for the generic (no-fisherman) install path's container
+# storage. The live overlay's upperdir is an 8G tmpfs backed by guest RAM +
+# swap, so a stock-image pull (aurora ≈ 9G uncompressed) physically cannot
+# land there — the same wall #941 measured from the other direction.
+# Attached to every live boot (a sparse qcow2 costs nothing unless written)
+# and only formatted/mounted by run_install_generic; addressed by serial for
+# the same never-confuse-with-vda reason as the swap disk.
+SCRATCH_DISK="${OUTPUT_DIR}/scratch-disk.qcow2"
+SCRATCH_DISK_SERIAL="e2escratch"
+SCRATCH_DISK_BYID="/dev/disk/by-id/virtio-${SCRATCH_DISK_SERIAL}"
+
 # QEMU writes the guest console into SERIAL_LOG, and several code paths below
 # tee ssh output into that same file. `-serial file:PATH` opens the file
 # O_WRONLY|O_CREAT|O_TRUNC and writes at QEMU's OWN offset, so the moment a
@@ -446,6 +493,119 @@ if [[ "${QEMU_NEEDS_VNC_SURFACE:-0}" == "1" ]]; then
 	QEMU_GPU_ARGS+=(-vnc "unix:${OUTPUT_DIR}/vnc.sock")
 fi
 
+# ── Guest SSH transport ─────────────────────────────────────────────────────
+# Everything that talks to the guest goes through GUEST_SSH/GUEST_SCP, set
+# here once (the per-function copies used to drift — see E2E_SSH_OPTS above).
+# Two transports exist:
+#
+#   tcp   (default) sshpass as liveuser through QEMU's hostfwd on
+#         127.0.0.1:${SSH_PORT}. Requires the image to ship a TCP sshd and a
+#         liveuser with password "live" — true for every tunaOS live ISO.
+#   vsock root over AF_VSOCK. Stock Fedora — and therefore the non-tunaOS
+#         reference images (aurora, bluefin) — ships sshd.service disabled;
+#         on live media only systemd-ssh-generator's AF_UNIX + AF_VSOCK
+#         listeners exist, so every hostfwd connection is reset and the tcp
+#         probe loops to timeout (tacklebox#178, iso-builder run 31105807882).
+#         The generator's vsock listener is purpose-built for exactly this
+#         kind of VM access, and systemd's tmpfiles provision.conf (v254+)
+#         imports the SMBIOS credential ssh.authorized_keys.root into
+#         /root/.ssh/authorized_keys at boot — so a per-run keypair passed on
+#         the QEMU command line authenticates root with zero image changes.
+#
+# check_ssh() probes tcp first and only switches to vsock when tcp fails but
+# the vsock listener answers, so tunaOS images keep the exact path they have
+# always had. Once chosen, the transport sticks for the rest of the run.
+SSH_TRANSPORT="tcp"
+GUEST_HOME="/home/liveuser"
+GUEST_SCP_DEST="liveuser@127.0.0.1"
+GUEST_SSH=()
+GUEST_SCP=()
+VSOCK_WHY=""
+
+# Guest CIDs 0-2 are reserved (hypervisor/loopback/host). Deriving the CID
+# from the (already collision-managed) SSH port keeps two concurrent runs on
+# one host from fighting over a CID the same way they would over port 2222.
+VSOCK_CID="${TBOX_E2E_VSOCK_CID:-$((SSH_PORT + 1000))}"
+VSOCK_SSH_KEY="${OUTPUT_DIR}/vsock-ssh-key"
+VSOCK_ARGS=()
+
+use_tcp_transport() {
+	SSH_TRANSPORT="tcp"
+	GUEST_HOME="/home/liveuser"
+	GUEST_SCP_DEST="liveuser@127.0.0.1"
+	GUEST_SSH=(sshpass -p live ssh "${E2E_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
+	# scp takes -P (capital) for the port; sharing one array with ssh's -p
+	# is how #941's "stat local 2222" bug happened. Keep them separate.
+	GUEST_SCP=(sshpass -p live scp "${E2E_SSH_OPTS[@]}" -P "$SSH_PORT")
+}
+
+use_vsock_transport() {
+	SSH_TRANSPORT="vsock"
+	GUEST_HOME="/root"
+	# The hostname is never resolved (ProxyCommand carries the connection);
+	# it only names the guest in known-hosts noise and scp destinations.
+	GUEST_SCP_DEST="root@e2e-vsock"
+	local -a common=(
+		-i "$VSOCK_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes
+		-o "ProxyCommand=socat - VSOCK-CONNECT:${VSOCK_CID}:22"
+	)
+	GUEST_SSH=(ssh "${common[@]}" "${E2E_SSH_OPTS[@]}" root@e2e-vsock)
+	GUEST_SCP=(scp "${common[@]}" "${E2E_SSH_OPTS[@]}")
+}
+use_tcp_transport
+
+# Host-side requirements for the fallback: a writable /dev/vhost-vsock (the
+# module is usually shipped but not loaded — in CI this script runs as root,
+# so load it here rather than asking every workflow to), a vsock-capable
+# socat for the ProxyCommand, and ssh-keygen for the per-run key. Missing any
+# of them just leaves VSOCK_ARGS empty: the QEMU command line is unchanged
+# and the harness behaves exactly as before the fallback existed.
+setup_vsock() {
+	if [[ ! -e /dev/vhost-vsock ]]; then
+		modprobe vhost_vsock 2>/dev/null || sudo -n modprobe vhost_vsock 2>/dev/null || true
+	fi
+	if [[ ! -w /dev/vhost-vsock ]]; then
+		echo "==> vsock SSH fallback unavailable (no writable /dev/vhost-vsock) — TCP only"
+		return 0
+	fi
+	if ! command -v socat &>/dev/null || ! socat -V 2>/dev/null | grep -qi vsock; then
+		echo "==> vsock SSH fallback unavailable (no vsock-capable socat) — TCP only"
+		return 0
+	fi
+	command -v ssh-keygen &>/dev/null || return 0
+	rm -f "$VSOCK_SSH_KEY" "${VSOCK_SSH_KEY}.pub"
+	ssh-keygen -q -t ed25519 -N "" -C "tunaos-iso-e2e" -f "$VSOCK_SSH_KEY"
+	# base64 without -w0 for macOS compatibility; the credential value must
+	# be one SMBIOS string, so strip the wrapping newlines. The base64
+	# alphabet contains no commas, so no QEMU option-escaping is needed.
+	local pub_b64
+	pub_b64=$(base64 <"${VSOCK_SSH_KEY}.pub" | tr -d '\n')
+	# The key rides under TWO credential names because they are consumed by
+	# different mechanisms and only the second one is known to work on the
+	# aurora-shaped images this fallback exists for:
+	#
+	#   ssh.authorized_keys.root — tmpfiles provision.conf writes it to
+	#     /root/.ssh/authorized_keys. On bootc/ostree images /root is a
+	#     symlink into /var/roothome, and aurora attempt 7 (iso-builder run
+	#     31115116876) proved the file never lands: the vsock handshake
+	#     completed and sshd answered "Permission denied (publickey)".
+	#     Kept because it is the documented generic mechanism and costs one
+	#     SMBIOS string.
+	#   ssh.ephemeral-authorized_keys-all — imported by the generated
+	#     sshd-vsock/sshd-unix-local instances themselves (verified in
+	#     aurora's systemd-ssh-generator: AuthorizedKeysFile
+	#     ${CREDENTIALS_DIRECTORY}/ssh.ephemeral-authorized_keys-all),
+	#     valid for every user with no home-directory involvement — exactly
+	#     the listener this fallback dials.
+	VSOCK_ARGS=(
+		-device "vhost-vsock-pci,guest-cid=${VSOCK_CID}"
+		-smbios "type=11,value=io.systemd.credential.binary:ssh.authorized_keys.root=${pub_b64}"
+		-smbios "type=11,value=io.systemd.credential.binary:ssh.ephemeral-authorized_keys-all=${pub_b64}"
+	)
+	echo "==> vsock SSH fallback armed (guest-cid=${VSOCK_CID})"
+}
+setup_vsock
+
 record_luks_evidence() {
 	[[ "$LUKS" -eq 1 ]] || return 0
 	echo "$1" | tee -a "$LUKS_EVIDENCE_LOG"
@@ -462,11 +622,17 @@ TPM_PIDFILE="${TPM_DIR}/swtpm.pid"
 TPM_ARGS=""
 
 start_swtpm() {
+	# "keep": preserve the TPM state dir. swtpm exits when its QEMU
+	# disconnects, so the generic path's auto-unlock reboot has to restart
+	# it — and the LUKS key bootc sealed at install time only unseals
+	# against that same state.
+	local keep="${1:-}"
 	command -v swtpm &>/dev/null || {
 		echo "ERROR: --luks requires swtpm (install the 'swtpm' package)" >&2
 		return 77
 	}
-	rm -rf "$TPM_DIR"
+	[[ "$keep" == "keep" ]] || rm -rf "$TPM_DIR"
+	rm -f "$TPM_SOCK" "$TPM_PIDFILE"
 	mkdir -p "$TPM_DIR"
 	echo "==> Starting swtpm (TPM 2.0) at ${TPM_SOCK}"
 	swtpm socket \
@@ -519,6 +685,18 @@ reset_qemu_sockets() {
 
 # shellcheck disable=SC2329  # invoked via `trap cleanup_vm EXIT`
 cleanup_vm() {
+	# Stop the timelapse FIRST, while QEMU is still alive: the recorder reads
+	# frames through the monitor socket, and everything below this point is
+	# dedicated to killing the process that serves it. Assembly itself needs
+	# no VM, but a recorder still looping against a dead socket would spin
+	# until the trap finished.
+	#
+	# Unconditional and non-fatal. record-timelapse.sh returns 0 when there is
+	# nothing to assemble, and this runs on the EXIT trap — an error here would
+	# overwrite the exit status of the test that actually ran.
+	if [[ -n "${TIMELAPSE_DIR:-}" ]]; then
+		bash "${SCRIPT_DIR}/record-timelapse.sh" stop "$TIMELAPSE_DIR" || true
+	fi
 	# `|| true` is load-bearing under `set -e`: once the watchdog has FIRED it
 	# has already exited, so this kill fails, and without the guard the
 	# non-zero status aborts cleanup_vm right here — skipping the QEMU and
@@ -628,6 +806,15 @@ boot_live_iso() {
 		fi
 	fi
 
+	# See SCRATCH_DISK above. Live boot only, like the swap disk.
+	if [[ ! -f "$SCRATCH_DISK" ]]; then
+		echo "==> Creating 32G scratch disk: ${SCRATCH_DISK}"
+		if ! qemu-img create -f qcow2 "$SCRATCH_DISK" 32G; then
+			echo "ERROR: qemu-img create failed for the scratch disk" >&2
+			return 1
+		fi
+	fi
+
 	# Kernel cmdline override: append `console=ttyS0` so the live env's
 	# tunaos-live-ready.service marker reaches the serial log. We do this
 	# via the OVMF boot menu's cmdline editing path, which the ISO's
@@ -657,8 +844,11 @@ boot_live_iso() {
 		-device virtio-blk-pci,drive=disk \
 		-drive "if=none,id=swapdisk,file=${SWAP_DISK},format=qcow2" \
 		-device "virtio-blk-pci,drive=swapdisk,serial=${SWAP_DISK_SERIAL}" \
+		-drive "if=none,id=scratchdisk,file=${SCRATCH_DISK},format=qcow2" \
+		-device "virtio-blk-pci,drive=scratchdisk,serial=${SCRATCH_DISK_SERIAL}" \
 		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
 		-device virtio-net-pci,netdev=net0 \
+		${VSOCK_ARGS[@]+"${VSOCK_ARGS[@]}"} \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
 		"${E2E_SERIAL_ARGS[@]}" \
 		"${QEMU_GPU_ARGS[@]}" \
@@ -836,7 +1026,7 @@ screenshot_compare() {
 #
 # The screenshot fallback below exists because bootc base kernels ship
 # CONFIG_SERIAL_8250=m and a healthy live session often cannot get
-# TUNAOS_LIVE_READY onto the serial console. What it cannot distinguish is a
+# the readiness marker onto the serial console. What it cannot distinguish is a
 # healthy session from a dracut emergency shell: that renders text too, so
 # the framebuffer is "sane" and the run passes.
 #
@@ -869,7 +1059,7 @@ boot_failed_on_serial() {
 # Sanity-check a captured screenshot: it must exist and show actual content
 # (not a black/blank framebuffer). Used as the readiness fallback when the
 # serial marker never arrives — the bootc base kernels ship
-# CONFIG_SERIAL_8250=m, so TUNAOS_LIVE_READY often can't reach the serial
+# CONFIG_SERIAL_8250=m, so the readiness marker often cannot reach the serial
 # console even though the live session is up (see research.md).
 # Returns 0 if the screenshot looks like a rendered screen, 1 otherwise.
 screenshot_sane() {
@@ -919,11 +1109,30 @@ screenshot_sane() {
 wait_for_ready() {
 	local deadline=$(($(date +%s) + TIMEOUT))
 	local last_size=0
-	echo "==> Waiting up to ${TIMEOUT}s for TUNAOS_LIVE_READY..."
+	echo "==> Waiting up to ${TIMEOUT}s for readiness marker (${LIVE_MARKER})..."
 	while (($(date +%s) < deadline)); do
-		if [[ -f "$SERIAL_LOG" ]] && grep -q "TUNAOS_LIVE_READY" "$SERIAL_LOG" 2>/dev/null; then
+		if [[ -f "$SERIAL_LOG" ]] && grep -qE -- "$LIVE_MARKER" "$SERIAL_LOG" 2>/dev/null; then
 			echo "==> Readiness marker found"
 			return 0
+		fi
+		# Fallback: if SSH is available (dev ISOs), check whether the guest
+		# is at least alive and whether tunaos-live-ready.service exists.
+		# Use same timeout/pattern as check_ssh but don't block the loop.
+		if command -v sshpass &>/dev/null; then
+			local ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=3"
+			if sshpass -p live ssh $ssh_opts liveuser@127.0.0.1 -p "$SSH_PORT" true 2>/dev/null; then
+				echo "    [ssh: guest is alive — checking why marker hasn't fired]"
+				sshpass -p live ssh $ssh_opts liveuser@127.0.0.1 -p "$SSH_PORT" \
+					"systemctl status tunaos-live-ready.service 2>&1 || true; echo '---'; systemctl is-active graphical.target 2>&1 || true" \
+					>>"$SERIAL_LOG" 2>/dev/null || true
+				# Also try grepping serial log for an install-checks result as
+				# a backup readiness signal — it means the system is well past
+				# boot and the marker just didn't fire.
+				if [[ -f "$SERIAL_LOG" ]] && grep -q "TUNAOS_INSTALL_CHECKS_RESULT" "$SERIAL_LOG" 2>/dev/null; then
+					echo "==> Readiness assumed from TUNAOS_INSTALL_CHECKS_RESULT (marker service missing/failed)"
+					return 0
+				fi
+			fi
 		fi
 		# Periodic progress: print serial-log size growth so a CI viewer
 		# knows the VM is making forward progress vs. hung.
@@ -938,22 +1147,63 @@ wait_for_ready() {
 	echo "ERROR: readiness marker not seen within ${TIMEOUT}s" >&2
 	echo "--- last 50 lines of serial log ---" >&2
 	tail -50 "$SERIAL_LOG" 2>/dev/null >&2 || true
+	# Last-resort diagnostic: try SSH to see if guest is alive but marker-less.
+	if command -v sshpass &>/dev/null; then
+		echo "--- SSH diagnostic (last resort) ---" >&2
+		local ssh_opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=5"
+		sshpass -p live ssh $ssh_opts liveuser@127.0.0.1 -p "$SSH_PORT" \
+			"echo 'guest uptime:'; uptime; echo '--- systemd state:'; systemctl list-units --state=failed 2>&1 || true; echo '--- tunaos-live-ready:'; systemctl status tunaos-live-ready.service 2>&1 || true; echo '--- graphical.target:'; systemctl status graphical.target 2>&1 || true" \
+			2>&1 >&2 || echo "SSH unreachable" >&2
+	fi
 	return 2
 }
 
-# Verify SSH connectivity. ISO must have ENABLE_SSHD=1.
+# Probe the vsock listener as root with the SMBIOS-provisioned key. On
+# success the transport is switched (and sticks) for everything downstream.
+check_ssh_vsock() {
+	local err
+	err=$(mktemp)
+	if ssh -i "$VSOCK_SSH_KEY" -o IdentitiesOnly=yes -o BatchMode=yes \
+		-o "ProxyCommand=socat - VSOCK-CONNECT:${VSOCK_CID}:22" \
+		"${E2E_SSH_OPTS[@]}" root@e2e-vsock true 2>"$err"; then
+		rm -f "$err"
+		if [[ "$SSH_TRANSPORT" != "vsock" ]]; then
+			echo "==> no TCP sshd on guest; switching to root over AF_VSOCK (systemd-ssh-generator image — tacklebox#178)"
+			use_vsock_transport
+		fi
+		echo "==> SSH OK (vsock cid=${VSOCK_CID})"
+		return 0
+	fi
+	VSOCK_WHY=$(tr -d '\r' <"$err" | grep -v '^Warning: Permanently added' | tr '\n' ' ' | sed 's/  */ /g') || true
+	rm -f "$err"
+	return 5
+}
+
+# Verify SSH connectivity and pick the transport. The tcp path needs an ISO
+# built with ENABLE_SSHD=1 (tunaOS live media); generic images without a TCP
+# sshd fall back to vsock — see the Guest SSH transport section.
 check_ssh() {
+	if [[ "$SSH_TRANSPORT" == "vsock" ]]; then
+		check_ssh_vsock
+		return $?
+	fi
 	if ! command -v sshpass &>/dev/null; then
 		echo "ERROR: sshpass required for --ssh-only; install it" >&2
 		return 77
 	fi
-	local opts="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o ConnectTimeout=10"
 	local err
 	err=$(mktemp)
-	# shellcheck disable=SC2086
-	if sshpass -p live ssh $opts liveuser@127.0.0.1 -p "$SSH_PORT" true 2>"$err"; then
+	if sshpass -p live ssh "${E2E_SSH_OPTS[@]}" liveuser@127.0.0.1 -p "$SSH_PORT" true 2>"$err"; then
 		rm -f "$err"
 		echo "==> SSH OK"
+		return 0
+	fi
+	# tcp failed. Before reporting, try the vsock fallback: a guest whose
+	# only listeners are systemd-ssh-generator's resets every hostfwd
+	# connection, and without this the loop above just replays that failure
+	# to timeout. Success here flips the transport for the whole run.
+	if [[ ${#VSOCK_ARGS[@]} -gt 0 ]] && check_ssh_vsock; then
+		rm -f "$err"
 		return 0
 	fi
 	# Say WHY. This used to be `2>/dev/null` with a bare "SSH check failed",
@@ -980,6 +1230,12 @@ check_ssh() {
 	local why=""
 	why=$(tr -d '\r' <"$err" | grep -v '^Warning: Permanently added' | tr '\n' ' ' | sed 's/  */ /g') || true
 	[[ -n "${why// /}" ]] || why="(no ssh stderr beyond the known-hosts warning)"
+	# Both transports were tried; report both reasons or the diagnosis is
+	# half-blind (the tcp reset is expected on generic images — the vsock
+	# line is the one that says what actually went wrong there).
+	if [[ ${#VSOCK_ARGS[@]} -gt 0 && -n "${VSOCK_WHY// /}" ]]; then
+		why="tcp: ${why} | vsock: ${VSOCK_WHY}"
+	fi
 	echo "ERROR: SSH check failed: $why" >&2
 	rm -f "$err"
 	return 5
@@ -993,16 +1249,16 @@ check_ssh() {
 run_smoke_checks() {
 	local script_dir
 	script_dir="$(dirname "${BASH_SOURCE[0]}")"
-	# Keepalives and their rationale live on E2E_SSH_OPTS at file scope.
-	local -a COMMON_SSH_OPTS=("${E2E_SSH_OPTS[@]}")
-	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
-	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_PORT")
+	# Transport-aware guest access (keepalive rationale on E2E_SSH_OPTS;
+	# transport selection in the Guest SSH transport section).
+	local ssh_cmd=("${GUEST_SSH[@]}")
+	local scp_cmd=("${GUEST_SCP[@]}")
 
-	"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" liveuser@127.0.0.1:/home/liveuser/e2e-assert.sh
-	"${scp_cmd[@]}" "${script_dir}/e2e-smoke-checks.sh" liveuser@127.0.0.1:/home/liveuser/e2e-smoke-checks.sh
+	"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-assert.sh"
+	"${scp_cmd[@]}" "${script_dir}/e2e-smoke-checks.sh" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-smoke-checks.sh"
 
 	local smoke_output smoke_rc=0
-	smoke_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=/home/liveuser bash /home/liveuser/e2e-smoke-checks.sh" 2>&1) || smoke_rc=$?
+	smoke_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=${GUEST_HOME} bash ${GUEST_HOME}/e2e-smoke-checks.sh" 2>&1) || smoke_rc=$?
 	echo "$smoke_output" | tee -a "${SERIAL_LOG}"
 	if [[ "$smoke_rc" -ne 0 ]]; then
 		echo "::warning::live-image smoke checks reported ${smoke_rc} failure(s)"
@@ -1050,10 +1306,400 @@ harvest_install_checks() {
 	return 0
 }
 
+# ── Guest heartbeat, on the console rather than over ssh ─────────────────
+# The install is the one phase where the guest can stop answering while
+# QEMU stays up, and `Timeout, server 127.0.0.1 not responding.` on its
+# own does not say why: a wedged guest and a live guest whose sshd
+# stalled under I/O look identical from the host. Everything else we log
+# comes back over the same ssh channel that just died, so it stops
+# exactly when the interesting part starts.
+#
+# This writes to /dev/console (i.e. the serial log) from a process
+# setsid'd out of the ssh session, so it keeps reporting after that
+# channel is gone. The last line before the silence is the diagnosis:
+# memavail collapsing means the guest is out of RAM (raise --memory),
+# memavail AND swapfree both collapsing means it is genuinely out of
+# memory rather than merely short of it (run 30730744132 killed podman
+# that way), target_free collapsing means the disk is, and one that keeps
+# ticking through the timeout means the guest was alive all along and
+# only sshd stalled.
+start_guest_heartbeat() {
+	local HB_LOCAL="${OUTPUT_DIR}/e2e-heartbeat.sh"
+	cat >"$HB_LOCAL" <<-'HBEOF'
+		#!/bin/sh
+		while :; do
+			printf 'TUNAOS_E2E_HEARTBEAT memavail_kb=%s swapfree_kb=%s dirty_kb=%s writeback_kb=%s target_free_kb=%s load=%s\n' \
+				"$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)" \
+				"$(awk '/^SwapFree:/{print $2}' /proc/meminfo)" \
+				"$(awk '/^Dirty:/{print $2}' /proc/meminfo)" \
+				"$(awk '/^Writeback:/{print $2}' /proc/meminfo)" \
+				"$(df -Pk /mnt/fisherman-target 2>/dev/null | awk 'NR==2{print $4}')" \
+				"$(cut -d' ' -f1-3 /proc/loadavg)" >/dev/console 2>/dev/null
+			sleep 15
+		done
+	HBEOF
+	if "${GUEST_SCP[@]}" "$HB_LOCAL" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-heartbeat.sh"; then
+		"${GUEST_SSH[@]}" "sudo install -m0755 ${GUEST_HOME}/e2e-heartbeat.sh /usr/local/bin/tunaos-e2e-heartbeat && \
+			sudo setsid --fork /usr/local/bin/tunaos-e2e-heartbeat </dev/null >/dev/null 2>&1" ||
+			echo "WARN: guest heartbeat did not start (continuing)"
+	else
+		echo "WARN: guest heartbeat could not be uploaded (continuing)"
+	fi
+}
+
+# E2E-only kargs on the installed system's BLS entries (the live env can
+# still mount the unencrypted ESP/boot). console=ttyS0 puts kernel output on
+# the serial the gate reads; plymouth.enable=0 makes the initramfs
+# cryptsetup PASSWORD PROMPT appear as serial text instead of a graphical
+# plymouth prompt — without it luks-first-boot.py never sees the prompt
+# (run 29670982740). Also dumps the ESP: whether the install produced a
+# *bootable* disk is only knowable from the ESP, and the ESP is gone the
+# moment this VM powers off. sailfin (composefs + systemd-boot) gets no
+# NVRAM entry — bootctl refuses to touch efivars from inside the install
+# container — so the firmware can only find it via the removable fallback
+# \EFI\BOOT\BOOTX64.EFI; when that file is missing the disk is unbootable
+# no matter what the boot order says, and from the serial log alone the
+# failure looks identical to a boot-order bug.
+append_installed_serial_kargs() {
+	echo "==> Appending console=ttyS0 + plymouth.enable=0 to installed BLS entries..."
+	"${GUEST_SSH[@]}" 'sudo bash -s' <<-'BLSEOF' 2>&1 | tee -a "$SERIAL_LOG" || echo "WARN: BLS karg append failed (continuing)"
+		for p in /dev/vda1 /dev/vda2 /dev/vda3; do
+			[ -b "$p" ] || continue
+			mkdir -p /mnt/tbx-bls
+			mount "$p" /mnt/tbx-bls 2>/dev/null || continue
+			found=0
+			for f in /mnt/tbx-bls/loader/entries/*.conf /mnt/tbx-bls/boot/loader/entries/*.conf; do
+				[ -f "$f" ] || continue
+				grep -q "console=ttyS0" "$f" || sed -i "s/^options \(.*\)$/options \1 console=ttyS0,115200n8 rd.plymouth=0 plymouth.enable=0/" "$f"
+				echo "karg appended: $f"
+				found=1
+			done
+			if [ "$found" = 1 ]; then
+				echo "--- ESP contents ($p) ---"
+				find /mnt/tbx-bls -maxdepth 3 2>/dev/null | sort || ls -lR /mnt/tbx-bls || true
+				if [ -f /mnt/tbx-bls/EFI/BOOT/BOOTX64.EFI ]; then
+					echo "esp: removable fallback present (EFI/BOOT/BOOTX64.EFI)"
+				else
+					echo "WARN: esp has NO EFI/BOOT/BOOTX64.EFI; firmware has no fallback to boot"
+				fi
+			fi
+			umount /mnt/tbx-bls
+			[ "$found" = 1 ] && break
+		done
+	BLSEOF
+}
+
+# Wait up to $2 seconds for pid $1 to leave the process table. 0 = it is gone.
+wait_pid_gone() {
+	local pid="$1" secs="$2" i
+	for ((i = 0; i < secs; i++)); do
+		kill -0 "$pid" 2>/dev/null || return 0
+		sleep 1
+	done
+	! kill -0 "$pid" 2>/dev/null
+}
+
+# Shut the guest down and do not return while its QEMU is still alive.
+#
+# Both callers launch the installed-disk boot immediately afterwards, reusing
+# $QEMU_PIDFILE — and QEMU holds an exclusive lock on that file for its entire
+# life. So a guest that overstays its poweroff does not merely delay the next
+# boot, it makes it impossible:
+#
+#   qemu-system-x86_64: cannot create PID file: Cannot lock pid file:
+#   Resource temporarily unavailable
+#
+# which under `set -e` ends the cell right there, minutes after the install it
+# was testing had already reported "Installation complete!" (run 31140233496,
+# albacore:cosmic). The generic path has a second stake in this: swtpm only
+# exits when its QEMU disconnects, and the TPM gate below restarts it.
+#
+# A guest can overstay for reasons that have nothing to do with the install.
+# In that run fisherman had just logged `cryptsetup luksClose: Device
+# fisherman-root is still in use`, and a busy dm device is exactly what
+# systemd-shutdown spends its shutdown retrying — on top of systemd's own 90s
+# DefaultTimeoutStopSec, which the previous 70s window could not outlast.
+# Hence: wait long enough for a slow-but-healthy shutdown, then stop asking.
+POWEROFF_WAIT_SECS="${TUNAOS_E2E_POWEROFF_WAIT:-180}"
+
+poweroff_and_wait_vm() {
+	if ! "${GUEST_SSH[@]}" "sudo systemctl poweroff" 2>/dev/null; then
+		# Not fatal: the guest may be going down already (sshd dies mid-command
+		# often enough), and ACPI below is a second way in. But it changes what
+		# a long wait MEANS, so it must not be silent.
+		echo "==> note: 'systemctl poweroff' over ssh did not return cleanly" >&2
+	fi
+	sleep 10
+	[[ -f "$QEMU_PIDFILE" ]] || return 0
+	local pid
+	pid=$(cat "$QEMU_PIDFILE" 2>/dev/null || true)
+	[[ -n "$pid" ]] || return 0
+	kill -0 "$pid" 2>/dev/null || return 0
+
+	echo "==> Waiting for VM to shut down..."
+	wait_pid_gone "$pid" "$POWEROFF_WAIT_SECS" && return 0
+
+	# The install is finished by here — fisherman/bootc have unmounted, frozen
+	# and flushed the target filesystem — so ending the guest ourselves costs
+	# nothing the following boot needs. The ladder still gives it two chances
+	# to end itself first, and only escalates when it will not.
+	echo "==> VM did not power off within ${POWEROFF_WAIT_SECS}s; forcing it down" >&2
+	if [[ -S "$MONITOR_SOCK" ]] && command -v socat &>/dev/null; then
+		echo "system_powerdown" | socat - "UNIX-CONNECT:${MONITOR_SOCK}" 2>/dev/null || true
+		wait_pid_gone "$pid" 20 && return 0
+	fi
+	kill -TERM "$pid" 2>/dev/null || true
+	if ! wait_pid_gone "$pid" 10; then
+		kill -KILL "$pid" 2>/dev/null || true
+		wait_pid_gone "$pid" 5 || true
+	fi
+	if kill -0 "$pid" 2>/dev/null; then
+		echo "ERROR: QEMU pid ${pid} survived SIGKILL; the installed-disk boot cannot" >&2
+		echo "       take the ${QEMU_PIDFILE} lock while it holds it." >&2
+		return 6
+	fi
+	# QEMU unlinks its own pidfile when it exits normally and did not get the
+	# chance here. Leaving a dead pid behind would have cleanup_vm signalling
+	# whatever recycles the number, and would hide that the next launch is
+	# starting from a corpse.
+	rm -f "$QEMU_PIDFILE"
+}
+
+# Prefix a bare "org/name:tag" image path with the default registry; a ref
+# whose first path component contains a dot already names its registry host
+# and passes through untouched.
+qualify_imgref() {
+	local ref="$1"
+	if [[ "${ref%%/*}" == *"."* ]]; then
+		echo "$ref"
+	else
+		echo "ghcr.io/${ref}"
+	fi
+}
+
+# Does the embedded offline store's image index record this exact ref?
+#
+# Takes the index as text rather than a path because it is read out of the guest
+# once, over SSH, and answered on the HOST. The guest side of that is `cat`;
+# everything that needs a parser runs here, where jq is a declared dependency.
+# The previous form asked the guest for `jq`, and a guest that ships neither jq
+# nor podman — guppy, whose Gentoo base emerges skopeo for bootc's
+# containers-image-proxy and neither of those two — could not answer either
+# probe, so a store holding the image read as empty.
+#
+# `names`, never `names-history`: containers-storage resolves a ref only while
+# it is a current name, and a ref that appears solely in the history was
+# retagged away. Answering yes for one would send bootc after an image it
+# cannot resolve, which is the same dead end by a different road.
+store_records_image() {
+	local images_json="$1" ref="$2"
+	[[ -n "$images_json" && -n "$ref" ]] || return 1
+	if command -v jq >/dev/null 2>&1; then
+		jq -e --arg ref "$ref" \
+			'.[]? | select(.names != null) | select(.names | index($ref))' \
+			>/dev/null 2>&1 <<<"$images_json"
+		return
+	fi
+	# No jq on this host either (a bare local run). Match the `names` arrays
+	# textually — `"names":` cannot match `"names-history":`, whose next
+	# character is `-` — so a missing jq degrades the probe instead of
+	# silently turning it off.
+	grep -o '"names":\[[^]]*\]' <<<"$images_json" | grep -Fq "\"${ref}\""
+}
+
+# Generic install path for live media built from images that ship no
+# fisherman — the reference cells (aurora, bluefin) and any stock bootc
+# image (tacklebox#178's ladder). Everything tunaOS-specific is skipped: no
+# offline store, no recipe, no first-boot passphrase enrollment. Instead:
+#
+#   - the image named by TBOX_E2E_IMAGE is pulled from its registry into
+#     container storage staged on the scratch disk (the live overlay's
+#     upperdir is an 8G tmpfs — a multi-GB store physically cannot land
+#     there, #941's lesson from the other direction),
+#   - bootc install to-disk --wipe runs from the pulled container — the
+#     designed non-live install path — with --block-setup tpm2-luks under
+#     --luks, and the serial/plymouth kargs baked via --karg,
+#   - the LUKS evidence checks reuse scripts/e2e-luks-checks.sh: unlike
+#     fisherman's post-install enrollment model, bootc's tpm2-luks enrolls
+#     a systemd-tpm2 token at install time, so both TAP checks apply,
+#   - the reboot gate boots the installed disk WITH the same swtpm state
+#     and expects the TPM to auto-unlock the root. There is no known
+#     passphrase to inject (bootc generates and seals its own), so
+#     reaching a login prompt on serial IS the unlock proof: a missing or
+#     wrong TPM hangs the boot in the initramfs at the cryptsetup prompt.
+run_install_generic() {
+	local imgref
+	imgref="$(qualify_imgref "$TBOX_E2E_IMAGE")"
+	echo "==> Generic bootc install path (no fisherman): ${imgref}"
+	record_luks_evidence "TUNAOS_LUKS_E2E_GENERIC_PATH image=${imgref}"
+
+	local ssh_cmd=("${GUEST_SSH[@]}")
+	local scp_cmd=("${GUEST_SCP[@]}")
+	local script_dir
+	script_dir="$(dirname "${BASH_SOURCE[0]}")"
+
+	# Same SLIRP PMTU blackhole as the fisherman path (bug #20 there): clamp
+	# the guest MTU before the registry pull, or a large layer hangs forever.
+	# shellcheck disable=SC2016  # $(...) must expand on the guest
+	"${ssh_cmd[@]}" 'for i in $(ls /sys/class/net | grep -v ^lo$); do sudo ip link set "$i" mtu 1400; done; ip -o link show' || true
+
+	echo "==> Running live-image smoke checks..."
+	run_smoke_checks || return 3
+
+	echo "==> Staging container storage on ${SCRATCH_DISK_BYID}..."
+	"${ssh_cmd[@]}" "sudo sh -c 'test -b ${SCRATCH_DISK_BYID} && mkfs.ext4 -q -L tbxscratch ${SCRATCH_DISK_BYID} && mkdir -p /var/lib/containers && mount ${SCRATCH_DISK_BYID} /var/lib/containers && df -h /var/lib/containers'" || {
+		echo "ERROR: could not stage container storage on the scratch disk" >&2
+		return 3
+	}
+
+	# Swap too — podman's staging allocates anonymous memory on the order of
+	# layer size even with the store itself on a real disk (see SWAP_DISK).
+	echo "==> Enabling guest swap on ${SWAP_DISK_BYID}..."
+	"${ssh_cmd[@]}" "sudo sh -c 'test -b ${SWAP_DISK_BYID} && mkswap -L tunaos-e2e-swap ${SWAP_DISK_BYID} >/dev/null && swapon ${SWAP_DISK_BYID}' && free -m" ||
+		echo "WARN: guest swap not enabled (continuing without it)"
+
+	start_guest_heartbeat
+
+	echo "==> Pulling ${imgref} in the guest (bounded 1800s)..."
+	if ! timeout 1800 "${ssh_cmd[@]}" "sudo podman pull ${imgref} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
+		echo "ERROR: podman pull failed or timed out" >&2
+		return 3
+	fi
+
+	local block_setup="" luks_cfg_mount=""
+	if [[ "$LUKS" -eq 1 ]]; then
+		block_setup="--block-setup tpm2-luks"
+		# bootc refuses --block-setup tpm2-luks unless the image's install
+		# config opts in: "Block setup Tpm2Luks is not enabled in
+		# installation config" (attempt 11, iso-builder run 31125136026 —
+		# it wiped /dev/vda and stopped one line later). Stock images ship
+		# no such opt-in, and it is install-time POLICY, not image content:
+		# stage a config drop-in on the scratch disk and bind-mount it into
+		# the installing container instead of mutating the image. "direct"
+		# stays in the list so the default path remains enabled too.
+		"${ssh_cmd[@]}" "printf '[install]\nblock = [\"direct\", \"tpm2-luks\"]\n' | sudo tee /var/lib/containers/tbox-install-luks.toml >/dev/null" || {
+			echo "ERROR: could not stage the bootc install-config drop-in" >&2
+			return 3
+		}
+		luks_cfg_mount="-v /var/lib/containers/tbox-install-luks.toml:/usr/lib/bootc/install/90-tbox-luks.toml:ro"
+	fi
+	echo "==> Running bootc install to-disk on /dev/vda..."
+	# The canonical containerized install (bootc docs): privileged, host pid,
+	# /dev and the store bind-mounted. The kargs the passphrase-gate path
+	# appends post-install are baked here instead — bootc owns the BLS
+	# entries it writes, and --karg is the supported way in.
+	if ! timeout 1800 "${ssh_cmd[@]}" "sudo podman run --rm --privileged --pid=host \
+		-v /var/lib/containers:/var/lib/containers -v /dev:/dev \
+		${luks_cfg_mount} \
+		--security-opt label=type:unconfined_t \
+		${imgref} \
+		bootc install to-disk --wipe ${block_setup} \
+		--karg console=ttyS0,115200n8 --karg rd.plymouth=0 --karg plymouth.enable=0 \
+		/dev/vda 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
+		echo "ERROR: bootc install to-disk failed or timed out" >&2
+		return 3
+	fi
+	"${ssh_cmd[@]}" "sudo pkill -f tunaos-e2e-heartbeat" >/dev/null 2>&1 || true
+
+	if [[ "$LUKS" -eq 1 ]]; then
+		"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-assert.sh"
+		"${scp_cmd[@]}" "${script_dir}/e2e-luks-checks.sh" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-luks-checks.sh"
+		local luks_check_output
+		luks_check_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=${GUEST_HOME} bash ${GUEST_HOME}/e2e-luks-checks.sh" 2>&1) || true
+		echo "$luks_check_output" | tee -a "$LUKS_EVIDENCE_LOG"
+		if echo "$luks_check_output" | grep -q "^ok - installed disk has a crypto_LUKS partition"; then
+			record_luks_evidence "TUNAOS_LUKS_E2E_ENCRYPTED_DISK_CONFIRMED"
+		else
+			echo "ERROR: installed disk has no crypto_LUKS partition" >&2
+			return 3
+		fi
+		# bootc enrolls the TPM at install time, so unlike the fisherman
+		# path the token's absence here would mean the enrollment failed.
+		if echo "$luks_check_output" | grep -q "^ok - LUKS header has a systemd-tpm2 enrollment token"; then
+			record_luks_evidence "TUNAOS_LUKS_E2E_TPM_ENROLLMENT_CONFIRMED"
+		else
+			echo "ERROR: bootc tpm2-luks install has no systemd-tpm2 enrollment token" >&2
+			return 3
+		fi
+	fi
+
+	# Best-effort: bootc already baked the kargs; this run is for the ESP
+	# evidence dump (and is a no-op on the karg side).
+	append_installed_serial_kargs
+
+	echo "==> bootc install complete. Shutting down..."
+	poweroff_and_wait_vm
+
+	# Same discipline as the fisherman path: the installed-boot gate must
+	# never match live-environment output.
+	mv -f "$SERIAL_LOG" "$LIVE_SERIAL_LOG"
+	: >"$SERIAL_LOG"
+
+	# ── TPM auto-unlock gate ─────────────────────────────────────────────
+	if [[ "$LUKS" -eq 1 ]]; then
+		# swtpm exits when its QEMU disconnects; restart it on the SAME
+		# state dir so the sealed key still unseals.
+		local tpid
+		tpid=$(cat "$TPM_PIDFILE" 2>/dev/null || true)
+		if [[ -z "$tpid" ]] || ! kill -0 "$tpid" 2>/dev/null; then
+			echo "==> Restarting swtpm with preserved state for the unlock boot..."
+			start_swtpm keep || return 77
+		fi
+	fi
+	echo "==> Booting installed disk (TPM auto-unlock), expecting a login prompt..."
+	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
+	reset_qemu_sockets
+	"$QEMU" -name "tunaos-iso-e2e-installed" -machine pc -cpu "$CPU_ARG" \
+		-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
+		${TPM_ARGS} \
+		-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
+		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
+		-device virtio-blk-pci,drive=disk,bootindex=0 \
+		-netdev "user,id=net0" -device virtio-net-pci,netdev=net0 \
+		-monitor "unix:${MONITOR_SOCK},server,nowait" \
+		"${E2E_SERIAL_ARGS[@]}" \
+		"${QEMU_GPU_ARGS[@]}" \
+		-pidfile "$QEMU_PIDFILE" -daemonize
+
+	# Generic images carry no TUNAOS_DESKTOP_CONTRACT service; the gate is
+	# the serial getty (console=ttyS0 spawns serial-getty@ttyS0) or a
+	# reached systemd target. A locked root never gets there — the boot
+	# hangs in the initramfs at the cryptsetup prompt instead.
+	local deadline=$(($(date +%s) + TIMEOUT))
+	while (($(date +%s) < deadline)); do
+		if grep -qaE "login:|Reached target.*(Graphical|Multi-User)" "$SERIAL_LOG" 2>/dev/null; then
+			echo "==> Installed system booted (root auto-unlocked via TPM)"
+			record_luks_evidence "TUNAOS_LUKS_E2E_PASS encrypted=1 tpm_unlock=1 installed_boot=1 desktop_contract=0"
+			screenshot "30-installed" || true
+			return 0
+		fi
+		if [[ -f "$QEMU_PIDFILE" ]] && ! kill -0 "$(cat "$QEMU_PIDFILE")" 2>/dev/null; then
+			echo "ERROR: installed VM exited during boot" >&2
+			return 4
+		fi
+		sleep 5
+	done
+	echo "ERROR: installed system did not reach a login prompt within ${TIMEOUT}s" >&2
+	echo "--- last 50 lines of installed-boot serial ---" >&2
+	tail -50 "$SERIAL_LOG" 2>/dev/null >&2 || true
+	screenshot "installed-desktop-failed" || true
+	return 4
+}
+
 # Run bootc install-to-disk via SSH, then reboot and verify the installed system.
 # This replaces the Anaconda kickstart approach (TunaOS uses bootc, not anaconda).
 run_install() {
 	record_luks_evidence "TUNAOS_LUKS_E2E_INSTALL_STARTED luks=${LUKS}"
+	# Film the install. Started here rather than at boot so the recording is
+	# the install itself, not the minutes of live-ISO boot that precede it,
+	# and stopped by cleanup_vm's EXIT trap so it ends however the cell ends.
+	#
+	# Best-effort throughout: record-timelapse.sh returns 0 when it cannot
+	# capture (no ffmpeg, or a virgl host where screendump has no surface), so
+	# a cell that installs correctly but cannot be filmed stays green.
+	TIMELAPSE_DIR="${OUTPUT_DIR}/timelapse"
+	bash "${SCRIPT_DIR}/record-timelapse.sh" start "$MONITOR_SOCK" "$TIMELAPSE_DIR" || true
 	echo "==> Waiting up to 60s for SSH..."
 	for _ in $(seq 1 30); do
 		check_ssh && break
@@ -1075,15 +1721,13 @@ run_install() {
 		return 5
 	}
 
-	# scp uses -P (capital) for the port flag; ssh uses -p. Sharing one array
-	# with the wrong flag silently makes scp treat the port number as a
-	# source-file argument ("stat local 2222: No such file or directory").
-	# Keepalives and their rationale live on E2E_SSH_OPTS at file scope. This
-	# is the array the multi-GB image transfer below uses, so it is the one
+	# Transport-aware guest access, resolved by the check_ssh loop above
+	# (keepalive rationale on E2E_SSH_OPTS; the ssh -p / scp -P split and
+	# transport selection live in the Guest SSH transport section). This is
+	# the command the multi-GB image transfer below uses, so it is the one
 	# that actually hung the runners in #939.
-	local -a COMMON_SSH_OPTS=("${E2E_SSH_OPTS[@]}")
-	local ssh_cmd=(sshpass -p live ssh "${COMMON_SSH_OPTS[@]}" -p "$SSH_PORT" liveuser@127.0.0.1)
-	local scp_cmd=(sshpass -p live scp "${COMMON_SSH_OPTS[@]}" -P "$SSH_PORT")
+	local ssh_cmd=("${GUEST_SSH[@]}")
+	local scp_cmd=("${GUEST_SCP[@]}")
 
 	# Bug #20: fisherman's network pull stalled indefinitely mid-blob (layer
 	# 42/65, no error, no further output) after dozens of smaller layers
@@ -1110,10 +1754,93 @@ run_install() {
 	# --block-setup tpm2-luks` doesn't cover the same way and that real users
 	# never exercise directly. See docs/ci-troubleshooting.md's fisherman
 	# glossary entry.
-	"${ssh_cmd[@]}" "command -v /usr/local/bin/fisherman" &>/dev/null || {
+	# Does THIS IMAGE ship fisherman? Probed once, before the override lands,
+	# because two separate decisions read it and they need different answers.
+	#
+	# Generic (non-tunaOS) images ship no fisherman. When the caller names
+	# the image (TBOX_E2E_IMAGE), install it with plain bootc instead — see
+	# run_install_generic. Without a named image the hard error stands:
+	# guessing a registry ref from an ISO filename is exactly the mistake
+	# the published-image-ref.sh resolver below exists to prevent.
+	#
+	# That choice is about the image, not about what this function copied onto
+	# it a moment ago. Reading it off /usr/local/bin/fisherman *after* the
+	# override installs would hand every TBOX_E2E_IMAGE caller the fisherman
+	# path instead, and recipe_image below resolves a *tunaOS* ref from
+	# VARIANT/FLAVOR — so a caller-named generic image would be silently
+	# swapped for a tunaOS one. Probe first, decide, then override.
+	local image_has_fisherman=1
+	"${ssh_cmd[@]}" "command -v /usr/local/bin/fisherman" &>/dev/null || image_has_fisherman=0
+	if [[ "$image_has_fisherman" -eq 0 && -n "${TBOX_E2E_IMAGE:-}" ]]; then
+		run_install_generic
+		return $?
+	fi
+
+	# An image that ships no fisherman ships no installer GUI either: the
+	# flatpak that carries the binary is the same one that carries the
+	# frontend, and customize-live.sh downgrades a failed install of it to a
+	# warning on dev/E2E media (`.enable-sshd`). The override below makes the
+	# LUKS install path testable anyway, which is right — but say out loud
+	# what this cell then does NOT cover.
+	if [[ "$image_has_fisherman" -eq 0 ]]; then
+		echo "::warning::live image ships no /usr/local/bin/fisherman (the installer flatpak is missing from the squash) — this cell tests the LUKS install with the caller's binary, not that ISO's own installer"
+	fi
+
+	# Install the override BEFORE the presence check below, not after it.
+	#
+	# This block used to live ~260 lines further down, next to the recipe.
+	# That is too late: the check is a hard `return 3`, so on any image that
+	# ships no fisherman the run died without ever installing the binary the
+	# job had just built for it. guppy:xfce, LUKS run 31131624108:
+	#
+	#   ERROR: fisherman not found on live image (VARIANT=guppy FLAVOR=xfce)
+	#   ERROR: and TBOX_E2E_IMAGE is unset, so the generic bootc path cannot
+	#          name an image ref
+	#
+	# 55 seconds into the LUKS step, after a 65-minute Gentoo build, with
+	# FISHERMAN_OVERRIDE=/tmp/fisherman-bin sitting on the runner and the
+	# workflow's own "Build fisherman in a golang container" step green
+	# immediately above it. All three guppy cells fail this way.
+	#
+	# Overriding first is also what the flag means: "use this fisherman", not
+	# "use this fisherman provided the image already had one". The bundled
+	# installer-flatpak fisherman is pinned to a release, which is why the
+	# override exists at all.
+	if [[ -n "${FISHERMAN_OVERRIDE:-}" && -f "${FISHERMAN_OVERRIDE}" ]]; then
+		echo "==> Overriding fisherman with ${FISHERMAN_OVERRIDE}"
+		"${scp_cmd[@]}" "${FISHERMAN_OVERRIDE}" "${GUEST_SCP_DEST}:${GUEST_HOME}/fisherman-override"
+		# Create the directory separately rather than letting `install -D` do
+		# it. Now that the override also has to work on an image that shipped
+		# none, /usr/local/bin may not exist — and on the ostree layout
+		# /usr/local is a symlink to a ../var/usrlocal that the image does not
+		# contain, where mkdir -p (which is what -D uses) refuses to create
+		# *through* a dangling symlink and dies with the confusing
+		#
+		#   mkdir: cannot create directory '/usr/local': File exists
+		#
+		# `readlink -m` canonicalises without requiring the path to exist, so
+		# this creates /var/usrlocal/bin on the symlinked layout and
+		# /usr/local/bin on the plain one, and the install below resolves
+		# through the symlink either way. Same trick, same reason, as the
+		# symlink customize-live.sh makes at build time.
+		"${ssh_cmd[@]}" "sudo mkdir -p \$(readlink -m /usr/local/bin)"
+		"${ssh_cmd[@]}" "sudo install -m0755 ${GUEST_HOME}/fisherman-override /usr/local/bin/fisherman"
+	fi
+
+	if ! "${ssh_cmd[@]}" "command -v /usr/local/bin/fisherman" &>/dev/null; then
 		echo "ERROR: fisherman not found on live image (VARIANT=${VARIANT:-} FLAVOR=${FLAVOR:-})" >&2
+		# Only true when the caller named no image: with TBOX_E2E_IMAGE set,
+		# an image that shipped no fisherman took the generic path above, so
+		# reaching here means the override clobbered a binary that was there.
+		if [[ -z "${TBOX_E2E_IMAGE:-}" ]]; then
+			echo "ERROR: and TBOX_E2E_IMAGE is unset, so the generic bootc path cannot name an image ref" >&2
+		fi
+		if [[ -n "${FISHERMAN_OVERRIDE:-}" ]]; then
+			echo "ERROR: FISHERMAN_OVERRIDE=${FISHERMAN_OVERRIDE} was set but did not land —" >&2
+			echo "ERROR: $([[ -f "${FISHERMAN_OVERRIDE}" ]] && echo 'the file exists, so the scp/install above failed' || echo 'that path does not exist on the runner')" >&2
+		fi
 		return 3
-	}
+	fi
 
 	# Pre-install evidence: the live squash boots the same bootc image that
 	# fisherman is about to install, so snosi-style smoke assertions here
@@ -1195,6 +1922,27 @@ run_install() {
 		return 3
 	fi
 
+	# Does this guest have podman at all? Not a rhetorical question: guppy's
+	# base (Containerfile.gentoo) emerges app-containers/skopeo — which is what
+	# bootc's containers-image-proxy actually shells out to — and never emerges
+	# app-containers/podman or app-misc/jq. So on guppy every `sudo podman ...`
+	# below answers
+	#
+	#   sudo: podman: command not found
+	#
+	# That is not a broken image; bootc reads containers-storage through skopeo
+	# and installs fine. But it silently defeated the store probe further down,
+	# which had only podman- and jq-shaped questions to ask. Ask once, here, so
+	# the dump names the situation instead of printing it a dozen times and
+	# leaving the reader to infer it from a missing "Found" line.
+	local guest_has_podman=0
+	if "${ssh_cmd[@]}" "command -v podman >/dev/null 2>&1" 2>/dev/null; then
+		guest_has_podman=1
+	else
+		echo "==> guest ships no podman (skopeo-only base) — skipping podman store queries;" \
+			"the offline store index is read host-side below"
+	fi
+
 	# ── Offline store diagnostics (debug: remove once stable) ─────────
 	echo "==> Offline store diagnostics:"
 	echo "--- store service status ---"
@@ -1210,17 +1958,21 @@ run_install() {
 	# from before the mount, causing image exists / pull to miss the
 	# additional store entirely (observed on Gentoo-based variants where
 	# the offline-store.service sometimes races with podman's init).
-	"${ssh_cmd[@]}" "sudo podman system renumber 2>&1 || true" || true
+	if [[ "$guest_has_podman" -eq 1 ]]; then
+		"${ssh_cmd[@]}" "sudo podman system renumber 2>&1 || true" || true
+	fi
 	echo "--- primary storage.conf ---"
 	"${ssh_cmd[@]}" "cat /etc/containers/storage.conf 2>&1 || echo '(not found)'" || true
 	echo "--- offline store layout ---"
 	"${ssh_cmd[@]}" "sudo ls -la /var/lib/superiso-store/ 2>&1 || true" || true
 	"${ssh_cmd[@]}" "sudo ls -la /var/lib/superiso-store/overlay-images/ 2>&1 || echo '(no overlay-images)'" || true
 	"${ssh_cmd[@]}" "sudo cat /var/lib/superiso-store/storage.lock 2>&1 || echo '(no storage.lock)'" || true
-	echo "--- effective storage driver ---"
-	"${ssh_cmd[@]}" "sudo podman info 2>&1 | grep -i graphdriver || echo 'podman info failed'" || true
-	echo "--- podman images (all) ---"
-	"${ssh_cmd[@]}" "sudo podman images 2>&1 || echo '(empty or error)'" || true
+	if [[ "$guest_has_podman" -eq 1 ]]; then
+		echo "--- effective storage driver ---"
+		"${ssh_cmd[@]}" "sudo podman info 2>&1 | grep -i graphdriver || echo 'podman info failed'" || true
+		echo "--- podman images (all) ---"
+		"${ssh_cmd[@]}" "sudo podman images 2>&1 || echo '(empty or error)'" || true
+	fi
 
 	# skipjack fails here in a way the dump above cannot explain: the store is
 	# mounted, storage.conf lists it in additionalimagestores, overlay-images/
@@ -1232,13 +1984,21 @@ run_install() {
 	# image store (driver mismatch, unreadable lock, version skew); images.json
 	# is ~1 KB and states the names actually recorded, which distinguishes
 	# "store ignored" from "image recorded under a name we never probe".
-	echo "--- why podman does or does not see the additional store ---"
-	"${ssh_cmd[@]}" "sudo podman --log-level=debug images 2>&1 \
-		| grep -iE 'additional|superiso|store|driver' | head -40 \
-		|| echo '(no matching debug lines)'" || true
+	if [[ "$guest_has_podman" -eq 1 ]]; then
+		echo "--- why podman does or does not see the additional store ---"
+		"${ssh_cmd[@]}" "sudo podman --log-level=debug images 2>&1 \
+			| grep -iE 'additional|superiso|store|driver' | head -40 \
+			|| echo '(no matching debug lines)'" || true
+	fi
+
+	# Read the store's index ONCE, and keep it: this is both the diagnostic dump
+	# and the input to the probe below, so what the log shows is exactly what
+	# the decision was made from.
+	local img_json="/var/lib/superiso-store/overlay-images/images.json"
+	local store_images_json=""
+	store_images_json="$("${ssh_cmd[@]}" "sudo cat ${img_json} 2>/dev/null" 2>/dev/null || true)"
 	echo "--- names recorded in the offline store ---"
-	"${ssh_cmd[@]}" "sudo cat /var/lib/superiso-store/overlay-images/images.json 2>&1 \
-		|| echo '(unreadable)'" || true
+	printf '%s\n' "${store_images_json:-(unreadable)}"
 
 	# Probe the guest's containers-storage for a locally-available image.
 	# Try podman image exists first (primary store), then fall back to
@@ -1249,14 +2009,26 @@ run_install() {
 	local found_local=0 found_ref=""
 	for candidate_ref in "$prod_ref" "$local_ref"; do
 		echo "==> Probing for ${candidate_ref}..."
-		if "${ssh_cmd[@]}" "sudo podman image exists '${candidate_ref}'" 2>/dev/null; then
+		if [[ "$guest_has_podman" -eq 1 ]] &&
+			"${ssh_cmd[@]}" "sudo podman image exists '${candidate_ref}'" 2>/dev/null; then
 			found_local=1
 			found_ref="$candidate_ref"
 			break
 		fi
-		# Fallback: check the offline store images.json directly.
-		local img_json="/var/lib/superiso-store/overlay-images/images.json"
-		if "${ssh_cmd[@]}" "sudo test -f ${img_json} && sudo jq -e --arg ref '${candidate_ref}' '.[] | select(.names != null) | select(.names | index(\$ref))' ${img_json} >/dev/null 2>&1" 2>/dev/null; then
+		# Fallback: the offline store's own index, parsed on the HOST.
+		#
+		# This used to run `sudo jq` in the guest, which asks the guest for a jq
+		# it may not have. guppy has neither jq nor podman (see the
+		# skopeo-only note above), so on that variant BOTH probes were
+		# unrunnable — each exiting 127 — and a store that records
+		# `ghcr.io/tuna-os/guppy:gnome` verbatim read as "image absent". The
+		# cell then spent four minutes on the SSH transfer the block below
+		# documents as impossible and died on `scp: write remote ...: Failure`,
+		# ~2.5 hours into the job. guppy:gnome, LUKS run 31134373523.
+		#
+		# The guest only has to supply `cat`, which the dump above proves it
+		# can; jq runs where jq is a declared dependency.
+		if store_records_image "$store_images_json" "$candidate_ref"; then
 			echo "==> Found ${candidate_ref} in offline store images.json (podman query missed it)"
 			# This used to deliberately NOT set found_local, on the theory that
 			# podman/bootc could not resolve the image from the additional
@@ -1334,20 +2106,20 @@ run_install() {
 			# readiness wait and the installed-boot wait.
 			echo "==> Transferring image to guest (this may take a few minutes)..."
 			if ! timeout 1800 "${scp_cmd[@]}" "$host_tar" \
-				"liveuser@127.0.0.1:/home/liveuser/"; then
+				"${GUEST_SCP_DEST}:${GUEST_HOME}/"; then
 				echo "ERROR: image transfer to guest timed out or failed" >&2
 				rm -f "$host_tar" || true
 				return 3
 			fi
 			echo "==> Loading image into guest podman..."
-			if timeout 1800 "${ssh_cmd[@]}" "sudo podman load -i /home/liveuser/${host_tar##*/} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
+			if timeout 1800 "${ssh_cmd[@]}" "sudo podman load -i ${GUEST_HOME}/${host_tar##*/} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
 				echo "==> Image loaded, using local containers-storage ref"
 				recipe_image="containers-storage:${host_img}"
 			else
 				echo "ERROR: podman load failed on guest"
 				return 3
 			fi
-			"${ssh_cmd[@]}" "rm -f /home/liveuser/${host_tar##*/}" || true
+			"${ssh_cmd[@]}" "rm -f ${GUEST_HOME}/${host_tar##*/}" || true
 			rm -f "$host_tar" || true
 		else
 			echo "ERROR: host image $host_img not found — was ISO build successful?"
@@ -1363,14 +2135,10 @@ run_install() {
 	local E2E_LUKS_PASS="tunaos-e2e-luks"
 	[[ "$LUKS" -eq 1 ]] && encryption_json="{\"type\": \"tpm2-luks-passphrase\", \"passphrase\": \"${E2E_LUKS_PASS}\"}"
 
-	# Override /usr/local/bin/fisherman with a freshly-built binary (e.g.
-	# from a PR under test) before installing — the bundled installer-flatpak
-	# fisherman is pinned to a release.
-	if [[ -n "${FISHERMAN_OVERRIDE:-}" && -f "${FISHERMAN_OVERRIDE}" ]]; then
-		echo "==> Overriding fisherman with ${FISHERMAN_OVERRIDE}"
-		"${scp_cmd[@]}" "${FISHERMAN_OVERRIDE}" liveuser@127.0.0.1:/home/liveuser/fisherman-override
-		"${ssh_cmd[@]}" "sudo install -m0755 /home/liveuser/fisherman-override /usr/local/bin/fisherman"
-	fi
+	# (The FISHERMAN_OVERRIDE install used to be here. It now runs before the
+	# presence check near the top of this function — see the comment there.
+	# Doing it at this point meant an image that shipped no fisherman never
+	# reached it, which is exactly the case the override is for.)
 
 	local RECIPE_LOCAL="${OUTPUT_DIR}/e2e-recipe.json"
 	cat >"$RECIPE_LOCAL" <<EOF
@@ -1387,7 +2155,7 @@ run_install() {
 }
 EOF
 	echo "==> Uploading fisherman recipe..."
-	"${scp_cmd[@]}" "$RECIPE_LOCAL" liveuser@127.0.0.1:/home/liveuser/e2e-recipe.json
+	"${scp_cmd[@]}" "$RECIPE_LOCAL" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-recipe.json"
 
 	# ── Swap on, before anything allocates ───────────────────────────────
 	# See SWAP_DISK: podman's copy of the exported OCI layout into the
@@ -1404,55 +2172,37 @@ EOF
 	"${ssh_cmd[@]}" "sudo sh -c 'test -b ${SWAP_DISK_BYID} && mkswap -L tunaos-e2e-swap ${SWAP_DISK_BYID} >/dev/null && swapon ${SWAP_DISK_BYID}' && free -m" ||
 		echo "WARN: guest swap not enabled (continuing without it)"
 
-	# ── Guest heartbeat, on the console rather than over ssh ─────────────
-	# The install is the one phase where the guest can stop answering while
-	# QEMU stays up, and `Timeout, server 127.0.0.1 not responding.` on its
-	# own does not say why: a wedged guest and a live guest whose sshd
-	# stalled under I/O look identical from the host. Everything else we log
-	# here comes back over the same ssh channel that just died, so it stops
-	# exactly when the interesting part starts.
-	#
-	# This writes to /dev/console (i.e. the serial log) from a process
-	# setsid'd out of the ssh session, so it keeps reporting after that
-	# channel is gone. The last line before the silence is the diagnosis:
-	# memavail collapsing means the guest is out of RAM (raise --memory),
-	# memavail AND swapfree both collapsing means it is genuinely out of
-	# memory rather than merely short of it (run 30730744132 killed podman
-	# that way), target_free collapsing means the disk is, and one that keeps
-	# ticking through the timeout means the guest was alive all along and
-	# only sshd stalled.
-	local HB_LOCAL="${OUTPUT_DIR}/e2e-heartbeat.sh"
-	cat >"$HB_LOCAL" <<-'HBEOF'
-		#!/bin/sh
-		while :; do
-			printf 'TUNAOS_E2E_HEARTBEAT memavail_kb=%s swapfree_kb=%s dirty_kb=%s writeback_kb=%s target_free_kb=%s load=%s\n' \
-				"$(awk '/^MemAvailable:/{print $2}' /proc/meminfo)" \
-				"$(awk '/^SwapFree:/{print $2}' /proc/meminfo)" \
-				"$(awk '/^Dirty:/{print $2}' /proc/meminfo)" \
-				"$(awk '/^Writeback:/{print $2}' /proc/meminfo)" \
-				"$(df -Pk /mnt/fisherman-target 2>/dev/null | awk 'NR==2{print $4}')" \
-				"$(cut -d' ' -f1-3 /proc/loadavg)" >/dev/console 2>/dev/null
-			sleep 15
-		done
-	HBEOF
-	if "${scp_cmd[@]}" "$HB_LOCAL" liveuser@127.0.0.1:/home/liveuser/e2e-heartbeat.sh; then
-		"${ssh_cmd[@]}" "sudo install -m0755 /home/liveuser/e2e-heartbeat.sh /usr/local/bin/tunaos-e2e-heartbeat && \
-			sudo setsid --fork /usr/local/bin/tunaos-e2e-heartbeat </dev/null >/dev/null 2>&1" ||
-			echo "WARN: guest heartbeat did not start (continuing)"
-	else
-		echo "WARN: guest heartbeat could not be uploaded (continuing)"
-	fi
+	start_guest_heartbeat
 
-	echo "==> Running fisherman /home/liveuser/e2e-recipe.json..."
+	echo "==> Running fisherman ${GUEST_HOME}/e2e-recipe.json..."
 	# Bound with `timeout` as a safety net; the image is already local at
 	# this point so this should only cover the actual install steps, not a
 	# network pull.
-	timeout 1800 "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman /home/liveuser/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
+	#
+	# 1800s was too tight for the largest images. bonito:kde is 9.1 GB in 64
+	# layers, and `bootc install to-filesystem` writing that into an encrypted
+	# xfs volume inside a nested QEMU guest ran for 25 minutes and was still
+	# going when the timer fired — no stall, just a big image on slow virtual
+	# storage. Raised, and overridable for a cell that legitimately needs more.
+	local install_timeout="${TUNAOS_E2E_INSTALL_TIMEOUT:-3600}"
+	timeout "$install_timeout" "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman ${GUEST_HOME}/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
 		rc=$?
 		if [[ $rc -eq 0 ]]; then
 			true
 		elif [[ $rc -eq 124 ]]; then
-			echo "ERROR: fisherman install timed out after 1800s (likely a stalled podman pull)"
+			# Do NOT name a cause here. This used to read "(likely a stalled
+			# podman pull)", directly contradicting the comment above saying
+			# the image is already local — and it sent the bonito:kde
+			# investigation looking for a network problem that did not exist.
+			# The install's own progress lines are the evidence; print the
+			# last one instead of guessing.
+			echo "ERROR: fisherman install timed out after ${install_timeout}s"
+			echo "       last progress line from the guest:"
+			grep -E '"type":"(step|substep)"' "${SERIAL_LOG}" | tail -1 |
+				sed 's/^/         /' || echo "         (none recorded)"
+			echo "       If that line shows work in flight, the image is too big for the"
+			echo "       budget — raise TUNAOS_E2E_INSTALL_TIMEOUT. If it is unchanged from"
+			echo "       minutes earlier, it is a genuine stall."
 			return 3
 		else
 			echo "ERROR: fisherman install failed (exit $rc)"
@@ -1476,10 +2226,10 @@ EOF
 		# tiered on-VM test scripts.
 		local script_dir
 		script_dir="$(dirname "${BASH_SOURCE[0]}")"
-		"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" liveuser@127.0.0.1:/home/liveuser/e2e-assert.sh
-		"${scp_cmd[@]}" "${script_dir}/e2e-luks-checks.sh" liveuser@127.0.0.1:/home/liveuser/e2e-luks-checks.sh
+		"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-assert.sh"
+		"${scp_cmd[@]}" "${script_dir}/e2e-luks-checks.sh" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-luks-checks.sh"
 		local luks_check_output
-		luks_check_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=/home/liveuser bash /home/liveuser/e2e-luks-checks.sh" 2>&1) || true
+		luks_check_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=${GUEST_HOME} bash ${GUEST_HOME}/e2e-luks-checks.sh" 2>&1) || true
 		echo "$luks_check_output" | tee -a "$LUKS_EVIDENCE_LOG"
 
 		if echo "$luks_check_output" | grep -q "^ok - installed disk has a crypto_LUKS partition"; then
@@ -1510,60 +2260,10 @@ EOF
 	# passphrase for disk ...") instead of a graphical plymouth prompt — without
 	# it luks-first-boot.py never sees the prompt (run 29670982740). Real users
 	# still get the plymouth prompt on a display; this is test media only.
-	echo "==> Appending console=ttyS0 + plymouth.enable=0 to installed BLS entries..."
-	"${ssh_cmd[@]}" 'sudo bash -s' <<-'BLSEOF' 2>&1 | tee -a "$SERIAL_LOG" || echo "WARN: BLS karg append failed (continuing)"
-		for p in /dev/vda1 /dev/vda2 /dev/vda3; do
-			[ -b "$p" ] || continue
-			mkdir -p /mnt/tbx-bls
-			mount "$p" /mnt/tbx-bls 2>/dev/null || continue
-			found=0
-			for f in /mnt/tbx-bls/loader/entries/*.conf /mnt/tbx-bls/boot/loader/entries/*.conf; do
-				[ -f "$f" ] || continue
-				grep -q "console=ttyS0" "$f" || sed -i "s/^options \(.*\)$/options \1 console=ttyS0,115200n8 rd.plymouth=0 plymouth.enable=0/" "$f"
-				echo "karg appended: $f"
-				found=1
-			done
-			if [ "$found" = 1 ]; then
-				# The ESP is the only evidence of whether the install
-				# produced a *bootable* disk, and it is gone the moment
-				# this VM powers off. sailfin (composefs + systemd-boot)
-				# gets no NVRAM entry: bootctl refuses to touch efivars
-				# from inside the install container ("Not booted with EFI
-				# or running in a container, skipping EFI variable
-				# modifications"), so the firmware can only find it via
-				# the removable fallback \EFI\BOOT\BOOTX64.EFI. If that
-				# file is missing, the disk is unbootable no matter what
-				# the boot order says, and the failure looks identical to
-				# a boot-order bug from the serial log alone.
-				echo "--- ESP contents ($p) ---"
-				find /mnt/tbx-bls -maxdepth 3 2>/dev/null | sort || ls -lR /mnt/tbx-bls || true
-				if [ -f /mnt/tbx-bls/EFI/BOOT/BOOTX64.EFI ]; then
-					echo "esp: removable fallback present (EFI/BOOT/BOOTX64.EFI)"
-				else
-					echo "WARN: esp has NO EFI/BOOT/BOOTX64.EFI; firmware has no fallback to boot"
-				fi
-			fi
-			umount /mnt/tbx-bls
-			[ "$found" = 1 ] && break
-		done
-	BLSEOF
+	append_installed_serial_kargs
 
 	echo "==> fisherman install complete. Shutting down..."
-	"${ssh_cmd[@]}" "sudo systemctl poweroff" 2>/dev/null || true
-	sleep 10
-
-	# Wait for VM to fully stop
-	if [[ -f "$QEMU_PIDFILE" ]]; then
-		local pid
-		pid=$(cat "$QEMU_PIDFILE" 2>/dev/null || true)
-		if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null; then
-			echo "==> Waiting for VM to shut down..."
-			for _ in $(seq 1 30); do
-				kill -0 "$pid" 2>/dev/null || break
-				sleep 2
-			done
-		fi
-	fi
+	poweroff_and_wait_vm
 
 	# The installed-boot gate must never match a marker emitted by the live
 	# environment. Preserve the first boot as separate evidence and give QEMU a
@@ -1609,7 +2309,16 @@ EOF
 			-netdev "user,id=net0" -device virtio-net-pci,netdev=net0 \
 			-monitor "unix:${MONITOR_SOCK},server,nowait" \
 			-serial "unix:${FB_SERIAL},server,nowait" \
-			"${QEMU_GPU_ARGS[@]}" -pidfile "$QEMU_PIDFILE" -daemonize
+			"${QEMU_GPU_ARGS[@]}" -pidfile "$QEMU_PIDFILE" -daemonize || {
+			# Without this the launch failure is a bare qemu message and a
+			# `set -e` exit, which is how run 31140233496 reported a pidfile
+			# collision as an unexplained "exit code 1" with no ERROR line to
+			# search for. Name it, and name the usual reason.
+			echo "ERROR: QEMU would not start for the LUKS passphrase gate (message above)" >&2
+			echo "       A 'cannot lock pid file' there means the install VM outlived" >&2
+			echo "       poweroff_and_wait_vm and still holds ${QEMU_PIDFILE}." >&2
+			return 5
+		}
 		# 5th arg: keep draining the serial for up to 300s past login waiting
 		# for the desktop contract. See luks-first-boot.py for why.
 		python3 "$(dirname "${BASH_SOURCE[0]}")/luks-first-boot.py" \
@@ -1691,6 +2400,38 @@ EOF
 			;;
 		*) echo "WARNING: no desktop contract marker on the installed system (DM likely never started)" >&2 ;;
 		esac
+
+		# ── Pixel gate: "DM active" must become "something actually drew" ──
+		# All the evidence above this line already exists on every run — the
+		# stddev-measured screenshot and the timelapse frames — but it was
+		# recorded fatal=0 and gated nothing, which is how a black console
+		# shipped under a green cell (run 29645108966). pixel_gate
+		# (scripts/lib/pixel-gate.sh) turns the measurable cases into a
+		# verdict and names the unmeasurable ones (virgl, no ImageMagick)
+		# instead of silently passing them.
+		#
+		# Stop the timelapse NOW rather than leaving it to cleanup_vm's EXIT
+		# trap: the gate needs frame-count.txt while the verdict is being
+		# decided. stop is idempotent (the pidfile is consumed; a second
+		# assemble recounts the same frames), so cleanup's later stop stays
+		# harmless.
+		local _frames="" _pixel_line="" _pixel_rc=0
+		if [[ -n "${TIMELAPSE_DIR:-}" ]]; then
+			bash "${SCRIPT_DIR}/record-timelapse.sh" stop "$TIMELAPSE_DIR" || true
+			_frames="$(cat "${TIMELAPSE_DIR}/frame-count.txt" 2>/dev/null || true)"
+		fi
+		_pixel_line="$(pixel_gate "$_shot" "${SCREENSHOT_STDDEV:-}" "$_frames" "${QEMU_NEEDS_VNC_SURFACE:-0}")" || _pixel_rc=$?
+		record_luks_evidence "$_pixel_line"
+		if [[ "$_pixel_rc" -ne 0 ]]; then
+			if [[ "${TUNAOS_PIXEL_GATE:-1}" == "1" ]]; then
+				echo "ERROR: pixel gate FAILED — the encrypted install unlocked and reached" >&2
+				echo "       login, but nothing provably rendered (${_pixel_line})." >&2
+				echo "       The screenshot and timelapse artifacts are the evidence;" >&2
+				echo "       TUNAOS_PIXEL_GATE=0 downgrades this to advisory." >&2
+				return 6
+			fi
+			echo "::warning::pixel gate failed but TUNAOS_PIXEL_GATE=0 — advisory only (${_pixel_line})"
+		fi
 
 		echo "==> LUKS passphrase gate PASSED for ${VARIANT:-}:${FLAVOR:-}"
 		return 0
@@ -1942,7 +2683,7 @@ app-launch)
 		app_idx=$((app_idx + 1))
 		label="20-app-$(printf '%02d' "$app_idx")-${app##*.}"
 		echo "==> Launching app via SSH: $app"
-		sshpass -p live ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "$SSH_PORT" liveuser@127.0.0.1 \
+		"${GUEST_SSH[@]}" \
 			"env $SSH_APP_ENV gtk-launch $app 2>&1" || echo "  (app launch may have failed)"
 		sleep 8
 		screenshot "$label"
@@ -1961,7 +2702,7 @@ app-launch)
 		# Best-effort stop (openQA closes each app before the next): match the
 		# desktop id's last segment, lowercased, against the process table.
 		app_proc="${app##*.}"
-		sshpass -p live ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -p "$SSH_PORT" liveuser@127.0.0.1 \
+		"${GUEST_SSH[@]}" \
 			"pkill -f '${app_proc,,}' 2>/dev/null" || true
 		sleep 2
 	done

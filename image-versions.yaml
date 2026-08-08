@@ -6,7 +6,7 @@ images:
   - name: common
     image: ghcr.io/projectbluefin/common
     tag: latest
-    digest: sha256:d0a9ca467b8a7638c21127b43ab2adaf8348757872da3b1be85f0d347629618d
+    digest: sha256:f7934f263b4357cba6ad253e7a3ce8d667cd478798a137be8f3a18c04806cbee
   - name: brew
     image: ghcr.io/ublue-os/brew
     tag: latest
@@ -17,7 +17,7 @@ images:
   - name: zirconium
     image: ghcr.io/zirconium-dev/zirconium
     tag: latest
-    digest: sha256:8a170c363041235122c8eea8a364fe0397a1ea0bbcd83b1fe29cc644d7208ee4
+    digest: sha256:0007fc49a34fccef9a3eae457cd88468a72927cd12b77e7e12d5e463ec7535cb
 
 # Pinned binary downloads (managed by Renovate)
 downloads:
@@ -50,21 +50,32 @@ downloads:
   # tacklebox 30629145076, booting to login at 30630284339.
   tacklebox: "4fa604115dfa2e6356c68bde85a191c6620ebea1"
 
+  # Zirconium's mkosi.extra payload, fetched as a source tarball by
+  # build_scripts/install-zirconium.sh (niri stages only). Pinned to a commit
+  # for the same reason every other download here is: `main` moves, so an
+  # unpinned fetch makes niri builds non-reproducible and puts whatever landed
+  # upstream in the last hour into the image. A tarball checksum is not an
+  # option on top of this — GitHub generates the archive on demand and its
+  # bytes are not stable — but the commit itself is content-addressed, so the
+  # pin is what fixes the file set.
+  # renovate: datasource=git-refs depName=zirconium-dev/zirconium
+  zirconium_src: "d2cfb176433cd214a26d02abe572c1b9d9fcc72e"
+
   # Bootc toolchain built from source (see toolchain/) and published to
   # ghcr.io/tuna-os/bootc-toolchain-<base> as OCI artifacts via ORAS.
   # These pins drive both the toolchain builds and the version tags consumers
   # request. Renovate bumps them; the toolchain workflow rebuilds on bump.
   # renovate: datasource=github-releases depName=bootc-dev/bootc
-  bootc: "v1.16.6"
+  bootc: "v1.16.7"
   # renovate: datasource=github-releases depName=coreos/bootupd
-  bootupd: "v0.2.35"
+  bootupd: "v0.2.36"
   # ostree from source only for bases whose packaged ostree is older than
   # bootc's required libostree (e.g. Debian trixie ships 2025.2 < 2025.3).
   # ostree is built from source (with its vendored composefs submodule) only for
   # bases whose packaged libostree is older than bootc's required 2025.3 — e.g.
   # Debian trixie ships 2025.2. Newer bases (sid) use the packaged libostree.
   # renovate: datasource=github-releases depName=ostreedev/ostree
-  ostree: "v2026.2"
+  ostree: "v2026.3"
   # composefs: built from source (meson) and pkg-config-installed so the source
   # ostree can configure --with-composefs, on bases that don't package it (trixie).
   # renovate: datasource=github-releases depName=containers/composefs

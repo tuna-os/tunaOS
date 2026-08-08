@@ -672,6 +672,25 @@ setup_runtime_check_stubs() {
   [ "$output" = "READY_FOUND" ]
 }
 
+@test "ready: default LIVE_MARKER accepts tacklebox's generic TBOX_LIVE_READY" {
+  # iso-builder's reference cells (aurora et al.) are built by tacklebox,
+  # which is a generic bootc ISO maker and bakes its own neutral marker
+  # rather than a tunaOS-branded one. The harness owns the contract, so
+  # its default accepts both. The default is EVALUATED out of the script
+  # itself so this test fails if the shipped default ever drifts, and the
+  # contract value is asserted explicitly so a drift is a failure here
+  # rather than a silently weakened assertion.
+  local default
+  default=$(unset LIVE_MARKER; eval "$(grep '^LIVE_MARKER=' "$SCRIPT")"; echo "$LIVE_MARKER")
+  [ "$default" = 'TUNAOS_LIVE_READY|TBOX_LIVE_READY' ]
+  SERIAL_LOG="$BATS_TEST_TMPDIR/test-serial3.log"
+  echo "some boot output" > "$SERIAL_LOG"
+  echo "TBOX_LIVE_READY uptime=12.3" >> "$SERIAL_LOG"
+  grep -qE -- "$default" "$SERIAL_LOG"
+  echo "still booting" > "$SERIAL_LOG"
+  ! grep -qE -- "$default" "$SERIAL_LOG"
+}
+
 @test "ready: marker not found when absent" {
   run bash -c '
     SERIAL_LOG="/tmp/test-serial2.log"
@@ -696,7 +715,8 @@ setup_runtime_check_stubs() {
   # on the shared append-mode chardev.
   grep -q 'append=on' "$SCRIPT"
   ! grep -q -- '-serial "file:${SERIAL_LOG}"' "$SCRIPT"
-  [ "$(grep -c '"${E2E_SERIAL_ARGS\[@\]}"' "$SCRIPT")" -eq 3 ]
+  # live boot, fisherman installed boot, generic installed boot, --disk boot
+  [ "$(grep -c '"${E2E_SERIAL_ARGS\[@\]}"' "$SCRIPT")" -eq 4 ]
 }
 
 @test "install: a console heartbeat outlives the ssh channel" {
@@ -739,7 +759,8 @@ setup_runtime_check_stubs() {
   # bootindex publishes a QEMU fw_cfg boot order OVMF applies over the stale
   # NVRAM. Both post-install boots need it; the live boot must NOT have it
   # (the ISO has to win there).
-  [ "$(grep -c 'device virtio-blk-pci,drive=disk,bootindex=0' "$SCRIPT")" -eq 2 ]
+  # fisherman passphrase gate, fisherman installed boot, generic TPM gate
+  [ "$(grep -c 'device virtio-blk-pci,drive=disk,bootindex=0' "$SCRIPT")" -eq 3 ]
   grep -q -- '-device virtio-blk-pci,drive=disk \\' "$SCRIPT"
 }
 
@@ -774,6 +795,140 @@ setup_runtime_check_stubs() {
     rm -f "$log"
   '
   [ "$output" = "GROWING" ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# vsock SSH fallback (tacklebox#178)
+# ═══════════════════════════════════════════════════════════════════════════
+
+@test "vsock: transport helpers switch user, home directory and proxy" {
+  # Generic (non-tunaOS) images ship no TCP sshd on live media — only
+  # systemd-ssh-generator's AF_VSOCK listener. The harness swaps every guest
+  # ssh/scp to root-over-vsock through one pair of helper functions; evaluate
+  # them out of the script so this fails if the shipped shapes drift.
+  run bash -c '
+    set -euo pipefail
+    src="'"$SCRIPT"'"
+    E2E_SSH_OPTS=(-o StrictHostKeyChecking=no)
+    SSH_PORT=2222 VSOCK_CID=3222 VSOCK_SSH_KEY=/tmp/never-read
+    eval "$(sed -n "/^use_tcp_transport()/,/^}/p" "$src")"
+    eval "$(sed -n "/^use_vsock_transport()/,/^}/p" "$src")"
+    use_tcp_transport
+    [[ "${GUEST_SSH[*]}" == *"liveuser@127.0.0.1"* ]]
+    [[ "${GUEST_SCP[*]}" == *"-P 2222"* ]]
+    [[ "$GUEST_HOME" == /home/liveuser ]]
+    use_vsock_transport
+    [[ "${GUEST_SSH[*]}" == *"VSOCK-CONNECT:3222:22"* ]]
+    [[ "${GUEST_SSH[*]}" == *"root@"* ]]
+    [[ "${GUEST_SCP[*]}" != *"-P "* ]]
+    [[ "$GUEST_HOME" == /root ]]
+    [[ "$SSH_TRANSPORT" == vsock ]]
+    echo SHAPES_OK
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" == *SHAPES_OK* ]]
+}
+
+@test "vsock: guest CID defaults to SSH_PORT+1000 and honors the env override" {
+  # CIDs collide across concurrent runs exactly like TCP ports do; deriving
+  # from the already collision-managed SSH_PORT keeps one knob. Evaluated out
+  # of the script, like the LIVE_MARKER default above.
+  local derived override
+  derived=$(unset TBOX_E2E_VSOCK_CID; SSH_PORT=2222; eval "$(grep '^VSOCK_CID=' "$SCRIPT")"; echo "$VSOCK_CID")
+  [ "$derived" = "3222" ]
+  override=$(TBOX_E2E_VSOCK_CID=77 SSH_PORT=2222 bash -c "$(grep '^VSOCK_CID=' "$SCRIPT"); echo \$VSOCK_CID")
+  [ "$override" = "77" ]
+}
+
+@test "vsock: root key rides the SMBIOS credential, device on the live boot only" {
+  # The whole fallback is contract: the key must reach the guest under BOTH
+  # credential names. provision.conf's ssh.authorized_keys.root writes
+  # /root/.ssh/authorized_keys — which never lands on bootc images, where
+  # /root is a symlink into /var/roothome (aurora attempt 7, run
+  # 31115116876: vsock handshake completed, "Permission denied (publickey)").
+  # ssh.ephemeral-authorized_keys-all is consumed by the generated
+  # sshd-vsock instance itself and is the one that actually authenticates
+  # there. Both must stay on the QEMU command line of the LIVE boot (the
+  # installed boots are serial-gated and get no vsock device).
+  grep -q 'io.systemd.credential.binary:ssh.authorized_keys.root=' "$SCRIPT"
+  grep -q 'io.systemd.credential.binary:ssh.ephemeral-authorized_keys-all=' "$SCRIPT"
+  grep -q 'vhost-vsock-pci,guest-cid=' "$SCRIPT"
+  # Absent host support must leave the command line untouched (VSOCK_ARGS
+  # stays empty), so the expansion needs the set -u-safe guard form.
+  grep -q '\${VSOCK_ARGS\[@\]+"\${VSOCK_ARGS\[@\]}"}' "$SCRIPT"
+}
+
+@test "vsock: check_ssh probes tcp first and reports both failures" {
+  # tunaOS images must keep the exact tcp path they always had — the vsock
+  # probe only runs after tcp fails. And when both fail, both stderrs are
+  # reported: on generic images the tcp reset is expected noise and the vsock
+  # line is the actual diagnosis.
+  grep -q 'check_ssh_vsock' "$SCRIPT"
+  grep -qF 'tcp: ${why} | vsock: ${VSOCK_WHY}' "$SCRIPT"
+  # The fallback is gated on the device actually having been attached.
+  grep -qF '[[ ${#VSOCK_ARGS[@]} -gt 0 ]] && check_ssh_vsock' "$SCRIPT"
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Generic (no-fisherman) bootc install path
+# ═══════════════════════════════════════════════════════════════════════════
+
+@test "generic: qualify_imgref prefixes bare refs and passes qualified ones through" {
+  run bash -c '
+    set -euo pipefail
+    eval "$(sed -n "/^qualify_imgref()/,/^}/p" "'"$SCRIPT"'")"
+    [ "$(qualify_imgref ublue-os/aurora:stable)" = "ghcr.io/ublue-os/aurora:stable" ]
+    [ "$(qualify_imgref quay.io/fedora/fedora-bootc:42)" = "quay.io/fedora/fedora-bootc:42" ]
+    [ "$(qualify_imgref registry.example.com:5000/x/y:z)" = "registry.example.com:5000/x/y:z" ]
+    echo REFS_OK
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" == *REFS_OK* ]]
+}
+
+@test "generic: fisherman absence falls back to bootc only when an image is named" {
+  # Guessing a registry ref from an ISO filename is how #1006's 40-minute
+  # failures happened; the generic path refuses to guess.
+  #
+  # Both halves sit in one condition, and it reads the image probe rather than
+  # /usr/local/bin/fisherman: FISHERMAN_OVERRIDE now lands on the guest before
+  # the verifying check, so a later read would find a fisherman on every image
+  # and divert nothing. See test_iso_e2e_fisherman_override.bats.
+  grep -qF 'if [[ "$image_has_fisherman" -eq 0 && -n "${TBOX_E2E_IMAGE:-}" ]]; then' "$SCRIPT"
+  grep -q 'run_install_generic' "$SCRIPT"
+  grep -q 'TBOX_E2E_IMAGE is unset' "$SCRIPT"
+}
+
+@test "generic: container storage lands on the scratch disk, not the tmpfs root" {
+  # The live overlay upperdir is an 8G tmpfs; a stock image pull (aurora ≈
+  # 9G uncompressed) cannot land there (#941, from the other direction).
+  # The scratch disk is by-serial like the swap disk, attached to the live
+  # boot only, and formatted/mounted only by the generic path.
+  grep -q 'SCRATCH_DISK="${OUTPUT_DIR}/scratch-disk.qcow2"' "$SCRIPT"
+  grep -q 'SCRATCH_DISK_BYID="/dev/disk/by-id/virtio-${SCRATCH_DISK_SERIAL}"' "$SCRIPT"
+  [ "$(grep -c 'drive=scratchdisk' "$SCRIPT")" -eq 1 ]
+  grep -q 'mkfs.ext4 -q -L tbxscratch ${SCRATCH_DISK_BYID}' "$SCRIPT"
+  grep -q 'mount ${SCRATCH_DISK_BYID} /var/lib/containers' "$SCRIPT"
+}
+
+@test "generic: bootc install bakes serial kargs and tpm2-luks under --luks" {
+  grep -q 'bootc install to-disk --wipe' "$SCRIPT"
+  grep -qF 'block_setup="--block-setup tpm2-luks"' "$SCRIPT"
+  grep -q -- '--karg console=ttyS0,115200n8 --karg rd.plymouth=0 --karg plymouth.enable=0' "$SCRIPT"
+  # bootc gates --block-setup tpm2-luks on the image's install config
+  # ("Block setup Tpm2Luks is not enabled in installation config", attempt
+  # 11 / run 31125136026). The opt-in is install-time policy, delivered as
+  # a drop-in bind-mounted into the installing container — never baked
+  # into the image. "direct" must stay enabled alongside it.
+  grep -qF 'block = [\"direct\", \"tpm2-luks\"]' "$SCRIPT"
+  grep -qF '/usr/lib/bootc/install/90-tbox-luks.toml:ro' "$SCRIPT"
+}
+
+@test "generic: the unlock gate restarts swtpm on preserved state" {
+  # swtpm exits with its QEMU; bootc sealed the LUKS key against that TPM's
+  # state, so the reboot gate must restart it WITHOUT wiping the state dir.
+  grep -q 'start_swtpm keep' "$SCRIPT"
+  grep -qF '[[ "$keep" == "keep" ]] || rm -rf "$TPM_DIR"' "$SCRIPT"
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -824,4 +979,17 @@ setup_runtime_check_stubs() {
   grep -q 'Found canonical offline image.*bootcDirect' "$SCRIPT"
   grep -q 'recipe_image=""' "$SCRIPT"
   grep -q 'containers-storage:<targetImgref>' "$SCRIPT"
+}
+
+@test "first-boot harness harvests the emergency shell instead of timing out past it" {
+  # guppy:xfce (run 31182709691): "Failed to start Switch Root", dracut
+  # emergency shell, and an artifact that proved the failure happened while
+  # containing nothing about why — rdsosreport.txt lives inside the guest and
+  # died with it. The harness must detect the shell and cat the report to the
+  # serial it already captures. Pinned on the CODE strings (the send commands
+  # and the detection literal), not the rationale comments.
+  local harness="${REPO_ROOT}/scripts/luks-first-boot.py"
+  grep -qF '"Entering emergency mode" in text' "$harness"
+  grep -qF 'cat /run/initramfs/rdsosreport.txt 2>/dev/null' "$harness"
+  grep -qF 'journalctl -b --no-pager -n 120' "$harness"
 }

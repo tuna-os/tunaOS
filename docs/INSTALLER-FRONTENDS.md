@@ -76,6 +76,33 @@ Filled from each run's `walkthrough-<flavor>.json`.
 
 _GPU_ = needs a virgl-capable host to evaluate; blank on GPU-less CI is expected.
 
+### Screen parity from GPU-less capture
+
+The matrix above is filled by `scripts/installer-walkthrough.py`, which needs a
+virgl-capable host. That is why Niri and XFCE read `_GPU_`: they have **never
+been evaluated**, and two crash-on-launch bugs plus a 93%-white screen survived
+in that gap — because a blank cell and a passing cell look identical to a
+reader.
+
+Each frontend repo now also runs an offscreen screenshot capture on a stock
+runner and emits the same `walkthrough-<flavor>.json`.
+`scripts/import-frontend-parity.py` imports those into the table below.
+
+**The two sources are not interchangeable, and are deliberately not merged.**
+An offscreen capture drives the wizard's pages in-process, so it cannot observe
+the three things the first columns above measure: that the flatpak launches
+under the real desktop, that a GL-less compositor can draw it — precisely what
+Niri and XFCE are suspected to fail — or that a keypress advances the wizard
+(KDE's `enter` defect is invisible to it by construction). Folding a `✅ᶜ` into
+a `✅` would claim coverage nobody has, which is a worse failure than the blank
+cells it replaces. So the import fills the screen columns only, and tags them.
+
+<!-- BEGIN GENERATED — scripts/import-frontend-parity.py -->
+
+_Not yet imported — run `scripts/import-frontend-parity.py`._
+
+<!-- END GENERATED — scripts/import-frontend-parity.py -->
+
 ### KDE — run 29684495194 (yellowfin, strict) — PASSES
 
 With the widened focus search the run reaches **6/8 transitions, 7 visual

@@ -25,14 +25,46 @@ screens:
   - id: welcome
     title: Welcome
     required: true
-    keywords: ["welcome", "get started", "let's get", "begin", "install tunaos"]
+    # "install tunaos" dropped: same product-name coupling as the disk and
+    # install lists. The four remaining keywords are what a welcome screen
+    # says regardless of what it is installing.
+    keywords: ["welcome", "get started", "let's get", "begin"]
 
   - id: disk
     title: Disk / target selection
     required: true
     # Heading/prompt text, not the "Target Disk: vda" row on the summary.
+    #
+    # MEASURED 2026-08-07 against the frontends' real headings. The list below
+    # was evidently written from KDE's wording — KDE matches three of these
+    # outright while Niri and XFCE matched none, which read as "no disk screen"
+    # for two frontends that plainly have one:
+    #     KDE     "Select Target Disk"                  matched
+    #     Niri    "Destination"                         no match
+    #     XFCE    "Where should TunaOS be installed?"   no match ("should be"
+    #                                                    vs "will be")
+    # "destination" is admitted as a bare-ish noun deliberately: it is the
+    # entire heading on Niri, and it does not appear as a field label on any
+    # other screen in any of the four frontends.
+    #
+    # PRODUCT-NAME-FREE from here on. The three keywords that embedded
+    # "tunaos" are gone: the frontends are being changed to show the VARIANT
+    # name the branding pipeline already computes (90-image-info.sh sets
+    # distro_name = PRETTY_NAME, which is why gnome says "Welcome to
+    # Skipjack"), so a keyword containing "tunaos" would stop matching the
+    # moment a frontend is branded correctly — the contract would punish the
+    # fix. Every keyword below is a heading or prompt that holds whatever the
+    # product is called.
+    #
+    # "be installed" rather than "will be installed" / "where tunaos will be
+    # installed": the product name sits INSIDE those phrases, so no
+    # product-free keyword can span it. XFCE's heading is "Where should
+    # <name> be installed?" and KDE's is "Choose the disk where <name> will
+    # be installed." — "be installed" is the longest contiguous run common to
+    # both that contains no product name. Verified against all four forks'
+    # source: it appears on their disk screens and on no other screen.
     keywords: ["select target disk", "select a disk", "choose the disk",
-               "available disks", "where tunaos will be installed"]
+               "available disks", "be installed", "destination"]
 
   - id: encryption
     title: Disk encryption (LUKS)
@@ -61,10 +93,64 @@ screens:
     # NOT "installing tunaos": the welcome page says "guide you through
     # installing TunaOS onto your computer". Progress screens say what they
     # are DOING, so match that instead.
+    #
+    # MEASURED 2026-08-07: ZERO of the four frontends matched this list.
+    #     KDE     (no contract keyword present)
+    #     Niri    "Installing…"
+    #     XFCE    "Installing TunaOS"
+    #     COSMIC  "Installing"
+    # Four frontends failing the same optional screen is one wrong list, not
+    # four wording bugs.
+    #
+    # NOT bare "installing", which was the obvious fix and is wrong. Niri's
+    # ENCRYPTION page reads "cannot be turned on later without reinstalling",
+    # and "installing" is a substring of "reinstalling". Encryption is not the
+    # first state, so the crediting rule would NOT have caught it: bare
+    # "installing" manufactures a phantom install row on the encryption screen.
+    # Exactly the failure the notes above this list were written about.
+    #
+    # "installing tunaos" IS safe, and the comment above rejects it because
+    # Niri's WELCOME prose says "guide you through installing TunaOS onto your
+    # computer" — correct, but that prose lives on the FIRST state, which the
+    # crediting rule already defends. So it is admitted, with the ellipsis form
+    # for Niri's own heading.
+    #
+    # The fisherman step lines are included too. Every frontend streams the
+    # same backend, so "partitioning" and "installing image" appear on the
+    # progress screen of all four and on no other screen — the strongest
+    # evidence available that an install is actually under way, which is the
+    # principle this list already states ("progress screens say what they are
+    # DOING").
+    #
+    # "installing tunaos" removed for the same reason as the disk keywords.
+    # The fisherman step lines carry this screen instead: every frontend
+    # streams the same backend, so "partitioning" and "installing image"
+    # appear on the progress screen of all five and on no other screen, and
+    # they do not contain a product name at all.
     keywords: ["installation progress", "copying files", "deploying",
-               "please wait", "writing image"]
+               "please wait", "writing image", "installing\u2026",
+               "partitioning", "installing image"]
 
   - id: done
     title: Finished / reboot
     required: false
-    keywords: ["complete", "finished", "reboot", "restart", "success"]
+    # NOT "reboot" or "restart", and NOT bare "complete"/"finished"/"success".
+    #
+    # A LOGIN GREETER satisfies those. cosmic-greeter's power menu offers
+    # Restart, Power Off and Suspend, so run 31183217981 — which never got past
+    # the greeter, with the installer not running at all — was still credited
+    # with reaching the FINISHED screen. That is the worst phantom row
+    # available: it reports an install that completed on a machine where the
+    # installer never started.
+    #
+    # Every keyword below needs a sentence a greeter has no reason to contain.
+    # Checked against the frontends' real done-screen text: KDE renders
+    # "Installation complete" and "TunaOS has been installed. Remove the
+    # installation media and restart to boot into your new system"; upstream
+    # bootc-installer renders "<product> is installed" (done.py). Note
+    # "restart to boot" is admitted where bare "restart" is not — the phrase
+    # cannot appear in a power menu.
+    keywords: ["installation complete", "installation finished",
+               "is installed", "has been installed",
+               "remove the installation media",
+               "restart to boot", "reboot into"]

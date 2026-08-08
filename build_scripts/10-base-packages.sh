@@ -32,7 +32,6 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 		fdisk \
 		flatpak \
 		distrobox \
-		fastfetch \
 		fwupd \
 		dbus-daemon \
 		fuse-overlayfs \
@@ -46,9 +45,7 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 		systemd-oomd \
 		power-profiles-daemon \
 		fzf \
-		glow \
 		wl-clipboard \
-		gum \
 		wayland-utils \
 		grim \
 		x11-xserver-utils \
@@ -63,6 +60,24 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 		gstreamer1.0-plugins-ugly \
 		gstreamer1.0-libav \
 		libavcodec-extra
+
+	# Release-dependent extras, best-effort.
+	#
+	# These three are in Ubuntu resolute (grouper) but NOT in noble (gurnard):
+	# fastfetch landed after 24.04, and glow/gum (charmbracelet) later still.
+	# apt fails the entire transaction on one unknown name, so listing them
+	# above took the whole base install down with
+	#
+	#   E: Unable to locate package fastfetch
+	#   E: Unable to locate package glow
+	#   E: Unable to locate package gum
+	#
+	# and gurnard could not build at all (LUKS run 31059184838) — the other 40
+	# packages were fine. They are conveniences (a fetch tool and two TUI
+	# helpers), not part of any contract, so a release that lacks them should
+	# lose them and nothing else. apt_install_available names each one it skips
+	# rather than dropping them quietly.
+	apt_install_available fastfetch glow gum
 
 	# Remove unwanted packages
 	# shellcheck disable=SC2015 # intentional: A&&B||true is a guard pattern
@@ -147,10 +162,17 @@ elif [[ $IS_FEDORA == true ]]; then
 		"https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-${FEDORA_VER}.noarch.rpm" \
 		"https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${FEDORA_VER}.noarch.rpm" || true
 
-	# Multimedia + common desktop packages in one transaction
+	# Multimedia + common desktop packages in one transaction.
+	# gstreamer1-plugin-libav is Fedora's own package (measured in the F44
+	# repodata); with RPM Fusion's full ffmpeg installed alongside it, its
+	# libgstlibav.so resolves the full libavcodec sonames — that pairing is
+	# what gives GStreamer apps H.264/H.265 decode. gstreamer1-plugins-ugly
+	# is the RPM Fusion build. The build contract asserts the result
+	# (verify-desktop-experience.sh codec baseline).
 	dnf -y install \
 		gstreamer1-plugins-good \
 		gstreamer1-plugins-ugly \
+		gstreamer1-plugin-libav \
 		gstreamer1-plugins-bad-free \
 		lame \
 		ffmpeg \
@@ -189,39 +211,55 @@ else
 	fi
 	dnf config-manager --set-enabled epel
 
-	# Multimedia codecs
+	# Multimedia codecs — negativo17 epel-multimedia (same as upstream
+	# bluefin-lts), on BOTH x86_64 legs.
+	#
+	# The v2 leg used to get `ffmpeg-free` and nothing else patent-encumbered
+	# ("no epel-multimedia for x86_64_v2"), which shipped flagship images
+	# that could not decode H.264/H.265 at all. The actual obstacle was only
+	# the repo file's $basearch: negativo17 publishes no x86_64_v2 tree
+	# (measured: .../epel-10/x86_64_v2/repodata/repomd.xml is 404 while the
+	# x86_64 path is 200), so on a v2 image the baseurl resolved to a 404 and
+	# skip_if_unavailable made the whole repo vanish. The v2 leg has always
+	# installed plain-x86_64 payloads regardless — ffmpeg-free exists only as
+	# EPEL's x86_64 build — so pin the basearch and install the same full set
+	# everywhere. If the depsolver ever disagrees on v2, the build fails
+	# loudly, which beats silently shipping a no-H.264 image.
+	#
+	# Written with curl+sed rather than `dnf config-manager` so the repo
+	# state is identical text on every EL10 base and there is no dnf4/dnf5
+	# syntax split to carry.
+	curl --retry 3 -fsSL https://negativo17.org/repos/epel-multimedia.repo \
+		-o /etc/yum.repos.d/epel-multimedia.repo
+	# Disabled at rest; enabled per-transaction below (previous behavior).
+	sed -i 's/^enabled=1/enabled=0/' /etc/yum.repos.d/epel-multimedia.repo
+	# Disable fastestmirror for this repo to avoid corrupted mirrors
+	sed -i '/^\[epel-multimedia\]$/a fastestmirror=0' /etc/yum.repos.d/epel-multimedia.repo
 	if is_x86_64_v2; then
-		echo "no epel-multimedia for x86_64_v2"
-		dnf -y install \
-			ffmpeg-free \
-			@multimedia \
-			gstreamer1-plugins-bad-free \
-			gstreamer1-plugins-bad-free-libs \
-			gstreamer1-plugins-good \
-			gstreamer1-plugins-base \
-			lame \
-			lame-libs \
-			libjxl
-	else
-		# Use negativo17 epel-multimedia repo (same as upstream bluefin-lts)
-		dnf config-manager --add-repo=https://negativo17.org/repos/epel-multimedia.repo
-		dnf config-manager --set-disabled epel-multimedia
-		# Disable fastestmirror for this repo to avoid corrupted mirrors
-		dnf config-manager --setopt="epel-multimedia.fastestmirror=0" --save
-
-		dnf_retry -y install --enablerepo=epel-multimedia \
-			ffmpeg \
-			libavcodec \
-			@multimedia \
-			gstreamer1-plugins-bad-free \
-			gstreamer1-plugins-bad-free-libs \
-			gstreamer1-plugins-good \
-			gstreamer1-plugins-base \
-			lame \
-			lame-libs \
-			libjxl \
-			ffmpegthumbnailer
+		# shellcheck disable=SC2016  # $basearch is a dnf repo variable, not a shell one
+		sed -i 's|/\$basearch/|/x86_64/|' /etc/yum.repos.d/epel-multimedia.repo
 	fi
+
+	# gstreamer1-plugins-ugly and gstreamer1-plugin-libav are the two that
+	# make GStreamer applications (totem, thumbnailers, anything WebKit)
+	# actually decode H.264/H.265 — libgstlibav.so routes through the full
+	# negativo17 libavcodec installed here. Both names measured present in
+	# the epel-10 repodata. The build contract asserts the result
+	# (verify-desktop-experience.sh codec baseline).
+	dnf_retry -y install --enablerepo=epel-multimedia \
+		ffmpeg \
+		libavcodec \
+		@multimedia \
+		gstreamer1-plugins-bad-free \
+		gstreamer1-plugins-bad-free-libs \
+		gstreamer1-plugins-good \
+		gstreamer1-plugins-base \
+		gstreamer1-plugins-ugly \
+		gstreamer1-plugin-libav \
+		lame \
+		lame-libs \
+		libjxl \
+		ffmpegthumbnailer
 
 	if [[ $IS_ALMALINUX == true ]] && [ "$MAJOR_VERSION_NUMBER" -ge 9 ]; then
 		dnf swap -y coreutils-single coreutils

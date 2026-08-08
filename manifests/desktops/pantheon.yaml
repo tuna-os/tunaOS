@@ -43,8 +43,33 @@ packages:
     # Core apps
     - io.elementary.terminal
     - io.elementary.settings-daemon
+    # The session entry itself. Nothing else in this list ships ANY session
+    # desktop file — the first pantheon contract run (31187758113) failed on
+    # exactly that, and it was a real gap, not a bad assert: without
+    # xsessions/pantheon.desktop the greeter has no Pantheon session to
+    # launch. Measured from the PPA deb (8.1.0+r419, dpkg -c): this package
+    # ships /usr/share/xsessions/pantheon.desktop,
+    # /usr/share/wayland-sessions/pantheon-wayland.desktop and the
+    # gnome-session definitions, and Depends: gnome-session-bin, gala,
+    # pantheon-shell, xwayland — the session stack arrives with it.
+    - pantheon-xsession-settings
     # Display manager itself comes from the Ubuntu archive, not the PPA.
     - lightdm
+    # The X server lightdm's seat spawns. Nothing else on this list pulls it
+    # under the installer's --no-install-recommends — lightdm only Recommends
+    # an X server, and Pantheon's session is X11 (pantheon-xsession-settings
+    # ships xsessions/pantheon.desktop; its xwayland dep is not a display
+    # server lightdm can seat). Without it the daemon logs "Seat seat0:
+    # Can't create display server for greeter" to /var/log/lightdm/
+    # lightdm.log only — the journal shows a bare exit 1 — and
+    # display-manager.service crash-loops. That silent loop is exactly what
+    # LUKS run 31215923156 measured on gurnard:pantheon; reproduced and
+    # bisected on ubuntu with this package set minus/plus these two.
+    - xserver-xorg
+    # Queried by every lightdm greeter for the user list; a lightdm
+    # Recommends, so it never arrives implicitly. Absent, each greeter start
+    # first warns "Error getting user list from org.freedesktop.Accounts".
+    - accountsservice
     # Portals and secrets — the gap that made sailfin:gnome ship without a
     # file manager or working credentials (tunaos-packages#132). Pantheon is
     # GTK, so it needs the GTK portal explicitly.
@@ -59,3 +84,6 @@ packages:
 
 post_install:
   - tuna-flatpak-remote.sh
+  # Curated Flatpak set (store + browser) + preinstall service — see the
+  # script header; asserts live in verify-desktop-experience.sh.
+  - flatpak-preinstall.sh

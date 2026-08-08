@@ -63,16 +63,47 @@ else
 		IMAGE_NAME="hummingbird"
 		IMAGE_PRETTY_NAME="Hummingbird"
 	fi
-	[[ "${BASE_IMAGE,,}" == *"fedora"* && "${BASE_IMAGE,,}" != *"hummingbird"* ]] && IS_FEDORA=true && IMAGE_NAME="bonito" && IMAGE_PRETTY_NAME="Bonito"
-	[[ "${BASE_IMAGE,,}" == *"red hat"* || "${BASE_IMAGE,,}" == *"rhel"* || "${BASE_IMAGE,,}" == *"redhat"* ]] && IS_RHEL=true && IMAGE_NAME="redfin" && IMAGE_PRETTY_NAME="Redfin"
-	[[ "${BASE_IMAGE,,}" == *"almalinux"* && "${BASE_IMAGE,,}" != *"-kitten"* ]] && IS_ALMALINUX=true && IMAGE_NAME="albacore" && IMAGE_PRETTY_NAME="Albacore"
-	[[ "${BASE_IMAGE,,}" == *"-kitten"* ]] && IS_ALMALINUXKITTEN=true && IMAGE_NAME="yellowfin" && IMAGE_PRETTY_NAME="Yellowfin"
-	[[ "${BASE_IMAGE,,}" == *"centos"* ]] && IS_CENTOS=true && IMAGE_NAME="skipjack" && IMAGE_PRETTY_NAME="Skipjack"
-	[[ "${BASE_IMAGE,,}" == *"ubuntu"* ]] && IS_UBUNTU=true && IMAGE_NAME="grouper" && IMAGE_PRETTY_NAME="Grouper"
-	[[ "${BASE_IMAGE,,}" == *"debian"* && "${BASE_IMAGE,,}" != *"ubuntu"* ]] && IS_DEBIAN=true && IMAGE_NAME="flounder" && IMAGE_PRETTY_NAME="Flounder"
-	[[ "${BASE_IMAGE,,}" == *"archlinux"* || "${BASE_IMAGE,,}" == *"arch-bootc"* ]] && IS_ARCH=true && IMAGE_NAME="marlin" && IMAGE_PRETTY_NAME="Marlin"
-	[[ "${BASE_IMAGE,,}" == *"opensuse"* ]] && IS_OPENSUSE=true && IMAGE_NAME="opensuse" && IMAGE_PRETTY_NAME="openSUSE"
-	[[ "${BASE_IMAGE,,}" == *"gentoo"* ]] && IS_GENTOO=true && IMAGE_NAME="gentoo" && IMAGE_PRETTY_NAME="Gentoo"
+	# The IS_* flags below are derived from the base image. The variant NAME is
+	# not derivable from it — several variants share a base family — so the
+	# names here are a FALLBACK for builds that pass no IMAGE_NAME, never an
+	# override of one that did.
+	#
+	# They used to be plain assignments, which clobbered the real value:
+	# gurnard (ubuntu:noble) built with IMAGE_NAME=grouper, so it would have
+	# taken grouper's name, pretty name and fish codename into os-release and
+	# image-info.json — an image that calls itself another variant. Verified in
+	# LUKS run 31059184838, which logged IMAGE_NAME=grouper while building
+	# gurnard:pantheon.
+	#
+	# For sailfin and guppy the old fallbacks were not even variant names —
+	# "opensuse" and "gentoo" — which 90-image-info.sh rejects outright ("no
+	# scientific fish codename defined for variant"). That was latent until
+	# those two Containerfiles started running 90-image-info.sh.
+	_derive_name() { # family-default name, family-default pretty name
+		if [[ -n "${IMAGE_NAME:-}" ]]; then
+			# The build told us the name, so the pretty name has to come from
+			# THAT, not from the family default — otherwise gurnard, whose name
+			# survives, still picks up "Grouper" here. Observed in run
+			# 31059184838: IMAGE_NAME=gurnard, IMAGE_PRETTY_NAME=Grouper.
+			# 90-image-info.sh independently computes "${IMAGE_NAME^}", so the
+			# family default would disagree with what actually reaches
+			# os-release. Match it.
+			IMAGE_PRETTY_NAME="${IMAGE_PRETTY_NAME:-${IMAGE_NAME^}}"
+		else
+			IMAGE_NAME="$1"
+			IMAGE_PRETTY_NAME="${IMAGE_PRETTY_NAME:-$2}"
+		fi
+	}
+	[[ "${BASE_IMAGE,,}" == *"fedora"* && "${BASE_IMAGE,,}" != *"hummingbird"* ]] && IS_FEDORA=true && _derive_name "bonito" "Bonito"
+	[[ "${BASE_IMAGE,,}" == *"red hat"* || "${BASE_IMAGE,,}" == *"rhel"* || "${BASE_IMAGE,,}" == *"redhat"* ]] && IS_RHEL=true && _derive_name "redfin" "Redfin"
+	[[ "${BASE_IMAGE,,}" == *"almalinux"* && "${BASE_IMAGE,,}" != *"-kitten"* ]] && IS_ALMALINUX=true && _derive_name "albacore" "Albacore"
+	[[ "${BASE_IMAGE,,}" == *"-kitten"* ]] && IS_ALMALINUXKITTEN=true && _derive_name "yellowfin" "Yellowfin"
+	[[ "${BASE_IMAGE,,}" == *"centos"* ]] && IS_CENTOS=true && _derive_name "skipjack" "Skipjack"
+	[[ "${BASE_IMAGE,,}" == *"ubuntu"* ]] && IS_UBUNTU=true && _derive_name "grouper" "Grouper"
+	[[ "${BASE_IMAGE,,}" == *"debian"* && "${BASE_IMAGE,,}" != *"ubuntu"* ]] && IS_DEBIAN=true && _derive_name "flounder" "Flounder"
+	[[ "${BASE_IMAGE,,}" == *"archlinux"* || "${BASE_IMAGE,,}" == *"arch-bootc"* ]] && IS_ARCH=true && _derive_name "marlin" "Marlin"
+	[[ "${BASE_IMAGE,,}" == *"opensuse"* ]] && IS_OPENSUSE=true && _derive_name "sailfin" "Sailfin"
+	[[ "${BASE_IMAGE,,}" == *"gentoo"* ]] && IS_GENTOO=true && _derive_name "guppy" "Guppy"
 
 	# Package manager dimension
 	if [[ "$IS_UBUNTU" == true || "$IS_DEBIAN" == true ]]; then
@@ -92,6 +123,7 @@ else
 		MAJOR_VERSION_NUMBER="${MAJOR_VERSION_NUMBER}"
 		BASE_IMAGE="${BASE_IMAGE}"
 		IS_FEDORA=${IS_FEDORA}
+		IS_HUMMINGBIRD=${IS_HUMMINGBIRD}
 		IS_RHEL=${IS_RHEL}
 		IS_ALMALINUX=${IS_ALMALINUX}
 		IS_ALMALINUXKITTEN=${IS_ALMALINUXKITTEN}
@@ -99,6 +131,8 @@ else
 		IS_UBUNTU=${IS_UBUNTU}
 		IS_DEBIAN=${IS_DEBIAN}
 		IS_ARCH=${IS_ARCH}
+		IS_OPENSUSE=${IS_OPENSUSE}
+		IS_GENTOO=${IS_GENTOO}
 		PKG_MGR="${PKG_MGR}"
 		IMAGE_NAME="${IMAGE_NAME:-}"
 		IMAGE_PRETTY_NAME="${IMAGE_PRETTY_NAME:-}"
@@ -125,6 +159,8 @@ export IS_CENTOS
 export IS_UBUNTU
 export IS_DEBIAN
 export IS_ARCH
+export IS_OPENSUSE
+export IS_GENTOO
 export PKG_MGR
 export IMAGE_NAME
 export IMAGE_PRETTY_NAME
@@ -296,11 +332,14 @@ pkg_install() {
 	elif [[ "$PKG_MGR" == "pacman" ]]; then
 		pacman -S --noconfirm --needed "$@"
 	elif [[ "$PKG_MGR" == "zypper" ]]; then
-		zypper --non-interactive in --no-recommends "$@"
+		zypper_retry --non-interactive in --no-recommends "$@"
 	elif [[ "$PKG_MGR" == "emerge" ]]; then
 		emerge --verbose --getbinpkg "$@"
-	else
+	elif [[ "$PKG_MGR" == "dnf" ]]; then
 		dnf_retry install -y --setopt=install_weak_deps=False "$@"
+	else
+		echo "pkg_install: unknown PKG_MGR '${PKG_MGR}'" >&2
+		return 1
 	fi
 }
 
@@ -315,31 +354,57 @@ pkg_remove() {
 		zypper --non-interactive rm "$@"
 	elif [[ "$PKG_MGR" == "emerge" ]]; then
 		emerge --deselect "$@"
-	else
+	elif [[ "$PKG_MGR" == "dnf" ]]; then
 		dnf_retry remove -y "$@"
+	else
+		echo "pkg_remove: unknown PKG_MGR '${PKG_MGR}'" >&2
+		return 1
 	fi
 }
 
 # Refresh package metadata.
+#
+# Every branch is explicit and dnf is one of them rather than the fallthrough.
+# An `else dnf ...` tail reads as "the default" and is really "everything I did
+# not think about": it is how 40-services.sh sent Arch down the dnf path
+# (#1015) and how pkg_clean below killed every sailfin build with
+# "lib.sh: line 366: dnf: command not found" after 99-cleanup.sh was wired into
+# Containerfile.opensuse. An unknown manager should say so, not run dnf.
 pkg_refresh() {
-	if [[ "$PKG_MGR" == "apt" ]]; then
-		apt-get update
-	else
-		dnf makecache
-	fi
+	case "$PKG_MGR" in
+	apt) apt-get update ;;
+	pacman) pacman -Sy --noconfirm ;;
+	zypper) zypper_retry --non-interactive --gpg-auto-import-keys refresh ;;
+	emerge) emerge --sync --quiet || emaint sync -a ;;
+	dnf) dnf makecache ;;
+	*)
+		echo "pkg_refresh: unknown PKG_MGR '${PKG_MGR}'" >&2
+		return 1
+		;;
+	esac
 }
 
 # Clean package manager caches to minimize final image size.
 pkg_clean() {
-	if [[ "$PKG_MGR" == "apt" ]]; then
+	case "$PKG_MGR" in
+	apt)
 		apt-get clean
 		rm -rf /var/lib/apt/lists/*
 		mkdir -p /var/lib/apt/lists/partial
-	elif [[ "$PKG_MGR" == "pacman" ]]; then
-		pacman -Scc --noconfirm 2>/dev/null || true
-	else
-		dnf clean all
-	fi
+		;;
+	pacman) pacman -Scc --noconfirm 2>/dev/null || true ;;
+	zypper) zypper clean --all 2>/dev/null || true ;;
+	# Gentoo's caches are the distfiles and the binpkg tree; portage has no
+	# "clean" verb for them, and eclean is in gentoolkit which the stage3 does
+	# not ship. Remove the paths directly, as Containerfile.gentoo:107 already
+	# does for /var/tmp/portage.
+	emerge) rm -rf /var/cache/distfiles/* /var/tmp/portage/* 2>/dev/null || true ;;
+	dnf) dnf clean all ;;
+	*)
+		echo "pkg_clean: unknown PKG_MGR '${PKG_MGR}'" >&2
+		return 1
+		;;
+	esac
 }
 
 # Run `dnf` with retries to absorb transient mirror flakes (EPEL / AlmaLinux /
@@ -367,6 +432,84 @@ dnf_retry() {
 	done
 	echo "dnf failed after ${max_attempts} attempts" >&2
 	return "$rc"
+}
+
+# zypper's counterpart to dnf_retry, and for the same reason.
+#
+# Tumbleweed publishes snapshots continuously, and a build that lands mid-sync
+# gets a repomd.xml pointing at a primary.xml that the mirror has already
+# rotated away:
+#
+#   Repository 'openSUSE-Tumbleweed-Oss' is invalid.
+#   [repo-oss|...] Failed to retrieve new repository metadata.
+#    - File './repodata/<hash>-primary.xml.zst' not found on medium ...
+#   Warning: Skipping repository 'openSUSE-Tumbleweed-Oss' because of the above error.
+#
+# zypper treats that as a WARNING and carries on with the repositories that did
+# refresh — so the build continues with the main repository silently absent and
+# dies later somewhere unrelated, wearing a misleading message:
+#
+#   Package 'systemd-network' not found.        (it is in repo-oss)
+#   ...40-services.sh... exit status 104
+#
+# That killed sailfin:niri in LUKS run 31089226102 with nothing wrong in the
+# tree. dnf has had dnf_retry for exactly this class since #1015; the zypper
+# path never got one, which is the same one-of-N-package-managers gap as the
+# openssh install and the pcsc omit line.
+#
+# Like dnf_retry this does NOT mask intrinsic errors — an unresolvable package
+# fails identically every attempt and the last exit code is returned.
+#
+# Usage: zypper_retry --non-interactive in --no-recommends foo bar
+zypper_retry() {
+	local max_attempts="${ZYPPER_RETRY_ATTEMPTS:-4}"
+	local attempt=1
+	local rc=0
+	while ((attempt <= max_attempts)); do
+		zypper "$@" && return 0 || rc=$?
+		echo "zypper attempt ${attempt}/${max_attempts} failed (exit ${rc}); refreshing metadata and retrying..." >&2
+		# Force a full re-download rather than trusting the cache that just
+		# failed — the stale-repomd case above is invisible otherwise.
+		zypper --non-interactive --gpg-auto-import-keys refresh --force || true
+		sleep "$((attempt * 5))"
+		attempt=$((attempt + 1))
+	done
+	echo "zypper failed after ${max_attempts} attempts" >&2
+	return "$rc"
+}
+
+# Record packages a best-effort installer skipped: a GitHub Actions warning
+# per miss (the fold-group log line alone is easy to scroll past) and an
+# append to the in-image wishlist file that travels with the build.
+# Downstream consumers — CI summary jobs, scripts/report-missing-packages.sh,
+# and the fatal checks/verify-package-wishlist.sh gate — read that file
+# instead of re-parsing build logs.
+#
+# Callers pass their own name first (BASH_SOURCE[1] resolved at THEIR frame —
+# resolving it here would always say lib.sh), then the missed package names.
+# TUNAOS_WISHLIST_DIR relocates the wishlist for tests.
+record_package_wishlist() {
+	local caller_script="$1"
+	shift
+	local misses=("$@")
+	[[ ${#misses[@]} -eq 0 ]] && return 0
+
+	local miss
+	for miss in "${misses[@]}"; do
+		printf '::warning title=Missing package (%s on %s)::%s is requested by %s but not in the active repos. Consider packaging it for EL10 via tuna-os/github-copr.\n' \
+			"${IMAGE_NAME:-?}" "${MAJOR_VERSION_NUMBER:-?}" "$miss" "$caller_script"
+	done
+
+	local wishlist="${TUNAOS_WISHLIST_DIR:-/usr/share/tunaos}/missing-on-${IMAGE_NAME:-unknown}.txt"
+	mkdir -p "$(dirname "$wishlist")"
+	{
+		printf '# Generated by build_scripts/lib.sh:record_package_wishlist\n'
+		printf '# image=%s major_version=%s caller=%s timestamp=%s\n' \
+			"${IMAGE_NAME:-?}" "${MAJOR_VERSION_NUMBER:-?}" "$caller_script" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+		for miss in "${misses[@]}"; do
+			printf '%s\n' "$miss"
+		done
+	} >>"$wishlist"
 }
 
 # Install only the packages that the active DNF repo set can actually
@@ -430,32 +573,9 @@ install_available() {
 		printf '  %s\n' "${missing[@]}"
 		printf '::endgroup::\n'
 
-		# Surface each miss as a GitHub Actions warning so the PR /
-		# workflow-run summary view shows them inline (the
-		# `::group::` block above folds, easy to miss). Title carries
-		# the active image name so a `gh run view --json annotations`
-		# call can grep by variant.
-		local caller_script
-		caller_script="$(basename "${BASH_SOURCE[1]:-install_available}")"
-		for miss in "${missing[@]}"; do
-			printf '::warning title=Missing package (%s on %s)::%s is requested by %s but not in the active repos. Consider packaging it for EL10 via tuna-os/github-copr.\n' \
-				"${IMAGE_NAME:-?}" "${MAJOR_VERSION_NUMBER:-?}" "$miss" "$caller_script"
-		done
-
-		# Write the wishlist into the image so it travels with the
-		# build. Downstream consumers (CI summary jobs, doc generators,
-		# the `report-missing-packages.sh` script) can read this file
-		# instead of re-parsing build logs.
-		local wishlist=/usr/share/tunaos/missing-on-${IMAGE_NAME:-unknown}.txt
-		mkdir -p "$(dirname "$wishlist")"
-		{
-			printf '# Generated by build_scripts/lib.sh:install_available\n'
-			printf '# image=%s major_version=%s caller=%s timestamp=%s\n' \
-				"${IMAGE_NAME:-?}" "${MAJOR_VERSION_NUMBER:-?}" "$caller_script" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-			for miss in "${missing[@]}"; do
-				printf '%s\n' "$miss"
-			done
-		} >>"$wishlist"
+		record_package_wishlist \
+			"$(basename "${BASH_SOURCE[1]:-install_available}")" \
+			"${missing[@]}"
 	fi
 
 	if [[ ${#available[@]} -gt 0 ]]; then
@@ -539,6 +659,71 @@ kde_dm_unit() {
 	fi
 }
 
+# Install the dnf copr/config-manager plugin providers, one transaction each.
+#
+# These used to be listed in a single `dnf -y install A B C D`. dnf fails the
+# WHOLE transaction when any one name is unmatched, and the dnf5-* virtual
+# provides do not exist on EL10 — so AlmaLinux Kitten and CentOS Stream 10
+# installed NONE of the four, including dnf-command(copr), which is the one
+# they do have. That is the "Unable to find a match: dnf5-command(copr)
+# dnf5-command(config-manager)" in #1016: dnf names only the unmatched ones,
+# and the `|| true` then hides that nothing was installed at all.
+#
+# The consequence was not log noise. With no copr plugin, the `dnf copr
+# enable` below fails, the COPR repo is never enabled, and the install falls
+# back to the base repos — so a package that only exists in COPR goes missing
+# from the image with every step reporting success.
+#
+# One transaction per name costs a few seconds of metadata resolution and
+# lets each distro install whichever names it actually has.
+install_dnf_plugin_providers() {
+	local _pkg
+	for _pkg in 'dnf5-command(copr)' 'dnf-command(copr)' \
+		'dnf5-command(config-manager)' 'dnf-command(config-manager)'; do
+		dnf -y install "$_pkg" 2>/dev/null || true
+	done
+}
+
+# apt counterpart to install_available: install only the names this release
+# actually has, and say loudly which it skipped.
+#
+# Use this ONLY for packages that legitimately vary across releases. apt fails
+# the whole transaction on one unknown name, so a single package that landed in
+# Ubuntu after 24.04 takes the entire base install down with it — which is what
+# `E: Unable to locate package fastfetch/glow/gum` did to every gurnard build
+# (noble) even though they resolve fine on grouper (resolute).
+#
+# Deliberately NOT applied to the whole base list. Silently reducing a required
+# package set is how an image ships without something it needs and still exits
+# 0; the skip has to be visible and the required list has to stay strict.
+apt_install_available() {
+	local want=("$@") have=() skipped=() pkg
+	for pkg in "${want[@]}"; do
+		# `apt-cache show` prints nothing and exits 0 for an unknown name, so
+		# test for the Package: stanza rather than the exit status.
+		if apt-cache show "$pkg" 2>/dev/null | grep -q '^Package:'; then
+			have+=("$pkg")
+		else
+			echo "apt_install_available: not in this release, skipping: ${pkg}" >&2
+			skipped+=("$pkg")
+		fi
+	done
+	# Same wishlist as the dnf path — without this, apt images had no miss
+	# record at all, so the verify-package-wishlist.sh gate covered every
+	# family except the one where the fastfetch/glow/gum variance actually
+	# lives.
+	if [[ ${#skipped[@]} -gt 0 ]]; then
+		record_package_wishlist \
+			"$(basename "${BASH_SOURCE[1]:-apt_install_available}")" \
+			"${skipped[@]}"
+	fi
+	if ((${#have[@]} == 0)); then
+		echo "apt_install_available: none of the requested packages exist here" >&2
+		return 0
+	fi
+	pkg_install "${have[@]}"
+}
+
 install_from_copr() {
 	COPR_NAME=$1
 	shift
@@ -550,8 +735,14 @@ install_from_copr() {
 		shift
 	fi
 
-	dnf -y install 'dnf5-command(copr)' 'dnf-command(copr)' 'dnf5-command(config-manager)' 'dnf-command(config-manager)' || true
-	dnf -y copr enable "$COPR_NAME" || true
+	install_dnf_plugin_providers
+
+	# A COPR repo that never enabled is the failure mode #1016 describes, and
+	# the fallback below hides it. Say so in the build log, greppably, so the
+	# next "package mysteriously absent" starts from evidence.
+	if ! dnf -y copr enable "$COPR_NAME"; then
+		echo "TUNAOS_COPR_ENABLE_FAILED repo=${COPR_NAME} — packages from it will fall back to base repos" >&2
+	fi
 
 	REPO_ID="copr:copr.fedorainfracloud.org:$(echo "$COPR_NAME" | tr '/' ':')"
 

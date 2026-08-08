@@ -72,8 +72,21 @@ RUN \
   --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=akmods_nvidia_open,src=/rpms,dst=/tmp/akmods-nvidia-open-rpms \
+  --mount=type=bind,from=akmods_nvidia_open,src=/kernel-rpms,dst=/tmp/kernel-rpms \
   --mount=type=bind,from=context,source=/,target=/run/context \
     bash -c 'if [ "${OVERLAY_TYPE}" = "hwe" ]; then /run/context/build_scripts/overlay/hwe.sh; elif [ "${OVERLAY_TYPE}" = "cachyos" ]; then /run/context/build_scripts/overlay/cachyos.sh; elif [ "${OVERLAY_TYPE}" = "asahi" ]; then /run/context/build_scripts/overlay/asahi.sh; else /run/context/build_scripts/overlay/nvidia.sh; fi'
+# The second akmods mount above is the kmod↔kernel alignment mechanism: every
+# ublue akmods image ships BOTH /rpms (the kmods) and /kernel-rpms (the exact
+# kernel those kmods were built against — akmods' Containerfile.in copies
+# both into the final scratch stage). The nvidia overlay swaps the image's
+# kernel to that one (overrides/nvidia/10-kernel-swap.sh) BEFORE installing
+# the kmod, so the exact-EVR install cannot miss: equality by construction,
+# the same shape bluefin-lts uses (its base build runs kernel-swap.sh from
+# the akmods kernel-rpms mount). First-contact evidence for why hoping the
+# base kernel matches does not work: yellowfin ships AlmaLinux Kitten
+# 6.12.0-250.el10 while akmods-nvidia-open:centos-10 carried kmods for a
+# different CentOS kernel, and the kde-nvidia proof build died on the glob
+# (run 31189433990).
 
 # ==============================================================================
 # Desktop target — single parameterized stage replaces the per-DE copy-paste.
@@ -83,6 +96,47 @@ FROM overlay-base AS desktop
 
 ARG DESKTOP_FLAVOR
 ENV DESKTOP_FLAVOR=${DESKTOP_FLAVOR}
+
+# The published base image may predate the sudo addition in Containerfile.arch.
+# Install it here so the live ISO's e2e harness (which runs sudo podman load)
+# works on Arch-based overlays until new base images are published.
+# fuse-overlayfs is the live ISO storage.conf's hardcoded mount_program
+# (customize-live.sh) — without it podman fails with "can't stat program
+# /usr/bin/fuse-overlayfs".
+RUN if command -v pacman &>/dev/null; then \
+        pacman -S --needed --noconfirm sudo fuse-overlayfs; \
+    fi
+
+# Re-lay the repo's system_files, for the same reason 90-image-info.sh is
+# re-run below: an overlay flavor does NOT rebuild its parent. It chains on
+# the PUBLISHED parent tag (Justfile: `localhost/<variant>:<parent>` when
+# present, else `<parent>-testing` from ghcr), so every file the base stage
+# copies is frozen at whatever that published image happened to carry —
+# while the desktop scripts, live-ISO adapters and contracts that read those
+# files are always current-tree.
+#
+# Measured, not assumed: ghcr.io/tuna-os/yellowfin:niri-testing
+# (IMAGE_VERSION niri-3505bf2) ships /usr/bin/niri but has no
+# /usr/share/niri/ directory and no /usr/share/backgrounds/tunaos/ — its
+# commit is not a descendant of 453f15b7, which added both. So the
+# niri-nvidia and niri-hwe LUKS cells (run 31226672079) died in live
+# customize on "config.kdl missing; cannot arrange installer autostart",
+# while plain niri passed: the dev ISO rebuilds THAT one from the current
+# tree. Same staleness applies to hwe/cachyos/asahi overlays, and to every
+# system_files asset, not just niri's.
+#
+# Ordering: before 90-image-info.sh, which reads assets this copy provides
+# (the logo it asserts lives at /usr/share/pixmaps/tunaos.svg, from
+# system_files).
+RUN --mount=type=tmpfs,dst=/tmp \
+    --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/00-copy-files.sh
+
+# The published base may predate 90-image-info.sh (identity/logo/image-info),
+# so re-run it on the overlay to guarantee the branding contract passes
+# regardless of base freshness.
+RUN --mount=type=bind,from=context,source=/,target=/run/context \
+    /run/context/build_scripts/90-image-info.sh
 
 RUN dnf versionlock add glib2 2>/dev/null || true
 RUN rm -rf /opt && ln -s /var/opt /opt

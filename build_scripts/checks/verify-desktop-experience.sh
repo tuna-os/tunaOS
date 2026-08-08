@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-desktop="${1:?usage: verify-desktop-experience.sh <gnome|kde|niri|cosmic|xfce> [--runtime]}"
+desktop="${1:?usage: verify-desktop-experience.sh <gnome|kde|niri|cosmic|xfce|pantheon> [--runtime]}"
 mode="${2:-build}"
 
 # At runtime the E2E gate greps ttyS0 for a contract marker; a silent early
@@ -90,6 +90,29 @@ require_any_user_unit() {
 	exit 1
 }
 
+# xfce's greeter is the one desktop piece NO other gate can see missing.
+# xfce.sh installs its DM stack via install_available: lightdm first, greetd
+# as the fallback — and greetd's stock config runs `agreety --cmd /bin/sh`,
+# a text prompt into a bare shell. If gtkgreet (or cage, its kiosk host)
+# fails to land, xfce.sh deliberately leaves that stock config in place, the
+# installed system still reaches graphical.target with an ACTIVE
+# display-manager.service, and both the runtime contract's dm check and the
+# LUKS gate read green — xfce.sh's own comment documents the blindness.
+# So assert the greeter statically, on exactly the branch xfce.sh's enable
+# logic takes: greetd is this image's DM if and only if lightdm did not land.
+xfce_greetd_greeter_contract() {
+	command -v lightdm >/dev/null 2>&1 && return 0
+	command -v greetd >/dev/null 2>&1 || return 0
+	require_command gtkgreet
+	require_command cage
+	local greetd_conf="${TUNAOS_VERIFY_ROOT:-}/etc/greetd/config.toml"
+	if ! grep -qs 'gtkgreet' "$greetd_conf"; then
+		echo "greetd is the display manager but ${greetd_conf} does not launch gtkgreet — stock agreety boots users to a text prompt, not a login screen" >&2
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
+		exit 1
+	fi
+}
+
 # PORTAL/KEYRING/GVFS PATHS — measured, one container per packaging family.
 # Never add a glob you have not seen resolve on a real distro: an invented
 # pattern that matches nothing turns a working desktop red, which is exactly
@@ -168,13 +191,21 @@ gnome)
 		echo "missing required GNOME Shell extensions under /usr/share/gnome-shell/extensions" >&2
 		exit 1
 	fi
-	# dconf compiled database: keyfiles in /etc/dconf/db/*.d/ must be compiled into binary dconf DB.
-	if compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
-		if [[ ! -s /etc/dconf/db/local && ! -s /etc/dconf/db/gdm ]]; then
-			echo "missing compiled dconf database: keyfiles exist under /etc/dconf/db/*.d/ but /etc/dconf/db/local and gdm are missing or empty (run dconf update)" >&2
-			exit 1
+	# dconf compiled database: every keyfile dir /etc/dconf/db/<name>.d/ must have
+	# a compiled /etc/dconf/db/<name>. Iterate instead of hardcoding local/gdm —
+	# distros ship their own keyfile dirs (ibus.d on Arch) already compiled by
+	# package postinst; hardcoding local/gdm fails those falsely.
+	for _dcf_dir in /etc/dconf/db/*.d; do
+		[[ -d "$_dcf_dir" ]] || continue
+		if compgen -G "$_dcf_dir/*" >/dev/null 2>&1; then
+			_dcf_name="${_dcf_dir%.d}"
+			_dcf_name="${_dcf_name##*/}"
+			if [[ ! -s "/etc/dconf/db/${_dcf_name}" ]]; then
+				echo "missing compiled dconf database: keyfiles in ${_dcf_dir} but /etc/dconf/db/${_dcf_name} is missing or empty (run dconf update)" >&2
+				exit 1
+			fi
 		fi
-	fi
+	done
 	;;
 kde)
 	experience="ublue-os/aurora"
@@ -230,7 +261,15 @@ cosmic)
 	# into a hard build failure on a variant that has always built. Nor is
 	# either path measured on any published cosmic image yet. Measure
 	# bonito:cosmic (fedora) and flounder:cosmic (apt) first, then decide.
-	dm_pattern='^greetd\.service$'
+	#
+	# cosmic-greeter.service is accepted alongside greetd.service because it is
+	# greetd: `ExecStart=greetd --config /etc/greetd/cosmic-greeter.toml`, with
+	# `Provides: x-display-manager` and `Pre-Depends: greetd` on the deb. On
+	# Ubuntu its postinst claims the display-manager.service alias, so
+	# `systemctl show -P Id display-manager.service` reports cosmic-greeter
+	# there while Fedora/EL10 report greetd. Pinning only greetd would fail
+	# grouper:cosmic on a correctly-wired COSMIC login screen.
+	dm_pattern='^(greetd|cosmic-greeter)\.service$'
 	;;
 xfce)
 	experience="tunaos/xfce"
@@ -246,7 +285,62 @@ xfce)
 	require_command thunar
 	require_any_glob \
 		'/usr/libexec/xdg-desktop-portal-gtk' '/usr/lib/xdg-desktop-portal-gtk'
+
+	# xfwl4 reads xfwm4's THEME DATA and panics without it — not a warning, a
+	# hard abort before the session exists:
+	#
+	#   xfwl4::backend::udev: Using renderD128 as primary GPU
+	#   smithay::wayland::socket: Created new socket name="wayland-1"
+	#   thread 'main' panicked at src/core/state.rs:260:74:
+	#   Failed to load initial config: Failed to find theme named Default
+	#
+	# yellowfin:xfce in installer-smoke run 31183217981 booted to a console of
+	# that backtrace: no desktop, no installer, nothing to screenshot. It reads
+	# like the GPU-less runner limitation and is not — the same log line says a
+	# render node WAS found.
+	#
+	# xfce.sh already pulls xfwm4 for this reason, but through
+	# install_available, which is best-effort by design and skips silently when
+	# the package does not resolve on a base. So the theme data can be absent
+	# with nothing in the build log to say so, and the first symptom is a
+	# compositor panic on a user's machine. Assert it here instead: an image
+	# whose compositor cannot start is not a shippable image.
+	#
+	# Guarded on xfwl4 being present because the X11 branch (xfwm4 as the WM on
+	# bases without the Wayland stack) pulls the same package as a dependency
+	# and would never reach this state.
+	if command -v xfwl4 >/dev/null 2>&1; then
+		require_any_glob \
+			'/usr/share/themes/Default/xfwm4/themerc' \
+			'/usr/share/themes/Default/xfwm4'
+	fi
+
+	xfce_greetd_greeter_contract
 	dm_pattern='^(gdm|gdm3|lightdm|greetd)\.service$'
+	;;
+pantheon)
+	# gurnard only: Pantheon comes exclusively from ppa:elementary-os/stable
+	# (manifests/desktops/pantheon.yaml). Until 2026-08-07 this case did not
+	# exist, so gurnard:pantheon sailed through the LUKS gates with
+	# desktop_contract=absent — a green cell whose desktop was never proven
+	# (run 31074188677, found by the full-matrix contract audit). The asserts
+	# mirror what the manifest actually installs, nothing invented: `gala` is
+	# the compositor package and its binary keeps that name, the session
+	# entry ships as pantheon.desktop, and the manifest pins
+	# display_manager: lightdm.
+	experience="tunaos/pantheon"
+	require_command gala
+	# Session entries measured from the PPA deb itself (pantheon-xsession-
+	# settings 8.1.0+r419, dpkg -c, 2026-08-07): xsessions/pantheon.desktop
+	# and wayland-sessions/pantheon-wayland.desktop. The first run of this
+	# contract (31187758113) failed here and the failure was REAL: no package
+	# in the manifest shipped any session entry at all — the greeter had
+	# nothing to launch. pantheon-xsession-settings is that package; the
+	# manifest now installs it.
+	require_any_glob '/usr/share/xsessions/pantheon*.desktop' \
+		'/usr/share/wayland-sessions/pantheon*.desktop'
+	require_any_unit lightdm
+	dm_pattern='^lightdm\.service$'
 	;;
 *) exit 0 ;;
 esac
@@ -349,6 +443,84 @@ else
 		fi
 	fi
 
+	# ── Codec baseline ──
+	# "Codecs installed" was promised on every family and verified on none —
+	# the EL10 x86_64_v2 leg shipped ffmpeg-free only (no H.264/H.265 at
+	# all) and marlin shipped gst-plugins-ugly without gst-libav (x264
+	# ENcoder present, no mainstream DEcoder), and both were green. Two
+	# file-level proofs, both cheap and network-free:
+	#
+	# 1. The GStreamer libav plugin exists — the piece that lets totem,
+	#    thumbnailers and WebKit decode through libavcodec. One measured
+	#    path per packaging family (repo rule: no unmeasured globs):
+	#      rpm/openSUSE/Gentoo  /usr/lib64/gstreamer-1.0/libgstlibav.so
+	#      Arch                 /usr/lib/gstreamer-1.0/libgstlibav.so
+	#      Debian/Ubuntu        /usr/lib/<triplet>/gstreamer-1.0/libgstlibav.so
+	#      (the apt path MEASURED on ubuntu:noble — gstreamer1.0-libav ships
+	#      /usr/lib/x86_64-linux-gnu/gstreamer-1.0/libgstlibav.so)
+	# 2. `ffmpeg -decoders` actually lists h264 — the plugin above routes
+	#    into libavcodec, so a free-codec libavcodec (the exact v2 failure)
+	#    is caught here even though the plugin file exists.
+	require_any_glob \
+		'/usr/lib64/gstreamer-1.0/libgstlibav.so' \
+		'/usr/lib/gstreamer-1.0/libgstlibav.so' \
+		'/usr/lib/*/gstreamer-1.0/libgstlibav.so'
+	require_command ffmpeg
+	if command -v ffmpeg >/dev/null 2>&1; then
+		# NEVER pipe ffmpeg straight into `grep -q` here. grep -q exits at the
+		# first match, ffmpeg is still writing its ~30 KB decoder list, gets
+		# SIGPIPE, exits 141 — and under this script's `set -o pipefail` the
+		# pipeline reports failure WITH the decoder present. That is not a
+		# race in practice: measured on ubuntu:noble (ffmpeg 6.1.1, h264
+		# decoder confirmed in the output), the piped form returned 141 on
+		# five out of five runs and failed gurnard:pantheon's proof build
+		# (run 31196812732) with a message blaming a "crippled libavcodec"
+		# the image did not have. Capture first, then grep the variable —
+		# and keep "ffmpeg would not run" distinct from "ffmpeg runs but
+		# cannot decode", because their fixes live in different places
+		# (packaging deps vs codec sourcing).
+		# Both failure branches dump the evidence that names the cause,
+		# because this check fired on guppy:xfce (run 31201546516) with a
+		# freshly source-built ffmpeg 8.1.2 whose USE line showed x264 —
+		# a build where the native h264 decoder should be unconditional —
+		# while the same check passes inside the July guppy:gnome image
+		# and against Alpine's 8.1.2. Three container reproductions of the
+		# tooling stage could not replicate it (portage tree drift), so
+		# the next failing run must answer for itself: WHICH ffmpeg ran,
+		# what its configure line disabled, what it printed to stderr
+		# (previously discarded), and what the decoder list actually held.
+		_ffmpeg_diag() {
+			{
+				echo "codec_diag: ffmpeg=$(command -v ffmpeg)"
+				ffmpeg -version 2>&1 | head -2 | sed 's/^/codec_diag: /'
+				ffmpeg -version 2>&1 | tr ' ' '\n' | grep -- '--disable-\(everything\|decoders\|decoder=[a-z0-9_]*\)' | sed 's/^/codec_diag: configure /'
+				echo "codec_diag: decoders_stdout_bytes=${#_ffmpeg_decoders}"
+				echo "codec_diag: decoders_stderr: ${_ffmpeg_stderr:-<empty>}"
+				grep -i 'h26' <<<"$_ffmpeg_decoders" | head -5 | sed 's/^/codec_diag: h26x /'
+			} >&2 || true
+		}
+		_ffmpeg_decoders=""
+		_ffmpeg_stderr=""
+		_ffmpeg_rc=0
+		_ffmpeg_stderr_file="$(mktemp)"
+		_ffmpeg_decoders="$(ffmpeg -hide_banner -decoders 2>"$_ffmpeg_stderr_file")" || _ffmpeg_rc=$?
+		_ffmpeg_stderr="$(head -c 2048 "$_ffmpeg_stderr_file")"
+		rm -f "$_ffmpeg_stderr_file"
+		if ((_ffmpeg_rc != 0)); then
+			echo "ffmpeg is installed but would not run (broken dependencies?) — cannot verify codecs" >&2
+			_ffmpeg_diag
+			if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
+				exit 1
+			fi
+		elif ! grep -q ' h264 ' <<<"$_ffmpeg_decoders"; then
+			echo "ffmpeg cannot decode h264 — a free/crippled libavcodec is installed" >&2
+			_ffmpeg_diag
+			if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
+				exit 1
+			fi
+		fi
+	fi
+
 	# ── KDE version-skew guard (pattern from ublue-os/aurora's 20-tests.sh) ──
 	# Mid-compose repo skew can ship kwin/kscreen from a newer Plasma than
 	# plasma-desktop; the session then crashes at login while every package
@@ -377,24 +549,67 @@ else
 		fi
 	fi
 
+	# ── Flatpak baseline (store + browser + a remote that can serve them) ──
+	# Asserts exactly what the build now lays down, nothing aspirational:
+	# tuna-flatpak-remote.sh bakes the Flathub remote on every base, and
+	# flatpak-preinstall.sh declares the curated set (io.github.kolunmi.Bazaar
+	# as the store, org.mozilla.firefox as the browser — Bluefin's choices)
+	# and enables flatpak-preinstall.service where the base's flatpak ships
+	# it. Guarded on flatpak existing so a hypothetical flatpak-less image is
+	# out of scope rather than red. The per-app grep list below is kept in
+	# lockstep with flatpak-preinstall.sh by
+	# tests/bats/test_build_scripts_remaining.bats — change both together.
+	if command -v flatpak >/dev/null 2>&1; then
+		require_glob '/etc/flatpak/remotes.d/flathub.flatpakrepo'
+		require_glob '/usr/share/flatpak/preinstall.d/*.preinstall'
+		for _fp_app in io.github.kolunmi.Bazaar org.mozilla.firefox; do
+			if ! grep -rqs "^\[Flatpak Preinstall ${_fp_app}\]" /usr/share/flatpak/preinstall.d; then
+				echo "missing flatpak preinstall declaration: ${_fp_app}" >&2
+				if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
+					exit 1
+				fi
+			fi
+		done
+		# Where the unit exists, declarations without the service are inert —
+		# that combination shipped: preinstall files with nothing to run them.
+		if [[ -f /usr/lib/systemd/system/flatpak-preinstall.service ]]; then
+			if ! systemctl is-enabled flatpak-preinstall.service >/dev/null 2>&1; then
+				echo "flatpak-preinstall.service is shipped but not enabled — the declared flatpaks would never install" >&2
+				if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
+					exit 1
+				fi
+			fi
+		else
+			echo "info: this base's flatpak ships no flatpak-preinstall.service; declarations are documentation until it does"
+		fi
+	fi
+
 	# ── Branding & Asset Contract ──
 	# Wallpapers: shipping only upstream artwork means a user sees upstream background on login.
 	if ! compgen -G "/usr/share/backgrounds/tunaos*" >/dev/null &&
 		! compgen -G "/usr/share/backgrounds/*/tunaos*" >/dev/null &&
 		! compgen -G "/usr/share/backgrounds/bluefin*" >/dev/null; then
-		echo "missing required path: /usr/share/backgrounds/tunaos* (branding wallpaper)" >&2
-		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then exit 0; fi
-		exit 1
-	fi
-
-	# dconf compiled database: desktop branding keyfiles in /etc/dconf/db/*.d must be compiled.
-	if compgen -G "/etc/dconf/db/*.d/*" >/dev/null 2>&1; then
-		if [[ ! -s /etc/dconf/db/local && ! -s /etc/dconf/db/gdm ]]; then
-			echo "missing compiled dconf database: keyfiles exist under /etc/dconf/db/*.d/ but /etc/dconf/db/local and gdm are missing or empty (run dconf update)" >&2
-			if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then exit 0; fi
+		echo "::warning::missing required path: /usr/share/backgrounds/tunaos* (branding wallpaper)" >&2
+		if [[ "${WALLPAPER_CHECK_FATAL:-0}" -eq 1 ]]; then
 			exit 1
 		fi
 	fi
+
+	# dconf compiled database: every keyfile dir /etc/dconf/db/<name>.d/ must have
+	# a compiled /etc/dconf/db/<name>. Iterate instead of hardcoding local/gdm —
+	# distros ship their own keyfile dirs (ibus.d on Arch) already compiled by
+	# package postinst; hardcoding local/gdm fails those falsely.
+	for _dcf_dir in /etc/dconf/db/*.d; do
+		[[ -d "$_dcf_dir" ]] || continue
+		if compgen -G "$_dcf_dir/*" >/dev/null 2>&1; then
+			_dcf_name="${_dcf_dir%.d}"
+			_dcf_name="${_dcf_name##*/}"
+			if [[ ! -s "/etc/dconf/db/${_dcf_name}" ]]; then
+				echo "missing compiled dconf database: keyfiles in ${_dcf_dir} but /etc/dconf/db/${_dcf_name} is missing or empty (run dconf update)" >&2
+				exit 1
+			fi
+		fi
+	done
 
 	install -d /usr/share/tunaos/experience-contracts
 	printf 'desktop=%s\nexperience=%s\nvalidated_at_build=true\n' "$desktop" "$experience" \

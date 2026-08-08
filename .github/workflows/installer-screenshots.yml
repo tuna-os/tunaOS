@@ -1,7 +1,10 @@
 name: Installer Walkthrough Screenshots
 
 # Boots a freshly built live ISO in QEMU, drives the bootc-install GUI with
-# scripts/run-walkthrough.sh (sendkey choreography + screendumps), and commits
+# scripts/run-walkthrough.sh (which delegates the driving to
+# scripts/installer-walkthrough.py — the fixed sendkey choreography this
+# comment used to describe was removed after it labelled three welcome-screen
+# frames as disk_select and confirm), and commits
 # the resulting flow screenshots to docs/images/installer/ — replacing the
 # repo's installer imagery with real captures on a schedule.
 #
@@ -40,7 +43,10 @@ jobs:
   walkthrough:
     name: ${{ inputs.variant || 'skipjack' }}:${{ matrix.flavor }} installer flow
     runs-on: ubuntu-24.04
-    timeout-minutes: 90
+    # Must exceed the sum of the step ceilings below (70 ISO + 30 walkthrough
+    # + 20 install-verify), or the job clock kills a step that is still inside
+    # its own budget — which reads as a hang rather than as the timeout it is.
+    timeout-minutes: 130
     strategy:
       fail-fast: false
       matrix:
@@ -65,24 +71,64 @@ jobs:
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
 
+      # The second line is the ISO-BUILD toolchain, and it is required now that
+      # tacklebox runs as a host binary rather than in a container: the
+      # container carried these tools, the runner does not. Without them the
+      # build runs all the way to the end and then dies with
+      #
+      #   Error: no systemd-boot EFI binary on host ...; install
+      #   systemd-boot-efi or systemd-boot-unsigned
+      #
+      # This is the same list installer-smoke.yml installs, and for the same
+      # reason — it has always built its ISOs from source.
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
             just podman jq golang-go git \
-            qemu-system-x86 qemu-utils ovmf socat netpbm python3-pil
+            systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk \
+            qemu-system-x86 qemu-utils ovmf socat netpbm python3-pil \
+            tesseract-ocr imagemagick
           sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
       - name: Log in to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
 
+      # TACKLEBOX_FROM_SOURCE=1 is what every other ISO-building workflow in
+      # this repo already sets — reusable-build-artifacts, live-iso-bootc,
+      # luks-e2e, publish-iso-groups and installer-smoke. This job was the only
+      # one that did not, and it is the reason it has never once gone green.
+      #
+      # Without it, tunaos_run_tacklebox() runs tacklebox INSIDE a podman
+      # container (scripts/lib/common.sh). Tacklebox then issues its own
+      # `podman run` for the live-customize step, so that step is
+      # podman-in-podman — and the nested container's DNS does not resolve:
+      #
+      #   Error: Failed to download metadata for repo 'baseos': Cannot prepare
+      #   internal mirrorlist: Curl error (6): Could not resolve hostname for
+      #   https://mirrors.centos.org/... [Could not resolve host: mirrors.centos.org]
+      #
+      # With it, tacklebox is built and run as a HOST binary at the SHA pinned
+      # in image-versions.yaml, so live-customize is an ordinary host container
+      # with working DNS. golang-go is already in this job's dependency list.
+      #
+      # The outer `sudo` goes with it. The Justfile's `iso` recipe already does
+      # `sudo -E bash ./scripts/build-iso-tacklebox.sh` itself; wrapping the
+      # whole thing in another sudo dropped the environment, which is why the
+      # variable had to be re-stated inline. installer-smoke.yml calls `just
+      # iso` unsudoed for exactly this reason.
+      # 45 was not enough once tacklebox moved to the host: the gnome leg of run
+      # 31162836652 was killed mid-build at exactly 45 minutes, having got
+      # past every previous failure point. The cosmic leg finished its build in
+      # ~7 minutes, so this is headroom for the large images, not a general
+      # slowdown.
       - name: Build live ISO (from published GHCR image)
-        timeout-minutes: 45
+        timeout-minutes: 70
         env:
           GITHUB_REPOSITORY_OWNER: tuna-os
+          TACKLEBOX_FROM_SOURCE: "1"
         run: |
-          sudo GITHUB_REPOSITORY_OWNER=tuna-os \
-            just iso "${VARIANT}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
+          just iso "${VARIANT}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
 
       - name: Run installer walkthrough
         timeout-minutes: 30
@@ -92,8 +138,77 @@ jobs:
             echo "::error::No ISO found for ${VARIANT}-${{ matrix.flavor }}"
             exit 1
           fi
-          sudo bash scripts/run-walkthrough.sh "$ISO" walkthrough-out
-          sudo chown -R "$USER:$(id -gn)" walkthrough-out
+          # FLAVOR must be set AND must survive sudo (-E), or run-walkthrough.sh
+          # falls back to FLAVOR=de and both matrix legs write the same
+          # walkthrough-de.json — a parity report that names neither frontend
+          # it came from.
+          # `|| true` so a walkthrough failure still reaches the chown below.
+          # run-walkthrough.sh runs as root, so everything it writes —
+          # serial.log included — is root-owned; without the chown the
+          # if: always() debug upload dies with EACCES and destroys the one
+          # piece of evidence a failed run produces. Run 31168173594 did
+          # exactly that: the walkthrough failed, `set -e` skipped the chown,
+          # and the serial log could not be uploaded.
+          rc=0
+          sudo -E FLAVOR="${{ matrix.flavor }}" \
+            bash scripts/run-walkthrough.sh "$ISO" walkthrough-out || rc=$?
+          sudo chown -R "$USER:$(id -gn)" walkthrough-out || true
+          if [[ "$rc" -ne 0 ]]; then
+            echo "::error::run-walkthrough.sh exited $rc"
+            exit "$rc"
+          fi
+
+          # Fail loudly rather than publish a report with the screen rows
+          # unfilled. installer-walkthrough.py degrades to "screen detection
+          # skipped" when tesseract is missing and still exits 0, so a missing
+          # dependency looked exactly like a passing run — which is how this
+          # job produced ocr:false reports for months while green.
+          json="walkthrough-out/walkthrough-${{ matrix.flavor }}.json"
+          if [[ ! -f "$json" ]]; then
+            echo "::error::$json was not written"
+            exit 1
+          fi
+          if [[ "$(jq -r .ocr "$json")" != "true" ]]; then
+            echo "::error::walkthrough ran without OCR — every screen row in"
+            echo "::error::this report is unfilled. tesseract-ocr missing?"
+            exit 1
+          fi
+          jq -r '.screens | to_entries[] | "  \(.key): \(.value)"' "$json"
+
+          # ocr:true only proves tesseract RAN. It says nothing about whether
+          # anything was recognised, and on run 31171184497 that gap was the
+          # whole story: the step went green while the harness's own TAP output
+          # read
+          #
+          #   not ok - gnome: screen changes between steps
+          #     # 0/10 transitions changed >500px
+          #     # 1 distinct visual state(s) across 11 frames
+          #   # Results: 2 passed, 7 failed, 9 total
+          #   # screens reached: (none detected)
+          #
+          # and every screen row came back false. installer-walkthrough.py
+          # reports those failures and exits 0 unless --strict is passed, so
+          # the assertion above — mine — was a gate that could not fire on the
+          # only question the job exists to answer.
+          #
+          # A run that detected NO screen at all has not produced a parity
+          # report; it has produced an empty one, which is worse, because the
+          # matrix cannot tell "we looked and found nothing" from "we never
+          # looked". Blank frames on the GPU-less runner are a known and
+          # expected limitation for cosmic/niri/xfwl4 — but the correct
+          # response to a limitation is to say so out loud, not to publish a
+          # green tick over six false rows.
+          reached=$(jq -r '[.screens[] | select(. == true)] | length' "$json")
+          total=$(jq -r '.screens | length' "$json")
+          echo "screens detected: ${reached}/${total}"
+          if [[ "$reached" -eq 0 ]]; then
+            echo "::error::the walkthrough detected NONE of the ${total} spec'd"
+            echo "::error::screens. The installer UI was never reached, so this"
+            echo "::error::report would fill the parity matrix with six false"
+            echo "::error::rows. See the DIAGNOSIS line above and the captured"
+            echo "::error::PNGs in the installer-shots-${{ matrix.flavor }} artifact."
+            exit 1
+          fi
 
       # The walkthrough performed a real install onto install-disk.qcow2.
       # Boot that disk to verify the install flow actually produced a
@@ -137,7 +252,12 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: installer-shots-${{ matrix.flavor }}
-          path: staged/*.png
+          # The parity report ships alongside the PNGs. It was being written
+          # into walkthrough-out/ and then uploaded by nothing, so the file
+          # tunaOS's own installer matrix consumes never left the runner.
+          path: |
+            staged/*.png
+            walkthrough-out/walkthrough-*.json
           if-no-files-found: error
           retention-days: 14
 

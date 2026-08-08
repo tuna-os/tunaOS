@@ -1,0 +1,45 @@
+name: frontend parity
+
+# Imports each installer frontend's GPU-less capture report into the parity
+# matrix in docs/INSTALLER-FRONTENDS.md.
+#
+# The matrix's other source is installer-smoke.yml, which needs a virgl-capable
+# host — which is why Niri and XFCE have never been evaluated at all. This does
+# not replace it: it fills the screen columns from evidence that a stock runner
+# can actually produce, and leaves launch/render/advance to the VM run. See the
+# doc for why those must not be conflated.
+
+on:
+  schedule:
+    - cron: "30 6 * * *"   # after matrix-status at 06:00
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  import:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: import parity reports
+        env:
+          # Needs read access to the frontend repos' artifacts, which the
+          # default GITHUB_TOKEN does not have — it is scoped to this repo.
+          GH_TOKEN: ${{ secrets.FRONTEND_READ_TOKEN || github.token }}
+        run: python3 scripts/import-frontend-parity.py
+
+      - name: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/INSTALLER-FRONTENDS.md
+          if git diff --cached --quiet; then
+            echo "no parity changes"
+            exit 0
+          fi
+          # Pushed only when a cell actually moves, same rule as matrix-status.
+          git commit -m "docs: import installer frontend parity reports [skip ci]"
+          git push

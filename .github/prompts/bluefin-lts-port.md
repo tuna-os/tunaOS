@@ -20,7 +20,7 @@ bluefin-lts uses an **almost identical directory structure** to TunaOS (both EL1
 
 | bluefin-lts | TunaOS equivalent |
 |---|---|
-| `build_scripts/gnome.sh` | `build_scripts/gnome.sh` |
+| `build_scripts/gnome.sh` | `manifests/desktops/gnome.yaml` — GNOME is manifest-driven; there is no gnome.sh |
 | `system_files/` | `system_files/` |
 | `system_files_overrides/gnome/` | `system_files_overrides/gnome/` |
 | `system_files_overrides/dx/` | `system_files_overrides/dx/` (if present) |
@@ -32,7 +32,8 @@ if the upstream change is in one of these files, the port is often trivial.
 
 ## Key Files to Read First
 
-- `build_scripts/gnome.sh` — all gnome package installs and post-setup
+- `manifests/desktops/gnome.yaml` — all GNOME package sets, per package manager
+- `build_scripts/desktop/install-desktop.sh` — the generic installer that reads it
 - `system_files_overrides/gnome/` — gnome-specific config files
 - `system_files/` — shared config files for all flavors
 - `Containerfile` lines ~130–145 — gnome flavor build stage
@@ -40,7 +41,9 @@ if the upstream change is in one of these files, the port is often trivial.
 
 ## Porting Rules
 
-1. **Packages**: Port packages from `build_scripts/gnome.sh` directly. If the upstream adds
+1. **Packages**: Port packages into `manifests/desktops/gnome.yaml` under the section
+   for the package manager concerned (`fedora`, `el10`, `apt`, `zypper`, `emerge`).
+   If the upstream adds
    a package in an EL10-specific COPR that TunaOS already uses (e.g., `jreilly1821/c10s-gnome-50-fresh`,
    `jreilly1821/c10s-gnome-50-fresh`, `ublue-os/packages`), it's safe to add.
    If it requires a new COPR not already in TunaOS, note it in the PR body.

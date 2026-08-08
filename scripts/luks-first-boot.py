@@ -58,6 +58,38 @@ contract_wait = int(sys.argv[5]) if len(sys.argv) > 5 else 0
 CONTRACT_RE = re.compile(r"TUNAOS_DESKTOP_CONTRACT_(OK|FAIL)")
 contract_result = None
 
+# Dracut's emergency shell announces itself and then waits forever; the boot
+# will never reach userspace, and the ONLY diagnosis — rdsosreport.txt — lives
+# inside the guest and dies with it. guppy:xfce hit exactly this (run
+# 31182709691): "Failed to start Switch Root", emergency shell, and an
+# artifact that proves the failure happened while containing nothing about
+# why. The console is interactive at that prompt, so harvest the report
+# instead of timing out around it: press Enter for the maintenance shell,
+# cat the report and the journal tail to the serial (which tee already
+# captures into installed-serial.log), then bail with the existing exit 3.
+emergency_seen = False
+
+
+def harvest_emergency(ser):
+    print("\n>>> emergency shell detected; harvesting rdsosreport", flush=True)
+    ser.sendall(b"\n")
+    time.sleep(3)
+    ser.sendall(b"cat /run/initramfs/rdsosreport.txt 2>/dev/null || true\n")
+    time.sleep(5)
+    ser.sendall(b"journalctl -b --no-pager -n 120 2>/dev/null || true\n")
+    # Drain whatever the guest prints for a bounded window.
+    drain_until = time.time() + 30
+    while time.time() < drain_until:
+        try:
+            d = ser.recv(4096)
+            if d:
+                sys.stdout.buffer.write(d)
+                sys.stdout.flush()
+        except socket.timeout:
+            # Expected: the guest is simply quiet right now. Keep polling until
+            # drain_until rather than cutting the harvest short.
+            pass
+
 while time.time() < deadline:
     try:
         d = ser.recv(4096)
@@ -80,6 +112,14 @@ while time.time() < deadline:
         reached_login = True
         login_at = time.time()
         print("\n>>> userspace reached; letting first-boot enrollment run", flush=True)
+
+    # Initramfs gave up: userspace will never come. Capture the diagnosis the
+    # emergency shell offers, then stop burning the timeout — the exit path
+    # below reports "never reached userspace" exactly as before.
+    if not emergency_seen and not reached_login and "Entering emergency mode" in text:
+        emergency_seen = True
+        harvest_emergency(ser)
+        break
 
     # Scan the WHOLE buffer, not the 4000-byte window above: the contract
     # marker is a single line emitted once, and at 10s-ish poll granularity a

@@ -1,0 +1,24 @@
+{
+    "KPackageStructure": "Plasma/LookAndFeel",
+    "KPlugin": {
+        "Authors": [
+            {
+                "Email": "",
+                "Name": "TunaOS Contributors"
+            }
+        ],
+        "Category": "",
+        "Description": "TunaOS - Theme variant of KDE Breeze",
+        "Id": "org.tunaos.light.desktop",
+        "License": "GPLv2+",
+        "Name": "TunaOS Light",
+        "ServiceTypes": [
+            "Plasma/LookAndFeel"
+        ],
+        "Version": "0.01",
+        "Website": "https://github.com/tuna-os/tunaos"
+    },
+    "X-KDE-ParentApp": "",
+    "X-Plasma-RootContainmentLayout": "org.kde.plasma.desktop-layout.js",
+    "X-Plasma-MainScript": "defaults"
+}

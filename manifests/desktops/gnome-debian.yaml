@@ -22,3 +22,13 @@ packages:
     # gschema overrides for autologin/no-sleep; Debian ships the tool in the
     # dev-bin package (Fedora's glib2 includes it in the main package).
     - libglib2.0-dev-bin
+
+# Post-install scripts to source (relative to build_scripts/desktop/).
+# This manifest had no post_install at all, so flounder's GNOME images also
+# never got the tuna-os Flatpak remote — both remotes now come from
+# tuna-flatpak-remote.sh like every other desktop manifest.
+post_install:
+  - tuna-flatpak-remote.sh
+  # Curated Flatpak set (store + browser) + preinstall service — see the
+  # script header; asserts live in verify-desktop-experience.sh.
+  - flatpak-preinstall.sh

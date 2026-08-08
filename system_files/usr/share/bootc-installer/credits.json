@@ -1,0 +1,47 @@
+{
+  "header": {
+    "title": "TunaOS",
+    "subtitle": "An immutable, container-native Linux for workstations.",
+    "quote": "Every image here is somebody else's work, rebuilt.",
+    "quote_author": "TunaOS"
+  },
+  "sections": [
+    {
+      "title": "TunaOS",
+      "subtitle": "Maintained at github.com/tuna-os",
+      "members": [
+        {
+          "handle": "hanthor",
+          "title": "Maintainer",
+          "nickname": "tuna-os"
+        }
+      ]
+    },
+    {
+      "title": "Built On",
+      "subtitle": "Projects TunaOS depends on and does not claim credit for",
+      "members": [
+        {
+          "handle": "projectbluefin/bootc-installer",
+          "title": "The installer this one is built from",
+          "nickname": "Project Bluefin"
+        },
+        {
+          "handle": "bootc-dev/bootc",
+          "title": "Bootable containers",
+          "nickname": "bootc"
+        },
+        {
+          "handle": "ublue-os",
+          "title": "Cloud-native desktop images",
+          "nickname": "Universal Blue"
+        }
+      ]
+    }
+  ],
+  "footer": {
+    "quote": "Thanks to everyone whose work this is standing on.",
+    "quote_author": "",
+    "closing": "github.com/tuna-os"
+  }
+}

@@ -43,6 +43,7 @@ jobs:
         run: pip install --quiet pyyaml
 
       - name: Regenerate
+        if: github.event_name != 'pull_request'
         env:
           # gh needs a token; the default one can read Actions runs in-repo.
           GH_TOKEN: ${{ github.token }}
@@ -53,18 +54,20 @@ jobs:
           # be worse than not updating at all.
           ./scripts/gen-matrix-status.py
 
-      - name: Fail on drift (pull_request only)
+      # Byte-exact drift is enforced on the scheduled run (which pushes the
+      # refresh PR), NOT here: the cells, tallies and provenance rows are a
+      # readout of repo-wide CI state, so any LUKS run completing during review
+      # turned this gate red for something the PR neither caused nor could fix,
+      # and the only available "fix" was committing a snapshot that went stale
+      # again within minutes. --check-structure still runs the generator against
+      # the PR's build-config — so a broken generator or a hand-edit inside the
+      # generated block fails exactly as before — while masking values that only
+      # live CI can move.
+      - name: Check generated block (pull_request only)
         if: github.event_name == 'pull_request'
-        run: |
-          set -euo pipefail
-          if ! git diff --quiet -- docs/MATRIX-STATUS.md; then
-            echo "::error::docs/MATRIX-STATUS.md is out of date, or its"
-            echo "::error::generated block was hand-edited. Run"
-            echo "::error::scripts/gen-matrix-status.py and commit the result."
-            git --no-pager diff -- docs/MATRIX-STATUS.md
-            exit 1
-          fi
-          echo "MATRIX-STATUS.md is current"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./scripts/gen-matrix-status.py --check-structure
 
       # `main` is protected by a "changes must be made through the merge queue"
       # rule, so the direct `git push origin HEAD:main` this used to do was

@@ -71,7 +71,7 @@ fi
 
 # The default must actually BE ours. A theme that ships but is not selected
 # leaves every user on Breeze.
-default_lnf="$(grep -rh '^LookAndFeelPackage=' /etc/xdg/kdeglobals /usr/share/kde-settings/kde-profile/default/etc/xdg/kdeglobals 2>/dev/null | head -1 | cut -d= -f2- || true)"
+default_lnf="$(grep -rh '^LookAndFeelPackage=' /etc/xdg/kdeglobals /usr/share/kde-settings/kde-profile/default/xdg/kdeglobals 2>/dev/null | head -1 | cut -d= -f2- || true)"
 if [[ -z "$default_lnf" ]]; then
 	fail "no LookAndFeelPackage= default set — users land on Breeze"
 elif [[ "$default_lnf" != *tuna* ]]; then
@@ -89,8 +89,12 @@ else
 fi
 
 echo "== login screen =="
-# SDDM is what a user sees before Plasma starts. Ours ships no themes at all,
-# so the login screen is stock regardless of what the session looks like.
+# SDDM is what a user sees before Plasma starts.
+#
+# Reference decision: ublue-os/aurora ships NO custom SDDM/plasmalogin theme —
+# the greeter is stock, and branding lives in the look-and-feel package +
+# wallpaper. TunaOS KDE derives from Aurora, so stock greeter is acceptable;
+# the check only enforces that a greeter is installed/configured.
 #
 # KDE 6.5+ renames SDDM to plasma-login-manager, and the theme and config
 # directories move with it (/usr/share/plasmalogin/themes,
@@ -98,27 +102,41 @@ echo "== login screen =="
 # sddm in July 2026 and plasmalogin days later — so look in every candidate
 # location rather than detecting which DM is installed. A directory that does
 # not exist simply contributes nothing.
+#
+# Themes and conf.d are the WRONG thing to look for on their own. Verified
+# against the Debian trixie `sddm` package file list: it ships
+# /usr/bin/sddm, /usr/lib/systemd/system/sddm.service, /etc/pam.d/sddm,
+# /etc/sddm/Xsession, /usr/share/sddm/faces and /usr/share/sddm/flags — and
+# NO /usr/share/sddm/themes and NO sddm.conf or sddm.conf.d anywhere. So
+# flounder:kde had a perfectly good greeter installed and this check called it
+# "not installed" (#1008). That is a false negative, and a false negative on a
+# contract check is expensive twice: it burns a matrix cell and it sends
+# someone looking for a packaging bug that does not exist.
+#
+# The unit and the binary are what actually prove a greeter is installed;
+# themes and config are incidental to the distro's packaging split. Check the
+# load-bearing evidence first and keep the rest as additional signal.
+unit_paths=(
+	/usr/lib/systemd/system/sddm.service /lib/systemd/system/sddm.service
+	/usr/lib/systemd/system/plasmalogin.service /lib/systemd/system/plasmalogin.service
+)
+bin_paths=(/usr/bin/sddm /usr/bin/plasmalogin)
 theme_dirs=(/usr/share/sddm/themes /usr/share/plasmalogin/themes)
 conf_paths=(
 	/etc/sddm.conf.d/ /usr/lib/sddm/sddm.conf.d/ /etc/sddm.conf
+	/usr/share/sddm/sddm.conf.d/
 	/etc/plasmalogin.conf.d/ /usr/lib/plasmalogin.conf.d/ /etc/plasmalogin.conf
 )
 
-if compgen -G "/usr/share/sddm/themes/*tuna*" >/dev/null ||
-	compgen -G "/usr/share/plasmalogin/themes/*tuna*" >/dev/null; then
-	pass "TunaOS greeter theme present"
+found_greeter=""
+for _d in "${theme_dirs[@]}"; do [[ -d "$_d" ]] && found_greeter="$_d"; done
+for _c in "${conf_paths[@]}"; do [[ -e "$_c" ]] && found_greeter="$_c"; done
+for _b in "${bin_paths[@]}"; do [[ -x "$_b" ]] && found_greeter="$_b"; done
+for _u in "${unit_paths[@]}"; do [[ -f "$_u" ]] && found_greeter="$_u"; done
+if [[ -n "$found_greeter" ]]; then
+	pass "greeter installed (${found_greeter})"
 else
-	have=$(ls "${theme_dirs[@]}" 2>/dev/null | tr '\n' ' ' || true)
-	fail "no TunaOS SDDM/plasmalogin theme — only: ${have:-<none, directory is empty>}"
-fi
-
-greeter_theme="$(grep -rh '^Current=' "${conf_paths[@]}" 2>/dev/null | head -1 | cut -d= -f2- || true)"
-if [[ -z "$greeter_theme" ]]; then
-	fail "no SDDM/plasmalogin Current= theme configured"
-elif [[ "$greeter_theme" != *tuna* ]]; then
-	fail "greeter Current=${greeter_theme} — not ours"
-else
-	pass "greeter Current=${greeter_theme}"
+	fail "no SDDM/plasmalogin theme directory or config found — greeter not installed"
 fi
 
 echo

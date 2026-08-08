@@ -39,7 +39,7 @@ name: Watch upstream (reusable)
         required: true
         type: string
       build_script:
-        description: 'Build script the flavor uses (e.g. build_scripts/kde.sh)'
+        description: 'Where the flavor is defined (e.g. manifests/desktops/kde.yaml)'
         required: true
         type: string
       overrides_dir:

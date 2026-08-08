@@ -133,7 +133,7 @@ jobs:
         if: ${{ startsWith(inputs.flavor, 'base') }}
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@9623ba6a5577ad1221d76a223c9dacbd9043bd04 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@f8418f73faf163c048ab23f10655235c078d7606 # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
           update-podman: "true"
@@ -545,7 +545,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:d2ad9a742d38e1ab550fbb20911056339632a5ca2f01777a32422a4c944fcb99  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:6db0999b1bbb8db10bf0e25b5166abaa5134c453f6e966f7b395af28101bd345  # :latest linux/amd64 as of 2026-06-13
       options: --privileged --security-opt seccomp=unconfined
     permissions:
       contents: read

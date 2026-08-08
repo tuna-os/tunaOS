@@ -7,6 +7,14 @@ packages:
   apt:
     - ubuntu-desktop-minimal
     - gnome-shell-extension-manager
+    # gnome-session and ubuntu-session are explicit because pkg_install runs
+    # --no-install-recommends: since resolute's GNOME 50.1 update they are no
+    # longer pulled in without recommends, and without them
+    # /usr/share/wayland-sessions has no *gnome*.desktop at all, which
+    # configure-desktop-runtime.sh hard-fails on (grouper:gnome red from
+    # 2026-07-21). Same rule as gnome-keyring below.
+    - gnome-session
+    - ubuntu-session
     - gnome-browser-connector
     - gnome-disk-utility
     - gnome-system-monitor
@@ -23,9 +31,12 @@ packages:
     # every app that stores a secret silently fail. Present in Ubuntu 26.04
     # main (50.0-1), so this is an omission in the list, not an upstream gap.
     - gnome-keyring
+    # ...and the PAM module, so the keyring is unlocked by the login password
+    # instead of prompting again on first use (matches niri and cosmic).
+    - libpam-gnome-keyring
 
   fedora:
-    packages:
+    packages: &fedora_gnome_packages
       - ModemManager
       - NetworkManager-adsl
       - NetworkManager-openconnect-gnome
@@ -88,6 +99,29 @@ packages:
       - PackageKit-command-not-found
       - gnome-software
       - gnome-software-fedora-langpacks
+
+  # ── Hummingbird ────────────────────────────────────────────────────────
+  # Hummingbird is a Fedora Rawhide rebuild: 30 of 38 core packages carry
+  # Rawhide's exact version AND release, differing only in the .hum1 dist tag.
+  # So the package NAMES are Fedora's, and this section aliases the fedora
+  # list above rather than restating it — a second copy across five desktop
+  # manifests is how these files drift apart.
+  #
+  # What differs is only where the names resolve from. Hummingbird publishes a
+  # base OS and no desktop: of the 58 packages the fedora list installs, its
+  # 3384-package repository ships exactly one (avahi). Rawhide's own binaries
+  # cannot be substituted either — glibc 2.43 vs 2.44, libxml2.so.16 vs .so.2,
+  # libcrypto.so.3 vs .so.4 — so they are rebuilt against Hummingbird's
+  # buildroot and published here. Measured in tuna-os/tunaos-packages#250.
+  #
+  # NOTE: not usable until that build lands — the baseurl below currently 404s.
+  # The wiring is here so the cell works the moment it does.
+  hummingbird:
+    repos:
+      - name: tunaos-hummingbird
+        baseurl: https://repo.tunaos.org/hummingbird/20251124-x86_64/
+        priority: 5
+    packages: *fedora_gnome_packages
 
   el10:
     # COPR repos for GNOME 50 backport — EL10 ships GNOME 48 natively.
@@ -273,3 +307,6 @@ versionlock:
 post_install:
   - tuna-flatpak-remote.sh
   - gnome-extensions.sh
+  # Curated Flatpak set (store + browser) + preinstall service — see the
+  # script header; asserts live in verify-desktop-experience.sh.
+  - flatpak-preinstall.sh

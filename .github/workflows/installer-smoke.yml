@@ -1,7 +1,8 @@
 # Installer GUI smoke (tunaOS#678 phase 1): per-desktop proof that the
 # live ISO autologins and the installer frontend actually starts.
 #
-# For each flavor: build the dev ISO (SSH enabled), boot it under OVMF,
+# For each flavor (gnome and the four forks): build the dev ISO (SSH enabled),
+# boot it under OVMF,
 # wait for TUNAOS_LIVE_READY, then over SSH assert the installer process
 # is running (flatpak run org.tunaos.Installer* / bootc-installer) and
 # capture a desktop screenshot as reviewable evidence.
@@ -21,7 +22,12 @@ on:
       flavors:
         description: "Comma-separated flavors"
         required: false
-        default: "kde,cosmic,niri,xfce"
+        # gnome included: it is the flow the four forks are asked to match, and
+        # it was the only frontend with no per-DE smoke leg at all. The APP
+        # mapping below already falls through to org.bootcinstaller.Installer
+        # for it, and the walkthrough's --strict list already names it — only
+        # this default kept it from ever running.
+        default: "gnome,kde,cosmic,niri,xfce"
         type: string
   schedule:
     # Weekly, after the Tuesday image builds settle.
@@ -39,7 +45,7 @@ jobs:
     steps:
       - id: gen
         env:
-          FLAVORS: ${{ inputs.flavors || 'kde,cosmic,niri,xfce' }}
+          FLAVORS: ${{ inputs.flavors || 'gnome,kde,cosmic,niri,xfce' }}
           VARIANT: ${{ inputs.variant || 'yellowfin' }}
         run: |
           M=$(jq -cn --arg v "$VARIANT" --arg f "$FLAVORS" \
@@ -99,8 +105,30 @@ jobs:
           FLAVOR: ${{ matrix.flavor }}
         run: |
           mkdir -p smoke-out
+          # --memory 8192, not the 4096 default. Run 31216208138's cosmic leg
+          # had cosmic-comp OOM-killed THREE times:
+          #
+          #   Out of memory: Killed process 2146 (cosmic-comp)
+          #   total-vm:2697460kB ... task_memcg=/user.slice/user-974.slice
+          #
+          # Every captured frame was 282 bytes of black, and the harness
+          # reported "0/9 frames above stddev" — which reads as a GL failure and
+          # is not one. The live overlay's upperdir alone is an 8G tmpfs backed
+          # by guest RAM; a Wayland compositor on top of that does not fit in 4G.
+          # ubuntu-latest runners have 16G, so 8G guest leaves ample host.
           sudo -E ./scripts/iso-e2e.sh "$ISO_PATH" --ssh-only --keep-vm \
-            --timeout 1200 --output smoke-out
+            --memory 8192 --timeout 1200 --output smoke-out
+
+          # An OOM kill must never reach the walkthrough as "blank screen".
+          # It is the one failure that looks identical to missing GL, costs a
+          # full 25-minute leg to misdiagnose, and is one grep away from
+          # certainty. Fail here, naming the process the kernel killed.
+          if grep -q 'Out of memory: Killed process' smoke-out/serial.log 2>/dev/null; then
+            echo "::error::guest ran out of memory — the kernel killed:"
+            grep 'Out of memory: Killed process' smoke-out/serial.log | sed 's/^/  /'
+            echo "Raise --memory above 8192 rather than reading the black frames as a GPU problem."
+            exit 1
+          fi
 
       - name: Assert live desktop session + installer frontend
         env:
@@ -182,11 +210,21 @@ jobs:
         env:
           FLAVOR: ${{ matrix.flavor }}
         run: |
-          # Smithay compositors (niri, xfwl4) cannot render without virgl, so a
-          # GPU-less runner shows blank frames legitimately — enforce only where
-          # rendering is possible; elsewhere still record screens for the matrix.
-          STRICT=""
-          case "${FLAVOR}" in kde|cosmic|gnome) STRICT="--strict" ;; esac
+          # Every flavor is strict. This used to exempt niri and xfce on the
+          # premise that "Smithay compositors cannot render without virgl, so a
+          # GPU-less runner shows blank frames legitimately" — which is false on
+          # both halves. The kernel in these very runs reports
+          #   [drm] pci: virtio-vga detected
+          # so a render node exists; and the blank frames that motivated the
+          # carve-out were the COMPOSITOR BEING OOM-KILLED (run 31216208138:
+          # cosmic-comp killed three times), fixed by the 8G guest above.
+          #
+          # An exemption granted on a wrong premise is worse than no gate: it
+          # made two of the five frontends permanently unable to fail the render
+          # and screen-coverage checks, which is exactly the drift this workflow
+          # exists to catch. If niri or xfce genuinely cannot render here, that
+          # must show up as a red leg with frames to look at, not as silence.
+          STRICT="--strict"
           if sudo test -S smoke-out/monitor.sock; then
             set +e
             sudo python3 scripts/installer-walkthrough.py \
@@ -227,6 +265,29 @@ jobs:
             echo
             echo "=== rendering capability in the live session ==="
             $SSH 'ls -l /dev/dri/ 2>/dev/null; echo "--- eglinfo/vulkaninfo ---"; (eglinfo 2>&1 | head -20) || true; (vulkaninfo --summary 2>&1 | head -20) || true' 2>/dev/null || true
+            echo
+            echo "=== who the display manager is, and which greetd config it reads ==="
+            # Added because run 31183217981's cosmic leg sat on the
+            # cosmic-greeter LOGIN SCREEN — liveuser, password prompt — so the
+            # installer never launched. desktop-cosmic.sh writes
+            # /etc/greetd/config.toml with [initial_session] user=liveuser
+            # command=cosmic-session, which should bypass any greeter, and the
+            # symptom says it did not take. The evidence to tell WHY was not
+            # collected: greetd logs to the journal, not to ttyS0, and the
+            # serial log we upload has nothing about the session at all.
+            #
+            # install-desktop.sh documents the shape that would explain it —
+            # cosmic-greeter.service IS greetd, wrapped, started as
+            #   ExecStart=greetd --config /etc/greetd/cosmic-greeter.toml
+            # i.e. a DIFFERENT file from the one the live adapter writes. That
+            # is a hypothesis, not a finding: this run reported the display
+            # manager as greetd.service, not cosmic-greeter.service. Rather
+            # than change autologin on a guess, collect what settles it.
+            $SSH 'echo "-- display-manager.service ->"; readlink -f /etc/systemd/system/display-manager.service 2>/dev/null; \
+                  echo "-- greetd config files present --"; ls -l /etc/greetd/ 2>/dev/null; \
+                  echo "-- ExecStart of the active DM --"; systemctl cat "$(basename "$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null)" 2>/dev/null)" 2>/dev/null | grep -E "^ExecStart|^\[" | head -20; \
+                  echo "-- /etc/greetd/config.toml as installed --"; cat /etc/greetd/config.toml 2>/dev/null; \
+                  echo "-- greetd journal --"; sudo journalctl -u greetd -u cosmic-greeter --no-pager 2>/dev/null | tail -40' 2>/dev/null || true
             echo
             echo "=== windows the compositor actually has ==="
             # -x matches comm exactly, so this cannot self-match the way a
