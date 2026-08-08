@@ -186,4 +186,21 @@ Canonical rollout plan for verifying end-to-end user ISO installation experience
 4. **Phase 4 — Frontend Expansion**: Progressive extension across GNOME, KDE, COSMIC, Niri, and XFCE frontends.
 5. **Phase 5 — ISO Builder Parity**: Unified verification contract for both CI-built and browser-built (ISO Builder #673) media via required experience manifests.
 
+---
+
+## Apple Silicon (Asahi Linux) Support (#781)
+
+Umbrella initiative for making TunaOS bootable on M1/M2 Apple Silicon Macs via the Asahi stack:
+
+- **Naming Convention**: `asahi` is a **tag suffix** (`bonito:gnome-asahi`), never a separate variant/image name.
+- **Verification Harness (#776 / #910)**: Daily 35-point golden-manifest boot-chain sweep. Bonito (Fedora) and Grouper (Ubuntu) are verified 36/36 green. Remaining variants are undergoing kernel and boot-chain alignment (#777, #911, #912, #914).
+- **Installer Track (`bootc-installer-asahi`)**:
+  - D0: Real-image payload packaging & validation.
+  - D1: Fisherman first-boot agent integration.
+  - D2: `asahi-installer` JSON mode interface.
+  - D3: macOS SwiftUI frontend application.
+  - D4: recoveryOS UX, LUKS, and Wi-Fi configuration.
+- **Constraints**: M1/M2 hardware targets only; no live-ISO path on Apple Silicon; no Apple firmware redistribution; GitHub arm64 runners use TCG emulation.
+
+
 
