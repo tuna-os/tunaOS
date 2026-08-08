@@ -17,6 +17,12 @@ on:
 permissions:
   contents: write
   actions: read
+  # Needed to open the import PR; `main` only accepts merge-queue changes.
+  pull-requests: write
+
+concurrency:
+  group: frontend-parity
+  cancel-in-progress: false
 
 jobs:
   import:
@@ -31,15 +37,54 @@ jobs:
           GH_TOKEN: ${{ secrets.FRONTEND_READ_TOKEN || github.token }}
         run: python3 scripts/import-frontend-parity.py
 
-      - name: commit
+      # `main` carries a "changes must be made through the merge queue" rule,
+      # so the `git push` straight to main this step used to do was rejected
+      # every time an import produced anything:
+      #
+      #   remote: error: GH013: Repository rule violations found for refs/heads/main
+      #   remote: - Changes must be made through the merge queue
+      #   ! [remote rejected] main -> main
+      #
+      # The import itself had already succeeded, so the red job hid the real
+      # symptom: the matrix has never received a single imported cell, and the
+      # generated block still reads "not yet imported" — the exact "no data
+      # looks like fine" failure the document exists to prevent. matrix-status
+      # hit this identically (see its comment); do what it does and open a PR.
+      - name: Open a PR with the imported parity reports
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: automation/frontend-parity
         run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/INSTALLER-FRONTENDS.md
-          if git diff --cached --quiet; then
+          set -euo pipefail
+          # Pushed only when a cell actually moves, same rule as matrix-status.
+          if git diff --quiet -- docs/INSTALLER-FRONTENDS.md; then
             echo "no parity changes"
             exit 0
           fi
-          # Pushed only when a cell actually moves, same rule as matrix-status.
-          git commit -m "docs: import installer frontend parity reports [skip ci]"
-          git push
+          git config user.name "github-actions[bot]"
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+          # One long-lived branch, force-pushed: the block is fully generated,
+          # so each import supersedes the last. It also keeps this to a single
+          # open PR — the block embeds each frontend's newest capture run URL,
+          # which moves whenever that repo pushes to main (KDE alone ran nine
+          # times on 2026-08-07), so a fresh PR per night would be daily noise.
+          git checkout -b "$BRANCH"
+          git add docs/INSTALLER-FRONTENDS.md
+          # No `[skip ci]`: that marker existed to stop a direct-to-main push
+          # from re-triggering CI. On a PR head commit it suppresses the PR's
+          # own checks instead, and a check that never reports cannot clear the
+          # merge queue — the change would sit unmergeable rather than land.
+          git commit -m "docs: import installer frontend parity reports ($(date -u +%Y-%m-%d))"
+          git push --force origin "$BRANCH"
+
+          if [[ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]]; then
+            gh pr create --base main --head "$BRANCH" \
+              --title "docs: import installer frontend parity reports" \
+              --body "$(printf '%s\n\n%s\n\n%s\n' \
+                'Imported by `scripts/import-frontend-parity.py` from the GPU-less captures in each frontend repo.' \
+                'Screen columns only — launch, render and advance stay with the VM walkthrough.' \
+                'Force-updated in place by the `frontend parity` workflow, so this branch always holds the newest import.')"
+          else
+            echo "PR already open for $BRANCH — force-push refreshed it."
+          fi
