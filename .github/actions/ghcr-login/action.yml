@@ -14,12 +14,17 @@ runs:
     # Podman login is required separately because some build steps invoke podman
     # directly rather than going through the Docker credential store.
     # Sudo podman is needed for privileged build operations (e.g. isogenerator).
+    # podman requires >=2048 open file descriptors to init its lock file
+    # (/libpod_lock). GitHub-hosted arm64 runners default to a lower
+    # ulimit -n, which made podman login fail with exit 125:
+    #   Error: failed to open 2048 locks in /libpod_lock: numerical result out of range
     - name: Login to Podman (user)
       run: |
+        ulimit -n 4096
         echo "${{ github.token }}" | podman login -u "${{ github.actor }}" --password-stdin ghcr.io
       shell: bash
 
     - name: Login to Podman (sudo)
       run: |
-        echo "${{ github.token }}" | sudo podman login -u "${{ github.actor }}" --password-stdin ghcr.io
+        sudo TOKEN="${{ github.token }}" ACTOR="${{ github.actor }}" bash -c 'ulimit -n 4096 && echo "$TOKEN" | podman login -u "$ACTOR" --password-stdin ghcr.io'
       shell: bash
