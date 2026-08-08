@@ -105,11 +105,14 @@ The ISO uses tacklebox (same as all other TunaOS variants) — UEFI live boot wi
 ### Option 2: bootc switch (from an existing RHEL system)
 
 ```bash
-# Switch a running RHEL 10 system to any redfin flavor
-sudo bootc switch localhost/redfin:gnome
-sudo bootc switch localhost/redfin:kde
-sudo bootc switch localhost/redfin:niri
-sudo bootc switch localhost/redfin:cosmic
+# Switch a running RHEL 10 system to any locally-built redfin flavor.
+# --transport=containers-storage is load-bearing: these refs live in root's
+# podman storage, and without it bootc would try to pull "localhost" as a
+# registry (the renner0e/server image-factory pattern uses the same flag).
+sudo bootc switch --transport=containers-storage localhost/redfin:gnome
+sudo bootc switch --transport=containers-storage localhost/redfin:kde
+sudo bootc switch --transport=containers-storage localhost/redfin:niri
+sudo bootc switch --transport=containers-storage localhost/redfin:cosmic
 ```
 
 ### Option 3: Direct disk install (VMs)
@@ -154,9 +157,48 @@ sudo bootc switch registry.internal.example.com/redfin:gnome
 # After first switch, updates happen automatically via uupd timer
 ```
 
-See [renner0e/server](https://github.com/renner0e/server) for a systemd timer pattern that automates this.
-
 Each deployed system must be covered by a RHEL subscription (the same free Developer Subscription works).
+
+### Systemd timer (self-hosted rebuild + switch)
+
+For a single machine that both builds and runs redfin (a corral VM, a QEMU
+install), the repo ships a TunaOS adaptation of the
+[renner0e/server](https://github.com/renner0e/server) image-factory pattern
+under `examples/redfin-image-factory/`: a timer rebuilds
+`localhost/redfin:gnome` daily, `bootc switch`es the machine to the fresh
+image, and prunes bootc images older than a week (rollback targets stay).
+
+```bash
+# 1. Check out the tunaos source where the unit expects it
+sudo git clone https://github.com/tuna-os/tunaos /var/lib/tunaos-image-factory
+
+# 2. Give the factory its RHSM credentials (mode 0600 — never inline)
+sudo install -m 0600 /dev/null /etc/bootc-image-factory/rhsm.env
+sudoedit /etc/bootc-image-factory/rhsm.env
+#   RHSM_USER=your-rh-username
+#   RHSM_PASSWORD=your-rh-password
+#   (or the activation-key form: RHSM_ORG=... RHSM_ACTIVATION_KEY=...)
+
+# 3. Make sure root can pull from registry.redhat.io — copy your auth.json to
+#    root's store (see "Using auth.json on builder VMs" above)
+
+# 4. Install and start the timer
+sudo cp examples/redfin-image-factory/bootc-image-factory-build.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now bootc-image-factory-build.timer
+
+# Inspect / trigger manually
+systemctl list-timers bootc-image-factory-build.timer
+sudo systemctl start bootc-image-factory-build.service   # run once now
+journalctl -u bootc-image-factory-build.service -f       # watch the rebuild
+```
+
+The build runs as a oneshot and `bootc switch` is an `ExecStartPost`, so the
+machine only switches after a successful build — a broken image is never
+switched to. `--transport=containers-storage` reads root's podman storage,
+which is where the root-run build stores `localhost/redfin:gnome`. If `just`
+lives outside the unit's `PATH` (e.g. under `~/.cargo`), add its directory to
+the `Environment=PATH=` line in the service file.
 
 ## Why No Public Images?
 
