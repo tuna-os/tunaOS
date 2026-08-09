@@ -1,6 +1,6 @@
 # tunaOS Roadmap
 
-**Last updated**: 2026-08-08 (correction) | **Maintainer**: tuna-os (hanthor)
+**Last updated**: 2026-08-08 (Q4 planning + adoption metrics) | **Maintainer**: tuna-os (hanthor)
 
 ---
 
@@ -34,11 +34,12 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
 ### Community
 
-- 55 stars, 2 forks
+- 56 stars, 3 forks
 - CONTRIBUTING.md, SECURITY.md, CODE_OF_CONDUCT.md published (June 2026)
 - Discussions enabled
 - Multi-agent development active (architect, guide, sec-check, quality, CI, outreach)
 - 34+ community outreach issues filed; product-readiness gate (#563) resolved
+- ⚠️ Adoption metrics untracked — no usage/telemetry data on the 179 downloadable ISOs (#1174, filed 08-08); first monthly download/usage snapshot planned for Q4
 
 ---
 
@@ -99,7 +100,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
 **Theme**: Enterprise readiness, community governance, ecosystem integration.
 
-**Planning started (2026-08-08)**: Q4 milestone #3 created; tracking issue #1159 open. Strategist-owned goals now tracked (#1167 branch protection, #1168 governance); Release automation + Package signing/SBOM remain untracked for ci-maintainer/sec-check. Stale dependency refs (#306/#307/#212/#301 closed) flagged in #1159.
+**Planning started (2026-08-08)**: Q4 milestone #3 created; tracking issue #1159 open. Strategist-owned goals now tracked (#1167 branch protection, #1168 governance); Release automation + Package signing/SBOM remain untracked for ci-maintainer/sec-check. Stale dependency refs (#306/#307/#212/#301 closed) flagged in #1159. Extended 08-08 evening: adoption metrics (#1174) and variant lifecycle policy (#1175) added as strategist-owned goals.
 
 | Goal | Owner | Dependencies |
 |------|-------|--------------|
@@ -113,6 +114,8 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | Bonito (Fedora 44) GA carryover | ci-maintainer | #272 |
 | Redfin (RHEL 10) alpha GA | ci-maintainer | #609 |
 | Fedora 45 base readiness | ci-maintainer | #1171 |
+| Adoption metrics / usage telemetry | strategist | #1174 |
+| Variant lifecycle policy (Beta→Stable exit criteria) | strategist | #1175 |
 
 ---
 
