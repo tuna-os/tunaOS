@@ -83,28 +83,31 @@ time in the browser — what you clicked is what installs.
 
 ## Threat model notes
 
-- The shim is GET/HEAD-only, org-allowlisted (`tuna-os/*`), and forwards
-  only `Authorization`/`Accept` — it cannot be used as a general relay,
-  and it never sees credentials (public images, anonymous tokens).
+- The relay is GET/HEAD-only and restricted by an explicit registry
+  allowlist. It forwards only `Authorization`/`Accept` — it cannot be used as
+  a general relay, and it never sees credentials (public images, anonymous
+  tokens).
 - The page verifies every blob against its manifest digest before use
   (WebCrypto sha256), so a compromised shim or cache can corrupt but not
   substitute content unnoticed.
-- Generated recipes only interpolate allowlisted variant/flavor values
-  and digests the page resolved itself — a crafted "builder link" cannot
-  aim the installer at a foreign image.
+- Generated recipes retain the exact OCI reference supplied by the user but
+  pin the resolved manifest digest. A crafted builder link can therefore not
+  substitute a different image after inspection, and registry policy remains
+  enforced by the relay allowlist.
 - Client-built ISOs are the user's provenance; cosign signatures on the
   *image* still verify at install time, which is the trust anchor that
   matters.
 
 ## Resource estimates
 
-- Shim: one Worker, free tier scale; edge cache does the heavy lifting.
+- Relay: one Worker, free-tier scale; edge cache does the heavy lifting.
 - User side per build: 1.8–3.5 GB download, minutes of WASM decompress/
-  author time, ~2× ISO disk headroom.
-- Engineering: stage 2 ≈ days (zstd WASM builds exist; tar is trivial);
-  stages 3+5 are the real work — an erofs writer and a minimal
-  ISO9660+ESP writer in WASM/JS; weeks-to-months, incrementally
-  shippable (each stage demos on its own).
+  author time, and roughly 2× ISO disk headroom. Desktop images require the
+  OPFS-backed store rather than the current memory-only path.
+- Remaining engineering is incremental: per-image initramfs artifacts or
+  cpio append, OPFS durability, and remora customization. The expensive
+  format work (unpack, erofs, ESP, and ISO9660/El Torito authoring) is already
+  complete and boot-verified.
 
 ## Current state (verified 2026-08-08)
 
