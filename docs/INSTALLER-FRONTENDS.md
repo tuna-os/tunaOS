@@ -117,6 +117,12 @@ list. The keywords now match headings rather than bare nouns, so this shows as
 the genuine feature gap it is. This is precisely the drift the matrix exists
 to expose, and the matcher was concealing it.
 
+**Status update (tuna-os/tunaOS#734).** Fixed since this run —
+[tuna-installer-kde#6](https://github.com/tuna-os/tuna-installer-kde/pull/6)
+adds a new `EncryptionPage` (the same four choices, wired between disk-select
+and confirm) and is live on `main`. Left as ❌ above rather than flipped, for
+the same reason as COSMIC's row: no walkthrough run has re-measured it since.
+
 `install` and `done` are unmeasured: the walkthrough stops before starting a
 real install, by design.
 
@@ -137,6 +143,35 @@ specifically is mapped is what checks 4 and 5 do, and here they correctly
 failed. The walkthrough now also prints an explicit diagnosis when the gate
 passed but nothing advanced and no screen matched, rather than leaving six
 identical "not reached" lines to interpret.
+
+**Status update (tuna-os/tunaOS#734).** Two things have moved since this run,
+neither of which changes the row above yet:
+
+- The encryption picker itself is done —
+  [tuna-installer-cosmic#20](https://github.com/tuna-os/tuna-installer-cosmic/pull/20)
+  (merged) ports XFCE's four-choice `ENCRYPTION_CHOICES` value-for-value, with
+  the same `/sys/class/tpm/tpm0` TPM gating and a Continue-button validation
+  gate that XFCE doesn't even have. This was blocked on nothing except the
+  window bug below actually letting anyone reach the Options page.
+- A root-cause fix for the window bug is open —
+  [tuna-installer-cosmic#25](https://github.com/tuna-os/tuna-installer-cosmic/pull/25):
+  `init()` was calling `offline::live_iso_image()` synchronously, which shells
+  out to the host over flatpak-spawn; iced/libcosmic only creates the window
+  *after* `init()` returns, so a slow or hung host call there is
+  indistinguishable from "no window ever appears" — exactly this run's
+  symptom. The fix defers it to a `tokio::task::spawn_blocking` + `Task`,
+  matching the pattern already used elsewhere in `main.rs`. Reviewed in
+  detail; the diagnosis and fix both look correct on read-through.
+
+**Why the parity matrix above still reads 0/8, not fixed.** #25's own CI
+(`capture`/`screenshots`) is green, but that check runs the app's synthetic
+capture-mode fixtures, which take a different branch and never call
+`live_iso_image()` — so it cannot prove the real hang is gone. What actually
+caught this bug was `scripts/installer-walkthrough.py` driving a real QEMU
+boot of a `*:cosmic` ISO (this run). That is the check that needs to go green
+before this row moves off 0/8 — per this doc's own rule above, a cell should
+say what has genuinely been measured, not what a plausible-looking fix implies
+should now be true.
 
 ### KDE — run 29681255102 (yellowfin, strict)
 
