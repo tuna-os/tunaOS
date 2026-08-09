@@ -747,4 +747,7 @@ EOF
 	safe_enable tunaos-desktop-contract.service
 fi
 
+emit_packages_manifest
+
 printf "::endgroup::\n"
+

@@ -34,6 +34,11 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$status" -eq 0 ]
 }
 
+@test "build_scripts/lib.sh: defines emit_packages_manifest function" {
+  run grep 'emit_packages_manifest()' "${REPO_ROOT}/build_scripts/lib.sh"
+  [ "$status" -eq 0 ]
+}
+
 @test "build_scripts/lib.sh: computes CONTEXT_PATH" {
   run grep 'CONTEXT_PATH=' "${REPO_ROOT}/build_scripts/lib.sh"
   [ "$status" -eq 0 ]
