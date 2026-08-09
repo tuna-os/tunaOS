@@ -18,6 +18,13 @@ Applies to every row and dimension in the ROADMAP variant table: base variants
 (Yellowfin, Albacore, Skipjack, Bonito, Sailfin, Guppy, Grouper, Marlin,
 Flounder, Redfin) and flavors (desktop, `*-nvidia`, ZFS root, etc.).
 
+Also covers **output / deployment architectures** — bootc/ostree images vs.
+mkosi DDI (`Format=disk`, systemd-sysupdate + dm-verity + UKI, the particleOS
+model), systemd-sysext / portable services, and any other way a variant can be
+shipped. The mkosi build-backend investigation (#999, #1227) is explicitly in
+scope: adopting a new output architecture is a portfolio commitment and passes
+the Proposal admission gate below, even though it reuses existing roots.
+
 ## Lifecycle stages
 
 | Stage | Meaning | Entry criteria | Exit criteria |
@@ -41,6 +48,11 @@ A new base variant or flavor requires, **before any build work starts**:
 3. **Upstream base availability** — the distro/version must exist and be
    distributable (Zorin, #944, is a live counter-example).
 4. **A tracking issue** filed with the `roadmap` label before the first commit.
+
+New **output architectures** (e.g. a mkosi DDI sidecar per variant, #999/#1227)
+count as proposals too: they multiply the boot/publish/signing surface (#1187,
+#1193) and must clear the same gate — ROADMAP row, owner, acceptance criteria,
+capacity — before the first build job lands.
 
 ### 2. Beta
 
