@@ -172,6 +172,11 @@ if [[ "${_TD_OS}" == "emerge" ]]; then
 	# declared the flavor. Fail loudly instead of relying on that.
 	if ((${#_TD_EMERGE_PKGS[@]} == 0)); then
 		echo "ERROR: no emerge packages parsed from ${_TD_MANIFEST}" >&2
+		if [[ "${_TD_DESKTOP}" == "niri" || "${_TD_DESKTOP}" == "cosmic" ]]; then
+			echo "       Gentoo has no ${_TD_DESKTOP} ebuilds in the main tree;" >&2
+			echo "       do not declare guppy:${_TD_DESKTOP} until an upstream or" >&2
+			echo "       explicitly maintained overlay provides and tests the packages." >&2
+		fi
 		echo "       This would yield an image tagged ${_TD_DESKTOP} with no desktop in it." >&2
 		exit 1
 	fi
