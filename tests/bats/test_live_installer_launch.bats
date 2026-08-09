@@ -94,3 +94,12 @@ launcher_app() {
   ! grep -q 'pgrep -af' "$WORKFLOW"
   grep -Fq 'grep -Fx' "$WORKFLOW"
 }
+
+
+@test "installer recipe backend does not need an executable source mount" {
+  # Tacklebox bind-mounts live-customize read-only. Git may retain this helper
+  # without the execute bit, so invoking it directly turns every flavor's ISO
+  # build into exit 126 before the LUKS test even starts.
+  grep -Fq '_backend_kv="$(bash "${SCRIPT_DIR}/installer-recipe-backend.sh")"' \
+    "${SRC}/customize-live.sh"
+}
