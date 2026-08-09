@@ -47,26 +47,45 @@ passphrase. To revert either kind of enrollment: `ujust disable-luks-tpm2`.
 
 ## Variant support matrix
 
-TPM2 auto-unlock needs the systemd TPM2 modules in the initramfs and a working
-`/dev/tpmrm0`. Enrollment is exercised per variant by the LUKS-TPM E2E; results:
+TPM2 auto-unlock needs the systemd `tpm2-tss` dracut module in the
+initramfs — which in turn needs a TPM2 userspace (`tpm2-tools` or
+equivalent) present when the image is built, since `dracut-install`
+refuses to package a module whose binaries don't exist — plus a working
+`/dev/tpmrm0` on the machine at boot. Two of those three are knowable
+**statically**, from what each base's package list and dracut config give
+the initramfs, without booting anything; only the third (does it actually
+unseal at runtime) needs the E2E boot. The columns below say which is
+which:
 
-| Variant | Base | Encrypted install (passphrase) | TPM2 auto-unlock | Notes |
-|---------|------|-------------------------------|------------------|-------|
-| yellowfin | AlmaLinux Kitten 10 | ✅ (fisherman) | _pending E2E_ | |
-| skipjack | CentOS Stream 10 | ✅ | _pending E2E_ | |
-| albacore | AlmaLinux 10 | ✅ | _pending E2E_ | |
-| bonito | Fedora 44 | ✅ | _pending E2E_ | |
-| sailfin | openSUSE Tumbleweed | ✅ | _pending E2E_ | |
-| flounder | Debian 13 Trixie | ✅ | _pending E2E_ | |
-| grouper | Ubuntu 26.04 | ✅ | _pending E2E_ | composefs/systemd-boot |
-| marlin | Arch | ✅ | _pending E2E_ | |
-| guppy | Gentoo | ✅ | _pending E2E_ | |
+| Variant | Base | Encrypted install (passphrase) | TPM2 userspace in initramfs | TPM2 auto-unlock | Notes |
+|---------|------|-------------------------------|------------------------------|-------------------|-------|
+| yellowfin | AlmaLinux Kitten 10 | ✅ (fisherman) | ✅ (RPM/dracut-config.sh probe) | _pending E2E_ | |
+| skipjack | CentOS Stream 10 | ✅ | ✅ (RPM/dracut-config.sh probe) | _pending E2E_ | |
+| albacore | AlmaLinux 10 | ✅ | ✅ (RPM/dracut-config.sh probe) | _pending E2E_ | |
+| bonito | Fedora 44 | ✅ | ✅ (RPM/dracut-config.sh probe) | _pending E2E_ | |
+| bonito-rawhide | Fedora Rawhide | ✅ | ✅ (RPM/dracut-config.sh probe) | _pending E2E_ | same Containerfile.el10 path as bonito |
+| hummingbird | Fedora Hummingbird | ✅ | ✅ (RPM/dracut-config.sh probe) | _pending E2E_ | same Containerfile.el10 path as bonito |
+| sailfin | openSUSE Tumbleweed | ✅ | ❌ **not built** | ❌ **not possible today** | `Containerfile.opensuse` omits `tpm2-tss`/`pcsc` from every dracut invocation unconditionally — no TPM2 userspace package is installed, so the module can never make it into the initramfs regardless of enrollment. tunaOS#714 |
+| flounder | Debian 13 Trixie | ✅ | ✅ (`tpm2-tools` installed explicitly) | _pending E2E_ | |
+| flounder-sid | Debian Sid | ✅ | ✅ (`tpm2-tools` installed explicitly) | _pending E2E_ | same `Containerfile.debian` path as flounder |
+| grouper | Ubuntu 26.04 | ✅ | ✅ (`tpm2-tools` installed explicitly) | _pending E2E_ | composefs/systemd-boot |
+| gurnard | Ubuntu 24.04 (Pantheon) | ✅ | ✅ (`tpm2-tools` installed explicitly) | _pending E2E_ | same `Containerfile.ubuntu` path as grouper |
+| marlin | Arch | ✅ | ❌ **not built** | ❌ **not possible today** | `pacman`'s package list has no `tpm2-tools`/`tpm2-tss`, so `dracut-config.sh`'s `command -v tpm2_pcrread` probe finds nothing and omits the module. Installing `tpm2-tools` on Arch would fix this, but is unverified in this environment (no local build/registry access) — left for a follow-up with real build coverage. tunaOS#714 |
+| guppy | Gentoo | ✅ | ❌ **not built** | ❌ **not possible today** | `Containerfile.gentoo` omits `tpm2-tss`/`pcsc` unconditionally — the emerge base installs neither `app-crypt/tpm2-tools` nor `pcscd` (see the Containerfile's own comment, tunaOS#714/prior LUKS run 31111959946). |
+
+`tests/bats/test_luks_tpm2_support_matrix.bats` asserts the three ❌ rows
+against the actual Containerfile omit lines / package lists, so this table
+cannot silently drift out of sync with the code — if a variant's TPM2
+posture changes (e.g. Arch gains a `tpm2-tools` install), that test breaks
+until this table is updated too.
 
 Filled in by the per-variant TPM-enrollment test: install → first installed
 boot (passphrase, first-boot oneshot enrolls TPM2 in the background) → reboot
 with no passphrase → confirm auto-unlock. `scripts/iso-e2e.sh --luks` with
 `TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK=1` runs exactly this sequence and records
 `TUNAOS_LUKS_E2E_TPM_AUTOUNLOCK_CONFIRMED` / `_FAILED` in the LUKS evidence
-log — not yet wired into a scheduled workflow (see the header comment in
-`.github/workflows/luks-e2e.yml`). See the LUKS-TPM tracking issue
+log. It's wired into `.github/workflows/luks-e2e.yml` via the
+`tpm_autounlock` dispatch input (and a quarterly schedule) — narrowed to one
+flavor per variant to bound cost, skipping the three variants above whose
+initramfs cannot carry the module at all. See the LUKS-TPM tracking issue
 (tunaOS#680).
