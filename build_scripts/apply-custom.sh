@@ -95,7 +95,7 @@ if [[ -f "${CUSTOM_DIR}/flatpaks.list" ]]; then
 		[[ -z "$fp" ]] && continue
 		printf "Installing flatpak: %s\n" "$fp"
 		flatpak install --system -y flathub "$fp" || printf "Warning: failed to install flatpak %s\n" "$fp"
-	done < "${CUSTOM_DIR}/flatpaks.list"
+	done <"${CUSTOM_DIR}/flatpaks.list"
 fi
 
 # 3. Copy Custom Files Overlay
