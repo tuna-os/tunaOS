@@ -17,6 +17,8 @@
 
 set -euo pipefail
 
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 VARIANT="${1:?Usage: $0 <variant> [flavor] [tag]}"
 FLAVOR="${2:-gnome}"
 TAG="${3:-$FLAVOR}"
@@ -83,6 +85,34 @@ done
 }
 check 'systemctl --failed --no-legend' || true
 check 'bootc status --format json' | jq -r '.status.booted.image.image.image' 2>/dev/null || true
+
+# ── Tier-1 functional checks (advisory) — tuna-os/tunaos#576 ────────────────
+# tests/functional/run.sh is the shared dispatcher (same checks CI, corral,
+# and manual runs use) — it covers more than the ad-hoc checks above: the
+# failed-unit allowlist (vs. just listing them), session binary + session
+# entry, Flathub, and (with VARIANT) branding. Run it here for visibility
+# while the suite proves itself stable; it does NOT affect $RC yet — per the
+# issue's phased rollout this starts advisory and flips blocking once there
+# is a track record. FLAVOR can carry an overlay suffix (gnome-nvidia,
+# kde-hwe, ...) that run.sh's dispatcher does not know about; strip it down
+# to the bare desktop name it expects. base* flavors have no desktop to
+# check and are skipped, same as the boot gate in reusable-build-image.yml.
+FUNC_DESKTOP="$FLAVOR"
+for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -zfs; do
+	if [[ "$FUNC_DESKTOP" == *"$_suffix" ]]; then
+		FUNC_DESKTOP="${FUNC_DESKTOP%"$_suffix"}"
+		break
+	fi
+done
+if [[ "$FUNC_DESKTOP" != base* ]]; then
+	echo "==> tier-1 functional checks (advisory): ${FUNC_DESKTOP}"
+	if corral ssh "$NAME" -u root -c "bash -s ${FUNC_DESKTOP} ${VARIANT}" \
+		<"${REPO_ROOT}/tests/functional/run.sh"; then
+		echo "✅ functional checks PASS (advisory)"
+	else
+		echo "⚠️  functional checks reported failures (advisory — not blocking yet)"
+	fi
+fi
 
 if [[ $RC -eq 0 ]]; then
 	echo "✅ boot-gate PASS: $IMG"
