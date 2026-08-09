@@ -2301,51 +2301,26 @@ run_install() {
 		# SLIRP pathology and a far faster link (2m54s) — the timing tracks
 		# bytes written, not network conditions. See #941.
 		#
-		# Do not "fix" this with a longer timeout, MTU clamping (already
-		# applied above) or retries. Any image larger than guest RAM cannot be
-		# delivered this way. Make the offline store resolve, or raise --memory
-		# above the image size.
+		# The fix is to use the already-mounted scratch disk for the fallback,
+		# not to increase timeouts or retry a write into the RAM-backed overlay.
 		echo "==> No local image in offline store — transferring from host via SSH"
 		local host_img="localhost/${VARIANT:-}:${FLAVOR:-}"
 		local host_tar="/tmp/luks-image-${VARIANT:-}-${FLAVOR:-}.tar"
+		local guest_tar_dir="/var/lib/containers/tunaos-e2e-transfer"
+		local guest_tar="${guest_tar_dir}/${host_tar##*/}"
 		if podman image exists "$host_img" 2>/dev/null; then
 			echo "==> Saving $host_img on host..."
 			podman save "$host_img" -o "$host_tar"
 
-			# Pre-flight: refuse a transfer the comment above already proves is
-			# doomed, instead of discovering it the same way #941 did — a
-			# silent multi-hour hang ending in the kernel OOM-killing the
-			# guest. The scp destination is GUEST_HOME (/home/liveuser), which
-			# is the live overlay's upperdir: a RAM-backed tmpfs, not disk.
-			# `df` on the guest reports 8G free there because that is the
-			# tmpfs's ADVERTISED size, not real backing store — every byte
-			# written to it is guest RAM. Compare the tar we are about to ship
-			# against the guest's live MemAvailable (not MemTotal: some RAM is
-			# already spoken for by the live session before we start copying)
-			# and fail fast with an actionable message if it cannot possibly
-			# fit, rather than burning the rest of the job's timeout budget on
-			# a transfer that ends in `scp: write remote ...: Failure`.
-			#
-			# 70% headroom, not 100%: podman load on the guest side still has
-			# to hold the tar AND unpack layers concurrently, plus whatever
-			# the live session itself needs to keep running. The one measured
-			# data point (#941) was a ~4.9G image against ~2.9G available —
-			# 169% of available, nowhere near this line — so 70% is a
-			# deliberately conservative guess, not a proven boundary.
-			local host_tar_bytes guest_mem_avail_kb
-			host_tar_bytes="$(stat -c%s "$host_tar" 2>/dev/null || echo 0)"
-			guest_mem_avail_kb="$("${ssh_cmd[@]}" "awk '/^MemAvailable:/{print \$2}' /proc/meminfo" 2>/dev/null || echo 0)"
-			if [[ "$host_tar_bytes" -gt 0 && "$guest_mem_avail_kb" -gt 0 ]]; then
-				local guest_mem_avail_bytes=$((guest_mem_avail_kb * 1024))
-				local safe_limit_bytes=$((guest_mem_avail_bytes * 70 / 100))
-				if [[ "$host_tar_bytes" -ge "$safe_limit_bytes" ]]; then
-					echo "ERROR: image tar (${host_tar_bytes} bytes / $((host_tar_bytes / 1024 / 1024))M) is too large for the guest's available RAM ($((guest_mem_avail_bytes / 1024 / 1024))M) to receive safely." >&2
-					echo "The SSH-transfer fallback writes into a RAM-backed tmpfs (${GUEST_HOME}) and will OOM-kill the guest partway through — this is a measured failure mode, not a guess (see #941)." >&2
-					echo "This path should not have been taken at all: make the offline store resolve so Fisherman can install directly from containers-storage (#941), or re-run with --memory well above the image size." >&2
-					rm -f "$host_tar" || true
-					return 3
-				fi
-			fi
+			# The scratch disk is mounted at /var/lib/containers above. Give the
+			# live user a temporary directory there so scp writes to disk rather
+			# than the RAM-backed GUEST_HOME overlay tmpfs. The previous destination
+			# caused multi-GB images to exhaust guest memory (#882).
+			"${ssh_cmd[@]}" "sudo install -d -o liveuser -g liveuser ${guest_tar_dir}" || {
+				echo "ERROR: scratch-disk transfer directory could not be prepared" >&2
+				rm -f "$host_tar" || true
+				return 3
+			}
 
 			# Bounded, like the fisherman call below. This is a multi-GB copy
 			# over a QEMU SLIRP hostfwd, so it is legitimately slow — but the
@@ -2356,20 +2331,20 @@ run_install() {
 			# readiness wait and the installed-boot wait.
 			e2e_phase "Transferring image to guest (this may take a few minutes)..."
 			if ! timeout 1800 "${scp_cmd[@]}" "$host_tar" \
-				"${GUEST_SCP_DEST}:${GUEST_HOME}/"; then
+				"${GUEST_SCP_DEST}:${guest_tar}"; then
 				echo "ERROR: image transfer to guest timed out or failed" >&2
 				rm -f "$host_tar" || true
 				return 3
 			fi
 			echo "==> Loading image into guest podman..."
-			if timeout 1800 "${ssh_cmd[@]}" "sudo podman load -i ${GUEST_HOME}/${host_tar##*/} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
+			if timeout 1800 "${ssh_cmd[@]}" "sudo podman load -i ${guest_tar} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
 				echo "==> Image loaded, using local containers-storage ref"
 				recipe_image="containers-storage:${host_img}"
 			else
 				echo "ERROR: podman load failed on guest"
 				return 3
 			fi
-			"${ssh_cmd[@]}" "rm -f ${GUEST_HOME}/${host_tar##*/}" || true
+			"${ssh_cmd[@]}" "sudo rm -f ${guest_tar}" || true
 			rm -f "$host_tar" || true
 		else
 			echo "ERROR: host image $host_img not found — was ISO build successful?"
