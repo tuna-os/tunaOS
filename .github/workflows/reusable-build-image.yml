@@ -429,6 +429,10 @@ jobs:
         # Syft mmaps the multi-GB OCI image and can OOM-kill the runner on
         # desktop-sized images; cap Go memory and time-box it, and never
         # fail the build over an SBOM (projectbluefin/actions#294/#300).
+        # The package manifest above already records every installed package.
+        # Scan the final filesystem view rather than every historical layer:
+        # the latter made the Gentoo base job spend its remaining runner time
+        # in Syft after the image had already built and pushed (tunaOS#956).
         continue-on-error: true
         timeout-minutes: 10
         env:
@@ -440,7 +444,7 @@ jobs:
           GOGC: "25"
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
-          $SYFT_CMD "$IMAGE" --scope all-layers -o spdx-json="sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.spdx.json"
+          $SYFT_CMD "$IMAGE" --scope squashed -o spdx-json="sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.spdx.json"
 
       - name: Upload SBOM
         if: inputs.sbom && github.event_name != 'pull_request'
