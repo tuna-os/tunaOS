@@ -79,8 +79,8 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | Bonito (Fedora 44) GA | ci-maintainer | #272 | 🟡 In progress (Q3 milestone) |
 | Redfin (RHEL 10) alpha | ci-maintainer | #609, #1123 | 🔴 DROPPED — restored to roadmap 2026-08-08 |
 | Ship KDE, COSMIC, Niri, XFCE variants | ci-maintainer | #285 | ✅ Done — all desktops downloadable on tunaos.org |
-| GitHub Releases page carries ISO assets | ci-maintainer | #1106 | 🟡 Gap — SBOM-name skip since 07-12 |
-| Release-cadence health gate (no silent skip) | ci-maintainer | #1147 | ⬜ Not started |
+| GitHub Releases page carries ISO assets | ci-maintainer | #1106 | 🟡 Fix merged 08-08 (`a4b147f8`) — verification pending on 08-09 daily run |
+| Release-cadence health gate (no silent skip) | ci-maintainer | #1147 | 🟡 Root cause fixed 08-08 (`a4b147f8` fails on dropped release) — verify no silent skip 08-09 |
 | Containerfile deduplication | architect | #305 | ✅ Done |
 | Hardcoded registry → configurable | architect | #304 | ✅ Done |
 | Justfile modular decomposition | architect | #308 | ✅ Done |
@@ -100,17 +100,17 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
 **Theme**: Enterprise readiness, community governance, ecosystem integration.
 
-**Planning started (2026-08-08)**: Q4 milestone #3 created; tracking issue #1159 open. Strategist-owned goals now tracked (#1167 branch protection, #1168 governance); Release automation + Package signing/SBOM remain untracked for ci-maintainer/sec-check. Stale dependency refs (#306/#307/#212/#301 closed) flagged in #1159. Extended 08-08 evening: adoption metrics (#1174) and variant lifecycle policy (#1175) added as strategist-owned goals.
+**Planning started (2026-08-08)**: Q4 milestone #3 created; tracking issue #1159 open. **All 9 Q4 goals now tracked** (#1167 branch protection, #1168 governance, #1186 release automation, #1187 package signing/SBOM). Stale dependency refs (#306/#307/#212/#301 closed) still flagged in #1159 — new trackers needed for Tacklebox decoupling and Upstream snapshot automation. Extended 08-08 evening: adoption metrics (#1174) and variant lifecycle policy (#1175) added as strategist-owned goals.
 
 | Goal | Owner | Dependencies |
 |------|-------|--------------|
-| Tacklebox decoupling | architect | #306 |
-| Upstream snapshot automation | ci-maintainer | #307 |
+| Tacklebox decoupling | architect | #306 (closed — needs new tracker) |
+| Upstream snapshot automation | ci-maintainer | #307 (closed — needs new tracker) |
 | Branch protection + required CI | strategist | CI health, #1167 |
-| Supply chain hardening | sec-check | #212, #301 |
-| Release automation | ci-maintainer | CI health, VERSIONING.md |
+| Supply chain hardening | sec-check | #212, #301 (closed — needs new tracker) |
+| Release automation | ci-maintainer | CI health, VERSIONING.md, #1186 |
 | Community governance model | strategist | #1168 |
-| Package signing / SBOM | sec-check | Supply chain |
+| Package signing / SBOM | sec-check | Supply chain, #1187 |
 | Bonito (Fedora 44) GA carryover | ci-maintainer | #272 |
 | Redfin (RHEL 10) alpha GA | ci-maintainer | #609 |
 | Fedora 45 base readiness | ci-maintainer | #1171 |
