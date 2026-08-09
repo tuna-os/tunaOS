@@ -416,6 +416,89 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     sudo chown "${SUDO_UID:-$(id -u)}:${SUDO_GID:-$(id -g)}" "$OUTPUT" 2>/dev/null || chown "$(id -u):$(id -g)" "$OUTPUT" 2>/dev/null || true
     echo "✓ Created $OUTPUT"
 
+# ==============================================================================
+#  CUSTOMIZATION OVERLAY PIPELINE
+# ==============================================================================
+
+# Build a customized image using the custom/ overlay directory
+build-custom base_image='' tag='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    
+    BASE="{{ base_image }}"
+    TAG="{{ tag }}"
+    
+    if [[ -z "$BASE" ]] && [[ -f "custom/image.yaml" ]]; then
+        BASE=$(python3 -c "import re; m = re.search(r'^base:\s*(.+)$', open('custom/image.yaml').read(), re.M); print(m.group(1).strip() if m else '')")
+    fi
+    [[ -z "$BASE" ]] && BASE="ghcr.io/tuna-os/yellowfin:gnome"
+    
+    if [[ -z "$TAG" ]] && [[ -f "custom/image.yaml" ]]; then
+        TAG=$(python3 -c "import re; m = re.search(r'^tag:\s*(.+)$', open('custom/image.yaml').read(), re.M); print(m.group(1).strip() if m else '')")
+    fi
+    [[ -z "$TAG" ]] && TAG="my-custom-os"
+    
+    TARGET_REF="localhost/${TAG}:latest"
+    echo "==> Building custom image $TARGET_REF from $BASE..."
+    
+    buildah build \
+        --build-arg BASE_IMAGE="$BASE" \
+        -f Containerfile.custom \
+        -t "$TARGET_REF" .
+    echo "✓ Built $TARGET_REF"
+
+# Validate custom/ directory schema, syntax, and flatpaks
+check-custom:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "==> Validating custom/ overlay configuration..."
+    if [[ -f custom/packages.yaml ]]; then
+        python3 -c "
+import sys, re
+with open('custom/packages.yaml') as f:
+    lines = f.readlines()
+for i, l in enumerate(lines, 1):
+    if l.strip() and not l.strip().startswith('#'):
+        if not re.match(r'^([a-zA-Z0-9_-]+)\s*:', l) and not re.match(r'^\s*-\s*', l):
+            print(f'Warning: custom/packages.yaml line {i} may not be valid YAML mapping or list item: {l.strip()}')
+"
+        echo "✓ custom/packages.yaml parsed successfully"
+    fi
+    for hook in custom/build.pre.sh custom/build.post.sh; do
+        if [[ -f "$hook" ]]; then
+            bash -n "$hook"
+            echo "✓ $hook syntax valid"
+        fi
+    done
+    echo "✓ Custom configuration check passed."
+
+# Build a qcow2 from a custom image and boot it in a VM
+run-custom-vm base_image='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{ just }} build-custom "{{ base_image }}"
+    TAG="my-custom-os"
+    if [[ -f "custom/image.yaml" ]]; then
+        T=$(python3 -c "import re; m = re.search(r'^tag:\s*(.+)$', open('custom/image.yaml').read(), re.M); print(m.group(1).strip() if m else '')")
+        [[ -n "$T" ]] && TAG="$T"
+    fi
+    echo "==> Generating qcow2 for localhost/${TAG}:latest..."
+    {{ just }} qcow2 "localhost/${TAG}:latest"
+    {{ just }} _run-vm qcow2 "${TAG}" "gnome"
+
+# Build a live ISO from a custom overlay image
+custom-iso base_image='':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    {{ just }} build-custom "{{ base_image }}"
+    TAG="my-custom-os"
+    if [[ -f "custom/image.yaml" ]]; then
+        T=$(python3 -c "import re; m = re.search(r'^tag:\s*(.+)$', open('custom/image.yaml').read(), re.M); print(m.group(1).strip() if m else '')")
+        [[ -n "$T" ]] && TAG="$T"
+    fi
+    echo "==> Generating live ISO for localhost/${TAG}:latest..."
+    sudo -E bash ./scripts/build-iso-tacklebox.sh "custom" "${TAG}" "local" "${TAG}" "1"
+
 # Boot an image in QEMU via browser (uses ghcr.io/qemus/qemu)
 run-qcow2 variant flavor='gnome':
     @{{ just }} _run-vm qcow2 {{ variant }} {{ flavor }}
