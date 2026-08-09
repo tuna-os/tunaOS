@@ -209,15 +209,18 @@ bad = []
 for name, st in stages.items():
     if st['desk'] is None:
         continue
-    # Branded in an ancestor is fine. Branded in THIS stage is fine only if it
-    # comes first.
-    if st['brand'] is not None:
-        if st['brand'] < st['desk']:
-            continue
-        bad.append(f"{name}: 90-image-info.sh runs AFTER install-desktop.sh")
+    # Branding must already be in place when install-desktop.sh runs, either
+    # earlier in this stage or anywhere in an ancestor. A later re-run in this
+    # stage is a repair (install-desktop.sh can overwrite os-release), not a
+    # violation, so it only counts when nothing branded the image beforehand.
+    if st['brand'] is not None and st['brand'] < st['desk']:
         continue
     parent = st['parent'] if st['parent'] in stages else None
-    if not (parent and branded_before(parent)):
+    if parent and branded_before(parent):
+        continue
+    if st['brand'] is not None:
+        bad.append(f"{name}: 90-image-info.sh runs AFTER install-desktop.sh")
+    else:
         bad.append(f"{name}: install-desktop.sh runs with no branding anywhere above it")
 
 if bad:
