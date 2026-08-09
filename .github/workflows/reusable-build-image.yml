@@ -920,13 +920,31 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  # Asahi images are arm64-only, so the x86 QEMU gate above is skipped. Do not
+  # treat that skip as proof of an Apple Silicon image: the boot-chain
+  # manifest must pass against the just-pushed testing tag before promotion.
+  # This is also the repository-side safety valve for tunaOS#777: until the
+  # EL10 OBS packages provide the missing m1n1/update hooks and userspace,
+  # these images remain available as -testing but cannot become catalog tags.
+  verify_asahi:
+    name: Asahi manifest gate
+    needs: manifest
+    if: >-
+      inputs.publish && github.event_name != 'pull_request' &&
+      endsWith(inputs.flavor, '-asahi')
+    uses: ./.github/workflows/verify-asahi-one.yml
+    with:
+      image: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}/${{ inputs.image-name }}:${{ inputs.default-tag }}-testing
+    secrets: inherit
+
   tag-image:
     name: Promote
-    needs: [manifest, verify_boot]
+    needs: [manifest, verify_boot, verify_asahi]
     if: >-
       !cancelled() && github.event_name != 'pull_request' &&
       needs.manifest.result == 'success' &&
-      (needs.verify_boot.result == 'success' || needs.verify_boot.result == 'skipped')
+      (needs.verify_boot.result == 'success' || needs.verify_boot.result == 'skipped') &&
+      (needs.verify_asahi.result == 'success' || needs.verify_asahi.result == 'skipped')
     # Temporarily off RunsOn: the tuna-os AWS account is capped to Free Tier,
     # so CreateFleet rejects every 8-vCPU type it tries and the job dies in
     # "Set up runner" before a single step executes. This is registry and
