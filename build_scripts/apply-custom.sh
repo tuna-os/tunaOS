@@ -20,51 +20,82 @@ if [[ -f "${CUSTOM_DIR}/packages.yaml" ]]; then
 	python3 - <<-PYTHONEOF
 		import os, subprocess, re
 
-		def parse_yaml(file_path):
+		def parse_simple_yaml(file_path):
 		    data = {}
 		    current_key = None
 		    with open(file_path, 'r') as f:
 		        for line in f:
-		            line = line.strip()
-		            if not line or line.startswith('#'):
+		            line_strip = line.strip()
+		            if not line_strip or line_strip.startswith('#'):
 		                continue
-		            # Match dictionary keys: "key:" or "key: []"
-		            m = re.match(r'^([a-zA-Z0-9_-]+)\s*:\s*(.*)$', line)
-		            if m:
-		                current_key = m.group(1)
-		                rest = m.group(2).strip()
+		            m_key = re.match(r'^([a-zA-Z0-9_-]+)\s*:\s*(.*)$', line_strip)
+		            if m_key:
+		                current_key = m_key.group(1)
+		                rest = m_key.group(2).strip()
 		                if rest == '[]':
 		                    data[current_key] = []
 		                else:
 		                    data[current_key] = []
 		                continue
-		            # Match list items: "- value"
-		            m = re.match(r'^-\s*(.+)$', line)
-		            if m and current_key:
-		                val = m.group(1).strip().strip('"').strip("'")
+		            m_item = re.match(r'^-\s*(.+)$', line_strip)
+		            if m_item and current_key:
+		                val = m_item.group(1).strip().strip('"').strip("'")
 		                data[current_key].append(val)
 		    return data
 
 		pkg_mgr = os.environ.get("PKG_MGR", "dnf")
 		yaml_path = "${CUSTOM_DIR}/packages.yaml"
 		if os.path.exists(yaml_path):
-		    data = parse_yaml(yaml_path)
+		    data = parse_simple_yaml(yaml_path)
 		    pkgs = data.get(pkg_mgr, [])
-		    if pkgs:
-		        print(f"Installing {len(pkgs)} packages for {pkg_mgr}: {', '.join(pkgs)}")
-		        # Invoke the pkg_install function via bash
-		        subprocess.run(["bash", "-c", f"source /run/context/build_scripts/lib.sh && pkg_install {' '.join(pkgs)}"], check=True)
+		    install_pkgs = []
+		    remove_pkgs = []
+		    for p in pkgs:
+		        if p.startswith('-'):
+		            remove_pkgs.append(p[1:])
+		        else:
+		            install_pkgs.append(p)
+
+		    # Handle package removals
+		    if remove_pkgs:
+		        print(f"Removing {len(remove_pkgs)} packages for {pkg_mgr}: {', '.join(remove_pkgs)}")
+		        subprocess.run(["bash", "-c", f"source /run/context/build_scripts/lib.sh && pkg_remove {' '.join(remove_pkgs)}"], check=True)
+
+		    # Handle package installs
+		    if install_pkgs:
+		        print(f"Installing {len(install_pkgs)} packages for {pkg_mgr}: {', '.join(install_pkgs)}")
+		        subprocess.run(["bash", "-c", f"source /run/context/build_scripts/lib.sh && pkg_install {' '.join(install_pkgs)}"], check=True)
+
+		    # Handle optional packages
+		    optional_pkgs = data.get("optional", [])
+		    if optional_pkgs:
+		        print(f"Installing optional packages: {', '.join(optional_pkgs)}")
+		        subprocess.run(["bash", "-c", f"source /run/context/build_scripts/lib.sh && install_available {' '.join(optional_pkgs)}"], check=False)
 
 		    # Handle Fedora/CentOS/RHEL COPRs if on dnf
 		    if pkg_mgr == "dnf" and "copr" in data:
-		        # Simple regex check for COPR entries
-		        # Format:
-		        # copr:
-		        #   - owner/project
 		        for copr in data["copr"]:
 		            print(f"Enabling COPR repository: {copr}")
 		            subprocess.run(["dnf", "copr", "enable", "-y", copr], check=True)
+
+		    # Handle Flatpaks if specified in packages.yaml
+		    flatpaks = data.get("flatpak", [])
+		    if flatpaks:
+		        print(f"Pre-installing flatpaks: {', '.join(flatpaks)}")
+		        for fp in flatpaks:
+		            subprocess.run(["flatpak", "install", "--system", "-y", "flathub", fp], check=True)
 	PYTHONEOF
+fi
+
+# 2b. Install Flatpaks from flatpaks.list if present
+if [[ -f "${CUSTOM_DIR}/flatpaks.list" ]]; then
+	printf "==> Pre-installing flatpaks from flatpaks.list...\n"
+	while IFS= read -r fp || [[ -n "$fp" ]]; do
+		fp=$(echo "$fp" | sed 's/#.*//' | xargs)
+		[[ -z "$fp" ]] && continue
+		printf "Installing flatpak: %s\n" "$fp"
+		flatpak install --system -y flathub "$fp" || printf "Warning: failed to install flatpak %s\n" "$fp"
+	done <"${CUSTOM_DIR}/flatpaks.list"
 fi
 
 # 3. Copy Custom Files Overlay
