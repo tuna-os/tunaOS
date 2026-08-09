@@ -170,6 +170,13 @@ until build_primary_image; do
 		echo "ERROR: image build failed after ${build_attempt} attempt(s)" >&2
 		exit 1
 	fi
+	# tuna-os/tunaOS#638: the amd64/v2 failure (`open out/index.json: no such
+	# file or directory`) is a buildah containers-storage OCI-layout race; a
+	# partially-written container from the failed attempt can fail the same
+	# way again. Drop buildah's working containers before retrying.
+	if [[ "${BUILDER}" == "buildah" ]]; then
+		buildah rm -a >/dev/null 2>&1 || true
+	fi
 	echo "${BUILDER} build attempt ${build_attempt} failed; retrying in $((build_attempt * 10))s..." >&2
 	sleep "$((build_attempt * 10))"
 	build_attempt=$((build_attempt + 1))
