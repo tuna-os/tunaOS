@@ -637,6 +637,43 @@ setup_runtime_check_stubs() {
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
+# Paint Wait (tunaOS#581)
+# ═══════════════════════════════════════════════════════════════════════════
+# Under plain virtio-vga the guest paints with llvmpipe, and first paint can
+# trail the serial markers by minutes on a 2-4 vCPU runner. The evidence
+# screenshot must wait for paint (bounded) instead of a fixed sleep, and must
+# never flip a healthy-but-slow boot into a failed gate.
+
+@test "paint-wait: wait_for_paint helper exists and defaults to a 120s cap" {
+  grep -q '^wait_for_paint()' "$SCRIPT"
+  awk '/^wait_for_paint\(\)/,/^}/' "$SCRIPT" | grep -q 'TBOX_E2E_PAINT_TIMEOUT:-120'
+  awk '/^wait_for_paint\(\)/,/^}/' "$SCRIPT" | grep -q 'screenshot_sane'
+}
+
+@test "paint-wait: disk-mode gate polls for paint instead of the fixed 30s sleep" {
+  # The #581 defect: `sleep 30; screenshot` after the contract marker — GDM
+  # under llvmpipe routinely needs longer, so the evidence gallery got black
+  # frames for healthy boots. The fixed sleep must be gone from the disk path.
+  run bash -c "awk '/^disk\)/,/^;;/' \"$SCRIPT\" | grep -c 'sleep 30'"
+  [ "$output" -eq 0 ]
+  awk '/^disk\)/,/^;;/' "$SCRIPT" | grep -q 'wait_for_paint "10-ready"'
+}
+
+@test "paint-wait: ready mode waits for paint before the 10-ready screenshot" {
+  # The screenshot-sanity fallback for serial-less kernels re-measures the
+  # same 10-ready file, so waiting for paint here also makes that fallback
+  # able to distinguish "slow" from "failed".
+  awk '/^ready\)/,/^;;/' "$SCRIPT" | grep -q 'wait_for_paint "10-ready"'
+}
+
+@test "paint-wait: the wait is evidence, never a gate — serial markers decide" {
+  # A machine that cannot paint must extend the run, not fail it. Both call
+  # sites swallow the helper's return.
+  run bash -c "grep -c 'wait_for_paint \"10-ready\" || true' \"$SCRIPT\""
+  [ "$output" -ge 2 ]
+}
+
+# ═══════════════════════════════════════════════════════════════════════════
 # Exit Code Assignments
 # ═══════════════════════════════════════════════════════════════════════════
 
