@@ -116,6 +116,110 @@ Defined once in [`tests/installer-screens.yaml`](../tests/installer-screens.yaml
 Required screens fail the build for that frontend; optional ones are recorded so
 drift is *visible* before we promote them to required.
 
+## Behavior contract
+
+The screen contract above only covers *what renders*. Five more behaviors are
+reimplemented by **each** frontend in its own language (Rust, C++, Go, Python,
+plus upstream bootc-installer) because the frontends share no code. These are
+the contracts those implementations must agree on — they are what a parity
+check (and a sixth frontend) should be written against. Filed as
+[#1197](https://github.com/tuna-os/tunaOS/issues/1197).
+
+### §1 Readiness stamp
+
+A machine-readable record that the UI really came up, read by
+`installer-smoke.yml` over SSH (no GPU, no OCR needed). Written once, on first
+presentation, to `$XDG_RUNTIME_DIR/tuna-installer-ready` (a per-user tmpfs, so a
+stale stamp cannot survive reboot). Write is best-effort: a frontend that
+cannot write its stamp must still install.
+
+Format — one `key=value` per line, atomically written via temp file + rename:
+
+| Field | Meaning | Allowed values |
+|-------|---------|----------------|
+| `app_id` | Flatpak app id of the frontend | `org.tunaos.Installer*` / `org.bootcinstaller.Installer` |
+| `window` | window class that mapped | e.g. `ApplicationWindow`, `InstallerWindow` |
+| `signal` | HOW the stamp was earned — the five frontends cannot all make the same claim | `gtk-map` \| `first-frame` \| `frame-swapped` |
+| `mapped_at` | unix epoch, seconds with ms precision (`%.3f`) | float |
+| `page` | wizard page showing at map time; `unknown` when absent | slug |
+
+Signal semantics (strictest claim first):
+
+| Value | Claim | Frontends |
+|-------|-------|-----------|
+| `gtk-map` | widget was actually mapped by the compositor | bootc-installer, tuna-installer-xfce |
+| `frame-swapped` | a frame was swapped to the compositor | tuna-installer-kde, tuna-installer-niri |
+| `first-frame` | the toolkit asked for a frame; strictly weaker (proves event loop, not a mapped surface) | tuna-installer-cosmic (libcosmic is iced-on-wgpu, no `map` equivalent) |
+
+Do **not** flatten these into one value: a smoke test that cannot distinguish
+them would report the COSMIC frontend's `first-frame` as proof of a mapped
+window — the exact failure mode it exists to catch.
+
+### §2 Product-name resolution
+
+Which product this ISO is, for the welcome screen. Per-variant branding bakes
+the name into `PRETTY_NAME` (see `build_scripts/90-image-info.sh`); the GNOME
+frontend reads it, so a Skipjack ISO must say "Welcome to Skipjack", never a
+hardcoded "TunaOS".
+
+Resolution order (host first — inside the flatpak sandbox `/etc/os-release`
+describes the *runtime*, not the live ISO):
+
+1. `/run/host/etc/os-release` → `PRETTY_NAME`
+2. `/etc/os-release` → `PRETTY_NAME`
+3. fallback constant `TunaOS` (developer checkout / CI / non-tunaOS host)
+
+Resolved once and cached: the value cannot change while the installer runs.
+A harness override may exist for screenshot capture, but must be explicit.
+
+### §3 Privilege escalation
+
+How the frontend runs **fisherman** (the backend that partitions a disk). The
+live ISO symlinks the flatpak-bundled fisherman to `/usr/local/bin` and installs
+the polkit policy for it (`customize-live.sh`); flatpak runtimes ship no
+`pkexec`, so escalation happens host-side:
+
+| Context | Command |
+|---------|---------|
+| inside flatpak sandbox | `flatpak-spawn --host pkexec /usr/local/bin/fisherman` |
+| outside flatpak | `sudo /usr/local/bin/fisherman` |
+
+Any host-side execution from inside the sandbox goes through
+`flatpak-spawn --host`. The user must be able to distinguish an installer that
+is about to touch a disk — no silent privilege drops.
+
+### §4 Offline / live-ISO detection
+
+- **In-sandbox detection**: presence of `/.flatpak-info`;
+- **Offline store roots**: `$TUNA_OFFLINE_STORES` (colon-separated, when
+  set) plus file `/etc/tuna-installer/offline-stores` (one path per line,
+  `#` comments allowed) plus default `/usr/share/tuna-installer/oci-store`
+  — deduplicated, existing dirs only (§4B conventions);
+- **Available images**: `podman images --root <store>`; the frontend marks
+  catalog entries whose imgref is present as `[available offline]`;
+- **Live-ISO image**: `bootc status --json` → booted image ref, non-empty only
+  when `/proc/cmdline` carries `rd.live.image` (or `/run/ostree-live` exists).
+  When live, the recipe may omit `image` (bootc installs the running
+  container).
+
+### §5 Encryption / LUKS policy
+
+The encryption modes are defined by the backend (fisherman recipe
+`Validate()`), not by the frontends — frontends must present exactly these ids
+and nothing else:
+
+| id | Meaning |
+|----|---------|
+| `none` | no encryption |
+| `luks-passphrase` | LUKS with user passphrase |
+| `tpm2-luks` | LUKS keyed to TPM2 |
+| `tpm2-luks-passphrase` | LUKS with TPM2 + passphrase |
+
+Anything else (e.g. a bare `luks`) fails recipe validation. A frontend that
+reads a recipe's `encryption` value must accept exactly these four ids and show
+the matching UI — or explicitly omit the step and report it (KDE currently has
+no encryption screen; that gap is visible in the parity matrix below).
+
 ## Parity matrix
 
 Filled from each run's `walkthrough-<flavor>.json`.
