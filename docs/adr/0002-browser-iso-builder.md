@@ -1,10 +1,12 @@
 # ADR 0002: In-browser ISO builder from existing GHCR bootc images
 
-- Status: proposed
+- Status: accepted (implemented — the builder is live)
 - Date: 2026-07-17
+- Last updated: 2026-08-08 (reflect post-prototype state; see Current state)
 - Issue: [#667](https://github.com/tuna-os/tunaOS/issues/667)
-- Prototype: `prototype/iso-builder/` (static page + stateless CORS shim;
-  pull chain — token → index → manifest → config — working)
+- Implementation: [tuna-os/iso-builder](https://github.com/tuna-os/iso-builder),
+  deployed at <https://iso.tunaos.org> (engine: tacklebox compiled to
+  `GOOS=js GOARCH=wasm`, tuna-os/tacklebox#95)
 
 ## Context
 
@@ -31,13 +33,14 @@ app install, no extra published artifacts, no build servers.
 
 **Build the ISO entirely in the browser, sourced directly from the
 existing ghcr.io images.** The only server-side piece is a **stateless
-CORS shim** (`prototype/iso-builder/worker/cors-shim.js`, ~60 lines of
-Cloudflare Worker): a read-only relay for the three GHCR endpoints,
-restricted to `tuna-os/*` images, that adds the CORS headers GHCR
-refuses to send. It stores nothing, has no build pipeline, and never
-needs updating when images change. Blob responses are content-addressed,
-so the Worker lets Cloudflare's edge cache absorb repeat pulls (free
-egress) and shield ghcr.io.
+CORS relay** (a Cloudflare Worker, ~60 lines; now `relay.tunaos.org` in
+the iso-builder repo): a read-only relay for the registry endpoints,
+that adds the CORS headers GHCR refuses to send. It stores nothing, has
+no build pipeline, and never needs updating when images change. Blob
+responses are content-addressed, so the relay lets the CDN's edge cache
+absorb repeat pulls (free egress) and shield ghcr.io. The relay's
+org-allowlist became a configurable registry allowlist once the builder
+accepted arbitrary bootable container images, not just `tuna-os/*`.
 
 Explicitly rejected alternatives:
 
@@ -55,12 +58,19 @@ Explicitly rejected alternatives:
 
 | Stage | Mechanism | Status |
 |---|---|---|
-| 1. Pull | token → index → platform manifest → config → layer blobs, via the shim; digest-verify with WebCrypto | **Working** (prototype demo; verified against real images) |
-| 2. Unpack | streaming zstd (WASM, e.g. a compiled libzstd — small, well-trodden) + tar walker; overlay whiteout handling | next |
-| 3. Live root | author erofs (preferred: `mkfs.erofs` is a clean userspace C codebase to compile to WASM) or squashfs from the merged tree | the main lift |
-| 4. Boot bits | extract kernel + initramfs from `/usr/lib/modules/<ver>/`, systemd-boot from the image's own payload; write fisherman `recipe.json` pointing back at the source image by digest | straightforward once 2 exists |
-| 5. Media | FAT ESP image + ISO9660/El Torito wrapper (JS/WASM writer) | bounded, well-specified formats |
-| 6. Deliver | stream to disk via File System Access API (`showSaveFilePicker`) — memory stays at chunk scale, not ISO scale | standard |
+| 1. Pull | token → index → platform manifest → config → layer blobs, via the relay; digest-verify with WebCrypto | **Working** (tacklebox pure-Go core, tacklebox#95) |
+| 2. Unpack | streaming zstd + tar walker with overlay whiteout handling | **Working** |
+| 3. Live root | erofs authoring from the merged tree | **Working** (kernel-mount verified) |
+| 4. Boot bits | extract kernel + initramfs from `/usr/lib/modules/<ver>/`, systemd-boot from the image's own payload; write the install recipe pointing back at the source image by digest | Working (recipe points at the source image; per-DE initramfs artifacts are a follow-up) |
+| 5. Media | FAT ESP image + ISO9660/Rock Ridge/El Torito wrapper (pure-Go writer) | **Working** — the pure-Go writer produced a native ISO that boots to `login:` under QEMU/OVMF (validated by xorriso, kernel mount, and firmware boot) |
+| 6. Deliver | stream to disk via File System Access API (`showSaveFilePicker`) / streamed download | **Working** |
+
+Honest MVP limits (tracked in the iso-builder repo): the store is
+memory-backed today (base images fit; desktop images need the OPFS
+store); ISOs carry the image's stock initramfs unless a tbox initramfs
+URL is supplied (cpio-append phase or CI-published per-variant
+initramfs artifacts are the follow-up); flatpak preload is a manifest
+the live environment consumes.
 
 Browser floor: a File System Access-capable browser (Chromium today,
 Firefox behind a flag) and disk headroom ~2× the ISO. Firefox/Safari
@@ -73,36 +83,58 @@ time in the browser — what you clicked is what installs.
 
 ## Threat model notes
 
-- The shim is GET/HEAD-only, org-allowlisted (`tuna-os/*`), and forwards
-  only `Authorization`/`Accept` — it cannot be used as a general relay,
-  and it never sees credentials (public images, anonymous tokens).
+- The relay is GET/HEAD-only and restricted by an explicit registry
+  allowlist. It forwards only `Authorization`/`Accept` — it cannot be used as
+  a general relay, and it never sees credentials (public images, anonymous
+  tokens).
 - The page verifies every blob against its manifest digest before use
   (WebCrypto sha256), so a compromised shim or cache can corrupt but not
   substitute content unnoticed.
-- Generated recipes only interpolate allowlisted variant/flavor values
-  and digests the page resolved itself — a crafted "builder link" cannot
-  aim the installer at a foreign image.
+- Generated recipes retain the exact OCI reference supplied by the user but
+  pin the resolved manifest digest. A crafted builder link can therefore not
+  substitute a different image after inspection, and registry policy remains
+  enforced by the relay allowlist.
 - Client-built ISOs are the user's provenance; cosign signatures on the
   *image* still verify at install time, which is the trust anchor that
   matters.
 
 ## Resource estimates
 
-- Shim: one Worker, free tier scale; edge cache does the heavy lifting.
+- Relay: one Worker, free-tier scale; edge cache does the heavy lifting.
 - User side per build: 1.8–3.5 GB download, minutes of WASM decompress/
-  author time, ~2× ISO disk headroom.
-- Engineering: stage 2 ≈ days (zstd WASM builds exist; tar is trivial);
-  stages 3+5 are the real work — an erofs writer and a minimal
-  ISO9660+ESP writer in WASM/JS; weeks-to-months, incrementally
-  shippable (each stage demos on its own).
+  author time, and roughly 2× ISO disk headroom. Desktop images require the
+  OPFS-backed store rather than the current memory-only path.
+- Remaining engineering is incremental: per-image initramfs artifacts or
+  cpio append, OPFS durability, and remora customization. The expensive
+  format work (unpack, erofs, ESP, and ISO9660/El Torito authoring) is already
+  complete and boot-verified.
 
-## MVP scope
+## Current state (verified 2026-08-08)
 
-- [x] Configurator page + working stage-1 pull chain (prototype).
-- [x] Stateless CORS shim (`worker/cors-shim.js`), ready to deploy.
-- [ ] Deploy shim at `ghcr-shim.tunaos.org`; wire digest verification.
-- [ ] Stage 2: WASM zstd + tar walk — demo: extract and display the
-      kernel version from any variant:flavor in-browser.
-- [ ] Stage 3–5: erofs + ESP + ISO writers; boot the result in the
-      existing `iso-e2e.sh` disk gate to prove parity with CI ISOs.
-- Out of scope: any new published artifact; any stateful service.
+- The builder graduated from this repo's `prototype/iso-builder/` (now
+  just a "moved" README) into its own repository,
+  [tuna-os/iso-builder](https://github.com/tuna-os/iso-builder), deployed
+  at <https://iso.tunaos.org> — build, test, and deploy independently of
+  the OS image pipeline.
+- The engine is [tacklebox](https://github.com/tuna-os/tacklebox)'s
+  pure-Go core compiled to WASM (tacklebox#95, merged): pull + unpack +
+  erofs authoring run client-side. The pure-Go ISO9660/Rock Ridge/El
+  Torito writer replaced the go-diskfs/xorriso path.
+- Arbitrary bootable container images are accepted (any OCI URI), with
+  desktop auto-detection from session files, per-DE flatpak preload
+  defaults, URL parameters as the API (`?image= &flatpaks= &label=
+  &initrd=`), and a streamed ISO download.
+- Remora manifest integration (package/config customization through
+  install) is tracked in tacklebox#99.
+
+## MVP scope (as implemented)
+
+- [x] Configurator page + working pull chain (prototype, then iso-builder).
+- [x] Stateless CORS relay, deployed (`relay.tunaos.org`).
+- [x] Digest verification of pulled blobs.
+- [x] Stages 2–3: zstd/tar unpack + erofs live root (tacklebox WASM).
+- [x] Stages 5: pure-Go ISO9660/ESP writer, boot-verified under QEMU/OVMF.
+- [ ] Stage 4 follow-ups: per-DE initramfs artifacts / cpio-append phase.
+- [ ] remora customization through install (tacklebox#99).
+- [ ] OPFS store for desktop-size images (memory-backed store today).
+- Out of scope: any new published ISO artifact; any stateful build service.
