@@ -101,10 +101,10 @@ cells it replaces. So the import fills the screen columns only, and tags them.
 
 | Frontend | Source | welcome | disk | encryption | summary | install | done |
 |----------|--------|---------|------|------------|---------|---------|------|
-| KDE | [capture](https://github.com/tuna-os/tuna-installer-kde/actions/runs/31217241114) | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
+| KDE | [capture](https://github.com/tuna-os/tuna-installer-kde/actions/runs/31273914226) | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
 | COSMIC | — | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| Niri | [capture](https://github.com/tuna-os/tuna-installer-niri/actions/runs/31231402559) | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
-| XFCE | [capture](https://github.com/tuna-os/tuna-installer-xfce/actions/runs/31233209558) | ✅ᶜ | ✅ᶜ | ⬜ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
+| Niri | [capture](https://github.com/tuna-os/tuna-installer-niri/actions/runs/31273928694) | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
+| XFCE | [capture](https://github.com/tuna-os/tuna-installer-xfce/actions/runs/31273942113) | ✅ᶜ | ✅ᶜ | ⬜ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
 
 ᶜ = GPU-less offscreen capture in the frontend's own repo.
 **It attests to screen parity only.** It drives pages in-process,
