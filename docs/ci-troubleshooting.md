@@ -760,3 +760,28 @@ Published container images built green in CI but shipped missing essential deskt
    - `missing`: No published image tag in registry.
    - `error`: Network or registry pull failure.
 3. **Display Manager Enablement Assertion**: Verifies display manager units (`gdm`, `sddm`, `plasmalogin`, `greetd`) are actively enabled in the image layer rather than merely present as installed unit files.
+
+---
+
+### 16. A red LUKS E2E cell can be stale evidence, not a live bug (#979, 2026-08-09)
+
+**Affected cells (as measured):** `yellowfin:gnome/kde/niri/cosmic`, `albacore:gnome/kde/cosmic` — all four/three shown red in `docs/MATRIX-STATUS.md` as of its 2026-08-08 snapshot.
+
+**Symptom (identical across all six jobs checked):**
+```
+TUNAOS_LUKS_E2E_PASS encrypted=1 passphrase_unlock=1 installed_boot=1
+TUNAOS_LUKS_E2E_DESKTOP_CONTRACT desktop_contract=ok fatal=0
+TUNAOS_LUKS_E2E_PIXEL_GATE result=absent frames=<200-400> stddev=na fatal=1
+ERROR: pixel gate FAILED — the encrypted install unlocked and reached
+       login, but nothing provably rendered (...).
+##[error]Process completed with exit code 6.
+```
+Encryption, unlock, boot and the in-guest desktop contract all genuinely passed — the *only* failing signal is `scripts/lib/pixel-gate.sh`'s pixel gate, and specifically its `shot=absent` path.
+
+**Root cause — not a new defect, a timing gap:** `scripts/lib/pixel-gate.sh` commit `e20fd037` (#1102, merged 2026-08-08T02:42 UTC) added exactly this case — `shot=absent` *and* `contract=ok` — as an advisory `absent_contract_ok` verdict (`fatal=0`), on the evidence of `gurnard:pantheon` and `grouper:xfce` hitting the identical pattern. Every one of the six failing job logs checked here (`yellowfin:gnome` run 31226672079, `yellowfin:kde`/`niri`/`cosmic` same run, `albacore:gnome`/`kde`/`cosmic` runs 31224487929/31224494825) is timestamped **before** `e20fd037` landed — they ran the *old* pixel-gate logic, which had no `contract=ok` carve-out and fell through to the fatal `absent` branch instead. None of these cells has been re-dispatched since the fix merged, so `MATRIX-STATUS.md`'s "35/52 green" — sourced from the newest available run per cell — is reporting genuinely stale verdicts for these six, not current ones.
+
+**Lesson:** before treating a red LUKS E2E cell as an open bug to diagnose, check the failing job's evidence lines against `git log` for `scripts/lib/pixel-gate.sh` (or whatever check actually failed) — `fatal=1` on an old run doesn't mean the current tree would still produce it. A cell only needs new investigation once it fails again on a run that started *after* the relevant fix.
+
+**Action taken:** re-dispatched `LUKS E2E` (`workflow_dispatch`) for `variant=yellowfin,flavor=all` (run [31286843546](https://github.com/tuna-os/tunaOS/actions/runs/31286843546)) and `variant=albacore,flavor=all` (run [31286849405](https://github.com/tuna-os/tunaOS/actions/runs/31286849405)) to get fresh, post-fix verdicts. Not yet observed to completion — a multi-cell LUKS sweep runs well past a single investigation session; check those runs' actual conclusions before assuming this note means the cells are already green.
+
+**Separate, still-open, NOT covered by the above:** `yellowfin:xfce` (same run, job 93022287474) fails during the **image build** itself — `dracut-install: ERROR: installing '/root'` plus `error: Linting: Checks failed: 2`, retried 3 times, never reaching the LUKS/pixel-gate stage at all. `albacore:gnome/kde/cosmic` log the identical `dracut-install`/lint messages during their own builds but the build still *succeeds* there (non-fatal, matching `bootc container lint`'s documented warn-only default — see #10 above), so this is not simply "the same bug, sometimes fatal" — `yellowfin:xfce`'s build genuinely dies and needs its own root-cause pass, not a re-dispatch.
