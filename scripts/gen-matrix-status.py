@@ -86,7 +86,7 @@ END = "<!-- END GENERATED -->"
 # Do not read 200 as the saturation point; read it as the depth at which the
 # walk stopped telling us it was truncating. latest_results warns on stderr
 # when the oldest run it examined was still producing first-time results, which
-# is the condition that made 20 and then 80 wrong, and it is silent at 200.
+# is the condition that made 20 and then 80 wrong, and it is silent at 200 (see issue #931).
 # Raise this when that warning appears rather than when a row looks wrong.
 RUN_DEPTH = 200
 
