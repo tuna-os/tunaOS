@@ -226,6 +226,7 @@ Related Communities:
 - [Roll Your Own Guide](docs/ROLL_YOUR_OWN.md) — build your own custom TunaOS variant
 - [Agent Guide](docs/AGENT_GUIDE.md) — complete architecture and contributor reference
 - [Build Pipeline](docs/build-pipeline.md) — CI/CD workflow overview
+- [mkosi Investigation](docs/mkosi-investigation.md) — mkosi as a build backend and DDI output: findings, not a production change (#999)
 - [Testing Guide](docs/TESTING.md) — ISO end-to-end test harness
 - [Secure Boot](docs/SECURE-BOOT.md) — which variants support Secure Boot out of the box
 - [Improvement Plan](docs/IMPROVEMENT_PLAN.md) — roadmap and development progress
