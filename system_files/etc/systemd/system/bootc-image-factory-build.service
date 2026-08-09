@@ -1,0 +1,16 @@
+[Unit]
+Description=Rebuild local Redfin images and apply them (bootc image factory)
+Documentation=https://github.com/tuna-os/tunaOS/blob/main/docs/rhel-setup.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# RHSM credentials / flavor selection live here (see docs/rhel-setup.md):
+EnvironmentFile=-/etc/default/redfin-image-factory
+ExecStart=/usr/local/bin/redfin-image-factory-build.sh
+# A full image build takes far longer than the default 90s start timeout.
+TimeoutStartSec=0
+
+[Install]
+WantedBy=multi-user.target

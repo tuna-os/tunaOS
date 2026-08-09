@@ -140,21 +140,51 @@ corral delete redfin-gnome --force
 
 ## Auto-Update (Local Image Factory)
 
-For ongoing updates without internet access to GHCR (since images can't be published), set up a local auto-rebuild:
+For ongoing updates without internet access to GHCR (since images can't be published), the image ships a ready-made auto-rebuild unit pair, adapted from the [renner0e/server](https://github.com/renner0e/server) pattern:
+
+- `bootc-image-factory-build.service` — one-shot: rebuilds the configured Redfin flavors with `just build redfin <flavor>` from a local repo checkout, then `bootc switch`s this system to the freshly built image, runs `bootc update`, and prunes superseded bootc images.
+- `bootc-image-factory-build.timer` — triggers the service daily at 04:00 (`Persistent=true`, 15-minute randomized delay).
+
+### One-time setup on a Redfin system
 
 ```bash
-# 1. Build updated image periodically (cron or systemd timer)
-just build redfin gnome
+# 1. Put a repo checkout where the service expects it (any checkout works; it
+#    git-pulls itself before each build)
+sudo mkdir -p /etc/bootc-image-factory
+sudo git clone https://github.com/tuna-os/tunaOS /etc/bootc-image-factory/tunaos
 
-# 2. Push to local registry (optional — for multi-machine deployments)
+# 2. RHSM credentials + flavor selection (chmod 600 — secrets)
+sudo tee /etc/default/redfin-image-factory >/dev/null <<'EOF'
+REDFIN_FLAVORS="gnome kde"
+RHSM_USER="your-rh-username"
+RHSM_PASSWORD="your-rh-password"
+# or, with an activation key:
+# RHSM_ORG="your-org-id"
+# RHSM_ACTIVATION_KEY="your-key"
+EOF
+sudo chmod 600 /etc/default/redfin-image-factory
+
+# 3. Enable the timer
+sudo systemctl enable --now bootc-image-factory-build.timer
+
+# Inspect / debug
+systemctl list-timers bootc-image-factory-build.timer
+sudo systemctl start bootc-image-factory-build.service   # run once now
+journalctl -u bootc-image-factory-build.service -e
+```
+
+### Multi-machine deployments
+
+Builds happen on one machine; the rest pull from a private registry:
+
+```bash
+# On the factory machine, after a build
 podman push localhost/redfin:gnome registry.internal.example.com/redfin:gnome
 
-# 3. Running systems pull updates
+# On each other system
 sudo bootc switch registry.internal.example.com/redfin:gnome
 # After first switch, updates happen automatically via uupd timer
 ```
-
-See [renner0e/server](https://github.com/renner0e/server) for a systemd timer pattern that automates this.
 
 Each deployed system must be covered by a RHEL subscription (the same free Developer Subscription works).
 
