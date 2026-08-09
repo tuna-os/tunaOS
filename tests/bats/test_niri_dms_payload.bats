@@ -73,6 +73,33 @@ _code() { grep -v '^[[:space:]]*#' "$1"; }
   done
 }
 
+@test "DMS packages stay in their publishing COPRs" {
+  if ! command -v "$YQ_BIN" &>/dev/null; then skip "yq not installed"; fi
+  local manifest="${REPO_ROOT}/manifests/desktops/niri.yaml"
+  local os n i repo pkgs
+  for os in fedora el10; do
+    n="$($YQ_BIN -r ".packages.${os}.copr | length" "$manifest")"
+    local danklinux=0 dmsgit=0
+    for ((i = 0; i < n; i++)); do
+      repo="$($YQ_BIN -r ".packages.${os}.copr[$i].repo" "$manifest")"
+      pkgs="$($YQ_BIN -r ".packages.${os}.copr[$i].packages[]?" "$manifest")"
+      [[ "$repo" == avengemedia/danklinux ]] && danklinux=1
+      [[ "$repo" == avengemedia/dms-git ]] && dmsgit=1
+      if [[ "$repo" == avengemedia/danklinux ]]; then
+        grep -qx 'dms-greeter' <<<"$pkgs"
+        grep -qx 'quickshell-git' <<<"$pkgs"
+        ! grep -qxE 'dms(-cli)?' <<<"$pkgs"
+      elif [[ "$repo" == avengemedia/dms-git ]]; then
+        grep -qx 'dms' <<<"$pkgs"
+        grep -qx 'dms-cli' <<<"$pkgs"
+        ! grep -qxE 'dms-greeter|quickshell(-git)?' <<<"$pkgs"
+      fi
+    done
+    [ "$danklinux" -eq 1 ]
+    [ "$dmsgit" -eq 1 ]
+  done
+}
+
 @test "install-desktop.sh does not run a package-less dnf install" {
   # `packages: []` is the enable-only idiom (write the repo file so a later
   # block can --enablerepo it). Running dnf install with no arguments there

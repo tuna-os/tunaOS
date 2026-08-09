@@ -22,19 +22,19 @@ packages:
       # all — tunaOS#1009 and #637. The el10 section below already had this
       # right; the fedora section never got the same treatment.
       #
-      # Install the suite in ONE transaction with both repos enabled, the
-      # shape el10 uses, so a cross-repo dependency can never split it again.
-      # The danklinux block is enable-only so its repo file exists for
-      # --enablerepo.
+      # Keep each transaction aligned with the repository that publishes its
+      # packages. In particular, dms-greeter is only in danklinux; putting it
+      # in a dms-git transaction made dnf reject the whole request and the
+      # best-effort install then silently shipped bonito without DMSGreeter.qml
+      # (tunaOS#1009).
       - repo: avengemedia/danklinux
-        packages: []
-      - repo: avengemedia/dms-git
         packages:
           - quickshell-git
+          - dms-greeter
+      - repo: avengemedia/dms-git
+        packages:
           - dms
           - dms-cli
-          - dms-greeter
-        options: "--enablerepo=copr:copr.fedorainfracloud.org:avengemedia:danklinux"
     packages:
       - greetd
       - greetd-selinux
@@ -92,21 +92,19 @@ packages:
           - adw-gtk3-theme
         options: "--nobest --allowerasing"
       # DMS (DankMaterialShell) suite: quickshell-git + dms-greeter live in the
-      # danklinux COPR, dms/dms-cli in dms-git, and they cross-depend. Installing
-      # dms-greeter from the dms-git block alone fails ("no match") and, because
-      # copr installs are best-effort, silently drops the whole shell. Install
-      # the suite from one block with danklinux (+ cosmic-epel for the
-      # dms-greeter→greetd dep) enabled, mirroring build_scripts/desktop/niri.sh. The
-      # danklinux block is enable-only so its repo file exists for --enablerepo.
+      # danklinux COPR, while dms/dms-cli live in dms-git. Keep the package
+      # lists with their provider repos: a missing name rejects the whole dnf
+      # transaction, and this path is best-effort by design. That exact drift
+      # left the image without DMSGreeter.qml (tunaOS#1009).
       - repo: avengemedia/danklinux
-        packages: []
-      - repo: avengemedia/dms-git
         packages:
           - quickshell-git
+          - dms-greeter
+      - repo: avengemedia/dms-git
+        packages:
           - dms
           - dms-cli
-          - dms-greeter
-        options: "--enablerepo=copr:copr.fedorainfracloud.org:avengemedia:danklinux --enablerepo=copr:copr.fedorainfracloud.org:yselkowitz:cosmic-epel"
+        options: "--enablerepo=copr:copr.fedorainfracloud.org:yselkowitz:cosmic-epel"
     packages:
       - xdg-desktop-portal-gnome
       - xdg-desktop-portal-gtk
