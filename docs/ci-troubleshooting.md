@@ -786,3 +786,43 @@ Encryption, unlock, boot and the in-guest desktop contract all genuinely passed 
 **Action taken:** re-dispatched `LUKS E2E` (`workflow_dispatch`) for `variant=yellowfin,flavor=all` (run [31286843546](https://github.com/tuna-os/tunaOS/actions/runs/31286843546)) and `variant=albacore,flavor=all` (run [31286849405](https://github.com/tuna-os/tunaOS/actions/runs/31286849405)) to get fresh, post-fix verdicts. Not yet observed to completion — a multi-cell LUKS sweep runs well past a single investigation session; check those runs' actual conclusions before assuming this note means the cells are already green.
 
 **Separate, still-open, NOT covered by the above:** `yellowfin:xfce` (same run, job 93022287474) fails during the **image build** itself — `dracut-install: ERROR: installing '/root'` plus `error: Linting: Checks failed: 2`, retried 3 times, never reaching the LUKS/pixel-gate stage at all. `albacore:gnome/kde/cosmic` log the identical `dracut-install`/lint messages during their own builds but the build still *succeeds* there (non-fatal, matching `bootc container lint`'s documented warn-only default — see #10 above), so this is not simply "the same bug, sometimes fatal" — `yellowfin:xfce`'s build genuinely dies and needs its own root-cause pass, not a re-dispatch.
+
+---
+
+### 17. flounder gnome/xfce live-customize and initramfs failures were already fixed upstream of #1010 (2026-08-09)
+
+**Reported symptoms (#1010):**
+- `flounder:gnome` — the image builds green (`TUNAOS_BRANDING_OK`), but tacklebox's `live_customize` step (`podman run --entrypoint /bin/bash localhost/flounder:gnome -c '...'`, running `live-iso/common/src/customize-live.sh` under `set -exo pipefail`) exits 1 against the built image, before an ISO is ever produced.
+- `flounder:xfce` — the image builds green, but ISO assembly fails at initramfs preparation with "does the image ship dracut?".
+
+**What actually broke each cell, and where it was already fixed:**
+
+1. **gnome — unguarded `glib-compile-schemas` under `set -e` (exit 127).**
+   `live-iso/common/src/desktop-gnome.sh` writes two `gschema.override` files (installer dock favorites, power-settings) and then compiled them unconditionally with `glib-compile-schemas /usr/share/glib-2.0/schemas`. Debian's `flounder`/`flounder-sid` images do not ship that binary (it comes from `glib2-devel`, not part of the desktop package set), so the call died with exit 127 and `set -e` in `customize-live.sh` took the whole live-customize step down with it — exactly the `set -eu`-style failure #1010 reports, before any desktop-specific logic ever ran.
+
+   Fixed by commit `0393d364` (`fix(live): unbreak kde/xfce live sessions and 3 overlay build failures`, 2026-07-26), which gates the call:
+   ```sh
+   if command -v glib-compile-schemas &>/dev/null; then
+       glib-compile-schemas /usr/share/glib-2.0/schemas
+   else
+       echo "desktop-gnome: glib-compile-schemas missing; power-settings override left uncompiled" >&2
+   fi
+   ```
+   The commit message names this exact failure by variant: *"Overlay builds: flounder/flounder-sid died at an unguarded glib-compile-schemas (exit 127)"*. It is an ancestor of current `main` (`git merge-base --is-ancestor 0393d364 HEAD` succeeds).
+
+2. **xfce — `/var/tmp` deleted after the base stage deliberately created it.**
+   tacklebox's ISO builder rebuilds the live initramfs by running `dracut` *inside* the already-built, non-booted image (`podman run ... --entrypoint /bin/sh`), so `systemd-tmpfiles` never runs to materialize `/var/tmp` from its `tmpfiles.d` declaration. `dracut --tmpdir` defaults to `/var/tmp`, and an absent directory fails as:
+   ```
+   realpath: /var/tmp: No such file or directory
+   dracut[F]: Invalid tmpdir '/var/tmp'.
+   ```
+   Because tacklebox surfaces that as a generic "does the image ship dracut?" — dracut *is* installed and running; only its tmpdir is missing — this is exactly what #1010 filed against xfce. `Containerfile.debian` already `mkdir -p`'d `/var/tmp` in its base stage for this reason, but `build_scripts/99-cleanup.sh` (wired into `Containerfile.debian` by #1018) runs a later `find /var -mindepth 1 -maxdepth 1 -delete` that removes it again, and its own `mkdir -p /var /boot` does not put it back.
+
+   Fixed by commit `fee4ba0a` (`fix: five defects surfaced by the first LUKS round`, item 5, 2026-08-06), which recreates `/var/tmp` at the point `99-cleanup.sh` deletes it, so every variant that runs this script gets it back — not just Debian. The commit explicitly refs `#1010`. It is an ancestor of current `main`.
+
+**Explicitly out of scope for #1010** (per the issue's own "Affected Cells" list, and unchanged by this note):
+- `flounder:kde` — a separate branding failure tracked in #1008.
+- `flounder:cosmic` — no longer a declared flavor at all; see [#13](#13-debian-cosmic-desktop-package-gap-floundercosmic--flounder-sidcosmic-924) and the [`cosmic.yaml` status note](../manifests/desktops/cosmic.yaml) added for #964 (Debian has no COSMIC packages anywhere).
+
+**Live re-verification dispatched:** `LUKS E2E` workflow, `variant=flounder flavor=all` (covers gnome, xfce, and kde in one run) — [run 31287377558](https://github.com/tuna-os/tunaOS/actions/runs/31287377558), dispatched 2026-08-09 to confirm both fixes hold end-to-end (image build → live-customize → dracut/initramfs → QEMU boot → LUKS install) now that they have landed on `main`, since no post-fix LUKS E2E run for flounder was found in the run history searched (workflow dispatches in the days since `fee4ba0a`/`0393d364` landed all targeted other variants).
+
