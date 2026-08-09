@@ -515,7 +515,13 @@ jobs:
             echo "::notice::R2 credentials not configured; skipping publish."
             exit 0
           fi
-          sudo apt-get install -y -qq rclone 2>/dev/null || true
+          # Do not mask package-install failures: otherwise the next line reports
+          # only `rclone: command not found`, hiding the actual cause.
+          if ! command -v rclone >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq rclone
+          fi
+          rclone version
           while IFS= read -r base; do
             [[ -n "$base" ]] || continue
             png="docs/images/installer/${base}.png"
