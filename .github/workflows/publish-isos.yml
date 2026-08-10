@@ -84,6 +84,7 @@ jobs:
     permissions:
       contents: write
       packages: read
+      id-token: write
     # Builds the ISO from the promoted :<flavor> image, boot-gates it in
     # QEMU, and only publishes (R2 + GitHub Release) if the gate passes.
     uses: ./.github/workflows/reusable-build-artifacts.yml

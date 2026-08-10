@@ -123,6 +123,7 @@ jobs:
     permissions:
       contents: write
       packages: read
+      id-token: write
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
@@ -197,6 +198,31 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.0.6
+
+      - name: Checksum, sign, and verify grouped ISO
+        env:
+          COSIGN_YES: "true"
+        run: |
+          set -euo pipefail
+          ISO=$(find . -maxdepth 1 -name "${{ matrix.basename }}-*.iso" -print -quit)
+          [[ -n "$ISO" ]] || { echo "::error::ISO not found"; exit 1; }
+          CHECKSUM="${ISO}.sha256"
+          BUNDLE="${ISO}.sigstore.json"
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/publish-iso-groups.yml@${GITHUB_REF}"
+          issuer="https://token.actions.githubusercontent.com"
+
+          sha256sum "$(basename "$ISO")" > "$CHECKSUM"
+          sha256sum --check --strict "$CHECKSUM"
+          cosign sign-blob --bundle "$BUNDLE" "$ISO"
+          cosign verify-blob "$ISO" \
+            --bundle "$BUNDLE" \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "$issuer"
+
       # Only reached if the boot gate passed.
       - name: Upload ISO to Cloudflare R2
         if: ${{ inputs.skip_upload != true }}
@@ -213,19 +239,32 @@ jobs:
             echo "ERROR: No ISO found for ${{ matrix.basename }}"
             exit 1
           fi
+          CHECKSUM="${ISO}.sha256"
+          BUNDLE="${ISO}.sigstore.json"
           echo "==> Uploading $ISO to R2..."
-          rclone copy --log-level INFO --checksum --s3-no-check-bucket \
-            "$ISO" R2:${{ secrets.R2_BUCKET }}/live-isos/
+          for artifact in "$ISO" "$CHECKSUM" "$BUNDLE"; do
+            rclone copy --log-level INFO --checksum --s3-no-check-bucket \
+              "$artifact" R2:${{ secrets.R2_BUCKET }}/live-isos/
+          done
           LATEST="${{ matrix.basename }}-latest.iso"
           rclone copyto --log-level INFO --s3-no-check-bucket \
             "$ISO" "R2:${{ secrets.R2_BUCKET }}/live-isos/${LATEST}"
-          echo "==> Upload complete: $(basename "$ISO") (latest → ${LATEST})"
+          DIGEST=$(sha256sum "$ISO" | awk '{print $1}')
+          printf '%s  %s\n' "$DIGEST" "$LATEST" > "${LATEST}.sha256"
+          rclone copyto --log-level INFO --s3-no-check-bucket \
+            "${LATEST}.sha256" "R2:${{ secrets.R2_BUCKET }}/live-isos/${LATEST}.sha256"
+          rclone copyto --log-level INFO --s3-no-check-bucket \
+            "$BUNDLE" "R2:${{ secrets.R2_BUCKET }}/live-isos/${LATEST}.sigstore.json"
+          echo "==> Upload complete: $(basename "$ISO") (latest → ${LATEST}) with signed sidecars"
 
       - name: Upload ISO as artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.basename }}-iso
-          path: "${{ matrix.basename }}-*.iso"
+          path: |
+            ${{ matrix.basename }}-*.iso
+            ${{ matrix.basename }}-*.iso.sha256
+            ${{ matrix.basename }}-*.iso.sigstore.json
           if-no-files-found: error
           retention-days: 7
 
@@ -249,12 +288,14 @@ jobs:
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
         run: |
           echo "==> Pruning grouped ISOs older than 14 days from R2..."
-          # Delete versioned ISOs older than 14 days.
-          # Excludes -latest.iso pointers (always current, never pruned).
+          # Delete versioned ISOs and their sidecars together. Exclude every
+          # latest pointer and sidecar (always current).
           rclone delete --log-level INFO \
             --min-age 14d \
+            --exclude "*-latest.iso*" \
             --include "*.iso" \
-            --exclude "*-latest.iso" \
+            --include "*.iso.sha256" \
+            --include "*.iso.sigstore.json" \
             --s3-no-check-bucket \
             "R2:${{ secrets.R2_BUCKET }}/live-isos/"
           echo "==> Prune complete. Remaining objects:"
