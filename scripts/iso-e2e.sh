@@ -1457,6 +1457,33 @@ run_smoke_checks() {
 	return 0
 }
 
+# Upload and run the TAP-style installer GUI verification checks (tunaOS#678).
+# Runs the per-flavor compositor + installer-frontend + readiness-stamp
+# assertions inside the live guest, same TAP format as the smoke checks.
+# Non-fatal by default; set E2E_INSTALLER_GUI_STRICT=1 to make any failed
+# assertion a hard failure.
+run_installer_gui_checks() {
+	local script_dir
+	script_dir="$(dirname "${BASH_SOURCE[0]}")"
+	local ssh_cmd=("${GUEST_SSH[@]}")
+	local scp_cmd=("${GUEST_SCP[@]}")
+
+	"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-assert.sh"
+	"${scp_cmd[@]}" "${script_dir}/e2e-installer-gui-checks.sh" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-installer-gui-checks.sh"
+
+	local gui_output gui_rc=0
+	gui_output=$("${ssh_cmd[@]}" "FLAVOR=${FLAVOR:-gnome} TEST_LIB_DIR=${GUEST_HOME} bash ${GUEST_HOME}/e2e-installer-gui-checks.sh" 2>&1) || gui_rc=$?
+	echo "$gui_output" | tee -a "${SERIAL_LOG}"
+	if [[ "$gui_rc" -ne 0 ]]; then
+		echo "::warning::installer GUI checks reported ${gui_rc} failure(s) for ${FLAVOR:-gnome}"
+		if [[ "${E2E_INSTALLER_GUI_STRICT:-0}" -eq 1 ]]; then
+			echo "ERROR: E2E_INSTALLER_GUI_STRICT=1 and installer GUI checks failed" >&2
+			return 1
+		fi
+	fi
+	return 0
+}
+
 # Harvest the installed-system TAP checks from the serial console. The
 # installed system has no SSH user, so the snosi-derived assertions are baked
 # into the image (build_scripts/checks/e2e-runtime-checks.sh, run by
@@ -2994,6 +3021,8 @@ ssh)
 	if [[ "$rc" -eq 0 ]]; then
 		echo "==> Running live-image smoke checks..."
 		run_smoke_checks || rc=5
+		echo "==> Running installer GUI checks..."
+		run_installer_gui_checks || rc=5
 	fi
 	screenshot "20-ssh"
 	exit "$rc"

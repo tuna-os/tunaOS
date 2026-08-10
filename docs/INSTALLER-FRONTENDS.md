@@ -32,6 +32,11 @@ Checks 3–5 come from `scripts/installer-walkthrough.py`, which drives the UI w
 QEMU `sendkey` (compositor-agnostic — no ydotool/Wayland tooling in the guest),
 screendumps each screen, and emits TAP plus `walkthrough-<flavor>.json`.
 
+Checks 1–2b are also available as a reusable TAP script:
+`scripts/e2e-installer-gui-checks.sh`. It runs inside the live guest over SSH
+(same transport as `scripts/e2e-smoke-checks.sh`) and is called automatically
+by `scripts/iso-e2e.sh --ssh-only` when `FLAVOR` is set.
+
 > **Historical note.** Check 2 used to be `pgrep -af "Installer|…"` run through
 > `bash -c` — the pattern matched its own command line, so it passed
 > unconditionally and never verified anything. Assertions that can match
