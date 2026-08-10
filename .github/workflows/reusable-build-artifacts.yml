@@ -108,14 +108,6 @@ jobs:
           sudo -E bash ./scripts/build-iso-tacklebox.sh \
             "${VARIANT}" "${FLAVOR}" ghcr "${TAG}"
 
-      - name: Upload ISO Artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: iso-${{ inputs.variant }}-${{ inputs.flavor }}
-          path: "*.iso"
-          if-no-files-found: error
-          retention-days: 7
-
       - name: Install QEMU for boot verification
         run: |
           sudo apt-get install -y qemu-system-x86 ovmf socat imagemagick qemu-utils sshpass python3-pip
@@ -137,6 +129,46 @@ jobs:
             ./scripts/iso-e2e.sh "$ISO" \
               --output iso-e2e-out \
               --timeout 900
+
+      # The booted bytes are the signed bytes. Sign only after the QEMU gate
+      # succeeds, then verify locally before either release backend sees them.
+      # GitHub OIDC + Fulcio supplies an ephemeral identity: no key/password.
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.0.6
+
+      - name: Checksum, sign, and verify ISO
+        env:
+          COSIGN_YES: "true"
+        run: |
+          set -euo pipefail
+          ISO=$(find . -maxdepth 1 -name "*.iso" -print -quit)
+          [[ -n "$ISO" ]] || { echo "::error::ISO not found"; exit 1; }
+          CHECKSUM="${ISO}.sha256"
+          BUNDLE="${ISO}.sigstore.json"
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/reusable-build-artifacts.yml@${GITHUB_REF}"
+          issuer="https://token.actions.githubusercontent.com"
+
+          sha256sum "$(basename "$ISO")" > "$CHECKSUM"
+          sha256sum --check --strict "$CHECKSUM"
+          cosign sign-blob --bundle "$BUNDLE" "$ISO"
+          cosign verify-blob "$ISO" \
+            --bundle "$BUNDLE" \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "$issuer"
+
+      - name: Upload signed ISO artifact
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: iso-${{ inputs.variant }}-${{ inputs.flavor }}
+          path: |
+            *.iso
+            *.iso.sha256
+            *.iso.sigstore.json
+          if-no-files-found: error
+          retention-days: 7
 
       # Installer-flow captures join the boot evidence so every visual the
       # pipeline can produce lands in ONE artifact (and, via the weekly
@@ -194,13 +226,23 @@ jobs:
             exit 0
           fi
           ISO=$(find . -maxdepth 1 -name "*.iso" | head -1)
+          CHECKSUM="${ISO}.sha256"
+          BUNDLE="${ISO}.sigstore.json"
           echo "==> Uploading $ISO to R2..."
-          rclone copy --log-level INFO --checksum --s3-no-check-bucket \
-            "$ISO" "R2:${R2_BUCKET}/live-isos/"
+          for artifact in "$ISO" "$CHECKSUM" "$BUNDLE"; do
+            rclone copy --log-level INFO --checksum --s3-no-check-bucket \
+              "$artifact" "R2:${R2_BUCKET}/live-isos/"
+          done
           LATEST="${VARIANT}-${FLAVOR}-latest.iso"
           rclone copyto --log-level INFO --s3-no-check-bucket \
             "$ISO" "R2:${R2_BUCKET}/live-isos/${LATEST}"
-          echo "==> Published $(basename "$ISO") and ${LATEST}"
+          DIGEST=$(sha256sum "$ISO" | awk '{print $1}')
+          printf '%s  %s\n' "$DIGEST" "$LATEST" > "${LATEST}.sha256"
+          rclone copyto --log-level INFO --s3-no-check-bucket \
+            "${LATEST}.sha256" "R2:${R2_BUCKET}/live-isos/${LATEST}.sha256"
+          rclone copyto --log-level INFO --s3-no-check-bucket \
+            "$BUNDLE" "R2:${R2_BUCKET}/live-isos/${LATEST}.sigstore.json"
+          echo "==> Published $(basename "$ISO") and ${LATEST}, with checksum + Sigstore bundle sidecars"
 
       - name: Attach ISO to GitHub Release
         if: inputs.attach-release
@@ -226,11 +268,15 @@ jobs:
           # the same name already exists and was uploaded in the same API
           # session. Explicitly delete first, then upload to avoid the race.
           ISO_NAME=$(basename "$ISO")
-          if gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" --json assets \
-              | python3 -c "import json,sys; assets=json.load(sys.stdin)['assets']; [print(a['name']) for a in assets]" \
-              | grep -qxF "$ISO_NAME"; then
-            echo "==> Deleting existing asset ${ISO_NAME} from release ${TAG}..."
-            gh release delete-asset "$TAG" "$ISO_NAME" --repo "${GITHUB_REPOSITORY}" --yes
-          fi
-          gh release upload "$TAG" --repo "${GITHUB_REPOSITORY}" "$ISO"
-          echo "==> Attached ${ISO_NAME} to release $TAG"
+          ASSETS=("$ISO_NAME" "${ISO_NAME}.sha256" "${ISO_NAME}.sigstore.json")
+          EXISTING=$(gh release view "$TAG" --repo "${GITHUB_REPOSITORY}" --json assets \
+            | python3 -c "import json,sys; assets=json.load(sys.stdin)['assets']; [print(a['name']) for a in assets]")
+          for asset in "${ASSETS[@]}"; do
+            if grep -qxF "$asset" <<< "$EXISTING"; then
+              echo "==> Deleting existing asset ${asset} from release ${TAG}..."
+              gh release delete-asset "$TAG" "$asset" --repo "${GITHUB_REPOSITORY}" --yes
+            fi
+          done
+          gh release upload "$TAG" --repo "${GITHUB_REPOSITORY}" \
+            "$ISO" "${ISO}.sha256" "${ISO}.sigstore.json"
+          echo "==> Attached ${ISO_NAME} plus checksum and Sigstore bundle to release $TAG"
