@@ -1,6 +1,6 @@
 # tunaOS Roadmap
 
-**Last updated**: 2026-08-08 (Q4 planning + adoption metrics) | **Maintainer**: tuna-os (hanthor)
+**Last updated**: 2026-08-09 (release verified) | **Maintainer**: tuna-os (hanthor)
 
 ---
 
@@ -30,7 +30,7 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 
 CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
-✅ **Downloads VERIFIED WORKING** (2026-08-08): tunaos.org/download serves 179 ISOs from R2 (newest 08-07, HTTP 200 GB-scale). ⚠️ **Remaining gap**: GitHub Releases page stale since 07-12 — 27 consecutive green Generate Release runs silently skipped; release tags are empty shells. Root cause was **build-run selection, not the artifact name**: the SBOM lookup asked the API for `status=success` runs of `build-yellowfin.yml`, but a nightly fans out to ~40 matrix cells with `fail-fast: false`, so one unrelated flavour failing marks the whole run `failure`. The only "successful" runs on main were single-flavour dispatches, which carry that one flavour's SBOM and nothing else — while `sbom-yellowfin-gnome-linux-amd64` sat in each night's (failed) run all along. See #1106 (fix) + #1147 (cadence health gate). **FIX MERGED 2026-08-08 (`a4b147f8`)** — both issues closed; outcome verification pending on the 08-09 daily release run (acceptance: release with assets, first since 07-12). #936 (tacklebox pin) is **not** a live-boot fix hold: the `image-versions.yaml` fallback was moved to the live-boot fix (tacklebox `4fa6041`) on 07-31 by #937. What is left is a separate, narrower thing — `publish-iso-groups.yml` sets its own `TACKLEBOX_SHA: a105d6d3` (61 commits older, pre-dating the appended-overlay live path), and since `publish-isos.yml` is disabled that override is the SHA every scheduled ISO is actually built with. Those ISOs boot-gate green (run 30773566969, 08-03), so this is a divergence to close deliberately with its own boot evidence, not a hold to lift.
+✅ **Downloads VERIFIED WORKING** (2026-08-08): tunaos.org/download serves 179 ISOs from R2 (newest 08-07, HTTP 200 GB-scale). ✅ **GitHub Releases RESUMED 2026-08-09**: `gnome-20260809` published 11:38 UTC with assets (incl. SBOM spdx, 52.5 MB) — first release since 07-12; the `a4b147f8` fix (build-run selection, not artifact name — see #1106) and the #1147 cadence backstop are confirmed effective. #936 (tacklebox pin) is **not** a live-boot fix hold: the `image-versions.yaml` fallback was moved to the live-boot fix (tacklebox `4fa6041`) on 07-31 by #937. What is left is a separate, narrower thing — `publish-iso-groups.yml` sets its own `TACKLEBOX_SHA: a105d6d3` (61 commits older, pre-dating the appended-overlay live path), and since `publish-isos.yml` is disabled that override is the SHA every scheduled ISO is actually built with. Those ISOs boot-gate green (run 30773566969, 08-03), so this is a divergence to close deliberately with its own boot evidence, not a hold to lift.
 
 ### Community
 
@@ -79,7 +79,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | Bonito (Fedora 44) GA | ci-maintainer | #272 | 🟡 In progress (Q3 milestone) |
 | Redfin (RHEL 10) alpha | ci-maintainer | #609, #1123 | 🔴 DROPPED — restored to roadmap 2026-08-08 |
 | Ship KDE, COSMIC, Niri, XFCE variants | ci-maintainer | #285 | ✅ Done — all desktops downloadable on tunaos.org |
-| GitHub Releases page carries ISO assets | ci-maintainer | #1106 | 🟡 Fix merged 08-08 (`a4b147f8`) — verification pending on 08-09 daily run |
+| GitHub Releases page carries ISO assets | ci-maintainer | #1106 | ✅ Verified 08-09 — `gnome-20260809` published with assets; cadence resumed |
 | Release-cadence health gate (no silent skip) | ci-maintainer | #1147 | 🟡 Root cause fixed 08-08 (`a4b147f8` fails on dropped release) — verify no silent skip 08-09 |
 | Containerfile deduplication | architect | #305 | ✅ Done |
 | Hardcoded registry → configurable | architect | #304 | ✅ Done |
