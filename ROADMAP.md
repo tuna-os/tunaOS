@@ -26,6 +26,11 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 | Marlin | Arch Linux (rolling), CachyOS overlay | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
 | Flounder / Flounder Sid | Debian 13 Trixie / Sid | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
 
+**Status terms** follow [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md): `Stable`
+means GA, `Beta` means published for testing on tunaos.org/download. This
+table is the canonical per-variant status; tunaos.org wiki and blog copy must
+track it. Notably **Bonito is Beta** (GA tracked in [#272](https://github.com/tuna-os/tunaos/issues/272)) — it is neither "Production" nor "Experimental".
+
 ### Build Health
 
 CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
