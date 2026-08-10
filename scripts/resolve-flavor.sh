@@ -85,6 +85,12 @@ elif [[ "${VARIANT}" != "grouper" && "${FLAVOR}" == *"-asahi" ]]; then
 	OVERLAY_TYPE="asahi"
 	DESKTOP_FLAVOR="desktop"
 	PARENT_FLAVOR="${FLAVOR%-asahi}"
+elif [[ "${VARIANT}" == "bonito" && "${FLAVOR}" == *"-t2" ]]; then
+	# Intel/T2 overlay: Fedora's maintained t2linux COPR on x86_64 only.
+	CONTAINERFILE="Containerfile.overlay"
+	OVERLAY_TYPE="t2"
+	DESKTOP_FLAVOR="desktop"
+	PARENT_FLAVOR="${FLAVOR%-t2}"
 elif [[ "${VARIANT}" == "marlin" && "${FLAVOR}" == *"-cachyos" ]]; then
 	CONTAINERFILE="Containerfile.overlay"
 	OVERLAY_TYPE="cachyos"
