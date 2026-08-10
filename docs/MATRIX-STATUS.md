@@ -101,7 +101,28 @@ Pulls the **published** image and runs the contract script against it directly (
 
 6 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
 
-Newest result 2026-08-09.
+Newest result 2026-08-10.
+
+## Bootc Lifecycle
+
+**0 of 52** cells green (0 tested, 52 never tested).
+
+Validates bootc image update, rebase, rollback, alias resolution, and post-switch system contracts across published stream deployments.
+
+| Variant | gnome | kde | cosmic | niri | xfce |
+|---|:--:|:--:|:--:|:--:|:--:|
+| **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **flounder** | ⬜ | ⬜ | — | — | ⬜ |
+| **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
+| **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
+| **guppy** | ⬜ | ⬜ | — | — | ⬜ |
+| **hummingbird** | ⬜ | ⬜ | ⬜ | ⬜ | — |
+| **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **yellowfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 
 ## Installer smoke
 
@@ -136,7 +157,7 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-08-09 | [31303827255](https://github.com/tuna-os/tunaOS/actions/runs/31303827255) | 47 |
+| 2026-08-10 | [31373454633](https://github.com/tuna-os/tunaOS/actions/runs/31373454633) | 47 |
 | 2026-08-09 | [31287377558](https://github.com/tuna-os/tunaOS/actions/runs/31287377558) | 3 |
 | 2026-08-09 | [31286849405](https://github.com/tuna-os/tunaOS/actions/runs/31286849405) | 18 |
 | 2026-08-09 | [31286843546](https://github.com/tuna-os/tunaOS/actions/runs/31286843546) | 18 |
