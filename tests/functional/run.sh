@@ -15,6 +15,7 @@
 #   6. Flathub remote is configured (system/user remotes or remotes.d preconfig)
 #   7. variant branding: image-info.json + installer recipe.json (when variant given)
 #   8. composefs mounted (when FUNCTIONAL_EXPECT_COMPOSEFS=1)
+#   9. Homebrew available (when brew-setup.service exists)
 #
 # Output is TAP-like (ok/not ok); the exit code is the failure count, so SSH
 # returns it directly to the caller.
@@ -156,6 +157,14 @@ fi
 # ── 8. Composefs (opt-in; e.g. grouper) ─────────────────────────────────────
 if [[ "${FUNCTIONAL_EXPECT_COMPOSEFS:-0}" == "1" ]]; then
 	check "composefs is mounted" bash -c "grep -qE 'composefs|erofs' /proc/mounts"
+fi
+
+# ── 9. Homebrew (when the image ships brew-setup.service) ────────────────────
+# brew-setup.service is safe_enable'd in 40-services.sh, meaning it is enabled
+# when the unit exists and silently skipped otherwise. A variant without the
+# unit is not expected to have brew; assert it only on images that ship it.
+if systemctl list-unit-files brew-setup.service --no-legend 2>/dev/null | grep -q '^brew-setup.service'; then
+	check "brew is available" bash -c "command -v brew"
 fi
 
 print_summary

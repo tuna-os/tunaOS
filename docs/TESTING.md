@@ -111,9 +111,10 @@ scp tests/functional/run.sh root@<guest>:/tmp/ && ssh root@<guest> bash /tmp/run
 FUNCTIONAL_EXPECT_COMPOSEFS=1 tests/functional/run.sh gnome grouper
 ```
 
-`just boot-gate <variant> [flavor]` / `scripts/boot-gate.sh` already run this
-dispatcher automatically after their own graphical.target/display-manager
-checks (advisory only for now — see the comment in `boot-gate.sh` for the
+`just boot-gate <variant> [flavor]` / `scripts/boot-gate.sh` and CI
+(`reusable-build-image.yml` `verify_boot` step) run this dispatcher
+automatically after their own graphical.target/display-manager checks
+(advisory in `verify_boot` — see the comment in `boot-gate.sh` for the
 overlay-suffix-to-desktop-name mapping and why `*-nvidia`/`*-hwe`/etc. flavors
 still resolve to a bare desktop name run.sh understands).
 
