@@ -1,0 +1,13 @@
+# Canonical TunaOS boot-gate scenario.
+# CI substitutes the bootc image with the image built by the current job.
+bootc: ghcr.io/tuna-os/yellowfin:gnome-testing
+cpus: 4
+memory: 4GiB
+disk: 32GiB
+provision:
+  - mode: system
+    script: |
+      #!/bin/sh
+      # Enable SSH in the installed disk before its first boot. This does not
+      # modify the published image.
+      systemctl enable sshd
