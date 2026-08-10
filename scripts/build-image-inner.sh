@@ -171,6 +171,15 @@ until build_primary_image; do
 		exit 1
 	fi
 	echo "${BUILDER} build attempt ${build_attempt} failed; retrying in $((build_attempt * 10))s..." >&2
+
+	# Clean buildah storage to recover from transient OCI-layout races
+	# (e.g. `open out/index.json: no such file or directory`).
+	# A plain retry without cleanup reliably hits the same broken state.
+	if [[ "${BUILDER}" == "buildah" ]]; then
+		buildah rm --all 2>/dev/null || true
+		buildah rmi --prune 2>/dev/null || true
+	fi
+
 	sleep "$((build_attempt * 10))"
 	build_attempt=$((build_attempt + 1))
 done
