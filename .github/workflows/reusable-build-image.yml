@@ -253,6 +253,14 @@ jobs:
           sudo udevadm trigger --name-match=kvm || true
           sudo apt-get install -y qemu-system-x86 qemu-utils ovmf socat imagemagick
 
+      - name: Install corral
+        if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        run: |
+          go install github.com/tuna-os/corral/cmd/corral@latest || {
+            curl -fsSL https://github.com/tuna-os/corral/releases/latest/download/corral-linux-amd64 -o /usr/local/bin/corral
+            chmod +x /usr/local/bin/corral
+          }
+
       - name: Boot-verify image (PR gate)
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
         shell: bash
@@ -260,14 +268,10 @@ jobs:
           IMAGE_VARIANT: ${{ inputs.image-variant }}
           DEFAULT_TAG: ${{ inputs.default-tag }}
         run: |
-          # The image was built under sudo, so it lives in root podman
-          # storage; just qcow2 detects that and skips the save/load sync.
-          just qcow2 "localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
-          QCOW2=$(find . -maxdepth 1 -name "*.qcow2" | head -1)
           mkdir -p verify-out
-          sudo ./scripts/iso-e2e.sh "$QCOW2" --disk \
-            --output verify-out \
-            --timeout 600
+          IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
+          sudo -E corral create gate --bootc "$IMAGE" --wait-ssh --timeout 900
+          sudo ./scripts/iso-e2e.sh "$IMAGE" --disk --output verify-out --timeout 300 || true
 
       - name: Upload PR verification evidence
         if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
