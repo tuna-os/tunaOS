@@ -642,6 +642,28 @@ def build() -> str:
     if dates:
         out += [f"Newest result {dates[-1]}.", ""]
 
+    # ── Bootc Lifecycle ──────────────────────────────────────────────────────
+    lifecycle = latest_results("bootc-lifecycle.yml", r":")
+    lifecycle_key = lambda v, d: f"{v}:{d}"            # noqa: E731
+    total, tested, passed = tally(lmatrix, lifecycle, lifecycle_key)
+    out += [
+        "## Bootc Lifecycle",
+        "",
+        f"**{passed} of {total}** cells green "
+        f"({tested} tested, {total - tested} never tested).",
+        "",
+        (
+            "Validates bootc image update, rebase, rollback, alias resolution, "
+            "and post-switch system contracts across published stream deployments."
+        ),
+        "",
+    ]
+    out += desktop_table(lmatrix, lifecycle, lifecycle_key)
+    out += [""]
+    dates = sorted({v[1] for v in lifecycle.values()})
+    if dates:
+        out += [f"Newest result {dates[-1]}.", ""]
+
     # ── Installer smoke ─────────────────────────────────────────────────────
     total, tested, passed = tally(matrix, smoke, smoke_key)
     pct = round(100 * tested / total) if total else 0
@@ -696,7 +718,7 @@ def build() -> str:
     # prefixing "LUKS "), so a merge would let one silently overwrite the
     # other on every cell they share and undercount both in the table below.
     runs = defaultdict(list)
-    for results in (luks, smoke, contract):
+    for results in (luks, smoke, contract, lifecycle):
         for name, (_, date, run_id) in results.items():
             runs[(date, run_id)].append(name)
     out += [

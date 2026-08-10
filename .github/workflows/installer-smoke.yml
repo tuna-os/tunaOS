@@ -59,7 +59,7 @@ jobs:
         run: |
           set -euo pipefail
           json="$(yq -o=json '.' .github/build-config.yml)"
-          
+
           if [[ -n "$FILTER_VARIANT" || -n "$FILTER_FLAVORS" ]]; then
             v="${FILTER_VARIANT:-yellowfin}"
             f="${FILTER_FLAVORS:-gnome,kde,cosmic,niri,xfce}"
