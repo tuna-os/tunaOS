@@ -58,3 +58,35 @@ The accepted identity is intentionally narrow:
 
 A signature from a fork, pull-request ref, another repository, another
 workflow, or another identity provider does not satisfy this policy.
+
+## Verify an ISO
+
+Every published ISO has two adjacent files:
+
+- `<name>.iso.sha256` — the SHA-256 checksum manifest;
+- `<name>.iso.sigstore.json` — the Cosign v3 keyless verification bundle.
+
+Download all three files into the same directory, then run:
+
+```bash
+sha256sum --check --strict tunaos-example.iso.sha256
+
+cosign verify-blob tunaos-example.iso \
+  --bundle tunaos-example.iso.sigstore.json \
+  --certificate-identity \
+    "https://github.com/tuna-os/tunaOS/.github/workflows/reusable-build-artifacts.yml@refs/heads/main" \
+  --certificate-oidc-issuer \
+    "https://token.actions.githubusercontent.com"
+```
+
+Scheduled combined/deduplicated media is produced directly by
+`publish-iso-groups.yml`. For those ISOs, use this exact identity instead:
+
+```text
+https://github.com/tuna-os/tunaOS/.github/workflows/publish-iso-groups.yml@refs/heads/main
+```
+
+The reusable artifact workflow signs only after the ISO passes its QEMU boot
+gate; the grouped workflow follows the same ordering. The verified ISO,
+checksum, and bundle are then uploaded together. A signing or local
+verification failure prevents publication.
