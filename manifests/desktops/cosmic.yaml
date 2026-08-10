@@ -4,6 +4,33 @@ display_manager: greetd
 
 packages:
   # ── APT (Ubuntu only, via PPA) ─────────────────────────────────────
+  # tunaOS#964 tracks moving this whole apt: block off the third-party PPA
+  # and onto our own Tideforge-built debs at repo.tunaos.org/tideforge/
+  # <distro>/ — the only desktop still sourced from a repo we don't
+  # control, and the direct cause of grouper:cosmic's known failures
+  # (run 30692866756) and flounder/flounder-sid:cosmic shipping with no
+  # compositor at all (#924, section 13 of docs/ci-troubleshooting.md).
+  #
+  # Status as of 2026-08-09, verified against tuna-os/tunaos-packages
+  # directly (manifests/target-queues/cosmic.yaml, .github/workflows/
+  # publish-tideforge-debs.yml, and the closed widening issues #204/#210/
+  # #214/#216): 5 of the 14 required recipes (pop-icon-theme, cosmic-
+  # icon-theme, cosmic-randr, cosmic-panel, cosmic-comp) are gate-proven
+  # for both ubuntu and debian, and 4 of those 5 are actually published to
+  # the real R2-backed apt repo (cosmic-comp's publish-matrix entry has
+  # not landed yet). The other 9 — including cosmic-session, which must
+  # go last since it Requires the other ten — are not yet gate-widened.
+  #
+  # Do NOT swap this apt: block until all 14 are published: cosmic-session's
+  # own recipe (not yet gate-widened, and last in the closure order since it
+  # Requires the other thirteen) already ships an intentionally EMPTY
+  # ubuntu/debian runtime-Depends list precisely because most of its
+  # siblings are not in the published repo yet — pointing cosmic.yaml at
+  # that repo now would trade a working (if third-party) grouper:cosmic for
+  # an unsatisfiable-Depends apt failure on every package this block still
+  # needs. Re-check tunaos-packages' publish-tideforge-debs.yml matrix and
+  # this file's target-queues/cosmic.yaml before touching this block.
+  #
   # NOT Debian. This block used to say "Debian Sid has native packages"; it
   # does not, and neither does any other suite. Checked with ftp-master's
   # madison API across oldoldstable..experimental for cosmic-session,

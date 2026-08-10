@@ -969,6 +969,25 @@ _run_lnf() { # $1 = file
   [ "$output" -eq 0 ]
 }
 
+@test "40-services.sh enables networking before the apt path returns" {
+  # tunaOS#1013: the Ubuntu/Grouper path exits before the non-apt branch. A
+  # helper call elsewhere in the file is therefore not enough to give the
+  # installed LUKS guest an address for its SSH check.
+  local script="${REPO_ROOT}/build_scripts/40-services.sh"
+  local apt_block
+  apt_block="$(awk '/^if \[\[ "\$\{PKG_MGR:-\}" == "apt" \]\]/,/^fi$/' "$script")"
+  [ -n "$apt_block" ]
+
+  # Keep the assertion tied to the actual early-return boundary rather than
+  # merely counting helper calls across unrelated package-manager branches.
+  grep -qF 'tunaos_enable_network_manager' <<<"$apt_block"
+  local network_line return_line
+  network_line="$(grep -nF 'tunaos_enable_network_manager' <<<"$apt_block" | head -1 | cut -d: -f1)"
+  return_line="$(grep -nE '^[[:space:]]*exit 0$' <<<"$apt_block" | head -1 | cut -d: -f1)"
+  [ -n "$return_line" ]
+  [ "$network_line" -lt "$return_line" ]
+}
+
 @test "40-services.sh installs networkd on zypper, which splits it out" {
   # The unit openSUSE needs is not in the `systemd` package. Measured in a
   # tumbleweed container: after `zypper install systemd` there is no

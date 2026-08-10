@@ -23,6 +23,7 @@
 # have blocked niri — where a partial config.kdl would clobber niri's defaults.
 
 SRC="${BATS_TEST_DIRNAME}/../../live-iso/common/src"
+WORKFLOW="${BATS_TEST_DIRNAME}/../../.github/workflows/installer-smoke.yml"
 
 # Flavor -> the app id its adapter must launch. Mirrors the case statement in
 # customize-live.sh; if that mapping changes, this fails and points at both.
@@ -77,4 +78,28 @@ launcher_app() {
     printf '  %s\n' "${wrong[@]}" >&2
     false
   fi
+}
+
+@test "installer smoke selects a compositor per flavor" {
+  [ -f "$WORKFLOW" ]
+  grep -q 'kde)    COMPS="kwin_wayland"' "$WORKFLOW"
+  grep -q 'cosmic) COMPS="cosmic-comp"' "$WORKFLOW"
+  grep -q 'niri)   COMPS="niri"' "$WORKFLOW"
+  grep -q 'xfce)   COMPS="xfwl4 labwc wayfire xfwm4"' "$WORKFLOW"
+  grep -q 'gnome)  COMPS="gnome-shell"' "$WORKFLOW"
+}
+
+@test "installer smoke does not accept a different frontend as a fallback" {
+  [ -f "$WORKFLOW" ]
+  ! grep -q 'pgrep -af' "$WORKFLOW"
+  grep -Fq 'grep -Fx' "$WORKFLOW"
+}
+
+
+@test "installer recipe backend does not need an executable source mount" {
+  # Tacklebox bind-mounts live-customize read-only. Git may retain this helper
+  # without the execute bit, so invoking it directly turns every flavor's ISO
+  # build into exit 126 before the LUKS test even starts.
+  grep -Fq '_backend_kv="$(bash "${SCRIPT_DIR}/installer-recipe-backend.sh")"' \
+    "${SRC}/customize-live.sh"
 }

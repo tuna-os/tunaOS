@@ -43,13 +43,35 @@ jobs:
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install yq
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
       - id: gen
         env:
-          FLAVORS: ${{ inputs.flavors || 'gnome,kde,cosmic,niri,xfce' }}
-          VARIANT: ${{ inputs.variant || 'yellowfin' }}
+          FILTER_VARIANT: ${{ inputs.variant || '' }}
+          FILTER_FLAVORS: ${{ inputs.flavors || '' }}
         run: |
-          M=$(jq -cn --arg v "$VARIANT" --arg f "$FLAVORS" \
-            '{include: ($f | split(",") | map({variant: $v, flavor: .}))}')
+          set -euo pipefail
+          json="$(yq -o=json '.' .github/build-config.yml)"
+
+          if [[ -n "$FILTER_VARIANT" || -n "$FILTER_FLAVORS" ]]; then
+            v="${FILTER_VARIANT:-yellowfin}"
+            f="${FILTER_FLAVORS:-gnome,kde,cosmic,niri,xfce}"
+            M=$(jq -cn --arg v "$v" --arg f "$f" \
+              '{include: ($f | split(",") | map({variant: $v, flavor: .}))}')
+          else
+            M=$(echo "$json" | jq -c \
+              '{include: [ .variants[] | . as $variant | .id as $v | .flavors[]
+                 | select(.build_iso == true)
+                 | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
+                 | {variant: $v, flavor: .id} ]}')
+          fi
           echo "matrix=$M" >> "$GITHUB_OUTPUT"
           echo "$M" | jq .
 
@@ -137,13 +159,20 @@ jobs:
           FLAVOR: ${{ matrix.flavor }}
         run: |
           SSH="sshpass -p live ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null liveuser@127.0.0.1"
-          # GROUND TRUTH = the compositor process is actually running. The
-          # old check accepted "a wayland socket + any liveuser session",
-          # which a bare greetd VT with a stale socket satisfies — so Niri
-          # falling through to a TTY still PASSED (run 29645108966: gate
-          # green, screenshot showed a black console). pgrep -x the exact
-          # compositor binary is the only signal that survives that.
-          COMPS="niri xfwl4 cosmic-comp kwin_wayland gnome-shell xfwm4 sway Hyprland labwc wayfire"
+          # GROUND TRUTH = the compositor for THIS flavor is actually running.
+          # The old check accepted any compositor: a KDE session could make a
+          # broken COSMIC leg green, and a cosmic-greeter's own cosmic-comp
+          # made the COSMIC login prompt look like a real desktop. A stale
+          # Wayland socket also let Niri falling through to a TTY pass.
+          # Require the exact compositor family selected by the matrix cell.
+          case "${FLAVOR}" in
+            kde)    COMPS="kwin_wayland" ;;
+            cosmic) COMPS="cosmic-comp" ;;
+            niri)   COMPS="niri" ;;
+            xfce)   COMPS="xfwl4 labwc wayfire xfwm4" ;;
+            gnome)  COMPS="gnome-shell" ;;
+            *)      echo "::error::unsupported installer-smoke flavor: ${FLAVOR}"; exit 1 ;;
+          esac
           session_ok=0; COMP=""
           for i in $(seq 1 36); do
             COMP=$($SSH "for p in $COMPS; do pgrep -x \"\$p\" >/dev/null 2>&1 && { echo \"\$p\"; break; }; done" 2>/dev/null || true)
@@ -173,12 +202,11 @@ jobs:
           fi
           echo "== ${FLAVOR}: compositor running: ${COMP}"
 
-          # Then the DESKTOP-MATCHED installer frontend must actually be running.
-          # The old check (`pgrep -af "Installer|..."`) ran through `bash -c`, so
-          # the pattern matched its OWN command line and passed unconditionally —
-          # it never verified anything (run 29645820128 "installer processes:
-          # 2330 bash -c pgrep -af ..."). Assert the specific app id for this
-          # desktop via `flatpak ps`, with a self-match-proof pgrep fallback.
+          # Then the DESKTOP-MATCHED installer frontend must actually be
+          # running. The old fallback accepted any TunaOS installer after the
+          # exact flatpak lookup failed, so the wrong frontend could satisfy a
+          # matrix cell. There is no generic fallback now: an app-id mismatch
+          # is a real per-frontend failure.
           case "${FLAVOR}" in
             kde)    APP=org.tunaos.InstallerKde ;;
             cosmic) APP=org.tunaos.InstallerCosmic ;;
@@ -189,9 +217,10 @@ jobs:
           echo "expecting installer frontend: ${APP}"
           PROCS=""
           for i in $(seq 1 18); do
-            # flatpak ps is authoritative (app id, not a substring guess); the
-            # bracket trick ([o]rg) keeps the fallback from matching itself.
-            PROCS=$($SSH "flatpak ps --columns=application 2>/dev/null | grep -Fx '${APP}' || pgrep -af '[o]rg\.(tunaos|bootcinstaller)\.Installer' || true" 2>/dev/null || true)
+            # flatpak ps is authoritative (app id, not a substring guess).
+            # `pgrep -f` is intentionally absent: its shell command line can
+            # self-match and it cannot distinguish the four frontends.
+            PROCS=$($SSH "flatpak ps --columns=application 2>/dev/null | grep -Fx '${APP}' || true" 2>/dev/null || true)
             [ -n "$PROCS" ] && break
             sleep 10
           done
@@ -202,6 +231,94 @@ jobs:
             echo "--- autostart + session procs:"; $SSH 'ls -la /etc/xdg/autostart/ 2>/dev/null | head; ps -eo pid,comm | grep -iE "install|bwrap|flatpak" || true' 2>/dev/null || true
             exit 1
           fi
+
+          # ── 2b. The frontend must have PUT A WINDOW ON THE SCREEN ──────────
+          #
+          # Check 2 above answers "is the process alive". That is not the same
+          # question as "did the user get a window", and the two have already
+          # diverged HERE: the cosmic leg ran the installer process with no
+          # window ever appearing, and check 2 stayed green. The only thing
+          # that noticed was a human looking at a screenshot.
+          #
+          # Checks 3-5 (the walkthrough) would notice, but they need a
+          # compositor that renders — and cosmic, niri, xfwl4 and kwin_wayland
+          # all require a DRM render node that GitHub-hosted runners do not
+          # have. So on exactly the runners where this matters most, the
+          # rendering checks are the ones that cannot run.
+          #
+          # The frontends therefore say it themselves: each writes
+          # $XDG_RUNTIME_DIR/tuna-installer-ready when its window comes up. No
+          # GPU, no OCR, just a file read over SSH. Contract and field list:
+          # docs/INSTALLER-FRONTENDS.md.
+          #
+          # Inside the Flatpak sandbox $XDG_RUNTIME_DIR is the app's own
+          # runtime dir, which the host sees at /run/user/<uid>/app/<app-id>/;
+          # an unsandboxed run writes to /run/user/<uid>/ directly. Look in
+          # both rather than assuming which one this ISO produced.
+          echo "expecting readiness stamp from: ${APP}"
+          STAMP=""
+          for _ in $(seq 1 18); do
+            STAMP=$($SSH "cat /run/user/*/app/${APP}/tuna-installer-ready /run/user/*/tuna-installer-ready 2>/dev/null | head -20" 2>/dev/null || true)
+            [ -n "$STAMP" ] && break
+            sleep 10
+          done
+
+          if [ -z "$STAMP" ]; then
+            echo "::error::${FLAVOR}: ${APP} is running but never reported a window"
+            echo "  The process is alive (check 2 passed) and no readiness stamp"
+            echo "  was written, which is the cosmic failure shape: a frontend"
+            echo "  that starts, stays up, and puts nothing on the screen."
+            echo "  If this frontend's stamp is new, confirm the ISO's flatpak"
+            echo "  postdates it before treating this as a UI regression."
+            echo "--- runtime dirs:"; $SSH 'ls -la /run/user/*/ /run/user/*/app/*/ 2>/dev/null | head -40' 2>/dev/null || true
+            exit 1
+          fi
+
+          # awk rather than `sed 's/^/  /'`: shellcheck's SC2001 fires on
+          # echo-into-sed, and this file is actionlint-clean.
+          echo "readiness stamp:"; echo "$STAMP" | awk '{print "  " $0}'
+
+          # The stamp must come from the frontend we asked for. A stale stamp
+          # from a previous boot cannot survive ($XDG_RUNTIME_DIR is tmpfs),
+          # but the WRONG frontend autostarting is a real and silent failure —
+          # every desktop's autostart entry is written by a different
+          # desktop-*.sh adapter.
+          STAMP_APP=$(echo "$STAMP" | sed -n 's/^app_id=//p' | head -1)
+          if [ "$STAMP_APP" != "${APP}" ]; then
+            echo "::error::${FLAVOR}: expected a stamp from ${APP}, got '${STAMP_APP:-<none>}'"
+            exit 1
+          fi
+
+          # `signal` records HOW each frontend earned its stamp, because the
+          # five toolkits cannot all make the same claim:
+          #
+          #   frame-swapped  a frame actually reached the compositor
+          #                  (kde, niri — Qt's QQuickWindow::frameSwapped)
+          #   gtk-map        the widget was mapped
+          #                  (gnome/bootc-installer, xfce)
+          #   first-frame    the toolkit asked for a frame. Proves the event
+          #                  loop runs; does NOT prove a surface was presented
+          #                  (cosmic — libcosmic is iced-on-wgpu, no map hook)
+          #
+          # first-frame is deliberately NOT failed here: it is the strongest
+          # claim libcosmic can make, and rejecting it would fail the one
+          # frontend this check exists for. It is reported instead, so a
+          # reader weighs cosmic's evidence for what it is rather than
+          # assuming a mapped window. An UNKNOWN value does fail — that means
+          # a frontend invented a claim this workflow has not reasoned about.
+          STAMP_SIGNAL=$(echo "$STAMP" | sed -n 's/^signal=//p' | head -1)
+          case "${STAMP_SIGNAL}" in
+            frame-swapped|gtk-map)
+              echo "${FLAVOR}: window confirmed on screen (${STAMP_SIGNAL})" ;;
+            first-frame)
+              echo "::notice::${FLAVOR}: stamp is 'first-frame' — the app is"\
+                   "producing frames, which does not prove a surface was"\
+                   "presented. Strongest claim libcosmic offers." ;;
+            *)
+              echo "::error::${FLAVOR}: unrecognised readiness signal '${STAMP_SIGNAL:-<none>}'."
+              echo "  Add it to this case with a note on what it proves, or fix the frontend."
+              exit 1 ;;
+          esac
 
       # Capturing frames proves nothing on its own, so this also asserts the
       # installer RENDERS (non-blank), ADVANCES (frames differ), and WHICH
@@ -420,7 +537,13 @@ jobs:
             echo "::notice::R2 credentials not configured; skipping publish."
             exit 0
           fi
-          sudo apt-get install -y -qq rclone 2>/dev/null || true
+          # Do not mask package-install failures: otherwise the next line reports
+          # only `rclone: command not found`, hiding the actual cause.
+          if ! command -v rclone >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y -qq rclone
+          fi
+          rclone version
           while IFS= read -r base; do
             [[ -n "$base" ]] || continue
             png="docs/images/installer/${base}.png"

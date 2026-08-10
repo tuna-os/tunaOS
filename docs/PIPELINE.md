@@ -126,6 +126,28 @@ just iso yellowfin gnome               # build ISO via tacklebox
 
 ---
 
+## Tooling
+
+### Corral (Boot-Gate Runner)
+
+Corral (`tuna-os/corral`) serves as the unified boot-gate runner for both local QEMU execution and KubeVirt cluster verification.
+
+- **CI / Local Gate Execution**:
+  ```bash
+  corral create gate --bootc $IMAGE:$TAG-testing --wait-ssh --timeout 900
+  ```
+- **Declarative Verification**: `tests/corral/verify.yaml` provides the canonical Lima-style YAML scenario configuration for boot verification.
+- **Local Parity**:
+  ```bash
+  corral create -f tests/corral/verify.yaml
+  ```
+- **KubeVirt Cluster Parity**:
+  ```bash
+  corral create -f tests/corral/verify.yaml --kubevirt
+  ```
+
+---
+
 ## Renovate (Automated Updates)
 
 All dependency updates automerge via `renovate.json`:
@@ -135,3 +157,4 @@ All dependency updates automerge via `renovate.json`:
 - Download versions (uupd, kcm_ublue, tacklebox)
 
 No human review required — CI is the gate.
+

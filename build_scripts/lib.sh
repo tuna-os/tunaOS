@@ -766,3 +766,68 @@ _yq_array() {
 	shift
 	readarray -t "$_arr_name" < <($YQ "$@" 2>/dev/null || true)
 }
+
+# emit_packages_manifest — Write normalized JSON package manifest to /usr/share/tunaos/packages.json
+# Usage: emit_packages_manifest
+emit_packages_manifest() {
+	local img_name="${IMAGE_NAME:-unknown}"
+	local img_flavor="${DESKTOP_FLAVOR:-gnome}"
+	local pkg_mgr="${PKG_MGR:-unknown}"
+	local target_dir="/usr/share/tunaos"
+	local target_file="${target_dir}/packages.json"
+	local tmp_file="/tmp/packages.json.tmp"
+
+	mkdir -p "${target_dir}"
+
+	local raw_pkgs=""
+	if command -v rpm >/dev/null 2>&1; then
+		raw_pkgs="$(rpm -qa --qf '%{NAME}\t%{VERSION}-%{RELEASE}\n' 2>/dev/null | LC_ALL=C sort -u || true)"
+	elif command -v dpkg-query >/dev/null 2>&1; then
+		raw_pkgs="$(dpkg-query -W -f '${Package}\t${Version}\n' 2>/dev/null | LC_ALL=C sort -u || true)"
+	elif command -v pacman >/dev/null 2>&1; then
+		raw_pkgs="$(pacman -Q 2>/dev/null | tr ' ' '\t' | LC_ALL=C sort -u || true)"
+	elif command -v qlist >/dev/null 2>&1; then
+		raw_pkgs="$(qlist -ICv 2>/dev/null | awk '{
+			name=$0;
+			sub(/-[0-9].*/, "", name);
+			sub(/^[^\/]*\//, "", name);
+			ver=$0;
+			sub(/^.*-/, "", ver);
+			print name "\t" ver;
+		}' | LC_ALL=C sort -u || true)"
+	fi
+
+	python3 -c '
+import json, sys
+
+img_name = sys.argv[1]
+img_flavor = sys.argv[2]
+pkg_mgr = sys.argv[3]
+raw = sys.stdin.read().strip()
+
+packages = []
+if raw:
+    for line in raw.split("\n"):
+        parts = line.split("\t")
+        if len(parts) >= 2:
+            packages.append({"name": parts[0], "version": parts[1]})
+        elif len(parts) == 1 and parts[0]:
+            packages.append({"name": parts[0], "version": ""})
+
+manifest = {
+    "image": img_name,
+    "flavor": img_flavor,
+    "pkg_manager": pkg_mgr,
+    "count": len(packages),
+    "packages": packages
+}
+
+with open(sys.argv[4], "w") as f:
+    json.dump(manifest, f, indent=2)
+' "$img_name" "$img_flavor" "$pkg_mgr" "$tmp_file" < <(printf '%s\n' "$raw_pkgs")
+
+	mv "$tmp_file" "$target_file"
+	chmod 0644 "$target_file"
+	echo "emit_packages_manifest: wrote $(wc -l <"$target_file") lines to ${target_file}"
+}
+

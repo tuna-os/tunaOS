@@ -360,6 +360,20 @@ fi
 # and that belief is now untested rather than demonstrated — the smoke matrix
 # has never run gnome. For everything else use scripts/iso-e2e-gpu.sh on a
 # host with a real render node.
+#
+# WHETHER OR NOT virgl engages, "GDM slow or black" under this GPU-less path
+# is expected and is NOT a boot failure (tunaOS#581). The guest's display
+# stack falls back to Mesa's llvmpipe software rasteriser, whose first frame
+# can trail the serial contract markers by a minute or more on a 2-4 vCPU
+# runner — the VM is healthy and simply has not painted yet. The boot gates
+# therefore key off the serial markers (the #575 mitigation), and the
+# evidence screenshot waits for paint (wait_for_paint / TBOX_E2E_PAINT_TIMEOUT)
+# instead of a fixed sleep. Screendump reads the current scanout buffer, so
+# while llvmpipe is mid-frame the capture is black; VT-switching to a tty
+# other than the compositor's shows black for a different reason — the live
+# squash runs getty only on tty1 and the serial console (ttyS0), so tty3 has
+# no console to switch to; the Wayland compositor holds tty1. The serial log
+# is the source of truth for "is it up", pixels are only for the gallery.
 _gpu_mode="${TBOX_E2E_GPU:-auto}"
 QEMU_GPU_ARGS=(-vga virtio -display none)
 if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /dev/dri/renderD128 ]]; } &&
@@ -1241,6 +1255,43 @@ screenshot_sane() {
 	return 1
 }
 
+# Give the display manager/desktop time to actually PAINT before the evidence
+# screenshot. Under QEMU's plain virtio-vga there is no render node, so the
+# guest composites with Mesa's llvmpipe software rasteriser; its first frame
+# can trail the serial contract marker by a minute or more on a 2-4 vCPU
+# runner (tunaOS#581). A fixed sleep before the screenshot therefore produced
+# a black "10-ready" in the evidence gallery for an otherwise-healthy gate,
+# and the screenshot-sanity fallback could not tell "slow" from "failed".
+#
+# Poll the framebuffer instead: screenshot, measure (screenshot_sane), retry
+# until the image has structure or the cap is reached. The LAST screenshot is
+# always left on disk as evidence. This is evidence, not a gate — pass/fail
+# stays with the serial marker (the #575 mitigation) — so a machine that
+# genuinely cannot paint extends the wait, it does not fail the run. The
+# per-attempt stddev is logged so a blank result stays diagnosable.
+wait_for_paint() {
+	local label="$1"
+	local cap="${TBOX_E2E_PAINT_TIMEOUT:-120}"
+	local deadline=$(($(date +%s) + cap))
+	local attempt=0
+	while (($(date +%s) < deadline)); do
+		attempt=$((attempt + 1))
+		screenshot "$label"
+		if screenshot_sane "$label"; then
+			echo "==> ${label} painted on attempt ${attempt} (stddev=${SCREENSHOT_STDDEV})"
+			return 0
+		fi
+		sleep 15
+	done
+	# One final capture after the cap so the freshest frame is the evidence.
+	screenshot "$label"
+	if screenshot_sane "$label"; then
+		return 0
+	fi
+	echo "==> ${label} still blank after ${cap}s (stddev=${SCREENSHOT_STDDEV}) — the serial marker, not pixels, is the gate" >&2
+	return 1
+}
+
 # Wait for the live env to print its readiness marker.
 wait_for_ready() {
 	local deadline=$(($(date +%s) + TIMEOUT))
@@ -1400,6 +1451,33 @@ run_smoke_checks() {
 		echo "::warning::live-image smoke checks reported ${smoke_rc} failure(s)"
 		if [[ "${E2E_SMOKE_STRICT:-0}" -eq 1 ]]; then
 			echo "ERROR: E2E_SMOKE_STRICT=1 and smoke checks failed" >&2
+			return 1
+		fi
+	fi
+	return 0
+}
+
+# Upload and run the TAP-style installer GUI verification checks (tunaOS#678).
+# Runs the per-flavor compositor + installer-frontend + readiness-stamp
+# assertions inside the live guest, same TAP format as the smoke checks.
+# Non-fatal by default; set E2E_INSTALLER_GUI_STRICT=1 to make any failed
+# assertion a hard failure.
+run_installer_gui_checks() {
+	local script_dir
+	script_dir="$(dirname "${BASH_SOURCE[0]}")"
+	local ssh_cmd=("${GUEST_SSH[@]}")
+	local scp_cmd=("${GUEST_SCP[@]}")
+
+	"${scp_cmd[@]}" "${script_dir}/lib/e2e-assert.sh" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-assert.sh"
+	"${scp_cmd[@]}" "${script_dir}/e2e-installer-gui-checks.sh" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-installer-gui-checks.sh"
+
+	local gui_output gui_rc=0
+	gui_output=$("${ssh_cmd[@]}" "FLAVOR=${FLAVOR:-gnome} TEST_LIB_DIR=${GUEST_HOME} bash ${GUEST_HOME}/e2e-installer-gui-checks.sh" 2>&1) || gui_rc=$?
+	echo "$gui_output" | tee -a "${SERIAL_LOG}"
+	if [[ "$gui_rc" -ne 0 ]]; then
+		echo "::warning::installer GUI checks reported ${gui_rc} failure(s) for ${FLAVOR:-gnome}"
+		if [[ "${E2E_INSTALLER_GUI_STRICT:-0}" -eq 1 ]]; then
+			echo "ERROR: E2E_INSTALLER_GUI_STRICT=1 and installer GUI checks failed" >&2
 			return 1
 		fi
 	fi
@@ -2250,51 +2328,26 @@ run_install() {
 		# SLIRP pathology and a far faster link (2m54s) — the timing tracks
 		# bytes written, not network conditions. See #941.
 		#
-		# Do not "fix" this with a longer timeout, MTU clamping (already
-		# applied above) or retries. Any image larger than guest RAM cannot be
-		# delivered this way. Make the offline store resolve, or raise --memory
-		# above the image size.
+		# The fix is to use the already-mounted scratch disk for the fallback,
+		# not to increase timeouts or retry a write into the RAM-backed overlay.
 		echo "==> No local image in offline store — transferring from host via SSH"
 		local host_img="localhost/${VARIANT:-}:${FLAVOR:-}"
 		local host_tar="/tmp/luks-image-${VARIANT:-}-${FLAVOR:-}.tar"
+		local guest_tar_dir="/var/lib/containers/tunaos-e2e-transfer"
+		local guest_tar="${guest_tar_dir}/${host_tar##*/}"
 		if podman image exists "$host_img" 2>/dev/null; then
 			echo "==> Saving $host_img on host..."
 			podman save "$host_img" -o "$host_tar"
 
-			# Pre-flight: refuse a transfer the comment above already proves is
-			# doomed, instead of discovering it the same way #941 did — a
-			# silent multi-hour hang ending in the kernel OOM-killing the
-			# guest. The scp destination is GUEST_HOME (/home/liveuser), which
-			# is the live overlay's upperdir: a RAM-backed tmpfs, not disk.
-			# `df` on the guest reports 8G free there because that is the
-			# tmpfs's ADVERTISED size, not real backing store — every byte
-			# written to it is guest RAM. Compare the tar we are about to ship
-			# against the guest's live MemAvailable (not MemTotal: some RAM is
-			# already spoken for by the live session before we start copying)
-			# and fail fast with an actionable message if it cannot possibly
-			# fit, rather than burning the rest of the job's timeout budget on
-			# a transfer that ends in `scp: write remote ...: Failure`.
-			#
-			# 70% headroom, not 100%: podman load on the guest side still has
-			# to hold the tar AND unpack layers concurrently, plus whatever
-			# the live session itself needs to keep running. The one measured
-			# data point (#941) was a ~4.9G image against ~2.9G available —
-			# 169% of available, nowhere near this line — so 70% is a
-			# deliberately conservative guess, not a proven boundary.
-			local host_tar_bytes guest_mem_avail_kb
-			host_tar_bytes="$(stat -c%s "$host_tar" 2>/dev/null || echo 0)"
-			guest_mem_avail_kb="$("${ssh_cmd[@]}" "awk '/^MemAvailable:/{print \$2}' /proc/meminfo" 2>/dev/null || echo 0)"
-			if [[ "$host_tar_bytes" -gt 0 && "$guest_mem_avail_kb" -gt 0 ]]; then
-				local guest_mem_avail_bytes=$((guest_mem_avail_kb * 1024))
-				local safe_limit_bytes=$((guest_mem_avail_bytes * 70 / 100))
-				if [[ "$host_tar_bytes" -ge "$safe_limit_bytes" ]]; then
-					echo "ERROR: image tar (${host_tar_bytes} bytes / $((host_tar_bytes / 1024 / 1024))M) is too large for the guest's available RAM ($((guest_mem_avail_bytes / 1024 / 1024))M) to receive safely." >&2
-					echo "The SSH-transfer fallback writes into a RAM-backed tmpfs (${GUEST_HOME}) and will OOM-kill the guest partway through — this is a measured failure mode, not a guess (see #941)." >&2
-					echo "This path should not have been taken at all: make the offline store resolve so Fisherman can install directly from containers-storage (#941), or re-run with --memory well above the image size." >&2
-					rm -f "$host_tar" || true
-					return 3
-				fi
-			fi
+			# The scratch disk is mounted at /var/lib/containers above. Give the
+			# live user a temporary directory there so scp writes to disk rather
+			# than the RAM-backed GUEST_HOME overlay tmpfs. The previous destination
+			# caused multi-GB images to exhaust guest memory (#882).
+			"${ssh_cmd[@]}" "sudo install -d -o liveuser -g liveuser ${guest_tar_dir}" || {
+				echo "ERROR: scratch-disk transfer directory could not be prepared" >&2
+				rm -f "$host_tar" || true
+				return 3
+			}
 
 			# Bounded, like the fisherman call below. This is a multi-GB copy
 			# over a QEMU SLIRP hostfwd, so it is legitimately slow — but the
@@ -2305,20 +2358,20 @@ run_install() {
 			# readiness wait and the installed-boot wait.
 			e2e_phase "Transferring image to guest (this may take a few minutes)..."
 			if ! timeout 1800 "${scp_cmd[@]}" "$host_tar" \
-				"${GUEST_SCP_DEST}:${GUEST_HOME}/"; then
+				"${GUEST_SCP_DEST}:${guest_tar}"; then
 				echo "ERROR: image transfer to guest timed out or failed" >&2
 				rm -f "$host_tar" || true
 				return 3
 			fi
 			echo "==> Loading image into guest podman..."
-			if timeout 1800 "${ssh_cmd[@]}" "sudo podman load -i ${GUEST_HOME}/${host_tar##*/} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
+			if timeout 1800 "${ssh_cmd[@]}" "sudo podman load -i ${guest_tar} 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
 				echo "==> Image loaded, using local containers-storage ref"
 				recipe_image="containers-storage:${host_img}"
 			else
 				echo "ERROR: podman load failed on guest"
 				return 3
 			fi
-			"${ssh_cmd[@]}" "rm -f ${GUEST_HOME}/${host_tar##*/}" || true
+			"${ssh_cmd[@]}" "sudo rm -f ${guest_tar}" || true
 			rm -f "$host_tar" || true
 		else
 			echo "ERROR: host image $host_img not found — was ISO build successful?"
@@ -2909,8 +2962,12 @@ disk)
 		sleep 10
 	done
 	# Let the display manager finish drawing before capturing evidence.
-	sleep 30
-	screenshot "10-ready"
+	# Poll for paint instead of a fixed 30s sleep: under plain virtio-vga the
+	# guest renders via llvmpipe and first paint can lag the contract marker
+	# by minutes on a 2-4 vCPU runner (tunaOS#581). The verdict above already
+	# came from the serial marker, so this is evidence work — a slow or absent
+	# paint extends the run, it cannot fail it.
+	wait_for_paint "10-ready" || true
 	if [[ "$rc" -eq 2 ]]; then
 		echo "ERROR: desktop experience contract marker was not emitted" >&2
 	fi
@@ -2926,7 +2983,11 @@ ready)
 	# whole recovery story for serial-less kernels. A bare call here
 	# historically aborted the script at exit 2 with only 00-boot captured.
 	wait_for_ready && rc=0 || rc=$?
-	screenshot "10-ready"
+	# Poll for paint so the evidence screenshot — and the screenshot-sanity
+	# fallback below, which re-measures the same file — sees the desktop
+	# rather than a still-llvmpipe black frame (tunaOS#581). Bounded by
+	# TBOX_E2E_PAINT_TIMEOUT; the serial marker, not pixels, stays the gate.
+	wait_for_paint "10-ready" || true
 	# Serial marker missing is expected when the guest kernel has no serial
 	# console support; fall back to verifying the framebuffer actually
 	# rendered a screen. Hard failures (blank/absent screenshot) stay fatal
@@ -2960,6 +3021,8 @@ ssh)
 	if [[ "$rc" -eq 0 ]]; then
 		echo "==> Running live-image smoke checks..."
 		run_smoke_checks || rc=5
+		echo "==> Running installer GUI checks..."
+		run_installer_gui_checks || rc=5
 	fi
 	screenshot "20-ssh"
 	exit "$rc"

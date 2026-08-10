@@ -1,0 +1,59 @@
+# TunaOS adaptation of renner0e/server's bootc image-factory pattern
+# (https://github.com/renner0e/server — system_files/etc/containers/systemd/
+# bootc-image-factory.build + .../bootc-image-factory-build.timer).
+#
+# Rebuilds the local redfin (RHEL 10) image from a tunaos source checkout on
+# a schedule, then switches THIS machine to the freshly built image. Redfin
+# images cannot be published to ghcr.io (RHEL EULA — see docs/rhel-setup.md),
+# so for a machine that both builds and runs redfin, the local image factory
+# IS the update path; for multi-machine deployments, push the built image to
+# a private registry instead and let deployed systems pull via uupd.
+#
+# This is the build-host side of the pattern. renner0e uses a podman quadlet
+# [Build] section; TunaOS builds through `just build redfin gnome` (the same
+# pipeline CI uses, RHSM creds passed via BuildKit secrets), so the build is
+# a plain ExecStart instead.
+#
+# Requirements (full walkthrough in docs/rhel-setup.md "Auto-Update"):
+#   * a tunaos checkout at WorkingDirectory, with `just` and `yq` on PATH
+#     (add just's directory to the Environment=PATH line if it lives under
+#     ~/.cargo or ~/.local/bin on the build user)
+#   * root's `podman login registry.redhat.io` done (auth.json — the embedded
+#     entitlement certs in the rhel-bootc base grant CDN access during build)
+#   * RHSM credentials in /etc/bootc-image-factory/rhsm.env (mode 0600):
+#       RHSM_USER=... RHSM_PASSWORD=...
+#     or the activation-key form: RHSM_ORG=... RHSM_ACTIVATION_KEY=...
+#   * the machine is itself bootc-managed (deployed from a redfin image — a
+#     corral VM or a QEMU install), so `bootc switch` has a deployment to
+#     replace
+#
+# Type=oneshot + ExecStartPost ordering is load-bearing: the switch only
+# fires after the build succeeds, so a broken build is never switched to.
+# bootc switch --transport=containers-storage reads root's podman storage,
+# which is where the root-run `just build` stores localhost/redfin:gnome.
+
+[Unit]
+Description=Rebuild localhost/redfin:gnome and switch this machine to it
+Documentation=https://github.com/tuna-os/tunaos/blob/main/docs/rhel-setup.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/var/lib/tunaos-image-factory
+EnvironmentFile=/etc/bootc-image-factory/rhsm.env
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=SKIP_SUBMODULES=1
+# `just build redfin gnome` produces localhost/redfin:gnome in root podman
+# storage. RHSM_* come from the EnvironmentFile; registry.redhat.io auth is
+# root's auth.json. SKIP_SUBMODULES=1 matches the CI build path (the gnome
+# flavor would otherwise run `git submodule update --init` on every tick).
+ExecStart=/usr/bin/env just build redfin gnome
+# Only after a successful build: point the running system at the new image,
+# and prune bootc images older than a week so rollback targets stay.
+ExecStartPost=/usr/bin/bootc switch --quiet --transport=containers-storage localhost/redfin:gnome
+ExecStartPost=/usr/bin/podman image prune --force --filter=label=containers.bootc=1 --filter until=168h
+Nice=0
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,127 @@
+# Browser/CI ISO parity gate (tunaOS#673).
+#
+# ISO-builder publishes an ISO and experience manifest as an artifact. This
+# reusable workflow downloads that artifact and a CI-built reference artifact,
+# validates that their inputs and GUI/install contracts match, then runs the
+# exact same LUKS harness against both ISO paths. There is intentionally no
+# browser-specific E2E implementation here.
+name: ISO Builder Parity
+
+on:
+  workflow_call:
+    inputs:
+      ci_run_id:
+        description: "Actions run containing the CI-built ISO artifact"
+        required: true
+        type: string
+      browser_run_id:
+        description: "Actions run containing the browser-built ISO artifact"
+        required: true
+        type: string
+      ci_repository:
+        description: "owner/repository containing the CI artifact"
+        required: false
+        default: "tuna-os/tunaos"
+        type: string
+      browser_repository:
+        description: "owner/repository containing the browser artifact"
+        required: false
+        default: "tuna-os/iso-builder"
+        type: string
+      ci_artifact:
+        description: "Artifact containing ci.iso and experience-manifest.json"
+        required: true
+        type: string
+      browser_artifact:
+        description: "Artifact containing browser.iso and experience-manifest.json"
+        required: true
+        type: string
+      variant:
+        required: true
+        type: string
+      flavor:
+        required: true
+        type: string
+    secrets:
+      artifact_token:
+        required: false
+
+jobs:
+  parity:
+    name: ${{ inputs.variant }}:${{ inputs.flavor }} browser/CI LUKS parity
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Download CI ISO and manifest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.ci_artifact }}
+          path: parity/ci
+          repository: ${{ inputs.ci_repository }}
+          run-id: ${{ inputs.ci_run_id }}
+          github-token: ${{ secrets.artifact_token || github.token }}
+
+      - name: Download browser ISO and manifest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.browser_artifact }}
+          path: parity/browser
+          repository: ${{ inputs.browser_repository }}
+          run-id: ${{ inputs.browser_run_id }}
+          github-token: ${{ secrets.artifact_token || github.token }}
+
+      - name: Install E2E dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils ovmf socat sshpass imagemagick swtpm
+
+      - name: Validate and compare experience manifests
+        env:
+          VARIANT: ${{ inputs.variant }}
+          FLAVOR: ${{ inputs.flavor }}
+        run: |
+          set -euo pipefail
+          for source in ci browser; do
+            manifest="parity/${source}/experience-manifest.json"
+            test -f "$manifest" || { echo "missing $manifest" >&2; exit 1; }
+            python3 scripts/verify-experience-manifest.py "$manifest"
+            jq -e --arg v "$VARIANT" --arg f "$FLAVOR" \
+              '.variant == $v and .flavor == $f' "$manifest" >/dev/null
+          done
+          python3 scripts/verify-experience-manifest.py \
+            parity/ci/experience-manifest.json \
+            --compare parity/browser/experience-manifest.json
+
+      - name: Run the identical LUKS E2E against CI ISO
+        env:
+          VARIANT: ${{ inputs.variant }}
+          FLAVOR: ${{ inputs.flavor }}
+        run: |
+          set -euo pipefail
+          iso="parity/ci/ci.iso"
+          test -f "$iso" || { echo "missing $iso" >&2; exit 1; }
+          ./scripts/iso-e2e.sh "$iso" --luks --output parity/ci-e2e
+
+      - name: Run the identical LUKS E2E against browser ISO
+        env:
+          VARIANT: ${{ inputs.variant }}
+          FLAVOR: ${{ inputs.flavor }}
+        run: |
+          set -euo pipefail
+          iso="parity/browser/browser.iso"
+          test -f "$iso" || { echo "missing $iso" >&2; exit 1; }
+          ./scripts/iso-e2e.sh "$iso" --luks --output parity/browser-e2e
+
+      - name: Upload parity evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: iso-builder-parity-${{ inputs.variant }}-${{ inputs.flavor }}
+          path: parity/*-e2e
+          if-no-files-found: warn

@@ -40,9 +40,11 @@ jobs:
             # Get desktop-only variant:flavor pairs (exclude base/hwe/nvidia suffixes and base flavors)
             # These are the most representative images to rotate through for daily checks
             CONFIG_FILE=".github/build-config.yml"
+            # guppy (Gentoo) is excluded: its source-based desktop images are experimental
+            # and not reliably published — see tunaOS#657, tunaOS#658.
             # shellcheck disable=SC2016
             JQ_DESKTOP='.variants[] | .id as $v | .flavors[] | select(
-              .build_image == true and (.id | test("^(gnome|kde|cosmic|niri)$"))
+              .build_image == true and (.id | test("^(gnome|kde|cosmic|niri)$")) and ($v != "guppy")
             ) | {variant: $v, flavor: .id}'
             ALL_IMAGES=$(yq -o=json "${CONFIG_FILE}" | jq -c "${JQ_DESKTOP}")
 
@@ -75,7 +77,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@f8418f73faf163c048ab23f10655235c078d7606 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@370431fd5f222dada9fbc21ae8a7b0387eb2b152 # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"

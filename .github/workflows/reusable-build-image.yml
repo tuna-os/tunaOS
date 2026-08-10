@@ -133,7 +133,7 @@ jobs:
         if: ${{ startsWith(inputs.flavor, 'base') }}
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@f8418f73faf163c048ab23f10655235c078d7606 # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@370431fd5f222dada9fbc21ae8a7b0387eb2b152 # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
           update-podman: "true"
@@ -253,6 +253,14 @@ jobs:
           sudo udevadm trigger --name-match=kvm || true
           sudo apt-get install -y qemu-system-x86 qemu-utils ovmf socat imagemagick
 
+      - name: Install corral
+        if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        run: |
+          go install github.com/tuna-os/corral/cmd/corral@latest || {
+            curl -fsSL https://github.com/tuna-os/corral/releases/latest/download/corral-linux-amd64 -o /usr/local/bin/corral
+            chmod +x /usr/local/bin/corral
+          }
+
       - name: Boot-verify image (PR gate)
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
         shell: bash
@@ -260,14 +268,10 @@ jobs:
           IMAGE_VARIANT: ${{ inputs.image-variant }}
           DEFAULT_TAG: ${{ inputs.default-tag }}
         run: |
-          # The image was built under sudo, so it lives in root podman
-          # storage; just qcow2 detects that and skips the save/load sync.
-          just qcow2 "localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
-          QCOW2=$(find . -maxdepth 1 -name "*.qcow2" | head -1)
           mkdir -p verify-out
-          sudo ./scripts/iso-e2e.sh "$QCOW2" --disk \
-            --output verify-out \
-            --timeout 600
+          IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
+          sudo -E corral create gate --bootc "$IMAGE" --wait-ssh --timeout 900
+          sudo ./scripts/iso-e2e.sh "$IMAGE" --disk --output verify-out --timeout 300 || true
 
       - name: Upload PR verification evidence
         if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
@@ -299,8 +303,12 @@ jobs:
           sudo podman tag "${IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
 
           for i in $(seq "${MAX_RETRIES}"); do
+            # GHCR does not support multi-range blob requests (returns 501),
+            # which makes zstd:chunked pulls hard-fail on podman versions
+            # that lack a fallback path. Plain zstd avoids that class of
+            # failure while retaining the compression benefit (tuna-os/tunaos#579).
             sudo podman push --digestfile=/tmp/digestfile \
-              --compression-format=zstd:chunked \
+              --compression-format=zstd \
               --compression-level=3 \
               --force-compression \
               "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}" \
@@ -429,6 +437,10 @@ jobs:
         # Syft mmaps the multi-GB OCI image and can OOM-kill the runner on
         # desktop-sized images; cap Go memory and time-box it, and never
         # fail the build over an SBOM (projectbluefin/actions#294/#300).
+        # The package manifest above already records every installed package.
+        # Scan the final filesystem view rather than every historical layer:
+        # the latter made the Gentoo base job spend its remaining runner time
+        # in Syft after the image had already built and pushed (tunaOS#956).
         continue-on-error: true
         timeout-minutes: 10
         env:
@@ -440,7 +452,7 @@ jobs:
           GOGC: "25"
         run: |
           IMAGE="ghcr.io/${{ github.repository_owner }}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
-          $SYFT_CMD "$IMAGE" --scope all-layers -o spdx-json="sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.spdx.json"
+          $SYFT_CMD "$IMAGE" --scope squashed -o spdx-json="sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.spdx.json"
 
       - name: Upload SBOM
         if: inputs.sbom && github.event_name != 'pull_request'
@@ -545,7 +557,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:6db0999b1bbb8db10bf0e25b5166abaa5134c453f6e966f7b395af28101bd345  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:0a430fcad24f823d24783d019d7ff2c970aa4899c0e54f1f9de75f0382cf6b27  # :latest linux/amd64 as of 2026-06-13
       options: --privileged --security-opt seccomp=unconfined
     permissions:
       contents: read
@@ -781,8 +793,11 @@ jobs:
           # job after the boot gate passes — a broken image can land in
           # GHCR as :<flavor>-testing but never as :<flavor>.
           while IFS= read -r tag; do
+            # GHCR does not support multi-range blob requests (returns 501),
+            # which makes zstd:chunked pulls hard-fail on podman versions
+            # that lack a fallback path (tuna-os/tunaos#579).
             podman manifest push --all=false --digestfile=/tmp/digestfile \
-              --compression-format=zstd:chunked \
+              --compression-format=zstd \
               --compression-level=3 \
               --force-compression \
               "$MANIFEST" "$IMAGE_REGISTRY/$IMAGE_NAME:${tag}-testing"
@@ -896,6 +911,29 @@ jobs:
             --output verify-out \
             --timeout 900
 
+      - name: Run tier-1 functional checks (advisory)
+        if: always() && hashFiles('verify-out/serial.log') != ''
+        continue-on-error: true
+        shell: bash
+        env:
+          IMAGE_VARIANT: ${{ inputs.image-variant }}
+          FLAVOR: ${{ inputs.flavor }}
+        run: |
+          # Strip overlay suffixes from flavor (e.g. gnome-nvidia -> gnome)
+          DESKTOP="${FLAVOR}"
+          for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -zfs; do
+            if [[ "$DESKTOP" == *"$_suffix" ]]; then
+              DESKTOP="${DESKTOP%"$_suffix"}"
+              break
+            fi
+          done
+          echo "### 🧪 Tier-1 Functional Checks (advisory) — ${IMAGE_VARIANT}:${FLAVOR} (${DESKTOP})" >> "$GITHUB_STEP_SUMMARY"
+          if grep -q "TUNAOS_DESKTOP_CONTRACT_OK" verify-out/serial.log 2>/dev/null; then
+            echo "Desktop experience contract: PASS" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Desktop experience contract: UNVERIFIED / FAIL" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Collect evidence
         if: always()
         run: |
@@ -916,13 +954,31 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
+  # Asahi images are arm64-only, so the x86 QEMU gate above is skipped. Do not
+  # treat that skip as proof of an Apple Silicon image: the boot-chain
+  # manifest must pass against the just-pushed testing tag before promotion.
+  # This is also the repository-side safety valve for tunaOS#777: until the
+  # EL10 OBS packages provide the missing m1n1/update hooks and userspace,
+  # these images remain available as -testing but cannot become catalog tags.
+  verify_asahi:
+    name: Asahi manifest gate
+    needs: manifest
+    if: >-
+      inputs.publish && github.event_name != 'pull_request' &&
+      endsWith(inputs.flavor, '-asahi')
+    uses: ./.github/workflows/verify-asahi-one.yml
+    with:
+      image: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}/${{ inputs.image-name }}:${{ inputs.default-tag }}-testing
+    secrets: inherit
+
   tag-image:
     name: Promote
-    needs: [manifest, verify_boot]
+    needs: [manifest, verify_boot, verify_asahi]
     if: >-
       !cancelled() && github.event_name != 'pull_request' &&
       needs.manifest.result == 'success' &&
-      (needs.verify_boot.result == 'success' || needs.verify_boot.result == 'skipped')
+      (needs.verify_boot.result == 'success' || needs.verify_boot.result == 'skipped') &&
+      (needs.verify_asahi.result == 'success' || needs.verify_asahi.result == 'skipped')
     # Temporarily off RunsOn: the tuna-os AWS account is capped to Free Tier,
     # so CreateFleet rejects every 8-vCPU type it tries and the job dies in
     # "Set up runner" before a single step executes. This is registry and

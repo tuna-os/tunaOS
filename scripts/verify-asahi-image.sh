@@ -95,7 +95,7 @@ check_any "m1n1 payload" /usr/lib64/m1n1/m1n1.bin /usr/lib/m1n1/m1n1.bin /usr/li
 # by downloading uboot-asahi-2026.04.asahi2-1-aarch64.pkg.tar.xz and listing
 # its contents directly) ships u-boot-nodtb.bin there instead, matching the
 # other two families' filename — only the directory differs by family.
-check_any "Apple U-Boot payload" /usr/share/uboot/apple_m1/u-boot-nodtb.bin /usr/lib/u-boot/apple_m1/u-boot-nodtb.bin /usr/lib/asahi-boot/u-boot-nodtb.bin
+check_any "Apple U-Boot payload" /usr/share/uboot/apple_m1/u-boot-nodtb.bin /usr/lib/u-boot/apple_m1/u-boot-nodtb.bin /usr/lib/asahi-boot/u-boot-nodtb.bin /boot/u-boot-nodtb.bin
 # CentOS Hyperscale SIG's update-m1n1 RPM (EL10: skipjack/yellowfin/albacore)
 # installs to /usr/sbin, not /usr/bin like Fedora's — verified by downloading
 # update-m1n1-20250426.1-1.hs+asahi.el10.noarch.rpm from the Hyperscale

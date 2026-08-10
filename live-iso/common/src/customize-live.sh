@@ -632,7 +632,7 @@ if [[ -f "$RECIPE_FILE" ]]; then
 	# a guessed recipe: 10 seconds of ISO build is a better place to learn this
 	# than hour three of a matrix cell, the same rule the sudo and podman
 	# assertions above follow.
-	_backend_kv="$("${SCRIPT_DIR}/installer-recipe-backend.sh")"
+	_backend_kv="$(bash "${SCRIPT_DIR}/installer-recipe-backend.sh")"
 	_bootloader="$(sed -n 's/^bootloader=//p' <<<"$_backend_kv")"
 	_composefs_backend="$(sed -n 's/^composeFsBackend=//p' <<<"$_backend_kv")"
 	_filesystem="$(sed -n 's/^filesystem=//p' <<<"$_backend_kv")"

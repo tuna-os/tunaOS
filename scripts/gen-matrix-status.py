@@ -29,6 +29,8 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
+import time
 import urllib.request
 from collections import defaultdict
 from pathlib import Path
@@ -86,7 +88,7 @@ END = "<!-- END GENERATED -->"
 # Do not read 200 as the saturation point; read it as the depth at which the
 # walk stopped telling us it was truncating. latest_results warns on stderr
 # when the oldest run it examined was still producing first-time results, which
-# is the condition that made 20 and then 80 wrong, and it is silent at 200.
+# is the condition that made 20 and then 80 wrong, and it is silent at 200 (see issue #931).
 # Raise this when that warning appears rather than when a row looks wrong.
 RUN_DEPTH = 200
 
@@ -103,20 +105,98 @@ PASS, FAIL, UNTESTED, NA = "✅", "❌", "⬜", "—"
 
 
 def gh_json(*args: str):
-    """Run gh and parse JSON. Raises on failure — see module docstring."""
-    out = subprocess.run(
-        ["gh", *args], capture_output=True, text=True, check=True
-    ).stdout
-    return json.loads(out) if out.strip() else None
+    """Run gh and parse JSON. Returns None on missing/failed query after retries."""
+    for attempt in range(3):
+        try:
+            out = subprocess.run(
+                ["gh", *args], capture_output=True, text=True, check=True
+            ).stdout
+            return json.loads(out) if out.strip() else None
+        except (subprocess.CalledProcessError, json.JSONDecodeError):
+            if attempt == 2:
+                return None
+            time.sleep(2)
+    return None
+
+
+def load_build_config(config_path: Path = CONFIG) -> dict:
+    """Load .github/build-config.yml using PyYAML or internal fallback parser."""
+    try:
+        import yaml
+        return yaml.safe_load(config_path.read_text())
+    except ImportError:
+        pass
+    content = config_path.read_text()
+    iso_groups = []
+    if "iso_groups:" in content:
+        ig_section = content.split("iso_groups:\n", 1)[1].split("\n\n", 1)[0]
+        current_g = None
+        for line in ig_section.splitlines():
+            line = line.strip()
+            if line.startswith("- suffix:"):
+                if current_g:
+                    iso_groups.append(current_g)
+                suf = line.split(":", 1)[1].strip().strip("\"'")
+                current_g = {"suffix": suf, "publish": True, "flavors": [], "offline_flavors": []}
+            elif line.startswith("publish:") and current_g:
+                current_g["publish"] = line.split(":", 1)[1].strip() == "true"
+            elif line.startswith("flavors:") and current_g:
+                flavs = line.split("[", 1)[1].split("]", 1)[0].split(",")
+                current_g["flavors"] = [fl.strip() for fl in flavs if fl.strip()]
+            elif line.startswith("offline_flavors:") and current_g:
+                flavs = line.split("[", 1)[1].split("]", 1)[0].split(",")
+                current_g["offline_flavors"] = [fl.strip() for fl in flavs if fl.strip()]
+        if current_g:
+            iso_groups.append(current_g)
+
+    variants = []
+    v_section = content.split("variants:\n", 1)[1]
+    raw_vars = re.split(r"\n  - id: ", "\n" + v_section)
+    for rv in raw_vars:
+        if not rv.strip():
+            continue
+        lines = rv.strip().splitlines()
+        vid = lines[0].split("#")[0].strip().strip("\"'")
+        v_platforms = ["linux/amd64", "linux/arm64"]
+        header_part = rv.split("flavors:\n", 1)[0]
+        vp_match = re.search(r"platforms:\s*\[(.*?)\]", header_part)
+        if vp_match:
+            v_platforms = [p.strip().strip("\"'") for p in vp_match.group(1).split(",")]
+        flavors = []
+        if "flavors:" in rv:
+            fl_text = rv.split("flavors:\n", 1)[1]
+            raw_fls = re.split(r"\n      - id: ", "\n" + fl_text)
+            for rf in raw_fls:
+                if not rf.strip():
+                    continue
+                fl_lines = rf.strip().splitlines()
+                fid = fl_lines[0].split("#")[0].strip().strip("\"'")
+                b_img = "build_image: true" in rf
+                b_iso = "build_iso: true" in rf
+                b_qcow2 = "build_qcow2: true" in rf
+                fp_match = re.search(r"platforms:\s*\[(.*?)\]", rf)
+                if fp_match:
+                    f_platforms = [p.strip().strip("\"'") for p in fp_match.group(1).split(",")]
+                else:
+                    f_platforms = list(v_platforms)
+                flavors.append({
+                    "id": fid,
+                    "build_image": b_img,
+                    "build_iso": b_iso,
+                    "build_qcow2": b_qcow2,
+                    "platforms": f_platforms,
+                })
+        variants.append({
+            "id": vid,
+            "platforms": v_platforms,
+            "flavors": flavors,
+        })
+    return {"iso_groups": iso_groups, "variants": variants}
 
 
 def _matrix(key: str, desktops_only: bool) -> dict[str, set[str]]:
     """variant -> {flavors where <key> is true}, from build-config.yml."""
-    try:
-        import yaml
-    except ImportError:
-        sys.exit("PyYAML required: pip install pyyaml")
-    cfg = yaml.safe_load(CONFIG.read_text())
+    cfg = load_build_config(CONFIG)
     out: dict[str, set[str]] = {}
     for variant in cfg.get("variants", []):
         flavors = {
@@ -221,6 +301,64 @@ def overlay_tags() -> set[str]:
     with urllib.request.urlopen(req, timeout=30) as resp:
         tags = json.load(resp).get("tags") or []
     return {t for t in tags if not t.startswith("sha256-")}
+
+
+def contract_results() -> dict[str, tuple[str, str, str]]:
+    """Newest per-cell verdict from desktop-contract-sweep.yml (tunaOS#858).
+
+    Deliberately NOT built on latest_results(): that helper reads a job's
+    GitHub *conclusion* as the pass/fail signal, which is exactly wrong here.
+    desktop-contract-sweep.yml's per-cell step runs under `set +e` on purpose
+    ("a contract failure is data, not an error" — see its own comment, and
+    sweep 30627663051, where the opposite bug silently dropped seven real
+    failures from the baseline) specifically so a failing contract does not
+    read as infrastructure trouble. That means every dispatched job's
+    `conclusion` is "success" whether its cell passed, failed, or found no
+    image at all — reading it the way LUKS/installer-smoke are read would
+    make marlin:kde-style failures render as a green ✅ in this very document,
+    which is worse than the missing section this function replaces: a status
+    page that actively lies is worse than one with a known gap.
+
+    The real per-cell verdict lives where the workflow's own `collate` job
+    puts it — the `desktop-contract-baseline` artifact's `all.json`, already
+    built for exactly this purpose. Read that instead.
+
+    Returns {cell: (status, iso_date, run_id)} with status one of this
+    workflow's five real outcomes (pass/fail/missing/error/lost) — not
+    translated to success/failure here, so callers can tell "no image
+    published" apart from "published and broken" if they need to.
+    """
+    runs = gh_json(
+        "run", "list", "--repo", REPO, "--workflow", "desktop-contract-sweep.yml",
+        "--limit", "10", "--json", "databaseId,createdAt,status,conclusion",
+    ) or []
+    for run in runs:
+        # The workflow's own conclusion (not the per-cell jobs') is a real
+        # signal here: `collate` fails the run if the baseline does not
+        # reconcile (see its "every cell must be accounted for" check), so a
+        # non-success run's artifact — if it even uploaded one — is not
+        # trustworthy data to read as a baseline.
+        if run.get("status") != "completed" or run.get("conclusion") != "success":
+            continue
+        run_id, date = str(run["databaseId"]), run["createdAt"][:10]
+        with tempfile.TemporaryDirectory() as tmp:
+            try:
+                subprocess.run(
+                    ["gh", "run", "download", run_id, "--repo", REPO,
+                     "--name", "desktop-contract-baseline", "--dir", tmp],
+                    capture_output=True, text=True, check=True,
+                )
+            except subprocess.CalledProcessError:
+                # Artifact expired (30/90-day retention) or this particular
+                # run predates the artifact existing — try the next-newest
+                # successful run rather than giving up on the whole section.
+                continue
+            all_json = Path(tmp) / "all.json"
+            if not all_json.exists():
+                continue
+            cells = json.loads(all_json.read_text())
+            return {c["cell"]: (c["status"], date, run_id) for c in cells}
+    return {}
 
 
 def cell(results: dict, key: str, in_matrix: bool) -> str:
@@ -340,8 +478,32 @@ def build() -> str:
     smoke = latest_results("installer-smoke.yml", r":")
     tags = overlay_tags()
 
+    # desktop-contract-sweep.yml schedules from the identical build_image /
+    # desktops-only set luks-e2e.yml does (both select build_image==true
+    # flavors restricted to gnome/kde/cosmic/niri/xfce from build-config.yml)
+    # — no separate matrix function needed, lmatrix already is that set.
+    contract_raw = contract_results()
+    # Translated to the same success/failure vocabulary latest_results()
+    # produces, so cell()/desktop_table()/tally() below don't need a second
+    # code path — but only for the two outcomes that vocabulary can actually
+    # represent. "missing" (no published image), "error" (infra trouble) and
+    # "lost" (job died) are none of them a pass OR a demonstrated failure, so
+    # they are dropped here rather than forced into one; cell() then reports
+    # them as UNTESTED, same as a cell no run has ever touched — which is
+    # honest for all three. contract_other below keeps the dropped count
+    # visible instead of silently shrinking the denominator.
+    contract = {
+        k: ("success" if v[0] == "pass" else "failure", v[1], v[2])
+        for k, v in contract_raw.items()
+        if v[0] in ("pass", "fail")
+    }
+    contract_other = sum(
+        1 for v in contract_raw.values() if v[0] not in ("pass", "fail")
+    )
+
     luks_key = lambda v, d: f"LUKS {v}:{d}"          # noqa: E731
     smoke_key = lambda v, d: f"{v}:{d}"              # noqa: E731
+    contract_key = lambda v, d: f"{v}:{d}"           # noqa: E731
 
     # Deliberately NO wall-clock timestamp. A generated "as of <now>" line
     # changes on every run, which would (a) make --check always fail and (b)
@@ -437,6 +599,71 @@ def build() -> str:
             "",
         ]
 
+    # ── Desktop Contract Sweep ──────────────────────────────────────────────
+    # tunaOS#858: marlin:kde published with no /usr/share/wayland-sessions/
+    # at all — the live payload's desktop detection silently fell back to
+    # gnome — and desktop-contract-sweep.yml had been running daily, and
+    # catching exactly this class of bug, for two weeks before anyone
+    # noticed, because nothing here ever showed its results. Runs directly
+    # against the published image (no boot, no DRM render node needed), so
+    # it is not subject to the "CI cannot test four of five desktops" gap
+    # documented in *Known systemic gaps* below — it is the one axis that
+    # gap does not apply to.
+    total, tested, passed = tally(lmatrix, contract, contract_key)
+    out += [
+        "## Desktop Contract Sweep",
+        "",
+        f"**{passed} of {total}** cells satisfy "
+        "`build_scripts/checks/verify-desktop-experience.sh` "
+        f"({tested} tested, {total - tested} never tested).",
+        "",
+        (
+            "Pulls the **published** image and runs the contract script "
+            "against it directly (`podman run`, no boot required) — the "
+            "same denominator as LUKS E2E above (`build_image`, restricted "
+            "to the five desktop flavors). This is what catches a desktop "
+            "whose packages silently never landed, independent of whether "
+            "anything can actually boot it on hosted CI."
+        ),
+        "",
+    ]
+    out += desktop_table(lmatrix, contract, contract_key)
+    out += [""]
+    if contract_other:
+        out += [
+            f"{contract_other} cell(s) in the most recent sweep are "
+            "missing (no published image), errored (registry/runner "
+            "trouble), or lost (job produced no result) rather than a "
+            "clean pass or fail — not counted above; see that sweep's own "
+            "`desktop-contract-baseline` artifact for which.",
+            "",
+        ]
+    dates = sorted({v[1] for v in contract.values()})
+    if dates:
+        out += [f"Newest result {dates[-1]}.", ""]
+
+    # ── Bootc Lifecycle ──────────────────────────────────────────────────────
+    lifecycle = latest_results("bootc-lifecycle.yml", r":")
+    lifecycle_key = lambda v, d: f"{v}:{d}"            # noqa: E731
+    total, tested, passed = tally(lmatrix, lifecycle, lifecycle_key)
+    out += [
+        "## Bootc Lifecycle",
+        "",
+        f"**{passed} of {total}** cells green "
+        f"({tested} tested, {total - tested} never tested).",
+        "",
+        (
+            "Validates bootc image update, rebase, rollback, alias resolution, "
+            "and post-switch system contracts across published stream deployments."
+        ),
+        "",
+    ]
+    out += desktop_table(lmatrix, lifecycle, lifecycle_key)
+    out += [""]
+    dates = sorted({v[1] for v in lifecycle.values()})
+    if dates:
+        out += [f"Newest result {dates[-1]}.", ""]
+
     # ── Installer smoke ─────────────────────────────────────────────────────
     total, tested, passed = tally(matrix, smoke, smoke_key)
     pct = round(100 * tested / total) if total else 0
@@ -486,9 +713,14 @@ def build() -> str:
     # Re-running a cell to the same verdict rewrites this table and nothing
     # else, which is not something a pull request can be answerable for, so
     # VOLATILE_LINE masks these rows out of the structural comparison.
+    # Iterated as separate dicts, not merged with `**` — smoke and contract
+    # use the identical "variant:desktop" key format (LUKS is alone in
+    # prefixing "LUKS "), so a merge would let one silently overwrite the
+    # other on every cell they share and undercount both in the table below.
     runs = defaultdict(list)
-    for name, (_, date, run_id) in {**luks, **smoke}.items():
-        runs[(date, run_id)].append(name)
+    for results in (luks, smoke, contract, lifecycle):
+        for name, (_, date, run_id) in results.items():
+            runs[(date, run_id)].append(name)
     out += [
         "## Provenance",
         "",

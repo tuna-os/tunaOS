@@ -1,0 +1,24 @@
+# Daily trigger for bootc-image-factory-build.service — TunaOS adaptation of
+# renner0e/server's bootc-image-factory-build.timer
+# (https://github.com/renner0e/server).
+#
+# Install alongside the service:
+#   sudo cp examples/redfin-image-factory/bootc-image-factory-build.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now bootc-image-factory-build.timer
+# Full walkthrough: docs/rhel-setup.md "Auto-Update".
+
+[Unit]
+Description=Daily rebuild of localhost/redfin:gnome (local image factory)
+
+[Timer]
+# Rebuild daily at 04:00.
+OnCalendar=*-*-* 04:00:00
+# If the machine was off/suspended at 04:00, trigger immediately on the next
+# boot/resume rather than waiting a full day.
+Persistent=true
+# Spread the load (and let a slow nightly build start cleanly).
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target

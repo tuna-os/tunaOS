@@ -1,0 +1,13 @@
+[Unit]
+Description=Daily Redfin image factory rebuild
+
+[Timer]
+# Daily at 04:00, matching the renner0e/server pattern (tuna-os/tunaos#609).
+OnCalendar=*-*-* 04:00:00
+# Fire immediately after boot if the last run was missed (machine off at 04:00).
+Persistent=true
+# Avoid thundering-herd load spikes on RHSM/CDN at the top of the hour.
+RandomizedDelaySec=15m
+
+[Install]
+WantedBy=timers.target

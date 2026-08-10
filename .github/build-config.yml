@@ -1071,6 +1071,10 @@ variants:
       # builds both arches, so the arm64 job was the ONLY failure in run
       # 31088031074 while amd64 built clean. Same shape as the aarch64 cosmic
       # pin on the EL10 variants for fprintd-pam (tunaOS#732).
+      #
+      # This PPA dependency is tracked for removal in tunaOS#964 — see the
+      # status note at the top of manifests/desktops/cosmic.yaml's apt:
+      # block for exactly what has and hasn't landed on the Tideforge side.
       - id: cosmic
         stage: 2
         platforms: ["linux/amd64"]
@@ -1154,6 +1158,47 @@ variants:
       - id: xfce-cachyos
         stage: 3
         build_image: true
+      # NVIDIA overlay on the Arch base (tunaOS#624): nvidia-open-dkms via
+      # pacman + dkms, not akmods — Arch has no RPM/akmods concept at all.
+      # See build_scripts/overlay/overrides/nvidia-arch/20-nvidia.sh. No
+      # *-nvidia-hwe: marlin has no HWE kernel layer to begin with (Arch
+      # ships the latest kernel natively), so there is nothing to stack an
+      # nvidia overlay on top of beyond plain *-nvidia.
+      #
+      # platforms is pinned to linux/amd64 explicitly (not inherited from
+      # the variant default) on every *-nvidia flavor in this file — a
+      # test (tests/bats/test_nvidia_overlay.bats) asserts that directly,
+      # and nvidia-open-dkms/nvidia-utils only publish x86_64 builds.
+      - id: gnome-nvidia
+        platforms: ["linux/amd64"]
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: kde-nvidia
+        platforms: ["linux/amd64"]
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: cosmic-nvidia
+        platforms: ["linux/amd64"]
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: niri-nvidia
+        platforms: ["linux/amd64"]
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: xfce-nvidia
+        platforms: ["linux/amd64"]
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
 
   # ── Debian ─────────────────────────────────────────────────────────────────
   # Flounder: Debian Trixie (13) stable. Uses Containerfile.debian.
@@ -1222,6 +1267,11 @@ variants:
       # below; it fails louder only because apt exits 100 on an unknown name
       # while niri.yaml had no apt section at all, so that one installed
       # nothing and exited 0. Do not re-add without a Debian source for COSMIC.
+      #
+      # That Debian source is what tunaOS#964 is building — our own
+      # Tideforge-built debs, not another PPA (which wouldn't cover Debian
+      # anyway). See manifests/desktops/cosmic.yaml's apt: block for the
+      # current widen/publish status before re-adding this flavor.
       # No niri: it is not packaged for apt in Debian trixie, Debian sid or
       # Ubuntu 26.04 (all three checked), and manifests/desktops/niri.yaml
       # has no apt section as a result. Building it produced a PUBLISHED,
@@ -1232,6 +1282,35 @@ variants:
       - id: xfce
         stage: 2
         build_image: true
+      # NVIDIA overlay on the Debian base (tunaOS#624): nvidia-driver via
+      # apt (official Debian non-free component, not a third-party repo) +
+      # dkms. See build_scripts/overlay/overrides/nvidia-debian/20-nvidia.sh.
+      # No *-nvidia-hwe: flounder has no HWE kernel layer (Debian ships one
+      # kernel per suite), so there is nothing to stack an nvidia overlay on
+      # top of beyond plain *-nvidia.
+      #
+      # platforms is pinned to linux/amd64 explicitly on every *-nvidia
+      # flavor in this file — asserted by
+      # tests/bats/test_nvidia_overlay.bats — matching nvidia-driver's own
+      # Debian archive coverage focus and this variant's amd64-only DE set.
+      - id: gnome-nvidia
+        platforms: ["linux/amd64"]
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: kde-nvidia
+        platforms: ["linux/amd64"]
+        stage: 3
+        build_image: true
+        build_iso: true
+        build_qcow2: false
+      - id: xfce-nvidia
+        platforms: ["linux/amd64"]
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
 
   # Flounder-sid: Debian Sid (unstable/rolling).
   - id: flounder-sid
@@ -1260,3 +1339,30 @@ variants:
       - id: xfce
         stage: 2
         build_image: true
+      # NVIDIA overlay on the Debian sid base (tunaOS#624) — same mechanism
+      # as flounder above (apt non-free + dkms). No *-nvidia-hwe: sid has
+      # no HWE kernel layer, same reasoning as flounder. No ISOs: this
+      # variant does not build any today (rolling/unstable), so none of its
+      # base DE flavors set build_iso either — nvidia flavors match that.
+      #
+      # platforms is pinned to linux/amd64 explicitly on every *-nvidia
+      # flavor in this file — asserted by
+      # tests/bats/test_nvidia_overlay.bats.
+      - id: gnome-nvidia
+        platforms: ["linux/amd64"]
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: kde-nvidia
+        platforms: ["linux/amd64"]
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: xfce-nvidia
+        platforms: ["linux/amd64"]
+        stage: 3
+        build_image: true
+        build_iso: false
+        build_qcow2: false
