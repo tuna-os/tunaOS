@@ -40,9 +40,11 @@ jobs:
             # Get desktop-only variant:flavor pairs (exclude base/hwe/nvidia suffixes and base flavors)
             # These are the most representative images to rotate through for daily checks
             CONFIG_FILE=".github/build-config.yml"
+            # guppy (Gentoo) is excluded: its source-based desktop images are experimental
+            # and not reliably published — see tunaOS#657, tunaOS#658.
             # shellcheck disable=SC2016
             JQ_DESKTOP='.variants[] | .id as $v | .flavors[] | select(
-              .build_image == true and (.id | test("^(gnome|kde|cosmic|niri)$"))
+              .build_image == true and (.id | test("^(gnome|kde|cosmic|niri)$")) and ($v != "guppy")
             ) | {variant: $v, flavor: .id}'
             ALL_IMAGES=$(yq -o=json "${CONFIG_FILE}" | jq -c "${JQ_DESKTOP}")
 
