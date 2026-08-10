@@ -124,6 +124,30 @@ just verify-disk ./yellowfin-gnome.qcow2  # QEMU boot check
 just iso yellowfin gnome               # build ISO via tacklebox
 ```
 
+## Tooling
+
+Corral is the boot-gate runner for bootc images. It builds the boot disk,
+boots it, and waits for root SSH; the canonical Lima-style scenario is
+[`tests/corral/verify.yaml`](../tests/corral/verify.yaml). The `provision`
+step enables `sshd` in the installed disk before first boot, so the published
+image is not modified.
+
+Install corral from its latest release or with `go install`, then run the same
+scenario locally with QEMU:
+
+```bash
+corral create gate -f tests/corral/verify.yaml --wait-ssh --timeout 900
+corral screenshot gate --output verify.png
+corral delete gate --force
+```
+
+For local KubeVirt parity, add `--kubevirt` to the create command. Change the
+`bootc:` reference in the YAML to the image and tag under test; CI performs
+that substitution automatically. The reusable image workflow uses this same
+scenario and corral's `--wait-ssh` exit status as the promotion gate. ISO
+gates continue to use `scripts/iso-e2e.sh`, since corral boots disks/images,
+not live ISOs.
+
 ---
 
 ## Renovate (Automated Updates)

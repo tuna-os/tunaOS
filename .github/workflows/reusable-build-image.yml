@@ -251,7 +251,15 @@ jobs:
             sudo tee /etc/udev/rules.d/99-kvm4all.rules
           sudo udevadm control --reload-rules
           sudo udevadm trigger --name-match=kvm || true
-          sudo apt-get install -y qemu-system-x86 qemu-utils ovmf socat imagemagick
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86 qemu-utils ovmf podman
+
+      - name: Install corral for verification
+        if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        run: |
+          go install github.com/tuna-os/corral@latest
+          sudo install -m 0755 "$(go env GOPATH)/bin/corral" /usr/local/bin/corral
+          corral --version
 
       - name: Boot-verify image (PR gate)
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
@@ -260,14 +268,13 @@ jobs:
           IMAGE_VARIANT: ${{ inputs.image-variant }}
           DEFAULT_TAG: ${{ inputs.default-tag }}
         run: |
-          # The image was built under sudo, so it lives in root podman
-          # storage; just qcow2 detects that and skips the save/load sync.
-          just qcow2 "localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
-          QCOW2=$(find . -maxdepth 1 -name "*.qcow2" | head -1)
           mkdir -p verify-out
-          sudo ./scripts/iso-e2e.sh "$QCOW2" --disk \
-            --output verify-out \
-            --timeout 600
+          IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
+          sed "s|^bootc:.*|bootc: ${IMAGE}|" tests/corral/verify.yaml > verify.yaml
+          cleanup() { corral delete gate --force >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          corral create gate -f verify.yaml --wait-ssh --timeout 900
+          corral screenshot gate --output verify-out/boot.png || true
 
       - name: Upload PR verification evidence
         if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
@@ -275,8 +282,7 @@ jobs:
         with:
           name: pr-boot-verify-${{ inputs.image-name }}-${{ inputs.default-tag }}-${{ matrix.safeplatform }}
           path: |
-            verify-out/serial.log
-            verify-out/*.ppm
+            verify-out/boot.png
           if-no-files-found: warn
           retention-days: 7
 
@@ -802,11 +808,10 @@ jobs:
   # at a 20-concurrent-job org limit that slot starves real builds. When
   # signing is reinstated, add it back between manifest and tag-image.
   # ── Boot gate ───────────────────────────────────────────────────────────────
-  # Pull the just-pushed :<tag>-testing manifest, install it to a qcow2 with
-  # bootc, boot it in QEMU, and require a graphical session (serial marker or
-  # screenshot sanity — scripts/iso-e2e.sh --disk). Promotion of the bare
-  # tags is blocked while this fails. Skipped for base* flavors (no desktop
-  # to verify; they are exercised by every desktop build layered on them).
+  # Pull the just-pushed :<tag>-testing manifest, have corral build its boot
+  # disk, and wait for SSH in QEMU. Promotion of the bare tags is blocked
+  # while this fails. Skipped for base* flavors (no desktop to verify; they
+  # are exercised by every desktop build layered on them).
   verify_boot:
     name: Gate
     needs: manifest
@@ -878,7 +883,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          pkgs=(just jq qemu-system-x86 qemu-utils ovmf socat imagemagick)
+          pkgs=(jq qemu-system-x86 qemu-utils ovmf)
           if sudo sh -c 'command -v podman' >/dev/null 2>&1; then
             echo "podman already present: $(sudo sh -c 'command -v podman') ($(sudo podman --version))"
           else
@@ -886,28 +891,21 @@ jobs:
           fi
           sudo apt-get install -y "${pkgs[@]}"
 
-      - name: Build qcow2 from testing image
-        env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+      - name: Install corral
         run: |
-          just qcow2 "${TEST_IMAGE}"
+          go install github.com/tuna-os/corral@latest
+          sudo install -m 0755 "$(go env GOPATH)/bin/corral" /usr/local/bin/corral
+          corral --version
 
       - name: Boot and verify
         run: |
-          QCOW2=$(find . -maxdepth 1 -name "*.qcow2" | head -1)
           mkdir -p verify-out
-          sudo ./scripts/iso-e2e.sh "$QCOW2" --disk \
-            --output verify-out \
-            --timeout 900
-
-      - name: Collect evidence
-        if: always()
-        run: |
-          sudo chown -R "$USER:$(id -gn)" verify-out 2>/dev/null || true
-          for ppm in verify-out/*.ppm; do
-            [[ -f "$ppm" ]] || continue
-            convert "$ppm" "${ppm%.ppm}.png" || true
-          done
+          IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-testing"
+          sed "s|^bootc:.*|bootc: ${IMAGE}|" tests/corral/verify.yaml > verify.yaml
+          cleanup() { corral delete gate --force >/dev/null 2>&1 || true; }
+          trap cleanup EXIT
+          corral create gate -f verify.yaml --wait-ssh --timeout 900
+          corral screenshot gate --output verify-out/boot.png || true
 
       - name: Upload boot evidence
         if: always()
@@ -915,8 +913,7 @@ jobs:
         with:
           name: boot-gate-${{ inputs.image-name }}-${{ inputs.default-tag }}
           path: |
-            verify-out/serial.log
-            verify-out/*.png
+            verify-out/boot.png
           if-no-files-found: warn
           retention-days: 7
 
