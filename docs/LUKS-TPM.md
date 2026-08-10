@@ -77,7 +77,11 @@ which:
 against the actual Containerfile omit lines / package lists, so this table
 cannot silently drift out of sync with the code — if a variant's TPM2
 posture changes (e.g. Arch gains a `tpm2-tools` install), that test breaks
-until this table is updated too.
+until this table is updated too. `tests/bats/test_luks_tpm2_enroll_script.bats`
+asserts the `tunaos-luks-tpm2-enroll` script and its `ujust` wrappers are
+wired correctly, documenting the PCR 7+14 default that the manual enrollment
+path (which users actually exercise) seals to — distinct from the
+first-boot oneshot's PCR-7-only seal (fisherman#48).
 
 Filled in by the per-variant TPM-enrollment test: install → first installed
 boot (passphrase, first-boot oneshot enrolls TPM2 in the background) → reboot
