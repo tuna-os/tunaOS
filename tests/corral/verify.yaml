@@ -1,0 +1,14 @@
+# Corral configuration to boot-verify a TunaOS bootc image
+images:
+  - location: "${IMAGE_REF}"
+    arch: "x86_64"
+
+# Resources
+cpus: 4
+memory: "8GiB"
+disk: "32GiB"
+
+# Boot semantics
+bootc: true
+wait_ssh: true
+timeout: 900
