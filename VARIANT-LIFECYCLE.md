@@ -83,6 +83,28 @@ A variant is deprecated when **any** of:
 Deprecation is announced in ROADMAP; ISOs leave the download matrix after a
 2-release grace period; the ROADMAP row is marked `Deprecated`.
 
+### 5. Release currency (all published flavors)
+
+Every flavor published on tunaos.org/download that is also advertised on the
+GitHub Releases channel must carry a **current release asset**:
+
+- **GitHub Releases parity** — the scheduled release pipeline
+  (`generate-changelog-release.yml`) must cover every flavor marked `Stable` or
+  `Beta` in ROADMAP, not just the gnome default. A flavor whose release has
+  gone **>30 days stale** (no new `<flavor>-<YYYYMMDD>` tag) is either
+  (a) published by explicit `workflow_dispatch`, or (b) explicitly designated
+  **tunaos.org-only** in ROADMAP with a documented rationale.
+- **No silent skips** — the release workflow warns-and-exits-0 on skipped
+  flavors (see #1254); a skip must leave an actionable trail (issue or
+  notification) so deprioritization is a decision, not an accident.
+- **Deliberate deprioritization** — if a flavor is intentionally released
+  less frequently (e.g., `*-nvidia` monthly, base variants on upstream
+  cadence), record the expected currency in its ROADMAP row.
+
+Until the pipeline is extended, the gap observed on 2026-08-10 (kde/xfce/
+cosmic/niri releases 36 days stale vs gnome-20260809 current) is a known
+violation tracked in #1254.
+
 ## Matrix economics
 
 The publish/test matrix (9+ bases × 5 desktops × nvidia/ZFS dimensions, 179
