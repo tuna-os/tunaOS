@@ -266,7 +266,7 @@ cells it replaces. So the import fills the screen columns only, and tags them.
 |----------|--------|---------|------|------------|---------|---------|------|
 | KDE | [capture](https://github.com/tuna-os/tuna-installer-kde/actions/runs/31273914226) | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
 | COSMIC | — | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| Niri | [capture](https://github.com/tuna-os/tuna-installer-niri/actions/runs/31273928694) | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
+| Niri | [capture](https://github.com/tuna-os/tuna-installer-niri/actions/runs/31350580635) | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
 | XFCE | [capture](https://github.com/tuna-os/tuna-installer-xfce/actions/runs/31273942113) | ✅ᶜ | ✅ᶜ | ⬜ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
 
 ᶜ = GPU-less offscreen capture in the frontend's own repo.
