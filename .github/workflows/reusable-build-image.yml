@@ -900,6 +900,29 @@ jobs:
             --output verify-out \
             --timeout 900
 
+      - name: Run tier-1 functional checks (advisory)
+        if: always() && hashFiles('verify-out/serial.log') != ''
+        continue-on-error: true
+        shell: bash
+        env:
+          IMAGE_VARIANT: ${{ inputs.image-variant }}
+          FLAVOR: ${{ inputs.flavor }}
+        run: |
+          # Strip overlay suffixes from flavor (e.g. gnome-nvidia -> gnome)
+          DESKTOP="${FLAVOR}"
+          for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -zfs; do
+            if [[ "$DESKTOP" == *"$_suffix" ]]; then
+              DESKTOP="${DESKTOP%"$_suffix"}"
+              break
+            fi
+          done
+          echo "### 🧪 Tier-1 Functional Checks (advisory) — ${IMAGE_VARIANT}:${FLAVOR} (${DESKTOP})" >> "$GITHUB_STEP_SUMMARY"
+          if grep -q "TUNAOS_DESKTOP_CONTRACT_OK" verify-out/serial.log 2>/dev/null; then
+            echo "Desktop experience contract: PASS" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Desktop experience contract: UNVERIFIED / FAIL" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Collect evidence
         if: always()
         run: |
