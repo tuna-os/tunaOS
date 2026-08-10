@@ -113,6 +113,26 @@ capacity (CI minutes, boot-gate slots, LUKS-E2E cells, desktop-contract
 coverage) — a hard requirement of the admission gate until #1174 provides real
 usage data.
 
+## Enforcement
+
+Policy is only as good as its checks. The admission gate is a **PR-time
+requirement**, enforced by reviewers and the strategist, not an after-the-fact
+audit:
+
+- **Portfolio-change PRs** (adds/removes a base variant, desktop flavor,
+  hardware/kernel profile such as T2/Asahi/HWE, or output architecture) must
+  carry the `roadmap` label and link a tracking issue that names the ROADMAP
+  row, owner, and acceptance criteria **before merge**.
+- **Scope is explicit**: hardware/kernel profiles (Apple Silicon Asahi #781,
+  Apple T2 `*-t2`, HWE) are in-scope flavors unless the ROADMAP row for the
+  base variant says otherwise. If a hardware profile is intentional but
+  capacity-constrained, it still gets a ROADMAP row + tracking issue; the
+  interim "no new flavors through 2026-09-30" gate applies.
+- **No paper gates**: a flavor that lands without a ROADMAP row or `roadmap`
+  label is a governance breach to be fixed retroactively (tracking issue +
+  row) within one week, not silently accepted. First observed breach:
+  `bonito:gnome-t2` (PR #1256), tracked in #1270.
+
 ## Maintenance
 
 This policy is maintained by the strategist agent and reviewed quarterly at
