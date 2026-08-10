@@ -303,8 +303,12 @@ jobs:
           sudo podman tag "${IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
 
           for i in $(seq "${MAX_RETRIES}"); do
+            # GHCR does not support multi-range blob requests (returns 501),
+            # which makes zstd:chunked pulls hard-fail on podman versions
+            # that lack a fallback path. Plain zstd avoids that class of
+            # failure while retaining the compression benefit (tuna-os/tunaos#579).
             sudo podman push --digestfile=/tmp/digestfile \
-              --compression-format=zstd:chunked \
+              --compression-format=zstd \
               --compression-level=3 \
               --force-compression \
               "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}" \
@@ -789,8 +793,11 @@ jobs:
           # job after the boot gate passes — a broken image can land in
           # GHCR as :<flavor>-testing but never as :<flavor>.
           while IFS= read -r tag; do
+            # GHCR does not support multi-range blob requests (returns 501),
+            # which makes zstd:chunked pulls hard-fail on podman versions
+            # that lack a fallback path (tuna-os/tunaos#579).
             podman manifest push --all=false --digestfile=/tmp/digestfile \
-              --compression-format=zstd:chunked \
+              --compression-format=zstd \
               --compression-level=3 \
               --force-compression \
               "$MANIFEST" "$IMAGE_REGISTRY/$IMAGE_NAME:${tag}-testing"
