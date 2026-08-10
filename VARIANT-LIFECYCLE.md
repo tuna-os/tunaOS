@@ -46,7 +46,10 @@ A new base variant or flavor requires, **before any build work starts**:
    current milestone close-out. Interim gate: **no new flavors through
    2026-09-30** while the 5 open Q3 milestone items are in flight.
 3. **Upstream base availability** — the distro/version must exist and be
-   distributable (Zorin, #944, is a live counter-example).
+   distributable (Zorin, #944, is a live counter-example: its public apt repo
+   packages index is empty across all components, dists, and architectures, and
+   essential components like `zorin-appearance` and session definitions are not
+   published).
 4. **A tracking issue** filed with the `roadmap` label before the first commit.
 
 New **output architectures** (e.g. a mkosi DDI sidecar per variant, #999/#1227)
