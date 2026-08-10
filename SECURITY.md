@@ -34,14 +34,22 @@ You can expect:
 
 TunaOS images are:
 - Built in CI from pinned base images (see `image-versions.yaml`)
-- Signed with [cosign](https://github.com/sigstore/cosign) (public key: `cosign.pub`)
+- Signed keylessly with [Sigstore Cosign](https://github.com/sigstore/cosign)
+  using the protected TunaOS GitHub Actions workflow identity
 - Scanned for vulnerabilities via GitHub's built-in scanning
-- Published as SBOM-attested OCI images
+- Published with signed SPDX SBOM attestations
+
+There is no long-lived TunaOS signing key or password to leak or rotate.
+Fulcio issues a short-lived certificate for the GitHub Actions OIDC identity,
+and the signature is recorded in Sigstore's transparency infrastructure. See
+[`docs/VERIFY-ARTIFACTS.md`](docs/VERIFY-ARTIFACTS.md) for verification commands.
 
 ## Supply Chain Security
 
 - Base images pinned by digest in `image-versions.yaml`
 - Third-party GitHub Actions pinned to commit SHAs
+- Release promotion requires successful keyless signature and SBOM-attestation
+  verification against the expected repository workflow and protected ref
 - Build secrets use BuildKit secret mounts, never environment variables
 - RPM packages from official AlmaLinux/CentOS/Fedora repositories and verified COPRs
 

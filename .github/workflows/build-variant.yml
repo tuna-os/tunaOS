@@ -25,8 +25,6 @@ on:
         default: 'all'
         type: string
     secrets:
-      SIGNING_SECRET:
-        required: false
       R2_ACCESS_KEY_ID:
         required: false
       R2_SECRET_ACCESS_KEY:
@@ -202,8 +200,6 @@ jobs:
       default-tag: ${{ matrix.published_tag }}
       publish: ${{ github.event_name != 'pull_request' }}
       sbom: ${{ github.event_name != 'pull_request' }}
-    secrets:
-      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
   # ── Stage 2: base-hwe, base-nvidia, and desktop base flavors ──────────────────
   # Runs only after ALL stage-1 jobs pass. Includes:
@@ -238,8 +234,6 @@ jobs:
       default-tag: ${{ matrix.published_tag }}
       publish: true
       sbom: true
-    secrets:
-      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
   # ── Stage 3: Desktop HWE and nvidia flavors ───────────────────────────────────
   # Layers on stage-2 images:
@@ -274,8 +268,6 @@ jobs:
       default-tag: ${{ matrix.published_tag }}
       publish: true
       sbom: true
-    secrets:
-      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
   # ── Stage 4: Combined nvidia+HWE flavors ──────────────────────────────────────
   # Layers on stage-3 images:
@@ -304,8 +296,6 @@ jobs:
       default-tag: ${{ matrix.published_tag }}
       publish: true
       sbom: true
-    secrets:
-      SIGNING_SECRET: ${{ secrets.SIGNING_SECRET }}
 
   # ── Artifact builds per stage (ISO + QCOW2) ───────────────────────────────
   # Each stage's artifacts depend only on that stage's image builds.
