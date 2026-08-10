@@ -43,13 +43,35 @@ jobs:
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install yq
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
       - id: gen
         env:
-          FLAVORS: ${{ inputs.flavors || 'gnome,kde,cosmic,niri,xfce' }}
-          VARIANT: ${{ inputs.variant || 'yellowfin' }}
+          FILTER_VARIANT: ${{ inputs.variant || '' }}
+          FILTER_FLAVORS: ${{ inputs.flavors || '' }}
         run: |
-          M=$(jq -cn --arg v "$VARIANT" --arg f "$FLAVORS" \
-            '{include: ($f | split(",") | map({variant: $v, flavor: .}))}')
+          set -euo pipefail
+          json="$(yq -o=json '.' .github/build-config.yml)"
+
+          if [[ -n "$FILTER_VARIANT" || -n "$FILTER_FLAVORS" ]]; then
+            v="${FILTER_VARIANT:-yellowfin}"
+            f="${FILTER_FLAVORS:-gnome,kde,cosmic,niri,xfce}"
+            M=$(jq -cn --arg v "$v" --arg f "$f" \
+              '{include: ($f | split(",") | map({variant: $v, flavor: .}))}')
+          else
+            M=$(echo "$json" | jq -c \
+              '{include: [ .variants[] | . as $variant | .id as $v | .flavors[]
+                 | select(.build_iso == true)
+                 | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
+                 | {variant: $v, flavor: .id} ]}')
+          fi
           echo "matrix=$M" >> "$GITHUB_OUTPUT"
           echo "$M" | jq .
 

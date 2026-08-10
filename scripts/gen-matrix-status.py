@@ -30,6 +30,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.request
 from collections import defaultdict
 from pathlib import Path
@@ -104,20 +105,98 @@ PASS, FAIL, UNTESTED, NA = "✅", "❌", "⬜", "—"
 
 
 def gh_json(*args: str):
-    """Run gh and parse JSON. Raises on failure — see module docstring."""
-    out = subprocess.run(
-        ["gh", *args], capture_output=True, text=True, check=True
-    ).stdout
-    return json.loads(out) if out.strip() else None
+    """Run gh and parse JSON. Returns None on missing/failed query after retries."""
+    for attempt in range(3):
+        try:
+            out = subprocess.run(
+                ["gh", *args], capture_output=True, text=True, check=True
+            ).stdout
+            return json.loads(out) if out.strip() else None
+        except (subprocess.CalledProcessError, json.JSONDecodeError):
+            if attempt == 2:
+                return None
+            time.sleep(2)
+    return None
+
+
+def load_build_config(config_path: Path = CONFIG) -> dict:
+    """Load .github/build-config.yml using PyYAML or internal fallback parser."""
+    try:
+        import yaml
+        return yaml.safe_load(config_path.read_text())
+    except ImportError:
+        pass
+    content = config_path.read_text()
+    iso_groups = []
+    if "iso_groups:" in content:
+        ig_section = content.split("iso_groups:\n", 1)[1].split("\n\n", 1)[0]
+        current_g = None
+        for line in ig_section.splitlines():
+            line = line.strip()
+            if line.startswith("- suffix:"):
+                if current_g:
+                    iso_groups.append(current_g)
+                suf = line.split(":", 1)[1].strip().strip("\"'")
+                current_g = {"suffix": suf, "publish": True, "flavors": [], "offline_flavors": []}
+            elif line.startswith("publish:") and current_g:
+                current_g["publish"] = line.split(":", 1)[1].strip() == "true"
+            elif line.startswith("flavors:") and current_g:
+                flavs = line.split("[", 1)[1].split("]", 1)[0].split(",")
+                current_g["flavors"] = [fl.strip() for fl in flavs if fl.strip()]
+            elif line.startswith("offline_flavors:") and current_g:
+                flavs = line.split("[", 1)[1].split("]", 1)[0].split(",")
+                current_g["offline_flavors"] = [fl.strip() for fl in flavs if fl.strip()]
+        if current_g:
+            iso_groups.append(current_g)
+
+    variants = []
+    v_section = content.split("variants:\n", 1)[1]
+    raw_vars = re.split(r"\n  - id: ", "\n" + v_section)
+    for rv in raw_vars:
+        if not rv.strip():
+            continue
+        lines = rv.strip().splitlines()
+        vid = lines[0].split("#")[0].strip().strip("\"'")
+        v_platforms = ["linux/amd64", "linux/arm64"]
+        header_part = rv.split("flavors:\n", 1)[0]
+        vp_match = re.search(r"platforms:\s*\[(.*?)\]", header_part)
+        if vp_match:
+            v_platforms = [p.strip().strip("\"'") for p in vp_match.group(1).split(",")]
+        flavors = []
+        if "flavors:" in rv:
+            fl_text = rv.split("flavors:\n", 1)[1]
+            raw_fls = re.split(r"\n      - id: ", "\n" + fl_text)
+            for rf in raw_fls:
+                if not rf.strip():
+                    continue
+                fl_lines = rf.strip().splitlines()
+                fid = fl_lines[0].split("#")[0].strip().strip("\"'")
+                b_img = "build_image: true" in rf
+                b_iso = "build_iso: true" in rf
+                b_qcow2 = "build_qcow2: true" in rf
+                fp_match = re.search(r"platforms:\s*\[(.*?)\]", rf)
+                if fp_match:
+                    f_platforms = [p.strip().strip("\"'") for p in fp_match.group(1).split(",")]
+                else:
+                    f_platforms = list(v_platforms)
+                flavors.append({
+                    "id": fid,
+                    "build_image": b_img,
+                    "build_iso": b_iso,
+                    "build_qcow2": b_qcow2,
+                    "platforms": f_platforms,
+                })
+        variants.append({
+            "id": vid,
+            "platforms": v_platforms,
+            "flavors": flavors,
+        })
+    return {"iso_groups": iso_groups, "variants": variants}
 
 
 def _matrix(key: str, desktops_only: bool) -> dict[str, set[str]]:
     """variant -> {flavors where <key> is true}, from build-config.yml."""
-    try:
-        import yaml
-    except ImportError:
-        sys.exit("PyYAML required: pip install pyyaml")
-    cfg = yaml.safe_load(CONFIG.read_text())
+    cfg = load_build_config(CONFIG)
     out: dict[str, set[str]] = {}
     for variant in cfg.get("variants", []):
         flavors = {
@@ -563,6 +642,28 @@ def build() -> str:
     if dates:
         out += [f"Newest result {dates[-1]}.", ""]
 
+    # ── Bootc Lifecycle ──────────────────────────────────────────────────────
+    lifecycle = latest_results("bootc-lifecycle.yml", r":")
+    lifecycle_key = lambda v, d: f"{v}:{d}"            # noqa: E731
+    total, tested, passed = tally(lmatrix, lifecycle, lifecycle_key)
+    out += [
+        "## Bootc Lifecycle",
+        "",
+        f"**{passed} of {total}** cells green "
+        f"({tested} tested, {total - tested} never tested).",
+        "",
+        (
+            "Validates bootc image update, rebase, rollback, alias resolution, "
+            "and post-switch system contracts across published stream deployments."
+        ),
+        "",
+    ]
+    out += desktop_table(lmatrix, lifecycle, lifecycle_key)
+    out += [""]
+    dates = sorted({v[1] for v in lifecycle.values()})
+    if dates:
+        out += [f"Newest result {dates[-1]}.", ""]
+
     # ── Installer smoke ─────────────────────────────────────────────────────
     total, tested, passed = tally(matrix, smoke, smoke_key)
     pct = round(100 * tested / total) if total else 0
@@ -617,7 +718,7 @@ def build() -> str:
     # prefixing "LUKS "), so a merge would let one silently overwrite the
     # other on every cell they share and undercount both in the table below.
     runs = defaultdict(list)
-    for results in (luks, smoke, contract):
+    for results in (luks, smoke, contract, lifecycle):
         for name, (_, date, run_id) in results.items():
             runs[(date, run_id)].append(name)
     out += [

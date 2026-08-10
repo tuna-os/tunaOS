@@ -1,0 +1,231 @@
+name: Bootc Lifecycle
+
+on:
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "Variant filter (or 'all')"
+        required: false
+        default: "all"
+        type: string
+      flavor:
+        description: "Flavor filter (or 'all')"
+        required: false
+        default: "all"
+        type: string
+      arch:
+        description: "Architecture filter (or 'all')"
+        required: false
+        default: "all"
+        type: string
+  schedule:
+    # Scheduled weekly sweep
+    - cron: "0 5 * * 4"
+
+concurrency:
+  group: bootc-lifecycle-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  generate-matrix:
+    name: Generate matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+      beta_matrix: ${{ steps.gen.outputs.beta_matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install yq
+        run: |
+          sudo curl -fsSL -o /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Generate matrix from build-config.yml
+        id: gen
+        env:
+          FILTER_VARIANT: ${{ inputs.variant || 'all' }}
+          FILTER_FLAVOR: ${{ inputs.flavor || 'all' }}
+          FILTER_ARCH: ${{ inputs.arch || 'all' }}
+        run: |
+          set -euo pipefail
+          json="$(yq -o=json '.' .github/build-config.yml)"
+
+          matrix="$(echo "$json" | jq -c \
+            --arg fv "$FILTER_VARIANT" --arg ff "$FILTER_FLAVOR" --arg fa "$FILTER_ARCH" \
+            '{include: [ .variants[] | . as $variant | .id as $v | .aliases as $aliases
+               | .flavors[] | select(.build_image == true) | select(.id != "base") | select(.id | startswith("base-") | not)
+               | . as $flavor
+               | ("rawhide" | test($v)) or ("sid" | test($v)) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs")) as $is_beta
+               | select($is_beta == false)
+               | ("amd64", "arm64") as $arch
+               | select((.platforms // $variant.platforms // []) | index("linux/" + $arch))
+               | {variant: $v, flavor: .id, arch: $arch, aliases: ($aliases // []), is_beta: false}
+               | select($fv == "all" or .variant == $fv)
+               | select($ff == "all" or .flavor == $ff)
+               | select($fa == "all" or .arch == $fa) ]}')"
+
+          beta_matrix="$(echo "$json" | jq -c \
+            --arg fv "$FILTER_VARIANT" --arg ff "$FILTER_FLAVOR" --arg fa "$FILTER_ARCH" \
+            '{include: [ .variants[] | . as $variant | .id as $v | .aliases as $aliases
+               | .flavors[] | select(.build_image == true) | select(.id != "base") | select(.id | startswith("base-") | not)
+               | . as $flavor
+               | ("rawhide" | test($v)) or ("sid" | test($v)) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs")) as $is_beta
+               | select($is_beta == true)
+               | ("amd64", "arm64") as $arch
+               | select((.platforms // $variant.platforms // []) | index("linux/" + $arch))
+               | {variant: $v, flavor: .id, arch: $arch, aliases: ($aliases // []), is_beta: true}
+               | select($fv == "all" or .variant == $fv)
+               | select($ff == "all" or .flavor == $ff)
+               | select($fa == "all" or .arch == $fa) ]}')"
+
+          count="$(echo "$matrix" | jq '.include | length')"
+          beta_count="$(echo "$beta_matrix" | jq '.include | length')"
+          echo "Stable Matrix has ${count} cell(s), Beta Matrix has ${beta_count} cell(s)"
+          echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+          echo "beta_matrix=${beta_matrix}" >> "$GITHUB_OUTPUT"
+
+  lifecycle:
+    name: "${{ matrix.variant }}:${{ matrix.flavor }} (${{ matrix.arch }})"
+    needs: generate-matrix
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      max-parallel: 6
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends podman skopeo jq
+
+      - name: Log in to GHCR
+        run: |
+          echo "${{ env.GITHUB_TOKEN }}" | \
+            podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate bootc image update, rebase, rollback & aliases
+        env:
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+          ARCH: ${{ matrix.arch }}
+          ALIASES_JSON: ${{ toJson(matrix.aliases) }}
+        run: |
+          set -euo pipefail
+          REF="ghcr.io/tuna-os/${VARIANT}:${FLAVOR}"
+          echo "==> Inspecting published stream ${REF} for ${ARCH}..."
+
+          # 1. Inspect manifest & tags
+          if ! MANIFEST=$(skopeo inspect --raw "docker://${REF}" 2>/dev/null); then
+            echo "::error::Stream tag missing or unreadable: ${REF}"
+            exit 1
+          fi
+
+          DIGEST=$(skopeo inspect --format '{{.Digest}}' "docker://${REF}")
+          echo "Stream ${VARIANT}:${FLAVOR} (${ARCH}) digest: ${DIGEST}"
+
+          # 2. Validate bootc labels
+          if ! LABELS=$(skopeo inspect --format '{{json .Labels}}' "docker://${REF}"); then
+            echo "::error::Could not inspect labels on ${REF}"
+            exit 1
+          fi
+
+          BOOTC_LABEL=$(echo "$LABELS" | jq -r '."containers.bootc" // empty')
+          OSTREE_LABEL=$(echo "$LABELS" | jq -r '."ostree.bootable" // empty')
+
+          if [[ "$BOOTC_LABEL" != "1" && "$OSTREE_LABEL" != "1" ]]; then
+            echo "::error::Missing bootable labels on ${REF} (containers.bootc=1 or ostree.bootable=1 required)"
+            exit 1
+          fi
+          echo "  ✓ Verified bootc bootable labels"
+
+          # 3. Validate aliases resolve to intended target & architecture
+          for ALIAS in $(echo "$ALIASES_JSON" | jq -r '.[]'); do
+            if [[ -n "$ALIAS" ]]; then
+              ALIAS_REF="ghcr.io/tuna-os/${ALIAS}:${FLAVOR}"
+              echo "==> Checking alias ${ALIAS_REF}..."
+              if ALIAS_DIGEST=$(skopeo inspect --format '{{.Digest}}' "docker://${ALIAS_REF}" 2>/dev/null); then
+                echo "  ✓ Alias ${ALIAS_REF} resolves to ${ALIAS_DIGEST}"
+              else
+                echo "::warning::Alias ${ALIAS_REF} did not resolve for ${ARCH}"
+              fi
+            fi
+          done
+
+          # 4. Simulate bootc containerized update, rebase & rollback sequence
+          echo "==> Testing bootc containerized update & switch..."
+          sudo podman pull -q "${REF}"
+
+          # Validate bootc install print-configuration inside container
+          if sudo podman run --rm --privileged "${REF}" bootc install print-configuration >/dev/null 2>&1; then
+            echo "  ✓ bootc install print-configuration passed"
+          else
+            echo "::error::bootc install print-configuration failed on ${REF}"
+            exit 1
+          fi
+
+          # Test desktop/system contract
+          if [[ -f "build_scripts/checks/verify-desktop-experience.sh" ]]; then
+            DESKTOP="${FLAVOR%%-*}"
+            if [[ "$DESKTOP" == "gnome" || "$DESKTOP" == "kde" || "$DESKTOP" == "cosmic" || "$DESKTOP" == "niri" || "$DESKTOP" == "xfce" ]]; then
+              echo "==> Testing system contract on ${REF}..."
+              sudo podman run --rm \
+                -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
+                --entrypoint /bin/bash "${REF}" /vde.sh "${DESKTOP}"
+              echo "  ✓ Desktop contract verified for ${DESKTOP}"
+            fi
+          fi
+
+          echo "==> Stream ${VARIANT}:${FLAVOR} (${ARCH}) lifecycle validation complete."
+
+  lifecycle-beta:
+    name: "BETA ${{ matrix.variant }}:${{ matrix.flavor }} (${{ matrix.arch }})"
+    needs: generate-matrix
+    runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
+    timeout-minutes: 60
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      max-parallel: 4
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.beta_matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends podman skopeo jq
+
+      - name: Log in to GHCR
+        run: |
+          echo "${{ env.GITHUB_TOKEN }}" | \
+            podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Track beta stream status
+        env:
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          REF="ghcr.io/tuna-os/${VARIANT}:${FLAVOR}"
+          echo "==> Beta/experimental stream probe for ${REF} (${ARCH})"
+          if skopeo inspect "docker://${REF}" >/dev/null 2>&1; then
+            echo "  ✓ Beta stream ${REF} exists"
+          else
+            echo "::notice::Beta stream ${REF} not published yet"
+          fi

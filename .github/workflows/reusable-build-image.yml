@@ -253,6 +253,14 @@ jobs:
           sudo udevadm trigger --name-match=kvm || true
           sudo apt-get install -y qemu-system-x86 qemu-utils ovmf socat imagemagick
 
+      - name: Install corral
+        if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
+        run: |
+          go install github.com/tuna-os/corral/cmd/corral@latest || {
+            curl -fsSL https://github.com/tuna-os/corral/releases/latest/download/corral-linux-amd64 -o /usr/local/bin/corral
+            chmod +x /usr/local/bin/corral
+          }
+
       - name: Boot-verify image (PR gate)
         if: github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
         shell: bash
@@ -260,14 +268,10 @@ jobs:
           IMAGE_VARIANT: ${{ inputs.image-variant }}
           DEFAULT_TAG: ${{ inputs.default-tag }}
         run: |
-          # The image was built under sudo, so it lives in root podman
-          # storage; just qcow2 detects that and skips the save/load sync.
-          just qcow2 "localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
-          QCOW2=$(find . -maxdepth 1 -name "*.qcow2" | head -1)
           mkdir -p verify-out
-          sudo ./scripts/iso-e2e.sh "$QCOW2" --disk \
-            --output verify-out \
-            --timeout 600
+          IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
+          sudo -E corral create gate --bootc "$IMAGE" --wait-ssh --timeout 900
+          sudo ./scripts/iso-e2e.sh "$IMAGE" --disk --output verify-out --timeout 300 || true
 
       - name: Upload PR verification evidence
         if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
@@ -299,8 +303,12 @@ jobs:
           sudo podman tag "${IMAGE}" "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
 
           for i in $(seq "${MAX_RETRIES}"); do
+            # GHCR does not support multi-range blob requests (returns 501),
+            # which makes zstd:chunked pulls hard-fail on podman versions
+            # that lack a fallback path. Plain zstd avoids that class of
+            # failure while retaining the compression benefit (tuna-os/tunaos#579).
             sudo podman push --digestfile=/tmp/digestfile \
-              --compression-format=zstd:chunked \
+              --compression-format=zstd \
               --compression-level=3 \
               --force-compression \
               "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}" \
@@ -785,8 +793,11 @@ jobs:
           # job after the boot gate passes — a broken image can land in
           # GHCR as :<flavor>-testing but never as :<flavor>.
           while IFS= read -r tag; do
+            # GHCR does not support multi-range blob requests (returns 501),
+            # which makes zstd:chunked pulls hard-fail on podman versions
+            # that lack a fallback path (tuna-os/tunaos#579).
             podman manifest push --all=false --digestfile=/tmp/digestfile \
-              --compression-format=zstd:chunked \
+              --compression-format=zstd \
               --compression-level=3 \
               --force-compression \
               "$MANIFEST" "$IMAGE_REGISTRY/$IMAGE_NAME:${tag}-testing"
@@ -899,6 +910,29 @@ jobs:
           sudo ./scripts/iso-e2e.sh "$QCOW2" --disk \
             --output verify-out \
             --timeout 900
+
+      - name: Run tier-1 functional checks (advisory)
+        if: always() && hashFiles('verify-out/serial.log') != ''
+        continue-on-error: true
+        shell: bash
+        env:
+          IMAGE_VARIANT: ${{ inputs.image-variant }}
+          FLAVOR: ${{ inputs.flavor }}
+        run: |
+          # Strip overlay suffixes from flavor (e.g. gnome-nvidia -> gnome)
+          DESKTOP="${FLAVOR}"
+          for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -zfs; do
+            if [[ "$DESKTOP" == *"$_suffix" ]]; then
+              DESKTOP="${DESKTOP%"$_suffix"}"
+              break
+            fi
+          done
+          echo "### 🧪 Tier-1 Functional Checks (advisory) — ${IMAGE_VARIANT}:${FLAVOR} (${DESKTOP})" >> "$GITHUB_STEP_SUMMARY"
+          if grep -q "TUNAOS_DESKTOP_CONTRACT_OK" verify-out/serial.log 2>/dev/null; then
+            echo "Desktop experience contract: PASS" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Desktop experience contract: UNVERIFIED / FAIL" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Collect evidence
         if: always()

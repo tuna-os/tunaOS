@@ -378,7 +378,7 @@ run_swap() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"swapping image kernel"* ]]
   grep -q -- '--erase kernel' "${BATS_TEST_TMPDIR}/tool.log"
-  grep -q "dnf -y install .*kernel-core-${AKMODS_KVER}.rpm" "${BATS_TEST_TMPDIR}/tool.log"
+  grep -q "dnf -y --setopt=exclude= install .*kernel-core-${AKMODS_KVER}.rpm" "${BATS_TEST_TMPDIR}/tool.log"
 }
 
 @test "kernel-swap fails loudly when the cache holds no kernel at all" {
