@@ -15,7 +15,7 @@ WORKFLOW="${BATS_TEST_DIRNAME}/../../.github/workflows/reusable-build-image.yml"
 }
 
 @test "promotion waits for the Asahi gate" {
-  grep -q 'needs: \[manifest, verify_boot, verify_asahi\]' "$WORKFLOW"
+  grep -q 'needs: [manifest, sign, verify_boot, verify_asahi]' "$WORKFLOW"
   grep -q 'needs.verify_asahi.result == '\''success'\''' "$WORKFLOW"
   grep -q 'needs.verify_asahi.result == '\''skipped'\''' "$WORKFLOW"
 }
