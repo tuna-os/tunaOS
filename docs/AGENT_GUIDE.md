@@ -157,6 +157,7 @@ No new shell script needed. `install-desktop.sh` handles it.
 | File | What it controls |
 |------|-----------------|
 | `.github/build-config.yml` | The build matrix (variants × flavors × platforms × stages) |
+| `PACKAGE-SOURCING.md` | Package sourcing policy (tiering, Tideforge-first, allowlist, #1319) |
 | `image-versions.yaml` | Pinned image digests + download versions |
 | `registry-map.yaml` | Registry mirror overrides |
 | `renovate.json` | Automated dependency updates (automerge all) |
