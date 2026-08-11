@@ -81,7 +81,9 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
 **Mid-quarter update (2026-08-10)**: Q3 milestone populated; CI green; **downloads verified working** (179 ISOs, newest 08-07). ⚠️ **Q3 at risk — checkpoint 2026-08-22** (#1299): 4 open strategic goals (#272 Bonito GA, #1123 Redfin alpha, #1093 RFC governance, #1094 ADR coverage) with zero movement since 08-08 while CI/ops work lands daily. ⚠️ **Desktop parity crisis** (#1294): tunaos-packages#133 audit shows 24/37 published editions are too small to contain their desktop (non-RPM bases: sailfin/flounder/grouper). GitHub Releases gap fixed 08-08 (#1106/#1147 closed, `a4b147f8`).
 
-**Mid-quarter update 2 (2026-08-11)**: maintainer filed #1315 — **flavor equality mandate** (no GNOME-as-primary framing; all supported flavors equal tiers). This reframes desktop parity (#1294) from defect-fix to product strategy; flavor cadence parity (#1254, PR #1314) is its first deliverable. Community signal: **first external contributor** (shimonenator, 08-10) — onboarding conversion tracked via #1317, seeds #1308 backlog in the contributor's interest area.
+**Mid-quarter update 2 (2026-08-11)**: maintainer filed #1315 — **flavor equality mandate** (no GNOME-as-primary framing; all supported flavors equal tiers). This reframes desktop parity (#1294) from defect-fix to product strategy; flavor cadence parity (#1254, PR #1314) is its first deliverable. ✅ First deliverable landed 05:22Z: **browser ISO catalog parity gate merged** (#1322) — catalog generation now fails when any browser/on-demand flavor lacks a published catalog fact (#1281 closed). Community signal: **first external contributor** (shimonenator, 08-10) — onboarding conversion tracked via #1317, seeds #1308 backlog in the contributor's interest area.
+
+**Mid-quarter update 3 (2026-08-11)**: maintainer directive #1319 — **package sourcing policy**: default to system repos / tideforge; no PPAs/COPRs/OBS/AUR; build in-house what the base lacks, with a small trusted third-party allowlist. Second directive in 24h; elevates the Q2 COPR-elimination win (#436) into org-wide supply-chain policy (#1323).
 
 | Goal | Owner | Tracking | Status |
 |------|-------|----------|--------|
@@ -105,7 +107,8 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | **Apple Silicon (Asahi Linux) support** | architect / ci-maintainer | #781 | 🟡 In progress (Bonito & Grouper 36/36 verified #776; D0–D4 installer track active) |
 | **Desktop parity floor (non-RPM bases)** | packaging | #133, tunaos-packages#323 | ⬜ Not started — P0 for Q4 (see #1294) |
 | **Q3 checkpoint (08-22): staff or descope #272/#1123/#1093/#1094** | strategist | #1299 | ⬜ Scheduled |
-| **Flavor equality mandate (docs wording + cadence parity)** | strategist | #1315, #1254 | ⬜ New 08-11 — maintainer directive; frame at 08-22 checkpoint (#1316) |
+| **Flavor equality mandate (docs wording + cadence parity)** | strategist | #1315, #1254 | 🟡 In progress — catalog parity gate merged 08-11 (#1322, #1281 closed); cadence parity pending (#1316) |
+| **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 | ⬜ New 08-11 — maintainer directive; draft PACKAGE-SOURCING.md; frame at 08-22 checkpoint |
 
 ---
 
