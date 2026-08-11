@@ -49,13 +49,13 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
 ### Community
 
-- 56 stars, 3 forks
+- 55 stars, 3 forks
 - CONTRIBUTING.md, SECURITY.md, CODE_OF_CONDUCT.md published (June 2026)
 - Discussions enabled
 - Multi-agent development active (architect, guide, sec-check, quality, CI, outreach)
 - 34+ community outreach issues filed; product-readiness gate (#563) resolved
 - ⚠️ Adoption metrics untracked — no usage/telemetry data on the 179 downloadable ISOs (#1174); **plan published 08-10** ([ADOPTION-METRICS.md](./ADOPTION-METRICS.md)) — first monthly download/usage snapshot targeted 2026-11-01 (Q4 "Mature")
-- 🟡 ROADMAP coverage improving — template merged into .github project-starter (PR #13); tunaos-packages, protota, iso-builder, corral seeded (08-10/08-11); 9/42 authorized repos now carry a ROADMAP.md, bootc-installer pending PR #13; wootc/mandelbrot/letters/remora/mariner/fisherman still unplanned (#1295)
+- 🟡 ROADMAP coverage improving — **15/39 authorized repos now carry a ROADMAP.md** (2026-08-12): tunaos, tromso, tacklebox, docs, xfce-linux, bluefin-cli, Tavern, corral, tunaos-packages, iso-builder, protota, bootc-migrate, dualcut, wootc, gtk-office-suite; template merged into .github project-starter (#13). Still unplanned: ubuntu, .github, letters, flatpak-index, bootc-installer (ROADMAP stranded on non-default `dev` branch — #1361), bootc-installer-asahi, branding, bst-ci, changelog-action, debian-copr, finupdate, fisherman, homebrew-tap, kde-build-meta, mandelbrot, mariner, remora, scoop-bucket, suite-common, suite-common-rust, tuna-installer-cosmic/kde/niri/xfce (#1295, #1361)
 - 🟢 **First external contributor engaged 08-10**: shimonenator landed docs on EL10/OBS design (fixes #777) and image-factory completion gate — first non-maintainer, non-agent commits; retention tracked as funnel proxy (#1317)
 - 🟡 **Flavor equality mandate (08-11)**: maintainer directive #1315 — all supported flavors are equal tiers; GNOME-first framing and cadence to be retired (#1316)
 
