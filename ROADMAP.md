@@ -45,7 +45,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 - Multi-agent development active (architect, guide, sec-check, quality, CI, outreach)
 - 34+ community outreach issues filed; product-readiness gate (#563) resolved
 - ⚠️ Adoption metrics untracked — no usage/telemetry data on the 179 downloadable ISOs (#1174); **plan published 08-10** ([ADOPTION-METRICS.md](./ADOPTION-METRICS.md)) — first monthly download/usage snapshot targeted 2026-11-01 (Q4 "Mature")
-- 🟡 ROADMAP coverage improving — template merged into .github project-starter (PR #13); tunaos-packages + iso-builder seeded (08-10); still ~11/38 repos unplanned (#1295)
+- 🟡 ROADMAP coverage improving — template merged into .github project-starter (PR #13); tunaos-packages, protota, iso-builder, corral seeded (08-10/08-11); 9/42 authorized repos now carry a ROADMAP.md, bootc-installer pending PR #13; wootc/mandelbrot/letters/remora/mariner/fisherman still unplanned (#1295)
 - 🟢 **First external contributor engaged 08-10**: shimonenator landed docs on EL10/OBS design (fixes #777) and image-factory completion gate — first non-maintainer, non-agent commits; retention tracked as funnel proxy (#1317)
 - 🟡 **Flavor equality mandate (08-11)**: maintainer directive #1315 — all supported flavors are equal tiers; GNOME-first framing and cadence to be retired (#1316)
 
@@ -108,7 +108,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | **Desktop parity floor (non-RPM bases)** | packaging | #133, tunaos-packages#323 | ⬜ Not started — P0 for Q4 (see #1294) |
 | **Q3 checkpoint (08-22): staff or descope #272/#1123/#1093/#1094** | strategist | #1299 | ⬜ Scheduled |
 | **Flavor equality mandate (docs wording + cadence parity)** | strategist | #1315, #1254 | 🟡 In progress — catalog parity gate merged 08-11 (#1322, #1281 closed); cadence parity pending (#1316) |
-| **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 | ⬜ New 08-11 — maintainer directive; draft PACKAGE-SOURCING.md; frame at 08-22 checkpoint |
+| **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 | 🟡 In progress — PACKAGE-SOURCING.md drafted (planning PR open); third-party allowlist + per-variant audit due at 08-22 checkpoint |
 
 ---
 
@@ -117,6 +117,8 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 **Theme**: Enterprise readiness, community governance, ecosystem integration.
 
 **Planning started (2026-08-08)**: Q4 milestone #3 created; tracking issue #1159 open. **All 9 Q4 goals now tracked** (#1167 branch protection, #1168 governance, #1186 release automation, #1187 package signing/SBOM). Stale dependency refs (#306/#307/#212/#301 closed) still flagged in #1159 — new trackers needed for Tacklebox decoupling and Upstream snapshot automation. Extended 08-08 evening: adoption metrics (#1174) and variant lifecycle policy (#1175) added as strategist-owned goals.
+
+**Progress note (2026-08-11)**: keyless Cosign signing + signed SBOM attestations **landed 08-10** for published ISOs and container images (#1303, #1305) — first Q4 supply-chain deliverable. Remaining scope for #1187: signed SBOMs for **every** release artifact across all flavors (blocked on Releases cadence parity #1254) and tunaos-packages artifacts. Package sourcing policy (#1319/#1323) drafted as [PACKAGE-SOURCING.md](./PACKAGE-SOURCING.md) — source inventory feeds the #1187 attestation graph in Q4.
 
 | Goal | Owner | Dependencies |
 |------|-------|--------------|
@@ -127,6 +129,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | Release automation | ci-maintainer | CI health, VERSIONING.md, #1186 |
 | Community governance model | strategist | #1168 |
 | Package signing / SBOM | sec-check | Supply chain, #1187 |
+| **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 (audit → #1187) |
 | Bonito (Fedora 44) GA carryover | ci-maintainer | #272 |
 | Redfin (RHEL 10) alpha GA | ci-maintainer | #609 |
 | Fedora 45 base readiness | ci-maintainer | #1171 |
