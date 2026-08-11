@@ -109,7 +109,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | Migration guide (Silverblue/Kinoite/UB) | guide | #273 | ✅ Done (MIGRATION.md) |
 | mdBook → tunaos.org centralized | guide | — | ✅ Done |
 | Versioning policy documented | strategist | #274 | ✅ Done (VERSIONING.md, date-based + tiers) |
-| External contributor onboarding | guide | — | ⬜ Not started |
+| **External contributor onboarding / Hacktoberfest 2026** | guide / strategist | #1331, #1347 | 🟡 In progress — GFI pool seeded 0→3 (08-11); hard deadline: 10-15 curated issues by 09-15, registration ~09-01 |
 | Weekly boot report as build gate | ci-maintainer | #989 | 🟡 In progress |
 | Outreach sequencing | strategist | #563 | ✅ Done (gate lifted) |
 | Populate Q3 milestone | strategist | #562 | ✅ Done (2026-08-08, 9 issues) |
@@ -144,6 +144,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | Redfin (RHEL 10) alpha GA | ci-maintainer | #609 |
 | Fedora 45 base readiness | ci-maintainer | #1171 |
 | Adoption metrics / usage telemetry | strategist | #1174 |
+| **Adoption evidence (ADOPTERS.md production entries)** | strategist | #1348 — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot |
 | Variant lifecycle policy (Beta→Stable exit criteria) | strategist | #1175 |
 
 ---
