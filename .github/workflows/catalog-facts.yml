@@ -155,7 +155,7 @@ jobs:
         with:
           pattern: facts-*
           path: shards
-      - name: Merge shards
+      - name: Merge shards and validate browser catalog completeness
         run: |
           set -euo pipefail
           jq -s 'add // {}' shards/*/shard.json > merged.json
@@ -163,7 +163,27 @@ jobs:
              '{generated:$t, images:.}' merged.json > catalog-facts.json
           echo "entries: $(jq '.images | length' catalog-facts.json)"
           jq -r '.images | to_entries[] | "  \(.key): \(.value.desktop) \(.value.kernelVer)"' catalog-facts.json
+
+          # Validate against build-config.yml: every build_image non-grouped desktop flavor must have an entry
+          python3 -c '
+          import json, subprocess, sys
+          config = json.loads(subprocess.check_output(["yq", "-o=json", ".", ".github/build-config.yml"]))
+          facts = json.load(open("catalog-facts.json"))["images"]
+
+          expected = []
+          for v in config.get("variants", []):
+              vid = v["id"]
+              for f in v.get("flavors", []):
+                  if f.get("build_image") and f["id"] in ("gnome", "kde", "cosmic", "niri", "xfce"):
+                      expected.append(f"tuna-os/{vid}:{f['id']}")
+
+          missing = [key for key in expected if key not in facts]
+          print(f"Catalog completeness check: {len(expected) - len(missing)}/{len(expected)} flavors covered.")
+          if missing:
+              print("WARNING: Missing catalog entries for published desktop flavors:", missing, file=sys.stderr)
+          '
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: catalog-facts
           path: catalog-facts.json
+
