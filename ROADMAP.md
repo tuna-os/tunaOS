@@ -25,11 +25,21 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 | Grouper | Ubuntu 26.04 | GNOME, KDE, Niri, XFCE | Beta (RFC 010) |
 | Marlin | Arch Linux (rolling), CachyOS overlay | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
 | Flounder / Flounder Sid | Debian 13 Trixie / Sid | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
+| Hummingbird | Fedora Hummingbird (container-native bootc) | Base, GNOME, KDE, COSMIC, Niri | Experimental (see #1341) |
+| Gurnard | Ubuntu 24.04 Noble | Base, Pantheon | Experimental (see #1341) |
 
 **Status terms** follow [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md): `Stable`
 means GA, `Beta` means published for testing on tunaos.org/download. This
 table is the canonical per-variant status; tunaos.org wiki and blog copy must
 track it. Notably **Bonito is Beta** (GA tracked in [#272](https://github.com/tuna-os/tunaos/issues/272)) — it is neither "Production" nor "Experimental".
+
+> **Experimental** (per maintainer #1315): Hummingbird and Gurnard/Pantheon are
+> configured in `.github/build-config.yml` and building, but predate the
+> admission gate in [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md) (#1196) — they
+> have no named owner or acceptance criteria yet. They are tracked in
+> [#1341](https://github.com/tuna-os/tunaos/issues/1341); the 2026-08-22 Q3
+> checkpoint (#1299) decides staff vs. descope. README coverage is tracked in
+> [#1298](https://github.com/tuna-os/tunaos/issues/1298).
 
 ### Build Health
 
