@@ -242,7 +242,7 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
     # there, so a /var reset re-establishes the link rather than leaving apt
     # pointing at an empty directory. /var/lib must be created first —
     # tmpfiles does not build parents for L+.
-    printf 'd /var/lib 0755 root root -\nL+ /var/lib/dpkg - - - - ../../usr/lib/sysimage/dpkg\n' \
+    printf 'd /var/lib 0755 root root -\nd /var/log/apt 0755 root root -\nL+ /var/lib/dpkg - - - - ../../usr/lib/sysimage/dpkg\n' \
         > /usr/lib/tmpfiles.d/dpkg-sysimage.conf && \
     # Image-build time too: apt/dpkg run in later layers (and in
     # live_customize) before tmpfiles has ever executed.
