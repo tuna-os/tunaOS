@@ -27,8 +27,8 @@ TunaOS builds **bootc-based desktop operating systems** with atomic updates and 
 
 ### Features
 
-- **Modern Desktops**: GNOME, KDE Plasma, COSMIC, and Niri — your choice, on Enterprise Linux
-- **Latest GNOME**: Don't get stuck on a 3-year-old GNOME. We backport the latest desktop features to the Enterprise Desktop
+- **Modern Desktops**: GNOME, KDE Plasma, COSMIC, Niri, and XFCE — equal first-class options across distribution bases
+- **Up-to-Date Desktop Stack**: Fresh desktop features and updates backported to Enterprise and community bases
 - **Homebrew**: Baked into the image — all your CLI apps and fonts are just a `brew` command away
 - **Flathub by Default**: Full Flathub access out of the box — get any Flatpak available on the net
 - **HWE Option**: Hardware Enablement kernel for newer hardware support

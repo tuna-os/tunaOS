@@ -14,14 +14,14 @@ config:
 # Variants that lack certain desktops simply get a smaller ISO — no group
 # needs per-variant tailoring here.
 iso_groups:
-  # Flagship: the 90%-of-users ISO. Boots GNOME NVIDIA by default, and embeds
+  # Desktop ISO group: boots GNOME NVIDIA by default, and embeds
   # both NVIDIA and non-NVIDIA flavors in the offline store for installer auto-detection.
   # Published as `<variant>.iso`.
   - suffix: ""
     flavors: [gnome-nvidia, gnome-nvidia-hwe]
     offline_flavors: [gnome, gnome-hwe, gnome-nvidia, gnome-nvidia-hwe]
-  # Community: niche desktops (KDE/COSMIC/Niri/XFCE). NOT published as an
-  # ISO — the browser ISO Builder (https://iso.tunaos.org) covers these on
+  # Additional desktop ISO group (KDE/COSMIC/Niri/XFCE). NOT published as a
+  # single grouped ISO — the browser ISO Builder (https://iso.tunaos.org) covers these on
   # demand from the published images, so we don't carry the cost of a
   # 5-flavor offline-store ISO for the long tail. The images still build
   # and publish to GHCR; only the grouped ISO is skipped.
