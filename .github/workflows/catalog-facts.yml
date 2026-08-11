@@ -155,7 +155,7 @@ jobs:
         with:
           pattern: facts-*
           path: shards
-      - name: Merge shards
+      - name: Merge shards and validate browser catalog completeness
         run: |
           set -euo pipefail
           jq -s 'add // {}' shards/*/shard.json > merged.json
@@ -163,6 +163,48 @@ jobs:
              '{generated:$t, images:.}' merged.json > catalog-facts.json
           echo "entries: $(jq '.images | length' catalog-facts.json)"
           jq -r '.images | to_entries[] | "  \(.key): \(.value.desktop) \(.value.kernelVer)"' catalog-facts.json
+
+          python3 <<'PY'
+          import json
+          import subprocess
+          import sys
+
+          config = json.loads(
+              subprocess.check_output(
+                  ["yq", "-o=json", ".", ".github/build-config.yml"]
+              )
+          )
+          facts = json.load(open("catalog-facts.json"))["images"]
+
+          browser_flavors = set()
+          for group in config.get("iso_groups", []):
+              if group.get("publish", True):
+                  continue
+              browser_flavors.update(group.get("flavors", []))
+              browser_flavors.update(group.get("offline_flavors", []))
+
+          expected = {
+              f"tuna-os/{variant['id']}:{flavor['id']}"
+              for variant in config.get("variants", [])
+              for flavor in variant.get("flavors", [])
+              if flavor.get("build_image")
+              and flavor["id"] in browser_flavors
+          }
+          missing = sorted(expected - facts.keys())
+
+          print(
+              f"Catalog completeness check: "
+              f"{len(expected) - len(missing)}/{len(expected)} flavors covered."
+          )
+          if missing:
+              print(
+                  "ERROR: Missing catalog entries for browser/on-demand flavors:",
+                  *missing,
+                  sep="\n  ",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+          PY
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: catalog-facts
