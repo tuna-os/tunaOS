@@ -51,7 +51,7 @@ yq_bin() { command -v yq; }
 	[ -n "$(yq_bin)" ] || skip "yq not available"
 	run yq -r '.packages.hummingbird.repos[0].baseurl' "$GNOME"
 	[ "$status" -eq 0 ]
-	[[ "$output" == *"hummingbird/20251124-x86_64"* ]]
+	[[ "$output" == *"hummingbird/current/\$basearch"* ]]
 }
 
 # The assertion this file exists for: the hummingbird package list must BE the
