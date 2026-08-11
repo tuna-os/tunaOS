@@ -193,7 +193,7 @@ Canonical rollout plan for verifying end-to-end user ISO installation experience
 Umbrella initiative for making TunaOS bootable on M1/M2 Apple Silicon Macs via the Asahi stack:
 
 - **Naming Convention**: `asahi` is a **tag suffix** (`bonito:gnome-asahi`), never a separate variant/image name.
-- **Verification Harness (#776 / #910)**: Daily 35-point golden-manifest boot-chain sweep. Bonito (Fedora) and Grouper (Ubuntu) are verified 36/36 green. Remaining variants are undergoing kernel and boot-chain alignment (#777, #911, #912, #914).
+- **Verification Harness (#776 / #910)**: Daily 35-point golden-manifest boot-chain sweep. Bonito (Fedora) and Grouper (Ubuntu) are verified 36/36 green. Remaining variants are undergoing kernel and boot-chain alignment (#777, #911, #912, #914; see [OBS Project Plan for EL10](./ASAHI-EL10-OBS-PROJECT.md)).
 - **Installer Track (`bootc-installer-asahi`)**:
   - D0: Real-image payload packaging & validation.
   - D1: Fisherman first-boot agent integration.
