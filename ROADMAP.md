@@ -44,7 +44,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 - Discussions enabled
 - Multi-agent development active (architect, guide, sec-check, quality, CI, outreach)
 - 34+ community outreach issues filed; product-readiness gate (#563) resolved
-- ⚠️ Adoption metrics untracked — no usage/telemetry data on the 179 downloadable ISOs (#1174, filed 08-08); first monthly download/usage snapshot planned for Q4
+- ⚠️ Adoption metrics untracked — no usage/telemetry data on the 179 downloadable ISOs (#1174); **plan published 08-10** ([ADOPTION-METRICS.md](./ADOPTION-METRICS.md)) — first monthly download/usage snapshot targeted 2026-11-01 (Q4 "Mature")
 - 🟡 ROADMAP coverage improving — template merged into .github project-starter (PR #13); tunaos-packages + iso-builder seeded (08-10); still ~11/38 repos unplanned (#1295)
 
 ---
