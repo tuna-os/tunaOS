@@ -1,5 +1,9 @@
 # Investigation: mkosi as a build backend, and mkosi DDI output (#999)
 
+> **→ See also [ADR 0003](adr/0003-mkosi-co-build-poc.md)** for concrete mkosi
+> profile templates, build/boot commands, and the POC scaffolding that follows
+> from this investigation.
+
 Status: **investigation only — no proof-of-concept boot performed, no production
 change recommended.** Per the issue's own gate ("no production switch until the
 POC boots"), that alone rules out adopting anything here yet: this sandbox has
