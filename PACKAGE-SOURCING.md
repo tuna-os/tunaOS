@@ -1,6 +1,6 @@
 # tunaOS Package Sourcing Policy
 
-**Status**: DRAFT — proposed 2026-08-11 by the strategist agent for review
+**Status**: ACTIVE — adopted 2026-08-11; migration of existing exceptions is tracked below
 **Owner**: tuna-os (hanthor) / strategist
 **Tracks**: [#1319](https://github.com/tuna-os/tunaos/issues/1319) (maintainer directive), [#1323](https://github.com/tuna-os/tunaos/issues/1323) (strategic framing)
 **Interacts with**: Q4 supply-chain hardening ([#1193](https://github.com/tuna-os/tunaos/issues/1193), [#1187](https://github.com/tuna-os/tunaos/issues/1187)), upstream snapshot automation ([#1194](https://github.com/tuna-os/tunaos/issues/1194)), desktop parity ([#1294](https://github.com/tuna-os/tunaos/issues/1294))
@@ -88,9 +88,10 @@ A repo enters the allowlist only when all of the following hold:
 
 - **Checkpoint gate**: the 2026-08-22 Q3 checkpoint ([#1299](https://github.com/tuna-os/tunaos/issues/1299)) reviews the audit table; policy
   violations are surfaced there.
-- **CI (proposed)**: a source-manifest lint step that fails when a manifest
-  references an external repo not on the allowlist — owner: ci-maintainer,
-  tracker TBD (this policy does not mandate the mechanism, only the rule).
+- **CI**: `scripts/check-package-sources.py` blocks new manifest changes that
+  add COPR, PPA, OBS, AUR, or an unapproved repository URL. Existing legacy
+  declarations remain migration inventory until their package is available in
+  Tideforge or a documented allowlist exception is approved.
 
 ---
 
