@@ -38,6 +38,7 @@ _(None listed yet — be the first!)_
 | [Arch Linux](https://archlinux.org) | Base OS — Marlin variant built on Arch Linux | [archlinux.org](https://archlinux.org) |
 | [Ubuntu](https://ubuntu.com) | Base OS — Ubuntu variant image | [ubuntu.com](https://ubuntu.com) |
 | [Niri](https://github.com/YaLTeR/niri) | Desktop environment — scrollable-tiling Wayland compositor (Bonito variant) | [github.com/YaLTeR/niri](https://github.com/YaLTeR/niri) |
+| [elementary OS](https://elementary.io) | Desktop environment — Pantheon desktop for the Gurnard (Ubuntu 24.04 LTS) variant | [elementary.io](https://elementary.io) |
 | [Fedora COPR](https://copr.fedorainfracloud.org) | Package distribution — GNOME 49/50 backports for CentOS Stream 10 / Fedora bases | [copr.fedorainfracloud.org](https://copr.fedorainfracloud.org) |
 | [Tideforge](https://tideforge.org) | Build service — COSMIC packages built from source for the EL10 desktop cells | [tideforge.org](https://tideforge.org) |
 | [GHCR](https://ghcr.io) | Image registry — all published TunaOS image flavors | [github.com/orgs/tuna-os/packages](https://github.com/orgs/tuna-os/packages) |
@@ -54,4 +55,4 @@ Questions? Reach out on [Matrix](https://matrix.to/#/%23tunaos:reilly.asia) or o
 
 ---
 
-*Maintained by the TunaOS community. Last updated: 2026-08-08.*
+*Maintained by the TunaOS community. Last updated: 2026-08-11.*
