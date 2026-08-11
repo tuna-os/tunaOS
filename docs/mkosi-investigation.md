@@ -219,3 +219,13 @@ practice and a hybrid (mkosi as an alternate backend for one variant, behind a
 flag, Containerfiles everywhere else) becomes a reasonable follow-up proposal.
 A DDI POC is a separate, later piece of work and should not block or be
 bundled with this one — see Finding 2.
+
+## Alignment with Image Factory Completion Gate (#1283)
+
+Any eventual POC or adoption of an mkosi-built variant must pass the unified
+[Image Factory Completion Gate](file:///home/dev/workspace/tuna-os/tunaos/docs/IMAGE-FACTORY-GATE.md) (`docs/IMAGE-FACTORY-GATE.md`).
+Specifically:
+- OCI Build & Publish reproducibility with keyless Cosign signatures and SPDX SBOMs.
+- Full LUKS install-to-disk and bootc update/rebase/rollback verification (`bootc-lifecycle.yml`).
+- Compatibility with on-demand and browser-based ISO generators (`publish-iso-groups.yml`).
+
