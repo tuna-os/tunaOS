@@ -235,6 +235,7 @@ Related Communities:
 
 ### Policies & Planning
 - [Roadmap](ROADMAP.md) — project direction and feature status
+- [Package Sourcing Policy](PACKAGE-SOURCING.md) — package origin rules, Tideforge-first, and allowlist (#1319)
 - [Versioning](VERSIONING.md) — tag scheme and stability tiers
 - [Migration Guide](MIGRATION.md) — switching from other distros
 - [Security Policy](SECURITY.md) — vulnerability reporting and supported versions

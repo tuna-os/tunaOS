@@ -126,6 +126,8 @@ packages:
   el10:
     # COPR repos for GNOME 50 backport — EL10 ships GNOME 48 natively.
     # Brings modern GNOME to Enterprise Linux without waiting 3 years.
+    # Policy exception per PACKAGE-SOURCING.md / #1319 (tier-3 temporary source;
+    # scheduled for Tideforge migration in Q4 #1187).
     copr:
       - repo: jreilly1821/c10s-gnome-50-fresh
         extra_repos:
