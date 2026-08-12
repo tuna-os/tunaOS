@@ -101,7 +101,7 @@ Pulls the **published** image and runs the contract script against it directly (
 
 6 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
 
-Newest result 2026-08-10.
+Newest result 2026-08-11.
 
 ## Bootc Lifecycle
 
@@ -157,7 +157,7 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-08-10 | [31373454633](https://github.com/tuna-os/tunaOS/actions/runs/31373454633) | 47 |
+| 2026-08-11 | [31474708887](https://github.com/tuna-os/tunaOS/actions/runs/31474708887) | 47 |
 | 2026-08-09 | [31287377558](https://github.com/tuna-os/tunaOS/actions/runs/31287377558) | 3 |
 | 2026-08-09 | [31286849405](https://github.com/tuna-os/tunaOS/actions/runs/31286849405) | 18 |
 | 2026-08-09 | [31286843546](https://github.com/tuna-os/tunaOS/actions/runs/31286843546) | 18 |
