@@ -261,13 +261,42 @@ EOF
 
 if [[ "${_TD_OS}" == "apt" ]]; then
 	# The apt section is either a plain package list (!!seq) or a map with
-	# .packages and optional .ppa. Branch on the type explicitly: mikefarah
-	# yq has NO if/then/else and indexing a seq with a string is an error,
-	# so the old one-liners either always failed (PPA count: type is
-	# "!!map", never "object") or errored and were swallowed by `|| true`
+	# .packages, optional .ppa, and optional .repos (Tideforge or other
+	# custom apt repos — tunaOS#964). Branch on the type explicitly:
+	# mikefarah yq has NO if/then/else and indexing a seq with a string is
+	# an error, so the old one-liners either always failed (PPA count: type
+	# is "!!map", never "object") or errored and were swallowed by `|| true`
 	# (package list) — every apt flavor shipped a desktop-less image that
 	# still passed CI.
 	_TD_APT_TYPE=$($YQ -r '.packages.apt | type' "${_TD_MANIFEST}")
+
+	# Handle custom apt repos (e.g. Tideforge — tunaOS#964).
+	# Each entry: name, uri, suite, keyring_url, optional condition.
+	# Added BEFORE PPAs so Tideforge priority beats third-party sources.
+	_TD_APT_REPO_COUNT=0
+	if [[ "${_TD_APT_TYPE}" == "!!map" ]]; then
+		_TD_APT_REPO_COUNT=$($YQ -r '.packages.apt.repos | length // 0' "${_TD_MANIFEST}" 2>/dev/null || echo 0)
+	fi
+	for ((i = 0; i < _TD_APT_REPO_COUNT; i++)); do
+		_TD_AR_NAME=$($YQ -r ".packages.apt.repos[$i].name" "${_TD_MANIFEST}")
+		_TD_AR_URI=$($YQ -r ".packages.apt.repos[$i].uri" "${_TD_MANIFEST}")
+		_TD_AR_SUITE=$($YQ -r ".packages.apt.repos[$i].suite" "${_TD_MANIFEST}")
+		_TD_AR_KEYRING=$($YQ -r ".packages.apt.repos[$i].keyring_url" "${_TD_MANIFEST}")
+		_TD_AR_COND=$($YQ -r ".packages.apt.repos[$i].condition // \"\"" "${_TD_MANIFEST}")
+		# Only add repo if condition matches (e.g. "ubuntu" only on Ubuntu)
+		if [[ -z "${_TD_AR_COND}" ]] || [[ "$IS_UBUNTU" == true && "${_TD_AR_COND}" == "ubuntu" ]]; then
+			install -d -m 0755 /etc/apt/keyrings
+			_TD_AR_KEYRING_PATH="/etc/apt/keyrings/${_TD_AR_NAME}.gpg"
+			curl -fsSL --retry 3 "${_TD_AR_KEYRING}" -o "${_TD_AR_KEYRING_PATH}"
+			chmod 0644 "${_TD_AR_KEYRING_PATH}"
+			cat >"/etc/apt/sources.list.d/${_TD_AR_NAME}.list" <<EOF
+deb [signed-by=${_TD_AR_KEYRING_PATH}] ${_TD_AR_URI} ${_TD_AR_SUITE}
+EOF
+			echo "Added apt repo ${_TD_AR_NAME} -> ${_TD_AR_URI}"
+			# The new repo's index has to be visible to the install below.
+			apt-get update -qq
+		fi
+	done
 
 	# Handle PPAs (Ubuntu only — Debian uses native repos)
 	_TD_PPA_COUNT=0
