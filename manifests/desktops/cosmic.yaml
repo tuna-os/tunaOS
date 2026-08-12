@@ -11,35 +11,46 @@ packages:
   # (run 30692866756) and flounder/flounder-sid:cosmic shipping with no
   # compositor at all (#924, section 13 of docs/ci-troubleshooting.md).
   #
+  # Partial migration in progress (tunaOS#964). The Tideforge repo below
+  # is ADDED alongside the PPA and apt resolves each package from whichever
+  # source carries the best version. Three packages (pop-icon-theme,
+  # cosmic-panel, cosmic-randr) share the same name in both repos and are
+  # therefore already resolved from Tideforge when its version beats the
+  # PPA's; the PPA remains the sole provider for the other 11. cosmic-
+  # icon-theme is NOT listed because the PPA names the icon set
+  # `cosmic-icons` and cosmic-session from the PPA depends on that name —
+  # switching to cosmic-icon-theme requires cosmic-session to be served
+  # from Tideforge too (its recipe ships an intentionally empty Depends
+  # list until then).
+  #
   # Status as of 2026-08-11, verified against tuna-os/tunaos-packages
   # directly (manifests/target-queues/cosmic.yaml, .github/workflows/
-  # publish-tideforge-debs.yml, and the closed widening issues #204/#210/
-  # #214/#216): 5 of the 14 required recipes (pop-icon-theme, cosmic-
-  # icon-theme, cosmic-randr, cosmic-panel, cosmic-comp) are gate-proven
-  # for both ubuntu and debian, and 4 of those 5 are actually published to
-  # the real R2-backed apt repo (cosmic-comp's publish-matrix entry has
-  # not landed yet). The other 9 — including cosmic-session, which must
-  # go last since it Requires the other ten — are not yet gate-widened.
+  # publish-tideforge-debs.yml): 4 of the 14 required recipes (pop-icon-
+  # theme, cosmic-icon-theme, cosmic-randr, cosmic-panel) are published to
+  # the R2-backed apt repo at repo.tunaos.org/tideforge/ubuntu/. A 5th
+  # (cosmic-comp) is gate-proven but its publish-matrix entry has not
+  # landed. The other 9 — including cosmic-session, which must go last
+  # since it Requires the other ten — are not yet gate-widened.
   #
-  # Do NOT swap this apt: block until all 14 are published: cosmic-session's
-  # own recipe (not yet gate-widened, and last in the closure order since it
-  # Requires the other thirteen) already ships an intentionally EMPTY
-  # ubuntu/debian runtime-Depends list precisely because most of its
-  # siblings are not in the published repo yet — pointing cosmic.yaml at
-  # that repo now would trade a working (if third-party) grouper:cosmic for
-  # an unsatisfiable-Depends apt failure on every package this block still
-  # needs. Re-check tunaos-packages' publish-tideforge-debs.yml matrix and
-  # this file's target-queues/cosmic.yaml before touching this block.
+  # The PPA MUST remain until all 14 are published to Tideforge.
+  # cosmic-session, cosmic-greeter, and cosmic-settings-daemon are the
+  # critical blockers: each has dependencies that only the PPA satisfies
+  # today (cosmic-settings-daemon Requires adw-gtk3-theme — no provider
+  # in Tideforge; cosmic-greeter Requires greetd-selinux — our greetd
+  # recipe ships no such subpackage). Re-check tunaos-packages'
+  # publish-tideforge-debs.yml matrix and manifests/target-queues/
+  # cosmic.yaml before touching this block.
   #
   # NOT Debian. This block used to say "Debian Sid has native packages"; it
   # does not, and neither does any other suite. Checked with ftp-master's
   # madison API across oldoldstable..experimental for cosmic-session,
   # cosmic-comp, cosmic-panel, cosmic-files, cosmic-term, cosmic-settings,
   # cosmic-greeter and xdg-desktop-portal-cosmic — all empty, against a
-  # control that is not. The `condition: ubuntu` on the PPA below is therefore
-  # the whole story: on a Debian base this list has no source and apt exits
-  # 100 with "Unable to locate package" (flounder:cosmic, run 31087927879).
-  # flounder and flounder-sid no longer declare a cosmic flavour as a result.
+  # control that is not. The `condition: ubuntu` on both the Tideforge repo
+  # and the PPA below is therefore the whole story: on a Debian base this
+  # list has no source and apt exits 100 with "Unable to locate package"
+  # (flounder:cosmic, run 31087927879). flounder and flounder-sid no longer
+  # declare a cosmic flavour as a result.
   #
   # Every name below was checked against the PPA's published binaries for
   # **resolute** (Launchpad getPublishedBinaries, exact_match, status=Published)
@@ -49,6 +60,9 @@ packages:
   # The icon theme is `cosmic-icons` here, NOT the `cosmic-icon-theme` the
   # Fedora and EL10 sections use. That name is published by neither the PPA
   # nor the Ubuntu archive, so it would have failed the whole apt transaction.
+  # Tideforge publishes `cosmic-icon-theme` but cosmic-session from the PPA
+  # depends on `cosmic-icons` — switching the icon package name requires
+  # switching cosmic-session first.
   #
   # amd64 ONLY. The PPA publishes amd64 and amd64v3 and nothing else — no
   # arm64 build exists for any of these names. grouper builds both arches, so
@@ -57,6 +71,12 @@ packages:
   # found (run 31088031074, 1 of 4 jobs). Checking the series without checking
   # the architecture is what missed it the first time.
   apt:
+    repos:
+      - name: tideforge
+        uri: https://repo.tunaos.org/tideforge/ubuntu/
+        suite: ./
+        keyring_url: https://repo.tunaos.org/tideforge/ubuntu/tideforge.gpg
+        condition: "ubuntu"
     ppa:
       - repo: "ppa:hepp3n/cosmic-epoch"
         condition: "ubuntu"  # Ubuntu only — Debian has no COSMIC anywhere (see above)
@@ -87,6 +107,9 @@ packages:
       # ppa:hepp3n/cosmic-epoch publishes 46 binaries for resolute; the icon
       # set among them is `cosmic-icons` 1.5.0~b78b059, and no package whose
       # name contains "icon-theme" exists there at all except pop-icon-theme.
+      # Tideforge publishes `cosmic-icon-theme` but the PPA's cosmic-session
+      # depends on `cosmic-icons` — TODO(#964): switch to cosmic-icon-theme
+      # when cosmic-session is served from Tideforge.
       - cosmic-icons
       - pop-icon-theme
       # COSMIC's own greeter. The PPA publishes it for resolute, so unlike
