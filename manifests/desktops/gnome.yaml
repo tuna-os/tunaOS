@@ -116,10 +116,16 @@ packages:
   #   https://repo.tunaos.org/hummingbird/current/$basearch/
   # (retaining immutable snapshot identifiers at .../hummingbird/<snapshot>-$basearch/
   # for reproduction/rollback).
+  #
+  # NOTE (08-12): the `current` alias does NOT exist on repo.tunaos.org yet —
+  # the pipeline publishes only the immutable snapshot path. Pinning to the
+  # snapshot so the desktop builds can resolve the repo; switch back to
+  # current/$basearch/ when tunaos-packages publishes the stable alias
+  # (tuna-os/tunaos-packages#365).
   hummingbird:
     repos:
       - name: tunaos-hummingbird
-        baseurl: https://repo.tunaos.org/hummingbird/current/$basearch/
+        baseurl: https://repo.tunaos.org/hummingbird/20251124-x86_64/
         priority: 5
     packages: *fedora_gnome_packages
 
