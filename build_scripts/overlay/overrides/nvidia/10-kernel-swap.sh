@@ -94,16 +94,19 @@ else
 		echo "ERROR: no installable kernel rpms for ${CACHED_VERSION} in ${KERNEL_RPMS_DIR}" >&2
 		exit 1
 	fi
-	# --setopt=exclude= clears the base image's kernel exclude list
-	# (ublue/bluefin dnf.conf ships `exclude=kernel*` so image-managed
-	# kernels never drift). That exclude would otherwise filter the cached
-	# kernel out of the transaction and fail the swap: bonito (Fedora 44
-	# base, kernel 7.1.7-200.fc44) + akmods coreos-stable-43 (kernel
-	# 7.1.4-100.fc43) failed 08-10 with "filtered out by exclude filtering"
-	# on every *-nvidia variant. The whole point of this script is to align
-	# the kernel to the one the kmods were built against BY CONSTRUCTION,
-	# so the generic safety-net exclude must not veto it.
-	dnf -y --setopt=exclude= install "${RPM_FILES[@]}"
+	# Install the cached kernel set directly with rpm, bypassing dnf's
+	# exclude filtering entirely. dnf's `--setopt=exclude=` only clears the
+	# [main] exclude from dnf.conf; repo-level `exclude=kernel*` in the base
+	# image's .repo files still filters @commandline packages — the
+	# 08-11 builds failed with "filtered out by exclude filtering" even
+	# with the setopt in place (bonito 31454139305, every *-nvidia job,
+	# 3/3 buildah attempts). The kernel cache carries the complete set
+	# (kernel, -core, -modules, -modules-core, -modules-extra, -uki-virt)
+	# so intra-set Requires resolve inside the transaction and the base
+	# image supplies the rest (dracut, kmod, linux-firmware). The old
+	# kernels were already erased with rpm --erase --nodeps above, so the
+	# -i install has no version conflicts.
+	rpm -ivh "${RPM_FILES[@]}"
 
 	# Remove the OLD kernel's module directory outright. `rpm --erase` above
 	# removes only rpm-OWNED files; generated ones (initramfs.img, depmod
