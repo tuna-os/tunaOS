@@ -138,23 +138,48 @@ def vnc_capture(png):
     return os.path.exists(png) and os.path.getsize(png) > 0
 
 
-# PPM -> PNG converter, resolved once.
+# ImageMagick command resolution, done once at import time.
 #
-# The screendump path hardcoded `convert`, under a `check=False` that reads as
-# tolerance but is not: check=False only suppresses a NONZERO EXIT, while a
-# missing binary raises FileNotFoundError out of Popen before any exit code
-# exists. So an absent ImageMagick did not degrade — it crashed the harness
-# with a traceback on the very first frame (run 31168173594), after the VM had
-# booted and was sitting on the installer's first screen.
+# The screendump path, stddev() and changed_pixels() all used to hardcode
+# `convert` / `compare` directly. On ImageMagick 7 those are subcommands of
+# `magick`, not standalone binaries, so a bare `convert` raises
+# FileNotFoundError out of subprocess.run and crashes the harness — exactly
+# what happened in run 31168173594 for the PPM converter.  The same defect
+# is still present in stddev() and changed_pixels(), which were never given
+# the same resolution logic.
 #
-# ImageMagick 7 ships `magick`; 6 ships `convert`; netpbm's `pnmtopng` reads
-# PPM natively and is already a dependency of every caller. Prefer whichever
-# exists, and say so once rather than per frame.
+# Resolve once at module scope so every call site uses the same version.
+def _resolve_im_convert():
+    """Return the ImageMagick command prefix for convert-style operations.
+
+    IM7: ["magick"]   — `magick input.png ...`
+    IM6: ["convert"]  — `convert input.png ...`
+    Returns None if neither is available."""
+    if shutil.which("magick"):
+        return ["magick"]
+    if shutil.which("convert"):
+        return ["convert"]
+    return None
+
+
+def _resolve_im_compare():
+    """Return the ImageMagick command prefix for compare-style operations.
+
+    IM7: ["magick", "compare"]  — `magick compare -metric AE ...`
+    IM6: ["compare"]            — `compare -metric AE ...`
+    Returns None if neither is available."""
+    if shutil.which("magick"):
+        return ["magick", "compare"]
+    if shutil.which("compare"):
+        return ["compare"]
+    return None
+
+
 def _resolve_ppm_converter():
-    for exe in ("magick", "convert"):
-        if shutil.which(exe):
-            return lambda ppm, png, exe=exe: subprocess.run(
-                [exe, ppm, png], check=False)
+    """Return a callable(ppm, png) that converts a PPM to PNG."""
+    if _im_convert is not None:
+        return lambda ppm, png, im=_im_convert: subprocess.run(
+            im + [ppm, png], check=False)
     if shutil.which("pnmtopng"):
         def _pnmtopng(ppm, png):
             with open(png, "wb") as out:
@@ -163,8 +188,13 @@ def _resolve_ppm_converter():
     return None
 
 
+_im_convert = _resolve_im_convert()
+_im_compare = _resolve_im_compare()
 _ppm_to_png = _resolve_ppm_converter()
-if _ppm_to_png is None:
+if _im_convert is None:
+    note("no ImageMagick found (magick / convert) — screendump frames cannot "
+         "be saved; install imagemagick")
+elif _ppm_to_png is None:
     note("no PPM converter found (magick / convert / pnmtopng) — screendump "
          "frames cannot be saved; install imagemagick or netpbm")
 
@@ -205,19 +235,23 @@ def send_keys(*keys):
 
 def stddev(png):
     """Grayscale standard deviation — 0 means a flat (blank) image."""
+    if _im_convert is None:
+        return 0.0
     r = subprocess.run(
-        ["convert", png, "-colorspace", "Gray", "-format",
-         "%[fx:standard_deviation]", "info:"],
+        _im_convert + [png, "-colorspace", "Gray", "-format",
+                       "%[fx:standard_deviation]", "info:"],
         capture_output=True, text=True)
     try:
         return float(r.stdout.strip())
-    except ValueError:
+    except (ValueError, FileNotFoundError):
         return 0.0
 
 
 def changed_pixels(a, b):
     """Pixels differing between two frames (ImageMagick absolute-error metric)."""
-    r = subprocess.run(["compare", "-metric", "AE", "-fuzz", "5%", a, b, "null:"],
+    if _im_compare is None:
+        return 0
+    r = subprocess.run(_im_compare + ["-metric", "AE", "-fuzz", "5%", a, b, "null:"],
                        capture_output=True, text=True)
     m = re.search(r"(\d+)", (r.stderr or "").strip())
     return int(m.group(1)) if m else 0
