@@ -127,26 +127,29 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
 **Theme**: Enterprise readiness, community governance, ecosystem integration.
 
-**Planning started (2026-08-08)**: Q4 milestone #3 created; tracking issue #1159 open. **All 9 Q4 goals now tracked** (#1167 branch protection, #1168 governance, #1186 release automation, #1187 package signing/SBOM). Stale dependency refs (#306/#307/#212/#301 closed) still flagged in #1159 — new trackers needed for Tacklebox decoupling and Upstream snapshot automation. Extended 08-08 evening: adoption metrics (#1174) and variant lifecycle policy (#1175) added as strategist-owned goals.
+**Planning started (2026-08-08)**: Q4 milestone #3 created; tracking issue #1159 open. **All 9 Q4 goals now tracked** (#1167 branch protection, #1168 governance, #1186 release automation, #1187 package signing/SBOM). Tracker fidelity: #1307 flags 7/9 goal trackers unattached to the milestone — attach #1174/#1175/#1186/#1187/#1192/#1193/#1194 at the 08-22 checkpoint. Extended 08-08 evening: adoption metrics (#1174) and variant lifecycle policy (#1175) added as strategist-owned goals.
 
 **Progress note (2026-08-11)**: keyless Cosign signing + signed SBOM attestations **landed 08-10** for published ISOs and container images (#1303, #1305) — first Q4 supply-chain deliverable. Remaining scope for #1187: signed SBOMs for **every** release artifact across all flavors (blocked on Releases cadence parity #1254) and tunaos-packages artifacts. Package sourcing policy (#1319/#1323) drafted as [PACKAGE-SOURCING.md](./PACKAGE-SOURCING.md) — source inventory feeds the #1187 attestation graph in Q4.
 
-| Goal | Owner | Dependencies |
-|------|-------|--------------|
-| Tacklebox decoupling | architect | #306 (closed — needs new tracker) |
-| Upstream snapshot automation | ci-maintainer | #307 (closed — needs new tracker) |
-| Branch protection + required CI | strategist | CI health, #1167 |
-| Supply chain hardening | sec-check | #212, #301 (closed — needs new tracker) |
-| Release automation | ci-maintainer | CI health, VERSIONING.md, #1186 |
-| Community governance model | strategist | #1168 |
-| Package signing / SBOM | sec-check | Supply chain, #1187 |
-| **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 (audit → #1187) |
-| Bonito (Fedora 44) GA carryover | ci-maintainer | #272 |
-| Redfin (RHEL 10) alpha GA | ci-maintainer | #609 |
-| Fedora 45 base readiness | ci-maintainer | #1171 |
-| Adoption metrics / usage telemetry | strategist | #1174 |
-| **Adoption evidence (ADOPTERS.md production entries)** | strategist | #1348 — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot |
-| Variant lifecycle policy (Beta→Stable exit criteria) | strategist | #1175 |
+**Update (2026-08-12)**: Q3 checkpoint refresh merged (#1372) — carryover is now a decision, not a discovery. **Q3→Q4 carryover candidates** (staff-or-descope decided 08-22): Bonito GA (#272), Redfin alpha (#1123), NVIDIA flavor family (#1383, 6 editions 0 assets — descope would land here). ADR 0003 (flavor equality) + ADR 0004 (RFC lifecycle) merged — #1094 staff test met. Q4 load: 15 rows below; every Q3 descope adds to Q4 before Q4 starts.
+
+| Goal | Owner | Dependencies | Status |
+|------|-------|--------------|--------|
+| Tacklebox decoupling | architect | #1192 | ⬜ Not started |
+| Upstream snapshot automation | ci-maintainer | #1194 | ⬜ Not started |
+| Branch protection + required CI | strategist | CI health, #1167 | ⬜ Not started — enforcement unverified |
+| Supply chain hardening | sec-check | #1193 | 🟡 In progress — keyless Cosign + signed SBOMs landed 08-10 (#1303/#1305) |
+| Release automation | ci-maintainer | CI health, VERSIONING.md, #1186 | ⬜ Not started — #1398 release-input bug being fixed |
+| Community governance model | strategist | #1168 | ⬜ Not started — no governance doc |
+| Package signing / SBOM (all artifacts) | sec-check | Supply chain, #1187 | 🟡 In progress — blocked on cadence parity #1254 |
+| **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 (audit → #1187) | 🟡 In progress — PACKAGE-SOURCING.md merged (#1330); allowlist audit due 08-22 |
+| Bonito (Fedora 44) GA carryover | ci-maintainer | #272 | 🔴 Zero movement — 08-22 decision (descope rec per #1372) |
+| Redfin (RHEL 10) alpha GA | ci-maintainer | #609 | 🔴 Zero movement — 08-22 decision (staff-with-external-capacity rec per #1372) |
+| NVIDIA flavor family (if descoped at 08-22) | ci-maintainer | #1383 | 🔴 6 editions, 0 assets — candidate carryover |
+| Fedora 45 base readiness | ci-maintainer | #1171 | ⬜ Not started |
+| Adoption metrics / usage telemetry | strategist | #1174 | 🟡 Plan published (ADOPTION-METRICS.md); monthly snapshot pending |
+| **Adoption evidence (ADOPTERS.md production entries)** | strategist | #1348 — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot | 🔴 Empty — outreach #1367 + DistroWatch draft (#1375) in flight |
+| Variant lifecycle policy (Beta→Stable exit criteria) | strategist | #1175 | 🟡 In progress — VARIANT-LIFECYCLE.md live; admission gate unenforced (#1270) |
 
 ---
 
