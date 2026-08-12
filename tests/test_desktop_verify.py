@@ -17,6 +17,11 @@ from pathlib import Path
 
 import pytest
 
+# desktop-verify.py hard-exits (77) when Pillow/requests are absent; skip the
+# whole module in CI environments that don't install them.
+pytest.importorskip("PIL")
+pytest.importorskip("requests")
+
 _SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "desktop-verify.py"
 _spec = importlib.util.spec_from_file_location("desktop_verify", _SCRIPT)
 _mod = importlib.util.module_from_spec(_spec)
