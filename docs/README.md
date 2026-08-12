@@ -20,6 +20,8 @@ user-facing site:
 | [AGENT_GUIDE.md](AGENT_GUIDE.md) | Repo architecture: variants, flavors, build stages, key files |
 | [INSTALLER_SCREENSHOTS.md](INSTALLER_SCREENSHOTS.md) | Visual step-by-step walkthrough of the GUI installer for GNOME and Cosmic |
 | [build-pipeline.md](build-pipeline.md) | CI/CD workflow and build-stage overview |
+| [ci-troubleshooting.md](ci-troubleshooting.md) | Diagnosing and fixing common CI failures |
+| [mkosi-investigation.md](mkosi-investigation.md) | Notes from the mkosi-based image build investigation |
 | [PIPELINE.md](PIPELINE.md) | Build pipeline reference: stages, workflows, artifact flow |
 | [CI_SPEC.md](CI_SPEC.md) | CI behavior specification |
 | [TESTING.md](TESTING.md) | ISO end-to-end test harness |
