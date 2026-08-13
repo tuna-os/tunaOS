@@ -145,6 +145,20 @@ human at the keyboard — bootc's rollback covers "new deployment doesn't
 confirm," not "new deployment hangs the whole boot before bootc's own health
 check can run").
 
+## Community testing (informal, not a CI tier)
+
+Tiers 2 and 3 above are maintainer-controlled: one is funded infrastructure,
+the other is a specific person's laptop. Neither can be volunteered into by
+a community member. If you own Apple Silicon hardware and want to try
+[bootc-installer-asahi](https://github.com/tuna-os/bootc-installer-asahi)
+independently of either tier, that's welcome — it's not part of the CI gate,
+but real-hardware reports are exactly the signal that motivated M1/M2
+support in the first place (tunaOS#911, the `gnome-asahi` unbootable-image
+incident). Report results as an issue in
+[bootc-installer-asahi](https://github.com/tuna-os/bootc-installer-asahi/issues),
+tagged `hardware-report`, with the Mac model and which image/flavor you
+tried.
+
 ## What is deliberately not in this PR
 
 - A Scaleway provisioning/teardown script. Writing one against an API this
