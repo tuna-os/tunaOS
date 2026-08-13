@@ -1,6 +1,6 @@
 # tunaOS Roadmap
 
-**Last updated**: 2026-08-12 (NVIDIA flavor row + flavor equality mandate) | **Maintainer**: tuna-os (hanthor)
+**Last updated**: 2026-08-13 (Q3 checkpoint refresh: NVIDIA and publish-path blockers) | **Maintainer**: tuna-os (hanthor)
 
 ---
 
@@ -95,6 +95,8 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
 **Mid-quarter update 3 (2026-08-11)**: maintainer directive #1319 — **package sourcing policy**: default to system repos / tideforge; no PPAs/COPRs/OBS/AUR; build in-house what the base lacks, with a small trusted third-party allowlist. Second directive in 24h; elevates the Q2 COPR-elimination win (#436) into org-wide supply-chain policy (#1323).
 
+**Mid-quarter update 4 (2026-08-13)**: checkpoint inputs now include the NVIDIA flavor family (#1383) and publish-path resilience (#1377/#1187). NVIDIA nightly failures remain reproducible across the matrix, and recurring `rekor.sigstore.dev` 502s have blocked variant image promotion for a week. The 2026-08-22 checkpoint decision sheet records explicit STAFF/DESCOPE criteria for both alongside the original four goals.
+
 | Goal | Owner | Tracking | Status |
 |------|-------|----------|--------|
 | **Fix ISO downloads** | ci-maintainer | #543, #561 | ✅ Done — downloads verified working (R2, 08-07) |
@@ -116,7 +118,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | **User-proven ISO installs roadmap** | ci-maintainer | #763 | 🟡 In progress (Phase 1 baseline dispatched #761; GUI gate #577) |
 | **Apple Silicon (Asahi Linux) support** | architect / ci-maintainer | #781 | 🟡 In progress (Bonito & Grouper 36/36 verified #776; D0–D4 installer track active) |
 | **Desktop parity floor (non-RPM bases)** | packaging | #133, tunaos-packages#323 | ⬜ Not started — P0 for Q4 (see #1294) |
-| **Q3 checkpoint (08-22): staff or descope #272/#1123/#1093/#1094** | strategist | #1299 | ⬜ Scheduled |
+| **Q3 checkpoint (08-22): staff or descope strategic goals and blockers** | strategist | #1299 | ⬜ Scheduled — decision sheet refreshed 08-13; includes #272/#1123/#1093/#1094 plus #1383 and #1377/#1187 |
 | **Flavor equality mandate (docs wording + cadence parity)** | strategist | #1315, #1254 | 🟡 In progress — catalog parity gate merged 08-11 (#1322, #1281 closed); cadence parity pending (#1316) |
 | **NVIDIA flavor family (6 editions, 0 assets since 07-05)** | ci-maintainer | #1383 | 🔴 Broken — nightly overlay regressed 08-12 (#1382); staff test: nightly green + gnome-nvidia assets republished by 09-01 (#1376/#1379) |
 | **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 | 🟡 In progress — PACKAGE-SOURCING.md drafted (planning PR open); third-party allowlist + per-variant audit due at 08-22 checkpoint |
