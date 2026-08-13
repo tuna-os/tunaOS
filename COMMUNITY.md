@@ -28,6 +28,14 @@ tunaOS is an open-source project building OCI-based Enterprise Linux desktops. W
 - **PR Reviews**: All contributions reviewed within 48 hours
 - **Matrix**: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia) — real-time chat, weekly release notes, monthly office hours (see below)
 
+### Ecosystem collaboration
+
+Potential ecosystem collaborations should start from verified project facts and
+an explicit exploratory ask. The [Chainguard collaboration brief](docs/CHAINGUARD-COLLABORATION.md)
+is the working example for the keyless-signing and SBOM story tracked in
+[#1339](https://github.com/tuna-os/tunaos/issues/1339); it does not imply an
+endorsement or existing partnership.
+
 ### Matrix room cadence
 
 The Matrix room is the project's real-time channel; this section documents
