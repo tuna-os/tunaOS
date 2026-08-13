@@ -849,14 +849,41 @@ jobs:
       - name: Sign images and attest SBOMs
         env:
           REQUIRE_SBOM: ${{ inputs.sbom }}
+          MAX_RETRIES: 3
         run: |
           set -euo pipefail
           identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/reusable-build-image.yml@${GITHUB_REF}"
           issuer="https://token.actions.githubusercontent.com"
           index_ref="${IMAGE_REGISTRY}/${IMAGE_NAME}@${INDEX_DIGEST}"
 
-          cosign sign "$index_ref"
-          cosign verify "$index_ref" \
+          # cosign's own retry (2 attempts, sub-second apart) is not enough
+          # for a Rekor transparency-log blip that lasts minutes, which is
+          # what a real outage looks like -- not what cosign is built to
+          # ride out. Measured against run 31663727643 (flounder base):
+          #
+          #   Error: signing ... creating bundle: signing bundle: error
+          #   signing bundle: Post "https://rekor.sigstore.dev/api/v1/log/entries":
+          #   giving up after 2 attempt(s): status 502 Bad Gateway
+          #
+          # and the same signature recurred across albacore, skipjack,
+          # sailfin, bonito and bonito-rawhide within the same run window --
+          # builds that had genuinely succeeded, failing only at this step.
+          # A single unwrapped invocation turns a transient Sigstore blip
+          # into a red Promote for every flavor whose Sign+attest lands
+          # inside the window. Wrap each cosign call the same way the GHCR
+          # push retries above do: linear backoff, MAX_RETRIES attempts.
+          cosign_retry() {
+            local i
+            for i in $(seq "${MAX_RETRIES}"); do
+              "$@" && return 0
+              echo "::warning::${1} failed (attempt ${i}/${MAX_RETRIES}); retrying..." >&2
+              sleep $((5 * i))
+            done
+            return 1
+          }
+
+          cosign_retry cosign sign "$index_ref"
+          cosign_retry cosign verify "$index_ref" \
             --certificate-identity "$identity" \
             --certificate-oidc-issuer "$issuer" >/dev/null
 
@@ -870,15 +897,15 @@ jobs:
             ref="${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}"
             sbom="supply-chain/sboms/sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${safeplatform}.spdx.json"
 
-            cosign sign "$ref"
-            cosign verify "$ref" \
+            cosign_retry cosign sign "$ref"
+            cosign_retry cosign verify "$ref" \
               --certificate-identity "$identity" \
               --certificate-oidc-issuer "$issuer" >/dev/null
             signed=$((signed + 1))
 
             if [[ -f "$sbom" ]]; then
-              cosign attest --type spdxjson --predicate "$sbom" "$ref"
-              cosign verify-attestation "$ref" \
+              cosign_retry cosign attest --type spdxjson --predicate "$sbom" "$ref"
+              cosign_retry cosign verify-attestation "$ref" \
                 --type spdxjson \
                 --certificate-identity "$identity" \
                 --certificate-oidc-issuer "$issuer" >/dev/null
