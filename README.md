@@ -113,6 +113,14 @@ Image tags are constructed as `<desktop>[-hardware]`:
 | **RAM** | 4 GB | 8 GB+ |
 | **Storage** | 20 GB | 50 GB+ |
 
+### Supported hardware (ARM laptops)
+
+| Hardware | Status | Docs |
+|----------|--------|------|
+| Snapdragon X Elite (e.g. Lenovo ThinkPad X13s) | Supported | [docs.tunaos.org/bonito-x13s](https://github.com/tuna-os/docs/tree/main/docs/bonito-x13s), [docs.tunaos.org/dakota-x13s](https://github.com/tuna-os/docs/tree/main/docs/dakota-x13s) |
+| Apple Silicon (M1, M2) | Supported via [Asahi Linux](https://asahilinux.org/) | [bootc-installer-asahi](https://github.com/tuna-os/bootc-installer-asahi) |
+| Apple Silicon (M3 and newer) | Not yet supported | — |
+
 ---
 
 ## Installation
