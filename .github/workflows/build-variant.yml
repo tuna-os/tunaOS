@@ -153,16 +153,20 @@ jobs:
             echo "$FULL_MATRIX" | jq -c --argjson stage "$STAGE" '{
               include: map(
                 select(.stage == $stage and (.build_iso == true or .build_qcow2 == true))
+                | . as $e
+                | ($e.platforms_json | fromjson)[]
+                | select(.platform == "linux/amd64" or .platform == "linux/arm64")
                 | {
-                    variant:       .variant,
-                    image_name:    .image_name,
-                    published_tag: .published_tag,
-                    variant_emoji: .variant_emoji,
-                    flavor:        .flavor,
-                    build_iso:     .build_iso,
-                    build_qcow2:   .build_qcow2,
-                    base_image:    .base_image,
-                    platform:      "linux/amd64"
+                    variant:       $e.variant,
+                    image_name:    $e.image_name,
+                    published_tag: $e.published_tag,
+                    variant_emoji: $e.variant_emoji,
+                    flavor:        $e.flavor,
+                    build_iso:     $e.build_iso,
+                    build_qcow2:   $e.build_qcow2,
+                    base_image:    $e.base_image,
+                    platform:      .platform,
+                    safeplatform:  .safeplatform
                   }
               )
             }'
@@ -318,7 +322,7 @@ jobs:
     with:
       variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
-      image-tag: ${{ matrix.published_tag }}-linux-amd64
+      image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -347,7 +351,7 @@ jobs:
     with:
       variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
-      image-tag: ${{ matrix.published_tag }}-linux-amd64
+      image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -374,7 +378,7 @@ jobs:
     with:
       variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
-      image-tag: ${{ matrix.published_tag }}-linux-amd64
+      image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
