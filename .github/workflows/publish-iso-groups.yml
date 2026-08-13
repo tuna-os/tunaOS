@@ -86,26 +86,34 @@ jobs:
                   variant:  $var.id,
                   group:    (if $suffix == "" then "default" else $suffix end),
                   suffix:   $suffix,
-                  basename: (if $suffix == "" then $var.id else "\($var.id)-\($suffix)" end)
+                  basename: (if $suffix == "" then $var.id else "\($var.id)-\($suffix)" end),
+                  flavors:  $sel
                 }
             ] | { include: . }')
-          # Probe the registry: a variant whose flagship image was never
-          # published (e.g. rawhide while its image gates are red) is
-          # SKIPPED with a warning instead of hard-failing the matrix —
-          # the publish pipeline ships what exists. A variant with a
-          # published flagship keeps failing loudly if other flavors of
-          # its group are missing (that is a real regression signal).
+          # Probe every image the selected group will consume. A variant whose
+          # flagship image was never published is skipped, as is a group with
+          # a missing flavor (for example, a failed gnome-nvidia build). Do
+          # this before emitting the matrix so one unavailable group cannot
+          # fail the other variants or the prune job.
           PRUNED='[]'
           for row in $(echo "$MATRIX" | jq -cr '.include[] | @base64'); do
             entry=$(echo "$row" | base64 -d)
             variant=$(echo "$entry" | jq -r .variant)
             pubname=$(yq -r ".variants[] | select(.id == \"$variant\") | .publish_name // .id" .github/build-config.yml)
             tagsuffix=$(yq -r ".variants[] | select(.id == \"$variant\") | .tag_suffix // \"\"" .github/build-config.yml)
-            probe_tag="gnome"; [ -n "$tagsuffix" ] && probe_tag="gnome-$tagsuffix"
-            if skopeo inspect --retry-times 3 --no-tags "docker://ghcr.io/tuna-os/${pubname}:${probe_tag}" >/dev/null 2>&1; then
-              PRUNED=$(echo "$PRUNED" | jq -c --argjson e "$entry" '. + [$e]')
+            missing=''
+            for flavor in $(echo "$entry" | jq -r '.flavors[]'); do
+              probe_tag="$flavor"
+              if [ -n "$tagsuffix" ]; then probe_tag="${probe_tag}-${tagsuffix}"; fi
+              image="ghcr.io/tuna-os/${pubname}:${probe_tag}"
+              if ! skopeo inspect --retry-times 3 --no-tags "docker://${image}" >/dev/null 2>&1; then
+                missing="${missing}${missing:+, }${image}"
+              fi
+            done
+            if [ -n "$missing" ]; then
+              echo "::warning::skipping $(echo "$entry" | jq -r .basename): required image(s) not published: ${missing}"
             else
-              echo "::warning::skipping $(echo "$entry" | jq -r .basename): ghcr.io/tuna-os/${pubname}:${probe_tag} not published (image builds red?)"
+              PRUNED=$(echo "$PRUNED" | jq -c --argjson e "$entry" '. + [$e]')
             fi
           done
           MATRIX=$(echo "$PRUNED" | jq -c '{ include: . }')
