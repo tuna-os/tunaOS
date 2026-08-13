@@ -1,6 +1,6 @@
 # tunaOS Roadmap
 
-**Last updated**: 2026-08-12 (NVIDIA flavor row + flavor equality mandate) | **Maintainer**: tuna-os (hanthor)
+**Last updated**: 2026-08-13 (tromso stable-release tracking) | **Maintainer**: tuna-os (hanthor)
 
 ---
 
@@ -127,7 +127,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
 **Theme**: Enterprise readiness, community governance, ecosystem integration.
 
-**Planning started (2026-08-08)**: Q4 milestone #3 created; tracking issue #1159 open. **All 9 Q4 goals now tracked** (#1167 branch protection, #1168 governance, #1186 release automation, #1187 package signing/SBOM). Stale dependency refs (#306/#307/#212/#301 closed) still flagged in #1159. Extended 08-08 evening: adoption metrics (#1174) and variant lifecycle policy (#1175) added as strategist-owned goals. **Update 08-13**: Supply chain hardening re-tracked under #1193 (was #212/#301, both closed) — the last of the 3 untracked Q4 goals fixed; Tacklebox decoupling and Upstream snapshot automation (#306/#307 closed) still need new trackers.
+**Planning started (2026-08-08)**: Q4 milestone #3 created; tracking issue #1159 open. **All 9 Q4 goals now tracked** (#1167 branch protection, #1168 governance, #1186 release automation, #1187 package signing/SBOM). Stale dependency refs (#306/#307/#212/#301 closed) still flagged in #1159. Extended 08-08 evening: adoption metrics (#1174) and variant lifecycle policy (#1175) added as strategist-owned goals. **Update 08-13**: Supply chain hardening re-tracked under #1193 (was #212/#301, both closed) — the last of the 3 untracked Q4 goals fixed; Tacklebox decoupling and Upstream snapshot automation (#306/#307 closed) still need new trackers. **tromso's first stable release is now explicitly tracked below**; its upstream execution issue remains tromso#83.
 
 **Progress note (2026-08-11)**: keyless Cosign signing + signed SBOM attestations **landed 08-10** for published ISOs and container images (#1303, #1305) — first Q4 supply-chain deliverable. Remaining scope for #1187: signed SBOMs for **every** release artifact across all flavors (blocked on Releases cadence parity #1254) and tunaos-packages artifacts. Package sourcing policy (#1319/#1323) drafted as [PACKAGE-SOURCING.md](./PACKAGE-SOURCING.md) — source inventory feeds the #1187 attestation graph in Q4.
 
@@ -148,6 +148,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | Adoption metrics / usage telemetry | strategist | #1174 |
 | **Adoption evidence (ADOPTERS.md production entries)** | strategist | #1348 — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot |
 | Variant lifecycle policy (Beta→Stable exit criteria) | strategist | #1175 |
+| **tromso first stable release** | ci-maintainer | #1371, [tromso#83](https://github.com/tuna-os/tromso/issues/83) — promote-stable after `build_final`, ISO boot gate, and LUKS e2e are green; attach tromso#83 to Q4 tracking |
 
 **Milestone fidelity (#1307, 2026-08-12)**: 7 of the 9 goal trackers above were
 filed without being attached to the Q4 milestone (#3), so the milestone
