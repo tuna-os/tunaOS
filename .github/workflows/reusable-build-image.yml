@@ -119,11 +119,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          persist-credentials: false
           submodules: recursive
         if: ${{ !startsWith(inputs.flavor, 'base') }}
 
       - name: Checkout (no submodules)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
         if: ${{ startsWith(inputs.flavor, 'base') }}
 
       - name: Setup runner
@@ -578,6 +581,8 @@ jobs:
 
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Exit on failure
         env:
@@ -962,6 +967,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # Reclaim ~25 GB of preinstalled toolchains from the main disk. The qcow2
       # is written to the workspace (main disk), not the container-storage
