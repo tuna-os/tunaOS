@@ -41,6 +41,11 @@ Make Q3 carryover an explicit decision, not a discovery. For every open Q3 goal,
 
 ### Supporting items for the checkpoint
 
+- **Adoption call (#1367)**: before using Q4 “Mature” language, publish the
+  [warm-channel adoption call](docs/ADOPTION-CALL.md) in a Show-and-tell
+  Discussion and record the link here. Count only consent-confirmed named
+  entries as public adoption evidence; downloads, stars, pulls, CI, and
+  anonymous reports do not populate `ADOPTERS.md` Production Users.
 - **Contributor retention → capacity**: shimonenator is ACTIVE (8 commits 08-10/11 across tunaOS + xfce-linux; last 08-11 20:26Z). 14-day window closes ~08-24 — 2 days AFTER this checkpoint. Recommend converting retention into capacity: seed GFI-scoped Bonito/Redfin packaging subtasks for the contributor **at** the checkpoint, so #272/#1123 staff tests can borrow external capacity instead of maintainer-only time.
 - **GFI pool is ZERO usable (#1362)**: the #1308 seeds never landed (letters#8 is on an archived repo); CONTRIBUTING's good-first-issue link is dead. No seeds → no external capacity → the retention-window opportunity above is moot. Seed 20+ GFIs by 09-15 (#1362; outreach #1354 tracks 3→8).
 - **Q4 dependency risk**: Q4 is 0/13 items closed (was 0/9); Bonito GA and Redfin GA already appear as Q4 rows — every Q3 descope adds Q4 load before Q4 starts. #1159/#1307 track Q4 goal fidelity.
@@ -73,6 +78,16 @@ Make Q3 carryover an explicit decision, not a discovery. For every open Q3 goal,
 ## Outcome recording
 
 After the checkpoint, update the ROADMAP.md Q3 status table (per #1299 step 3) so carryover is a decision, not a discovery.
+
+### Adoption-call record
+
+| Discussion URL | Responses | Confirmed named entries | Anonymous reports | ADOPTERS.md PRs |
+|---|---:|---:|---:|---:|
+| `[DISCUSSION_URL]` | [N] | [N] | [N] | [#PRs] |
+
+Replace the placeholder only after the maintainer publishes the Discussion.
+Keep the counts separate and do not promote the Q4 “Mature” claim from this
+call unless the evidence target is met.
 
 ---
 *Prepared by strategist agent (ACMM L6 — full mode). Signed-off-by: hanthor-hive-agent[bot] <290068839+hanthor-hive-agent[bot]@users.noreply.github.com>*
