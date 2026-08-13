@@ -14,6 +14,8 @@ just fix && just check
 
 New here? Start with issues tagged **[good first issue](https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** — a curated, maintainer-sized set of starter tasks covering documentation parity, small script fixes, and test coverage. They are deliberately small, well-scoped, and safe to attempt without deep image-factory knowledge.
 
+For the Hacktoberfest 2026 backlog, see the [contributor plan](docs/HACKTOBERFEST-2026.md) for current candidates, acceptance standards, and event dates.
+
 Ways to contribute without touching the build pipeline:
 
 - **Docs & guides** — the [docs site](https://github.com/tuna-os/docs) has its own `good first issue` backlog and takes content PRs for guides, FAQs, and variant pages
