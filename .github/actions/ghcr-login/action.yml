@@ -14,17 +14,60 @@ runs:
     # Podman login is required separately because some build steps invoke podman
     # directly rather than going through the Docker credential store.
     # Sudo podman is needed for privileged build operations (e.g. isogenerator).
-    # podman requires >=2048 open file descriptors to init its lock file
-    # (/libpod_lock). GitHub-hosted arm64 runners default to a lower
-    # ulimit -n, which made podman login fail with exit 125:
+    #
+    # `ulimit -n 4096` below is not load-bearing and is kept only because
+    # removing it is not free to re-verify. It was added as a fix for
+    # arm64's intermittent "Login to Podman (sudo)" failure:
     #   Error: failed to open 2048 locks in /libpod_lock: numerical result out of range
+    # (exit 125) -- but it never actually stopped the failure (grouper and
+    # yellowfin kept hitting it after this landed, tunaOS#1101). tunaOS#1495
+    # measured six live arm64 runners across both podman versions the fleet
+    # hands out (4.9.3 and 5.8.4, with and without a pre-existing
+    # containers.conf) and found `podman info`/`podman login` succeed at
+    # sudo's DEFAULT soft nofile of 1024 on every one of them -- the
+    # descriptor theory does not hold. A follow-up measurement reproduced
+    # ghcr-login's exact sequence (unsudo login, then sudo login, real
+    # credentials, no ulimit override) on the same six runners and it
+    # succeeded cleanly on all six too. Every mechanism available to an
+    # isolated diagnostic job has now been tried and has not reproduced the
+    # production failure; whatever triggers it lives in the full job's
+    # earlier steps (disk cleanup, KVM setup, apt installs) or in a fleet
+    # image batch that has since rotated out, and isolating that is not
+    # cheap. Retry rather than guess again at a resource limit.
     - name: Login to Podman (user)
       run: |
         ulimit -n 4096
         echo "${{ github.token }}" | podman login -u "${{ github.actor }}" --password-stdin ghcr.io
       shell: bash
 
+    # Retried with linear backoff, same idiom as the GHCR push retry in
+    # reusable-build-image.yml and the cosign retry in the Sign+attest step:
+    # a transient failure on a call this cheap should not fail the whole
+    # arm64 build. This is a mitigation for an unreproduced intermittent,
+    # not a fix for a diagnosed cause -- see the comment above.
+    #
+    # The loop ends on an explicit exit, not on falling off the bottom: a
+    # `for ... && break; sleep; done` with nothing after it exits with
+    # `sleep`'s status (near-always 0) even when every attempt failed, which
+    # would report this step as successful with podman never authenticated
+    # -- a later, more confusing failure the first time something tries to
+    # push or pull. `login_ok` makes exhaustion a real failure.
     - name: Login to Podman (sudo)
+      env:
+        MAX_RETRIES: 3
       run: |
-        sudo TOKEN="${{ github.token }}" ACTOR="${{ github.actor }}" bash -c 'ulimit -n 4096 && echo "$TOKEN" | podman login -u "$ACTOR" --password-stdin ghcr.io'
+        login_ok=0
+        for i in $(seq "${MAX_RETRIES}"); do
+          if sudo TOKEN="${{ github.token }}" ACTOR="${{ github.actor }}" \
+              bash -c 'ulimit -n 4096 && echo "$TOKEN" | podman login -u "$ACTOR" --password-stdin ghcr.io'; then
+            login_ok=1
+            break
+          fi
+          echo "::warning::sudo podman login failed (attempt ${i}/${MAX_RETRIES}); retrying..."
+          sleep $((5 * i))
+        done
+        if [[ "$login_ok" -ne 1 ]]; then
+          echo "::error::sudo podman login failed after ${MAX_RETRIES} attempts"
+          exit 1
+        fi
       shell: bash
