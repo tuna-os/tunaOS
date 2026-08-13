@@ -248,7 +248,7 @@ From previous `{target}` version `{prev}` there have been the following changes.
 
 ### How to rebase
 ```bash
-sudo bootc switch --enforce-container-sigpolicy ghcr.io/hanthor/$IMAGE_NAME:{target}
+sudo bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/$IMAGE_NAME:{target}
 ```"""
     assert "### Major packages" in format_str
     assert "### How to rebase" in format_str

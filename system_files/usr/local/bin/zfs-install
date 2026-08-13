@@ -69,7 +69,7 @@ if [[ -z "${IMGREF}" ]]; then
     if [[ -f /etc/bootc-installer/images.json ]]; then
         IMGREF=$(python3 -c "import json; print(json.load(open('/etc/bootc-installer/images.json'))['local_imgref'])" 2>/dev/null) || true
     fi
-    [[ -n "${IMGREF}" ]] || IMGREF="ghcr.io/hanthor/ubuntu-26.04-desktop-bootc:latest"
+    [[ -n "${IMGREF}" ]] || IMGREF="ghcr.io/tuna-os/ubuntu-26.04-desktop-bootc:latest"
 fi
 
 HOSTID_HEX=$(hostid 2>/dev/null || echo "00000000")
