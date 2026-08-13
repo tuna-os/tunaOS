@@ -166,6 +166,42 @@ If you're already running a compatible bootc system:
 sudo bootc switch ghcr.io/tuna-os/yellowfin:gnome
 ```
 
+### Verifying downloads
+
+TunaOS images and ISOs are keylessly signed (Sigstore Cosign, GitHub Actions
+OIDC identity — no project key or password) and published with SBOMs, so you
+can verify what you're running instead of trusting the download blindly.
+
+**ISOs** ship with a `.iso.sha256` checksum and a `.iso.sigstore.json`
+verification bundle alongside the image:
+
+```bash
+sha256sum --check --strict tunaos-example.iso.sha256
+
+cosign verify-blob tunaos-example.iso \
+  --bundle tunaos-example.iso.sigstore.json \
+  --certificate-identity \
+    "https://github.com/tuna-os/tunaOS/.github/workflows/reusable-build-artifacts.yml@refs/heads/main" \
+  --certificate-oidc-issuer \
+    "https://token.actions.githubusercontent.com"
+```
+
+**Container images** are signed by digest, with a signed SPDX SBOM
+attestation attached to each platform image:
+
+```bash
+digest=$(skopeo inspect docker://ghcr.io/tuna-os/yellowfin:gnome | jq -r .Digest)
+cosign verify "ghcr.io/tuna-os/yellowfin@${digest}" \
+  --certificate-identity \
+    "https://github.com/tuna-os/tunaOS/.github/workflows/reusable-build-image.yml@refs/heads/main" \
+  --certificate-oidc-issuer \
+    "https://token.actions.githubusercontent.com"
+```
+
+Full commands, the SBOM-attestation example, and the exact trust boundary
+(which identities/issuers are accepted and why) are in
+[docs/VERIFY-ARTIFACTS.md](docs/VERIFY-ARTIFACTS.md).
+
 ## Container registry authentication
 
 Images are published on GitHub Container Registry (GHCR). To pull images with `bootc` or `podman`:
