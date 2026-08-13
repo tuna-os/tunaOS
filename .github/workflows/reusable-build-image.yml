@@ -550,7 +550,10 @@ jobs:
       - build_push
     container:
       image: cgr.dev/chainguard/wolfi-base@sha256:82d4510534784020cb991dda82a7a1be75d4cd00ceae6e81590cc1ebf7a58ab5  # :latest linux/amd64 as of 2026-06-13
-      options: --privileged --security-opt seccomp=unconfined
+      # This job only performs registry/API operations (podman login and
+      # manifest create/add/annotate/push). It does not run or build a
+      # container, mount a host filesystem, or need kernel capabilities.
+      # Keep the job at the runner's default container confinement.
     permissions:
       contents: read
       packages: write
