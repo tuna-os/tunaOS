@@ -109,7 +109,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | Migration guide (Silverblue/Kinoite/UB) | guide | #273 | ✅ Done (MIGRATION.md) |
 | mdBook → tunaos.org centralized | guide | — | ✅ Done |
 | Versioning policy documented | strategist | #274 | ✅ Done (VERSIONING.md, date-based + tiers) |
-| **External contributor onboarding / Hacktoberfest 2026** | guide / strategist | #1331, #1347 | 🟡 In progress — GFI pool 0→5 (08-13, #1277: `good first issue` and `help wanted` both non-empty for the first time — #1308/#1350/#1351/#1366/#1385); hard deadline: 10-15 curated issues by 09-15, registration ~09-01 |
+| **External contributor onboarding / Hacktoberfest 2026** | guide / strategist | #1331, #1347, #1362 | 🟡 In progress — org-wide GFI pool 0→9 (08-13): tunaos 5 (#1277), docs 3, protota 1 (#193, newly tagged). #1362's real target is **20+ across 8 repos by 09-15**; `bootc-installer` has issues **disabled entirely** (structural blocker, needs re-enabling or dropping from the target list) and `letters` is archived (its 1 tag doesn't count) |
 | Weekly boot report as build gate | ci-maintainer | #989 | 🟡 In progress |
 | Outreach sequencing | strategist | #563 | ✅ Done (gate lifted) |
 | Populate Q3 milestone | strategist | #562 | ✅ Done (2026-08-08, 9 issues) |
