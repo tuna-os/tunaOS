@@ -89,6 +89,40 @@ def test_the_refresh_lands_through_a_pull_request(run_blocks):
     )
 
 
+def test_the_push_survives_a_transient_github_error(run_blocks):
+    # The 2026-08-13 13:30 UTC run committed the refresh and then died on a
+    # single unretried `git push --force` hitting GitHub's transient
+    #   remote: Internal Server Error
+    # -- exactly the failure mode this workflow already retries for the GHCR
+    # push in reusable-build-image.yml. A bare, unretried push froze the
+    # table the same way the pre-PR merge-queue rejection did, just from a
+    # different cause. Pin that the push is inside a retry loop, not a bare
+    # command that gives up on the first flake.
+    joined = "\n".join(run_blocks)
+    push_block = next(
+        (block for block in run_blocks if "git push --force origin" in block), None
+    )
+    assert push_block is not None, "no run block pushes the refresh branch"
+
+    lines = push_block.splitlines()
+    push_line = next(i for i, l in enumerate(lines) if "git push --force origin" in l)
+    # A bare push (not inside an `if`/loop conditional) is the original bug:
+    # the very next non-blank, non-comment line after it must not be able to
+    # run unconditionally after a failed push under `set -e` -- i.e. the push
+    # has to be the condition of an `if`, not a standalone statement.
+    stripped = lines[push_line].strip()
+    assert stripped.startswith("if ") or stripped.startswith("if["), (
+        "`git push --force origin \"$BRANCH\"` runs as a bare statement; one "
+        "transient GitHub error kills the whole job with nothing retried. "
+        f"got: {stripped!r}"
+    )
+    assert "for i in $(seq" in joined and "push_ok" in joined, (
+        "the push is not wrapped in a retry loop with an explicit success "
+        "flag; a `for ... && break; sleep; done` with nothing after it would "
+        "silently report success even if every attempt failed"
+    )
+
+
 def test_the_workflow_may_open_that_pull_request(workflow):
     permissions = workflow.get("permissions") or {}
     assert permissions.get("pull-requests") == "write", (
