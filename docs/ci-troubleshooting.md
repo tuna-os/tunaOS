@@ -103,13 +103,13 @@ so neither runs if the system stays at multi-user.target.
 individual gated checks with diagnostic `TUNAOS_DESKTOP_CONTRACT_FAIL` markers
 instead of `set -e` killing the script silently. Commit `ebdb0cd`.
 
-**Caveat for NVIDIA images:** The grouped ISO flagship group boots
+**Caveat for NVIDIA images:** The grouped ISO default desktop group boots
 `gnome-nvidia` by default. In QEMU with virtio-gpu (no NVIDIA hardware),
 the NVIDIA kernel modules may interfere with DRM initialisation. This produces
 a blank framebuffer even if graphical.target is reached. Two mitigations:
 1. The `graphical.target` fix should at least let the contract service run
    (marker appears on serial even if screen is blank).
-2. Consider changing the flagship group's default boot entry from
+2. Consider changing the default desktop group's default boot entry from
    `gnome-nvidia` to `gnome` for CI boot gates, or adding a
    `--boot-entry <name>` option to `iso-e2e.sh`.
 
@@ -141,7 +141,7 @@ at the build step (they fell through to the boot gate).
   in a way that breaks the matrix generation (`generate-matrix` step).
 
 **Status:** Not yet root-caused. The schedule failures have stopped since the
-config was simplified to two groups (flagship + community). Monitor the next
+config was simplified to two groups (default desktop + additional desktop). Monitor the next
 Sunday run (2026-07-20).
 
 ---
@@ -608,7 +608,7 @@ All failing gates share the same root cause — images built before the
 |----------|---------------|------|-------|
 | Build Yellowfin | yellowfin:gnome | disk | `TUNAOS_DESKTOP_CONTRACT_OK` not emitted |
 | Build Grouper | grouper:niri | disk | `TUNAOS_DESKTOP_CONTRACT_OK` not emitted |
-| Publish Grouped ISOs | yellowfin (flagship) | ISO ready | `TUNAOS_LIVE_READY` not emitted + blank screen |
+| Publish Grouped ISOs | yellowfin (default desktop) | ISO ready | `TUNAOS_LIVE_READY` not emitted + blank screen |
 | LUKS E2E | yellowfin:kde | ISO → install | `flatpak: command not found` (separate root cause, see §1) |
 
 Once new images are published with the `graphical.target` fix, all three boot-gate

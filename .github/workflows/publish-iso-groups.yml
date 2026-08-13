@@ -24,7 +24,7 @@ on:
           - bonito
           - grouper
       group:
-        description: 'ISO group (all = flagship + community + nvidia)'
+        description: 'ISO group (all = default desktop + additional desktop + nvidia)'
         required: false
         default: 'all'
         type: choice
@@ -66,7 +66,7 @@ jobs:
         run: |
           # Emit one matrix entry per (variant, group) whose intersection of
           # group flavors with the variant's build_image flavors is non-empty.
-          # "default"/'' is the flagship group; its ISO has no suffix.
+          # "default"/'' is the default desktop group; its ISO has no suffix.
           MATRIX=$(yq -o=json .github/build-config.yml | jq -c \
             --arg wv "$WANT_VARIANT" --arg wg "$WANT_GROUP" '
             [ .variants[] as $var
@@ -79,7 +79,7 @@ jobs:
               | select($wg == "all"
                        or ($wg == "default" and $suffix == "")
                        or $wg == $suffix)
-              # Skip publish:false groups (builder-only, e.g. community)
+              # Skip publish:false groups (builder-only, e.g. additional desktop)
               # UNLESS the dispatch names that exact suffix.
               | select(($g.publish != false) or ($wg == $suffix))
               | {
@@ -89,11 +89,11 @@ jobs:
                   basename: (if $suffix == "" then $var.id else "\($var.id)-\($suffix)" end)
                 }
             ] | { include: . }')
-          # Probe the registry: a variant whose flagship image was never
+          # Probe the registry: a variant whose default desktop image was never
           # published (e.g. rawhide while its image gates are red) is
           # SKIPPED with a warning instead of hard-failing the matrix —
           # the publish pipeline ships what exists. A variant with a
-          # published flagship keeps failing loudly if other flavors of
+          # published default desktop keeps failing loudly if other flavors of
           # its group are missing (that is a real regression signal).
           PRUNED='[]'
           for row in $(echo "$MATRIX" | jq -cr '.include[] | @base64'); do
