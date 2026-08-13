@@ -995,8 +995,40 @@ jobs:
             --output verify-out \
             --timeout 900
 
+      # iso-e2e.sh runs under sudo, so everything it drops in verify-out is
+      # root-owned. Hand it back to the runner user BEFORE any later step
+      # reads it. This chown used to live only in "Collect evidence", which
+      # runs AFTER the tier-1 step below, and that ordering failed every
+      # desktop Gate on marlin and flounder: the tier-1 step's `if:` called
+      # hashFiles('verify-out/serial.log'), hashFiles is evaluated by the
+      # runner as the runner user, and failing to read a root-owned file is
+      # not a falsy result -- it is a template evaluation error that fails
+      # the whole job before a single step of it runs:
+      #
+      #   The template is not valid. System.InvalidOperationException:
+      #   hashFiles('verify-out/serial.log') failed. Fail to hash files
+      #   under directory '/home/runner/work/tunaOS/tunaOS'
+      #
+      # Gate is a `needs:` of Promote, so images that booted fine -- serial
+      # log carrying "Desktop experience contract passed" -- never got their
+      # bare tags. The `if:` now reads a step output instead of hashing a
+      # file, so ownership can never turn a green boot into a template error
+      # again; the chown is what makes the step's own greps work.
+      - name: Normalize verify-out ownership
+        if: always()
+        id: evidence
+        shell: bash
+        run: |
+          sudo chown -R "$USER:$(id -gn)" verify-out 2>/dev/null || true
+          if [[ -r verify-out/serial.log ]]; then
+            echo "serial=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "serial=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::verify-out/serial.log is missing or unreadable; tier-1 functional checks skipped"
+          fi
+
       - name: Run tier-1 functional checks (advisory)
-        if: always() && hashFiles('verify-out/serial.log') != ''
+        if: always() && steps.evidence.outputs.serial == 'true'
         continue-on-error: true
         shell: bash
         env:
