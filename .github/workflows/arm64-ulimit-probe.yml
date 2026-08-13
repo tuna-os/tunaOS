@@ -128,6 +128,39 @@ jobs:
             fi
           fi
 
+      # The measurement none of the above take: every prior step calls
+      # `podman info` or a bare `ulimit` in isolation. Production never does
+      # that -- ghcr-login runs an UNSUDO `podman login` first, in the same
+      # job, and only then the sudo one that fails. `podman info` above
+      # proved sudo's default 1024 is enough for a lock-file init done cold;
+      # this checks whether an EARLIER unsudo login changes what the sudo
+      # one sees -- shared XDG_RUNTIME_DIR state, a rootless storage graph
+      # already initialized under the runner UID, anything the isolated
+      # probes above could not catch by construction. Real credentials
+      # (github.token), no ulimit override on either call, same order
+      # ghcr-login uses.
+      - name: Does the exact ghcr-login login sequence reproduce it?
+        run: |
+          echo "${{ github.token }}" | podman login -u "${{ github.actor }}" --password-stdin ghcr.io
+          echo "unsudo login: OK"
+          if sudo TOKEN="${{ github.token }}" ACTOR="${{ github.actor }}" \
+              bash -c 'echo "$TOKEN" | podman login -u "$ACTOR" --password-stdin ghcr.io' \
+              2>/tmp/seq.err; then
+            echo "sudo login AFTER an unsudo login: OK"
+            echo '| sudo login after unsudo login, no ulimit | OK |' >> "$GITHUB_STEP_SUMMARY"
+          else
+            rc=$?
+            echo "sudo login AFTER an unsudo login: FAILED rc=${rc}"
+            cat /tmp/seq.err
+            if grep -q 'libpod_lock' /tmp/seq.err; then
+              echo '| sudo login after unsudo login, no ulimit | REPRODUCES libpod_lock |' \
+                >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| sudo login after unsudo login, no ulimit | FAILED rc=${rc}, different error |" \
+                >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+
       - name: What podman itself reports
         run: |
           echo "--- podman version ---"
