@@ -39,6 +39,7 @@ user-facing site:
 | [IMAGE-FACTORY-LIFECYCLE-GATE.md](IMAGE-FACTORY-LIFECYCLE-GATE.md) | Image factory lifecycle coverage & required gate (#1278) |
 | [CFP-FOSDEM-2027.md](CFP-FOSDEM-2027.md) | FOSDEM 2027 CFP draft |
 | [DISTROWATCH-SUBMISSION.md](DISTROWATCH-SUBMISSION.md) | DistroWatch project submission draft |
+| [ADOPTION-CALL.md](ADOPTION-CALL.md) | Warm-channel call and consent workflow for public TunaOS adopter reports |
 | [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) | Historical record of the May 2026 sprint + remaining roadmap items |
 | [agents/](agents/) | Hive agent guides (issue-tracker, triage-labels, domain) |
 | [adr/](adr/) | Architecture Decision Records |
