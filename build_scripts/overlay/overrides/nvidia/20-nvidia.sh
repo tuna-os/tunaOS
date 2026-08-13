@@ -65,8 +65,21 @@ QUALIFIED_KERNEL="$(rpm -qa | grep -P 'kernel-(|'"$KERNEL_SUFFIX"'-)(\d+\.\d+\.\
 #            bonito's coreos-stable akmods.
 # Fallback when neither tag is readable: fedora-43, bluefin-lts's pinned
 # default, kept so an unexpected bundle still names a real repo.
-AKMODS_EL_VERSION="$(find /tmp/akmods-nvidia-open-rpms -name "*.rpm" -print | grep -oPm1 '(?<=\.el)\d+' || true)"
-AKMODS_FEDORA_VERSION="$(find /tmp/akmods-nvidia-open-rpms -name "*.rpm" -print | grep -oPm1 '(?<=\.fc)\d+' || true)"
+#
+# `head -1` after grep, and not grep's own -m1: -m1 stops after the first
+# matching LINE, while -o prints every match ON that line. A bundle whose
+# first matching filename carries the dist tag twice -- e.g.
+# kmod-nvidia-open-6.12.0-257.el10.x86_64-...el10.rpm -- therefore yields
+# "10\n10", not "10". The embedded newline survives into NVIDIA_RELEASEVER
+# and then into the sed expression that templates $releasever below, which
+# dies with:
+#
+#   sed: -e expression #1, char 16: unterminated `s' command
+#
+# That killed yellowfin's cosmic-nvidia, niri-nvidia and xfce-nvidia builds
+# on every nightly. The value must be exactly one line.
+AKMODS_EL_VERSION="$(find /tmp/akmods-nvidia-open-rpms -name "*.rpm" -print | grep -oP '(?<=\.el)\d+' | head -1 || true)"
+AKMODS_FEDORA_VERSION="$(find /tmp/akmods-nvidia-open-rpms -name "*.rpm" -print | grep -oP '(?<=\.fc)\d+' | head -1 || true)"
 if [[ -n "${AKMODS_EL_VERSION}" ]]; then
 	NVIDIA_REPO_ID="epel-nvidia"
 	NVIDIA_RELEASEVER="${AKMODS_EL_VERSION}"
