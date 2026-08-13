@@ -3,11 +3,12 @@
 > A list of organizations and projects that use TunaOS in production, development, or evaluation.
 >
 > If you or your organization is using TunaOS, we'd love to add you to this list!
-> Please submit a PR adding your name or open an issue.
+> See the [adoption call](docs/ADOPTION-CALL.md) to self-identify in the public
+> Show-and-tell Discussion, or submit a PR with the same consent details.
 
 ## Production Users
 
-_(None listed yet — be the first!)_
+_(None listed yet — see the [adoption call](docs/ADOPTION-CALL.md) and be the first!)_
 
 ## Development & Evaluation
 
