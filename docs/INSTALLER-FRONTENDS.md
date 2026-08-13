@@ -10,8 +10,11 @@ TunaOS ships **five independently-forked installer frontends**, one per desktop:
 | XFCE | `org.tunaos.InstallerXfce` | fork of bootc-installer |
 | GNOME | `org.bootcinstaller.Installer` | upstream, unmodified |
 
-They all drive the same backend (**fisherman**, via `recipe.json`), but the UIs
-are separate codebases. **Feature drift is therefore the default failure mode**:
+The four TunaOS-forked frontends (KDE, COSMIC, Niri, XFCE) all drive the same
+backend (**fisherman**, via `recipe.json`); GNOME is unmodified upstream
+bootc-installer with its own disk backend (see §3–§5 below). The UIs are
+separate codebases regardless. **Feature drift is therefore the default
+failure mode**:
 a screen or recipe field wired up in one fork silently never lands in the others.
 Nothing about "it built" or "it launched" catches that — this page does.
 
@@ -124,9 +127,11 @@ drift is *visible* before we promote them to required.
 ## Behavior contract
 
 The screen contract above only covers *what renders*. Five more behaviors are
-reimplemented by **each** frontend in its own language (Rust, C++, Go, Python,
-plus upstream bootc-installer) because the frontends share no code. These are
-the contracts those implementations must agree on — they are what a parity
+reimplemented — three of them (§3–§5) across the four TunaOS-forked frontends
+only (Rust, C++, Go, Python — GNOME/bootc-installer does not participate, see
+§3's note), two of them (§1–§2) across all five including upstream
+bootc-installer — because the frontends share no code. These are the
+contracts those implementations must agree on — they are what a parity
 check (and a sixth frontend) should be written against. Filed as
 [#1197](https://github.com/tuna-os/tunaOS/issues/1197).
 
@@ -176,6 +181,15 @@ describes the *runtime*, not the live ISO):
 
 Resolved once and cached: the value cannot change while the installer runs.
 A harness override may exist for screenshot capture, but must be explicit.
+
+§3–§5 below describe the four TunaOS-forked frontends (KDE, COSMIC, Niri,
+XFCE) — the ones that drive fisherman via `recipe.json`. GNOME
+(`org.bootcinstaller.Installer`) is upstream bootc-installer, unmodified: a
+repo search turns up zero references to `fisherman` or `recipe.json` anywhere
+in its source. It owns its own disk-partitioning and encryption logic and is
+out of scope for §3–§5's contracts; only §1 (readiness stamp) and §2
+(product-name resolution) apply to it, and both already list it in their
+tables above.
 
 ### §3 Privilege escalation
 
