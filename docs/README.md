@@ -27,6 +27,7 @@ user-facing site:
 | [rhel-setup.md](rhel-setup.md) | RHEL 10 (Redfin) local-build instructions |
 | [ROLL_YOUR_OWN.md](ROLL_YOUR_OWN.md) | Guide to building custom TunaOS variants for your own use |
 | [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) | Historical record of the May 2026 sprint + remaining roadmap items |
+| [Q4-2026-PROMOTION-CALENDAR.md](Q4-2026-PROMOTION-CALENDAR.md) | Fedora 45, All Things Open, and KubeCon NA promotion plan |
 | [agents/](agents/) | Hive agent guides (issue-tracker, triage-labels, domain) |
 | [adr/](adr/) | Architecture Decision Records |
 
