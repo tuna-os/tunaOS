@@ -56,7 +56,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 - 34+ community outreach issues filed; product-readiness gate (#563) resolved
 - ⚠️ Adoption metrics untracked — no usage/telemetry data on the 179 downloadable ISOs (#1174); **plan published 08-10** ([ADOPTION-METRICS.md](./ADOPTION-METRICS.md)) — first monthly download/usage snapshot targeted 2026-11-01 (Q4 "Mature")
 - 🟡 ROADMAP coverage improving — **15/37 active authorized repos now carry a ROADMAP.md** (2026-08-12): tunaos, tromso, tacklebox, docs, xfce-linux, bluefin-cli, Tavern, corral, tunaos-packages, iso-builder, protota, bootc-migrate, dualcut, wootc, gtk-office-suite; template merged into .github project-starter (#13). Excluded from planning scope: ubuntu + letters (**archived** 2026-08-12). Still unplanned (22 active): .github, flatpak-index, bootc-installer (ROADMAP stranded on non-default `dev` branch — #1361), bootc-installer-asahi, branding, bst-ci, changelog-action, debian-copr, finupdate, fisherman, homebrew-tap, kde-build-meta, mandelbrot, mariner, remora, scoop-bucket, suite-common, suite-common-rust, tuna-installer-cosmic/kde/niri/xfce (#1295, #1361)
-- 🟢 **First external contributor engaged 08-10**: shimonenator landed docs on EL10/OBS design (fixes #777) and image-factory completion gate — first non-maintainer, non-agent commits; retention tracked as funnel proxy (#1317)
+- ⚪ **"First external contributor" claim retracted (#1317, corrected 2026-08-13)**: the shimonenator commits (EL10/OBS design fixing #777, image-factory completion gate) are **not** a human contribution — maintainer confirmed the account is misattributed by GitHub because the Google Antigravity agent is listed as commit author; `git log` shows `commit.author.name: antigravity` on every one of that account's commits. There is still no first external human contributor; bus-factor risk (#1095) is unchanged.
 - 🟡 **Flavor equality mandate (08-11)**: maintainer directive #1315 — all supported flavors are equal tiers; GNOME-first framing and cadence to be retired (#1316)
 
 ---
@@ -91,7 +91,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
 **Mid-quarter update (2026-08-10)**: Q3 milestone populated; CI green; **downloads verified working** (179 ISOs, newest 08-07). ⚠️ **Q3 at risk — checkpoint 2026-08-22** (#1299): 4 open strategic goals (#272 Bonito GA, #1123 Redfin alpha, #1093 RFC governance, #1094 ADR coverage) with zero movement since 08-08 while CI/ops work lands daily. ⚠️ **Desktop parity crisis** (#1294): tunaos-packages#133 audit shows 24/37 published editions are too small to contain their desktop (non-RPM bases: sailfin/flounder/grouper). GitHub Releases gap fixed 08-08 (#1106/#1147 closed, `a4b147f8`).
 
-**Mid-quarter update 2 (2026-08-11)**: maintainer filed #1315 — **flavor equality mandate** (no GNOME-as-primary framing; all supported flavors equal tiers). This reframes desktop parity (#1294) from defect-fix to product strategy; flavor cadence parity (#1254, PR #1314) is its first deliverable. ✅ First deliverable landed 05:22Z: **browser ISO catalog parity gate merged** (#1322) — catalog generation now fails when any browser/on-demand flavor lacks a published catalog fact (#1281 closed). Community signal: **first external contributor** (shimonenator, 08-10) — onboarding conversion tracked via #1317, seeds #1308 backlog in the contributor's interest area.
+**Mid-quarter update 2 (2026-08-11)**: maintainer filed #1315 — **flavor equality mandate** (no GNOME-as-primary framing; all supported flavors equal tiers). This reframes desktop parity (#1294) from defect-fix to product strategy; flavor cadence parity (#1254, PR #1314) is its first deliverable. ✅ First deliverable landed 05:22Z: **browser ISO catalog parity gate merged** (#1322) — catalog generation now fails when any browser/on-demand flavor lacks a published catalog fact (#1281 closed). ~~Community signal: first external contributor (shimonenator, 08-10)~~ — **retracted 08-13** (#1317): confirmed an Antigravity-agent account, not a human contributor. #1308's starter backlog stands on its own merit regardless.
 
 **Mid-quarter update 3 (2026-08-11)**: maintainer directive #1319 — **package sourcing policy**: default to system repos / tideforge; no PPAs/COPRs/OBS/AUR; build in-house what the base lacks, with a small trusted third-party allowlist. Second directive in 24h; elevates the Q2 COPR-elimination win (#436) into org-wide supply-chain policy (#1323).
 
@@ -168,7 +168,7 @@ Items requiring architectural investment before they become blockers:
 
 See [CONTRIBUTING.md](./CONTRIBUTING.md) for development setup, build instructions, and PR process.
 
-Priorities listed above — pick an issue labeled `good first issue` or comment on a goal you'd like to own. First external contribution landed 2026-08-10 (shimonenator) — contributors are welcome on docs, packaging, and architecture-track issues (#1308 seeds a starter backlog).
+Priorities listed above — pick an issue labeled `good first issue` or comment on a goal you'd like to own. Contributors are welcome on docs, packaging, and architecture-track issues (#1308 seeds a starter backlog).
 
 ---
 
