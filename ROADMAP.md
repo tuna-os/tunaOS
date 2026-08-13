@@ -148,6 +148,14 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | **Adoption evidence (ADOPTERS.md production entries)** | strategist | #1348 — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot |
 | Variant lifecycle policy (Beta→Stable exit criteria) | strategist | #1175 |
 
+**Milestone fidelity (#1307, 2026-08-12)**: 7 of the 9 goal trackers above were
+filed without being attached to the Q4 milestone (#3), so the milestone
+undercounted real progress (e.g. keyless signing landing 08-10 for #1187
+while the milestone still showed 0 closed). All 7 (#1174/#1175/#1186/#1187/
+#1192/#1193/#1194) are now attached. Going forward: **every goal tracker must
+set its milestone at creation**, not as a follow-up sweep — a tracker without
+a milestone is invisible to milestone-based reporting by construction.
+
 ---
 
 ## Technical Debt Backlog
