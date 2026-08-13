@@ -10,9 +10,32 @@ git clone https://github.com/tuna-os/tunaOS.git && cd tunaOS
 just fix && just check
 ```
 
-## Good First Issues
+## Contributor onboarding
 
-New here? Start with issues tagged **[good first issue](https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** — a curated, maintainer-sized set of starter tasks covering documentation parity, small script fixes, and test coverage. They are deliberately small, well-scoped, and safe to attempt without deep image-factory knowledge.
+New here? Start with a **[good first issue](https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** — a curated, maintainer-sized task covering documentation parity, a small script fix, or test coverage. Before starting, leave a comment saying you are taking the issue so the work is not duplicated.
+
+The current starter runway includes:
+
+- [#1308](https://github.com/tuna-os/tunaOS/issues/1308) — build a documentation-parity checklist for published editions
+- [#1350](https://github.com/tuna-os/tunaOS/issues/1350) — document the `pantheon` desktop suffix
+- [#1351](https://github.com/tuna-os/tunaOS/issues/1351) — add a Gurnard/Pantheon desktop guide
+- [#1366](https://github.com/tuna-os/tunaOS/issues/1366) — document checksum and SBOM verification
+- [#1385](https://github.com/tuna-os/tunaOS/issues/1385) — document supported ARM laptop hardware
+
+These tasks are intentionally independent of the image build pipeline. If one is claimed or closed, use the same issue search to choose another bounded task.
+
+### Fork → PR loop
+
+1. Fork `tuna-os/tunaos` on GitHub and clone your fork.
+2. Create a focused branch: `git switch -c docs/short-description`.
+3. Make the smallest change that satisfies the issue's acceptance criteria.
+4. Run the checks listed below, then commit and push the branch to your fork.
+5. Open a PR against `tuna-os/tunaos:main`, link the issue with `Fixes #NNN`, and include the checks you ran.
+6. Keep the branch available while review is in progress; follow-up fixes can be pushed to the same PR.
+
+You do not need write access to the upstream repository. GitHub's fork-based PR flow is the normal path for external contributors. If CI fails, include the failing job and a short reproduction in the PR rather than silently retrying it.
+
+For the Hacktoberfest 2026 backlog, see the [contributor plan](docs/HACKTOBERFEST-2026.md) for current candidates, acceptance standards, and event dates.
 
 Ways to contribute without touching the build pipeline:
 
@@ -21,6 +44,17 @@ Ways to contribute without touching the build pipeline:
 - **Labels** — issues tagged `help wanted` are explicitly open for external contribution
 
 When you pick an issue, say so in a comment (prevents double work) and ask in Matrix if you get stuck — someone is usually around.
+
+### Weekly contributor triage
+
+The maintainer reserves one 30-minute slot each week for contributor work. During that slot:
+
+1. Review new issues and label at least one bounded task `good first issue` when its scope and acceptance criteria are clear.
+2. Check claimed starter issues for unanswered questions, stale claims, or duplicate work.
+3. Review open contributor PRs, respond to blockers, and keep CI failures distinguishable from code-review requests.
+4. Refresh the starter links above when tasks are completed, superseded, or moved to another repository.
+
+This is a lightweight queue-management commitment, not a promise of immediate review. Contributors should expect an acknowledgement or status update within the next weekly triage slot.
 
 ## Pre-Commit (mandatory)
 

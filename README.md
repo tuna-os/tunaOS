@@ -11,7 +11,7 @@
 
 ---
 
-[![License](https://img.shields.io/github/license/tuna-os/tunaOS?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/github/license/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/blob/main/LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/stargazers)
 [![Issues](https://img.shields.io/github/issues/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/issues)
 [![Adopters](https://img.shields.io/badge/adopters-15_entries-2ea44f?style=for-the-badge)](ADOPTERS.md)
@@ -68,10 +68,10 @@ _Generated from the latest completed main-branch build for each variant. A cell 
 | 🐟 **Albacore** | AlmaLinux 10 (RHEL 10) | `ghcr.io/tuna-os/albacore` | GNOME, KDE, COSMIC, Niri | x86_64, x86_64/v2, arm64 |
 | 🍣 **Skipjack** | CentOS Stream 10 | `ghcr.io/tuna-os/skipjack` | GNOME, KDE, COSMIC, Niri | x86_64, arm64 |
 | 🎣 **Bonito** | Fedora 44 | `ghcr.io/tuna-os/bonito` | GNOME, KDE, COSMIC, Niri | x86_64, arm64 |
-| 🐦 **Hummingbird** | Fedora Hummingbird (experimental) | `ghcr.io/tuna-os/hummingbird` | Base only | x86_64, arm64 |
+| 🐦 **Hummingbird** | Fedora Hummingbird (experimental) | `ghcr.io/tuna-os/hummingbird` | Base, GNOME, KDE, COSMIC, Niri | x86_64, arm64 |
 | 🔒 **Redfin** | Red Hat Enterprise Linux 10 | *Local-Build Only* | GNOME, KDE, COSMIC, Niri, XFCE | x86_64, arm64 |
 | 🐟 **Grouper** | Ubuntu 26.04 | `ghcr.io/tuna-os/grouper` | GNOME, KDE, Niri, XFCE | x86_64 |
-| 🐟 **Gurnard** | Ubuntu 24.04 (Noble Numbat) | `ghcr.io/tuna-os/gurnard` | Base, Pantheon | x86_64, arm64 |
+| 🐟 **Gurnard** | Ubuntu 24.04 (Noble Numbat, experimental) | `ghcr.io/tuna-os/gurnard` | Base, Pantheon | x86_64, arm64 |
 | 🚀 **Marlin** | Arch Linux (Rolling) | `ghcr.io/tuna-os/marlin` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64 |
 | 🐡 **Flounder** | Debian 13 (Trixie) | `ghcr.io/tuna-os/flounder` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64 |
 | ☢️ **Flounder Sid** | Debian Sid (Unstable) | `ghcr.io/tuna-os/flounder:*-sid` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64 |
@@ -92,6 +92,7 @@ Image tags are constructed as `<desktop>[-hardware]`:
    * `cosmic`: COSMIC Desktop
    * `niri`: Niri (tiling Wayland compositor)
    * `xfce`: XFCE (Wayland experimental)
+   * `pantheon`: Pantheon desktop (elementary OS) — Gurnard variant, experimental
    * `base`: Plain system image with no desktop environment pre-installed (available for most variants)
 
 2. **Hardware Suffixes** (append to any desktop suffix):
@@ -111,6 +112,14 @@ Image tags are constructed as `<desktop>[-hardware]`:
 | **CPU** | x86_64, ARM64 | x86_64, ARM64 |
 | **RAM** | 4 GB | 8 GB+ |
 | **Storage** | 20 GB | 50 GB+ |
+
+### Supported hardware (ARM laptops)
+
+| Hardware | Status | Docs |
+|----------|--------|------|
+| Snapdragon X Elite (e.g. Lenovo ThinkPad X13s) | Supported | [docs.tunaos.org/bonito-x13s](https://github.com/tuna-os/docs/tree/main/docs/bonito-x13s), [docs.tunaos.org/dakota-x13s](https://github.com/tuna-os/docs/tree/main/docs/dakota-x13s) |
+| Apple Silicon (M1, M2) | Supported via [Asahi Linux](https://asahilinux.org/) | [bootc-installer-asahi](https://github.com/tuna-os/bootc-installer-asahi) |
+| Apple Silicon (M3 and newer) | Not yet supported | — |
 
 ---
 
@@ -164,6 +173,42 @@ If you're already running a compatible bootc system:
 ```bash
 sudo bootc switch ghcr.io/tuna-os/yellowfin:gnome
 ```
+
+### Verifying downloads
+
+TunaOS images and ISOs are keylessly signed (Sigstore Cosign, GitHub Actions
+OIDC identity — no project key or password) and published with SBOMs, so you
+can verify what you're running instead of trusting the download blindly.
+
+**ISOs** ship with a `.iso.sha256` checksum and a `.iso.sigstore.json`
+verification bundle alongside the image:
+
+```bash
+sha256sum --check --strict tunaos-example.iso.sha256
+
+cosign verify-blob tunaos-example.iso \
+  --bundle tunaos-example.iso.sigstore.json \
+  --certificate-identity \
+    "https://github.com/tuna-os/tunaOS/.github/workflows/reusable-build-artifacts.yml@refs/heads/main" \
+  --certificate-oidc-issuer \
+    "https://token.actions.githubusercontent.com"
+```
+
+**Container images** are signed by digest, with a signed SPDX SBOM
+attestation attached to each platform image:
+
+```bash
+digest=$(skopeo inspect docker://ghcr.io/tuna-os/yellowfin:gnome | jq -r .Digest)
+cosign verify "ghcr.io/tuna-os/yellowfin@${digest}" \
+  --certificate-identity \
+    "https://github.com/tuna-os/tunaOS/.github/workflows/reusable-build-image.yml@refs/heads/main" \
+  --certificate-oidc-issuer \
+    "https://token.actions.githubusercontent.com"
+```
+
+Full commands, the SBOM-attestation example, and the exact trust boundary
+(which identities/issuers are accepted and why) are in
+[docs/VERIFY-ARTIFACTS.md](docs/VERIFY-ARTIFACTS.md).
 
 ## Container registry authentication
 
@@ -223,6 +268,8 @@ Related Communities:
 
 ### Project Docs
 - [TunaOS Blog](https://tunaos.org/blog/modern-enterprise-linux-desktops-with-tunaos) — launch announcement and design philosophy comparison
+- [Vision](VISION.md) — project philosophy: erasing the mystique of the Linux distribution
+- [Goal](GOAL.md) — current objective: LUKS E2E fisherman migration
 - [Contributor Guide](CONTRIBUTING.md) — how to set up, build, and contribute
 - [Roll Your Own Guide](docs/ROLL_YOUR_OWN.md) — build your own custom TunaOS variant
 - [Agent Guide](docs/AGENT_GUIDE.md) — complete architecture and contributor reference
@@ -232,15 +279,19 @@ Related Communities:
 - [Secure Boot](docs/SECURE-BOOT.md) — which variants support Secure Boot out of the box
 - [Improvement Plan](docs/IMPROVEMENT_PLAN.md) — roadmap and development progress
 - [Redfin Setup](docs/rhel-setup.md) — RHEL 10 local-build instructions
-- [Developer Docs](https://tunaos.org/docs/dev/introduction) — build and contribution guide
+- [Developer Docs](https://tunaos.org/docs/tunaos/building) — build and contribution guide
 
 ### Policies & Planning
 - [Roadmap](ROADMAP.md) — project direction and feature status
+- [Q3 2026 Checkpoint](Q3_CHECKPOINT-2026-08-22.md) — decision sheet for the Q3 "Expand Coverage" milestone (#1299)
+- [Variant Lifecycle Policy](VARIANT-LIFECYCLE.md) — Stable/Beta/Alpha admission gates and deprecation rules
+- [RFC Process](RFC-PROCESS.md) — how RFCs are proposed, reviewed, and decided
 - [Package Sourcing Policy](PACKAGE-SOURCING.md) — package origin rules, Tideforge-first, and allowlist (#1319)
 - [Versioning](VERSIONING.md) — tag scheme and stability tiers
 - [Migration Guide](MIGRATION.md) — switching from other distros
 - [Security Policy](SECURITY.md) — vulnerability reporting and supported versions
 - [Adopters](ADOPTERS.md) — organizations using TunaOS
+- [Adoption Metrics](ADOPTION-METRICS.md) — how adoption is measured and reported (#1174)
 - [Code of Conduct](CODE_OF_CONDUCT.md) — community standards
 
 ### Community & Governance
@@ -286,6 +337,6 @@ Every commit, PR, and issue in this repo benefits from multi-agent collaboration
 
 *Inspired by [Bluefin](https://projectbluefin.io) and the [Universal Blue](https://universal-blue.org/) Community*
 
-*Licensed under [Apache 2.0](LICENSE)*
+*Licensed under [Apache 2.0](https://github.com/tuna-os/tunaOS/blob/main/LICENSE)*
 
 </div>

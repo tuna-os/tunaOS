@@ -101,7 +101,7 @@ Pulls the **published** image and runs the contract script against it directly (
 
 6 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
 
-Newest result 2026-08-11.
+Newest result 2026-08-12.
 
 ## Bootc Lifecycle
 
@@ -126,28 +126,28 @@ Validates bootc image update, rebase, rollback, alias resolution, and post-switc
 
 ## Installer smoke
 
-**15 of 36** non-NVIDIA ISO cells have *ever* been tested — 42% coverage. 2 of those pass.
+**31 of 36** non-NVIDIA ISO cells have *ever* been tested — 86% coverage. 0 of those pass.
 
-This is the only axis that checks a human could actually install. For 21 combinations, nobody has confirmed the installer appears on screen.
+This is the only axis that checks a human could actually install. For 5 combinations, nobody has confirmed the installer appears on screen.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ❌ | ❌ | ❌ | ✅ | ❌ |
-| **bonito** | ❌ | ❌ | ❌ | ✅ | ❌ |
-| **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **flounder** | ⬜ | ⬜ | — | — | — |
-| **grouper** | ⬜ | ⬜ | — | — | ⬜ |
+| **albacore** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **bonito** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **bonito-rawhide** | ❌ | ❌ | ⬜ | ❌ | ❌ |
+| **flounder** | ❌ | ⬜ | — | — | — |
+| **grouper** | ❌ | ⬜ | — | — | ⬜ |
 | **gurnard** | — | — | — | — | — |
-| **hummingbird** | ⬜ | ⬜ | ⬜ | ⬜ | — |
-| **marlin** | ⬜ | ⬜ | — | — | — |
-| **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **hummingbird** | ❌ | ❌ | ❌ | ❌ | — |
+| **marlin** | ❌ | ⬜ | — | — | — |
+| **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **yellowfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on hosted CI may be a harness limitation rather than a product failure. See *Known systemic gaps*.
 
 ## Live overlay
 
-**47** tags published.
+**48** tags published.
 
 Missing for 6 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-cosmic`, `hummingbird-gnome`, `hummingbird-kde`, `hummingbird-niri`
 
@@ -157,18 +157,18 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-08-11 | [31474708887](https://github.com/tuna-os/tunaOS/actions/runs/31474708887) | 47 |
+| 2026-08-12 | [31585741267](https://github.com/tuna-os/tunaOS/actions/runs/31585741267) | 56 |
+| 2026-08-12 | [31581371053](https://github.com/tuna-os/tunaOS/actions/runs/31581371053) | 47 |
 | 2026-08-09 | [31287377558](https://github.com/tuna-os/tunaOS/actions/runs/31287377558) | 3 |
 | 2026-08-09 | [31286849405](https://github.com/tuna-os/tunaOS/actions/runs/31286849405) | 18 |
 | 2026-08-09 | [31286843546](https://github.com/tuna-os/tunaOS/actions/runs/31286843546) | 18 |
-| 2026-08-08 | [31253325888](https://github.com/tuna-os/tunaOS/actions/runs/31253325888) | 1 |
 | 2026-08-08 | [31242742608](https://github.com/tuna-os/tunaOS/actions/runs/31242742608) | 1 |
 | 2026-08-08 | [31236474250](https://github.com/tuna-os/tunaOS/actions/runs/31236474250) | 1 |
 | 2026-08-08 | [31236469036](https://github.com/tuna-os/tunaOS/actions/runs/31236469036) | 1 |
-| 2026-08-08 | [31229915708](https://github.com/tuna-os/tunaOS/actions/runs/31229915708) | 4 |
 | 2026-08-07 | [31182709691](https://github.com/tuna-os/tunaOS/actions/runs/31182709691) | 2 |
 | 2026-08-07 | [31159853110](https://github.com/tuna-os/tunaOS/actions/runs/31159853110) | 1 |
 | 2026-08-07 | [31140248804](https://github.com/tuna-os/tunaOS/actions/runs/31140248804) | 1 |
+| 2026-08-07 | [31140243067](https://github.com/tuna-os/tunaOS/actions/runs/31140243067) | 1 |
 
 <!-- END GENERATED -->
 

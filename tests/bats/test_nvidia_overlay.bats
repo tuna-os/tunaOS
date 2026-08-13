@@ -381,6 +381,23 @@ run_swap() {
   grep -q "rpm -ivh .*kernel-core-${AKMODS_KVER}.rpm" "${BATS_TEST_TMPDIR}/tool.log"
 }
 
+@test "kernel-swap installs the akmods kernel set with signature checking off" {
+  # bonito-rawhide's kernel cache RPMs are not GPG-signed by ublue-os's
+  # akmods build (true for every consumer, not just rawhide) -- run
+  # 31663771496 died here on fedora-bootc:rawhide with "does not verify:
+  # no signature" on all six kernel packages, while bonito installs the
+  # identical unsigned set from the identical akmods bundle without
+  # incident. The RPMs' authenticity is already established by the pinned
+  # OCI digest of the akmods_nvidia_open build stage; --nosignature drops
+  # a GPG check that source was never going to pass, not one that would
+  # have caught tampering.
+  make_swap_stubs "6.12.0-250.el10.x86_64"
+  make_swap_fixture
+  run_swap
+  [ "$status" -eq 0 ]
+  grep -q -- 'rpm -ivh --nosignature' "${BATS_TEST_TMPDIR}/tool.log"
+}
+
 @test "kernel-swap fails loudly when the cache holds no kernel at all" {
   make_swap_stubs "$AKMODS_KVER"
   make_swap_fixture

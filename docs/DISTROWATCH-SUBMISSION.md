@@ -54,7 +54,7 @@ release cadence, verified boot reports, and an active community on Matrix.
 
 | Variant | Base | Desktop | Status |
 |---|---|---|---|
-| Yellowfin | AlmaLinux 10 | GNOME | Stable |
+| Yellowfin | AlmaLinux Kitten 10 | GNOME | Stable |
 | Albacore | AlmaLinux 10 | GNOME | Stable |
 | Bonito | Fedora | GNOME | Beta |
 | Skipjack | CentOS Stream 10 | KDE Plasma | Stable |

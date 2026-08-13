@@ -3,6 +3,14 @@
 **Milestone**: Q3 2026 "Expand Coverage" (closes 2026-09-30)
 **Tracker**: #1299 | **Prepared**: 2026-08-11 | **Last refreshed**: 2026-08-12 (T-10) | **Decision authority**: maintainer
 
+> **Correction (2026-08-13, #1317)**: every "shimonenator" reference below assumed a
+> human external contributor. The maintainer confirmed the account is a Google
+> Antigravity agent, misattributed by GitHub — `commit.author.name` is
+> `antigravity` on every one of that account's commits. There is no external
+> contributor to retain or convert into capacity; treat the "external
+> capacity" framing for #1123 Redfin below as unavailable until a real human
+> contributor appears.
+
 ## Purpose
 
 Make Q3 carryover an explicit decision, not a discovery. For every open Q3 goal, choose one of:
@@ -29,7 +37,7 @@ Make Q3 carryover an explicit decision, not a discovery. For every open Q3 goal,
 | Directive | Issue | Status | Decision needed |
 |-----------|-------|--------|-----------------|
 | Flavor equality | #1315 / #1316 | Catalog parity gate merged 08-11 (#1322, closes #1281); scheduled cadence parity pending (#1254) | STAFF cadence parity in Q3, or descope to Q4 with owner |
-| Package sourcing | #1319 / #1323 | PACKAGE-SOURCING.md drafted (PR #1330 open); third-party allowlist + per-variant audit outstanding | STAFF — merge policy doc by 08-22; audit due at checkpoint |
+| Package sourcing | #1319 / #1323 | PACKAGE-SOURCING.md merged (#1330); DNF/COPR audit landed 08-13 — found the niri desktop depends on 6 distinct unsanctioned COPRs (largest single gap: `yalter/niri-git` ships niri itself), plus a Q2 "COPR eliminated" regression (`ublue-os/packages` still feeds krunner-bazaar). apt/AUR/OBS bases (marlin/flounder/sailfin/guppy) not yet audited | STAFF — allowlist sign-off + migration plan for the niri COPR cluster at the 08-22 checkpoint |
 
 ### Supporting items for the checkpoint
 

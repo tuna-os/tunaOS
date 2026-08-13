@@ -549,7 +549,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:5f3cb6adc6057b4084b8a1844ea16069d5d6be5a48da5a4856495b9a44bce4ed  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:82d4510534784020cb991dda82a7a1be75d4cd00ceae6e81590cc1ebf7a58ab5  # :latest linux/amd64 as of 2026-06-13
       options: --privileged --security-opt seccomp=unconfined
     permissions:
       contents: read
@@ -849,32 +849,41 @@ jobs:
       - name: Sign images and attest SBOMs
         env:
           REQUIRE_SBOM: ${{ inputs.sbom }}
+          MAX_RETRIES: 3
         run: |
           set -euo pipefail
           identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/reusable-build-image.yml@${GITHUB_REF}"
           issuer="https://token.actions.githubusercontent.com"
           index_ref="${IMAGE_REGISTRY}/${IMAGE_NAME}@${INDEX_DIGEST}"
 
-          # rekor.sigstore.dev has had multi-day intermittent 502s (tunaos#1377);
-          # cosign's own single internal retry doesn't outlast that. cosign
-          # sign/attest are idempotent per digest, so retrying just the failed
-          # call (not the whole step) is safe and doesn't re-sign what already
-          # succeeded.
-          with_retry() {
-            local attempt=0
-            until "$@"; do
-              attempt=$((attempt + 1))
-              if [[ "$attempt" -ge 3 ]]; then
-                echo "::error::'$*' failed after 3 attempts"
-                return 1
-              fi
-              echo "'$*' failed (attempt ${attempt}); retrying in $((attempt * 30))s..."
-              sleep $((attempt * 30))
+          # cosign's own retry (2 attempts, sub-second apart) is not enough
+          # for a Rekor transparency-log blip that lasts minutes, which is
+          # what a real outage looks like -- not what cosign is built to
+          # ride out. Measured against run 31663727643 (flounder base):
+          #
+          #   Error: signing ... creating bundle: signing bundle: error
+          #   signing bundle: Post "https://rekor.sigstore.dev/api/v1/log/entries":
+          #   giving up after 2 attempt(s): status 502 Bad Gateway
+          #
+          # and the same signature recurred across albacore, skipjack,
+          # sailfin, bonito and bonito-rawhide within the same run window --
+          # builds that had genuinely succeeded, failing only at this step.
+          # A single unwrapped invocation turns a transient Sigstore blip
+          # into a red Promote for every flavor whose Sign+attest lands
+          # inside the window. Wrap each cosign call the same way the GHCR
+          # push retries above do: linear backoff, MAX_RETRIES attempts.
+          cosign_retry() {
+            local i
+            for i in $(seq "${MAX_RETRIES}"); do
+              "$@" && return 0
+              echo "::warning::${1} failed (attempt ${i}/${MAX_RETRIES}); retrying..." >&2
+              sleep $((5 * i))
             done
+            return 1
           }
 
-          with_retry cosign sign "$index_ref"
-          cosign verify "$index_ref" \
+          cosign_retry cosign sign "$index_ref"
+          cosign_retry cosign verify "$index_ref" \
             --certificate-identity "$identity" \
             --certificate-oidc-issuer "$issuer" >/dev/null
 
@@ -888,15 +897,15 @@ jobs:
             ref="${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}"
             sbom="supply-chain/sboms/sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${safeplatform}.spdx.json"
 
-            with_retry cosign sign "$ref"
-            cosign verify "$ref" \
+            cosign_retry cosign sign "$ref"
+            cosign_retry cosign verify "$ref" \
               --certificate-identity "$identity" \
               --certificate-oidc-issuer "$issuer" >/dev/null
             signed=$((signed + 1))
 
             if [[ -f "$sbom" ]]; then
-              with_retry cosign attest --type spdxjson --predicate "$sbom" "$ref"
-              cosign verify-attestation "$ref" \
+              cosign_retry cosign attest --type spdxjson --predicate "$sbom" "$ref"
+              cosign_retry cosign verify-attestation "$ref" \
                 --type spdxjson \
                 --certificate-identity "$identity" \
                 --certificate-oidc-issuer "$issuer" >/dev/null
@@ -1013,8 +1022,40 @@ jobs:
             --output verify-out \
             --timeout 900
 
+      # iso-e2e.sh runs under sudo, so everything it drops in verify-out is
+      # root-owned. Hand it back to the runner user BEFORE any later step
+      # reads it. This chown used to live only in "Collect evidence", which
+      # runs AFTER the tier-1 step below, and that ordering failed every
+      # desktop Gate on marlin and flounder: the tier-1 step's `if:` called
+      # hashFiles('verify-out/serial.log'), hashFiles is evaluated by the
+      # runner as the runner user, and failing to read a root-owned file is
+      # not a falsy result -- it is a template evaluation error that fails
+      # the whole job before a single step of it runs:
+      #
+      #   The template is not valid. System.InvalidOperationException:
+      #   hashFiles('verify-out/serial.log') failed. Fail to hash files
+      #   under directory '/home/runner/work/tunaOS/tunaOS'
+      #
+      # Gate is a `needs:` of Promote, so images that booted fine -- serial
+      # log carrying "Desktop experience contract passed" -- never got their
+      # bare tags. The `if:` now reads a step output instead of hashing a
+      # file, so ownership can never turn a green boot into a template error
+      # again; the chown is what makes the step's own greps work.
+      - name: Normalize verify-out ownership
+        if: always()
+        id: evidence
+        shell: bash
+        run: |
+          sudo chown -R "$USER:$(id -gn)" verify-out 2>/dev/null || true
+          if [[ -r verify-out/serial.log ]]; then
+            echo "serial=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "serial=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::verify-out/serial.log is missing or unreadable; tier-1 functional checks skipped"
+          fi
+
       - name: Run tier-1 functional checks (advisory)
-        if: always() && hashFiles('verify-out/serial.log') != ''
+        if: always() && steps.evidence.outputs.serial == 'true'
         continue-on-error: true
         shell: bash
         env:

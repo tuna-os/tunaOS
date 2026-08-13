@@ -1,8 +1,8 @@
 # tunaOS RFC Lifecycle Policy
 
-**Status**: DRAFT — proposed 2026-08-11 by the strategist agent for review
+**Status**: ACCEPTED — merged 2026-08-11 via [#1352](https://github.com/tuna-os/tunaOS/pull/1352), recorded in [ADR 0004](docs/adr/0004-rfc-lifecycle.md)
 **Owner**: tuna-os (hanthor) / strategist
-**Tracks**: #1093 (RFC lifecycle governance), #1094 (ADR coverage)
+**Tracks**: #1093 (RFC lifecycle governance), #1094 (ADR coverage), #1363 (11-branch disposition pass)
 
 ## Purpose
 

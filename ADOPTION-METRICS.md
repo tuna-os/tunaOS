@@ -25,11 +25,13 @@ publish, and *how* the snapshot feeds roadmap decisions.
 |------|--------|--------|--------------------------|------------------------------|
 | Discovery | GitHub stars / forks | GitHub API | 56 / 3 | ≥100 stars |
 | Discovery | Docs site visits, top variant pages | Cloudflare analytics on tunaos.org | not measured | ≥1k visits/mo, variant-page ranking |
+| Discovery | DistroWatch referral traffic | Cloudflare analytics referrer field, tunaos.org | not submitted yet — draft ready ([docs/DISTROWATCH-SUBMISSION.md](./docs/DISTROWATCH-SUBMISSION.md), tunaos#1333) | Submission live; referral share visible in the monthly snapshot |
 | Download | ISO downloads by variant+desktop | R2 access logs (tunaos.org/download) | **not measured** | ≥1k ISO downloads/mo; variant ranking |
 | Download | GitHub Release asset downloads | Releases API (resumed 08-09, #1106) | 0 (assets were empty shells) | assets present on all flavors; downloads counted |
 | Install | Installs / successful boots | opt-in telemetry or boot-report gating | **not measured** | Q4 design decision (#577 GUI gate, #763) |
 | Community | Open PRs from external contributors | GitHub API | 0 external contributors | ≥2 external contributor PRs merged |
 | Community | Discussion posts, `good first issue` pickups | GitHub API | 0 starter issues (dead label, #1308) | ≥5 starter issues picked up |
+| Community | Public adopters (production or evaluation), [ADOPTERS.md](./ADOPTERS.md) | Manual — PR from the adopting org, or outreach asking permission to list | 0 production entries (#1348) | ≥2–3 public evaluator/production entries |
 
 **Instrumentation order** (cheapest first):
 
@@ -48,8 +50,9 @@ publish, and *how* the snapshot feeds roadmap decisions.
 - **Monthly snapshot**, published in the ROADMAP **Community** section (first:
   **2026-11-01**, covering October — aligns with Q4 "Mature" opening).
 - Snapshot format: downloads by variant × desktop (top 10), stars/forks,
-  external-contributor PRs, release-asset presence per flavor, and a one-line
-  "variant ranking" that flags under-/over-performing editions.
+  external-contributor PRs, release-asset presence per flavor,
+  [ADOPTERS.md](./ADOPTERS.md) production/evaluation entry count, and a
+  one-line "variant ranking" that flags under-/over-performing editions.
 - Ownership: **strategist** compiles; **ci-maintainer** supplies R2/Releases
   exports; **guide** publishes on tunaos.org/blog.
 

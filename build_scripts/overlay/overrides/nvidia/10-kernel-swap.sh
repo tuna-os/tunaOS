@@ -106,7 +106,29 @@ else
 	# image supplies the rest (dracut, kmod, linux-firmware). The old
 	# kernels were already erased with rpm --erase --nodeps above, so the
 	# -i install has no version conflicts.
-	rpm -ivh "${RPM_FILES[@]}"
+	#
+	# --nosignature is required, not optional, on bonito-rawhide
+	# (base_image quay.io/fedora/fedora-bootc:rawhide). The akmods kernel
+	# cache RPMs are not GPG-signed by ublue-os's akmods build for ANY
+	# consumer -- bonito installs the identical unsigned set from the
+	# identical coreos-stable akmods bundle without incident (its failure
+	# in the SAME run window was purely the unrelated sed bug one script
+	# later, in 20-nvidia.sh -- proof this step passed for it). What
+	# differs on rawhide is the base image's own rpm signature-verify
+	# policy, which fedora-bootc:rawhide sets stricter than bonito's base:
+	#
+	#   package kernel-modules-core-7.1.4-100.fc43.x86_64 does not
+	#   verify: no signature
+	#
+	# on all six kernel packages uniformly (run 31663771496,
+	# bonito-rawhide gnome-nvidia) -- a property of the bundle, not
+	# corruption of a subset. The actual trust boundary for this content
+	# is already the pinned OCI digest of the akmods_nvidia_open build
+	# stage (Containerfile.overlay); the GPG check on top of that is
+	# redundant for a source that was never signed to begin with, and
+	# failing on its absence here blocks every *-nvidia flavor of the one
+	# variant that runs on a base image strict enough to enforce it.
+	rpm -ivh --nosignature "${RPM_FILES[@]}"
 
 	# Remove the OLD kernel's module directory outright. `rpm --erase` above
 	# removes only rpm-OWNED files; generated ones (initramfs.img, depmod

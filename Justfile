@@ -10,6 +10,7 @@ yq := `which yq`
 export platform := env("PLATFORM", if arch == "x86_64" { if `rpm -q kernel 2>/dev/null | grep -q "x86_64_v2$"; echo $?` == "0" { "linux/amd64/v2" } else { "linux/amd64" } } else if arch == "arm64" { "linux/arm64" } else if arch == "aarch64" { "linux/arm64" } else { error("Unsupported ARCH '" + arch + "'. Supported values are 'x86_64', 'aarch64', and 'arm64'.") })
 
 import 'just/utilities.just'
+import 'just/custom-overlay.just'
 
 # ==============================================================================
 #  BUILD PIPELINE
@@ -49,36 +50,6 @@ _build target_tag_with_version target_tag container_file base_image_for_build ta
     export YQ="{{ yq }}"
     # OVERLAY_TYPE inherited from parent shell (exported by build recipe)
     ./scripts/build-image-inner.sh
-
-# Build a custom TunaOS overlay using the configuration in custom/
-build-custom base="" tag="": _ensure-deps
-    #!/usr/bin/env bash
-    set -euo pipefail
-    BASE_IMAGE="{{ base }}"
-    if [[ -z "${BASE_IMAGE}" ]]; then
-        BASE_IMAGE=$(python3 -c "import re; open_f = open('custom/image.yaml').read(); print(re.search(r'base:\s*(\S+)', open_f).group(1))" 2>/dev/null || echo "ghcr.io/tuna-os/yellowfin:gnome")
-    fi
-    TARGET_TAG="{{ tag }}"
-    if [[ -z "${TARGET_TAG}" ]]; then
-        TARGET_TAG=$(python3 -c "import re; open_f = open('custom/image.yaml').read(); print(re.search(r'tag:\s*(\S+)', open_f).group(1))" 2>/dev/null || echo "my-custom-os")
-    fi
-    echo "==> Building custom image based on ${BASE_IMAGE} as localhost/${TARGET_TAG}..."
-    podman build \
-        --file Containerfile.custom \
-        --build-arg BASE_IMAGE="${BASE_IMAGE}" \
-        --tag "localhost/${TARGET_TAG}" \
-        .
-
-# Build QCOW2 from custom TunaOS image
-run-custom-vm tag="":
-    #!/usr/bin/env bash
-    set -euo pipefail
-    TARGET_TAG="{{ tag }}"
-    if [[ -z "${TARGET_TAG}" ]]; then
-        TARGET_TAG=$(python3 -c "import re; open_f = open('custom/image.yaml').read(); print(re.search(r'tag:\s*(\S+)', open_f).group(1))" 2>/dev/null || echo "my-custom-os")
-    fi
-    # Use scripts/build-qcow2.sh to build the QCOW2 from local image
-    ./scripts/build-qcow2.sh "localhost/${TARGET_TAG}"
 
 # Build a TunaOS variant
 build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest' chain_base_image='' enable_sshd="0": _ensure-deps
@@ -417,40 +388,12 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     echo "✓ Created $OUTPUT"
 
 # ==============================================================================
-#  CUSTOMIZATION OVERLAY PIPELINE
+#  RUN / VM PIPELINE
 # ==============================================================================
-
-# Validate custom/ directory schema, syntax, and flatpaks
-check-custom:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    echo "==> Validating custom/ overlay configuration..."
-    if [[ -f custom/packages.yaml ]]; then
-        if INVALID=$(grep -nvE '^[[:space:]]*(#.*)?$|^[a-zA-Z0-9_-]+[[:space:]]*:|^[[:space:]]*-[[:space:]]*' custom/packages.yaml); then
-            printf 'Warning: custom/packages.yaml lines that are neither a mapping key nor a list item:\n%s\n' "$INVALID"
-        fi
-        echo "✓ custom/packages.yaml parsed successfully"
-    fi
-    for hook in custom/build.pre.sh custom/build.post.sh; do
-        if [[ -f "$hook" ]]; then
-            bash -n "$hook"
-            echo "✓ $hook syntax valid"
-        fi
-    done
-    echo "✓ Custom configuration check passed."
-
-# Build a live ISO from a custom overlay image
-custom-iso base_image='':
-    #!/usr/bin/env bash
-    set -euo pipefail
-    {{ just }} build-custom "{{ base_image }}"
-    TAG="my-custom-os"
-    if [[ -f "custom/image.yaml" ]]; then
-        T=$(python3 -c "import re; m = re.search(r'^tag:\s*(.+)$', open('custom/image.yaml').read(), re.M); print(m.group(1).strip() if m else '')")
-        [[ -n "$T" ]] && TAG="$T"
-    fi
-    echo "==> Generating live ISO for localhost/${TAG}:latest..."
-    sudo -E bash ./scripts/build-iso-tacklebox.sh "custom" "${TAG}" "local" "${TAG}" "1"
+# (build-custom, run-custom-vm, check-custom, custom-iso moved to
+#  just/custom-overlay.just — #508, this banner previously mislabeled this
+#  whole section "CUSTOMIZATION OVERLAY PIPELINE" though only those four
+#  recipes were customization-specific; everything below is VM/run/demo.)
 
 # Boot an image in QEMU via browser (uses ghcr.io/qemus/qemu)
 run-qcow2 variant flavor='gnome':

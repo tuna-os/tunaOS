@@ -78,7 +78,15 @@ fi
 
 MODULE_FILE=""
 if [[ -n "$KVER" ]]; then
-	MODULE_FILE="$(find "${NV_ROOT}/usr/lib/modules/${KVER}" -name 'nvidia.ko*' -print -quit 2>/dev/null || true)"
+	# nvidia-current.ko.xz, not nvidia.ko: Debian's nvidia-kernel-dkms is
+	# alternatives-managed and its DKMS module is named nvidia-current. The
+	# core module only, so the modinfo version check below does not end up
+	# reading -modeset/-drm/-uvm/-peermem instead.
+	for _nv_base in nvidia nvidia-current; do
+		MODULE_FILE="$(find "${NV_ROOT}/usr/lib/modules/${KVER}" -name "${_nv_base}.ko*" -print -quit 2>/dev/null || true)"
+		[[ -n "$MODULE_FILE" ]] && break
+	done
+	unset _nv_base
 	if [[ -n "$MODULE_FILE" ]]; then
 		pass "dkms built a module for ${KVER} (${MODULE_FILE#"${NV_ROOT}"})"
 	else
