@@ -23,12 +23,14 @@ failure, verified upgrades. The desktop updates like a container fleet, and
 stays on a current GNOME while the base tracks Fedora's lifecycle.
 
 **Why it fits Fedora Magazine.** Fedora is where the container-native desktop
-idea is most alive — the COPR backports, the bootc work, and the growing
-group of Fedora-based immutable spins (including our Niri and XFCE flavors,
-which build on Fedora infrastructure). TunaOS has also been packaging GNOME
-49/50/51 backports via Fedora COPR for CentOS Stream 10 and Fedora bases, so
-the post can cover both the Bonito image itself and the wider packaging
-effort — genuinely Fedora ecosystem news, not an advert.
+idea is most alive — the bootc work, and the growing group of Fedora-based
+immutable spins (including our Niri and XFCE flavors, which build on Fedora
+infrastructure). TunaOS also packages current GNOME backports (49/50/51) for
+CentOS Stream 10 and Fedora bases through its own native RPM build chain,
+published to a project-run repository — Fedora COPR is legacy/compatibility
+infrastructure for us now, being phased out — so the post can cover both the
+Bonito image itself and the wider packaging effort — genuinely Fedora
+ecosystem news, not an advert.
 
 **What we'd include.** A short tour of Bonito: what it is, how bootc changes
 the update model, what works today (Fedora 44 base, GNOME, Niri, XFCE
