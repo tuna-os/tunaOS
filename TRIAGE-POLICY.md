@@ -1,6 +1,6 @@
 # tunaOS Issue Triage Policy
 
-**Status**: DRAFT — proposed 2026-08-13 by the strategist agent for review
+**Status**: ADOPTED — merged via [#1438](https://github.com/tuna-os/tunaOS/pull/1438) on 2026-08-13
 **Owner**: tuna-os (hanthor) / strategist
 **Tracks**: #1195 (this finding), #1168 (Q4 community governance goal)
 
