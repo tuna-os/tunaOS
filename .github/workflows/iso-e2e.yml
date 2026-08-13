@@ -110,8 +110,9 @@ jobs:
           # Mirrors the `if:` on the download step below: source=artifact
           # never touches R2, so it must not be blocked on R2 secrets.
           NEEDS_R2: ${{ github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest' }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
             if [[ "${DISPATCH_VARIANT}" != "${{ matrix.variant }}" ]] \
                || [[ "${DISPATCH_FLAVOR}" != "${{ matrix.flavor }}" ]]; then
               echo "skip=true" >> "$GITHUB_OUTPUT"
