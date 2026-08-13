@@ -1,4 +1,4 @@
-# ADR 0003: Flavor equality — no primary desktop tier
+# ADR 0005: Flavor equality — no primary desktop tier
 
 - Status: accepted (implemented)
 - Date: 2026-08-11
