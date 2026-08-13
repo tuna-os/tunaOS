@@ -176,8 +176,18 @@ if [[ ! -f /usr/lib/dracut/dracut.conf.d/99-nvidia.conf ]]; then
 	exit 1
 fi
 sed -i 's@omit_drivers@force_drivers@g' /usr/lib/dracut/dracut.conf.d/99-nvidia.conf
-# as we need forced load, also must pre-load intel/amd iGPU else chromium web browsers fail to use hardware acceleration
-sed -i 's@ nvidia @ i915 amdgpu nvidia @g' /usr/lib/dracut/dracut.conf.d/99-nvidia.conf
+# As we need forced load, also must pre-load intel/amd iGPU else chromium web
+# browsers fail to use hardware acceleration. tunaos#1499: also force
+# sr_mod/cdrom/virtio_blk — --no-hostonly alone stopped being enough to
+# guarantee these on the live ISO / installed-disk boot path on this
+# negativo17 conf; they started coming up missing from the rebuilt
+# initramfs on every *-nvidia nightly (10/10 red 08-03..08-13) while present
+# in the parent (non-nvidia) image's initramfs and in this image's own
+# initramfs before this 99-nvidia.conf edit. virtio_scsi/isofs/squashfs/
+# overlay/loop were unaffected, so this isn't a wholesale hostonly-detection
+# failure — just these three. Same mechanism as i915/amdgpu: force them in
+# explicitly rather than trust generic-mode autodetection to include them.
+sed -i 's@ nvidia @ i915 amdgpu nvidia sr_mod cdrom virtio_blk @g' /usr/lib/dracut/dracut.conf.d/99-nvidia.conf
 
 # Make sure initramfs is rebuilt after nvidia drivers or kernel replacement
 /usr/bin/dracut --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible --tmpdir /boot --zstd -v --add ostree -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
