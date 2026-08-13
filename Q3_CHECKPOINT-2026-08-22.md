@@ -1,7 +1,7 @@
 # Q3 2026 Checkpoint — Decision Sheet (2026-08-22)
 
 **Milestone**: Q3 2026 "Expand Coverage" (closes 2026-09-30)
-**Tracker**: #1299 | **Prepared**: 2026-08-11 | **Last refreshed**: 2026-08-12 (T-10) | **Decision authority**: maintainer
+**Tracker**: #1299 | **Prepared**: 2026-08-11 | **Last refreshed**: 2026-08-13 (T-9) | **Decision authority**: maintainer
 
 ## Purpose
 
@@ -31,6 +31,13 @@ Make Q3 carryover an explicit decision, not a discovery. For every open Q3 goal,
 | Flavor equality | #1315 / #1316 | Catalog parity gate merged 08-11 (#1322, closes #1281); scheduled cadence parity pending (#1254) | STAFF cadence parity in Q3, or descope to Q4 with owner |
 | Package sourcing | #1319 / #1323 | PACKAGE-SOURCING.md drafted (PR #1330 open); third-party allowlist + per-variant audit outstanding | STAFF — merge policy doc by 08-22; audit due at checkpoint |
 
+### Operational blockers added 2026-08-12–13 (must also be framed)
+
+| Blocker | Issue | Evidence | Decision needed |
+|---------|-------|----------|----------------|
+| NVIDIA flavor family | #1383 | All six NVIDIA releases have shipped zero assets since 07-05/07-12; overlay failures remain red in the 08-13 nightly matrix (#1376/#1379/#1382) | STAFF only if nightly builds are green and `gnome-nvidia` assets are republished by 09-01; otherwise DESCOPE the all-flavors Q3 claim |
+| Publish-path resilience | #1377 / #1187 | `rekor.sigstore.dev` 502s have blocked variant image builds since 08-07, including the 08-13 nightly; downstream Gate/Promote jobs cannot proceed | Carry the resilience requirement into Q4 #1187: retry/backoff plus offline attestation or an alternate transparency log |
+
 ### Supporting items for the checkpoint
 
 - **Contributor retention → capacity**: shimonenator is ACTIVE (8 commits 08-10/11 across tunaOS + xfce-linux; last 08-11 20:26Z). 14-day window closes ~08-24 — 2 days AFTER this checkpoint. Recommend converting retention into capacity: seed GFI-scoped Bonito/Redfin packaging subtasks for the contributor **at** the checkpoint, so #272/#1123 staff tests can borrow external capacity instead of maintainer-only time.
@@ -39,6 +46,7 @@ Make Q3 carryover an explicit decision, not a discovery. For every open Q3 goal,
 - **Release parity**: GNOME releases are now daily (08-09 → 08-11, 3 assets each). kde/xfce/niri/gnome-nvidia still stale 30–37 days (#1254). Browser-catalog parity gate (#1322) fixed the on-demand path; the scheduled GitHub Releases pipeline remains GNOME-only.
 - **New planning debt (mid-cycle)**: wootc ROADMAP merged (wootc#116) but CONTRIBUTING/LICENSE still missing (#1358); gtk-office-suite planning gap open (#1359); tromso stable release untracked (no releases, no milestones — core build tooling; filed as new tracker this cycle).
 - **Enterprise posture**: ADOPTERS.md empty vs Q4 "Mature" claim (#1348); RHEL10/AlmaLinux topics on repo but Redfin alpha dropped (#1123); branch protection unverified (#1167).
+- **Nightly reliability (08-13)**: the rekor outage is now a week-long recurring SPOF (#1377), while GHCR arm64 login failures add a second failure class. GNOME ISO daily releases remain unaffected because they use a separate path.
 
 ## Strategist recommendation (input — decision authority stays with maintainer)
 
@@ -61,6 +69,7 @@ Make Q3 carryover an explicit decision, not a discovery. For every open Q3 goal,
 | #1094 ADR coverage | ⬜ | | | |
 | #1316 Flavor equality | ⬜ | | | |
 | #1323 Package sourcing | ⬜ | | | |
+| #1383 NVIDIA flavor family | ⬜ | | | |
 
 ## Outcome recording
 
