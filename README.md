@@ -11,7 +11,7 @@
 
 ---
 
-[![License](https://img.shields.io/github/license/tuna-os/tunaOS?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/github/license/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/blob/main/LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/stargazers)
 [![Issues](https://img.shields.io/github/issues/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/issues)
 [![Adopters](https://img.shields.io/badge/adopters-15_entries-2ea44f?style=for-the-badge)](ADOPTERS.md)
@@ -286,6 +286,6 @@ Every commit, PR, and issue in this repo benefits from multi-agent collaboration
 
 *Inspired by [Bluefin](https://projectbluefin.io) and the [Universal Blue](https://universal-blue.org/) Community*
 
-*Licensed under [Apache 2.0](LICENSE)*
+*Licensed under [Apache 2.0](https://github.com/tuna-os/tunaOS/blob/main/LICENSE)*
 
 </div>
