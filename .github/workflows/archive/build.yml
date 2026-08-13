@@ -107,6 +107,10 @@ jobs:
         run: |
           IMAGE_VARIANTS="yellowfin albacore skipjack bonito"
           PR_HWE_GDX_RELATED="$PR_HWE_GDX"
+          RECHUNK=true
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            RECHUNK=false
+          fi
 
           if [[ "$EVENT_NAME" == "workflow_dispatch" && "$INPUT_IMAGE_VARIANT" != "all" ]]; then
             IMAGE_VARIANTS="$INPUT_IMAGE_VARIANT"
@@ -225,7 +229,7 @@ jobs:
               \"run_kde\": ${RUN_KDE},
               \"run_kde_hwe_gdx\": ${RUN_KDE_HWE_GDX},
               \"run_niri_hwe_gdx\": ${RUN_NIRI_HWE_GDX},
-              \"rechunk\": ${{ github.event_name != 'pull_request' }},
+              \"rechunk\": ${RECHUNK},
               \"sbom\": false,
               \"publish\": true
             }]")"
