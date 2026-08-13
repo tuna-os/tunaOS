@@ -59,6 +59,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           BRANCH: automation/readme-build-status
+          MAX_RETRIES: 3
         run: |
           set -euo pipefail
           if git diff --quiet -- README.md; then
@@ -74,7 +75,29 @@ jobs:
           git checkout -b "$BRANCH"
           git add README.md
           git commit -m "docs: refresh build matrix status ($(date -u +%Y-%m-%d))"
-          git push --force origin "$BRANCH"
+
+          # Retried with linear backoff, same idiom as the GHCR push retry in
+          # reusable-build-image.yml: the 2026-08-13 13:30 UTC run died on a
+          # single unretried attempt hitting a transient GitHub 500 --
+          #   remote: Internal Server Error
+          #   ! [remote rejected] automation/readme-build-status ->
+          #     automation/readme-build-status (Internal Server Error)
+          # -- which froze the table exactly the way the merge-queue rejection
+          # did before this workflow started opening a PR at all. One flaky
+          # push should not cost the whole refresh.
+          push_ok=0
+          for i in $(seq "${MAX_RETRIES}"); do
+            if git push --force origin "$BRANCH"; then
+              push_ok=1
+              break
+            fi
+            echo "::warning::git push failed (attempt ${i}/${MAX_RETRIES}); retrying..."
+            sleep $((5 * i))
+          done
+          if [[ "$push_ok" -ne 1 ]]; then
+            echo "::error::git push failed after ${MAX_RETRIES} attempts"
+            exit 1
+          fi
 
           if [[ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]]; then
             gh pr create --base main --head "$BRANCH" \
