@@ -12,15 +12,28 @@ just fix && just check
 
 ## Contributor onboarding
 
-New here? Start with a **[good first issue](https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** — a curated, maintainer-sized task covering documentation parity, a small script fix, or test coverage. Before starting, leave a comment saying you are taking the issue so the work is not duplicated.
+New here? Start with a **[good first issue](https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** or **[help wanted](https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22help+wanted%22)** issue — a curated, maintainer-sized task covering documentation parity, a small script fix, or test coverage. Before starting, leave a comment saying you are taking the issue so the work is not duplicated.
 
 The current starter runway includes:
 
-- [#1308](https://github.com/tuna-os/tunaOS/issues/1308) — build a documentation-parity checklist for published editions
-- [#1350](https://github.com/tuna-os/tunaOS/issues/1350) — document the `pantheon` desktop suffix
+- [#1496](https://github.com/tuna-os/tunaOS/issues/1496) — link orphaned docs in the README Documentation section
+- [#1308](https://github.com/tuna-os/tunaOS/issues/1308) — seed and maintain the good-first-issue backlog
 - [#1351](https://github.com/tuna-os/tunaOS/issues/1351) — add a Gurnard/Pantheon desktop guide
-- [#1366](https://github.com/tuna-os/tunaOS/issues/1366) — document checksum and SBOM verification
-- [#1385](https://github.com/tuna-os/tunaOS/issues/1385) — document supported ARM laptop hardware
+
+This list is a snapshot, not a second issue tracker. Use the label queries
+above for the current queue; weekly triage must remove completed links and add
+new bounded tasks rather than letting this list go stale.
+
+The repository checks this queue weekly. To verify it locally (requires the
+GitHub CLI and read access), run:
+
+```bash
+GITHUB_REPOSITORY=tuna-os/tunaos ./scripts/check-gfi-pool.sh
+```
+
+The check is a read-only alarm, not an auto-labeler. If either onboarding
+label falls below three open issues, add or refresh a bounded task during
+weekly triage before changing the contributor-facing links.
 
 These tasks are intentionally independent of the image build pipeline. If one is claimed or closed, use the same issue search to choose another bounded task.
 
