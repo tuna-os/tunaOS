@@ -26,6 +26,50 @@ tunaOS is an open-source project building OCI-based Enterprise Linux desktops. W
 - **GitHub Issues**: Bug reports, feature requests, discussion
 - **GitHub Discussions**: General topics, ideas, Q&A
 - **PR Reviews**: All contributions reviewed within 48 hours
+- **Matrix**: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia) — real-time chat, weekly release notes, monthly office hours (see below)
+
+### Matrix room cadence
+
+The Matrix room is the project's real-time channel; this section documents
+its recurring structure so it doesn't rely on any one person's memory to
+keep going (#1136).
+
+- **Weekly release notes** (Fridays, mirroring the [weekly boot
+  report](https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+label%3Aboot-report)
+  cadence): post a short summary of the week's [Generate
+  Release](.github/workflows/generate-changelog-release.yml) runs and any
+  notable boot-report findings. Template:
+
+  ```
+  📦 This week in tunaOS — <date>
+
+  - Released: <variant/flavor list + dates, from `gh release list`>
+  - Boot health: <link to this week's boot-report issue>
+  - Notable changes: <1-3 bullets — new variant, fixed regression, etc.>
+  - Full changelog: <link to the release/CHANGELOG.md entry>
+  ```
+
+- **Monthly office hours** (~30 min, announced 1 week ahead in the room):
+  open Q&A / walkthrough slot. No fixed agenda beyond "bring questions."
+
+- **`#new-to-tunaos` pinned message** — the three best entry points for
+  someone new to the room:
+
+  ```
+  👋 New here? Start with one of these:
+
+  1. Try it: bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/yellowfin:gnome
+  2. Pick a starter task: issues labeled "good first issue"
+     → https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
+  3. Read CONTRIBUTING.md and COMMUNITY.md (this file) before your first PR
+
+  Questions are welcome any time — you don't need to wait for office hours.
+  ```
+
+- **Cross-posting GitHub Discussions**: when a Discussions thread gets real
+  engagement (multiple replies, a maintainer answer, a decision), drop a
+  one-line summary + link into the room. Keeps the room aware of
+  async-first conversations without duplicating them live.
 
 ### Adoption Metrics
 
