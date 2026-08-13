@@ -90,8 +90,18 @@ jobs:
           DATE=$(date -u +%Y-%m-%d)
           NOW=$(date -u +%Y-%m-%dT%H:%M:%SZ)
           BRANCH="upstream-snapshots/${DATE}"
-          # Stable branch per-week so re-runs the same week reuse it.
-          git checkout -b "$BRANCH" 2>/dev/null || git checkout "$BRANCH"
+          # Stable branch per-week so re-runs the same week reuse it. The
+          # checkout action starts from the default branch and does not fetch
+          # arbitrary remote branches, so fetch the existing branch before
+          # using force-with-lease below. Without this, a same-week rerun can
+          # fail even though the branch and PR are both still valid (#1194).
+          if git ls-remote --exit-code origin "refs/heads/${BRANCH}" >/dev/null 2>&1; then
+            git fetch --no-tags origin \
+              "refs/heads/${BRANCH}:refs/remotes/origin/${BRANCH}"
+            git checkout -B "$BRANCH" "origin/$BRANCH"
+          else
+            git checkout -b "$BRANCH"
+          fi
           git add _upstream-snapshots/
           if git diff --cached --quiet; then
             echo "Nothing staged after add — skip"
