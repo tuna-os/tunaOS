@@ -47,6 +47,26 @@ Cosign prints the verified in-toto statement. Its `subject[].digest.sha256`
 must match the digest in `ref`. The predicate contains the SPDX document for
 that platform image.
 
+## Verify the provenance attestation
+
+Each published platform image also has a signed provenance attestation
+recording the source commit, workflow/run, variant, flavor, platform, and
+build-config revision it was produced from:
+
+```bash
+cosign verify-attestation "${ref}" \
+  --type https://tunaos.org/provenance/v1 \
+  --certificate-identity \
+    "https://github.com/tuna-os/tunaOS/.github/workflows/reusable-build-image.yml@refs/heads/main" \
+  --certificate-oidc-issuer \
+    "https://token.actions.githubusercontent.com"
+```
+
+The predicate's `sourceCommit` and `buildConfigRevision` should match the
+commit you expect this image to have been built from. This attestation does
+not currently pin the resolved base-image digest — see tunaos#1187 for that
+remaining gap.
+
 ## Trust boundary
 
 The accepted identity is intentionally narrow:
