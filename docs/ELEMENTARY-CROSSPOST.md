@@ -6,14 +6,14 @@
 
 ## Cross-post summary (3–4 paragraphs, submission-ready)
 
-**Title (working): Pantheon, anywhere: Gurnard brings the elementary desktop to Ubuntu 24.04 LTS**
+**Title (working): Pantheon beyond elementary OS: Gurnard brings the desktop to Ubuntu 24.04 LTS**
 
-If you love the Pantheon desktop — the calm, minimal environment at the heart
-of elementary OS — you mostly had to run elementary OS itself to get it. A new
-project called [TunaOS](https://tunaos.org) just made that choice bigger:
-**Gurnard** pairs Ubuntu 24.04 LTS with Pantheon, wrapped in an atomic,
-container-native core. It's the first widely-buildable way to get the
-elementary desktop on a standard Ubuntu LTS base.
+If you love the Pantheon desktop — the calm, minimal environment associated
+with elementary OS — you may also want to try it on another base. A community
+project called [TunaOS](https://tunaos.org) has built **Gurnard**, an
+experimental image that pairs Ubuntu 24.04 LTS with Pantheon and a
+container-native core. This is a TunaOS community project, not an elementary
+OS release or endorsement.
 
 Gurnard keeps what makes Pantheon special — the elegant shell, the
 application-centric workflow, the clean out-of-the-box feel — while the base
@@ -22,13 +22,13 @@ updates, rollback on failure, verified upgrades. Flathub and Homebrew come
 pre-enabled, so apps and tools are a click away. The images ship for both
 x86_64 and arm64.
 
-Why does this matter for the elementary community? Because Pantheon is
-packaging surface that deserves to live beyond one distribution. Gurnard is
-experimental today (`ghcr.io/tuna-os/gurnard:base` and `:pantheon`) — the
-right time to try it is now, while bug reports are cheap to fix and can shape
-the packaging before the surface settles. Think of it as a second home for
-Pantheon: same desktop, new foundation, and a project that explicitly lists
-elementary OS in its ecosystem table.
+Why does this matter for the elementary community? Because it gives Pantheon
+users another place to test the desktop and gives packagers concrete feedback
+about a non-elementary base. Gurnard is experimental today
+(`ghcr.io/tuna-os/gurnard:base` and `:pantheon`) — the right time to try it is
+now, while bug reports are cheap to fix and can shape the packaging before the
+surface settles. TunaOS lists elementary OS in its ecosystem table as a
+desktop relationship; that listing is not a claim of endorsement or use.
 
 If you're curious: [announcement post](https://tunaos.org/blog/2026/08/12/announcing-gurnard-ubuntu-pantheon),
 [download](https://tunaos.org/download), or join the conversation on
@@ -42,8 +42,9 @@ elementary users about what a Pantheon-on-Ubuntu should feel like.
 >
 > TunaOS just shipped Gurnard — Ubuntu 24.04 LTS with the Pantheon desktop as
 > an atomic bootc image. We'd love to feature a short cross-post on the
-> elementary blog/planet or community forum, framed around "Pantheon on a
-> non-elementary base" and what that means for the desktop's reach.
+> elementary blog/planet or community forum, framed around “Pantheon on a
+> non-elementary base” and what that means for the desktop's reach. This is a
+> TunaOS community proposal, not a request to imply elementary OS endorsement.
 >
 > Happy to adapt tone/length to your editorial style. Full announcement:
 > https://tunaos.org/blog/2026/08/12/announcing-gurnard-ubuntu-pantheon
@@ -69,8 +70,13 @@ Before sending, the maintainer should confirm:
 
 - [ ] Gurnard's experimental status, Ubuntu 24.04 base, tested architectures,
       and current download URL are accurate.
+- [ ] The `base` and `pantheon` image references resolve to the currently
+      published Gurnard artifacts, or the pitch uses the current release URL
+      instead of stale tags.
 - [ ] The pitch does not imply elementary OS endorses, supports, or uses
       TunaOS; it describes a TunaOS community proposal.
+- [ ] The destination accepts this kind of community submission and the final
+      copy follows its current length, attribution, and link rules.
 - [ ] The [Pantheon feedback tracker](https://github.com/tuna-os/tunaos/issues/1469)
       is linked for technical reports.
 - [ ] The destination and date are recorded in the monthly adoption snapshot.
