@@ -72,6 +72,36 @@ jobs:
           # And what the process actually ends up with if it is accepted.
           sudo bash -c 'ulimit -n 4096 2>/dev/null; printf "after raise: soft=%s hard=%s\n" "$(ulimit -Sn)" "$(ulimit -Hn)"' || true
 
+      # The decisive one. Everything above says the *fix* works; this says
+      # whether the fix is what is doing the work. If podman fails here with
+      # the production error signature at sudo's default soft limit of 1024,
+      # the model is confirmed: 1024 descriptors is not enough for 2048 locks,
+      # `ulimit -n 4096` is what rescues it, and the production failure means
+      # that ulimit is somehow not in effect there -- a different question
+      # from "is the diagnosis right".
+      #
+      # If podman instead SUCCEEDS at 1024, the whole descriptor story is
+      # wrong and the real cause is elsewhere.
+      - name: Does podman actually fail at sudo's default 1024?
+        run: |
+          echo "sudo default soft limit: $(sudo bash -c 'ulimit -Sn')"
+          if sudo bash -c 'podman info >/dev/null' 2>/tmp/nolimit.err; then
+            echo "sudo podman info WITHOUT ulimit: OK -- descriptor story does not hold"
+            echo '| sudo `podman info` (no ulimit) | OK -- unexpected | |' \
+              >> "$GITHUB_STEP_SUMMARY"
+          else
+            rc=$?
+            echo "sudo podman info WITHOUT ulimit: FAILED rc=${rc}"
+            tail -3 /tmp/nolimit.err
+            if grep -q 'libpod_lock' /tmp/nolimit.err; then
+              echo '| sudo `podman info` (no ulimit) | FAILS with the production libpod_lock error | |' \
+                >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| sudo \`podman info\` (no ulimit) | FAILED rc=${rc}, different error | |" \
+                >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+
       - name: What podman itself reports
         run: |
           echo "--- podman version ---"
