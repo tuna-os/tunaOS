@@ -135,7 +135,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 |------|-------|--------------|
 | Tacklebox decoupling | architect | #306 (closed — needs new tracker) |
 | Upstream snapshot automation | ci-maintainer | #307 (closed — needs new tracker) |
-| Branch protection + required CI | strategist | CI health, #1167 |
+| Branch protection + required CI | strategist | CI health, #1167 — audited 2026-08-13: [BRANCH-PROTECTION.md](./docs/BRANCH-PROTECTION.md), active `main` ruleset has no required-status-checks rule; proposed list is `lint`, `lint-summary`, `unit-tests` |
 | Supply chain hardening | sec-check | #1193 (tracker; #212/#301 closed) — coordinates with #1187 (package signing/SBOM is the largest hardening item, tracked there in detail) |
 | Release automation | ci-maintainer | CI health, VERSIONING.md, #1186 |
 | Community governance model | strategist | #1168 |
