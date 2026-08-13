@@ -120,8 +120,8 @@ VERIFY_DEBIAN_SH="${REPO_ROOT}/build_scripts/checks/verify-nvidia-debian.sh"
   [ "$status" -eq 0 ]
 }
 
-@test "nvidia-debian 20-nvidia.sh proves the module by finding nvidia.ko, not by trusting dkms status text" {
-  run grep -F "find \"/usr/lib/modules/\${KVER}\" -name 'nvidia.ko*'" "$DEBIAN_INSTALL_SH"
+@test "nvidia-debian 20-nvidia.sh proves the module by finding it on disk, not by trusting dkms status text" {
+  run grep -F 'find "/usr/lib/modules/${KVER}" -name "${_nv_base}.ko*"' "$DEBIAN_INSTALL_SH"
   [ "$status" -eq 0 ]
 }
 
@@ -269,7 +269,15 @@ make_good_debian_root() {
     "$r/usr/share/vulkan/icd.d" \
     "$r/usr/lib/dracut/dracut.conf.d" \
     "$nvlib"
-  touch "$r/usr/lib/modules/${KVER}/nvidia.ko.zst"
+  # nvidia-current.ko.xz is what Debian's alternatives-managed
+  # nvidia-kernel-dkms actually installs, straight from flounder's build log:
+  #   Installing /lib/modules/6.12.101+deb13-amd64/updates/dkms/nvidia-current.ko.xz
+  # This fixture used to write nvidia.ko.zst -- the Fedora/Arch name -- so it
+  # agreed with the script's glob instead of with Debian, and the check passed
+  # here while failing every real nvidia build. The sibling module is written
+  # too, so a glob that grabs the wrong one cannot pass by accident.
+  touch "$r/usr/lib/modules/${KVER}/nvidia-current.ko.xz"
+  touch "$r/usr/lib/modules/${KVER}/nvidia-current-modeset.ko.xz"
   echo initrd >"$r/usr/lib/modules/${KVER}/initramfs.img"
   echo "blacklist nouveau" >"$r/usr/lib/modprobe.d/00-nouveau-blacklist.conf"
   echo 'kargs = ["rd.driver.blacklist=nouveau", "modprobe.blacklist=nouveau", "nvidia-drm.modeset=1"]' \
@@ -332,7 +340,7 @@ run_verify_debian() {
 @test "verify-nvidia-debian fails when the dkms module is missing" {
   make_debian_stub_tools
   root="$(make_good_debian_root)"
-  rm "$root/usr/lib/modules/${KVER}/nvidia.ko.zst"
+  rm "$root/usr/lib/modules/${KVER}/nvidia-current.ko.xz"
   run_verify_debian "$root"
   [ "$status" -ne 0 ]
   [[ "$output" == *"TUNAOS_NVIDIA_DEBIAN_CONTRACT_FAIL"* ]]

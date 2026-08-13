@@ -110,7 +110,22 @@ dkms status
 # file, not by string-matching dkms status output (whose module name and
 # phrasing are not a stable contract — see header). A missing .ko here is a
 # black screen on real hardware, so this is a hard failure.
-NVIDIA_KO="$(find "/usr/lib/modules/${KVER}" -name 'nvidia.ko*' -print -quit)"
+# Debian's nvidia-kernel-dkms is alternatives-managed, so its DKMS module is
+# named nvidia-current and the file it installs is nvidia-current.ko.xz --
+# 'nvidia.ko*' never matches it. That is not a hypothetical: flounder's
+# gnome/kde/xfce-nvidia images failed here on every nightly while the build
+# above printed "Building module(s)... done.", signed five modules, installed
+# nvidia-current.ko.xz, and reported "installed" in dkms status. The comment
+# above is right that dkms status text is not a contract; the module FILENAME
+# is not one either, so match the names this distro actually uses and keep
+# NVIDIA_KO pointing at the core module (not -modeset/-drm/-uvm/-peermem) so
+# the modinfo version check below still reads the right file.
+NVIDIA_KO=""
+for _nv_base in nvidia nvidia-current; do
+	NVIDIA_KO="$(find "/usr/lib/modules/${KVER}" -name "${_nv_base}.ko*" -print -quit)"
+	[[ -n "$NVIDIA_KO" ]] && break
+done
+unset _nv_base
 if [[ -z "$NVIDIA_KO" ]]; then
 	echo "ERROR: dkms did not produce nvidia.ko for ${KVER} — dkms status above shows why." >&2
 	exit 1
