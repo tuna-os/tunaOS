@@ -89,16 +89,18 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
 **Theme**: Expand variant coverage, harden architecture, grow community.
 
-**Mid-quarter update (2026-08-10)**: Q3 milestone populated; CI green; **downloads verified working** (179 ISOs, newest 08-07). ⚠️ **Q3 at risk — checkpoint 2026-08-22** (#1299): 4 open strategic goals (#272 Bonito GA, #1123 Redfin alpha, #1093 RFC governance, #1094 ADR coverage) with zero movement since 08-08 while CI/ops work lands daily. ⚠️ **Desktop parity crisis** (#1294): tunaos-packages#133 audit shows 24/37 published editions are too small to contain their desktop (non-RPM bases: sailfin/flounder/grouper). GitHub Releases gap fixed 08-08 (#1106/#1147 closed, `a4b147f8`).
+**Mid-quarter update (2026-08-10)**: Q3 milestone populated; CI green (at the time — see 08-13 correction below); **downloads verified working** (179 ISOs, newest 08-07). ⚠️ **Q3 at risk — checkpoint 2026-08-22** (#1299): 4 open strategic goals (#272 Bonito GA, #1123 Redfin alpha, #1093 RFC governance, #1094 ADR coverage) with zero movement since 08-08 while CI/ops work lands daily. ⚠️ **Desktop parity crisis** (#1294): tunaos-packages#133 audit shows 24/37 published editions are too small to contain their desktop (non-RPM bases: sailfin/flounder/grouper). GitHub Releases gap fixed 08-08 (#1106/#1147 closed, `a4b147f8`).
 
 **Mid-quarter update 2 (2026-08-11)**: maintainer filed #1315 — **flavor equality mandate** (no GNOME-as-primary framing; all supported flavors equal tiers). This reframes desktop parity (#1294) from defect-fix to product strategy; flavor cadence parity (#1254, PR #1314) is its first deliverable. ✅ First deliverable landed 05:22Z: **browser ISO catalog parity gate merged** (#1322) — catalog generation now fails when any browser/on-demand flavor lacks a published catalog fact (#1281 closed). ~~Community signal: first external contributor (shimonenator, 08-10)~~ — **retracted 08-13** (#1317): confirmed an Antigravity-agent account, not a human contributor. #1308's starter backlog stands on its own merit regardless.
 
 **Mid-quarter update 3 (2026-08-11)**: maintainer directive #1319 — **package sourcing policy**: default to system repos / tideforge; no PPAs/COPRs/OBS/AUR; build in-house what the base lacks, with a small trusted third-party allowlist. Second directive in 24h; elevates the Q2 COPR-elimination win (#436) into org-wide supply-chain policy (#1323).
 
+**Correction (2026-08-13)**: the 08-10 "CI green" note above is stale. Bonito's nightly (`build-bonito.yml`) has been **red for 10/10 scheduled runs, 08-03 through 08-13** — verified via `gh run list`. Root cause is a cross-variant nvidia-overlay initramfs regression (`sr_mod`/`cdrom`/`virtio_blk` missing, `TUNAOS_NVIDIA_CONTRACT_FAIL`), independently confirmed also 100% red on Albacore, Marlin, and Yellowfin's nightlies over the same window — not Bonito-specific. Filed as #1499 (previously untracked; distinct from the closed, different-symptom #1118). Separately, `base`/arm64 jobs are failing on transient runner infra (`/libpod_lock` exhaustion), unrelated to the nvidia regression.
+
 | Goal | Owner | Tracking | Status |
 |------|-------|----------|--------|
 | **Fix ISO downloads** | ci-maintainer | #543, #561 | ✅ Done — downloads verified working (R2, 08-07) |
-| Bonito (Fedora 44) GA | ci-maintainer | #272 | 🟡 In progress (Q3 milestone) |
+| Bonito (Fedora 44) GA | ci-maintainer | #272 | 🔴 Blocked — nightly 10/10 red 08-03–08-13, cross-variant nvidia initramfs regression (#1499), not GA-ready |
 | Redfin (RHEL 10) alpha | ci-maintainer | #609 (closed, shipped 08-09), #1123 | 🟡 Local-build alpha shipped (systemd auto-update timer units, #609/#1182/#1219) — intentionally **not** in `.github/build-config.yml`'s CI matrix (RHEL EULA forbids redistribution + no RHSM creds on CI runners, see `scripts/get-base-image.sh`); build via `just build redfin <desktop>` or `scripts/corral-build.sh`, see [docs/rhel-setup.md](docs/rhel-setup.md). Remaining: no automated build/publish path is possible by design, so "alpha" here means local-build-verified, not downloadable |
 | Ship KDE, COSMIC, Niri, XFCE variants | ci-maintainer | #285 | 🟡 Published but **desktop-completeness unverified** — 24/37 editions undersized per #133/#1294 |
 | GitHub Releases page carries ISO assets | ci-maintainer | #1106 | ✅ Verified 08-09 — `gnome-20260809` published with assets; cadence resumed |
@@ -142,7 +144,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | Issue triage policy (queue actionability) | strategist | #1195 — [TRIAGE-POLICY.md](./TRIAGE-POLICY.md) drafted 08-13: milestone-only roadmap signal, verify-before-trust closure, tiered SLA |
 | Package signing / SBOM | sec-check | Supply chain, #1187 |
 | **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 (audit → #1187) |
-| Bonito (Fedora 44) GA carryover | ci-maintainer | #272 |
+| Bonito (Fedora 44) GA carryover | ci-maintainer | #272 — blocked on #1499 (nightly red 08-03–08-13) |
 | Redfin (RHEL 10) alpha GA | ci-maintainer | #609 |
 | Fedora 45 base readiness | ci-maintainer | #1171 — [FEDORA-BASE-POLICY.md](./FEDORA-BASE-POLICY.md) drafted 08-13: N+rawhide model, Fedora 45 planning sequenced after Bonito (#272) GA, not parallel |
 | Adoption metrics / usage telemetry | strategist | #1174 |
