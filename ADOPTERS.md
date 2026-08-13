@@ -39,7 +39,8 @@ _(None listed yet — be the first!)_
 | [Ubuntu](https://ubuntu.com) | Base OS — Ubuntu variant image | [ubuntu.com](https://ubuntu.com) |
 | [Niri](https://github.com/YaLTeR/niri) | Desktop environment — scrollable-tiling Wayland compositor (Bonito variant) | [github.com/YaLTeR/niri](https://github.com/YaLTeR/niri) |
 | [elementary OS](https://elementary.io) | Desktop environment — Pantheon desktop for the Gurnard (Ubuntu 24.04 LTS) variant | [elementary.io](https://elementary.io) |
-| [Fedora COPR](https://copr.fedorainfracloud.org) | Package distribution — GNOME 49/50 backports for CentOS Stream 10 / Fedora bases | [copr.fedorainfracloud.org](https://copr.fedorainfracloud.org) |
+| [Fedora COPR](https://copr.fedorainfracloud.org) | Package distribution (legacy/compatibility) — GNOME 49/50 backports for CentOS Stream 10 / Fedora bases; being retired in favor of the native RPM + Cloudflare R2 pipeline below | [copr.fedorainfracloud.org](https://copr.fedorainfracloud.org) |
+| [Cloudflare R2](https://www.cloudflare.com/developer-platform/products/r2/) | Package/artifact distribution — native EL10 RPM repository (GNOME 51 onward), ISOs, and boot screenshots | [cloudflare.com/r2](https://www.cloudflare.com/developer-platform/products/r2/) |
 | [Tideforge](https://tideforge.org) | Build service — COSMIC packages built from source for the EL10 desktop cells | [tideforge.org](https://tideforge.org) |
 | [GHCR](https://ghcr.io) | Image registry — all published TunaOS image flavors | [github.com/orgs/tuna-os/packages](https://github.com/orgs/tuna-os/packages) |
 
