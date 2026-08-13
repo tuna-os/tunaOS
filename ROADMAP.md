@@ -138,7 +138,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | Branch protection + required CI | strategist | CI health, #1167 |
 | Supply chain hardening | sec-check | #212, #301 (closed — needs new tracker) |
 | Release automation | ci-maintainer | CI health, VERSIONING.md, #1186 |
-| Community governance model | strategist | #1168 |
+| Community governance model | strategist | #1168; [GOVERNANCE.md](GOVERNANCE.md) |
 | Package signing / SBOM | sec-check | Supply chain, #1187 |
 | **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 (audit → #1187) |
 | Bonito (Fedora 44) GA carryover | ci-maintainer | #272 |

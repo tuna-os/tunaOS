@@ -43,4 +43,4 @@ See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). We follow the Contributor Covenant
 
 ## Project Governance
 
-tunaOS is maintained by [@hanthor](https://github.com/hanthor) with automated assistance from Hive agents. Decisions are made via GitHub Issues and PRs. See [MAINTAINERS.md](MAINTAINERS.md) for the full maintainer playbook.
+tunaOS is maintained by [@hanthor](https://github.com/hanthor) with automated assistance from Hive agents. Decisions are made via GitHub Issues and PRs. See [GOVERNANCE.md](GOVERNANCE.md) for the proposed decision, role, review, and escalation model, and [MAINTAINERS.md](MAINTAINERS.md) for the operational playbook.
