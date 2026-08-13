@@ -31,6 +31,7 @@ publish, and *how* the snapshot feeds roadmap decisions.
 | Community | Open PRs from external contributors | GitHub API | 0 external contributors | ≥2 external contributor PRs merged |
 | Community | Discussion posts, `good first issue` pickups | GitHub API | 0 starter issues (dead label, #1308) | ≥5 starter issues picked up |
 | Community | Public adopters (production or evaluation), [ADOPTERS.md](./ADOPTERS.md) | Manual — PR from the adopting org, or outreach asking permission to list | 0 production entries (#1348) | ≥2–3 public evaluator/production entries |
+| Discovery | Elementary OS cross-post pickup / referrals | Maintainer submission record + tunaos.org analytics | **not measured** | Record submission outcome and referral signal for the Gurnard/Pantheon pitch (#1368) |
 
 **Instrumentation order** (cheapest first):
 
@@ -50,8 +51,9 @@ publish, and *how* the snapshot feeds roadmap decisions.
   **2026-11-01**, covering October — aligns with Q4 "Mature" opening).
 - Snapshot format: downloads by variant × desktop (top 10), stars/forks,
   external-contributor PRs, release-asset presence per flavor,
-  [ADOPTERS.md](./ADOPTERS.md) production/evaluation entry count, and a
-  one-line "variant ranking" that flags under-/over-performing editions.
+  [ADOPTERS.md](./ADOPTERS.md) production/evaluation entry count, elementary
+  cross-post outcome/referrals, and a one-line "variant ranking" that flags
+  under-/over-performing editions.
 - Ownership: **strategist** compiles; **ci-maintainer** supplies R2/Releases
   exports; **guide** publishes on tunaos.org/blog.
 
