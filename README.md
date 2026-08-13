@@ -92,6 +92,7 @@ Image tags are constructed as `<desktop>[-hardware]`:
    * `cosmic`: COSMIC Desktop
    * `niri`: Niri (tiling Wayland compositor)
    * `xfce`: XFCE (Wayland experimental)
+   * `pantheon`: Pantheon desktop (elementary OS) — Gurnard variant, experimental
    * `base`: Plain system image with no desktop environment pre-installed (available for most variants)
 
 2. **Hardware Suffixes** (append to any desktop suffix):
