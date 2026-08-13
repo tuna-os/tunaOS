@@ -50,12 +50,13 @@ every PR into `main` today:
 | `test.yml` (Test) | `unit-tests` | every PR (path-filtered) |
 
 Other `pull_request`-triggered workflows (`iso-e2e.yml`, `just-fix.yml`,
-`matrix-status.yml`, `live-iso-bootc.yml`, `conductor-smoke.yml`,
-`validate-renovate.yaml`) are either path-filtered to a narrow subset of PRs,
-advisory/autofix in nature (`just-fix.yml`), or gate speculative code
-(`conductor-smoke.yml`, see #1158) — none of them are safe to name as a
-blanket required check without excluding PRs that never trigger them (a
-required check that never runs blocks the PR forever).
+`matrix-status.yml`, `live-iso-bootc.yml`, `validate-renovate.yaml`) are
+either path-filtered to a narrow subset of PRs or advisory/autofix in nature
+(`just-fix.yml`) — none of them are safe to name as a blanket required check
+without excluding PRs that never trigger them (a required check that never
+runs blocks the PR forever). `conductor-smoke.yml`, previously listed here as
+an example of gating speculative code, was removed per #1158 — the ports it
+smoke-checked have no packaging and were never wired into a real build.
 
 **Proposal**: the minimum required-status-checks list for a `main`-targeting
 ruleset should be `lint`, `lint-summary`, and `unit-tests`. Broader coverage
