@@ -1,5 +1,9 @@
 # Maintainers
 
+The project governance policy is documented in [GOVERNANCE.md](GOVERNANCE.md).
+This file records the current people and area assignments; it is not a
+substitute for the decision and conduct rules in that policy.
+
 ## Active Maintainer
 
 - **James Reilly** ([@hanthor](https://github.com/hanthor)) — Project lead, all areas

@@ -245,6 +245,7 @@ Related Communities:
 
 ### Community & Governance
 - [Community](COMMUNITY.md) — contribution ladder, metrics, communication
+- [Governance](GOVERNANCE.md) — roles, decision process, review authority, and escalation
 - [Maintainers](MAINTAINERS.md) — maintainer playbook and bus factor plan
 
 ### External Resources
