@@ -223,6 +223,8 @@ Related Communities:
 
 ### Project Docs
 - [TunaOS Blog](https://tunaos.org/blog/modern-enterprise-linux-desktops-with-tunaos) — launch announcement and design philosophy comparison
+- [Vision](VISION.md) — project philosophy: erasing the mystique of the Linux distribution
+- [Goal](GOAL.md) — current objective: LUKS E2E fisherman migration
 - [Contributor Guide](CONTRIBUTING.md) — how to set up, build, and contribute
 - [Roll Your Own Guide](docs/ROLL_YOUR_OWN.md) — build your own custom TunaOS variant
 - [Agent Guide](docs/AGENT_GUIDE.md) — complete architecture and contributor reference
@@ -232,15 +234,19 @@ Related Communities:
 - [Secure Boot](docs/SECURE-BOOT.md) — which variants support Secure Boot out of the box
 - [Improvement Plan](docs/IMPROVEMENT_PLAN.md) — roadmap and development progress
 - [Redfin Setup](docs/rhel-setup.md) — RHEL 10 local-build instructions
-- [Developer Docs](https://tunaos.org/docs/dev/introduction) — build and contribution guide
+- [Developer Docs](https://tunaos.org/docs/tunaos/building) — build and contribution guide
 
 ### Policies & Planning
 - [Roadmap](ROADMAP.md) — project direction and feature status
+- [Q3 2026 Checkpoint](Q3_CHECKPOINT-2026-08-22.md) — decision sheet for the Q3 "Expand Coverage" milestone (#1299)
+- [Variant Lifecycle Policy](VARIANT-LIFECYCLE.md) — Stable/Beta/Alpha admission gates and deprecation rules
+- [RFC Process](RFC-PROCESS.md) — how RFCs are proposed, reviewed, and decided
 - [Package Sourcing Policy](PACKAGE-SOURCING.md) — package origin rules, Tideforge-first, and allowlist (#1319)
 - [Versioning](VERSIONING.md) — tag scheme and stability tiers
 - [Migration Guide](MIGRATION.md) — switching from other distros
 - [Security Policy](SECURITY.md) — vulnerability reporting and supported versions
 - [Adopters](ADOPTERS.md) — organizations using TunaOS
+- [Adoption Metrics](ADOPTION-METRICS.md) — how adoption is measured and reported (#1174)
 - [Code of Conduct](CODE_OF_CONDUCT.md) — community standards
 
 ### Community & Governance
