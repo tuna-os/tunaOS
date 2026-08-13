@@ -1,6 +1,6 @@
 # tunaOS Roadmap
 
-**Last updated**: 2026-08-14 (Hacktoberfest seeding tracker refresh, T-8 numbers) | **Maintainer**: tuna-os (hanthor)
+**Last updated**: 2026-08-14 (Hacktoberfest seeding tracker refresh, T-8 numbers; org-wide roadmap coverage policy) | **Maintainer**: tuna-os (hanthor)
 
 ---
 
@@ -55,7 +55,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 - Multi-agent development active (architect, guide, sec-check, quality, CI, outreach)
 - 34+ community outreach issues filed; product-readiness gate (#563) resolved
 - ⚠️ Adoption metrics untracked — no usage/telemetry data on the 179 downloadable ISOs (#1174); **plan published 08-10** ([ADOPTION-METRICS.md](./ADOPTION-METRICS.md)) — first monthly download/usage snapshot targeted 2026-11-01 (Q4 "Mature")
-- 🟡 ROADMAP coverage improving — **15/37 active authorized repos now carry a ROADMAP.md** (2026-08-12): tunaos, tromso, tacklebox, docs, xfce-linux, bluefin-cli, Tavern, corral, tunaos-packages, iso-builder, protota, bootc-migrate, dualcut, wootc, gtk-office-suite; template merged into .github project-starter (#13). Excluded from planning scope: ubuntu + letters (**archived** 2026-08-12). Still unplanned (22 active): .github, flatpak-index, bootc-installer (ROADMAP stranded on non-default `dev` branch — #1361), bootc-installer-asahi, branding, bst-ci, changelog-action, debian-copr, finupdate, fisherman, homebrew-tap, kde-build-meta, mandelbrot, mariner, remora, scoop-bucket, suite-common, suite-common-rust, tuna-installer-cosmic/kde/niri/xfce (#1295, #1361)
+- 🟡 **ROADMAP coverage / planning hygiene** — **15/37 active authorized repos carry a root `ROADMAP.md`** (2026-08-13; tracker: #1295): tunaos, tromso, tacklebox, docs, xfce-linux, bluefin-cli, Tavern, corral, tunaos-packages, iso-builder, protota, bootc-migrate, dualcut, wootc, gtk-office-suite. New repositories should inherit the ROADMAP template merged into `.github/project-starter` (#13); existing active repositories are expected to add a minimal roadmap before their next strategic review. Excluded from planning scope: ubuntu + letters (**archived** 2026-08-12). Still unplanned (22 active): .github, flatpak-index, bootc-installer (ROADMAP stranded on non-default `dev` branch — #1361), bootc-installer-asahi, branding, bst-ci, changelog-action, debian-copr, finupdate, fisherman, homebrew-tap, kde-build-meta, mandelbrot, mariner, remora, scoop-bucket, suite-common, suite-common-rust, tuna-installer-cosmic/kde/niri/xfce (#1295, #1361)
 - ⚪ **"First external contributor" claim retracted (#1317, corrected 2026-08-13)**: the shimonenator commits (EL10/OBS design fixing #777, image-factory completion gate) are **not** a human contribution — maintainer confirmed the account is misattributed by GitHub because the Google Antigravity agent is listed as commit author; `git log` shows `commit.author.name: antigravity` on every one of that account's commits. There is still no first external human contributor; bus-factor risk (#1095) is unchanged.
 - 🟡 **Flavor equality mandate (08-11)**: maintainer directive #1315 — all supported flavors are equal tiers; GNOME-first framing and cadence to be retired (#1316)
 
@@ -186,6 +186,12 @@ Priorities listed above — pick an issue labeled `good first issue` or comment 
 ## Roadmap Governance
 
 This roadmap is maintained by the strategist agent. Updates published after major milestones or quarterly. Propose changes via PR to this file with issue reference.
+
+Roadmap coverage is an organization-level planning signal, not a requirement
+that every repository use the same milestone structure. The Community inventory
+above is the source of truth for active-repository coverage; update it when a
+repository is archived, adopts a roadmap, or moves its roadmap onto the default
+branch.
 
 See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 
