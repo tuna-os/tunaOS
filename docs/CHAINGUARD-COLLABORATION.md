@@ -14,10 +14,17 @@ Actions identity, verifies the signatures before promotion, and publishes
 signed SPDX SBOM attestations for platform images.
 
 That gives Chainguard a concrete ecosystem conversation rather than a generic
-request for promotion. The existing relationship with
-[@tulilirockz](https://github.com/tulilirockz), who has contributed
-substantially to TunaOS, is the appropriate warm path. Confirm their current
-role and preferred contact route before forwarding this brief.
+request for promotion.
+
+> **Correction (maintainer, 2026-08-13)**: an earlier version of this brief
+> named [@tulilirockz](https://github.com/tulilirockz) as an existing TunaOS
+> contributor and proposed warm path. That's inaccurate — TunaOS's git
+> history was inherited from its bluefin-lts fork point, and all of
+> tulilirockz's commits predate that fork (last commit 2025-05-07, over a
+> year before TunaOS existed as a separate project). They maintained
+> bluefin-lts, not TunaOS. There is no confirmed existing relationship to use
+> as a warm path here — this brief should be treated as cold outreach unless
+> a maintainer identifies a real contact.
 
 ## Evidence maintainers can point to
 
