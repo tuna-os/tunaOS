@@ -12,7 +12,7 @@ just fix && just check
 
 ## Good First Issues
 
-New here? Start with issues tagged **[good first issue](https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** — a curated, maintainer-sized set of starter tasks covering documentation parity, small script fixes, and test coverage. They are deliberately small, well-scoped, and safe to attempt without deep image-factory knowledge.
+New here? Start with issues tagged **[good first issue](https://github.com/issues?q=is%3Aissue+is%3Aopen+org%3Atuna-os+label%3A%22good+first+issue%22)** — a curated, maintainer-sized set of starter tasks covering documentation parity, small script fixes, and test coverage. If the queue is empty, use the [documentation-parity audit brief](docs/GOOD-FIRST-ISSUES.md) to make a small, self-contained contribution and report the result in [#1308](https://github.com/tuna-os/tunaOS/issues/1308).
 
 Ways to contribute without touching the build pipeline:
 
