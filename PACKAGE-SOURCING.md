@@ -71,7 +71,33 @@ A repo enters the allowlist only when all of the following hold:
 
 | Repo | Gap covered | Consuming variants | Added | Next review | Justification |
 |------|-------------|--------------------|-------|-------------|---------------|
-| *(pending audit)* | — | — | — | — | Audit per variant lands before entries are added; maintainer-cited codec/Nvidia repos are the starting candidates |
+| *(pending maintainer sign-off)* | — | — | — | — | Candidates below come from a code audit (2026-08-13); none are formally admitted yet — that decision stays with the maintainer/sec-check per the admission criteria above |
+
+## Audit findings (2026-08-13, ahead of the 08-22 checkpoint)
+
+`grep`-based inventory of every `build_scripts/`/`manifests/` reference to a
+COPR, PPA, OBS project, or other external repo, as it exists on `main` today.
+Classified against the sourcing tiers above — **classification only, no
+migration performed by this audit**.
+
+| Source | What it provides | Where used | Classification | Notes |
+|---|---|---|---|---|
+| `rpmfusion` (free + nonfree) | Standard Fedora multimedia/codec/driver packages absent from Fedora's own repos | `build_scripts/10-base-packages.sh` (Bonito) | Tier-3 candidate | Fedora-ecosystem-standard third-party repo; large install base, actively maintained — the kind of repo the allowlist process exists to formalize, not eliminate |
+| `negativo17` (`epel-multimedia`, `fedora-nvidia`/`epel-nvidia`) | Multimedia codecs, Nvidia drivers | `build_scripts/10-base-packages.sh`, `build_scripts/overlay/overrides/nvidia/20-nvidia.sh` | Tier-3 candidate | **This is the exact repo #1319 cited by name as acceptable** — highest-priority formal allowlist entry |
+| `pkgs.tailscale.com` (vendor repo) | Tailscale VPN mesh client | `build_scripts/20-packages.sh` | Needs clarification | Repo file is written then immediately `enabled=0`'d — unclear if this definition is load-bearing or dead code; flag for the script owner, not necessarily a sourcing violation |
+| COPR `trixieua/morewaita-icon-theme` | `morewaita-icon-theme` (GNOME icon theme) | `build_scripts/20-packages.sh` (gnome flavors) | **Violation** | Single-maintainer personal COPR with no allowlist entry — exactly what #1319 prohibits. Smallest migration candidate: one package, one desktop |
+| COPR `ublue-os/packages` | `krunner-bazaar` | `build_scripts/desktop/kcm-ublue.sh` | **Violation** — and a regression | ROADMAP.md's Q2 goal "ublue-os/packages COPR eliminated" (#436) is not fully true: this one package still pulls from it on Fedora. EL10 already builds from source in the same script — same pattern could retire the Fedora COPR path |
+| COPR `zirconium/packages`, `yalter/niri-git`, `avengemedia/danklinux`, `avengemedia/dms-git`, `yselkowitz/wlroots-epel`, `ligenix/enterprise-cosmic` | niri itself, DankMaterialShell suite, wlroots-epel, COSMIC-on-EL10 backport | `build_scripts/desktop/niri.sh` (Fedora/EL10 niri build) | **Violation — largest gap found** | The niri desktop's core WM binary ships from an individual's git-build COPR (`yalter/niri-git`), not Fedora's own `niri` package. Six distinct COPRs feed one desktop flavor. Migrating this is a real Tideforge packaging project, not a quick fix — flagging scope honestly rather than understating it |
+| COPR `@asahi/fedora-remix-branding`, `@asahi/u-boot`; CentOS Hyperscale SIG repos; OBS `home:mrkcee` | Apple Silicon (Asahi) hardware enablement: branding, u-boot, kernel | `build_scripts/overlay/asahi.sh` | Tier-3 candidate, scoped exception | Upstream Asahi Linux project's own infrastructure for hardware this org doesn't control the kernel for — narrow, hardware-gated (only applies to `*-asahi` builds), well-precedented pattern for this class of variant |
+| `ppa:elementary-os/stable` | Pantheon desktop environment | `build_scripts/desktop/install-desktop.sh` (Gurnard/Pantheon) | Tier-3 candidate, scoped exception | Official upstream elementary OS PPA — the canonical source for Pantheon on Ubuntu, not a third-party mirror |
+| Manifest-driven `packages.<os>.copr[]` block (`install-desktop.sh`) | General per-desktop COPR mechanism | Any desktop manifest that declares a `copr:` block | Mechanism, not a violation itself | This is *how* a desktop opts into a COPR — the entries above are what actually uses it. Worth a lint step (see §Enforcement) so new `copr:` blocks require a matching allowlist entry, not just code review |
+
+**Not yet audited**: apt/AUR/OBS usage outside the entries found above (Debian/
+Arch/openSUSE/Gentoo bases largely use their own package managers' extra
+repos differently than DNF's COPR model) — this pass focused on the DNF/COPR
+ecosystem where the volume was highest. A follow-up pass should cover
+`marlin` (Arch/AUR), `flounder`/`flounder-sid` (Debian), `sailfin` (openSUSE
+OBS), and `guppy` (Gentoo overlays) before the audit is called complete.
 
 ## Audit & transition plan
 
