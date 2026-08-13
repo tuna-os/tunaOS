@@ -274,9 +274,13 @@ Related Communities:
 - [Roll Your Own Guide](docs/ROLL_YOUR_OWN.md) — build your own custom TunaOS variant
 - [Agent Guide](docs/AGENT_GUIDE.md) — complete architecture and contributor reference
 - [Build Pipeline](docs/build-pipeline.md) — CI/CD workflow overview
+- [Build Pipeline Reference](docs/PIPELINE.md) — the build matrix, verification gates, and publish flow in detail
 - [mkosi Investigation](docs/mkosi-investigation.md) — mkosi as a build backend and DDI output: findings, not a production change (#999)
 - [Testing Guide](docs/TESTING.md) — ISO end-to-end test harness
 - [Secure Boot](docs/SECURE-BOOT.md) — which variants support Secure Boot out of the box
+- [Disk Encryption & TPM2](docs/LUKS-TPM.md) — LUKS2 passphrase setup and TPM2 auto-unlock
+- [CI/CD Spec](docs/CI_SPEC.md) — target/aspirational workflow spec; see Build Pipeline above for what's actually deployed
+- [CI Troubleshooting Playbook](docs/ci-troubleshooting.md) — quick reference for diagnosing recurring CI failures
 - [Improvement Plan](docs/IMPROVEMENT_PLAN.md) — roadmap and development progress
 - [Redfin Setup](docs/rhel-setup.md) — RHEL 10 local-build instructions
 - [Developer Docs](https://tunaos.org/docs/tunaos/building) — build and contribution guide
@@ -287,6 +291,8 @@ Related Communities:
 - [Variant Lifecycle Policy](VARIANT-LIFECYCLE.md) — Stable/Beta/Alpha admission gates and deprecation rules
 - [RFC Process](RFC-PROCESS.md) — how RFCs are proposed, reviewed, and decided
 - [Package Sourcing Policy](PACKAGE-SOURCING.md) — package origin rules, Tideforge-first, and allowlist (#1319)
+- [Issue Triage Policy](TRIAGE-POLICY.md) — triage states and SLAs (draft, #1195)
+- [Fedora Base Currency Policy](FEDORA-BASE-POLICY.md) — N+rawhide sequencing for Fedora-based variants (draft, #1171)
 - [Versioning](VERSIONING.md) — tag scheme and stability tiers
 - [Migration Guide](MIGRATION.md) — switching from other distros
 - [Security Policy](SECURITY.md) — vulnerability reporting and supported versions
