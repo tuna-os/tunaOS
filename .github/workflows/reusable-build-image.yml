@@ -855,7 +855,25 @@ jobs:
           issuer="https://token.actions.githubusercontent.com"
           index_ref="${IMAGE_REGISTRY}/${IMAGE_NAME}@${INDEX_DIGEST}"
 
-          cosign sign "$index_ref"
+          # rekor.sigstore.dev has had multi-day intermittent 502s (tunaos#1377);
+          # cosign's own single internal retry doesn't outlast that. cosign
+          # sign/attest are idempotent per digest, so retrying just the failed
+          # call (not the whole step) is safe and doesn't re-sign what already
+          # succeeded.
+          with_retry() {
+            local attempt=0
+            until "$@"; do
+              attempt=$((attempt + 1))
+              if [[ "$attempt" -ge 3 ]]; then
+                echo "::error::'$*' failed after 3 attempts"
+                return 1
+              fi
+              echo "'$*' failed (attempt ${attempt}); retrying in $((attempt * 30))s..."
+              sleep $((attempt * 30))
+            done
+          }
+
+          with_retry cosign sign "$index_ref"
           cosign verify "$index_ref" \
             --certificate-identity "$identity" \
             --certificate-oidc-issuer "$issuer" >/dev/null
@@ -870,14 +888,14 @@ jobs:
             ref="${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}"
             sbom="supply-chain/sboms/sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${safeplatform}.spdx.json"
 
-            cosign sign "$ref"
+            with_retry cosign sign "$ref"
             cosign verify "$ref" \
               --certificate-identity "$identity" \
               --certificate-oidc-issuer "$issuer" >/dev/null
             signed=$((signed + 1))
 
             if [[ -f "$sbom" ]]; then
-              cosign attest --type spdxjson --predicate "$sbom" "$ref"
+              with_retry cosign attest --type spdxjson --predicate "$sbom" "$ref"
               cosign verify-attestation "$ref" \
                 --type spdxjson \
                 --certificate-identity "$identity" \
