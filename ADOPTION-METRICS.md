@@ -26,6 +26,7 @@ publish, and *how* the snapshot feeds roadmap decisions.
 | Discovery | GitHub stars / forks | GitHub API | 56 / 3 | ≥100 stars |
 | Discovery | Docs site visits, top variant pages | Cloudflare analytics on tunaos.org | not measured | ≥1k visits/mo, variant-page ranking |
 | Download | ISO downloads by variant+desktop | R2 access logs (tunaos.org/download) | **not measured** | ≥1k ISO downloads/mo; variant ranking |
+| Outreach | DistroWatch referral visits and ISO clicks | Cloudflare/R2 logs for `utm_campaign=distrowatch-2026` | not submitted | establish baseline in first 30 days |
 | Download | GitHub Release asset downloads | Releases API (resumed 08-09, #1106) | 0 (assets were empty shells) | assets present on all flavors; downloads counted |
 | Install | Installs / successful boots | opt-in telemetry or boot-report gating | **not measured** | Q4 design decision (#577 GUI gate, #763) |
 | Community | Open PRs from external contributors | GitHub API | 0 external contributors | ≥2 external contributor PRs merged |
@@ -37,6 +38,8 @@ publish, and *how* the snapshot feeds roadmap decisions.
    flavors to publish assets too (#1254 parity gap).
 2. **R2/Cloudflare access-log analytics** on tunaos.org/download — R2 already
    serves the ISOs; enable access logs + a dashboard (owner: ci-maintainer).
+   External campaigns should use a stable UTM campaign name so referral
+   traffic can be separated from direct visits without adding OS telemetry.
 3. **Docs analytics** — Cloudflare Web Analytics on the Docusaurus site
    (one script tag; owner: guide).
 4. **Install telemetry** — deferred to Q4 design decision; do not block 1–3.
