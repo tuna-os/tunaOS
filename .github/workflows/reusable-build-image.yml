@@ -768,8 +768,8 @@ jobs:
           REGISTRY: ghcr.io
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
-          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "$GITHUB_ACTOR" --password-stdin "${REGISTRY}"
+          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "$GITHUB_ACTOR" --password-stdin "${REGISTRY}"
 
       - name: Push Manifest
         if: github.event_name != 'pull_request'
@@ -829,7 +829,7 @@ jobs:
       - name: Login to GitHub Container Registry
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
+        run: echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
 
       - name: Fetch platform digests
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -1151,10 +1151,10 @@ jobs:
           REGISTRY: ghcr.io
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
-          echo "${{ env.GITHUB_TOKEN }}" | sudo podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "$GITHUB_ACTOR" --password-stdin "${REGISTRY}"
+          echo "${{ env.GITHUB_TOKEN }}" | sudo podman login -u "$GITHUB_ACTOR" --password-stdin "${REGISTRY}"
           # Also login with skopeo
-          echo "${{ env.GITHUB_TOKEN }}" | sudo skopeo login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+          echo "${{ env.GITHUB_TOKEN }}" | sudo skopeo login -u "$GITHUB_ACTOR" --password-stdin "${REGISTRY}"
 
       - name: Pull Image and Apply Tags
         id: tag

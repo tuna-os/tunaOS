@@ -81,7 +81,7 @@ jobs:
         timeout-minutes: 45
         run: |
           sudo scripts/build-qcow2.sh \
-            "ghcr.io/${{ github.repository_owner }}/${{ matrix.variant }}:${{ matrix.flavor }}-linux-amd64"
+            "ghcr.io/${GITHUB_REPOSITORY_OWNER}/${{ matrix.variant }}:${{ matrix.flavor }}-linux-amd64"
 
       - name: Boot QCOW2 and capture screenshot
         if: steps.filter.outputs.skip != 'true'

@@ -75,7 +75,7 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git add -A
           git commit -m "style: fix formatting"
-          if [[ "${{ github.ref_name }}" == "${DEFAULT_BRANCH}" ]]; then
+          if [[ "$GITHUB_REF_NAME" == "${DEFAULT_BRANCH}" ]]; then
             BRANCH="automation/just-fix-$(date +%s)"
             git checkout -b "${BRANCH}"
             git push -u origin "${BRANCH}"

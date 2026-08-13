@@ -41,7 +41,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends just qemu-utils podman
 
       - name: Log in to GHCR
-        run: echo "${{ env.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+        run: echo "${{ env.GITHUB_TOKEN }}" | podman login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
