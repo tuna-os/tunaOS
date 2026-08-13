@@ -19,8 +19,15 @@ The initial participation scope is:
 - [docs](https://github.com/tuna-os/docs)
 - [corral](https://github.com/tuna-os/corral)
 - [iso-builder](https://github.com/tuna-os/iso-builder)
-- [letters](https://github.com/tuna-os/letters)
+- [gtk-office-suite](https://github.com/tuna-os/gtk-office-suite) — replaces
+  `letters` below, which is **archived** (confirmed 2026-08-12) and
+  read-only; any GFI issue there is unclaimable. gtk-office-suite is the
+  active successor (tunaos#1362).
+- [wootc](https://github.com/tuna-os/wootc)
 - [Tavern](https://github.com/tuna-os/Tavern)
+
+~~[letters](https://github.com/tuna-os/letters)~~ — archived, removed from
+scope (tunaos#1362).
 
 Apply the `hacktoberfest` repository or issue label only after the 2026
 registration guidance is published. Until then, keep curation and eligibility
@@ -55,9 +62,17 @@ longer available to claim.
 The eight items above meet the 09-15 floor but not yet the 10–15 launch
 target from #1331, and `corral` still has zero viable GFI candidates (checked
 directly: only a Renovate dashboard and one large VDI-plugin epic — see
-#1354's verification comment). Add more tasks from `iso-builder`, `letters`,
-and `Tavern` before the 09-08 audit checkpoint, and keep two alternates
-available for tasks that are claimed or found to be too broad.
+#1354's verification comment). `gtk-office-suite` and `tunaos-packages`
+currently have **zero** open `good first issue` tasks each — checked
+directly (2026-08-13), no false positive: real open issues exist in both
+repos but none are scoped/labeled as starter tasks yet, and unlike `corral`
+this isn't because there's nothing suitable, it's because nobody has curated
+one yet. `wootc` also had zero, plus was missing a `CONTRIBUTING.md`
+entirely (fixed: tuna-os/wootc#150), which blocked it from meeting the
+curation checklist's link requirement below. Add more tasks from
+`iso-builder` and `Tavern` too before the 09-08 audit checkpoint, and keep
+two alternates available for tasks that are claimed or found to be too
+broad.
 
 ## Curation checklist
 
