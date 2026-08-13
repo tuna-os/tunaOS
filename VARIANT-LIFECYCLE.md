@@ -12,6 +12,15 @@ grows without a capacity plan and no variant ever reaches GA — the treadmill
 risk flagged in #1175, now observable on the **entry** side (#1185 ZFS root,
 #1191 `*-nvidia`, opened the same day #1196 was filed).
 
+### Flavor equality (#1315/#1316)
+
+Every supported desktop, hardware, and filesystem flavor is a first-class
+portfolio entry. The lifecycle stage describes readiness and maintenance
+state, not product rank: GNOME is not a default support tier, and the
+`community` ISO-group suffix is a packaging identifier rather than a claim
+that its desktops are secondary. Release-currency and admission rules below
+therefore apply equally to every published flavor.
+
 ## Scope
 
 Applies to every row and dimension in the ROADMAP variant table: base variants
@@ -106,7 +115,8 @@ GitHub Releases channel must carry a **current release asset**:
 
 Until the pipeline is extended, the gap observed on 2026-08-10 (kde/xfce/
 cosmic/niri releases 36 days stale vs gnome-20260809 current) is a known
-violation tracked in #1254.
+violation tracked in #1254. Closing that gap is the first concrete deliverable
+of the flavor-equality mandate, not a request to make only GNOME the default.
 
 ## Matrix economics
 

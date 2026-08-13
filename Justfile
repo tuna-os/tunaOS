@@ -202,7 +202,7 @@ iso variant='skipjack' flavor='gnome' repo='local' tag='' dev='0':
     sudo -E bash ./scripts/build-iso-tacklebox.sh "{{ variant }}" "{{ flavor }}" "$_repo" "$_tag" "{{ dev }}"
 
 # Build ONE combined dedup ISO containing every desktop in an iso_group (#455).
-# group: '' / default (flagship gnome+hwe), community (kde/cosmic/niri), nvidia.
+# group: '' / default (gnome+hwe), community (kde/cosmic/niri), nvidia.
 iso-group variant='yellowfin' group='default' repo='ghcr':
     # --preserve-env: the inner sudo must not strip the CI-pinned tacklebox
     # source build vars (a plain sudo here silently fell back to the stale

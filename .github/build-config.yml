@@ -23,9 +23,10 @@ iso_groups:
   # Additional desktop ISO group (KDE/COSMIC/Niri/XFCE). NOT published as a
   # single grouped ISO — the browser ISO Builder (https://iso.tunaos.org) covers these on
   # demand from the published images, so we don't carry the cost of a
-  # 5-flavor offline-store ISO for the long tail. The images still build
-  # and publish to GHCR; only the grouped ISO is skipped.
-  # (Manually publishable via workflow_dispatch group=community if needed.)
+  # 5-flavor offline-store ISO for the remaining desktop set. The images still
+  # build and publish to GHCR; only the grouped ISO is skipped.
+  # (Manually publishable via workflow_dispatch group=community if needed; the
+  # suffix is retained for workflow compatibility, not as a support tier.)
   - suffix: community
     publish: false
     flavors: [kde-nvidia, cosmic-nvidia, niri-nvidia, xfce-nvidia]
@@ -575,7 +576,7 @@ variants:
     # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
     platforms: ["linux/amd64", "linux/arm64"]
     # Flavor strategy: Fedora ships the latest kernel and GNOME by default,
-    # so HWE layers are only provided for gnome (the primary desktop).
+    # so HWE layers are only provided for gnome (the default desktop image).
     # GNOME 50 is EL10-specific and not needed on Fedora.
     # gnome-nvidia-hwe (stage 4) omitted for now — kernel compatibility TBD.
     flavors:

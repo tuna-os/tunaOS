@@ -1,6 +1,6 @@
 # tunaOS Roadmap
 
-**Last updated**: 2026-08-12 (NVIDIA flavor row + flavor equality mandate) | **Maintainer**: tuna-os (hanthor)
+**Last updated**: 2026-08-13 (flavor equality acceptance criteria + cadence parity sequencing) | **Maintainer**: tuna-os (hanthor)
 
 ---
 
@@ -117,7 +117,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | **Apple Silicon (Asahi Linux) support** | architect / ci-maintainer | #781 | 🟡 In progress (Bonito & Grouper 36/36 verified #776; D0–D4 installer track active) |
 | **Desktop parity floor (non-RPM bases)** | packaging | #133, tunaos-packages#323 | ⬜ Not started — P0 for Q4 (see #1294) |
 | **Q3 checkpoint (08-22): staff or descope #272/#1123/#1093/#1094** | strategist | #1299 | ⬜ Scheduled |
-| **Flavor equality mandate (docs wording + cadence parity)** | strategist | #1315, #1254 | 🟡 In progress — catalog parity gate merged 08-11 (#1322, #1281 closed); cadence parity pending (#1316) |
+| **Flavor equality mandate (docs wording + cadence parity)** | strategist / ci-maintainer | #1315, #1316, #1254 | 🟡 In progress — tier language retired in docs and lifecycle policy; cadence parity is the first deliverable: schedule KDE/COSMIC/Niri/XFCE releases or record an explicit tunaos.org-only cadence per flavor |
 | **NVIDIA flavor family (6 editions, 0 assets since 07-05)** | ci-maintainer | #1383 | 🔴 Broken — nightly overlay regressed 08-12 (#1382); staff test: nightly green + gnome-nvidia assets republished by 09-01 (#1376/#1379) |
 | **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 | 🟡 In progress — PACKAGE-SOURCING.md drafted (planning PR open); third-party allowlist + per-variant audit due at 08-22 checkpoint |
 

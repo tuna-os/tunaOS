@@ -91,7 +91,7 @@ Image tags are constructed as `<desktop>[-hardware]`:
    * `kde`: KDE Plasma
    * `cosmic`: COSMIC Desktop
    * `niri`: Niri (tiling Wayland compositor)
-   * `xfce`: XFCE (Wayland experimental)
+   * `xfce`: XFCE (Wayland session)
    * `base`: Plain system image with no desktop environment pre-installed (available for most variants)
 
 2. **Hardware Suffixes** (append to any desktop suffix):

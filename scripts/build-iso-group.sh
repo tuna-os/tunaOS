@@ -16,7 +16,7 @@
 # Usage:
 #   sudo ./scripts/build-iso-group.sh <variant> <group> [<repo>]
 #     variant   yellowfin | albacore | skipjack | bonito
-#     group     ""|default (flagship), community, nvidia, … (a suffix in iso_groups)
+#     group     ""|default (default desktop), community, nvidia, … (a suffix in iso_groups)
 #     repo      local | ghcr   (default: ghcr)
 #
 # Outputs to project root as <variant>[-<group>]-<version>-<arch>.iso
@@ -28,7 +28,7 @@ set -euo pipefail
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
 
 VARIANT="${1:?usage: $0 <variant> <group> [repo]}"
-# "default"/"flagship"/"" all select the empty-suffix flagship group.
+# "default"/"flagship"/"" all select the empty-suffix default desktop group.
 GROUP_RAW="${2-default}"
 REPO="${3:-ghcr}"
 
@@ -54,7 +54,7 @@ done
 
 REPO_ROOT="$(pwd)"
 
-# Normalise the group selector to its config suffix ("" for the flagship).
+# Normalise the group selector to its config suffix ("" for the default group).
 case "$GROUP_RAW" in
 default | flagship | "") GROUP_SUFFIX="" ;;
 *) GROUP_SUFFIX="$GROUP_RAW" ;;
@@ -115,7 +115,7 @@ for f in "${OFFLINE_FLAVORS[@]}"; do
 done
 
 if ((${#SELECTED[@]} == 0)); then
-	echo "==> No flavors from group '${GROUP_SUFFIX:-flagship}' are built for ${VARIANT}; nothing to do." >&2
+	echo "==> No flavors from group '${GROUP_SUFFIX:-default}' are built for ${VARIANT}; nothing to do." >&2
 	exit 0
 fi
 
@@ -134,7 +134,7 @@ echo "    offline payloads: ${SELECTED_OFFLINE[*]}"
 
 # ── Build the recipe ────────────────────────────────────────────────────────
 # Build scratch: GitHub runners keep ~14 GB on / but ~60 GB on /mnt —
-# community groups (5+ flavors of images + embedded store + squash +
+# Additional desktop groups (5+ flavors of images + embedded store + squash +
 # ISO) exhaust the root disk (run 29630690744: ENOSPC mid image-copy).
 OUT_BASE="${TUNAOS_ISO_OUT_BASE:-.build/iso-group}"
 if [[ -z "${TUNAOS_ISO_OUT_BASE:-}" && -d /mnt && -w /mnt ]]; then
