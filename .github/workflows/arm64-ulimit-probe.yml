@@ -1,0 +1,92 @@
+# Diagnostic only. Measures the file-descriptor limits podman actually sees on
+# an arm64 runner, under the plain shell and under sudo, before anyone edits
+# .github/actions/ghcr-login. That action is on the critical path of every
+# build in this repository, so a guess pushed straight into it is a repo-wide
+# outage if the guess is wrong.
+#
+# What we are chasing: "Login to Podman (sudo)" fails in ~2s on
+# ubuntu-24.04-arm with
+#   Error: failed to open 2048 locks in /libpod_lock: numerical result out of range
+# (exit 125) while "Login to Podman (user)" -- the same login, same
+# `ulimit -n 4096`, without sudo -- reports "Login Succeeded!" in the same job.
+#
+# Delete this workflow once the fix lands; it exists to produce one table.
+name: arm64 ulimit probe (diagnostic)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: ulimits on ${{ matrix.runner }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # x64 is the control: the same action succeeds there today, so any
+        # difference in these numbers is the thing to explain.
+        runner: [ubuntu-24.04-arm, ubuntu-24.04]
+    steps:
+      - name: Limits as the job shell sees them
+        run: |
+          echo "### ${{ matrix.runner }}" >> "$GITHUB_STEP_SUMMARY"
+          printf '| context | soft nofile | hard nofile |\n| :-- | --: | --: |\n' \
+            >> "$GITHUB_STEP_SUMMARY"
+          printf '| plain shell | %s | %s |\n' "$(ulimit -Sn)" "$(ulimit -Hn)" \
+            >> "$GITHUB_STEP_SUMMARY"
+          echo "plain: soft=$(ulimit -Sn) hard=$(ulimit -Hn)"
+
+      - name: Limits under sudo
+        run: |
+          # Read them the way the failing step's shell would see them.
+          sudo bash -c 'printf "sudo: soft=%s hard=%s\n" "$(ulimit -Sn)" "$(ulimit -Hn)"'
+          soft=$(sudo bash -c 'ulimit -Sn')
+          hard=$(sudo bash -c 'ulimit -Hn')
+          printf '| sudo shell | %s | %s |\n' "$soft" "$hard" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Can the sudo shell actually raise it to 4096?
+        run: |
+          # This is the exact construct ghcr-login uses. `&&` means a failure
+          # here stops the login from ever running, so distinguish "the ulimit
+          # was rejected" from "podman ran and disliked what it got".
+          if sudo bash -c 'ulimit -n 4096' 2>/tmp/ulimit.err; then
+            echo "sudo ulimit -n 4096: OK"
+            echo '| sudo `ulimit -n 4096` | accepted | |' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "sudo ulimit -n 4096: REJECTED"
+            cat /tmp/ulimit.err
+            echo "| sudo \`ulimit -n 4096\` | REJECTED: $(cat /tmp/ulimit.err) | |" \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
+          # And what the process actually ends up with if it is accepted.
+          sudo bash -c 'ulimit -n 4096 2>/dev/null; printf "after raise: soft=%s hard=%s\n" "$(ulimit -Sn)" "$(ulimit -Hn)"' || true
+
+      - name: What podman itself reports
+        run: |
+          echo "--- podman version ---"
+          podman --version || true
+          sudo podman --version || true
+          echo "--- num_locks in effect ---"
+          podman info --format '{{.Host.Slirp4netns}}' >/dev/null 2>&1 || true
+          echo "--- containers.conf files present ---"
+          for f in /etc/containers/containers.conf \
+                   /usr/share/containers/containers.conf \
+                   "$HOME/.config/containers/containers.conf"; do
+            [[ -r "$f" ]] && { echo "== $f"; grep -nE 'num_locks|^\[engine\]' "$f" || echo "(no num_locks)"; }
+          done
+          echo "--- does the failing construct reproduce? ---"
+          # No credentials involved: `podman login` needs the lock file before
+          # it needs a registry, so a bare `podman info` exercises the same
+          # /libpod_lock init that was failing.
+          if sudo bash -c 'ulimit -n 4096 && podman info >/dev/null'; then
+            echo "sudo podman info: OK"
+            echo '| sudo `podman info` | OK | |' >> "$GITHUB_STEP_SUMMARY"
+          else
+            rc=$?
+            echo "sudo podman info: FAILED rc=$rc"
+            sudo bash -c 'ulimit -n 4096 && podman info' 2>&1 | tail -5
+            echo "| sudo \`podman info\` | FAILED rc=$rc | |" >> "$GITHUB_STEP_SUMMARY"
+          fi
