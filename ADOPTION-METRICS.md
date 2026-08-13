@@ -30,6 +30,7 @@ publish, and *how* the snapshot feeds roadmap decisions.
 | Install | Installs / successful boots | opt-in telemetry or boot-report gating | **not measured** | Q4 design decision (#577 GUI gate, #763) |
 | Community | Open PRs from external contributors | GitHub API | 0 external contributors | ≥2 external contributor PRs merged |
 | Community | Discussion posts, `good first issue` pickups | GitHub API | 0 starter issues (dead label, #1308) | ≥5 starter issues picked up |
+| Community | Pantheon feedback reports | Public tracker #1469 + GitHub API | **not measured** | Classify reports and compare Gurnard downloads/docs visits in monthly snapshots |
 | Community | Public adopters (production or evaluation), [ADOPTERS.md](./ADOPTERS.md) | Manual — PR from the adopting org, or outreach asking permission to list | 0 production entries (#1348) | ≥2–3 public evaluator/production entries |
 
 **Instrumentation order** (cheapest first):
@@ -49,9 +50,10 @@ publish, and *how* the snapshot feeds roadmap decisions.
 - **Monthly snapshot**, published in the ROADMAP **Community** section (first:
   **2026-11-01**, covering October — aligns with Q4 "Mature" opening).
 - Snapshot format: downloads by variant × desktop (top 10), stars/forks,
-  external-contributor PRs, release-asset presence per flavor,
-  [ADOPTERS.md](./ADOPTERS.md) production/evaluation entry count, and a
-  one-line "variant ranking" that flags under-/over-performing editions.
+  external-contributor PRs, release-asset presence per flavor, Pantheon
+  feedback counts/classifications, [ADOPTERS.md](./ADOPTERS.md)
+  production/evaluation entry count, and a one-line "variant ranking" that
+  flags under-/over-performing editions.
 - Ownership: **strategist** compiles; **ci-maintainer** supplies R2/Releases
   exports; **guide** publishes on tunaos.org/blog.
 
