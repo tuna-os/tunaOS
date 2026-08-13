@@ -13,3 +13,5 @@ The skills speak in terms of five canonical triage roles. This file maps those r
 When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the corresponding label string from this table.
 
 Edit the right-hand column to match whatever vocabulary you actually use.
+
+For queue-level policy (SLA tiers, when to close a bot-filed finding, milestone-vs-backlog signal) see [TRIAGE-POLICY.md](../../TRIAGE-POLICY.md) — this file only maps individual-issue labels.
