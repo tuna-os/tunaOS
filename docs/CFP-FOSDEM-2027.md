@@ -55,6 +55,25 @@ this is an open-source project's architecture talk with live demos.
 - Speaker: maintainer or maintainer-designate (travel: FOSDEM is free to attend; Brussels transit from most of Europe)
 - Materials: laptop + demo VMs pre-built (bootc images exist in GHCR; Corral runs anywhere with KubeVirt)
 
+## bootc / CNCF ecosystem angle (#1340)
+
+bootc is a CNCF Sandbox project, and TunaOS is one of the more complete
+production bootc *desktop* deployments (37 published editions, daily GNOME
+releases, keyless-signed artifacts) — a concrete adoption story for a
+sandbox project working toward incubation. This isn't cold outreach: Jorge
+Castro (castrojo), CNCF Developer Relations and a Universal Blue founder, is
+already a 201-commit contributor and CODEOWNERS entry on this repo
+(verified via the GitHub API and `.github/CODEOWNERS`, 2026-08-13).
+
+This makes the FOSDEM talk (Containers devroom) a natural fit for a
+CNCF-adjacent bootc ecosystem showcase, not just a standalone project talk.
+**A pitch to bootc-dev / CNCF channels has not been sent** — that's a
+maintainer decision (it's an external, public action on the org's behalf),
+not something to originate from this doc. If a maintainer wants to make
+that pitch, this CFP abstract and the ADOPTERS.md ecosystem table (which
+already lists bootc-dev/bootc as an upstream dependency) are the supporting
+material to point to.
+
 ## Submission checklist
 
 - [ ] CFP portal opens (~Oct 2026) — confirm exact date
@@ -62,6 +81,7 @@ this is an open-source project's architecture talk with live demos.
 - [ ] Record demo video (3–5 min) — needs a spare laptop/VM
 - [ ] Ask 1–2 community members to proof the abstract (FOSDEM reviewers like demos + no-vendor-pitch)
 - [ ] Submit to Containers devroom first; fall back to Desktops if categories allow
+- [ ] (Optional, maintainer call) Pitch a bootc-ecosystem case-study feature to bootc-dev/CNCF channels — see #1340
 
 ## Supporting material (for reviewers / talk page)
 
