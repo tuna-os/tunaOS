@@ -398,6 +398,13 @@ run_swap() {
   grep -q -- 'rpm -ivh --nosignature' "${BATS_TEST_TMPDIR}/tool.log"
 }
 
+@test "kernel-swap keeps automatic dracut temporary output on the boot filesystem" {
+  # The kernel RPM's post-transaction scriptlet invokes dracut before the
+  # overlay's explicit rebuild. With /boot mounted as tmpfs, leaving dracut's
+  # default temp directory elsewhere makes its final rename fail with EXDEV.
+  grep -qF 'TMPDIR=/boot rpm -ivh --nosignature' "$SWAP_SH"
+}
+
 @test "kernel-swap fails loudly when the cache holds no kernel at all" {
   make_swap_stubs "$AKMODS_KVER"
   make_swap_fixture
