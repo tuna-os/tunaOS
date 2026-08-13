@@ -45,7 +45,7 @@ Make Q3 carryover an explicit decision, not a discovery. For every open Q3 goal,
 - **GFI pool is ZERO usable (#1362)**: the #1308 seeds never landed (letters#8 is on an archived repo); CONTRIBUTING's good-first-issue link is dead. No seeds → no external capacity → the retention-window opportunity above is moot. Seed 20+ GFIs by 09-15 (#1362; outreach #1354 tracks 3→8).
 - **Q4 dependency risk**: Q4 is 0/13 items closed (was 0/9); Bonito GA and Redfin GA already appear as Q4 rows — every Q3 descope adds Q4 load before Q4 starts. #1159/#1307 track Q4 goal fidelity.
 - **Release parity**: GNOME releases are now daily (08-09 → 08-11, 3 assets each). kde/xfce/niri/gnome-nvidia still stale 30–37 days (#1254). Browser-catalog parity gate (#1322) fixed the on-demand path; the scheduled GitHub Releases pipeline remains GNOME-only.
-- **New planning debt (mid-cycle)**: wootc ROADMAP merged (wootc#116) but CONTRIBUTING/LICENSE still missing (#1358); gtk-office-suite planning gap open (#1359); tromso stable release untracked (no releases, no milestones — core build tooling; filed as new tracker this cycle).
+- **New planning debt (mid-cycle)**: wootc ROADMAP merged (wootc#116) but CONTRIBUTING/LICENSE still missing (#1358); gtk-office-suite ROADMAP merged (gtk-office-suite#189, resolving #1359; README/tracker follow-up in gtk-office-suite#218); tromso stable release untracked (no releases, no milestones — core build tooling; filed as new tracker this cycle).
 - **Enterprise posture**: ADOPTERS.md empty vs Q4 "Mature" claim (#1348); RHEL10/AlmaLinux topics on repo but Redfin alpha dropped (#1123); branch protection unverified (#1167).
 
 ## Strategist recommendation (input — decision authority stays with maintainer)
