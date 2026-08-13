@@ -7,6 +7,7 @@ import argparse
 import subprocess
 import sys
 from pathlib import Path
+from urllib.parse import urlparse
 
 import yaml
 
@@ -31,7 +32,8 @@ def violations(value: object, path: str = "") -> list[str]:
         for index, child in enumerate(value):
             found.extend(violations(child, f"{path}[{index}]"))
     elif isinstance(value, str) and path.endswith(".baseurl"):
-        if value.startswith(("http://", "https://")) and not any(host in value for host in ALLOWED_REPO_HOSTS):
+        host = urlparse(value).hostname or ""
+        if value.startswith(("http://", "https://")) and host not in ALLOWED_REPO_HOSTS:
             found.append(f"{path}: external repository {value!r} is not approved")
     return found
 
