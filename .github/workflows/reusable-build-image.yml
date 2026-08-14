@@ -444,7 +444,14 @@ jobs:
           set -euo pipefail
           IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
           OUT="sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.spdx.json"
-          $SYFT_CMD "$IMAGE" --scope squashed -o spdx-json="$OUT"
+          # timeout-minutes above is enforced by the runner agent, which is
+          # exactly the thing that wedges when syft OOM-thrashes the runner:
+          # on 08-14 (tunaOS#1567) the guppy base job sat in this step for
+          # 51 minutes past its 20-minute limit, died for lost communication
+          # and uploaded no logs. GOMEMLIMIT is advisory, so bound the scan
+          # externally: `timeout` fails the step fast (exit 124), with logs,
+          # while the agent is still healthy enough to report it.
+          timeout --kill-after=30s 18m $SYFT_CMD "$IMAGE" --scope squashed -o spdx-json="$OUT"
           jq -e '
             .spdxVersion | startswith("SPDX-")
           ' "$OUT" >/dev/null
@@ -849,7 +856,7 @@ jobs:
       - name: Sign images and attest SBOMs
         env:
           REQUIRE_SBOM: ${{ inputs.sbom }}
-          MAX_RETRIES: 3
+          MAX_RETRIES: 6
         run: |
           set -euo pipefail
           identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/reusable-build-image.yml@${GITHUB_REF}"
@@ -870,14 +877,21 @@ jobs:
           # builds that had genuinely succeeded, failing only at this step.
           # A single unwrapped invocation turns a transient Sigstore blip
           # into a red Promote for every flavor whose Sign+attest lands
-          # inside the window. Wrap each cosign call the same way the GHCR
-          # push retries above do: linear backoff, MAX_RETRIES attempts.
+          # inside the window.
+          #
+          # The backoff must be sized against a real outage, not a hiccup:
+          # the 08-14 nightlies (tunaOS#1560) saw Rekor 502 continuously for
+          # 45+ minutes, and the original 3x linear backoff (~30s total)
+          # failed 25 Sign+attest jobs across 7 variants without riding out
+          # a single one. Exponential 15s..8m doubles per attempt (~15.75min
+          # of sleep worst-case per call); this job has no timeout-minutes
+          # (360m default) and only a failing call burns the window.
           cosign_retry() {
             local i
             for i in $(seq "${MAX_RETRIES}"); do
               "$@" && return 0
               echo "::warning::${1} failed (attempt ${i}/${MAX_RETRIES}); retrying..." >&2
-              sleep $((5 * i))
+              sleep $(( 15 * (2 ** (i - 1)) ))
             done
             return 1
           }
