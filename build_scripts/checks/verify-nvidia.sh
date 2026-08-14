@@ -255,9 +255,12 @@ elif ! command -v lsinitrd >/dev/null 2>&1; then
 	fail "lsinitrd is unavailable — cannot prove the initramfs carries the boot drivers"
 else
 	_initrd_list="$(lsinitrd "$INITRAMFS" 2>/dev/null || true)"
+	_builtin_file="${NV_ROOT}/usr/lib/modules/${KERNEL_VRA}/modules.builtin"
 	for _drv in sr_mod cdrom isofs squashfs virtio_scsi virtio_blk overlay loop; do
 		if grep -qE "/${_drv}\.ko" <<<"$_initrd_list"; then
 			pass "initramfs carries ${_drv}"
+		elif [[ -f "$_builtin_file" ]] && grep -qE "/${_drv}\.ko" "$_builtin_file"; then
+			pass "kernel carries ${_drv} as builtin (modules.builtin)"
 		else
 			fail "initramfs is missing ${_drv} — the live ISO or installed boot cannot mount its root"
 		fi

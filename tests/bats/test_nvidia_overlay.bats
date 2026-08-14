@@ -596,6 +596,29 @@ STUB
   [[ "$output" == *"initramfs is missing virtio_scsi"* ]]
 }
 
+@test "verify-nvidia passes when a driver is built into the kernel (modules.builtin)" {
+  make_stub_tools
+  root="$(make_good_root)"
+  # lsinitrd missing sr_mod, cdrom, and virtio_blk (as on 7.1.4 fc43 kernel)
+  cat > "${BATS_TEST_TMPDIR}/bin/lsinitrd" <<STUB
+#!/usr/bin/env bash
+for d in isofs squashfs virtio_scsi overlay loop; do
+  echo "usr/lib/modules/${KVER}/kernel/drivers/misc/\${d}.ko.xz"
+done
+STUB
+  chmod +x "${BATS_TEST_TMPDIR}/bin/lsinitrd"
+  # Provide modules.builtin with the missing drivers
+  cat > "$root/usr/lib/modules/${KVER}/modules.builtin" <<'EOF'
+kernel/drivers/block/virtio_blk.ko
+kernel/drivers/cdrom/cdrom.ko
+kernel/drivers/scsi/sr_mod.ko
+EOF
+  run_verify "$root"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"kernel carries sr_mod as builtin (modules.builtin)"* ]]
+  [[ "$output" == *"TUNAOS_NVIDIA_CONTRACT_OK"* ]]
+}
+
 @test "verify-nvidia fails when the installed kernel has no initramfs at all" {
   make_stub_tools
   root="$(make_good_root)"
