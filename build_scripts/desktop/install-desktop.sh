@@ -426,7 +426,16 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 			echo "name=${_TD_RN}"
 			echo "baseurl=${_TD_RB}"
 			echo "enabled=1"
-			echo "gpgcheck=0"
+			# gpgcheck=1 verifies each RPM against the tuna-os signing key
+			# (every repo.tunaos.org publish pipeline runs `rpmsign --addsign`
+			# before upload — see tuna-os/tunaos-packages#394). repo_gpgcheck
+			# stays 0: repomd.xml isn't detached-signed yet (no repomd.xml.asc
+			# published), so turning that on would hard-fail every dnf
+			# transaction against these repos, not just add a check. Matches
+			# the already-working contrib/install-gnome49.sh pattern rather
+			# than tuna-os/tunaOS#1655's literal ask of both =1.
+			echo "gpgcheck=1"
+			echo "gpgkey=https://repo.tunaos.org/public.gpg"
 			echo "repo_gpgcheck=0"
 			echo "skip_if_unavailable=False"
 			[[ -n "${_TD_RP}" && "${_TD_RP}" != "null" ]] && echo "priority=${_TD_RP}"
