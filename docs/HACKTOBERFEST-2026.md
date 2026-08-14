@@ -33,6 +33,31 @@ Apply the `hacktoberfest` repository or issue label only after the 2026
 registration guidance is published. Until then, keep curation and eligibility
 review separate from the promotional label.
 
+## Blocked repository: bootc-installer
+
+[`tuna-os/bootc-installer`](https://github.com/tuna-os/bootc-installer) is a
+strong potential contributor repo: its GTK 4/Libadwaita frontend and
+`fisherman` pipeline are approachable without the image-factory context. It
+is not currently part of the launch scope, however, because GitHub Issues are
+disabled there ([tunaos#1531](https://github.com/tuna-os/tunaos/issues/1531)).
+Do not advertise it as a starter-repository or seed contributor tasks there
+until the issue channel is available.
+
+The repository maintainer should complete these steps before adding it to the
+participation scope:
+
+1. Enable **Issues** in the `tuna-os/bootc-installer` repository settings.
+2. Open two or three bounded tasks from `ROADMAP.md` (for example, a
+   `fisherman` test-coverage gap or a Flatpak-manifest polish task).
+3. Give each task observable acceptance criteria and both `good first issue`
+   and `help wanted` labels.
+4. Confirm that the issue URLs, contributor guidance, and labels are visible
+   to an unauthenticated visitor before listing the repository here.
+
+Until those checks pass, count `bootc-installer` as a blocked candidate rather
+than as one of the participating repositories or as part of the launch-task
+quota.
+
 ## Current TunaOS candidates
 
 Re-verified live on 2026-08-13 against #1354's 3→8 tagged-task target. Three
