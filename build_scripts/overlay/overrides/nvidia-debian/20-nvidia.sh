@@ -79,6 +79,14 @@ apt-get update -y
 # real one (linux-headers-amd64 here) — see header. dkms needs it present
 # under /usr/lib/modules/${KVER}/build before autoinstall below has
 # anything to build against.
+#
+# libnvidia-allocator1/-egl-gbm1/-egl-wayland1 (tunaOS#1564): not pulled in
+# by nvidia-driver-libs, and --no-install-recommends means they don't arrive
+# transitively either. Without libnvidia-allocator1 specifically,
+# nvidia-drm_gbm.so is missing and verify-nvidia-debian.sh's Debian contract
+# check hard-fails every nvidia flavor build. The other two are the rest of
+# the GBM/Wayland EGL plumbing that check is guarding — added alongside it
+# so the fix is complete, not just the one file the check happens to probe.
 apt-get install -y --no-install-recommends \
 	dkms \
 	linux-headers-generic \
@@ -86,7 +94,10 @@ apt-get install -y --no-install-recommends \
 	nvidia-driver-libs \
 	nvidia-vulkan-icd \
 	nvidia-settings \
-	libgl1-nvidia-glvnd-glx
+	libgl1-nvidia-glvnd-glx \
+	libnvidia-allocator1 \
+	libnvidia-egl-gbm1 \
+	libnvidia-egl-wayland1
 
 if [[ ! -e "/usr/lib/modules/${KVER}/build" ]]; then
 	echo "ERROR: /usr/lib/modules/${KVER}/build is missing after installing linux-headers-generic —" >&2
