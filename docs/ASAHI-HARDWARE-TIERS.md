@@ -97,21 +97,21 @@ and does nothing until then.
    batching multiple flavors into one rental window is worth doing once this
    is real rather than renting per flavor per night.
 
-## Tier 3 — James's M1 Air (`jamess-macbook-air` on tailnet)
+## Tier 3 — M1 MacBook Air (`macbook-air` on tailnet)
 
 A standing, non-ephemeral personal machine reachable over Tailscale. One-time
 physical setup, then indefinite remote iteration:
 
-**One-time, physical, by James:**
+**One-time, physical, by the machine's owner:**
 
 1. Install [Fedora Asahi Remix](https://asahilinux.org/fedora/) (the
    "Minimal" spin — no desktop needed on the host itself, TunaOS images
    bring their own) using the official `asahi-installer` from macOS Recovery.
 2. Boot it, `dnf install tailscale openssh-server`, `systemctl enable --now
    tailscaled sshd`, `tailscale up`, note the tailnet hostname
-   (`jamess-macbook-air`, per the issue).
+   (`macbook-air`, per the issue).
 3. Confirm SSH from a machine already on the tailnet:
-   `ssh james@jamess-macbook-air.<tailnet>.ts.net true`.
+   `ssh <user>@macbook-air.<tailnet>.ts.net true`.
 4. `systemctl mask asahi-bootbin-sync.service` if a TunaOS bootc image is
    ever switched to on this host (see the rule above) — the stock Fedora
    Asahi Remix install won't have this unit at all until the first `bootc
@@ -121,14 +121,14 @@ physical setup, then indefinite remote iteration:
    to remember once.
 
 None of the above can be done from this sandbox — it requires a keyboard in
-front of James's laptop. What follows can run from anywhere with tailnet
+front of the machine. What follows can run from anywhere with tailnet
 reach and does not need repeating per-machine.
 
 **Ongoing, remote, by anyone (agent or human) on the tailnet:**
 
 ```sh
-ASAHI_HW_HOST=jamess-macbook-air.<tailnet>.ts.net \
-ASAHI_HW_USER=james \
+ASAHI_HW_HOST=macbook-air.<tailnet>.ts.net \
+ASAHI_HW_USER=<user> \
   scripts/asahi-remote-switch.sh ghcr.io/tuna-os/bonito:gnome-asahi
 ```
 
