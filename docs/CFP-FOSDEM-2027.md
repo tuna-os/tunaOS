@@ -60,10 +60,25 @@ this is an open-source project's architecture talk with live demos.
 bootc is a CNCF Sandbox project, and TunaOS is one of the more complete
 production bootc *desktop* deployments (37 published editions, daily GNOME
 releases, keyless-signed artifacts) — a concrete adoption story for a
-sandbox project working toward incubation. This isn't cold outreach: Jorge
-Castro (castrojo), CNCF Developer Relations and a Universal Blue founder, is
-already a 201-commit contributor and CODEOWNERS entry on this repo
-(verified via the GitHub API and `.github/CODEOWNERS`, 2026-08-13).
+sandbox project working toward incubation.
+
+**Correction (2026-08-13):** an earlier version of this section claimed
+Jorge Castro (castrojo, CNCF Developer Relations and a Universal Blue
+founder)'s "201-commit contributor and CODEOWNERS entry" status meant this
+wasn't cold outreach. That doesn't hold up — re-verified via the GitHub
+API: every one of castrojo's 201 commits predates `tuna-os/tunaOS`'s own
+creation (2025-07-30), the latest is 2025-05-28, and a search across this
+repo's issues/PRs turns up zero comments, authored issues, or reviews from
+castrojo, ever. Same pattern as the retracted shimonenator claim (#1317)
+and the tulilirockz "warm path" correction (#1339): the commits are
+inherited pre-fork history from bluefin-lts, not real engagement with this
+repo. `.github/CODEOWNERS` still lists castrojo (and tulilirockz), but
+given both show zero real post-fork activity, that file itself looks like
+it was carried over unchanged from the fork rather than reflecting actual
+current maintainers — worth a maintainer's separate look, not assumed here.
+
+Treat this as cold outreach unless a maintainer confirms an actual current
+relationship.
 
 This makes the FOSDEM talk (Containers devroom) a natural fit for a
 CNCF-adjacent bootc ecosystem showcase, not just a standalone project talk.
