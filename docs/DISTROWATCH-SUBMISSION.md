@@ -28,8 +28,9 @@ verifies every release. For teams already running Kubernetes, the Corral
 project manages desktop and service VMs as declarative resources on the
 same cluster estate, with snapshots and GPU passthrough as code.
 
-TunaOS is free and open source under the Apache-2.0 license, with weekly
-release cadence, verified boot reports, and an active community on Matrix.
+TunaOS is free and open source under the Apache-2.0 license, with a daily
+rolling build cadence (plus weekly and quarterly-LTS stability tiers),
+verified boot reports, and an active community on Matrix.
 
 ## Metadata for the listing
 
@@ -40,7 +41,7 @@ release cadence, verified boot reports, and an active community on Matrix.
 | **Source** | https://github.com/tuna-os/tunaOS |
 | **Download** | https://tunaos.org/download (ISOs for all variants) |
 | **Image registry** | https://github.com/orgs/tuna-os/packages (GHCR) |
-| **Status** | Active (weekly releases) |
+| **Status** | Active (daily rolling builds; weekly/quarterly-LTS stability tiers) |
 | **Origin** | USA / global maintainer community |
 | **Desktop environments** | GNOME, KDE Plasma, COSMIC, Niri, XFCE, Pantheon |
 | **Package management** | bootc image-based (rpm-ostree-style), atomic |
