@@ -810,6 +810,12 @@ jobs:
       inputs.publish && github.event_name != 'pull_request' &&
       needs.manifest.result == 'success'
     runs-on: ubuntu-latest
+    # A single Sign+attest job makes several sequential cosign calls (index
+    # sign/verify, then per-platform sign/verify/attest/verify-attestation).
+    # The retry budget below is ~10 min per call, worst case if every call
+    # in the job independently exhausts it (#1560) -- this is a backstop so
+    # a pathological all-502 run fails the job instead of hanging the workflow.
+    timeout-minutes: 45
     permissions:
       contents: read
       packages: write
@@ -849,7 +855,7 @@ jobs:
       - name: Sign images and attest SBOMs
         env:
           REQUIRE_SBOM: ${{ inputs.sbom }}
-          MAX_RETRIES: 3
+          MAX_RETRIES: 11
         run: |
           set -euo pipefail
           identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/reusable-build-image.yml@${GITHUB_REF}"
@@ -870,14 +876,26 @@ jobs:
           # builds that had genuinely succeeded, failing only at this step.
           # A single unwrapped invocation turns a transient Sigstore blip
           # into a red Promote for every flavor whose Sign+attest lands
-          # inside the window. Wrap each cosign call the same way the GHCR
-          # push retries above do: linear backoff, MAX_RETRIES attempts.
+          # inside the window.
+          #
+          # The original linear 5/10/15s backoff (~30s total) was sized for
+          # "a blip that lasts minutes". #1560 measured a real Rekor outage
+          # lasting 03:33-05:11+ UTC (45+ min) on two consecutive nights,
+          # which blew straight through that window on every affected job.
+          # Exponential backoff capped at 90s between attempts, 11 attempts,
+          # gives each cosign call ~10 min to ride out an outage before
+          # giving up -- long enough for the outages actually observed,
+          # short enough (with the job's 45-min timeout above) that a
+          # permanently-down Rekor still fails the job in bounded time
+          # instead of hanging it.
           cosign_retry() {
-            local i
+            local i delay
             for i in $(seq "${MAX_RETRIES}"); do
               "$@" && return 0
-              echo "::warning::${1} failed (attempt ${i}/${MAX_RETRIES}); retrying..." >&2
-              sleep $((5 * i))
+              delay=$((5 * (2 ** (i - 1))))
+              [[ "$delay" -gt 90 ]] && delay=90
+              echo "::warning::${1} failed (attempt ${i}/${MAX_RETRIES}); retrying in ${delay}s..." >&2
+              sleep "$delay"
             done
             return 1
           }
