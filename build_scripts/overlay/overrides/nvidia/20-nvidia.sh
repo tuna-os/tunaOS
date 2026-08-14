@@ -178,15 +178,24 @@ fi
 sed -i 's@omit_drivers@force_drivers@g' /usr/lib/dracut/dracut.conf.d/99-nvidia.conf
 # As we need forced load, also must pre-load intel/amd iGPU else chromium web
 # browsers fail to use hardware acceleration. tunaos#1499: also force
-# sr_mod/cdrom/virtio_blk — --no-hostonly alone stopped being enough to
-# guarantee these on the live ISO / installed-disk boot path on this
-# negativo17 conf; they started coming up missing from the rebuilt
-# initramfs on every *-nvidia nightly (10/10 red 08-03..08-13) while present
-# in the parent (non-nvidia) image's initramfs and in this image's own
-# initramfs before this 99-nvidia.conf edit. virtio_scsi/isofs/squashfs/
-# overlay/loop were unaffected, so this isn't a wholesale hostonly-detection
-# failure — just these three. Same mechanism as i915/amdgpu: force them in
-# explicitly rather than trust generic-mode autodetection to include them.
+# sr_mod/cdrom/virtio_blk for the live ISO / installed-disk boot path.
+#
+# CORRECTION (tunaos#1561). #1499 read the 10/10 red *-nvidia nightlies
+# (08-03..08-13) as generic-mode autodetection failing to pick these three up,
+# and forced them here to compensate. That diagnosis was wrong, and forcing
+# them never could have fixed it: the images had swapped to Fedora 43's
+# kernel, whose config sets CONFIG_BLK_DEV_SR=y and CONFIG_VIRTIO_BLK=y (EL10
+# has both =m). sr_mod, cdrom and virtio_blk are therefore compiled into
+# vmlinuz on fc43 — there is no .ko for dracut to install, so no amount of
+# force_drivers puts one in the initramfs. What was actually red was
+# verify-nvidia.sh's parity check, which demanded a .ko; it now accepts a
+# modules.builtin entry as equally good.
+#
+# The line stays because it is NOT dead: yellowfin/albacore/skipjack's
+# non-HWE nvidia flavors build on the EL10 kernel, where these three ARE
+# modular and forcing them is load-bearing exactly as #1499 intended. On fc43
+# dracut skips them harmlessly. virtio_scsi/isofs/squashfs/overlay/loop are
+# =m on both, which is why they were never part of the failure.
 sed -i 's@ nvidia @ i915 amdgpu nvidia sr_mod cdrom virtio_blk @g' /usr/lib/dracut/dracut.conf.d/99-nvidia.conf
 
 # Make sure initramfs is rebuilt after nvidia drivers or kernel replacement
