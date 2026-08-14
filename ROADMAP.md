@@ -1,6 +1,6 @@
 # tunaOS Roadmap
 
-**Last updated**: 2026-08-12 (NVIDIA flavor row + flavor equality mandate) | **Maintainer**: tuna-os (hanthor)
+**Last updated**: 2026-08-14 (Hacktoberfest seeding tracker refresh, T-8 numbers) | **Maintainer**: tuna-os (hanthor)
 
 ---
 
@@ -111,7 +111,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | Migration guide (Silverblue/Kinoite/UB) | guide | #273 | ✅ Done (MIGRATION.md) |
 | mdBook → tunaos.org centralized | guide | — | ✅ Done |
 | Versioning policy documented | strategist | #274 | ✅ Done (VERSIONING.md, date-based + tiers) |
-| **External contributor onboarding / Hacktoberfest 2026** | guide / strategist | #1331, #1347, #1354, #1362 | 🟡 In progress — org-wide GFI pool at 9 (08-13): tunaos 4, docs 4, protota 1 (#193). **#1354's 3→8 target across tunaos+docs is met** (one issue, #1350, was already picked up and merged — the loop converts end to end). `corral` (named in #1354) has zero viable candidates today (only a Dependency Dashboard issue and one large epic). #1362's broader target is **20+ across 8 repos by 09-15**; `bootc-installer` has issues **disabled entirely** (structural blocker) and `letters` is archived (its 1 tag doesn't count) |
+| **External contributor onboarding / Hacktoberfest 2026** | guide / strategist | #1331, #1347, #1354, #1537 | 🟡 In progress — **T-8 verified (08-14): ~6 usable seeds** (tunaos #1496/#1351, docs #204/#158/#157, protota #193) vs 15–20 needed by the **09-15 seeding deadline** (#1537). **#1354's 3→8 target across tunaos+docs is met** (one issue, #1350, was already picked up and merged — the loop converts end to end). 🟡 Zero curated GFI in **gtk-office-suite, tunaos-packages, wootc**; `corral` (named in #1354) has zero viable candidates (only a Dependency Dashboard issue and one large epic). `bootc-installer` has issues **disabled entirely** (structural blocker, #1531) and `letters` is archived (its 1 tag doesn't count). Former tracker #1362 closed 08-14 as COMPLETED while target unmet — pool growth now tracked in #1537 |
 | Weekly boot report as build gate | ci-maintainer | #989 | 🟡 In progress |
 | Outreach sequencing | strategist | #563 | ✅ Done (gate lifted) |
 | Populate Q3 milestone | strategist | #562 | ✅ Done (2026-08-08, 9 issues) |
