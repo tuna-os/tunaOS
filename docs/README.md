@@ -23,6 +23,8 @@ user-facing site:
 | [ci-troubleshooting.md](ci-troubleshooting.md) | Diagnosing and fixing common CI failures |
 | [mkosi-investigation.md](mkosi-investigation.md) | Notes from the mkosi-based image build investigation |
 | [PIPELINE.md](PIPELINE.md) | Build pipeline reference: stages, workflows, artifact flow |
+| [BRANCH-POLICY.md](BRANCH-POLICY.md) | Branch naming conventions, RFC disposition, and 30-day staleness rules |
+| [EDUCATION-PITCH.md](EDUCATION-PITCH.md) | Education & teaching lab adoption brief for CS departments (#1600) |
 | [BRANCH-PROTECTION.md](BRANCH-PROTECTION.md) | Current-state audit + proposal for main-branch protection & required CI (#1167) |
 | [CI_SPEC.md](CI_SPEC.md) | CI behavior specification |
 | [TESTING.md](TESTING.md) | ISO end-to-end test harness |
