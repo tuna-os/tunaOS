@@ -38,7 +38,19 @@ Include = /etc/pacman.d/cachyos-mirrorlist
 EOF
 fi
 
-pacman -Syu --noconfirm --needed \
+# This stage's parent image already has a kernel: Containerfile.arch's base
+# build detects the [cachyos] repo in pacman.conf to decide KERNEL_PKG, but
+# that repo isn't registered until the block above runs, in THIS later
+# overlay stage — so the base build always installed stock `linux` (this
+# overlay is x86_64-only, unlike asahi's aarch64-only marlin path) and
+# already baked it an initramfs. Installing linux-cachyos without removing
+# it left two kernel module trees on the image (tunaOS#1563), and the plain
+# `pacman -Syu` below could independently bump the stock kernel to a third.
+# Remove it first, the same way asahi.sh removes marlin's aarch64 stock
+# kernel before installing linux-asahi.
+pacman -Rdd --noconfirm linux linux-headers 2>/dev/null || true
+
+pacman -Sy --noconfirm --needed \
 	cachyos-keyring cachyos-mirrorlist cachyos-settings \
 	linux-cachyos linux-cachyos-headers tpm2-tss
 
@@ -46,6 +58,23 @@ pacman -Syu --noconfirm --needed \
 install -D /dev/null /etc/cachyos-release
 printf 'CachyOS\n' >/etc/cachyos-release
 
-# Rebuild initramfs via dracut
-dracut --force --omit "tpm2-tss" "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
+# Rebuild initramfs via dracut for every kernel module tree actually present,
+# not a `find | tail -1` guess (tunaOS#1563): readdir order is unspecified,
+# so which tree got the initramfs was a per-image gamble. When bootc's
+# BLS/composefs setup picked a different entry than dracut did, install
+# failed with "initramfs not found"; when the gamble half-landed, the
+# booted kernel and its module tree disagreed and boot stalled before
+# graphical.target. The stock kernel is removed above, so normally only the
+# cachyos tree remains — looping keeps this correct even if that ever stops
+# holding, instead of re-introducing the same guess with different odds.
+mapfile -t _cachyos_moddirs < <(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d ! -name '*.img')
+if [[ "${#_cachyos_moddirs[@]}" -eq 0 ]]; then
+	echo "ERROR: no kernel module directory found under /usr/lib/modules" >&2
+	exit 1
+fi
+for _moddir in "${_cachyos_moddirs[@]}"; do
+	dracut --force --omit "tpm2-tss" "${_moddir}/initramfs.img"
+done
+unset _cachyos_moddirs _moddir
+
 pacman -Scc --noconfirm || true
