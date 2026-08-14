@@ -21,7 +21,7 @@
 |-------|--------------|-------------|--------|
 | ADR coverage (#1094) staff test | 2 ADR PRs open | ✅ **Met** — ADR 0003 (#1369) + ADR 0004 (#1370) merged 08-13 | PR states |
 | RFC disposition (#1363) | 11 branches undetermined | 11 RFC branches still undetermined; 97 total branches on tunaos; disposition pass due **at** this checkpoint | branch list |
-| GFI pool (#1362) | ZERO usable | **~6 usable seeds** — tunaos #1496/#1351, docs #204/#158/#157, protota #193 (verified 08-14) | label search |
+| GFI pool (#1537 successor to #1362) | ZERO usable | **9 usable seeds in docs; zero in the other checked target repos** (tunaos has only non-usable meta-tracker #1308; verified by live label search 08-14) | label search / [Hacktoberfest tracker](HACKTOBERFEST-2026.md) |
 | External capacity | shimonenator (agent, misattributed) | **None** — retraction confirmed; no human contributor exists | #1317, ROADMAP |
 | Release parity (#1254) | gnome daily to 08-11; others 30–37d stale | gnome daily through 08-13; kde/xfce/niri/cosmic/gnome50 stale 40d (since 07-05), gnome-nvidia 33d (since 07-12) | Releases API |
 | NVIDIA (#1383) | overlay builds regressed 08-12 | **Worse** — initramfs regression #1499 (5 variants, 10/10 nightlies red); fixes #1503/#1523 in flight | #1499 |
