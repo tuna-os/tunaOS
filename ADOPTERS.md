@@ -47,9 +47,14 @@ _(None listed yet — be the first!)_
 
 ## Adding Your Organization
 
-To add your organization to this list:
+The fastest way to get added: open an issue using the
+[adoption-request form](https://github.com/tuna-os/.github/issues/new?template=adoption.yml)
+— tell us your tier, variants, and use case, and we'll open the ADOPTERS.md
+entry for you.
 
-1. Open a PR adding your entry to the **Production Users** or **Development & Evaluation** table
+Prefer to do it yourself? You can also open a PR directly:
+
+1. Add your entry to the **Production Users** or **Development & Evaluation** table
 2. Include the variant(s) you use and a brief description of your use case
 3. (Optional) Add any relevant links (blog posts, case studies, conference talks)
 
