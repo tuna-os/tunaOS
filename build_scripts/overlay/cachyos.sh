@@ -38,7 +38,12 @@ Include = /etc/pacman.d/cachyos-mirrorlist
 EOF
 fi
 
-pacman -Syu --noconfirm --needed \
+# Remove stock kernel packages (linux, linux-headers) if present so only linux-cachyos remains.
+# linux-cachyos provides "linux" / "linux-headers", so --noconfirm would decline conflict resolution
+# if installed alongside stock linux.
+pacman -Rdd --noconfirm linux linux-headers 2>/dev/null || true
+
+pacman -S --noconfirm --needed \
 	cachyos-keyring cachyos-mirrorlist cachyos-settings \
 	linux-cachyos linux-cachyos-headers tpm2-tss
 
@@ -46,6 +51,11 @@ pacman -Syu --noconfirm --needed \
 install -D /dev/null /etc/cachyos-release
 printf 'CachyOS\n' >/etc/cachyos-release
 
-# Rebuild initramfs via dracut
-dracut --force --omit "tpm2-tss" "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
+# Rebuild initramfs via dracut for every kernel installed in /usr/lib/modules
+for kdir in /usr/lib/modules/*/; do
+	[[ -d "$kdir" ]] || continue
+	kver="$(basename "$kdir")"
+	dracut --force --omit "tpm2-tss" "${kdir}/initramfs.img" "${kver}"
+done
+
 pacman -Scc --noconfirm || true

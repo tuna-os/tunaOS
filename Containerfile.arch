@@ -168,7 +168,11 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 # nowhere shared to live.
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/bootc/dracut-config.sh && \
-    dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
+    for kdir in /usr/lib/modules/*/; do \
+        [ -d "$kdir" ] || continue; \
+        kver="$(basename "$kdir")"; \
+        dracut --force "${kdir}/initramfs.img" "${kver}"; \
+    done
 
 # systemd-firstboot asks the CONSOLE for a timezone and blocks there forever.
 #
