@@ -1,6 +1,6 @@
 # tunaOS Roadmap
 
-**Last updated**: 2026-08-14 (Hacktoberfest seeding tracker refresh, T-8 numbers; org-wide roadmap coverage policy) | **Maintainer**: tuna-os (hanthor)
+**Last updated**: 2026-08-14 (CI critical-path correction — 13/13 variants red #1570, workflows-permission blocker #1557; Hacktoberfest T-8 numbers) | **Maintainer**: tuna-os (hanthor)
 
 ---
 
@@ -43,7 +43,7 @@ track it. Notably **Bonito is Beta** (GA tracked in [#272](https://github.com/tu
 
 ### Build Health
 
-CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
+⚠️ **CORRECTION (2026-08-14)**: the prior "CI pipeline builds are green" claim is **stale** — **all 13 variant workflows were red on 08-14** (#1570, consolidated root-cause diagnosis: yellowfin, albacore, skipjack, bonito, bonito-rawhide, sailfin, guppy, grouper, marlin, flounder, flounder-sid, gurnard, hummingbird). Every failed job maps to a known root cause (no unexplained failures); fixes are fixable but stranded: the hive GitHub App **lacks `workflows` permission** (#1557), so every `.github/workflows/*.yml` fix PR is rejected at push. **CI recovery is now the Q3 critical path** (strategist #1571) — flavor equality (#1316), NVIDIA family (#1383), and release parity (#1254) staff tests all depend on a green matrix. 08-22 checkpoint decision required: STAFF CI-recovery with first-PR-by-09-01, plus maintainer grant of the App `workflows` permission.
 
 ✅ **Downloads VERIFIED WORKING** (2026-08-08): tunaos.org/download serves 179 ISOs from R2 (newest 08-07, HTTP 200 GB-scale). ✅ **GitHub Releases RESUMED 2026-08-09**: `gnome-20260809` published 11:38 UTC with assets (incl. SBOM spdx, 52.5 MB) — first release since 07-12; the `a4b147f8` fix (build-run selection, not artifact name — see #1106) and the #1147 cadence backstop are confirmed effective. #936 (tacklebox pin) is **not** a live-boot fix hold: the `image-versions.yaml` fallback was moved to the live-boot fix (tacklebox `4fa6041`) on 07-31 by #937. What is left is a separate, narrower thing — `publish-iso-groups.yml` sets its own `TACKLEBOX_SHA: a105d6d3` (61 commits older, pre-dating the appended-overlay live path), and since `publish-isos.yml` is disabled that override is the SHA every scheduled ISO is actually built with. Those ISOs boot-gate green (run 30773566969, 08-03), so this is a divergence to close deliberately with its own boot evidence, not a hold to lift.
 
@@ -120,7 +120,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | **Desktop parity floor (non-RPM bases)** | packaging | #133, tunaos-packages#323 | ⬜ Not started — P0 for Q4 (see #1294) |
 | **Q3 checkpoint (08-22): staff or descope #272/#1123/#1093/#1094** | strategist | #1299 | ⬜ Scheduled |
 | **Flavor equality mandate (docs wording + cadence parity)** | strategist | #1315, #1254 | 🟡 In progress — catalog parity gate merged 08-11 (#1322, #1281 closed); cadence parity pending (#1316) |
-| **NVIDIA flavor family (6 editions, 0 assets since 07-05)** | ci-maintainer | #1383 | 🔴 Broken — nightly overlay regressed 08-12 (#1382); staff test: nightly green + gnome-nvidia assets republished by 09-01 (#1376/#1379) |
+| **NVIDIA flavor family (6 editions, 0 assets since 07-05)** | ci-maintainer | #1383 | 🔴 Broken — nightly overlay regressed 08-12 (#1382); 13/13 variant matrix red 08-14 (#1570) incl. nvidia cells (#1561/#1562/#1564/#1565); staff test: nightly green + gnome-nvidia assets republished by 09-01 (#1376/#1379) |
 | **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 | 🟡 In progress — PACKAGE-SOURCING.md merged; DNF/COPR audit done 08-13, ahead of the 08-22 checkpoint (2 violations, 6-COPR niri gap, negativo17/rpmfusion allowlist candidates confirmed — #1453); apt/AUR/OBS bases still unaudited, maintainer allowlist sign-off and Phase 2 migration still pending |
 
 ---
