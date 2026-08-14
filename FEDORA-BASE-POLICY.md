@@ -1,6 +1,6 @@
 # Fedora Base Currency Policy
 
-**Status**: DRAFT — proposed 2026-08-13 by the strategist agent for review
+**Status**: ADOPTED — 2026-08-13 via PR #1432
 **Owner**: tuna-os (hanthor) / strategist
 **Tracks**: #1171 (Fedora 45 planning), #272 (Bonito / Fedora 44 GA), #637 (rawhide variant)
 
