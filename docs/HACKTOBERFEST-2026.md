@@ -4,7 +4,8 @@ This runbook prepares the tuna-os organization for Hacktoberfest 2026
 (October 1–31). It is maintained ahead of the event so contributors arrive at
 a useful, reviewed backlog rather than an empty label search.
 
-Tracking issue: [tunaos#1331](https://github.com/tuna-os/tunaos/issues/1331)
+Planning issue: [tunaos#1331](https://github.com/tuna-os/tunaos/issues/1331)
+Live seeding tracker: [tunaos#1537](https://github.com/tuna-os/tunaos/issues/1537)
 
 ## Launch target
 
@@ -13,66 +14,74 @@ Before October 1, maintainers should publish 10–15 open issues that are both
 backlog should include at least three repositories and no repository should
 account for more than half of the tasks.
 
-The initial participation scope is:
+The seeding audit tracks these eight target repositories:
 
 - [tunaos](https://github.com/tuna-os/tunaos)
 - [docs](https://github.com/tuna-os/docs)
-- [corral](https://github.com/tuna-os/corral)
-- [iso-builder](https://github.com/tuna-os/iso-builder)
-- [gtk-office-suite](https://github.com/tuna-os/gtk-office-suite) — replaces
-  `letters` below, which is **archived** (confirmed 2026-08-12) and
-  read-only; any GFI issue there is unclaimable. gtk-office-suite is the
-  active successor (tunaos#1362).
+- [protota](https://github.com/tuna-os/protota)
 - [wootc](https://github.com/tuna-os/wootc)
-- [Tavern](https://github.com/tuna-os/Tavern)
+- [gtk-office-suite](https://github.com/tuna-os/gtk-office-suite)
+- [tunaos-packages](https://github.com/tuna-os/tunaos-packages)
+- [corral](https://github.com/tuna-os/corral)
+- [bootc-installer](https://github.com/tuna-os/bootc-installer) — currently
+  blocked because issues are disabled ([tunaos#1531](https://github.com/tuna-os/tunaos/issues/1531)).
 
-~~[letters](https://github.com/tuna-os/letters)~~ — archived, removed from
-scope (tunaos#1362).
+`letters` is archived and removed from scope. `iso-builder` and `Tavern` remain
+useful expansion sources, but are not substitutes for the eight-repository
+gap audit above.
 
 Apply the `hacktoberfest` repository or issue label only after the 2026
 registration guidance is published. Until then, keep curation and eligibility
 review separate from the promotional label.
 
-## Current TunaOS candidates
+## Live gap snapshot
 
-Re-verified live on 2026-08-13 against #1354's 3→8 tagged-task target. Three
-of the five originally-listed candidates (#1350, #1366, #1385) have since
-been claimed and merged — proof the loop converts, but also a reminder that
-this table needs to be re-checked, not treated as a static plan. The org-wide
-`good first issue` pool sits at **6 open** (2 tunaos, 4 docs) as of this
-update; two new tasks below (#1496, docs#207) bring it to **8**, meeting the
-09-15 target with room to grow toward the 10–15 launch goal.
+The former tracker [#1362](https://github.com/tuna-os/tunaos/issues/1362) was
+closed as completed while its broader target was still open. The T-8 checkpoint
+recorded approximately six usable seeds; a fresh label recount on 2026-08-14
+found **9 open `good first issue` tasks** across three repositories. That is
+progress, but it is still below the **20+ seeds across eight target repos**
+needed by 2026-09-15. Counts below are a snapshot, not a substitute for the
+weekly audit in #1537.
+
+| Target repo | Open `good first issue` | State | Next action |
+|---|---:|---|---|
+| tunaos | 2 | ✅ seeded | Keep two or more alternates available |
+| docs | 6 | ✅ seeded | Keep tasks scoped and replace claimed items |
+| protota | 1 | 🟡 seeded | Confirm acceptance criteria and a maintainer |
+| wootc | 0 | 🔴 gap | Curate a bounded task now that CONTRIBUTING exists |
+| gtk-office-suite | 0 | 🔴 gap | Scanner/maintainer to select and label a small task |
+| tunaos-packages | 0 | 🔴 gap | Packaging maintainer to select a docs/test task |
+| corral | 0 viable | 🟡 constrained | Do not force a GFI from the dashboard or large epic; find a smaller candidate or document descope |
+| bootc-installer | N/A | 🔴 blocked | Resolve disabled issues or exclude it from the usable-pool denominator |
+
+The count includes issues carrying the `good first issue` label. A task only
+counts as **usable** after it passes the curation checklist below and has a
+maintainer who can answer questions. A closed tracker, an unlabelled issue, or
+an issue in a repository with disabled issue intake does not count.
 
 | Issue | Task | Contribution shape | Status |
 |---|---|---|---|
 | [#1308](https://github.com/tuna-os/tunaos/issues/1308) | Reconcile the published-edition documentation/download checklist | research + documentation | open |
-| [#1351](https://github.com/tuna-os/tunaos/issues/1351) | Add a Gurnard/Pantheon desktop guide in `tuna-os/docs` | documentation | open |
-| [#1496](https://github.com/tuna-os/tunaos/issues/1496) | Link six orphaned docs (TRIAGE-POLICY.md, FEDORA-BASE-POLICY.md, docs/CI_SPEC.md, docs/PIPELINE.md, docs/LUKS-TPM.md, docs/ci-troubleshooting.md) into README | one-file documentation | open |
+| [#1526](https://github.com/tuna-os/tunaos/issues/1526) | Add unit tests for `scripts/desktop-verify.py` | tests | open |
+| [docs#217](https://github.com/tuna-os/docs/issues/217) | Niri window-manager quick-start for the Bonito variant | documentation | open |
+| [docs#216](https://github.com/tuna-os/docs/issues/216) | Evaluate TunaOS in a VM — QEMU/KVM quick-start guide | documentation | open |
+| [docs#214](https://github.com/tuna-os/docs/issues/214) | Add a “Choosing your TunaOS variant” decision guide | documentation | open |
 | [docs#204](https://github.com/tuna-os/docs/issues/204) | Add Pantheon edition to the Gurnard variant entry on the download page | documentation | open |
-| [docs#207](https://github.com/tuna-os/docs/issues/207) | Add a Marlin (Arch Linux) variant page | documentation | open |
-| [docs#170](https://github.com/tuna-os/docs/issues/170) | FAQ: Apple Silicon / Snapdragon X Elite support | documentation | open |
 | [docs#158](https://github.com/tuna-os/docs/issues/158) | Pantheon keyboard-shortcuts cheat sheet | documentation | open |
 | [docs#157](https://github.com/tuna-os/docs/issues/157) | FAQ: fold in top GitHub Discussion questions | documentation | open |
+| [protota#193](https://github.com/tuna-os/protota/issues/193) | Declare the project license in `LICENSE` and `package.json` | metadata | open |
 
 ~~[#1350](https://github.com/tuna-os/tunaos/issues/1350)~~,
 ~~[#1366](https://github.com/tuna-os/tunaos/issues/1366)~~, and
 ~~[#1385](https://github.com/tuna-os/tunaos/issues/1385)~~ — merged, no
 longer available to claim.
 
-The eight items above meet the 09-15 floor but not yet the 10–15 launch
-target from #1331, and `corral` still has zero viable GFI candidates (checked
-directly: only a Renovate dashboard and one large VDI-plugin epic — see
-#1354's verification comment). `gtk-office-suite` and `tunaos-packages`
-currently have **zero** open `good first issue` tasks each — checked
-directly (2026-08-13), no false positive: real open issues exist in both
-repos but none are scoped/labeled as starter tasks yet, and unlike `corral`
-this isn't because there's nothing suitable, it's because nobody has curated
-one yet. `wootc` also had zero, plus was missing a `CONTRIBUTING.md`
-entirely (fixed: tuna-os/wootc#150), which blocked it from meeting the
-curation checklist's link requirement below. Add more tasks from
-`iso-builder` and `Tavern` too before the 09-08 audit checkpoint, and keep
-two alternates available for tasks that are claimed or found to be too
-broad.
+The listed candidates are a starting pool, not a claim that the target is met.
+Add tasks from `wootc`, `gtk-office-suite`, and `tunaos-packages` first; keep
+two alternates per repository where practical; and record every new issue or
+descope decision in #1537. `iso-builder` and `Tavern` can provide additional
+alternates after the eight-target audit is back on track.
 
 ## Curation checklist
 
@@ -98,13 +107,14 @@ as Hacktoberfest starter tasks.
 | Date | Deliverable | Owner |
 |---|---|---|
 | By 2026-09-01 | Confirm registration and label guidance | strategist |
-| By 2026-09-08 | Audit the six repositories and select 10–15 tasks plus two alternates | guide + repository maintainers |
+| By 2026-09-08 | Audit the eight target repositories and select 10–15 launch tasks plus two alternates | guide + repository maintainers |
 | By 2026-09-15 | Apply final labels, add missing acceptance criteria, and publish the backlog | guide |
 | 2026-09-15–30 | Announce participation on the blog and Matrix; link directly to the filtered issue view | outreach |
 | 2026-10-01–31 | Triage claims, answer questions, and review starter PRs promptly | repository maintainers |
 | By 2026-11-01 | Record results in the adoption funnel | strategist + guide |
 
-Use the organization-wide filtered view when announcing the event:
+Use the organization-wide filtered view when announcing the event, but link
+the live tracker alongside it so a closed planning issue cannot hide the gap:
 
 <https://github.com/issues?q=is%3Aissue+is%3Aopen+org%3Atuna-os+label%3A%22good+first+issue%22>
 
