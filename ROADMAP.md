@@ -135,7 +135,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
 | Goal | Owner | Dependencies |
 |------|-------|--------------|
-| Tacklebox decoupling | architect | #1192 (tracker; #306 closed) |
+| Tacklebox decoupling | architect | #1192 (tracker; #306 closed), #1197 (installer behavior contract) — exit criterion: the four fisherman-driven frontends consume one backend-owned contract/parity check instead of maintaining five behavior copies |
 | Upstream snapshot automation | ci-maintainer | #1194 (tracker; #307 closed) |
 | Branch protection + required CI | strategist | CI health, #1167 — audited 2026-08-13: [BRANCH-PROTECTION.md](./docs/BRANCH-PROTECTION.md), active `main` ruleset has no required-status-checks rule; proposed list is `lint`, `lint-summary`, `unit-tests` |
 | Supply chain hardening | sec-check | #1193 (tracker; #212/#301 closed) — coordinates with #1187 (package signing/SBOM is the largest hardening item, tracked there in detail) |
