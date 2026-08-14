@@ -522,7 +522,7 @@ def render_report(
         out.append(
             "Packages requested by build_scripts but not in the active EL10 "
             "repos (BaseOS/AppStream/EPEL/CRB/COPRs). Candidates for "
-            "[tuna-os/github-copr](https://github.com/tuna-os/github-copr)."
+            "[tuna-os/tunaos-packages](https://github.com/tuna-os/tunaos-packages)."
         )
         out.append("")
         # Flatten + dedupe across all images
