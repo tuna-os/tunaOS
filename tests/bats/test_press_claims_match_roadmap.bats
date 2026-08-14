@@ -21,6 +21,24 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 ROADMAP="${REPO_ROOT}/ROADMAP.md"
 DISTROWATCH="${REPO_ROOT}/docs/DISTROWATCH-SUBMISSION.md"
 
+# Every external-facing doc that publishes a variant table, not just the
+# DistroWatch one. Four more were in flight when this was written — PRESSKIT.md
+# (#1653), TECH-PRESS-PITCHES.md (#1544), YOUTUBER-REVIEW-KIT.md (#1545) — and
+# a guard that only covers the document that happened to be checked first is
+# how the next one ships wrong. Files are matched if present; a doc that does
+# not exist yet simply is not scanned, and starts being scanned the day it
+# lands.
+press_docs() {
+  local f
+  for f in "${REPO_ROOT}"/docs/DISTROWATCH-SUBMISSION.md \
+           "${REPO_ROOT}"/docs/PRESSKIT.md \
+           "${REPO_ROOT}"/docs/TECH-PRESS-PITCHES.md \
+           "${REPO_ROOT}"/docs/YOUTUBER-REVIEW-KIT.md \
+           "${REPO_ROOT}"/docs/FEDORA-MAGAZINE-PITCH.md; do
+    [ -f "$f" ] && grep -qE '^\| *[A-Z][A-Za-z]+ *\|' "$f" && echo "$f"
+  done
+}
+
 # "| Name | Base | Desktops | Status |" rows from a markdown variant table.
 variant_rows() {
   awk -F'|' '/^\| *[A-Z][A-Za-z]/ && NF==6 {
@@ -35,12 +53,29 @@ variant_rows() {
 # Flounder Sid". A listing reasonably says just "Bonito", so match either half
 # rather than forcing press copy to use the compound name.
 canon_status_for() {
+  # Compound names appear on BOTH sides and are not written identically:
+  # ROADMAP says "Flounder / Flounder Sid", a press kit reasonably writes
+  # "Flounder / Sid". Split both and match on any shared part, so the guard
+  # flags variants that do not exist rather than variants spelled shorter. (It
+  # flagged Flounder before this — a false positive is how a guard gets
+  # deleted, so it matters more than the true positives.)
   variant_rows "$ROADMAP" | awk -F'\t' -v want="$1" '
     {
       if ($1 == want) { print $2; exit }
-      n = split($1, parts, / *\/ */)
-      for (i = 1; i <= n; i++) if (parts[i] == want) { print $2; exit }
+      nc = split($1, cparts, / *\/ */)
+      nw = split(want, wparts, / *\/ */)
+      for (i = 1; i <= nc; i++)
+        for (j = 1; j <= nw; j++)
+          if (cparts[i] == wparts[j]) { print $2; exit }
     }'
+}
+
+@test "there is at least one press doc with a variant table to check" {
+  # Without this, renaming a press doc turns every check below into a pass that
+  # inspected nothing.
+  run bash -c "$(declare -f press_docs); REPO_ROOT='$REPO_ROOT'; press_docs | wc -l"
+  [ "$status" -eq 0 ]
+  [ "$output" -ge 1 ]
 }
 
 @test "the canonical table is parseable and non-trivial" {
@@ -51,31 +86,48 @@ canon_status_for() {
   [ "$output" -ge 10 ]
 }
 
-@test "every variant the DistroWatch draft lists exists in ROADMAP's canonical table" {
-  # Catches desktop flavors (COSMIC, Niri, XFCE) and other repos (Tromsø)
-  # being presented to an editor as distributions.
-  local missing=0 name status
-  while IFS=$'\t' read -r name status; do
-    [ -n "$name" ] || continue
-    if [ -z "$(canon_status_for "$name")" ]; then
-      echo "NOT A VARIANT: DistroWatch draft lists '$name', absent from ROADMAP's canonical table" >&2
-      missing=$((missing + 1))
-    fi
-  done < <(variant_rows "$DISTROWATCH")
+@test "every variant any press doc lists exists in ROADMAP's canonical table" {
+  # Catches three things an editor would check and we would not: desktop
+  # flavors (COSMIC, Niri, XFCE) presented as distributions, other repos
+  # (Tromsø, XFCE Linux) presented as variants, and — the expensive one —
+  # variants that are goals rather than builds. PRESSKIT.md's draft listed
+  # "Redfin | RHEL 10" in a table headed "Variant matrix (as of 2026-08-14)";
+  # `redfin` appears zero times in build-config.yml, and ROADMAP tracks it as a
+  # Q3 goal with "zero movement since 08-08". RHEL support is exactly what an
+  # enterprise outlet asks about first.
+  local missing=0 name status doc
+  while read -r doc; do
+    while IFS=$'\t' read -r name status; do
+      [ -n "$name" ] || continue
+      if [ -z "$(canon_status_for "$name")" ]; then
+        echo "NOT A VARIANT: $(basename "$doc") lists '$name', absent from ROADMAP's canonical table" >&2
+        missing=$((missing + 1))
+      fi
+    done < <(variant_rows "$doc")
+  done < <(press_docs)
   [ "$missing" -eq 0 ]
 }
 
-@test "the DistroWatch draft reports each variant's canonical status" {
-  local drift=0 name status canon
-  while IFS=$'\t' read -r name status; do
-    [ -n "$name" ] || continue
-    canon="$(canon_status_for "$name")"
-    [ -n "$canon" ] || continue  # absence is the previous test's job
-    if [ "$status" != "$canon" ]; then
-      echo "STATUS DRIFT: '$name' is '$status' in the DistroWatch draft, '$canon' in ROADMAP" >&2
-      drift=$((drift + 1))
-    fi
-  done < <(variant_rows "$DISTROWATCH")
+@test "press docs report each variant's canonical status" {
+  # Only applies to tables whose 4th column IS a status. A press kit whose
+  # columns are Base/Desktop/Arch has no status to drift, and canon_status_for
+  # returning empty for a non-status string keeps this from firing on it.
+  local drift=0 name status canon doc
+  while read -r doc; do
+    while IFS=$'\t' read -r name status; do
+      [ -n "$name" ] || continue
+      canon="$(canon_status_for "$name")"
+      [ -n "$canon" ] || continue
+      case "$status" in
+        Stable|Beta|Alpha|Experimental*|New*|GA) ;;
+        *) continue ;;   # not a status column
+      esac
+      if [ "$status" != "$canon" ]; then
+        echo "STATUS DRIFT: '$name' is '$status' in $(basename "$doc"), '$canon' in ROADMAP" >&2
+        drift=$((drift + 1))
+      fi
+    done < <(variant_rows "$doc")
+  done < <(press_docs)
   [ "$drift" -eq 0 ]
 }
 
