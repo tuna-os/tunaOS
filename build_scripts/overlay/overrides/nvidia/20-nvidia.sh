@@ -154,6 +154,7 @@ if [[ -f /usr/share/selinux/packages/nvidia-container.pp ]]; then
 	# atomic directory renames (tmp -> active) succeed on overlayfs.
 	if [[ -d /etc/selinux/targeted ]]; then
 		rm -rf /etc/selinux/targeted/tmp /etc/selinux/targeted/previous
+		rm -rf /etc/selinux/targeted.copyup
 		cp -a /etc/selinux/targeted /etc/selinux/targeted.copyup
 		rm -rf /etc/selinux/targeted
 		mv /etc/selinux/targeted.copyup /etc/selinux/targeted
