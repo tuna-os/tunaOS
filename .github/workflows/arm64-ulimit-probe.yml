@@ -140,10 +140,12 @@ jobs:
       # (github.token), no ulimit override on either call, same order
       # ghcr-login uses.
       - name: Does the exact ghcr-login login sequence reproduce it?
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
-          echo "${{ github.token }}" | podman login -u "${{ github.actor }}" --password-stdin ghcr.io
+          echo "${GITHUB_TOKEN}" | podman login -u "${GITHUB_ACTOR}" --password-stdin ghcr.io
           echo "unsudo login: OK"
-          if sudo TOKEN="${{ github.token }}" ACTOR="${{ github.actor }}" \
+          if sudo TOKEN="${GITHUB_TOKEN}" ACTOR="${GITHUB_ACTOR}" \
               bash -c 'echo "$TOKEN" | podman login -u "$ACTOR" --password-stdin ghcr.io' \
               2>/tmp/seq.err; then
             echo "sudo login AFTER an unsudo login: OK"
