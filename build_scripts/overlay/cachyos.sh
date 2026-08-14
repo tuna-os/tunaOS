@@ -38,14 +38,38 @@ Include = /etc/pacman.d/cachyos-mirrorlist
 EOF
 fi
 
-pacman -Syu --noconfirm --needed \
+# Install the CachyOS kernel without upgrading the entire base mid-overlay.
+# A full -Syu can update the stock kernel as a side effect, leaving multiple
+# module trees for the bootc/BLS generator to choose between.
+pacman -S --noconfirm --needed \
 	cachyos-keyring cachyos-mirrorlist cachyos-settings \
 	linux-cachyos linux-cachyos-headers tpm2-tss
+
+# The Arch base's stock linux package is not a usable fallback here: keeping
+# it alongside linux-cachyos gives bootc two kernels but only one reliably
+# prepared initramfs. Remove it before generating the CachyOS initramfs.
+if pacman -Qq linux >/dev/null 2>&1; then
+	pacman -Rdd --noconfirm linux
+fi
 
 # Mark as CachyOS-augmented for install-desktop.sh detection
 install -D /dev/null /etc/cachyos-release
 printf 'CachyOS\n' >/etc/cachyos-release
 
-# Rebuild initramfs via dracut
-dracut --force --omit "tpm2-tss" "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
+# Rebuild an initramfs for every remaining kernel tree. Never select one with
+# find | tail: directory enumeration order is not stable, and bootc may select
+# a different BLS kernel than the one that happened to receive the initramfs.
+kernel_dirs=()
+for kernel_dir in /usr/lib/modules/*; do
+	[[ -d "$kernel_dir" ]] || continue
+	[[ "${kernel_dir##*/}" == *.img ]] && continue
+	kernel_dirs+=("$kernel_dir")
+done
+if ((${#kernel_dirs[@]} == 0)); then
+	echo "ERROR: no kernel module directories remain after installing linux-cachyos" >&2
+	exit 1
+fi
+for kernel_dir in "${kernel_dirs[@]}"; do
+	dracut --force --omit "tpm2-tss" "${kernel_dir}/initramfs.img"
+done
 pacman -Scc --noconfirm || true
