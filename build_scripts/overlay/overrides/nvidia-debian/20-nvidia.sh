@@ -79,9 +79,29 @@ apt-get update -y
 # real one (linux-headers-amd64 here) — see header. dkms needs it present
 # under /usr/lib/modules/${KVER}/build before autoinstall below has
 # anything to build against.
+#
+# KVER (tunaOS#1565) is the kernel already baked into the base layer,
+# typically served from the buildah registry cache — NOT necessarily what
+# the archive currently serves under the *-generic virtual package. The
+# lockstep the file header describes ("installing them together always
+# pairs a kernel with its own headers") holds inside Containerfile.debian's
+# base stage, where kernel and headers install together fresh; it does not
+# hold here, where only headers install, against an archive that keeps
+# moving after the cached base layer was built. On sid that skew is the
+# common case, not the exception: linux-headers-generic landed 7.1.8 headers
+# against a 7.1.7 cached kernel, dkms built for 7.1.8, and the ${KVER}/build
+# guard below correctly refused to accept it.
+#
+# Install the exact version-matched package first; only fall back to the
+# generic (floating) one if the archive has already moved past this exact
+# kernel version (e.g. a stale cache several releases behind).
+if ! apt-get install -y --no-install-recommends "linux-headers-${KVER}"; then
+	echo "==> linux-headers-${KVER} not in the archive (cache likely behind current sid); falling back to linux-headers-generic" >&2
+	apt-get install -y --no-install-recommends linux-headers-generic
+fi
+
 apt-get install -y --no-install-recommends \
 	dkms \
-	linux-headers-generic \
 	nvidia-kernel-dkms \
 	nvidia-driver-libs \
 	nvidia-vulkan-icd \
