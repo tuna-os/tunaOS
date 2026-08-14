@@ -51,7 +51,7 @@ An RFC branch may merge only when **all** of the following hold:
    The decision record may be brief (context + decision + consequences).
 
 Branches that cannot meet the gate within **30 days** of the last commit are
-flagged for triage (stage → Merged, Abandoned, or folded into a successor).
+flagged for triage (stage → Merged, Abandoned, or folded into a successor) per [BRANCH-HYGIENE.md](docs/BRANCH-HYGIENE.md).
 
 ## Numbering and branch conventions
 
