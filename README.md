@@ -72,6 +72,7 @@ _Generated from the latest completed main-branch build for each variant. A cell 
 | 🎣 **Bonito** | Fedora 44 | `ghcr.io/tuna-os/bonito` | GNOME, KDE, COSMIC, Niri | x86_64, arm64 |
 | 🐦 **Hummingbird** | Fedora Hummingbird (experimental) | `ghcr.io/tuna-os/hummingbird` | Base only | x86_64, arm64 |
 | 🔒 **Redfin** | Red Hat Enterprise Linux 10 | *Local-Build Only* | GNOME, KDE, COSMIC, Niri, XFCE | x86_64, arm64 |
+| 🐟 **Gurnard** | Ubuntu 24.04 Noble (experimental) | `ghcr.io/tuna-os/gurnard` | Pantheon | x86_64, arm64 |
 | 🐟 **Grouper** | Ubuntu 26.04 | `ghcr.io/tuna-os/grouper` | GNOME, KDE, Niri, XFCE | x86_64 |
 | 🚀 **Marlin** | Arch Linux (Rolling) | `ghcr.io/tuna-os/marlin` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64 |
 | 🐡 **Flounder** | Debian 13 (Trixie) | `ghcr.io/tuna-os/flounder` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64 |
@@ -93,6 +94,7 @@ Image tags are constructed as `<desktop>[-hardware]`:
    * `cosmic`: COSMIC Desktop
    * `niri`: Niri (tiling Wayland compositor)
    * `xfce`: XFCE (Wayland experimental)
+   * `pantheon`: Pantheon (Gurnard experimental)
    * `base`: Plain system image with no desktop environment pre-installed (available for most variants)
 
 2. **Hardware Suffixes** (append to any desktop suffix):
