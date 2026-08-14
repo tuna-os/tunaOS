@@ -8,7 +8,36 @@
 
 ## 🏔️ Background: Bonito on the Fedora Release Cycle
 
-TunaOS's **Bonito** variant brings a container-native, image-mode bootc desktop experience to Fedora users. As the Fedora 45 release cycle advances (Beta ~September 2026, GA October 2026), testing Bonito across diverse hardware architectures and desktop environments gives Fedora testers an immutable desktop trial path while producing real community validation data.
+TunaOS's **Bonito** variant brings a container-native, image-mode bootc desktop
+experience to Fedora users.
+
+**Read this before testing: TunaOS does not ship a Fedora 45 image.** Checked
+2026-08-14 against the build config and the upstream base registry:
+
+| what you can install | Fedora stream |
+|---|---|
+| `bonito:<flavor>` | **Fedora 44** — `build-config.yml` pins `quay.io/fedora/fedora-bootc:44` |
+| `bonito:<flavor>-rawhide` | **Rawhide** — which is now Fedora **46** development, since `fedora-bootc` publishes both `45` and `46` |
+
+So neither image is Fedora 45: one is a release behind it, the other a release
+ahead. That is deliberate rather than an oversight —
+[FEDORA-BASE-POLICY.md](FEDORA-BASE-POLICY.md) sequences Fedora 45 base work to
+begin **after** Bonito (Fedora 44) reaches GA
+([#272](https://github.com/tuna-os/tunaOS/issues/272)), specifically so the
+project is not carrying two incomplete Fedora bases at once.
+
+This matters for what the call can honestly ask for. Describing these images as
+"Bonito on Fedora 45" would mislead testers about what they are running, and the
+results feed the Fedora Magazine pitch
+([#1137](https://github.com/tuna-os/tunaOS/issues/1137)) — F44 and Rawhide
+findings labelled as Fedora 45 data is the kind of thing an editor checks.
+
+**What this call actually is**, and is worth doing on its own terms: an
+invitation to Fedora users, who are already testing during the Fedora 45 cycle,
+to try an image-mode bootc desktop built on the Fedora they can run today. Test
+Rawhide if you want to see where the base is heading; test the stable image if
+you want something that should just work. When a Fedora 45 base lands, this
+document gets a fourth row and a re-announcement.
 
 ---
 
@@ -18,9 +47,14 @@ We are calling for community testing across three core Bonito configurations:
 
 | Image / Target | Desktop / Architecture | Key Test Focus |
 |---|---|---|
-| `ghcr.io/tuna-os/bonito:gnome` | GNOME / x86_64, arm64 | Boot, Wayland session, Flatpak preinstall, Extensions |
-| `ghcr.io/tuna-os/bonito:kde` | KDE Plasma / x86_64, arm64 | Wayland login, SDDM/plasmalogin, Dolphin, Konsole |
-| `ghcr.io/tuna-os/bonito:niri` | Niri (Zirconium) / x86_64 | Scrollable tiling compositor, Wayland portals, Greetd |
+| `ghcr.io/tuna-os/bonito:gnome` (F44) | GNOME / x86_64, arm64 | Boot, Wayland session, Flatpak preinstall, Extensions |
+| `ghcr.io/tuna-os/bonito:kde` (F44) | KDE Plasma / x86_64, arm64 | Wayland login, SDDM/plasmalogin, Dolphin, Konsole |
+| `ghcr.io/tuna-os/bonito:niri` (F44) | Niri (Zirconium) / x86_64 | Scrollable tiling compositor, Wayland portals, Greetd |
+| `ghcr.io/tuna-os/bonito:gnome-rawhide` (F46 dev) | GNOME / x86_64, arm64 | The same checks, on the newest base — this is where breakage shows up first |
+
+All four tags verified published in GHCR on 2026-08-14. The Fedora stream is
+stated per row on purpose: a tester who reports "works on Fedora 45" about an
+image that is not Fedora 45 has produced data nobody can use.
 
 ---
 
@@ -29,8 +63,13 @@ We are calling for community testing across three core Bonito configurations:
 ### 1. Zero-Friction QEMU/KVM VM Trial (20 Minutes)
 Test without touching physical disks:
 ```bash
-just vm-run bonito gnome
+# Builds a qcow2 for the flavor and boots it (web console URL is printed).
+scripts/run-vm.sh demo bonito gnome
 ```
+
+> `just vm-run` was in an earlier draft of this guide and is not a recipe in
+> the Justfile — the first command a tester runs has to be one that exists.
+> `just qcow2 bonito gnome` builds the disk image without booting it.
 Or run directly via QEMU:
 ```bash
 qemu-system-x86_64 -m 4096 -smp 4 \
