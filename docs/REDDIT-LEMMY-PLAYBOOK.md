@@ -134,6 +134,8 @@ detail: https://tunaos.org/blog/2026/08/12/announcing-gurnard-ubuntu-pantheon
 
 ### Draft C — Snapdragon X Elite (X13s-class ARM laptops)
 
+**Tracking:** [#1374](https://github.com/tuna-os/tunaOS/issues/1374)
+
 **Target subs:** r/linuxhardware, r/linux (if not using Draft B)
 
 **Title:** `TunaOS on Snapdragon X Elite — bootc Linux for X13s-class ARM laptops`
