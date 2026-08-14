@@ -398,8 +398,34 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 	ensure_dbus_daemon
 	dbus-daemon --system --fork --nopidfile || true
 
-	if ! command -v flatpak &>/dev/null; then
-		echo "ERROR: flatpak not installed; cannot pre-install ${INSTALLER_APP}" >&2
+	# grouper (Ubuntu/apt) and bonito-rawhide (Fedora/dnf) don't ship flatpak
+	# in their base image, so the pre-install below always died with "flatpak
+	# not installed" (tunaOS#1397). Same failure shape as ensure_dbus_daemon
+	# above: try the flatpak package on whichever package manager is present
+	# before giving up, rather than failing every live-customize run for
+	# these bases outright. Portage (guppy/Gentoo) is deliberately not in this
+	# list — emerge is a compile-from-source install with no timeout budget
+	# here and no precedent in this file; guppy keeps failing loud below until
+	# someone verifies an emerge-based install is safe to add.
+	ensure_flatpak() {
+		command -v flatpak >/dev/null 2>&1 && return 0
+		echo "flatpak missing; installing it for the customize step"
+		if command -v dnf5 >/dev/null 2>&1; then
+			dnf5 install -y flatpak
+		elif command -v dnf >/dev/null 2>&1; then
+			dnf install -y flatpak
+		elif command -v zypper >/dev/null 2>&1; then
+			zypper --non-interactive install -y flatpak
+		elif command -v pacman >/dev/null 2>&1; then
+			pacman -Sy --noconfirm --needed flatpak
+		elif command -v apt-get >/dev/null 2>&1; then
+			apt-get update -qq && apt-get install -y --no-install-recommends flatpak
+		fi
+		command -v flatpak >/dev/null 2>&1
+	}
+
+	if ! ensure_flatpak; then
+		echo "ERROR: flatpak not installed and could not be installed; cannot pre-install ${INSTALLER_APP}" >&2
 		exit 1
 	fi
 	# openSUSE's CA bundle is generated under /var, while bootc image stages
