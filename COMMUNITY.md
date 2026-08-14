@@ -21,6 +21,30 @@ tunaOS is an open-source project building OCI-based Enterprise Linux desktops. W
 | **Variant maintainer** | Own a distro variant | Monitor builds, fix breakage |
 | **Core maintainer** | Architecture, CI, releases | Sustained contribution + trust |
 
+### Contributor recognition
+
+We want to recognize contributors whose work strengthens TunaOS over time. In
+August 2026, [Shimon Schwartz (@shimonenator)](https://github.com/shimonenator)
+became the project's first external human contributor to return with multiple
+merged contributions. Their five contributions cover the image-factory
+completion contract, the EL10/Asahi packaging design, the Hummingbird desktop
+repository contract, and flavor-equality documentation:
+
+- [#1283](https://github.com/tuna-os/tunaOS/pull/1283) — image-factory
+  completion gate and definition of done
+- [#777](https://github.com/tuna-os/tunaOS/issues/777) — EL10/Asahi OBS
+  packaging design
+- [#999](https://github.com/tuna-os/tunaOS/pull/999) — image-factory gate
+  alignment
+- [#1282](https://github.com/tuna-os/tunaOS/pull/1282) — Hummingbird
+  repository contract URL
+- [#1315](https://github.com/tuna-os/tunaOS/pull/1315) — flavor equality
+
+Thank you, Shimon, for helping turn these project gaps into clearer contracts
+and more reliable contributor-facing documentation. If you are building on
+TunaOS and return to improve it, we want to recognize that work too — open a
+PR or tell us about it in [Matrix](https://matrix.to/#/%23tunaos:reilly.asia).
+
 ### Communication
 
 - **GitHub Issues**: Bug reports, feature requests, discussion
