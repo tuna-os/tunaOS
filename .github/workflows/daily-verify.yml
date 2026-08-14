@@ -97,6 +97,10 @@ jobs:
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
           OWNER: ${{ github.repository_owner }}
         run: |
           IMAGE_REF="ghcr.io/${OWNER}/${VARIANT}:${FLAVOR}"
@@ -144,8 +148,8 @@ jobs:
           FLAVOR: ${{ matrix.flavor }}
         run: |
           TITLE="Daily Verification Failed: ${VARIANT}:${FLAVOR}"
-          IMAGE_URI="ghcr.io/${{ github.repository_owner }}/${VARIANT}:${FLAVOR}"
-          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          IMAGE_URI="ghcr.io/${GITHUB_REPOSITORY_OWNER}/${VARIANT}:${FLAVOR}"
+          RUN_URL="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
 
           BODY=$(cat <<ISSUE_EOF
           Daily verification failed for \`${VARIANT}:${FLAVOR}\`.

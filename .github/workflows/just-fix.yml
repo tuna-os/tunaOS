@@ -66,6 +66,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           if [[ -z $(git status --porcelain) ]]; then
             echo "no formatting changes to commit"
@@ -75,7 +76,7 @@ jobs:
           git config --local user.name "github-actions[bot]"
           git add -A
           git commit -m "style: fix formatting"
-          if [[ "${{ github.ref_name }}" == "${DEFAULT_BRANCH}" ]]; then
+          if [[ "${REF_NAME}" == "${DEFAULT_BRANCH}" ]]; then
             BRANCH="automation/just-fix-$(date +%s)"
             git checkout -b "${BRANCH}"
             git push -u origin "${BRANCH}"
