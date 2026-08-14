@@ -48,8 +48,8 @@ jobs:
           # BATS (bash automated testing system)
           brew install bats-core
 
-          # pytest for Python tests
-          pip3 install pytest pytest-cov --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov --user
+          # pytest and VLM/image dependencies for Python tests
+          pip3 install pytest pytest-cov Pillow requests --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov Pillow requests --user
 
       - name: Run BATS tests
         run: |
