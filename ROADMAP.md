@@ -83,7 +83,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | Migration guide (Silverblue/Kinoite/UB) | guide | #273 | ✅ Done (MIGRATION.md) |
 | mdBook → tunaos.org centralized | guide | — | ✅ Done |
 | Versioning policy documented | strategist | #274 | ✅ Done (VERSIONING.md, date-based + tiers) |
-| External contributor onboarding | guide | — | ⬜ Not started |
+| External contributor onboarding | guide | #1347 | 🟡 In progress (Hacktoberfest pool: 10–15 by 2026-10-01) |
 | Weekly boot report as build gate | ci-maintainer | #989 | 🟡 In progress |
 | Outreach sequencing | strategist | #563 | ✅ Done (gate lifted) |
 | Populate Q3 milestone | strategist | #562 | ✅ Done (2026-08-08, 9 issues) |
