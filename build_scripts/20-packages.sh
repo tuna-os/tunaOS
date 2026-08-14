@@ -48,16 +48,46 @@ else
 fi
 
 # Tailscale — fetch repo file directly into /etc/yum.repos.d/
-local_ts_ver="${MAJOR_VERSION_NUMBER:-10}"
-if [[ ! "$local_ts_ver" =~ ^[0-9]+$ ]]; then local_ts_ver=10; fi
-
-if [[ $IS_FEDORA == true ]]; then
-	curl -fsSL -o /etc/yum.repos.d/tailscale.repo "https://pkgs.tailscale.com/stable/fedora/tailscale.repo" || true
+#
+# Tailscale publishes ONE version-independent repo file for Fedora and one per
+# EL major for CentOS. The EL branch interpolates MAJOR_VERSION_NUMBER, which
+# comes from os-release VERSION_ID — and that is not always an EL major.
+# Hummingbird versions by datestamp, so this built
+#
+#   https://pkgs.tailscale.com/stable/centos/20251124/tailscale.repo   → 404
+#
+# (tunaOS#1555's evidence list). The old guard only asked "is it digits", which
+# a datestamp satisfies. Nothing failed the build — every step here ends in
+# `|| true` — so tailscale was simply absent from Hummingbird images, silently.
+#
+# Hummingbird is Fedora-derived and IS_FEDORA is deliberately false for it
+# (lib.sh excludes it so the Bonito-specific Fedora paths don't fire), so it
+# needs naming here rather than folding into IS_FEDORA. The fedora repo file is
+# correct for it — verified 200 against pkgs.tailscale.com on 2026-08-14, as
+# were centos/9 and centos/10.
+ts_repo_url=""
+local_ts_ver="${MAJOR_VERSION_NUMBER:-}"
+if [[ $IS_FEDORA == true || ${IS_HUMMINGBIRD:-false} == true ]]; then
+	ts_repo_url="https://pkgs.tailscale.com/stable/fedora/tailscale.repo"
+elif [[ "$local_ts_ver" =~ ^[0-9]{1,2}$ ]]; then
+	# An EL major is one or two digits. A datestamp is not.
+	ts_repo_url="https://pkgs.tailscale.com/stable/centos/${local_ts_ver}/tailscale.repo"
 else
-	curl -fsSL -o /etc/yum.repos.d/tailscale.repo "https://pkgs.tailscale.com/stable/centos/${local_ts_ver}/tailscale.repo" || true
+	echo "WARNING: no tailscale repo for VERSION_ID-derived major '${local_ts_ver:-unset}'" >&2
+	echo "         on this base; skipping tailscale rather than fetching a URL that 404s." >&2
 fi
-sed -i 's/enabled=1/enabled=0/g' /etc/yum.repos.d/tailscale.repo 2>/dev/null || true
-dnf -y --enablerepo "tailscale-stable" install tailscale || true
+
+if [[ -n "$ts_repo_url" ]]; then
+	if curl -fsSL -o /etc/yum.repos.d/tailscale.repo "$ts_repo_url"; then
+		sed -i 's/enabled=1/enabled=0/g' /etc/yum.repos.d/tailscale.repo 2>/dev/null || true
+		dnf -y --enablerepo "tailscale-stable" install tailscale || true
+	else
+		# curl -f leaves no file behind on an HTTP error, so there is nothing
+		# to clean up — but say so, because the previous version's silence is
+		# what let this sit unnoticed across ten red nightlies.
+		echo "WARNING: could not fetch ${ts_repo_url}; tailscale not installed." >&2
+	fi
+fi
 
 # Upstream ublue-os-signing bug: the package used /usr/etc for container
 # signing; bootc rejects non-/etc paths. Fixed upstream (ublue-os/packages#245
