@@ -57,13 +57,13 @@ release cadence, verified boot reports, and an active community on Matrix.
 | Yellowfin | AlmaLinux Kitten 10 | GNOME | Stable |
 | Albacore | AlmaLinux 10 | GNOME | Stable |
 | Bonito | Fedora | GNOME | Beta |
-| Skipjack | CentOS Stream 10 | KDE Plasma | Stable |
+| Skipjack | CentOS Stream 10 | KDE Plasma | Beta |
 | Tromsø | BuildStream-based | KDE Plasma 6 | Stable |
 | XFCE Linux | BuildStream-based | XFCE 4.20 | Stable |
 | COSMIC | EL10 cell (Tideforge-built) | COSMIC | Beta |
 | Niri | Fedora | Niri | Beta |
-| Gurnard | Ubuntu 24.04 LTS | Pantheon | New (08-2026) |
-| Marlin | Arch | GNOME | Alpha |
+| Gurnard | Ubuntu 24.04 LTS | Pantheon | Experimental |
+| Marlin | Arch | GNOME | Beta |
 
 ## Suggested pitch to DistroWatch Weekly editors
 
