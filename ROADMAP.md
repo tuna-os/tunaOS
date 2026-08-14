@@ -146,7 +146,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 (audit → #1187) |
 | Bonito (Fedora 44) GA carryover | ci-maintainer | #272 — blocked on #1499 (nightly red 08-03–08-13) |
 | Redfin (RHEL 10) alpha GA | ci-maintainer | #609 |
-| Fedora 45 base readiness | ci-maintainer | #1171 — [FEDORA-BASE-POLICY.md](./FEDORA-BASE-POLICY.md) drafted 08-13: N+rawhide model, Fedora 45 planning sequenced after Bonito (#272) GA, not parallel |
+| Fedora 45 base readiness | ci-maintainer | #1171 — [FEDORA-BASE-POLICY.md](./FEDORA-BASE-POLICY.md) adopted 08-13: N+rawhide model, Fedora 45 planning sequenced after Bonito (#272) GA, not parallel |
 | Adoption metrics / usage telemetry | strategist | #1174 |
 | **Adoption evidence (ADOPTERS.md production entries)** | strategist | #1348 — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot |
 | Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | #1196, #1175 — [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) |

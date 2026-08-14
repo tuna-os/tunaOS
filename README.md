@@ -292,7 +292,7 @@ Related Communities:
 - [RFC Process](RFC-PROCESS.md) — how RFCs are proposed, reviewed, and decided
 - [Package Sourcing Policy](PACKAGE-SOURCING.md) — package origin rules, Tideforge-first, and allowlist (#1319)
 - [Issue Triage Policy](TRIAGE-POLICY.md) — triage states and SLAs (draft, #1195)
-- [Fedora Base Currency Policy](FEDORA-BASE-POLICY.md) — N+rawhide sequencing for Fedora-based variants (draft, #1171)
+- [Fedora Base Currency Policy](FEDORA-BASE-POLICY.md) — adopted N+rawhide sequencing for Fedora-based variants (#1171)
 - [Versioning](VERSIONING.md) — tag scheme and stability tiers
 - [Migration Guide](MIGRATION.md) — switching from other distros
 - [Security Policy](SECURITY.md) — vulnerability reporting and supported versions
