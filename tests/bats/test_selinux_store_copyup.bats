@@ -32,18 +32,28 @@ INSTALL_SH="${REPO_ROOT}/build_scripts/overlay/overrides/nvidia/20-nvidia.sh"
 # Needs unprivileged user+mount namespaces and overlayfs-over-tmpfs. Available
 # on GitHub-hosted ubuntu runners; skipped rather than failed anywhere it is
 # not, so a constrained runner reports "skipped", not a fake regression.
-setup() {
-  # Probe the WHOLE capability, not just unshare. A runner where unshare works
-  # but overlay-over-tmpfs does not would otherwise fail every test below on a
-  # mount error — a false regression, and exactly the kind of red that gets
-  # ignored. Either the fixture can be built or the tests skip.
-  if ! unshare -Ur --mount bash -c '
-        mount -t tmpfs tmpfs /mnt &&
-        mkdir -p /mnt/l /mnt/u /mnt/w /mnt/m &&
-        mount -t overlay overlay -o lowerdir=/mnt/l,upperdir=/mnt/u,workdir=/mnt/w /mnt/m
-      ' >/dev/null 2>&1; then
-    skip "unprivileged overlayfs-over-tmpfs unavailable on this runner"
+# Can this runner build the overlay fixture at all? GitHub-hosted runners turned
+# out NOT to allow unprivileged overlayfs-over-tmpfs — the first version of this
+# file skipped all five tests there, which is a suite that costs CI time and
+# proves nothing. They do have passwordless sudo, so try that too before giving
+# up. Probes the WHOLE capability, not just unshare: a runner with one and not
+# the other would fail on a mount error rather than skipping.
+OVERLAY_RUNNER=""
+probe_overlay() {
+  local fixture='
+    mount -t tmpfs tmpfs /mnt &&
+    mkdir -p /mnt/l /mnt/u /mnt/w /mnt/m &&
+    mount -t overlay overlay -o lowerdir=/mnt/l,upperdir=/mnt/u,workdir=/mnt/w /mnt/m'
+  if unshare -Ur --mount bash -c "$fixture" >/dev/null 2>&1; then
+    OVERLAY_RUNNER="unshare -Ur --mount"
+  elif sudo -n unshare --mount bash -c "$fixture" >/dev/null 2>&1; then
+    OVERLAY_RUNNER="sudo -n unshare --mount"
   fi
+}
+
+require_overlay() {
+  probe_overlay
+  [ -n "$OVERLAY_RUNNER" ] || skip "no way to mount overlayfs-over-tmpfs on this runner"
 }
 
 # Runs a script inside a namespace with an overlay mounted at /mnt/merged,
@@ -51,7 +61,7 @@ setup() {
 # build layer leaves behind.
 in_overlay() {
   local body="$1"
-  unshare -Ur --mount bash -s <<EOF 2>&1
+  ${OVERLAY_RUNNER} bash -s <<EOF 2>&1
 set -u
 mount -t tmpfs tmpfs /mnt || exit 1
 mkdir -p /mnt/lower/selinux/targeted/active/modules /mnt/upper /mnt/work /mnt/merged
@@ -98,6 +108,7 @@ copyup_block() {
 }
 
 @test "without the copy-up, libsemanage's commit reproduces the build failure" {
+  require_overlay
   run in_overlay "$COMMIT_SANDBOX"
   [ "$status" -eq 0 ]
   # Exactly the two messages from the build log, in order: the EXDEV that sends
@@ -107,6 +118,7 @@ copyup_block() {
 }
 
 @test "with the copy-up from 20-nvidia.sh, both renames succeed" {
+  require_overlay
   run in_overlay "$(copyup_block)
 ${COMMIT_SANDBOX}"
   [ "$status" -eq 0 ]
@@ -117,6 +129,7 @@ ${COMMIT_SANDBOX}"
 }
 
 @test "the copy-up preserves the store rather than emptying it" {
+  require_overlay
   # A copy-up that lost the policy would turn a loud build failure into a
   # broken image, which is worse. Assert the payload survives the round trip.
   #
