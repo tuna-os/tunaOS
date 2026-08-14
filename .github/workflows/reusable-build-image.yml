@@ -265,7 +265,7 @@ jobs:
           mkdir -p verify-out
           IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
           sudo -E corral create gate --bootc "$IMAGE" --wait-ssh --timeout 900
-          sudo ./scripts/iso-e2e.sh "$IMAGE" --disk --output verify-out --timeout 300 || true
+          sudo ./scripts/iso-e2e.sh "$IMAGE" --disk --output verify-out --timeout 300
 
       - name: Upload PR verification evidence
         if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
