@@ -75,13 +75,21 @@ cat /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 
-# linux-headers-generic is a virtual package resolving to the arch-specific
-# real one (linux-headers-amd64 here) — see header. dkms needs it present
-# under /usr/lib/modules/${KVER}/build before autoinstall below has
-# anything to build against.
+# linux-headers-${KVER} matches the base layer's baked kernel version.
+# On sid / rolling archives where the archive has moved past the cached base
+# layer's kernel (e.g. base kernel 7.1.7 vs archive headers 7.1.8), installing
+# linux-headers-generic pulls headers for a newer kernel that dkms builds for,
+# leaving /usr/lib/modules/${KVER}/build missing. If the exact versioned package
+# has been removed from the archive, fall back to linux-headers-generic.
+HEADERS_PKG="linux-headers-${KVER}"
+if ! apt-cache show "$HEADERS_PKG" >/dev/null 2>&1; then
+	echo "==> ${HEADERS_PKG} not available in apt archive; falling back to linux-headers-generic"
+	HEADERS_PKG="linux-headers-generic"
+fi
+
 apt-get install -y --no-install-recommends \
 	dkms \
-	linux-headers-generic \
+	"${HEADERS_PKG}" \
 	nvidia-kernel-dkms \
 	nvidia-driver-libs \
 	nvidia-vulkan-icd \
