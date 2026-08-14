@@ -19,8 +19,15 @@ The initial participation scope is:
 - [docs](https://github.com/tuna-os/docs)
 - [corral](https://github.com/tuna-os/corral)
 - [iso-builder](https://github.com/tuna-os/iso-builder)
-- [letters](https://github.com/tuna-os/letters)
+- [gtk-office-suite](https://github.com/tuna-os/gtk-office-suite) — replaces
+  `letters` below, which is **archived** (confirmed 2026-08-12) and
+  read-only; any GFI issue there is unclaimable. gtk-office-suite is the
+  active successor (tunaos#1362).
+- [wootc](https://github.com/tuna-os/wootc)
 - [Tavern](https://github.com/tuna-os/Tavern)
+
+~~[letters](https://github.com/tuna-os/letters)~~ — archived, removed from
+scope (tunaos#1362).
 
 Apply the `hacktoberfest` repository or issue label only after the 2026
 registration guidance is published. Until then, keep curation and eligibility
@@ -28,22 +35,44 @@ review separate from the promotional label.
 
 ## Current TunaOS candidates
 
-These open issues were present in the queue on 2026-08-13. Recheck their
-scope, ownership, and dependencies before announcing them; an issue that is
-claimed, stale, or blocked must be replaced.
+Re-verified live on 2026-08-13 against #1354's 3→8 tagged-task target. Three
+of the five originally-listed candidates (#1350, #1366, #1385) have since
+been claimed and merged — proof the loop converts, but also a reminder that
+this table needs to be re-checked, not treated as a static plan. The org-wide
+`good first issue` pool sits at **6 open** (2 tunaos, 4 docs) as of this
+update; two new tasks below (#1496, docs#207) bring it to **8**, meeting the
+09-15 target with room to grow toward the 10–15 launch goal.
 
-| Issue | Task | Contribution shape |
-|---|---|---|
-| [#1308](https://github.com/tuna-os/tunaos/issues/1308) | Reconcile the published-edition documentation/download checklist | research + documentation |
-| [#1350](https://github.com/tuna-os/tunaos/issues/1350) | Document the `pantheon` desktop suffix in the README | one-file documentation |
-| [#1351](https://github.com/tuna-os/tunaos/issues/1351) | Add a Gurnard/Pantheon desktop guide in `tuna-os/docs` | documentation |
-| [#1366](https://github.com/tuna-os/tunaos/issues/1366) | Add README guidance for checksum and SBOM verification | documentation |
-| [#1385](https://github.com/tuna-os/tunaos/issues/1385) | Document supported ARM laptop hardware in the README | documentation |
+| Issue | Task | Contribution shape | Status |
+|---|---|---|---|
+| [#1308](https://github.com/tuna-os/tunaos/issues/1308) | Reconcile the published-edition documentation/download checklist | research + documentation | open |
+| [#1351](https://github.com/tuna-os/tunaos/issues/1351) | Add a Gurnard/Pantheon desktop guide in `tuna-os/docs` | documentation | open |
+| [#1496](https://github.com/tuna-os/tunaos/issues/1496) | Link six orphaned docs (TRIAGE-POLICY.md, FEDORA-BASE-POLICY.md, docs/CI_SPEC.md, docs/PIPELINE.md, docs/LUKS-TPM.md, docs/ci-troubleshooting.md) into README | one-file documentation | open |
+| [docs#204](https://github.com/tuna-os/docs/issues/204) | Add Pantheon edition to the Gurnard variant entry on the download page | documentation | open |
+| [docs#207](https://github.com/tuna-os/docs/issues/207) | Add a Marlin (Arch Linux) variant page | documentation | open |
+| [docs#170](https://github.com/tuna-os/docs/issues/170) | FAQ: Apple Silicon / Snapdragon X Elite support | documentation | open |
+| [docs#158](https://github.com/tuna-os/docs/issues/158) | Pantheon keyboard-shortcuts cheat sheet | documentation | open |
+| [docs#157](https://github.com/tuna-os/docs/issues/157) | FAQ: fold in top GitHub Discussion questions | documentation | open |
 
-The five items above are a starting pool, not a promise that all five will be
-selected. Add at least five more tasks from the other participating
-repositories, and keep two alternates available for tasks that are claimed or
-found to be too broad.
+~~[#1350](https://github.com/tuna-os/tunaos/issues/1350)~~,
+~~[#1366](https://github.com/tuna-os/tunaos/issues/1366)~~, and
+~~[#1385](https://github.com/tuna-os/tunaos/issues/1385)~~ — merged, no
+longer available to claim.
+
+The eight items above meet the 09-15 floor but not yet the 10–15 launch
+target from #1331, and `corral` still has zero viable GFI candidates (checked
+directly: only a Renovate dashboard and one large VDI-plugin epic — see
+#1354's verification comment). `gtk-office-suite` and `tunaos-packages`
+currently have **zero** open `good first issue` tasks each — checked
+directly (2026-08-13), no false positive: real open issues exist in both
+repos but none are scoped/labeled as starter tasks yet, and unlike `corral`
+this isn't because there's nothing suitable, it's because nobody has curated
+one yet. `wootc` also had zero, plus was missing a `CONTRIBUTING.md`
+entirely (fixed: tuna-os/wootc#150), which blocked it from meeting the
+curation checklist's link requirement below. Add more tasks from
+`iso-builder` and `Tavern` too before the 09-08 audit checkpoint, and keep
+two alternates available for tasks that are claimed or found to be too
+broad.
 
 ## Curation checklist
 
