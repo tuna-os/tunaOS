@@ -43,6 +43,7 @@ _(None listed yet — be the first!)_
 | [Cloudflare R2](https://www.cloudflare.com/developer-platform/products/r2/) | Package/artifact distribution — native EL10 RPM repository (GNOME 51 onward), ISOs, and boot screenshots | [cloudflare.com/r2](https://www.cloudflare.com/developer-platform/products/r2/) |
 | [Tideforge](https://tideforge.org) | Build service — COSMIC packages built from source for the EL10 desktop cells | [tideforge.org](https://tideforge.org) |
 | [GHCR](https://ghcr.io) | Image registry — all published TunaOS image flavors | [github.com/orgs/tuna-os/packages](https://github.com/orgs/tuna-os/packages) |
+| [Asahi Linux](https://asahilinux.org) | Hardware enablement — bootc-installer-asahi's payload layout is modeled on fedora-asahi/nixos-asahi conventions; targets M1/M2 Macs via Asahi's kernel/firmware work | [github.com/AsahiLinux](https://github.com/AsahiLinux) |
 
 ## Adding Your Organization
 
