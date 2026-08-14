@@ -169,7 +169,14 @@ elif [[ $IS_FEDORA == true ]]; then
 	# what gives GStreamer apps H.264/H.265 decode. gstreamer1-plugins-ugly
 	# is the RPM Fusion build. The build contract asserts the result
 	# (verify-desktop-experience.sh codec baseline).
-	dnf -y install \
+	# Note: On Rawhide (Fedora 46+), exclude openh264* until fedora-cisco-openh264
+	# updates its openh264 RPMs signed with the F46 key (currently fc45 signed with F45 key).
+	# Remove this exclude once openh264-*.fc46 appears in fedora-cisco-openh264.
+	local dnf_opts=()
+	if [[ "${FEDORA_VER}" == "rawhide" ]]; then
+		dnf_opts+=(--exclude='openh264*')
+	fi
+	dnf -y install "${dnf_opts[@]}" \
 		gstreamer1-plugins-good \
 		gstreamer1-plugins-ugly \
 		gstreamer1-plugin-libav \
