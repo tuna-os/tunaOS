@@ -20,8 +20,25 @@
 # is a virtual package resolving to linux-image-amd64 (verified via
 # packages.debian.org, 2026-08-08), and linux-headers-generic resolves to
 # the matching linux-headers-amd64 the SAME way — both are kept in lockstep
-# by the linux source package, so installing them together always pairs a
+# by the linux source package, so installing them TOGETHER always pairs a
 # kernel with its own headers, no exact-EVR juggling required.
+#
+# That lockstep is real, and it is why Containerfile.debian's base stage needs
+# no version pinning. It does NOT carry over to this stage, and assuming it did
+# is tunaOS#1565. Here the kernel is already baked into the base layer — served
+# from --cache-from ghcr.io/tuna-os/tunaos-buildcache — while only the headers
+# are installed, resolved against whatever the archive holds TODAY. The two
+# lockstep with each other, not with the cached layer. On sid they diverge
+# constantly (madison, 2026-08-14):
+#
+#   linux-headers-amd64 | 7.1.7-1 | testing
+#   linux-headers-amd64 | 7.1.8-1 | unstable
+#
+# so `linux-headers-generic` on a base layer holding 7.1.7 installed the 7.1.8
+# headers, upgraded linux-image-amd64 from 7.1.7-1 "over" to 7.1.8-1, created a
+# second /usr/lib/modules tree, and dkms built nvidia-current.ko.xz for
+# 7.1.8+deb14-amd64 while every KVER-keyed step below still pointed at 7.1.7.
+# Headers are therefore pinned to the baked kernel, not taken from the meta.
 #
 # The exact dkms module name nvidia-kernel-dkms registers is NOT assumed:
 # the Debian Contents index (2026-08-08) shows
@@ -75,13 +92,48 @@ cat /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 
-# linux-headers-generic is a virtual package resolving to the arch-specific
-# real one (linux-headers-amd64 here) — see header. dkms needs it present
-# under /usr/lib/modules/${KVER}/build before autoinstall below has
-# anything to build against.
+# Headers for the kernel THIS IMAGE ACTUALLY CARRIES, by exact ABI name, in
+# their own transaction ahead of the driver — see the header for why
+# linux-headers-generic (-> linux-headers-amd64 -> whatever the archive serves
+# today) is the wrong package here.
+#
+# Debian keeps the ABI-versioned binaries in the archive across a transition
+# while the meta moves on, which is what makes pinning work (madison,
+# 2026-08-14):
+#
+#   linux-headers-7.1.7+deb14-amd64 | 7.1.7-1 | testing, unstable
+#   linux-headers-7.1.8+deb14-amd64 | 7.1.8-1 | unstable
+#
+# and linux-headers-<abi>-amd64 depends only on gcc-*-for-host, linux-base,
+# linux-base-<abi>, linux-headers-<abi>-common and linux-kbuild-<abi> — no
+# linux-image — so this cannot drag a second kernel in the way the meta did.
+#
+# Separate transaction, before the driver: nvidia-kernel-dkms's postinst
+# autobuilds against whatever headers are installed at that moment, so the
+# only way to guarantee it builds for ${KVER} is for ${KVER}'s headers to be
+# the only ones present when it is unpacked. (apt would satisfy dkms itself
+# either way — nvidia-kernel-dkms Depends on it.)
+HEADERS_PKG="linux-headers-${KVER}"
+echo "==> installing headers for the baked kernel: ${HEADERS_PKG}"
+if ! apt-get install -y --no-install-recommends "$HEADERS_PKG"; then
+	echo "ERROR: ${HEADERS_PKG} is not installable from this archive." >&2
+	echo "       This image's baked kernel is ${KVER}, but the Debian archive no" >&2
+	echo "       longer carries headers for that ABI — i.e. the base layer (usually" >&2
+	echo "       served from --cache-from ghcr.io/tuna-os/tunaos-buildcache) is older" >&2
+	echo "       than the archive by more than one kernel transition." >&2
+	echo "" >&2
+	echo "       This is NOT fixable by installing linux-headers-generic instead:" >&2
+	echo "       that resolves to the current ABI, and dkms would build the driver" >&2
+	echo "       for a kernel this image does not ship (tunaOS#1565)." >&2
+	echo "       Rebuild the base layer so its kernel is current, then retry." >&2
+	echo "" >&2
+	echo "       what the archive offers now:" >&2
+	apt-cache policy linux-headers-amd64 "$HEADERS_PKG" >&2 || true
+	exit 1
+fi
+
 apt-get install -y --no-install-recommends \
 	dkms \
-	linux-headers-generic \
 	nvidia-kernel-dkms \
 	nvidia-driver-libs \
 	nvidia-vulkan-icd \
@@ -89,8 +141,10 @@ apt-get install -y --no-install-recommends \
 	libgl1-nvidia-glvnd-glx
 
 if [[ ! -e "/usr/lib/modules/${KVER}/build" ]]; then
-	echo "ERROR: /usr/lib/modules/${KVER}/build is missing after installing linux-headers-generic —" >&2
+	echo "ERROR: /usr/lib/modules/${KVER}/build is missing after installing ${HEADERS_PKG} —" >&2
 	echo "       dkms has no headers to build the nvidia module against for ${KVER}." >&2
+	echo "       The package installed cleanly, so this is a packaging-layout change" >&2
+	echo "       rather than the archive skew in tunaOS#1565 — that path exits above." >&2
 	exit 1
 fi
 

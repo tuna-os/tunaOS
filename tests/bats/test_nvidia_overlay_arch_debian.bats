@@ -114,10 +114,85 @@ VERIFY_DEBIAN_SH="${REPO_ROOT}/build_scripts/checks/verify-nvidia-debian.sh"
 @test "nvidia-debian 20-nvidia.sh guards on IS_DEBIAN and asserts the dkms build tree before building" {
   run grep -F 'IS_DEBIAN' "$DEBIAN_INSTALL_SH"
   [ "$status" -eq 0 ]
-  run grep -F 'linux-headers-generic' "$DEBIAN_INSTALL_SH"
+  # This used to assert linux-headers-generic was installed. That package is
+  # the defect (tunaOS#1565), not the contract — see the headers tests below.
+  run grep -F '/usr/lib/modules/${KVER}/build' "$DEBIAN_INSTALL_SH"
   [ "$status" -eq 0 ]
   run grep -F 'dkms autoinstall' "$DEBIAN_INSTALL_SH"
   [ "$status" -eq 0 ]
+}
+
+# ── headers must match the BAKED kernel, not today's archive (tunaOS#1565) ──
+#
+# KVER is read from the kernel already in the base layer, which is normally
+# served from --cache-from. Installing linux-headers-generic resolved to
+# linux-headers-amd64 at whatever version the archive held at build time. On
+# sid those diverge constantly:
+#
+#   linux-headers-amd64 | 7.1.7-1 | testing
+#   linux-headers-amd64 | 7.1.8-1 | unstable
+#
+# so on a 7.1.7 base layer the overlay installed 7.1.8 headers, upgraded
+# linux-image-amd64 "over" 7.1.7-1, made a second /usr/lib/modules tree, and
+# dkms built for 7.1.8 while every KVER-keyed step still meant 7.1.7.
+
+@test "nvidia-debian 20-nvidia.sh does not install linux-headers-generic" {
+  # Target the package-list usage specifically. The name still appears in the
+  # header (explaining the defect) and in the not-installable error (telling
+  # the reader why falling back to it is not the fix) — a test that matched any
+  # mention would fail on the fix's own documentation. What must never come
+  # back is the package being handed to apt.
+  run grep -nE '^[[:space:]]*linux-headers-generic[[:space:]]*\\?[[:space:]]*$' "$DEBIAN_INSTALL_SH"
+  [ "$status" -ne 0 ]
+  run grep -nE 'apt-get install[^|&;]*linux-headers-generic' "$DEBIAN_INSTALL_SH"
+  [ "$status" -ne 0 ]
+}
+
+@test "nvidia-debian 20-nvidia.sh installs headers for the exact baked ABI" {
+  run grep -F 'HEADERS_PKG="linux-headers-${KVER}"' "$DEBIAN_INSTALL_SH"
+  [ "$status" -eq 0 ]
+  run grep -F 'apt-get install -y --no-install-recommends "$HEADERS_PKG"' "$DEBIAN_INSTALL_SH"
+  [ "$status" -eq 0 ]
+}
+
+@test "nvidia-debian 20-nvidia.sh installs the headers before the dkms driver" {
+  # nvidia-kernel-dkms's postinst autobuilds against whatever headers are
+  # installed when it is unpacked, so ${KVER}'s headers must be the only ones
+  # present by then. Same transaction is not enough — order is the contract.
+  run awk '/HEADERS_PKG="linux-headers-\$\{KVER\}"/{print NR; exit}' "$DEBIAN_INSTALL_SH"
+  local headers_line="$output"
+  # Anchor to the package-list line, not the first mention anywhere: the file
+  # header discusses nvidia-kernel-dkms long before either is installed.
+  run awk '/^[[:space:]]+nvidia-kernel-dkms[[:space:]]*\\?[[:space:]]*$/{print NR; exit}' "$DEBIAN_INSTALL_SH"
+  local dkms_line="$output"
+  [ -n "$headers_line" ]
+  [ -n "$dkms_line" ]
+  [ "$headers_line" -lt "$dkms_line" ]
+}
+
+@test "nvidia-debian 20-nvidia.sh fails loudly when the baked kernel's headers are gone from the archive" {
+  # Deliberately NOT the fallback the issue suggested. Falling back to
+  # linux-headers-generic reproduces the failure exactly, so it recovers
+  # nothing — it just moves the error later and makes it harder to read.
+  run grep -F 'is not installable from this archive' "$DEBIAN_INSTALL_SH"
+  [ "$status" -eq 0 ]
+  # The message must name the real cause (a base layer older than the archive)
+  # rather than leaving the reader at a missing build directory.
+  run grep -F 'cache-from' "$DEBIAN_INSTALL_SH"
+  [ "$status" -eq 0 ]
+  # And it must exit, not warn.
+  run awk '/is not installable from this archive/{f=1} f&&/^\texit 1/{print "found"; exit}' "$DEBIAN_INSTALL_SH"
+  [ "$output" = "found" ]
+}
+
+@test "nvidia-debian keeps the single-kernel-tree contract satisfiable" {
+  # verify-nvidia-debian.sh requires exactly one tree under /usr/lib/modules.
+  # The old headers path created a second one, so that contract could not hold
+  # on flounder-sid regardless of what the overlay did afterwards.
+  run grep -F 'kernel module trees under /usr/lib/modules' "$VERIFY_DEBIAN_SH"
+  [ "$status" -eq 0 ]
+  run grep -nE '^[^#]*linux-image-generic' "$DEBIAN_INSTALL_SH"
+  [ "$status" -ne 0 ]
 }
 
 @test "nvidia-debian 20-nvidia.sh proves the module by finding it on disk, not by trusting dkms status text" {
