@@ -44,6 +44,7 @@ user-facing site:
 | [CFP-FOSDEM-2027.md](CFP-FOSDEM-2027.md) | FOSDEM 2027 CFP draft |
 | [CFP-SCALE-21X.md](CFP-SCALE-21X.md) | SCaLE 21x CFP draft, adapted from the FOSDEM abstract |
 | [DISTROWATCH-SUBMISSION.md](DISTROWATCH-SUBMISSION.md) | DistroWatch project submission draft |
+| [ADOPTION-OUTREACH-STATUS.md](ADOPTION-OUTREACH-STATUS.md) | Evidence ledger for DistroWatch, CNCF, and adopter outreach |
 | [REDDIT-LEMMY-PLAYBOOK.md](REDDIT-LEMMY-PLAYBOOK.md) | Release-announcement playbook for Reddit / Lemmy |
 | [YOUTUBER-REVIEW-KIT.md](YOUTUBER-REVIEW-KIT.md) | Linux YouTuber review kit — verified working downloads, ARM story (#1535) |
 | [FEDORA-MAGAZINE-PITCH.md](FEDORA-MAGAZINE-PITCH.md) | Guest-post pitch draft for Fedora Magazine |
