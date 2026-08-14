@@ -32,6 +32,10 @@ ok()   { echo "  ok   $*"; ((pass++)); }
 bad()  { echo "  FAIL $*"; ((fail++)); }
 note() { echo "  warn $*"; ((warn++)); }
 check_file() { [[ -e "$mnt$1" ]] && ok "$1" || bad "$1 missing"; }
+# Same as check_file, but downgrades to note() on EL10/Hyperscale for a
+# known, still-open packaging gap (note_or_bad, defined below) instead of
+# failing the gate.
+check_file_known_gap() { [[ -e "$mnt$1" ]] && ok "$1" || note_or_bad "$1 missing"; }
 
 echo "== kernel =="
 mapfile -t kvers < <(ls "$mnt/usr/lib/modules/" 2>/dev/null)
@@ -48,6 +52,27 @@ kver="${kvers[0]:-}"
 for k in "${kvers[@]}"; do
     if [[ "$k" == *asahi* ]]; then kver="$k"; break; fi
 done
+# CentOS Hyperscale SIG (EL10: albacore/skipjack/yellowfin) release strings
+# embed "el10" the same way every Enterprise Linux kernel package does
+# (RPM's %{?dist} convention) -- confirmed against a real run's kver,
+# 6.16.4-0.hs100.hs+asahi.el10.aarch64+16k (tunaOS#1569). Four checks below
+# are known, still-open Hyperscale packaging gaps (tunaOS#777) that will
+# never exist for this family until the OBS work there lands -- grading them
+# as hard FAILs here made the gate structurally unpassable for EL10 images
+# forever, at the cost of two matrix cells with zero signal. Fedora-family
+# images (kver has no "el10") keep the hard FAIL.
+is_el10_hyperscale=0
+[[ "$kver" == *el10* ]] && is_el10_hyperscale=1
+# note_or_bad: like bad(), but downgrades to note() for the four
+# known-EL10-gap checks below instead of failing the gate on a defect this
+# repo cannot fix from scripts/.
+note_or_bad() {
+    if [[ "$is_el10_hyperscale" -eq 1 ]]; then
+        note "$* (known EL10/Hyperscale gap, tunaOS#777 — not a hard fail on this family)"
+    else
+        bad "$*"
+    fi
+}
 M="$mnt/usr/lib/modules/$kver"
 # 16K pages are a hard requirement of Apple Silicon's DART IOMMU, not a
 # distro naming convention — Fedora encodes it in the version (+16k),
@@ -70,8 +95,15 @@ deps="$M/modules.dep"
 for mod in asahi.ko appledrm.ko nvme-apple.ko hci_bcm4377.ko brcmfmac.ko \
            apple-dart.ko macsmc.ko apple-isp.ko spi-hid-apple.ko \
            apple-admac.ko apple-soc-cpufreq.ko dockchannel-hid.ko; do
-    if grep -qE "/${mod}(\.xz|\.zst|\.gz)?:" "$deps" 2>/dev/null; then ok "$mod"
-    else bad "$mod not in modules.dep"; fi
+    if grep -qE "/${mod}(\.xz|\.zst|\.gz)?:" "$deps" 2>/dev/null; then
+        ok "$mod"
+    elif [[ "$mod" == "apple-isp.ko" ]]; then
+        # Absent from the 6.16.4 hs+asahi EL10 kernel build (tunaOS#1569,
+        # tunaOS#777) -- Hyperscale gap, not a Fedora-family gap.
+        note_or_bad "$mod not in modules.dep"
+    else
+        bad "$mod not in modules.dep"
+    fi
 done
 
 echo "== devicetrees =="
@@ -87,6 +119,15 @@ check_any() { # label, candidate paths...
         if [[ -e "$mnt$f" ]]; then ok "$label ($f)"; return; fi
     done
     bad "$label missing (tried: $*)"
+}
+# Same as check_any, but downgrades to note() on EL10/Hyperscale for a known,
+# still-open packaging gap instead of failing the gate.
+check_any_known_gap() { # label, candidate paths...
+    local label="$1"; shift
+    for f in "$@"; do
+        if [[ -e "$mnt$f" ]]; then ok "$label ($f)"; return; fi
+    done
+    note_or_bad "$label missing (tried: $*)"
 }
 # Paths differ per packaging family (Fedora lib64, Debian/Ubuntu lib, Arch boot)
 check_any "m1n1 payload" /usr/lib64/m1n1/m1n1.bin /usr/lib/m1n1/m1n1.bin /usr/lib/asahi-boot/m1n1.bin /boot/m1n1.bin
@@ -117,7 +158,7 @@ check_any "update-m1n1" /usr/bin/update-m1n1 /usr/sbin/update-m1n1
 # tracks upstream packaging completeness, not "does this image regenerate its
 # boot.bin after an upgrade" — that question is asahi-bootbin-sync.service's,
 # and it does not depend on this hook existing.
-check_any "update-m1n1 kernel hook" /usr/lib/kernel/install.d/15-update-m1n1.install /etc/kernel/postinst.d/update-m1n1 /etc/kernel/postinst.d/zz-update-m1n1
+check_any_known_gap "update-m1n1 kernel hook" /usr/lib/kernel/install.d/15-update-m1n1.install /etc/kernel/postinst.d/update-m1n1 /etc/kernel/postinst.d/zz-update-m1n1
 
 echo "== firmware handling =="
 check_file /usr/bin/asahi-fwextract
@@ -148,9 +189,12 @@ aa=$(ls "$mnt/usr/share/asahi-audio" 2>/dev/null | wc -l)
 [[ "$aa" -ge 5 ]] && ok "asahi-audio machine profiles ($aa)" || bad "asahi-audio profiles missing"
 
 echo "== misc userspace =="
-check_file /usr/bin/tiny-dfr
-check_file /usr/lib/systemd/system/tiny-dfr.service
-check_file /usr/bin/asahi-diagnose
+# tiny-dfr and asahi-diagnose are Fedora-Asahi userspace packages not in the
+# EL10/Hyperscale set (tunaOS#777, tunaOS#1569) -- same known-gap treatment
+# as update-m1n1's kernel hook and apple-isp.ko above.
+check_file_known_gap /usr/bin/tiny-dfr
+check_file_known_gap /usr/lib/systemd/system/tiny-dfr.service
+check_file_known_gap /usr/bin/asahi-diagnose
 
 echo
 echo "RESULT: $pass passed, $fail failed, $warn warnings"
