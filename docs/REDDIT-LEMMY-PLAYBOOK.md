@@ -56,8 +56,116 @@ release announcements a repeatable, low-effort process.
    ADOPTION-METRICS.md snapshot (#1311)
 4. Retro after 3 posts: what worked, what to cut
 
-## First post (ready to adapt)
+## Ready-to-post drafts (August 2026 launch trio)
 
-Gurnard launch announcement — see
-[blog/2026-08-12-announcing-gurnard-ubuntu-pantheon.md](https://github.com/tuna-os/docs/blob/main/blog/2026-08-12-announcing-gurnard-ubuntu-pantheon.md)
-and issue #1344 for the base content.
+Three launches went out on the blog 2026-08-12 (Gurnard/Pantheon, Apple
+Silicon, Snapdragon X Elite) with **no** Reddit/Lemmy presence yet. The
+drafts below follow the template above and are ready for the maintainer to
+post verbatim or trim.
+
+**r/linux slot budget (1/month):** per the rules above, pick **one** of the
+three for r/linux this month. Recommendation: **Draft B (ARM roundup)** —
+it has the broadest audience (Apple Silicon + Snapdragon Linux are both
+hot topics in 2026). The other two go to their niche subs (r/AsahiLinux,
+r/linuxhardware, r/Ubuntu, r/elementaryos) where they are on-topic and not
+subject to r/linux's self-promotion limits.
+
+### Draft A — Gurnard (Ubuntu 24.04 + Pantheon)
+
+**Target subs:** r/Ubuntu, r/elementaryos, r/linux (if not using Draft B)
+
+**Title:** `TunaOS Gurnard — the Pantheon desktop on Ubuntu 24.04 LTS, as an atomic bootc image`
+
+**Body:**
+
+> We just shipped **Gurnard** — Ubuntu 24.04 LTS with the Pantheon desktop
+> (the elementary OS environment) wrapped in an atomic, container-native
+> core. It's the first widely-buildable way to run the elementary desktop
+> on a standard Ubuntu LTS base.
+>
+> Why it matters: Pantheon is one of the most polished desktop shells in
+> Linux, but until now it was mostly tied to elementary OS itself. Gurnard
+> keeps the calm, minimal, app-centric feel while the base behaves like a
+> modern immutable system — bootable containers, atomic updates, rollback
+> on failure, verified upgrades. Flathub and Homebrew are pre-enabled.
+>
+> New/changed:
+> - Ubuntu 24.04 LTS base + Pantheon shell, x86_64 **and** arm64 images
+> - Atomic updates with rollback; images on GHCR (`ghcr.io/tuna-os/gurnard:base` / `:pantheon`)
+> - Built with the same bootc toolchain as the rest of TunaOS
+>
+> Try it: https://tunaos.org/download — announcement post with more
+detail: https://tunaos.org/blog/2026/08/12/announcing-gurnard-ubuntu-pantheon
+>
+> Status: **experimental** — great time to kick the tires while bug reports
+> are cheap and can shape the Pantheon packaging. Feedback welcome in the
+> comments or on Matrix (#tunaos).
+
+### Draft B — Apple Silicon (M1/M2 Macs)
+
+**Target subs:** r/AsahiLinux, r/linux (recommended r/linux slot for Aug)
+
+**Title:** `TunaOS on Apple Silicon — bootc images for M1/M2 Macs, alongside Asahi`
+
+**Body:**
+
+> We just published **TunaOS images for Apple Silicon Macs** — atomic,
+> container-native Linux for M1/M2, installed via our
+> bootc-installer-asahi path (which is explicitly designed to work beyond
+> TunaOS — Dakota, Bluefin, Bazzite could all ride it).
+>
+> Why it matters: Apple Silicon is the most common ARM Linux machine in
+> the world, and the Asahi ecosystem has done the heavy lifting to make
+> Linux run there. TunaOS adds a bootc-based desktop on top: atomic
+> updates, verified upgrades, rollback. It's not a replacement for Asahi
+> Linux — it's a sibling with a different update model.
+>
+> New/changed:
+> - Bootc images for M1/M2 Macs with a recoveryOS handoff installer
+> - Golden-manifest verification of the installed payload
+> - R2-hosted payloads; installer docs written up this week
+>
+> Try it: https://tunaos.org/download (Apple Silicon section) — post:
+> https://tunaos.org/blog/2026/08/12/tunaos-on-apple-silicon
+>
+> Status: early but actively developed (commits this week). Hardware
+> testing reports from real Macs are the most useful contribution right
+> now — we track them here: https://github.com/tuna-os/bootc-installer-asahi
+
+### Draft C — Snapdragon X Elite (X13s-class ARM laptops)
+
+**Target subs:** r/linuxhardware, r/linux (if not using Draft B)
+
+**Title:** `TunaOS on Snapdragon X Elite — bootc Linux for X13s-class ARM laptops`
+
+**Body:**
+
+> We just published **TunaOS images for Snapdragon X Elite (X13s-class)
+> ARM laptops** — the Bonito/Dakota family now ships an ARM laptop build
+> with the same atomic, container-native update model as the rest of the
+> project.
+>
+> Why it matters: Snapdragon X Elite laptops are the fastest-growing ARM
+> Windows hardware, and Linux support on them is exactly where the
+> ecosystem needs more real-world testing. This is a small but concrete
+> step: bootc-based desktop images you can actually boot on the hardware
+> you already own.
+>
+> New/changed:
+> - Bonito/Dakota ARM images for X13s-class laptops
+> - Same toolchain: atomic updates, rollback, verified upgrades
+> - Documented hardware support matrix in the README
+>
+> Try it: https://tunaos.org/download — post:
+> https://tunaos.org/blog/2026/08/12/tunaos-on-snapdragon-x-elite
+>
+> Status: early. If you own an X13s-class laptop and want to help test,
+> the hardware matrix and issue tracker are the place to start.
+
+### Post-and-track
+
+1. Post the chosen draft (maintainer account), then drop the URL + star
+   delta into the monthly ADOPTION-METRICS.md snapshot (#1311).
+2. Retro after 3 posts (playbook rule above).
+3. Next hook in the calendar: Q3 checkpoint recap (08-22), GNOME 51
+   release week (~09-12), Hacktoberfest (10-01), Fedora 45 (~10-20).
