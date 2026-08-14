@@ -21,6 +21,30 @@ tunaOS is an open-source project building OCI-based Enterprise Linux desktops. W
 | **Variant maintainer** | Own a distro variant | Monitor builds, fix breakage |
 | **Core maintainer** | Architecture, CI, releases | Sustained contribution + trust |
 
+### Contributor recognition
+
+We want to recognize contributors whose work strengthens TunaOS over time. If
+you are building on TunaOS and return to improve it, open a PR or tell us in
+[Matrix](https://matrix.to/#/%23tunaos:reilly.asia) — sustained work is what we
+most want to name.
+
+There is no one to name yet, and saying so is deliberate. An earlier draft of
+this section recognized "@shimonenator" as the project's first external *human*
+contributor to return with multiple merged contributions. That was withdrawn
+before it was published (#1317, #1633): every commit from that account across
+the org carries `commit.author.name: antigravity` — it is a Google Antigravity
+agent, not a person. Re-verified independently before removing this:
+
+    gh api -X GET search/commits -f q='author:shimonenator org:tuna-os'
+    → 10 commits, author.name = "antigravity" on all 10
+
+The commits are real and the work landed; the human being thanked was not. The
+project retracted the same claim from ROADMAP.md, the Q3 checkpoint, and the
+published blog post (tuna-os/docs#252) rather than quietly deleting it, on the
+maintainer's stated reasoning that "correcting that publicly matters more to us
+than the metric would have". This section follows that: the first real external
+contributor should arrive on an honest baseline, not inherit a corrected one.
+
 ### Communication
 
 - **GitHub Issues**: Bug reports, feature requests, discussion
