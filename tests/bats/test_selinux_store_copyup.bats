@@ -32,6 +32,15 @@ INSTALL_SH="${REPO_ROOT}/build_scripts/overlay/overrides/nvidia/20-nvidia.sh"
 # Needs unprivileged user+mount namespaces and overlayfs-over-tmpfs. Available
 # on GitHub-hosted ubuntu runners; skipped rather than failed anywhere it is
 # not, so a constrained runner reports "skipped", not a fake regression.
+# redirect_dir=off is load-bearing, not tidiness. With redirect_dir=ON — which
+# some kernels default to for privileged mounts — overlayfs CAN rename a
+# lower-layer directory, the EXDEV never happens, and the bug does not
+# reproduce at all. CI proved that the hard way: the first version of this file
+# ran as root via sudo, got a redirect_dir=on mount, and failed asserting an
+# EXDEV that legitimately did not occur there. buildah's rootful overlay is the
+# environment the failure was observed in, so the fixture pins the option that
+# reproduces it rather than assuming every overlay behaves alike.
+#
 # Can this runner build the overlay fixture at all? GitHub-hosted runners turned
 # out NOT to allow unprivileged overlayfs-over-tmpfs — the first version of this
 # file skipped all five tests there, which is a suite that costs CI time and
@@ -39,21 +48,50 @@ INSTALL_SH="${REPO_ROOT}/build_scripts/overlay/overrides/nvidia/20-nvidia.sh"
 # up. Probes the WHOLE capability, not just unshare: a runner with one and not
 # the other would fail on a mount error rather than skipping.
 OVERLAY_RUNNER=""
+OVERLAY_OPTS=""
+
+# Two axes have to line up, and neither is available on every runner:
+#
+#   * A way to mount overlayfs at all — unprivileged user+mount namespaces, or
+#     passwordless sudo. GitHub-hosted runners refuse the former.
+#   * A mount where a lower-layer directory rename actually fails. With
+#     redirect_dir=ON, which kernels default to for PRIVILEGED mounts,
+#     overlayfs renames it happily and the bug does not exist. But
+#     redirect_dir=off is REJECTED for unprivileged mounts, where the default
+#     already gives the failing behaviour.
+#
+# So: privileged wants the explicit option, unprivileged cannot have it. Try
+# both, then CONFIRM the fixture really reproduces EXDEV before trusting it —
+# an environment that cannot reproduce the bug cannot say anything about the
+# fix, and should skip rather than assert.
 probe_overlay() {
-  local fixture='
-    mount -t tmpfs tmpfs /mnt &&
-    mkdir -p /mnt/l /mnt/u /mnt/w /mnt/m &&
-    mount -t overlay overlay -o lowerdir=/mnt/l,upperdir=/mnt/u,workdir=/mnt/w /mnt/m'
-  if unshare -Ur --mount bash -c "$fixture" >/dev/null 2>&1; then
-    OVERLAY_RUNNER="unshare -Ur --mount"
-  elif sudo -n unshare --mount bash -c "$fixture" >/dev/null 2>&1; then
-    OVERLAY_RUNNER="sudo -n unshare --mount"
-  fi
+  local runner opts
+  for runner in "sudo -n unshare --mount" "unshare -Ur --mount"; do
+    for opts in "redirect_dir=off," ""; do
+      if $runner bash -c "
+            mount -t tmpfs tmpfs /mnt &&
+            mkdir -p /mnt/l /mnt/u /mnt/w /mnt/m &&
+            mount -t overlay overlay -o ${opts}lowerdir=/mnt/l,upperdir=/mnt/u,workdir=/mnt/w /mnt/m
+          " >/dev/null 2>&1; then
+        OVERLAY_RUNNER="$runner"; OVERLAY_OPTS="$opts"
+        # Does a lower-layer directory rename actually fail here?
+        if [[ "$(in_overlay 'python3 -c "
+import os,sys
+try:
+    os.rename(\"$S/active\", \"$S/previous\"); print(\"renamed\")
+except OSError: print(\"failed\")
+"')" == *failed* ]]; then
+          return 0
+        fi
+        OVERLAY_RUNNER=""; OVERLAY_OPTS=""
+      fi
+    done
+  done
+  return 1
 }
 
 require_overlay() {
-  probe_overlay
-  [ -n "$OVERLAY_RUNNER" ] || skip "no way to mount overlayfs-over-tmpfs on this runner"
+  probe_overlay || skip "no overlayfs mount here reproduces a failing lower-layer directory rename"
 }
 
 # Runs a script inside a namespace with an overlay mounted at /mnt/merged,
@@ -66,7 +104,7 @@ set -u
 mount -t tmpfs tmpfs /mnt || exit 1
 mkdir -p /mnt/lower/selinux/targeted/active/modules /mnt/upper /mnt/work /mnt/merged
 echo kern > /mnt/lower/selinux/targeted/active/policy.kern
-mount -t overlay overlay -o lowerdir=/mnt/lower,upperdir=/mnt/upper,workdir=/mnt/work /mnt/merged || exit 1
+mount -t overlay overlay -o ${OVERLAY_OPTS}lowerdir=/mnt/lower,upperdir=/mnt/upper,workdir=/mnt/work /mnt/merged || exit 1
 S=/mnt/merged/selinux/targeted
 ${body}
 EOF
