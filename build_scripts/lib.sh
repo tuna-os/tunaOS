@@ -417,19 +417,49 @@ pkg_clean() {
 # those fail identically on every attempt; the loop returns the last DNF
 # exit code so callers still see real errors.
 #
+# It used to retry those identically-failing transactions anyway, though:
+# `nothing provides X` / `No match for argument` are dnf's own resolver
+# telling you the *repo content* can't satisfy the request, which four
+# attempts and `dnf clean metadata` cannot change — clearing metadata just
+# re-downloads the same repodata that already says the provider is missing.
+# Measured on tuna-os/tunaos#1555 (Hummingbird's public-hummingbird repo
+# missing libjsoncpp.so.26/librhash.so.1 providers): ~50s of pure sleep
+# wasted per doomed call, three separate calls in one job. Detecting that
+# class of error and returning immediately doesn't change any caller's
+# pass/fail outcome (the transaction was always going to fail) — it just
+# stops paying for retries that can't work.
+#
 # Usage: dnf_retry install -y foo bar
 #        dnf_retry -y install --setopt=… foo
 dnf_retry() {
 	local max_attempts="${DNF_RETRY_ATTEMPTS:-4}"
 	local attempt=1
 	local rc=0
+	local out
+	local tmp_out
+	tmp_out=$(mktemp)
 	while ((attempt <= max_attempts)); do
-		dnf "$@" && return 0 || rc=$?
+		if dnf "$@" 2>&1 | tee "$tmp_out"; then
+			rm -f "$tmp_out"
+			return 0
+		fi
+		rc="${PIPESTATUS[0]}"
+		out=$(cat "$tmp_out")
+		# Resolver-level failures: the repo's own metadata says the
+		# request can't be satisfied. Every attempt sees the same
+		# repodata (clean metadata just re-fetches it), so retrying
+		# is certain to reproduce the identical failure.
+		if [[ "$out" == *"nothing provides"* || "$out" == *"No match for argument"* || "$out" == *"Problem: conflicting requests"* ]]; then
+			echo "dnf attempt ${attempt}/${max_attempts}: unresolvable transaction (not a transient error) — not retrying" >&2
+			rm -f "$tmp_out"
+			return "$rc"
+		fi
 		echo "dnf attempt ${attempt}/${max_attempts} failed (exit ${rc}); clearing metadata and retrying..." >&2
 		dnf clean metadata || true
 		sleep "$((attempt * 5))"
 		attempt=$((attempt + 1))
 	done
+	rm -f "$tmp_out"
 	echo "dnf failed after ${max_attempts} attempts" >&2
 	return "$rc"
 }
