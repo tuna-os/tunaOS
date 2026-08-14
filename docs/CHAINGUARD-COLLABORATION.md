@@ -60,7 +60,7 @@ the format:
 Possible working title: **“From OCI image to bootable desktop: keyless
 signing and SBOM verification in a bootc pipeline.”**
 
-## Draft warm note
+## Draft cold-outreach note
 
 > Hi! We’ve just landed keyless Cosign signing and signed SPDX attestations
 > for TunaOS’s published container images, plus verification bundles for the
