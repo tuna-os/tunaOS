@@ -149,12 +149,14 @@ jobs:
               && break || sleep $((i * 2))
           done
 
-          curl -fsSL \
-            "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${JUST_ARCH}-unknown-linux-musl.tar.gz" \
-            -o /tmp/just.tgz 2>/dev/null \
-            || curl -fsSL https://just.systems/install.sh | sudo bash -s -- --to /usr/local/bin
+          for i in 1 2 3; do
+            sudo curl -fsSL \
+              "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${JUST_ARCH}-unknown-linux-musl.tar.gz" \
+              -o /tmp/just.tgz \
+              && break || sleep $((i * 2))
+          done
 
-          if [ -f /tmp/just.tgz ]; then sudo tar -xzf /tmp/just.tgz -C /usr/local/bin just; fi
+          sudo tar -xzf /tmp/just.tgz -C /usr/local/bin just
           sudo chmod +x /usr/bin/yq /usr/local/bin/just 2>/dev/null || true
           just --version && yq --version
 
