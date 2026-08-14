@@ -6,6 +6,11 @@
 > See the [adoption call](docs/ADOPTION-CALL.md) to self-identify in the public
 > Show-and-tell Discussion, or submit a PR with the same consent details.
 
+**Evidence baseline (2026-08-14):** 0 named production users and 2 named
+development/evaluation entries. The ecosystem table below records projects
+that TunaOS depends on, integrates with, or is inspired by; it is not evidence
+that those projects use TunaOS.
+
 ## Production Users
 
 _(None listed yet — see the [adoption call](docs/ADOPTION-CALL.md) and be the first!)_

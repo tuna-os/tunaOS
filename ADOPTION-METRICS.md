@@ -58,6 +58,14 @@ publish, and *how* the snapshot feeds roadmap decisions.
 - Ownership: **strategist** compiles; **ci-maintainer** supplies R2/Releases
   exports; **guide** publishes on tunaos.org/blog.
 
+## Outreach evidence
+
+The current outreach record is kept in
+[docs/ADOPTION-OUTREACH-STATUS.md](docs/ADOPTION-OUTREACH-STATUS.md). A draft,
+an intended recipient, or an ecosystem relationship is not an outreach result;
+the monthly snapshot must record a sent date, public URL, response, or an
+explicitly unattempted status.
+
 ## Decision linkage
 
 Each snapshot must answer two questions for the roadmap:
