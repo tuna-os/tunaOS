@@ -33,8 +33,16 @@ INSTALL_SH="${REPO_ROOT}/build_scripts/overlay/overrides/nvidia/20-nvidia.sh"
 # on GitHub-hosted ubuntu runners; skipped rather than failed anywhere it is
 # not, so a constrained runner reports "skipped", not a fake regression.
 setup() {
-  if ! unshare -Ur --mount true 2>/dev/null; then
-    skip "unprivileged user+mount namespaces unavailable"
+  # Probe the WHOLE capability, not just unshare. A runner where unshare works
+  # but overlay-over-tmpfs does not would otherwise fail every test below on a
+  # mount error — a false regression, and exactly the kind of red that gets
+  # ignored. Either the fixture can be built or the tests skip.
+  if ! unshare -Ur --mount bash -c '
+        mount -t tmpfs tmpfs /mnt &&
+        mkdir -p /mnt/l /mnt/u /mnt/w /mnt/m &&
+        mount -t overlay overlay -o lowerdir=/mnt/l,upperdir=/mnt/u,workdir=/mnt/w /mnt/m
+      ' >/dev/null 2>&1; then
+    skip "unprivileged overlayfs-over-tmpfs unavailable on this runner"
   fi
 }
 
