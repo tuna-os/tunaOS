@@ -17,14 +17,35 @@ _(None listed yet — see the [adoption call](docs/ADOPTION-CALL.md) and be the 
 
 ## Development & Evaluation
 
+> Both current entries are the project itself — the maintainer, and TunaOS's own
+> CI. They are honest as dogfooding records and are **not** external adoption
+> evidence; the adopters KPI in
+> [ADOPTION-METRICS.md](./ADOPTION-METRICS.md) counts external entries only, so
+> these do not move it.
+
 | Organization | Use Case | Variant(s) | Since |
 |---|---|---|---|
 | [@hanthor](https://github.com/hanthor) (Project Maintainer) | Personal daily driver — development, testing, and dogfooding all variants | Yellowfin GNOME, Albacore GNOME, Skipjack KDE | 2026-04 |
 | [TunaOS Hive Agents](https://hive.tunaos.org) | Automated CI/CD — build, test, and release pipeline runs on TunaOS infrastructure | Yellowfin GNOME, Albacore GNOME | 2026-05 |
 
-## Ecosystem & Downstream Projects
+## Upstream & Ecosystem Dependencies
 
-| Project | Relationship | Link |
+**These are not adopters.** Every entry below is a project TunaOS *builds on* or
+*consumes* — base operating systems, desktop environments it packages, build
+services, registries. None of them are downstream of TunaOS, and none have a
+partnership with it; being listed here says only that TunaOS uses their work.
+
+The section was previously headed "Ecosystem & Downstream Projects", which in a
+file that opens "organizations and projects that use TunaOS" reads as 24
+adopters. That matters because this file is cited as adoption evidence in the
+DistroWatch (#1333) and CNCF (#1340) pitches — a reader checking it would find
+Debian, Fedora, KDE and elementary OS apparently listed as TunaOS adopters, and
+none of them have said any such thing.
+
+Kept because the dependency map is genuinely useful; relabelled so it cannot be
+read as, or counted as, adoption.
+
+| Project | What TunaOS uses it for | Link |
 |---|---|---|
 | [Universal Blue](https://universal-blue.org/) | Upstream inspiration — TunaOS is a fork of Bluefin LTS | [github.com/ublue-os](https://github.com/ublue-os) |
 | [Bluefin](https://projectbluefin.io) | Direct upstream — bootc-based desktop foundation | [github.com/ublue-os/bluefin-lts](https://github.com/ublue-os/bluefin-lts) |
