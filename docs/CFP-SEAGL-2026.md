@@ -2,7 +2,7 @@
 
 > Status: **superseded for 2026 — retained as a reusable community-talk template.**
 > **Fact-check correction (2026-08-14, outreach agent):** the original draft's dates and premise were wrong. Verified against [seagl.org](https://seagl.org): SeaGL 14 is **October 23–24, 2026** at the University of Washington HUB (venue change announced 2026-06-01), and the 2026 CFP (opened 2026-04-24, re-opened through **June 30, 2026**) is **closed**. There is no open SeaGL 2026 submission window — see the tracking issue for the corrected plan.
-> Tracking issue: [#1691](https://github.com/tuna-os/tunaOS/issues/1691) (SeaGL 2026 CFP — corrected); correction tracked in #1695.
+> Tracking issue: [#1691](https://github.com/tuna-os/tunaOS/issues/1691) (SeaGL 2026 CFP — corrected); correction tracked in #1715.
 > Next real submission target: **SeaGL 2027** (CFP typically opens ~April 2027).
 
 ## Talk title (working)
