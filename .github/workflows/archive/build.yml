@@ -249,7 +249,10 @@ jobs:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.base_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
+    # No `secrets:` block: reusable-build-image.yml's workflow_call declares
+    # no explicit secrets input (it only uses the auto-provided
+    # GITHUB_TOKEN), so `secrets: inherit` was passing every repo/org secret
+    # for nothing (tuna-os/tunaos#1536).
     with:
       image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} no-DE base
@@ -277,7 +280,10 @@ jobs:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.base_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
+    # No `secrets:` block: reusable-build-image.yml's workflow_call declares
+    # no explicit secrets input (it only uses the auto-provided
+    # GITHUB_TOKEN), so `secrets: inherit` was passing every repo/org secret
+    # for nothing (tuna-os/tunaos#1536).
     with:
       image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} HWE no-DE base
@@ -308,7 +314,10 @@ jobs:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.base_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
+    # No `secrets:` block: reusable-build-image.yml's workflow_call declares
+    # no explicit secrets input (it only uses the auto-provided
+    # GITHUB_TOKEN), so `secrets: inherit` was passing every repo/org secret
+    # for nothing (tuna-os/tunaos#1536).
     with:
       image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} GDX no-DE base
@@ -341,7 +350,10 @@ jobs:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.base_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
+    # No `secrets:` block: reusable-build-image.yml's workflow_call declares
+    # no explicit secrets input (it only uses the auto-provided
+    # GITHUB_TOKEN), so `secrets: inherit` was passing every repo/org secret
+    # for nothing (tuna-os/tunaos#1536).
     with:
       image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} GNOME
@@ -373,7 +385,10 @@ jobs:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.kde_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
+    # No `secrets:` block: reusable-build-image.yml's workflow_call declares
+    # no explicit secrets input (it only uses the auto-provided
+    # GITHUB_TOKEN), so `secrets: inherit` was passing every repo/org secret
+    # for nothing (tuna-os/tunaos#1536).
     with:
       image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} KDE
@@ -405,7 +420,10 @@ jobs:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.niri_hwe_gdx_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
+    # No `secrets:` block: reusable-build-image.yml's workflow_call declares
+    # no explicit secrets input (it only uses the auto-provided
+    # GITHUB_TOKEN), so `secrets: inherit` was passing every repo/org secret
+    # for nothing (tuna-os/tunaos#1536).
     with:
       image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} Niri
@@ -436,7 +454,10 @@ jobs:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
+    # No `secrets:` block: reusable-build-image.yml's workflow_call declares
+    # no explicit secrets input (it only uses the auto-provided
+    # GITHUB_TOKEN), so `secrets: inherit` was passing every repo/org secret
+    # for nothing (tuna-os/tunaos#1536).
     with:
       image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} GNOME HWE
@@ -467,7 +488,10 @@ jobs:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.hwe_gdx_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
+    # No `secrets:` block: reusable-build-image.yml's workflow_call declares
+    # no explicit secrets input (it only uses the auto-provided
+    # GITHUB_TOKEN), so `secrets: inherit` was passing every repo/org secret
+    # for nothing (tuna-os/tunaos#1536).
     with:
       image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} GNOME GDX
@@ -499,7 +523,10 @@ jobs:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.kde_hwe_gdx_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
+    # No `secrets:` block: reusable-build-image.yml's workflow_call declares
+    # no explicit secrets input (it only uses the auto-provided
+    # GITHUB_TOKEN), so `secrets: inherit` was passing every repo/org secret
+    # for nothing (tuna-os/tunaos#1536).
     with:
       image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} KDE HWE
@@ -530,7 +557,10 @@ jobs:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.kde_hwe_gdx_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
+    # No `secrets:` block: reusable-build-image.yml's workflow_call declares
+    # no explicit secrets input (it only uses the auto-provided
+    # GITHUB_TOKEN), so `secrets: inherit` was passing every repo/org secret
+    # for nothing (tuna-os/tunaos#1536).
     with:
       image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} KDE GDX
@@ -562,7 +592,10 @@ jobs:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.niri_hwe_gdx_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
+    # No `secrets:` block: reusable-build-image.yml's workflow_call declares
+    # no explicit secrets input (it only uses the auto-provided
+    # GITHUB_TOKEN), so `secrets: inherit` was passing every repo/org secret
+    # for nothing (tuna-os/tunaos#1536).
     with:
       image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} Niri HWE
@@ -593,7 +626,10 @@ jobs:
       fail-fast: false
       matrix: ${{fromJson(needs.generate_matrix.outputs.niri_hwe_gdx_matrix)}}
     uses: ./.github/workflows/reusable-build-image.yml
-    secrets: inherit
+    # No `secrets:` block: reusable-build-image.yml's workflow_call declares
+    # no explicit secrets input (it only uses the auto-provided
+    # GITHUB_TOKEN), so `secrets: inherit` was passing every repo/org secret
+    # for nothing (tuna-os/tunaos#1536).
     with:
       image-name: ${{ matrix.image_name }}
       image-desc: ${{ matrix.description }} Niri GDX
