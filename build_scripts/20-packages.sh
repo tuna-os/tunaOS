@@ -68,9 +68,31 @@ if [ -d /usr/etc ]; then
 	rm -rvf /usr/etc
 fi
 
-# MoreWaita icon theme
+# MoreWaita icon theme — from upstream source, not the trixieua/
+# morewaita-icon-theme personal COPR. tunaOS#1323's package-sourcing policy
+# audit (#1453) flagged that COPR as a real violation: a single-maintainer
+# personal repackage of one static-file package, with no build step of its
+# own. Upstream ships install.sh, which just copies icon files into
+# THEMEDIR — clone at a pinned tag and run it directly instead of trusting
+# a third party's repackage of the same files.
 if [[ "${DESKTOP_FLAVOR}" == *"gnome"* ]]; then
-	install_from_copr trixieua/morewaita-icon-theme morewaita-icon-theme
+	MOREWAITA_VERSION="v49"
+	# git is not guaranteed present on the Fedora/EL10 RPM path at this build
+	# stage (kcm-ublue.sh's own BUILD_DEPS list has to install it explicitly
+	# for the same reason) — install it here rather than assume it.
+	dnf_retry -y install git
+	MOREWAITA_SRC=$(mktemp -d)
+	git clone --depth 1 --branch "${MOREWAITA_VERSION}" \
+		https://github.com/somepaulo/MoreWaita.git "${MOREWAITA_SRC}"
+	# install.sh's own final step (gtk-update-icon-cache) is a live-desktop
+	# concern, not guaranteed present in a build container — best-effort,
+	# same tolerance as the rest of this file's non-essential installs.
+	if THEMEDIR=/usr/share/icons/MoreWaita/ bash "${MOREWAITA_SRC}/install.sh"; then
+		echo "MoreWaita ${MOREWAITA_VERSION} icon theme installed."
+	else
+		echo "Warning: MoreWaita icon theme install reported a non-fatal error (icon cache update?)."
+	fi
+	rm -rf "${MOREWAITA_SRC}"
 fi
 
 # This is required so homebrew works indefinitely.
