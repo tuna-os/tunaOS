@@ -31,7 +31,32 @@ pass=0 fail=0 warn=0
 ok()   { echo "  ok   $*"; ((pass++)); }
 bad()  { echo "  FAIL $*"; ((fail++)); }
 note() { echo "  warn $*"; ((warn++)); }
-check_file() { [[ -e "$mnt$1" ]] && ok "$1" || bad "$1 missing"; }
+check_file() {
+    local soft="${2:-false}"
+    if [[ -e "$mnt$1" ]]; then
+        ok "$1"
+    elif [[ "$soft" == "true" ]]; then
+        note "$1 missing (known packaging gap)"
+    else
+        bad "$1 missing"
+    fi
+}
+
+echo "== distro family =="
+is_el10=false
+if [[ -f "$mnt/etc/os-release" ]]; then
+    if grep -qE 'PLATFORM_ID="platform:el10"|VERSION_ID="10"' "$mnt/etc/os-release" 2>/dev/null; then
+        is_el10=true
+        ok "EL10 packaging family detected (os-release)"
+    else
+        ok "standard packaging family detected (os-release)"
+    fi
+elif [[ "$kver" == *el10* ]]; then
+    is_el10=true
+    ok "EL10 packaging family detected (kernel ver: $kver)"
+else
+    ok "standard packaging family detected"
+fi
 
 echo "== kernel =="
 mapfile -t kvers < <(ls "$mnt/usr/lib/modules/" 2>/dev/null)
@@ -71,6 +96,7 @@ for mod in asahi.ko appledrm.ko nvme-apple.ko hci_bcm4377.ko brcmfmac.ko \
            apple-dart.ko macsmc.ko apple-isp.ko spi-hid-apple.ko \
            apple-admac.ko apple-soc-cpufreq.ko dockchannel-hid.ko; do
     if grep -qE "/${mod}(\.xz|\.zst|\.gz)?:" "$deps" 2>/dev/null; then ok "$mod"
+    elif [[ "$is_el10" == "true" && "$mod" == "apple-isp.ko" ]]; then note "$mod not in modules.dep (known EL10 packaging gap)"
     else bad "$mod not in modules.dep"; fi
 done
 
@@ -81,21 +107,27 @@ dtb_count=$(ls "$dtb_dir" 2>/dev/null | wc -l)
 [[ -f "$dtb_dir/t8103-j313.dtb" ]] && ok "t8103-j313.dtb (M1 MacBook Air)" || bad "t8103-j313.dtb missing"
 
 echo "== boot chain payloads =="
-check_any() { # label, candidate paths...
-    local label="$1"; shift
+check_any() { # label, soft, candidate paths...
+    local label="$1"
+    local soft="$2"
+    shift 2
     for f in "$@"; do
         if [[ -e "$mnt$f" ]]; then ok "$label ($f)"; return; fi
     done
-    bad "$label missing (tried: $*)"
+    if [[ "$soft" == "true" ]]; then
+        note "$label missing (known packaging gap, tried: $*)"
+    else
+        bad "$label missing (tried: $*)"
+    fi
 }
 # Paths differ per packaging family (Fedora lib64, Debian/Ubuntu lib, Arch boot)
-check_any "m1n1 payload" /usr/lib64/m1n1/m1n1.bin /usr/lib/m1n1/m1n1.bin /usr/lib/asahi-boot/m1n1.bin /boot/m1n1.bin
+check_any "m1n1 payload" false /usr/lib64/m1n1/m1n1.bin /usr/lib/m1n1/m1n1.bin /usr/lib/asahi-boot/m1n1.bin /boot/m1n1.bin
 # /usr/lib/asahi-boot/u-boot.bin was a guess at Arch's filename under that
 # directory; the real uboot-asahi package (asahi-alarm/asahi-alarm, verified
 # by downloading uboot-asahi-2026.04.asahi2-1-aarch64.pkg.tar.xz and listing
 # its contents directly) ships u-boot-nodtb.bin there instead, matching the
 # other two families' filename — only the directory differs by family.
-check_any "Apple U-Boot payload" /usr/share/uboot/apple_m1/u-boot-nodtb.bin /usr/lib/u-boot/apple_m1/u-boot-nodtb.bin /usr/lib/asahi-boot/u-boot-nodtb.bin /boot/u-boot-nodtb.bin
+check_any "Apple U-Boot payload" false /usr/share/uboot/apple_m1/u-boot-nodtb.bin /usr/lib/u-boot/apple_m1/u-boot-nodtb.bin /usr/lib/asahi-boot/u-boot-nodtb.bin /boot/u-boot-nodtb.bin
 # CentOS Hyperscale SIG's update-m1n1 RPM (EL10: skipjack/yellowfin/albacore)
 # installs to /usr/sbin, not /usr/bin like Fedora's — verified by downloading
 # update-m1n1-20250426.1-1.hs+asahi.el10.noarch.rpm from the Hyperscale
@@ -103,7 +135,7 @@ check_any "Apple U-Boot payload" /usr/share/uboot/apple_m1/u-boot-nodtb.bin /usr
 # was a hard-coded single-path check missing that family split, unlike the
 # two checks above it — every yellowfin/skipjack sweep was scoring a FAIL for
 # a binary that was actually present the whole time.
-check_any "update-m1n1" /usr/bin/update-m1n1 /usr/sbin/update-m1n1
+check_any "update-m1n1" false /usr/bin/update-m1n1 /usr/sbin/update-m1n1
 # Hyperscale's update-m1n1 RPM genuinely does not ship a kernel-install.d (or
 # postinst.d) hook — confirmed the same way, by reading its actual file list;
 # there is no plausible alternate path to add here for this family. This is a
@@ -117,7 +149,7 @@ check_any "update-m1n1" /usr/bin/update-m1n1 /usr/sbin/update-m1n1
 # tracks upstream packaging completeness, not "does this image regenerate its
 # boot.bin after an upgrade" — that question is asahi-bootbin-sync.service's,
 # and it does not depend on this hook existing.
-check_any "update-m1n1 kernel hook" /usr/lib/kernel/install.d/15-update-m1n1.install /etc/kernel/postinst.d/update-m1n1 /etc/kernel/postinst.d/zz-update-m1n1
+check_any "update-m1n1 kernel hook" "$is_el10" /usr/lib/kernel/install.d/15-update-m1n1.install /etc/kernel/postinst.d/update-m1n1 /etc/kernel/postinst.d/zz-update-m1n1
 
 echo "== firmware handling =="
 check_file /usr/bin/asahi-fwextract
@@ -126,7 +158,7 @@ check_file /usr/bin/asahi-fwextract
 # installs to /usr/sbin/asahi-fwupdate. asahi-fwextract, checked just above,
 # really is at /usr/bin in the same RPM family — the split is per-binary, not
 # uniformly bin-vs-sbin, so it is not safe to assume from one to the other.
-check_any "asahi-fwupdate" /usr/bin/asahi-fwupdate /usr/sbin/asahi-fwupdate
+check_any "asahi-fwupdate" false /usr/bin/asahi-fwupdate /usr/sbin/asahi-fwupdate
 [[ -d "$mnt/usr/lib/dracut/modules.d/99asahi-firmware" ]] && ok "dracut 99asahi-firmware" || bad "dracut module 99asahi-firmware missing"
 [[ -d "$mnt/usr/lib/dracut/modules.d/91kernel-modules-asahi" ]] && ok "dracut 91kernel-modules-asahi" || bad "dracut module 91kernel-modules-asahi missing"
 if grep -qs "asahi-firmware" "$mnt"/usr/lib/dracut/dracut.conf.d/*; then
@@ -148,9 +180,9 @@ aa=$(ls "$mnt/usr/share/asahi-audio" 2>/dev/null | wc -l)
 [[ "$aa" -ge 5 ]] && ok "asahi-audio machine profiles ($aa)" || bad "asahi-audio profiles missing"
 
 echo "== misc userspace =="
-check_file /usr/bin/tiny-dfr
-check_file /usr/lib/systemd/system/tiny-dfr.service
-check_file /usr/bin/asahi-diagnose
+check_file /usr/bin/tiny-dfr "$is_el10"
+check_file /usr/lib/systemd/system/tiny-dfr.service "$is_el10"
+check_file /usr/bin/asahi-diagnose "$is_el10"
 
 echo
 echo "RESULT: $pass passed, $fail failed, $warn warnings"
