@@ -313,6 +313,7 @@ Related Communities:
 - [Security Policy](SECURITY.md) — vulnerability reporting and supported versions
 - [Branch Protection](docs/BRANCH-PROTECTION.md) — rulesets and required CI audit (#1167)
 - [Branch Hygiene](docs/BRANCH-HYGIENE.md) — branch lifecycle, naming rules, and stale branch triage (#1530)
+- [Q3 Checkpoint Policy](docs/Q3_CHECKPOINT-2026-08-22.md) — decision integrity and merge-eligible scoring rule (#1683)
 - [Adopters](ADOPTERS.md) — organizations using TunaOS
 - [Adoption Metrics](ADOPTION-METRICS.md) — how adoption is measured and reported (#1174)
 - [Code of Conduct](CODE_OF_CONDUCT.md) — community standards
