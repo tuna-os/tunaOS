@@ -14,15 +14,7 @@ just fix && just check
 
 New here? Start with a **[good first issue](https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** — a curated, maintainer-sized task covering documentation parity, a small script fix, or test coverage. Before starting, leave a comment saying you are taking the issue so the work is not duplicated.
 
-The current starter runway includes:
-
-- [#1308](https://github.com/tuna-os/tunaOS/issues/1308) — build a documentation-parity checklist for published editions
-- [#1350](https://github.com/tuna-os/tunaOS/issues/1350) — document the `pantheon` desktop suffix
-- [#1351](https://github.com/tuna-os/tunaOS/issues/1351) — add a Gurnard/Pantheon desktop guide
-- [#1366](https://github.com/tuna-os/tunaOS/issues/1366) — document checksum and SBOM verification
-- [#1385](https://github.com/tuna-os/tunaOS/issues/1385) — document supported ARM laptop hardware
-
-These tasks are intentionally independent of the image build pipeline. If one is claimed or closed, use the same issue search to choose another bounded task.
+The current starter runway lives in the org-wide **[good first issue](https://github.com/tuna-os/docs/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** pool, mostly in `tuna-os/docs` (docs-parity and guide tasks — e.g. desktop quick-starts, verification guides, cheat sheets). These tasks are intentionally independent of the image build pipeline and are curated for first-time contributors. If one is claimed or closed, pick another bounded task from the same search.
 
 ### Fork → PR loop
 
