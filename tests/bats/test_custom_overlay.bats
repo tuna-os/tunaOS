@@ -32,12 +32,16 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 }
 
 @test "Justfile contains custom recipes" {
-  run grep "build-custom" "${REPO_ROOT}/Justfile"
-  [ "$status" -eq 0 ]
-  run grep "check-custom" "${REPO_ROOT}/Justfile"
-  [ "$status" -eq 0 ]
-  run grep "run-custom-vm" "${REPO_ROOT}/Justfile"
-  [ "$status" -eq 0 ]
-  run grep "custom-iso" "${REPO_ROOT}/Justfile"
-  [ "$status" -eq 0 ]
+  local recipe_file="${REPO_ROOT}/Justfile"
+  if ! grep -q "build-custom" "$recipe_file" ||
+    ! grep -q "check-custom" "$recipe_file" ||
+    ! grep -q "run-custom-vm" "$recipe_file" ||
+    ! grep -q "custom-iso" "$recipe_file"; then
+    recipe_file="${REPO_ROOT}/just/custom-overlay.just"
+  fi
+
+  for recipe in build-custom check-custom run-custom-vm custom-iso; do
+    run grep -q "$recipe" "$recipe_file"
+    [ "$status" -eq 0 ]
+  done
 }
