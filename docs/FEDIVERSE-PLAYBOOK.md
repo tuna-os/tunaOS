@@ -123,12 +123,12 @@ Alt: <image description> (when attaching a screenshot)
 > https://tunaos.org/blog/2026/08/12/announcing-gurnard-ubuntu-pantheon
 > #Linux #Pantheon #elementaryOS #bootc #Ubuntu
 
-### Toot 6 — Apple Silicon (M1/M2)
+### Toot 6 — Apple Silicon (M1/M2) — experimental preview
 
-> TunaOS images for Apple Silicon Macs — atomic, container-native Linux for
-> M1/M2, installed via bootc-installer-asahi (built to work beyond TunaOS —
-> Dakota, Bluefin, Bazzite could all ride it). Golden-manifest verification
-> of the installed payload, R2-hosted, recoveryOS handoff installer.
+> Apple Silicon support is an **experimental engineering preview**: the
+> bootc-installer-asahi installer ships kernel + glue for M1/M2 (built to
+> work beyond TunaOS — Dakota, Bluefin, Bazzite could all ride it), but
+> boot payloads are still pending, so it is not a shipped product yet.
 >
 > Hardware testing reports from real Macs are the most useful contribution
 > right now: https://github.com/tuna-os/bootc-installer-asahi
@@ -136,9 +136,9 @@ Alt: <image description> (when attaching a screenshot)
 
 ### Toot 7 — Snapdragon X Elite (X13s-class)
 
-> Bonito/Dakota now ships ARM laptop builds for Snapdragon X Elite
-> (X13s-class) hardware — the same atomic update model as the rest of the
-> project, on the fastest-growing ARM Windows hardware. Linux support on it
+> Bonito/Dakota has ARM laptop builds for Snapdragon X Elite (X13s-class)
+> hardware — the same atomic update model as the rest of the project, on
+> the fastest-growing ARM Windows hardware. Linux support on it still
 > needs real-world testing; this is a concrete place to start.
 >
 > https://tunaos.org/download — hardware matrix in the README.
