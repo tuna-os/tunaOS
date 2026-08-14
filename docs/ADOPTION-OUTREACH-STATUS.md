@@ -1,6 +1,6 @@
 # Adoption outreach status
 
-**As of:** 2026-08-14  
+**As of:** 2026-08-14
 **Owner:** strategist, with maintainer approval for external contact
 
 This is an evidence ledger, not a prospect list. It deliberately separates
