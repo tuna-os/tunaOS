@@ -1,82 +1,112 @@
-# TunaOS for Computer Science & Teaching Labs
+# TunaOS for Computer Science Teaching Labs
 
-**Target Audience**: Computer Science Department IT Admins, Lab Managers, and Systems Instructors  
-**Tracks**: [#1600](https://github.com/tuna-os/tunaOS/issues/1600) (Education & Teaching Lab Adoption Pitch)  
-**Supports**: [#1367](https://github.com/tuna-os/tunaOS/issues/1367) (Production / Academic Adoption Program)
+**Audience:** university IT teams, lab managers, and systems instructors
 
----
+**Supports:** [#1367](https://github.com/tuna-os/tunaOS/issues/1367), the
+TunaOS production and evaluation adopter program
 
-## 🎓 The Teaching Lab Challenge: State Drift & Maintenance Overhead
+## The lab problem
 
-Computer science and engineering teaching labs face a persistent operational headache:
+Teaching machines drift during a term. Students install packages, change
+system configuration, and leave behind broken state; the next class inherits
+an inconsistent environment. Re-imaging between sections is disruptive, and
+maintaining separate images for workstation hardware multiplies the work.
 
-1. **State Drift & Machine Corruption**: Students modify system packages, break shell configurations, or leave residual artifacts, resulting in inconsistent lab environments across the term.
-2. **Re-imaging Friction**: Traditional PXE/Ghost re-imaging is slow, network-heavy, and disruptive between back-to-back lab sections.
-3. **Hardware & Driver Variance**: Managing separate images for workstations with NVIDIA GPUs, different display layouts, or virtualized environments creates image sprawl.
+TunaOS addresses the system-image part of that problem with an immutable,
+bootc-based desktop. Updates are delivered as image versions, and a failed
+update can be rolled back to the previous deployment. User data remains a
+separate policy decision: a lab can preserve home directories, reset them at
+session boundaries, or use temporary student accounts.
 
----
+## A low-risk pilot
 
-## 🚀 The Solution: Immutable bootc Container Desktops
+The first evaluation should change no physical disks. Use a published ISO in
+QEMU/KVM on one existing lab workstation:
 
-TunaOS applies cloud-native, OCI-container patterns to desktop operating systems using Red Hat's `bootc` (bootable container) engine:
-
-- **100% Stateless & Immutable**: System root `/usr` is read-only. Student home directories (`/var/home`) can be wiped or reset on reboot, guaranteeing a pristine environment for every class.
-- **OCI Container Pipeline**: Lab images are built like standard Docker container images (using standard `Containerfile` / `Dockerfile` syntax) and hosted in standard container registries (GHCR / Quay).
-- **Atomic Updates & Instant Rollbacks**: Updating a 30-station lab requires pulling container layers. If an update fails, rolling back to the previous known-good deployment takes one `bootc rollback` command.
-- **Zero-Risk VM Pilots**: Instructors and lab admins can evaluate TunaOS inside QEMU/KVM or VirtualBox in 20 minutes without modifying physical disk partitions.
-
----
-
-## 🛠️ 20-Minute Pilot Architecture for CS Labs
-
-### Step 1: Evaluate in a Local VM
-Deploy TunaOS in a VM using the standard Just recipe:
 ```bash
-just vm-run bonito kde
+wget https://download.tunaos.org/live-isos/yellowfin-gnome-latest.iso
+./scripts/iso-e2e.sh ./yellowfin-gnome-latest.iso \
+  --output ./pilot-e2e --timeout 300
 ```
-Alternatively, test via QEMU/KVM:
+
+The same harness used by CI checks boot readiness, desktop startup, critical
+failures, screenshots, and serial logs. The machine can be discarded after
+the pilot. Requirements and troubleshooting are documented in
+[`docs/TESTING.md`](TESTING.md).
+
+For a department that wants to test its own image, the supported fork workflow
+is:
+
 ```bash
-qemu-system-x86_64 -m 4096 -smp 4 \
-  -drive file=tunaos-bonito-kde.qcow2,format=qcow2 \
-  -enable-kvm -cpu host -net nic -net user
+just build yellowfin gnome
+just qcow2 yellowfin gnome
+just verify-disk ./yellowfin.qcow2
 ```
 
-### Step 2: Customize Your Department Image (`Containerfile.cs-lab`)
-Extend any standard TunaOS variant (e.g. `Yellowfin` AlmaLinux 10 or `Bonito` Fedora 44) with department-specific compilers, IDEs, and tools:
+The exact variant and desktop can be changed after the first pilot. A custom
+package set can start with the repository's `custom/` overlay:
 
-```dockerfile
-FROM ghcr.io/tuna-os/yellowfin:gnome
-
-# Install CS curriculum tooling
-RUN dnf install -y \
-    gcc gcc-c++ gdb \
-    clang lldb \
-    python3-pip python3-numpy \
-    valgrind strace \
-    code \
-    && dnf clean all
-
-# Apply default lab shell & dconf presets
-COPY cs-lab-dconf.ini /etc/dconf/db/distro.d/01-cs-lab
-RUN dconf update
+```bash
+just build-custom
+just run-custom-vm
 ```
 
-### Step 3: Deployment & Maintenance Model
-- **Central Build**: Run your `Containerfile.cs-lab` through GitHub Actions or internal CI/CD to push to your university's internal OCI registry (`registry.cs.university.edu/lab/desktop:latest`).
-- **Fleet Sync**: Lab workstations run `bootc update` via a nightly systemd timer, fetching delta layers seamlessly.
+See [`docs/ROLL_YOUR_OWN.md`](ROLL_YOUR_OWN.md) for the overlay files, image
+registry workflow, and the deeper fork-and-customize path.
 
----
+## Sample CS lab image
 
-## 📈 Academic Pilot Program & Community Handoff
+Start from a published desktop and add only the tools required by the course.
+For example, `custom/packages.yaml` can contain:
 
-### Pilot Process
-1. **Maintainer Consultation**: Lab admins open an issue or discussion tagged `education-pilot` on `tuna-os/tunaOS`.
-2. **Custom Layer Assistance**: Core maintainers provide template Containerfiles and Ansible/just recipes tailored for academic software stacks.
-3. **Adopter Recognition**: Participating academic institutions and CS labs are credited in `ADOPTERS.md` under the Academic & Production Users registry (#1367).
+```yaml
+dnf:
+  - gcc
+  - gcc-c++
+  - gdb
+  - clang
+  - lldb
+  - python3-pip
+  - python3-numpy
+  - valgrind
+  - strace
+```
 
----
+Build the overlay in CI and publish it to the department's OCI registry. Lab
+machines can then update from the approved image on a schedule, while the
+department retains its existing account, network, and classroom-management
+policies.
 
-## 🔗 Related Resources
-- [QEMU/KVM VM Evaluation Guide](../docs/IMPROVEMENT_PLAN.md)
-- [Variant Selection Decision Guide](choosing-a-variant.md)
-- [ADOPTERS.md Ecosystem & Production Registry](../ADOPTERS.md)
+## Three candidate pilot profiles
+
+These are qualification profiles for a warm introduction, not claims that a
+specific institution already uses TunaOS:
+
+1. **Fedora-based introductory programming lab.** A course already using
+   Fedora workstations is the shortest technical path to a Bonito or custom
+   Fedora-based pilot. Measure setup time, package parity, and reset time
+   between two lab sections.
+2. **AlmaLinux systems-administration or operating-systems lab.** A lab that
+   values an enterprise Linux base can trial Yellowfin or Albacore. Measure
+   rollback time after deliberately applying a bad image update.
+3. **Mixed-GPU computer-graphics or AI lab.** A lab with NVIDIA and
+   non-NVIDIA machines can start with one stock desktop and one NVIDIA flavor.
+   Measure whether the image matrix reduces manual driver and re-image work.
+
+The maintainer should offer the brief through existing Fedora, AlmaLinux, and
+university Linux communities, asking each candidate for a small pilot rather
+than a fleet commitment. A successful pilot should record the variant, image
+customizations, hardware, class size, and operational results.
+
+## Adoption handoff
+
+1. Open an issue or discussion tagged `education-pilot` with the lab profile
+   and the desired pilot window.
+2. Agree on one image, one VM or workstation, and success criteria before
+   changing the wider fleet.
+3. Publish the results, including limitations and rollback experience.
+4. With the institution's permission, add it to the **Development &
+   Evaluation** or **Production Users** section of [`ADOPTERS.md`](../ADOPTERS.md).
+
+This gives #1367 verifiable adoption evidence without inventing an adopter or
+promising support that has not yet been agreed.
