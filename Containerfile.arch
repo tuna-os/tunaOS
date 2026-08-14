@@ -166,9 +166,17 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 # It used to be a printf here. That is how five composefs variants ended up with
 # one erofs driver between them: the fix was made while chasing marlin and had
 # nowhere shared to live.
+# Only one kernel module tree exists at this stage (the cachyos overlay that
+# can introduce a second one runs later, in Containerfile.overlay — see its
+# own dracut loop, tunaOS#1563), so `tail -1` currently picks the only
+# candidate either way. Looped for the same reason as there: readdir order
+# is unspecified, so a single `find | tail -1` is a guess that happens to
+# have one right answer today, not a guarantee it stays that way.
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     /run/context/build_scripts/bootc/dracut-config.sh && \
-    dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
+    for moddir in $(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d ! -name '*.img'); do \
+        dracut --force "${moddir}/initramfs.img"; \
+    done
 
 # systemd-firstboot asks the CONSOLE for a timezone and blocks there forever.
 #
