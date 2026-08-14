@@ -20,7 +20,7 @@ setup() {
 }
 
 @test "justfile: has 'build' recipe" {
-  run grep -E '^build[:( ]' "${JUSTFILE}"
+  run grep -hE '^build[:( ]' "${JUSTFILE}" "${REPO_ROOT}/just"/*.just
   [ "$status" -eq 0 ]
 }
 
@@ -44,8 +44,16 @@ setup() {
 }
 
 @test "justfile: has container build recipe" {
-  # Justfile uses 'build' recipe with parameters, not build-* prefixes
-  run grep -E '^build[ (:]' "${JUSTFILE}"
+  # Justfile uses 'build' recipe with parameters, not build-* prefixes. The
+  # recipe may live in an imported module because imports share one namespace.
+  run grep -hE '^build[ (:]' "${JUSTFILE}" "${REPO_ROOT}/just"/*.just
+  [ "$status" -eq 0 ]
+}
+
+@test "justfile: image pipeline recipes live in an imported module" {
+  run grep -F "import 'just/image-pipeline.just'" "${JUSTFILE}"
+  [ "$status" -eq 0 ]
+  run grep -hE '^(build|lifecycle-test|corral-build|iso|iso-group)[ :(]' "${REPO_ROOT}/just/image-pipeline.just"
   [ "$status" -eq 0 ]
 }
 
