@@ -147,9 +147,14 @@ NVIDIA_ARCH_SH="${REPO_ROOT}/build_scripts/overlay/overrides/nvidia-arch/20-nvid
 @test "cachyos.sh matches the nvidia-arch overlay's positional path+kver form" {
   # nvidia-arch is the sibling Arch overlay whose five flavors passed the Gate
   # in the run that failed all five cachyos flavors. Both must name the kernel.
-  run grep -E 'dracut .*"/usr/lib/modules/\$\{KVER\}/initramfs\.img" "\$\{KVER\}"' "$NVIDIA_ARCH_SH"
+  #
+  # Match the positional pair alone, without a `dracut .*` prefix: nvidia-arch
+  # wraps its invocation across two lines (the args are on the continuation),
+  # and grep is line-oriented, so requiring both on one line asserts a line
+  # layout rather than the thing that matters.
+  run grep -E '"/usr/lib/modules/\$\{KVER\}/initramfs\.img" "\$\{KVER\}"' "$NVIDIA_ARCH_SH"
   [ "$status" -eq 0 ]
-  run grep -E 'dracut .*"/usr/lib/modules/\$\{KVER\}/initramfs\.img" "\$\{KVER\}"' "$CACHYOS_SH"
+  run grep -E '"/usr/lib/modules/\$\{KVER\}/initramfs\.img" "\$\{KVER\}"' "$CACHYOS_SH"
   [ "$status" -eq 0 ]
 }
 
