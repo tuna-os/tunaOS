@@ -20,7 +20,7 @@ _(None listed yet — see the [adoption call](docs/ADOPTION-CALL.md) and be the 
 | Organization | Use Case | Variant(s) | Since |
 |---|---|---|---|
 | [@hanthor](https://github.com/hanthor) (Project Maintainer) | Personal daily driver — development, testing, and dogfooding all variants | Yellowfin GNOME, Albacore GNOME, Skipjack KDE | 2026-04 |
-| [TunaOS Hive Agents](https://github.com/tuna-os) | Automated CI/CD — build, test, and release pipeline runs on TunaOS infrastructure | Yellowfin GNOME, Albacore GNOME | 2026-05 |
+| [TunaOS Hive Agents](https://hive.tunaos.org) | Automated CI/CD — build, test, and release pipeline runs on TunaOS infrastructure | Yellowfin GNOME, Albacore GNOME | 2026-05 |
 
 ## Ecosystem & Downstream Projects
 
