@@ -24,6 +24,7 @@
 | Q4 milestone fidelity (#1307) | 7/9 trackers unattached | ✅ **Fixed** — all trackers attached (verified 08-13); milestone #3 = 10 open / 1 closed | #1307, milestone |
 | Docs adoption surface | 3 P0s open | ✅ **Recovered** — #103 pagination, #115 flatpak deploy, #135 404 links all closed 08-13 | docs issues |
 | wootc planning (#1358) | no ROADMAP/LICENSE | ROADMAP (wootc#116) + LICENSE-GPL-2.0/LICENSE-MIT landed; **CONTRIBUTING still missing** | wootc tree |
+| Delivery pipeline | not tracked | **Merge-queue freeze 06:46:37Z → 20:09:32Z (13h 23m, zero merges to `main`)**; drain began 20:09Z and had not completed as of 20:17Z | #1657, `git log` |
 
 ## Purpose
 
@@ -56,6 +57,7 @@ Make Q3 carryover an explicit decision, not a discovery. For every open Q3 goal,
 ### Supporting items for the checkpoint
 
 - **Release reliability is the top new risk since T-10**: 08-13 nightly failed across the variant matrix (Yellowfin, Bonito…); NVIDIA initramfs regression #1499 has 5 variants on 10/10 red nightlies (fixes #1503/#1523 in flight); Asahi manifest gate red nightly (#1411); live-overlay artifacts red for guppy/grouper/bonito-rawhide (#1397). Every one of these blocks the flavor-equality mandate (#1316) and the parity decision above.
+- **Delivery-pipeline requirement — "merged" is not a reliable proxy for "done" this cycle (#1657)**: the `main` ruleset's merge-queue rule rejected the hive automerge agent's direct merge calls, freezing `main` for **13h 23m** on 08-14 — last merge before the freeze #1572 at 06:46:37Z, first merge of the recovery #1665 at 20:09:32Z, with ~73 merge-eligible PRs stranded meanwhile. The drain began at 20:09Z (19 merges by 20:13Z, including **#1551**, the Unit Tests gate fix that ungreens ~24 PRs) and was **still incomplete as of 20:17Z** — #1588, #1573, #1639, #1621/#1622/#1519, #1454/#1433/#1434 and #1592/#1475 were all still open at that reading. **Consequence for this checkpoint**: the staff test above is "first PR by 2026-09-01" and two DESCOPE recommendations rest on "zero movement" — but during a freeze, an unmerged PR is evidence about the pipeline, not about the goal. Before recording any DESCOPE or DROP on movement grounds, check the goal's PRs for merge-eligible-but-stranded work. #1316 flavor equality is the live example: its remaining deliverable (#1254) is **#1588**, which was written and mergeable throughout the freeze.
 - **GFI pool improved but below target**: ~6 usable seeds verified 08-14 (tunaos #1496/#1351, docs #204/#158/#157, protota #193) vs ZERO at 08-12 — but the 09-15 seeding deadline for Hacktoberfest (10-01) needs 15–20 (#1362, #1347). CONTRIBUTING's good-first-issue link fixed; the meta-tracker #1308 itself carries the label and is not a task.
 - **No external capacity — Q3 staff tests are maintainer-only**: post-retraction (#1317) the only human is hanthor. #272 and #1123 staff tests have no borrowed-capacity path; **DESCOPE is the realistic outcome for both unless concrete PRs land by 08-22**.
 - **Q4 dependency risk**: Q4 milestone #3 = 10 open / 1 closed; trackers now attached (fidelity fixed, #1307). Bonito GA and Redfin GA already appear as Q4 rows — every Q3 descope adds Q4 load before Q4 starts. Q4 also carries adoption metrics snapshot (#1174, first 11-01), governance (#1168), branch protection (#1167), Fedora 45 planning (#1171).
@@ -100,6 +102,8 @@ Make Q3 carryover an explicit decision, not a discovery. For every open Q3 goal,
 ## Outcome recording
 
 After the checkpoint, update the ROADMAP.md Q3 status table (per #1299 step 3) so carryover is a decision, not a discovery.
+
+Before filling the Decision record above, run the delivery-pipeline check (#1657): for every goal about to be marked DESCOPE or DROP on movement grounds, confirm its PRs are genuinely absent rather than merge-eligible and stranded. A goal whose work landed only after the 08-14 freeze drained should be recorded as delivered late, not as not-delivered.
 
 ---
 *Prepared by strategist agent (ACMM L6 — full mode). Signed-off-by: hanthor-hive-agent[bot] <290068839+hanthor-hive-agent[bot]@users.noreply.github.com>*
