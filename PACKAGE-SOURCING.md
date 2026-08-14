@@ -101,9 +101,14 @@ OBS), and `guppy` (Gentoo overlays) before the audit is called complete.
 
 ## Audit & transition plan
 
-1. **Audit (Q3 checkpoint 2026-08-22, [#1323](https://github.com/tuna-os/tunaos/issues/1323))**: inventory every manifest's external
-   `apt:`/`dnf:`/`zypper:`/`pacman:`/`emerge:` source across all published
-   variants; classify each as tier 1/2/3 or violation; publish the table.
+1. **Audit** — **done 2026-08-13, ahead of the 08-22 checkpoint** (see
+   "Audit findings" above; [#1323](https://github.com/tuna-os/tunaos/issues/1323)).
+   Found 2 clear violations (`trixieua/morewaita-icon-theme`,
+   `ublue-os/packages`/`krunner-bazaar`), one large gap (niri's 6-COPR
+   dependency chain), and confirmed `negativo17`/`rpmfusion` as the
+   Tier-3 allowlist candidates #1319 already named. Not yet covered:
+   apt/AUR/OBS usage on `marlin`/`flounder`/`sailfin`/`guppy` — a
+   follow-up audit pass, not silently dropped.
 2. **Migrate (Q3–Q4)**: move tier-3/✗ sources that have in-house equivalents
    to Tideforge; drive the 14-recipe COSMIC build-out already tracked in
    [ROADMAP.md](./ROADMAP.md) ([#964](https://github.com/tuna-os/tunaos/issues/964) COSMIC-off-PPA is the flagship migration).
