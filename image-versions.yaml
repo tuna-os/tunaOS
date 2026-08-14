@@ -19,6 +19,20 @@ images:
     tag: latest
     digest: sha256:ce66e6687e423a0871150f8e2d62bed28bea2a79cbdf4757a0ee269232072266
 
+  # Rechunk tool (scripts/build-image-inner.sh Pass 2). Was unpinned at
+  # :latest — every other build input here is digest-pinned so an upstream
+  # regression needs a reviewed bump to reach a build; chunkah was the one
+  # exception, and it produced a corrupt out.ociarchive on bonito:base
+  # 2026-08-14 (tunaos#1568, run 31766548793: "archive/tar: invalid tar
+  # header" at the podman load step). Single occurrence so far, so this pin
+  # doesn't claim to be a proven fix for that corruption on its own — see
+  # the archive validation + retry added alongside it in the same script —
+  # but an unpinned rechunker is a real, independent gap regardless.
+  - name: chunkah
+    image: quay.io/coreos/chunkah
+    tag: latest
+    digest: sha256:ff8b8b466a942ec6000445d4001fc661e2fc5a952ad9ee29b4de9ab09d1d1708
+
 # Pinned binary downloads (managed by Renovate)
 downloads:
   # renovate: datasource=github-releases depName=ublue-os/uupd

@@ -193,7 +193,11 @@ fi
 echo "==> Running chunkah on ${PRE_CHUNK_TAG}..."
 
 if [[ -z "${CHUNKAH_IMAGE:-}" ]]; then
-	CHUNKAH_IMAGE="quay.io/coreos/chunkah:latest"
+	# Pinned (tunaos#1568): every other build input in image-versions.yaml is
+	# digest-pinned so an upstream regression needs a reviewed Renovate bump
+	# to reach a build. chunkah was the one unpinned :latest exception.
+	chunkah_digest=$($YQ -r '.images[] | select(.name == "chunkah") | .digest' image-versions.yaml)
+	CHUNKAH_IMAGE="quay.io/coreos/chunkah@${chunkah_digest}"
 fi
 if ! podman image inspect "${CHUNKAH_IMAGE}" &>/dev/null; then
 	if ! podman pull "${CHUNKAH_IMAGE}" 2>/dev/null; then
@@ -208,34 +212,68 @@ fi
 # by copying the rootfs into container-local workspace, creating a temporary
 # /var/lib/rpm directory so chunkah's rpmdb component loader succeeds, and
 # passing `--prune /var/lib/rpm` so the dummy directory is never packed into the OCI archive.
-CHUNK_OUT=$(mktemp -d)
-CHUNK_EMPTY_DEV=$(mktemp -d)
-podman run --rm \
-	--security-opt label=disable \
-	--network host \
-	--entrypoint="" \
-	-v "${CHUNK_OUT}:/run/out:Z" \
-	--mount "type=image,source=${PRE_CHUNK_TAG},target=/chunkah" \
-	-v "${CHUNK_EMPTY_DEV}:/chunkah/dev:Z" \
-	"${CHUNKAH_IMAGE}" \
-	sh -c '
-		HAS_RPMDB=0
-		if [ -n "$(ls -A /chunkah/usr/lib/sysimage/rpm 2>/dev/null)" ] || [ -n "$(ls -A /chunkah/var/lib/rpm 2>/dev/null)" ]; then
-			HAS_RPMDB=1
-		fi
-		if [ "$HAS_RPMDB" = "1" ]; then
-			chunkah build --rootfs /chunkah --skip-special-files -o /run/out/out.ociarchive
-		else
-			echo "==> Image has no rpmdb — preparing rootfs copy with dummy rpmdb & pruning it in chunkah build..."
-			mkdir -p /tmp/rootfs
-			cp -a /chunkah/. /tmp/rootfs/
-			mkdir -p /tmp/rootfs/var/lib/rpm
-			chunkah build --rootfs /tmp/rootfs --prune /var/lib/rpm --skip-special-files -o /run/out/out.ociarchive
-			rm -rf /tmp/rootfs
-		fi
-	'
-mv "${CHUNK_OUT}/out.ociarchive" out.ociarchive
-rm -rf "${CHUNK_OUT}" "${CHUNK_EMPTY_DEV}"
+#
+# `--prune /sysroot/` (both branches, tunaos#1568): bootc images' /sysroot
+# holds the ostree deployment tree, which chunkah itself warns is wasted
+# bytes if not excluded — "rootfs contains sysroot/ostree which was not
+# pruned; Use --prune /sysroot/ to exclude it." The trailing slash matters:
+# chunkah's --prune treats `/sysroot` (no slash) as "skip this path
+# entirely" and `/sysroot/` (with slash) as "keep the directory, skip its
+# children" — /sysroot needs to exist as a mount point at runtime, so this
+# repo wants the latter. --prune is a repeatable flag (chunkah's cmd_build.rs
+# collects it into a Vec), so this is additive with the existing
+# --prune /var/lib/rpm, not a replacement.
+#
+# chunkah build is retried once (CHUNKAH_ATTEMPT loop) because a corrupt
+# out.ociarchive has been observed once so far (tunaos#1568: "archive/tar:
+# invalid tar header" at the podman load step below, bonito:base
+# 2026-08-14) with no confirmed root cause -- possibly a truncated write
+# under disk pressure. `tar tf` validates the archive is at least a well-
+# formed tarball before handing it to podman load, so a truncated write is
+# caught here with a log line pointing at this issue, instead of surfacing
+# as podman's much less obvious "payload does not match any of the
+# supported image formats".
+CHUNKAH_OK=0
+for CHUNKAH_ATTEMPT in 1 2; do
+	CHUNK_OUT=$(mktemp -d)
+	CHUNK_EMPTY_DEV=$(mktemp -d)
+	podman run --rm \
+		--security-opt label=disable \
+		--network host \
+		--entrypoint="" \
+		-v "${CHUNK_OUT}:/run/out:Z" \
+		--mount "type=image,source=${PRE_CHUNK_TAG},target=/chunkah" \
+		-v "${CHUNK_EMPTY_DEV}:/chunkah/dev:Z" \
+		"${CHUNKAH_IMAGE}" \
+		sh -c '
+			HAS_RPMDB=0
+			if [ -n "$(ls -A /chunkah/usr/lib/sysimage/rpm 2>/dev/null)" ] || [ -n "$(ls -A /chunkah/var/lib/rpm 2>/dev/null)" ]; then
+				HAS_RPMDB=1
+			fi
+			if [ "$HAS_RPMDB" = "1" ]; then
+				chunkah build --rootfs /chunkah --prune /sysroot/ --skip-special-files -o /run/out/out.ociarchive
+			else
+				echo "==> Image has no rpmdb — preparing rootfs copy with dummy rpmdb & pruning it in chunkah build..."
+				mkdir -p /tmp/rootfs
+				cp -a /chunkah/. /tmp/rootfs/
+				mkdir -p /tmp/rootfs/var/lib/rpm
+				chunkah build --rootfs /tmp/rootfs --prune /var/lib/rpm --prune /sysroot/ --skip-special-files -o /run/out/out.ociarchive
+				rm -rf /tmp/rootfs
+			fi
+		'
+	if [[ -s "${CHUNK_OUT}/out.ociarchive" ]] && tar tf "${CHUNK_OUT}/out.ociarchive" >/dev/null 2>&1; then
+		mv "${CHUNK_OUT}/out.ociarchive" out.ociarchive
+		rm -rf "${CHUNK_OUT}" "${CHUNK_EMPTY_DEV}"
+		CHUNKAH_OK=1
+		break
+	fi
+	echo "::warning::chunkah attempt ${CHUNKAH_ATTEMPT}/2 produced an invalid or missing out.ociarchive (tunaos#1568) — retrying" >&2
+	rm -rf "${CHUNK_OUT}" "${CHUNK_EMPTY_DEV}"
+done
+if [[ "${CHUNKAH_OK}" -ne 1 ]]; then
+	echo "ERROR: chunkah did not produce a valid OCI archive after 2 attempts" >&2
+	exit 1
+fi
 
 # ── Pass 3: Relabel ──────────────────────────────────────────────────────────
 echo "==> Applying labels from OCI archive..."
