@@ -35,13 +35,28 @@ review separate from the promotional label.
 
 ## Current TunaOS candidates
 
-Re-verified live on 2026-08-14 against the 09-15 seeding target. The current
-label census finds **9 open candidates in docs**, while tunaos has only its
-meta-tracker (#1308), which is not a starter task. The effective pool is
-therefore **9 usable candidates** versus the **15–20 needed by 09-15** (#1537).
-This is a net-of-consumption count, not a gross total of every issue ever
-seeded. Re-run this census at the 09-08 audit; the table below is a dated
-snapshot, not a static promise.
+Re-verified live on 2026-08-14 (23:45Z) against the 09-15 seeding target.
+The label census finds **11 issues carrying `good first issue` org-wide** —
+9 in docs, 1 in tunaos, 1 in letters — but only **9 are contributable**:
+
+| repo | labelled | contributable | why |
+|---|---|---|---|
+| `tuna-os/docs` | 9 | **9** | |
+| `tuna-os/tunaOS` | 1 | **0** | only the meta-tracker (#1308), which is not a starter task |
+| `tuna-os/letters` | 1 | **0** | repository is archived read-only; a PR cannot be merged |
+
+That is a net-of-consumption count, not a gross total of every issue ever
+seeded, and it is **9 against the 15–20 needed by 09-15** (#1537).
+
+The concentration matters as much as the total. **Every contributable task is
+in one repository**, and the flagship repo offers none — a contributor who
+wants to write code, or who has already taken the docs task, sees nothing. So
+"the pool is ≥8" can be true while the pool is thin, which is why the sweep
+reports the per-repository split and warns when one repository holds more than
+60% of it. It currently holds 100%.
+
+Re-run this census at the 09-08 audit; the table below is a dated snapshot,
+not a static promise.
 
 | Target repo | Open `good first issue` | Usable for Hacktoberfest? | Next action |
 |---|---|---|---|
@@ -100,7 +115,19 @@ as Hacktoberfest starter tasks.
 
 Use the organization-wide filtered view when announcing the event:
 
-<https://github.com/issues?q=is%3Aissue+is%3Aopen+org%3Atuna-os+label%3A%22good+first+issue%22>
+<https://github.com/issues?q=is%3Aissue+is%3Aopen+org%3Atuna-os+label%3A%22good+first+issue%22+archived%3Afalse>
+
+`archived:false` is load-bearing, not tidiness. GitHub's issue search includes
+archived repositories unless told otherwise, and this document already excludes
+`letters` from the repo list because it is archived — but the URL above did
+not, so the announced view still offered its `good first issue`. A first-timer
+who clicks through, picks it, and finds they cannot open a pull request has had
+exactly the experience this plan exists to prevent. Measured 2026-08-14: 13
+results without the filter, 12 with it.
+
+Re-run [`scripts/gfi-pool-report.sh`](../scripts/gfi-pool-report.sh) for the
+Monday sweep rather than counting by hand — it applies the same filter, splits
+the pool by repository, and flags issues that are already claimed.
 
 ## Measurement
 
