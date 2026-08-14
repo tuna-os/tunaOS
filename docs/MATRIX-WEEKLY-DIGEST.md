@@ -29,6 +29,9 @@
 - New good-first-issue tasks: [#NNNN](https://github.com/tuna-os/tunaOS/issues/NNNN) — _one-line scope_
 - Discussion thread worth reading: [title](link) — _one-line why_
 - New contributor shout-out (if any): @handle merged _x_ PR(s)
+- Adoption call (once published): [Who's running TunaOS?](DISCUSSION_URL) —
+  _voluntary, consent-confirmed reports for ADOPTERS.md; do not infer use from
+  downloads or image pulls_
 
 ### 🔗 Links
 
@@ -46,7 +49,8 @@
 - **Ad hoc** only for: variant launches, conference talks, Hacktoberfest
   start, release-week events (e.g., GNOME 51, Fedora 45)
 - Always end with one **call to action** (try the ISO, pick up a GFI,
-  join office hours) — a digest without an ask does not grow the room
+  join office hours, or self-identify through the [adoption call](ADOPTION-CALL.md))
+  — a digest without an ask does not grow the room
 
 ## First post candidates
 

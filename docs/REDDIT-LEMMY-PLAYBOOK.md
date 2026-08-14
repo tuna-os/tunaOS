@@ -1,8 +1,8 @@
 # Reddit / Lemmy Release-Announcement Playbook
 
 > Status: **draft** — for maintainer review before first post.
-> Tracking issue: [#1346](https://github.com/tuna-os/tunaOS/issues/1346) (Reddit/Lemmy Linux-community presence).
-> Prepared: 2026-08-12. First post targets: Gurnard launch (#1344) / GNOME 51 release week (#1334).
+> Tracking issues: [#1346](https://github.com/tuna-os/tunaOS/issues/1346) (Reddit/Lemmy Linux-community presence), [#1599](https://github.com/tuna-os/tunaOS/issues/1599) (homelab/self-hosted, Draft D).
+> Prepared: 2026-08-12, homelab draft added 2026-08-14. First post targets: Gurnard launch (#1344) / GNOME 51 release week (#1334).
 
 ## Why this exists
 
@@ -162,10 +162,52 @@ detail: https://tunaos.org/blog/2026/08/12/announcing-gurnard-ubuntu-pantheon
 > Status: early. If you own an X13s-class laptop and want to help test,
 > the hardware matrix and issue tracker are the place to start.
 
+### Draft D — Homelab / self-hosted (bootc desktop + Corral)
+
+**Target subs:** r/selfhosted, r/homelab — audience-specific, not subject
+to the r/linux 1/month slot budget above.
+
+**Title:** `TunaOS + Corral — a bootc desktop and a Kubernetes-native VM manager, same image-based model`
+
+**Body:**
+
+> Two things from the TunaOS project that fit this sub: the desktop OS
+> ships as a **bootc container image** (atomic updates, one transaction,
+> rollback on failure — no package-manager drift to babysit), and
+> [Corral](https://github.com/tuna-os/corral) is a companion VM manager
+> that runs the same idea against your homelab: QEMU/KVM locally,
+> KubeVirt if you've got a cluster, with a Proxmox-style web UI.
+>
+> The angle that might actually be useful to you: Corral also serves a
+> **Proxmox VE API-compatible layer** on top of KubeVirt (verified against
+> the `bpg/proxmox` Terraform provider) — so existing Proxmox tooling
+> (Terraform, Ansible's `community.general.proxmox_*`, `proxmoxer`,
+> monitoring scripts) can list/create/start/stop/delete KubeVirt VMs
+> without knowing Corral is there. It is **not** a Proxmox host manager —
+> if you want Corral to manage an existing Proxmox box as a backend,
+> that's still an open gap (no PVE export adapter yet, tracked upstream).
+> It's the reverse: making a Kubernetes cluster speak Proxmox's API to the
+> tools you already use.
+>
+> Try the desktop side first — a QEMU/KVM eval takes about 20 minutes,
+> no repartitioning, snapshot-and-revert the whole thing:
+> https://tunaos.org/docs/tunaos/evaluating-in-a-vm
+>
+> Corral: https://github.com/tuna-os/corral (backend support matrix in
+> the README — QEMU/KubeVirt are the most complete backends today; Incus
+> and libvirt work but some capabilities are backend-limited)
+>
+> Status: both actively developed, not "finished" — Corral is mid-rewrite
+> from an earlier Python tool, and backend move/migration parity between
+> Proxmox/Incus/KubeVirt is explicitly incomplete. Said honestly because
+> this sub calls that out fast if you don't.
+
 ### Post-and-track
 
 1. Post the chosen draft (maintainer account), then drop the URL + star
    delta into the monthly ADOPTION-METRICS.md snapshot (#1311).
 2. Retro after 3 posts (playbook rule above).
 3. Next hook in the calendar: Q3 checkpoint recap (08-22), GNOME 51
-   release week (~09-12), Hacktoberfest (10-01), Fedora 45 (~10-20).
+   release week (~09-12), Hacktoberfest (10-01), Fedora 45 (~10-20),
+   homelab/self-hosted post (Draft D, no fixed date — ride the Q3
+   checkpoint's Corral/bootc mentions per #1599).

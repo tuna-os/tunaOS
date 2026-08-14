@@ -21,6 +21,21 @@ tunaOS is an open-source project building OCI-based Enterprise Linux desktops. W
 | **Variant maintainer** | Own a distro variant | Monitor builds, fix breakage |
 | **Core maintainer** | Architecture, CI, releases | Sustained contribution + trust |
 
+### Contributor recognition and attribution
+
+We recognize contributors for the work they actually contribute, while taking
+care to distinguish human contributions from automated activity. Before
+publishing a contributor spotlight or counting a contribution toward the
+community's human-contributor metrics, maintainers should verify the commit
+author and the contributor's identity. This keeps public thanks meaningful and
+avoids attributing agent work to a person.
+
+The `shimonenator` commits previously described as the project's first external
+human contribution were confirmed on 2026-08-13 to be authored by the Google
+Antigravity agent (`antigravity`). They remain useful project work, but are not
+a human-contributor milestone; the search for and welcome to our first external
+human contributor remains open.
+
 ### Communication
 
 - **GitHub Issues**: Bug reports, feature requests, discussion

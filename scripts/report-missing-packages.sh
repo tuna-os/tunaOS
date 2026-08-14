@@ -74,7 +74,7 @@ echo "Generated $(date -u +%Y-%m-%dT%H:%M:%SZ) from \`install_available\`'s buil
 echo
 echo "These packages were requested by tunaos's build scripts but did not"
 echo "resolve against the active DNF repos at build time. Add them to"
-echo "\`tuna-os/github-copr\` (or another COPR we control) to bring them"
+echo "\`tuna-os/tunaos-packages\` (or another repo we control) to bring them"
 echo "into EL10 reach."
 echo
 

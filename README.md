@@ -14,7 +14,7 @@
 [![License](https://img.shields.io/github/license/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/blob/main/LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/stargazers)
 [![Issues](https://img.shields.io/github/issues/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/issues)
-[![Adopters](https://img.shields.io/badge/adopters-15_entries-2ea44f?style=for-the-badge)](ADOPTERS.md)
+[![Adoption evidence](https://img.shields.io/badge/adoption-0_production%2C_2_evaluation-2ea44f?style=for-the-badge)](ADOPTERS.md)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/MXSTqB8Nv)
 
 </div>
@@ -46,19 +46,21 @@ _Generated from the latest completed main-branch build for each variant. A cell 
 
 | Variant | Green image cells | Latest run | Blocked or failing tags |
 | :--- | ---: | :--- | :--- |
-| 🐠 `yellowfin` | **9/16** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304663189) | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri |
-| 🐟 `albacore` | **16/16** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304560979) | — |
-| 🍣 `skipjack` | **15/15** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304713188) | — |
-| 🎣 `bonito` | **14/14** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304431595) | — |
-| 🦈 `sailfin` | **5/5** | [✅ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304766845) | — |
-| 🌈 `guppy` | **3/3** | [✅ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29305134903) | — |
-| 🐉 `bonito-rawhide` | **13/14** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304558402) | gnome |
-| 🐟 `grouper` | **4/6** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304749688) | gnome-zfs,niri |
-| 🚀 `marlin` | **0/8** | [❌ 2026-07-15](https://github.com/tuna-os/tunaOS/actions/runs/29388284284) | base,gnome,kde,cosmic,niri,xfce,gnome-cachyos,kde-cachyos |
-| 🐡 `flounder` | **0/6** | [❌ 2026-07-15](https://github.com/tuna-os/tunaOS/actions/runs/29387806332) | base,gnome,kde,cosmic,niri,xfce |
-| ☢️ `flounder-sid` | **0/6** | [❌ 2026-07-15](https://github.com/tuna-os/tunaOS/actions/runs/29387743218) | base,gnome,kde,cosmic,niri,xfce |
+| 🐠 `yellowfin` | **0/20** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766492172) | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,kde-hwe,kde-nvidia,niri-hwe,niri-nvidia,xfce-hwe,xfce-nvidia |
+| 🐟 `albacore` | **0/20** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766397923) | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,kde-hwe,kde-nvidia,niri-hwe,niri-nvidia,xfce-hwe,xfce-nvidia |
+| 🍣 `skipjack` | **0/18** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766408724) | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,kde-hwe,kde-nvidia,niri-hwe,niri-nvidia |
+| 🎣 `bonito` | **0/15** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766548793) | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,cosmic-nvidia,kde-nvidia,niri-nvidia,xfce-nvidia |
+| 🐦 `hummingbird` | **1/5** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766751166) | gnome,kde,niri,cosmic |
+| 🦈 `sailfin` | **0/7** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766602231) | base,gnome,gnome-asahi,kde,niri,xfce,cosmic |
+| 🌈 `guppy` | **0/4** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766322789) | base,gnome,kde,xfce |
+| 🐉 `bonito-rawhide` | **0/14** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766505527) | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-nvidia,cosmic-nvidia,kde-nvidia,niri-nvidia,xfce-nvidia |
+| 🐟 `gurnard` | **0/2** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766667186) | base,pantheon |
+| 🐟 `grouper` | **0/7** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766671286) | base,gnome,gnome-asahi,gnome-zfs,kde,cosmic,xfce |
+| 🚀 `marlin` | **5/16** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766586852) | base,gnome,kde,cosmic,niri,xfce,gnome-cachyos,kde-cachyos,cosmic-cachyos,niri-cachyos,xfce-cachyos |
+| 🐡 `flounder` | **0/7** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766676694) | base,gnome,kde,xfce,gnome-nvidia,kde-nvidia,xfce-nvidia |
+| ☢️ `flounder-sid` | **0/7** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766504862) | base,gnome,kde,xfce,gnome-nvidia,kde-nvidia,xfce-nvidia |
 
-**Current image coverage: 79/109 cells (72%).** This is a point-in-time CI snapshot, not a support-tier promise.
+**Current image coverage: 6/142 cells (4%).** This is a point-in-time CI snapshot, not a support-tier promise.
 
 <!-- build-status:end -->
 
@@ -118,8 +120,21 @@ Image tags are constructed as `<desktop>[-hardware]`:
 | Hardware | Status | Docs |
 |----------|--------|------|
 | Snapdragon X Elite (e.g. Lenovo ThinkPad X13s) | Supported | [docs.tunaos.org/bonito-x13s](https://github.com/tuna-os/docs/tree/main/docs/bonito-x13s), [docs.tunaos.org/dakota-x13s](https://github.com/tuna-os/docs/tree/main/docs/dakota-x13s) |
-| Apple Silicon (M1, M2) | Supported via [Asahi Linux](https://asahilinux.org/) | [bootc-installer-asahi](https://github.com/tuna-os/bootc-installer-asahi) |
-| Apple Silicon (M3 and newer) | Not yet supported | — |
+| Apple Silicon (M1, M2) | In progress via [Asahi Linux](https://asahilinux.org/) — see note below | [bootc-installer-asahi](https://github.com/tuna-os/bootc-installer-asahi) |
+| Apple Silicon (M3 and newer) | Not supported (no Asahi support for M3+ yet) | — |
+
+> **Apple Silicon status.** [ROADMAP.md](ROADMAP.md) is the canonical source
+> and lists Apple Silicon support as 🟡 **in progress**
+> ([#781](https://github.com/tuna-os/tunaOS/issues/781)), so this row says the
+> same thing rather than a flat "Supported". Concretely, what exists today:
+> the `-asahi` images build and are gated in CI (Bonito & Grouper, 36/36
+> verified, [#776](https://github.com/tuna-os/tunaOS/issues/776)), and the
+> installer track has D0–D2 and D4 done. What does not exist yet: the D3
+> macOS installer app, any tagged release of `bootc-installer-asahi`, and any
+> validation on real Apple hardware — that repo's deepest test is qemu +
+> U-Boot, which it describes as "the deepest fidelity achievable without
+> Apple hardware". Installing today means driving the Asahi installer path
+> by hand. If you have M1/M2 hardware to test on, #781 is the place to help.
 
 ---
 
@@ -292,10 +307,13 @@ Related Communities:
 - [RFC Process](RFC-PROCESS.md) — how RFCs are proposed, reviewed, and decided
 - [Package Sourcing Policy](PACKAGE-SOURCING.md) — package origin rules, Tideforge-first, and allowlist (#1319)
 - [Issue Triage Policy](TRIAGE-POLICY.md) — triage states and SLAs (draft, #1195)
-- [Fedora Base Currency Policy](FEDORA-BASE-POLICY.md) — N+rawhide sequencing for Fedora-based variants (draft, #1171)
+- [Fedora Base Currency Policy](FEDORA-BASE-POLICY.md) — adopted N+rawhide sequencing for Fedora-based variants (#1171)
 - [Versioning](VERSIONING.md) — tag scheme and stability tiers
 - [Migration Guide](MIGRATION.md) — switching from other distros
 - [Security Policy](SECURITY.md) — vulnerability reporting and supported versions
+- [Branch Protection](docs/BRANCH-PROTECTION.md) — rulesets and required CI audit (#1167)
+- [Branch Hygiene](docs/BRANCH-HYGIENE.md) — branch lifecycle, naming rules, and stale branch triage (#1530)
+- [Q3 Checkpoint Policy](docs/Q3_CHECKPOINT-2026-08-22.md) — decision integrity and merge-eligible scoring rule (#1683)
 - [Adopters](ADOPTERS.md) — organizations using TunaOS
 - [Adoption Metrics](ADOPTION-METRICS.md) — how adoption is measured and reported (#1174)
 - [Code of Conduct](CODE_OF_CONDUCT.md) — community standards
