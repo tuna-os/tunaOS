@@ -1,8 +1,8 @@
 # Reddit / Lemmy Release-Announcement Playbook
 
 > Status: **draft** — for maintainer review before first post.
-> Tracking issue: [#1346](https://github.com/tuna-os/tunaOS/issues/1346) (Reddit/Lemmy Linux-community presence).
-> Prepared: 2026-08-12. First post targets: Gurnard launch (#1344) / GNOME 51 release week (#1334).
+> Tracking issues: [#1346](https://github.com/tuna-os/tunaOS/issues/1346) (Reddit/Lemmy Linux-community presence), [#1610](https://github.com/tuna-os/tunaOS/issues/1610) (Q3 checkpoint promotion bundle, Draft E).
+> Prepared: 2026-08-12, Q3 checkpoint draft added 2026-08-14. First post targets: Gurnard launch (#1344) / GNOME 51 release week (#1334).
 
 ## Why this exists
 
@@ -162,10 +162,60 @@ detail: https://tunaos.org/blog/2026/08/12/announcing-gurnard-ubuntu-pantheon
 > Status: early. If you own an X13s-class laptop and want to help test,
 > the hardware matrix and issue tracker are the place to start.
 
+### Draft E — Q3 2026 checkpoint recap
+
+**Target subs:** r/linux (September's slot, if not already used —
+Draft B used August's) — a milestone/roadmap recap is exactly r/linux's
+"project update" wheelhouse, more than a niche hardware sub.
+
+**Title:** `TunaOS Q3 2026 checkpoint — new variants, flavor equality, and where we go next`
+
+**Body:**
+
+> We just published our Q3 2026 community checkpoint — the same review our
+> maintainer used internally, written for anyone who uses, builds on, or
+> contributes to [TunaOS](https://tunaos.org): bootc-based, atomic-update
+> Enterprise Linux desktops (AlmaLinux, CentOS Stream, Fedora), now also
+> shipping Ubuntu (Gurnard/Pantheon) and container-native Fedora
+> (Hummingbird).
+>
+> Why it matters: we stopped treating GNOME as the "primary" desktop this
+> quarter — every flavor (KDE Plasma, COSMIC, Niri, XFCE) is now held to
+> the same promotion standard. We also caught and publicly corrected our
+> own mistake: an early "first external contributor" signal turned out to
+> be a misattributed automated-agent account, not a person. We'd rather
+> retract a good metric than keep a false one.
+>
+> New/changed:
+> - Gurnard (Ubuntu 24.04 + Pantheon) and Hummingbird (container-native
+>   Fedora) joined the catalog
+> - Flavor-equality catalog parity gate — no more GNOME-first cadence
+> - A documented package-sourcing policy (system-repos/Tideforge-first,
+>   reviewable third-party allowlist)
+> - Good-first-issue backlog growing ahead of Hacktoberfest
+>
+> Try it: https://tunaos.org/download — full checkpoint:
+> https://tunaos.org/blog/2026/08/22/q3-2026-community-checkpoint
+>
+> Status: honest about what's still open — the post includes our actual
+> Q3 decision sheet (staff/descope/drop on every open goal), not just the
+> wins. Feedback and pushback both welcome, here or on
+> [Matrix](https://matrix.to/#/%23tunaos:reilly.asia).
+
+**Pre-post check (do this before publishing, not when drafting):** the
+"Decisions made at the checkpoint" table in the blog post is `⬜ pending
+08-22 review` as of this draft — confirm it's been filled in with real
+STAFF/DESCOPE/DROP outcomes before the Reddit post goes out, since this
+draft's body summarizes the post as already reflecting real decisions.
+Also re-check the good-first-issue count cited in the linked post against
+the live count (#1537 tracks it; it moves daily) rather than trusting
+whatever number was in the draft when this was written.
+
 ### Post-and-track
 
 1. Post the chosen draft (maintainer account), then drop the URL + star
    delta into the monthly ADOPTION-METRICS.md snapshot (#1311).
 2. Retro after 3 posts (playbook rule above).
-3. Next hook in the calendar: Q3 checkpoint recap (08-22), GNOME 51
-   release week (~09-12), Hacktoberfest (10-01), Fedora 45 (~10-20).
+3. Next hook in the calendar: Q3 checkpoint recap (08-22, Draft E above),
+   GNOME 51 release week (~09-12), Hacktoberfest (10-01), Fedora 45
+   (~10-20).
