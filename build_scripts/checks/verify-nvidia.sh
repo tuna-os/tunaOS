@@ -249,6 +249,18 @@ echo "== initramfs boot-driver parity =="
 # this is a parity floor, not a wish list; dm_crypt is deliberately absent
 # because the parent's initramfs does not carry it either.
 INITRAMFS="${NV_ROOT}/usr/lib/modules/${KERNEL_VRA}/initramfs.img"
+BUILTIN_MODULES="${NV_ROOT}/usr/lib/modules/${KERNEL_VRA}/modules.builtin"
+
+# A driver compiled into the kernel is not listed as a .ko in the initramfs:
+# it is already available before initramfs unpacking. Fedora 43's 7.1.4
+# kernel moved these generic block/optical drivers into that category, so a
+# literal lsinitrd-only check reports a false missing-driver failure.
+module_is_builtin() {
+	local driver="$1"
+	[[ -s "$BUILTIN_MODULES" ]] || return 1
+	grep -qE "(^|/)${driver}\.ko(\.xz|\.zst|\.gz)?$" "$BUILTIN_MODULES"
+}
+
 if [[ ! -s "$INITRAMFS" ]]; then
 	fail "missing or empty initramfs for the installed kernel: /usr/lib/modules/${KERNEL_VRA}/initramfs.img"
 elif ! command -v lsinitrd >/dev/null 2>&1; then
@@ -258,6 +270,8 @@ else
 	for _drv in sr_mod cdrom isofs squashfs virtio_scsi virtio_blk overlay loop; do
 		if grep -qE "/${_drv}\.ko" <<<"$_initrd_list"; then
 			pass "initramfs carries ${_drv}"
+		elif module_is_builtin "${_drv}"; then
+			pass "kernel has built-in ${_drv} (initramfs entry not required)"
 		else
 			fail "initramfs is missing ${_drv} — the live ISO or installed boot cannot mount its root"
 		fi

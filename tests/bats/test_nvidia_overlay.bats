@@ -226,6 +226,32 @@ run_verify() {
   [[ "$output" == *"TUNAOS_NVIDIA_CONTRACT_OK"* ]]
 }
 
+@test "verify-nvidia accepts boot drivers compiled into the kernel" {
+  make_stub_tools
+  root="$(make_good_root)"
+  # Fedora 43's 7.1.4 kernel records these as built-ins rather than shipping
+  # standalone .ko files in the initramfs. Keep the other five drivers in the
+  # fake lsinitrd output so this proves the fallback is per-driver.
+  cat > "$root/usr/lib/modules/${KVER}/modules.builtin" <<EOF
+kernel/drivers/scsi/sr_mod.ko
+kernel/drivers/cdrom/cdrom.ko
+kernel/drivers/block/virtio_blk.ko
+EOF
+  cat > "${BATS_TEST_TMPDIR}/bin/lsinitrd" <<STUB
+#!/usr/bin/env bash
+for d in isofs squashfs virtio_scsi overlay loop; do
+  echo "usr/lib/modules/${KVER}/kernel/drivers/misc/\${d}.ko.xz"
+done
+STUB
+  chmod +x "${BATS_TEST_TMPDIR}/bin/lsinitrd"
+  run_verify "$root"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"kernel has built-in sr_mod"* ]]
+  [[ "$output" == *"kernel has built-in cdrom"* ]]
+  [[ "$output" == *"kernel has built-in virtio_blk"* ]]
+  [[ "$output" == *"TUNAOS_NVIDIA_CONTRACT_OK"* ]]
+}
+
 @test "verify-nvidia fails when the kmod is for a different kernel" {
   make_stub_tools
   root="$(make_good_root)"
