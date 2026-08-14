@@ -162,7 +162,7 @@
     FEDORA_VER="rawhide"
     dnf_opts=()
     if [[ "${FEDORA_VER}" == "rawhide" ]]; then
-      dnf_opts+=(--exclude=\'openh264*\')
+      dnf_opts+=(--exclude="openh264*")
     fi
     echo "dnf -y install ${dnf_opts[*]}"
   '
