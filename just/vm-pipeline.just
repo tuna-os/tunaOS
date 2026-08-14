@@ -297,4 +297,3 @@ _run-vm type variant flavor='gnome' iso_file='':
 
     (sleep 5 && xdg-open "http://127.0.0.1:${port}") &
     podman run "${run_args[@]}"
-
