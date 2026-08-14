@@ -498,7 +498,7 @@ variants:
         build_qcow2: false
       # gnome-nvidia-hwe re-enabled (tunaOS#639): the gnome-shell-49 vs
       # gnome-shell-common-48 file conflict is fixed upstream in the spec
-      # (tuna-os/github-copr#23 merged: Obsoletes: gnome-shell-common <
+      # (tuna-os/tunaos-packages#23 merged: Obsoletes: gnome-shell-common <
       # %{major_version}), verified live in the published spec, not just
       # by the PR having merged.
       - id: gnome-nvidia-hwe

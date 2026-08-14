@@ -91,7 +91,7 @@ if [[ ${#unexpected[@]} -gt 0 ]]; then
 		echo "These packages were requested, silently skipped as unavailable, and are"
 		echo "NOT in checks/package-miss-allowlist.txt:"
 		printf '  %s\n' "${unexpected[@]}"
-		echo "Either package them (tuna-os/github-copr), install them strictly, or —"
+		echo "Either package them (tuna-os/tunaos-packages), install them strictly, or —"
 		echo "if they are genuinely optional — add them to the allowlist with a comment."
 	} >&2
 	exit 1
