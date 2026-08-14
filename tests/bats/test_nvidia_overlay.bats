@@ -118,6 +118,24 @@ OVERLAY_SH="${REPO_ROOT}/build_scripts/overlay/nvidia.sh"
   [ "$status" -eq 0 ]
 }
 
+@test "20-nvidia.sh force-includes sr_mod/cdrom/virtio_blk alongside the GPU drivers (tunaos#1499)" {
+  # --no-hostonly alone stopped guaranteeing these three in the rebuilt
+  # initramfs (10/10 red Bonito nightlies 08-03..08-13, verify-nvidia.sh's
+  # boot-driver-parity check: sr_mod/cdrom/virtio_blk missing, the other 5
+  # required drivers unaffected). Same fix mechanism as i915/amdgpu on the
+  # same line: force them in via the 99-nvidia.conf force_drivers sed rather
+  # than trust generic-mode autodetection.
+  run grep -E 's@ nvidia @.*sr_mod.*cdrom.*virtio_blk.*@g' "$INSTALL_SH"
+  [ "$status" -eq 0 ]
+  # Applied to the dracut.conf.d file that actually gets sourced, and after
+  # the omit_drivers->force_drivers rename (so it lands in force_drivers,
+  # not a dead omit_drivers key).
+  run awk '/omit_drivers.*force_drivers/{print NR; exit}' "$INSTALL_SH"
+  local rename_line="$output"
+  run awk '/sr_mod.*cdrom.*virtio_blk/{print NR; exit}' "$INSTALL_SH"
+  [ -n "$rename_line" ] && [ -n "$output" ] && [ "$rename_line" -lt "$output" ]
+}
+
 # ── contract: verify-nvidia.sh behavioral tests against a fixture root ─────
 #
 # The script takes TUNAOS_NVIDIA_VERIFY_ROOT (same pattern as
