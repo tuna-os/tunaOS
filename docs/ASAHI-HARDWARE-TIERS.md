@@ -32,7 +32,7 @@ who can hold the recovery key combo if a bad payload leaves it unbootable.
 
 Neither hardware tier has that. A Scaleway rental has no console access
 beyond SSH and a "brick risk, no physical access" clause in the issue that
-created this tier; James's M1 Air only has whoever is at James's desk. On
+created this tier; the M1 Air only has whoever is at the machine's desk. On
 both, an automatic `boot.bin` rewrite triggered by switching to a
 **deliberately experimental or known-broken test image** — which is the
 entire point of iterating against this tier — turns a bad OS image into a
@@ -172,5 +172,5 @@ tried.
   result format; wiring it in blind, with no hardware to run it against, has
   the same problem as the point above.
 - Renting any actual instance, setting any actual repository secret, or
-  touching James's actual laptop. All three require access this environment
+  touching the actual M1 Air. All three require access this environment
   does not have.
