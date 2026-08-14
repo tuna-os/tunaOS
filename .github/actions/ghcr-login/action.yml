@@ -43,8 +43,22 @@ runs:
     # Retried with linear backoff, same idiom as the GHCR push retry in
     # reusable-build-image.yml and the cosign retry in the Sign+attest step:
     # a transient failure on a call this cheap should not fail the whole
-    # arm64 build. This is a mitigation for an unreproduced intermittent,
-    # not a fix for a diagnosed cause -- see the comment above.
+    # arm64 build. Plain in-place retry alone doesn't help this specific
+    # failure, though (tunaOS#1556): a job-by-job sweep of 12 arm64 cells
+    # hitting this on 08-14 found it deterministic *within* an affected
+    # runner -- all 3 of #1511's retry attempts failed identically in ~30s
+    # every time, because it's persistent root-podman SHM state on that
+    # runner instance, not a transient hiccup. `Error: failed to open 2048
+    # locks in /libpod_lock: numerical result out of range` is the ERANGE
+    # signature of shm_open finding a pre-existing /dev/shm/libpod_lock
+    # segment whose lock count disagrees with the configured num_locks --
+    # the rootless login on the very same runner, seconds earlier, is
+    # unaffected because it has its own separate lock segment.
+    #
+    # Reset that state before every attempt (idempotent -- a no-op if
+    # nothing is stale) instead of just re-running the same doomed command.
+    # `podman system renumber` is the same idiom scripts/iso-e2e.sh already
+    # uses for this exact class of lock-count drift.
     #
     # The loop ends on an explicit exit, not on falling off the bottom: a
     # `for ... && break; sleep; done` with nothing after it exits with
@@ -58,6 +72,8 @@ runs:
       run: |
         login_ok=0
         for i in $(seq "${MAX_RETRIES}"); do
+          sudo rm -f /dev/shm/libpod_lock* 2>/dev/null || true
+          sudo podman system renumber 2>&1 || true
           if sudo TOKEN="${{ github.token }}" ACTOR="${{ github.actor }}" \
               bash -c 'ulimit -n 4096 && echo "$TOKEN" | podman login -u "$ACTOR" --password-stdin ghcr.io'; then
             login_ok=1
