@@ -166,9 +166,19 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 # It used to be a printf here. That is how five composefs variants ended up with
 # one erofs driver between them: the fix was made while chasing marlin and had
 # nowhere shared to live.
+#
+# The kernel is named once and passed to both dracut-config.sh (which probes
+# drivers against that kernel's module tree) and dracut itself, rather than
+# each rediscovering it. This step only ever sees one kernel, so the old
+# `find ... | tail -1` output path was correct here by luck; the same idiom in
+# build_scripts/overlay/cachyos.sh ran with two kernel trees and picked a
+# different one per flavor, failing 5/5 cachyos Gates (tunaOS#1563). It is not
+# worth leaving a second copy of that around to be inherited.
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
-    /run/context/build_scripts/bootc/dracut-config.sh && \
-    dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
+    KVER="$(basename "$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d ! -name '*.img' | sort -V | tail -1)")" && \
+    if [ -z "$KVER" ]; then echo "ERROR: no kernel module directory under /usr/lib/modules" >&2; exit 1; fi && \
+    /run/context/build_scripts/bootc/dracut-config.sh "$KVER" && \
+    dracut --force "/usr/lib/modules/${KVER}/initramfs.img" "${KVER}"
 
 # systemd-firstboot asks the CONSOLE for a timezone and blocks there forever.
 #
