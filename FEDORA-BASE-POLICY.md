@@ -52,6 +52,45 @@ tunaOS tracks Fedora bases on an **N (current stable) + rawhide** model,
   planned/upcoming, not shipped, until this policy's trigger condition is
   met and #1171 reports base readiness.
 
+## Executing a transition — where the version actually lives
+
+A currency policy that does not say what to edit cannot be carried out, and
+this repo has already paid for that. `scripts/get-base-image.sh`'s header
+records a second hardcoded copy of the variant→base map drifting from
+build-config:
+
+    bonito    build-config: fedora-bootc:44      here: fedora-bootc:43
+
+— "silently, because nothing compared them". The lesson it drew was to keep one
+copy. The inventory below is the copies that remain, measured on 2026-08-14,
+so the next transition is a checklist rather than a search.
+
+**Authoritative.** Change this first; everything else follows it:
+
+| Location | What |
+|---|---|
+| `.github/build-config.yml` (`bonito` entry) | `base_image:` — the pin every build resolves, and `description:` alongside it, which feeds docs and the image label |
+
+**Must be changed in the same PR.** None of these derive from the pin above:
+
+| Location | What | Note |
+|---|---|---|
+| `registry-map.yaml` → `fedora-bootc.tag` | duplicate of the base version | **no consumers** — nothing calls `registry_ref fedora-bootc`, so it can drift without any build failing |
+| `Justfile:5` → `coreos_stable_version` | akmods/CoreOS stream for bonito | the value every real build uses |
+| `scripts/build-image-inner.sh` → `COREOS_STABLE_VERSION` default | same, for direct invocation | had drifted to `41` while the Justfile said `43` |
+| `build_scripts/overlay/overrides/nvidia/20-nvidia.sh` → `FEDORA_AKMODS_VERSION` fallback | negativo17 nvidia userspace tree | only a fallback; the live value is derived from the akmods bundle's dist tag |
+
+**Prose that states the version** and goes stale without failing anything:
+`ROADMAP.md`, `MIGRATION.md`, `.github/copilot-instructions.md`,
+`docs/PIPELINE.md`, `docs/build-pipeline.md`, `docs/AGENT_GUIDE.md`,
+`docs/LUKS-TPM.md`, `docs/FEDORA-MAGAZINE-PITCH.md`, `docs/adr/0003-mkosi-co-build-poc.md`.
+
+`tests/bats/test_fedora_base_currency.bats` compares the pins that can be
+compared, so the silent half of this list is no longer silent. The prose list
+is not machine-checked — deliberately, since pinning strings in nine documents
+would fail on every unrelated wording change — which is why it is written down
+here instead.
+
 ## Relationship to other bases
 
 This policy covers Fedora only. Other rolling/tracking bases (Sailfin/

@@ -78,7 +78,13 @@ AKMODS_REGISTRY_BASE="$(registry_ref akmods 2>/dev/null || echo "ghcr.io/${AKMOD
 BUILD_ARGS+=("--build-arg" "AKMODS_BASE=${AKMODS_REGISTRY_BASE}")
 
 if [[ "${ENABLE_HWE}" == "1" ]] || [[ "${VARIANT}" == bonito* ]]; then
-	COREOS_STABLE="${COREOS_STABLE_VERSION:-41}"
+	# Keep this default equal to the Justfile's (Justfile:5). Nothing in
+	# .github/workflows sets COREOS_STABLE_VERSION, and every real build goes
+	# through `just`, which exports it — so this fallback only fires when the
+	# script is invoked directly, which is exactly why it sat two Fedora
+	# releases behind (41) without anyone noticing. tests/bats/
+	# test_fedora_base_currency.bats now compares the two (tunaOS#1171).
+	COREOS_STABLE="${COREOS_STABLE_VERSION:-43}"
 	BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=coreos-stable-${COREOS_STABLE}")
 	BUILD_ARGS+=("--build-arg" "AKMODS_NVIDIA_VERSION=coreos-stable-${COREOS_STABLE}")
 else
