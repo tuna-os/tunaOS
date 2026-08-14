@@ -61,6 +61,16 @@ jobs:
         run: |
           ./scripts/sync-upstream-snapshots.sh "${UPSTREAM}"
 
+      - name: Enforce snapshot size budget
+        # Keep the vendored review surface bounded. A refresh over budget must
+        # be split, narrowed, or explicitly re-designed before it can create
+        # another large git snapshot commit (tuna-os/tunaos#1647).
+        env:
+          MAX_SNAPSHOT_FILES: '300'
+          MAX_SNAPSHOT_BYTES: '2097152'
+          MAX_SNAPSHOT_CHANGED_FILES: '150'
+        run: ./scripts/check-upstream-snapshot-size.sh
+
       - name: Detect changes
         id: diff
         run: |
