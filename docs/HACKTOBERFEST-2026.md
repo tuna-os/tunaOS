@@ -35,45 +35,38 @@ review separate from the promotional label.
 
 ## Current TunaOS candidates
 
-Re-verified live on 2026-08-14 (T-8 checkpoint) against the 09-15 seeding
-target. **Consumption is now outpacing seeding**: five previously-listed
-candidates (#1350, #1366, #1385, #1496, #1351) have been claimed and merged
-since 08-13 — proof the loop converts end-to-end, but the pool must be
-maintained *net of consumption*, not gross-seeded once. Current org-wide
-`good first issue` pool: **~8 usable** (docs 5, wootc 2, protota 1; tunaos
-shows only meta-tracker #1308 which is a planning issue, not a starter task)
-vs the **15–20 needed by 09-15** (#1537). gtk-office-suite and
-tunaos-packages remain at **zero** curated tasks. This table must be
-re-checked at the 09-08 audit, not treated as static.
+Re-verified live on 2026-08-14 against the 09-15 seeding target. The current
+label census finds **9 open candidates in docs**, while tunaos has only its
+meta-tracker (#1308), which is not a starter task. The effective pool is
+therefore **9 usable candidates** versus the **15–20 needed by 09-15** (#1537).
+This is a net-of-consumption count, not a gross total of every issue ever
+seeded. Re-run this census at the 09-08 audit; the table below is a dated
+snapshot, not a static promise.
 
-| Issue | Task | Contribution shape | Status |
+| Target repo | Open `good first issue` | Usable for Hacktoberfest? | Next action |
 |---|---|---|---|
-| [#1308](https://github.com/tuna-os/tunaos/issues/1308) | Reconcile the published-edition documentation/download checklist | research + documentation | open |
-| [#1351](https://github.com/tuna-os/tunaos/issues/1351) | Add a Gurnard/Pantheon desktop guide in `tuna-os/docs` | documentation | open |
-| [#1496](https://github.com/tuna-os/tunaos/issues/1496) | Link six orphaned docs (TRIAGE-POLICY.md, FEDORA-BASE-POLICY.md, docs/CI_SPEC.md, docs/PIPELINE.md, docs/LUKS-TPM.md, docs/ci-troubleshooting.md) into README | one-file documentation | open |
-| [docs#204](https://github.com/tuna-os/docs/issues/204) | Add Pantheon edition to the Gurnard variant entry on the download page | documentation | open |
-| [docs#207](https://github.com/tuna-os/docs/issues/207) | Add a Marlin (Arch Linux) variant page | documentation | open |
-| [docs#170](https://github.com/tuna-os/docs/issues/170) | FAQ: Apple Silicon / Snapdragon X Elite support | documentation | open |
-| [docs#158](https://github.com/tuna-os/docs/issues/158) | Pantheon keyboard-shortcuts cheat sheet | documentation | open |
-| [docs#157](https://github.com/tuna-os/docs/issues/157) | FAQ: fold in top GitHub Discussion questions | documentation | open |
+| [tunaos](https://github.com/tuna-os/tunaOS) | 1 (only [#1308](https://github.com/tuna-os/tunaOS/issues/1308)) | **0** — planning issue only | Seed one bounded implementation task. |
+| [docs](https://github.com/tuna-os/docs) | 9 ([#217](https://github.com/tuna-os/docs/issues/217), [#231](https://github.com/tuna-os/docs/issues/231), [#232](https://github.com/tuna-os/docs/issues/232), [#255](https://github.com/tuna-os/docs/issues/255), [#256](https://github.com/tuna-os/docs/issues/256), [#257](https://github.com/tuna-os/docs/issues/257), [#259](https://github.com/tuna-os/docs/issues/259), [#262](https://github.com/tuna-os/docs/issues/262), [#264](https://github.com/tuna-os/docs/issues/264)) | **9** pending maintainer confirmation | Maintain against claims and merges. |
+| [protota](https://github.com/tuna-os/protota) | 0 | **0** | Curate one small test or documentation task. |
+| [wootc](https://github.com/tuna-os/wootc) | 0 | **0** | Re-check the two earlier security seeds; relabel or replace if closed. |
+| [gtk-office-suite](https://github.com/tuna-os/gtk-office-suite) | 0 | **0** | Named seeder needed before the 08-22 checkpoint. |
+| [tunaos-packages](https://github.com/tuna-os/tunaos-packages) | 0 | **0** | Named seeder needed; choose a bounded packaging/docs task. |
+| [corral](https://github.com/tuna-os/corral) | 0 | **0** | Do not label the Renovate dashboard or large VDI epic; find a smaller task. |
+| [bootc-installer](https://github.com/tuna-os/bootc-installer) | N/A | **0** — issues disabled | Resolve the structural blocker before counting it. |
 
 ~~[#1350](https://github.com/tuna-os/tunaos/issues/1350)~~,
 ~~[#1366](https://github.com/tuna-os/tunaos/issues/1366)~~, and
 ~~[#1385](https://github.com/tuna-os/tunaos/issues/1385)~~ — merged, no
 longer available to claim.
 
-The eight items above met the 09-15 floor as of 08-13 but **no longer do
-as of 08-14** — five have been consumed and tunaos is back to the meta-tracker
-only. `gtk-office-suite` and `tunaos-packages` still have **zero** open
-`good first issue` tasks each (verified 08-14) — not because nothing is
-suitable, but because nobody has curated one yet. `corral` also has zero
-viable GFI candidates (only a Renovate dashboard and one large VDI-plugin
-epic). `wootc` went from zero to **2** (sec-check #154/#153, 08-14) once its
-missing `CONTRIBUTING.md` was fixed (tuna-os/wootc#150). **Recommended:
-assign a named seeder for gtk-office-suite + tunaos-packages before the
-08-22 Q3 checkpoint** (#1537), and seed from `iso-builder` and `Tavern` too
-before the 09-08 audit. Keep two alternates available for tasks that are
-claimed or found to be too broad.
+The earlier 08-14 report listed wootc and protota seeds that are no longer
+present in the live label search. `gtk-office-suite`, `tunaos-packages`, and
+`corral` still have **zero** open curated tasks; bootc-installer cannot be
+counted while its issue tracker is disabled. **Assign named seeders for
+gtk-office-suite and tunaos-packages before the 08-22 Q3 checkpoint** (#1537),
+then re-check wootc, protota, iso-builder, and Tavern before the 09-08 audit.
+Keep two alternates available for tasks that are claimed or found to be too
+broad.
 
 ## Curation checklist
 
