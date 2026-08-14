@@ -32,12 +32,16 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 }
 
 @test "Justfile contains custom recipes" {
-  run grep "build-custom" "${REPO_ROOT}/Justfile"
+  # Custom overlay recipes live in just/custom-overlay.just, imported from
+  # the root Justfile (#508 Justfile modularization, PR #1417).
+  run grep "^import 'just/custom-overlay.just'" "${REPO_ROOT}/Justfile"
   [ "$status" -eq 0 ]
-  run grep "check-custom" "${REPO_ROOT}/Justfile"
+  run grep "build-custom" "${REPO_ROOT}/just/custom-overlay.just"
   [ "$status" -eq 0 ]
-  run grep "run-custom-vm" "${REPO_ROOT}/Justfile"
+  run grep "check-custom" "${REPO_ROOT}/just/custom-overlay.just"
   [ "$status" -eq 0 ]
-  run grep "custom-iso" "${REPO_ROOT}/Justfile"
+  run grep "run-custom-vm" "${REPO_ROOT}/just/custom-overlay.just"
+  [ "$status" -eq 0 ]
+  run grep "custom-iso" "${REPO_ROOT}/just/custom-overlay.just"
   [ "$status" -eq 0 ]
 }
