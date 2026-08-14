@@ -114,7 +114,7 @@ VERIFY_DEBIAN_SH="${REPO_ROOT}/build_scripts/checks/verify-nvidia-debian.sh"
 @test "nvidia-debian 20-nvidia.sh guards on IS_DEBIAN and asserts the dkms build tree before building" {
   run grep -F 'IS_DEBIAN' "$DEBIAN_INSTALL_SH"
   [ "$status" -eq 0 ]
-  run grep -F 'linux-headers-generic' "$DEBIAN_INSTALL_SH"
+  run grep -F 'HEADERS_PKG' "$DEBIAN_INSTALL_SH"
   [ "$status" -eq 0 ]
   run grep -F 'dkms autoinstall' "$DEBIAN_INSTALL_SH"
   [ "$status" -eq 0 ]
