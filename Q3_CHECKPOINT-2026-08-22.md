@@ -1,7 +1,11 @@
 # Q3 2026 Checkpoint — Decision Sheet (2026-08-22)
 
 **Milestone**: Q3 2026 "Expand Coverage" (closes 2026-09-30)
-**Tracker**: #1299 | **Prepared**: 2026-08-11 | **Last refreshed**: 2026-08-14 (T-8) | **Decision authority**: maintainer
+**Tracker**: #1299 | **Prepared**: 2026-08-11 | **Last refreshed**: 2026-08-14 (T-7) | **Decision authority**: maintainer
+
+> **T-7 refresh (2026-08-14, 21:45Z)**: post-T-8 delivery-pipeline update only — see the
+> "Delivery pipeline" row and the new "Post-unblock branch staleness" supporting item
+> (#1694). No goal-status changes since the T-8 table below.
 
 > **Correction (2026-08-13, #1317)**: every "shimonenator" reference below assumed a
 > human external contributor. The maintainer confirmed the account is a Google
@@ -24,7 +28,7 @@
 | Q4 milestone fidelity (#1307) | 7/9 trackers unattached | ✅ **Fixed** — all trackers attached (verified 08-13); milestone #3 = 10 open / 1 closed | #1307, milestone |
 | Docs adoption surface | 3 P0s open | ✅ **Recovered** — #103 pagination, #115 flatpak deploy, #135 404 links all closed 08-13 | docs issues |
 | wootc planning (#1358) | no ROADMAP/LICENSE | ROADMAP (wootc#116) + LICENSE-GPL-2.0/LICENSE-MIT landed; **CONTRIBUTING still missing** | wootc tree |
-| Delivery pipeline | not tracked | **Merge-queue freeze 06:46:37Z → 20:09:32Z (13h 23m, zero merges to `main`)**; drain began 20:09Z and had not completed as of 20:17Z | #1657, `git log` |
+| Delivery pipeline | not tracked | **Freeze 06:46:37Z → 20:09:32Z (13h 23m)**; **drain completed ~21:19Z — 20+ merges incl. #1551 Unit Tests gate fix, #1608/#1639 strategist planning PRs, #1686 scoring rule**; ~51 PRs remain merge-eligible but **new stale-branch Unit Tests failures** (21:27–21:33Z) risk re-clog — #1694 | #1657 (closed), #1694, `git log` |
 
 ## Purpose
 
@@ -57,6 +61,7 @@ Make Q3 carryover an explicit decision, not a discovery. For every open Q3 goal,
 ### Supporting items for the checkpoint
 
 - **Release reliability is the top new risk since T-10**: 08-13 nightly failed across the variant matrix (Yellowfin, Bonito…); NVIDIA initramfs regression #1499 has 5 variants on 10/10 red nightlies (fixes #1503/#1523 in flight); Asahi manifest gate red nightly (#1411); live-overlay artifacts red for guppy/grouper/bonito-rawhide (#1397). Every one of these blocks the flavor-equality mandate (#1316) and the parity decision above.
+- **Post-unblock branch staleness (#1694, T-7)**: the drain finished ~21:19Z, but a fresh wave of `test.yml` runs (21:27–21:33Z, 20+ runs) is failing Unit Tests across the ~51 remaining merge-eligible PRs. Cause is branch staleness, not per-PR defects: `main` absorbed a test-authoring burst today (`test_custom_overlay.bats` reworked 16:26Z for the `just/custom-overlay.just` module; reusable-build-image maintainer-identity checks) and PR branches created before those commits fail the new assertions. **Before 08-22**: run a rebase/update-branch sweep across the merge-eligible set and confirm the set is empty, or the checkpoint's delivery-pipeline check (#1657) and the merge-eligible==done scoring rule (#1686) lose their evidence basis.
 - **Delivery-pipeline requirement — "merged" is not a reliable proxy for "done" this cycle (#1657)**: the `main` ruleset's merge-queue rule rejected the hive automerge agent's direct merge calls, freezing `main` for **13h 23m** on 08-14 — last merge before the freeze #1572 at 06:46:37Z, first merge of the recovery #1665 at 20:09:32Z, with ~73 merge-eligible PRs stranded meanwhile. The drain began at 20:09Z (19 merges by 20:13Z, including **#1551**, the Unit Tests gate fix that ungreens ~24 PRs) and was **still incomplete as of 20:17Z** — #1588, #1573, #1639, #1621/#1622/#1519, #1454/#1433/#1434 and #1592/#1475 were all still open at that reading. **Consequence for this checkpoint**: the staff test above is "first PR by 2026-09-01" and two DESCOPE recommendations rest on "zero movement" — but during a freeze, an unmerged PR is evidence about the pipeline, not about the goal. Before recording any DESCOPE or DROP on movement grounds, check the goal's PRs for merge-eligible-but-stranded work. #1316 flavor equality is the live example: its remaining deliverable (#1254) is **#1588**, which was written and mergeable throughout the freeze.
 - **GFI pool improved but below target**: ~6 usable seeds verified 08-14 (tunaos #1496/#1351, docs #204/#158/#157, protota #193) vs ZERO at 08-12 — but the 09-15 seeding deadline for Hacktoberfest (10-01) needs 15–20 (#1362, #1347). CONTRIBUTING's good-first-issue link fixed; the meta-tracker #1308 itself carries the label and is not a task.
 - **No external capacity — Q3 staff tests are maintainer-only**: post-retraction (#1317) the only human is hanthor. #272 and #1123 staff tests have no borrowed-capacity path; **DESCOPE is the realistic outcome for both unless concrete PRs land by 08-22**.
@@ -81,6 +86,7 @@ Make Q3 carryover an explicit decision, not a discovery. For every open Q3 goal,
 
 | Date | Event | Owner |
 |------|-------|-------|
+| 2026-08-18 | Merge-eligible set verified empty (rebase sweep per #1694) — pre-checkpoint gate | strategist + ci-maintainer |
 | 2026-08-22 | **Checkpoint decision sheet filled** (table below) | maintainer (strategist prepares) |
 | 2026-08-24 | shimonenator 14-day window closes (moot — retracted) | — |
 | 2026-09-01 | Staff-test deadline: first PR for any STAFF goal | goal owners |
