@@ -23,27 +23,27 @@ tunaOS is an open-source project building OCI-based Enterprise Linux desktops. W
 
 ### Contributor recognition
 
-We want to recognize contributors whose work strengthens TunaOS over time. In
-August 2026, [Shimon Schwartz (@shimonenator)](https://github.com/shimonenator)
-became the project's first external human contributor to return with multiple
-merged contributions. Their five contributions cover the image-factory
-completion contract, the EL10/Asahi packaging design, the Hummingbird desktop
-repository contract, and flavor-equality documentation:
+We want to recognize contributors whose work strengthens TunaOS over time. If
+you are building on TunaOS and return to improve it, open a PR or tell us in
+[Matrix](https://matrix.to/#/%23tunaos:reilly.asia) — sustained work is what we
+most want to name.
 
-- [#1283](https://github.com/tuna-os/tunaOS/pull/1283) — image-factory
-  completion gate and definition of done
-- [#777](https://github.com/tuna-os/tunaOS/issues/777) — EL10/Asahi OBS
-  packaging design
-- [#999](https://github.com/tuna-os/tunaOS/pull/999) — image-factory gate
-  alignment
-- [#1282](https://github.com/tuna-os/tunaOS/pull/1282) — Hummingbird
-  repository contract URL
-- [#1315](https://github.com/tuna-os/tunaOS/pull/1315) — flavor equality
+There is no one to name yet, and saying so is deliberate. An earlier draft of
+this section recognized "@shimonenator" as the project's first external *human*
+contributor to return with multiple merged contributions. That was withdrawn
+before it was published (#1317, #1633): every commit from that account across
+the org carries `commit.author.name: antigravity` — it is a Google Antigravity
+agent, not a person. Re-verified independently before removing this:
 
-Thank you, Shimon, for helping turn these project gaps into clearer contracts
-and more reliable contributor-facing documentation. If you are building on
-TunaOS and return to improve it, we want to recognize that work too — open a
-PR or tell us about it in [Matrix](https://matrix.to/#/%23tunaos:reilly.asia).
+    gh api -X GET search/commits -f q='author:shimonenator org:tuna-os'
+    → 10 commits, author.name = "antigravity" on all 10
+
+The commits are real and the work landed; the human being thanked was not. The
+project retracted the same claim from ROADMAP.md, the Q3 checkpoint, and the
+published blog post (tuna-os/docs#252) rather than quietly deleting it, on the
+maintainer's stated reasoning that "correcting that publicly matters more to us
+than the metric would have". This section follows that: the first real external
+contributor should arrive on an honest baseline, not inherit a corrected one.
 
 ### Communication
 

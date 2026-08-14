@@ -29,7 +29,7 @@ publish, and *how* the snapshot feeds roadmap decisions.
 | Download | ISO downloads by variant+desktop | R2 access logs (tunaos.org/download) | **not measured** | ≥1k ISO downloads/mo; variant ranking |
 | Download | GitHub Release asset downloads | Releases API (resumed 08-09, #1106) | 0 (assets were empty shells) | assets present on all flavors; downloads counted |
 | Install | Installs / successful boots | opt-in telemetry or boot-report gating | **not measured** | Q4 design decision (#577 GUI gate, #763) |
-| Community | Open PRs from external contributors | GitHub API | 1 repeat external contributor; 5 merged contributions | ≥2 external contributors with merged contributions |
+| Community | Open PRs from external contributors | GitHub API | 0 external contributors (#1317 — the account previously counted here is an automated agent) | ≥2 external contributor PRs merged |
 | Community | Discussion posts, `good first issue` pickups | GitHub API | 0 starter issues (dead label, #1308) | ≥5 starter issues picked up |
 | Community | Public adopters (production or evaluation), [ADOPTERS.md](./ADOPTERS.md) | Manual — PR from the adopting org, or outreach asking permission to list | 0 production entries (#1348) | ≥2–3 public evaluator/production entries |
 
