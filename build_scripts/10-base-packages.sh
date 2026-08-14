@@ -172,7 +172,7 @@ elif [[ $IS_FEDORA == true ]]; then
 	# Note: On Rawhide (Fedora 46+), exclude openh264* until fedora-cisco-openh264
 	# updates its openh264 RPMs signed with the F46 key (currently fc45 signed with F45 key).
 	# Remove this exclude once openh264-*.fc46 appears in fedora-cisco-openh264.
-	local dnf_opts=()
+	dnf_opts=()
 	if [[ "${FEDORA_VER}" == "rawhide" ]]; then
 		dnf_opts+=(--exclude='openh264*')
 	fi
