@@ -65,12 +65,52 @@ flagged for triage (stage → Merged, Abandoned, or folded into a successor).
 - Branch shape: `rfcNNN-<slug>`; iterative versions use `-v2`, `-v3`
   **only** on the same proposal number, never a new number.
 
-## Triage of existing branches (at 2026-08-22 checkpoint)
+## Triage of existing branches (disposition pass, #1363, 2026-08-13)
 
-The 11 existing RFC branches predate this policy. At the Q3 checkpoint
-(#1299) each must be assigned one of: **merge** (meets gate today),
-**carry** (owner + 30-day plan), or **abandon** (close branch + issue).
-No RFC branch may remain un-triaged after 2026-08-31.
+The 11 existing RFC branches predate this policy and none carries a
+`docs/rfc/rfcNNN-*.md` document, so none can meet the merge gate above as
+written — the gate is a forward-looking bar for *new* proposals, not a test
+these branches were ever measured against. Disposition here is instead based
+on whether each branch's actual code content already shipped to `main`
+through a different path (2 months of drift — 3,652+ commits — makes this
+common), is still a live, un-shipped proposal, or is a zero-diff historical
+ref.
+
+| Branch | Unique commits | Disposition | Evidence |
+|---|---|---|---|
+| `rfc001-phase1-hw-variant-param` | 5 | **Abandon** | Proposed a single parametrized Containerfile (`HW_VARIANT` build arg). Main took a different direction instead: per-base `Containerfile.{el10,ubuntu,debian,arch,gentoo,opensuse}` files. No `HW_VARIANT` anywhere in the tree. Superseded by an architectural choice, not absorbed. |
+| `rfc001-phase1-hw-variant-param-v2` | 0 | **Delete** | Zero commits ahead of `main` — every commit on this branch is already an ancestor of `main`. Pure dead ref. |
+| `rfc003-consolidate-agent-files` | 1 | **Abandon (absorbed)** | Proposed consolidating triplicate agent files into `AGENTS.md`. `AGENTS.md` already exists at repo root, landed via a different commit. Outcome shipped; this branch's specific diff didn't. |
+| `rfc004-ci-gate-generated-workflows` | 1 | **Abandon** | Proposed a Python generator (`scripts/generate-workflows.py`) producing exactly the then-4 per-variant workflow files, with a CI drift gate. The repo now has 17 `build-*.yml` files with a materially different structure — the branch's specific generator design no longer fits current architecture. The underlying idea (drift protection for generated files) is still sound and could be re-proposed fresh against today's workflow set. |
+| `rfc005-directory-readmes` | 1 | **Merged (this PR)** | Proposed `scripts/README.md` + `build_scripts/README.md` clarifying the boundary. `build_scripts/README.md` already existed on `main`; `scripts/README.md` was still missing. Added it in this PR (fresh content — the branch's original copy referenced the pre-RFC-006 monolithic `Justfile`, since replaced by `just/`). |
+| `rfc006-justfile-modular-split` | 7 | **Abandon (absorbed)** | Proposed splitting a 787-line monolithic `Justfile` into modules. `just/` already exists with the modular structure (`just/utilities.just`, `just/custom-overlay.just`, etc.), landed via different commits. |
+| `rfc007-upstream-sync-script` | 1 | **Abandon (absorbed)** | Proposed `scripts/sync-upstream-snapshots.sh`. Already exists on `main` under the same name. |
+| `rfc008-gdx-to-nvidia` | 8 | **Abandon (absorbed)** | Rename already shipped and recorded in [ADR 0001](docs/adr/0001-gdx-to-nvidia-rename.md) — confirmed dead weight, as this issue itself named. |
+| `rfc009-registry-mirrors` | 1 | **Abandon (absorbed)** | `registry-map.yaml` already exists on `main`. [ADR 0007](docs/adr/0007-registry-mirror-support.md) explicitly documents it "shipped directly to main, not via the rfc009-registry-mirrors-* branches." |
+| `rfc009-registry-mirrors-v2` | 1 | **Abandon (absorbed)** | Same as above — see ADR 0007. |
+| `rfc009-registry-mirrors-v3` | 1 | **Abandon (absorbed)** | Same as above — see ADR 0007. |
+
+**Net**: 1 merged (rfc005, this PR), 1 deleted as a zero-diff ref
+(rfc001-v2), 9 abandoned (8 already absorbed into `main` through other
+commits, 1 superseded by a different architectural direction). None require
+carrying forward — every unresolved idea worth keeping (rfc004's drift-gate
+concept) is called out above for a fresh RFC against current architecture,
+not a revival of stale branch content.
+
+Branch deletion itself requires push access this contributor doesn't have;
+the maintainer command to execute this disposition is:
+
+```bash
+git push upstream --delete \
+  rfc001-phase1-hw-variant-param rfc001-phase1-hw-variant-param-v2 \
+  rfc003-consolidate-agent-files rfc004-ci-gate-generated-workflows \
+  rfc005-directory-readmes rfc006-justfile-modular-split \
+  rfc007-upstream-sync-script rfc008-gdx-to-nvidia \
+  rfc009-registry-mirrors rfc009-registry-mirrors-v2 rfc009-registry-mirrors-v3
+```
+
+(`rfc005` is safe to delete too once this PR merges — its content is now on
+`main` directly, not via the branch.)
 
 ## Relationship to ADRs (#1094)
 
