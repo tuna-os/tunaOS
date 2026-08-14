@@ -48,6 +48,17 @@
       "matchStrings": [
         "#\\s*renovate:\\s*datasource=(?<datasource>[^\\s]+)\\s+depName=(?<depName>[^\\s]+)\\n.*?(?<currentValue>v?\\d+\\.\\d+[^\\s/\"]*)"
       ]
+    },
+    {
+      "customType": "regex",
+      "description": "Update quay.io image digests in registry-map.yaml. tunaOS#1568: this file carried a digest pin for supply-chain safety that nothing bumped, and the pin was garbage-collected upstream (quay 404) before anyone noticed. Scoped to `registry: quay` entries so registryUrlTemplate is correct by construction; a ghcr entry that gains a digest needs its own block rather than silently resolving against the wrong registry.",
+      "managerFilePatterns": ["/^registry-map\\.yaml$/"],
+      "matchStrings": [
+        "registry: quay\\n\\s+path: (?<packageName>[^\\n]+)\\n(?:\\s+#[^\\n]*\\n)*\\s+digest: (?<currentDigest>sha256:[a-f0-9]+)\\n\\s+tag: (?<currentValue>[^\\n]+)"
+      ],
+      "datasourceTemplate": "docker",
+      "registryUrlTemplate": "https://quay.io",
+      "depNameTemplate": "{{{packageName}}}"
     }
   ],
 

@@ -68,7 +68,16 @@ images:
     path: coreos/chunkah
     # SECURITY: Pinned to digest to prevent supply-chain attacks via tag mutation.
     # tag: latest is retained as fallback for setups without the pinned image.
-    digest: sha256:33ab77f29c90fb3ec7a3a6b6c84ee2f2bcff1846b3c34a3231092aebd39e673b
+    #
+    # Refreshed 2026-08-14 (tunaOS#1568). The previous pin
+    # (sha256:33ab77f2…) had been garbage-collected upstream — quay returns
+    # 404 for it — so anything resolving this entry would have fallen through
+    # to building chunkah from source on every build. Nothing noticed because
+    # registry_ref could not read this entry at all (see scripts/_registry.sh)
+    # and the only consumer hardcoded :latest. A pin that nothing bumps and
+    # nothing reads rots; renovate.json now has a manager for this file.
+    # Verified a manifest list covering amd64 + arm64, the two arches built here.
+    digest: sha256:ff8b8b466a942ec6000445d4001fc661e2fc5a952ad9ee29b4de9ab09d1d1708
     tag: latest
 
   # --- Tool images (build infra) ---

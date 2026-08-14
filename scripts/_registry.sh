@@ -94,7 +94,21 @@ registry_ref() {
 		ref="${ref}${tag_spec}"
 	elif [[ -n "${default_digest}" && "${default_digest}" != "null" ]]; then
 		# Digest takes precedence over tag (security: immutable reference)
-		local digest_override_var="TUNA_IMAGE_DIGEST_${name}"
+		#
+		# ${name//-/_} like the path and tag overrides above, not a bare
+		# ${name}. A hyphen is not legal in a shell identifier, so for any
+		# hyphenated image name `${!var}` did not merely fail to find an
+		# override — bash aborted with "invalid variable name", and under this
+		# file's `set -euo pipefail` that took registry_ref down with it.
+		# coreos-chunkah is the only hyphenated image in registry-map.yaml that
+		# carries a digest, so `registry_ref coreos-chunkah` has never
+		# returned: the digest pin added there "to prevent supply-chain attacks
+		# via tag mutation" was unreachable by every caller, and
+		# build-image-inner.sh hardcoded quay.io/coreos/chunkah:latest instead
+		# (tunaOS#1568). The tests missed it because the digest case used a
+		# name without a hyphen and the hyphen case used a name without a
+		# digest — neither covered the intersection.
+		local digest_override_var="TUNA_IMAGE_DIGEST_${name//-/_}"
 		local digest="${!digest_override_var:-${default_digest}}"
 		ref="${ref}@${digest}"
 	elif [[ -n "${default_tag}" && "${default_tag}" != "null" ]]; then
