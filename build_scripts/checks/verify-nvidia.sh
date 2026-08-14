@@ -248,7 +248,41 @@ echo "== initramfs boot-driver parity =="
 # present in the nvidia image's swapped-kernel initramfs (720 modules) —
 # this is a parity floor, not a wish list; dm_crypt is deliberately absent
 # because the parent's initramfs does not carry it either.
+#
+# A driver satisfies the floor two ways, and BOTH are a real boot (#1561):
+#   1. it ships as a .ko in the initramfs, or
+#   2. it is built into the kernel image, so there is no .ko to ship and
+#      dracut correctly emits none.
+# Case 2 is not hypothetical. The floor above was measured on an el10 6.x
+# kernel, where all eight are modules. After the swap to Fedora 43's
+# 7.1.4-100.fc43 the check went red on exactly sr_mod/cdrom/virtio_blk
+# across 9 image cells — because that kernel builds them in. Read out of
+# the Fedora 43 and rawhide kernel configs (kernel-x86_64-fedora.config):
+#   CONFIG_BLK_DEV_SR=y   -> sr_mod   built in
+#   CONFIG_VIRTIO_BLK=y   -> virtio_blk built in
+#   CONFIG_CDROM          -> invisible tristate, select'd by BLK_DEV_SR,
+#                            so it follows it to =y -> cdrom built in
+# while the five that kept passing (isofs/squashfs/virtio_scsi/overlay/loop)
+# are all =m there. The FAIL set and the =y set are the same set — that is
+# the whole failure. Independently corroborated by the non-nvidia gnome-hwe
+# image on the same kernel passing the full qcow2 boot-verify Gate, which a
+# genuinely virtio_blk-less initramfs could not do.
+# So: consult modules.builtin before failing. A driver missing from BOTH the
+# initramfs and modules.builtin is still fatal — this widens what counts as
+# proof of a bootable initramfs, it does not stop demanding proof.
 INITRAMFS="${NV_ROOT}/usr/lib/modules/${KERNEL_VRA}/initramfs.img"
+MODULES_BUILTIN="${NV_ROOT}/usr/lib/modules/${KERNEL_VRA}/modules.builtin"
+# modules.builtin lists one object per line, kernel-relative. The canonical
+# form carries the .ko suffix (kernel/drivers/scsi/sr_mod.ko), but the
+# suffix has not been read off one of these images directly — no rpm/zstd
+# in the authoring environment — so match a bare name at end-of-line too
+# rather than assert a form that was not measured. Both alternatives are
+# anchored on / and on the driver name, so they cannot match a substring of
+# a longer module name.
+_is_builtin() {
+	[[ -s "$MODULES_BUILTIN" ]] || return 1
+	grep -qE "/${1}\.ko([.][^/]*)?$|/${1}$" "$MODULES_BUILTIN"
+}
 if [[ ! -s "$INITRAMFS" ]]; then
 	fail "missing or empty initramfs for the installed kernel: /usr/lib/modules/${KERNEL_VRA}/initramfs.img"
 elif ! command -v lsinitrd >/dev/null 2>&1; then
@@ -258,8 +292,12 @@ else
 	for _drv in sr_mod cdrom isofs squashfs virtio_scsi virtio_blk overlay loop; do
 		if grep -qE "/${_drv}\.ko" <<<"$_initrd_list"; then
 			pass "initramfs carries ${_drv}"
+		elif _is_builtin "$_drv"; then
+			# Distinct wording on purpose: "carries" would be a lie here, and
+			# these verdict lines are what a human reads off a red matrix.
+			pass "${_drv} is built into the kernel (modules.builtin) — no initramfs .ko expected"
 		else
-			fail "initramfs is missing ${_drv} — the live ISO or installed boot cannot mount its root"
+			fail "initramfs is missing ${_drv} and it is not in modules.builtin — the live ISO or installed boot cannot mount its root"
 		fi
 	done
 fi

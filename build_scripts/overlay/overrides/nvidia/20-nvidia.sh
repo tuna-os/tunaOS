@@ -177,16 +177,23 @@ if [[ ! -f /usr/lib/dracut/dracut.conf.d/99-nvidia.conf ]]; then
 fi
 sed -i 's@omit_drivers@force_drivers@g' /usr/lib/dracut/dracut.conf.d/99-nvidia.conf
 # As we need forced load, also must pre-load intel/amd iGPU else chromium web
-# browsers fail to use hardware acceleration. tunaos#1499: also force
-# sr_mod/cdrom/virtio_blk — --no-hostonly alone stopped being enough to
-# guarantee these on the live ISO / installed-disk boot path on this
-# negativo17 conf; they started coming up missing from the rebuilt
-# initramfs on every *-nvidia nightly (10/10 red 08-03..08-13) while present
-# in the parent (non-nvidia) image's initramfs and in this image's own
-# initramfs before this 99-nvidia.conf edit. virtio_scsi/isofs/squashfs/
-# overlay/loop were unaffected, so this isn't a wholesale hostonly-detection
-# failure — just these three. Same mechanism as i915/amdgpu: force them in
-# explicitly rather than trust generic-mode autodetection to include them.
+# browsers fail to use hardware acceleration. tunaos#1499 also forces
+# sr_mod/cdrom/virtio_blk here, so that the live ISO (CD path) and the
+# installed disk (virtio_blk) both come up on the kernels where those are
+# modules — the el10 6.x akmods kernel behind the non-HWE yellowfin/
+# albacore/skipjack nvidia flavors. Keep them: dropping them regresses
+# exactly the case #1499 was opened for.
+#
+# #1499's stated mechanism was wrong, though, and #1561 corrected it: these
+# three did not go missing because --no-hostonly "stopped being enough".
+# They went missing because the kernel swapped to Fedora 43's 7.1.4-100.fc43,
+# which BUILDS THEM IN (CONFIG_BLK_DEV_SR=y, CONFIG_VIRTIO_BLK=y, and CDROM
+# is an invisible tristate select'd by BLK_DEV_SR, so it follows to =y) —
+# there is no .ko for dracut to add, on any dracut setting. That is also why
+# forcing them here did not turn the nightlies green. dracut tolerates being
+# asked for a builtin, so this line is harmless on fc43 and load-bearing on
+# el10; the honest fix belongs in the contract check, which now accepts
+# modules.builtin as proof (verify-nvidia.sh, "initramfs boot-driver parity").
 sed -i 's@ nvidia @ i915 amdgpu nvidia sr_mod cdrom virtio_blk @g' /usr/lib/dracut/dracut.conf.d/99-nvidia.conf
 
 # Make sure initramfs is rebuilt after nvidia drivers or kernel replacement

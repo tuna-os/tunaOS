@@ -596,6 +596,94 @@ STUB
   [[ "$output" == *"initramfs is missing virtio_scsi"* ]]
 }
 
+# ── builtin boot drivers (#1561) ───────────────────────────────────────────
+# The floor was measured on an el10 6.x kernel where all eight drivers are
+# modules. Fedora 43's 7.1.4-100.fc43 builds sr_mod/cdrom/virtio_blk INTO the
+# kernel (CONFIG_BLK_DEV_SR=y, CONFIG_VIRTIO_BLK=y, CDROM select'd to =y), so
+# dracut ships no .ko for them and the check false-FAILed on 9 image cells.
+# A builtin is a working boot; a driver that is neither shipped nor built in
+# is still fatal.
+lsinitrd_without() {
+  # Emit the floor minus the named drivers, as lsinitrd prints it.
+  local skip=" $* "
+  cat > "${BATS_TEST_TMPDIR}/bin/lsinitrd" <<STUB
+#!/usr/bin/env bash
+for d in sr_mod cdrom isofs squashfs virtio_scsi virtio_blk overlay loop; do
+  case "${skip}" in *" \${d} "*) continue ;; esac
+  echo "usr/lib/modules/${KVER}/kernel/drivers/misc/\${d}.ko.xz"
+done
+STUB
+  chmod +x "${BATS_TEST_TMPDIR}/bin/lsinitrd"
+}
+
+@test "verify-nvidia accepts boot drivers that are built into the kernel" {
+  make_stub_tools
+  root="$(make_good_root)"
+  lsinitrd_without sr_mod cdrom virtio_blk
+  # The fc43 shape: exactly the three that vanished are in modules.builtin.
+  cat > "$root/usr/lib/modules/${KVER}/modules.builtin" <<'BUILTIN'
+kernel/drivers/scsi/sr_mod.ko
+kernel/drivers/cdrom/cdrom.ko
+kernel/drivers/block/virtio_blk.ko
+BUILTIN
+  run_verify "$root"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"sr_mod is built into the kernel"* ]]
+  [[ "$output" == *"cdrom is built into the kernel"* ]]
+  [[ "$output" == *"virtio_blk is built into the kernel"* ]]
+  # The modular five must still be proven the normal way, not waved through.
+  [[ "$output" == *"initramfs carries virtio_scsi"* ]]
+}
+
+@test "verify-nvidia accepts modules.builtin entries written without a .ko suffix" {
+  make_stub_tools
+  root="$(make_good_root)"
+  lsinitrd_without virtio_blk
+  # Suffix form was not measured on-image, so the matcher tolerates both.
+  echo "kernel/drivers/block/virtio_blk" \
+    > "$root/usr/lib/modules/${KVER}/modules.builtin"
+  run_verify "$root"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"virtio_blk is built into the kernel"* ]]
+}
+
+@test "verify-nvidia still fails when a driver is neither shipped nor built in" {
+  make_stub_tools
+  root="$(make_good_root)"
+  lsinitrd_without sr_mod virtio_blk
+  # modules.builtin exists and is honest: it accounts for sr_mod only.
+  echo "kernel/drivers/scsi/sr_mod.ko" \
+    > "$root/usr/lib/modules/${KVER}/modules.builtin"
+  run_verify "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"sr_mod is built into the kernel"* ]]
+  [[ "$output" == *"initramfs is missing virtio_blk"* ]]
+}
+
+@test "verify-nvidia does not treat a missing modules.builtin as proof of builtin" {
+  make_stub_tools
+  root="$(make_good_root)"
+  lsinitrd_without virtio_blk
+  # No modules.builtin at all — absence of evidence is not evidence, so the
+  # check must stay red rather than silently pass every driver.
+  [ ! -e "$root/usr/lib/modules/${KVER}/modules.builtin" ]
+  run_verify "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"initramfs is missing virtio_blk"* ]]
+}
+
+@test "verify-nvidia does not let a longer module name satisfy a shorter one" {
+  make_stub_tools
+  root="$(make_good_root)"
+  lsinitrd_without loop
+  # loop_extra must not be mistaken for loop by a sloppy substring match.
+  echo "kernel/drivers/block/loop_extra.ko" \
+    > "$root/usr/lib/modules/${KVER}/modules.builtin"
+  run_verify "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"initramfs is missing loop"* ]]
+}
+
 @test "verify-nvidia fails when the installed kernel has no initramfs at all" {
   make_stub_tools
   root="$(make_good_root)"
