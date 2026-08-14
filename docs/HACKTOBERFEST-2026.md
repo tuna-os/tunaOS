@@ -35,13 +35,16 @@ review separate from the promotional label.
 
 ## Current TunaOS candidates
 
-Re-verified live on 2026-08-13 against #1354's 3→8 tagged-task target. Three
-of the five originally-listed candidates (#1350, #1366, #1385) have since
-been claimed and merged — proof the loop converts, but also a reminder that
-this table needs to be re-checked, not treated as a static plan. The org-wide
-`good first issue` pool sits at **6 open** (2 tunaos, 4 docs) as of this
-update; two new tasks below (#1496, docs#207) bring it to **8**, meeting the
-09-15 target with room to grow toward the 10–15 launch goal.
+Re-verified live on 2026-08-14 (T-8 checkpoint) against the 09-15 seeding
+target. **Consumption is now outpacing seeding**: five previously-listed
+candidates (#1350, #1366, #1385, #1496, #1351) have been claimed and merged
+since 08-13 — proof the loop converts end-to-end, but the pool must be
+maintained *net of consumption*, not gross-seeded once. Current org-wide
+`good first issue` pool: **~8 usable** (docs 5, wootc 2, protota 1; tunaos
+shows only meta-tracker #1308 which is a planning issue, not a starter task)
+vs the **15–20 needed by 09-15** (#1537). gtk-office-suite and
+tunaos-packages remain at **zero** curated tasks. This table must be
+re-checked at the 09-08 audit, not treated as static.
 
 | Issue | Task | Contribution shape | Status |
 |---|---|---|---|
@@ -59,20 +62,18 @@ update; two new tasks below (#1496, docs#207) bring it to **8**, meeting the
 ~~[#1385](https://github.com/tuna-os/tunaos/issues/1385)~~ — merged, no
 longer available to claim.
 
-The eight items above meet the 09-15 floor but not yet the 10–15 launch
-target from #1331, and `corral` still has zero viable GFI candidates (checked
-directly: only a Renovate dashboard and one large VDI-plugin epic — see
-#1354's verification comment). `gtk-office-suite` and `tunaos-packages`
-currently have **zero** open `good first issue` tasks each — checked
-directly (2026-08-13), no false positive: real open issues exist in both
-repos but none are scoped/labeled as starter tasks yet, and unlike `corral`
-this isn't because there's nothing suitable, it's because nobody has curated
-one yet. `wootc` also had zero, plus was missing a `CONTRIBUTING.md`
-entirely (fixed: tuna-os/wootc#150), which blocked it from meeting the
-curation checklist's link requirement below. Add more tasks from
-`iso-builder` and `Tavern` too before the 09-08 audit checkpoint, and keep
-two alternates available for tasks that are claimed or found to be too
-broad.
+The eight items above met the 09-15 floor as of 08-13 but **no longer do
+as of 08-14** — five have been consumed and tunaos is back to the meta-tracker
+only. `gtk-office-suite` and `tunaos-packages` still have **zero** open
+`good first issue` tasks each (verified 08-14) — not because nothing is
+suitable, but because nobody has curated one yet. `corral` also has zero
+viable GFI candidates (only a Renovate dashboard and one large VDI-plugin
+epic). `wootc` went from zero to **2** (sec-check #154/#153, 08-14) once its
+missing `CONTRIBUTING.md` was fixed (tuna-os/wootc#150). **Recommended:
+assign a named seeder for gtk-office-suite + tunaos-packages before the
+08-22 Q3 checkpoint** (#1537), and seed from `iso-builder` and `Tavern` too
+before the 09-08 audit. Keep two alternates available for tasks that are
+claimed or found to be too broad.
 
 ## Curation checklist
 
@@ -98,7 +99,7 @@ as Hacktoberfest starter tasks.
 | Date | Deliverable | Owner |
 |---|---|---|
 | By 2026-09-01 | Confirm registration and label guidance | strategist |
-| By 2026-09-08 | Audit the six repositories and select 10–15 tasks plus two alternates | guide + repository maintainers |
+| By 2026-09-08 | Audit the six repositories and select 10–15 tasks plus two alternates — **re-check net pool vs consumption** (5 consumed 08-13→08-14; #1537) | guide + repository maintainers |
 | By 2026-09-15 | Apply final labels, add missing acceptance criteria, and publish the backlog | guide |
 | 2026-09-15–30 | Announce participation on the blog and Matrix; link directly to the filtered issue view | outreach |
 | 2026-10-01–31 | Triage claims, answer questions, and review starter PRs promptly | repository maintainers |

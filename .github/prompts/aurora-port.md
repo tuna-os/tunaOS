@@ -62,7 +62,7 @@ package, a new exclude, or a new COPR.
    installed best-effort and never fails the build.
 
    Active EL10 repos in TunaOS: base AlmaLinux/CentOS Stream 10, EPEL 10, CRB,
-   `ublue-os/packages` COPR, `tuna-os/github-copr` COPR (see `build_scripts/lib.sh`).
+   `ublue-os/packages` COPR, `tuna-os/tunaos-packages` COPR (formerly `github-copr`; see `build_scripts/lib.sh`).
 
 2. **COPR packages**: Aurora uses `ublue-os/packages`, `ublue-os/staging`, `ledif/kairpods`,
    `lizardbyte/beta`. TunaOS has `ublue-os/packages` for EL10. Add Fedora-only COPRs

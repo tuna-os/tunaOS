@@ -72,9 +72,18 @@ if ((${#missing_deps[@]} > 0)); then
 	printf '::warning title=kcm_ublue skipped (%s)::build deps unavailable in the active repos: %s\n' \
 		"${IMAGE_NAME:-?}" "${missing_deps[*]}"
 	echo "Skipping kcm_ublue source build."
+elif ! dnf_retry -y install "${BUILD_DEPS[@]}"; then
+	# The repoquery probe above only checks that a package NAME resolves in
+	# the active repos — it can't see a broken *dependency* of that package.
+	# tuna-os/tunaOS#1555: cmake existed in the Hummingbird repo index (probe
+	# passed), but its own libjsoncpp.so.26/librhash.so.1 providers didn't,
+	# so this install still failed and — before this branch existed — took
+	# the whole image down under `set -e`. Same "nice to have, not
+	# essential" call as the missing-package case above.
+	printf '::warning title=kcm_ublue skipped (%s)::dnf install of build deps failed despite passing the repoquery probe — an unresolvable transitive dependency in the active repos.\n' \
+		"${IMAGE_NAME:-?}"
+	echo "Skipping kcm_ublue source build."
 else
-	dnf_retry -y install "${BUILD_DEPS[@]}"
-
 	BUILD_DIR=$(mktemp -d)
 	trap 'rm -rf "$BUILD_DIR"' EXIT
 

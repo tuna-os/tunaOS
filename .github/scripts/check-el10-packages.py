@@ -2,8 +2,8 @@
 """Check EL10 package availability for packages mentioned in the upstream diff.
 
 Spins up an AlmaLinux Kitten 10 container, enables EPEL 10 + CRB +
-ublue-os/packages COPR + tuna-os/github-copr, then queries dnf for every
-package candidate found in the diff's added lines.
+the ublue-os/packages COPR, then queries dnf for every package candidate
+found in the diff's added lines.
 
 Results are appended to GEMINI_TASK.md so the AI knows exactly which packages
 can go in both blocks vs. the IS_FEDORA-only block.
@@ -101,7 +101,16 @@ setup = " && ".join([
     "dnf install -y dnf-plugins-core epel-release --quiet --nogpgcheck 2>/dev/null",
     "crb enable --quiet 2>/dev/null || true",
     "dnf copr enable -y ublue-os/packages --quiet 2>/dev/null || true",
-    "dnf copr enable -y tuna-os/github-copr --quiet 2>/dev/null || true",
+    # The tuna-os/github-copr COPR that used to be enabled here is gone —
+    # copr.fedorainfracloud.org/coprs/tuna-os/github-copr 404s, and no COPR
+    # exists under tuna-os/* at all (the GitHub repo was renamed to
+    # tunaos-packages, but that never had a COPR project). The line was a
+    # silent no-op: `dnf copr enable` failed and `|| true` swallowed it, so
+    # removing it changes nothing at runtime — it only stops this script
+    # claiming to check a repo it never reached. The live EL10 GNOME COPRs are
+    # jreilly1821/c10s-gnome-50-fresh and jreilly1821/c10s-gnome-50 (see
+    # manifests/desktops/gnome.yaml); adding either here would change which
+    # packages count as available, so that is a maintainer call, not a rename.
     "dnf makecache --quiet 2>/dev/null || true",
 ])
 query = "dnf repoquery --available --quiet " + " ".join(pkg_list) + " 2>/dev/null"
@@ -152,7 +161,7 @@ lines = [
     "## EL10 Package Availability Check",
     "",
     "Packages from the diff were queried against **AlmaLinux Kitten 10 + EPEL 10 + CRB + "
-    "`ublue-os/packages` + `tuna-os/github-copr`**.",
+    "`ublue-os/packages`**.",
     "",
     "**Port as much as possible.** Use this report to place packages correctly:",
     "",
@@ -214,7 +223,7 @@ for pkg in unavailable:
         f"cannot include this package. It is currently added to the "
         f"`IS_FEDORA == true` block only.\n\n"
         f"### Options\n\n"
-        f"- [ ] Package it in `tuna-os/github-copr`\n"
+        f"- [ ] Package it in `tuna-os/tunaos-packages`\n"
         f"- [ ] Find an EL10-compatible alternative\n"
         f"- [ ] Accept the Fedora-only status and document it\n"
     )

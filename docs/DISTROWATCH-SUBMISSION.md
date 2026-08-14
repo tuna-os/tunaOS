@@ -28,8 +28,9 @@ verifies every release. For teams already running Kubernetes, the Corral
 project manages desktop and service VMs as declarative resources on the
 same cluster estate, with snapshots and GPU passthrough as code.
 
-TunaOS is free and open source under the Apache-2.0 license, with weekly
-release cadence, verified boot reports, and an active community on Matrix.
+TunaOS is free and open source under the Apache-2.0 license, with a daily
+rolling build cadence (plus weekly and quarterly-LTS stability tiers),
+verified boot reports, and an active community on Matrix.
 
 ## Metadata for the listing
 
@@ -40,7 +41,7 @@ release cadence, verified boot reports, and an active community on Matrix.
 | **Source** | https://github.com/tuna-os/tunaOS |
 | **Download** | https://tunaos.org/download (ISOs for all variants) |
 | **Image registry** | https://github.com/orgs/tuna-os/packages (GHCR) |
-| **Status** | Active (weekly releases) |
+| **Status** | Active (daily rolling builds; weekly/quarterly-LTS stability tiers) |
 | **Origin** | USA / global maintainer community |
 | **Desktop environments** | GNOME, KDE Plasma, COSMIC, Niri, XFCE, Pantheon |
 | **Package management** | bootc image-based (rpm-ostree-style), atomic |
@@ -57,13 +58,13 @@ release cadence, verified boot reports, and an active community on Matrix.
 | Yellowfin | AlmaLinux Kitten 10 | GNOME | Stable |
 | Albacore | AlmaLinux 10 | GNOME | Stable |
 | Bonito | Fedora | GNOME | Beta |
-| Skipjack | CentOS Stream 10 | KDE Plasma | Stable |
+| Skipjack | CentOS Stream 10 | KDE Plasma | Beta |
 | Tromsø | BuildStream-based | KDE Plasma 6 | Stable |
 | XFCE Linux | BuildStream-based | XFCE 4.20 | Stable |
 | COSMIC | EL10 cell (Tideforge-built) | COSMIC | Beta |
 | Niri | Fedora | Niri | Beta |
-| Gurnard | Ubuntu 24.04 LTS | Pantheon | New (08-2026) |
-| Marlin | Arch | GNOME | Alpha |
+| Gurnard | Ubuntu 24.04 LTS | Pantheon | Experimental |
+| Marlin | Arch | GNOME | Beta |
 
 ## Suggested pitch to DistroWatch Weekly editors
 
