@@ -128,7 +128,12 @@ else
 	# redundant for a source that was never signed to begin with, and
 	# failing on its absence here blocks every *-nvidia flavor of the one
 	# variant that runs on a base image strict enough to enforce it.
-	rpm -ivh --nosignature "${RPM_FILES[@]}"
+	# The kernel RPM's %posttrans runs rpm-ostree kernel-install, which invokes
+	# dracut before this script's explicit rebuild below. /boot is a tmpfs mount
+	# in Containerfile.overlay; keep dracut's temporary output on that same
+	# filesystem so its final rename cannot fail with EXDEV (Invalid cross-device
+	# link) when a newer kernel package is installed.
+	TMPDIR=/boot rpm -ivh --nosignature "${RPM_FILES[@]}"
 
 	# Remove the OLD kernel's module directory outright. `rpm --erase` above
 	# removes only rpm-OWNED files; generated ones (initramfs.img, depmod
