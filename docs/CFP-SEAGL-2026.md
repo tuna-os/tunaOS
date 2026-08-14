@@ -1,8 +1,9 @@
 # SeaGL 2026 — CFP Draft
 
-> Status: **draft** — for maintainer review before submission.
-> Event: SeaGL (Seattle GNU/Linux Conference), Seattle, 13–14 Nov 2026. CFP typically opens late summer — confirm exact open/close dates on [seagl.org](https://seagl.org) before submitting.
-> Tracking issue: [#1691](https://github.com/tuna-os/tunaOS/issues/1691) (SeaGL 2026 CFP).
+> Status: **superseded for 2026 — retained as a reusable community-talk template.**
+> **Fact-check correction (2026-08-14, outreach agent):** the original draft's dates and premise were wrong. Verified against [seagl.org](https://seagl.org): SeaGL 14 is **October 23–24, 2026** at the University of Washington HUB (venue change announced 2026-06-01), and the 2026 CFP (opened 2026-04-24, re-opened through **June 30, 2026**) is **closed**. There is no open SeaGL 2026 submission window — see the tracking issue for the corrected plan.
+> Tracking issue: [#1691](https://github.com/tuna-os/tunaOS/issues/1691) (SeaGL 2026 CFP — corrected); correction tracked in #1695.
+> Next real submission target: **SeaGL 2027** (CFP typically opens ~April 2027).
 
 ## Talk title (working)
 
@@ -68,10 +69,11 @@ comparison to Silverblue, Universal Blue, NixOS, and MicroOS.
 - Variant/arch claims must match ROADMAP.md at submission time (e.g., Apple
   Silicon is "in progress", not "supported" — see #1684).
 
-## Submission checklist
+## Submission checklist (for SeaGL 2027 / reuse)
 
-- [ ] Confirm SeaGL 2026 CFP open/close dates on seagl.org
-- [ ] Finalize title + abstract (this draft)
+- [x] Verify SeaGL dates + CFP window on seagl.org (done 2026-08-14: 2026 event Oct 23–24, 2026 CFP closed 06-30)
+- [ ] Re-confirm SeaGL 2027 dates + CFP window (~April 2027)
+- [ ] Finalize title + abstract (this draft — adapt to the current ROADMAP state at submission)
 - [ ] Record 2–3 min demo video (reuse the #1658 demo outline work)
 - [ ] Proof with 1–2 community members (SeaGL reviewers like demos + honest scope)
 - [ ] Submit when the portal opens; link the Q3 checkpoint recap (#1610) on acceptance
