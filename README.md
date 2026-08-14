@@ -119,7 +119,7 @@ Image tags are constructed as `<desktop>[-hardware]`:
 
 | Hardware | Status | Docs |
 |----------|--------|------|
-| Snapdragon X Elite (e.g. Lenovo ThinkPad X13s) | Supported | [docs.tunaos.org/bonito-x13s](https://github.com/tuna-os/docs/tree/main/docs/bonito-x13s), [docs.tunaos.org/dakota-x13s](https://github.com/tuna-os/docs/tree/main/docs/dakota-x13s) |
+| Snapdragon X Elite (e.g. Lenovo ThinkPad X13s) | Supported via [Bonito](https://tunaos.org/docs/bonito) (ARM64) | [Snapdragon X Elite FAQ](https://tunaos.org/docs/faq); the dedicated [bonito-x13s](https://tunaos.org/docs/bonito-x13s) / [dakota-x13s](https://tunaos.org/docs/dakota-x13s) pages are archived |
 | Apple Silicon (M1, M2) | In progress via [Asahi Linux](https://asahilinux.org/) — see note below | [bootc-installer-asahi](https://github.com/tuna-os/bootc-installer-asahi) |
 | Apple Silicon (M3 and newer) | Not supported (no Asahi support for M3+ yet) | — |
 
