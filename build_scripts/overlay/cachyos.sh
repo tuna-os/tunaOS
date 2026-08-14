@@ -38,14 +38,35 @@ Include = /etc/pacman.d/cachyos-mirrorlist
 EOF
 fi
 
-pacman -Syu --noconfirm --needed \
+# Do not upgrade the base image here: a full -Syu can install or update the
+# stock linux package alongside linux-cachyos, leaving bootc with multiple
+# kernel trees.  The image must have one kernel whose initramfs is unambiguous.
+pacman -S --noconfirm --needed \
 	cachyos-keyring cachyos-mirrorlist cachyos-settings \
 	linux-cachyos linux-cachyos-headers tpm2-tss
+
+# linux-cachyos is the kernel selected for CachyOS images.  Remove Arch's
+# stock kernel after the replacement is installed; -Rdd is intentional here
+# because the stock kernel's dependencies are also provided by the CachyOS
+# kernel package, but pacman cannot infer that relationship from package
+# metadata.
+if pacman -Qq linux >/dev/null 2>&1; then
+	pacman -Rdd --noconfirm linux
+fi
 
 # Mark as CachyOS-augmented for install-desktop.sh detection
 install -D /dev/null /etc/cachyos-release
 printf 'CachyOS\n' >/etc/cachyos-release
 
-# Rebuild initramfs via dracut
-dracut --force --omit "tpm2-tss" "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v '\.img' | tail -1)/initramfs.img"
+# Rebuild initramfs via dracut.  Do not use find | tail -1: directory order is
+# unspecified, and selecting the wrong tree leaves the bootloader with a
+# kernel that has no matching initramfs.
+mapfile -t _module_dirs < <(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d ! -name '*.img' | sort -V)
+if [[ "${#_module_dirs[@]}" -ne 1 ]]; then
+	echo "ERROR: CachyOS overlay expected exactly one kernel module tree, found ${#_module_dirs[@]}: ${_module_dirs[*]}" >&2
+	exit 1
+fi
+_kernel_dir="${_module_dirs[0]}"
+_kernel="$(basename "${_kernel_dir}")"
+dracut --force --omit "tpm2-tss" "${_kernel_dir}/initramfs.img" "${_kernel}"
 pacman -Scc --noconfirm || true
