@@ -17,6 +17,24 @@ on:
         description: "Flavor (gnome, kde, niri, xfce, gnome-nvidia, ...)"
         required: true
         type: string
+      platform:
+        description: >-
+          Target platform (linux/amd64 or linux/arm64). Selects the runner
+          arch (#1378) — this job builds and boots the ISO natively, no
+          cross-arch emulation, so it must run on a host matching the image
+          it's building.
+        required: false
+        type: string
+        default: "linux/amd64"
+      safeplatform:
+        description: >-
+          Filesystem/artifact-name-safe form of platform (e.g. linux-amd64).
+          GitHub Actions expressions have no string-replace function, so this
+          is computed by the caller (build-variant.yml already has it from
+          its own matrix) rather than derived here.
+        required: false
+        type: string
+        default: "linux-amd64"
       image-tag:
         description: "GHCR tag to build the ISO from (defaults to <flavor>-linux-amd64)"
         required: false
@@ -56,7 +74,7 @@ jobs:
   iso:
     name: "ISO ${{ inputs.variant }}:${{ inputs.flavor }}"
     if: inputs.build-iso
-    runs-on: ubuntu-latest
+    runs-on: ${{ contains(inputs.platform, 'arm64') && 'ubuntu-24.04-arm' || 'ubuntu-latest' }}
     timeout-minutes: 90
     # No explicit permissions: inherit the caller's grant. publish-isos.yml
     # grants contents:write (release attach); build-variant.yml grants only
@@ -108,6 +126,15 @@ jobs:
           sudo -E bash ./scripts/build-iso-tacklebox.sh \
             "${VARIANT}" "${FLAVOR}" ghcr "${TAG}"
 
+      # KNOWN GAP (#1378): qemu-system-x86 + ovmf are x86_64-specific, and
+      # scripts/iso-e2e.sh itself only looks for qemu-system-x86_64 + OVMF
+      # firmware — it has no qemu-system-aarch64/AAVMF path. This job now
+      # runs on an arm64 runner for arm64 platforms (ISO build + tacklebox
+      # need a native host, no cross-arch emulation), so the ISO build step
+      # above should work — but THIS step and iso-e2e.sh's boot gate will
+      # still fail on arm64 until they're taught the aarch64 QEMU/firmware
+      # equivalents. Filed as a follow-up rather than guessed at here: real
+      # aarch64 KVM boot behavior needs verifying on real CI, not assumed.
       - name: Install QEMU for boot verification
         run: |
           sudo apt-get install -y qemu-system-x86 ovmf socat imagemagick qemu-utils sshpass python3-pip
@@ -162,7 +189,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: iso-${{ inputs.variant }}-${{ inputs.flavor }}
+          name: iso-${{ inputs.variant }}-${{ inputs.flavor }}-${{ inputs.safeplatform }}
           path: |
             *.iso
             *.iso.sha256
@@ -200,7 +227,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: e2e-${{ inputs.variant }}-${{ inputs.flavor }}
+          name: e2e-${{ inputs.variant }}-${{ inputs.flavor }}-${{ inputs.safeplatform }}
           path: |
             iso-e2e-out/serial.log
             iso-e2e-out/*.png
@@ -220,6 +247,7 @@ jobs:
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
           VARIANT: ${{ inputs.variant }}
           FLAVOR: ${{ inputs.flavor }}
+          PLATFORM: ${{ inputs.platform }}
         run: |
           if [[ -z "${R2_BUCKET}" ]]; then
             echo "R2 secrets not configured — skipping publish"
@@ -233,7 +261,16 @@ jobs:
             rclone copy --log-level INFO --checksum --s3-no-check-bucket \
               "$artifact" "R2:${R2_BUCKET}/live-isos/"
           done
-          LATEST="${VARIANT}-${FLAVOR}-latest.iso"
+          # amd64 keeps the bare <variant>-<flavor>-latest.iso name — that's a
+          # documented download URL (docs/TESTING.md) users already `wget`,
+          # so it must not move out from under them. Other platforms
+          # (#1378) get an arch-suffixed pointer instead of clobbering it.
+          if [[ "${PLATFORM}" == "linux/amd64" ]]; then
+            LATEST="${VARIANT}-${FLAVOR}-latest.iso"
+          else
+            ARCH_SUFFIX="${PLATFORM##*/}"
+            LATEST="${VARIANT}-${FLAVOR}-latest-${ARCH_SUFFIX}.iso"
+          fi
           rclone copyto --log-level INFO --s3-no-check-bucket \
             "$ISO" "R2:${R2_BUCKET}/live-isos/${LATEST}"
           DIGEST=$(sha256sum "$ISO" | awk '{print $1}')
