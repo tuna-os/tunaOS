@@ -21,7 +21,7 @@
 |-------|--------------|-------------|--------|
 | ADR coverage (#1094) staff test | 2 ADR PRs open | ✅ **Met** — ADR 0003 (#1369) + ADR 0004 (#1370) merged 08-13 | PR states |
 | RFC disposition (#1363) | 11 branches undetermined | 11 RFC branches still undetermined; 97 total branches on tunaos; disposition pass due **at** this checkpoint | branch list |
-| GFI pool (#1537) | ZERO usable | **9 usable seeds in docs; zero in the other checked target repos** (tunaos has only non-usable meta-tracker #1308; verified by live label search 08-14); **+2 converted to merged PRs by external humans same day** (docs #234/#239) — conversion loop proven (#1537) | label search / [Hacktoberfest tracker](HACKTOBERFEST-2026.md) |
+| GFI pool (#1537) | ZERO usable | **9 usable seeds in docs; zero in the other checked target repos** (tunaos has only non-usable meta-tracker #1308; verified by live label search 08-14); **+2 converted to merged PRs by external humans same day** (docs #234/#239) — conversion loop proven (#1537) | label search / [Hacktoberfest tracker](docs/HACKTOBERFEST-2026.md) |
 | External capacity | shimonenator (agent, misattributed) | **First external humans landed 08-14** — docs #234 (dchaudhari7177), docs #239 (Elonon901001), plus bootc-migrate #daegalus 08-05; docs-repo only, not core-code staff-test capacity (#1317 retraction stands for shimonenator) | PR states |
 | Release parity (#1254) | gnome daily to 08-11; others 30–37d stale | gnome daily through 08-13; kde/xfce/niri/cosmic/gnome50 stale 40d (since 07-05), gnome-nvidia 33d (since 07-12) | Releases API |
 | NVIDIA (#1383) | overlay builds regressed 08-12 | **Worse** — initramfs regression #1499 (5 variants, 10/10 nightlies red); fixes #1503/#1523 in flight | #1499 |
