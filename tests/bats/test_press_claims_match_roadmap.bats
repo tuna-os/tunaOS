@@ -39,14 +39,30 @@ press_docs() {
   done
 }
 
-# "| Name | Base | Desktops | Status |" rows from a markdown variant table.
+# "| Variant | Base | Desktops | Status |" rows from a markdown variant table.
+#
+# Scoped to tables whose FIRST column header is literally "Variant", because a
+# press doc may carry other four-column tables. YOUTUBER-REVIEW-KIT.md heads
+# its download table "| Story | Variant | Download | Notes |" — the variant is
+# in column 2, so reading column 1 as a name produced "Enterprise Linux
+# desktop, stable" and three siblings as variants that do not exist in
+# ROADMAP. That is a false positive of exactly the kind this file warns about
+# below ("a false positive is how a guard gets deleted"), so the table is
+# identified by its header rather than by the shape of its rows.
 variant_rows() {
-  awk -F'|' '/^\| *[A-Z][A-Za-z]/ && NF==6 {
-      name=$2; status=$5
-      gsub(/^ +| +$/, "", name); gsub(/^ +| +$/, "", status)
-      if (name == "Variant") next
+  awk -F'|' '
+    /^\|/ {
+      if ($0 ~ /^\| *:?-+/) next            # separator row
+      name=$2; gsub(/^ +| +$/, "", name)
+      if (name == "Variant") { in_table=1; next }   # a real variant table
+      if (!in_table) next                   # some other table: not ours
+      if (NF != 6 || name !~ /^[A-Z]/) next
+      status=$5; gsub(/^ +| +$/, "", status)
       print name "\t" status
-    }' "$1"
+      next
+    }
+    { in_table=0 }                          # any non-table line ends it
+  ' "$1"
 }
 
 # ROADMAP names some rows for a pair — "Bonito / Bonito Rawhide", "Flounder /
