@@ -42,6 +42,7 @@ user-facing site:
 | [IMAGE-FACTORY-LIFECYCLE-GATE.md](IMAGE-FACTORY-LIFECYCLE-GATE.md) | Image factory lifecycle coverage & required gate (#1278) |
 | [../VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) | Variant/flavor admission, capacity, promotion, and deprecation policy (#1196, #1175) |
 | [CFP-FOSDEM-2027.md](CFP-FOSDEM-2027.md) | FOSDEM 2027 CFP draft |
+| [CFP-DEMO-SCRIPT.md](CFP-DEMO-SCRIPT.md) | Shot list for the 3–5 min CFP demo video, shared by both Q1 2027 submissions |
 | [CFP-SCALE-21X.md](CFP-SCALE-21X.md) | SCaLE 21x CFP draft, adapted from the FOSDEM abstract |
 | [DISTROWATCH-SUBMISSION.md](DISTROWATCH-SUBMISSION.md) | DistroWatch project submission draft |
 | [ADOPTION-OUTREACH-STATUS.md](ADOPTION-OUTREACH-STATUS.md) | Evidence ledger for DistroWatch, CNCF, and adopter outreach |

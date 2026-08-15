@@ -148,21 +148,34 @@ jobs:
           # Per-stage artifact matrices — each stage's ISOs/QCOW2s depend
           # only on that stage's image builds, avoiding the stage-4 artifact
           # jail where a gnome-nvidia-hwe failure blocked ALL ISOs (F10).
+          # One row per architecture platform (#1378): this used to hardcode
+          # platform: "linux/amd64" unconditionally, so flavors that publish
+          # arm64 images (per build-config.yml's platforms/global_platforms)
+          # never got arm64 ISO/QCOW2 artifacts — the same gap #230 closed
+          # without the fix landing. platforms_json (built above, per entry)
+          # already carries every {platform, safeplatform} pair the image
+          # matrix published; expand each artifact-eligible entry into one
+          # row per amd64/arm64 platform instead of one fixed amd64 row.
+          # /v2 (a CPU-feature variant, not a real target arch) is excluded.
           make_artifact_matrix() {
             local STAGE=$1
             echo "$FULL_MATRIX" | jq -c --argjson stage "$STAGE" '{
               include: map(
                 select(.stage == $stage and (.build_iso == true or .build_qcow2 == true))
+                | . as $e
+                | ($e.platforms_json | fromjson)[]
+                | select(.platform == "linux/amd64" or .platform == "linux/arm64")
                 | {
-                    variant:       .variant,
-                    image_name:    .image_name,
-                    published_tag: .published_tag,
-                    variant_emoji: .variant_emoji,
-                    flavor:        .flavor,
-                    build_iso:     .build_iso,
-                    build_qcow2:   .build_qcow2,
-                    base_image:    .base_image,
-                    platform:      "linux/amd64"
+                    variant:       $e.variant,
+                    image_name:    $e.image_name,
+                    published_tag: $e.published_tag,
+                    variant_emoji: $e.variant_emoji,
+                    flavor:        $e.flavor,
+                    build_iso:     $e.build_iso,
+                    build_qcow2:   $e.build_qcow2,
+                    base_image:    $e.base_image,
+                    platform:      .platform,
+                    safeplatform:  .safeplatform
                   }
               )
             }'
@@ -317,7 +330,7 @@ jobs:
   # ISOs pull the already-published GHCR image for their stage.
 
   build_artifacts_s2:
-    name: "iso:${{ matrix.flavor }}"
+    name: "iso:${{ matrix.flavor }} (${{ matrix.safeplatform }})"
     needs: [generate_matrix, build_stage2]
     if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_s2_count != '0'
     strategy:
@@ -331,7 +344,9 @@ jobs:
     with:
       variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
-      image-tag: ${{ matrix.published_tag }}-linux-amd64
+      platform: ${{ matrix.platform }}
+      safeplatform: ${{ matrix.safeplatform }}
+      image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -342,7 +357,7 @@ jobs:
   # Same cell logic for stage-3 ISOs (gnome-nvidia etc.). `!cancelled()` so a
   # single stage-3 image failure doesn't skip the artifacts that DID build.
   build_artifacts_s3:
-    name: "iso:${{ matrix.flavor }}"
+    name: "iso:${{ matrix.flavor }} (${{ matrix.safeplatform }})"
     needs: [generate_matrix, build_stage3]
     if: >-
       !cancelled() && needs.generate_matrix.result == 'success' &&
@@ -360,7 +375,9 @@ jobs:
     with:
       variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
-      image-tag: ${{ matrix.published_tag }}-linux-amd64
+      platform: ${{ matrix.platform }}
+      safeplatform: ${{ matrix.safeplatform }}
+      image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
@@ -369,7 +386,7 @@ jobs:
       R2_BUCKET: ${{ secrets.R2_BUCKET }}
 
   build_artifacts_s4:
-    name: "iso:${{ matrix.flavor }}"
+    name: "iso:${{ matrix.flavor }} (${{ matrix.safeplatform }})"
     needs: [generate_matrix, build_stage4]
     if: >-
       !cancelled() && needs.generate_matrix.result == 'success' &&
@@ -387,7 +404,9 @@ jobs:
     with:
       variant: ${{ matrix.variant }}
       flavor: ${{ matrix.flavor }}
-      image-tag: ${{ matrix.published_tag }}-linux-amd64
+      platform: ${{ matrix.platform }}
+      safeplatform: ${{ matrix.safeplatform }}
+      image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}

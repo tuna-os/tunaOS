@@ -164,12 +164,18 @@ jobs:
               && break || sleep $((i * 2))
           done
 
-          curl -fsSL \
-            "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${JUST_ARCH}-unknown-linux-musl.tar.gz" \
-            -o /tmp/just.tgz 2>/dev/null \
-            || curl -fsSL https://just.systems/install.sh | sudo bash -s -- --to /usr/local/bin
+          # Pinned GitHub release only — no unpinned just.systems/install.sh
+          # fallback (that pipes an unauthenticated remote script into
+          # `sudo bash`, tunaos#1357). Retry the pinned download instead,
+          # same as the yq retry loop above.
+          for i in 1 2 3; do
+            curl -fsSL \
+              "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${JUST_ARCH}-unknown-linux-musl.tar.gz" \
+              -o /tmp/just.tgz \
+              && break || sleep $((i * 2))
+          done
 
-          if [ -f /tmp/just.tgz ]; then sudo tar -xzf /tmp/just.tgz -C /usr/local/bin just; fi
+          sudo tar -xzf /tmp/just.tgz -C /usr/local/bin just
           sudo chmod +x /usr/bin/yq /usr/local/bin/just 2>/dev/null || true
           just --version && yq --version
 
@@ -1225,7 +1231,10 @@ jobs:
     uses: ./.github/workflows/verify-asahi-one.yml
     with:
       image: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}/${{ inputs.image-name }}:${{ inputs.default-tag }}-testing
-    secrets: inherit
+    # No `secrets:` block: verify-asahi-one.yml's workflow_call declares no
+    # explicit secrets input (it only uses the auto-provided GITHUB_TOKEN),
+    # so `secrets: inherit` was passing every repo/org secret for nothing
+    # (tuna-os/tunaos#1536).
 
   tag-image:
     name: Promote

@@ -87,18 +87,40 @@ if ! apt-cache show "$HEADERS_PKG" >/dev/null 2>&1; then
 	HEADERS_PKG="linux-headers-generic"
 fi
 
-# libnvidia-allocator1 is what ships nvidia-drm_gbm.so, the GBM backend every
-# Wayland compositor loads to get a buffer out of the driver. Debian keeps it
-# in its own binary package and nvidia-driver-libs only Recommends it, so
-# --no-install-recommends left it out and every flounder *-nvidia image failed
-# verify-nvidia-debian.sh on "missing nvidia-drm_gbm.so" while the rest of the
-# driver stack was present and correct (tuna-os/tunaOS#1564). Naming it here
-# rather than dropping --no-install-recommends keeps the package set explicit;
-# the recommends set for this stack pulls in Xorg, which these images do not
-# ship. libnvidia-egl-gbm1 and libnvidia-egl-wayland1 are the rest of the same
-# path -- the EGL external-platform halves the contract check is really
-# guarding -- and are Recommends for the same reason, so they go in alongside
-# rather than waiting for the check to grow a probe for each of them.
+# linux-headers-generic is a virtual package resolving to the arch-specific
+# real one (linux-headers-amd64 here) — see header. dkms needs it present
+# under /usr/lib/modules/${KVER}/build before autoinstall below has
+# anything to build against.
+#
+# --no-install-recommends is deliberate, but it means every Recommends this
+# stack needs has to be named here. nvidia-driver-libs Recommends
+# libnvidia-allocator1 (verified on packages.debian.org, trixie 550.163.01-2),
+# and that is the package shipping
+# /usr/lib/x86_64-linux-gnu/nvidia/current/nvidia-drm_gbm.so — read straight
+# off its file list, not inferred. Dropping the Recommends dropped the file,
+# and verify-nvidia-debian.sh failed every flounder nvidia build on it
+# (tunaOS#1564).
+#
+# The two egl-* packages are separate source packages that nothing in the
+# nvidia-driver chain depends on OR recommends, so they were never going to
+# arrive on their own. They are what makes the GBM backend reachable rather
+# than merely present:
+#
+#   libnvidia-egl-gbm1     libnvidia-egl-gbm.so.1
+#                          /usr/share/egl/egl_external_platform.d/15_nvidia_gbm.json
+#   libnvidia-egl-wayland1 libnvidia-egl-wayland.so.1
+#
+# Without that JSON, EGL never loads the GBM external platform and
+# nvidia-drm_gbm.so sits on disk unused — the contract check would pass while
+# the thing it exists to guarantee still did not work. egl-wayland is the same
+# component the Arch sibling installs as `egl-wayland`
+# (overrides/nvidia-arch/20-nvidia.sh), so this also brings the two families
+# to parity.
+#
+# All three are in stable AND unstable for amd64/arm64 (madison, 2026-08-14),
+# so this is safe for flounder (trixie) and flounder-sid alike;
+# libnvidia-egl-gbm1 is in contrib and the rest in non-free/main, all of which
+# the component-enabling block above turns on.
 apt-get install -y --no-install-recommends \
 	dkms \
 	"${HEADERS_PKG}" \
@@ -106,10 +128,10 @@ apt-get install -y --no-install-recommends \
 	nvidia-driver-libs \
 	nvidia-vulkan-icd \
 	nvidia-settings \
+	libgl1-nvidia-glvnd-glx \
 	libnvidia-allocator1 \
 	libnvidia-egl-gbm1 \
-	libnvidia-egl-wayland1 \
-	libgl1-nvidia-glvnd-glx
+	libnvidia-egl-wayland1
 
 if [[ ! -e "/usr/lib/modules/${KVER}/build" ]]; then
 	echo "ERROR: /usr/lib/modules/${KVER}/build is missing after installing linux-headers-generic —" >&2

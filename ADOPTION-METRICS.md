@@ -31,7 +31,7 @@ publish, and *how* the snapshot feeds roadmap decisions.
 | Install | Installs / successful boots | opt-in telemetry or boot-report gating | **not measured** | Q4 design decision (#577 GUI gate, #763) |
 | Community | Open PRs from external contributors | GitHub API | 0 external contributors | ≥2 external contributor PRs merged |
 | Community | Discussion posts, `good first issue` pickups | GitHub API | 0 starter issues (dead label, #1308) | ≥5 starter issues picked up |
-| Community | Public adopters (production or evaluation), [ADOPTERS.md](./ADOPTERS.md) | Manual — PR from the adopting org, or outreach asking permission to list | 0 production entries (#1348) | ≥2–3 public evaluator/production entries |
+| Community | **External** public adopters (production or evaluation), [ADOPTERS.md](./ADOPTERS.md) — excludes the maintainer and TunaOS's own infrastructure | Manual — PR from the adopting org, or outreach asking permission to list | 0 external entries (#1348) | ≥2–3 external evaluator/production entries |
 | Community | Adoption-call conversion | GitHub Discussion + follow-up PRs | **not measured** | Record responses, consent-confirmed named entries, anonymous reports, and ADOPTERS.md PRs |
 
 **Instrumentation order** (cheapest first):
@@ -52,9 +52,11 @@ publish, and *how* the snapshot feeds roadmap decisions.
   **2026-11-01**, covering October — aligns with Q4 "Mature" opening).
 - Snapshot format: downloads by variant × desktop (top 10), stars/forks,
   external-contributor PRs, release-asset presence per flavor,
-  [ADOPTERS.md](./ADOPTERS.md) production/evaluation entry count, adoption-call
-  responses/conversion, and a one-line "variant ranking" that flags
-  under-/over-performing editions.
+  [ADOPTERS.md](./ADOPTERS.md) EXTERNAL production/evaluation entry count
+  (the two self-entries — maintainer and TunaOS CI — are excluded; counting
+  them would have met the >=2 target on the day it was written, #1348),
+  adoption-call responses/conversion, and a one-line "variant ranking" that
+  flags under-/over-performing editions.
 - Ownership: **strategist** compiles; **ci-maintainer** supplies R2/Releases
   exports; **guide** publishes on tunaos.org/blog.
 

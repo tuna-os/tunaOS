@@ -77,7 +77,10 @@ jobs:
     uses: ./.github/workflows/asahi-hw-nightly-one.yml
     with:
       image: ghcr.io/tuna-os/${{ matrix.flavor }}:gnome-asahi
-    secrets: inherit
+    secrets:
+      ASAHI_HW_TIER2_SSH_KEY: ${{ secrets.ASAHI_HW_TIER2_SSH_KEY }}
+      ASAHI_HW_TIER2_HOST: ${{ secrets.ASAHI_HW_TIER2_HOST }}
+      ASAHI_HW_TIER2_USER: ${{ secrets.ASAHI_HW_TIER2_USER }}
 
   # Dispatch mode: one explicit ref, for iterating on a single build (e.g. a
   # -testing tag) before it's promoted.
@@ -87,4 +90,7 @@ jobs:
     uses: ./.github/workflows/asahi-hw-nightly-one.yml
     with:
       image: ${{ inputs.image }}
-    secrets: inherit
+    secrets:
+      ASAHI_HW_TIER2_SSH_KEY: ${{ secrets.ASAHI_HW_TIER2_SSH_KEY }}
+      ASAHI_HW_TIER2_HOST: ${{ secrets.ASAHI_HW_TIER2_HOST }}
+      ASAHI_HW_TIER2_USER: ${{ secrets.ASAHI_HW_TIER2_USER }}
