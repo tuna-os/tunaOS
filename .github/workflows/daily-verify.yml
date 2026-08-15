@@ -77,7 +77,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@8906e13e3ac1654504e75ad27440bffb28e52fbc # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@cad7d15c30224a7a1a49c5ff0fd2054ca57b9cfd # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"
