@@ -826,6 +826,8 @@ jobs:
       IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
       DEFAULT_TAG: ${{ inputs.default-tag }}
       INDEX_DIGEST: ${{ needs.manifest.outputs.digest }}
+      IMAGE_VARIANT: ${{ inputs.image-variant }}
+      FLAVOR: ${{ inputs.flavor }}
       COSIGN_YES: "true"
     steps:
       - name: Install Cosign
@@ -853,7 +855,7 @@ jobs:
           merge-multiple: true
           path: supply-chain/sboms
 
-      - name: Sign images and attest SBOMs
+      - name: Sign images and attest SBOMs + provenance
         env:
           REQUIRE_SBOM: ${{ inputs.sbom }}
           MAX_RETRIES: 6
@@ -862,6 +864,14 @@ jobs:
           identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/reusable-build-image.yml@${GITHUB_REF}"
           issuer="https://token.actions.githubusercontent.com"
           index_ref="${IMAGE_REGISTRY}/${IMAGE_NAME}@${INDEX_DIGEST}"
+          # https://tunaos.org/provenance/v1 fields: source commit, workflow/run,
+          # variant, flavor, platform, build-config revision (tunaos/tunaos#1187).
+          # Base-image digest is deliberately omitted: get-base-image.sh resolves
+          # a tag, not a digest, in the per-platform build job, and pinning it
+          # would mean adding a `skopeo inspect` call to that live 180-minute
+          # build matrix — not something to do blind in this change.
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          provenance_dir="$(mktemp -d)"
 
           # cosign's own retry (2 attempts, sub-second apart) is not enough
           # for a Rekor transparency-log blip that lasts minutes, which is
@@ -928,6 +938,25 @@ jobs:
               echo "::error::missing SPDX SBOM for ${safeplatform}"
               exit 1
             fi
+
+            provenance="${provenance_dir}/provenance-${safeplatform}.json"
+            jq -n \
+              --arg sourceCommit "$GITHUB_SHA" \
+              --arg sourceRepository "https://github.com/${GITHUB_REPOSITORY}" \
+              --arg workflow ".github/workflows/reusable-build-image.yml" \
+              --arg runId "$GITHUB_RUN_ID" \
+              --arg runUrl "$run_url" \
+              --arg variant "$IMAGE_VARIANT" \
+              --arg flavor "$FLAVOR" \
+              --arg platform "$safeplatform" \
+              --arg buildConfigRevision "$GITHUB_SHA" \
+              '{sourceCommit: $sourceCommit, sourceRepository: $sourceRepository, workflow: $workflow, runId: $runId, runUrl: $runUrl, variant: $variant, flavor: $flavor, platform: $platform, buildConfigRevision: $buildConfigRevision}' \
+              > "$provenance"
+            cosign attest --type https://tunaos.org/provenance/v1 --predicate "$provenance" "$ref"
+            cosign verify-attestation "$ref" \
+              --type https://tunaos.org/provenance/v1 \
+              --certificate-identity "$identity" \
+              --certificate-oidc-issuer "$issuer" >/dev/null
           done
 
           [[ "$signed" -gt 0 ]] || { echo "::error::no platform digests found"; exit 1; }
@@ -935,7 +964,7 @@ jobs:
             echo "::error::attested ${attested}/${signed} platform SBOMs"
             exit 1
           fi
-          echo "Signed index plus ${signed} platform image(s); attested ${attested} SPDX SBOM(s)." >> "$GITHUB_STEP_SUMMARY"
+          echo "Signed index plus ${signed} platform image(s); attested ${attested} SPDX SBOM(s) and ${signed} provenance statement(s)." >> "$GITHUB_STEP_SUMMARY"
 
   # ── Boot gate ───────────────────────────────────────────────────────────────
   # Pull the just-pushed :<tag>-testing manifest, install it to a qcow2 with
