@@ -12,30 +12,37 @@ setup() {
   SCRIPT="${REPO_ROOT}/scripts/get-base-image.sh"
 }
 
+# #1713 pinned base_image refs with @sha256: digests; these tests verify the
+# registry/path:tag mapping, which is orthogonal to digest pinning, so strip
+# the digest before comparing.
+strip_digest() {
+  echo "${1%%@*}"
+}
+
 # ── Variant mapping tests ────────────────────────────────────────────────────
 
 @test "yellowfin → almalinux-bootc:10-kitten" {
   run bash "$SCRIPT" yellowfin
   [ "$status" -eq 0 ]
-  [ "$output" = "quay.io/almalinuxorg/almalinux-bootc:10-kitten" ]
+  [ "$(strip_digest "$output")" = "quay.io/almalinuxorg/almalinux-bootc:10-kitten" ]
 }
 
 @test "albacore → almalinux-bootc:10" {
   run bash "$SCRIPT" albacore
   [ "$status" -eq 0 ]
-  [ "$output" = "quay.io/almalinuxorg/almalinux-bootc:10" ]
+  [ "$(strip_digest "$output")" = "quay.io/almalinuxorg/almalinux-bootc:10" ]
 }
 
 @test "skipjack → centos-bootc:stream10" {
   run bash "$SCRIPT" skipjack
   [ "$status" -eq 0 ]
-  [ "$output" = "quay.io/centos-bootc/centos-bootc:stream10" ]
+  [ "$(strip_digest "$output")" = "quay.io/centos-bootc/centos-bootc:stream10" ]
 }
 
 @test "bonito → fedora-bootc:44" {
   run bash "$SCRIPT" bonito
   [ "$status" -eq 0 ]
-  [ "$output" = "quay.io/fedora/fedora-bootc:44" ]
+  [ "$(strip_digest "$output")" = "quay.io/fedora/fedora-bootc:44" ]
 }
 
 # ── Agreement with build-config.yml ──────────────────────────────────────────
@@ -76,7 +83,7 @@ setup() {
 @test "gurnard resolves (regression: #1014 'Unknown variant: gurnard')" {
   run bash "$SCRIPT" gurnard
   [ "$status" -eq 0 ]
-  [ "$output" = "docker.io/library/ubuntu:noble" ]
+  [ "$(strip_digest "$output")" = "docker.io/library/ubuntu:noble" ]
 }
 
 @test "redfin resolves though it is absent from build-config.yml" {
@@ -95,7 +102,7 @@ setup() {
   [ "$output" = "ghcr.io/tuna-os/archlinuxarm:latest" ]
   # ...and does not leak into other variants or other platforms.
   run bash "$SCRIPT" marlin linux/amd64
-  [ "$output" = "docker.io/archlinux/archlinux:latest" ]
+  [ "$(strip_digest "$output")" = "docker.io/archlinux/archlinux:latest" ]
 }
 
 # ── Error handling ────────────────────────────────────────────────────────────
