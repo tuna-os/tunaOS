@@ -95,8 +95,10 @@ fi
 # driver stack was present and correct (tuna-os/tunaOS#1564). Naming it here
 # rather than dropping --no-install-recommends keeps the package set explicit;
 # the recommends set for this stack pulls in Xorg, which these images do not
-# ship. libnvidia-egl-gbm1 is the EGL external-platform half of the same path
-# and is a Recommends for the same reason.
+# ship. libnvidia-egl-gbm1 and libnvidia-egl-wayland1 are the rest of the same
+# path -- the EGL external-platform halves the contract check is really
+# guarding -- and are Recommends for the same reason, so they go in alongside
+# rather than waiting for the check to grow a probe for each of them.
 apt-get install -y --no-install-recommends \
 	dkms \
 	"${HEADERS_PKG}" \
@@ -106,6 +108,7 @@ apt-get install -y --no-install-recommends \
 	nvidia-settings \
 	libnvidia-allocator1 \
 	libnvidia-egl-gbm1 \
+	libnvidia-egl-wayland1 \
 	libgl1-nvidia-glvnd-glx
 
 if [[ ! -e "/usr/lib/modules/${KVER}/build" ]]; then
