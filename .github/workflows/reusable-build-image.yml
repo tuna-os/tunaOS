@@ -1132,7 +1132,10 @@ jobs:
     uses: ./.github/workflows/verify-asahi-one.yml
     with:
       image: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}/${{ inputs.image-name }}:${{ inputs.default-tag }}-testing
-    secrets: inherit
+    # No `secrets:` block: verify-asahi-one.yml's workflow_call declares no
+    # explicit secrets input (it only uses the auto-provided GITHUB_TOKEN),
+    # so `secrets: inherit` was passing every repo/org secret for nothing
+    # (tuna-os/tunaos#1536).
 
   tag-image:
     name: Promote
