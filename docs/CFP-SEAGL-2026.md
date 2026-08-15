@@ -1,8 +1,26 @@
-# SeaGL 2026 — CFP Draft
+# SeaGL — CFP Draft (reusable; next live target SeaGL 2027)
 
-> Status: **draft** — for maintainer review before submission.
-> Event: SeaGL (Seattle GNU/Linux Conference), Seattle, 13–14 Nov 2026. CFP typically opens late summer — confirm exact open/close dates on [seagl.org](https://seagl.org) before submitting.
-> Tracking issue: [#1691](https://github.com/tuna-os/tunaOS/issues/1691) (SeaGL 2026 CFP).
+> **Status: NOT submittable for 2026 — the CFP is closed.** Kept as a
+> reviewed, reusable community-talk draft; the next real submission window is
+> SeaGL 2027 (CFP historically opens ~April).
+>
+> **Verified on [seagl.org](https://seagl.org), 2026-08-14** (#1715):
+>
+> | | |
+> |---|---|
+> | Event | SeaGL 14, **23–24 October 2026**, University of Washington **and online** |
+> | CFP | re-opened after the date change, accepting proposals "through the end of June" — **closed since 2026-06-30** |
+>
+> This corrects the dates this draft shipped with. It previously said
+> *"Seattle, 13–14 Nov 2026. CFP typically opens late summer"* — wrong on both
+> the event dates and the CFP window, and the error reached a merged repo doc
+> (PR #1693) and its tracking issue (#1691). The venue moved to UW in an
+> announcement dated 2026-06-01, which is also when the CFP was re-opened.
+>
+> Tracking issue: [#1691](https://github.com/tuna-os/tunaOS/issues/1691),
+> reframed — 2026 is an attend/volunteer/sponsor decision for the maintainer,
+> not a submission. Correction tracked in
+> [#1715](https://github.com/tuna-os/tunaOS/issues/1715).
 
 ## Talk title (working)
 
@@ -68,13 +86,25 @@ comparison to Silverblue, Universal Blue, NixOS, and MicroOS.
 - Variant/arch claims must match ROADMAP.md at submission time (e.g., Apple
   Silicon is "in progress", not "supported" — see #1684).
 
-## Submission checklist
+## Submission checklist (SeaGL 2027 — 2026 has closed)
 
-- [ ] Confirm SeaGL 2026 CFP open/close dates on seagl.org
+- [ ] **Re-verify on seagl.org first**: event dates, venue, and the CFP
+      open/close window. Record "verified on seagl.org, `<date>`" in the header
+      above before this draft is treated as submittable again. This step is
+      first because skipping it is what produced the 2026 error.
+- [ ] Confirm the 2027 CFP is actually open (historically ~April; 2026 opened
+      04-24 and re-opened through 06-30)
 - [ ] Finalize title + abstract (this draft)
 - [ ] Record 2–3 min demo video (reuse the #1658 demo outline work)
 - [ ] Proof with 1–2 community members (SeaGL reviewers like demos + honest scope)
-- [ ] Submit when the portal opens; link the Q3 checkpoint recap (#1610) on acceptance
+- [ ] Re-check every variant/arch claim against ROADMAP.md at submission time
+- [ ] Submit when the portal opens; link the current checkpoint recap on acceptance
+
+## For October 2026 (no talk)
+
+The event still happens 23–24 October 2026 at UW and online. Attending,
+volunteering, or sponsoring is a maintainer call tracked in #1691 — the talk
+track simply resumes for 2027.
 
 ## Supporting material (for reviewers / talk page)
 
@@ -85,4 +115,7 @@ comparison to Silverblue, Universal Blue, NixOS, and MicroOS.
 
 ---
 
-*Draft prepared by outreach agent (ACMM L6 — full mode). Review, edit, and submit when the CFP portal opens.*
+*Draft prepared by outreach agent (ACMM L6 — full mode). Dates corrected
+against seagl.org on 2026-08-14 (#1715); the 2026 CFP closed on 06-30, so this
+is held as a reusable draft for SeaGL 2027. Re-verify the event and CFP dates
+on seagl.org before treating it as submittable.*
