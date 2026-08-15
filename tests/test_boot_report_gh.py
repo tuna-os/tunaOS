@@ -29,9 +29,16 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-os.environ.setdefault("GITHUB_REPOSITORY", "tuna-os/tunaos")
-os.environ.setdefault("REPORT_DATE", "2026-08-10")
-os.environ.setdefault("PREVIOUS_BRANCH", "boot/2026-08-03")
+# Assigned, not setdefault. These three are the module's entire configuration,
+# read once at import, and setdefault yields to whatever the environment
+# already has -- which under Actions means GITHUB_REPOSITORY arrives as the
+# real "tuna-os/tunaOS" instead of the fixture below. The suite then passed
+# locally (where the var is unset) and failed in CI on nothing but the capital
+# O. That went unnoticed because a collection error was aborting the whole
+# pytest run before these tests executed at all; see pytest.ini.
+os.environ["GITHUB_REPOSITORY"] = "tuna-os/tunaos"
+os.environ["REPORT_DATE"] = "2026-08-10"
+os.environ["PREVIOUS_BRANCH"] = "boot/2026-08-03"
 
 _SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "generate-boot-report.py"
 _spec = importlib.util.spec_from_file_location("generate_boot_report_gh", _SCRIPT)
@@ -365,7 +372,7 @@ class TestRenderComboRowScreenshots(unittest.TestCase):
         self.assertIn("✨ changed", row)
         self.assertIn("= same", row)
         self.assertIn(f"ghcr.io/{gbr.REPO_OWNER}/yellowfin:gnome", row)
-        self.assertIn("[run](https://github.com/tuna-os/tunaos/actions/runs/7)", row)
+        self.assertIn(f"[run](https://github.com/{gbr.REPO}/actions/runs/7)", row)
 
     def test_row_without_screenshots(self):
         combo = _combo()
