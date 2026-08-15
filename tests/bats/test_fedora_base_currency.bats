@@ -25,8 +25,11 @@ setup() {
 }
 
 # The base_image build-config declares for a variant — the authoritative one.
+# #1713 pinned refs with @sha256: digests; these tests compare tag-level pins
+# (registry-map vs config), so strip the digest first.
 config_base() {
-  yq -r ".variants[] | select(.id == \"$1\") | .base_image" "$BUILD_CONFIG"
+  yq -r ".variants[] | select(.id == \"$1\") | .base_image" "$BUILD_CONFIG" \
+    | sed 's/@sha256:.*//'
 }
 
 # The ref registry-map.yaml would resolve for a logical image name.
