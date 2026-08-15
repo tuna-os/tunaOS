@@ -44,10 +44,19 @@ this is an open-source project's architecture talk with live demos.
 
 ## Demo video outline (3–5 min, attach to CFP)
 
+The beats, in order:
+
 1. `podman` pull of a TunaOS image; show the layered FS
 2. `bootc upgrade` on a live VM → atomic swap + `bootc rollback` on failure
 3. Corral: declare a desktop VM as a manifest, `kubectl apply`, watch it schedule
 4. Boot the updated image; GNOME session running on AlmaLinux 10
+
+**To actually record it, use [CFP-DEMO-SCRIPT.md](./CFP-DEMO-SCRIPT.md)** — the
+shot list with the real commands (`just qcow2`, `scripts/run-vm.sh demo`,
+`just corral-build`), per-shot timings, what each shot has to prove to a
+reviewer, and the pre-pull step without which `bootc upgrade` does not fit in
+five minutes. The same recording is reused for SCaLE 21x rather than shot
+twice.
 
 ## Logistics
 
@@ -93,14 +102,17 @@ material to point to.
 
 - [ ] CFP portal opens (~Oct 2026) — confirm exact date
 - [ ] Finalize title + abstract (this draft)
-- [ ] Record demo video (3–5 min) — needs a spare laptop/VM
+- [ ] Record demo video (3–5 min) — follow [CFP-DEMO-SCRIPT.md](./CFP-DEMO-SCRIPT.md);
+      its "Before you record" table is the concrete version of "needs a spare laptop/VM"
 - [ ] Ask 1–2 community members to proof the abstract (FOSDEM reviewers like demos + no-vendor-pitch)
 - [ ] Submit to Containers devroom first; fall back to Desktops if categories allow
 - [ ] (Optional, maintainer call) Pitch a bootc-ecosystem case-study feature to bootc-dev/CNCF channels — see #1340
 
 ## Supporting material (for reviewers / talk page)
 
-- Project: [github.com/tuna-os/tunaOS](https://github.com/tuna-os/tunaOS) — 56 stars, 40+ repos, daily image builds
+- Project: [github.com/tuna-os/tunaOS](https://github.com/tuna-os/tunaOS) — 55 stars, 37 active repos
+  in the org, daily image builds *(counts as of 2026-08-14; re-check before submitting — the
+  previous figures were undated and had already drifted)*
 - Blog: [tunaos.org/blog](https://tunaos.org/blog) — 10 posts incl. "The Immutable Desktop Landscape" and "Modern Enterprise Linux Desktops with TunaOS"
 - Tech: bootc (CNCF Sandbox), KubeVirt, QEMU, BuildStream
 - ADOPTERS: [tuna-os/tunaOS/ADOPTERS.md](https://github.com/tuna-os/tunaOS/blob/main/ADOPTERS.md)
