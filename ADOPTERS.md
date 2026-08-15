@@ -3,22 +3,49 @@
 > A list of organizations and projects that use TunaOS in production, development, or evaluation.
 >
 > If you or your organization is using TunaOS, we'd love to add you to this list!
-> Please submit a PR adding your name or open an issue.
+> See the [adoption call](docs/ADOPTION-CALL.md) to self-identify in the public
+> Show-and-tell Discussion, or submit a PR with the same consent details.
+
+**Evidence baseline (2026-08-14):** 0 named production users and 2 named
+development/evaluation entries. The ecosystem table below records projects
+that TunaOS depends on, integrates with, or is inspired by; it is not evidence
+that those projects use TunaOS.
 
 ## Production Users
 
-_(None listed yet — be the first!)_
+_(None listed yet — see the [adoption call](docs/ADOPTION-CALL.md) and be the first!)_
 
 ## Development & Evaluation
+
+> Both current entries are the project itself — the maintainer, and TunaOS's own
+> CI. They are honest as dogfooding records and are **not** external adoption
+> evidence; the adopters KPI in
+> [ADOPTION-METRICS.md](./ADOPTION-METRICS.md) counts external entries only, so
+> these do not move it.
 
 | Organization | Use Case | Variant(s) | Since |
 |---|---|---|---|
 | [@hanthor](https://github.com/hanthor) (Project Maintainer) | Personal daily driver — development, testing, and dogfooding all variants | Yellowfin GNOME, Albacore GNOME, Skipjack KDE | 2026-04 |
-| [TunaOS Hive Agents](https://github.com/tuna-os) | Automated CI/CD — build, test, and release pipeline runs on TunaOS infrastructure | Yellowfin GNOME, Albacore GNOME | 2026-05 |
+| [TunaOS Hive Agents](https://hive.tunaos.org) | Automated CI/CD — build, test, and release pipeline runs on TunaOS infrastructure | Yellowfin GNOME, Albacore GNOME | 2026-05 |
 
-## Ecosystem & Downstream Projects
+## Upstream & Ecosystem Dependencies
 
-| Project | Relationship | Link |
+**These are not adopters.** Every entry below is a project TunaOS *builds on* or
+*consumes* — base operating systems, desktop environments it packages, build
+services, registries. None of them are downstream of TunaOS, and none have a
+partnership with it; being listed here says only that TunaOS uses their work.
+
+The section was previously headed "Ecosystem & Downstream Projects", which in a
+file that opens "organizations and projects that use TunaOS" reads as 24
+adopters. That matters because this file is cited as adoption evidence in the
+DistroWatch (#1333) and CNCF (#1340) pitches — a reader checking it would find
+Debian, Fedora, KDE and elementary OS apparently listed as TunaOS adopters, and
+none of them have said any such thing.
+
+Kept because the dependency map is genuinely useful; relabelled so it cannot be
+read as, or counted as, adoption.
+
+| Project | What TunaOS uses it for | Link |
 |---|---|---|
 | [Universal Blue](https://universal-blue.org/) | Upstream inspiration — TunaOS is a fork of Bluefin LTS | [github.com/ublue-os](https://github.com/ublue-os) |
 | [Bluefin](https://projectbluefin.io) | Direct upstream — bootc-based desktop foundation | [github.com/ublue-os/bluefin-lts](https://github.com/ublue-os/bluefin-lts) |
@@ -47,9 +74,14 @@ _(None listed yet — be the first!)_
 
 ## Adding Your Organization
 
-To add your organization to this list:
+The fastest way to get added: open an issue using the
+[adoption-request form](https://github.com/tuna-os/.github/issues/new?template=adoption.yml)
+— tell us your tier, variants, and use case, and we'll open the ADOPTERS.md
+entry for you.
 
-1. Open a PR adding your entry to the **Production Users** or **Development & Evaluation** table
+Prefer to do it yourself? You can also open a PR directly:
+
+1. Add your entry to the **Production Users** or **Development & Evaluation** table
 2. Include the variant(s) you use and a brief description of your use case
 3. (Optional) Add any relevant links (blog posts, case studies, conference talks)
 

@@ -10,11 +10,21 @@ build-custom base="" tag="": _ensure-deps
     set -euo pipefail
     BASE_IMAGE="{{ base }}"
     if [[ -z "${BASE_IMAGE}" ]]; then
-        BASE_IMAGE=$(python3 -c "import re; open_f = open('custom/image.yaml').read(); print(re.search(r'base:\s*(\S+)', open_f).group(1))" 2>/dev/null || echo "ghcr.io/tuna-os/yellowfin:gnome")
+        # yq, not a regex: `_ensure-deps` above already guarantees it, and it
+        # parses YAML instead of pattern-matching text. The regex this replaced
+        # (`re.search(r'base:\s*(\S+)')`) matched the first line containing
+        # "base:" anywhere — including inside a comment or a nested block — and
+        # called .group(1) on a possible None, so a missing or malformed field
+        # raised AttributeError into `2>/dev/null` and silently produced the
+        # default below. A wrong image built without complaint is worse than a
+        # failure (tunaOS#1651).
+        BASE_IMAGE=$({{ yq }} -r '.base // ""' custom/image.yaml 2>/dev/null || true)
+        BASE_IMAGE="${BASE_IMAGE:-ghcr.io/tuna-os/yellowfin:gnome}"
     fi
     TARGET_TAG="{{ tag }}"
     if [[ -z "${TARGET_TAG}" ]]; then
-        TARGET_TAG=$(python3 -c "import re; open_f = open('custom/image.yaml').read(); print(re.search(r'tag:\s*(\S+)', open_f).group(1))" 2>/dev/null || echo "my-custom-os")
+        TARGET_TAG=$({{ yq }} -r '.tag // ""' custom/image.yaml 2>/dev/null || true)
+        TARGET_TAG="${TARGET_TAG:-my-custom-os}"
     fi
     echo "==> Building custom image based on ${BASE_IMAGE} as localhost/${TARGET_TAG}..."
     podman build \
@@ -29,7 +39,8 @@ run-custom-vm tag="":
     set -euo pipefail
     TARGET_TAG="{{ tag }}"
     if [[ -z "${TARGET_TAG}" ]]; then
-        TARGET_TAG=$(python3 -c "import re; open_f = open('custom/image.yaml').read(); print(re.search(r'tag:\s*(\S+)', open_f).group(1))" 2>/dev/null || echo "my-custom-os")
+        TARGET_TAG=$({{ yq }} -r '.tag // ""' custom/image.yaml 2>/dev/null || true)
+        TARGET_TAG="${TARGET_TAG:-my-custom-os}"
     fi
     # Use scripts/build-qcow2.sh to build the QCOW2 from local image
     ./scripts/build-qcow2.sh "localhost/${TARGET_TAG}"
@@ -60,7 +71,7 @@ custom-iso base_image='':
     {{ just }} build-custom "{{ base_image }}"
     TAG="my-custom-os"
     if [[ -f "custom/image.yaml" ]]; then
-        T=$(python3 -c "import re; m = re.search(r'^tag:\s*(.+)$', open('custom/image.yaml').read(), re.M); print(m.group(1).strip() if m else '')")
+        T=$({{ yq }} -r '.tag // ""' custom/image.yaml 2>/dev/null || true)
         [[ -n "$T" ]] && TAG="$T"
     fi
     echo "==> Generating live ISO for localhost/${TAG}:latest..."

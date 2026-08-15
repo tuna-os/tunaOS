@@ -148,6 +148,19 @@ if compgen -G "${NVLIB}/nvidia-drm_gbm.so" >/dev/null; then
 else
 	fail "missing /usr/lib/x86_64-linux-gnu/nvidia/current/nvidia-drm_gbm.so — Wayland compositors cannot use the driver"
 fi
+# The backend above is loaded THROUGH the EGL external-platform registration,
+# not directly: without 15_nvidia_gbm.json, EGL never looks for the GBM
+# platform and nvidia-drm_gbm.so sits on disk doing nothing. Checking only the
+# .so made "Wayland compositors can use the driver" provable in a state where
+# they still could not — and, unlike the .so, nothing in the nvidia-driver
+# dependency chain pulls this in even with Recommends enabled, so it can only
+# ever arrive by being named in the install list (tunaOS#1564). Path read from
+# libnvidia-egl-gbm1's file list (trixie 1.1.2.1-1; same version in unstable).
+if compgen -G "${NV_ROOT}/usr/share/egl/egl_external_platform.d/15_nvidia_gbm.json" >/dev/null; then
+	pass "EGL GBM external platform registered"
+else
+	fail "missing /usr/share/egl/egl_external_platform.d/15_nvidia_gbm.json (libnvidia-egl-gbm1) — EGL will not load the GBM backend"
+fi
 
 echo "== initramfs policy =="
 DRACUT_CONF="${NV_ROOT}/usr/lib/dracut/dracut.conf.d/99-nvidia.conf"

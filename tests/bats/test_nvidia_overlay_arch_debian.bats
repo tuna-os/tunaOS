@@ -114,7 +114,7 @@ VERIFY_DEBIAN_SH="${REPO_ROOT}/build_scripts/checks/verify-nvidia-debian.sh"
 @test "nvidia-debian 20-nvidia.sh guards on IS_DEBIAN and asserts the dkms build tree before building" {
   run grep -F 'IS_DEBIAN' "$DEBIAN_INSTALL_SH"
   [ "$status" -eq 0 ]
-  run grep -F 'linux-headers-generic' "$DEBIAN_INSTALL_SH"
+  run grep -F 'HEADERS_PKG' "$DEBIAN_INSTALL_SH"
   [ "$status" -eq 0 ]
   run grep -F 'dkms autoinstall' "$DEBIAN_INSTALL_SH"
   [ "$status" -eq 0 ]
@@ -267,6 +267,7 @@ make_good_debian_root() {
     "$r/usr/lib/bootc/kargs.d" \
     "$r/usr/share/glvnd/egl_vendor.d" \
     "$r/usr/share/vulkan/icd.d" \
+    "$r/usr/share/egl/egl_external_platform.d" \
     "$r/usr/lib/dracut/dracut.conf.d" \
     "$nvlib"
   # nvidia-current.ko.xz is what Debian's alternatives-managed
@@ -285,6 +286,10 @@ make_good_debian_root() {
   echo '{}' >"$r/usr/share/glvnd/egl_vendor.d/10_nvidia.json"
   echo '{}' >"$r/usr/share/vulkan/icd.d/nvidia_icd.json"
   touch "$nvlib/libEGL_nvidia.so.0" "$nvlib/libGLX_nvidia.so.0" "$nvlib/nvidia-drm_gbm.so"
+  # nvidia-drm_gbm.so is only reachable through this registration — the file
+  # alone is not a working GBM path (tunaOS#1564). From libnvidia-egl-gbm1's
+  # file list; libnvidia-allocator1 ships the .so above.
+  echo '{}' >"$r/usr/share/egl/egl_external_platform.d/15_nvidia_gbm.json"
   echo 'force_drivers+=" i915 amdgpu nvidia nvidia_modeset nvidia_uvm nvidia_drm "' \
     >"$r/usr/lib/dracut/dracut.conf.d/99-nvidia.conf"
   echo "$r"
@@ -354,6 +359,56 @@ run_verify_debian() {
   run_verify_debian "$root"
   [ "$status" -ne 0 ]
   [[ "$output" == *"nvidia-drm_gbm.so"* ]]
+}
+
+@test "verify-nvidia-debian fails when the EGL GBM external platform is unregistered" {
+  # The .so present but its platform JSON absent is the state that would let a
+  # driver look complete to the old check while EGL never loaded the GBM
+  # backend at all (tunaOS#1564).
+  make_debian_stub_tools
+  root="$(make_good_debian_root)"
+  rm "$root/usr/share/egl/egl_external_platform.d/15_nvidia_gbm.json"
+  run_verify_debian "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"15_nvidia_gbm.json"* ]]
+  [[ "$output" == *"libnvidia-egl-gbm1"* ]]
+}
+
+# ── the packages that ship the Wayland path (tunaOS#1564) ──────────────────
+#
+# --no-install-recommends means every Recommends has to be named. The overlay
+# installed nvidia-driver-libs but not libnvidia-allocator1, which is where
+# .../nvidia/current/nvidia-drm_gbm.so actually comes from — so every flounder
+# nvidia build failed the contract on a file no listed package shipped.
+
+@test "nvidia-debian 20-nvidia.sh installs libnvidia-allocator1 for nvidia-drm_gbm.so" {
+  # Must be an installed package, not just a name in a comment.
+  run grep -nE '^[[:space:]]*libnvidia-allocator1[[:space:]]*\\?[[:space:]]*$' "$DEBIAN_INSTALL_SH"
+  [ "$status" -eq 0 ]
+}
+
+@test "nvidia-debian 20-nvidia.sh installs the EGL external platform packages" {
+  # Neither is a dependency OR a recommendation of anything else in the list,
+  # so they can only arrive by being named. libnvidia-egl-gbm1 is what makes
+  # the GBM backend loadable; egl-wayland matches what the Arch sibling
+  # installs as `egl-wayland`.
+  run grep -nE '^[[:space:]]*libnvidia-egl-gbm1[[:space:]]*\\?[[:space:]]*$' "$DEBIAN_INSTALL_SH"
+  [ "$status" -eq 0 ]
+  run grep -nE '^[[:space:]]*libnvidia-egl-wayland1[[:space:]]*\\?[[:space:]]*$' "$DEBIAN_INSTALL_SH"
+  [ "$status" -eq 0 ]
+  run grep -F 'egl-wayland' "$ARCH_INSTALL_SH"
+  [ "$status" -eq 0 ]
+}
+
+@test "the contract check and the install list agree about the GBM path" {
+  # The pairing that broke: a check asserting a file, and an install list that
+  # ships no package providing it. Both halves must move together.
+  run grep -F 'nvidia-drm_gbm.so' "$VERIFY_DEBIAN_SH"
+  [ "$status" -eq 0 ]
+  run grep -F '15_nvidia_gbm.json' "$VERIFY_DEBIAN_SH"
+  [ "$status" -eq 0 ]
+  run grep -nE '^[[:space:]]*libnvidia-(allocator1|egl-gbm1)[[:space:]]*\\?[[:space:]]*$' "$DEBIAN_INSTALL_SH"
+  [ "$status" -eq 0 ]
 }
 
 @test "verify-nvidia-debian fails when the modeset karg is absent" {
