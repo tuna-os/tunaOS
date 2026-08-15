@@ -1,7 +1,7 @@
 # Reddit / Lemmy Release-Announcement Playbook
 
 > Status: **draft** — for maintainer review before first post.
-> Tracking issues: [#1346](https://github.com/tuna-os/tunaOS/issues/1346) (Reddit/Lemmy Linux-community presence), [#1599](https://github.com/tuna-os/tunaOS/issues/1599) (homelab/self-hosted, Draft D).
+> Tracking issues: [#1346](https://github.com/tuna-os/tunaOS/issues/1346) (Reddit/Lemmy Linux-community presence), [#1599](https://github.com/tuna-os/tunaOS/issues/1599) (homelab/self-hosted, Draft D), [#1610](https://github.com/tuna-os/tunaOS/issues/1610) (Q3 checkpoint recap, Draft E).
 > Prepared: 2026-08-12, homelab draft added 2026-08-14. First post targets: Gurnard launch (#1344) / GNOME 51 release week (#1334).
 
 ## Why this exists
