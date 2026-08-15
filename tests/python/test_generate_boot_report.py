@@ -19,8 +19,11 @@ import pytest
 
 # ── Module loading (env-first, hyphenated filename) ────────────────────
 
-os.environ.setdefault("GITHUB_REPOSITORY", "tuna-os/tunaos")
-os.environ.setdefault("REPORT_DATE", "2026-08-10")
+# Assigned, not setdefault -- see the note in tests/test_boot_report_gh.py.
+# Under Actions GITHUB_REPOSITORY is already set, so setdefault silently hands
+# the module the real repository instead of this fixture.
+os.environ["GITHUB_REPOSITORY"] = "tuna-os/tunaos"
+os.environ["REPORT_DATE"] = "2026-08-10"
 
 _SCRIPT = Path(__file__).resolve().parent.parent.parent / "scripts" / "generate-boot-report.py"
 _spec = importlib.util.spec_from_file_location("generate_boot_report", _SCRIPT)

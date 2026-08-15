@@ -83,26 +83,83 @@ def test_every_cosign_invocation_goes_through_the_retry_helper(workflow):
                     )
 
 
+def _deadline(workflow, job_name, step_name) -> int:
+    job = workflow["jobs"][job_name]
+    step = next(s for s in job["steps"] if s.get("name") == step_name)
+    env = step.get("env") or {}
+    assert "SIGN_DEADLINE_MINUTES" in env, (
+        f"{job_name}/{step_name} does not set SIGN_DEADLINE_MINUTES"
+    )
+    assert "MAX_RETRIES" not in env, (
+        f"{job_name}/{step_name} still carries the old MAX_RETRIES budget"
+    )
+    return int(env["SIGN_DEADLINE_MINUTES"])
+
+
 def test_the_retry_budget_is_a_deadline_not_an_attempt_count(workflow):
     """An attempt count silently changes duration whenever a call gets slower.
 
     Run 31858324517 is the counter-example: six attempts read like a long
     budget and delivered 16 minutes against a longer outage.
     """
-    for job_name, step_name, run in _cosign_run_blocks(workflow):
-        job = workflow["jobs"][job_name]
-        step = next(s for s in job["steps"] if s.get("name") == step_name)
-        env = step.get("env") or {}
-        assert "SIGN_DEADLINE_MINUTES" in env, (
-            f"{job_name}/{step_name} does not set SIGN_DEADLINE_MINUTES"
-        )
-        assert int(env["SIGN_DEADLINE_MINUTES"]) >= 30, (
-            f"{job_name}/{step_name}: deadline {env['SIGN_DEADLINE_MINUTES']}m is "
-            "shorter than outages already observed in production"
-        )
-        assert "MAX_RETRIES" not in env, (
-            f"{job_name}/{step_name} still carries the old MAX_RETRIES budget"
-        )
+    for job_name, step_name, _ in _cosign_run_blocks(workflow):
+        _deadline(workflow, job_name, step_name)
+
+
+def test_a_blocking_cosign_step_waits_out_a_real_outage(workflow):
+    """Signing gates promotion, so giving up early throws away a whole build."""
+    assert _deadline(workflow, "sign", "Sign images") >= 30, (
+        "the image-signing deadline is shorter than outages already observed "
+        "in production, and Promote requires it"
+    )
+
+
+def test_a_non_blocking_cosign_step_gives_up_much_sooner(workflow):
+    """Off the critical path still costs wall-clock, and that has to be cheap.
+
+    attest_sbom is continue-on-error and absent from Promote's needs, but
+    build-variant.yml's stage 2 waits for the entire reusable-workflow call --
+    this job included. On gurnard run 31891742138 `pantheon` sat idle while a
+    non-blocking attestation burned its budget against a Rekor outage. With a
+    40m deadline a four-stage chain spends ~2h40m per variant waiting for an
+    artifact it is explicitly allowed to do without.
+    """
+    attest = _deadline(workflow, "attest_sbom", "Attest SPDX SBOMs")
+    sign = _deadline(workflow, "sign", "Sign images")
+    assert attest < sign, (
+        f"attest_sbom waits {attest}m, as long as blocking signing -- a "
+        "transparency-log outage stalls every downstream stage for it"
+    )
+    assert attest <= 15, (
+        f"attest_sbom's {attest}m deadline is charged to every later stage's "
+        "wall clock during an outage"
+    )
+    # Long enough that an ordinary flake is still absorbed: image signing
+    # completed in 19s on the run above.
+    assert attest >= 5, f"{attest}m is too short to ride out an ordinary flake"
+
+
+def test_the_non_blocking_step_has_a_ceiling_the_env_deadline_cannot_give_it(workflow):
+    """SIGN_DEADLINE_MINUTES bounds one cosign call, not the step.
+
+    The attest loop runs `cosign attest` + `cosign verify-attestation` per
+    platform digest and each call starts its own deadline, so the step's real
+    worst case is deadline x 2 x platforms. Run 31891742138 is the proof: the
+    step was still running 48 minutes into a nominal 40-minute budget. Only a
+    step-level timeout bounds the thing stage 2 is actually waiting on.
+    """
+    attest = workflow["jobs"]["attest_sbom"]
+    step = next(s for s in attest["steps"] if s.get("name") == "Attest SPDX SBOMs")
+    ceiling = step.get("timeout-minutes")
+    assert ceiling, (
+        "the attest step has no timeout-minutes, so its duration is "
+        "deadline x 2 x platforms with nothing bounding the total"
+    )
+    per_call = int(step["env"]["SIGN_DEADLINE_MINUTES"])
+    assert per_call <= int(ceiling), (
+        f"a {per_call}m per-call deadline cannot fit inside a {ceiling}m step "
+        "ceiling, so even one slow call trips the timeout"
+    )
 
 
 # ── The promotion contract ────────────────────────────────────────────────
