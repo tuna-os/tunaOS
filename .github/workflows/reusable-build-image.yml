@@ -1004,11 +1004,15 @@ jobs:
         # A hard ceiling on the whole step, because SIGN_DEADLINE_MINUTES is a
         # budget PER cosign INVOCATION, not per step: the loop below runs
         # `cosign attest` + `cosign verify-attestation` for every platform
-        # digest, and each call starts its own deadline. Slow-but-eventually-
-        # succeeding calls therefore multiply -- on gurnard run 31891742138
-        # this step was still going 48 minutes into a nominal "40 minute"
-        # budget, and a three-platform variant could reach 40m x 6. The env
-        # deadline governs one call; this governs the step.
+        # digest, and each call starts its own deadline (see cosign_retry --
+        # `deadline` is a local, recomputed on entry). Under `set -e` a
+        # *failing* call aborts the step after one deadline, which is what
+        # gurnard run 31891742138 did: 21 Rekor 502s over 39m19s, then
+        # SIGSTORE_OUTAGE. The unbounded case is calls that SUCCEED slowly --
+        # nothing aborts, and a three-platform variant can reach 40m x 6.
+        # That case has not been observed in production; this ceiling is
+        # here so it cannot be, since the env deadline structurally cannot
+        # bound the step.
         timeout-minutes: 20
         env:
           # Deliberately much shorter than Sign's 40m. Splitting this job off
