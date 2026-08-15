@@ -33,6 +33,8 @@ import importlib
 _desktop_verify = importlib.import_module("desktop-verify")
 _parse_results = _desktop_verify._parse_results
 encode_image = _desktop_verify.encode_image
+call_gemini = _desktop_verify.call_gemini
+call_lemonade = _desktop_verify.call_lemonade
 DESKTOP_CHECKS = _desktop_verify.DESKTOP_CHECKS
 LOGIN_CHECKS = _desktop_verify.LOGIN_CHECKS
 DESKTOP_SESSION_CHECKS = _desktop_verify.DESKTOP_SESSION_CHECKS
@@ -381,3 +383,108 @@ class TestEncodeImage:
             assert result.size == (1024, 768)
         finally:
             os.unlink(tmp_path)
+
+
+# ── Test: check constants ────────────────────────────────────────────────────
+
+
+class TestChecks:
+    """Sanity checks on the check-constant sets exported by the script."""
+
+    def test_all_ids_unique_and_assertions_present(self):
+        all_checks = (
+            DESKTOP_CHECKS + LOGIN_CHECKS + DESKTOP_SESSION_CHECKS
+        )
+        ids = [c["id"] for c in all_checks]
+        assert len(ids) == len(set(ids)), f"duplicate check ids: {ids}"
+        for c in all_checks:
+            assert c["id"] and c["assertion"], f"empty check: {c!r}"
+
+    def test_expected_screen_coverage(self):
+        ids = {c["id"] for c in DESKTOP_CHECKS + LOGIN_CHECKS + DESKTOP_SESSION_CHECKS}
+        assert ids == {
+            "boot-complete", "compositor-active", "no-crash",
+            "login-prompt", "desktop-loaded", "apps-available",
+        }
+
+
+# ── Test: call_gemini / call_lemonade ────────────────────────────────────────
+
+
+class _FakeResp:
+    def __init__(self, payload):
+        self._payload = payload
+
+    def raise_for_status(self):
+        return None
+
+    def json(self):
+        return self._payload
+
+
+class TestCallGemini:
+    """call_gemini() request shape + result parsing with a mocked HTTP layer."""
+
+    def test_posts_and_parses(self, monkeypatch):
+        calls = {}
+
+        def fake_post(url, **kw):
+            calls["url"] = url
+            calls["kw"] = kw
+            return _FakeResp({
+                "candidates": [{
+                    "content": {"parts": [{"text":
+                        "1. Result: Pass. Evidence: ok\n"
+                        "2. Result: Pass. Evidence: ok\n"
+                        "3. Result: Pass. Evidence: ok"}]}
+                }]
+            })
+
+        monkeypatch.setattr(_desktop_verify.requests, "post", fake_post)
+        r = call_gemini("aGVsbG8=", DESKTOP_CHECKS, "test-key")
+        assert all(v is True for v in r["results"].values())
+        assert calls["kw"]["params"] == {"key": "test-key"}
+        assert calls["kw"]["json"]["contents"][0]["parts"][0]["inline_data"]["data"] == "aGVsbG8="
+
+    def test_prompt_contains_assertions(self, monkeypatch):
+        seen = {}
+
+        def fake_post(url, **kw):
+            seen["prompt"] = kw["json"]["contents"][0]["parts"][1]["text"]
+            return _FakeResp({"candidates": [{"content": {"parts": [{"text": ""}]}}]})
+
+        monkeypatch.setattr(_desktop_verify.requests, "post", fake_post)
+        call_gemini("b3du", DESKTOP_CHECKS, "k")
+        assert DESKTOP_CHECKS[0]["assertion"] in seen["prompt"]
+        assert "Result: Pass. Evidence:" in seen["prompt"]
+
+
+class TestCallLemonade:
+    """call_lemonade() OpenAI-shaped request + error-dict fallback."""
+
+    def test_posts_openai_shape_and_parses(self, monkeypatch):
+        seen = {}
+
+        def fake_post(url, **kw):
+            seen["url"] = url
+            seen["json"] = kw["json"]
+            return _FakeResp({"choices": [{"message": {"content":
+                "1. Result: Pass. Evidence: ok\n"
+                "2. Result: Fail. Evidence: console\n"
+                "3. Result: Pass. Evidence: ok"}}]})
+
+        monkeypatch.setattr(_desktop_verify.requests, "post", fake_post)
+        r = call_lemonade("aGVsbG8=", DESKTOP_CHECKS)
+        assert r["results"]["boot-complete"] is True
+        assert r["results"]["compositor-active"] is False
+        assert r["results"]["no-crash"] is True
+        assert seen["json"]["messages"][0]["content"][0]["type"] == "image_url"
+
+    def test_exception_returns_error_dict(self, monkeypatch):
+        def boom(*a, **k):
+            raise ConnectionError("no lemonade")
+
+        monkeypatch.setattr(_desktop_verify.requests, "post", boom)
+        r = call_lemonade("aGVsbG8=", DESKTOP_CHECKS)
+        assert "error" in r
+        assert all(v is False for v in r["results"].values())
