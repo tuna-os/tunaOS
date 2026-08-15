@@ -87,6 +87,16 @@ if ! apt-cache show "$HEADERS_PKG" >/dev/null 2>&1; then
 	HEADERS_PKG="linux-headers-generic"
 fi
 
+# libnvidia-allocator1 is what ships nvidia-drm_gbm.so, the GBM backend every
+# Wayland compositor loads to get a buffer out of the driver. Debian keeps it
+# in its own binary package and nvidia-driver-libs only Recommends it, so
+# --no-install-recommends left it out and every flounder *-nvidia image failed
+# verify-nvidia-debian.sh on "missing nvidia-drm_gbm.so" while the rest of the
+# driver stack was present and correct (tuna-os/tunaOS#1564). Naming it here
+# rather than dropping --no-install-recommends keeps the package set explicit;
+# the recommends set for this stack pulls in Xorg, which these images do not
+# ship. libnvidia-egl-gbm1 is the EGL external-platform half of the same path
+# and is a Recommends for the same reason.
 apt-get install -y --no-install-recommends \
 	dkms \
 	"${HEADERS_PKG}" \
@@ -94,6 +104,8 @@ apt-get install -y --no-install-recommends \
 	nvidia-driver-libs \
 	nvidia-vulkan-icd \
 	nvidia-settings \
+	libnvidia-allocator1 \
+	libnvidia-egl-gbm1 \
 	libgl1-nvidia-glvnd-glx
 
 if [[ ! -e "/usr/lib/modules/${KVER}/build" ]]; then
