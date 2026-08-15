@@ -76,9 +76,11 @@ EOF
 
 @test "respects env-provided deadline and cap" {
   unset SIGN_DEADLINE_MINUTES SIGN_BACKOFF_CAP_SECONDS
-  SIGN_DEADLINE_MINUTES=7 SIGN_BACKOFF_CAP_SECONDS=9 source "$SCRIPT"
+  export SIGN_DEADLINE_MINUTES=7 SIGN_BACKOFF_CAP_SECONDS=9
+  source "$SCRIPT"
   [ "$SIGN_DEADLINE_MINUTES" = "7" ]
   [ "$SIGN_BACKOFF_CAP_SECONDS" = "9" ]
+  unset SIGN_DEADLINE_MINUTES SIGN_BACKOFF_CAP_SECONDS
 }
 
 # ── _cosign_transient ────────────────────────────────────────────────────────
