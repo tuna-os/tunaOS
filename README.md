@@ -42,25 +42,25 @@ TunaOS provides a variety of bootc-based operating system images. Use the table 
 
 <!-- build-status:start -->
 
-_Generated from the latest completed main-branch build for each variant. A cell is green when its image was successfully promoted to the published tag._
+_Generated from the latest conclusive main-branch build for each variant (cancelled runs are skipped over). A cell is green when its image was successfully promoted to the published tag; **failing** means a job ran and failed; **not reached** means no job asserted the cell at all, usually because an earlier stage stopped it._
 
-| Variant | Green image cells | Latest run | Blocked or failing tags |
-| :--- | ---: | :--- | :--- |
-| 🐠 `yellowfin` | **0/20** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766492172) | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,kde-hwe,kde-nvidia,niri-hwe,niri-nvidia,xfce-hwe,xfce-nvidia |
-| 🐟 `albacore` | **0/20** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766397923) | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,kde-hwe,kde-nvidia,niri-hwe,niri-nvidia,xfce-hwe,xfce-nvidia |
-| 🍣 `skipjack` | **0/18** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766408724) | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,kde-hwe,kde-nvidia,niri-hwe,niri-nvidia |
-| 🎣 `bonito` | **0/15** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766548793) | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,cosmic-nvidia,kde-nvidia,niri-nvidia,xfce-nvidia |
-| 🐦 `hummingbird` | **1/5** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766751166) | gnome,kde,niri,cosmic |
-| 🦈 `sailfin` | **0/7** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766602231) | base,gnome,gnome-asahi,kde,niri,xfce,cosmic |
-| 🌈 `guppy` | **0/4** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766322789) | base,gnome,kde,xfce |
-| 🐉 `bonito-rawhide` | **0/14** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766505527) | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-nvidia,cosmic-nvidia,kde-nvidia,niri-nvidia,xfce-nvidia |
-| 🐟 `gurnard` | **0/2** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766667186) | base,pantheon |
-| 🐟 `grouper` | **0/7** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766671286) | base,gnome,gnome-asahi,gnome-zfs,kde,cosmic,xfce |
-| 🚀 `marlin` | **5/16** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766586852) | base,gnome,kde,cosmic,niri,xfce,gnome-cachyos,kde-cachyos,cosmic-cachyos,niri-cachyos,xfce-cachyos |
-| 🐡 `flounder` | **0/7** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766676694) | base,gnome,kde,xfce,gnome-nvidia,kde-nvidia,xfce-nvidia |
-| ☢️ `flounder-sid` | **0/7** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766504862) | base,gnome,kde,xfce,gnome-nvidia,kde-nvidia,xfce-nvidia |
+| Variant | Green image cells | Latest run | Failing | Not reached |
+| :--- | ---: | :--- | :--- | :--- |
+| 🐠 `yellowfin` | **0/20** | [❌ 2026-08-15](https://github.com/tuna-os/tunaOS/actions/runs/31858386947) | — | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,kde-hwe,kde-nvidia,niri-hwe,niri-nvidia,xfce-hwe,xfce-nvidia |
+| 🐟 `albacore` | **0/20** | [❌ 2026-08-15](https://github.com/tuna-os/tunaOS/actions/runs/31858324517) | — | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,kde-hwe,kde-nvidia,niri-hwe,niri-nvidia,xfce-hwe,xfce-nvidia |
+| 🍣 `skipjack` | **0/18** | [❌ 2026-08-15](https://github.com/tuna-os/tunaOS/actions/runs/31858359806) | — | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,kde-hwe,kde-nvidia,niri-hwe,niri-nvidia |
+| 🎣 `bonito` | **0/15** | [❌ 2026-08-15](https://github.com/tuna-os/tunaOS/actions/runs/31858501374) | — | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,cosmic-nvidia,kde-nvidia,niri-nvidia,xfce-nvidia |
+| 🐦 `hummingbird` | **1/5** | [❌ 2026-08-15](https://github.com/tuna-os/tunaOS/actions/runs/31858659620) | — | gnome,kde,niri,cosmic |
+| 🦈 `sailfin` | **0/7** | [❌ 2026-08-15](https://github.com/tuna-os/tunaOS/actions/runs/31858554568) | — | base,gnome,gnome-asahi,kde,niri,xfce,cosmic |
+| 🌈 `guppy` | **0/4** | [❌ 2026-08-15](https://github.com/tuna-os/tunaOS/actions/runs/31858268042) | — | base,gnome,kde,xfce |
+| 🐉 `bonito-rawhide` | **0/14** | [❌ 2026-08-15](https://github.com/tuna-os/tunaOS/actions/runs/31858447980) | — | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-nvidia,cosmic-nvidia,kde-nvidia,niri-nvidia,xfce-nvidia |
+| 🐟 `gurnard` | **0/2** | [❌ 2026-08-15](https://github.com/tuna-os/tunaOS/actions/runs/31858598839) | — | base,pantheon |
+| 🐟 `grouper` | **0/7** | [❌ 2026-08-15](https://github.com/tuna-os/tunaOS/actions/runs/31858620617) | — | base,gnome,gnome-asahi,gnome-zfs,kde,cosmic,xfce |
+| 🚀 `marlin` | **5/16** | [❌ 2026-08-14](https://github.com/tuna-os/tunaOS/actions/runs/31766586852) | — | base,gnome,kde,cosmic,niri,xfce,gnome-cachyos,kde-cachyos,cosmic-cachyos,niri-cachyos,xfce-cachyos |
+| 🐡 `flounder` | **0/7** | [❌ 2026-08-15](https://github.com/tuna-os/tunaOS/actions/runs/31858639170) | — | base,gnome,kde,xfce,gnome-nvidia,kde-nvidia,xfce-nvidia |
+| ☢️ `flounder-sid` | **0/7** | [❌ 2026-08-15](https://github.com/tuna-os/tunaOS/actions/runs/31858448566) | — | base,gnome,kde,xfce,gnome-nvidia,kde-nvidia,xfce-nvidia |
 
-**Current image coverage: 6/142 cells (4%).** This is a point-in-time CI snapshot, not a support-tier promise.
+**Current image coverage: 6/142 cells (4%)** — of the remainder, **0 failing** and **136 never reached** (no job asserted them). The two are reported separately on purpose: a never-reached cell is untested, not broken. This is a point-in-time CI snapshot, not a support-tier promise.
 
 <!-- build-status:end -->
 
