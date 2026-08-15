@@ -1001,8 +1001,30 @@ jobs:
           path: supply-chain/sboms
 
       - name: Attest SPDX SBOMs
+        # A hard ceiling on the whole step, because SIGN_DEADLINE_MINUTES is a
+        # budget PER cosign INVOCATION, not per step: the loop below runs
+        # `cosign attest` + `cosign verify-attestation` for every platform
+        # digest, and each call starts its own deadline. Slow-but-eventually-
+        # succeeding calls therefore multiply -- on gurnard run 31891742138
+        # this step was still going 48 minutes into a nominal "40 minute"
+        # budget, and a three-platform variant could reach 40m x 6. The env
+        # deadline governs one call; this governs the step.
+        timeout-minutes: 20
         env:
-          SIGN_DEADLINE_MINUTES: "40"
+          # Deliberately much shorter than Sign's 40m. Splitting this job off
+          # (#1560) took SBOM attestation off Promote's critical path, but not
+          # off the *clock*: build-variant.yml's stage 2 waits for the whole
+          # reusable-workflow call to finish, and this job is part of it. On
+          # the run above `pantheon` had still not started 48 minutes after
+          # base's images were built, signed and manifested -- held up purely
+          # by an attestation the pipeline is explicitly allowed to do without.
+          #
+          # 10m is far longer than any successful attestation (image signing
+          # completed in 19s on that same run) so genuine flakes are absorbed;
+          # what it stops absorbing is a sustained outage, which is exactly the
+          # case where continuing without the attestation is the intended
+          # behaviour.
+          SIGN_DEADLINE_MINUTES: "10"
           SIGN_BACKOFF_CAP_SECONDS: "120"
         run: |
           set -euo pipefail
