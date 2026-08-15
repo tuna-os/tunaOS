@@ -29,7 +29,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-os.environ.setdefault("GITHUB_REPOSITORY", "tuna-os/tunaos")
+os.environ["GITHUB_REPOSITORY"] = "tuna-os/tunaOS"
 os.environ.setdefault("REPORT_DATE", "2026-08-10")
 os.environ.setdefault("PREVIOUS_BRANCH", "boot/2026-08-03")
 
@@ -365,7 +365,7 @@ class TestRenderComboRowScreenshots(unittest.TestCase):
         self.assertIn("✨ changed", row)
         self.assertIn("= same", row)
         self.assertIn(f"ghcr.io/{gbr.REPO_OWNER}/yellowfin:gnome", row)
-        self.assertIn("[run](https://github.com/tuna-os/tunaos/actions/runs/7)", row)
+        self.assertIn("[run](https://github.com/tuna-os/tunaOS/actions/runs/7)", row)
 
     def test_row_without_screenshots(self):
         combo = _combo()
