@@ -1424,3 +1424,24 @@ STUB
   done
   grep -qE '^d /var/lib/lightdm 0750 lightdm lightdm' "$runtime"
 }
+
+@test "install-desktop.sh signature-verifies manifest-declared yum repos" {
+  # tuna-os/tunaOS#1655: this block used to write gpgcheck=0/repo_gpgcheck=0
+  # unconditionally for every repo the manifest declares (the xfce-wayland,
+  # hummingbird, and fprintd repos), so packages installed on real systems
+  # with no authenticity check at all. Every repo.tunaos.org publish pipeline
+  # signs its RPMs (tuna-os/tunaos-packages#394's `rpmsign --addsign` step),
+  # so gpgcheck=1 + the matching gpgkey= is real protection. repo_gpgcheck
+  # stays 0 on purpose: repomd.xml isn't detached-signed (no repomd.xml.asc
+  # published), so =1 there would hard-fail every dnf transaction rather than
+  # add a check — same tradeoff contrib/install-gnome49.sh already makes in
+  # tunaos-packages.
+  local script="${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
+  local block
+  block="$(awk '/for \(\(i = 0; i < _TD_REPO_COUNT/,/^\tdone$/' "$script")"
+  [ -n "$block" ]
+  grep -qF 'echo "gpgcheck=1"' <<<"$block"
+  grep -qF 'echo "gpgkey=https://repo.tunaos.org/public.gpg"' <<<"$block"
+  grep -qF 'echo "repo_gpgcheck=0"' <<<"$block"
+  ! grep -qF 'echo "gpgcheck=0"' <<<"$block"
+}

@@ -85,8 +85,8 @@ migration performed by this audit**.
 | `rpmfusion` (free + nonfree) | Standard Fedora multimedia/codec/driver packages absent from Fedora's own repos | `build_scripts/10-base-packages.sh` (Bonito) | Tier-3 candidate | Fedora-ecosystem-standard third-party repo; large install base, actively maintained — the kind of repo the allowlist process exists to formalize, not eliminate |
 | `negativo17` (`epel-multimedia`, `fedora-nvidia`/`epel-nvidia`) | Multimedia codecs, Nvidia drivers | `build_scripts/10-base-packages.sh`, `build_scripts/overlay/overrides/nvidia/20-nvidia.sh` | Tier-3 candidate | **This is the exact repo #1319 cited by name as acceptable** — highest-priority formal allowlist entry |
 | `pkgs.tailscale.com` (vendor repo) | Tailscale VPN mesh client | `build_scripts/20-packages.sh` | Needs clarification | Repo file is written then immediately `enabled=0`'d — unclear if this definition is load-bearing or dead code; flag for the script owner, not necessarily a sourcing violation |
-| COPR `trixieua/morewaita-icon-theme` | `morewaita-icon-theme` (GNOME icon theme) | `build_scripts/20-packages.sh` (gnome flavors) | **Violation** | Single-maintainer personal COPR with no allowlist entry — exactly what #1319 prohibits. Smallest migration candidate: one package, one desktop |
-| COPR `ublue-os/packages` | `krunner-bazaar` | `build_scripts/desktop/kcm-ublue.sh` | **Violation** — and a regression | ROADMAP.md's Q2 goal "ublue-os/packages COPR eliminated" (#436) is not fully true: this one package still pulls from it on Fedora. EL10 already builds from source in the same script — same pattern could retire the Fedora COPR path |
+| ~~COPR `trixieua/morewaita-icon-theme`~~ | `morewaita-icon-theme` (GNOME icon theme) | `build_scripts/20-packages.sh` (gnome flavors) | **Migrated** | Was a single-maintainer personal COPR with no allowlist entry. Now built from upstream `somepaulo/MoreWaita` source directly — `install.sh` just copies static icon files, no build step, so cloning the real project at a pinned tag removes the third-party repackage entirely |
+| ~~COPR `ublue-os/packages`~~ | `krunner-bazaar` | `build_scripts/desktop/kcm-ublue.sh` | **Migrated** | Was a regression against ROADMAP.md's Q2 goal "ublue-os/packages COPR eliminated" (#436) — this one package still pulled from it on Fedora. Unified onto the source-build path EL10 already used in the same script (a ~10s CMake KF6 plugin build), retiring the last Fedora call site of that COPR |
 | COPR `zirconium/packages`, `yalter/niri-git`, `avengemedia/danklinux`, `avengemedia/dms-git`, `yselkowitz/wlroots-epel`, `ligenix/enterprise-cosmic` | niri itself, DankMaterialShell suite, wlroots-epel, COSMIC-on-EL10 backport | `build_scripts/desktop/niri.sh` (Fedora/EL10 niri build) | **Violation — largest gap found** | The niri desktop's core WM binary ships from an individual's git-build COPR (`yalter/niri-git`), not Fedora's own `niri` package. Six distinct COPRs feed one desktop flavor. Migrating this is a real Tideforge packaging project, not a quick fix — flagging scope honestly rather than understating it |
 | COPR `@asahi/fedora-remix-branding`, `@asahi/u-boot`; CentOS Hyperscale SIG repos; OBS `home:mrkcee` | Apple Silicon (Asahi) hardware enablement: branding, u-boot, kernel | `build_scripts/overlay/asahi.sh` | Tier-3 candidate, scoped exception | Upstream Asahi Linux project's own infrastructure for hardware this org doesn't control the kernel for — narrow, hardware-gated (only applies to `*-asahi` builds), well-precedented pattern for this class of variant |
 | `ppa:elementary-os/stable` | Pantheon desktop environment | `build_scripts/desktop/install-desktop.sh` (Gurnard/Pantheon) | Tier-3 candidate, scoped exception | Official upstream elementary OS PPA — the canonical source for Pantheon on Ubuntu, not a third-party mirror |
@@ -101,9 +101,14 @@ OBS), and `guppy` (Gentoo overlays) before the audit is called complete.
 
 ## Audit & transition plan
 
-1. **Audit (Q3 checkpoint 2026-08-22, [#1323](https://github.com/tuna-os/tunaos/issues/1323))**: inventory every manifest's external
-   `apt:`/`dnf:`/`zypper:`/`pacman:`/`emerge:` source across all published
-   variants; classify each as tier 1/2/3 or violation; publish the table.
+1. **Audit** — **done 2026-08-13, ahead of the 08-22 checkpoint** (see
+   "Audit findings" above; [#1323](https://github.com/tuna-os/tunaos/issues/1323)).
+   Found 2 clear violations (`trixieua/morewaita-icon-theme`,
+   `ublue-os/packages`/`krunner-bazaar`), one large gap (niri's 6-COPR
+   dependency chain), and confirmed `negativo17`/`rpmfusion` as the
+   Tier-3 allowlist candidates #1319 already named. Not yet covered:
+   apt/AUR/OBS usage on `marlin`/`flounder`/`sailfin`/`guppy` — a
+   follow-up audit pass, not silently dropped.
 2. **Migrate (Q3–Q4)**: move tier-3/✗ sources that have in-house equivalents
    to Tideforge; drive the 14-recipe COSMIC build-out already tracked in
    [ROADMAP.md](./ROADMAP.md) ([#964](https://github.com/tuna-os/tunaos/issues/964) COSMIC-off-PPA is the flagship migration).

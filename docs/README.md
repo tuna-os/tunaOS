@@ -23,7 +23,9 @@ user-facing site:
 | [ci-troubleshooting.md](ci-troubleshooting.md) | Diagnosing and fixing common CI failures |
 | [mkosi-investigation.md](mkosi-investigation.md) | Notes from the mkosi-based image build investigation |
 | [PIPELINE.md](PIPELINE.md) | Build pipeline reference: stages, workflows, artifact flow |
+| [EDUCATION-PITCH.md](EDUCATION-PITCH.md) | Education & teaching lab adoption brief for CS departments (#1600) |
 | [BRANCH-PROTECTION.md](BRANCH-PROTECTION.md) | Current-state audit + proposal for main-branch protection & required CI (#1167) |
+| [BRANCH-POLICY.md](BRANCH-POLICY.md) | Branch naming conventions, RFC disposition, and 30-day staleness rules |
 | [CI_SPEC.md](CI_SPEC.md) | CI behavior specification |
 | [TESTING.md](TESTING.md) | ISO end-to-end test harness |
 | [MATRIX-STATUS.md](MATRIX-STATUS.md) | Which variant×desktop combinations are actually verified — and which have never been tested |
@@ -40,9 +42,15 @@ user-facing site:
 | [IMAGE-FACTORY-LIFECYCLE-GATE.md](IMAGE-FACTORY-LIFECYCLE-GATE.md) | Image factory lifecycle coverage & required gate (#1278) |
 | [../VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) | Variant/flavor admission, capacity, promotion, and deprecation policy (#1196, #1175) |
 | [CFP-FOSDEM-2027.md](CFP-FOSDEM-2027.md) | FOSDEM 2027 CFP draft |
+| [CFP-DEMO-SCRIPT.md](CFP-DEMO-SCRIPT.md) | Shot list for the 3–5 min CFP demo video, shared by both Q1 2027 submissions |
+| [CFP-SCALE-21X.md](CFP-SCALE-21X.md) | SCaLE 21x CFP draft, adapted from the FOSDEM abstract |
 | [DISTROWATCH-SUBMISSION.md](DISTROWATCH-SUBMISSION.md) | DistroWatch project submission draft |
+| [ADOPTION-OUTREACH-STATUS.md](ADOPTION-OUTREACH-STATUS.md) | Evidence ledger for DistroWatch, CNCF, and adopter outreach |
 | [REDDIT-LEMMY-PLAYBOOK.md](REDDIT-LEMMY-PLAYBOOK.md) | Release-announcement playbook for Reddit / Lemmy |
+| [YOUTUBER-REVIEW-KIT.md](YOUTUBER-REVIEW-KIT.md) | Linux YouTuber review kit — verified working downloads, ARM story (#1535) |
 | [FEDORA-MAGAZINE-PITCH.md](FEDORA-MAGAZINE-PITCH.md) | Guest-post pitch draft for Fedora Magazine |
+| [EDUCATION-PITCH.md](EDUCATION-PITCH.md) | Education & teaching lab adoption brief for CS departments (#1600) |
+| [FEDORA45-TESTING-CALL.md](FEDORA45-TESTING-CALL.md) | Fedora 45 Beta testing call guide for Bonito variant (#1609) |
 | [ELEMENTARY-CROSSPOST.md](ELEMENTARY-CROSSPOST.md) | Gurnard cross-post draft for the elementary OS community |
 | [MATRIX-WEEKLY-DIGEST.md](MATRIX-WEEKLY-DIGEST.md) | Matrix weekly-digest post template |
 | [HACKTOBERFEST-2026.md](HACKTOBERFEST-2026.md) | Hacktoberfest 2026 contributor runbook |

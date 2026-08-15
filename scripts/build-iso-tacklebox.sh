@@ -91,7 +91,8 @@ fi
 # ponytail: tacklebox runner delegated to common.sh tunaos_run_tacklebox
 
 # ── Generate the recipe ─────────────────────────────────────────────────────
-# Schema: github.com/tuna-os/tacklebox/blob/main/internal/recipe/
+# Contract: docs/TACKLEBOX-CONTRACT.md
+# Tacklebox schema: github.com/tuna-os/tacklebox/blob/main/internal/recipe/
 # Single-environment, live-only — minimum useful recipe for a smoke ISO.
 
 OUT_DIR="$(pwd)/.build/iso-tacklebox/${VARIANT}-${FLAVOR}"

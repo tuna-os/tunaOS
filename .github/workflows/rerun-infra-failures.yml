@@ -1,0 +1,158 @@
+name: Re-run infra failures
+
+# A variant nightly is a single daily cron with no recovery path: when one
+# fails at 03:20 on something that has nothing to do with the images, the
+# matrix stays red until the next night, and any fix merged in between waits
+# a full cycle for its first piece of evidence (tuna-os/tunaOS#1731).
+#
+# The two faults that actually cost us nights are both transient and both
+# external:
+#
+#   - Sigstore/Rekor 5xx during signing. On 2026-08-15 every albacore flavor
+#     built, pushed and passed its gates, and all twelve Promote jobs were
+#     skipped because the transparency log was down (#1560).
+#   - `sudo podman login` dying with `libpod_lock` on hosted arm64 runners --
+#     ten legs across six variants on 2026-08-14 (#1556).
+#
+# Both clear on their own within the hour. This workflow waits, re-checks,
+# and re-runs the failed jobs once. It deliberately does NOT retry anything
+# it cannot positively identify as infra: a broken build must stay broken and
+# visible, and a re-run loop over a real defect burns runner minutes while
+# hiding it.
+on:
+  workflow_run:
+    workflows:
+      - Build Albacore
+      - Build Bonito
+      - Build Bonito Rawhide
+      - Build Flounder
+      - Build Flounder Sid
+      - Build Grouper
+      - Build Guppy
+      - Build Gurnard
+      - Build Hummingbird
+      - Build Marlin
+      - Build Sailfin
+      - Build Skipjack
+      - Build Yellowfin
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: "Run ID to classify and re-run (bypasses the delay)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  # Keyed on the run so two events for the same run cannot both re-run it.
+  group: rerun-infra-${{ github.event.workflow_run.id || inputs.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  classify-and-rerun:
+    name: Classify and re-run
+    # run_attempt > 1 means this run IS a re-run: one recovery attempt, never
+    # a loop. A run that fails twice on the same fault is not transient.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'failure' &&
+       github.event.workflow_run.run_attempt == 1 &&
+       github.event.workflow_run.event == 'schedule')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Classify failed jobs
+        id: classify
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+        run: |
+          set -euo pipefail
+
+          # Signatures that mean "the world was briefly unavailable", not
+          # "this image is broken". Each one is anchored to something a job
+          # actually printed in a named run, so the list stays auditable:
+          #
+          #   SIGSTORE_OUTAGE       .github/scripts/cosign-retry.sh, on deadline
+          #   libpod_lock           run 31766602231, sailfin base linux-arm64
+          #   rekor.sigstore.dev    run 31858324517, albacore cosmic-hwe
+          #   The runner has received a shutdown signal / lost communication
+          #                         run 31766322789, guppy base linux-amd64
+          #                         (runner died mid-Syft; no logs uploaded)
+          patterns='SIGSTORE_OUTAGE|failed to open 2048 locks in /libpod_lock|(rekor|fulcio|tuf-repo-cdn)\.sigstore\.dev.*(50[0-9]|Bad Gateway|Service Unavailable)|The runner has received a shutdown signal|lost communication with the server'
+
+          mapfile -t failed < <(
+            gh api --paginate "repos/${REPO}/actions/runs/${RUN_ID}/jobs?per_page=100" \
+              --jq '.jobs[] | select(.conclusion == "failure") | .id'
+          )
+
+          if [ "${#failed[@]}" -eq 0 ]; then
+            echo "No failed jobs to classify."
+            echo "infra=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Classifying ${#failed[@]} failed job(s) in run ${RUN_ID}."
+
+          infra=false
+          product=0
+          for job_id in "${failed[@]}"; do
+            # A job whose runner died uploads no logs at all: the download is
+            # a 404, and that absence is itself the signature. Treating it as
+            # a product failure would mean the one fault that leaves no
+            # evidence is also the one we never recover from.
+            if ! log="$(gh api "repos/${REPO}/actions/jobs/${job_id}/logs" 2>/dev/null)"; then
+              echo "  job ${job_id}: no logs (runner death) -> infra"
+              infra=true
+              continue
+            fi
+            if grep -qE "$patterns" <<<"$log"; then
+              echo "  job ${job_id}: matched an infra signature -> infra"
+              infra=true
+            else
+              echo "  job ${job_id}: no infra signature -> product failure"
+              product=$((product + 1))
+            fi
+          done
+
+          # Any unexplained failure means a re-run would paper over a real
+          # defect. Recover only when every failure is accounted for.
+          if [ "$product" -gt 0 ]; then
+            echo "${product} failure(s) are not infra; leaving the run red."
+            infra=false
+          fi
+
+          echo "infra=${infra}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Re-run classification"
+            echo
+            echo "- Run: [${RUN_ID}](https://github.com/${REPO}/actions/runs/${RUN_ID})"
+            echo "- Failed jobs: ${#failed[@]} (${product} not attributable to infra)"
+            echo "- Re-running: ${infra}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Wait for the outage to clear
+        # Both faults we recover from are minutes-to-an-hour events. Re-running
+        # immediately just fails again against the same outage and spends the
+        # single retry doing it.
+        if: steps.classify.outputs.infra == 'true' && github.event_name != 'workflow_dispatch'
+        run: sleep 2700
+
+      - name: Re-run failed jobs
+        if: steps.classify.outputs.infra == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+        run: |
+          set -euo pipefail
+          echo "Re-running failed jobs in ${RUN_ID}."
+          gh api --method POST "repos/${REPO}/actions/runs/${RUN_ID}/rerun-failed-jobs"
+          echo "Re-run requested for [${RUN_ID}](https://github.com/${REPO}/actions/runs/${RUN_ID})." \
+            >> "$GITHUB_STEP_SUMMARY"

@@ -278,6 +278,91 @@ STUB
   [[ "$output" == *"nvidia-drm.modeset=1"* ]]
 }
 
+# ── initramfs parity: builtin drivers count (tunaos#1561) ─────────────────
+#
+# The floor list was measured on EL10, where CONFIG_BLK_DEV_SR=m and
+# CONFIG_VIRTIO_BLK=m so every driver in it is a .ko. Fedora 43 sets both =y,
+# making sr_mod, cdrom (selected by BLK_DEV_SR) and virtio_blk vmlinuz
+# builtins with no .ko anywhere — and the check that demanded a .ko turned
+# that into a deterministic FAIL on every bonito/bonito-rawhide nvidia flavor
+# and gnome-nvidia-hwe on three EL variants, while gnome-hwe on the same
+# kernel passed the qcow2 boot gate. These tests pin the fc43 *shape* — which
+# drivers are .ko and which are builtin — so a future kernel that really does
+# drop a boot driver still fails. The fixture keeps the EL10 $KVER string
+# because nothing in the check branches on the version; only the shape counts,
+# and hardcoding an fc43 exemption is precisely what the fix avoids.
+
+# lsinitrd stub carrying only the drivers that are =m on BOTH configs.
+stub_lsinitrd_modular_only() {
+  cat > "${BATS_TEST_TMPDIR}/bin/lsinitrd" <<STUB
+#!/usr/bin/env bash
+for d in isofs squashfs virtio_scsi overlay loop; do
+  echo "usr/lib/modules/${KVER}/kernel/fs/\${d}.ko.xz"
+done
+STUB
+  chmod +x "${BATS_TEST_TMPDIR}/bin/lsinitrd"
+}
+
+# modules.builtin as the kernel ships it: relative paths, no compression
+# suffix, one per line.
+write_modules_builtin() {
+  local root="$1"; shift
+  local d
+  : > "$root/usr/lib/modules/${KVER}/modules.builtin"
+  for d in "$@"; do
+    echo "kernel/drivers/${d}.ko" >> "$root/usr/lib/modules/${KVER}/modules.builtin"
+  done
+}
+
+@test "verify-nvidia passes when the missing boot drivers are kernel builtins" {
+  make_stub_tools
+  root="$(make_good_root)"
+  stub_lsinitrd_modular_only
+  write_modules_builtin "$root" scsi/sr_mod cdrom/cdrom block/virtio_blk
+  run_verify "$root"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"TUNAOS_NVIDIA_CONTRACT_OK"* ]]
+  [[ "$output" == *"sr_mod is built into the kernel"* ]]
+}
+
+@test "verify-nvidia still fails a boot driver that is neither packed nor builtin" {
+  make_stub_tools
+  root="$(make_good_root)"
+  stub_lsinitrd_modular_only
+  # virtio_blk deliberately absent from both — an installed disk cannot boot.
+  write_modules_builtin "$root" scsi/sr_mod cdrom/cdrom
+  run_verify "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"TUNAOS_NVIDIA_CONTRACT_FAIL"* ]]
+  [[ "$output" == *"virtio_blk"* ]]
+  [[ "$output" == *"not built into the kernel"* ]]
+}
+
+@test "verify-nvidia says so when modules.builtin cannot be read at all" {
+  make_stub_tools
+  root="$(make_good_root)"
+  stub_lsinitrd_modular_only
+  # No modules.builtin: builtin status is unprovable. That is still a FAIL,
+  # but it must not be reported as "not builtin" — a missing record and a
+  # measured absence are different diagnoses.
+  rm -f "$root/usr/lib/modules/${KVER}/modules.builtin"
+  run_verify "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"modules.builtin is missing or empty"* ]]
+}
+
+@test "a builtin entry cannot be satisfied by a different module that contains its name" {
+  make_stub_tools
+  root="$(make_good_root)"
+  stub_lsinitrd_modular_only
+  # pktcdvd.ko must not satisfy cdrom; sr_mod/virtio_blk are real so cdrom is
+  # the only driver left to fail.
+  write_modules_builtin "$root" scsi/sr_mod block/virtio_blk block/pktcdvd
+  run_verify "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"initramfs is missing cdrom"* ]]
+}
+
 @test "verify-nvidia fails when a shipped suspend unit is disabled" {
   make_stub_tools
   root="$(make_good_root)"

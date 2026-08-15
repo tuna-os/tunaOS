@@ -62,11 +62,11 @@ jobs:
             '{include: [ .variants[] | . as $variant | .id as $v | .aliases as $aliases
                | .flavors[] | select(.build_image == true) | select(.id != "base") | select(.id | startswith("base-") | not)
                | . as $flavor
-               | ("rawhide" | test($v)) or ("sid" | test($v)) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs")) as $is_beta
+               | (("rawhide" | test($v)) or ("sid" | test($v)) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs"))) as $is_beta
                | select($is_beta == false)
                | ("amd64", "arm64") as $arch
                | select((.platforms // $variant.platforms // []) | index("linux/" + $arch))
-               | {variant: $v, flavor: .id, arch: $arch, aliases: ($aliases // []), is_beta: false}
+               | {variant: $v, flavor: .id, arch: $arch, aliases: ($aliases // [])}
                | select($fv == "all" or .variant == $fv)
                | select($ff == "all" or .flavor == $ff)
                | select($fa == "all" or .arch == $fa) ]}')"
@@ -76,11 +76,11 @@ jobs:
             '{include: [ .variants[] | . as $variant | .id as $v | .aliases as $aliases
                | .flavors[] | select(.build_image == true) | select(.id != "base") | select(.id | startswith("base-") | not)
                | . as $flavor
-               | ("rawhide" | test($v)) or ("sid" | test($v)) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs")) as $is_beta
+               | (("rawhide" | test($v)) or ("sid" | test($v)) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs"))) as $is_beta
                | select($is_beta == true)
                | ("amd64", "arm64") as $arch
                | select((.platforms // $variant.platforms // []) | index("linux/" + $arch))
-               | {variant: $v, flavor: .id, arch: $arch, aliases: ($aliases // []), is_beta: true}
+               | {variant: $v, flavor: .id, arch: $arch, aliases: ($aliases // [])}
                | select($fv == "all" or .variant == $fv)
                | select($ff == "all" or .flavor == $ff)
                | select($fa == "all" or .arch == $fa) ]}')"

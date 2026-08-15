@@ -34,14 +34,16 @@ ecosystem news, not an advert.
 
 **What we'd include.** A short tour of Bonito: what it is, how bootc changes
 the update model, what works today (Fedora 44 base, GNOME, Niri, XFCE
-flavors, verified boot reports), and how to try it. All content is already
+flavors, automated boot verification, and weekly boot reports), and how to try
+it. All content is already
 published on [tunaos.org/blog](https://tunaos.org/blog) and
 [github.com/tuna-os/tunaOS](https://github.com/tuna-os/tunaOS), so we can
 provide a full draft in Magazine house style on request.
 
-**About the author.** TunaOS is an open-source project with weekly release
-cadence and an active community on Matrix. Happy to adapt length, tone, and
-depth to the Magazine's editorial preferences.
+**About the author.** TunaOS is an open-source project with a daily rolling
+build cadence (plus weekly and quarterly-LTS stability tiers for users who
+want less churn) and an active community on Matrix. Happy to adapt length,
+tone, and depth to the Magazine's editorial preferences.
 
 Thanks for considering,
 [Maintainer name]

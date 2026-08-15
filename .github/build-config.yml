@@ -50,7 +50,7 @@ variants:
   - id: yellowfin
     emoji: "🐠"
     description: "Based on AlmaLinux Kitten 10"
-    base_image: "quay.io/almalinuxorg/almalinux-bootc:10-kitten"
+    base_image: "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:95d73b4e20fd6562593272e8b1630b9376b4a34507ed10bdf5f56ae10f7d7438"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [almalinux-kitten]
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -228,7 +228,7 @@ variants:
   - id: albacore
     emoji: "🐟"
     description: "Based on AlmaLinux 10"
-    base_image: "quay.io/almalinuxorg/almalinux-bootc:10"
+    base_image: "quay.io/almalinuxorg/almalinux-bootc:10@sha256:5a1c306cd49c33294a70ef542538fa2bca7b2a905471b89b1f40e123e9370ac5"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [almalinux]
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -406,7 +406,7 @@ variants:
   - id: skipjack
     emoji: "🍣"
     description: "Based on CentOS Stream 10"
-    base_image: "quay.io/centos-bootc/centos-bootc:stream10"
+    base_image: "quay.io/centos-bootc/centos-bootc:stream10@sha256:2b7e3b1abf8db094d1efb083721dc0f72e6feeef2355fc16ea010d0266b2bb95"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [centos]
     # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
@@ -498,7 +498,7 @@ variants:
         build_qcow2: false
       # gnome-nvidia-hwe re-enabled (tunaOS#639): the gnome-shell-49 vs
       # gnome-shell-common-48 file conflict is fixed upstream in the spec
-      # (tuna-os/github-copr#23 merged: Obsoletes: gnome-shell-common <
+      # (tuna-os/tunaos-packages#23 merged: Obsoletes: gnome-shell-common <
       # %{major_version}), verified live in the published spec, not just
       # by the PR having merged.
       - id: gnome-nvidia-hwe
@@ -568,7 +568,7 @@ variants:
   - id: bonito
     emoji: "🎣"
     description: "Based on Fedora 44"
-    base_image: "quay.io/fedora/fedora-bootc:44"
+    base_image: "quay.io/fedora/fedora-bootc:44@sha256:ff18dfdd91e4dfb02a8260b7fbc4e4863a452ff9bd8e8a478794c3c2ac4f2d6d"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [fedora]
     akmods: "ublue-os"
@@ -713,7 +713,7 @@ variants:
   - id: hummingbird
     emoji: "🐦"
     description: "Fedora Hummingbird (bootc container-native OS)"
-    base_image: "quay.io/hummingbird-community/bootc-os:latest"
+    base_image: "quay.io/hummingbird-community/bootc-os:latest@sha256:c5539f9ed4d93aab6bd41e4f5aef8ab83055f3f9e855a47b69fadb7420d0d1df"
     platforms: ["linux/amd64", "linux/arm64"]
     flavors:
       - id: base
@@ -742,7 +742,7 @@ variants:
   - id: sailfin
     emoji: "🦈"
     description: "Based on openSUSE Tumbleweed (rolling)"
-    base_image: "registry.opensuse.org/opensuse/tumbleweed:latest"
+    base_image: "registry.opensuse.org/opensuse/tumbleweed:latest@sha256:486ca7bf37bf87be5f4401ad1965e908c405b7b17a0298665c5765f2d81df078"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [opensuse, tumbleweed]
     platforms: ["linux/amd64"]
@@ -840,7 +840,7 @@ variants:
     tag_suffix: rawhide
     emoji: "🐉"
     description: "Based on Fedora Rawhide (rolling)"
-    base_image: "quay.io/fedora/fedora-bootc:rawhide"
+    base_image: "quay.io/fedora/fedora-bootc:rawhide@sha256:b5c4f06bb53444f3befa085d0e8c1fe6ac7333e56f96fb9d5a3a97f622725170"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [fedora]
     akmods: "ublue-os"
@@ -977,7 +977,7 @@ variants:
   - id: gurnard
     emoji: "🐟"
     description: "Based on Ubuntu 24.04 Noble Numbat with the Pantheon desktop"
-    base_image: "docker.io/library/ubuntu:noble"
+    base_image: "docker.io/library/ubuntu:noble@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [elementary]
     platforms:
@@ -995,7 +995,7 @@ variants:
   - id: grouper
     emoji: "🐟"
     description: "Based on Ubuntu 26.04 Resolute Raccoon"
-    base_image: "docker.io/library/ubuntu:resolute"
+    base_image: "docker.io/library/ubuntu:resolute@sha256:678c6550cc43645e08669028bc177f50be4e7c5b8cca677067b1914d4afc7a03"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [ubuntu]
     # Built directly from stock Ubuntu and bootcified in Containerfile.ubuntu
@@ -1091,7 +1091,7 @@ variants:
   - id: marlin
     emoji: "🚀"
     description: "Based on Arch Linux (rolling)"
-    base_image: "docker.io/archlinux/archlinux:latest"
+    base_image: "docker.io/archlinux/archlinux:latest@sha256:71810bb6f8bece3e2172e458dd8c0793fec139a6b6a7e5da2c832f96d1b9a0a6"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [arch, archlinux]
     # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -1205,7 +1205,7 @@ variants:
   - id: flounder
     emoji: "🐡"
     description: "Based on Debian 13 Trixie (stable)"
-    base_image: "docker.io/library/debian:trixie"
+    base_image: "docker.io/library/debian:trixie@sha256:34cd9e9fd437c0a095ec39cb2e73422c9f30821b0d0848ed74fd0d43bae4d958"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [debian]
     platforms: ["linux/amd64"]
@@ -1318,7 +1318,7 @@ variants:
     tag_suffix: sid
     emoji: "☢️"
     description: "Based on Debian Sid (unstable, rolling)"
-    base_image: "docker.io/library/debian:sid"
+    base_image: "docker.io/library/debian:sid@sha256:24c766c06ebdbda66a026e92361ede7d9212819701b2fca82e347ef0c240cb2c"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [debian]
     platforms: ["linux/amd64"]
