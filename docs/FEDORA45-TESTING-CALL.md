@@ -1,7 +1,7 @@
 # Bonito (Fedora-based) Fedora 45 Beta Testing Call & Community Guide
 
 **Target Audience**: Fedora Atomic / bootc Community, r/Fedora, r/FedoraAtomic, Fedora Discourse Testers  
-**Tracks**: [#1609](https://github.com/tuna-os/tunaOS/issues/1609) (Fedora 45 Beta testing call — Bonito variant)  
+**Tracks**: [#1742](https://github.com/tuna-os/tunaOS/issues/1742) (Fedora 45 beta tester call — active); supersedes closed [#1609](https://github.com/tuna-os/tunaOS/issues/1609)  
 **Supports**: [#1137](https://github.com/tuna-os/tunaOS/issues/1137) (Fedora Magazine Guest Post Pitch) & [#1166](https://github.com/tuna-os/tunaOS/issues/1166) (Q4 Release Calendar)
 
 ---
@@ -39,6 +39,32 @@ Rawhide if you want to see where the base is heading; test the stable image if
 you want something that should just work. When a Fedora 45 base lands, this
 document gets a fourth row and a re-announcement.
 
+## 🚦 Variant health gate (2026-08-15)
+
+**Do not announce a stream that is red.** The call's promise to testers is that
+the image boots and is worth their time; pointing a community call at a broken
+stream is the same credibility failure the fact-check discipline
+([#1667](https://github.com/tuna-os/tunaOS/issues/1667)) is meant to prevent.
+
+Checked 2026-08-15 against the nightly matrix:
+
+| Stream | Status 2026-08-15 | Tracking |
+|---|---|---|
+| `bonito` (F44, stable) | 🟢 builds green | — |
+| `bonito-rawhide` (F46 dev) | 🔴 **base fails on both amd64 + arm64** — 14 cells red | [#1752](https://github.com/tuna-os/tunaOS/issues/1752) |
+
+**Consequences for the call:**
+
+1. The Rawhide test row below is **not publishable until #1752 is resolved** —
+   a tester pointed at `gnome-rawhide` today hits a broken base, and an
+   "it's broken" report is not useful beta data.
+2. Re-check the matrix before any announcement (Fedora 45 beta ~late Aug, per
+   [#1742](https://github.com/tuna-os/tunaOS/issues/1742)); announce the Rawhide
+   arm of the call only when it is green, or lead with the stable F44 image and
+   mark Rawhide as "coming back online".
+3. When a Fedora 45 base lands, update the stream table above **and** re-verify
+   this gate — a new base can introduce its own red cells.
+
 ---
 
 ## 📋 What to Test (Bonito Test Matrix)
@@ -52,9 +78,13 @@ We are calling for community testing across three core Bonito configurations:
 | `ghcr.io/tuna-os/bonito:niri` (F44) | Niri (Zirconium) / x86_64 | Scrollable tiling compositor, Wayland portals, Greetd |
 | `ghcr.io/tuna-os/bonito:gnome-rawhide` (F46 dev) | GNOME / x86_64, arm64 | The same checks, on the newest base — this is where breakage shows up first |
 
-All four tags verified published in GHCR on 2026-08-14. The Fedora stream is
-stated per row on purpose: a tester who reports "works on Fedora 45" about an
-image that is not Fedora 45 has produced data nobody can use.
+All four tags were verified published in GHCR on 2026-08-14 — but see the
+[health gate above](#-variant-health-gate-2026-08-15): the `bonito-rawhide`
+base has been red on both architectures since the 08-15 nightly
+([#1752](https://github.com/tuna-os/tunaOS/issues/1752)), so **the Rawhide row
+is not currently announceable**. The Fedora stream is stated per row on
+purpose: a tester who reports "works on Fedora 45" about an image that is not
+Fedora 45 has produced data nobody can use.
 
 ---
 
