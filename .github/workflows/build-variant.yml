@@ -228,9 +228,22 @@ jobs:
     # build_base is SKIPPED (not failed) when a flavor-filtered dispatch
     # leaves stage 1 empty (e.g. `-f flavor=xfce`); without !cancelled() a
     # skipped need auto-skips this job and single-flavor dispatches no-op.
+    #
+    # Gate on the base MANIFEST, not on build_base's conclusion. The
+    # conclusion is red if any platform leg failed, and one arm64 runner
+    # fault used to skip this whole stage — including flavors that declare
+    # only amd64 and never touch the arm64 base. On 2026-08-14 that cost 14
+    # flavors across sailfin/marlin/flounder/gurnard, none of which produced
+    # a job at all (tuna-os/tunaOS#1729). manifest_published is true once
+    # :<flavor>-testing exists for at least one platform, so a flavor whose
+    # arch did build proceeds, one whose arch did not fails on its own pull,
+    # and a base that produced nothing still stops the stage dead. Same
+    # principle stage 3 already applies (#285).
     if: >-
       !cancelled() && needs.generate_matrix.result == 'success' &&
-      needs.build_base.result != 'failure' && needs.build_base.result != 'cancelled' &&
+      needs.build_base.result != 'cancelled' &&
+      (needs.build_base.result == 'skipped' ||
+       needs.build_base.outputs.manifest_published == 'true') &&
       github.event_name != 'pull_request' &&
       fromJson(needs.generate_matrix.outputs.stage2_matrix).include[0]
     strategy:
