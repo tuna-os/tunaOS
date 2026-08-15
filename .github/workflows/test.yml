@@ -63,6 +63,7 @@ jobs:
           exit $FAILED
 
       - name: Run pytest tests
+        if: always()
         run: |
           echo "=== pytest Tests ==="
           python3 -m pytest tests/ tests/pytest/ -v --tb=short --cov=. --cov-report=term --cov-report=xml:coverage-python.xml
@@ -88,3 +89,4 @@ jobs:
           name: coverage-python
           path: coverage-python.xml
           retention-days: 30
+          if-no-files-found: ignore

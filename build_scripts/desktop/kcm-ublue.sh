@@ -72,9 +72,18 @@ if ((${#missing_deps[@]} > 0)); then
 	printf '::warning title=kcm_ublue skipped (%s)::build deps unavailable in the active repos: %s\n' \
 		"${IMAGE_NAME:-?}" "${missing_deps[*]}"
 	echo "Skipping kcm_ublue source build."
+elif ! dnf_retry -y install "${BUILD_DEPS[@]}"; then
+	# The repoquery probe above only checks that a package NAME resolves in
+	# the active repos — it can't see a broken *dependency* of that package.
+	# tuna-os/tunaOS#1555: cmake existed in the Hummingbird repo index (probe
+	# passed), but its own libjsoncpp.so.26/librhash.so.1 providers didn't,
+	# so this install still failed and — before this branch existed — took
+	# the whole image down under `set -e`. Same "nice to have, not
+	# essential" call as the missing-package case above.
+	printf '::warning title=kcm_ublue skipped (%s)::dnf install of build deps failed despite passing the repoquery probe — an unresolvable transitive dependency in the active repos.\n' \
+		"${IMAGE_NAME:-?}"
+	echo "Skipping kcm_ublue source build."
 else
-	dnf_retry -y install "${BUILD_DEPS[@]}"
-
 	BUILD_DIR=$(mktemp -d)
 	trap 'rm -rf "$BUILD_DIR"' EXIT
 
@@ -98,43 +107,42 @@ fi
 # Bazaar is a Flatpak (io.github.kolunmi.Bazaar). The krunner-bazaar plugin
 # talks to it over D-Bus at runtime (when the Flatpak is running).
 #
-# On Fedora: install from ublue-os/packages COPR (same as Aurora).
-# On EL10:   build from source — the COPR RPM depends on a `bazaar` RPM
-#            that doesn't exist for EL10, but the plugin only needs D-Bus.
-# See: ublue-os/aurora build_files/base/01-packages.sh
+# Built from source on every RPM base (Fedora and EL10 alike) — tunaOS#1323's
+# package-sourcing policy audit (#1453) found this was still pulling from the
+# ublue-os/packages COPR on Fedora, contradicting ROADMAP.md's own claim that
+# Q2 goal #436 fully eliminated that COPR. It hadn't: this was the one
+# remaining call site. EL10 already had to build from source here, because
+# the COPR's krunner-bazaar RPM depends on a `bazaar` RPM that doesn't exist
+# for EL10 — but the plugin only needs D-Bus at runtime, so that source build
+# (a ~10s CMake KF6 plugin) works identically on Fedora. Unify on it and drop
+# the COPR dependency entirely rather than keeping two paths for one plugin.
+# See: ublue-os/aurora build_files/base/01-packages.sh (the COPR this
+# replaces, for reference on what the plugin needs at runtime).
 echo "Installing krunner-bazaar and setting up Bazaar Flatpak..."
 
 KRUNNER_BAZAAR_VERSION="v1.3.0"
+KRUNNER_BAZAAR_SRC="/tmp/krunner-bazaar-src"
 
-if [[ "$IS_FEDORA" == true ]]; then
-	# Fedora: install from COPR (same as Aurora)
-	install_from_copr "ublue-os/packages" krunner-bazaar
-	echo "krunner-bazaar installed from ublue-os/packages COPR."
+# Build deps — most already present from KDE group install
+dnf_retry -y install \
+	cmake extra-cmake-modules \
+	kf6-krunner-devel kf6-ki18n-devel kf6-kconfig-devel \
+	qt6-qtbase-devel qt6-qtdeclarative-devel || true
+
+curl -fsSL "https://github.com/bazaar-org/krunner-bazaar/archive/refs/tags/${KRUNNER_BAZAAR_VERSION}.tar.gz" |
+	tar -xzf - -C /tmp
+mv "/tmp/krunner-bazaar-${KRUNNER_BAZAAR_VERSION#v}" "${KRUNNER_BAZAAR_SRC}"
+
+if cmake -B "${KRUNNER_BAZAAR_SRC}/_build" -S "${KRUNNER_BAZAAR_SRC}" \
+	-DCMAKE_INSTALL_PREFIX=/usr \
+	-DCMAKE_BUILD_TYPE=Release 2>&1; then
+	cmake --build "${KRUNNER_BAZAAR_SRC}/_build" --parallel "$(nproc)"
+	cmake --install "${KRUNNER_BAZAAR_SRC}/_build"
+	echo "krunner-bazaar ${KRUNNER_BAZAAR_VERSION} built and installed from source."
 else
-	# EL10: build from source (small CMake KF6 plugin, ~10s)
-	KRUNNER_BAZAAR_SRC="/tmp/krunner-bazaar-src"
-
-	# Build deps — most already present from KDE group install
-	dnf_retry -y install \
-		cmake extra-cmake-modules \
-		kf6-krunner-devel kf6-ki18n-devel kf6-kconfig-devel \
-		qt6-qtbase-devel qt6-qtdeclarative-devel || true
-
-	curl -fsSL "https://github.com/bazaar-org/krunner-bazaar/archive/refs/tags/${KRUNNER_BAZAAR_VERSION}.tar.gz" |
-		tar -xzf - -C /tmp
-	mv "/tmp/krunner-bazaar-${KRUNNER_BAZAAR_VERSION#v}" "${KRUNNER_BAZAAR_SRC}"
-
-	if cmake -B "${KRUNNER_BAZAAR_SRC}/_build" -S "${KRUNNER_BAZAAR_SRC}" \
-		-DCMAKE_INSTALL_PREFIX=/usr \
-		-DCMAKE_BUILD_TYPE=Release 2>&1; then
-		cmake --build "${KRUNNER_BAZAAR_SRC}/_build" --parallel "$(nproc)"
-		cmake --install "${KRUNNER_BAZAAR_SRC}/_build"
-		echo "krunner-bazaar ${KRUNNER_BAZAAR_VERSION} built and installed from source."
-	else
-		echo "Warning: krunner-bazaar build failed (missing KF6 devel deps?), skipping plugin."
-	fi
-	rm -rf "${KRUNNER_BAZAAR_SRC}"
+	echo "Warning: krunner-bazaar build failed (missing KF6 devel deps?), skipping plugin."
 fi
+rm -rf "${KRUNNER_BAZAAR_SRC}"
 
 # Flatpak preinstall — Bazaar will be installed on first boot
 mkdir -p /usr/share/flatpak/preinstall.d

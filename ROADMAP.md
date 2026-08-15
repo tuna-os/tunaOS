@@ -1,6 +1,6 @@
 # tunaOS Roadmap
 
-**Last updated**: 2026-08-14 (Hacktoberfest seeding tracker refresh, T-8 numbers) | **Maintainer**: tuna-os (hanthor)
+**Last updated**: 2026-08-14 (Hacktoberfest seeding tracker refresh, T-8 numbers; org-wide roadmap coverage policy) | **Maintainer**: tuna-os (hanthor)
 
 ---
 
@@ -55,7 +55,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 - Multi-agent development active (architect, guide, sec-check, quality, CI, outreach)
 - 34+ community outreach issues filed; product-readiness gate (#563) resolved
 - ⚠️ Adoption metrics untracked — no usage/telemetry data on the 179 downloadable ISOs (#1174); **plan published 08-10** ([ADOPTION-METRICS.md](./ADOPTION-METRICS.md)) — first monthly download/usage snapshot targeted 2026-11-01 (Q4 "Mature")
-- 🟡 ROADMAP coverage improving — **15/37 active authorized repos now carry a ROADMAP.md** (2026-08-12): tunaos, tromso, tacklebox, docs, xfce-linux, bluefin-cli, Tavern, corral, tunaos-packages, iso-builder, protota, bootc-migrate, dualcut, wootc, gtk-office-suite; template merged into .github project-starter (#13). Excluded from planning scope: ubuntu + letters (**archived** 2026-08-12). Still unplanned (22 active): .github, flatpak-index, bootc-installer (ROADMAP stranded on non-default `dev` branch — #1361), bootc-installer-asahi, branding, bst-ci, changelog-action, debian-copr, finupdate, fisherman, homebrew-tap, kde-build-meta, mandelbrot, mariner, remora, scoop-bucket, suite-common, suite-common-rust, tuna-installer-cosmic/kde/niri/xfce (#1295, #1361)
+- 🟡 **ROADMAP coverage / planning hygiene** — **16/37 active authorized repos carry a root `ROADMAP.md`** (2026-08-14; tracker: #1295): tunaos, tromso, tacklebox, docs, xfce-linux, bluefin-cli, Tavern, corral, tunaos-packages, iso-builder, protota, bootc-migrate, dualcut, wootc, gtk-office-suite, bootc-installer. New repositories should inherit the ROADMAP template merged into `.github/project-starter` (#13); existing active repositories are expected to add a minimal roadmap before their next strategic review. Excluded from planning scope: ubuntu + letters (**archived** 2026-08-12). Still unplanned (21 active): .github, flatpak-index, bootc-installer-asahi, branding, bst-ci, changelog-action, debian-copr, finupdate, fisherman, homebrew-tap, kde-build-meta, mandelbrot, mariner, remora, scoop-bucket, suite-common, suite-common-rust, tuna-installer-cosmic/kde/niri/xfce (#1295, #1361)
 - ⚪ **"First external contributor" claim retracted (#1317, corrected 2026-08-13)**: the shimonenator commits (EL10/OBS design fixing #777, image-factory completion gate) are **not** a human contribution — maintainer confirmed the account is misattributed by GitHub because the Google Antigravity agent is listed as commit author; `git log` shows `commit.author.name: antigravity` on every one of that account's commits. There is still no first external human contributor; bus-factor risk (#1095) is unchanged.
 - 🟡 **Flavor equality mandate (08-11)**: maintainer directive #1315 — all supported flavors are equal tiers; GNOME-first framing and cadence to be retired (#1316)
 
@@ -111,7 +111,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | Migration guide (Silverblue/Kinoite/UB) | guide | #273 | ✅ Done (MIGRATION.md) |
 | mdBook → tunaos.org centralized | guide | — | ✅ Done |
 | Versioning policy documented | strategist | #274 | ✅ Done (VERSIONING.md, date-based + tiers) |
-| **External contributor onboarding / Hacktoberfest 2026** | guide / strategist | #1331, #1347, #1354, #1537 | 🟡 In progress — **T-8 verified (08-14): ~6 usable seeds** (tunaos #1496/#1351, docs #204/#158/#157, protota #193) vs 15–20 needed by the **09-15 seeding deadline** (#1537). **#1354's 3→8 target across tunaos+docs is met** (one issue, #1350, was already picked up and merged — the loop converts end to end). 🟡 Zero curated GFI in **gtk-office-suite, tunaos-packages, wootc**; `corral` (named in #1354) has zero viable candidates (only a Dependency Dashboard issue and one large epic). `bootc-installer` has issues **disabled entirely** (structural blocker, #1531) and `letters` is archived (its 1 tag doesn't count). Former tracker #1362 closed 08-14 as COMPLETED while target unmet — pool growth now tracked in #1537 |
+| **External contributor onboarding / Hacktoberfest 2026** | guide / strategist | #1331, #1347, #1354, #1537 | 🟡 In progress — **08-14 live census: 9 usable seeds in docs; tunaos has only non-usable meta-tracker #1308** vs 15–20 needed by the **09-15 seeding deadline** (#1537). **#1354's 3→8 target across tunaos+docs is met**, but the broader pool is below target after consumption. **Zero curated GFI** in protota, wootc, gtk-office-suite, tunaos-packages, and corral; `bootc-installer` has issues disabled entirely (#1531). Former tracker #1362 closed 08-14 as COMPLETED while target unmet — live pool tracking continues in #1537 |
 | Weekly boot report as build gate | ci-maintainer | #989 | 🟡 In progress |
 | Outreach sequencing | strategist | #563 | ✅ Done (gate lifted) |
 | Populate Q3 milestone | strategist | #562 | ✅ Done (2026-08-08, 9 issues) |
@@ -121,7 +121,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | **Q3 checkpoint (08-22): staff or descope #272/#1123/#1093/#1094** | strategist | #1299 | ⬜ Scheduled |
 | **Flavor equality mandate (docs wording + cadence parity)** | strategist | #1315, #1254 | 🟡 In progress — catalog parity gate merged 08-11 (#1322, #1281 closed); cadence parity pending (#1316) |
 | **NVIDIA flavor family (6 editions, 0 assets since 07-05)** | ci-maintainer | #1383 | 🔴 Broken — nightly overlay regressed 08-12 (#1382); staff test: nightly green + gnome-nvidia assets republished by 09-01 (#1376/#1379) |
-| **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 | 🟡 In progress — PACKAGE-SOURCING.md drafted (planning PR open); third-party allowlist + per-variant audit due at 08-22 checkpoint |
+| **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 | 🟡 In progress — PACKAGE-SOURCING.md merged; DNF/COPR audit done 08-13, ahead of the 08-22 checkpoint (2 violations, 6-COPR niri gap, negativo17/rpmfusion allowlist candidates confirmed — #1453); apt/AUR/OBS bases still unaudited, maintainer allowlist sign-off and Phase 2 migration still pending |
 
 ---
 
@@ -135,7 +135,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 
 | Goal | Owner | Dependencies |
 |------|-------|--------------|
-| Tacklebox decoupling | architect | #1192 (tracker; #306 closed) |
+| Tacklebox decoupling | architect | #1192 (tracker; #306 closed) — audited 2026-08-14: of #306's 4 recommendations, 3 already landed (`TACKLEBOX_SHA`/`TACKLEBOX_IMAGE` version pinning via `scripts/lib/common.sh`; tacklebox runs as a `ghcr.io/tuna-os/tacklebox` container image, not a host-installed binary; the flagged `ghcr.io/hanthor/bluefin:lts` `iso.toml` reference no longer exists in this repo's own build path). Real remaining gap: **the version pin has no single source of truth** — `image-versions.yaml` (`4fa6041`, renovate-tracked) diverges from hardcoded overrides in `publish-iso-groups.yml` (`a105d6d3`) and `luks-e2e.yml` (`fd95174`, the documented floor SHA, not the current pin). Consolidating those onto one pin needs real boot evidence before merging (see Build Health note above on why `publish-iso-groups.yml`'s divergence was left as a deliberate, not accidental, gap) — flagged as the concrete next step, not actioned blind |
 | Upstream snapshot automation | ci-maintainer | #1194 (tracker; #307 closed) |
 | Branch protection + required CI | strategist | CI health, #1167 — audited 2026-08-13: [BRANCH-PROTECTION.md](./docs/BRANCH-PROTECTION.md), active `main` ruleset has no required-status-checks rule; proposed list is `lint`, `lint-summary`, `unit-tests` |
 | Supply chain hardening | sec-check | #1193 (tracker; #212/#301 closed) — coordinates with #1187 (package signing/SBOM is the largest hardening item, tracked there in detail) |
@@ -146,7 +146,7 @@ CI pipeline builds are green on amd64, amd64-v2, and arm64 for core variants.
 | **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 (audit → #1187) |
 | Bonito (Fedora 44) GA carryover | ci-maintainer | #272 — blocked on #1499 (nightly red 08-03–08-13) |
 | Redfin (RHEL 10) alpha GA | ci-maintainer | #609 |
-| Fedora 45 base readiness | ci-maintainer | #1171 — [FEDORA-BASE-POLICY.md](./FEDORA-BASE-POLICY.md) drafted 08-13: N+rawhide model, Fedora 45 planning sequenced after Bonito (#272) GA, not parallel |
+| Fedora 45 base readiness | ci-maintainer | #1171 — [FEDORA-BASE-POLICY.md](./FEDORA-BASE-POLICY.md) adopted 08-13: N+rawhide model, Fedora 45 planning sequenced after Bonito (#272) GA, not parallel |
 | Adoption metrics / usage telemetry | strategist | #1174 |
 | **Adoption evidence (ADOPTERS.md production entries)** | strategist | #1348 — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot |
 | Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | #1196, #1175 — [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) |
@@ -186,6 +186,12 @@ Priorities listed above — pick an issue labeled `good first issue` or comment 
 ## Roadmap Governance
 
 This roadmap is maintained by the strategist agent. Updates published after major milestones or quarterly. Propose changes via PR to this file with issue reference.
+
+Roadmap coverage is an organization-level planning signal, not a requirement
+that every repository use the same milestone structure. The Community inventory
+above is the source of truth for active-repository coverage; update it when a
+repository is archived, adopts a roadmap, or moves its roadmap onto the default
+branch.
 
 See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 

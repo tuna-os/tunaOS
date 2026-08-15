@@ -496,7 +496,7 @@ record_package_wishlist() {
 
 	local miss
 	for miss in "${misses[@]}"; do
-		printf '::warning title=Missing package (%s on %s)::%s is requested by %s but not in the active repos. Consider packaging it for EL10 via tuna-os/github-copr.\n' \
+		printf '::warning title=Missing package (%s on %s)::%s is requested by %s but not in the active repos. Consider packaging it for EL10 via tuna-os/tunaos-packages.\n' \
 			"${IMAGE_NAME:-?}" "${MAJOR_VERSION_NUMBER:-?}" "$miss" "$caller_script"
 	done
 

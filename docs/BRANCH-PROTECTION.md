@@ -56,7 +56,8 @@ either path-filtered to a narrow subset of PRs or advisory/autofix in nature
 without excluding PRs that never trigger them (a required check that never
 runs blocks the PR forever). `conductor-smoke.yml`, previously listed here as
 an example of gating speculative code, was removed per #1158 — the ports it
-smoke-checked have no packaging and were never wired into a real build.
+smoke-checked had no packaging and were never wired into a real build.
+`conductor/` itself has since been deleted under the same issue.
 
 **Proposal**: the minimum required-status-checks list for a `main`-targeting
 ruleset should be `lint`, `lint-summary`, and `unit-tests`. Broader coverage

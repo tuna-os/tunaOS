@@ -248,7 +248,29 @@ echo "== initramfs boot-driver parity =="
 # present in the nvidia image's swapped-kernel initramfs (720 modules) —
 # this is a parity floor, not a wish list; dm_crypt is deliberately absent
 # because the parent's initramfs does not carry it either.
+#
+# A driver satisfies the floor two ways, and the check must accept BOTH: as a
+# .ko in the initramfs, or built into the kernel image. Requiring only the
+# first made the floor a property of the kernel's build config rather than of
+# the boot path, and that broke the moment the kernel changed (#1561). The
+# floor was measured on EL10, where the CentOS Stream 10 config has
+# CONFIG_BLK_DEV_SR=m and CONFIG_VIRTIO_BLK=m. Fedora 43 sets both to =y, so
+# on fc43 sr_mod, cdrom (selected by BLK_DEV_SR) and virtio_blk are vmlinuz
+# builtins with no .ko for dracut to install or lsinitrd to list — and every
+# bonito/bonito-rawhide nvidia flavor plus gnome-nvidia-hwe on three EL
+# variants failed on drivers that were present all along. gnome-hwe on the
+# same kernel passed the full qcow2 boot gate in those same runs, which is
+# what a virtio_blk boot working looks like.
+#
+# modules.builtin is the kernel's own record of that, shipped per-kernel-tree,
+# so this stays a measurement rather than a hardcoded fc43 exemption: a driver
+# that is neither in the initramfs nor builtin is still a real failure.
 INITRAMFS="${NV_ROOT}/usr/lib/modules/${KERNEL_VRA}/initramfs.img"
+BUILTIN="${NV_ROOT}/usr/lib/modules/${KERNEL_VRA}/modules.builtin"
+_builtin_list=""
+if [[ -s "$BUILTIN" ]]; then
+	_builtin_list="$(<"$BUILTIN")"
+fi
 if [[ ! -s "$INITRAMFS" ]]; then
 	fail "missing or empty initramfs for the installed kernel: /usr/lib/modules/${KERNEL_VRA}/initramfs.img"
 elif ! command -v lsinitrd >/dev/null 2>&1; then
@@ -256,10 +278,17 @@ elif ! command -v lsinitrd >/dev/null 2>&1; then
 else
 	_initrd_list="$(lsinitrd "$INITRAMFS" 2>/dev/null || true)"
 	for _drv in sr_mod cdrom isofs squashfs virtio_scsi virtio_blk overlay loop; do
+		# modules.builtin records bare relative paths (kernel/drivers/scsi/
+		# sr_mod.ko), never a compression suffix — anchor the end so cdrom
+		# cannot be satisfied by some other module that merely contains it.
 		if grep -qE "/${_drv}\.ko" <<<"$_initrd_list"; then
 			pass "initramfs carries ${_drv}"
+		elif [[ -n "$_builtin_list" ]] && grep -qE "(^|/)${_drv}\.ko$" <<<"$_builtin_list"; then
+			pass "${_drv} is built into the kernel (modules.builtin) — no .ko to carry"
+		elif [[ ! -s "$BUILTIN" ]]; then
+			fail "initramfs is missing ${_drv}, and /usr/lib/modules/${KERNEL_VRA}/modules.builtin is missing or empty so it cannot be shown to be builtin either — the live ISO or installed boot cannot mount its root"
 		else
-			fail "initramfs is missing ${_drv} — the live ISO or installed boot cannot mount its root"
+			fail "initramfs is missing ${_drv} and it is not built into the kernel — the live ISO or installed boot cannot mount its root"
 		fi
 	done
 fi

@@ -641,7 +641,7 @@ jobs:
             io.artifacthub.package.keywords=bootc,tunaos
             io.artifacthub.package.license=Apache-2.0
             io.artifacthub.package.logo-url=https://avatars.githubusercontent.com/u/223733964?s=200&v=4
-            io.artifacthub.package.maintainers=[{\"name\":\"hanthor\",\"email\":\"jreilly1821@gmail.com\"}]
+            io.artifacthub.package.maintainers=[{\"name\":\"${{ vars.MAINTAINER_NAME || github.repository_owner }}\",\"email\":\"${{ vars.MAINTAINER_EMAIL }}\"}]
             io.artifacthub.package.prerelease=true
             containers.bootc=1
 

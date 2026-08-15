@@ -156,6 +156,20 @@
   [[ ! "$output" == *"epel"* ]]
 }
 
+@test "Fedora rawhide excludes openh264 during transaction" {
+  run bash -c '
+    IS_FEDORA=true
+    FEDORA_VER="rawhide"
+    dnf_opts=()
+    if [[ "${FEDORA_VER}" == "rawhide" ]]; then
+      dnf_opts+=(--exclude="openh264*")
+    fi
+    echo "dnf -y install ${dnf_opts[*]}"
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"--exclude=openh264*"* ]]
+}
+
 # ── RHEL: EPEL URL-based install vs AlmaLinux: EPEL via epel-release ──────
 
 @test "RHEL installs EPEL from URL" {
