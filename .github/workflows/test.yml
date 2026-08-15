@@ -51,6 +51,9 @@ jobs:
           # pytest for Python tests
           pip3 install pytest pytest-cov --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov --user
 
+          # Pillow + requests for desktop-verify.py tests
+          pip3 install pillow requests --break-system-packages 2>/dev/null || pip3 install pillow requests --user
+
       - name: Run BATS tests
         run: |
           echo "=== BATS Tests ==="
