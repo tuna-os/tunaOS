@@ -1,6 +1,18 @@
 name: Just Fix
 on:
+  # Restricted to the default branch on purpose. An unfiltered `push` fires on
+  # every feature-branch push as well, which produces a second run for the
+  # same head SHA as the `pull_request` event. The concurrency group below
+  # then cancels one of them -- and a *cancelled* check run stays attached to
+  # the head SHA, where GitHub's merge-state computation counts it as
+  # non-success. Every PR carrying a Just Fix run therefore sat in UNSTABLE
+  # even though the run that mattered had passed, which is what stalls
+  # auto-merge and the queue paths that key off merge state (#1790).
+  #
+  # PR branches are still formatted: the `pull_request` event covers the same
+  # head SHA. Pushes to main keep the auto-fix and automation-PR behaviour.
   push:
+    branches: [main]
   pull_request:
 
 concurrency:
