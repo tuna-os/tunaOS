@@ -103,10 +103,22 @@ jobs:
   build_push:
     name: ${{ matrix.safeplatform }}
     runs-on: ${{ contains(matrix.platform, 'amd64') && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
-    # 180 to give the source-based experimental variants headroom —
-    # guppy (Gentoo) still compiles bootc from git even with the binhost (#644).
-    # A max, not a fixed duration: RPM variants finish in ~20-40m unaffected.
-    timeout-minutes: 180
+    # Headroom for the source-based experimental variants — guppy (Gentoo)
+    # still compiles bootc from git even with the binhost (#644).
+    # A max, not a fixed duration: RPM variants finish in ~20-40m unaffected,
+    # so raising it costs nothing on the variants that do not need it.
+    #
+    # 60 was too low (#644); 180 was too low as well (#1802). guppy's kde was
+    # cancelled at 2h57m with 245 of 252 emerge jobs complete and still
+    # compiling steadily — it ran out of clock, not progress, and took the
+    # whole cell with it because a cancelled build writes no digest artifact.
+    # Measured on that run: base 36m, xfce ~1h57m, gnome ~1h59m, kde 2h57m+.
+    #
+    # This is the symptom, not the cause. The cause is that the whole
+    # kde-plasma set is being compiled from source rather than pulled from the
+    # binhost, which is #644's preferred fix and is tracked in #1802. Until
+    # that lands, the ceiling has to clear the slowest real build.
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
