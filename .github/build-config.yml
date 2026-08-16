@@ -568,7 +568,7 @@ variants:
   - id: bonito
     emoji: "🎣"
     description: "Based on Fedora 44"
-    base_image: "quay.io/fedora/fedora-bootc:44@sha256:ff18dfdd91e4dfb02a8260b7fbc4e4863a452ff9bd8e8a478794c3c2ac4f2d6d"
+    base_image: "quay.io/fedora/fedora-bootc:44@sha256:35f5a8e7e7417a3b15a4d62d1a950ab8a873af0a0a8c20105d079224c01ac64c"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [fedora]
     akmods: "ublue-os"
@@ -742,7 +742,7 @@ variants:
   - id: sailfin
     emoji: "🦈"
     description: "Based on openSUSE Tumbleweed (rolling)"
-    base_image: "registry.opensuse.org/opensuse/tumbleweed:latest@sha256:486ca7bf37bf87be5f4401ad1965e908c405b7b17a0298665c5765f2d81df078"
+    base_image: "registry.opensuse.org/opensuse/tumbleweed:latest@sha256:6139b58340ad977b1aa6892f9e756ad897163da14ecfa937a8f88f71c7dd9bc2"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [opensuse, tumbleweed]
     platforms: ["linux/amd64"]
@@ -840,7 +840,7 @@ variants:
     tag_suffix: rawhide
     emoji: "🐉"
     description: "Based on Fedora Rawhide (rolling)"
-    base_image: "quay.io/fedora/fedora-bootc:rawhide@sha256:b5c4f06bb53444f3befa085d0e8c1fe6ac7333e56f96fb9d5a3a97f622725170"
+    base_image: "quay.io/fedora/fedora-bootc:rawhide@sha256:866d7e689d3ec0bd41101fac43ea2c18c6860a6cda5fcce42098c304e0e1a825"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [fedora]
     akmods: "ublue-os"
