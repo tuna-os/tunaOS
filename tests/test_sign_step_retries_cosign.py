@@ -143,9 +143,14 @@ def test_the_non_blocking_step_has_a_ceiling_the_env_deadline_cannot_give_it(wor
     """SIGN_DEADLINE_MINUTES bounds one cosign call, not the step.
 
     The attest loop runs `cosign attest` + `cosign verify-attestation` per
-    platform digest and each call starts its own deadline, so the step's real
-    worst case is deadline x 2 x platforms. Run 31891742138 is the proof: the
-    step was still running 48 minutes into a nominal 40-minute budget. Only a
+    platform digest and each call starts its own deadline, so the step's worst
+    case is deadline x 2 x platforms.
+
+    That worst case is a code property, not a measured one, and the
+    distinction matters. On run 31891742138 the step took 39m19s -- 21 Rekor
+    502s against a single 40-minute deadline, then SIGSTORE_OUTAGE -- because
+    `set -e` aborts the loop on the first *failing* call. Multiplication needs
+    calls that succeed slowly, one after another, which nothing aborts. Only a
     step-level timeout bounds the thing stage 2 is actually waiting on.
     """
     attest = workflow["jobs"]["attest_sbom"]
