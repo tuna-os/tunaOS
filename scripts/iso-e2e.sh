@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/iso-e2e.sh — TunaOS live-ISO end-to-end smoke test.
 #
-# Boots a pre-built ISO in QEMU under OVMF (UEFI), waits for the TunaOS live
+# Boots a pre-built ISO in QEMU under OVMF/AAVMF (UEFI), waits for the TunaOS live
 # readiness marker on the serial console, optionally runs an Anaconda
 # kickstart install + reboots into the installed disk, and captures
 # screenshots + serial logs for CI artifact upload.
@@ -314,16 +314,34 @@ ISO_FLAVOR="${ISO_FLAVOR%%-*}"
 
 # ── Dependency resolution ───────────────────────────────────────────────────
 
-# Pick a QEMU binary. Order: distro qemu-kvm → qemu-system-x86_64 → brew.
+# Pick the QEMU binary and machine type for the host architecture. Artifact
+# jobs run natively, so an aarch64 host must use the ARM system emulator and
+# the ARM `virt` machine rather than the x86_64 emulator and `pc` machine.
+HOST_ARCH="$(uname -m)"
 QEMU=""
-for candidate in /usr/libexec/qemu-kvm /usr/bin/qemu-kvm /usr/bin/qemu-system-x86_64 /home/linuxbrew/.linuxbrew/bin/qemu-system-x86_64; do
+QEMU_MACHINE=""
+case "$HOST_ARCH" in
+	aarch64 | arm64)
+		QEMU_MACHINE="virt"
+		QEMU_CANDIDATES=(/usr/bin/qemu-system-aarch64 /usr/local/bin/qemu-system-aarch64)
+		;;
+	x86_64 | amd64)
+		QEMU_MACHINE="pc"
+		QEMU_CANDIDATES=(/usr/libexec/qemu-kvm /usr/bin/qemu-kvm /usr/bin/qemu-system-x86_64 /home/linuxbrew/.linuxbrew/bin/qemu-system-x86_64)
+		;;
+	*)
+		echo "ERROR: unsupported host architecture: $HOST_ARCH" >&2
+		exit 77
+		;;
+esac
+for candidate in "${QEMU_CANDIDATES[@]}"; do
 	if [[ -x "$candidate" ]]; then
 		QEMU="$candidate"
 		break
 	fi
 done
 if [[ -z "$QEMU" ]]; then
-	echo "ERROR: no qemu-kvm / qemu-system-x86_64 found" >&2
+	echo "ERROR: no QEMU system emulator found for $HOST_ARCH" >&2
 	exit 77
 fi
 
@@ -406,35 +424,52 @@ else
 	echo "==> GPU: -vga virtio headless (no render node/virgl) — niri/xfwl4 will not render here"
 fi
 
-# Locate OVMF firmware. Path varies across distros (Debian/Ubuntu, Fedora,
-# RHEL, Brew). We also need a writable copy of OVMF_VARS for UEFI to persist
-# its NVRAM during boot.
-OVMF_CODE=""
-for f in \
-	/usr/share/OVMF/OVMF_CODE_4M.fd \
-	/usr/share/OVMF/OVMF_CODE.fd \
-	/usr/share/edk2/ovmf/OVMF_CODE.fd \
-	/usr/share/edk2-ovmf/x64/OVMF_CODE.fd \
-	/usr/share/ovmf/OVMF.fd \
-	/home/linuxbrew/.linuxbrew/Cellar/qemu/*/share/qemu/edk2-x86_64-code.fd; do
+# Locate architecture-appropriate UEFI firmware. Path varies across distros
+# (Debian/Ubuntu, Fedora, RHEL, Brew). We also need a writable copy of the
+# variables file for UEFI to persist its NVRAM during boot.
+UEFI_CODE=""
+UEFI_VARS_SRC=""
+if [[ "$QEMU_MACHINE" == "virt" ]]; then
+	UEFI_CODE_CANDIDATES=(
+		/usr/share/AAVMF/AAVMF_CODE.fd
+		/usr/share/AAVMF/AAVMF_CODE.ms.fd
+		/usr/share/qemu-efi-aarch64/QEMU_EFI.fd
+	)
+	UEFI_VARS_CANDIDATES=(
+		/usr/share/AAVMF/AAVMF_VARS.fd
+		/usr/share/AAVMF/AAVMF_VARS.ms.fd
+		/usr/share/qemu-efi-aarch64/vars-template-pflash.raw
+	)
+else
+	UEFI_CODE_CANDIDATES=(
+		/usr/share/OVMF/OVMF_CODE_4M.fd
+		/usr/share/OVMF/OVMF_CODE.fd
+		/usr/share/edk2/ovmf/OVMF_CODE.fd
+		/usr/share/edk2-ovmf/x64/OVMF_CODE.fd
+		/usr/share/ovmf/OVMF.fd
+		/home/linuxbrew/.linuxbrew/Cellar/qemu/*/share/qemu/edk2-x86_64-code.fd
+	)
+	UEFI_VARS_CANDIDATES=(
+		/usr/share/OVMF/OVMF_VARS_4M.fd
+		/usr/share/OVMF/OVMF_VARS.fd
+		/usr/share/edk2/ovmf/OVMF_VARS.fd
+		/usr/share/edk2-ovmf/x64/OVMF_VARS.fd
+	)
+fi
+for f in "${UEFI_CODE_CANDIDATES[@]}"; do
 	if [[ -f "$f" ]]; then
-		OVMF_CODE="$f"
+		UEFI_CODE="$f"
 		break
 	fi
 done
-OVMF_VARS_SRC=""
-for f in \
-	/usr/share/OVMF/OVMF_VARS_4M.fd \
-	/usr/share/OVMF/OVMF_VARS.fd \
-	/usr/share/edk2/ovmf/OVMF_VARS.fd \
-	/usr/share/edk2-ovmf/x64/OVMF_VARS.fd; do
+for f in "${UEFI_VARS_CANDIDATES[@]}"; do
 	if [[ -f "$f" ]]; then
-		OVMF_VARS_SRC="$f"
+		UEFI_VARS_SRC="$f"
 		break
 	fi
 done
-if [[ -z "$OVMF_CODE" ]]; then
-	echo "ERROR: OVMF firmware not found — install edk2-ovmf or ovmf" >&2
+if [[ -z "$UEFI_CODE" ]]; then
+	echo "ERROR: UEFI firmware not found for $HOST_ARCH — install the architecture's OVMF/AAVMF package" >&2
 	exit 77
 fi
 
@@ -446,10 +481,10 @@ ACCEL="tcg"
 if [[ "$NO_KVM" -eq 0 ]] && [[ -r /dev/kvm ]] && [[ -w /dev/kvm ]]; then
 	ACCEL="kvm"
 fi
-CPU_ARG="qemu64"
+CPU_ARG="max"
 if [[ "$ACCEL" == "kvm" ]]; then
 	CPU_ARG="host"
-else
+elif [[ "$QEMU_MACHINE" == "pc" ]]; then
 	# Broaden the TCG CPU to include modern extensions that post-2020
 	# shim/GRUB binaries require. The default qemu64 omits SSE4, AES-NI,
 	# XSAVE, and AVX, causing #UD crashes when loading EFI bootloaders
@@ -470,7 +505,7 @@ fi
 
 # ── Per-run scratch files ───────────────────────────────────────────────────
 
-OVMF_VARS="${OUTPUT_DIR}/OVMF_VARS.fd"
+OVMF_VARS="${OUTPUT_DIR}/UEFI_VARS.fd"
 MONITOR_SOCK="${OUTPUT_DIR}/monitor.sock"
 SERIAL_LOG="${OUTPUT_DIR}/serial.log"
 LIVE_SERIAL_LOG="${OUTPUT_DIR}/live-serial.log"
@@ -737,8 +772,8 @@ start_swtpm() {
 
 # Fresh OVMF NVRAM each run — UEFI writes state during install (boot order,
 # secure-boot vars). Reusing a stale one masks regressions.
-if [[ -n "$OVMF_VARS_SRC" ]]; then
-	cp -f "$OVMF_VARS_SRC" "$OVMF_VARS"
+if [[ -n "$UEFI_VARS_SRC" ]]; then
+	cp -f "$UEFI_VARS_SRC" "$OVMF_VARS"
 else
 	# Some packaging only ships a combined OVMF.fd; create empty vars file
 	# as a fallback (UEFI will populate it).
@@ -979,13 +1014,13 @@ boot_live_iso() {
 	reset_qemu_sockets
 	"$QEMU" \
 		-name "tunaos-iso-e2e" \
-		-machine pc \
+		-machine "$QEMU_MACHINE" \
 		-cpu "$CPU_ARG" \
 		-accel "$ACCEL" \
 		-m "$MEMORY" \
 		-smp "$CPUS" \
 		${TPM_ARGS} \
-		-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+		-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=iso,file=${ISO_PATH},media=cdrom,readonly=on,format=raw" \
 		-device virtio-scsi-pci,id=scsi \
@@ -1571,7 +1606,8 @@ start_guest_heartbeat() {
 # moment this VM powers off. sailfin (composefs + systemd-boot) gets no
 # NVRAM entry — bootctl refuses to touch efivars from inside the install
 # container — so the firmware can only find it via the removable fallback
-# \EFI\BOOT\BOOTX64.EFI; when that file is missing the disk is unbootable
+# \EFI\BOOT\BOOTX64.EFI (or BOOTAA64.EFI on ARM); when that file is missing
+# the disk is unbootable
 # no matter what the boot order says, and from the serial log alone the
 # failure looks identical to a boot-order bug.
 append_installed_serial_kargs() {
@@ -1591,10 +1627,12 @@ append_installed_serial_kargs() {
 			if [ "$found" = 1 ]; then
 				echo "--- ESP contents ($p) ---"
 				find /mnt/tbx-bls -maxdepth 3 2>/dev/null | sort || ls -lR /mnt/tbx-bls || true
-				if [ -f /mnt/tbx-bls/EFI/BOOT/BOOTX64.EFI ]; then
-					echo "esp: removable fallback present (EFI/BOOT/BOOTX64.EFI)"
+				fallback_efi="BOOTX64.EFI"
+				[[ "$(uname -m)" == "aarch64" ]] && fallback_efi="BOOTAA64.EFI"
+				if [ -f "/mnt/tbx-bls/EFI/BOOT/${fallback_efi}" ]; then
+					echo "esp: removable fallback present (EFI/BOOT/${fallback_efi})"
 				else
-					echo "WARN: esp has NO EFI/BOOT/BOOTX64.EFI; firmware has no fallback to boot"
+					echo "WARN: esp has NO EFI/BOOT/${fallback_efi}; firmware has no fallback to boot"
 				fi
 			fi
 			umount /mnt/tbx-bls
@@ -1863,10 +1901,10 @@ run_install_generic() {
 	e2e_phase "Booting installed disk (TPM auto-unlock), expecting a login prompt..."
 	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
 	reset_qemu_sockets
-	"$QEMU" -name "tunaos-iso-e2e-installed" -machine pc -cpu "$CPU_ARG" \
+	"$QEMU" -name "tunaos-iso-e2e-installed" -machine "$QEMU_MACHINE" -cpu "$CPU_ARG" \
 		-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
 		${TPM_ARGS} \
-		-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+		-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 		-device virtio-blk-pci,drive=disk,bootindex=0 \
@@ -2571,10 +2609,10 @@ EOF
 		# putting this disk first and leaving the shell as the last resort.
 		reset_qemu_sockets
 		# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
-		"$QEMU" -name "tunaos-iso-e2e-installed" -machine pc -cpu "$CPU_ARG" \
+		"$QEMU" -name "tunaos-iso-e2e-installed" -machine "$QEMU_MACHINE" -cpu "$CPU_ARG" \
 			-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
 			${TPM_ARGS} \
-			-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+			-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 			-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 			-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 			-device virtio-blk-pci,drive=disk,bootindex=0 \
@@ -2774,10 +2812,10 @@ EOF
 			# TPM auto-unlock gate uses.
 			reset_qemu_sockets
 			# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
-			"$QEMU" -name "tunaos-iso-e2e-installed" -machine pc -cpu "$CPU_ARG" \
+			"$QEMU" -name "tunaos-iso-e2e-installed" -machine "$QEMU_MACHINE" -cpu "$CPU_ARG" \
 				-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
 				${TPM_ARGS} \
-				-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+				-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 				-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 				-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 				-device virtio-blk-pci,drive=disk,bootindex=0 \
@@ -2839,13 +2877,13 @@ EOF
 	reset_qemu_sockets
 	"$QEMU" \
 		-name "tunaos-iso-e2e-installed" \
-		-machine pc \
+		-machine "$QEMU_MACHINE" \
 		-cpu "$CPU_ARG" \
 		-accel "$ACCEL" \
 		-m "$MEMORY" \
 		-smp "$CPUS" \
 		${TPM_ARGS} \
-		-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+		-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 		-device virtio-blk-pci,drive=disk,bootindex=0 \
@@ -2905,12 +2943,12 @@ boot_disk_image() {
 	reset_qemu_sockets
 	"$QEMU" \
 		-name "tunaos-disk-e2e" \
-		-machine pc \
+		-machine "$QEMU_MACHINE" \
 		-cpu "$CPU_ARG" \
 		-accel "$ACCEL" \
 		-m "$MEMORY" \
 		-smp "$CPUS" \
-		-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+		-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${ISO_PATH},format=${fmt}" \
 		-device virtio-blk-pci,drive=disk \
