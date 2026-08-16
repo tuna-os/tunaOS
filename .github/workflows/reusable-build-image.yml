@@ -475,9 +475,26 @@ jobs:
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
           GOMEMLIMIT: 3GiB
           GOGC: "25"
-          # Hard ceiling for the cgroup below. Left generous: the point is to
-          # keep the runner agent alive, not to make the scan frugal.
-          SYFT_MEMORY_MAX: 5G
+          # What the cgroup below leaves for everything that is NOT syft --
+          # most importantly the runner agent, which is the process this
+          # whole guard exists to keep alive.
+          #
+          # Expressed as a reserve rather than a ceiling on purpose. A
+          # hardcoded ceiling is not a ceiling at all on a runner smaller
+          # than the number, and that is the one case where the guard has to
+          # work. 5G was the first attempt at a ceiling and it was too tight
+          # the other way: on guppy (Gentoo, run 31942667550) syft was
+          # SIGKILLed at exit 137 after 2m11s. The cap did its job -- the
+          # agent lived and the variant built, signed and promoted for the
+          # first time in five nights -- but it cost an SBOM that would
+          # likely have fit in a larger budget. A reserve gives syft
+          # everything else the box has, whatever size the box turns out to
+          # be.
+          SYFT_MEMORY_RESERVE_MIB: "5120"
+          # Floor, for the pathological case of a runner so small that the
+          # reserve eats all of it. Below this syft cannot finish anyway, and
+          # failing fast under the cap beats failing slow outside it.
+          SYFT_MEMORY_FLOOR_MIB: "2048"
         run: |
           set -euo pipefail
           IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
@@ -504,10 +521,23 @@ jobs:
           syft_cmd=( timeout --kill-after=30s 18m
                      "$SYFT_CMD" "$IMAGE" --scope squashed -o spdx-json="$OUT" )
 
+          # Size the cap off the box we actually landed on, and say so, so a
+          # future exit 137 can be read against a real number instead of an
+          # assumption about hosted-runner sizing (#1567 recorded 7 GB; that
+          # is not what ubuntu-latest ships now, and the arm64 leg is a
+          # different image again).
+          mem_total_mib="$(free -m | awk '/^Mem:/ {print $2}')"
+          cap_mib=$(( mem_total_mib - SYFT_MEMORY_RESERVE_MIB ))
+          if [ "$cap_mib" -lt "$SYFT_MEMORY_FLOOR_MIB" ]; then
+            cap_mib="$SYFT_MEMORY_FLOOR_MIB"
+          fi
+          echo "runner memory (MiB): total=${mem_total_mib} available=$(free -m | awk '/^Mem:/ {print $7}')"
+          echo "syft cgroup cap (MiB): ${cap_mib} (reserving ${SYFT_MEMORY_RESERVE_MIB} for the agent)"
+
           if command -v systemd-run >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
             sudo systemd-run --scope --quiet \
               --uid="$(id -u)" --gid="$(id -g)" \
-              -p MemoryMax="${SYFT_MEMORY_MAX}" -p MemorySwapMax=0 \
+              -p MemoryMax="${cap_mib}M" -p MemorySwapMax=0 \
               -- "${syft_cmd[@]}"
           else
             # Never silently drop the guard: without it a hungry scan can
