@@ -552,12 +552,67 @@ jobs:
           ' "$OUT" >/dev/null
           jq -e '(.packages // []) | length > 0' "$OUT" >/dev/null
 
+      - name: Synthesize SBOM from the package manifest
+        id: sbom_fallback
+        # Runs only when the scan did not produce one. On guppy that is most
+        # nights: Gentoo's file inventory outgrows the runner, the cgroup cap
+        # kills syft (#1784, #1795), and the variant publishes with no SBOM
+        # at all while `Attest SBOM` reports the gap.
+        #
+        # The information was never missing. `Publish package manifest` two
+        # steps up already read every installed package straight out of the
+        # image's own package database, in seconds. Re-deriving that list by
+        # walking every file is what costs the memory. So derive the SPDX
+        # document from the manifest instead of shipping nothing (#1567).
+        #
+        # Deliberately a fallback and not a replacement: syft's output is
+        # richer -- file inventory, license detection -- and where the scan
+        # succeeds it still wins. This only decides what happens when it
+        # does not.
+        if: inputs.sbom && github.event_name != 'pull_request' && steps.sbom.outcome != 'success'
+        continue-on-error: true
+        env:
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          DEFAULT_TAG: ${{ inputs.default-tag }}
+          SAFE_PLATFORM: ${{ matrix.safeplatform }}
+        run: |
+          set -euo pipefail
+          IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
+          OUT="sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.spdx.json"
+          MANIFEST="packages-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.txt"
+
+          # `Publish package manifest` is itself continue-on-error, and an
+          # image with no package database publishes only a marker. Either
+          # way there is nothing to fall back to, and saying so beats
+          # emitting a document that claims the image is empty.
+          if [ ! -s "$MANIFEST" ]; then
+            echo "::warning::no package manifest for ${IMAGE} -- cannot synthesize an SBOM"
+            exit 1
+          fi
+
+          python3 scripts/packages_to_spdx.py \
+            --manifest "$MANIFEST" --output "$OUT" --image "$IMAGE"
+
+          # Same two checks the scan path is held to: a consumer cannot tell
+          # which path produced the file, so neither can ship a weaker one.
+          jq -e '.spdxVersion | startswith("SPDX-")' "$OUT" >/dev/null
+          jq -e '(.packages // []) | length > 0' "$OUT" >/dev/null
+
+          echo "::notice::SBOM for ${IMAGE} derived from the package manifest ($(jq '.packages | length' "$OUT") packages); syft did not complete."
+
       - name: Upload SBOM
-        # steps.sbom.outcome, not the job status: Generate SBOM is
-        # continue-on-error, so its failure leaves the job green and this
+        # Step outcomes, not the job status: both producers are
+        # continue-on-error, so their failure leaves the job green and this
         # step would otherwise run and fail on `if-no-files-found: error`,
-        # converting the soft failure straight back into a hard one.
-        if: inputs.sbom && github.event_name != 'pull_request' && steps.sbom.outcome == 'success'
+        # converting a soft failure straight back into a hard one.
+        #
+        # Either producer will do. They write the same filename, and the
+        # fallback is held to the same validation, so nothing downstream
+        # needs to know which one ran.
+        if: >-
+          inputs.sbom && github.event_name != 'pull_request'
+          && (steps.sbom.outcome == 'success' || steps.sbom_fallback.outcome == 'success')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom-${{ env.IMAGE_NAME }}-${{ inputs.default-tag }}-${{ matrix.safeplatform }}
