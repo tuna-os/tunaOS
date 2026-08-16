@@ -1,7 +1,14 @@
 # Q3 2026 Checkpoint — Decision Sheet (2026-08-22)
 
 **Milestone**: Q3 2026 "Expand Coverage" (closes 2026-09-30)
-**Tracker**: #1299 | **Prepared**: 2026-08-11 | **Last refreshed**: 2026-08-14 (T-7; CI critical-path escalation #1571) | **Decision authority**: maintainer
+**Tracker**: #1299 | **Prepared**: 2026-08-11 | **Last refreshed**: 2026-08-15 (T-7; variant taxonomy + release-parity execution status) | **Decision authority**: maintainer
+
+> **T-7 refresh (2026-08-15, 16:00Z, strategist #1762/#1763)**: adds the new variant health
+> taxonomy (#1753/#1754 — 89 pinned cells that should be green vs 53 rolling/experimental
+> cells that are red-by-design) as a scoring input, updates release parity to a
+> merge-execution gap (#1588 authored+green, blocked on merge queue), and flags
+> hummingbird admission debt (#1755). See the two new supporting items and the
+> updated Release parity row.
 
 > **T-7 refresh (2026-08-14, 21:45Z)**: post-T-8 delivery-pipeline update only — see the
 > "Delivery pipeline" row and the new "Post-unblock branch staleness" supporting item
@@ -74,7 +81,9 @@ Make Q3 carryover an explicit decision, not a discovery. For every open Q3 goal,
 - **GFI pool improved but below target**: ~8 usable seeds verified 08-14 (tunaos #1496/#1351, docs #204/#158/#157, protota #193) **+2 converted to merged PRs by external humans same day (docs #234/#239)** vs ZERO at 08-12 — but the 09-15 seeding deadline for Hacktoberfest (10-01) needs 15–20 (#1362, #1347). CONTRIBUTING's good-first-issue link fixed; the meta-tracker #1308 itself carries the label and is not a task.
 - **No external capacity for core-code staff tests — maintainer-only**: post-retraction (#1317) the only human for core build/CI work is hanthor; the two docs contributions merged 08-14 (docs #234/#239, first external humans) are docs-repo only and do not change #272/#1123 staff-test capacity. **DESCOPE is the realistic outcome for both unless concrete PRs land by 08-22** — but the docs-channel onboarding proof (08-14) is a positive signal for Q4 adoption evidence (#1348).
 - **Q4 dependency risk**: Q4 milestone #3 = 10 open / 1 closed; trackers now attached (fidelity fixed, #1307). Bonito GA and Redfin GA already appear as Q4 rows — every Q3 descope adds Q4 load before Q4 starts. Q4 also carries adoption metrics snapshot (#1174, first 11-01), governance (#1168), branch protection (#1167), Fedora 45 planning (#1171).
-- **Release parity**: GNOME daily through 08-13 (gnome-20260813). kde/xfce/niri/cosmic/gnome50 stale **40 days** (since 07-05); gnome-nvidia stale 33 days (since 07-12). Browser-catalog parity gate (#1322) fixed the on-demand path; scheduled GitHub Releases pipeline remains GNOME-only.
+- **Release parity — now a merge-execution gap, not a pipeline-design gap (T-7)**: GNOME daily through 08-15 (gnome-20260815). kde/xfce/niri/cosmic/gnome50 stale **41 days** (since 07-05); gnome-nvidia stale 34 days (since 07-12). The scheduled-releases fix **#1588** (publish kde/xfce/cosmic/niri on cron) is authored, **green on all 6 checks, but `mergeable_state: blocked` on the merge-queue rule** since 08-14 07:12Z — unmerged 33h+. The remaining blocker is merge execution (queue rule + App `workflows` permission #1557 for the workflow-file push), not design. **Checkpoint action**: merge #1588 (and #1515 NVIDIA asset parity audit) before 08-22, or record the staff-test miss for #1316/#1254 as execution-failure rather than goal-failure per #1686.
+- **Variant taxonomy — adopt as green standard (T-7, strategist #1762)**: CI lane formalized the split on 08-15 — **#1753**: 7 non-rolling variants / **89 cells that should be green** (currently 0 green, ~2 real defects); **#1754**: 6 rolling+experimental variants / **53 cells that are red-by-design** (hummingbird, bonito-rawhide, marlin, sailfin, guppy, flounder-sid). The 08-14 "all 13 workflows red" alarm (#1570) conflates the two populations — 6 of 13 workflows are rolling/experimental whose red is expected. **Checkpoint action**: score #1570-adjacent goals against the 89-cell pinned standard; route rolling-variant Daily Verification Failures (#1733/#1734) to #1754 instead of the bug queue.
+- **hummingbird admission debt (T-7, strategist #1763, #1755)**: experimental variant admitted with rebuild repo that cannot work as configured — no gnome-shell/gdm/mutter, no aarch64 repo (404), 3/4 desktops (kde/niri/cosmic) missing manifest sections; 10+ consecutive red nights whose initial dnf-dep attribution (#1555) was already fixed. **Checkpoint action**: extend the admission gate (#1270/#1487) with a rebuild-config completeness precondition; apply the #1755 cosmic-on-amd64 quick win (22/23 packages present).
 - **Planning debt (mid-cycle)**: wootc ROADMAP + LICENSE landed but CONTRIBUTING missing (#1358); gtk-office-suite planning gap open (#1359); tromso stable release untracked — zero releases, zero milestones (#1371).
 - **Enterprise posture**: ADOPTERS.md empty vs Q4 "Mature" claim (#1348); Redfin alpha dropped from Q3 (#1123); branch protection unverified (#1167).
 - **Docs adoption surface recovered**: all three docs P0s closed 08-13 (#103 pagination, #115 flatpak deploy, #135 404 links) — next step is Cloudflare Web Analytics instrumentation per ADOPTION-METRICS.md (#1174).
