@@ -445,13 +445,27 @@ jobs:
           syft-version: v1.39.0
 
       - name: Generate SBOM
+        id: sbom
         if: inputs.sbom && github.event_name != 'pull_request'
-        # Scan the published, immutable platform image. Stable publication is
-        # intentionally fail-closed: an image without its SBOM cannot be
-        # signed or promoted by the supply-chain gate below.
         # Scan the final filesystem view rather than every historical layer:
         # the latter made the Gentoo base job spend its remaining runner time
         # in Syft after the image had already built and pushed (tunaOS#956).
+        #
+        # NOT fail-closed any more, and the distinction matters. The image is
+        # already built, pushed and immutable in GHCR before this step runs --
+        # a failed scan cannot un-publish it. What a hard failure here *did*
+        # do was skip `Create Job Outputs`, which is the step that writes the
+        # digest artifact `Manifest` fans in on. So one dead scan cost the
+        # whole variant: Manifest failed at `Load Outputs`, and Sign, Gate,
+        # Promote and every stage-2 flavor were skipped behind it
+        # (2026-08-16 nightly, guppy run 31921372675).
+        #
+        # An image signature gates promotion; an SBOM does not. That is the
+        # same line drawn for SBOM *attestation* in #1560/#1766, applied one
+        # step earlier to SBOM *generation*. A missing SBOM is still reported
+        # loudly by attest_sbom ("::error::missing SPDX SBOM"), which is
+        # continue-on-error and therefore visible without being fatal.
+        continue-on-error: true
         timeout-minutes: 20
         env:
           SYFT_CMD: ${{ steps.setup-syft.outputs.cmd }}
@@ -461,25 +475,59 @@ jobs:
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
           GOMEMLIMIT: 3GiB
           GOGC: "25"
+          # Hard ceiling for the cgroup below. Left generous: the point is to
+          # keep the runner agent alive, not to make the scan frugal.
+          SYFT_MEMORY_MAX: 5G
         run: |
           set -euo pipefail
           IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
           OUT="sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.spdx.json"
-          # timeout-minutes above is enforced by the runner agent, which is
-          # exactly the thing that wedges when syft OOM-thrashes the runner:
-          # on 08-14 (tunaOS#1567) the guppy base job sat in this step for
-          # 51 minutes past its 20-minute limit, died for lost communication
-          # and uploaded no logs. GOMEMLIMIT is advisory, so bound the scan
-          # externally: `timeout` fails the step fast (exit 124), with logs,
-          # while the agent is still healthy enough to report it.
-          timeout --kill-after=30s 18m $SYFT_CMD "$IMAGE" --scope squashed -o spdx-json="$OUT"
+
+          # Two bounds, because the two previous attempts each caught only one
+          # failure mode and the scan has now escaped both:
+          #
+          #   timeout-minutes: 20   enforced by the runner AGENT -- useless
+          #                         precisely when the agent is the casualty.
+          #                         On 08-14 (#1567) the step overran it by 51
+          #                         minutes and uploaded no logs at all.
+          #   timeout 18m           wall-clock, added by #1572. On the 08-16
+          #                         nightly the runner died at 7m56s, well
+          #                         inside it: "The runner has received a
+          #                         shutdown signal."
+          #
+          # Time was never the fault. Memory is: GOMEMLIMIT is advisory, so a
+          # large enough file inventory sails past 3GiB and takes the agent
+          # down with it. A cgroup cap makes the kernel kill syft instead --
+          # a real exit code, with logs, while the agent is still healthy.
+          # The wall-clock bound stays for the orthogonal case of a scan that
+          # is slow rather than hungry.
+          syft_cmd=( timeout --kill-after=30s 18m
+                     "$SYFT_CMD" "$IMAGE" --scope squashed -o spdx-json="$OUT" )
+
+          if command -v systemd-run >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+            sudo systemd-run --scope --quiet \
+              --uid="$(id -u)" --gid="$(id -g)" \
+              -p MemoryMax="${SYFT_MEMORY_MAX}" -p MemorySwapMax=0 \
+              -- "${syft_cmd[@]}"
+          else
+            # Never silently drop the guard: without it a hungry scan can
+            # still take the agent, which is the failure this step exists to
+            # stop being invisible.
+            echo "::warning::systemd-run unavailable; syft is time-bounded but NOT memory-bounded"
+            "${syft_cmd[@]}"
+          fi
+
           jq -e '
             .spdxVersion | startswith("SPDX-")
           ' "$OUT" >/dev/null
           jq -e '(.packages // []) | length > 0' "$OUT" >/dev/null
 
       - name: Upload SBOM
-        if: inputs.sbom && github.event_name != 'pull_request'
+        # steps.sbom.outcome, not the job status: Generate SBOM is
+        # continue-on-error, so its failure leaves the job green and this
+        # step would otherwise run and fail on `if-no-files-found: error`,
+        # converting the soft failure straight back into a hard one.
+        if: inputs.sbom && github.event_name != 'pull_request' && steps.sbom.outcome == 'success'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom-${{ env.IMAGE_NAME }}-${{ inputs.default-tag }}-${{ matrix.safeplatform }}
