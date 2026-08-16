@@ -227,7 +227,7 @@ bundled with this one — see Finding 2.
 ## Alignment with Image Factory Completion Gate (#1283)
 
 Any eventual POC or adoption of an mkosi-built variant must pass the unified
-[Image Factory Completion Gate](file:///home/dev/workspace/tuna-os/tunaos/docs/IMAGE-FACTORY-GATE.md) (`docs/IMAGE-FACTORY-GATE.md`).
+[Image Factory Completion Gate](IMAGE-FACTORY-GATE.md) (`docs/IMAGE-FACTORY-GATE.md`).
 Specifically:
 - OCI Build & Publish reproducibility with keyless Cosign signatures and SPDX SBOMs.
 - Full LUKS install-to-disk and bootc update/rebase/rollback verification (`bootc-lifecycle.yml`).

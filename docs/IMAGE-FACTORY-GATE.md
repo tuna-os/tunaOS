@@ -40,6 +40,6 @@ For every supported `variant × flavor × platform` cell:
 
 ## 4. Current Matrix Verification References
 
-- **LUKS E2E & Desktop Contract Ledger**: [docs/MATRIX-STATUS.md](file:///home/dev/workspace/tuna-os/tunaos/docs/MATRIX-STATUS.md)
-- **Pipeline & Build Architecture**: [docs/PIPELINE.md](file:///home/dev/workspace/tuna-os/tunaos/docs/PIPELINE.md)
-- **Artifact Verification Guide**: [docs/VERIFY-ARTIFACTS.md](file:///home/dev/workspace/tuna-os/tunaos/docs/VERIFY-ARTIFACTS.md)
+- **LUKS E2E & Desktop Contract Ledger**: [docs/MATRIX-STATUS.md](MATRIX-STATUS.md)
+- **Pipeline & Build Architecture**: [docs/PIPELINE.md](PIPELINE.md)
+- **Artifact Verification Guide**: [docs/VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md)
