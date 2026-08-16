@@ -1,0 +1,31 @@
+name: Check base image pins
+
+# Runs an hour before the nightly variant builds. A digest-pinned base image
+# that upstream has garbage-collected fails partway into the base build as
+# `manifest unknown`, which reads like a broken Containerfile and takes every
+# downstream flavor of that variant with it (#1788, and at least once before).
+#
+# Checking the pins directly takes seconds and names the problem in one line,
+# so the fix can land before the matrix pays for it rather than after.
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 3 * * *'
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64
+          sudo chmod +x /usr/bin/yq
+
+      - name: Verify every base image pin still resolves
+        run: ./scripts/check-base-image-pins.sh
