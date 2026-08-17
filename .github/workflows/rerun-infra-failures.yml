@@ -35,6 +35,11 @@ on:
       - Build Sailfin
       - Build Skipjack
       - Build Yellowfin
+      # The weekly lifecycle sweep fails the same two infra ways the
+      # nightlies do (GHCR/podman on hosted runners), and its 08-13 red run
+      # sat unnoticed for four days because nothing triaged it (W2). Same
+      # rule as above: one classified re-run, never a loop.
+      - Bootc Lifecycle
     types: [completed]
   workflow_dispatch:
     inputs:
