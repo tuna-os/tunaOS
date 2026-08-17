@@ -98,6 +98,7 @@ jobs:
         env:
           PR_HWE_GDX: ${{ needs.detect_pr_scope.outputs.hwe_gdx_related || 'false' }}
           EVENT_NAME: ${{ github.event_name }}
+          RECHUNK: ${{ github.event_name != 'pull_request' }}
           INPUT_IMAGE_VARIANT: ${{ inputs.image_variant }}
           INPUT_PLATFORMS: ${{ inputs.platforms }}
           INPUT_BUILD_VARIANT: ${{ inputs.build_variant }}
@@ -225,7 +226,7 @@ jobs:
               \"run_kde\": ${RUN_KDE},
               \"run_kde_hwe_gdx\": ${RUN_KDE_HWE_GDX},
               \"run_niri_hwe_gdx\": ${RUN_NIRI_HWE_GDX},
-              \"rechunk\": ${{ github.event_name != 'pull_request' }},
+              \"rechunk\": ${RECHUNK},
               \"sbom\": false,
               \"publish\": true
             }]")"
