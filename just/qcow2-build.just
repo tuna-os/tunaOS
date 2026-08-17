@@ -7,6 +7,7 @@
 qcow2 variant flavor='gnome' repo='local' tag='':
     #!/usr/bin/env bash
     set -euo pipefail
+    cd {{ justfile_directory() }}
 
     IMG_REF=""
     if [[ "{{ variant }}" == *":"* || "{{ variant }}" == *"/"* ]]; then
@@ -57,7 +58,7 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     # We also mount the correct install config from the repo over the top of
     # whatever is baked into the image, so stale cached builds can't break
     # the TOML parse step.
-    INSTALL_TOML="$(pwd)/system_files/usr/lib/bootc/install/00-tunaos.toml"
+    INSTALL_TOML="{{ justfile_directory() }}/system_files/usr/lib/bootc/install/00-tunaos.toml"
 
     # Collect the local user's SSH public keys to inject into root's authorized_keys
     SSH_PUBKEYS_FILE=""

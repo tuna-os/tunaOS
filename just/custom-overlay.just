@@ -8,6 +8,7 @@
 build-custom base="" tag="": _ensure-deps
     #!/usr/bin/env bash
     set -euo pipefail
+    cd {{ justfile_directory() }}
     BASE_IMAGE="{{ base }}"
     if [[ -z "${BASE_IMAGE}" ]]; then
         # yq, not a regex: `_ensure-deps` above already guarantees it, and it
@@ -37,6 +38,7 @@ build-custom base="" tag="": _ensure-deps
 run-custom-vm tag="":
     #!/usr/bin/env bash
     set -euo pipefail
+    cd {{ justfile_directory() }}
     TARGET_TAG="{{ tag }}"
     if [[ -z "${TARGET_TAG}" ]]; then
         TARGET_TAG=$({{ yq }} -r '.tag // ""' custom/image.yaml 2>/dev/null || true)
@@ -49,6 +51,7 @@ run-custom-vm tag="":
 check-custom:
     #!/usr/bin/env bash
     set -euo pipefail
+    cd {{ justfile_directory() }}
     echo "==> Validating custom/ overlay configuration..."
     if [[ -f custom/packages.yaml ]]; then
         if INVALID=$(grep -nvE '^[[:space:]]*(#.*)?$|^[a-zA-Z0-9_-]+[[:space:]]*:|^[[:space:]]*-[[:space:]]*' custom/packages.yaml); then
@@ -68,6 +71,7 @@ check-custom:
 custom-iso base_image='':
     #!/usr/bin/env bash
     set -euo pipefail
+    cd {{ justfile_directory() }}
     {{ just }} build-custom "{{ base_image }}"
     TAG="my-custom-os"
     if [[ -f "custom/image.yaml" ]]; then

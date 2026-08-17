@@ -19,6 +19,7 @@ run-iso variant flavor='gnome' iso_file='':
 demo variant='albacore' flavor='gnome' rebuild='0':
     #!/usr/bin/env bash
     set -euo pipefail
+    cd {{ justfile_directory() }}
 
     if [[ -f "{{ variant }}-{{ flavor }}.qcow2" ]]; then
         QCOW2_FILE="{{ variant }}-{{ flavor }}.qcow2"
@@ -46,6 +47,7 @@ demo variant='albacore' flavor='gnome' rebuild='0':
 demo-iso variant='skipjack' flavor='gnome' rebuild='0':
     #!/usr/bin/env bash
     set -euo pipefail
+    cd {{ justfile_directory() }}
 
     BUILD_DIR=".build/live-iso/{{ variant }}-{{ flavor }}"
     ISO_FILE=$(find "${BUILD_DIR}" -maxdepth 1 -name "*.iso" 2>/dev/null | head -1 || true)
@@ -68,6 +70,7 @@ demo-iso variant='skipjack' flavor='gnome' rebuild='0':
 _lima-novnc vm_name type image_path:
     #!/usr/bin/env bash
     set -euo pipefail
+    cd {{ justfile_directory() }}
 
     VM_NAME="{{ vm_name }}"
     TYPE="{{ type }}"
@@ -218,6 +221,7 @@ _lima-novnc vm_name type image_path:
 boot-gate variant flavor='gnome' tag='':
     #!/usr/bin/env bash
     set -euo pipefail
+    cd {{ justfile_directory() }}
     REPO_ORGANIZATION="{{ repo_organization }}" ./scripts/boot-gate.sh "{{ variant }}" "{{ flavor }}" "{{ tag }}"
 
 # Boot-gate a whole matrix of images in parallel across the KubeVirt cluster,
@@ -234,12 +238,14 @@ boot-gate-matrix +targets='yellowfin':
 verify-disk disk_image timeout='600':
     #!/usr/bin/env bash
     set -euo pipefail
+    cd {{ justfile_directory() }}
     sudo ./scripts/iso-e2e.sh "{{ disk_image }}" --disk --output verify-out --timeout "{{ timeout }}"
 
 # Verify an ISO using Lima
 verify-iso iso_file:
     #!/usr/bin/env bash
     set -euo pipefail
+    cd {{ justfile_directory() }}
     ./scripts/verify-iso.sh "{{ iso_file }}"
 
 # Boot an ISO and expose the Anaconda WebUI on http://localhost:19090
@@ -248,6 +254,7 @@ verify-iso iso_file:
 install-test iso_file kickstart='':
     #!/usr/bin/env bash
     set -euo pipefail
+    cd {{ justfile_directory() }}
     ks_arg=""
     [[ -n "{{ kickstart }}" ]] && ks_arg="--kickstart {{ kickstart }}"
     # shellcheck disable=SC2086
@@ -258,6 +265,7 @@ install-test iso_file kickstart='':
 _run-vm type variant flavor='gnome' iso_file='':
     #!/usr/bin/env bash
     set -eoux pipefail
+    cd {{ justfile_directory() }}
 
     if [[ -n "{{ iso_file }}" ]]; then
         image_file="{{ iso_file }}"
