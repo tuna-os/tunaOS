@@ -7,6 +7,7 @@ document tells you what happens between a commit and a user's `bootc upgrade`.
 TunaOS is a fork-of-ideas from the [Universal Blue](https://universal-blue.org/)
 family — [Bluefin](https://projectbluefin.io) (GNOME),
 [Aurora](https://getaurora.dev) (KDE),
+[Bazzite](https://bazzite.gg) (gaming),
 [Zirconium](https://github.com/zirconium-dev/zirconium) (Niri). We consume
 their artifacts directly where we can (`ghcr.io/projectbluefin/common`,
 `ghcr.io/ublue-os/brew`, `ublue-os/akmods` for NVIDIA, the Zirconium source
