@@ -1460,7 +1460,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          pkgs=(just jq qemu-system-x86 qemu-utils ovmf socat)
+          pkgs=(just jq qemu-system-x86 qemu-utils ovmf socat imagemagick)
           if sudo sh -c 'command -v podman' >/dev/null 2>&1; then
             echo "podman already present: $(sudo sh -c 'command -v podman')"
           else
@@ -1482,6 +1482,14 @@ jobs:
             --contract base \
             --output verify-out \
             --timeout 600
+
+      # Same lesson the desktop Gate carries above: iso-e2e runs under sudo,
+      # so QEMU's screendump lands root-owned in verify-out and the upload
+      # dies on EACCES — which is how sailfin run 32068513822 lost the ONE
+      # serial log that would explain why the base marker never arrived.
+      - name: Make evidence uploadable
+        if: always()
+        run: sudo chown -R "$USER:$(id -gn)" verify-out 2>/dev/null || true
 
       - name: Upload boot evidence
         if: always()

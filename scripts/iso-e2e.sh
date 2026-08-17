@@ -1320,7 +1320,7 @@ wait_for_paint() {
 		attempt=$((attempt + 1))
 		screenshot "$label"
 		if screenshot_sane "$label"; then
-			echo "==> ${label} painted on attempt ${attempt} (stddev=${SCREENSHOT_STDDEV})"
+			echo "==> ${label} painted on attempt ${attempt} (stddev=${SCREENSHOT_STDDEV:-unmeasured})"
 			return 0
 		fi
 		sleep 15
@@ -1330,7 +1330,11 @@ wait_for_paint() {
 	if screenshot_sane "$label"; then
 		return 0
 	fi
-	echo "==> ${label} still blank after ${cap}s (stddev=${SCREENSHOT_STDDEV}) — the serial marker, not pixels, is the gate" >&2
+	# :-unmeasured, not a bare expansion: screenshot_sane's early returns (no
+	# ImageMagick, no capture) never set SCREENSHOT_STDDEV, and under set -u a
+	# bare reference here killed the base Gate's TIMEOUT path before it could
+	# print any diagnostics (sailfin run 32068513822, line-1323 crash).
+	echo "==> ${label} still blank after ${cap}s (stddev=${SCREENSHOT_STDDEV:-unmeasured}) — the serial marker, not pixels, is the gate" >&2
 	return 1
 }
 

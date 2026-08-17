@@ -117,3 +117,32 @@ def test_readme_updater_scores_boots_with_the_same_scope() -> None:
     )
     assert '"boots,builds"' in body, "guard must accept the graduated set"
     assert "gate=" in body
+
+
+def test_base_gate_evidence_survives_sudo_and_timeouts() -> None:
+    """Sailfin run 32068513822, the base Gate's first real boot: the 600s
+    timeout crashed on an unbound SCREENSHOT_STDDEV before printing any
+    diagnostics, and the root-owned screendump made the artifact upload die
+    on EACCES — losing the one serial log that says why the marker never
+    arrived. Evidence collection must survive both failure modes."""
+    doc = yaml.safe_load(WORKFLOW)
+    steps = doc["jobs"]["verify_boot_base"]["steps"]
+    names = [s.get("name", "") for s in steps]
+    assert "Make evidence uploadable" in names, (
+        "verify-out is root-owned (iso-e2e runs under sudo); without a chown "
+        "the upload EACCESes and the evidence is lost"
+    )
+    chown = next(s for s in steps if s.get("name") == "Make evidence uploadable")
+    assert chown.get("if") == "always()", "evidence matters MOST on failure"
+    assert names.index("Make evidence uploadable") < names.index("Upload boot evidence")
+    install = next(s for s in steps if s.get("name") == "Install dependencies")
+    assert "imagemagick" in install["run"], (
+        "without ImageMagick every screenshot is unjudgeable and the paint "
+        "poll burns its full cap"
+    )
+    harness = (ROOT / "scripts" / "iso-e2e.sh").read_text(encoding="utf-8")
+    assert "${SCREENSHOT_STDDEV:-" in harness, (
+        "screenshot_sane's early returns never set SCREENSHOT_STDDEV; a bare "
+        "expansion under set -u kills the timeout path before diagnostics"
+    )
+    assert "(stddev=${SCREENSHOT_STDDEV})" not in harness
