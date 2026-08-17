@@ -282,6 +282,8 @@ Related Communities:
 ## Documentation
 
 ### Project Docs
+- [User Guide](docs/USER-GUIDE.md) — choosing an image, installing, updating, rolling back, apps, encryption
+- [Developer Guide](docs/DEVELOPER-GUIDE.md) — the whole pipeline and its plumbing, with diagrams: matrix, build stages, package factories, quality machinery
 - [TunaOS Blog](https://tunaos.org/blog/modern-enterprise-linux-desktops-with-tunaos) — launch announcement and design philosophy comparison
 - [Vision](VISION.md) — project philosophy: erasing the mystique of the Linux distribution
 - [Goal](GOAL.md) — current objective: LUKS E2E fisherman migration
