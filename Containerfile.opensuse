@@ -115,7 +115,7 @@ RUN set -eu; \
     update-ca-certificates && \
     retry_zypper --non-interactive removerepo virtualization-containers && \
     retry_zypper install -y -t pattern enhanced_base && \
-    retry_zypper --non-interactive addrepo --check --refresh --priority 90 --name packman-essentials http://ftp.gwdg.de/pub/linux/misc/packman/suse/openSUSE_Tumbleweed/Essentials packman-essentials && \
+    retry_zypper --non-interactive addrepo --check --refresh --priority 90 --name packman-essentials https://ftp.gwdg.de/pub/linux/misc/packman/suse/openSUSE_Tumbleweed/Essentials packman-essentials && \
     retry_zypper --non-interactive --gpg-auto-import-keys refresh && \
     retry_zypper --non-interactive dup --from packman-essentials --allow-vendor-change && \
     retry_zypper --non-interactive install -y \
