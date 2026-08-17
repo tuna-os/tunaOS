@@ -363,6 +363,54 @@ def omissions_results() -> dict[str, tuple[str, str, str]]:
     return out
 
 
+_PARITY_CACHE: tuple[list[dict], str, str] | None = None
+
+
+def parity_results() -> dict[str, tuple[str, str, str]]:
+    """Per-cell parity verdict from package-parity.yml's baseline artifact.
+
+    ok → success; BROKEN/suspect → failure (a desktop adding fewer than the
+    floor of packages over its base is below the bar even when it isn't the
+    zero-added #858 case); unmeasured cells yield nothing — cell() renders ⬜.
+    """
+    global _PARITY_CACHE
+    if _PARITY_CACHE is None:
+        runs = gh_json(
+            "run", "list", "--repo", REPO, "--workflow", "package-parity.yml",
+            "--limit", "10", "--json", "databaseId,createdAt,status,conclusion",
+        ) or []
+        _PARITY_CACHE = ([], "", "")
+        for run in runs:
+            if run.get("status") != "completed" or run.get("conclusion") != "success":
+                continue
+            run_id, date = str(run["databaseId"]), run["createdAt"][:10]
+            with tempfile.TemporaryDirectory() as tmp:
+                try:
+                    subprocess.run(
+                        ["gh", "run", "download", run_id, "--repo", REPO,
+                         "--name", "package-parity-baseline", "--dir", tmp],
+                        capture_output=True, text=True, check=True,
+                    )
+                except subprocess.CalledProcessError:
+                    continue
+                parity_json = Path(tmp) / "parity.json"
+                if not parity_json.exists():
+                    continue
+                _PARITY_CACHE = (
+                    json.loads(parity_json.read_text()), date, run_id
+                )
+                break
+    cells, date, run_id = _PARITY_CACHE
+    out: dict[str, tuple[str, str, str]] = {}
+    for c in cells:
+        verdict = c.get("verdict", "")
+        if verdict == "ok":
+            out[c["cell"]] = ("success", date, run_id)
+        elif verdict.startswith(("BROKEN", "suspect")):
+            out[c["cell"]] = ("failure", date, run_id)
+    return out
+
+
 def contract_results() -> dict[str, tuple[str, str, str]]:
     """Newest per-cell verdict from desktop-contract-sweep.yml (tunaOS#858).
 
@@ -504,7 +552,7 @@ def criterion_scope_allows(criterion: dict, flavor: str) -> bool:
 
 
 def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
-                      omissions):
+                      omissions, parity):
     """The bar itself: one table scored against the blocking criteria.
 
     Per-criterion applicability follows each axis's own denominator, exactly
@@ -539,6 +587,9 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
             )
             per_cell["no_silent_omissions"] = _axis_from_results(
                 omissions, f"{variant}:{flavor}"
+            )
+            per_cell["parity"] = _axis_from_results(
+                parity, f"{variant}:{flavor}"
             )
         if flavor in isos.get(variant, set()):
             per_cell["iso"] = _axis_from_results(smoke, f"{variant}:{flavor}")
@@ -641,6 +692,29 @@ def omissions_section(lmatrix, omissions) -> list[str]:
         ),
         "",
     ] + desktop_table(lmatrix, omissions, om_key) + [""]
+
+
+def parity_section(lmatrix, parity) -> list[str]:
+    """Green criterion 7's first cadence (see parity_results)."""
+    pkey = lambda v, d: f"{v}:{d}"                     # noqa: E731
+    total, tested, passed = tally(lmatrix, parity, pkey)
+    return [
+        "## Package parity",
+        "",
+        f"**{passed} of {total}** cells at parity "
+        f"({tested} measured, {total - tested} never measured).",
+        "",
+        (
+            "Green criterion 7 (`parity`), first cadence: every desktop's "
+            "package set audited daily against its own base "
+            "(`package-parity.yml` → `scripts/package-parity.sh --audit`) — "
+            "the shape that exposes a build applying no desktop at all "
+            "(#858). ❌ covers both BROKEN (no more packages than base) and "
+            "suspect (fewer than 25 added). Diffing against each variant's "
+            "upstream reference is the next step and is not yet asserted."
+        ),
+        "",
+    ] + desktop_table(lmatrix, parity, pkey) + [""]
 
 
 def cell(results: dict, key: str, in_matrix: bool) -> str:
@@ -811,13 +885,15 @@ def build() -> str:
     # that composes the axes into the one claim the word "green" now makes.
     lifecycle = latest_results("bootc-lifecycle.yml", r":")
     omissions = omissions_results()
+    parity = parity_results()
     composite_lines, _, _ = composite_section(
         load_green_criteria(), build_stage_results(), contract, luks, smoke,
-        lifecycle, omissions,
+        lifecycle, omissions, parity,
     )
     out += composite_lines
 
     out += omissions_section(lmatrix, omissions)
+    out += parity_section(lmatrix, parity)
 
 
     # ── LUKS ────────────────────────────────────────────────────────────────

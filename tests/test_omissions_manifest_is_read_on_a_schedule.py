@@ -80,7 +80,7 @@ def test_composite_scores_the_omissions_axis() -> None:
                           "date": "x"}}
     omissions = {"albacore:gnome": ("failure", "x", "1")}
     _, green, _ = gms.composite_section(
-        criteria, stage, {}, {}, {}, {}, omissions
+        criteria, stage, {}, {}, {}, {}, omissions, {}
     )
     assert green == 0, "a cell shipping silent omissions must not be green"
 

@@ -90,7 +90,7 @@ def test_scope_excludes_are_not_judged_and_gate_absence_is_not_green() -> None:
         ("gnome", "Promote"): "success",
         ("gnome", "Gate"): "success",            # the full bar → green
     }, "date": "x"}}
-    _, green, _ = gms.composite_section(criteria, stage, {}, {}, {}, {}, {})
+    _, green, _ = gms.composite_section(criteria, stage, {}, {}, {}, {}, {}, {})
     # gnome (promote+gate) and base-hwe (boots out of scope) are green;
     # base promoted but its gate never ran — skipped_is_not_green.
     assert green == 2

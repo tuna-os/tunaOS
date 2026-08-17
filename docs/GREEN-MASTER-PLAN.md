@@ -106,10 +106,15 @@ Every image already writes `/usr/share/tunaos/missing-on-*.txt`.
 
 ### W6. Schedule parity *(criterion 7)*
 
-- [ ] `scripts/package-parity.sh` exists; put it on a cadence against each
-      variant's upstream reference and feed W1.
-- [ ] Start advisory; graduate to blocking per-variant once the noise floor is
-      known.
+- [x] `scripts/package-parity.sh` is on a daily cadence
+      (`package-parity.yml`) and feeds W1: per-cell verdicts land in the
+      package-parity-baseline artifact, the Package parity section, and the
+      composite. First cadence = desktop-vs-own-base delta (the #858 shape);
+      the audit roster now derives from build-config so no declared variant
+      can be silently omitted.
+- [ ] Diff against each variant's UPSTREAM reference (Bluefin/Aurora package
+      sets) — the criterion's full claim; advisory until that lands and the
+      noise floor is known, then graduate per-variant.
 
 ### W7. Rebuildability beyond base pins *(criterion 9)*
 
