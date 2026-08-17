@@ -91,8 +91,10 @@ per-cell skippable, and `base` cells promote with the Gate skipped.
 
 Every image already writes `/usr/share/tunaos/missing-on-*.txt`.
 
-- [ ] Scheduled job: pull each promoted image, read the manifest, publish a
-      table; nonzero omissions on a cell claiming green ⇒ not green.
+- [x] Scheduled job: the desktop contract sweep now runs
+      `verify-package-wishlist.sh` against every published image it pulls
+      (one pull, two axes), records `omissions_status` per cell, and the
+      composite scores it; unallowlisted omissions ⇒ not clean.
 - [ ] This is what catches the #858 class (published image, no desktop) and
       the #1755 class (hummingbird desktops installing nothing) *at publish
       time* instead of at verification time.

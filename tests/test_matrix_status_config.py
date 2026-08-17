@@ -216,6 +216,13 @@ class OverlayTagsNetworkLayer(unittest.TestCase):
 class ContractResultsArtifactDownload(unittest.TestCase):
     """desktop-contract-sweep.yml's baseline artifact, not job conclusions."""
 
+    def setUp(self):
+        # contract_results() and omissions_results() share one download via
+        # _baseline_cells()'s module-level cache; a prior test's data must not
+        # satisfy this test's call without its mocks ever running.
+        gms._BASELINE_CACHE = None
+        self.addCleanup(setattr, gms, "_BASELINE_CACHE", None)
+
     def _run(self, status="completed"):
         return {"databaseId": 1, "createdAt": "2026-08-06T00:00:00Z",
                 "status": status, "conclusion": "success"}
