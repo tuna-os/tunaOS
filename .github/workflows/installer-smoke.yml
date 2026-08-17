@@ -38,7 +38,29 @@ permissions:
   packages: read
 
 jobs:
+  # Hosted Ubuntu runners do not expose a DRM render node.  The Smithay
+  # frontends (KDE, COSMIC, Niri and XFCE) need EGL_EXT_device_drm, so
+  # launching those legs on plain virtio only produces the misleading
+  # "process is alive, no readiness stamp" failure.  Detect the capability
+  # before expanding the matrix and keep the weekly hosted run honest.
+  host-capabilities:
+    runs-on: ubuntu-latest
+    outputs:
+      gpu_available: ${{ steps.detect.outputs.gpu_available }}
+    steps:
+      - id: detect
+        run: |
+          if [[ -e /dev/dri/renderD128 ]]; then
+            echo "gpu_available=true" >> "$GITHUB_OUTPUT"
+            echo "DRM render node detected; GPU-dependent installer legs enabled"
+          else
+            echo "gpu_available=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::No DRM render node; GPU-dependent installer legs will be omitted"
+            echo "Explicit manual flavor selections remain available for targeted diagnosis."
+          fi
+
   generate-matrix:
+    needs: host-capabilities
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
@@ -56,6 +78,7 @@ jobs:
         env:
           FILTER_VARIANT: ${{ inputs.variant || '' }}
           FILTER_FLAVORS: ${{ inputs.flavors || '' }}
+          GPU_AVAILABLE: ${{ needs.host-capabilities.outputs.gpu_available }}
         run: |
           set -euo pipefail
           json="$(yq -o=json '.' .github/build-config.yml)"
@@ -71,6 +94,16 @@ jobs:
                  | select(.build_iso == true)
                  | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
                  | {variant: $v, flavor: .id} ]}')
+          fi
+
+          # A plain hosted runner cannot provide the EGL/DRM surface required
+          # by the four non-GNOME frontends.  Keep GNOME as a useful weekly
+          # smoke signal, and reserve the other legs for a GPU-capable manual
+          # run instead of reporting a deterministic infrastructure failure
+          # as an installer regression.
+          if [[ "$GPU_AVAILABLE" != "true" && -z "$FILTER_FLAVORS" ]]; then
+            echo "::notice::Filtering GPU-dependent installer flavors (no DRM render node)"
+            M=$(echo "$M" | jq -c '{include: [.include[] | select(.flavor == "gnome")]}' )
           fi
           echo "matrix=$M" >> "$GITHUB_OUTPUT"
           echo "$M" | jq .

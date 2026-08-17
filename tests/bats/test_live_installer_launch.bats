@@ -95,6 +95,14 @@ launcher_app() {
   grep -Fq 'grep -Fx' "$WORKFLOW"
 }
 
+@test "installer smoke gates GPU-dependent flavors on runner capability" {
+  [ -f "$WORKFLOW" ]
+  grep -Fq 'host-capabilities:' "$WORKFLOW"
+  grep -Fq 'gpu_available' "$WORKFLOW"
+  grep -Fq 'No DRM render node' "$WORKFLOW"
+  grep -Fq 'select(.flavor == "gnome")' "$WORKFLOW"
+}
+
 
 @test "installer recipe backend does not need an executable source mount" {
   # Tacklebox bind-mounts live-customize read-only. Git may retain this helper
