@@ -32,7 +32,7 @@ check: _ensure_check_deps
     fi
     just --unstable --fmt --check -f Justfile
     echo "Checking workflow drift..."
-    python3 scripts/generate-workflows.py
+    python3 {{ justfile_directory() }}/scripts/generate-workflows.py
     if ! git diff --exit-code .github/workflows/build-*.yml; then
         echo "::error::Generated workflow files are stale. Run 'just generate-workflows' and commit the changes."
         exit 1
@@ -61,7 +61,7 @@ test-pytest: _ensure_test_deps
 
 generate-workflows:
     #!/usr/bin/env bash
-    chmod +x scripts/generate-workflows.py && python3 scripts/generate-workflows.py
+    chmod +x {{ justfile_directory() }}/scripts/generate-workflows.py && python3 {{ justfile_directory() }}/scripts/generate-workflows.py
 
 fix:
     #!/usr/bin/env bash

@@ -121,7 +121,7 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     # a broken podman on the runner made the probe report ostree/unsealed for
     # an image its kde/xfce siblings probed as composefs-native/SEALED=1.
     PROBE_ERR=$(mktemp)
-    if ! PROBE=$(. scripts/lib/common.sh && probe_image_backend "$IMG_REF" sudo podman 2>"$PROBE_ERR"); then
+    if ! PROBE=$(. {{ justfile_directory() }}/scripts/lib/common.sh && probe_image_backend "$IMG_REF" sudo podman 2>"$PROBE_ERR"); then
         echo "ERROR: could not probe $IMG_REF for its bootc backend:" >&2
         cat "$PROBE_ERR" >&2
         rm -f "$PROBE_ERR"
