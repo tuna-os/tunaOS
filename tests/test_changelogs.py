@@ -15,6 +15,7 @@ Tests core logic extractable from the script:
 import pytest
 import re
 from itertools import product
+from pathlib import Path
 
 
 # ── Constants from the script ───────────────────────────────────────────────
@@ -262,6 +263,15 @@ def test_changelog_format_handwritten_placeholder():
     handwritten = """This is an automatically generated changelog for release `42.20250101`."""
     assert "automatically generated" in handwritten
     assert "42.20250101" in handwritten
+
+
+def test_commit_links_use_current_repository_org():
+    """Generated commit links must follow the current tuna-os repository."""
+    repo_root = Path(__file__).resolve().parents[1]
+    changelog_source = (repo_root / ".github" / "changelogs.py").read_text()
+
+    assert "https://github.com/tuna-os/albacore-lts/commit/" in changelog_source
+    assert "https://github.com/hanthor/albacore-lts/commit/" not in changelog_source
 
 
 # ── RETRIES Constant ────────────────────────────────────────────────────────
