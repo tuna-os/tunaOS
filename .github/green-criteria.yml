@@ -115,9 +115,13 @@ criteria:
     name: The build tells the truth about what it shipped
     proves: >-
       No package was dropped without the result being surfaced and acted on.
-    asserted_by: /usr/share/tunaos/missing-on-*.txt written into the image
-    enforcement: unimplemented
+    asserted_by: >-
+      build_scripts/checks/verify-package-wishlist.sh — at build time as a
+      gate, and daily against every published image by
+      .github/workflows/desktop-contract-sweep.yml (omissions read)
+    enforcement: advisory
     status_2026_08_17: "written into every image; read by nothing on a schedule"
+    status_2026_08_17_pm: "scheduled: the contract sweep reads the manifest from every image it pulls and scores it against package-miss-allowlist.txt"
     notes: >-
       Distinct from `parity`. Parity asks whether the set matches upstream;
       this asks whether the build admitted what it silently skipped.

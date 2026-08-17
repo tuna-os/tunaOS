@@ -66,7 +66,7 @@ it.
 
 ## Composite green — the bar
 
-Scored against `.github/green-criteria.yml`: a cell is green only when every **blocking** criterion applicable to it has a current affirmative result; a criterion that was skipped, never tested, or unasserted renders ⬜ and does not count as satisfied. Blocking today: `builds`. Advisory (measured in the sections below, not yet biting): `desktop`, `boots`, `install`, `rebuildable`. Unimplemented: `iso`, `lifecycle`, `parity`, `no_silent_omissions`, `arch_honesty`. Graduating a criterion is an edit to `enforcement:` in that file — this table and the README count tighten with no code change.
+Scored against `.github/green-criteria.yml`: a cell is green only when every **blocking** criterion applicable to it has a current affirmative result; a criterion that was skipped, never tested, or unasserted renders ⬜ and does not count as satisfied. Blocking today: `builds`. Advisory (measured in the sections below, not yet biting): `desktop`, `boots`, `install`, `no_silent_omissions`, `rebuildable`. Unimplemented: `iso`, `lifecycle`, `parity`, `arch_honesty`. Graduating a criterion is an edit to `enforcement:` in that file — this table and the README count tighten with no code change.
 
 **0 of 142** published cells are composite-green.
 
@@ -86,6 +86,27 @@ Scored against `.github/green-criteria.yml`: a cell is green only when every **b
 | **yellowfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
+
+## Silent omissions
+
+**0 of 52** cells clean (0 read, 52 never read).
+
+Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package-wishlist.sh` against every published image it pulls — the same gate new builds pass at build time — so an image shipping a silently-skipped package outside `package-miss-allowlist.txt` reads ❌ here even if it was published before the gate existed. A cell whose image was not read (no image, pull error, job lost) is ⬜, not clean.
+
+| Variant | gnome | kde | cosmic | niri | xfce |
+|---|:--:|:--:|:--:|:--:|:--:|
+| **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **flounder** | ⬜ | ⬜ | — | — | ⬜ |
+| **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
+| **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
+| **guppy** | ⬜ | ⬜ | — | — | ⬜ |
+| **hummingbird** | ⬜ | ⬜ | ⬜ | ⬜ | — |
+| **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **yellowfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 
 ## LUKS E2E
 
