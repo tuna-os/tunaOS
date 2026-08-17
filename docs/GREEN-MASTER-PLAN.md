@@ -31,12 +31,14 @@ The README matrix counts *promoted* cells; MATRIX-STATUS tracks the other axes
 separately and nothing composes them. Under the new bar the scoreboard must
 score cells against the criteria.
 
-- [ ] Extend `scripts/gen-matrix-status.py` to emit a **composite green
+- [x] Extend `scripts/gen-matrix-status.py` to emit a **composite green
       table**: a cell is green only when every `blocking` criterion in
       `green-criteria.yml` has a current affirmative result; never-tested
       renders as ⬜, not green.
-- [ ] `update-build-status.sh` README table gains a second number:
+- [x] `update-build-status.sh` README table gains a second number:
       `built X/142 · green Y/142` so raising the bar is visible, not silent.
+      Guarded: the script refuses to publish the composite number the day a
+      criterion it cannot score graduates to blocking.
 - [ ] Per-cell provenance (which run asserted which criterion, when) — already
       half-exists in MATRIX-STATUS; make it cover every axis.
 
