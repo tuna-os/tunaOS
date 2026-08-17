@@ -123,24 +123,30 @@ echo "Installing krunner-bazaar and setting up Bazaar Flatpak..."
 KRUNNER_BAZAAR_VERSION="v1.3.0"
 KRUNNER_BAZAAR_SRC="/tmp/krunner-bazaar-src"
 
-# Build deps — most already present from KDE group install
-dnf_retry -y install \
+# Build deps — most already present from KDE group install. This plugin is
+# optional; in particular, Hummingbird's incomplete KDE repos can report a
+# package as available while failing to resolve one of its shared-library
+# providers. Do not continue into a build (or let a download failure abort the
+# image) after that optional dependency setup fails.
+if dnf_retry -y install \
 	cmake extra-cmake-modules \
 	kf6-krunner-devel kf6-ki18n-devel kf6-kconfig-devel \
-	qt6-qtbase-devel qt6-qtdeclarative-devel || true
-
-curl -fsSL "https://github.com/bazaar-org/krunner-bazaar/archive/refs/tags/${KRUNNER_BAZAAR_VERSION}.tar.gz" |
-	tar -xzf - -C /tmp
-mv "/tmp/krunner-bazaar-${KRUNNER_BAZAAR_VERSION#v}" "${KRUNNER_BAZAAR_SRC}"
-
-if cmake -B "${KRUNNER_BAZAAR_SRC}/_build" -S "${KRUNNER_BAZAAR_SRC}" \
-	-DCMAKE_INSTALL_PREFIX=/usr \
-	-DCMAKE_BUILD_TYPE=Release 2>&1; then
-	cmake --build "${KRUNNER_BAZAAR_SRC}/_build" --parallel "$(nproc)"
-	cmake --install "${KRUNNER_BAZAAR_SRC}/_build"
-	echo "krunner-bazaar ${KRUNNER_BAZAAR_VERSION} built and installed from source."
+	qt6-qtbase-devel qt6-qtdeclarative-devel; then
+	rm -rf "${KRUNNER_BAZAAR_SRC}"
+	if curl -fsSL "https://github.com/bazaar-org/krunner-bazaar/archive/refs/tags/${KRUNNER_BAZAAR_VERSION}.tar.gz" |
+		tar -xzf - -C /tmp &&
+		mv "/tmp/krunner-bazaar-${KRUNNER_BAZAAR_VERSION#v}" "${KRUNNER_BAZAAR_SRC}" &&
+		cmake -B "${KRUNNER_BAZAAR_SRC}/_build" -S "${KRUNNER_BAZAAR_SRC}" \
+			-DCMAKE_INSTALL_PREFIX=/usr \
+			-DCMAKE_BUILD_TYPE=Release 2>&1 &&
+		cmake --build "${KRUNNER_BAZAAR_SRC}/_build" --parallel "$(nproc)" &&
+		cmake --install "${KRUNNER_BAZAAR_SRC}/_build"; then
+		echo "krunner-bazaar ${KRUNNER_BAZAAR_VERSION} built and installed from source."
+	else
+		echo "Warning: krunner-bazaar download or build failed, skipping plugin."
+	fi
 else
-	echo "Warning: krunner-bazaar build failed (missing KF6 devel deps?), skipping plugin."
+	echo "Warning: krunner-bazaar build deps unavailable, skipping plugin."
 fi
 rm -rf "${KRUNNER_BAZAAR_SRC}"
 
