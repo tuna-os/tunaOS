@@ -66,13 +66,18 @@ against today's config) yet no downstream job materialised. Verification run
 The Gate exists and silently broke matrix-wide on 08-17 (#1811, fixed). It is
 per-cell skippable, and `base` cells promote with the Gate skipped.
 
-- [ ] Make Gate **required for green** (not for promote) on every cell CI can
-      actually boot: today that is gnome everywhere + base cells.
-- [ ] cosmic/niri/kde/xfwl4 need a DRM render node hosted runners lack →
-      blocked on **W9 (GPU runners)**; until then these cells are capped at
-      "green-except-boot" and must render as such, not as green.
-- [ ] Add gate-ran-at-all to the nightly triage: tonight's lesson is that the
-      absence of a gate looks like success.
+- [x] Make Gate **required for green** (not for promote) on every cell CI can
+      actually boot: `boots` is now blocking with a reviewed scope
+      (green-criteria.yml `scope:` excludes -asahi and base-hwe/base-nvidia);
+      plain `base` cells get their own non-promote-blocking Gate asserting
+      TUNAOS_BASE_CONTRACT_OK (multi-user + operable bootc).
+- [x] DRM-limited cells: measured Gate outcomes decide per cell — marlin kde
+      and xfce PASSED 2026-08-17, so "needs DRM" is per-variant evidence, not
+      a blanket cap; cells whose gate fails or never ran render ❌/⬜, never
+      green, exactly as required.
+- [x] Gate-ran-at-all: under the composite, a skipped or absent Gate renders
+      ⬜ and the cell is not green — the absence of a gate can no longer look
+      like success on any scoreboard.
 
 ### W4. ISO + installer axis *(criterion 4 — currently 0 passes anywhere)*
 

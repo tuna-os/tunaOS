@@ -2976,7 +2976,18 @@ boot_disk_image() {
 case "$MODE" in
 disk)
 	boot_disk_image || exit 1
-	e2e_phase "Waiting up to ${TIMEOUT}s for a graphical session..."
+	# Which contract proves the boot. Base images reach multi-user, not
+	# graphical, so their marker is TUNAOS_BASE_CONTRACT_* (see --contract).
+	DISK_CONTRACT="${DISK_CONTRACT:-desktop}"
+	case "$DISK_CONTRACT" in
+	desktop) CONTRACT_PREFIX="TUNAOS_DESKTOP_CONTRACT" ;;
+	base) CONTRACT_PREFIX="TUNAOS_BASE_CONTRACT" ;;
+	*)
+		echo "ERROR: --contract must be 'desktop' or 'base', got '${DISK_CONTRACT}'" >&2
+		exit 1
+		;;
+	esac
+	e2e_phase "Waiting up to ${TIMEOUT}s for the ${DISK_CONTRACT} contract marker..."
 	deadline=$(($(date +%s) + TIMEOUT))
 	rc=2
 	while (($(date +%s) < deadline)); do
@@ -2985,14 +2996,14 @@ disk)
 			echo "ERROR: VM exited during boot" >&2
 			exit 1
 		fi
-		if grep -qE "TUNAOS_DESKTOP_CONTRACT_(OK|FAIL)" "$SERIAL_LOG" 2>/dev/null; then
-			if grep -q "TUNAOS_DESKTOP_CONTRACT_OK" "$SERIAL_LOG" 2>/dev/null; then
-				echo "==> Desktop experience contract passed (serial)"
+		if grep -qE "${CONTRACT_PREFIX}_(OK|FAIL)" "$SERIAL_LOG" 2>/dev/null; then
+			if grep -q "${CONTRACT_PREFIX}_OK" "$SERIAL_LOG" 2>/dev/null; then
+				echo "==> ${DISK_CONTRACT} contract passed (serial)"
 				rc=0
 				harvest_install_checks || rc=1
 			else
-				echo "ERROR: desktop experience contract FAILED:" >&2
-				grep "TUNAOS_DESKTOP_CONTRACT_FAIL" "$SERIAL_LOG" | tr -d '\r' >&2
+				echo "ERROR: ${DISK_CONTRACT} contract FAILED:" >&2
+				grep "${CONTRACT_PREFIX}_FAIL" "$SERIAL_LOG" | tr -d '\r' >&2
 				rc=1
 			fi
 			break
@@ -3007,7 +3018,7 @@ disk)
 	# paint extends the run, it cannot fail it.
 	wait_for_paint "10-ready" || true
 	if [[ "$rc" -eq 2 ]]; then
-		echo "ERROR: desktop experience contract marker was not emitted" >&2
+		echo "ERROR: ${DISK_CONTRACT} contract marker was not emitted" >&2
 	fi
 	exit "$rc"
 	;;

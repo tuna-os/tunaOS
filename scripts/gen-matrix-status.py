@@ -437,8 +437,17 @@ def build_stage_results() -> dict[str, dict]:
                 r" / (?P<flavor>[^/]+) / (?P<stage>Promote|Gate)$",
                 job.get("name", ""),
             )
-            if m:
-                jobs[(m["flavor"], m["stage"])] = job.get("conclusion") or ""
+            if not m:
+                continue
+            key = (m["flavor"], m["stage"])
+            conclusion = job.get("conclusion") or ""
+            # Two jobs can share a display name for one cell: the desktop
+            # Gate (skipped on base) and the base Gate (skipped on desktops)
+            # both render as "base / Gate". A real verdict must never be
+            # overwritten by its skipped twin, and job order must not decide.
+            if key in jobs and conclusion not in ("success", "failure"):
+                continue
+            jobs[key] = conclusion
         out[variant] = {"jobs": jobs, "date": run["createdAt"][:10]}
     return out
 
@@ -476,6 +485,24 @@ def composite_verdict(verdicts: list[str]) -> str:
     return "pass"
 
 
+def criterion_scope_allows(criterion: dict, flavor: str) -> bool:
+    """Whether a criterion is scored on this flavor at all.
+
+    A scope entry in green-criteria.yml is a REVIEWED declaration that CI
+    cannot assert the criterion for that cell (asahi has no aarch64 KVM;
+    base-hwe/base-nvidia are unbooted derivations). Out-of-scope cells are
+    not judged on the criterion — which is different from ⬜: untested counts
+    against green, out-of-scope simply isn't part of that cell's bar.
+    """
+    scope = criterion.get("scope") or {}
+    if flavor in (scope.get("excludes_flavors") or []):
+        return False
+    return not any(
+        flavor.endswith(suffix)
+        for suffix in (scope.get("excludes_flavor_suffixes") or [])
+    )
+
+
 def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
                       omissions):
     """The bar itself: one table scored against the blocking criteria.
@@ -495,9 +522,12 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
         jobs = stage.get(variant, {}).get("jobs", {})
         per_cell = {
             "builds": _stage_verdict(jobs.get((flavor, "Promote"))),
+            # Every cell has a Gate verdict slot — desktops from the desktop
+            # Gate, plain base from the base Gate (W3); whether it BINDS is
+            # the criterion's scope, applied in verdict() below.
+            "boots": _stage_verdict(jobs.get((flavor, "Gate"))),
         }
         if flavor in desktops.get(variant, set()):
-            per_cell["boots"] = _stage_verdict(jobs.get((flavor, "Gate")))
             per_cell["desktop"] = _axis_from_results(
                 contract, f"{variant}:{flavor}"
             )
@@ -514,7 +544,8 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
             per_cell["iso"] = _axis_from_results(smoke, f"{variant}:{flavor}")
         return per_cell
 
-    blocking = [c["id"] for c in criteria if c["enforcement"] == "blocking"]
+    blocking_criteria = [c for c in criteria if c["enforcement"] == "blocking"]
+    blocking = [c["id"] for c in blocking_criteria]
     advisory = [c["id"] for c in criteria if c["enforcement"] == "advisory"]
     unimplemented = [
         c["id"] for c in criteria if c["enforcement"] == "unimplemented"
@@ -522,10 +553,19 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
 
     def verdict(variant: str, flavor: str) -> str:
         per_cell = scorers(variant, flavor)
-        applicable = [
-            per_cell.get(c, "untested") for c in blocking
-            if c == "builds" or c in per_cell
-        ]
+        applicable = []
+        for criterion in blocking_criteria:
+            if not criterion_scope_allows(criterion, flavor):
+                continue
+            cid = criterion["id"]
+            if cid in ("builds", "boots"):
+                # Universal criteria: absence of a verdict is ⬜, it never
+                # silently drops out of the bar (skipped_is_not_green).
+                applicable.append(per_cell.get(cid, "untested"))
+            elif cid in per_cell:
+                # Axis-scoped criteria (desktop/install/iso/...): judged only
+                # where their own denominator schedules the cell.
+                applicable.append(per_cell[cid])
         return composite_verdict(applicable or ["untested"])
 
     green = total = 0
