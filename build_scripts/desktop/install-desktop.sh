@@ -183,6 +183,38 @@ if [[ "${_TD_OS}" == "zypper" ]]; then
 			zypper --non-interactive --gpg-auto-import-keys refresh --force || true
 			sleep $((attempt * 5))
 		done
+
+		# The dup is VERSION-driven, and that is not enough. Run 32047331620
+		# (gnome amd64): the desktop transaction upgraded ffmpeg to
+		# openSUSE's newer 9.0.1 build, the dup printed "Nothing to do" —
+		# there was no higher Packman version to move to — and the codec
+		# baseline still failed on the crippled decoder set. Ownership is
+		# the invariant, not version order: verify the vendor on the named
+		# multimedia set and force any openSUSE-owned member back to
+		# Packman, downgrades allowed.
+		_td_pm_lost=()
+		for _td_pkg in ffmpeg libavcodec-full gstreamer-plugins-good \
+			gstreamer-plugins-bad gstreamer-plugins-ugly \
+			gstreamer-plugins-libav vlc-codecs; do
+			rpm -q "$_td_pkg" >/dev/null 2>&1 || continue
+			rpm -q --qf '%{VENDOR}\n' "$_td_pkg" | grep -qi packman ||
+				_td_pm_lost+=("$_td_pkg")
+		done
+		if ((${#_td_pm_lost[@]} > 0)); then
+			echo "Packman lost ownership of: ${_td_pm_lost[*]} — forcing it back (tunaOS#1832)"
+			attempt=0
+			until zypper --non-interactive install -y --oldpackage \
+				--allow-vendor-change --force-resolution \
+				--from packman-essentials "${_td_pm_lost[@]}"; do
+				attempt=$((attempt + 1))
+				if ((attempt >= 3)); then
+					echo "ERROR: could not force the multimedia stack back to Packman (tunaOS#1832)" >&2
+					exit 1
+				fi
+				zypper --non-interactive --gpg-auto-import-keys refresh --force || true
+				sleep $((attempt * 5))
+			done
+		fi
 	fi
 fi
 
