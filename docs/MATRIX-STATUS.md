@@ -66,7 +66,7 @@ it.
 
 ## Composite green — the bar
 
-Scored against `.github/green-criteria.yml`: a cell is green only when every **blocking** criterion applicable to it has a current affirmative result; a criterion that was skipped, never tested, or unasserted renders ⬜ and does not count as satisfied. Blocking today: `builds`. Advisory (measured in the sections below, not yet biting): `desktop`, `boots`, `install`, `no_silent_omissions`, `rebuildable`. Unimplemented: `iso`, `lifecycle`, `parity`, `arch_honesty`. Graduating a criterion is an edit to `enforcement:` in that file — this table and the README count tighten with no code change.
+Scored against `.github/green-criteria.yml`: a cell is green only when every **blocking** criterion applicable to it has a current affirmative result; a criterion that was skipped, never tested, or unasserted renders ⬜ and does not count as satisfied. Blocking today: `builds`, `boots`. Advisory (measured in the sections below, not yet biting): `desktop`, `install`, `no_silent_omissions`, `rebuildable`. Unimplemented: `iso`, `lifecycle`, `parity`, `arch_honesty`. Graduating a criterion is an edit to `enforcement:` in that file — this table and the README count tighten with no code change.
 
 **0 of 142** published cells are composite-green.
 
