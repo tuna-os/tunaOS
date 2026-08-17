@@ -36,6 +36,7 @@ user-facing site:
 | [SECURE-BOOT.md](SECURE-BOOT.md) | Secure Boot support by variant |
 | [LUKS-TPM.md](LUKS-TPM.md) | Disk encryption & TPM2 auto-unlock |
 | [VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md) | Verify TunaOS artifacts — signatures and SBOM attestations |
+| [CHAINGUARD-COLLABORATION.md](CHAINGUARD-COLLABORATION.md) | Factual outreach brief for a possible Chainguard supply-chain collaboration (#1339) |
 | [INSTALLER-FRONTENDS.md](INSTALLER-FRONTENDS.md) | Installer frontends (cosmic/kde/niri/xfce): verification & parity |
 | [SCREENSHOTS.md](SCREENSHOTS.md) | TunaOS screenshot gallery |
 | [IMAGE-FACTORY-GATE.md](IMAGE-FACTORY-GATE.md) | Image factory completion gate & definition of done (#1283) |
