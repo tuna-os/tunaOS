@@ -162,13 +162,13 @@ elif [[ $IS_FEDORA == true ]]; then
 		"https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-${FEDORA_VER}.noarch.rpm" \
 		"https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${FEDORA_VER}.noarch.rpm" || true
 
-	# Multimedia + common desktop packages in one transaction.
-	# gstreamer1-plugin-libav is Fedora's own package (measured in the F44
-	# repodata); with RPM Fusion's full ffmpeg installed alongside it, its
-	# libgstlibav.so resolves the full libavcodec sonames — that pairing is
-	# what gives GStreamer apps H.264/H.265 decode. gstreamer1-plugins-ugly
-	# is the RPM Fusion build. The build contract asserts the result
-	# (verify-desktop-experience.sh codec baseline).
+	# RPM Fusion multimedia set — its own transaction, tolerant ONLY on
+	# Rawhide (tunaOS#1810). gstreamer1-plugin-libav is Fedora's own package
+	# (measured in the F44 repodata); with RPM Fusion's full ffmpeg installed
+	# alongside it, its libgstlibav.so resolves the full libavcodec sonames —
+	# that pairing is what gives GStreamer apps H.264/H.265 decode.
+	# gstreamer1-plugins-ugly is the RPM Fusion build. The build contract
+	# asserts the result (verify-desktop-experience.sh codec baseline).
 	# Note: On Rawhide (Fedora 46+), exclude openh264* until fedora-cisco-openh264
 	# updates its openh264 RPMs signed with the F46 key (currently fc45 signed with F45 key).
 	# Remove this exclude once openh264-*.fc46 appears in fedora-cisco-openh264.
@@ -176,13 +176,29 @@ elif [[ $IS_FEDORA == true ]]; then
 	if [[ "${FEDORA_VER}" == "rawhide" ]]; then
 		dnf_opts+=(--exclude='openh264*')
 	fi
-	dnf -y install "${dnf_opts[@]}" \
+	# install_rawhide_tolerant (build_scripts/lib.sh) behaves exactly like a
+	# plain `dnf -y install` on every pinned Fedora release — including this
+	# one, bonito — and only degrades to a --skip-broken retry + loud
+	# wishlist record when FEDORA_VER=rawhide AND the strict transaction
+	# fails (e.g. rpmfusion-free-rawhide's ffmpeg-libs needing a liboapv
+	# SONAME Fedora rawhide no longer ships). Kept as its own transaction,
+	# separate from the required base packages below, so a rawhide codec
+	# skew can never tolerate away buildah/podman/etc — those still fail the
+	# build strictly on every release, rawhide included.
+	install_rawhide_tolerant "${dnf_opts[@]}" \
 		gstreamer1-plugins-good \
 		gstreamer1-plugins-ugly \
 		gstreamer1-plugin-libav \
 		gstreamer1-plugins-bad-free \
 		lame \
-		ffmpeg \
+		ffmpeg
+
+	# Common desktop + container-tooling packages — always a strict
+	# transaction; a failure here fails the build on every Fedora release,
+	# rawhide included. Never routed through install_rawhide_tolerant: none
+	# of these are expected to be affected by the rpmfusion/rawhide skew,
+	# and none of them should ever become silently optional.
+	dnf -y install \
 		buildah \
 		podman \
 		skopeo \
