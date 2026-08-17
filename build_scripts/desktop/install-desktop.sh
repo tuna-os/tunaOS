@@ -157,6 +157,33 @@ if [[ "${_TD_OS}" == "zypper" ]]; then
 	}
 	zypper --non-interactive --gpg-auto-import-keys refresh || true
 	_td_zypper_install_retry "${_TD_ZYPPER_PKGS[@]}"
+
+	# Re-assert the Packman multimedia stack AFTER the desktop transaction
+	# (tunaOS#1832). The base stage installs Packman's full-codec ffmpeg with
+	# --allow-vendor-change, but the desktop install can pull a NEWER
+	# openSUSE-vendor ffmpeg through a dependency bump — vendor stickiness
+	# does not survive a version-forced upgrade — and openSUSE's build
+	# compiles the h264/hevc/vc1 decoders out. Every sailfin desktop then
+	# failed the codec baseline deterministically:
+	#
+	#   ffmpeg cannot decode h264 — a free/crippled libavcodec is installed
+	#   configure --disable-decoder='h264,hevc,vc1,prores_raw,vvc'
+	#
+	# The dup is a no-op when Packman already owns the stack, so this is
+	# idempotent, and the codec baseline in verify-desktop-experience.sh
+	# remains the assertion that it worked.
+	if zypper --non-interactive repos packman-essentials >/dev/null 2>&1; then
+		attempt=0
+		until zypper --non-interactive dup --from packman-essentials --allow-vendor-change; do
+			attempt=$((attempt + 1))
+			if ((attempt >= 3)); then
+				echo "ERROR: could not re-assert Packman multimedia after the desktop install (tunaOS#1832)" >&2
+				exit 1
+			fi
+			zypper --non-interactive --gpg-auto-import-keys refresh --force || true
+			sleep $((attempt * 5))
+		done
+	fi
 fi
 
 # ── Emerge path ────────────────────────────────────────────────────────────────
