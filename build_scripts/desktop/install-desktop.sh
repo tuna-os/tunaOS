@@ -184,35 +184,59 @@ if [[ "${_TD_OS}" == "zypper" ]]; then
 			sleep $((attempt * 5))
 		done
 
-		# The dup is VERSION-driven, and that is not enough. Run 32047331620
-		# (gnome amd64): the desktop transaction upgraded ffmpeg to
-		# openSUSE's newer 9.0.1 build, the dup printed "Nothing to do" —
-		# there was no higher Packman version to move to — and the codec
-		# baseline still failed on the crippled decoder set. Ownership is
-		# the invariant, not version order: verify the vendor on the named
-		# multimedia set and force any openSUSE-owned member back to
-		# Packman, downgrades allowed.
+		# The dup is VERSION-driven, and that is not enough — but the first
+		# forced-install attempt (run 32047331620 follow-up, 32052422745)
+		# also taught us WHICH packages matter. The Packman codec model on
+		# openSUSE keeps the distro's ffmpeg/gstreamer packages
+		# openSUSE-vendored; full decoding comes from Packman's LIBRARY
+		# complements. Essentials carries NO package literally named
+		# `ffmpeg` (measured against the live index 2026-08-17: only
+		# ffmpeg-3..8 and libavcodecNN), so forcing the openSUSE names was
+		# a no-op: 'ffmpeg' not found in package names → "already
+		# installed" → Nothing to do → crippled decoders survive.
+		#
+		# The invariant: every installed libavcodecNN (the soname the
+		# ffmpeg binary actually loads decoders from) plus the
+		# gstreamer *-codecs complements and vlc-codecs must be
+		# Packman-vendored. Force any that are not, downgrades allowed.
 		_td_pm_lost=()
-		for _td_pkg in ffmpeg libavcodec-full gstreamer-plugins-good \
-			gstreamer-plugins-bad gstreamer-plugins-ugly \
-			gstreamer-plugins-libav vlc-codecs; do
-			rpm -q "$_td_pkg" >/dev/null 2>&1 || continue
+		while IFS= read -r _td_pkg; do
+			[[ -n "$_td_pkg" ]] || continue
 			rpm -q --qf '%{VENDOR}\n' "$_td_pkg" | grep -qi packman ||
 				_td_pm_lost+=("$_td_pkg")
+		done < <(rpm -qa --qf '%{NAME}\n' 'libavcodec*' 2>/dev/null)
+		for _td_pkg in gstreamer-plugins-bad-codecs \
+			gstreamer-plugins-ugly-codecs vlc-codecs; do
+			if ! rpm -q "$_td_pkg" >/dev/null 2>&1; then
+				# The complement is not installed at all — that is the same
+				# hole with a different spelling.
+				_td_pm_lost+=("$_td_pkg")
+			elif ! rpm -q --qf '%{VENDOR}\n' "$_td_pkg" | grep -qi packman; then
+				_td_pm_lost+=("$_td_pkg")
+			fi
 		done
 		if ((${#_td_pm_lost[@]} > 0)); then
-			echo "Packman lost ownership of: ${_td_pm_lost[*]} — forcing it back (tunaOS#1832)"
+			echo "Packman must own the codec libraries; forcing: ${_td_pm_lost[*]} (tunaOS#1832)"
 			attempt=0
 			until zypper --non-interactive install -y --oldpackage \
 				--allow-vendor-change --force-resolution \
 				--from packman-essentials "${_td_pm_lost[@]}"; do
 				attempt=$((attempt + 1))
 				if ((attempt >= 3)); then
-					echo "ERROR: could not force the multimedia stack back to Packman (tunaOS#1832)" >&2
+					echo "ERROR: could not force the codec libraries back to Packman (tunaOS#1832)" >&2
 					exit 1
 				fi
 				zypper --non-interactive --gpg-auto-import-keys refresh --force || true
 				sleep $((attempt * 5))
+			done
+			# Assert, don't hope: a second no-op here means the force above
+			# quietly failed and the codec baseline will fail later anyway —
+			# fail HERE, where the zypper output is still on screen.
+			for _td_pkg in "${_td_pm_lost[@]}"; do
+				rpm -q --qf '%{VENDOR}\n' "$_td_pkg" | grep -qi packman || {
+					echo "ERROR: ${_td_pkg} still not Packman-vendored after the forced install (tunaOS#1832)" >&2
+					exit 1
+				}
 			done
 		fi
 	fi

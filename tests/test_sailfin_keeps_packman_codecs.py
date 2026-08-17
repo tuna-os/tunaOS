@@ -44,16 +44,25 @@ def test_base_stage_still_installs_packman_first() -> None:
 
 
 def test_ownership_is_verified_not_inferred_from_the_dup() -> None:
-    """Run 32047331620 proved the dup alone is insufficient: the desktop
-    transaction upgraded ffmpeg to openSUSE's NEWER crippled build, the dup
-    said "Nothing to do" (no higher Packman version existed), and the codec
-    baseline still failed. The script must check the installed VENDOR on the
-    multimedia set and force openSUSE-owned members back to Packman, with
-    downgrades allowed — version order is not the invariant, ownership is."""
+    """Run 32047331620 proved the dup alone is insufficient (openSUSE's
+    NEWER ffmpeg → "Nothing to do"), and run 32052422745 proved which
+    packages the check must target: Packman Essentials carries NO package
+    named `ffmpeg` (measured live 2026-08-17 — only ffmpeg-3..8 and
+    libavcodecNN), so forcing the openSUSE package names was a no-op
+    ('not found in package names'). The invariant is that the LIBRARY
+    complements are Packman-vendored: every installed libavcodecNN, the
+    gstreamer *-codecs packages, and vlc-codecs."""
     assert "rpm -q --qf '%{VENDOR}" in SCRIPT
     assert "--oldpackage" in SCRIPT
     assert "--from packman-essentials" in SCRIPT
-    assert "force the multimedia stack back to Packman" in SCRIPT
+    # The corrected target set: libraries, not the openSUSE binary names.
+    assert "'libavcodec*'" in SCRIPT
+    assert "gstreamer-plugins-bad-codecs" in SCRIPT
+    assert "gstreamer-plugins-ugly-codecs" in SCRIPT
+    assert "vlc-codecs" in SCRIPT
+    # And it must assert the outcome, not hope: a post-force vendor
+    # re-check that fails the build where the zypper output is on screen.
+    assert "still not Packman-vendored after the forced install" in SCRIPT
     # The vendor check must come AFTER the dup — it is the fallback for the
     # case the dup cannot handle, not a replacement for it.
     assert SCRIPT.index("dup --from packman-essentials") \
