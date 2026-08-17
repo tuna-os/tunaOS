@@ -38,6 +38,7 @@ from pathlib import Path
 REPO = "tuna-os/tunaOS"
 DOC = Path("docs/MATRIX-STATUS.md")
 CONFIG = Path(".github/build-config.yml")
+GREEN_CRITERIA = Path(".github/green-criteria.yml")
 
 BEGIN = "<!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->"
 END = "<!-- END GENERATED -->"
@@ -361,6 +362,190 @@ def contract_results() -> dict[str, tuple[str, str, str]]:
     return {}
 
 
+def load_green_criteria(path: Path = GREEN_CRITERIA) -> list[dict]:
+    """The criteria roster. PyYAML only — this file has anchors-free simple
+    structure, but hand-parsing it would mean two parsers to keep honest;
+    matrix-status.yml pip-installs pyyaml before running this script."""
+    try:
+        import yaml
+    except ImportError:
+        sys.exit("green-criteria.yml needs PyYAML: pip install pyyaml")
+    return yaml.safe_load(path.read_text())["criteria"]
+
+
+def build_stage_results() -> dict[str, dict]:
+    """Per-variant Promote and Gate outcomes from the newest CONCLUSIVE build.
+
+    Same selection rule as .github/scripts/update-build-status.sh: walk recent
+    runs, take the first whose conclusion is success or failure — a cancelled
+    run is not a verdict on anything (tunaOS#1730). One run view per variant,
+    not a RUN_DEPTH walk: a build run asserts its whole matrix at once, so the
+    newest conclusive run IS the current state of every cell it scheduled.
+    """
+    out: dict[str, dict] = {}
+    for variant in sorted(_matrix("build_image", desktops_only=False)):
+        runs = gh_json(
+            "run", "list", "--repo", REPO,
+            "--workflow", f"build-{variant}.yml",
+            "--branch", "main", "--limit", "10",
+            "--json", "databaseId,conclusion,createdAt",
+        ) or []
+        run = next(
+            (r for r in runs if r.get("conclusion") in ("success", "failure")),
+            None,
+        )
+        if run is None:
+            out[variant] = {"jobs": {}, "date": ""}
+            continue
+        detail = gh_json(
+            "run", "view", str(run["databaseId"]), "--repo", REPO,
+            "--json", "jobs",
+        ) or {}
+        jobs: dict[tuple[str, str], str] = {}
+        for job in detail.get("jobs", []):
+            m = re.search(
+                r" / (?P<flavor>[^/]+) / (?P<stage>Promote|Gate)$",
+                job.get("name", ""),
+            )
+            if m:
+                jobs[(m["flavor"], m["stage"])] = job.get("conclusion") or ""
+        out[variant] = {"jobs": jobs, "date": run["createdAt"][:10]}
+    return out
+
+
+def _stage_verdict(conclusion: str | None) -> str:
+    """success → pass, failure → fail, anything else → untested.
+
+    Skipped and missing are deliberately NOT failures: "no job asserted this
+    cell" is absence of evidence (tunaOS#1730), and green-criteria.yml's rule
+    already refuses to count it as green (skipped_is_not_green) — ⬜ says both.
+    """
+    if conclusion == "success":
+        return "pass"
+    if conclusion == "failure":
+        return "fail"
+    return "untested"
+
+
+def _axis_from_results(results: dict, key: str) -> str:
+    hit = results.get(key)
+    return _stage_verdict(hit[0] if hit else None)
+
+
+def composite_verdict(verdicts: list[str]) -> str:
+    """Compose per-criterion verdicts under green-criteria.yml's rule.
+
+    fail outranks untested for the glyph — a demonstrated failure is more
+    information than an absence — but neither is green: the count below only
+    ever admits cells where every applicable blocking criterion says pass.
+    """
+    if any(v == "fail" for v in verdicts):
+        return "fail"
+    if any(v == "untested" for v in verdicts):
+        return "untested"
+    return "pass"
+
+
+def composite_section(criteria, stage, contract, luks, smoke, lifecycle):
+    """The bar itself: one table scored against the blocking criteria.
+
+    Per-criterion applicability follows each axis's own denominator, exactly
+    like the sections below — builds applies to every published cell, the
+    desktop/boot/install axes to the desktops set, iso to the ISO set. A
+    criterion with no per-cell assertion wired here scores untested, which the
+    rule turns into "not green": making such a criterion blocking turns the
+    whole board ⬜ loudly instead of silently passing it.
+    """
+    desktops = _matrix("build_image", desktops_only=True)
+    everything = _matrix("build_image", desktops_only=False)
+    isos = iso_matrix()
+
+    def scorers(variant: str, flavor: str) -> dict[str, str]:
+        jobs = stage.get(variant, {}).get("jobs", {})
+        per_cell = {
+            "builds": _stage_verdict(jobs.get((flavor, "Promote"))),
+        }
+        if flavor in desktops.get(variant, set()):
+            per_cell["boots"] = _stage_verdict(jobs.get((flavor, "Gate")))
+            per_cell["desktop"] = _axis_from_results(
+                contract, f"{variant}:{flavor}"
+            )
+            per_cell["install"] = _axis_from_results(
+                luks, f"LUKS {variant}:{flavor}"
+            )
+            per_cell["lifecycle"] = _axis_from_results(
+                lifecycle, f"{variant}:{flavor}"
+            )
+        if flavor in isos.get(variant, set()):
+            per_cell["iso"] = _axis_from_results(smoke, f"{variant}:{flavor}")
+        return per_cell
+
+    blocking = [c["id"] for c in criteria if c["enforcement"] == "blocking"]
+    advisory = [c["id"] for c in criteria if c["enforcement"] == "advisory"]
+    unimplemented = [
+        c["id"] for c in criteria if c["enforcement"] == "unimplemented"
+    ]
+
+    def verdict(variant: str, flavor: str) -> str:
+        per_cell = scorers(variant, flavor)
+        applicable = [
+            per_cell.get(c, "untested") for c in blocking
+            if c == "builds" or c in per_cell
+        ]
+        return composite_verdict(applicable or ["untested"])
+
+    green = total = 0
+    for variant, flavors in everything.items():
+        for flavor in flavors:
+            total += 1
+            if verdict(variant, flavor) == "pass":
+                green += 1
+
+    glyph = {"pass": PASS, "fail": FAIL, "untested": UNTESTED}
+    rows = ["| Variant | " + " | ".join(DESKTOPS) + " |",
+            "|---|" + ":--:|" * len(DESKTOPS)]
+    for variant in sorted(desktops):
+        cells = [
+            glyph[verdict(variant, d)] if d in desktops[variant] else NA
+            for d in DESKTOPS
+        ]
+        rows.append(f"| **{variant}** | " + " | ".join(cells) + " |")
+
+    lines = [
+        "## Composite green — the bar",
+        "",
+        (
+            "Scored against `.github/green-criteria.yml`: a cell is green only "
+            "when every **blocking** criterion applicable to it has a current "
+            "affirmative result; a criterion that was skipped, never tested, "
+            "or unasserted renders \u2b1c and does not count as satisfied. "
+            "Blocking today: "
+            + ", ".join(f"`{c}`" for c in blocking)
+            + ". Advisory (measured in the sections below, not yet biting): "
+            + ", ".join(f"`{c}`" for c in advisory)
+            + ". Unimplemented: "
+            + ", ".join(f"`{c}`" for c in unimplemented)
+            + ". Graduating a criterion is an edit to `enforcement:` in that "
+            "file — this table and the README count tighten with no code "
+            "change."
+        ),
+        "",
+        f"**{green} of {total}** published cells are composite-green.",
+        "",
+    ] + rows + [
+        "",
+        (
+            "Cells outside the desktop columns (base, hwe, nvidia and friends) "
+            "are in the count above but not the table; only `builds` applies "
+            "to them today."
+        ),
+        "",
+    ]
+    # The escaped square renders literally otherwise.
+    lines = [l.replace("\u2b1c", UNTESTED) for l in lines]
+    return lines, green, total
+
+
 def cell(results: dict, key: str, in_matrix: bool) -> str:
     """A real result always wins over "not built".
 
@@ -524,6 +709,16 @@ def build() -> str:
         "",
     ]
 
+    # ── Composite ───────────────────────────────────────────────────────────
+    # First, because everything below is an input to it: this is the section
+    # that composes the axes into the one claim the word "green" now makes.
+    lifecycle = latest_results("bootc-lifecycle.yml", r":")
+    composite_lines, _, _ = composite_section(
+        load_green_criteria(), build_stage_results(), contract, luks, smoke,
+        lifecycle,
+    )
+    out += composite_lines
+
     # ── LUKS ────────────────────────────────────────────────────────────────
     total, tested, passed = tally(lmatrix, luks, luks_key)
     # NOT lmatrix: it is desktops_only, so no flavor in it can ever contain
@@ -643,7 +838,7 @@ def build() -> str:
         out += [f"Newest result {dates[-1]}.", ""]
 
     # ── Bootc Lifecycle ──────────────────────────────────────────────────────
-    lifecycle = latest_results("bootc-lifecycle.yml", r":")
+    # `lifecycle` itself was fetched up top, where the composite scores it.
     lifecycle_key = lambda v, d: f"{v}:{d}"            # noqa: E731
     total, tested, passed = tally(lmatrix, lifecycle, lifecycle_key)
     out += [
