@@ -164,7 +164,7 @@ fi
 
 {
 	echo
-	echo "**Built ${total_green}/${total_cells} · composite green ${composite_green}/${total_cells} (${percent}%)** — of the remainder, **${total_failing} failing** and **${total_unreached} never reached** (no job asserted them). The two are reported separately on purpose: a never-reached cell is untested, not broken. Composite green is scored against [\\`.github/green-criteria.yml\\`](.github/green-criteria.yml) (blocking today: \\`builds\\` + \\`boots\\` — a cell must promote AND pass its boot Gate; the full per-axis board is [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md)). This is a point-in-time CI snapshot, not a support-tier promise."
+	echo "**Built ${total_green}/${total_cells} · composite green ${composite_green}/${total_cells} (${percent}%)** — of the remainder, **${total_failing} failing** and **${total_unreached} never reached** (no job asserted them). The two are reported separately on purpose: a never-reached cell is untested, not broken. Composite green is scored against [\`.github/green-criteria.yml\`](.github/green-criteria.yml) (blocking today: \`builds\` + \`boots\` — a cell must promote AND pass its boot Gate; the full per-axis board is [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md)). This is a point-in-time CI snapshot, not a support-tier promise."
 	echo
 	echo "$end"
 } >>"$tmp_table"

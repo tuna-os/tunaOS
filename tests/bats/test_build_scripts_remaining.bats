@@ -203,9 +203,13 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 @test "disk gate requires the desktop contract marker" {
   # The gate wakes on either marker (both prove the contract service ran)
   # but only OK passes; FAIL surfaces its reason lines and exits nonzero.
+  # --contract selects the marker prefix; desktop is the default and base
+  # cells assert TUNAOS_BASE_CONTRACT instead.
   run grep -F 'TUNAOS_DESKTOP_CONTRACT_(OK|FAIL)' "${REPO_ROOT}/scripts/iso-e2e.sh"
   [ "$status" -eq 0 ]
-  grep -qF 'desktop experience contract FAILED' "${REPO_ROOT}/scripts/iso-e2e.sh"
+  grep -qF 'CONTRACT_PREFIX="TUNAOS_DESKTOP_CONTRACT"' "${REPO_ROOT}/scripts/iso-e2e.sh"
+  grep -qF 'CONTRACT_PREFIX="TUNAOS_BASE_CONTRACT"' "${REPO_ROOT}/scripts/iso-e2e.sh"
+  grep -qF 'contract FAILED:' "${REPO_ROOT}/scripts/iso-e2e.sh"
 }
 
 @test "runtime contract never asserts graphical.target is active" {

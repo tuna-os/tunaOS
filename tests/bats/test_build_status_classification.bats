@@ -22,14 +22,18 @@ setup() {
   BIN="${BATS_TEST_TMPDIR}/bin"
   mkdir -p "$BIN"
 
-  # yq: one variant, four flavors. The script only ever asks for the flavor
-  # list and the (id, emoji) pairs.
+  # yq: one variant, four flavors. The script asks for the flavor list, the
+  # (id, emoji) pairs, and — since the composite count — the green-criteria
+  # blocking set and the boots scope. The excludes cases must precede the
+  # generic *flavors* one: their queries also contain the word "flavors".
   cat > "${BIN}/yq" <<'STUB'
 #!/usr/bin/env bash
 for arg in "$@"; do
   case "$arg" in
-    *flavors*) printf 'green\nbroken\nskipped\nabsent\n'; exit 0 ;;
-    *emoji*)   printf 'sailfin\t🦈\n'; exit 0 ;;
+    *excludes_flavor*) exit 0 ;;
+    *enforcement*)     printf 'boots,builds\n'; exit 0 ;;
+    *flavors*)         printf 'green\nbroken\nskipped\nabsent\n'; exit 0 ;;
+    *emoji*)           printf 'sailfin\t🦈\n'; exit 0 ;;
   esac
 done
 exit 0
