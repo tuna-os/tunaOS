@@ -642,6 +642,80 @@ install_available() {
 	done
 }
 
+# Tolerate an unresolvable RPM Fusion Rawhide transaction without killing
+# the whole variant (tunaOS#1810). Fedora Rawhide and RPM Fusion Rawhide
+# are two independently-built repos; when Fedora bumps a shared library's
+# SONAME before RPM Fusion rebuilds against it, packages in the enabled
+# repo set can go unresolvable even though every requested name is real.
+# Measured 2026-08-17 against live repodata: Fedora rawhide's openapv-libs
+# now provides only `liboapv.so.3` (0.3.0.0-1.fc46), but
+# rpmfusion-free-rawhide's ffmpeg-libs-8.1.2-5.fc46 still
+# `Requires: liboapv.so.2()(64bit)` — nothing in either repo provides that
+# SONAME anymore. That is a depsolve failure, not a missing package name,
+# so install_available's `dnf repoquery --available` probe (which only
+# checks that the name exists) cannot see it: "ffmpeg" genuinely exists,
+# only its dependency chain does not resolve.
+#
+# Strategy: try the transaction exactly as given first. On any release
+# OTHER than rawhide, or whenever the strict transaction succeeds,
+# behavior is identical to a plain `dnf -y install` — pinned bonito (and
+# every other non-rawhide Fedora build) is provably unaffected. Only when
+# FEDORA_VER=rawhide AND the strict transaction fails do we retry once
+# with --skip-broken, then diff the originally-requested package list
+# against what's actually installed afterward to name exactly what
+# dropped out. Those names are routed through the same loud path
+# install_available uses: a ::warning per miss, and an append to
+# /usr/share/tunaos/missing-on-<image>.txt (record_package_wishlist) — so
+# checks/verify-package-wishlist.sh still gates the miss against
+# checks/package-miss-allowlist.txt. The omission is recorded, not
+# silent, and criterion no_silent_omissions has real evidence to point at.
+#
+# Usage: install_rawhide_tolerant [dnf-flag ...] pkg1 pkg2 pkg3 ...
+# (leading `-`-prefixed args are treated as dnf flags, e.g. --exclude=...,
+# everything after the first non-flag arg is a package name)
+install_rawhide_tolerant() {
+	local opts=()
+	while [[ "${1:-}" == -* ]]; do
+		opts+=("$1")
+		shift
+	done
+	local pkgs=("$@")
+	if [[ ${#pkgs[@]} -eq 0 ]]; then
+		echo "install_rawhide_tolerant: no packages requested" >&2
+		return 0
+	fi
+
+	if dnf -y install "${opts[@]}" "${pkgs[@]}"; then
+		return 0
+	fi
+
+	if [[ "${FEDORA_VER:-}" != "rawhide" ]]; then
+		echo "install_rawhide_tolerant: transaction failed on ${FEDORA_VER:-non-rawhide Fedora}; not tolerating (only Rawhide gets the --skip-broken retry — pinned Fedora releases stay strict)." >&2
+		return 1
+	fi
+
+	printf '::warning title=Rawhide multimedia transaction unresolvable (tunaOS#1810)::[%s] failed to resolve as a strict dnf transaction on Fedora Rawhide (an rpmfusion-rawhide/Fedora-rawhide packaging skew). Retrying with --skip-broken so this costs codecs, not the whole variant.\n' "${pkgs[*]}"
+
+	dnf -y install --skip-broken "${opts[@]}" "${pkgs[@]}" || true
+
+	local missing=() pkg
+	for pkg in "${pkgs[@]}"; do
+		rpm -q "$pkg" &>/dev/null || missing+=("$pkg")
+	done
+
+	if [[ ${#missing[@]} -eq 0 ]]; then
+		echo "install_rawhide_tolerant: --skip-broken retry actually installed everything requested; the earlier failure was transient." >&2
+		return 0
+	fi
+
+	record_package_wishlist \
+		"$(basename "${BASH_SOURCE[1]:-install_rawhide_tolerant}")" \
+		"${missing[@]}"
+
+	echo "install_rawhide_tolerant: proceeding without: ${missing[*]}" >&2
+	return 0
+}
+
 # systemctl enable wrapper that tolerates the unit-not-present case.
 # Build scripts run in a multi-stage container build where some units may
 # only exist on certain variants (e.g. tailscaled on EL10 but not on EL9).

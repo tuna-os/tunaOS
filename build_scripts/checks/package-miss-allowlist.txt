@@ -109,3 +109,17 @@ xfce4-clipman-plugin
 fastfetch
 glow
 gum
+
+# ── build_scripts/10-base-packages.sh install_rawhide_tolerant path
+#    (tunaOS#1810) — the RPM Fusion Rawhide multimedia transaction, tolerant
+#    ONLY when FEDORA_VER=rawhide (see build_scripts/lib.sh). ffmpeg is the
+#    one that actually drops: rpmfusion-free-rawhide's ffmpeg-libs-8.1.2-5
+#    Requires: liboapv.so.2()(64bit), which nothing in the enabled repos
+#    provides — Fedora rawhide's openapv-libs moved to liboapv.so.3.
+#    gstreamer1-plugin-libav (the codec path GStreamer apps actually use)
+#    resolves independently via Fedora's own libavcodec-free, so it is NOT
+#    expected to appear here; if it ever does, that is a different, more
+#    serious break and should NOT be silently allowlisted alongside this
+#    one. Remove this entry once rpmfusion-free-rawhide rebuilds ffmpeg
+#    against openapv 0.3 (liboapv.so.3), restoring ffmpeg on bonito-rawhide.
+ffmpeg
