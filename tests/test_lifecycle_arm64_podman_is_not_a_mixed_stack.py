@@ -28,3 +28,18 @@ def test_podman_is_never_apt_installed_over_a_preinstalled_one() -> None:
 
 def test_stale_lock_segments_are_cleared() -> None:
     assert BODY.count("rm -f /dev/shm/libpod_lock") == 2
+
+
+# The ISO surface — where #1556 was originally filed. Lifecycle run
+# 32040213366 validated the guard on all 53 arm64 legs (zero mixed-stack or
+# lock-init failures), so the same treatment applies to the workflow whose
+# arm64 tacklebox pre-pull first showed the signature.
+ARTIFACTS = (ROOT / ".github" / "workflows" /
+             "reusable-build-artifacts.yml").read_text(encoding="utf-8")
+
+
+def test_iso_surface_carries_the_same_guard() -> None:
+    assert "podman already present" in ARTIFACTS
+    assert "rm -f /dev/shm/libpod_lock" in ARTIFACTS
+    # The one unconditional install line this workflow used to carry.
+    assert "apt-get install -y just podman" not in ARTIFACTS
