@@ -53,7 +53,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        stream: ${{ github.event_name == 'workflow_dispatch' && fromJson(format('[\"{0}\"]', inputs.stream)) || fromJson('["gnome"]') }}
+        # Keep the scheduled Releases surface in parity with the stable
+        # desktop streams built nightly. Manual dispatch remains scoped to
+        # the requested stream so it can be used for targeted catch-up runs.
+        stream: ${{ github.event_name == 'workflow_dispatch' && fromJson(format('[\"{0}\"]', inputs.stream)) || fromJson('["gnome", "kde", "xfce", "cosmic", "niri"]') }}
 
     steps:
       - name: Checkout repository
