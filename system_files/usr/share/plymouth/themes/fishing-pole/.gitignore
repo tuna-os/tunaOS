@@ -1,0 +1,4 @@
+# Only frame 0001 is the compact source asset. The build phase creates the
+# remaining names as symlinks so Plymouth can use its normal frame contract.
+fishing-pole-[0-9][0-9][0-9][0-9].png
+!fishing-pole-0001.png

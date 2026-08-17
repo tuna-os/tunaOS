@@ -36,6 +36,14 @@ THEMES_DIR="system_files/usr/share/plymouth/themes"
     done
 }
 
+@test "fishing-pole keeps one source frame and generates the remaining names" {
+    [ -f "${THEMES_DIR}/fishing-pole/fishing-pole-0001.png" ]
+    [ ! -e "${THEMES_DIR}/fishing-pole/fishing-pole-0002.png" ]
+    [ -x build_scripts/scripts/generate-fishing-pole-frames.sh ]
+    grep -q 'ln -sfn' build_scripts/scripts/generate-fishing-pole-frames.sh
+    grep -q 'generate-fishing-pole-frames.sh' "$SCRIPT"
+}
+
 @test "unmapped/unknown variant falls back to the tunaos theme" {
     run bash -c "grep -A2 'PLYMOUTH_THEME=\"tunaos\"' '$SCRIPT' | head -1"
     [[ "$output" == *'PLYMOUTH_THEME="tunaos"'* ]]

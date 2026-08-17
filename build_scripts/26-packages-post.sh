@@ -65,6 +65,14 @@ marlin) PLYMOUTH_THEME="rocket" ;;            # 🚀
 flounder) PLYMOUTH_THEME="pufferfish" ;;      # 🐡
 flounder-sid) PLYMOUTH_THEME="radioactive" ;; # ☢️
 esac
+
+# Keep the fishing-pole animation's frame contract generated at build time.
+# Only its compact source frame is tracked in git (tuna-os/tunaos#1650).
+if [[ "$PLYMOUTH_THEME" == "fishing-pole" ]]; then
+	"$SCRIPTS_PATH/generate-fishing-pole-frames.sh" \
+		"/usr/share/plymouth/themes/fishing-pole"
+fi
+
 if command -v plymouth-set-default-theme >/dev/null 2>&1; then
 	plymouth-set-default-theme "$PLYMOUTH_THEME"
 fi
