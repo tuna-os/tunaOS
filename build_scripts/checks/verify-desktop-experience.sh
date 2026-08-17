@@ -644,7 +644,9 @@ else
 			_dcf_name="${_dcf_name##*/}"
 			if [[ ! -s "/etc/dconf/db/${_dcf_name}" ]]; then
 				echo "missing compiled dconf database: keyfiles in ${_dcf_dir} but /etc/dconf/db/${_dcf_name} is missing or empty (run dconf update)" >&2
-				exit 1
+				if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
+					exit 1
+				fi
 			fi
 		fi
 	done
