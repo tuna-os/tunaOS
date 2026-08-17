@@ -10,6 +10,10 @@ config="${1:-.github/build-config.yml}"
 readme="${2:-README.md}"
 start='<!-- build-status:start -->'
 end='<!-- build-status:end -->'
+# A literal backtick for Markdown inline-code spans. shellcheck cannot parse
+# a backslash-escaped backtick inside a double-quoted string (SC1072/SC1073),
+# so carry it in a variable instead.
+bt='`'
 tmp_table=$(mktemp)
 tmp_readme=$(mktemp)
 trap 'rm -f "$tmp_table" "$tmp_readme"' EXIT
@@ -124,7 +128,7 @@ total_failing=$((total_cells - total_green - total_unreached))
 # scripts/gen-matrix-status.py, scores every axis; sourcing the README number
 # from there is the intended fix when this guard fires.)
 blocking=$(yq -r '[.criteria[] | select(.enforcement == "blocking") | .id] | join(",")' .github/green-criteria.yml)
-if [[ "$blocking" != "builds" ]]; then
+if [[ -n "$blocking" && "$blocking" != "builds" ]]; then
 	echo "::error::green-criteria.yml now blocks on [${blocking}] but update-build-status.sh can only score 'builds'. Source the composite count from scripts/gen-matrix-status.py before the README can claim one." >&2
 	exit 1
 fi
@@ -132,7 +136,7 @@ composite_green=$total_green
 
 {
 	echo
-	echo "**Built ${total_green}/${total_cells} · composite green ${composite_green}/${total_cells} (${percent}%)** — of the remainder, **${total_failing} failing** and **${total_unreached} never reached** (no job asserted them). The two are reported separately on purpose: a never-reached cell is untested, not broken. Composite green is scored against [\\`.github/green-criteria.yml\\`](.github/green-criteria.yml) (blocking today: \\`builds\\`; the full per-axis board is [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md)). This is a point-in-time CI snapshot, not a support-tier promise."
+	echo "**Built ${total_green}/${total_cells} · composite green ${composite_green}/${total_cells} (${percent}%)** — of the remainder, **${total_failing} failing** and **${total_unreached} never reached** (no job asserted them). The two are reported separately on purpose: a never-reached cell is untested, not broken. Composite green is scored against [${bt}.github/green-criteria.yml${bt}](.github/green-criteria.yml) (blocking today: ${bt}builds${bt}; the full per-axis board is [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md)). This is a point-in-time CI snapshot, not a support-tier promise."
 	echo
 	echo "$end"
 } >>"$tmp_table"
