@@ -52,10 +52,17 @@ failing in 9 seconds — `generate-matrix` succeeded (the jq emits 156 cells
 against today's config) yet no downstream job materialised. Verification run
 `31999953433` dispatched 08-17 06:01Z.
 
-- [ ] Diagnose the run-2 result; fix whatever eats the matrix between
-      `generate-matrix` and the `lifecycle` job.
-- [ ] First full sweep: expect mass failure; file per-class issues, not
-      per-cell.
+- [x] Diagnose the run-2 result; fix whatever eats the matrix between
+      `generate-matrix` and the `lifecycle` job — run 2 surfaced the arm64
+      mixed-stack/stale-lock podman failure (#1556 class, all six arm64
+      cells); fixed by the guarded install + lock sweep (#1841).
+- [x] First full sweep: run 32040213366 (08-17, post-#1841) executed all
+      168 cells — 133 passed, including 43 of 53 arm64. Every failure maps
+      to a KNOWN class, no new ones: xfce cells → #1819 (7 cells,
+      roster posted), gnome-nvidia-hwe → #1820 (3 cells, roster posted),
+      bonito-rawhide → #1823, hummingbird desktops → images not yet
+      published by the factory. The update transaction demonstrably works
+      matrix-wide where images exist.
 - [ ] Wire results into MATRIX-STATUS (already scaffolded) and W1.
 - [ ] Then: weekly cadence is already scheduled; make the cron survive
       (the 08-13 failure went unnoticed for four days — add it to the red-run
