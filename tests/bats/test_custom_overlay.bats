@@ -31,17 +31,20 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$status" -eq 0 ]
 }
 
-@test "Justfile contains custom recipes" {
-  local recipe_file="${REPO_ROOT}/Justfile"
-  if ! grep -q "build-custom" "$recipe_file" ||
-    ! grep -q "check-custom" "$recipe_file" ||
-    ! grep -q "run-custom-vm" "$recipe_file" ||
-    ! grep -q "custom-iso" "$recipe_file"; then
-    recipe_file="${REPO_ROOT}/just/custom-overlay.just"
-  fi
+@test "Justfile imports the custom-overlay recipe module" {
+  run grep "^import 'just/custom-overlay.just'" "${REPO_ROOT}/Justfile"
+  [ "$status" -eq 0 ]
+}
 
-  for recipe in build-custom check-custom run-custom-vm custom-iso; do
-    run grep -q "$recipe" "$recipe_file"
-    [ "$status" -eq 0 ]
-  done
+@test "just/custom-overlay.just contains custom recipes" {
+  run test -f "${REPO_ROOT}/just/custom-overlay.just"
+  [ "$status" -eq 0 ]
+  run grep "build-custom" "${REPO_ROOT}/just/custom-overlay.just"
+  [ "$status" -eq 0 ]
+  run grep "check-custom" "${REPO_ROOT}/just/custom-overlay.just"
+  [ "$status" -eq 0 ]
+  run grep "run-custom-vm" "${REPO_ROOT}/just/custom-overlay.just"
+  [ "$status" -eq 0 ]
+  run grep "custom-iso" "${REPO_ROOT}/just/custom-overlay.just"
+  [ "$status" -eq 0 ]
 }
