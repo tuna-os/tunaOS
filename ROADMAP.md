@@ -118,7 +118,7 @@ track it. Notably **Bonito is Beta** (GA tracked in [#272](https://github.com/tu
 | Populate Q3 milestone | strategist | #562 | ✅ Done (2026-08-08, 9 issues) |
 | **User-proven ISO installs roadmap** | ci-maintainer | #763 | 🟡 In progress (Phase 1 baseline dispatched #761; GUI gate #577) |
 | **Apple Silicon (Asahi Linux) support** | architect / ci-maintainer | #781 | 🟡 In progress (Bonito & Grouper 36/36 verified #776; D0–D4 installer track active) |
-| **Desktop parity floor (non-RPM bases)** | packaging | #133, tunaos-packages#323 | ⬜ Not started — P0 for Q4 (see #1294) |
+| **Desktop completeness parity (non-RPM bases)** | ci-maintainer / packaging | #1294, tunaos-packages#132, #133 | 🟡 In progress — published-tag desktop contract is now a gate; remediate sailfin, flounder, and grouper editions below the completeness floor |
 | **Q3 checkpoint (08-22): staff or descope #272/#1123/#1093/#1094** | strategist | #1299 | ⬜ Scheduled |
 | **Flavor equality mandate (docs wording + cadence parity)** | strategist | #1315, #1254 | 🟡 In progress — catalog parity gate merged 08-11 (#1322, #1281 closed); cadence parity pending (#1316) |
 | **NVIDIA flavor family (6 editions, 0 assets since 07-05)** | ci-maintainer | #1383 | 🔴 Broken — nightly overlay regressed 08-12 (#1382); 13/13 variant matrix red 08-14 (#1570) incl. nvidia cells (#1561/#1562/#1564/#1565); staff test: nightly green + gnome-nvidia assets republished by 09-01 (#1376/#1379) |
