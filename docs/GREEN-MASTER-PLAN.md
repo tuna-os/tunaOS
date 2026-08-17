@@ -112,9 +112,12 @@ Every image already writes `/usr/share/tunaos/missing-on-*.txt`.
       composite. First cadence = desktop-vs-own-base delta (the #858 shape);
       the audit roster now derives from build-config so no declared variant
       can be silently omitted.
-- [ ] Diff against each variant's UPSTREAM reference (Bluefin/Aurora package
-      sets) — the criterion's full claim; advisory until that lands and the
-      noise floor is known, then graduate per-variant.
+- [x] Diff against each variant's UPSTREAM reference (Bluefin/Aurora package
+      sets) — the `upstream` job in package-parity.yml measures every cell in
+      green-criteria.yml's `upstream_references` map (bonito→bluefin:stable /
+      aurora:stable, EL family→bluefin:lts) daily. Measurement only: the
+      criterion stays advisory until the noise floor these numbers establish
+      turns into per-variant thresholds, then graduate per-variant.
 
 ### W7. Rebuildability beyond base pins *(criterion 9)*
 

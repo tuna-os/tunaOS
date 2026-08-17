@@ -76,3 +76,47 @@ def test_criterion_is_advisory_with_the_cadence_named() -> None:
 def test_committed_doc_carries_the_parity_section() -> None:
     doc = (ROOT / "docs" / "MATRIX-STATUS.md").read_text()
     assert "## Package parity" in doc
+
+
+def test_upstream_references_declare_only_real_cells() -> None:
+    """The map is a reviewed declaration; a typo'd variant or a flavor the
+    variant does not build would silently measure nothing forever."""
+    criteria = yaml.safe_load(
+        (ROOT / ".github" / "green-criteria.yml").read_text()
+    )["criteria"]
+    c = next(c for c in criteria if c["id"] == "parity")
+    refs = c.get("upstream_references")
+    assert refs, "W6 box 2: the upstream map is the criterion's full claim"
+    cfg = yaml.safe_load(
+        (ROOT / ".github" / "build-config.yml").read_text()
+    )
+    flavors_by_variant = {
+        v["id"]: {f["id"] for f in v.get("flavors", [])}
+        for v in cfg["variants"]
+    }
+    for de, mapping in refs.items():
+        for variant, ref in mapping.items():
+            assert variant in flavors_by_variant, f"unknown variant {variant}"
+            assert de in flavors_by_variant[variant], (
+                f"{variant} declares no {de} flavor"
+            )
+            assert ref.startswith("ghcr.io/ublue-os/"), (
+                "upstream anchors are Universal Blue reference images"
+            )
+
+
+def test_upstream_audit_reads_the_declared_map() -> None:
+    body = SCRIPT.read_text()
+    assert "--upstream-audit" in body
+    assert "upstream_references" in body, (
+        "the audit must read the criteria map, not a second hardcoded roster"
+    )
+
+
+def test_upstream_sweep_is_wired_and_fails_when_it_measures_nothing() -> None:
+    body = WORKFLOW.read_text()
+    assert "--upstream-audit" in body
+    assert "package-parity-upstream" in body
+    assert "upstream parity measured zero cells" in body, (
+        "a sweep that measured nothing must fail loudly, like the base audit"
+    )

@@ -12,9 +12,11 @@ name: Package Parity
 # job fails only when the audit itself cannot run (that would otherwise read
 # as 52 quiet ⬜ cells — the failure mode this whole program exists to stop).
 #
-# The against-own-base delta is the first, cheap parity assertion; diffing
-# against each variant's UPSTREAM reference (Bluefin/Aurora package sets) is
-# the second W6 box and stays open.
+# The against-own-base delta is the first, cheap parity assertion. The
+# `upstream` job is the second W6 cadence: it diffs each cell named in
+# green-criteria.yml's upstream_references map against its Bluefin/Aurora
+# reference image. Measurement only — it establishes the noise floor the
+# criterion needs before per-variant thresholds can graduate it.
 
 on:
   workflow_dispatch:
@@ -81,4 +83,59 @@ jobs:
           path: |
             parity.json
             parity-report.txt
+          retention-days: 90
+
+  # W6 second cadence: the upstream-reference diff. Separate job on purpose —
+  # it pulls multi-GB reference images, and a disk blowup here must not take
+  # out the cheap artifact-only base audit above.
+  upstream:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install oras and yq
+        run: |
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64
+          sudo chmod +x /usr/bin/yq
+          curl -fsSL https://github.com/oras-project/oras/releases/download/v1.3.0/oras_1.3.0_linux_amd64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin oras
+
+      - name: Free runner disk for the reference images
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/hostedtoolcache/CodeQL
+          df -h / | tail -1
+
+      - name: Diff mapped cells against their upstream references
+        env:
+          PARITY_JSON: parity-upstream.jsonl
+        run: |
+          set -euo pipefail
+          : > "$PARITY_JSON"
+          ./scripts/package-parity.sh --upstream-audit | tee upstream-report.txt
+          jq -s -c 'sort_by(.cell)' "$PARITY_JSON" > parity-upstream.json
+          measured=$(jq '[.[] | select(.verdict == "measured")] | length' parity-upstream.json)
+          # A sweep that measured nothing is a broken sweep, not a clean one.
+          if [[ "$measured" -eq 0 ]]; then
+            echo "::error::upstream parity measured zero cells — every fetch failed; this is an audit fault, not parity evidence"
+            exit 1
+          fi
+          {
+            echo "# Package parity (cell vs upstream reference)"
+            echo
+            echo -n "**${measured} cells measured.** \`missing\` = packages the upstream ships that we do not; "
+            echo "\`extra\` = ours it lacks. Noise-floor data — no thresholds yet."
+            echo
+            echo '```'
+            cat upstream-report.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload upstream baseline
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-parity-upstream
+          path: |
+            parity-upstream.json
+            upstream-report.txt
           retention-days: 90
