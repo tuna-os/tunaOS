@@ -41,3 +41,20 @@ def test_base_stage_still_installs_packman_first() -> None:
     """The re-assert complements the base install, it does not replace it."""
     assert "packman-essentials" in BASE
     assert "--allow-vendor-change" in BASE
+
+
+def test_ownership_is_verified_not_inferred_from_the_dup() -> None:
+    """Run 32047331620 proved the dup alone is insufficient: the desktop
+    transaction upgraded ffmpeg to openSUSE's NEWER crippled build, the dup
+    said "Nothing to do" (no higher Packman version existed), and the codec
+    baseline still failed. The script must check the installed VENDOR on the
+    multimedia set and force openSUSE-owned members back to Packman, with
+    downgrades allowed — version order is not the invariant, ownership is."""
+    assert "rpm -q --qf '%{VENDOR}" in SCRIPT
+    assert "--oldpackage" in SCRIPT
+    assert "--from packman-essentials" in SCRIPT
+    assert "force the multimedia stack back to Packman" in SCRIPT
+    # The vendor check must come AFTER the dup — it is the fallback for the
+    # case the dup cannot handle, not a replacement for it.
+    assert SCRIPT.index("dup --from packman-essentials") \
+        < SCRIPT.index("rpm -q --qf '%{VENDOR}")
