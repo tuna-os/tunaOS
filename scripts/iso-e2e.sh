@@ -198,6 +198,13 @@ while [[ $# -gt 0 ]]; do
 		TIMEOUT="$2"
 		shift 2
 		;;
+	--contract)
+		# --disk only: which in-image contract marker gates the boot.
+		# 'desktop' waits for TUNAOS_DESKTOP_CONTRACT_*, 'base' for
+		# TUNAOS_BASE_CONTRACT_*. Validated where disk mode reads it.
+		DISK_CONTRACT="$2"
+		shift 2
+		;;
 	--live-marker)
 		LIVE_MARKER="$2"
 		shift 2

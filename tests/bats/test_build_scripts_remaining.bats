@@ -210,6 +210,10 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   grep -qF 'CONTRACT_PREFIX="TUNAOS_DESKTOP_CONTRACT"' "${REPO_ROOT}/scripts/iso-e2e.sh"
   grep -qF 'CONTRACT_PREFIX="TUNAOS_BASE_CONTRACT"' "${REPO_ROOT}/scripts/iso-e2e.sh"
   grep -qF 'contract FAILED:' "${REPO_ROOT}/scripts/iso-e2e.sh"
+  # The FLAG must be parsed, not just the mapping present: the base Gate's
+  # first sailfin run (32047331620) died in 0.05s on 'Unknown flag:
+  # --contract' because the disk-mode logic landed without a parser case.
+  grep -qE '^\s+--contract\)' "${REPO_ROOT}/scripts/iso-e2e.sh"
 }
 
 @test "runtime contract never asserts graphical.target is active" {
