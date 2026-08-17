@@ -57,6 +57,37 @@ user-facing site:
 | [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) | Historical record of the May 2026 sprint + remaining roadmap items |
 | [agents/](agents/) | Hive agent guides (issue-tracker, triage-labels, domain) |
 | [adr/](adr/) | Architecture Decision Records |
+| [USER-GUIDE.md](USER-GUIDE.md) | Choosing an image, installing, updating, rolling back, apps, encryption |
+| [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md) | The whole pipeline and its plumbing, with diagrams |
+| [INSTALL.md](INSTALL.md) | Building media locally, artifact verification, registry auth, pull troubleshooting |
+| [HARDWARE.md](HARDWARE.md) | System requirements and ARM laptop support status |
+| [IMAGE-TAGS.md](IMAGE-TAGS.md) | Image tag reference: desktop and hardware suffixes |
+| [GREEN-CRITERIA.md](GREEN-CRITERIA.md) | What "green" means for a cell — the criteria behind the composite score |
+| [GREEN-MASTER-PLAN.md](GREEN-MASTER-PLAN.md) | The workstreams driving the matrix to green |
+| [build-pipeline.md](build-pipeline.md) | CI/CD workflow overview |
+| [ci-troubleshooting.md](ci-troubleshooting.md) | Quick reference for diagnosing recurring CI failures |
+
+## Policies & planning (repo root)
+
+These live at the repository root rather than in this folder:
+
+- [ROADMAP.md](../ROADMAP.md) — project direction and feature status
+- [VISION.md](../VISION.md) — project philosophy
+- [GOAL.md](../GOAL.md) — current objective
+- [CONTRIBUTING.md](../CONTRIBUTING.md) — how to set up, build, and contribute
+- [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) — Stable/Beta/Alpha admission gates and deprecation rules
+- [RFC-PROCESS.md](../RFC-PROCESS.md) — how RFCs are proposed, reviewed, and decided
+- [PACKAGE-SOURCING.md](../PACKAGE-SOURCING.md) — package origin rules, Tideforge-first, and allowlist (#1319)
+- [TRIAGE-POLICY.md](../TRIAGE-POLICY.md) — triage states and SLAs (draft, #1195)
+- [FEDORA-BASE-POLICY.md](../FEDORA-BASE-POLICY.md) — adopted N+rawhide sequencing for Fedora-based variants (#1171)
+- [VERSIONING.md](../VERSIONING.md) — tag scheme and stability tiers
+- [MIGRATION.md](../MIGRATION.md) — switching from other distros
+- [SECURITY.md](../SECURITY.md) — vulnerability reporting and supported versions
+- [ADOPTERS.md](../ADOPTERS.md) / [ADOPTION-METRICS.md](../ADOPTION-METRICS.md) — who uses TunaOS and how adoption is measured
+- [COMMUNITY.md](../COMMUNITY.md) — contribution ladder, metrics, communication
+- [MAINTAINERS.md](../MAINTAINERS.md) — maintainer playbook and bus factor plan
+- [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) — community standards
+- [Q3_CHECKPOINT-2026-08-22.md](../Q3_CHECKPOINT-2026-08-22.md) — decision sheet for the Q3 "Expand Coverage" milestone (#1299)
 
 For current project priorities see [ROADMAP.md](../ROADMAP.md). For how to build
 and contribute see [CONTRIBUTING.md](../CONTRIBUTING.md).
