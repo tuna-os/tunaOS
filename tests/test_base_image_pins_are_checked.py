@@ -166,12 +166,79 @@ def test_the_manifest_request_accepts_index_and_list_types(tmp_path):
 # ── it has to actually run on a schedule to be worth anything ─────────────
 
 
-def test_the_check_runs_before_the_nightlies(tmp_path):
-    """A pin check that runs after the build it was meant to protect is decor."""
+def _cron_minutes_after_midnight(expr):
+    """`m h * * *` -> minutes since 00:00 UTC. Only the daily form is used here."""
+    minute, hour = expr.split()[0], expr.split()[1]
+    return int(hour) * 60 + int(minute)
+
+
+def _nightly_build_schedules():
+    """Read the real variant-build crons off disk.
+
+    Deliberately derived, not written down. The first version of this test
+    hardcoded "the nightly base builds start ~04:00Z" and asserted `hour < 4`.
+    The builds actually run at 01:00, so the check shipped at 03:00 -- two
+    hours AFTER the thing it exists to protect -- and the test passed anyway,
+    because it was checking my assumption rather than the repository.
+    """
+    out = {}
+    for wf in sorted((ROOT / ".github/workflows").glob("build-*.yml")):
+        data = yaml.safe_load(wf.read_text())
+        if not isinstance(data, dict):
+            continue
+        sched = (data.get(True) or {}).get("schedule") if isinstance(data.get(True), dict) else None
+        if not sched:
+            continue
+        for entry in sched:
+            cron = entry.get("cron", "")
+            if len(cron.split()) == 5 and cron.split()[1].isdigit() and cron.split()[0].isdigit():
+                out.setdefault(wf.name, []).append(cron)
+    return out
+
+
+def test_the_check_runs_before_the_nightlies():
+    """A pin check that runs after the build it was meant to protect is decor.
+
+    The margin matters as much as the order: GitHub's scheduler is not
+    punctual. On 2026-08-17 the 01:00 nightlies did not start until 02:17 --
+    a 77-minute delay -- so a check scheduled shortly beforehand can still
+    lose the race.
+    """
     wf = yaml.safe_load(WORKFLOW.read_text())
     crons = [c["cron"] for c in wf[True]["schedule"]]
     assert crons, "no schedule — the check would only ever run by hand"
-    hours = {int(c.split()[1]) for c in crons}
-    assert all(h < 4 for h in hours), (
-        f"scheduled at {sorted(hours)}h UTC; the nightly base builds start ~04:00Z"
+
+    nightlies = _nightly_build_schedules()
+    assert nightlies, "found no scheduled build-*.yml workflows to compare against"
+
+    earliest_build = min(
+        _cron_minutes_after_midnight(c) for crons_ in nightlies.values() for c in crons_
     )
+    check_at = min(_cron_minutes_after_midnight(c) for c in crons)
+
+    # Same-day comparison only makes sense if the check is earlier in the day;
+    # a check late the previous evening wraps to a negative margin, so measure
+    # the gap the way the clock actually runs.
+    margin = earliest_build - check_at
+    if margin < 0:
+        margin += 24 * 60
+
+    # Bounded at BOTH ends. A lower bound alone is not enough: because the
+    # gap wraps around midnight, a check that runs two hours *after* the
+    # nightly scores 22 hours of "margin" against the following night's run.
+    # That is how the 03:00 schedule passed this test while being exactly the
+    # thing the test exists to forbid. An upper bound makes it a pre-flight
+    # rather than a day-stale reading.
+    assert 120 <= margin <= 360, (
+        f"pin check fires {margin} min before the earliest nightly build "
+        f"(at {earliest_build // 60:02d}:{earliest_build % 60:02d}Z, from "
+        f"{sorted(nightlies)[:3]}…). Want 2-6h: enough slack for GitHub's "
+        "scheduling delay, close enough that the pins are still current."
+    )
+
+
+def test_the_check_avoids_the_top_of_the_hour():
+    """:00 is the most contended minute and attracts the longest queueing."""
+    wf = yaml.safe_load(WORKFLOW.read_text())
+    minutes = {int(c["cron"].split()[0]) for c in wf[True]["schedule"]}
+    assert 0 not in minutes, "scheduled on the hour, where GitHub queues longest"
