@@ -36,3 +36,18 @@ jobs:
 
       - name: Verify every base image pin still resolves
         run: ./scripts/check-base-image-pins.sh
+
+  # Separate job on purpose: a GC'd base digest and an expired package repo
+  # are different failures with different owners, and one exiting 1 must not
+  # stop the other from reporting.
+  package-repos:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install PyYAML
+        run: pip install pyyaml
+
+      - name: Verify every package-repo pin still resolves
+        run: python3 scripts/check-package-repo-pins.py

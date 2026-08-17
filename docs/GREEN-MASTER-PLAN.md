@@ -126,7 +126,15 @@ Every image already writes `/usr/share/tunaos/missing-on-*.txt`.
 repo.tunaos.org snapshots (hummingbird's 9-month-old datestamp pin), toolchain
 payloads, action pins.
 
-- [ ] Extend the pin check to package-repo URLs per variant.
+- [x] Extend the pin check to package-repo URLs per variant —
+      scripts/check-package-repo-pins.py walks every desktop manifest for dnf
+      baseurls, COPR projects, PPAs, and APT repos/keyrings, and probes each
+      nightly in check-base-image-pins.yml (own job, so base-pin and
+      package-pin failures report independently). 14 pins found, 14 resolving
+      at first run. Toolchain payloads and action pins remain open, as does
+      the COPR *content* question (#391 is about trusting the repo, not just
+      its existence) — the structural fix for that is RFC 011's tier-2
+      migration, not this check.
 - [ ] The `createrepo_c --update` drift class (#358) is fixed in
       `build-xfce-package.yml` only — audit `build-xfce-distributed.yml`,
       `build.yml`, `build-gnome49/50/51-package.yml` (noted on #358).

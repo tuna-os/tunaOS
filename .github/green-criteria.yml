@@ -178,15 +178,24 @@ criteria:
   - id: rebuildable
     name: The image can still be built tomorrow
     proves: Every pinned input still resolves.
-    asserted_by: scripts/check-base-image-pins.sh (.github/workflows/check-base-image-pins.yml)
+    asserted_by: >-
+      scripts/check-base-image-pins.sh + scripts/check-package-repo-pins.py
+      (.github/workflows/check-base-image-pins.yml, nightly 22:20 UTC)
     enforcement: advisory
     status_2026_08_17: "13 of 13 base-image pins resolve"
+    status_2026_08_17_pm: >-
+      package-repo pins now checked nightly alongside the base digests: dnf
+      baseurls (repo.tunaos.org snapshot datestamps included), COPR projects
+      (#391's single point of failure among them), PPAs, and the tideforge
+      APT repo + keyring — 14 of 14 resolved at first measurement. Toolchain
+      payloads and action pins remain unchecked.
     notes: >-
       A cell that built last night and cannot build tonight was never really
       green. On 2026-08-16 three variants died at once because upstream
       garbage-collected their base digests with nothing in this repo changing
-      (#1788). Currently covers base-image pins only; package and toolchain
-      pins are not yet checked.
+      (#1788). Package repos fail the same way with worse error messages: a
+      cleaned snapshot bucket or a deleted personal COPR 404s at dnf time,
+      mid-build, per flavor.
 
   - id: arch_honesty
     name: A cell may not declare an architecture it cannot satisfy
