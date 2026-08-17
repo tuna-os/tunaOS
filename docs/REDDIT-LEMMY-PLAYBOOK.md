@@ -132,35 +132,61 @@ detail: https://tunaos.org/blog/2026/08/12/announcing-gurnard-ubuntu-pantheon
 > testing reports from real Macs are the most useful contribution right
 > now — we track them here: https://github.com/tuna-os/bootc-installer-asahi
 
-### Draft C — Snapdragon X Elite (X13s-class ARM laptops)
+### Draft C — Snapdragon ARM laptops (X13s reference path)
 
-**Target subs:** r/linuxhardware, r/linux (if not using Draft B)
+**Tracking:** [#1374](https://github.com/tuna-os/tunaOS/issues/1374)
 
-**Title:** `TunaOS on Snapdragon X Elite — bootc Linux for X13s-class ARM laptops`
+**Target subs:** r/linuxhardware, Snapdragon/X13s communities, r/linux (if not using Draft B)
+
+**Title:** `TunaOS on Snapdragon ARM laptops — the X13s reference path for Linux testing`
+
+**Accuracy note:** Do not describe the ThinkPad X13s as a Snapdragon X Elite
+device. Lenovo's X13s uses Snapdragon 8cx Gen 3, while Snapdragon X Elite is a
+separate platform family. Lead with the X13s support that is documented today;
+invite X Elite owners to report hardware compatibility rather than implying
+that the X13s image is already validated on every X Elite laptop. Sources:
+[Lenovo X13s specification](https://news.lenovo.com/wp-content/uploads/2022/02/ThinkPad-X13s-Gen-1-Datasheet.pdf),
+[Qualcomm X Elite brief](https://docs.qualcomm.com/bundle/publicresource/87-71417-1_REV_E_Snapdragon_X_Elite_Product_Brief.pdf).
 
 **Body:**
 
-> We just published **TunaOS images for Snapdragon X Elite (X13s-class)
-> ARM laptops** — the Bonito/Dakota family now ships an ARM laptop build
-> with the same atomic, container-native update model as the rest of the
-> project.
+> We just published **TunaOS ARM laptop images for the ThinkPad X13s** — the
+> Bonito/Dakota family now has a documented Snapdragon laptop path with the
+> same atomic, container-native update model as the rest of the project.
 >
-> Why it matters: Snapdragon X Elite laptops are the fastest-growing ARM
-> Windows hardware, and Linux support on them is exactly where the
-> ecosystem needs more real-world testing. This is a small but concrete
-> step: bootc-based desktop images you can actually boot on the hardware
-> you already own.
+> Why it matters: Snapdragon laptops are bringing a new wave of ARM hardware
+> owners into Linux. The X13s is a concrete, documented starting point, while
+> owners of newer Snapdragon X Elite systems can help establish which parts of
+> the story generalize to their hardware.
 >
 > New/changed:
-> - Bonito/Dakota ARM images for X13s-class laptops
+> - Bonito/Dakota ARM images for the ThinkPad X13s
 > - Same toolchain: atomic updates, rollback, verified upgrades
 > - Documented hardware support matrix in the README
 >
 > Try it: https://tunaos.org/download — post:
 > https://tunaos.org/blog/2026/08/12/tunaos-on-snapdragon-x-elite
 >
-> Status: early. If you own an X13s-class laptop and want to help test,
-> the hardware matrix and issue tracker are the place to start.
+> Status: early. If you own an X13s or Snapdragon X Elite laptop and want to
+> help test, report the exact model, firmware version, install path, working
+> devices, and failures in the issue tracker rather than assuming cross-device
+> compatibility.
+
+### Draft C execution checklist
+
+Before publication, the maintainer should:
+
+1. Confirm the target community permits project announcements and hardware
+   testing requests; ask moderators or channel maintainers where required.
+2. Use the [Bonito X13s](https://github.com/tuna-os/docs/tree/main/docs/bonito-x13s)
+   and [Dakota X13s](https://github.com/tuna-os/docs/tree/main/docs/dakota-x13s)
+   guides as the technical source of truth. Do not promise X Elite support
+   unless a device-specific report exists.
+3. Ask testers to report model, firmware, image/variant, installer path,
+   kernel, working hardware, and logs. Link the resulting issue or discussion
+   back to #1374 so this outreach produces evidence rather than impressions.
+4. Record the post URL, date, channel, and tester responses in the issue. Do
+   not add an adopter entry without consent-confirmed public evidence.
 
 ### Draft D — Homelab / self-hosted (bootc desktop + Corral)
 
