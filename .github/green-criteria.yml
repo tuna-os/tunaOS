@@ -130,9 +130,16 @@ criteria:
   - id: parity
     name: Package set matches the upstream reference
     proves: The flavor ships the packages its upstream equivalent ships.
-    asserted_by: scripts/package-parity.sh
-    enforcement: unimplemented
+    asserted_by: >-
+      .github/workflows/package-parity.yml (daily) →
+      scripts/package-parity.sh --audit; verdicts feed the scoreboard via the
+      package-parity-baseline artifact
+    enforcement: advisory
     status_2026_08_17: "not scheduled"
+    status_2026_08_17_pm: >-
+      scheduled daily. First cadence asserts the desktop-vs-own-base delta
+      (the #858 no-desktop-at-all shape); the upstream-reference diff is not
+      yet asserted and this criterion stays advisory at least until it is.
 
   - id: no_silent_omissions
     name: The build tells the truth about what it shipped

@@ -62,7 +62,7 @@ def test_blocking_criteria_are_scoreable() -> None:
 def test_offline_composite_covers_the_full_matrix() -> None:
     """With no CI data at all: nothing green, every published cell counted,
     and the total agrees with the README denominator (build_image cells)."""
-    lines, green, total = gms.composite_section(CRITERIA, {}, {}, {}, {}, {}, {})
+    lines, green, total = gms.composite_section(CRITERIA, {}, {}, {}, {}, {}, {}, {})
     assert green == 0
     cfg = gms._matrix("build_image", desktops_only=False)
     assert total == sum(len(f) for f in cfg.values())
@@ -72,7 +72,7 @@ def test_offline_composite_covers_the_full_matrix() -> None:
 def test_composite_scores_a_promoted_gated_cell_green_iff_blocking_pass() -> None:
     stage = {"albacore": {"jobs": {("gnome", "Promote"): "success",
                                    ("gnome", "Gate"): "failure"}, "date": "x"}}
-    lines, green, total = gms.composite_section(CRITERIA, stage, {}, {}, {}, {}, {})
+    lines, green, total = gms.composite_section(CRITERIA, stage, {}, {}, {}, {}, {}, {})
     blocking = {c["id"] for c in CRITERIA if c["enforcement"] == "blocking"}
     if blocking == {"builds"}:
         # A failing Gate is advisory today: the cell is still composite-green.

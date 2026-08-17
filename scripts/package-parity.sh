@@ -65,15 +65,34 @@ names() { cut -f1 "$1" | LC_ALL=C sort -u; }
 # no desktop at all, which is what marlin's kde/cosmic/niri/xfce do.
 if [[ "${1:-}" == "--audit" ]]; then
 	de="${2:?usage: --audit <desktop>}"
+	# The variant roster comes from build-config when available, so the audit
+	# cannot silently omit a variant the factory declares (bonito-rawhide,
+	# flounder-sid and gurnard were missing from the old hardcoded list —
+	# exactly the absence-of-evidence hole this repo keeps refusing to dig).
+	variants=(yellowfin bonito sailfin flounder grouper marlin skipjack albacore guppy)
+	if command -v yq >/dev/null && [[ -f .github/build-config.yml ]]; then
+		mapfile -t variants < <(yq -r '.variants[].id' .github/build-config.yml)
+	fi
+	# PARITY_JSON: append one JSON object per audited cell — the machine
+	# output the scheduled workflow collates for the scoreboard (W6).
+	emit_json() {
+		[[ -n "${PARITY_JSON:-}" ]] || return 0
+		jq -nc --arg cell "$1" --arg verdict "$2" --argjson delta "$3" \
+			'{cell:$cell,verdict:$verdict,delta:$delta}' >>"$PARITY_JSON"
+	}
 	printf '%-12s %8s %8s %9s   %s\n' variant base "$de" delta verdict
 	printf -- '-%.0s' {1..72}
 	echo
-	for v in yellowfin bonito sailfin flounder grouper marlin skipjack albacore guppy; do
+	for v in "${variants[@]}"; do
 		b=$(fetch "$v:base" 2>/dev/null) || {
 			printf '%-12s   (no base)\n' "$v"
+			emit_json "$v:$de" "unmeasured: no base manifest" 0
 			continue
 		}
-		d=$(fetch "$v:$de" 2>/dev/null) || continue
+		d=$(fetch "$v:$de" 2>/dev/null) || {
+			emit_json "$v:$de" "unmeasured: no $de manifest" 0
+			continue
+		}
 		nb=$(names "$b" | wc -l)
 		nd=$(names "$d" | wc -l)
 		delta=$((nd - nb))
@@ -81,6 +100,7 @@ if [[ "${1:-}" == "--audit" ]]; then
 		((delta <= 0)) && verdict="BROKEN: no more packages than base"
 		((delta > 0 && delta < 25)) && verdict="suspect: only $delta added"
 		printf '%-12s %8d %8d %+9d   %s\n' "$v" "$nb" "$nd" "$delta" "$verdict"
+		emit_json "$v:$de" "$verdict" "$delta"
 	done
 	exit 0
 fi
