@@ -74,3 +74,58 @@ def test_the_qcow2_probe_is_anchored():
     body = (MODULE_DIR / "qcow2-build.just").read_text(encoding="utf-8")
     assert "{{ justfile_directory() }}/scripts/lib/common.sh" in body
     assert ". scripts/lib/common.sh" not in body
+
+
+SHEBANG = "#!/usr/bin/env bash"
+CD_ANCHOR = "cd {{ justfile_directory() }}"
+
+
+@pytest.mark.parametrize("module", MODULES, ids=lambda p: p.name)
+def test_module_shebang_recipes_start_at_the_repo_root(module):
+    """Every bash recipe in an imported module must cd to the repo root first.
+
+    The just version decides an imported recipe's working directory: 1.21.0
+    (what Ubuntu 24.04's apt installs on the Gate runners) runs it from the
+    directory of the imported file — just/ — while 1.25+ runs it from the root
+    justfile's directory.  Measured, not assumed: marlin's Gate run
+    31999186436 rendered $(pwd)/system_files/... as
+    tunaOS/just/system_files/... and bootc failed the statfs, one step after
+    the scripts/lib/common.sh fix from the same import move (#1586, #1811).
+
+    An explicit `cd {{ justfile_directory() }}` is version-proof: the function
+    is evaluated by just itself and returns the root justfile's directory on
+    every version (verified on 1.21.0, 1.42.4 and 1.55.1).  It also puts
+    recipe outputs (marlin.qcow2) back at the repo root, where the workflow's
+    `find . -maxdepth 1 -name '*.qcow2'` expects them.
+    """
+    lines = module.read_text(encoding="utf-8").splitlines()
+    offenders = []
+    for lineno, line in enumerate(lines, 1):
+        if line.strip() != SHEBANG:
+            continue
+        # The cd must appear within the next two lines (a `set` line may
+        # come first so an unwritable root fails loudly under -e).
+        window = [l.strip() for l in lines[lineno:lineno + 2]]
+        if not any(CD_ANCHOR in l for l in window):
+            offenders.append(f"{module.name}:{lineno}")
+
+    assert not offenders, (
+        "bash recipe in a just module without an explicit repo-root cd — on "
+        "the Gate runners' just 1.21.0 it runs from just/ and every "
+        "repo-relative path or output lands in the wrong place:\n  "
+        + "\n  ".join(offenders)
+    )
+
+
+def test_no_pwd_anchored_repo_paths_in_modules():
+    """$(pwd) said repo root in the root Justfile; in a module it lies."""
+    for module in MODULES:
+        for lineno, line in enumerate(
+            module.read_text(encoding="utf-8").splitlines(), 1
+        ):
+            for token in ("$(pwd)/system_files", "$(pwd)/scripts",
+                          "${PWD}/system_files", "${PWD}/scripts"):
+                assert token not in line, (
+                    f"{module.name}:{lineno} anchors a repo path to the "
+                    "working directory; use '{{ justfile_directory() }}/'"
+                )
