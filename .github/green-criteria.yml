@@ -1,0 +1,150 @@
+# What "green" means for a tunaOS cell.
+#
+# A cell is one (variant, flavor) pair — e.g. yellowfin:gnome. Historically
+# "green" meant the image built and promoted, which is the weakest claim the
+# pipeline can make: an image can build, push, promote, and ship no desktop at
+# all (tunaOS#858, marlin:kde with no /usr/share/wayland-sessions).
+#
+# This file is the source of truth for the criteria. docs/GREEN-CRITERIA.md is
+# the prose companion; tests/test_green_criteria.py keeps them honest.
+#
+# `enforcement` is deliberately explicit, because the failure mode this whole
+# exercise exists to fix is a criterion that everyone believes is checked and
+# which nothing actually blocks on:
+#
+#   blocking     a cell cannot be green without it
+#   advisory     measured and reported, does not yet block
+#   unimplemented  no automated assertion exists yet
+#
+# `status_2026_08_17` records where each criterion stood when the bar was
+# raised, so progress is measurable rather than remembered.
+
+version: 1
+raised_on: "2026-08-17"
+
+# The composite rule. This is the part that makes the list mean something:
+# without it, adding criteria just adds more things that silently do not run.
+rule:
+  summary: >-
+    A cell is green only if every blocking criterion has an affirmative,
+    current result. A criterion that was skipped, never tested, or whose
+    evidence is stale does not count as satisfied.
+  never_tested_is_not_green: true
+  skipped_is_not_green: true
+  stale_is_not_green: true
+
+criteria:
+  - id: builds
+    name: Image builds and promotes
+    proves: The image builds for every declared architecture and reaches its published tag.
+    asserted_by: .github/workflows/reusable-build-image.yml (build_push, Manifest, Promote)
+    enforcement: blocking
+    status_2026_08_17: "84 of 142 cells"
+
+  - id: desktop
+    name: The declared desktop is actually present and startable
+    proves: >-
+      The packages, session files and display manager for the flavor landed in
+      the published image, and verify-desktop-experience.sh passes against it.
+    asserted_by: .github/workflows/desktop-contract-sweep.yml + build_scripts/checks/verify-desktop-experience.sh
+    enforcement: advisory
+    status_2026_08_17: "35 of 52 cells (47 tested, 5 never tested)"
+    notes: >-
+      Runs against the published image without booting, so it is not subject to
+      the missing-DRM-render-node gap. This is the axis that catches "built
+      fine, shipped the wrong desktop".
+
+  - id: boots
+    name: The image boots to a graphical session
+    proves: A disk built from the image reaches a real graphical session under QEMU.
+    asserted_by: .github/workflows/reusable-build-image.yml (Gate → scripts/iso-e2e.sh)
+    enforcement: advisory
+    status_2026_08_17: "skippable per cell; silently broke matrix-wide on 2026-08-17 (#1811)"
+    notes: >-
+      Distinct from `desktop`: that one inspects the image, this one runs it.
+      Four of five desktops need a DRM render node hosted runners lack, so this
+      cannot be blocking for cosmic/niri/xfwl4/kde until GPU capacity exists.
+
+  - id: iso
+    name: The ISO boots and offers an installer
+    proves: The live ISO boots and the installer frontend appears on screen.
+    asserted_by: .github/workflows/iso-e2e.yml + scripts/iso-e2e.sh (Installer smoke)
+    enforcement: unimplemented
+    status_2026_08_17: "31 of 36 ISO cells ever tested; 0 pass"
+    blocked_by: ["#1772", "#1556"]
+    notes: >-
+      The only axis that checks a human could actually install. Zero cells pass
+      today, so "working ISOs" is currently unproven everywhere.
+
+  - id: install
+    name: Installation completes and the installed system boots
+    proves: >-
+      An unattended install runs to completion and the resulting system boots
+      on its own, including the encrypted-disk path.
+    asserted_by: .github/workflows/luks-e2e.yml
+    enforcement: advisory
+    status_2026_08_17: "31 of 52 cells (47 tested, 5 never tested)"
+    notes: >-
+      LUKS E2E drives fisherman over SSH and never looks at the screen, so it
+      proves install-and-boot but not that the installer GUI works. `iso` is
+      the complement and must not be conflated with it.
+
+  - id: lifecycle
+    name: Update, rebase and rollback work
+    proves: >-
+      A deployed system can bootc upgrade to a newer build, rebase across
+      streams, resolve aliases, and roll back off a bad deployment.
+    asserted_by: .github/workflows/bootc-lifecycle.yml
+    enforcement: unimplemented
+    status_2026_08_17: "0 of 52 cells (0 tested, 52 never tested)"
+    notes: >-
+      Has never run for a single cell. For a bootc OS the update transaction is
+      the product: an image that installs perfectly and cannot upgrade, or
+      cannot roll back off a bad deployment, has failed at the thing
+      immutability is sold on. Every user meets upgrade repeatedly and the ISO
+      once.
+
+  - id: parity
+    name: Package set matches the upstream reference
+    proves: The flavor ships the packages its upstream equivalent ships.
+    asserted_by: scripts/package-parity.sh
+    enforcement: unimplemented
+    status_2026_08_17: "not scheduled"
+
+  - id: no_silent_omissions
+    name: The build tells the truth about what it shipped
+    proves: >-
+      No package was dropped without the result being surfaced and acted on.
+    asserted_by: /usr/share/tunaos/missing-on-*.txt written into the image
+    enforcement: unimplemented
+    status_2026_08_17: "written into every image; read by nothing on a schedule"
+    notes: >-
+      Distinct from `parity`. Parity asks whether the set matches upstream;
+      this asks whether the build admitted what it silently skipped.
+      install_available and --skip-unavailable mean missing packages never fail
+      a build — which is deliberate, and is exactly how marlin:kde published
+      with no wayland-sessions at all (tunaOS#858).
+
+  - id: rebuildable
+    name: The image can still be built tomorrow
+    proves: Every pinned input still resolves.
+    asserted_by: scripts/check-base-image-pins.sh (.github/workflows/check-base-image-pins.yml)
+    enforcement: advisory
+    status_2026_08_17: "13 of 13 base-image pins resolve"
+    notes: >-
+      A cell that built last night and cannot build tonight was never really
+      green. On 2026-08-16 three variants died at once because upstream
+      garbage-collected their base digests with nothing in this repo changing
+      (#1788). Currently covers base-image pins only; package and toolchain
+      pins are not yet checked.
+
+  - id: arch_honesty
+    name: A cell may not declare an architecture it cannot satisfy
+    proves: Every declared platform has a resolvable package source.
+    asserted_by: null
+    enforcement: unimplemented
+    status_2026_08_17: "hummingbird declares linux/arm64 against a repo that 404s (#1755 §3)"
+    notes: >-
+      Four guaranteed-red cells per night that no change in this repository can
+      clear. Declaring an unsatisfiable architecture should be a configuration
+      error, not a nightly failure.
