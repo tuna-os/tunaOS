@@ -37,6 +37,7 @@ from pathlib import Path
 
 REPO = "tuna-os/tunaOS"
 DOC = Path("docs/MATRIX-STATUS.md")
+PROV = Path("docs/matrix-provenance.json")
 CONFIG = Path(".github/build-config.yml")
 GREEN_CRITERIA = Path(".github/green-criteria.yml")
 
@@ -496,7 +497,13 @@ def build_stage_results() -> dict[str, dict]:
             if key in jobs and conclusion not in ("success", "failure"):
                 continue
             jobs[key] = conclusion
-        out[variant] = {"jobs": jobs, "date": run["createdAt"][:10]}
+        out[variant] = {
+            "jobs": jobs,
+            "date": run["createdAt"][:10],
+            # Kept for provenance: builds/boots verdicts all come from this
+            # one conclusive run, so the cell→run attribution is per-variant.
+            "run_id": str(run["databaseId"]),
+        }
     return out
 
 
@@ -596,33 +603,67 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
     everything = _matrix("build_image", desktops_only=False)
     isos = iso_matrix()
 
+    # W1's last box: which run asserted which criterion, when. Every axis
+    # source already carries (conclusion, date, run_id) — the glyphs threw
+    # that away. Recorded here, as a side product of the same wiring that
+    # scores the composite, so the provenance can never disagree with the
+    # board it explains.
+    provenance: dict[str, dict[str, dict[str, str]]] = {}
+
+    def _run_url(run_id: str) -> str:
+        return f"https://github.com/{REPO}/actions/runs/{run_id}" if run_id else ""
+
     def scorers(variant: str, flavor: str) -> dict[str, str]:
-        jobs = stage.get(variant, {}).get("jobs", {})
+        vstage = stage.get(variant, {})
+        jobs = vstage.get("jobs", {})
+        entry = provenance.setdefault(f"{variant}:{flavor}", {})
+
+        def stage_axis(axis: str, stage_name: str) -> str:
+            v = _stage_verdict(jobs.get((flavor, stage_name)))
+            entry[axis] = {
+                "verdict": v,
+                "date": vstage.get("date", "") if (flavor, stage_name) in jobs else "",
+                "run": _run_url(vstage.get("run_id", "")) if (flavor, stage_name) in jobs else "",
+            }
+            return v
+
+        def result_axis(axis: str, results: dict, key: str) -> str:
+            hit = results.get(key)
+            v = _stage_verdict(hit[0] if hit else None)
+            entry[axis] = {
+                "verdict": v,
+                "date": hit[1] if hit else "",
+                "run": _run_url(hit[2]) if hit else "",
+            }
+            return v
+
         per_cell = {
-            "builds": _stage_verdict(jobs.get((flavor, "Promote"))),
+            "builds": stage_axis("builds", "Promote"),
             # Every cell has a Gate verdict slot — desktops from the desktop
             # Gate, plain base from the base Gate (W3); whether it BINDS is
             # the criterion's scope, applied in verdict() below.
-            "boots": _stage_verdict(jobs.get((flavor, "Gate"))),
+            "boots": stage_axis("boots", "Gate"),
         }
         if flavor in desktops.get(variant, set()):
-            per_cell["desktop"] = _axis_from_results(
-                contract, f"{variant}:{flavor}"
+            per_cell["desktop"] = result_axis(
+                "desktop", contract, f"{variant}:{flavor}"
             )
-            per_cell["install"] = _axis_from_results(
-                luks, f"LUKS {variant}:{flavor}"
+            per_cell["install"] = result_axis(
+                "install", luks, f"LUKS {variant}:{flavor}"
             )
-            per_cell["lifecycle"] = _axis_from_results(
-                lifecycle, f"{variant}:{flavor}"
+            per_cell["lifecycle"] = result_axis(
+                "lifecycle", lifecycle, f"{variant}:{flavor}"
             )
-            per_cell["no_silent_omissions"] = _axis_from_results(
-                omissions, f"{variant}:{flavor}"
+            per_cell["no_silent_omissions"] = result_axis(
+                "no_silent_omissions", omissions, f"{variant}:{flavor}"
             )
-            per_cell["parity"] = _axis_from_results(
-                parity, f"{variant}:{flavor}"
+            per_cell["parity"] = result_axis(
+                "parity", parity, f"{variant}:{flavor}"
             )
         if flavor in isos.get(variant, set()):
-            per_cell["iso"] = _axis_from_results(smoke, f"{variant}:{flavor}")
+            per_cell["iso"] = result_axis(
+                "iso", smoke, f"{variant}:{flavor}"
+            )
         return per_cell
 
     blocking_criteria = [c for c in criteria if c["enforcement"] == "blocking"]
@@ -695,10 +736,17 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
             "to them today."
         ),
         "",
+        (
+            "Per-cell provenance \u2014 which run asserted which criterion, when \u2014 "
+            "is machine-readable in "
+            "[matrix-provenance.json](matrix-provenance.json), regenerated "
+            "with this document."
+        ),
+        "",
     ]
     # The escaped square renders literally otherwise.
     lines = [l.replace("\u2b1c", UNTESTED) for l in lines]
-    return lines, green, total
+    return lines, green, total, provenance
 
 
 def omissions_section(lmatrix, omissions) -> list[str]:
@@ -916,7 +964,7 @@ def build() -> str:
     lifecycle = lifecycle_results()
     omissions = omissions_results()
     parity = parity_results()
-    composite_lines, _, _ = composite_section(
+    composite_lines, _, _, provenance = composite_section(
         load_green_criteria(), build_stage_results(), contract, luks, smoke,
         lifecycle, omissions, parity,
     )
@@ -1137,7 +1185,7 @@ def build() -> str:
         url = f"https://github.com/{REPO}/actions/runs/{run_id}"
         out.append(f"| {date} | [{run_id}]({url}) | {len(names)} |")
     out += ["", END]
-    return "\n".join(out)
+    return "\n".join(out), provenance
 
 
 # Lines whose whole content is a readout of live CI or registry state.
@@ -1236,7 +1284,7 @@ def main() -> int:
 
     head, rest = text.split(BEGIN, 1)
     committed, tail = rest.split(END, 1)
-    generated = build()
+    generated, provenance = build()
     updated = head + generated + tail
 
     if args.check_structure:
@@ -1264,6 +1312,18 @@ def main() -> int:
         print("\n".join(diff), file=sys.stderr)
         return 1
 
+    if not args.check:
+        # The JSON is regenerated whenever the doc is, and also when the
+        # doc happens to be byte-identical: same inputs, same payload, so
+        # this is idempotent rather than churn.
+        PROV.write_text(json.dumps(
+            {"about": "Which run asserted which criterion, when — "
+                      "per published cell, per axis. Generated by "
+                      "scripts/gen-matrix-status.py alongside "
+                      "MATRIX-STATUS.md; empty run+date means the axis "
+                      "has no current assertion for that cell.",
+             "cells": provenance},
+            indent=1, sort_keys=True) + "\n")
     if updated == text:
         print("MATRIX-STATUS.md already current")
         return 0

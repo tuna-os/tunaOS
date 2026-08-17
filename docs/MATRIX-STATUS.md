@@ -87,6 +87,8 @@ Scored against `.github/green-criteria.yml`: a cell is green only when every **b
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
 
+Per-cell provenance — which run asserted which criterion, when — is machine-readable in [matrix-provenance.json](matrix-provenance.json), regenerated with this document.
+
 ## Silent omissions
 
 **0 of 52** cells clean (0 read, 52 never read).

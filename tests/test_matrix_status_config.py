@@ -382,8 +382,13 @@ class MainCliDispatch(unittest.TestCase):
         self.doc.write_text(f"# Matrix status\n\n{self._wrap(body)}\n")
 
     def _run_main(self, argv, generated_body="new content"):
+        # build() now returns (text, provenance); main writes the provenance
+        # JSON beside the doc, so point PROV into the same tmpdir.
+        prov = Path(self.tmp.name) / "matrix-provenance.json"
         with mock.patch.object(gms, "DOC", self.doc), \
-                mock.patch.object(gms, "build", return_value=self._wrap(generated_body)), \
+                mock.patch.object(gms, "PROV", prov), \
+                mock.patch.object(gms, "build",
+                                  return_value=(self._wrap(generated_body), {})), \
                 mock.patch.object(sys, "argv", ["gen-matrix-status.py", *argv]):
             return gms.main()
 

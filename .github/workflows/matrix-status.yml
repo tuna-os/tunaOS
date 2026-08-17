@@ -103,7 +103,7 @@ jobs:
           BRANCH: automation/matrix-status
         run: |
           set -euo pipefail
-          if git diff --quiet -- docs/MATRIX-STATUS.md; then
+          if git diff --quiet -- docs/MATRIX-STATUS.md docs/matrix-provenance.json; then
             echo "No cells moved — nothing to commit."
             exit 0
           fi
@@ -115,7 +115,7 @@ jobs:
           # add noise. Reusing the name also keeps this to a single open PR
           # instead of one per day.
           git checkout -b "$BRANCH"
-          git add docs/MATRIX-STATUS.md
+          git add docs/MATRIX-STATUS.md docs/matrix-provenance.json
           git commit -m "docs: refresh matrix status ($(date -u +%Y-%m-%d))"
           git push --force origin "$BRANCH"
 

@@ -62,7 +62,7 @@ def test_blocking_criteria_are_scoreable() -> None:
 def test_offline_composite_covers_the_full_matrix() -> None:
     """With no CI data at all: nothing green, every published cell counted,
     and the total agrees with the README denominator (build_image cells)."""
-    lines, green, total = gms.composite_section(CRITERIA, {}, {}, {}, {}, {}, {}, {})
+    lines, green, total, _ = gms.composite_section(CRITERIA, {}, {}, {}, {}, {}, {}, {})
     assert green == 0
     cfg = gms._matrix("build_image", desktops_only=False)
     assert total == sum(len(f) for f in cfg.values())
@@ -72,7 +72,7 @@ def test_offline_composite_covers_the_full_matrix() -> None:
 def test_composite_scores_a_promoted_gated_cell_green_iff_blocking_pass() -> None:
     stage = {"albacore": {"jobs": {("gnome", "Promote"): "success",
                                    ("gnome", "Gate"): "failure"}, "date": "x"}}
-    lines, green, total = gms.composite_section(CRITERIA, stage, {}, {}, {}, {}, {}, {})
+    lines, green, total, _ = gms.composite_section(CRITERIA, stage, {}, {}, {}, {}, {}, {})
     blocking = {c["id"] for c in CRITERIA if c["enforcement"] == "blocking"}
     if blocking == {"builds"}:
         # A failing Gate is advisory today: the cell is still composite-green.
@@ -97,4 +97,45 @@ def test_committed_doc_carries_the_composite_section() -> None:
     assert "## Composite green — the bar" in doc
     assert doc.index("## Composite green") < doc.index("## LUKS E2E"), (
         "the composite is the headline; the axis sections are its inputs"
+    )
+
+
+def test_provenance_records_which_run_asserted_which_criterion() -> None:
+    """W1's last box: the axis tuples already carried (conclusion, date,
+    run_id); the glyphs threw them away. The provenance payload comes out of
+    the SAME wiring that scores the board, so the two cannot disagree."""
+    stage = {
+        "sailfin": {
+            "jobs": {("gnome", "Promote"): "success",
+                     ("gnome", "Gate"): "failure"},
+            "date": "2026-08-17",
+            "run_id": "32068513822",
+        }
+    }
+    lifecycle = {"sailfin:gnome": ("success", "2026-08-17", "32040213366")}
+    _, _, _, prov = gms.composite_section(
+        CRITERIA, stage, {}, {}, {}, lifecycle, {}, {}
+    )
+    cell = prov["sailfin:gnome"]
+    assert cell["builds"]["verdict"] == "pass"
+    assert cell["builds"]["run"].endswith("/actions/runs/32068513822")
+    assert cell["boots"]["verdict"] == "fail"
+    assert cell["lifecycle"]["verdict"] == "pass"
+    assert cell["lifecycle"]["run"].endswith("/actions/runs/32040213366")
+    assert cell["lifecycle"]["date"] == "2026-08-17"
+    # An unasserted axis is recorded as untested with NO run — absence stays
+    # visible instead of becoming a hole in the payload.
+    assert cell["desktop"]["verdict"] == "untested"
+    assert cell["desktop"]["run"] == ""
+
+
+def test_provenance_ships_with_the_doc() -> None:
+    body = (ROOT / "scripts" / "gen-matrix-status.py").read_text()
+    assert 'Path("docs/matrix-provenance.json")' in body
+    doc = (ROOT / "docs" / "MATRIX-STATUS.md").read_text()
+    assert "matrix-provenance.json" in doc
+    wf = (ROOT / ".github" / "workflows" / "matrix-status.yml").read_text()
+    assert wf.count("docs/matrix-provenance.json") >= 2, (
+        "the refresh workflow must both diff-check AND git-add the JSON, or "
+        "it regenerates and then silently fails to ship"
     )
