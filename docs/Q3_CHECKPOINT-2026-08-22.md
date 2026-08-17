@@ -38,6 +38,16 @@ To ensure decision inputs survive upstream merge delays:
 1. **Issue Thread Auditing**: Checkpoint recommendations and status updates must be posted directly to their primary tracking issues (#1299, #1341, #272, #1123, #1383, #1657).
 2. **Divergence Correction**: Public status tables (including `ROADMAP.md` and `ADOPTION-METRICS.md`) maintain an issue comment audit log matching verified repository state (e.g. tracking non-queue merges such as `bootc-installer` and external human contributor PRs).
 
+### External-capacity correction (2026-08-14)
+
+The prior “no external capacity” framing is stale. Two verified human-authored
+docs PRs merged on 2026-08-14 ([docs#234](https://github.com/tuna-os/docs/pull/234)
+and [docs#239](https://github.com/tuna-os/docs/pull/239)), demonstrating a
+docs-channel contribution path. For #272/#1123, preserve the conclusion only
+with the narrower evidence statement **“no core-code capacity”**; do not cite
+“no external capacity.” Contribution activity is not adopter evidence and must
+remain separate from the Q4 adoption metrics. See #1714.
+
 ---
 
 ## Escalation Path (#1657)

@@ -1,6 +1,6 @@
 # TunaOS Adoption Metrics Plan
 
-**Last updated**: 2026-08-10 | **Owner**: strategist (snapshot), ci-maintainer (R2/Releases data), guide (publishing)
+**Last updated**: 2026-08-14 | **Owner**: strategist (snapshot), ci-maintainer (R2/Releases data), guide (publishing)
 **Tracking**: [tunaos#1174](https://github.com/tuna-os/tunaos/issues/1174)
 
 ---
@@ -29,7 +29,7 @@ publish, and *how* the snapshot feeds roadmap decisions.
 | Download | ISO downloads by variant+desktop | R2 access logs (tunaos.org/download) | **not measured** | ≥1k ISO downloads/mo; variant ranking |
 | Download | GitHub Release asset downloads | Releases API (resumed 08-09, #1106) | 0 (assets were empty shells) | assets present on all flavors; downloads counted |
 | Install | Installs / successful boots | opt-in telemetry or boot-report gating | **not measured** | Q4 design decision (#577 GUI gate, #763) |
-| Community | Open PRs from external contributors | GitHub API | 0 external contributors | ≥2 external contributor PRs merged |
+| Community | Merged PRs from external human contributors | GitHub API | **3 merged contributions from 3 verified humans** (docs#234, docs#239 on 08-14; one bootc-migrate contribution on 08-05) | ≥5 merged PRs from ≥3 humans, including one repeat contributor |
 | Community | Discussion posts, `good first issue` pickups | GitHub API | 0 starter issues (dead label, #1308) | ≥5 starter issues picked up |
 | Community | **External** public adopters (production or evaluation), [ADOPTERS.md](./ADOPTERS.md) — excludes the maintainer and TunaOS's own infrastructure | Manual — PR from the adopting org, or outreach asking permission to list | 0 external entries (#1348) | ≥2–3 external evaluator/production entries |
 | Community | Adoption-call conversion | GitHub Discussion + follow-up PRs | **not measured** | Record responses, consent-confirmed named entries, anonymous reports, and ADOPTERS.md PRs |
@@ -67,6 +67,14 @@ The current outreach record is kept in
 an intended recipient, or an ecosystem relationship is not an outreach result;
 the monthly snapshot must record a sent date, public URL, response, or an
 explicitly unattempted status.
+
+### Contribution evidence is not adoption evidence
+
+The 2026-08-14 docs merges establish a real external-contribution channel and
+are useful leading evidence for the Hacktoberfest funnel. They do not establish
+that the authors use TunaOS. Keep the contribution count separate from
+production/evaluation entries in `ADOPTERS.md`; only a consent-confirmed report
+belongs in the adopter funnel.
 
 ## Decision linkage
 
