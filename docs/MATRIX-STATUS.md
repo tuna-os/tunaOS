@@ -18,6 +18,20 @@ survived for weeks because the absence of evidence read as evidence of absence.
 
 ---
 
+## 0. What green means
+
+The bar was raised on 2026-08-17: green means the image **works**, not that it
+built. The criteria — desktop present and startable, boots to a session, ISO
+installs, installation completes, update and rollback work, upstream parity, no
+silent omissions, still rebuildable, no unsatisfiable architectures — are
+defined in [GREEN-CRITERIA.md](GREEN-CRITERIA.md), with
+[`.github/green-criteria.yml`](../.github/green-criteria.yml) as the machine
+readable source.
+
+The rule that makes the list mean anything: **skipped, never-tested and stale
+all count as not green.** The axes below are the evidence those criteria are
+scored against.
+
 ## 1. Scope: what each axis actually proves
 
 Passing one axis says nothing about the others. This caught us out repeatedly,
