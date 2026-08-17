@@ -162,7 +162,7 @@ Same shape as yellowfin. Additionally:
 ### skipjack (CentOS Stream 10) — 9/18 build
 | area | state | action |
 |---|---|---|
-| gnome, gnome-hwe | missing — **undiagnosed** | pull nightly logs, classify |
+| gnome, gnome-hwe | classified 2026-08-17: builds succeed on both arches; Gates died on the #1811/#1818 just-cwd class (fixed on main), Attest SBOMs on Rekor 502s | clears on the first post-#1818 nightly; verify then |
 | xfce | expect unblock from #358 repair | verify next nightly |
 | *-nvidia (5) | #1725 | as above |
 
@@ -196,7 +196,7 @@ The fully-diagnosed one: **#1755**.
 | area | state | action |
 |---|---|---|
 | base | **promoted 08-17** after #1806 re-pin (was 100% blocked) | keep |
-| gnome/kde/cosmic/niri/xfce amd64 | failed Build Image tonight — **undiagnosed** (first attempt in days, base was the blocker) | pull logs, classify |
+| gnome/kde/cosmic/niri/xfce amd64 | classified 2026-08-17: **#1832** — one blocker for all five: openSUSE ships the crippled ffmpeg (h264/hevc decoders compiled out), the codec baseline fails deterministically | enable Packman ffmpeg (the RPM Fusion equivalent), per #1832 |
 
 ### guppy (Gentoo) — 2/4 build
 The best-instrumented variant after this week.
@@ -214,7 +214,7 @@ variant-specific blocker.
 | area | state | action |
 |---|---|---|
 | kde/xfce gates | broke 08-17 with the module-path regression, fixed (#1811) | verify on next nightly |
-| gnome-zfs | never reached — **undiagnosed** | pull logs, classify |
+| gnome-zfs | classified 2026-08-17: builds, signs; Gate died on the #1811/#1818 just-cwd class (fixed on main), Promote skipped behind it | clears on the first post-#1818 nightly; verify then |
 
 ### marlin (Arch) — 16/16 build, gates regressed
 | area | state | action |
@@ -229,7 +229,7 @@ Green on build (nvidia included since #1564). Next bar is gates/ISO/lifecycle.
 ### flounder-sid (Debian Sid) — 5/7 build
 | area | state | action |
 |---|---|---|
-| gnome, xfce | missing — **undiagnosed** | pull logs, classify |
+| gnome, xfce | classified 2026-08-17: **#1833** — sid's GNOME 50→51 transition (libgjs0 Breaks gnome-shell < 51~beta~); gnome via extension-manager→gjs, xfce via gdm3→gnome-shell | upstream heals on gnome-shell 51; optional decoupling per #1833 |
 | taxonomy | rolling variant (#1762) | rolling standard |
 
 ---
