@@ -44,6 +44,7 @@ jobs:
           - json-validate
           - actionlint
           - justfmt
+          - error-suppression
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -111,6 +112,10 @@ jobs:
             -ignore "save-always" \
             -ignore "cannot be filtered" \
             .github/workflows/*.yml .github/workflows/*.yaml
+
+      - name: Check new error suppressions
+        if: matrix.check == 'error-suppression'
+        run: bash scripts/check-new-error-suppressions.sh
 
       - name: Check Justfile formatting
         if: matrix.check == 'justfmt'

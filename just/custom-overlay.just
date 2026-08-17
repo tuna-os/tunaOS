@@ -19,12 +19,12 @@ build-custom base="" tag="": _ensure-deps
         # raised AttributeError into `2>/dev/null` and silently produced the
         # default below. A wrong image built without complaint is worse than a
         # failure (tunaOS#1651).
-        BASE_IMAGE=$({{ yq }} -r '.base // ""' custom/image.yaml 2>/dev/null || true)
+        BASE_IMAGE=$({{ yq }} -r '.base // ""' custom/image.yaml)
         BASE_IMAGE="${BASE_IMAGE:-ghcr.io/tuna-os/yellowfin:gnome}"
     fi
     TARGET_TAG="{{ tag }}"
     if [[ -z "${TARGET_TAG}" ]]; then
-        TARGET_TAG=$({{ yq }} -r '.tag // ""' custom/image.yaml 2>/dev/null || true)
+        TARGET_TAG=$({{ yq }} -r '.tag // ""' custom/image.yaml)
         TARGET_TAG="${TARGET_TAG:-my-custom-os}"
     fi
     echo "==> Building custom image based on ${BASE_IMAGE} as localhost/${TARGET_TAG}..."
@@ -75,7 +75,7 @@ custom-iso base_image='':
     {{ just }} build-custom "{{ base_image }}"
     TAG="my-custom-os"
     if [[ -f "custom/image.yaml" ]]; then
-        T=$({{ yq }} -r '.tag // ""' custom/image.yaml 2>/dev/null || true)
+        T=$({{ yq }} -r '.tag // ""' custom/image.yaml)
         [[ -n "$T" ]] && TAG="$T"
     fi
     echo "==> Generating live ISO for localhost/${TAG}:latest..."
