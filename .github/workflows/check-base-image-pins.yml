@@ -1,16 +1,23 @@
 name: Check base image pins
 
-# Runs an hour before the nightly variant builds. A digest-pinned base image
-# that upstream has garbage-collected fails partway into the base build as
+# Runs well before the nightly variant builds. A digest-pinned base image that
+# upstream has garbage-collected fails partway into the base build as
 # `manifest unknown`, which reads like a broken Containerfile and takes every
 # downstream flavor of that variant with it (#1788, and at least once before).
 #
 # Checking the pins directly takes seconds and names the problem in one line,
 # so the fix can land before the matrix pays for it rather than after.
+#
+# The variant builds are `cron: "0 1 * * *"`. This first shipped at 03:00,
+# which is two hours AFTER them -- the check would have run on the wreckage it
+# was meant to prevent. 22:20 leaves ~2h40m of margin, and GitHub's scheduler
+# needs it: on 2026-08-17 the 01:00 nightlies did not actually start until
+# 02:17, a 77-minute delay. Off the hour on purpose, since :00 is the most
+# contended minute and attracts the longest queueing.
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 3 * * *'
+    - cron: '20 22 * * *'
 
 permissions:
   contents: read
