@@ -215,12 +215,33 @@ if [[ "${_TD_OS}" == "zypper" ]]; then
 				_td_pm_lost+=("$_td_pkg")
 			fi
 		done
-		if ((${#_td_pm_lost[@]} > 0)); then
-			echo "Packman must own the codec libraries; forcing: ${_td_pm_lost[*]} (tunaOS#1832)"
+		# A soname generation Packman has not published cannot be forced
+		# from packman-essentials. During a Tumbleweed ffmpeg major
+		# transition the openSUSE build is briefly the ONLY build — run
+		# 32068513822 killed all five amd64 desktops because openSUSE
+		# shipped libavcodec63 (ffmpeg 9) while Packman's newest is
+		# libavcodec62, so the forced install was a no-op and the assert
+		# below (correctly) refused to hope. Failing the image for that
+		# gap goes red on something no change in this repository can fix:
+		# force what Packman offers, surface the rest with a greppable
+		# marker, and let the codec baseline in
+		# verify-desktop-experience.sh keep asserting that the primary
+		# ffmpeg stack still decodes h264 (it links the Packman soname).
+		_td_force=()
+		for _td_pkg in "${_td_pm_lost[@]}"; do
+			if zypper --non-interactive search --match-exact --type package \
+				--repo packman-essentials "$_td_pkg" >/dev/null 2>&1; then
+				_td_force+=("$_td_pkg")
+			else
+				echo "TUNAOS_CODEC_GAP: ${_td_pkg} is not Packman-vendored and packman-essentials publishes no build to force; its consumers decode with openSUSE's crippled build until Packman catches up (tunaOS#1832)"
+			fi
+		done
+		if ((${#_td_force[@]} > 0)); then
+			echo "Packman must own the codec libraries; forcing: ${_td_force[*]} (tunaOS#1832)"
 			attempt=0
 			until zypper --non-interactive install -y --oldpackage \
 				--allow-vendor-change --force-resolution \
-				--from packman-essentials "${_td_pm_lost[@]}"; do
+				--from packman-essentials "${_td_force[@]}"; do
 				attempt=$((attempt + 1))
 				if ((attempt >= 3)); then
 					echo "ERROR: could not force the codec libraries back to Packman (tunaOS#1832)" >&2
@@ -232,7 +253,7 @@ if [[ "${_TD_OS}" == "zypper" ]]; then
 			# Assert, don't hope: a second no-op here means the force above
 			# quietly failed and the codec baseline will fail later anyway —
 			# fail HERE, where the zypper output is still on screen.
-			for _td_pkg in "${_td_pm_lost[@]}"; do
+			for _td_pkg in "${_td_force[@]}"; do
 				rpm -q --qf '%{VENDOR}\n' "$_td_pkg" | grep -qi packman || {
 					echo "ERROR: ${_td_pkg} still not Packman-vendored after the forced install (tunaOS#1832)" >&2
 					exit 1

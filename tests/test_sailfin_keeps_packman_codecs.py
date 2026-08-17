@@ -67,3 +67,23 @@ def test_ownership_is_verified_not_inferred_from_the_dup() -> None:
     # case the dup cannot handle, not a replacement for it.
     assert SCRIPT.index("dup --from packman-essentials") \
         < SCRIPT.index("rpm -q --qf '%{VENDOR}")
+
+
+def test_unpublished_soname_generations_are_surfaced_not_fatal() -> None:
+    """Run 32068513822 killed all five amd64 desktops: Tumbleweed shipped
+    libavcodec63 (ffmpeg 9) while Packman Essentials' newest build is
+    libavcodec62, so the forced install was a no-op ('already installed')
+    and the post-force assert failed — on a gap no change in this
+    repository can close. A generation Packman does not publish cannot be
+    forced from packman-essentials: it must be surfaced with a greppable
+    marker, and only the Packman-published subset forced and asserted."""
+    assert "TUNAOS_CODEC_GAP" in SCRIPT
+    # Availability is measured against the live repo, per package, before
+    # any forcing happens.
+    assert "--match-exact" in SCRIPT
+    assert "--repo packman-essentials" in SCRIPT
+    assert SCRIPT.index("TUNAOS_CODEC_GAP") \
+        < SCRIPT.index("Packman must own the codec libraries")
+    # The force and the post-force assert both operate on the filtered set,
+    # so the assert can never demand a package the force was never given.
+    assert SCRIPT.count('"${_td_force[@]}"') >= 2
