@@ -93,7 +93,82 @@ done < <("$YQ" -r '.variants[].base_image // empty' "$CONFIG" | sort -u)
 echo
 echo "checked ${checked} digest-pinned base image(s); ${failed} unresolvable"
 
+# ── Architecture honesty (green criterion 10, GREEN-MASTER-PLAN W8) ─────────
+# A variant may not declare a platform its base image cannot provide: the
+# result is a guaranteed-red cell every night that no change in this repo can
+# clear (hummingbird declared linux/arm64 against a source that 404'd,
+# #1755 §3 — four dead cells nightly until someone read the logs). Declaring
+# an unsatisfiable architecture should fail THIS check, loudly, at config
+# time.
+#
+# Platform → manifest architecture: linux/amd64/v2 is a microarchitecture
+# level of amd64, so it maps to amd64; the base manifest cannot and need not
+# distinguish it.
+arch_failed=0
+arch_checked=0
+echo
+while IFS=$'\t' read -r variant ref platforms; do
+  [ -n "$ref" ] && [ "$ref" != "null" ] || continue
+  case "$ref" in *@sha256:*) ;; *) continue ;; esac
+
+  digest="${ref##*@}"
+  before_at="${ref%@*}"
+  name="${before_at%%:*}"
+  registry="${name%%/*}"
+  repo="${name#*/}"
+
+  hdr="$(auth_header "$registry" "$repo")"
+  body="$(curl -fsS --max-time 30 -H "Accept: ${ACCEPT}" ${hdr:+-H "$hdr"} \
+      "https://$(api_host "$registry")/v2/${repo}/manifests/${digest}" 2>/dev/null || true)"
+  [ -n "$body" ] || continue  # resolution failures already reported above
+
+  archs="$(printf '%s' "$body" | python3 -c '
+import json, sys
+doc = json.load(sys.stdin)
+entries = doc.get("manifests")
+if entries is None:
+    # A plain (single-arch) manifest carries its architecture in the config
+    # blob, not here; report the sentinel rather than guessing.
+    print("SINGLE")
+else:
+    seen = sorted({m.get("platform", {}).get("architecture", "?")
+                   for m in entries
+                   if m.get("platform", {}).get("os") != "unknown"})
+    print(" ".join(seen))
+' 2>/dev/null || echo '?')"
+
+  for platform in ${platforms//,/ }; do
+    arch="${platform#linux/}"
+    arch="${arch%%/*}"
+    arch_checked=$((arch_checked + 1))
+    if [ "$archs" = "SINGLE" ]; then
+      # Cannot verify cheaply; only complain when the variant claims more
+      # than the one architecture a single manifest can possibly hold.
+      distinct="$(printf '%s\n' ${platforms//,/ } | sed 's|linux/||; s|/.*||' | sort -u | wc -l)"
+      if [ "$distinct" -gt 1 ]; then
+        echo "ARCH?  ${variant}: ${platform} declared but ${name} pins a single-arch manifest"
+        echo "::warning::${variant} declares ${platform} but its base image pin is a single-architecture manifest — at most one declared architecture can be real"
+      fi
+      continue
+    fi
+    case " $archs " in
+      *" $arch "*) echo "arch   ok  ${variant}: ${platform} (base has: ${archs})" ;;
+      *)
+        echo "ARCH  FAIL ${variant}: ${platform} — base ${name} provides only [${archs}]"
+        echo "::error::${variant} declares ${platform} but its base image provides only [${archs}] — a guaranteed-red cell nightly. Drop the platform or fix the base pin (criterion arch_honesty, W8)."
+        arch_failed=$((arch_failed + 1))
+        ;;
+    esac
+  done
+done < <("$YQ" -r '.variants[] | [.id, (.base_image // ""), ((.platforms // []) | join(","))] | @tsv' "$CONFIG")
+
+echo
+echo "checked ${arch_checked} declared platform(s); ${arch_failed} unsatisfiable"
+
 if [ "$failed" -gt 0 ]; then
   echo "::error::${failed} base image pin(s) have been garbage-collected upstream. Re-pin them to the tag's current digest before the next nightly (see #1788)."
+  exit 1
+fi
+if [ "$arch_failed" -gt 0 ]; then
   exit 1
 fi

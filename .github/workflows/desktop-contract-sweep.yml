@@ -115,6 +115,7 @@ jobs:
           fi
 
           status=missing; exitcode=""; reason="no published image"
+          omissions_status=untested; omissions_reason="image not read"
           # Existence check WITHOUT pulling: a cell with no image is untested,
           # not failing, and must not cost a multi-GB download to discover.
           #
@@ -153,6 +154,34 @@ jobs:
                 reason=$(grep -m1 -E "^missing (required|unit)" <<<"$out" || echo "exit ${exitcode}")
               fi
               echo "$out" | tail -40
+
+              # Same pulled image, second axis (green criterion 8,
+              # no_silent_omissions): run the SAME gate the build runs
+              # (checks/verify-package-wishlist.sh) against what was actually
+              # published. The build-time gate covers new builds; this read
+              # covers what users pull today — images published before the
+              # gate existed, or through paths that bypass it. Reuses this
+              # job's multi-GB pull instead of funding a second sweep.
+              # IS_HUMMINGBIRD is mirrored from the build context: those
+              # images skip the gate there, so they skip it here, for the
+              # same recorded reason.
+              is_hb=false
+              [[ "${{ matrix.variant }}" == hummingbird* ]] && is_hb=true
+              wl_out=$(sudo podman run --rm \
+                -v "$PWD/build_scripts/checks/verify-package-wishlist.sh:/vpw.sh:z" \
+                -v "$PWD/build_scripts/checks/package-miss-allowlist.txt:/allow.txt:z" \
+                -e TUNAOS_WISHLIST_ALLOWLIST=/allow.txt \
+                -e IS_HUMMINGBIRD="$is_hb" \
+                --entrypoint /bin/bash "$REF" /vpw.sh 2>&1)
+              wl_exit=$?
+              if [[ "$wl_exit" -eq 0 ]]; then
+                omissions_status=pass
+              else
+                omissions_status=fail
+              fi
+              omissions_reason=$(grep -m1 -E '^TUNAOS_WISHLIST_(OK|FAIL|SKIPPED)' <<<"$wl_out" \
+                || echo "gate exited ${wl_exit} without its verdict line")
+              echo "$wl_out" | tail -20
             fi
           fi
 
@@ -160,7 +189,8 @@ jobs:
           jq -n --arg cell "$CELL" --arg variant "${{ matrix.variant }}" \
                 --arg desktop "${{ matrix.desktop }}" --arg status "$status" \
                 --arg reason "$reason" --arg exitcode "${exitcode:-}" \
-             '{cell:$cell,variant:$variant,desktop:$desktop,status:$status,reason:$reason,exit:$exitcode}' \
+                --arg om "$omissions_status" --arg omr "$omissions_reason" \
+             '{cell:$cell,variant:$variant,desktop:$desktop,status:$status,reason:$reason,exit:$exitcode,omissions_status:$om,omissions_reason:$omr}' \
              > "result.json"
 
       - name: Upload cell result
@@ -205,7 +235,9 @@ jobs:
             | .[0] + [ .[1][] | select(.cell as $c | $got | index($c) | not)
                        | {cell: .cell, variant: (.cell|split(":")[0]),
                           desktop: (.cell|split(":")[1]), status: "lost",
-                          reason: "job produced no result (see its log)", exit: ""} ]
+                          reason: "job produced no result (see its log)", exit: "",
+                          omissions_status: "untested",
+                          omissions_reason: "job produced no result"} ]
             | sort_by(.cell)' found.json expected.json > all.json
 
           pass=$(jq '[.[]|select(.status=="pass")]|length' all.json)
@@ -233,6 +265,20 @@ jobs:
                else "⬜" end) +
               " | \(.reason) |"' all.json
           } | tee -a "$GITHUB_STEP_SUMMARY" > baseline.md
+
+          om_pass=$(jq '[.[]|select(.omissions_status=="pass")]|length' all.json)
+          om_fail=$(jq '[.[]|select(.omissions_status=="fail")]|length' all.json)
+          {
+            echo
+            echo "**Silent omissions (criterion 8): ${om_pass} clean, ${om_fail} shipping unallowlisted misses** (cells whose image was not read score untested, not clean)."
+            if (( om_fail > 0 )); then
+              echo
+              echo "| cell | omissions |"
+              echo "|---|---|"
+              jq -r '.[] | select(.omissions_status=="fail")
+                | "| \(.cell) | \(.omissions_reason) |"' all.json
+            fi
+          } | tee -a "$GITHUB_STEP_SUMMARY" >> baseline.md
 
           echo "DESKTOP CONTRACT BASELINE: ${pass}/${total} pass, ${fail} fail, ${miss} no image, ${err} error, ${lost} lost"
 

@@ -242,3 +242,30 @@ def test_the_check_avoids_the_top_of_the_hour():
     wf = yaml.safe_load(WORKFLOW.read_text())
     minutes = {int(c["cron"].split()[0]) for c in wf[True]["schedule"]}
     assert 0 not in minutes, "scheduled on the hour, where GitHub queues longest"
+
+
+def test_declared_platforms_are_checked_against_base_architectures():
+    """W8 (arch_honesty): declaring an architecture the base image cannot
+    provide is a config error caught nightly, not a guaranteed-red cell
+    someone diagnoses from build logs (#1755 §3)."""
+    body = SCRIPT.read_text(encoding="utf-8")
+    assert "arch_honesty" in body
+    assert "provides only" in body, "the failure must name what the base has"
+    # linux/amd64/v2 is a microarchitecture level of amd64 — it must map to
+    # amd64, or every /v2 declaration false-positives.
+    assert 'arch="${arch%%/*}"' in body
+
+
+def test_arch_honesty_failures_fail_the_check():
+    body = SCRIPT.read_text(encoding="utf-8")
+    assert 'if [ "$arch_failed" -gt 0 ]' in body
+
+
+def test_arch_honesty_criterion_is_advisory_and_asserted():
+    import yaml
+    criteria = yaml.safe_load(
+        (SCRIPT.parents[1] / ".github" / "green-criteria.yml").read_text()
+    )["criteria"]
+    c = next(c for c in criteria if c["id"] == "arch_honesty")
+    assert c["enforcement"] == "advisory"
+    assert "check-base-image-pins" in c["asserted_by"]

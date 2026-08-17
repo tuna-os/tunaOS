@@ -304,6 +304,113 @@ def overlay_tags() -> set[str]:
     return {t for t in tags if not t.startswith("sha256-")}
 
 
+_BASELINE_CACHE: tuple[list[dict], str, str] | None = None
+
+
+def _baseline_cells() -> tuple[list[dict], str, str]:
+    """The newest trustworthy desktop-contract-baseline artifact, once.
+
+    contract_results() and omissions_results() read the same all.json — the
+    sweep records both axes from one image pull — so download it once per
+    invocation rather than once per axis.
+    """
+    global _BASELINE_CACHE
+    if _BASELINE_CACHE is not None:
+        return _BASELINE_CACHE
+    runs = gh_json(
+        "run", "list", "--repo", REPO, "--workflow", "desktop-contract-sweep.yml",
+        "--limit", "10", "--json", "databaseId,createdAt,status,conclusion",
+    ) or []
+    for run in runs:
+        if run.get("status") != "completed" or run.get("conclusion") != "success":
+            continue
+        run_id, date = str(run["databaseId"]), run["createdAt"][:10]
+        with tempfile.TemporaryDirectory() as tmp:
+            try:
+                subprocess.run(
+                    ["gh", "run", "download", run_id, "--repo", REPO,
+                     "--name", "desktop-contract-baseline", "--dir", tmp],
+                    capture_output=True, text=True, check=True,
+                )
+            except subprocess.CalledProcessError:
+                continue
+            all_json = Path(tmp) / "all.json"
+            if not all_json.exists():
+                continue
+            _BASELINE_CACHE = (json.loads(all_json.read_text()), date, run_id)
+            return _BASELINE_CACHE
+    _BASELINE_CACHE = ([], "", "")
+    return _BASELINE_CACHE
+
+
+def omissions_results() -> dict[str, tuple[str, str, str]]:
+    """Per-cell no_silent_omissions verdict from the sweep's baseline.
+
+    Same artifact as contract_results(), different field: the sweep runs
+    checks/verify-package-wishlist.sh against every published image it pulls
+    (green criterion 8). Cells from artifacts that predate the field, and
+    cells whose image was never read (missing/error/lost), score untested —
+    absence of evidence, per the same #1730 rule as everywhere else.
+    """
+    cells, date, run_id = _baseline_cells()
+    out: dict[str, tuple[str, str, str]] = {}
+    for c in cells:
+        verdict = c.get("omissions_status")
+        if verdict in ("pass", "fail"):
+            out[c["cell"]] = (
+                "success" if verdict == "pass" else "failure", date, run_id
+            )
+    return out
+
+
+_PARITY_CACHE: tuple[list[dict], str, str] | None = None
+
+
+def parity_results() -> dict[str, tuple[str, str, str]]:
+    """Per-cell parity verdict from package-parity.yml's baseline artifact.
+
+    ok → success; BROKEN/suspect → failure (a desktop adding fewer than the
+    floor of packages over its base is below the bar even when it isn't the
+    zero-added #858 case); unmeasured cells yield nothing — cell() renders ⬜.
+    """
+    global _PARITY_CACHE
+    if _PARITY_CACHE is None:
+        runs = gh_json(
+            "run", "list", "--repo", REPO, "--workflow", "package-parity.yml",
+            "--limit", "10", "--json", "databaseId,createdAt,status,conclusion",
+        ) or []
+        _PARITY_CACHE = ([], "", "")
+        for run in runs:
+            if run.get("status") != "completed" or run.get("conclusion") != "success":
+                continue
+            run_id, date = str(run["databaseId"]), run["createdAt"][:10]
+            with tempfile.TemporaryDirectory() as tmp:
+                try:
+                    subprocess.run(
+                        ["gh", "run", "download", run_id, "--repo", REPO,
+                         "--name", "package-parity-baseline", "--dir", tmp],
+                        capture_output=True, text=True, check=True,
+                    )
+                except subprocess.CalledProcessError:
+                    continue
+                parity_json = Path(tmp) / "parity.json"
+                if not parity_json.exists():
+                    continue
+                _PARITY_CACHE = (
+                    json.loads(parity_json.read_text()), date, run_id
+                )
+                break
+    cells, date, run_id = _PARITY_CACHE
+    out: dict[str, tuple[str, str, str]] = {}
+    for c in cells:
+        verdict = c.get("verdict", "")
+        if verdict == "ok":
+            out[c["cell"]] = ("success", date, run_id)
+        elif verdict.startswith(("BROKEN", "suspect")):
+            out[c["cell"]] = ("failure", date, run_id)
+    return out
+
+
 def contract_results() -> dict[str, tuple[str, str, str]]:
     """Newest per-cell verdict from desktop-contract-sweep.yml (tunaOS#858).
 
@@ -329,37 +436,8 @@ def contract_results() -> dict[str, tuple[str, str, str]]:
     translated to success/failure here, so callers can tell "no image
     published" apart from "published and broken" if they need to.
     """
-    runs = gh_json(
-        "run", "list", "--repo", REPO, "--workflow", "desktop-contract-sweep.yml",
-        "--limit", "10", "--json", "databaseId,createdAt,status,conclusion",
-    ) or []
-    for run in runs:
-        # The workflow's own conclusion (not the per-cell jobs') is a real
-        # signal here: `collate` fails the run if the baseline does not
-        # reconcile (see its "every cell must be accounted for" check), so a
-        # non-success run's artifact — if it even uploaded one — is not
-        # trustworthy data to read as a baseline.
-        if run.get("status") != "completed" or run.get("conclusion") != "success":
-            continue
-        run_id, date = str(run["databaseId"]), run["createdAt"][:10]
-        with tempfile.TemporaryDirectory() as tmp:
-            try:
-                subprocess.run(
-                    ["gh", "run", "download", run_id, "--repo", REPO,
-                     "--name", "desktop-contract-baseline", "--dir", tmp],
-                    capture_output=True, text=True, check=True,
-                )
-            except subprocess.CalledProcessError:
-                # Artifact expired (30/90-day retention) or this particular
-                # run predates the artifact existing — try the next-newest
-                # successful run rather than giving up on the whole section.
-                continue
-            all_json = Path(tmp) / "all.json"
-            if not all_json.exists():
-                continue
-            cells = json.loads(all_json.read_text())
-            return {c["cell"]: (c["status"], date, run_id) for c in cells}
-    return {}
+    cells, date, run_id = _baseline_cells()
+    return {c["cell"]: (c["status"], date, run_id) for c in cells}
 
 
 def load_green_criteria(path: Path = GREEN_CRITERIA) -> list[dict]:
@@ -407,8 +485,17 @@ def build_stage_results() -> dict[str, dict]:
                 r" / (?P<flavor>[^/]+) / (?P<stage>Promote|Gate)$",
                 job.get("name", ""),
             )
-            if m:
-                jobs[(m["flavor"], m["stage"])] = job.get("conclusion") or ""
+            if not m:
+                continue
+            key = (m["flavor"], m["stage"])
+            conclusion = job.get("conclusion") or ""
+            # Two jobs can share a display name for one cell: the desktop
+            # Gate (skipped on base) and the base Gate (skipped on desktops)
+            # both render as "base / Gate". A real verdict must never be
+            # overwritten by its skipped twin, and job order must not decide.
+            if key in jobs and conclusion not in ("success", "failure"):
+                continue
+            jobs[key] = conclusion
         out[variant] = {"jobs": jobs, "date": run["createdAt"][:10]}
     return out
 
@@ -446,7 +533,26 @@ def composite_verdict(verdicts: list[str]) -> str:
     return "pass"
 
 
-def composite_section(criteria, stage, contract, luks, smoke, lifecycle):
+def criterion_scope_allows(criterion: dict, flavor: str) -> bool:
+    """Whether a criterion is scored on this flavor at all.
+
+    A scope entry in green-criteria.yml is a REVIEWED declaration that CI
+    cannot assert the criterion for that cell (asahi has no aarch64 KVM;
+    base-hwe/base-nvidia are unbooted derivations). Out-of-scope cells are
+    not judged on the criterion — which is different from ⬜: untested counts
+    against green, out-of-scope simply isn't part of that cell's bar.
+    """
+    scope = criterion.get("scope") or {}
+    if flavor in (scope.get("excludes_flavors") or []):
+        return False
+    return not any(
+        flavor.endswith(suffix)
+        for suffix in (scope.get("excludes_flavor_suffixes") or [])
+    )
+
+
+def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
+                      omissions, parity):
     """The bar itself: one table scored against the blocking criteria.
 
     Per-criterion applicability follows each axis's own denominator, exactly
@@ -464,9 +570,12 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle):
         jobs = stage.get(variant, {}).get("jobs", {})
         per_cell = {
             "builds": _stage_verdict(jobs.get((flavor, "Promote"))),
+            # Every cell has a Gate verdict slot — desktops from the desktop
+            # Gate, plain base from the base Gate (W3); whether it BINDS is
+            # the criterion's scope, applied in verdict() below.
+            "boots": _stage_verdict(jobs.get((flavor, "Gate"))),
         }
         if flavor in desktops.get(variant, set()):
-            per_cell["boots"] = _stage_verdict(jobs.get((flavor, "Gate")))
             per_cell["desktop"] = _axis_from_results(
                 contract, f"{variant}:{flavor}"
             )
@@ -476,11 +585,18 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle):
             per_cell["lifecycle"] = _axis_from_results(
                 lifecycle, f"{variant}:{flavor}"
             )
+            per_cell["no_silent_omissions"] = _axis_from_results(
+                omissions, f"{variant}:{flavor}"
+            )
+            per_cell["parity"] = _axis_from_results(
+                parity, f"{variant}:{flavor}"
+            )
         if flavor in isos.get(variant, set()):
             per_cell["iso"] = _axis_from_results(smoke, f"{variant}:{flavor}")
         return per_cell
 
-    blocking = [c["id"] for c in criteria if c["enforcement"] == "blocking"]
+    blocking_criteria = [c for c in criteria if c["enforcement"] == "blocking"]
+    blocking = [c["id"] for c in blocking_criteria]
     advisory = [c["id"] for c in criteria if c["enforcement"] == "advisory"]
     unimplemented = [
         c["id"] for c in criteria if c["enforcement"] == "unimplemented"
@@ -488,10 +604,19 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle):
 
     def verdict(variant: str, flavor: str) -> str:
         per_cell = scorers(variant, flavor)
-        applicable = [
-            per_cell.get(c, "untested") for c in blocking
-            if c == "builds" or c in per_cell
-        ]
+        applicable = []
+        for criterion in blocking_criteria:
+            if not criterion_scope_allows(criterion, flavor):
+                continue
+            cid = criterion["id"]
+            if cid in ("builds", "boots"):
+                # Universal criteria: absence of a verdict is ⬜, it never
+                # silently drops out of the bar (skipped_is_not_green).
+                applicable.append(per_cell.get(cid, "untested"))
+            elif cid in per_cell:
+                # Axis-scoped criteria (desktop/install/iso/...): judged only
+                # where their own denominator schedules the cell.
+                applicable.append(per_cell[cid])
         return composite_verdict(applicable or ["untested"])
 
     green = total = 0
@@ -544,6 +669,52 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle):
     # The escaped square renders literally otherwise.
     lines = [l.replace("\u2b1c", UNTESTED) for l in lines]
     return lines, green, total
+
+
+def omissions_section(lmatrix, omissions) -> list[str]:
+    """Green criterion 8 as its own axis section (see omissions_results)."""
+    om_key = lambda v, d: f"{v}:{d}"                   # noqa: E731
+    total, tested, passed = tally(lmatrix, omissions, om_key)
+    return [
+        "## Silent omissions",
+        "",
+        f"**{passed} of {total}** cells clean "
+        f"({tested} read, {total - tested} never read).",
+        "",
+        (
+            "Green criterion 8 (`no_silent_omissions`): the sweep runs "
+            "`checks/verify-package-wishlist.sh` against every published image "
+            "it pulls — the same gate new builds pass at build time — so an "
+            "image shipping a silently-skipped package outside "
+            "`package-miss-allowlist.txt` reads ❌ here even if it was "
+            "published before the gate existed. A cell whose image was not "
+            "read (no image, pull error, job lost) is ⬜, not clean."
+        ),
+        "",
+    ] + desktop_table(lmatrix, omissions, om_key) + [""]
+
+
+def parity_section(lmatrix, parity) -> list[str]:
+    """Green criterion 7's first cadence (see parity_results)."""
+    pkey = lambda v, d: f"{v}:{d}"                     # noqa: E731
+    total, tested, passed = tally(lmatrix, parity, pkey)
+    return [
+        "## Package parity",
+        "",
+        f"**{passed} of {total}** cells at parity "
+        f"({tested} measured, {total - tested} never measured).",
+        "",
+        (
+            "Green criterion 7 (`parity`), first cadence: every desktop's "
+            "package set audited daily against its own base "
+            "(`package-parity.yml` → `scripts/package-parity.sh --audit`) — "
+            "the shape that exposes a build applying no desktop at all "
+            "(#858). ❌ covers both BROKEN (no more packages than base) and "
+            "suspect (fewer than 25 added). Diffing against each variant's "
+            "upstream reference is the next step and is not yet asserted."
+        ),
+        "",
+    ] + desktop_table(lmatrix, parity, pkey) + [""]
 
 
 def cell(results: dict, key: str, in_matrix: bool) -> str:
@@ -713,11 +884,17 @@ def build() -> str:
     # First, because everything below is an input to it: this is the section
     # that composes the axes into the one claim the word "green" now makes.
     lifecycle = latest_results("bootc-lifecycle.yml", r":")
+    omissions = omissions_results()
+    parity = parity_results()
     composite_lines, _, _ = composite_section(
         load_green_criteria(), build_stage_results(), contract, luks, smoke,
-        lifecycle,
+        lifecycle, omissions, parity,
     )
     out += composite_lines
+
+    out += omissions_section(lmatrix, omissions)
+    out += parity_section(lmatrix, parity)
+
 
     # ── LUKS ────────────────────────────────────────────────────────────────
     total, tested, passed = tally(lmatrix, luks, luks_key)

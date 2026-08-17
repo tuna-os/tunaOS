@@ -66,13 +66,18 @@ against today's config) yet no downstream job materialised. Verification run
 The Gate exists and silently broke matrix-wide on 08-17 (#1811, fixed). It is
 per-cell skippable, and `base` cells promote with the Gate skipped.
 
-- [ ] Make Gate **required for green** (not for promote) on every cell CI can
-      actually boot: today that is gnome everywhere + base cells.
-- [ ] cosmic/niri/kde/xfwl4 need a DRM render node hosted runners lack →
-      blocked on **W9 (GPU runners)**; until then these cells are capped at
-      "green-except-boot" and must render as such, not as green.
-- [ ] Add gate-ran-at-all to the nightly triage: tonight's lesson is that the
-      absence of a gate looks like success.
+- [x] Make Gate **required for green** (not for promote) on every cell CI can
+      actually boot: `boots` is now blocking with a reviewed scope
+      (green-criteria.yml `scope:` excludes -asahi and base-hwe/base-nvidia);
+      plain `base` cells get their own non-promote-blocking Gate asserting
+      TUNAOS_BASE_CONTRACT_OK (multi-user + operable bootc).
+- [x] DRM-limited cells: measured Gate outcomes decide per cell — marlin kde
+      and xfce PASSED 2026-08-17, so "needs DRM" is per-variant evidence, not
+      a blanket cap; cells whose gate fails or never ran render ❌/⬜, never
+      green, exactly as required.
+- [x] Gate-ran-at-all: under the composite, a skipped or absent Gate renders
+      ⬜ and the cell is not green — the absence of a gate can no longer look
+      like success on any scoreboard.
 
 ### W4. ISO + installer axis *(criterion 4 — currently 0 passes anywhere)*
 
@@ -91,18 +96,25 @@ per-cell skippable, and `base` cells promote with the Gate skipped.
 
 Every image already writes `/usr/share/tunaos/missing-on-*.txt`.
 
-- [ ] Scheduled job: pull each promoted image, read the manifest, publish a
-      table; nonzero omissions on a cell claiming green ⇒ not green.
+- [x] Scheduled job: the desktop contract sweep now runs
+      `verify-package-wishlist.sh` against every published image it pulls
+      (one pull, two axes), records `omissions_status` per cell, and the
+      composite scores it; unallowlisted omissions ⇒ not clean.
 - [ ] This is what catches the #858 class (published image, no desktop) and
       the #1755 class (hummingbird desktops installing nothing) *at publish
       time* instead of at verification time.
 
 ### W6. Schedule parity *(criterion 7)*
 
-- [ ] `scripts/package-parity.sh` exists; put it on a cadence against each
-      variant's upstream reference and feed W1.
-- [ ] Start advisory; graduate to blocking per-variant once the noise floor is
-      known.
+- [x] `scripts/package-parity.sh` is on a daily cadence
+      (`package-parity.yml`) and feeds W1: per-cell verdicts land in the
+      package-parity-baseline artifact, the Package parity section, and the
+      composite. First cadence = desktop-vs-own-base delta (the #858 shape);
+      the audit roster now derives from build-config so no declared variant
+      can be silently omitted.
+- [ ] Diff against each variant's UPSTREAM reference (Bluefin/Aurora package
+      sets) — the criterion's full claim; advisory until that lands and the
+      noise floor is known, then graduate per-variant.
 
 ### W7. Rebuildability beyond base pins *(criterion 9)*
 
@@ -118,12 +130,16 @@ payloads, action pins.
 
 ### W8. Architecture honesty *(criterion 10)*
 
-- [ ] Config-time validation: every `platforms:` entry must name a resolvable
-      package source, or the config fails CI. hummingbird declares
-      `linux/arm64` against a repo that 404s → four guaranteed-red cells per
-      night no code change can fix (#1755 §3).
-- [ ] Either build an aarch64 hummingbird repo (tunaos-packages, large) or
-      drop arm64 from its desktop flavors (hours). Decide, then enforce.
+- [x] Config-time validation, first cadence: every declared platform must
+      exist in the variant's base-image manifest list, checked nightly at
+      22:20 UTC by `check-base-image-pins.sh` before the builds — an
+      unsatisfiable declaration is now a loud config error, not a mystery
+      red cell. Package-repo arch coverage (the hummingbird case proper) is
+      the remaining half, shared with W7's repo-pin extension.
+- [x] Decided and built: the aarch64 hummingbird leg landed
+      (tunaos-packages#414) and upstream public-hummingbird serves arm64
+      with full source parity — the four guaranteed-red cells become
+      buildable once the first aarch64 factory run publishes.
 
 ### W9. Hardware capacity *(unblocks W3/W4 for 4 of 5 desktops, and NVIDIA)*
 
@@ -160,7 +176,7 @@ Same shape as yellowfin. Additionally:
 ### skipjack (CentOS Stream 10) — 9/18 build
 | area | state | action |
 |---|---|---|
-| gnome, gnome-hwe | missing — **undiagnosed** | pull nightly logs, classify |
+| gnome, gnome-hwe | classified 2026-08-17: builds succeed on both arches; Gates died on the #1811/#1818 just-cwd class (fixed on main), Attest SBOMs on Rekor 502s | clears on the first post-#1818 nightly; verify then |
 | xfce | expect unblock from #358 repair | verify next nightly |
 | *-nvidia (5) | #1725 | as above |
 
@@ -194,7 +210,7 @@ The fully-diagnosed one: **#1755**.
 | area | state | action |
 |---|---|---|
 | base | **promoted 08-17** after #1806 re-pin (was 100% blocked) | keep |
-| gnome/kde/cosmic/niri/xfce amd64 | failed Build Image tonight — **undiagnosed** (first attempt in days, base was the blocker) | pull logs, classify |
+| gnome/kde/cosmic/niri/xfce amd64 | classified 2026-08-17: **#1832** — one blocker for all five: openSUSE ships the crippled ffmpeg (h264/hevc decoders compiled out), the codec baseline fails deterministically | enable Packman ffmpeg (the RPM Fusion equivalent), per #1832 |
 
 ### guppy (Gentoo) — 2/4 build
 The best-instrumented variant after this week.
@@ -212,7 +228,7 @@ variant-specific blocker.
 | area | state | action |
 |---|---|---|
 | kde/xfce gates | broke 08-17 with the module-path regression, fixed (#1811) | verify on next nightly |
-| gnome-zfs | never reached — **undiagnosed** | pull logs, classify |
+| gnome-zfs | classified 2026-08-17: builds, signs; Gate died on the #1811/#1818 just-cwd class (fixed on main), Promote skipped behind it | clears on the first post-#1818 nightly; verify then |
 
 ### marlin (Arch) — 16/16 build, gates regressed
 | area | state | action |
@@ -227,7 +243,7 @@ Green on build (nvidia included since #1564). Next bar is gates/ISO/lifecycle.
 ### flounder-sid (Debian Sid) — 5/7 build
 | area | state | action |
 |---|---|---|
-| gnome, xfce | missing — **undiagnosed** | pull logs, classify |
+| gnome, xfce | classified 2026-08-17: **#1833** — sid's GNOME 50→51 transition (libgjs0 Breaks gnome-shell < 51~beta~); gnome via extension-manager→gjs, xfce via gdm3→gnome-shell | upstream heals on gnome-shell 51; optional decoupling per #1833 |
 | taxonomy | rolling variant (#1762) | rolling standard |
 
 ---

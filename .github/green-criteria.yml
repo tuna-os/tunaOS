@@ -55,15 +55,38 @@ criteria:
       fine, shipped the wrong desktop".
 
   - id: boots
-    name: The image boots to a graphical session
-    proves: A disk built from the image reaches a real graphical session under QEMU.
-    asserted_by: .github/workflows/reusable-build-image.yml (Gate → scripts/iso-e2e.sh)
-    enforcement: advisory
+    name: The image boots to its contract target
+    proves: >-
+      A disk built from the image boots under QEMU and its in-image contract
+      marker fires: desktops to a graphical session
+      (TUNAOS_DESKTOP_CONTRACT_OK), base to an operable multi-user bootc
+      system (TUNAOS_BASE_CONTRACT_OK).
+    asserted_by: .github/workflows/reusable-build-image.yml (Gate → scripts/iso-e2e.sh --disk)
+    enforcement: blocking
+    # Which cells the criterion is scored on. Cells outside the scope are not
+    # judged on boots at all (their composite is decided by the remaining
+    # applicable criteria) — a scope entry here is a REVIEWED declaration that
+    # CI cannot boot that cell, with the reason recorded.
+    scope:
+      # arm64-only flavors: the gate is an x86 QEMU/KVM boot; no aarch64 KVM
+      # on hosted runners (the images are verified by the dispatched Asahi
+      # harness instead).
+      excludes_flavor_suffixes: ["-asahi"]
+      # Hardware derivations of an already-gated base: QEMU exercises neither
+      # an HWE kernel's reason for existing nor an NVIDIA userspace.
+      excludes_flavors: ["base-hwe", "base-nvidia"]
     status_2026_08_17: "skippable per cell; silently broke matrix-wide on 2026-08-17 (#1811)"
+    status_2026_08_17_pm: >-
+      blocking. Gates restored by #1818 (marlin gnome/kde/xfce passed same
+      day); base cells gated by tunaos-base-contract.service. Cells whose
+      compositor cannot render under QEMU (the W9 DRM gap) now show ❌/⬜ —
+      per W3, they render as not-green rather than green-except-boot.
     notes: >-
       Distinct from `desktop`: that one inspects the image, this one runs it.
-      Four of five desktops need a DRM render node hosted runners lack, so this
-      cannot be blocking for cosmic/niri/xfwl4/kde until GPU capacity exists.
+      Some Smithay-based desktops may need a DRM render node hosted runners
+      lack (W9); measured Gate outcomes decide per cell — marlin's kde and
+      xfce passed 2026-08-17, so "needs DRM" is per-variant evidence, not a
+      blanket exemption.
 
   - id: iso
     name: The ISO boots and offers an installer
@@ -107,17 +130,28 @@ criteria:
   - id: parity
     name: Package set matches the upstream reference
     proves: The flavor ships the packages its upstream equivalent ships.
-    asserted_by: scripts/package-parity.sh
-    enforcement: unimplemented
+    asserted_by: >-
+      .github/workflows/package-parity.yml (daily) →
+      scripts/package-parity.sh --audit; verdicts feed the scoreboard via the
+      package-parity-baseline artifact
+    enforcement: advisory
     status_2026_08_17: "not scheduled"
+    status_2026_08_17_pm: >-
+      scheduled daily. First cadence asserts the desktop-vs-own-base delta
+      (the #858 no-desktop-at-all shape); the upstream-reference diff is not
+      yet asserted and this criterion stays advisory at least until it is.
 
   - id: no_silent_omissions
     name: The build tells the truth about what it shipped
     proves: >-
       No package was dropped without the result being surfaced and acted on.
-    asserted_by: /usr/share/tunaos/missing-on-*.txt written into the image
-    enforcement: unimplemented
+    asserted_by: >-
+      build_scripts/checks/verify-package-wishlist.sh — at build time as a
+      gate, and daily against every published image by
+      .github/workflows/desktop-contract-sweep.yml (omissions read)
+    enforcement: advisory
     status_2026_08_17: "written into every image; read by nothing on a schedule"
+    status_2026_08_17_pm: "scheduled: the contract sweep reads the manifest from every image it pulls and scores it against package-miss-allowlist.txt"
     notes: >-
       Distinct from `parity`. Parity asks whether the set matches upstream;
       this asks whether the build admitted what it silently skipped.
@@ -141,9 +175,17 @@ criteria:
   - id: arch_honesty
     name: A cell may not declare an architecture it cannot satisfy
     proves: Every declared platform has a resolvable package source.
-    asserted_by: null
-    enforcement: unimplemented
+    asserted_by: >-
+      scripts/check-base-image-pins.sh (nightly 22:20 UTC) — every declared
+      platform must exist in the variant's base-image manifest list
+    enforcement: advisory
     status_2026_08_17: "hummingbird declares linux/arm64 against a repo that 404s (#1755 §3)"
+    status_2026_08_17_pm: >-
+      first cadence asserted: declared platforms are checked against the base
+      image's manifest architectures nightly, before the builds. Package-repo
+      arch coverage (the hummingbird case proper — the base existed, its
+      package source did not) is the remaining gap, shared with W7's
+      repo-pin extension.
     notes: >-
       Four guaranteed-red cells per night that no change in this repository can
       clear. Declaring an unsatisfiable architecture should be a configuration
