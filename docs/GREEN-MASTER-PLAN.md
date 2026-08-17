@@ -130,12 +130,16 @@ payloads, action pins.
 
 ### W8. Architecture honesty *(criterion 10)*
 
-- [ ] Config-time validation: every `platforms:` entry must name a resolvable
-      package source, or the config fails CI. hummingbird declares
-      `linux/arm64` against a repo that 404s → four guaranteed-red cells per
-      night no code change can fix (#1755 §3).
-- [ ] Either build an aarch64 hummingbird repo (tunaos-packages, large) or
-      drop arm64 from its desktop flavors (hours). Decide, then enforce.
+- [x] Config-time validation, first cadence: every declared platform must
+      exist in the variant's base-image manifest list, checked nightly at
+      22:20 UTC by `check-base-image-pins.sh` before the builds — an
+      unsatisfiable declaration is now a loud config error, not a mystery
+      red cell. Package-repo arch coverage (the hummingbird case proper) is
+      the remaining half, shared with W7's repo-pin extension.
+- [x] Decided and built: the aarch64 hummingbird leg landed
+      (tunaos-packages#414) and upstream public-hummingbird serves arm64
+      with full source parity — the four guaranteed-red cells become
+      buildable once the first aarch64 factory run publishes.
 
 ### W9. Hardware capacity *(unblocks W3/W4 for 4 of 5 desktops, and NVIDIA)*
 

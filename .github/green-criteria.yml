@@ -175,9 +175,17 @@ criteria:
   - id: arch_honesty
     name: A cell may not declare an architecture it cannot satisfy
     proves: Every declared platform has a resolvable package source.
-    asserted_by: null
-    enforcement: unimplemented
+    asserted_by: >-
+      scripts/check-base-image-pins.sh (nightly 22:20 UTC) — every declared
+      platform must exist in the variant's base-image manifest list
+    enforcement: advisory
     status_2026_08_17: "hummingbird declares linux/arm64 against a repo that 404s (#1755 §3)"
+    status_2026_08_17_pm: >-
+      first cadence asserted: declared platforms are checked against the base
+      image's manifest architectures nightly, before the builds. Package-repo
+      arch coverage (the hummingbird case proper — the base existed, its
+      package source did not) is the remaining gap, shared with W7's
+      repo-pin extension.
     notes: >-
       Four guaranteed-red cells per night that no change in this repository can
       clear. Declaring an unsatisfiable architecture should be a configuration
