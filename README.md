@@ -65,21 +65,21 @@ _Generated from the latest conclusive main-branch build for each variant (cancel
 
 | Variant | Green image cells | Latest run | Failing | Not reached |
 | :--- | ---: | :--- | :--- | :--- |
-| 🐠 `yellowfin` | **12/20** | [❌ 2026-08-16](https://github.com/tuna-os/tunaOS/actions/runs/31921480845) | — | xfce,gnome-nvidia,gnome-nvidia-hwe,cosmic-nvidia,kde-nvidia,niri-nvidia,xfce-hwe,xfce-nvidia |
-| 🐟 `albacore` | **12/20** | [❌ 2026-08-16](https://github.com/tuna-os/tunaOS/actions/runs/31921426398) | — | xfce,gnome-asahi,gnome-nvidia,gnome-nvidia-hwe,cosmic-nvidia,kde-nvidia,xfce-hwe,xfce-nvidia |
-| 🍣 `skipjack` | **9/18** | [❌ 2026-08-16](https://github.com/tuna-os/tunaOS/actions/runs/31921443740) | — | gnome,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,gnome-nvidia-hwe,cosmic-nvidia,kde-nvidia,niri-nvidia |
-| 🎣 `bonito` | **6/15** | [❌ 2026-08-16](https://github.com/tuna-os/tunaOS/actions/runs/31921611894) | — | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-nvidia |
-| 🐦 `hummingbird` | **1/5** | [❌ 2026-08-16](https://github.com/tuna-os/tunaOS/actions/runs/31921714054) | — | gnome,kde,niri,cosmic |
-| 🦈 `sailfin` | **0/7** | [❌ 2026-08-16](https://github.com/tuna-os/tunaOS/actions/runs/31921624452) | — | base,gnome,gnome-asahi,kde,niri,xfce,cosmic |
-| 🌈 `guppy` | **2/4** | [❌ 2026-08-16](https://github.com/tuna-os/tunaOS/actions/runs/31953925629) | — | gnome,kde |
-| 🐉 `bonito-rawhide` | **6/14** | [❌ 2026-08-16](https://github.com/tuna-os/tunaOS/actions/runs/31921565037) | — | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce |
-| 🐟 `gurnard` | **2/2** | [❌ 2026-08-16](https://github.com/tuna-os/tunaOS/actions/runs/31921682626) | — | — |
-| 🐟 `grouper` | **6/7** | [❌ 2026-08-16](https://github.com/tuna-os/tunaOS/actions/runs/31921685119) | — | gnome-zfs |
-| 🚀 `marlin` | **16/16** | [❌ 2026-08-16](https://github.com/tuna-os/tunaOS/actions/runs/31921609702) | — | — |
-| 🐡 `flounder` | **7/7** | [❌ 2026-08-16](https://github.com/tuna-os/tunaOS/actions/runs/31921688547) | — | — |
-| ☢️ `flounder-sid` | **5/7** | [❌ 2026-08-16](https://github.com/tuna-os/tunaOS/actions/runs/31921565050) | — | gnome,xfce |
+| 🐠 `yellowfin` | **4/20** | [❌ 2026-08-17](https://github.com/tuna-os/tunaOS/actions/runs/31987371134) | — | gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-nvidia,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,kde-hwe,kde-nvidia,niri-hwe,niri-nvidia,xfce-hwe,xfce-nvidia |
+| 🐟 `albacore` | **2/20** | [❌ 2026-08-17](https://github.com/tuna-os/tunaOS/actions/runs/31987265967) | — | base-hwe,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,kde-hwe,kde-nvidia,niri-hwe,niri-nvidia,xfce-hwe,xfce-nvidia |
+| 🍣 `skipjack` | **4/18** | [❌ 2026-08-17](https://github.com/tuna-os/tunaOS/actions/runs/31987303449) | — | gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-nvidia,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,kde-hwe,kde-nvidia,niri-hwe,niri-nvidia |
+| 🎣 `bonito` | **2/15** | [❌ 2026-08-17](https://github.com/tuna-os/tunaOS/actions/runs/31987528569) | base-nvidia | gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,cosmic-nvidia,kde-nvidia,niri-nvidia,xfce-nvidia |
+| 🐦 `hummingbird` | **1/5** | [❌ 2026-08-17](https://github.com/tuna-os/tunaOS/actions/runs/31987675784) | — | gnome,kde,niri,cosmic |
+| 🦈 `sailfin` | **1/7** | [❌ 2026-08-17](https://github.com/tuna-os/tunaOS/actions/runs/31987555325) | — | gnome,gnome-asahi,kde,niri,xfce,cosmic |
+| 🌈 `guppy` | **1/4** | [❌ 2026-08-17](https://github.com/tuna-os/tunaOS/actions/runs/32002633749) | — | gnome,kde,xfce |
+| 🐉 `bonito-rawhide` | **2/14** | [❌ 2026-08-17](https://github.com/tuna-os/tunaOS/actions/runs/32011563812) | — | base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-nvidia,cosmic-nvidia,kde-nvidia,niri-nvidia,xfce-nvidia |
+| 🐟 `gurnard` | **1/2** | [❌ 2026-08-17](https://github.com/tuna-os/tunaOS/actions/runs/31987622864) | — | pantheon |
+| 🐟 `grouper` | **2/7** | [❌ 2026-08-17](https://github.com/tuna-os/tunaOS/actions/runs/31987613412) | — | gnome,gnome-zfs,kde,cosmic,xfce |
+| 🚀 `marlin` | **16/16** | [❌ 2026-08-17](https://github.com/tuna-os/tunaOS/actions/runs/32005385162) | — | — |
+| 🐡 `flounder` | **1/7** | [❌ 2026-08-17](https://github.com/tuna-os/tunaOS/actions/runs/31987631533) | — | gnome,kde,xfce,gnome-nvidia,kde-nvidia,xfce-nvidia |
+| ☢️ `flounder-sid` | **1/7** | [❌ 2026-08-17](https://github.com/tuna-os/tunaOS/actions/runs/31987439738) | — | gnome,kde,xfce,gnome-nvidia,kde-nvidia,xfce-nvidia |
 
-**Current image coverage: 84/142 cells (59%)** — of the remainder, **0 failing** and **58 never reached** (no job asserted them). The two are reported separately on purpose: a never-reached cell is untested, not broken. This is a point-in-time CI snapshot, not a support-tier promise.
+**Built 38/142 · composite green 25/142 (26%)** — of the remainder, **1 failing** and **103 never reached** (no job asserted them). The two are reported separately on purpose: a never-reached cell is untested, not broken. Composite green is scored against [`.github/green-criteria.yml`](.github/green-criteria.yml) (blocking today: `builds` + `boots` — a cell must promote AND pass its boot Gate; the full per-axis board is [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md)). This is a point-in-time CI snapshot, not a support-tier promise.
 
 <!-- build-status:end -->
 
