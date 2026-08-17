@@ -519,6 +519,36 @@ def _axis_from_results(results: dict, key: str) -> str:
     return _stage_verdict(hit[0] if hit else None)
 
 
+# bootc-lifecycle job names carry an arch suffix, and the smoke-tier jobs a
+# BETA prefix: "yellowfin:gnome (amd64)", "BETA guppy:gnome (amd64)". The
+# composite and the Lifecycle section key cells as plain "variant:flavor".
+_LIFECYCLE_NAME = re.compile(
+    r"^(?:BETA\s+)?(?P<cell>[a-z0-9-]+:[a-z0-9-]+)\s+\([a-z0-9]+\)$"
+)
+
+
+def lifecycle_results() -> dict[str, tuple[str, str, str]]:
+    """Cell-keyed lifecycle verdicts, worst-of-arches.
+
+    The wiring below was written before Bootc Lifecycle had ever run, and
+    the first real sweep (run 32040213366, 168 jobs) proved the raw job
+    names never matched a cell lookup: every cell rendered ⬜ while 133
+    passes sat in the run. Normalise the names here, and merge a cell's
+    arch legs pessimistically — one green leg must not mask a red one, for
+    the same reason never-tested is not green.
+    """
+    merged: dict[str, tuple[str, str, str]] = {}
+    for name, hit in latest_results("bootc-lifecycle.yml", r":").items():
+        m = _LIFECYCLE_NAME.match(name)
+        if not m:
+            continue
+        cell = m.group("cell")
+        prev = merged.get(cell)
+        if prev is None or (prev[0] == "success" and hit[0] == "failure"):
+            merged[cell] = hit
+    return merged
+
+
 def composite_verdict(verdicts: list[str]) -> str:
     """Compose per-criterion verdicts under green-criteria.yml's rule.
 
@@ -883,7 +913,7 @@ def build() -> str:
     # ── Composite ───────────────────────────────────────────────────────────
     # First, because everything below is an input to it: this is the section
     # that composes the axes into the one claim the word "green" now makes.
-    lifecycle = latest_results("bootc-lifecycle.yml", r":")
+    lifecycle = lifecycle_results()
     omissions = omissions_results()
     parity = parity_results()
     composite_lines, _, _ = composite_section(

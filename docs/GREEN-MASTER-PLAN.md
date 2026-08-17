@@ -63,10 +63,18 @@ against today's config) yet no downstream job materialised. Verification run
       bonito-rawhide → #1823, hummingbird desktops → images not yet
       published by the factory. The update transaction demonstrably works
       matrix-wide where images exist.
-- [ ] Wire results into MATRIX-STATUS (already scaffolded) and W1.
-- [ ] Then: weekly cadence is already scheduled; make the cron survive
-      (the 08-13 failure went unnoticed for four days — add it to the red-run
-      triage the same way nightlies are).
+- [x] Wire results into MATRIX-STATUS (already scaffolded) and W1 — the
+      scaffold had a latent key mismatch (raw job names like
+      "yellowfin:gnome (amd64)" / "BETA guppy:gnome (amd64)" vs the
+      composite's "variant:flavor" lookup), so all 168 real verdicts
+      rendered ⬜; lifecycle_results() now normalises names and merges arch
+      legs worst-of. Criterion flipped unimplemented → advisory on the
+      first-sweep evidence; graduate after a second consecutive clean-shape
+      weekly sweep.
+- [x] Then: weekly cadence is already scheduled; make the cron survive —
+      Bootc Lifecycle added to rerun-infra-failures.yml's roster, so an
+      infra-classified red sweep gets one classified re-run instead of
+      sitting unnoticed for four days like 08-13 did.
 
 ### W3. Boot gate mandatory where CI can test it *(criterion 3)*
 

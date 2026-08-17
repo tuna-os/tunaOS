@@ -448,3 +448,41 @@ class MainCliDispatch(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class LifecycleResultsNormalisation(unittest.TestCase):
+    """W2: the lifecycle scaffold was written before the workflow ever ran,
+    and the first real sweep (run 32040213366) proved its keys never matched
+    — latest_results returns raw job names ("yellowfin:gnome (amd64)",
+    "BETA guppy:gnome (amd64)") while the composite looks up
+    "variant:flavor". 168 verdicts rendered as 168 ⬜."""
+
+    def _with_raw(self, raw):
+        with mock.patch.object(gms, "latest_results", return_value=raw):
+            return gms.lifecycle_results()
+
+    def test_real_job_names_normalise_to_cells(self):
+        got = self._with_raw({
+            "yellowfin:gnome (amd64)": ("success", "2026-08-17", "1"),
+            "BETA guppy:gnome (amd64)": ("success", "2026-08-17", "1"),
+            "flounder:kde-nvidia (amd64)": ("failure", "2026-08-17", "1"),
+        })
+        self.assertEqual(got["yellowfin:gnome"][0], "success")
+        self.assertEqual(got["guppy:gnome"][0], "success")
+        self.assertEqual(got["flounder:kde-nvidia"][0], "failure")
+
+    def test_arch_legs_merge_worst_of(self):
+        # One green leg must not mask a red one — same spirit as
+        # never-tested-is-not-green. Order-independent on purpose.
+        for first, second in (("success", "failure"), ("failure", "success")):
+            got = self._with_raw({
+                "bonito-rawhide:gnome (amd64)": (first, "2026-08-17", "1"),
+                "bonito-rawhide:gnome (arm64)": (second, "2026-08-17", "1"),
+            })
+            self.assertEqual(got["bonito-rawhide:gnome"][0], "failure")
+
+    def test_non_cell_jobs_are_ignored(self):
+        got = self._with_raw({
+            "Generate matrix": ("success", "2026-08-17", "1"),
+        })
+        self.assertEqual(got, {})

@@ -117,15 +117,23 @@ criteria:
     proves: >-
       A deployed system can bootc upgrade to a newer build, rebase across
       streams, resolve aliases, and roll back off a bad deployment.
-    asserted_by: .github/workflows/bootc-lifecycle.yml
-    enforcement: unimplemented
+    asserted_by: >-
+      .github/workflows/bootc-lifecycle.yml (weekly, Thu 05:00 UTC; red runs
+      auto-retried once by rerun-infra-failures.yml when the failure is
+      infra-classified) — cell verdicts feed the scoreboard worst-of-arches
+    enforcement: advisory
     status_2026_08_17: "0 of 52 cells (0 tested, 52 never tested)"
+    status_2026_08_17_pm: >-
+      advisory. First full sweep (run 32040213366): 168 jobs, 133 passed,
+      43 of 53 arm64 clean; every failure mapped to a known class (#1819,
+      #1820, #1823, unpublished hummingbird images) with no new class.
+      Advisory until a second consecutive weekly sweep holds the shape,
+      then graduate.
     notes: >-
-      Has never run for a single cell. For a bootc OS the update transaction is
-      the product: an image that installs perfectly and cannot upgrade, or
-      cannot roll back off a bad deployment, has failed at the thing
-      immutability is sold on. Every user meets upgrade repeatedly and the ISO
-      once.
+      For a bootc OS the update transaction is the product: an image that
+      installs perfectly and cannot upgrade, or cannot roll back off a bad
+      deployment, has failed at the thing immutability is sold on. Every user
+      meets upgrade repeatedly and the ISO once.
 
   - id: parity
     name: Package set matches the upstream reference
