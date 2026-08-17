@@ -228,3 +228,69 @@ run_tolerant() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"rawhide"* ]]
 }
+
+# --- detect_fedora_ver: the gate above is only reachable if FEDORA_VER can
+# actually say "rawhide". `rpm -E %fedora` never does (it expands to the
+# numeric next release on Rawhide), so the derivation must consult
+# os-release. Run 32002010101 is the measured failure: "transaction failed
+# on 46; not tolerating" on a genuine Rawhide image.
+
+extract_detect() {
+  FN_DETECT="$(awk '/^detect_fedora_ver\(\)/,/^}/' "$LIB")"
+  [[ -n "$FN_DETECT" ]]
+}
+
+@test "detect_fedora_ver: pinned release stays numeric" {
+  extract_detect
+  cat >"${BIN}/rpm" <<'MOCK'
+#!/usr/bin/env bash
+[[ "$1" == "-E" && "$2" == "%fedora" ]] && { echo 44; exit 0; }
+exit 1
+MOCK
+  chmod +x "${BIN}/rpm"
+  printf 'PRETTY_NAME="Fedora Linux 44 (Container Image)"\nVERSION_ID=44\n' \
+    >"${BATS_TEST_TMPDIR}/os-release"
+  run env PATH="${BIN}:$PATH" OS_RELEASE="${BATS_TEST_TMPDIR}/os-release" \
+    bash -c "$FN_DETECT; detect_fedora_ver"
+  [[ "$status" -eq 0 ]]
+  [[ "$output" == "44" ]]
+}
+
+@test "detect_fedora_ver: rawhide os-release wins over the numeric expansion" {
+  extract_detect
+  cat >"${BIN}/rpm" <<'MOCK'
+#!/usr/bin/env bash
+[[ "$1" == "-E" && "$2" == "%fedora" ]] && { echo 46; exit 0; }
+exit 1
+MOCK
+  chmod +x "${BIN}/rpm"
+  printf 'PRETTY_NAME="Fedora Linux Rawhide (Container Image Prerelease)"\nVERSION_ID=46\n' \
+    >"${BATS_TEST_TMPDIR}/os-release"
+  run env PATH="${BIN}:$PATH" OS_RELEASE="${BATS_TEST_TMPDIR}/os-release" \
+    bash -c "$FN_DETECT; detect_fedora_ver"
+  [[ "$status" -eq 0 ]]
+  [[ "$output" == "rawhide" ]]
+}
+
+@test "detect_fedora_ver: unexpanded %fedora falls back to rawhide" {
+  extract_detect
+  cat >"${BIN}/rpm" <<'MOCK'
+#!/usr/bin/env bash
+[[ "$1" == "-E" && "$2" == "%fedora" ]] && { echo '%fedora'; exit 0; }
+exit 1
+MOCK
+  chmod +x "${BIN}/rpm"
+  printf 'PRETTY_NAME="Fedora Linux 44 (Container Image)"\n' \
+    >"${BATS_TEST_TMPDIR}/os-release"
+  run env PATH="${BIN}:$PATH" OS_RELEASE="${BATS_TEST_TMPDIR}/os-release" \
+    bash -c "$FN_DETECT; detect_fedora_ver"
+  [[ "$status" -eq 0 ]]
+  [[ "$output" == "rawhide" ]]
+}
+
+@test "10-base-packages derives FEDORA_VER through detect_fedora_ver" {
+  grep -q 'FEDORA_VER="\$(detect_fedora_ver)"' \
+    "${REPO_ROOT}/build_scripts/10-base-packages.sh"
+  ! grep -q 'FEDORA_VER="\$(rpm -E %fedora)"' \
+    "${REPO_ROOT}/build_scripts/10-base-packages.sh"
+}

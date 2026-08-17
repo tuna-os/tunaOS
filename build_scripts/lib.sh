@@ -670,6 +670,30 @@ install_available() {
 # checks/package-miss-allowlist.txt. The omission is recorded, not
 # silent, and criterion no_silent_omissions has real evidence to point at.
 #
+# Which Fedora is this buildroot, in the form the rpmfusion release RPMs and
+# the rawhide-tolerance gate below both need: a number for pinned releases,
+# the literal string "rawhide" for Rawhide.
+#
+# `rpm -E %fedora` alone cannot answer that: on Rawhide it expands to the
+# NEXT numeric release (46 today) and NEVER to "rawhide", so a gate comparing
+# against "rawhide" can never fire from it. Measured: bonito-rawhide run
+# 32002010101 printed "install_rawhide_tolerant: transaction failed on 46;
+# not tolerating" and the base failed on the exact skew the tolerance exists
+# for. os-release is the discriminator — Rawhide images carry "Rawhide" in
+# VERSION/PRETTY_NAME, branched and released images do not.
+#
+# OS_RELEASE is overridable for tests only; production callers use the default.
+detect_fedora_ver() {
+	local ver
+	ver="$(rpm -E %fedora 2>/dev/null || true)"
+	if [[ -z "$ver" || "$ver" == "%fedora" ]] \
+		|| grep -qi rawhide "${OS_RELEASE:-/etc/os-release}" 2>/dev/null; then
+		echo rawhide
+	else
+		echo "$ver"
+	fi
+}
+
 # Usage: install_rawhide_tolerant [dnf-flag ...] pkg1 pkg2 pkg3 ...
 # (leading `-`-prefixed args are treated as dnf flags, e.g. --exclude=...,
 # everything after the first non-flag arg is a package name)

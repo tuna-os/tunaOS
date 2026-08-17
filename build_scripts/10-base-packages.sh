@@ -150,10 +150,12 @@ if [[ $IS_HUMMINGBIRD == true ]]; then
 		gcc-c++ \
 		just || true
 elif [[ $IS_FEDORA == true ]]; then
-	FEDORA_VER="$(rpm -E %fedora)"
-	if [[ -z "${FEDORA_VER}" || "${FEDORA_VER}" == "%fedora" ]]; then
-		FEDORA_VER="rawhide"
-	fi
+	# detect_fedora_ver (lib.sh) yields "rawhide" on Rawhide images — from
+	# os-release, because `rpm -E %fedora` expands to the numeric NEXT
+	# release there and would leave the tolerance gate below permanently
+	# cold (run 32002010101). Also picks the -rawhide rpmfusion release
+	# RPMs instead of a not-yet-published numeric one.
+	FEDORA_VER="$(detect_fedora_ver)"
 	# Install config-manager, RPM Fusion, multimedia, and common packages
 	# in as few transactions as possible (each dnf invocation incurs ~10-20s
 	# metadata resolution overhead).
