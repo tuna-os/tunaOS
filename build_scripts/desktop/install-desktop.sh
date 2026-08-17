@@ -180,6 +180,17 @@ if [[ "${_TD_OS}" == "emerge" ]]; then
 		echo "       This would yield an image tagged ${_TD_DESKTOP} with no desktop in it." >&2
 		exit 1
 	fi
+
+	# Binhost version lock — tuna-os/tunaOS#1802. getbinpkg is configured
+	# (Containerfile.gentoo, base stage) but only substitutes a binary on an
+	# exact CPV match; a bare `emerge --sync` races ahead of the binhost's own
+	# rebuild cadence for fast-moving categories like kde-plasma, so nothing
+	# in the anchor package's dependency chain (packages.emerge[0] — the
+	# meta/-light/-4-meta package for kde/gnome/xfce) gets served as binary.
+	# Best-effort and fails open; see the script header for the full story.
+	"${_TD_CTX}/build_scripts/desktop/gentoo-binhost-version-lock.sh" \
+		"${_TD_EMERGE_PKGS[0]%%/*}" "${_TD_EMERGE_PKGS[@]}" || true
+
 	emerge --verbose "${_TD_EMERGE_PKGS[@]}"
 fi
 
