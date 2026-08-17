@@ -39,8 +39,12 @@ score cells against the criteria.
       `built X/142 · green Y/142` so raising the bar is visible, not silent.
       Guarded: the script refuses to publish the composite number the day a
       criterion it cannot score graduates to blocking.
-- [ ] Per-cell provenance (which run asserted which criterion, when) — already
+- [x] Per-cell provenance (which run asserted which criterion, when) — already
       half-exists in MATRIX-STATUS; make it cover every axis.
+      Done: `composite_section()` records `{cell → {axis → verdict, date,
+      run URL}}` as a side product of the same wiring that scores the board,
+      and the generator ships it as `docs/matrix-provenance.json` next to the
+      scoreboard on every refresh.
 
 *Risk:* the composite number will start low (likely < 20/142). That is the
 true number; do not soften it.
