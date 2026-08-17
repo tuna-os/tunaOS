@@ -27,6 +27,7 @@ user-facing site:
 | [BRANCH-PROTECTION.md](BRANCH-PROTECTION.md) | Current-state audit + proposal for main-branch protection & required CI (#1167) |
 | [BRANCH-POLICY.md](BRANCH-POLICY.md) | Branch naming conventions, RFC disposition, and 30-day staleness rules |
 | [CI_SPEC.md](CI_SPEC.md) | CI behavior specification |
+| [JUSTFILE-MODULARIZATION.md](JUSTFILE-MODULARIZATION.md) | Justfile module standard and cross-repo migration checklist (#508) |
 | [TESTING.md](TESTING.md) | ISO end-to-end test harness |
 | [MATRIX-STATUS.md](MATRIX-STATUS.md) | Which variant×desktop combinations are actually verified — and which have never been tested |
 | [ASAHI-HARDWARE-TIERS.md](ASAHI-HARDWARE-TIERS.md) | Real Apple Silicon hardware CI: rented Scaleway rental + personal-machine tiers, and the m1n1/boot.bin safety rule both must follow |

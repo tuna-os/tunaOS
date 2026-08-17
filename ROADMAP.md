@@ -151,6 +151,7 @@ track it. Notably **Bonito is Beta** (GA tracked in [#272](https://github.com/tu
 | Adoption metrics / usage telemetry | strategist | #1174 |
 | **Adoption evidence (ADOPTERS.md production entries)** | strategist | #1348 — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot |
 | Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | #1196, #1175 — [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) |
+| Justfile modularization standard | architect | #508 — [docs/JUSTFILE-MODULARIZATION.md](./docs/JUSTFILE-MODULARIZATION.md); tunaOS local-import pattern adopted, cross-repo rollout pending maintainer decision |
 
 **Milestone fidelity (#1307, 2026-08-12)**: 7 of the 9 goal trackers above were
 filed without being attached to the Q4 milestone (#3), so the milestone
