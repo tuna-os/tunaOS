@@ -135,11 +135,27 @@ criteria:
       scripts/package-parity.sh --audit; verdicts feed the scoreboard via the
       package-parity-baseline artifact
     enforcement: advisory
+    # Which cells have an upstream that publishes a comparable package set.
+    # Like the boots scope, an entry here is a REVIEWED declaration: only the
+    # Fedora/EL-family variants have a Universal Blue reference image built
+    # from the same package universe — diffing marlin (Arch) or flounder
+    # (Debian) against Bluefin would measure packaging-name noise, not parity.
+    # scripts/package-parity.sh --upstream-audit reads this map.
+    upstream_references:
+      gnome:
+        bonito: ghcr.io/ublue-os/bluefin:stable
+        yellowfin: ghcr.io/ublue-os/bluefin:lts
+        albacore: ghcr.io/ublue-os/bluefin:lts
+        skipjack: ghcr.io/ublue-os/bluefin:lts
+      kde:
+        bonito: ghcr.io/ublue-os/aurora:stable
     status_2026_08_17: "not scheduled"
     status_2026_08_17_pm: >-
       scheduled daily. First cadence asserts the desktop-vs-own-base delta
-      (the #858 no-desktop-at-all shape); the upstream-reference diff is not
-      yet asserted and this criterion stays advisory at least until it is.
+      (the #858 no-desktop-at-all shape). Second cadence (same workflow,
+      upstream job) measures the diff against the upstream_references map
+      above — measurement only, to establish the noise floor; the criterion
+      stays advisory at least until per-variant thresholds exist.
 
   - id: no_silent_omissions
     name: The build tells the truth about what it shipped
