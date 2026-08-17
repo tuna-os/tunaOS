@@ -104,10 +104,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # podman handled like the boot Gate does it (reusable-build-image.yml):
+      # never apt-install over a preinstalled /usr/local podman — the mixed
+      # stack cannot start containers ("crun: unknown version"). On the
+      # ubuntu-24.04-arm runners this ALSO fixes tunaOS#1556: two podman
+      # builds sharing /dev/shm/libpod_lock with different lock counts is
+      # exactly how "failed to open 2048 locks in /libpod_lock: numerical
+      # result out of range" killed all 6 arm64 cells of run 31999953433
+      # before any test content ran. The stale-segment removal is defensive
+      # for the case where the runner image itself already initialized the
+      # segment: podman re-creates it with its own count on next use.
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends podman skopeo jq
+          pkgs=(skopeo jq)
+          if sudo sh -c 'command -v podman' >/dev/null 2>&1; then
+            echo "podman already present: $(sudo sh -c 'command -v podman') ($(sudo podman --version))"
+          else
+            pkgs+=(podman)
+          fi
+          sudo apt-get install -y --no-install-recommends "${pkgs[@]}"
+          sudo rm -f /dev/shm/libpod_lock /dev/shm/libpod_rootless_lock_* || true
 
       - name: Log in to GHCR
         run: |
@@ -204,10 +221,27 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # podman handled like the boot Gate does it (reusable-build-image.yml):
+      # never apt-install over a preinstalled /usr/local podman — the mixed
+      # stack cannot start containers ("crun: unknown version"). On the
+      # ubuntu-24.04-arm runners this ALSO fixes tunaOS#1556: two podman
+      # builds sharing /dev/shm/libpod_lock with different lock counts is
+      # exactly how "failed to open 2048 locks in /libpod_lock: numerical
+      # result out of range" killed all 6 arm64 cells of run 31999953433
+      # before any test content ran. The stale-segment removal is defensive
+      # for the case where the runner image itself already initialized the
+      # segment: podman re-creates it with its own count on next use.
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends podman skopeo jq
+          pkgs=(skopeo jq)
+          if sudo sh -c 'command -v podman' >/dev/null 2>&1; then
+            echo "podman already present: $(sudo sh -c 'command -v podman') ($(sudo podman --version))"
+          else
+            pkgs+=(podman)
+          fi
+          sudo apt-get install -y --no-install-recommends "${pkgs[@]}"
+          sudo rm -f /dev/shm/libpod_lock /dev/shm/libpod_rootless_lock_* || true
 
       - name: Log in to GHCR
         run: |
