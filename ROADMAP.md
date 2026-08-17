@@ -33,6 +33,13 @@ means GA, `Beta` means published for testing on tunaos.org/download. This
 table is the canonical per-variant status; tunaos.org wiki and blog copy must
 track it. Notably **Bonito is Beta** (GA tracked in [#272](https://github.com/tuna-os/tunaos/issues/272)) — it is neither "Production" nor "Experimental".
 
+`Stable` is an all-cells claim: every advertised desktop, edition, and
+supported architecture for that variant must have the evidence ledger required
+by [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md). A passing GNOME/default cell
+does not promote the other cells. Promotion or a deliberate narrower support
+claim must link the per-cell boot-gate, LUKS-E2E, desktop-contract, and
+user-install evidence in its PR.
+
 > **Experimental** (per maintainer #1315): Hummingbird and Gurnard/Pantheon are
 > configured in `.github/build-config.yml` and building, but predate the
 > admission gate in [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md) (#1196) — they
