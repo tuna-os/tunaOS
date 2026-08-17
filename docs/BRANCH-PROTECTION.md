@@ -65,6 +65,33 @@ ruleset should be `lint`, `lint-summary`, and `unit-tests`. Broader coverage
 widened to run unconditionally, or added as a separate, narrower ruleset
 scoped to the paths they already filter on.
 
+## Maintainer action and verification checklist
+
+This is the remaining live-repository work for #1167. A maintainer with
+ruleset-admin access should apply the proposal to the active `main` ruleset,
+then record the result in the issue. The API shape is intentionally shown as a
+checklist rather than embedded in CI: rulesets are repository configuration and
+must not be silently changed by a code workflow.
+
+1. Read back `GET /repos/tuna-os/tunaos/rulesets/10437561` and confirm that the
+   target is `main` and enforcement is `active`.
+2. Add one `required_status_checks` rule containing exactly these contexts:
+   `lint`, `lint-summary`, and `unit-tests`. Keep the merge-queue rule enabled.
+3. Decide whether the `OrganizationAdmin` and repository-role bypass actors
+   are still necessary. If they remain, document the operational exception;
+   if they are removed, verify that the merge queue can still be operated by
+   the normal maintainer workflow.
+4. Open a small PR that triggers all three jobs and confirm that the ruleset's
+   rule-suite evaluation reports success before the PR can merge. A direct
+   push or an admin merge is not evidence of enforcement because both can
+   bypass the ruleset.
+5. Re-read the ruleset and rule-suite history, capture the verification date,
+   and update this document and #1167 with the observed rule and test PR.
+
+The Q4 exit criterion is satisfied only after steps 1–5 are evidenced. The
+current audit is not that evidence: it explicitly found that the
+`required_status_checks` rule is absent.
+
 ## What this doc is not
 
 This is a documentation-only audit and proposal. Applying it (adding a
