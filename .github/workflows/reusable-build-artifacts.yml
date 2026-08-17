@@ -99,10 +99,25 @@ jobs:
       - name: Maximize build space
         uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
 
+      # Do NOT apt-install podman on a runner that already has one (the Gate's
+      # rule in reusable-build-image.yml, proven again by bootc-lifecycle run
+      # 32040213366: after #1841 applied this guard, all 53 arm64 legs ran
+      # podman cleanly — the failures left were missing images, not
+      # "crun: unknown version"). The stale-lock sweep is the second half of
+      # the same fix: a leftover /dev/shm/libpod_lock sized by a different
+      # podman build fails lock init with ERANGE mid-pre-pull — the #1556
+      # signature this workflow's arm64 ISO cells die with.
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
+          pkgs=(just jq rclone golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs)
+          if sudo sh -c 'command -v podman' >/dev/null 2>&1; then
+            echo "podman already present: $(sudo sh -c 'command -v podman') ($(sudo podman --version))"
+          else
+            pkgs+=(podman)
+          fi
+          sudo apt-get install -y "${pkgs[@]}"
+          sudo rm -f /dev/shm/libpod_lock /dev/shm/libpod_rootless_lock_* || true
 
       - name: Setup rootless podman (subuid/subgid for runner)
         run: |
