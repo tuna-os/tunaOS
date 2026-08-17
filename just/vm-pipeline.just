@@ -169,7 +169,7 @@ _lima-novnc vm_name type image_path:
     podman run -d --rm \
         --name "${VM_NAME}-novnc" \
         --network host \
-        "$(source scripts/_registry.sh 2>/dev/null && registry_ref novnc || echo 'ghcr.io/novnc/novnc:latest')" \
+        "$(source {{ justfile_directory() }}/scripts/_registry.sh 2>/dev/null && registry_ref novnc || echo 'ghcr.io/novnc/novnc:latest')" \
         /usr/share/novnc/utils/novnc_proxy \
             --listen "${NOVNC_PORT}" \
             --vnc "${VNC_HOST}:${VNC_PORT}"
@@ -292,7 +292,7 @@ _run-vm type variant flavor='gnome' iso_file='':
     echo "Connect via SSH: ssh centos@127.0.0.1 -p ${ssh_port}"
     run_args+=(--publish "0.0.0.0:${ssh_port}:22" --env "USER_PORTS=22" --env "NETWORK=user")
 
-    QEMU_IMAGE="$(source scripts/_registry.sh 2>/dev/null && registry_ref qemu || echo 'ghcr.io/qemus/qemu')"
+    QEMU_IMAGE="$(source {{ justfile_directory() }}/scripts/_registry.sh 2>/dev/null && registry_ref qemu || echo 'ghcr.io/qemus/qemu')"
     run_args+=(--volume "${PWD}/${image_file}":"/boot.{{ type }}" "${QEMU_IMAGE}")
 
     (sleep 5 && xdg-open "http://127.0.0.1:${port}") &
