@@ -26,6 +26,9 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 fi
 # ── dnf (RPM) path continues below ────────────────────────────────────
 
+# Before the first rpm write of stage-2: the #1823 probe (no-op off Rawhide).
+rawhide_rpmdb_probe
+
 # Install OS-specific branding
 if [[ $IS_FEDORA == true ]]; then
 	dnf_retry -y install fedora-logos

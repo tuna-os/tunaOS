@@ -740,6 +740,36 @@ install_rawhide_tolerant() {
 	return 0
 }
 
+# tunaOS#1823 probe: stage-2 on a fresh Rawhide base fails with sqlite error
+# 11 ("database disk image is malformed") on every RPM install once the
+# transaction is large — small overlays pass, desktop-sized ones fail, both
+# arches, across all dnf retries and full build attempts. Rebuilding the
+# rpmdb inherited from the base layer BEFORE the first stage-2 rpm write is
+# the cheap discriminating experiment the issue asks for:
+#
+#   rebuild FAILS                        -> the base's rpmdb is malformed at
+#                                           rest (base rpm wrote a bad db)
+#   rebuild ok, transaction then ok      -> inherited-db/overlayfs-copy-up
+#                                           was the problem; probe graduates
+#                                           to a fix
+#   rebuild ok, transaction still fails  -> corruption happens DURING the
+#                                           transaction (sqlite-on-overlayfs)
+#
+# Deliberately a no-op off Rawhide, and never fails the build itself: the
+# transaction that follows is the real verdict either way, and a probe that
+# can kill a green pinned-Fedora build would cost more than it measures.
+rawhide_rpmdb_probe() {
+	[[ "$(detect_fedora_ver)" == "rawhide" ]] || return 0
+	echo "::notice title=rpmdb probe (tunaOS#1823)::rebuilding the rpmdb inherited from the Rawhide base before the first stage-2 rpm write"
+	if rpm --rebuilddb; then
+		echo "TUNAOS_RPMDB_PROBE=rebuilt"
+	else
+		echo "TUNAOS_RPMDB_PROBE=rebuild-failed"
+		echo "::warning title=rpmdb probe (tunaOS#1823)::rpm --rebuilddb itself failed — the base image's rpmdb is malformed at rest, not corrupted by the stage-2 transaction"
+	fi
+	return 0
+}
+
 # systemctl enable wrapper that tolerates the unit-not-present case.
 # Build scripts run in a multi-stage container build where some units may
 # only exist on certain variants (e.g. tailscaled on EL10 but not on EL9).
