@@ -140,12 +140,21 @@ fi
 
 if [[ $IS_HUMMINGBIRD == true ]]; then
 	echo "Hummingbird base detected; using --skip-unavailable for base packages..."
+	# xfsprogs: `bootc install` execs mkfs.xfs from INSIDE the image being
+	# installed, and tunaOS's qcow2/disk recipes format the root as xfs.
+	# The upstream hummingbird bootc-os base is btrfs-oriented (hence
+	# btrfs-progs here) and ships no xfsprogs, so the first hummingbird
+	# cosmic Gate ever to reach disk install died at
+	#   > mkfs.xfs ... /dev/loop0p3
+	#   error: Installing to disk: Creating rootfs: No such file or directory
+	# (run 32139187211, 2026-08-18). Present in the 20251124 x86_64 index.
 	dnf -y install --skip-unavailable \
 		buildah \
 		podman \
 		skopeo \
 		systemd-container \
 		btrfs-progs \
+		xfsprogs \
 		gcc \
 		gcc-c++ \
 		just || true
