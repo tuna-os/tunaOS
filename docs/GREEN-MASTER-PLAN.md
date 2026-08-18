@@ -98,16 +98,18 @@ per-cell skippable, and `base` cells promote with the Gate skipped.
       ⬜ and the cell is not green — the absence of a gate can no longer look
       like success on any scoreboard.
 
-*Open (2026-08-18):* every **base** Gate in the matrix times out marker-less
-with the same shape — the VM boots and paints a text screen (screenshot
-stddev ~0.15-0.21) while the serial the Gate greps stays silent; verified on
-sailfin and bonito-rawhide with the evidence that now survives (#1855). One
-systematic cause, not per-variant defects — desktop Gates on the same qcow2
-path have passed (marlin 08-17), so the discriminator is whether the serial
-log is empty (console= routing never reached the serial port) or has kernel
-printk without the marker (the contract unit never ran). #1861 dumps the
-serial tail into the job log on marker-timeout; the first post-#1861 nightly
-answers it in-log.
+*Resolved (2026-08-18, maintainer decision):* every **base** Gate timed out
+marker-less matrix-wide (VM boots, paints a text screen, serial silent —
+verified on sailfin and bonito-rawhide with #1855's surviving evidence),
+and the maintainer settled the underlying product question instead: base
+images are parent layers, not user-facing artifacts — nobody runs them
+as-is. Plain `base` is now a reviewed boots-scope exclusion (like
+base-hwe/base-nvidia) and the dedicated base Gate job is removed; a base's
+boot machinery is transitively proven by every desktop Gate stacked on it
+(marlin's 15 Gate passes prove marlin's base boots). The boots axis is now
+exactly the desktop Gate, which demonstrably works. #1861's serial-tail
+dump stays — it serves the desktop-Gate ❌ cells (albacore/yellowfin/
+skipjack/grouper/flounder/guppy), which are the real remaining boots work.
 
 ### W4. ISO + installer axis *(criterion 4 — currently 0 passes anywhere)*
 

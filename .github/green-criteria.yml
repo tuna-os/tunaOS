@@ -74,13 +74,28 @@ criteria:
       excludes_flavor_suffixes: ["-asahi"]
       # Hardware derivations of an already-gated base: QEMU exercises neither
       # an HWE kernel's reason for existing nor an NVIDIA userspace.
-      excludes_flavors: ["base-hwe", "base-nvidia"]
+      # Plain `base` (added 2026-08-18, maintainer decision): base images are
+      # parent layers, not user-facing artifacts — nobody is supposed to run
+      # them as-is. Their boot machinery is transitively proven by every
+      # desktop Gate built on top of them (marlin's 15 Gate-passing cells
+      # prove marlin's base boots without ever booting marlin:base). The
+      # dedicated base Gate W3 added also never delivered its serial marker
+      # on any variant, so it was cost without signal; removed from
+      # reusable-build-image.yml the same day. Re-gate `base` here if it
+      # ever becomes a supported end-user target.
+      excludes_flavors: ["base", "base-hwe", "base-nvidia"]
     status_2026_08_17: "skippable per cell; silently broke matrix-wide on 2026-08-17 (#1811)"
     status_2026_08_17_pm: >-
       blocking. Gates restored by #1818 (marlin gnome/kde/xfce passed same
       day); base cells gated by tunaos-base-contract.service. Cells whose
       compositor cannot render under QEMU (the W9 DRM gap) now show ❌/⬜ —
       per W3, they render as not-green rather than green-except-boot.
+    status_2026_08_18: >-
+      blocking, desktops only. Plain `base` moved into the scope exclusions
+      (see scope above): parent layers, transitively proven by their
+      desktops' Gates. The desktop Gate is now the whole boots axis, and it
+      demonstrably works — marlin passed all 15 of its desktop-family Gates
+      on the 08-18 board.
     notes: >-
       Distinct from `desktop`: that one inspects the image, this one runs it.
       Some Smithay-based desktops may need a DRM render node hosted runners
