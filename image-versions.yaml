@@ -48,7 +48,7 @@ downloads:
   # runs, and the boot dies in emergency on `overlayfs: failed to resolve
   # '/run/rootfsbase'`. Proven both ways by named runs: broken at
   # tacklebox 30629145076, booting to login at 30630284339.
-  tacklebox: "4fa604115dfa2e6356c68bde85a191c6620ebea1"
+  tacklebox: "dca2b63c1c647dca46d2866eb8dcb8864e4ab0b0"
 
   # Zirconium's mkosi.extra payload, fetched as a source tarball by
   # build_scripts/install-zirconium.sh (niri stages only). Pinned to a commit
