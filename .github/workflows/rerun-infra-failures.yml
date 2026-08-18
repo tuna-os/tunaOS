@@ -107,6 +107,7 @@ jobs:
 
           infra=false
           product=0
+          infra_jobs=()
           for job_id in "${failed[@]}"; do
             # A job whose runner died uploads no logs at all: the download is
             # a 404, and that absence is itself the signature. Treating it as
@@ -115,11 +116,13 @@ jobs:
             if ! log="$(gh api "repos/${REPO}/actions/jobs/${job_id}/logs" 2>/dev/null)"; then
               echo "  job ${job_id}: no logs (runner death) -> infra"
               infra=true
+              infra_jobs+=("$job_id")
               continue
             fi
             if grep -qE "$patterns" <<<"$log"; then
               echo "  job ${job_id}: matched an infra signature -> infra"
               infra=true
+              infra_jobs+=("$job_id")
             else
               echo "  job ${job_id}: no infra signature -> product failure"
               product=$((product + 1))
@@ -134,6 +137,7 @@ jobs:
           fi
 
           echo "infra=${infra}" >> "$GITHUB_OUTPUT"
+          echo "infra_jobs=${infra_jobs[*]}" >> "$GITHUB_OUTPUT"
           {
             echo "### Re-run classification"
             echo
@@ -150,14 +154,24 @@ jobs:
         run: sleep 2700
 
       - name: Re-run failed jobs
+        # Re-run only the jobs classified as infra.  GitHub's run-level
+        # endpoint replays every failed job on the original head SHA,
+        # including product failures that must remain visible.
         if: steps.classify.outputs.infra == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
-          RUN_ID: ${{ github.event.workflow_run.id || inputs.run_id }}
+          INFRA_JOBS: ${{ steps.classify.outputs.infra_jobs }}
         run: |
           set -euo pipefail
-          echo "Re-running failed jobs in ${RUN_ID}."
-          gh api --method POST "repos/${REPO}/actions/runs/${RUN_ID}/rerun-failed-jobs"
-          echo "Re-run requested for [${RUN_ID}](https://github.com/${REPO}/actions/runs/${RUN_ID})." \
+          if [[ -z "${INFRA_JOBS}" ]]; then
+            echo "No infra-classified jobs to re-run."
+            exit 0
+          fi
+          echo "Re-running ${INFRA_JOBS}."
+          for job_id in ${INFRA_JOBS}; do
+            echo "  re-running job ${job_id}"
+            gh api --method POST "repos/${REPO}/actions/jobs/${job_id}/rerun"
+          done
+          echo "Re-run requested for job(s): ${INFRA_JOBS}." \
             >> "$GITHUB_STEP_SUMMARY"
