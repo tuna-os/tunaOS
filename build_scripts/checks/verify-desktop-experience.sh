@@ -12,7 +12,14 @@ marker_emitted=0
 emit_fail_on_early_exit() {
 	local rc=$?
 	if [[ "$mode" == --runtime && "$rc" -ne 0 && "$marker_emitted" -eq 0 ]]; then
-		echo "TUNAOS_DESKTOP_CONTRACT_FAIL desktop=${desktop} reason=early_exit rc=${rc}" | tee /dev/ttyS0 2>/dev/null || true
+		# The static assertions run before the runtime summary block below.  Keep
+		# their failure actionable in a serial-only Gate: without this, the
+		# harness only gets `early_exit rc=1` and cannot distinguish a missing
+		# session, portal, keyring, or display-manager unit.
+		local line="${BASH_LINENO[0]:-unknown}"
+		local command="${BASH_COMMAND:-unknown}"
+		printf 'TUNAOS_DESKTOP_CONTRACT_FAIL desktop=%s reason=early_exit rc=%s line=%s command=%q\n' \
+			"${desktop}" "${rc}" "${line}" "${command}" | tee /dev/ttyS0 2>/dev/null || true
 	fi
 }
 trap emit_fail_on_early_exit EXIT
