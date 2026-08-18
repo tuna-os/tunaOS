@@ -246,7 +246,7 @@ Same shape as yellowfin. Additionally:
 | area | state | action |
 |---|---|---|
 | base | **promoted 08-17** after #1806 re-pin | keep |
-| desktops | were blocked behind base; tonight xfce/arm64 built, xfce/amd64 failed — **undiagnosed** | classify remaining desktop failures now base is back |
+| desktops | classified 08-18: xfce **healed on both arches**; gnome/niri amd64 fail on F44 amd64 repo skew (libxslt/libtasn1/libnotify version walls + `LIBSYSTEMD_257` symbol missing) — upstream repo inconsistency, nothing here can fix it | heals when the F44 amd64 mirrors converge; re-check next nightly |
 | *-nvidia (5) | #1725 | as above |
 
 ### bonito-rawhide (Fedora Rawhide) — 6/14 build
