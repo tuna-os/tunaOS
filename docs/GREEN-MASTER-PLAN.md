@@ -194,6 +194,12 @@ payloads, action pins.
       (tunaos-packages#414) and upstream public-hummingbird serves arm64
       with full source parity — the four guaranteed-red cells become
       buildable once the first aarch64 factory run publishes.
+      Update 08-18: the first aarch64 publish landed
+      (`hummingbird/20251124-aarch64`, 1358 packages) but is a seed with no
+      desktop coverage (cosmic 8/22, gnome 5/52, measured live). The four
+      cells are pinned `linux/amd64` per #1755 option A instead of red —
+      tests/test_hummingbird_arm64_honesty.py makes re-adding arm64 a
+      reviewed, per-desktop, measured decision as the factory converges.
 
 ### W9. Hardware capacity *(unblocks W3/W4 for 4 of 5 desktops, and NVIDIA)*
 
@@ -257,7 +263,7 @@ The fully-diagnosed one: **#1755**.
 | gnome amd64 | builds; repo lacks gnome-shell/gdm/mutter (29 of 52 pkgs missing) so the image has no real desktop | needs tunaos-packages rebuilds (#1755 §2, tunaos-packages#250) |
 | cosmic amd64 | **section landed 08-18** (#1755 option B): 22/23 pkgs re-measured against the live repo, `hummingbird:` section added to cosmic.yaml (cosmic-settings-daemon deliberately omitted — not in repo) | verify on next nightly |
 | kde/niri | no manifest section; ~50% pkg coverage | after cosmic proves the path |
-| all arm64 desktops | repo 404s — unsatisfiable by construction | W8: drop or build (#1755 option A/D) |
+| all arm64 desktops | resolved 08-18 via option A: the aarch64 repo now publishes (1358-pkg seed vs x86_64's 8100 — cosmic 8/22, gnome 5/52, no shell/gdm/compositor measured live) but cannot carry a desktop yet, so desktop flavors are pinned `linux/amd64` in build-config with the re-add condition tested | re-add arm64 per flavor when the aarch64 index carries that desktop's manifest set |
 | dconf branding failure | **deliberately left failing** — guarding it would green cells that contain no desktop | fix only after manifest sections exist |
 | convergence | tunaos-packages seed grew for the first time since 08-09 (7170→7673); reserve budget stops *between* tiers (tunaos-packages#401), cosmic/niri/kde runs lost to the 6h ceiling | in-loop deadline check (#401), tier failures layer-00/01/02/07/10/11 to classify (#402/#403/#404 candidates) |
 
