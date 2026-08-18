@@ -68,22 +68,22 @@ it.
 
 Scored against `.github/green-criteria.yml`: a cell is green only when every **blocking** criterion applicable to it has a current affirmative result; a criterion that was skipped, never tested, or unasserted renders ⬜ and does not count as satisfied. Blocking today: `builds`, `boots`. Advisory (measured in the sections below, not yet biting): `desktop`, `install`, `lifecycle`, `parity`, `no_silent_omissions`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. Graduating a criterion is an edit to `enforcement:` in that file — this table and the README count tighten with no code change.
 
-**0 of 142** published cells are composite-green.
+**31 of 142** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **albacore** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **bonito** | ⬜ | ❌ | ⬜ | ❌ | ⬜ |
 | **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **flounder** | ⬜ | ⬜ | — | — | ⬜ |
-| **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
-| **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
-| **guppy** | ⬜ | ⬜ | — | — | ⬜ |
+| **flounder** | ❌ | ❌ | — | — | ❌ |
+| **flounder-sid** | ⬜ | ✅ | — | — | ⬜ |
+| **grouper** | ❌ | ❌ | ❌ | — | ❌ |
+| **guppy** | ❌ | ⬜ | — | — | ❌ |
 | **hummingbird** | ⬜ | ⬜ | ⬜ | ⬜ | — |
-| **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **yellowfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **yellowfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
 
@@ -161,7 +161,7 @@ Newest result 2026-08-09, oldest still-authoritative result 2026-08-05. Results 
 
 ## Desktop Contract Sweep
 
-**35 of 52** cells satisfy `build_scripts/checks/verify-desktop-experience.sh` (47 tested, 5 never tested).
+**36 of 52** cells satisfy `build_scripts/checks/verify-desktop-experience.sh` (48 tested, 4 never tested).
 
 Pulls the **published** image and runs the contract script against it directly (`podman run`, no boot required) — the same denominator as LUKS E2E above (`build_image`, restricted to the five desktop flavors). This is what catches a desktop whose packages silently never landed, independent of whether anything can actually boot it on hosted CI.
 
@@ -173,37 +173,40 @@ Pulls the **published** image and runs the contract script against it directly (
 | **flounder** | ✅ | ✅ | — | — | ✅ |
 | **flounder-sid** | ❌ | ❌ | — | — | ❌ |
 | **grouper** | ✅ | ✅ | ✅ | — | ✅ |
-| **guppy** | ❌ | ✅ | — | — | ⬜ |
+| **guppy** | ❌ | ✅ | — | — | ✅ |
 | **hummingbird** | ⬜ | ⬜ | ⬜ | ⬜ | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ❌ |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ❌ |
 
-6 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
+5 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
 
-Newest result 2026-08-16.
+Newest result 2026-08-17.
 
 ## Bootc Lifecycle
 
-**0 of 52** cells green (0 tested, 52 never tested).
+**37 of 52** cells green (52 tested, 0 never tested).
 
 Validates bootc image update, rebase, rollback, alias resolution, and post-switch system contracts across published stream deployments.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **flounder** | ⬜ | ⬜ | — | — | ⬜ |
-| **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
-| **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
-| **guppy** | ⬜ | ⬜ | — | — | ⬜ |
-| **hummingbird** | ⬜ | ⬜ | ⬜ | ⬜ | — |
-| **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **skipjack** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **yellowfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **albacore** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **flounder** | ✅ | ✅ | — | — | ✅ |
+| **flounder-sid** | ❌ | ❌ | — | — | ❌ |
+| **grouper** | ✅ | ✅ | ✅ | — | ✅ |
+| **guppy** | ✅ | ✅ | — | — | ✅ |
+| **gurnard** | — | — | — | — | — |
+| **hummingbird** | ❌ | ❌ | ❌ | ❌ | — |
+| **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **skipjack** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ❌ |
+
+Newest result 2026-08-17.
 
 ## Installer smoke
 
@@ -238,7 +241,8 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-08-16 | [31936207521](https://github.com/tuna-os/tunaOS/actions/runs/31936207521) | 47 |
+| 2026-08-17 | [32040213366](https://github.com/tuna-os/tunaOS/actions/runs/32040213366) | 119 |
+| 2026-08-17 | [32011067008](https://github.com/tuna-os/tunaOS/actions/runs/32011067008) | 48 |
 | 2026-08-12 | [31585741267](https://github.com/tuna-os/tunaOS/actions/runs/31585741267) | 56 |
 | 2026-08-09 | [31287377558](https://github.com/tuna-os/tunaOS/actions/runs/31287377558) | 3 |
 | 2026-08-09 | [31286849405](https://github.com/tuna-os/tunaOS/actions/runs/31286849405) | 18 |
@@ -249,7 +253,6 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 | 2026-08-07 | [31182709691](https://github.com/tuna-os/tunaOS/actions/runs/31182709691) | 2 |
 | 2026-08-07 | [31159853110](https://github.com/tuna-os/tunaOS/actions/runs/31159853110) | 1 |
 | 2026-08-07 | [31140248804](https://github.com/tuna-os/tunaOS/actions/runs/31140248804) | 1 |
-| 2026-08-07 | [31140243067](https://github.com/tuna-os/tunaOS/actions/runs/31140243067) | 1 |
 
 <!-- END GENERATED -->
 
