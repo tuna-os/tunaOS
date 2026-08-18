@@ -230,7 +230,7 @@ The fully-diagnosed one: **#1755**.
 |---|---|---|
 | base | **promotes on both arches** | keep |
 | gnome amd64 | builds; repo lacks gnome-shell/gdm/mutter (29 of 52 pkgs missing) so the image has no real desktop | needs tunaos-packages rebuilds (#1755 §2, tunaos-packages#250) |
-| cosmic amd64 | **cheapest real win in the matrix**: 22/23 pkgs already in repo, fails only for want of a `hummingbird:` manifest section | write the section (#1755 option B) |
+| cosmic amd64 | **section landed 08-18** (#1755 option B): 22/23 pkgs re-measured against the live repo, `hummingbird:` section added to cosmic.yaml (cosmic-settings-daemon deliberately omitted — not in repo) | verify on next nightly |
 | kde/niri | no manifest section; ~50% pkg coverage | after cosmic proves the path |
 | all arm64 desktops | repo 404s — unsatisfiable by construction | W8: drop or build (#1755 option A/D) |
 | dconf branding failure | **deliberately left failing** — guarding it would green cells that contain no desktop | fix only after manifest sections exist |
