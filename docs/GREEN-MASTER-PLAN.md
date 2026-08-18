@@ -98,6 +98,17 @@ per-cell skippable, and `base` cells promote with the Gate skipped.
       ⬜ and the cell is not green — the absence of a gate can no longer look
       like success on any scoreboard.
 
+*Open (2026-08-18):* every **base** Gate in the matrix times out marker-less
+with the same shape — the VM boots and paints a text screen (screenshot
+stddev ~0.15-0.21) while the serial the Gate greps stays silent; verified on
+sailfin and bonito-rawhide with the evidence that now survives (#1855). One
+systematic cause, not per-variant defects — desktop Gates on the same qcow2
+path have passed (marlin 08-17), so the discriminator is whether the serial
+log is empty (console= routing never reached the serial port) or has kernel
+printk without the marker (the contract unit never ran). #1861 dumps the
+serial tail into the job log on marker-timeout; the first post-#1861 nightly
+answers it in-log.
+
 ### W4. ISO + installer axis *(criterion 4 — currently 0 passes anywhere)*
 
 - [ ] **#1772** — tacklebox `[customize]` hangs 87m silent on amd64. External
@@ -164,8 +175,12 @@ payloads, action pins.
       `--update`. The class IS live in two surfaces the issue did not name:
       `build-fprintd-aarch64.yml` (seeds published repodata, signs only new
       RPMs, then `--update`) and the justfile's `sync-to-r2` recipe (the
-      #358 shape verbatim). Apply-ready patches are on #421; blocked from a
-      PR only by RFC #419 occupying this session's branch in that repo.
+      #358 shape verbatim). Update 08-18: RFC 011 is **accepted** (maintainer
+      sign-off; ADR 0001 in tunaos-packages) and the #421 fixes plus the
+      RFC's Phase 0 catalog (928 entries + completeness tests) are staged on
+      packages#419, waiting only on upstream CI transients (Arch mirror sync,
+      the sid perl transition) to merge. RFC 011 Phase 2 makes this class
+      structurally unrepeatable.
 
 ### W8. Architecture honesty *(criterion 10)*
 
@@ -229,8 +244,9 @@ Same shape as yellowfin. Additionally:
 ### bonito-rawhide (Fedora Rawhide) — 6/14 build
 | area | state | action |
 |---|---|---|
-| base (both arches) | pin fixed (#1806), now blocked **upstream**: rpmfusion ffmpeg-libs needs `liboapv.so.2`, nothing provides it (#1810) | watch upstream; product call between wait / scoped `--skip-unavailable` / drop rpmfusion — see #1810 options |
-| everything else | downstream of base | — |
+| base (both arches) | **promotes again since 08-18** — the #1810 liboapv wall cleared upstream | keep |
+| rpmdb (#1823) | probe verdict in (nightly 32090947417): `rpm --rebuilddb` fails **at rest** on the inherited base — malformed before any stage-2 write, or the rebuild's replace step fails under the buildah overlay; discriminating datum recorded on #1823 | run the probe once on a stable dnf base to pick between the two readings |
+| desktops | new upstream skew class 08-18: `libnma-gtk4` still requires `libnm.so.0` after Rawhide's NetworkManager dropped it — nothing here can fix it | heals when Rawhide rebuilds libnma; rolling standard |
 | taxonomy | rolling variant, structurally exposed to skew (#1762) | count under rolling standard |
 
 ### hummingbird (Fedora rebuild, experimental) — 1/5 build
@@ -248,8 +264,8 @@ The fully-diagnosed one: **#1755**.
 ### sailfin (openSUSE Tumbleweed) — 0/7 build → base back
 | area | state | action |
 |---|---|---|
-| base | **promoted 08-17** after #1806 re-pin (was 100% blocked) | keep |
-| gnome/kde/cosmic/niri/xfce amd64 | classified 2026-08-17: **#1832** — one blocker for all five: openSUSE ships the crippled ffmpeg (h264/hevc decoders compiled out), the codec baseline fails deterministically | enable Packman ffmpeg (the RPM Fusion equivalent), per #1832 |
+| base | **promoted 08-17** after #1806 re-pin; promotes nightly since | keep |
+| gnome/kde/cosmic/niri/xfce amd64 | **#1832, four layers deep and each fix evidence-verified**: dup re-assert after the desktop transaction (#1850) → force the LIBRARY complements Packman actually publishes, not openSUSE's binary names (#1854) → availability-gate the force because Packman has no ffmpeg-9 soname yet, surface the gap as TUNAOS_CODEC_GAP (#1858, verified working on nightly 32091072257) → pin the CLI to `ffmpeg-8` because Tumbleweed flipped the unversioned `ffmpeg` name to the decoder-crippled 9.x stream (#1861, merged 08-18). gnome **arm64 passes** throughout | verify all five amd64 legs on the first post-#1861 nightly; when Packman ships the 9.x stream, unpin per the Containerfile note |
 
 ### guppy (Gentoo) — 2/4 build
 The best-instrumented variant after this week.
