@@ -38,6 +38,45 @@ Build pipeline: [`docs/PIPELINE.md`](docs/PIPELINE.md)
 
 Write `manifests/desktops/<name>.yaml`. No shell script needed. See existing manifests for the format.
 
+## PR quality contract
+
+Five rules, each one written because a real agent PR broke it and the break
+was measured. A PR that violates one of these gets closed, not reviewed.
+
+1. **Run what you claim to fix, and paste the result.** A PR titled
+   "restore green main" must contain the passing test output for the tests
+   that were red. #1828 fixed some occurrences of an escaping bug, missed
+   others, never ran the test suite it claimed to restore — the suite was
+   still red with the patch applied, and the PR was closed as superseded.
+2. **Verify the external claim in the PR body.** A one-line transport or
+   pin change still needs its one line of evidence (the curl, the resolved
+   URL, the closing run link). #1852 was a correct https switch that a
+   reviewer had to re-derive from scratch because the body carried no
+   verification.
+3. **Derive status, never transcribe it.** Any table of current state
+   (what's published, what passes, what's listed where) must be emitted by
+   a script the repo runs on a schedule, or it is stale the day it merges.
+   This is the repo's core convention: `MATRIX-STATUS.md`, the README
+   matrix, and `matrix-provenance.json` are all generated. #1814 hand-copied
+   a 40-row live-data table into a committed doc and had to end with
+   "re-check the sources when a cell looks stale" — that sentence is the
+   anti-pattern naming itself.
+4. **Check main and open PRs before diagnosing or fixing.** This repo
+   merges several PRs a day; the bug you measured yesterday may be fixed,
+   moved, or being fixed. #1725's recommendation had already landed via
+   another PR by the time it was filed; #1828 raced a fix that was already
+   further along. `git log --oneline -20` and a PR-list search cost a
+   minute; a stale PR costs a review cycle.
+5. **Rebase before opening.** A PR based days behind main is reviewed
+   against a repo that no longer exists. If the base moved under you while
+   the PR was open, rebase and re-run rule 1 — the merge queue tests the
+   merge result, and "it passed on my old base" is not evidence.
+
+Evidence style, for anything you write into the repo (comments, docs,
+commit messages): state the constraint and the measured run/log that proves
+it, not the narrative of how you found it. Every load-bearing comment in
+`build_scripts/` follows this shape — match it.
+
 ## Agent Skills
 
 ### Issue tracker
