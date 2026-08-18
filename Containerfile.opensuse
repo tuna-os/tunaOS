@@ -90,6 +90,18 @@ ENV BASE_IMAGE=${BASE_IMAGE} \
 # volume opens, until it dropped to the emergency shell (defect 8 of
 # tunaOS#953, run 30733919804). The GNOME pattern pulls cryptsetup in later,
 # but the initramfs is built here, and no other flavor's package set does.
+#
+# ffmpeg-8, NOT the unversioned `ffmpeg` name (tunaOS#1832, nightly
+# 32091072257): Tumbleweed flipped `ffmpeg` to the 9.x stream, whose openSUSE
+# build compiles the h264/hevc/vc1 decoders out — and Packman publishes no
+# 9.x yet (measured against the live Essentials index 2026-08-18: newest CLI
+# is ffmpeg-8 8.1.2, newest soname libavcodec62). Installing the unversioned
+# name therefore hands /usr/bin/ffmpeg to a binary that cannot decode h264 no
+# matter what the Packman dup below does to the libraries. ffmpeg-8 resolves
+# from packman-essentials directly (priority 90 beats the distro's 99 at
+# equal versions), keeps the CLI on the stream Packman actually ships full
+# codecs for, and install-desktop.sh's vendor check asserts the ownership.
+# Move back to the unversioned name when Packman publishes the 9.x stream.
 RUN set -eu; \
     retry_zypper() { \
       attempt=1; \
@@ -119,7 +131,7 @@ RUN set -eu; \
     retry_zypper --non-interactive --gpg-auto-import-keys refresh && \
     retry_zypper --non-interactive dup --from packman-essentials --allow-vendor-change && \
     retry_zypper --non-interactive install -y \
-        ffmpeg \
+        ffmpeg-8 \
         gstreamer-plugins-good \
         gstreamer-plugins-bad \
         gstreamer-plugins-ugly \

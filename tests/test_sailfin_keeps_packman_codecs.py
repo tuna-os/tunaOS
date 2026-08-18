@@ -87,3 +87,18 @@ def test_unpublished_soname_generations_are_surfaced_not_fatal() -> None:
     # The force and the post-force assert both operate on the filtered set,
     # so the assert can never demand a package the force was never given.
     assert SCRIPT.count('"${_td_force[@]}"') >= 2
+
+
+def test_the_ffmpeg_cli_is_pinned_to_the_stream_packman_ships() -> None:
+    """Nightly 32091072257: Tumbleweed flipped the unversioned `ffmpeg` name
+    to the 9.x stream (decoders compiled out) while Packman's newest CLI is
+    ffmpeg-8 — so installing `ffmpeg` hands /usr/bin/ffmpeg to a binary that
+    cannot decode h264 regardless of what happens to the libraries, and the
+    codec baseline fails on every desktop. The base installs the versioned
+    stream Packman actually ships, and the vendor check owns the CLI too."""
+    assert "ffmpeg-8 \\\n" in BASE
+    # the unversioned name must NOT be in the base install list
+    import re
+    assert not re.search(r"^\s+ffmpeg \\\\$", BASE, re.M)
+    # the ownership check covers the CLI glob alongside the sonames
+    assert "'ffmpeg-[0-9]'" in SCRIPT

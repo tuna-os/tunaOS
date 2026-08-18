@@ -3030,6 +3030,21 @@ disk)
 	wait_for_paint "10-ready" || true
 	if [[ "$rc" -eq 2 ]]; then
 		echo "ERROR: ${DISK_CONTRACT} contract marker was not emitted" >&2
+		# Answer WHY in the job log itself, not only in an artifact a human
+		# must download: every base Gate on 2026-08-18's nightlies timed out
+		# with a painted VGA screen and this branch as the only in-log
+		# evidence (sailfin run 32091072257, bonito-rawhide 32090947417).
+		# An EMPTY serial log means the console karg routing is broken (the
+		# markers went to the screen the Gate photographs); a serial log
+		# with kernel printk but no marker means the contract unit itself
+		# never ran or never reached the console. The tail makes the two
+		# distinguishable at a glance.
+		if [[ -s "$SERIAL_LOG" ]]; then
+			echo "==> serial log captured $(wc -c <"$SERIAL_LOG") bytes; last 120 lines:" >&2
+			tail -n 120 "$SERIAL_LOG" | sed 's/^/serial| /' >&2
+		else
+			echo "==> serial log is EMPTY — nothing reached ${SERIAL_LOG}: the guest's console= routing never targeted the serial port the Gate captures" >&2
+		fi
 	fi
 	exit "$rc"
 	;;
