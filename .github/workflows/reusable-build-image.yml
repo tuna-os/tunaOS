@@ -1407,98 +1407,19 @@ jobs:
     # so `secrets: inherit` was passing every repo/org secret for nothing
     # (tuna-os/tunaos#1536).
 
-  # ── Base boot gate ─────────────────────────────────────────────────────────
-  # The desktop Gate above skips base* flavors ("no desktop to verify"), which
-  # meant nothing asserted that a base image boots at all — the absence of a
-  # gate looked like success (GREEN-MASTER-PLAN W3). This job boots plain
-  # `base` to multi-user and requires the image's own
-  # tunaos-base-contract.service marker (TUNAOS_BASE_CONTRACT_OK: system
-  # reaches running/degraded AND `bootc status` works).
-  #
-  # Deliberately NOT in Promote's `needs`: the W3 decision is "required for
-  # GREEN, not for promote" — the composite scoreboard reads this job's real
-  # conclusion (which is also why it must not use continue-on-error: that
-  # would launder a failed boot into a success conclusion). base-hwe and
-  # base-nvidia stay ungated: they are hardware derivations of the same base,
-  # and QEMU exercises neither an HWE kernel's reason for existing nor an
-  # NVIDIA userspace.
-  verify_boot_base:
-    name: Gate
-    needs: manifest
-    if: >-
-      inputs.publish && github.event_name != 'pull_request' &&
-      inputs.flavor == 'base' &&
-      contains(inputs.platforms, 'amd64')
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    permissions:
-      contents: read
-      packages: read
-    env:
-      IMAGE_NAME: ${{ inputs.image-name }}
-      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
-      DEFAULT_TAG: ${{ inputs.default-tag }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Free up disk space
-        run: |
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
-            /usr/local/share/boost /opt/hostedtoolcache/CodeQL || true
-          df -h /
-
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | \
-            sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm || true
-
-      # Same podman rule as the desktop Gate above: never apt-install over a
-      # preinstalled /usr/local podman (crun "unknown version" mixed-stack).
-      - name: Install dependencies
-        run: |
-          sudo apt-get update
-          pkgs=(just jq qemu-system-x86 qemu-utils ovmf socat imagemagick)
-          if sudo sh -c 'command -v podman' >/dev/null 2>&1; then
-            echo "podman already present: $(sudo sh -c 'command -v podman')"
-          else
-            pkgs+=(podman)
-          fi
-          sudo apt-get install -y "${pkgs[@]}"
-
-      - name: Build qcow2 from testing image
-        env:
-          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
-        run: |
-          just qcow2 "${TEST_IMAGE}"
-
-      - name: Boot and verify (base contract)
-        run: |
-          QCOW2=$(find . -maxdepth 1 -name "*.qcow2" | head -1)
-          mkdir -p verify-out
-          sudo ./scripts/iso-e2e.sh "$QCOW2" --disk \
-            --contract base \
-            --output verify-out \
-            --timeout 600
-
-      # Same lesson the desktop Gate carries above: iso-e2e runs under sudo,
-      # so QEMU's screendump lands root-owned in verify-out and the upload
-      # dies on EACCES — which is how sailfin run 32068513822 lost the ONE
-      # serial log that would explain why the base marker never arrived.
-      - name: Make evidence uploadable
-        if: always()
-        run: sudo chown -R "$USER:$(id -gn)" verify-out 2>/dev/null || true
-
-      - name: Upload boot evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: base-gate-${{ inputs.image-name }}-${{ inputs.default-tag }}
-          path: verify-out/
-          retention-days: 14
-          if-no-files-found: ignore
+  # ── Base boot gate: removed 2026-08-18 ─────────────────────────────────────
+  # W3 gated plain `base` cells here (tunaos-base-contract.service marker
+  # under QEMU). Maintainer decision 08-18: base images are parent layers,
+  # not user-facing artifacts — their boot machinery is transitively proven
+  # by every desktop Gate built on top of them (marlin's 15 Gate-passing
+  # cells prove marlin's base boots without ever booting marlin:base). The
+  # job also never produced a marker in 600s on any variant (the serial
+  # question tracked in GREEN-MASTER-PLAN W3), so it was all cost and no
+  # signal. `base` is now a reviewed boots-scope exclusion in
+  # green-criteria.yml, like base-hwe/base-nvidia; the in-image
+  # tunaos-base-contract.service stays (it costs nothing and still fires on
+  # desktop images at multi-user, before the graphical marker). Revert this
+  # block from git history if base ever becomes a supported end-user target.
 
   tag-image:
     name: Promote
