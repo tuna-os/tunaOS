@@ -109,3 +109,15 @@ jobs:
             echo "PR already open for $BRANCH -- force-push refreshed it."
           fi
 
+          # Arm auto-merge so the snapshot lands without a human — same
+          # mechanism and rationale as matrix-status.yml: bot-opened PRs
+          # trigger no pull_request checks, but the merge queue runs its
+          # required checks on the merge group itself, so arming is all the
+          # PR needs to enqueue and merge. Re-armed every refresh because a
+          # merge clears it.
+          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+          if [[ -n "$pr" ]]; then
+            gh pr merge --auto --merge "$pr" ||
+              echo "::warning::could not arm auto-merge on #$pr — the refresh will wait for a human"
+          fi
+
