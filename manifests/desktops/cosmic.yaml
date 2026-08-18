@@ -146,6 +146,58 @@ packages:
       - xdg-desktop-portal-cosmic
       - pop-icon-theme
 
+  # ── Hummingbird (Fedora rebuild) ───────────────────────────────────
+  # The cheapest real win in the matrix (#1755 §4): the rebuild repo carries
+  # 22 of cosmic's 23 Fedora packages, and the cell was red purely because no
+  # section named them. Re-measured 2026-08-18 against the live primary.xml
+  # (8100 packages): everything below resolves.
+  #
+  # NOT an alias of the fedora list (unlike gnome.yaml's section, which IS
+  # `*fedora_gnome_packages`): the repo has no `cosmic-settings-daemon` — the
+  # single gap — and hummingbird installs run --skip-unavailable, so listing
+  # it would record a permanent, known omission every night instead of a
+  # decision. Same treatment as the zypper section's cosmic-settings note
+  # above: do not list what the repository cannot supply. Re-add it (or
+  # restore the alias outright) when tunaos-packages rebuilds it —
+  # tests/bats/test_hummingbird_desktop_wiring.bats pins that the difference
+  # between this list and fedora's is exactly that one package, so the two
+  # cannot drift silently.
+  #
+  # Snapshot pin, not `current/$basearch/`: same status as gnome.yaml's
+  # section — the floating alias does not exist on repo.tunaos.org yet
+  # (tuna-os/tunaos-packages#365), and the x86_64-only path is the only one
+  # published (#1755 §3), which is fine because this section is only read on
+  # the amd64 leg's dnf path.
+  hummingbird:
+    repos:
+      - name: tunaos-hummingbird
+        baseurl: https://repo.tunaos.org/hummingbird/20251124-x86_64/
+        priority: 5
+    packages:
+      - cosmic-session
+      - cosmic-comp
+      - cosmic-panel
+      - cosmic-app-library
+      - cosmic-applets
+      - cosmic-bg
+      - cosmic-files
+      - cosmic-idle
+      - cosmic-launcher
+      - cosmic-notifications
+      - cosmic-osd
+      - cosmic-randr
+      - cosmic-screenshot
+      - cosmic-settings
+      # cosmic-settings-daemon deliberately absent — see the section comment.
+      - cosmic-term
+      - cosmic-wallpapers
+      - cosmic-workspaces
+      - cosmic-greeter
+      - cosmic-icon-theme
+      - greetd
+      - xdg-desktop-portal-cosmic
+      - pop-icon-theme
+
   el10:
     # cosmic-greeter hard-requires fprintd-pam, which CentOS Stream 10 only
     # builds for x86_64 -- that gap is why aarch64 cosmic was pinned off in

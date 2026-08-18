@@ -71,16 +71,39 @@ yq_bin() { command -v yq; }
 	[ "$output" -ge 1 ]
 }
 
-# Only gnome is wired on purpose. kde uses `groups:` and niri uses `copr:`,
-# and their Hummingbird package sets (384 and 310 sources) do not exist yet —
-# inventing sections for repositories that 404 would be guesswork. This test
-# records that as a deliberate boundary so its absence is not read as an
-# oversight.
+# Only gnome and cosmic are wired on purpose. kde uses `groups:` and niri
+# uses `copr:`, and their Hummingbird package sets (~47-50% repo coverage,
+# #1755 §4) do not exist yet — inventing sections for packages the repo
+# cannot supply would be guesswork. This test records that as a deliberate
+# boundary so their absence is not read as an oversight.
 @test "only the desktops whose hummingbird packages exist are wired" {
 	[ -n "$(yq_bin)" ] || skip "yq not available"
 	local d
-	for d in kde niri cosmic; do
+	for d in kde niri; do
 		run yq -r '.packages.hummingbird // "absent"' "${REPO_ROOT}/manifests/desktops/${d}.yaml"
 		[ "$output" = "absent" ] || [ "$output" = "null" ]
 	done
+}
+
+# cosmic joined gnome on 2026-08-18 (#1755 option B): 22 of its 23 Fedora
+# packages resolve against the live repo (re-measured, 8100-package
+# primary.xml), the gap being exactly cosmic-settings-daemon. Its section is
+# a literal list, NOT the fedora alias gnome uses — listing the missing
+# daemon under --skip-unavailable would turn a decision into a nightly
+# omission. This test IS the drift guard the alias would have been: the
+# difference between the two lists must be exactly that one package, in that
+# direction, so either list changing alone fails loudly here.
+@test "cosmic's hummingbird list is fedora's minus exactly cosmic-settings-daemon" {
+	[ -n "$(yq_bin)" ] || skip "yq not available"
+	local cosmic_yaml="${REPO_ROOT}/manifests/desktops/cosmic.yaml"
+	run yq -r '.packages.hummingbird.repos[0].baseurl' "$cosmic_yaml"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"hummingbird/20251124-x86_64"* ]]
+	local fedora hummingbird diff
+	fedora="$(yq -r '.packages.fedora.packages[]' "$cosmic_yaml" | sort)"
+	hummingbird="$(yq -r '.packages.hummingbird.packages[]' "$cosmic_yaml" | sort)"
+	[ -n "$fedora" ]
+	[ -n "$hummingbird" ]
+	diff="$(comm -3 <(echo "$fedora") <(echo "$hummingbird") | tr -d '\t')"
+	[ "$diff" = "cosmic-settings-daemon" ]
 }
