@@ -73,6 +73,28 @@ if [[ "$INSTALLED_VERSION" == "$CACHED_VERSION" ]]; then
 	echo "==> kernels already aligned; no swap needed"
 else
 	echo "==> swapping image kernel to the akmods-matched ${CACHED_VERSION}"
+
+	# tunaOS#1823 on the EL10 surface (tunaOS#1725): on 2026-08-18 every EL10
+	# *-nvidia leg died right below with sqlite error 11 — "database disk
+	# image is malformed" on every INSERT of the kernel install transaction
+	# (albacore run 32090745718, all five legs, 3/3 buildah attempts) — the
+	# same error class bonito-rawhide hits in stage-2. The rpmdb this stage
+	# inherits is a sqlite file in a LOWER overlay layer; rpm mmaps it, and
+	# overlayfs copy-up under an mmap'd write is the known corruption shape.
+	# Rebuilding the db first forces the whole database through copy-up into
+	# THIS layer before the first write touches it. This is lib.sh's
+	# rawhide_rpmdb_probe graduating per its own protocol on a stable base:
+	# rebuild outcome + transaction outcome discriminate the two #1823
+	# readings, and if the copy-up reading is right, it fixes the swap
+	# outright. Deliberately FATAL on rebuild failure (unlike the rawhide
+	# probe, which runs on green pinned builds): every cell that reaches this
+	# branch is red today, and a db that cannot even rebuild at rest means
+	# the transaction below was never going to succeed — fail here with the
+	# discriminating signature in the log instead of 300 INSERT errors later.
+	echo "==> rebuilding the inherited rpmdb before the swap (copy-up guard, tunaOS#1823/#1725)"
+	rpm --rebuilddb
+	echo "TUNAOS_RPMDB_PROBE=rebuilt-pre-swap"
+
 	# Always remove these packages as kernel cache provides signed versions
 	# (bluefin-lts kernel-swap.sh, verbatim reasoning).
 	PKGS=("${KERNEL_NAME}" "${KERNEL_NAME}-core" "${KERNEL_NAME}-modules" "${KERNEL_NAME}-modules-core" "${KERNEL_NAME}-modules-extra" "${KERNEL_NAME}-uki-virt")

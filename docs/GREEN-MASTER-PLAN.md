@@ -232,7 +232,11 @@ the current failure is not semodule — all five albacore nvidia legs die in
 the overlay kernel swap with rpmdb sqlite corruption ("database disk image
 is malformed" on every INSERT while installing kernel-6.12.0-257.el10),
 i.e. the same rpmdb-under-buildah-overlay class as #1823, on a second
-variant surface. Count EL10 nvidia cells under #1823 until it resolves.*
+variant surface. Count EL10 nvidia cells under #1823 until it resolves.
+Copy-up guard landed same day: 10-kernel-swap.sh now runs `rpm
+--rebuilddb` before its first destructive write, forcing the inherited
+sqlite db through overlay copy-up — probe and candidate fix in one, per
+the #1823 protocol. Verify on the next nightly's nvidia legs.*
 
 ### yellowfin (AlmaLinux Kitten 10) — 12/20 build
 | area | state | action |
