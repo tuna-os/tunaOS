@@ -646,6 +646,15 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+      # Intel Macs with Apple's T2 security chip. Fedora's t2linux stack is
+      # x86_64-only; no generic ISO may stand in for this profile because it
+      # lacks the T2 kernel. Bootsahi Legacy supplies its dedicated USB flow.
+      - id: gnome-t2
+        stage: 3
+        platforms: ["linux/amd64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: gnome-nvidia
         # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
         # any other platform the exact-EVR kmod install can never match and
