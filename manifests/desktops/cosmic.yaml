@@ -122,6 +122,16 @@ packages:
 
   fedora:
     packages:
+      # dconf is explicit, not assumed: the TunaOS branding keyfiles in
+      # /etc/dconf/db/distro.d need `dconf update` at build time, and
+      # verify-branding fails the build if the compiled db is missing. Full
+      # Fedora pulls dconf transitively so this line is a no-op there, but
+      # hummingbird's minimal rebuild does not (its cosmic chain never
+      # requires it — measured on the 2026-08-18 redispatch, where the image
+      # had keyfiles, no dconf binary, and TUNAOS_BRANDING_FAIL). The package
+      # is in the 20251124 hummingbird index. Listed in BOTH sections so the
+      # wiring test's pinned diff (exactly cosmic-settings-daemon) holds.
+      - dconf
       - cosmic-session
       - cosmic-comp
       - cosmic-panel
@@ -174,6 +184,10 @@ packages:
         baseurl: https://repo.tunaos.org/hummingbird/20251124-x86_64/
         priority: 5
     packages:
+      # See the fedora list's dconf note — needed here for real (the rebuild
+      # never pulls it transitively), mirrored there to keep the lists' diff
+      # pinned to exactly cosmic-settings-daemon.
+      - dconf
       - cosmic-session
       - cosmic-comp
       - cosmic-panel
