@@ -720,20 +720,36 @@ variants:
         stage: 1
         build_image: true
         build_iso: true
+      # Desktops are amd64-only until the aarch64 rebuild repo converges
+      # (#1755 option A, W8 architecture honesty). Measured 2026-08-18:
+      # hummingbird/20251124-aarch64 now EXISTS (it 404'd when #1755 was
+      # filed) but is a 1358-package seed against x86_64's 8100 — cosmic
+      # 8/22 manifest packages present, gnome 5/52, no gnome-shell/gdm and
+      # no COSMIC compositor. An arm64 desktop leg today would either 404
+      # nothing and install almost nothing (--skip-unavailable), publishing
+      # the #858 shape: an image with no desktop. Same treatment as
+      # grouper:cosmic's amd64 pin. Re-add "linux/arm64" per flavor when
+      # the aarch64 index carries that desktop's manifest set — re-measure
+      # with the method in manifests/desktops/cosmic.yaml's hummingbird
+      # section comment.
       - id: gnome
         stage: 2
+        platforms: ["linux/amd64"]
         build_image: true
         build_iso: true
       - id: kde
         stage: 2
+        platforms: ["linux/amd64"]
         build_image: true
         build_iso: true
       - id: niri
         stage: 2
+        platforms: ["linux/amd64"]
         build_image: true
         build_iso: true
       - id: cosmic
         stage: 2
+        platforms: ["linux/amd64"]
         build_image: true
         build_iso: true
 
