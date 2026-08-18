@@ -119,9 +119,11 @@ Every image already writes `/usr/share/tunaos/missing-on-*.txt`.
       `verify-package-wishlist.sh` against every published image it pulls
       (one pull, two axes), records `omissions_status` per cell, and the
       composite scores it; unallowlisted omissions ⇒ not clean.
-- [ ] This is what catches the #858 class (published image, no desktop) and
+- [x] This is what catches the #858 class (published image, no desktop) and
       the #1755 class (hummingbird desktops installing nothing) *at publish
-      time* instead of at verification time.
+      time* instead of at verification time — in force since the box above
+      landed: the sweep reads the manifest from every published image daily
+      and unallowlisted omissions score the cell not-clean in the composite.
 
 ### W6. Schedule parity *(criterion 7)*
 
@@ -154,9 +156,16 @@ payloads, action pins.
       the COPR *content* question (#391 is about trusting the repo, not just
       its existence) — the structural fix for that is RFC 011's tier-2
       migration, not this check.
-- [ ] The `createrepo_c --update` drift class (#358) is fixed in
+- [x] The `createrepo_c --update` drift class (#358) is fixed in
       `build-xfce-package.yml` only — audit `build-xfce-distributed.yml`,
       `build.yml`, `build-gnome49/50/51-package.yml` (noted on #358).
+      Audited 2026-08-18 (tunaos-packages#421): every named suspect is clean
+      — they all exclude `repodata/**` at seed and full-generate before any
+      `--update`. The class IS live in two surfaces the issue did not name:
+      `build-fprintd-aarch64.yml` (seeds published repodata, signs only new
+      RPMs, then `--update`) and the justfile's `sync-to-r2` recipe (the
+      #358 shape verbatim). Apply-ready patches are on #421; blocked from a
+      PR only by RFC #419 occupying this session's branch in that repo.
 
 ### W8. Architecture honesty *(criterion 10)*
 
@@ -248,7 +257,7 @@ The best-instrumented variant after this week.
 |---|---|---|
 | base, xfce | promoted, with attested SBOM for the first time (#1567 closed loop: cgroup cap #1784/#1795 + manifest-derived SBOM fallback #1796) | keep |
 | gnome | builds, signs — **fails the desktop-experience contract deterministically**, `early_exit rc=1` at ~36s, twice reproduced (#1801) | reproduce locally via `scripts/boot-gate.sh guppy gnome`; genuine desktop debugging |
-| kde | emerge now *finishes* (3h43m under #1803's 240m) but image assembly overruns the ceiling; **0 of 70 emerges used the binhost** (#1802) | enable `getbinpkg` for `kde-plasma/*` — packaging decision, collapses hours to minutes; do **not** raise the ceiling again |
+| kde | binhost wired: getbinpkg is on and #1816 locks kde-plasma/gnome/xfce versions to what the binhost has actually built (the tree racing ahead of the binhost was why 0 of 70 emerges substituted) | verify a nightly kde build completes under the ceiling with binpkg substitution in the log |
 
 ### gurnard (Ubuntu 24.04, experimental) — 2/2 build
 Green on build. Next bar: gates, ISO, lifecycle like everyone else. No known
