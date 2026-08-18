@@ -111,6 +111,13 @@ exactly the desktop Gate, which demonstrably works. #1861's serial-tail
 dump stays — it serves the desktop-Gate ❌ cells (albacore/yellowfin/
 skipjack/grouper/flounder/guppy), which are the real remaining boots work.
 
+*Post-mortem datum (08-18, from #1861's serial dump on the last base Gate
+ever run, sailfin dispatch 32105775211):* console routing was never the
+problem — the serial log shows a complete boot to login (graphical target
+reached, agetty on ttyS0). The `TUNAOS_BASE_CONTRACT` marker simply never
+emitted: the contract unit didn't fire, on a system that otherwise booted
+clean. Recorded here for the day `base` is ever re-gated.
+
 ### W4. ISO + installer axis *(criterion 4 — currently 0 passes anywhere)*
 
 - [ ] **#1772** — tacklebox `[customize]` hangs 87m silent on amd64. External
@@ -178,10 +185,11 @@ payloads, action pins.
       `build-fprintd-aarch64.yml` (seeds published repodata, signs only new
       RPMs, then `--update`) and the justfile's `sync-to-r2` recipe (the
       #358 shape verbatim). Update 08-18: RFC 011 is **accepted** (maintainer
-      sign-off; ADR 0001 in tunaos-packages) and the #421 fixes plus the
-      RFC's Phase 0 catalog (928 entries + completeness tests) are staged on
-      packages#419, waiting only on upstream CI transients (Arch mirror sync,
-      the sid perl transition) to merge. RFC 011 Phase 2 makes this class
+      sign-off; ADR 0001 in tunaos-packages) and **packages#419 MERGED
+      08:36Z** — the #421 fixes, the Phase 0 catalog (928 entries +
+      completeness tests), the deb `apt-get build-dep` rework, and the
+      workflow shell-quoting regression test are all on main. Tracking
+      issue #418 stays open for Phase 1+. RFC 011 Phase 2 makes this class
       structurally unrepeatable.
 
 ### W8. Architecture honesty *(criterion 10)*
@@ -219,6 +227,12 @@ are issues that stand between the variant and *build* green; the criteria
 above then apply on top. NVIDIA flavors across yellowfin/albacore/skipjack/
 bonito/bonito-rawhide/marlin/flounder/flounder-sid share **#1725**
 (semodule install fails) plus W9, and are not repeated per row.
+*Re-classified 08-18 for EL10 (albacore run 32090745718, posted on #1725):
+the current failure is not semodule — all five albacore nvidia legs die in
+the overlay kernel swap with rpmdb sqlite corruption ("database disk image
+is malformed" on every INSERT while installing kernel-6.12.0-257.el10),
+i.e. the same rpmdb-under-buildah-overlay class as #1823, on a second
+variant surface. Count EL10 nvidia cells under #1823 until it resolves.*
 
 ### yellowfin (AlmaLinux Kitten 10) — 12/20 build
 | area | state | action |
@@ -263,25 +277,25 @@ The fully-diagnosed one: **#1755**.
 |---|---|---|
 | base | **promotes on both arches** | keep |
 | gnome amd64 | builds; repo lacks gnome-shell/gdm/mutter (29 of 52 pkgs missing) so the image has no real desktop | needs tunaos-packages rebuilds (#1755 §2, tunaos-packages#250) |
-| cosmic amd64 | **section landed 08-18** (#1755 option B): 22/23 pkgs re-measured against the live repo, `hummingbird:` section added to cosmic.yaml (cosmic-settings-daemon deliberately omitted — not in repo) | verify on next nightly |
+| cosmic amd64 | **section landed 08-18** (#1755 option B): 22/23 pkgs re-measured against the live repo, `hummingbird:` section added to cosmic.yaml (cosmic-settings-daemon deliberately omitted — not in repo). First verification attempt lost: the 08-18 nightly's amd64 base leg hung 4h in runner setup and was cancelled, so no stage-2 ran; redispatched ~08:50Z | read the cosmic leg on the redispatched run |
 | kde/niri | no manifest section; ~50% pkg coverage | after cosmic proves the path |
 | all arm64 desktops | resolved 08-18 via option A: the aarch64 repo now publishes (1358-pkg seed vs x86_64's 8100 — cosmic 8/22, gnome 5/52, no shell/gdm/compositor measured live) but cannot carry a desktop yet, so desktop flavors are pinned `linux/amd64` in build-config with the re-add condition tested | re-add arm64 per flavor when the aarch64 index carries that desktop's manifest set |
 | dconf branding failure | **deliberately left failing** — guarding it would green cells that contain no desktop | fix only after manifest sections exist |
 | convergence | tunaos-packages seed grew for the first time since 08-09 (7170→7673); reserve budget stops *between* tiers (tunaos-packages#401), cosmic/niri/kde runs lost to the 6h ceiling | in-loop deadline check (#401), tier failures layer-00/01/02/07/10/11 to classify (#402/#403/#404 candidates) |
 
-### sailfin (openSUSE Tumbleweed) — 0/7 build → base back
+### sailfin (openSUSE Tumbleweed) — 0/7 → **all five desktops promoted with Gates green (08-18)**
 | area | state | action |
 |---|---|---|
 | base | **promoted 08-17** after #1806 re-pin; promotes nightly since | keep |
-| gnome/kde/cosmic/niri/xfce amd64 | **#1832, four layers deep and each fix evidence-verified**: dup re-assert after the desktop transaction (#1850) → force the LIBRARY complements Packman actually publishes, not openSUSE's binary names (#1854) → availability-gate the force because Packman has no ffmpeg-9 soname yet, surface the gap as TUNAOS_CODEC_GAP (#1858, verified working on nightly 32091072257) → pin the CLI to `ffmpeg-8` because Tumbleweed flipped the unversioned `ffmpeg` name to the decoder-crippled 9.x stream (#1861, merged 08-18). gnome **arm64 passes** throughout | verify all five amd64 legs on the first post-#1861 nightly; when Packman ships the 9.x stream, unpin per the Containerfile note |
+| gnome/kde/cosmic/niri/xfce amd64 | **VERIFIED 08-18** on dispatch 32105775211: all five legs built, **all five desktop Gates passed, all five Promoted** (gnome arm64 too). The four-layer codec saga (#1832) is closed: dup re-assert (#1850) → library complements (#1854) → availability-gated force + TUNAOS_CODEC_GAP (#1858) → `ffmpeg-8` CLI pin (#1861). Sailfin went 0→5 promoted desktop cells in one day and is the second variant after marlin with a fully Gate-green desktop board | unpin `ffmpeg-8` per the Containerfile note when Packman ships the 9.x stream; watch the nightly holds |
 
-### guppy (Gentoo) — 2/4 build
+### guppy (Gentoo) — 4/4 build (08-18), kde+xfce fully green
 The best-instrumented variant after this week.
 | area | state | action |
 |---|---|---|
-| base, xfce | promoted, with attested SBOM for the first time (#1567 closed loop: cgroup cap #1784/#1795 + manifest-derived SBOM fallback #1796) | keep |
-| gnome | builds, signs — **fails the desktop-experience contract deterministically**, `early_exit rc=1` at ~36s, twice reproduced (#1801) | reproduce locally via `scripts/boot-gate.sh guppy gnome`; genuine desktop debugging |
-| kde | binhost wired: getbinpkg is on and #1816 locks kde-plasma/gnome/xfce versions to what the binhost has actually built (the tree racing ahead of the binhost was why 0 of 70 emerges substituted) | verify a nightly kde build completes under the ceiling with binpkg substitution in the log |
+| base, xfce | promoted, with attested SBOM for the first time (#1567 closed loop: cgroup cap #1784/#1795 + manifest-derived SBOM fallback #1796); xfce **Gate passed 08-18** | keep |
+| gnome | builds (42m), signs — **fails the desktop-experience contract deterministically**, `early_exit rc=1`, reproduced again on the 08-18 nightly (#1801); Promote held behind the Gate | reproduce locally via `scripts/boot-gate.sh guppy gnome`; genuine desktop debugging |
+| kde | **VERIFIED 08-18** (nightly 32090675142): #1816's binhost version-lock worked — kde built in **79 minutes** (vs the 6h ceiling), **Gate passed, Promoted**. Guppy now builds 4/4 with two desktop cells fully green | keep; #1816 pattern is the template if the tree races ahead again |
 
 ### gurnard (Ubuntu 24.04, experimental) — 2/2 build
 Green on build. Next bar: gates, ISO, lifecycle like everyone else. No known
