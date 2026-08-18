@@ -146,3 +146,15 @@ def test_base_gate_evidence_survives_sudo_and_timeouts() -> None:
         "expansion under set -u kills the timeout path before diagnostics"
     )
     assert "(stddev=${SCREENSHOT_STDDEV})" not in harness
+
+
+def test_marker_timeout_dumps_the_serial_tail_into_the_job_log() -> None:
+    """2026-08-18 nightlies: every base Gate timed out marker-less with the
+    only evidence in a download-only artifact — the job log said nothing
+    about WHY. On rc=2 the disk mode now prints the serial tail directly
+    (or states the log is EMPTY, which means the guest's console= routing
+    never targeted the serial port), so the next silent gate is
+    classifiable from the job log alone."""
+    script = (ROOT / "scripts" / "iso-e2e.sh").read_text(encoding="utf-8")
+    assert "serial log is EMPTY" in script
+    assert 'tail -n 120 "$SERIAL_LOG"' in script

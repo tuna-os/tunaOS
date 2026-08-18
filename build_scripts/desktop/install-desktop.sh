@@ -199,12 +199,20 @@ if [[ "${_TD_OS}" == "zypper" ]]; then
 		# ffmpeg binary actually loads decoders from) plus the
 		# gstreamer *-codecs complements and vlc-codecs must be
 		# Packman-vendored. Force any that are not, downgrades allowed.
+		# 'ffmpeg-[0-9]' also covers the CLI: openSUSE's versioned ffmpeg-N
+		# packages exist in both repos, and only Packman's build ships the
+		# h264/hevc decoders — an openSUSE-vendored ffmpeg-8 is the same
+		# crippled stack with a working library underneath it. (The
+		# unversioned `ffmpeg` name is deliberately not installed at all —
+		# see Containerfile.opensuse; if a dependency ever drags it in, the
+		# availability gate below surfaces it as TUNAOS_CODEC_GAP because
+		# Packman publishes no package of that name.)
 		_td_pm_lost=()
 		while IFS= read -r _td_pkg; do
 			[[ -n "$_td_pkg" ]] || continue
 			rpm -q --qf '%{VENDOR}\n' "$_td_pkg" | grep -qi packman ||
 				_td_pm_lost+=("$_td_pkg")
-		done < <(rpm -qa --qf '%{NAME}\n' 'libavcodec*' 2>/dev/null)
+		done < <(rpm -qa --qf '%{NAME}\n' 'libavcodec*' 'ffmpeg-[0-9]' 'ffmpeg' 2>/dev/null)
 		for _td_pkg in gstreamer-plugins-bad-codecs \
 			gstreamer-plugins-ugly-codecs vlc-codecs; do
 			if ! rpm -q "$_td_pkg" >/dev/null 2>&1; then
