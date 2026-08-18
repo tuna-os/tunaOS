@@ -124,6 +124,19 @@ jobs:
             -name "*.just" -type f \
             -exec just --unstable --fmt --check -f {} \;
 
+  package-source-policy:
+    name: Package source policy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Install YAML parser
+        run: python3 -m pip install pyyaml --break-system-packages
+      - name: Reject new non-system package sources
+        run: python3 scripts/check-package-sources.py --base "${{ github.event.pull_request.base.sha || github.event.before }}"
+
   # Summary job: aggregates results and posts a single status check
   #
   # A cancelled shard is NOT a lint failure. `cancel-in-progress` cancels this
@@ -135,13 +148,14 @@ jobs:
   # cancelled and skipped are reported as-is.
   lint-summary:
     name: Lint Summary
-    needs: lint
+    needs: [lint, package-source-policy]
     if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Check lint results
         env:
           LINT_RESULT: ${{ needs.lint.result }}
+          SOURCE_POLICY_RESULT: ${{ needs['package-source-policy'].result }}
         run: |
           echo "## Lint Results" >> "$GITHUB_STEP_SUMMARY"
           case "${LINT_RESULT}" in
@@ -156,3 +170,7 @@ jobs:
               exit 1
               ;;
           esac
+          if [[ "${SOURCE_POLICY_RESULT}" != success ]]; then
+            echo "❌ Package source policy check did not pass" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
