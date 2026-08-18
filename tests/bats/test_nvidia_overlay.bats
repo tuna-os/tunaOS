@@ -469,9 +469,32 @@ run_swap() {
   run_swap
   [ "$status" -eq 0 ]
   [[ "$output" == *"no swap needed"* ]]
-  # No erase and no kernel install happened.
+  # No erase and no kernel install happened — and no rebuilddb either: the
+  # copy-up guard exists to protect rpm WRITES, and the aligned branch
+  # makes none, so running it there would only add risk to green cells.
   ! grep -q 'rpm --erase' "${BATS_TEST_TMPDIR}/tool.log"
   ! grep -q 'dnf -y install' "${BATS_TEST_TMPDIR}/tool.log"
+  ! grep -q -- '--rebuilddb' "${BATS_TEST_TMPDIR}/tool.log"
+}
+
+@test "kernel-swap rebuilds the inherited rpmdb before its first destructive write" {
+  # tunaOS#1823 on EL10 (#1725): the swap's rpm --erase/-ivh run against a
+  # sqlite rpmdb inherited from a lower overlay layer, and every EL10
+  # *-nvidia leg died in that transaction with "database disk image is
+  # malformed" (albacore run 32090745718). The guard must force the db
+  # through copy-up BEFORE the first write — rebuilddb after an erase has
+  # already corrupted the db protects nothing, so the ORDER is the contract.
+  make_swap_stubs "6.12.0-250.el10.x86_64"
+  make_swap_fixture
+  run_swap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"TUNAOS_RPMDB_PROBE=rebuilt-pre-swap"* ]]
+  local rebuild_line first_erase_line
+  rebuild_line="$(grep -n -- '--rebuilddb' "${BATS_TEST_TMPDIR}/tool.log" | head -1 | cut -d: -f1)"
+  first_erase_line="$(grep -n -- '--erase' "${BATS_TEST_TMPDIR}/tool.log" | head -1 | cut -d: -f1)"
+  [ -n "$rebuild_line" ]
+  [ -n "$first_erase_line" ]
+  [ "$rebuild_line" -lt "$first_erase_line" ]
 }
 
 @test "kernel-swap replaces a mismatched kernel with the akmods one" {
