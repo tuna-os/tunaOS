@@ -218,6 +218,41 @@ payloads, action pins.
 - [ ] NVIDIA needs real GPUs; #848 (stage-3 dev ISO) is a prerequisite.
       Until then NVIDIA cells are *not yet covered*, never *green*.
 
+### W10. Package supply (RFC 011) — the factory closes the gap and retires COPR
+
+The image factory's green bar depends on the package supply. RFC 011
+(tunaos-packages) makes the supply structural: one catalog owns identity,
+the gap engine computes per-target need against live repo indexes, and one
+unified format-agnostic factory (`package-factory.yml` + `package-factory-cell.yml`,
+landed in tunaos-packages#430, amended by #438) builds only what the target's
+system repos cannot supply. Measured 2026-08-18 (`docs/factory-status.json`):
+
+| target | built | needed | coverage |
+|---|---|---|---|
+| `el10/x86_64` | 56 | **73** | 43% |
+| `hummingbird/x86_64` | 570 | 103 | 85% |
+| `hummingbird/aarch64` | 262 | **411** | 39% |
+| `arch`/`debian`/`opensuse-tumbleweed`/`ubuntu` | — | — | **unmeasured** |
+
+The third-party dependency to retire is COPR `jreilly1821/c10s-gnome-50` /
+`c10s-gnome-49` (#391 SPOF) — the `build-order*.yml` files still carry
+`copr_name` entries ("already registered in COPR; just trigger build-package").
+
+- [x] RFC 011 accepted; Phase 0 catalog (928 entries + completeness tests)
+      landed (tunaos-packages#419); the unified factory (#430) replaced the
+      per-family workflows; RFC amended to the format-agnostic shape (#438).
+- [ ] Close the el10 gap (73 needed: COSMIC, XFCE-Wayland, Niri/labwc/greetd,
+      fprintd, and the long tail) — tracking tunaos-packages#439.
+- [ ] Close the hummingbird/aarch64 gap (411 needed) or honestly classify the
+      x86_64-only upstream sources.
+- [ ] Measure the four unmeasured targets (`arch`, `debian`,
+      `opensuse-tumbleweed`, `ubuntu`) so their need is computed, not assumed.
+- [ ] Retire COPR: remove the `copr_name` entries as each family's in-factory
+      build proves out and the image build points at the factory R2 path.
+- [ ] Wire factory dependency ordering — gap deps must publish before their
+      dependents' clean-install verify (tunaos-packages#440; the first el10
+      wave showed niri failing on unbuilt `libseat`, its declared runtime dep).
+
 ---
 
 ## Part 2 — Per-variant state and work
