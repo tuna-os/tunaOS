@@ -37,6 +37,7 @@ age_marker = _rep.age_marker
 status_emoji = _rep.status_emoji
 render_combo_row = _rep.render_combo_row
 render_report = _rep.render_report
+e2e_status_for = _rep.e2e_status_for
 
 
 # ── age_marker ──────────────────────────────────────────────────────────
@@ -92,6 +93,29 @@ def test_status_emoji_unknown_and_missing():
     assert status_emoji(None) == "❓"
     assert status_emoji("") == "❓"
     assert status_emoji("in_progress") == "❓"
+
+
+def test_e2e_status_does_not_claim_unrun_matrix_cells(monkeypatch):
+    run = {"id": 123, "conclusion": "success", "html_url": "https://github.com/run/123"}
+    monkeypatch.setattr(_rep, "latest_workflow_run", lambda _workflow: run)
+    _rep._E2E_JOBS_CACHE = {123: [{"name": "E2E yellowfin:gnome", "conclusion": "success"}]}
+
+    assert e2e_status_for("yellowfin", "kde") is None
+
+
+def test_e2e_status_uses_matching_matrix_cell(monkeypatch):
+    run = {"id": 123, "conclusion": "success", "html_url": "https://github.com/run/123"}
+    monkeypatch.setattr(_rep, "latest_workflow_run", lambda _workflow: run)
+    _rep._E2E_JOBS_CACHE = {123: [{
+        "name": "E2E yellowfin:gnome",
+        "conclusion": "failure",
+        "html_url": "https://github.com/job/456",
+    }]}
+
+    assert e2e_status_for("yellowfin", "gnome") == {
+        "conclusion": "failure",
+        "html_url": "https://github.com/job/456",
+    }
 
 
 # ── Combo ───────────────────────────────────────────────────────────────
@@ -154,9 +178,9 @@ def test_render_report_sections_and_wishlist():
     out = render_report(combos, wishlist)
 
     assert "# 🖥️ Weekly Boot Screenshot Report" in out
-    assert "## Fresh builds" in out
+    assert "## Fresh screenshots" in out
     assert "R-FRESH" in out
-    assert "## ⚠️ Stale or missing builds" in out
+    assert "## ⚠️ Stale or missing screenshots" in out
     assert "R-STALE" in out
     assert "## 📦 EL10 packaging wishlist" in out
     assert "| `pkg-a` | letters, tables |" in out
@@ -166,7 +190,7 @@ def test_render_report_sections_and_wishlist():
 def test_render_report_empty_inputs():
     out = render_report([], {})
     assert "# 🖥️ Weekly Boot Screenshot Report" in out
-    assert "## Fresh builds" not in out
-    assert "## ⚠️ Stale or missing builds" not in out
+    assert "## Fresh screenshots" not in out
+    assert "## ⚠️ Stale or missing screenshots" not in out
     assert "## 📦 EL10 packaging wishlist" not in out
     assert "## 🚀 Release ISOs" in out
