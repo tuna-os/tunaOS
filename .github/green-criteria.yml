@@ -188,9 +188,14 @@ criteria:
       build_scripts/checks/verify-package-wishlist.sh — at build time as a
       gate, and daily against every published image by
       .github/workflows/desktop-contract-sweep.yml (omissions read)
-    enforcement: advisory
+    enforcement: blocking
     status_2026_08_17: "written into every image; read by nothing on a schedule"
     status_2026_08_17_pm: "scheduled: the contract sweep reads the manifest from every image it pulls and scores it against package-miss-allowlist.txt"
+    status_2026_08_19: >-
+      graduated advisory → blocking. The composite green count did not drop
+      (63 → 63): every composite-green cell already carries an affirmative
+      omissions verdict, so the flip only makes an existing check bite instead
+      of leaving it advisory. First of the Part 3 Phase 4 graduations.
     notes: >-
       Distinct from `parity`. Parity asks whether the set matches upstream;
       this asks whether the build admitted what it silently skipped.
