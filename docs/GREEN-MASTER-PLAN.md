@@ -120,16 +120,23 @@ clean. Recorded here for the day `base` is ever re-gated.
 
 ### W4. ISO + installer axis *(criterion 4 — currently 0 passes anywhere)*
 
-- [ ] **#1772** — tacklebox `[customize]` hangs 87m silent on amd64. External
-      pinned repo; needs either a maintainer fix upstream or a timeout+retry
-      harness around it. This blocks *every* amd64 ISO cell.
-- [ ] **#1556** — arm64 `libpod_lock` during tacklebox pre-pull blocks every
-      arm64 ISO cell before boot; also gates the unresolved `-vga` risk on
-      aarch64 (#1595 review note).
-- [ ] Installer smoke passes 0/31 tested; after #1772/#1556, re-baseline and
-      split real failures from the DRM-render-node harness limit.
-- [ ] LUKS E2E (criterion 5) is the healthiest axis (31/52) — keep it green
-      while the ISO work lands; it is the complement, not a substitute.
+- [x] **#1772** — tacklebox `[customize]` hangs 87m silent on amd64. Fixed by
+      #1882 (outer 80-min deadline) + #1885 (streamed customize, 30-min cap):
+      customize now streams and completes in ~2 min. Closed with evidence from
+      run 32238167029.
+- [x] **#1556** — arm64 `libpod_lock` during tacklebox pre-pull. Root cause
+      stale `/dev/shm/libpod_lock` (lock-count drift → ERANGE); fixed by the
+      rm + `podman system renumber` reset in ghcr-login (#1576), lifecycle
+      (#1841), and the ISO surface (#1848). Closed with arm64 login + full
+      build evidence (run 32254285223).
+- [ ] Installer smoke passes 0/31 tested. **Now blocked by #1893, not #1772**:
+      after customize completes, the ISO build hangs ~50 min silently in the
+      `podman commit` of the customized container (tacklebox#231 streams it).
+      Re-baseline and split real failures from the DRM-render-node harness
+      limit once the pin bump lands.
+- [ ] LUKS E2E (criterion 5) is the healthiest axis (31/52). Blocked at the
+      same "Build dev ISO" step (the Aug 9 failures), so it needs the same
+      #1893 fix before a fresh sweep can re-verify 31/52.
 
 ### W5. Read the omissions manifest *(criterion 8 — data exists, unread)*
 
