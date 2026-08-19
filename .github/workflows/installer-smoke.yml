@@ -78,7 +78,12 @@ jobs:
   smoke:
     name: ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate-matrix
-    runs-on: ubuntu-latest
+    # The compositor-rendering checks (OCR/screenshot) need a DRM render node
+    # for cosmic/niri/xfwl4/kde (kwin_wayland) — the `gpu` RunsOn group
+    # (g4dn spot) supplies it. gnome/xfce stay on the hosted runner: gnome is
+    # verifiable without a render node, xfce rides the readiness-stamp path.
+    runs-on: >-
+      ${{ (startsWith(matrix.flavor, 'cosmic') || startsWith(matrix.flavor, 'niri') || startsWith(matrix.flavor, 'xfwl4') || startsWith(matrix.flavor, 'kde')) ? 'gpu' : 'ubuntu-latest' }}
     timeout-minutes: 75
     strategy:
       fail-fast: false
