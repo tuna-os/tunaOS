@@ -12,6 +12,8 @@ set -xeuo pipefail
 
 source /run/context/build_scripts/lib.sh
 
+rpmdb_stage2_guard
+
 # kcm_ublue and its build tooling come from dnf/COPR. On RPM-less distros
 # (openSUSE/Gentoo/Arch) skip it rather than fail with "dnf: command not found".
 if ! command -v dnf &>/dev/null; then

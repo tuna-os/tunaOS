@@ -4,6 +4,8 @@ set -euo pipefail
 printf "::group:: === 00-workarounds ===\n"
 
 source /run/context/build_scripts/lib.sh
+
+rpmdb_stage2_guard
 # This is a bucket list. We want to not have anything in this file at all.
 if [[ "$IS_RHEL" = true || "$IS_CENTOS" = true ]]; then rm -f /usr/lib/bootc/install/20-rhel.toml; fi
 # Remove amd-legacy.conf from upstream: TunaOS kernel is not compiled with si_support/cik_support
