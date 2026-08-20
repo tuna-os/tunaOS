@@ -11,6 +11,19 @@ runners:
     image: ubuntu24-full-arm64
     volume: 80gb:gp3
     spot: capacity-optimized
+  # GPU/DRM render-node runner for the Smithay-compositor boot gates and
+  # installer smoke (cosmic/niri/xfwl4, and kde's installer compositor), which
+  # hard-require EGL_EXT_device_drm and NEVER start on GitHub-hosted runners.
+  # ubuntu24-gpu-x64 ships the NVIDIA driver + CUDA + container toolkit, so
+  # /dev/dri/renderD128 exists and iso-e2e-gpu.sh passes the real render node
+  # through. Spot keeps the cost per job minimal; runs-on: gpu only ever
+  # provisions an instance when a job actually asks for it.
+  gpu:
+    family: ["g4dn"]
+    cpu: [4]
+    image: ubuntu24-gpu-x64
+    volume: 60gb:gp3
+    spot: capacity-optimized
 
 tags:
   team: tunaos
