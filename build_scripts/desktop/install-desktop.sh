@@ -19,6 +19,16 @@ _TD_CTX="/run/context"
 # lib.sh first: manifest resolution below needs IS_DEBIAN / PKG_MGR.
 source "${_TD_CTX}/build_scripts/lib.sh"
 
+# tunaOS#1823: the stage-2 desktop dnf writes inherit an rpmdb in a LOWER
+# overlay layer; rpm mmaps it and overlayfs copy-up under an mmap'd write
+# corrupts it ("database disk image is malformed"). 20-packages.sh guards
+# its own stage, but every desktop stage's install-desktop.sh dnf writes
+# hit the same shape on the freshly imported base. Same probe as
+# 20-packages.sh — no-op off the dnf path (debian/arch/opensuse/gentoo).
+if [[ "${PKG_MGR:-}" == dnf ]]; then
+	rawhide_rpmdb_probe
+fi
+
 # Per-distro manifest overrides: <desktop>-debian.yaml / <desktop>-arch.yaml
 # beat the generic <desktop>.yaml when they exist — package names, session
 # files, and display managers differ across distros (kde-debian.yaml
