@@ -92,6 +92,24 @@ else
 	# the transaction below was never going to succeed — fail here with the
 	# discriminating signature in the log instead of 300 INSERT errors later.
 	echo "==> rebuilding the inherited rpmdb before the swap (copy-up guard, tunaOS#1823/#1725)"
+	# The bare rebuild was not enough — run 32143809963 answered with the
+	# discriminating signature this guard was built to produce:
+	#   error: failed to replace old database with new database!
+	# and ZERO "malformed" lines. The rebuild reads and rewrites the db
+	# fine; it dies at its final step, a directory RENAME over the dbpath —
+	# which still lives in a LOWER overlay layer, and overlayfs refuses
+	# cross-layer directory renames (EXDEV). The same mechanism is what
+	# corrupts sqlite's writes in the plain install transaction (#1823).
+	# So recreate the directory natively in the upper layer first: the
+	# copy lands in the upper layer, the rm whiteouts the lower dir, and
+	# the mv is then a same-device rename. Every subsequent rpm write —
+	# the rebuild's replace included — is upper-layer-native.
+	_rpmdb_dir="$(rpm --eval '%_dbpath' 2>/dev/null || true)"
+	if [[ -n "$_rpmdb_dir" && -d "$_rpmdb_dir" ]]; then
+		cp -a "$_rpmdb_dir" "${_rpmdb_dir}.tbox-copyup"
+		rm -rf "$_rpmdb_dir"
+		mv "${_rpmdb_dir}.tbox-copyup" "$_rpmdb_dir"
+	fi
 	rpm --rebuilddb
 	echo "TUNAOS_RPMDB_PROBE=rebuilt-pre-swap"
 
