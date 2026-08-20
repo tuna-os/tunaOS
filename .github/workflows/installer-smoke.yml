@@ -75,8 +75,8 @@ jobs:
           echo "matrix=$M" >> "$GITHUB_OUTPUT"
           echo "$M" | jq .
 
-  smoke:
-    name: ${{ matrix.variant }}:${{ matrix.flavor }}
+  build-iso:
+    name: build ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate-matrix
     # RunsOn for all cells: the ISO build (tacklebox + podman) cannot work on
     # the GitHub runner's podman 5.8.4 (tunaOS#1893). The `gpu` group (g4dn
@@ -107,8 +107,7 @@ jobs:
       - name: Install dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y just podman jq golang-go git socat imagemagick sshpass tesseract-ocr \
-            qemu-system-x86 qemu-utils ovmf \
+          sudo apt-get install -y just podman jq golang-go git \
             systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk
           sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
@@ -155,6 +154,70 @@ jobs:
           ISO=$(find .build -maxdepth 3 -name "*.iso" | head -1)
           [[ -n "$ISO" ]] || { echo "::error::dev ISO not produced"; exit 1; }
           echo "ISO_PATH=${ISO}" >> "$GITHUB_ENV"
+          # Hand-off: the boot phase runs on a KVM-capable GitHub-hosted
+          # runner (see the smoke job below), which receives the ISO as an
+          # artifact. Stage it under a stable name.
+          mkdir -p iso-out
+          sudo mv "$ISO" iso-out/dev.iso
+          sudo chown "$(id -u):$(id -g)" iso-out/dev.iso
+          ls -lh iso-out/
+
+      - name: Upload dev ISO for the boot phase
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dev-iso-${{ matrix.variant }}-${{ matrix.flavor }}
+          path: iso-out/dev.iso
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
+  smoke:
+    name: ${{ matrix.variant }}:${{ matrix.flavor }}
+    needs: [generate-matrix, build-iso]
+    # KVM split (#1893 endgame): the ISO must be BUILT on RunsOn (working
+    # podman), but RunsOn's EC2 instances are virtualized — no /dev/kvm — so
+    # QEMU falls back to TCG and the live image cannot reach its readiness
+    # marker inside any sane timeout (run 32395858593 attempt 2: 2.8KB of
+    # serial output in 20 minutes). GitHub-hosted runners are the inverse:
+    # broken podman, working KVM. So build there, boot here — the boot half
+    # needs no podman, and this is the exact environment the render/screen
+    # gates and the software-GL generator (#1087) were built against.
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: free disk space
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # main as of 2026-06-09
+        with:
+          tool-cache: false
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: false
+          docker-images: true
+          swap-storage: false
+
+      - name: Install boot dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq socat imagemagick sshpass tesseract-ocr \
+            qemu-system-x86 qemu-utils ovmf
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+
+      - name: Download dev ISO
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dev-iso-${{ matrix.variant }}-${{ matrix.flavor }}
+          path: iso-out
+
+      - name: Point the harness at the ISO
+        run: |
+          ls -lh iso-out/
+          echo "ISO_PATH=iso-out/dev.iso" >> "$GITHUB_ENV"
 
       - name: Boot live env (SSH mode, keep VM)
         env:
@@ -500,6 +563,7 @@ jobs:
   # runs across all four independent frontend forks with per-frontend
   # navigation handling (KDE's Enter-key fix, tab-count widening, etc.), so it
   # is the only harness that actually generalizes across kde/cosmic/niri/xfce.
+
   publish-screenshots:
     name: Publish installer screenshots
     needs: smoke
