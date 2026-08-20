@@ -78,12 +78,12 @@ jobs:
   smoke:
     name: ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate-matrix
-    # The compositor-rendering checks (OCR/screenshot) need a DRM render node
-    # for cosmic/niri/xfwl4/kde (kwin_wayland) — the `gpu` RunsOn group
-    # (g4dn spot) supplies it. gnome/xfce stay on the hosted runner: gnome is
-    # verifiable without a render node, xfce rides the readiness-stamp path.
-    runs-on: >-
-      ${{ (startsWith(matrix.flavor, 'cosmic') || startsWith(matrix.flavor, 'niri') || startsWith(matrix.flavor, 'xfwl4') || startsWith(matrix.flavor, 'kde')) ? 'gpu' : 'ubuntu-latest' }}
+    # RunsOn for all cells: the ISO build (tacklebox + podman) cannot work on
+    # the GitHub runner's podman 5.8.4 (tunaOS#1893). The `gpu` group (g4dn
+    # spot) also supplies the DRM render node the compositor-rendering checks
+    # need for cosmic/niri/xfwl4/kde (kwin_wayland); gnome/xfce run on the
+    # `build-amd64` CPU group (the readiness-stamp path needs no GPU).
+    runs-on: runs-on=${{ github.run_id }}/runner=${{ (startsWith(matrix.flavor, 'cosmic') || startsWith(matrix.flavor, 'niri') || startsWith(matrix.flavor, 'xfwl4') || startsWith(matrix.flavor, 'kde')) ? 'gpu' : 'build-amd64' }}
     timeout-minutes: 75
     strategy:
       fail-fast: false
@@ -116,6 +116,29 @@ jobs:
         run: echo "${{ env.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # The RunsOn ubuntu24 image ships podman 5.8.4 (same wedge as the GitHub
+      # runner); install the Kubic podman and drop the image shadow so the ISO
+      # build's podman run/commit work (tunaOS#1893). The bumped tacklebox pin
+      # (k8s-file log driver) handles the rest.
+      - name: setup working podman on RunsOn
+        run: |
+          set -euo pipefail
+          sudo install -d /etc/apt/keyrings
+          curl -fsSL https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04/Release.key \
+            | gpg --dearmor | sudo tee /etc/apt/keyrings/kubic.gpg >/dev/null
+          echo 'deb [signed-by=/etc/apt/keyrings/kubic.gpg] https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04/ /' \
+            | sudo tee /etc/apt/sources.list.d/kubic.list
+          sudo apt-get update -qq
+          sudo apt-get remove -y podman conmon crun || true
+          sudo apt-get install -y podman
+          for p in /usr/local/bin/podman /usr/local/sbin/podman; do
+            if [ -e "$p" ] && ! dpkg -S "$p" >/dev/null 2>&1; then
+              sudo rm -f "$p"
+            fi
+          done
+          hash -r
+          echo ">>> podman: $(podman --version)"
 
       - name: Build dev ISO
         env:
