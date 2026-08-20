@@ -104,14 +104,33 @@ else
 	# copy lands in the upper layer, the rm whiteouts the lower dir, and
 	# the mv is then a same-device rename. Every subsequent rpm write —
 	# the rebuild's replace included — is upper-layer-native.
-	_rpmdb_dir="$(rpm --eval '%_dbpath' 2>/dev/null || true)"
+	# Round 2 (nightly 32323650607): the round-trip ran and the rebuild
+	# STILL failed — now at "could not move new database in place" AND
+	# "could also not restore old database", with `malformed` gone
+	# entirely. Every failing operation is a rename beside the dbpath.
+	# On bootc/ostree images %_dbpath (/usr/share/rpm) is typically a
+	# SYMLINK into /usr/lib/sysimage/rpm, so round-tripping the literal
+	# path round-trips the symlink and leaves the real directory in the
+	# lower layer. Resolve first, round-trip the real directory.
+	_rpmdb_path="$(rpm --eval '%_dbpath' 2>/dev/null || true)"
+	_rpmdb_dir="$(readlink -f "$_rpmdb_path" 2>/dev/null || true)"
 	if [[ -n "$_rpmdb_dir" && -d "$_rpmdb_dir" ]]; then
+		echo "==> rpmdb: ${_rpmdb_path} resolves to ${_rpmdb_dir}; recreating it in the upper layer"
 		cp -a "$_rpmdb_dir" "${_rpmdb_dir}.tbox-copyup"
 		rm -rf "$_rpmdb_dir"
 		mv "${_rpmdb_dir}.tbox-copyup" "$_rpmdb_dir"
 	fi
-	rpm --rebuilddb
-	echo "TUNAOS_RPMDB_PROBE=rebuilt-pre-swap"
+	# The rebuild is now ADVISORY: its endgame is a pair of directory
+	# renames beside a possibly-symlinked dbpath — exactly the step
+	# measured failing twice — while the round-trip above is the actual
+	# copy-up fix. The kernel transaction below is the real verdict; do
+	# not let the probe kill the patient.
+	if rpm --rebuilddb; then
+		echo "TUNAOS_RPMDB_PROBE=rebuilt-pre-swap"
+	else
+		echo "TUNAOS_RPMDB_PROBE=rebuild-failed-nonfatal"
+		echo "::warning title=rpmdb rebuild (tunaOS#1823)::rpm --rebuilddb failed (rename beside the dbpath); proceeding — the kernel transaction below is the real verdict"
+	fi
 
 	# Always remove these packages as kernel cache provides signed versions
 	# (bluefin-lts kernel-swap.sh, verbatim reasoning).
