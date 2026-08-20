@@ -418,6 +418,15 @@ echo "rpm \$*" >> "${BATS_TEST_TMPDIR}/tool.log"
 case "\$*" in
   *"-q kernel"*) echo "$1"; exit 0 ;;
   *"--eval"*) echo "${BATS_TEST_TMPDIR}/rpmdb"; exit 0 ;;
+  *"--rebuilddb"*)
+    # Real rpm leaves the completed rebuild dir behind when its rename
+    # endgame fails; the salvage path picks that up.
+    if [[ "\${TUNAOS_TEST_REBUILD_RC:-0}" != 0 ]]; then
+      mkdir -p "${BATS_TEST_TMPDIR}/rpmrebuilddb.42"
+      echo rebuilt > "${BATS_TEST_TMPDIR}/rpmrebuilddb.42/rpmdb.sqlite"
+    fi
+    exit "\${TUNAOS_TEST_REBUILD_RC:-0}"
+    ;;
 esac
 exit 0
 STUB
@@ -539,6 +548,24 @@ run_swap() {
   # ...and the symlink still points at it.
   [ -L "${BATS_TEST_TMPDIR}/rpmdb" ]
   [ "$(cat "${BATS_TEST_TMPDIR}/rpmdb/rpmdb.sqlite")" = "sentinel" ]
+}
+
+@test "kernel-swap salvages a completed rebuild file-level when rpm's rename fails" {
+  # Round 4 of tunaOS#1823 (run 32339591457): the desktop-nvidia legs
+  # inherit a db their stage-2 already corrupted at rest, so the
+  # transaction NEEDS the rebuild's product — and rpm builds it, then
+  # throws it away at the failing rename, printing 'replace files in ...
+  # with files from .../rpmrebuilddb.NN to recover'. The guard must do
+  # exactly that: a file-level swap, no directory rename involved.
+  make_swap_stubs "6.12.0-250.el10.x86_64"
+  make_swap_fixture
+  TUNAOS_TEST_REBUILD_RC=1 run_swap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"TUNAOS_RPMDB_PROBE=rebuilt-salvaged"* ]]
+  # The db dir now holds the rebuilt content, not the pre-rebuild one...
+  [ "$(cat "${BATS_TEST_TMPDIR}/rpmdb/rpmdb.sqlite")" = "rebuilt" ]
+  # ...and no rebuild residue remains beside it.
+  [ ! -e "${BATS_TEST_TMPDIR}/rpmrebuilddb.42" ]
 }
 
 @test "kernel-swap replaces a mismatched kernel with the akmods one" {

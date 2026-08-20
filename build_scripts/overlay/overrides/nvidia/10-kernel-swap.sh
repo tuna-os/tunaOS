@@ -120,16 +120,35 @@ else
 		rm -rf "$_rpmdb_dir"
 		mv "${_rpmdb_dir}.tbox-copyup" "$_rpmdb_dir"
 	fi
-	# The rebuild is now ADVISORY: its endgame is a pair of directory
-	# renames beside a possibly-symlinked dbpath — exactly the step
-	# measured failing twice — while the round-trip above is the actual
-	# copy-up fix. The kernel transaction below is the real verdict; do
-	# not let the probe kill the patient.
+	# Round 4 (run 32339591457): base-nvidia went green on the round-trip
+	# alone, but the DESKTOP legs inherit an rpmdb their stage-2 build
+	# already corrupted at rest (1678 malformed-on-READ lines), so the
+	# transaction needs the REBUILD's product — and rpm's rebuild reads
+	# and rewrites the corrupt db fine, then throws the result away when
+	# its directory-rename endgame fails under the overlay, printing its
+	# own recovery instruction:
+	#   error: replace files in /usr/share/rpm with files from
+	#          /usr/share/rpmrebuilddb.NN to recover
+	# So do exactly that: when the rename fails, salvage the completed
+	# rebuild with a FILE-level swap, which needs no directory rename at
+	# all. Stale rebuild/old dirs are cleared first so the salvage can
+	# only pick up the rebuild that just ran.
+	_rpmdb_parent="${_rpmdb_dir%/*}"
+	rm -rf "${_rpmdb_parent}"/rpmrebuilddb.* "${_rpmdb_parent}"/rpmold.* 2>/dev/null || true
 	if rpm --rebuilddb; then
 		echo "TUNAOS_RPMDB_PROBE=rebuilt-pre-swap"
 	else
-		echo "TUNAOS_RPMDB_PROBE=rebuild-failed-nonfatal"
-		echo "::warning title=rpmdb rebuild (tunaOS#1823)::rpm --rebuilddb failed (rename beside the dbpath); proceeding — the kernel transaction below is the real verdict"
+		_rebuilt="$(ls -d "${_rpmdb_parent}"/rpmrebuilddb.* 2>/dev/null | head -1 || true)"
+		if [[ -n "$_rpmdb_dir" && -d "$_rpmdb_dir" && -n "$_rebuilt" && -d "$_rebuilt" ]]; then
+			echo "==> salvaging the completed rebuild file-level from ${_rebuilt} (rpm's own recovery instruction)"
+			rm -rf "${_rpmdb_dir:?}"/*
+			cp -a "$_rebuilt"/. "$_rpmdb_dir"/
+			rm -rf "$_rebuilt" "${_rpmdb_parent}"/rpmold.*
+			echo "TUNAOS_RPMDB_PROBE=rebuilt-salvaged"
+		else
+			echo "TUNAOS_RPMDB_PROBE=rebuild-failed-nonfatal"
+			echo "::warning title=rpmdb rebuild (tunaOS#1823)::rpm --rebuilddb failed and left no rebuilt db to salvage; proceeding — the kernel transaction below is the real verdict"
+		fi
 	fi
 
 	# Always remove these packages as kernel cache provides signed versions

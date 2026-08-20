@@ -777,15 +777,30 @@ rawhide_rpmdb_probe() {
 		rm -rf "$_rpmdb_dir"
 		mv "${_rpmdb_dir}.tbox-copyup" "$_rpmdb_dir"
 	fi
-	# The rebuild stays advisory-only: its replace step ends in directory
-	# renames that fail under this overlay even against an upper-native
-	# dir (measured twice on the nvidia surface) — the round-trip above is
-	# the fix, the stage-2 transaction that follows is the verdict.
+	# The rebuild's rename endgame fails under this overlay even against
+	# an upper-native dir (measured twice on the nvidia surface) — but a
+	# db corrupted AT REST by an earlier stage's writes needs the
+	# rebuild's PRODUCT, and rpm builds it fine before throwing it away
+	# at the rename, printing its own recovery instruction ("replace
+	# files in ... with files from .../rpmrebuilddb.NN"). Same salvage as
+	# 10-kernel-swap.sh: file-level swap, no directory rename needed.
+	local _rpmdb_parent _rebuilt
+	_rpmdb_parent="${_rpmdb_dir%/*}"
+	rm -rf "${_rpmdb_parent}"/rpmrebuilddb.* "${_rpmdb_parent}"/rpmold.* 2>/dev/null || true
 	if rpm --rebuilddb; then
 		echo "TUNAOS_RPMDB_PROBE=rebuilt"
 	else
-		echo "TUNAOS_RPMDB_PROBE=rebuild-failed-nonfatal"
-		echo "::warning title=rpmdb probe (tunaOS#1823)::rpm --rebuilddb failed (rename beside the dbpath); proceeding — the stage-2 transaction is the real verdict"
+		_rebuilt="$(ls -d "${_rpmdb_parent}"/rpmrebuilddb.* 2>/dev/null | head -1 || true)"
+		if [[ -n "$_rpmdb_dir" && -d "$_rpmdb_dir" && -n "$_rebuilt" && -d "$_rebuilt" ]]; then
+			echo "::notice title=rpmdb salvage (tunaOS#1823)::salvaging the completed rebuild file-level from ${_rebuilt}"
+			rm -rf "${_rpmdb_dir:?}"/*
+			cp -a "$_rebuilt"/. "$_rpmdb_dir"/
+			rm -rf "$_rebuilt" "${_rpmdb_parent}"/rpmold.*
+			echo "TUNAOS_RPMDB_PROBE=rebuilt-salvaged"
+		else
+			echo "TUNAOS_RPMDB_PROBE=rebuild-failed-nonfatal"
+			echo "::warning title=rpmdb probe (tunaOS#1823)::rpm --rebuilddb failed and left no rebuilt db to salvage; proceeding — the stage-2 transaction is the real verdict"
+		fi
 	fi
 	return 0
 }

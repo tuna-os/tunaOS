@@ -32,6 +32,12 @@ case "$1" in
   --eval) printf '%s\n' "${RPM_DBPATH_OUT:-}" ;;
   --rebuilddb)
     echo invoked >> "${REBUILD_LOG}"
+    # Real rpm leaves the completed rebuild dir behind when its rename
+    # endgame fails; the salvage path picks that up.
+    if [[ "${REBUILD_RC:-0}" != 0 && -n "${RPM_DBPATH_OUT:-}" ]]; then
+      mkdir -p "${RPM_DBPATH_OUT%/*}/rpmrebuilddb.42"
+      echo rebuilt > "${RPM_DBPATH_OUT%/*}/rpmrebuilddb.42/rpmdb.sqlite"
+    fi
     exit "${REBUILD_RC:-0}"
     ;;
 esac
@@ -95,6 +101,19 @@ run_probe() {
   [[ "$output" == *"recreating it in the upper layer"* ]]
   [ "$(cat "${BATS_TEST_TMPDIR}/rpmdb/rpmdb.sqlite")" = "sentinel" ]
   [ ! -e "${BATS_TEST_TMPDIR}/rpmdb.tbox-copyup" ]
+}
+
+@test "a failed rebuild with a completed product is salvaged file-level" {
+  # tunaOS#1823 round 4: a db corrupted at rest by an earlier stage needs
+  # the rebuild's PRODUCT, and rpm builds it before the rename fails —
+  # its own error text says to replace the files by hand. The probe does.
+  mkdir -p "${BATS_TEST_TMPDIR}/rpmdb"
+  echo corrupt > "${BATS_TEST_TMPDIR}/rpmdb/rpmdb.sqlite"
+  RPM_DBPATH_OUT="${BATS_TEST_TMPDIR}/rpmdb" REBUILD_RC=1 run_probe
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"TUNAOS_RPMDB_PROBE=rebuilt-salvaged"* ]]
+  [ "$(cat "${BATS_TEST_TMPDIR}/rpmdb/rpmdb.sqlite")" = "rebuilt" ]
+  [ ! -e "${BATS_TEST_TMPDIR}/rpmrebuilddb.42" ]
 }
 
 @test "stage-2 calls the probe before its first rpm write" {
