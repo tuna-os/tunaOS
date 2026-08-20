@@ -85,11 +85,13 @@ def test_composite_scores_the_omissions_axis() -> None:
     assert green == 0, "a cell shipping silent omissions must not be green"
 
 
-def test_criterion_is_now_advisory_with_a_named_assertion() -> None:
+def test_criterion_is_now_blocking_with_a_named_assertion() -> None:
+    """#1898 graduated no_silent_omissions advisory -> blocking; pin the
+    graduated state so a silent downgrade cannot ship."""
     import yaml
     criteria = yaml.safe_load(
         (ROOT / ".github" / "green-criteria.yml").read_text()
     )["criteria"]
     c = next(c for c in criteria if c["id"] == "no_silent_omissions")
-    assert c["enforcement"] == "advisory"
+    assert c["enforcement"] == "blocking"
     assert "desktop-contract-sweep" in c["asserted_by"]

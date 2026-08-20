@@ -241,7 +241,15 @@ fi
 # into every rechunked RPM image.
 chunkah_attempt() {
 	local out_dir="$1"
+	# --log-driver=k8s-file: the RunsOn runner images ship a conmon built
+	# without journald ("[conmon:e]: Include journald in compilation path"),
+	# which kills any podman run using the default journald log driver — the
+	# same failure tacklebox#235 fixed for its own podman runs. Run
+	# 32389521239 hit it here: both chunkah attempts died in conmon before
+	# chunkah ever ran, and the retry loop read that as an unreadable
+	# oci-archive.
 	podman run --rm \
+		--log-driver=k8s-file \
 		--security-opt label=disable \
 		--network host \
 		--entrypoint="" \
