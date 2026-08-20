@@ -29,6 +29,7 @@ setup() {
 #!/usr/bin/env bash
 case "$1" in
   -E) printf '%s\n' "${RPM_E_OUT:-45}" ;;
+  --eval) printf '%s\n' "${RPM_DBPATH_OUT:-}" ;;
   --rebuilddb)
     echo invoked >> "${REBUILD_LOG}"
     exit "${REBUILD_RC:-0}"
@@ -70,14 +71,30 @@ run_probe() {
   [ "$(wc -l < "$REBUILD_LOG")" -eq 0 ]
 }
 
-@test "a failed rebuild warns with the at-rest diagnosis but does not fail the build" {
-  # If --rebuilddb itself dies, the base wrote a malformed db — that is the
-  # most valuable outcome the probe can report, and the transaction that
-  # follows is still the real verdict.
+@test "a failed rebuild warns but does not fail the build" {
+  # Re-diagnosed on the nvidia surface (run 32339591457): the rebuild's
+  # replace step ends in directory renames that fail under the overlay
+  # even against an upper-native dir — it is not evidence of a malformed
+  # source db. The round-trip is the fix; the transaction that follows is
+  # the real verdict, so a rebuild failure only warns.
   REBUILD_RC=1 run_probe
   [ "$status" -eq 0 ]
-  [[ "$output" == *"TUNAOS_RPMDB_PROBE=rebuild-failed"* ]]
-  [[ "$output" == *"malformed at rest"* ]]
+  [[ "$output" == *"TUNAOS_RPMDB_PROBE=rebuild-failed-nonfatal"* ]]
+  [[ "$output" == *"real verdict"* ]]
+}
+
+@test "the resolved rpmdb dir is round-tripped into the upper layer first" {
+  # The proven #1823 fix (albacore base-nvidia went red→green on it):
+  # recreate the resolved db directory natively in the upper layer before
+  # the first rpm write. The sentinel proves the contents survive the
+  # cp -a → rm -rf → mv round trip; no .tbox-copyup residue remains.
+  mkdir -p "${BATS_TEST_TMPDIR}/rpmdb"
+  echo sentinel > "${BATS_TEST_TMPDIR}/rpmdb/rpmdb.sqlite"
+  RPM_DBPATH_OUT="${BATS_TEST_TMPDIR}/rpmdb" run_probe
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"recreating it in the upper layer"* ]]
+  [ "$(cat "${BATS_TEST_TMPDIR}/rpmdb/rpmdb.sqlite")" = "sentinel" ]
+  [ ! -e "${BATS_TEST_TMPDIR}/rpmdb.tbox-copyup" ]
 }
 
 @test "stage-2 calls the probe before its first rpm write" {
