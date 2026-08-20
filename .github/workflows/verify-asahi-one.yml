@@ -33,7 +33,7 @@ jobs:
       - name: Login to GHCR
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GH_TOKEN" | podman login ghcr.io --username "${{ github.actor }}" --password-stdin
+        run: echo "$GH_TOKEN" | podman login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
 
       - name: Verify image against Asahi golden manifest
         id: verify
