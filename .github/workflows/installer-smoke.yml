@@ -64,13 +64,13 @@ jobs:
             v="${FILTER_VARIANT:-yellowfin}"
             f="${FILTER_FLAVORS:-gnome,kde,cosmic,niri,xfce}"
             M=$(jq -cn --arg v "$v" --arg f "$f" \
-              '{include: ($f | split(",") | map({variant: $v, flavor: .}))}')
+              '{include: ($f | split(",") | map({variant: $v, flavor: ., runner: (if (. | test("^(cosmic|niri|xfwl4|kde)")) then "gpu" else "build-amd64" end)}))}')
           else
             M=$(echo "$json" | jq -c \
               '{include: [ .variants[] | . as $variant | .id as $v | .flavors[]
                  | select(.build_iso == true)
                  | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
-                 | {variant: $v, flavor: .id} ]}')
+                 | {variant: $v, flavor: .id, runner: (if (.id | test("^(cosmic|niri|xfwl4|kde)")) then "gpu" else "build-amd64" end)} ]}')
           fi
           echo "matrix=$M" >> "$GITHUB_OUTPUT"
           echo "$M" | jq .
@@ -83,7 +83,7 @@ jobs:
     # spot) also supplies the DRM render node the compositor-rendering checks
     # need for cosmic/niri/xfwl4/kde (kwin_wayland); gnome/xfce run on the
     # `build-amd64` CPU group (the readiness-stamp path needs no GPU).
-    runs-on: "${{ format('runs-on={0}/runner={1}', github.run_id, (startsWith(matrix.flavor, 'cosmic') || startsWith(matrix.flavor, 'niri') || startsWith(matrix.flavor, 'xfwl4') || startsWith(matrix.flavor, 'kde')) ? 'gpu' : 'build-amd64') }}"
+    runs-on: runs-on=${{ github.run_id }}/runner=${{ matrix.runner }}
     timeout-minutes: 75
     strategy:
       fail-fast: false
