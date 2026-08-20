@@ -518,6 +518,29 @@ run_swap() {
   [ ! -e "${BATS_TEST_TMPDIR}/rpmdb.tbox-copyup" ]
 }
 
+@test "kernel-swap resolves a symlinked dbpath and round-trips the real directory" {
+  # Round 2 of tunaOS#1823 (nightly 32323650607): the round-trip ran and
+  # the rebuild still died at 'could not move new database in place' —
+  # because on bootc/ostree images %_dbpath is a SYMLINK into
+  # /usr/lib/sysimage/rpm, so round-tripping the literal path moved the
+  # symlink and left the real directory in the lower layer. The guard
+  # must readlink -f first and round-trip what the path resolves to.
+  make_swap_stubs "6.12.0-250.el10.x86_64"
+  make_swap_fixture
+  rm -rf "${BATS_TEST_TMPDIR}/rpmdb"
+  mkdir -p "${BATS_TEST_TMPDIR}/sysimage-rpm"
+  echo sentinel > "${BATS_TEST_TMPDIR}/sysimage-rpm/rpmdb.sqlite"
+  ln -s "${BATS_TEST_TMPDIR}/sysimage-rpm" "${BATS_TEST_TMPDIR}/rpmdb"
+  run_swap
+  [ "$status" -eq 0 ]
+  # The REAL directory was round-tripped and survived intact...
+  [ "$(cat "${BATS_TEST_TMPDIR}/sysimage-rpm/rpmdb.sqlite")" = "sentinel" ]
+  [ ! -e "${BATS_TEST_TMPDIR}/sysimage-rpm.tbox-copyup" ]
+  # ...and the symlink still points at it.
+  [ -L "${BATS_TEST_TMPDIR}/rpmdb" ]
+  [ "$(cat "${BATS_TEST_TMPDIR}/rpmdb/rpmdb.sqlite")" = "sentinel" ]
+}
+
 @test "kernel-swap replaces a mismatched kernel with the akmods one" {
   make_swap_stubs "6.12.0-250.el10.x86_64"  # the first-contact Kitten kernel
   make_swap_fixture
