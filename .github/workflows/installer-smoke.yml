@@ -83,7 +83,7 @@ jobs:
     # spot) also supplies the DRM render node the compositor-rendering checks
     # need for cosmic/niri/xfwl4/kde (kwin_wayland); gnome/xfce run on the
     # `build-amd64` CPU group (the readiness-stamp path needs no GPU).
-    runs-on: "runs-on=${{ github.run_id }}/runner=${{ (startsWith(matrix.flavor, 'cosmic') || startsWith(matrix.flavor, 'niri') || startsWith(matrix.flavor, 'xfwl4') || startsWith(matrix.flavor, 'kde')) ? 'gpu' : 'build-amd64' }}"
+    runs-on: "${{ format('runs-on={0}/runner={1}', github.run_id, (startsWith(matrix.flavor, 'cosmic') || startsWith(matrix.flavor, 'niri') || startsWith(matrix.flavor, 'xfwl4') || startsWith(matrix.flavor, 'kde')) ? 'gpu' : 'build-amd64') }}"
     timeout-minutes: 75
     strategy:
       fail-fast: false
