@@ -899,7 +899,14 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 	cat >/usr/lib/systemd/system/tunaos-desktop-contract.service <<EOF
 [Unit]
 Description=Verify TunaOS ${_TD_DESKTOP} desktop experience
-After=display-manager.service
+# dconf-update.service compiles /etc/dconf/db/*.d keyfiles at boot. On bases
+# where the compiled db is baked at build this is a no-op; on guppy:gnome the
+# baked db was absent and the contract raced the compile at first boot,
+# failing on "missing compiled dconf database" while dconf-update would have
+# fixed it moments later (boot-gate run 32323551841). Order after it so the
+# check judges the settled state — a genuinely broken dconf still fails.
+After=display-manager.service dconf-update.service
+Wants=dconf-update.service
 Requires=display-manager.service
 
 [Service]
