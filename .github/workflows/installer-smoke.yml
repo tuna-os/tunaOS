@@ -148,7 +148,10 @@ jobs:
           FLAVOR: ${{ matrix.flavor }}
         run: |
           export TACKLEBOX_FROM_SOURCE=1
-          just iso "${VARIANT}" "${FLAVOR}" ghcr "" 1
+          # Root build: the RunsOn runner's rootless podman/buildah re-exec is
+          # broken ("cannot re-exec process"), and the tacklebox ISO build
+          # already runs as root via sudo.
+          sudo -E env "PATH=$PATH" just iso "${VARIANT}" "${FLAVOR}" ghcr "" 1
           ISO=$(find .build -maxdepth 3 -name "*.iso" | head -1)
           [[ -n "$ISO" ]] || { echo "::error::dev ISO not produced"; exit 1; }
           echo "ISO_PATH=${ISO}" >> "$GITHUB_ENV"
