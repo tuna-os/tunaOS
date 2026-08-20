@@ -31,7 +31,14 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-24.04
+    # The stock GitHub runner's container storage corrupts the rpmdb sqlite
+    # across layer commits (#1823: every stage-2 script's guard found the db
+    # malformed again; the lossy rebuilds eventually drop system-release and
+    # dnf dies on literal epel-$releasever metalinks — runs 32392181047 /
+    # 32394645068, deterministic). installer-smoke escaped the same class of
+    # runner breakage by moving to RunsOn with the Kubic podman (#1919-#1923);
+    # build here the same way.
+    runs-on: runs-on=${{ github.run_id }}/runner=build-amd64
     permissions:
       contents: read
       packages: read
@@ -45,13 +52,32 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Maximize build space
-        uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
-
       - name: Install dependencies
         run: |
           sudo apt-get update
           sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk e2fsprogs btrfs-progs
+
+      # Same wedge and same fix as installer-smoke.yml: the runner image's
+      # podman 5.8.4 cannot run/commit containers (tunaOS#1893) and its conmon
+      # lacks journald (handled by the k8s-file log drivers in the scripts) —
+      # install the Kubic podman and drop any image-baked shadow binary.
+      - name: setup working podman
+        run: |
+          set -euo pipefail
+          sudo install -d /etc/apt/keyrings
+          curl -fsSL https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04/Release.key \
+            | gpg --dearmor | sudo tee /etc/apt/keyrings/kubic.gpg >/dev/null
+          echo 'deb [signed-by=/etc/apt/keyrings/kubic.gpg] https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04/ /' \
+            | sudo tee /etc/apt/sources.list.d/kubic.list
+          sudo apt-get update -qq
+          sudo apt-get remove -y podman conmon crun || true
+          sudo apt-get install -y podman
+          for p in /usr/local/bin/podman /usr/local/sbin/podman; do
+            if [ -e "$p" ] && ! dpkg -S "$p" >/dev/null 2>&1; then
+              sudo rm -f "$p"
+            fi
+          done
+          hash -r
 
       - name: Setup rootless podman (subuid/subgid for runner)
         run: |
