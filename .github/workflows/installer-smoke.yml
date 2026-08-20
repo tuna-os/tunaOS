@@ -136,7 +136,9 @@ jobs:
           echo ">>> podman: $(podman --version)"
 
       - name: Log in to GHCR
-        run: echo "${{ env.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
+        # sudo (root) podman: the runner rootless re-exec is broken
+        # ("cannot re-exec process"); the ISO build also runs as root.
+        run: echo "${{ env.GITHUB_TOKEN }}" | sudo -n podman login ghcr.io -u ${{ github.actor }} --password-stdin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
