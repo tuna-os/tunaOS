@@ -790,7 +790,7 @@ rawhide_rpmdb_probe() {
 	if rpm --rebuilddb; then
 		echo "TUNAOS_RPMDB_PROBE=rebuilt"
 	else
-		_rebuilt="$(ls -d "${_rpmdb_parent}"/rpmrebuilddb.* 2>/dev/null | head -1 || true)"
+		_rebuilt="$(find "${_rpmdb_parent}" -maxdepth 1 -name 'rpmrebuilddb.*' 2>/dev/null | head -1 || true)"
 		if [[ -n "$_rpmdb_dir" && -d "$_rpmdb_dir" && -n "$_rebuilt" && -d "$_rebuilt" ]]; then
 			echo "::notice title=rpmdb salvage (tunaOS#1823)::salvaging the completed rebuild file-level from ${_rebuilt}"
 			rm -rf "${_rpmdb_dir:?}"/*

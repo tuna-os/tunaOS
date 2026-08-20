@@ -193,20 +193,24 @@ class TestE2EStatus(unittest.TestCase):
         self.assertEqual(out["conclusion"], "success")
         self.assertIn("job/E2E yellowfin:gnome", out["html_url"])
 
-    def test_no_matching_job_falls_back_to_run(self):
+    def test_no_matching_job_reports_unproven(self):
+        """A run whose matrix never contained our combo proves nothing about
+        it — falling back to the run's top-level conclusion would report
+        green for a cell that never ran (the honest-scoreboard rule the
+        source now states at the fallback site)."""
         run = self._run()
         with mock.patch.object(gbr, "latest_workflow_run", return_value=run), \
              mock.patch.object(gbr.subprocess, "run",
                                return_value=_completed(json.dumps(self._jobs(["E2E bonito:gnome"])))):
-            out = gbr.e2e_status_for("yellowfin", "gnome")
-        self.assertIs(out, run)
+            self.assertIsNone(gbr.e2e_status_for("yellowfin", "gnome"))
 
-    def test_jobs_fetch_error_falls_back(self):
+    def test_jobs_fetch_error_reports_unproven(self):
+        """If the job list cannot be fetched we cannot know our cell ran;
+        same rule — no borrowed green from the run conclusion."""
         run = self._run()
         with mock.patch.object(gbr, "latest_workflow_run", return_value=run), \
              mock.patch.object(gbr.subprocess, "run", side_effect=OSError("boom")):
-            out = gbr.e2e_status_for("yellowfin", "gnome")
-        self.assertIs(out, run)
+            self.assertIsNone(gbr.e2e_status_for("yellowfin", "gnome"))
 
     def test_cache_avoids_second_fetch(self):
         run = self._run()
