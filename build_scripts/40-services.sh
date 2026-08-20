@@ -12,6 +12,8 @@ export MAJOR_VERSION_NUMBER
 
 source /run/context/build_scripts/lib.sh
 
+rpmdb_stage2_guard
+
 # Make sure an SSH server EXISTS on every variant, whatever it is packaged as.
 #
 # tunaOS#951. openssh-server was installed in exactly one place in this file —

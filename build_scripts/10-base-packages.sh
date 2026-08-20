@@ -6,6 +6,8 @@ printf "::group:: === 10 Base Packages ===\n"
 
 source /run/context/build_scripts/lib.sh
 
+rpmdb_stage2_guard
+
 # Source RHSM credentials from the BuildKit secret if it's mounted.
 # /run/secrets/rhsm is provided by the `--mount=type=secret,id=rhsm`
 # directive in the Containerfile (only when RHSM_* env was set when

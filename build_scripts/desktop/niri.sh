@@ -4,6 +4,8 @@ set -xeuo pipefail
 
 source /run/context/build_scripts/lib.sh
 
+rpmdb_stage2_guard
+
 case "${1:-}" in
 "base")
 	# ── apt (Ubuntu/Debian) Niri path ──────────────────────────────────

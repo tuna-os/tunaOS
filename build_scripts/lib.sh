@@ -805,6 +805,16 @@ rawhide_rpmdb_probe() {
 	return 0
 }
 
+# Stage-2 rpmdb guard: every RUN layer that does dnf inherits the rpmdb in a
+# LOWER overlay layer and can corrupt it under an mmap'd write (#1823).
+# install-desktop.sh calls the probe directly; the other desktop scripts that
+# run dnf (gnome-extensions, kcm-ublue, niri, xfce) call this wrapper, which
+# no-ops off the dnf path.
+rpmdb_stage2_guard() {
+	[[ "${PKG_MGR:-}" == dnf ]] || return 0
+	rawhide_rpmdb_probe
+}
+
 # systemctl enable wrapper that tolerates the unit-not-present case.
 # Build scripts run in a multi-stage container build where some units may
 # only exist on certain variants (e.g. tailscaled on EL10 but not on EL9).
