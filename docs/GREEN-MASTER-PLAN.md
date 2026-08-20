@@ -275,10 +275,21 @@ the overlay kernel swap with rpmdb sqlite corruption ("database disk image
 is malformed" on every INSERT while installing kernel-6.12.0-257.el10),
 i.e. the same rpmdb-under-buildah-overlay class as #1823, on a second
 variant surface. Count EL10 nvidia cells under #1823 until it resolves.
-Copy-up guard landed same day: 10-kernel-swap.sh now runs `rpm
---rebuilddb` before its first destructive write, forcing the inherited
-sqlite db through overlay copy-up — probe and candidate fix in one, per
-the #1823 protocol. Verify on the next nightly's nvidia legs.*
+**RESOLVED on the EL10 surface, three rounds of evidence (08-18→08-20):**
+round 1 (#1877, bare `rpm --rebuilddb`) produced the discriminating
+signature — clean rebuild, replace REFUSED, zero malformed; round 2
+(#1909, literal-path directory round-trip) killed the malformed storm but
+the rebuild's rename still failed; round 3 (#1912, `readlink -f` the
+dbpath + round-trip the RESOLVED directory + rebuild demoted to advisory)
+went GREEN: albacore base-nvidia run 32339591457 logged the resolution
+(`/usr/share/rpm` is a real dir there — symlink hypothesis refuted for
+EL10), the kernel transaction completed with no malformed and
+`TUNAOS_NVIDIA_CONTRACT_OK`. Root cause: rpm writing into a db directory
+still in a lower overlay layer; the upper-layer round-trip is the whole
+fix, the rebuild was only ever the probe. Ported to bonito-rawhide's
+stage-2 the same day (`rawhide_rpmdb_probe` in lib.sh now round-trips
+before rebuilding) — verify on the next bonito-rawhide nightly's desktop
+legs, then #1823 closes.*
 
 ### yellowfin (AlmaLinux Kitten 10) — 12/20 build
 | area | state | action |

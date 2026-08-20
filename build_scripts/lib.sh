@@ -760,12 +760,32 @@ install_rawhide_tolerant() {
 # can kill a green pinned-Fedora build would cost more than it measures.
 rawhide_rpmdb_probe() {
 	[[ "$(detect_fedora_ver)" == "rawhide" ]] || return 0
-	echo "::notice title=rpmdb probe (tunaOS#1823)::rebuilding the rpmdb inherited from the Rawhide base before the first stage-2 rpm write"
+	# tunaOS#1823, PROVEN FIX ported from the nvidia overlay (run
+	# 32339591457, 2026-08-20): the sqlite corruption class is rpm writing
+	# into a db directory that still lives in a LOWER overlay layer.
+	# Recreating the resolved directory natively in the upper layer (copy
+	# lands upper, rm whiteouts the lower dir, mv is a same-device rename)
+	# made albacore's base-nvidia kernel swap — previously 100% red on the
+	# malformed-db storm — build clean end to end. Same shape here, before
+	# the first stage-2 rpm write on the inherited Rawhide base.
+	local _rpmdb_path _rpmdb_dir
+	_rpmdb_path="$(rpm --eval '%_dbpath' 2>/dev/null || true)"
+	_rpmdb_dir="$(readlink -f "$_rpmdb_path" 2>/dev/null || true)"
+	if [[ -n "$_rpmdb_dir" && -d "$_rpmdb_dir" ]]; then
+		echo "::notice title=rpmdb copy-up (tunaOS#1823)::${_rpmdb_path} resolves to ${_rpmdb_dir}; recreating it in the upper layer before the first stage-2 rpm write"
+		cp -a "$_rpmdb_dir" "${_rpmdb_dir}.tbox-copyup"
+		rm -rf "$_rpmdb_dir"
+		mv "${_rpmdb_dir}.tbox-copyup" "$_rpmdb_dir"
+	fi
+	# The rebuild stays advisory-only: its replace step ends in directory
+	# renames that fail under this overlay even against an upper-native
+	# dir (measured twice on the nvidia surface) — the round-trip above is
+	# the fix, the stage-2 transaction that follows is the verdict.
 	if rpm --rebuilddb; then
 		echo "TUNAOS_RPMDB_PROBE=rebuilt"
 	else
-		echo "TUNAOS_RPMDB_PROBE=rebuild-failed"
-		echo "::warning title=rpmdb probe (tunaOS#1823)::rpm --rebuilddb itself failed — the base image's rpmdb is malformed at rest, not corrupted by the stage-2 transaction"
+		echo "TUNAOS_RPMDB_PROBE=rebuild-failed-nonfatal"
+		echo "::warning title=rpmdb probe (tunaOS#1823)::rpm --rebuilddb failed (rename beside the dbpath); proceeding — the stage-2 transaction is the real verdict"
 	fi
 	return 0
 }
