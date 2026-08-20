@@ -147,7 +147,26 @@ if [[ $IS_HUMMINGBIRD == true ]]; then
 	# cosmic Gate ever to reach disk install died at
 	#   > mkfs.xfs ... /dev/loop0p3
 	#   error: Installing to disk: Creating rootfs: No such file or directory
-	# (run 32139187211, 2026-08-18). Present in the 20251124 x86_64 index.
+	# (run 32139187211, 2026-08-18).
+	#
+	# Listing it here was not enough: the repos the upstream base image
+	# ships resolve against public-hummingbird, which answered
+	#   No match for argument: xfsprogs
+	# and --skip-unavailable + `|| true` swallowed that miss silently, so
+	# run 32144269992 died at the identical mkfs.xfs line WITH the fix
+	# "in place". The package exists in tunaOS's PUBLISHED hummingbird
+	# snapshot (verified against the live 20251124-x86_64 primary.xml) —
+	# the same repo the desktop manifests already enable at stage 2 —
+	# so enable it for the base stage too. Left in the image: installed
+	# systems want the tunaOS repo for updates anyway.
+	cat >/etc/yum.repos.d/tunaos-hummingbird.repo <<'REPO'
+[tunaos-hummingbird]
+name=TunaOS Hummingbird published packages
+baseurl=https://repo.tunaos.org/hummingbird/20251124-$basearch/
+enabled=1
+gpgcheck=0
+priority=5
+REPO
 	dnf -y install --skip-unavailable \
 		buildah \
 		podman \
@@ -158,6 +177,16 @@ if [[ $IS_HUMMINGBIRD == true ]]; then
 		gcc \
 		gcc-c++ \
 		just || true
+	# The disk-install tooling is NOT optional and may not be silently
+	# skipped again: an image bootc cannot install is the #858 shape on
+	# the install axis. Fail here, with the repo listing in the log,
+	# rather than at mkfs.xfs inside the Gate two stages later.
+	if ! rpm -q xfsprogs >/dev/null 2>&1; then
+		echo "ERROR: xfsprogs did not install — no enabled repo carries it;" >&2
+		echo "       bootc install to-disk cannot format the root without it." >&2
+		dnf repolist >&2 || true
+		exit 1
+	fi
 elif [[ $IS_FEDORA == true ]]; then
 	# detect_fedora_ver (lib.sh) yields "rawhide" on Rawhide images — from
 	# os-release, because `rpm -E %fedora` expands to the numeric NEXT
