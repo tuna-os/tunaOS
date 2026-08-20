@@ -469,19 +469,25 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 	export DBUS_SESSION_BUS_ADDRESS="unix:path=${SESSION_BUS_SOCK}"
 	if [[ "${INSTALLER_APP}" == "org.bootcinstaller.Installer" ]]; then
 		# gnome: mirrors projectbluefin/dakota-iso's install-flatpaks.sh —
-		# download the upstream release bundle and import it into a
-		# throwaway local ostree repo. `flatpak install --bundle` in a
-		# container build only creates the installer-origin: remote ref, not
-		# the deploy/ ref that `flatpak run`/`flatpak list` need; installing
-		# from a local file:// remote goes through the full deploy pipeline.
-		# Primary source: projectbluefin/bootc-installer (upstream). Fallback:
-		# tuna-os/tuna-installer, which mirrors the same app ID as a release
-		# asset.
+		# download a release bundle and import it into a throwaway local
+		# ostree repo. `flatpak install --bundle` in a container build only
+		# creates the installer-origin: remote ref, not the deploy/ ref
+		# that `flatpak run`/`flatpak list` need; installing from a local
+		# file:// remote goes through the full deploy pipeline.
+		#
+		# Primary source: the tuna-os/bootc-installer fork's release. It
+		# MUST be the fork, not upstream projectbluefin: installer-smoke's
+		# readiness assert requires the tuna-installer-ready stamp the fork
+		# writes on window map (bootc-installer#7/#8), and the upstream
+		# release predates it — smoke run 32408962415's gnome leg had the
+		# session and installer process fully up yet failed on exactly the
+		# missing stamp. Fallback: tuna-os/tuna-installer, which mirrors
+		# the same app ID as a release asset.
 		INSTALLER_FLATPAK_FILE="/tmp/bootc-installer.flatpak"
 		if ! curl --retry 3 --fail --location --max-time 300 \
-			"https://github.com/projectbluefin/bootc-installer/releases/latest/download/org.bootcinstaller.Installer.flatpak" \
+			"https://github.com/tuna-os/bootc-installer/releases/latest/download/org.bootcinstaller.Installer.flatpak" \
 			-o "${INSTALLER_FLATPAK_FILE}" 2>/dev/null; then
-			echo "projectbluefin/bootc-installer unavailable, falling back to tuna-os/tuna-installer..."
+			echo "tuna-os/bootc-installer unavailable, falling back to tuna-os/tuna-installer..."
 			curl --retry 3 --fail --location --max-time 300 \
 				"https://github.com/tuna-os/tuna-installer/releases/latest/download/org.bootcinstaller.Installer.flatpak" \
 				-o "${INSTALLER_FLATPAK_FILE}"
