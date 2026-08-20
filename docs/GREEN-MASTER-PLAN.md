@@ -286,10 +286,19 @@ went GREEN: albacore base-nvidia run 32339591457 logged the resolution
 EL10), the kernel transaction completed with no malformed and
 `TUNAOS_NVIDIA_CONTRACT_OK`. Root cause: rpm writing into a db directory
 still in a lower overlay layer; the upper-layer round-trip is the whole
-fix, the rebuild was only ever the probe. Ported to bonito-rawhide's
-stage-2 the same day (`rawhide_rpmdb_probe` in lib.sh now round-trips
-before rebuilding) — verify on the next bonito-rawhide nightly's desktop
-legs, then #1823 closes.*
+fix, the rebuild was only ever the probe. Round 4 (#1916) closed the
+second half of the class: the DESKTOP legs inherit a db their stage-2
+already corrupted at rest and need the rebuild's PRODUCT, which rpm
+builds and then discards at its failing rename — so the guard now
+salvages it file-level, exactly per rpm's own printed recovery
+instruction. **Validation run 32367546177 (08-20): ALL FIVE albacore
+desktop-nvidia legs built green** — `rebuilt-salvaged` marker, zero
+malformed, zero failed deps, `TUNAOS_NVIDIA_CONTRACT_OK` — plus
+base-nvidia promoted. The full EL10 nvidia cluster (~15 build cells
+across albacore/yellowfin/skipjack, same overlay script) is unblocked;
+the next board refresh shows it. Ported to bonito-rawhide's stage-2
+(`rawhide_rpmdb_probe`, #1915+#1916) — verify on its next nightly's
+desktop legs, then #1823 closes.*
 
 ### yellowfin (AlmaLinux Kitten 10) — 12/20 build
 | area | state | action |
