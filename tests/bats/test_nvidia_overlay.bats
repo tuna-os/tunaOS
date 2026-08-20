@@ -417,6 +417,7 @@ STUB
 echo "rpm \$*" >> "${BATS_TEST_TMPDIR}/tool.log"
 case "\$*" in
   *"-q kernel"*) echo "$1"; exit 0 ;;
+  *"--eval"*) echo "${BATS_TEST_TMPDIR}/rpmdb"; exit 0 ;;
 esac
 exit 0
 STUB
@@ -438,6 +439,11 @@ make_swap_fixture() {
   for p in kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra; do
     touch "${BATS_TEST_TMPDIR}/kernel-rpms/${p}-${AKMODS_KVER}.rpm"
   done
+  # The rpmdb dir the stubbed `rpm --eval %_dbpath` names; the copy-up
+  # guard round-trips it (cp -a → rm -rf → mv), and the sentinel proves
+  # the contents survive the trip.
+  mkdir -p "${BATS_TEST_TMPDIR}/rpmdb"
+  echo sentinel > "${BATS_TEST_TMPDIR}/rpmdb/rpmdb.sqlite"
 }
 
 run_swap() {
@@ -495,6 +501,21 @@ run_swap() {
   [ -n "$rebuild_line" ]
   [ -n "$first_erase_line" ]
   [ "$rebuild_line" -lt "$first_erase_line" ]
+}
+
+@test "kernel-swap recreates the rpmdb dir in the upper layer before rebuilding it" {
+  # Run 32143809963: the bare rebuild died at 'failed to replace old
+  # database with new database' — overlayfs refuses the rebuild's final
+  # directory rename while the dbpath is a lower-layer dir (EXDEV). The
+  # guard must round-trip the directory (cp -a → rm -rf → mv) so every
+  # later write is same-device, and must not lose the db doing it.
+  make_swap_stubs "6.12.0-250.el10.x86_64"
+  make_swap_fixture
+  run_swap
+  [ "$status" -eq 0 ]
+  [ -d "${BATS_TEST_TMPDIR}/rpmdb" ]
+  [ "$(cat "${BATS_TEST_TMPDIR}/rpmdb/rpmdb.sqlite")" = "sentinel" ]
+  [ ! -e "${BATS_TEST_TMPDIR}/rpmdb.tbox-copyup" ]
 }
 
 @test "kernel-swap replaces a mismatched kernel with the akmods one" {
