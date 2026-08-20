@@ -802,6 +802,17 @@ rawhide_rpmdb_probe() {
 			echo "::warning title=rpmdb probe (tunaOS#1823)::rpm --rebuilddb failed and left no rebuilt db to salvage; proceeding — the stage-2 transaction is the real verdict"
 		fi
 	fi
+	# A rebuild from an already-malformed db is LOSSY: it keeps whatever the
+	# failing SELECT managed to read. On the stock ubuntu-latest storage the
+	# corruption recurs after every layer commit, each salvage compounds the
+	# loss, and by install-desktop the db has dropped system-release — after
+	# which dnf cannot resolve $releasever and every later stage dies on
+	# 'metalink?repo=epel-$releasever' 404s that look like a repo outage
+	# (runs 32392181047 / 32394645068). Name the data loss here instead.
+	if ! rpm -q --whatprovides 'system-release(releasever)' >/dev/null 2>&1; then
+		echo "::error title=rpmdb data loss (tunaOS#1823)::the rebuilt rpmdb no longer provides system-release(releasever) — the salvage was lossy and dnf's \$releasever detection is gone. This build cannot produce a valid image; fix the runner's container storage (see #1893) instead of chasing the downstream epel-\$releasever 404s."
+		return 1
+	fi
 	return 0
 }
 
