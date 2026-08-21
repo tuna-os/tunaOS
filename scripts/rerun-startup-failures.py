@@ -26,6 +26,16 @@ only when the startup-failed scheduled run is still the newest run of that
 workflow; the dispatch itself then becomes the newest run, so the next
 sweep skips it. That also means a human who already re-ran it by hand is
 never duplicated.
+
+And the sweep is CAPPED, because the failure it recovers from is a mass one.
+The 2026-08-21 event lost all 13 at once, so an uncapped sweep would dispatch
+13 full variant builds simultaneously into a 20-concurrent-job ceiling --
+recreating exactly the thundering herd the nightly stagger (#1932) exists to
+prevent, and starving them all into the same slow failure it was meant to
+cure. Recovering two per sweep drains a total loss over the following day
+while never putting more than two extra variants in flight, and in the common
+case -- one variant lost -- recovery is still immediate. What the cap defers
+is reported, never silently dropped.
 """
 from __future__ import annotations
 
@@ -38,6 +48,10 @@ import sys
 # Only the per-variant nightlies. Deliberately not every scheduled workflow:
 # re-dispatching an arbitrary workflow because it failed to start is a much
 # broader claim than this evidence supports.
+# See the module docstring: an uncapped sweep answers a 13-variant loss with
+# 13 simultaneous builds, which the job ceiling cannot absorb.
+DEFAULT_MAX_DISPATCH = 2
+
 WORKFLOWS = [
     "build-albacore.yml",
     "build-bonito-rawhide.yml",
@@ -127,9 +141,18 @@ def main(argv=None):
         action="store_true",
         help="report what would be dispatched without dispatching it",
     )
+    ap.add_argument(
+        "--max-dispatch",
+        type=int,
+        default=DEFAULT_MAX_DISPATCH,
+        help=(
+            "most workflows to re-dispatch in one sweep; the rest are "
+            "reported and picked up by the next sweep"
+        ),
+    )
     args = ap.parse_args(argv)
 
-    dispatched, skipped = [], []
+    dispatched, deferred, skipped = [], [], []
     for workflow in WORKFLOWS:
         try:
             runs = runs_for(args.repo, workflow)
@@ -153,6 +176,16 @@ def main(argv=None):
             )
             continue
 
+        if len(dispatched) >= args.max_dispatch:
+            # Deferred, not dropped: say so, so a capped sweep never reads as
+            # a clean one.
+            print(
+                f"  {workflow}: run {run['id']} failed with ZERO jobs -- "
+                f"DEFERRED, {args.max_dispatch} already dispatched this sweep"
+            )
+            deferred.append(workflow)
+            continue
+
         print(
             f"  {workflow}: run {run['id']} failed with ZERO jobs and is "
             "still the newest run -- re-dispatching"
@@ -166,9 +199,14 @@ def main(argv=None):
             ])
         dispatched.append(workflow)
 
-    print(f"\nre-dispatched {len(dispatched)}; unreadable {len(skipped)}")
+    print(
+        f"\nre-dispatched {len(dispatched)}; deferred {len(deferred)}; "
+        f"unreadable {len(skipped)}"
+    )
     if dispatched:
-        print("  " + ", ".join(dispatched))
+        print("  dispatched: " + ", ".join(dispatched))
+    if deferred:
+        print("  deferred to the next sweep: " + ", ".join(deferred))
     return 0
 
 
