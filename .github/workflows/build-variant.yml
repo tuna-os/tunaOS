@@ -8,10 +8,11 @@ name: Unified Build
 # Biggest variants overnight; only the two smallest inside the 04:00–09:00
 # proving window (daily-verify 04:00, verify-asahi 05:40, matrix-status &
 # catalog-facts 06:00, desktop-contract-sweep 08:00).
-#   00:20 yellowfin(20fl)  02:20 albacore(20)   04:20 gurnard(2)
-#   06:20 flounder-sid(5)  09:20 skipjack(18)   11:20 bonito(15)
-#   13:20 bonito-rawhide(14) 15:20 marlin(9)    17:20 grouper(7)
-#   19:20 sailfin(7)       21:20 flounder(6)    23:20 guppy(4)
+#   00:20 yellowfin(20fl)  02:20 albacore(20)       04:20 gurnard(2)
+#   06:20 guppy(4)         09:20 skipjack(18)       11:20 bonito(16)
+#   13:20 marlin(16)       15:20 bonito-rawhide(14) 17:20 grouper(7)
+#   19:20 sailfin(7)       21:20 flounder(7)        22:20 hummingbird(5)
+#   23:20 flounder-sid(7)
 # If you add a variant or move a cron, keep this table true.
 on:
   workflow_call:

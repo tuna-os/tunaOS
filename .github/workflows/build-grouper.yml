@@ -1,7 +1,7 @@
 name: Build Grouper
 on:
   schedule:
-    - cron: "0 1 * * *"
+    - cron: "20 17 * * *"
   workflow_dispatch:
     inputs:
       flavor:
