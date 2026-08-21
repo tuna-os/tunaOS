@@ -106,10 +106,27 @@ def needs_redispatch(runs, job_count):
     return not has_newer_run(runs, run)
 
 
+class GhError(RuntimeError):
+    """A gh invocation that failed, carrying what gh actually said."""
+
+
 def _gh(args):
-    return subprocess.run(
-        ["gh", *args], check=True, capture_output=True, text=True
-    ).stdout
+    """Run gh, and on failure raise with its stderr attached.
+
+    The first live sweep failed on a dispatch and the traceback carried only
+    `CalledProcessError: ... returned non-zero exit status 1` -- because
+    capture_output swallowed the one line that explains why. That is the same
+    defect as a capture step that tails past its own diagnostic: the helper
+    discarded the message it existed to surface.
+    """
+    proc = subprocess.run(["gh", *args], capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise GhError(
+            f"gh {' '.join(args)} exited {proc.returncode}\n"
+            f"  stdout: {proc.stdout.strip() or '(empty)'}\n"
+            f"  stderr: {proc.stderr.strip() or '(empty)'}"
+        )
+    return proc.stdout
 
 
 def runs_for(repo, workflow, limit=20):
@@ -152,7 +169,7 @@ def main(argv=None):
     )
     args = ap.parse_args(argv)
 
-    dispatched, deferred, skipped = [], [], []
+    dispatched, deferred, skipped, failed = [], [], [], []
     for workflow in WORKFLOWS:
         try:
             runs = runs_for(args.repo, workflow)
@@ -191,22 +208,36 @@ def main(argv=None):
             "still the newest run -- re-dispatching"
         )
         if not args.dry_run:
-            _gh([
-                "api",
-                "--method", "POST",
-                f"repos/{args.repo}/actions/workflows/{workflow}/dispatches",
-                "-f", f"ref={args.ref}",
-            ])
+            try:
+                _gh([
+                    "api",
+                    "--method", "POST",
+                    f"repos/{args.repo}/actions/workflows/{workflow}/dispatches",
+                    "-f", f"ref={args.ref}",
+                ])
+            except GhError as exc:
+                # One failed dispatch must not abandon the rest. The first
+                # live sweep aborted on its first POST and left every other
+                # lost variant unrecovered -- the same "keep going" rule the
+                # listing above already follows, which this did not.
+                print(f"::error::{workflow}: dispatch failed -- {exc}")
+                failed.append(workflow)
+                continue
         dispatched.append(workflow)
 
     print(
         f"\nre-dispatched {len(dispatched)}; deferred {len(deferred)}; "
-        f"unreadable {len(skipped)}"
+        f"unreadable {len(skipped)}; dispatch-failed {len(failed)}"
     )
     if dispatched:
         print("  dispatched: " + ", ".join(dispatched))
     if deferred:
         print("  deferred to the next sweep: " + ", ".join(deferred))
+    if failed:
+        print("  dispatch FAILED: " + ", ".join(failed))
+        # Non-zero so a sweep that recovered nothing cannot read as green,
+        # but only AFTER every workflow has had its turn.
+        return 1
     return 0
 
 
