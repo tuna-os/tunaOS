@@ -64,13 +64,13 @@ jobs:
             v="${FILTER_VARIANT:-yellowfin}"
             f="${FILTER_FLAVORS:-gnome,kde,cosmic,niri,xfce}"
             M=$(jq -cn --arg v "$v" --arg f "$f" \
-              '{include: ($f | split(",") | map({variant: $v, flavor: ., runner: (if (. | test("^(cosmic|niri|xfwl4|kde)")) then "gpu" else "build-amd64" end)}))}')
+              '{include: ($f | split(",") | map({variant: $v, flavor: ., runner: "build-amd64"}))}')
           else
             M=$(echo "$json" | jq -c \
               '{include: [ .variants[] | . as $variant | .id as $v | .flavors[]
                  | select(.build_iso == true)
                  | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
-                 | {variant: $v, flavor: .id, runner: (if (.id | test("^(cosmic|niri|xfwl4|kde)")) then "gpu" else "build-amd64" end)} ]}')
+                 | {variant: $v, flavor: .id, runner: "build-amd64"} ]}')
           fi
           echo "matrix=$M" >> "$GITHUB_OUTPUT"
           echo "$M" | jq .
@@ -79,10 +79,25 @@ jobs:
     name: build ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate-matrix
     # RunsOn for all cells: the ISO build (tacklebox + podman) cannot work on
-    # the GitHub runner's podman 5.8.4 (tunaOS#1893). The `gpu` group (g4dn
-    # spot) also supplies the DRM render node the compositor-rendering checks
-    # need for cosmic/niri/xfwl4/kde (kwin_wayland); gnome/xfce run on the
-    # `build-amd64` CPU group (the readiness-stamp path needs no GPU).
+    # the GitHub runner's podman 5.8.4 (tunaOS#1893).
+    #
+    # build-amd64 for every flavor, including cosmic/niri/xfwl4/kde. Those
+    # four were routed to the `gpu` group (g4dn spot) for the DRM render node
+    # the compositor checks need -- but #1929 split this workflow in two, and
+    # the render node is needed by the half that no longer runs here. THIS job
+    # checks out, sets up podman, builds an ISO and uploads it; it touches no
+    # DRM device and invokes no compositor. The boot-and-assert half is the
+    # `smoke` job below, which runs on ubuntu-latest for every flavor and
+    # drives scripts/iso-e2e.sh -- not iso-e2e-gpu.sh.
+    #
+    # So the gpu routing survived the split as a no-op that still provisions
+    # a g4dn per cell. Removing it makes cosmic/niri/kde testable without any
+    # GPU capacity at all, which matters because the g4dn quota is a real
+    # constraint (the on-demand increase was declined 2026-08-21, and this
+    # group is spot anyway -- a different quota, L-3819A6DF).
+    #
+    # The boot Gate in reusable-build-image.yml is unaffected: it genuinely
+    # runs iso-e2e-gpu.sh and still asks for `gpu`.
     runs-on: runs-on=${{ github.run_id }}/runner=${{ matrix.runner }}
     timeout-minutes: 75
     strategy:
