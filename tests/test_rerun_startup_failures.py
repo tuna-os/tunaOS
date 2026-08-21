@@ -199,6 +199,70 @@ def test_dry_run_dispatches_nothing(monkeypatch) -> None:
     assert posts == []
 
 
+# --- failure handling -------------------------------------------------------
+
+
+def test_gh_failures_carry_what_gh_said(monkeypatch) -> None:
+    """The first live sweep's traceback said only "exited 1".
+
+    capture_output swallowed the one line explaining why, which is the same
+    defect as a capture step that tails past its own diagnostic.
+    """
+    import subprocess as _sp
+
+    class Proc:
+        returncode = 1
+        stdout = ""
+        stderr = "HTTP 403: Resource not accessible by integration"
+
+    monkeypatch.setattr(_sp, "run", lambda *a, **k: Proc())
+    with pytest.raises(sweeper.GhError) as excinfo:
+        sweeper._gh(["api", "whatever"])
+    assert "Resource not accessible" in str(excinfo.value)
+    assert "exited 1" in str(excinfo.value)
+
+
+def test_one_failed_dispatch_does_not_abandon_the_rest(capsys, monkeypatch) -> None:
+    """The first live sweep aborted on its first POST.
+
+    Every other lost variant went unrecovered -- the listing loop already
+    kept going past one unreadable workflow, and the dispatch loop did not.
+    """
+    import json as _json
+
+    posts = []
+
+    def gh(args):
+        joined = " ".join(args)
+        if "--method" in args:
+            posts.append(joined)
+            if "build-albacore" in joined:
+                raise sweeper.GhError("gh ... exited 1\n  stderr: HTTP 403")
+            return ""
+        if "/runs?per_page" in joined:
+            return _json.dumps(
+                [{"id": 999, "event": "schedule", "conclusion": "failure",
+                  "created_at": "2026-08-21T02:17:57Z"}]
+            )
+        if "/jobs?per_page" in joined:
+            return "0\n"
+        return ""
+
+    monkeypatch.setattr(sweeper, "_gh", gh)
+    rc = sweeper.main(["--repo", "tuna-os/tunaOS"])
+    out = capsys.readouterr().out
+
+    # albacore is alphabetically first and fails. The sweep must carry on --
+    # and the failure must not consume a cap slot, because it put nothing in
+    # flight. So three POSTs are attempted and two succeed.
+    assert len(posts) == 3, f"gave up after the first failure: {posts}"
+    assert "re-dispatched 2" in out, "a failed dispatch ate a cap slot"
+    assert "dispatch-failed 1" in out
+    assert "dispatch FAILED: build-albacore.yml" in out
+    assert "HTTP 403" in out, "the reason must reach the log"
+    assert rc == 1, "a sweep that failed a dispatch must not read as green"
+
+
 # --- scope ------------------------------------------------------------------
 
 
