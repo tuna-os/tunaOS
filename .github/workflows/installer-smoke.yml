@@ -534,9 +534,32 @@ jobs:
             # Bracket the first letter so the pattern never matches its own
             # argv, the same defence the frontend check above already uses.
             $SSH 'pgrep -xl "[c]osmic-comp|[n]iri|[x]fwl4|[k]win_wayland" 2>/dev/null || echo "(no compositor matched)"; ps -eo pid,comm,args | grep -iE "[I]nstaller" || echo "(no installer process)"' 2>/dev/null || true
+
+            echo
+            echo "=== XDG_RUNTIME_DIR as the sandboxed frontend sees it ==="
+            # Run 67 put the wizard ON SCREEN (evidence screenshot) with the
+            # app's runtime dir present and EMPTY, and no stamp in either
+            # location the assert reads. So the window mapped and the stamp
+            # still was not written. readiness.stamp_path() returns None when
+            # XDG_RUNTIME_DIR is unset, and write_stamp swallows failures by
+            # design, so an unset variable INSIDE the sandbox produces exactly
+            # this shape and leaves no other trace. The host-side directory
+            # existing does not prove the variable is set in the sandbox --
+            # flatpak creates it either way. Read it from the process itself.
+            $SSH 'for p in $(pgrep -x bootc-installer 2>/dev/null); do \
+                    echo "-- pid $p"; \
+                    { sudo cat /proc/$p/environ 2>/dev/null || cat /proc/$p/environ 2>/dev/null; } | tr "\0" "\n" | grep -E "^(XDG_RUNTIME_DIR|FLATPAK_ID|HOME|XDG_CACHE_HOME)=" || echo "(could not read environ)"; \
+                  done; \
+                  echo "-- stamp anywhere under /run/user --"; \
+                  find /run/user -name "tuna-installer-ready" 2>/dev/null || true' 2>/dev/null || true
           } > "$out" 2>&1
           echo "--- captured $(wc -l < "$out") lines ---"
-          tail -30 "$out"
+          # NOT tail: the installer's own debug log is the FIRST section of
+          # five, so `tail -30` showed the last two and structurally could
+          # never show the one this capture was added for (run 67). The whole
+          # file is ~170 lines -- small enough to print, and the point is to
+          # be readable without downloading an artifact.
+          cat "$out"
 
       - name: Screenshot desktop evidence
         if: always()
@@ -570,11 +593,14 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: installer-smoke-${{ matrix.variant }}-${{ matrix.flavor }}
+          # *.log rather than serial.log alone: the capture step writes
+          # installer-stderr-<flavor>.log, which matched no pattern here, so
+          # run 67's capture reached neither the console nor the artifact.
           path: |
             smoke-out/*.png
             smoke-out/*.json
             smoke-out/*.tap
-            smoke-out/serial.log
+            smoke-out/*.log
           if-no-files-found: warn
 
   # Publishes the walkthrough-*.png frames captured above to docs, the same
