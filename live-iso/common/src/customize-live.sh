@@ -484,13 +484,36 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		# missing stamp. Fallback: tuna-os/tuna-installer, which mirrors
 		# the same app ID as a release asset.
 		INSTALLER_FLATPAK_FILE="/tmp/bootc-installer.flatpak"
+		# A flatpak bundle carries refs for ONE architecture, so the asset has
+		# to match the host. The release was x86_64-only and the name carried
+		# no arch, so an aarch64 ISO downloaded it, imported
+		# app/org.bootcinstaller.Installer/x86_64/master, and then:
+		#
+		#   error: Nothing matches org.bootcinstaller.Installer in remote
+		#          installer-local
+		#
+		# (gurnard run 32495176056, iso:pantheon linux-arm64.) x86_64 keeps
+		# the bare name — every existing consumer fetches that exact URL, and
+		# renaming it would break them for no gain. See
+		# tuna-os/bootc-installer#25.
+		_installer_asset="org.bootcinstaller.Installer.flatpak"
+		if [[ "$(uname -m)" != "x86_64" ]]; then
+			_installer_asset="org.bootcinstaller.Installer-$(uname -m).flatpak"
+		fi
 		if ! curl --retry 3 --fail --location --max-time 300 \
-			"https://github.com/tuna-os/bootc-installer/releases/latest/download/org.bootcinstaller.Installer.flatpak" \
+			"https://github.com/tuna-os/bootc-installer/releases/latest/download/${_installer_asset}" \
 			-o "${INSTALLER_FLATPAK_FILE}" 2>/dev/null; then
 			echo "tuna-os/bootc-installer unavailable, falling back to tuna-os/tuna-installer..."
-			curl --retry 3 --fail --location --max-time 300 \
-				"https://github.com/tuna-os/tuna-installer/releases/latest/download/org.bootcinstaller.Installer.flatpak" \
-				-o "${INSTALLER_FLATPAK_FILE}"
+			if ! curl --retry 3 --fail --location --max-time 300 \
+				"https://github.com/tuna-os/tuna-installer/releases/latest/download/${_installer_asset}" \
+				-o "${INSTALLER_FLATPAK_FILE}"; then
+				# Name the arch. Without this the next failure reads as
+				# "Nothing matches ... in remote installer-local" three
+				# commands later, which looks like a corrupt download rather
+				# than an asset that was never published.
+				echo "ERROR: no ${_installer_asset} published for $(uname -m)" >&2
+				exit 1
+			fi
 		fi
 		INSTALLER_LOCAL_REPO="/tmp/installer-local-repo"
 		ostree init --repo="${INSTALLER_LOCAL_REPO}" --mode=archive-z2
@@ -508,7 +531,10 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		# the deployment directory but omits the 'active' symlink inside the
 		# branch directory, leaving the app unreachable to flatpak run/list.
 		# Reproduce the symlink a normal installation would create.
-		_app_arch_dir="/var/lib/flatpak/app/${INSTALLER_APP}/x86_64"
+		# $(uname -m), not a hardcoded x86_64: flatpak deploys under the
+		# host arch, so on aarch64 this globbed a directory that does not
+		# exist and the repair below silently did nothing.
+		_app_arch_dir="/var/lib/flatpak/app/${INSTALLER_APP}/$(uname -m)"
 		for _branch_dir in "${_app_arch_dir}"/*/; do
 			_branch_dir="${_branch_dir%/}"
 			[[ -d "${_branch_dir}" ]] || continue
