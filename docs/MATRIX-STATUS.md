@@ -68,11 +68,11 @@ it.
 
 Scored against `.github/green-criteria.yml`: a cell is green only when every **blocking** criterion applicable to it has a current affirmative result; a criterion that was skipped, never tested, or unasserted renders ⬜ and does not count as satisfied. Blocking today: `builds`, `desktop`, `boots`, `no_silent_omissions`. Advisory (measured in the sections below, not yet biting): `install`, `lifecycle`, `parity`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. Graduating a criterion is an edit to `enforcement:` in that file — this table and the README count tighten with no code change.
 
-**52 of 143** published cells are composite-green.
+**74 of 143** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ⬜ | ✅ | ✅ | ✅ | ✅ |
+| **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **flounder** | ✅ | ✅ | — | — | ✅ |
@@ -82,8 +82,8 @@ Scored against `.github/green-criteria.yml`: a cell is green only when every **b
 | **hummingbird** | ❌ | ⬜ | ❌ | ⬜ | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **skipjack** | ❌ | ⬜ | ✅ | ✅ | ✅ |
-| **yellowfin** | ✅ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **skipjack** | ❌ | ✅ | ✅ | ✅ | ✅ |
+| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
 
@@ -112,13 +112,13 @@ Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package
 
 ## Package parity
 
-**36 of 52** cells at parity (49 measured, 3 never measured).
+**39 of 52** cells at parity (49 measured, 3 never measured).
 
 Green criterion 7 (`parity`), first cadence: every desktop's package set audited daily against its own base (`package-parity.yml` → `scripts/package-parity.sh --audit`) — the shape that exposes a build applying no desktop at all (#858). ❌ covers both BROKEN (no more packages than base) and suspect (fewer than 25 added). Diffing against each variant's upstream reference is the next step and is not yet asserted.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito** | ✅ | ✅ | ❌ | ✅ | ✅ |
 | **bonito-rawhide** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **flounder** | ❌ | ❌ | — | — | ❌ |
@@ -128,8 +128,8 @@ Green criterion 7 (`parity`), first cadence: every desktop's package set audited
 | **hummingbird** | ✅ | ❌ | ✅ | ❌ | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **skipjack** | ✅ | ✅ | ✅ | ✅ | ❌ |
-| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ## LUKS E2E
 
@@ -182,17 +182,17 @@ Pulls the **published** image and runs the contract script against it directly (
 
 5 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
 
-Newest result 2026-08-19.
+Newest result 2026-08-20.
 
 ## Bootc Lifecycle
 
-**37 of 52** cells green (52 tested, 0 never tested).
+**40 of 52** cells green (52 tested, 0 never tested).
 
 Validates bootc image update, rebase, rollback, alias resolution, and post-switch system contracts across published stream deployments.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **flounder** | ✅ | ✅ | — | — | ✅ |
@@ -203,10 +203,10 @@ Validates bootc image update, rebase, rollback, alias resolution, and post-switc
 | **hummingbird** | ❌ | ❌ | ❌ | ❌ | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **skipjack** | ✅ | ✅ | ✅ | ✅ | ❌ |
-| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-Newest result 2026-08-17.
+Newest result 2026-08-20.
 
 ## Installer smoke
 
@@ -219,6 +219,7 @@ This is the only axis that checks a human could actually install. For 4 combinat
 | **albacore** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **bonito** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **build yellowfin** | ✅ | — | — | — | ✅ |
 | **flounder** | ❌ | ⬜ | — | — | — |
 | **grouper** | ❌ | ⬜ | — | — | ⬜ |
 | **gurnard** | — | — | — | — | — |
@@ -241,18 +242,18 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-08-19 | [32238167029](https://github.com/tuna-os/tunaOS/actions/runs/32238167029) | 40 |
-| 2026-08-19 | [32232799110](https://github.com/tuna-os/tunaOS/actions/runs/32232799110) | 48 |
-| 2026-08-17 | [32040213366](https://github.com/tuna-os/tunaOS/actions/runs/32040213366) | 119 |
-| 2026-08-12 | [31585741267](https://github.com/tuna-os/tunaOS/actions/runs/31585741267) | 21 |
+| 2026-08-21 | [32445454947](https://github.com/tuna-os/tunaOS/actions/runs/32445454947) | 2 |
+| 2026-08-20 | [32408962415](https://github.com/tuna-os/tunaOS/actions/runs/32408962415) | 2 |
+| 2026-08-20 | [32378642846](https://github.com/tuna-os/tunaOS/actions/runs/32378642846) | 3 |
+| 2026-08-20 | [32349089138](https://github.com/tuna-os/tunaOS/actions/runs/32349089138) | 48 |
+| 2026-08-20 | [32335146969](https://github.com/tuna-os/tunaOS/actions/runs/32335146969) | 120 |
+| 2026-08-19 | [32238167029](https://github.com/tuna-os/tunaOS/actions/runs/32238167029) | 38 |
+| 2026-08-12 | [31585741267](https://github.com/tuna-os/tunaOS/actions/runs/31585741267) | 18 |
 | 2026-08-09 | [31287377558](https://github.com/tuna-os/tunaOS/actions/runs/31287377558) | 3 |
 | 2026-08-09 | [31286849405](https://github.com/tuna-os/tunaOS/actions/runs/31286849405) | 18 |
 | 2026-08-09 | [31286843546](https://github.com/tuna-os/tunaOS/actions/runs/31286843546) | 18 |
 | 2026-08-08 | [31242742608](https://github.com/tuna-os/tunaOS/actions/runs/31242742608) | 1 |
 | 2026-08-08 | [31236474250](https://github.com/tuna-os/tunaOS/actions/runs/31236474250) | 1 |
-| 2026-08-08 | [31236469036](https://github.com/tuna-os/tunaOS/actions/runs/31236469036) | 1 |
-| 2026-08-07 | [31182709691](https://github.com/tuna-os/tunaOS/actions/runs/31182709691) | 2 |
-| 2026-08-07 | [31159853110](https://github.com/tuna-os/tunaOS/actions/runs/31159853110) | 1 |
 
 <!-- END GENERATED -->
 
