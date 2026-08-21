@@ -472,6 +472,28 @@ jobs:
           SSH="sshpass -p live ssh -p 2222 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null liveuser@127.0.0.1"
           out="smoke-out/installer-stderr-${FLAVOR}.log"
           {
+            # The installer's OWN log, which is where its Python logging
+            # actually goes. main.py configures basicConfig with both a
+            # StreamHandler and a FileHandler at
+            #   $XDG_CACHE_HOME/bootc-installer/installer-debug.log
+            # and inside the Flatpak sandbox XDG_CACHE_HOME is the app's
+            # private ~/.var/app/<app-id>/cache. The journal therefore sees
+            # almost nothing from it: smoke run 32435080411 captured 133
+            # lines and exactly ONE came from the installer (an libEGL
+            # warning), which is why "running but never reported a window"
+            # has stayed undiagnosable across runs 63-66.
+            #
+            # This file answers it directly. It records "do_activate called",
+            # which of BootcWindow / BootcRamWindow / BootcCpuWindow /
+            # BootcUnsupportedWindow was constructed, "Main window created",
+            # and any traceback from the do_activate except-branch. If the
+            # window was built and armed but never mapped, the log ends after
+            # "Main window created" with no exception — which distinguishes a
+            # renderer that cannot present from an app that never got that
+            # far. Collect what settles it rather than guessing at a fix.
+            echo "=== installer's own debug log ==="
+            $SSH 'cat ~/.var/app/org.bootcinstaller.Installer/cache/bootc-installer/installer-debug.log 2>/dev/null || cat ~/.cache/bootc-installer/installer-debug.log 2>/dev/null || echo "(no installer-debug.log found)"' 2>/dev/null || true
+            echo
             echo "=== user journal (installer + portal + flatpak) ==="
             $SSH 'journalctl --user -b --no-pager 2>/dev/null | grep -iE "installer|flatpak|portal|wgpu|EGL|MESA|wayland|vulkan" | tail -120' 2>/dev/null || true
             echo
