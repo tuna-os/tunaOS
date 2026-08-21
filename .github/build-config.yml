@@ -106,7 +106,7 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # tunaOS xfce-wayland stack comes from repo.tunaos.org, which only
         # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
         platforms:
           - linux/amd64
@@ -208,7 +208,7 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # tunaOS xfce-wayland stack comes from repo.tunaos.org, which only
         # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
         platforms:
           - linux/amd64
@@ -284,7 +284,7 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # tunaOS xfce-wayland stack comes from repo.tunaos.org, which only
         # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
         platforms:
           - linux/amd64
@@ -386,7 +386,7 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # tunaOS xfce-wayland stack comes from repo.tunaos.org, which only
         # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
         platforms:
           - linux/amd64
@@ -463,7 +463,7 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # tunaOS xfce-wayland stack comes from repo.tunaos.org, which only
         # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
         platforms:
           - linux/amd64
