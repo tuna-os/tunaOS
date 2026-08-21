@@ -132,7 +132,12 @@ if [[ "${IS_UBUNTU:-false}" = true ]]; then
 		# a var/home that is empty in the container layer, so that half can
 		# legitimately fail; the account removal is what has to succeed.
 		userdel --remove ubuntu 2>/dev/null || userdel ubuntu
-		getent group ubuntu >/dev/null && groupdel ubuntu 2>/dev/null || true
+		# An if-block, not `A && B || C`: shellcheck's SC2015 is an INFO
+		# finding, and tests/bats/test_build_scripts.bats runs shellcheck
+		# with only SC1091 excluded, so info findings fail the gate.
+		if getent group ubuntu >/dev/null; then
+			groupdel ubuntu 2>/dev/null || true
+		fi
 		# cloud-init's sudoers drop-in names the account just deleted, which
 		# leaves a rule for a user that no longer exists. Removed only when
 		# it actually mentions `ubuntu`: on a base that repurposed the file
