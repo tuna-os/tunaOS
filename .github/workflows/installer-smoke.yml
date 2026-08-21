@@ -615,6 +615,26 @@ jobs:
             $SSH 'pgrep -xl "[c]osmic-comp|[n]iri|[x]fwl4|[k]win_wayland" 2>/dev/null || echo "(no compositor matched)"; ps -eo pid,comm,args | grep -iE "[I]nstaller" || echo "(no installer process)"' 2>/dev/null || true
 
             echo
+            echo "=== does the session command's compositor exist at all? ==="
+            # Run 32450214451's xfce leg: greetd's config is correctly shaped
+            # (user and command present in both [initial_session] and
+            # [default_session]) and `dbus-run-session startxfce4 --wayland
+            # xfwl4` still exited immediately, twice, after which greetd
+            # looped -- "greeter exited without creating a session". greetd
+            # does not capture the session's stderr, so the journal says only
+            # that it exited, never why.
+            #
+            # The cheapest discriminator is whether the binaries the config
+            # names are installed at all. tideforge-xfwl4-el10 is red today
+            # for want of libxfce4ui-devel, a build-chain product with no
+            # publisher (tunaos-packages#459), so "the compositor is simply
+            # not in the image" is a live hypothesis rather than a wild one --
+            # and one line of output settles it either way.
+            $SSH 'for b in startxfce4 xfwl4 labwc niri cosmic-comp kwin_wayland gnome-shell; do \
+                    printf "%-16s %s\n" "$b" "$(command -v "$b" 2>/dev/null || echo MISSING)"; \
+                  done' 2>/dev/null || true
+
+            echo
             echo "=== XDG_RUNTIME_DIR as the sandboxed frontend sees it ==="
             # Run 67 put the wizard ON SCREEN (evidence screenshot) with the
             # app's runtime dir present and EMPTY, and no stamp in either
