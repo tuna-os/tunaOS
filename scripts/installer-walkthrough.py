@@ -296,7 +296,47 @@ def load_spec(path):
 # ── Capture ──────────────────────────────────────────────────────────────
 time.sleep(5)  # let the installer settle on its first screen
 frames = []
-p = shot(0, "initial screen")
+
+# Leave the shell overview before driving a single key.
+#
+# Run 32450214451's gnome leg reached this point with a mapped, correctly
+# stamped installer window and still produced 9 frames, 2 visual states and
+# zero page advances. The frames say why: the session was sitting in GNOME's
+# ACTIVITIES OVERVIEW, with the installer rendered as a window thumbnail
+# behind the "Type to search" entry. Every key went to the shell, not the
+# app — the widen-the-focus-sweep loop then walked focus onto the
+# thumbnail's CLOSE button and the dash icon, which is worse than useless:
+# one more Return would have closed the installer.
+#
+# Escape is the right key and the only safe one here. In GNOME it closes the
+# overview and does nothing when the overview is already down, so it costs a
+# single keystroke on the four flavors that never had this problem. Super
+# would TOGGLE — opening the overview on any session that was fine.
+#
+# Whether it was needed is itself a finding, so it is measured rather than
+# assumed: capture before, press, capture after, and compare. A frontend
+# that boots behind its own compositor's shell is a real defect in the live
+# session, and quietly dismissing it would hide exactly the inconsistency
+# this workflow exists to catch.
+overlay_dismissed = False
+_pre = shot(0, "initial screen")
+if _pre:
+    _probe = _pre[:-4] + "-preesc.png"
+    shutil.copyfile(_pre, _probe)
+    send_keys("esc")
+    time.sleep(2)
+    _post = shot(0, "initial screen (after leaving any shell overview)")
+    if _post and changed_pixels(_probe, _post) > DIFF_PIXELS:
+        overlay_dismissed = True
+        note("a shell overlay was covering the installer at session start; "
+             "'esc' dismissed it")
+    try:
+        os.remove(_probe)
+    except OSError:
+        pass
+    p = _post or _pre
+else:
+    p = _pre
 if p:
     frames.append(p)
 
@@ -405,6 +445,17 @@ for i in range(1, steps + 1):
 
 print(f"\n# walkthrough verification ({flavor}) — {len(frames)} frames, "
       f"strict={strict}\n", flush=True)
+
+# Reported, not enforced -- for now. The wizard behind it has never been
+# exercised on gnome, so failing here would replace one unknown with
+# another. It is a genuine live-session defect and belongs in the record
+# while that sequencing plays out; see tuna-os/tunaOS#1941.
+tap(not overlay_dismissed,
+    f"{flavor}: installer is frontmost at session start",
+    "a shell overlay (GNOME Activities overview or equivalent) was covering "
+    "the installer and had to be dismissed with 'esc' before the walkthrough "
+    "could drive it -- a user booting this ISO sees the same thing",
+    enforced=False)
 
 tap(len(frames) >= 2, f"{flavor}: captured at least 2 frames",
     f"got {len(frames)}")
@@ -567,6 +618,11 @@ summary = {
     "screens": reached,
     "strict": strict,
     "failures": _fails,
+    # The assertions themselves, not just how many failed. A bare count says
+    # "5 failed" and leaves every consumer -- the scoreboard, a reviewer, a
+    # test -- to re-parse stdout to learn WHICH, and whether each was
+    # enforced or advisory.
+    "tap": _tap,
 }
 with open(os.path.join(outdir, f"walkthrough-{flavor}.json"), "w") as f:
     json.dump(summary, f, indent=2)
