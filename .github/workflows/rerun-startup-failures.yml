@@ -1,0 +1,62 @@
+name: Re-run startup failures
+
+# A startup failure is a run GitHub refused to begin: zero jobs, zero
+# duration, conclusion "failure". On 2026-08-21 all 13 variant nightlies died
+# this way within nine minutes of each other, every one attributed to a
+# gh-readonly-queue/* ref that had been deleted when the PR it belonged to
+# merged the evening before. A whole night of images, lost silently
+# (tuna-os/tunaOS#1933).
+#
+# rerun-infra-failures.yml cannot recover these, for two independent reasons:
+#
+#   1. It classifies by reading each failed job's log and bails early when
+#      there are none -- exactly the shape of a run that produced no jobs.
+#   2. It is driven by `workflow_run: [completed]`, and GitHub does not emit
+#      that event for a run that never started. Verified against its own run
+#      history: nothing fired for any of the 13.
+#
+# The second is fatal, and it is why this is a POLLED sweep rather than
+# another workflow_run listener.
+#
+# Every three hours, not daily: the nightly stagger spreads the 13 variants
+# across the whole clock (00:20 yellowfin ... 23:20 flounder-sid), so a daily
+# sweep would leave a late-slot failure sitting for most of a day.
+on:
+  schedule:
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: "Report what would be dispatched without dispatching it"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rerun-startup-failures
+  cancel-in-progress: false
+
+jobs:
+  sweep:
+    name: Sweep for nightlies that never started
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Re-dispatch nightlies that produced no jobs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          python3 scripts/rerun-startup-failures.py \
+            --repo "${{ github.repository }}" \
+            --ref "${{ github.event.repository.default_branch || 'main' }}" \
+            ${{ inputs.dry-run && '--dry-run' || '' }} \
+            | tee -a "$GITHUB_STEP_SUMMARY"
