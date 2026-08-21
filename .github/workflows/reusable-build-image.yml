@@ -1239,8 +1239,23 @@ jobs:
     # iso-e2e-gpu.sh passes through. kde/xfce stay on hosted runners (per-
     # variant evidence: marlin passed 08-17), gnome is verifiable without a
     # render node. Everything else keeps the hosted runner — sparse by design.
+    # NOT a ternary: GitHub Actions expressions have no `? :`, and one here
+    # failed to PARSE, which fails the whole file, which fails every caller.
+    # That is what startup-failed all 13 variant nightlies on 2026-08-21 with
+    # zero jobs and zero duration, and what made every sweeper re-dispatch
+    # return HTTP 422 (run 32482857699):
+    #   reusable-build-image.yml (Line: 1242): Unexpected symbol: '?'
+    # The `cond && a || b` form on line 105 of this same file is the idiom.
+    # b2d29bdb introduced the same ternary into installer-smoke.yml too; that
+    # copy was fixed in #1919 and this one was not.
+    #
+    # And `'gpu'` alone was never a runner: RunsOn groups are addressed as
+    # runs-on=<run_id>/runner=<group>, as installer-smoke.yml does. A bare
+    # label would queue forever with no runner ever claiming it -- trading a
+    # parse error for a silent hang is not a fix, so both halves are repaired.
     runs-on: >-
-      ${{ (startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4')) ? 'gpu' : 'ubuntu-latest' }}
+      ${{ (startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4'))
+          && format('runs-on={0}/runner=gpu', github.run_id) || 'ubuntu-latest' }}
     timeout-minutes: 60
     permissions:
       contents: read
