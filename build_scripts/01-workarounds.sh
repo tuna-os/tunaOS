@@ -90,6 +90,67 @@ if [[ "$IS_CENTOS" = true ]] && ! [[ "$IS_ALMALINUX" = true ]]; then
 		/etc/yum.repos.d/compose.repo
 	cat /etc/yum.repos.d/compose.repo
 fi
+# ── Ubuntu: free UID 1000 for a real user ───────────────────────────────────
+#
+# docker.io/library/ubuntu ships a packaged cloud account at UID 1000.
+# Measured on the pinned gurnard base
+# (ubuntu:noble@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea),
+# by extracting /etc/passwd from its single layer:
+#
+#   ubuntu:x:1000:1000:Ubuntu:/home/ubuntu:/bin/bash
+#
+# Two things follow, and the second is what made this visible.
+#
+# 1. The first REAL user an installed gurnard/grouper creates lands at 1001,
+#    while a passwordless phantom account holds the UID every desktop
+#    session, flatpak permission and $XDG_RUNTIME_DIR path assumes. Nothing
+#    in tunaOS references this account -- it is dead weight from the cloud
+#    image lineage.
+#
+# 2. The live ISO cannot be built at all. tacklebox's CustomizeLive prepends
+#    its embedded src/live/baseline.sh, which creates the live user with an
+#    unconditional `--uid 1000`:
+#
+#      >>> [customize] (1/2) baseline.sh
+#      useradd: UID 1000 is not unique
+#      Error: live customize for gurnard-pantheon: ... exit status 4
+#
+#    (gurnard run 32484024591, both linux-amd64 and linux-arm64.) tunaOS
+#    hit exactly this bug in its OWN live-iso/common/src/customize-live.sh
+#    and fixed it there by asking for 1000 only when it is free -- but that
+#    script runs as (2/2) and never gets the chance.
+#
+# Removing the account fixes the shipped image on its own merits and frees
+# the UID as a consequence. Deliberately narrow: only an account that is
+# still the stock one -- name `ubuntu`, UID exactly 1000 -- is removed, so a
+# base image that stops shipping it, renumbers it, or an operator who has
+# repurposed the name is left alone rather than silently altered.
+if [[ "${IS_UBUNTU:-false}" = true ]]; then
+	if [[ "$(id -u ubuntu 2>/dev/null || echo -)" == "1000" ]]; then
+		echo "removing the stock cloud account 'ubuntu' (UID 1000)"
+		# --remove deletes /home/ubuntu. bootc images make /home a symlink to
+		# a var/home that is empty in the container layer, so that half can
+		# legitimately fail; the account removal is what has to succeed.
+		userdel --remove ubuntu 2>/dev/null || userdel ubuntu
+		getent group ubuntu >/dev/null && groupdel ubuntu 2>/dev/null || true
+		# cloud-init's sudoers drop-in names the account just deleted, which
+		# leaves a rule for a user that no longer exists. Removed only when
+		# it actually mentions `ubuntu`: on a base that repurposed the file
+		# for something else, deleting it would revoke unrelated sudo.
+		if grep -q '\bubuntu\b' /etc/sudoers.d/90-cloud-init-users 2>/dev/null; then
+			rm -f /etc/sudoers.d/90-cloud-init-users
+		fi
+	fi
+	# Not fatal, but named where it can be seen. If UID 1000 is still taken
+	# the live ISO build WILL fail later in tacklebox's baseline.sh with
+	# "useradd: UID 1000 is not unique" -- a message that arrives an hour
+	# downstream, in another repo's code, with no mention of this image.
+	if getent passwd 1000 >/dev/null; then
+		echo "WARNING: UID 1000 is still taken; the live ISO build will fail:"
+		getent passwd 1000
+	fi
+fi
+
 echo "Build variant info:"
 echo "is_fedora: $IS_FEDORA"
 echo "is_rhel: $IS_RHEL"
