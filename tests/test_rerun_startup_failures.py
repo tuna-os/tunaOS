@@ -107,6 +107,98 @@ def test_a_human_rerun_is_not_duplicated() -> None:
     assert not sweeper.needs_redispatch(runs, 0)
 
 
+# --- the cap ----------------------------------------------------------------
+
+
+def _all_lost_transport(posts):
+    """Every workflow showing the 2026-08-21 shape: failed, zero jobs."""
+    import json as _json
+
+    def gh(args):
+        joined = " ".join(args)
+        if "--method" in args:
+            posts.append(joined)
+            return ""
+        if "/runs?per_page" in joined:
+            return _json.dumps(
+                [{
+                    "id": 999,
+                    "event": "schedule",
+                    "conclusion": "failure",
+                    "created_at": "2026-08-21T02:17:57Z",
+                }]
+            )
+        if "/jobs?per_page" in joined:
+            return "0\n"
+        return ""
+
+    return gh
+
+
+def test_a_total_loss_does_not_become_a_thundering_herd(monkeypatch) -> None:
+    """The regression this cap exists for.
+
+    Every variant's full build alone exceeds the 20-concurrent-job ceiling,
+    which is why the nightlies are staggered at all (#1932). An uncapped
+    sweep answers a 13-variant loss with 13 simultaneous builds and starves
+    them into the same slow failure it was meant to cure.
+    """
+    posts = []
+    monkeypatch.setattr(sweeper, "_gh", _all_lost_transport(posts))
+    sweeper.main(["--repo", "tuna-os/tunaOS"])
+    assert len(posts) == sweeper.DEFAULT_MAX_DISPATCH
+
+
+def test_the_cap_defers_rather_than_drops(capsys, monkeypatch) -> None:
+    """A capped sweep must not read as a clean one."""
+    posts = []
+    monkeypatch.setattr(sweeper, "_gh", _all_lost_transport(posts))
+    sweeper.main(["--repo", "tuna-os/tunaOS"])
+    out = capsys.readouterr().out
+    assert "deferred 11" in out
+    assert "deferred to the next sweep:" in out
+    for name in sweeper.WORKFLOWS:
+        assert name in out, f"{name} vanished from the report"
+
+
+def test_the_common_case_is_still_immediate(monkeypatch) -> None:
+    """One variant lost must recover on the very next sweep, not be rationed."""
+    import json as _json
+
+    posts = []
+
+    def gh(args):
+        joined = " ".join(args)
+        if "--method" in args:
+            posts.append(joined)
+            return ""
+        if "/runs?per_page" in joined:
+            lost = "build-yellowfin" in joined
+            return _json.dumps(
+                [{
+                    "id": 999 if lost else 1,
+                    "event": "schedule",
+                    "conclusion": "failure" if lost else "success",
+                    "created_at": "2026-08-21T02:17:57Z",
+                }]
+            )
+        if "/jobs?per_page" in joined:
+            return "0\n" if "999" in joined else "30\n"
+        return ""
+
+    monkeypatch.setattr(sweeper, "_gh", gh)
+    sweeper.main(["--repo", "tuna-os/tunaOS"])
+    assert len(posts) == 1
+    assert "build-yellowfin.yml" in posts[0]
+
+
+def test_dry_run_dispatches_nothing(monkeypatch) -> None:
+    posts = []
+    monkeypatch.setattr(sweeper, "_gh", _all_lost_transport(posts))
+    sweeper.main(["--repo", "tuna-os/tunaOS", "--dry-run"])
+    assert posts == []
+
+
 # --- scope ------------------------------------------------------------------
 
 
