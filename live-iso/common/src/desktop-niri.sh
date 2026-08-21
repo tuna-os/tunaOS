@@ -84,19 +84,52 @@ systemctl mask sleep.target suspend.target hibernate.target hybrid-sleep.target 
 # user unit: spawn-at-startup is niri's own idiom and is demonstrably working
 # in this exact image, whereas a user unit would rest on an assumption about
 # how far niri-session takes graphical-session.target.
-NIRI_CONFIG=/usr/share/niri/config.kdl
-if [[ -f "${NIRI_CONFIG}" ]]; then
-	tee -a "${NIRI_CONFIG}" <<'NIRIEOF'
+# niri reads exactly ONE config -- the first of these that exists:
+#
+#   $XDG_CONFIG_HOME/niri/config.kdl   (liveuser's ~/.config/niri/config.kdl)
+#   /etc/niri/config.kdl
+#   /usr/share/niri/config.kdl
+#
+# This appended only to the LAST one, and run 32450214451 proved that never
+# takes effect. niri came up fine (pid 2083, socket wayland-1) and said so
+# itself:
+#
+#   niri_config: loaded config from "/var/home/liveuser/.config/niri/config.kdl"
+#
+# The niri package ships a skel copy, useradd --create-home installs it into
+# liveuser's home at customize-live.sh:81 -- fifteen lines before this script
+# is sourced -- and from then on the system default is dead weight. The
+# flatpak was installed and correct; `flatpak ps` was simply empty, because
+# nothing ever launched it. Exactly the read-path failure this repo keeps
+# hitting: the fix landed somewhere the target never looks.
+#
+# So append to every candidate that exists rather than guessing which wins.
+# niri reads one, so this cannot double-spawn, and it does not have to model
+# a precedence order that may change.
+_niri_home="$(getent passwd liveuser | cut -d: -f6)"
+NIRI_CONFIGS=(
+	"${_niri_home:-/var/home/liveuser}/.config/niri/config.kdl"
+	/etc/niri/config.kdl
+	/usr/share/niri/config.kdl
+)
+_niri_appended=0
+for _niri_cfg in "${NIRI_CONFIGS[@]}"; do
+	[[ -f "${_niri_cfg}" ]] || continue
+	tee -a "${_niri_cfg}" <<'NIRIEOF'
 
 // ── live ISO only ────────────────────────────────────────────────────────────
 // Appended by live-iso/common/src/desktop-niri.sh. Installed systems never see
 // this line: it is written into the live squash, not into the deployed image.
 spawn-at-startup "flatpak" "run" "org.tunaos.InstallerNiri"
 NIRIEOF
-else
+	echo "desktop-niri: installer autostart appended to ${_niri_cfg}"
+	_niri_appended=$((_niri_appended + 1))
+done
+
+if [[ "${_niri_appended}" -eq 0 ]]; then
 	# Fatal on purpose. A live niri ISO with no installer launcher is the exact
 	# defect this block exists to close, and it is invisible from outside — the
 	# ISO builds, the VM boots, the desktop comes up, and nothing runs.
-	echo "desktop-niri: ${NIRI_CONFIG} missing; cannot arrange installer autostart" >&2
+	echo "desktop-niri: no niri config.kdl found in any of ${NIRI_CONFIGS[*]}; cannot arrange installer autostart" >&2
 	exit 1
 fi
