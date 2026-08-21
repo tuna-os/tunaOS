@@ -362,14 +362,33 @@ jobs:
           # GPU, no OCR, just a file read over SSH. Contract and field list:
           # docs/INSTALLER-FRONTENDS.md.
           #
-          # Inside the Flatpak sandbox $XDG_RUNTIME_DIR is the app's own
-          # runtime dir, which the host sees at /run/user/<uid>/app/<app-id>/;
-          # an unsandboxed run writes to /run/user/<uid>/ directly. Look in
-          # both rather than assuming which one this ISO produced.
+          # Inside the Flatpak sandbox $XDG_RUNTIME_DIR reads as
+          # /run/user/<uid>, but that is a BIND MOUNT and the host path
+          # differs. Current flatpak backs it with
+          #   /run/user/<uid>/.flatpak/<app-id>/xdg-run/
+          # and that is where run 32445454947 actually found the stamp:
+          #   /run/user/1000/.flatpak/org.bootcinstaller.Installer/xdg-run/
+          #     tuna-installer-ready
+          # while the app's own log said it had written
+          # "/run/user/1000/tuna-installer-ready" -- the in-sandbox view of
+          # the same file.
+          #
+          # This check previously read only /run/user/<uid>/app/<app-id>/ and
+          # /run/user/<uid>/. Neither is where the file lands, so runs 63-68
+          # were ALL false negatives: the installer mapped its window (run 67's
+          # evidence screenshot shows the wizard), wrote a correct stamp naming
+          # BootcWindow, and the gate reported "running but never reported a
+          # window". The app/<app-id>/ directory does still exist -- flatpak
+          # creates it -- which is why an empty-directory listing looked like
+          # confirmation that nothing had been written.
+          #
+          # All three paths are read, newest layout first: an unsandboxed run
+          # still writes to /run/user/<uid>/ directly, and app/<app-id>/ costs
+          # nothing to keep for older flatpak.
           echo "expecting readiness stamp from: ${APP}"
           STAMP=""
           for _ in $(seq 1 18); do
-            STAMP=$($SSH "cat /run/user/*/app/${APP}/tuna-installer-ready /run/user/*/tuna-installer-ready 2>/dev/null | head -20" 2>/dev/null || true)
+            STAMP=$($SSH "cat /run/user/*/.flatpak/${APP}/xdg-run/tuna-installer-ready /run/user/*/app/${APP}/tuna-installer-ready /run/user/*/tuna-installer-ready 2>/dev/null | head -20" 2>/dev/null || true)
             [ -n "$STAMP" ] && break
             sleep 10
           done
@@ -381,7 +400,11 @@ jobs:
             echo "  that starts, stays up, and puts nothing on the screen."
             echo "  If this frontend's stamp is new, confirm the ISO's flatpak"
             echo "  postdates it before treating this as a UI regression."
-            echo "--- runtime dirs:"; $SSH 'ls -la /run/user/*/ /run/user/*/app/*/ 2>/dev/null | head -40' 2>/dev/null || true
+            echo "--- runtime dirs:"; $SSH 'ls -la /run/user/*/ /run/user/*/app/*/ /run/user/*/.flatpak/*/xdg-run/ 2>/dev/null | head -60' 2>/dev/null || true
+            # A stamp that exists but sits somewhere none of the three reads
+            # cover is the exact defect this block just had, so name it
+            # rather than making the next reader deduce it again.
+            echo "--- stamp anywhere under /run/user:"; $SSH 'find /run/user -name tuna-installer-ready 2>/dev/null || echo "(none)"' 2>/dev/null || true
             exit 1
           fi
 
