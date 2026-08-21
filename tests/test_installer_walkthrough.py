@@ -73,6 +73,10 @@ class FakeQEMUMonitor:
     def __init__(self, sock_path, outdir):
         self.sock_path = sock_path
         self.outdir = outdir
+        # Recorded so tests can assert the ORDER keys are sent, not just that
+        # the run finished. The overview-dismissal fix is entirely about
+        # sending 'esc' BEFORE anything else.
+        self.commands = []
         self._srv = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._srv.bind(sock_path)
         self._srv.listen(8)
@@ -97,6 +101,7 @@ class FakeQEMUMonitor:
                         break
                     data += chunk
                 cmd = data.decode("utf-8", "replace").strip()
+                self.commands.append(cmd)
                 if cmd.startswith("screendump "):
                     ppm = cmd.split(None, 1)[1]
                     with open(ppm, "w") as f:
@@ -150,6 +155,7 @@ def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
         summary_path = outdir / f"walkthrough-{flavor}.json"
         if summary_path.exists():
             summary = json.loads(summary_path.read_text())
+        run_walkthrough.last_commands = list(mon.commands)
         return proc, summary
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -253,3 +259,74 @@ class TestTapContract:
         assert proc.returncode == 0, proc.stdout + proc.stderr
         assert "# Results:" in proc.stdout
         assert "screens reached: welcome" in proc.stdout
+
+
+class TestLeavesTheShellOverview:
+    """Run 32450214451's gnome leg: a mapped, correctly stamped installer
+    window, 9 frames, 2 visual states, zero page advances.
+
+    The frames showed why -- the session sat in GNOME's Activities overview
+    with the installer as a thumbnail behind the "Type to search" entry, so
+    every key went to the shell. The focus-widening loop then walked onto the
+    thumbnail's CLOSE button, which is worse than useless: one more Return
+    would have closed the installer.
+    """
+
+    def test_escape_is_sent_before_any_advance_key(self):
+        """Escape must come first, or the overview eats the whole run."""
+        run_walkthrough({"0": "Welcome", "1": "Welcome"}, steps="2")
+        keys = [c.split(None, 1)[1] for c in run_walkthrough.last_commands
+                if c.startswith("sendkey ")]
+        assert keys, "no keys were sent at all"
+        assert keys[0] == "esc", (
+            f"first key sent was {keys[0]!r}, not 'esc' -- an overview would "
+            f"swallow it and every key after it (full order: {keys})"
+        )
+
+    def test_escape_precedes_the_first_activation(self):
+        run_walkthrough({"0": "Welcome"}, steps="2")
+        keys = [c.split(None, 1)[1] for c in run_walkthrough.last_commands
+                if c.startswith("sendkey ")]
+        assert "ret" in keys, f"no activation key was sent: {keys}"
+        assert keys.index("esc") < keys.index("ret")
+
+    def test_a_dismissed_overlay_is_reported(self):
+        """High pixel-diff stub => the screen changed when esc was pressed."""
+        proc, summary = run_walkthrough(
+            {"0": "Welcome", "1": "Disk", "2": "Disk"},
+            magick_ae=5000, steps="2")
+        assert "shell overlay was covering the installer" in proc.stdout, (
+            f"the dismissal was not reported:\n{proc.stdout}"
+        )
+        entry = _find_tap(summary, "frontmost at session start")
+        assert entry is not None, "no frontmost assertion in the summary"
+        assert entry["ok"] is False
+
+    def test_no_overlay_is_reported_when_escape_changes_nothing(self):
+        """magick_ae=0 => esc changed no pixels => nothing was covering it."""
+        proc, summary = run_walkthrough(
+            {"0": "Welcome", "1": "Welcome", "2": "Welcome"},
+            magick_ae=0, steps="2")
+        assert "shell overlay was covering the installer" not in proc.stdout
+        entry = _find_tap(summary, "frontmost at session start")
+        assert entry is not None
+        assert entry["ok"] is True
+
+    def test_the_overlay_finding_does_not_fail_the_run_on_its_own(self):
+        """Reported, not enforced -- the wizard behind it has never been
+        exercised on gnome, so failing here would swap one unknown for
+        another. It must still be in the record."""
+        _, summary = run_walkthrough(
+            {"0": "Welcome", "1": "Disk", "2": "Disk"},
+            magick_ae=5000, steps="2")
+        entry = _find_tap(summary, "frontmost at session start")
+        assert entry["enforced"] is False
+
+
+def _find_tap(summary, needle):
+    if not summary:
+        return None
+    for entry in summary.get("tap", []):
+        if needle in entry.get("desc", ""):
+            return entry
+    return None
