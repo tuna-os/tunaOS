@@ -86,3 +86,79 @@ def test_the_failure_branch_locates_a_misplaced_stamp() -> None:
 def test_the_failure_branch_lists_the_sandbox_dir() -> None:
     body = WORKFLOW.read_text()
     assert "/run/user/*/.flatpak/*/xdg-run/" in body
+
+
+# --- the window class (the designed-but-unread field) -----------------------
+
+
+def assert_step() -> str:
+    doc = yaml.safe_load(WORKFLOW.read_text())
+    for job in doc["jobs"].values():
+        for step in (job.get("steps") or []):
+            if "Assert live desktop" in str(step.get("name", "")):
+                return step["run"]
+    raise AssertionError("assert step not found")
+
+
+def test_the_window_class_is_actually_read() -> None:
+    """readiness.py carries it precisely so this check can exist.
+
+    Its own words: "A CI VM sized just under the RAM threshold would show the
+    not-enough-RAM screen and pass every check we currently run." app_id
+    proves which frontend stamped and signal proves a surface reached the
+    screen; neither tells the wizard from the too-small-VM screen.
+    """
+    assert re.search(r"STAMP_WINDOW=\$\(", code_of(assert_step())), (
+        "the stamp's window field is written by every frontend and read by "
+        "nothing; a RAM/CPU/UEFI window would pass the gate"
+    )
+
+
+def code_of(run: str) -> str:
+    """Executable lines only. Comments and echo text name these classes for
+    documentation, and matching those made the first version of these tests
+    pass against a gate that had stopped checking anything."""
+    out = []
+    for line in run.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("#") or stripped.startswith("echo "):
+            continue
+        out.append(line)
+    return "\n".join(out)
+
+
+def case_patterns(run: str) -> set[str]:
+    """The patterns of every `case` arm, e.g. {"BootcRamWindow", ...}."""
+    patterns = set()
+    for line in code_of(run).splitlines():
+        m = re.match(r"\s*([A-Za-z0-9_|\"*-]+)\)\s*$", line)
+        if m:
+            patterns.update(p.strip('"') for p in m.group(1).split("|"))
+    return patterns
+
+
+@pytest.mark.parametrize(
+    "klass", ["BootcRamWindow", "BootcCpuWindow", "BootcUnsupportedWindow"]
+)
+def test_the_non_wizard_windows_are_rejected(klass) -> None:
+    """Must appear as a `case` PATTERN, not merely somewhere in the text."""
+    assert klass in case_patterns(assert_step()), (
+        f"{klass} is not matched by any case arm, so a VM that presents it "
+        "passes the gate"
+    )
+
+
+def test_the_check_is_a_denylist_not_an_allowlist() -> None:
+    """The wizard class differs per frontend -- BootcWindow on gnome,
+    ApplicationWindow on niri -- so an allowlist would fail green cells
+    every time a fork renamed a class."""
+    # Comments may name the per-frontend classes -- that is documentation.
+    # What must not happen is a `case` PATTERN matching one.
+    code = code_of(assert_step())
+    assert "ApplicationWindow" not in code, (
+        "the gate matches on a per-frontend wizard class, which makes it an "
+        "allowlist that will fail cells when a fork renames one"
+    )
+    assert "BootcWindow" not in code, (
+        "same, for gnome's wizard class"
+    )

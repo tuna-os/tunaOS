@@ -454,6 +454,47 @@ jobs:
               exit 1 ;;
           esac
 
+          # The stamp's `window` field was designed and never read.
+          #
+          # readiness.py states plainly why it carries the window class:
+          # do_activate does not always present the wizard. Depending on the
+          # machine it presents BootcRamWindow, BootcCpuWindow or
+          # BootcUnsupportedWindow instead -- real windows, correctly mapped,
+          # that are not the installer. Its own words: "A CI VM sized just
+          # under the RAM threshold would show the not-enough-RAM screen and
+          # pass every check we currently run."
+          #
+          # That was true until now. app_id proves WHICH frontend stamped;
+          # signal proves a surface reached the screen; neither can tell the
+          # wizard from the sorry-your-VM-is-too-small screen. So the field
+          # existed, the frontends all wrote it, and nothing looked.
+          #
+          # A denylist rather than an allowlist, because the wizard class is
+          # per-frontend -- BootcWindow on gnome, ApplicationWindow on niri --
+          # and an allowlist would have to be updated every time a fork
+          # renames a class, failing green cells when it was not.
+          STAMP_WINDOW=$(echo "$STAMP" | sed -n 's/^window=//p' | head -1)
+          case "${STAMP_WINDOW}" in
+            BootcRamWindow|BootcCpuWindow|BootcUnsupportedWindow)
+              echo "::error::${FLAVOR}: the frontend presented ${STAMP_WINDOW}, not the installer."
+              echo "  The window mapped and the stamp is genuine -- this is the"
+              echo "  wrong window, which means the VM does not meet the"
+              echo "  installer's own requirements:"
+              echo "    BootcRamWindow         not enough RAM"
+              echo "    BootcCpuWindow         not enough CPU"
+              echo "    BootcUnsupportedWindow not booted UEFI"
+              echo "  Fix the harness sizing in scripts/iso-e2e.sh, or set"
+              echo "  IGNORE_RAM / IGNORE_CPU in the live autostart if the"
+              echo "  threshold is deliberately not met in CI."
+              exit 1 ;;
+            "")
+              echo "::warning::${FLAVOR}: stamp carries no window class; cannot"\
+                   "tell the wizard from the RAM/CPU/UEFI screens"
+              ;;
+            *)
+              echo "${FLAVOR}: window class ${STAMP_WINDOW}" ;;
+          esac
+
       # Capturing frames proves nothing on its own, so this also asserts the
       # installer RENDERS (non-blank), ADVANCES (frames differ), and WHICH
       # spec'd screens it reached (OCR vs tests/installer-screens.yaml) — the
