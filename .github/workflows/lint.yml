@@ -43,6 +43,7 @@ jobs:
           - yamllint
           - json-validate
           - actionlint
+          - action-pins
           - justfmt
     steps:
       - name: Checkout
@@ -111,6 +112,10 @@ jobs:
             -ignore "save-always" \
             -ignore "cannot be filtered" \
             .github/workflows/*.yml .github/workflows/*.yaml
+
+      - name: Check action pins
+        if: matrix.check == 'action-pins'
+        run: python3 .github/scripts/check-action-pins.py
 
       - name: Check Justfile formatting
         if: matrix.check == 'justfmt'
