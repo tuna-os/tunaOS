@@ -29,9 +29,9 @@ on:
         # this default kept it from ever running.
         default: "gnome,kde,cosmic,niri,xfce"
         type: string
-  schedule:
-    # Weekly, after the Tuesday image builds settle.
-    - cron: "0 9 * * 3"
+# schedule:
+  #   # Weekly, after the Tuesday image builds settle. Disabled until window readiness stamp under OVMF software GL is resolved (#1396)
+  #   - cron: "0 9 * * 3"
 
 permissions:
   contents: read
