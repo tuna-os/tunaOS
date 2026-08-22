@@ -107,7 +107,13 @@ jobs:
         env:
           GITHUB_REPOSITORY_OWNER: tuna-os
         run: |
-          sudo GITHUB_REPOSITORY_OWNER=tuna-os \
+          # TBOX_CUSTOMIZE_NETWORK=host works around tuna-os/tacklebox's documented
+          # podman-bridge DNS issue for root-context containers (see tacklebox's
+          # internal/install/customize.go): the live-customize container can end up
+          # with no route out on GitHub-hosted runners, surfacing as "Could not
+          # resolve host" for whatever host the customize scripts happen to hit
+          # first (github.com, mirrors.almalinux.org, ...) — tuna-os/tunaos#1412.
+          sudo GITHUB_REPOSITORY_OWNER=tuna-os TBOX_CUSTOMIZE_NETWORK=host \
             just iso "${{ matrix.variant }}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
 
       - name: Boot ISO and capture desktop screenshot
