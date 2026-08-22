@@ -68,21 +68,21 @@ it.
 
 Scored against `.github/green-criteria.yml`: a cell is green only when every **blocking** criterion applicable to it has a current affirmative result; a criterion that was skipped, never tested, or unasserted renders ⬜ and does not count as satisfied. Blocking today: `builds`, `desktop`, `boots`, `no_silent_omissions`. Advisory (measured in the sections below, not yet biting): `install`, `lifecycle`, `parity`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. Graduating a criterion is an edit to `enforcement:` in that file — this table and the README count tighten with no code change.
 
-**74 of 143** published cells are composite-green.
+**70 of 143** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **albacore** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **flounder** | ✅ | ✅ | — | — | ✅ |
 | **flounder-sid** | ❌ | ❌ | — | — | ❌ |
-| **grouper** | ✅ | ✅ | ✅ | — | ✅ |
-| **guppy** | ❌ | ✅ | — | — | ✅ |
+| **grouper** | ✅ | ✅ | ❌ | — | ✅ |
+| **guppy** | ❌ | ⬜ | — | — | ✅ |
 | **hummingbird** | ❌ | ⬜ | ❌ | ⬜ | — |
-| **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **marlin** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **skipjack** | ❌ | ✅ | ✅ | ✅ | ✅ |
+| **skipjack** | ❌ | ✅ | ❌ | ❌ | ✅ |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
@@ -182,7 +182,7 @@ Pulls the **published** image and runs the contract script against it directly (
 
 5 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
 
-Newest result 2026-08-20.
+Newest result 2026-08-21.
 
 ## Bootc Lifecycle
 
@@ -219,7 +219,7 @@ This is the only axis that checks a human could actually install. For 4 combinat
 | **albacore** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **bonito** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **build yellowfin** | ✅ | — | — | — | ✅ |
+| **build yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **flounder** | ❌ | ⬜ | — | — | — |
 | **grouper** | ❌ | ⬜ | — | — | ⬜ |
 | **gurnard** | — | — | — | — | — |
@@ -242,10 +242,9 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-08-21 | [32445454947](https://github.com/tuna-os/tunaOS/actions/runs/32445454947) | 2 |
-| 2026-08-20 | [32408962415](https://github.com/tuna-os/tunaOS/actions/runs/32408962415) | 2 |
-| 2026-08-20 | [32378642846](https://github.com/tuna-os/tunaOS/actions/runs/32378642846) | 3 |
-| 2026-08-20 | [32349089138](https://github.com/tuna-os/tunaOS/actions/runs/32349089138) | 48 |
+| 2026-08-21 | [32472623013](https://github.com/tuna-os/tunaOS/actions/runs/32472623013) | 6 |
+| 2026-08-21 | [32465179023](https://github.com/tuna-os/tunaOS/actions/runs/32465179023) | 4 |
+| 2026-08-21 | [32463624333](https://github.com/tuna-os/tunaOS/actions/runs/32463624333) | 48 |
 | 2026-08-20 | [32335146969](https://github.com/tuna-os/tunaOS/actions/runs/32335146969) | 120 |
 | 2026-08-19 | [32238167029](https://github.com/tuna-os/tunaOS/actions/runs/32238167029) | 38 |
 | 2026-08-12 | [31585741267](https://github.com/tuna-os/tunaOS/actions/runs/31585741267) | 18 |
@@ -254,6 +253,7 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 | 2026-08-09 | [31286843546](https://github.com/tuna-os/tunaOS/actions/runs/31286843546) | 18 |
 | 2026-08-08 | [31242742608](https://github.com/tuna-os/tunaOS/actions/runs/31242742608) | 1 |
 | 2026-08-08 | [31236474250](https://github.com/tuna-os/tunaOS/actions/runs/31236474250) | 1 |
+| 2026-08-08 | [31236469036](https://github.com/tuna-os/tunaOS/actions/runs/31236469036) | 1 |
 
 <!-- END GENERATED -->
 
