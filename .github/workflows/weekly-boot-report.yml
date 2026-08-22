@@ -129,5 +129,30 @@ jobs:
             --label "boot-report" \
             --body-file "${{ steps.report.outputs.body_file }}")
           echo "==> Report: ${ISSUE_URL}"
+
+          # A weekly report is a snapshot, not a durable work item. Keep the
+          # latest issue open for review and close every older open report so
+          # generated snapshots do not accumulate indefinitely (#660).
+          CURRENT_NUMBER="${ISSUE_URL##*/}"
+          SUPERSEDED_REPORTS=$(mktemp)
+          trap 'rm -f "$SUPERSEDED_REPORTS"' EXIT
+          gh issue list \
+            --repo "$REPO" \
+            --label "boot-report" \
+            --state open \
+            --limit 100 \
+            --json number,title \
+            --jq ".[] | select(.number != ${CURRENT_NUMBER}) | [.number, .title] | @tsv" \
+            > "$SUPERSEDED_REPORTS"
+          CLOSED_REPORTS=$(grep -c . "$SUPERSEDED_REPORTS" || true)
+          while IFS=$'\t' read -r number title; do
+            [[ -z "$number" ]] && continue
+            gh issue close "$number" \
+              --repo "$REPO" \
+              --reason "completed" \
+              --comment "Superseded by the latest weekly boot report: ${ISSUE_URL}."
+            echo "==> Closed superseded boot report #${number}: ${title}"
+          done < "$SUPERSEDED_REPORTS"
           echo "## Boot report" >> "$GITHUB_STEP_SUMMARY"
           echo "- Issue: ${ISSUE_URL}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Superseded open reports closed: ${CLOSED_REPORTS}" >> "$GITHUB_STEP_SUMMARY"
