@@ -53,8 +53,14 @@ STUB
   export OS_RELEASE
 }
 
+# IS_FEDORA defaults to true here because every case below models a FEDORA
+# image (Rawhide or pinned). It used to be unset, which meant these tests
+# reached the probe the same way CentOS did in production — through
+# detect_fedora_ver mapping an unexpanded %fedora to "rawhide" — rather than
+# by being a Fedora at all. See tunaOS#1823; the non-Fedora case is now
+# asserted explicitly below instead of being the accidental default.
 run_probe() {
-  PATH="${BIN}:$PATH" run bash -c "
+  PATH="${BIN}:$PATH" IS_FEDORA="${IS_FEDORA:-true}" run bash -c "
     set -euo pipefail
     ${FN_DETECT}
     ${FN_PROBE}
@@ -67,6 +73,33 @@ run_probe() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"TUNAOS_RPMDB_PROBE=rebuilt"* ]]
   [ "$(wc -l < "$REBUILD_LOG")" -eq 1 ]
+}
+
+@test "off Fedora entirely, the probe is a no-op — CentOS is not Rawhide" {
+  # The regression this guard exists for. On CentOS/RHEL/Alma `rpm -E %fedora`
+  # prints the macro back unexpanded, detect_fedora_ver reports "rawhide", and
+  # before the IS_FEDORA guard the Rawhide-only copy-up ran on a CentOS image
+  # and then aborted the build on a lossy salvage (skipjack,
+  # centos-bootc:stream10, run 32534198668).
+  printf 'PRETTY_NAME="CentOS Stream 10"\n' > "$OS_RELEASE"
+  IS_FEDORA=false RPM_E_OUT='%fedora' run_probe
+  [ "$status" -eq 0 ]
+  [[ "$output" != *"TUNAOS_RPMDB_PROBE"* ]]
+  [ "$(wc -l < "$REBUILD_LOG")" -eq 0 ]
+}
+
+@test "detect_fedora_ver still reports rawhide there — the guard is what stops it" {
+  # Pins the MECHANISM, not just the outcome: detect_fedora_ver is deliberately
+  # left alone, because 10-base-packages.sh depends on that fallback inside an
+  # `elif [[ $IS_FEDORA == true ]]` branch. If a later change "fixes" the
+  # helper instead, this test says so.
+  PATH="${BIN}:$PATH" run bash -c "
+    set -euo pipefail
+    ${FN_DETECT}
+    RPM_E_OUT='%fedora' detect_fedora_ver
+  "
+  [ "$status" -eq 0 ]
+  [[ "$output" == "rawhide" ]]
 }
 
 @test "off rawhide, the probe is a no-op — pinned Fedora never pays for it" {

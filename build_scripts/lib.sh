@@ -759,6 +759,40 @@ install_rawhide_tolerant() {
 # transaction that follows is the real verdict either way, and a probe that
 # can kill a green pinned-Fedora build would cost more than it measures.
 rawhide_rpmdb_probe() {
+	# EXPERIMENT for tunaOS#1823. The comment above says this is "a no-op off
+	# Rawhide". It was not. detect_fedora_ver (above) maps an UNEXPANDED
+	# %fedora to "rawhide", and %fedora is undefined on every non-Fedora dnf
+	# image -- so "this is not a Fedora at all" was being read as "this is
+	# Rawhide", and the Rawhide-only copy-up ran on CentOS, RHEL and Alma too.
+	#
+	# Measured on skipjack (quay.io/centos-bootc/centos-bootc:stream10,
+	# IS_CENTOS=true, IS_FEDORA=false), run 32534198668:
+	#
+	#   ++ rpm -E %fedora
+	#   ++ ver=%fedora
+	#   ++ [[ %fedora == \%\f\e\d\o\r\a ]]
+	#   ++ echo rawhide
+	#   + [[ rawhide == \r\a\w\h\i\d\e ]]
+	#
+	# detect_fedora_ver's fallback is sound where it was designed to be used:
+	# 10-base-packages.sh only reaches it inside an `elif [[ $IS_FEDORA == true
+	# ]]` branch, where an unexpanded macro really can only mean an odd
+	# prerelease. This function consumed it with no such guard.
+	#
+	# Whether that misfire is inert or load-bearing on EL10 is exactly what
+	# this branch measures, and it is NOT obvious: #1912 and #1916 fixed real
+	# EL10 corruption with this same round-trip and salvage, and if EL10 cells
+	# have been reaching that code THROUGH the misdetection, gating it here
+	# reverts those fixes. The nvidia surface is unaffected either way --
+	# overlay/overrides/nvidia/10-kernel-swap.sh carries its own deliberately
+	# fatal copy, and describes itself as this probe "graduating on a stable
+	# base", which reads as though the two were always meant to be separate.
+	#
+	# Read the result before merging. If EL10 desktop cells behave identically
+	# with this gate in place, the misfire was inert and the scope can simply
+	# be made honest. If they change, this line must NOT land as-is and EL10
+	# needs its own named entry point instead.
+	[[ "${IS_FEDORA:-false}" == true ]] || return 0
 	[[ "$(detect_fedora_ver)" == "rawhide" ]] || return 0
 	# tunaOS#1823, PROVEN FIX ported from the nvidia overlay (run
 	# 32339591457, 2026-08-20): the sqlite corruption class is rpm writing
