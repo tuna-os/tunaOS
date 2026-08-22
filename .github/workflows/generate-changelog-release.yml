@@ -293,8 +293,30 @@ jobs:
               {"sbom_name": "flatpak",       "label": "Flatpak"},
               {"sbom_name": "pipewire",      "label": "PipeWire"}
             ]
-          handwritten:  ${{ inputs.handwritten || '' }}
           github-token: ${{ github.token }}
+
+      # projectbluefin/actions/bootc-build/create-release has no note-injection
+      # input (tunaos#1398 — a `handwritten:` input here was silently ignored,
+      # dropping the note from every release). Prepend it ourselves once the
+      # release exists, so it never overwrites the action's own generated
+      # changelog/SBOM notes.
+      - name: Prepend handwritten note
+        if: |
+          steps.release.outcome == 'success' &&
+          inputs.handwritten != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.vars.outputs.tag }}
+          NOTE: ${{ inputs.handwritten }}
+        run: |
+          set -euo pipefail
+          BODY_FILE=$(mktemp)
+          {
+            echo "$NOTE"
+            echo ""
+            gh release view "$TAG" --repo "${{ github.repository }}" --json body -q .body
+          } > "$BODY_FILE"
+          gh release edit "$TAG" --repo "${{ github.repository }}" --notes-file "$BODY_FILE"
 
       # ── Release cadence health gate (#1147) ───────────────────────────────
       # Before this existed, "we shipped nothing" and "we shipped" were the
