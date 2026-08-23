@@ -68,7 +68,7 @@ it.
 
 Scored against `.github/green-criteria.yml`: a cell is green only when every **blocking** criterion applicable to it has a current affirmative result; a criterion that was skipped, never tested, or unasserted renders ⬜ and does not count as satisfied. Blocking today: `builds`, `desktop`, `boots`, `no_silent_omissions`. Advisory (measured in the sections below, not yet biting): `install`, `lifecycle`, `parity`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. Graduating a criterion is an edit to `enforcement:` in that file — this table and the README count tighten with no code change.
 
-**70 of 143** published cells are composite-green.
+**67 of 143** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -80,10 +80,10 @@ Scored against `.github/green-criteria.yml`: a cell is green only when every **b
 | **grouper** | ✅ | ✅ | ❌ | — | ✅ |
 | **guppy** | ❌ | ⬜ | — | — | ✅ |
 | **hummingbird** | ❌ | ⬜ | ❌ | ⬜ | — |
-| **marlin** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **marlin** | ✅ | ⬜ | ❌ | ❌ | ✅ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **skipjack** | ❌ | ✅ | ❌ | ❌ | ✅ |
-| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **yellowfin** | ✅ | ✅ | ❌ | ❌ | ✅ |
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
 
@@ -182,7 +182,7 @@ Pulls the **published** image and runs the contract script against it directly (
 
 5 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
 
-Newest result 2026-08-21.
+Newest result 2026-08-22.
 
 ## Bootc Lifecycle
 
@@ -242,9 +242,9 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-08-22 | [32562013165](https://github.com/tuna-os/tunaOS/actions/runs/32562013165) | 48 |
 | 2026-08-21 | [32472623013](https://github.com/tuna-os/tunaOS/actions/runs/32472623013) | 6 |
 | 2026-08-21 | [32465179023](https://github.com/tuna-os/tunaOS/actions/runs/32465179023) | 4 |
-| 2026-08-21 | [32463624333](https://github.com/tuna-os/tunaOS/actions/runs/32463624333) | 48 |
 | 2026-08-20 | [32335146969](https://github.com/tuna-os/tunaOS/actions/runs/32335146969) | 120 |
 | 2026-08-19 | [32238167029](https://github.com/tuna-os/tunaOS/actions/runs/32238167029) | 38 |
 | 2026-08-12 | [31585741267](https://github.com/tuna-os/tunaOS/actions/runs/31585741267) | 18 |
