@@ -94,6 +94,17 @@ EOF
 
   export MEM_TOTAL_MIB=16384
   export MEM_AVAIL_MIB=14000
+
+  # A PATH holding only the mocks plus the handful of real tools the script
+  # needs. Deleting the systemd-run mock is not enough to simulate a host
+  # without systemd-run: GitHub's runners ship a real one in /usr/bin, so
+  # `command -v systemd-run` still succeeds and the test takes the capped
+  # branch it was written to avoid.
+  SHIM="${BATS_TEST_TMPDIR}/shim"
+  mkdir -p "$SHIM"
+  for tool in bash awk timeout id jq; do
+    ln -sf "$(command -v "$tool")" "${SHIM}/${tool}"
+  done
 }
 
 @test "cap is runner total minus the reserve on a normally-sized runner" {
@@ -125,8 +136,13 @@ EOF
 
 @test "losing systemd-run warns loudly and still runs syft" {
   rm -f "${BIN}/systemd-run"
+  # The branch under test only exists when systemd-run is gone, so hand the
+  # script a PATH that has neither the mock nor the runner's real one — but
+  # keep this test's own PATH intact for its assertions below.
+  [ ! -e "${BIN}/systemd-run" ]
+  [ ! -e "${SHIM}/systemd-run" ]
 
-  run "$SCRIPT"
+  run env PATH="${BIN}:${SHIM}" "$SCRIPT"
   [ "$status" -eq 0 ]
 
   [[ "$output" == *"::warning::systemd-run unavailable"* ]]
