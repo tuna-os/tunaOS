@@ -79,8 +79,9 @@ jobs:
           done
           hash -r
 
-      - name: Setup rootless podman (subuid/subgid for runner)
+      - name: Setup rootless podman (subuid/subgid + userns for runner)
         run: |
+          set -euo pipefail
           # tacklebox runs 'sudo -u runner podman unshare' for the squashfs;
           # 'podman unshare' only works rootless and needs subuid/subgid
           # entries for the unprivileged user ("please use unshare with
@@ -91,6 +92,55 @@ jobs:
           if ! grep -q "^${USER}:" /etc/subgid 2>/dev/null; then
             echo "${USER}:100000:65536" | sudo tee -a /etc/subgid
           fi
+
+          # subuid/subgid are necessary and NOT sufficient. Rootless podman
+          # also has to be allowed to create a user namespace at all, and on
+          # Ubuntu 24.04 -- which is what the kubic repo above pins podman
+          # against -- it is not by default:
+          #
+          #   kernel.apparmor_restrict_unprivileged_userns = 1
+          #
+          # When that is set, an unprivileged clone(CLONE_NEWUSER) is refused
+          # and podman reports it without naming the cause:
+          #
+          #   cannot clone: Permission denied
+          #   Error: cannot re-exec process
+          #   ##[error]Process completed with exit code 125
+          #
+          # (run 32688258870, `Sync image into rootless storage`). Nothing in
+          # that message mentions namespaces, AppArmor or the sysctl, and it
+          # arrives AFTER a ~12 minute image build, because the first rootless
+          # command in the job is the one right after `Build OS image`.
+          echo "==> unprivileged userns gates, as found:"
+          for k in kernel.apparmor_restrict_unprivileged_userns \
+                   kernel.unprivileged_userns_clone; do
+            printf '    %s = %s\n' "$k" "$(sysctl -n "$k" 2>/dev/null || echo '(absent)')"
+          done
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
+          # PROVE it rather than assume it. This is the same operation
+          # tacklebox and the sync step below both need, it costs a fraction
+          # of a second, and failing HERE names the cause while failing twelve
+          # minutes later does not. A setup step that configures something and
+          # never checks it is the shape this repository has been bitten by
+          # repeatedly.
+          if ! podman unshare true; then
+            echo "::error::rootless podman still cannot create a user namespace."
+            echo "  subuid: $(grep "^${USER}:" /etc/subuid || echo MISSING)"
+            echo "  subgid: $(grep "^${USER}:" /etc/subgid || echo MISSING)"
+            for k in kernel.apparmor_restrict_unprivileged_userns \
+                     kernel.unprivileged_userns_clone \
+                     user.max_user_namespaces; do
+              printf '  %s = %s\n' "$k" "$(sysctl -n "$k" 2>/dev/null || echo '(absent)')"
+            done
+            echo "  Everything downstream that runs rootless -- the image sync"
+            echo "  and tacklebox's squashfs -- will fail with 'cannot re-exec"
+            echo "  process' and exit 125, naming none of the above."
+            exit 1
+          fi
+          echo "==> rootless podman can create a user namespace"
 
       - name: Build OS image
         run: |

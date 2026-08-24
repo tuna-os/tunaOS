@@ -51,6 +51,8 @@ from pathlib import Path
 
 import pytest
 
+yaml = pytest.importorskip("yaml")
+
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPTS = ROOT / "scripts"
 HARNESS = SCRIPTS / "iso-e2e.sh"
@@ -265,3 +267,103 @@ def test_the_workflow_prints_the_session_journal():
     assert f"journalctl -t {SESSION_TAG}" in body, (
         "the session now logs under a tag nothing reads"
     )
+
+
+# ── A setup step that configures something and never checks it ──────────────
+#
+# `Sync image into rootless storage` runs `sudo podman save ... | podman load`.
+# The second half is rootless, and on Ubuntu 24.04 -- which is the distro the
+# kubic repo pins podman against in this very workflow -- an unprivileged
+# clone(CLONE_NEWUSER) is refused by default:
+#
+#   kernel.apparmor_restrict_unprivileged_userns = 1
+#
+# podman reports that without naming it:
+#
+#   cannot clone: Permission denied
+#   Error: cannot re-exec process
+#   ##[error]Process completed with exit code 125
+#
+# (run 32688258870). Twelve minutes of image build happen first, because the
+# first rootless command in the job is the one immediately after `Build OS
+# image` -- so the cost of the missing diagnosis is a whole build, and the
+# message names neither namespaces nor AppArmor nor the sysctl.
+#
+# The subuid/subgid step already existed to make rootless podman work. It set
+# a precondition and never verified the thing it was a precondition FOR, which
+# is the same shape as the helper-path bug above: configuration present,
+# behaviour absent, nobody looking. So the step now PROVES it with the cheapest
+# possible instance of the operation everything downstream needs.
+
+LIVE_ISO_WORKFLOW = ROOT / ".github" / "workflows" / "live-iso-bootc.yml"
+
+
+def _live_iso_steps():
+    doc = yaml.safe_load(LIVE_ISO_WORKFLOW.read_text())
+    return doc["jobs"]["build"]["steps"]
+
+
+def _rootless_setup_step():
+    for s in _live_iso_steps():
+        if "Setup rootless podman" in s.get("name", ""):
+            return s
+    raise AssertionError("no rootless-podman setup step found")
+
+
+def test_the_setup_step_runs_before_the_first_rootless_command():
+    """Configuring userns after the thing that needs it would prove nothing."""
+    names = [s.get("name", "") for s in _live_iso_steps()]
+    setup = next(i for i, n in enumerate(names) if "Setup rootless podman" in n)
+    sync = next(i for i, n in enumerate(names) if "Sync image into rootless storage" in n)
+    assert setup < sync, names
+
+
+def test_the_setup_step_proves_rootless_podman_works(tmp_path):
+    """Run the body with podman shimmed to fail; it must exit nonzero and SAY why."""
+    import os
+    import subprocess
+
+    step = tmp_path / "step.sh"
+    step.write_text(_rootless_setup_step()["run"], encoding="utf-8")
+
+    shims = tmp_path / "bin"
+    shims.mkdir()
+    (shims / "sudo").write_text('#!/bin/sh\nexec "$@"\n')
+    (shims / "podman").write_text("#!/bin/sh\nexit 1\n")  # userns refused
+    (shims / "sysctl").write_text('#!/bin/sh\n[ "$1" = "-n" ] && { echo 1; exit 0; }\nexit 0\n')
+    (shims / "tee").write_text("#!/bin/sh\ncat >/dev/null\n")
+    for f in shims.iterdir():
+        f.chmod(0o755)
+
+    env = dict(os.environ, PATH=f"{shims}:/usr/bin:/bin", USER="runner")
+    proc = subprocess.run(["bash", str(step)], capture_output=True, text=True, env=env)
+
+    assert proc.returncode != 0, proc.stdout
+    assert "cannot create a user namespace" in proc.stdout, proc.stdout
+    # The values that identify WHICH gate is closed must be printed, or the
+    # step just relocates an unexplained failure instead of explaining it.
+    assert "apparmor_restrict_unprivileged_userns" in proc.stdout, proc.stdout
+
+
+def test_the_setup_step_passes_when_the_namespace_can_be_created(tmp_path):
+    """It must also be able to succeed, or it is a permanently red gate."""
+    import os
+    import subprocess
+
+    step = tmp_path / "step.sh"
+    step.write_text(_rootless_setup_step()["run"], encoding="utf-8")
+
+    shims = tmp_path / "bin"
+    shims.mkdir()
+    (shims / "sudo").write_text('#!/bin/sh\nexec "$@"\n')
+    (shims / "podman").write_text("#!/bin/sh\nexit 0\n")  # userns allowed
+    (shims / "sysctl").write_text('#!/bin/sh\n[ "$1" = "-n" ] && { echo 0; exit 0; }\nexit 0\n')
+    (shims / "tee").write_text("#!/bin/sh\ncat >/dev/null\n")
+    for f in shims.iterdir():
+        f.chmod(0o755)
+
+    env = dict(os.environ, PATH=f"{shims}:/usr/bin:/bin", USER="runner")
+    proc = subprocess.run(["bash", str(step)], capture_output=True, text=True, env=env)
+
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "can create a user namespace" in proc.stdout, proc.stdout
