@@ -20,16 +20,34 @@ iso_groups:
   - suffix: ""
     flavors: [gnome-nvidia, gnome-nvidia-hwe]
     offline_flavors: [gnome, gnome-hwe, gnome-nvidia, gnome-nvidia-hwe]
-  # Additional desktop ISO group (KDE/COSMIC/Niri/XFCE). NOT published as a
-  # single grouped ISO — the browser ISO Builder (https://iso.tunaos.org) covers these on
-  # demand from the published images, so we don't carry the cost of a
-  # 5-flavor offline-store ISO for the long tail. The images still build
-  # and publish to GHCR; only the grouped ISO is skipped.
-  # (Manually publishable via workflow_dispatch group=community if needed.)
-  - suffix: community
-    publish: false
-    flavors: [kde-nvidia, cosmic-nvidia, niri-nvidia, xfce-nvidia]
-    offline_flavors: [kde, kde-hwe, cosmic, cosmic-hwe, niri, niri-hwe, xfce, kde-nvidia, cosmic-nvidia, niri-nvidia, xfce-nvidia]
+  # ONE ISO PER BASE+DESKTOP, each embedding its own NVIDIA and HWE flavors —
+  # the same shape as the GNOME group above, applied to the other four
+  # desktops. Published as `<variant>-<suffix>.iso`.
+  #
+  # This replaces a single `community` group that packed KDE, COSMIC, Niri and
+  # XFCE into ONE ISO and carried `publish: false`, on the reasoning that the
+  # browser ISO Builder covers the long tail on demand so a five-flavor
+  # offline store was not worth the storage. The cost argument was sound; the
+  # conclusion was not. A user who wants KDE should get a KDE ISO, not a
+  # four-desktop ISO or a browser build step, and one desktop's offline store
+  # is a fraction of four.
+  #
+  # Storage does not grow the way the old comment implied either: these are
+  # DEDUPLICATED groups over a shared squashfs, so a per-desktop ISO carries
+  # its own desktop plus the base layers it already shares with every other
+  # ISO of the same variant.
+  - suffix: kde
+    flavors: [kde-nvidia]
+    offline_flavors: [kde, kde-hwe, kde-nvidia]
+  - suffix: cosmic
+    flavors: [cosmic-nvidia]
+    offline_flavors: [cosmic, cosmic-hwe, cosmic-nvidia]
+  - suffix: niri
+    flavors: [niri-nvidia]
+    offline_flavors: [niri, niri-hwe, niri-nvidia]
+  - suffix: xfce
+    flavors: [xfce-nvidia]
+    offline_flavors: [xfce, xfce-hwe, xfce-nvidia]
 
 # Build stages (for reference — enforced by the workflow job graph):
 #

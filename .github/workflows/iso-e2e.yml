@@ -10,26 +10,48 @@ name: ISO E2E Smoke
 #
 # This is the lightweight readiness mode (--mode=ready). Future iterations
 # add --kickstart and --ssh-only modes. See scripts/iso-e2e.sh --help.
+#
+# TWO SOURCES.
+#
+#   r2-latest  the published ISO — what users actually download. The release
+#              check. Limited to whatever has been published, which today is
+#              albacore only (#2027).
+#   build      build the ISO on this runner and boot it where it lies.
+#
+# `build` exists because testing every cell must not mean publishing every
+# cell: R2 storage for ~50 five-gigabyte ISOs is a real bill, and most of
+# those images are being tested, not shipped. Building takes ~19 minutes on a
+# GitHub runner (measured, run 32768030728) and the ISO is deleted with the
+# runner, so a sweep costs runner minutes and nothing else.
+#
+# It replaces a `source: artifact` option that was offered in the dispatch UI
+# and NEVER IMPLEMENTED — there is no download-artifact step in this file, so
+# choosing it skipped the R2 fetch and left ISO_PATH unset. Building in-job
+# rather than via an artifact also avoids paying to store the ISO twice.
 
 on:
   workflow_dispatch:
     inputs:
       variant:
-        description: 'Variant to test'
+        # Free-form, not a choice list. The list here offered yellowfin and
+        # albacore while build-config.yml declares build_iso: true for ten
+        # variants, so eight of them could not be tested at all -- and the
+        # job matrix below only ever had two cells, so even a listed value
+        # like albacore:kde had nothing to run on.
+        #
+        # That is why the `iso` criterion is the single biggest blocker in
+        # docs/matrix-provenance.json: of 143 cells, 66 carry an iso verdict
+        # and none of them passes. Six boot-green cells are one criterion
+        # short of fully green and in every case that criterion is iso.
+        description: 'Variant to test (any id from build-config.yml)'
         required: false
         default: 'yellowfin'
-        type: choice
-        options:
-          - yellowfin
-          - albacore
-      flavor:
-        description: 'Flavor to test'
+        type: string
+      flavors:
+        description: 'Comma-separated flavors'
         required: false
         default: 'gnome'
-        type: choice
-        options:
-          - gnome
-          - gnome-hwe
+        type: string
       source:
         description: 'Where to source the ISO from'
         required: false
@@ -37,7 +59,7 @@ on:
         type: choice
         options:
           - r2-latest      # Download the latest published ISO from Cloudflare R2.
-          - artifact       # Consume an ISO uploaded as a workflow artifact.
+          - build          # Build the ISO on the runner and test it in place.
   # PR trigger only when the harness itself changes. Building a per-PR ISO
   # to test arbitrary Containerfile/build_scripts changes would take ~40 min
   # and isn't wired up yet (the workflow currently downloads from R2, which
@@ -59,19 +81,52 @@ permissions:
   actions: read
 
 jobs:
+  generate-matrix:
+    name: Generate ISO E2E matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # A dispatch tests exactly the cells asked for. Anything else -- the
+      # pull_request harness trigger and the Monday schedule -- keeps the two
+      # cells this workflow has always run, so widening the inputs cannot
+      # silently turn a harness smoke test into a fifty-cell sweep.
+      - name: Build the cell list
+        id: gen
+        env:
+          DISPATCH_VARIANT: ${{ inputs.variant }}
+          DISPATCH_FLAVORS: ${{ inputs.flavors }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${DISPATCH_VARIANT:-}" && -n "${DISPATCH_FLAVORS:-}" ]]; then
+            M=$(jq -cn --arg v "$DISPATCH_VARIANT" --arg f "$DISPATCH_FLAVORS" \
+              '{include: ($f | split(",") | map(ltrimstr(" ") | rtrimstr(" "))
+                              | map(select(length > 0))
+                              | map({variant: $v, flavor: .}))}')
+          else
+            M='{"include":[{"variant":"yellowfin","flavor":"gnome"},{"variant":"albacore","flavor":"gnome"}]}'
+          fi
+          # An empty include list is a GREEN CHECK THAT RAN NOTHING, which is
+          # worse than a red one: a sweep would report complete having
+          # measured no cell. `flavors: " , "` produced exactly that.
+          if [[ "$(echo "$M" | jq '.include | length')" -eq 0 ]]; then
+            echo "::error::no cells to test — variant='${DISPATCH_VARIANT:-}' flavors='${DISPATCH_FLAVORS:-}' produced an empty matrix"
+            exit 1
+          fi
+          echo "matrix=$M" >> "$GITHUB_OUTPUT"
+          echo "$M" | jq -r '.include[] | "  \(.variant):\(.flavor)"'
+
   e2e:
     name: E2E ${{ matrix.variant }}:${{ matrix.flavor }}
+    needs: generate-matrix
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       # Don't cancel the other leg if one fails — we want to see both signals.
       fail-fast: false
-      matrix:
-        include:
-          - variant: yellowfin
-            flavor: gnome
-          - variant: albacore
-            flavor: gnome
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
 
     steps:
       - name: Checkout
@@ -100,14 +155,19 @@ jobs:
       - name: Preflight (dispatch filter, R2 credentials)
         id: filter
         env:
-          DISPATCH_VARIANT: ${{ inputs.variant }}
-          DISPATCH_FLAVOR: ${{ inputs.flavor }}
+          # Left empty deliberately: the matrix is now generated from the
+          # dispatch inputs above, so there are no non-matching cells left
+          # for this filter to skip. Wiring `inputs.flavors` (plural, a
+          # list) into a filter that compares one flavor would skip every
+          # cell but the first. The R2-credentials half below still runs.
+          DISPATCH_VARIANT: ''
+          DISPATCH_FLAVOR: ''
           # Read only to test for emptiness — never printed.
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
-          # Mirrors the `if:` on the download step below: source=artifact
+          # Mirrors the `if:` on the download step below: source=build
           # never touches R2, so it must not be blocked on R2 secrets.
           NEEDS_R2: ${{ github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest' }}
         run: |
@@ -222,6 +282,56 @@ jobs:
           fi
           {
             echo "ISO_PATH=$(realpath "${OBJECT}")"
+            echo "VARIANT=${VARIANT}"
+            echo "FLAVOR=${FLAVOR}"
+          } >> "$GITHUB_ENV"
+
+      # Build in place. No R2 read, no artifact upload, nothing to clean up:
+      # the ISO lives and dies on this runner. Mirrors live-iso-bootc.yml's
+      # build steps, which is where these exact incantations are explained --
+      # notably that `just iso` must NOT be wrapped in sudo (it sudos
+      # internally, and nesting breaks tacklebox's rootless podman unshare).
+      - name: Build the ISO on this runner
+        if: >-
+          steps.filter.outputs.skip != 'true' &&
+          github.event_name == 'workflow_dispatch' && inputs.source == 'build'
+        timeout-minutes: 60
+        env:
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+          TACKLEBOX_FROM_SOURCE: "1"
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y just podman jq golang-go git systemd-boot-efi \
+            xorriso mtools squashfs-tools dosfstools gdisk e2fsprogs btrfs-progs
+          # Both runner images ship a podman that cannot run/commit these
+          # containers (tunaOS#1893); same Kubic install as every other
+          # ISO-building job here.
+          sudo install -d /etc/apt/keyrings
+          curl -fsSL https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04/Release.key \
+            | gpg --dearmor | sudo tee /etc/apt/keyrings/kubic.gpg >/dev/null
+          echo 'deb [signed-by=/etc/apt/keyrings/kubic.gpg] https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04/ /' \
+            | sudo tee /etc/apt/sources.list.d/kubic.list
+          sudo apt-get update -qq
+          sudo apt-get remove -y podman conmon crun || true
+          sudo apt-get install -y podman
+          if ! grep -q "^${USER}:" /etc/subuid 2>/dev/null; then
+            echo "${USER}:100000:65536" | sudo tee -a /etc/subuid
+          fi
+          if ! grep -q "^${USER}:" /etc/subgid 2>/dev/null; then
+            echo "${USER}:100000:65536" | sudo tee -a /etc/subgid
+          fi
+          sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
+          sudo podman save "localhost/${VARIANT}:${FLAVOR}" | podman load
+          just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
+          ISO="$(find . -maxdepth 3 -name '*.iso' -newermt '-2 hours' -print -quit)"
+          if [[ -z "$ISO" ]]; then
+            echo "::error::build produced no ISO for ${VARIANT}:${FLAVOR}"
+            exit 1
+          fi
+          {
+            echo "ISO_PATH=$(realpath "$ISO")"
             echo "VARIANT=${VARIANT}"
             echo "FLAVOR=${FLAVOR}"
           } >> "$GITHUB_ENV"
