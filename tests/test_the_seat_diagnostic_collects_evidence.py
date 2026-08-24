@@ -135,3 +135,26 @@ def test_the_reasoning_is_recorded_next_to_the_diagnostic():
         "the comment must mark the cause as unestablished; this branch has "
         "been wrong five times by asserting one"
     )
+
+
+def test_the_journal_capture_covers_every_display_manager():
+    """gnome and kde are the two top-priority flavors and the two the capture
+    could not see.
+
+    The journal line named only `greetd` and `cosmic-greeter`. cosmic, niri and
+    xfce all run under greetd and additionally wrap their session command in
+    `systemd-cat -t tunaos-live-session`, so their compositor stderr is
+    reachable two ways. gnome and kde do neither: gnome autologins through gdm
+    and kde through plasmalogin, so for those two the capture named no unit at
+    all and the session's own words went unrecorded.
+
+    That is why kde's only diagnosis on file is a second-hand
+    `plasmalogin-helper exited with 5` from run 30234237855, attributed to a
+    render-node theory the xfce evidence has since contradicted.
+    """
+    body = capture_step()
+    m = re.search(r"journalctl (-u \S+ )+--no-pager", body)
+    assert m, "no display-manager journalctl invocation found in the capture step"
+    units = set(re.findall(r"-u (\S+)", m.group(0)))
+    for dm in ("greetd", "cosmic-greeter", "plasmalogin", "gdm"):
+        assert dm in units, f"{dm} is not captured; units are {sorted(units)}"
