@@ -170,3 +170,89 @@ def test_the_journal_capture_covers_every_display_manager():
         "be answered from post-mortem loginctl output, which cannot see the "
         f"session that already exited. units are {sorted(units)}"
     )
+
+
+# ── The installer's own log, looked for under one flavor's app id ───────────
+#
+# The capture step calls this file "the thing that answers it directly": it
+# records do_activate being called, which window class was constructed, "Main
+# window created", and any traceback. Its own comment says "running but never
+# reported a window" has stayed undiagnosable across runs 63-66 without it.
+#
+# It was read from ~/.var/app/org.bootcinstaller.Installer/... — a hardcoded
+# app id that only GNOME uses. kde runs org.tunaos.InstallerKde, and
+# cosmic/niri/xfce their own. So on four of five flavors the step printed
+#
+#     (no installer-debug.log found)
+#
+# and nobody noticed, because that string reads like a fact about the guest
+# rather than a fact about the path. kde run 32704425971 is the proof: the
+# frontend launched (org.tunaos.InstallerKde asserted OK), the readiness stamp
+# was absent, and the one file that would say why was sought under gnome's id.
+
+INSTALLER_APPS = [
+    "org.bootcinstaller.Installer",
+    "org.tunaos.InstallerKde",
+    "org.tunaos.InstallerCosmic",
+    "org.tunaos.InstallerNiri",
+    "org.tunaos.InstallerXfce",
+]
+
+
+def debug_log_payload() -> str:
+    body = capture_step()
+    m = re.search(r"\$SSH 'found=0;.*?' 2>/dev/null \|\| true", body, re.S)
+    assert m, "the installer-debug.log capture is not in the expected shape"
+    return m.group(0)[len("$SSH '") : -len("' 2>/dev/null || true")]
+
+
+def test_the_debug_log_payload_is_valid_shell(tmp_path):
+    f = tmp_path / "p.sh"
+    f.write_text(debug_log_payload(), encoding="utf-8")
+    proc = subprocess.run(["bash", "-n", str(f)], capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr
+
+
+@pytest.mark.parametrize("app", INSTALLER_APPS)
+def test_every_frontend_app_id_is_searched(tmp_path, app):
+    """Run it with only THIS flavor's log present. All five must be found."""
+    import os as _os
+
+    home = tmp_path / app
+    d = home / ".var/app" / app / "cache/bootc-installer"
+    d.mkdir(parents=True)
+    (d / "installer-debug.log").write_text("do_activate called\n", encoding="utf-8")
+
+    script = tmp_path / f"p-{app}.sh"
+    script.write_text(debug_log_payload(), encoding="utf-8")
+    proc = subprocess.run(
+        ["bash", str(script)],
+        capture_output=True,
+        text=True,
+        env=dict(_os.environ, HOME=str(home)),
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "do_activate called" in proc.stdout, (
+        f"{app}'s installer-debug.log was not found; output was {proc.stdout!r}"
+    )
+    assert "no installer-debug.log" not in proc.stdout, proc.stdout
+
+
+def test_a_genuinely_absent_log_says_what_is_there_instead(tmp_path):
+    """"Not found" must be distinguishable from "looked in the wrong place"."""
+    import os as _os
+
+    home = tmp_path / "empty"
+    (home / ".var/app/org.tunaos.InstallerNiri").mkdir(parents=True)
+    script = tmp_path / "p.sh"
+    script.write_text(debug_log_payload(), encoding="utf-8")
+    proc = subprocess.run(
+        ["bash", str(script)],
+        capture_output=True,
+        text=True,
+        env=dict(_os.environ, HOME=str(home)),
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert "no installer-debug.log under any known app id" in proc.stdout
+    # The listing is the half that makes the negative result actionable.
+    assert "org.tunaos.InstallerNiri" in proc.stdout, proc.stdout

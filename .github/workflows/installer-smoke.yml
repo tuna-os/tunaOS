@@ -571,7 +571,43 @@ jobs:
             # renderer that cannot present from an app that never got that
             # far. Collect what settles it rather than guessing at a fix.
             echo "=== installer's own debug log ==="
-            $SSH 'cat ~/.var/app/org.bootcinstaller.Installer/cache/bootc-installer/installer-debug.log 2>/dev/null || cat ~/.cache/bootc-installer/installer-debug.log 2>/dev/null || echo "(no installer-debug.log found)"' 2>/dev/null || true
+            #
+            # THE PATH WAS HARDCODED TO ONE FLAVOR'S APP ID, WHICH IS WHY THE
+            # ABOVE HAS NEVER ONCE BEEN READ FOR THE OTHER FOUR.
+            #
+            # Flatpak puts each app's cache under ~/.var/app/<APP_ID>/cache,
+            # and only gnome runs org.bootcinstaller.Installer. kde runs
+            # org.tunaos.InstallerKde, and cosmic/niri/xfce their own ids. So
+            # on every non-gnome cell this printed
+            #
+            #   (no installer-debug.log found)
+            #
+            # and the comment above -- which correctly identifies this file as
+            # the thing that distinguishes "the window was built and never
+            # mapped" from "the app never got that far" -- described a
+            # capture that could not fire. kde run 32704425971 is the proof:
+            # `installer frontend launched (org.tunaos.InstallerKde)` passed,
+            # `installer readiness stamp present` failed, and the one file that
+            # would say why was looked for under the wrong app id.
+            #
+            # Try every id rather than deriving one: the mapping already exists
+            # twice in this workflow and a third copy is a third thing to keep
+            # in step. A path that does not exist costs one failed `cat`.
+            $SSH 'found=0; \
+                  for app in org.bootcinstaller.Installer org.tunaos.InstallerKde \
+                             org.tunaos.InstallerCosmic org.tunaos.InstallerNiri \
+                             org.tunaos.InstallerXfce; do \
+                    f="$HOME/.var/app/$app/cache/bootc-installer/installer-debug.log"; \
+                    if [ -f "$f" ]; then echo "---- $f"; cat "$f"; found=1; fi; \
+                  done; \
+                  if [ -f "$HOME/.cache/bootc-installer/installer-debug.log" ]; then \
+                    echo "---- $HOME/.cache/bootc-installer/installer-debug.log"; \
+                    cat "$HOME/.cache/bootc-installer/installer-debug.log"; found=1; \
+                  fi; \
+                  if [ "$found" = 0 ]; then \
+                    echo "(no installer-debug.log under any known app id)"; \
+                    echo "-- what IS under ~/.var/app --"; ls -1 "$HOME/.var/app" 2>/dev/null || echo "(no ~/.var/app)"; \
+                  fi' 2>/dev/null || true
             echo
             echo "=== user journal (installer + portal + flatpak) ==="
             $SSH 'journalctl --user -b --no-pager 2>/dev/null | grep -iE "installer|flatpak|portal|wgpu|EGL|MESA|wayland|vulkan" | tail -120' 2>/dev/null || true

@@ -276,11 +276,18 @@ runners — and tuna-os/tunaOS#848 is a prerequisite, since stage-3 flavors
 currently cannot build a dev ISO at all. Until then the ⬜/stale cells above
 should be read as *not yet covered*, not as a backlog of broken cells.
 
-**Four of five desktops do not start on hosted CI. The reason is not settled.**
-cosmic, niri, xfwl4 and kde all fail to bring a session up there. This section
-used to say they need a DRM render node, that GitHub runners have none, and
-that "no configuration change alters this". The first measurement taken inside
-the guest contradicts the middle claim, so the conclusion cannot rest on it.
+**Not four of five. Two of five are measured, and they fail differently.**
+This section used to say cosmic, niri, xfwl4 **and kde** all need a DRM render
+node, that GitHub runners have none, and that "no configuration change alters
+this". Every part of that has now been contradicted by measurement taken inside
+the guest rather than on the runner host.
+
+What is measured today: **gnome starts and passes** (smoke run 32704425971,
+`yellowfin:gnome`, every step green including the walkthrough), **kde starts**
+and fails later at the installer window, **xfwl4 starts and aborts** at a
+render node it had already selected. cosmic and niri have NOT been re-measured
+since the diagnostics landed, so their rows say nothing more than "last seen
+red under a theory that turned out to be wrong".
 
 Smoke run [32681262659](https://github.com/tuna-os/tunaOS/actions/runs/32681262659),
 `yellowfin:xfce`, read from the live session itself:
@@ -303,6 +310,63 @@ the same run it boots, `gnome-shell` starts through Mesa's software path
 (`libEGL warning: egl: failed to create dri2 screen`), the installer frontend
 launches and stamps a window, and the walkthrough captures **9 non-blank frames
 across 8 distinct visual states**. So a compositor CAN come up on this hardware.
+
+### What kde actually does — it starts, and the old claim was wrong
+
+kde was recorded here as the flavor whose greeter and autologin session "both
+die instantly", on run `30234237855`, attributed to the render-node theory.
+That entry stood because the smoke capture named only `greetd` and
+`cosmic-greeter` in its journal line — kde runs **sddm**, so no unit was
+captured for it and nobody ever read what it said.
+
+Smoke run [32704425971](https://github.com/tuna-os/tunaOS/actions/runs/32704425971)
+is the first time it was. kde comes up:
+
+```
+sddm-helper: pam_unix(sddm-autologin:session): session opened for user liveuser
+sddm-helper: Starting Wayland user session: "/etc/sddm/wayland-session" ...
+session 1: VTNr=1 Seat=seat0 Type=wayland Class=user Active=yes State=active
+```
+
+A properly seated session on `seat0`, VT 1. And the checks agree:
+
+```
+ok - compositor running (kwin_wayland)
+ok - installer frontend launched (org.tunaos.InstallerKde)
+ok - kde: installer is frontmost at session start
+ok - kde: screen is not blank
+ok - kde: screen changes between steps
+```
+
+kwin hits the same missing DRM node as everyone else —
+
+```
+kwin_wayland: Failed to open drm node : No such file or directory
+kwin_wayland: couldn't find dev node for drm device
+libEGL warning: egl: failed to create dri2 screen      (everywhere, llvmpipe)
+```
+
+— and **carries on regardless**. That is the difference that matters: kwin
+degrades to software, the Smithay compositors abort. "These desktops need a
+render node" is not one claim about four desktops; it is false for kde and
+gnome, and for xfwl4 it describes an abort, not an absence.
+
+What kde actually fails is one step later:
+
+```
+not ok - installer readiness stamp present
+not ok - kde: reached 'welcome' screen        (and disk, encryption, summary, install, done)
+```
+
+The frontend is running and the screen is painting, but no installer window is
+identified and no spec'd screen is OCR-matched. The file that would settle
+which — the installer's own debug log, which records `do_activate called`,
+which window class was built, and any traceback — had **never been captured on
+this flavor**: the capture read `~/.var/app/org.bootcinstaller.Installer/...`,
+which is gnome's app id. kde is `org.tunaos.InstallerKde`. So it printed "(no
+installer-debug.log found)" on four of five flavors, and that string reads like
+a fact about the guest instead of a fact about the path. Fixed; the next kde
+run carries it.
 
 ### What xfce actually does — measured, not inferred
 
