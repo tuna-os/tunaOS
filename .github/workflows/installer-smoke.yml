@@ -607,6 +607,46 @@ jobs:
                   echo "-- what the session command itself said (tunaos-live-session) --"; \
                   sudo journalctl -t tunaos-live-session --no-pager 2>/dev/null | tail -80 || true' 2>/dev/null || true
 
+            echo
+            echo "=== does the session have a SEAT, and can PAM give it one? ==="
+            # The unifying symptom, found on run 32691426582s xfce leg. Every
+            # logind session on the guest has an EMPTY seat and an empty TTY:
+            #
+            #   SESSION  UID USER     SEAT LEADER CLASS   TTY IDLE SINCE
+            #         2 1000 liveuser -    1273   manager -   no   -
+            #        24 1000 liveuser -    3469   user    -   no   -
+            #
+            # logind hands DRM master to the ACTIVE session ON A SEAT. With no
+            # seat there is no DRM master, which is exactly what the compositor
+            # then reports, in this order:
+            #
+            #   WARN  smithay::backend::drm::device::fd: Unable to become drm
+            #         master, assuming unprivileged mode
+            #   WARN  xfwl4::backend::udev::device: failed to initialize gpu
+            #         err=NoRenderNode
+            #   ERROR xfwl4: Failed to initialize primary GPU node
+            #
+            # NoRenderNode for a device it had already selected and NAMED
+            # (renderD128, which /dev/dri confirms exists and is world
+            # readable). So the render node was never the problem; the seat is.
+            # That also fits the shape of the matrix -- gnome, the one flavor
+            # that works, is the one on gdm rather than greetd.
+            #
+            # WHY the seat is missing is NOT established, and is not guessed
+            # here. The candidate is greetds PAM stack: a session that does not
+            # run pam_systemd.so, or runs it without XDG_VTNR, registers with
+            # logind unseated. Printing the file settles it in one line instead
+            # of another 40-minute round trip on a hypothesis.
+            $SSH 'echo "-- /etc/pam.d/greetd --"; cat /etc/pam.d/greetd 2>/dev/null || echo "(absent)"; \
+                  echo "-- /etc/pam.d/greetd-greeter --"; cat /etc/pam.d/greetd-greeter 2>/dev/null || echo "(absent)"; \
+                  echo "-- seat/VT detail per session --"; \
+                  for s in $(loginctl list-sessions --no-legend 2>/dev/null | awk "{print \$1}"); do \
+                    echo "   session $s:"; \
+                    loginctl show-session "$s" -p Id -p Seat -p VTNr -p Active -p State -p Class -p Type -p Remote 2>/dev/null | sed "s/^/     /"; \
+                  done; \
+                  echo "-- seats known to logind --"; loginctl list-seats 2>/dev/null || echo "(none)"; \
+                  echo "-- is there a seat0 device tree at all --"; ls -l /run/systemd/seats/ 2>/dev/null || echo "(no /run/systemd/seats)"' 2>/dev/null || true
+
           echo
           # The line that has been missing from every red greetd cell.
           #
