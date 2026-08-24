@@ -207,158 +207,34 @@ jobs:
           path: "*.iso"
           if-no-files-found: error
 
-      - name: Install QEMU for boot verification
-        run: |
-          sudo apt-get install -y qemu-system-x86 ovmf socat imagemagick
-
-      - name: Boot ISO and capture desktop screenshot
-        timeout-minutes: 10
-        run: |
-          ISO=$(find . -maxdepth 1 -name "*.iso" | head -1)
-          echo "==> Booting $ISO in QEMU (headless, KVM)..."
-
-          # Locate UEFI firmware (path varies by Ubuntu version)
-          OVMF_CODE=""
-          for f in \
-            /usr/share/OVMF/OVMF_CODE_4M.fd \
-            /usr/share/OVMF/OVMF_CODE.fd \
-            /usr/share/edk2/ovmf/OVMF_CODE.fd; do
-            [ -f "$f" ] && OVMF_CODE="$f" && break
-          done
-          OVMF_VARS=""
-          for f in \
-            /usr/share/OVMF/OVMF_VARS_4M.fd \
-            /usr/share/OVMF/OVMF_VARS.fd \
-            /usr/share/edk2/ovmf/OVMF_VARS.fd; do
-            if [ -f "$f" ]; then
-              cp "$f" /tmp/OVMF_VARS.fd
-              OVMF_VARS="/tmp/OVMF_VARS.fd"
-              break
-            fi
-          done
-
-          PFLASH=()
-          if [ -n "$OVMF_CODE" ] && [ -n "$OVMF_VARS" ]; then
-            echo "==> Using UEFI: $OVMF_CODE"
-            PFLASH+=(-drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE")
-            PFLASH+=(-drive "if=pflash,format=raw,file=$OVMF_VARS")
-          else
-            echo "==> OVMF not found, booting in BIOS mode"
-          fi
-
-          sudo qemu-system-x86_64 \
-            -machine type=q35,accel=kvm \
-            -cpu host \
-            -m 4G \
-            -smp 2 \
-            -cdrom "$ISO" \
-            -boot d \
-            "${PFLASH[@]}" \
-            -monitor unix:/tmp/qemu-monitor.sock,server,nowait \
-            -serial file:/tmp/serial.log \
-            -display none \
-            -daemonize
-
-          # Wait for monitor socket
-          for i in $(seq 1 30); do
-            [ -S /tmp/qemu-monitor.sock ] && break
-            sleep 2
-          done
-
-          # Wait for live desktop to fully boot (~4 minutes)
-          echo "==> Waiting 4 minutes for GNOME desktop to appear..."
-          sleep 240
-
-          # Capture screenshot via QEMU monitor
-          echo "screendump /tmp/screenshot.ppm" | \
-            sudo socat - UNIX-CONNECT:/tmp/qemu-monitor.sock
-          sleep 3
-
-          # Convert to PNG
-          if sudo test -f /tmp/screenshot.ppm; then
-            sudo convert /tmp/screenshot.ppm screenshot.png 2>/dev/null || \
-              sudo cp /tmp/screenshot.ppm screenshot.png
-            echo "==> Screenshot captured: $(ls -lh screenshot.png)"
-          else
-            echo "WARNING: screenshot.ppm not found; serial log follows:"
-            sudo cat /tmp/serial.log || true
-          fi
-
-          # Shut down QEMU
-          echo "quit" | sudo socat - UNIX-CONNECT:/tmp/qemu-monitor.sock || true
-
-      - name: Upload desktop screenshot
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: desktop-screenshot
-          path: screenshot.png
-          if-no-files-found: warn
-
-      # Only same-repo PRs can comment. On a fork `pull_request` run GITHUB_TOKEN
-      # is read-only no matter what the `permissions:` block above asks for, so
-      # `issues.createComment` 403s — which used to fail this job *after* the ISO
-      # had already built and booted, throwing away a successful verification.
-      # Forks get the same text in the run summary instead (see next step).
-      - name: Post boot screenshot to PR
-        if: >-
-          github.event_name == 'pull_request'
-          && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        env:
-          VARIANT: ${{ env.VARIANT }}
-          FLAVOR: ${{ env.FLAVOR }}
-        with:
-          script: |
-            const runUrl = [
-              context.serverUrl,
-              context.repo.owner,
-              context.repo.repo,
-              'actions/runs',
-              context.runId,
-            ].join('/');
-            const sha = context.payload.pull_request.head.sha.slice(0, 7);
-            const body = [
-              '## Live ISO Boot Verification',
-              '',
-              'The live ISO built and booted successfully to the GNOME desktop.',
-              '',
-              `**Variant:** \`${process.env.VARIANT}\` | ` +
-                `**Flavor:** \`${process.env.FLAVOR}\` | ` +
-                `**Commit:** \`${sha}\``,
-              '',
-              `📸 [Download desktop screenshot](${runUrl})` +
-                ' — expand **Artifacts** and download `desktop-screenshot`',
-            ].join('\n');
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body,
-            });
-
-      # Fork PRs cannot be commented on, but the verification still ran and its
-      # result still matters — put it where a fork contributor can actually see
-      # it rather than dropping it on the floor.
-      - name: Report boot verification in run summary (fork PR)
-        if: >-
-          github.event_name == 'pull_request'
-          && github.event.pull_request.head.repo.full_name != github.repository
-        env:
-          VARIANT: ${{ env.VARIANT }}
-          FLAVOR: ${{ env.FLAVOR }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          {
-            echo "## Live ISO Boot Verification"
-            echo ""
-            echo "The live ISO built and booted successfully to the GNOME desktop."
-            echo ""
-            echo "**Variant:** \`${VARIANT}\` | **Flavor:** \`${FLAVOR}\` | **Commit:** \`${HEAD_SHA:0:7}\`"
-            echo ""
-            echo "📸 [Download desktop screenshot](${RUN_URL}) — expand **Artifacts**"
-            echo "and download \`desktop-screenshot\`."
-            echo ""
-            echo "> Posted here rather than as a PR comment: this run is from a fork,"
-            echo "> so \`GITHUB_TOKEN\` is read-only and cannot comment."
-          } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+      # Boot verification deliberately does NOT live here.
+      #
+      # It used to: `Install QEMU`, `Boot ISO and capture desktop screenshot`,
+      # `Upload desktop screenshot` and two PR-reporting steps. They could
+      # never have worked on this runner. The job runs on
+      # `runs-on=.../runner=build-amd64`, whose families in
+      # .github/runs-on.yml are ["c6a", "c6i", "c5a", "c5"] -- ordinary EC2
+      # instances. EC2 exposes /dev/kvm only on .metal types, so every run
+      # ended:
+      #
+      #   ==> Booting ./skipjack-gnome-10-x86_64.iso in QEMU (headless, KVM)...
+      #   Could not access KVM kernel module: No such file or directory
+      #   qemu-system-x86_64: failed to initialize kvm: No such file or directory
+      #
+      # (runs 32690010127 and 32696543980, both after the ISO built fine).
+      # That is not capacity flakiness to retry around; it is the instance
+      # family, and no change in this repository alters it.
+      #
+      # The verification itself is not lost -- it is done properly elsewhere.
+      # installer-smoke.yml boots the ISO on `ubuntu-latest`, which does
+      # provide KVM, then SSHes into the guest and asserts the compositor and
+      # installer frontend are running, drives the installer through its
+      # screens, and captures the session journal. It covers all five flavors
+      # rather than this job's single hardcoded one. Tonight it booted gnome
+      # (desktop session + installer frontend confirmed) and xfce (which is
+      # how xfwl4's exit was finally diagnosed).
+      #
+      # So this job builds and uploads the ISO, which is what it can actually
+      # do. Keeping a boot gate here that has never once executed would report
+      # a verification nobody performed -- the failure mode this branch exists
+      # to remove.
