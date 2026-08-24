@@ -230,12 +230,23 @@ jobs:
           # "drops" to root for `podman unshare` and dies (rootless-only).
           just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
 
+      # RETENTION IS NOT OPTIONAL ON A MULTI-GIGABYTE ARTIFACT.
+      #
+      # This had no `retention-days`, so every run — including every PR run —
+      # parked a whole live ISO in Actions storage for the DEFAULT 90 DAYS.
+      # The account's included Actions storage is 0.5 GB; one ISO exceeds it
+      # outright, and the quota hit 90% on 2026-08-24.
+      #
+      # `compression-level: 0` because an ISO is already compressed: level 6
+      # burns minutes to save nothing.
       - name: Upload Artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ env.VARIANT }}-${{ env.FLAVOR }}-live-iso
           path: "*.iso"
           if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
 
       # Boot verification deliberately does NOT live here.
       #

@@ -269,8 +269,16 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ matrix.basename }}-iso
+          # The ISO itself is deliberately NOT uploaded. This job's whole
+          # purpose is to put it in R2, so an Actions artifact of the same
+          # bytes is a second copy of the deliverable — at 90 days by
+          # default, across every grouped cell, against 0.5 GB of included
+          # storage. The checksum and signature stay: they are kilobytes,
+          # and they are what a reviewer actually wants to see from a run.
+          #
+          # Recovering the ISO means downloading it from R2, which is the
+          # thing being published and therefore the copy worth testing.
           path: |
-            ${{ matrix.basename }}-*.iso
             ${{ matrix.basename }}-*.iso.sha256
             ${{ matrix.basename }}-*.iso.sigstore.json
           if-no-files-found: error
