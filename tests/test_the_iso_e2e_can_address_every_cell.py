@@ -177,7 +177,6 @@ def test_the_never_implemented_artifact_source_is_gone():
     skipped the R2 fetch and left ISO_PATH unset — the job then booted
     nothing. An option that cannot work must not be offered.
     """
-    body = WORKFLOW.read_text(encoding="utf-8")
     opts = workflow()[True]["workflow_dispatch"]["inputs"]["source"]["options"]
     assert "artifact" not in opts, opts
     assert "build" in opts, opts
