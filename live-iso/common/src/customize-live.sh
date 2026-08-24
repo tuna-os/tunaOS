@@ -545,12 +545,43 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 			echo "---- installer flatpak install FAILED; what the remotes offer:"
 			echo "-- configured remotes --"
 			flatpak remotes --system --columns=name,url 2>&1 | sed "s/^/     /" || true
-			echo "-- org.gnome/org.kde Platform+Sdk branches visible --"
-			flatpak remote-ls --system --columns=ref 2>/dev/null |
-				grep -E "org\.(gnome|kde)\.(Platform|Sdk)" | sed "s/^/     /" ||
-				echo "     (none, or remote-ls could not reach a remote)"
+			# ASK ABOUT THE ONE REF, DO NOT LIST EVERY REMOTE.
+			#
+			# The first version of this probe ran a bare
+			# `flatpak remote-ls --system`, which pulls the FULL index of
+			# every configured remote -- flathub included. In run 32728454277
+			# the job was killed during exactly that command:
+			#
+			#   -- org.gnome/org.kde Platform+Sdk branches visible --
+			#   + flatpak remote-ls --system --columns=ref
+			#   ##[error]The runner has received a shutdown signal.
+			#
+			# so the listing never printed and the question stayed open. I had
+			# written that every probe was `|| true` and so could not become
+			# the failure; `|| true` guards a non-zero exit, not a probe that
+			# takes long enough to lose the runner. A diagnostic on an error
+			# path has to be cheap or it replaces one unanswered failure with
+			# another.
+			#
+			# remote-info names a single ref and answers the actual question in
+			# one round trip: present means the runtime IS reachable and the
+			# failure is resolution or ordering; absent means the branch is not
+			# published on that remote. Bounded, and per-remote so the answer
+			# says WHICH remote was asked.
+			echo "-- is the required runtime on each remote? --"
+			for _remote in flathub tuna-os; do
+				for _rt in org.gnome.Platform//50 org.gnome.Platform//49; do
+					printf "     %-10s %-28s " "${_remote}" "${_rt}"
+					if timeout 60 flatpak remote-info --system "${_remote}" "${_rt}" \
+						>/dev/null 2>&1; then
+						echo "PRESENT"
+					else
+						echo "absent (or remote unreachable)"
+					fi
+				done
+			done
 			echo "-- what the app asks for --"
-			flatpak remote-info --system installer-local "${INSTALLER_APP}" 2>&1 |
+			timeout 60 flatpak remote-info --system installer-local "${INSTALLER_APP}" 2>&1 |
 				grep -iE "runtime|sdk|branch" | sed "s/^/     /" || true
 
 			[[ -f "${SCRIPT_DIR}/.enable-sshd" ]] &&

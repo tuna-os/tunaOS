@@ -29,6 +29,7 @@ become the failure being diagnosed.
 from __future__ import annotations
 
 import os
+import re
 import subprocess
 from pathlib import Path
 
@@ -54,8 +55,9 @@ def _run(tmp_path: Path, *, install_ok: bool, sshd: bool):
         'case "$1" in\n'
         f"  install) exit {0 if install_ok else 1};;\n"
         '  remotes) echo "flathub\thttps://dl.flathub.org/repo/";;\n'
-        '  remote-ls) echo "runtime/org.gnome.Platform/x86_64/49";;\n'
-        '  remote-info) echo "Runtime: org.gnome.Platform/x86_64/50";;\n'
+        # remote-info succeeds only for //49, so the probe must report
+        # PRESENT for 49 and absent for 50 -- the mismatch under diagnosis.
+        '  remote-info) case "$4" in *//49) exit 0;; *) exit 1;; esac;;\n'
         "esac\n",
         encoding="utf-8",
     )
@@ -107,10 +109,12 @@ def test_a_failed_install_names_the_available_branches(tmp_path):
     out = proc.stdout
     assert "what the remotes offer" in out, out
     assert "flathub" in out, out
-    # The branch actually carried (49) is what distinguishes the three cases.
-    assert "org.gnome.Platform/x86_64/49" in out, out
-    # And what the app asked for (50), so the mismatch is visible in one place.
-    assert "50" in out, out
+    # The probe must report BOTH branches per remote, so "//50 absent while
+    # //49 is present" is readable off one block rather than inferred.
+    assert re.search(r"flathub\s+org\.gnome\.Platform//50\s+absent", out), out
+    assert re.search(r"flathub\s+org\.gnome\.Platform//49\s+PRESENT", out), out
+    # And it must name every remote it asked, not just the first.
+    assert "tuna-os" in out, out
 
 
 def test_the_dev_iso_still_continues_and_the_production_iso_still_fails(tmp_path):
@@ -121,3 +125,49 @@ def test_the_dev_iso_still_continues_and_the_production_iso_still_fails(tmp_path
 
     prod = _run(tmp_path / "prod", install_ok=False, sshd=False)
     assert prod.returncode != 0, prod.stdout
+
+
+def test_every_network_probe_is_time_bounded():
+    """The probe must not be able to outlive the runner.
+
+    The first version ran a bare `flatpak remote-ls --system`, which pulls the
+    full index of every configured remote. Run 32728454277 was killed during
+    exactly that command --
+
+        + flatpak remote-ls --system --columns=ref
+        ##[error]The runner has received a shutdown signal.
+
+    -- so the listing never printed and the question it was added to answer
+    stayed open. `|| true` guards a non-zero exit, not a probe slow enough to
+    lose the runner, and I had claimed the former covered the latter.
+
+    A diagnostic on an error path must be cheap, or it replaces one unanswered
+    failure with another. This is asserted on the script text rather than by
+    running it, because what matters is that no unbounded network call can
+    reach production -- a stub cannot demonstrate the absence of one.
+    """
+    body = failure_block()
+
+    calls = [
+        l.strip()
+        for l in body.splitlines()
+        # Comments quote the very command this test forbids, as the record of
+        # why it is forbidden. Match executable lines only.
+        if not l.strip().startswith("#")
+        and re.search(r"\bflatpak\s+(remote-ls|remote-info|remote-add)\b", l)
+    ]
+    assert calls, "no flatpak remote call found in the failure block"
+
+    for call in calls:
+        assert call.startswith("timeout ") or "timeout " in call, (
+            f"unbounded flatpak network call on the failure path: {call!r}"
+        )
+
+    # remote-ls over every remote is the specific shape that cost a runner.
+    executable = "\n".join(
+        l for l in body.splitlines() if not l.strip().startswith("#")
+    )
+    assert not re.search(r"flatpak remote-ls --system\s+--columns", executable), (
+        "bare `remote-ls --system` pulls every remote's full index; ask about "
+        "the specific ref with remote-info instead"
+    )
