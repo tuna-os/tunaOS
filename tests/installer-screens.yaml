@@ -186,9 +186,37 @@ screens:
     # streams the same backend, so "partitioning" and "installing image"
     # appear on the progress screen of all five and on no other screen, and
     # they do not contain a product name at all.
+    #
+    # RE-MEASURED 2026-08-24, this time against what is on the progress screen
+    # BEFORE the backend has streamed a line -- which is the state a harness
+    # screenshot actually catches, and which none of the keywords above cover:
+    #
+    #   gnome   "Installing", "0:00 elapsed", "Downloading system image..."
+    #           (progress.blp:189,229; views/progress.py:101,689)
+    #   kde     "Installing <product> onto <disk>. Do not power off the
+    #           machine." (modules/progress/.../main.qml:35)
+    #   cosmic  "Installing <product>" + caption "Do not power off the
+    #           computer." (src/ui.rs:377,369)
+    #   niri    "Installing..."               (ui/installer.qml:422)
+    #   xfce    "Installing <product>" + a step label from PIPELINE_STEPS
+    #           (app.py:18-22,325)
+    #
+    # "do not power off" is added for kde and cosmic: measured on both, unique
+    # to the progress screen, carries no product name, and is present from the
+    # moment the screen opens rather than only once the log has scrolled.
+    #
+    # gnome is deliberately left unmatched rather than guessed at. Its only
+    # always-present product-free strings there are the bare word "Installing"
+    # -- forbidden by the header above, and a substring of the welcome page's
+    # "guide you through installing" -- and "elapsed", a single common word
+    # that a log pane could easily produce. The distinctive sentence
+    # "Installation will continue normally" (progress.blp:85) sits in the tour
+    # panel, whose visibility depends on the recipe, so it is not something
+    # this file can rely on. An unmatched advisory row that says why beats a
+    # keyword that manufactures a phantom one.
     keywords: ["installation progress", "copying files", "deploying",
                "please wait", "writing image", "installing\u2026",
-               "partitioning", "installing image"]
+               "partitioning", "installing image", "do not power off"]
 
   - id: done
     title: Finished / reboot
