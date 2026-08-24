@@ -19,6 +19,25 @@ on:
         required: false
         default: "yellowfin"
         type: string
+      build_runner:
+        # The experiment behind tunaOS#2010: is RunsOn actually required to
+        # build an ISO, or was it inherited from a podman diagnosis that the
+        # workflow itself contradicts three steps later?
+        #
+        # `runs-on` (default) keeps every scheduled run and every other
+        # dispatch exactly as it was. `github` routes the build to
+        # ubuntu-latest so the two can be compared on the same commit.
+        #
+        # The `schedule` trigger passes no inputs, so this evaluates empty
+        # there and falls through to RunsOn -- the weekly run cannot be
+        # changed by adding this.
+        description: "Runner for the ISO build"
+        required: false
+        default: "runs-on"
+        type: choice
+        options:
+          - runs-on
+          - github
       flavors:
         description: "Comma-separated flavors"
         required: false
@@ -98,8 +117,25 @@ jobs:
     #
     # The boot Gate in reusable-build-image.yml is unaffected: it genuinely
     # runs iso-e2e-gpu.sh and still asks for `gpu`.
-    runs-on: runs-on=${{ github.run_id }}/runner=${{ matrix.runner }}
-    timeout-minutes: 75
+    #
+    # RUNNER, and the experiment: `build_runner: github` sends this job to
+    # ubuntu-latest instead. The stated reason for RunsOn is directly above --
+    # "cannot work on the GitHub runner's podman 5.8.4" -- but the `setup
+    # working podman` step below opens by saying the RunsOn image ships THE
+    # SAME podman 5.8.4 and installs the Kubic build over it. That step is a
+    # plain apt install with nothing runner-specific in it, so it should work
+    # identically on either. What is genuinely different is disk (80GB gp3 vs
+    # ~14GB free of ~65GB, which is why `free disk space` runs below) and
+    # cores (8 vs 4, against a 75-minute cap that a ~50-minute build already
+    # eats most of). Those are measurable, and this input is how.
+    runs-on: ${{ inputs.build_runner == 'github'
+      && 'ubuntu-latest'
+      || format('runs-on={0}/runner={1}', github.run_id, matrix.runner) }}
+    # Raised from 75 only for the GitHub leg: half the cores on the same work
+    # would otherwise be cancelled at the cap and read as "GitHub runners
+    # cannot build an ISO", when the finding would really be "it needs longer
+    # than 75 minutes". A timeout is not a measurement.
+    timeout-minutes: ${{ inputs.build_runner == 'github' && 150 || 75 }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
@@ -126,11 +162,12 @@ jobs:
             systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk
           sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
-      # The RunsOn ubuntu24 image ships podman 5.8.4 (same wedge as the GitHub
-      # runner); install the Kubic podman and drop the image shadow so the ISO
-      # build's podman run/commit work (tunaOS#1893). The bumped tacklebox pin
-      # (k8s-file log driver) handles the rest.
-      - name: setup working podman on RunsOn
+      # Both runner images ship podman 5.8.4, which cannot run/commit the
+      # build containers (tunaOS#1893); install the Kubic podman and drop any
+      # image-baked shadow binary. The bumped tacklebox pin (k8s-file log
+      # driver) handles the rest. Nothing here is runner-specific -- which is
+      # precisely why the RunsOn requirement above is worth testing.
+      - name: setup working podman
         run: |
           set -euo pipefail
           sudo install -d /etc/apt/keyrings
