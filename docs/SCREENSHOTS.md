@@ -96,6 +96,44 @@
 
 ![smoke-cosmic_08](images/installer/smoke-cosmic_08.png)
 
+### smoke-gnome flow
+
+**smoke-gnome_00**
+
+![smoke-gnome_00](images/installer/smoke-gnome_00.png)
+
+**smoke-gnome_01**
+
+![smoke-gnome_01](images/installer/smoke-gnome_01.png)
+
+**smoke-gnome_02**
+
+![smoke-gnome_02](images/installer/smoke-gnome_02.png)
+
+**smoke-gnome_03**
+
+![smoke-gnome_03](images/installer/smoke-gnome_03.png)
+
+**smoke-gnome_04**
+
+![smoke-gnome_04](images/installer/smoke-gnome_04.png)
+
+**smoke-gnome_05**
+
+![smoke-gnome_05](images/installer/smoke-gnome_05.png)
+
+**smoke-gnome_06**
+
+![smoke-gnome_06](images/installer/smoke-gnome_06.png)
+
+**smoke-gnome_07**
+
+![smoke-gnome_07](images/installer/smoke-gnome_07.png)
+
+**smoke-gnome_08**
+
+![smoke-gnome_08](images/installer/smoke-gnome_08.png)
+
 ### smoke-kde flow
 
 **smoke-kde_00**
@@ -135,4 +173,4 @@
 ![smoke-kde_08](images/installer/smoke-kde_08.png)
 
 ---
-_Last regenerated: 2026-08-24T12:01:57Z_
+_Last regenerated: 2026-08-24T15:06:46Z_
