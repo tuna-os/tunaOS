@@ -26,9 +26,36 @@ screens:
     title: Welcome
     required: true
     # "install tunaos" dropped: same product-name coupling as the disk and
-    # install lists. The four remaining keywords are what a welcome screen
-    # says regardless of what it is installing.
-    keywords: ["welcome", "get started", "let's get", "begin"]
+    # install lists. The remaining keywords are what a welcome screen says
+    # regardless of what it is installing.
+    #
+    # MEASURED 2026-08-24 against all five frontends' source strings, the way
+    # the disk list was on 2026-08-07. The disk list got that treatment; this
+    # one was written from the premise that every welcome screen says
+    # "welcome" or "get started". Four of the five do. KDE does not:
+    #
+    #     gnome   "Welcome to <product>"          welcome_title, welcome.py:93
+    #     cosmic  "Welcome. This assistant..."    src/ui.rs:82  + "Get started"
+    #     niri    "Welcome to <product>"          ui/installer.qml:186
+    #     xfce    "Welcome to <product>"          app.py:68
+    #     KDE     "Install <product>"             welcome main.qml:39,
+    #                                             primary button "Next"
+    #                                             (Wizard.qml:290)
+    #
+    # So on KDE not one of the four keywords was on the page, and run
+    # 32718219267 reported all six screens unreached with the diagnosis "no
+    # installer screen was ever detected" -- while the readiness stamp from
+    # that same process in that same guest read `signal=frame-swapped
+    # page=welcome`. The frontend was on its welcome screen and the contract
+    # could not see it.
+    #
+    # "will guide you through" is added rather than "install": it is the
+    # orientation sentence KDE, niri and cosmic all put on the welcome page
+    # and nowhere else (grepped across all five frontends), it carries no
+    # product name, and it is a prompt rather than the bare noun the header
+    # above forbids. gnome and xfce keep matching on "welcome".
+    keywords: ["welcome", "get started", "let's get", "begin",
+               "will guide you through"]
 
   - id: disk
     title: Disk / target selection

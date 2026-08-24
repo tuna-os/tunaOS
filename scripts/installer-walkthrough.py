@@ -604,6 +604,57 @@ if have_ocr and not any(reached.values()) and rendered > 0:
           f"the app merely pinned to a dock or launcher is case 1, not a UI bug.",
           flush=True)
 
+# ── What the OCR actually read ───────────────────────────────────────────
+# The five causes above share an assumption that is false often enough to cost
+# whole rounds: that a screen which matched nothing was not the installer.
+# There is a sixth cause, and on kde it is the true one --
+#
+#     the installer WAS on screen, and no keyword in the spec describes what
+#     it says.
+#
+# kde run 32718219267 reported "no installer screen was ever detected" while
+# the readiness stamp written by that same process, in that same guest, read
+#
+#     window=ApplicationWindow signal=frame-swapped page=welcome
+#
+# A frame had been swapped and the app was on its welcome page. Its heading is
+# "Install " + productName and its primary button is "Next"
+# (tuna-installer-kde modules/welcome/contents/ui/main.qml:39,
+# src/qml/Wizard.qml:290), so not one of the welcome keywords appeared on it.
+# Six red lines and a diagnosis pointing at autostart, OOM-kills and missing GL
+# paths, for a frontend that was working.
+#
+# Printing the text settles it without downloading an artifact: text present
+# and unmatched is a spec gap, text absent everywhere is a rendering or OCR
+# failure, and those want opposite fixes.
+#
+# Gated on a MISSING REQUIRED SCREEN rather than on "nothing matched at all",
+# because the partial case is the one this run will produce next: with the
+# welcome keyword fixed, kde is expected to credit welcome and still miss the
+# later screens, and that is exactly when someone needs to see the words on
+# the page. Silent on a fully green leg; printed on every leg that fails.
+_missing_required = [sc["id"] for sc in spec
+                     if sc.get("required", False) and not reached.get(sc["id"])]
+if have_ocr and _missing_required:
+    _seen = {}
+    for _i, _t in enumerate(frame_text):
+        _seen.setdefault(state_of[_i], "")
+        if not _seen[state_of[_i]]:
+            _seen[state_of[_i]] = " ".join(_t.split())
+    if any(_seen.values()):
+        print("  # what the OCR actually read, per visual state "
+              f"(missing required: {', '.join(_missing_required)}):", flush=True)
+        for _s in sorted(_seen):
+            print(f"  #   state {_s}: {_seen[_s] or '(no text)'}"[:220], flush=True)
+        print("  # If the installer's own words are up there, this is cause 6: "
+              "the spec's keywords do not describe this frontend's screens. Fix "
+              "tests/installer-screens.yaml against the frontend's source "
+              "strings -- not the frontend against the spec.", flush=True)
+    else:
+        print("  # the OCR read NO text on any frame. That rules out a keyword "
+              "gap and puts causes 3-5 first: the pixels are not letters.",
+              flush=True)
+
 # ── Result for the parity matrix ─────────────────────────────────────────
 summary = {
     "flavor": flavor,
