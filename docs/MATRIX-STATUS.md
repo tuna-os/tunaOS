@@ -276,18 +276,30 @@ runners — and tuna-os/tunaOS#848 is a prerequisite, since stage-3 flavors
 currently cannot build a dev ISO at all. Until then the ⬜/stale cells above
 should be read as *not yet covered*, not as a backlog of broken cells.
 
-**Not four of five. Two of five are measured, and they fail differently.**
+**Not four of five. Four of five are measured, and three of them START.**
 This section used to say cosmic, niri, xfwl4 **and kde** all need a DRM render
 node, that GitHub runners have none, and that "no configuration change alters
 this". Every part of that has now been contradicted by measurement taken inside
 the guest rather than on the runner host.
 
-What is measured today: **gnome starts and passes** (smoke run 32704425971,
-`yellowfin:gnome`, every step green including the walkthrough), **kde starts**
-and fails later at the installer window, **xfwl4 starts and aborts** at a
-render node it had already selected. cosmic and niri have NOT been re-measured
-since the diagnostics landed, so their rows say nothing more than "last seen
-red under a theory that turned out to be wrong".
+What is measured today:
+
+| flavor | compositor | starts? | installer window | what actually fails |
+|---|---|---|---|---|
+| gnome | gnome-shell | ✅ | mapped, drives | **nothing — green** (run 32704425971) |
+| kde | kwin_wayland | ✅ | mapped, `page=welcome` | does not advance past welcome |
+| cosmic | cosmic-comp (Smithay) | ✅ | mapped, `page=welcome`, OCR matches | does not advance past welcome |
+| xfce | xfwl4 (Smithay) | ❌ | — | aborts: `err=NoRenderNode` |
+| niri | niri (Smithay) | ? | ? | never measured with these diagnostics |
+
+**Three of the four measured desktops come up and render on a GPU-less
+runner.** Only xfwl4 aborts.
+
+A generalisation published earlier in this branch — "kwin degrades to
+software, the Smithay compositors abort" — is WRONG and is withdrawn here.
+`cosmic-comp` is Smithay and it starts, renders 9/9 non-blank frames, maps its
+installer window and reaches the welcome screen. Whatever stops xfwl4 is
+specific to xfwl4, not a property of its toolkit.
 
 Smoke run [32681262659](https://github.com/tuna-os/tunaOS/actions/runs/32681262659),
 `yellowfin:xfce`, read from the live session itself:
@@ -347,7 +359,9 @@ libEGL warning: egl: failed to create dri2 screen      (everywhere, llvmpipe)
 ```
 
 — and **carries on regardless**. That is the difference that matters: kwin
-degrades to software, the Smithay compositors abort. "These desktops need a
+degrades to software, and xfwl4 aborts. (An earlier draft of this sentence
+said "the Smithay compositors abort" — cosmic-comp is Smithay and does not,
+so the split is not by toolkit. See the table above.) "These desktops need a
 render node" is not one claim about four desktops; it is false for kde and
 gnome, and for xfwl4 it describes an abort, not an absence.
 
@@ -367,6 +381,35 @@ which is gnome's app id. kde is `org.tunaos.InstallerKde`. So it printed "(no
 installer-debug.log found)" on four of five flavors, and that string reads like
 a fact about the guest instead of a fact about the path. Fixed; the next kde
 run carries it.
+
+### What cosmic and kde share — the installer will not advance
+
+Both come up. Both map the installer window on the **welcome** page. Neither
+gets past it.
+
+cosmic, run 32718219267:
+
+```
+ok - compositor running (cosmic-comp)
+ok - installer frontend launched (org.tunaos.InstallerCosmic)
+ok - cosmic: screen is not blank        # 9/9 frames above stddev
+ok - cosmic: reached 'welcome' screen   # seen on visual state(s) [0, 1]
+not ok - cosmic: reached 'disk' screen  # not found on any state the installer advanced to
+  # 1/8 transitions changed >500px; primary action activated with 'spc'
+  # 2 distinct visual state(s) across 9 frames
+```
+
+Its readiness stamp agrees: `app_id=org.tunaos.InstallerCosmic
+signal=first-frame page=welcome`. kde's says the same thing —
+`window=ApplicationWindow signal=frame-swapped page=welcome` — it simply
+matched no OCR keywords at all.
+
+So the remaining question for both is **not** rendering, seats, or DRM. It is
+that the walkthrough's keyboard drive (`ret`, escalating to `spc`, then
+widening the focus search) does not move these frontends off their first page.
+gnome advances 7/8 transitions on the same harness. Whether that is a
+walkthrough limitation or a real defect in the two frontends is open, and is
+deliberately not guessed at here.
 
 ### What xfce actually does — measured, not inferred
 
