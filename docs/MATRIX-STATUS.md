@@ -304,18 +304,55 @@ the same run it boots, `gnome-shell` starts through Mesa's software path
 launches and stamps a window, and the walkthrough captures **9 non-blank frames
 across 8 distinct visual states**. So a compositor CAN come up on this hardware.
 
-Why the other four do not is still open, and the evidence to close it did not
-exist: greetd reports only its own bookkeeping —
+### What xfce actually does — measured, not inferred
+
+greetd reports only its own bookkeeping (`greeter exited without creating a
+session`, five times to `start-limit-hit`), so the compositor's reason went
+nowhere for five rounds of this. The live adapters now run the session under
+`systemd-cat -t tunaos-live-session`, and smoke run
+[32691426582](https://github.com/tuna-os/tunaOS/actions/runs/32691426582)
+is the first time xfwl4's own words have been captured:
 
 ```
-greetd: error: check_children: greeter exited without creating a session
+INFO  xfwl4: Starting xfwl4 on a tty using udev
+INFO  xfwl4::backend::udev: Using renderD128 as primary GPU
+INFO  smithay::wayland::socket: Created new socket name=Some("wayland-1")
+INFO  xfwl4::core::state: Listening on wayland socket name="wayland-1"
+WARN  smithay::backend::drm::device::fd: Unable to become drm master, assuming unprivileged mode
+INFO  smithay::backend::drm::device: DrmDevice initializing
+INFO  smithay::backend::egl::display: Successfully selected EGL platform: PLATFORM_GBM_KHR
+INFO  smithay::backend::egl::display: EGL Initialized
+INFO  smithay::backend::egl::display: EGL Version: (1, 5)
+WARN  xfwl4::backend::udev::device: failed to initialize gpu err=NoRenderNode
+ERROR xfwl4: Failed to initialize primary GPU node
 ```
 
-five times to `start-limit-hit` — and the compositor's own reason went
-nowhere. The live adapters now run the session under
-`systemd-cat -t tunaos-live-session` and the smoke workflow prints that tag, so
-the next run answers this instead of inviting a sixth guess. Until it does,
-read these cells as **undiagnosed**, not as a hardware limit.
+So the compositor **starts**, **finds the render node and names it**, opens a
+Wayland socket and listens, and initialises EGL on GBM. It dies at
+`err=NoRenderNode` from Smithay's udev device init — *after* having selected
+`renderD128` — having first failed to become DRM master.
+
+"These desktops need a DRM render node" is therefore not merely unproven, it
+is contradicted by the compositor's own log: the node is present and xfwl4
+says which one it picked. The open question is now specific and much smaller:
+why Smithay reports `NoRenderNode` for a device it just selected, and whether
+the preceding `Unable to become drm master` is the cause or a separate
+symptom. Deliberately not guessed here — that is what the previous five
+attempts did.
+
+A second, independent defect is visible in the same log and is a packaging bug
+rather than a graphics one:
+
+```
+INFO xfwl4::core::config::xfwl4_config: Failed to reload defaults:
+     /usr/local/share/xfce4/xfwl4/defaults does not exist; using hard-coded defaults
+WARN xfwl4::core::util::rc: Missing value for required setting box_move
+... ~45 more required settings missing ...
+```
+
+`/usr/local/share` is not where a distribution package installs data, so
+xfwl4 ships looking for a defaults file that its own packaging never puts
+there. Not the fatal error, and worth fixing on its own.
 
 kde fails the same way: on run `30234237855`, plasmalogin's autologin session
 and its greeter both exit immediately (`plasmalogin-helper exited with 5`) in a

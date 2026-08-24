@@ -112,9 +112,12 @@ jobs:
           # arrives AFTER a ~12 minute image build, because the first rootless
           # command in the job is the one right after `Build OS image`.
           echo "==> unprivileged userns gates, as found:"
+          declare -A _gate_found=()
           for k in kernel.apparmor_restrict_unprivileged_userns \
-                   kernel.unprivileged_userns_clone; do
-            printf '    %s = %s\n' "$k" "$(sysctl -n "$k" 2>/dev/null || echo '(absent)')"
+                   kernel.unprivileged_userns_clone \
+                   user.max_user_namespaces; do
+            _gate_found[$k]="$(sysctl -n "$k" 2>/dev/null || echo '(absent)')"
+            printf '    %s = %s\n' "$k" "${_gate_found[$k]}"
           done
           if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
             sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
@@ -141,6 +144,33 @@ jobs:
             exit 1
           fi
           echo "==> rootless podman can create a user namespace"
+
+          # ALSO to the step summary, because the job log cannot be relied on
+          # to still contain this.
+          #
+          # `Build OS image` emits tens of thousands of lines, and the log
+          # download for this job comes back starting PART-WAY THROUGH that
+          # step -- everything steps 1-6 printed is simply not in it. So the
+          # gate values were captured and then unreadable, which is the same
+          # defect as not capturing them: on run 32690010127 step 8 went from
+          # failing to passing across this change and the evidence for WHY was
+          # in the truncated region.
+          #
+          # The step summary is a separate artifact with its own budget and is
+          # not subject to that truncation.
+          {
+            echo "### Rootless podman userns"
+            echo ""
+            echo "| gate | as found |"
+            echo "|---|---|"
+            for k in kernel.apparmor_restrict_unprivileged_userns \
+                     kernel.unprivileged_userns_clone \
+                     user.max_user_namespaces; do
+              printf '| `%s` | `%s` |\n' "$k" "${_gate_found[$k]:-(unread)}"
+            done
+            echo ""
+            echo "\`podman unshare\` succeeded after configuration."
+          } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
       - name: Build OS image
         run: |
@@ -331,4 +361,4 @@ jobs:
             echo ""
             echo "> Posted here rather than as a PR comment: this run is from a fork,"
             echo "> so \`GITHUB_TOKEN\` is read-only and cannot comment."
-          } >> "$GITHUB_STEP_SUMMARY"
+          } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"

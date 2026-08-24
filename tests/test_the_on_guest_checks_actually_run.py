@@ -367,3 +367,73 @@ def test_the_setup_step_passes_when_the_namespace_can_be_created(tmp_path):
 
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "can create a user namespace" in proc.stdout, proc.stdout
+
+
+def test_the_gate_values_survive_log_truncation(tmp_path):
+    """The diagnostic must land somewhere the job log's truncation cannot eat.
+
+    `Build OS image` emits tens of thousands of lines, and the log download for
+    that job comes back starting PART-WAY THROUGH it -- everything steps 1-6
+    printed is simply absent. On run 32690010127 step 8 went from failing to
+    passing across this change and the evidence for WHY was in the cut region,
+    which is the same defect as never capturing it.
+    """
+    import os
+    import subprocess
+
+    step = tmp_path / "step.sh"
+    step.write_text(_rootless_setup_step()["run"], encoding="utf-8")
+
+    shims = tmp_path / "bin"
+    shims.mkdir()
+    (shims / "sudo").write_text('#!/bin/sh\nexec "$@"\n')
+    (shims / "podman").write_text("#!/bin/sh\nexit 0\n")
+    (shims / "sysctl").write_text('#!/bin/sh\n[ "$1" = "-n" ] && { echo 1; exit 0; }\nexit 0\n')
+    (shims / "tee").write_text("#!/bin/sh\ncat >/dev/null\n")
+    for f in shims.iterdir():
+        f.chmod(0o755)
+
+    summary = tmp_path / "summary.md"
+    env = dict(
+        os.environ,
+        PATH=f"{shims}:/usr/bin:/bin",
+        USER="runner",
+        GITHUB_STEP_SUMMARY=str(summary),
+    )
+    proc = subprocess.run(["bash", str(step)], capture_output=True, text=True, env=env)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+    written = summary.read_text(encoding="utf-8")
+    assert "apparmor_restrict_unprivileged_userns" in written, written
+    # The VALUE, not just the key -- a summary naming the gate without saying
+    # what it was set to settles nothing.
+    assert "`1`" in written, written
+
+
+def test_the_step_survives_a_missing_step_summary(tmp_path):
+    """`set -u` plus an unset GITHUB_STEP_SUMMARY must not kill the step.
+
+    Caught by this suite rather than by a run: the first version referenced the
+    variable unguarded and died with `unbound variable` after the probe had
+    already passed.
+    """
+    import os
+    import subprocess
+
+    step = tmp_path / "step.sh"
+    step.write_text(_rootless_setup_step()["run"], encoding="utf-8")
+
+    shims = tmp_path / "bin"
+    shims.mkdir()
+    (shims / "sudo").write_text('#!/bin/sh\nexec "$@"\n')
+    (shims / "podman").write_text("#!/bin/sh\nexit 0\n")
+    (shims / "sysctl").write_text('#!/bin/sh\n[ "$1" = "-n" ] && { echo 0; exit 0; }\nexit 0\n')
+    (shims / "tee").write_text("#!/bin/sh\ncat >/dev/null\n")
+    for f in shims.iterdir():
+        f.chmod(0o755)
+
+    env = {k: v for k, v in os.environ.items() if k != "GITHUB_STEP_SUMMARY"}
+    env.update(PATH=f"{shims}:/usr/bin:/bin", USER="runner")
+    proc = subprocess.run(["bash", str(step)], capture_output=True, text=True, env=env)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert "unbound variable" not in proc.stderr, proc.stderr
