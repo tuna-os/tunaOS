@@ -2165,7 +2165,7 @@ run_install() {
 	# `[[ "$VARIANT" == "grouper" ]]`, so sailfin, marlin, flounder,
 	# flounder-sid, guppy and gurnard — every other composefs variant — were
 	# installed down the ostree/grub2 path they cannot boot. See
-	# probe_image_backend() in scripts/lib/common.sh (tunaOS#954).
+	# probe_image_backend() in scripts/lib/backend.sh (tunaOS#954).
 	# Probe the image that will actually be INSTALLED. In the dev/e2e flow that
 	# is the locally rebuilt one, and the published tag may be months stale or
 	# absent entirely for a variant whose Gate has been failing — probing it
