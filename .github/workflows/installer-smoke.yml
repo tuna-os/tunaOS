@@ -604,7 +604,7 @@ jobs:
                   echo "-- ExecStart of the active DM --"; systemctl cat "$(basename "$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null)" 2>/dev/null)" 2>/dev/null | grep -E "^ExecStart|^\[" | head -20; \
                   echo "-- /etc/greetd/config.toml as installed --"; cat /etc/greetd/config.toml 2>/dev/null; \
                   echo "-- display-manager journal (all five, not just greetd) --"; \
-                  sudo journalctl -u greetd -u cosmic-greeter -u plasmalogin -u sddm -u gdm --no-pager 2>/dev/null | tail -60; \
+                  sudo journalctl -u greetd -u cosmic-greeter -u plasmalogin -u sddm -u gdm -u systemd-logind --no-pager 2>/dev/null | tail -80; \
                   echo "-- what the session command itself said (tunaos-live-session) --"; \
                   sudo journalctl -t tunaos-live-session --no-pager 2>/dev/null | tail -80 || true' 2>/dev/null || true
 

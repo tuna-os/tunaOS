@@ -158,3 +158,15 @@ def test_the_journal_capture_covers_every_display_manager():
     units = set(re.findall(r"-u (\S+)", m.group(0)))
     for dm in ("greetd", "cosmic-greeter", "plasmalogin", "gdm"):
         assert dm in units, f"{dm} is not captured; units are {sorted(units)}"
+    # systemd-logind is the one that survives the session it describes.
+    # `loginctl` is read minutes after the compositor died and greetd gave up,
+    # so it reports whatever is left -- the SSH login and the user manager,
+    # both of which legitimately have no seat. logind's journal records "New
+    # session N of user ..." WITH the seat and VT at the moment the session was
+    # created, which is the only post-mortem-proof answer to whether the
+    # compositor's session was ever seated.
+    assert "systemd-logind" in units, (
+        "systemd-logind is not captured; without it the seat question can only "
+        "be answered from post-mortem loginctl output, which cannot see the "
+        f"session that already exited. units are {sorted(units)}"
+    )
