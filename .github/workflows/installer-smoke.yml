@@ -20,24 +20,29 @@ on:
         default: "yellowfin"
         type: string
       build_runner:
-        # The experiment behind tunaOS#2010: is RunsOn actually required to
-        # build an ISO, or was it inherited from a podman diagnosis that the
-        # workflow itself contradicts three steps later?
+        # MEASURED 2026-08-24, run 32747410944 against RunsOn runs
+        # 32747410944/32735883406/32718219267, same commit, same steps:
         #
-        # `runs-on` (default) keeps every scheduled run and every other
-        # dispatch exactly as it was. `github` routes the build to
-        # ubuntu-latest so the two can be compared on the same commit.
+        #   Build dev ISO      ubuntu-latest      RunsOn (c6a, 8 vCPU)
+        #   gnome              38m46s             48m18s
+        #   kde                41m16s             59m53s
         #
-        # The `schedule` trigger passes no inputs, so this evaluates empty
-        # there and falls through to RunsOn -- the weekly run cannot be
-        # changed by adding this.
+        # GitHub-hosted is FASTER on both flavors, on half the cores, and the
+        # gnome leg went green end to end (walkthrough included). No disk
+        # failure: `free disk space` frees enough, taking 1m36s-5m25s to do
+        # it against ~11s on RunsOn, which is the whole of the setup cost.
+        # The build is evidently not CPU-bound.
+        #
+        # So `github` is now the default and `runs-on` is the escape hatch,
+        # kept because one afternoon of measurements is not a guarantee and
+        # reverting should not need a code change.
         description: "Runner for the ISO build"
         required: false
-        default: "runs-on"
+        default: "github"
         type: choice
         options:
-          - runs-on
           - github
+          - runs-on
       flavors:
         description: "Comma-separated flavors"
         required: false
@@ -118,24 +123,28 @@ jobs:
     # The boot Gate in reusable-build-image.yml is unaffected: it genuinely
     # runs iso-e2e-gpu.sh and still asks for `gpu`.
     #
-    # RUNNER, and the experiment: `build_runner: github` sends this job to
-    # ubuntu-latest instead. The stated reason for RunsOn is directly above --
-    # "cannot work on the GitHub runner's podman 5.8.4" -- but the `setup
-    # working podman` step below opens by saying the RunsOn image ships THE
-    # SAME podman 5.8.4 and installs the Kubic build over it. That step is a
-    # plain apt install with nothing runner-specific in it, so it should work
-    # identically on either. What is genuinely different is disk (80GB gp3 vs
-    # ~14GB free of ~65GB, which is why `free disk space` runs below) and
-    # cores (8 vs 4, against a 75-minute cap that a ~50-minute build already
-    # eats most of). Those are measurable, and this input is how.
-    runs-on: ${{ inputs.build_runner == 'github'
+    # RUNNER. The comment above is the history; the measurement retired it.
+    # The stated reason for RunsOn was "cannot work on the GitHub runner's
+    # podman 5.8.4" -- but the `setup working podman` step below always said
+    # the RunsOn image ships THE SAME podman 5.8.4 and installs the Kubic
+    # build over it, and that step is a plain apt install with nothing
+    # runner-specific in it. It succeeds on ubuntu-latest, as it always would
+    # have. tunaOS#1893's root cause was a `podman commit --quiet` wedge
+    # inside tacklebox, fixed in tacklebox#231 -- never a runner property.
+    #
+    # ubuntu-latest is the default now, on the numbers in the input comment
+    # above. `build_runner: runs-on` still routes back to RunsOn without a
+    # code change; the `schedule` trigger passes no inputs, so it takes the
+    # empty branch, which is why the comparison is written `!= 'runs-on'`
+    # rather than `== 'github'`.
+    runs-on: ${{ inputs.build_runner != 'runs-on'
       && 'ubuntu-latest'
       || format('runs-on={0}/runner={1}', github.run_id, matrix.runner) }}
-    # Raised from 75 only for the GitHub leg: half the cores on the same work
-    # would otherwise be cancelled at the cap and read as "GitHub runners
-    # cannot build an ISO", when the finding would really be "it needs longer
-    # than 75 minutes". A timeout is not a measurement.
-    timeout-minutes: ${{ inputs.build_runner == 'github' && 150 || 75 }}
+    # 150 for ubuntu-latest, where the measured builds are 38-41 minutes: a
+    # cap close to the observed time turns a slow build into a cancellation
+    # and reports the wrong thing. 75 stays for the RunsOn path it was set
+    # for. A timeout is not a measurement.
+    timeout-minutes: ${{ inputs.build_runner != 'runs-on' && 150 || 75 }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}

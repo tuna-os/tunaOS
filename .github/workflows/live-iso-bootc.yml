@@ -22,6 +22,19 @@ on:
         required: false
         default: false
         type: boolean
+      build_runner:
+        # Deliberately NOT defaulted to github, unlike installer-smoke.yml.
+        # That workflow was flipped on measurements of ITS build; this job
+        # builds a full OS image and a live ISO, a different shape of work,
+        # and nobody has timed it on ubuntu-latest. Opt in, measure, then
+        # decide.
+        description: 'Runner for the build'
+        required: false
+        default: 'runs-on'
+        type: choice
+        options:
+          - runs-on
+          - github
   pull_request:
     branches: [main]
     paths:
@@ -38,7 +51,24 @@ jobs:
     # 32394645068, deterministic). installer-smoke escaped the same class of
     # runner breakage by moving to RunsOn with the Kubic podman (#1919-#1923);
     # build here the same way.
-    runs-on: runs-on=${{ github.run_id }}/runner=build-amd64
+    #
+    # That reasoning is now partly in doubt. installer-smoke's stated blocker
+    # ("the GitHub runner's podman 5.8.4") was refuted by its own `setup
+    # working podman` step, which this workflow carries a byte-identical copy
+    # of, and its build turned out FASTER on ubuntu-latest (38m46s vs 48m18s
+    # for gnome, run 32747410944). #1823 is a different claim -- rpmdb sqlite
+    # over overlayfs, and the issue itself diagnoses it on both arches rather
+    # than as a runner property -- so it is not refuted by that, only made
+    # worth re-testing.
+    #
+    # `== 'github'` here, NOT the `!= 'runs-on'` installer-smoke uses. This
+    # workflow also runs on `pull_request`, which passes no inputs; the !=
+    # form would silently move every PR build to ubuntu-latest, and this one
+    # is opt-in until measured. Dispatch with build_runner=github to measure
+    # it.
+    runs-on: ${{ inputs.build_runner == 'github'
+      && 'ubuntu-latest'
+      || format('runs-on={0}/runner=build-amd64', github.run_id) }}
     permissions:
       contents: read
       packages: read
