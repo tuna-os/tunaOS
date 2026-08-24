@@ -227,6 +227,80 @@ def test_the_build_step_fails_when_it_produces_no_iso():
 
 
 def test_the_r2_step_still_guards_the_published_path():
-    """Adding a second source must not weaken the first."""
+    """Adding a second source must not weaken the first.
+
+    The message moved when the lookup learned the grouped naming scheme;
+    what must not move is that a missing published ISO is still a hard
+    failure rather than a silently skipped cell.
+    """
     body = WORKFLOW.read_text(encoding="utf-8")
-    assert "No ISO found in R2 at live-isos/" in body
+    assert "::error::No ISO in R2 under either name" in body
+
+
+# ── Two naming schemes in one bucket ─────────────────────────────────────
+# The legacy per-flavor pipeline wrote `<variant>-<flavor>-latest.iso`; the
+# grouped dedup pipeline that replaced it writes `<basename>-latest.iso`,
+# where basename is the VARIANT ALONE for the gnome group. Measured against
+# the live bucket on 2026-08-24:
+#
+#     albacore-gnome-latest.iso   200   (legacy)
+#     albacore-kde-latest.iso     200   (legacy; grouped agrees by accident)
+#     albacore-latest.iso         404   (grouped gnome — never published)
+#     yellowfin-latest.iso        404
+#
+# So publishing the grouped ISOs would NOT have turned E2E yellowfin:gnome
+# green on its own: the object lands under a key nothing looks up.
+
+def download_step() -> dict:
+    steps = workflow()["jobs"]["e2e"]["steps"]
+    step = next(s for s in steps if "rclone copy" in str(s.get("run", "")))
+    assert "live-isos" in step["run"], step["run"][:200]
+    return step
+
+
+def test_the_lookup_tries_both_naming_schemes():
+    run = download_step()["run"]
+    assert '${VARIANT}-${FLAVOR}-latest.iso' in run, run[-800:]
+    assert '${VARIANT}-latest.iso' in run, run[-800:]
+    assert '${VARIANT}-${DESKTOP}-latest.iso' in run, run[-800:]
+
+
+def test_gnome_maps_to_the_bare_variant_name():
+    """The whole asymmetry. Every other desktop keeps its suffix; gnome's
+    grouped ISO is `<variant>-latest.iso` with no desktop in the name."""
+    run = download_step()["run"]
+    assert 'DESKTOP="${FLAVOR%%-*}"' in run, run[-800:]
+    gnome_branch = run[run.index('if [[ "$DESKTOP" == "gnome" ]]'):]
+    head = gnome_branch[:gnome_branch.index("else")]
+    assert '${VARIANT}-latest.iso' in head, head
+    assert "${DESKTOP}" not in head, head
+
+
+def test_a_flavor_variant_resolves_to_its_group():
+    """gnome-hwe and kde-nvidia ride inside their group's offline store, so
+    they must resolve to that group's ISO rather than to a per-flavor image
+    that the grouped pipeline never publishes."""
+    run = download_step()["run"]
+    # `%%-*` strips at the FIRST hyphen: gnome-nvidia-hwe -> gnome.
+    assert "%%-*" in run, run[-800:]
+
+
+def test_it_still_fails_loudly_when_neither_name_exists():
+    """Two chances to find it is not a licence to boot nothing."""
+    run = download_step()["run"]
+    assert "::error::No ISO in R2 under either name" in run, run[-800:]
+    assert "exit 1" in run
+    # And it must name BOTH keys it tried, or the next reader cannot tell
+    # which pipeline was supposed to have produced the ISO.
+    err = run[run.index("::error::No ISO in R2"):]
+    assert "${OBJECT}" in err and "${GROUP_OBJECT}" in err, err[:300]
+
+
+def test_the_rclone_failure_does_not_abort_before_the_fallback():
+    """`set -euo pipefail` plus a failing rclone would kill the step before
+    the second candidate was ever tried — the fallback would be dead code."""
+    run = download_step()["run"]
+    copy_lines = [l for l in run.splitlines() if "rclone copy" in l]
+    assert copy_lines, run[-800:]
+    idx = run.index("for candidate in")
+    assert "|| true" in run[idx:], run[idx:idx + 600]

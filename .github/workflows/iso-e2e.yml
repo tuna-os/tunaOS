@@ -272,14 +272,53 @@ jobs:
           # up `${VARIANT}-${FLAVOR}-nvidia-latest.iso` etc. via the `-*.iso`
           # glob (which over-matches because the rclone include glob
           # isn't anchored at the end).
+          # TWO NAMING SCHEMES ARE LIVE IN THE BUCKET.
+          #
+          # The legacy per-flavor pipeline (publish-isos.yml, now disabled)
+          # wrote `<variant>-<flavor>-latest.iso`. The grouped dedup pipeline
+          # that replaced it (publish-iso-groups.yml) writes
+          # `<basename>-latest.iso`, where basename is the variant alone for
+          # the GNOME group and `<variant>-<desktop>` for the others.
+          #
+          # So for every desktop except gnome the two agree by accident --
+          # `yellowfin-kde-latest.iso` either way -- and for gnome they do
+          # NOT: the grouped pipeline writes `yellowfin-latest.iso` while
+          # this job asked for `yellowfin-gnome-latest.iso`. Measured
+          # 2026-08-24: albacore-gnome-latest.iso and albacore-kde-latest.iso
+          # are 200 (from the legacy pipeline), albacore-latest.iso and
+          # yellowfin-latest.iso are 404.
+          #
+          # That is why publishing the grouped ISOs would not by itself have
+          # turned E2E yellowfin:gnome green: the object would have landed
+          # under a key nothing looks up.
+          #
+          # Try the per-flavor name first, since that is what is in the
+          # bucket today, then the group name. A flavor maps to its group by
+          # its desktop prefix -- gnome-hwe and gnome-nvidia all ride inside
+          # the gnome group's offline store, so they resolve to the same ISO.
+          DESKTOP="${FLAVOR%%-*}"
+          if [[ "$DESKTOP" == "gnome" ]]; then
+            GROUP_OBJECT="${VARIANT}-latest.iso"
+          else
+            GROUP_OBJECT="${VARIANT}-${DESKTOP}-latest.iso"
+          fi
           OBJECT="${VARIANT}-${FLAVOR}-latest.iso"
-          echo "==> Fetching ${OBJECT} from R2..."
-          rclone copy --log-level INFO --s3-no-check-bucket \
-            "R2:${{ secrets.R2_BUCKET }}/live-isos/${OBJECT}" .
-          if [[ ! -f "${OBJECT}" ]]; then
-            echo "::error::No ISO found in R2 at live-isos/${OBJECT}"
+          FOUND=""
+          for candidate in "${OBJECT}" "${GROUP_OBJECT}"; do
+            echo "==> Trying ${candidate} from R2..."
+            rclone copy --log-level INFO --s3-no-check-bucket \
+              "R2:${{ secrets.R2_BUCKET }}/live-isos/${candidate}" . || true
+            if [[ -f "${candidate}" ]]; then
+              FOUND="${candidate}"
+              break
+            fi
+          done
+          if [[ -z "${FOUND}" ]]; then
+            echo "::error::No ISO in R2 under either name: live-isos/${OBJECT} (per-flavor) or live-isos/${GROUP_OBJECT} (grouped)"
             exit 1
           fi
+          OBJECT="${FOUND}"
+          echo "==> Using ${OBJECT}"
           {
             echo "ISO_PATH=$(realpath "${OBJECT}")"
             echo "VARIANT=${VARIANT}"
