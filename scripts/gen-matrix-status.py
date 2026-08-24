@@ -909,7 +909,22 @@ def build() -> str:
     matrix = iso_matrix()
     lmatrix = luks_matrix()
     luks = latest_results("luks-e2e.yml", r"^LUKS ")
-    smoke = latest_results("installer-smoke.yml", r":")
+    # NOT r":" — installer-smoke.yml has TWO jobs per cell and both carry a
+    # colon:
+    #
+    #     build-iso:  name: build ${{ matrix.variant }}:${{ matrix.flavor }}
+    #     smoke:      name: ${{ matrix.variant }}:${{ matrix.flavor }}
+    #
+    # A bare colon matched both, so every ISO BUILD result was filed as a
+    # smoke result under a phantom variant literally named "build yellowfin".
+    # The 2026-08-24 refresh published it: a "build yellowfin" row reading
+    # ✅✅✅✅✅ sat directly above the real yellowfin row reading ❌❌❌❌❌,
+    # while the summary line above them said "0 of those pass".
+    #
+    # That is the worst kind of wrong for this document: the build jobs DO
+    # pass, so the phantom row looked like the good news anyone would want to
+    # see, on the one axis where there is none. Anchor the exclusion instead.
+    smoke = latest_results("installer-smoke.yml", r"^(?!build )[^:]+:")
     tags = overlay_tags()
 
     # desktop-contract-sweep.yml schedules from the identical build_image /
