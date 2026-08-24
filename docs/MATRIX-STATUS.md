@@ -219,7 +219,6 @@ This is the only axis that checks a human could actually install. For 4 combinat
 | **albacore** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **bonito** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **build yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **flounder** | ❌ | ⬜ | — | — | — |
 | **grouper** | ❌ | ⬜ | — | — | ⬜ |
 | **gurnard** | — | — | — | — | — |
@@ -242,9 +241,11 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-08-24 | [32691426582](https://github.com/tuna-os/tunaOS/actions/runs/32691426582) | 1 |
+| 2026-08-24 | [32681262659](https://github.com/tuna-os/tunaOS/actions/runs/32681262659) | 1 |
 | 2026-08-23 | [32628057824](https://github.com/tuna-os/tunaOS/actions/runs/32628057824) | 48 |
-| 2026-08-21 | [32472623013](https://github.com/tuna-os/tunaOS/actions/runs/32472623013) | 6 |
-| 2026-08-21 | [32465179023](https://github.com/tuna-os/tunaOS/actions/runs/32465179023) | 4 |
+| 2026-08-21 | [32472623013](https://github.com/tuna-os/tunaOS/actions/runs/32472623013) | 2 |
+| 2026-08-21 | [32465179023](https://github.com/tuna-os/tunaOS/actions/runs/32465179023) | 1 |
 | 2026-08-20 | [32335146969](https://github.com/tuna-os/tunaOS/actions/runs/32335146969) | 120 |
 | 2026-08-19 | [32238167029](https://github.com/tuna-os/tunaOS/actions/runs/32238167029) | 38 |
 | 2026-08-12 | [31585741267](https://github.com/tuna-os/tunaOS/actions/runs/31585741267) | 18 |
@@ -252,8 +253,6 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 | 2026-08-09 | [31286849405](https://github.com/tuna-os/tunaOS/actions/runs/31286849405) | 18 |
 | 2026-08-09 | [31286843546](https://github.com/tuna-os/tunaOS/actions/runs/31286843546) | 18 |
 | 2026-08-08 | [31242742608](https://github.com/tuna-os/tunaOS/actions/runs/31242742608) | 1 |
-| 2026-08-08 | [31236474250](https://github.com/tuna-os/tunaOS/actions/runs/31236474250) | 1 |
-| 2026-08-08 | [31236469036](https://github.com/tuna-os/tunaOS/actions/runs/31236469036) | 1 |
 
 <!-- END GENERATED -->
 
