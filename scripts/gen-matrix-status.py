@@ -1153,10 +1153,12 @@ def build() -> str:
         # this line states the symptom and points at the section that carries
         # the evidence, rather than restating a cause the measurement did not
         # support.
-        "cosmic, niri, xfwl4 and kde do not bring a session up on hosted CI. The "
-        "cause is undiagnosed rather than established -- gnome starts on the "
-        "same guest, which has a render node but no 3D. See *Known systemic "
-        "gaps*.",
+        (
+            "cosmic, niri, xfwl4 and kde do not bring a session up on hosted CI. The "
+            + "cause is undiagnosed rather than established -- gnome starts on the "
+            + "same guest, which has a render node but no 3D. See *Known systemic "
+            + "gaps*."
+        ),
         "",
     ]
 
