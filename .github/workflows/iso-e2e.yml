@@ -431,12 +431,15 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: iso-e2e-${{ matrix.variant }}-${{ matrix.flavor }}
+          # The PPMs are dropped: the step above converts every one of them
+          # to PNG, so uploading both stores each frame twice — once in an
+          # UNCOMPRESSED format (a 1280x800 PPM is ~3 MB raw against ~100 KB
+          # as PNG). Same evidence, a fraction of the bytes.
           path: |
             iso-e2e-out/serial.log
             iso-e2e-out/*.png
-            iso-e2e-out/*.ppm
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 7
 
       # Only fail when the e2e step actually ran AND reported failure.
       # When the filter step skipped the job, steps.e2e.outputs.rc is empty,

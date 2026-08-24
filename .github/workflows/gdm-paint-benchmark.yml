@@ -59,6 +59,8 @@ jobs:
         with:
           name: gdm-bench-base-qcow2
           path: base.qcow2
+          # Already-compressed disk image: level 6 spends minutes for ~0%.
+          compression-level: 0
           retention-days: 1
 
   benchmark:

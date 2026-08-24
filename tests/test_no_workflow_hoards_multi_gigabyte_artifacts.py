@@ -18,13 +18,23 @@ short. A default that costs money is not a default anyone chose.
 """
 from __future__ import annotations
 
+import pathlib
 from pathlib import Path
 
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = sorted((ROOT / ".github" / "workflows").glob("*.yml"))
-MAX_RETENTION_DAYS = 7
+# A DISK IMAGE, not just an ISO. The first version of this rule matched
+# `.iso` — the example that prompted it — and therefore never looked at
+# gdm-paint-benchmark.yml's `base.qcow2`, which is the same shape of object
+# for the same reason. Match the class.
+DISK_IMAGE_SUFFIXES = (".iso", ".qcow2", ".raw", ".img", ".vdi", ".vmdk")
+
+# One day. The earlier ceiling was seven, which reusable-build-artifacts.yml
+# satisfied while keeping a multi-gigabyte ISO for a week — against 0.5 GB of
+# included storage, a week is indistinguishable from forever.
+MAX_RETENTION_DAYS = 1
 
 
 def upload_steps():
@@ -59,10 +69,27 @@ def iso_uploads():
     for wf, job, step in upload_steps():
         path = str(step.get("with", {}).get("path", ""))
         # `.iso.sha256` and `.iso.sigstore.json` are kilobytes — the point is
-        # the image itself, so match a path component ENDING in .iso.
+        # the image itself, so match a path component ENDING in one of the
+        # disk-image suffixes.
         lines = [l.strip() for l in path.splitlines() if l.strip()]
-        if any(l.endswith(".iso") for l in lines):
+        if any(l.endswith(DISK_IMAGE_SUFFIXES) for l in lines):
             yield wf, job, step
+
+
+def test_the_rule_covers_more_than_the_one_example_that_prompted_it():
+    """qcow2 is a disk image too.
+
+    Matching `.iso` alone let gdm-paint-benchmark.yml upload a multi-gigabyte
+    base.qcow2 through this check untouched. A rule written around its
+    motivating example is a rule with a hole in it.
+    """
+    found = {pathlib.Path(str(s.get("with", {}).get("path", "")).strip()).suffix
+             for _, _, s in iso_uploads()}
+    assert ".iso" in found, found
+    assert ".qcow2" in found, (
+        "no qcow2 upload matched — either it is gone (good) or the suffix "
+        "list stopped covering it (bad, and silent)"
+    )
 
 
 def test_the_iso_uploads_are_still_findable():
@@ -115,3 +142,27 @@ def test_the_publish_job_does_not_also_hoard_what_it_published():
             f"the publish job uploads {line!r} as an artifact as well as to "
             "R2 — one deliverable, two bills"
         )
+
+
+def test_frames_are_not_stored_twice_in_two_formats():
+    """iso-e2e converts every PPM screendump to PNG, then uploaded both.
+
+    A 1280x800 PPM is ~3 MB uncompressed against ~100 KB as PNG, so keeping
+    both stored each frame twice and the larger copy was the raw one. The
+    evidence is identical; only the bytes differ.
+    """
+    doc = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "iso-e2e.yml").read_text(encoding="utf-8"))
+    uploads = [
+        str(s.get("with", {}).get("path", ""))
+        for job in doc["jobs"].values() if isinstance(job, dict)
+        for s in job.get("steps", []) or []
+        if "upload-artifact" in str(s.get("uses", ""))
+    ]
+    assert uploads, "no upload steps found in iso-e2e.yml"
+    blob = "\n".join(uploads)
+    assert "*.png" in blob, "the PNG frames should still be kept"
+    assert "*.ppm" not in blob, (
+        "uploading the PPMs as well as the PNGs converted from them stores "
+        "every frame twice, the bigger copy uncompressed"
+    )
