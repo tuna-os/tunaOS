@@ -124,11 +124,35 @@ fi
 # ── 3. The installer wrote a readiness stamp ────────────────────────────────
 # "process alive" ≠ "window on screen". Each frontend writes
 # $XDG_RUNTIME_DIR/tuna-installer-ready when its window comes up.
-# Inside the Flatpak sandbox the host sees it at
-# /run/user/<uid>/app/<app-id>/tuna-installer-ready; an unsandboxed run
-# writes to /run/user/<uid>/tuna-installer-ready directly.
+#
+# THE SANDBOX PATH WAS MISSING HERE, AND ONLY HERE. installer-smoke.yml's
+# inline copy of this same check was corrected (3c6cbf0c, "read the stamp
+# where flatpak actually puts it"); this script does the identical job over
+# SSH and was left behind. Two copies of one check, one of them fixed.
+#
+# Inside the sandbox $XDG_RUNTIME_DIR reads as /run/user/<uid>, but that is a
+# BIND MOUNT and the host path differs. Current flatpak backs it with
+#   /run/user/<uid>/.flatpak/<app-id>/xdg-run/
+# The app/<app-id>/ directory still EXISTS -- flatpak creates it -- so its
+# emptiness looked like proof that nothing had been written, which is how this
+# survived.
+#
+# Measured, kde run 32718219267: this script reported
+#   not ok - installer readiness stamp present
+# while the workflow's inline check, on the same guest at the same moment,
+# read the stamp and printed
+#   app_id=org.tunaos.InstallerKde window=ApplicationWindow
+#   signal=frame-swapped page=welcome
+# A frame HAD been swapped and the window WAS on screen. The failure was the
+# lookup, not the installer.
+#
+# All three paths, newest layout first: an unsandboxed run still writes to
+# /run/user/<uid>/ directly, and app/<app-id>/ costs nothing to keep for
+# older flatpak.
 STAMP=""
-for d in /run/user/*/app/"${APP}"/tuna-installer-ready /run/user/*/tuna-installer-ready; do
+for d in /run/user/*/.flatpak/"${APP}"/xdg-run/tuna-installer-ready \
+	/run/user/*/app/"${APP}"/tuna-installer-ready \
+	/run/user/*/tuna-installer-ready; do
 	if [[ -f "$d" ]]; then
 		STAMP=$(cat "$d" 2>/dev/null | head -20)
 		break
