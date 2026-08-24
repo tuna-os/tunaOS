@@ -305,6 +305,13 @@ def readable(text):
 
 
 _ocr_variant = {}
+# {frame: {pass_name: score}} -- every reading, not only the winner. The first
+# version recorded the winner alone, and reported "best pass per frame: psm6"
+# on kde run 32747410944 where in fact ALL FOUR passes scored zero. `>` is
+# strictly greater, so a four-way tie leaves psm6 holding the title it started
+# with, and the printed hint then read that as evidence FOR psm6 -- an
+# argument from a tie. The scores say what the winner cannot.
+_ocr_scores = {}
 
 
 def _tesseract(png, psm):
@@ -318,6 +325,7 @@ def ocr(png):
         return None
 
     best, best_name = _tesseract(png, "6"), "psm6"
+    _ocr_scores[png] = {"psm6": _text_score(best)}
     if readable(best):
         _ocr_variant[png] = best_name
         return best
@@ -340,6 +348,7 @@ def ocr(png):
                 os.unlink(neg)
 
     for text, name in candidates:
+        _ocr_scores[png][name] = _text_score(text)
         if _text_score(text) > _text_score(best):
             best, best_name = text, name
 
@@ -720,13 +729,15 @@ if have_ocr and not any(reached.values()) and rendered > 0:
 # and a diagnosis pointing at autostart, OOM-kills and missing GL paths, for a
 # frontend that was working.
 #
-# The first reading of that -- "KDE's welcome page contains none of the spec's
-# keywords" -- was true of the PAGE and false of the SCREEN: the wizard draws
-# the step name "Welcome" as a 1.6x heading above it (tuna-installer-kde
-# src/qml/Wizard.qml:46,185). So the word was up there and the match still did
-# not happen, and the cause is not yet known. Which is the argument for this
-# block: it is cheaper to print what the OCR read than to keep proposing
-# explanations for a screen nobody has read the text of.
+# I then "corrected" that to say the wizard draws the step name "Welcome"
+# above the page (Wizard.qml:46,185) and so the word WAS on screen. The
+# published capture shows it is not: the welcome step reads "Install
+# Yellowfin", then the wizard prose, then "Next". Reading the QML told me what
+# should render; the picture told me what did.
+#
+# Which is the argument for this block. Two rounds went into explaining a
+# screen nobody had looked at, and both explanations came from source code.
+# Printing what the OCR read is cheaper than either.
 #
 # Printing the text settles it without downloading an artifact: text present
 # and unmatched is a spec gap, text absent everywhere is a rendering or OCR
@@ -761,17 +772,27 @@ if have_ocr and _missing_required:
               "tests/installer-screens.yaml against the frontend's source "
               "strings -- not the frontend against the spec.", flush=True)
     else:
-        _variants = sorted({v for v in _ocr_variant.values()})
         _geo = png_geometry(frames[0]) if frames else None
+        _w, _h = _geo or ("?", "?")
+        # Best score each pass reached on ANY frame. Reporting the winner
+        # alone cannot distinguish "psm6 read the most" from "nothing read
+        # anything and psm6 kept the tie", and those are different findings.
+        _totals = {}
+        for _scores in _ocr_scores.values():
+            for _name, _score in _scores.items():
+                _totals[_name] = max(_totals.get(_name, 0), _score)
+        _table = ", ".join(f"{_n}={_v}" for _n, _v in sorted(_totals.items()))
         print("  # Those are NOT words. Every OCR reading came back as noise, "
-              "so this is not a keyword gap -- the pixels never became text. "
-              f"Frame geometry {(_geo or ('?', '?'))[0]}x{(_geo or ('?', '?'))[1]}; "
-              f"best pass per frame: {', '.join(_variants) or 'none'}.\n"
-              "  # If a *-negated pass won anywhere, the frontend is drawing "
-              "light text on a dark ground and tesseract wants the inverse. If "
-              "psm6 won everywhere and still returned noise, the glyphs are "
-              "too small or too soft at this resolution -- raise the guest "
-              "framebuffer rather than widening the spec.", flush=True)
+              "so this is not a keyword gap -- the pixels never became text.\n"
+              f"  # Frame geometry {_w}x{_h}. Best word-score any frame reached, "
+              f"per pass: {_table or 'none'} (readable needs "
+              f"{MIN_WORD_CHARS}).\n"
+              "  # A *-negated pass scoring HIGHER means the frontend draws "
+              "light text on a dark ground and tesseract wants the inverse. "
+              "All passes at or near zero means no segmentation helped, and "
+              "the next question is the frame itself, not the spec -- pull the "
+              "published capture and look at it before changing anything.",
+              flush=True)
 
 # ── Result for the parity matrix ─────────────────────────────────────────
 summary = {

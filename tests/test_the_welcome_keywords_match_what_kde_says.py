@@ -58,8 +58,12 @@ KDE_WELCOME_BODY = (
     "should be encrypted. Everything after that is handled by the installer. "
     "Next"
 )
-# The whole screen, heading included. This is what a screenshot contains.
-KDE_WELCOME_FULL = "Welcome " + KDE_WELCOME_BODY
+# What the published capture actually contains, window title included:
+# download.tunaos.org/screenshots/installer/smoke-kde_00-latest.png, run
+# 32747410944. Note what is NOT in it -- the word "Welcome". The wizard's
+# stepHeading Label (Wizard.qml:185) starts at opacity 0 and does not come up
+# on the first page, whatever its animation intends.
+KDE_WELCOME_FULL = "Yellowfin Installer " + KDE_WELCOME_BODY
 NIRI_WELCOME = (
     "Welcome to Yellowfin This wizard will guide you through installing "
     "Yellowfin onto your computer. Get Started"
@@ -128,14 +132,26 @@ def test_kdes_page_body_alone_is_now_enough():
     )
 
 
-def test_the_heading_would_always_have_matched():
-    """The correction, asserted rather than only written down.
+def test_the_whole_screen_still_needs_the_added_keyword():
+    """The correction to the correction, held by a test.
 
-    KDE's wizard heading IS the literal word "welcome", so a frame that
-    contains it matches on the ORIGINAL keyword list. That is why "the spec
-    cannot describe KDE's welcome screen" does not explain the failing run,
-    and why the cause is recorded as open instead of closed.
+    A comment once claimed KDE's wizard draws the word "Welcome" above the
+    page, so the original keyword list would have matched after all. The
+    published capture shows otherwise: the welcome step reads "Install
+    Yellowfin", the wizard prose, and "Next". Nothing on it is in the
+    original list.
+
+    So the ENTIRE screen -- window title included -- is recognisable only
+    through "will guide you through". Asserted on the full-screen text
+    rather than the page body so a future reader cannot re-derive the wrong
+    correction from the fact that the body test is narrowly scoped.
     """
+    lowered = KDE_WELCOME_FULL.lower()
+    for old_kw in ("welcome", "get started", "let's get", "begin"):
+        assert old_kw not in lowered, (
+            f"{old_kw!r} appears on KDE's welcome screen after all -- "
+            "re-measure against a fresh capture"
+        )
     proc, summary = run_walkthrough(
         {"00": KDE_WELCOME_FULL, "01": DISK, "02": DISK},
     )
@@ -239,12 +255,37 @@ class TestTheDiagnosisPrintsWhatItRead:
         # The noise itself is still printed -- it is the evidence.
         assert "1 ft" in proc.stdout, proc.stdout
 
-    def test_the_noise_report_names_what_it_tried(self):
-        """It must say which OCR pass won and how big the frame was, or the
-        reader is back to guessing between "dark theme" and "too small"."""
+    def test_the_noise_report_scores_every_pass(self):
+        """Not the winner -- the scores.
+
+        The first version printed "best pass per frame: psm6", and on kde
+        run 32747410944 that was true while all four passes scored ZERO:
+        the comparison is strictly greater, so a tie leaves psm6 holding the
+        title it started with. The printed hint then read that as evidence
+        FOR psm6 and told the reader to raise the framebuffer. An argument
+        from a tie.
+
+        Every pass must report its own number, so "psm6 read the most" and
+        "nothing read anything" cannot be confused again.
+        """
         proc, _ = run_walkthrough({"00": "1 ft", "01": "hm", "02": "i]"})
         assert "Frame geometry" in proc.stdout, proc.stdout
-        assert "best pass per frame" in proc.stdout, proc.stdout
+        assert "Best word-score any frame reached" in proc.stdout, proc.stdout
+        assert re.search(r"psm6=\d+", proc.stdout), proc.stdout
+        assert re.search(r"psm11=\d+", proc.stdout), proc.stdout
+        # And it must not go back to naming a winner as if that settled it.
+        assert "best pass per frame" not in proc.stdout, proc.stdout
+
+    def test_a_tie_at_zero_does_not_read_as_a_verdict(self):
+        """The specific misreading, pinned.
+
+        All passes at zero must print zeros the reader can see, and must not
+        claim the resolution is the problem -- that conclusion needed psm6 to
+        have actually beaten the others, which it had not.
+        """
+        proc, _ = run_walkthrough({"00": "1 ft", "01": "hm", "02": "i]"})
+        assert "psm6=0" in proc.stdout, proc.stdout
+        assert "raise the guest framebuffer" not in proc.stdout, proc.stdout
 
     def test_a_negated_pass_can_win_and_is_named(self):
         """The dark-theme fallback, exercised rather than assumed.
