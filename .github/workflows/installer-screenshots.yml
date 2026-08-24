@@ -279,6 +279,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Needed to open the refresh PR; `main` only accepts merge-queue changes.
+      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -331,9 +333,20 @@ jobs:
         if: steps.stage.outputs.staged != '0'
         run: bash scripts/gen-screenshot-gallery.sh
 
-      - name: Commit and push
+      # Opens a PR; does NOT push to main. `main` is protected by a
+      # repository rule -- "Changes must be made through the merge queue" --
+      # so `git push origin HEAD:main` is rejected outright (GH013). Observed
+      # on installer-smoke.yml run 32704425971, where the identical step had
+      # simply never executed before: it is gated on `staged != 0` and no
+      # flavor had ever produced frames. All three screenshot writers carried
+      # the same line; all three are now the matrix-status.yml shape.
+      - name: Open the screenshot refresh PR
         if: steps.stage.outputs.staged != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: automation/installer-screenshots-weekly
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/images/installer docs/SCREENSHOTS.md
@@ -341,6 +354,25 @@ jobs:
             echo "No screenshot changes to commit"
             exit 0
           fi
-          git commit -m "docs: refresh installer walkthrough screenshots ($(date +%Y-%m-%d)) [skip ci]"
-          git pull --rebase origin main
-          git push origin HEAD:main
+          git checkout -b "$BRANCH"
+          git commit -m "docs: refresh installer walkthrough screenshots ($(date -u +%Y-%m-%d))"
+          git push --force origin "$BRANCH"
+
+          if [[ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]]; then
+            gh pr create --base main --head "$BRANCH" \
+              --title "docs: refresh installer walkthrough screenshots" \
+              --body "$(printf '%s\n\n%s\n' \
+                'Captured by the weekly installer walkthrough and staged by `scripts/gen-screenshot-gallery.sh`.' \
+                'Force-updated in place, so this branch always holds the newest capture.')"
+          else
+            echo "PR already open for $BRANCH — force-push refreshed it."
+          fi
+
+          # A PR opened with the Actions token starts no checks of its own;
+          # the merge queue runs the required checks on the merge group, so
+          # arming auto-merge is what actually lands the refresh.
+          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+          if [[ -n "$pr" ]]; then
+            gh pr merge --auto --merge "$pr" ||
+              echo "::warning::could not arm auto-merge on #$pr — the refresh will wait for a human"
+          fi

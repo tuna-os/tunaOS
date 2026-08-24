@@ -819,6 +819,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Needed to open the refresh PR; `main` only accepts merge-queue changes.
+      pull-requests: write
     steps:
       # This job commits to main, so it must start FROM main — not from the
       # dispatched ref. Checking out a feature branch made `git pull --rebase
@@ -902,9 +904,32 @@ jobs:
         if: steps.stage.outputs.staged != '0'
         run: bash scripts/gen-screenshot-gallery.sh
 
-      - name: Commit and push
+      # Opens a PR; does NOT push to main. `git push origin HEAD:main` is
+      # rejected outright:
+      #
+      #   remote: error: GH013: Repository rule violations found for
+      #                  refs/heads/main.
+      #   remote: - Changes must be made through the merge queue
+      #   ! [remote rejected] HEAD -> main
+      #
+      # (run 32704425971). That was latent for as long as this job existed:
+      # these steps are gated on `staged != 0`, and until gnome went green on
+      # that same run NO flavor had ever produced walkthrough frames, so the
+      # push never executed and the rule was never hit. A gate that has never
+      # run is not a gate that passes.
+      #
+      # Same shape and same remedy as matrix-status.yml: one long-lived
+      # branch, force-pushed, with auto-merge armed. The doc is regenerated
+      # wholesale each time, so a refresh supersedes its predecessor and
+      # stacking commits would only add noise; reusing the branch name keeps
+      # this to a single open PR rather than one per run.
+      - name: Open the screenshot refresh PR
         if: steps.stage.outputs.staged != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: automation/installer-screenshots
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/images/installer docs/SCREENSHOTS.md
@@ -912,6 +937,27 @@ jobs:
             echo "No screenshot changes to commit"
             exit 0
           fi
-          git commit -m "docs: refresh installer frontend walkthrough screenshots ($(date +%Y-%m-%d)) [skip ci]"
-          git pull --rebase origin main
-          git push origin HEAD:main
+          git checkout -b "$BRANCH"
+          git commit -m "docs: refresh installer frontend walkthrough screenshots ($(date -u +%Y-%m-%d))"
+          git push --force origin "$BRANCH"
+
+          if [[ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]]; then
+            gh pr create --base main --head "$BRANCH" \
+              --title "docs: refresh installer walkthrough screenshots" \
+              --body "$(printf '%s\n\n%s\n' \
+                'Captured by the Installer Smoke walkthrough and staged by `scripts/gen-screenshot-gallery.sh`.' \
+                'Force-updated in place by the `Installer Smoke` workflow, so this branch always holds the newest capture.')"
+          else
+            echo "PR already open for $BRANCH — force-push refreshed it."
+          fi
+
+          # Auto-merge for the reason matrix-status.yml documents at length: a
+          # PR opened with the Actions token triggers no pull_request
+          # workflows, so its own checks never start, but the merge QUEUE runs
+          # the required checks itself on the merge group. Arming auto-merge
+          # is therefore what actually lands it.
+          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+          if [[ -n "$pr" ]]; then
+            gh pr merge --auto --merge "$pr" ||
+              echo "::warning::could not arm auto-merge on #$pr — the refresh will wait for a human"
+          fi
