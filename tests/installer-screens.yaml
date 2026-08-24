@@ -42,18 +42,28 @@ screens:
     #                                             primary button "Next"
     #                                             (Wizard.qml:290)
     #
-    # So on KDE not one of the four keywords was on the page, and run
-    # 32718219267 reported all six screens unreached with the diagnosis "no
-    # installer screen was ever detected" -- while the readiness stamp from
-    # that same process in that same guest read `signal=frame-swapped
-    # page=welcome`. The frontend was on its welcome screen and the contract
-    # could not see it.
+    # CORRECTION, same day: KDE's welcome PAGE says none of the four, but its
+    # wizard does. Wizard.qml:46 names the step "Welcome" and Wizard.qml:185
+    # draws it as a 1.6x heading above the page; it starts at opacity 0 and a
+    # `running: true` animation fades it in at startup (Wizard.qml:216). So
+    # the literal word IS on screen, and "the keyword list cannot describe
+    # KDE's welcome screen" is NOT a sufficient explanation for run
+    # 32718219267 reporting it unreached.
     #
-    # "will guide you through" is added rather than "install": it is the
-    # orientation sentence KDE, niri and cosmic all put on the welcome page
-    # and nowhere else (grepped across all five frontends), it carries no
+    # What that run does establish stands: the readiness stamp from the same
+    # process in the same guest read `signal=frame-swapped page=welcome`, so
+    # the frontend was up and on its welcome page while the contract scored
+    # it missing. Why the OCR did not see a heading that large is now an open
+    # question -- scripts/installer-walkthrough.py prints the text it read on
+    # any leg missing a required screen, which is what will answer it.
+    #
+    # "will guide you through" is kept as coverage rather than as the fix: it
+    # is the orientation sentence KDE, niri and cosmic all put on the welcome
+    # page and nowhere else (grepped across all five frontends), it carries no
     # product name, and it is a prompt rather than the bare noun the header
-    # above forbids. gnome and xfce keep matching on "welcome".
+    # above forbids. It gives the welcome screen a second, independent
+    # phrase to be recognised by, in the body copy rather than in a heading
+    # that animates.
     keywords: ["welcome", "get started", "let's get", "begin",
                "will guide you through"]
 

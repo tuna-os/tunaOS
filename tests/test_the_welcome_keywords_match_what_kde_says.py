@@ -1,16 +1,6 @@
 """A contract that could not see the screen it was pointed at.
 
-`tests/installer-screens.yaml` says a welcome screen is one whose text
-contains "welcome", "get started", "let's get" or "begin". Four of the five
-frontends satisfy that. KDE's welcome page says none of them: its heading is
-
-    text: "Install " + InstallerController.productName
-                    -- tuna-installer-kde modules/welcome/.../main.qml:39
-
-its body is "This wizard will guide you through installing <product> onto this
-computer.", and its primary button is "Next" (src/qml/Wizard.qml:290).
-
-So run 32718219267 reported all six screens unreached for kde, with
+kde run 32718219267 scored all six screens unreached and printed
 
     # DIAGNOSIS: kde -- no installer screen was ever detected
 
@@ -19,11 +9,25 @@ read `window=ApplicationWindow signal=frame-swapped page=welcome`. The
 installer was up and on its welcome page. Six red lines, a diagnosis pointing
 at autostart, OOM-kills and missing GL paths, and a working frontend.
 
-The keyword list was never measured -- the disk list was measured against the
-frontends' real headings on 2026-08-07, this one was written from the premise
-that a welcome screen says "welcome". These tests hold the two halves of the
-fix in place: the measurement (KDE really does say none of the old keywords)
-and the behaviour (the harness now credits KDE's welcome page).
+The first explanation -- "KDE's welcome page contains none of the spec's
+keywords" -- was true of the PAGE and false of the SCREEN. Its body copy
+really does say none of "welcome", "get started", "let's get" or "begin"
+(modules/welcome/contents/ui/main.qml:39,48,56, primary button "Next" at
+Wizard.qml:290), but the wizard draws the step name "Welcome" as a 1.6x
+heading above it (Wizard.qml:46,185), faded in at startup by a `running: true`
+animation. So the word was on screen and the match still did not happen, and
+WHY is not yet known.
+
+What these tests do hold:
+
+  * the measurement, scoped honestly -- KDE's welcome page body carries none
+    of the four original keywords, so the screen was recognisable only by a
+    heading that animates;
+  * the coverage added for it -- "will guide you through", the orientation
+    sentence KDE, niri and cosmic all put on the welcome page and nowhere
+    else, giving the screen a second and independent phrase to be found by;
+  * the diagnostic that will actually answer the open question -- the harness
+    now prints the text OCR read, on any leg missing a required screen.
 
 They RUN the harness rather than grepping the spec, because a keyword list
 that parses is not a keyword list that matches.
@@ -44,12 +48,18 @@ SPEC = ROOT / "tests" / "installer-screens.yaml"
 
 # Verbatim from the frontends' sources, with the product name filled in the way
 # the branding pipeline fills it. These are the strings OCR sees.
-KDE_WELCOME = (
+# The page body ONLY -- what modules/welcome/contents/ui/main.qml draws. The
+# wizard's own "Welcome" heading is drawn by Wizard.qml above it and is kept
+# out of this constant deliberately, so the tests below can say which half of
+# the screen carries which evidence.
+KDE_WELCOME_BODY = (
     "Install Yellowfin This wizard will guide you through installing "
     "Yellowfin onto this computer. You will choose a target disk and how it "
     "should be encrypted. Everything after that is handled by the installer. "
     "Next"
 )
+# The whole screen, heading included. This is what a screenshot contains.
+KDE_WELCOME_FULL = "Welcome " + KDE_WELCOME_BODY
 NIRI_WELCOME = (
     "Welcome to Yellowfin This wizard will guide you through installing "
     "Yellowfin onto your computer. Get Started"
@@ -71,14 +81,18 @@ def welcome_keywords() -> list[str]:
 
 
 def test_the_measurement_that_started_this():
-    """KDE's welcome page contains not one of the four original keywords.
+    """KDE's welcome PAGE contains not one of the four original keywords.
 
-    Asserted directly, because it is the fact the whole change rests on. If a
-    future edit to the KDE frontend makes one of them true, this test failing
-    is the signal that the added keyword is no longer load-bearing -- not a
-    reason to delete it, but a reason to re-measure.
+    Scoped to the page body on purpose. The claim that KDE's welcome SCREEN
+    said none of them was wrong -- the wizard heading above it is the literal
+    word -- and this test is what keeps that correction from being lost: it
+    asserts only what was actually measured in the page source.
+
+    If a future edit to the KDE frontend puts one of the four into the body,
+    this failing is the signal that the added keyword is no longer
+    load-bearing -- a reason to re-measure, not to delete it.
     """
-    lowered = KDE_WELCOME.lower()
+    lowered = KDE_WELCOME_BODY.lower()
     for old in ("welcome", "get started", "let's get", "begin"):
         assert old not in lowered, (
             f"{old!r} is on KDE's welcome page after all -- re-measure the "
@@ -99,15 +113,34 @@ def test_the_spec_still_forbids_a_bare_product_noun():
             assert banned not in kw, kw
 
 
-def test_kde_welcome_is_now_credited():
-    """The behaviour: run the harness on KDE's real text."""
+def test_kdes_page_body_alone_is_now_enough():
+    """The behaviour the added keyword buys.
+
+    If the animated heading is missed -- for whatever reason run 32718219267
+    missed it -- the body copy still identifies the screen.
+    """
     proc, summary = run_walkthrough(
-        {"00": KDE_WELCOME, "01": DISK, "02": DISK},
+        {"00": KDE_WELCOME_BODY, "01": DISK, "02": DISK},
     )
     assert summary is not None, proc.stdout + proc.stderr
     assert summary["screens"]["welcome"] is True, (
         summary["screens"], proc.stdout
     )
+
+
+def test_the_heading_would_always_have_matched():
+    """The correction, asserted rather than only written down.
+
+    KDE's wizard heading IS the literal word "welcome", so a frame that
+    contains it matches on the ORIGINAL keyword list. That is why "the spec
+    cannot describe KDE's welcome screen" does not explain the failing run,
+    and why the cause is recorded as open instead of closed.
+    """
+    proc, summary = run_walkthrough(
+        {"00": KDE_WELCOME_FULL, "01": DISK, "02": DISK},
+    )
+    assert summary is not None, proc.stdout + proc.stderr
+    assert summary["screens"]["welcome"] is True, proc.stdout
 
 
 def test_every_other_frontend_still_matches():
@@ -144,7 +177,7 @@ def test_the_added_keyword_is_what_does_the_work():
     try:
         SPEC.write_text(mutated, encoding="utf-8")
         proc, summary = run_walkthrough(
-            {"00": KDE_WELCOME, "01": DISK, "02": DISK},
+            {"00": KDE_WELCOME_BODY, "01": DISK, "02": DISK},
         )
         assert summary is not None, proc.stdout + proc.stderr
         assert summary["screens"]["welcome"] is False, (
@@ -185,7 +218,7 @@ class TestTheDiagnosisPrintsWhatItRead:
     def test_it_stays_quiet_when_every_required_screen_was_found(self):
         """Quiet on a green leg, or it is noise on every run."""
         proc, summary = run_walkthrough(
-            {"00": KDE_WELCOME, "01": "Select Target Disk",
+            {"00": KDE_WELCOME_BODY, "01": "Select Target Disk",
              "02": "Confirm Installation"},
         )
         for req in ("welcome", "disk", "summary"):
@@ -202,7 +235,7 @@ class TestTheDiagnosisPrintsWhatItRead:
         fixed, which is when the remaining words on the page start to
         matter."""
         proc, summary = run_walkthrough(
-            {"00": KDE_WELCOME, "01": "Select Target Disk",
+            {"00": KDE_WELCOME_BODY, "01": "Select Target Disk",
              "02": "Select Target Disk"},
         )
         assert summary["screens"]["welcome"] is True, proc.stdout

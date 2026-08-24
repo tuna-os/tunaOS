@@ -617,12 +617,17 @@ if have_ocr and not any(reached.values()) and rendered > 0:
 #
 #     window=ApplicationWindow signal=frame-swapped page=welcome
 #
-# A frame had been swapped and the app was on its welcome page. Its heading is
-# "Install " + productName and its primary button is "Next"
-# (tuna-installer-kde modules/welcome/contents/ui/main.qml:39,
-# src/qml/Wizard.qml:290), so not one of the welcome keywords appeared on it.
-# Six red lines and a diagnosis pointing at autostart, OOM-kills and missing GL
-# paths, for a frontend that was working.
+# A frame had been swapped and the app was on its welcome page. Six red lines
+# and a diagnosis pointing at autostart, OOM-kills and missing GL paths, for a
+# frontend that was working.
+#
+# The first reading of that -- "KDE's welcome page contains none of the spec's
+# keywords" -- was true of the PAGE and false of the SCREEN: the wizard draws
+# the step name "Welcome" as a 1.6x heading above it (tuna-installer-kde
+# src/qml/Wizard.qml:46,185). So the word was up there and the match still did
+# not happen, and the cause is not yet known. Which is the argument for this
+# block: it is cheaper to print what the OCR read than to keep proposing
+# explanations for a screen nobody has read the text of.
 #
 # Printing the text settles it without downloading an artifact: text present
 # and unmatched is a spec gap, text absent everywhere is a rendering or OCR
