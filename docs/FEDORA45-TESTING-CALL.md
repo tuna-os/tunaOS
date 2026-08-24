@@ -21,7 +21,7 @@ experience to Fedora users.
 
 So neither image is Fedora 45: one is a release behind it, the other a release
 ahead. That is deliberate rather than an oversight —
-[FEDORA-BASE-POLICY.md](FEDORA-BASE-POLICY.md) sequences Fedora 45 base work to
+[FEDORA-BASE-POLICY.md](../FEDORA-BASE-POLICY.md) sequences Fedora 45 base work to
 begin **after** Bonito (Fedora 44) reaches GA
 ([#272](https://github.com/tuna-os/tunaOS/issues/272)), specifically so the
 project is not carrying two incomplete Fedora bases at once.
@@ -133,5 +133,5 @@ sudo systemctl reboot
 
 ## 🔗 Related Resources
 - [Fedora Magazine Guest Post Pitch](FEDORA-MAGAZINE-PITCH.md)
-- [Variant Selection Decision Guide](choosing-a-variant.md)
+- [Matrix Status — which variant×desktop cells are verified](MATRIX-STATUS.md)
 - [ADOPTERS.md Ecosystem & Production Registry](../ADOPTERS.md)
