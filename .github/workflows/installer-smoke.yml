@@ -603,7 +603,31 @@ jobs:
                   echo "-- greetd config files present --"; ls -l /etc/greetd/ 2>/dev/null; \
                   echo "-- ExecStart of the active DM --"; systemctl cat "$(basename "$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null)" 2>/dev/null)" 2>/dev/null | grep -E "^ExecStart|^\[" | head -20; \
                   echo "-- /etc/greetd/config.toml as installed --"; cat /etc/greetd/config.toml 2>/dev/null; \
-                  echo "-- greetd journal --"; sudo journalctl -u greetd -u cosmic-greeter --no-pager 2>/dev/null | tail -40' 2>/dev/null || true
+                  echo "-- greetd journal --"; sudo journalctl -u greetd -u cosmic-greeter --no-pager 2>/dev/null | tail -40; \
+                  echo "-- what the session command itself said (tunaos-live-session) --"; \
+                  sudo journalctl -t tunaos-live-session --no-pager 2>/dev/null | tail -80 || true' 2>/dev/null || true
+
+          echo
+          # The line that has been missing from every red greetd cell.
+          #
+          # greetd reports only its own bookkeeping -- "greeter exited without
+          # creating a session" -- and the compositor's reason went nowhere,
+          # which is why this failure has been attributed to a missing DRM
+          # render node with no compositor output to support it. Run
+          # 32681262659 disproves that attribution outright: the guest has
+          # /dev/dri/renderD128 and the kernel reports `-virgl`, so the node is
+          # present and 3D is not. Those are different claims.
+          #
+          # live-iso/common/src/desktop-{xfce,niri,cosmic}.sh now run the
+          # session under `systemd-cat -t tunaos-live-session`, so the reason
+          # is in the journal above under that tag. An ISO built before that
+          # change has no such tag; say so rather than printing nothing, or
+          # the absence reads as "the compositor said nothing".
+          if ! grep -q "tunaos-live-session" "$out" 2>/dev/null; then
+            echo "::notice::${FLAVOR}: no tunaos-live-session journal in this image —"\
+                 "it predates the session-logging change, so the compositor's"\
+                 "own reason for exiting is still uncaptured."
+          fi
             echo
             echo "=== windows the compositor actually has ==="
             # -x matches comm exactly, so this cannot self-match the way a

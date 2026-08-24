@@ -20,7 +20,36 @@
 # verification steps (tunaOS#678).
 set -uo pipefail
 
-HELPERS="${TEST_LIB_DIR:-$(dirname "$0")}/lib/e2e-assert.sh"
+# `/lib` belongs INSIDE the default, not after the expansion. iso-e2e.sh
+# uploads the helper flat, next to this script:
+#
+#   scp scripts/lib/e2e-assert.sh guest:${GUEST_HOME}/e2e-assert.sh
+#   ssh  TEST_LIB_DIR=${GUEST_HOME} bash ${GUEST_HOME}/e2e-installer-gui-checks.sh
+#
+# so with TEST_LIB_DIR set, `${TEST_LIB_DIR}/lib/e2e-assert.sh` names a
+# directory the guest does not have. This script has therefore NEVER run:
+# smoke run 32681262659 shows every assertion missing, not failing --
+#
+#   /home/liveuser/e2e-installer-gui-checks.sh: line 25:
+#     /home/liveuser/lib/e2e-assert.sh: No such file or directory
+#   /home/liveuser/e2e-installer-gui-checks.sh: line 54: check: command not found
+#   ...
+#   line 159: print_summary: command not found
+#
+# and the harness reported "installer GUI checks reported 127 failure(s)".
+# 127 is bash for command-not-found, not a count of anything. The sibling
+# scripts get this right two different ways (e2e-luks-checks.sh has no /lib
+# at all; e2e-smoke-checks.sh puts it inside the default), which is how the
+# odd one out survived.
+HELPERS="${TEST_LIB_DIR:-$(dirname "$0")/lib}/e2e-assert.sh"
+# A missing helper must be LOUD. Sourcing a file that is not there leaves
+# check() undefined, and every assertion then "passes" by printing nothing to
+# stdout while bash writes command-not-found to stderr -- a gate that examines
+# nothing and reports success is worse than one that fails.
+if [[ ! -r "$HELPERS" ]]; then
+	echo "Bail out! cannot read assertion helpers at ${HELPERS}"
+	exit 99
+fi
 # shellcheck source=scripts/lib/e2e-assert.sh
 source "$HELPERS"
 

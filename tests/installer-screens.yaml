@@ -63,8 +63,30 @@ screens:
     # be installed." — "be installed" is the longest contiguous run common to
     # both that contains no product name. Verified against all four forks'
     # source: it appears on their disk screens and on no other screen.
+    #
+    # MEASURED 2026-08-24 against the GNOME frontend, which the 2026-08-07
+    # measurement above could not have covered: gnome was absent from
+    # installer-smoke.yml's matrix until #1039, so upstream bootc-installer
+    # was the one fork nobody OCRed. Smoke run 32681262659 is the first time
+    # this cell has ever run, and it reported
+    #
+    #   not ok - gnome: reached 'disk' screen (Disk / target selection)
+    #     # not found on any state the installer advanced to
+    #
+    # while crediting encryption and summary -- screens that sit AFTER disk
+    # selection in the flow, so the installer plainly passed through it.
+    #
+    # Its heading is "Install Location" (default-disk.blp:63), which matches
+    # none of the six keywords above. Same shape as the install list below:
+    # a frontend failing a screen it demonstrably reached is one wrong list,
+    # not a wording bug.
+    #
+    # Checked against all five frontends' source before admitting it: the
+    # string occurs exactly once in the whole set, on this page. It carries
+    # no product name, so the branding work does not break it.
     keywords: ["select target disk", "select a disk", "choose the disk",
-               "available disks", "be installed", "destination"]
+               "available disks", "be installed", "destination",
+               "install location"]
 
   - id: encryption
     title: Disk encryption (LUKS)

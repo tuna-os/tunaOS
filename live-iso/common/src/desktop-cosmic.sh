@@ -12,6 +12,34 @@ set -euo pipefail
 
 # greetd autologin: drop straight into a COSMIC session without prompting.
 mkdir -p /etc/greetd
+# WHY systemd-cat WRAPS EVERY SESSION COMMAND HERE
+#
+# greetd runs `command` and captures nothing. When the session exits
+# immediately, the journal records the bookkeeping and not one line from the
+# process that died:
+#
+#   greetd[1240]: pam_unix(greetd:session): session opened for user liveuser
+#   greetd[1981]: pam_unix(greetd-greeter:session): session closed for user liveuser
+#   greetd[1231]: error: check_children: greeter exited without creating a session
+#
+# repeated five times to start-limit-hit (smoke run 32681262659, xfce). That
+# message names greetd's bookkeeping, never the compositor's reason, and it
+# is the entire evidence base on which this failure has been attributed to a
+# missing DRM render node. The same run disproves that attribution: the guest
+# has /dev/dri/renderD128, and the kernel reports
+#
+#   [drm] pci: virtio-vga detected at 0000:00:02.0
+#   [drm] features: -virgl +edid -resource_blob -host_visible
+#
+# so the node is there and 3D is not, which is a different claim needing
+# different evidence.
+#
+# systemd-cat execs the program with stdout and stderr on the journal and
+# passes the exit status through, so `journalctl -t tunaos-live-session` now
+# holds whatever the compositor said on its way out. Nothing about what runs
+# changes. This is the same remedy that ended four wrong guesses at
+# gnome-desktop:languages in the package factory -- make the failing thing
+# print its own log, then read it.
 tee /etc/greetd/config.toml <<'GREETDEOF'
 [terminal]
 vt = 1
@@ -22,11 +50,11 @@ vt = 1
 # reject the whole config, falling back to the image's greeter.
 [initial_session]
 user = "liveuser"
-command = "cosmic-session"
+command = "systemd-cat -t tunaos-live-session cosmic-session"
 
 [default_session]
 user = "liveuser"
-command = "cosmic-session"
+command = "systemd-cat -t tunaos-live-session cosmic-session"
 GREETDEOF
 
 # Ensure greetd actually runs on boot: enable the service and make

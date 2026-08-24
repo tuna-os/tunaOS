@@ -228,7 +228,7 @@ This is the only axis that checks a human could actually install. For 4 combinat
 | **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **yellowfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
 
-cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on hosted CI may be a harness limitation rather than a product failure. See *Known systemic gaps*.
+cosmic, niri, xfwl4 and kde do not bring a session up on hosted CI. The cause is undiagnosed rather than established -- gnome starts on the same guest, which has a render node but no 3D. See *Known systemic gaps*.
 
 ## Live overlay
 
@@ -276,19 +276,75 @@ runners — and tuna-os/tunaOS#848 is a prerequisite, since stage-3 flavors
 currently cannot build a dev ISO at all. Until then the ⬜/stale cells above
 should be read as *not yet covered*, not as a backlog of broken cells.
 
-**CI cannot test four of five desktops.** cosmic, niri, xfwl4 **and kde** need a
-DRM render node. GitHub runners have none, so on hosted CI the compositor never
-starts — no configuration change alters this.
+**Four of five desktops do not start on hosted CI. The reason is not settled.**
+cosmic, niri, xfwl4 and kde all fail to bring a session up there. This section
+used to say they need a DRM render node, that GitHub runners have none, and
+that "no configuration change alters this". The first measurement taken inside
+the guest contradicts the middle claim, so the conclusion cannot rest on it.
 
-kde was previously believed to be the exception. It is not: on run
-`30234237855`, plasmalogin's autologin session and its greeter both exit
-immediately (`plasmalogin-helper exited with 5`) in a restart loop, and
-`eglinfo` on that runner lists **no `EGL_EXT_device_drm` at all**, putting
-kwin_wayland in the same position as the Smithay compositors.
+Smoke run [32681262659](https://github.com/tuna-os/tunaOS/actions/runs/32681262659),
+`yellowfin:xfce`, read from the live session itself:
 
-That leaves **gnome** as the only desktop still thought verifiable without a
-render node — and that is now an untested assumption rather than a
-demonstrated fact, because the smoke matrix has never run gnome.
+```
+crw-rw----+ 1 root video  226,   1 card1
+crw-rw-rw-. 1 root render 226, 128 renderD128
+[drm] pci: virtio-vga detected at 0000:00:02.0
+[drm] features: -virgl +edid -resource_blob -host_visible
+```
+
+The guest **has** a render node. What it does not have is 3D — virgl is not
+negotiated, because the host QEMU has no node of its own to pass through. Those
+are different claims, and only the second is supported. The earlier `eglinfo`
+evidence was collected on the runner HOST, which says nothing about what the
+guest can do.
+
+gnome is the counter-example, and it is now measured rather than assumed. On
+the same run it boots, `gnome-shell` starts through Mesa's software path
+(`libEGL warning: egl: failed to create dri2 screen`), the installer frontend
+launches and stamps a window, and the walkthrough captures **9 non-blank frames
+across 8 distinct visual states**. So a compositor CAN come up on this hardware.
+
+Why the other four do not is still open, and the evidence to close it did not
+exist: greetd reports only its own bookkeeping —
+
+```
+greetd: error: check_children: greeter exited without creating a session
+```
+
+five times to `start-limit-hit` — and the compositor's own reason went
+nowhere. The live adapters now run the session under
+`systemd-cat -t tunaos-live-session` and the smoke workflow prints that tag, so
+the next run answers this instead of inviting a sixth guess. Until it does,
+read these cells as **undiagnosed**, not as a hardware limit.
+
+kde fails the same way: on run `30234237855`, plasmalogin's autologin session
+and its greeter both exit immediately (`plasmalogin-helper exited with 5`) in a
+restart loop. The `eglinfo` output cited alongside it — **no
+`EGL_EXT_device_drm` at all** — was collected on the runner HOST, not in the
+guest, so it is not evidence about kwin_wayland's environment and is no longer
+offered as such.
+
+**gnome is no longer an assumption.** It was described here as "the only
+desktop still thought verifiable without a render node", untested because the
+smoke matrix had never run it. It has now run, on
+[32681262659](https://github.com/tuna-os/tunaOS/actions/runs/32681262659): it
+boots, the compositor and installer frontend both come up, and the walkthrough
+captures 9 non-blank frames over 8 visual states. It reaches welcome,
+encryption and summary; it does not reach the disk screen, which was a keyword
+gap in the screen contract — the contract had been measured against the other
+four frontends and never against this one.
+
+Two real defects that run surfaced, neither of them about graphics:
+
+* **The installer starts behind the GNOME Activities overview.** The
+  walkthrough had to press `esc` before it could drive anything, and records
+  it as a failure precisely because a user booting this ISO sees the same
+  thing. Reproduced on runs `32450214451` and `32681262659`.
+* **`e2e-installer-gui-checks.sh` had never executed.** It resolved its TAP
+  helpers to a path the guest does not have, so every assertion was
+  `command not found` and the harness printed the shell's 127 as a count of
+  failures. The per-flavor compositor and frontend assertions have therefore
+  never run, on any flavor, in any smoke run.
 
 `scripts/iso-e2e-gpu.sh` runs the harness on a GPU host and is the intended
 answer; it currently has to be driven by hand.
