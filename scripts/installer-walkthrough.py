@@ -257,12 +257,111 @@ def changed_pixels(a, b):
     return int(m.group(1)) if m else 0
 
 
+# How the OCR pass is chosen, and why there is more than one.
+#
+# kde run 32735883406 read this off four distinct visual states:
+#
+#     state 0: 1 ft
+#     state 1: hm
+#     state 2: i]
+#     state 3: lm
+#
+# Nine frames above the blank threshold, four distinct states, and a readiness
+# stamp from the same guest saying `signal=frame-swapped page=welcome` -- the
+# wizard was on screen and tesseract got two characters of noise off it. The
+# spec keywords were never the problem; the pixels never became words.
+#
+# `--psm 6` is "assume a single uniform block of text". A desktop screenshot is
+# not that: it is a window of sparse headings and buttons on a background, and
+# psm 6 will happily return line noise rather than fail. Nothing downstream can
+# tell that apart from a screen with no text on it, which is how "no installer
+# screen was ever detected" survived as a diagnosis.
+#
+# So: score the result, and if it is not words, try the other readings before
+# giving up --
+#   * --psm 11 (sparse text), the segmentation a desktop actually needs;
+#   * the same two against a negated copy, because tesseract wants dark ink on
+#     light paper and a dark-themed frontend is the exact inverse. gnome's
+#     Adwaita default is light and gnome is the flavor that has always scored;
+#     that asymmetry is worth ruling in or out rather than assuming.
+#
+# The winning variant is recorded and reported. If plain psm 6 keeps winning,
+# this costs one extra process on frames that were unreadable anyway; if a
+# negated pass starts winning, that IS the finding.
+MIN_WORD_CHARS = 8
+
+def _text_score(text):
+    """Alphabetic characters in words of 3+ letters.
+
+    Deliberately not len(text): "1 ft\nhm\ni]" is 9 characters and zero
+    words, and treating it as content is what made an unreadable screen look
+    like a vocabulary mismatch."""
+    return sum(len(w) for w in re.findall(r"[a-z]{3,}", text.lower()))
+
+
+def readable(text):
+    """Whether OCR output is words rather than noise."""
+    return _text_score(text or "") >= MIN_WORD_CHARS
+
+
+_ocr_variant = {}
+
+
+def _tesseract(png, psm):
+    r = subprocess.run(["tesseract", png, "stdout", "--psm", psm],
+                       capture_output=True, text=True)
+    return (r.stdout or "").lower()
+
+
 def ocr(png):
     if not shutil.which("tesseract"):
         return None
-    r = subprocess.run(["tesseract", png, "stdout", "--psm", "6"],
-                       capture_output=True, text=True)
-    return (r.stdout or "").lower()
+
+    best, best_name = _tesseract(png, "6"), "psm6"
+    if readable(best):
+        _ocr_variant[png] = best_name
+        return best
+
+    candidates = [(_tesseract(png, "11"), "psm11")]
+
+    # A negated copy, for a light-on-dark frontend. Skipped rather than
+    # failed if ImageMagick is missing -- this is a fallback, not a
+    # dependency.
+    if _im_convert is not None:
+        neg = png + ".neg.png"
+        try:
+            subprocess.run(_im_convert + [png, "-negate", neg],
+                           check=False, capture_output=True)
+            if os.path.exists(neg):
+                candidates.append((_tesseract(neg, "6"), "psm6-negated"))
+                candidates.append((_tesseract(neg, "11"), "psm11-negated"))
+        finally:
+            if os.path.exists(neg):
+                os.unlink(neg)
+
+    for text, name in candidates:
+        if _text_score(text) > _text_score(best):
+            best, best_name = text, name
+
+    _ocr_variant[png] = best_name
+    return best
+
+
+def png_geometry(path):
+    """(width, height) from the PNG IHDR, or None.
+
+    Read here rather than shelled out to `identify`: a frame too small for its
+    glyphs to survive is one of the readings of an unreadable screen, and it
+    would be absurd to spawn a process to learn it."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(24)
+        if head[:8] != b"\x89PNG\r\n\x1a\n" or head[12:16] != b"IHDR":
+            return None
+        return (int.from_bytes(head[16:20], "big"),
+                int.from_bytes(head[20:24], "big"))
+    except OSError:
+        return None
 
 
 def load_spec(path):
@@ -646,19 +745,33 @@ if have_ocr and _missing_required:
         _seen.setdefault(state_of[_i], "")
         if not _seen[state_of[_i]]:
             _seen[state_of[_i]] = " ".join(_t.split())
-    if any(_seen.values()):
-        print("  # what the OCR actually read, per visual state "
-              f"(missing required: {', '.join(_missing_required)}):", flush=True)
-        for _s in sorted(_seen):
-            print(f"  #   state {_s}: {_seen[_s] or '(no text)'}"[:220], flush=True)
-        print("  # If the installer's own words are up there, this is cause 6: "
-              "the spec's keywords do not describe this frontend's screens. Fix "
+    print("  # what the OCR actually read, per visual state "
+          f"(missing required: {', '.join(_missing_required)}):", flush=True)
+    for _s in sorted(_seen):
+        print(f"  #   state {_s}: {_seen[_s] or '(no text)'}"[:220], flush=True)
+
+    # The first version of this block asked `if any(_seen.values())` and, on
+    # kde run 32735883406, printed "1 ft / hm / i] / lm" under a heading
+    # inviting the reader to fix the keyword list. Nine non-blank frames of
+    # line noise are not a vocabulary problem, and a truthiness test cannot
+    # say so. Score it instead.
+    if any(readable(t) for t in _seen.values()):
+        print("  # Those are words, so this is cause 6: the spec's keywords do "
+              "not describe this frontend's screens. Fix "
               "tests/installer-screens.yaml against the frontend's source "
               "strings -- not the frontend against the spec.", flush=True)
     else:
-        print("  # the OCR read NO text on any frame. That rules out a keyword "
-              "gap and puts causes 3-5 first: the pixels are not letters.",
-              flush=True)
+        _variants = sorted({v for v in _ocr_variant.values()})
+        _geo = png_geometry(frames[0]) if frames else None
+        print("  # Those are NOT words. Every OCR reading came back as noise, "
+              "so this is not a keyword gap -- the pixels never became text. "
+              f"Frame geometry {(_geo or ('?', '?'))[0]}x{(_geo or ('?', '?'))[1]}; "
+              f"best pass per frame: {', '.join(_variants) or 'none'}.\n"
+              "  # If a *-negated pass won anywhere, the frontend is drawing "
+              "light text on a dark ground and tesseract wants the inverse. If "
+              "psm6 won everywhere and still returned noise, the glyphs are "
+              "too small or too soft at this resolution -- raise the guest "
+              "framebuffer rather than widening the spec.", flush=True)
 
 # ── Result for the parity matrix ─────────────────────────────────────────
 summary = {

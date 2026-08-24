@@ -206,14 +206,96 @@ class TestTheDiagnosisPrintsWhatItRead:
         assert "what the OCR actually read" in proc.stdout, proc.stdout
         # ocr() lowercases what it reads, so the excerpt does too.
         assert "underground empire" in proc.stdout, proc.stdout
+        # Real words, so it must reach cause 6 rather than the noise branch.
         assert "cause 6" in proc.stdout, proc.stdout
+        assert "Those are NOT words" not in proc.stdout, proc.stdout
 
     def test_empty_ocr_is_reported_as_a_different_cause(self):
         """Text absent everywhere and text present but unmatched want
         opposite fixes, so they must not print the same thing."""
         proc, _ = run_walkthrough({"00": "", "01": "", "02": ""})
-        assert "read NO text on any frame" in proc.stdout, proc.stdout
+        assert "Those are NOT words" in proc.stdout, proc.stdout
         assert "cause 6" not in proc.stdout, proc.stdout
+
+    def test_noise_is_not_reported_as_a_vocabulary_problem(self):
+        """The exact output kde run 32735883406 produced.
+
+        Four distinct visual states, nine frames above the blank threshold,
+        and a readiness stamp saying the wizard was on screen -- and this is
+        what tesseract returned:
+
+            state 0: 1 ft
+            state 1: hm
+            state 2: i]
+
+        The first version of the block asked `if any(_seen.values())`, so it
+        printed those three fragments under a heading inviting the reader to
+        go fix the keyword list. They are not a vocabulary problem. A
+        truthiness test cannot tell noise from words; a score can.
+        """
+        proc, _ = run_walkthrough({"00": "1 ft", "01": "hm", "02": "i]"})
+        assert "Those are NOT words" in proc.stdout, proc.stdout
+        assert "cause 6" not in proc.stdout, proc.stdout
+        # The noise itself is still printed -- it is the evidence.
+        assert "1 ft" in proc.stdout, proc.stdout
+
+    def test_the_noise_report_names_what_it_tried(self):
+        """It must say which OCR pass won and how big the frame was, or the
+        reader is back to guessing between "dark theme" and "too small"."""
+        proc, _ = run_walkthrough({"00": "1 ft", "01": "hm", "02": "i]"})
+        assert "Frame geometry" in proc.stdout, proc.stdout
+        assert "best pass per frame" in proc.stdout, proc.stdout
+
+    def test_a_negated_pass_can_win_and_is_named(self):
+        """The dark-theme fallback, exercised rather than assumed.
+
+        tesseract wants dark ink on light paper. gnome -- the only flavor
+        that has ever scored screens -- defaults to Adwaita light, so
+        "kde draws light text on a dark ground" is a live reading of the
+        noise, and the harness has to be able to act on it.
+
+        Here the plain pass returns noise and only the negated copy returns
+        words. If the escalation works, the screen is credited AND the
+        report says which pass won, because "psm6-negated won" is the
+        finding, not an implementation detail.
+        """
+        proc, summary = run_walkthrough(
+            {"00": "1 ft", "01": "hm", "02": "i]"},
+            tess_neg={"00": KDE_WELCOME_FULL, "01": "Select Target Disk",
+                      "02": "Confirm Installation"},
+        )
+        assert summary is not None, proc.stdout + proc.stderr
+        assert summary["screens"]["welcome"] is True, (summary["screens"],
+                                                       proc.stdout)
+        assert summary["screens"]["disk"] is True, proc.stdout
+
+    def test_without_the_negated_fallback_the_same_frames_stay_unread(self):
+        """The other half: identical noise, no readable negated copy, and
+        the run must still report unreadable rather than inventing a
+        match."""
+        proc, summary = run_walkthrough({"00": "1 ft", "01": "hm", "02": "i]"})
+        assert summary["screens"]["welcome"] is False, proc.stdout
+        assert "Those are NOT words" in proc.stdout, proc.stdout
+
+    def test_the_negation_leaves_no_file_behind(self):
+        """The first version wrote its temporary next to the frame and a
+        stub bug dropped a file called "-negate" into the repo root. The
+        negated copy must be cleaned up whatever the pass returns."""
+        proc, _ = run_walkthrough(
+            {"00": "1 ft", "01": "hm", "02": "i]"},
+            tess_neg={"00": KDE_WELCOME_FULL, "01": DISK, "02": DISK},
+        )
+        assert not list(ROOT.glob("*negate*")), list(ROOT.glob("*negate*"))
+        assert not list(ROOT.glob("**/*.neg.png")), "negated copies left behind"
+
+    def test_a_frame_that_is_not_a_png_does_not_crash_the_diagnosis(self):
+        """The stub writes PPM bytes into .png files, so the geometry read
+        gets a file with no IHDR. A diagnostic that raised here would take
+        out the run it was added to explain."""
+        proc, _ = run_walkthrough({"00": "1 ft", "01": "hm", "02": "i]"})
+        assert proc.returncode in (0, 1), proc.stderr
+        assert "Traceback" not in proc.stderr, proc.stderr
+        assert "?x?" in proc.stdout, proc.stdout
 
     def test_it_stays_quiet_when_every_required_screen_was_found(self):
         """Quiet on a green leg, or it is noise on every run."""

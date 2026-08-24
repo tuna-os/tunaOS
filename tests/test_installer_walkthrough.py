@@ -50,8 +50,15 @@ for a in "$@"; do
     exit 0
   fi
 done
-if [ -n "${2:-}" ]; then
-  cp "$1" "$2" 2>/dev/null || printf 'P3\n1 1\n255\n0 0 0\n' > "$2"
+# The output is the LAST argument, not $2: installer-walkthrough.py's OCR
+# fallback calls `magick in.png -negate out.png`, and treating $2 as the
+# destination wrote a file literally named "-negate" into the repo root while
+# leaving the negated pass untested. Whatever operators sit in between, the
+# stub copies the input to the final path.
+out=""
+for a in "$@"; do out="$a"; done
+if [ -n "$out" ] && [ "$out" != "$1" ]; then
+  cp "$1" "$out" 2>/dev/null || printf 'P3\n1 1\n255\n0 0 0\n' > "$out"
 fi
 exit 0
 """
@@ -60,9 +67,16 @@ TESSERACT_STUB = r"""#!/bin/bash
 # Fake tesseract. The image filename encodes the frame number
 # (walkthrough-<flavor>-NN.png); the OCR text for that frame comes from the
 # TESS_NN environment variable.
+# A negated copy is <frame>.neg.png. It answers from TESSNEG_NN instead, so
+# a test can make the negated pass the only readable one -- which is the
+# whole point of that fallback existing.
 name=$(basename "$1")
+pfx="TESS"
+case "$name" in
+  *.neg.png) name=${name%.neg.png}; pfx="TESSNEG";;
+esac
 nn=$(printf '%s' "$name" | sed -n 's/.*-\([0-9][0-9]\)\.png$/\1/p')
-var="TESS_${nn}"
+var="${pfx}_${nn}"
 printf '%s' "${!var}"
 """
 
@@ -118,10 +132,12 @@ class FakeQEMUMonitor:
 
 
 def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
-                    flavor="de", strict=False, timeout=120):
+                    flavor="de", strict=False, timeout=120, tess_neg=None):
     """Run the script against the fake monitor + stubs.
 
-    *tess* maps frame number (str) -> OCR text. Returns (proc, summary_json).
+    *tess* maps frame number (str) -> OCR text. *tess_neg* is the same for the
+    negated copy the OCR fallback makes, so a test can give the plain pass
+    noise and the negated pass words. Returns (proc, summary_json).
     """
     tmp = Path(tempfile.mkdtemp(prefix="walkthrough-test-"))
     try:
@@ -144,6 +160,8 @@ def run_walkthrough(tess, magick_ae=5000, magick_stddev=0.5, steps="2",
         env["MAGICK_STDDEV"] = str(magick_stddev)
         for k, v in tess.items():
             env[f"TESS_{k}"] = v
+        for k, v in (tess_neg or {}).items():
+            env[f"TESSNEG_{k}"] = v
 
         cmd = [sys.executable, str(SCRIPT), sock, str(outdir), steps, flavor]
         if strict:
