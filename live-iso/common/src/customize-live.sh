@@ -520,10 +520,43 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		flatpak build-import-bundle "${INSTALLER_LOCAL_REPO}" "${INSTALLER_FLATPAK_FILE}"
 		rm -f "${INSTALLER_FLATPAK_FILE}"
 		flatpak remote-add --system --no-gpg-verify installer-local "file://${INSTALLER_LOCAL_REPO}"
-		timeout 900 flatpak install --system --noninteractive installer-local "${INSTALLER_APP}" ||
-			{ [[ -f "${SCRIPT_DIR}/.enable-sshd" ]] &&
+		# On failure, say WHAT THE REMOTES ACTUALLY OFFER. The error flatpak
+		# prints names only what was wanted:
+		#
+		#   error: The application org.bootcinstaller.Installer/x86_64/master
+		#   requires the runtime org.gnome.Platform/x86_64/50 which was not found
+		#
+		# which reads as "flathub is missing" and is not necessarily that. The
+		# flathub remote-add immediately above SUCCEEDED in the run that
+		# produced this message.
+		#
+		# skipjack-gnome failed exactly this way in Live ISOs run 32725309736
+		# while yellowfin-gnome installed the same app successfully in
+		# installer-smoke run 32704425971 an hour earlier. So the runtime is
+		# reachable from some bases and not others, and this message cannot
+		# tell those apart. Listing the Platform branches each remote actually
+		# carries is what separates "no flathub" from "flathub without //50"
+		# from "the app wants a branch nobody publishes yet".
+		#
+		# Diagnostic only, and only on the failure path: it costs nothing when
+		# the install works, and every probe is `|| true` so the diagnostic
+		# cannot itself become the failure.
+		if ! timeout 900 flatpak install --system --noninteractive installer-local "${INSTALLER_APP}"; then
+			echo "---- installer flatpak install FAILED; what the remotes offer:"
+			echo "-- configured remotes --"
+			flatpak remotes --system --columns=name,url 2>&1 | sed "s/^/     /" || true
+			echo "-- org.gnome/org.kde Platform+Sdk branches visible --"
+			flatpak remote-ls --system --columns=ref 2>/dev/null |
+				grep -E "org\.(gnome|kde)\.(Platform|Sdk)" | sed "s/^/     /" ||
+				echo "     (none, or remote-ls could not reach a remote)"
+			echo "-- what the app asks for --"
+			flatpak remote-info --system installer-local "${INSTALLER_APP}" 2>&1 |
+				grep -iE "runtime|sdk|branch" | sed "s/^/     /" || true
+
+			[[ -f "${SCRIPT_DIR}/.enable-sshd" ]] &&
 				echo "WARN: installer flatpak install failed; continuing (dev/e2e ISO)" ||
-				exit 1; }
+				exit 1
+		fi
 		flatpak remote-delete --system --force installer-local || true
 		rm -rf "${INSTALLER_LOCAL_REPO}"
 
