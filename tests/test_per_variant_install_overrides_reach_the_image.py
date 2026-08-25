@@ -103,3 +103,55 @@ def test_the_hook_fails_loudly_when_the_variant_is_unknown(tmp_path):
     assert rc != 0, f"unset IMAGE_NAME_VARIANT must fail, not skip:\n{out}"
     assert "IMAGE_NAME_VARIANT" in out
     assert not landed
+
+
+# ---------------------------------------------------------------------------
+# The path mapping the tests above cannot see.
+#
+# _run_hook builds its fake context by hand and STUBS copy_systemfiles_for, so
+# it proves the hook's control flow and nothing about where the overrides
+# actually live. In the real build there are two independent facts that have to
+# agree, and neither is exercised above:
+#
+#   1. Containerfile.el10's context stage does `COPY system_files_overrides
+#      /overrides` -- it RENAMES the directory. The hook probes
+#      /run/context/overrides/<variant>, which is only correct because of that
+#      line.
+#   2. lib.sh's copy_systemfiles_for reads ${CONTEXT_PATH}/overrides/<variant>.
+#      The hook's own `-d` guard must name the SAME directory, or the guard
+#      passes while the copier finds nothing (or vice versa).
+#
+# Change either one and every test above still passes while the drop-in never
+# reaches the image -- a green suite over an installer that cannot finish,
+# which is the precise failure this file exists to prevent.
+# ---------------------------------------------------------------------------
+
+CONTEXT_DIR_IN_REPO = "system_files_overrides"
+CONTEXT_DIR_IN_IMAGE = "/overrides"
+
+
+def test_the_context_stage_publishes_overrides_where_the_hook_looks():
+    cf = (ROOT / "Containerfile.el10").read_text()
+    expected = f"COPY {CONTEXT_DIR_IN_REPO} {CONTEXT_DIR_IN_IMAGE}"
+    assert expected in cf, (
+        f"Containerfile.el10 must contain {expected!r}. The hook probes "
+        f"/run/context{CONTEXT_DIR_IN_IMAGE}/<variant>; renaming the COPY "
+        f"target makes it silently skip every override while exiting 0."
+    )
+    assert (ROOT / CONTEXT_DIR_IN_REPO).is_dir(), (
+        f"{CONTEXT_DIR_IN_REPO}/ is what that COPY reads"
+    )
+
+
+def test_the_hook_guards_the_same_directory_the_copier_reads():
+    """The `-d` test and copy_systemfiles_for must not drift apart."""
+    lib = (ROOT / "build_scripts" / "lib.sh").read_text()
+    assert '"${CONTEXT_PATH}/overrides/$WHAT"' in lib, (
+        "copy_systemfiles_for no longer reads ${CONTEXT_PATH}/overrides/ -- "
+        "the hook's guard below must be updated to match it"
+    )
+    hook = HOOK.read_text()
+    assert f'-d "/run/context{CONTEXT_DIR_IN_IMAGE}/${{VARIANT_KEY}}"' in hook, (
+        "the hook must guard on the same directory copy_systemfiles_for reads, "
+        "or it can pass its guard and still copy nothing"
+    )
