@@ -112,18 +112,24 @@ def test_whitespace_and_empty_entries_do_not_become_cells(tmp_path):
 
 
 @needs_jq
-def test_no_dispatch_keeps_the_original_two_cells(tmp_path):
+def test_no_dispatch_runs_one_small_fixed_cell_list(tmp_path):
     """The pull_request and schedule triggers pass no inputs.
 
-    They must keep testing exactly what they always did: widening the inputs
-    must not turn the harness smoke test into a fifty-cell sweep that would
-    also fail on every unpublished ISO.
+    Two properties, and the second is why this test changed. Widening the
+    dispatch inputs must not turn the harness smoke test into a fifty-cell
+    sweep -- so the list stays small and fixed. And with no inputs there is
+    no `source`, so the ISO must come from R2, which means every cell here
+    must be one R2 actually holds.
+
+    It used to be yellowfin:gnome + albacore:gnome. Measured against the
+    live bucket on 2026-08-25, albacore-gnome-latest.iso is 200 and
+    yellowfin-gnome-latest.iso is 404 (#2027), so that cell could only ever
+    fail -- on every PR that touched this workflow, for a publishing gap
+    rather than a harness regression.
     """
     m = run_generator("", "", tmp_path)
-    assert m["include"] == [
-        {"variant": "yellowfin", "flavor": "gnome"},
-        {"variant": "albacore", "flavor": "gnome"},
-    ], m
+    assert m["include"] == [{"variant": "albacore", "flavor": "gnome"}], m
+    assert len(m["include"]) <= 2, "the no-input default must stay a smoke test"
 
 
 @needs_jq
