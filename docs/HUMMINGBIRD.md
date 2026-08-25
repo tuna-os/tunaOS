@@ -159,6 +159,112 @@ Not fixed here: correcting the label is a fleet-wide metadata change across
 thirteen variants with downstream consumers, which wants its own change and its
 own review rather than being folded into a hummingbird documentation pass.
 
+## What actually blocks a hummingbird ISO (measured 2026-08-25)
+
+The chain from "packages exist" to "a laptop runs Hummingbird GNOME" has six
+links. Five of them were opaque this morning; they are not any more, and the
+binding constraint is smaller and more specific than "the desktop is missing".
+
+| # | link | state |
+|---|---|---|
+| 1 | build the desktop packages | 673 in `build-order-hummingbird-desktops.yml`, **570 served, 103 left** — 53 before layer-07, 19 more in layer-07 itself (measured 2026-08-25 15:30) |
+| 2 | publish that wave to R2 | dispatch-only; the nightly builds and caches but **never publishes** (no `rclone`/`R2_` anywhere in `package-factory.yml`) |
+| 3 | image build installs them | fixed: the `IS_HUMMINGBIRD` branch of `10-base-packages.sh` never listed `flatpak` |
+| 4 | Gate: `bootc install to-disk` + boot | **proven fixed** — ext4 drop-in, installs in 1m54s and boots to `graphical.target` |
+| 5 | Promote publishes `hummingbird:gnome` | blocked only by the Gate's boot-verify, which needs a real desktop |
+| 6 | overlay → ISO → install | blocked by `flatpak`, see below |
+| 7 | the installed system works on the target laptop | **no device firmware exists anywhere** — see below (#2064) |
+
+### `flatpak` is the single package gating the whole ISO axis
+
+Not `gnome-shell`. `flatpak` is **layer-07**, and it blocks three consecutive
+steps rather than one:
+
+* the **live-overlay** build — `customize-live.sh` pre-installs the installer
+  app and `exit 1`s if flatpak cannot be made present;
+* the **CI ISO build** — `build-iso-tacklebox.sh` passes that *same* script as
+  the recipe's `live_customize` step;
+* the **installer itself** — gnome has no TunaOS-branded frontend fork, so it
+  ships upstream `org.bootcinstaller.Installer`, which is a Flatpak.
+
+`ensure_flatpak()`'s `dnf install flatpak` fallback rescues guppy, grouper and
+bonito-rawhide, whose distributions package it and whose images merely omit it.
+It cannot rescue Hummingbird: flatpak is absent from **both** indexes —
+`public-hummingbird` (3510 binary names, revision 1787670929) and our rebuild
+snapshot (7986, revision 1786989380), re-measured live on 2026-08-25 at 15:30.
+Upstream has not adopted it, so waiting for upstream is not a strategy; it has
+to be built.
+
+#### How to re-measure this, and one trap in doing so
+
+Read both indexes and compare BUILD-ORDER SOURCE NAMES against the source of
+each binary we serve (`srpm_name(pkg["srpm"])`), not against served binary
+names — most of the chain's sources ship under different binary names, and
+matching on binary names undercounts what is built.
+
+The trap is the tier INDEX. `flatpak` sits in `layer-07`, which is **tier
+index 11**, because the list opens with four bootstrap tiers before `layer-00`.
+Filtering on `index <= 7` silently answers a different question and reports far
+too little work remaining — measured 15 instead of 53 when this was last
+computed. Match on the tier `name`, or find flatpak's index first.
+
+### Link 7: firmware, and why CI can never tell you about it
+
+`linux-firmware` and every per-device firmware package are absent from
+`hummingbird:base` (287 packages) and `hummingbird:gnome` (405), from
+`public-hummingbird`, from our published snapshot, **and from the 673-entry
+build order**. Nothing is scheduled to build them. Measured 2026-08-25 against
+the images' own rpm manifests and both repodata indexes; full table in #2064.
+
+QEMU cannot surface this, and that is the point. virtio needs no firmware, so
+`installer-smoke` and `iso-e2e` pass on media that would reach a laptop with:
+
+* **no wifi** — no firmware, no `wpa_supplicant`, and NetworkManager present
+  without its wifi plugin (`NetworkManager-wifi` exists in `public-hummingbird`
+  and is simply not requested);
+* **no GPU initialisation** on amdgpu or recent i915/xe, which need firmware
+  blobs before the display comes up at all;
+* **no audio** on any modern Intel laptop, which needs `sof-firmware`.
+
+The driver *userspace* is fine — the gnome layer already brings
+`mesa-dri-drivers`, `libdrm` and `mesa-libgbm`. This is specifically a firmware
+gap.
+
+It is also not obviously a Hummingbird bug. A hardened, desktop-less
+server/container base omitting ~500 MB of unauditable vendor blobs is a
+defensible choice; the gap only appears when the desktop flavors point it at
+a laptop. #2064 lays out the four options and deliberately does not pick one,
+because the choice trades the hardening premise against hardware support and
+that is a maintainer's call.
+
+**Do not read a green `installer-smoke` cell as evidence that a laptop install
+works.** Every passing cell in `docs/MATRIX-STATUS.md`, including the single
+`yellowfin gnome` one, is QEMU.
+
+### The precedent that says this is achievable
+
+`docs/MATRIX-STATUS.md` records **one** passing installer-smoke cell out of 36:
+`yellowfin gnome`. The same matrix records that cosmic, niri, xfwl4 and kde do
+not bring a session up on hosted CI, while gnome does. So gnome is the only
+desktop with a working end-to-end precedent, and hummingbird gnome runs the
+identical installer. Its gap to that precedent is links 1 and 6 above, not the
+machinery in between.
+
+Worth keeping honest: installer smoke runs in QEMU. It proves an ISO boots, the
+installer appears, and the walkthrough can drive it. **No variant has a proven
+install on physical hardware** — that step is manual and nothing in CI stands in
+for it.
+
+### Our own repo can shadow upstream's fixes
+
+The desktop manifests and the base stage both add our rebuild repo at
+`priority: 5`, and dnf priority is *absolute* rather than a tie-break. So for
+any package present in both indexes, ours installs even when upstream's is
+newer. Measured: 30 names overlap, **16 of them older on our side**, including
+`sudo` fifteen releases behind. The gap measurement drops adopted packages from
+the BUILD ORDER but nothing withdraws the already-published copy.
+`scripts/check-upstream-shadowing.py` in tunaos-packages now fails on this.
+
 ## Rules of thumb for future work here
 
 1. **Do not call it a Fedora rebuild.** It is a hardened rolling fork tracking

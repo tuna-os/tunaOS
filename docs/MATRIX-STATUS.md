@@ -79,7 +79,7 @@ Scored against `.github/green-criteria.yml`: a cell is green only when every **b
 | **flounder-sid** | ❌ | ❌ | — | — | ❌ |
 | **grouper** | ✅ | ✅ | ❌ | — | ✅ |
 | **guppy** | ❌ | ⬜ | — | — | ✅ |
-| **hummingbird** | ❌ | ⬜ | ❌ | ⬜ | — |
+| **hummingbird** | ❌ | — | ❌ | — | — |
 | **marlin** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **skipjack** | ❌ | ✅ | ❌ | ❌ | ✅ |
@@ -104,7 +104,7 @@ Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package
 | **flounder-sid** | ✅ | ✅ | — | — | ✅ |
 | **grouper** | ✅ | ✅ | ✅ | — | ✅ |
 | **guppy** | ✅ | ✅ | — | — | ✅ |
-| **hummingbird** | ⬜ | ⬜ | ⬜ | ⬜ | — |
+| **hummingbird** | ⬜ | — | ⬜ | — | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -147,7 +147,7 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **grouper** | ✅ | ✅ | ✅ | — | ✅ |
 | **guppy** | ❌ | ❌ | — | — | ✅ |
 | **gurnard** | — | — | — | — | — |
-| **hummingbird** | ❌ | ⬜ | ⬜ | ⬜ | — |
+| **hummingbird** | ❌ | — | ⬜ | — | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -174,7 +174,7 @@ Pulls the **published** image and runs the contract script against it directly (
 | **flounder-sid** | ❌ | ❌ | — | — | ❌ |
 | **grouper** | ✅ | ✅ | ✅ | — | ✅ |
 | **guppy** | ❌ | ✅ | — | — | ✅ |
-| **hummingbird** | ⬜ | ⬜ | ⬜ | ⬜ | — |
+| **hummingbird** | ⬜ | — | ⬜ | — | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |

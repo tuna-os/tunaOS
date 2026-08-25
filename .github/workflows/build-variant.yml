@@ -5,13 +5,14 @@ name: Unified Build
 # are staggered ~2h apart instead of the old 01:00–03:30 cluster, which put
 # ~8 variants (~500 job demand) in flight at once and starved the proving
 # workflows (0 running / 28 queued / 102-min waits on 2026-07-31).
-# Biggest variants overnight; only the two smallest inside the 04:00–09:00
-# proving window (daily-verify 04:00, verify-asahi 05:40, matrix-status &
-# catalog-facts 06:00, desktop-contract-sweep 08:00).
+# Biggest variants overnight; at most two variants, of at most 4 flavors
+# each, inside the 04:00–09:00 proving window (daily-verify 04:00,
+# verify-asahi 05:40, matrix-status & catalog-facts 06:00,
+# desktop-contract-sweep 08:00).
 #   00:20 yellowfin(20fl)  02:20 albacore(20)       04:20 gurnard(2)
 #   06:20 guppy(4)         09:20 skipjack(18)       11:20 bonito(16)
 #   13:20 marlin(16)       15:20 bonito-rawhide(14) 17:20 grouper(7)
-#   19:20 sailfin(7)       21:20 flounder(7)        22:20 hummingbird(5)
+#   19:20 sailfin(7)       21:20 flounder(7)        22:20 hummingbird(3)
 #   23:20 flounder-sid(7)
 # If you add a variant or move a cron, keep this table true.
 on:
@@ -333,7 +334,23 @@ jobs:
   build_artifacts_s2:
     name: "iso:${{ matrix.flavor }} (${{ matrix.safeplatform }})"
     needs: [generate_matrix, build_stage2]
-    if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_s2_count != '0'
+    # Per-CELL, not per-stage (#2059). This `if` carried no status function,
+    # so success() was implicit on `build_stage2` -- a MATRIX over every
+    # stage-2 flavor. One failing desktop therefore skipped every ISO in the
+    # stage. Run 32786338463: hummingbird's gnome image built, signed and
+    # manifested, and its ISO was skipped because kde and niri failed beside
+    # it. Same shape as #1729 one edge further down, and as the stage-4
+    # artifact jail the comment above records.
+    #
+    # What replaces the coarse gate is `image-digest-artifact` below: the
+    # called workflow refuses to build unless THIS run published THIS cell's
+    # image. Without that, `!cancelled()` would emit an ISO from the tag a
+    # FAILED flavor last published -- stale media that looks fresh.
+    if: >-
+      !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build_stage2.result != 'cancelled' &&
+      github.event_name != 'pull_request' &&
+      needs.generate_matrix.outputs.artifact_s2_count != '0'
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s2_matrix) }}
@@ -349,6 +366,10 @@ jobs:
       safeplatform: ${{ matrix.safeplatform }}
       image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
+      # Names the artifact this cell's OWN image leg uploads after a
+      # successful push. Its existence is what makes the relaxed gate above
+      # safe; see the provenance gate in reusable-build-artifacts.yml.
+      image-digest-artifact: ${{ matrix.image_name }}-${{ matrix.published_tag }}-${{ matrix.safeplatform }}-${{ github.run_id }}
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -362,7 +383,7 @@ jobs:
     needs: [generate_matrix, build_stage3]
     if: >-
       !cancelled() && needs.generate_matrix.result == 'success' &&
-      needs.build_stage3.result == 'success' &&
+      needs.build_stage3.result != 'cancelled' &&
       github.event_name != 'pull_request' &&
       needs.generate_matrix.outputs.artifact_s3_count != '0'
     strategy:
@@ -380,6 +401,10 @@ jobs:
       safeplatform: ${{ matrix.safeplatform }}
       image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
+      # Names the artifact this cell's OWN image leg uploads after a
+      # successful push. Its existence is what makes the relaxed gate above
+      # safe; see the provenance gate in reusable-build-artifacts.yml.
+      image-digest-artifact: ${{ matrix.image_name }}-${{ matrix.published_tag }}-${{ matrix.safeplatform }}-${{ github.run_id }}
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -391,7 +416,7 @@ jobs:
     needs: [generate_matrix, build_stage4]
     if: >-
       !cancelled() && needs.generate_matrix.result == 'success' &&
-      needs.build_stage4.result == 'success' &&
+      needs.build_stage4.result != 'cancelled' &&
       github.event_name != 'pull_request' &&
       needs.generate_matrix.outputs.artifact_s4_count != '0'
     strategy:
@@ -409,6 +434,10 @@ jobs:
       safeplatform: ${{ matrix.safeplatform }}
       image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
+      # Names the artifact this cell's OWN image leg uploads after a
+      # successful push. Its existence is what makes the relaxed gate above
+      # safe; see the provenance gate in reusable-build-artifacts.yml.
+      image-digest-artifact: ${{ matrix.image_name }}-${{ matrix.published_tag }}-${{ matrix.safeplatform }}-${{ github.run_id }}
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}

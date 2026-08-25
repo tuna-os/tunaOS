@@ -839,16 +839,36 @@ variants:
         platforms: ["linux/amd64"]
         build_image: true
         build_iso: true
-      - id: kde
-        stage: 2
-        platforms: ["linux/amd64"]
-        build_image: true
-        build_iso: true
-      - id: niri
-        stage: 2
-        platforms: ["linux/amd64"]
-        build_image: true
-        build_iso: true
+      # kde and niri are DECLARED but not implemented for hummingbird, and
+      # advertising them costs the flavor that is.
+      #
+      # manifests/desktops/{kde,niri}.yaml have no `packages.hummingbird`
+      # section at all -- 0 packages, against gnome's 52 and cosmic's 23.
+      # install-desktop.sh routes hummingbird to that section by construction,
+      # so both flavors have never had a package set to install. Measured on
+      # run 32786338463: the two flavors with no manifest are exactly the two
+      # whose image builds failed.
+      #
+      #   kde   nothing provides libdouble-conversion.so.3 / libfbclient.so.2
+      #         needed by qt6-qtbase-*.hum1 from public-hummingbird -- an
+      #         UPSTREAM gap; those sonames are in no index, ours or theirs,
+      #         and no wave the factory is building supplies them.
+      #   niri  TUNAOS_BRANDING_FAIL -- dconf keyfiles written to
+      #         /etc/dconf/db/distro.d with no compiled database, because
+      #         `dconf update` is guarded on `command -v dconf` and dconf is
+      #         not installed when there is no package set to install it.
+      #
+      # Why this blocks GNOME. build_artifacts_s2 takes `needs: build_stage2`,
+      # a matrix job over every stage-2 flavor, so one failing leg skips every
+      # ISO in the stage -- gnome's included, however cleanly it built
+      # (tuna-os/tunaOS#2059). gnome is the only desktop with a passing
+      # installer-smoke cell anywhere in the matrix, so the flavors that were
+      # never implemented are blocking the one that works.
+      #
+      # Re-add each of these the moment it has a `packages.hummingbird`
+      # section, exactly as cosmic and gnome do. Nothing here is a judgement
+      # about wanting kde or niri on hummingbird; it is a statement that they
+      # do not exist yet and should not be advertised as though they do.
       - id: cosmic
         stage: 2
         platforms: ["linux/amd64"]
