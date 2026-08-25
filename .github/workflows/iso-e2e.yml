@@ -358,6 +358,28 @@ jobs:
           if ! grep -q "^${USER}:" /etc/subgid 2>/dev/null; then
             echo "${USER}:100000:65536" | sudo tee -a /etc/subgid
           fi
+
+          # Which storage driver root podman picked, and how much disk it has.
+          #
+          # This is the measurement that decides #1893. tacklebox bounds its
+          # post-customize `podman commit` at a hardcoded 600s; on this runner
+          # that cap fired (job 97638514487, skipjack:xfce, exactly 600.0s
+          # wall) while the same commit completes on the RunsOn builders that
+          # publish albacore's ISOs. A commit is proportional to what it has
+          # to write: under `overlay` that is the customize container's diff
+          # (the flatpak runtimes, a few GB); under `vfs` there are no layers,
+          # so it copies the WHOLE rootfs every time. Which of the two we are
+          # on turns "raise the timeout" into either the right fix or a
+          # band-aid over a driver fallback, so print it rather than guess.
+          # tacklebox runs podman as root, so root's driver is the one that
+          # matters -- the rootless one can and does differ.
+          echo "=== podman storage (root — the one tacklebox uses) ==="
+          sudo podman info --format \
+            'driver={{.Store.GraphDriverName}} root={{.Store.GraphRoot}} run={{.Store.RunRoot}}' || true
+          sudo podman info --format 'version={{.Version.Version}}' || true
+          echo "=== free space ==="
+          df -h / /mnt /var/lib/containers 2>/dev/null || df -h
+
           sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
           sudo podman save "localhost/${VARIANT}:${FLAVOR}" | podman load
           just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
