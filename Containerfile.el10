@@ -138,6 +138,15 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/91-arch-customizations.sh
 
+# Per-variant overrides, after the per-arch ones so a variant can override an
+# arch default. This is what delivers system_files_overrides/<variant>/ into
+# the image -- notably hummingbird's 50-hummingbird.toml, without which
+# `bootc install to-disk` aborts installing GRUB onto xfs.
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+   /run/context/build_scripts/92-variant-customizations.sh
+
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \

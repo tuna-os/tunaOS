@@ -1,0 +1,26 @@
+# hummingbird: install the root filesystem as ext4, not the xfs default.
+#
+# Sorts after 00-tunaos.toml, which sets type = "xfs" and says per-variant
+# overrides belong in exactly this kind of drop-in.
+#
+# Why hummingbird needs it: its base probes BACKEND=ostree SEALED=0, so the
+# qcow2/Gate path does not pass --filesystem ext4 (that is reserved for
+# composefs-sealed images), and it lands on the xfs default. Then:
+#
+#   Creating root filesystem (xfs) on device /dev/loop0p3
+#   Bootloader: grub
+#   /usr/sbin/grub2-install: error: ../grub-core/kern/fs.c:123:unknown filesystem.
+#   error: Installing to disk: Installing bootloader: Failed to run
+#     command: bootupctl backend install
+#
+# BIOS grub2-install cannot read the xfs this base's mkfs.xfs writes. That
+# is NOT a legacy-boot-only problem: bootupctl installs the BIOS component
+# unconditionally on the hybrid layout, and its failure aborts the entire
+# `bootc install to-disk`, so UEFI laptops fail identically.
+#
+# This file is what makes a real install work. The TUNAOS_QCOW2_FILESYSTEM
+# knob in just/qcow2-build.just only fixes the CI gate's own qcow2; an ISO
+# install reads this config from inside the image, so without this drop-in a
+# green gate would still hand users an installer that cannot finish.
+[install.filesystem.root]
+type = "ext4"
