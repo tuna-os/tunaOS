@@ -402,16 +402,41 @@ jobs:
           # band-aid over a driver fallback, so print it rather than guess.
           # tacklebox runs podman as root, so root's driver is the one that
           # matters -- the rootless one can and does differ.
-          echo "=== podman storage (root — the one tacklebox uses) ==="
+          # Root and rootless podman pick different storage drivers, and that
+          # is the difference this step is chasing. Root gets native
+          # `overlay`; rootless falls back to `fuse-overlayfs`, where
+          # committing a multi-gigabyte layer goes through FUSE. Print both.
+          echo "=== podman storage: root ==="
           sudo podman info --format \
-            'driver={{.Store.GraphDriverName}} root={{.Store.GraphRoot}} run={{.Store.RunRoot}}' || true
-          sudo podman info --format 'version={{.Version.Version}}' || true
+            'driver={{.Store.GraphDriverName}} root={{.Store.GraphRoot}} version={{.Version.Version}}' || true
+          echo "=== podman storage: rootless ($USER) ==="
+          podman info --format \
+            'driver={{.Store.GraphDriverName}} root={{.Store.GraphRoot}} version={{.Version.Version}}' || true
           echo "=== free space ==="
-          df -h / /mnt /var/lib/containers 2>/dev/null || df -h
+          df -h / /mnt 2>/dev/null || df -h
 
+          # Build the image AND the ISO as root, in one root context.
+          #
+          # This used to build as root, copy the image into rootless storage
+          # with `podman save | podman load`, then run `just iso` bare -- so
+          # SUDO_USER was the runner and tacklebox did its customize and
+          # commit rootless. That commit did not finish: job 97638514487
+          # (skipjack:xfce) ran it for exactly 600.0s before tacklebox's
+          # bound killed it, and #1893 records the same stall unbounded.
+          #
+          # installer-smoke.yml does the same tacklebox customize+commit on
+          # ubuntu-latest and it COMPLETES -- `Build dev ISO` succeeded for
+          # yellowfin:gnome in 38m46s and yellowfin:kde in 41m16s in run
+          # 32747410944, and gnome then booted and passed its walkthrough.
+          # The one structural difference is that installer-smoke wraps the
+          # recipe in sudo, so the whole build stays root.
+          #
+          # So this is not "GitHub-hosted runners cannot build an ISO", which
+          # is what one bare-invocation failure looked like. Root storage also
+          # makes the save|load hop unnecessary: the image is already where
+          # tacklebox will look for it.
           sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
-          sudo podman save "localhost/${VARIANT}:${FLAVOR}" | podman load
-          just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
+          sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
           ISO="$(find . -maxdepth 3 -name '*.iso' -newermt '-2 hours' -print -quit)"
           if [[ -z "$ISO" ]]; then
             echo "::error::build produced no ISO for ${VARIANT}:${FLAVOR}"

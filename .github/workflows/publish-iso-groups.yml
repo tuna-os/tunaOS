@@ -28,8 +28,7 @@ on:
         # `iso_groups:`. They named `community` and `nvidia`, which stopped
         # existing when the config went to one group per desktop -- so the
         # four desktop groups that DO exist could not be dispatched at all,
-        # and the two that could addressed nothing. Same failure the ISO E2E
-        # variant list had.
+        # and the two offered addressed nothing.
         description: 'ISO group (all = every group; default = the GNOME flagship)'
         required: false
         default: 'all'
@@ -135,20 +134,7 @@ jobs:
     name: ${{ matrix.basename }}
     needs: generate-matrix
     if: ${{ needs.generate-matrix.outputs.count != '0' }}
-    # An ISO build does not complete on a GitHub-hosted runner today, so this
-    # job could never have published anything. tacklebox's post-customize
-    # `podman commit` of the live rootfs exceeds ten minutes there (#1893,
-    # measured at exactly 600.0s in job 97638514487) while the same commit
-    # finishes on RunsOn -- which is where every ISO in the bucket came from:
-    # albacore-{gnome,kde,xfce}-latest.iso, 5.1-6.0 GB, published 2026-08-20
-    # by the legacy per-flavor pipeline over reusable-build-artifacts.yml.
-    # `albacore-latest.iso` and every other grouped name is 404.
-    #
-    # tacklebox reached the same conclusion upstream: the fix commit for the
-    # podman 5.8.4 wedge is titled "iso-smoke on RunsOn ... wedge resolved"
-    # (tacklebox#235). The 600s bound in that same commit is a guard that
-    # names the hang, not a cure for it.
-    runs-on: runs-on=${{ github.run_id }}/runner=build-amd64
+    runs-on: ubuntu-24.04
     permissions:
       contents: write
       packages: read
@@ -161,21 +147,29 @@ jobs:
         with:
           submodules: recursive
 
-      # `free-disk-space` and `container-storage-action` were here to survive
-      # a GitHub-hosted runner's 14 GB root. The build-amd64 runner brings an
-      # 80 GB gp3 volume, so both are minutes spent deleting toolchains that
-      # aren't installed. live-iso-bootc.yml builds ISOs on this same runner
-      # with the setup below and nothing else.
+      - name: Maximize build disk
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # main as of 2026-06-09
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
+
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk e2fsprogs btrfs-progs
+          sudo apt-get install -y just podman jq rclone golang-go git systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk
           sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
-      # The runner image's podman 5.8.4 cannot commit these containers
-      # (#1893) and its conmon lacks journald. Every other ISO-building job
-      # in this repository installs the Kubic podman first; this one never
-      # did, which is the second reason it could not finish.
+      # The runner image ships podman 5.8.4, which wedges committing a
+      # live-customized rootfs (#1893). installer-smoke.yml builds ISOs on
+      # ubuntu-latest successfully and installs this first; this job never
+      # did, so it ran the wedging one.
       - name: setup working podman
         run: |
           set -euo pipefail
@@ -194,31 +188,6 @@ jobs:
           done
           hash -r
 
-      # tacklebox runs `sudo -u runner podman unshare` for the squashfs, which
-      # only works rootless and needs both subuid/subgid entries AND
-      # permission to create a user namespace at all. Ubuntu 24.04 sets
-      # kernel.apparmor_restrict_unprivileged_userns=1, under which podman
-      # reports only "cannot clone: Permission denied" -- after the image
-      # build, not before it. Prove it here instead.
-      - name: Setup rootless podman (subuid/subgid + userns)
-        run: |
-          set -euo pipefail
-          if ! grep -q "^${USER}:" /etc/subuid 2>/dev/null; then
-            echo "${USER}:100000:65536" | sudo tee -a /etc/subuid
-          fi
-          if ! grep -q "^${USER}:" /etc/subgid 2>/dev/null; then
-            echo "${USER}:100000:65536" | sudo tee -a /etc/subgid
-          fi
-          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
-            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
-          fi
-          if ! podman unshare true; then
-            echo "::error::rootless podman cannot create a user namespace; tacklebox's squashfs will fail with exit 125 and name none of this."
-            echo "  subuid: $(grep "^${USER}:" /etc/subuid || echo MISSING)"
-            echo "  subgid: $(grep "^${USER}:" /etc/subgid || echo MISSING)"
-            exit 1
-          fi
-
       - name: Log in to GHCR
         run: echo "${{ env.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
         env:
@@ -231,15 +200,12 @@ jobs:
           # available before the release-container workflow finishes publishing.
           TACKLEBOX_FROM_SOURCE: '1'
           # No TACKLEBOX_SHA: common.sh falls back to image-versions.yaml, so
-          # this job now tracks the repository's pin like everything else.
-          # It was pinned to a105d6d3 (2026-07-18) to get a low-disk
-          # offline-store implementation that had not been released yet. That
-          # was a month stale, and a105d6d3 is an ancestor of the current pin,
-          # so the reason for the override is satisfied by the pin itself --
-          # while the override also held this job a month behind, on a
-          # tacklebox whose customize commit is not bounded at all. On a
-          # runner where that commit wedges, an unbounded commit is a silent
-          # six-hour job, which is what this workflow has been doing.
+          # this job tracks the repository's pin like everything else. It was
+          # pinned to a105d6d3 (2026-07-18) for a low-disk offline-store
+          # implementation that had not been released yet. a105d6d3 is an
+          # ancestor of the current pin, so that reason is satisfied by the
+          # pin itself -- while the override held this job a month behind, on
+          # a tacklebox whose customize commit is not bounded at all.
         run: |
           sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA \
             just iso-group "${{ matrix.variant }}" "${{ matrix.group }}" ghcr
