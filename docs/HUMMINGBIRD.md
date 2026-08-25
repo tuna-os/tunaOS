@@ -175,6 +175,49 @@ binding constraint is smaller and more specific than "the desktop is missing".
 | 6 | overlay → ISO → install | blocked by `flatpak`, see below |
 | 7 | the installed system works on the target laptop | **no device firmware exists anywhere** — see below (#2064) |
 
+### Confirmed by running it: iso-e2e run 32866334376
+
+Link 6 is no longer inferred. A gate dispatch of `iso-e2e.yml`
+(`variant=hummingbird, flavors=base, source=build`) built the ISO on the runner
+and reached exactly the predicted line, from inside the real base image:
+
+```
+15:35:46  + dnf5 install -y flatpak
+15:35:46  No match for argument: flatpak
+15:35:46  ERROR: flatpak not installed and could not be installed;
+          cannot pre-install org.bootcinstaller.Installer
+15:35:46  + exit 1
+```
+
+Two things follow. First, **everything before flatpak works**: the base image
+pulls, buildah builds, `ensure_dbus_daemon` installs and starts the classic bus,
+and the whole customize path runs — in 3.5 minutes. flatpak is the *first* thing
+to fail, not one of many. Second, the "No match for argument" comes from dnf
+inside the image itself, which is stronger evidence than index scraping that
+flatpak is in neither repository.
+
+### A second, independent blocker the same run exposed
+
+The run did not fail at 15:35:46. It failed at **16:32:26**, on
+`##[error]The action 'Build the ISO on this runner' has timed out after 60
+minutes` — 57 minutes of complete silence after the script exited 1.
+
+The cause is in our script, not in tacklebox. `customize-live.sh` forks a system
+`dbus-daemon` before the flatpak block. A forked bus outlives the script, and
+the stdout it inherited keeps the build's output pipe open, so the reader waits
+long after the script is gone. Demonstrated in isolation: a shell that forks a
+child and exits returns immediately when the child is reaped and blocks for the
+child's full lifetime when it is not.
+
+This matters beyond one misleading message. `build_artifacts_s2` allows an ISO
+cell **90 minutes**. Any failure below that fork — today's missing flatpak, or
+whatever fails next once flatpak lands — consumes the cell's entire budget and
+then reports itself as a timeout. Fixed by redirecting the daemons' output to
+`/dev/null` so they cannot pin the pipe, plus pidfiles and an `EXIT` trap to
+reap them; `tests/test_a_failing_live_customize_fails_fast.py` runs the script's
+own helpers against a daemon that outlives its caller and fails if the wedge
+returns.
+
 ### `flatpak` is the single package gating the whole ISO axis
 
 Not `gnome-shell`. `flatpak` is **layer-07**, and it blocks three consecutive

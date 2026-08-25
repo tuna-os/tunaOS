@@ -393,10 +393,56 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		}
 	}
 
+	# A forked bus OUTLIVES this script. If it inherits this script's stdout
+	# and stderr it keeps the build's output pipe OPEN, so a failure below does
+	# not end the build -- it wedges whatever is reading that pipe.
+	#
+	# Measured on iso-e2e run 32866334376 (hummingbird:base): ensure_flatpak
+	# printed its error and exited 1 at 15:35:46, and the step then produced not
+	# one further line until the 60-minute timeout killed it at 16:32:26. Three
+	# and a half minutes of correct, specific diagnosis became an hour of dead
+	# air, and the failure GitHub reported was "has timed out after 60 minutes"
+	# rather than "flatpak not installed".
+	#
+	# The cost is more than a confusing message: build_artifacts_s2 allows an
+	# ISO cell 90 minutes, so ANY failure below this line -- today's missing
+	# flatpak, or whatever fails next once flatpak lands -- burns the cell's
+	# whole budget and then misattributes itself to a timeout.
+	#
+	# Two changes, and the redirection is the load-bearing one. Sending the
+	# daemons' output to /dev/null means they cannot hold the pipe no matter how
+	# long they live. The pidfiles are hygiene on top: reap them on the way out
+	# rather than leaving buses running in the layer.
+	#
+	# Deliberately NOT `--print-pid` through a command substitution: `$( )` waits
+	# for the pipe to close, which is the very thing a forked daemon holds, so
+	# capturing the pid that way hangs the script AT THE FORK -- earlier and
+	# harder than the bug being fixed. That is not hypothetical; it is what the
+	# first version of this did, and tests/test_a_failing_live_customize_fails_fast.py
+	# caught it.
+	_live_bus_pidfiles=()
+	_reap_live_buses() {
+		local _f _pid
+		for _f in ${_live_bus_pidfiles[@]+"${_live_bus_pidfiles[@]}"}; do
+			[[ -s "$_f" ]] || continue
+			read -r _pid <"$_f" || continue
+			[[ -n "${_pid//[!0-9]/}" ]] || continue
+			kill "$_pid" 2>/dev/null || true
+		done
+	}
+	trap _reap_live_buses EXIT
+
+	_start_bus() {
+		local _pidfile="$1"
+		shift
+		_live_bus_pidfiles+=("$_pidfile")
+		dbus-daemon "$@" --fork --pidfile="$_pidfile" >/dev/null 2>&1
+	}
+
 	mkdir -p /var/lib/dbus
 	ln -sf /etc/machine-id /var/lib/dbus/machine-id
 	ensure_dbus_daemon
-	dbus-daemon --system --fork --nopidfile || true
+	_start_bus /tmp/live-system-bus.pid --system || true
 
 	# grouper (Ubuntu/apt) and bonito-rawhide (Fedora/dnf) don't ship flatpak
 	# in their base image, so the pre-install below always died with "flatpak
@@ -465,7 +511,7 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 	# bus) rather than the dbus-run-session wrapper — some flavors (niri,
 	# cosmic) don't pull in the package that ships dbus-run-session.
 	SESSION_BUS_SOCK="${HOME}/session-bus.sock"
-	dbus-daemon --session --fork --nopidfile --address="unix:path=${SESSION_BUS_SOCK}"
+	_start_bus /tmp/live-session-bus.pid --session --address="unix:path=${SESSION_BUS_SOCK}"
 	export DBUS_SESSION_BUS_ADDRESS="unix:path=${SESSION_BUS_SOCK}"
 	if [[ "${INSTALLER_APP}" == "org.bootcinstaller.Installer" ]]; then
 		# gnome: mirrors projectbluefin/dakota-iso's install-flatpaks.sh —
