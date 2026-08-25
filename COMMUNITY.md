@@ -32,9 +32,13 @@ avoids attributing agent work to a person.
 
 The `shimonenator` commits previously described as the project's first external
 human contribution were confirmed on 2026-08-13 to be authored by the Google
-Antigravity agent (`antigravity`). They remain useful project work, but are not
-a human-contributor milestone; the search for and welcome to our first external
-human contributor remains open.
+Antigravity agent (`antigravity`). The first external human contributions landed
+and merged on 2026-08-14: `tuna-os/docs#234` (QEMU/KVM guide by `dchaudhari7177`)
+and `tuna-os/docs#239` (Gurnard Pantheon fix by `Elonon901001`).
+
+External contributor onboarding is actively supported via the fork→PR loop,
+curated `good first issue` tasks, and weekly maintainer triage documented in
+[CONTRIBUTING.md](CONTRIBUTING.md) and [docs/HACKTOBERFEST-2026.md](docs/HACKTOBERFEST-2026.md).
 
 ### Communication
 
@@ -102,4 +106,4 @@ See [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md). We follow the Contributor Covenant
 
 ## Project Governance
 
-tunaOS is maintained by [@hanthor](https://github.com/hanthor) with automated assistance from Hive agents. Decisions are made via GitHub Issues and PRs. See [MAINTAINERS.md](MAINTAINERS.md) for the full maintainer playbook.
+tunaOS is maintained by [@hanthor](https://github.com/hanthor) with automated assistance from Hive agents. Decisions are made via GitHub Issues, PRs, and Architecture Decision Records. See [MAINTAINERS.md](MAINTAINERS.md) for the maintainer playbook, [TRIAGE-POLICY.md](TRIAGE-POLICY.md) for issue triage SLAs, and [RFC-PROCESS.md](RFC-PROCESS.md) for architectural proposal governance.
