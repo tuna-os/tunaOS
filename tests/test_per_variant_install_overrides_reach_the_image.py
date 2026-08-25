@@ -23,7 +23,6 @@ import subprocess
 import textwrap
 from pathlib import Path
 
-import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 DROPIN = ROOT / "system_files_overrides" / "hummingbird" / "usr" / "lib" / "bootc" / "install" / "50-hummingbird.toml"
