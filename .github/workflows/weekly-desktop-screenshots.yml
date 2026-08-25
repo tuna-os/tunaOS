@@ -95,6 +95,30 @@ jobs:
             qemu-system-x86 qemu-utils ovmf socat imagemagick
           sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
+      # The runner image ships podman 5.8.4, which wedges committing a
+      # live-customized rootfs (#1893). Every ISO build needs the Kubic one
+      # instead; this job ran `just iso` without it. Necessary, not
+      # sufficient -- iso-e2e.yml installs this and its commit still exceeded
+      # tacklebox's 600s bound on a GitHub-hosted runner (job 97638514487) --
+      # but a build without it cannot finish at all.
+      - name: setup working podman
+        run: |
+          set -euo pipefail
+          sudo install -d /etc/apt/keyrings
+          curl -fsSL https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04/Release.key \
+            | gpg --dearmor | sudo tee /etc/apt/keyrings/kubic.gpg >/dev/null
+          echo 'deb [signed-by=/etc/apt/keyrings/kubic.gpg] https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04/ /' \
+            | sudo tee /etc/apt/sources.list.d/kubic.list
+          sudo apt-get update -qq
+          sudo apt-get remove -y podman conmon crun || true
+          sudo apt-get install -y podman
+          for p in /usr/local/bin/podman /usr/local/sbin/podman; do
+            if [ -e "$p" ] && ! dpkg -S "$p" >/dev/null 2>&1; then
+              sudo rm -f "$p"
+            fi
+          done
+          hash -r
+
       - name: Log in to GHCR
         if: steps.filter.outputs.skip != 'true'
         run: echo "${{ env.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
