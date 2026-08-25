@@ -155,13 +155,6 @@ jobs:
       - name: Preflight (dispatch filter, R2 credentials)
         id: filter
         env:
-          # Left empty deliberately: the matrix is now generated from the
-          # dispatch inputs above, so there are no non-matching cells left
-          # for this filter to skip. Wiring `inputs.flavors` (plural, a
-          # list) into a filter that compares one flavor would skip every
-          # cell but the first. The R2-credentials half below still runs.
-          DISPATCH_VARIANT: ''
-          DISPATCH_FLAVOR: ''
           # Read only to test for emptiness — never printed.
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -171,15 +164,19 @@ jobs:
           # never touches R2, so it must not be blocked on R2 secrets.
           NEEDS_R2: ${{ github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest' }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            if [[ "${DISPATCH_VARIANT}" != "${{ matrix.variant }}" ]] \
-               || [[ "${DISPATCH_FLAVOR}" != "${{ matrix.flavor }}" ]]; then
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-              echo "Skipping ${{ matrix.variant }}:${{ matrix.flavor }} — dispatch chose ${DISPATCH_VARIANT}:${DISPATCH_FLAVOR}"
-              exit 0
-            fi
-          fi
-
+          # THE DISPATCH FILTER IS GONE, and this is the only thing that used
+          # to live here besides the R2 check.
+          #
+          # It existed because the matrix was two hardcoded cells and a
+          # dispatch had to suppress the one it did not choose. The matrix is
+          # generated from the dispatch inputs now, so every cell that exists
+          # is a cell that was asked for and there is nothing to filter.
+          #
+          # Leaving it in place with its inputs blanked was worse than either
+          # option: `"" != "marlin"` is true, so it set skip=true on EVERY
+          # dispatched cell, every step after this one was skipped, and the
+          # job reported SUCCESS having booted nothing. Run 32791464847 swept
+          # six cells that way and came back green in twenty seconds.
           if [[ "${NEEDS_R2}" == "true" ]]; then
             missing=()
             for name in R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT R2_BUCKET; do

@@ -148,21 +148,74 @@ def test_the_generator_never_emits_an_empty_matrix(tmp_path):
     assert "no cells to test" in proc.stdout + proc.stderr, proc.stdout
 
 
-def test_the_stale_dispatch_filter_cannot_skip_every_cell():
-    """The preflight compared one flavor against the matrix cell.
+def preflight_script() -> str:
+    steps = workflow()["jobs"]["e2e"]["steps"]
+    body = next(s["run"] for s in steps if s.get("id") == "filter")
+    assert "NEEDS_R2" in body, body
+    return body
 
-    The input is a LIST now, so feeding `inputs.flavors` into that
-    comparison would skip every cell but the first — a sweep reporting one
-    result and calling it five. The matrix is already filtered, so the
-    filter's variant/flavor halves are fed empty on purpose.
+
+def run_preflight(tmp_path: Path, needs_r2: str, creds: bool) -> dict:
+    """Run the real preflight body and return what it wrote to GITHUB_OUTPUT."""
+    out = tmp_path / "gh_output"
+    out.write_text("", encoding="utf-8")
+    script = tmp_path / "filter.sh"
+    script.write_text(preflight_script(), encoding="utf-8")
+    env = dict(os.environ, NEEDS_R2=needs_r2, GITHUB_OUTPUT=str(out))
+    for name in ("R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY",
+                 "R2_ENDPOINT", "R2_BUCKET"):
+        env[name] = "set" if creds else ""
+    proc = subprocess.run(["bash", str(script)], capture_output=True,
+                          text=True, env=env)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    return dict(
+        l.split("=", 1) for l in out.read_text(encoding="utf-8").splitlines() if "=" in l
+    )
+
+
+def test_a_dispatched_cell_is_not_skipped():
+    """The bug this replaces, asserted by RUNNING the filter.
+
+    The dispatch filter compared `inputs.variant` against `matrix.variant`
+    back when the matrix was two hardcoded cells. Once the matrix was
+    generated from those same inputs the comparison was redundant, and
+    blanking its inputs rather than deleting it made `"" != "marlin"` true —
+    so it set skip=true on EVERY dispatched cell. Every later step was
+    skipped and the job reported SUCCESS. Run 32791464847 swept six cells
+    that way and came back green in twenty seconds having booted nothing.
+
+    The previous guard asserted the OLD wiring string was absent from the
+    file. That is the shape of the old symptom, not the property that
+    matters, and it passed while the workflow skipped everything.
     """
-    body = WORKFLOW.read_text(encoding="utf-8")
-    assert "DISPATCH_FLAVOR: ${{ inputs.flavor }}" not in body
-    assert "DISPATCH_FLAVORS: ${{ inputs.flavors }}" not in re.sub(
-        r"(?s)jobs:\s*\n\s*e2e:.*", "", body).split("generate-matrix")[-1] or True
-    # The R2-credential half of that preflight must survive: it is what keeps
-    # fork PRs from burning 3.5 minutes on a bogus S3 endpoint (#1129).
-    assert "R2_ACCESS_KEY_ID" in body
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        # source=build: NEEDS_R2 is false, and no cell may be skipped.
+        got = run_preflight(Path(td), needs_r2="false", creds=False)
+    assert got.get("skip") != "true", got
+
+
+def test_the_r2_credential_guard_survived():
+    """The half that must NOT be deleted: fork PRs get no secrets, and
+    without this they burn ~3.5 minutes on a bogus S3 endpoint (#1129)."""
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        got = run_preflight(Path(td), needs_r2="true", creds=False)
+    assert got.get("skip") == "true", got
+    assert got.get("no_r2_credentials") == "true", got
+
+    with tempfile.TemporaryDirectory() as td:
+        ok = run_preflight(Path(td), needs_r2="true", creds=True)
+    assert ok.get("skip") != "true", ok
+
+
+def test_nothing_compares_dispatch_inputs_to_a_matrix_cell_any_more():
+    """Belt and braces: the comparison itself must be gone from the job,
+    not merely neutralised, since neutralising it is what broke the sweep."""
+    steps = workflow()["jobs"]["e2e"]["steps"]
+    blob = yaml.dump(steps)
+    assert "DISPATCH_FLAVOR:" not in blob, blob[:400]
+    assert "matrix.variant }}\" ]]" not in blob
 
 
 # ── Testing without paying to publish ────────────────────────────────────
