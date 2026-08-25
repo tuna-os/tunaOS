@@ -123,12 +123,21 @@ def test_the_proving_window_carries_only_the_smallest_builds() -> None:
     """04:00-09:00 belongs to the verification workflows, not the fleet."""
     counts = flavor_counts()
     low, high = PROVING_WINDOW
-    inside = [v for v, (h, _) in scheduled_crons().items() if low <= h < high]
+    scheduled = scheduled_crons()
+    inside = [v for v, (h, _) in scheduled.items() if low <= h < high]
     assert len(inside) <= MAX_IN_PROVING_WINDOW, (
         f"{sorted(inside)} all fire inside the {low:02d}:00-{high:02d}:00 "
         "proving window"
     )
-    smallest = sorted(counts, key=lambda v: (counts[v], v))[: len(inside)]
+    # The comparison pool is the SCHEDULED variants, not every variant in
+    # build-config.yml. Only a variant with a cron can occupy a slot, so
+    # ranking against the full config asks an unscheduled variant to hold a
+    # window it has no workflow to fill. wahoo (Fedora ELN) is the first
+    # `experimental: true` variant — generate-workflows.py emits it
+    # dispatch-only, with no `schedule:` at all — and at 2 flavors it is the
+    # smallest thing in the config, so it displaced guppy from `smallest`
+    # and failed this assertion while changing nothing about the stagger.
+    smallest = sorted(scheduled, key=lambda v: (counts[v], v))[: len(inside)]
     assert sorted(inside) == sorted(smallest), (
         f"the proving window carries {sorted(inside)}; the smallest builds "
         f"are {sorted(smallest)}"

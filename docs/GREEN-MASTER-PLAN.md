@@ -349,6 +349,29 @@ The fully-diagnosed one: **#1755**.
 | dconf branding failure | **deliberately left failing** — guarding it would green cells that contain no desktop | fix only after manifest sections exist |
 | convergence | tunaos-packages seed grew for the first time since 08-09 (7170→7673); reserve budget stops *between* tiers (tunaos-packages#401), cosmic/niri/kde runs lost to the 6h ceiling | in-loop deadline check (#401), tier failures layer-00/01/02/07/10/11 to classify (#402/#403/#404 candidates) |
 
+### wahoo (Fedora ELN, experimental) — 0/2 build, never dispatched
+New 2026-08-25. The EL11 early-warning lane: ELN is Rawhide sources built with
+Enterprise Linux macros, and its os-release already reads `ID=eln`,
+`VERSION_ID=11`, `ID_LIKE="rhel centos fedora"` — the same 11 c11s and
+almalinux-bootc:11-kitten will carry. Nothing else in the matrix sees EL11, so
+today an EL11 break surfaces the day a base flips rather than months earlier.
+
+Dispatch-only (`experimental: true`), so it adds **0 nightly cells, 0 ISO
+cells and 0 boot-gate cells**; its one incremental scheduled cell is
+wahoo:gnome in the monthly LUKS sweep. Nothing below is a build result yet —
+every row is a repodata measurement against the pinned `eln-bootc` digest,
+and the first dispatch is what turns them into evidence.
+
+| area | state | action |
+|---|---|---|
+| base image | `registry.fedoraproject.org/eln-bootc` exists (fedora-eln/eln#214) — OCI index with amd64/arm64/ppc64le/s390x, 480 pkgs, bootc-1.16.7, dnf5-5.4.3.0, kernel-7.3.0-rc | first `base` dispatch |
+| repos | `/etc/yum.repos.d` is EMPTY on this base; `fedora-repos-eln` ships the repo file at `/usr/share/dnf5/repos.d/fedora-eln.repo`, which dnf5 reads — eln-{baseos,appstream,crb,extras} enabled by default, so no `crb enable` and no EPEL step | none — the build adds no repo of its own |
+| base packages | 40 of the 48 EL/Fedora base names resolve; `systemd-oomd`, `just`, `tailscale`, `epel-release` do not, and are omitted rather than `--skip-unavailable`'d (the #1555 failure shape) | re-measure when ELN grows them |
+| codecs | **no working H.264 or H.265 at all** — measured, not assumed. RPM Fusion publishes no ELN branch; ELN carries no `ffmpeg` and no `gstreamer1-plugins-ugly`; `ffmpeg-free` 8.1.2's only h264 entry is `libopenh264`, and the sole openh264 provider in ELN is `noopenh264-2.6.0-5.eln158`, Fedora's **stub** — encoding a 1s testsrc through it wrote a 0-byte file. No hevc decoder is listed. The desktop contract fires correctly here and is let through ELN-only with a `TUNAOS_CODEC_GAP` marker (`tests/bats/test_eln_codec_gap.bats` pins that it stays loud and never widens to accept the stub's name) | needs an ELN codec source; until then wahoo must never be promoted as media-capable, and this row is the reason it stays experimental |
+| gnome amd64 | 42 of the 52 fedora-list packages resolve, GNOME 51~beta (gnome-shell 51~beta-3, gdm 51~beta-1, mutter 51~beta-1); the 10 misses are best-effort `optional:` | first `gnome` dispatch → desktop contract |
+| gnome arm64 | same six core packages resolve on aarch64 (`dnf repoquery --forcearch=aarch64`) — the measurement #1755 §3 skipped, done before declaring the platform | first arm64 dispatch |
+| kde/cosmic/niri/xfce | **not declared** — unmeasured on ELN, and declaring an undertested desktop is the #858 shape | measure repodata before adding a flavor row |
+
 ### sailfin (openSUSE Tumbleweed) — 0/7 → **all five desktops promoted with Gates green (08-18)**
 | area | state | action |
 |---|---|---|

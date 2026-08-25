@@ -48,6 +48,7 @@ else
 	# OS Detection Flags
 	IS_FEDORA=false
 	IS_HUMMINGBIRD=false
+	IS_ELN=false
 	IS_RHEL=false
 	IS_ALMALINUX=false
 	IS_ALMALINUXKITTEN=false
@@ -94,7 +95,27 @@ else
 			IMAGE_PRETTY_NAME="${IMAGE_PRETTY_NAME:-$2}"
 		fi
 	}
-	[[ "${BASE_IMAGE,,}" == *"fedora"* && "${BASE_IMAGE,,}" != *"hummingbird"* ]] && IS_FEDORA=true && _derive_name "bonito" "Bonito"
+	# ELN is tested BEFORE the fedora substring test, and excluded from it,
+	# for the same reason hummingbird is: its base image reference
+	# (registry.fedoraproject.org/eln-bootc) contains "fedora", so the
+	# unguarded test below matches it and every Bonito-specific Fedora path
+	# fires against a base that cannot satisfy them. Measured on the pinned
+	# digest, 2026-08-25: no epel-release, no versionlock plugin, no
+	# rpmfusion-*-release-eln, and `dnf repoquery` finds no ffmpeg,
+	# gstreamer1-plugins-ugly, tailscale or `just`. The Fedora branch of
+	# 10-base-packages.sh installs rpmfusion-{free,nonfree}-release-${FEDORA_VER}
+	# by URL, and there is no ELN branch of RPM Fusion to install.
+	#
+	# os-release is the primary signal because it is unambiguous and travels
+	# with the image (ID=eln, VERSION_ID=11, VARIANT_ID=eln); the BASE_IMAGE
+	# test is the fallback for chained stages whose image-info.json is not
+	# written yet.
+	if [[ "${BASE_IMAGE,,}" == *"eln-bootc"* ]] ||
+		grep -qE '^ID=eln$' /etc/os-release /usr/lib/os-release 2>/dev/null; then
+		IS_ELN=true
+		_derive_name "wahoo" "Wahoo"
+	fi
+	[[ "${BASE_IMAGE,,}" == *"fedora"* && "${BASE_IMAGE,,}" != *"hummingbird"* && "${IS_ELN}" != true ]] && IS_FEDORA=true && _derive_name "bonito" "Bonito"
 	[[ "${BASE_IMAGE,,}" == *"red hat"* || "${BASE_IMAGE,,}" == *"rhel"* || "${BASE_IMAGE,,}" == *"redhat"* ]] && IS_RHEL=true && _derive_name "redfin" "Redfin"
 	[[ "${BASE_IMAGE,,}" == *"almalinux"* && "${BASE_IMAGE,,}" != *"-kitten"* ]] && IS_ALMALINUX=true && _derive_name "albacore" "Albacore"
 	[[ "${BASE_IMAGE,,}" == *"-kitten"* ]] && IS_ALMALINUXKITTEN=true && _derive_name "yellowfin" "Yellowfin"
@@ -124,6 +145,7 @@ else
 		BASE_IMAGE="${BASE_IMAGE}"
 		IS_FEDORA=${IS_FEDORA}
 		IS_HUMMINGBIRD=${IS_HUMMINGBIRD}
+		IS_ELN=${IS_ELN}
 		IS_RHEL=${IS_RHEL}
 		IS_ALMALINUX=${IS_ALMALINUX}
 		IS_ALMALINUXKITTEN=${IS_ALMALINUXKITTEN}

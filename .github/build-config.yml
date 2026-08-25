@@ -565,6 +565,76 @@ variants:
         build_iso: true
         build_qcow2: false
 
+
+  # ── Wahoo ────────────────────────────────────────────────────────────────
+  # Fedora ELN — the EL11 early-warning lane.
+  #
+  # ELN ("Extra Lifecycle Notes") is Fedora Rawhide's sources built with
+  # Enterprise Linux macros, buildroot and repo layout. Its os-release is
+  # already the thing this variant exists to preview:
+  #
+  #   ID=eln  VERSION_ID=11  ID_LIKE="rhel centos fedora"  VARIANT_ID=eln
+  #
+  # — measured on the pinned digest below, 2026-08-25. That is the same 11
+  # that c10s→c11s and almalinux-bootc:11-kitten will carry, months before
+  # either exists to build against. Yellowfin (Kitten 10), Albacore (Alma 10)
+  # and Skipjack (c10s) are all EL10; nothing in the matrix sees EL11 today,
+  # so an EL11 break surfaces the day a base flips, not before. That is the
+  # gap this fills, and it is why the variant is EL-family rather than a
+  # bonito flavor: ELN is upstream of every EL11 rebuild, not of Fedora 45.
+  #
+  # Upstream base availability (VARIANT-LIFECYCLE.md admission gate #3):
+  # registry.fedoraproject.org/eln-bootc is the image fedora-eln/eln#214
+  # asked for, and it exists — an OCI index carrying amd64, arm64, ppc64le
+  # and s390x, 480 packages, bootc-1.16.7, dnf5-5.4.3.0, kernel-7.3.0-rc.
+  # Both declared platforms are satisfied by the index AND by the desktop
+  # payload: gnome-shell/gdm/mutter/nautilus/gnome-control-center/
+  # mesa-dri-drivers all resolve on x86_64 and aarch64 (GNOME 51~beta,
+  # `dnf repoquery --forcearch=aarch64`, 2026-08-25) — the measurement
+  # hummingbird's arm64 legs skipped (#1755 §3).
+  #
+  # experimental: true — dispatch-only, no cron. The Q3 flavor freeze
+  # (VARIANT-LIFECYCLE.md §1, "no new flavors through 2026-09-30") is a
+  # CAPACITY gate, and a nightly EL11 lane is exactly the nightly capacity it
+  # protects while 13 variant workflows are still being brought back to
+  # green. Dispatch-only adds 0 nightly cells, 0 ISO cells and 0 boot-gate
+  # cells. It is not literally zero incremental CI: luks-e2e.yml builds its
+  # matrix from build_image with no experimental filter, so wahoo:gnome is one
+  # extra boot in the monthly sweep (`0 7 1 * *`) — counted rather than
+  # excluded, and pinned by tests/test_matrix_status.py's denominator.
+  # Promotion to a cron lane needs the capacity note the gate asks for.
+  - id: wahoo
+    emoji: "🎏"
+    description: "Based on Fedora ELN (EL11 preview, rolling)"
+    experimental: true
+    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:1909ffb6ae0c51c0ac831878f0778d7127f38e8bbfddf90d4a14afb281a05748"
+    # No alias: `eln` is Fedora's identifier for a moving development target,
+    # and an alias tag is a stability promise this lane deliberately does not
+    # make. Revisit if/when ELN gains a versioned publish.
+    platforms: ["linux/amd64", "linux/arm64"]
+    # Known gap, recorded here because it bounds what this lane may claim:
+    # ELN has NO working H.264/H.265 decoder (ffmpeg-free's only h264 entry
+    # is backed by the `noopenh264` stub, which encodes 0 bytes; RPM Fusion
+    # publishes no ELN branch). See docs/GREEN-MASTER-PLAN.md's wahoo section
+    # and the TUNAOS_CODEC_GAP marker in verify-desktop-experience.sh.
+    #
+    # MVP scope: base + GNOME only. ELN AppStream carries GNOME 51~beta;
+    # KDE/COSMIC/Niri/XFCE are not measured here and must not be declared
+    # before they are (#858: an image tagged for a desktop that contains no
+    # desktop). No ISO and no qcow2 — a preview lane publishes images to
+    # `bootc switch` onto, not installer media.
+    flavors:
+      - id: base
+        stage: 1
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
   - id: bonito
     emoji: "🎣"
     description: "Based on Fedora 44"

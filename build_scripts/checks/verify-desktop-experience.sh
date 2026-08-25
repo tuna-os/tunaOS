@@ -560,7 +560,33 @@ else
 		elif ! grep -q ' h264 ' <<<"$_ffmpeg_decoders"; then
 			echo "ffmpeg cannot decode h264 — a free/crippled libavcodec is installed" >&2
 			_ffmpeg_diag
-			if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
+			# ELN (wahoo) is the one base where this is a measured property of
+			# the upstream compose rather than a packaging mistake this repo
+			# can fix, so it is named, marked and let through — never silently.
+			#
+			# Measured on the pinned eln-bootc digest, 2026-08-25:
+			#   - eln-{baseos,appstream,crb,extras} carry no ffmpeg and no
+			#     gstreamer1-plugins-ugly; RPM Fusion publishes no ELN branch.
+			#   - ffmpeg-free 8.1.2 lists exactly one h264 entry,
+			#     `libopenh264 ... (codec h264)` — which does not match the
+			#     ' h264 ' decoder-column test above, and would not deserve to:
+			#   - the only openh264 in ELN is `noopenh264-2.6.0-5.eln158`,
+			#     Fedora's API-compatible STUB. Encoding a 1s testsrc through
+			#     it produced a 0-byte file ("Nothing was written into output
+			#     file"), so the decoder is present in the list and does
+			#     nothing. That is the crippled case, correctly detected.
+			#   - no hevc/H.265 decoder is listed at all.
+			#
+			# So wahoo has NO working H.264 or H.265 path, and the marker says
+			# so in the build log rather than a green cell implying otherwise.
+			# Remove this branch — do not extend it — the day ELN gains a
+			# functional codec source. It must never be widened to accept
+			# `libopenh264` generally: on a base where the real openh264 is
+			# installed that name means working decode, and on this one it
+			# means the stub, so the name cannot carry the distinction.
+			if [[ "${IS_ELN:-false}" == "true" ]]; then
+				echo "TUNAOS_CODEC_GAP: ELN publishes no functional H.264/H.265 decoder (ffmpeg-free + noopenh264 stub, no RPM Fusion ELN branch); wahoo images cannot play mainstream video (tunaOS: ELN preview lane)" >&2
+			elif [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
 				exit 1
 			fi
 		fi
