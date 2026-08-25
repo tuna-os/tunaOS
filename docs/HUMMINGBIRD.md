@@ -173,6 +173,7 @@ binding constraint is smaller and more specific than "the desktop is missing".
 | 4 | Gate: `bootc install to-disk` + boot | **proven fixed** — ext4 drop-in, installs in 1m54s and boots to `graphical.target` |
 | 5 | Promote publishes `hummingbird:gnome` | blocked only by the Gate's boot-verify, which needs a real desktop |
 | 6 | overlay → ISO → install | blocked by `flatpak`, see below |
+| 7 | the installed system works on the target laptop | **no device firmware exists anywhere** — see below (#2064) |
 
 ### `flatpak` is the single package gating the whole ISO axis
 
@@ -206,6 +207,39 @@ index 11**, because the list opens with four bootstrap tiers before `layer-00`.
 Filtering on `index <= 7` silently answers a different question and reports far
 too little work remaining — measured 15 instead of 53 when this was last
 computed. Match on the tier `name`, or find flatpak's index first.
+
+### Link 7: firmware, and why CI can never tell you about it
+
+`linux-firmware` and every per-device firmware package are absent from
+`hummingbird:base` (287 packages) and `hummingbird:gnome` (405), from
+`public-hummingbird`, from our published snapshot, **and from the 673-entry
+build order**. Nothing is scheduled to build them. Measured 2026-08-25 against
+the images' own rpm manifests and both repodata indexes; full table in #2064.
+
+QEMU cannot surface this, and that is the point. virtio needs no firmware, so
+`installer-smoke` and `iso-e2e` pass on media that would reach a laptop with:
+
+* **no wifi** — no firmware, no `wpa_supplicant`, and NetworkManager present
+  without its wifi plugin (`NetworkManager-wifi` exists in `public-hummingbird`
+  and is simply not requested);
+* **no GPU initialisation** on amdgpu or recent i915/xe, which need firmware
+  blobs before the display comes up at all;
+* **no audio** on any modern Intel laptop, which needs `sof-firmware`.
+
+The driver *userspace* is fine — the gnome layer already brings
+`mesa-dri-drivers`, `libdrm` and `mesa-libgbm`. This is specifically a firmware
+gap.
+
+It is also not obviously a Hummingbird bug. A hardened, desktop-less
+server/container base omitting ~500 MB of unauditable vendor blobs is a
+defensible choice; the gap only appears when the desktop flavors point it at
+a laptop. #2064 lays out the four options and deliberately does not pick one,
+because the choice trades the hardening premise against hardware support and
+that is a maintainer's call.
+
+**Do not read a green `installer-smoke` cell as evidence that a laptop install
+works.** Every passing cell in `docs/MATRIX-STATUS.md`, including the single
+`yellowfin gnome` one, is QEMU.
 
 ### The precedent that says this is achievable
 
