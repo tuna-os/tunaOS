@@ -90,3 +90,39 @@ def test_the_detector_still_matches_a_real_declared_pin():
         "the snapshot pin was replaced (good, remove this) or the detector "
         "has gone blind (bad)"
     )
+
+
+# --- content age beats name age ---------------------------------------------
+# The 20251124 prefix is a LIVING repo the package factory publishes into
+# nightly (r2_path: hummingbird/20251124-$arch), not an immutable snapshot.
+# Judged by its NAME it is forever stale; judged by its repomd <revision>
+# (createrepo_c stamps the indexing epoch) it is as old as its content.
+# Measured live while writing this: 274d by name, 8d by content -- the
+# name-based verdict this suite originally pinned was a false positive of
+# exactly the cry-wolf kind that gets checks deleted.
+
+def test_an_epoch_revision_yields_content_age():
+    body = b"<repomd><revision>1786000000</revision></repomd>"
+    age = cprp.repomd_content_age_days(body, today=TODAY)
+    assert age is not None and 0 <= age <= 30, age
+
+
+def test_a_serial_revision_falls_back_to_none():
+    """Some tools write serials (small ints); those are not timestamps."""
+    assert cprp.repomd_content_age_days(
+        b"<repomd><revision>17</revision></repomd>", today=TODAY) is None
+
+
+def test_a_body_without_a_revision_is_none_not_zero():
+    assert cprp.repomd_content_age_days(b"<repomd/>", today=TODAY) is None
+    assert cprp.repomd_content_age_days(b"", today=TODAY) is None
+
+
+def test_probe_returns_the_body_content_age_needs():
+    """The verdict reads the revision out of the SAME fetch reachability
+    used; if probe stops returning the body, content age silently never
+    applies and every datestamped repo is judged by its name again."""
+    import inspect
+    sig = inspect.signature(cprp.probe)
+    ret = inspect.getsource(cprp.probe)
+    assert "resp.read()" in ret, "probe no longer returns the body"

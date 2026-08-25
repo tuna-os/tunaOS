@@ -153,15 +153,43 @@ def collect(doc) -> list[tuple[str, str]]:
     return pins
 
 
-def probe(url: str) -> int:
+def probe(url: str) -> tuple[int, bytes]:
+    """(status, body). The body rides along so content-age needs no re-fetch."""
     req = urllib.request.Request(url, headers=UA, method="GET")
     try:
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
-            return resp.status
+            return resp.status, resp.read()
     except urllib.error.HTTPError as e:
-        return e.code
+        return e.code, b""
     except (urllib.error.URLError, OSError):
-        return 0
+        return 0, b""
+
+
+def repomd_content_age_days(body: bytes,
+                            today: datetime.date | None = None) -> int | None:
+    """Age of a repomd.xml's <revision>, when it is an epoch timestamp.
+
+    This is what STALE should mean for a datestamped repo. The hummingbird
+    prefix carries 20251124 in its NAME, but the package factory publishes
+    into that same prefix nightly (r2_path: hummingbird/20251124-$arch), so it
+    is a LIVING repository with a date in its label, not an immutable
+    snapshot. Judging it by the label would cry STALE forever about a repo
+    receiving packages daily -- and a check that cries wolf gets deleted,
+    which is worse than no check. The repomd revision is written at index
+    time; createrepo_c stamps it with the epoch, so its age is the age of the
+    CONTENT. A revision that is not epoch-shaped (some tools write serials)
+    yields None and the caller falls back to the name date, saying so.
+    """
+    import re as _re
+    m = _re.search(rb"<revision>(\d{9,11})</revision>", body)
+    if not m:
+        return None
+    ts = int(m.group(1))
+    try:
+        taken = datetime.datetime.utcfromtimestamp(ts).date()
+    except (OverflowError, OSError, ValueError):
+        return None
+    return ((today or datetime.date.today()) - taken).days
 
 
 def main() -> int:
@@ -188,13 +216,20 @@ def main() -> int:
             print(f"SKIP  {kind:5s} (unresolved repo variable)  {url}")
             skipped += 1
             continue
-        code = probe(url) or probe(url)  # one retry on transport failure
+        code, body = probe(url)
+        if code != 200:
+            code, body = probe(url)  # one retry on transport failure
         if code == 200:
             age = snapshot_age_days(url)
+            basis = "name"
+            if age is not None:
+                content_age = repomd_content_age_days(body)
+                if content_age is not None:
+                    age, basis = content_age, "content"
             if age is None:
                 print(f"ok    {kind:5s} {code}  {url}")
             elif age >= SNAPSHOT_FAIL_DAYS:
-                print(f"STALE {kind:5s} {code}  {url}  ({age}d old)")
+                print(f"STALE {kind:5s} {code}  {url}  ({age}d old, by {basis})")
                 print(f"::error::datestamped snapshot pin is {age} days old "
                       f"(limit {SNAPSHOT_FAIL_DAYS}): {url} — it still "
                       f"resolves, which is why nothing else catches this. "
@@ -206,13 +241,13 @@ def main() -> int:
                 stale += 1
                 failed += 1
             elif age >= SNAPSHOT_WARN_DAYS:
-                print(f"ok    {kind:5s} {code}  {url}  ({age}d old)")
+                print(f"ok    {kind:5s} {code}  {url}  ({age}d old, by {basis})")
                 print(f"::warning::datestamped snapshot pin is {age} days old "
                       f"({url}) — refresh it before it drifts far enough from "
                       f"the base image to break dependency resolution")
                 stale += 1
             else:
-                print(f"ok    {kind:5s} {code}  {url}  ({age}d old)")
+                print(f"ok    {kind:5s} {code}  {url}  ({age}d old, by {basis})")
         else:
             print(f"FAIL  {kind:5s} {code}  {url}")
             print(f"::error::package-repo pin no longer resolves "
