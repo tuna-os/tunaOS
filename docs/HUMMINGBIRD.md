@@ -167,7 +167,7 @@ binding constraint is smaller and more specific than "the desktop is missing".
 
 | # | link | state |
 |---|---|---|
-| 1 | build the desktop packages | 673 in `build-order-hummingbird-desktops.yml`, **570 served, 103 left** — 53 before layer-07, 19 more in layer-07 itself (measured 2026-08-25 15:30) |
+| 1 | build the desktop packages | 673 in `build-order-hummingbird-desktops.yml`, 570 served, 103 left — 53 before layer-07, 19 more in layer-07 itself (measured 2026-08-25 15:30). **Read the caveat below before using this number.** |
 | 2 | publish that wave to R2 | dispatch-only; the nightly builds and caches but **never publishes** (no `rclone`/`R2_` anywhere in `package-factory.yml`) |
 | 3 | image build installs them | fixed: the `IS_HUMMINGBIRD` branch of `10-base-packages.sh` never listed `flatpak` |
 | 4 | Gate: `bootc install to-disk` + boot | **proven fixed** — ext4 drop-in, installs in 1m54s and boots to `graphical.target` |
@@ -217,6 +217,47 @@ then reports itself as a timeout. Fixed by redirecting the daemons' output to
 reap them; `tests/test_a_failing_live_customize_fails_fast.py` runs the script's
 own helpers against a daemon that outlives its caller and fails if the wedge
 returns.
+
+### "N packages left" is not a measure of progress
+
+That figure counts the **served index**, which is cumulative across past
+publishes. It says nothing about what a chain run accomplishes, and on
+2026-08-25 the two came apart completely.
+
+Run [32842254545](https://github.com/tuna-os/tunaos-packages/actions/runs/32842254545)
+built for **4h01m** and reached **tier 5 of 22**:
+
+```
+11:27:19  [resume] found `hummingbird-x86_64-partial` from 11:26:17Z (429 MB)
+11:27:24  [resume] action key differs — the inputs changed, so building from scratch
+11:28:58  ===== Tier: bootstrap-00 =====
+11:40:54  ===== Tier: layer-00 =====
+          (still in layer-00 when cancelled at 15:28:55)
+```
+
+`Skipping: 0`. It rejected a 429 MB partial written **thirty-four seconds
+earlier** and rebuilt from nothing, because the action key included the whole
+of `manifests/package-factory.yaml` — twice, by two independent paths — and an
+unrelated edit to another target had moved it.
+
+**The chain was not failing to finish. It was failing to accumulate.** Every
+merge that touched the manifest sent a 22-tier chain back to tier 0, which is
+why the remaining count never moved however many nightlies ran.
+
+Both manifest paths are closed in tunaos-packages#529. One coupling remains
+and is deliberately open in tunaos-packages#528: `scripts/build-chain.sh` is a
+whole-file `renderer_inputs` entry, so *any* factory improvement still costs a
+full chain restart — #512's mock root-cache change was a pure speedup with no
+effect on any package's contents and invalidated every partial in the
+repository.
+
+Practical consequence while that stands: **do not edit
+`manifests/package-factory.yaml`, `scripts/build-chain.sh`, or
+`scripts/run-package-factory-cell.sh` while a chain is converging.** And when
+reading a chain run, the `[resume]` line is the single most informative line
+in the log — it is the difference between a run that accumulates and one that
+starts over, and it went unnoticed for as long as it did because a restarted
+run looks identical to a merely slow one.
 
 ### `flatpak` is the single package gating the whole ISO axis
 
