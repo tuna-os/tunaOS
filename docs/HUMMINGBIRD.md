@@ -104,6 +104,54 @@ immutable snapshot of a stable release that is the right check. For a rolling
 distribution it is the wrong property: the snapshot will keep answering 200
 long after it has stopped being a usable base to layer against.
 
+## Its published images claim to be version 10
+
+Measured on the 2026-08-25 build (run 32813037866). The image's own os-release:
+
+```
+NAME="Hummingbird OS"   VERSION="20251124"   VERSION_ID="20251124"
+ID="hummingbird"        ID_LIKE="fedora rhel"
+CPE_NAME="cpe:/a:redhat:hummingbird:1"      VENDOR_NAME="Red Hat"
+```
+
+The build ran with `MAJOR_VERSION: 10`, and `reusable-build-image.yml` stamps
+
+```yaml
+org.opencontainers.image.version=${{ env.MAJOR_VERSION }}
+```
+
+so `hummingbird:gnome-testing` is published claiming to be version **10**.
+
+The cause is not hummingbird-specific. `reusable-build-image.yml` declares:
+
+```yaml
+major-version:
+  description: "The version of CentOS to build the image on"
+  default: "10"
+```
+
+and `build-variant.yml` never passes it, so **every** variant inherits `10` —
+Arch, Ubuntu 26.04, Debian 13, Tumbleweed and Gentoo included. It is the same
+EL10-shaped assumption this document exists to correct, just at the metadata
+layer.
+
+Note there are two different values with confusingly similar names, and only
+one of them is wrong:
+
+| | source | hummingbird's value |
+|---|---|---|
+| `MAJOR_VERSION` (workflow env) | `inputs.major-version`, default `"10"` | `10` — wrong |
+| `MAJOR_VERSION_NUMBER` (`build_scripts/lib.sh`) | the image's own `VERSION_ID` | `20251124` — right |
+
+So the build *scripts* already see the correct value; it is the OCI label that
+lies. Anyone fixing this should know that `MAJOR_VERSION_NUMBER` feeds
+`epel-release-latest-N`, `codeready-builder-for-rhel-N` and a numeric
+`-ge 9` comparison, so it is not a free variable to redefine.
+
+Not fixed here: correcting the label is a fleet-wide metadata change across
+thirteen variants with downstream consumers, which wants its own change and its
+own review rather than being folded into a hummingbird documentation pass.
+
 ## Rules of thumb for future work here
 
 1. **Do not call it a Fedora rebuild.** It is a hardened rolling fork tracking
