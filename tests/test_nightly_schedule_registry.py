@@ -36,6 +36,13 @@ BUILD_CONFIG = ROOT / ".github/build-config.yml"
 # desktop-contract-sweep 08:00.
 PROVING_WINDOW = (4, 9)
 MAX_IN_PROVING_WINDOW = 2
+# A variant may sit inside the window only if it is SMALL. Today gurnard has
+# 2 flavors and guppy 4; the next tier up is the 7-flavor group (flounder,
+# flounder-sid, grouper, sailfin) and everything above it runs to 20. So 4 is
+# the boundary between "fits beside the verification workflows" and "is a
+# fleet build", and it is a threshold rather than a ranking on purpose --
+# see test_the_proving_window_carries_only_small_builds.
+MAX_FLAVORS_IN_PROVING_WINDOW = 4
 
 # `20 13 * * *` -> ("13", "20"); anything else is not a daily slot.
 _DAILY_CRON = re.compile(r"^(\d{1,2}) (\d{1,2}) \* \* \*$")
@@ -119,26 +126,66 @@ def test_no_two_variants_share_a_slot() -> None:
         seen[slot] = variant
 
 
-def test_the_proving_window_carries_only_the_smallest_builds() -> None:
-    """04:00-09:00 belongs to the verification workflows, not the fleet."""
+def test_the_proving_window_carries_only_small_builds() -> None:
+    """04:00-09:00 belongs to the verification workflows, not the fleet.
+
+    This asserted a RANKING -- that the variants inside the window are exactly
+    the N smallest scheduled variants -- and that shape has now rotted twice
+    for reasons that had nothing to do with the stagger:
+
+      * wahoo (Fedora ELN, `experimental: true`) entered build-config at 2
+        flavors and displaced guppy from `smallest`, though it is emitted
+        dispatch-only and has no cron to occupy any slot at all. Fixed by
+        ranking against SCHEDULED variants only.
+      * hummingbird dropped from 5 flavors to 3 when kde and niri were removed
+        for having no package set, which made it smaller than guppy and so
+        "should" have been in the window. It should not be, and the reason is
+        not its size: it fires at 22:20 so the image build follows the day's
+        package publish. Moving it into the morning would break that ordering
+        to satisfy an arithmetic tie-break.
+
+    A total order over the whole fleet is simply the wrong instrument. Any
+    flavor added or removed ANYWHERE re-sorts it, and the test then demands a
+    scheduling change that nothing about the contention justifies.
+
+    The hazard is unchanged and is what gets asserted instead: a BIG build
+    inside the reserved window queues against daily-verify, verify-asahi,
+    matrix-status, catalog-facts and desktop-contract-sweep under the org's
+    20-concurrent-job ceiling. That is a question of size against a threshold,
+    not of rank. Both guards stay -- how MANY variants sit in the window, and
+    how BIG each is -- so the two ways it can be spoiled are still covered.
+    """
     counts = flavor_counts()
     low, high = PROVING_WINDOW
-    scheduled = scheduled_crons()
-    inside = [v for v, (h, _) in scheduled.items() if low <= h < high]
+    inside = [v for v, (h, _) in scheduled_crons().items() if low <= h < high]
+
     assert len(inside) <= MAX_IN_PROVING_WINDOW, (
         f"{sorted(inside)} all fire inside the {low:02d}:00-{high:02d}:00 "
         "proving window"
     )
-    # The comparison pool is the SCHEDULED variants, not every variant in
-    # build-config.yml. Only a variant with a cron can occupy a slot, so
-    # ranking against the full config asks an unscheduled variant to hold a
-    # window it has no workflow to fill. wahoo (Fedora ELN) is the first
-    # `experimental: true` variant — generate-workflows.py emits it
-    # dispatch-only, with no `schedule:` at all — and at 2 flavors it is the
-    # smallest thing in the config, so it displaced guppy from `smallest`
-    # and failed this assertion while changing nothing about the stagger.
-    smallest = sorted(scheduled, key=lambda v: (counts[v], v))[: len(inside)]
-    assert sorted(inside) == sorted(smallest), (
-        f"the proving window carries {sorted(inside)}; the smallest builds "
-        f"are {sorted(smallest)}"
+    oversized = {v: counts[v] for v in inside
+                 if counts[v] > MAX_FLAVORS_IN_PROVING_WINDOW}
+    assert not oversized, (
+        f"{oversized} fire inside the {low:02d}:00-{high:02d}:00 proving "
+        f"window with more than {MAX_FLAVORS_IN_PROVING_WINDOW} flavors; the "
+        "window is reserved for the verification workflows and a fleet-sized "
+        "build queues against them under the 20-job ceiling"
+    )
+
+
+def test_the_proving_window_guard_would_notice_a_fleet_build() -> None:
+    """The guard above must be able to FAIL, not merely to pass today.
+
+    A threshold test is exactly the shape that quietly stops examining
+    anything if the threshold drifts above the fleet. This asserts the
+    threshold still sits below the largest scheduled variant, so the guard
+    has something it would actually reject.
+    """
+    counts = flavor_counts()
+    scheduled = scheduled_crons()
+    heaviest = max(scheduled, key=lambda v: counts[v])
+    assert counts[heaviest] > MAX_FLAVORS_IN_PROVING_WINDOW, (
+        f"the threshold ({MAX_FLAVORS_IN_PROVING_WINDOW}) is at or above the "
+        f"largest scheduled variant ({heaviest} at {counts[heaviest]}), so the "
+        "guard cannot fail for any variant and is measuring nothing"
     )
