@@ -91,18 +91,25 @@ The same absence blocks the ISO: `live-iso/common/src/customize-live.sh` needs
 baseurl=https://repo.tunaos.org/hummingbird/20251124-$basearch/
 ```
 
-A datestamped, immutable snapshot — while `.github/build-config.yml` pins the
-upstream base image by digest from `quay.io/hummingbird-community/bootc-os`.
+**The datestamp is a label, not a snapshot.** This prefix is where
+tunaos-packages' factory *publishes into* (`r2_path:
+hummingbird/20251124-$arch`), so it is a living repository whose name
+happens to carry the date it was seeded. Measured 2026-08-25: the URL's name
+is 274 days old while its repomd `<revision>` — the indexing epoch — is
+**8 days** old. An earlier revision of this document called it "a
+datestamped, immutable snapshot"; that reading produced a false STALE
+verdict and bad advice ("the snapshot needs refreshing"), both since
+corrected. Judge this repo by its *content* age, never its name.
 
-**Two independently-pinned halves of a rolling distribution.** They were
-coherent when both were taken; they drift apart with every upstream roll, and
-the drift surfaces as dependency breakage inside the layered desktop rather than
+The genuine mismatch is between the two halves: `.github/build-config.yml`
+pins the upstream base image by digest while the package prefix grows on the
+factory's own cadence. They drift apart with every upstream roll, and the
+drift surfaces as dependency breakage inside the layered desktop rather than
 as anything that looks like a pin problem.
 
-`scripts/check-package-repo-pins.py` verifies that this URL *resolves*. For an
-immutable snapshot of a stable release that is the right check. For a rolling
-distribution it is the wrong property: the snapshot will keep answering 200
-long after it has stopped being a usable base to layer against.
+`scripts/check-package-repo-pins.py` verifies the URL resolves **and** fails
+datestamped prefixes whose repomd revision is older than 180 days — content
+age, precisely so a living repo with a dated name is never miscalled stale.
 
 ## Its published images claim to be version 10
 
