@@ -333,7 +333,23 @@ jobs:
   build_artifacts_s2:
     name: "iso:${{ matrix.flavor }} (${{ matrix.safeplatform }})"
     needs: [generate_matrix, build_stage2]
-    if: github.event_name != 'pull_request' && needs.generate_matrix.outputs.artifact_s2_count != '0'
+    # Per-CELL, not per-stage (#2059). This `if` carried no status function,
+    # so success() was implicit on `build_stage2` -- a MATRIX over every
+    # stage-2 flavor. One failing desktop therefore skipped every ISO in the
+    # stage. Run 32786338463: hummingbird's gnome image built, signed and
+    # manifested, and its ISO was skipped because kde and niri failed beside
+    # it. Same shape as #1729 one edge further down, and as the stage-4
+    # artifact jail the comment above records.
+    #
+    # What replaces the coarse gate is `image-digest-artifact` below: the
+    # called workflow refuses to build unless THIS run published THIS cell's
+    # image. Without that, `!cancelled()` would emit an ISO from the tag a
+    # FAILED flavor last published -- stale media that looks fresh.
+    if: >-
+      !cancelled() && needs.generate_matrix.result == 'success' &&
+      needs.build_stage2.result != 'cancelled' &&
+      github.event_name != 'pull_request' &&
+      needs.generate_matrix.outputs.artifact_s2_count != '0'
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate_matrix.outputs.artifact_s2_matrix) }}
@@ -349,6 +365,10 @@ jobs:
       safeplatform: ${{ matrix.safeplatform }}
       image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
+      # Names the artifact this cell's OWN image leg uploads after a
+      # successful push. Its existence is what makes the relaxed gate above
+      # safe; see the provenance gate in reusable-build-artifacts.yml.
+      image-digest-artifact: ${{ matrix.image_name }}-${{ matrix.published_tag }}-${{ matrix.safeplatform }}-${{ github.run_id }}
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -362,7 +382,7 @@ jobs:
     needs: [generate_matrix, build_stage3]
     if: >-
       !cancelled() && needs.generate_matrix.result == 'success' &&
-      needs.build_stage3.result == 'success' &&
+      needs.build_stage3.result != 'cancelled' &&
       github.event_name != 'pull_request' &&
       needs.generate_matrix.outputs.artifact_s3_count != '0'
     strategy:
@@ -380,6 +400,10 @@ jobs:
       safeplatform: ${{ matrix.safeplatform }}
       image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
+      # Names the artifact this cell's OWN image leg uploads after a
+      # successful push. Its existence is what makes the relaxed gate above
+      # safe; see the provenance gate in reusable-build-artifacts.yml.
+      image-digest-artifact: ${{ matrix.image_name }}-${{ matrix.published_tag }}-${{ matrix.safeplatform }}-${{ github.run_id }}
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
@@ -391,7 +415,7 @@ jobs:
     needs: [generate_matrix, build_stage4]
     if: >-
       !cancelled() && needs.generate_matrix.result == 'success' &&
-      needs.build_stage4.result == 'success' &&
+      needs.build_stage4.result != 'cancelled' &&
       github.event_name != 'pull_request' &&
       needs.generate_matrix.outputs.artifact_s4_count != '0'
     strategy:
@@ -409,6 +433,10 @@ jobs:
       safeplatform: ${{ matrix.safeplatform }}
       image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
+      # Names the artifact this cell's OWN image leg uploads after a
+      # successful push. Its existence is what makes the relaxed gate above
+      # safe; see the provenance gate in reusable-build-artifacts.yml.
+      image-digest-artifact: ${{ matrix.image_name }}-${{ matrix.published_tag }}-${{ matrix.safeplatform }}-${{ github.run_id }}
     secrets:
       R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
       R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
