@@ -406,14 +406,25 @@ jobs:
           # is the difference this step is chasing. Root gets native
           # `overlay`; rootless falls back to `fuse-overlayfs`, where
           # committing a multi-gigabyte layer goes through FUSE. Print both.
-          echo "=== podman storage: root ==="
-          sudo podman info --format \
-            'driver={{.Store.GraphDriverName}} root={{.Store.GraphRoot}} version={{.Version.Version}}' || true
-          echo "=== podman storage: rootless ($USER) ==="
-          podman info --format \
-            'driver={{.Store.GraphDriverName}} root={{.Store.GraphRoot}} version={{.Version.Version}}' || true
+          ROOT_DRV="$(sudo podman info --format '{{.Store.GraphDriverName}}' 2>/dev/null || echo unknown)"
+          USER_DRV="$(podman info --format '{{.Store.GraphDriverName}}' 2>/dev/null || echo unknown)"
+          DRIVERS="root=${ROOT_DRV} rootless=${USER_DRV}"
+          echo "=== podman storage: ${DRIVERS} ==="
+          sudo podman info --format 'root: {{.Store.GraphRoot}} v{{.Version.Version}}' || true
+          podman info --format 'rootless: {{.Store.GraphRoot}} v{{.Version.Version}}' || true
           echo "=== free space ==="
           df -h / /mnt 2>/dev/null || df -h
+
+          # Repeat the drivers on the way out, whatever the outcome.
+          #
+          # get_job_logs only returns a tail. This step emits tens of
+          # thousands of lines building the image, so a diagnostic printed at
+          # the top has already scrolled past retrieval by the time the step
+          # fails -- which is exactly what happened to the first version of
+          # this probe in job 97644460337: it ran, it printed, and the answer
+          # was unreachable. A diagnostic that cannot be read afterwards is
+          # not a diagnostic.
+          trap 'echo "=== podman storage (repeated at exit): ${DRIVERS} ==="' EXIT
 
           # Build the image AND the ISO as root, in one root context.
           #
