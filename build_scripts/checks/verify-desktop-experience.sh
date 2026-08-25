@@ -684,10 +684,20 @@ else
 	install -d /usr/share/tunaos/experience-contracts
 	if ((TUNAOS_CONTRACT_WAIVED > 0)); then
 		# NOT "passed". The requirements above were unmet and only the
-		# hummingbird exemption let the build continue. Record that in the
-		# on-image contract file so anything reading it downstream (matrix
-		# scoring, provenance, the omissions manifest) sees an unverified
-		# desktop rather than a verified one.
+		# hummingbird exemption let the build continue.
+		#
+		# The CONSUMED signal is the ::warning:: and the marker line below:
+		# the warning surfaces as a CI annotation, and TUNAOS_DESKTOP_CONTRACT_*
+		# markers are what scripts/iso-e2e.sh greps for.
+		#
+		# The contract FILE is written for correctness, not because something
+		# reads it yet -- today only install-remora.sh writes a sibling and
+		# nothing but tests reads either. gen-matrix-status.py takes its
+		# per-cell verdicts from a sweep's all.json, not from files inside the
+		# image, so wiring this into matrix scoring means teaching that sweep
+		# about it. Worth doing; not done here. Claiming otherwise would be
+		# the same shape of error as the "contract passed" line this block
+		# replaces.
 		printf 'desktop=%s\nexperience=%s\nvalidated_at_build=false\nwaived_requirements=%s\n' \
 			"$desktop" "$experience" "$TUNAOS_CONTRACT_WAIVED" \
 			>"/usr/share/tunaos/experience-contracts/${desktop}"
