@@ -90,9 +90,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # A dispatch tests exactly the cells asked for. Anything else -- the
-      # pull_request harness trigger and the Monday schedule -- keeps the two
-      # cells this workflow has always run, so widening the inputs cannot
-      # silently turn a harness smoke test into a fifty-cell sweep.
+      # pull_request harness trigger and the Monday schedule -- runs a fixed
+      # cell, so widening the inputs cannot silently turn a harness smoke
+      # test into a fifty-cell sweep.
+      #
+      # That cell is albacore:gnome, and it is the only one it can be. Those
+      # triggers pass no inputs, so `source` is empty and the ISO must come
+      # from R2 -- and R2 today holds albacore alone (#2027). Measured
+      # against the live bucket:
+      #
+      #   albacore-{gnome,kde,xfce}-latest.iso   200
+      #   yellowfin-gnome-latest.iso             404
+      #   skipjack-gnome-latest.iso              404
+      #   albacore-latest.iso                    404   (grouped name, unpublished)
+      #
+      # The list used to be yellowfin:gnome + albacore:gnome, so every PR
+      # touching this file got a red check for a 404 that is a publishing
+      # gap tracked in #2027, not a harness regression: run 32794531963
+      # failed in `Download latest ISO from R2` after 2 seconds. The step
+      # does say exactly which two keys it tried, so the red was legible --
+      # it was just never going to be anything else. A check that cannot
+      # pass teaches people to ignore it. When #2027 publishes more
+      # variants, add them here.
       - name: Build the cell list
         id: gen
         env:
@@ -106,7 +125,7 @@ jobs:
                               | map(select(length > 0))
                               | map({variant: $v, flavor: .}))}')
           else
-            M='{"include":[{"variant":"yellowfin","flavor":"gnome"},{"variant":"albacore","flavor":"gnome"}]}'
+            M='{"include":[{"variant":"albacore","flavor":"gnome"}]}'
           fi
           # An empty include list is a GREEN CHECK THAT RAN NOTHING, which is
           # worse than a red one: a sweep would report complete having
@@ -122,7 +141,17 @@ jobs:
     name: E2E ${{ matrix.variant }}:${{ matrix.flavor }}
     needs: generate-matrix
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # The job budget has to cover the steps inside it. This was a flat 30
+    # while the build step declares 60 and the readiness step 20, so every
+    # `source: build` cell was killed by the JOB at 30 minutes with its own
+    # steps still well inside their limits -- E2E guppy:xfce, job
+    # 97638529947, cancelled at 00:48:29 after starting its build at
+    # 00:18:40. `cancelled` reads like infrastructure flake, so a sweep of
+    # six cells reported nothing usable about any of them.
+    #
+    # Only the build path needs the larger budget; sourcing from R2 is a
+    # download plus a 20-minute boot and 30 is right for it.
+    timeout-minutes: ${{ (github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 90 || 30 }}
     strategy:
       # Don't cancel the other leg if one fails — we want to see both signals.
       fail-fast: false
