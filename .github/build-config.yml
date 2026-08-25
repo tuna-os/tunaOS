@@ -739,7 +739,12 @@ variants:
   # (Konflux hermetic build model, CKI ARK kernel).
   - id: hummingbird
     emoji: "🐦"
-    description: "Fedora Hummingbird (bootc container-native OS)"
+    # Rolling, security-hardened fork tracking Fedora RAWHIDE -- not Fedora 43,
+    # whatever the .fc43 dist tags suggest -- and shipping NO desktop upstream.
+    # The desktop flavors below are therefore a PORT onto a desktop-less base,
+    # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
+    # reasoning about what its package set should contain.
+    description: "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
     base_image: "quay.io/hummingbird-community/bootc-os:latest@sha256:c5539f9ed4d93aab6bd41e4f5aef8ab83055f3f9e855a47b69fadb7420d0d1df"
     platforms: ["linux/amd64", "linux/arm64"]
     flavors:

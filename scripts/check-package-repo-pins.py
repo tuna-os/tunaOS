@@ -27,7 +27,9 @@ silently become a hole.
 
 from __future__ import annotations
 
+import datetime
 import glob
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -47,6 +49,54 @@ def _sub_vars(url: str) -> str:
     for var, val in VARS.items():
         url = url.replace(var, val)
     return url
+
+
+# ---------------------------------------------------------------------------
+# Datestamped snapshot freshness.
+#
+# Resolving is the right property for an immutable snapshot of a STABLE
+# release: it either still exists or it does not. It is the wrong property for
+# a snapshot of a ROLLING distribution, which keeps answering 200 long after it
+# has stopped being a usable base to layer against.
+#
+# hummingbird is exactly that case and is why this exists. Fedora Hummingbird
+# is a rolling release tracking Fedora Rawhide (docs/HUMMINGBIRD.md) — not
+# Fedora 43, whatever the .fc43 dist tags suggest. tunaOS pins two halves of it
+# independently: the base image by digest in build-config.yml, and the package
+# snapshot by datestamp in build_scripts/10-base-packages.sh. Both were
+# coherent when taken. They drift with every upstream roll.
+#
+# The drift does not surface as a pin problem. It surfaces as UNRESOLVABLE
+# DEPENDENCIES inside the layered desktop: on 2026-08-25 the 20251124 snapshot
+# served gtk4 but not the harfbuzz gtk4 requires, so dnf reported gtk4 and 17
+# others as BROKEN rather than missing, --skip-unavailable dropped them, and
+# hummingbird:gnome shipped with 410 packages and no GNOME in it. Every pin in
+# that build resolved. Nothing here was red.
+#
+# So age is checked as well as reachability. Exactly one pin in the manifests
+# carries a datestamp today (measured), so this is precise rather than a broad
+# heuristic looking for something to flag.
+SNAPSHOT_RE = re.compile(r"/[^/]*?(20\d{6})[^/]*/")
+SNAPSHOT_WARN_DAYS = 60
+SNAPSHOT_FAIL_DAYS = 180
+
+
+def snapshot_age_days(url: str, today: datetime.date | None = None) -> int | None:
+    """Age in days of a YYYYMMDD datestamp in the URL path, else None.
+
+    `today` is injectable so the tests do not drift into failing as the
+    calendar moves — a check whose verdict depends on when it runs is a check
+    nobody can reason about.
+    """
+    hit = SNAPSHOT_RE.search(url)
+    if not hit:
+        return None
+    stamp = hit.group(1)
+    try:
+        taken = datetime.date(int(stamp[:4]), int(stamp[4:6]), int(stamp[6:8]))
+    except ValueError:
+        return None  # 20259999 and friends are not datestamps
+    return ((today or datetime.date.today()) - taken).days
 
 
 def collect(doc) -> list[tuple[str, str]]:
@@ -131,6 +181,7 @@ def main() -> int:
 
     failed = 0
     skipped = 0
+    stale = 0
     for url in sorted(pins):
         kind = pins[url]
         if "$" in url:
@@ -139,7 +190,29 @@ def main() -> int:
             continue
         code = probe(url) or probe(url)  # one retry on transport failure
         if code == 200:
-            print(f"ok    {kind:5s} {code}  {url}")
+            age = snapshot_age_days(url)
+            if age is None:
+                print(f"ok    {kind:5s} {code}  {url}")
+            elif age >= SNAPSHOT_FAIL_DAYS:
+                print(f"STALE {kind:5s} {code}  {url}  ({age}d old)")
+                print(f"::error::datestamped snapshot pin is {age} days old "
+                      f"(limit {SNAPSHOT_FAIL_DAYS}): {url} — it still "
+                      f"resolves, which is why nothing else catches this. "
+                      f"Against a rolling upstream a snapshot this old no "
+                      f"longer satisfies the dependencies of what is layered "
+                      f"on top of it; the symptom is packages skipped for "
+                      f"BROKEN dependencies mid-build, not a 404 here. "
+                      f"See docs/HUMMINGBIRD.md")
+                stale += 1
+                failed += 1
+            elif age >= SNAPSHOT_WARN_DAYS:
+                print(f"ok    {kind:5s} {code}  {url}  ({age}d old)")
+                print(f"::warning::datestamped snapshot pin is {age} days old "
+                      f"({url}) — refresh it before it drifts far enough from "
+                      f"the base image to break dependency resolution")
+                stale += 1
+            else:
+                print(f"ok    {kind:5s} {code}  {url}  ({age}d old)")
         else:
             print(f"FAIL  {kind:5s} {code}  {url}")
             print(f"::error::package-repo pin no longer resolves "
@@ -148,7 +221,8 @@ def main() -> int:
             failed += 1
 
     print(f"\nchecked {len(pins) - skipped} package-repo pin(s), "
-          f"{skipped} skipped; {failed} unresolvable")
+          f"{skipped} skipped; {failed} unresolvable or stale, "
+          f"{stale} datestamped snapshot(s) past {SNAPSHOT_WARN_DAYS}d")
     return 1 if failed else 0
 
 

@@ -1,0 +1,129 @@
+# Hummingbird — what it actually is
+
+Written because this was got wrong repeatedly, in code comments, in
+`GREEN-MASTER-PLAN.md`, and in issue triage. Hummingbird is **not** Fedora 43
+and **not** EL10, and treating it as either produces conclusions that are
+confidently wrong.
+
+## The short version
+
+**Fedora Hummingbird is a rolling-release, security-hardened, bootable-container
+OS that tracks Fedora Rawhide and ships no desktop environment.**
+
+It is the OS-scale application of Red Hat's **Project Hummingbird**, an early
+access program providing a catalog of minimal, hardened, *distroless* container
+images kept at near-zero CVE. Fedora Hummingbird applies that same pipeline
+logic to a whole operating system.
+
+| | |
+|---|---|
+| Upstream tracked | **Fedora Rawhide** — "over 95% of packages from Rawhide", upstream sources where Rawhide lacks a needed version |
+| Release model | **Rolling.** Not a numbered release. There is no "Hummingbird 43". |
+| Kernel | **ARK** (Always Ready Kernel) from the CKI project, following mainline Linux |
+| Delivery | A **bootc / bootable OCI image**, x86_64 + aarch64; container, VM and bare metal |
+| Filesystem | Read-only root; writable state confined to `/var` and `/etc`; atomic updates with rollback |
+| Desktop | **None.** It ships no desktop environment, by design |
+| Audience | Developers and cloud-native workloads — explicitly *not* desktop end users |
+| Build | Konflux-based pipeline, isolated reproducible builds from pinned package lists, Syft + Grype scanning, per-package CVE tracking and lifecycle |
+
+Sources: [Red Hat press release](https://www.redhat.com/en/about/press-releases/red-hat-introduces-project-hummingbird-zero-cve-strategies),
+[Project Hummingbird docs](https://hummingbird-project.io/docs/using/overview/),
+[Help Net Security](https://www.helpnetsecurity.com/2026/05/13/fedora-hummingbird-linux/),
+[It's FOSS](https://itsfoss.com/news/fedora-hummingbird-images/).
+
+## Why the `.fc43` version strings mislead
+
+Packages in hummingbird's repos carry versions like `gtk4-4.22.1-2.fc43` and
+`NetworkManager-1.58.0-1.hum1`. The `.fc43` dist tag is **Rawhide's current
+numbering**, not evidence that this is the Fedora 43 stable release. Reading
+`.fc43` as "this is Fedora 43" is the single easiest mistake to make here, and
+it leads directly to expecting Fedora 43's package set to be present. It is not.
+
+## What this means for tunaOS
+
+tunaOS builds `hummingbird:{base,gnome,kde,niri,cosmic}` (see
+`.github/build-config.yml`). Everything except `base` asks a distribution that
+**deliberately ships no desktop environment** to host a full desktop, layered
+from tunaOS's own package snapshot.
+
+That is a legitimate thing to attempt — it is most of what tunaOS does for every
+variant — but it is a *port*, not a *rebuild*, and the difference matters:
+
+- There is no upstream desktop package set to fall back on. Anything the desktop
+  needs either exists in tunaOS's hummingbird snapshot or does not exist at all.
+- Upstream rolls. A snapshot taken once drifts away from the base image
+  continuously, and the failure mode is unresolvable dependencies rather than
+  missing packages (see below).
+- Hardening and minimalism are the *point*. A package being absent is often a
+  deliberate upstream choice, not an oversight to be reported as a bug.
+
+### Measured state of the snapshot (2026-08-25)
+
+Against the live index that `build_scripts/10-base-packages.sh` configures,
+`https://repo.tunaos.org/hummingbird/20251124-x86_64/` — **8,100 packages**, of
+which only 43 names match `gnome-*`:
+
+| package | served? |
+|---|---|
+| `gtk4`, `gdk-pixbuf2`, `mutter`, `gvfs` | yes |
+| `gnome-shell`, `gdm`, `nautilus` | **no** |
+| `harfbuzz`, `gnome-desktop3` | **no** |
+| `flatpak` | **no** |
+
+`gtk4` is present *and* requires `harfbuzz`, which is not. That is why dnf
+reports gtk4 and 17 other packages as having **broken dependencies** rather than
+being unavailable — and why `--skip-unavailable` silently drops them.
+
+The consequence, measured on `ghcr.io/tuna-os/hummingbird:gnome-testing` built
+2026-08-25: **410 packages, and no GNOME.** The only `gnome`-matching names in
+the image are `gnome-backgrounds`, `gnome-user-docs`,
+`desktop-backgrounds-gnome`, `f45-backgrounds-gnome` and `pinentry-gnome3` —
+wallpapers and documentation.
+
+The same absence blocks the ISO: `live-iso/common/src/customize-live.sh` needs
+`flatpak` to pre-install the installer, and hummingbird has no `flatpak`.
+
+## The rolling/pinned mismatch
+
+`build_scripts/10-base-packages.sh` pins:
+
+```
+baseurl=https://repo.tunaos.org/hummingbird/20251124-$basearch/
+```
+
+A datestamped, immutable snapshot — while `.github/build-config.yml` pins the
+upstream base image by digest from `quay.io/hummingbird-community/bootc-os`.
+
+**Two independently-pinned halves of a rolling distribution.** They were
+coherent when both were taken; they drift apart with every upstream roll, and
+the drift surfaces as dependency breakage inside the layered desktop rather than
+as anything that looks like a pin problem.
+
+`scripts/check-package-repo-pins.py` verifies that this URL *resolves*. For an
+immutable snapshot of a stable release that is the right check. For a rolling
+distribution it is the wrong property: the snapshot will keep answering 200
+long after it has stopped being a usable base to layer against.
+
+## Rules of thumb for future work here
+
+1. **Do not call it a Fedora rebuild.** It is a hardened rolling fork tracking
+   Rawhide with its own CVE lifecycle per package.
+2. **Do not infer the package set from Fedora.** Measure the actual index. The
+   repodata is public and small: fetch `repodata/repomd.xml`, then the
+   `primary.xml.gz` it names, and grep. That takes seconds and beats any
+   assumption.
+3. **A missing package may be intentional.** Before filing it as a packaging
+   bug, consider that minimalism is the product.
+4. **Desktop flavors are a port onto a desktop-less base.** Expect gaps; expect
+   them to be structural rather than accidental.
+5. **Both pins move.** Refreshing one without the other is how the halves drift.
+
+## Related
+
+- `build_scripts/10-base-packages.sh` — where the snapshot repo is configured
+- `scripts/check-package-repo-pins.py` — pin reachability *and* snapshot age
+- `build_scripts/checks/verify-desktop-experience.sh` — carries a blanket
+  hummingbird exemption; it reports a **waiver**, not a pass, when requirements
+  are unmet
+- tunaos-packages#401, #406, #412 — hummingbird desktop package builds not
+  completing; the reason the snapshot lacks a desktop set
