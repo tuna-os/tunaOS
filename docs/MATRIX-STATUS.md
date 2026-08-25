@@ -83,7 +83,7 @@ Scored against `.github/green-criteria.yml`: a cell is green only when every **b
 | **marlin** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **skipjack** | ❌ | ✅ | ❌ | ❌ | ✅ |
-| **yellowfin** | ✅ | ✅ | ⬜ | ❌ | ✅ |
+| **yellowfin** | ✅ | ✅ | ❌ | ❌ | ✅ |
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
 
@@ -182,7 +182,7 @@ Pulls the **published** image and runs the contract script against it directly (
 
 5 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
 
-Newest result 2026-08-23.
+Newest result 2026-08-24.
 
 ## Bootc Lifecycle
 
@@ -210,7 +210,7 @@ Newest result 2026-08-20.
 
 ## Installer smoke
 
-**32 of 36** non-NVIDIA ISO cells have *ever* been tested — 89% coverage. 0 of those pass.
+**32 of 36** non-NVIDIA ISO cells have *ever* been tested — 89% coverage. 1 of those pass.
 
 This is the only axis that checks a human could actually install. For 4 combinations, nobody has confirmed the installer appears on screen.
 
@@ -225,7 +225,7 @@ This is the only axis that checks a human could actually install. For 4 combinat
 | **hummingbird** | ❌ | ❌ | ❌ | ❌ | — |
 | **marlin** | ❌ | ⬜ | — | — | — |
 | **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **yellowfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **yellowfin** | ✅ | ❌ | ❌ | ❌ | ❌ |
 
 cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on hosted CI may be a harness limitation rather than a product failure. See *Known systemic gaps*.
 
@@ -241,10 +241,10 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-08-24 | [32691426582](https://github.com/tuna-os/tunaOS/actions/runs/32691426582) | 1 |
-| 2026-08-24 | [32681262659](https://github.com/tuna-os/tunaOS/actions/runs/32681262659) | 1 |
-| 2026-08-23 | [32628057824](https://github.com/tuna-os/tunaOS/actions/runs/32628057824) | 48 |
-| 2026-08-21 | [32472623013](https://github.com/tuna-os/tunaOS/actions/runs/32472623013) | 2 |
+| 2026-08-24 | [32747410944](https://github.com/tuna-os/tunaOS/actions/runs/32747410944) | 2 |
+| 2026-08-24 | [32718219267](https://github.com/tuna-os/tunaOS/actions/runs/32718219267) | 1 |
+| 2026-08-24 | [32707439589](https://github.com/tuna-os/tunaOS/actions/runs/32707439589) | 48 |
+| 2026-08-24 | [32700275124](https://github.com/tuna-os/tunaOS/actions/runs/32700275124) | 1 |
 | 2026-08-21 | [32465179023](https://github.com/tuna-os/tunaOS/actions/runs/32465179023) | 1 |
 | 2026-08-20 | [32335146969](https://github.com/tuna-os/tunaOS/actions/runs/32335146969) | 120 |
 | 2026-08-19 | [32238167029](https://github.com/tuna-os/tunaOS/actions/runs/32238167029) | 38 |
