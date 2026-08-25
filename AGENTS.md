@@ -34,6 +34,29 @@ Containerfiles:
 
 Build pipeline: [`docs/PIPELINE.md`](docs/PIPELINE.md)
 
+### Know your base before reasoning about its packages
+
+Variants do not all behave like the distro their version strings suggest.
+The one that has burned the most time:
+
+**hummingbird is NOT Fedora 43 and NOT EL10.** It is a rolling,
+security-hardened fork tracking **Fedora Rawhide** (Red Hat's Project
+Hummingbird, zero-CVE), on the ARK kernel, and it **ships no desktop
+environment by design**. Its `.fc43` dist tags are Rawhide's numbering, not
+evidence of Fedora 43 — a trap that has produced confidently wrong diagnoses
+more than once, including attributing its empty desktop to a package loss in a
+repository it does not even read.
+
+Read [`docs/HUMMINGBIRD.md`](docs/HUMMINGBIRD.md) before filing a packaging
+issue, blaming a build failure on a missing package, or assuming a Fedora
+package set is available. **Measure the index rather than inferring it** —
+repodata is public and small:
+
+```bash
+curl -s https://repo.tunaos.org/hummingbird/20251124-x86_64/repodata/repomd.xml
+# then fetch the primary.xml.gz it names and grep for <name>PKG</name>
+```
+
 ## Adding a Desktop
 
 Write `manifests/desktops/<name>.yaml`. No shell script needed. See existing manifests for the format.
