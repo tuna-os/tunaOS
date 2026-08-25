@@ -159,6 +159,62 @@ Not fixed here: correcting the label is a fleet-wide metadata change across
 thirteen variants with downstream consumers, which wants its own change and its
 own review rather than being folded into a hummingbird documentation pass.
 
+## What actually blocks a hummingbird ISO (measured 2026-08-25)
+
+The chain from "packages exist" to "a laptop runs Hummingbird GNOME" has six
+links. Five of them were opaque this morning; they are not any more, and the
+binding constraint is smaller and more specific than "the desktop is missing".
+
+| # | link | state |
+|---|---|---|
+| 1 | build the desktop packages | 673 in `build-order-hummingbird-desktops.yml`, **509 served, 164 left** — 131 through layer-07, 153 through layer-09 |
+| 2 | publish that wave to R2 | dispatch-only; the nightly builds and caches but **never publishes** (no `rclone`/`R2_` anywhere in `package-factory.yml`) |
+| 3 | image build installs them | fixed: the `IS_HUMMINGBIRD` branch of `10-base-packages.sh` never listed `flatpak` |
+| 4 | Gate: `bootc install to-disk` + boot | **proven fixed** — ext4 drop-in, installs in 1m54s and boots to `graphical.target` |
+| 5 | Promote publishes `hummingbird:gnome` | blocked only by the Gate's boot-verify, which needs a real desktop |
+| 6 | overlay → ISO → install | blocked by `flatpak`, see below |
+
+### `flatpak` is the single package gating the whole ISO axis
+
+Not `gnome-shell`. `flatpak` is **layer-07**, and it blocks three consecutive
+steps rather than one:
+
+* the **live-overlay** build — `customize-live.sh` pre-installs the installer
+  app and `exit 1`s if flatpak cannot be made present;
+* the **CI ISO build** — `build-iso-tacklebox.sh` passes that *same* script as
+  the recipe's `live_customize` step;
+* the **installer itself** — gnome has no TunaOS-branded frontend fork, so it
+  ships upstream `org.bootcinstaller.Installer`, which is a Flatpak.
+
+`ensure_flatpak()`'s `dnf install flatpak` fallback rescues guppy, grouper and
+bonito-rawhide, whose distributions package it and whose images merely omit it.
+It cannot rescue Hummingbird: flatpak is absent from **both** indexes —
+`public-hummingbird` (3509 binary names) and our rebuild snapshot (7986).
+
+### The precedent that says this is achievable
+
+`docs/MATRIX-STATUS.md` records **one** passing installer-smoke cell out of 36:
+`yellowfin gnome`. The same matrix records that cosmic, niri, xfwl4 and kde do
+not bring a session up on hosted CI, while gnome does. So gnome is the only
+desktop with a working end-to-end precedent, and hummingbird gnome runs the
+identical installer. Its gap to that precedent is links 1 and 6 above, not the
+machinery in between.
+
+Worth keeping honest: installer smoke runs in QEMU. It proves an ISO boots, the
+installer appears, and the walkthrough can drive it. **No variant has a proven
+install on physical hardware** — that step is manual and nothing in CI stands in
+for it.
+
+### Our own repo can shadow upstream's fixes
+
+The desktop manifests and the base stage both add our rebuild repo at
+`priority: 5`, and dnf priority is *absolute* rather than a tie-break. So for
+any package present in both indexes, ours installs even when upstream's is
+newer. Measured: 30 names overlap, **16 of them older on our side**, including
+`sudo` fifteen releases behind. The gap measurement drops adopted packages from
+the BUILD ORDER but nothing withdraws the already-published copy.
+`scripts/check-upstream-shadowing.py` in tunaos-packages now fails on this.
+
 ## Rules of thumb for future work here
 
 1. **Do not call it a Fedora rebuild.** It is a hardened rolling fork tracking
