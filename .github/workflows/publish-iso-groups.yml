@@ -251,22 +251,38 @@ jobs:
         with:
           cosign-release: v3.1.3
 
-      # BOUNDED, because this step has killed three consecutive runs and left
-      # no evidence behind. Jobs 97650065786, 97655764784 and 97661993804 all
-      # reached it; none completed it. The last ran 45 minutes and then the
-      # job "completed" with THIS step still in_progress and its logs 404 --
-      # the signature of a runner terminated out from under the job, which
-      # takes the log with it. So an unbounded call here does not fail, it
-      # vanishes.
+      # SIGN THE CHECKSUM, NOT THE ISO.
       #
-      # For scale: `sha256sum` over the same 5.7 GB ISO takes 38 seconds.
-      # cosign is handed that whole ISO twice (sign then verify). Whether it
-      # is slow, memory-bound, or wedged on an OIDC exchange is NOT
-      # established -- the readable run got as far as "Generating ephemeral
-      # keys..." and "Using payload from: ./albacore-10.2-x86_64.iso" and
-      # then produced nothing further. The timeouts and the before/after
-      # readings below exist to answer that on the next run instead of
-      # inviting a fourth guess.
+      # `cosign sign-blob` reads its payload into memory. This ISO is 8.0
+      # GiB and the runner has 16 GB with NO SWAP, so signing it directly
+      # OOM-kills the runner -- which Actions surfaces as "The runner has
+      # received a shutdown signal", not as a failure of this step. That is
+      # why four consecutive publish runs died here having already BUILT and
+      # BOOT-GATED the ISO successfully.
+      #
+      # Measured in job 97677987562, with the step instrumented:
+      #
+      #   -rw-r--r-- 1 root root 8586199040 albacore-10.2-x86_64.iso
+      #   Mem:  total 15989   available 14795      Swap: 0
+      #   sha256sum over the same file: real 0m18.083s
+      #   04:23:06.8  cosign sign-blob starts
+      #   04:23:07.5  "Using payload from: ./albacore-10.2-x86_64.iso"
+      #   04:23:40.0  runner shutdown          <- 32s in
+      #
+      # That rules out the alternatives it could have been: not throughput
+      # (18s to read all 8 GiB), not the 600s bound (died at 32s), not a
+      # wedged OIDC exchange (it printed "Generating ephemeral keys" and
+      # moved on to the payload). An 8 GiB read into 14.8 GiB of available
+      # RAM with no swap is what is left.
+      #
+      # The .sha256 is ~100 bytes and binds the ISO cryptographically, so
+      # signing it gives the same guarantee for a payload cosign can
+      # actually hold. This is what Fedora, Debian and Arch all do.
+      #
+      # VERIFICATION CHANGES SHAPE, deliberately: a consumer now verifies
+      # the sigstore bundle over the .sha256, then checks the ISO against
+      # that checksum -- two steps instead of one. Both files are published
+      # alongside the ISO.
       - name: Checksum, sign, and verify grouped ISO
         timeout-minutes: 30
         env:
@@ -276,6 +292,9 @@ jobs:
           ISO=$(find . -maxdepth 1 -name "${{ matrix.basename }}-*.iso" -print -quit)
           [[ -n "$ISO" ]] || { echo "::error::ISO not found"; exit 1; }
           CHECKSUM="${ISO}.sha256"
+          # Bundle keeps the ISO-derived name so every downstream key
+          # (R2 objects, artifact globs, the prune filter) is unchanged.
+          # It is the signature over $CHECKSUM, not over $ISO.
           BUNDLE="${ISO}.sigstore.json"
           identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/publish-iso-groups.yml@${GITHUB_REF}"
           issuer="https://token.actions.githubusercontent.com"
@@ -283,33 +302,21 @@ jobs:
           echo "=== before signing ==="
           ls -l "$ISO"
           free -m || true
-          df -h . | tail -1
 
           time sha256sum "$(basename "$ISO")" > "$CHECKSUM"
           sha256sum --check --strict "$CHECKSUM"
 
-          # `timeout` so a wedge is a named failure at a known elapsed time
-          # rather than a job that disappears. 600s is ~15x the sha256sum of
-          # the same bytes; if cosign needs more than that to hash them, that
-          # is the finding.
-          echo "=== cosign sign-blob (bounded 600s) ==="
-          if ! timeout 600 cosign sign-blob --bundle "$BUNDLE" "$ISO"; then
-            rc=$?
-            echo "=== after the failed sign ==="
-            free -m || true
-            if [[ $rc -eq 124 ]]; then
-              echo "::error::cosign sign-blob exceeded 600s on $(stat -c%s "$ISO") bytes. sha256sum over the same file took the time printed above. See #1893-adjacent publish failures: jobs 97650065786, 97655764784, 97661993804."
-            else
-              echo "::error::cosign sign-blob failed with exit $rc"
-            fi
-            exit 1
-          fi
-
-          echo "=== cosign verify-blob (bounded 600s) ==="
-          timeout 600 cosign verify-blob "$ISO" \
+          # The payload here is the checksum file, NOT $ISO. See the note
+          # above: passing the ISO OOM-kills the runner.
+          timeout 300 cosign sign-blob --bundle "$BUNDLE" "$CHECKSUM"
+          timeout 300 cosign verify-blob "$CHECKSUM" \
             --bundle "$BUNDLE" \
             --certificate-identity "$identity" \
             --certificate-oidc-issuer "$issuer"
+
+          echo "=== signed ==="
+          ls -l "$CHECKSUM" "$BUNDLE"
+          cat "$CHECKSUM"
 
       # Only reached if the boot gate passed.
       - name: Upload ISO to Cloudflare R2
