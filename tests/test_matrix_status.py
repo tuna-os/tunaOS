@@ -332,14 +332,22 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
             gms.VOLATILE_LINE,
         )
 
-    def test_the_real_build_config_declares_52_luks_cells(self):
+    def test_the_real_build_config_declares_53_luks_cells(self):
         """Ties the unit tests above to the actual denominator on disk.
 
         If this number moves, the LUKS total moves with it, and that should be
         a deliberate build-config edit rather than a surprise.
+
+        52 -> 53 on 2026-08-25: wahoo (Fedora ELN) declares one desktop
+        flavor, gnome, with build_image: true. luks-e2e.yml builds its matrix
+        from build_image with no experimental filter, so the cell is real and
+        counted rather than quietly excluded — it costs one boot in the
+        monthly sweep (`0 7 1 * *`), and nothing nightly, because the variant
+        is dispatch-only.
         """
         matrix = gms.luks_matrix()
-        self.assertEqual(sum(len(v) for v in matrix.values()), 52)
+        self.assertEqual(sum(len(v) for v in matrix.values()), 53)
+        self.assertEqual(matrix.get("wahoo"), {"gnome"})
         self.assertNotIn("cosmic", matrix.get("flounder", set()))
         self.assertNotIn("cosmic", matrix.get("flounder-sid", set()))
         # A control: the flavours flounder DOES declare are still there, so

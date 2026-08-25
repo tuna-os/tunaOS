@@ -123,6 +123,9 @@ declare -A FISH=(
 	# the branding contract the moment one ran. All four of its declared
 	# flavours are untested, which is the only reason it has not.
 	["hummingbird"]="Trochilidae"
+	# Wahoo (Fedora ELN): a mackerel, and the fastest bony fish in the
+	# Atlantic — the lane exists to run ahead of EL11.
+	["wahoo"]="Acanthocybium solandri"
 )
 
 echo "== identity =="
