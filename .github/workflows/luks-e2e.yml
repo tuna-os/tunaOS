@@ -419,7 +419,12 @@ jobs:
           TACKLEBOX_SHA: fd95174432b854a6135600b6c321b3ef01b4bc2d
         run: |
           export TACKLEBOX_FROM_SOURCE=1
-          just iso "${VARIANT}" "${FLAVOR}" ghcr "" 1
+          # Root, not bare — same reason as installer-screenshots.yml: on a
+          # GitHub-hosted runner the rootless commit exceeds tacklebox's
+          # hardcoded 600s bound, while the root path completes in ~133s.
+          # Identical arguments to installer-smoke.yml's invocation, which is
+          # the one measured green on this runner.
+          sudo -E env "PATH=$PATH" just iso "${VARIANT}" "${FLAVOR}" ghcr "" 1
           ISO=$(find .build -maxdepth 3 -name "*.iso" | head -1)
           [[ -n "$ISO" ]] || { echo "::error::dev ISO not produced"; exit 1; }
           echo "ISO_PATH=${ISO}" >> "$GITHUB_ENV"

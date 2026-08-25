@@ -154,7 +154,18 @@ jobs:
           GITHUB_REPOSITORY_OWNER: tuna-os
           TACKLEBOX_FROM_SOURCE: "1"
         run: |
-          just iso "${VARIANT}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
+          # Root, not bare. tacklebox's post-customize `podman commit` is
+          # bounded at a hardcoded 600s, and how long it takes is a product
+          # of the storage path and the disk. Measured on the same commit:
+          #
+          #   ubuntu-24.04  + rootless (fuse-overlayfs)   >600s, killed (x3)
+          #   ubuntu-24.04  + root     (native overlay)    133s
+          #   RunsOn        + rootless (fuse-overlayfs)    150s
+          #
+          # This job is on a GitHub-hosted runner, which is the slow disk, so
+          # it needs the fast storage path. `sudo -E env "PATH=$PATH"` is the
+          # form installer-smoke.yml uses and the one measured green there.
+          sudo -E env "PATH=$PATH" just iso "${VARIANT}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
 
       - name: Run installer walkthrough
         timeout-minutes: 30
