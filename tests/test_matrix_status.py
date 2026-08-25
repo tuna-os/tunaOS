@@ -332,7 +332,7 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
             gms.VOLATILE_LINE,
         )
 
-    def test_the_real_build_config_declares_53_luks_cells(self):
+    def test_the_real_build_config_declares_51_luks_cells(self):
         """Ties the unit tests above to the actual denominator on disk.
 
         If this number moves, the LUKS total moves with it, and that should be
@@ -344,9 +344,21 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         counted rather than quietly excluded — it costs one boot in the
         monthly sweep (`0 7 1 * *`), and nothing nightly, because the variant
         is dispatch-only.
+
+        53 -> 51 on 2026-08-25: hummingbird stopped declaring kde and niri.
+        Neither had a `packages.hummingbird` section in
+        manifests/desktops/*.yaml -- 0 packages against gnome's 52 -- so
+        neither could ever have installed a desktop, and both were failing
+        their image build. The denominator going DOWN by two is the point:
+        those two cells were counted as owed and could never be paid, and
+        while they failed beside gnome they also skipped gnome's ISO
+        (tuna-os/tunaOS#2059). Re-declaring either flavor puts its cell back.
         """
         matrix = gms.luks_matrix()
-        self.assertEqual(sum(len(v) for v in matrix.values()), 53)
+        self.assertEqual(sum(len(v) for v in matrix.values()), 51)
+        # The control that makes the drop specific rather than merely smaller:
+        # hummingbird keeps exactly the desktops it has package sets for.
+        self.assertEqual(matrix.get("hummingbird"), {"gnome", "cosmic"})
         self.assertEqual(matrix.get("wahoo"), {"gnome"})
         self.assertNotIn("cosmic", matrix.get("flounder", set()))
         self.assertNotIn("cosmic", matrix.get("flounder-sid", set()))
