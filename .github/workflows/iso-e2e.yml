@@ -80,6 +80,25 @@ permissions:
   # actions: read is needed when source=artifact to download the prior run's ISO.
   actions: read
 
+concurrency:
+  # A push to a PR supersedes the previous push's run: only the newest
+  # commit's verdict matters, and this job is a full ISO build. Without this,
+  # every push to a long-lived PR started another one and let the old one run
+  # to completion.
+  #
+  # The PR trigger fires on a paths filter, and GitHub evaluates that against
+  # the PR's WHOLE diff rather than the pushed commit. A branch that once
+  # touched one of those paths therefore pays for a rebuild on every
+  # subsequent push, however unrelated the change. This branch touches
+  # live-iso/** and this workflow file, so all eight of tonight's pushes
+  # started one.
+  #
+  # workflow_dispatch gets a per-run group so a deliberate multi-cell sweep
+  # never cancels its own siblings — the repo's plain `<name>-${{ github.ref }}`
+  # form would, since every cell of a sweep shares one branch.
+  group: iso-e2e-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}
+  cancel-in-progress: true
+
 jobs:
   generate-matrix:
     name: Generate ISO E2E matrix
