@@ -165,35 +165,61 @@ def test_the_live_iso_build_can_opt_in_to_a_github_runner():
     assert set(spec["options"]) == {"runs-on", "github"}, spec
 
 
-def test_the_live_iso_build_still_defaults_to_runs_on():
-    """Unmeasured, so unchanged.
+def test_the_live_iso_build_defaults_to_github_hosted():
+    """GitHub-hosted is the default; RunsOn is the opt-out.
 
-    installer-smoke was flipped on numbers from its own build. This job
-    builds a full OS image plus a live ISO -- different work, never timed on
-    ubuntu-latest -- and #1823's rpmdb claim is about storage rather than
-    podman, so the installer-smoke measurement does not carry over to it.
+    This asserted the opposite until 2026-08-25, on the grounds that the
+    installer-smoke measurement was about a different shape of work and
+    this job had never been timed on ubuntu-latest. Two things changed.
+
+    The measurement arrived from iso-e2e.yml: the same tacklebox
+    customize-and-commit completes in 133s on ubuntu-latest and the cell
+    boots (skipjack:kde, job 97648442043) once the build runs in one root
+    context instead of being handed through rootless storage. This job now
+    does exactly that.
+
+    And the cost of the old default became visible: RunsOn is billed EC2,
+    the PR trigger fires on the PR's whole diff rather than the pushed
+    commit, and a day of pushes to one branch put spend at $9.87 against a
+    $5.00 budget. GitHub-hosted runners are included, with 60 concurrent
+    jobs.
     """
     wf = yaml.safe_load(LIVE_ISO.read_text(encoding="utf-8"))
     spec = wf[True]["workflow_dispatch"]["inputs"]["build_runner"]
-    assert spec["default"] == "runs-on", spec
-    expr = str(live_iso_build_job()["runs-on"])
-    assert "inputs.build_runner == 'github'" in expr, expr
+    assert spec["default"] == "github", spec
+    assert set(spec["options"]) == {"github", "runs-on"}, spec
 
 
-def test_the_pull_request_trigger_still_builds_on_runs_on():
-    """The reason for the opposite comparison, asserted rather than trusted.
+def test_an_input_less_trigger_gets_the_github_default():
+    """The comparison has to be `!= 'runs-on'`, and this pins WHY.
 
-    This workflow runs on `pull_request`, which passes no inputs. Under
-    installer-smoke's `!= 'runs-on'` form that empty value would evaluate
-    true and move every PR build to ubuntu-latest without anyone choosing
-    it. Here the opt-in must stay explicit.
+    `pull_request` and `schedule` pass no inputs, so the expression sees an
+    empty string. Under `== 'github'` that is false and every input-less
+    run lands on RunsOn — which is precisely how the PR trigger came to
+    bill an EC2 ISO build on every push. Under `!= 'runs-on'` it is true
+    and they get the default.
+
+    Resolved rather than string-matched: an expression can read correctly
+    and evaluate the wrong way.
     """
     wf = yaml.safe_load(LIVE_ISO.read_text(encoding="utf-8"))
     assert "pull_request" in wf[True], sorted(wf[True])
-    expr = str(live_iso_build_job()["runs-on"])
-    assert "!= 'runs-on'" not in expr, (
-        "the != form sends PR builds to ubuntu-latest, which nothing has "
-        "measured for this job; keep the opt-in explicit"
+    expr = " ".join(str(live_iso_build_job()["runs-on"]).split())
+
+    def resolve(build_runner):
+        m = re.search(
+            r"\$\{\{ inputs\.build_runner (!=|==) '([\w-]+)' "
+            r"&& '([^']+)' \|\| (.+?) \}\}$",
+            expr,
+        )
+        assert m, f"unrecognised runs-on expression: {expr!r}"
+        op, operand, true_arm, false_arm = m.groups()
+        hit = (build_runner != operand) if op == "!=" else (build_runner == operand)
+        return true_arm if hit else false_arm.strip()
+
+    assert resolve("") == "ubuntu-latest", (
+        "an input-less trigger (pull_request, schedule) does not get the "
+        "GitHub-hosted default — this is the case that was billing EC2"
     )
-    false_arm = expr.index("||")
-    assert "runs-on={0}/runner=build-amd64" in expr[false_arm:], expr
+    assert resolve("github") == "ubuntu-latest", "explicit github must be GitHub-hosted"
+    assert "runner=build-amd64" in resolve("runs-on"), "the opt-out must still reach RunsOn"

@@ -45,6 +45,7 @@ the odd one out went unnoticed. This file holds all three to one rule.
 """
 from __future__ import annotations
 
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -183,8 +184,6 @@ SCREENS = ROOT / "tests" / "installer-screens.yaml"
 
 
 def _screen(sid):
-    import yaml
-
     doc = yaml.safe_load(SCREENS.read_text())
     return next(s for s in doc["screens"] if s["id"] == sid)
 
@@ -310,12 +309,57 @@ def _rootless_setup_step():
     raise AssertionError("no rootless-podman setup step found")
 
 
-def test_the_setup_step_runs_before_the_first_rootless_command():
-    """Configuring userns after the thing that needs it would prove nothing."""
-    names = [s.get("name", "") for s in _live_iso_steps()]
+def test_the_setup_step_runs_before_any_rootless_command():
+    """Configuring userns after the thing that needs it would prove nothing.
+
+    This used to key off a `Sync image into rootless storage` step by name.
+    That step is gone: the build now runs image and ISO in one ROOT context,
+    because the rootless commit ran past tacklebox's hardcoded 600s bound on
+    a GitHub-hosted runner while the root one takes 133s (#1893). Keying on
+    a step name meant the test broke the moment the step was removed rather
+    than the moment the PROPERTY was violated, so it keys on the property
+    now: whatever rootless commands exist, the setup precedes all of them.
+
+    A rootless command here is a `podman` invocation NOT under sudo. The
+    setup step is exempt — proving rootless podman works is what it is for.
+    """
+    steps = _live_iso_steps()
+    names = [s.get("name", "") for s in steps]
     setup = next(i for i, n in enumerate(names) if "Setup rootless podman" in n)
-    sync = next(i for i, n in enumerate(names) if "Sync image into rootless storage" in n)
-    assert setup < sync, names
+
+    rootless = []
+    for i, step in enumerate(steps):
+        if i == setup:
+            continue
+        for line in str(step.get("run", "")).splitlines():
+            code = line.split("#", 1)[0].strip()
+            if not code:
+                continue
+            # `sudo podman ...` and `sudo -E env ... podman` are root; a bare
+            # `podman` or one on the right of a pipe is not.
+            for fragment in code.split("|"):
+                fragment = fragment.strip()
+                if re.match(r"^podman\b", fragment):
+                    rootless.append((i, names[i], fragment[:60]))
+
+    for i, name, fragment in rootless:
+        assert setup < i, (
+            f"step {i} ({name!r}) runs rootless podman ({fragment!r}) before "
+            f"the setup step at index {setup}; configuring userns afterwards "
+            f"proves nothing"
+        )
+
+
+def test_the_rootless_setup_step_is_still_present_as_a_guard():
+    """It is kept deliberately even though nothing rootless remains.
+
+    Nothing in this workflow needs rootless podman any more. The step costs
+    a fraction of a second and its `podman unshare true` probe fails loudly,
+    so if anyone restores a bare `just iso` it fails HERE naming the cause
+    instead of twelve minutes into a build. Removing it would make that
+    regression silent, so its presence is asserted rather than assumed.
+    """
+    assert _rootless_setup_step()["run"], "the rootless setup step has no body"
 
 
 def test_the_setup_step_proves_rootless_podman_works(tmp_path):

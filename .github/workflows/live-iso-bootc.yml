@@ -23,18 +23,27 @@ on:
         default: false
         type: boolean
       build_runner:
-        # Deliberately NOT defaulted to github, unlike installer-smoke.yml.
-        # That workflow was flipped on measurements of ITS build; this job
-        # builds a full OS image and a live ISO, a different shape of work,
-        # and nobody has timed it on ubuntu-latest. Opt in, measure, then
-        # decide.
+        # Defaults to github. GitHub-hosted runners are included in the plan
+        # with 60 concurrent jobs, so anything that CAN run there should;
+        # RunsOn is billed EC2 and yesterday's spend was $9.87 against a
+        # $5.00 daily budget.
+        #
+        # This was previously opt-in pending a measurement of THIS build on
+        # ubuntu-latest. The measurement that matters arrived from
+        # iso-e2e.yml instead: the same tacklebox customize-and-commit runs
+        # there in 133s and boots (skipjack:kde, job 97648442043), once the
+        # build is done in one ROOT context rather than handed through
+        # rootless storage. That is the change made below, so the reason to
+        # stay on RunsOn no longer holds.
+        #
+        # `runs-on` remains selectable for a side-by-side comparison.
         description: 'Runner for the build'
         required: false
-        default: 'runs-on'
+        default: 'github'
         type: choice
         options:
-          - runs-on
           - github
+          - runs-on
   pull_request:
     branches: [main]
     paths:
@@ -81,13 +90,19 @@ jobs:
     # worth re-testing.
     #
     # `== 'github'` here, NOT the `!= 'runs-on'` installer-smoke uses. This
-    # workflow also runs on `pull_request`, which passes no inputs; the !=
-    # form would silently move every PR build to ubuntu-latest, and this one
-    # is opt-in until measured. Dispatch with build_runner=github to measure
-    # it.
-    runs-on: ${{ inputs.build_runner == 'github'
+    # `!= 'runs-on'`, not `== 'github'`. This workflow also runs on
+    # `pull_request`, which passes no inputs, so the expression must
+    # evaluate empty-string to the DEFAULT — and the default is now
+    # GitHub-hosted. The `== 'github'` form sent every input-less trigger to
+    # RunsOn, which is how the PR trigger came to bill an EC2 ISO build on
+    # every push.
+    runs-on: ${{ inputs.build_runner != 'runs-on'
       && 'ubuntu-latest'
       || format('runs-on={0}/runner=build-amd64', github.run_id) }}
+    # A GitHub-hosted runner is slower per-core than the c6a this used to
+    # take, and there is no job timeout here to inherit -- the Actions
+    # default is 360 minutes, well clear of a ~40-minute build.
+
     permissions:
       contents: read
       packages: read
@@ -156,9 +171,13 @@ jobs:
           #   Error: cannot re-exec process
           #   ##[error]Process completed with exit code 125
           #
-          # (run 32688258870, `Sync image into rootless storage`). Nothing in
-          # that message mentions namespaces, AppArmor or the sysctl, and it
-          # arrives AFTER a ~12 minute image build, because the first rootless
+          # (run 32688258870, in a `Sync image into rootless storage` step
+          # that no longer exists -- the build is one root context now). This
+          # step is KEPT as a guard: it costs a fraction of a second, and if
+          # anyone restores a rootless invocation it fails here, naming the
+          # cause, instead of twelve minutes later. Nothing in the podman
+          # message mentions namespaces, AppArmor or the sysctl, and it
+          # arrived AFTER a ~12 minute image build, because the first rootless
           # command in the job is the one right after `Build OS image`.
           echo "==> unprivileged userns gates, as found:"
           declare -A _gate_found=()
@@ -225,13 +244,6 @@ jobs:
         run: |
           sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
 
-      - name: Sync image into rootless storage
-        run: |
-          # sudo just build lands the image in root podman storage, but
-          # tacklebox's squashfs step reads it via rootless `podman unshare`
-          # as the runner user ("image not known" otherwise).
-          sudo podman save "localhost/${VARIANT}:${FLAVOR}" | podman load
-
       - name: Build Live ISO
         env:
           TACKLEBOX_FROM_SOURCE: "1"
@@ -244,10 +256,21 @@ jobs:
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
-          # No outer sudo: the `iso` recipe sudos internally. Nesting sudo
-          # makes SUDO_USER=root inside build-iso-tacklebox.sh, so tacklebox
-          # "drops" to root for `podman unshare` and dies (rootless-only).
-          just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
+          # Root, and no rootless hop before it.
+          #
+          # This used to run bare so tacklebox would drop to the runner user
+          # for `podman unshare`, with the image copied into rootless storage
+          # first. On the c6a that cost 150s at the customize commit and was
+          # fine. On a GitHub-hosted runner the same rootless commit ran past
+          # tacklebox's hardcoded 600s bound and was killed -- three times,
+          # always at exactly 600.0s (#1893). Building image and ISO in one
+          # root context brought the same commit to 133s and the cell booted
+          # (skipjack:kde, job 97648442043).
+          #
+          # `sudo just build` already puts the image in ROOT storage, so with
+          # the ISO built as root too the save|load hop is not just
+          # unnecessary, it was the thing that forced the slow path.
+          sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
 
       # RETENTION IS NOT OPTIONAL ON A MULTI-GIGABYTE ARTIFACT.
       #
