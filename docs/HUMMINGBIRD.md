@@ -167,7 +167,7 @@ binding constraint is smaller and more specific than "the desktop is missing".
 
 | # | link | state |
 |---|---|---|
-| 1 | build the desktop packages | 673 in `build-order-hummingbird-desktops.yml`, **509 served, 164 left** — 131 through layer-07, 153 through layer-09 |
+| 1 | build the desktop packages | 673 in `build-order-hummingbird-desktops.yml`, **570 served, 103 left** — 53 before layer-07, 19 more in layer-07 itself (measured 2026-08-25 15:30) |
 | 2 | publish that wave to R2 | dispatch-only; the nightly builds and caches but **never publishes** (no `rclone`/`R2_` anywhere in `package-factory.yml`) |
 | 3 | image build installs them | fixed: the `IS_HUMMINGBIRD` branch of `10-base-packages.sh` never listed `flatpak` |
 | 4 | Gate: `bootc install to-disk` + boot | **proven fixed** — ext4 drop-in, installs in 1m54s and boots to `graphical.target` |
@@ -189,7 +189,23 @@ steps rather than one:
 `ensure_flatpak()`'s `dnf install flatpak` fallback rescues guppy, grouper and
 bonito-rawhide, whose distributions package it and whose images merely omit it.
 It cannot rescue Hummingbird: flatpak is absent from **both** indexes —
-`public-hummingbird` (3509 binary names) and our rebuild snapshot (7986).
+`public-hummingbird` (3510 binary names, revision 1787670929) and our rebuild
+snapshot (7986, revision 1786989380), re-measured live on 2026-08-25 at 15:30.
+Upstream has not adopted it, so waiting for upstream is not a strategy; it has
+to be built.
+
+#### How to re-measure this, and one trap in doing so
+
+Read both indexes and compare BUILD-ORDER SOURCE NAMES against the source of
+each binary we serve (`srpm_name(pkg["srpm"])`), not against served binary
+names — most of the chain's sources ship under different binary names, and
+matching on binary names undercounts what is built.
+
+The trap is the tier INDEX. `flatpak` sits in `layer-07`, which is **tier
+index 11**, because the list opens with four bootstrap tiers before `layer-00`.
+Filtering on `index <= 7` silently answers a different question and reports far
+too little work remaining — measured 15 instead of 53 when this was last
+computed. Match on the tier `name`, or find flatpak's index first.
 
 ### The precedent that says this is achievable
 
