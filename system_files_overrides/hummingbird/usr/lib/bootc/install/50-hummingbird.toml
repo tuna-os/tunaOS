@@ -13,14 +13,24 @@
 #   error: Installing to disk: Installing bootloader: Failed to run
 #     command: bootupctl backend install
 #
-# BIOS grub2-install cannot read the xfs this base's mkfs.xfs writes. That
-# is NOT a legacy-boot-only problem: bootupctl installs the BIOS component
-# unconditionally on the hybrid layout, and its failure aborts the entire
-# `bootc install to-disk`, so UEFI laptops fail identically.
+# BIOS grub2-install cannot read the xfs this base's mkfs.xfs writes, and
+# bootupctl installs the BIOS component unconditionally, so the failure
+# aborts the entire `bootc install to-disk` rather than just its legacy
+# half.
 #
-# This file is what makes a real install work. The TUNAOS_QCOW2_FILESYSTEM
-# knob in just/qcow2-build.just only fixes the CI gate's own qcow2; an ISO
-# install reads this config from inside the image, so without this drop-in a
-# green gate would still hand users an installer that cannot finish.
+# SCOPE, corrected after checking the installer instead of assuming it:
+# this file fixes `bootc install to-disk`, which is the path the Gate's
+# qcow2 takes. It is NOT what makes an ISO install to a laptop work. An
+# ISO install runs fisherman, which always lays down a 3-partition GPT
+# with a SEPARATE ext4 /boot precisely because GRUB cannot read modern XFS
+# (bootc-installer CLAUDE.md: "the separate ext4 /boot is
+# non-negotiable"). GRUB there reads its files from ext4 /boot, never from
+# the xfs root, so that path does not hit this failure at all.
+#
+# It still matters for the goal, just one step removed: Promote is gated
+# on the Gate, the Gate runs `bootc install to-disk`, and until it passes
+# hummingbird:gnome is never published — so no ISO can be built from it.
+# This unblocks publishing. Whether a hummingbird ISO then installs
+# cleanly is a separate question that nothing has measured yet.
 [install.filesystem.root]
 type = "ext4"

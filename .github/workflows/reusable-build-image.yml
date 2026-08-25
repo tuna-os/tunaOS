@@ -1320,7 +1320,10 @@ jobs:
           # default and `bootc install to-disk` ABORTS installing the
           # bootloader: BIOS grub2-install cannot read the xfs this base's
           # mkfs.xfs produces, and bootupctl installs the BIOS component
-          # unconditionally, so UEFI hardware does not escape it either. Six
+          # unconditionally, so the whole to-disk install fails. (An ISO
+          # install is a different path -- fisherman gives it a separate
+          # ext4 /boot -- so this is about the Gate, and about Promote
+          # being gated on the Gate.) Six
           # consecutive nightlies died here (run 32786338463, gnome Gate job
           # 97638679623), which is why hummingbird:gnome has never been
           # promoted and is 404 on GHCR.
