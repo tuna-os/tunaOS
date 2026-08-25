@@ -217,7 +217,10 @@ jobs:
             *.iso.sha256
             *.iso.sigstore.json
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
+          # An ISO is already compressed: the default level 6 spends runner
+          # minutes to save roughly nothing on it.
+          compression-level: 0
 
       # Installer-flow captures join the boot evidence so every visual the
       # pipeline can produce lands in ONE artifact (and, via the weekly

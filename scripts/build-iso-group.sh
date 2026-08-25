@@ -206,9 +206,21 @@ chown_back "$ISO_OUT"
 # ── Copy to project root with version/arch in the name ──────────────────────
 # Use the first (default) environment's image to read VERSION_ID + arch — all
 # environments share the same EL base, so any of them gives the same answer.
-VERSION_ID=$(podman run --rm --security-opt label=disable "$FIRST_REF" \
+# --log-driver=k8s-file: the same conmon-without-journald gap
+# build-iso-tacklebox.sh documents at its identical pair of calls
+# (tacklebox#235). The Kubic conmon these jobs install cannot log to the
+# journal, so any container started on the default driver dies with
+# "conmon failed: exit status 1" and exit 126.
+#
+# These two lines run AFTER the ISO is finished, purely to read VERSION_ID
+# and arch for the filename — so without the flag the whole pipeline builds
+# a correct ISO and then throws it away on a metadata lookup. That is
+# exactly what happened to the first grouped ISO ever built successfully:
+# job 97650065786 logged ">>> Tacklebox ISO complete" and TOTAL 13m39.511s,
+# then failed here.
+VERSION_ID=$(podman run --rm --log-driver=k8s-file --security-opt label=disable "$FIRST_REF" \
 	sh -c '. /usr/lib/os-release && echo "${VERSION_ID}"')
-ARCH=$(podman run --rm --security-opt label=disable "$FIRST_REF" uname -m)
+ARCH=$(podman run --rm --log-driver=k8s-file --security-opt label=disable "$FIRST_REF" uname -m)
 
 FINAL_ISO="${REPO_ROOT}/${ISO_BASENAME}-${VERSION_ID}-${ARCH}.iso"
 mv "$ISO_OUT" "$FINAL_ISO"

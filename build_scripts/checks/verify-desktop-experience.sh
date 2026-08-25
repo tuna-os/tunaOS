@@ -27,19 +27,40 @@ trap emit_fail_on_early_exit EXIT
 source /run/context/build_scripts/lib.sh 2>/dev/null || true
 detected_os 2>/dev/null || true
 
+# How many requirements the hummingbird exemption let through.
+#
+# Every require_* below returns 0 instead of exiting when IS_HUMMINGBIRD is
+# set, so hummingbird can bootstrap against incomplete repos. That is a
+# deliberate policy and this change does not alter it. What it alters is the
+# REPORT: the script used to print "desktop experience contract passed" after
+# listing ten unmet requirements, which is how hummingbird:gnome shipped with
+# no GNOME in it for weeks and no one noticed.
+#
+# Measured on tunaOS run 32813037866 (2026-08-25): the image carried 410
+# packages -- gnome-backgrounds and gnome-user-docs, no gnome-shell, no gdm,
+# no mutter, no gtk4 -- and this check called it passed. The boot gate then
+# failed 15 minutes later on a marker that could never be emitted, because
+# the packages were dropped upstream (tunaos-packages#519).
+#
+# Exit status is deliberately unchanged: turning the waiver into a hard
+# failure would red-line every hummingbird build, which is a policy call for
+# a human, not a side effect of a logging fix.
+TUNAOS_CONTRACT_WAIVED=0
+waive() { TUNAOS_CONTRACT_WAIVED=$((TUNAOS_CONTRACT_WAIVED + 1)); }
+
 require_command() { command -v "$1" >/dev/null || {
 	echo "missing required command: $1" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then waive; return 0; fi
 	exit 1
 }; }
 require_glob() { compgen -G "$1" >/dev/null || {
 	echo "missing required path: $1" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then waive; return 0; fi
 	exit 1
 }; }
 require_unit() { systemctl list-unit-files "$1.service" --no-legend 2>/dev/null | grep -q "^$1.service" || {
 	echo "missing unit: $1.service" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then waive; return 0; fi
 	exit 1
 }; }
 # Distro drift: the same DE ships different DM units per variant (gdm vs
@@ -53,7 +74,7 @@ require_any_unit() {
 		fi
 	done
 	echo "missing unit: none of [$*] exist" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then waive; return 0; fi
 	exit 1
 }
 # Session availability may be wayland or x11 depending on DE/distro.
@@ -63,7 +84,7 @@ require_any_glob() {
 		compgen -G "$g" >/dev/null && return 0
 	done
 	echo "missing required path: none of [$*] exist" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then waive; return 0; fi
 	exit 1
 }
 
@@ -78,7 +99,7 @@ require_user_unit() {
 		return 0
 	fi
 	echo "missing user unit: ${u}.service" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then waive; return 0; fi
 	exit 1
 }
 
@@ -93,7 +114,7 @@ require_any_user_unit() {
 		fi
 	done
 	echo "missing user unit: none of [$*] exist" >&2
-	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then waive; return 0; fi
 	exit 1
 }
 
@@ -115,7 +136,7 @@ xfce_greetd_greeter_contract() {
 	local greetd_conf="${TUNAOS_VERIFY_ROOT:-}/etc/greetd/config.toml"
 	if ! grep -qs 'gtkgreet' "$greetd_conf"; then
 		echo "greetd is the display manager but ${greetd_conf} does not launch gtkgreet — stock agreety boots users to a text prompt, not a login screen" >&2
-		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then return 0; fi
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then waive; return 0; fi
 		exit 1
 	fi
 }
@@ -557,6 +578,7 @@ else
 			if [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
 				exit 1
 			fi
+			waive
 		elif ! grep -q ' h264 ' <<<"$_ffmpeg_decoders"; then
 			echo "ffmpeg cannot decode h264 — a free/crippled libavcodec is installed" >&2
 			_ffmpeg_diag
@@ -589,6 +611,7 @@ else
 			elif [[ "${IS_HUMMINGBIRD:-false}" != "true" ]]; then
 				exit 1
 			fi
+			waive
 		fi
 	fi
 
@@ -685,7 +708,30 @@ else
 	done
 
 	install -d /usr/share/tunaos/experience-contracts
-	printf 'desktop=%s\nexperience=%s\nvalidated_at_build=true\n' "$desktop" "$experience" \
-		>"/usr/share/tunaos/experience-contracts/${desktop}"
-	echo "desktop experience contract passed: $desktop ($experience)"
+	if ((TUNAOS_CONTRACT_WAIVED > 0)); then
+		# NOT "passed". The requirements above were unmet and only the
+		# hummingbird exemption let the build continue.
+		#
+		# The CONSUMED signal is the ::warning:: and the marker line below:
+		# the warning surfaces as a CI annotation, and TUNAOS_DESKTOP_CONTRACT_*
+		# markers are what scripts/iso-e2e.sh greps for.
+		#
+		# The contract FILE is written for correctness, not because something
+		# reads it yet -- today only install-remora.sh writes a sibling and
+		# nothing but tests reads either. gen-matrix-status.py takes its
+		# per-cell verdicts from a sweep's all.json, not from files inside the
+		# image, so wiring this into matrix scoring means teaching that sweep
+		# about it. Worth doing; not done here. Claiming otherwise would be
+		# the same shape of error as the "contract passed" line this block
+		# replaces.
+		printf 'desktop=%s\nexperience=%s\nvalidated_at_build=false\nwaived_requirements=%s\n' \
+			"$desktop" "$experience" "$TUNAOS_CONTRACT_WAIVED" \
+			>"/usr/share/tunaos/experience-contracts/${desktop}"
+		echo "::warning::desktop experience contract WAIVED: ${desktop} (${experience}) — ${TUNAOS_CONTRACT_WAIVED} requirement(s) unmet; this image is NOT a verified ${desktop} desktop"
+		echo "TUNAOS_DESKTOP_CONTRACT_WAIVED desktop=${desktop} missing=${TUNAOS_CONTRACT_WAIVED}"
+	else
+		printf 'desktop=%s\nexperience=%s\nvalidated_at_build=true\n' "$desktop" "$experience" \
+			>"/usr/share/tunaos/experience-contracts/${desktop}"
+		echo "desktop experience contract passed: $desktop ($experience)"
+	fi
 fi

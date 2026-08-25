@@ -22,12 +22,53 @@ on:
         required: false
         default: false
         type: boolean
+      build_runner:
+        # Defaults to github. GitHub-hosted runners are included in the plan
+        # with 60 concurrent jobs, so anything that CAN run there should;
+        # RunsOn is billed EC2 and yesterday's spend was $9.87 against a
+        # $5.00 daily budget.
+        #
+        # This was previously opt-in pending a measurement of THIS build on
+        # ubuntu-latest. The measurement that matters arrived from
+        # iso-e2e.yml instead: the same tacklebox customize-and-commit runs
+        # there in 133s and boots (skipjack:kde, job 97648442043), once the
+        # build is done in one ROOT context rather than handed through
+        # rootless storage. That is the change made below, so the reason to
+        # stay on RunsOn no longer holds.
+        #
+        # `runs-on` remains selectable for a side-by-side comparison.
+        description: 'Runner for the build'
+        required: false
+        default: 'github'
+        type: choice
+        options:
+          - github
+          - runs-on
   pull_request:
     branches: [main]
     paths:
       - 'live-iso/**'
       - 'scripts/build-iso-tacklebox.sh'
       - '.github/workflows/live-iso-bootc.yml'
+
+concurrency:
+  # A push to a PR supersedes the previous push's run: only the newest
+  # commit's verdict matters, and this job is a full ISO build. Without this,
+  # every push to a long-lived PR started another one and let the old one run
+  # to completion.
+  #
+  # The PR trigger fires on a paths filter, and GitHub evaluates that against
+  # the PR's WHOLE diff rather than the pushed commit. A branch that once
+  # touched one of those paths therefore pays for a rebuild on every
+  # subsequent push, however unrelated the change. This branch touches
+  # live-iso/** and this workflow file, so all eight of tonight's pushes
+  # started one.
+  #
+  # workflow_dispatch gets a per-run group so a deliberate multi-cell sweep
+  # never cancels its own siblings — the repo's plain `<name>-${{ github.ref }}`
+  # form would, since every cell of a sweep shares one branch.
+  group: live-iso-bootc-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -38,7 +79,30 @@ jobs:
     # 32394645068, deterministic). installer-smoke escaped the same class of
     # runner breakage by moving to RunsOn with the Kubic podman (#1919-#1923);
     # build here the same way.
-    runs-on: runs-on=${{ github.run_id }}/runner=build-amd64
+    #
+    # That reasoning is now partly in doubt. installer-smoke's stated blocker
+    # ("the GitHub runner's podman 5.8.4") was refuted by its own `setup
+    # working podman` step, which this workflow carries a byte-identical copy
+    # of, and its build turned out FASTER on ubuntu-latest (38m46s vs 48m18s
+    # for gnome, run 32747410944). #1823 is a different claim -- rpmdb sqlite
+    # over overlayfs, and the issue itself diagnoses it on both arches rather
+    # than as a runner property -- so it is not refuted by that, only made
+    # worth re-testing.
+    #
+    # `== 'github'` here, NOT the `!= 'runs-on'` installer-smoke uses. This
+    # `!= 'runs-on'`, not `== 'github'`. This workflow also runs on
+    # `pull_request`, which passes no inputs, so the expression must
+    # evaluate empty-string to the DEFAULT — and the default is now
+    # GitHub-hosted. The `== 'github'` form sent every input-less trigger to
+    # RunsOn, which is how the PR trigger came to bill an EC2 ISO build on
+    # every push.
+    runs-on: ${{ inputs.build_runner != 'runs-on'
+      && 'ubuntu-latest'
+      || format('runs-on={0}/runner=build-amd64', github.run_id) }}
+    # A GitHub-hosted runner is slower per-core than the c6a this used to
+    # take, and there is no job timeout here to inherit -- the Actions
+    # default is 360 minutes, well clear of a ~40-minute build.
+
     permissions:
       contents: read
       packages: read
@@ -79,8 +143,9 @@ jobs:
           done
           hash -r
 
-      - name: Setup rootless podman (subuid/subgid for runner)
+      - name: Setup rootless podman (subuid/subgid + userns for runner)
         run: |
+          set -euo pipefail
           # tacklebox runs 'sudo -u runner podman unshare' for the squashfs;
           # 'podman unshare' only works rootless and needs subuid/subgid
           # entries for the unprivileged user ("please use unshare with
@@ -92,16 +157,92 @@ jobs:
             echo "${USER}:100000:65536" | sudo tee -a /etc/subgid
           fi
 
+          # subuid/subgid are necessary and NOT sufficient. Rootless podman
+          # also has to be allowed to create a user namespace at all, and on
+          # Ubuntu 24.04 -- which is what the kubic repo above pins podman
+          # against -- it is not by default:
+          #
+          #   kernel.apparmor_restrict_unprivileged_userns = 1
+          #
+          # When that is set, an unprivileged clone(CLONE_NEWUSER) is refused
+          # and podman reports it without naming the cause:
+          #
+          #   cannot clone: Permission denied
+          #   Error: cannot re-exec process
+          #   ##[error]Process completed with exit code 125
+          #
+          # (run 32688258870, in a `Sync image into rootless storage` step
+          # that no longer exists -- the build is one root context now). This
+          # step is KEPT as a guard: it costs a fraction of a second, and if
+          # anyone restores a rootless invocation it fails here, naming the
+          # cause, instead of twelve minutes later. Nothing in the podman
+          # message mentions namespaces, AppArmor or the sysctl, and it
+          # arrived AFTER a ~12 minute image build, because the first rootless
+          # command in the job is the one right after `Build OS image`.
+          echo "==> unprivileged userns gates, as found:"
+          declare -A _gate_found=()
+          for k in kernel.apparmor_restrict_unprivileged_userns \
+                   kernel.unprivileged_userns_clone \
+                   user.max_user_namespaces; do
+            _gate_found[$k]="$(sysctl -n "$k" 2>/dev/null || echo '(absent)')"
+            printf '    %s = %s\n' "$k" "${_gate_found[$k]}"
+          done
+          if [ -e /proc/sys/kernel/apparmor_restrict_unprivileged_userns ]; then
+            sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          fi
+
+          # PROVE it rather than assume it. This is the same operation
+          # tacklebox and the sync step below both need, it costs a fraction
+          # of a second, and failing HERE names the cause while failing twelve
+          # minutes later does not. A setup step that configures something and
+          # never checks it is the shape this repository has been bitten by
+          # repeatedly.
+          if ! podman unshare true; then
+            echo "::error::rootless podman still cannot create a user namespace."
+            echo "  subuid: $(grep "^${USER}:" /etc/subuid || echo MISSING)"
+            echo "  subgid: $(grep "^${USER}:" /etc/subgid || echo MISSING)"
+            for k in kernel.apparmor_restrict_unprivileged_userns \
+                     kernel.unprivileged_userns_clone \
+                     user.max_user_namespaces; do
+              printf '  %s = %s\n' "$k" "$(sysctl -n "$k" 2>/dev/null || echo '(absent)')"
+            done
+            echo "  Everything downstream that runs rootless -- the image sync"
+            echo "  and tacklebox's squashfs -- will fail with 'cannot re-exec"
+            echo "  process' and exit 125, naming none of the above."
+            exit 1
+          fi
+          echo "==> rootless podman can create a user namespace"
+
+          # ALSO to the step summary, because the job log cannot be relied on
+          # to still contain this.
+          #
+          # `Build OS image` emits tens of thousands of lines, and the log
+          # download for this job comes back starting PART-WAY THROUGH that
+          # step -- everything steps 1-6 printed is simply not in it. So the
+          # gate values were captured and then unreadable, which is the same
+          # defect as not capturing them: on run 32690010127 step 8 went from
+          # failing to passing across this change and the evidence for WHY was
+          # in the truncated region.
+          #
+          # The step summary is a separate artifact with its own budget and is
+          # not subject to that truncation.
+          {
+            echo "### Rootless podman userns"
+            echo ""
+            echo "| gate | as found |"
+            echo "|---|---|"
+            for k in kernel.apparmor_restrict_unprivileged_userns \
+                     kernel.unprivileged_userns_clone \
+                     user.max_user_namespaces; do
+              printf '| `%s` | `%s` |\n' "$k" "${_gate_found[$k]:-(unread)}"
+            done
+            echo ""
+            echo "\`podman unshare\` succeeded after configuration."
+          } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+
       - name: Build OS image
         run: |
           sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
-
-      - name: Sync image into rootless storage
-        run: |
-          # sudo just build lands the image in root podman storage, but
-          # tacklebox's squashfs step reads it via rootless `podman unshare`
-          # as the runner user ("image not known" otherwise).
-          sudo podman save "localhost/${VARIANT}:${FLAVOR}" | podman load
 
       - name: Build Live ISO
         env:
@@ -115,170 +256,68 @@ jobs:
           RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
-          # No outer sudo: the `iso` recipe sudos internally. Nesting sudo
-          # makes SUDO_USER=root inside build-iso-tacklebox.sh, so tacklebox
-          # "drops" to root for `podman unshare` and dies (rootless-only).
-          just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
+          # Root, and no rootless hop before it.
+          #
+          # This used to run bare so tacklebox would drop to the runner user
+          # for `podman unshare`, with the image copied into rootless storage
+          # first. On the c6a that cost 150s at the customize commit and was
+          # fine. On a GitHub-hosted runner the same rootless commit ran past
+          # tacklebox's hardcoded 600s bound and was killed -- three times,
+          # always at exactly 600.0s (#1893). Building image and ISO in one
+          # root context brought the same commit to 133s and the cell booted
+          # (skipjack:kde, job 97648442043).
+          #
+          # `sudo just build` already puts the image in ROOT storage, so with
+          # the ISO built as root too the save|load hop is not just
+          # unnecessary, it was the thing that forced the slow path.
+          sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
 
+      # RETENTION IS NOT OPTIONAL ON A MULTI-GIGABYTE ARTIFACT.
+      #
+      # This had no `retention-days`, so every run — including every PR run —
+      # parked a whole live ISO in Actions storage for the DEFAULT 90 DAYS.
+      # The account's included Actions storage is 0.5 GB; one ISO exceeds it
+      # outright, and the quota hit 90% on 2026-08-24.
+      #
+      # `compression-level: 0` because an ISO is already compressed: level 6
+      # burns minutes to save nothing.
       - name: Upload Artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ${{ env.VARIANT }}-${{ env.FLAVOR }}-live-iso
           path: "*.iso"
           if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
 
-      - name: Install QEMU for boot verification
-        run: |
-          sudo apt-get install -y qemu-system-x86 ovmf socat imagemagick
-
-      - name: Boot ISO and capture desktop screenshot
-        timeout-minutes: 10
-        run: |
-          ISO=$(find . -maxdepth 1 -name "*.iso" | head -1)
-          echo "==> Booting $ISO in QEMU (headless, KVM)..."
-
-          # Locate UEFI firmware (path varies by Ubuntu version)
-          OVMF_CODE=""
-          for f in \
-            /usr/share/OVMF/OVMF_CODE_4M.fd \
-            /usr/share/OVMF/OVMF_CODE.fd \
-            /usr/share/edk2/ovmf/OVMF_CODE.fd; do
-            [ -f "$f" ] && OVMF_CODE="$f" && break
-          done
-          OVMF_VARS=""
-          for f in \
-            /usr/share/OVMF/OVMF_VARS_4M.fd \
-            /usr/share/OVMF/OVMF_VARS.fd \
-            /usr/share/edk2/ovmf/OVMF_VARS.fd; do
-            if [ -f "$f" ]; then
-              cp "$f" /tmp/OVMF_VARS.fd
-              OVMF_VARS="/tmp/OVMF_VARS.fd"
-              break
-            fi
-          done
-
-          PFLASH=()
-          if [ -n "$OVMF_CODE" ] && [ -n "$OVMF_VARS" ]; then
-            echo "==> Using UEFI: $OVMF_CODE"
-            PFLASH+=(-drive "if=pflash,format=raw,readonly=on,file=$OVMF_CODE")
-            PFLASH+=(-drive "if=pflash,format=raw,file=$OVMF_VARS")
-          else
-            echo "==> OVMF not found, booting in BIOS mode"
-          fi
-
-          sudo qemu-system-x86_64 \
-            -machine type=q35,accel=kvm \
-            -cpu host \
-            -m 4G \
-            -smp 2 \
-            -cdrom "$ISO" \
-            -boot d \
-            "${PFLASH[@]}" \
-            -monitor unix:/tmp/qemu-monitor.sock,server,nowait \
-            -serial file:/tmp/serial.log \
-            -display none \
-            -daemonize
-
-          # Wait for monitor socket
-          for i in $(seq 1 30); do
-            [ -S /tmp/qemu-monitor.sock ] && break
-            sleep 2
-          done
-
-          # Wait for live desktop to fully boot (~4 minutes)
-          echo "==> Waiting 4 minutes for GNOME desktop to appear..."
-          sleep 240
-
-          # Capture screenshot via QEMU monitor
-          echo "screendump /tmp/screenshot.ppm" | \
-            sudo socat - UNIX-CONNECT:/tmp/qemu-monitor.sock
-          sleep 3
-
-          # Convert to PNG
-          if sudo test -f /tmp/screenshot.ppm; then
-            sudo convert /tmp/screenshot.ppm screenshot.png 2>/dev/null || \
-              sudo cp /tmp/screenshot.ppm screenshot.png
-            echo "==> Screenshot captured: $(ls -lh screenshot.png)"
-          else
-            echo "WARNING: screenshot.ppm not found; serial log follows:"
-            sudo cat /tmp/serial.log || true
-          fi
-
-          # Shut down QEMU
-          echo "quit" | sudo socat - UNIX-CONNECT:/tmp/qemu-monitor.sock || true
-
-      - name: Upload desktop screenshot
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: desktop-screenshot
-          path: screenshot.png
-          if-no-files-found: warn
-
-      # Only same-repo PRs can comment. On a fork `pull_request` run GITHUB_TOKEN
-      # is read-only no matter what the `permissions:` block above asks for, so
-      # `issues.createComment` 403s — which used to fail this job *after* the ISO
-      # had already built and booted, throwing away a successful verification.
-      # Forks get the same text in the run summary instead (see next step).
-      - name: Post boot screenshot to PR
-        if: >-
-          github.event_name == 'pull_request'
-          && github.event.pull_request.head.repo.full_name == github.repository
-        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9
-        env:
-          VARIANT: ${{ env.VARIANT }}
-          FLAVOR: ${{ env.FLAVOR }}
-        with:
-          script: |
-            const runUrl = [
-              context.serverUrl,
-              context.repo.owner,
-              context.repo.repo,
-              'actions/runs',
-              context.runId,
-            ].join('/');
-            const sha = context.payload.pull_request.head.sha.slice(0, 7);
-            const body = [
-              '## Live ISO Boot Verification',
-              '',
-              'The live ISO built and booted successfully to the GNOME desktop.',
-              '',
-              `**Variant:** \`${process.env.VARIANT}\` | ` +
-                `**Flavor:** \`${process.env.FLAVOR}\` | ` +
-                `**Commit:** \`${sha}\``,
-              '',
-              `📸 [Download desktop screenshot](${runUrl})` +
-                ' — expand **Artifacts** and download `desktop-screenshot`',
-            ].join('\n');
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body,
-            });
-
-      # Fork PRs cannot be commented on, but the verification still ran and its
-      # result still matters — put it where a fork contributor can actually see
-      # it rather than dropping it on the floor.
-      - name: Report boot verification in run summary (fork PR)
-        if: >-
-          github.event_name == 'pull_request'
-          && github.event.pull_request.head.repo.full_name != github.repository
-        env:
-          VARIANT: ${{ env.VARIANT }}
-          FLAVOR: ${{ env.FLAVOR }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          {
-            echo "## Live ISO Boot Verification"
-            echo ""
-            echo "The live ISO built and booted successfully to the GNOME desktop."
-            echo ""
-            echo "**Variant:** \`${VARIANT}\` | **Flavor:** \`${FLAVOR}\` | **Commit:** \`${HEAD_SHA:0:7}\`"
-            echo ""
-            echo "📸 [Download desktop screenshot](${RUN_URL}) — expand **Artifacts**"
-            echo "and download \`desktop-screenshot\`."
-            echo ""
-            echo "> Posted here rather than as a PR comment: this run is from a fork,"
-            echo "> so \`GITHUB_TOKEN\` is read-only and cannot comment."
-          } >> "$GITHUB_STEP_SUMMARY"
+      # Boot verification deliberately does NOT live here.
+      #
+      # It used to: `Install QEMU`, `Boot ISO and capture desktop screenshot`,
+      # `Upload desktop screenshot` and two PR-reporting steps. They could
+      # never have worked on this runner. The job runs on
+      # `runs-on=.../runner=build-amd64`, whose families in
+      # .github/runs-on.yml are ["c6a", "c6i", "c5a", "c5"] -- ordinary EC2
+      # instances. EC2 exposes /dev/kvm only on .metal types, so every run
+      # ended:
+      #
+      #   ==> Booting ./skipjack-gnome-10-x86_64.iso in QEMU (headless, KVM)...
+      #   Could not access KVM kernel module: No such file or directory
+      #   qemu-system-x86_64: failed to initialize kvm: No such file or directory
+      #
+      # (runs 32690010127 and 32696543980, both after the ISO built fine).
+      # That is not capacity flakiness to retry around; it is the instance
+      # family, and no change in this repository alters it.
+      #
+      # The verification itself is not lost -- it is done properly elsewhere.
+      # installer-smoke.yml boots the ISO on `ubuntu-latest`, which does
+      # provide KVM, then SSHes into the guest and asserts the compositor and
+      # installer frontend are running, drives the installer through its
+      # screens, and captures the session journal. It covers all five flavors
+      # rather than this job's single hardcoded one. Tonight it booted gnome
+      # (desktop session + installer frontend confirmed) and xfce (which is
+      # how xfwl4's exit was finally diagnosed).
+      #
+      # So this job builds and uploads the ISO, which is what it can actually
+      # do. Keeping a boot gate here that has never once executed would report
+      # a verification nobody performed -- the failure mode this branch exists
+      # to remove.

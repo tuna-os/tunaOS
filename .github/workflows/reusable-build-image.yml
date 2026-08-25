@@ -1316,6 +1316,25 @@ jobs:
       - name: Build qcow2 from testing image
         env:
           TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          # hummingbird probes BACKEND=ostree SEALED=0, so it takes the xfs
+          # default and `bootc install to-disk` ABORTS installing the
+          # bootloader: BIOS grub2-install cannot read the xfs this base's
+          # mkfs.xfs produces, and bootupctl installs the BIOS component
+          # unconditionally, so the whole to-disk install fails. (An ISO
+          # install is a different path -- fisherman gives it a separate
+          # ext4 /boot -- so this is about the Gate, and about Promote
+          # being gated on the Gate.) Six
+          # consecutive nightlies died here (run 32786338463, gnome Gate job
+          # 97638679623), which is why hummingbird:gnome has never been
+          # promoted and is 404 on GHCR.
+          #
+          # Scoped to this one variant ON PURPOSE. It is a measurement, not a
+          # product change: if the gate goes green on ext4 then ext4 is the
+          # answer and the durable fix is a 50-hummingbird.toml drop-in, as
+          # 00-tunaos.toml already prescribes. Every other variant is
+          # untouched -- the variable is unset for them and the probe decides
+          # exactly as before.
+          TUNAOS_QCOW2_FILESYSTEM: ${{ inputs.image-variant == 'hummingbird' && 'ext4' || '' }}
         run: |
           just qcow2 "${TEST_IMAGE}"
 

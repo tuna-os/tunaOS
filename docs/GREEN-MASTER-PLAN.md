@@ -337,7 +337,7 @@ Same shape as yellowfin. Additionally:
 | desktops | new upstream skew class 08-18: `libnma-gtk4` still requires `libnm.so.0` after Rawhide's NetworkManager dropped it — nothing here can fix it | heals when Rawhide rebuilds libnma; rolling standard |
 | taxonomy | rolling variant, structurally exposed to skew (#1762) | count under rolling standard |
 
-### hummingbird (Fedora rebuild, experimental) — 1/5 build
+### hummingbird (hardened rolling fork of Fedora Rawhide, experimental) — 1/5 build
 The fully-diagnosed one: **#1755**.
 | area | state | action |
 |---|---|---|

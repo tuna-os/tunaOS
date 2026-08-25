@@ -227,7 +227,7 @@ This is the only axis that checks a human could actually install. For 4 combinat
 | **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **yellowfin** | ✅ | ❌ | ❌ | ❌ | ❌ |
 
-cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on hosted CI may be a harness limitation rather than a product failure. See *Known systemic gaps*.
+cosmic, niri, xfwl4 and kde do not bring a session up on hosted CI. The cause is undiagnosed rather than established -- gnome starts on the same guest, which has a render node but no 3D. See *Known systemic gaps*.
 
 ## Live overlay
 
@@ -275,19 +275,219 @@ runners — and tuna-os/tunaOS#848 is a prerequisite, since stage-3 flavors
 currently cannot build a dev ISO at all. Until then the ⬜/stale cells above
 should be read as *not yet covered*, not as a backlog of broken cells.
 
-**CI cannot test four of five desktops.** cosmic, niri, xfwl4 **and kde** need a
-DRM render node. GitHub runners have none, so on hosted CI the compositor never
-starts — no configuration change alters this.
+**Not four of five. Four of five are measured, and three of them START.**
+This section used to say cosmic, niri, xfwl4 **and kde** all need a DRM render
+node, that GitHub runners have none, and that "no configuration change alters
+this". Every part of that has now been contradicted by measurement taken inside
+the guest rather than on the runner host.
 
-kde was previously believed to be the exception. It is not: on run
-`30234237855`, plasmalogin's autologin session and its greeter both exit
-immediately (`plasmalogin-helper exited with 5`) in a restart loop, and
-`eglinfo` on that runner lists **no `EGL_EXT_device_drm` at all**, putting
-kwin_wayland in the same position as the Smithay compositors.
+What is measured today:
 
-That leaves **gnome** as the only desktop still thought verifiable without a
-render node — and that is now an untested assumption rather than a
-demonstrated fact, because the smoke matrix has never run gnome.
+| flavor | compositor | starts? | installer window | what actually fails |
+|---|---|---|---|---|
+| gnome | gnome-shell | ✅ | mapped, drives | **nothing — green** (run 32704425971) |
+| kde | kwin_wayland | ✅ | mapped, `page=welcome` | does not advance past welcome |
+| cosmic | cosmic-comp (Smithay) | ✅ | mapped, `page=welcome`, OCR matches | does not advance past welcome |
+| xfce | xfwl4 (Smithay) | ❌ | — | aborts: `err=NoRenderNode` |
+| niri | niri (Smithay) | ? | ? | never measured with these diagnostics |
+
+**Three of the four measured desktops come up and render on a GPU-less
+runner.** Only xfwl4 aborts.
+
+A generalisation published earlier in this branch — "kwin degrades to
+software, the Smithay compositors abort" — is WRONG and is withdrawn here.
+`cosmic-comp` is Smithay and it starts, renders 9/9 non-blank frames, maps its
+installer window and reaches the welcome screen. Whatever stops xfwl4 is
+specific to xfwl4, not a property of its toolkit.
+
+Smoke run [32681262659](https://github.com/tuna-os/tunaOS/actions/runs/32681262659),
+`yellowfin:xfce`, read from the live session itself:
+
+```
+crw-rw----+ 1 root video  226,   1 card1
+crw-rw-rw-. 1 root render 226, 128 renderD128
+[drm] pci: virtio-vga detected at 0000:00:02.0
+[drm] features: -virgl +edid -resource_blob -host_visible
+```
+
+The guest **has** a render node. What it does not have is 3D — virgl is not
+negotiated, because the host QEMU has no node of its own to pass through. Those
+are different claims, and only the second is supported. The earlier `eglinfo`
+evidence was collected on the runner HOST, which says nothing about what the
+guest can do.
+
+gnome is the counter-example, and it is now measured rather than assumed. On
+the same run it boots, `gnome-shell` starts through Mesa's software path
+(`libEGL warning: egl: failed to create dri2 screen`), the installer frontend
+launches and stamps a window, and the walkthrough captures **9 non-blank frames
+across 8 distinct visual states**. So a compositor CAN come up on this hardware.
+
+### What kde actually does — it starts, and the old claim was wrong
+
+kde was recorded here as the flavor whose greeter and autologin session "both
+die instantly", on run `30234237855`, attributed to the render-node theory.
+That entry stood because the smoke capture named only `greetd` and
+`cosmic-greeter` in its journal line — kde runs **sddm**, so no unit was
+captured for it and nobody ever read what it said.
+
+Smoke run [32704425971](https://github.com/tuna-os/tunaOS/actions/runs/32704425971)
+is the first time it was. kde comes up:
+
+```
+sddm-helper: pam_unix(sddm-autologin:session): session opened for user liveuser
+sddm-helper: Starting Wayland user session: "/etc/sddm/wayland-session" ...
+session 1: VTNr=1 Seat=seat0 Type=wayland Class=user Active=yes State=active
+```
+
+A properly seated session on `seat0`, VT 1. And the checks agree:
+
+```
+ok - compositor running (kwin_wayland)
+ok - installer frontend launched (org.tunaos.InstallerKde)
+ok - kde: installer is frontmost at session start
+ok - kde: screen is not blank
+ok - kde: screen changes between steps
+```
+
+kwin hits the same missing DRM node as everyone else —
+
+```
+kwin_wayland: Failed to open drm node : No such file or directory
+kwin_wayland: couldn't find dev node for drm device
+libEGL warning: egl: failed to create dri2 screen      (everywhere, llvmpipe)
+```
+
+— and **carries on regardless**. That is the difference that matters: kwin
+degrades to software, and xfwl4 aborts. (An earlier draft of this sentence
+said "the Smithay compositors abort" — cosmic-comp is Smithay and does not,
+so the split is not by toolkit. See the table above.) "These desktops need a
+render node" is not one claim about four desktops; it is false for kde and
+gnome, and for xfwl4 it describes an abort, not an absence.
+
+What kde actually fails is one step later:
+
+```
+not ok - installer readiness stamp present
+not ok - kde: reached 'welcome' screen        (and disk, encryption, summary, install, done)
+```
+
+The frontend is running and the screen is painting, but no installer window is
+identified and no spec'd screen is OCR-matched. The file that would settle
+which — the installer's own debug log, which records `do_activate called`,
+which window class was built, and any traceback — had **never been captured on
+this flavor**: the capture read `~/.var/app/org.bootcinstaller.Installer/...`,
+which is gnome's app id. kde is `org.tunaos.InstallerKde`. So it printed "(no
+installer-debug.log found)" on four of five flavors, and that string reads like
+a fact about the guest instead of a fact about the path. Fixed; the next kde
+run carries it.
+
+### What cosmic and kde share — the installer will not advance
+
+Both come up. Both map the installer window on the **welcome** page. Neither
+gets past it.
+
+cosmic, run 32718219267:
+
+```
+ok - compositor running (cosmic-comp)
+ok - installer frontend launched (org.tunaos.InstallerCosmic)
+ok - cosmic: screen is not blank        # 9/9 frames above stddev
+ok - cosmic: reached 'welcome' screen   # seen on visual state(s) [0, 1]
+not ok - cosmic: reached 'disk' screen  # not found on any state the installer advanced to
+  # 1/8 transitions changed >500px; primary action activated with 'spc'
+  # 2 distinct visual state(s) across 9 frames
+```
+
+Its readiness stamp agrees: `app_id=org.tunaos.InstallerCosmic
+signal=first-frame page=welcome`. kde's says the same thing —
+`window=ApplicationWindow signal=frame-swapped page=welcome` — it simply
+matched no OCR keywords at all.
+
+So the remaining question for both is **not** rendering, seats, or DRM. It is
+that the walkthrough's keyboard drive (`ret`, escalating to `spc`, then
+widening the focus search) does not move these frontends off their first page.
+gnome advances 7/8 transitions on the same harness. Whether that is a
+walkthrough limitation or a real defect in the two frontends is open, and is
+deliberately not guessed at here.
+
+### What xfce actually does — measured, not inferred
+
+greetd reports only its own bookkeeping (`greeter exited without creating a
+session`, five times to `start-limit-hit`), so the compositor's reason went
+nowhere for five rounds of this. The live adapters now run the session under
+`systemd-cat -t tunaos-live-session`, and smoke run
+[32691426582](https://github.com/tuna-os/tunaOS/actions/runs/32691426582)
+is the first time xfwl4's own words have been captured:
+
+```
+INFO  xfwl4: Starting xfwl4 on a tty using udev
+INFO  xfwl4::backend::udev: Using renderD128 as primary GPU
+INFO  smithay::wayland::socket: Created new socket name=Some("wayland-1")
+INFO  xfwl4::core::state: Listening on wayland socket name="wayland-1"
+WARN  smithay::backend::drm::device::fd: Unable to become drm master, assuming unprivileged mode
+INFO  smithay::backend::drm::device: DrmDevice initializing
+INFO  smithay::backend::egl::display: Successfully selected EGL platform: PLATFORM_GBM_KHR
+INFO  smithay::backend::egl::display: EGL Initialized
+INFO  smithay::backend::egl::display: EGL Version: (1, 5)
+WARN  xfwl4::backend::udev::device: failed to initialize gpu err=NoRenderNode
+ERROR xfwl4: Failed to initialize primary GPU node
+```
+
+So the compositor **starts**, **finds the render node and names it**, opens a
+Wayland socket and listens, and initialises EGL on GBM. It dies at
+`err=NoRenderNode` from Smithay's udev device init — *after* having selected
+`renderD128` — having first failed to become DRM master.
+
+"These desktops need a DRM render node" is therefore not merely unproven, it
+is contradicted by the compositor's own log: the node is present and xfwl4
+says which one it picked. The open question is now specific and much smaller:
+why Smithay reports `NoRenderNode` for a device it just selected, and whether
+the preceding `Unable to become drm master` is the cause or a separate
+symptom. Deliberately not guessed here — that is what the previous five
+attempts did.
+
+A second, independent defect is visible in the same log and is a packaging bug
+rather than a graphics one:
+
+```
+INFO xfwl4::core::config::xfwl4_config: Failed to reload defaults:
+     /usr/local/share/xfce4/xfwl4/defaults does not exist; using hard-coded defaults
+WARN xfwl4::core::util::rc: Missing value for required setting box_move
+... ~45 more required settings missing ...
+```
+
+`/usr/local/share` is not where a distribution package installs data, so
+xfwl4 ships looking for a defaults file that its own packaging never puts
+there. Not the fatal error, and worth fixing on its own.
+
+kde fails the same way: on run `30234237855`, plasmalogin's autologin session
+and its greeter both exit immediately (`plasmalogin-helper exited with 5`) in a
+restart loop. The `eglinfo` output cited alongside it — **no
+`EGL_EXT_device_drm` at all** — was collected on the runner HOST, not in the
+guest, so it is not evidence about kwin_wayland's environment and is no longer
+offered as such.
+
+**gnome is no longer an assumption.** It was described here as "the only
+desktop still thought verifiable without a render node", untested because the
+smoke matrix had never run it. It has now run, on
+[32681262659](https://github.com/tuna-os/tunaOS/actions/runs/32681262659): it
+boots, the compositor and installer frontend both come up, and the walkthrough
+captures 9 non-blank frames over 8 visual states. It reaches welcome,
+encryption and summary; it does not reach the disk screen, which was a keyword
+gap in the screen contract — the contract had been measured against the other
+four frontends and never against this one.
+
+Two real defects that run surfaced, neither of them about graphics:
+
+* **The installer starts behind the GNOME Activities overview.** The
+  walkthrough had to press `esc` before it could drive anything, and records
+  it as a failure precisely because a user booting this ISO sees the same
+  thing. Reproduced on runs `32450214451` and `32681262659`.
+* **`e2e-installer-gui-checks.sh` had never executed.** It resolved its TAP
+  helpers to a path the guest does not have, so every assertion was
+  `command not found` and the harness printed the shell's 127 as a count of
+  failures. The per-flavor compositor and frontend assertions have therefore
+  never run, on any flavor, in any smoke run.
 
 `scripts/iso-e2e-gpu.sh` runs the harness on a GPU host and is the intended
 answer; it currently has to be driven by hand.

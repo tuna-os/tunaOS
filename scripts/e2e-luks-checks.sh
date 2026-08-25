@@ -7,6 +7,14 @@ set -uo pipefail
 
 HELPERS="${TEST_LIB_DIR:-$(dirname "$0")}/e2e-assert.sh"
 # shellcheck source=scripts/lib/e2e-assert.sh
+# A missing helper leaves check() undefined, and every assertion then
+# prints nothing while bash writes command-not-found to stderr. Bail out
+# loudly instead -- see the note in e2e-installer-gui-checks.sh, where
+# exactly that went unnoticed across every smoke run.
+if [[ ! -r "$HELPERS" ]]; then
+	echo "Bail out! cannot read assertion helpers at ${HELPERS}"
+	exit 99
+fi
 source "$HELPERS"
 
 echo "# LUKS/TPM install evidence"

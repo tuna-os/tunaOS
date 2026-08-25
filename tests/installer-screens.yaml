@@ -26,9 +26,55 @@ screens:
     title: Welcome
     required: true
     # "install tunaos" dropped: same product-name coupling as the disk and
-    # install lists. The four remaining keywords are what a welcome screen
-    # says regardless of what it is installing.
-    keywords: ["welcome", "get started", "let's get", "begin"]
+    # install lists. The remaining keywords are what a welcome screen says
+    # regardless of what it is installing.
+    #
+    # MEASURED 2026-08-24 against all five frontends' source strings, the way
+    # the disk list was on 2026-08-07. The disk list got that treatment; this
+    # one was written from the premise that every welcome screen says
+    # "welcome" or "get started". Four of the five do. KDE does not:
+    #
+    #     gnome   "Welcome to <product>"          welcome_title, welcome.py:93
+    #     cosmic  "Welcome. This assistant..."    src/ui.rs:82  + "Get started"
+    #     niri    "Welcome to <product>"          ui/installer.qml:186
+    #     xfce    "Welcome to <product>"          app.py:68
+    #     KDE     "Install <product>"             welcome main.qml:39,
+    #                                             primary button "Next"
+    #                                             (Wizard.qml:290)
+    #
+    # A correction was posted here reading KDE's Wizard.qml -- the step model
+    # names the step "Welcome" (Wizard.qml:46) and a 1.6x Label draws it
+    # (Wizard.qml:185), so the word was said to be on screen after all. THAT
+    # CORRECTION WAS WRONG, and the measurement above stands.
+    #
+    # Settled by looking at the frame instead of the source. The published
+    # capture (download.tunaos.org/screenshots/installer/smoke-kde_00-latest.png,
+    # from run 32747410944) shows the welcome step in full:
+    #
+    #     titlebar   "Yellowfin Installer"
+    #     heading    "Install Yellowfin"
+    #     body       "This wizard will guide you through installing Yellowfin
+    #                 onto this computer."
+    #                "You will choose a target disk and how it should be
+    #                 encrypted. Everything after that is handled by the
+    #                 installer."
+    #     button     "Next"
+    #
+    # There is no "Welcome" anywhere on it. The stepHeading Label starts at
+    # `opacity: 0` and does not come up on the first page whatever the
+    # animation is meant to do -- which is arguably its own bug, but not this
+    # file's business. Reading a QML file told me what should render; the
+    # screenshot told me what did.
+    #
+    # So "will guide you through" is load-bearing, not merely coverage: it
+    # is the orientation sentence KDE, niri and cosmic all put on the welcome
+    # page and nowhere else (grepped across all five frontends), it carries no
+    # product name, and it is a prompt rather than the bare noun the header
+    # above forbids. It gives the welcome screen a second, independent
+    # phrase to be recognised by, in the body copy rather than in a heading
+    # that animates.
+    keywords: ["welcome", "get started", "let's get", "begin",
+               "will guide you through"]
 
   - id: disk
     title: Disk / target selection
@@ -63,8 +109,30 @@ screens:
     # be installed." — "be installed" is the longest contiguous run common to
     # both that contains no product name. Verified against all four forks'
     # source: it appears on their disk screens and on no other screen.
+    #
+    # MEASURED 2026-08-24 against the GNOME frontend, which the 2026-08-07
+    # measurement above could not have covered: gnome was absent from
+    # installer-smoke.yml's matrix until #1039, so upstream bootc-installer
+    # was the one fork nobody OCRed. Smoke run 32681262659 is the first time
+    # this cell has ever run, and it reported
+    #
+    #   not ok - gnome: reached 'disk' screen (Disk / target selection)
+    #     # not found on any state the installer advanced to
+    #
+    # while crediting encryption and summary -- screens that sit AFTER disk
+    # selection in the flow, so the installer plainly passed through it.
+    #
+    # Its heading is "Install Location" (default-disk.blp:63), which matches
+    # none of the six keywords above. Same shape as the install list below:
+    # a frontend failing a screen it demonstrably reached is one wrong list,
+    # not a wording bug.
+    #
+    # Checked against all five frontends' source before admitting it: the
+    # string occurs exactly once in the whole set, on this page. It carries
+    # no product name, so the branding work does not break it.
     keywords: ["select target disk", "select a disk", "choose the disk",
-               "available disks", "be installed", "destination"]
+               "available disks", "be installed", "destination",
+               "install location"]
 
   - id: encryption
     title: Disk encryption (LUKS)
@@ -127,9 +195,37 @@ screens:
     # streams the same backend, so "partitioning" and "installing image"
     # appear on the progress screen of all five and on no other screen, and
     # they do not contain a product name at all.
+    #
+    # RE-MEASURED 2026-08-24, this time against what is on the progress screen
+    # BEFORE the backend has streamed a line -- which is the state a harness
+    # screenshot actually catches, and which none of the keywords above cover:
+    #
+    #   gnome   "Installing", "0:00 elapsed", "Downloading system image..."
+    #           (progress.blp:189,229; views/progress.py:101,689)
+    #   kde     "Installing <product> onto <disk>. Do not power off the
+    #           machine." (modules/progress/.../main.qml:35)
+    #   cosmic  "Installing <product>" + caption "Do not power off the
+    #           computer." (src/ui.rs:377,369)
+    #   niri    "Installing..."               (ui/installer.qml:422)
+    #   xfce    "Installing <product>" + a step label from PIPELINE_STEPS
+    #           (app.py:18-22,325)
+    #
+    # "do not power off" is added for kde and cosmic: measured on both, unique
+    # to the progress screen, carries no product name, and is present from the
+    # moment the screen opens rather than only once the log has scrolled.
+    #
+    # gnome is deliberately left unmatched rather than guessed at. Its only
+    # always-present product-free strings there are the bare word "Installing"
+    # -- forbidden by the header above, and a substring of the welcome page's
+    # "guide you through installing" -- and "elapsed", a single common word
+    # that a log pane could easily produce. The distinctive sentence
+    # "Installation will continue normally" (progress.blp:85) sits in the tour
+    # panel, whose visibility depends on the recipe, so it is not something
+    # this file can rely on. An unmatched advisory row that says why beats a
+    # keyword that manufactures a phantom one.
     keywords: ["installation progress", "copying files", "deploying",
                "please wait", "writing image", "installing\u2026",
-               "partitioning", "installing image"]
+               "partitioning", "installing image", "do not power off"]
 
   - id: done
     title: Finished / reboot
