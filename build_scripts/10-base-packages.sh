@@ -176,6 +176,7 @@ REPO
 		systemd-container \
 		btrfs-progs \
 		xfsprogs \
+		flatpak \
 		gcc \
 		gcc-c++ \
 		just || true
@@ -188,6 +189,39 @@ REPO
 		echo "       bootc install to-disk cannot format the root without it." >&2
 		dnf repolist >&2 || true
 		exit 1
+	fi
+
+	# flatpak is not optional either, for a reason that only bites three
+	# steps downstream. live-iso/common/src/customize-live.sh pre-installs
+	# the installer app and exits 1 if flatpak cannot be made present:
+	#
+	#   ERROR: flatpak not installed and could not be installed;
+	#          cannot pre-install ${INSTALLER_APP}
+	#
+	# and that same script is what scripts/build-iso-tacklebox.sh passes as
+	# the ISO recipe's live_customize step. So a hummingbird image without
+	# flatpak cannot produce a live overlay, cannot build an ISO, and has no
+	# installer to launch if one were built -- gnome ships upstream
+	# bootc-installer as org.bootcinstaller.Installer, a Flatpak.
+	#
+	# Its ensure_flatpak() fallback installs the package on bases that merely
+	# omit it from the image (guppy, grouper, bonito-rawhide). That cannot
+	# help hummingbird: measured 2026-08-25, flatpak is absent from BOTH
+	# public-hummingbird (3509 binary names) and our rebuild snapshot (7986).
+	# It is layer-07 of build-order-hummingbird-desktops.yml, 131 packages
+	# into the 164 still unbuilt.
+	#
+	# Listed above so the image picks it up the moment that wave publishes,
+	# and warned about rather than fatal because it genuinely is not
+	# available yet -- a hard failure here would break every hummingbird base
+	# build today. Make it fatal, like xfsprogs above, once layer-07 is
+	# served. What must NOT happen is the xfsprogs shape: --skip-unavailable
+	# swallowing the miss silently and the failure surfacing two stages later
+	# as something else. tuna-os/tunaOS#1397 tracks this.
+	if ! rpm -q flatpak >/dev/null 2>&1; then
+		echo "WARNING: flatpak did not install — no enabled repo carries it yet." >&2
+		echo "         This image cannot build a live overlay or an ISO, and has" >&2
+		echo "         no installer app; see tuna-os/tunaOS#1397." >&2
 	fi
 elif [[ ${IS_ELN:-false} == true ]]; then
 	# ── Fedora ELN ───────────────────────────────────────────────────────
