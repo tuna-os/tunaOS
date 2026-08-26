@@ -125,7 +125,7 @@ packages:
   hummingbird:
     repos:
       - name: tunaos-hummingbird
-        baseurl: https://repo.tunaos.org/hummingbird/20251124-x86_64/
+        baseurl: https://repo.tunaos.org/hummingbird/20251124-$basearch/
         priority: 5
     packages: *fedora_gnome_packages
 
