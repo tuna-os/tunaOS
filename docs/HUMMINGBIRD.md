@@ -218,6 +218,68 @@ reap them; `tests/test_a_failing_live_customize_fails_fast.py` runs the script's
 own helpers against a daemon that outlives its caller and fails if the wedge
 returns.
 
+### Both of those were confirmed again in production: run 32907940350
+
+Build Hummingbird #66 is the first nightly to run with the fail-fast fix, and
+it settled two questions at once.
+
+**The wedge is gone, measured.** `iso:cosmic (linux-amd64)` reached the same
+flatpak line and failed in **56 seconds** (03:03:22 → 03:04:18), against the
+57 minutes of silence the same failure cost on 32866334376. The `EXIT` trap
+fired in the log — `+ _reap_live_buses` — and the cell reported a real exit 1
+rather than a timeout.
+
+**The flatpak gate is not an artefact of the e2e harness.** The identical
+three lines came out of `ghcr.io/tuna-os/hummingbird:cosmic-linux-amd64`, a
+real published image, in the real nightly's real ISO job — not a dispatched
+probe of `base`:
+
+```
+03:04:18  + dnf5 install -y flatpak
+03:04:18  No match for argument: flatpak
+03:04:18  ERROR: flatpak not installed and could not be installed;
+          cannot pre-install org.bootcinstaller.Installer
+```
+
+Everything above it in that job worked: the provenance gate passed (cosmic
+published a digest in this run), the image pulled, `ensure_dbus_daemon`
+installed and started the bus from `public-hummingbird-x86_64-rpms`. flatpak
+is still the first and only thing that fails.
+
+### gnome cannot get as far as cosmic: it wedges in the build
+
+The same run's `gnome / linux-amd64` cell never published at all, so the
+`iso:gnome` job was refused by the provenance gate in 0 seconds — correctly,
+rather than building media from a stale tag.
+
+The gnome cell did not fail. It stopped:
+
+```
+23:12:27  [13/30] pcre2-utf32-0:10.47-1.2.hum1 100% | 247.5 KiB | 00m00s
+03:00:31  ##[error]The operation was canceled.
+```
+
+Seventeen packages still in flight, then 3h48m without one further line, then
+the job's 240-minute ceiling. Compare cosmic, which finished the same stage in
+**14 minutes**. The difference is not the desktop — it is that one dnf
+download stalled and nothing bounded it. librepo treats a connection
+delivering less than 1000 B/s as healthy and waits indefinitely, and
+`repo.tunaos.org` is a single small host.
+
+Two bounds now exist: `minrate`/`timeout`/`retries` in `/etc/dnf/dnf.conf`
+(written by `10-base-packages.sh`, so every downstream `RUN` layer inherits
+them), and a `timeout --kill-after=60s 210m` around the build itself so a
+wedge anywhere else fails 30 minutes inside the ceiling with an annotation
+instead of a bare cancellation.
+
+The same job also exposed a second, quieter fault: `install-desktop.sh` passed
+`--skip-unavailable` *before* `install`, which dnf5 rejects outright. The
+call site is `dnf_retry … || install_available …`, so the `||` swallowed our
+own usage error and ran all 52 gnome packages through the fallback — which
+drops the manifest's `exclude:` list and forces `install_weak_deps=False`. The
+build would have composed a different image than the manifest describes even
+if it had finished.
+
 ### "N packages left" is not a measure of progress
 
 That figure counts the **served index**, which is cumulative across past
