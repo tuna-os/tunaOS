@@ -489,6 +489,43 @@ unmet, and they are the same package:
 `gstreamer1-plugins-base`, `gtk3` and `gtk4`, all three of which ARE served.
 It is one of seven sources that tier is short.
 
+#### Do not work around gtk4's dependency — build the package
+
+`src/gnome-50/gtk4/gtk4.spec` already carries a switch for exactly this
+situation, in three places, all keyed on `%{rhel}`:
+
+```spec
+# gstreamer1-plugins-bad-free-devel pulls in libgtk-3 on EL10 (gtk3 removed)
+%if !0%{?rhel}
+BuildRequires:  pkgconfig(gstreamer-player-1.0) >= %{gstreamer_version}
+%endif
+...
+%if !0%{?rhel}
+Requires: gstreamer1-plugins-bad-free-libs%{?_isa} >= %{gstreamer_version}
+%endif
+...
+%if 0%{?rhel}
+    -Dmedia-gstreamer=disabled \
+%endif
+```
+
+Hummingbird is not `rhel`, so all three are on and gtk4 hard-requires a
+package we do not serve. Extending that guard to hummingbird would make gtk4
+installable in one line, and it is the wrong fix.
+
+The EL10 exemption exists because the dependency is CIRCULAR there:
+`gstreamer1-plugins-bad-free-libs` needs `libgtk-3.so.0`, and EL10 dropped
+gtk3. Hummingbird builds gtk3 — it is served today — so nothing about that
+reasoning transfers. Disabling `media-gstreamer` here would trade GTK4's
+in-widget video playback for a build-order convenience, on a desktop image,
+with no structural obstacle to just building the package.
+
+`gstreamer1-plugins-bad-free` is already in `layer-05` of the build order, it
+takes its sources from Fedora dist-git (the `distgit:` name IS the pin, so
+nothing needs vendoring), and `gstreamer1`, `gstreamer1-plugins-base`, `gtk3`
+and `gtk4` from the same tier are all served. It is one of seven sources that
+tier is short. Build it.
+
 ### How far the chain actually is: 570 of 673
 
 Comparing build-order SOURCE names against the source of every binary we
