@@ -618,8 +618,17 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 		for exc in "${_TD_EXCLUDES[@]}"; do
 			[[ -n "$exc" ]] && _TD_EXCL_ARGS+=("-x" "$exc")
 		done
+		# --skip-unavailable is command-scoped in dnf5: it goes AFTER
+		# `install`, never between `-y` and it. Spelled the other way it
+		# is not a warning, it is `Unknown argument … (It has to be
+		# placed after the command.)` — and the `||` below then quietly
+		# re-runs the whole set through install_available, which ignores
+		# the exclude list above and forces install_weak_deps=False.
+		# Build Hummingbird #66 (run 32907940350) shipped all 52 gnome
+		# packages that way. tests/test_dnf_flags_land_after_the_
+		# subcommand.py lints for it tree-wide.
 		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
-			dnf_retry -y --skip-unavailable install "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}" || install_available "${_TD_PKGS[@]}"
+			dnf_retry -y install --skip-unavailable "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}" || install_available "${_TD_PKGS[@]}"
 		else
 			dnf_retry -y install "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}"
 		fi
@@ -652,7 +661,7 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 		fi
 		# shellcheck disable=SC2086
 		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
-			dnf -y --enablerepo="${_TD_REPO_ID}" --skip-unavailable install ${_TD_COPR_OPTS} "${_TD_COPR_PKGS[@]}" || install_available "${_TD_COPR_PKGS[@]}" || true
+			dnf -y --enablerepo="${_TD_REPO_ID}" install --skip-unavailable ${_TD_COPR_OPTS} "${_TD_COPR_PKGS[@]}" || install_available "${_TD_COPR_PKGS[@]}" || true
 		else
 			dnf -y --enablerepo="${_TD_REPO_ID}" install ${_TD_COPR_OPTS} "${_TD_COPR_PKGS[@]}" || true
 		fi

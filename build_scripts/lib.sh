@@ -476,6 +476,21 @@ dnf_retry() {
 			rm -f "$tmp_out"
 			return "$rc"
 		fi
+		# Usage errors: we mis-spelled the command line, so dnf never
+		# even looked at a repo. Retrying is pointless, but the bigger
+		# problem is that most callers write `dnf_retry … || fallback`,
+		# which turns our own bug into a silently-degraded install.
+		# Measured on Build Hummingbird #66 (run 32907940350): a
+		# misplaced --skip-unavailable sent all 52 gnome desktop
+		# packages through install_available, which does not honour the
+		# manifest's exclude list, after 4 attempts and 35s of backoff.
+		# Annotate so the next one surfaces in the job's annotations
+		# even when the caller swallows the exit code.
+		if [[ "$out" == *"Unknown argument"* || "$out" == *"Unknown command"* ]]; then
+			echo "::error title=dnf invoked incorrectly::dnf $* — ${out%%$'\n'*}" >&2
+			rm -f "$tmp_out"
+			return "$rc"
+		fi
 		echo "dnf attempt ${attempt}/${max_attempts} failed (exit ${rc}); clearing metadata and retrying..." >&2
 		dnf clean metadata || true
 		sleep "$((attempt * 5))"
