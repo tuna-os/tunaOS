@@ -415,24 +415,56 @@ That is a smaller job than "flatpak plus everything it needs".
 **`mutter` arrived in our rebuild** since the 08-15 measurement in #1755, which
 listed it as missing. The rest of that issue's §2 list still holds.
 
-### What that means for the goal, stated plainly
+### What that means for the goal: 14 of 52, measured on the image itself
 
-`hummingbird:gnome` requests `gdm` and `gnome-shell` — they are in the
-manifest's list and they appear in the dnf command line of every gnome cell.
-Neither is in either index. Under `--skip-unavailable` they are dropped
-without failing the build.
+Run 32925587829 built `hummingbird:gnome` in **11m33s** and pushed it to
+GHCR — the dnf-flag and stalled-download fixes work, and the cell that ran
+3h57m and was cancelled the night before now completes in twelve minutes.
 
-So even a gnome cell that builds cleanly, publishes, and passes every gate
-produces an image with **no GNOME session and no display manager**. Installed
-to a laptop it reaches a text console. The build-side fixes in this document —
-the mis-placed dnf flag, the stalled-download bounds, the fail-fast
-live-customize — are all necessary and none of them changes that.
+That makes the question answerable from the image rather than from the
+indexes. Its own published package manifest
+(`packages-hummingbird-gnome-linux-amd64`, 405 packages) against the 52 the
+manifest asks for:
 
-The ISO axis and the desktop axis are blocked on the same thing from different
-directions: the ISO cannot be built at all without `flatpak`, and the image it
-would carry is not a desktop without `gnome-shell` and `gdm`. All three are
-the package chain's to produce, and the chain has published nothing for eight
-days.
+    requested        52
+    present          14
+    silently dropped 38
+
+The fourteen: ModemManager, NetworkManager-adsl, NetworkManager-wwan, avahi,
+dconf, glib-networking, gnome-backgrounds, gnome-user-docs, mesa-dri-drivers,
+mesa-libEGL, mesa-vulkan-drivers, polkit, desktop-backgrounds-gnome,
+pinentry-gnome3.
+
+Everything that makes it a desktop is in the other thirty-eight — `gdm`,
+`gnome-shell`, `gnome-session-wayland-session`, `gnome-settings-daemon`,
+`gnome-control-center`, `nautilus`, `ptyxis`, both xdg-desktop-portals, all
+six gvfs backends, `librsvg2`, `yelp`. The only packages in the image whose
+names begin with "gnome" are `gnome-backgrounds` and `gnome-user-docs`.
+
+**`hummingbird:gnome` is a 405-package base with wallpapers and
+documentation.** Installed to a laptop it reaches a text console. Every
+build-side fix in this document is necessary and none of them changes that.
+
+Two details worth keeping. `mutter` IS in our rebuild index but is not in the
+image, because nothing requests it directly — it would arrive as a dependency
+of `gnome-shell`, which does not exist to depend on it. And `ostree` IS in the
+image, from upstream, so flatpak's main dependency is already present.
+
+The ISO axis and the desktop axis are therefore blocked on the same producer
+from two directions: no ISO can be built at all without `flatpak`, and the
+image one would carry is not a desktop without those thirty-eight. All of it
+is the package chain's to produce.
+
+#### Why 38 dropped packages went unremarked
+
+`install_available` records them to `/usr/share/tunaos/missing-on-*.txt`
+inside the image, and the only thing that reads that is
+`generate-boot-report.py`, run by `weekly-boot-report.yml` — weekly, and by
+pulling each published image. Meanwhile every build job already uploads its
+own `packages-<image>-<flavor>-<platform>.txt` artifact on every run, which
+is what the numbers above were computed from, at no cost and with no image
+pull. A per-run completeness count against the manifest would turn this from
+a weekly archaeology exercise into a number on the build.
 
 ### Link 7: firmware, and why CI can never tell you about it
 
