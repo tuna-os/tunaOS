@@ -629,6 +629,11 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 		# subcommand.py lints for it tree-wide.
 		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
 			dnf_retry -y install --skip-unavailable "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}" || install_available "${_TD_PKGS[@]}"
+			# Whichever branch ran, --skip-unavailable can have dropped
+			# packages without saying so. install_available reports its own
+			# misses; the transaction above reports nothing, so ask the rpm
+			# database what actually landed.
+			record_unsatisfied_requests "install-desktop.sh:${_TD_DESKTOP}" "${_TD_PKGS[@]}"
 		else
 			dnf_retry -y install "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}"
 		fi
