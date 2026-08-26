@@ -27,6 +27,7 @@ installed, and neither fails the build.
 from __future__ import annotations
 
 import re
+import shutil
 import subprocess
 import tempfile
 import unittest
@@ -51,12 +52,31 @@ class RecordsWhatSkipUnavailableDropped(unittest.TestCase):
             "record_package_wishlist"
         )
 
+    # The helper shells out to exactly these; PATH is built from them and
+    # nothing else, so `with_rpm=False` is a base that genuinely has no rpm
+    # rather than a host that happens to lack one.
+    # bash included: the rpm stub uses `#!/usr/bin/env bash`, and env
+    # resolves bash through the PATH under test.
+    NEEDED = ("bash", "mkdir", "dirname", "date")
+
     def _run(self, requested, installed, provides=(), with_rpm=True):
-        """Run the real helper against a stubbed rpm database."""
+        """Run the real helper against a stubbed rpm database.
+
+        PATH is the temp bin directory ALONE. The first version appended
+        /usr/bin:/bin, which made `with_rpm=False` depend on whether the HOST
+        had rpm: it passed in a container without one and failed on GitHub's
+        runners, which ship rpm, where the real binary ran and duly reported
+        all five packages missing. The test asserted a property of the base
+        and measured a property of the machine.
+        """
         with tempfile.TemporaryDirectory() as tmp:
             tmp = Path(tmp)
             bin_dir = tmp / "bin"
             bin_dir.mkdir()
+            for tool in self.NEEDED:
+                source = shutil.which(tool)
+                assert source, f"{tool} is not on PATH; the harness cannot run"
+                (bin_dir / tool).symlink_to(source)
             if with_rpm:
                 stub = bin_dir / "rpm"
                 stub.write_text(
@@ -85,10 +105,11 @@ class RecordsWhatSkipUnavailableDropped(unittest.TestCase):
                 + "\n"
             )
             proc = subprocess.run(
-                ["bash", str(script)],
+                # Absolute: `bash` must not be resolved via the PATH under test.
+                ["/bin/bash", str(script)],
                 capture_output=True,
                 text=True,
-                env={"PATH": f"{bin_dir}:/usr/bin:/bin"},
+                env={"PATH": str(bin_dir)},
                 timeout=60,
             )
             wishlist = tmp / "wishlist" / "missing-on-hummingbird.txt"
