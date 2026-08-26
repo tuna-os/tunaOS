@@ -29,7 +29,6 @@ Two guards here, because either one alone leaves the door open:
 """
 
 import re
-import shutil
 import subprocess
 import tempfile
 import unittest
