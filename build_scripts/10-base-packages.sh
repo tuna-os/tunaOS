@@ -117,6 +117,30 @@ if [[ -f /etc/dnf/dnf.conf ]] && ! grep -q '^max_parallel_downloads' /etc/dnf/dn
 	echo 'max_parallel_downloads=10' >>/etc/dnf/dnf.conf
 fi
 
+# Bound how long a single download may stall. Without this a mirror that
+# accepts the connection and then stops sending wedges the whole build: on
+# Build Hummingbird #66 (run 32907940350) the gnome cell printed
+# `[13/30] pcre2-utf32 … 00m00s` at 23:12:27 and then nothing at all until
+# the 240-minute job cap cancelled it at 03:00:31 — 3h48m of silence inside
+# one dnf transaction, which skipped Manifest, Sign, Promote and the ISO.
+#
+# minrate/timeout are what actually abort a stalled transfer: a connection
+# delivering less than minrate bytes/s for timeout seconds is dropped. The
+# defaults are far too permissive for a build with a job budget (1000 B/s
+# indefinitely is a "healthy" transfer as far as librepo is concerned).
+# retries lets librepo re-dial before dnf_retry has to re-run the whole
+# transaction.
+#
+# These are deliberately generous — repo.tunaos.org is a single small host,
+# not a CDN, and the point is to catch a WEDGE, not to fail a slow mirror.
+if [[ -f /etc/dnf/dnf.conf ]] && ! grep -q '^minrate' /etc/dnf/dnf.conf; then
+	{
+		echo 'minrate=10240'
+		echo 'timeout=120'
+		echo 'retries=3'
+	} >>/etc/dnf/dnf.conf
+fi
+
 # This thing slows down downloads A LOT for no reason
 if [[ $IS_CENTOS == true ]]; then
 	dnf remove -y subscription-manager
