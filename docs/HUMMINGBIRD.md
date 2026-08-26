@@ -455,6 +455,104 @@ from two directions: no ISO can be built at all without `flatpak`, and the
 image one would carry is not a desktop without those thirty-eight. All of it
 is the package chain's to produce.
 
+#### 16 of the 38 are built and served — they fall over behind one package
+
+Splitting the 38 against both live indexes gives two very different groups:
+
+* **22 genuinely absent** from both — `gdm`, `gnome-shell`, `nautilus`,
+  `ptyxis`, `gnome-control-center`, the portals, `librsvg2` and so on;
+* **16 present in an index and dropped anyway** — all six `gvfs-*` backends,
+  `gnome-settings-daemon`, `gnome-system-monitor`, `gnome-classic-session`,
+  `gnome-browser-connector`, `yelp`, and four NetworkManager VPN plugins.
+
+The second group is not unbuilt. dnf says so itself, in the gnome cell of run
+32925587829:
+
+```
+Skipping packages with broken dependencies:
+ gnome-settings-daemon  x86_64 50.0-4.fc43      tunaos-hummingbird   6.1 MiB
+ gtk4                   x86_64 4.22.1-2.fc43    tunaos-hummingbird  28.1 MiB
+ gvfs                   x86_64 1.61.90-1.fc43   tunaos-hummingbird   1.2 MiB
+ …
+ yelp                   x86_64 2:49.1-1.fc43    tunaos-hummingbird   2.2 MiB
+```
+
+`gtk4` is in that list, and every other entry is a GTK application. Resolving
+gtk4's 71 requires against the union of both indexes leaves exactly two
+unmet, and they are the same package:
+
+    gstreamer1-plugins-bad-free-libs(x86-64)
+    libgstplay-1.0.so.0()(64bit)
+
+**One missing package takes down gtk4, and gtk4 takes down sixteen.**
+`gstreamer1-plugins-bad-free` is in the build order — `layer-05`, alongside
+`gstreamer1-plugins-base`, `gtk3` and `gtk4`, all three of which ARE served.
+It is one of seven sources that tier is short.
+
+### How far the chain actually is: 570 of 673
+
+Comparing build-order SOURCE names against the source of every binary we
+serve (`sourcerpm`, not served binary names — see the trap below):
+
+| tier | sources | served | missing |
+| :--- | ---: | ---: | ---: |
+| bootstrap-00…03 | 10 | 10 | 0 |
+| layer-00 | 190 | 187 | 3 |
+| layer-01 | 76 | 71 | 5 |
+| layer-02 | 27 | 27 | 0 |
+| layer-03 | 22 | 15 | 7 |
+| layer-04 | 31 | 27 | 4 |
+| layer-05 | 93 | 86 | 7 |
+| layer-06 | 90 | 63 | 27 |
+| layer-07 | 46 | 27 | 19 |
+| layer-08 | 19 | 8 | 11 |
+| layer-09 | 17 | 7 | 10 |
+| layer-10 | 15 | 11 | 4 |
+| layer-11…17 | 37 | 31 | 6 |
+| **total** | **673** | **570** | **103** |
+
+The chain is **85% served**, and the gaps are scattered rather than sitting
+behind a clean frontier. "Reached tier 5 of 22" describes a from-scratch
+rebuild restarting, not how much is actually published — which is why that
+figure and this one have felt irreconcilable.
+
+### What the goal needs, by tier
+
+Where each package a working GNOME laptop install requires sits:
+
+| tier | still missing, and what it gates |
+| :--- | :--- |
+| layer-05 | **`gstreamer1-plugins-bad-free`** → gtk4 → 16 packages; `librsvg2` |
+| layer-06 | `gnome-session`, `xdg-user-dirs-gtk` |
+| layer-07 | **`flatpak`** → the entire ISO axis; `gdm`, `ptyxis`, `gnome-bluetooth` |
+| layer-08 | `gnome-control-center`, `xdg-desktop-portal`, `gnome-disk-utility`, `gnome-initial-setup`, `fprintd` |
+| layer-09 | **`gnome-shell`**, `xdg-desktop-portal-gnome`, `xdg-desktop-portal-gtk` |
+| layer-10 | `nautilus` |
+
+So an ISO needs the chain through **layer-07**, and a desktop worth
+installing needs it through **layer-10**.
+
+Two of the 38 can never arrive as the build order stands: `evince` and
+`totem` are not in it at all, so `evince-thumbnailer`, `evince-previewer` and
+`totem-video-thumbnailer` have no producer. Either add them or stop asking
+for them in `manifests/desktops/gnome.yaml`.
+
+#### Reproducing all of the above
+
+```bash
+# both indexes
+curl -s https://repo.tunaos.org/hummingbird/20251124-x86_64/repodata/repomd.xml
+curl -s https://packages.redhat.com/api/pulp-content/public-hummingbird/x86_64/repodata/repomd.xml
+# what the image actually got: the build job's own artifact, no image pull
+#   packages-hummingbird-<flavor>-<platform>  (405 lines for gnome)
+```
+
+Compare build-order SOURCE names against `sourcerpm` from the index, never
+against served binary names — most sources ship under different binary names
+and matching on those undercounts what is built. The other trap, tier INDEX
+vs tier NAME, is described under "flatpak is the single package gating the
+whole ISO axis" above.
+
 #### Why 38 dropped packages went unremarked
 
 `install_available` records them to `/usr/share/tunaos/missing-on-*.txt`
