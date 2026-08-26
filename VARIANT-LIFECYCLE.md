@@ -72,6 +72,25 @@ must not be promoted or gain additional ISO coverage.
 | `flounder:gnome-nvidia` | #1191 | ci-maintainer | 1 image + 1 ISO (amd64) | NVIDIA driver load, boot gate, LUKS E2E, desktop contract | Held pending capacity sign-off |
 | `flounder-sid:gnome-nvidia` | #1191 | ci-maintainer | 1 image; 0 ISO (amd64) | NVIDIA driver load, boot gate, LUKS E2E, desktop contract | Held pending capacity sign-off |
 
+| Addition (opened 2026-08-25) | Tracker | Owner | Incremental cells | Acceptance evidence | Status |
+|---|---|---|---:|---|---|
+| `wahoo` (Fedora ELN / EL11 preview) — `base`, `gnome` | #2048; fedora-eln/eln#214 | hanthor | 0 nightly; 0 ISO; **1 LUKS** (wahoo:gnome, monthly) | Base availability measured before the first commit (`eln-bootc` OCI index, 4 arches); both flavors built + Promoted on amd64/arm64 (run 32833686631); desktop contract + branding pass; `TUNAOS_WISHLIST_OK misses=0`. **Boot gate NOT run** — Gate is skipped on dispatch | Admitted as experimental, dispatch-only. Not eligible for Beta: VARIANT-LIFECYCLE §2 requires boot-gate green and a download entry, and neither exists |
+
+Wahoo is recorded here for the opposite reason to the four rows above: those
+were grandfathered in and needed a gate applied retroactively, whereas this
+one cleared the gate before its first commit — upstream base availability was
+measured, not assumed, and the flavor set was cut to what the compose actually
+carries. It is dispatch-only precisely so it consumes none of the nightly
+capacity the interim freeze protects. Its one non-zero cell is the monthly
+LUKS sweep, which `luks-e2e.yml` derives from `build_image` with no
+experimental filter; that is counted rather than excluded, and pinned by the
+denominator in `tests/test_matrix_status.py`.
+
+The ELN codec gap is a portfolio constraint, not just a build detail: ELN
+publishes no functional H.264/H.265 decoder, so no wahoo flavor may be
+promoted or marketed as media-capable regardless of how green it goes. See
+the wahoo section of docs/GREEN-MASTER-PLAN.md.
+
 The cell count is the minimum incremental matrix impact, not a claim that the
 work is free: an ISO cell also consumes grouped-ISO or on-demand publishing
 and boot-gate capacity. The owner must attach a capacity note to the tracker
