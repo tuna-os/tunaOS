@@ -354,6 +354,86 @@ Filtering on `index <= 7` silently answers a different question and reports far
 too little work remaining — measured 15 instead of 53 when this was last
 computed. Match on the tier `name`, or find flatpak's index first.
 
+### Re-measured 2026-08-26 03:28: what is actually in each index
+
+Both indexes read live, side by side. The two have moved in opposite
+directions since 08-25, and the difference matters more than either number.
+
+| | `public-hummingbird` (upstream) | `tunaos-hummingbird` (ours) |
+| :--- | :--- | :--- |
+| binary names | 3510 | 7986 |
+| repomd revision | 1787711680 = **2026-08-26 02:34** | 1786989380 = **2026-08-17 17:56** |
+
+**Ours has not been republished in eight days and ten hours** — the revision
+is byte-identical to the one recorded at 08-25 15:30, and the name count has
+not moved either.
+
+That is not a regression. It is that the hummingbird index has never been
+published by the publisher at all. `publish-build-chain-rpms.yml` has seven
+runs in its whole history: one failed on 08-21 at 05:22 (#463's first
+dispatch), three succeeded that morning, one was cancelled, one failed that
+night — all of them xfce/gnome50/el10 targets — and run 7 is the hummingbird
+one, dispatched 08-26 00:14 and still building. The 08-17 17:56 content
+predates the publisher's existence entirely.
+
+So the pipe everything below waits on has not stalled; it has not yet run to
+completion once. "N packages left" cannot distinguish those two, because the
+served index is exactly what that figure counts.
+
+The shape of the problem is a job budget. Run 32842254545 built for 4h01m and
+reached tier 5 of 22. At that rate the chain wants something like seventeen
+hours, against a six-hour cap on a hosted job — so it can only ever finish
+across several runs, each resuming the last one's partial. That makes the
+partial-resume key the whole ballgame, which is why #528/#529 sit on the
+critical path to an ISO and not off to one side, and why `build-chain.sh` in
+`renderer_inputs` must not be touched while a chain is converging: it would
+restart run 7 at bootstrap-00.
+
+Package by package, against what a hummingbird GNOME ISO needs:
+
+| | upstream | ours | union |
+| :--- | :---: | :---: | :---: |
+| `flatpak` | no | no | **no** |
+| `ostree`, `ostree-libs` | **yes** | no | yes |
+| `bubblewrap` | yes | yes | yes |
+| `appstream` | no | yes | yes |
+| `mutter` | no | **yes** | yes |
+| `gnome-shell` | no | no | **no** |
+| `gdm` | no | no | **no** |
+| `gnome-session`, `nautilus` | no | no | **no** |
+| `xdg-desktop-portal{,-gnome,-gtk}` | no | no | **no** |
+| `NetworkManager-wifi` | yes | no | yes |
+| `linux-firmware`, `wpa_supplicant`, `sof-firmware` | no | no | **no** |
+
+Two corrections to what is written above this section.
+
+**flatpak's dependencies are already in reach.** `ostree` is in upstream today
+(with `ostree-libs`, `ostree-devel`, `ostree-grub2`), `bubblewrap` is in both,
+`appstream` is in ours. flatpak itself is the gap, not a closure behind it.
+That is a smaller job than "flatpak plus everything it needs".
+
+**`mutter` arrived in our rebuild** since the 08-15 measurement in #1755, which
+listed it as missing. The rest of that issue's §2 list still holds.
+
+### What that means for the goal, stated plainly
+
+`hummingbird:gnome` requests `gdm` and `gnome-shell` — they are in the
+manifest's list and they appear in the dnf command line of every gnome cell.
+Neither is in either index. Under `--skip-unavailable` they are dropped
+without failing the build.
+
+So even a gnome cell that builds cleanly, publishes, and passes every gate
+produces an image with **no GNOME session and no display manager**. Installed
+to a laptop it reaches a text console. The build-side fixes in this document —
+the mis-placed dnf flag, the stalled-download bounds, the fail-fast
+live-customize — are all necessary and none of them changes that.
+
+The ISO axis and the desktop axis are blocked on the same thing from different
+directions: the ISO cannot be built at all without `flatpak`, and the image it
+would carry is not a desktop without `gnome-shell` and `gdm`. All three are
+the package chain's to produce, and the chain has published nothing for eight
+days.
+
 ### Link 7: firmware, and why CI can never tell you about it
 
 `linux-firmware` and every per-device firmware package are absent from
