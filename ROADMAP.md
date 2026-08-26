@@ -25,7 +25,7 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 | Grouper | Ubuntu 26.04 | GNOME, KDE, Niri, XFCE | Beta (RFC 010) |
 | Marlin | Arch Linux (rolling), CachyOS overlay | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
 | Flounder / Flounder Sid | Debian 13 Trixie / Sid | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
-| Hummingbird | Fedora Hummingbird (container-native bootc) | Base, GNOME, KDE, COSMIC, Niri | Experimental (see #1341) |
+| Hummingbird | Fedora Hummingbird (container-native bootc) | Base, GNOME, COSMIC | Experimental (see #1341) |
 | Gurnard | Ubuntu 24.04 Noble | Base, Pantheon | Experimental (see #1341) |
 | Wahoo | Fedora ELN (EL11 preview, rolling) | Base, GNOME | Experimental — both flavors built and published 08-25 (dispatch-only, no cron); **not booted**, Gate is skipped on dispatch (fedora-eln/eln#214, desktops #2048) |
 
