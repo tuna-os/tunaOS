@@ -65,15 +65,27 @@ def test_the_preset_file_is_where_systemd_looks_for_it() -> None:
     assert PRESET.parent.name == "system-preset"
 
 
-def test_it_sorts_before_fedoras_catch_all_disable() -> None:
+def test_every_preset_we_ship_sorts_before_fedoras_catch_all_disable() -> None:
     """`disable *` ships as 99-default.preset; a higher number never wins.
 
-    Worth pinning because renaming the file is exactly the kind of tidy-up
-    that would silently restore the bug — the file would still be read, and
-    still lose.
+    Checked across EVERY preset file rather than just the one named above,
+    because the failure this guards against arrived as a second file, not as
+    a rename: `git mv` during a mutation test staged 99-tunaos.preset, a
+    directory-level `git add` swept it into a commit, and a version of this
+    test that only looked at PRESET.name passed while a file sorting after
+    the catch-all sat right beside it.
     """
-    prefix = int(PRESET.name.split("-", 1)[0])
-    assert prefix < 99, f"{PRESET.name} sorts at or after the catch-all"
+    shipped = sorted(PRESET.parent.glob("*.preset"))
+    assert shipped, "no preset files found — this test is measuring nothing"
+    for path in shipped:
+        prefix = int(path.name.split("-", 1)[0])
+        assert prefix < 99, f"{path.name} sorts at or after the catch-all"
+
+
+def test_we_ship_exactly_one_tunaos_preset() -> None:
+    """Two files with overlapping directives is a merge nobody reviewed."""
+    ours = sorted(p.name for p in PRESET.parent.glob("*-tunaos.preset"))
+    assert ours == [PRESET.name], f"unexpected tunaos preset files: {ours}"
 
 
 def test_every_unit_first_boot_stripped_is_now_enabled() -> None:
