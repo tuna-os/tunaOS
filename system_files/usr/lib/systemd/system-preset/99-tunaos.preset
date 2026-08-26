@@ -1,0 +1,8 @@
+# TunaOS systemd presets — suppress benign warnings from services that
+# are present but intentionally not enabled in our images.
+#
+# tracker-extract-3.service: installed by tracker3 package but not
+# needed in our build environments. Without this preset, systemd emits
+# a warning on every bootc deployment.
+
+disable tracker-extract-3.service
