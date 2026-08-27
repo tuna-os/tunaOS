@@ -83,7 +83,7 @@ Scored against `.github/green-criteria.yml`: a cell is green only when every **b
 | **marlin** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **skipjack** | ❌ | ⬜ | ❌ | ❌ | ✅ |
-| **wahoo** | ⬜ | — | — | — | — |
+| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
 | **yellowfin** | ✅ | ✅ | ❌ | ❌ | ✅ |
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
@@ -109,7 +109,7 @@ Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **wahoo** | ⬜ | — | — | — | — |
+| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ## Package parity
@@ -131,7 +131,7 @@ Green criterion 7 (`parity`), first cadence: every desktop's package set audited
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ❌ |
-| **wahoo** | ⬜ | — | — | — | — |
+| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ## LUKS E2E
@@ -154,7 +154,7 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **wahoo** | ⬜ | — | — | — | — |
+| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
 | **yellowfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 25 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
@@ -182,7 +182,7 @@ Pulls the **published** image and runs the contract script against it directly (
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **wahoo** | ⬜ | — | — | — | — |
+| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 5 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
@@ -209,7 +209,7 @@ Validates bootc image update, rebase, rollback, alias resolution, and post-switc
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **wahoo** | ⬜ | — | — | — | — |
+| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 Newest result 2026-08-20.
