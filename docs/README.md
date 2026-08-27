@@ -18,6 +18,8 @@ user-facing site:
 | Doc | What it covers |
 |-----|----------------|
 | [AGENT_GUIDE.md](AGENT_GUIDE.md) | Repo architecture: variants, flavors, build stages, key files |
+| [HUMMINGBIRD.md](HUMMINGBIRD.md) | Fedora Hummingbird variant architecture, rolling release model, and package snapshot state |
+| [architecture/reusable-build-image-decomposition.md](architecture/reusable-build-image-decomposition.md) | Architectural plan for decomposing reusable-build-image.yml monolith |
 | [INSTALLER_SCREENSHOTS.md](INSTALLER_SCREENSHOTS.md) | Visual step-by-step walkthrough of the GUI installer for GNOME and Cosmic |
 | [build-pipeline.md](build-pipeline.md) | CI/CD workflow and build-stage overview |
 | [ci-troubleshooting.md](ci-troubleshooting.md) | Diagnosing and fixing common CI failures |
