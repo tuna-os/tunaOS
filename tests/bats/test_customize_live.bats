@@ -89,12 +89,13 @@ detect() {
   # helper (the forked bus was holding the build's stdout pipe open and turning
   # a 1-second failure into a 57-minute timeout). The session bus was still
   # started and still exported, but the string was gone, so this test failed on
-  # a script that behaves correctly — and it failed on main, not just on the
-  # branch that changed it, because the commit did not grep for tests pinning
-  # the old wording.
+  # a script that behaves correctly — and it failed on every PR in the repo, not
+  # just the ones touching live-iso, because Unit Tests runs the whole bats
+  # suite and the commit did not grep for tests pinning the old wording.
   grep -q 'DBUS_SESSION_BUS_ADDRESS' "${SCRIPT}"
-  # a session bus is started...
-  grep -qE '_start_bus[^#]*--session' "${SCRIPT}"
+  # a session bus is started (the space rules out the helper's own definition
+  # line, and the class rules out a comment or a pipeline carrying the flag)...
+  grep -qE '_start_bus [^#|]*--session' "${SCRIPT}"
   # ...and the thing that starts it really does exec dbus-daemon.
   grep -q 'dbus-daemon "$@"' "${SCRIPT}"
 }

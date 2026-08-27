@@ -68,21 +68,22 @@ it.
 
 Scored against `.github/green-criteria.yml`: a cell is green only when every **blocking** criterion applicable to it has a current affirmative result; a criterion that was skipped, never tested, or unasserted renders ⬜ and does not count as satisfied. Blocking today: `builds`, `desktop`, `boots`, `no_silent_omissions`. Advisory (measured in the sections below, not yet biting): `install`, `lifecycle`, `parity`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. Graduating a criterion is an edit to `enforcement:` in that file — this table and the README count tighten with no code change.
 
-**67 of 143** published cells are composite-green.
+**63 of 143** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **albacore** | ✅ | ✅ | ❌ | ❌ | ⬜ |
 | **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **flounder** | ✅ | ✅ | — | — | ✅ |
+| **flounder** | ⬜ | ✅ | — | — | ✅ |
 | **flounder-sid** | ❌ | ❌ | — | — | ❌ |
-| **grouper** | ✅ | ✅ | ❌ | — | ✅ |
-| **guppy** | ❌ | ⬜ | — | — | ✅ |
+| **grouper** | ✅ | ✅ | ❌ | — | ⬜ |
+| **guppy** | ❌ | ✅ | — | — | ✅ |
 | **hummingbird** | ❌ | — | ❌ | — | — |
 | **marlin** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **skipjack** | ❌ | ✅ | ❌ | ❌ | ✅ |
+| **skipjack** | ❌ | ⬜ | ❌ | ❌ | ✅ |
+| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
 | **yellowfin** | ✅ | ✅ | ❌ | ❌ | ✅ |
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
@@ -91,7 +92,7 @@ Per-cell provenance — which run asserted which criterion, when — is machine-
 
 ## Silent omissions
 
-**48 of 52** cells clean (48 read, 4 never read).
+**48 of 51** cells clean (48 read, 3 never read).
 
 Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package-wishlist.sh` against every published image it pulls — the same gate new builds pass at build time — so an image shipping a silently-skipped package outside `package-miss-allowlist.txt` reads ❌ here even if it was published before the gate existed. A cell whose image was not read (no image, pull error, job lost) is ⬜, not clean.
 
@@ -108,11 +109,12 @@ Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ## Package parity
 
-**39 of 52** cells at parity (49 measured, 3 never measured).
+**38 of 51** cells at parity (47 measured, 4 never measured).
 
 Green criterion 7 (`parity`), first cadence: every desktop's package set audited daily against its own base (`package-parity.yml` → `scripts/package-parity.sh --audit`) — the shape that exposes a build applying no desktop at all (#858). ❌ covers both BROKEN (no more packages than base) and suspect (fewer than 25 added). Diffing against each variant's upstream reference is the next step and is not yet asserted.
 
@@ -128,12 +130,13 @@ Green criterion 7 (`parity`), first cadence: every desktop's package set audited
 | **hummingbird** | ✅ | ❌ | ✅ | ❌ | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **skipjack** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ## LUKS E2E
 
-**31 of 52** cells green (47 tested, 5 never tested).
+**31 of 51** cells green (47 tested, 4 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
@@ -151,6 +154,7 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
 | **yellowfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
 
 NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 25 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
@@ -161,7 +165,7 @@ Newest result 2026-08-09, oldest still-authoritative result 2026-08-05. Results 
 
 ## Desktop Contract Sweep
 
-**39 of 52** cells satisfy `build_scripts/checks/verify-desktop-experience.sh` (48 tested, 4 never tested).
+**39 of 51** cells satisfy `build_scripts/checks/verify-desktop-experience.sh` (48 tested, 3 never tested).
 
 Pulls the **published** image and runs the contract script against it directly (`podman run`, no boot required) — the same denominator as LUKS E2E above (`build_image`, restricted to the five desktop flavors). This is what catches a desktop whose packages silently never landed, independent of whether anything can actually boot it on hosted CI.
 
@@ -178,15 +182,16 @@ Pulls the **published** image and runs the contract script against it directly (
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 5 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
 
-Newest result 2026-08-24.
+Newest result 2026-08-25.
 
 ## Bootc Lifecycle
 
-**40 of 52** cells green (52 tested, 0 never tested).
+**40 of 51** cells green (50 tested, 1 never tested).
 
 Validates bootc image update, rebase, rollback, alias resolution, and post-switch system contracts across published stream deployments.
 
@@ -204,13 +209,14 @@ Validates bootc image update, rebase, rollback, alias resolution, and post-switc
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 Newest result 2026-08-20.
 
 ## Installer smoke
 
-**32 of 36** non-NVIDIA ISO cells have *ever* been tested — 89% coverage. 1 of those pass.
+**30 of 34** non-NVIDIA ISO cells have *ever* been tested — 88% coverage. 1 of those pass.
 
 This is the only axis that checks a human could actually install. For 4 combinations, nobody has confirmed the installer appears on screen.
 
@@ -233,7 +239,7 @@ cosmic, niri, xfwl4 and kde do not bring a session up on hosted CI. The cause is
 
 **48** tags published.
 
-Missing for 6 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-cosmic`, `hummingbird-gnome`, `hummingbird-kde`, `hummingbird-niri`
+Missing for 4 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-cosmic`, `hummingbird-gnome`
 
 ## Provenance
 
@@ -241,9 +247,9 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-08-25 | [32827278933](https://github.com/tuna-os/tunaOS/actions/runs/32827278933) | 48 |
 | 2026-08-24 | [32747410944](https://github.com/tuna-os/tunaOS/actions/runs/32747410944) | 2 |
 | 2026-08-24 | [32718219267](https://github.com/tuna-os/tunaOS/actions/runs/32718219267) | 1 |
-| 2026-08-24 | [32707439589](https://github.com/tuna-os/tunaOS/actions/runs/32707439589) | 48 |
 | 2026-08-24 | [32700275124](https://github.com/tuna-os/tunaOS/actions/runs/32700275124) | 1 |
 | 2026-08-21 | [32465179023](https://github.com/tuna-os/tunaOS/actions/runs/32465179023) | 1 |
 | 2026-08-20 | [32335146969](https://github.com/tuna-os/tunaOS/actions/runs/32335146969) | 120 |
