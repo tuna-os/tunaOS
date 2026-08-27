@@ -19,6 +19,16 @@ set -euo pipefail
 CONFIG="${CONFIG:-.github/build-config.yml}"
 YQ="${YQ:-yq}"
 
+if ! command -v "$YQ" >/dev/null 2>&1; then
+  echo "::error::yq executable not found ('$YQ'); cannot parse $CONFIG" >&2
+  exit 1
+fi
+
+if [ ! -f "$CONFIG" ]; then
+  echo "::error::config file not found ($CONFIG)" >&2
+  exit 1
+fi
+
 # Registries serve manifest lists, image indexes and plain manifests; ask for
 # all of them or a HEAD against a multi-arch tag returns 404 on content-type
 # grounds and looks exactly like a GC'd digest.
