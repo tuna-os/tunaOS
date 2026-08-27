@@ -349,39 +349,33 @@ The fully-diagnosed one: **#1755**.
 | dconf branding failure | **deliberately left failing** — guarding it would green cells that contain no desktop | fix only after manifest sections exist |
 | convergence | tunaos-packages seed grew for the first time since 08-09 (7170→7673); reserve budget stops *between* tiers (tunaos-packages#401), cosmic/niri/kde runs lost to the 6h ceiling | in-loop deadline check (#401), tier failures layer-00/01/02/07/10/11 to classify (#402/#403/#404 candidates) |
 
-### wahoo (Fedora ELN, experimental) — 2/2 build, both promoted (08-25, first dispatch)
-New 2026-08-25 (#2042). The EL11 early-warning lane: ELN is Rawhide sources
-built with Enterprise Linux macros, and its os-release already reads `ID=eln`,
-`VERSION_ID=11`, `ID_LIKE="rhel centos fedora"` — the same 11 c11s and
-almalinux-bootc:11-kitten will carry. Nothing else in the matrix sees EL11, so
-today an EL11 break surfaces the day a base flips rather than months earlier.
+### wahoo (Fedora ELN, experimental) — 4/4 build; gnome + kde Gate-green and promoted (08-27)
+New 2026-08-25 (#2042); cosmic + kde added 08-27 (#2103). The EL11
+early-warning lane: ELN is Rawhide sources built with Enterprise Linux
+macros, and its os-release already reads `ID=eln`, `VERSION_ID=11`,
+`ID_LIKE="rhel centos fedora"` — the same 11 c11s and
+almalinux-bootc:11-kitten will carry. Nothing else in the matrix sees EL11.
 
-Dispatch-only (`experimental: true`): 0 nightly cells, 0 ISO cells; its one
-incremental scheduled cell is wahoo:gnome in the monthly LUKS sweep.
+Dispatch-only (`experimental: true`): 0 nightly cells, 0 ISO cells; its
+incremental scheduled cells are the three desktops in the monthly LUKS sweep.
 
-**First dispatch, run 32833686631, on 80bc855 — conclusion success.** Both
-flavors built, manifested, cosign-signed and Promoted on amd64 AND arm64, and
-`ghcr.io/tuna-os/wahoo` now serves `base`, `gnome` and their dated/per-arch
-tags (the `gnome` index carries both arches, verified against the registry).
-The rows below were repodata predictions when this section was written; they
-are build results now, and where the two differ the build wins.
-
-**Not proven: this lane has never booted.** The Gate job is `skipped` on a
-dispatch, so build-green here means "the image assembles and the desktop
-contract passes", not "it boots". Nothing should read a promoted wahoo tag as
-a boot claim until a Gate or LUKS run says so.
+**It boots.** Run 33041330231 (on a4d86c5) is the first wahoo dispatch to
+reach a Gate at all — earlier runs had it `skipped` — and **gnome and kde
+both passed it**. That retires the "this lane has never booted" caveat these
+docs carried from 08-25, for those two flavors.
 
 | area | state | action |
 |---|---|---|
-| base amd64/arm64 | **built and Promoted** (33m / 28m). `TUNAOS_BRANDING_OK variant=wahoo`, `TUNAOS_BASE_CONTRACT_BUILDCHECK_OK` | keep |
-| gnome amd64/arm64 | **built and Promoted**, `desktop experience contract passed: gnome`; installed gnome-shell 51~beta-3.eln158, gdm 1:51~beta-1, mutter 51~beta-1, nautilus 51~beta-1 | keep |
-| package measurement | `TUNAOS_WISHLIST_OK misses=0` — every name listed strictly resolved, nothing silently skipped. The pre-merge repodata measurement (40/48 base, 42/52 gnome) was exact | re-measure when ELN moves |
-| repos | `/etc/yum.repos.d` is EMPTY on this base; `fedora-repos-eln` ships the repo file at `/usr/share/dnf5/repos.d/fedora-eln.repo`, which dnf5 reads — eln-{baseos,appstream,crb,extras} enabled by default, so no `crb enable` and no EPEL step | none — the build adds no repo of its own |
-| base packages | `systemd-oomd`, `just`, `tailscale`, `epel-release` are absent from ELN and omitted rather than `--skip-unavailable`'d (the #1555 failure shape). `misses=0` confirms nothing else was | re-measure when ELN grows them |
-| codecs | **no working H.264 or H.265 at all** — measured, not assumed. RPM Fusion publishes no ELN branch; ELN carries no `ffmpeg` and no `gstreamer1-plugins-ugly`; `ffmpeg-free` 8.1.2's only h264 entry is `libopenh264`, and the sole openh264 provider in ELN is `noopenh264-2.6.0-5.eln158`, Fedora's **stub** — encoding a 1s testsrc through it wrote a 0-byte file. `TUNAOS_CODEC_GAP` fired on the green gnome build exactly as designed; `tests/bats/test_eln_codec_gap.bats` pins that it stays loud and never widens to accept the stub's name | needs an ELN codec source; until then wahoo must never be promoted as media-capable, and this row is the reason it stays experimental |
-| boot gate | **never run** — `Gate` is skipped on dispatch | dispatch a boot gate before any promotion claim |
-| SBOM attestation | **missing on both flavors.** Both `Attest SBOM` jobs failed against `rekor.sigstore.dev` (14x 502 plus 429s, twice each, including a re-run at 12:52-13:01Z) and ended in the workflow's own `SIGSTORE_OUTAGE` classifier. Upstream outage, non-blocking by design; the SBOMs were generated and uploaded, just not countersigned. Note the images ARE cosign-signed — that is a different path | attests on the next dispatch once Sigstore's write path recovers |
-| kde/cosmic/niri/xfce | **not declared** — measured 08-25 and tracked in #2048: COSMIC 23/24 and KDE 16/23 with their groups present (ready to attempt); Niri and XFCE blocked, XFCE because ELN composes **zero** `xfce*` packages | #2049 (cosmic), #2050 (kde); #2051/#2052 stay filed until their blockers clear |
+| base amd64/arm64 | built, manifested, cosign-signed, **Promoted** | keep |
+| gnome amd64/arm64 | built, **Gate PASSED**, **Promoted** | keep |
+| kde amd64/arm64 | built, **Gate PASSED**, **Promoted**. Plasma 6.7.4 (plasma-desktop, kwin 6.7.4-2, kscreen), sddm 0.21.0 present; `TUNAOS_BRANDING_KDE_OK` | keep |
+| cosmic amd64/arm64 | **built, manifested and signed on both arches** — but **Promote skipped**, held behind a Gate that never ran: the GPU runner failed to launch with AWS `VcpuLimitExceeded` ("current vCPU limit of 0" for the `g4dn*` bucket). Nothing about the image was tested; `cosmic-linux-amd64`/`-arm64` and `cosmic-testing` are on GHCR, the promoted `cosmic` tag is not | **needs a human**: raise the AWS on-demand `g4dn` vCPU limit for the runner account, then re-dispatch. Not a wahoo defect |
+| kde display manager | **measured answer to the question kde.yaml flagged**: the eln `kde-desktop` group makes `plasma-login-manager` (6.7.4) mandatory, and it claims `display-manager.service` first — the build logs `already points at plasmalogin.service; leaving it` — so the greeter is **plasmalogin, not the `sddm` the manifest declares**. The Gate passed on it, so this is an accuracy gap in the manifest, not a breakage | decide whether ELN should override `display_manager` per-section; note `display_manager` is top-level in kde.yaml and shared with el10/fedora, so it must not be changed globally |
+| package measurement | `TUNAOS_WISHLIST_OK misses=0` on every flavor — every strictly-listed name resolved, nothing silently skipped. The pre-merge repodata measurements (cosmic 23/24, kde 16/23) held exactly | re-measure when ELN moves |
+| desktop contract | **waived, not passed, on all three desktops — `missing=1` each, and the 1 is always the codec gap.** `verify-desktop-experience.sh` calls `waive()` on the h264 branch after the ELN marker, so the images are correctly stamped "NOT a verified desktop" while still building | closes only when a codec source exists |
+| codecs | **sharper evidence than the 08-25 note.** The build's own `codec_diag` shows ELN's ffmpeg-free is configured `--disable-decoders` and `--disable-decoder='h264,hevc,vc1,vvc'` — the decoders are **compiled out of libavcodec**, not merely unbacked by the `noopenh264` stub. So even a working openh264 would not restore hevc/vc1/vvc. `TUNAOS_CODEC_GAP` fires on every green build as designed | tunaos-packages#562 — a sourcing decision, not a build task |
+| SBOM attestation | still missing. All three `Attest SBOM` jobs failed on `rekor.sigstore.dev` (14x 502 plus 429s) with the workflow's `SIGSTORE_OUTAGE` classifier — the **third consecutive run**. Upstream, non-blocking; images are cosign-signed | attests itself when Sigstore's write path recovers; do not chase |
+| niri/xfce | **not declared** — ELN ships one package of the Niri stack (`swaybg`) and zero `xfce*` | #2051/#2052; tunaos-packages#559-#562 |
 
 ### sailfin (openSUSE Tumbleweed) — 0/7 → **all five desktops promoted with Gates green (08-18)**
 | area | state | action |
