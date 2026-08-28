@@ -17,6 +17,10 @@
 # reusable-build-image.yml. Falls back to querying the image directly when an
 # edition predates that (or the publish step was skipped), which costs a pull.
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/build-config.sh
+source "${SCRIPT_DIR}/lib/build-config.sh"
+BUILD_CONFIG="$(tunaos_build_config)"
 
 REGISTRY="${TUNA_REGISTRY:-ghcr.io/tuna-os}"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/tuna-parity"
@@ -82,8 +86,8 @@ if [[ "${1:-}" == "--audit" ]]; then
 	# flounder-sid and gurnard were missing from the old hardcoded list —
 	# exactly the absence-of-evidence hole this repo keeps refusing to dig).
 	variants=(yellowfin bonito sailfin flounder grouper marlin skipjack albacore guppy)
-	if command -v yq >/dev/null && [[ -f .github/build-config.yml ]]; then
-		mapfile -t variants < <(yq -r '.variants[].id' .github/build-config.yml)
+	if command -v yq >/dev/null && [[ -f "$BUILD_CONFIG" ]]; then
+		mapfile -t variants < <(yq -r '.variants[].id' "$BUILD_CONFIG")
 	fi
 	# PARITY_JSON: append one JSON object per audited cell — the machine
 	# output the scheduled workflow collates for the scoreboard (W6).

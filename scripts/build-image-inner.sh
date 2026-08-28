@@ -38,6 +38,9 @@ YQ="${YQ:-yq}"
 
 # ── Source shared helpers ─────────────────────────────────────────────────────
 source scripts/_registry.sh
+# shellcheck source=lib/build-config.sh
+source scripts/lib/build-config.sh
+BUILD_CONFIG="$(tunaos_build_config)"
 
 # ── Resolve image refs from image-versions.yaml ───────────────────────────────
 common_image="${COMMON_IMAGE:-ghcr.io/projectbluefin/common}"
@@ -73,7 +76,7 @@ if [[ -n "${OVERLAY_TYPE:-}" ]]; then
 fi
 
 # Akmods version selection
-AKMODS_ORG=$($YQ -r ".variants[] | select(.id == \"${VARIANT}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
+AKMODS_ORG=$($YQ -r ".variants[] | select(.id == \"${VARIANT}\") | .akmods // \"ublue-os\"" "$BUILD_CONFIG")
 AKMODS_REGISTRY_BASE="$(registry_ref akmods 2>/dev/null || echo "ghcr.io/${AKMODS_ORG}")"
 BUILD_ARGS+=("--build-arg" "AKMODS_BASE=${AKMODS_REGISTRY_BASE}")
 
