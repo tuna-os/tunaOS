@@ -905,7 +905,7 @@ variants:
   - id: sailfin
     emoji: "🦈"
     description: "Based on openSUSE Tumbleweed (rolling)"
-    base_image: "registry.opensuse.org/opensuse/tumbleweed:latest@sha256:1e5f7c9f7987f7243ecda913201c2667cff4c83f71c7deca12af3087d5555c41"
+    base_image: "registry.opensuse.org/opensuse/tumbleweed:latest@sha256:bbe3311a70b9b5fec1f57b44ee86b68fce0490424c5b804e18dd473123216e87"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [opensuse, tumbleweed]
     platforms: ["linux/amd64"]
