@@ -68,7 +68,7 @@ it.
 
 Scored against `.github/green-criteria.yml`: a cell is green only when every **blocking** criterion applicable to it has a current affirmative result; a criterion that was skipped, never tested, or unasserted renders ⬜ and does not count as satisfied. Blocking today: `builds`, `desktop`, `boots`, `no_silent_omissions`. Advisory (measured in the sections below, not yet biting): `install`, `lifecycle`, `parity`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. Graduating a criterion is an edit to `enforcement:` in that file — this table and the README count tighten with no code change.
 
-**69 of 145** published cells are composite-green.
+**68 of 145** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -83,7 +83,7 @@ Scored against `.github/green-criteria.yml`: a cell is green only when every **b
 | **marlin** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **skipjack** | ❌ | ✅ | ❌ | ❌ | ✅ |
-| **wahoo** | ❌ | ⬜ | ❌ | — | — |
+| **wahoo** | ❌ | ❌ | ❌ | — | — |
 | **yellowfin** | ✅ | ✅ | ❌ | ❌ | ✅ |
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
@@ -92,7 +92,7 @@ Per-cell provenance — which run asserted which criterion, when — is machine-
 
 ## Silent omissions
 
-**48 of 53** cells clean (49 read, 4 never read).
+**49 of 53** cells clean (50 read, 3 never read).
 
 Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package-wishlist.sh` against every published image it pulls — the same gate new builds pass at build time — so an image shipping a silently-skipped package outside `package-miss-allowlist.txt` reads ❌ here even if it was published before the gate existed. A cell whose image was not read (no image, pull error, job lost) is ⬜, not clean.
 
@@ -109,12 +109,12 @@ Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **wahoo** | ❌ | ⬜ | ⬜ | — | — |
+| **wahoo** | ❌ | ✅ | ⬜ | — | — |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ## Package parity
 
-**39 of 53** cells at parity (48 measured, 5 never measured).
+**41 of 53** cells at parity (50 measured, 3 never measured).
 
 Green criterion 7 (`parity`), first cadence: every desktop's package set audited daily against its own base (`package-parity.yml` → `scripts/package-parity.sh --audit`) — the shape that exposes a build applying no desktop at all (#858). ❌ covers both BROKEN (no more packages than base) and suspect (fewer than 25 added). Diffing against each variant's upstream reference is the next step and is not yet asserted.
 
@@ -130,8 +130,8 @@ Green criterion 7 (`parity`), first cadence: every desktop's package set audited
 | **hummingbird** | ✅ | ❌ | ✅ | ❌ | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **skipjack** | ✅ | ✅ | ✅ | ✅ | ❌ |
-| **wahoo** | ✅ | ⬜ | ⬜ | — | — |
+| **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **wahoo** | ✅ | ✅ | ❌ | — | — |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 ## LUKS E2E
@@ -165,7 +165,7 @@ Newest result 2026-08-09, oldest still-authoritative result 2026-08-05. Results 
 
 ## Desktop Contract Sweep
 
-**39 of 53** cells satisfy `build_scripts/checks/verify-desktop-experience.sh` (49 tested, 4 never tested).
+**39 of 53** cells satisfy `build_scripts/checks/verify-desktop-experience.sh` (50 tested, 3 never tested).
 
 Pulls the **published** image and runs the contract script against it directly (`podman run`, no boot required) — the same denominator as LUKS E2E above (`build_image`, restricted to the five desktop flavors). This is what catches a desktop whose packages silently never landed, independent of whether anything can actually boot it on hosted CI.
 
@@ -182,12 +182,12 @@ Pulls the **published** image and runs the contract script against it directly (
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **wahoo** | ❌ | ⬜ | ⬜ | — | — |
+| **wahoo** | ❌ | ❌ | ⬜ | — | — |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-3 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
+4 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
 
-Newest result 2026-08-26.
+Newest result 2026-08-27.
 
 ## Bootc Lifecycle
 
@@ -247,8 +247,8 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-08-27 | [33104817652](https://github.com/tuna-os/tunaOS/actions/runs/33104817652) | 50 |
 | 2026-08-27 | [33090531233](https://github.com/tuna-os/tunaOS/actions/runs/33090531233) | 121 |
-| 2026-08-26 | [32948500704](https://github.com/tuna-os/tunaOS/actions/runs/32948500704) | 49 |
 | 2026-08-24 | [32747410944](https://github.com/tuna-os/tunaOS/actions/runs/32747410944) | 2 |
 | 2026-08-24 | [32718219267](https://github.com/tuna-os/tunaOS/actions/runs/32718219267) | 1 |
 | 2026-08-24 | [32700275124](https://github.com/tuna-os/tunaOS/actions/runs/32700275124) | 1 |
