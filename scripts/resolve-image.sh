@@ -28,11 +28,14 @@ YQ="${YQ:-yq}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck disable=SC1091
 source "${SCRIPT_DIR}/_registry.sh" 2>/dev/null || true
+# shellcheck source=lib/build-config.sh
+source "${SCRIPT_DIR}/lib/build-config.sh"
+BUILD_CONFIG="$(tunaos_build_config)"
 
 case "${ROLE}" in
 base)
 	# Base image from build-config.yml
-	$YQ -r ".variants[] | select(.id == \"${VARIANT}\") | .base_image" .github/build-config.yml
+	$YQ -r ".variants[] | select(.id == \"${VARIANT}\") | .base_image" "$BUILD_CONFIG"
 	;;
 common)
 	IMAGE="${COMMON_IMAGE:-ghcr.io/projectbluefin/common}"
@@ -50,7 +53,7 @@ zirconium)
 	echo "ghcr.io/zirconium-dev/zirconium@${DIGEST}"
 	;;
 akmods)
-	AKMODS_ORG=$($YQ -r ".variants[] | select(.id == \"${VARIANT}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
+	AKMODS_ORG=$($YQ -r ".variants[] | select(.id == \"${VARIANT}\") | .akmods // \"ublue-os\"" "$BUILD_CONFIG")
 	registry_ref akmods 2>/dev/null || echo "ghcr.io/${AKMODS_ORG}"
 	;;
 *)

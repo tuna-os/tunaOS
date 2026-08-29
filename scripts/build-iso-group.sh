@@ -26,13 +26,15 @@
 set -euo pipefail
 # shellcheck source=lib/common.sh
 . "$(dirname "${BASH_SOURCE[0]}")/lib/common.sh"
+# shellcheck source=lib/build-config.sh
+. "$(dirname "${BASH_SOURCE[0]}")/lib/build-config.sh"
 
 VARIANT="${1:?usage: $0 <variant> <group> [repo]}"
 # "default"/"flagship"/"" all select the empty-suffix flagship group.
 GROUP_RAW="${2-default}"
 REPO="${3:-ghcr}"
 
-CONFIG=".github/build-config.yml"
+CONFIG="$(tunaos_build_config)"
 
 if [[ "$EUID" -ne 0 ]]; then
 	echo "ERROR: tacklebox needs root for sgdisk / mkfs / mount" >&2
