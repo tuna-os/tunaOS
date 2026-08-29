@@ -97,6 +97,8 @@ These live at the repository root rather than in this folder:
 - [MAINTAINERS.md](../MAINTAINERS.md) — maintainer playbook and bus factor plan
 - [CODE_OF_CONDUCT.md](../CODE_OF_CONDUCT.md) — community standards
 - [Q3_CHECKPOINT-2026-08-22.md](../Q3_CHECKPOINT-2026-08-22.md) — decision sheet for the Q3 "Expand Coverage" milestone (#1299)
+- [Q4-MATURE-DEFINITION.md](../Q4-MATURE-DEFINITION.md) — operational definition of done for Q4 "Mature" milestone (#1637)
+- [Q4-ADOPTION-PLAN.md](../Q4-ADOPTION-PLAN.md) — Q4 adoption and community expansion plan
 
 For current project priorities see [ROADMAP.md](../ROADMAP.md). For how to build
 and contribute see [CONTRIBUTING.md](../CONTRIBUTING.md).

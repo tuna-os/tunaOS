@@ -121,6 +121,7 @@ track it. Notably **Bonito is Beta** (GA tracked in [#272](https://github.com/tu
 | **Apple Silicon (Asahi Linux) support** | architect / ci-maintainer | #781 | 🟡 In progress (Bonito & Grouper 36/36 verified #776; D0–D4 installer track active) |
 | **Desktop parity floor (non-RPM bases)** | packaging | #133, tunaos-packages#323 | ⬜ Not started — P0 for Q4 (see #1294) |
 | **Q3 checkpoint (08-22): staff or descope #272/#1123/#1093/#1094** | strategist | #1299 | ⬜ Scheduled |
+| **RFC lifecycle governance** | strategist | #1093 | ✅ Done — RFC lifecycle policy adopted ([RFC-PROCESS.md](RFC-PROCESS.md), [ADR 0004](docs/adr/0004-rfc-lifecycle.md)); 11 legacy RFC branches audited and triaged (#1363) |
 | **Flavor equality mandate (docs wording + cadence parity)** | strategist | #1315, #1254 | 🟡 In progress — catalog parity gate merged 08-11 (#1322, #1281 closed); cadence parity pending (#1316) |
 | **NVIDIA flavor family (6 editions, 0 assets since 07-05)** | ci-maintainer | #1383 | 🔴 Broken — nightly overlay regressed 08-12 (#1382); 13/13 variant matrix red 08-14 (#1570) incl. nvidia cells (#1561/#1562/#1564/#1565); staff test: nightly green + gnome-nvidia assets republished by 09-01 (#1376/#1379) |
 | **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 | 🟡 In progress — PACKAGE-SOURCING.md merged; DNF/COPR audit done 08-13, ahead of the 08-22 checkpoint (2 violations, 6-COPR niri gap, negativo17/rpmfusion allowlist candidates confirmed — #1453); apt/AUR/OBS bases still unaudited, maintainer allowlist sign-off and Phase 2 migration still pending |
@@ -137,21 +138,21 @@ track it. Notably **Bonito is Beta** (GA tracked in [#272](https://github.com/tu
 
 | Goal | Owner | Dependencies |
 |------|-------|--------------|
-| Tacklebox decoupling | architect | #1192 (tracker; #306 closed) — audited 2026-08-14: of #306's 4 recommendations, 3 already landed (`TACKLEBOX_SHA`/`TACKLEBOX_IMAGE` version pinning via `scripts/lib/common.sh`; tacklebox runs as a `ghcr.io/tuna-os/tacklebox` container image, not a host-installed binary; the flagged `ghcr.io/hanthor/bluefin:lts` `iso.toml` reference no longer exists in this repo's own build path). Real remaining gap: **the version pin has no single source of truth** — `image-versions.yaml` (`4fa6041`, renovate-tracked) diverges from hardcoded overrides in `publish-iso-groups.yml` (`a105d6d3`) and `luks-e2e.yml` (`fd95174`, the documented floor SHA, not the current pin). Consolidating those onto one pin needs real boot evidence before merging (see Build Health note above on why `publish-iso-groups.yml`'s divergence was left as a deliberate, not accidental, gap) — flagged as the concrete next step, not actioned blind |
-| Upstream snapshot automation | ci-maintainer | #1194 (tracker; #307 closed) |
-| Branch protection + required CI | strategist | CI health, #1167 — audited 2026-08-13: [BRANCH-PROTECTION.md](./docs/BRANCH-PROTECTION.md), active `main` ruleset has no required-status-checks rule; proposed list is `lint`, `lint-summary`, `unit-tests` |
-| Supply chain hardening | sec-check | #1193 (tracker; #212/#301 closed) — coordinates with #1187 (package signing/SBOM is the largest hardening item, tracked there in detail) |
-| Release automation | ci-maintainer | CI health, VERSIONING.md, #1186 |
-| Community governance model | strategist | #1168 |
-| Issue triage policy (queue actionability) | strategist | #1195 — [TRIAGE-POLICY.md](./TRIAGE-POLICY.md) drafted 08-13: milestone-only roadmap signal, verify-before-trust closure, tiered SLA |
-| Package signing / SBOM | sec-check | Supply chain, #1187 |
-| **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 (audit → #1187) |
-| Bonito (Fedora 44) GA carryover | ci-maintainer | #272 — blocked on #1499 (nightly red 08-03–08-13) |
-| Redfin (RHEL 10) alpha GA | ci-maintainer | #609 |
-| Fedora 45 base readiness | ci-maintainer | #1171 — [FEDORA-BASE-POLICY.md](./FEDORA-BASE-POLICY.md) adopted 08-13: N+rawhide model, Fedora 45 planning sequenced after Bonito (#272) GA, not parallel |
-| Adoption metrics / usage telemetry | strategist | #1174 |
-| **Adoption evidence (ADOPTERS.md production entries)** | strategist | #1348 — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot |
-| Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | #1196, #1175 — [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) |
+| Tacklebox decoupling | architect | [#1192](https://github.com/tuna-os/tunaos/issues/1192) (tracker; #306 closed, Q4 milestone #3 attached) — audited 2026-08-14: container image execution decoupled per #306 recommendations, version pin consolidation in progress |
+| Upstream snapshot automation | ci-maintainer | [#1194](https://github.com/tuna-os/tunaos/issues/1194) (tracker; #307 closed, Q4 milestone #3 attached) |
+| Branch protection + required CI | strategist | CI health, [#1167](https://github.com/tuna-os/tunaos/issues/1167) — audited 2026-08-13: [BRANCH-PROTECTION.md](./docs/BRANCH-PROTECTION.md), active `main` ruleset has no required-status-checks rule; proposed list is `lint`, `lint-summary`, `unit-tests` |
+| Supply chain hardening | sec-check | [#1193](https://github.com/tuna-os/tunaos/issues/1193) (tracker; #212/#301 closed, Q4 milestone #3 attached) — coordinates with [#1187](https://github.com/tuna-os/tunaos/issues/1187) (package signing/SBOM, provenance attestations) |
+| Release automation | ci-maintainer | CI health, [VERSIONING.md](./VERSIONING.md), [#1186](https://github.com/tuna-os/tunaos/issues/1186) (tracker, Q4 milestone #3 attached) — scheduled multi-flavor release pipeline & fail-on-drop gate |
+| Community governance model | strategist | [#1168](https://github.com/tuna-os/tunaos/issues/1168) |
+| Issue triage policy (queue actionability) | strategist | [#1195](https://github.com/tuna-os/tunaos/issues/1195) — [TRIAGE-POLICY.md](./TRIAGE-POLICY.md) drafted 08-13: milestone-only roadmap signal, verify-before-trust closure, tiered SLA |
+| Package signing / SBOM | sec-check | Supply chain, [#1187](https://github.com/tuna-os/tunaos/issues/1187) |
+| **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | [#1319](https://github.com/tuna-os/tunaos/issues/1319), [#1323](https://github.com/tuna-os/tunaos/issues/1323) (audit → #1187) |
+| Bonito (Fedora 44) GA carryover | ci-maintainer | [#272](https://github.com/tuna-os/tunaos/issues/272) — blocked on #1499 (nightly red 08-03–08-13) |
+| Redfin (RHEL 10) alpha GA | ci-maintainer | [#609](https://github.com/tuna-os/tunaos/issues/609), [#1123](https://github.com/tuna-os/tunaos/issues/1123) |
+| Fedora 45 base readiness | ci-maintainer | [#1171](https://github.com/tuna-os/tunaos/issues/1171) — [FEDORA-BASE-POLICY.md](./FEDORA-BASE-POLICY.md) adopted 08-13: N+rawhide model, Fedora 45 planning sequenced after Bonito (#272) GA, not parallel |
+| Adoption metrics / usage telemetry | strategist | [#1174](https://github.com/tuna-os/tunaos/issues/1174) |
+| **Adoption evidence (ADOPTERS.md production entries)** | strategist | [#1348](https://github.com/tuna-os/tunaos/issues/1348) — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot |
+| Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | [#1196](https://github.com/tuna-os/tunaos/issues/1196), [#1175](https://github.com/tuna-os/tunaos/issues/1175) — [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) |
 
 **Milestone fidelity (#1307, 2026-08-12)**: 7 of the 9 goal trackers above were
 filed without being attached to the Q4 milestone (#3), so the milestone

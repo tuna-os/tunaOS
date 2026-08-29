@@ -124,6 +124,8 @@ just verify-disk image.qcow2  # QEMU boot verification
 ## Documentation
 
 - [Vision](VISION.md) — project philosophy
+- [RFC Lifecycle Policy](RFC-PROCESS.md) — proposal lifecycle, merge gates, and decision records
+- [Variant Lifecycle](VARIANT-LIFECYCLE.md) — admission gates, capacity, and stability tiers
 - [Agent Guide](docs/AGENT_GUIDE.md) — architecture reference
 - [Pipeline](docs/PIPELINE.md) — CI/CD details
 - [Testing](docs/TESTING.md) — test harness

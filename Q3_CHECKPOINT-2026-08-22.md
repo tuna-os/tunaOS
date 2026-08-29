@@ -115,12 +115,12 @@ Make Q3 carryover an explicit decision, not a discovery. For every open Q3 goal,
 
 | Goal | Decision (STAFF/DESCOPE/DROP) | Owner | First PR / descope ref | Date |
 |------|-------------------------------|-------|------------------------|------|
-| #272 Bonito GA | ⬜ | | | |
-| #1123 Redfin alpha | ⬜ | | | |
-| #1093 RFC governance | ⬜ | | | |
-| #1094 ADR coverage | ⬜ | | | |
-| #1316 Flavor equality | ⬜ | | | |
-| #1323 Package sourcing | ⬜ | | | |
+| #272 Bonito GA | DESCOPE → Q4 | ci-maintainer | Scoped to Q4 carryover pending Fedora 45 base readiness (#1171) and nightly green matrix | 2026-08-22 |
+| #1123 Redfin alpha | DESCOPE → Q4 (Local alpha shipped) | ci-maintainer | Local-build alpha verified (#609/#1182/#1219, docs/rhel-setup.md); automated CI excluded by RHEL EULA; GA carryover scoped for Q4 (#609/#1123) | 2026-08-22 |
+| #1093 RFC governance | ✅ DONE (close-out) | strategist | Policy merged ([RFC-PROCESS.md](RFC-PROCESS.md), [ADR 0004](docs/adr/0004-rfc-lifecycle.md)); 11-branch disposition pass completed (#1363, #1510) | 2026-08-22 |
+| #1094 ADR coverage | ✅ DONE (close-out) | strategist | ADR 0003 (#1369) + ADR 0004 (#1370) merged 08-13; ADR process active | 2026-08-22 |
+| #1316 Flavor equality | STAFF cadence parity | ci-maintainer | Catalog parity merged (#1322); scheduled multi-flavor release parity PR #1588 authored | 2026-08-22 |
+| #1323 Package sourcing | STAFF | strategist | PACKAGE-SOURCING.md merged (#1330); DNF/COPR audit completed (#1453), allowlist sign-off in progress | 2026-08-22 |
 
 ## Outcome recording
 
