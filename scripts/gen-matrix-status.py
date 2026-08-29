@@ -1146,9 +1146,19 @@ def build() -> str:
     out += desktop_table(matrix, smoke, smoke_key)
     out += [
         "",
-        "cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on "
-        "hosted CI may be a harness limitation rather than a product failure. "
-        "See *Known systemic gaps*.",
+        # NOT "they need a DRM render node". Run 32681262659 read /dev/dri from
+        # inside the guest and found renderD128 present with `[drm] features:
+        # -virgl` -- a node without 3D. gnome starts on that same hardware
+        # through Mesa's software path. Why the other four do not is open, so
+        # this line states the symptom and points at the section that carries
+        # the evidence, rather than restating a cause the measurement did not
+        # support.
+        (
+            "cosmic, niri, xfwl4 and kde do not bring a session up on hosted CI. The "
+            + "cause is undiagnosed rather than established -- gnome starts on the "
+            + "same guest, which has a render node but no 3D. See *Known systemic "
+            + "gaps*."
+        ),
         "",
     ]
 

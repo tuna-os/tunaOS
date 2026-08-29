@@ -393,10 +393,56 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		}
 	}
 
+	# A forked bus OUTLIVES this script. If it inherits this script's stdout
+	# and stderr it keeps the build's output pipe OPEN, so a failure below does
+	# not end the build -- it wedges whatever is reading that pipe.
+	#
+	# Measured on iso-e2e run 32866334376 (hummingbird:base): ensure_flatpak
+	# printed its error and exited 1 at 15:35:46, and the step then produced not
+	# one further line until the 60-minute timeout killed it at 16:32:26. Three
+	# and a half minutes of correct, specific diagnosis became an hour of dead
+	# air, and the failure GitHub reported was "has timed out after 60 minutes"
+	# rather than "flatpak not installed".
+	#
+	# The cost is more than a confusing message: build_artifacts_s2 allows an
+	# ISO cell 90 minutes, so ANY failure below this line -- today's missing
+	# flatpak, or whatever fails next once flatpak lands -- burns the cell's
+	# whole budget and then misattributes itself to a timeout.
+	#
+	# Two changes, and the redirection is the load-bearing one. Sending the
+	# daemons' output to /dev/null means they cannot hold the pipe no matter how
+	# long they live. The pidfiles are hygiene on top: reap them on the way out
+	# rather than leaving buses running in the layer.
+	#
+	# Deliberately NOT `--print-pid` through a command substitution: `$( )` waits
+	# for the pipe to close, which is the very thing a forked daemon holds, so
+	# capturing the pid that way hangs the script AT THE FORK -- earlier and
+	# harder than the bug being fixed. That is not hypothetical; it is what the
+	# first version of this did, and tests/test_a_failing_live_customize_fails_fast.py
+	# caught it.
+	_live_bus_pidfiles=()
+	_reap_live_buses() {
+		local _f _pid
+		for _f in ${_live_bus_pidfiles[@]+"${_live_bus_pidfiles[@]}"}; do
+			[[ -s "$_f" ]] || continue
+			read -r _pid <"$_f" || continue
+			[[ -n "${_pid//[!0-9]/}" ]] || continue
+			kill "$_pid" 2>/dev/null || true
+		done
+	}
+	trap _reap_live_buses EXIT
+
+	_start_bus() {
+		local _pidfile="$1"
+		shift
+		_live_bus_pidfiles+=("$_pidfile")
+		dbus-daemon "$@" --fork --pidfile="$_pidfile" >/dev/null 2>&1
+	}
+
 	mkdir -p /var/lib/dbus
 	ln -sf /etc/machine-id /var/lib/dbus/machine-id
 	ensure_dbus_daemon
-	dbus-daemon --system --fork --nopidfile || true
+	_start_bus /tmp/live-system-bus.pid --system || true
 
 	# grouper (Ubuntu/apt) and bonito-rawhide (Fedora/dnf) don't ship flatpak
 	# in their base image, so the pre-install below always died with "flatpak
@@ -465,7 +511,7 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 	# bus) rather than the dbus-run-session wrapper — some flavors (niri,
 	# cosmic) don't pull in the package that ships dbus-run-session.
 	SESSION_BUS_SOCK="${HOME}/session-bus.sock"
-	dbus-daemon --session --fork --nopidfile --address="unix:path=${SESSION_BUS_SOCK}"
+	_start_bus /tmp/live-session-bus.pid --session --address="unix:path=${SESSION_BUS_SOCK}"
 	export DBUS_SESSION_BUS_ADDRESS="unix:path=${SESSION_BUS_SOCK}"
 	if [[ "${INSTALLER_APP}" == "org.bootcinstaller.Installer" ]]; then
 		# gnome: mirrors projectbluefin/dakota-iso's install-flatpaks.sh —
@@ -520,10 +566,74 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 		flatpak build-import-bundle "${INSTALLER_LOCAL_REPO}" "${INSTALLER_FLATPAK_FILE}"
 		rm -f "${INSTALLER_FLATPAK_FILE}"
 		flatpak remote-add --system --no-gpg-verify installer-local "file://${INSTALLER_LOCAL_REPO}"
-		timeout 900 flatpak install --system --noninteractive installer-local "${INSTALLER_APP}" ||
-			{ [[ -f "${SCRIPT_DIR}/.enable-sshd" ]] &&
+		# On failure, say WHAT THE REMOTES ACTUALLY OFFER. The error flatpak
+		# prints names only what was wanted:
+		#
+		#   error: The application org.bootcinstaller.Installer/x86_64/master
+		#   requires the runtime org.gnome.Platform/x86_64/50 which was not found
+		#
+		# which reads as "flathub is missing" and is not necessarily that. The
+		# flathub remote-add immediately above SUCCEEDED in the run that
+		# produced this message.
+		#
+		# skipjack-gnome failed exactly this way in Live ISOs run 32725309736
+		# while yellowfin-gnome installed the same app successfully in
+		# installer-smoke run 32704425971 an hour earlier. So the runtime is
+		# reachable from some bases and not others, and this message cannot
+		# tell those apart. Listing the Platform branches each remote actually
+		# carries is what separates "no flathub" from "flathub without //50"
+		# from "the app wants a branch nobody publishes yet".
+		#
+		# Diagnostic only, and only on the failure path: it costs nothing when
+		# the install works, and every probe is `|| true` so the diagnostic
+		# cannot itself become the failure.
+		if ! timeout 900 flatpak install --system --noninteractive installer-local "${INSTALLER_APP}"; then
+			echo "---- installer flatpak install FAILED; what the remotes offer:"
+			echo "-- configured remotes --"
+			flatpak remotes --system --columns=name,url 2>&1 | sed "s/^/     /" || true
+			# ASK ABOUT THE ONE REF, DO NOT LIST EVERY REMOTE.
+			#
+			# The first version of this probe ran a bare
+			# `flatpak remote-ls --system`, which pulls the FULL index of
+			# every configured remote -- flathub included. In run 32728454277
+			# the job was killed during exactly that command:
+			#
+			#   -- org.gnome/org.kde Platform+Sdk branches visible --
+			#   + flatpak remote-ls --system --columns=ref
+			#   ##[error]The runner has received a shutdown signal.
+			#
+			# so the listing never printed and the question stayed open. I had
+			# written that every probe was `|| true` and so could not become
+			# the failure; `|| true` guards a non-zero exit, not a probe that
+			# takes long enough to lose the runner. A diagnostic on an error
+			# path has to be cheap or it replaces one unanswered failure with
+			# another.
+			#
+			# remote-info names a single ref and answers the actual question in
+			# one round trip: present means the runtime IS reachable and the
+			# failure is resolution or ordering; absent means the branch is not
+			# published on that remote. Bounded, and per-remote so the answer
+			# says WHICH remote was asked.
+			echo "-- is the required runtime on each remote? --"
+			for _remote in flathub tuna-os; do
+				for _rt in org.gnome.Platform//50 org.gnome.Platform//49; do
+					printf "     %-10s %-28s " "${_remote}" "${_rt}"
+					if timeout 60 flatpak remote-info --system "${_remote}" "${_rt}" \
+						>/dev/null 2>&1; then
+						echo "PRESENT"
+					else
+						echo "absent (or remote unreachable)"
+					fi
+				done
+			done
+			echo "-- what the app asks for --"
+			timeout 60 flatpak remote-info --system installer-local "${INSTALLER_APP}" 2>&1 |
+				grep -iE "runtime|sdk|branch" | sed "s/^/     /" || true
+
+			[[ -f "${SCRIPT_DIR}/.enable-sshd" ]] &&
 				echo "WARN: installer flatpak install failed; continuing (dev/e2e ISO)" ||
-				exit 1; }
+				exit 1
+		fi
 		flatpak remote-delete --system --force installer-local || true
 		rm -rf "${INSTALLER_LOCAL_REPO}"
 

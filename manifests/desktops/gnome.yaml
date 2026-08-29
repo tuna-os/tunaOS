@@ -125,10 +125,90 @@ packages:
   hummingbird:
     repos:
       - name: tunaos-hummingbird
-        baseurl: https://repo.tunaos.org/hummingbird/20251124-x86_64/
+        baseurl: https://repo.tunaos.org/hummingbird/20251124-$basearch/
         priority: 5
     packages: *fedora_gnome_packages
 
+  # ── Wahoo (Fedora ELN) ─────────────────────────────────────────────────
+  # ELN is Fedora Rawhide sources built with Enterprise Linux macros, so the
+  # package NAMES are Fedora's — but the ELN compose is a subset, and a
+  # strict `dnf install` of the fedora list above fails on the ten names it
+  # does not carry. Measured with `dnf repoquery` against the pinned
+  # eln-bootc digest on 2026-08-25: 42 of 52 present.
+  #
+  # The 42 are listed strictly, so an ELN regression in any of them fails
+  # this lane's build — which is what an early-warning lane is for. The ten
+  # misses go under optional: (install_available, best-effort) rather than
+  # being deleted, so they start installing by themselves the week ELN
+  # grows them, with no edit here.
+  #
+  # GNOME version on this base: 51~beta (gnome-shell 51~beta-3.eln158,
+  # gdm 51~beta-1.eln158, mutter 51~beta-1.eln158), on BOTH x86_64 and
+  # aarch64 — so no per-arch flavor pin is needed, unlike hummingbird.
+  eln:
+    packages:
+      - ModemManager
+      - NetworkManager-adsl
+      - NetworkManager-openvpn-gnome
+      - NetworkManager-ppp
+      - NetworkManager-wwan
+      - avahi
+      - dconf
+      - fprintd-pam
+      - gdm
+      - glib-networking
+      - gnome-bluetooth
+      - gnome-browser-connector
+      - gnome-classic-session
+      - gnome-color-manager
+      - gnome-control-center
+      - gnome-disk-utility
+      - gnome-initial-setup
+      - gnome-remote-desktop
+      - gnome-session-wayland-session
+      - gnome-settings-daemon
+      - gnome-shell
+      - gnome-system-monitor
+      - gnome-user-docs
+      - gvfs-fuse
+      - gvfs-goa
+      - gvfs-gphoto2
+      - gvfs-mtp
+      - gvfs-smb
+      - librsvg2
+      - libsane-hpaio
+      - mesa-dri-drivers
+      - mesa-libEGL
+      - mesa-vulkan-drivers
+      - nautilus
+      - polkit
+      - ptyxis
+      - xdg-desktop-portal-gnome
+      - xdg-desktop-portal-gtk
+      - xdg-user-dirs-gtk
+      - yelp
+      - desktop-backgrounds-gnome
+      - pinentry-gnome3
+    # Absent from ELN on 2026-08-25 — best-effort so they land
+    # automatically when the compose grows them.
+    optional:
+      - NetworkManager-openconnect-gnome
+      - NetworkManager-ssh-gnome
+      - NetworkManager-vpnc-gnome
+      - evince-previewer
+      - evince-thumbnailer
+      - gnome-backgrounds
+      - gnome-user-share
+      - gvfs-afc
+      - qadwaitadecorations-qt5
+      - totem-video-thumbnailer
+      - gvfs-afp
+      - gvfs-archive
+    exclude:
+      - PackageKit
+      - PackageKit-command-not-found
+      - gnome-software
+      - gnome-software-fedora-langpacks
   el10:
     # COPR repos for GNOME 50 backport — EL10 ships GNOME 48 natively.
     # Brings modern GNOME to Enterprise Linux without waiting 3 years.

@@ -72,6 +72,7 @@ A TunaOS image is named `<variant>:<desktop>[-hardware]`.
 | 🦈 **sailfin** | openSUSE Tumbleweed | Rolling |
 | 🌈 **guppy** | Gentoo | Binary-package Gentoo, the adventurous pick |
 | 🐦 **hummingbird** | Fedora Hummingbird | Experimental next-gen Fedora base |
+| 🎏 **wahoo** | Fedora ELN | Experimental EL11 preview — what c11s/Kitten 11 will be like, months early. **No H.264/H.265**: ELN ships no working video decoder, so this is a testing lane, not a daily driver |
 | 🔒 **redfin** | RHEL 10 | Local-build only (EULA) — see [rhel-setup.md](rhel-setup.md) |
 
 ### The desktop — `gnome`, `kde`, `cosmic`, `niri`, `xfce`

@@ -176,6 +176,7 @@ REPO
 		systemd-container \
 		btrfs-progs \
 		xfsprogs \
+		flatpak \
 		gcc \
 		gcc-c++ \
 		just || true
@@ -186,6 +187,137 @@ REPO
 	if ! rpm -q xfsprogs >/dev/null 2>&1; then
 		echo "ERROR: xfsprogs did not install — no enabled repo carries it;" >&2
 		echo "       bootc install to-disk cannot format the root without it." >&2
+		dnf repolist >&2 || true
+		exit 1
+	fi
+
+	# flatpak is not optional either, for a reason that only bites three
+	# steps downstream. live-iso/common/src/customize-live.sh pre-installs
+	# the installer app and exits 1 if flatpak cannot be made present:
+	#
+	#   ERROR: flatpak not installed and could not be installed;
+	#          cannot pre-install ${INSTALLER_APP}
+	#
+	# and that same script is what scripts/build-iso-tacklebox.sh passes as
+	# the ISO recipe's live_customize step. So a hummingbird image without
+	# flatpak cannot produce a live overlay, cannot build an ISO, and has no
+	# installer to launch if one were built -- gnome ships upstream
+	# bootc-installer as org.bootcinstaller.Installer, a Flatpak.
+	#
+	# Its ensure_flatpak() fallback installs the package on bases that merely
+	# omit it from the image (guppy, grouper, bonito-rawhide). That cannot
+	# help hummingbird: measured 2026-08-25, flatpak is absent from BOTH
+	# public-hummingbird (3509 binary names) and our rebuild snapshot (7986).
+	# It is layer-07 of build-order-hummingbird-desktops.yml, 131 packages
+	# into the 164 still unbuilt.
+	#
+	# Listed above so the image picks it up the moment that wave publishes,
+	# and warned about rather than fatal because it genuinely is not
+	# available yet -- a hard failure here would break every hummingbird base
+	# build today. Make it fatal, like xfsprogs above, once layer-07 is
+	# served. What must NOT happen is the xfsprogs shape: --skip-unavailable
+	# swallowing the miss silently and the failure surfacing two stages later
+	# as something else. tuna-os/tunaOS#1397 tracks this.
+	if ! rpm -q flatpak >/dev/null 2>&1; then
+		echo "WARNING: flatpak did not install — no enabled repo carries it yet." >&2
+		echo "         This image cannot build a live overlay or an ISO, and has" >&2
+		echo "         no installer app; see tuna-os/tunaOS#1397." >&2
+	fi
+elif [[ ${IS_ELN:-false} == true ]]; then
+	# ── Fedora ELN ───────────────────────────────────────────────────────
+	# ELN takes neither of the branches around it, and both would fail
+	# rather than degrade. Everything below is measured against the pinned
+	# eln-bootc digest with `dnf repoquery`, 2026-08-25.
+	#
+	# Not the EL branch: `dnf install -y epel-release` has nothing to
+	# resolve — EPEL builds for RHEL 8/9/10, and there is no epel-11 to
+	# match ELN's VERSION_ID=11. `crb enable` is also a no-op here: ELN
+	# ships eln-crb enabled by default in
+	# /usr/share/dnf5/repos.d/fedora-eln.repo, which is why the repo
+	# file lives in /usr/share and /etc/yum.repos.d is empty on this base.
+	#
+	# Not the Fedora branch: it installs
+	# rpmfusion-{free,nonfree}-release-${FEDORA_VER} by URL, and RPM Fusion
+	# publishes no ELN branch. `dnf repoquery` finds no ffmpeg and no
+	# gstreamer1-plugins-ugly in ELN — the patent-encumbered set has no
+	# source on this base at all.
+	#
+	# So the codec baseline here is ffmpeg-free (8.1.2, eln-appstream) plus
+	# the free GStreamer plugins, and that is stated rather than papered
+	# over: H.264/H.265 playback is NOT equivalent to Bonito's or
+	# Yellowfin's. A preview lane exists to surface EL11 API/ABI and desktop
+	# breakage early; it is not a media-complete edition, and it must not be
+	# promoted as one until an ELN-branch codec source exists.
+	dnf -y install \
+		ffmpeg-free \
+		gstreamer1-plugins-good \
+		gstreamer1-plugins-base \
+		gstreamer1-plugins-bad-free \
+		gstreamer1-plugin-libav \
+		lame
+
+	# Base set, strict. Every name here was verified present in
+	# eln-{baseos,appstream,crb,extras} on 2026-08-25; a miss is a real ELN
+	# regression worth failing the build on, which is the whole point of an
+	# early-warning lane. The four names the EL/Fedora lists carry that ELN
+	# does NOT ship are deliberately absent rather than silently skipped:
+	#
+	#   systemd-oomd  — `dnf repoquery --whatprovides systemd-oomd` returns
+	#                   nothing (EL drops the subpackage); systemd-oomd-defaults
+	#                   likewise. oomd tuning is not available on this base.
+	#   just          — EPEL-only on the EL family, absent from ELN.
+	#   tailscale     — pkgs.tailscale.com/stable/centos/11/tailscale.repo
+	#                   is a 404 (measured); 20-packages.sh's own guard
+	#                   already declines to fetch it.
+	#
+	# glow, gum, tuned-ppd, system-reinstall-bootc, fpaste and the libcamera
+	# set are EPEL packages on the EL10 family but are IN ELN (eln-appstream
+	# / eln-extras), so they are listed strictly below rather than dropped by
+	# analogy with EPEL.
+	#
+	# Listing any of them with --skip-unavailable is how #1555 shipped
+	# images that silently lacked tailscale for ten nightlies. When ELN
+	# grows them, move them up into this transaction.
+	dnf -y install \
+		buildah \
+		podman \
+		skopeo \
+		systemd-container \
+		flatpak \
+		distrobox \
+		fastfetch \
+		fwupd \
+		dbus-daemon \
+		fuse-overlayfs \
+		systemd-resolved \
+		btrfs-progs \
+		xfsprogs \
+		gcc \
+		gcc-c++ \
+		plymouth \
+		plymouth-system-theme \
+		plymouth-plugin-script \
+		xdg-desktop-portal \
+		libcamera-v4l2 \
+		libcamera-gstreamer \
+		libcamera-tools \
+		system-reinstall-bootc \
+		powertop \
+		tuned-ppd \
+		fzf \
+		glow \
+		gum \
+		fpaste \
+		wl-clipboard \
+		xhost \
+		unzip
+
+	# bootc install to-disk execs mkfs.xfs from inside the image; the same
+	# assertion hummingbird earned the hard way (run 32139187211) applies to
+	# any base whose xfsprogs is not guaranteed. Assert rather than trust.
+	if ! rpm -q xfsprogs >/dev/null 2>&1; then
+		echo "ERROR: xfsprogs did not install — bootc install to-disk cannot" >&2
+		echo "       format the root without it." >&2
 		dnf repolist >&2 || true
 		exit 1
 	fi

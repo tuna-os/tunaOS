@@ -10,26 +10,48 @@ name: ISO E2E Smoke
 #
 # This is the lightweight readiness mode (--mode=ready). Future iterations
 # add --kickstart and --ssh-only modes. See scripts/iso-e2e.sh --help.
+#
+# TWO SOURCES.
+#
+#   r2-latest  the published ISO — what users actually download. The release
+#              check. Limited to whatever has been published, which today is
+#              albacore only (#2027).
+#   build      build the ISO on this runner and boot it where it lies.
+#
+# `build` exists because testing every cell must not mean publishing every
+# cell: R2 storage for ~50 five-gigabyte ISOs is a real bill, and most of
+# those images are being tested, not shipped. Building takes ~19 minutes on a
+# GitHub runner (measured, run 32768030728) and the ISO is deleted with the
+# runner, so a sweep costs runner minutes and nothing else.
+#
+# It replaces a `source: artifact` option that was offered in the dispatch UI
+# and NEVER IMPLEMENTED — there is no download-artifact step in this file, so
+# choosing it skipped the R2 fetch and left ISO_PATH unset. Building in-job
+# rather than via an artifact also avoids paying to store the ISO twice.
 
 on:
   workflow_dispatch:
     inputs:
       variant:
-        description: 'Variant to test'
+        # Free-form, not a choice list. The list here offered yellowfin and
+        # albacore while build-config.yml declares build_iso: true for ten
+        # variants, so eight of them could not be tested at all -- and the
+        # job matrix below only ever had two cells, so even a listed value
+        # like albacore:kde had nothing to run on.
+        #
+        # That is why the `iso` criterion is the single biggest blocker in
+        # docs/matrix-provenance.json: of 143 cells, 66 carry an iso verdict
+        # and none of them passes. Six boot-green cells are one criterion
+        # short of fully green and in every case that criterion is iso.
+        description: 'Variant to test (any id from build-config.yml)'
         required: false
         default: 'yellowfin'
-        type: choice
-        options:
-          - yellowfin
-          - albacore
-      flavor:
-        description: 'Flavor to test'
+        type: string
+      flavors:
+        description: 'Comma-separated flavors'
         required: false
         default: 'gnome'
-        type: choice
-        options:
-          - gnome
-          - gnome-hwe
+        type: string
       source:
         description: 'Where to source the ISO from'
         required: false
@@ -37,7 +59,7 @@ on:
         type: choice
         options:
           - r2-latest      # Download the latest published ISO from Cloudflare R2.
-          - artifact       # Consume an ISO uploaded as a workflow artifact.
+          - build          # Build the ISO on the runner and test it in place.
   # PR trigger only when the harness itself changes. Building a per-PR ISO
   # to test arbitrary Containerfile/build_scripts changes would take ~40 min
   # and isn't wired up yet (the workflow currently downloads from R2, which
@@ -58,20 +80,101 @@ permissions:
   # actions: read is needed when source=artifact to download the prior run's ISO.
   actions: read
 
+concurrency:
+  # A push to a PR supersedes the previous push's run: only the newest
+  # commit's verdict matters, and this job is a full ISO build. Without this,
+  # every push to a long-lived PR started another one and let the old one run
+  # to completion.
+  #
+  # The PR trigger fires on a paths filter, and GitHub evaluates that against
+  # the PR's WHOLE diff rather than the pushed commit. A branch that once
+  # touched one of those paths therefore pays for a rebuild on every
+  # subsequent push, however unrelated the change. This branch touches
+  # live-iso/** and this workflow file, so all eight of tonight's pushes
+  # started one.
+  #
+  # workflow_dispatch gets a per-run group so a deliberate multi-cell sweep
+  # never cancels its own siblings — the repo's plain `<name>-${{ github.ref }}`
+  # form would, since every cell of a sweep shares one branch.
+  group: iso-e2e-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}
+  cancel-in-progress: true
+
 jobs:
+  generate-matrix:
+    name: Generate ISO E2E matrix
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # A dispatch tests exactly the cells asked for. Anything else -- the
+      # pull_request harness trigger and the Monday schedule -- runs a fixed
+      # cell, so widening the inputs cannot silently turn a harness smoke
+      # test into a fifty-cell sweep.
+      #
+      # That cell is albacore:gnome, and it is the only one it can be. Those
+      # triggers pass no inputs, so `source` is empty and the ISO must come
+      # from R2 -- and R2 today holds albacore alone (#2027). Measured
+      # against the live bucket:
+      #
+      #   albacore-{gnome,kde,xfce}-latest.iso   200
+      #   yellowfin-gnome-latest.iso             404
+      #   skipjack-gnome-latest.iso              404
+      #   albacore-latest.iso                    404   (grouped name, unpublished)
+      #
+      # The list used to be yellowfin:gnome + albacore:gnome, so every PR
+      # touching this file got a red check for a 404 that is a publishing
+      # gap tracked in #2027, not a harness regression: run 32794531963
+      # failed in `Download latest ISO from R2` after 2 seconds. The step
+      # does say exactly which two keys it tried, so the red was legible --
+      # it was just never going to be anything else. A check that cannot
+      # pass teaches people to ignore it. When #2027 publishes more
+      # variants, add them here.
+      - name: Build the cell list
+        id: gen
+        env:
+          DISPATCH_VARIANT: ${{ inputs.variant }}
+          DISPATCH_FLAVORS: ${{ inputs.flavors }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${DISPATCH_VARIANT:-}" && -n "${DISPATCH_FLAVORS:-}" ]]; then
+            M=$(jq -cn --arg v "$DISPATCH_VARIANT" --arg f "$DISPATCH_FLAVORS" \
+              '{include: ($f | split(",") | map(ltrimstr(" ") | rtrimstr(" "))
+                              | map(select(length > 0))
+                              | map({variant: $v, flavor: .}))}')
+          else
+            M='{"include":[{"variant":"albacore","flavor":"gnome"}]}'
+          fi
+          # An empty include list is a GREEN CHECK THAT RAN NOTHING, which is
+          # worse than a red one: a sweep would report complete having
+          # measured no cell. `flavors: " , "` produced exactly that.
+          if [[ "$(echo "$M" | jq '.include | length')" -eq 0 ]]; then
+            echo "::error::no cells to test — variant='${DISPATCH_VARIANT:-}' flavors='${DISPATCH_FLAVORS:-}' produced an empty matrix"
+            exit 1
+          fi
+          echo "matrix=$M" >> "$GITHUB_OUTPUT"
+          echo "$M" | jq -r '.include[] | "  \(.variant):\(.flavor)"'
+
   e2e:
     name: E2E ${{ matrix.variant }}:${{ matrix.flavor }}
+    needs: generate-matrix
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # The job budget has to cover the steps inside it. This was a flat 30
+    # while the build step declares 60 and the readiness step 20, so every
+    # `source: build` cell was killed by the JOB at 30 minutes with its own
+    # steps still well inside their limits -- E2E guppy:xfce, job
+    # 97638529947, cancelled at 00:48:29 after starting its build at
+    # 00:18:40. `cancelled` reads like infrastructure flake, so a sweep of
+    # six cells reported nothing usable about any of them.
+    #
+    # Only the build path needs the larger budget; sourcing from R2 is a
+    # download plus a 20-minute boot and 30 is right for it.
+    timeout-minutes: ${{ (github.event_name == 'workflow_dispatch' && inputs.source == 'build') && 90 || 30 }}
     strategy:
       # Don't cancel the other leg if one fails — we want to see both signals.
       fail-fast: false
-      matrix:
-        include:
-          - variant: yellowfin
-            flavor: gnome
-          - variant: albacore
-            flavor: gnome
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
 
     steps:
       - name: Checkout
@@ -100,26 +203,28 @@ jobs:
       - name: Preflight (dispatch filter, R2 credentials)
         id: filter
         env:
-          DISPATCH_VARIANT: ${{ inputs.variant }}
-          DISPATCH_FLAVOR: ${{ inputs.flavor }}
           # Read only to test for emptiness — never printed.
           R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
           R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
           R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
           R2_BUCKET: ${{ secrets.R2_BUCKET }}
-          # Mirrors the `if:` on the download step below: source=artifact
+          # Mirrors the `if:` on the download step below: source=build
           # never touches R2, so it must not be blocked on R2 secrets.
           NEEDS_R2: ${{ github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest' }}
         run: |
-          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-            if [[ "${DISPATCH_VARIANT}" != "${{ matrix.variant }}" ]] \
-               || [[ "${DISPATCH_FLAVOR}" != "${{ matrix.flavor }}" ]]; then
-              echo "skip=true" >> "$GITHUB_OUTPUT"
-              echo "Skipping ${{ matrix.variant }}:${{ matrix.flavor }} — dispatch chose ${DISPATCH_VARIANT}:${DISPATCH_FLAVOR}"
-              exit 0
-            fi
-          fi
-
+          # THE DISPATCH FILTER IS GONE, and this is the only thing that used
+          # to live here besides the R2 check.
+          #
+          # It existed because the matrix was two hardcoded cells and a
+          # dispatch had to suppress the one it did not choose. The matrix is
+          # generated from the dispatch inputs now, so every cell that exists
+          # is a cell that was asked for and there is nothing to filter.
+          #
+          # Leaving it in place with its inputs blanked was worse than either
+          # option: `"" != "marlin"` is true, so it set skip=true on EVERY
+          # dispatched cell, every step after this one was skipped, and the
+          # job reported SUCCESS having booted nothing. Run 32791464847 swept
+          # six cells that way and came back green in twenty seconds.
           if [[ "${NEEDS_R2}" == "true" ]]; then
             missing=()
             for name in R2_ACCESS_KEY_ID R2_SECRET_ACCESS_KEY R2_ENDPOINT R2_BUCKET; do
@@ -212,16 +317,163 @@ jobs:
           # up `${VARIANT}-${FLAVOR}-nvidia-latest.iso` etc. via the `-*.iso`
           # glob (which over-matches because the rclone include glob
           # isn't anchored at the end).
+          # TWO NAMING SCHEMES ARE LIVE IN THE BUCKET.
+          #
+          # The legacy per-flavor pipeline (publish-isos.yml, now disabled)
+          # wrote `<variant>-<flavor>-latest.iso`. The grouped dedup pipeline
+          # that replaced it (publish-iso-groups.yml) writes
+          # `<basename>-latest.iso`, where basename is the variant alone for
+          # the GNOME group and `<variant>-<desktop>` for the others.
+          #
+          # So for every desktop except gnome the two agree by accident --
+          # `yellowfin-kde-latest.iso` either way -- and for gnome they do
+          # NOT: the grouped pipeline writes `yellowfin-latest.iso` while
+          # this job asked for `yellowfin-gnome-latest.iso`. Measured
+          # 2026-08-24: albacore-gnome-latest.iso and albacore-kde-latest.iso
+          # are 200 (from the legacy pipeline), albacore-latest.iso and
+          # yellowfin-latest.iso are 404.
+          #
+          # That is why publishing the grouped ISOs would not by itself have
+          # turned E2E yellowfin:gnome green: the object would have landed
+          # under a key nothing looks up.
+          #
+          # Try the per-flavor name first, since that is what is in the
+          # bucket today, then the group name. A flavor maps to its group by
+          # its desktop prefix -- gnome-hwe and gnome-nvidia all ride inside
+          # the gnome group's offline store, so they resolve to the same ISO.
+          DESKTOP="${FLAVOR%%-*}"
+          if [[ "$DESKTOP" == "gnome" ]]; then
+            GROUP_OBJECT="${VARIANT}-latest.iso"
+          else
+            GROUP_OBJECT="${VARIANT}-${DESKTOP}-latest.iso"
+          fi
           OBJECT="${VARIANT}-${FLAVOR}-latest.iso"
-          echo "==> Fetching ${OBJECT} from R2..."
-          rclone copy --log-level INFO --s3-no-check-bucket \
-            "R2:${{ secrets.R2_BUCKET }}/live-isos/${OBJECT}" .
-          if [[ ! -f "${OBJECT}" ]]; then
-            echo "::error::No ISO found in R2 at live-isos/${OBJECT}"
+          FOUND=""
+          for candidate in "${OBJECT}" "${GROUP_OBJECT}"; do
+            echo "==> Trying ${candidate} from R2..."
+            rclone copy --log-level INFO --s3-no-check-bucket \
+              "R2:${{ secrets.R2_BUCKET }}/live-isos/${candidate}" . || true
+            if [[ -f "${candidate}" ]]; then
+              FOUND="${candidate}"
+              break
+            fi
+          done
+          if [[ -z "${FOUND}" ]]; then
+            echo "::error::No ISO in R2 under either name: live-isos/${OBJECT} (per-flavor) or live-isos/${GROUP_OBJECT} (grouped)"
+            exit 1
+          fi
+          OBJECT="${FOUND}"
+          echo "==> Using ${OBJECT}"
+          {
+            echo "ISO_PATH=$(realpath "${OBJECT}")"
+            echo "VARIANT=${VARIANT}"
+            echo "FLAVOR=${FLAVOR}"
+          } >> "$GITHUB_ENV"
+
+      # Build in place. No R2 read, no artifact upload, nothing to clean up:
+      # the ISO lives and dies on this runner. Mirrors live-iso-bootc.yml's
+      # build steps, which is where these exact incantations are explained --
+      # notably that `just iso` must NOT be wrapped in sudo (it sudos
+      # internally, and nesting breaks tacklebox's rootless podman unshare).
+      - name: Build the ISO on this runner
+        if: >-
+          steps.filter.outputs.skip != 'true' &&
+          github.event_name == 'workflow_dispatch' && inputs.source == 'build'
+        timeout-minutes: 60
+        env:
+          VARIANT: ${{ matrix.variant }}
+          FLAVOR: ${{ matrix.flavor }}
+          TACKLEBOX_FROM_SOURCE: "1"
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y just podman jq golang-go git systemd-boot-efi \
+            xorriso mtools squashfs-tools dosfstools gdisk e2fsprogs btrfs-progs
+          # Both runner images ship a podman that cannot run/commit these
+          # containers (tunaOS#1893); same Kubic install as every other
+          # ISO-building job here.
+          sudo install -d /etc/apt/keyrings
+          curl -fsSL https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04/Release.key \
+            | gpg --dearmor | sudo tee /etc/apt/keyrings/kubic.gpg >/dev/null
+          echo 'deb [signed-by=/etc/apt/keyrings/kubic.gpg] https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04/ /' \
+            | sudo tee /etc/apt/sources.list.d/kubic.list
+          sudo apt-get update -qq
+          sudo apt-get remove -y podman conmon crun || true
+          sudo apt-get install -y podman
+          if ! grep -q "^${USER}:" /etc/subuid 2>/dev/null; then
+            echo "${USER}:100000:65536" | sudo tee -a /etc/subuid
+          fi
+          if ! grep -q "^${USER}:" /etc/subgid 2>/dev/null; then
+            echo "${USER}:100000:65536" | sudo tee -a /etc/subgid
+          fi
+
+          # Which storage driver root podman picked, and how much disk it has.
+          #
+          # This is the measurement that decides #1893. tacklebox bounds its
+          # post-customize `podman commit` at a hardcoded 600s; on this runner
+          # that cap fired (job 97638514487, skipjack:xfce, exactly 600.0s
+          # wall) while the same commit completes on the RunsOn builders that
+          # publish albacore's ISOs. A commit is proportional to what it has
+          # to write: under `overlay` that is the customize container's diff
+          # (the flatpak runtimes, a few GB); under `vfs` there are no layers,
+          # so it copies the WHOLE rootfs every time. Which of the two we are
+          # on turns "raise the timeout" into either the right fix or a
+          # band-aid over a driver fallback, so print it rather than guess.
+          # tacklebox runs podman as root, so root's driver is the one that
+          # matters -- the rootless one can and does differ.
+          # Root and rootless podman pick different storage drivers, and that
+          # is the difference this step is chasing. Root gets native
+          # `overlay`; rootless falls back to `fuse-overlayfs`, where
+          # committing a multi-gigabyte layer goes through FUSE. Print both.
+          ROOT_DRV="$(sudo podman info --format '{{.Store.GraphDriverName}}' 2>/dev/null || echo unknown)"
+          USER_DRV="$(podman info --format '{{.Store.GraphDriverName}}' 2>/dev/null || echo unknown)"
+          DRIVERS="root=${ROOT_DRV} rootless=${USER_DRV}"
+          echo "=== podman storage: ${DRIVERS} ==="
+          sudo podman info --format 'root: {{.Store.GraphRoot}} v{{.Version.Version}}' || true
+          podman info --format 'rootless: {{.Store.GraphRoot}} v{{.Version.Version}}' || true
+          echo "=== free space ==="
+          df -h / /mnt 2>/dev/null || df -h
+
+          # Repeat the drivers on the way out, whatever the outcome.
+          #
+          # get_job_logs only returns a tail. This step emits tens of
+          # thousands of lines building the image, so a diagnostic printed at
+          # the top has already scrolled past retrieval by the time the step
+          # fails -- which is exactly what happened to the first version of
+          # this probe in job 97644460337: it ran, it printed, and the answer
+          # was unreachable. A diagnostic that cannot be read afterwards is
+          # not a diagnostic.
+          trap 'echo "=== podman storage (repeated at exit): ${DRIVERS} ==="' EXIT
+
+          # Build the image AND the ISO as root, in one root context.
+          #
+          # This used to build as root, copy the image into rootless storage
+          # with `podman save | podman load`, then run `just iso` bare -- so
+          # SUDO_USER was the runner and tacklebox did its customize and
+          # commit rootless. That commit did not finish: job 97638514487
+          # (skipjack:xfce) ran it for exactly 600.0s before tacklebox's
+          # bound killed it, and #1893 records the same stall unbounded.
+          #
+          # installer-smoke.yml does the same tacklebox customize+commit on
+          # ubuntu-latest and it COMPLETES -- `Build dev ISO` succeeded for
+          # yellowfin:gnome in 38m46s and yellowfin:kde in 41m16s in run
+          # 32747410944, and gnome then booted and passed its walkthrough.
+          # The one structural difference is that installer-smoke wraps the
+          # recipe in sudo, so the whole build stays root.
+          #
+          # So this is not "GitHub-hosted runners cannot build an ISO", which
+          # is what one bare-invocation failure looked like. Root storage also
+          # makes the save|load hop unnecessary: the image is already where
+          # tacklebox will look for it.
+          sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
+          sudo -E env "PATH=$PATH" just iso "$VARIANT" "$FLAVOR" local "$FLAVOR"
+          ISO="$(find . -maxdepth 3 -name '*.iso' -newermt '-2 hours' -print -quit)"
+          if [[ -z "$ISO" ]]; then
+            echo "::error::build produced no ISO for ${VARIANT}:${FLAVOR}"
             exit 1
           fi
           {
-            echo "ISO_PATH=$(realpath "${OBJECT}")"
+            echo "ISO_PATH=$(realpath "$ISO")"
             echo "VARIANT=${VARIANT}"
             echo "FLAVOR=${FLAVOR}"
           } >> "$GITHUB_ENV"
@@ -282,12 +534,15 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: iso-e2e-${{ matrix.variant }}-${{ matrix.flavor }}
+          # The PPMs are dropped: the step above converts every one of them
+          # to PNG, so uploading both stores each frame twice — once in an
+          # UNCOMPRESSED format (a 1280x800 PPM is ~3 MB raw against ~100 KB
+          # as PNG). Same evidence, a fraction of the bytes.
           path: |
             iso-e2e-out/serial.log
             iso-e2e-out/*.png
-            iso-e2e-out/*.ppm
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 7
 
       # Only fail when the e2e step actually ran AND reported failure.
       # When the filter step skipped the job, steps.e2e.outputs.rc is empty,

@@ -85,7 +85,16 @@ detect() {
 
 @test "customize-live.sh: gives headless Flatpak an explicit session bus" {
   grep -q 'DBUS_SESSION_BUS_ADDRESS' "${SCRIPT}"
-  grep -q 'dbus-daemon --session' "${SCRIPT}"
+  # Assert the behaviour, not the spelling. This used to grep for the literal
+  # `dbus-daemon --session`, which the script no longer contains: the call was
+  # refactored into the _start_bus helper when dbus-broker images made the bare
+  # binary unsafe to assume (every cosmic flavor plus sailfin/grouper/guppy/
+  # marlin died with "dbus-daemon: command not found", exit 127). The session
+  # bus is still started, and still with --session — only contiguously no
+  # longer. The stale assertion failed on every PR in the repo, not just the
+  # ones touching live-iso, because Unit Tests runs the whole bats suite.
+  grep -q 'dbus-daemon "$@"' "${SCRIPT}"
+  grep -qE '_start_bus [^|]*--session' "${SCRIPT}"
 }
 
 @test "customize-live.sh: initializes D-Bus identity before Flatpak installation" {

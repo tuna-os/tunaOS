@@ -89,6 +89,25 @@ elif [[ "${IS_HUMMINGBIRD:-false}" == true ]]; then
 	# libcrypto.so.3 vs .so.4. They have to be rebuilt against Hummingbird's
 	# buildroot, which is what the hummingbird: manifest sections point at.
 	_TD_OS="hummingbird"
+elif [[ "${IS_ELN:-false}" == true ]]; then
+	# ELN gets its own section for the same reason hummingbird does, and the
+	# measurement is the argument. Of the 52 packages the fedora: list
+	# installs, ELN's repos carry 42 (`dnf repoquery` against the pinned
+	# eln-bootc digest, 2026-08-25) — so `fedora` is close, but the ten
+	# misses are a strict `dnf install` away from failing the build:
+	#
+	#   NetworkManager-{openconnect,ssh,vpnc}-gnome, evince-previewer,
+	#   evince-thumbnailer, gnome-backgrounds, gnome-user-share, gvfs-afc,
+	#   qadwaitadecorations-qt5, totem-video-thumbnailer
+	#
+	# and `el10` is worse than close: that section is a GNOME 50 COPR
+	# backport for a base that ships GNOME 48, while ELN's own AppStream
+	# carries GNOME 51~beta. Routing ELN there would enable a c10s COPR on an
+	# EL11 buildroot to install packages ELN already has, newer.
+	#
+	# What the eln: section supplies is therefore the fedora list minus those
+	# ten names, aliased rather than restated — see the manifest.
+	_TD_OS="eln"
 elif [[ "$IS_FEDORA" == true ]]; then
 	_TD_OS="fedora"
 else
@@ -525,7 +544,7 @@ if [[ "${_TD_OS}" == "pacman" ]]; then
 	# now runs the same gate every other package manager does.
 fi
 
-# ── DNF path (el10/fedora/hummingbird) ───────────────────────────────────────
+# ── DNF path (el10/fedora/hummingbird/eln) ───────────────────────────────────
 # These sections are maps (groups/group_options/copr/optional/versionlock). The
 # list-style sections (apt/pacman/zypper/emerge) installed above and must skip
 # this — indexing an array with .group_options etc. is a hard yq error.
@@ -534,7 +553,7 @@ fi
 # differs is only WHICH repository satisfies the names, which the manifest's
 # hummingbird: section supplies. Leaving it out would route a dnf base down
 # the list-style path and produce that same yq error.
-if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummingbird" ]]; then
+if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummingbird" || "${_TD_OS}" == "eln" ]]; then
 
 	# Plain (non-COPR) baseurl repos — e.g. the tuna-os xfce-wayland repo,
 	# which lives at its own R2 path (repo.tunaos.org/xfce/...), not the main

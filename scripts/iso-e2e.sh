@@ -1474,6 +1474,39 @@ check_ssh() {
 	return 5
 }
 
+# A gate that DID NOT RUN is not a gate that found problems, and only one of
+# those two is tolerable in non-strict mode.
+#
+# e2e-installer-gui-checks.sh resolved its assertion helpers to a path the
+# guest does not have, so `source` failed, `check` was never defined, and
+# every assertion evaporated into command-not-found on stderr. The script
+# exited 127 -- bash for command-not-found -- and this harness printed
+#
+#   ::warning::installer GUI checks reported 127 failure(s) for gnome
+#
+# as a WARNING, in a mode that tolerates warnings. So the compositor and
+# installer-frontend assertions have never once executed, on any flavor, in
+# any smoke run, and the workflow stayed green through it (run 32681262659).
+#
+# The discriminator is the TAP summary. print_summary is the only thing that
+# emits `# Results:`, and it is the last statement of every check script, so
+# its ABSENCE means the script did not reach the end -- whatever the exit
+# code says. Missing summary is a hard failure in every mode; E2E_*_STRICT
+# governs failed assertions, not an absent gate.
+checks_ran() {
+	local output="$1" rc="$2" label="$3"
+	if [[ "$output" == *"# Results:"* ]]; then
+		return 0
+	fi
+	echo "ERROR: ${label} checks did not run to completion (exit ${rc}); no TAP summary was emitted." >&2
+	echo "  This is NOT a count of failed assertions -- the script did not finish," >&2
+	echo "  so nothing it claims to verify was verified. Strict mode does not apply." >&2
+	if [[ "$output" == *"Bail out!"* ]]; then
+		echo "$output" | grep "Bail out!" | sed "s/^/  /" >&2
+	fi
+	return 1
+}
+
 # Upload and run the TAP-style live-image smoke checks (assertions adapted
 # from frostyard/snosi's tiered on-VM test scripts) over SSH. Non-fatal by
 # default — the TAP output is CI evidence; set E2E_SMOKE_STRICT=1 to turn
@@ -1493,6 +1526,7 @@ run_smoke_checks() {
 	local smoke_output smoke_rc=0
 	smoke_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=${GUEST_HOME} bash ${GUEST_HOME}/e2e-smoke-checks.sh" 2>&1) || smoke_rc=$?
 	echo "$smoke_output" | tee -a "${SERIAL_LOG}"
+	checks_ran "$smoke_output" "$smoke_rc" "live-image smoke" || return 1
 	if [[ "$smoke_rc" -ne 0 ]]; then
 		echo "::warning::live-image smoke checks reported ${smoke_rc} failure(s)"
 		if [[ "${E2E_SMOKE_STRICT:-0}" -eq 1 ]]; then
@@ -1520,6 +1554,7 @@ run_installer_gui_checks() {
 	local gui_output gui_rc=0
 	gui_output=$("${ssh_cmd[@]}" "FLAVOR=${FLAVOR:-gnome} TEST_LIB_DIR=${GUEST_HOME} bash ${GUEST_HOME}/e2e-installer-gui-checks.sh" 2>&1) || gui_rc=$?
 	echo "$gui_output" | tee -a "${SERIAL_LOG}"
+	checks_ran "$gui_output" "$gui_rc" "installer GUI" || return 1
 	if [[ "$gui_rc" -ne 0 ]]; then
 		echo "::warning::installer GUI checks reported ${gui_rc} failure(s) for ${FLAVOR:-gnome}"
 		if [[ "${E2E_INSTALLER_GUI_STRICT:-0}" -eq 1 ]]; then
