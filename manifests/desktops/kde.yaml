@@ -51,6 +51,68 @@ packages:
       - PackageKit
       - PackageKit-command-not-found
 
+  # ── Wahoo (Fedora ELN) ─────────────────────────────────────────────────
+  # ELN defines the `kde-desktop` group (86 entries, eln-extras) and ships
+  # Plasma 6.7.4 — plasma-desktop, plasma-workspace, kwin, kscreen,
+  # plasma-nm — plus sddm 0.21.0 and dolphin/konsole/kate at 26.08. So the
+  # group install this section leans on resolves, unlike xfce-desktop,
+  # which ELN does not define at all (#2052).
+  #
+  # Measured with `dnf repoquery` against the pinned eln-bootc digest on
+  # 2026-08-26: 16 of 23 explicit packages present. The seven misses are
+  # all peripheral input / security-key extras — none is needed for a
+  # session to start — so they go under optional: rather than blocking the
+  # flavor. Listing them strictly would fail the build over a fingerprint
+  # helper; dropping them silently would be the #1555 shape. Neither.
+  #
+  # MEASURED 2026-08-27 (run 33041330231), replacing the prediction that
+  # used to sit here: the group makes `plasma-login-manager` (6.7.4)
+  # mandatory, it claims display-manager.service first, and the build logs
+  #
+  #   display-manager.service already points at plasmalogin.service; leaving it
+  #
+  # so the greeter on wahoo is plasmalogin, NOT the sddm this manifest
+  # declares — sddm is installed but not wired. The Gate PASSED on that, so
+  # it boots and this is an accuracy gap rather than a breakage.
+  #
+  # Deliberately not "fixed" by editing display_manager: that key is
+  # top-level in this file and shared with the el10 and fedora sections,
+  # where sddm IS correct. Overriding it for ELN alone needs per-section
+  # display_manager support on the dnf path (the zypper path already has
+  # it). Left as-is until someone decides that is worth adding.
+  eln:
+    groups:
+      - kde-desktop
+    packages:
+      - sddm
+      - dolphin
+      - konsole
+      - kate
+      - ark
+      - plasma-discover
+      - kde-connect
+      - xdg-desktop-portal-kde
+      - qt5-qtwayland
+      - qt6-qtwayland
+      - ksshaskpass
+      - ksystemlog
+      - tesseract
+      - pam-u2f
+      - pam_yubico
+      - nvtop
+    # Absent from ELN on 2026-08-26 — peripheral input/security-key extras.
+    # Best-effort so they land by themselves when the compose grows them.
+    optional:
+      - input-remapper
+      - evtest
+      - libratbag-ratbagd
+      - solaar-udev
+      - openrgb-udev-rules
+      - pamu2fcfg
+      - yubikey-manager
+    exclude:
+      - PackageKit
+      - PackageKit-command-not-found
   # ── DNF: EL10 (AlmaLinux, CentOS Stream, RHEL) ────────────────────
   el10:
     groups:

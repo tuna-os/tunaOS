@@ -636,10 +636,18 @@ variants:
     # publishes no ELN branch). See docs/GREEN-MASTER-PLAN.md's wahoo section
     # and the TUNAOS_CODEC_GAP marker in verify-desktop-experience.sh.
     #
-    # MVP scope: base + GNOME only. ELN AppStream carries GNOME 51~beta;
-    # KDE/COSMIC/Niri/XFCE are not measured here and must not be declared
-    # before they are (#858: an image tagged for a desktop that contains no
-    # desktop). No ISO and no qcow2 — a preview lane publishes images to
+    # Scope: every desktop ELN actually composes, and no others. GNOME 51~beta
+    # and COSMIC 1.6.0 come from eln-appstream/eln-extras; KDE comes from the
+    # `kde-desktop` group (86 entries, Plasma 6.7.4). Each was repodata-measured
+    # before its row was added — #858 is an image tagged for a desktop that
+    # contains no desktop, and the guard against it is measuring first.
+    #
+    # Niri and XFCE are deliberately NOT here and must not be added by analogy:
+    # ELN ships one package of the Niri stack (`swaybg`) and ZERO `xfce*`
+    # packages at all. Both need packages built before a row is honest —
+    # tracked in #2051 / #2052 and in tunaos-packages.
+    #
+    # No ISO and no qcow2 on any flavor — a preview lane publishes images to
     # `bootc switch` onto, not installer media.
     flavors:
       - id: base
@@ -648,6 +656,23 @@ variants:
         build_iso: false
         build_qcow2: false
       - id: gnome
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      # COSMIC 1.6.0 from eln-extras — 23 of 24 manifest packages present
+      # (only cosmic-wallpapers absent). Notably needs NO copr and no
+      # repo.tunaos.org fprintd repo, both of which the el10 section carries:
+      # ELN has fprintd-1.94.5-6.eln158 in eln-appstream (#2049).
+      - id: cosmic
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      # Plasma 6.7.4 via the eln-extras `kde-desktop` group; 16 of 23 explicit
+      # packages present, the seven misses are peripheral input/security-key
+      # extras carried as `optional:` (#2050).
+      - id: kde
         stage: 2
         build_image: true
         build_iso: false
@@ -880,7 +905,7 @@ variants:
   - id: sailfin
     emoji: "🦈"
     description: "Based on openSUSE Tumbleweed (rolling)"
-    base_image: "registry.opensuse.org/opensuse/tumbleweed:latest@sha256:1e5f7c9f7987f7243ecda913201c2667cff4c83f71c7deca12af3087d5555c41"
+    base_image: "registry.opensuse.org/opensuse/tumbleweed:latest@sha256:bbe3311a70b9b5fec1f57b44ee86b68fce0490424c5b804e18dd473123216e87"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [opensuse, tumbleweed]
     platforms: ["linux/amd64"]

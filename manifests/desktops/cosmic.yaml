@@ -212,6 +212,54 @@ packages:
       - xdg-desktop-portal-cosmic
       - pop-icon-theme
 
+  # ── Wahoo (Fedora ELN) ─────────────────────────────────────────────────
+  # ELN carries COSMIC natively, in eln-extras, at 1.6.0 — and that is the
+  # headline finding of the whole lane so far, not just a convenience.
+  # `cosmic.el10` above sources COSMIC from COPR `yselkowitz/cosmic-epel`
+  # (twice) and fprintd from repo.tunaos.org, both tier-3 migration
+  # inventory under PACKAGE-SOURCING.md. On this base neither is needed:
+  # the compose ships cosmic-session/comp/panel/files/greeter/settings and
+  # xdg-desktop-portal-cosmic, and `fprintd-1.94.5-6.eln158` resolves from
+  # eln-appstream, so the aarch64 fprintd gap that pinned cosmic off arm64
+  # on EL10 (tunaOS#732) does not reproduce here either.
+  #
+  # Measured with `dnf repoquery` against the pinned eln-bootc digest on
+  # 2026-08-26: 23 of 24 present. If EL11 keeps this, the COSMIC COPR
+  # dependency retires itself at the EL10 -> EL11 transition rather than
+  # needing a Tideforge migration (#2048, #2049).
+  #
+  # NO copr: block here, deliberately — ELN needs none, and a new one
+  # fails scripts/check-package-sources.py.
+  eln:
+    packages:
+      - dconf
+      - cosmic-session
+      - cosmic-comp
+      - cosmic-panel
+      - cosmic-app-library
+      - cosmic-applets
+      - cosmic-bg
+      - cosmic-files
+      - cosmic-idle
+      - cosmic-launcher
+      - cosmic-notifications
+      - cosmic-osd
+      - cosmic-randr
+      - cosmic-screenshot
+      - cosmic-settings
+      - cosmic-settings-daemon
+      - cosmic-term
+      - cosmic-workspaces
+      - cosmic-greeter
+      - cosmic-icon-theme
+      - greetd
+      - xdg-desktop-portal-cosmic
+      - pop-icon-theme
+    # Absent from ELN on 2026-08-26 (cosmic-icons likewise, and it is not
+    # in the fedora list either). Best-effort so it lands by itself when
+    # the compose grows it — tracked in tunaos-packages.
+    optional:
+      - cosmic-wallpapers
   el10:
     # cosmic-greeter hard-requires fprintd-pam, which CentOS Stream 10 only
     # builds for x86_64 -- that gap is why aarch64 cosmic was pinned off in
