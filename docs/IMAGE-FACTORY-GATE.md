@@ -16,8 +16,8 @@ For every supported `variant × flavor × platform` cell:
 - [x] **Boot Verification**: Each declared output boots and reaches its expected desktop or service contract.
 - [x] **Install-to-Disk & LUKS**: Complete install-to-disk, reboot, and first boot verified (`luks-e2e.yml`).
 - [x] **Lifecycle Stream Operations**: Published streams pass bootc `update`, `rebase`, and `rollback` validation (`bootc-lifecycle.yml`).
-- [x] **Supply-Chain Verification**: Enforceable keyless Cosign v3 signatures, SPDX SBOMs, and provenance attestations attached and verified (`docs/VERIFY-ARTIFACTS.md`).
-- [x] **Fresh Evidence**: Automated evidence is fresh, linked, and required for stable promotion (`docs/MATRIX-STATUS.md`).
+- [x] **Supply-Chain Verification**: Enforceable keyless Cosign v3 signatures, SPDX SBOMs, and provenance attestations attached and verified ([VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md)).
+- [x] **Fresh Evidence**: Automated evidence is fresh, linked, and required for stable promotion ([MATRIX-STATUS.md](MATRIX-STATUS.md)).
 - [x] **Failure Visibility**: Scheduled failures cannot be hidden by aggregate workflow status or silent skips.
 - [x] **Catalog & Artifact Currency**: User-facing catalog, documentation, release assets, and checksums agree.
 
@@ -32,7 +32,7 @@ For every supported `variant × flavor × platform` cell:
 4. **Browser & On-Demand ISO Parity (`#1281`)**:
    - Browser ISO generator (`publish-iso-groups.yml`) aligns with on-demand tacklebox builds.
 5. **Supply Chain Enforcement (`#1187`, `#1193`)**:
-   - Cosign keyless OIDC signing, SPDX SBOM attestations, and ISO verification bundles (`docs/VERIFY-ARTIFACTS.md`).
+   - Cosign keyless OIDC signing, SPDX SBOM attestations, and ISO verification bundles ([VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md)).
 6. **Release Currency & Lifecycle Admission (`#1254`, `#1175`, `#1196`, `#1270`)**:
    - Strict admission criteria for new variants/flavors before matrix expansion.
 7. **Install & Hardware Verification (`#979`, `#1099`, `#989`, `#777`, `#781`)**:
@@ -40,6 +40,6 @@ For every supported `variant × flavor × platform` cell:
 
 ## 4. Current Matrix Verification References
 
-- **LUKS E2E & Desktop Contract Ledger**: [docs/MATRIX-STATUS.md](MATRIX-STATUS.md)
-- **Pipeline & Build Architecture**: [docs/PIPELINE.md](PIPELINE.md)
-- **Artifact Verification Guide**: [docs/VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md)
+- **LUKS E2E & Desktop Contract Ledger**: [MATRIX-STATUS.md](MATRIX-STATUS.md)
+- **Pipeline & Build Architecture**: [PIPELINE.md](PIPELINE.md)
+- **Artifact Verification Guide**: [VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md)

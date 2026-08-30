@@ -55,7 +55,7 @@ manifest-driven, multi-distro build pipeline.
 
 ## Variant matrix (canonical, as of 2026-08-14)
 
-Status terms follow [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md): **Stable**
+Status terms follow [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md): **Stable**
 means GA, **Beta** means published for testing on tunaos.org/download,
 **Experimental** means building but pre-admission-gate. This table tracks
 the canonical table in [ROADMAP.md](https://github.com/tuna-os/tunaOS/blob/main/ROADMAP.md).
