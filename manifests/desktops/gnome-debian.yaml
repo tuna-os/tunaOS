@@ -13,7 +13,8 @@ packages:
     - gnome-core
     - gnome-disk-utility
     - gnome-system-monitor
-    - gnome-shell-extension-manager
+    # Optional during sid's GNOME 50→51 transition: libgjs0 can advance
+    # before gnome-shell, making this extension manager unsatisfiable.
     - nautilus
     - xdg-desktop-portal-gnome
     - xdg-desktop-portal-gtk
