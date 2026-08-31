@@ -91,24 +91,29 @@ migration performed by this audit**.
 | COPR `@asahi/fedora-remix-branding`, `@asahi/u-boot`; CentOS Hyperscale SIG repos; OBS `home:mrkcee` | Apple Silicon (Asahi) hardware enablement: branding, u-boot, kernel | `build_scripts/overlay/asahi.sh` | Tier-3 candidate, scoped exception | Upstream Asahi Linux project's own infrastructure for hardware this org doesn't control the kernel for — narrow, hardware-gated (only applies to `*-asahi` builds), well-precedented pattern for this class of variant |
 | `ppa:elementary-os/stable` | Pantheon desktop environment | `build_scripts/desktop/install-desktop.sh` (Gurnard/Pantheon) | Tier-3 candidate, scoped exception | Official upstream elementary OS PPA — the canonical source for Pantheon on Ubuntu, not a third-party mirror |
 | Manifest-driven `packages.<os>.copr[]` block (`install-desktop.sh`) | General per-desktop COPR mechanism | Any desktop manifest that declares a `copr:` block | Mechanism, not a violation itself | This is *how* a desktop opts into a COPR — the entries above are what actually uses it. Worth a lint step (see §Enforcement) so new `copr:` blocks require a matching allowlist entry, not just code review |
+| `ppa:ubuntu-asahi/ubuntu-asahi` | Asahi kernel and hardware enablement | `build_scripts/ubuntu-kernel.sh` (Asahi builds) | Tier-3 candidate, hardware-scoped | Upstream Asahi project infrastructure; applies only to Apple Silicon variants and is not a general package source |
+| `ppa:avengemedia/danklinux`, `ppa:avengemedia/dms` | Niri/DankMaterialShell packages on Ubuntu | `build_scripts/desktop/niri.sh` (Ubuntu Niri) | Tier-3 candidate, variant-scoped | Supplies packages absent from the Ubuntu archive; migrate to Tideforge where feasible, or admit explicitly before adding new consumers |
+| `sharpenedblade/t2linux` COPR | T2 kernel and hardware enablement | `build_scripts/overlay/t2.sh` | Tier-3 candidate, hardware-scoped | Required for Apple T2 hardware support; never enabled on non-T2 images |
+| CachyOS repositories | CachyOS kernel and tuning packages | `build_scripts/overlay/cachyos.sh` | Tier-3 candidate, hardware/performance-scoped | Distribution-owned repositories used only by CachyOS overlays; pin and review independently of generic Arch packages |
+| Gentoo GURU overlay | Niri and related Gentoo ebuilds | `manifests/desktops/niri.yaml` | Tier-3 candidate, variant-scoped | Community overlay supplies packages missing from Gentoo main; build in-house or record maintainer admission before expanding use |
+| openSUSE Virtualization repository | Container tooling on openSUSE | `Containerfile.opensuse` | Tier-3 candidate, base-scoped | Official openSUSE project repository, but separate from the base system repos; verify package necessity and signing before admission |
 
-**Not yet audited**: apt/AUR/OBS usage outside the entries found above (Debian/
-Arch/openSUSE/Gentoo bases largely use their own package managers' extra
-repos differently than DNF's COPR model) — this pass focused on the DNF/COPR
-ecosystem where the volume was highest. A follow-up pass should cover
-`marlin` (Arch/AUR), `flounder`/`flounder-sid` (Debian), `sailfin` (openSUSE
-OBS), and `guppy` (Gentoo overlays) before the audit is called complete.
+The follow-up inventory above covers the previously unreviewed apt, Arch,
+openSUSE, and Gentoo paths. It found no additional AUR or OBS source used by a
+published package path beyond the scoped repositories listed here. These are
+classifications, not admissions: each candidate still needs maintainer/security
+sign-off or migration to Tideforge before it is treated as approved.
 
 ## Audit & transition plan
 
-1. **Audit** — **done 2026-08-13, ahead of the 08-22 checkpoint** (see
-   "Audit findings" above; [#1323](https://github.com/tuna-os/tunaos/issues/1323)).
+1. **Audit** — **done 2026-08-13, with the follow-up inventory added
+   2026-08-31** (see "Audit findings" above; [#1323](https://github.com/tuna-os/tunaos/issues/1323)).
    Found 2 clear violations (`trixieua/morewaita-icon-theme`,
    `ublue-os/packages`/`krunner-bazaar`), one large gap (niri's 6-COPR
    dependency chain), and confirmed `negativo17`/`rpmfusion` as the
-   Tier-3 allowlist candidates #1319 already named. Not yet covered:
-   apt/AUR/OBS usage on `marlin`/`flounder`/`sailfin`/`guppy` — a
-   follow-up audit pass, not silently dropped.
+   Tier-3 allowlist candidates #1319 already named. The follow-up inventory
+   classifies the apt/Arch/openSUSE/Gentoo sources above; no additional AUR or
+   OBS package source was found in the published paths.
 2. **Migrate (Q3–Q4)**: move tier-3/✗ sources that have in-house equivalents
    to Tideforge; drive the 14-recipe COSMIC build-out already tracked in
    [ROADMAP.md](./ROADMAP.md) ([#964](https://github.com/tuna-os/tunaos/issues/964) COSMIC-off-PPA is the flagship migration).
