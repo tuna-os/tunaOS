@@ -1,6 +1,6 @@
 # FOSDEM 2027 — CFP Draft
 
-> Status: **draft** — for maintainer review before submission.
+> Status: **draft** — for maintainer review before submission (last updated: 2026-08-31).
 > Event: FOSDEM 2027, Brussels, 6–7 Feb 2027. CFP typically opens ~October 2026.
 > Tracking issue: [#1135](https://github.com/tuna-os/tunaOS/issues/1135) (Q1 2027 CFP season).
 
