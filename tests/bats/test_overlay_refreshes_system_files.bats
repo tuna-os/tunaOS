@@ -82,3 +82,12 @@ desktop_stage() {
   [ "$status" -eq 0 ]
   [[ "$output" == *"exit 1"* ]]
 }
+
+@test "the overlay desktop stage recompiles glib schemas and dconf databases" {
+  # Without this, overlay-added keyfiles in /etc/dconf/db/*.d (e.g. gdm.d) are
+  # uncompiled, causing GDM/GNOME runtime contract failures (#1751, #1820).
+  run desktop_stage
+  [[ "$output" == *"glib-compile-schemas"* ]]
+  [[ "$output" == *"dconf update"* ]]
+}
+
