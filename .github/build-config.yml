@@ -681,7 +681,7 @@ variants:
   - id: bonito
     emoji: "🎣"
     description: "Based on Fedora 44"
-    base_image: "quay.io/fedora/fedora-bootc:44@sha256:f51e9dca468f0c9d4b2f534d576818d2c4be8bfe225e1eb887ff10101082ecf3"
+    base_image: "quay.io/fedora/fedora-bootc:44@sha256:e91da1afe4026c2c830241557fd5bd40c165bad45cb6f9a89fc0db00ec749d6e"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [fedora]
     akmods: "ublue-os"
