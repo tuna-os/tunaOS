@@ -68,7 +68,7 @@ it.
 
 Scored against `.github/green-criteria.yml`: a cell is green only when every **blocking** criterion applicable to it has a current affirmative result; a criterion that was skipped, never tested, or unasserted renders ⬜ and does not count as satisfied. Blocking today: `builds`, `desktop`, `boots`, `no_silent_omissions`. Advisory (measured in the sections below, not yet biting): `install`, `lifecycle`, `parity`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. Graduating a criterion is an edit to `enforcement:` in that file — this table and the README count tighten with no code change.
 
-**69 of 145** published cells are composite-green.
+**68 of 145** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -79,7 +79,7 @@ Scored against `.github/green-criteria.yml`: a cell is green only when every **b
 | **flounder-sid** | ❌ | ❌ | — | — | ❌ |
 | **grouper** | ✅ | ✅ | ❌ | — | ✅ |
 | **guppy** | ❌ | ✅ | — | — | ✅ |
-| **hummingbird** | ❌ | — | ❌ | — | — |
+| **hummingbird** | ⬜ | — | ⬜ | — | — |
 | **marlin** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **skipjack** | ❌ | ✅ | ❌ | ❌ | ✅ |
@@ -130,9 +130,9 @@ Green criterion 7 (`parity`), first cadence: every desktop's package set audited
 | **hummingbird** | ✅ | ❌ | ✅ | ❌ | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **skipjack** | ✅ | ✅ | ✅ | ✅ | ❌ |
+| **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **wahoo** | ✅ | ✅ | ❌ | — | — |
-| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **yellowfin** | ✅ | ✅ | ✅ | ✅ | ❌ |
 
 ## LUKS E2E
 
@@ -187,7 +187,7 @@ Pulls the **published** image and runs the contract script against it directly (
 
 4 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
 
-Newest result 2026-08-30.
+Newest result 2026-08-31.
 
 ## Bootc Lifecycle
 
@@ -247,7 +247,7 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-08-30 | [33314228650](https://github.com/tuna-os/tunaOS/actions/runs/33314228650) | 50 |
+| 2026-08-31 | [33410150212](https://github.com/tuna-os/tunaOS/actions/runs/33410150212) | 50 |
 | 2026-08-27 | [33090531233](https://github.com/tuna-os/tunaOS/actions/runs/33090531233) | 121 |
 | 2026-08-24 | [32747410944](https://github.com/tuna-os/tunaOS/actions/runs/32747410944) | 2 |
 | 2026-08-24 | [32718219267](https://github.com/tuna-os/tunaOS/actions/runs/32718219267) | 1 |
