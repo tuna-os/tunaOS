@@ -30,10 +30,19 @@ import re
 import subprocess
 import sys
 import tempfile
-import time
+import time  # compatibility: tests and downstream imports patch retry sleep here
 import urllib.request
 from collections import defaultdict
 from pathlib import Path
+
+# This file is also loaded directly via importlib by its unit tests.  In that
+# mode Python does not add the script's directory to sys.path as it does for a
+# normal executable invocation, so make the sibling adapter discoverable.
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from matrix_status_github import GitHubClient
 
 REPO = "tuna-os/tunaOS"
 DOC = Path("docs/MATRIX-STATUS.md")
@@ -105,20 +114,12 @@ DESKTOPS = ["gnome", "kde", "cosmic", "niri", "xfce"]
 
 PASS, FAIL, UNTESTED, NA = "✅", "❌", "⬜", "—"
 
+GITHUB = GitHubClient()
+
 
 def gh_json(*args: str):
-    """Run gh and parse JSON. Returns None on missing/failed query after retries."""
-    for attempt in range(3):
-        try:
-            out = subprocess.run(
-                ["gh", *args], capture_output=True, text=True, check=True
-            ).stdout
-            return json.loads(out) if out.strip() else None
-        except (subprocess.CalledProcessError, json.JSONDecodeError):
-            if attempt == 2:
-                return None
-            time.sleep(2)
-    return None
+    """Compatibility seam for callers and tests that replace the data source."""
+    return GITHUB.json(*args)
 
 
 def load_build_config(config_path: Path = CONFIG) -> dict:
@@ -327,13 +328,9 @@ def _baseline_cells() -> tuple[list[dict], str, str]:
             continue
         run_id, date = str(run["databaseId"]), run["createdAt"][:10]
         with tempfile.TemporaryDirectory() as tmp:
-            try:
-                subprocess.run(
-                    ["gh", "run", "download", run_id, "--repo", REPO,
-                     "--name", "desktop-contract-baseline", "--dir", tmp],
-                    capture_output=True, text=True, check=True,
-                )
-            except subprocess.CalledProcessError:
+            if not GITHUB.download_artifact(
+                REPO, run_id, "desktop-contract-baseline", Path(tmp)
+            ):
                 continue
             all_json = Path(tmp) / "all.json"
             if not all_json.exists():
@@ -386,13 +383,9 @@ def parity_results() -> dict[str, tuple[str, str, str]]:
                 continue
             run_id, date = str(run["databaseId"]), run["createdAt"][:10]
             with tempfile.TemporaryDirectory() as tmp:
-                try:
-                    subprocess.run(
-                        ["gh", "run", "download", run_id, "--repo", REPO,
-                         "--name", "package-parity-baseline", "--dir", tmp],
-                        capture_output=True, text=True, check=True,
-                    )
-                except subprocess.CalledProcessError:
+                if not GITHUB.download_artifact(
+                    REPO, run_id, "package-parity-baseline", Path(tmp)
+                ):
                     continue
                 parity_json = Path(tmp) / "parity.json"
                 if not parity_json.exists():
