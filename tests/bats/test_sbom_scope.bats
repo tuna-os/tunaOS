@@ -79,6 +79,13 @@ WORKFLOW="${REPO_ROOT}/.github/workflows/reusable-build-image.yml"
 }
 
 @test "promotion requires the signing gate" {
-  grep -q 'needs: \[manifest, sign, verify_boot, verify_asahi\]' "$WORKFLOW"
+  # Assert `sign` is among Promote's gates rather than pinning the exact gate
+  # list: the list grows as deep E2E axes land (verify_desktop, #2263), and
+  # scripts/check-ci-contract.py already enforces that Promote covers every
+  # blocking gate in the workflow. What this file owns is the signing gate.
+  local promote_needs
+  promote_needs="$(awk '/^  tag-image:/{f=1} f && /^    needs:/{print; exit}' "$WORKFLOW")"
+  [ -n "$promote_needs" ]
+  [[ "$promote_needs" == *"sign"* ]]
   grep -q "needs.sign.result == 'success'" "$WORKFLOW"
 }
