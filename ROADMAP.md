@@ -47,7 +47,9 @@ user-install evidence in its PR.
 > have no named owner or acceptance criteria yet. They are tracked in
 > [#1341](https://github.com/tuna-os/tunaos/issues/1341); the 2026-08-22 Q3
 > checkpoint (#1299) decides staff vs. descope. README coverage is tracked in
-> [#1298](https://github.com/tuna-os/tunaos/issues/1298).
+> [#1298](https://github.com/tuna-os/tunaos/issues/1298). Hardware/kernel profiles
+> (e.g. `bonito:gnome-t2`, Apple Silicon Asahi, HWE) are in-scope under the
+> admission gate (#1270).
 
 ### Build Health
 
@@ -111,7 +113,7 @@ user-install evidence in its PR.
 | **Fix ISO downloads** | ci-maintainer | #543, #561 | ✅ Done — downloads verified working (R2, 08-07) |
 | Bonito (Fedora 44) GA | ci-maintainer | #272 | 🟡 Progress — T2 bootc profile **#1256 merged 08-18**; nvidia initramfs regression **#1499 closed** (fixes #1503/#1523 merged 08-14); still Beta, GA exit per VARIANT-LIFECYCLE.md; staff test at 09-01 checkpoint review |
 | Redfin (RHEL 10) alpha | ci-maintainer | #609 (closed, shipped 08-09), #1123 | 🟡 Local-build alpha shipped (systemd auto-update timer units, #609/#1182/#1219) — intentionally **not** in `.github/build-config.yml`'s CI matrix (RHEL EULA forbids redistribution + no RHSM creds on CI runners, see `scripts/get-base-image.sh`); build via `just build redfin <desktop>` or `scripts/corral-build.sh`, see [docs/rhel-setup.md](docs/rhel-setup.md). Remaining: no automated build/publish path is possible by design, so "alpha" here means local-build-verified, not downloadable |
-| Ship KDE, COSMIC, Niri, XFCE variants | ci-maintainer | #285 | 🟡 Published but **desktop-completeness unverified** — 24/37 editions undersized per #133/#1294 |
+| Ship KDE, COSMIC, Niri, XFCE variants | ci-maintainer | #285 | 🟡 Published but **desktop-completeness unverified** — 24/37 editions undersized per tunaos-packages#133 / #1294 |
 | GitHub Releases page carries ISO assets | ci-maintainer | #1106 | ✅ Verified 08-09 — `gnome-20260809` published with assets; cadence resumed |
 | Release-cadence health gate (no silent skip) | ci-maintainer | #1147 | 🟡 Root cause fixed 08-08 (`a4b147f8` fails on dropped release) — verify no silent skip 08-09 |
 | Containerfile deduplication | architect | #305 | ✅ Done |
@@ -126,7 +128,7 @@ user-install evidence in its PR.
 | Populate Q3 milestone | strategist | #562 | ✅ Done (2026-08-08, 9 issues) |
 | **User-proven ISO installs roadmap** | ci-maintainer | #763 | 🟡 In progress (Phase 1 baseline dispatched #761; GUI gate #577) |
 | **Apple Silicon (Asahi Linux) support** | architect / ci-maintainer | #781 | 🟡 In progress (Bonito & Grouper 36/36 verified #776; D0–D4 installer track active) |
-| **Desktop parity floor (non-RPM bases)** | packaging | #133, tunaos-packages#323 | ⬜ Not started — P0 for Q4 (see #1294) |
+| **Desktop parity floor (non-RPM bases)** | packaging | tunaos-packages#133, #1294 (successor tunaos-packages#507) | ⬜ Not started — P0 for Q4 (see #1294) |
 | **Q3 checkpoint (08-22): staff or descope #272/#1123/#1093/#1094** | strategist | #1299 | 🟡 Date elapsed 08-22 — T-9 refresh 2026-08-23 (evidence updated: nvidia regression closed, Bonito T2 profile merged, wootc shipped); **decisions pending maintainer sign-off by 09-01 staff-test deadline** |
 | **Flavor equality mandate (docs wording + cadence parity)** | strategist | #1315, #1254 | 🟡 In progress — catalog parity gate merged 08-11 (#1322, #1281 closed); cadence parity pending (#1316) |
 | **NVIDIA flavor family (6 editions, 0 assets since 07-05)** | ci-maintainer | #1383 | 🔴 Broken — nightly overlay regressed 08-12 (#1382); 13/13 variant matrix red 08-14 (#1570) incl. nvidia cells (#1561/#1562/#1564/#1565); staff test: nightly green + gnome-nvidia assets republished by 09-01 (#1376/#1379) |
@@ -161,7 +163,7 @@ user-install evidence in its PR.
 | Fedora 45 base readiness | ci-maintainer | #1171 — [FEDORA-BASE-POLICY.md](./FEDORA-BASE-POLICY.md) adopted 08-13: N+rawhide model, Fedora 45 planning sequenced after Bonito (#272) GA, not parallel |
 | Adoption metrics / usage telemetry | strategist | #1174 |
 | **Adoption evidence (ADOPTERS.md production entries)** | strategist | #1348 — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot |
-| Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | #1196, #1175 — [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) |
+| Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | #1196, #1175, #1270, #1254, #1294 — [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) |
 | **Windows conversion channel (wootc) — beta gate + winget** | strategist / wootc maintainer | #1988, wootc#211, wootc#221 — Q3 carryover. Q4 scope: full-tier matrix green (wootc#222), BitLocker path (wootc#223), winget package live, and wootc's adoption numbers folded into the #1174 metrics snapshot and #1743 Q4 sequencing. This is the org's only adoption channel that reaches users not already running Linux |
 
 **Milestone fidelity (#1307, 2026-08-12)**: 7 of the 9 goal trackers above were

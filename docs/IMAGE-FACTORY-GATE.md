@@ -11,7 +11,7 @@ Deliver a fully functional TunaOS image factory in which every supported variant
 For every supported `variant × flavor × platform` cell:
 
 - [x] **OCI Build & Publish**: OCI image builds reproducibly and publishes by immutable digest (`ghcr.io/tuna-os/<variant>@sha256:...`).
-- [x] **Package & Desktop Contracts**: Passes package/desktop contract checks via `verify-desktop-experience.sh` (Desktop Contract Sweep).
+- [x] **Package & Desktop Contracts**: Passes package/desktop contract checks via `verify-desktop-experience.sh` (Desktop Contract Sweep) and meets desktop completeness & parity floor standards (#1294).
 - [x] **Declared Outputs**: All declared outputs (OCI / ISO / QCOW2 / hardware installer) are generated and discoverable.
 - [x] **Boot Verification**: Each declared output boots and reaches its expected desktop or service contract.
 - [x] **Install-to-Disk & LUKS**: Complete install-to-disk, reboot, and first boot verified (`luks-e2e.yml`).
@@ -34,8 +34,11 @@ For every supported `variant × flavor × platform` cell:
 5. **Supply Chain Enforcement (`#1187`, `#1193`)**:
    - Cosign keyless OIDC signing, SPDX SBOM attestations, and ISO verification bundles ([VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md)).
 6. **Release Currency & Lifecycle Admission (`#1254`, `#1175`, `#1196`, `#1270`)**:
-   - Strict admission criteria for new variants/flavors before matrix expansion.
-7. **Install & Hardware Verification (`#979`, `#1099`, `#989`, `#777`, `#781`)**:
+   - Strict admission criteria for new variants, desktop flavors, and hardware/kernel profiles (T2/Asahi/HWE) before matrix expansion (#1270).
+   - Scheduled release currency and flavor parity enforcement across all published flavors (#1254).
+7. **Desktop Parity & Completeness Gate (`#1294`)**:
+   - Verification of desktop completeness and minimum package/size floors across non-RPM and RPM bases to prevent thin-desktop releases.
+8. **Install & Hardware Verification (`#979`, `#1099`, `#989`, `#777`, `#781`)**:
    - Asahi Apple Silicon (`scripts/verify-asahi-image.sh`) and Intel T2 hardware qualification runs.
 
 ## 4. Current Matrix Verification References

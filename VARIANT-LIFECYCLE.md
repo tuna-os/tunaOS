@@ -70,6 +70,7 @@ must not be promoted or gain additional ISO coverage.
 | `grouper:gnome-zfs` | #1185 | ci-maintainer | 1 image; 0 ISO | Install-to-ZFS boot E2E (#625), LUKS E2E, desktop contract | Held pending capacity sign-off |
 | `marlin:gnome-nvidia` | #1191 | ci-maintainer | 1 image + 1 ISO (amd64) | NVIDIA driver load, boot gate, LUKS E2E, desktop contract | Held pending capacity sign-off |
 | `flounder:gnome-nvidia` | #1191 | ci-maintainer | 1 image + 1 ISO (amd64) | NVIDIA driver load, boot gate, LUKS E2E, desktop contract | Held pending capacity sign-off |
+| `bonito:gnome-t2` | #1270 | ci-maintainer | 1 image; 0 ISO (amd64) | T2 kernel/hardware modules, boot gate, desktop contract | Held pending capacity sign-off |
 | `flounder-sid:gnome-nvidia` | #1191 | ci-maintainer | 1 image; 0 ISO (amd64) | NVIDIA driver load, boot gate, LUKS E2E, desktop contract | Held pending capacity sign-off |
 
 | Addition (opened 2026-08-25) | Tracker | Owner | Incremental cells | Acceptance evidence | Status |
@@ -112,6 +113,8 @@ existing cells without reopening the general Q3 flavor freeze.
 - Published to tunaos.org/download (download pipeline verified working, #561).
 - Desktop contract: at minimum a session starts (#916); `*-nvidia` and ZFS
   flavors additionally pass their flavor-specific smoke checks.
+- Desktop completeness: published editions must meet per-desktop package
+  and size floor criteria without undeclared thinness (tracks #1294).
 
 ### 3. Stable — promotion criteria (#1175)
 
@@ -129,7 +132,7 @@ cell**:
 - **Boot-gate green for 4 consecutive weeks** of daily runs with no regressions.
 - **LUKS E2E green** for the variant and each supported install/storage mode.
 - **Desktop-contract pass** — beyond session start: window painted (#1217),
-  browser/CI ISO parity gate (#1204) where applicable.
+  browser/CI ISO parity gate (#1204) where applicable, and desktop parity floor verified (#1294).
 - **≥1 user-proven install**, or a documented telemetry proxy until #1174
   (adoption metrics) lands.
 
@@ -209,4 +212,4 @@ milestone planning (next: Q4 2026 kickoff). Criteria changes are filed as
 issues on the roadmap tracker (#1159).
 
 ---
-*Drafted by strategist agent (ACMM L6 — full mode). Tracks #1175 and #1196.*
+*Drafted by strategist agent (ACMM L6 — full mode). Tracks #1175, #1196, #1254, #1270, and #1294.*
