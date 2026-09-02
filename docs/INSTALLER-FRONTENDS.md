@@ -278,10 +278,10 @@ cells it replaces. So the import fills the screen columns only, and tags them.
 
 | Frontend | Source | welcome | disk | encryption | summary | install | done |
 |----------|--------|---------|------|------------|---------|---------|------|
-| KDE | [capture](https://github.com/tuna-os/tuna-installer-kde/actions/runs/31273914226) | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
+| KDE | [capture](https://github.com/tuna-os/tuna-installer-kde/actions/runs/33258385114) | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
 | COSMIC | — | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| Niri | [capture](https://github.com/tuna-os/tuna-installer-niri/actions/runs/31350580635) | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
-| XFCE | [capture](https://github.com/tuna-os/tuna-installer-xfce/actions/runs/31273942113) | ✅ᶜ | ✅ᶜ | ⬜ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
+| Niri | [capture](https://github.com/tuna-os/tuna-installer-niri/actions/runs/32732384359) | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
+| XFCE | [capture](https://github.com/tuna-os/tuna-installer-xfce/actions/runs/32678602805) | ✅ᶜ | ✅ᶜ | ⬜ᶜ | ✅ᶜ | ✅ᶜ | ✅ᶜ |
 
 ᶜ = GPU-less offscreen capture in the frontend's own repo.
 **It attests to screen parity only.** It drives pages in-process,
@@ -291,10 +291,10 @@ keypress advances the wizard — the first three columns of the
 matrix above remain the VM walkthrough's job, and a green row
 here is not a substitute for one.
 
-- **KDE** — 6 pages, 6 passed the pixel audit, 5 transitions. Text from `qml-item-tree`.
+- **KDE** — 6 pages, 5 passed the pixel audit, 5 transitions. Text from `qml-item-tree`.
 - **COSMIC** — no parity report imported (no run carried a parity report).
 - **Niri** — 6 pages, 6 passed the pixel audit, 5 transitions. Text from `widget-tree`.
-- **XFCE** — 8 pages, 8 passed the pixel audit, 7 transitions. Text from `widget-tree`.
+- **XFCE** — 8 pages, 8 passed the pixel audit, 6 transitions. Text from `widget-tree`.
 
 <!-- END GENERATED — scripts/import-frontend-parity.py -->
 
