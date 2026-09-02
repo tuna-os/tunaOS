@@ -65,7 +65,7 @@ user-facing site:
 | [MATRIX-WEEKLY-DIGEST.md](MATRIX-WEEKLY-DIGEST.md) | Matrix weekly-digest post template |
 | [HACKTOBERFEST-2026.md](HACKTOBERFEST-2026.md) | Hacktoberfest 2026 contributor runbook |
 | [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) | Historical record of the May 2026 sprint + remaining roadmap items |
-| [Q4-2026-PROMOTION-CALENDAR.md](Q4-2026-PROMOTION-CALENDAR.md) | Fedora 45, All Things Open, and KubeCon NA promotion plan |
+| [Q4-2026-PROMOTION-CALENDAR.md](Q4-2026-PROMOTION-CALENDAR.md) | Fedora 45, Hacktoberfest, All Things Open, and KubeCon NA promotion plan |
 | [agents/](agents/) | Hive agent guides (issue-tracker, triage-labels, domain) |
 | [adr/](adr/) | Architecture Decision Records |
 | [architecture/shared-just-recipes.md](architecture/shared-just-recipes.md) | Delivery contract for shared Just modules across tuna-os repositories (#1977, #508) |
