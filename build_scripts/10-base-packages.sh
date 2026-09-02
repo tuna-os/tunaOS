@@ -200,7 +200,6 @@ REPO
 		systemd-container \
 		btrfs-progs \
 		xfsprogs \
-		flatpak \
 		gcc \
 		gcc-c++ \
 		just || true
@@ -230,22 +229,31 @@ REPO
 	#
 	# Its ensure_flatpak() fallback installs the package on bases that merely
 	# omit it from the image (guppy, grouper, bonito-rawhide). That cannot
-	# help hummingbird: measured 2026-08-25, flatpak is absent from BOTH
-	# public-hummingbird (3509 binary names) and our rebuild snapshot (7986).
-	# It is layer-07 of build-order-hummingbird-desktops.yml, 131 packages
-	# into the 164 still unbuilt.
+	# help hummingbird either way, so this asks for it directly.
 	#
-	# Listed above so the image picks it up the moment that wave publishes,
-	# and warned about rather than fatal because it genuinely is not
-	# available yet -- a hard failure here would break every hummingbird base
-	# build today. Make it fatal, like xfsprogs above, once layer-07 is
-	# served. What must NOT happen is the xfsprogs shape: --skip-unavailable
-	# swallowing the miss silently and the failure surfacing two stages later
-	# as something else. tuna-os/tunaOS#1397 tracks this.
+	# A SEPARATE transaction from the block above, on purpose (tuna-os/
+	# tunaOS#1734). flatpak now resolves a name -- public-hummingbird started
+	# publishing layer-07 -- but the version live there, flatpak-1.17.3-1.bfin1,
+	# Requires libfuse3.so.4, and the fuse3-libs that provides it in the
+	# rebuild repo conflicts with the base image's own fuse3-libs (the
+	# installed grub2-tools-minimal there needs .so.3). That is a dependency
+	# CONFLICT, which --skip-unavailable does not cover -- it only drops a
+	# name that resolves to nothing. Batched into the transaction above, that
+	# conflict failed the WHOLE transaction and took xfsprogs down with it:
+	# the #858 shape this script exists to prevent (run 33574843735 -- base
+	# failed on both arches, so no hummingbird image, base or desktop,
+	# published for close to two weeks, which is why hummingbird:cosmic's
+	# daily verification found no ghcr.io manifest to check at all). Isolating
+	# flatpak here, with --skip-broken added, lets dnf drop it alone when its
+	# deps do not resolve, without touching the packages proven above.
+	dnf -y install --skip-unavailable --skip-broken flatpak || true
+	# Warned about rather than fatal: unlike xfsprogs, an image without
+	# flatpak can still boot and be installed -- it only loses the live
+	# overlay / ISO / installer-app path (tuna-os/tunaOS#1397).
 	if ! rpm -q flatpak >/dev/null 2>&1; then
-		echo "WARNING: flatpak did not install — no enabled repo carries it yet." >&2
-		echo "         This image cannot build a live overlay or an ISO, and has" >&2
-		echo "         no installer app; see tuna-os/tunaOS#1397." >&2
+		echo "WARNING: flatpak did not install — see tuna-os/tunaOS#1734 and" >&2
+		echo "         tuna-os/tunaOS#1397 for why. This image cannot build a" >&2
+		echo "         live overlay or an ISO, and has no installer app." >&2
 	fi
 elif [[ ${IS_ELN:-false} == true ]]; then
 	# ── Fedora ELN ───────────────────────────────────────────────────────

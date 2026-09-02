@@ -53,16 +53,62 @@ def test_the_branch_is_still_findable() -> None:
     assert "xfsprogs" in branch, "the branch no longer looks like the one measured"
 
 
+def dnf_install_blocks(branch: str) -> list[str]:
+    """Every `dnf -y install ... || true` transaction in the branch, each as
+    its own string. flatpak moved into its own transaction (tuna-os/
+    tunaOS#1734) so a dependency conflict in ITS resolution can no longer
+    fail the xfsprogs transaction batched alongside it -- tests that care
+    about one transaction's contents must not assume there is only one."""
+    blocks = []
+    pos = 0
+    while True:
+        start = branch.find("dnf -y install", pos)
+        if start == -1:
+            break
+        end = branch.index("|| true", start)
+        blocks.append(branch[start:end])
+        pos = end + len("|| true")
+    return blocks
+
+
 def test_hummingbird_asks_for_flatpak() -> None:
     branch = hummingbird_branch()
-    install = branch[branch.index("dnf -y install"):]
-    install = install[:install.index("|| true")]
-    packages = {line.strip().rstrip("\\").strip() for line in install.splitlines()}
+    packages: set[str] = set()
+    for block in dnf_install_blocks(branch):
+        packages |= {line.strip().rstrip("\\").strip() for line in block.splitlines()}
     assert "flatpak" in packages, (
         "the hummingbird base does not install flatpak, so once the package "
         "is published the image still will not carry it -- and without it "
         "customize-live.sh exits 1, no overlay or ISO can be built, and there "
         "is no installer app to launch"
+    )
+
+
+def test_flatpak_is_not_batched_with_xfsprogs() -> None:
+    """The regression this guards against (tuna-os/tunaOS#1734): flatpak
+    started publishing with a libfuse3.so.4 dependency that conflicts with
+    the base image's own fuse3-libs. --skip-unavailable does not cover a
+    dependency CONFLICT (only a name that resolves to nothing), so batching
+    flatpak into the same transaction as xfsprogs let that conflict fail the
+    whole transaction -- and xfsprogs with it, taking down every hummingbird
+    build, base and desktop alike, for close to two weeks. flatpak must stay
+    in its own transaction so its resolution can fail without ever touching
+    xfsprogs."""
+    branch = hummingbird_branch()
+    blocks = dnf_install_blocks(branch)
+    xfsprogs_block = next(b for b in blocks if "xfsprogs" in b)
+    assert "flatpak" not in xfsprogs_block, (
+        "flatpak is back in the same dnf transaction as xfsprogs -- a "
+        "dependency conflict in flatpak's resolution (as opposed to it "
+        "merely being unavailable) will fail the whole transaction and take "
+        "xfsprogs, and therefore every hummingbird build, down with it"
+    )
+    flatpak_block = next(b for b in blocks if "flatpak" in b)
+    assert "--skip-broken" in flatpak_block, (
+        "flatpak's transaction needs --skip-broken, not just "
+        "--skip-unavailable: the failure mode this guards is an "
+        "unresolvable dependency CONFLICT, which --skip-unavailable does "
+        "not cover"
     )
 
 
