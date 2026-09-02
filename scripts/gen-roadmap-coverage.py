@@ -160,13 +160,18 @@ def build(repos: list[dict], today: str | None = None) -> str:
     out = [
         BEGIN,
         "",
+        # One list element per rendered line; the `+` joins are source-width
+        # wrapping, not line breaks. They are explicit because implicit
+        # adjacency here reads as a missing comma -- a review bot proposed
+        # adding one, which would have split a sentence across two lines of
+        # the generated block.
         f"- {glyph} **Per-repo ROADMAP coverage — {len(planned)} of {total} "
-        f"active repos ({pct}%)**, measured {stamp} by "
-        "[`scripts/gen-roadmap-coverage.py`](./scripts/gen-roadmap-coverage.py).",
+        + f"active repos ({pct}%)**, measured {stamp} by "
+        + "[`scripts/gen-roadmap-coverage.py`](./scripts/gen-roadmap-coverage.py).",
         "  Scope is every non-archived, non-private repo in the `tuna-os` org; "
-        "a repo counts as",
+        + "a repo counts as",
         "  planned when `ROADMAP.md` is at the root of its **default branch**. "
-        "Archived repos are out",
+        + "Archived repos are out",
         "  of scope because a read-only repo cannot be planned.",
     ]
     out += [
