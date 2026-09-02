@@ -211,6 +211,7 @@ jobs:
           # Mirrors the `if:` on the download step below: source=build
           # never touches R2, so it must not be blocked on R2 secrets.
           NEEDS_R2: ${{ github.event_name != 'workflow_dispatch' || inputs.source == 'r2-latest' }}
+          EVENT_NAME: ${{ github.event_name }}
         run: |
           # THE DISPATCH FILTER IS GONE, and this is the only thing that used
           # to live here besides the R2 check.

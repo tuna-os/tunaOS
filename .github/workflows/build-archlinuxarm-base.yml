@@ -57,6 +57,8 @@ jobs:
           sed 's/ArchLinuxARM-aarch64-latest.tar.gz/rootfs.tar.gz/' rootfs.tar.gz.md5 | md5sum -c -
 
       - name: Build image from rootfs
+        env:
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
           ctr=$(sudo buildah from scratch)
@@ -82,7 +84,7 @@ jobs:
             --cmd /usr/bin/bash \
             --label org.opencontainers.image.title="Arch Linux ARM base" \
             --label org.opencontainers.image.description="Arch Linux ARM aarch64 rootfs as an OCI base image (marlin arm64/asahi prerequisite)" \
-            --label org.opencontainers.image.source="https://github.com/${{ github.repository }}" \
+            --label org.opencontainers.image.source="https://github.com/${GITHUB_REPOSITORY}" \
             "$ctr"
           sudo buildah commit --format oci "$ctr" archlinuxarm:build
 
@@ -95,10 +97,12 @@ jobs:
       - name: Push to GHCR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_REPOSITORY_OWNER: ${{ github.repository_owner }}
         run: |
           set -euo pipefail
-          echo "${{ env.GITHUB_TOKEN }}" | sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-          REF="ghcr.io/${{ github.repository_owner }}/archlinuxarm"
+          echo "${GITHUB_TOKEN}" | sudo podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
+          REF="ghcr.io/${GITHUB_REPOSITORY_OWNER}/archlinuxarm"
           DATE=$(date -u +%Y%m%d)
           sudo podman tag archlinuxarm:build "$REF:latest" "$REF:$DATE"
           sudo podman push "$REF:latest"

@@ -259,9 +259,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.vars.outputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          if gh release view "${TAG}" --repo "${{ github.repository }}" &>/dev/null; then
+          if gh release view "${TAG}" --repo "${REPO}" &>/dev/null; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Release ${TAG} already exists — skipping"
           else

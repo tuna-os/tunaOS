@@ -25,6 +25,19 @@ release announcements a repeatable, low-effort process.
 - **Engage honestly in comments** — answer questions, accept criticism,
   update the post with fixes
 
+## Target communities
+
+| Community | Purpose | Posting approach |
+|---|---|---|
+| [r/linux](https://www.reddit.com/r/linux/) | Broad Linux audience for a substantial release or project milestone | One original, discussion-oriented post when the release has broad interest; answer questions in the same thread |
+| [r/immutables](https://www.reddit.com/r/immutables/) | People specifically interested in image-based/atomic desktops | Use for variant, bootc, rollback, or image-update details; cross-post only when the content is relevant |
+| [programming.dev/c/linux](https://programming.dev/c/linux) | Lemmy Linux audience | Publish the same announcement as a native post, adapting links and tone to the community |
+| [lemmy.world/c/linux](https://lemmy.world/c/linux) | Additional Lemmy Linux audience | Cross-post only after checking local rules and whether the post adds value there |
+
+Keep this list small and check relevance/local moderation rules before
+expanding it — a post that fits r/linux does not automatically fit every
+Lemmy Linux community.
+
 ## When to post (candidate hooks)
 
 | Hook | Date | Post angle |
@@ -47,14 +60,35 @@ release announcements a repeatable, low-effort process.
 5. Known limitations / status (honest)
 6. Link: tunaos.org/blog post + GitHub
 
+## Release gate
+
+Before drafting a post, confirm:
+
+- the release or variant is published and the download page works;
+- the release notes identify what changed, known limitations, and a
+  support path;
+- checksums/signatures and source links are available where applicable;
+- the named variant and desktop are spelled consistently with the catalog;
+- screenshots or other media are free to redistribute and have useful alt
+  text;
+- the post has one clear action for readers (try it, read the notes, or
+  give feedback), not a list of unrelated asks.
+
+If the download, release notes, or signing state is not ready, wait — a
+broken announcement link is worse than a late announcement.
+
 ## Process
 
 1. Draft post as a **GitHub Discussion** first (public review, gets the
    community's eyes on it before it goes out)
-2. Maintainer posts to r/linux + Lemmy (one human account)
-3. Track star/download deltas per post in the monthly
-   ADOPTION-METRICS.md snapshot (#1311)
-4. Retro after 3 posts: what worked, what to cut
+2. Re-check the target community's current rules immediately before
+   posting — promotion limits, flair, and account-age requirements can
+   change between drafting and publishing
+3. Maintainer posts to r/linux + Lemmy (one human account)
+4. Track star/download deltas per post in the monthly
+   ADOPTION-METRICS.md snapshot (#1311); label unavailable values
+   `not available` rather than estimating them
+5. Retro after 3 posts: what worked, what to cut
 
 ## Ready-to-post drafts (August 2026 launch trio)
 
