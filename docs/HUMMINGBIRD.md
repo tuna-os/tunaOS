@@ -57,6 +57,29 @@ variant — but it is a *port*, not a *rebuild*, and the difference matters:
 - Hardening and minimalism are the *point*. A package being absent is often a
   deliberate upstream choice, not an oversight to be reported as a bug.
 
+### GNOME comes from utah-packages (2026-09-02)
+
+`hummingbird:gnome` no longer waits on the tunaos-packages closure for the
+GNOME stack. Bluefin builds GNOME 51 for Hummingbird in Hummingbird's own
+build root ([projectbluefin/utah-packages](https://github.com/projectbluefin/utah-packages))
+and publishes it as an OCI image carrying a `createrepo_c` repository,
+cosign-signed. tunaOS consumes it the way it consumes `projectbluefin/common`
+and `ublue-os/brew`: pinned by digest in `image-versions.yaml`
+(`utah-packages`), declared as a stage in `Containerfile.el10`, bind-mounted
+at `/run/utah-packages` for the gnome stage's install only, and enabled by
+`manifests/desktops/gnome.yaml`'s hummingbird section as a `file://` repo at
+priority 4, above the `tunaos-hummingbird` prefix (5). The repo is marked
+`unsigned: true`; `install-desktop.sh` allows that only for `file://`
+content, because the image digest is the signature there and nothing fetched
+over the network may skip `gpgcheck` (#1655).
+
+What utah does not ship (the fedora list's extras, and the other four
+desktops) still comes from `repo.tunaos.org/hummingbird/<snapshot>`, which
+tunaos-packages now builds in the same Fedora 44 + public-hummingbird root
+(tuna-os/tunaos-packages#630) and gates on a static installability walk.
+The decision and the numbers behind it are in tunaos-packages'
+`docs/HUMMINGBIRD-TARGET.md` and tuna-os/tunaos-packages#629.
+
 ### Measured state of the snapshot (2026-08-25)
 
 Against the live index that `build_scripts/10-base-packages.sh` configures,

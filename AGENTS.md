@@ -50,7 +50,9 @@ repository it does not even read.
 
 Read [`docs/HUMMINGBIRD.md`](docs/HUMMINGBIRD.md) before filing a packaging
 issue, blaming a build failure on a missing package, or assuming a Fedora
-package set is available. **Measure the index rather than inferring it** —
+package set is available. Since 2026-09-02 `hummingbird:gnome` takes the GNOME
+stack from `projectbluefin/utah-packages` (digest-pinned OCI repo, see
+`image-versions.yaml`), and only the rest from `repo.tunaos.org/hummingbird`. **Measure the index rather than inferring it** —
 repodata is public and small:
 
 ```bash

@@ -572,22 +572,40 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 		_TD_RN=$($YQ -r ".packages.${_TD_OS}.repos[$i].name" "${_TD_MANIFEST}")
 		_TD_RB=$($YQ -r ".packages.${_TD_OS}.repos[$i].baseurl" "${_TD_MANIFEST}")
 		_TD_RP=$($YQ -r ".packages.${_TD_OS}.repos[$i].priority // \"\"" "${_TD_MANIFEST}")
+		_TD_RU=$($YQ -r ".packages.${_TD_OS}.repos[$i].unsigned // false" "${_TD_MANIFEST}")
 		[[ -z "${_TD_RN}" || "${_TD_RN}" == "null" ]] && continue
+		# `unsigned: true` is allowed for exactly one shape of repo: a
+		# file:// path the Containerfile bind-mounted out of an OCI image
+		# that is pinned BY DIGEST in image-versions.yaml (utah-packages,
+		# /run/utah-packages). There the digest is the signature: the bytes
+		# cannot differ from what was reviewed, so per-RPM gpgcheck adds
+		# nothing and the RPMs carry no signature to check. Anything fetched
+		# over the network at build time has no such pin and MUST stay
+		# signed (tuna-os/tunaOS#1655) -- so an unsigned https:// repo is a
+		# manifest error, not a config choice.
+		if [[ "${_TD_RU}" == "true" && "${_TD_RB}" != file://* ]]; then
+			echo "ERROR: ${_TD_MANIFEST}: repo ${_TD_RN} is 'unsigned: true' but its baseurl is not file:// (${_TD_RB}); only digest-pinned, bind-mounted content may skip gpgcheck" >&2
+			exit 1
+		fi
 		{
 			echo "[${_TD_RN}]"
 			echo "name=${_TD_RN}"
 			echo "baseurl=${_TD_RB}"
 			echo "enabled=1"
-			# gpgcheck=1 verifies each RPM against the tuna-os signing key
-			# (every repo.tunaos.org publish pipeline runs `rpmsign --addsign`
-			# before upload — see tuna-os/tunaos-packages#394). repo_gpgcheck
-			# stays 0: repomd.xml isn't detached-signed yet (no repomd.xml.asc
-			# published), so turning that on would hard-fail every dnf
-			# transaction against these repos, not just add a check. Matches
-			# the already-working contrib/install-gnome49.sh pattern rather
-			# than tuna-os/tunaOS#1655's literal ask of both =1.
-			echo "gpgcheck=1"
-			echo "gpgkey=https://repo.tunaos.org/public.gpg"
+			if [[ "${_TD_RU}" == "true" ]]; then
+				echo "gpgcheck=0"
+			else
+				# gpgcheck=1 verifies each RPM against the tuna-os signing key
+				# (every repo.tunaos.org publish pipeline runs `rpmsign --addsign`
+				# before upload — see tuna-os/tunaos-packages#394). repo_gpgcheck
+				# stays 0: repomd.xml isn't detached-signed yet (no repomd.xml.asc
+				# published), so turning that on would hard-fail every dnf
+				# transaction against these repos, not just add a check. Matches
+				# the already-working contrib/install-gnome49.sh pattern rather
+				# than tuna-os/tunaOS#1655's literal ask of both =1.
+				echo "gpgcheck=1"
+				echo "gpgkey=https://repo.tunaos.org/public.gpg"
+			fi
 			echo "repo_gpgcheck=0"
 			echo "skip_if_unavailable=False"
 			[[ -n "${_TD_RP}" && "${_TD_RP}" != "null" ]] && echo "priority=${_TD_RP}"
