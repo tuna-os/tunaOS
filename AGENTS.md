@@ -7,6 +7,7 @@
 ```bash
 just fix && just check   # format + validate (mandatory before every commit)
 just test                # bats + pytest (same as CI)
+just ci                  # the whole PR gate locally: check + CI contract + test
 just build yellowfin gnome  # build a single flavor
 just --list              # show all available commands
 ```
@@ -99,6 +100,19 @@ Evidence style, for anything you write into the repo (comments, docs,
 commit messages): state the constraint and the measured run/log that proves
 it, not the narrative of how you found it. Every load-bearing comment in
 `build_scripts/` follows this shape — match it.
+
+Two further conventions, adopted from Hive (#2250):
+
+- **An incident is fixed when a test proves it cannot silently recur.** A
+  fix for a bug that shipped an unusable or wrongly-promoted image lands
+  with a regression test in `tests/regressions/test_issue_<N>_*.py`
+  (see that directory's README). "Fixed the script" without the test is
+  half a PR.
+- **A gate that is declared is a gate that runs.** If you move, rename, or
+  add a job that asserts a green criterion, update its `gates` block in
+  `.github/green-criteria.yml`; `tests/test_ci_contract.py` fails when the
+  contract and the workflows disagree, and `just test-contract` runs it
+  locally.
 
 ## Agent Skills
 
