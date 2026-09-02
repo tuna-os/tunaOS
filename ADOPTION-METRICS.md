@@ -37,7 +37,10 @@ publish, and *how* the snapshot feeds roadmap decisions.
 **Instrumentation order** (cheapest first):
 
 1. **GitHub Releases download counts** — free API counter; requires non-gnome
-   flavors to publish assets too (#1254 parity gap).
+   flavors to publish assets too (#1254 parity gap — scheduled matrix now
+   covers gnome/kde/xfce/cosmic/niri, PR pending; watch the next few
+   scheduled runs to confirm kde/xfce/cosmic/niri actually publish before
+   counting this instrumentation step done).
 2. **R2/Cloudflare access-log analytics** on tunaos.org/download — R2 already
    serves the ISOs; enable access logs + a dashboard (owner: ci-maintainer).
 3. **Docs analytics** — Cloudflare Web Analytics on the Docusaurus site
