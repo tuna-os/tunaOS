@@ -70,21 +70,32 @@ def fake_dbus_daemon(tmp_path: Path) -> Path:
 
     The realistic part is that the daemonized child INHERITS whatever stdout
     the caller gave it and outlives the caller — which is precisely how a real
-    bus can pin the build's output pipe. It honours --pidfile so the reaper has
-    something to read.
+    bus can pin the build's output pipe.
+
+    It speaks the real binary's option set, not a convenient one. The first
+    version of this fake honoured `--pidfile=FILE`, an option dbus-daemon does
+    not have (its only pidfile switch is `--nopidfile`; the path is config
+    syntax), so the suite proved the reaper worked against a bus the real
+    daemon refused to start, and every live customize from 2026-08-25 to
+    2026-09-02 died at the session bus (runs 32875192246, 33594824101). Now
+    `--pidfile` is a usage error exactly as it is for dbus 1.14, and the pid
+    is delivered the way the real one delivers it: `--print-pid=FD`.
     """
     binder = tmp_path / "bin"
     binder.mkdir(exist_ok=True)
     shim = binder / "dbus-daemon"
     shim.write_text(
         "#!/usr/bin/env bash\n"
-        "pidfile=\n"
+        "fd=\n"
         'for arg in "$@"; do\n'
-        '  case "$arg" in --pidfile=*) pidfile="${arg#--pidfile=}" ;; esac\n'
+        '  case "$arg" in\n'
+        '    --print-pid=*) fd="${arg#--print-pid=}" ;;\n'
+        '    --pidfile=*) echo "dbus-daemon [--version] [--session] ... [--nopidfile]" >&2; exit 1 ;;\n'
+        "  esac\n"
         "done\n"
         f"sleep {FAKE_BUS_LIFETIME} &\n"
         'child=$!\n'
-        '[[ -n "$pidfile" ]] && echo "$child" >"$pidfile"\n'
+        '[[ -n "$fd" ]] && echo "$child" >&"$fd"\n'
         "exit 0\n"
     )
     shim.chmod(0o755)
@@ -138,9 +149,12 @@ def test_the_wedge_is_real_without_the_reaper(tmp_path) -> None:
     """
     # Remove the redirection, which is the load-bearing half: without it the
     # forked bus inherits the build's stdout and pins the pipe open.
-    crippled = bus_helpers().replace(
-        'dbus-daemon "$@" --fork --pidfile="$_pidfile" >/dev/null 2>&1',
-        'dbus-daemon "$@" --fork --pidfile="$_pidfile"',
+    real = 'dbus-daemon "$@" --fork --nopidfile --print-pid=3 3>"$_pidfile" >/dev/null 2>&1'
+    helpers = bus_helpers()
+    assert real in helpers, "the _start_bus line changed; update this mutation with it"
+    crippled = helpers.replace(
+        real,
+        'dbus-daemon "$@" --fork --nopidfile --print-pid=3 3>"$_pidfile"',
     ).replace("trap _reap_live_buses EXIT", "true")
     elapsed, code = run_failing_customize(tmp_path, crippled)
     assert code == -1, (
@@ -157,10 +171,21 @@ def test_the_fix_keeps_the_bus_off_the_build_pipe(tmp_path) -> None:
         "the forked bus inherits the build's stdout again, which is what pins "
         "the output pipe open and turns a fast failure into a step timeout"
     )
-    assert "--print-pid" not in block, (
+    # Comments are allowed to quote the wrong forms; only the code is pinned.
+    code = "\n".join(l for l in block.splitlines() if not l.lstrip().startswith("#"))
+    assert "$(dbus-daemon" not in code and "`dbus-daemon" not in code, (
         "`_pid=$(dbus-daemon ... --print-pid)` cannot be used here: command "
         "substitution waits for the pipe to close, which is exactly what a "
         "forked daemon holds, so it hangs AT THE FORK -- earlier and harder "
         "than the bug being fixed. The first version of this fix did that and "
-        "this suite caught it; --pidfile is why it is gone."
+        "this suite caught it. `--print-pid=FD` with FD opened on a FILE is "
+        "the way that does not wait, and it is the only pid delivery the real "
+        "binary offers."
+    )
+    assert "--pidfile=" not in code, (
+        "dbus-daemon has no --pidfile option (only --nopidfile; the path is "
+        "config-file syntax). Passing it is a usage error, exit 1, on the "
+        "stderr this helper discards: no bus starts and the session-bus call "
+        "kills the customize under set -eu. That is what every live-ISO build "
+        "did from 886444e3 until 2026-09-02."
     )
