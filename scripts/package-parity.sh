@@ -20,7 +20,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=lib/build-config.sh
 source "${SCRIPT_DIR}/lib/build-config.sh"
-BUILD_CONFIG="$(tunaos_build_config)"
+BUILD_CONFIG="${BUILD_CONFIG:-.github/build-config.yml}"
+if [[ ! -f "$BUILD_CONFIG" ]]; then
+	BUILD_CONFIG="$(tunaos_build_config)"
+fi
 
 REGISTRY="${TUNA_REGISTRY:-ghcr.io/tuna-os}"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/tuna-parity"
@@ -85,7 +88,7 @@ if [[ "${1:-}" == "--audit" ]]; then
 	# cannot silently omit a variant the factory declares (bonito-rawhide,
 	# flounder-sid and gurnard were missing from the old hardcoded list —
 	# exactly the absence-of-evidence hole this repo keeps refusing to dig).
-	variants=(yellowfin bonito sailfin flounder grouper marlin skipjack albacore guppy)
+	variants=(yellowfin bonito sailfin flounder grouper marlin skipjack albacore guppy wahoo)
 	if command -v yq >/dev/null && [[ -f "$BUILD_CONFIG" ]]; then
 		mapfile -t variants < <(yq -r '.variants[].id' "$BUILD_CONFIG")
 	fi
