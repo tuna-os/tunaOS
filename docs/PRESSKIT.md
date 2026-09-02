@@ -58,7 +58,7 @@ manifest-driven, multi-distro build pipeline.
 Status terms follow [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md): **Stable**
 means GA, **Beta** means published for testing on tunaos.org/download,
 **Experimental** means building but pre-admission-gate. This table tracks
-the canonical table in [ROADMAP.md](https://github.com/tuna-os/tunaOS/blob/main/ROADMAP.md).
+the canonical table in [ROADMAP.md](../ROADMAP.md).
 
 | Variant | Base | Status |
 |---|---|---|

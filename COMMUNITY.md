@@ -2,6 +2,8 @@
 
 ## Getting Involved
 
+> 🎃 **Hacktoberfest 2026**: We are participating! Looking for your first open-source PR? Check out our [good first issues](https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22) and join us on Matrix for maintainer office hours in October.
+
 tunaOS is an open-source project building OCI-based Enterprise Linux desktops. We welcome contributors at all levels.
 
 ### Quick Start
