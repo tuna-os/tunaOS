@@ -1,11 +1,21 @@
 name: Build Arch Linux ARM base
 
 # Builds ghcr.io/tuna-os/archlinuxarm from the official Arch Linux ARM
-# aarch64 rootfs tarball (os.archlinuxarm.org) — the marlin arm64 /
-# asahi (#778) base. docker.io/archlinux is x86_64-only and ALARM
-# publishes no OCI image, so we make our own from their canonical
-# tarball, verified against their published MD5 (all they sign tarballs
-# with; the pacman keyring takes over from first sync onward).
+# aarch64 rootfs tarball — the marlin arm64 / asahi (#778) base.
+# docker.io/archlinux is x86_64-only and ALARM publishes no OCI image,
+# so we make our own from their canonical tarball, verified against
+# their published MD5 (all they sign tarballs with; the pacman keyring
+# takes over from first sync onward).
+#
+# Fetched from fl.us.mirror.archlinuxarm.org over HTTPS rather than
+# os.archlinuxarm.org: the redirector at os.archlinuxarm.org only
+# serves plain HTTP (it 302s to a geo-routed mirror over HTTP too) and
+# has no valid TLS certificate for its own hostname, so pinning to a
+# named mirror with a valid cert is what actually gets us an
+# authenticated channel. ALARM does not publish a sha256 or a detached
+# signature for this rolling "-latest" tarball, only MD5 — MD5 is kept
+# here purely as a corruption check, not a security boundary; the
+# HTTPS mirror connection is what stops in-transit tampering (#1710).
 #
 # Weekly rebuild keeps the snapshot fresh; consumers run pacman -Syu at
 # build time anyway, so staleness only costs download time.
@@ -38,10 +48,12 @@ jobs:
         run: |
           set -euo pipefail
           curl -fsSL -o rootfs.tar.gz \
-            "http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz"
+            "https://fl.us.mirror.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz"
           curl -fsSL -o rootfs.tar.gz.md5 \
-            "http://os.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz.md5"
-          # The .md5 references the canonical filename
+            "https://fl.us.mirror.archlinuxarm.org/os/ArchLinuxARM-aarch64-latest.tar.gz.md5"
+          # The .md5 references the canonical filename. MD5 is only a
+          # corruption check (ALARM publishes no sha256/signature for
+          # this tarball) — HTTPS above is what authenticates the mirror.
           sed 's/ArchLinuxARM-aarch64-latest.tar.gz/rootfs.tar.gz/' rootfs.tar.gz.md5 | md5sum -c -
 
       - name: Build image from rootfs
