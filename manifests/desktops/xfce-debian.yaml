@@ -16,3 +16,22 @@ packages:
     - xdg-desktop-portal-gtk
     - thunar
     - mousepad
+
+# Post-install scripts to source (relative to build_scripts/desktop/).
+#
+# The -debian override REPLACES xfce.yaml rather than merging with it
+# (install-desktop.sh reassigns _TD_MANIFEST), so a missing post_install here
+# is not "inherit the generic one" — it is "run nothing". flounder's XFCE
+# images therefore shipped with no Flathub remote and no preinstalled apps.
+# gnome-debian.yaml carried the identical bug and was fixed the same way;
+# kde-debian.yaml has always had these two lines.
+#
+# xfce.yaml's other two scripts are deliberately not carried over:
+# xfce-greeter.sh configures greetd/gtkgreet, and this manifest uses LightDM;
+# xfwm4-theme.sh backfills theme data that only EL10's xfwl4 lacks, while
+# Debian's xfce4 ships xfwm4 with its themes.
+post_install:
+  - tuna-flatpak-remote.sh
+  # Curated Flatpak set (store + browser) + preinstall service — see the
+  # script header; asserts live in verify-desktop-experience.sh.
+  - flatpak-preinstall.sh
