@@ -87,7 +87,13 @@ if [[ "${1:-}" == "--audit" ]]; then
 	# declares (bonito-rawhide, flounder-sid and gurnard were missing from the
 	# old hardcoded list — exactly the absence-of-evidence hole this repo keeps
 	# refusing to dig). The literal list below is only the no-yq fallback.
-	variants=(yellowfin bonito sailfin flounder grouper marlin skipjack albacore guppy)
+	# Kept in step with .github/build-config.yml by
+	# tests/test_package_parity_is_scheduled.py, which fails when the two
+	# disagree: the last time this list was hand-maintained it silently
+	# dropped five declared variants (wahoo, hummingbird, bonito-rawhide,
+	# gurnard, flounder-sid) and the audit reported on nine of fourteen
+	# while looking complete.
+	variants=(yellowfin albacore skipjack wahoo bonito hummingbird sailfin guppy bonito-rawhide gurnard grouper marlin flounder flounder-sid)
 	if command -v yq >/dev/null && [[ -f "$BUILD_CONFIG" ]]; then
 		mapfile -t variants < <(yq -r '.variants[].id' "$BUILD_CONFIG")
 	fi

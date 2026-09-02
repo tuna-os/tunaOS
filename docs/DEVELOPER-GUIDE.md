@@ -54,12 +54,12 @@ flowchart LR
   installs; [INSTALLER-FRONTENDS.md](INSTALLER-FRONTENDS.md) tracks their
   parity matrix.
 
-## 2. The build matrix: 142 cells
+## 2. The build matrix: 145 cells
 
 Everything CI does is driven by **`.github/build-config.yml`**: 13 variants ×
 their flavors (5 desktops + `base` + hardware tiers) × declared platforms
 (amd64 / amd64-v2 / arm64). A **cell** is one `(variant, flavor)` pair —
-`yellowfin:gnome`, `bonito:kde-nvidia` — and there are 142 of them with
+`yellowfin:gnome`, `bonito:kde-nvidia` — and there are 145 of them with
 `build_image: true`. Every scoreboard, gate, and denominator in the project
 derives from this file, on purpose: a flavor that isn't declared here doesn't
 exist, and tests enforce that the workflows regenerate from it rather than
@@ -180,7 +180,7 @@ also need to update.
 | UTC | What |
 | --- | --- |
 | 22:20 | `check-base-image-pins` — every pinned base digest must still resolve (#1788: upstream GC'd three at once) |
-| 01:00 | All 13 `build-<variant>.yml` nightlies (scheduler drift up to ~90 min is normal) |
+| staggered, 00:00-23:00 | All 13 `build-<variant>.yml` nightlies, each pinned to its own cron hour to spread runner load |
 | 08:00 | Desktop contract sweep — pulls every **published** desktop image; §6 |
 | 13:30 | README build-status refresh → automation PR |
 | on cell movement | MATRIX-STATUS regeneration → automation PR |
@@ -255,7 +255,7 @@ flowchart LR
     CRIT[".github/green-criteria.yml<br/>enforcement per criterion"]
     GEN["scripts/gen-matrix-status.py<br/>composite scorer"]
     MS["docs/MATRIX-STATUS.md<br/>Composite green — the bar"]
-    RM["README<br/>Built X/142 · composite green Y/142"]
+    RM["README<br/>Built X/145 · composite green Y/145"]
 
     evidence --> GEN
     CRIT --> GEN

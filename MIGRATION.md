@@ -159,7 +159,7 @@ If you are currently running Windows (Windows 10 or 11), you can migrate to Tuna
 
 wootc is a Windows installer application for TunaOS:
 - **No USB stick required**: Runs directly within Windows and prepares a bootable environment.
-- **Safe alongside Windows**: Installs to a loop root disk (`root.disk`) on your existing drive while keeping Windows intact in the UEFI boot menu. BitLocker partitions remain safe.
+- **Safe alongside Windows**: Installs to a loop root disk (`root.disk`) on your existing drive while keeping Windows intact in the UEFI boot menu. A BitLocker-encrypted disk is not yet a supported path — that work is tracked as wootc#223 and is Q4 scope in [ROADMAP.md](ROADMAP.md) — so suspend BitLocker or back up your recovery key before you start.
 - **Migration assistance**: Can import Wi-Fi networks, wallpaper, browser profiles, keyboard layouts, WSL configurations, and user documents.
 - **Full TunaOS catalog**: Choose from GNOME, KDE Plasma, COSMIC, Niri, or XFCE editions across supported TunaOS bases.
 - **Honest rollback / uninstall**: Uninstall cleanly from Windows Settings / Add or Remove Programs, leaving no residual partition state.

@@ -8,7 +8,10 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   grep -q '^display_manager: lightdm$' "$manifest"
   grep -q '^    - lightdm$' "$manifest"
   grep -q '^    - lightdm-gtk-greeter$' "$manifest"
-  ! grep -q 'gdm3\|gnome-shell' "$manifest"
+  # Package lines only. The manifest's own comment names gdm3 and
+  # gnome-shell to explain what this override exists to avoid, and a
+  # whole-file grep read that explanation as the thing it forbids.
+  ! grep -qE '^[[:space:]]*-[[:space:]]*(gdm3|gnome-shell)([[:space:]]|$)' "$manifest"
 }
 
 @test "Debian GNOME manifest keeps the extension manager optional to the transition" {

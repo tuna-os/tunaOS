@@ -14,6 +14,7 @@ import yaml
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "package-parity.yml"
 SCRIPT = ROOT / "scripts" / "package-parity.sh"
+CONFIG = ROOT / ".github" / "build-config.yml"
 spec = importlib.util.spec_from_file_location(
     "gms", ROOT / "scripts" / "gen-matrix-status.py"
 )
@@ -34,11 +35,28 @@ def test_workflow_is_scheduled_and_advisory_shaped() -> None:
 
 def test_audit_roster_derives_from_build_config() -> None:
     body = SCRIPT.read_text()
-    assert ".github/build-config.yml" in body, (
+    assert ".github/build-config.yml" in body or "build-config.sh" in body, (
         "a hardcoded variant list silently omits declared variants "
         "(bonito-rawhide, flounder-sid and gurnard were missing)"
     )
     assert "PARITY_JSON" in body
+
+
+def test_the_no_yq_fallback_roster_is_every_declared_variant() -> None:
+    """The fallback is only reached when yq is missing, which is exactly when
+    nobody is watching -- so it has to be complete or the audit reports on a
+    subset while looking whole. #2268 noticed `wahoo` was missing; four more
+    were (hummingbird, bonito-rawhide, gurnard, flounder-sid), so this pins
+    the list to the config rather than to one name."""
+    declared = [v["id"] for v in
+                yaml.safe_load(CONFIG.read_text(encoding="utf-8"))["variants"]]
+    line = next(l for l in SCRIPT.read_text().splitlines()
+                if l.strip().startswith("variants=("))
+    fallback = line.split("(", 1)[1].rstrip(")").split()
+    assert fallback == declared, (
+        "scripts/package-parity.sh's no-yq fallback roster has drifted from "
+        ".github/build-config.yml"
+    )
 
 
 def test_parity_results_maps_verdicts() -> None:

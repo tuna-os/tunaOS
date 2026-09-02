@@ -225,7 +225,7 @@ screens:
     # keyword that manufactures a phantom one.
     keywords: ["installation progress", "copying files", "deploying",
                "please wait", "writing image", "installing\u2026",
-               "partitioning", "installing image", "do not power off"]
+               "partitioning", "installing image"]
 
   - id: done
     title: Finished / reboot

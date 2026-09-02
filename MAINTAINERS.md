@@ -8,10 +8,10 @@
 
 ### Release Process
 
-1. Builds run daily at 1am UTC (`build-*.yml` workflows)
+1. Builds run nightly, each variant on its own staggered cron hour (`build-*.yml` workflows)
 2. Monday boot report (`weekly-boot-report.yml`) validates all variants×desktops
 3. ISOs are auto-published via `live-iso-bootc.yml`
-4. GitHub Releases created via `generate-release.yml`
+4. GitHub Releases created via `generate-changelog-release.yml`
 
 ### Emergency: If builds fail
 
@@ -31,9 +31,9 @@
 
 ### Adding a new desktop
 
-1. Add to `.github/build-config.yml` flavors array for the variant
-2. Create `build_scripts/<desktop>.sh` with `base` and `extra` cases
-3. Call it from Containerfile or via `run_buildscripts_for()` in `lib.sh`
+1. Write a manifest at `manifests/desktops/<desktop>.yaml` (packages per base OS, display manager, versionlock)
+2. Add a stage to the Containerfile (copy from an existing desktop's pattern)
+3. Add the flavor to `.github/build-config.yml` — `install-desktop.sh` handles the rest (see CONTRIBUTING.md)
 
 ### Contributor Onboarding & Issue Triage
 

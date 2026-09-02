@@ -31,7 +31,7 @@ setup() {
 for arg in "$@"; do
   case "$arg" in
     *excludes_flavor*) exit 0 ;;
-    *enforcement*)     printf 'boots,builds\n'; exit 0 ;;
+    *enforcement*)     printf 'boots\nbuilds\n'; exit 0 ;;
     *flavors*)         printf 'green\nbroken\nskipped\nabsent\n'; exit 0 ;;
     *emoji*)           printf 'sailfin\t🦈\n'; exit 0 ;;
   esac
@@ -120,4 +120,72 @@ run_generator() {
   [ "$status" -eq 0 ]
   grep -q 'no completed run' "$README"
   grep -q '4 never reached' "$README"
+}
+
+# --- composite green when the blocking set outgrows this script -------------
+#
+# `desktop` and `no_silent_omissions` graduated to blocking on 2026-08-19.
+# This script can only read `builds` and `boots` off Actions job names, and
+# its response was to exit 1 — which froze the README block for two weeks
+# rather than publishing a number that had stopped meaning what it said.
+# It now takes gen-matrix-status.py's count, which scores every axis.
+
+blocking_stub() {
+  cat > "${BIN}/yq" <<'STUB'
+#!/usr/bin/env bash
+for arg in "$@"; do
+  case "$arg" in
+    *excludes_flavor*) exit 0 ;;
+    *enforcement*)     printf 'boots\nbuilds\ndesktop\nno_silent_omissions\n'; exit 0 ;;
+    *flavors*)         printf 'green\nbroken\nskipped\nabsent\n'; exit 0 ;;
+    *emoji*)           printf 'sailfin\t🦈\n'; exit 0 ;;
+  esac
+done
+exit 0
+STUB
+  chmod +x "${BIN}/yq"
+}
+
+@test "an unscorable blocking set takes its composite from MATRIX-STATUS.md" {
+  blocking_stub
+  export MATRIX_STATUS_DOC="${BATS_TEST_TMPDIR}/MATRIX-STATUS.md"
+  printf '## Composite green\n\n**68 of 145** published cells are composite-green.\n' \
+    > "$MATRIX_STATUS_DOC"
+  run_generator
+  [ "$status" -eq 0 ]
+  # The sourced pair, over its own denominator — not this table's four cells.
+  grep -q 'composite green 68/145' "$README"
+  grep -q 'published cells, per \[docs/MATRIX-STATUS.md\]' "$README"
+}
+
+@test "the footer names every blocking criterion, not a stale pair" {
+  blocking_stub
+  export MATRIX_STATUS_DOC="${BATS_TEST_TMPDIR}/MATRIX-STATUS.md"
+  printf '**68 of 145** published cells are composite-green.\n' > "$MATRIX_STATUS_DOC"
+  run_generator
+  [ "$status" -eq 0 ]
+  grep -q 'blocking today on `boots`, `builds`, `desktop`, `no_silent_omissions`' "$README"
+}
+
+@test "a MATRIX-STATUS.md with no composite line is an error, not a guess" {
+  blocking_stub
+  export MATRIX_STATUS_DOC="${BATS_TEST_TMPDIR}/MATRIX-STATUS.md"
+  printf 'no composite sentence here\n' > "$MATRIX_STATUS_DOC"
+  run_generator
+  [ "$status" -eq 1 ]
+  [[ "$output" == *"carries no"* ]]
+  # The README keeps whatever it had rather than gaining a wrong number.
+  grep -q 'stale' "$README"
+}
+
+@test "a scorable blocking set still scores itself, with no document to read" {
+  # boots+builds is what this script can measure; it must not start depending
+  # on a generated document for the case it has always handled.
+  export MATRIX_STATUS_DOC="${BATS_TEST_TMPDIR}/absent.md"
+  run_generator
+  [ "$status" -eq 0 ]
+  # 0, not 1: `green` promoted but no Gate asserted it, and a Gate that never
+  # ran is not a pass (skipped_is_not_green).
+  grep -q 'composite green 0/4' "$README"
+  grep -q 'counts this table' "$README"
 }
