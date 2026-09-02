@@ -325,6 +325,36 @@ jobs:
             gh release view "$TAG" --repo "${{ github.repository }}" --json body -q .body
           } > "$BODY_FILE"
           gh release edit "$TAG" --repo "${{ github.repository }}" --notes-file "$BODY_FILE"
+      # A successful action invocation is not proof that GitHub received the
+      # release payload. Keep an empty release from looking healthy (#1186).
+      - name: Verify release assets
+        if: >-
+          !cancelled() &&
+          steps.check.outputs.skip == 'false' &&
+          inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO:     ${{ github.repository }}
+          TAG:      ${{ steps.vars.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          ASSETS=$(gh api --paginate \
+            "repos/${REPO}/releases/tags/${TAG}" \
+            --jq '.assets[]?.name' 2>/dev/null || true)
+          ASSET_COUNT=$(printf '%s\n' "${ASSETS}" | sed '/^$/d' | wc -l)
+
+          if [[ "${ASSET_COUNT}" -eq 0 ]]; then
+            echo "::error::release ${TAG} exists but has no uploaded assets"
+            exit 1
+          fi
+
+          if ! grep -q '\.spdx\.json$' <<< "${ASSETS}"; then
+            echo "::error::release ${TAG} has no SPDX SBOM asset"
+            exit 1
+          fi
+
+          echo "Verified ${ASSET_COUNT} uploaded asset(s), including an SPDX SBOM, for ${TAG}"
 
       # ── Release cadence health gate (#1147) ───────────────────────────────
       # Before this existed, "we shipped nothing" and "we shipped" were the

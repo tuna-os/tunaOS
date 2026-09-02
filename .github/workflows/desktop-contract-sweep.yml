@@ -289,6 +289,15 @@ jobs:
             echo "::error::baseline does not reconcile: ${pass}+${fail}+${miss}+${err}+${lost} != ${total}"
             exit 1
           fi
+
+          # A baseline is useful only when every expected cell is healthy.
+          # Keep missing, infrastructure-error, and lost results non-passing:
+          # otherwise a published edition can disappear from the evidence and
+          # still look green to the release process (#1294).
+          if (( fail + miss + err + lost > 0 )); then
+            echo "::error::desktop completeness gate failed: ${fail} failed, ${miss} missing, ${err} errored, ${lost} lost"
+            exit 1
+          fi
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: desktop-contract-baseline
