@@ -30,7 +30,7 @@ checkpoint (#1299). Q4 must close with evidence, not wishes.
 | Adoption metrics / usage telemetry | #1174 | First monthly download/usage snapshot **published by 2026-11-01**; dashboard or doc with numbers, not prose |
 | Adoption evidence | #1348 | ≥1 production adopter listed in ADOPTERS.md with a verifiable reference (deployment, testimonial, case study) |
 | Community governance model | #1168 | Governance doc merged (maintainer roles, decision rights, contribution ladder) and referenced from CONTRIBUTING.md |
-| Branch protection + required CI | #1167 | Active `main` ruleset on tunaos enforces required status checks (`lint`, `lint-summary`, `unit-tests`) — verified, not claimed |
+| Branch protection + required CI | #1167 | Active `main` ruleset on tunaos contains a `required_status_checks` rule for `lint`, `lint-summary`, and `unit-tests`; verify the rule and a clean merge-queue evaluation from a non-bypass PR |
 | Release automation | #1186 | Scheduled releases for **all supported flavors** (kde/xfce/cosmic/niri + gnome) with assets; ≥2 consecutive weekly cycles green |
 | Package signing / SBOM | #1187 | Signed SBOM attestation present on every published release artifact org-wide (not just gnome); verification docs public |
 | Supply chain hardening | #1193 | Dependency-freshness automation healthy org-wide: no halted Renovate configs, org automerge gate enforced (#1636, #1612) |
