@@ -133,5 +133,5 @@ sudo systemctl reboot
 
 ## 🔗 Related Resources
 - [Fedora Magazine Guest Post Pitch](FEDORA-MAGAZINE-PITCH.md)
-- [Matrix Status — which variant×desktop cells are verified](MATRIX-STATUS.md)
+- [Variant Selection Decision Guide](USER-GUIDE.md#2-choosing-your-image)
 - [ADOPTERS.md Ecosystem & Production Registry](../ADOPTERS.md)
