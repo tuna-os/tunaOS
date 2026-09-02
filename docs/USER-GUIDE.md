@@ -136,6 +136,10 @@ just qcow2 ghcr.io/tuna-os/bonito:kde     # produces bonito.qcow2
 just run-qcow2 bonito kde                  # boots it under QEMU
 ```
 
+### Option D — from Windows (wootc)
+
+Moving from Windows 10/11? You can install TunaOS directly without flashing a USB drive using **[wootc](https://github.com/tuna-os/wootc)** (the Windows bootc installer). Download `tunaos-installer.exe` from [wootc releases](https://github.com/tuna-os/wootc/releases), select your desktop, and reboot. See [MIGRATION.md](../MIGRATION.md#from-windows-wootc) for full details.
+
 ## 4. Day-2 administration
 
 This section mirrors Bluefin's

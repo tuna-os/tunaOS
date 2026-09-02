@@ -85,6 +85,24 @@ jobs:
                | select($ff == "all" or .flavor == $ff)
                | select($fa == "all" or .arch == $fa) ]}')"
 
+          # tunaos#1430: the first scheduled run of this workflow failed 9s in
+          # with no failing job -- "Generate matrix" reported success (165
+          # stable + 11 beta cells) but the downstream matrix jobs never
+          # spawned, and the fromJSON() expansion error that must have caused
+          # it is only visible in the Actions UI, not the REST API this repo's
+          # tooling reads. Validate both payloads explicitly before writing
+          # them to GITHUB_OUTPUT, so a malformed/oversized value fails loud
+          # HERE with a real error message instead of silently producing an
+          # output that kills the run downstream with no diagnosable cause.
+          for name in matrix beta_matrix; do
+            val="${!name}"
+            if ! jq empty <<<"$val" >/dev/null 2>&1; then
+              echo "::error::${name} is not valid JSON (see below) -- refusing to write a GITHUB_OUTPUT that would break the downstream fromJSON() expansion"
+              echo "$val"
+              exit 1
+            fi
+          done
+
           count="$(echo "$matrix" | jq '.include | length')"
           beta_count="$(echo "$beta_matrix" | jq '.include | length')"
           echo "Stable Matrix has ${count} cell(s), Beta Matrix has ${beta_count} cell(s)"
@@ -99,7 +117,10 @@ jobs:
     strategy:
       fail-fast: false
       max-parallel: 6
-      matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
+      # tunaos#1430: degrade to a no-op matrix instead of aborting the whole
+      # run if the upstream output is ever empty/malformed despite the new
+      # validation in generate-matrix.
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix || '{"include":[]}') }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -216,7 +237,7 @@ jobs:
     strategy:
       fail-fast: false
       max-parallel: 4
-      matrix: ${{ fromJSON(needs.generate-matrix.outputs.beta_matrix) }}
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.beta_matrix || '{"include":[]}') }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

@@ -7,6 +7,10 @@ on:
       - 'build_scripts/**'
       - '.github/scripts/**'
       - '.github/changelogs.py'
+      # The CI contract (tests/test_ci_contract.py) proves every green gate
+      # exists and runs; it has to re-run when the gates themselves move.
+      - '.github/workflows/**'
+      - '.github/green-criteria.yml'
       - 'Justfile'
   push:
     branches: [main]

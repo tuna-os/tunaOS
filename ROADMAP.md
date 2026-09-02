@@ -25,7 +25,7 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 | Grouper | Ubuntu 26.04 | GNOME, KDE, Niri, XFCE | Beta (RFC 010) |
 | Marlin | Arch Linux (rolling), CachyOS overlay | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
 | Flounder / Flounder Sid | Debian 13 Trixie / Sid | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
-| Hummingbird | Fedora Hummingbird (container-native bootc) | Base, GNOME, KDE, COSMIC, Niri | Experimental (see #1341) |
+| Hummingbird | Fedora Hummingbird (container-native bootc) | Base, GNOME, COSMIC | Experimental (see #1341) |
 | Gurnard | Ubuntu 24.04 Noble | Base, Pantheon | Experimental (see #1341) |
 | Wahoo | Fedora ELN (EL11 preview, rolling) | Base, GNOME, KDE, COSMIC | Experimental, dispatch-only — base/GNOME/KDE **Gate-green and published** 08-27; COSMIC builds but Promote is held behind a Gate blocked by an AWS GPU vCPU quota of 0. No working H.264/H.265 on this base (fedora-eln/eln#214, desktops #2048) |
 
@@ -50,7 +50,7 @@ track it. Notably **Bonito is Beta** (GA tracked in [#272](https://github.com/tu
 
 ### Community
 
-- 55 stars, 3 forks
+- Pre-Q4 Baseline (2026-08): 56 stars, 3 forks (API), 0 GitHub Release downloads, 0 external production adopters (ADOPTERS.md)
 - CONTRIBUTING.md, SECURITY.md, CODE_OF_CONDUCT.md published (June 2026)
 - Discussions enabled
 - Multi-agent development active (architect, guide, sec-check, quality, CI, outreach)
@@ -143,7 +143,7 @@ track it. Notably **Bonito is Beta** (GA tracked in [#272](https://github.com/tu
 | Branch protection + required CI | strategist | CI health, #1167 — audited 2026-08-13: [BRANCH-PROTECTION.md](./docs/BRANCH-PROTECTION.md), active `main` ruleset has no required-status-checks rule; proposed list is `lint`, `lint-summary`, `unit-tests` |
 | Supply chain hardening | sec-check | #1193 (tracker; #212/#301 closed) — coordinates with #1187 (package signing/SBOM is the largest hardening item, tracked there in detail) |
 | Release automation | ci-maintainer | CI health, VERSIONING.md, #1186 |
-| Community governance model | strategist | #1168 |
+| Community governance model | strategist | #1168 — [docs/GOVERNANCE.md](./docs/GOVERNANCE.md) |
 | **Flavor equality mandate** | strategist | #1315, #1316 (cadence parity #1254) |
 | **tromso first stable release** | ci-maintainer | tromso#83 |
 | Issue triage policy (queue actionability) | strategist | #1195 — [TRIAGE-POLICY.md](./TRIAGE-POLICY.md) drafted 08-13: milestone-only roadmap signal, verify-before-trust closure, tiered SLA |

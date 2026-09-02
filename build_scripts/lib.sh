@@ -476,6 +476,21 @@ dnf_retry() {
 			rm -f "$tmp_out"
 			return "$rc"
 		fi
+		# Usage errors: we mis-spelled the command line, so dnf never
+		# even looked at a repo. Retrying is pointless, but the bigger
+		# problem is that most callers write `dnf_retry … || fallback`,
+		# which turns our own bug into a silently-degraded install.
+		# Measured on Build Hummingbird #66 (run 32907940350): a
+		# misplaced --skip-unavailable sent all 52 gnome desktop
+		# packages through install_available, which does not honour the
+		# manifest's exclude list, after 4 attempts and 35s of backoff.
+		# Annotate so the next one surfaces in the job's annotations
+		# even when the caller swallows the exit code.
+		if [[ "$out" == *"Unknown argument"* || "$out" == *"Unknown command"* ]]; then
+			echo "::error title=dnf invoked incorrectly::dnf $* — ${out%%$'\n'*}" >&2
+			rm -f "$tmp_out"
+			return "$rc"
+		fi
 		echo "dnf attempt ${attempt}/${max_attempts} failed (exit ${rc}); clearing metadata and retrying..." >&2
 		dnf clean metadata || true
 		sleep "$((attempt * 5))"
@@ -540,6 +555,48 @@ zypper_retry() {
 # Callers pass their own name first (BASH_SOURCE[1] resolved at THEIR frame —
 # resolving it here would always say lib.sh), then the missed package names.
 # TUNAOS_WISHLIST_DIR relocates the wishlist for tests.
+# Account for what `--skip-unavailable` dropped.
+#
+# `install_available` reports its own misses through record_package_wishlist,
+# so for a long time the fallback path was the only thing that produced a
+# record of a package the repos could not supply. That made a correctness fix
+# a REGRESSION in visibility: once install-desktop.sh stopped mis-spelling
+# --skip-unavailable (so the primary transaction succeeded instead of failing
+# into install_available), the packages dnf dropped left no trace at all --
+# no warning, no wishlist file, nothing for the weekly boot report to read.
+#
+# Measured on run 32925587829: hummingbird:gnome asked for 52 desktop
+# packages, installed 14, and emitted zero "Missing package" warnings.
+#
+# dnf's own two reasons are deliberately not distinguished here. "No match for
+# argument" (absent) and "Skipping packages with broken dependencies"
+# (present but unusable) are very different problems, but both end with the
+# package not installed, and the caller cannot see either one -- the whole
+# point of --skip-unavailable is that neither fails the build.
+record_unsatisfied_requests() {
+	local caller_script="$1"
+	shift
+	local requested=("$@")
+	[[ ${#requested[@]} -eq 0 ]] && return 0
+	command -v rpm >/dev/null 2>&1 || return 0
+
+	local pkg misses=()
+	for pkg in "${requested[@]}"; do
+		[[ -n "$pkg" ]] || continue
+		# --whatprovides second: several manifest entries are provides rather
+		# than package names, and reporting one of those as missing when it is
+		# installed under another name is worse than not reporting it.
+		rpm -q --quiet "$pkg" 2>/dev/null && continue
+		rpm -q --quiet --whatprovides "$pkg" 2>/dev/null && continue
+		misses+=("$pkg")
+	done
+
+	((${#misses[@]} == 0)) && return 0
+	printf '::warning title=Desktop packages dropped (%s)::%d of %d packages requested by %s were not installed; --skip-unavailable dropped them without failing the build.\n' \
+		"${IMAGE_NAME:-?}" "${#misses[@]}" "${#requested[@]}" "$caller_script"
+	record_package_wishlist "$caller_script" "${misses[@]}"
+}
+
 record_package_wishlist() {
 	local caller_script="$1"
 	shift

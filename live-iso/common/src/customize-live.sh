@@ -432,11 +432,22 @@ if [[ -n "${INSTALLER_APP}" ]]; then
 	}
 	trap _reap_live_buses EXIT
 
+	#
+	# And NOT `--pidfile=FILE` either: dbus-daemon has no such option. Its
+	# only pidfile switch is `--nopidfile`; a pidfile path is config-file
+	# syntax. `dbus-daemon --fork --pidfile=/x` is a usage error, exit 1,
+	# with the usage text on the stderr this helper discards -- so the
+	# first version of THIS fix started no bus at all, and every live
+	# customize since 2026-08-25 died here (runs 32875192246, 33594824101;
+	# the fake bus in tests/test_a_failing_live_customize_fails_fast.py
+	# honoured the option the real binary rejects). `--print-pid=3` writes
+	# the daemon's pid to fd 3, which is opened on the pidfile: a file, not
+	# a pipe, so nothing waits on it and nothing holds it open.
 	_start_bus() {
 		local _pidfile="$1"
 		shift
 		_live_bus_pidfiles+=("$_pidfile")
-		dbus-daemon "$@" --fork --pidfile="$_pidfile" >/dev/null 2>&1
+		dbus-daemon "$@" --fork --nopidfile --print-pid=3 3>"$_pidfile" >/dev/null 2>&1
 	}
 
 	mkdir -p /var/lib/dbus

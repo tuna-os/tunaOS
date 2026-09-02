@@ -30,6 +30,11 @@ cd "$_TUNAOS_REPO_ROOT" || {
 	exit 1
 }
 
+# Compatibility facade: existing callers retain these helpers while focused
+# consumers can source the side-effect-free flavor contract directly.
+# shellcheck source=flavor.sh
+. "$(dirname "${BASH_SOURCE[0]}")/flavor.sh"
+
 # ── Image-ref resolution ────────────────────────────────────────────────────
 # Given (variant, flavor, repo, tag) → OCI image reference string.
 # `repo` is one of: local | ghcr | registry
@@ -152,157 +157,17 @@ tunaos_import_to_root_storage() {
 # ── Flavor → human title ────────────────────────────────────────────────────
 # Render a flavor id (e.g. "gnome-nvidia-hwe") into the title shown in the
 # systemd-boot menu of a grouped ISO (e.g. "GNOME (NVIDIA, HWE)"). Keeping the
-# mapping here means the boot-menu labels stay consistent across the single-
-# flavor and grouped-ISO build paths.
-tunaos_flavor_title() {
-	local flavor="${1:?flavor required}"
-	local base="$flavor" mods=() suffix=""
-
-	# Peel hardware modifiers off the end so the desktop name is left bare.
-	if [[ "$base" == *-nvidia-hwe ]]; then
-		mods=("NVIDIA" "HWE")
-		base="${base%-nvidia-hwe}"
-	elif [[ "$base" == *-nvidia ]]; then
-		mods=("NVIDIA")
-		base="${base%-nvidia}"
-	elif [[ "$base" == *-hwe ]]; then
-		mods=("HWE")
-		base="${base%-hwe}"
-	fi
-
-	local name
-	case "$base" in
-
-	gnome) name="GNOME" ;;
-	kde) name="KDE Plasma" ;;
-	cosmic) name="COSMIC" ;;
-	niri) name="Niri" ;;
-	base) name="Base" ;;
-	*) name="${base^}" ;;
-	esac
-
-	if ((${#mods[@]})); then
-		local joined="${mods[0]}" i
-		for ((i = 1; i < ${#mods[@]}; i++)); do
-			joined+=", ${mods[i]}"
-		done
-		suffix=" (${joined})"
-	fi
-	printf '%s%s\n' "$name" "$suffix"
-}
+# The compatibility import above keeps boot-menu labels consistent for legacy
+# common.sh consumers.
+# Implementation provided by scripts/lib/flavor.sh.
 
 # ── Desktop session for a flavor ────────────────────────────────────────────
-# Map a flavor id to its desktop session so tacklebox's livesys-* sets autologin
-# for the right session manager. Hardware modifiers (-hwe/-nvidia) don't change
-# the desktop, so a prefix match is sufficient.
-tunaos_flavor_desktop() {
-	local flavor="${1:?flavor required}"
-	case "$flavor" in
-	kde*) echo "kde" ;;
-	niri*) echo "niri" ;;
-	cosmic*) echo "cosmic" ;;
-	xfce*) echo "xfce" ;;
-	gnome* | *) echo "gnome" ;;
-	esac
-}
+# The side-effect-free flavor library owns the desktop-session mapping.
+# Implementation provided by scripts/lib/flavor.sh.
 
-# ── tacklebox runner ────────────────────────────────────────────────────────
-# Resolve tacklebox (the published container image by default, or a pinned
-# source build when TACKLEBOX_FROM_SOURCE=1) and build the ISO described by
-# <recipe_file>. Shared by build-iso-tacklebox.sh (single flavor) and
-# build-iso-group.sh (grouped dedup). Must run as root — tacklebox needs
-# loopback + sgdisk + mkfs.
-#
-# Usage: tunaos_run_tacklebox <recipe_file> <out_dir> <iso_out>
-tunaos_run_tacklebox() {
-	local recipe_file="${1:?recipe_file required}"
-	local out_dir="${2:?out_dir required}"
-	local iso_out="${3:?iso_out required}"
-	# Tacklebox currently reports a live-customize phase only as
-	# "running N script(s)". If a nested operation stalls, the surrounding
-	# 90-minute Actions job used to end as a bare cancellation with neither an
-	# actionable error nor its later diagnostic steps (#1772). Bound the whole
-	# invocation below that job limit so the failure says what happened and the
-	# workflow still has time to upload its evidence. Workflows with a reviewed
-	# longer budget may override this, but an unbounded value is never accepted.
-	local timeout_seconds="${TUNAOS_TACKLEBOX_TIMEOUT_SECONDS:-4800}"
-	[[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]] || {
-		echo "ERROR: TUNAOS_TACKLEBOX_TIMEOUT_SECONDS must be a positive integer" >&2
-		return 2
-	}
-
-	local tacklebox_image="${TACKLEBOX_IMAGE:-ghcr.io/tuna-os/tacklebox:latest}"
-	local from_source="${TACKLEBOX_FROM_SOURCE:-0}"
-
-	local -a tb
-	if [[ "$from_source" == "1" ]]; then
-		# Pin the source SHA so CI doesn't silently track a moving HEAD.
-		local sha cache bin
-		sha="${TACKLEBOX_SHA:-$(grep '^\s*tacklebox:' image-versions.yaml 2>/dev/null | sed 's/.*"\(.*\)".*/\1/')}"
-		sha="${sha:-3b4598273efb2f71d17515947e442f0e6b26a6c5}"
-		cache="${TACKLEBOX_CACHE:-/var/cache/tunaos/tacklebox}"
-		bin="${cache}/tacklebox"
-
-		if [[ ! -x "$bin" ]] || [[ "$("$bin" version 2>/dev/null || echo)" != *"$sha"* ]]; then
-			echo "==> Building tacklebox @ ${sha}..." >&2
-			mkdir -p "$cache"
-			(
-				cd "$cache" || exit 1
-				if [[ ! -d .git ]]; then
-					git clone --quiet https://github.com/tuna-os/tacklebox.git .
-				else
-					git fetch --quiet origin
-				fi
-				git -c advice.detachedHead=false checkout --quiet "$sha"
-				local go_bin=""
-				for g in /home/linuxbrew/.linuxbrew/bin/go /usr/bin/go go; do
-					if command -v "$g" &>/dev/null; then
-						go_bin="$g"
-						break
-					fi
-				done
-				if [[ -z "$go_bin" ]]; then
-					echo "ERROR: go not found; install go 1.22+ to build tacklebox" >&2
-					exit 1
-				fi
-				"$go_bin" build -o tacklebox ./cmd/tacklebox
-			)
-		fi
-		[[ -x "$bin" ]] || {
-			echo "ERROR: tacklebox binary missing after build" >&2
-			return 1
-		}
-		tb=("$bin")
-	else
-		echo "==> Using tacklebox image: ${tacklebox_image}" >&2
-		podman pull "$tacklebox_image" >/dev/null
-		tb=(podman run --rm --privileged
-			--security-opt label=disable
-			-v /var/lib/containers:/var/lib/containers
-			-v /dev:/dev
-			-v "$(realpath "$out_dir"):$(realpath "$out_dir")"
-			-v "$(realpath "$recipe_file"):$(realpath "$recipe_file"):ro"
-			"$tacklebox_image")
-	fi
-
-	local -a build_cmd=("${tb[@]}" build "$(realpath "$recipe_file")" \
-		--iso "$(realpath "$iso_out")" \
-		--output-base "$(realpath "$out_dir")" \
-		--yes)
-
-	echo "==> Running tacklebox with a ${timeout_seconds}s deadline" >&2
-	if timeout --foreground --kill-after=120 "$timeout_seconds" "${build_cmd[@]}"; then
-		return 0
-	else
-		local rc=$?
-		if [[ "$rc" -eq 124 || "$rc" -eq 137 ]]; then
-			echo "::error::tacklebox exceeded its ${timeout_seconds}s deadline; " \
-				"see tunaOS#1772 and the workflow diagnostics below" >&2
-			podman ps -a 2>&1 || true
-		fi
-		return "$rc"
-	fi
-}
+# ── tacklebox runner ───────────────────────────────────────
+# shellcheck source=lib/tacklebox.sh
+. "${_TUNAOS_REPO_ROOT}/scripts/lib/tacklebox.sh"
 
 # Compatibility facade: existing consumers retain the backend-probe API while
 # focused consumers can avoid common.sh's repository-root cwd change.

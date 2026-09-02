@@ -81,10 +81,12 @@ names() { cut -f1 "$1" | LC_ALL=C sort -u; }
 # no desktop at all, which is what marlin's kde/cosmic/niri/xfce do.
 if [[ "${1:-}" == "--audit" ]]; then
 	de="${2:?usage: --audit <desktop>}"
-	# The variant roster comes from build-config when available, so the audit
-	# cannot silently omit a variant the factory declares (bonito-rawhide,
-	# flounder-sid and gurnard were missing from the old hardcoded list —
-	# exactly the absence-of-evidence hole this repo keeps refusing to dig).
+	# The variant roster comes from .github/build-config.yml (resolved through
+	# lib/build-config.sh, so TUNAOS_BUILD_CONFIG can relocate it) when
+	# available, so the audit cannot silently omit a variant the factory
+	# declares (bonito-rawhide, flounder-sid and gurnard were missing from the
+	# old hardcoded list — exactly the absence-of-evidence hole this repo keeps
+	# refusing to dig). The literal list below is only the no-yq fallback.
 	variants=(yellowfin bonito sailfin flounder grouper marlin skipjack albacore guppy)
 	if command -v yq >/dev/null && [[ -f "$BUILD_CONFIG" ]]; then
 		mapfile -t variants < <(yq -r '.variants[].id' "$BUILD_CONFIG")

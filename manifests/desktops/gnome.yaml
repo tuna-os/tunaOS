@@ -127,6 +127,20 @@ packages:
       - name: tunaos-hummingbird
         baseurl: https://repo.tunaos.org/hummingbird/20251124-$basearch/
         priority: 5
+      # GNOME 51 itself comes from projectbluefin/utah-packages: Bluefin's
+      # build for Hummingbird, in Hummingbird's own root, published as an OCI
+      # image carrying a createrepo_c repository. Containerfile.el10 bind-
+      # mounts /repository of the digest pinned in image-versions.yaml at
+      # /run/utah-packages for the gnome stage; the digest is the signature
+      # (see the `unsigned` rule in install-desktop.sh). Priority 4 beats the
+      # tunaos-hummingbird prefix (5) so the GNOME stack resolves from one
+      # coherent build; what utah does not ship (the fedora list's extras)
+      # still comes from the prefix. Decided in tuna-os/tunaos-packages#629;
+      # the numbers are in tunaos-packages' docs/HUMMINGBIRD-TARGET.md.
+      - name: utah-packages
+        baseurl: file:///run/utah-packages
+        priority: 4
+        unsigned: true
     packages: *fedora_gnome_packages
 
   # ── Wahoo (Fedora ELN) ─────────────────────────────────────────────────

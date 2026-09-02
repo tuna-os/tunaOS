@@ -52,7 +52,7 @@ Validation on every commit: `shellcheck --exclude=SC1091`, `shfmt -d`,
 
 | Variant | Root cause | Where |
 |---|---|---|
-| `skipjack` | `gnome-shell-50.x` conflicts with `gnome-shell-common-48.3` on the same files (`/usr/share/glib-2.0/schemas/org.gnome.shell.gschema.xml`). Intrinsic to upstream packaging; needs COPR coordination. | `gnome.sh` line 32–44 invokes `gnome50-el10-compat`; both pull the new gnome-shell while CentOS Stream 10 ships the older one. |
+| `skipjack` | Previously `gnome-shell-50.x` conflicted with `gnome-shell-common-48.3`. Fixed in `tuna-os/tunaos-packages#23` and re-enabled in `a3c14ddd24b2`. | `manifests/desktops/gnome.yaml` |
 | `bonito` | `bootc container lint --fatal-warnings` reports `Checks failed: 3`. The `\|\| true` mask is gone (now routed through `lint_image` in `lib.sh`, which surfaces every finding into the build-log group + step summary; #272). Findings are visible but not yet build-fatal — set `BOOTC_LINT_FATAL=1` for bonito once the three are fixed. | `cleanup.sh` → `lint_image` (`lib.sh`) |
 | `yellowfin` | Actually succeeded in the last logged run (cache sync complete). The "Unknown variant" error in `build.log` was a separate invocation typo. | n/a |
 
@@ -65,12 +65,7 @@ Proposed treatment: phase 1 below.
 Goal: clean baseline builds for every variant without `|| true` masking
 real failures.
 
-1. **Diagnose & fix skipjack gnome-shell conflict.** Two paths:
-   - Update `tuna-os/tunaos-packages` (formerly `github-copr`) `gnome50-el10-compat`
-     to obsolete `gnome-shell-common < 49` so DNF auto-removes the older
-     conflicting package. Preferred.
-   - Or, in `gnome.sh`, `dnf -y remove gnome-shell-common` before the
-     compat install (only on `IS_CENTOS` / `IS_ALMALINUXKITTEN`). Fallback.
+1. **Diagnose & fix skipjack gnome-shell conflict.** ✅ Done — resolved upstream via `tuna-os/tunaos-packages#23` (`Obsoletes: gnome-shell-common < %{major_version}`) and re-enabled on `skipjack:gnome-nvidia-hwe` in commit `a3c14ddd24b2`.
 2. **Surface bonito's three lint failures.** ✅ Done — `cleanup.sh` now
    calls `lint_image` (`lib.sh`), which runs `bootc container lint
    --fatal-warnings`, prints the full findings in a collapsed log group,

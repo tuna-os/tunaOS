@@ -17,7 +17,21 @@ images:
   - name: zirconium
     image: ghcr.io/zirconium-dev/zirconium
     tag: latest
-    digest: sha256:990d93a5f5c0887e6811a02f38e605d1c94c92349867387dc3788315aacc0a66
+    digest: sha256:443da3579628d022d2b6aa2e3006a6872369c28cfb05380c7d426241c39c3074
+
+  # Bluefin's GNOME 51 for Hummingbird (projectbluefin/utah-packages): a
+  # createrepo_c repository shipped as an OCI image (`/repository`), signed
+  # with cosign, built in Hummingbird's own root (Fedora 44 + public-
+  # hummingbird by priority). hummingbird:gnome consumes it by digest the
+  # way every other upstream payload here is consumed, instead of building a
+  # second GNOME 51 for the same base in tunaos-packages
+  # (tuna-os/tunaos-packages#629, docs/HUMMINGBIRD-TARGET.md there).
+  # x86_64 only; hummingbird's desktop flavors are amd64-only in
+  # .github/build-config.yml for the same reason.
+  - name: utah-packages
+    image: ghcr.io/projectbluefin/utah-packages
+    tag: latest
+    digest: sha256:9cb667291a1a0b112c39d3c6a69116bb52cb1a10c7df12290b9c298b5682426c
 
 # Pinned binary downloads (managed by Renovate)
 downloads:
@@ -26,10 +40,10 @@ downloads:
   # renovate: datasource=github-releases depName=ledif/kcm_ublue
   kcm_ublue: "v0.6.1"
   # renovate: datasource=github-releases depName=twpayne/chezmoi
-  chezmoi: "v2.72.0"
+  chezmoi: "v2.72.1"
   chezmoi_sha256:
-    amd64: "6023435f5393553345ec10c75cd8160658c415f2bf9c3d8def3e120c92faf629"
-    arm64: "9acbc4676bf257002a3439fc0936a9e3553e20ac51573214b7e7a6ef156d5ca1"
+    amd64: "168063d2bbde78522751b27d0c523d41c612640c5b568d156d20a50240c827ba"
+    arm64: "07d136f29d9a37587dd9e950a656983984b98dfbed5b15a76f6447aa51c208e6"
   # renovate: datasource=git-refs depName=tuna-os/tacklebox
   # This is the fallback every caller that does not set TACKLEBOX_SHA gets
   # (scripts/lib/common.sh:229) — installer-smoke.yml among them.
@@ -71,7 +85,7 @@ downloads:
   # renovate: datasource=github-releases depName=bootc-dev/bootc
   bootc: "v1.16.10"
   # renovate: datasource=github-releases depName=coreos/bootupd
-  bootupd: "v0.2.36"
+  bootupd: "v0.3.1"
   # ostree from source only for bases whose packaged ostree is older than
   # bootc's required libostree (e.g. Debian trixie ships 2025.2 < 2025.3).
   # ostree is built from source (with its vendored composefs submodule) only for
