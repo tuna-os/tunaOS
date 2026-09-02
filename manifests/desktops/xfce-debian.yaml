@@ -1,0 +1,18 @@
+# XFCE Desktop Manifest — Debian override.
+#
+# Debian sid's gdm3 pulls the GNOME stack. During the GNOME 50→51
+# transition, sid's libgjs0 explicitly Breaks the available gnome-shell,
+# which makes an otherwise independent XFCE build impossible to resolve.
+# XFCE does not require GNOME or gdm3, so use LightDM on Debian bases.
+
+display_manager: lightdm
+
+packages:
+  apt:
+    - xfce4
+    - xfce4-goodies
+    - lightdm
+    - lightdm-gtk-greeter
+    - xdg-desktop-portal-gtk
+    - thunar
+    - mousepad
