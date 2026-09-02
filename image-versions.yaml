@@ -42,8 +42,8 @@ downloads:
   # renovate: datasource=github-releases depName=twpayne/chezmoi
   chezmoi: "v2.72.1"
   chezmoi_sha256:
-    amd64: "6023435f5393553345ec10c75cd8160658c415f2bf9c3d8def3e120c92faf629"
-    arm64: "9acbc4676bf257002a3439fc0936a9e3553e20ac51573214b7e7a6ef156d5ca1"
+    amd64: "168063d2bbde78522751b27d0c523d41c612640c5b568d156d20a50240c827ba"
+    arm64: "07d136f29d9a37587dd9e950a656983984b98dfbed5b15a76f6447aa51c208e6"
   # renovate: datasource=git-refs depName=tuna-os/tacklebox
   # This is the fallback every caller that does not set TACKLEBOX_SHA gets
   # (scripts/lib/common.sh:229) — installer-smoke.yml among them.
