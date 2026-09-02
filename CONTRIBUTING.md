@@ -25,7 +25,7 @@ The current starter runway lives in the **[org-wide good first issue](https://gi
 5. Open a PR against `tuna-os/tunaos:main`, link the issue with `Fixes #NNN`, and include the checks you ran.
 6. Keep the branch available while review is in progress; follow-up fixes can be pushed to the same PR.
 
-You do not need write access to the upstream repository. GitHub's fork-based PR flow is the normal path for external contributors. If CI fails, include the failing job and a short reproduction in the PR rather than silently retrying it.
+You do not need write access to the upstream repository. GitHub's fork-based PR flow is the normal path for external contributors. If CI fails, include the failing job and a short reproduction in the PR rather than silently retrying it. If a push is rejected because the GitHub App lacks `workflows` permission, follow the [workflow publishing runbook](docs/CI-WORKFLOW-PUBLISHING.md); repository workflow YAML cannot grant that App-level permission.
 
 For the Hacktoberfest 2026 backlog, see the [contributor plan](docs/HACKTOBERFEST-2026.md) for current candidates, acceptance standards, and event dates.
 
