@@ -79,6 +79,26 @@ WORKFLOW="${REPO_ROOT}/.github/workflows/reusable-build-image.yml"
 }
 
 @test "promotion requires the signing gate" {
-  grep -q 'needs: \[manifest, sign, verify_boot, verify_asahi\]' "$WORKFLOW"
-  grep -q "needs.sign.result == 'success'" "$WORKFLOW"
+  # Asserted as membership, not as a byte-exact `needs:` line. The literal
+  # `[manifest, sign, verify_boot, verify_asahi]` broke the moment
+  # verify_desktop joined the gate (#2269) -- a test that fails when the gate
+  # gets STRICTER is a test that argues against its own contract. What must
+  # hold is that Promote waits on the signature and cannot start without it.
+  needs=$(awk '/^  tag-image:/ {f=1} f && /^    needs: \[/ {print; exit}' "$WORKFLOW")
+  [ -n "$needs" ]
+  for job in manifest sign verify_boot verify_asahi; do
+    echo "$needs" | grep -q "\b${job}\b" || {
+      echo "Promote no longer needs ${job}: ${needs}" >&2
+      return 1
+    }
+  done
+  # Scoped to the Promote job's own `if:`. A file-wide grep passed here even
+  # with Promote's guard deleted, because another job carries the same
+  # expression on line 1171 -- so the old assertion could not have caught the
+  # failure it was written to catch.
+  guard=$(awk '/^  tag-image:/ {f=1} f && /^    runs-on:/ {exit} f' "$WORKFLOW")
+  echo "$guard" | grep -q "needs.sign.result == 'success'" || {
+    echo "Promote's own if: no longer requires a successful sign" >&2
+    return 1
+  }
 }
