@@ -113,7 +113,7 @@ track it. Notably **Bonito is Beta** (GA tracked in [#272](https://github.com/tu
 | Migration guide (Silverblue/Kinoite/UB) | guide | #273 | ✅ Done (MIGRATION.md) |
 | mdBook → tunaos.org centralized | guide | — | ✅ Done |
 | Versioning policy documented | strategist | #274 | ✅ Done (VERSIONING.md, date-based + tiers) |
-| **External contributor onboarding / Hacktoberfest 2026** | guide / strategist | #1331, #1347, #1354, #1537 | 🟡 In progress — **08-14 live census: 9 usable seeds in docs; tunaos has only non-usable meta-tracker #1308** vs 15–20 needed by the **09-15 seeding deadline** (#1537). **#1354's 3→8 target across tunaos+docs is met**, but the broader pool is below target after consumption. **Zero curated GFI** in protota, wootc, gtk-office-suite, tunaos-packages, and corral; `bootc-installer` has issues disabled entirely (#1531). Former tracker #1362 closed 08-14 as COMPLETED while target unmet — live pool tracking continues in #1537 |
+| **External contributor onboarding / Hacktoberfest 2026** | guide / strategist | #1331, #1347, #1354, #1537 | 🟡 In progress — **08-14 live census: 9 usable seeds in docs; tunaos has only non-usable meta-tracker #1308** vs 15–20 needed by the **09-15 seeding deadline** (#1537). **#1354's 3→8 target across tunaos+docs is met**, but the broader pool is below target after consumption. **Zero curated GFI** in protota, wootc, gtk-office-suite, tunaos-packages, and corral; `bootc-installer` has issues disabled entirely (#1531). Former tracker #1362 closed 08-14 as COMPLETED while target unmet — successor tracking for 09-15 target and repo gaps continues in #1537 |
 | Weekly boot report as build gate | ci-maintainer | #989 | 🟡 In progress |
 | Outreach sequencing | strategist | #563 | ✅ Done (gate lifted) |
 | Populate Q3 milestone | strategist | #562 | ✅ Done (2026-08-08, 9 issues) |
@@ -139,11 +139,13 @@ track it. Notably **Bonito is Beta** (GA tracked in [#272](https://github.com/tu
 | Goal | Owner | Dependencies |
 |------|-------|--------------|
 | Tacklebox decoupling | architect | #1192 (tracker; #306 closed) — audited 2026-08-14: of #306's 4 recommendations, 3 already landed (`TACKLEBOX_SHA`/`TACKLEBOX_IMAGE` version pinning via `scripts/lib/common.sh`; tacklebox runs as a `ghcr.io/tuna-os/tacklebox` container image, not a host-installed binary; the flagged `ghcr.io/hanthor/bluefin:lts` `iso.toml` reference no longer exists in this repo's own build path). Real remaining gap: **the version pin has no single source of truth** — `image-versions.yaml` (`4fa6041`, renovate-tracked) diverges from hardcoded overrides in `publish-iso-groups.yml` (`a105d6d3`) and `luks-e2e.yml` (`fd95174`, the documented floor SHA, not the current pin). Consolidating those onto one pin needs real boot evidence before merging (see Build Health note above on why `publish-iso-groups.yml`'s divergence was left as a deliberate, not accidental, gap) — flagged as the concrete next step, not actioned blind |
-| Upstream snapshot automation | ci-maintainer | #1194 (tracker; #307 closed) |
+| Upstream snapshot automation | ci-maintainer | #1194 (tracker; #307 closed) — **live (daily refresh PRs merging)** |
 | Branch protection + required CI | strategist | CI health, #1167 — audited 2026-08-13: [BRANCH-PROTECTION.md](./docs/BRANCH-PROTECTION.md), active `main` ruleset has no required-status-checks rule; proposed list is `lint`, `lint-summary`, `unit-tests` |
 | Supply chain hardening | sec-check | #1193 (tracker; #212/#301 closed) — coordinates with #1187 (package signing/SBOM is the largest hardening item, tracked there in detail) |
 | Release automation | ci-maintainer | CI health, VERSIONING.md, #1186 |
 | Community governance model | strategist | #1168 — [docs/GOVERNANCE.md](./docs/GOVERNANCE.md) |
+| **Flavor equality mandate** | strategist | #1315, #1316 (cadence parity #1254) |
+| **tromso first stable release** | ci-maintainer | tromso#83 |
 | Issue triage policy (queue actionability) | strategist | #1195 — [TRIAGE-POLICY.md](./TRIAGE-POLICY.md) drafted 08-13: milestone-only roadmap signal, verify-before-trust closure, tiered SLA |
 | Package signing / SBOM | sec-check | Supply chain, #1187 |
 | **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 (audit → #1187) |
