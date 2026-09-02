@@ -7,6 +7,7 @@
 ```bash
 just fix && just check   # format + validate (mandatory before every commit)
 just test                # bats + pytest (same as CI)
+just ci                  # the whole PR gate locally: check + CI contract + test
 just build yellowfin gnome  # build a single flavor
 just --list              # show all available commands
 ```
@@ -33,6 +34,31 @@ Containerfiles:
 - `Containerfile.ubuntu` — Ubuntu/Debian bootcification
 
 Build pipeline: [`docs/PIPELINE.md`](docs/PIPELINE.md)
+
+### Know your base before reasoning about its packages
+
+Variants do not all behave like the distro their version strings suggest.
+The one that has burned the most time:
+
+**hummingbird is NOT Fedora 43 and NOT EL10.** It is a rolling,
+security-hardened fork tracking **Fedora Rawhide** (Red Hat's Project
+Hummingbird, zero-CVE), on the ARK kernel, and it **ships no desktop
+environment by design**. Its `.fc43` dist tags are Rawhide's numbering, not
+evidence of Fedora 43 — a trap that has produced confidently wrong diagnoses
+more than once, including attributing its empty desktop to a package loss in a
+repository it does not even read.
+
+Read [`docs/HUMMINGBIRD.md`](docs/HUMMINGBIRD.md) before filing a packaging
+issue, blaming a build failure on a missing package, or assuming a Fedora
+package set is available. Since 2026-09-02 `hummingbird:gnome` takes the GNOME
+stack from `projectbluefin/utah-packages` (digest-pinned OCI repo, see
+`image-versions.yaml`), and only the rest from `repo.tunaos.org/hummingbird`. **Measure the index rather than inferring it** —
+repodata is public and small:
+
+```bash
+curl -s https://repo.tunaos.org/hummingbird/20251124-x86_64/repodata/repomd.xml
+# then fetch the primary.xml.gz it names and grep for <name>PKG</name>
+```
 
 ## Adding a Desktop
 
@@ -76,6 +102,19 @@ Evidence style, for anything you write into the repo (comments, docs,
 commit messages): state the constraint and the measured run/log that proves
 it, not the narrative of how you found it. Every load-bearing comment in
 `build_scripts/` follows this shape — match it.
+
+Two further conventions, adopted from Hive (#2250):
+
+- **An incident is fixed when a test proves it cannot silently recur.** A
+  fix for a bug that shipped an unusable or wrongly-promoted image lands
+  with a regression test in `tests/regressions/test_issue_<N>_*.py`
+  (see that directory's README). "Fixed the script" without the test is
+  half a PR.
+- **A gate that is declared is a gate that runs.** If you move, rename, or
+  add a job that asserts a green criterion, update its `gates` block in
+  `.github/green-criteria.yml`; `tests/test_ci_contract.py` fails when the
+  contract and the workflows disagree, and `just test-contract` runs it
+  locally.
 
 ## Agent Skills
 

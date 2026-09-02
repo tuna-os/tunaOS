@@ -78,6 +78,7 @@ guppy) CODE_NAME="Poecilia reticulata" ;;
 grouper) CODE_NAME="Epinephelus marginatus" ;;
 marlin) CODE_NAME="Makaira nigricans" ;;
 hummingbird) CODE_NAME="Trochilidae" ;;
+wahoo) CODE_NAME="Acanthocybium solandri" ;;
 gurnard) CODE_NAME="Chelidonichthys lucerna" ;;
 flounder | flounder-sid) CODE_NAME="Platichthys flesus" ;;
 *)
@@ -170,6 +171,7 @@ if [[ -f "${RECIPE_FILE}" ]]; then
 	BASE_OS_NAME="Enterprise Linux"
 	if [[ "$IS_FEDORA" == true ]]; then BASE_OS_NAME="Fedora"; fi
 	if [[ "$IS_HUMMINGBIRD" == true ]]; then BASE_OS_NAME="Fedora Hummingbird"; fi
+	if [[ "${IS_ELN:-false}" == true ]]; then BASE_OS_NAME="Fedora ELN"; fi
 	if [[ "$IS_ALMALINUX" == true ]]; then BASE_OS_NAME="AlmaLinux"; fi
 	if [[ "$IS_ALMALINUXKITTEN" == true ]]; then BASE_OS_NAME="AlmaLinux Kitten"; fi
 	if [[ "$IS_CENTOS" == true ]]; then BASE_OS_NAME="CentOS Stream"; fi

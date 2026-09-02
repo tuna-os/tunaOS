@@ -246,11 +246,37 @@ jobs:
             done
           fi
           build_start=$(date +%s)
+          # 210m, against the job's 240m ceiling. This is NOT a guess at how
+          # long a build should take -- the ceiling above already clears the
+          # slowest real one (guppy kde, 2h57m compiling plasma from source).
+          # It exists so a build that was going to blow the job cap anyway
+          # fails 30 minutes early, with an exit code and a message, instead
+          # of a bare "The operation was canceled" and no telemetry.
+          #
+          # Build Hummingbird #66 (run 32907940350) is why: the gnome cell
+          # stalled inside one dnf transaction at 23:12:27 and emitted not
+          # one further line before the cap cancelled it at 03:00:31. The
+          # cancel skipped Manifest, Sign, Promote and the ISO, and left
+          # nothing in the log saying what had wedged. 10-base-packages.sh
+          # now bounds the dnf side of that; this bounds every other way a
+          # build layer can hang.
+          #
+          # `timeout` runs the child in its own process group and signals the
+          # group, so buildah dies with just. Under sudo so the signals come
+          # from root -- a non-root timeout cannot kill a root buildah.
+          #
           # --preserve-env: sudo otherwise strips the cache/rechunk knobs
           # (the old layer cache never worked for exactly this reason).
+          rc=0
           sudo --preserve-env=BUILDAH_CACHE_FLAGS,SKIP_RECHUNK,PUBLIC_IMAGE_NAME \
-            "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}"
+            timeout --kill-after=60s 210m \
+            "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}" || rc=$?
           echo "BUILD_SECONDS=$(( $(date +%s) - build_start ))" >> "$GITHUB_ENV"
+          if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+            echo "::error title=Build wedged::${IMAGE_VARIANT}:${DEFAULT_TAG} (${PLATFORM}) made no progress for 210 minutes and was killed. The last line of build output above is where it stopped."
+            exit 1
+          fi
+          [ "$rc" -eq 0 ] || exit "$rc"
 
       - name: Build telemetry
         if: always()
@@ -298,7 +324,12 @@ jobs:
           mkdir -p verify-out
           IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
           sudo -E corral create gate --bootc "$IMAGE" --wait-ssh --timeout 900
-          sudo ./scripts/iso-e2e.sh "$IMAGE" --disk --output verify-out --timeout 300 || true
+          # No `|| true` here (tuna-os/tunaos#1533): a PR whose image fails to
+          # boot must fail the PR gate, not just warn on missing evidence. The
+          # evidence-upload step below already runs under `if: always()`, so
+          # dropping the swallow doesn't lose any diagnostics — it just makes
+          # the check red when the boot actually failed.
+          sudo ./scripts/iso-e2e.sh "$IMAGE" --disk --output verify-out --timeout 300
 
       - name: Upload PR verification evidence
         if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
@@ -722,7 +753,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:52604323e2a19f5e6d37dffa7e6a7ef30e2f98506a73a11cdfa3ef25100131be  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:1cec89e6c040d7a1ff412318d7a5fa89bab2c8b56e44d0a30f1df8acd646e1d0  # :latest linux/amd64 as of 2026-06-13
       options: --privileged --security-opt seccomp=unconfined
     permissions:
       contents: read
@@ -1316,6 +1347,25 @@ jobs:
       - name: Build qcow2 from testing image
         env:
           TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          # hummingbird probes BACKEND=ostree SEALED=0, so it takes the xfs
+          # default and `bootc install to-disk` ABORTS installing the
+          # bootloader: BIOS grub2-install cannot read the xfs this base's
+          # mkfs.xfs produces, and bootupctl installs the BIOS component
+          # unconditionally, so the whole to-disk install fails. (An ISO
+          # install is a different path -- fisherman gives it a separate
+          # ext4 /boot -- so this is about the Gate, and about Promote
+          # being gated on the Gate.) Six
+          # consecutive nightlies died here (run 32786338463, gnome Gate job
+          # 97638679623), which is why hummingbird:gnome has never been
+          # promoted and is 404 on GHCR.
+          #
+          # Scoped to this one variant ON PURPOSE. It is a measurement, not a
+          # product change: if the gate goes green on ext4 then ext4 is the
+          # answer and the durable fix is a 50-hummingbird.toml drop-in, as
+          # 00-tunaos.toml already prescribes. Every other variant is
+          # untouched -- the variable is unset for them and the probe decides
+          # exactly as before.
+          TUNAOS_QCOW2_FILESYSTEM: ${{ inputs.image-variant == 'hummingbird' && 'ext4' || '' }}
         run: |
           just qcow2 "${TEST_IMAGE}"
 

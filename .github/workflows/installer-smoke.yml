@@ -19,6 +19,30 @@ on:
         required: false
         default: "yellowfin"
         type: string
+      build_runner:
+        # MEASURED 2026-08-24, run 32747410944 against RunsOn runs
+        # 32747410944/32735883406/32718219267, same commit, same steps:
+        #
+        #   Build dev ISO      ubuntu-latest      RunsOn (c6a, 8 vCPU)
+        #   gnome              38m46s             48m18s
+        #   kde                41m16s             59m53s
+        #
+        # GitHub-hosted is FASTER on both flavors, on half the cores, and the
+        # gnome leg went green end to end (walkthrough included). No disk
+        # failure: `free disk space` frees enough, taking 1m36s-5m25s to do
+        # it against ~11s on RunsOn, which is the whole of the setup cost.
+        # The build is evidently not CPU-bound.
+        #
+        # So `github` is now the default and `runs-on` is the escape hatch,
+        # kept because one afternoon of measurements is not a guarantee and
+        # reverting should not need a code change.
+        description: "Runner for the ISO build"
+        required: false
+        default: "github"
+        type: choice
+        options:
+          - github
+          - runs-on
       flavors:
         description: "Comma-separated flavors"
         required: false
@@ -29,9 +53,9 @@ on:
         # this default kept it from ever running.
         default: "gnome,kde,cosmic,niri,xfce"
         type: string
-  schedule:
-    # Weekly, after the Tuesday image builds settle.
-    - cron: "0 9 * * 3"
+# schedule:
+  #   # Weekly, after the Tuesday image builds settle. Disabled until window readiness stamp under OVMF software GL is resolved (#1396)
+  #   - cron: "0 9 * * 3"
 
 permissions:
   contents: read
@@ -98,8 +122,29 @@ jobs:
     #
     # The boot Gate in reusable-build-image.yml is unaffected: it genuinely
     # runs iso-e2e-gpu.sh and still asks for `gpu`.
-    runs-on: runs-on=${{ github.run_id }}/runner=${{ matrix.runner }}
-    timeout-minutes: 75
+    #
+    # RUNNER. The comment above is the history; the measurement retired it.
+    # The stated reason for RunsOn was "cannot work on the GitHub runner's
+    # podman 5.8.4" -- but the `setup working podman` step below always said
+    # the RunsOn image ships THE SAME podman 5.8.4 and installs the Kubic
+    # build over it, and that step is a plain apt install with nothing
+    # runner-specific in it. It succeeds on ubuntu-latest, as it always would
+    # have. tunaOS#1893's root cause was a `podman commit --quiet` wedge
+    # inside tacklebox, fixed in tacklebox#231 -- never a runner property.
+    #
+    # ubuntu-latest is the default now, on the numbers in the input comment
+    # above. `build_runner: runs-on` still routes back to RunsOn without a
+    # code change; the `schedule` trigger passes no inputs, so it takes the
+    # empty branch, which is why the comparison is written `!= 'runs-on'`
+    # rather than `== 'github'`.
+    runs-on: ${{ inputs.build_runner != 'runs-on'
+      && 'ubuntu-latest'
+      || format('runs-on={0}/runner={1}', github.run_id, matrix.runner) }}
+    # 150 for ubuntu-latest, where the measured builds are 38-41 minutes: a
+    # cap close to the observed time turns a slow build into a cancellation
+    # and reports the wrong thing. 75 stays for the RunsOn path it was set
+    # for. A timeout is not a measurement.
+    timeout-minutes: ${{ inputs.build_runner != 'runs-on' && 150 || 75 }}
     strategy:
       fail-fast: false
       matrix: ${{ fromJson(needs.generate-matrix.outputs.matrix) }}
@@ -126,11 +171,12 @@ jobs:
             systemd-boot-efi xorriso mtools squashfs-tools dosfstools gdisk
           sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
-      # The RunsOn ubuntu24 image ships podman 5.8.4 (same wedge as the GitHub
-      # runner); install the Kubic podman and drop the image shadow so the ISO
-      # build's podman run/commit work (tunaOS#1893). The bumped tacklebox pin
-      # (k8s-file log driver) handles the rest.
-      - name: setup working podman on RunsOn
+      # Both runner images ship podman 5.8.4, which cannot run/commit the
+      # build containers (tunaOS#1893); install the Kubic podman and drop any
+      # image-baked shadow binary. The bumped tacklebox pin (k8s-file log
+      # driver) handles the rest. Nothing here is runner-specific -- which is
+      # precisely why the RunsOn requirement above is worth testing.
+      - name: setup working podman
         run: |
           set -euo pipefail
           sudo install -d /etc/apt/keyrings
@@ -571,7 +617,43 @@ jobs:
             # renderer that cannot present from an app that never got that
             # far. Collect what settles it rather than guessing at a fix.
             echo "=== installer's own debug log ==="
-            $SSH 'cat ~/.var/app/org.bootcinstaller.Installer/cache/bootc-installer/installer-debug.log 2>/dev/null || cat ~/.cache/bootc-installer/installer-debug.log 2>/dev/null || echo "(no installer-debug.log found)"' 2>/dev/null || true
+            #
+            # THE PATH WAS HARDCODED TO ONE FLAVOR'S APP ID, WHICH IS WHY THE
+            # ABOVE HAS NEVER ONCE BEEN READ FOR THE OTHER FOUR.
+            #
+            # Flatpak puts each app's cache under ~/.var/app/<APP_ID>/cache,
+            # and only gnome runs org.bootcinstaller.Installer. kde runs
+            # org.tunaos.InstallerKde, and cosmic/niri/xfce their own ids. So
+            # on every non-gnome cell this printed
+            #
+            #   (no installer-debug.log found)
+            #
+            # and the comment above -- which correctly identifies this file as
+            # the thing that distinguishes "the window was built and never
+            # mapped" from "the app never got that far" -- described a
+            # capture that could not fire. kde run 32704425971 is the proof:
+            # `installer frontend launched (org.tunaos.InstallerKde)` passed,
+            # `installer readiness stamp present` failed, and the one file that
+            # would say why was looked for under the wrong app id.
+            #
+            # Try every id rather than deriving one: the mapping already exists
+            # twice in this workflow and a third copy is a third thing to keep
+            # in step. A path that does not exist costs one failed `cat`.
+            $SSH 'found=0; \
+                  for app in org.bootcinstaller.Installer org.tunaos.InstallerKde \
+                             org.tunaos.InstallerCosmic org.tunaos.InstallerNiri \
+                             org.tunaos.InstallerXfce; do \
+                    f="$HOME/.var/app/$app/cache/bootc-installer/installer-debug.log"; \
+                    if [ -f "$f" ]; then echo "---- $f"; cat "$f"; found=1; fi; \
+                  done; \
+                  if [ -f "$HOME/.cache/bootc-installer/installer-debug.log" ]; then \
+                    echo "---- $HOME/.cache/bootc-installer/installer-debug.log"; \
+                    cat "$HOME/.cache/bootc-installer/installer-debug.log"; found=1; \
+                  fi; \
+                  if [ "$found" = 0 ]; then \
+                    echo "(no installer-debug.log under any known app id)"; \
+                    echo "-- what IS under ~/.var/app --"; ls -1 "$HOME/.var/app" 2>/dev/null || echo "(no ~/.var/app)"; \
+                  fi' 2>/dev/null || true
             echo
             echo "=== user journal (installer + portal + flatpak) ==="
             $SSH 'journalctl --user -b --no-pager 2>/dev/null | grep -iE "installer|flatpak|portal|wgpu|EGL|MESA|wayland|vulkan" | tail -120' 2>/dev/null || true
@@ -603,7 +685,72 @@ jobs:
                   echo "-- greetd config files present --"; ls -l /etc/greetd/ 2>/dev/null; \
                   echo "-- ExecStart of the active DM --"; systemctl cat "$(basename "$(readlink -f /etc/systemd/system/display-manager.service 2>/dev/null)" 2>/dev/null)" 2>/dev/null | grep -E "^ExecStart|^\[" | head -20; \
                   echo "-- /etc/greetd/config.toml as installed --"; cat /etc/greetd/config.toml 2>/dev/null; \
-                  echo "-- greetd journal --"; sudo journalctl -u greetd -u cosmic-greeter --no-pager 2>/dev/null | tail -40' 2>/dev/null || true
+                  echo "-- display-manager journal (all five, not just greetd) --"; \
+                  sudo journalctl -u greetd -u cosmic-greeter -u plasmalogin -u sddm -u gdm -u systemd-logind --no-pager 2>/dev/null | tail -80; \
+                  echo "-- what the session command itself said (tunaos-live-session) --"; \
+                  sudo journalctl -t tunaos-live-session --no-pager 2>/dev/null | tail -80 || true' 2>/dev/null || true
+
+            echo
+            echo "=== does the session have a SEAT, and can PAM give it one? ==="
+            # The unifying symptom, found on run 32691426582s xfce leg. Every
+            # logind session on the guest has an EMPTY seat and an empty TTY:
+            #
+            #   SESSION  UID USER     SEAT LEADER CLASS   TTY IDLE SINCE
+            #         2 1000 liveuser -    1273   manager -   no   -
+            #        24 1000 liveuser -    3469   user    -   no   -
+            #
+            # logind hands DRM master to the ACTIVE session ON A SEAT. With no
+            # seat there is no DRM master, which is exactly what the compositor
+            # then reports, in this order:
+            #
+            #   WARN  smithay::backend::drm::device::fd: Unable to become drm
+            #         master, assuming unprivileged mode
+            #   WARN  xfwl4::backend::udev::device: failed to initialize gpu
+            #         err=NoRenderNode
+            #   ERROR xfwl4: Failed to initialize primary GPU node
+            #
+            # NoRenderNode for a device it had already selected and NAMED
+            # (renderD128, which /dev/dri confirms exists and is world
+            # readable). So the render node was never the problem; the seat is.
+            # That also fits the shape of the matrix -- gnome, the one flavor
+            # that works, is the one on gdm rather than greetd.
+            #
+            # WHY the seat is missing is NOT established, and is not guessed
+            # here. The candidate is greetds PAM stack: a session that does not
+            # run pam_systemd.so, or runs it without XDG_VTNR, registers with
+            # logind unseated. Printing the file settles it in one line instead
+            # of another 40-minute round trip on a hypothesis.
+            $SSH 'echo "-- /etc/pam.d/greetd --"; cat /etc/pam.d/greetd 2>/dev/null || echo "(absent)"; \
+                  echo "-- /etc/pam.d/greetd-greeter --"; cat /etc/pam.d/greetd-greeter 2>/dev/null || echo "(absent)"; \
+                  echo "-- seat/VT detail per session --"; \
+                  for s in $(loginctl list-sessions --no-legend 2>/dev/null | awk "{print \$1}"); do \
+                    echo "   session $s:"; \
+                    loginctl show-session "$s" -p Id -p Seat -p VTNr -p Active -p State -p Class -p Type -p Remote 2>/dev/null | sed "s/^/     /"; \
+                  done; \
+                  echo "-- seats known to logind --"; loginctl list-seats 2>/dev/null || echo "(none)"; \
+                  echo "-- is there a seat0 device tree at all --"; ls -l /run/systemd/seats/ 2>/dev/null || echo "(no /run/systemd/seats)"' 2>/dev/null || true
+
+          echo
+          # The line that has been missing from every red greetd cell.
+          #
+          # greetd reports only its own bookkeeping -- "greeter exited without
+          # creating a session" -- and the compositor's reason went nowhere,
+          # which is why this failure has been attributed to a missing DRM
+          # render node with no compositor output to support it. Run
+          # 32681262659 disproves that attribution outright: the guest has
+          # /dev/dri/renderD128 and the kernel reports `-virgl`, so the node is
+          # present and 3D is not. Those are different claims.
+          #
+          # live-iso/common/src/desktop-{xfce,niri,cosmic}.sh now run the
+          # session under `systemd-cat -t tunaos-live-session`, so the reason
+          # is in the journal above under that tag. An ISO built before that
+          # change has no such tag; say so rather than printing nothing, or
+          # the absence reads as "the compositor said nothing".
+          if ! grep -q "tunaos-live-session" "$out" 2>/dev/null; then
+            echo "::notice::${FLAVOR}: no tunaos-live-session journal in this image —"\
+                 "it predates the session-logging change, so the compositor's"\
+                 "own reason for exiting is still uncaptured."
+          fi
             echo
             echo "=== windows the compositor actually has ==="
             # -x matches comm exactly, so this cannot self-match the way a
@@ -718,6 +865,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Needed to open the refresh PR; `main` only accepts merge-queue changes.
+      pull-requests: write
     steps:
       # This job commits to main, so it must start FROM main — not from the
       # dispatched ref. Checking out a feature branch made `git pull --rebase
@@ -732,6 +881,10 @@ jobs:
           ref: main
           fetch-depth: 0
 
+          # Screendumps are PPM (~3 MB each, several per leg). 90 days of
+          # them across five flavors is real storage for evidence nobody
+          # reads after the round it belongs to.
+          retention-days: 7
       - name: Download walkthrough artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -801,9 +954,32 @@ jobs:
         if: steps.stage.outputs.staged != '0'
         run: bash scripts/gen-screenshot-gallery.sh
 
-      - name: Commit and push
+      # Opens a PR; does NOT push to main. `git push origin HEAD:main` is
+      # rejected outright:
+      #
+      #   remote: error: GH013: Repository rule violations found for
+      #                  refs/heads/main.
+      #   remote: - Changes must be made through the merge queue
+      #   ! [remote rejected] HEAD -> main
+      #
+      # (run 32704425971). That was latent for as long as this job existed:
+      # these steps are gated on `staged != 0`, and until gnome went green on
+      # that same run NO flavor had ever produced walkthrough frames, so the
+      # push never executed and the rule was never hit. A gate that has never
+      # run is not a gate that passes.
+      #
+      # Same shape and same remedy as matrix-status.yml: one long-lived
+      # branch, force-pushed, with auto-merge armed. The doc is regenerated
+      # wholesale each time, so a refresh supersedes its predecessor and
+      # stacking commits would only add noise; reusing the branch name keeps
+      # this to a single open PR rather than one per run.
+      - name: Open the screenshot refresh PR
         if: steps.stage.outputs.staged != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: automation/installer-screenshots
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/images/installer docs/SCREENSHOTS.md
@@ -811,6 +987,27 @@ jobs:
             echo "No screenshot changes to commit"
             exit 0
           fi
-          git commit -m "docs: refresh installer frontend walkthrough screenshots ($(date +%Y-%m-%d)) [skip ci]"
-          git pull --rebase origin main
-          git push origin HEAD:main
+          git checkout -b "$BRANCH"
+          git commit -m "docs: refresh installer frontend walkthrough screenshots ($(date -u +%Y-%m-%d))"
+          git push --force origin "$BRANCH"
+
+          if [[ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]]; then
+            gh pr create --base main --head "$BRANCH" \
+              --title "docs: refresh installer walkthrough screenshots" \
+              --body "$(printf '%s\n\n%s\n' \
+                'Captured by the Installer Smoke walkthrough and staged by `scripts/gen-screenshot-gallery.sh`.' \
+                'Force-updated in place by the `Installer Smoke` workflow, so this branch always holds the newest capture.')"
+          else
+            echo "PR already open for $BRANCH — force-push refreshed it."
+          fi
+
+          # Auto-merge for the reason matrix-status.yml documents at length: a
+          # PR opened with the Actions token triggers no pull_request
+          # workflows, so its own checks never start, but the merge QUEUE runs
+          # the required checks itself on the merge group. Arming auto-merge
+          # is therefore what actually lands it.
+          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+          if [[ -n "$pr" ]]; then
+            gh pr merge --auto --merge "$pr" ||
+              echo "::warning::could not arm auto-merge on #$pr — the refresh will wait for a human"
+          fi

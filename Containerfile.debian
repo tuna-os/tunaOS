@@ -7,7 +7,7 @@
 #   buildah build --build-arg BASE_IMAGE=docker.io/library/debian:trixie \
 #     --target=kde --file Containerfile.debian .
 
-ARG BASE_IMAGE="docker.io/library/debian:trixie@sha256:34cd9e9fd437c0a095ec39cb2e73422c9f30821b0d0848ed74fd0d43bae4d958"
+ARG BASE_IMAGE="docker.io/library/debian:trixie@sha256:f324c7ff54321e8d9c588493a20244965938ce0aa50bbd1022d38010e9ffc4b1"
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
@@ -27,11 +27,20 @@ ARG IMAGE_NAME_VARIANT
 FROM ${BASE_IMAGE} AS bootc-builder
 ARG BASE_IMAGE
 ARG ORAS_VERSION=1.2.0
+ARG ORAS_SHA256_AMD64=5b3f1cbb86d869eee68120b9b45b9be983f3738442f87ee5f06b00edd0bab336
+ARG ORAS_SHA256_ARM64=27df680a39fc2fcedc549cb737891623bc696c9a92a03fd341e9356a35836bae
 ARG TARGETARCH
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends curl ca-certificates tar gzip && \
-    curl -fsSL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_${TARGETARCH}.tar.gz" \
-      | tar -xz -C /usr/local/bin oras && \
+    case "${TARGETARCH}" in \
+      amd64) ORAS_SHA256="${ORAS_SHA256_AMD64}" ;; \
+      arm64) ORAS_SHA256="${ORAS_SHA256_ARM64}" ;; \
+      *) echo "Unsupported ORAS architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac && \
+    curl -fsSL "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_${TARGETARCH}.tar.gz" -o /tmp/oras.tar.gz && \
+    echo "${ORAS_SHA256}  /tmp/oras.tar.gz" | sha256sum -c - && \
+    tar -xzf /tmp/oras.tar.gz -C /usr/local/bin oras && \
+    rm -f /tmp/oras.tar.gz && \
     case "${BASE_IMAGE}" in *sid*) TC=sid ;; *) TC=trixie ;; esac && \
     mkdir -p /fetch /output && cd /fetch && \
     oras pull "ghcr.io/tuna-os/bootc-toolchain-${TC}:latest-${TARGETARCH}" && \

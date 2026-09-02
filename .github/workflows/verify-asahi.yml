@@ -35,8 +35,10 @@ permissions:
   packages: read
 
 jobs:
-  # Sweep mode: every flavor that publishes a :gnome-asahi tag.
-  # guppy is intentionally absent — its asahi overlay is stubbed, not broken.
+  # Sweep mode: every flavor that declares and publishes a :gnome-asahi tag.
+  # marlin and flounder are excluded as their gnome-asahi flavors are not declared in
+  # build-config.yml until complete distro Asahi stacks are available (tunaOS#911, #1738).
+  # guppy is absent as its asahi overlay is stubbed, not broken.
   sweep:
     # Explicit on the schedule path: a `schedule` event has no `inputs` context
     # at all, and relying on null == '' to pick the sweep is exactly how you get
@@ -52,8 +54,6 @@ jobs:
           - albacore
           - yellowfin
           - sailfin
-          - flounder
-          - marlin
           - skipjack
     uses: ./.github/workflows/verify-asahi-one.yml
     with:

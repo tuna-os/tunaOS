@@ -10,14 +10,28 @@ images:
   - name: brew
     image: ghcr.io/ublue-os/brew
     tag: latest
-    digest: sha256:e3b6878ed7b5ca963fd3f54ce44e6ab83da7533b28c83b2a11b92a5fedaa4adb
+    digest: sha256:bed056871da6edd8c6ee455a274283ae83bf269461dcad758a7729aaad018401
 
   # RFC 010: pre-built Zirconium image for DMS/Niri system files
   # on grouper (Ubuntu) — not available from Ubuntu apt.
   - name: zirconium
     image: ghcr.io/zirconium-dev/zirconium
     tag: latest
-    digest: sha256:28c404a9b1eaa952e56d40ffa0ca151b628eafa02c2c553423ecb494dbeb0fe5
+    digest: sha256:443da3579628d022d2b6aa2e3006a6872369c28cfb05380c7d426241c39c3074
+
+  # Bluefin's GNOME 51 for Hummingbird (projectbluefin/utah-packages): a
+  # createrepo_c repository shipped as an OCI image (`/repository`), signed
+  # with cosign, built in Hummingbird's own root (Fedora 44 + public-
+  # hummingbird by priority). hummingbird:gnome consumes it by digest the
+  # way every other upstream payload here is consumed, instead of building a
+  # second GNOME 51 for the same base in tunaos-packages
+  # (tuna-os/tunaos-packages#629, docs/HUMMINGBIRD-TARGET.md there).
+  # x86_64 only; hummingbird's desktop flavors are amd64-only in
+  # .github/build-config.yml for the same reason.
+  - name: utah-packages
+    image: ghcr.io/projectbluefin/utah-packages
+    tag: latest
+    digest: sha256:9cb667291a1a0b112c39d3c6a69116bb52cb1a10c7df12290b9c298b5682426c
 
 # Pinned binary downloads (managed by Renovate)
 downloads:
@@ -26,10 +40,10 @@ downloads:
   # renovate: datasource=github-releases depName=ledif/kcm_ublue
   kcm_ublue: "v0.6.1"
   # renovate: datasource=github-releases depName=twpayne/chezmoi
-  chezmoi: "v2.72.0"
+  chezmoi: "v2.72.1"
   chezmoi_sha256:
-    amd64: "a8880a1b01e877c3e5da250b9f882ce9fa39962686d75f436fa21e021fa092b1"
-    arm64: "ea9389f4efdc26d74bf9b4cc73db8f3a529e1e6effb5703e438117ea3f095439"
+    amd64: "168063d2bbde78522751b27d0c523d41c612640c5b568d156d20a50240c827ba"
+    arm64: "07d136f29d9a37587dd9e950a656983984b98dfbed5b15a76f6447aa51c208e6"
   # renovate: datasource=git-refs depName=tuna-os/tacklebox
   # This is the fallback every caller that does not set TACKLEBOX_SHA gets
   # (scripts/lib/common.sh:229) — installer-smoke.yml among them.
@@ -69,7 +83,7 @@ downloads:
   # These pins drive both the toolchain builds and the version tags consumers
   # request. Renovate bumps them; the toolchain workflow rebuilds on bump.
   # renovate: datasource=github-releases depName=bootc-dev/bootc
-  bootc: "v1.16.9"
+  bootc: "v1.16.10"
   # renovate: datasource=github-releases depName=coreos/bootupd
   bootupd: "v0.2.36"
   # ostree from source only for bases whose packaged ostree is older than

@@ -304,68 +304,7 @@ tunaos_run_tacklebox() {
 	fi
 }
 
-# ── bootc storage backend detection (tunaOS#954) ──────────────────────────
-#
-# Ported from tuna-os/wootc payload/deployer/deploy.sh:867-949, deliberately
-# faithfully rather than simplified. It PROBES IMAGE CONTENT; the variant name
-# is not a signal. tunaOS had three divergent name-based rules — a five-prefix
-# allowlist in build-qcow2.sh (already stale: gurnard from #943 was missing and
-# would have failed its first build), a bare `== grouper` test in iso-e2e.sh,
-# and a separate expression in the Justfile.
-#
-# THE ORDER IS LOAD-BEARING.
-#
-#   1. bootupd PAYLOAD present  → ostree. Checked FIRST so composefs-SEALED
-#      ostree images (bluefin, bonito, yellowfin) keep the ostree path even
-#      though they also set `enabled = yes` in branch 2.
-#   2. else prepare-root.conf composefs enabled → composefs-native. Reaching
-#      here means there is NO bootupd payload, so an ostree install is
-#      impossible and bootc aborts with
-#         error: Installing to disk: bootupd is required for ostree-based installs
-#      which is exactly the Gate failure that has kept flounder, marlin,
-#      grouper and sailfin unpublished since 2026-07-13.
-#   3. else ships systemd-boot → composefs-native (the dakota shape).
-#   4. else unknown — never guessed.
-#
-# The bootloader is NOT a backend signal. Per the bootc docs a composefs
-# install may use either bootupd/GRUB or systemd-boot. The old tunaOS test was
-# `systemd-boot present && ! command -v bootupctl`, which mis-classified
-# precisely these images: marlin ships the bootupctl BINARY at
-# /usr/sbin/bootupctl but has no /usr/lib/bootupd payload.
-#
-# bootupd 0.2.x kept binaries under updates/EFI/<vendor>; current Fedora keeps
-# versioned binaries under /usr/lib/efi with only EFI.json under bootupd/
-# updates — hence the two-form branch-1 test.
-#
-# shellcheck disable=SC2016  # the $-free sh body is intentionally unexpanded
-TUNAOS_BACKEND_PROBE_SH='
-if { ls /usr/lib/bootupd/updates/EFI/*/grubx64.efi >/dev/null 2>&1 ||
-     { test -f /usr/lib/bootupd/updates/EFI.json &&
-       find /usr/lib/efi/grub2 -type f -name grubx64.efi -print -quit 2>/dev/null | grep -q . &&
-       find /usr/lib/efi/shim -type f -name shimx64.efi -print -quit 2>/dev/null | grep -q .; }; }; then
-    echo BACKEND=ostree
-elif grep -A8 "^\[composefs\]" /usr/lib/ostree/prepare-root.conf 2>/dev/null \
-     | grep -qiE "enabled[[:space:]]*=[[:space:]]*(yes|true|1|signed)"; then
-    echo BACKEND=composefs-native
-elif test -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi; then
-    echo BACKEND=composefs-native
-else
-    echo BACKEND=unknown
-fi
-grep -A8 "^\[composefs\]" /usr/lib/ostree/prepare-root.conf 2>/dev/null \
-  | grep -qiE "enabled[[:space:]]*=[[:space:]]*(yes|true|1|signed)" && echo SEALED=1 || echo SEALED=0
-'
-
-# probe_image_backend <image-ref> [podman-prefix...]
-# Echoes two lines: BACKEND=<ostree|composefs-native|unknown> and SEALED=<0|1>.
-# Returns non-zero if the image could not be inspected — callers must treat
-# that as fatal rather than defaulting. A silent fallback to ostree/grub2 on a
-# composefs image produces a disk that boots into a dracut emergency shell with
-# nothing in the log explaining why (wootc hit exactly this).
-probe_image_backend() {
-	local ref="${1:?probe_image_backend <image-ref>}"
-	shift
-	local -a runner=("$@")
-	[[ ${#runner[@]} -eq 0 ]] && runner=(podman)
-	timeout 300 "${runner[@]}" run --rm --entrypoint="" "$ref" sh -c "$TUNAOS_BACKEND_PROBE_SH"
-}
+# Compatibility facade: existing consumers retain the backend-probe API while
+# focused consumers can avoid common.sh's repository-root cwd change.
+# shellcheck source=backend.sh
+. "$(dirname "${BASH_SOURCE[0]}")/backend.sh"

@@ -1,0 +1,43 @@
+name: Check download checksums
+
+# Several downloads are pinned twice: a version, and a per-architecture sha256
+# of the asset at that version. Renovate maintains the version and cannot
+# maintain the checksums -- both custom managers in renovate.json capture a
+# single version line, so a sibling `_sha256` map is outside the match.
+#
+# That gap has already bitten: Renovate bumped chezmoi v2.71.0 -> v2.72.0 and
+# left chezmoi_sha256 on v2.71.0's hashes, so the Ubuntu/niri build downloaded
+# a v2.72.0 .deb and checked it against a v2.71.0 hash. It fails closed, so
+# nothing bad shipped -- but the build died and nothing named the cause.
+#
+# Running on pull requests is the point: `automerge: true` covers patch
+# updates, and platformAutomerge waits on checks, so a Renovate bump that
+# leaves checksums behind cannot merge itself. The schedule catches the other
+# case -- a release re-published under the same tag with different content.
+on:
+  pull_request:
+    paths:
+      - 'image-versions.yaml'
+      - 'build_scripts/install-remora.sh'
+      - 'scripts/check-download-checksums.py'
+      - '.github/workflows/check-download-checksums.yml'
+  schedule:
+    - cron: '35 22 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: check-download-checksums-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checksums:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Verify every pinned checksum matches its pinned release
+        run: python3 scripts/check-download-checksums.py

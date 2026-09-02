@@ -48,6 +48,7 @@ else
 	# OS Detection Flags
 	IS_FEDORA=false
 	IS_HUMMINGBIRD=false
+	IS_ELN=false
 	IS_RHEL=false
 	IS_ALMALINUX=false
 	IS_ALMALINUXKITTEN=false
@@ -94,7 +95,27 @@ else
 			IMAGE_PRETTY_NAME="${IMAGE_PRETTY_NAME:-$2}"
 		fi
 	}
-	[[ "${BASE_IMAGE,,}" == *"fedora"* && "${BASE_IMAGE,,}" != *"hummingbird"* ]] && IS_FEDORA=true && _derive_name "bonito" "Bonito"
+	# ELN is tested BEFORE the fedora substring test, and excluded from it,
+	# for the same reason hummingbird is: its base image reference
+	# (registry.fedoraproject.org/eln-bootc) contains "fedora", so the
+	# unguarded test below matches it and every Bonito-specific Fedora path
+	# fires against a base that cannot satisfy them. Measured on the pinned
+	# digest, 2026-08-25: no epel-release, no versionlock plugin, no
+	# rpmfusion-*-release-eln, and `dnf repoquery` finds no ffmpeg,
+	# gstreamer1-plugins-ugly, tailscale or `just`. The Fedora branch of
+	# 10-base-packages.sh installs rpmfusion-{free,nonfree}-release-${FEDORA_VER}
+	# by URL, and there is no ELN branch of RPM Fusion to install.
+	#
+	# os-release is the primary signal because it is unambiguous and travels
+	# with the image (ID=eln, VERSION_ID=11, VARIANT_ID=eln); the BASE_IMAGE
+	# test is the fallback for chained stages whose image-info.json is not
+	# written yet.
+	if [[ "${BASE_IMAGE,,}" == *"eln-bootc"* ]] ||
+		grep -qE '^ID=eln$' /etc/os-release /usr/lib/os-release 2>/dev/null; then
+		IS_ELN=true
+		_derive_name "wahoo" "Wahoo"
+	fi
+	[[ "${BASE_IMAGE,,}" == *"fedora"* && "${BASE_IMAGE,,}" != *"hummingbird"* && "${IS_ELN}" != true ]] && IS_FEDORA=true && _derive_name "bonito" "Bonito"
 	[[ "${BASE_IMAGE,,}" == *"red hat"* || "${BASE_IMAGE,,}" == *"rhel"* || "${BASE_IMAGE,,}" == *"redhat"* ]] && IS_RHEL=true && _derive_name "redfin" "Redfin"
 	[[ "${BASE_IMAGE,,}" == *"almalinux"* && "${BASE_IMAGE,,}" != *"-kitten"* ]] && IS_ALMALINUX=true && _derive_name "albacore" "Albacore"
 	[[ "${BASE_IMAGE,,}" == *"-kitten"* ]] && IS_ALMALINUXKITTEN=true && _derive_name "yellowfin" "Yellowfin"
@@ -124,6 +145,7 @@ else
 		BASE_IMAGE="${BASE_IMAGE}"
 		IS_FEDORA=${IS_FEDORA}
 		IS_HUMMINGBIRD=${IS_HUMMINGBIRD}
+		IS_ELN=${IS_ELN}
 		IS_RHEL=${IS_RHEL}
 		IS_ALMALINUX=${IS_ALMALINUX}
 		IS_ALMALINUXKITTEN=${IS_ALMALINUXKITTEN}
@@ -454,6 +476,21 @@ dnf_retry() {
 			rm -f "$tmp_out"
 			return "$rc"
 		fi
+		# Usage errors: we mis-spelled the command line, so dnf never
+		# even looked at a repo. Retrying is pointless, but the bigger
+		# problem is that most callers write `dnf_retry … || fallback`,
+		# which turns our own bug into a silently-degraded install.
+		# Measured on Build Hummingbird #66 (run 32907940350): a
+		# misplaced --skip-unavailable sent all 52 gnome desktop
+		# packages through install_available, which does not honour the
+		# manifest's exclude list, after 4 attempts and 35s of backoff.
+		# Annotate so the next one surfaces in the job's annotations
+		# even when the caller swallows the exit code.
+		if [[ "$out" == *"Unknown argument"* || "$out" == *"Unknown command"* ]]; then
+			echo "::error title=dnf invoked incorrectly::dnf $* — ${out%%$'\n'*}" >&2
+			rm -f "$tmp_out"
+			return "$rc"
+		fi
 		echo "dnf attempt ${attempt}/${max_attempts} failed (exit ${rc}); clearing metadata and retrying..." >&2
 		dnf clean metadata || true
 		sleep "$((attempt * 5))"
@@ -518,6 +555,48 @@ zypper_retry() {
 # Callers pass their own name first (BASH_SOURCE[1] resolved at THEIR frame —
 # resolving it here would always say lib.sh), then the missed package names.
 # TUNAOS_WISHLIST_DIR relocates the wishlist for tests.
+# Account for what `--skip-unavailable` dropped.
+#
+# `install_available` reports its own misses through record_package_wishlist,
+# so for a long time the fallback path was the only thing that produced a
+# record of a package the repos could not supply. That made a correctness fix
+# a REGRESSION in visibility: once install-desktop.sh stopped mis-spelling
+# --skip-unavailable (so the primary transaction succeeded instead of failing
+# into install_available), the packages dnf dropped left no trace at all --
+# no warning, no wishlist file, nothing for the weekly boot report to read.
+#
+# Measured on run 32925587829: hummingbird:gnome asked for 52 desktop
+# packages, installed 14, and emitted zero "Missing package" warnings.
+#
+# dnf's own two reasons are deliberately not distinguished here. "No match for
+# argument" (absent) and "Skipping packages with broken dependencies"
+# (present but unusable) are very different problems, but both end with the
+# package not installed, and the caller cannot see either one -- the whole
+# point of --skip-unavailable is that neither fails the build.
+record_unsatisfied_requests() {
+	local caller_script="$1"
+	shift
+	local requested=("$@")
+	[[ ${#requested[@]} -eq 0 ]] && return 0
+	command -v rpm >/dev/null 2>&1 || return 0
+
+	local pkg misses=()
+	for pkg in "${requested[@]}"; do
+		[[ -n "$pkg" ]] || continue
+		# --whatprovides second: several manifest entries are provides rather
+		# than package names, and reporting one of those as missing when it is
+		# installed under another name is worse than not reporting it.
+		rpm -q --quiet "$pkg" 2>/dev/null && continue
+		rpm -q --quiet --whatprovides "$pkg" 2>/dev/null && continue
+		misses+=("$pkg")
+	done
+
+	((${#misses[@]} == 0)) && return 0
+	printf '::warning title=Desktop packages dropped (%s)::%d of %d packages requested by %s were not installed; --skip-unavailable dropped them without failing the build.\n' \
+		"${IMAGE_NAME:-?}" "${#misses[@]}" "${#requested[@]}" "$caller_script"
+	record_package_wishlist "$caller_script" "${misses[@]}"
+}
+
 record_package_wishlist() {
 	local caller_script="$1"
 	shift

@@ -1,6 +1,6 @@
 # tunaOS Roadmap
 
-**Last updated**: 2026-08-14 (CI critical-path correction — 13/13 variants red #1570, workflows-permission blocker #1557; Hacktoberfest T-8 numbers) | **Maintainer**: tuna-os (hanthor)
+**Last updated**: 2026-08-23 (Windows conversion channel added to Q3 + Q4 after wootc `v0.1.0-alpha.1` shipped 08-22 — #1988) | **Maintainer**: tuna-os (hanthor)
 
 ---
 
@@ -27,6 +27,7 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 | Flounder / Flounder Sid | Debian 13 Trixie / Sid | GNOME, KDE, COSMIC, Niri, XFCE | Beta |
 | Hummingbird | Fedora Hummingbird (container-native bootc) | Base, GNOME, KDE, COSMIC, Niri | Experimental (see #1341) |
 | Gurnard | Ubuntu 24.04 Noble | Base, Pantheon | Experimental (see #1341) |
+| Wahoo | Fedora ELN (EL11 preview, rolling) | Base, GNOME, KDE, COSMIC | Experimental, dispatch-only — base/GNOME/KDE **Gate-green and published** 08-27; COSMIC builds but Promote is held behind a Gate blocked by an AWS GPU vCPU quota of 0. No working H.264/H.265 on this base (fedora-eln/eln#214, desktops #2048) |
 
 **Status terms** follow [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md): `Stable`
 means GA, `Beta` means published for testing on tunaos.org/download. This
@@ -101,7 +102,7 @@ track it. Notably **Bonito is Beta** (GA tracked in [#272](https://github.com/tu
 | Goal | Owner | Tracking | Status |
 |------|-------|----------|--------|
 | **Fix ISO downloads** | ci-maintainer | #543, #561 | ✅ Done — downloads verified working (R2, 08-07) |
-| Bonito (Fedora 44) GA | ci-maintainer | #272 | 🔴 Blocked — nightly 10/10 red 08-03–08-13, cross-variant nvidia initramfs regression (#1499), not GA-ready |
+| Bonito (Fedora 44) GA | ci-maintainer | #272 | 🟡 Progress — T2 bootc profile **#1256 merged 08-18**; nvidia initramfs regression **#1499 closed** (fixes #1503/#1523 merged 08-14); still Beta, GA exit per VARIANT-LIFECYCLE.md; staff test at 09-01 checkpoint review |
 | Redfin (RHEL 10) alpha | ci-maintainer | #609 (closed, shipped 08-09), #1123 | 🟡 Local-build alpha shipped (systemd auto-update timer units, #609/#1182/#1219) — intentionally **not** in `.github/build-config.yml`'s CI matrix (RHEL EULA forbids redistribution + no RHSM creds on CI runners, see `scripts/get-base-image.sh`); build via `just build redfin <desktop>` or `scripts/corral-build.sh`, see [docs/rhel-setup.md](docs/rhel-setup.md). Remaining: no automated build/publish path is possible by design, so "alpha" here means local-build-verified, not downloadable |
 | Ship KDE, COSMIC, Niri, XFCE variants | ci-maintainer | #285 | 🟡 Published but **desktop-completeness unverified** — 24/37 editions undersized per #133/#1294 |
 | GitHub Releases page carries ISO assets | ci-maintainer | #1106 | ✅ Verified 08-09 — `gnome-20260809` published with assets; cadence resumed |
@@ -119,9 +120,10 @@ track it. Notably **Bonito is Beta** (GA tracked in [#272](https://github.com/tu
 | **User-proven ISO installs roadmap** | ci-maintainer | #763 | 🟡 In progress (Phase 1 baseline dispatched #761; GUI gate #577) |
 | **Apple Silicon (Asahi Linux) support** | architect / ci-maintainer | #781 | 🟡 In progress (Bonito & Grouper 36/36 verified #776; D0–D4 installer track active) |
 | **Desktop parity floor (non-RPM bases)** | packaging | #133, tunaos-packages#323 | ⬜ Not started — P0 for Q4 (see #1294) |
-| **Q3 checkpoint (08-22): staff or descope #272/#1123/#1093/#1094** | strategist | #1299 | ⬜ Scheduled |
+| **Q3 checkpoint (08-22): staff or descope #272/#1123/#1093/#1094** | strategist | #1299 | 🟡 Date elapsed 08-22 — T-9 refresh 2026-08-23 (evidence updated: nvidia regression closed, Bonito T2 profile merged, wootc shipped); **decisions pending maintainer sign-off by 09-01 staff-test deadline** |
 | **Flavor equality mandate (docs wording + cadence parity)** | strategist | #1315, #1254 | 🟡 In progress — catalog parity gate merged 08-11 (#1322, #1281 closed); cadence parity pending (#1316) |
 | **NVIDIA flavor family (6 editions, 0 assets since 07-05)** | ci-maintainer | #1383 | 🔴 Broken — nightly overlay regressed 08-12 (#1382); 13/13 variant matrix red 08-14 (#1570) incl. nvidia cells (#1561/#1562/#1564/#1565); staff test: nightly green + gnome-nvidia assets republished by 09-01 (#1376/#1379) |
+| **Windows conversion channel (wootc)** | strategist / wootc maintainer | #1988, #1958, wootc#210 | 🟡 In progress — `v0.1.0-alpha.1` shipped 2026-08-22 (five branded installers + deployer artifacts + `SHA256SUMS`, E2E-gated); nightly auto pre-releases live. wootc's own [ROADMAP](https://github.com/tuna-os/wootc/blob/main/ROADMAP.md) (refreshed 08-22) carries the v0.1.0-alpha → v1.0.0 ladder with milestone trackers M2–M5 (wootc#210–#213). Gaps closing under #1988: no Windows entry point from this repo (`README.md`/`MIGRATION.md` have zero wootc references; user ask #1958 filed 08-22 untriaged), and `winget install TunaOS.wootc` blocked on the maintainer-only `WINGET_TOKEN` secret (wootc#221). Next gate: **v0.2.0-alpha — proven on real hardware** (wootc#210) |
 | **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 | 🟡 In progress — PACKAGE-SOURCING.md merged; DNF/COPR audit done 08-13, ahead of the 08-22 checkpoint (2 violations, 6-COPR niri gap, negativo17/rpmfusion allowlist candidates confirmed — #1453); apt/AUR/OBS bases still unaudited, maintainer allowlist sign-off and Phase 2 migration still pending |
 
 ---
@@ -145,12 +147,13 @@ track it. Notably **Bonito is Beta** (GA tracked in [#272](https://github.com/tu
 | Issue triage policy (queue actionability) | strategist | #1195 — [TRIAGE-POLICY.md](./TRIAGE-POLICY.md) drafted 08-13: milestone-only roadmap signal, verify-before-trust closure, tiered SLA |
 | Package signing / SBOM | sec-check | Supply chain, #1187 |
 | **Package sourcing policy (system-repos/tideforge-first + allowlist)** | strategist | #1319, #1323 (audit → #1187) |
-| Bonito (Fedora 44) GA carryover | ci-maintainer | #272 — blocked on #1499 (nightly red 08-03–08-13) |
+| Bonito (Fedora 44) GA carryover | ci-maintainer | #272 — nvidia regression closed (#1499), T2 profile merged (#1256); re-scored STAFF at T-9 refresh |
 | Redfin (RHEL 10) alpha GA | ci-maintainer | #609 |
 | Fedora 45 base readiness | ci-maintainer | #1171 — [FEDORA-BASE-POLICY.md](./FEDORA-BASE-POLICY.md) adopted 08-13: N+rawhide model, Fedora 45 planning sequenced after Bonito (#272) GA, not parallel |
 | Adoption metrics / usage telemetry | strategist | #1174 |
 | **Adoption evidence (ADOPTERS.md production entries)** | strategist | #1348 — zero public production adopters vs "Mature" claim; first entries at 2026-11-01 snapshot |
 | Variant lifecycle policy (admission + Beta→Stable exit criteria) | strategist | #1196, #1175 — [VARIANT-LIFECYCLE.md](./VARIANT-LIFECYCLE.md) |
+| **Windows conversion channel (wootc) — beta gate + winget** | strategist / wootc maintainer | #1988, wootc#211, wootc#221 — Q3 carryover. Q4 scope: full-tier matrix green (wootc#222), BitLocker path (wootc#223), winget package live, and wootc's adoption numbers folded into the #1174 metrics snapshot and #1743 Q4 sequencing. This is the org's only adoption channel that reaches users not already running Linux |
 
 **Milestone fidelity (#1307, 2026-08-12)**: 7 of the 9 goal trackers above were
 filed without being attached to the Q4 milestone (#3), so the milestone

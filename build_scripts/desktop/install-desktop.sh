@@ -89,6 +89,25 @@ elif [[ "${IS_HUMMINGBIRD:-false}" == true ]]; then
 	# libcrypto.so.3 vs .so.4. They have to be rebuilt against Hummingbird's
 	# buildroot, which is what the hummingbird: manifest sections point at.
 	_TD_OS="hummingbird"
+elif [[ "${IS_ELN:-false}" == true ]]; then
+	# ELN gets its own section for the same reason hummingbird does, and the
+	# measurement is the argument. Of the 52 packages the fedora: list
+	# installs, ELN's repos carry 42 (`dnf repoquery` against the pinned
+	# eln-bootc digest, 2026-08-25) — so `fedora` is close, but the ten
+	# misses are a strict `dnf install` away from failing the build:
+	#
+	#   NetworkManager-{openconnect,ssh,vpnc}-gnome, evince-previewer,
+	#   evince-thumbnailer, gnome-backgrounds, gnome-user-share, gvfs-afc,
+	#   qadwaitadecorations-qt5, totem-video-thumbnailer
+	#
+	# and `el10` is worse than close: that section is a GNOME 50 COPR
+	# backport for a base that ships GNOME 48, while ELN's own AppStream
+	# carries GNOME 51~beta. Routing ELN there would enable a c10s COPR on an
+	# EL11 buildroot to install packages ELN already has, newer.
+	#
+	# What the eln: section supplies is therefore the fedora list minus those
+	# ten names, aliased rather than restated — see the manifest.
+	_TD_OS="eln"
 elif [[ "$IS_FEDORA" == true ]]; then
 	_TD_OS="fedora"
 else
@@ -525,7 +544,7 @@ if [[ "${_TD_OS}" == "pacman" ]]; then
 	# now runs the same gate every other package manager does.
 fi
 
-# ── DNF path (el10/fedora/hummingbird) ───────────────────────────────────────
+# ── DNF path (el10/fedora/hummingbird/eln) ───────────────────────────────────
 # These sections are maps (groups/group_options/copr/optional/versionlock). The
 # list-style sections (apt/pacman/zypper/emerge) installed above and must skip
 # this — indexing an array with .group_options etc. is a hard yq error.
@@ -534,7 +553,7 @@ fi
 # differs is only WHICH repository satisfies the names, which the manifest's
 # hummingbird: section supplies. Leaving it out would route a dnf base down
 # the list-style path and produce that same yq error.
-if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummingbird" ]]; then
+if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummingbird" || "${_TD_OS}" == "eln" ]]; then
 
 	# Plain (non-COPR) baseurl repos — e.g. the tuna-os xfce-wayland repo,
 	# which lives at its own R2 path (repo.tunaos.org/xfce/...), not the main
@@ -553,22 +572,40 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 		_TD_RN=$($YQ -r ".packages.${_TD_OS}.repos[$i].name" "${_TD_MANIFEST}")
 		_TD_RB=$($YQ -r ".packages.${_TD_OS}.repos[$i].baseurl" "${_TD_MANIFEST}")
 		_TD_RP=$($YQ -r ".packages.${_TD_OS}.repos[$i].priority // \"\"" "${_TD_MANIFEST}")
+		_TD_RU=$($YQ -r ".packages.${_TD_OS}.repos[$i].unsigned // false" "${_TD_MANIFEST}")
 		[[ -z "${_TD_RN}" || "${_TD_RN}" == "null" ]] && continue
+		# `unsigned: true` is allowed for exactly one shape of repo: a
+		# file:// path the Containerfile bind-mounted out of an OCI image
+		# that is pinned BY DIGEST in image-versions.yaml (utah-packages,
+		# /run/utah-packages). There the digest is the signature: the bytes
+		# cannot differ from what was reviewed, so per-RPM gpgcheck adds
+		# nothing and the RPMs carry no signature to check. Anything fetched
+		# over the network at build time has no such pin and MUST stay
+		# signed (tuna-os/tunaOS#1655) -- so an unsigned https:// repo is a
+		# manifest error, not a config choice.
+		if [[ "${_TD_RU}" == "true" && "${_TD_RB}" != file://* ]]; then
+			echo "ERROR: ${_TD_MANIFEST}: repo ${_TD_RN} is 'unsigned: true' but its baseurl is not file:// (${_TD_RB}); only digest-pinned, bind-mounted content may skip gpgcheck" >&2
+			exit 1
+		fi
 		{
 			echo "[${_TD_RN}]"
 			echo "name=${_TD_RN}"
 			echo "baseurl=${_TD_RB}"
 			echo "enabled=1"
-			# gpgcheck=1 verifies each RPM against the tuna-os signing key
-			# (every repo.tunaos.org publish pipeline runs `rpmsign --addsign`
-			# before upload — see tuna-os/tunaos-packages#394). repo_gpgcheck
-			# stays 0: repomd.xml isn't detached-signed yet (no repomd.xml.asc
-			# published), so turning that on would hard-fail every dnf
-			# transaction against these repos, not just add a check. Matches
-			# the already-working contrib/install-gnome49.sh pattern rather
-			# than tuna-os/tunaOS#1655's literal ask of both =1.
-			echo "gpgcheck=1"
-			echo "gpgkey=https://repo.tunaos.org/public.gpg"
+			if [[ "${_TD_RU}" == "true" ]]; then
+				echo "gpgcheck=0"
+			else
+				# gpgcheck=1 verifies each RPM against the tuna-os signing key
+				# (every repo.tunaos.org publish pipeline runs `rpmsign --addsign`
+				# before upload — see tuna-os/tunaos-packages#394). repo_gpgcheck
+				# stays 0: repomd.xml isn't detached-signed yet (no repomd.xml.asc
+				# published), so turning that on would hard-fail every dnf
+				# transaction against these repos, not just add a check. Matches
+				# the already-working contrib/install-gnome49.sh pattern rather
+				# than tuna-os/tunaOS#1655's literal ask of both =1.
+				echo "gpgcheck=1"
+				echo "gpgkey=https://repo.tunaos.org/public.gpg"
+			fi
 			echo "repo_gpgcheck=0"
 			echo "skip_if_unavailable=False"
 			[[ -n "${_TD_RP}" && "${_TD_RP}" != "null" ]] && echo "priority=${_TD_RP}"
@@ -599,8 +636,22 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 		for exc in "${_TD_EXCLUDES[@]}"; do
 			[[ -n "$exc" ]] && _TD_EXCL_ARGS+=("-x" "$exc")
 		done
+		# --skip-unavailable is command-scoped in dnf5: it goes AFTER
+		# `install`, never between `-y` and it. Spelled the other way it
+		# is not a warning, it is `Unknown argument … (It has to be
+		# placed after the command.)` — and the `||` below then quietly
+		# re-runs the whole set through install_available, which ignores
+		# the exclude list above and forces install_weak_deps=False.
+		# Build Hummingbird #66 (run 32907940350) shipped all 52 gnome
+		# packages that way. tests/test_dnf_flags_land_after_the_
+		# subcommand.py lints for it tree-wide.
 		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
-			dnf_retry -y --skip-unavailable install "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}" || install_available "${_TD_PKGS[@]}"
+			dnf_retry -y install --skip-unavailable "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}" || install_available "${_TD_PKGS[@]}"
+			# Whichever branch ran, --skip-unavailable can have dropped
+			# packages without saying so. install_available reports its own
+			# misses; the transaction above reports nothing, so ask the rpm
+			# database what actually landed.
+			record_unsatisfied_requests "install-desktop.sh:${_TD_DESKTOP}" "${_TD_PKGS[@]}"
 		else
 			dnf_retry -y install "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}"
 		fi
@@ -633,7 +684,7 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 		fi
 		# shellcheck disable=SC2086
 		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
-			dnf -y --enablerepo="${_TD_REPO_ID}" --skip-unavailable install ${_TD_COPR_OPTS} "${_TD_COPR_PKGS[@]}" || install_available "${_TD_COPR_PKGS[@]}" || true
+			dnf -y --enablerepo="${_TD_REPO_ID}" install --skip-unavailable ${_TD_COPR_OPTS} "${_TD_COPR_PKGS[@]}" || install_available "${_TD_COPR_PKGS[@]}" || true
 		else
 			dnf -y --enablerepo="${_TD_REPO_ID}" install ${_TD_COPR_OPTS} "${_TD_COPR_PKGS[@]}" || true
 		fi

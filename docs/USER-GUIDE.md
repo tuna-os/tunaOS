@@ -72,6 +72,7 @@ A TunaOS image is named `<variant>:<desktop>[-hardware]`.
 | 🦈 **sailfin** | openSUSE Tumbleweed | Rolling |
 | 🌈 **guppy** | Gentoo | Binary-package Gentoo, the adventurous pick |
 | 🐦 **hummingbird** | Fedora Hummingbird | Experimental next-gen Fedora base |
+| 🎏 **wahoo** | Fedora ELN | Experimental EL11 preview — what c11s/Kitten 11 will be like, months early. **No H.264/H.265**: ELN ships no working video decoder, so this is a testing lane, not a daily driver |
 | 🔒 **redfin** | RHEL 10 | Local-build only (EULA) — see [rhel-setup.md](rhel-setup.md) |
 
 ### The desktop — `gnome`, `kde`, `cosmic`, `niri`, `xfce`
@@ -134,6 +135,10 @@ git clone https://github.com/tuna-os/tunaOS && cd tunaOS
 just qcow2 ghcr.io/tuna-os/bonito:kde     # produces bonito.qcow2
 just run-qcow2 bonito kde                  # boots it under QEMU
 ```
+
+### Option D — from Windows (wootc)
+
+Moving from Windows 10/11? You can install TunaOS directly without flashing a USB drive using **[wootc](https://github.com/tuna-os/wootc)** (the Windows bootc installer). Download `tunaos-installer.exe` from [wootc releases](https://github.com/tuna-os/wootc/releases), select your desktop, and reboot. See [MIGRATION.md](../MIGRATION.md#from-windows-wootc) for full details.
 
 ## 4. Day-2 administration
 
