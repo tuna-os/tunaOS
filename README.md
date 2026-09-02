@@ -89,6 +89,7 @@ _Generated from the latest conclusive main-branch build for each variant (cancel
 ## Get started
 
 - **Install from an ISO:** [📦 tunaos.org/download](https://tunaos.org/download)
+- **Install from Windows (no USB drive needed):** [🪟 wootc installer](https://github.com/tuna-os/wootc) (download from [releases](https://github.com/tuna-os/wootc/releases) / read the [Migration Guide](MIGRATION.md#from-windows-wootc))
 - **Build your own ISO in the browser:** [🛠️ tunaos.org/iso-builder](https://tunaos.org/iso-builder)
 - **Switch an existing bootc system:**
 
