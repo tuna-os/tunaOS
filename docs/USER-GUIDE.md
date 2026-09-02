@@ -131,7 +131,7 @@ replaced atomically. Switching back is the same command with the old image.
 Every image can be turned into a disk image locally:
 
 ```bash
-git clone https://github.com/tuna-os/tunaOS && cd tunaOS
+git clone https://github.com/tuna-os/tunaos.git && cd tunaos
 just qcow2 ghcr.io/tuna-os/bonito:kde     # produces bonito.qcow2
 just run-qcow2 bonito kde                  # boots it under QEMU
 ```
@@ -270,9 +270,15 @@ itself, see the [Developer Guide](DEVELOPER-GUIDE.md).
 Every published image is signed with cosign and carries an attested SBOM:
 
 ```bash
-cosign verify ghcr.io/tuna-os/yellowfin:gnome \
-  --certificate-identity-regexp 'github.com/tuna-os/tunaOS' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+image=ghcr.io/tuna-os/yellowfin:gnome
+digest=$(skopeo inspect "docker://${image}" | jq -r .Digest)
+ref="ghcr.io/tuna-os/yellowfin@${digest}"
+
+cosign verify "${ref}" \
+  --certificate-identity \
+    "https://github.com/tuna-os/tunaos/.github/workflows/reusable-build-image.yml@refs/heads/main" \
+  --certificate-oidc-issuer \
+    "https://token.actions.githubusercontent.com"
 ```
 
 More in [VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md).
@@ -282,7 +288,7 @@ More in [VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md).
 1. **Roll back first** (`sudo bootc rollback` + reboot), then debug.
 2. Check your cell in [MATRIX-STATUS.md](MATRIX-STATUS.md): if the axis
    that bit you is ❌ or ⬜ there, it's known territory.
-3. Search [issues](https://github.com/tuna-os/tunaOS/issues); file one with
+3. Search [issues](https://github.com/tuna-os/tunaos/issues); file one with
    `bootc status` output and your image ref if it's new.
 4. Ask in [Discord](https://discord.gg/MXSTqB8Nv).
 
