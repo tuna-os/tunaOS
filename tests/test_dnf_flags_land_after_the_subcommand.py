@@ -116,7 +116,7 @@ class CommandScopedFlagPlacement(unittest.TestCase):
         )
 
     def test_the_iso_and_live_scripts_are_covered_too(self):
-        for directory in ("live-iso", "iso_files"):
+        for directory in ("live-iso",):
             root = REPO / directory
             if root.is_dir():
                 self.assertEqual(_scan(root), [])

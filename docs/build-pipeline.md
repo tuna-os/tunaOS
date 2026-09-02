@@ -64,7 +64,9 @@ The single build workflow for all variants. Replaces the old per-variant `build-
 
 PRs trigger `build-variant.yml` with `variant=all`, `flavor=gnome`. Only stage 1 runs (PR path short-circuit). The reusable workflow builds the gnome image and pushes it as a non-published test artifact.
 
-Legacy `build.yml` is archived at `.github/workflows/archive/build.yml`.
+The legacy monolithic `build.yml` (and its `generate-release.yml` companion)
+were removed in 2026-09; `git log --all -- .github/workflows/archive/` has
+them if the history is needed.
 
 ---
 

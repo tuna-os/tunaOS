@@ -17,11 +17,6 @@ on:
         required: true
         default: 'gnome'
         type: string
-      upload_r2:
-        description: 'Upload to Cloudflare R2'
-        required: false
-        default: false
-        type: boolean
       build_runner:
         # Defaults to github. GitHub-hosted runners are included in the plan
         # with 60 concurrent jobs, so anything that CAN run there should;
@@ -245,16 +240,15 @@ jobs:
           sudo just build "$VARIANT" "$FLAVOR" linux/amd64 1 "$FLAVOR"
 
       - name: Build Live ISO
+        # No R2 credentials here on purpose. This step used to export the
+        # four R2 secrets plus an UPLOAD_R2 dispatch input, and nothing read
+        # any of them: `grep -rn UPLOAD_R2 RCLONE_CONFIG_R2 scripts/ live-iso/`
+        # is empty. Publishing ISOs is publish-isos.yml's job. Dead secret
+        # references still matter on a fork PR, where every secret is empty
+        # and the step is the first thing a reviewer suspects
+        # (tests/test_fork_safe_workflows.py).
         env:
           TACKLEBOX_FROM_SOURCE: "1"
-          UPLOAD_R2: ${{ github.event.inputs.upload_r2 }}
-          RCLONE_CONFIG_R2_TYPE: s3
-          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
-          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          RCLONE_CONFIG_R2_REGION: auto
-          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-          R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: |
           # Root, and no rootless hop before it.
           #

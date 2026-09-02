@@ -55,6 +55,32 @@ just fix     # format shell scripts and Justfile
 just check   # shellcheck, yamllint, actionlint
 ```
 
+`just ci` runs what the PR gate runs — `check`, the CI contract, and every
+unit suite — so a green `just ci` locally is a green PR, minus the
+scheduled build matrix. The rest of the contributor contract:
+
+| Command | What it is |
+|---|---|
+| `just setup` | install the tools the checks and tests need, print versions |
+| `just test-fast` | the Python suites only, stop at the first failure |
+| `just test` | bats + pytest, same as CI |
+| `just test-contract` | every green gate exists, is reachable, meets its freshness SLA |
+| `just test-random [seed]` | the suites in a seeded random order (the nightly lane) |
+| `just test-cell <variant> <flavor>` | the desktop contract against one published image, as the nightly sweep runs it |
+| `just test-e2e <iso>` | boot an ISO under QEMU and assert the live environment reaches readiness |
+
+## Every incident becomes a regression test
+
+A bug that let an unusable or wrongly-promoted image ship is not fixed until a
+test proves the old failure mode cannot silently recur. Put that test in
+[`tests/regressions/`](tests/regressions/README.md), named after the issue
+(`test_issue_<number>_<what_must_not_recur>.py`), with a docstring that cites
+the issue and the run or log that measured the failure. The seed example is
+#858 (marlin:kde shipped with no Wayland session): the regression test runs
+the desktop contract's own check against a filesystem with no session file
+and holds that it fails. `tests/test_regression_convention.py` enforces the
+naming.
+
 ## Building Images
 
 ```bash

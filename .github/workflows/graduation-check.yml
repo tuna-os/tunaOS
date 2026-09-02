@@ -1,0 +1,84 @@
+name: Graduation Check
+
+# Weekly: has any advisory green criterion earned the right to block?
+#
+# scripts/graduation-check.py measures each advisory criterion's gate
+# workflow against the `graduation` bar in .github/green-criteria.yml
+# (consecutive scheduled passes on main, failure rate over a window). When
+# one is ready this opens — or refreshes — a single tracking issue; a human
+# still flips `enforcement`, because graduating changes what green means
+# for every cell. Nothing here ever edits the criteria file. Epic #2250
+# item 8: advisory checks must not become permanent dashboard wallpaper.
+
+on:
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  actions: read
+
+jobs:
+  check:
+    name: advisory → blocking candidates
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install PyYAML
+        run: pip3 install pyyaml --break-system-packages 2>/dev/null || pip3 install pyyaml --user
+
+      - name: Measure every advisory criterion against its bar
+        id: measure
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          python3 scripts/graduation-check.py > report.md
+          python3 scripts/graduation-check.py --json > report.json
+          {
+            echo "### Graduation check"
+            echo ""
+            cat report.md
+          } >> "$GITHUB_STEP_SUMMARY"
+          ready="$(python3 -c 'import json; print(",".join(json.load(open("report.json"))["ready"]))')"
+          echo "ready=${ready}" >> "$GITHUB_OUTPUT"
+          echo "ready: ${ready:-none}"
+
+      - name: Open or refresh the tracking issue
+        if: steps.measure.outputs.ready != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          READY: ${{ steps.measure.outputs.ready }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          title="[green-criteria] advisory criteria ready to graduate: ${READY}"
+          marker='<!-- graduation-check -->'
+          body_file="$(mktemp)"
+          {
+            echo "$marker"
+            echo "The weekly graduation check found advisory criteria that have met the bar in"
+            echo "\`.github/green-criteria.yml\` (\`graduation:\`) — measured from scheduled runs on \`main\`, run: ${RUN_URL}"
+            echo ""
+            cat report.md
+            echo ""
+            echo "To graduate one: change its \`enforcement\` to \`blocking\` in \`.github/green-criteria.yml\`,"
+            echo "record a \`status_<date>\` line saying what the composite green count did, and let"
+            echo "\`tests/test_ci_contract.py\` confirm the gate cannot be waved through."
+          } > "$body_file"
+          # One open issue at a time: refresh it rather than filing a new one each week.
+          search='in:title "[green-criteria] advisory criteria ready to graduate"'
+          existing="$(gh issue list --state open --search "$search" --json number --jq '.[0].number // empty')"
+          if [[ -n "$existing" ]]; then
+            gh issue edit "$existing" --title "$title" --body-file "$body_file"
+            echo "refreshed #$existing"
+          else
+            gh issue create --title "$title" --body-file "$body_file" --label "ci"
+          fi
