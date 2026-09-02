@@ -66,6 +66,73 @@ test-pytest: _ensure_test_deps
     cd {{ justfile_directory() }}
     python3 -m pytest tests/ tests/pytest/ -v --tb=short
 
+# --- Contributor contract (epic #2250 item 14) ---
+#
+# `just ci` is the PR gate, locally: what test.yml, lint.yml and the CI
+# contract run, in one command, so nobody has to reverse-engineer forty
+# workflows to know what will be checked. The scheduled lanes (full build
+# matrix, boot gates, installer E2E, lifecycle) are NOT part of it; they are
+# what `just test-cell` and `just test-e2e` reproduce one cell at a time.
+
+# Install the tools the checks and tests need (brew/pip), then print versions
+setup: _ensure_test_deps
+    #!/usr/bin/env bash
+    cd {{ justfile_directory() }}
+    for t in shellcheck shfmt yamllint jq actionlint bats yq; do
+        printf '%-11s %s\n' "$t" "$(command -v "$t" >/dev/null && $t --version 2>&1 | head -1 || echo MISSING)"
+    done
+    python3 -c 'import pytest, yaml; print("pytest", pytest.__version__, "pyyaml", yaml.__version__)'
+
+# Fast feedback: the Python suites only, stop at the first failure
+test-fast: _ensure_test_deps
+    #!/usr/bin/env bash
+    cd {{ justfile_directory() }}
+    python3 -m pytest tests/ tests/pytest/ -q --tb=short -x
+
+# The CI contract: every green gate exists, is reachable, and meets its freshness SLA
+test-contract:
+    #!/usr/bin/env bash
+    cd {{ justfile_directory() }}
+    python3 {{ justfile_directory() }}/scripts/check-ci-contract.py
+
+# The same suites as `test`, in a seeded random order. Reproduce a failure with the printed TUNAOS_TEST_SEED.
+test-random seed='': _ensure_test_deps
+    #!/usr/bin/env bash
+    set -uo pipefail; FAILED=0
+    cd {{ justfile_directory() }}
+    seed="{{ seed }}"
+    [[ -z "$seed" ]] && seed="${TUNAOS_TEST_SEED:-$(( (RANDOM << 15) | RANDOM ))}"
+    export TUNAOS_TEST_SEED="$seed"
+    echo "==> TUNAOS_TEST_SEED=$seed (reproduce with: TUNAOS_TEST_SEED=$seed just test-random)"
+    # bats files in a seed-derived order; pytest shuffles itself from the env var
+    readarray -t FILES < <(ls tests/bats/*.bats | shuf --random-source=<(yes "$seed"))
+    for f in "${FILES[@]}"; do bats --formatter tap "$f" || FAILED=1; done
+    python3 -m pytest tests/ tests/pytest/ -q --tb=short || FAILED=1
+    if [[ "$FAILED" -ne 0 ]]; then echo "==> FAILED under TUNAOS_TEST_SEED=$seed"; fi
+    exit $FAILED
+
+# Run the desktop contract (green criterion `desktop`) against one published cell, exactly as the nightly sweep does
+test-cell variant='yellowfin' flavor='gnome':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{ justfile_directory() }}
+    ref="ghcr.io/{{ repo_organization }}/{{ variant }}:{{ flavor }}"
+    desktop="${ref##*:}"; desktop="${desktop%%-*}"
+    echo "==> $ref: desktop contract ($desktop)"
+    sudo podman run --rm --pull=always \
+        -v "$PWD/build_scripts:/run/context/build_scripts:ro,z" \
+        "$ref" bash /run/context/build_scripts/checks/verify-desktop-experience.sh "$desktop"
+
+# Boot an ISO under QEMU and assert the live environment reaches readiness (green criterion `iso`); build one with `just iso`
+test-e2e iso:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd {{ justfile_directory() }}
+    sudo -E ./scripts/iso-e2e.sh "{{ iso }}"
+
+# The PR gate, locally: format + lint checks, the CI contract, then every unit suite
+ci: check test-contract test
+
 generate-workflows:
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}

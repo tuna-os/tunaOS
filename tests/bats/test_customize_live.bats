@@ -84,17 +84,20 @@ detect() {
 }
 
 @test "customize-live.sh: gives headless Flatpak an explicit session bus" {
+  # Asserts the MECHANISM, not one spelling of it. This used to grep for the
+  # literal `dbus-daemon --session`, which 886444e3 replaced with a `_start_bus`
+  # helper (the forked bus was holding the build's stdout pipe open and turning
+  # a 1-second failure into a 57-minute timeout). The session bus was still
+  # started and still exported, but the string was gone, so this test failed on
+  # a script that behaves correctly — and it failed on every PR in the repo, not
+  # just the ones touching live-iso, because Unit Tests runs the whole bats
+  # suite and the commit did not grep for tests pinning the old wording.
   grep -q 'DBUS_SESSION_BUS_ADDRESS' "${SCRIPT}"
-  # Assert the behaviour, not the spelling. This used to grep for the literal
-  # `dbus-daemon --session`, which the script no longer contains: the call was
-  # refactored into the _start_bus helper when dbus-broker images made the bare
-  # binary unsafe to assume (every cosmic flavor plus sailfin/grouper/guppy/
-  # marlin died with "dbus-daemon: command not found", exit 127). The session
-  # bus is still started, and still with --session — only contiguously no
-  # longer. The stale assertion failed on every PR in the repo, not just the
-  # ones touching live-iso, because Unit Tests runs the whole bats suite.
+  # a session bus is started (the space rules out the helper's own definition
+  # line, and the class rules out a comment or a pipeline carrying the flag)...
+  grep -qE '_start_bus [^#|]*--session' "${SCRIPT}"
+  # ...and the thing that starts it really does exec dbus-daemon.
   grep -q 'dbus-daemon "$@"' "${SCRIPT}"
-  grep -qE '_start_bus [^|]*--session' "${SCRIPT}"
 }
 
 @test "customize-live.sh: initializes D-Bus identity before Flatpak installation" {

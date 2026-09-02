@@ -246,11 +246,37 @@ jobs:
             done
           fi
           build_start=$(date +%s)
+          # 210m, against the job's 240m ceiling. This is NOT a guess at how
+          # long a build should take -- the ceiling above already clears the
+          # slowest real one (guppy kde, 2h57m compiling plasma from source).
+          # It exists so a build that was going to blow the job cap anyway
+          # fails 30 minutes early, with an exit code and a message, instead
+          # of a bare "The operation was canceled" and no telemetry.
+          #
+          # Build Hummingbird #66 (run 32907940350) is why: the gnome cell
+          # stalled inside one dnf transaction at 23:12:27 and emitted not
+          # one further line before the cap cancelled it at 03:00:31. The
+          # cancel skipped Manifest, Sign, Promote and the ISO, and left
+          # nothing in the log saying what had wedged. 10-base-packages.sh
+          # now bounds the dnf side of that; this bounds every other way a
+          # build layer can hang.
+          #
+          # `timeout` runs the child in its own process group and signals the
+          # group, so buildah dies with just. Under sudo so the signals come
+          # from root -- a non-root timeout cannot kill a root buildah.
+          #
           # --preserve-env: sudo otherwise strips the cache/rechunk knobs
           # (the old layer cache never worked for exactly this reason).
+          rc=0
           sudo --preserve-env=BUILDAH_CACHE_FLAGS,SKIP_RECHUNK,PUBLIC_IMAGE_NAME \
-            "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}"
+            timeout --kill-after=60s 210m \
+            "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}" || rc=$?
           echo "BUILD_SECONDS=$(( $(date +%s) - build_start ))" >> "$GITHUB_ENV"
+          if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+            echo "::error title=Build wedged::${IMAGE_VARIANT}:${DEFAULT_TAG} (${PLATFORM}) made no progress for 210 minutes and was killed. The last line of build output above is where it stopped."
+            exit 1
+          fi
+          [ "$rc" -eq 0 ] || exit "$rc"
 
       - name: Build telemetry
         if: always()
@@ -298,7 +324,12 @@ jobs:
           mkdir -p verify-out
           IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
           sudo -E corral create gate --bootc "$IMAGE" --wait-ssh --timeout 900
-          sudo ./scripts/iso-e2e.sh "$IMAGE" --disk --output verify-out --timeout 300 || true
+          # No `|| true` here (tuna-os/tunaos#1533): a PR whose image fails to
+          # boot must fail the PR gate, not just warn on missing evidence. The
+          # evidence-upload step below already runs under `if: always()`, so
+          # dropping the swallow doesn't lose any diagnostics — it just makes
+          # the check red when the boot actually failed.
+          sudo ./scripts/iso-e2e.sh "$IMAGE" --disk --output verify-out --timeout 300
 
       - name: Upload PR verification evidence
         if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
@@ -722,7 +753,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:c7d29704d7d74b8aac2fd07de13a0d4253e26188f558b1205f089f7532c3fe7a  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:1cec89e6c040d7a1ff412318d7a5fa89bab2c8b56e44d0a30f1df8acd646e1d0  # :latest linux/amd64 as of 2026-06-13
       options: --privileged --security-opt seccomp=unconfined
     permissions:
       contents: read

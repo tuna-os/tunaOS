@@ -1,0 +1,50 @@
+name: PR Reminders
+
+# Advisory on purpose. The rules live in .github/scripts/pr-nudges.sh with
+# the reasoning; this file only fetches the changed paths and hands them
+# over. It never fails a PR: on a fork the token is read-only and a comment
+# would 403, so the script delivers the reminder as a job summary and a
+# ::notice:: annotation first and treats the comment as a nicety
+# (tests/bats/test_pr_nudges.bats holds the 403 path at exit 0).
+# Epic #2250 item 11; modelled on kubestellar/hive's changelog-reminder.yml.
+
+on:
+  pull_request:
+    types: [opened, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  remind:
+    name: reminders
+    # Drafts are not ready for the question; dependency bumps never need it.
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.actor != 'renovate[bot]' &&
+      github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/scripts/pr-nudges.sh
+          sparse-checkout-cone-mode: false
+
+      - name: Derive and deliver the reminders
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+        run: |
+          # Reading the file list needs no write permission, so it works on
+          # forks; --paginate so a large PR cannot hide a path on page two.
+          gh api --paginate "repos/${REPO}/pulls/${PR}/files" --jq '.[].filename' \
+            | bash .github/scripts/pr-nudges.sh --deliver

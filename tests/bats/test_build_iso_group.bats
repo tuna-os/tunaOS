@@ -11,11 +11,20 @@ setup() {
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   cd "${REPO_ROOT}" || exit 1
   CONFIG=".github/build-config.yml"
+  # shellcheck source=../../scripts/lib/flavor.sh
+  . "${REPO_ROOT}/scripts/lib/flavor.sh"
+  # Recipe tests below also exercise the image-reference compatibility facade.
   # shellcheck source=../../scripts/lib/common.sh
   . "${REPO_ROOT}/scripts/lib/common.sh"
 }
 
 # ── Title mapping ───────────────────────────────────────────────────────────
+
+@test "flavor library has no source-time working-directory side effect" {
+  run bash -c 'before=$PWD; source "$1"; [[ "$PWD" == "$before" ]]' \
+    _ "${REPO_ROOT}/scripts/lib/flavor.sh"
+  [ "$status" -eq 0 ]
+}
 
 @test "title: gnome -> GNOME" {
   [ "$(tunaos_flavor_title gnome)" = "GNOME" ]

@@ -79,7 +79,7 @@ Scored against `.github/green-criteria.yml`: a cell is green only when every **b
 | **flounder-sid** | ❌ | ❌ | — | — | ❌ |
 | **grouper** | ✅ | ✅ | ❌ | — | ✅ |
 | **guppy** | ❌ | ✅ | — | — | ✅ |
-| **hummingbird** | ❌ | — | ❌ | — | — |
+| **hummingbird** | ⬜ | — | ⬜ | — | — |
 | **marlin** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **skipjack** | ❌ | ✅ | ❌ | ❌ | ✅ |
@@ -136,32 +136,32 @@ Green criterion 7 (`parity`), first cadence: every desktop's package set audited
 
 ## LUKS E2E
 
-**31 of 53** cells green (47 tested, 6 never tested).
+**0 of 53** cells green (53 tested, 0 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
 | **albacore** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **bonito-rawhide** | ✅ | ✅ | ✅ | ⬜ | ⬜ |
+| **bonito** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **flounder** | ❌ | ❌ | ❌ | — | ❌ |
-| **flounder-sid** | ✅ | ✅ | — | — | ✅ |
-| **grouper** | ✅ | ✅ | ✅ | — | ✅ |
-| **guppy** | ❌ | ❌ | — | — | ✅ |
+| **flounder-sid** | ❌ | ❌ | — | — | ❌ |
+| **grouper** | ❌ | ❌ | ❌ | — | ❌ |
+| **guppy** | ❌ | ❌ | — | — | ❌ |
 | **gurnard** | — | — | — | — | — |
-| **hummingbird** | ❌ | — | ⬜ | — | — |
-| **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
+| **hummingbird** | ❌ | — | ❌ | — | — |
+| **marlin** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **sailfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **wahoo** | ❌ | ❌ | ❌ | — | — |
 | **yellowfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
 
-NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 25 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
+NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 43 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
 
 The table above still shows a result for `flounder:cosmic`. `.github/build-config.yml` no longer declares that flavour, so `luks-e2e.yml` cannot schedule it and no run will ever turn it green. It is excluded from the count above — a last-measured verdict kept visible, not a gap. Same reasoning as the NVIDIA note.
 
-Newest result 2026-08-09, oldest still-authoritative result 2026-08-05. Results older than the most recent round of fixes are the best available data, not current data.
+Newest result 2026-09-01, oldest still-authoritative result 2026-08-06. Results older than the most recent round of fixes are the best available data, not current data.
 
 ## Desktop Contract Sweep
 
@@ -187,7 +187,7 @@ Pulls the **published** image and runs the contract script against it directly (
 
 4 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
 
-Newest result 2026-08-27.
+Newest result 2026-09-01.
 
 ## Bootc Lifecycle
 
@@ -247,7 +247,8 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-08-27 | [33104817652](https://github.com/tuna-os/tunaOS/actions/runs/33104817652) | 50 |
+| 2026-09-01 | [33510520345](https://github.com/tuna-os/tunaOS/actions/runs/33510520345) | 50 |
+| 2026-09-01 | [33506738063](https://github.com/tuna-os/tunaOS/actions/runs/33506738063) | 125 |
 | 2026-08-27 | [33090531233](https://github.com/tuna-os/tunaOS/actions/runs/33090531233) | 121 |
 | 2026-08-24 | [32747410944](https://github.com/tuna-os/tunaOS/actions/runs/32747410944) | 2 |
 | 2026-08-24 | [32718219267](https://github.com/tuna-os/tunaOS/actions/runs/32718219267) | 1 |
@@ -256,9 +257,7 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 | 2026-08-20 | [32335146969](https://github.com/tuna-os/tunaOS/actions/runs/32335146969) | 2 |
 | 2026-08-19 | [32238167029](https://github.com/tuna-os/tunaOS/actions/runs/32238167029) | 38 |
 | 2026-08-12 | [31585741267](https://github.com/tuna-os/tunaOS/actions/runs/31585741267) | 18 |
-| 2026-08-09 | [31287377558](https://github.com/tuna-os/tunaOS/actions/runs/31287377558) | 3 |
-| 2026-08-09 | [31286849405](https://github.com/tuna-os/tunaOS/actions/runs/31286849405) | 18 |
-| 2026-08-09 | [31286843546](https://github.com/tuna-os/tunaOS/actions/runs/31286843546) | 18 |
+| 2026-08-06 | [31087927879](https://github.com/tuna-os/tunaOS/actions/runs/31087927879) | 1 |
 
 <!-- END GENERATED -->
 

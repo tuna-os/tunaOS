@@ -11,6 +11,14 @@ Browse the currently published installation media on the download page:
 
 **[📦 tunaos.org/download](https://tunaos.org/download)**
 
+## Install from Windows (wootc)
+
+If you are coming from Windows, you can install TunaOS directly using **[wootc](https://github.com/tuna-os/wootc)** without writing an ISO to a USB flash drive or repartitioning your disk.
+
+- Download the installer from the [wootc releases](https://github.com/tuna-os/wootc/releases)
+- Run `tunaos-installer.exe` as Administrator, select your desktop and variant, and reboot into TunaOS
+- See the [Migration Guide (From Windows)](../MIGRATION.md#from-windows-wootc) and [wootc documentation](https://github.com/tuna-os/wootc) for full details
+
 ## Build your own ISO or VM image
 
 **In your browser — no tools, no root, nothing uploaded:**

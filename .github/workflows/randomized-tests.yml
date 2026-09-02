@@ -1,0 +1,93 @@
+name: Randomized Tests
+
+# Why this exists
+#
+# The PR gate (test.yml) runs the suites in file order, every time. A test
+# that only passes because a sibling ran first — a shared temp path, a script
+# that leaves state behind, a fixture that assumes an earlier module already
+# wrote a file — never fails there. It fails the day someone adds a file that
+# sorts earlier, and then it looks like that person broke it.
+#
+# This lane runs the same suites in a seeded random order (epic #2250, item
+# 3; Hive practice). It is SCHEDULED, not a PR check: an order-dependent
+# failure is real, but it is not the fault of the PR that happened to be open
+# when the seed landed on it. The seed is recorded as an artifact, in the job
+# summary, and in the failure output as TUNAOS_TEST_SEED=<n>, so any failure
+# reproduces locally with:
+#
+#     TUNAOS_TEST_SEED=<n> just test-random
+#
+# Dispatch with a seed to re-run a specific order.
+
+on:
+  schedule:
+    - cron: "30 3 * * *"
+  workflow_dispatch:
+    inputs:
+      seed:
+        description: 'Seed to reproduce (empty = draw a new one)'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  shuffled:
+    name: Shuffled unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Setup Homebrew
+        uses: Homebrew/actions/setup-homebrew@f830e99d47c69efee99f1ddbf18a8e3144d1b93e
+
+      - name: Install test dependencies
+        run: |
+          brew install bats-core just
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
+          pip3 install pytest pillow requests pyyaml --break-system-packages 2>/dev/null || pip3 install pytest pillow requests pyyaml --user
+
+      - name: Draw the seed
+        id: seed
+        env:
+          REQUESTED: ${{ github.event.inputs.seed }}
+        run: |
+          if [[ -n "${REQUESTED}" ]]; then
+            seed="${REQUESTED}"
+          else
+            seed="$(( (RANDOM << 15) | RANDOM ))"
+          fi
+          echo "seed=${seed}" >> "$GITHUB_OUTPUT"
+          echo "${seed}" > seed.txt
+          {
+            echo "### Randomized test lane"
+            echo ""
+            echo "Order seed: \`TUNAOS_TEST_SEED=${seed}\`"
+            echo ""
+            echo "Reproduce locally: \`TUNAOS_TEST_SEED=${seed} just test-random\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Record the seed before anything can fail
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: test-seed
+          path: seed.txt
+          retention-days: 30
+
+      - name: Run the shuffled suites
+        env:
+          TUNAOS_TEST_SEED: ${{ steps.seed.outputs.seed }}
+        run: |
+          set -o pipefail
+          if ! just test-random "${TUNAOS_TEST_SEED}"; then
+            repro="TUNAOS_TEST_SEED=${TUNAOS_TEST_SEED} just test-random"
+            echo "::error title=Order-dependent failure::${repro} reproduces this order"
+            exit 1
+          fi

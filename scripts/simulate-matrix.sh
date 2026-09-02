@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/build-config.sh
+source "${SCRIPT_DIR}/lib/build-config.sh"
+BUILD_CONFIG="$(tunaos_build_config)"
 
 # This script simulates the GitHub Actions build matrix based on build-config.yml
 
 echo "Simulated GitHub Actions Matrix (Dry Run):"
 echo "=========================================="
 
-yq -o=json '.variants[] | {"variant": .id, "description": .description, "platforms": .platforms, "flavors": [.flavors[] | select(.build_image == true) | .id]}' .github/build-config.yml | jq -c '.' | while read -r line; do
+yq -o=json '.variants[] | {"variant": .id, "description": .description, "platforms": .platforms, "flavors": [.flavors[] | select(.build_image == true) | .id]}' "$BUILD_CONFIG" | jq -c '.' | while read -r line; do
 	VARIANT=$(echo "$line" | jq -r '.variant')
 	DESC=$(echo "$line" | jq -r '.description')
 	PLATFORMS=$(echo "$line" | jq -r '.platforms | join(", ")')
