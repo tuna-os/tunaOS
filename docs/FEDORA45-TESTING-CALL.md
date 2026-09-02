@@ -133,5 +133,5 @@ sudo systemctl reboot
 
 ## 🔗 Related Resources
 - [Fedora Magazine Guest Post Pitch](FEDORA-MAGAZINE-PITCH.md)
-- [Variant Selection Decision Guide](USER-GUIDE.md)
+- [Variant Selection Decision Guide](USER-GUIDE.md#2-choosing-your-image)
 - [ADOPTERS.md Ecosystem & Production Registry](../ADOPTERS.md)

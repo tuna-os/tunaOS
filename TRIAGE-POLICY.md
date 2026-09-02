@@ -1,6 +1,6 @@
 # tunaOS Issue Triage Policy
 
-**Status**: DRAFT — proposed 2026-08-13 by the strategist agent for review
+**Status**: ADOPTED — official tunaOS issue triage policy
 **Owner**: tuna-os (hanthor) / strategist
 **Tracks**: #1195 (triage finding), #1168 (Q4 community governance goal),
 #2133 (automation intake quality gate)
