@@ -1,7 +1,7 @@
-# SCaLE 21x — CFP Draft
+# SCaLE 24x — CFP Draft
 
 > Status: **draft** — for maintainer review before submission.
-> Event: SCaLE 21x, Pasadena, March 2027. CFP typically opens ~November 2026.
+> Event: SCaLE 24x, Pasadena, April 1–4, 2027. CFP opened August 1, 2026 and closes November 1, 2026.
 > Tracking issue: [#1135](https://github.com/tuna-os/tunaOS/issues/1135) (Q1 2027 CFP season).
 > Adapted from [docs/CFP-FOSDEM-2027.md](./CFP-FOSDEM-2027.md) per
 > [docs/Q4-2026-PROMOTION-CALENDAR.md](./Q4-2026-PROMOTION-CALENDAR.md)'s
@@ -83,7 +83,7 @@ bootc segment).
 
 ## Submission checklist
 
-- [ ] CFP portal opens (~Nov 2026) — confirm exact date
+- [x] CFP portal opened August 1, 2026
 - [ ] Finalize title + abstract (this draft)
 - [ ] Decide: reuse the FOSDEM demo video, or re-cut with Corral leading
 - [ ] Ask 1–2 community members to proof the abstract for a
@@ -91,6 +91,7 @@ bootc segment).
       bootc/OSTree background?)
 - [ ] Submit to DevOps/Infrastructure-as-Code track first; Containers &
       Virtualization or Everything Open as fallback
+- [ ] Submit by November 1, 2026
 
 ## Supporting material (for reviewers / talk page)
 
@@ -101,4 +102,4 @@ since this abstract leans on it more than the FOSDEM version does.
 
 ---
 
-*Draft prepared by outreach agent. Review, edit, and submit when the CFP portal opens.*
+*Draft prepared by outreach agent. Review, edit, and submit by November 1, 2026.*
