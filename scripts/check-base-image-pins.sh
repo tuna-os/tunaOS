@@ -16,7 +16,10 @@
 # way, because "which ones are fine" is as useful as "which one broke".
 set -euo pipefail
 
-CONFIG="${CONFIG:-.github/build-config.yml}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/build-config.sh
+source "${SCRIPT_DIR}/lib/build-config.sh"
+CONFIG="${CONFIG:-$(tunaos_build_config)}"
 YQ="${YQ:-yq}"
 
 # Registries serve manifest lists, image indexes and plain manifests; ask for

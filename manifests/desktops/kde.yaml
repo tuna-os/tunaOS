@@ -65,12 +65,21 @@ packages:
   # flavor. Listing them strictly would fail the build over a fingerprint
   # helper; dropping them silently would be the #1555 shape. Neither.
   #
-  # Note for whoever reads a Gate failure here first: the group makes
-  # `plasma-login-manager` mandatory (Plasma 6.7 ships its own), while
-  # this manifest also installs sddm and declares display_manager: sddm.
-  # Both packages resolve. If the session comes up on the wrong greeter,
-  # that is the thing to look at, and it is an ELN/Plasma-6.7 signal
-  # worth reporting upstream rather than a tunaOS packaging bug.
+  # MEASURED 2026-08-27 (run 33041330231), replacing the prediction that
+  # used to sit here: the group makes `plasma-login-manager` (6.7.4)
+  # mandatory, it claims display-manager.service first, and the build logs
+  #
+  #   display-manager.service already points at plasmalogin.service; leaving it
+  #
+  # so the greeter on wahoo is plasmalogin, NOT the sddm this manifest
+  # declares — sddm is installed but not wired. The Gate PASSED on that, so
+  # it boots and this is an accuracy gap rather than a breakage.
+  #
+  # Deliberately not "fixed" by editing display_manager: that key is
+  # top-level in this file and shared with the el10 and fedora sections,
+  # where sddm IS correct. Overriding it for ELN alone needs per-section
+  # display_manager support on the dnf path (the zypper path already has
+  # it). Left as-is until someone decides that is worth adding.
   eln:
     groups:
       - kde-desktop
