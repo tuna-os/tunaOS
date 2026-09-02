@@ -57,6 +57,29 @@ variant — but it is a *port*, not a *rebuild*, and the difference matters:
 - Hardening and minimalism are the *point*. A package being absent is often a
   deliberate upstream choice, not an oversight to be reported as a bug.
 
+### GNOME comes from utah-packages (2026-09-02)
+
+`hummingbird:gnome` no longer waits on the tunaos-packages closure for the
+GNOME stack. Bluefin builds GNOME 51 for Hummingbird in Hummingbird's own
+build root ([projectbluefin/utah-packages](https://github.com/projectbluefin/utah-packages))
+and publishes it as an OCI image carrying a `createrepo_c` repository,
+cosign-signed. tunaOS consumes it the way it consumes `projectbluefin/common`
+and `ublue-os/brew`: pinned by digest in `image-versions.yaml`
+(`utah-packages`), declared as a stage in `Containerfile.el10`, bind-mounted
+at `/run/utah-packages` for the gnome stage's install only, and enabled by
+`manifests/desktops/gnome.yaml`'s hummingbird section as a `file://` repo at
+priority 4, above the `tunaos-hummingbird` prefix (5). The repo is marked
+`unsigned: true`; `install-desktop.sh` allows that only for `file://`
+content, because the image digest is the signature there and nothing fetched
+over the network may skip `gpgcheck` (#1655).
+
+What utah does not ship (the fedora list's extras, and the other four
+desktops) still comes from `repo.tunaos.org/hummingbird/<snapshot>`, which
+tunaos-packages now builds in the same Fedora 44 + public-hummingbird root
+(tuna-os/tunaos-packages#630) and gates on a static installability walk.
+The decision and the numbers behind it are in tunaos-packages'
+`docs/HUMMINGBIRD-TARGET.md` and tuna-os/tunaos-packages#629.
+
 ### Measured state of the snapshot (2026-08-25)
 
 Against the live index that `build_scripts/10-base-packages.sh` configures,
@@ -218,6 +241,68 @@ reap them; `tests/test_a_failing_live_customize_fails_fast.py` runs the script's
 own helpers against a daemon that outlives its caller and fails if the wedge
 returns.
 
+### Both of those were confirmed again in production: run 32907940350
+
+Build Hummingbird #66 is the first nightly to run with the fail-fast fix, and
+it settled two questions at once.
+
+**The wedge is gone, measured.** `iso:cosmic (linux-amd64)` reached the same
+flatpak line and failed in **56 seconds** (03:03:22 → 03:04:18), against the
+57 minutes of silence the same failure cost on 32866334376. The `EXIT` trap
+fired in the log — `+ _reap_live_buses` — and the cell reported a real exit 1
+rather than a timeout.
+
+**The flatpak gate is not an artefact of the e2e harness.** The identical
+three lines came out of `ghcr.io/tuna-os/hummingbird:cosmic-linux-amd64`, a
+real published image, in the real nightly's real ISO job — not a dispatched
+probe of `base`:
+
+```
+03:04:18  + dnf5 install -y flatpak
+03:04:18  No match for argument: flatpak
+03:04:18  ERROR: flatpak not installed and could not be installed;
+          cannot pre-install org.bootcinstaller.Installer
+```
+
+Everything above it in that job worked: the provenance gate passed (cosmic
+published a digest in this run), the image pulled, `ensure_dbus_daemon`
+installed and started the bus from `public-hummingbird-x86_64-rpms`. flatpak
+is still the first and only thing that fails.
+
+### gnome cannot get as far as cosmic: it wedges in the build
+
+The same run's `gnome / linux-amd64` cell never published at all, so the
+`iso:gnome` job was refused by the provenance gate in 0 seconds — correctly,
+rather than building media from a stale tag.
+
+The gnome cell did not fail. It stopped:
+
+```
+23:12:27  [13/30] pcre2-utf32-0:10.47-1.2.hum1 100% | 247.5 KiB | 00m00s
+03:00:31  ##[error]The operation was canceled.
+```
+
+Seventeen packages still in flight, then 3h48m without one further line, then
+the job's 240-minute ceiling. Compare cosmic, which finished the same stage in
+**14 minutes**. The difference is not the desktop — it is that one dnf
+download stalled and nothing bounded it. librepo treats a connection
+delivering less than 1000 B/s as healthy and waits indefinitely, and
+`repo.tunaos.org` is a single small host.
+
+Two bounds now exist: `minrate`/`timeout`/`retries` in `/etc/dnf/dnf.conf`
+(written by `10-base-packages.sh`, so every downstream `RUN` layer inherits
+them), and a `timeout --kill-after=60s 210m` around the build itself so a
+wedge anywhere else fails 30 minutes inside the ceiling with an annotation
+instead of a bare cancellation.
+
+The same job also exposed a second, quieter fault: `install-desktop.sh` passed
+`--skip-unavailable` *before* `install`, which dnf5 rejects outright. The
+call site is `dnf_retry … || install_available …`, so the `||` swallowed our
+own usage error and ran all 52 gnome packages through the fallback — which
+drops the manifest's `exclude:` list and forces `install_weak_deps=False`. The
+build would have composed a different image than the manifest describes even
+if it had finished.
+
 ### "N packages left" is not a measure of progress
 
 That figure counts the **served index**, which is cumulative across past
@@ -291,6 +376,253 @@ index 11**, because the list opens with four bootstrap tiers before `layer-00`.
 Filtering on `index <= 7` silently answers a different question and reports far
 too little work remaining — measured 15 instead of 53 when this was last
 computed. Match on the tier `name`, or find flatpak's index first.
+
+### Re-measured 2026-08-26 03:28: what is actually in each index
+
+Both indexes read live, side by side. The two have moved in opposite
+directions since 08-25, and the difference matters more than either number.
+
+| | `public-hummingbird` (upstream) | `tunaos-hummingbird` (ours) |
+| :--- | :--- | :--- |
+| binary names | 3510 | 7986 |
+| repomd revision | 1787711680 = **2026-08-26 02:34** | 1786989380 = **2026-08-17 17:56** |
+
+**Ours has not been republished in eight days and ten hours** — the revision
+is byte-identical to the one recorded at 08-25 15:30, and the name count has
+not moved either.
+
+That is not a regression. It is that the hummingbird index has never been
+published by the publisher at all. `publish-build-chain-rpms.yml` has seven
+runs in its whole history: one failed on 08-21 at 05:22 (#463's first
+dispatch), three succeeded that morning, one was cancelled, one failed that
+night — all of them xfce/gnome50/el10 targets — and run 7 is the hummingbird
+one, dispatched 08-26 00:14 and still building. The 08-17 17:56 content
+predates the publisher's existence entirely.
+
+So the pipe everything below waits on has not stalled; it has not yet run to
+completion once. "N packages left" cannot distinguish those two, because the
+served index is exactly what that figure counts.
+
+The shape of the problem is a job budget. Run 32842254545 built for 4h01m and
+reached tier 5 of 22. At that rate the chain wants something like seventeen
+hours, against a six-hour cap on a hosted job — so it can only ever finish
+across several runs, each resuming the last one's partial. That makes the
+partial-resume key the whole ballgame, which is why #528/#529 sit on the
+critical path to an ISO and not off to one side, and why `build-chain.sh` in
+`renderer_inputs` must not be touched while a chain is converging: it would
+restart run 7 at bootstrap-00.
+
+Package by package, against what a hummingbird GNOME ISO needs:
+
+| | upstream | ours | union |
+| :--- | :---: | :---: | :---: |
+| `flatpak` | no | no | **no** |
+| `ostree`, `ostree-libs` | **yes** | no | yes |
+| `bubblewrap` | yes | yes | yes |
+| `appstream` | no | yes | yes |
+| `mutter` | no | **yes** | yes |
+| `gnome-shell` | no | no | **no** |
+| `gdm` | no | no | **no** |
+| `gnome-session`, `nautilus` | no | no | **no** |
+| `xdg-desktop-portal{,-gnome,-gtk}` | no | no | **no** |
+| `NetworkManager-wifi` | yes | no | yes |
+| `linux-firmware`, `wpa_supplicant`, `sof-firmware` | no | no | **no** |
+
+Two corrections to what is written above this section.
+
+**flatpak's dependencies are already in reach.** `ostree` is in upstream today
+(with `ostree-libs`, `ostree-devel`, `ostree-grub2`), `bubblewrap` is in both,
+`appstream` is in ours. flatpak itself is the gap, not a closure behind it.
+That is a smaller job than "flatpak plus everything it needs".
+
+**`mutter` arrived in our rebuild** since the 08-15 measurement in #1755, which
+listed it as missing. The rest of that issue's §2 list still holds.
+
+### What that means for the goal: 14 of 52, measured on the image itself
+
+Run 32925587829 built `hummingbird:gnome` in **11m33s** and pushed it to
+GHCR — the dnf-flag and stalled-download fixes work, and the cell that ran
+3h57m and was cancelled the night before now completes in twelve minutes.
+
+That makes the question answerable from the image rather than from the
+indexes. Its own published package manifest
+(`packages-hummingbird-gnome-linux-amd64`, 405 packages) against the 52 the
+manifest asks for:
+
+    requested        52
+    present          14
+    silently dropped 38
+
+The fourteen: ModemManager, NetworkManager-adsl, NetworkManager-wwan, avahi,
+dconf, glib-networking, gnome-backgrounds, gnome-user-docs, mesa-dri-drivers,
+mesa-libEGL, mesa-vulkan-drivers, polkit, desktop-backgrounds-gnome,
+pinentry-gnome3.
+
+Everything that makes it a desktop is in the other thirty-eight — `gdm`,
+`gnome-shell`, `gnome-session-wayland-session`, `gnome-settings-daemon`,
+`gnome-control-center`, `nautilus`, `ptyxis`, both xdg-desktop-portals, all
+six gvfs backends, `librsvg2`, `yelp`. The only packages in the image whose
+names begin with "gnome" are `gnome-backgrounds` and `gnome-user-docs`.
+
+**`hummingbird:gnome` is a 405-package base with wallpapers and
+documentation.** Installed to a laptop it reaches a text console. Every
+build-side fix in this document is necessary and none of them changes that.
+
+Two details worth keeping. `mutter` IS in our rebuild index but is not in the
+image, because nothing requests it directly — it would arrive as a dependency
+of `gnome-shell`, which does not exist to depend on it. And `ostree` IS in the
+image, from upstream, so flatpak's main dependency is already present.
+
+The ISO axis and the desktop axis are therefore blocked on the same producer
+from two directions: no ISO can be built at all without `flatpak`, and the
+image one would carry is not a desktop without those thirty-eight. All of it
+is the package chain's to produce.
+
+#### 16 of the 38 are built and served — they fall over behind one package
+
+Splitting the 38 against both live indexes gives two very different groups:
+
+* **22 genuinely absent** from both — `gdm`, `gnome-shell`, `nautilus`,
+  `ptyxis`, `gnome-control-center`, the portals, `librsvg2` and so on;
+* **16 present in an index and dropped anyway** — all six `gvfs-*` backends,
+  `gnome-settings-daemon`, `gnome-system-monitor`, `gnome-classic-session`,
+  `gnome-browser-connector`, `yelp`, and four NetworkManager VPN plugins.
+
+The second group is not unbuilt. dnf says so itself, in the gnome cell of run
+32925587829:
+
+```
+Skipping packages with broken dependencies:
+ gnome-settings-daemon  x86_64 50.0-4.fc43      tunaos-hummingbird   6.1 MiB
+ gtk4                   x86_64 4.22.1-2.fc43    tunaos-hummingbird  28.1 MiB
+ gvfs                   x86_64 1.61.90-1.fc43   tunaos-hummingbird   1.2 MiB
+ …
+ yelp                   x86_64 2:49.1-1.fc43    tunaos-hummingbird   2.2 MiB
+```
+
+`gtk4` is in that list, and every other entry is a GTK application. Resolving
+gtk4's 71 requires against the union of both indexes leaves exactly two
+unmet, and they are the same package:
+
+    gstreamer1-plugins-bad-free-libs(x86-64)
+    libgstplay-1.0.so.0()(64bit)
+
+**One missing package takes down gtk4, and gtk4 takes down sixteen.**
+`gstreamer1-plugins-bad-free` is in the build order — `layer-05`, alongside
+`gstreamer1-plugins-base`, `gtk3` and `gtk4`, all three of which ARE served.
+It is one of seven sources that tier is short.
+
+#### Do not work around gtk4's dependency — build the package
+
+`src/gnome-50/gtk4/gtk4.spec` already carries a switch for exactly this
+situation, in three places, all keyed on `%{rhel}`:
+
+```spec
+# gstreamer1-plugins-bad-free-devel pulls in libgtk-3 on EL10 (gtk3 removed)
+%if !0%{?rhel}
+BuildRequires:  pkgconfig(gstreamer-player-1.0) >= %{gstreamer_version}
+%endif
+...
+%if !0%{?rhel}
+Requires: gstreamer1-plugins-bad-free-libs%{?_isa} >= %{gstreamer_version}
+%endif
+...
+%if 0%{?rhel}
+    -Dmedia-gstreamer=disabled \
+%endif
+```
+
+Hummingbird is not `rhel`, so all three are on and gtk4 hard-requires a
+package we do not serve. Extending that guard to hummingbird would make gtk4
+installable in one line, and it is the wrong fix.
+
+The EL10 exemption exists because the dependency is CIRCULAR there:
+`gstreamer1-plugins-bad-free-libs` needs `libgtk-3.so.0`, and EL10 dropped
+gtk3. Hummingbird builds gtk3 — it is served today — so nothing about that
+reasoning transfers. Disabling `media-gstreamer` here would trade GTK4's
+in-widget video playback for a build-order convenience, on a desktop image,
+with no structural obstacle to just building the package.
+
+`gstreamer1-plugins-bad-free` is already in `layer-05` of the build order, it
+takes its sources from Fedora dist-git (the `distgit:` name IS the pin, so
+nothing needs vendoring), and `gstreamer1`, `gstreamer1-plugins-base`, `gtk3`
+and `gtk4` from the same tier are all served. It is one of seven sources that
+tier is short. Build it.
+
+### How far the chain actually is: 570 of 673
+
+Comparing build-order SOURCE names against the source of every binary we
+serve (`sourcerpm`, not served binary names — see the trap below):
+
+| tier | sources | served | missing |
+| :--- | ---: | ---: | ---: |
+| bootstrap-00…03 | 10 | 10 | 0 |
+| layer-00 | 190 | 187 | 3 |
+| layer-01 | 76 | 71 | 5 |
+| layer-02 | 27 | 27 | 0 |
+| layer-03 | 22 | 15 | 7 |
+| layer-04 | 31 | 27 | 4 |
+| layer-05 | 93 | 86 | 7 |
+| layer-06 | 90 | 63 | 27 |
+| layer-07 | 46 | 27 | 19 |
+| layer-08 | 19 | 8 | 11 |
+| layer-09 | 17 | 7 | 10 |
+| layer-10 | 15 | 11 | 4 |
+| layer-11…17 | 37 | 31 | 6 |
+| **total** | **673** | **570** | **103** |
+
+The chain is **85% served**, and the gaps are scattered rather than sitting
+behind a clean frontier. "Reached tier 5 of 22" describes a from-scratch
+rebuild restarting, not how much is actually published — which is why that
+figure and this one have felt irreconcilable.
+
+### What the goal needs, by tier
+
+Where each package a working GNOME laptop install requires sits:
+
+| tier | still missing, and what it gates |
+| :--- | :--- |
+| layer-05 | **`gstreamer1-plugins-bad-free`** → gtk4 → 16 packages; `librsvg2` |
+| layer-06 | `gnome-session`, `xdg-user-dirs-gtk` |
+| layer-07 | **`flatpak`** → the entire ISO axis; `gdm`, `ptyxis`, `gnome-bluetooth` |
+| layer-08 | `gnome-control-center`, `xdg-desktop-portal`, `gnome-disk-utility`, `gnome-initial-setup`, `fprintd` |
+| layer-09 | **`gnome-shell`**, `xdg-desktop-portal-gnome`, `xdg-desktop-portal-gtk` |
+| layer-10 | `nautilus` |
+
+So an ISO needs the chain through **layer-07**, and a desktop worth
+installing needs it through **layer-10**.
+
+Two of the 38 can never arrive as the build order stands: `evince` and
+`totem` are not in it at all, so `evince-thumbnailer`, `evince-previewer` and
+`totem-video-thumbnailer` have no producer. Either add them or stop asking
+for them in `manifests/desktops/gnome.yaml`.
+
+#### Reproducing all of the above
+
+```bash
+# both indexes
+curl -s https://repo.tunaos.org/hummingbird/20251124-x86_64/repodata/repomd.xml
+curl -s https://packages.redhat.com/api/pulp-content/public-hummingbird/x86_64/repodata/repomd.xml
+# what the image actually got: the build job's own artifact, no image pull
+#   packages-hummingbird-<flavor>-<platform>  (405 lines for gnome)
+```
+
+Compare build-order SOURCE names against `sourcerpm` from the index, never
+against served binary names — most sources ship under different binary names
+and matching on those undercounts what is built. The other trap, tier INDEX
+vs tier NAME, is described under "flatpak is the single package gating the
+whole ISO axis" above.
+
+#### Why 38 dropped packages went unremarked
+
+`install_available` records them to `/usr/share/tunaos/missing-on-*.txt`
+inside the image, and the only thing that reads that is
+`generate-boot-report.py`, run by `weekly-boot-report.yml` — weekly, and by
+pulling each published image. Meanwhile every build job already uploads its
+own `packages-<image>-<flavor>-<platform>.txt` artifact on every run, which
+is what the numbers above were computed from, at no cost and with no image
+pull. A per-run completeness count against the manifest would turn this from
+a weekly archaeology exercise into a number on the build.
 
 ### Link 7: firmware, and why CI can never tell you about it
 

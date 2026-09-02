@@ -49,6 +49,30 @@ iso_groups:
     flavors: [xfce-nvidia]
     offline_flavors: [xfce, xfce-hwe, xfce-nvidia]
 
+# ── Sibling images ─────────────────────────────────────────────────────────
+# TunaOS-family bootc images built in their OWN repositories with BuildStream
+# on freedesktop-sdk. They are whole-OS products, not package sources, and
+# they never enter the variant matrix below or green-criteria.yml: each repo
+# runs its own build, live-ISO, plain-install and LUKS-install checks.
+# .github/scripts/sibling-images-status.sh renders their latest main-branch
+# build into the README next to the variant matrix so the family is visible
+# in one place. `workflow` is the repo's SCHEDULED build workflow.
+sibling_images:
+  - id: tromso
+    emoji: "🏔️"
+    description: "Aurora Tromsø: KDE Plasma 6 on freedesktop-sdk (BuildStream)"
+    image: ghcr.io/tuna-os/tromso
+    repo: tuna-os/tromso
+    workflow: build-tromso-multirunner.yml
+    desktops: [KDE]
+  - id: xfce-linux
+    emoji: "🐭"
+    description: "XFCE Linux: XFCE Wayland on freedesktop-sdk (BuildStream)"
+    image: ghcr.io/tuna-os/xfce-linux
+    repo: tuna-os/xfce-linux
+    workflow: build-multirunner.yml
+    desktops: [XFCE]
+
 # Build stages (for reference — enforced by the workflow job graph):
 #
 #   Stage 1:  base
@@ -63,7 +87,6 @@ iso_groups:
 #   stage: 2  → build_stage2    (needs: build_base)
 #   stage: 3  → build_stage3    (needs: build_stage2)
 #   stage: 4  → build_stage4    (needs: build_stage3)
-
 variants:
   - id: yellowfin
     emoji: "🐠"

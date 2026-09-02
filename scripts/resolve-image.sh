@@ -14,6 +14,7 @@
 #   common     — projectbluefin/common with pinned digest
 #   brew       — ublue-os/brew with pinned digest
 #   zirconium  — zirconium-dev/zirconium with pinned digest
+#   utah-packages — projectbluefin/utah-packages (Hummingbird GNOME repo) with pinned digest
 #   akmods     — akmods-nvidia-open registry base (with mirror support)
 #
 # Output: fully-qualified image reference (image@sha256:... or image:tag)
@@ -52,12 +53,17 @@ zirconium)
 	DIGEST=$($YQ -r '.images[] | select(.name == "zirconium") | .digest' image-versions.yaml)
 	echo "ghcr.io/zirconium-dev/zirconium@${DIGEST}"
 	;;
+utah-packages)
+	IMAGE="${UTAH_PACKAGES_IMAGE:-ghcr.io/projectbluefin/utah-packages}"
+	DIGEST=$($YQ -r '.images[] | select(.name == "utah-packages") | .digest' image-versions.yaml)
+	echo "${IMAGE%%:*}@${DIGEST}"
+	;;
 akmods)
 	AKMODS_ORG=$($YQ -r ".variants[] | select(.id == \"${VARIANT}\") | .akmods // \"ublue-os\"" "$BUILD_CONFIG")
 	registry_ref akmods 2>/dev/null || echo "ghcr.io/${AKMODS_ORG}"
 	;;
 *)
-	echo "ERROR: unknown role '${ROLE}'. Valid: base, common, brew, zirconium, akmods" >&2
+	echo "ERROR: unknown role '${ROLE}'. Valid: base, common, brew, zirconium, utah-packages, akmods" >&2
 	exit 1
 	;;
 esac

@@ -19,5 +19,5 @@ Each criterion in that file records:
 The composite rule that makes the list mean something: a cell is green only
 if every blocking criterion has an affirmative, *current* result — never
 tested, skipped, or stale evidence does not count as satisfied. See
-`.claude/skills/check-green-criteria/SKILL.md` for how to read it when
+`skills/check-green-criteria/SKILL.md` for how to read it when
 investigating a specific cell.

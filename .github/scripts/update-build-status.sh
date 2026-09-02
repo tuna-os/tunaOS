@@ -144,6 +144,10 @@ while IFS=$'\t' read -r variant emoji; do
 		"$emoji" "$variant" "$green" "$count" "$icon" "$run_date" "$run_url" "$failing_text" "$unreached_text" >>"$tmp_table"
 done < <(yq -r '.variants[] | [.id, .emoji] | @tsv' "$config")
 
+# Family images built elsewhere (build-config `sibling_images:`). Rendered
+# after the variant table and OUTSIDE its totals: they are not cells here.
+"$(dirname "${BASH_SOURCE[0]}")/sibling-images-status.sh" "$config" >>"$tmp_table"
+
 percent=$((100 * total_green / total_cells))
 total_failing=$((total_cells - total_green - total_unreached))
 
