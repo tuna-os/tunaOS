@@ -30,6 +30,11 @@ cd "$_TUNAOS_REPO_ROOT" || {
 	exit 1
 }
 
+# Compatibility facade: existing callers retain these helpers while focused
+# consumers can source the side-effect-free flavor contract directly.
+# shellcheck source=flavor.sh
+. "$(dirname "${BASH_SOURCE[0]}")/flavor.sh"
+
 # ── Image-ref resolution ────────────────────────────────────────────────────
 # Given (variant, flavor, repo, tag) → OCI image reference string.
 # `repo` is one of: local | ghcr | registry
@@ -152,59 +157,13 @@ tunaos_import_to_root_storage() {
 # ── Flavor → human title ────────────────────────────────────────────────────
 # Render a flavor id (e.g. "gnome-nvidia-hwe") into the title shown in the
 # systemd-boot menu of a grouped ISO (e.g. "GNOME (NVIDIA, HWE)"). Keeping the
-# mapping here means the boot-menu labels stay consistent across the single-
-# flavor and grouped-ISO build paths.
-tunaos_flavor_title() {
-	local flavor="${1:?flavor required}"
-	local base="$flavor" mods=() suffix=""
-
-	# Peel hardware modifiers off the end so the desktop name is left bare.
-	if [[ "$base" == *-nvidia-hwe ]]; then
-		mods=("NVIDIA" "HWE")
-		base="${base%-nvidia-hwe}"
-	elif [[ "$base" == *-nvidia ]]; then
-		mods=("NVIDIA")
-		base="${base%-nvidia}"
-	elif [[ "$base" == *-hwe ]]; then
-		mods=("HWE")
-		base="${base%-hwe}"
-	fi
-
-	local name
-	case "$base" in
-
-	gnome) name="GNOME" ;;
-	kde) name="KDE Plasma" ;;
-	cosmic) name="COSMIC" ;;
-	niri) name="Niri" ;;
-	base) name="Base" ;;
-	*) name="${base^}" ;;
-	esac
-
-	if ((${#mods[@]})); then
-		local joined="${mods[0]}" i
-		for ((i = 1; i < ${#mods[@]}; i++)); do
-			joined+=", ${mods[i]}"
-		done
-		suffix=" (${joined})"
-	fi
-	printf '%s%s\n' "$name" "$suffix"
-}
+# The compatibility import above keeps boot-menu labels consistent for legacy
+# common.sh consumers.
+# Implementation provided by scripts/lib/flavor.sh.
 
 # ── Desktop session for a flavor ────────────────────────────────────────────
-# Map a flavor id to its desktop session so tacklebox's livesys-* sets autologin
-# for the right session manager. Hardware modifiers (-hwe/-nvidia) don't change
-# the desktop, so a prefix match is sufficient.
-tunaos_flavor_desktop() {
-	local flavor="${1:?flavor required}"
-	case "$flavor" in
-	kde*) echo "kde" ;;
-	niri*) echo "niri" ;;
-	cosmic*) echo "cosmic" ;;
-	xfce*) echo "xfce" ;;
-	gnome* | *) echo "gnome" ;;
-	esac
-}
+# The side-effect-free flavor library owns the desktop-session mapping.
+# Implementation provided by scripts/lib/flavor.sh.
 
 # ── tacklebox runner ───────────────────────────────────────
 # shellcheck source=lib/tacklebox.sh
