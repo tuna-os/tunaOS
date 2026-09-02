@@ -76,10 +76,20 @@ criteria:
     proves: >-
       The packages, session files and display manager for the flavor landed in
       the published image, and verify-desktop-experience.sh passes against it.
-    asserted_by: .github/workflows/desktop-contract-sweep.yml + build_scripts/checks/verify-desktop-experience.sh
+    asserted_by: >-
+      .github/workflows/reusable-build-image.yml (verify_desktop) +
+      .github/workflows/desktop-contract-sweep.yml
     enforcement: blocking
     freshness_sla_days: 2
+    scope:
+      excludes_flavor_suffixes: ["-asahi"]
+      excludes_flavors: ["base", "base-hwe", "base-nvidia"]
     gates:
+      - workflow: .github/workflows/reusable-build-image.yml
+        jobs:
+          verify_desktop: Verify desktop experience
+        scripts:
+          - build_scripts/checks/verify-desktop-experience.sh
       - workflow: .github/workflows/desktop-contract-sweep.yml
         jobs:
           sweep: Run the contract against the published image
@@ -260,12 +270,21 @@ criteria:
     proves: >-
       No package was dropped without the result being surfaced and acted on.
     asserted_by: >-
-      build_scripts/checks/verify-package-wishlist.sh — at build time as a
-      gate, and daily against every published image by
+      build_scripts/checks/verify-package-wishlist.sh — at build time in
+      .github/workflows/reusable-build-image.yml (verify_desktop), and daily
+      against every published image by
       .github/workflows/desktop-contract-sweep.yml (omissions read)
     enforcement: blocking
     freshness_sla_days: 2
+    scope:
+      excludes_flavor_suffixes: ["-asahi"]
+      excludes_flavors: ["base", "base-hwe", "base-nvidia"]
     gates:
+      - workflow: .github/workflows/reusable-build-image.yml
+        jobs:
+          verify_desktop: Verify package wishlist
+        scripts:
+          - build_scripts/checks/verify-package-wishlist.sh
       - workflow: .github/workflows/desktop-contract-sweep.yml
         jobs:
           sweep: Run the contract against the published image

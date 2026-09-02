@@ -271,11 +271,85 @@ def violations_for(criterion: dict, workflows: dict[str, dict],
     return problems
 
 
+def _ancestors(job_id: str, jobs: dict[str, dict]) -> set[str]:
+    anc: set[str] = set()
+    job = jobs.get(job_id)
+    if not job:
+        return anc
+    direct_needs = job.get("needs") or []
+    if isinstance(direct_needs, str):
+        direct_needs = [direct_needs]
+    for n in direct_needs:
+        anc.add(n)
+        anc.update(_ancestors(n, jobs))
+    return anc
+
+
+def check_promote_covers_blocking_gates(
+    criteria: list[dict], workflows: dict[str, dict]
+) -> list[str]:
+    """Every blocking gate in a workflow that contains a Promote job must be
+    required by Promote's `needs` and guarded by its `if` condition (#2263).
+
+    Without this, adding a blocking gate to a workflow does not stop Promote
+    from shipping a broken image when that gate fails.
+    """
+    problems: list[str] = []
+    blocking_gates_by_wf: dict[str, set[str]] = {}
+    for c in criteria:
+        if c.get("enforcement") != "blocking":
+            continue
+        for gate in c.get("gates") or []:
+            wf = gate["workflow"]
+            for job_id in (gate.get("jobs") or {}).keys():
+                blocking_gates_by_wf.setdefault(wf, set()).add(job_id)
+
+    for wf_name, doc in workflows.items():
+        jobs = doc.get("jobs") or {}
+        for job_id, job in jobs.items():
+            is_promote = (
+                job_id in {"tag-image", "tag_image", "promote"}
+                or job.get("name") == "Promote"
+            )
+            if not is_promote:
+                continue
+
+            needs = job.get("needs") or []
+            if isinstance(needs, str):
+                needs = [needs]
+            needs_set = set(needs)
+
+            all_ancestors: set[str] = set()
+            for n in needs_set:
+                all_ancestors.update(_ancestors(n, jobs))
+
+            cond = str(job.get("if") or "")
+
+            expected_gates = blocking_gates_by_wf.get(wf_name, set())
+            for gate_job_id in sorted(expected_gates):
+                if gate_job_id == job_id or gate_job_id in all_ancestors:
+                    continue
+                if gate_job_id not in needs_set:
+                    problems.append(
+                        f"{wf_name}:{job_id} (Promote) does not include blocking "
+                        f"gate {gate_job_id!r} in its `needs`"
+                    )
+                result_check = f"needs.{gate_job_id}.result"
+                if result_check not in cond:
+                    problems.append(
+                        f"{wf_name}:{job_id} (Promote) `if:` does not check "
+                        f"{result_check!r}"
+                    )
+    return problems
+
+
 def check(criteria_path: Path = CRITERIA, workflows_dir: Path = WORKFLOWS) -> list[str]:
     workflows = load_workflows(workflows_dir)
+    criteria = load_criteria(criteria_path)
     problems: list[str] = []
-    for c in load_criteria(criteria_path):
+    for c in criteria:
         problems.extend(violations_for(c, workflows, criteria_path.parents[1]))
+    problems.extend(check_promote_covers_blocking_gates(criteria, workflows))
     return problems
 
 

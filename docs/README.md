@@ -30,6 +30,7 @@ user-facing site:
 | [BRANCH-PROTECTION.md](BRANCH-PROTECTION.md) | Current-state audit + proposal for main-branch protection & required CI (#1167) |
 | [BRANCH-POLICY.md](BRANCH-POLICY.md) | Branch naming conventions, RFC disposition, and 30-day staleness rules |
 | [CI_SPEC.md](CI_SPEC.md) | CI behavior specification |
+| [JUSTFILE-MODULARIZATION.md](JUSTFILE-MODULARIZATION.md) | Justfile module standard and cross-repo migration checklist (#508) |
 | [R2-COST-VISIBILITY.md](R2-COST-VISIBILITY.md) | Cloudflare R2 cost, retention, and ownership runbook (#1618) |
 | [TESTING.md](TESTING.md) | ISO end-to-end test harness |
 | [MATRIX-STATUS.md](MATRIX-STATUS.md) | Which variant×desktop combinations are actually verified — and which have never been tested |
@@ -57,6 +58,9 @@ user-facing site:
 | [CNCF-BOOTC-SHOWCASE.md](CNCF-BOOTC-SHOWCASE.md) | CNCF bootc ecosystem showcase and case study draft (#1340) |
 | [CHAINGUARD-COLLABORATION.md](CHAINGUARD-COLLABORATION.md) | Chainguard supply-chain security collaboration angle brief (#1339) |
 | [ADOPTION-OUTREACH-STATUS.md](ADOPTION-OUTREACH-STATUS.md) | Evidence ledger for DistroWatch, CNCF, and adopter outreach |
+| [PANTHEON-FEEDBACK-LOOP.md](PANTHEON-FEEDBACK-LOOP.md) | How Gurnard's Pantheon packaging findings get back to elementary (#1469) |
+| [SNAPDRAGON-X13S-OUTREACH.md](SNAPDRAGON-X13S-OUTREACH.md) | Draft plan for reaching the Snapdragon X13s Linux community |
+| [TECH-PRESS-PITCHES.md](TECH-PRESS-PITCHES.md) | Pitch pack for Linux technology press, with guardrails on what we may claim |
 | [ADOPTION-CALL.md](ADOPTION-CALL.md) | Public call for adopters and evaluation feedback |
 | [ALMALINUX-COMMUNITY-INTRO.md](ALMALINUX-COMMUNITY-INTRO.md) | Introduction draft for the AlmaLinux community |
 | [FEDIVERSE-PLAYBOOK.md](FEDIVERSE-PLAYBOOK.md) | Release-announcement playbook for Fediverse communities |
@@ -74,7 +78,7 @@ user-facing site:
 | [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) | Historical record of the May 2026 sprint + remaining roadmap items |
 | [Q4-2026-PROMOTION-CALENDAR.md](Q4-2026-PROMOTION-CALENDAR.md) | Fedora 45, Hacktoberfest, All Things Open, and KubeCon NA promotion plan |
 | [agents/](agents/) | Hive agent guides (issue-tracker, triage-labels, domain) |
-| [adr/](adr/) | Architecture Decision Records |
+| [adr/](adr/README.md) | Architecture Decision Records |
 | [architecture/shared-just-recipes.md](architecture/shared-just-recipes.md) | Delivery contract for shared Just modules across tuna-os repositories (#1977, #508) |
 | [USER-GUIDE.md](USER-GUIDE.md) | Choosing an image, installing, updating, rolling back, apps, encryption |
 | [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md) | The whole pipeline and its plumbing, with diagrams |
@@ -97,7 +101,7 @@ These live at the repository root rather than in this folder:
 - [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) — Stable/Beta/Alpha admission gates and deprecation rules
 - [RFC-PROCESS.md](../RFC-PROCESS.md) — how RFCs are proposed, reviewed, and decided
 - [PACKAGE-SOURCING.md](../PACKAGE-SOURCING.md) — package origin rules, Tideforge-first, and allowlist (#1319)
-- [TRIAGE-POLICY.md](../TRIAGE-POLICY.md) — triage states and SLAs (draft, #1195)
+- [TRIAGE-POLICY.md](../TRIAGE-POLICY.md) — triage states and SLAs (adopted, #1195)
 - [FEDORA-BASE-POLICY.md](../FEDORA-BASE-POLICY.md) — adopted N+rawhide sequencing for Fedora-based variants (#1171)
 - [VERSIONING.md](../VERSIONING.md) — tag scheme and stability tiers
 - [MIGRATION.md](../MIGRATION.md) — switching from other distros

@@ -116,6 +116,28 @@ existing cells without reopening the general Q3 flavor freeze.
 - Desktop completeness: published editions must meet per-desktop package
   and size floor criteria without undeclared thinness (tracks #1294).
 
+### 2a. Published-edition completeness gate (#1294)
+
+Every declared `variant × desktop` edition must pass the desktop contract
+against the image tag that is actually published. A build-time pass is not
+enough: the scheduled `desktop-contract-sweep.yml` workflow rechecks the
+published tag and treats a failed, missing, errored, or lost result as a gate
+failure.
+
+Package-count and compressed-size deltas are useful audit signals, but they
+are not a portable completeness threshold across Fedora/EL, Debian/Ubuntu,
+openSUSE, Arch, and Gentoo. A small delta therefore requires both:
+
+1. the desktop contract's required session, display-manager, application,
+   portal, and supporting-service checks to pass; and
+2. an explicit ROADMAP-linked waiver naming the owner, affected edition,
+   evidence, remediation, and expiry date.
+
+An edition with no desktop-specific package or runtime evidence cannot be
+promoted or advertised as complete. The non-RPM parity audit and its
+remediation are tracked in ROADMAP under #1294 and
+tuna-os/tunaos-packages#132/#133.
+
 ### 3. Stable — promotion criteria (#1175)
 
 The promotion unit is a **published release cell**: base variant × desktop

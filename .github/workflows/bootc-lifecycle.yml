@@ -148,11 +148,12 @@ jobs:
           sudo rm -f /dev/shm/libpod_lock /dev/shm/libpod_rootless_lock_* || true
 
       - name: Log in to GHCR
-        run: |
-          echo "${{ env.GITHUB_TOKEN }}" | \
-            podman login ghcr.io -u "${{ github.actor }}" --password-stdin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          echo "${GITHUB_TOKEN}" | \
+            podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
 
       - name: Validate bootc image update, rebase, rollback & aliases
         env:
@@ -265,11 +266,12 @@ jobs:
           sudo rm -f /dev/shm/libpod_lock /dev/shm/libpod_rootless_lock_* || true
 
       - name: Log in to GHCR
-        run: |
-          echo "${{ env.GITHUB_TOKEN }}" | \
-            podman login ghcr.io -u "${{ github.actor }}" --password-stdin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_ACTOR: ${{ github.actor }}
+        run: |
+          echo "${GITHUB_TOKEN}" | \
+            podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
 
       - name: Track beta stream status
         env:

@@ -69,6 +69,16 @@ def test_the_cli_and_the_test_agree():
     assert contract.main([]) == 0
 
 
+def test_promote_covers_every_blocking_gate_in_the_same_workflow():
+    """Promote requires the deep E2E axes, not only the boot Gate (#2263).
+
+    Every blocking gate defined in a workflow that contains a Promote job must
+    be declared in Promote's `needs:` and checked in its `if:` condition.
+    """
+    problems = contract.check_promote_covers_blocking_gates(CRITERIA, WORKFLOWS)
+    assert not problems, "\n".join(problems)
+
+
 # ── the checker would notice ──────────────────────────────────────────────
 #
 # Guard the guard: each of these mutates a real criterion into a shape that
@@ -79,6 +89,28 @@ def test_the_cli_and_the_test_agree():
 def _clone(cid: str) -> dict:
     import copy
     return copy.deepcopy(next(c for c in CRITERIA if c["id"] == cid))
+
+
+def test_a_blocking_gate_omitted_from_promote_needs_is_a_violation():
+    import copy
+    wfs = copy.deepcopy(WORKFLOWS)
+    promote_job = wfs[".github/workflows/reusable-build-image.yml"]["jobs"]["tag-image"]
+    promote_job["needs"] = [j for j in promote_job["needs"] if j != "verify_desktop"]
+    problems = contract.check_promote_covers_blocking_gates(CRITERIA, wfs)
+    assert any("verify_desktop" in p and "needs" in p for p in problems), problems
+
+
+def test_a_blocking_gate_omitted_from_promote_if_is_a_violation():
+    import copy
+    wfs = copy.deepcopy(WORKFLOWS)
+    promote_job = wfs[".github/workflows/reusable-build-image.yml"]["jobs"]["tag-image"]
+    promote_job["if"] = (
+        "!cancelled() && github.event_name != 'pull_request' && "
+        "needs.manifest.result == 'success' && needs.sign.result == 'success' && "
+        "(needs.verify_boot.result == 'success' || needs.verify_boot.result == 'skipped')"
+    )
+    problems = contract.check_promote_covers_blocking_gates(CRITERIA, wfs)
+    assert any("verify_desktop" in p and "needs.verify_desktop.result" in p for p in problems), problems
 
 
 def test_a_missing_workflow_is_a_violation():
