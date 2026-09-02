@@ -40,6 +40,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install yq
         run: |
@@ -124,6 +126,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # podman handled like the boot Gate does it (reusable-build-image.yml):
       # never apt-install over a preinstalled /usr/local podman — the mixed
@@ -242,6 +246,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # podman handled like the boot Gate does it (reusable-build-image.yml):
       # never apt-install over a preinstalled /usr/local podman — the mixed
