@@ -94,25 +94,46 @@ def test_the_timeout_moves_with_the_runner():
     assert max(minutes) >= 120, timeout
 
 
-def test_the_weekly_schedule_takes_the_same_default():
+def test_both_triggers_take_the_same_default():
     """`schedule` passes no inputs, so `inputs.build_runner` is empty.
 
     Under the != comparison that lands on ubuntu-latest, which is the
-    intended behaviour now -- one default for both triggers. Asserted
-    because switching it back to == would silently split them, and the
-    weekly run is the one nobody watches.
+    intended behaviour -- one default for both triggers. Asserted because
+    switching it back to == would silently split them, and the weekly run
+    is the one nobody watches.
+
+    The weekly cron is commented out today, blocked on the window-readiness
+    stamp under OVMF software GL (#1396). This test used to require it and
+    has therefore been failing on main ever since it was disabled, which is
+    worse than useless: a red test nobody can fix stops being read. So the
+    runner assertion is unconditional (it is the part that protects
+    anything), the schedule is checked only if one is enabled, and the
+    disabled state has to carry its reason so it cannot quietly become
+    permanent.
     """
-    triggers = workflow()[True]
-    assert "schedule" in triggers, triggers
-    sched = triggers["schedule"]
-    assert isinstance(sched, list) and sched, sched
-    for entry in sched:
-        assert set(entry) == {"cron"}, entry
     expr = str(build_job()["runs-on"])
     assert "== 'github'" not in expr, (
         "an == comparison sends the scheduled run to RunsOn while every "
         "dispatch goes to ubuntu-latest; use != 'runs-on' so both triggers "
         "share one default"
+    )
+
+    triggers = workflow()[True]
+    if "schedule" in triggers:
+        sched = triggers["schedule"]
+        assert isinstance(sched, list) and sched, sched
+        for entry in sched:
+            assert set(entry) == {"cron"}, entry
+        return
+
+    body = WORKFLOW.read_text(encoding="utf-8")
+    assert "# schedule:" in body, (
+        "the weekly trigger is neither enabled nor commented out with its "
+        "reason; it has simply gone"
+    )
+    assert "#1396" in body, (
+        "a disabled schedule must name what blocks it, or nobody knows when "
+        "it can come back"
     )
 
 
