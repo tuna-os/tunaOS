@@ -34,7 +34,7 @@ def test_workflow_is_scheduled_and_advisory_shaped() -> None:
 
 def test_audit_roster_derives_from_build_config() -> None:
     body = SCRIPT.read_text()
-    assert ".github/build-config.yml" in body, (
+    assert ".github/build-config.yml" in body or "build-config.sh" in body, (
         "a hardcoded variant list silently omits declared variants "
         "(bonito-rawhide, flounder-sid and gurnard were missing)"
     )

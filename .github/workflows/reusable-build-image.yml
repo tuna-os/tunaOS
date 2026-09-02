@@ -1455,13 +1455,102 @@ jobs:
   # desktop images at multi-user, before the graphical marker). Revert this
   # block from git history if base ever becomes a supported end-user target.
 
+  # ── Desktop contract gate ───────────────────────────────────────────────────
+  # Pull the candidate :<tag>-testing manifest and verify:
+  # 1. Desktop experience (verify-desktop-experience.sh): packages, session
+  #    files, portals, display manager.
+  # 2. Package wishlist (verify-package-wishlist.sh): no undeclared omissions.
+  # Promotion of the bare tags is blocked while this fails. Skipped for base*
+  # flavors (no desktop to verify) and arm64-only flavors (verified by Asahi gate).
+  verify_desktop:
+    name: Desktop contract
+    needs: manifest
+    if: >-
+      inputs.publish && github.event_name != 'pull_request' &&
+      !startsWith(inputs.flavor, 'base') &&
+      contains(inputs.platforms, 'amd64')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    env:
+      IMAGE_NAME: ${{ inputs.image-name }}
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
+      DEFAULT_TAG: ${{ inputs.default-tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/share/boost /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - name: Login to GitHub Container Registry
+        env:
+          REGISTRY: ghcr.io
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+          echo "${{ env.GITHUB_TOKEN }}" | sudo podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+
+      - name: Pull Candidate Image
+        env:
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+        run: |
+          set -euo pipefail
+          sudo podman pull "${TEST_IMAGE}"
+
+      - name: Verify desktop experience
+        env:
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          FLAVOR: ${{ inputs.flavor }}
+          IMAGE_VARIANT: ${{ inputs.image-variant }}
+        run: |
+          set -euo pipefail
+          # Strip overlay suffixes from flavor (e.g. gnome-nvidia -> gnome)
+          DESKTOP="${FLAVOR}"
+          for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -zfs; do
+            if [[ "$DESKTOP" == *"$_suffix" ]]; then
+              DESKTOP="${DESKTOP%"$_suffix"}"
+              break
+            fi
+          done
+
+          is_hb=false
+          [[ "${IMAGE_VARIANT}" == hummingbird* ]] && is_hb=true
+
+          sudo podman run --rm \
+            -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
+            -e IS_HUMMINGBIRD="$is_hb" \
+            --entrypoint /bin/bash "${TEST_IMAGE}" /vde.sh "${DESKTOP}"
+
+      - name: Verify package wishlist
+        env:
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          IMAGE_VARIANT: ${{ inputs.image-variant }}
+        run: |
+          set -euo pipefail
+          is_hb=false
+          [[ "${IMAGE_VARIANT}" == hummingbird* ]] && is_hb=true
+
+          sudo podman run --rm \
+            -v "$PWD/build_scripts/checks/verify-package-wishlist.sh:/vpw.sh:z" \
+            -v "$PWD/build_scripts/checks/package-miss-allowlist.txt:/allow.txt:z" \
+            -e TUNAOS_WISHLIST_ALLOWLIST=/allow.txt \
+            -e IS_HUMMINGBIRD="$is_hb" \
+            --entrypoint /bin/bash "${TEST_IMAGE}" /vpw.sh
+
   tag-image:
     name: Promote
-    needs: [manifest, sign, verify_boot, verify_asahi]
+    needs: [manifest, sign, verify_desktop, verify_boot, verify_asahi]
     if: >-
       !cancelled() && github.event_name != 'pull_request' &&
       needs.manifest.result == 'success' &&
       needs.sign.result == 'success' &&
+      (needs.verify_desktop.result == 'success' || needs.verify_desktop.result == 'skipped') &&
       (needs.verify_boot.result == 'success' || needs.verify_boot.result == 'skipped') &&
       (needs.verify_asahi.result == 'success' || needs.verify_asahi.result == 'skipped')
     # Temporarily off RunsOn: the tuna-os AWS account is capped to Free Tier,
