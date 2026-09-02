@@ -810,7 +810,14 @@ setup_runtime_check_stubs() {
   # removable fallback the firmware needs is missing.
   grep -q 'ESP contents' "$SCRIPT"
   grep -q 'esp: removable fallback present' "$SCRIPT"
-  grep -q 'WARN: esp has NO EFI/BOOT/BOOTX64.EFI' "$SCRIPT"
+  # Accept either the x86 literal or the arch-parameterised form. The thing
+  # this guarantees is that a missing removable fallback is called out BY
+  # NAME -- not that the name is always BOOTX64.EFI. On arm64 the firmware
+  # looks for BOOTAA64.EFI, so pinning the x86 spelling makes the assertion
+  # wrong on exactly the platform #1592 started scheduling ISO cells for,
+  # and blocks #1595 from fixing it. Enumerated rather than left open
+  # (`EFI/BOOT/` alone) so a typo'd or empty suffix still fails.
+  grep -qE 'WARN: esp has NO EFI/BOOT/(BOOTX64\.EFI|\$\{fallback_efi\})' "$SCRIPT"
 }
 
 @test "install: the LUKS workflow gives the guest more RAM than the image" {

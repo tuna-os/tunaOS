@@ -332,14 +332,45 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
             gms.VOLATILE_LINE,
         )
 
-    def test_the_real_build_config_declares_52_luks_cells(self):
+    def test_the_real_build_config_declares_53_luks_cells(self):
         """Ties the unit tests above to the actual denominator on disk.
 
         If this number moves, the LUKS total moves with it, and that should be
         a deliberate build-config edit rather than a surprise.
+
+        52 -> 53 on 2026-08-25: wahoo (Fedora ELN) declares one desktop
+        flavor, gnome, with build_image: true. luks-e2e.yml builds its matrix
+        from build_image with no experimental filter, so the cell is real and
+        counted rather than quietly excluded — it costs one boot in the
+        monthly sweep (`0 7 1 * *`), and nothing nightly, because the variant
+        is dispatch-only.
+
+        53 -> 51 on 2026-08-25: hummingbird stopped declaring kde and niri.
+        Neither had a `packages.hummingbird` section in
+        manifests/desktops/*.yaml -- 0 packages against gnome's 52 -- so
+        neither could ever have installed a desktop, and both were failing
+        their image build. The denominator going DOWN by two is the point:
+        those two cells were counted as owed and could never be paid, and
+        while they failed beside gnome they also skipped gnome's ISO
+        (tuna-os/tunaOS#2059). Re-declaring either flavor puts its cell back.
+
+        51 -> 53 on 2026-08-26: wahoo declares cosmic and kde. Both were
+        repodata-measured against the pinned eln-bootc digest before the rows
+        were added -- COSMIC 1.6.0 from eln-extras at 23/24 packages, Plasma
+        6.7.4 via the eln-extras `kde-desktop` group at 16/23 explicit
+        packages -- which is the distinction the hummingbird drop above draws:
+        a cell is only honest when a package set exists to pay it. Niri and
+        XFCE stay undeclared for exactly that reason (ELN ships one package of
+        the Niri stack and zero `xfce*`), so they add nothing here.
         """
         matrix = gms.luks_matrix()
-        self.assertEqual(sum(len(v) for v in matrix.values()), 52)
+        self.assertEqual(sum(len(v) for v in matrix.values()), 53)
+        # The control that makes the drop specific rather than merely smaller:
+        # hummingbird keeps exactly the desktops it has package sets for.
+        self.assertEqual(matrix.get("hummingbird"), {"gnome", "cosmic"})
+        # wahoo carries exactly the desktops ELN composes -- and notably NOT
+        # niri or xfce, which is what keeps this an honest denominator.
+        self.assertEqual(matrix.get("wahoo"), {"gnome", "cosmic", "kde"})
         self.assertNotIn("cosmic", matrix.get("flounder", set()))
         self.assertNotIn("cosmic", matrix.get("flounder-sid", set()))
         # A control: the flavours flounder DOES declare are still there, so

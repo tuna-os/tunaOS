@@ -62,11 +62,11 @@ jobs:
             '{include: [ .variants[] | . as $variant | .id as $v | .aliases as $aliases
                | .flavors[] | select(.build_image == true) | select(.id != "base") | select(.id | startswith("base-") | not)
                | . as $flavor
-               | ("rawhide" | test($v)) or ("sid" | test($v)) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs")) as $is_beta
+               | (("rawhide" | test($v)) or ("sid" | test($v)) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs"))) as $is_beta
                | select($is_beta == false)
                | ("amd64", "arm64") as $arch
                | select((.platforms // $variant.platforms // []) | index("linux/" + $arch))
-               | {variant: $v, flavor: .id, arch: $arch, aliases: ($aliases // []), is_beta: false}
+               | {variant: $v, flavor: .id, arch: $arch, aliases: ($aliases // [])}
                | select($fv == "all" or .variant == $fv)
                | select($ff == "all" or .flavor == $ff)
                | select($fa == "all" or .arch == $fa) ]}')"
@@ -76,14 +76,32 @@ jobs:
             '{include: [ .variants[] | . as $variant | .id as $v | .aliases as $aliases
                | .flavors[] | select(.build_image == true) | select(.id != "base") | select(.id | startswith("base-") | not)
                | . as $flavor
-               | ("rawhide" | test($v)) or ("sid" | test($v)) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs")) as $is_beta
+               | (("rawhide" | test($v)) or ("sid" | test($v)) or ($v == "guppy") or (.id | contains("asahi")) or (.id | contains("zfs"))) as $is_beta
                | select($is_beta == true)
                | ("amd64", "arm64") as $arch
                | select((.platforms // $variant.platforms // []) | index("linux/" + $arch))
-               | {variant: $v, flavor: .id, arch: $arch, aliases: ($aliases // []), is_beta: true}
+               | {variant: $v, flavor: .id, arch: $arch, aliases: ($aliases // [])}
                | select($fv == "all" or .variant == $fv)
                | select($ff == "all" or .flavor == $ff)
                | select($fa == "all" or .arch == $fa) ]}')"
+
+          # tunaos#1430: the first scheduled run of this workflow failed 9s in
+          # with no failing job -- "Generate matrix" reported success (165
+          # stable + 11 beta cells) but the downstream matrix jobs never
+          # spawned, and the fromJSON() expansion error that must have caused
+          # it is only visible in the Actions UI, not the REST API this repo's
+          # tooling reads. Validate both payloads explicitly before writing
+          # them to GITHUB_OUTPUT, so a malformed/oversized value fails loud
+          # HERE with a real error message instead of silently producing an
+          # output that kills the run downstream with no diagnosable cause.
+          for name in matrix beta_matrix; do
+            val="${!name}"
+            if ! jq empty <<<"$val" >/dev/null 2>&1; then
+              echo "::error::${name} is not valid JSON (see below) -- refusing to write a GITHUB_OUTPUT that would break the downstream fromJSON() expansion"
+              echo "$val"
+              exit 1
+            fi
+          done
 
           count="$(echo "$matrix" | jq '.include | length')"
           beta_count="$(echo "$beta_matrix" | jq '.include | length')"
@@ -99,15 +117,35 @@ jobs:
     strategy:
       fail-fast: false
       max-parallel: 6
-      matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix) }}
+      # tunaos#1430: degrade to a no-op matrix instead of aborting the whole
+      # run if the upstream output is ever empty/malformed despite the new
+      # validation in generate-matrix.
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.matrix || '{"include":[]}') }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # podman handled like the boot Gate does it (reusable-build-image.yml):
+      # never apt-install over a preinstalled /usr/local podman — the mixed
+      # stack cannot start containers ("crun: unknown version"). On the
+      # ubuntu-24.04-arm runners this ALSO fixes tunaOS#1556: two podman
+      # builds sharing /dev/shm/libpod_lock with different lock counts is
+      # exactly how "failed to open 2048 locks in /libpod_lock: numerical
+      # result out of range" killed all 6 arm64 cells of run 31999953433
+      # before any test content ran. The stale-segment removal is defensive
+      # for the case where the runner image itself already initialized the
+      # segment: podman re-creates it with its own count on next use.
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends podman skopeo jq
+          pkgs=(skopeo jq)
+          if sudo sh -c 'command -v podman' >/dev/null 2>&1; then
+            echo "podman already present: $(sudo sh -c 'command -v podman') ($(sudo podman --version))"
+          else
+            pkgs+=(podman)
+          fi
+          sudo apt-get install -y --no-install-recommends "${pkgs[@]}"
+          sudo rm -f /dev/shm/libpod_lock /dev/shm/libpod_rootless_lock_* || true
 
       - name: Log in to GHCR
         run: |
@@ -199,15 +237,32 @@ jobs:
     strategy:
       fail-fast: false
       max-parallel: 4
-      matrix: ${{ fromJSON(needs.generate-matrix.outputs.beta_matrix) }}
+      matrix: ${{ fromJSON(needs.generate-matrix.outputs.beta_matrix || '{"include":[]}') }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # podman handled like the boot Gate does it (reusable-build-image.yml):
+      # never apt-install over a preinstalled /usr/local podman — the mixed
+      # stack cannot start containers ("crun: unknown version"). On the
+      # ubuntu-24.04-arm runners this ALSO fixes tunaOS#1556: two podman
+      # builds sharing /dev/shm/libpod_lock with different lock counts is
+      # exactly how "failed to open 2048 locks in /libpod_lock: numerical
+      # result out of range" killed all 6 arm64 cells of run 31999953433
+      # before any test content ran. The stale-segment removal is defensive
+      # for the case where the runner image itself already initialized the
+      # segment: podman re-creates it with its own count on next use.
       - name: Install dependencies
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends podman skopeo jq
+          pkgs=(skopeo jq)
+          if sudo sh -c 'command -v podman' >/dev/null 2>&1; then
+            echo "podman already present: $(sudo sh -c 'command -v podman') ($(sudo podman --version))"
+          else
+            pkgs+=(podman)
+          fi
+          sudo apt-get install -y --no-install-recommends "${pkgs[@]}"
+          sudo rm -f /dev/shm/libpod_lock /dev/shm/libpod_rootless_lock_* || true
 
       - name: Log in to GHCR
         run: |

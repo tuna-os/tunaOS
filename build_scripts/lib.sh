@@ -48,6 +48,7 @@ else
 	# OS Detection Flags
 	IS_FEDORA=false
 	IS_HUMMINGBIRD=false
+	IS_ELN=false
 	IS_RHEL=false
 	IS_ALMALINUX=false
 	IS_ALMALINUXKITTEN=false
@@ -94,7 +95,27 @@ else
 			IMAGE_PRETTY_NAME="${IMAGE_PRETTY_NAME:-$2}"
 		fi
 	}
-	[[ "${BASE_IMAGE,,}" == *"fedora"* && "${BASE_IMAGE,,}" != *"hummingbird"* ]] && IS_FEDORA=true && _derive_name "bonito" "Bonito"
+	# ELN is tested BEFORE the fedora substring test, and excluded from it,
+	# for the same reason hummingbird is: its base image reference
+	# (registry.fedoraproject.org/eln-bootc) contains "fedora", so the
+	# unguarded test below matches it and every Bonito-specific Fedora path
+	# fires against a base that cannot satisfy them. Measured on the pinned
+	# digest, 2026-08-25: no epel-release, no versionlock plugin, no
+	# rpmfusion-*-release-eln, and `dnf repoquery` finds no ffmpeg,
+	# gstreamer1-plugins-ugly, tailscale or `just`. The Fedora branch of
+	# 10-base-packages.sh installs rpmfusion-{free,nonfree}-release-${FEDORA_VER}
+	# by URL, and there is no ELN branch of RPM Fusion to install.
+	#
+	# os-release is the primary signal because it is unambiguous and travels
+	# with the image (ID=eln, VERSION_ID=11, VARIANT_ID=eln); the BASE_IMAGE
+	# test is the fallback for chained stages whose image-info.json is not
+	# written yet.
+	if [[ "${BASE_IMAGE,,}" == *"eln-bootc"* ]] ||
+		grep -qE '^ID=eln$' /etc/os-release /usr/lib/os-release 2>/dev/null; then
+		IS_ELN=true
+		_derive_name "wahoo" "Wahoo"
+	fi
+	[[ "${BASE_IMAGE,,}" == *"fedora"* && "${BASE_IMAGE,,}" != *"hummingbird"* && "${IS_ELN}" != true ]] && IS_FEDORA=true && _derive_name "bonito" "Bonito"
 	[[ "${BASE_IMAGE,,}" == *"red hat"* || "${BASE_IMAGE,,}" == *"rhel"* || "${BASE_IMAGE,,}" == *"redhat"* ]] && IS_RHEL=true && _derive_name "redfin" "Redfin"
 	[[ "${BASE_IMAGE,,}" == *"almalinux"* && "${BASE_IMAGE,,}" != *"-kitten"* ]] && IS_ALMALINUX=true && _derive_name "albacore" "Albacore"
 	[[ "${BASE_IMAGE,,}" == *"-kitten"* ]] && IS_ALMALINUXKITTEN=true && _derive_name "yellowfin" "Yellowfin"
@@ -124,6 +145,7 @@ else
 		BASE_IMAGE="${BASE_IMAGE}"
 		IS_FEDORA=${IS_FEDORA}
 		IS_HUMMINGBIRD=${IS_HUMMINGBIRD}
+		IS_ELN=${IS_ELN}
 		IS_RHEL=${IS_RHEL}
 		IS_ALMALINUX=${IS_ALMALINUX}
 		IS_ALMALINUXKITTEN=${IS_ALMALINUXKITTEN}
@@ -417,19 +439,64 @@ pkg_clean() {
 # those fail identically on every attempt; the loop returns the last DNF
 # exit code so callers still see real errors.
 #
+# It used to retry those identically-failing transactions anyway, though:
+# `nothing provides X` / `No match for argument` are dnf's own resolver
+# telling you the *repo content* can't satisfy the request, which four
+# attempts and `dnf clean metadata` cannot change — clearing metadata just
+# re-downloads the same repodata that already says the provider is missing.
+# Measured on tuna-os/tunaos#1555 (Hummingbird's public-hummingbird repo
+# missing libjsoncpp.so.26/librhash.so.1 providers): ~50s of pure sleep
+# wasted per doomed call, three separate calls in one job. Detecting that
+# class of error and returning immediately doesn't change any caller's
+# pass/fail outcome (the transaction was always going to fail) — it just
+# stops paying for retries that can't work.
+#
 # Usage: dnf_retry install -y foo bar
 #        dnf_retry -y install --setopt=… foo
 dnf_retry() {
 	local max_attempts="${DNF_RETRY_ATTEMPTS:-4}"
 	local attempt=1
 	local rc=0
+	local out
+	local tmp_out
+	tmp_out=$(mktemp)
 	while ((attempt <= max_attempts)); do
-		dnf "$@" && return 0 || rc=$?
+		if dnf "$@" 2>&1 | tee "$tmp_out"; then
+			rm -f "$tmp_out"
+			return 0
+		fi
+		rc="${PIPESTATUS[0]}"
+		out=$(cat "$tmp_out")
+		# Resolver-level failures: the repo's own metadata says the
+		# request can't be satisfied. Every attempt sees the same
+		# repodata (clean metadata just re-fetches it), so retrying
+		# is certain to reproduce the identical failure.
+		if [[ "$out" == *"nothing provides"* || "$out" == *"No match for argument"* || "$out" == *"Problem: conflicting requests"* ]]; then
+			echo "dnf attempt ${attempt}/${max_attempts}: unresolvable transaction (not a transient error) — not retrying" >&2
+			rm -f "$tmp_out"
+			return "$rc"
+		fi
+		# Usage errors: we mis-spelled the command line, so dnf never
+		# even looked at a repo. Retrying is pointless, but the bigger
+		# problem is that most callers write `dnf_retry … || fallback`,
+		# which turns our own bug into a silently-degraded install.
+		# Measured on Build Hummingbird #66 (run 32907940350): a
+		# misplaced --skip-unavailable sent all 52 gnome desktop
+		# packages through install_available, which does not honour the
+		# manifest's exclude list, after 4 attempts and 35s of backoff.
+		# Annotate so the next one surfaces in the job's annotations
+		# even when the caller swallows the exit code.
+		if [[ "$out" == *"Unknown argument"* || "$out" == *"Unknown command"* ]]; then
+			echo "::error title=dnf invoked incorrectly::dnf $* — ${out%%$'\n'*}" >&2
+			rm -f "$tmp_out"
+			return "$rc"
+		fi
 		echo "dnf attempt ${attempt}/${max_attempts} failed (exit ${rc}); clearing metadata and retrying..." >&2
 		dnf clean metadata || true
 		sleep "$((attempt * 5))"
 		attempt=$((attempt + 1))
 	done
+	rm -f "$tmp_out"
 	echo "dnf failed after ${max_attempts} attempts" >&2
 	return "$rc"
 }
@@ -488,6 +555,48 @@ zypper_retry() {
 # Callers pass their own name first (BASH_SOURCE[1] resolved at THEIR frame —
 # resolving it here would always say lib.sh), then the missed package names.
 # TUNAOS_WISHLIST_DIR relocates the wishlist for tests.
+# Account for what `--skip-unavailable` dropped.
+#
+# `install_available` reports its own misses through record_package_wishlist,
+# so for a long time the fallback path was the only thing that produced a
+# record of a package the repos could not supply. That made a correctness fix
+# a REGRESSION in visibility: once install-desktop.sh stopped mis-spelling
+# --skip-unavailable (so the primary transaction succeeded instead of failing
+# into install_available), the packages dnf dropped left no trace at all --
+# no warning, no wishlist file, nothing for the weekly boot report to read.
+#
+# Measured on run 32925587829: hummingbird:gnome asked for 52 desktop
+# packages, installed 14, and emitted zero "Missing package" warnings.
+#
+# dnf's own two reasons are deliberately not distinguished here. "No match for
+# argument" (absent) and "Skipping packages with broken dependencies"
+# (present but unusable) are very different problems, but both end with the
+# package not installed, and the caller cannot see either one -- the whole
+# point of --skip-unavailable is that neither fails the build.
+record_unsatisfied_requests() {
+	local caller_script="$1"
+	shift
+	local requested=("$@")
+	[[ ${#requested[@]} -eq 0 ]] && return 0
+	command -v rpm >/dev/null 2>&1 || return 0
+
+	local pkg misses=()
+	for pkg in "${requested[@]}"; do
+		[[ -n "$pkg" ]] || continue
+		# --whatprovides second: several manifest entries are provides rather
+		# than package names, and reporting one of those as missing when it is
+		# installed under another name is worse than not reporting it.
+		rpm -q --quiet "$pkg" 2>/dev/null && continue
+		rpm -q --quiet --whatprovides "$pkg" 2>/dev/null && continue
+		misses+=("$pkg")
+	done
+
+	((${#misses[@]} == 0)) && return 0
+	printf '::warning title=Desktop packages dropped (%s)::%d of %d packages requested by %s were not installed; --skip-unavailable dropped them without failing the build.\n' \
+		"${IMAGE_NAME:-?}" "${#misses[@]}" "${#requested[@]}" "$caller_script"
+	record_package_wishlist "$caller_script" "${misses[@]}"
+}
+
 record_package_wishlist() {
 	local caller_script="$1"
 	shift
@@ -496,7 +605,7 @@ record_package_wishlist() {
 
 	local miss
 	for miss in "${misses[@]}"; do
-		printf '::warning title=Missing package (%s on %s)::%s is requested by %s but not in the active repos. Consider packaging it for EL10 via tuna-os/github-copr.\n' \
+		printf '::warning title=Missing package (%s on %s)::%s is requested by %s but not in the active repos. Consider packaging it for EL10 via tuna-os/tunaos-packages.\n' \
 			"${IMAGE_NAME:-?}" "${MAJOR_VERSION_NUMBER:-?}" "$miss" "$caller_script"
 	done
 
@@ -610,6 +719,224 @@ install_available() {
 	for copr in "${enabled_coprs[@]}"; do
 		dnf -y copr disable "$copr" || true
 	done
+}
+
+# Tolerate an unresolvable RPM Fusion Rawhide transaction without killing
+# the whole variant (tunaOS#1810). Fedora Rawhide and RPM Fusion Rawhide
+# are two independently-built repos; when Fedora bumps a shared library's
+# SONAME before RPM Fusion rebuilds against it, packages in the enabled
+# repo set can go unresolvable even though every requested name is real.
+# Measured 2026-08-17 against live repodata: Fedora rawhide's openapv-libs
+# now provides only `liboapv.so.3` (0.3.0.0-1.fc46), but
+# rpmfusion-free-rawhide's ffmpeg-libs-8.1.2-5.fc46 still
+# `Requires: liboapv.so.2()(64bit)` — nothing in either repo provides that
+# SONAME anymore. That is a depsolve failure, not a missing package name,
+# so install_available's `dnf repoquery --available` probe (which only
+# checks that the name exists) cannot see it: "ffmpeg" genuinely exists,
+# only its dependency chain does not resolve.
+#
+# Strategy: try the transaction exactly as given first. On any release
+# OTHER than rawhide, or whenever the strict transaction succeeds,
+# behavior is identical to a plain `dnf -y install` — pinned bonito (and
+# every other non-rawhide Fedora build) is provably unaffected. Only when
+# FEDORA_VER=rawhide AND the strict transaction fails do we retry once
+# with --skip-broken, then diff the originally-requested package list
+# against what's actually installed afterward to name exactly what
+# dropped out. Those names are routed through the same loud path
+# install_available uses: a ::warning per miss, and an append to
+# /usr/share/tunaos/missing-on-<image>.txt (record_package_wishlist) — so
+# checks/verify-package-wishlist.sh still gates the miss against
+# checks/package-miss-allowlist.txt. The omission is recorded, not
+# silent, and criterion no_silent_omissions has real evidence to point at.
+#
+# Which Fedora is this buildroot, in the form the rpmfusion release RPMs and
+# the rawhide-tolerance gate below both need: a number for pinned releases,
+# the literal string "rawhide" for Rawhide.
+#
+# `rpm -E %fedora` alone cannot answer that: on Rawhide it expands to the
+# NEXT numeric release (46 today) and NEVER to "rawhide", so a gate comparing
+# against "rawhide" can never fire from it. Measured: bonito-rawhide run
+# 32002010101 printed "install_rawhide_tolerant: transaction failed on 46;
+# not tolerating" and the base failed on the exact skew the tolerance exists
+# for. os-release is the discriminator — Rawhide images carry "Rawhide" in
+# VERSION/PRETTY_NAME, branched and released images do not.
+#
+# OS_RELEASE is overridable for tests only; production callers use the default.
+detect_fedora_ver() {
+	local ver
+	ver="$(rpm -E %fedora 2>/dev/null || true)"
+	if [[ -z "$ver" || "$ver" == "%fedora" ]] \
+		|| grep -qi rawhide "${OS_RELEASE:-/etc/os-release}" 2>/dev/null; then
+		echo rawhide
+	else
+		echo "$ver"
+	fi
+}
+
+# Usage: install_rawhide_tolerant [dnf-flag ...] pkg1 pkg2 pkg3 ...
+# (leading `-`-prefixed args are treated as dnf flags, e.g. --exclude=...,
+# everything after the first non-flag arg is a package name)
+install_rawhide_tolerant() {
+	local opts=()
+	while [[ "${1:-}" == -* ]]; do
+		opts+=("$1")
+		shift
+	done
+	local pkgs=("$@")
+	if [[ ${#pkgs[@]} -eq 0 ]]; then
+		echo "install_rawhide_tolerant: no packages requested" >&2
+		return 0
+	fi
+
+	if dnf -y install "${opts[@]}" "${pkgs[@]}"; then
+		return 0
+	fi
+
+	if [[ "${FEDORA_VER:-}" != "rawhide" ]]; then
+		echo "install_rawhide_tolerant: transaction failed on ${FEDORA_VER:-non-rawhide Fedora}; not tolerating (only Rawhide gets the --skip-broken retry — pinned Fedora releases stay strict)." >&2
+		return 1
+	fi
+
+	printf '::warning title=Rawhide multimedia transaction unresolvable (tunaOS#1810)::[%s] failed to resolve as a strict dnf transaction on Fedora Rawhide (an rpmfusion-rawhide/Fedora-rawhide packaging skew). Retrying with --skip-broken so this costs codecs, not the whole variant.\n' "${pkgs[*]}"
+
+	dnf -y install --skip-broken "${opts[@]}" "${pkgs[@]}" || true
+
+	local missing=() pkg
+	for pkg in "${pkgs[@]}"; do
+		rpm -q "$pkg" &>/dev/null || missing+=("$pkg")
+	done
+
+	if [[ ${#missing[@]} -eq 0 ]]; then
+		echo "install_rawhide_tolerant: --skip-broken retry actually installed everything requested; the earlier failure was transient." >&2
+		return 0
+	fi
+
+	record_package_wishlist \
+		"$(basename "${BASH_SOURCE[1]:-install_rawhide_tolerant}")" \
+		"${missing[@]}"
+
+	echo "install_rawhide_tolerant: proceeding without: ${missing[*]}" >&2
+	return 0
+}
+
+# tunaOS#1823 probe: stage-2 on a fresh Rawhide base fails with sqlite error
+# 11 ("database disk image is malformed") on every RPM install once the
+# transaction is large — small overlays pass, desktop-sized ones fail, both
+# arches, across all dnf retries and full build attempts. Rebuilding the
+# rpmdb inherited from the base layer BEFORE the first stage-2 rpm write is
+# the cheap discriminating experiment the issue asks for:
+#
+#   rebuild FAILS                        -> the base's rpmdb is malformed at
+#                                           rest (base rpm wrote a bad db)
+#   rebuild ok, transaction then ok      -> inherited-db/overlayfs-copy-up
+#                                           was the problem; probe graduates
+#                                           to a fix
+#   rebuild ok, transaction still fails  -> corruption happens DURING the
+#                                           transaction (sqlite-on-overlayfs)
+#
+# Deliberately a no-op off Rawhide, and never fails the build itself: the
+# transaction that follows is the real verdict either way, and a probe that
+# can kill a green pinned-Fedora build would cost more than it measures.
+rawhide_rpmdb_probe() {
+	# EXPERIMENT for tunaOS#1823. The comment above says this is "a no-op off
+	# Rawhide". It was not. detect_fedora_ver (above) maps an UNEXPANDED
+	# %fedora to "rawhide", and %fedora is undefined on every non-Fedora dnf
+	# image -- so "this is not a Fedora at all" was being read as "this is
+	# Rawhide", and the Rawhide-only copy-up ran on CentOS, RHEL and Alma too.
+	#
+	# Measured on skipjack (quay.io/centos-bootc/centos-bootc:stream10,
+	# IS_CENTOS=true, IS_FEDORA=false), run 32534198668:
+	#
+	#   ++ rpm -E %fedora
+	#   ++ ver=%fedora
+	#   ++ [[ %fedora == \%\f\e\d\o\r\a ]]
+	#   ++ echo rawhide
+	#   + [[ rawhide == \r\a\w\h\i\d\e ]]
+	#
+	# detect_fedora_ver's fallback is sound where it was designed to be used:
+	# 10-base-packages.sh only reaches it inside an `elif [[ $IS_FEDORA == true
+	# ]]` branch, where an unexpanded macro really can only mean an odd
+	# prerelease. This function consumed it with no such guard.
+	#
+	# Whether that misfire is inert or load-bearing on EL10 is exactly what
+	# this branch measures, and it is NOT obvious: #1912 and #1916 fixed real
+	# EL10 corruption with this same round-trip and salvage, and if EL10 cells
+	# have been reaching that code THROUGH the misdetection, gating it here
+	# reverts those fixes. The nvidia surface is unaffected either way --
+	# overlay/overrides/nvidia/10-kernel-swap.sh carries its own deliberately
+	# fatal copy, and describes itself as this probe "graduating on a stable
+	# base", which reads as though the two were always meant to be separate.
+	#
+	# Read the result before merging. If EL10 desktop cells behave identically
+	# with this gate in place, the misfire was inert and the scope can simply
+	# be made honest. If they change, this line must NOT land as-is and EL10
+	# needs its own named entry point instead.
+	[[ "${IS_FEDORA:-false}" == true ]] || return 0
+	[[ "$(detect_fedora_ver)" == "rawhide" ]] || return 0
+	# tunaOS#1823, PROVEN FIX ported from the nvidia overlay (run
+	# 32339591457, 2026-08-20): the sqlite corruption class is rpm writing
+	# into a db directory that still lives in a LOWER overlay layer.
+	# Recreating the resolved directory natively in the upper layer (copy
+	# lands upper, rm whiteouts the lower dir, mv is a same-device rename)
+	# made albacore's base-nvidia kernel swap — previously 100% red on the
+	# malformed-db storm — build clean end to end. Same shape here, before
+	# the first stage-2 rpm write on the inherited Rawhide base.
+	local _rpmdb_path _rpmdb_dir
+	_rpmdb_path="$(rpm --eval '%_dbpath' 2>/dev/null || true)"
+	_rpmdb_dir="$(readlink -f "$_rpmdb_path" 2>/dev/null || true)"
+	if [[ -n "$_rpmdb_dir" && -d "$_rpmdb_dir" ]]; then
+		echo "::notice title=rpmdb copy-up (tunaOS#1823)::${_rpmdb_path} resolves to ${_rpmdb_dir}; recreating it in the upper layer before the first stage-2 rpm write"
+		cp -a "$_rpmdb_dir" "${_rpmdb_dir}.tbox-copyup"
+		rm -rf "$_rpmdb_dir"
+		mv "${_rpmdb_dir}.tbox-copyup" "$_rpmdb_dir"
+	fi
+	# The rebuild's rename endgame fails under this overlay even against
+	# an upper-native dir (measured twice on the nvidia surface) — but a
+	# db corrupted AT REST by an earlier stage's writes needs the
+	# rebuild's PRODUCT, and rpm builds it fine before throwing it away
+	# at the rename, printing its own recovery instruction ("replace
+	# files in ... with files from .../rpmrebuilddb.NN"). Same salvage as
+	# 10-kernel-swap.sh: file-level swap, no directory rename needed.
+	local _rpmdb_parent _rebuilt
+	_rpmdb_parent="${_rpmdb_dir%/*}"
+	rm -rf "${_rpmdb_parent}"/rpmrebuilddb.* "${_rpmdb_parent}"/rpmold.* 2>/dev/null || true
+	if rpm --rebuilddb; then
+		echo "TUNAOS_RPMDB_PROBE=rebuilt"
+	else
+		_rebuilt="$(find "${_rpmdb_parent}" -maxdepth 1 -name 'rpmrebuilddb.*' 2>/dev/null | head -1 || true)"
+		if [[ -n "$_rpmdb_dir" && -d "$_rpmdb_dir" && -n "$_rebuilt" && -d "$_rebuilt" ]]; then
+			echo "::notice title=rpmdb salvage (tunaOS#1823)::salvaging the completed rebuild file-level from ${_rebuilt}"
+			rm -rf "${_rpmdb_dir:?}"/*
+			cp -a "$_rebuilt"/. "$_rpmdb_dir"/
+			rm -rf "$_rebuilt" "${_rpmdb_parent}"/rpmold.*
+			echo "TUNAOS_RPMDB_PROBE=rebuilt-salvaged"
+		else
+			echo "TUNAOS_RPMDB_PROBE=rebuild-failed-nonfatal"
+			echo "::warning title=rpmdb probe (tunaOS#1823)::rpm --rebuilddb failed and left no rebuilt db to salvage; proceeding — the stage-2 transaction is the real verdict"
+		fi
+	fi
+	# A rebuild from an already-malformed db is LOSSY: it keeps whatever the
+	# failing SELECT managed to read. On the stock ubuntu-latest storage the
+	# corruption recurs after every layer commit, each salvage compounds the
+	# loss, and by install-desktop the db has dropped system-release — after
+	# which dnf cannot resolve $releasever and every later stage dies on
+	# 'metalink?repo=epel-$releasever' 404s that look like a repo outage
+	# (runs 32392181047 / 32394645068). Name the data loss here instead.
+	if ! rpm -q --whatprovides 'system-release(releasever)' >/dev/null 2>&1; then
+		echo "::error title=rpmdb data loss (tunaOS#1823)::the rebuilt rpmdb no longer provides system-release(releasever) — the salvage was lossy and dnf's \$releasever detection is gone. This build cannot produce a valid image; fix the runner's container storage (see #1893) instead of chasing the downstream epel-\$releasever 404s."
+		return 1
+	fi
+	return 0
+}
+
+# Stage-2 rpmdb guard: every RUN layer that does dnf inherits the rpmdb in a
+# LOWER overlay layer and can corrupt it under an mmap'd write (#1823).
+# install-desktop.sh calls the probe directly; the other desktop scripts that
+# run dnf (gnome-extensions, kcm-ublue, niri, xfce) call this wrapper, which
+# no-ops off the dnf path.
+rpmdb_stage2_guard() {
+	[[ "${PKG_MGR:-}" == dnf ]] || return 0
+	rawhide_rpmdb_probe
 }
 
 # systemctl enable wrapper that tolerates the unit-not-present case.

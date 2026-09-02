@@ -84,14 +84,41 @@ on:
         required: false
         type: string
         default: ""
+    outputs:
+      manifest_published:
+        description: >-
+          "true" once a :<flavor>-testing manifest exists in GHCR for at
+          least one platform. Callers gate dependent stages on this rather
+          than on the workflow's own conclusion: a single platform leg
+          failing still leaves a usable base for the platforms that did
+          build, and the workflow conclusion stays red so the failure is
+          not mistaken for a clean run (tuna-os/tunaOS#1729).
+        value: ${{ jobs.manifest.outputs.image != '' }}
+      all_platforms_built:
+        description: >-
+          "true" when every platform this flavor declares produced a digest.
+          Only then does the bare :<flavor> tag get written.
+        value: ${{ jobs.manifest.outputs.all_platforms_built }}
 jobs:
   build_push:
     name: ${{ matrix.safeplatform }}
     runs-on: ${{ contains(matrix.platform, 'amd64') && 'ubuntu-latest' || 'ubuntu-24.04-arm' }}
-    # 180 to give the source-based experimental variants headroom —
-    # guppy (Gentoo) still compiles bootc from git even with the binhost (#644).
-    # A max, not a fixed duration: RPM variants finish in ~20-40m unaffected.
-    timeout-minutes: 180
+    # Headroom for the source-based experimental variants — guppy (Gentoo)
+    # still compiles bootc from git even with the binhost (#644).
+    # A max, not a fixed duration: RPM variants finish in ~20-40m unaffected,
+    # so raising it costs nothing on the variants that do not need it.
+    #
+    # 60 was too low (#644); 180 was too low as well (#1802). guppy's kde was
+    # cancelled at 2h57m with 245 of 252 emerge jobs complete and still
+    # compiling steadily — it ran out of clock, not progress, and took the
+    # whole cell with it because a cancelled build writes no digest artifact.
+    # Measured on that run: base 36m, xfce ~1h57m, gnome ~1h59m, kde 2h57m+.
+    #
+    # This is the symptom, not the cause. The cause is that the whole
+    # kde-plasma set is being compiled from source rather than pulled from the
+    # binhost, which is #644's preferred fix and is tracked in #1802. Until
+    # that lands, the ceiling has to clear the slowest real build.
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -127,7 +154,7 @@ jobs:
         if: ${{ startsWith(inputs.flavor, 'base') }}
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@8906e13e3ac1654504e75ad27440bffb28e52fbc # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@eb4c546389f19ad9e42f1af052623de73c620ebb # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
           update-podman: "true"
@@ -149,12 +176,18 @@ jobs:
               && break || sleep $((i * 2))
           done
 
-          curl -fsSL \
-            "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${JUST_ARCH}-unknown-linux-musl.tar.gz" \
-            -o /tmp/just.tgz 2>/dev/null \
-            || curl -fsSL https://just.systems/install.sh | sudo bash -s -- --to /usr/local/bin
+          # Pinned GitHub release only — no unpinned just.systems/install.sh
+          # fallback (that pipes an unauthenticated remote script into
+          # `sudo bash`, tunaos#1357). Retry the pinned download instead,
+          # same as the yq retry loop above.
+          for i in 1 2 3; do
+            curl -fsSL \
+              "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${JUST_ARCH}-unknown-linux-musl.tar.gz" \
+              -o /tmp/just.tgz \
+              && break || sleep $((i * 2))
+          done
 
-          if [ -f /tmp/just.tgz ]; then sudo tar -xzf /tmp/just.tgz -C /usr/local/bin just; fi
+          sudo tar -xzf /tmp/just.tgz -C /usr/local/bin just
           sudo chmod +x /usr/bin/yq /usr/local/bin/just 2>/dev/null || true
           just --version && yq --version
 
@@ -213,11 +246,37 @@ jobs:
             done
           fi
           build_start=$(date +%s)
+          # 210m, against the job's 240m ceiling. This is NOT a guess at how
+          # long a build should take -- the ceiling above already clears the
+          # slowest real one (guppy kde, 2h57m compiling plasma from source).
+          # It exists so a build that was going to blow the job cap anyway
+          # fails 30 minutes early, with an exit code and a message, instead
+          # of a bare "The operation was canceled" and no telemetry.
+          #
+          # Build Hummingbird #66 (run 32907940350) is why: the gnome cell
+          # stalled inside one dnf transaction at 23:12:27 and emitted not
+          # one further line before the cap cancelled it at 03:00:31. The
+          # cancel skipped Manifest, Sign, Promote and the ISO, and left
+          # nothing in the log saying what had wedged. 10-base-packages.sh
+          # now bounds the dnf side of that; this bounds every other way a
+          # build layer can hang.
+          #
+          # `timeout` runs the child in its own process group and signals the
+          # group, so buildah dies with just. Under sudo so the signals come
+          # from root -- a non-root timeout cannot kill a root buildah.
+          #
           # --preserve-env: sudo otherwise strips the cache/rechunk knobs
           # (the old layer cache never worked for exactly this reason).
+          rc=0
           sudo --preserve-env=BUILDAH_CACHE_FLAGS,SKIP_RECHUNK,PUBLIC_IMAGE_NAME \
-            "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}"
+            timeout --kill-after=60s 210m \
+            "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}" || rc=$?
           echo "BUILD_SECONDS=$(( $(date +%s) - build_start ))" >> "$GITHUB_ENV"
+          if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+            echo "::error title=Build wedged::${IMAGE_VARIANT}:${DEFAULT_TAG} (${PLATFORM}) made no progress for 210 minutes and was killed. The last line of build output above is where it stopped."
+            exit 1
+          fi
+          [ "$rc" -eq 0 ] || exit "$rc"
 
       - name: Build telemetry
         if: always()
@@ -265,7 +324,12 @@ jobs:
           mkdir -p verify-out
           IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
           sudo -E corral create gate --bootc "$IMAGE" --wait-ssh --timeout 900
-          sudo ./scripts/iso-e2e.sh "$IMAGE" --disk --output verify-out --timeout 300 || true
+          # No `|| true` here (tuna-os/tunaos#1533): a PR whose image fails to
+          # boot must fail the PR gate, not just warn on missing evidence. The
+          # evidence-upload step below already runs under `if: always()`, so
+          # dropping the swallow doesn't lose any diagnostics — it just makes
+          # the check red when the boot actually failed.
+          sudo ./scripts/iso-e2e.sh "$IMAGE" --disk --output verify-out --timeout 300
 
       - name: Upload PR verification evidence
         if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
@@ -424,13 +488,27 @@ jobs:
           syft-version: v1.39.0
 
       - name: Generate SBOM
+        id: sbom
         if: inputs.sbom && github.event_name != 'pull_request'
-        # Scan the published, immutable platform image. Stable publication is
-        # intentionally fail-closed: an image without its SBOM cannot be
-        # signed or promoted by the supply-chain gate below.
         # Scan the final filesystem view rather than every historical layer:
         # the latter made the Gentoo base job spend its remaining runner time
         # in Syft after the image had already built and pushed (tunaOS#956).
+        #
+        # NOT fail-closed any more, and the distinction matters. The image is
+        # already built, pushed and immutable in GHCR before this step runs --
+        # a failed scan cannot un-publish it. What a hard failure here *did*
+        # do was skip `Create Job Outputs`, which is the step that writes the
+        # digest artifact `Manifest` fans in on. So one dead scan cost the
+        # whole variant: Manifest failed at `Load Outputs`, and Sign, Gate,
+        # Promote and every stage-2 flavor were skipped behind it
+        # (2026-08-16 nightly, guppy run 31921372675).
+        #
+        # An image signature gates promotion; an SBOM does not. That is the
+        # same line drawn for SBOM *attestation* in #1560/#1766, applied one
+        # step earlier to SBOM *generation*. A missing SBOM is still reported
+        # loudly by attest_sbom ("::error::missing SPDX SBOM"), which is
+        # continue-on-error and therefore visible without being fatal.
+        continue-on-error: true
         timeout-minutes: 20
         env:
           SYFT_CMD: ${{ steps.setup-syft.outputs.cmd }}
@@ -440,18 +518,144 @@ jobs:
           SAFE_PLATFORM: ${{ matrix.safeplatform }}
           GOMEMLIMIT: 3GiB
           GOGC: "25"
+          # What the cgroup below leaves for everything that is NOT syft --
+          # most importantly the runner agent, which is the process this
+          # whole guard exists to keep alive.
+          #
+          # Expressed as a reserve rather than a ceiling on purpose. A
+          # hardcoded ceiling is not a ceiling at all on a runner smaller
+          # than the number, and that is the one case where the guard has to
+          # work. 5G was the first attempt at a ceiling and it was too tight
+          # the other way: on guppy (Gentoo, run 31942667550) syft was
+          # SIGKILLed at exit 137 after 2m11s. The cap did its job -- the
+          # agent lived and the variant built, signed and promoted for the
+          # first time in five nights -- but it cost an SBOM that would
+          # likely have fit in a larger budget. A reserve gives syft
+          # everything else the box has, whatever size the box turns out to
+          # be.
+          SYFT_MEMORY_RESERVE_MIB: "5120"
+          # Floor, for the pathological case of a runner so small that the
+          # reserve eats all of it. Below this syft cannot finish anyway, and
+          # failing fast under the cap beats failing slow outside it.
+          SYFT_MEMORY_FLOOR_MIB: "2048"
         run: |
           set -euo pipefail
           IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
           OUT="sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.spdx.json"
-          $SYFT_CMD "$IMAGE" --scope squashed -o spdx-json="$OUT"
+
+          # Two bounds, because the two previous attempts each caught only one
+          # failure mode and the scan has now escaped both:
+          #
+          #   timeout-minutes: 20   enforced by the runner AGENT -- useless
+          #                         precisely when the agent is the casualty.
+          #                         On 08-14 (#1567) the step overran it by 51
+          #                         minutes and uploaded no logs at all.
+          #   timeout 18m           wall-clock, added by #1572. On the 08-16
+          #                         nightly the runner died at 7m56s, well
+          #                         inside it: "The runner has received a
+          #                         shutdown signal."
+          #
+          # Time was never the fault. Memory is: GOMEMLIMIT is advisory, so a
+          # large enough file inventory sails past 3GiB and takes the agent
+          # down with it. A cgroup cap makes the kernel kill syft instead --
+          # a real exit code, with logs, while the agent is still healthy.
+          # The wall-clock bound stays for the orthogonal case of a scan that
+          # is slow rather than hungry.
+          syft_cmd=( timeout --kill-after=30s 18m
+                     "$SYFT_CMD" "$IMAGE" --scope squashed -o spdx-json="$OUT" )
+
+          # Size the cap off the box we actually landed on, and say so, so a
+          # future exit 137 can be read against a real number instead of an
+          # assumption about hosted-runner sizing (#1567 recorded 7 GB; that
+          # is not what ubuntu-latest ships now, and the arm64 leg is a
+          # different image again).
+          mem_total_mib="$(free -m | awk '/^Mem:/ {print $2}')"
+          cap_mib=$(( mem_total_mib - SYFT_MEMORY_RESERVE_MIB ))
+          if [ "$cap_mib" -lt "$SYFT_MEMORY_FLOOR_MIB" ]; then
+            cap_mib="$SYFT_MEMORY_FLOOR_MIB"
+          fi
+          echo "runner memory (MiB): total=${mem_total_mib} available=$(free -m | awk '/^Mem:/ {print $7}')"
+          echo "syft cgroup cap (MiB): ${cap_mib} (reserving ${SYFT_MEMORY_RESERVE_MIB} for the agent)"
+
+          if command -v systemd-run >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
+            sudo systemd-run --scope --quiet \
+              --uid="$(id -u)" --gid="$(id -g)" \
+              -p MemoryMax="${cap_mib}M" -p MemorySwapMax=0 \
+              -- "${syft_cmd[@]}"
+          else
+            # Never silently drop the guard: without it a hungry scan can
+            # still take the agent, which is the failure this step exists to
+            # stop being invisible.
+            echo "::warning::systemd-run unavailable; syft is time-bounded but NOT memory-bounded"
+            "${syft_cmd[@]}"
+          fi
+
           jq -e '
             .spdxVersion | startswith("SPDX-")
           ' "$OUT" >/dev/null
           jq -e '(.packages // []) | length > 0' "$OUT" >/dev/null
 
+      - name: Synthesize SBOM from the package manifest
+        id: sbom_fallback
+        # Runs only when the scan did not produce one. On guppy that is most
+        # nights: Gentoo's file inventory outgrows the runner, the cgroup cap
+        # kills syft (#1784, #1795), and the variant publishes with no SBOM
+        # at all while `Attest SBOM` reports the gap.
+        #
+        # The information was never missing. `Publish package manifest` two
+        # steps up already read every installed package straight out of the
+        # image's own package database, in seconds. Re-deriving that list by
+        # walking every file is what costs the memory. So derive the SPDX
+        # document from the manifest instead of shipping nothing (#1567).
+        #
+        # Deliberately a fallback and not a replacement: syft's output is
+        # richer -- file inventory, license detection -- and where the scan
+        # succeeds it still wins. This only decides what happens when it
+        # does not.
+        if: inputs.sbom && github.event_name != 'pull_request' && steps.sbom.outcome != 'success'
+        continue-on-error: true
+        env:
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          IMAGE_NAME: ${{ env.IMAGE_NAME }}
+          DEFAULT_TAG: ${{ inputs.default-tag }}
+          SAFE_PLATFORM: ${{ matrix.safeplatform }}
+        run: |
+          set -euo pipefail
+          IMAGE="${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${SAFE_PLATFORM}"
+          OUT="sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.spdx.json"
+          MANIFEST="packages-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.txt"
+
+          # `Publish package manifest` is itself continue-on-error, and an
+          # image with no package database publishes only a marker. Either
+          # way there is nothing to fall back to, and saying so beats
+          # emitting a document that claims the image is empty.
+          if [ ! -s "$MANIFEST" ]; then
+            echo "::warning::no package manifest for ${IMAGE} -- cannot synthesize an SBOM"
+            exit 1
+          fi
+
+          python3 scripts/packages_to_spdx.py \
+            --manifest "$MANIFEST" --output "$OUT" --image "$IMAGE"
+
+          # Same two checks the scan path is held to: a consumer cannot tell
+          # which path produced the file, so neither can ship a weaker one.
+          jq -e '.spdxVersion | startswith("SPDX-")' "$OUT" >/dev/null
+          jq -e '(.packages // []) | length > 0' "$OUT" >/dev/null
+
+          echo "::notice::SBOM for ${IMAGE} derived from the package manifest ($(jq '.packages | length' "$OUT") packages); syft did not complete."
+
       - name: Upload SBOM
-        if: inputs.sbom && github.event_name != 'pull_request'
+        # Step outcomes, not the job status: both producers are
+        # continue-on-error, so their failure leaves the job green and this
+        # step would otherwise run and fail on `if-no-files-found: error`,
+        # converting a soft failure straight back into a hard one.
+        #
+        # Either producer will do. They write the same filename, and the
+        # fallback is held to the same validation, so nothing downstream
+        # needs to know which one ran.
+        if: >-
+          inputs.sbom && github.event_name != 'pull_request'
+          && (steps.sbom.outcome == 'success' || steps.sbom_fallback.outcome == 'success')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: sbom-${{ env.IMAGE_NAME }}-${{ inputs.default-tag }}-${{ matrix.safeplatform }}
@@ -549,7 +753,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:5f3cb6adc6057b4084b8a1844ea16069d5d6be5a48da5a4856495b9a44bce4ed  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:1cec89e6c040d7a1ff412318d7a5fa89bab2c8b56e44d0a30f1df8acd646e1d0  # :latest linux/amd64 as of 2026-06-13
       options: --privileged --security-opt seccomp=unconfined
     permissions:
       contents: read
@@ -579,20 +783,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Exit on failure
+      - name: Report upstream job status
         env:
           JOBS: ${{ toJson(needs) }}
         run: |
           echo "Job status:"
-          echo $JOBS | jq -r 'to_entries[] | " - \(.key): \(.value.result)"'
+          echo "$JOBS" | jq -r 'to_entries[] | " - \(.key): \(.value.result)"'
 
-          for i in $(echo "${JOBS}" | jq -r 'to_entries[] | .value.result'); do
-            if [ "$i" != "success" ] && [ "$i" != "skipped" ]; then
-              echo ""
-              echo "Status check not okay!"
-              exit 1
-            fi
-          done
+          # This step used to `exit 1` the moment any build_push leg was not
+          # success/skipped. `needs.build_push.result` is the aggregate of the
+          # whole platform matrix, so one arch failing aborted the manifest —
+          # and with it every stage that depends on this flavor, including
+          # flavors that declare only the arch that DID build. On 2026-08-14
+          # that turned three `sudo podman login` faults on arm64 runners into
+          # 16 red cells across sailfin/marlin/flounder/gurnard, 14 of which
+          # never produced a job at all (tuna-os/tunaOS#1729).
+          #
+          # The real precondition for building a manifest is "at least one
+          # platform produced a digest", which is asserted from the digest
+          # artifacts in `Require at least one platform` below — evidence of
+          # what was actually pushed, not an aggregate job result. Completeness
+          # is still enforced, just later and where it belongs: `Check Platform
+          # Completeness` sets all_platforms_built=false and the promote job
+          # leaves the bare :<flavor> tag at its last good version. A partial
+          # build can therefore reach :<flavor>-testing, and can never reach
+          # :<flavor>.
+          if echo "$JOBS" | jq -e 'to_entries[] | select(.value.result != "success" and .value.result != "skipped")' >/dev/null; then
+            echo "::warning::Not every upstream job succeeded; continuing with whatever platforms published. The bare tag will not be promoted unless all declared platforms are present."
+          fi
 
       - name: Get current date
         id: date
@@ -634,7 +852,7 @@ jobs:
             io.artifacthub.package.keywords=bootc,tunaos
             io.artifacthub.package.license=Apache-2.0
             io.artifacthub.package.logo-url=https://avatars.githubusercontent.com/u/223733964?s=200&v=4
-            io.artifacthub.package.maintainers=[{\"name\":\"hanthor\",\"email\":\"jreilly1821@gmail.com\"}]
+            io.artifacthub.package.maintainers=[{\"name\":\"${{ vars.MAINTAINER_NAME || github.repository_owner }}\",\"email\":\"${{ vars.MAINTAINER_EMAIL }}\"}]
             io.artifacthub.package.prerelease=true
             containers.bootc=1
 
@@ -666,6 +884,23 @@ jobs:
             DIGESTS_JSON="$(echo "${DIGESTS_JSON}" | jq --arg key "${PLATFORM_KEY}" --arg value "${DIGEST}" '. + {($key): $value}')"
           done
           echo "DIGESTS_JSON=$(echo "$DIGESTS_JSON" | jq -c '.')" >> "${GITHUB_OUTPUT}"
+
+      # The precondition `Report upstream job status` no longer enforces. A
+      # manifest needs at least one platform to point at; zero means every
+      # build_push leg failed and there is nothing to publish, which is a
+      # genuine failure and must stay red.
+      - name: Require at least one platform
+        if: ${{ inputs.publish }}
+        env:
+          DIGESTS_JSON: ${{ steps.load-outputs.outputs.DIGESTS_JSON }}
+        run: |
+          set -euo pipefail
+          count="$(echo "${DIGESTS_JSON}" | jq 'length')"
+          if [ "${count}" -eq 0 ]; then
+            echo "::error::No platform produced a digest — every build leg failed, nothing to publish."
+            exit 1
+          fi
+          echo "${count} platform digest(s) available for the manifest."
 
       - name: Check Platform Completeness
         if: ${{ inputs.publish }}
@@ -746,10 +981,14 @@ jobs:
 
             digest="$(echo "${DIGESTS_JSON}" | jq -r --arg key "${platform_key_for_lookup}" '.[$key]')"
 
+            # A platform with no digest means that leg failed. Skip it rather
+            # than aborting: the manifest is still useful to every stage that
+            # builds on the platforms that DID publish, and the bare tag is
+            # withheld anyway because `Check Platform Completeness` has already
+            # set all_platforms_built=false (tuna-os/tunaOS#1729).
             if [ "$digest" == "null" ] || [ -z "$digest" ]; then
-                echo "Error: Digest not found for platform ${platform_original}"
-                echo "Lookup key: ${platform_key_for_lookup} in DIGESTS_JSON=${DIGESTS_JSON}"
-              exit 1
+              echo "::warning::No digest for platform ${platform_original} (key: ${platform_key_for_lookup}); omitting it from the manifest. The bare tag will not be promoted."
+              continue
             fi
 
             arch_for_podman="${platform_original#linux/}"
@@ -803,8 +1042,18 @@ jobs:
   # GitHub's OIDC identity. Fulcio issues an ephemeral certificate and Rekor
   # records the event: there is no private key, password, or repository secret.
   # This can run beside the boot gate; both must pass before promotion.
+  #
+  # SBOM attestation deliberately does NOT happen here — it is its own job
+  # (attest_sbom) off the critical path, the shape projectbluefin/dakota uses
+  # (publish-image signs; publish-sbom attaches and signs the SBOM with
+  # continue-on-error, and promote needs only publish-image). Reason, measured:
+  # on the 08-15 nightly every albacore flavor built, pushed and passed its
+  # gates, and all twelve Promote jobs were skipped because `cosign attest`
+  # could not reach Rekor. Image signatures are a promotion precondition; an
+  # SBOM attestation that a transparency-log outage delayed by an hour is not
+  # (tuna-os/tunaOS#1560).
   sign:
-    name: Sign + attest
+    name: Sign
     needs: manifest
     if: >-
       inputs.publish && github.event_name != 'pull_request' &&
@@ -821,6 +1070,88 @@ jobs:
       INDEX_DIGEST: ${{ needs.manifest.outputs.digest }}
       COSIGN_YES: "true"
     steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        with:
+          cosign-release: v3.1.3
+
+      - name: Login to GitHub Container Registry
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Fetch platform digests
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: ${{ env.IMAGE_NAME }}-${{ env.DEFAULT_TAG }}-*
+          merge-multiple: true
+          path: supply-chain/digests
+
+      - name: Sign images
+        env:
+          SIGN_DEADLINE_MINUTES: "40"
+          SIGN_BACKOFF_CAP_SECONDS: "120"
+        run: |
+          set -euo pipefail
+          identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/reusable-build-image.yml@${GITHUB_REF}"
+          issuer="https://token.actions.githubusercontent.com"
+          index_ref="${IMAGE_REGISTRY}/${IMAGE_NAME}@${INDEX_DIGEST}"
+
+          source "${GITHUB_WORKSPACE}/.github/scripts/cosign-retry.sh"
+
+          cosign_retry cosign sign "$index_ref"
+
+          signed=0
+          shopt -s nullglob
+          for digest_file in supply-chain/digests/*.txt; do
+            digest="$(<"$digest_file")"
+            cosign_retry cosign sign "${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}"
+            signed=$((signed + 1))
+          done
+
+          [[ "$signed" -gt 0 ]] || { echo "::error::no platform digests found"; exit 1; }
+
+          # One verify against the index is enough to prove the identity and
+          # issuer are what we think they are. Verifying every platform ref
+          # individually added a Rekor round trip per platform per flavor for
+          # no extra signal -- and each of those round trips was another way
+          # for an outage to block promotion.
+          cosign_retry cosign verify "$index_ref" \
+            --certificate-identity "$identity" \
+            --certificate-oidc-issuer "$issuer" >/dev/null
+
+          echo "Signed index plus ${signed} platform image(s)." >> "$GITHUB_STEP_SUMMARY"
+
+  # Attach and sign the SPDX SBOMs. Off the critical path on purpose: this job
+  # is not in Promote's `needs`, and continue-on-error keeps a Sigstore outage
+  # here from turning the run red. Same split as projectbluefin/dakota's
+  # publish-sbom job. A missed attestation is recoverable -- rerun-infra-
+  # failures.yml re-runs the job, and the SBOM artifacts are retained -- while
+  # a blocked promotion costs a whole day of matrix state (tuna-os/tunaOS#1731).
+  attest_sbom:
+    name: Attest SBOM
+    needs: [manifest, sign]
+    if: >-
+      inputs.publish && inputs.sbom && github.event_name != 'pull_request' &&
+      needs.manifest.result == 'success' && needs.sign.result == 'success'
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    env:
+      IMAGE_NAME: ${{ inputs.image-name }}
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
+      DEFAULT_TAG: ${{ inputs.default-tag }}
+      COSIGN_YES: "true"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
       - name: Install Cosign
         uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         with:
@@ -839,29 +1170,51 @@ jobs:
           path: supply-chain/digests
 
       - name: Fetch SPDX SBOMs
-        if: inputs.sbom
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           pattern: sbom-${{ env.IMAGE_NAME }}-${{ env.DEFAULT_TAG }}-*
           merge-multiple: true
           path: supply-chain/sboms
 
-      - name: Sign images and attest SBOMs
+      - name: Attest SPDX SBOMs
+        # A hard ceiling on the whole step, because SIGN_DEADLINE_MINUTES is a
+        # budget PER cosign INVOCATION, not per step: the loop below runs
+        # `cosign attest` + `cosign verify-attestation` for every platform
+        # digest, and each call starts its own deadline (see cosign_retry --
+        # `deadline` is a local, recomputed on entry). Under `set -e` a
+        # *failing* call aborts the step after one deadline, which is what
+        # gurnard run 31891742138 did: 21 Rekor 502s over 39m19s, then
+        # SIGSTORE_OUTAGE. The unbounded case is calls that SUCCEED slowly --
+        # nothing aborts, and a three-platform variant can reach 40m x 6.
+        # That case has not been observed in production; this ceiling is
+        # here so it cannot be, since the env deadline structurally cannot
+        # bound the step.
+        timeout-minutes: 20
         env:
-          REQUIRE_SBOM: ${{ inputs.sbom }}
+          # Deliberately much shorter than Sign's 40m. Splitting this job off
+          # (#1560) took SBOM attestation off Promote's critical path, but not
+          # off the *clock*: build-variant.yml's stage 2 waits for the whole
+          # reusable-workflow call to finish, and this job is part of it. On
+          # the run above `pantheon` had still not started 48 minutes after
+          # base's images were built, signed and manifested -- held up purely
+          # by an attestation the pipeline is explicitly allowed to do without.
+          #
+          # 10m is far longer than any successful attestation (image signing
+          # completed in 19s on that same run) so genuine flakes are absorbed;
+          # what it stops absorbing is a sustained outage, which is exactly the
+          # case where continuing without the attestation is the intended
+          # behaviour.
+          SIGN_DEADLINE_MINUTES: "10"
+          SIGN_BACKOFF_CAP_SECONDS: "120"
         run: |
           set -euo pipefail
           identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/reusable-build-image.yml@${GITHUB_REF}"
           issuer="https://token.actions.githubusercontent.com"
-          index_ref="${IMAGE_REGISTRY}/${IMAGE_NAME}@${INDEX_DIGEST}"
 
-          cosign sign "$index_ref"
-          cosign verify "$index_ref" \
-            --certificate-identity "$identity" \
-            --certificate-oidc-issuer "$issuer" >/dev/null
+          source "${GITHUB_WORKSPACE}/.github/scripts/cosign-retry.sh"
 
-          signed=0
           attested=0
+          missing=0
           shopt -s nullglob
           for digest_file in supply-chain/digests/*.txt; do
             filename="$(basename "$digest_file" .txt)"
@@ -870,31 +1223,26 @@ jobs:
             ref="${IMAGE_REGISTRY}/${IMAGE_NAME}@${digest}"
             sbom="supply-chain/sboms/sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${safeplatform}.spdx.json"
 
-            cosign sign "$ref"
-            cosign verify "$ref" \
+            if [[ ! -f "$sbom" ]]; then
+              echo "::error::missing SPDX SBOM for ${safeplatform}"
+              missing=$((missing + 1))
+              continue
+            fi
+
+            cosign_retry cosign attest --type spdxjson --predicate "$sbom" "$ref"
+            cosign_retry cosign verify-attestation "$ref" \
+              --type spdxjson \
               --certificate-identity "$identity" \
               --certificate-oidc-issuer "$issuer" >/dev/null
-            signed=$((signed + 1))
-
-            if [[ -f "$sbom" ]]; then
-              cosign attest --type spdxjson --predicate "$sbom" "$ref"
-              cosign verify-attestation "$ref" \
-                --type spdxjson \
-                --certificate-identity "$identity" \
-                --certificate-oidc-issuer "$issuer" >/dev/null
-              attested=$((attested + 1))
-            elif [[ "$REQUIRE_SBOM" == "true" ]]; then
-              echo "::error::missing SPDX SBOM for ${safeplatform}"
-              exit 1
-            fi
+            attested=$((attested + 1))
           done
 
-          [[ "$signed" -gt 0 ]] || { echo "::error::no platform digests found"; exit 1; }
-          if [[ "$REQUIRE_SBOM" == "true" && "$attested" -ne "$signed" ]]; then
-            echo "::error::attested ${attested}/${signed} platform SBOMs"
+          echo "Attested ${attested} SPDX SBOM(s)." >> "$GITHUB_STEP_SUMMARY"
+          if (( missing > 0 )); then
+            echo "::error::${missing} platform image(s) had no SBOM to attest"
             exit 1
           fi
-          echo "Signed index plus ${signed} platform image(s); attested ${attested} SPDX SBOM(s)." >> "$GITHUB_STEP_SUMMARY"
+          (( attested > 0 )) || { echo "::error::no platform digests found"; exit 1; }
 
   # ── Boot gate ───────────────────────────────────────────────────────────────
   # Pull the just-pushed :<tag>-testing manifest, install it to a qcow2 with
@@ -915,15 +1263,30 @@ jobs:
       inputs.publish && github.event_name != 'pull_request' &&
       !startsWith(inputs.flavor, 'base') &&
       contains(inputs.platforms, 'amd64')
-    # Temporarily off RunsOn (see the manifest job) while the AWS account is
-    # Free-Tier capped. This gate is the one with real hardware needs — an
-    # x86 QEMU/KVM boot with OVMF — so it is the likeliest of the four to
-    # need its dedicated runner back. GitHub-hosted Linux runners do expose
-    # /dev/kvm, and the job already reclaims disk and uses
-    # container-storage-action, so it is worth trying; if it flakes on
-    # capacity rather than on the image, that is the reason, not a
-    # regression in the image.
-    runs-on: ubuntu-latest
+    # Back on RunsOn (AWS credits restored) for the DRM-gated desktops only:
+    # cosmic/niri/xfwl4 are Smithay compositors that hard-require a DRM render
+    # node (EGL_EXT_device_drm) and never start on hosted runners — the `gpu`
+    # group (g4dn spot, ubuntu24-gpu-x64) supplies /dev/dri/renderD128, which
+    # iso-e2e-gpu.sh passes through. kde/xfce stay on hosted runners (per-
+    # variant evidence: marlin passed 08-17), gnome is verifiable without a
+    # render node. Everything else keeps the hosted runner — sparse by design.
+    # NOT a ternary: GitHub Actions expressions have no `? :`, and one here
+    # failed to PARSE, which fails the whole file, which fails every caller.
+    # That is what startup-failed all 13 variant nightlies on 2026-08-21 with
+    # zero jobs and zero duration, and what made every sweeper re-dispatch
+    # return HTTP 422 (run 32482857699):
+    #   reusable-build-image.yml (Line: 1242): Unexpected symbol: '?'
+    # The `cond && a || b` form on line 105 of this same file is the idiom.
+    # b2d29bdb introduced the same ternary into installer-smoke.yml too; that
+    # copy was fixed in #1919 and this one was not.
+    #
+    # And `'gpu'` alone was never a runner: RunsOn groups are addressed as
+    # runs-on=<run_id>/runner=<group>, as installer-smoke.yml does. A bare
+    # label would queue forever with no runner ever claiming it -- trading a
+    # parse error for a silent hang is not a fix, so both halves are repaired.
+    runs-on: >-
+      ${{ (startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4'))
+          && format('runs-on={0}/runner=gpu', github.run_id) || 'ubuntu-latest' }}
     timeout-minutes: 60
     permissions:
       contents: read
@@ -984,6 +1347,25 @@ jobs:
       - name: Build qcow2 from testing image
         env:
           TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          # hummingbird probes BACKEND=ostree SEALED=0, so it takes the xfs
+          # default and `bootc install to-disk` ABORTS installing the
+          # bootloader: BIOS grub2-install cannot read the xfs this base's
+          # mkfs.xfs produces, and bootupctl installs the BIOS component
+          # unconditionally, so the whole to-disk install fails. (An ISO
+          # install is a different path -- fisherman gives it a separate
+          # ext4 /boot -- so this is about the Gate, and about Promote
+          # being gated on the Gate.) Six
+          # consecutive nightlies died here (run 32786338463, gnome Gate job
+          # 97638679623), which is why hummingbird:gnome has never been
+          # promoted and is 404 on GHCR.
+          #
+          # Scoped to this one variant ON PURPOSE. It is a measurement, not a
+          # product change: if the gate goes green on ext4 then ext4 is the
+          # answer and the durable fix is a 50-hummingbird.toml drop-in, as
+          # 00-tunaos.toml already prescribes. Every other variant is
+          # untouched -- the variable is unset for them and the probe decides
+          # exactly as before.
+          TUNAOS_QCOW2_FILESYSTEM: ${{ inputs.image-variant == 'hummingbird' && 'ext4' || '' }}
         run: |
           just qcow2 "${TEST_IMAGE}"
 
@@ -995,8 +1377,40 @@ jobs:
             --output verify-out \
             --timeout 900
 
+      # iso-e2e.sh runs under sudo, so everything it drops in verify-out is
+      # root-owned. Hand it back to the runner user BEFORE any later step
+      # reads it. This chown used to live only in "Collect evidence", which
+      # runs AFTER the tier-1 step below, and that ordering failed every
+      # desktop Gate on marlin and flounder: the tier-1 step's `if:` called
+      # hashFiles('verify-out/serial.log'), hashFiles is evaluated by the
+      # runner as the runner user, and failing to read a root-owned file is
+      # not a falsy result -- it is a template evaluation error that fails
+      # the whole job before a single step of it runs:
+      #
+      #   The template is not valid. System.InvalidOperationException:
+      #   hashFiles('verify-out/serial.log') failed. Fail to hash files
+      #   under directory '/home/runner/work/tunaOS/tunaOS'
+      #
+      # Gate is a `needs:` of Promote, so images that booted fine -- serial
+      # log carrying "Desktop experience contract passed" -- never got their
+      # bare tags. The `if:` now reads a step output instead of hashing a
+      # file, so ownership can never turn a green boot into a template error
+      # again; the chown is what makes the step's own greps work.
+      - name: Normalize verify-out ownership
+        if: always()
+        id: evidence
+        shell: bash
+        run: |
+          sudo chown -R "$USER:$(id -gn)" verify-out 2>/dev/null || true
+          if [[ -r verify-out/serial.log ]]; then
+            echo "serial=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "serial=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::verify-out/serial.log is missing or unreadable; tier-1 functional checks skipped"
+          fi
+
       - name: Run tier-1 functional checks (advisory)
-        if: always() && hashFiles('verify-out/serial.log') != ''
+        if: always() && steps.evidence.outputs.serial == 'true'
         continue-on-error: true
         shell: bash
         env:
@@ -1053,7 +1467,24 @@ jobs:
     uses: ./.github/workflows/verify-asahi-one.yml
     with:
       image: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}/${{ inputs.image-name }}:${{ inputs.default-tag }}-testing
-    secrets: inherit
+    # No `secrets:` block: verify-asahi-one.yml's workflow_call declares no
+    # explicit secrets input (it only uses the auto-provided GITHUB_TOKEN),
+    # so `secrets: inherit` was passing every repo/org secret for nothing
+    # (tuna-os/tunaos#1536).
+
+  # ── Base boot gate: removed 2026-08-18 ─────────────────────────────────────
+  # W3 gated plain `base` cells here (tunaos-base-contract.service marker
+  # under QEMU). Maintainer decision 08-18: base images are parent layers,
+  # not user-facing artifacts — their boot machinery is transitively proven
+  # by every desktop Gate built on top of them (marlin's 15 Gate-passing
+  # cells prove marlin's base boots without ever booting marlin:base). The
+  # job also never produced a marker in 600s on any variant (the serial
+  # question tracked in GREEN-MASTER-PLAN W3), so it was all cost and no
+  # signal. `base` is now a reviewed boots-scope exclusion in
+  # green-criteria.yml, like base-hwe/base-nvidia; the in-image
+  # tunaos-base-contract.service stays (it costs nothing and still fires on
+  # desktop images at multi-user, before the graphical marker). Revert this
+  # block from git history if base ever becomes a supported end-user target.
 
   tag-image:
     name: Promote
@@ -1107,6 +1538,7 @@ jobs:
           MAJOR_VERSION: ${{ env.MAJOR_VERSION }}
           ALL_PLATFORMS_BUILT: ${{ needs.manifest.outputs.all_platforms_built }}
           INPUT_PLATFORMS: ${{ inputs.platforms }}
+          MAX_RETRIES: 4
         run: |
           set -ex
           # Promote the verified -testing manifest to the bare tags users
@@ -1115,22 +1547,52 @@ jobs:
 
           DATE_TAG="$(date +%Y%m%d)"
 
+          # Every promotion below is a blob-for-blob re-upload to GHCR, and
+          # GHCR drops upload sessions under load: run 31891742138 (gurnard)
+          # failed the whole Promote job on
+          #   writing blob: uploading layer to https://ghcr.io/v2/tuna-os/elementary/
+          #   blobs/upload/2.fbd191d4-...: blob upload unknown
+          # on the *sixth* copy, after five had already succeeded. Under
+          # `set -e` that leaves the flavor half-promoted -- the canonical
+          # tags written, one alias missing -- and the run red for a fault
+          # that clears on the next attempt.
+          #
+          # The rest of this workflow already retries the two other network
+          # legs (base pull, GHCR push); the promotion copies were the one
+          # bare path left. skopeo copy to the same destination is idempotent,
+          # so a retry after a partial upload is safe: blobs that landed are
+          # skipped by digest and only the failed one is re-sent.
+          copy_retry() {
+            local dest="$1" i
+            for i in $(seq "${MAX_RETRIES}"); do
+              if sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${dest}"; then
+                return 0
+              fi
+              if [ "$i" -lt "${MAX_RETRIES}" ]; then
+                echo "::warning::promotion copy to ${dest} failed (attempt ${i}/${MAX_RETRIES}); retrying in $((i * 15))s..."
+                sleep $((i * 15))
+              fi
+            done
+            echo "::error::promotion copy to ${dest} failed after ${MAX_RETRIES} attempts."
+            return 1
+          }
+
           if [ "${ALL_PLATFORMS_BUILT}" = "true" ]; then
             echo "All default platforms built and boot gate passed - promoting"
 
             # Tag with flavor only
-            sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
+            copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}"
 
             # Tag with flavor-date
-            sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${DATE_TAG}"
+            copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${DATE_TAG}"
 
             # Tag each platform with flavor-arch and flavor-arch-date
             IFS=',' read -r -a PLATFORMS <<< "${INPUT_PLATFORMS}"
             for platform in "${PLATFORMS[@]}"; do
               arch="${platform#linux/}"
               arch="${arch//\//-}"
-              sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${arch}"
-              sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${arch}-${DATE_TAG}"
+              copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${arch}"
+              copy_retry "${IMAGE_REGISTRY}/${IMAGE_NAME}:${DEFAULT_TAG}-${arch}-${DATE_TAG}"
             done
 
             # Friendly aliases: the same digest under a name users can guess
@@ -1144,8 +1606,8 @@ jobs:
                 alias_name="$(echo "${alias_name}" | tr -d '[:space:]')"
                 [ -n "${alias_name}" ] || continue
                 echo "Publishing alias ${alias_name}:${DEFAULT_TAG}"
-                sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${alias_name}:${DEFAULT_TAG}"
-                sudo skopeo copy --all "docker://${SOURCE_IMAGE}" "docker://${IMAGE_REGISTRY}/${alias_name}:${DEFAULT_TAG}-${DATE_TAG}"
+                copy_retry "${IMAGE_REGISTRY}/${alias_name}:${DEFAULT_TAG}"
+                copy_retry "${IMAGE_REGISTRY}/${alias_name}:${DEFAULT_TAG}-${DATE_TAG}"
               done
             fi
 

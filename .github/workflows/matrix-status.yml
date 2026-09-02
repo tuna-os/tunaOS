@@ -103,7 +103,7 @@ jobs:
           BRANCH: automation/matrix-status
         run: |
           set -euo pipefail
-          if git diff --quiet -- docs/MATRIX-STATUS.md; then
+          if git diff --quiet -- docs/MATRIX-STATUS.md docs/matrix-provenance.json; then
             echo "No cells moved — nothing to commit."
             exit 0
           fi
@@ -115,7 +115,7 @@ jobs:
           # add noise. Reusing the name also keeps this to a single open PR
           # instead of one per day.
           git checkout -b "$BRANCH"
-          git add docs/MATRIX-STATUS.md
+          git add docs/MATRIX-STATUS.md docs/matrix-provenance.json
           git commit -m "docs: refresh matrix status ($(date -u +%Y-%m-%d))"
           git push --force origin "$BRANCH"
 
@@ -127,6 +127,24 @@ jobs:
                 'Force-updated in place by the `Matrix Status` workflow, so this branch always holds the newest regeneration.')"
           else
             echo "PR already open for $BRANCH — force-push refreshed it."
+          fi
+
+          # Arm auto-merge so the refresh lands without a human. A PR opened
+          # with the Actions token triggers no pull_request workflows, so its
+          # own checks sit at "Expected" forever and the PR reads as waiting
+          # for approval — but this repo merges through a MERGE QUEUE, and
+          # the queue runs its required checks itself on the merge group
+          # (queue-initiated, so the bot-token workflow-trigger limitation
+          # does not apply there). Arming auto-merge is therefore sufficient:
+          # the PR enqueues immediately, the group checks run, and the
+          # refresh merges — measured on every auto-merged PR of 2026-08-18,
+          # each of which enqueued before its PR-level checks finished.
+          # Re-armed on every refresh because a merge clears auto-merge and
+          # the next refresh opens a fresh PR.
+          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+          if [[ -n "$pr" ]]; then
+            gh pr merge --auto --merge "$pr" ||
+              echo "::warning::could not arm auto-merge on #$pr — the refresh will wait for a human"
           fi
 
       - name: Summary

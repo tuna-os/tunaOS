@@ -118,6 +118,24 @@ OVERLAY_SH="${REPO_ROOT}/build_scripts/overlay/nvidia.sh"
   [ "$status" -eq 0 ]
 }
 
+@test "20-nvidia.sh force-includes sr_mod/cdrom/virtio_blk alongside the GPU drivers (tunaos#1499)" {
+  # --no-hostonly alone stopped guaranteeing these three in the rebuilt
+  # initramfs (10/10 red Bonito nightlies 08-03..08-13, verify-nvidia.sh's
+  # boot-driver-parity check: sr_mod/cdrom/virtio_blk missing, the other 5
+  # required drivers unaffected). Same fix mechanism as i915/amdgpu on the
+  # same line: force them in via the 99-nvidia.conf force_drivers sed rather
+  # than trust generic-mode autodetection.
+  run grep -E 's@ nvidia @.*sr_mod.*cdrom.*virtio_blk.*@g' "$INSTALL_SH"
+  [ "$status" -eq 0 ]
+  # Applied to the dracut.conf.d file that actually gets sourced, and after
+  # the omit_drivers->force_drivers rename (so it lands in force_drivers,
+  # not a dead omit_drivers key).
+  run awk '/omit_drivers.*force_drivers/{print NR; exit}' "$INSTALL_SH"
+  local rename_line="$output"
+  run awk '/sr_mod.*cdrom.*virtio_blk/{print NR; exit}' "$INSTALL_SH"
+  [ -n "$rename_line" ] && [ -n "$output" ] && [ "$rename_line" -lt "$output" ]
+}
+
 # ── contract: verify-nvidia.sh behavioral tests against a fixture root ─────
 #
 # The script takes TUNAOS_NVIDIA_VERIFY_ROOT (same pattern as
@@ -260,6 +278,91 @@ STUB
   [[ "$output" == *"nvidia-drm.modeset=1"* ]]
 }
 
+# ── initramfs parity: builtin drivers count (tunaos#1561) ─────────────────
+#
+# The floor list was measured on EL10, where CONFIG_BLK_DEV_SR=m and
+# CONFIG_VIRTIO_BLK=m so every driver in it is a .ko. Fedora 43 sets both =y,
+# making sr_mod, cdrom (selected by BLK_DEV_SR) and virtio_blk vmlinuz
+# builtins with no .ko anywhere — and the check that demanded a .ko turned
+# that into a deterministic FAIL on every bonito/bonito-rawhide nvidia flavor
+# and gnome-nvidia-hwe on three EL variants, while gnome-hwe on the same
+# kernel passed the qcow2 boot gate. These tests pin the fc43 *shape* — which
+# drivers are .ko and which are builtin — so a future kernel that really does
+# drop a boot driver still fails. The fixture keeps the EL10 $KVER string
+# because nothing in the check branches on the version; only the shape counts,
+# and hardcoding an fc43 exemption is precisely what the fix avoids.
+
+# lsinitrd stub carrying only the drivers that are =m on BOTH configs.
+stub_lsinitrd_modular_only() {
+  cat > "${BATS_TEST_TMPDIR}/bin/lsinitrd" <<STUB
+#!/usr/bin/env bash
+for d in isofs squashfs virtio_scsi overlay loop; do
+  echo "usr/lib/modules/${KVER}/kernel/fs/\${d}.ko.xz"
+done
+STUB
+  chmod +x "${BATS_TEST_TMPDIR}/bin/lsinitrd"
+}
+
+# modules.builtin as the kernel ships it: relative paths, no compression
+# suffix, one per line.
+write_modules_builtin() {
+  local root="$1"; shift
+  local d
+  : > "$root/usr/lib/modules/${KVER}/modules.builtin"
+  for d in "$@"; do
+    echo "kernel/drivers/${d}.ko" >> "$root/usr/lib/modules/${KVER}/modules.builtin"
+  done
+}
+
+@test "verify-nvidia passes when the missing boot drivers are kernel builtins" {
+  make_stub_tools
+  root="$(make_good_root)"
+  stub_lsinitrd_modular_only
+  write_modules_builtin "$root" scsi/sr_mod cdrom/cdrom block/virtio_blk
+  run_verify "$root"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"TUNAOS_NVIDIA_CONTRACT_OK"* ]]
+  [[ "$output" == *"sr_mod is built into the kernel"* ]]
+}
+
+@test "verify-nvidia still fails a boot driver that is neither packed nor builtin" {
+  make_stub_tools
+  root="$(make_good_root)"
+  stub_lsinitrd_modular_only
+  # virtio_blk deliberately absent from both — an installed disk cannot boot.
+  write_modules_builtin "$root" scsi/sr_mod cdrom/cdrom
+  run_verify "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"TUNAOS_NVIDIA_CONTRACT_FAIL"* ]]
+  [[ "$output" == *"virtio_blk"* ]]
+  [[ "$output" == *"not built into the kernel"* ]]
+}
+
+@test "verify-nvidia says so when modules.builtin cannot be read at all" {
+  make_stub_tools
+  root="$(make_good_root)"
+  stub_lsinitrd_modular_only
+  # No modules.builtin: builtin status is unprovable. That is still a FAIL,
+  # but it must not be reported as "not builtin" — a missing record and a
+  # measured absence are different diagnoses.
+  rm -f "$root/usr/lib/modules/${KVER}/modules.builtin"
+  run_verify "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"modules.builtin is missing or empty"* ]]
+}
+
+@test "a builtin entry cannot be satisfied by a different module that contains its name" {
+  make_stub_tools
+  root="$(make_good_root)"
+  stub_lsinitrd_modular_only
+  # pktcdvd.ko must not satisfy cdrom; sr_mod/virtio_blk are real so cdrom is
+  # the only driver left to fail.
+  write_modules_builtin "$root" scsi/sr_mod block/virtio_blk block/pktcdvd
+  run_verify "$root"
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"initramfs is missing cdrom"* ]]
+}
+
 @test "verify-nvidia fails when a shipped suspend unit is disabled" {
   make_stub_tools
   root="$(make_good_root)"
@@ -314,6 +417,16 @@ STUB
 echo "rpm \$*" >> "${BATS_TEST_TMPDIR}/tool.log"
 case "\$*" in
   *"-q kernel"*) echo "$1"; exit 0 ;;
+  *"--eval"*) echo "${BATS_TEST_TMPDIR}/rpmdb"; exit 0 ;;
+  *"--rebuilddb"*)
+    # Real rpm leaves the completed rebuild dir behind when its rename
+    # endgame fails; the salvage path picks that up.
+    if [[ "\${TUNAOS_TEST_REBUILD_RC:-0}" != 0 ]]; then
+      mkdir -p "${BATS_TEST_TMPDIR}/rpmrebuilddb.42"
+      echo rebuilt > "${BATS_TEST_TMPDIR}/rpmrebuilddb.42/rpmdb.sqlite"
+    fi
+    exit "\${TUNAOS_TEST_REBUILD_RC:-0}"
+    ;;
 esac
 exit 0
 STUB
@@ -335,6 +448,11 @@ make_swap_fixture() {
   for p in kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra; do
     touch "${BATS_TEST_TMPDIR}/kernel-rpms/${p}-${AKMODS_KVER}.rpm"
   done
+  # The rpmdb dir the stubbed `rpm --eval %_dbpath` names; the copy-up
+  # guard round-trips it (cp -a → rm -rf → mv), and the sentinel proves
+  # the contents survive the trip.
+  mkdir -p "${BATS_TEST_TMPDIR}/rpmdb"
+  echo sentinel > "${BATS_TEST_TMPDIR}/rpmdb/rpmdb.sqlite"
 }
 
 run_swap() {
@@ -366,9 +484,88 @@ run_swap() {
   run_swap
   [ "$status" -eq 0 ]
   [[ "$output" == *"no swap needed"* ]]
-  # No erase and no kernel install happened.
+  # No erase and no kernel install happened — and no rebuilddb either: the
+  # copy-up guard exists to protect rpm WRITES, and the aligned branch
+  # makes none, so running it there would only add risk to green cells.
   ! grep -q 'rpm --erase' "${BATS_TEST_TMPDIR}/tool.log"
   ! grep -q 'dnf -y install' "${BATS_TEST_TMPDIR}/tool.log"
+  ! grep -q -- '--rebuilddb' "${BATS_TEST_TMPDIR}/tool.log"
+}
+
+@test "kernel-swap rebuilds the inherited rpmdb before its first destructive write" {
+  # tunaOS#1823 on EL10 (#1725): the swap's rpm --erase/-ivh run against a
+  # sqlite rpmdb inherited from a lower overlay layer, and every EL10
+  # *-nvidia leg died in that transaction with "database disk image is
+  # malformed" (albacore run 32090745718). The guard must force the db
+  # through copy-up BEFORE the first write — rebuilddb after an erase has
+  # already corrupted the db protects nothing, so the ORDER is the contract.
+  make_swap_stubs "6.12.0-250.el10.x86_64"
+  make_swap_fixture
+  run_swap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"TUNAOS_RPMDB_PROBE=rebuilt-pre-swap"* ]]
+  local rebuild_line first_erase_line
+  rebuild_line="$(grep -n -- '--rebuilddb' "${BATS_TEST_TMPDIR}/tool.log" | head -1 | cut -d: -f1)"
+  first_erase_line="$(grep -n -- '--erase' "${BATS_TEST_TMPDIR}/tool.log" | head -1 | cut -d: -f1)"
+  [ -n "$rebuild_line" ]
+  [ -n "$first_erase_line" ]
+  [ "$rebuild_line" -lt "$first_erase_line" ]
+}
+
+@test "kernel-swap recreates the rpmdb dir in the upper layer before rebuilding it" {
+  # Run 32143809963: the bare rebuild died at 'failed to replace old
+  # database with new database' — overlayfs refuses the rebuild's final
+  # directory rename while the dbpath is a lower-layer dir (EXDEV). The
+  # guard must round-trip the directory (cp -a → rm -rf → mv) so every
+  # later write is same-device, and must not lose the db doing it.
+  make_swap_stubs "6.12.0-250.el10.x86_64"
+  make_swap_fixture
+  run_swap
+  [ "$status" -eq 0 ]
+  [ -d "${BATS_TEST_TMPDIR}/rpmdb" ]
+  [ "$(cat "${BATS_TEST_TMPDIR}/rpmdb/rpmdb.sqlite")" = "sentinel" ]
+  [ ! -e "${BATS_TEST_TMPDIR}/rpmdb.tbox-copyup" ]
+}
+
+@test "kernel-swap resolves a symlinked dbpath and round-trips the real directory" {
+  # Round 2 of tunaOS#1823 (nightly 32323650607): the round-trip ran and
+  # the rebuild still died at 'could not move new database in place' —
+  # because on bootc/ostree images %_dbpath is a SYMLINK into
+  # /usr/lib/sysimage/rpm, so round-tripping the literal path moved the
+  # symlink and left the real directory in the lower layer. The guard
+  # must readlink -f first and round-trip what the path resolves to.
+  make_swap_stubs "6.12.0-250.el10.x86_64"
+  make_swap_fixture
+  rm -rf "${BATS_TEST_TMPDIR}/rpmdb"
+  mkdir -p "${BATS_TEST_TMPDIR}/sysimage-rpm"
+  echo sentinel > "${BATS_TEST_TMPDIR}/sysimage-rpm/rpmdb.sqlite"
+  ln -s "${BATS_TEST_TMPDIR}/sysimage-rpm" "${BATS_TEST_TMPDIR}/rpmdb"
+  run_swap
+  [ "$status" -eq 0 ]
+  # The REAL directory was round-tripped and survived intact...
+  [ "$(cat "${BATS_TEST_TMPDIR}/sysimage-rpm/rpmdb.sqlite")" = "sentinel" ]
+  [ ! -e "${BATS_TEST_TMPDIR}/sysimage-rpm.tbox-copyup" ]
+  # ...and the symlink still points at it.
+  [ -L "${BATS_TEST_TMPDIR}/rpmdb" ]
+  [ "$(cat "${BATS_TEST_TMPDIR}/rpmdb/rpmdb.sqlite")" = "sentinel" ]
+}
+
+@test "kernel-swap salvages a completed rebuild file-level when rpm's rename fails" {
+  # Round 4 of tunaOS#1823 (run 32339591457): the desktop-nvidia legs
+  # inherit a db their stage-2 already corrupted at rest, so the
+  # transaction NEEDS the rebuild's product — and rpm builds it, then
+  # throws it away at the failing rename, printing 'replace files in ...
+  # with files from .../rpmrebuilddb.NN to recover'. The guard must do
+  # exactly that: a file-level swap, no directory rename involved.
+  make_swap_stubs "6.12.0-250.el10.x86_64"
+  make_swap_fixture
+  TUNAOS_TEST_REBUILD_RC=1 run_swap
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"TUNAOS_RPMDB_PROBE=rebuilt-salvaged"* ]]
+  # The db dir now holds the rebuilt content, not the pre-rebuild one...
+  [ "$(cat "${BATS_TEST_TMPDIR}/rpmdb/rpmdb.sqlite")" = "rebuilt" ]
+  # ...and no rebuild residue remains beside it.
+  [ ! -e "${BATS_TEST_TMPDIR}/rpmrebuilddb.42" ]
 }
 
 @test "kernel-swap replaces a mismatched kernel with the akmods one" {
@@ -379,6 +576,30 @@ run_swap() {
   [[ "$output" == *"swapping image kernel"* ]]
   grep -q -- '--erase kernel' "${BATS_TEST_TMPDIR}/tool.log"
   grep -q "rpm -ivh .*kernel-core-${AKMODS_KVER}.rpm" "${BATS_TEST_TMPDIR}/tool.log"
+}
+
+@test "kernel-swap installs the akmods kernel set with signature checking off" {
+  # bonito-rawhide's kernel cache RPMs are not GPG-signed by ublue-os's
+  # akmods build (true for every consumer, not just rawhide) -- run
+  # 31663771496 died here on fedora-bootc:rawhide with "does not verify:
+  # no signature" on all six kernel packages, while bonito installs the
+  # identical unsigned set from the identical akmods bundle without
+  # incident. The RPMs' authenticity is already established by the pinned
+  # OCI digest of the akmods_nvidia_open build stage; --nosignature drops
+  # a GPG check that source was never going to pass, not one that would
+  # have caught tampering.
+  make_swap_stubs "6.12.0-250.el10.x86_64"
+  make_swap_fixture
+  run_swap
+  [ "$status" -eq 0 ]
+  grep -q -- 'rpm -ivh --nosignature' "${BATS_TEST_TMPDIR}/tool.log"
+}
+
+@test "kernel-swap keeps automatic dracut temporary output on the boot filesystem" {
+  # The kernel RPM's post-transaction scriptlet invokes dracut before the
+  # overlay's explicit rebuild. With /boot mounted as tmpfs, leaving dracut's
+  # default temp directory elsewhere makes its final rename fail with EXDEV.
+  grep -qF 'TMPDIR=/boot rpm -ivh --nosignature' "$SWAP_SH"
 }
 
 @test "kernel-swap fails loudly when the cache holds no kernel at all" {

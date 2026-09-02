@@ -19,6 +19,16 @@ _TD_CTX="/run/context"
 # lib.sh first: manifest resolution below needs IS_DEBIAN / PKG_MGR.
 source "${_TD_CTX}/build_scripts/lib.sh"
 
+# tunaOS#1823: the stage-2 desktop dnf writes inherit an rpmdb in a LOWER
+# overlay layer; rpm mmaps it and overlayfs copy-up under an mmap'd write
+# corrupts it ("database disk image is malformed"). 20-packages.sh guards
+# its own stage, but every desktop stage's install-desktop.sh dnf writes
+# hit the same shape on the freshly imported base. Same probe as
+# 20-packages.sh — no-op off the dnf path (debian/arch/opensuse/gentoo).
+if [[ "${PKG_MGR:-}" == dnf ]]; then
+	rawhide_rpmdb_probe
+fi
+
 # Per-distro manifest overrides: <desktop>-debian.yaml / <desktop>-arch.yaml
 # beat the generic <desktop>.yaml when they exist — package names, session
 # files, and display managers differ across distros (kde-debian.yaml
@@ -79,6 +89,25 @@ elif [[ "${IS_HUMMINGBIRD:-false}" == true ]]; then
 	# libcrypto.so.3 vs .so.4. They have to be rebuilt against Hummingbird's
 	# buildroot, which is what the hummingbird: manifest sections point at.
 	_TD_OS="hummingbird"
+elif [[ "${IS_ELN:-false}" == true ]]; then
+	# ELN gets its own section for the same reason hummingbird does, and the
+	# measurement is the argument. Of the 52 packages the fedora: list
+	# installs, ELN's repos carry 42 (`dnf repoquery` against the pinned
+	# eln-bootc digest, 2026-08-25) — so `fedora` is close, but the ten
+	# misses are a strict `dnf install` away from failing the build:
+	#
+	#   NetworkManager-{openconnect,ssh,vpnc}-gnome, evince-previewer,
+	#   evince-thumbnailer, gnome-backgrounds, gnome-user-share, gvfs-afc,
+	#   qadwaitadecorations-qt5, totem-video-thumbnailer
+	#
+	# and `el10` is worse than close: that section is a GNOME 50 COPR
+	# backport for a base that ships GNOME 48, while ELN's own AppStream
+	# carries GNOME 51~beta. Routing ELN there would enable a c10s COPR on an
+	# EL11 buildroot to install packages ELN already has, newer.
+	#
+	# What the eln: section supplies is therefore the fedora list minus those
+	# ten names, aliased rather than restated — see the manifest.
+	_TD_OS="eln"
 elif [[ "$IS_FEDORA" == true ]]; then
 	_TD_OS="fedora"
 else
@@ -157,6 +186,118 @@ if [[ "${_TD_OS}" == "zypper" ]]; then
 	}
 	zypper --non-interactive --gpg-auto-import-keys refresh || true
 	_td_zypper_install_retry "${_TD_ZYPPER_PKGS[@]}"
+
+	# Re-assert the Packman multimedia stack AFTER the desktop transaction
+	# (tunaOS#1832). The base stage installs Packman's full-codec ffmpeg with
+	# --allow-vendor-change, but the desktop install can pull a NEWER
+	# openSUSE-vendor ffmpeg through a dependency bump — vendor stickiness
+	# does not survive a version-forced upgrade — and openSUSE's build
+	# compiles the h264/hevc/vc1 decoders out. Every sailfin desktop then
+	# failed the codec baseline deterministically:
+	#
+	#   ffmpeg cannot decode h264 — a free/crippled libavcodec is installed
+	#   configure --disable-decoder='h264,hevc,vc1,prores_raw,vvc'
+	#
+	# The dup is a no-op when Packman already owns the stack, so this is
+	# idempotent, and the codec baseline in verify-desktop-experience.sh
+	# remains the assertion that it worked.
+	if zypper --non-interactive repos packman-essentials >/dev/null 2>&1; then
+		attempt=0
+		until zypper --non-interactive dup --from packman-essentials --allow-vendor-change; do
+			attempt=$((attempt + 1))
+			if ((attempt >= 3)); then
+				echo "ERROR: could not re-assert Packman multimedia after the desktop install (tunaOS#1832)" >&2
+				exit 1
+			fi
+			zypper --non-interactive --gpg-auto-import-keys refresh --force || true
+			sleep $((attempt * 5))
+		done
+
+		# The dup is VERSION-driven, and that is not enough — but the first
+		# forced-install attempt (run 32047331620 follow-up, 32052422745)
+		# also taught us WHICH packages matter. The Packman codec model on
+		# openSUSE keeps the distro's ffmpeg/gstreamer packages
+		# openSUSE-vendored; full decoding comes from Packman's LIBRARY
+		# complements. Essentials carries NO package literally named
+		# `ffmpeg` (measured against the live index 2026-08-17: only
+		# ffmpeg-3..8 and libavcodecNN), so forcing the openSUSE names was
+		# a no-op: 'ffmpeg' not found in package names → "already
+		# installed" → Nothing to do → crippled decoders survive.
+		#
+		# The invariant: every installed libavcodecNN (the soname the
+		# ffmpeg binary actually loads decoders from) plus the
+		# gstreamer *-codecs complements and vlc-codecs must be
+		# Packman-vendored. Force any that are not, downgrades allowed.
+		# 'ffmpeg-[0-9]' also covers the CLI: openSUSE's versioned ffmpeg-N
+		# packages exist in both repos, and only Packman's build ships the
+		# h264/hevc decoders — an openSUSE-vendored ffmpeg-8 is the same
+		# crippled stack with a working library underneath it. (The
+		# unversioned `ffmpeg` name is deliberately not installed at all —
+		# see Containerfile.opensuse; if a dependency ever drags it in, the
+		# availability gate below surfaces it as TUNAOS_CODEC_GAP because
+		# Packman publishes no package of that name.)
+		_td_pm_lost=()
+		while IFS= read -r _td_pkg; do
+			[[ -n "$_td_pkg" ]] || continue
+			rpm -q --qf '%{VENDOR}\n' "$_td_pkg" | grep -qi packman ||
+				_td_pm_lost+=("$_td_pkg")
+		done < <(rpm -qa --qf '%{NAME}\n' 'libavcodec*' 'ffmpeg-[0-9]' 'ffmpeg' 2>/dev/null)
+		for _td_pkg in gstreamer-plugins-bad-codecs \
+			gstreamer-plugins-ugly-codecs vlc-codecs; do
+			if ! rpm -q "$_td_pkg" >/dev/null 2>&1; then
+				# The complement is not installed at all — that is the same
+				# hole with a different spelling.
+				_td_pm_lost+=("$_td_pkg")
+			elif ! rpm -q --qf '%{VENDOR}\n' "$_td_pkg" | grep -qi packman; then
+				_td_pm_lost+=("$_td_pkg")
+			fi
+		done
+		# A soname generation Packman has not published cannot be forced
+		# from packman-essentials. During a Tumbleweed ffmpeg major
+		# transition the openSUSE build is briefly the ONLY build — run
+		# 32068513822 killed all five amd64 desktops because openSUSE
+		# shipped libavcodec63 (ffmpeg 9) while Packman's newest is
+		# libavcodec62, so the forced install was a no-op and the assert
+		# below (correctly) refused to hope. Failing the image for that
+		# gap goes red on something no change in this repository can fix:
+		# force what Packman offers, surface the rest with a greppable
+		# marker, and let the codec baseline in
+		# verify-desktop-experience.sh keep asserting that the primary
+		# ffmpeg stack still decodes h264 (it links the Packman soname).
+		_td_force=()
+		for _td_pkg in "${_td_pm_lost[@]}"; do
+			if zypper --non-interactive search --match-exact --type package \
+				--repo packman-essentials "$_td_pkg" >/dev/null 2>&1; then
+				_td_force+=("$_td_pkg")
+			else
+				echo "TUNAOS_CODEC_GAP: ${_td_pkg} is not Packman-vendored and packman-essentials publishes no build to force; its consumers decode with openSUSE's crippled build until Packman catches up (tunaOS#1832)"
+			fi
+		done
+		if ((${#_td_force[@]} > 0)); then
+			echo "Packman must own the codec libraries; forcing: ${_td_force[*]} (tunaOS#1832)"
+			attempt=0
+			until zypper --non-interactive install -y --oldpackage \
+				--allow-vendor-change --force-resolution \
+				--from packman-essentials "${_td_force[@]}"; do
+				attempt=$((attempt + 1))
+				if ((attempt >= 3)); then
+					echo "ERROR: could not force the codec libraries back to Packman (tunaOS#1832)" >&2
+					exit 1
+				fi
+				zypper --non-interactive --gpg-auto-import-keys refresh --force || true
+				sleep $((attempt * 5))
+			done
+			# Assert, don't hope: a second no-op here means the force above
+			# quietly failed and the codec baseline will fail later anyway —
+			# fail HERE, where the zypper output is still on screen.
+			for _td_pkg in "${_td_force[@]}"; do
+				rpm -q --qf '%{VENDOR}\n' "$_td_pkg" | grep -qi packman || {
+					echo "ERROR: ${_td_pkg} still not Packman-vendored after the forced install (tunaOS#1832)" >&2
+					exit 1
+				}
+			done
+		fi
+	fi
 fi
 
 # ── Emerge path ────────────────────────────────────────────────────────────────
@@ -180,6 +321,17 @@ if [[ "${_TD_OS}" == "emerge" ]]; then
 		echo "       This would yield an image tagged ${_TD_DESKTOP} with no desktop in it." >&2
 		exit 1
 	fi
+
+	# Binhost version lock — tuna-os/tunaOS#1802. getbinpkg is configured
+	# (Containerfile.gentoo, base stage) but only substitutes a binary on an
+	# exact CPV match; a bare `emerge --sync` races ahead of the binhost's own
+	# rebuild cadence for fast-moving categories like kde-plasma, so nothing
+	# in the anchor package's dependency chain (packages.emerge[0] — the
+	# meta/-light/-4-meta package for kde/gnome/xfce) gets served as binary.
+	# Best-effort and fails open; see the script header for the full story.
+	"${_TD_CTX}/build_scripts/desktop/gentoo-binhost-version-lock.sh" \
+		"${_TD_EMERGE_PKGS[0]%%/*}" "${_TD_EMERGE_PKGS[@]}" || true
+
 	emerge --verbose "${_TD_EMERGE_PKGS[@]}"
 fi
 
@@ -392,7 +544,7 @@ if [[ "${_TD_OS}" == "pacman" ]]; then
 	# now runs the same gate every other package manager does.
 fi
 
-# ── DNF path (el10/fedora/hummingbird) ───────────────────────────────────────
+# ── DNF path (el10/fedora/hummingbird/eln) ───────────────────────────────────
 # These sections are maps (groups/group_options/copr/optional/versionlock). The
 # list-style sections (apt/pacman/zypper/emerge) installed above and must skip
 # this — indexing an array with .group_options etc. is a hard yq error.
@@ -401,7 +553,7 @@ fi
 # differs is only WHICH repository satisfies the names, which the manifest's
 # hummingbird: section supplies. Leaving it out would route a dnf base down
 # the list-style path and produce that same yq error.
-if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummingbird" ]]; then
+if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummingbird" || "${_TD_OS}" == "eln" ]]; then
 
 	# Plain (non-COPR) baseurl repos — e.g. the tuna-os xfce-wayland repo,
 	# which lives at its own R2 path (repo.tunaos.org/xfce/...), not the main
@@ -420,13 +572,40 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 		_TD_RN=$($YQ -r ".packages.${_TD_OS}.repos[$i].name" "${_TD_MANIFEST}")
 		_TD_RB=$($YQ -r ".packages.${_TD_OS}.repos[$i].baseurl" "${_TD_MANIFEST}")
 		_TD_RP=$($YQ -r ".packages.${_TD_OS}.repos[$i].priority // \"\"" "${_TD_MANIFEST}")
+		_TD_RU=$($YQ -r ".packages.${_TD_OS}.repos[$i].unsigned // false" "${_TD_MANIFEST}")
 		[[ -z "${_TD_RN}" || "${_TD_RN}" == "null" ]] && continue
+		# `unsigned: true` is allowed for exactly one shape of repo: a
+		# file:// path the Containerfile bind-mounted out of an OCI image
+		# that is pinned BY DIGEST in image-versions.yaml (utah-packages,
+		# /run/utah-packages). There the digest is the signature: the bytes
+		# cannot differ from what was reviewed, so per-RPM gpgcheck adds
+		# nothing and the RPMs carry no signature to check. Anything fetched
+		# over the network at build time has no such pin and MUST stay
+		# signed (tuna-os/tunaOS#1655) -- so an unsigned https:// repo is a
+		# manifest error, not a config choice.
+		if [[ "${_TD_RU}" == "true" && "${_TD_RB}" != file://* ]]; then
+			echo "ERROR: ${_TD_MANIFEST}: repo ${_TD_RN} is 'unsigned: true' but its baseurl is not file:// (${_TD_RB}); only digest-pinned, bind-mounted content may skip gpgcheck" >&2
+			exit 1
+		fi
 		{
 			echo "[${_TD_RN}]"
 			echo "name=${_TD_RN}"
 			echo "baseurl=${_TD_RB}"
 			echo "enabled=1"
-			echo "gpgcheck=0"
+			if [[ "${_TD_RU}" == "true" ]]; then
+				echo "gpgcheck=0"
+			else
+				# gpgcheck=1 verifies each RPM against the tuna-os signing key
+				# (every repo.tunaos.org publish pipeline runs `rpmsign --addsign`
+				# before upload — see tuna-os/tunaos-packages#394). repo_gpgcheck
+				# stays 0: repomd.xml isn't detached-signed yet (no repomd.xml.asc
+				# published), so turning that on would hard-fail every dnf
+				# transaction against these repos, not just add a check. Matches
+				# the already-working contrib/install-gnome49.sh pattern rather
+				# than tuna-os/tunaOS#1655's literal ask of both =1.
+				echo "gpgcheck=1"
+				echo "gpgkey=https://repo.tunaos.org/public.gpg"
+			fi
 			echo "repo_gpgcheck=0"
 			echo "skip_if_unavailable=False"
 			[[ -n "${_TD_RP}" && "${_TD_RP}" != "null" ]] && echo "priority=${_TD_RP}"
@@ -457,8 +636,22 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 		for exc in "${_TD_EXCLUDES[@]}"; do
 			[[ -n "$exc" ]] && _TD_EXCL_ARGS+=("-x" "$exc")
 		done
+		# --skip-unavailable is command-scoped in dnf5: it goes AFTER
+		# `install`, never between `-y` and it. Spelled the other way it
+		# is not a warning, it is `Unknown argument … (It has to be
+		# placed after the command.)` — and the `||` below then quietly
+		# re-runs the whole set through install_available, which ignores
+		# the exclude list above and forces install_weak_deps=False.
+		# Build Hummingbird #66 (run 32907940350) shipped all 52 gnome
+		# packages that way. tests/test_dnf_flags_land_after_the_
+		# subcommand.py lints for it tree-wide.
 		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
-			dnf_retry -y --skip-unavailable install "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}" || install_available "${_TD_PKGS[@]}"
+			dnf_retry -y install --skip-unavailable "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}" || install_available "${_TD_PKGS[@]}"
+			# Whichever branch ran, --skip-unavailable can have dropped
+			# packages without saying so. install_available reports its own
+			# misses; the transaction above reports nothing, so ask the rpm
+			# database what actually landed.
+			record_unsatisfied_requests "install-desktop.sh:${_TD_DESKTOP}" "${_TD_PKGS[@]}"
 		else
 			dnf_retry -y install "${_TD_EXCL_ARGS[@]}" "${_TD_PKGS[@]}"
 		fi
@@ -491,7 +684,7 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 		fi
 		# shellcheck disable=SC2086
 		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
-			dnf -y --enablerepo="${_TD_REPO_ID}" --skip-unavailable install ${_TD_COPR_OPTS} "${_TD_COPR_PKGS[@]}" || install_available "${_TD_COPR_PKGS[@]}" || true
+			dnf -y --enablerepo="${_TD_REPO_ID}" install --skip-unavailable ${_TD_COPR_OPTS} "${_TD_COPR_PKGS[@]}" || install_available "${_TD_COPR_PKGS[@]}" || true
 		else
 			dnf -y --enablerepo="${_TD_REPO_ID}" install ${_TD_COPR_OPTS} "${_TD_COPR_PKGS[@]}" || true
 		fi
@@ -757,7 +950,14 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 	cat >/usr/lib/systemd/system/tunaos-desktop-contract.service <<EOF
 [Unit]
 Description=Verify TunaOS ${_TD_DESKTOP} desktop experience
-After=display-manager.service
+# dconf-update.service compiles /etc/dconf/db/*.d keyfiles at boot. On bases
+# where the compiled db is baked at build this is a no-op; on guppy:gnome the
+# baked db was absent and the contract raced the compile at first boot,
+# failing on "missing compiled dconf database" while dconf-update would have
+# fixed it moments later (boot-gate run 32323551841). Order after it so the
+# check judges the settled state — a genuinely broken dconf still fails.
+After=display-manager.service dconf-update.service
+Wants=dconf-update.service
 Requires=display-manager.service
 
 [Service]

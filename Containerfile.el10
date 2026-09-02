@@ -14,9 +14,18 @@ ARG IMAGE_NAME_VARIANT
 # without --build-arg overrides will fail with a clear error.
 ARG COMMON_IMAGE_REF="ghcr.io/projectbluefin/common:unpinned-must-override"
 ARG BREW_IMAGE_REF="ghcr.io/ublue-os/brew:unpinned-must-override"
+# projectbluefin/utah-packages: Bluefin's GNOME 51 for Hummingbird as a dnf
+# repository inside an OCI image (/repository, createrepo_c output; the image
+# is cosign-signed and pinned by digest in image-versions.yaml). Only the
+# gnome stage of a hummingbird build reads it -- bind-mounted, never copied,
+# so no image carries 500 MB of RPMs -- through the file:// repo declared in
+# manifests/desktops/gnome.yaml's hummingbird section
+# (tuna-os/tunaos-packages#629).
+ARG UTAH_PACKAGES_IMAGE_REF="ghcr.io/projectbluefin/utah-packages:unpinned-must-override"
 
 FROM ${COMMON_IMAGE_REF} AS common
 FROM ${BREW_IMAGE_REF} AS brew
+FROM ${UTAH_PACKAGES_IMAGE_REF} AS utah-packages
 
 # Context layer combines build-time dependencies and configuration files.
 # NOTE: no zirconium content here — the context stage feeds EVERY desktop
@@ -138,6 +147,15 @@ RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=bind,from=context,source=/,target=/run/context \
    /run/context/build_scripts/91-arch-customizations.sh
 
+# Per-variant overrides, after the per-arch ones so a variant can override an
+# arch default. This is what delivers system_files_overrides/<variant>/ into
+# the image -- notably hummingbird's 50-hummingbird.toml, without which
+# `bootc install to-disk` aborts installing GRUB onto xfs.
+RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+   /run/context/build_scripts/92-variant-customizations.sh
+
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
@@ -167,9 +185,13 @@ RUN rm -rf /opt && ln -s /var/opt /opt
 FROM base-no-de AS gnome
 # Bluefin LTS experience payload is scoped to GNOME images.
 COPY --from=common /system_files/bluefin /
+# /run/utah-packages is read only when the manifest's OS section declares a
+# repo there (hummingbird does); on every other variant it is an unused
+# read-only directory for the duration of this one RUN.
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
+  --mount=type=bind,from=utah-packages,source=/repository,target=/run/utah-packages \
   /run/context/build_scripts/desktop/install-desktop.sh gnome
 # Extensions are a separate layer so DE package install caches independently
 # of submodule updates to extension sources.

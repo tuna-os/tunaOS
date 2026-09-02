@@ -145,8 +145,20 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 }
 
 @test "simulate-matrix.sh: fails when build-config.yml is missing" {
-  run bash -c "cd \$(mktemp -d) && bash ${REPO_ROOT}/scripts/simulate-matrix.sh 2>/dev/null; exit \$?"
+  # "Missing" now means the resolved config does not exist, not "the caller's
+  # CWD happens not to contain one". Before scripts/lib/build-config.sh this
+  # test cd'd to a temp dir, which only worked because the script read a
+  # relative path — the CWD-dependence this seam deliberately removes.
+  run env TUNAOS_BUILD_CONFIG="${BATS_TEST_TMPDIR}/absent.yml" bash "${REPO_ROOT}/scripts/simulate-matrix.sh"
   [ "$status" -ne 0 ]
+  [[ "$output" == *"build config not found"* ]]
+}
+
+@test "simulate-matrix.sh: resolves its config from any working directory" {
+  # The inverse of the assertion above, and the actual point of the change:
+  # running from an unrelated CWD must now succeed.
+  run bash -c "cd \$(mktemp -d) && bash ${REPO_ROOT}/scripts/simulate-matrix.sh"
+  [ "$status" -eq 0 ]
 }
 
 @test "simulate-matrix.sh: passes shellcheck" {

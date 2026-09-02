@@ -1,0 +1,344 @@
+# What "green" means for a tunaOS cell.
+#
+# A cell is one (variant, flavor) pair — e.g. yellowfin:gnome. Historically
+# "green" meant the image built and promoted, which is the weakest claim the
+# pipeline can make: an image can build, push, promote, and ship no desktop at
+# all (tunaOS#858, marlin:kde with no /usr/share/wayland-sessions).
+#
+# This file is the source of truth for the criteria. docs/GREEN-CRITERIA.md is
+# the prose companion; tests/test_green_criteria.py keeps them honest.
+#
+# `enforcement` is deliberately explicit, because the failure mode this whole
+# exercise exists to fix is a criterion that everyone believes is checked and
+# which nothing actually blocks on:
+#
+#   blocking     a cell cannot be green without it
+#   advisory     measured and reported, does not yet block
+#   unimplemented  no automated assertion exists yet
+#
+# `status_2026_08_17` records where each criterion stood when the bar was
+# raised, so progress is measurable rather than remembered.
+#
+# `gates` is the machine-readable half of `asserted_by`: the workflow, the
+# job(s) and the step that produce the verdict, plus the scripts they run.
+# tests/test_ci_contract.py walks it and proves every gate exists, is
+# reachable from an active trigger, and (for blocking criteria) cannot be
+# waved through by continue-on-error -- because a test existing in the
+# repository is not the same as a test being run (#2250).
+#
+# `freshness_sla_days` is the maximum age of evidence before a verdict is
+# stale. The schedule that produces the evidence must fire at least that
+# often; the contract test checks the cron against the number.
+
+version: 1
+raised_on: "2026-08-17"
+
+# The composite rule. This is the part that makes the list mean something:
+# without it, adding criteria just adds more things that silently do not run.
+rule:
+  summary: >-
+    A cell is green only if every blocking criterion has an affirmative,
+    current result. A criterion that was skipped, never tested, or whose
+    evidence is stale does not count as satisfied.
+  never_tested_is_not_green: true
+  skipped_is_not_green: true
+  stale_is_not_green: true
+
+# When an advisory criterion has earned the right to block. Measured, not
+# remembered: scripts/graduation-check.py reads each advisory gate's
+# scheduled-run history on main against this bar (weekly, via
+# graduation-check.yml) and opens an issue when one is ready. A human still
+# flips `enforcement`, because graduating changes what green means for every
+# cell. Override per criterion with a `graduation:` block on the criterion
+# (e.g. a monthly gate needs fewer consecutive runs to prove itself).
+graduation:
+  required_consecutive_passes: 3
+  maximum_failure_rate: 0.10
+  lookback_runs: 20
+
+criteria:
+  - id: builds
+    name: Image builds and promotes
+    proves: The image builds for every declared architecture and reaches its published tag.
+    asserted_by: .github/workflows/reusable-build-image.yml (build_push, Manifest, Promote)
+    enforcement: blocking
+    freshness_sla_days: 2
+    gates:
+      - workflow: .github/workflows/reusable-build-image.yml
+        jobs:
+          build_push: Build Image
+          manifest: Push Manifest
+          tag-image: Pull Image and Apply Tags
+    status_2026_08_17: "84 of 142 cells"
+
+  - id: desktop
+    name: The declared desktop is actually present and startable
+    proves: >-
+      The packages, session files and display manager for the flavor landed in
+      the published image, and verify-desktop-experience.sh passes against it.
+    asserted_by: .github/workflows/desktop-contract-sweep.yml + build_scripts/checks/verify-desktop-experience.sh
+    enforcement: blocking
+    freshness_sla_days: 2
+    gates:
+      - workflow: .github/workflows/desktop-contract-sweep.yml
+        jobs:
+          sweep: Run the contract against the published image
+        scripts:
+          - build_scripts/checks/verify-desktop-experience.sh
+    status_2026_08_17: "35 of 52 cells (47 tested, 5 never tested)"
+    status_2026_08_19: >-
+      graduated advisory → blocking. Composite green drops 63 → 60 (-3): the
+      three cells lose green because their desktop contract is not (yet)
+      affirmatively verified, not because the axis broke. Runs against the
+      published image without booting, so it is not subject to the DRM gap.
+    notes: >-
+      Runs against the published image without booting, so it is not subject to
+      the missing-DRM-render-node gap. This is the axis that catches "built
+      fine, shipped the wrong desktop".
+
+  - id: boots
+    name: The image boots to its contract target
+    proves: >-
+      A disk built from the image boots under QEMU and its in-image contract
+      marker fires: desktops to a graphical session
+      (TUNAOS_DESKTOP_CONTRACT_OK), base to an operable multi-user bootc
+      system (TUNAOS_BASE_CONTRACT_OK).
+    asserted_by: .github/workflows/reusable-build-image.yml (Gate → scripts/iso-e2e.sh --disk)
+    enforcement: blocking
+    freshness_sla_days: 2
+    gates:
+      - workflow: .github/workflows/reusable-build-image.yml
+        jobs:
+          verify_boot: Boot and verify
+        scripts:
+          - scripts/iso-e2e.sh
+    # Which cells the criterion is scored on. Cells outside the scope are not
+    # judged on boots at all (their composite is decided by the remaining
+    # applicable criteria) — a scope entry here is a REVIEWED declaration that
+    # CI cannot boot that cell, with the reason recorded.
+    scope:
+      # arm64-only flavors: the gate is an x86 QEMU/KVM boot; no aarch64 KVM
+      # on hosted runners (the images are verified by the dispatched Asahi
+      # harness instead).
+      excludes_flavor_suffixes: ["-asahi"]
+      # Hardware derivations of an already-gated base: QEMU exercises neither
+      # an HWE kernel's reason for existing nor an NVIDIA userspace.
+      # Plain `base` (added 2026-08-18, maintainer decision): base images are
+      # parent layers, not user-facing artifacts — nobody is supposed to run
+      # them as-is. Their boot machinery is transitively proven by every
+      # desktop Gate built on top of them (marlin's 15 Gate-passing cells
+      # prove marlin's base boots without ever booting marlin:base). The
+      # dedicated base Gate W3 added also never delivered its serial marker
+      # on any variant, so it was cost without signal; removed from
+      # reusable-build-image.yml the same day. Re-gate `base` here if it
+      # ever becomes a supported end-user target.
+      excludes_flavors: ["base", "base-hwe", "base-nvidia"]
+    status_2026_08_17: "skippable per cell; silently broke matrix-wide on 2026-08-17 (#1811)"
+    status_2026_08_17_pm: >-
+      blocking. Gates restored by #1818 (marlin gnome/kde/xfce passed same
+      day); base cells gated by tunaos-base-contract.service. Cells whose
+      compositor cannot render under QEMU (the W9 DRM gap) now show ❌/⬜ —
+      per W3, they render as not-green rather than green-except-boot.
+    status_2026_08_18: >-
+      blocking, desktops only. Plain `base` moved into the scope exclusions
+      (see scope above): parent layers, transitively proven by their
+      desktops' Gates. The desktop Gate is now the whole boots axis, and it
+      demonstrably works — marlin passed all 15 of its desktop-family Gates
+      on the 08-18 board.
+    notes: >-
+      Distinct from `desktop`: that one inspects the image, this one runs it.
+      Some Smithay-based desktops may need a DRM render node hosted runners
+      lack (W9); measured Gate outcomes decide per cell — marlin's kde and
+      xfce passed 2026-08-17, so "needs DRM" is per-variant evidence, not a
+      blanket exemption.
+
+  - id: iso
+    name: The ISO boots and offers an installer
+    proves: The live ISO boots and the installer frontend appears on screen.
+    asserted_by: .github/workflows/iso-e2e.yml + scripts/iso-e2e.sh (Installer smoke)
+    enforcement: unimplemented
+    freshness_sla_days: 8
+    gates:
+      - workflow: .github/workflows/iso-e2e.yml
+        jobs:
+          e2e: Run readiness e2e
+        scripts:
+          - scripts/iso-e2e.sh
+    status_2026_08_17: "31 of 36 ISO cells ever tested; 0 pass"
+    blocked_by: ["#1772", "#1556"]
+    notes: >-
+      The only axis that checks a human could actually install. Zero cells pass
+      today, so "working ISOs" is currently unproven everywhere.
+
+  - id: install
+    name: Installation completes and the installed system boots
+    proves: >-
+      An unattended install runs to completion and the resulting system boots
+      on its own, including the encrypted-disk path.
+    asserted_by: .github/workflows/luks-e2e.yml
+    enforcement: advisory
+    freshness_sla_days: 35
+    graduation:
+      required_consecutive_passes: 2
+    gates:
+      - workflow: .github/workflows/luks-e2e.yml
+        jobs:
+          luks: LUKS install + unlock verification
+    status_2026_08_17: "31 of 52 cells (47 tested, 5 never tested)"
+    notes: >-
+      LUKS E2E drives fisherman over SSH and never looks at the screen, so it
+      proves install-and-boot but not that the installer GUI works. `iso` is
+      the complement and must not be conflated with it.
+
+  - id: lifecycle
+    name: Update, rebase and rollback work
+    proves: >-
+      A deployed system can bootc upgrade to a newer build, rebase across
+      streams, resolve aliases, and roll back off a bad deployment.
+    asserted_by: >-
+      .github/workflows/bootc-lifecycle.yml (weekly, Thu 05:00 UTC; red runs
+      auto-retried once by rerun-infra-failures.yml when the failure is
+      infra-classified) — cell verdicts feed the scoreboard worst-of-arches
+    enforcement: advisory
+    freshness_sla_days: 8
+    gates:
+      - workflow: .github/workflows/bootc-lifecycle.yml
+        jobs:
+          lifecycle: Validate bootc image update, rebase, rollback & aliases
+    status_2026_08_17: "0 of 52 cells (0 tested, 52 never tested)"
+    status_2026_08_17_pm: >-
+      advisory. First full sweep (run 32040213366): 168 jobs, 133 passed,
+      43 of 53 arm64 clean; every failure mapped to a known class (#1819,
+      #1820, #1823, unpublished hummingbird images) with no new class.
+      Advisory until a second consecutive weekly sweep holds the shape,
+      then graduate.
+    notes: >-
+      For a bootc OS the update transaction is the product: an image that
+      installs perfectly and cannot upgrade, or cannot roll back off a bad
+      deployment, has failed at the thing immutability is sold on. Every user
+      meets upgrade repeatedly and the ISO once.
+
+  - id: parity
+    name: Package set matches the upstream reference
+    proves: The flavor ships the packages its upstream equivalent ships.
+    asserted_by: >-
+      .github/workflows/package-parity.yml (daily) →
+      scripts/package-parity.sh --audit; verdicts feed the scoreboard via the
+      package-parity-baseline artifact
+    enforcement: advisory
+    freshness_sla_days: 2
+    gates:
+      - workflow: .github/workflows/package-parity.yml
+        jobs:
+          audit: Audit every desktop against its base
+        scripts:
+          - scripts/package-parity.sh
+    # Which cells have an upstream that publishes a comparable package set.
+    # Like the boots scope, an entry here is a REVIEWED declaration: only the
+    # Fedora/EL-family variants have a Universal Blue reference image built
+    # from the same package universe — diffing marlin (Arch) or flounder
+    # (Debian) against Bluefin would measure packaging-name noise, not parity.
+    # scripts/package-parity.sh --upstream-audit reads this map.
+    upstream_references:
+      gnome:
+        bonito: ghcr.io/ublue-os/bluefin:stable
+        yellowfin: ghcr.io/ublue-os/bluefin:lts
+        albacore: ghcr.io/ublue-os/bluefin:lts
+        skipjack: ghcr.io/ublue-os/bluefin:lts
+      kde:
+        bonito: ghcr.io/ublue-os/aurora:stable
+    status_2026_08_17: "not scheduled"
+    status_2026_08_17_pm: >-
+      scheduled daily. First cadence asserts the desktop-vs-own-base delta
+      (the #858 no-desktop-at-all shape). Second cadence (same workflow,
+      upstream job) measures the diff against the upstream_references map
+      above — measurement only, to establish the noise floor; the criterion
+      stays advisory at least until per-variant thresholds exist.
+
+  - id: no_silent_omissions
+    name: The build tells the truth about what it shipped
+    proves: >-
+      No package was dropped without the result being surfaced and acted on.
+    asserted_by: >-
+      build_scripts/checks/verify-package-wishlist.sh — at build time as a
+      gate, and daily against every published image by
+      .github/workflows/desktop-contract-sweep.yml (omissions read)
+    enforcement: blocking
+    freshness_sla_days: 2
+    gates:
+      - workflow: .github/workflows/desktop-contract-sweep.yml
+        jobs:
+          sweep: Run the contract against the published image
+        scripts:
+          - build_scripts/checks/verify-package-wishlist.sh
+    status_2026_08_17: "written into every image; read by nothing on a schedule"
+    status_2026_08_17_pm: "scheduled: the contract sweep reads the manifest from every image it pulls and scores it against package-miss-allowlist.txt"
+    status_2026_08_19: >-
+      graduated advisory → blocking. The composite green count did not drop
+      (63 → 63): every composite-green cell already carries an affirmative
+      omissions verdict, so the flip only makes an existing check bite instead
+      of leaving it advisory. First of the Part 3 Phase 4 graduations.
+    notes: >-
+      Distinct from `parity`. Parity asks whether the set matches upstream;
+      this asks whether the build admitted what it silently skipped.
+      install_available and --skip-unavailable mean missing packages never fail
+      a build — which is deliberate, and is exactly how marlin:kde published
+      with no wayland-sessions at all (tunaOS#858).
+
+  - id: rebuildable
+    name: The image can still be built tomorrow
+    proves: Every pinned input still resolves.
+    asserted_by: >-
+      scripts/check-base-image-pins.sh + scripts/check-package-repo-pins.py
+      (.github/workflows/check-base-image-pins.yml, nightly 22:20 UTC)
+    enforcement: advisory
+    freshness_sla_days: 2
+    gates:
+      - workflow: .github/workflows/check-base-image-pins.yml
+        jobs:
+          check: Verify every base image pin still resolves
+          package-repos: Verify every package-repo pin still resolves
+        scripts:
+          - scripts/check-base-image-pins.sh
+          - scripts/check-package-repo-pins.py
+    status_2026_08_17: "13 of 13 base-image pins resolve"
+    status_2026_08_17_pm: >-
+      package-repo pins now checked nightly alongside the base digests: dnf
+      baseurls (repo.tunaos.org snapshot datestamps included), COPR projects
+      (#391's single point of failure among them), PPAs, and the tideforge
+      APT repo + keyring — 14 of 14 resolved at first measurement. Toolchain
+      payloads and action pins remain unchecked.
+    notes: >-
+      A cell that built last night and cannot build tonight was never really
+      green. On 2026-08-16 three variants died at once because upstream
+      garbage-collected their base digests with nothing in this repo changing
+      (#1788). Package repos fail the same way with worse error messages: a
+      cleaned snapshot bucket or a deleted personal COPR 404s at dnf time,
+      mid-build, per flavor.
+
+  - id: arch_honesty
+    name: A cell may not declare an architecture it cannot satisfy
+    proves: Every declared platform has a resolvable package source.
+    asserted_by: >-
+      scripts/check-base-image-pins.sh (.github/workflows/check-base-image-pins.yml,
+      nightly 22:20 UTC) — every declared platform must exist in the
+      variant's base-image manifest list
+    enforcement: advisory
+    freshness_sla_days: 2
+    gates:
+      - workflow: .github/workflows/check-base-image-pins.yml
+        jobs:
+          check: Verify every base image pin still resolves
+        scripts:
+          - scripts/check-base-image-pins.sh
+    status_2026_08_17: "hummingbird declares linux/arm64 against a repo that 404s (#1755 §3)"
+    status_2026_08_17_pm: >-
+      first cadence asserted: declared platforms are checked against the base
+      image's manifest architectures nightly, before the builds. Package-repo
+      arch coverage (the hummingbird case proper — the base existed, its
+      package source did not) is the remaining gap, shared with W7's
+      repo-pin extension.
+    notes: >-
+      Four guaranteed-red cells per night that no change in this repository can
+      clear. Declaring an unsatisfiable architecture should be a configuration
+      error, not a nightly failure.

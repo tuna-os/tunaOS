@@ -44,7 +44,7 @@ Stage 4:  gnome-nvidia-hwe                              (layer on gnome-hwe)
 |------|------|
 | `build-yellowfin.yml` / `build-albacore.yml` / etc. | Top-level per-variant entry points (trigger: schedule + manual) |
 | `build-variant.yml` | Unified orchestrator — generates matrix, runs 4-stage DAG |
-| `reusable-build-image.yml` | Per-platform build + push + sign + boot-gate |
+| `reusable-build-image.yml` | Per-platform build + push + sign + boot-gate (Decomposition Plan: [docs/architecture/reusable-build-image-decomposition.md](architecture/reusable-build-image-decomposition.md)) |
 | `reusable-build-artifacts.yml` | ISO/QCOW2 generation |
 
 ---

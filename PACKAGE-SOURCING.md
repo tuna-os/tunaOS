@@ -1,6 +1,6 @@
 # tunaOS Package Sourcing Policy
 
-**Status**: DRAFT — proposed 2026-08-11 by the strategist agent for review
+**Status**: ACTIVE — adopted 2026-08-11; migration of existing exceptions is tracked below
 **Owner**: tuna-os (hanthor) / strategist
 **Tracks**: [#1319](https://github.com/tuna-os/tunaos/issues/1319) (maintainer directive), [#1323](https://github.com/tuna-os/tunaos/issues/1323) (strategic framing)
 **Interacts with**: Q4 supply-chain hardening ([#1193](https://github.com/tuna-os/tunaos/issues/1193), [#1187](https://github.com/tuna-os/tunaos/issues/1187)), upstream snapshot automation ([#1194](https://github.com/tuna-os/tunaos/issues/1194)), desktop parity ([#1294](https://github.com/tuna-os/tunaos/issues/1294))
@@ -71,13 +71,49 @@ A repo enters the allowlist only when all of the following hold:
 
 | Repo | Gap covered | Consuming variants | Added | Next review | Justification |
 |------|-------------|--------------------|-------|-------------|---------------|
-| *(pending audit)* | — | — | — | — | Audit per variant lands before entries are added; maintainer-cited codec/Nvidia repos are the starting candidates |
+| *(pending maintainer sign-off)* | — | — | — | — | Candidates below come from a code audit (2026-08-13); none are formally admitted yet — that decision stays with the maintainer/sec-check per the admission criteria above |
+
+## Audit findings (2026-08-13, ahead of the 08-22 checkpoint)
+
+`grep`-based inventory of every `build_scripts/`/`manifests/` reference to a
+COPR, PPA, OBS project, or other external repo, as it exists on `main` today.
+Classified against the sourcing tiers above — **classification only, no
+migration performed by this audit**.
+
+| Source | What it provides | Where used | Classification | Notes |
+|---|---|---|---|---|
+| `rpmfusion` (free + nonfree) | Standard Fedora multimedia/codec/driver packages absent from Fedora's own repos | `build_scripts/10-base-packages.sh` (Bonito) | Tier-3 candidate | Fedora-ecosystem-standard third-party repo; large install base, actively maintained — the kind of repo the allowlist process exists to formalize, not eliminate |
+| `negativo17` (`epel-multimedia`, `fedora-nvidia`/`epel-nvidia`) | Multimedia codecs, Nvidia drivers | `build_scripts/10-base-packages.sh`, `build_scripts/overlay/overrides/nvidia/20-nvidia.sh` | Tier-3 candidate | **This is the exact repo #1319 cited by name as acceptable** — highest-priority formal allowlist entry |
+| `pkgs.tailscale.com` (vendor repo) | Tailscale VPN mesh client | `build_scripts/20-packages.sh` | Needs clarification | Repo file is written then immediately `enabled=0`'d — unclear if this definition is load-bearing or dead code; flag for the script owner, not necessarily a sourcing violation |
+| ~~COPR `trixieua/morewaita-icon-theme`~~ | `morewaita-icon-theme` (GNOME icon theme) | `build_scripts/20-packages.sh` (gnome flavors) | **Migrated** | Was a single-maintainer personal COPR with no allowlist entry. Now built from upstream `somepaulo/MoreWaita` source directly — `install.sh` just copies static icon files, no build step, so cloning the real project at a pinned tag removes the third-party repackage entirely |
+| ~~COPR `ublue-os/packages`~~ | `krunner-bazaar` | `build_scripts/desktop/kcm-ublue.sh` | **Migrated** | Was a regression against ROADMAP.md's Q2 goal "ublue-os/packages COPR eliminated" (#436) — this one package still pulled from it on Fedora. Unified onto the source-build path EL10 already used in the same script (a ~10s CMake KF6 plugin build), retiring the last Fedora call site of that COPR |
+| COPR `zirconium/packages`, `yalter/niri-git`, `avengemedia/danklinux`, `avengemedia/dms-git`, `yselkowitz/wlroots-epel`, `ligenix/enterprise-cosmic` | niri itself, DankMaterialShell suite, wlroots-epel, COSMIC-on-EL10 backport | `build_scripts/desktop/niri.sh` (Fedora/EL10 niri build) | **Violation — largest gap found** | The niri desktop's core WM binary ships from an individual's git-build COPR (`yalter/niri-git`), not Fedora's own `niri` package. Six distinct COPRs feed one desktop flavor. Migrating this is a real Tideforge packaging project, not a quick fix — flagging scope honestly rather than understating it |
+| COPR `@asahi/fedora-remix-branding`, `@asahi/u-boot`; CentOS Hyperscale SIG repos; OBS `home:mrkcee` | Apple Silicon (Asahi) hardware enablement: branding, u-boot, kernel | `build_scripts/overlay/asahi.sh` | Tier-3 candidate, scoped exception | Upstream Asahi Linux project's own infrastructure for hardware this org doesn't control the kernel for — narrow, hardware-gated (only applies to `*-asahi` builds), well-precedented pattern for this class of variant |
+| `ppa:elementary-os/stable` | Pantheon desktop environment | `build_scripts/desktop/install-desktop.sh` (Gurnard/Pantheon) | Tier-3 candidate, scoped exception | Official upstream elementary OS PPA — the canonical source for Pantheon on Ubuntu, not a third-party mirror |
+| Manifest-driven `packages.<os>.copr[]` block (`install-desktop.sh`) | General per-desktop COPR mechanism | Any desktop manifest that declares a `copr:` block | Mechanism, not a violation itself | This is *how* a desktop opts into a COPR — the entries above are what actually uses it. Worth a lint step (see §Enforcement) so new `copr:` blocks require a matching allowlist entry, not just code review |
+| `ppa:ubuntu-asahi/ubuntu-asahi` | Asahi kernel and hardware enablement | `build_scripts/ubuntu-kernel.sh` (Asahi builds) | Tier-3 candidate, hardware-scoped | Upstream Asahi project infrastructure; applies only to Apple Silicon variants and is not a general package source |
+| `ppa:avengemedia/danklinux`, `ppa:avengemedia/dms` | Niri/DankMaterialShell packages on Ubuntu | `build_scripts/desktop/niri.sh` (Ubuntu Niri) | Tier-3 candidate, variant-scoped | Supplies packages absent from the Ubuntu archive; migrate to Tideforge where feasible, or admit explicitly before adding new consumers |
+| `sharpenedblade/t2linux` COPR | T2 kernel and hardware enablement | `build_scripts/overlay/t2.sh` | Tier-3 candidate, hardware-scoped | Required for Apple T2 hardware support; never enabled on non-T2 images |
+| CachyOS repositories | CachyOS kernel and tuning packages | `build_scripts/overlay/cachyos.sh` | Tier-3 candidate, hardware/performance-scoped | Distribution-owned repositories used only by CachyOS overlays; pin and review independently of generic Arch packages |
+| Gentoo GURU overlay | Niri and related Gentoo ebuilds | `manifests/desktops/niri.yaml` | Tier-3 candidate, variant-scoped | Community overlay supplies packages missing from Gentoo main; build in-house or record maintainer admission before expanding use |
+| openSUSE Virtualization repository | Container tooling on openSUSE | `Containerfile.opensuse` | Tier-3 candidate, base-scoped | Official openSUSE project repository, but separate from the base system repos; verify package necessity and signing before admission |
+
+The follow-up inventory above covers the previously unreviewed apt, Arch,
+openSUSE, and Gentoo paths. It found no additional AUR or OBS source used by a
+published package path beyond the scoped repositories listed here. These are
+classifications, not admissions: each candidate still needs maintainer/security
+sign-off or migration to Tideforge before it is treated as approved.
 
 ## Audit & transition plan
 
-1. **Audit (Q3 checkpoint 2026-08-22, [#1323](https://github.com/tuna-os/tunaos/issues/1323))**: inventory every manifest's external
-   `apt:`/`dnf:`/`zypper:`/`pacman:`/`emerge:` source across all published
-   variants; classify each as tier 1/2/3 or violation; publish the table.
+1. **Audit** — **done 2026-08-13, with the follow-up inventory added
+   2026-08-31** (see "Audit findings" above; [#1323](https://github.com/tuna-os/tunaos/issues/1323)).
+   Found 2 clear violations (`trixieua/morewaita-icon-theme`,
+   `ublue-os/packages`/`krunner-bazaar`), one large gap (niri's 6-COPR
+   dependency chain), and confirmed `negativo17`/`rpmfusion` as the
+   Tier-3 allowlist candidates #1319 already named. The follow-up inventory
+   classifies the apt/Arch/openSUSE/Gentoo sources above; no additional AUR or
+   OBS package source was found in the published paths.
 2. **Migrate (Q3–Q4)**: move tier-3/✗ sources that have in-house equivalents
    to Tideforge; drive the 14-recipe COSMIC build-out already tracked in
    [ROADMAP.md](./ROADMAP.md) ([#964](https://github.com/tuna-os/tunaos/issues/964) COSMIC-off-PPA is the flagship migration).
@@ -88,9 +124,10 @@ A repo enters the allowlist only when all of the following hold:
 
 - **Checkpoint gate**: the 2026-08-22 Q3 checkpoint ([#1299](https://github.com/tuna-os/tunaos/issues/1299)) reviews the audit table; policy
   violations are surfaced there.
-- **CI (proposed)**: a source-manifest lint step that fails when a manifest
-  references an external repo not on the allowlist — owner: ci-maintainer,
-  tracker TBD (this policy does not mandate the mechanism, only the rule).
+- **CI**: `scripts/check-package-sources.py` blocks new manifest changes that
+  add COPR, PPA, OBS, AUR, or an unapproved repository URL. Existing legacy
+  declarations remain migration inventory until their package is available in
+  Tideforge or a documented allowlist exception is approved.
 
 ---
 

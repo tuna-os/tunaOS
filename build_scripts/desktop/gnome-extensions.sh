@@ -14,6 +14,8 @@ set -xeuo pipefail
 
 source /run/context/build_scripts/lib.sh
 
+rpmdb_stage2_guard
+
 # ── apt (Ubuntu/Debian) path ──────────────────────────────────────────
 if [[ "$PKG_MGR" == "apt" ]]; then
 	# Ubuntu ships pre-built extensions; just compile schemas

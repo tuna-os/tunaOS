@@ -21,11 +21,78 @@ tunaOS is an open-source project building OCI-based Enterprise Linux desktops. W
 | **Variant maintainer** | Own a distro variant | Monitor builds, fix breakage |
 | **Core maintainer** | Architecture, CI, releases | Sustained contribution + trust |
 
+### Contributor recognition and attribution
+
+We recognize contributors for the work they actually contribute, while taking
+care to distinguish human contributions from automated activity. Before
+publishing a contributor spotlight or counting a contribution toward the
+community's human-contributor metrics, maintainers should verify the commit
+author and the contributor's identity. This keeps public thanks meaningful and
+avoids attributing agent work to a person.
+
+The `shimonenator` commits previously described as the project's first external
+human contribution were confirmed on 2026-08-13 to be authored by the Google
+Antigravity agent (`antigravity`). They remain useful project work, but are not
+a human-contributor milestone; the search for and welcome to our first external
+human contributor remains open.
+
 ### Communication
 
 - **GitHub Issues**: Bug reports, feature requests, discussion
 - **GitHub Discussions**: General topics, ideas, Q&A
 - **PR Reviews**: All contributions reviewed within 48 hours
+- **Matrix**: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia) — real-time chat, weekly release notes, monthly office hours (see below)
+
+### Ecosystem collaboration
+
+Potential ecosystem collaborations should start from verified project facts and
+an explicit exploratory ask. The [Chainguard collaboration brief](docs/CHAINGUARD-COLLABORATION.md)
+is the working example for the keyless-signing and SBOM story tracked in
+[#1339](https://github.com/tuna-os/tunaos/issues/1339); it does not imply an
+endorsement or existing partnership.
+
+### Matrix room cadence
+
+The Matrix room is the project's real-time channel; this section documents
+its recurring structure so it doesn't rely on any one person's memory to
+keep going (#1136).
+
+- **Weekly release notes** (Fridays, mirroring the [weekly boot
+  report](https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+label%3Aboot-report)
+  cadence): post a short summary of the week's [Generate
+  Release](.github/workflows/generate-changelog-release.yml) runs and any
+  notable boot-report findings. Template:
+
+  ```
+  📦 This week in tunaOS — <date>
+
+  - Released: <variant/flavor list + dates, from `gh release list`>
+  - Boot health: <link to this week's boot-report issue>
+  - Notable changes: <1-3 bullets — new variant, fixed regression, etc.>
+  - Full changelog: <link to the release/CHANGELOG.md entry>
+  ```
+
+- **Monthly office hours** (~30 min, announced 1 week ahead in the room):
+  open Q&A / walkthrough slot. No fixed agenda beyond "bring questions."
+
+- **`#new-to-tunaos` pinned message** — the three best entry points for
+  someone new to the room:
+
+  ```
+  👋 New here? Start with one of these:
+
+  1. Try it: bootc switch --enforce-container-sigpolicy ghcr.io/tuna-os/yellowfin:gnome
+  2. Pick a starter task: issues labeled "good first issue"
+     → https://github.com/tuna-os/tunaOS/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22
+  3. Read CONTRIBUTING.md and COMMUNITY.md (this file) before your first PR
+
+  Questions are welcome any time — you don't need to wait for office hours.
+  ```
+
+- **Cross-posting GitHub Discussions**: when a Discussions thread gets real
+  engagement (multiple replies, a maintainer answer, a decision), drop a
+  one-line summary + link into the room. Keeps the room aware of
+  async-first conversations without duplicating them live.
 
 ### Adoption Metrics
 

@@ -1,0 +1,6 @@
+# Cursor rules
+
+This project's agent instructions live in [`AGENTS.md`](../AGENTS.md) and
+the authoritative guide it points to, [`docs/AGENT_GUIDE.md`](../docs/AGENT_GUIDE.md).
+Read those before making changes — this file just points Cursor at them so
+the instructions aren't duplicated (and can't drift) across tools.

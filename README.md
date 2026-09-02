@@ -11,10 +11,10 @@
 
 ---
 
-[![License](https://img.shields.io/github/license/tuna-os/tunaOS?style=for-the-badge)](LICENSE)
+[![License](https://img.shields.io/github/license/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/blob/main/LICENSE)
 [![GitHub Stars](https://img.shields.io/github/stars/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/stargazers)
 [![Issues](https://img.shields.io/github/issues/tuna-os/tunaOS?style=for-the-badge)](https://github.com/tuna-os/tunaOS/issues)
-[![Adopters](https://img.shields.io/badge/adopters-15_entries-2ea44f?style=for-the-badge)](ADOPTERS.md)
+[![Adoption evidence](https://img.shields.io/badge/adoption-0_production%2C_2_evaluation-2ea44f?style=for-the-badge)](ADOPTERS.md)
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?style=for-the-badge&logo=discord&logoColor=white)](https://discord.gg/MXSTqB8Nv)
 
 </div>
@@ -25,42 +25,13 @@ TunaOS builds **bootc-based desktop operating systems** with atomic updates and 
 
 [Visit tunaos.org](https://tunaos.org/) or read the [launch announcement](https://tunaos.org/blog/modern-enterprise-linux-desktops-with-tunaos).
 
-### Features
-
 - **Modern Desktops**: GNOME, KDE Plasma, COSMIC, Niri, and XFCE — equal first-class options across distribution bases
 - **Up-to-Date Desktop Stack**: Fresh desktop features and updates backported to Enterprise and community bases
 - **Homebrew**: Baked into the image — all your CLI apps and fonts are just a `brew` command away
 - **Flathub by Default**: Full Flathub access out of the box — get any Flatpak available on the net
-- **HWE Option**: Hardware Enablement kernel for newer hardware support
-- **NVIDIA Option**: NVIDIA drivers and CUDA for graphics and AI workflows
+- **HWE and NVIDIA Options**: Hardware Enablement kernels and NVIDIA drivers + CUDA as image tags
 
-## Images and variants
-
-TunaOS provides a variety of bootc-based operating system images. Use the table below to choose your base distribution and desktop environment.
-
-### Live build matrix
-
-<!-- build-status:start -->
-
-_Generated from the latest completed main-branch build for each variant. A cell is green when its image was successfully promoted to the published tag._
-
-| Variant | Green image cells | Latest run | Blocked or failing tags |
-| :--- | ---: | :--- | :--- |
-| 🐠 `yellowfin` | **9/16** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304663189) | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri |
-| 🐟 `albacore` | **16/16** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304560979) | — |
-| 🍣 `skipjack` | **15/15** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304713188) | — |
-| 🎣 `bonito` | **14/14** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304431595) | — |
-| 🦈 `sailfin` | **5/5** | [✅ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304766845) | — |
-| 🌈 `guppy` | **3/3** | [✅ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29305134903) | — |
-| 🐉 `bonito-rawhide` | **13/14** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304558402) | gnome |
-| 🐟 `grouper` | **4/6** | [❌ 2026-07-14](https://github.com/tuna-os/tunaOS/actions/runs/29304749688) | gnome-zfs,niri |
-| 🚀 `marlin` | **0/8** | [❌ 2026-07-15](https://github.com/tuna-os/tunaOS/actions/runs/29388284284) | base,gnome,kde,cosmic,niri,xfce,gnome-cachyos,kde-cachyos |
-| 🐡 `flounder` | **0/6** | [❌ 2026-07-15](https://github.com/tuna-os/tunaOS/actions/runs/29387806332) | base,gnome,kde,cosmic,niri,xfce |
-| ☢️ `flounder-sid` | **0/6** | [❌ 2026-07-15](https://github.com/tuna-os/tunaOS/actions/runs/29387743218) | base,gnome,kde,cosmic,niri,xfce |
-
-**Current image coverage: 79/109 cells (72%).** This is a point-in-time CI snapshot, not a support-tier promise.
-
-<!-- build-status:end -->
+## Choose your image
 
 | Variant | Base OS | Registry Path | Desktops | Architectures |
 | :--- | :--- | :--- | :--- | :--- |
@@ -68,146 +39,72 @@ _Generated from the latest completed main-branch build for each variant. A cell 
 | 🐟 **Albacore** | AlmaLinux 10 (RHEL 10) | `ghcr.io/tuna-os/albacore` | GNOME, KDE, COSMIC, Niri | x86_64, x86_64/v2, arm64 |
 | 🍣 **Skipjack** | CentOS Stream 10 | `ghcr.io/tuna-os/skipjack` | GNOME, KDE, COSMIC, Niri | x86_64, arm64 |
 | 🎣 **Bonito** | Fedora 44 | `ghcr.io/tuna-os/bonito` | GNOME, KDE, COSMIC, Niri | x86_64, arm64 |
-| 🐦 **Hummingbird** | Fedora Hummingbird (experimental) | `ghcr.io/tuna-os/hummingbird` | Base only | x86_64, arm64 |
+| 🐦 **Hummingbird** | Fedora Hummingbird (experimental) | `ghcr.io/tuna-os/hummingbird` | Base, GNOME, KDE, COSMIC, Niri | x86_64, arm64 |
+| 🎏 **Wahoo** | Fedora ELN — EL11 preview (experimental, no codecs) | `ghcr.io/tuna-os/wahoo` | Base, GNOME | x86_64, arm64 |
 | 🔒 **Redfin** | Red Hat Enterprise Linux 10 | *Local-Build Only* | GNOME, KDE, COSMIC, Niri, XFCE | x86_64, arm64 |
 | 🐟 **Grouper** | Ubuntu 26.04 | `ghcr.io/tuna-os/grouper` | GNOME, KDE, Niri, XFCE | x86_64 |
-| 🐟 **Gurnard** | Ubuntu 24.04 (Noble Numbat) | `ghcr.io/tuna-os/gurnard` | Base, Pantheon | x86_64, arm64 |
+| 🐟 **Gurnard** | Ubuntu 24.04 (Noble Numbat, experimental) | `ghcr.io/tuna-os/gurnard` | Base, Pantheon | x86_64, arm64 |
 | 🚀 **Marlin** | Arch Linux (Rolling) | `ghcr.io/tuna-os/marlin` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64 |
 | 🐡 **Flounder** | Debian 13 (Trixie) | `ghcr.io/tuna-os/flounder` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64 |
 | ☢️ **Flounder Sid** | Debian Sid (Unstable) | `ghcr.io/tuna-os/flounder:*-sid` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64 |
 | 🐉 **Bonito Rawhide** | Fedora Rawhide | `ghcr.io/tuna-os/bonito:*-rawhide` | GNOME, KDE, COSMIC, Niri, XFCE | x86_64, arm64 |
 | 🦈 **Sailfin** | openSUSE Tumbleweed | `ghcr.io/tuna-os/sailfin` | GNOME, KDE, Niri, XFCE | x86_64 |
 | 🌈 **Guppy** | Gentoo Linux | `ghcr.io/tuna-os/guppy` | GNOME, KDE | x86_64 |
+| 🏔️ **Tromsø** | freedesktop-sdk (BuildStream), built in [tuna-os/tromso](https://github.com/tuna-os/tromso) | `ghcr.io/tuna-os/tromso` | KDE | x86_64 |
+| 🐭 **XFCE Linux** | freedesktop-sdk (BuildStream), built in [tuna-os/xfce-linux](https://github.com/tuna-os/xfce-linux) | `ghcr.io/tuna-os/xfce-linux` | XFCE | x86_64 |
+
+Tags are `<desktop>[-hardware]` — e.g. `yellowfin:gnome-hwe`,
+`albacore:kde-nvidia`. Full tag reference: [docs/IMAGE-TAGS.md](docs/IMAGE-TAGS.md).
+Hardware requirements and ARM laptop status: [docs/HARDWARE.md](docs/HARDWARE.md).
 
 > [!NOTE]
 > **Redfin (RHEL 10)** is local-build only due to EULA restrictions. To build it locally, run `just build redfin <desktop>` (see [rhel-setup.md](docs/rhel-setup.md)).
 
-### Suffix Rules (Image Tags)
+## Live build matrix
 
-Image tags are constructed as `<desktop>[-hardware]`:
+<!-- build-status:start -->
 
-1. **Desktop Suffixes**:
-   * `gnome`: GNOME (stable)
-   * `kde`: KDE Plasma
-   * `cosmic`: COSMIC Desktop
-   * `niri`: Niri (tiling Wayland compositor)
-   * `xfce`: XFCE (Wayland experimental)
-   * `base`: Plain system image with no desktop environment pre-installed (available for most variants)
+_Generated from the latest conclusive main-branch build for each variant (cancelled runs are skipped over). A cell is green when its image was successfully promoted to the published tag; **failing** means a job ran and failed; **not reached** means no job asserted the cell at all, usually because an earlier stage stopped it._
 
-2. **Hardware Suffixes** (append to any desktop suffix):
-   * *(none)*: Standard generic kernel build
-   * `-hwe`: Hardware Enablement (newer kernel stack)
-   * `-nvidia`: NVIDIA drivers + CUDA pre-configured
-   * `-nvidia-hwe`: NVIDIA drivers on HWE kernel stack
+| Variant | Green image cells | Latest run | Failing | Not reached |
+| :--- | ---: | :--- | :--- | :--- |
+| 🐠 `yellowfin` | **1/20** | [✅ 2026-08-19](https://github.com/tuna-os/tunaOS/actions/runs/32254285223) | — | base,base-hwe,base-nvidia,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,kde-hwe,kde-nvidia,niri-hwe,niri-nvidia,xfce-hwe,xfce-nvidia |
+| 🐟 `albacore` | **6/20** | [❌ 2026-08-18](https://github.com/tuna-os/tunaOS/actions/runs/32143809963) | — | base,base-nvidia,niri,gnome-hwe,gnome-nvidia,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,kde-hwe,kde-nvidia,niri-hwe,niri-nvidia,xfce-hwe,xfce-nvidia |
+| 🍣 `skipjack` | **10/18** | [❌ 2026-08-18](https://github.com/tuna-os/tunaOS/actions/runs/32090785200) | — | gnome,gnome-hwe,gnome-asahi,gnome-nvidia,gnome-nvidia-hwe,cosmic-nvidia,kde-nvidia,niri-nvidia |
+| 🎣 `bonito` | **5/16** | [❌ 2026-08-18](https://github.com/tuna-os/tunaOS/actions/runs/32091020905) | — | base-nvidia,gnome,niri,gnome-hwe,gnome-asahi,gnome-t2,gnome-nvidia,cosmic-nvidia,kde-nvidia,niri-nvidia,xfce-nvidia |
+| 🐦 `hummingbird` | **1/5** | [❌ 2026-08-18](https://github.com/tuna-os/tunaOS/actions/runs/32144269992) | — | gnome,kde,niri,cosmic |
+| 🦈 `sailfin` | **0/7** | [❌ 2026-08-19](https://github.com/tuna-os/tunaOS/actions/runs/32207972605) | — | base,gnome,gnome-asahi,kde,niri,xfce,cosmic |
+| 🌈 `guppy` | **0/4** | [❌ 2026-08-19](https://github.com/tuna-os/tunaOS/actions/runs/32207524392) | — | base,gnome,kde,xfce |
+| 🐉 `bonito-rawhide` | **0/14** | [❌ 2026-08-19](https://github.com/tuna-os/tunaOS/actions/runs/32207826157) | — | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-nvidia,cosmic-nvidia,kde-nvidia,niri-nvidia,xfce-nvidia |
+| 🐟 `gurnard` | **2/2** | [❌ 2026-08-19](https://github.com/tuna-os/tunaOS/actions/runs/32208039249) | — | — |
+| 🐟 `grouper` | **2/7** | [❌ 2026-08-17](https://github.com/tuna-os/tunaOS/actions/runs/31987613412) | — | gnome,gnome-zfs,kde,cosmic,xfce |
+| 🚀 `marlin` | **16/16** | [❌ 2026-08-18](https://github.com/tuna-os/tunaOS/actions/runs/32091076264) | — | — |
+| 🐡 `flounder` | **1/7** | [❌ 2026-08-17](https://github.com/tuna-os/tunaOS/actions/runs/31987631533) | — | gnome,kde,xfce,gnome-nvidia,kde-nvidia,xfce-nvidia |
+| ☢️ `flounder-sid` | **3/7** | [❌ 2026-08-19](https://github.com/tuna-os/tunaOS/actions/runs/32207827017) | — | gnome,kde,xfce,xfce-nvidia |
 
-*Example tags:* `yellowfin:gnome-hwe`, `albacore:kde-nvidia`, `marlin:cosmic`
+**Built 47/143 · composite green 47/143 (32%)** — of the remainder, **0 failing** and **96 never reached** (no job asserted them). The two are reported separately on purpose: a never-reached cell is untested, not broken. Composite green is scored against [`.github/green-criteria.yml`](.github/green-criteria.yml) (blocking today: `builds` + `boots` — a cell must promote AND pass its boot Gate; the full per-axis board is [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md)). This is a point-in-time CI snapshot, not a support-tier promise.
 
----
+<!-- build-status:end -->
 
-## System requirements
+## Get started
 
-| Component | Minimum | Recommended |
-|-----------|---------|-------------|
-| **CPU** | x86_64, ARM64 | x86_64, ARM64 |
-| **RAM** | 4 GB | 8 GB+ |
-| **Storage** | 20 GB | 50 GB+ |
+- **Install from an ISO:** [📦 tunaos.org/download](https://tunaos.org/download)
+- **Install from Windows (no USB drive needed):** [🪟 wootc installer](https://github.com/tuna-os/wootc) (download from [releases](https://github.com/tuna-os/wootc/releases) / read the [Migration Guide](MIGRATION.md#from-windows-wootc))
+- **Build your own ISO in the browser:** [🛠️ tunaos.org/iso-builder](https://tunaos.org/iso-builder)
+- **Switch an existing bootc system:**
 
----
+  ```bash
+  sudo bootc switch ghcr.io/tuna-os/yellowfin:gnome
+  ```
 
-## Installation
-
-### Use a pre-built ISO
-
-Browse the currently published installation media on the download page:
-
-**[📦 tunaos.org/download](https://tunaos.org/download)**
-
-### Build your own ISO or VM image
-
-**In your browser — no tools, no root, nothing uploaded:**
-
-**[🛠️ tunaos.org/iso-builder](https://tunaos.org/iso-builder)** — point it
-at any TunaOS image (or your own bootc image), pick your flatpaks, and it
-authors a bootable live ISO entirely in WebAssembly using the same
-[tacklebox](https://github.com/tuna-os/tacklebox) engine CI uses.
-[User guide](https://tunaos.org/docs/iso-builder).
-
-**Or locally with [tacklebox](https://github.com/tuna-os/tacklebox):**
-
-```bash
-# ISO (requires root)
-sudo tacklebox build --iso tunaos-yellowfin-gnome.iso \
-  --bootable-environment-image ghcr.io/tuna-os/yellowfin:gnome \
-  --bootable-environment-desktop gnome \
-  --output-base .build/iso
-```
-
-Or use the included helper script:
-
-```bash
-sudo ./scripts/build-iso-tacklebox.sh yellowfin gnome ghcr gnome
-```
-
-For QCOW2 VM images, use bootc directly:
-
-```bash
-# QCOW2 (VM image)
-sudo bootc image build-to-qcow2 \
-  --output-format qcow2 \
-  ghcr.io/tuna-os/yellowfin:gnome
-```
-
-### Switch an existing system
-
-If you're already running a compatible bootc system:
-
-```bash
-sudo bootc switch ghcr.io/tuna-os/yellowfin:gnome
-```
-
-## Container registry authentication
-
-Images are published on GitHub Container Registry (GHCR). To pull images with `bootc` or `podman`:
-
-```bash
-# Authenticate to GHCR (requires a GitHub personal access token with read:packages scope)
-echo "$GITHUB_TOKEN" | podman login ghcr.io -u YOUR_USERNAME --password-stdin
-
-# Or use the GitHub CLI
-gh auth token | podman login ghcr.io -u YOUR_USERNAME --password-stdin
-```
-
-See [GitHub Container Registry docs](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) for more details.
-
-### Troubleshooting: `501 Unsupported client range` on pull
-
-TunaOS images publish as `zstd:chunked` for faster delta pulls, but GHCR's
-blob CDN doesn't support the multi-range HTTP requests that chunked pulls
-use. Most `podman`/`bootc` builds fall back to a normal full-blob pull
-automatically, but some do not and hard-fail with:
-
-```
-Error: copying system image from manifest list: partial pull of blob sha256:...:
-read zstd:chunked manifest: fetching partial blob: received unexpected HTTP status: 501 Unsupported client range
-```
-
-If you hit this, disable partial/chunked pulls client-side in
-`/etc/containers/storage.conf`:
-
-```toml
-[storage.options.pull_options]
-enable_partial_images = "false"
-```
-
-Tracked in [tuna-os/tunaos#579](https://github.com/tuna-os/tunaos/issues/579).
+Building media locally, verifying signatures and SBOMs, registry
+authentication, and pull troubleshooting: [docs/INSTALL.md](docs/INSTALL.md).
 
 ## Contributing
 
-Contributions welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for:
-- Development environment setup
-- Build workflow and pre-commit checklist
-- Pull request guidelines
-- Architecture overview
+Contributions welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for development
+environment setup, the build workflow and pre-commit checklist, pull request
+guidelines, and an architecture overview.
 
 ## Community and support
 
@@ -215,43 +112,23 @@ Contributions welcome! See [`CONTRIBUTING.md`](CONTRIBUTING.md) for:
 - [m] **Chat**: [#tunaos:reilly.asia](https://matrix.to/#/%23tunaos:reilly.asia)
 - 🎮 **Discord:** [TunaOS](https://discord.gg/MXSTqB8Nv)
 
-Related Communities:
-- 🎮 **Discord:** [Universal Blue Community](https://discord.gg/WEu6BdFEtp)
-- 💬 **AlmaLinux Atomic SIG:** [AlmaLinux Atomic SIG](https://chat.almalinux.org/almalinux/channels/sigatomic)
+Related communities: [Universal Blue Discord](https://discord.gg/WEu6BdFEtp) ·
+[AlmaLinux Atomic SIG](https://chat.almalinux.org/almalinux/channels/sigatomic)
 
 ## Documentation
 
-### Project Docs
-- [TunaOS Blog](https://tunaos.org/blog/modern-enterprise-linux-desktops-with-tunaos) — launch announcement and design philosophy comparison
-- [Contributor Guide](CONTRIBUTING.md) — how to set up, build, and contribute
-- [Roll Your Own Guide](docs/ROLL_YOUR_OWN.md) — build your own custom TunaOS variant
-- [Agent Guide](docs/AGENT_GUIDE.md) — complete architecture and contributor reference
-- [Build Pipeline](docs/build-pipeline.md) — CI/CD workflow overview
-- [mkosi Investigation](docs/mkosi-investigation.md) — mkosi as a build backend and DDI output: findings, not a production change (#999)
-- [Testing Guide](docs/TESTING.md) — ISO end-to-end test harness
-- [Secure Boot](docs/SECURE-BOOT.md) — which variants support Secure Boot out of the box
-- [Improvement Plan](docs/IMPROVEMENT_PLAN.md) — roadmap and development progress
-- [Redfin Setup](docs/rhel-setup.md) — RHEL 10 local-build instructions
-- [Developer Docs](https://tunaos.org/docs/dev/introduction) — build and contribution guide
+Start here:
 
-### Policies & Planning
+- [User Guide](docs/USER-GUIDE.md) — choosing an image, installing, updating, rolling back, apps, encryption
+- [Developer Guide](docs/DEVELOPER-GUIDE.md) — the whole pipeline and its plumbing, with diagrams
+- [Installation](docs/INSTALL.md) — building media, verification, registry access
+- [Hardware Support](docs/HARDWARE.md) — requirements and ARM laptop status
+- [Matrix Status](docs/MATRIX-STATUS.md) — which variant×desktop cells are verified, per quality axis
 - [Roadmap](ROADMAP.md) — project direction and feature status
-- [Package Sourcing Policy](PACKAGE-SOURCING.md) — package origin rules, Tideforge-first, and allowlist (#1319)
-- [Versioning](VERSIONING.md) — tag scheme and stability tiers
-- [Migration Guide](MIGRATION.md) — switching from other distros
-- [Security Policy](SECURITY.md) — vulnerability reporting and supported versions
-- [Adopters](ADOPTERS.md) — organizations using TunaOS
-- [Code of Conduct](CODE_OF_CONDUCT.md) — community standards
+- [Vision](VISION.md) — project philosophy
 
-### Community & Governance
-- [Community](COMMUNITY.md) — contribution ladder, metrics, communication
-- [Maintainers](MAINTAINERS.md) — maintainer playbook and bus factor plan
-
-### External Resources
-- [AlmaLinux Kitten 10 Differences](https://wiki.almalinux.org/development/almalinux-os-kitten-10.html#how-is-almalinux-os-kitten-different-from-centos-stream)
-- [Project Bluefin Documentation](https://docs.projectbluefin.io)
-- [Universal Blue](https://universal-blue.org/)
-- [bootc](https://github.com/bootc-dev/bootc)
+The full index — every guide, policy, and planning doc — is at
+[docs/README.md](docs/README.md).
 
 ---
 
@@ -270,22 +147,14 @@ Related Communities:
 
 ---
 
-### 🤖 Powered by KubeStellar / Hive
-
-This repository and many of the [tuna-os](https://github.com/tuna-os) repositories are developed and maintained using **[Hive](https://hive.tunaos.org)** — an AI-driven development platform orchestrated via [KubeStellar](https://kubestellar.io/).
-
-Hive deploys a suite of specialized AI agents (guide, architect, sec-check, quality, ci-maintainer, strategist) onto a local Kubernetes cluster. These agents triage issues, implement fixes, review PRs, manage CI pipelines, and maintain documentation — all working autonomously through GitHub.
-
-<img width="100" alt="Hive" src="https://avatars.githubusercontent.com/in/3942065" />
-
-Every commit, PR, and issue in this repo benefits from multi-agent collaboration coordinated through Hive.
-
-*Learn more: [hive.tunaos.org](https://hive.tunaos.org) | [KubeStellar](https://kubestellar.io/)*
+This repository and many of the [tuna-os](https://github.com/tuna-os) repos are
+developed and maintained with **[Hive](https://hive.tunaos.org)**, an AI-driven
+development platform orchestrated via [KubeStellar](https://kubestellar.io/).
 
 ---
 
 *Inspired by [Bluefin](https://projectbluefin.io) and the [Universal Blue](https://universal-blue.org/) Community*
 
-*Licensed under [Apache 2.0](LICENSE)*
+*Licensed under [Apache 2.0](https://github.com/tuna-os/tunaOS/blob/main/LICENSE)*
 
 </div>

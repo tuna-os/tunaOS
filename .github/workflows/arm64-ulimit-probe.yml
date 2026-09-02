@@ -1,0 +1,189 @@
+# Diagnostic only. Measures the file-descriptor limits podman actually sees on
+# an arm64 runner, under the plain shell and under sudo, before anyone edits
+# .github/actions/ghcr-login. That action is on the critical path of every
+# build in this repository, so a guess pushed straight into it is a repo-wide
+# outage if the guess is wrong.
+#
+# What we are chasing: "Login to Podman (sudo)" fails in ~2s on
+# ubuntu-24.04-arm with
+#   Error: failed to open 2048 locks in /libpod_lock: numerical result out of range
+# (exit 125) while "Login to Podman (user)" -- the same login, same
+# `ulimit -n 4096`, without sudo -- reports "Login Succeeded!" in the same job.
+#
+# Delete this workflow once the fix lands; it exists to produce one table.
+name: arm64 ulimit probe (diagnostic)
+
+on:
+  workflow_dispatch:
+  # Also on PRs that touch this file, and only this file. workflow_dispatch is
+  # not offered for a workflow that is not yet on the default branch, so
+  # dispatch-only would mean merging a diagnostic before it can diagnose
+  # anything. Scoped to its own path, this runs exactly once -- on the PR that
+  # introduces it -- and never again.
+  pull_request:
+    paths:
+      - .github/workflows/arm64-ulimit-probe.yml
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: ulimits on ${{ matrix.runner }} #${{ matrix.sample }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # x64 is the control: the same action succeeds there today, so any
+        # difference in these numbers is the thing to explain.
+        #
+        # arm64 appears six times on purpose. The fleet behind this label is
+        # not homogeneous -- two runs three minutes apart drew image
+        # 20260810.90.1 with podman 5.8.4 and image 20260719.67.1 with podman
+        # 4.9.3 -- and runner assignment cannot be requested. One job is a
+        # coin flip over the combination that matters; six is a sample. Each
+        # job costs about ten seconds.
+        runner: [ubuntu-24.04-arm, ubuntu-24.04]
+        sample: [1, 2, 3, 4, 5, 6]
+        exclude:
+          # The x64 control does not need repeating; it is not the ambiguous one.
+          - runner: ubuntu-24.04
+            sample: 2
+          - runner: ubuntu-24.04
+            sample: 3
+          - runner: ubuntu-24.04
+            sample: 4
+          - runner: ubuntu-24.04
+            sample: 5
+          - runner: ubuntu-24.04
+            sample: 6
+    steps:
+      - name: Limits as the job shell sees them
+        run: |
+          echo "### ${{ matrix.runner }}" >> "$GITHUB_STEP_SUMMARY"
+          printf '| context | soft nofile | hard nofile |\n| :-- | --: | --: |\n' \
+            >> "$GITHUB_STEP_SUMMARY"
+          printf '| plain shell | %s | %s |\n' "$(ulimit -Sn)" "$(ulimit -Hn)" \
+            >> "$GITHUB_STEP_SUMMARY"
+          echo "plain: soft=$(ulimit -Sn) hard=$(ulimit -Hn)"
+
+      - name: Limits under sudo
+        run: |
+          # Read them the way the failing step's shell would see them.
+          sudo bash -c 'printf "sudo: soft=%s hard=%s\n" "$(ulimit -Sn)" "$(ulimit -Hn)"'
+          soft=$(sudo bash -c 'ulimit -Sn')
+          hard=$(sudo bash -c 'ulimit -Hn')
+          printf '| sudo shell | %s | %s |\n' "$soft" "$hard" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Can the sudo shell actually raise it to 4096?
+        run: |
+          # This is the exact construct ghcr-login uses. `&&` means a failure
+          # here stops the login from ever running, so distinguish "the ulimit
+          # was rejected" from "podman ran and disliked what it got".
+          if sudo bash -c 'ulimit -n 4096' 2>/tmp/ulimit.err; then
+            echo "sudo ulimit -n 4096: OK"
+            echo '| sudo `ulimit -n 4096` | accepted | |' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "sudo ulimit -n 4096: REJECTED"
+            cat /tmp/ulimit.err
+            echo "| sudo \`ulimit -n 4096\` | REJECTED: $(cat /tmp/ulimit.err) | |" \
+              >> "$GITHUB_STEP_SUMMARY"
+          fi
+          # And what the process actually ends up with if it is accepted.
+          sudo bash -c 'ulimit -n 4096 2>/dev/null; printf "after raise: soft=%s hard=%s\n" "$(ulimit -Sn)" "$(ulimit -Hn)"' || true
+
+      # The decisive one. Everything above says the *fix* works; this says
+      # whether the fix is what is doing the work. If podman fails here with
+      # the production error signature at sudo's default soft limit of 1024,
+      # the model is confirmed: 1024 descriptors is not enough for 2048 locks,
+      # `ulimit -n 4096` is what rescues it, and the production failure means
+      # that ulimit is somehow not in effect there -- a different question
+      # from "is the diagnosis right".
+      #
+      # If podman instead SUCCEEDS at 1024, the whole descriptor story is
+      # wrong and the real cause is elsewhere.
+      - name: Does podman actually fail at sudo's default 1024?
+        run: |
+          # Report the version alongside the result. Without it a table of
+          # six samples cannot be read: "OK" means nothing unless you know
+          # which podman produced it, and that is the whole open question.
+          PODMAN_V="$(sudo podman --version 2>/dev/null | awk '{print $3}')"
+          IMG="${ImageVersion:-unknown}"
+          echo "podman=${PODMAN_V} image=${IMG}"
+          echo "sudo default soft limit: $(sudo bash -c 'ulimit -Sn')"
+          if sudo bash -c 'podman info >/dev/null' 2>/tmp/nolimit.err; then
+            echo "sudo podman info WITHOUT ulimit: OK -- descriptor story does not hold"
+            echo "| podman ${PODMAN_V} / image ${IMG} | no ulimit | OK |" \
+              >> "$GITHUB_STEP_SUMMARY"
+          else
+            rc=$?
+            echo "sudo podman info WITHOUT ulimit: FAILED rc=${rc}"
+            tail -3 /tmp/nolimit.err
+            if grep -q 'libpod_lock' /tmp/nolimit.err; then
+              echo "| podman ${PODMAN_V} / image ${IMG} | no ulimit | REPRODUCES libpod_lock |" \
+                >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| sudo \`podman info\` (no ulimit) | FAILED rc=${rc}, different error | |" \
+                >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+
+      # The measurement none of the above take: every prior step calls
+      # `podman info` or a bare `ulimit` in isolation. Production never does
+      # that -- ghcr-login runs an UNSUDO `podman login` first, in the same
+      # job, and only then the sudo one that fails. `podman info` above
+      # proved sudo's default 1024 is enough for a lock-file init done cold;
+      # this checks whether an EARLIER unsudo login changes what the sudo
+      # one sees -- shared XDG_RUNTIME_DIR state, a rootless storage graph
+      # already initialized under the runner UID, anything the isolated
+      # probes above could not catch by construction. Real credentials
+      # (github.token), no ulimit override on either call, same order
+      # ghcr-login uses.
+      - name: Does the exact ghcr-login login sequence reproduce it?
+        run: |
+          echo "${{ github.token }}" | podman login -u "${{ github.actor }}" --password-stdin ghcr.io
+          echo "unsudo login: OK"
+          if sudo TOKEN="${{ github.token }}" ACTOR="${{ github.actor }}" \
+              bash -c 'echo "$TOKEN" | podman login -u "$ACTOR" --password-stdin ghcr.io' \
+              2>/tmp/seq.err; then
+            echo "sudo login AFTER an unsudo login: OK"
+            echo '| sudo login after unsudo login, no ulimit | OK |' >> "$GITHUB_STEP_SUMMARY"
+          else
+            rc=$?
+            echo "sudo login AFTER an unsudo login: FAILED rc=${rc}"
+            cat /tmp/seq.err
+            if grep -q 'libpod_lock' /tmp/seq.err; then
+              echo '| sudo login after unsudo login, no ulimit | REPRODUCES libpod_lock |' \
+                >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "| sudo login after unsudo login, no ulimit | FAILED rc=${rc}, different error |" \
+                >> "$GITHUB_STEP_SUMMARY"
+            fi
+          fi
+
+      - name: What podman itself reports
+        run: |
+          echo "--- podman version ---"
+          podman --version || true
+          sudo podman --version || true
+          echo "--- num_locks in effect ---"
+          podman info --format '{{.Host.Slirp4netns}}' >/dev/null 2>&1 || true
+          echo "--- containers.conf files present ---"
+          for f in /etc/containers/containers.conf \
+                   /usr/share/containers/containers.conf \
+                   "$HOME/.config/containers/containers.conf"; do
+            [[ -r "$f" ]] && { echo "== $f"; grep -nE 'num_locks|^\[engine\]' "$f" || echo "(no num_locks)"; }
+          done
+          echo "--- does the failing construct reproduce? ---"
+          # No credentials involved: `podman login` needs the lock file before
+          # it needs a registry, so a bare `podman info` exercises the same
+          # /libpod_lock init that was failing.
+          if sudo bash -c 'ulimit -n 4096 && podman info >/dev/null'; then
+            echo "sudo podman info: OK"
+            echo '| sudo `podman info` | OK | |' >> "$GITHUB_STEP_SUMMARY"
+          else
+            rc=$?
+            echo "sudo podman info: FAILED rc=$rc"
+            sudo bash -c 'ulimit -n 4096 && podman info' 2>&1 | tail -5
+            echo "| sudo \`podman info\` | FAILED rc=$rc | |" >> "$GITHUB_STEP_SUMMARY"
+          fi

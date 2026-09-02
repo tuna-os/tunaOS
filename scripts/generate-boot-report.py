@@ -271,9 +271,10 @@ def e2e_status_for(variant: str, flavor: str) -> dict | None:
                 "conclusion": job.get("conclusion"),
                 "html_url": job.get("html_url") or run.get("html_url"),
             }
-    # No matrix cell ran for this combo — fall back to the workflow's
-    # top-level conclusion so the cell still shows *some* signal.
-    return run
+    # No matrix cell ran for this combo.  Do not use the workflow's
+    # top-level conclusion here: a successful run only proves the cells
+    # that were actually in its matrix, not every flavor in build-config.
+    return None
 
 
 # ── Missing-package wishlist ────────────────────────────────────────────────
@@ -502,11 +503,11 @@ def render_report(
             fresh.append(rendered)
 
     if fresh:
-        out.append("## Fresh builds")
+        out.append("## Fresh screenshots")
         out.append("")
         out.extend(fresh)
     if stale:
-        out.append("## ⚠️ Stale or missing builds")
+        out.append("## ⚠️ Stale or missing screenshots")
         out.append("")
         out.append(
             "These combos have screenshots older than 7 days (or none at all). "
@@ -522,7 +523,7 @@ def render_report(
         out.append(
             "Packages requested by build_scripts but not in the active EL10 "
             "repos (BaseOS/AppStream/EPEL/CRB/COPRs). Candidates for "
-            "[tuna-os/github-copr](https://github.com/tuna-os/github-copr)."
+            "[tuna-os/tunaos-packages](https://github.com/tuna-os/tunaos-packages)."
         )
         out.append("")
         # Flatten + dedupe across all images

@@ -65,8 +65,21 @@ QUALIFIED_KERNEL="$(rpm -qa | grep -P 'kernel-(|'"$KERNEL_SUFFIX"'-)(\d+\.\d+\.\
 #            bonito's coreos-stable akmods.
 # Fallback when neither tag is readable: fedora-43, bluefin-lts's pinned
 # default, kept so an unexpected bundle still names a real repo.
-AKMODS_EL_VERSION="$(find /tmp/akmods-nvidia-open-rpms -name "*.rpm" -print | grep -oPm1 '(?<=\.el)\d+' || true)"
-AKMODS_FEDORA_VERSION="$(find /tmp/akmods-nvidia-open-rpms -name "*.rpm" -print | grep -oPm1 '(?<=\.fc)\d+' || true)"
+#
+# `head -1` after grep, and not grep's own -m1: -m1 stops after the first
+# matching LINE, while -o prints every match ON that line. A bundle whose
+# first matching filename carries the dist tag twice -- e.g.
+# kmod-nvidia-open-6.12.0-257.el10.x86_64-...el10.rpm -- therefore yields
+# "10\n10", not "10". The embedded newline survives into NVIDIA_RELEASEVER
+# and then into the sed expression that templates $releasever below, which
+# dies with:
+#
+#   sed: -e expression #1, char 16: unterminated `s' command
+#
+# That killed yellowfin's cosmic-nvidia, niri-nvidia and xfce-nvidia builds
+# on every nightly. The value must be exactly one line.
+AKMODS_EL_VERSION="$(find /tmp/akmods-nvidia-open-rpms -name "*.rpm" -print | grep -oP '(?<=\.el)\d+' | head -1 || true)"
+AKMODS_FEDORA_VERSION="$(find /tmp/akmods-nvidia-open-rpms -name "*.rpm" -print | grep -oP '(?<=\.fc)\d+' | head -1 || true)"
 if [[ -n "${AKMODS_EL_VERSION}" ]]; then
 	NVIDIA_REPO_ID="epel-nvidia"
 	NVIDIA_RELEASEVER="${AKMODS_EL_VERSION}"
@@ -137,6 +150,15 @@ if [[ -f /usr/lib/systemd/system/ublue-nvctk-cdi.service ]]; then
 	systemctl enable ublue-nvctk-cdi.service
 fi
 if [[ -f /usr/share/selinux/packages/nvidia-container.pp ]]; then
+	# Force copy-up of /etc/selinux/targeted into the top layer so libsemanage's
+	# atomic directory renames (tmp -> active) succeed on overlayfs.
+	if [[ -d /etc/selinux/targeted ]]; then
+		rm -rf /etc/selinux/targeted/tmp /etc/selinux/targeted/previous
+		rm -rf /etc/selinux/targeted.copyup
+		cp -a /etc/selinux/targeted /etc/selinux/targeted.copyup
+		rm -rf /etc/selinux/targeted
+		mv /etc/selinux/targeted.copyup /etc/selinux/targeted
+	fi
 	semodule --verbose --install /usr/share/selinux/packages/nvidia-container.pp
 fi
 
@@ -163,8 +185,27 @@ if [[ ! -f /usr/lib/dracut/dracut.conf.d/99-nvidia.conf ]]; then
 	exit 1
 fi
 sed -i 's@omit_drivers@force_drivers@g' /usr/lib/dracut/dracut.conf.d/99-nvidia.conf
-# as we need forced load, also must pre-load intel/amd iGPU else chromium web browsers fail to use hardware acceleration
-sed -i 's@ nvidia @ i915 amdgpu nvidia @g' /usr/lib/dracut/dracut.conf.d/99-nvidia.conf
+# As we need forced load, also must pre-load intel/amd iGPU else chromium web
+# browsers fail to use hardware acceleration. tunaos#1499: also force
+# sr_mod/cdrom/virtio_blk for the live ISO / installed-disk boot path.
+#
+# CORRECTION (tunaos#1561). #1499 read the 10/10 red *-nvidia nightlies
+# (08-03..08-13) as generic-mode autodetection failing to pick these three up,
+# and forced them here to compensate. That diagnosis was wrong, and forcing
+# them never could have fixed it: the images had swapped to Fedora 43's
+# kernel, whose config sets CONFIG_BLK_DEV_SR=y and CONFIG_VIRTIO_BLK=y (EL10
+# has both =m). sr_mod, cdrom and virtio_blk are therefore compiled into
+# vmlinuz on fc43 — there is no .ko for dracut to install, so no amount of
+# force_drivers puts one in the initramfs. What was actually red was
+# verify-nvidia.sh's parity check, which demanded a .ko; it now accepts a
+# modules.builtin entry as equally good.
+#
+# The line stays because it is NOT dead: yellowfin/albacore/skipjack's
+# non-HWE nvidia flavors build on the EL10 kernel, where these three ARE
+# modular and forcing them is load-bearing exactly as #1499 intended. On fc43
+# dracut skips them harmlessly. virtio_scsi/isofs/squashfs/overlay/loop are
+# =m on both, which is why they were never part of the failure.
+sed -i 's@ nvidia @ i915 amdgpu nvidia sr_mod cdrom virtio_blk @g' /usr/lib/dracut/dracut.conf.d/99-nvidia.conf
 
 # Make sure initramfs is rebuilt after nvidia drivers or kernel replacement
 /usr/bin/dracut --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible --tmpdir /boot --zstd -v --add ostree -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"

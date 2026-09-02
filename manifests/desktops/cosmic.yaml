@@ -122,6 +122,16 @@ packages:
 
   fedora:
     packages:
+      # dconf is explicit, not assumed: the TunaOS branding keyfiles in
+      # /etc/dconf/db/distro.d need `dconf update` at build time, and
+      # verify-branding fails the build if the compiled db is missing. Full
+      # Fedora pulls dconf transitively so this line is a no-op there, but
+      # hummingbird's minimal rebuild does not (its cosmic chain never
+      # requires it — measured on the 2026-08-18 redispatch, where the image
+      # had keyfiles, no dconf binary, and TUNAOS_BRANDING_FAIL). The package
+      # is in the 20251124 hummingbird index. Listed in BOTH sections so the
+      # wiring test's pinned diff (exactly cosmic-settings-daemon) holds.
+      - dconf
       - cosmic-session
       - cosmic-comp
       - cosmic-panel
@@ -146,11 +156,115 @@ packages:
       - xdg-desktop-portal-cosmic
       - pop-icon-theme
 
+  # ── Hummingbird (Fedora rebuild) ───────────────────────────────────
+  # The cheapest real win in the matrix (#1755 §4): the rebuild repo carries
+  # 22 of cosmic's 23 Fedora packages, and the cell was red purely because no
+  # section named them. Re-measured 2026-08-18 against the live primary.xml
+  # (8100 packages): everything below resolves.
+  #
+  # NOT an alias of the fedora list (unlike gnome.yaml's section, which IS
+  # `*fedora_gnome_packages`): the repo has no `cosmic-settings-daemon` — the
+  # single gap — and hummingbird installs run --skip-unavailable, so listing
+  # it would record a permanent, known omission every night instead of a
+  # decision. Same treatment as the zypper section's cosmic-settings note
+  # above: do not list what the repository cannot supply. Re-add it (or
+  # restore the alias outright) when tunaos-packages rebuilds it —
+  # tests/bats/test_hummingbird_desktop_wiring.bats pins that the difference
+  # between this list and fedora's is exactly that one package, so the two
+  # cannot drift silently.
+  #
+  # Snapshot pin, not `current/$basearch/`: same status as gnome.yaml's
+  # section — the floating alias does not exist on repo.tunaos.org yet
+  # (tuna-os/tunaos-packages#365), and the x86_64-only path is the only one
+  # published (#1755 §3), which is fine because this section is only read on
+  # the amd64 leg's dnf path.
+  hummingbird:
+    repos:
+      - name: tunaos-hummingbird
+        baseurl: https://repo.tunaos.org/hummingbird/20251124-$basearch/
+        priority: 5
+    packages:
+      # See the fedora list's dconf note — needed here for real (the rebuild
+      # never pulls it transitively), mirrored there to keep the lists' diff
+      # pinned to exactly cosmic-settings-daemon.
+      - dconf
+      - cosmic-session
+      - cosmic-comp
+      - cosmic-panel
+      - cosmic-app-library
+      - cosmic-applets
+      - cosmic-bg
+      - cosmic-files
+      - cosmic-idle
+      - cosmic-launcher
+      - cosmic-notifications
+      - cosmic-osd
+      - cosmic-randr
+      - cosmic-screenshot
+      - cosmic-settings
+      # cosmic-settings-daemon deliberately absent — see the section comment.
+      - cosmic-term
+      - cosmic-wallpapers
+      - cosmic-workspaces
+      - cosmic-greeter
+      - cosmic-icon-theme
+      - greetd
+      - xdg-desktop-portal-cosmic
+      - pop-icon-theme
+
+  # ── Wahoo (Fedora ELN) ─────────────────────────────────────────────────
+  # ELN carries COSMIC natively, in eln-extras, at 1.6.0 — and that is the
+  # headline finding of the whole lane so far, not just a convenience.
+  # `cosmic.el10` above sources COSMIC from COPR `yselkowitz/cosmic-epel`
+  # (twice) and fprintd from repo.tunaos.org, both tier-3 migration
+  # inventory under PACKAGE-SOURCING.md. On this base neither is needed:
+  # the compose ships cosmic-session/comp/panel/files/greeter/settings and
+  # xdg-desktop-portal-cosmic, and `fprintd-1.94.5-6.eln158` resolves from
+  # eln-appstream, so the aarch64 fprintd gap that pinned cosmic off arm64
+  # on EL10 (tunaOS#732) does not reproduce here either.
+  #
+  # Measured with `dnf repoquery` against the pinned eln-bootc digest on
+  # 2026-08-26: 23 of 24 present. If EL11 keeps this, the COSMIC COPR
+  # dependency retires itself at the EL10 -> EL11 transition rather than
+  # needing a Tideforge migration (#2048, #2049).
+  #
+  # NO copr: block here, deliberately — ELN needs none, and a new one
+  # fails scripts/check-package-sources.py.
+  eln:
+    packages:
+      - dconf
+      - cosmic-session
+      - cosmic-comp
+      - cosmic-panel
+      - cosmic-app-library
+      - cosmic-applets
+      - cosmic-bg
+      - cosmic-files
+      - cosmic-idle
+      - cosmic-launcher
+      - cosmic-notifications
+      - cosmic-osd
+      - cosmic-randr
+      - cosmic-screenshot
+      - cosmic-settings
+      - cosmic-settings-daemon
+      - cosmic-term
+      - cosmic-workspaces
+      - cosmic-greeter
+      - cosmic-icon-theme
+      - greetd
+      - xdg-desktop-portal-cosmic
+      - pop-icon-theme
+    # Absent from ELN on 2026-08-26 (cosmic-icons likewise, and it is not
+    # in the fedora list either). Best-effort so it lands by itself when
+    # the compose grows it — tracked in tunaos-packages.
+    optional:
+      - cosmic-wallpapers
   el10:
     # cosmic-greeter hard-requires fprintd-pam, which CentOS Stream 10 only
     # builds for x86_64 -- that gap is why aarch64 cosmic was pinned off in
     # tunaOS's build-config.yml (tunaOS#732). It's now built
-    # (tuna-os/github-copr#110, same pinned version as x86_64's 1.94.5) and
+    # (tuna-os/tunaos-packages#110, same pinned version as x86_64's 1.94.5) and
     # published at its own R2 path, separate from the main tuna-os.repo.
     # baseurl is not $basearch-templated (only aarch64 RPMs are published
     # here), so this is harmless to enable unconditionally on x86_64 --

@@ -7,6 +7,10 @@ on:
       - 'build_scripts/**'
       - '.github/scripts/**'
       - '.github/changelogs.py'
+      # The CI contract (tests/test_ci_contract.py) proves every green gate
+      # exists and runs; it has to re-run when the gates themselves move.
+      - '.github/workflows/**'
+      - '.github/green-criteria.yml'
       - 'Justfile'
   push:
     branches: [main]
@@ -28,7 +32,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@8906e13e3ac1654504e75ad27440bffb28e52fbc # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@eb4c546389f19ad9e42f1af052623de73c620ebb # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"
@@ -51,6 +55,9 @@ jobs:
           # pytest for Python tests
           pip3 install pytest pytest-cov --break-system-packages 2>/dev/null || pip3 install pytest pytest-cov --user
 
+          # Pillow + requests for desktop-verify.py tests
+          pip3 install pillow requests --break-system-packages 2>/dev/null || pip3 install pillow requests --user
+
       - name: Run BATS tests
         run: |
           echo "=== BATS Tests ==="
@@ -63,6 +70,7 @@ jobs:
           exit $FAILED
 
       - name: Run pytest tests
+        if: always()
         run: |
           echo "=== pytest Tests ==="
           python3 -m pytest tests/ tests/pytest/ -v --tb=short --cov=. --cov-report=term --cov-report=xml:coverage-python.xml
@@ -88,3 +96,4 @@ jobs:
           name: coverage-python
           path: coverage-python.xml
           retention-days: 30
+          if-no-files-found: ignore

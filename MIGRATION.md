@@ -1,6 +1,6 @@
 # Migration Guide — Moving to tunaOS
 
-This guide helps you migrate to tunaOS from other Linux distributions.
+This guide helps you migrate to tunaOS from Windows or other Linux distributions.
 
 ## Overview
 
@@ -150,6 +150,28 @@ Vanilla OS 2 (Orchid) uses ABRoot, not rpm-ostree. Direct migration is not suppo
 ### Endless OS
 
 Endless OS uses OSTree but with a different deployment model. Migration is not tested or supported.
+
+---
+
+## From Windows (wootc)
+
+If you are currently running Windows (Windows 10 or 11), you can migrate to TunaOS directly using **[wootc](https://github.com/tuna-os/wootc)** without needing to burn a USB flash drive or repartition your drive in advance.
+
+wootc is a Windows installer application for TunaOS:
+- **No USB stick required**: Runs directly within Windows and prepares a bootable environment.
+- **Safe alongside Windows**: Installs to a loop root disk (`root.disk`) on your existing drive while keeping Windows intact in the UEFI boot menu. BitLocker partitions remain safe.
+- **Migration assistance**: Can import Wi-Fi networks, wallpaper, browser profiles, keyboard layouts, WSL configurations, and user documents.
+- **Full TunaOS catalog**: Choose from GNOME, KDE Plasma, COSMIC, Niri, or XFCE editions across supported TunaOS bases.
+- **Honest rollback / uninstall**: Uninstall cleanly from Windows Settings / Add or Remove Programs, leaving no residual partition state.
+
+### Getting Started with wootc
+
+1. Download the latest installer from the [wootc releases page](https://github.com/tuna-os/wootc/releases) (e.g. `tunaos-installer.exe`).
+2. Run the installer in Windows with administrator privileges.
+3. Select your desired TunaOS desktop environment and variant, configure username and password, and allocate disk space.
+4. Reboot your system and select TunaOS from the boot menu to complete setup.
+
+For detailed instructions, refer to the [wootc Getting Started Guide](https://github.com/tuna-os/wootc/blob/main/docs/getting-started.md).
 
 ---
 

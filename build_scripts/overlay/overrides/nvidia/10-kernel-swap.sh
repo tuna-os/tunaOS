@@ -73,6 +73,84 @@ if [[ "$INSTALLED_VERSION" == "$CACHED_VERSION" ]]; then
 	echo "==> kernels already aligned; no swap needed"
 else
 	echo "==> swapping image kernel to the akmods-matched ${CACHED_VERSION}"
+
+	# tunaOS#1823 on the EL10 surface (tunaOS#1725): on 2026-08-18 every EL10
+	# *-nvidia leg died right below with sqlite error 11 — "database disk
+	# image is malformed" on every INSERT of the kernel install transaction
+	# (albacore run 32090745718, all five legs, 3/3 buildah attempts) — the
+	# same error class bonito-rawhide hits in stage-2. The rpmdb this stage
+	# inherits is a sqlite file in a LOWER overlay layer; rpm mmaps it, and
+	# overlayfs copy-up under an mmap'd write is the known corruption shape.
+	# Rebuilding the db first forces the whole database through copy-up into
+	# THIS layer before the first write touches it. This is lib.sh's
+	# rawhide_rpmdb_probe graduating per its own protocol on a stable base:
+	# rebuild outcome + transaction outcome discriminate the two #1823
+	# readings, and if the copy-up reading is right, it fixes the swap
+	# outright. Deliberately FATAL on rebuild failure (unlike the rawhide
+	# probe, which runs on green pinned builds): every cell that reaches this
+	# branch is red today, and a db that cannot even rebuild at rest means
+	# the transaction below was never going to succeed — fail here with the
+	# discriminating signature in the log instead of 300 INSERT errors later.
+	echo "==> rebuilding the inherited rpmdb before the swap (copy-up guard, tunaOS#1823/#1725)"
+	# The bare rebuild was not enough — run 32143809963 answered with the
+	# discriminating signature this guard was built to produce:
+	#   error: failed to replace old database with new database!
+	# and ZERO "malformed" lines. The rebuild reads and rewrites the db
+	# fine; it dies at its final step, a directory RENAME over the dbpath —
+	# which still lives in a LOWER overlay layer, and overlayfs refuses
+	# cross-layer directory renames (EXDEV). The same mechanism is what
+	# corrupts sqlite's writes in the plain install transaction (#1823).
+	# So recreate the directory natively in the upper layer first: the
+	# copy lands in the upper layer, the rm whiteouts the lower dir, and
+	# the mv is then a same-device rename. Every subsequent rpm write —
+	# the rebuild's replace included — is upper-layer-native.
+	# Round 2 (nightly 32323650607): the round-trip ran and the rebuild
+	# STILL failed — now at "could not move new database in place" AND
+	# "could also not restore old database", with `malformed` gone
+	# entirely. Every failing operation is a rename beside the dbpath.
+	# On bootc/ostree images %_dbpath (/usr/share/rpm) is typically a
+	# SYMLINK into /usr/lib/sysimage/rpm, so round-tripping the literal
+	# path round-trips the symlink and leaves the real directory in the
+	# lower layer. Resolve first, round-trip the real directory.
+	_rpmdb_path="$(rpm --eval '%_dbpath' 2>/dev/null || true)"
+	_rpmdb_dir="$(readlink -f "$_rpmdb_path" 2>/dev/null || true)"
+	if [[ -n "$_rpmdb_dir" && -d "$_rpmdb_dir" ]]; then
+		echo "==> rpmdb: ${_rpmdb_path} resolves to ${_rpmdb_dir}; recreating it in the upper layer"
+		cp -a "$_rpmdb_dir" "${_rpmdb_dir}.tbox-copyup"
+		rm -rf "$_rpmdb_dir"
+		mv "${_rpmdb_dir}.tbox-copyup" "$_rpmdb_dir"
+	fi
+	# Round 4 (run 32339591457): base-nvidia went green on the round-trip
+	# alone, but the DESKTOP legs inherit an rpmdb their stage-2 build
+	# already corrupted at rest (1678 malformed-on-READ lines), so the
+	# transaction needs the REBUILD's product — and rpm's rebuild reads
+	# and rewrites the corrupt db fine, then throws the result away when
+	# its directory-rename endgame fails under the overlay, printing its
+	# own recovery instruction:
+	#   error: replace files in /usr/share/rpm with files from
+	#          /usr/share/rpmrebuilddb.NN to recover
+	# So do exactly that: when the rename fails, salvage the completed
+	# rebuild with a FILE-level swap, which needs no directory rename at
+	# all. Stale rebuild/old dirs are cleared first so the salvage can
+	# only pick up the rebuild that just ran.
+	_rpmdb_parent="${_rpmdb_dir%/*}"
+	rm -rf "${_rpmdb_parent}"/rpmrebuilddb.* "${_rpmdb_parent}"/rpmold.* 2>/dev/null || true
+	if rpm --rebuilddb; then
+		echo "TUNAOS_RPMDB_PROBE=rebuilt-pre-swap"
+	else
+		_rebuilt="$(ls -d "${_rpmdb_parent}"/rpmrebuilddb.* 2>/dev/null | head -1 || true)"
+		if [[ -n "$_rpmdb_dir" && -d "$_rpmdb_dir" && -n "$_rebuilt" && -d "$_rebuilt" ]]; then
+			echo "==> salvaging the completed rebuild file-level from ${_rebuilt} (rpm's own recovery instruction)"
+			rm -rf "${_rpmdb_dir:?}"/*
+			cp -a "$_rebuilt"/. "$_rpmdb_dir"/
+			rm -rf "$_rebuilt" "${_rpmdb_parent}"/rpmold.*
+			echo "TUNAOS_RPMDB_PROBE=rebuilt-salvaged"
+		else
+			echo "TUNAOS_RPMDB_PROBE=rebuild-failed-nonfatal"
+			echo "::warning title=rpmdb rebuild (tunaOS#1823)::rpm --rebuilddb failed and left no rebuilt db to salvage; proceeding — the kernel transaction below is the real verdict"
+		fi
+	fi
+
 	# Always remove these packages as kernel cache provides signed versions
 	# (bluefin-lts kernel-swap.sh, verbatim reasoning).
 	PKGS=("${KERNEL_NAME}" "${KERNEL_NAME}-core" "${KERNEL_NAME}-modules" "${KERNEL_NAME}-modules-core" "${KERNEL_NAME}-modules-extra" "${KERNEL_NAME}-uki-virt")
@@ -106,7 +184,34 @@ else
 	# image supplies the rest (dracut, kmod, linux-firmware). The old
 	# kernels were already erased with rpm --erase --nodeps above, so the
 	# -i install has no version conflicts.
-	rpm -ivh "${RPM_FILES[@]}"
+	#
+	# --nosignature is required, not optional, on bonito-rawhide
+	# (base_image quay.io/fedora/fedora-bootc:rawhide). The akmods kernel
+	# cache RPMs are not GPG-signed by ublue-os's akmods build for ANY
+	# consumer -- bonito installs the identical unsigned set from the
+	# identical coreos-stable akmods bundle without incident (its failure
+	# in the SAME run window was purely the unrelated sed bug one script
+	# later, in 20-nvidia.sh -- proof this step passed for it). What
+	# differs on rawhide is the base image's own rpm signature-verify
+	# policy, which fedora-bootc:rawhide sets stricter than bonito's base:
+	#
+	#   package kernel-modules-core-7.1.4-100.fc43.x86_64 does not
+	#   verify: no signature
+	#
+	# on all six kernel packages uniformly (run 31663771496,
+	# bonito-rawhide gnome-nvidia) -- a property of the bundle, not
+	# corruption of a subset. The actual trust boundary for this content
+	# is already the pinned OCI digest of the akmods_nvidia_open build
+	# stage (Containerfile.overlay); the GPG check on top of that is
+	# redundant for a source that was never signed to begin with, and
+	# failing on its absence here blocks every *-nvidia flavor of the one
+	# variant that runs on a base image strict enough to enforce it.
+	# The kernel RPM's %posttrans runs rpm-ostree kernel-install, which invokes
+	# dracut before this script's explicit rebuild below. /boot is a tmpfs mount
+	# in Containerfile.overlay; keep dracut's temporary output on that same
+	# filesystem so its final rename cannot fail with EXDEV (Invalid cross-device
+	# link) when a newer kernel package is installed.
+	TMPDIR=/boot rpm -ivh --nosignature "${RPM_FILES[@]}"
 
 	# Remove the OLD kernel's module directory outright. `rpm --erase` above
 	# removes only rpm-OWNED files; generated ones (initramfs.img, depmod

@@ -50,7 +50,7 @@ Always run `just fix && just check` after making changes to validate the build c
    | ❌ Not available in EL10 | Add **only** inside `if [[ $IS_FEDORA == true ]]; then` — a tracking issue has already been opened |
 
    Active EL10 repos in TunaOS: base AlmaLinux/CentOS Stream 10, EPEL 10, CRB,
-   `ublue-os/packages` COPR, `tuna-os/github-copr` COPR (see `build_scripts/lib.sh`).
+   `ublue-os/packages` COPR, `tuna-os/tunaos-packages` COPR (formerly `github-copr`; see `build_scripts/lib.sh`).
 
 2. **Config files**: Drop config files into `system_files_overrides/niri/` mirroring the path
    from `mkosi.extra/`. Create subdirectories as needed.

@@ -362,6 +362,14 @@ JSON
   [ "$TACKLEBOX_IMAGE" = "quay.io/custom/tacklebox:dev" ]
 }
 
+@test "tacklebox invocation has a bounded, overrideable deadline" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/common.sh"
+	grep -q 'TUNAOS_TACKLEBOX_TIMEOUT_SECONDS:-4800' "$SCRIPT_PATH"
+	grep -q 'timeout --foreground --kill-after=120' "$SCRIPT_PATH"
+	grep -q 'tunaOS#1772' "$SCRIPT_PATH"
+	grep -q 'must be a positive integer' "$SCRIPT_PATH"
+}
+
 # ── Variant matrix ─────────────────────────────────────────────────────────
 
 @test "variants: all four variants produce valid output dirs" {

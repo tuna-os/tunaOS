@@ -47,6 +47,16 @@ images:
     registry: docker
     path: library/ubuntu
     tag: "22.04"
+  # Hyphenated name AND a digest — the intersection the two fixtures above
+  # each miss (`pinned` has a digest but no hyphen; `multi-override` has a
+  # hyphen but no digest). registry-map.yaml's real coreos-chunkah entry is
+  # exactly this shape, and resolving it aborted registry_ref outright
+  # (tunaOS#1568).
+  pinned-tool:
+    registry: quay
+    path: coreos/sometool
+    digest: "sha256:deadbeef1234"
+    tag: latest
 YAML
 
   # Patch _registry.sh: point REGISTRY_MAP at the test map and replace
@@ -203,6 +213,49 @@ teardown() {
   '
   [ "$status" -eq 0 ]
   [[ "$output" == "ghcr.io/tuna-os/tools@sha256:ffffff999999" ]]
+}
+
+@test "registry_ref: resolves a digest-pinned image whose name contains a hyphen" {
+  # A hyphen is not a legal shell identifier character, so building the
+  # override variable name as TUNA_IMAGE_DIGEST_${name} made bash abort with
+  # "invalid variable name" — under _registry.sh's own `set -euo pipefail`
+  # that took the whole call down. Not "the override was ignored": no ref came
+  # back at all, which is why registry-map.yaml's coreos-chunkah digest pin
+  # was unreachable and build-image-inner.sh hardcoded :latest instead.
+  run bash -c '
+    source "${TEST_ROOT}/scripts/_registry.sh" 2>/dev/null
+    registry_ref pinned-tool
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" == "quay.io/coreos/sometool@sha256:deadbeef1234" ]]
+}
+
+@test "registry_ref: TUNA_IMAGE_DIGEST_ override works on a hyphenated name" {
+  # Hyphens become underscores in the variable name, matching the
+  # TUNA_IMAGE_PATH_/TUNA_IMAGE_TAG_ convention and _registry.sh's own header,
+  # which documents TUNA_IMAGE_DIGEST_coreos_chunkah.
+  run bash -c '
+    export TUNA_IMAGE_DIGEST_pinned_tool=sha256:cafe5678
+    source "${TEST_ROOT}/scripts/_registry.sh" 2>/dev/null
+    registry_ref pinned-tool
+  '
+  [ "$status" -eq 0 ]
+  [[ "$output" == "quay.io/coreos/sometool@sha256:cafe5678" ]]
+}
+
+@test "registry_ref: the real coreos-chunkah entry resolves against the shipped map" {
+  # The regression that mattered, against registry-map.yaml itself rather than
+  # a fixture: build-image-inner.sh calls registry_ref coreos-chunkah, and it
+  # must return a digest ref instead of aborting.
+  # Double-quoted so REPO_ROOT expands HERE: setup() exports TEST_ROOT, but
+  # REPO_ROOT is a plain file-scope assignment, so a single-quoted body would
+  # reach the child shell as an empty path and source nothing.
+  run bash -c "
+    source '${REPO_ROOT}/scripts/_registry.sh' 2>/dev/null
+    registry_ref coreos-chunkah
+  "
+  [ "$status" -eq 0 ]
+  [[ "$output" == quay.io/coreos/chunkah@sha256:* ]]
 }
 
 @test "registry_ref: multiple overrides combined (registry + path + tag)" {

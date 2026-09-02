@@ -37,7 +37,9 @@ from pathlib import Path
 
 REPO = "tuna-os/tunaOS"
 DOC = Path("docs/MATRIX-STATUS.md")
+PROV = Path("docs/matrix-provenance.json")
 CONFIG = Path(".github/build-config.yml")
+GREEN_CRITERIA = Path(".github/green-criteria.yml")
 
 BEGIN = "<!-- BEGIN GENERATED — scripts/gen-matrix-status.py -->"
 END = "<!-- END GENERATED -->"
@@ -303,6 +305,113 @@ def overlay_tags() -> set[str]:
     return {t for t in tags if not t.startswith("sha256-")}
 
 
+_BASELINE_CACHE: tuple[list[dict], str, str] | None = None
+
+
+def _baseline_cells() -> tuple[list[dict], str, str]:
+    """The newest trustworthy desktop-contract-baseline artifact, once.
+
+    contract_results() and omissions_results() read the same all.json — the
+    sweep records both axes from one image pull — so download it once per
+    invocation rather than once per axis.
+    """
+    global _BASELINE_CACHE
+    if _BASELINE_CACHE is not None:
+        return _BASELINE_CACHE
+    runs = gh_json(
+        "run", "list", "--repo", REPO, "--workflow", "desktop-contract-sweep.yml",
+        "--limit", "10", "--json", "databaseId,createdAt,status,conclusion",
+    ) or []
+    for run in runs:
+        if run.get("status") != "completed" or run.get("conclusion") != "success":
+            continue
+        run_id, date = str(run["databaseId"]), run["createdAt"][:10]
+        with tempfile.TemporaryDirectory() as tmp:
+            try:
+                subprocess.run(
+                    ["gh", "run", "download", run_id, "--repo", REPO,
+                     "--name", "desktop-contract-baseline", "--dir", tmp],
+                    capture_output=True, text=True, check=True,
+                )
+            except subprocess.CalledProcessError:
+                continue
+            all_json = Path(tmp) / "all.json"
+            if not all_json.exists():
+                continue
+            _BASELINE_CACHE = (json.loads(all_json.read_text()), date, run_id)
+            return _BASELINE_CACHE
+    _BASELINE_CACHE = ([], "", "")
+    return _BASELINE_CACHE
+
+
+def omissions_results() -> dict[str, tuple[str, str, str]]:
+    """Per-cell no_silent_omissions verdict from the sweep's baseline.
+
+    Same artifact as contract_results(), different field: the sweep runs
+    checks/verify-package-wishlist.sh against every published image it pulls
+    (green criterion 8). Cells from artifacts that predate the field, and
+    cells whose image was never read (missing/error/lost), score untested —
+    absence of evidence, per the same #1730 rule as everywhere else.
+    """
+    cells, date, run_id = _baseline_cells()
+    out: dict[str, tuple[str, str, str]] = {}
+    for c in cells:
+        verdict = c.get("omissions_status")
+        if verdict in ("pass", "fail"):
+            out[c["cell"]] = (
+                "success" if verdict == "pass" else "failure", date, run_id
+            )
+    return out
+
+
+_PARITY_CACHE: tuple[list[dict], str, str] | None = None
+
+
+def parity_results() -> dict[str, tuple[str, str, str]]:
+    """Per-cell parity verdict from package-parity.yml's baseline artifact.
+
+    ok → success; BROKEN/suspect → failure (a desktop adding fewer than the
+    floor of packages over its base is below the bar even when it isn't the
+    zero-added #858 case); unmeasured cells yield nothing — cell() renders ⬜.
+    """
+    global _PARITY_CACHE
+    if _PARITY_CACHE is None:
+        runs = gh_json(
+            "run", "list", "--repo", REPO, "--workflow", "package-parity.yml",
+            "--limit", "10", "--json", "databaseId,createdAt,status,conclusion",
+        ) or []
+        _PARITY_CACHE = ([], "", "")
+        for run in runs:
+            if run.get("status") != "completed" or run.get("conclusion") != "success":
+                continue
+            run_id, date = str(run["databaseId"]), run["createdAt"][:10]
+            with tempfile.TemporaryDirectory() as tmp:
+                try:
+                    subprocess.run(
+                        ["gh", "run", "download", run_id, "--repo", REPO,
+                         "--name", "package-parity-baseline", "--dir", tmp],
+                        capture_output=True, text=True, check=True,
+                    )
+                except subprocess.CalledProcessError:
+                    continue
+                parity_json = Path(tmp) / "parity.json"
+                if not parity_json.exists():
+                    continue
+                _PARITY_CACHE = (
+                    json.loads(parity_json.read_text()), date, run_id
+                )
+                break
+    cells, date, run_id = _PARITY_CACHE
+    out: dict[str, tuple[str, str, str]] = {}
+    for c in cells:
+        verdict = c.get("verdict", "")
+        if verdict == "ok":
+            out[c["cell"]] = ("success", date, run_id)
+        elif verdict.startswith(("BROKEN", "suspect")):
+            out[c["cell"]] = ("failure", date, run_id)
+    return out
+
+
 def contract_results() -> dict[str, tuple[str, str, str]]:
     """Newest per-cell verdict from desktop-contract-sweep.yml (tunaOS#858).
 
@@ -328,37 +437,362 @@ def contract_results() -> dict[str, tuple[str, str, str]]:
     translated to success/failure here, so callers can tell "no image
     published" apart from "published and broken" if they need to.
     """
-    runs = gh_json(
-        "run", "list", "--repo", REPO, "--workflow", "desktop-contract-sweep.yml",
-        "--limit", "10", "--json", "databaseId,createdAt,status,conclusion",
-    ) or []
-    for run in runs:
-        # The workflow's own conclusion (not the per-cell jobs') is a real
-        # signal here: `collate` fails the run if the baseline does not
-        # reconcile (see its "every cell must be accounted for" check), so a
-        # non-success run's artifact — if it even uploaded one — is not
-        # trustworthy data to read as a baseline.
-        if run.get("status") != "completed" or run.get("conclusion") != "success":
+    cells, date, run_id = _baseline_cells()
+    return {c["cell"]: (c["status"], date, run_id) for c in cells}
+
+
+def load_green_criteria(path: Path = GREEN_CRITERIA) -> list[dict]:
+    """The criteria roster. PyYAML only — this file has anchors-free simple
+    structure, but hand-parsing it would mean two parsers to keep honest;
+    matrix-status.yml pip-installs pyyaml before running this script."""
+    try:
+        import yaml
+    except ImportError:
+        sys.exit("green-criteria.yml needs PyYAML: pip install pyyaml")
+    return yaml.safe_load(path.read_text())["criteria"]
+
+
+def build_stage_results() -> dict[str, dict]:
+    """Per-variant Promote and Gate outcomes from the newest CONCLUSIVE build.
+
+    Same selection rule as .github/scripts/update-build-status.sh: walk recent
+    runs, take the first whose conclusion is success or failure — a cancelled
+    run is not a verdict on anything (tunaOS#1730). One run view per variant,
+    not a RUN_DEPTH walk: a build run asserts its whole matrix at once, so the
+    newest conclusive run IS the current state of every cell it scheduled.
+    """
+    out: dict[str, dict] = {}
+    for variant in sorted(_matrix("build_image", desktops_only=False)):
+        runs = gh_json(
+            "run", "list", "--repo", REPO,
+            "--workflow", f"build-{variant}.yml",
+            "--branch", "main", "--limit", "10",
+            "--json", "databaseId,conclusion,createdAt",
+        ) or []
+        run = next(
+            (r for r in runs if r.get("conclusion") in ("success", "failure")),
+            None,
+        )
+        if run is None:
+            out[variant] = {"jobs": {}, "date": ""}
             continue
-        run_id, date = str(run["databaseId"]), run["createdAt"][:10]
-        with tempfile.TemporaryDirectory() as tmp:
-            try:
-                subprocess.run(
-                    ["gh", "run", "download", run_id, "--repo", REPO,
-                     "--name", "desktop-contract-baseline", "--dir", tmp],
-                    capture_output=True, text=True, check=True,
-                )
-            except subprocess.CalledProcessError:
-                # Artifact expired (30/90-day retention) or this particular
-                # run predates the artifact existing — try the next-newest
-                # successful run rather than giving up on the whole section.
+        detail = gh_json(
+            "run", "view", str(run["databaseId"]), "--repo", REPO,
+            "--json", "jobs",
+        ) or {}
+        jobs: dict[tuple[str, str], str] = {}
+        for job in detail.get("jobs", []):
+            m = re.search(
+                r" / (?P<flavor>[^/]+) / (?P<stage>Promote|Gate)$",
+                job.get("name", ""),
+            )
+            if not m:
                 continue
-            all_json = Path(tmp) / "all.json"
-            if not all_json.exists():
+            key = (m["flavor"], m["stage"])
+            conclusion = job.get("conclusion") or ""
+            # Two jobs can share a display name for one cell: the desktop
+            # Gate (skipped on base) and the base Gate (skipped on desktops)
+            # both render as "base / Gate". A real verdict must never be
+            # overwritten by its skipped twin, and job order must not decide.
+            if key in jobs and conclusion not in ("success", "failure"):
                 continue
-            cells = json.loads(all_json.read_text())
-            return {c["cell"]: (c["status"], date, run_id) for c in cells}
-    return {}
+            jobs[key] = conclusion
+        out[variant] = {
+            "jobs": jobs,
+            "date": run["createdAt"][:10],
+            # Kept for provenance: builds/boots verdicts all come from this
+            # one conclusive run, so the cell→run attribution is per-variant.
+            "run_id": str(run["databaseId"]),
+        }
+    return out
+
+
+def _stage_verdict(conclusion: str | None) -> str:
+    """success → pass, failure → fail, anything else → untested.
+
+    Skipped and missing are deliberately NOT failures: "no job asserted this
+    cell" is absence of evidence (tunaOS#1730), and green-criteria.yml's rule
+    already refuses to count it as green (skipped_is_not_green) — ⬜ says both.
+    """
+    if conclusion == "success":
+        return "pass"
+    if conclusion == "failure":
+        return "fail"
+    return "untested"
+
+
+def _axis_from_results(results: dict, key: str) -> str:
+    hit = results.get(key)
+    return _stage_verdict(hit[0] if hit else None)
+
+
+# bootc-lifecycle job names carry an arch suffix, and the smoke-tier jobs a
+# BETA prefix: "yellowfin:gnome (amd64)", "BETA guppy:gnome (amd64)". The
+# composite and the Lifecycle section key cells as plain "variant:flavor".
+_LIFECYCLE_NAME = re.compile(
+    r"^(?:BETA\s+)?(?P<cell>[a-z0-9-]+:[a-z0-9-]+)\s+\([a-z0-9]+\)$"
+)
+
+
+def lifecycle_results() -> dict[str, tuple[str, str, str]]:
+    """Cell-keyed lifecycle verdicts, worst-of-arches.
+
+    The wiring below was written before Bootc Lifecycle had ever run, and
+    the first real sweep (run 32040213366, 168 jobs) proved the raw job
+    names never matched a cell lookup: every cell rendered ⬜ while 133
+    passes sat in the run. Normalise the names here, and merge a cell's
+    arch legs pessimistically — one green leg must not mask a red one, for
+    the same reason never-tested is not green.
+    """
+    merged: dict[str, tuple[str, str, str]] = {}
+    for name, hit in latest_results("bootc-lifecycle.yml", r":").items():
+        m = _LIFECYCLE_NAME.match(name)
+        if not m:
+            continue
+        cell = m.group("cell")
+        prev = merged.get(cell)
+        if prev is None or (prev[0] == "success" and hit[0] == "failure"):
+            merged[cell] = hit
+    return merged
+
+
+def composite_verdict(verdicts: list[str]) -> str:
+    """Compose per-criterion verdicts under green-criteria.yml's rule.
+
+    fail outranks untested for the glyph — a demonstrated failure is more
+    information than an absence — but neither is green: the count below only
+    ever admits cells where every applicable blocking criterion says pass.
+    """
+    if any(v == "fail" for v in verdicts):
+        return "fail"
+    if any(v == "untested" for v in verdicts):
+        return "untested"
+    return "pass"
+
+
+def criterion_scope_allows(criterion: dict, flavor: str) -> bool:
+    """Whether a criterion is scored on this flavor at all.
+
+    A scope entry in green-criteria.yml is a REVIEWED declaration that CI
+    cannot assert the criterion for that cell (asahi has no aarch64 KVM;
+    base-hwe/base-nvidia are unbooted derivations). Out-of-scope cells are
+    not judged on the criterion — which is different from ⬜: untested counts
+    against green, out-of-scope simply isn't part of that cell's bar.
+    """
+    scope = criterion.get("scope") or {}
+    if flavor in (scope.get("excludes_flavors") or []):
+        return False
+    return not any(
+        flavor.endswith(suffix)
+        for suffix in (scope.get("excludes_flavor_suffixes") or [])
+    )
+
+
+def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
+                      omissions, parity):
+    """The bar itself: one table scored against the blocking criteria.
+
+    Per-criterion applicability follows each axis's own denominator, exactly
+    like the sections below — builds applies to every published cell, the
+    desktop/boot/install axes to the desktops set, iso to the ISO set. A
+    criterion with no per-cell assertion wired here scores untested, which the
+    rule turns into "not green": making such a criterion blocking turns the
+    whole board ⬜ loudly instead of silently passing it.
+    """
+    desktops = _matrix("build_image", desktops_only=True)
+    everything = _matrix("build_image", desktops_only=False)
+    isos = iso_matrix()
+
+    # W1's last box: which run asserted which criterion, when. Every axis
+    # source already carries (conclusion, date, run_id) — the glyphs threw
+    # that away. Recorded here, as a side product of the same wiring that
+    # scores the composite, so the provenance can never disagree with the
+    # board it explains.
+    provenance: dict[str, dict[str, dict[str, str]]] = {}
+
+    def _run_url(run_id: str) -> str:
+        return f"https://github.com/{REPO}/actions/runs/{run_id}" if run_id else ""
+
+    def scorers(variant: str, flavor: str) -> dict[str, str]:
+        vstage = stage.get(variant, {})
+        jobs = vstage.get("jobs", {})
+        entry = provenance.setdefault(f"{variant}:{flavor}", {})
+
+        def stage_axis(axis: str, stage_name: str) -> str:
+            v = _stage_verdict(jobs.get((flavor, stage_name)))
+            entry[axis] = {
+                "verdict": v,
+                "date": vstage.get("date", "") if (flavor, stage_name) in jobs else "",
+                "run": _run_url(vstage.get("run_id", "")) if (flavor, stage_name) in jobs else "",
+            }
+            return v
+
+        def result_axis(axis: str, results: dict, key: str) -> str:
+            hit = results.get(key)
+            v = _stage_verdict(hit[0] if hit else None)
+            entry[axis] = {
+                "verdict": v,
+                "date": hit[1] if hit else "",
+                "run": _run_url(hit[2]) if hit else "",
+            }
+            return v
+
+        per_cell = {
+            "builds": stage_axis("builds", "Promote"),
+            # Every cell has a Gate verdict slot — desktops from the desktop
+            # Gate, plain base from the base Gate (W3); whether it BINDS is
+            # the criterion's scope, applied in verdict() below.
+            "boots": stage_axis("boots", "Gate"),
+        }
+        if flavor in desktops.get(variant, set()):
+            per_cell["desktop"] = result_axis(
+                "desktop", contract, f"{variant}:{flavor}"
+            )
+            per_cell["install"] = result_axis(
+                "install", luks, f"LUKS {variant}:{flavor}"
+            )
+            per_cell["lifecycle"] = result_axis(
+                "lifecycle", lifecycle, f"{variant}:{flavor}"
+            )
+            per_cell["no_silent_omissions"] = result_axis(
+                "no_silent_omissions", omissions, f"{variant}:{flavor}"
+            )
+            per_cell["parity"] = result_axis(
+                "parity", parity, f"{variant}:{flavor}"
+            )
+        if flavor in isos.get(variant, set()):
+            per_cell["iso"] = result_axis(
+                "iso", smoke, f"{variant}:{flavor}"
+            )
+        return per_cell
+
+    blocking_criteria = [c for c in criteria if c["enforcement"] == "blocking"]
+    blocking = [c["id"] for c in blocking_criteria]
+    advisory = [c["id"] for c in criteria if c["enforcement"] == "advisory"]
+    unimplemented = [
+        c["id"] for c in criteria if c["enforcement"] == "unimplemented"
+    ]
+
+    def verdict(variant: str, flavor: str) -> str:
+        per_cell = scorers(variant, flavor)
+        applicable = []
+        for criterion in blocking_criteria:
+            if not criterion_scope_allows(criterion, flavor):
+                continue
+            cid = criterion["id"]
+            if cid in ("builds", "boots"):
+                # Universal criteria: absence of a verdict is ⬜, it never
+                # silently drops out of the bar (skipped_is_not_green).
+                applicable.append(per_cell.get(cid, "untested"))
+            elif cid in per_cell:
+                # Axis-scoped criteria (desktop/install/iso/...): judged only
+                # where their own denominator schedules the cell.
+                applicable.append(per_cell[cid])
+        return composite_verdict(applicable or ["untested"])
+
+    green = total = 0
+    for variant, flavors in everything.items():
+        for flavor in flavors:
+            total += 1
+            if verdict(variant, flavor) == "pass":
+                green += 1
+
+    glyph = {"pass": PASS, "fail": FAIL, "untested": UNTESTED}
+    rows = ["| Variant | " + " | ".join(DESKTOPS) + " |",
+            "|---|" + ":--:|" * len(DESKTOPS)]
+    for variant in sorted(desktops):
+        cells = [
+            glyph[verdict(variant, d)] if d in desktops[variant] else NA
+            for d in DESKTOPS
+        ]
+        rows.append(f"| **{variant}** | " + " | ".join(cells) + " |")
+
+    lines = [
+        "## Composite green — the bar",
+        "",
+        (
+            "Scored against `.github/green-criteria.yml`: a cell is green only "
+            "when every **blocking** criterion applicable to it has a current "
+            "affirmative result; a criterion that was skipped, never tested, "
+            "or unasserted renders \u2b1c and does not count as satisfied. "
+            "Blocking today: "
+            + ", ".join(f"`{c}`" for c in blocking)
+            + ". Advisory (measured in the sections below, not yet biting): "
+            + ", ".join(f"`{c}`" for c in advisory)
+            + ". Unimplemented: "
+            + ", ".join(f"`{c}`" for c in unimplemented)
+            + ". Graduating a criterion is an edit to `enforcement:` in that "
+            "file — this table and the README count tighten with no code "
+            "change."
+        ),
+        "",
+        f"**{green} of {total}** published cells are composite-green.",
+        "",
+    ] + rows + [
+        "",
+        (
+            "Cells outside the desktop columns (base, hwe, nvidia and friends) "
+            "are in the count above but not the table; only `builds` applies "
+            "to them today."
+        ),
+        "",
+        (
+            "Per-cell provenance \u2014 which run asserted which criterion, when \u2014 "
+            "is machine-readable in "
+            "[matrix-provenance.json](matrix-provenance.json), regenerated "
+            "with this document."
+        ),
+        "",
+    ]
+    # The escaped square renders literally otherwise.
+    lines = [l.replace("\u2b1c", UNTESTED) for l in lines]
+    return lines, green, total, provenance
+
+
+def omissions_section(lmatrix, omissions) -> list[str]:
+    """Green criterion 8 as its own axis section (see omissions_results)."""
+    om_key = lambda v, d: f"{v}:{d}"                   # noqa: E731
+    total, tested, passed = tally(lmatrix, omissions, om_key)
+    return [
+        "## Silent omissions",
+        "",
+        f"**{passed} of {total}** cells clean "
+        f"({tested} read, {total - tested} never read).",
+        "",
+        (
+            "Green criterion 8 (`no_silent_omissions`): the sweep runs "
+            "`checks/verify-package-wishlist.sh` against every published image "
+            "it pulls — the same gate new builds pass at build time — so an "
+            "image shipping a silently-skipped package outside "
+            "`package-miss-allowlist.txt` reads ❌ here even if it was "
+            "published before the gate existed. A cell whose image was not "
+            "read (no image, pull error, job lost) is ⬜, not clean."
+        ),
+        "",
+    ] + desktop_table(lmatrix, omissions, om_key) + [""]
+
+
+def parity_section(lmatrix, parity) -> list[str]:
+    """Green criterion 7's first cadence (see parity_results)."""
+    pkey = lambda v, d: f"{v}:{d}"                     # noqa: E731
+    total, tested, passed = tally(lmatrix, parity, pkey)
+    return [
+        "## Package parity",
+        "",
+        f"**{passed} of {total}** cells at parity "
+        f"({tested} measured, {total - tested} never measured).",
+        "",
+        (
+            "Green criterion 7 (`parity`), first cadence: every desktop's "
+            "package set audited daily against its own base "
+            "(`package-parity.yml` → `scripts/package-parity.sh --audit`) — "
+            "the shape that exposes a build applying no desktop at all "
+            "(#858). ❌ covers both BROKEN (no more packages than base) and "
+            "suspect (fewer than 25 added). Diffing against each variant's "
+            "upstream reference is the next step and is not yet asserted."
+        ),
+        "",
+    ] + desktop_table(lmatrix, parity, pkey) + [""]
 
 
 def cell(results: dict, key: str, in_matrix: bool) -> str:
@@ -475,7 +909,22 @@ def build() -> str:
     matrix = iso_matrix()
     lmatrix = luks_matrix()
     luks = latest_results("luks-e2e.yml", r"^LUKS ")
-    smoke = latest_results("installer-smoke.yml", r":")
+    # NOT r":" — installer-smoke.yml has TWO jobs per cell and both carry a
+    # colon:
+    #
+    #     build-iso:  name: build ${{ matrix.variant }}:${{ matrix.flavor }}
+    #     smoke:      name: ${{ matrix.variant }}:${{ matrix.flavor }}
+    #
+    # A bare colon matched both, so every ISO BUILD result was filed as a
+    # smoke result under a phantom variant literally named "build yellowfin".
+    # The 2026-08-24 refresh published it: a "build yellowfin" row reading
+    # ✅✅✅✅✅ sat directly above the real yellowfin row reading ❌❌❌❌❌,
+    # while the summary line above them said "0 of those pass".
+    #
+    # That is the worst kind of wrong for this document: the build jobs DO
+    # pass, so the phantom row looked like the good news anyone would want to
+    # see, on the one axis where there is none. Anchor the exclusion instead.
+    smoke = latest_results("installer-smoke.yml", r"^(?!build )[^:]+:")
     tags = overlay_tags()
 
     # desktop-contract-sweep.yml schedules from the identical build_image /
@@ -523,6 +972,22 @@ def build() -> str:
         "git history is a record of when each combination flipped.*",
         "",
     ]
+
+    # ── Composite ───────────────────────────────────────────────────────────
+    # First, because everything below is an input to it: this is the section
+    # that composes the axes into the one claim the word "green" now makes.
+    lifecycle = lifecycle_results()
+    omissions = omissions_results()
+    parity = parity_results()
+    composite_lines, _, _, provenance = composite_section(
+        load_green_criteria(), build_stage_results(), contract, luks, smoke,
+        lifecycle, omissions, parity,
+    )
+    out += composite_lines
+
+    out += omissions_section(lmatrix, omissions)
+    out += parity_section(lmatrix, parity)
+
 
     # ── LUKS ────────────────────────────────────────────────────────────────
     total, tested, passed = tally(lmatrix, luks, luks_key)
@@ -643,7 +1108,7 @@ def build() -> str:
         out += [f"Newest result {dates[-1]}.", ""]
 
     # ── Bootc Lifecycle ──────────────────────────────────────────────────────
-    lifecycle = latest_results("bootc-lifecycle.yml", r":")
+    # `lifecycle` itself was fetched up top, where the composite scores it.
     lifecycle_key = lambda v, d: f"{v}:{d}"            # noqa: E731
     total, tested, passed = tally(lmatrix, lifecycle, lifecycle_key)
     out += [
@@ -681,9 +1146,19 @@ def build() -> str:
     out += desktop_table(matrix, smoke, smoke_key)
     out += [
         "",
-        "cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on "
-        "hosted CI may be a harness limitation rather than a product failure. "
-        "See *Known systemic gaps*.",
+        # NOT "they need a DRM render node". Run 32681262659 read /dev/dri from
+        # inside the guest and found renderD128 present with `[drm] features:
+        # -virgl` -- a node without 3D. gnome starts on that same hardware
+        # through Mesa's software path. Why the other four do not is open, so
+        # this line states the symptom and points at the section that carries
+        # the evidence, rather than restating a cause the measurement did not
+        # support.
+        (
+            "cosmic, niri, xfwl4 and kde do not bring a session up on hosted CI. The "
+            + "cause is undiagnosed rather than established -- gnome starts on the "
+            + "same guest, which has a render node but no 3D. See *Known systemic "
+            + "gaps*."
+        ),
         "",
     ]
 
@@ -735,7 +1210,7 @@ def build() -> str:
         url = f"https://github.com/{REPO}/actions/runs/{run_id}"
         out.append(f"| {date} | [{run_id}]({url}) | {len(names)} |")
     out += ["", END]
-    return "\n".join(out)
+    return "\n".join(out), provenance
 
 
 # Lines whose whole content is a readout of live CI or registry state.
@@ -834,7 +1309,7 @@ def main() -> int:
 
     head, rest = text.split(BEGIN, 1)
     committed, tail = rest.split(END, 1)
-    generated = build()
+    generated, provenance = build()
     updated = head + generated + tail
 
     if args.check_structure:
@@ -862,6 +1337,18 @@ def main() -> int:
         print("\n".join(diff), file=sys.stderr)
         return 1
 
+    if not args.check:
+        # The JSON is regenerated whenever the doc is, and also when the
+        # doc happens to be byte-identical: same inputs, same payload, so
+        # this is idempotent rather than churn.
+        PROV.write_text(json.dumps(
+            {"about": "Which run asserted which criterion, when — "
+                      "per published cell, per axis. Generated by "
+                      "scripts/gen-matrix-status.py alongside "
+                      "MATRIX-STATUS.md; empty run+date means the axis "
+                      "has no current assertion for that cell.",
+             "cells": provenance},
+            indent=1, sort_keys=True) + "\n")
     if updated == text:
         print("MATRIX-STATUS.md already current")
         return 0

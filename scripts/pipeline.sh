@@ -315,7 +315,12 @@ run_stage() {
 
 # ── Load config & filter ─────────────────────────────────────────────────
 
-ENTRIES=$(yq -o=json '.' .github/build-config.yml | jq -r '
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/build-config.sh
+source "${SCRIPT_DIR}/lib/build-config.sh"
+BUILD_CONFIG="$(tunaos_build_config)"
+
+ENTRIES=$(yq -o=json '.' "$BUILD_CONFIG" | jq -r '
     .variants[]
     | . as $v
     | .flavors[]

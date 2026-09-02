@@ -12,6 +12,11 @@ on:
       - ".github/renovate.json5"
       - ".github/workflows/renovate.yml"
 
+# Read-only on purpose: the job only validates a file. Declared so the
+# read-only downgrade on fork PRs changes nothing (tests/test_fork_safe_workflows.py).
+permissions:
+  contents: read
+
 jobs:
   validate:
     runs-on: ubuntu-latest

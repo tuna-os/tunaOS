@@ -257,12 +257,120 @@ def changed_pixels(a, b):
     return int(m.group(1)) if m else 0
 
 
+# How the OCR pass is chosen, and why there is more than one.
+#
+# kde run 32735883406 read this off four distinct visual states:
+#
+#     state 0: 1 ft
+#     state 1: hm
+#     state 2: i]
+#     state 3: lm
+#
+# Nine frames above the blank threshold, four distinct states, and a readiness
+# stamp from the same guest saying `signal=frame-swapped page=welcome` -- the
+# wizard was on screen and tesseract got two characters of noise off it. The
+# spec keywords were never the problem; the pixels never became words.
+#
+# `--psm 6` is "assume a single uniform block of text". A desktop screenshot is
+# not that: it is a window of sparse headings and buttons on a background, and
+# psm 6 will happily return line noise rather than fail. Nothing downstream can
+# tell that apart from a screen with no text on it, which is how "no installer
+# screen was ever detected" survived as a diagnosis.
+#
+# So: score the result, and if it is not words, try the other readings before
+# giving up --
+#   * --psm 11 (sparse text), the segmentation a desktop actually needs;
+#   * the same two against a negated copy, because tesseract wants dark ink on
+#     light paper and a dark-themed frontend is the exact inverse. gnome's
+#     Adwaita default is light and gnome is the flavor that has always scored;
+#     that asymmetry is worth ruling in or out rather than assuming.
+#
+# The winning variant is recorded and reported. If plain psm 6 keeps winning,
+# this costs one extra process on frames that were unreadable anyway; if a
+# negated pass starts winning, that IS the finding.
+MIN_WORD_CHARS = 8
+
+def _text_score(text):
+    """Alphabetic characters in words of 3+ letters.
+
+    Deliberately not len(text): "1 ft\nhm\ni]" is 9 characters and zero
+    words, and treating it as content is what made an unreadable screen look
+    like a vocabulary mismatch."""
+    return sum(len(w) for w in re.findall(r"[a-z]{3,}", text.lower()))
+
+
+def readable(text):
+    """Whether OCR output is words rather than noise."""
+    return _text_score(text or "") >= MIN_WORD_CHARS
+
+
+_ocr_variant = {}
+# {frame: {pass_name: score}} -- every reading, not only the winner. The first
+# version recorded the winner alone, and reported "best pass per frame: psm6"
+# on kde run 32747410944 where in fact ALL FOUR passes scored zero. `>` is
+# strictly greater, so a four-way tie leaves psm6 holding the title it started
+# with, and the printed hint then read that as evidence FOR psm6 -- an
+# argument from a tie. The scores say what the winner cannot.
+_ocr_scores = {}
+
+
+def _tesseract(png, psm):
+    r = subprocess.run(["tesseract", png, "stdout", "--psm", psm],
+                       capture_output=True, text=True)
+    return (r.stdout or "").lower()
+
+
 def ocr(png):
     if not shutil.which("tesseract"):
         return None
-    r = subprocess.run(["tesseract", png, "stdout", "--psm", "6"],
-                       capture_output=True, text=True)
-    return (r.stdout or "").lower()
+
+    best, best_name = _tesseract(png, "6"), "psm6"
+    _ocr_scores[png] = {"psm6": _text_score(best)}
+    if readable(best):
+        _ocr_variant[png] = best_name
+        return best
+
+    candidates = [(_tesseract(png, "11"), "psm11")]
+
+    # A negated copy, for a light-on-dark frontend. Skipped rather than
+    # failed if ImageMagick is missing -- this is a fallback, not a
+    # dependency.
+    if _im_convert is not None:
+        neg = png + ".neg.png"
+        try:
+            subprocess.run(_im_convert + [png, "-negate", neg],
+                           check=False, capture_output=True)
+            if os.path.exists(neg):
+                candidates.append((_tesseract(neg, "6"), "psm6-negated"))
+                candidates.append((_tesseract(neg, "11"), "psm11-negated"))
+        finally:
+            if os.path.exists(neg):
+                os.unlink(neg)
+
+    for text, name in candidates:
+        _ocr_scores[png][name] = _text_score(text)
+        if _text_score(text) > _text_score(best):
+            best, best_name = text, name
+
+    _ocr_variant[png] = best_name
+    return best
+
+
+def png_geometry(path):
+    """(width, height) from the PNG IHDR, or None.
+
+    Read here rather than shelled out to `identify`: a frame too small for its
+    glyphs to survive is one of the readings of an unreadable screen, and it
+    would be absurd to spawn a process to learn it."""
+    try:
+        with open(path, "rb") as f:
+            head = f.read(24)
+        if head[:8] != b"\x89PNG\r\n\x1a\n" or head[12:16] != b"IHDR":
+            return None
+        return (int.from_bytes(head[16:20], "big"),
+                int.from_bytes(head[20:24], "big"))
+    except OSError:
+        return None
 
 
 def load_spec(path):
@@ -296,7 +404,47 @@ def load_spec(path):
 # ── Capture ──────────────────────────────────────────────────────────────
 time.sleep(5)  # let the installer settle on its first screen
 frames = []
-p = shot(0, "initial screen")
+
+# Leave the shell overview before driving a single key.
+#
+# Run 32450214451's gnome leg reached this point with a mapped, correctly
+# stamped installer window and still produced 9 frames, 2 visual states and
+# zero page advances. The frames say why: the session was sitting in GNOME's
+# ACTIVITIES OVERVIEW, with the installer rendered as a window thumbnail
+# behind the "Type to search" entry. Every key went to the shell, not the
+# app — the widen-the-focus-sweep loop then walked focus onto the
+# thumbnail's CLOSE button and the dash icon, which is worse than useless:
+# one more Return would have closed the installer.
+#
+# Escape is the right key and the only safe one here. In GNOME it closes the
+# overview and does nothing when the overview is already down, so it costs a
+# single keystroke on the four flavors that never had this problem. Super
+# would TOGGLE — opening the overview on any session that was fine.
+#
+# Whether it was needed is itself a finding, so it is measured rather than
+# assumed: capture before, press, capture after, and compare. A frontend
+# that boots behind its own compositor's shell is a real defect in the live
+# session, and quietly dismissing it would hide exactly the inconsistency
+# this workflow exists to catch.
+overlay_dismissed = False
+_pre = shot(0, "initial screen")
+if _pre:
+    _probe = _pre[:-4] + "-preesc.png"
+    shutil.copyfile(_pre, _probe)
+    send_keys("esc")
+    time.sleep(2)
+    _post = shot(0, "initial screen (after leaving any shell overview)")
+    if _post and changed_pixels(_probe, _post) > DIFF_PIXELS:
+        overlay_dismissed = True
+        note("a shell overlay was covering the installer at session start; "
+             "'esc' dismissed it")
+    try:
+        os.remove(_probe)
+    except OSError:
+        pass
+    p = _post or _pre
+else:
+    p = _pre
 if p:
     frames.append(p)
 
@@ -405,6 +553,17 @@ for i in range(1, steps + 1):
 
 print(f"\n# walkthrough verification ({flavor}) — {len(frames)} frames, "
       f"strict={strict}\n", flush=True)
+
+# Reported, not enforced -- for now. The wizard behind it has never been
+# exercised on gnome, so failing here would replace one unknown with
+# another. It is a genuine live-session defect and belongs in the record
+# while that sequencing plays out; see tuna-os/tunaOS#1941.
+tap(not overlay_dismissed,
+    f"{flavor}: installer is frontmost at session start",
+    "a shell overlay (GNOME Activities overview or equivalent) was covering "
+    "the installer and had to be dismissed with 'esc' before the walkthrough "
+    "could drive it -- a user booting this ISO sees the same thing",
+    enforced=False)
 
 tap(len(frames) >= 2, f"{flavor}: captured at least 2 frames",
     f"got {len(frames)}")
@@ -553,6 +712,88 @@ if have_ocr and not any(reached.values()) and rendered > 0:
           f"the app merely pinned to a dock or launcher is case 1, not a UI bug.",
           flush=True)
 
+# ── What the OCR actually read ───────────────────────────────────────────
+# The five causes above share an assumption that is false often enough to cost
+# whole rounds: that a screen which matched nothing was not the installer.
+# There is a sixth cause, and on kde it is the true one --
+#
+#     the installer WAS on screen, and no keyword in the spec describes what
+#     it says.
+#
+# kde run 32718219267 reported "no installer screen was ever detected" while
+# the readiness stamp written by that same process, in that same guest, read
+#
+#     window=ApplicationWindow signal=frame-swapped page=welcome
+#
+# A frame had been swapped and the app was on its welcome page. Six red lines
+# and a diagnosis pointing at autostart, OOM-kills and missing GL paths, for a
+# frontend that was working.
+#
+# I then "corrected" that to say the wizard draws the step name "Welcome"
+# above the page (Wizard.qml:46,185) and so the word WAS on screen. The
+# published capture shows it is not: the welcome step reads "Install
+# Yellowfin", then the wizard prose, then "Next". Reading the QML told me what
+# should render; the picture told me what did.
+#
+# Which is the argument for this block. Two rounds went into explaining a
+# screen nobody had looked at, and both explanations came from source code.
+# Printing what the OCR read is cheaper than either.
+#
+# Printing the text settles it without downloading an artifact: text present
+# and unmatched is a spec gap, text absent everywhere is a rendering or OCR
+# failure, and those want opposite fixes.
+#
+# Gated on a MISSING REQUIRED SCREEN rather than on "nothing matched at all",
+# because the partial case is the one this run will produce next: with the
+# welcome keyword fixed, kde is expected to credit welcome and still miss the
+# later screens, and that is exactly when someone needs to see the words on
+# the page. Silent on a fully green leg; printed on every leg that fails.
+_missing_required = [sc["id"] for sc in spec
+                     if sc.get("required", False) and not reached.get(sc["id"])]
+if have_ocr and _missing_required:
+    _seen = {}
+    for _i, _t in enumerate(frame_text):
+        _seen.setdefault(state_of[_i], "")
+        if not _seen[state_of[_i]]:
+            _seen[state_of[_i]] = " ".join(_t.split())
+    print("  # what the OCR actually read, per visual state "
+          f"(missing required: {', '.join(_missing_required)}):", flush=True)
+    for _s in sorted(_seen):
+        print(f"  #   state {_s}: {_seen[_s] or '(no text)'}"[:220], flush=True)
+
+    # The first version of this block asked `if any(_seen.values())` and, on
+    # kde run 32735883406, printed "1 ft / hm / i] / lm" under a heading
+    # inviting the reader to fix the keyword list. Nine non-blank frames of
+    # line noise are not a vocabulary problem, and a truthiness test cannot
+    # say so. Score it instead.
+    if any(readable(t) for t in _seen.values()):
+        print("  # Those are words, so this is cause 6: the spec's keywords do "
+              "not describe this frontend's screens. Fix "
+              "tests/installer-screens.yaml against the frontend's source "
+              "strings -- not the frontend against the spec.", flush=True)
+    else:
+        _geo = png_geometry(frames[0]) if frames else None
+        _w, _h = _geo or ("?", "?")
+        # Best score each pass reached on ANY frame. Reporting the winner
+        # alone cannot distinguish "psm6 read the most" from "nothing read
+        # anything and psm6 kept the tie", and those are different findings.
+        _totals = {}
+        for _scores in _ocr_scores.values():
+            for _name, _score in _scores.items():
+                _totals[_name] = max(_totals.get(_name, 0), _score)
+        _table = ", ".join(f"{_n}={_v}" for _n, _v in sorted(_totals.items()))
+        print("  # Those are NOT words. Every OCR reading came back as noise, "
+              "so this is not a keyword gap -- the pixels never became text.\n"
+              f"  # Frame geometry {_w}x{_h}. Best word-score any frame reached, "
+              f"per pass: {_table or 'none'} (readable needs "
+              f"{MIN_WORD_CHARS}).\n"
+              "  # A *-negated pass scoring HIGHER means the frontend draws "
+              "light text on a dark ground and tesseract wants the inverse. "
+              "All passes at or near zero means no segmentation helped, and "
+              "the next question is the frame itself, not the spec -- pull the "
+              "published capture and look at it before changing anything.",
+              flush=True)
+
 # ── Result for the parity matrix ─────────────────────────────────────────
 summary = {
     "flavor": flavor,
@@ -567,6 +808,11 @@ summary = {
     "screens": reached,
     "strict": strict,
     "failures": _fails,
+    # The assertions themselves, not just how many failed. A bare count says
+    # "5 failed" and leaves every consumer -- the scoreboard, a reviewer, a
+    # test -- to re-parse stdout to learn WHICH, and whether each was
+    # enforced or advisory.
+    "tap": _tap,
 }
 with open(os.path.join(outdir, f"walkthrough-{flavor}.json"), "w") as f:
     json.dump(summary, f, indent=2)

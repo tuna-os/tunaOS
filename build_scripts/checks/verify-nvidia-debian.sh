@@ -78,7 +78,15 @@ fi
 
 MODULE_FILE=""
 if [[ -n "$KVER" ]]; then
-	MODULE_FILE="$(find "${NV_ROOT}/usr/lib/modules/${KVER}" -name 'nvidia.ko*' -print -quit 2>/dev/null || true)"
+	# nvidia-current.ko.xz, not nvidia.ko: Debian's nvidia-kernel-dkms is
+	# alternatives-managed and its DKMS module is named nvidia-current. The
+	# core module only, so the modinfo version check below does not end up
+	# reading -modeset/-drm/-uvm/-peermem instead.
+	for _nv_base in nvidia nvidia-current; do
+		MODULE_FILE="$(find "${NV_ROOT}/usr/lib/modules/${KVER}" -name "${_nv_base}.ko*" -print -quit 2>/dev/null || true)"
+		[[ -n "$MODULE_FILE" ]] && break
+	done
+	unset _nv_base
 	if [[ -n "$MODULE_FILE" ]]; then
 		pass "dkms built a module for ${KVER} (${MODULE_FILE#"${NV_ROOT}"})"
 	else
@@ -139,6 +147,19 @@ if compgen -G "${NVLIB}/nvidia-drm_gbm.so" >/dev/null; then
 	pass "GBM backend nvidia-drm_gbm.so present"
 else
 	fail "missing /usr/lib/x86_64-linux-gnu/nvidia/current/nvidia-drm_gbm.so — Wayland compositors cannot use the driver"
+fi
+# The backend above is loaded THROUGH the EGL external-platform registration,
+# not directly: without 15_nvidia_gbm.json, EGL never looks for the GBM
+# platform and nvidia-drm_gbm.so sits on disk doing nothing. Checking only the
+# .so made "Wayland compositors can use the driver" provable in a state where
+# they still could not — and, unlike the .so, nothing in the nvidia-driver
+# dependency chain pulls this in even with Recommends enabled, so it can only
+# ever arrive by being named in the install list (tunaOS#1564). Path read from
+# libnvidia-egl-gbm1's file list (trixie 1.1.2.1-1; same version in unstable).
+if compgen -G "${NV_ROOT}/usr/share/egl/egl_external_platform.d/15_nvidia_gbm.json" >/dev/null; then
+	pass "EGL GBM external platform registered"
+else
+	fail "missing /usr/share/egl/egl_external_platform.d/15_nvidia_gbm.json (libnvidia-egl-gbm1) — EGL will not load the GBM backend"
 fi
 
 echo "== initramfs policy =="

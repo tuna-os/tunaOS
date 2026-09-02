@@ -44,10 +44,19 @@ this is an open-source project's architecture talk with live demos.
 
 ## Demo video outline (3–5 min, attach to CFP)
 
+The beats, in order:
+
 1. `podman` pull of a TunaOS image; show the layered FS
 2. `bootc upgrade` on a live VM → atomic swap + `bootc rollback` on failure
 3. Corral: declare a desktop VM as a manifest, `kubectl apply`, watch it schedule
 4. Boot the updated image; GNOME session running on AlmaLinux 10
+
+**To actually record it, use [CFP-DEMO-SCRIPT.md](./CFP-DEMO-SCRIPT.md)** — the
+shot list with the real commands (`just qcow2`, `scripts/run-vm.sh demo`,
+`just corral-build`), per-shot timings, what each shot has to prove to a
+reviewer, and the pre-pull step without which `bootc upgrade` does not fit in
+five minutes. The same recording is reused for SCaLE 21x rather than shot
+twice.
 
 ## Logistics
 
@@ -55,17 +64,55 @@ this is an open-source project's architecture talk with live demos.
 - Speaker: maintainer or maintainer-designate (travel: FOSDEM is free to attend; Brussels transit from most of Europe)
 - Materials: laptop + demo VMs pre-built (bootc images exist in GHCR; Corral runs anywhere with KubeVirt)
 
+## bootc / CNCF ecosystem angle (#1340)
+
+bootc is a CNCF Sandbox project, and TunaOS is one of the more complete
+production bootc *desktop* deployments (37 published editions, daily GNOME
+releases, keyless-signed artifacts) — a concrete adoption story for a
+sandbox project working toward incubation.
+
+**Correction (2026-08-13):** an earlier version of this section claimed
+Jorge Castro (castrojo, CNCF Developer Relations and a Universal Blue
+founder)'s "201-commit contributor and CODEOWNERS entry" status meant this
+wasn't cold outreach. That doesn't hold up — re-verified via the GitHub
+API: every one of castrojo's 201 commits predates `tuna-os/tunaOS`'s own
+creation (2025-07-30), the latest is 2025-05-28, and a search across this
+repo's issues/PRs turns up zero comments, authored issues, or reviews from
+castrojo, ever. Same pattern as the retracted shimonenator claim (#1317)
+and the tulilirockz "warm path" correction (#1339): the commits are
+inherited pre-fork history from bluefin-lts, not real engagement with this
+repo. `.github/CODEOWNERS` still lists castrojo (and tulilirockz), but
+given both show zero real post-fork activity, that file itself looks like
+it was carried over unchanged from the fork rather than reflecting actual
+current maintainers — worth a maintainer's separate look, not assumed here.
+
+Treat this as cold outreach unless a maintainer confirms an actual current
+relationship.
+
+This makes the FOSDEM talk (Containers devroom) a natural fit for a
+CNCF-adjacent bootc ecosystem showcase, not just a standalone project talk.
+**A pitch to bootc-dev / CNCF channels has not been sent** — that's a
+maintainer decision (it's an external, public action on the org's behalf),
+not something to originate from this doc. If a maintainer wants to make
+that pitch, this CFP abstract and the ADOPTERS.md ecosystem table (which
+already lists bootc-dev/bootc as an upstream dependency) are the supporting
+material to point to.
+
 ## Submission checklist
 
 - [ ] CFP portal opens (~Oct 2026) — confirm exact date
 - [ ] Finalize title + abstract (this draft)
-- [ ] Record demo video (3–5 min) — needs a spare laptop/VM
+- [ ] Record demo video (3–5 min) — follow [CFP-DEMO-SCRIPT.md](./CFP-DEMO-SCRIPT.md);
+      its "Before you record" table is the concrete version of "needs a spare laptop/VM"
 - [ ] Ask 1–2 community members to proof the abstract (FOSDEM reviewers like demos + no-vendor-pitch)
 - [ ] Submit to Containers devroom first; fall back to Desktops if categories allow
+- [ ] (Optional, maintainer call) Pitch a bootc-ecosystem case-study feature to bootc-dev/CNCF channels — see #1340
 
 ## Supporting material (for reviewers / talk page)
 
-- Project: [github.com/tuna-os/tunaOS](https://github.com/tuna-os/tunaOS) — 56 stars, 40+ repos, daily image builds
+- Project: [github.com/tuna-os/tunaOS](https://github.com/tuna-os/tunaOS) — 55 stars, 37 active repos
+  in the org, daily image builds *(counts as of 2026-08-14; re-check before submitting — the
+  previous figures were undated and had already drifted)*
 - Blog: [tunaos.org/blog](https://tunaos.org/blog) — 10 posts incl. "The Immutable Desktop Landscape" and "Modern Enterprise Linux Desktops with TunaOS"
 - Tech: bootc (CNCF Sandbox), KubeVirt, QEMU, BuildStream
 - ADOPTERS: [tuna-os/tunaOS/ADOPTERS.md](https://github.com/tuna-os/tunaOS/blob/main/ADOPTERS.md)

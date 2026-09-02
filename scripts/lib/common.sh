@@ -218,6 +218,18 @@ tunaos_run_tacklebox() {
 	local recipe_file="${1:?recipe_file required}"
 	local out_dir="${2:?out_dir required}"
 	local iso_out="${3:?iso_out required}"
+	# Tacklebox currently reports a live-customize phase only as
+	# "running N script(s)". If a nested operation stalls, the surrounding
+	# 90-minute Actions job used to end as a bare cancellation with neither an
+	# actionable error nor its later diagnostic steps (#1772). Bound the whole
+	# invocation below that job limit so the failure says what happened and the
+	# workflow still has time to upload its evidence. Workflows with a reviewed
+	# longer budget may override this, but an unbounded value is never accepted.
+	local timeout_seconds="${TUNAOS_TACKLEBOX_TIMEOUT_SECONDS:-4800}"
+	[[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]] || {
+		echo "ERROR: TUNAOS_TACKLEBOX_TIMEOUT_SECONDS must be a positive integer" >&2
+		return 2
+	}
 
 	local tacklebox_image="${TACKLEBOX_IMAGE:-ghcr.io/tuna-os/tacklebox:latest}"
 	local from_source="${TACKLEBOX_FROM_SOURCE:-0}"
@@ -273,74 +285,26 @@ tunaos_run_tacklebox() {
 			"$tacklebox_image")
 	fi
 
-	"${tb[@]}" build "$(realpath "$recipe_file")" \
+	local -a build_cmd=("${tb[@]}" build "$(realpath "$recipe_file")" \
 		--iso "$(realpath "$iso_out")" \
 		--output-base "$(realpath "$out_dir")" \
-		--yes
+		--yes)
+
+	echo "==> Running tacklebox with a ${timeout_seconds}s deadline" >&2
+	if timeout --foreground --kill-after=120 "$timeout_seconds" "${build_cmd[@]}"; then
+		return 0
+	else
+		local rc=$?
+		if [[ "$rc" -eq 124 || "$rc" -eq 137 ]]; then
+			echo "::error::tacklebox exceeded its ${timeout_seconds}s deadline; " \
+				"see tunaOS#1772 and the workflow diagnostics below" >&2
+			podman ps -a 2>&1 || true
+		fi
+		return "$rc"
+	fi
 }
 
-# ── bootc storage backend detection (tunaOS#954) ──────────────────────────
-#
-# Ported from tuna-os/wootc payload/deployer/deploy.sh:867-949, deliberately
-# faithfully rather than simplified. It PROBES IMAGE CONTENT; the variant name
-# is not a signal. tunaOS had three divergent name-based rules — a five-prefix
-# allowlist in build-qcow2.sh (already stale: gurnard from #943 was missing and
-# would have failed its first build), a bare `== grouper` test in iso-e2e.sh,
-# and a separate expression in the Justfile.
-#
-# THE ORDER IS LOAD-BEARING.
-#
-#   1. bootupd PAYLOAD present  → ostree. Checked FIRST so composefs-SEALED
-#      ostree images (bluefin, bonito, yellowfin) keep the ostree path even
-#      though they also set `enabled = yes` in branch 2.
-#   2. else prepare-root.conf composefs enabled → composefs-native. Reaching
-#      here means there is NO bootupd payload, so an ostree install is
-#      impossible and bootc aborts with
-#         error: Installing to disk: bootupd is required for ostree-based installs
-#      which is exactly the Gate failure that has kept flounder, marlin,
-#      grouper and sailfin unpublished since 2026-07-13.
-#   3. else ships systemd-boot → composefs-native (the dakota shape).
-#   4. else unknown — never guessed.
-#
-# The bootloader is NOT a backend signal. Per the bootc docs a composefs
-# install may use either bootupd/GRUB or systemd-boot. The old tunaOS test was
-# `systemd-boot present && ! command -v bootupctl`, which mis-classified
-# precisely these images: marlin ships the bootupctl BINARY at
-# /usr/sbin/bootupctl but has no /usr/lib/bootupd payload.
-#
-# bootupd 0.2.x kept binaries under updates/EFI/<vendor>; current Fedora keeps
-# versioned binaries under /usr/lib/efi with only EFI.json under bootupd/
-# updates — hence the two-form branch-1 test.
-#
-# shellcheck disable=SC2016  # the $-free sh body is intentionally unexpanded
-TUNAOS_BACKEND_PROBE_SH='
-if { ls /usr/lib/bootupd/updates/EFI/*/grubx64.efi >/dev/null 2>&1 ||
-     { test -f /usr/lib/bootupd/updates/EFI.json &&
-       find /usr/lib/efi/grub2 -type f -name grubx64.efi -print -quit 2>/dev/null | grep -q . &&
-       find /usr/lib/efi/shim -type f -name shimx64.efi -print -quit 2>/dev/null | grep -q .; }; }; then
-    echo BACKEND=ostree
-elif grep -A8 "^\[composefs\]" /usr/lib/ostree/prepare-root.conf 2>/dev/null \
-     | grep -qiE "enabled[[:space:]]*=[[:space:]]*(yes|true|1|signed)"; then
-    echo BACKEND=composefs-native
-elif test -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi; then
-    echo BACKEND=composefs-native
-else
-    echo BACKEND=unknown
-fi
-grep -A8 "^\[composefs\]" /usr/lib/ostree/prepare-root.conf 2>/dev/null \
-  | grep -qiE "enabled[[:space:]]*=[[:space:]]*(yes|true|1|signed)" && echo SEALED=1 || echo SEALED=0
-'
-
-# probe_image_backend <image-ref> [podman-prefix...]
-# Echoes two lines: BACKEND=<ostree|composefs-native|unknown> and SEALED=<0|1>.
-# Returns non-zero if the image could not be inspected — callers must treat
-# that as fatal rather than defaulting. A silent fallback to ostree/grub2 on a
-# composefs image produces a disk that boots into a dracut emergency shell with
-# nothing in the log explaining why (wootc hit exactly this).
-probe_image_backend() {
-	local ref="${1:?probe_image_backend <image-ref>}"
-	shift
-	local -a runner=("$@")
-	[[ ${#runner[@]} -eq 0 ]] && runner=(podman)
-	timeout 300 "${runner[@]}" run --rm --entrypoint="" "$ref" sh -c "$TUNAOS_BACKEND_PROBE_SH"
-}
+# Compatibility facade: existing consumers retain the backend-probe API while
+# focused consumers can avoid common.sh's repository-root cwd change.
+# shellcheck source=backend.sh
+. "$(dirname "${BASH_SOURCE[0]}")/backend.sh"

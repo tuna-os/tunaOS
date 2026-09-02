@@ -6,6 +6,8 @@ printf "::group:: === 10 Base Packages ===\n"
 
 source /run/context/build_scripts/lib.sh
 
+rpmdb_stage2_guard
+
 # Source RHSM credentials from the BuildKit secret if it's mounted.
 # /run/secrets/rhsm is provided by the `--mount=type=secret,id=rhsm`
 # directive in the Containerfile (only when RHSM_* env was set when
@@ -115,6 +117,30 @@ if [[ -f /etc/dnf/dnf.conf ]] && ! grep -q '^max_parallel_downloads' /etc/dnf/dn
 	echo 'max_parallel_downloads=10' >>/etc/dnf/dnf.conf
 fi
 
+# Bound how long a single download may stall. Without this a mirror that
+# accepts the connection and then stops sending wedges the whole build: on
+# Build Hummingbird #66 (run 32907940350) the gnome cell printed
+# `[13/30] pcre2-utf32 … 00m00s` at 23:12:27 and then nothing at all until
+# the 240-minute job cap cancelled it at 03:00:31 — 3h48m of silence inside
+# one dnf transaction, which skipped Manifest, Sign, Promote and the ISO.
+#
+# minrate/timeout are what actually abort a stalled transfer: a connection
+# delivering less than minrate bytes/s for timeout seconds is dropped. The
+# defaults are far too permissive for a build with a job budget (1000 B/s
+# indefinitely is a "healthy" transfer as far as librepo is concerned).
+# retries lets librepo re-dial before dnf_retry has to re-run the whole
+# transaction.
+#
+# These are deliberately generous — repo.tunaos.org is a single small host,
+# not a CDN, and the point is to catch a WEDGE, not to fail a slow mirror.
+if [[ -f /etc/dnf/dnf.conf ]] && ! grep -q '^minrate' /etc/dnf/dnf.conf; then
+	{
+		echo 'minrate=10240'
+		echo 'timeout=120'
+		echo 'retries=3'
+	} >>/etc/dnf/dnf.conf
+fi
+
 # This thing slows down downloads A LOT for no reason
 if [[ $IS_CENTOS == true ]]; then
 	dnf remove -y subscription-manager
@@ -140,20 +166,192 @@ fi
 
 if [[ $IS_HUMMINGBIRD == true ]]; then
 	echo "Hummingbird base detected; using --skip-unavailable for base packages..."
+	# xfsprogs: `bootc install` execs mkfs.xfs from INSIDE the image being
+	# installed, and tunaOS's qcow2/disk recipes format the root as xfs.
+	# The upstream hummingbird bootc-os base is btrfs-oriented (hence
+	# btrfs-progs here) and ships no xfsprogs, so the first hummingbird
+	# cosmic Gate ever to reach disk install died at
+	#   > mkfs.xfs ... /dev/loop0p3
+	#   error: Installing to disk: Creating rootfs: No such file or directory
+	# (run 32139187211, 2026-08-18).
+	#
+	# Listing it here was not enough: the repos the upstream base image
+	# ships resolve against public-hummingbird, which answered
+	#   No match for argument: xfsprogs
+	# and --skip-unavailable + `|| true` swallowed that miss silently, so
+	# run 32144269992 died at the identical mkfs.xfs line WITH the fix
+	# "in place". The package exists in tunaOS's PUBLISHED hummingbird
+	# snapshot (verified against the live 20251124-x86_64 primary.xml) —
+	# the same repo the desktop manifests already enable at stage 2 —
+	# so enable it for the base stage too. Left in the image: installed
+	# systems want the tunaOS repo for updates anyway.
+	cat >/etc/yum.repos.d/tunaos-hummingbird.repo <<'REPO'
+[tunaos-hummingbird]
+name=TunaOS Hummingbird published packages
+baseurl=https://repo.tunaos.org/hummingbird/20251124-$basearch/
+enabled=1
+gpgcheck=0
+priority=5
+REPO
 	dnf -y install --skip-unavailable \
 		buildah \
 		podman \
 		skopeo \
 		systemd-container \
 		btrfs-progs \
+		xfsprogs \
+		flatpak \
 		gcc \
 		gcc-c++ \
 		just || true
-elif [[ $IS_FEDORA == true ]]; then
-	FEDORA_VER="$(rpm -E %fedora)"
-	if [[ -z "${FEDORA_VER}" || "${FEDORA_VER}" == "%fedora" ]]; then
-		FEDORA_VER="rawhide"
+	# The disk-install tooling is NOT optional and may not be silently
+	# skipped again: an image bootc cannot install is the #858 shape on
+	# the install axis. Fail here, with the repo listing in the log,
+	# rather than at mkfs.xfs inside the Gate two stages later.
+	if ! rpm -q xfsprogs >/dev/null 2>&1; then
+		echo "ERROR: xfsprogs did not install — no enabled repo carries it;" >&2
+		echo "       bootc install to-disk cannot format the root without it." >&2
+		dnf repolist >&2 || true
+		exit 1
 	fi
+
+	# flatpak is not optional either, for a reason that only bites three
+	# steps downstream. live-iso/common/src/customize-live.sh pre-installs
+	# the installer app and exits 1 if flatpak cannot be made present:
+	#
+	#   ERROR: flatpak not installed and could not be installed;
+	#          cannot pre-install ${INSTALLER_APP}
+	#
+	# and that same script is what scripts/build-iso-tacklebox.sh passes as
+	# the ISO recipe's live_customize step. So a hummingbird image without
+	# flatpak cannot produce a live overlay, cannot build an ISO, and has no
+	# installer to launch if one were built -- gnome ships upstream
+	# bootc-installer as org.bootcinstaller.Installer, a Flatpak.
+	#
+	# Its ensure_flatpak() fallback installs the package on bases that merely
+	# omit it from the image (guppy, grouper, bonito-rawhide). That cannot
+	# help hummingbird: measured 2026-08-25, flatpak is absent from BOTH
+	# public-hummingbird (3509 binary names) and our rebuild snapshot (7986).
+	# It is layer-07 of build-order-hummingbird-desktops.yml, 131 packages
+	# into the 164 still unbuilt.
+	#
+	# Listed above so the image picks it up the moment that wave publishes,
+	# and warned about rather than fatal because it genuinely is not
+	# available yet -- a hard failure here would break every hummingbird base
+	# build today. Make it fatal, like xfsprogs above, once layer-07 is
+	# served. What must NOT happen is the xfsprogs shape: --skip-unavailable
+	# swallowing the miss silently and the failure surfacing two stages later
+	# as something else. tuna-os/tunaOS#1397 tracks this.
+	if ! rpm -q flatpak >/dev/null 2>&1; then
+		echo "WARNING: flatpak did not install — no enabled repo carries it yet." >&2
+		echo "         This image cannot build a live overlay or an ISO, and has" >&2
+		echo "         no installer app; see tuna-os/tunaOS#1397." >&2
+	fi
+elif [[ ${IS_ELN:-false} == true ]]; then
+	# ── Fedora ELN ───────────────────────────────────────────────────────
+	# ELN takes neither of the branches around it, and both would fail
+	# rather than degrade. Everything below is measured against the pinned
+	# eln-bootc digest with `dnf repoquery`, 2026-08-25.
+	#
+	# Not the EL branch: `dnf install -y epel-release` has nothing to
+	# resolve — EPEL builds for RHEL 8/9/10, and there is no epel-11 to
+	# match ELN's VERSION_ID=11. `crb enable` is also a no-op here: ELN
+	# ships eln-crb enabled by default in
+	# /usr/share/dnf5/repos.d/fedora-eln.repo, which is why the repo
+	# file lives in /usr/share and /etc/yum.repos.d is empty on this base.
+	#
+	# Not the Fedora branch: it installs
+	# rpmfusion-{free,nonfree}-release-${FEDORA_VER} by URL, and RPM Fusion
+	# publishes no ELN branch. `dnf repoquery` finds no ffmpeg and no
+	# gstreamer1-plugins-ugly in ELN — the patent-encumbered set has no
+	# source on this base at all.
+	#
+	# So the codec baseline here is ffmpeg-free (8.1.2, eln-appstream) plus
+	# the free GStreamer plugins, and that is stated rather than papered
+	# over: H.264/H.265 playback is NOT equivalent to Bonito's or
+	# Yellowfin's. A preview lane exists to surface EL11 API/ABI and desktop
+	# breakage early; it is not a media-complete edition, and it must not be
+	# promoted as one until an ELN-branch codec source exists.
+	dnf -y install \
+		ffmpeg-free \
+		gstreamer1-plugins-good \
+		gstreamer1-plugins-base \
+		gstreamer1-plugins-bad-free \
+		gstreamer1-plugin-libav \
+		lame
+
+	# Base set, strict. Every name here was verified present in
+	# eln-{baseos,appstream,crb,extras} on 2026-08-25; a miss is a real ELN
+	# regression worth failing the build on, which is the whole point of an
+	# early-warning lane. The four names the EL/Fedora lists carry that ELN
+	# does NOT ship are deliberately absent rather than silently skipped:
+	#
+	#   systemd-oomd  — `dnf repoquery --whatprovides systemd-oomd` returns
+	#                   nothing (EL drops the subpackage); systemd-oomd-defaults
+	#                   likewise. oomd tuning is not available on this base.
+	#   just          — EPEL-only on the EL family, absent from ELN.
+	#   tailscale     — pkgs.tailscale.com/stable/centos/11/tailscale.repo
+	#                   is a 404 (measured); 20-packages.sh's own guard
+	#                   already declines to fetch it.
+	#
+	# glow, gum, tuned-ppd, system-reinstall-bootc, fpaste and the libcamera
+	# set are EPEL packages on the EL10 family but are IN ELN (eln-appstream
+	# / eln-extras), so they are listed strictly below rather than dropped by
+	# analogy with EPEL.
+	#
+	# Listing any of them with --skip-unavailable is how #1555 shipped
+	# images that silently lacked tailscale for ten nightlies. When ELN
+	# grows them, move them up into this transaction.
+	dnf -y install \
+		buildah \
+		podman \
+		skopeo \
+		systemd-container \
+		flatpak \
+		distrobox \
+		fastfetch \
+		fwupd \
+		dbus-daemon \
+		fuse-overlayfs \
+		systemd-resolved \
+		btrfs-progs \
+		xfsprogs \
+		gcc \
+		gcc-c++ \
+		plymouth \
+		plymouth-system-theme \
+		plymouth-plugin-script \
+		xdg-desktop-portal \
+		libcamera-v4l2 \
+		libcamera-gstreamer \
+		libcamera-tools \
+		system-reinstall-bootc \
+		powertop \
+		tuned-ppd \
+		fzf \
+		glow \
+		gum \
+		fpaste \
+		wl-clipboard \
+		xhost \
+		unzip
+
+	# bootc install to-disk execs mkfs.xfs from inside the image; the same
+	# assertion hummingbird earned the hard way (run 32139187211) applies to
+	# any base whose xfsprogs is not guaranteed. Assert rather than trust.
+	if ! rpm -q xfsprogs >/dev/null 2>&1; then
+		echo "ERROR: xfsprogs did not install — bootc install to-disk cannot" >&2
+		echo "       format the root without it." >&2
+		dnf repolist >&2 || true
+		exit 1
+	fi
+elif [[ $IS_FEDORA == true ]]; then
+	# detect_fedora_ver (lib.sh) yields "rawhide" on Rawhide images — from
+	# os-release, because `rpm -E %fedora` expands to the numeric NEXT
+	# release there and would leave the tolerance gate below permanently
+	# cold (run 32002010101). Also picks the -rawhide rpmfusion release
+	# RPMs instead of a not-yet-published numeric one.
+	FEDORA_VER="$(detect_fedora_ver)"
 	# Install config-manager, RPM Fusion, multimedia, and common packages
 	# in as few transactions as possible (each dnf invocation incurs ~10-20s
 	# metadata resolution overhead).
@@ -162,20 +360,43 @@ elif [[ $IS_FEDORA == true ]]; then
 		"https://download1.rpmfusion.org/free/fedora/rpmfusion-free-release-${FEDORA_VER}.noarch.rpm" \
 		"https://download1.rpmfusion.org/nonfree/fedora/rpmfusion-nonfree-release-${FEDORA_VER}.noarch.rpm" || true
 
-	# Multimedia + common desktop packages in one transaction.
-	# gstreamer1-plugin-libav is Fedora's own package (measured in the F44
-	# repodata); with RPM Fusion's full ffmpeg installed alongside it, its
-	# libgstlibav.so resolves the full libavcodec sonames — that pairing is
-	# what gives GStreamer apps H.264/H.265 decode. gstreamer1-plugins-ugly
-	# is the RPM Fusion build. The build contract asserts the result
-	# (verify-desktop-experience.sh codec baseline).
-	dnf -y install \
+	# RPM Fusion multimedia set — its own transaction, tolerant ONLY on
+	# Rawhide (tunaOS#1810). gstreamer1-plugin-libav is Fedora's own package
+	# (measured in the F44 repodata); with RPM Fusion's full ffmpeg installed
+	# alongside it, its libgstlibav.so resolves the full libavcodec sonames —
+	# that pairing is what gives GStreamer apps H.264/H.265 decode.
+	# gstreamer1-plugins-ugly is the RPM Fusion build. The build contract
+	# asserts the result (verify-desktop-experience.sh codec baseline).
+	# Note: On Rawhide (Fedora 46+), exclude openh264* until fedora-cisco-openh264
+	# updates its openh264 RPMs signed with the F46 key (currently fc45 signed with F45 key).
+	# Remove this exclude once openh264-*.fc46 appears in fedora-cisco-openh264.
+	dnf_opts=()
+	if [[ "${FEDORA_VER}" == "rawhide" ]]; then
+		dnf_opts+=(--exclude='openh264*')
+	fi
+	# install_rawhide_tolerant (build_scripts/lib.sh) behaves exactly like a
+	# plain `dnf -y install` on every pinned Fedora release — including this
+	# one, bonito — and only degrades to a --skip-broken retry + loud
+	# wishlist record when FEDORA_VER=rawhide AND the strict transaction
+	# fails (e.g. rpmfusion-free-rawhide's ffmpeg-libs needing a liboapv
+	# SONAME Fedora rawhide no longer ships). Kept as its own transaction,
+	# separate from the required base packages below, so a rawhide codec
+	# skew can never tolerate away buildah/podman/etc — those still fail the
+	# build strictly on every release, rawhide included.
+	install_rawhide_tolerant "${dnf_opts[@]}" \
 		gstreamer1-plugins-good \
 		gstreamer1-plugins-ugly \
 		gstreamer1-plugin-libav \
 		gstreamer1-plugins-bad-free \
 		lame \
-		ffmpeg \
+		ffmpeg
+
+	# Common desktop + container-tooling packages — always a strict
+	# transaction; a failure here fails the build on every Fedora release,
+	# rawhide included. Never routed through install_rawhide_tolerant: none
+	# of these are expected to be affected by the rpmfusion/rawhide skew,
+	# and none of them should ever become silently optional.
+	dnf -y install \
 		buildah \
 		podman \
 		skopeo \

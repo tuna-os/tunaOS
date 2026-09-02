@@ -1,6 +1,18 @@
 name: Just Fix
 on:
+  # Restricted to the default branch on purpose. An unfiltered `push` fires on
+  # every feature-branch push as well, which produces a second run for the
+  # same head SHA as the `pull_request` event. The concurrency group below
+  # then cancels one of them -- and a *cancelled* check run stays attached to
+  # the head SHA, where GitHub's merge-state computation counts it as
+  # non-success. Every PR carrying a Just Fix run therefore sat in UNSTABLE
+  # even though the run that mattered had passed, which is what stalls
+  # auto-merge and the queue paths that key off merge state (#1790).
+  #
+  # PR branches are still formatted: the `pull_request` event covers the same
+  # head SHA. Pushes to main keep the auto-fix and automation-PR behaviour.
   push:
+    branches: [main]
   pull_request:
 
 concurrency:
@@ -61,14 +73,38 @@ jobs:
       # On the default branch, push the formatting commit to a feature branch
       # and open a PR (the merge queue will handle the actual merge). On any
       # other branch keep the original direct-push behavior.
+      #
+      # A pull request from a FORK cannot be pushed to at all: GITHUB_TOKEN is
+      # read-only on fork PRs whatever `permissions:` asks for, so the push
+      # 403s and `bash -e` turns a formatting nit into a red check on the one
+      # population least likely to know the convention (the Hive
+      # changelog-reminder lesson, kubestellar/hive#4440; epic #2250 item 13).
+      # On a fork PR the diff is delivered as a job summary and a notice, and
+      # the step succeeds — a reminder, not a gate.
       - name: Commit and push changes
         if: steps.check-bot.outputs.last_commit_is_bot != 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
         run: |
           if [[ -z $(git status --porcelain) ]]; then
             echo "no formatting changes to commit"
+            exit 0
+          fi
+          if [[ "${IS_FORK:-false}" == "true" ]]; then
+            {
+              echo "### Formatting changes needed"
+              echo ""
+              echo "This pull request comes from a fork, so the formatter cannot push a fix to it."
+              echo "Run \`just fix\` locally and commit the result. The diff it would have made:"
+              echo ""
+              echo '```diff'
+              git --no-pager diff
+              echo '```'
+            } >> "${GITHUB_STEP_SUMMARY:-/dev/null}"
+            msg="Run 'just fix' locally and commit; the diff is in this job's summary. Not a gate."
+            echo "::notice title=Formatting::${msg}"
             exit 0
           fi
           git config --local user.email "github-actions[bot]@users.noreply.github.com"

@@ -91,7 +91,8 @@ fi
 # ponytail: tacklebox runner delegated to common.sh tunaos_run_tacklebox
 
 # ── Generate the recipe ─────────────────────────────────────────────────────
-# Schema: github.com/tuna-os/tacklebox/blob/main/internal/recipe/
+# Contract: docs/TACKLEBOX-CONTRACT.md
+# Tacklebox schema: github.com/tuna-os/tacklebox/blob/main/internal/recipe/
 # Single-environment, live-only — minimum useful recipe for a smoke ISO.
 
 OUT_DIR="$(pwd)/.build/iso-tacklebox/${VARIANT}-${FLAVOR}"
@@ -166,10 +167,13 @@ fi
 # Copy to project root with version info in filename (matching bootc-image-builder pattern)
 cd - >/dev/null
 REPO_ROOT="${REPO_ROOT:-.}"
-VERSION_ID=$(podman run --rm --security-opt label=disable \
+# --log-driver=k8s-file: same conmon-without-journald gap as
+# build-image-inner.sh's chunkah run (tacklebox#235) — the RunsOn runners
+# cannot run any container on the default journald log driver.
+VERSION_ID=$(podman run --rm --log-driver=k8s-file --security-opt label=disable \
 	"$IMAGE_REF" \
 	sh -c '. /usr/lib/os-release && echo "${VERSION_ID}"')
-ARCH=$(podman run --rm --security-opt label=disable \
+ARCH=$(podman run --rm --log-driver=k8s-file --security-opt label=disable \
 	"$IMAGE_REF" uname -m)
 
 FINAL_ISO="${REPO_ROOT}/${VARIANT}-${FLAVOR}-${VERSION_ID}-${ARCH}.iso"

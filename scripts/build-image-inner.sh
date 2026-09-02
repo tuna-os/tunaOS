@@ -38,6 +38,9 @@ YQ="${YQ:-yq}"
 
 # ── Source shared helpers ─────────────────────────────────────────────────────
 source scripts/_registry.sh
+# shellcheck source=lib/build-config.sh
+source scripts/lib/build-config.sh
+BUILD_CONFIG="$(tunaos_build_config)"
 
 # ── Resolve image refs from image-versions.yaml ───────────────────────────────
 common_image="${COMMON_IMAGE:-ghcr.io/projectbluefin/common}"
@@ -47,6 +50,14 @@ common_image_sha=$($YQ -r '.images[] | select(.name == "common") | .digest' imag
 common_image_ref="${common_image}@${common_image_sha}"
 brew_image_sha=$($YQ -r '.images[] | select(.name == "brew") | .digest' image-versions.yaml)
 brew_image_ref="${brew_image}@${brew_image_sha}"
+# Hummingbird's GNOME comes from projectbluefin/utah-packages, an OCI image
+# carrying a dnf repository; Containerfile.el10 bind-mounts it into the gnome
+# stage and manifests/desktops/gnome.yaml's hummingbird section points dnf at
+# it. Resolved for every build so the Containerfile has one contract; only
+# hummingbird's gnome stage reads it.
+utah_packages_image="${UTAH_PACKAGES_IMAGE:-ghcr.io/projectbluefin/utah-packages}"
+utah_packages_sha=$($YQ -r '.images[] | select(.name == "utah-packages") | .digest' image-versions.yaml)
+utah_packages_ref="${utah_packages_image}@${utah_packages_sha}"
 
 # ── Build args ────────────────────────────────────────────────────────────────
 BUILD_ARGS=()
@@ -56,6 +67,7 @@ BUILD_ARGS+=("--build-arg" "IMAGE_REGISTRY=${IMAGE_REGISTRY}")
 BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${BASE_IMAGE}")
 BUILD_ARGS+=("--build-arg" "COMMON_IMAGE_REF=${common_image_ref}")
 BUILD_ARGS+=("--build-arg" "BREW_IMAGE_REF=${brew_image_ref}")
+BUILD_ARGS+=("--build-arg" "UTAH_PACKAGES_IMAGE_REF=${utah_packages_ref}")
 BUILD_ARGS+=("--build-arg" "ENABLE_HWE=${ENABLE_HWE}")
 BUILD_ARGS+=("--build-arg" "ENABLE_ASAHI=${ENABLE_ASAHI:-0}")
 BUILD_ARGS+=("--build-arg" "ENABLE_NVIDIA=${ENABLE_NVIDIA}")
@@ -73,12 +85,18 @@ if [[ -n "${OVERLAY_TYPE:-}" ]]; then
 fi
 
 # Akmods version selection
-AKMODS_ORG=$($YQ -r ".variants[] | select(.id == \"${VARIANT}\") | .akmods // \"ublue-os\"" .github/build-config.yml)
+AKMODS_ORG=$($YQ -r ".variants[] | select(.id == \"${VARIANT}\") | .akmods // \"ublue-os\"" "$BUILD_CONFIG")
 AKMODS_REGISTRY_BASE="$(registry_ref akmods 2>/dev/null || echo "ghcr.io/${AKMODS_ORG}")"
 BUILD_ARGS+=("--build-arg" "AKMODS_BASE=${AKMODS_REGISTRY_BASE}")
 
 if [[ "${ENABLE_HWE}" == "1" ]] || [[ "${VARIANT}" == bonito* ]]; then
-	COREOS_STABLE="${COREOS_STABLE_VERSION:-41}"
+	# Keep this default equal to the Justfile's (Justfile:5). Nothing in
+	# .github/workflows sets COREOS_STABLE_VERSION, and every real build goes
+	# through `just`, which exports it — so this fallback only fires when the
+	# script is invoked directly, which is exactly why it sat two Fedora
+	# releases behind (41) without anyone noticing. tests/bats/
+	# test_fedora_base_currency.bats now compares the two (tunaOS#1171).
+	COREOS_STABLE="${COREOS_STABLE_VERSION:-43}"
 	BUILD_ARGS+=("--build-arg" "AKMODS_VERSION=coreos-stable-${COREOS_STABLE}")
 	BUILD_ARGS+=("--build-arg" "AKMODS_NVIDIA_VERSION=coreos-stable-${COREOS_STABLE}")
 else
@@ -192,9 +210,18 @@ fi
 # ── Pass 2: Rechunk ──────────────────────────────────────────────────────────
 echo "==> Running chunkah on ${PRE_CHUNK_TAG}..."
 
+# Resolve through registry-map.yaml rather than hardcoding a ref, so chunkah
+# comes in digest-pinned like every other build input. registry-map.yaml has
+# carried a coreos-chunkah digest (with a "prevent supply-chain attacks via tag
+# mutation" comment) the whole time; registry_ref just could not read it —
+# see the digest-override note in scripts/_registry.sh (tunaOS#1568). An
+# unpinned :latest meant an upstream chunkah regression landed in our builds
+# the hour it was published, unreviewed, which is one of the two candidate
+# causes for the corrupt archive this block now also detects.
 if [[ -z "${CHUNKAH_IMAGE:-}" ]]; then
-	CHUNKAH_IMAGE="quay.io/coreos/chunkah:latest"
+	CHUNKAH_IMAGE="$(registry_ref coreos-chunkah)"
 fi
+echo "==> chunkah image: ${CHUNKAH_IMAGE}"
 if ! podman image inspect "${CHUNKAH_IMAGE}" &>/dev/null; then
 	if ! podman pull "${CHUNKAH_IMAGE}" 2>/dev/null; then
 		echo "==> chunkah image not pullable, building from source..."
@@ -208,32 +235,133 @@ fi
 # by copying the rootfs into container-local workspace, creating a temporary
 # /var/lib/rpm directory so chunkah's rpmdb component loader succeeds, and
 # passing `--prune /var/lib/rpm` so the dummy directory is never packed into the OCI archive.
-CHUNK_OUT=$(mktemp -d)
+# `--prune /sysroot/` — note the TRAILING SLASH. chunkah's scanner documents
+# it as load-bearing:
+#
+#   "Paths must be absolute. A trailing `/` means prune children only,
+#    keeping the directory itself."               (chunkah src/scan.rs)
+#
+# so `--prune /sysroot` (no slash) would drop the /sysroot directory itself,
+# which a bootc image needs as the real sysroot's mountpoint. Upstream's own
+# warning — the one bonito's log printed — spells it with the slash:
+# "Use --prune /sysroot/ to exclude it". Chunking an ostree object store
+# "produces poor results" per that warning, and packs bytes no deployment
+# reads. `prune` is a Vec, so it can be passed more than once.
+#
+# It goes on BOTH branches. The rpmdb branch — the one every RPM variant takes,
+# bonito included — passed no --prune at all, so the sysroot has been packed
+# into every rechunked RPM image.
+chunkah_attempt() {
+	local out_dir="$1"
+	# --log-driver=k8s-file: the RunsOn runner images ship a conmon built
+	# without journald ("[conmon:e]: Include journald in compilation path"),
+	# which kills any podman run using the default journald log driver — the
+	# same failure tacklebox#235 fixed for its own podman runs. Run
+	# 32389521239 hit it here: both chunkah attempts died in conmon before
+	# chunkah ever ran, and the retry loop read that as an unreadable
+	# oci-archive.
+	podman run --rm \
+		--log-driver=k8s-file \
+		--security-opt label=disable \
+		--network host \
+		--entrypoint="" \
+		-v "${out_dir}:/run/out:Z" \
+		--mount "type=image,source=${PRE_CHUNK_TAG},target=/chunkah" \
+		-v "${CHUNK_EMPTY_DEV}:/chunkah/dev:Z" \
+		"${CHUNKAH_IMAGE}" \
+		sh -c '
+			HAS_RPMDB=0
+			if [ -n "$(ls -A /chunkah/usr/lib/sysimage/rpm 2>/dev/null)" ] || [ -n "$(ls -A /chunkah/var/lib/rpm 2>/dev/null)" ]; then
+				HAS_RPMDB=1
+			fi
+			if [ "$HAS_RPMDB" = "1" ]; then
+				chunkah build --rootfs /chunkah --prune /sysroot/ --skip-special-files -o /run/out/out.ociarchive
+			else
+				echo "==> Image has no rpmdb — preparing rootfs copy with dummy rpmdb & pruning it in chunkah build..."
+				mkdir -p /tmp/rootfs
+				cp -a /chunkah/. /tmp/rootfs/
+				mkdir -p /tmp/rootfs/var/lib/rpm
+				chunkah build --rootfs /tmp/rootfs --prune /var/lib/rpm --prune /sysroot/ --skip-special-files -o /run/out/out.ociarchive
+				rm -rf /tmp/rootfs
+			fi
+		'
+}
+
+# chunkah reported "build complete" and still produced an archive that podman
+# could not read ("archive/tar: invalid tar header" mid-blob, bonito base
+# 2026-08-14). A zero exit from the builder is therefore not evidence the
+# archive is loadable — check the container that podman is about to consume
+# before consuming it, so a truncated write is named where it happens rather
+# than surfacing as an opaque `podman load` error two steps later.
+validate_ociarchive() {
+	local f="$1" listing
+	if [[ ! -s "$f" ]]; then
+		echo "==> archive is missing or empty" >&2
+		return 1
+	fi
+	# oci-archive is a plain (uncompressed) tar, so listing it walks every
+	# header — exactly the read that failed. Capture the listing instead of
+	# piping it: `tar tf ... | grep -q` lets grep exit at the first match, tar
+	# takes SIGPIPE, and under this script's `set -o pipefail` the pipeline
+	# then reports failure for a perfectly good archive. The listing is
+	# filenames only (an oci-archive has a handful of entries), not content.
+	if ! listing="$(tar tf "$f" 2>&1)"; then
+		echo "==> archive does not read as a valid tar:" >&2
+		printf '%s\n' "$listing" | tail -3 >&2
+		return 1
+	fi
+	# The whole "./" is optional, not just its slash: `tar cf x -C d .` lists
+	# entries as ./oci-layout while `tar cf x -C d oci-layout ...` lists them
+	# bare, and both are valid OCI archives. `^\./?oci-layout$` would demand
+	# the dot and reject the second form — verified against real tarballs of
+	# each shape rather than reasoned about.
+	if ! grep -qE '^(\./)?oci-layout$' <<<"$listing"; then
+		echo "==> archive is a valid tar but has no oci-layout — not an OCI archive" >&2
+		return 1
+	fi
+	return 0
+}
+
+# Disk pressure is the other candidate cause: the uncompressed archive is
+# several GiB and is written before the prune below frees space. Report it
+# rather than guess — one line that either confirms or kills that hypothesis
+# the next time this fails.
+echo "==> free space before rechunk:"
+df -Ph "${TMPDIR:-/tmp}" . 2>/dev/null || true
+
 CHUNK_EMPTY_DEV=$(mktemp -d)
-podman run --rm \
-	--security-opt label=disable \
-	--network host \
-	--entrypoint="" \
-	-v "${CHUNK_OUT}:/run/out:Z" \
-	--mount "type=image,source=${PRE_CHUNK_TAG},target=/chunkah" \
-	-v "${CHUNK_EMPTY_DEV}:/chunkah/dev:Z" \
-	"${CHUNKAH_IMAGE}" \
-	sh -c '
-		HAS_RPMDB=0
-		if [ -n "$(ls -A /chunkah/usr/lib/sysimage/rpm 2>/dev/null)" ] || [ -n "$(ls -A /chunkah/var/lib/rpm 2>/dev/null)" ]; then
-			HAS_RPMDB=1
-		fi
-		if [ "$HAS_RPMDB" = "1" ]; then
-			chunkah build --rootfs /chunkah --skip-special-files -o /run/out/out.ociarchive
-		else
-			echo "==> Image has no rpmdb — preparing rootfs copy with dummy rpmdb & pruning it in chunkah build..."
-			mkdir -p /tmp/rootfs
-			cp -a /chunkah/. /tmp/rootfs/
-			mkdir -p /tmp/rootfs/var/lib/rpm
-			chunkah build --rootfs /tmp/rootfs --prune /var/lib/rpm --skip-special-files -o /run/out/out.ociarchive
-			rm -rf /tmp/rootfs
-		fi
-	'
+CHUNK_OUT=""
+rechunk_ok=0
+for attempt in 1 2; do
+	# CHUNK_OUT is empty on the first pass, so this is a no-op then and a
+	# cleanup of the previous attempt's partial archive on the second —
+	# attempt 2 must not end up validating attempt 1's corpse.
+	#
+	# Spelled as `if` rather than `[[ -n ... ]] && rm`: under `set -e` the &&
+	# form is exempt here only because another statement follows it, and it
+	# would start failing the build if it were ever moved to the end of a
+	# function or loop body. Not worth leaving that dependency on line order.
+	if [[ -n "${CHUNK_OUT}" ]]; then
+		rm -rf "${CHUNK_OUT}"
+	fi
+	CHUNK_OUT=$(mktemp -d)
+	echo "==> chunkah build (attempt ${attempt}/2)"
+	if chunkah_attempt "${CHUNK_OUT}" && validate_ociarchive "${CHUNK_OUT}/out.ociarchive"; then
+		rechunk_ok=1
+		break
+	fi
+	echo "::warning::chunkah attempt ${attempt} produced no usable oci-archive" >&2
+	df -Ph "${TMPDIR:-/tmp}" . 2>/dev/null || true
+done
+if [[ "${rechunk_ok}" -ne 1 ]]; then
+	echo "ERROR: chunkah produced an unreadable oci-archive twice — not loading it." >&2
+	echo "       A corrupt archive here is a truncated/interrupted write, not a" >&2
+	echo "       recoverable image; loading it fails later with a far less" >&2
+	echo "       obvious 'invalid tar header' (tunaOS#1568)." >&2
+	rm -rf "${CHUNK_OUT}" "${CHUNK_EMPTY_DEV}"
+	exit 1
+fi
+
 mv "${CHUNK_OUT}/out.ociarchive" out.ociarchive
 rm -rf "${CHUNK_OUT}" "${CHUNK_EMPTY_DEV}"
 

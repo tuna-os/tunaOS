@@ -20,16 +20,58 @@ iso_groups:
   - suffix: ""
     flavors: [gnome-nvidia, gnome-nvidia-hwe]
     offline_flavors: [gnome, gnome-hwe, gnome-nvidia, gnome-nvidia-hwe]
-  # Additional desktop ISO group (KDE/COSMIC/Niri/XFCE). NOT published as a
-  # single grouped ISO — the browser ISO Builder (https://iso.tunaos.org) covers these on
-  # demand from the published images, so we don't carry the cost of a
-  # 5-flavor offline-store ISO for the long tail. The images still build
-  # and publish to GHCR; only the grouped ISO is skipped.
-  # (Manually publishable via workflow_dispatch group=community if needed.)
-  - suffix: community
-    publish: false
-    flavors: [kde-nvidia, cosmic-nvidia, niri-nvidia, xfce-nvidia]
-    offline_flavors: [kde, kde-hwe, cosmic, cosmic-hwe, niri, niri-hwe, xfce, kde-nvidia, cosmic-nvidia, niri-nvidia, xfce-nvidia]
+  # ONE ISO PER BASE+DESKTOP, each embedding its own NVIDIA and HWE flavors —
+  # the same shape as the GNOME group above, applied to the other four
+  # desktops. Published as `<variant>-<suffix>.iso`.
+  #
+  # This replaces a single `community` group that packed KDE, COSMIC, Niri and
+  # XFCE into ONE ISO and carried `publish: false`, on the reasoning that the
+  # browser ISO Builder covers the long tail on demand so a five-flavor
+  # offline store was not worth the storage. The cost argument was sound; the
+  # conclusion was not. A user who wants KDE should get a KDE ISO, not a
+  # four-desktop ISO or a browser build step, and one desktop's offline store
+  # is a fraction of four.
+  #
+  # Storage does not grow the way the old comment implied either: these are
+  # DEDUPLICATED groups over a shared squashfs, so a per-desktop ISO carries
+  # its own desktop plus the base layers it already shares with every other
+  # ISO of the same variant.
+  - suffix: kde
+    flavors: [kde-nvidia]
+    offline_flavors: [kde, kde-hwe, kde-nvidia]
+  - suffix: cosmic
+    flavors: [cosmic-nvidia]
+    offline_flavors: [cosmic, cosmic-hwe, cosmic-nvidia]
+  - suffix: niri
+    flavors: [niri-nvidia]
+    offline_flavors: [niri, niri-hwe, niri-nvidia]
+  - suffix: xfce
+    flavors: [xfce-nvidia]
+    offline_flavors: [xfce, xfce-hwe, xfce-nvidia]
+
+# ── Sibling images ─────────────────────────────────────────────────────────
+# TunaOS-family bootc images built in their OWN repositories with BuildStream
+# on freedesktop-sdk. They are whole-OS products, not package sources, and
+# they never enter the variant matrix below or green-criteria.yml: each repo
+# runs its own build, live-ISO, plain-install and LUKS-install checks.
+# .github/scripts/sibling-images-status.sh renders their latest main-branch
+# build into the README next to the variant matrix so the family is visible
+# in one place. `workflow` is the repo's SCHEDULED build workflow.
+sibling_images:
+  - id: tromso
+    emoji: "🏔️"
+    description: "Aurora Tromsø: KDE Plasma 6 on freedesktop-sdk (BuildStream)"
+    image: ghcr.io/tuna-os/tromso
+    repo: tuna-os/tromso
+    workflow: build-tromso-multirunner.yml
+    desktops: [KDE]
+  - id: xfce-linux
+    emoji: "🐭"
+    description: "XFCE Linux: XFCE Wayland on freedesktop-sdk (BuildStream)"
+    image: ghcr.io/tuna-os/xfce-linux
+    repo: tuna-os/xfce-linux
+    workflow: build-multirunner.yml
+    desktops: [XFCE]
 
 # Build stages (for reference — enforced by the workflow job graph):
 #
@@ -45,12 +87,11 @@ iso_groups:
 #   stage: 2  → build_stage2    (needs: build_base)
 #   stage: 3  → build_stage3    (needs: build_stage2)
 #   stage: 4  → build_stage4    (needs: build_stage3)
-
 variants:
   - id: yellowfin
     emoji: "🐠"
     description: "Based on AlmaLinux Kitten 10"
-    base_image: "quay.io/almalinuxorg/almalinux-bootc:10-kitten"
+    base_image: "quay.io/almalinuxorg/almalinux-bootc:10-kitten@sha256:95d73b4e20fd6562593272e8b1630b9376b4a34507ed10bdf5f56ae10f7d7438"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [almalinux-kitten]
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -106,7 +147,7 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # tunaOS xfce-wayland stack comes from repo.tunaos.org, which only
         # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
         platforms:
           - linux/amd64
@@ -208,7 +249,7 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # tunaOS xfce-wayland stack comes from repo.tunaos.org, which only
         # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
         platforms:
           - linux/amd64
@@ -228,7 +269,7 @@ variants:
   - id: albacore
     emoji: "🐟"
     description: "Based on AlmaLinux 10"
-    base_image: "quay.io/almalinuxorg/almalinux-bootc:10"
+    base_image: "quay.io/almalinuxorg/almalinux-bootc:10@sha256:5a1c306cd49c33294a70ef542538fa2bca7b2a905471b89b1f40e123e9370ac5"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [almalinux]
     platforms: ["linux/amd64", "linux/amd64/v2", "linux/arm64"]
@@ -284,7 +325,7 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # tunaOS xfce-wayland stack comes from repo.tunaos.org, which only
         # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
         platforms:
           - linux/amd64
@@ -386,7 +427,7 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
-        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # tunaOS xfce-wayland stack comes from repo.tunaos.org, which only
         # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
         platforms:
           - linux/amd64
@@ -406,7 +447,7 @@ variants:
   - id: skipjack
     emoji: "🍣"
     description: "Based on CentOS Stream 10"
-    base_image: "quay.io/centos-bootc/centos-bootc:stream10"
+    base_image: "quay.io/centos-bootc/centos-bootc:stream10@sha256:2b7e3b1abf8db094d1efb083721dc0f72e6feeef2355fc16ea010d0266b2bb95"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [centos]
     # Note: linux/amd64/v2 intentionally omitted — verify builder support before adding.
@@ -463,7 +504,7 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-        # hanthor/xfce-wayland stack comes from repo.tunaos.org, which only
+        # tunaOS xfce-wayland stack comes from repo.tunaos.org, which only
         # publishes EL10 x86_64 packages — no aarch64 until the repo grows one.
         platforms:
           - linux/amd64
@@ -498,7 +539,7 @@ variants:
         build_qcow2: false
       # gnome-nvidia-hwe re-enabled (tunaOS#639): the gnome-shell-49 vs
       # gnome-shell-common-48 file conflict is fixed upstream in the spec
-      # (tuna-os/github-copr#23 merged: Obsoletes: gnome-shell-common <
+      # (tuna-os/tunaos-packages#23 merged: Obsoletes: gnome-shell-common <
       # %{major_version}), verified live in the published spec, not just
       # by the PR having merged.
       - id: gnome-nvidia-hwe
@@ -565,10 +606,105 @@ variants:
         build_iso: true
         build_qcow2: false
 
+
+  # ── Wahoo ────────────────────────────────────────────────────────────────
+  # Fedora ELN — the EL11 early-warning lane.
+  #
+  # ELN ("Extra Lifecycle Notes") is Fedora Rawhide's sources built with
+  # Enterprise Linux macros, buildroot and repo layout. Its os-release is
+  # already the thing this variant exists to preview:
+  #
+  #   ID=eln  VERSION_ID=11  ID_LIKE="rhel centos fedora"  VARIANT_ID=eln
+  #
+  # — measured on the pinned digest below, 2026-08-25. That is the same 11
+  # that c10s→c11s and almalinux-bootc:11-kitten will carry, months before
+  # either exists to build against. Yellowfin (Kitten 10), Albacore (Alma 10)
+  # and Skipjack (c10s) are all EL10; nothing in the matrix sees EL11 today,
+  # so an EL11 break surfaces the day a base flips, not before. That is the
+  # gap this fills, and it is why the variant is EL-family rather than a
+  # bonito flavor: ELN is upstream of every EL11 rebuild, not of Fedora 45.
+  #
+  # Upstream base availability (VARIANT-LIFECYCLE.md admission gate #3):
+  # registry.fedoraproject.org/eln-bootc is the image fedora-eln/eln#214
+  # asked for, and it exists — an OCI index carrying amd64, arm64, ppc64le
+  # and s390x, 480 packages, bootc-1.16.7, dnf5-5.4.3.0, kernel-7.3.0-rc.
+  # Both declared platforms are satisfied by the index AND by the desktop
+  # payload: gnome-shell/gdm/mutter/nautilus/gnome-control-center/
+  # mesa-dri-drivers all resolve on x86_64 and aarch64 (GNOME 51~beta,
+  # `dnf repoquery --forcearch=aarch64`, 2026-08-25) — the measurement
+  # hummingbird's arm64 legs skipped (#1755 §3).
+  #
+  # experimental: true — dispatch-only, no cron. The Q3 flavor freeze
+  # (VARIANT-LIFECYCLE.md §1, "no new flavors through 2026-09-30") is a
+  # CAPACITY gate, and a nightly EL11 lane is exactly the nightly capacity it
+  # protects while 13 variant workflows are still being brought back to
+  # green. Dispatch-only adds 0 nightly cells, 0 ISO cells and 0 boot-gate
+  # cells. It is not literally zero incremental CI: luks-e2e.yml builds its
+  # matrix from build_image with no experimental filter, so wahoo:gnome is one
+  # extra boot in the monthly sweep (`0 7 1 * *`) — counted rather than
+  # excluded, and pinned by tests/test_matrix_status.py's denominator.
+  # Promotion to a cron lane needs the capacity note the gate asks for.
+  - id: wahoo
+    emoji: "🎏"
+    description: "Based on Fedora ELN (EL11 preview, rolling)"
+    experimental: true
+    base_image: "registry.fedoraproject.org/eln-bootc:latest@sha256:1909ffb6ae0c51c0ac831878f0778d7127f38e8bbfddf90d4a14afb281a05748"
+    # No alias: `eln` is Fedora's identifier for a moving development target,
+    # and an alias tag is a stability promise this lane deliberately does not
+    # make. Revisit if/when ELN gains a versioned publish.
+    platforms: ["linux/amd64", "linux/arm64"]
+    # Known gap, recorded here because it bounds what this lane may claim:
+    # ELN has NO working H.264/H.265 decoder (ffmpeg-free's only h264 entry
+    # is backed by the `noopenh264` stub, which encodes 0 bytes; RPM Fusion
+    # publishes no ELN branch). See docs/GREEN-MASTER-PLAN.md's wahoo section
+    # and the TUNAOS_CODEC_GAP marker in verify-desktop-experience.sh.
+    #
+    # Scope: every desktop ELN actually composes, and no others. GNOME 51~beta
+    # and COSMIC 1.6.0 come from eln-appstream/eln-extras; KDE comes from the
+    # `kde-desktop` group (86 entries, Plasma 6.7.4). Each was repodata-measured
+    # before its row was added — #858 is an image tagged for a desktop that
+    # contains no desktop, and the guard against it is measuring first.
+    #
+    # Niri and XFCE are deliberately NOT here and must not be added by analogy:
+    # ELN ships one package of the Niri stack (`swaybg`) and ZERO `xfce*`
+    # packages at all. Both need packages built before a row is honest —
+    # tracked in #2051 / #2052 and in tunaos-packages.
+    #
+    # No ISO and no qcow2 on any flavor — a preview lane publishes images to
+    # `bootc switch` onto, not installer media.
+    flavors:
+      - id: base
+        stage: 1
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      - id: gnome
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      # COSMIC 1.6.0 from eln-extras — 23 of 24 manifest packages present
+      # (only cosmic-wallpapers absent). Notably needs NO copr and no
+      # repo.tunaos.org fprintd repo, both of which the el10 section carries:
+      # ELN has fprintd-1.94.5-6.eln158 in eln-appstream (#2049).
+      - id: cosmic
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+      # Plasma 6.7.4 via the eln-extras `kde-desktop` group; 16 of 23 explicit
+      # packages present, the seven misses are peripheral input/security-key
+      # extras carried as `optional:` (#2050).
+      - id: kde
+        stage: 2
+        build_image: true
+        build_iso: false
+        build_qcow2: false
+
   - id: bonito
     emoji: "🎣"
     description: "Based on Fedora 44"
-    base_image: "quay.io/fedora/fedora-bootc:44"
+    base_image: "quay.io/fedora/fedora-bootc:44@sha256:e91da1afe4026c2c830241557fd5bd40c165bad45cb6f9a89fc0db00ec749d6e"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [fedora]
     akmods: "ublue-os"
@@ -646,6 +782,15 @@ variants:
         build_image: true
         build_iso: false
         build_qcow2: false
+      # Intel Macs with Apple's T2 security chip. Fedora's t2linux stack is
+      # x86_64-only; no generic ISO may stand in for this profile because it
+      # lacks the T2 kernel. Bootsahi Legacy supplies its dedicated USB flow.
+      - id: gnome-t2
+        stage: 3
+        platforms: ["linux/amd64"]
+        build_image: true
+        build_iso: false
+        build_qcow2: false
       - id: gnome-nvidia
         # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
         # any other platform the exact-EVR kmod install can never match and
@@ -712,28 +857,69 @@ variants:
   # (Konflux hermetic build model, CKI ARK kernel).
   - id: hummingbird
     emoji: "🐦"
-    description: "Fedora Hummingbird (bootc container-native OS)"
-    base_image: "quay.io/hummingbird-community/bootc-os:latest"
+    # Rolling, security-hardened fork tracking Fedora RAWHIDE -- not Fedora 43,
+    # whatever the .fc43 dist tags suggest -- and shipping NO desktop upstream.
+    # The desktop flavors below are therefore a PORT onto a desktop-less base,
+    # not a rebuild of an existing one. Read docs/HUMMINGBIRD.md before
+    # reasoning about what its package set should contain.
+    description: "Fedora Hummingbird (hardened rolling Rawhide fork, bootc)"
+    base_image: "quay.io/hummingbird-community/bootc-os:latest@sha256:c5539f9ed4d93aab6bd41e4f5aef8ab83055f3f9e855a47b69fadb7420d0d1df"
     platforms: ["linux/amd64", "linux/arm64"]
     flavors:
       - id: base
         stage: 1
         build_image: true
         build_iso: true
+      # Desktops are amd64-only until the aarch64 rebuild repo converges
+      # (#1755 option A, W8 architecture honesty). Measured 2026-08-18:
+      # hummingbird/20251124-aarch64 now EXISTS (it 404'd when #1755 was
+      # filed) but is a 1358-package seed against x86_64's 8100 — cosmic
+      # 8/22 manifest packages present, gnome 5/52, no gnome-shell/gdm and
+      # no COSMIC compositor. An arm64 desktop leg today would either 404
+      # nothing and install almost nothing (--skip-unavailable), publishing
+      # the #858 shape: an image with no desktop. Same treatment as
+      # grouper:cosmic's amd64 pin. Re-add "linux/arm64" per flavor when
+      # the aarch64 index carries that desktop's manifest set — re-measure
+      # with the method in manifests/desktops/cosmic.yaml's hummingbird
+      # section comment.
       - id: gnome
         stage: 2
+        platforms: ["linux/amd64"]
         build_image: true
         build_iso: true
-      - id: kde
-        stage: 2
-        build_image: true
-        build_iso: true
-      - id: niri
-        stage: 2
-        build_image: true
-        build_iso: true
+      # kde and niri are DECLARED but not implemented for hummingbird, and
+      # advertising them costs the flavor that is.
+      #
+      # manifests/desktops/{kde,niri}.yaml have no `packages.hummingbird`
+      # section at all -- 0 packages, against gnome's 52 and cosmic's 23.
+      # install-desktop.sh routes hummingbird to that section by construction,
+      # so both flavors have never had a package set to install. Measured on
+      # run 32786338463: the two flavors with no manifest are exactly the two
+      # whose image builds failed.
+      #
+      #   kde   nothing provides libdouble-conversion.so.3 / libfbclient.so.2
+      #         needed by qt6-qtbase-*.hum1 from public-hummingbird -- an
+      #         UPSTREAM gap; those sonames are in no index, ours or theirs,
+      #         and no wave the factory is building supplies them.
+      #   niri  TUNAOS_BRANDING_FAIL -- dconf keyfiles written to
+      #         /etc/dconf/db/distro.d with no compiled database, because
+      #         `dconf update` is guarded on `command -v dconf` and dconf is
+      #         not installed when there is no package set to install it.
+      #
+      # Why this blocks GNOME. build_artifacts_s2 takes `needs: build_stage2`,
+      # a matrix job over every stage-2 flavor, so one failing leg skips every
+      # ISO in the stage -- gnome's included, however cleanly it built
+      # (tuna-os/tunaOS#2059). gnome is the only desktop with a passing
+      # installer-smoke cell anywhere in the matrix, so the flavors that were
+      # never implemented are blocking the one that works.
+      #
+      # Re-add each of these the moment it has a `packages.hummingbird`
+      # section, exactly as cosmic and gnome do. Nothing here is a judgement
+      # about wanting kde or niri on hummingbird; it is a statement that they
+      # do not exist yet and should not be advertised as though they do.
       - id: cosmic
         stage: 2
+        platforms: ["linux/amd64"]
         build_image: true
         build_iso: true
 
@@ -742,7 +928,7 @@ variants:
   - id: sailfin
     emoji: "🦈"
     description: "Based on openSUSE Tumbleweed (rolling)"
-    base_image: "registry.opensuse.org/opensuse/tumbleweed:latest"
+    base_image: "registry.opensuse.org/opensuse/tumbleweed:latest@sha256:bbe3311a70b9b5fec1f57b44ee86b68fce0490424c5b804e18dd473123216e87"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [opensuse, tumbleweed]
     platforms: ["linux/amd64"]
@@ -840,7 +1026,7 @@ variants:
     tag_suffix: rawhide
     emoji: "🐉"
     description: "Based on Fedora Rawhide (rolling)"
-    base_image: "quay.io/fedora/fedora-bootc:rawhide"
+    base_image: "quay.io/fedora/fedora-bootc:rawhide@sha256:38682c7550526995bbc8bff3bba02a6fda5f57029a60706f1dc7f9fbefaf71ef"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [fedora]
     akmods: "ublue-os"
@@ -977,7 +1163,7 @@ variants:
   - id: gurnard
     emoji: "🐟"
     description: "Based on Ubuntu 24.04 Noble Numbat with the Pantheon desktop"
-    base_image: "docker.io/library/ubuntu:noble"
+    base_image: "docker.io/library/ubuntu:noble@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [elementary]
     platforms:
@@ -995,7 +1181,7 @@ variants:
   - id: grouper
     emoji: "🐟"
     description: "Based on Ubuntu 26.04 Resolute Raccoon"
-    base_image: "docker.io/library/ubuntu:resolute"
+    base_image: "docker.io/library/ubuntu:resolute@sha256:678c6550cc43645e08669028bc177f50be4e7c5b8cca677067b1914d4afc7a03"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [ubuntu]
     # Built directly from stock Ubuntu and bootcified in Containerfile.ubuntu
@@ -1091,7 +1277,7 @@ variants:
   - id: marlin
     emoji: "🚀"
     description: "Based on Arch Linux (rolling)"
-    base_image: "docker.io/archlinux/archlinux:latest"
+    base_image: "docker.io/archlinux/archlinux:latest@sha256:71810bb6f8bece3e2172e458dd8c0793fec139a6b6a7e5da2c832f96d1b9a0a6"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [arch, archlinux]
     # arm64 legs use ghcr.io/tuna-os/archlinuxarm instead (docker.io/archlinux
@@ -1205,7 +1391,7 @@ variants:
   - id: flounder
     emoji: "🐡"
     description: "Based on Debian 13 Trixie (stable)"
-    base_image: "docker.io/library/debian:trixie"
+    base_image: "docker.io/library/debian:trixie@sha256:34cd9e9fd437c0a095ec39cb2e73422c9f30821b0d0848ed74fd0d43bae4d958"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [debian]
     platforms: ["linux/amd64"]
@@ -1318,7 +1504,7 @@ variants:
     tag_suffix: sid
     emoji: "☢️"
     description: "Based on Debian Sid (unstable, rolling)"
-    base_image: "docker.io/library/debian:sid"
+    base_image: "docker.io/library/debian:sid@sha256:24c766c06ebdbda66a026e92361ede7d9212819701b2fca82e347ef0c240cb2c"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [debian]
     platforms: ["linux/amd64"]

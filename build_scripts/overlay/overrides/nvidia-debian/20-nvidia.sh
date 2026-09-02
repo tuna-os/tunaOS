@@ -75,18 +75,63 @@ cat /etc/apt/sources.list.d/*.sources /etc/apt/sources.list 2>/dev/null || true
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -y
 
+# linux-headers-${KVER} matches the base layer's baked kernel version.
+# On sid / rolling archives where the archive has moved past the cached base
+# layer's kernel (e.g. base kernel 7.1.7 vs archive headers 7.1.8), installing
+# linux-headers-generic pulls headers for a newer kernel that dkms builds for,
+# leaving /usr/lib/modules/${KVER}/build missing. If the exact versioned package
+# has been removed from the archive, fall back to linux-headers-generic.
+HEADERS_PKG="linux-headers-${KVER}"
+if ! apt-cache show "$HEADERS_PKG" >/dev/null 2>&1; then
+	echo "==> ${HEADERS_PKG} not available in apt archive; falling back to linux-headers-generic"
+	HEADERS_PKG="linux-headers-generic"
+fi
+
 # linux-headers-generic is a virtual package resolving to the arch-specific
 # real one (linux-headers-amd64 here) — see header. dkms needs it present
 # under /usr/lib/modules/${KVER}/build before autoinstall below has
 # anything to build against.
+#
+# --no-install-recommends is deliberate, but it means every Recommends this
+# stack needs has to be named here. nvidia-driver-libs Recommends
+# libnvidia-allocator1 (verified on packages.debian.org, trixie 550.163.01-2),
+# and that is the package shipping
+# /usr/lib/x86_64-linux-gnu/nvidia/current/nvidia-drm_gbm.so — read straight
+# off its file list, not inferred. Dropping the Recommends dropped the file,
+# and verify-nvidia-debian.sh failed every flounder nvidia build on it
+# (tunaOS#1564).
+#
+# The two egl-* packages are separate source packages that nothing in the
+# nvidia-driver chain depends on OR recommends, so they were never going to
+# arrive on their own. They are what makes the GBM backend reachable rather
+# than merely present:
+#
+#   libnvidia-egl-gbm1     libnvidia-egl-gbm.so.1
+#                          /usr/share/egl/egl_external_platform.d/15_nvidia_gbm.json
+#   libnvidia-egl-wayland1 libnvidia-egl-wayland.so.1
+#
+# Without that JSON, EGL never loads the GBM external platform and
+# nvidia-drm_gbm.so sits on disk unused — the contract check would pass while
+# the thing it exists to guarantee still did not work. egl-wayland is the same
+# component the Arch sibling installs as `egl-wayland`
+# (overrides/nvidia-arch/20-nvidia.sh), so this also brings the two families
+# to parity.
+#
+# All three are in stable AND unstable for amd64/arm64 (madison, 2026-08-14),
+# so this is safe for flounder (trixie) and flounder-sid alike;
+# libnvidia-egl-gbm1 is in contrib and the rest in non-free/main, all of which
+# the component-enabling block above turns on.
 apt-get install -y --no-install-recommends \
 	dkms \
-	linux-headers-generic \
+	"${HEADERS_PKG}" \
 	nvidia-kernel-dkms \
 	nvidia-driver-libs \
 	nvidia-vulkan-icd \
 	nvidia-settings \
-	libgl1-nvidia-glvnd-glx
+	libgl1-nvidia-glvnd-glx \
+	libnvidia-allocator1 \
+	libnvidia-egl-gbm1 \
+	libnvidia-egl-wayland1
 
 if [[ ! -e "/usr/lib/modules/${KVER}/build" ]]; then
 	echo "ERROR: /usr/lib/modules/${KVER}/build is missing after installing linux-headers-generic —" >&2
@@ -110,7 +155,22 @@ dkms status
 # file, not by string-matching dkms status output (whose module name and
 # phrasing are not a stable contract — see header). A missing .ko here is a
 # black screen on real hardware, so this is a hard failure.
-NVIDIA_KO="$(find "/usr/lib/modules/${KVER}" -name 'nvidia.ko*' -print -quit)"
+# Debian's nvidia-kernel-dkms is alternatives-managed, so its DKMS module is
+# named nvidia-current and the file it installs is nvidia-current.ko.xz --
+# 'nvidia.ko*' never matches it. That is not a hypothetical: flounder's
+# gnome/kde/xfce-nvidia images failed here on every nightly while the build
+# above printed "Building module(s)... done.", signed five modules, installed
+# nvidia-current.ko.xz, and reported "installed" in dkms status. The comment
+# above is right that dkms status text is not a contract; the module FILENAME
+# is not one either, so match the names this distro actually uses and keep
+# NVIDIA_KO pointing at the core module (not -modeset/-drm/-uvm/-peermem) so
+# the modinfo version check below still reads the right file.
+NVIDIA_KO=""
+for _nv_base in nvidia nvidia-current; do
+	NVIDIA_KO="$(find "/usr/lib/modules/${KVER}" -name "${_nv_base}.ko*" -print -quit)"
+	[[ -n "$NVIDIA_KO" ]] && break
+done
+unset _nv_base
 if [[ -z "$NVIDIA_KO" ]]; then
 	echo "ERROR: dkms did not produce nvidia.ko for ${KVER} — dkms status above shows why." >&2
 	exit 1

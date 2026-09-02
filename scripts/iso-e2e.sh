@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # scripts/iso-e2e.sh — TunaOS live-ISO end-to-end smoke test.
 #
-# Boots a pre-built ISO in QEMU under OVMF (UEFI), waits for the TunaOS live
+# Boots a pre-built ISO in QEMU under OVMF/AAVMF (UEFI), waits for the TunaOS live
 # readiness marker on the serial console, optionally runs an Anaconda
 # kickstart install + reboots into the installed disk, and captures
 # screenshots + serial logs for CI artifact upload.
@@ -198,6 +198,13 @@ while [[ $# -gt 0 ]]; do
 		TIMEOUT="$2"
 		shift 2
 		;;
+	--contract)
+		# --disk only: which in-image contract marker gates the boot.
+		# 'desktop' waits for TUNAOS_DESKTOP_CONTRACT_*, 'base' for
+		# TUNAOS_BASE_CONTRACT_*. Validated where disk mode reads it.
+		DISK_CONTRACT="$2"
+		shift 2
+		;;
 	--live-marker)
 		LIVE_MARKER="$2"
 		shift 2
@@ -314,16 +321,34 @@ ISO_FLAVOR="${ISO_FLAVOR%%-*}"
 
 # ── Dependency resolution ───────────────────────────────────────────────────
 
-# Pick a QEMU binary. Order: distro qemu-kvm → qemu-system-x86_64 → brew.
+# Pick the QEMU binary and machine type for the host architecture. Artifact
+# jobs run natively, so an aarch64 host must use the ARM system emulator and
+# the ARM `virt` machine rather than the x86_64 emulator and `pc` machine.
+HOST_ARCH="$(uname -m)"
 QEMU=""
-for candidate in /usr/libexec/qemu-kvm /usr/bin/qemu-kvm /usr/bin/qemu-system-x86_64 /home/linuxbrew/.linuxbrew/bin/qemu-system-x86_64; do
+QEMU_MACHINE=""
+case "$HOST_ARCH" in
+	aarch64 | arm64)
+		QEMU_MACHINE="virt"
+		QEMU_CANDIDATES=(/usr/bin/qemu-system-aarch64 /usr/local/bin/qemu-system-aarch64)
+		;;
+	x86_64 | amd64)
+		QEMU_MACHINE="pc"
+		QEMU_CANDIDATES=(/usr/libexec/qemu-kvm /usr/bin/qemu-kvm /usr/bin/qemu-system-x86_64 /home/linuxbrew/.linuxbrew/bin/qemu-system-x86_64)
+		;;
+	*)
+		echo "ERROR: unsupported host architecture: $HOST_ARCH" >&2
+		exit 77
+		;;
+esac
+for candidate in "${QEMU_CANDIDATES[@]}"; do
 	if [[ -x "$candidate" ]]; then
 		QEMU="$candidate"
 		break
 	fi
 done
 if [[ -z "$QEMU" ]]; then
-	echo "ERROR: no qemu-kvm / qemu-system-x86_64 found" >&2
+	echo "ERROR: no QEMU system emulator found for $HOST_ARCH" >&2
 	exit 77
 fi
 
@@ -406,35 +431,52 @@ else
 	echo "==> GPU: -vga virtio headless (no render node/virgl) — niri/xfwl4 will not render here"
 fi
 
-# Locate OVMF firmware. Path varies across distros (Debian/Ubuntu, Fedora,
-# RHEL, Brew). We also need a writable copy of OVMF_VARS for UEFI to persist
-# its NVRAM during boot.
-OVMF_CODE=""
-for f in \
-	/usr/share/OVMF/OVMF_CODE_4M.fd \
-	/usr/share/OVMF/OVMF_CODE.fd \
-	/usr/share/edk2/ovmf/OVMF_CODE.fd \
-	/usr/share/edk2-ovmf/x64/OVMF_CODE.fd \
-	/usr/share/ovmf/OVMF.fd \
-	/home/linuxbrew/.linuxbrew/Cellar/qemu/*/share/qemu/edk2-x86_64-code.fd; do
+# Locate architecture-appropriate UEFI firmware. Path varies across distros
+# (Debian/Ubuntu, Fedora, RHEL, Brew). We also need a writable copy of the
+# variables file for UEFI to persist its NVRAM during boot.
+UEFI_CODE=""
+UEFI_VARS_SRC=""
+if [[ "$QEMU_MACHINE" == "virt" ]]; then
+	UEFI_CODE_CANDIDATES=(
+		/usr/share/AAVMF/AAVMF_CODE.fd
+		/usr/share/AAVMF/AAVMF_CODE.ms.fd
+		/usr/share/qemu-efi-aarch64/QEMU_EFI.fd
+	)
+	UEFI_VARS_CANDIDATES=(
+		/usr/share/AAVMF/AAVMF_VARS.fd
+		/usr/share/AAVMF/AAVMF_VARS.ms.fd
+		/usr/share/qemu-efi-aarch64/vars-template-pflash.raw
+	)
+else
+	UEFI_CODE_CANDIDATES=(
+		/usr/share/OVMF/OVMF_CODE_4M.fd
+		/usr/share/OVMF/OVMF_CODE.fd
+		/usr/share/edk2/ovmf/OVMF_CODE.fd
+		/usr/share/edk2-ovmf/x64/OVMF_CODE.fd
+		/usr/share/ovmf/OVMF.fd
+		/home/linuxbrew/.linuxbrew/Cellar/qemu/*/share/qemu/edk2-x86_64-code.fd
+	)
+	UEFI_VARS_CANDIDATES=(
+		/usr/share/OVMF/OVMF_VARS_4M.fd
+		/usr/share/OVMF/OVMF_VARS.fd
+		/usr/share/edk2/ovmf/OVMF_VARS.fd
+		/usr/share/edk2-ovmf/x64/OVMF_VARS.fd
+	)
+fi
+for f in "${UEFI_CODE_CANDIDATES[@]}"; do
 	if [[ -f "$f" ]]; then
-		OVMF_CODE="$f"
+		UEFI_CODE="$f"
 		break
 	fi
 done
-OVMF_VARS_SRC=""
-for f in \
-	/usr/share/OVMF/OVMF_VARS_4M.fd \
-	/usr/share/OVMF/OVMF_VARS.fd \
-	/usr/share/edk2/ovmf/OVMF_VARS.fd \
-	/usr/share/edk2-ovmf/x64/OVMF_VARS.fd; do
+for f in "${UEFI_VARS_CANDIDATES[@]}"; do
 	if [[ -f "$f" ]]; then
-		OVMF_VARS_SRC="$f"
+		UEFI_VARS_SRC="$f"
 		break
 	fi
 done
-if [[ -z "$OVMF_CODE" ]]; then
-	echo "ERROR: OVMF firmware not found — install edk2-ovmf or ovmf" >&2
+if [[ -z "$UEFI_CODE" ]]; then
+	echo "ERROR: UEFI firmware not found for $HOST_ARCH — install the architecture's OVMF/AAVMF package" >&2
 	exit 77
 fi
 
@@ -446,10 +488,10 @@ ACCEL="tcg"
 if [[ "$NO_KVM" -eq 0 ]] && [[ -r /dev/kvm ]] && [[ -w /dev/kvm ]]; then
 	ACCEL="kvm"
 fi
-CPU_ARG="qemu64"
+CPU_ARG="max"
 if [[ "$ACCEL" == "kvm" ]]; then
 	CPU_ARG="host"
-else
+elif [[ "$QEMU_MACHINE" == "pc" ]]; then
 	# Broaden the TCG CPU to include modern extensions that post-2020
 	# shim/GRUB binaries require. The default qemu64 omits SSE4, AES-NI,
 	# XSAVE, and AVX, causing #UD crashes when loading EFI bootloaders
@@ -470,7 +512,7 @@ fi
 
 # ── Per-run scratch files ───────────────────────────────────────────────────
 
-OVMF_VARS="${OUTPUT_DIR}/OVMF_VARS.fd"
+OVMF_VARS="${OUTPUT_DIR}/UEFI_VARS.fd"
 MONITOR_SOCK="${OUTPUT_DIR}/monitor.sock"
 SERIAL_LOG="${OUTPUT_DIR}/serial.log"
 LIVE_SERIAL_LOG="${OUTPUT_DIR}/live-serial.log"
@@ -737,8 +779,8 @@ start_swtpm() {
 
 # Fresh OVMF NVRAM each run — UEFI writes state during install (boot order,
 # secure-boot vars). Reusing a stale one masks regressions.
-if [[ -n "$OVMF_VARS_SRC" ]]; then
-	cp -f "$OVMF_VARS_SRC" "$OVMF_VARS"
+if [[ -n "$UEFI_VARS_SRC" ]]; then
+	cp -f "$UEFI_VARS_SRC" "$OVMF_VARS"
 else
 	# Some packaging only ships a combined OVMF.fd; create empty vars file
 	# as a fallback (UEFI will populate it).
@@ -979,13 +1021,13 @@ boot_live_iso() {
 	reset_qemu_sockets
 	"$QEMU" \
 		-name "tunaos-iso-e2e" \
-		-machine pc \
+		-machine "$QEMU_MACHINE" \
 		-cpu "$CPU_ARG" \
 		-accel "$ACCEL" \
 		-m "$MEMORY" \
 		-smp "$CPUS" \
 		${TPM_ARGS} \
-		-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+		-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=iso,file=${ISO_PATH},media=cdrom,readonly=on,format=raw" \
 		-device virtio-scsi-pci,id=scsi \
@@ -1278,7 +1320,7 @@ wait_for_paint() {
 		attempt=$((attempt + 1))
 		screenshot "$label"
 		if screenshot_sane "$label"; then
-			echo "==> ${label} painted on attempt ${attempt} (stddev=${SCREENSHOT_STDDEV})"
+			echo "==> ${label} painted on attempt ${attempt} (stddev=${SCREENSHOT_STDDEV:-unmeasured})"
 			return 0
 		fi
 		sleep 15
@@ -1288,7 +1330,11 @@ wait_for_paint() {
 	if screenshot_sane "$label"; then
 		return 0
 	fi
-	echo "==> ${label} still blank after ${cap}s (stddev=${SCREENSHOT_STDDEV}) — the serial marker, not pixels, is the gate" >&2
+	# :-unmeasured, not a bare expansion: screenshot_sane's early returns (no
+	# ImageMagick, no capture) never set SCREENSHOT_STDDEV, and under set -u a
+	# bare reference here killed the base Gate's TIMEOUT path before it could
+	# print any diagnostics (sailfin run 32068513822, line-1323 crash).
+	echo "==> ${label} still blank after ${cap}s (stddev=${SCREENSHOT_STDDEV:-unmeasured}) — the serial marker, not pixels, is the gate" >&2
 	return 1
 }
 
@@ -1428,6 +1474,39 @@ check_ssh() {
 	return 5
 }
 
+# A gate that DID NOT RUN is not a gate that found problems, and only one of
+# those two is tolerable in non-strict mode.
+#
+# e2e-installer-gui-checks.sh resolved its assertion helpers to a path the
+# guest does not have, so `source` failed, `check` was never defined, and
+# every assertion evaporated into command-not-found on stderr. The script
+# exited 127 -- bash for command-not-found -- and this harness printed
+#
+#   ::warning::installer GUI checks reported 127 failure(s) for gnome
+#
+# as a WARNING, in a mode that tolerates warnings. So the compositor and
+# installer-frontend assertions have never once executed, on any flavor, in
+# any smoke run, and the workflow stayed green through it (run 32681262659).
+#
+# The discriminator is the TAP summary. print_summary is the only thing that
+# emits `# Results:`, and it is the last statement of every check script, so
+# its ABSENCE means the script did not reach the end -- whatever the exit
+# code says. Missing summary is a hard failure in every mode; E2E_*_STRICT
+# governs failed assertions, not an absent gate.
+checks_ran() {
+	local output="$1" rc="$2" label="$3"
+	if [[ "$output" == *"# Results:"* ]]; then
+		return 0
+	fi
+	echo "ERROR: ${label} checks did not run to completion (exit ${rc}); no TAP summary was emitted." >&2
+	echo "  This is NOT a count of failed assertions -- the script did not finish," >&2
+	echo "  so nothing it claims to verify was verified. Strict mode does not apply." >&2
+	if [[ "$output" == *"Bail out!"* ]]; then
+		echo "$output" | grep "Bail out!" | sed "s/^/  /" >&2
+	fi
+	return 1
+}
+
 # Upload and run the TAP-style live-image smoke checks (assertions adapted
 # from frostyard/snosi's tiered on-VM test scripts) over SSH. Non-fatal by
 # default — the TAP output is CI evidence; set E2E_SMOKE_STRICT=1 to turn
@@ -1447,6 +1526,7 @@ run_smoke_checks() {
 	local smoke_output smoke_rc=0
 	smoke_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=${GUEST_HOME} bash ${GUEST_HOME}/e2e-smoke-checks.sh" 2>&1) || smoke_rc=$?
 	echo "$smoke_output" | tee -a "${SERIAL_LOG}"
+	checks_ran "$smoke_output" "$smoke_rc" "live-image smoke" || return 1
 	if [[ "$smoke_rc" -ne 0 ]]; then
 		echo "::warning::live-image smoke checks reported ${smoke_rc} failure(s)"
 		if [[ "${E2E_SMOKE_STRICT:-0}" -eq 1 ]]; then
@@ -1474,6 +1554,7 @@ run_installer_gui_checks() {
 	local gui_output gui_rc=0
 	gui_output=$("${ssh_cmd[@]}" "FLAVOR=${FLAVOR:-gnome} TEST_LIB_DIR=${GUEST_HOME} bash ${GUEST_HOME}/e2e-installer-gui-checks.sh" 2>&1) || gui_rc=$?
 	echo "$gui_output" | tee -a "${SERIAL_LOG}"
+	checks_ran "$gui_output" "$gui_rc" "installer GUI" || return 1
 	if [[ "$gui_rc" -ne 0 ]]; then
 		echo "::warning::installer GUI checks reported ${gui_rc} failure(s) for ${FLAVOR:-gnome}"
 		if [[ "${E2E_INSTALLER_GUI_STRICT:-0}" -eq 1 ]]; then
@@ -1571,7 +1652,8 @@ start_guest_heartbeat() {
 # moment this VM powers off. sailfin (composefs + systemd-boot) gets no
 # NVRAM entry — bootctl refuses to touch efivars from inside the install
 # container — so the firmware can only find it via the removable fallback
-# \EFI\BOOT\BOOTX64.EFI; when that file is missing the disk is unbootable
+# \EFI\BOOT\BOOTX64.EFI (or BOOTAA64.EFI on ARM); when that file is missing
+# the disk is unbootable
 # no matter what the boot order says, and from the serial log alone the
 # failure looks identical to a boot-order bug.
 append_installed_serial_kargs() {
@@ -1591,10 +1673,12 @@ append_installed_serial_kargs() {
 			if [ "$found" = 1 ]; then
 				echo "--- ESP contents ($p) ---"
 				find /mnt/tbx-bls -maxdepth 3 2>/dev/null | sort || ls -lR /mnt/tbx-bls || true
-				if [ -f /mnt/tbx-bls/EFI/BOOT/BOOTX64.EFI ]; then
-					echo "esp: removable fallback present (EFI/BOOT/BOOTX64.EFI)"
+				fallback_efi="BOOTX64.EFI"
+				[[ "$(uname -m)" == "aarch64" ]] && fallback_efi="BOOTAA64.EFI"
+				if [ -f "/mnt/tbx-bls/EFI/BOOT/${fallback_efi}" ]; then
+					echo "esp: removable fallback present (EFI/BOOT/${fallback_efi})"
 				else
-					echo "WARN: esp has NO EFI/BOOT/BOOTX64.EFI; firmware has no fallback to boot"
+					echo "WARN: esp has NO EFI/BOOT/${fallback_efi}; firmware has no fallback to boot"
 				fi
 			fi
 			umount /mnt/tbx-bls
@@ -1863,10 +1947,10 @@ run_install_generic() {
 	e2e_phase "Booting installed disk (TPM auto-unlock), expecting a login prompt..."
 	# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
 	reset_qemu_sockets
-	"$QEMU" -name "tunaos-iso-e2e-installed" -machine pc -cpu "$CPU_ARG" \
+	"$QEMU" -name "tunaos-iso-e2e-installed" -machine "$QEMU_MACHINE" -cpu "$CPU_ARG" \
 		-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
 		${TPM_ARGS} \
-		-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+		-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 		-device virtio-blk-pci,drive=disk,bootindex=0 \
@@ -2116,7 +2200,7 @@ run_install() {
 	# `[[ "$VARIANT" == "grouper" ]]`, so sailfin, marlin, flounder,
 	# flounder-sid, guppy and gurnard — every other composefs variant — were
 	# installed down the ostree/grub2 path they cannot boot. See
-	# probe_image_backend() in scripts/lib/common.sh (tunaOS#954).
+	# probe_image_backend() in scripts/lib/backend.sh (tunaOS#954).
 	# Probe the image that will actually be INSTALLED. In the dev/e2e flow that
 	# is the locally rebuilt one, and the published tag may be months stale or
 	# absent entirely for a variant whose Gate has been failing — probing it
@@ -2571,10 +2655,10 @@ EOF
 		# putting this disk first and leaving the shell as the last resort.
 		reset_qemu_sockets
 		# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
-		"$QEMU" -name "tunaos-iso-e2e-installed" -machine pc -cpu "$CPU_ARG" \
+		"$QEMU" -name "tunaos-iso-e2e-installed" -machine "$QEMU_MACHINE" -cpu "$CPU_ARG" \
 			-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
 			${TPM_ARGS} \
-			-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+			-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 			-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 			-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 			-device virtio-blk-pci,drive=disk,bootindex=0 \
@@ -2774,10 +2858,10 @@ EOF
 			# TPM auto-unlock gate uses.
 			reset_qemu_sockets
 			# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
-			"$QEMU" -name "tunaos-iso-e2e-installed" -machine pc -cpu "$CPU_ARG" \
+			"$QEMU" -name "tunaos-iso-e2e-installed" -machine "$QEMU_MACHINE" -cpu "$CPU_ARG" \
 				-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
 				${TPM_ARGS} \
-				-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+				-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 				-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 				-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 				-device virtio-blk-pci,drive=disk,bootindex=0 \
@@ -2839,13 +2923,13 @@ EOF
 	reset_qemu_sockets
 	"$QEMU" \
 		-name "tunaos-iso-e2e-installed" \
-		-machine pc \
+		-machine "$QEMU_MACHINE" \
 		-cpu "$CPU_ARG" \
 		-accel "$ACCEL" \
 		-m "$MEMORY" \
 		-smp "$CPUS" \
 		${TPM_ARGS} \
-		-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+		-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 		-device virtio-blk-pci,drive=disk,bootindex=0 \
@@ -2905,12 +2989,12 @@ boot_disk_image() {
 	reset_qemu_sockets
 	"$QEMU" \
 		-name "tunaos-disk-e2e" \
-		-machine pc \
+		-machine "$QEMU_MACHINE" \
 		-cpu "$CPU_ARG" \
 		-accel "$ACCEL" \
 		-m "$MEMORY" \
 		-smp "$CPUS" \
-		-drive "if=pflash,format=raw,readonly=on,file=${OVMF_CODE}" \
+		-drive "if=pflash,format=raw,readonly=on,file=${UEFI_CODE}" \
 		-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 		-drive "if=none,id=disk,file=${ISO_PATH},format=${fmt}" \
 		-device virtio-blk-pci,drive=disk \
@@ -2938,7 +3022,18 @@ boot_disk_image() {
 case "$MODE" in
 disk)
 	boot_disk_image || exit 1
-	e2e_phase "Waiting up to ${TIMEOUT}s for a graphical session..."
+	# Which contract proves the boot. Base images reach multi-user, not
+	# graphical, so their marker is TUNAOS_BASE_CONTRACT_* (see --contract).
+	DISK_CONTRACT="${DISK_CONTRACT:-desktop}"
+	case "$DISK_CONTRACT" in
+	desktop) CONTRACT_PREFIX="TUNAOS_DESKTOP_CONTRACT" ;;
+	base) CONTRACT_PREFIX="TUNAOS_BASE_CONTRACT" ;;
+	*)
+		echo "ERROR: --contract must be 'desktop' or 'base', got '${DISK_CONTRACT}'" >&2
+		exit 1
+		;;
+	esac
+	e2e_phase "Waiting up to ${TIMEOUT}s for the ${DISK_CONTRACT} contract marker..."
 	deadline=$(($(date +%s) + TIMEOUT))
 	rc=2
 	while (($(date +%s) < deadline)); do
@@ -2947,14 +3042,14 @@ disk)
 			echo "ERROR: VM exited during boot" >&2
 			exit 1
 		fi
-		if grep -qE "TUNAOS_DESKTOP_CONTRACT_(OK|FAIL)" "$SERIAL_LOG" 2>/dev/null; then
-			if grep -q "TUNAOS_DESKTOP_CONTRACT_OK" "$SERIAL_LOG" 2>/dev/null; then
-				echo "==> Desktop experience contract passed (serial)"
+		if grep -qE "${CONTRACT_PREFIX}_(OK|FAIL)" "$SERIAL_LOG" 2>/dev/null; then
+			if grep -q "${CONTRACT_PREFIX}_OK" "$SERIAL_LOG" 2>/dev/null; then
+				echo "==> ${DISK_CONTRACT} contract passed (serial)"
 				rc=0
 				harvest_install_checks || rc=1
 			else
-				echo "ERROR: desktop experience contract FAILED:" >&2
-				grep "TUNAOS_DESKTOP_CONTRACT_FAIL" "$SERIAL_LOG" | tr -d '\r' >&2
+				echo "ERROR: ${DISK_CONTRACT} contract FAILED:" >&2
+				grep "${CONTRACT_PREFIX}_FAIL" "$SERIAL_LOG" | tr -d '\r' >&2
 				rc=1
 			fi
 			break
@@ -2969,7 +3064,22 @@ disk)
 	# paint extends the run, it cannot fail it.
 	wait_for_paint "10-ready" || true
 	if [[ "$rc" -eq 2 ]]; then
-		echo "ERROR: desktop experience contract marker was not emitted" >&2
+		echo "ERROR: ${DISK_CONTRACT} contract marker was not emitted" >&2
+		# Answer WHY in the job log itself, not only in an artifact a human
+		# must download: every base Gate on 2026-08-18's nightlies timed out
+		# with a painted VGA screen and this branch as the only in-log
+		# evidence (sailfin run 32091072257, bonito-rawhide 32090947417).
+		# An EMPTY serial log means the console karg routing is broken (the
+		# markers went to the screen the Gate photographs); a serial log
+		# with kernel printk but no marker means the contract unit itself
+		# never ran or never reached the console. The tail makes the two
+		# distinguishable at a glance.
+		if [[ -s "$SERIAL_LOG" ]]; then
+			echo "==> serial log captured $(wc -c <"$SERIAL_LOG") bytes; last 120 lines:" >&2
+			tail -n 120 "$SERIAL_LOG" | sed 's/^/serial| /' >&2
+		else
+			echo "==> serial log is EMPTY — nothing reached ${SERIAL_LOG}: the guest's console= routing never targeted the serial port the Gate captures" >&2
+		fi
 	fi
 	exit "$rc"
 	;;
