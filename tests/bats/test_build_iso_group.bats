@@ -11,11 +11,20 @@ setup() {
   REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   cd "${REPO_ROOT}" || exit 1
   CONFIG=".github/build-config.yml"
+  # shellcheck source=../../scripts/lib/flavor.sh
+  . "${REPO_ROOT}/scripts/lib/flavor.sh"
+  # Recipe tests below also exercise the image-reference compatibility facade.
   # shellcheck source=../../scripts/lib/common.sh
   . "${REPO_ROOT}/scripts/lib/common.sh"
 }
 
 # ── Title mapping ───────────────────────────────────────────────────────────
+
+@test "flavor library has no source-time working-directory side effect" {
+  run bash -c 'before=$PWD; source "$1"; [[ "$PWD" == "$before" ]]' \
+    _ "${REPO_ROOT}/scripts/lib/flavor.sh"
+  [ "$status" -eq 0 ]
+}
 
 @test "title: gnome -> GNOME" {
   [ "$(tunaos_flavor_title gnome)" = "GNOME" ]
@@ -69,10 +78,29 @@ setup() {
 
 # ── Config shape ────────────────────────────────────────────────────────────
 
-@test "config: iso_groups defines flagship, community" {
+# One group per desktop, each embedding its own NVIDIA and HWE flavors.
+# Previously two groups: the gnome flagship plus a `community` group that
+# packed KDE, COSMIC, Niri and XFCE into ONE unpublished ISO.
+@test "config: iso_groups defines one group per desktop" {
   json="$(yq -o=json '.' "$CONFIG")"
   suffixes="$(echo "$json" | jq -r '[.iso_groups[].suffix // ""] | sort | join(",")')"
-  [ "$suffixes" = ",community" ]
+  [ "$suffixes" = ",cosmic,kde,niri,xfce" ]
+}
+
+@test "config: no iso_group packs more than one desktop" {
+  json="$(yq -o=json '.' "$CONFIG")"
+  # The flagship group's suffix is "" and it is the gnome one.
+  while read -r line; do
+    [ -z "$line" ] && continue
+    suffix="${line%%|*}"
+    flavor="${line#*|}"
+    desktop="${suffix:-gnome}"
+    [ "${flavor%%-*}" = "$desktop" ] || {
+      echo "group '$desktop' names '$flavor' from another desktop" >&2
+      return 1
+    }
+  done < <(echo "$json" | jq -r '.iso_groups[] | (.suffix // "") as $s
+             | (.flavors[], .offline_flavors[]) | "\($s)|\(.)"')
 }
 
 @test "config: every iso_group flavor exists on at least one variant" {
@@ -112,18 +140,31 @@ _select() {
   [ "$(_select '' bonito)" = "gnome-nvidia" ]
 }
 
-@test "select: bonito community resolves to nvidia desktops" {
-  [ "$(_select community bonito)" = "kde-nvidia cosmic-nvidia niri-nvidia xfce-nvidia" ]
+@test "select: each desktop group resolves to its own nvidia flavor" {
+  [ "$(_select kde bonito)" = "kde-nvidia" ]
+  [ "$(_select cosmic bonito)" = "cosmic-nvidia" ]
+  [ "$(_select niri bonito)" = "niri-nvidia" ]
+  [ "$(_select xfce bonito)" = "xfce-nvidia" ]
 }
 
-@test "select: grand total is 8 grouped ISOs across 4 variants" {
+# skipjack has no xfce-nvidia, so its xfce group must resolve to nothing and
+# be skipped rather than build something broken. A group naming a flavor a
+# variant lacks is the normal case now, not an edge one.
+@test "select: a variant missing a desktop's nvidia flavor drops that group" {
+  [ -z "$(_select xfce skipjack)" ]
+}
+
+@test "select: grand total is 19 grouped ISOs across 4 variants" {
   local count=0
-  for g in '' community; do
+  for g in '' kde cosmic niri xfce; do
     for v in yellowfin albacore skipjack bonito; do
       [ -n "$(_select "$g" "$v")" ] && count=$((count + 1))
     done
   done
-  [ "$count" -eq 8 ]
+  # 4 variants x 5 desktops = 20, minus exactly one: skipjack has no
+  # xfce-nvidia. Asserted as a number, counted rather than estimated, so a
+  # config edit that silently drops a variant's ISOs is caught.
+  [ "$count" -eq 19 ]
 }
 
 # ── Recipe JSON ─────────────────────────────────────────────────────────────

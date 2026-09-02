@@ -33,6 +33,31 @@ Apply the `hacktoberfest` repository or issue label only after the 2026
 registration guidance is published. Until then, keep curation and eligibility
 review separate from the promotional label.
 
+## Blocked repository: bootc-installer
+
+[`tuna-os/bootc-installer`](https://github.com/tuna-os/bootc-installer) is a
+strong potential contributor repo: its GTK 4/Libadwaita frontend and
+`fisherman` pipeline are approachable without the image-factory context. It
+is not currently part of the launch scope, however, because GitHub Issues are
+disabled there ([tunaos#1531](https://github.com/tuna-os/tunaos/issues/1531)).
+Do not advertise it as a starter-repository or seed contributor tasks there
+until the issue channel is available.
+
+The repository maintainer should complete these steps before adding it to the
+participation scope:
+
+1. Enable **Issues** in the `tuna-os/bootc-installer` repository settings.
+2. Open two or three bounded tasks from `ROADMAP.md` (for example, a
+   `fisherman` test-coverage gap or a Flatpak-manifest polish task).
+3. Give each task observable acceptance criteria and both `good first issue`
+   and `help wanted` labels.
+4. Confirm that the issue URLs, contributor guidance, and labels are visible
+   to an unauthenticated visitor before listing the repository here.
+
+Until those checks pass, count `bootc-installer` as a blocked candidate rather
+than as one of the participating repositories or as part of the launch-task
+quota.
+
 ## Current TunaOS candidates
 
 Re-verified live on 2026-08-14 (23:45Z) against the 09-15 seeding target.
@@ -83,6 +108,30 @@ then re-check wootc, protota, iso-builder, and Tavern before the 09-08 audit.
 Keep two alternates available for tasks that are claimed or found to be too
 broad.
 
+## Conversion-loop evidence (2026-08-14)
+
+The “no external capacity” assumption is no longer valid for the docs channel.
+Two first-time, human-authored docs contributions converted from seeded issues
+to merged PRs on 2026-08-14:
+
+| Seed / surface | Result | Evidence |
+|---|---|---|
+| QEMU/KVM evaluation guide | Merged | [docs#234](https://github.com/tuna-os/docs/pull/234), Dipak Chaudhari, 07:16Z |
+| Gurnard Pantheon edition fix | Merged | [docs#239](https://github.com/tuna-os/docs/pull/239), Shawn, 09:19Z |
+
+This is a proven GFI → review → merge loop: **2 converted in one day from
+roughly 6–9 usable seeds** (about a 25% observed conversion rate). It is
+evidence for docs-channel external contribution capacity, not evidence of
+TunaOS adoption or production use. Keep core-code capacity and adopter
+evidence as separate checkpoint inputs.
+
+Re-baseline the seeding plan against **net usable tasks**, not gross issues:
+replace consumed tasks promptly, preserve 15–20 usable candidates by the
+2026-09-15 deadline, and carry two alternates through the 09-08 audit. At the
+first post-launch snapshot, record claims, merged PRs, distinct contributors,
+and whether any contributor returns; do not count a contribution as an adopter
+entry without the consent workflow in `ADOPTERS.md`.
+
 ## Curation checklist
 
 For every selected issue, the maintainer should confirm:
@@ -107,7 +156,7 @@ as Hacktoberfest starter tasks.
 | Date | Deliverable | Owner |
 |---|---|---|
 | By 2026-09-01 | Confirm registration and label guidance | strategist |
-| By 2026-09-08 | Audit the six repositories and select 10–15 tasks plus two alternates — **re-check net pool vs consumption** (5 consumed 08-13→08-14; #1537) | guide + repository maintainers |
+| By 2026-09-08 | Audit the six repositories and select 10–15 tasks plus two alternates — **re-check net pool vs consumption** and preserve the proven docs conversion loop (#1537, #1714) | guide + repository maintainers |
 | By 2026-09-15 | Apply final labels, add missing acceptance criteria, and publish the backlog | guide |
 | 2026-09-15–30 | Announce participation on the blog and Matrix; link directly to the filtered issue view | outreach |
 | 2026-10-01–31 | Triage claims, answer questions, and review starter PRs promptly | repository maintainers |

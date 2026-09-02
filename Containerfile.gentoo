@@ -12,6 +12,14 @@ ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
 ARG IMAGE_REGISTRY="ghcr.io"
 ARG IMAGE_NAME_VARIANT
 
+ARG JUST_VERSION="1.35.0"
+ARG JUST_SHA256="c4172306e241bd175c07316156a610593fa2b687ac49418520a375605d7cead4"
+ARG GLOW_VERSION="1.5.1"
+ARG GLOW_SHA256="d224be006fc4ee361c1d1a85dbd46c269372b76c5413e2a9bfd0f7fe52c66f78"
+ARG GUM_VERSION="0.14.3"
+ARG GUM_SHA256="76836c1ba0f5aaebed5426a02b986c890cc3560c6165aed5894758671115aeb1"
+ARG BOOTC_COMMIT="3e76c16556c55e6d15d31bd47602b231e2131cb2"
+
 # Context files sit at root; the build stages bind-mount this stage's / at
 # /run/context, so e.g. /build_scripts → /run/context/build_scripts. (Copying
 # to /run/context/... here would double-nest to /run/context/run/context/...)
@@ -31,6 +39,12 @@ FROM ${COMMON_IMAGE_REF} AS common
 # scripts/get-base-image.sh (#1014); build-config.yml is the source of truth
 # and build-image-inner.sh already passes it through as a build-arg.
 FROM ${BASE_IMAGE} AS base
+ARG JUST_VERSION
+ARG JUST_SHA256
+ARG GLOW_VERSION
+ARG GLOW_SHA256
+ARG GUM_VERSION
+ARG GUM_SHA256
 # Speed: pull prebuilt, gpg-verified binary packages from Gentoo's official
 # binhost instead of compiling all of @world from source (which blew past the
 # 60-min CI job timeout — tuna-os/tunaOS#644). getuto imports the shipped
@@ -166,12 +180,15 @@ RUN emerge --verbose --deep --newuse \
     command -v systemd-cryptenroll && \
     command -v cryptsetup && \
     command -v dmsetup && \
-    curl -fsSL -o /tmp/just.tar.gz https://github.com/casey/just/releases/download/1.35.0/just-1.35.0-x86_64-unknown-linux-musl.tar.gz && \
+    curl -fsSL -o /tmp/just.tar.gz "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-x86_64-unknown-linux-musl.tar.gz" && \
+    echo "${JUST_SHA256}  /tmp/just.tar.gz" | sha256sum -c - && \
     tar -xzf /tmp/just.tar.gz -C /usr/bin just && rm /tmp/just.tar.gz && \
-    curl -fsSL -o /tmp/glow.tar.gz https://github.com/charmbracelet/glow/releases/download/v1.5.1/glow_Linux_x86_64.tar.gz && \
+    curl -fsSL -o /tmp/glow.tar.gz "https://github.com/charmbracelet/glow/releases/download/v${GLOW_VERSION}/glow_Linux_x86_64.tar.gz" && \
+    echo "${GLOW_SHA256}  /tmp/glow.tar.gz" | sha256sum -c - && \
     tar -xzf /tmp/glow.tar.gz -C /usr/bin glow && rm /tmp/glow.tar.gz && \
-    curl -fsSL -o /tmp/gum.tar.gz https://github.com/charmbracelet/gum/releases/download/v0.14.3/gum_0.14.3_Linux_x86_64.tar.gz && \
-    tar -xzf /tmp/gum.tar.gz -C /tmp && mv /tmp/gum_0.14.3_Linux_x86_64/gum /usr/bin/ && rm -rf /tmp/gum*
+    curl -fsSL -o /tmp/gum.tar.gz "https://github.com/charmbracelet/gum/releases/download/v${GUM_VERSION}/gum_${GUM_VERSION}_Linux_x86_64.tar.gz" && \
+    echo "${GUM_SHA256}  /tmp/gum.tar.gz" | sha256sum -c - && \
+    tar -xzf /tmp/gum.tar.gz -C /tmp && mv "/tmp/gum_${GUM_VERSION}_Linux_x86_64/gum" /usr/bin/ && rm -rf /tmp/gum*
 
 # No live-boot dracut modules needed: tacklebox injects its embedded
 # tbox-live/tbox-root modules at ISO build time (tuna-os/tacklebox#90).
@@ -207,6 +224,7 @@ RUN mkdir -p /usr/lib/dracut/dracut.conf.d && \
         > /usr/lib/dracut/dracut.conf.d/30-omit-unsatisfiable.conf
 
 FROM base AS builder
+ARG BOOTC_COMMIT
 # The cleanup below MUST stay in this RUN. Unlike Containerfile.arch — which
 # builds bootc in a throwaway stage and COPY --from=bootc-builder /output / —
 # this file is linear (base -> builder -> system), so every file created here
@@ -220,7 +238,10 @@ FROM base AS builder
 # Gentoo cannot simply copy Arch's throwaway-builder pattern: this stage also
 # emerges dev-util/ostree, which the final system needs at runtime.
 RUN emerge --verbose dev-util/ostree net-misc/openssh && \
-    git clone --depth 1 https://github.com/bootc-dev/bootc.git /tmp/bootc && \
+    git init /tmp/bootc && \
+    git -C /tmp/bootc remote add origin https://github.com/bootc-dev/bootc.git && \
+    git -C /tmp/bootc fetch --depth 1 origin "${BOOTC_COMMIT}" && \
+    git -C /tmp/bootc checkout --detach FETCH_HEAD && \
     make -C /tmp/bootc bin install-all && \
     rm -rf /tmp/bootc /root/.cargo /root/.rustup /var/tmp/portage
 

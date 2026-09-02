@@ -95,6 +95,30 @@ jobs:
             qemu-system-x86 qemu-utils ovmf socat imagemagick
           sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 && sudo chmod +x /usr/bin/yq
 
+      # The runner image ships podman 5.8.4, which wedges committing a
+      # live-customized rootfs (#1893). Every ISO build needs the Kubic one
+      # instead; this job ran `just iso` without it. Necessary, not
+      # sufficient -- iso-e2e.yml installs this and its commit still exceeded
+      # tacklebox's 600s bound on a GitHub-hosted runner (job 97638514487) --
+      # but a build without it cannot finish at all.
+      - name: setup working podman
+        run: |
+          set -euo pipefail
+          sudo install -d /etc/apt/keyrings
+          curl -fsSL https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04/Release.key \
+            | gpg --dearmor | sudo tee /etc/apt/keyrings/kubic.gpg >/dev/null
+          echo 'deb [signed-by=/etc/apt/keyrings/kubic.gpg] https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04/ /' \
+            | sudo tee /etc/apt/sources.list.d/kubic.list
+          sudo apt-get update -qq
+          sudo apt-get remove -y podman conmon crun || true
+          sudo apt-get install -y podman
+          for p in /usr/local/bin/podman /usr/local/sbin/podman; do
+            if [ -e "$p" ] && ! dpkg -S "$p" >/dev/null 2>&1; then
+              sudo rm -f "$p"
+            fi
+          done
+          hash -r
+
       - name: Log in to GHCR
         if: steps.filter.outputs.skip != 'true'
         run: echo "${{ env.GITHUB_TOKEN }}" | podman login ghcr.io -u ${{ github.actor }} --password-stdin
@@ -107,7 +131,11 @@ jobs:
         env:
           GITHUB_REPOSITORY_OWNER: tuna-os
         run: |
-          sudo GITHUB_REPOSITORY_OWNER=tuna-os \
+          # The pinned tacklebox supports this escape hatch for hosts where
+          # root-context podman's bridge DNS is broken. The customize script
+          # fetches installer Flatpaks from GitHub/tunaos.org; host networking
+          # gives that nested container the runner's working resolver.
+          sudo TBOX_CUSTOMIZE_NETWORK=host GITHUB_REPOSITORY_OWNER=tuna-os \
             just iso "${{ matrix.variant }}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
 
       - name: Boot ISO and capture desktop screenshot
@@ -199,6 +227,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Needed to open the refresh PR; `main` only accepts merge-queue changes.
+      pull-requests: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
@@ -229,9 +259,20 @@ jobs:
         if: steps.stage.outputs.staged != '0'
         run: bash scripts/gen-screenshot-gallery.sh
 
-      - name: Commit and push
+      # Opens a PR; does NOT push to main. `main` is protected by a
+      # repository rule -- "Changes must be made through the merge queue" --
+      # so `git push origin HEAD:main` is rejected outright (GH013). Observed
+      # on installer-smoke.yml run 32704425971, where the identical step had
+      # simply never executed before: it is gated on `staged != 0` and no
+      # flavor had ever produced frames. All three screenshot writers carried
+      # the same line; all three are now the matrix-status.yml shape.
+      - name: Open the screenshot refresh PR
         if: steps.stage.outputs.staged != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BRANCH: automation/desktop-screenshots
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/images/desktops docs/SCREENSHOTS.md
@@ -239,6 +280,25 @@ jobs:
             echo "No screenshot changes to commit"
             exit 0
           fi
-          git commit -m "docs: refresh desktop screenshots ($(date +%Y-%m-%d)) [skip ci]"
-          git pull --rebase origin main
-          git push origin HEAD:main
+          git checkout -b "$BRANCH"
+          git commit -m "docs: refresh desktop screenshots ($(date -u +%Y-%m-%d))"
+          git push --force origin "$BRANCH"
+
+          if [[ -z "$(gh pr list --head "$BRANCH" --state open --json number --jq '.[].number')" ]]; then
+            gh pr create --base main --head "$BRANCH" \
+              --title "docs: refresh desktop screenshots" \
+              --body "$(printf '%s\n\n%s\n' \
+                'Captured by the weekly desktop screenshot run and staged by `scripts/gen-screenshot-gallery.sh`.' \
+                'Force-updated in place, so this branch always holds the newest capture.')"
+          else
+            echo "PR already open for $BRANCH — force-push refreshed it."
+          fi
+
+          # A PR opened with the Actions token starts no checks of its own;
+          # the merge queue runs the required checks on the merge group, so
+          # arming auto-merge is what actually lands the refresh.
+          pr=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number')
+          if [[ -n "$pr" ]]; then
+            gh pr merge --auto --merge "$pr" ||
+              echo "::warning::could not arm auto-merge on #$pr — the refresh will wait for a human"
+          fi

@@ -70,7 +70,27 @@ must not be promoted or gain additional ISO coverage.
 | `grouper:gnome-zfs` | #1185 | ci-maintainer | 1 image; 0 ISO | Install-to-ZFS boot E2E (#625), LUKS E2E, desktop contract | Held pending capacity sign-off |
 | `marlin:gnome-nvidia` | #1191 | ci-maintainer | 1 image + 1 ISO (amd64) | NVIDIA driver load, boot gate, LUKS E2E, desktop contract | Held pending capacity sign-off |
 | `flounder:gnome-nvidia` | #1191 | ci-maintainer | 1 image + 1 ISO (amd64) | NVIDIA driver load, boot gate, LUKS E2E, desktop contract | Held pending capacity sign-off |
+| `bonito:gnome-t2` | #1270 | ci-maintainer | 1 image; 0 ISO (amd64) | T2 kernel/hardware modules, boot gate, desktop contract | Held pending capacity sign-off |
 | `flounder-sid:gnome-nvidia` | #1191 | ci-maintainer | 1 image; 0 ISO (amd64) | NVIDIA driver load, boot gate, LUKS E2E, desktop contract | Held pending capacity sign-off |
+
+| Addition (opened 2026-08-25) | Tracker | Owner | Incremental cells | Acceptance evidence | Status |
+|---|---|---|---:|---|---|
+| `wahoo` (Fedora ELN / EL11 preview) — `base`, `gnome`, `kde`, `cosmic` | #2048; fedora-eln/eln#214 | hanthor | 0 nightly; 0 ISO; **3 LUKS** (gnome/kde/cosmic, monthly) | Base availability measured before the first commit (`eln-bootc` OCI index, 4 arches). Run 33041330231: all four flavors built on amd64/arm64, `TUNAOS_WISHLIST_OK misses=0` throughout; **base/gnome/kde Gate-green and Promoted**; cosmic built + signed but Promote held behind a Gate that could not launch (AWS `VcpuLimitExceeded`, g4dn limit 0). Desktop contract **waived, not passed** — `missing=1` on each desktop, always the codec gap | Admitted as experimental, dispatch-only. Still not Beta: §2 wants boot-gate green **and** a download entry; the boot gate is now green for gnome/kde but there is no download entry, and no flavor may be promoted as media-capable while the codec gap stands |
+
+Wahoo is recorded here for the opposite reason to the four rows above: those
+were grandfathered in and needed a gate applied retroactively, whereas this
+one cleared the gate before its first commit — upstream base availability was
+measured, not assumed, and the flavor set was cut to what the compose actually
+carries. It is dispatch-only precisely so it consumes none of the nightly
+capacity the interim freeze protects. Its one non-zero cell is the monthly
+LUKS sweep, which `luks-e2e.yml` derives from `build_image` with no
+experimental filter; that is counted rather than excluded, and pinned by the
+denominator in `tests/test_matrix_status.py`.
+
+The ELN codec gap is a portfolio constraint, not just a build detail: ELN
+publishes no functional H.264/H.265 decoder, so no wahoo flavor may be
+promoted or marketed as media-capable regardless of how green it goes. See
+the wahoo section of docs/GREEN-MASTER-PLAN.md.
 
 The cell count is the minimum incremental matrix impact, not a claim that the
 work is free: an ISO cell also consumes grouped-ISO or on-demand publishing
@@ -93,23 +113,42 @@ existing cells without reopening the general Q3 flavor freeze.
 - Published to tunaos.org/download (download pipeline verified working, #561).
 - Desktop contract: at minimum a session starts (#916); `*-nvidia` and ZFS
   flavors additionally pass their flavor-specific smoke checks.
+- Desktop completeness: published editions must meet per-desktop package
+  and size floor criteria without undeclared thinness (tracks #1294).
 
 ### 3. Stable — promotion criteria (#1175)
 
-Promotion Beta → Stable requires **all** of:
+The promotion unit is a **published release cell**: base variant × desktop
+flavor × hardware/filesystem edition × supported architecture. A base variant
+may be shown as `Stable` in ROADMAP only when every cell that it advertises as
+part of that variant has passed the applicable gates below. A passing GNOME
+cell does not make a variant with failing KDE, Niri, NVIDIA, ZFS, or arm64
+cells Stable. If coverage is intentionally narrower, the ROADMAP row must say
+which cells are supported rather than implying that the whole variant is GA.
+
+Promotion Beta → Stable requires **all applicable gates for every advertised
+cell**:
 
 - **Boot-gate green for 4 consecutive weeks** of daily runs with no regressions.
-- **LUKS E2E green** for the variant.
+- **LUKS E2E green** for the variant and each supported install/storage mode.
 - **Desktop-contract pass** — beyond session start: window painted (#1217),
-  browser/CI ISO parity gate (#1204) where applicable.
+  browser/CI ISO parity gate (#1204) where applicable, and desktop parity floor verified (#1294).
 - **≥1 user-proven install**, or a documented telemetry proxy until #1174
   (adoption metrics) lands.
+
+The promotion PR must link an evidence ledger with one row per published cell,
+including the boot-gate window, LUKS-E2E run, desktop-contract run, and
+user-install evidence. The strategist records the decision in ROADMAP only
+after reviewing that ledger; a green default desktop is not a proxy for an
+unverified flavor.
 
 ### 4. Deprecated
 
 A variant is deprecated when **any** of:
 
-- Its base is superseded (e.g., Fedora 44 → Fedora 45, #1171).
+- Its base is superseded (e.g., Fedora 44 → Fedora 45, #1171). Fedora-based
+  variants additionally follow the sequencing and one-active-GA-base rule in
+  [FEDORA-BASE-POLICY.md](FEDORA-BASE-POLICY.md).
 - Its base reaches upstream EOL.
 - No green run for 60 consecutive days (unmaintained).
 
@@ -173,4 +212,4 @@ milestone planning (next: Q4 2026 kickoff). Criteria changes are filed as
 issues on the roadmap tracker (#1159).
 
 ---
-*Drafted by strategist agent (ACMM L6 — full mode). Tracks #1175 and #1196.*
+*Drafted by strategist agent (ACMM L6 — full mode). Tracks #1175, #1196, #1254, #1270, and #1294.*

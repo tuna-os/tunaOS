@@ -18,15 +18,19 @@ user-facing site:
 | Doc | What it covers |
 |-----|----------------|
 | [AGENT_GUIDE.md](AGENT_GUIDE.md) | Repo architecture: variants, flavors, build stages, key files |
+| [HUMMINGBIRD.md](HUMMINGBIRD.md) | Fedora Hummingbird variant architecture, rolling release model, and package snapshot state |
+| [architecture/reusable-build-image-decomposition.md](architecture/reusable-build-image-decomposition.md) | Architectural plan for decomposing reusable-build-image.yml monolith |
 | [INSTALLER_SCREENSHOTS.md](INSTALLER_SCREENSHOTS.md) | Visual step-by-step walkthrough of the GUI installer for GNOME and Cosmic |
 | [build-pipeline.md](build-pipeline.md) | CI/CD workflow and build-stage overview |
 | [ci-troubleshooting.md](ci-troubleshooting.md) | Diagnosing and fixing common CI failures |
+| [CI-WORKFLOW-PUBLISHING.md](CI-WORKFLOW-PUBLISHING.md) | Recovering GitHub App permission for workflow-file fixes (#1557) |
 | [mkosi-investigation.md](mkosi-investigation.md) | Notes from the mkosi-based image build investigation |
 | [PIPELINE.md](PIPELINE.md) | Build pipeline reference: stages, workflows, artifact flow |
 | [EDUCATION-PITCH.md](EDUCATION-PITCH.md) | Education & teaching lab adoption brief for CS departments (#1600) |
 | [BRANCH-PROTECTION.md](BRANCH-PROTECTION.md) | Current-state audit + proposal for main-branch protection & required CI (#1167) |
 | [BRANCH-POLICY.md](BRANCH-POLICY.md) | Branch naming conventions, RFC disposition, and 30-day staleness rules |
 | [CI_SPEC.md](CI_SPEC.md) | CI behavior specification |
+| [R2-COST-VISIBILITY.md](R2-COST-VISIBILITY.md) | Cloudflare R2 cost, retention, and ownership runbook (#1618) |
 | [TESTING.md](TESTING.md) | ISO end-to-end test harness |
 | [MATRIX-STATUS.md](MATRIX-STATUS.md) | Which variant×desktop combinations are actually verified — and which have never been tested |
 | [EDITION-VARIANT-PAGE-CHECKLIST.md](EDITION-VARIANT-PAGE-CHECKLIST.md) | Every published edition from the tunaos-packages#133 audit vs its tunaos.org variant page & download link (#1308) |
@@ -49,23 +53,29 @@ user-facing site:
 | [CFP-SEAGL-2026.md](CFP-SEAGL-2026.md) | SeaGL 2026 CFP proposal and submission checklist |
 | [PRESSKIT.md](PRESSKIT.md) | Project facts, descriptions, screenshots, and media contacts |
 | [DISTROWATCH-SUBMISSION.md](DISTROWATCH-SUBMISSION.md) | DistroWatch project submission draft |
+| [GNOME-51-RELEASE-CONTENT.md](GNOME-51-RELEASE-CONTENT.md) | GNOME 51.0 release-week content and packaging hook (#1334) |
+| [CNCF-BOOTC-SHOWCASE.md](CNCF-BOOTC-SHOWCASE.md) | CNCF bootc ecosystem showcase and case study draft (#1340) |
+| [CHAINGUARD-COLLABORATION.md](CHAINGUARD-COLLABORATION.md) | Chainguard supply-chain security collaboration angle brief (#1339) |
 | [ADOPTION-OUTREACH-STATUS.md](ADOPTION-OUTREACH-STATUS.md) | Evidence ledger for DistroWatch, CNCF, and adopter outreach |
 | [ADOPTION-CALL.md](ADOPTION-CALL.md) | Public call for adopters and evaluation feedback |
 | [ALMALINUX-COMMUNITY-INTRO.md](ALMALINUX-COMMUNITY-INTRO.md) | Introduction draft for the AlmaLinux community |
 | [FEDIVERSE-PLAYBOOK.md](FEDIVERSE-PLAYBOOK.md) | Release-announcement playbook for Fediverse communities |
 | [REDDIT-LEMMY-PLAYBOOK.md](REDDIT-LEMMY-PLAYBOOK.md) | Release-announcement playbook for Reddit / Lemmy |
+| [XFCE-OLD-LAPTOP-PITCH.md](XFCE-OLD-LAPTOP-PITCH.md) | Old-laptop and e-waste repurposing pitch for the XFCE Linux companion project (#1682) |
 | [YOUTUBER-REVIEW-KIT.md](YOUTUBER-REVIEW-KIT.md) | Linux YouTuber review kit — verified working downloads, ARM story (#1535) |
 | [FEDORA-MAGAZINE-PITCH.md](FEDORA-MAGAZINE-PITCH.md) | Guest-post pitch draft for Fedora Magazine |
 | [FEDORA45-TESTING-CALL.md](FEDORA45-TESTING-CALL.md) | Fedora 45 Beta testing call guide for Bonito variant (#1609) |
+| [GNOME51-BETA-TESTING-CALL.md](GNOME51-BETA-TESTING-CALL.md) | GNOME 51 beta testing call for the EL10 backport tier (#1717) |
 | [ELEMENTARY-CROSSPOST.md](ELEMENTARY-CROSSPOST.md) | Gurnard cross-post draft for the elementary OS community |
 | [MARLIN-CACHYOS-POST.md](MARLIN-CACHYOS-POST.md) | Marlin announcement draft for the CachyOS community |
 | [SHOWHN-LAUNCH.md](SHOWHN-LAUNCH.md) | Show HN launch draft and posting checklist |
 | [MATRIX-WEEKLY-DIGEST.md](MATRIX-WEEKLY-DIGEST.md) | Matrix weekly-digest post template |
 | [HACKTOBERFEST-2026.md](HACKTOBERFEST-2026.md) | Hacktoberfest 2026 contributor runbook |
 | [IMPROVEMENT_PLAN.md](IMPROVEMENT_PLAN.md) | Historical record of the May 2026 sprint + remaining roadmap items |
-| [Q4-2026-PROMOTION-CALENDAR.md](Q4-2026-PROMOTION-CALENDAR.md) | Fedora 45, All Things Open, and KubeCon NA promotion plan |
+| [Q4-2026-PROMOTION-CALENDAR.md](Q4-2026-PROMOTION-CALENDAR.md) | Fedora 45, Hacktoberfest, All Things Open, and KubeCon NA promotion plan |
 | [agents/](agents/) | Hive agent guides (issue-tracker, triage-labels, domain) |
 | [adr/](adr/) | Architecture Decision Records |
+| [architecture/shared-just-recipes.md](architecture/shared-just-recipes.md) | Delivery contract for shared Just modules across tuna-os repositories (#1977, #508) |
 | [USER-GUIDE.md](USER-GUIDE.md) | Choosing an image, installing, updating, rolling back, apps, encryption |
 | [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md) | The whole pipeline and its plumbing, with diagrams |
 | [INSTALL.md](INSTALL.md) | Building media locally, artifact verification, registry auth, pull troubleshooting |

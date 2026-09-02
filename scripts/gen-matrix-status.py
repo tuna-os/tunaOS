@@ -909,7 +909,22 @@ def build() -> str:
     matrix = iso_matrix()
     lmatrix = luks_matrix()
     luks = latest_results("luks-e2e.yml", r"^LUKS ")
-    smoke = latest_results("installer-smoke.yml", r":")
+    # NOT r":" — installer-smoke.yml has TWO jobs per cell and both carry a
+    # colon:
+    #
+    #     build-iso:  name: build ${{ matrix.variant }}:${{ matrix.flavor }}
+    #     smoke:      name: ${{ matrix.variant }}:${{ matrix.flavor }}
+    #
+    # A bare colon matched both, so every ISO BUILD result was filed as a
+    # smoke result under a phantom variant literally named "build yellowfin".
+    # The 2026-08-24 refresh published it: a "build yellowfin" row reading
+    # ✅✅✅✅✅ sat directly above the real yellowfin row reading ❌❌❌❌❌,
+    # while the summary line above them said "0 of those pass".
+    #
+    # That is the worst kind of wrong for this document: the build jobs DO
+    # pass, so the phantom row looked like the good news anyone would want to
+    # see, on the one axis where there is none. Anchor the exclusion instead.
+    smoke = latest_results("installer-smoke.yml", r"^(?!build )[^:]+:")
     tags = overlay_tags()
 
     # desktop-contract-sweep.yml schedules from the identical build_image /
@@ -1131,9 +1146,19 @@ def build() -> str:
     out += desktop_table(matrix, smoke, smoke_key)
     out += [
         "",
-        "cosmic, niri, xfwl4 and kde all need a DRM render node; a ❌ for those on "
-        "hosted CI may be a harness limitation rather than a product failure. "
-        "See *Known systemic gaps*.",
+        # NOT "they need a DRM render node". Run 32681262659 read /dev/dri from
+        # inside the guest and found renderD128 present with `[drm] features:
+        # -virgl` -- a node without 3D. gnome starts on that same hardware
+        # through Mesa's software path. Why the other four do not is open, so
+        # this line states the symptom and points at the section that carries
+        # the evidence, rather than restating a cause the measurement did not
+        # support.
+        (
+            "cosmic, niri, xfwl4 and kde do not bring a session up on hosted CI. The "
+            + "cause is undiagnosed rather than established -- gnome starts on the "
+            + "same guest, which has a render node but no 3D. See *Known systemic "
+            + "gaps*."
+        ),
         "",
     ]
 

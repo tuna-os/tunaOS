@@ -2,7 +2,8 @@
 
 **Status**: DRAFT — proposed 2026-08-13 by the strategist agent for review
 **Owner**: tuna-os (hanthor) / strategist
-**Tracks**: #1195 (this finding), #1168 (Q4 community governance goal)
+**Tracks**: #1195 (triage finding), #1168 (Q4 community governance goal),
+#2133 (automation intake quality gate)
 
 ## Purpose
 
@@ -31,7 +32,40 @@ showed the original mechanism wouldn't fire.
 
 ## Policy
 
-### 1. Milestone-only signal (adopts #1195 recommendation #4)
+### 1. Automation admission gate (adopts #2133)
+
+Automated findings must pass an intake check **before** they become public
+issues. This applies to Hive agents and any scheduled issue-creation job; it
+does not restrict human reports.
+
+An automated finding is admissible only when all of these are true:
+
+- **Complete**: its title and body contain no unresolved template text such
+  as `<specific description>` or empty required sections.
+- **Distinct**: the creator searched the current issue/PR queue for the same
+  repository, component, and root cause. If an existing tracker covers the
+  finding, add evidence there instead of opening another issue.
+- **Measured**: the body cites at least one reproducible repository fact,
+  current CI run, release, or API result and states when it was verified.
+- **Actionable**: the proposed next step names a decision or first action;
+  a market or audience idea without a readiness gate is not yet a roadmap
+  item.
+- **Bounded**: one agent run opens at most one issue in a strategy or
+  outreach category unless the issues have independent owners or acceptance
+  tests. Batch ideation belongs in one umbrella tracker.
+
+The 2026-08-27 baseline that triggered #2133 was 237 open issues and 97 open
+PRs, including literal placeholders (#1954, #1959, #2046, #2063, #2076,
+#2102) and repeated campaign pairs (#2031/#2032, #2067/#2068, #2079/#2080).
+The gate's staff test is **zero newly created placeholder issues for 14 days**
+and a week-over-week decline in open automation-created items until the queue
+fits maintainer review capacity.
+
+Existing placeholders and exact or near-duplicates should receive one
+verification pass. Close only bot-created items with no unique evidence or
+discussion, link to the surviving tracker, and preserve human-authored work.
+
+### 2. Milestone-only signal (adopts #1195 recommendation #4)
 
 A **milestone-attached issue is the actionable roadmap**; ROADMAP.md tracks
 only milestone-attached work. Everything else is backlog: worth keeping
@@ -40,7 +74,7 @@ fixes this policy's own drafting process turned up), but not a claim on
 near-term capacity. This formalizes what ROADMAP.md already does in practice
 today.
 
-### 2. Resolution-verified closure, not calendar-age closure
+### 3. Resolution-verified closure, not calendar-age closure
 
 Since nothing in this queue goes calendar-stale, "close-stale" here means:
 **before trusting a bot-filed finding, verify against current repo state**,
@@ -63,14 +97,14 @@ an implicit convention:
   gets a comment recording that boundary, and stays open — it is real
   backlog, not noise, and closing it would just lose the finding.
 
-### 3. Dedup pass (adopts #1195 recommendation #2)
+### 4. Dedup pass (adopts #1195 recommendation #2)
 
 Bot-generated findings that name the same root cause (the #1186/#1187
 pattern #1195 itself cites) should collapse onto one tracker issue. When
 triaging a new bot-filed issue, search for existing open issues covering the
 same file/workflow/repo before treating it as independent work.
 
-### 4. SLA re-baseline by priority tier (adopts #1195 recommendation #3)
+### 5. SLA re-baseline by priority tier (adopts #1195 recommendation #3)
 
 Replace the flat, universally-violated SLA with tiers keyed to what's
 actually being tracked:

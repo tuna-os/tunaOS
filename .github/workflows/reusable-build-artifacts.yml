@@ -40,6 +40,18 @@ on:
         required: false
         type: string
         default: ""
+      image-digest-artifact:
+        description: >-
+          Name of the workflow artifact this cell's OWN image job uploaded
+          when it pushed, i.e.
+          `<image_name>-<published_tag>-<safeplatform>-<run_id>`, written by
+          reusable-build-image.yml's "Create Job Outputs" step. When set, the
+          provenance gate below requires it to exist before an ISO is built.
+          Callers that deliberately build from already-published tags
+          (publish-isos.yml) leave it empty and keep the old behaviour.
+        required: false
+        type: string
+        default: ""
       build-iso:
         description: "Build (and gate + publish) the live ISO"
         required: false
@@ -84,6 +96,75 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # ── Provenance gate (tuna-os/tunaOS#2059) ────────────────────────────
+      # This job builds an ISO from a MOVING TAG -- `<published_tag>-<safe
+      # platform>` -- and never from the digest its image job produced. That
+      # is safe only while something guarantees this cell's image was pushed
+      # by THIS run. Until now the guarantee came from `needs: build_stageN`,
+      # and build_stageN is a MATRIX over every flavor in the stage: one
+      # failing desktop skipped every ISO in the stage, including flavors
+      # that built perfectly. Run 32786338463 is the record -- hummingbird's
+      # gnome image built, signed and manifested, and its ISO was skipped
+      # because kde and niri (declared, never implemented) failed beside it.
+      #
+      # Relaxing that to per-cell is only correct with something in its
+      # place. For a flavor whose image build FAILED, the tag it would pull
+      # still resolves to the PREVIOUS image, so the ISO job would succeed
+      # and emit media that looks fresh and is not. Silently stale media is
+      # worse than no media and worse than a skipped cell, which is why the
+      # coarse gate was defensible.
+      #
+      # The replacement is the artifact reusable-build-image.yml already
+      # uploads, and only ever uploads after `podman push` returns a digest:
+      # `<image_name>-<published_tag>-<safeplatform>-<run_id>`. Its EXISTENCE
+      # is the proof, and the run_id suffix is what makes it proof of THIS
+      # run rather than of some earlier one. Absent means this cell published
+      # nothing today, and the job stops before building anything.
+      #
+      # This does not narrow the pre-existing window in which a concurrent
+      # run moves the tag between push and pull; it closes the failure that
+      # #2059 measured, which is a cell whose image never published at all.
+      - name: Fetch the digest this run published for this cell
+        id: cell_digest
+        if: inputs.image-digest-artifact != ''
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ inputs.image-digest-artifact }}
+          path: /tmp/cell-digest
+
+      - name: "Provenance gate: this run published the image this ISO is built from"
+        if: inputs.image-digest-artifact != ''
+        env:
+          ARTIFACT: ${{ inputs.image-digest-artifact }}
+          FETCHED: ${{ steps.cell_digest.outcome }}
+          VARIANT: ${{ inputs.variant }}
+          FLAVOR: ${{ inputs.flavor }}
+        run: |
+          set -euo pipefail
+          # Both halves, because download-artifact's behaviour on a name that
+          # does not exist is not something to bet the message on: it may fail
+          # the step (outcome != success) or warn and succeed with an empty
+          # directory. Either way the cell published nothing, and either way a
+          # maintainer should read that sentence rather than `cat: no such
+          # file`.
+          set -- /tmp/cell-digest/*.txt
+          if [ "$FETCHED" != success ] || [ ! -f "$1" ]; then
+            echo "::error::${VARIANT}:${FLAVOR} published no image in this run" \
+                 "(no artifact '${ARTIFACT}'). The tag this ISO would build" \
+                 "from still holds a PREVIOUS image, so building it would emit" \
+                 "media that looks fresh and is not. Refusing."
+            exit 1
+          fi
+          DIGEST="$(cat "$@" | tr -d '[:space:]')"
+          if [ -z "$DIGEST" ]; then
+            echo "::error::artifact '${ARTIFACT}' carries an EMPTY digest;" \
+                 "the push step recorded no digest for ${VARIANT}:${FLAVOR}."
+            exit 1
+          fi
+          echo "${VARIANT}:${FLAVOR} published ${DIGEST} in this run."
+          echo "provenance: \`${DIGEST}\`" >> "$GITHUB_STEP_SUMMARY"
 
       # Reclaim ~25 GB of preinstalled toolchains from the main disk. The ISO is
       # assembled under .build/ on the workspace (main disk), not the
@@ -217,7 +298,10 @@ jobs:
             *.iso.sha256
             *.iso.sigstore.json
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
+          # An ISO is already compressed: the default level 6 spends runner
+          # minutes to save roughly nothing on it.
+          compression-level: 0
 
       # Installer-flow captures join the boot evidence so every visual the
       # pipeline can produce lands in ONE artifact (and, via the weekly

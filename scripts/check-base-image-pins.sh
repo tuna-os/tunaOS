@@ -16,8 +16,21 @@
 # way, because "which ones are fine" is as useful as "which one broke".
 set -euo pipefail
 
-CONFIG="${CONFIG:-.github/build-config.yml}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/build-config.sh
+source "${SCRIPT_DIR}/lib/build-config.sh"
+CONFIG="${CONFIG:-$(tunaos_build_config)}"
 YQ="${YQ:-yq}"
+
+if ! command -v "$YQ" >/dev/null 2>&1; then
+  echo "::error::yq executable not found ('$YQ'); cannot parse $CONFIG" >&2
+  exit 1
+fi
+
+if [ ! -f "$CONFIG" ]; then
+  echo "::error::config file not found ($CONFIG)" >&2
+  exit 1
+fi
 
 # Registries serve manifest lists, image indexes and plain manifests; ask for
 # all of them or a HEAD against a multi-arch tag returns 404 on content-type

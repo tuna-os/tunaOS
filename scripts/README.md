@@ -18,6 +18,7 @@ Invoked by:
 | `resolve-image.sh` | Resolves image references (base, common, brew, akmods) |
 | `build-image-inner.sh` | The build engine (env-var driven) |
 | `sync-upstream-snapshots.sh` | Syncs and drift-checks the `_upstream-snapshots/` tree |
+| `check-upstream-snapshot-size.sh` | Fails refreshes that exceed the snapshot size or change budget |
 
 See `docs/AGENT_GUIDE.md`'s Key Files table for the fuller list and how
 these fit into the overall build pipeline (`docs/PIPELINE.md`,
