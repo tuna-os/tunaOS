@@ -131,7 +131,11 @@ jobs:
         env:
           GITHUB_REPOSITORY_OWNER: tuna-os
         run: |
-          sudo GITHUB_REPOSITORY_OWNER=tuna-os \
+          # The pinned tacklebox supports this escape hatch for hosts where
+          # root-context podman's bridge DNS is broken. The customize script
+          # fetches installer Flatpaks from GitHub/tunaos.org; host networking
+          # gives that nested container the runner's working resolver.
+          sudo TBOX_CUSTOMIZE_NETWORK=host GITHUB_REPOSITORY_OWNER=tuna-os \
             just iso "${{ matrix.variant }}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
 
       - name: Boot ISO and capture desktop screenshot

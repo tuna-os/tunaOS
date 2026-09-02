@@ -140,20 +140,37 @@ tuna-os/tunaos-packages#132/#133.
 
 ### 3. Stable — promotion criteria (#1175)
 
-Promotion Beta → Stable requires **all** of:
+The promotion unit is a **published release cell**: base variant × desktop
+flavor × hardware/filesystem edition × supported architecture. A base variant
+may be shown as `Stable` in ROADMAP only when every cell that it advertises as
+part of that variant has passed the applicable gates below. A passing GNOME
+cell does not make a variant with failing KDE, Niri, NVIDIA, ZFS, or arm64
+cells Stable. If coverage is intentionally narrower, the ROADMAP row must say
+which cells are supported rather than implying that the whole variant is GA.
+
+Promotion Beta → Stable requires **all applicable gates for every advertised
+cell**:
 
 - **Boot-gate green for 4 consecutive weeks** of daily runs with no regressions.
-- **LUKS E2E green** for the variant.
+- **LUKS E2E green** for the variant and each supported install/storage mode.
 - **Desktop-contract pass** — beyond session start: window painted (#1217),
   browser/CI ISO parity gate (#1204) where applicable, and desktop parity floor verified (#1294).
 - **≥1 user-proven install**, or a documented telemetry proxy until #1174
   (adoption metrics) lands.
 
+The promotion PR must link an evidence ledger with one row per published cell,
+including the boot-gate window, LUKS-E2E run, desktop-contract run, and
+user-install evidence. The strategist records the decision in ROADMAP only
+after reviewing that ledger; a green default desktop is not a proxy for an
+unverified flavor.
+
 ### 4. Deprecated
 
 A variant is deprecated when **any** of:
 
-- Its base is superseded (e.g., Fedora 44 → Fedora 45, #1171).
+- Its base is superseded (e.g., Fedora 44 → Fedora 45, #1171). Fedora-based
+  variants additionally follow the sequencing and one-active-GA-base rule in
+  [FEDORA-BASE-POLICY.md](FEDORA-BASE-POLICY.md).
 - Its base reaches upstream EOL.
 - No green run for 60 consecutive days (unmaintained).
 

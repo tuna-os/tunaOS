@@ -184,6 +184,12 @@ detect() {
   [ "$status" -eq 0 ]
 }
 
+@test "weekly desktop screenshots use host networking for tacklebox customize" {
+  run grep 'sudo TBOX_CUSTOMIZE_NETWORK=host' \
+    "${REPO_ROOT}/.github/workflows/weekly-desktop-screenshots.yml"
+  [ "$status" -eq 0 ]
+}
+
 @test "dev ISO marker enables SSH without changing production images" {
   grep -q '\.enable-sshd' "${REPO_ROOT}/scripts/build-iso-tacklebox.sh"
   grep -q 'tunaos-live-ssh-credentials.service' "${SCRIPT}"

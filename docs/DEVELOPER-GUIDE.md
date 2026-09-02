@@ -56,7 +56,7 @@ flowchart LR
 
 ## 2. The build matrix: 145 cells
 
-Everything CI does is driven by **`.github/build-config.yml`**: 13 variants ×
+Everything CI does is driven by **`.github/build-config.yml`**: 14 variants ×
 their flavors (5 desktops + `base` + hardware tiers) × declared platforms
 (amd64 / amd64-v2 / arm64). A **cell** is one `(variant, flavor)` pair —
 `yellowfin:gnome`, `bonito:kde-nvidia` — and there are 145 of them with

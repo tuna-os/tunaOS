@@ -371,36 +371,10 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  prune-r2:
-    name: Prune R2 ISOs older than 14 days
-    needs: build-and-publish
-    # Run even if some build jobs failed so we still prune on partial runs.
-    if: ${{ always() && inputs.skip_upload != true }}
-    runs-on: ubuntu-latest
-    steps:
-      - name: Install rclone
-        run: sudo apt-get install -y rclone
-
-      - name: Delete grouped ISOs older than 14 days
-        env:
-          RCLONE_CONFIG_R2_TYPE: s3
-          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
-          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-          RCLONE_CONFIG_R2_REGION: auto
-          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
-        run: |
-          echo "==> Pruning grouped ISOs older than 14 days from R2..."
-          # Delete versioned ISOs and their sidecars together. Exclude every
-          # latest pointer and sidecar (always current).
-          rclone delete --log-level INFO \
-            --min-age 14d \
-            --exclude "*-latest.iso*" \
-            --include "*.iso" \
-            --include "*.iso.sha256" \
-            --include "*.iso.sigstore.json" \
-            --s3-no-check-bucket \
-            "R2:${{ secrets.R2_BUCKET }}/live-isos/"
-          echo "==> Prune complete. Remaining objects:"
-          rclone ls --s3-no-check-bucket \
-            "R2:${{ secrets.R2_BUCKET }}/live-isos/" | sort
+  # Retention for live-isos/ moved to the scheduled .github/workflows/prune-r2.yml
+  # (tunaOS#1618): this workflow is workflow_dispatch-only, so a prune-r2 job
+  # here only ever ran as a side effect of someone manually publishing grouped
+  # ISOs -- not on any regular cadence, while every prefix accumulated
+  # unpruned in between. The centralized workflow covers this same
+  # live-isos/ prefix (and the previously-unpruned screenshot prefixes) on an
+  # actual daily schedule.

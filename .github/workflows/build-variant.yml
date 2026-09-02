@@ -109,6 +109,7 @@ jobs:
                 image_aliases: (($v.aliases // []) | join(",")),
                 published_tag: (.id + (if ($v.tag_suffix // "") == "" then "" else "-" + $v.tag_suffix end)),
                 variant_emoji: ($v.emoji // "❓"),
+                description:   ($v.description // ""),
                 base_image:    $v.base_image,
                 platforms:     (if $event == "pull_request" then "linux/amd64" else ((.platforms // $v.platforms) | join(",")) end),
                 platforms_json: ((if $event == "pull_request" then ["linux/amd64"] else (.platforms // $v.platforms) end)
@@ -130,6 +131,7 @@ jobs:
                 image_aliases: .image_aliases,
                 published_tag: .published_tag,
                 variant_emoji: .variant_emoji,
+                description:   .description,
                 flavor:        .flavor,
                 platforms:     .platforms,
                 platforms_json: .platforms_json,
@@ -210,6 +212,7 @@ jobs:
       image-name: ${{ matrix.image_name }}
       image-aliases: ${{ matrix.image_aliases }}
       image-variant: ${{ matrix.variant }}
+      image-desc: ${{ matrix.description }}
       flavor: ${{ matrix.flavor }}
       platforms: ${{ matrix.platforms }}
       platforms-json: ${{ matrix.platforms_json }}
@@ -257,6 +260,7 @@ jobs:
       image-name: ${{ matrix.image_name }}
       image-aliases: ${{ matrix.image_aliases }}
       image-variant: ${{ matrix.variant }}
+      image-desc: ${{ matrix.description }}
       flavor: ${{ matrix.flavor }}
       platforms: ${{ matrix.platforms }}
       platforms-json: ${{ matrix.platforms_json }}
@@ -291,6 +295,7 @@ jobs:
       image-name: ${{ matrix.image_name }}
       image-aliases: ${{ matrix.image_aliases }}
       image-variant: ${{ matrix.variant }}
+      image-desc: ${{ matrix.description }}
       flavor: ${{ matrix.flavor }}
       platforms: ${{ matrix.platforms }}
       platforms-json: ${{ matrix.platforms_json }}
@@ -319,6 +324,7 @@ jobs:
       image-name: ${{ matrix.image_name }}
       image-aliases: ${{ matrix.image_aliases }}
       image-variant: ${{ matrix.variant }}
+      image-desc: ${{ matrix.description }}
       flavor: ${{ matrix.flavor }}
       platforms: ${{ matrix.platforms }}
       platforms-json: ${{ matrix.platforms_json }}

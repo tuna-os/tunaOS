@@ -23,6 +23,7 @@ user-facing site:
 | [INSTALLER_SCREENSHOTS.md](INSTALLER_SCREENSHOTS.md) | Visual step-by-step walkthrough of the GUI installer for GNOME and Cosmic |
 | [build-pipeline.md](build-pipeline.md) | CI/CD workflow and build-stage overview |
 | [ci-troubleshooting.md](ci-troubleshooting.md) | Diagnosing and fixing common CI failures |
+| [CI-WORKFLOW-PUBLISHING.md](CI-WORKFLOW-PUBLISHING.md) | Recovering GitHub App permission for workflow-file fixes (#1557) |
 | [mkosi-investigation.md](mkosi-investigation.md) | Notes from the mkosi-based image build investigation |
 | [PIPELINE.md](PIPELINE.md) | Build pipeline reference: stages, workflows, artifact flow |
 | [EDUCATION-PITCH.md](EDUCATION-PITCH.md) | Education & teaching lab adoption brief for CS departments (#1600) |
@@ -30,6 +31,7 @@ user-facing site:
 | [BRANCH-POLICY.md](BRANCH-POLICY.md) | Branch naming conventions, RFC disposition, and 30-day staleness rules |
 | [CI_SPEC.md](CI_SPEC.md) | CI behavior specification |
 | [JUSTFILE-MODULARIZATION.md](JUSTFILE-MODULARIZATION.md) | Justfile module standard and cross-repo migration checklist (#508) |
+| [R2-COST-VISIBILITY.md](R2-COST-VISIBILITY.md) | Cloudflare R2 cost, retention, and ownership runbook (#1618) |
 | [TESTING.md](TESTING.md) | ISO end-to-end test harness |
 | [MATRIX-STATUS.md](MATRIX-STATUS.md) | Which variant×desktop combinations are actually verified — and which have never been tested |
 | [EDITION-VARIANT-PAGE-CHECKLIST.md](EDITION-VARIANT-PAGE-CHECKLIST.md) | Every published edition from the tunaos-packages#133 audit vs its tunaos.org variant page & download link (#1308) |
@@ -47,8 +49,8 @@ user-facing site:
 | [IMAGE-FACTORY-LIFECYCLE-GATE.md](IMAGE-FACTORY-LIFECYCLE-GATE.md) | Image factory lifecycle coverage & required gate (#1278) |
 | [../VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md) | Variant/flavor admission, capacity, promotion, and deprecation policy (#1196, #1175) |
 | [CFP-FOSDEM-2027.md](CFP-FOSDEM-2027.md) | FOSDEM 2027 CFP draft |
-| [CFP-DEMO-SCRIPT.md](CFP-DEMO-SCRIPT.md) | Shot list for the 3–5 min CFP demo video, shared by both Q1 2027 submissions |
-| [CFP-SCALE-21X.md](CFP-SCALE-21X.md) | SCaLE 21x CFP draft, adapted from the FOSDEM abstract |
+| [CFP-DEMO-SCRIPT.md](CFP-DEMO-SCRIPT.md) | Shot list for the 3–5 min CFP demo video, shared by both 2027 submissions |
+| [CFP-SCALE-24X.md](CFP-SCALE-24X.md) | SCaLE 24x CFP draft, adapted from the FOSDEM abstract |
 | [CFP-SEAGL-2026.md](CFP-SEAGL-2026.md) | SeaGL 2026 CFP proposal and submission checklist |
 | [PRESSKIT.md](PRESSKIT.md) | Project facts, descriptions, screenshots, and media contacts |
 | [DISTROWATCH-SUBMISSION.md](DISTROWATCH-SUBMISSION.md) | DistroWatch project submission draft |
@@ -63,9 +65,11 @@ user-facing site:
 | [ALMALINUX-COMMUNITY-INTRO.md](ALMALINUX-COMMUNITY-INTRO.md) | Introduction draft for the AlmaLinux community |
 | [FEDIVERSE-PLAYBOOK.md](FEDIVERSE-PLAYBOOK.md) | Release-announcement playbook for Fediverse communities |
 | [REDDIT-LEMMY-PLAYBOOK.md](REDDIT-LEMMY-PLAYBOOK.md) | Release-announcement playbook for Reddit / Lemmy |
+| [XFCE-OLD-LAPTOP-PITCH.md](XFCE-OLD-LAPTOP-PITCH.md) | Old-laptop and e-waste repurposing pitch for the XFCE Linux companion project (#1682) |
 | [YOUTUBER-REVIEW-KIT.md](YOUTUBER-REVIEW-KIT.md) | Linux YouTuber review kit — verified working downloads, ARM story (#1535) |
 | [FEDORA-MAGAZINE-PITCH.md](FEDORA-MAGAZINE-PITCH.md) | Guest-post pitch draft for Fedora Magazine |
 | [FEDORA45-TESTING-CALL.md](FEDORA45-TESTING-CALL.md) | Fedora 45 Beta testing call guide for Bonito variant (#1609) |
+| [GNOME51-BETA-TESTING-CALL.md](GNOME51-BETA-TESTING-CALL.md) | GNOME 51 beta testing call for the EL10 backport tier (#1717) |
 | [ELEMENTARY-CROSSPOST.md](ELEMENTARY-CROSSPOST.md) | Gurnard cross-post draft for the elementary OS community |
 | [MARLIN-CACHYOS-POST.md](MARLIN-CACHYOS-POST.md) | Marlin announcement draft for the CachyOS community |
 | [SHOWHN-LAUNCH.md](SHOWHN-LAUNCH.md) | Show HN launch draft and posting checklist |
