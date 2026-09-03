@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import datetime
 import glob
+import json
 import re
 import sys
 import urllib.error
@@ -37,6 +38,7 @@ import urllib.request
 import yaml
 
 MANIFEST_GLOB = "manifests/desktops/*.yaml"
+IMAGE_VERSIONS = "image-versions.yaml"
 TIMEOUT = 25
 UA = {"User-Agent": "tunaos-repo-pin-check (+https://github.com/tuna-os/tunaOS)"}
 
@@ -99,11 +101,44 @@ def snapshot_age_days(url: str, today: datetime.date | None = None) -> int | Non
     return ((today or datetime.date.today()) - taken).days
 
 
-def collect(doc) -> list[tuple[str, str]]:
+def oci_pins(path: str = IMAGE_VERSIONS) -> dict[str, str]:
+    """name -> image@digest for every digest-pinned entry in image-versions.yaml."""
+    try:
+        with open(path, encoding="utf-8") as f:
+            doc = yaml.safe_load(f) or {}
+    except FileNotFoundError:
+        return {}
+    out: dict[str, str] = {}
+    for entry in doc.get("images") or []:
+        if not isinstance(entry, dict):
+            continue
+        name, image, digest = entry.get("name"), entry.get("image"), entry.get("digest")
+        if isinstance(name, str) and isinstance(image, str) and isinstance(digest, str):
+            out[name] = f"{image}@{digest}"
+    return out
+
+
+FILE_REPO_RE = re.compile(r"^file:///run/([^/]+)/?$")
+
+
+def collect(doc, pins_by_name: dict[str, str] | None = None) -> list[tuple[str, str]]:
     """Walk a parsed manifest and return (kind, probe_url) pairs.
 
     Shapes handled — one per declaration style that exists in the manifests:
       dnf:   {..., "baseurl": URL}            -> URL/repodata/repomd.xml
+      oci:   {..., "baseurl": "file:///run/NAME"}
+                                              -> the image@digest that
+                                                 image-versions.yaml pins
+                                                 under NAME (Containerfile.el10
+                                                 bind-mounts its /repository
+                                                 at /run/NAME). Probed as a
+                                                 registry manifest, since a
+                                                 file:// URL is only ever
+                                                 reachable inside the build.
+                                                 A file:// baseurl with no pin
+                                                 behind it is reported as
+                                                 `oci-unpinned` and FAILS: it
+                                                 names a repo nothing provides.
       apt:   {..., "uri": URL, "suite": S}    -> flat (S == "./") URL/Packages
                                                  else URL/dists/S/InRelease
              {..., "keyring_url": URL}        -> URL itself
@@ -121,8 +156,19 @@ def collect(doc) -> list[tuple[str, str]]:
     def walk(node):
         if isinstance(node, dict):
             if isinstance(node.get("baseurl"), str):
-                pins.append(("dnf", _sub_vars(node["baseurl"]).rstrip("/")
-                             + "/repodata/repomd.xml"))
+                baseurl = node["baseurl"]
+                file_hit = FILE_REPO_RE.match(baseurl)
+                if file_hit:
+                    ref = (pins_by_name or {}).get(file_hit.group(1))
+                    if ref:
+                        pins.append(("oci", ref))
+                    else:
+                        pins.append(("oci-unpinned", baseurl))
+                elif baseurl.startswith("file://"):
+                    pins.append(("oci-unpinned", baseurl))
+                else:
+                    pins.append(("dnf", _sub_vars(baseurl).rstrip("/")
+                                 + "/repodata/repomd.xml"))
             if isinstance(node.get("uri"), str) and "suite" in node:
                 uri = node["uri"].rstrip("/")
                 suite = str(node.get("suite", "./"))
@@ -151,6 +197,56 @@ def collect(doc) -> list[tuple[str, str]]:
 
     walk(doc)
     return pins
+
+
+# Registry quirks mirror scripts/check-base-image-pins.sh: docker.io is a
+# name whose API host is registry-1.docker.io; quay/ghcr/docker hand out
+# anonymous pull tokens from different endpoints; anything else is tried
+# unauthenticated.
+OCI_ACCEPT = ",".join((
+    "application/vnd.oci.image.index.v1+json",
+    "application/vnd.docker.distribution.manifest.list.v2+json",
+    "application/vnd.docker.distribution.manifest.v2+json",
+    "application/vnd.oci.image.manifest.v1+json",
+))
+
+
+def oci_manifest_request(ref: str) -> tuple[str, str | None]:
+    """(manifest_url, token_url_or_None) for an image@digest reference."""
+    name, _, digest = ref.partition("@")
+    name = name.split(":", 1)[0] if "/" not in name.split(":", 1)[-1] else name
+    registry, _, repo = name.partition("/")
+    host = "registry-1.docker.io" if registry == "docker.io" else registry
+    token = {
+        "docker.io": f"https://auth.docker.io/token?service=registry.docker.io&scope=repository:{repo}:pull",
+        "quay.io": f"https://quay.io/v2/auth?service=quay.io&scope=repository:{repo}:pull",
+        "ghcr.io": f"https://ghcr.io/token?scope=repository:{repo}:pull",
+    }.get(registry)
+    return f"https://{host}/v2/{repo}/manifests/{digest}", token
+
+
+def probe_oci(ref: str) -> tuple[int, bytes]:
+    """HTTP status of the registry manifest behind image@digest."""
+    manifest_url, token_url = oci_manifest_request(ref)
+    headers = {**UA, "Accept": OCI_ACCEPT}
+    if token_url:
+        try:
+            with urllib.request.urlopen(
+                    urllib.request.Request(token_url, headers=UA),
+                    timeout=TIMEOUT) as resp:
+                token = json.loads(resp.read().decode()).get("token", "")
+            if token:
+                headers["Authorization"] = f"Bearer {token}"
+        except (urllib.error.URLError, OSError, ValueError):
+            pass  # an unauthenticated probe still answers 401/404 honestly
+    req = urllib.request.Request(manifest_url, headers=headers, method="GET")
+    try:
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            return resp.status, resp.read()
+    except urllib.error.HTTPError as e:
+        return e.code, b""
+    except (urllib.error.URLError, OSError):
+        return 0, b""
 
 
 def probe(url: str) -> tuple[int, bytes]:
@@ -186,7 +282,7 @@ def repomd_content_age_days(body: bytes,
         return None
     ts = int(m.group(1))
     try:
-        taken = datetime.datetime.utcfromtimestamp(ts).date()
+        taken = datetime.datetime.fromtimestamp(ts, datetime.timezone.utc).date()
     except (OverflowError, OSError, ValueError):
         return None
     return ((today or datetime.date.today()) - taken).days
@@ -194,10 +290,11 @@ def repomd_content_age_days(body: bytes,
 
 def main() -> int:
     pins: dict[str, str] = {}
+    by_name = oci_pins()
     for path in sorted(glob.glob(MANIFEST_GLOB)):
         with open(path, encoding="utf-8") as f:
             doc = yaml.safe_load(f)
-        for kind, url in collect(doc):
+        for kind, url in collect(doc, by_name):
             pins.setdefault(url, kind)
 
     if not pins:
@@ -212,13 +309,28 @@ def main() -> int:
     stale = 0
     for url in sorted(pins):
         kind = pins[url]
+        if kind == "oci-unpinned":
+            # A file:// repo is a bind mount of something; if image-versions.yaml
+            # pins nothing under that name, the build has no bytes to mount and
+            # dnf will read an empty directory. Loud, not skipped.
+            print(f"FAIL  {kind:5s} ---  {url}")
+            print(f"::error::file:// package repo has no digest pin behind it "
+                  f"in {IMAGE_VERSIONS}: {url} — nothing provides the "
+                  f"repository the manifest mounts (rebuildable criterion, W7)")
+            failed += 1
+            continue
         if "$" in url:
             print(f"SKIP  {kind:5s} (unresolved repo variable)  {url}")
             skipped += 1
             continue
-        code, body = probe(url)
-        if code != 200:
-            code, body = probe(url)  # one retry on transport failure
+        if kind == "oci":
+            code, body = probe_oci(url)
+            if code != 200:
+                code, body = probe_oci(url)
+        else:
+            code, body = probe(url)
+            if code != 200:
+                code, body = probe(url)  # one retry on transport failure
         if code == 200:
             age = snapshot_age_days(url)
             basis = "name"
@@ -250,9 +362,11 @@ def main() -> int:
                 print(f"ok    {kind:5s} {code}  {url}  ({age}d old, by {basis})")
         else:
             print(f"FAIL  {kind:5s} {code}  {url}")
-            print(f"::error::package-repo pin no longer resolves "
-                  f"(HTTP {code}): {url} — an image that references it "
-                  f"cannot be rebuilt (rebuildable criterion, W7)")
+            what = ("OCI package-repo pin (the digest behind a file:// "
+                    "baseurl) no longer resolves" if kind == "oci"
+                    else "package-repo pin no longer resolves")
+            print(f"::error::{what} (HTTP {code}): {url} — an image that "
+                  f"references it cannot be rebuilt (rebuildable criterion, W7)")
             failed += 1
 
     print(f"\nchecked {len(pins) - skipped} package-repo pin(s), "
