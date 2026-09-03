@@ -236,32 +236,51 @@ packages:
       - gnome-software
       - gnome-software-fedora-langpacks
   el10:
-    # COPR repos for the GNOME 50 backport. EL 10.2 ships GNOME 49 (AlmaLinux
-    # 10.2 AppStream: gnome-shell 49.4, gtk4 4.16, gdm 47); the floor is 50.
-    # Brings modern GNOME to Enterprise Linux without waiting 3 years.
-    # Policy exception per PACKAGE-SOURCING.md / #1319 (tier-3 temporary source;
-    # scheduled for Tideforge migration in Q4 #1187 -- the signed native tier
-    # already exists at repo.tunaos.org/gnome50/10-stream-x86_64 with the same
-    # 50.0 builds, but x86_64 only, and the COPRs carry aarch64 too).
+    # GNOME 50 on EL10 comes from tunaOS's own package factory
+    # (tuna-os/tunaos-packages, build-order-gnome50 / gnome51): RPMs built in
+    # GitHub Actions in a CentOS Stream 10 mock root, signed with the tunaOS
+    # key, published as an rpm-md tier. No COPR: maintainer directive
+    # 2026-09-03 -- "no more COPR, build in GitHub like utah-packages". The
+    # previous jreilly1821/c10s-gnome-50 COPR entries are gone; the factory
+    # tier carries the same 50.0 builds plus gnome50-el10-compat, the glib2
+    # 2.88 / fontconfig 2.17 / gjs / gobject-introspection the stack needs,
+    # and the selinux-policy 43 that gdm 50 requires (466 binary names
+    # measured 2026-09-03).
     #
-    # `packages: []` is the stack-replacing shape: install-desktop.sh enables
-    # this repo and every `extra_repos:` entry BEFORE the group install, runs
-    # `pre_install:` with them live, and disables them again only before the
-    # version locks. Until 2026-09-03 nothing read extra_repos or pre_install
-    # and the repo was disabled the moment it was enabled, so every EL10 GNOME
-    # image shipped the base's 49 (yellowfin 49.5, albacore 49.4, skipjack
-    # 49.5) while this file said 50.
-    copr:
-      - repo: jreilly1821/c10s-gnome-50-fresh
-        extra_repos:
-          - jreilly1821/c10s-gnome-50
-        pre_install:
-          - "dnf -y upgrade glib2 fontconfig gobject-introspection gjs"
-          - "dnf_retry -y install --allowerasing gnome50-el10-compat"
-        packages: []
+    # EL 10.2 ships GNOME 49 itself (AlmaLinux 10.2 AppStream: gnome-shell
+    # 49.4, gtk4 4.16, gdm 47) and the floor is 50 (minimum_version above),
+    # so this repo sits at priority 1: for every name it carries, its build
+    # wins over AppStream's regardless of version, and the version locks at
+    # the end of install-desktop.sh pin what it installed.
+    #
+    # x86_64 only today: repo.tunaos.org/gnome50/10-stream-aarch64 does not
+    # exist (404, 2026-09-03), so the EL10 gnome flavors are pinned to amd64
+    # in .github/build-config.yml (arch_honesty criterion; same shape as
+    # xfce's tier). The aarch64 leg of the tier is the unblock, tracked on the
+    # tunaos-packages side.
+    #
+    # Next: the factory publishes the tier as an OCI image (createrepo output
+    # only) consumed by digest through image-versions.yaml and a file://
+    # bind-mount, the way hummingbird consumes projectbluefin/utah-packages
+    # below. Then this block becomes a file:// repo with `unsigned: true` and
+    # the digest is the signature.
+    repos:
+      - name: tunaos-gnome50
+        baseurl: https://repo.tunaos.org/gnome50/10-stream-x86_64/
+        priority: 1
 
-    # Remove conflicting packages before COPR install
+    # Run before any group or package of this section, with the tier live.
+    # The first two are what Bluefin LTS does on the same stack: the base's
+    # glib2 2.80 and fontconfig 2.15 must be upgraded before gnome-shell 50
+    # is resolved (pango 1.57 links a fontconfig 2.17 symbol; glib2 2.84+
+    # ships both libgirepository-1.0 and -2.0, and gjs/gobject-introspection
+    # must move together or gnome-shell double-registers GIRepository at
+    # startup). gnome50-el10-compat is the tier's shim for the EL10 bits
+    # GNOME 50 assumes. The last removes the base's gnome-shell-common, which
+    # conflicts with the tier's; it is a no-op on a base that never had it.
     pre_install:
+      - "dnf -y upgrade glib2 fontconfig gobject-introspection gjs"
+      - "dnf_retry -y install --allowerasing gnome50-el10-compat"
       - "warn_on_fail dnf_retry -y remove --noautoremove gnome-shell-common"
 
     groups:
