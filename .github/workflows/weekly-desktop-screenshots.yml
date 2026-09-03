@@ -68,11 +68,10 @@ jobs:
           fi
 
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
         if: steps.filter.outputs.skip != 'true'
         with:
           submodules: recursive
+          persist-credentials: false
 
       - uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
         if: steps.filter.outputs.skip != 'true'
