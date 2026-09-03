@@ -153,6 +153,15 @@ def collect(doc) -> list[tuple[str, str]]:
     return pins
 
 
+def is_bind_mounted(url: str) -> bool:
+    """A file:// baseurl is a repository the Containerfile bind-mounted out of
+    an OCI image pinned by digest in image-versions.yaml (utah-packages,
+    gnome50-el10-packages). There is nothing to probe over the network: the
+    bytes are named by the digest, and a GC'd digest fails the image build
+    itself at `FROM`. Probing it here only ever produced a false DOWN."""
+    return url.startswith("file://")
+
+
 def probe(url: str) -> tuple[int, bytes]:
     """(status, body). The body rides along so content-age needs no re-fetch."""
     req = urllib.request.Request(url, headers=UA, method="GET")
@@ -214,6 +223,10 @@ def main() -> int:
         kind = pins[url]
         if "$" in url:
             print(f"SKIP  {kind:5s} (unresolved repo variable)  {url}")
+            skipped += 1
+            continue
+        if is_bind_mounted(url):
+            print(f"SKIP  {kind:5s} (digest-pinned bind mount, not a network repo)  {url}")
             skipped += 1
             continue
         code, body = probe(url)

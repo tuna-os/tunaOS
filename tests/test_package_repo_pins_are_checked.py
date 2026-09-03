@@ -97,3 +97,14 @@ def test_the_nightly_workflow_runs_it() -> None:
         "package-repo pins get their own job so a base-pin failure cannot "
         "stop them from reporting (and vice versa)"
     )
+
+
+def test_a_bind_mounted_repo_is_not_probed_over_the_network() -> None:
+    """file:///run/utah-packages is a bind mount of a digest-pinned OCI image.
+    urlopen on it from the runner can only fail -- nightly run 33699188451
+    reported it as `FAIL dnf 0 file:///run/utah-packages/repodata/repomd.xml`
+    -- and a check that cries wolf every night gets ignored, which is worse
+    than no check. The digest names the bytes; a GC'd digest fails the image
+    build at `FROM`, not a probe here."""
+    assert crpp.is_bind_mounted("file:///run/utah-packages/repodata/repomd.xml")
+    assert not crpp.is_bind_mounted("https://repo.tunaos.org/gnome50/10-stream-x86_64/repodata/repomd.xml")
