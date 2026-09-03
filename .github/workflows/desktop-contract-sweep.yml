@@ -50,6 +50,8 @@ jobs:
           persist-credentials: false
       - id: cells
         shell: bash
+        env:
+          FILTER: ${{ inputs.filter }}
         run: |
           set -euo pipefail
           # Derive cells from build-config so the sweep cannot drift from what
@@ -64,8 +66,8 @@ jobs:
               | "\($v):\(.id)"' .github/build-config.yml \
             | jq -R -s -c 'split("\n") | map(select(length > 0))
               | map(split(":")) | map({variant: .[0], desktop: .[1]})')
-          if [[ -n "${{ inputs.filter }}" ]]; then
-            cells=$(jq -c --arg f "${{ inputs.filter }}" \
+          if [[ -n "$FILTER" ]]; then
+            cells=$(jq -c --arg f "$FILTER" \
               '[.[] | select("\(.variant):\(.desktop)" | contains($f))]' <<<"$cells")
           fi
           echo "matrix=$(jq -c '{include: .}' <<<"$cells")" >> "$GITHUB_OUTPUT"
