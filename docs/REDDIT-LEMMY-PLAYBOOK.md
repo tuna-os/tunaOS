@@ -44,7 +44,7 @@ Lemmy Linux community.
 |---|---|---|
 | Gurnard launch (#1344) | Aug 2026 | Ubuntu 24.04 + Pantheon as an atomic bootc image |
 | GNOME 51 release week (#1334) | ~Sep 12 | GNOME 51 on EL10 before the upstream release |
-| Hacktoberfest (#1331) | Oct 1 | Good-first-issue backlog, contributor onboarding |
+| Hacktoberfest ([runbook](HACKTOBERFEST-2026.md); #1331 is closed, live trackers #1537 / #2304) | Oct 1 | Good-first-issue backlog, contributor onboarding |
 | Fedora 45 (#1166) | ~Oct 20 | Bonito on Fedora 45, bootc desktop story |
 | Q3 checkpoint recap | 08-22 | Community milestones, new variants |
 
