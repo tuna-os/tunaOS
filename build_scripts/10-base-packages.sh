@@ -193,7 +193,20 @@ enabled=1
 gpgcheck=0
 priority=5
 REPO
-	dnf -y install --skip-unavailable \
+	# --skip-broken as well as --skip-unavailable: the two are different
+	# misses and only one of them was covered. On 2026-09-03 (run
+	# 33699113444, both arches) tunaos-hummingbird began serving
+	# flatpak-1.17.3-1.bfin1, built against fuse3 3.18 (libfuse3.so.4),
+	# while the pinned base still ships fuse3-libs 3.16.2 (libfuse3.so.3)
+	# and a grub2-tools-minimal that requires the old soname, which neither
+	# repo has rebuilt. flatpak was therefore not unavailable but BROKEN --
+	# and dnf's answer to one broken request is to refuse the whole
+	# transaction, so xfsprogs (present, resolvable, mandatory) was never
+	# installed and the base build died at the guard below with a message
+	# about xfsprogs. --skip-broken drops the request that cannot resolve
+	# and installs the rest; the two rpm -q guards below still decide what
+	# was mandatory, so a skipped xfsprogs cannot slip through either way.
+	dnf -y install --skip-unavailable --skip-broken \
 		buildah \
 		podman \
 		skopeo \
