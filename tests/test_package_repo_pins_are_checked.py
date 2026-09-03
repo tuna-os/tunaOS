@@ -60,14 +60,10 @@ def test_the_real_manifests_yield_the_known_pin_classes() -> None:
         f"missing pin classes: extraction found only {sorted(kinds)}"
     )
     urls = [u for _, u in pins]
-    # The named motivators: the hummingbird snapshot datestamp, and the EL10
-    # GNOME 50 tier that replaced the #391 COPR single point of failure
-    # (2026-09-03: no more COPR for a desktop stack).
+    # The two named motivators: the hummingbird snapshot datestamp and the
+    # #391 COPR single point of failure.
     assert any("hummingbird/20251124" in u for u in urls)
-    assert any("repo.tunaos.org/gnome50/10-stream-x86_64" in u for u in urls)
-    assert not any("projectname=c10s-gnome-5" in u for u in urls), (
-        "a jreilly1821/c10s-gnome-5x COPR is back in a manifest; GNOME on EL10 comes from the factory tier"
-    )
+    assert any("projectname=c10s-gnome-50" in u for u in urls)
 
 
 def test_basearch_is_substituted_and_leftovers_skip_not_guess() -> None:
@@ -99,12 +95,68 @@ def test_the_nightly_workflow_runs_it() -> None:
     )
 
 
-def test_a_bind_mounted_repo_is_not_probed_over_the_network() -> None:
-    """file:///run/utah-packages is a bind mount of a digest-pinned OCI image.
-    urlopen on it from the runner can only fail -- nightly run 33699188451
-    reported it as `FAIL dnf 0 file:///run/utah-packages/repodata/repomd.xml`
-    -- and a check that cries wolf every night gets ignored, which is worse
-    than no check. The digest names the bytes; a GC'd digest fails the image
-    build at `FROM`, not a probe here."""
-    assert crpp.is_bind_mounted("file:///run/utah-packages/repodata/repomd.xml")
-    assert not crpp.is_bind_mounted("https://repo.tunaos.org/gnome50/10-stream-x86_64/repodata/repomd.xml")
+# ── file:// repos are OCI pins in disguise ─────────────────────────────────
+#
+# hummingbird:gnome takes GNOME 51 from projectbluefin/utah-packages: an OCI
+# image carrying a createrepo_c repository, pinned by digest in
+# image-versions.yaml and bind-mounted at /run/utah-packages by
+# Containerfile.el10. The manifest declares it as `baseurl:
+# file:///run/utah-packages`. Probing that as an HTTP URL answers 0 and the
+# nightly went red on it from the day the pin landed (run 33699188451,
+# 2026-09-03: "FAIL dnf 0 file:///run/utah-packages/repodata/repomd.xml").
+# The pin behind it is what can rot, so that is what gets probed.
+
+
+def test_a_file_repo_resolves_to_the_oci_pin_that_provides_it():
+    doc = {"hummingbird": {"repos": [{"name": "utah-packages",
+                                      "baseurl": "file:///run/utah-packages",
+                                      "priority": 4}]}}
+    pins = {"utah-packages": "ghcr.io/projectbluefin/utah-packages@sha256:" + "a" * 64}
+    assert crpp.collect(doc, pins) == [
+        ("oci", "ghcr.io/projectbluefin/utah-packages@sha256:" + "a" * 64)
+    ]
+
+
+def test_a_file_repo_with_no_pin_behind_it_is_a_failure_not_a_skip():
+    """Nothing provides the bytes the manifest mounts: that is a repo that
+    cannot be rebuilt, and it must be named, not skipped."""
+    doc = {"repos": [{"baseurl": "file:///run/nothing-pins-this"}]}
+    assert crpp.collect(doc, {}) == [("oci-unpinned", "file:///run/nothing-pins-this")]
+    assert crpp.collect(doc, None) == [("oci-unpinned", "file:///run/nothing-pins-this")]
+
+
+def test_the_real_manifests_route_the_utah_repo_through_image_versions():
+    pins = crpp.oci_pins(str(ROOT / "image-versions.yaml"))
+    assert "utah-packages" in pins, "image-versions.yaml no longer pins utah-packages"
+    assert pins["utah-packages"].startswith("ghcr.io/projectbluefin/utah-packages@sha256:")
+    collected: list[tuple[str, str]] = []
+    for path in sorted((ROOT / "manifests" / "desktops").glob("*.yaml")):
+        collected.extend(crpp.collect(yaml.safe_load(path.read_text()), pins))
+    kinds = {k for k, _ in collected}
+    assert "oci-unpinned" not in kinds, [u for k, u in collected if k == "oci-unpinned"]
+    assert ("oci", pins["utah-packages"]) in collected
+    assert not any(u.startswith("file://") for _, u in collected), (
+        "a file:// URL survived to the probe list; it can never resolve over HTTP"
+    )
+
+
+def test_the_oci_probe_asks_the_registry_for_the_digest_with_a_token():
+    """Same quirks as check-base-image-pins.sh: ghcr/quay/docker.io hand out
+    anonymous pull tokens from different places, docker.io is not an API
+    host, and the manifest must be requested by digest, not by tag."""
+    ref = "ghcr.io/projectbluefin/utah-packages@sha256:" + "b" * 64
+    url, token = crpp.oci_manifest_request(ref)
+    assert url == "https://ghcr.io/v2/projectbluefin/utah-packages/manifests/sha256:" + "b" * 64
+    assert token == "https://ghcr.io/token?scope=repository:projectbluefin/utah-packages:pull"
+
+    url, token = crpp.oci_manifest_request("docker.io/library/debian:trixie@sha256:" + "c" * 64)
+    assert url.startswith("https://registry-1.docker.io/v2/library/debian/manifests/sha256:")
+    assert "auth.docker.io" in token
+
+    url, token = crpp.oci_manifest_request("quay.io/fedora/fedora-bootc:44@sha256:" + "d" * 64)
+    assert url == "https://quay.io/v2/fedora/fedora-bootc/manifests/sha256:" + "d" * 64
+    assert token == "https://quay.io/v2/auth?service=quay.io&scope=repository:fedora/fedora-bootc:pull"
+
+    url, token = crpp.oci_manifest_request("registry.opensuse.org/opensuse/tumbleweed@sha256:" + "e" * 64)
+    assert url == "https://registry.opensuse.org/v2/opensuse/tumbleweed/manifests/sha256:" + "e" * 64
+    assert token is None

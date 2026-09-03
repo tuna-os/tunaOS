@@ -53,10 +53,13 @@ jobs:
       - name: Re-dispatch nightlies that produced no jobs
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TARGET_REPO: ${{ github.repository }}
+          TARGET_REF: ${{ github.event.repository.default_branch || 'main' }}
+          DRY_RUN_FLAG: ${{ inputs.dry-run && '--dry-run' || '' }}
         run: |
           set -euo pipefail
           python3 scripts/rerun-startup-failures.py \
-            --repo "${{ github.repository }}" \
-            --ref "${{ github.event.repository.default_branch || 'main' }}" \
-            ${{ inputs.dry-run && '--dry-run' || '' }} \
+            --repo "$TARGET_REPO" \
+            --ref "$TARGET_REF" \
+            ${DRY_RUN_FLAG:+"$DRY_RUN_FLAG"} \
             | tee -a "$GITHUB_STEP_SUMMARY"

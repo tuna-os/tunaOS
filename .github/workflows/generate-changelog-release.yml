@@ -66,6 +66,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # ── Resolve inputs ─────────────────────────────────────────────────────
       - name: Resolve variant and tag
@@ -317,15 +319,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.vars.outputs.tag }}
           NOTE: ${{ inputs.handwritten }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           BODY_FILE=$(mktemp)
           {
             echo "$NOTE"
             echo ""
-            gh release view "$TAG" --repo "${{ github.repository }}" --json body -q .body
+            gh release view "$TAG" --repo "$REPO" --json body -q .body
           } > "$BODY_FILE"
-          gh release edit "$TAG" --repo "${{ github.repository }}" --notes-file "$BODY_FILE"
+          gh release edit "$TAG" --repo "$REPO" --notes-file "$BODY_FILE"
       # A successful action invocation is not proof that GitHub received the
       # release payload. Keep an empty release from looking healthy (#1186).
       - name: Verify release assets

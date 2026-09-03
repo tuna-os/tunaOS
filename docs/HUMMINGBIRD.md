@@ -292,9 +292,12 @@ delivering less than 1000 B/s as healthy and waits indefinitely, and
 
 Two bounds now exist: `minrate`/`timeout`/`retries` in `/etc/dnf/dnf.conf`
 (written by `10-base-packages.sh`, so every downstream `RUN` layer inherits
-them), and a `timeout --kill-after=60s 210m` around the build itself so a
-wedge anywhere else fails 30 minutes inside the ceiling with an annotation
-instead of a bare cancellation.
+them), and a `timeout --kill-after=60s "${BUILD_BOUND_MINUTES}m"` around the
+build itself (210m under the 240m job ceiling for every binary variant; 330m
+under 360m for guppy, which compiles from source) so a build that would blow
+the ceiling anyway fails 30 minutes inside it with an annotation instead of a
+bare cancellation. It is a clock, not a stall detector: the annotation sends
+the reader to the last line of build output rather than claiming a wedge.
 
 The same job also exposed a second, quieter fault: `install-desktop.sh` passed
 `--skip-unavailable` *before* `install`, which dnf5 rejects outright. The

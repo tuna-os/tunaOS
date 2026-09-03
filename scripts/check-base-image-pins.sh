@@ -71,10 +71,12 @@ auth_header() {
 
 failed=0
 checked=0
+seen=0
 
 while IFS= read -r ref; do
   [ -n "$ref" ] || continue
   [ "$ref" = "null" ] && continue
+  seen=$((seen + 1))
   case "$ref" in *@sha256:*) ;; *)
     # Not digest-pinned. Not this script's problem, but say so rather than
     # silently passing -- an unpinned base is its own kind of surprise.
@@ -101,10 +103,25 @@ while IFS= read -r ref; do
     echo "::error::base image pin no longer resolves (HTTP ${code}): ${ref}"
     failed=$((failed + 1))
   fi
-done < <("$YQ" -r '.variants[].base_image // empty' "$CONFIG" | sort -u)
+done < <("$YQ" -r '.variants[] | .base_image // ""' "$CONFIG" | sort -u)
 
 echo
 echo "checked ${checked} digest-pinned base image(s); ${failed} unresolvable"
+
+# Zero base images read is the check being broken, not the config being
+# clean. This is not hypothetical: the extraction above used to fall back
+# with jq's `empty` keyword, which mikefarah yq v4.53.3 rejects ("lexer:
+# invalid input text"). The error happened inside a process substitution,
+# where `set -e` cannot see it, so from the night that shipped the job
+# printed "checked 0 digest-pinned base image(s); 0 unresolvable" and
+# exited 0 -- while sailfin's tumbleweed digest and both fedora-bootc
+# digests had been garbage-collected and every sailfin build died on
+# `manifest unknown` (run 33687500544, 2026-09-02). The absence-of-evidence
+# rule (#1730) applies to the checker itself.
+if [ "$seen" -eq 0 ]; then
+  echo "::error::base image pin check read ZERO base images from ${CONFIG} -- the extraction is broken, not the pins clean"
+  exit 1
+fi
 
 # ── Architecture honesty (green criterion 10, GREEN-MASTER-PLAN W8) ─────────
 # A variant may not declare a platform its base image cannot provide: the

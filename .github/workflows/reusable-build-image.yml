@@ -118,7 +118,15 @@ jobs:
     # kde-plasma set is being compiled from source rather than pulled from the
     # binhost, which is #644's preferred fix and is tracked in #1802. Until
     # that lands, the ceiling has to clear the slowest real build.
-    timeout-minutes: 240
+    #
+    # And that build is bimodal. With the binhost warm, guppy kde takes 55m
+    # (run 33310245957, 2026-08-30). When Gentoo bumps plasma and the binhost
+    # has not caught up, every kde-plasma package compiles from source and
+    # the same cell was still emerging (250 of 254) when a flat 210m bound
+    # killed it (run 33624381727, 2026-09-02). So guppy alone gets the
+    # platform maximum; the binary variants keep 240 so a wedge on one of
+    # them still costs four hours, not six.
+    timeout-minutes: ${{ inputs.image-variant == 'guppy' && 360 || 240 }}
     strategy:
       fail-fast: false
       matrix:
@@ -256,6 +264,9 @@ jobs:
           # PR builds never publish; skip the two-pass chunkah rechunk +
           # relabel (~10 min) and validate the plain build instead.
           SKIP_RECHUNK: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+          # Wall-clock bound on the build itself, 30 minutes under the job
+          # ceiling above. See the comment at the `timeout` call below.
+          BUILD_BOUND_MINUTES: ${{ inputs.image-variant == 'guppy' && 330 || 210 }}
         run: |
           set -x
           just=$(which just)
@@ -275,12 +286,20 @@ jobs:
             done
           fi
           build_start=$(date +%s)
-          # 210m, against the job's 240m ceiling. This is NOT a guess at how
-          # long a build should take -- the ceiling above already clears the
-          # slowest real one (guppy kde, 2h57m compiling plasma from source).
-          # It exists so a build that was going to blow the job cap anyway
-          # fails 30 minutes early, with an exit code and a message, instead
-          # of a bare "The operation was canceled" and no telemetry.
+          # BUILD_BOUND_MINUTES against the job ceiling, 30 minutes under it:
+          # 210m/240m for every binary variant, 330m/360m for guppy, which
+          # compiles the desktop from source whenever the Gentoo binhost lags
+          # a plasma bump (#1802). This is NOT a guess at how long a build
+          # should take. It exists so a build that was going to blow the job
+          # cap anyway fails 30 minutes early, with an exit code and a
+          # message, instead of a bare "The operation was canceled" and no
+          # telemetry.
+          #
+          # It is a clock, not a stall detector, and the message below must
+          # not claim otherwise. Run 33624381727 (guppy kde, 2026-09-02) hit
+          # the old flat 210m bound with 250 of 254 emerge jobs complete and
+          # three packages actively compiling -- slow, not wedged -- and the
+          # annotation said "made no progress for 210 minutes".
           #
           # Build Hummingbird #66 (run 32907940350) is why: the gnome cell
           # stalled inside one dnf transaction at 23:12:27 and emitted not
@@ -298,11 +317,11 @@ jobs:
           # (the old layer cache never worked for exactly this reason).
           rc=0
           sudo --preserve-env=BUILDAH_CACHE_FLAGS,SKIP_RECHUNK,PUBLIC_IMAGE_NAME \
-            timeout --kill-after=60s 210m \
+            timeout --kill-after=60s "${BUILD_BOUND_MINUTES}m" \
             "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}" || rc=$?
           echo "BUILD_SECONDS=$(( $(date +%s) - build_start ))" >> "$GITHUB_ENV"
           if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
-            echo "::error title=Build wedged::${IMAGE_VARIANT}:${DEFAULT_TAG} (${PLATFORM}) made no progress for 210 minutes and was killed. The last line of build output above is where it stopped."
+            echo "::error title=Build hit its wall-clock bound::${IMAGE_VARIANT}:${DEFAULT_TAG} (${PLATFORM}) was still running after ${BUILD_BOUND_MINUTES} minutes and was killed. This is a clock, not a stall detector: the last line of build output above says whether it was wedged or merely slow."
             exit 1
           fi
           [ "$rc" -eq 0 ] || exit "$rc"
@@ -782,11 +801,33 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:1cec89e6c040d7a1ff412318d7a5fa89bab2c8b56e44d0a30f1df8acd646e1d0  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:f69faa11b2523b86e9f474316ac17c64d49c3adf4f15425e3266bb85c4fcfba8  # :latest linux/amd64 as of 2026-06-13
       # This job only performs registry/API operations (podman login and
       # manifest create/add/annotate/push). It does not run or build a
-      # container, mount a host filesystem, or need kernel capabilities.
-      # Keep the job at the runner's default container confinement.
+      # container or mount a host filesystem -- but podman itself needs
+      # CAP_SYS_ADMIN to believe it is root. Without it, podman classifies
+      # the process as rootless and re-execs into a user namespace before
+      # doing anything at all, and docker's default seccomp profile denies
+      # clone(CLONE_NEWUSER) to a process without that capability:
+      #
+      #   cannot clone: Operation not permitted
+      #   Error: cannot re-exec process
+      #
+      # Until 2026-09-02 that never surfaced, because the hosted runner
+      # launched every job container with `--privileged --security-opt
+      # seccomp=unconfined` on its own. Runner 2.337.0 stopped doing that.
+      # Measured on the same runner image (ubuntu-24.04 20260823.283.1),
+      # the same 63 apk packages and the same podman 6.0.2-r2: marlin's six
+      # Manifest jobs passed on runner 2.336.0 at 18:26Z (run 33659564363);
+      # every Manifest job on runner 2.337.0 from 23:12Z on died on the two
+      # lines above (sailfin 33687500544, flounder 33694724467, flounder-sid
+      # 33702354589). The two `docker create` commands differ only in those
+      # flags and the runner path. So ask explicitly for the confinement
+      # this job has always actually run under; the next runner change must
+      # not be able to take promotion down matrix-wide again.
+      # tests/test_the_manifest_job_asks_for_the_confinement_podman_needs.py
+      # holds this line in place.
+      options: --privileged
     permissions:
       contents: read
       packages: write
@@ -1113,7 +1154,8 @@ jobs:
       - name: Login to GitHub Container Registry
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
+          GHCR_ACTOR: ${{ github.actor }}
+        run: echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "$GHCR_ACTOR" --password-stdin
 
       - name: Fetch platform digests
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -1555,9 +1597,10 @@ jobs:
         env:
           REGISTRY: ghcr.io
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}
         run: |
-          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
-          echo "${{ env.GITHUB_TOKEN }}" | sudo podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+          echo "${GITHUB_TOKEN}" | podman login -u "$GHCR_ACTOR" --password-stdin "${REGISTRY}"
+          echo "${GITHUB_TOKEN}" | sudo podman login -u "$GHCR_ACTOR" --password-stdin "${REGISTRY}"
 
       - name: Pull Candidate Image
         env:

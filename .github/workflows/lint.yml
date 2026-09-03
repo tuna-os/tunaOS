@@ -140,7 +140,9 @@ jobs:
       - name: Install YAML parser
         run: python3 -m pip install pyyaml --break-system-packages
       - name: Reject new non-system package sources
-        run: python3 scripts/check-package-sources.py --base "${{ github.event.pull_request.base.sha || github.event.before }}"
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: python3 scripts/check-package-sources.py --base "$BASE_SHA"
 
   # Summary job: aggregates results and posts a single status check
   #

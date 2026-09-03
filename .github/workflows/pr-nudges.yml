@@ -7,6 +7,17 @@ name: PR Reminders
 # ::notice:: annotation first and treats the comment as a nicety
 # (tests/bats/test_pr_nudges.bats holds the 403 path at exit 0).
 # Epic #2250 item 11; modelled on kubestellar/hive's changelog-reminder.yml.
+#
+# This is the in-repo job again, not the org-level wrapper. b578d7dd (#2260)
+# replaced it with `uses: tuna-os/.github/.github/workflows/reusable-pr-nudges.yml@26a445da`,
+# and that SHA is the head of tuna-os/.github pull request #57, which has not
+# merged: the file does not exist on that repository's main (404 at 275ecff7),
+# and Actions will not load a reusable workflow at a ref reachable only
+# through refs/pull/*. Every PR opened here from 2026-09-02 20:00Z on carried
+# a startup-failed "pr-nudges" run with zero jobs (runs 22, 24-38), a red X
+# that means nothing and teaches people to ignore red. When #57 merges, wrap
+# again -- pinned to a SHA on main, with `secrets: token:` spelled out rather
+# than `secrets: inherit` (#2311).
 
 on:
   pull_request:
@@ -36,6 +47,8 @@ jobs:
         with:
           sparse-checkout: .github/scripts/pr-nudges.sh
           sparse-checkout-cone-mode: false
+          # Nothing here pushes; the token stays out of .git/config (#2303).
+          persist-credentials: false
 
       - name: Derive and deliver the reminders
         env:

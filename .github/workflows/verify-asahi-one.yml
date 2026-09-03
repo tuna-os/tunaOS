@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install lsinitrd
         # dracut-core provides lsinitrd; without it the harness skips the
@@ -37,18 +39,22 @@ jobs:
 
       - name: Verify image against Asahi golden manifest
         id: verify
+        env:
+          IMAGE: ${{ inputs.image }}
         run: |
           set -o pipefail
-          ./scripts/verify-asahi-image.sh "${{ inputs.image }}" 2>&1 | tee /tmp/verify.log
+          ./scripts/verify-asahi-image.sh "$IMAGE" 2>&1 | tee /tmp/verify.log
 
       - name: Summarize
         # Always runs, so a red leg reports its score and failing checks in the
         # run summary rather than only in the raw log. This step must not mask
         # the failure — the verify step's own exit code decides the leg.
         if: always()
+        env:
+          IMAGE: ${{ inputs.image }}
         run: |
           {
-            echo "### \`${{ inputs.image }}\`"
+            echo "### \`${IMAGE}\`"
             echo
             if result=$(grep -oE 'RESULT: .*' /tmp/verify.log 2>/dev/null); then
               echo "**${result}**"
