@@ -29,6 +29,11 @@ For every supported `variant × flavor × platform` cell:
    - `scripts/e2e-installer-gui-checks.sh` derives installer frontend test coverage from declared capabilities.
 3. **Bootc Update/Rebase/Rollback (`#1280`)**:
    - `.github/workflows/bootc-lifecycle.yml` validates stream updates, variant/desktop rebases, and rollback recovery.
+   - That validation is client-side (a host already on the bad image can
+     `bootc rollback`). Repointing the published bare tag away from a bad
+     digest so hosts that haven't updated yet stop receiving it is a
+     separate, manual step: see
+     [../runbooks/rollback-a-bad-image-promotion.md](../runbooks/rollback-a-bad-image-promotion.md).
 4. **Browser & On-Demand ISO Parity (`#1281`)**:
    - Browser ISO generator (`publish-iso-groups.yml`) aligns with on-demand tacklebox builds.
 5. **Supply Chain Enforcement (`#1187`, `#1193`)**:

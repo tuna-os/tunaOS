@@ -24,6 +24,7 @@ user-facing site:
 | [build-pipeline.md](build-pipeline.md) | CI/CD workflow and build-stage overview |
 | [ci-troubleshooting.md](ci-troubleshooting.md) | Diagnosing and fixing common CI failures |
 | [CI-WORKFLOW-PUBLISHING.md](CI-WORKFLOW-PUBLISHING.md) | Recovering GitHub App permission for workflow-file fixes (#1557) |
+| [../runbooks/rollback-a-bad-image-promotion.md](../runbooks/rollback-a-bad-image-promotion.md) | Containing a bad container image promotion: repointing the bare tag to a last-known-good dated tag |
 | [mkosi-investigation.md](mkosi-investigation.md) | Notes from the mkosi-based image build investigation |
 | [PIPELINE.md](PIPELINE.md) | Build pipeline reference: stages, workflows, artifact flow |
 | [EDUCATION-PITCH.md](EDUCATION-PITCH.md) | Education & teaching lab adoption brief for CS departments (#1600) |
