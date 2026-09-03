@@ -1,7 +1,23 @@
 name: PR Reminders
 
-# Thin wrapper over org-level reusable workflow in tuna-os/.github.
-# Epic #2250 item 11 (issue #2260).
+# Advisory on purpose. The rules live in .github/scripts/pr-nudges.sh with
+# the reasoning; this file only fetches the changed paths and hands them
+# over. It never fails a PR: on a fork the token is read-only and a comment
+# would 403, so the script delivers the reminder as a job summary and a
+# ::notice:: annotation first and treats the comment as a nicety
+# (tests/bats/test_pr_nudges.bats holds the 403 path at exit 0).
+# Epic #2250 item 11; modelled on kubestellar/hive's changelog-reminder.yml.
+#
+# This is the in-repo job again, not the org-level wrapper. b578d7dd (#2260)
+# replaced it with `uses: tuna-os/.github/.github/workflows/reusable-pr-nudges.yml@26a445da`,
+# and that SHA is the head of tuna-os/.github pull request #57, which has not
+# merged: the file does not exist on that repository's main (404 at 275ecff7),
+# and Actions will not load a reusable workflow at a ref reachable only
+# through refs/pull/*. Every PR opened here from 2026-09-02 20:00Z on carried
+# a startup-failed "pr-nudges" run with zero jobs (runs 22, 24-38), a red X
+# that means nothing and teaches people to ignore red. When #57 merges, wrap
+# again -- pinned to a SHA on main, with `secrets: token:` spelled out rather
+# than `secrets: inherit` (#2311).
 
 on:
   pull_request:
@@ -16,6 +32,32 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  nudges:
-    uses: tuna-os/.github/.github/workflows/reusable-pr-nudges.yml@26a445da7a5b6cfc9de9b3bc239b7a2e0f7daf4a # tuna-os/.github main as of 2026-09-02
-    secrets: inherit
+  remind:
+    name: reminders
+    # Drafts are not ready for the question; dependency bumps never need it.
+    if: >-
+      github.event.pull_request.draft == false &&
+      github.actor != 'renovate[bot]' &&
+      github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: .github/scripts/pr-nudges.sh
+          sparse-checkout-cone-mode: false
+          # Nothing here pushes; the token stays out of .git/config (#2303).
+          persist-credentials: false
+
+      - name: Derive and deliver the reminders
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR: ${{ github.event.pull_request.number }}
+          REPO: ${{ github.repository }}
+          IS_FORK: ${{ github.event.pull_request.head.repo.fork }}
+        run: |
+          # Reading the file list needs no write permission, so it works on
+          # forks; --paginate so a large PR cannot hide a path on page two.
+          gh api --paginate "repos/${REPO}/pulls/${PR}/files" --jq '.[].filename' \
+            | bash .github/scripts/pr-nudges.sh --deliver
