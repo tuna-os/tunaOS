@@ -76,6 +76,9 @@ criteria:
     proves: >-
       The packages, session files and display manager for the flavor landed in
       the published image, and verify-desktop-experience.sh passes against it.
+      For GNOME that includes the version floor declared in
+      manifests/desktops/gnome.yaml (minimum_version: 50, maintainer directive
+      2026-09-03): a GNOME 49 image is not a passing desktop.
     asserted_by: >-
       .github/workflows/reusable-build-image.yml (verify_desktop) +
       .github/workflows/desktop-contract-sweep.yml

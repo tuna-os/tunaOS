@@ -157,10 +157,61 @@ xfce_greetd_greeter_contract() {
 #
 # gnome-keyring-daemon is /usr/bin/gnome-keyring-daemon on all five.
 #
+# GNOME version floor. Maintainer directive 2026-09-03: nothing below GNOME 50
+# ships as a tunaOS GNOME image, and 51 is the target as it releases. Measured
+# the same day from the published .packages artifacts: yellowfin 49.5, albacore
+# 49.4 and skipjack 49.5 (EL 10.2's own GNOME -- the GNOME 50 COPR in
+# gnome.yaml was never taking effect), guppy 49.7 (Gentoo's tree tops out at
+# 49.9), bonito/sailfin/marlin 50.4, wahoo 51~beta. A contract that let those
+# promote was calling a 49 image green under a 50 policy; this is the check
+# that stops that. The number is deliberately a constant here and NOT read
+# from the manifest: this script runs inside the image with nothing but
+# itself mounted, so the manifest's `minimum_version:` is the documented
+# policy and tests/test_the_gnome_floor_is_enforced.py holds the two equal.
+GNOME_MINIMUM_MAJOR=50
+
+# The installed gnome-shell's major version, from the binary first (works on
+# the bases with no package database -- flounder and guppy, tunaos-packages
+# #135) and the package manager as a fallback. Empty when neither answers.
+gnome_shell_major() {
+	local v=""
+	v="$(gnome-shell --version 2>/dev/null | grep -oE '[0-9]+' | head -1)" || true
+	if [[ -z "$v" ]] && command -v rpm >/dev/null 2>&1; then
+		v="$(rpm -q --qf '%{VERSION}\n' gnome-shell 2>/dev/null | grep -oE '^[0-9]+' | head -1)" || true
+	fi
+	if [[ -z "$v" ]] && command -v dpkg-query >/dev/null 2>&1; then
+		v="$(dpkg-query -W -f '${Version}\n' gnome-shell 2>/dev/null | grep -oE '^[0-9]+' | head -1)" || true
+	fi
+	if [[ -z "$v" ]] && command -v pacman >/dev/null 2>&1; then
+		v="$(pacman -Q gnome-shell 2>/dev/null | grep -oE '[0-9]+' | head -1)" || true
+	fi
+	if [[ -z "$v" ]] && command -v qlist >/dev/null 2>&1; then
+		v="$(qlist -Iv gnome-base/gnome-shell 2>/dev/null | grep -oE '[0-9]+' | head -1)" || true
+	fi
+	printf '%s' "$v"
+}
+
+require_gnome_at_least() {
+	local floor="$1" major
+	major="$(gnome_shell_major)"
+	if [[ -z "$major" ]]; then
+		echo "cannot determine the installed GNOME version: gnome-shell --version failed and no package manager knows gnome-shell" >&2
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then waive; return 0; fi
+		exit 1
+	fi
+	if ((major < floor)); then
+		echo "GNOME ${major} is below the floor: nothing below GNOME ${floor} ships (maintainer directive 2026-09-03; the target is 51). This image's gnome-shell reports major version ${major}." >&2
+		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then waive; return 0; fi
+		exit 1
+	fi
+	echo "GNOME ${major} meets the floor of ${floor}"
+}
+
 case "$desktop" in
 gnome)
 	experience="projectbluefin/bluefin-lts"
 	require_command gnome-shell
+	require_gnome_at_least "$GNOME_MINIMUM_MAJOR"
 	# Ubuntu names its GNOME session `ubuntu.desktop`, not `gnome*.desktop`.
 	# Measured on the published grouper:gnome: /usr/share/wayland-sessions
 	# contains exactly `ubuntu.desktop`, /usr/share/xsessions does not exist,

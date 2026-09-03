@@ -2,6 +2,18 @@
 
 display_manager: gdm
 
+# Version floor for every GNOME image, whatever the base. Maintainer directive
+# 2026-09-03: tunaOS is moving off GNOME 49 -- nothing below 50 ships, and 51
+# is the target as it releases (51.0 is due 2026-09-12). This is the documented
+# policy; build_scripts/checks/verify-desktop-experience.sh enforces it with
+# its own constant (it runs inside the image, where this file is not
+# available) and tests/test_the_gnome_floor_is_enforced.py holds the two
+# equal. Bases that cannot reach the floor from their own repositories on
+# 2026-09-03: Debian trixie (48.7; sid has 50.4) and Gentoo (::gentoo tops out
+# at 49.9). Their gnome cells fail the desktop contract until a source that
+# meets the floor is wired, which is the honest state, not a bug in the check.
+minimum_version: 50
+
 packages:
   # This section serves Ubuntu (grouper). Debian uses gnome-debian.yaml.
   apt:
@@ -224,10 +236,21 @@ packages:
       - gnome-software
       - gnome-software-fedora-langpacks
   el10:
-    # COPR repos for GNOME 50 backport — EL10 ships GNOME 48 natively.
+    # COPR repos for the GNOME 50 backport. EL 10.2 ships GNOME 49 (AlmaLinux
+    # 10.2 AppStream: gnome-shell 49.4, gtk4 4.16, gdm 47); the floor is 50.
     # Brings modern GNOME to Enterprise Linux without waiting 3 years.
     # Policy exception per PACKAGE-SOURCING.md / #1319 (tier-3 temporary source;
-    # scheduled for Tideforge migration in Q4 #1187).
+    # scheduled for Tideforge migration in Q4 #1187 -- the signed native tier
+    # already exists at repo.tunaos.org/gnome50/10-stream-x86_64 with the same
+    # 50.0 builds, but x86_64 only, and the COPRs carry aarch64 too).
+    #
+    # `packages: []` is the stack-replacing shape: install-desktop.sh enables
+    # this repo and every `extra_repos:` entry BEFORE the group install, runs
+    # `pre_install:` with them live, and disables them again only before the
+    # version locks. Until 2026-09-03 nothing read extra_repos or pre_install
+    # and the repo was disabled the moment it was enabled, so every EL10 GNOME
+    # image shipped the base's 49 (yellowfin 49.5, albacore 49.4, skipjack
+    # 49.5) while this file said 50.
     copr:
       - repo: jreilly1821/c10s-gnome-50-fresh
         extra_repos:

@@ -613,6 +613,62 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 		echo "Added repo ${_TD_RN} -> ${_TD_RB}"
 	done
 
+	# ── COPR repos that replace part of the base ─────────────────────────────
+	# Two shapes of copr entry, told apart by `packages:`.
+	#
+	#   packages: [a, b]   An add-on (niri-git, wlroots-epel, cosmic-epel): the
+	#                      repo is enabled, disabled again at once, and only the
+	#                      listed packages are installed from it, with
+	#                      --enablerepo, in the block after the groups below.
+	#   packages: []       A repo the groups and packages below must resolve
+	#                      AGAINST -- GNOME 50 on EL10, where the base's own
+	#                      GNOME 49 wins every resolution the repo is not part
+	#                      of. It is enabled here, before the group install,
+	#                      together with its `extra_repos:`; its `pre_install:`
+	#                      commands run with it live; and it is disabled only
+	#                      after the last install of this section.
+	#
+	# The second shape used to enable the repo and disable it on the spot,
+	# announce it as enabled for a later --enablerepo, and no later block ever
+	# named it. Every EL10 GNOME image built that way took gnome-shell from
+	# the base -- measured 2026-09-03 from the published .packages artifacts:
+	# yellowfin 49.5, albacore 49.4, skipjack 49.5 -- with the manifest's
+	# COPR never consulted, and the versionlock at the end then pinned 49.
+	# `extra_repos:` and `pre_install:` were read by nothing at all.
+	_TD_COPR_COUNT=$($YQ -r ".packages.${_TD_OS}.copr | length // 0" "${_TD_MANIFEST}" 2>/dev/null)
+	_TD_COPR_LIVE=()
+	for ((i = 0; i < _TD_COPR_COUNT; i++)); do
+		_TD_COPR_REPO=$($YQ -r ".packages.${_TD_OS}.copr[$i].repo" "${_TD_MANIFEST}")
+		_TD_COPR_NPKG=$($YQ -r ".packages.${_TD_OS}.copr[$i].packages | length // 0" "${_TD_MANIFEST}" 2>/dev/null)
+		((_TD_COPR_NPKG == 0)) || continue
+		readarray -t _TD_COPR_EXTRA < <($YQ -r ".packages.${_TD_OS}.copr[$i].extra_repos[]" "${_TD_MANIFEST}" 2>/dev/null || true)
+		readarray -t _TD_COPR_PRE < <($YQ -r ".packages.${_TD_OS}.copr[$i].pre_install[]" "${_TD_MANIFEST}" 2>/dev/null || true)
+		install_dnf_plugin_providers
+		for _TD_R in "${_TD_COPR_REPO}" ${_TD_COPR_EXTRA[@]+"${_TD_COPR_EXTRA[@]}"}; do
+			[[ -n "${_TD_R}" && "${_TD_R}" != "null" ]] || continue
+			if dnf -y copr enable "${_TD_R}"; then
+				_TD_COPR_LIVE+=("${_TD_R}")
+				echo "Enabled ${_TD_R} for the whole ${_TD_DESKTOP} install (stack-replacing copr entry)"
+			else
+				echo "TUNAOS_COPR_ENABLE_FAILED repo=${_TD_R} — the groups and packages below will resolve from the base repos instead" >&2
+			fi
+		done
+		for _TD_CMD in ${_TD_COPR_PRE[@]+"${_TD_COPR_PRE[@]}"}; do
+			[[ -n "${_TD_CMD}" ]] || continue
+			echo "pre_install (${_TD_COPR_REPO}): ${_TD_CMD}"
+			eval "${_TD_CMD}"
+		done
+	done
+
+	# Section-level pre_install: commands the manifest wants run before any
+	# group or package of this section, with the repos above already live.
+	readarray -t _TD_PRE < <($YQ -r ".packages.${_TD_OS}.pre_install[]" "${_TD_MANIFEST}" 2>/dev/null || true)
+	for _TD_CMD in ${_TD_PRE[@]+"${_TD_PRE[@]}"}; do
+		[[ -n "${_TD_CMD}" ]] || continue
+		echo "pre_install: ${_TD_CMD}"
+		eval "${_TD_CMD}"
+	done
+
 	# Install groups
 	_TD_GROUP_OPTS=$($YQ -r ".packages.${_TD_OS}.group_options // \"\"" "${_TD_MANIFEST}")
 	_yq_array _TD_GROUPS -r ".packages.${_TD_OS}.groups[]" "${_TD_MANIFEST}"
@@ -657,12 +713,18 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 		fi
 	fi
 
-	# COPR packages (EL10 primarily)
-	_TD_COPR_COUNT=$($YQ -r ".packages.${_TD_OS}.copr | length // 0" "${_TD_MANIFEST}" 2>/dev/null)
+	# COPR add-on packages (EL10 primarily): the `packages: [a, b]` shape.
 	for ((i = 0; i < _TD_COPR_COUNT; i++)); do
 		_TD_COPR_REPO=$($YQ -r ".packages.${_TD_OS}.copr[$i].repo" "${_TD_MANIFEST}")
 		readarray -t _TD_COPR_PKGS < <($YQ -r ".packages.${_TD_OS}.copr[$i].packages[]" "${_TD_MANIFEST}" 2>/dev/null || true)
 		_TD_COPR_OPTS=$($YQ -r ".packages.${_TD_OS}.copr[$i].options // \"\"" "${_TD_MANIFEST}")
+
+		# `packages: []` entries went live before the group install (see the
+		# block above the groups) and are still enabled here on purpose.
+		if ((${#_TD_COPR_PKGS[@]} == 0)); then
+			echo "${_TD_COPR_REPO}: stack-replacing entry, enabled before the group install and left live until the version locks"
+			continue
+		fi
 
 		# One transaction per provider name — listing them together made dnf
 		# discard all of them whenever one was unmatched, which on EL10 is
@@ -673,15 +735,6 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 		fi
 		dnf -y copr disable "${_TD_COPR_REPO}" || true
 		_TD_REPO_ID="copr:copr.fedorainfracloud.org:$(echo "${_TD_COPR_REPO}" | tr '/' ':')"
-		# `packages: []` is the enable-only idiom: the block exists so the
-		# repo FILE is written and a later block can name it in --enablerepo.
-		# Running `dnf install` with no arguments there is a guaranteed error
-		# swallowed by `|| true`, which buries a real failure in noise the
-		# reader has learned to ignore. Skip it and say why.
-		if ((${#_TD_COPR_PKGS[@]} == 0)); then
-			echo "Enabled ${_TD_COPR_REPO} (no packages listed — repo enabled for a later --enablerepo)"
-			continue
-		fi
 		# shellcheck disable=SC2086
 		if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
 			dnf -y --enablerepo="${_TD_REPO_ID}" install --skip-unavailable ${_TD_COPR_OPTS} "${_TD_COPR_PKGS[@]}" || install_available "${_TD_COPR_PKGS[@]}" || true
@@ -706,6 +759,15 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 			echo "Skipping optional group (${_TD_FIRST} not available in repos)"
 		fi
 	fi
+
+	# The stack-replacing COPRs have done their job once the groups, packages
+	# and optionals are in. Disable them so nothing later in the build, or on
+	# the installed system, resolves against them by accident; the version
+	# locks below then pin exactly what they installed.
+	for _TD_R in ${_TD_COPR_LIVE[@]+"${_TD_COPR_LIVE[@]}"}; do
+		dnf -y copr disable "${_TD_R}" || true
+		echo "Disabled ${_TD_R} again; its packages stay and are version-locked below"
+	done
 
 	# ── Version locks ────────────────────────────────────────────────────────────
 	readarray -t _TD_LOCKS < <($YQ -r '.versionlock[]' "${_TD_MANIFEST}" 2>/dev/null || true)
