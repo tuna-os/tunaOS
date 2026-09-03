@@ -68,21 +68,21 @@ it.
 
 Scored against `.github/green-criteria.yml`: a cell is green only when every **blocking** criterion applicable to it has a current affirmative result; a criterion that was skipped, never tested, or unasserted renders ⬜ and does not count as satisfied. Blocking today: `builds`, `desktop`, `boots`, `no_silent_omissions`. Advisory (measured in the sections below, not yet biting): `install`, `lifecycle`, `parity`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. Graduating a criterion is an edit to `enforcement:` in that file — this table and the README count tighten with no code change.
 
-**68 of 145** published cells are composite-green.
+**52 of 145** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
 | **albacore** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **flounder** | ✅ | ✅ | — | — | ✅ |
+| **flounder** | ⬜ | ⬜ | — | — | ⬜ |
 | **flounder-sid** | ❌ | ❌ | — | — | ❌ |
-| **grouper** | ✅ | ✅ | ❌ | — | ✅ |
-| **guppy** | ❌ | ✅ | — | — | ✅ |
+| **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
+| **guppy** | ❌ | ⬜ | — | — | ✅ |
 | **hummingbird** | ⬜ | — | ⬜ | — | — |
 | **marlin** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **skipjack** | ❌ | ✅ | ❌ | ❌ | ✅ |
+| **skipjack** | ❌ | ✅ | ❌ | ❌ | ❌ |
 | **wahoo** | ❌ | ❌ | ❌ | — | — |
 | **yellowfin** | ✅ | ✅ | ❌ | ❌ | ✅ |
 
@@ -187,7 +187,7 @@ Pulls the **published** image and runs the contract script against it directly (
 
 4 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
 
-Newest result 2026-09-01.
+Newest result 2026-09-02.
 
 ## Bootc Lifecycle
 
@@ -212,7 +212,7 @@ Validates bootc image update, rebase, rollback, alias resolution, and post-switc
 | **wahoo** | ❌ | ❌ | ❌ | — | — |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 
-Newest result 2026-08-27.
+Newest result 2026-09-03.
 
 ## Installer smoke
 
@@ -237,7 +237,7 @@ cosmic, niri, xfwl4 and kde do not bring a session up on hosted CI. The cause is
 
 ## Live overlay
 
-**48** tags published.
+**51** tags published.
 
 Missing for 4 ISO cell(s): `gurnard-pantheon`, `hummingbird-base`, `hummingbird-cosmic`, `hummingbird-gnome`
 
@@ -247,9 +247,9 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
-| 2026-09-01 | [33510520345](https://github.com/tuna-os/tunaOS/actions/runs/33510520345) | 50 |
+| 2026-09-03 | [33737812664](https://github.com/tuna-os/tunaOS/actions/runs/33737812664) | 121 |
+| 2026-09-02 | [33629919067](https://github.com/tuna-os/tunaOS/actions/runs/33629919067) | 50 |
 | 2026-09-01 | [33506738063](https://github.com/tuna-os/tunaOS/actions/runs/33506738063) | 125 |
-| 2026-08-27 | [33090531233](https://github.com/tuna-os/tunaOS/actions/runs/33090531233) | 121 |
 | 2026-08-24 | [32747410944](https://github.com/tuna-os/tunaOS/actions/runs/32747410944) | 2 |
 | 2026-08-24 | [32718219267](https://github.com/tuna-os/tunaOS/actions/runs/32718219267) | 1 |
 | 2026-08-24 | [32700275124](https://github.com/tuna-os/tunaOS/actions/runs/32700275124) | 1 |
