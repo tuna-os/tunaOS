@@ -60,10 +60,14 @@ def test_the_real_manifests_yield_the_known_pin_classes() -> None:
         f"missing pin classes: extraction found only {sorted(kinds)}"
     )
     urls = [u for _, u in pins]
-    # The two named motivators: the hummingbird snapshot datestamp and the
-    # #391 COPR single point of failure.
+    # The named motivators: the hummingbird snapshot datestamp, and the EL10
+    # GNOME 50 tier that replaced the #391 COPR single point of failure
+    # (2026-09-03: no more COPR for a desktop stack).
     assert any("hummingbird/20251124" in u for u in urls)
-    assert any("projectname=c10s-gnome-50" in u for u in urls)
+    assert any("repo.tunaos.org/gnome50/10-stream-x86_64" in u for u in urls)
+    assert not any("projectname=c10s-gnome-5" in u for u in urls), (
+        "a jreilly1821/c10s-gnome-5x COPR is back in a manifest; GNOME on EL10 comes from the factory tier"
+    )
 
 
 def test_basearch_is_substituted_and_leftovers_skip_not_guess() -> None:
