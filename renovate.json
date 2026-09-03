@@ -69,6 +69,11 @@
       "automerge": true
     },
     {
+      "description": "Never automerge a download whose version is paired with a hand-pinned sha256. Renovate bumps the version and cannot bump the checksum, so the bump alone fails every base build closed at `sha256sum --check` (install-remora.sh). The `checksums` check catches it on the PR, but the main ruleset has no required status checks, so platformAutomerge merged #2308 with that check red and took every variant's nightly base build down on 2026-09-03 (flounder run 33694724467). Hold these for a human to run `scripts/check-download-checksums.py --fix` on the branch first. tests/test_checksum_pinned_downloads_are_not_automerged.py derives this list from the repo.",
+      "matchDepNames": ["tuna-os/remora", "twpayne/chezmoi"],
+      "automerge": false
+    },
+    {
       "description": "Group all GitHub Actions updates into a single PR",
       "matchManagers": ["github-actions"],
       "groupName": "github-actions"

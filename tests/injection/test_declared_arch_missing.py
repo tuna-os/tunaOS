@@ -40,13 +40,18 @@ def _run_arch_check(tmp_path: Path, variant: str, platforms: list[str], availabl
     platforms_str = ",".join(platforms)
 
     # Mock yq to return:
-    # 1. Base image list
-    # 2. Tab-separated [id, base_image, platforms]
+    # 1. Tab-separated [id, base_image, platforms] (the arch-honesty loop)
+    # 2. Base image list (the resolution loop) for any other .base_image query
+    #
+    # Matched on `.base_image`, not on the exact expression: an earlier
+    # version keyed on the literal `// empty` fallback, which was the jq-only
+    # syntax the pinned mikefarah yq rejected, so the stub was faithfully
+    # reproducing the broken query rather than the config.
     yq_script = f"""#!/usr/bin/env bash
-if [[ "$*" == *".base_image // empty"* ]]; then
-  echo "{base_ref}"
-elif [[ "$*" == *"@tsv"* ]]; then
+if [[ "$*" == *"@tsv"* ]]; then
   printf "%s\\t%s\\t%s\\n" "{variant}" "{base_ref}" "{platforms_str}"
+elif [[ "$*" == *".base_image"* ]]; then
+  echo "{base_ref}"
 else
   echo ""
 fi
