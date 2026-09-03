@@ -29,9 +29,11 @@ You do not need write access to the upstream repository. GitHub's fork-based PR 
 
 For the Hacktoberfest 2026 backlog, see the [contributor plan](docs/HACKTOBERFEST-2026.md) for current candidates, acceptance standards, and event dates.
 
+Before drafting a guide, a campaign post, or anything that names an image reference, a shipped tool, hardware support, or readiness, work through the [pre-write claim checklist](docs/CONTENT-CLAIM-CHECKLIST.md). Five guide PRs in a row were closed for the same two defects: an image reference the project does not publish, and toolchains the images do not ship. The checklist is those defects written down.
+
 Ways to contribute without touching the build pipeline:
 
-- **Docs & guides** — the [docs site](https://github.com/tuna-os/docs) has its own `good first issue` backlog and takes content PRs for guides, FAQs, and variant pages
+- **Docs & guides** — the [docs site](https://github.com/tuna-os/docs) has its own `good first issue` backlog and takes content PRs for guides, FAQs, and variant pages; run the [claim checklist](docs/CONTENT-CLAIM-CHECKLIST.md) before you write
 - **Community** — help triage [open issues](https://github.com/tuna-os/tunaOS/issues), answer questions in [Matrix](https://matrix.to/#/%23tunaos:reilly.asia), or improve the [adopters list](ADOPTERS.md) if your org uses TunaOS
 - **Labels** — issues tagged `help wanted` are explicitly open for external contribution
 

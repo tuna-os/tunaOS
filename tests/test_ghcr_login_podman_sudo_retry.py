@@ -51,14 +51,19 @@ def test_the_step_retries_more_than_cosigns_own_two_attempts(sudo_login_step):
 
 def _drive_step(sudo_login_step, tmp_path, login_cmd):
     """Run the REAL step body, substituting a fake `sudo` so no real sudo call happens."""
-    # The real body embeds GitHub Actions expressions (${{ github.token }},
-    # ${{ github.actor }}), which are not valid bash -- substitute harmless
-    # literals, the same way a workflow runner would before executing this.
-    body = (
-        sudo_login_step["run"]
+    # The body reads its untrusted values ($GHCR_TOKEN, $GHCR_ACTOR) from the
+    # step's `env:` block rather than interpolating ${{ }} expressions inline,
+    # so drive it the way a runner does: evaluate the expressions in `env:`
+    # and export them around the verbatim body. Substituting inside the body
+    # instead would leave $GHCR_TOKEN unbound under `set -u`.
+    body = sudo_login_step["run"]
+    step_env = {
+        name: str(value)
         .replace("${{ github.token }}", "fake-token")
         .replace("${{ github.actor }}", "fake-actor")
-    )
+        for name, value in sudo_login_step.get("env", {}).items()
+    }
+    env_block = "\n".join(f'export {name}="{value}"' for name, value in step_env.items())
     # The step invokes `sudo TOKEN=... ACTOR=... bash -c '...'`. Swap in a
     # fake `sudo` on PATH that runs the given login_cmd instead of the real
     # podman/bash construct, so this drives the loop/exit logic without
@@ -74,7 +79,7 @@ def _drive_step(sudo_login_step, tmp_path, login_cmd):
             #!/usr/bin/env bash
             set -euo pipefail
             PATH="{tmp_path}:$PATH"
-            MAX_RETRIES=3
+            {env_block}
             {body}
             echo "REACHED END"
             """

@@ -782,11 +782,33 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:1cec89e6c040d7a1ff412318d7a5fa89bab2c8b56e44d0a30f1df8acd646e1d0  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:f69faa11b2523b86e9f474316ac17c64d49c3adf4f15425e3266bb85c4fcfba8  # :latest linux/amd64 as of 2026-06-13
       # This job only performs registry/API operations (podman login and
       # manifest create/add/annotate/push). It does not run or build a
-      # container, mount a host filesystem, or need kernel capabilities.
-      # Keep the job at the runner's default container confinement.
+      # container or mount a host filesystem -- but podman itself needs
+      # CAP_SYS_ADMIN to believe it is root. Without it, podman classifies
+      # the process as rootless and re-execs into a user namespace before
+      # doing anything at all, and docker's default seccomp profile denies
+      # clone(CLONE_NEWUSER) to a process without that capability:
+      #
+      #   cannot clone: Operation not permitted
+      #   Error: cannot re-exec process
+      #
+      # Until 2026-09-02 that never surfaced, because the hosted runner
+      # launched every job container with `--privileged --security-opt
+      # seccomp=unconfined` on its own. Runner 2.337.0 stopped doing that.
+      # Measured on the same runner image (ubuntu-24.04 20260823.283.1),
+      # the same 63 apk packages and the same podman 6.0.2-r2: marlin's six
+      # Manifest jobs passed on runner 2.336.0 at 18:26Z (run 33659564363);
+      # every Manifest job on runner 2.337.0 from 23:12Z on died on the two
+      # lines above (sailfin 33687500544, flounder 33694724467, flounder-sid
+      # 33702354589). The two `docker create` commands differ only in those
+      # flags and the runner path. So ask explicitly for the confinement
+      # this job has always actually run under; the next runner change must
+      # not be able to take promotion down matrix-wide again.
+      # tests/test_the_manifest_job_asks_for_the_confinement_podman_needs.py
+      # holds this line in place.
+      options: --privileged
     permissions:
       contents: read
       packages: write
@@ -1113,7 +1135,8 @@ jobs:
       - name: Login to GitHub Container Registry
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
+          GHCR_ACTOR: ${{ github.actor }}
+        run: echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "$GHCR_ACTOR" --password-stdin
 
       - name: Fetch platform digests
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -1555,9 +1578,10 @@ jobs:
         env:
           REGISTRY: ghcr.io
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}
         run: |
-          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
-          echo "${{ env.GITHUB_TOKEN }}" | sudo podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+          echo "${GITHUB_TOKEN}" | podman login -u "$GHCR_ACTOR" --password-stdin "${REGISTRY}"
+          echo "${GITHUB_TOKEN}" | sudo podman login -u "$GHCR_ACTOR" --password-stdin "${REGISTRY}"
 
       - name: Pull Candidate Image
         env:

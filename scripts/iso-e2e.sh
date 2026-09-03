@@ -325,7 +325,7 @@ ISO_FLAVOR="${ISO_FLAVOR%%-*}"
 # jobs run natively, so an aarch64 host must use the ARM system emulator and
 # the ARM `virt` machine rather than the x86_64 emulator and `pc` machine.
 HOST_ARCH="$(uname -m)"
-QEMU=""
+QEMU="${QEMU:-}"
 QEMU_MACHINE=""
 case "$HOST_ARCH" in
 	aarch64 | arm64)
@@ -341,13 +341,15 @@ case "$HOST_ARCH" in
 		exit 77
 		;;
 esac
-for candidate in "${QEMU_CANDIDATES[@]}"; do
-	if [[ -x "$candidate" ]]; then
-		QEMU="$candidate"
-		break
-	fi
-done
-if [[ -z "$QEMU" ]]; then
+if [[ -z "${QEMU:-}" ]]; then
+	for candidate in "${QEMU_CANDIDATES[@]}"; do
+		if [[ -x "$candidate" ]]; then
+			QEMU="$candidate"
+			break
+		fi
+	done
+fi
+if [[ -z "${QEMU:-}" ]]; then
 	echo "ERROR: no QEMU system emulator found for $HOST_ARCH" >&2
 	exit 77
 fi
@@ -434,8 +436,8 @@ fi
 # Locate architecture-appropriate UEFI firmware. Path varies across distros
 # (Debian/Ubuntu, Fedora, RHEL, Brew). We also need a writable copy of the
 # variables file for UEFI to persist its NVRAM during boot.
-UEFI_CODE=""
-UEFI_VARS_SRC=""
+UEFI_CODE="${UEFI_CODE:-}"
+UEFI_VARS_SRC="${UEFI_VARS_SRC:-}"
 if [[ "$QEMU_MACHINE" == "virt" ]]; then
 	UEFI_CODE_CANDIDATES=(
 		/usr/share/AAVMF/AAVMF_CODE.fd
@@ -463,19 +465,23 @@ else
 		/usr/share/edk2-ovmf/x64/OVMF_VARS.fd
 	)
 fi
-for f in "${UEFI_CODE_CANDIDATES[@]}"; do
-	if [[ -f "$f" ]]; then
-		UEFI_CODE="$f"
-		break
-	fi
-done
-for f in "${UEFI_VARS_CANDIDATES[@]}"; do
-	if [[ -f "$f" ]]; then
-		UEFI_VARS_SRC="$f"
-		break
-	fi
-done
-if [[ -z "$UEFI_CODE" ]]; then
+if [[ -z "${UEFI_CODE:-}" ]]; then
+	for f in "${UEFI_CODE_CANDIDATES[@]}"; do
+		if [[ -f "$f" ]]; then
+			UEFI_CODE="$f"
+			break
+		fi
+	done
+fi
+if [[ -z "${UEFI_VARS_SRC:-}" ]]; then
+	for f in "${UEFI_VARS_CANDIDATES[@]}"; do
+		if [[ -f "$f" ]]; then
+			UEFI_VARS_SRC="$f"
+			break
+		fi
+	done
+fi
+if [[ -z "${UEFI_CODE:-}" ]]; then
 	echo "ERROR: UEFI firmware not found for $HOST_ARCH — install the architecture's OVMF/AAVMF package" >&2
 	exit 77
 fi
@@ -3054,7 +3060,7 @@ disk)
 			fi
 			break
 		fi
-		sleep 10
+		sleep "${DISK_POLL_INTERVAL:-1}"
 	done
 	# Let the display manager finish drawing before capturing evidence.
 	# Poll for paint instead of a fixed 30s sleep: under plain virtio-vga the

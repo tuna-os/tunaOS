@@ -10,10 +10,16 @@ name: Check download checksums
 # a v2.72.0 .deb and checked it against a v2.71.0 hash. It fails closed, so
 # nothing bad shipped -- but the build died and nothing named the cause.
 #
-# Running on pull requests is the point: `automerge: true` covers patch
-# updates, and platformAutomerge waits on checks, so a Renovate bump that
-# leaves checksums behind cannot merge itself. The schedule catches the other
-# case -- a release re-published under the same tag with different content.
+# Running on pull requests names the stale pair on the Renovate PR itself.
+# It does NOT stop the merge: platformAutomerge waits only on checks the
+# branch ruleset REQUIRES, and main's ruleset requires none
+# (docs/BRANCH-PROTECTION.md), so #2308 merged with this check red and every
+# variant's nightly base build failed closed at install-remora.sh on
+# 2026-09-03. What holds the merge is renovate.json: downloads paired with a
+# hand-pinned sha256 are `automerge: false`, so a human runs `--fix` on the
+# branch first. The schedule catches the other case -- a release re-published
+# under the same tag with different content -- and a bump that slipped past
+# both, which is how the two remora breakages of 09-02/09-03 were found.
 on:
   pull_request:
     paths:
@@ -38,6 +44,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Verify every pinned checksum matches its pinned release
         run: python3 scripts/check-download-checksums.py
