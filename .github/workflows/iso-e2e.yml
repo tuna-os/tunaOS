@@ -107,6 +107,8 @@ jobs:
       matrix: ${{ steps.gen.outputs.matrix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # A dispatch tests exactly the cells asked for. Anything else -- the
       # pull_request harness trigger and the Monday schedule -- runs a fixed
@@ -179,6 +181,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # Two preflight gates, both meaning "this cell must not go on", and
       # both of which have to be evaluated in a step rather than a
