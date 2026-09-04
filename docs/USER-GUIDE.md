@@ -195,6 +195,16 @@ Homebrew → distrobox/toolbox container → build your own image
 custom-image story). That last option is the escape hatch that makes the
 first three acceptable.
 
+You can still run `dnf` inside a toolbox, and some images do ship a
+repository definition under `/etc/yum.repos.d` — hummingbird carries the
+tunaOS package repository, for instance. What they do **not** ship is the
+repositories that existed only while the image was being built: those are
+bind-mounted directories that are gone by the time you boot, and a
+definition left pointing at one would fail every `dnf` transaction rather
+than sit there harmlessly. The build removes them at the end of the desktop
+install, so every repository an image ships is one a running system can
+actually reach.
+
 ## 5. Rollback
 
 One command, or pick the previous entry in the boot menu:
