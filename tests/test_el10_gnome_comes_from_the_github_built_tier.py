@@ -25,7 +25,10 @@ Two facts the manifest and build-config must keep agreeing on:
 
 from __future__ import annotations
 
+import os
 import re
+import stat
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -37,8 +40,22 @@ GNOME = ROOT / "manifests" / "desktops" / "gnome.yaml"
 CONFIG = ROOT / ".github" / "build-config.yml"
 SCRIPT = ROOT / "build_scripts" / "desktop" / "install-desktop.sh"
 POLICY = ROOT / "PACKAGE-SOURCING.md"
+IMAGE_VERSIONS = ROOT / "image-versions.yaml"
+REGISTRY_MAP = ROOT / "registry-map.yaml"
+RESOLVE = ROOT / "scripts" / "resolve-image.sh"
+INNER = ROOT / "scripts" / "build-image-inner.sh"
+CONTAINERFILE = ROOT / "Containerfile.el10"
 
-TIER = "https://repo.tunaos.org/gnome50/10-stream-x86_64/"
+# One string in four places: the image-versions.yaml pin, the registry-map
+# entry, the resolve-image.sh role, and the /run path Containerfile.el10
+# mounts at -- which is what gnome.yaml's baseurl names. The nightly pin
+# checker's FILE_REPO_RE turns file:///run/NAME back into the pin called NAME,
+# so renaming one and not the others is an unresolvable pin, not a fallback.
+PIN = "gnome50-el10-packages"
+IMAGE = "ghcr.io/tuna-os/tunaos-packages"
+TAG = "gnome50-el10-x86_64"
+MOUNT = f"/run/{PIN}"
+TIER = f"file://{MOUNT}"
 EL10_VARIANTS = ("yellowfin", "albacore", "skipjack")
 # EL10 variants whose gnome cells are amd64-only until the tier has aarch64.
 PINNED = {"yellowfin", "albacore", "skipjack"}
@@ -72,8 +89,10 @@ def test_the_tier_is_declared_at_priority_one(el10):
     assert tier[0].get("priority") == 1, (
         "the tier must sit at priority 1 so its gnome-shell 50 beats EL 10.2's own 49 for every name it carries"
     )
-    assert not tier[0].get("unsigned"), (
-        "the https tier is signed; unsigned is for digest-pinned file:// only"
+    assert tier[0].get("unsigned") is True, (
+        "the repository is bind-mounted out of an image pinned by digest; the "
+        "digest is the signature, and install-desktop.sh allows unsigned only "
+        "for a file:// baseurl"
     )
 
 
@@ -128,7 +147,7 @@ def test_el10_gnome_is_amd64_only_until_the_tier_has_aarch64(variants, variant):
     for fid in ("gnome", "gnome-hwe"):
         assert flavors[fid].get("platforms") == AMD64, (
             f"{variant}:{fid} declares {flavors[fid].get('platforms', variants[variant]['platforms'])}; "
-            "re-adding arm64 requires an aarch64 index at repo.tunaos.org/gnome50/ and removing the "
+            "re-adding arm64 requires an aarch64 cell in tunaos-packages and removing the "
             "variant from PINNED in the same change"
         )
     asahi = flavors.get("gnome-asahi")
@@ -155,4 +174,115 @@ def test_the_sourcing_policy_records_the_retirement():
     assert re.search(r"~~COPR `jreilly1821/c10s-gnome-50-fresh`", text), (
         "PACKAGE-SOURCING.md must list the GNOME 50 COPR as migrated, with the tier that replaced it"
     )
-    assert "gnome50/10-stream-x86_64" in text
+    assert f"{IMAGE}:{TAG}" in text, (
+        "the row must name the image that replaced the COPR, not just say a tier did"
+    )
+
+
+# ── The pin, and the plumbing that carries it ────────────────────────────────
+
+
+@pytest.fixture(scope="module")
+def pin() -> dict:
+    images = yaml.safe_load(IMAGE_VERSIONS.read_text())["images"]
+    by_name = {i["name"]: i for i in images}
+    assert PIN in by_name, f"image-versions.yaml has no {PIN} pin"
+    return by_name[PIN]
+
+
+def test_the_pin_is_a_digest_on_the_factory_image(pin):
+    assert pin["image"] == IMAGE
+    assert re.fullmatch(r"sha256:[0-9a-f]{64}", pin["digest"]), (
+        f"{PIN} is not pinned to a digest: {pin.get('digest')!r}"
+    )
+    assert pin.get("tag") == TAG, (
+        "Renovate's image-versions block matches `name/image/tag/digest` in "
+        "that order; without the tag the digest is never bumped, and the tag "
+        "is what says which build chain published it"
+    )
+
+
+def test_registry_map_names_it():
+    images = yaml.safe_load(REGISTRY_MAP.read_text())["images"]
+    assert images[PIN]["path"] == IMAGE.split("/", 1)[1]
+    assert images[PIN]["registry"] == "ghcr"
+
+
+def test_resolve_image_has_a_role_for_it(tmp_path):
+    bindir = tmp_path / "bin"
+    bindir.mkdir()
+    yq = bindir / "yq"
+    yq.write_text(
+        "#!/usr/bin/env bash\n"
+        f'case "$*" in *{PIN}*) echo sha256:{"cd" * 32} ;; '
+        '*) echo unexpected-query >&2; exit 1 ;; esac\n'
+    )
+    yq.chmod(yq.stat().st_mode | stat.S_IEXEC)
+    out = subprocess.run(
+        ["bash", str(RESOLVE), "yellowfin", PIN],
+        capture_output=True, text=True, cwd=ROOT,
+        env={**os.environ, "PATH": f"{bindir}:{os.environ['PATH']}", "YQ": str(yq)},
+    )
+    assert out.returncode == 0, out.stderr
+    assert out.stdout.strip() == f"{IMAGE}@sha256:{'cd' * 32}"
+
+
+def test_an_unknown_role_still_lists_this_one():
+    """The error message is how the next person finds the role; one that
+    resolves but is not named there is a role nobody discovers."""
+    out = subprocess.run(
+        ["bash", str(RESOLVE), "yellowfin", "no-such-role"],
+        capture_output=True, text=True, cwd=ROOT,
+    )
+    assert out.returncode != 0
+    assert PIN in out.stderr
+
+
+def test_the_build_engine_passes_the_ref_as_a_build_arg():
+    text = INNER.read_text()
+    assert f'select(.name == "{PIN}") | .digest' in text
+    assert '"GNOME50_EL10_PACKAGES_IMAGE_REF=${gnome50_el10_packages_ref}"' in text
+
+
+def test_the_containerfile_declares_the_stage_and_mounts_it_on_gnome_only():
+    text = CONTAINERFILE.read_text()
+    assert (
+        f'ARG GNOME50_EL10_PACKAGES_IMAGE_REF="{IMAGE}:unpinned-must-override"'
+        in text
+    ), (
+        "the default must be a tag that cannot resolve, like COMMON/BREW/UTAH, "
+        "so a bare `podman build` fails loudly instead of pulling an unpinned repo"
+    )
+    assert f"FROM ${{GNOME50_EL10_PACKAGES_IMAGE_REF}} AS {PIN}" in text
+    mount = f"--mount=type=bind,from={PIN},source=/repository,target={MOUNT}"
+    stages = re.split(r"^FROM ", text, flags=re.M)
+    mounted = [s.split("\n", 1)[0] for s in stages if mount in s]
+    assert mounted == ["base-no-de AS gnome"], mounted
+    assert f"COPY --from={PIN}" not in text, (
+        "the repository is hundreds of MB of RPMs; it is bind-mounted for one "
+        "RUN, never copied into an image"
+    )
+
+
+def test_the_pin_checker_resolves_the_manifest_baseurl_to_the_image():
+    """gnome.yaml says file:///run/NAME and nothing on the network answers
+    that. check-package-repo-pins.py maps it back through image-versions.yaml
+    and probes the registry instead -- but only while the two names agree."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location(
+        "crpp", ROOT / "scripts" / "check-package-repo-pins.py"
+    )
+    crpp = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(crpp)
+
+    collected = crpp.collect(
+        yaml.safe_load(GNOME.read_text()), crpp.oci_pins(str(IMAGE_VERSIONS))
+    )
+    kinds = {url: kind for kind, url in collected}
+    ref = next(u for u in kinds if u.startswith(IMAGE + "@"))
+    assert kinds[ref] == "oci", (
+        f"{TIER} did not resolve to a pinned image; it would be reported "
+        "oci-unpinned and fail the nightly check"
+    )
+    assert "oci-unpinned" not in set(kinds.values())

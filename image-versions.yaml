@@ -33,6 +33,31 @@ images:
     tag: latest
     digest: sha256:9cb667291a1a0b112c39d3c6a69116bb52cb1a10c7df12290b9c298b5682426c
 
+  # tunaOS' own GNOME 50 for EL10, from the gnome50-el10-x86_64 build chain in
+  # tuna-os/tunaos-packages: a createrepo_c repository shipped as an OCI image
+  # (`/repository`), exactly the shape utah-packages uses above. Built in a
+  # CentOS Stream 10 mock root in GitHub Actions and signed with the tunaOS
+  # key; here the digest is what is trusted.
+  #
+  # This replaces the https tier at repo.tunaos.org/gnome50/10-stream-x86_64.
+  # That prefix was never factory output -- the since-deleted
+  # refresh-gnome50-r2.yml rclone-synced the jreilly1821/c10s-gnome-50 COPR
+  # into it, so its packages carried the COPR project key and a gpgcheck=1
+  # consumer could not install one (yellowfin run 33750514082 died at "GPG
+  # check FAILED ... glib2-2.88.0-4.el10"). tunaos-packages#676 gave the family
+  # its own prefix and evicted the foreign content; #682 fixed the buildroot so
+  # the chain could rebuild what the eviction removed. This digest is the first
+  # index that is both factory-signed and a complete stack: 345 packages,
+  # gnome-shell 50.0-3, mutter 50.0-4, gdm 50.0-3, gtk4 4.21.6, glib2 2.88.0-1
+  # (tunaos-packages run 33857079036).
+  #
+  # x86_64 only: the chain has no aarch64 leg, so EL10 GNOME stays off on
+  # Apple Silicon until one exists.
+  - name: gnome50-el10-packages
+    image: ghcr.io/tuna-os/tunaos-packages
+    tag: gnome50-el10-x86_64
+    digest: sha256:b279ab7c95e48fdc14ad083169fd79cd87b04a5d2aba90d3a8ba1580f7de944d
+
 # Pinned binary downloads (managed by Renovate)
 downloads:
   # renovate: datasource=github-releases depName=ublue-os/uupd

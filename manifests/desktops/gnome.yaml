@@ -239,7 +239,8 @@ packages:
     # GNOME 50 on EL10 comes from tunaOS's own package factory
     # (tuna-os/tunaos-packages, build-order-gnome50 / gnome51): RPMs built in
     # GitHub Actions in a CentOS Stream 10 mock root, signed with the tunaOS
-    # key, published as an rpm-md tier. No COPR: maintainer directive
+    # key, published as createrepo_c output inside an OCI image. No COPR:
+    # maintainer directive
     # 2026-09-03 -- "no more COPR, build in GitHub like utah-packages". The
     # previous jreilly1821/c10s-gnome-50 COPR entries are gone; the factory
     # tier carries the same 50.0 builds plus gnome50-el10-compat, the glib2
@@ -253,21 +254,34 @@ packages:
     # wins over AppStream's regardless of version, and the version locks at
     # the end of install-desktop.sh pin what it installed.
     #
-    # x86_64 only today: repo.tunaos.org/gnome50/10-stream-aarch64 does not
-    # exist (404, 2026-09-03), so the EL10 gnome flavors are pinned to amd64
-    # in .github/build-config.yml (arch_honesty criterion; same shape as
-    # xfce's tier). The aarch64 leg of the tier is the unblock, tracked on the
-    # tunaos-packages side.
+    # x86_64 only today: the chain has a single leg, gnome50-el10-x86_64, and
+    # there is no aarch64 image to pin, so the EL10 gnome flavors are pinned to
+    # amd64 in .github/build-config.yml (arch_honesty criterion; same shape as
+    # xfce's tier). An aarch64 cell in tunaos-packages is the unblock.
     #
-    # Next: the factory publishes the tier as an OCI image (createrepo output
-    # only) consumed by digest through image-versions.yaml and a file://
-    # bind-mount, the way hummingbird consumes projectbluefin/utah-packages
-    # below. Then this block becomes a file:// repo with `unsigned: true` and
-    # the digest is the signature.
+    # It is consumed as an OCI image of the createrepo_c output, by digest
+    # (image-versions.yaml pins `gnome50-el10-packages`), bind-mounted by
+    # Containerfile.el10 at /run/gnome50-el10-packages -- exactly how
+    # hummingbird consumes projectbluefin/utah-packages below. `unsigned: true`
+    # because the digest is the signature: the bytes cannot differ from what
+    # was reviewed, and install-desktop.sh allows that only for a file:// repo
+    # (tuna-os/tunaOS#1655).
+    #
+    # This replaces the https tier at repo.tunaos.org/gnome50/10-stream-x86_64
+    # this block used to name. That prefix was never factory output: the
+    # since-deleted refresh-gnome50-r2.yml rclone-synced the
+    # jreilly1821/c10s-gnome-50 COPR into it, so its packages carried the COPR
+    # project key and a gpgcheck=1 consumer could not install one of them --
+    # yellowfin run 33750514082 failed at "GPG check FAILED ...
+    # glib2-2.88.0-4.el10". tunaos-packages#676 gave the family its own prefix
+    # and evicts foreign content from it; #682 fixed the buildroot so the chain
+    # could rebuild what the eviction removed. Taking the OCI image by digest
+    # removes the network from the path altogether.
     repos:
-      - name: tunaos-gnome50
-        baseurl: https://repo.tunaos.org/gnome50/10-stream-x86_64/
+      - name: gnome50-el10-packages
+        baseurl: file:///run/gnome50-el10-packages
         priority: 1
+        unsigned: true
 
     # Run before any group or package of this section, with the tier live.
     # The first two are what Bluefin LTS does on the same stack: the base's

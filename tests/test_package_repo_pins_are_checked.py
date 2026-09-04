@@ -52,19 +52,28 @@ def test_the_real_manifests_yield_the_known_pin_classes() -> None:
     """Extraction against the actual manifests finds every pin class we know
     is declared today. If a manifest refactor changes a shape, this fails
     before the nightly check silently starts checking nothing."""
+    by_name = crpp.oci_pins(str(ROOT / "image-versions.yaml"))
     pins: list[tuple[str, str]] = []
     for path in sorted((ROOT / "manifests" / "desktops").glob("*.yaml")):
-        pins.extend(crpp.collect(yaml.safe_load(path.read_text())))
+        pins.extend(crpp.collect(yaml.safe_load(path.read_text()), by_name))
     kinds = {k for k, _ in pins}
-    assert {"dnf", "copr", "ppa", "apt", "key"} <= kinds, (
+    assert {"dnf", "copr", "ppa", "apt", "key", "oci"} <= kinds, (
         f"missing pin classes: extraction found only {sorted(kinds)}"
+    )
+    assert "oci-unpinned" not in kinds, (
+        "a manifest declares a file:///run/NAME repo with no image-versions.yaml "
+        "pin called NAME; nothing provides that repo at build time"
     )
     urls = [u for _, u in pins]
     # The named motivators: the hummingbird snapshot datestamp, and the EL10
     # GNOME 50 tier that replaced the #391 COPR single point of failure
     # (2026-09-03: no more COPR for a desktop stack).
     assert any("hummingbird/20251124" in u for u in urls)
-    assert any("repo.tunaos.org/gnome50/10-stream-x86_64" in u for u in urls)
+    assert any("ghcr.io/tuna-os/tunaos-packages@sha256:" in u for u in urls), (
+        "the EL10 GNOME source is a file:///run/... repo; the checker must "
+        "resolve it back through image-versions.yaml to the image it pins, or "
+        "the nightly silently stops checking the desktop stack's only source"
+    )
     assert not any("projectname=c10s-gnome-5" in u for u in urls), (
         "a jreilly1821/c10s-gnome-5x COPR is back in a manifest; GNOME on EL10 comes from the factory tier"
     )
