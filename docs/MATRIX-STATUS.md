@@ -68,23 +68,23 @@ it.
 
 Scored against `.github/green-criteria.yml`: a cell is green only when every **blocking** criterion applicable to it has a current affirmative result; a criterion that was skipped, never tested, or unasserted renders ⬜ and does not count as satisfied. Blocking today: `builds`, `desktop`, `boots`, `no_silent_omissions`. Advisory (measured in the sections below, not yet biting): `install`, `lifecycle`, `parity`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. Graduating a criterion is an edit to `enforcement:` in that file — this table and the README count tighten with no code change.
 
-**52 of 145** published cells are composite-green.
+**62 of 145** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
 | **albacore** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **flounder** | ⬜ | ⬜ | — | — | ⬜ |
+| **flounder** | ✅ | ✅ | — | — | ❌ |
 | **flounder-sid** | ❌ | ❌ | — | — | ❌ |
-| **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
-| **guppy** | ❌ | ⬜ | — | — | ✅ |
-| **hummingbird** | ⬜ | — | ⬜ | — | — |
+| **grouper** | ✅ | ✅ | ❌ | — | ✅ |
+| **guppy** | ❌ | ⬜ | — | — | ⬜ |
+| **hummingbird** | ❌ | — | ❌ | — | — |
 | **marlin** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **skipjack** | ❌ | ✅ | ❌ | ❌ | ❌ |
+| **skipjack** | ❌ | ✅ | ❌ | ⬜ | ✅ |
 | **wahoo** | ❌ | ❌ | ❌ | — | — |
-| **yellowfin** | ✅ | ✅ | ❌ | ❌ | ✅ |
+| **yellowfin** | ❌ | ✅ | ❌ | ❌ | ✅ |
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
 
@@ -114,13 +114,13 @@ Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package
 
 ## Package parity
 
-**41 of 53** cells at parity (50 measured, 3 never measured).
+**40 of 53** cells at parity (50 measured, 3 never measured).
 
 Green criterion 7 (`parity`), first cadence: every desktop's package set audited daily against its own base (`package-parity.yml` → `scripts/package-parity.sh --audit`) — the shape that exposes a build applying no desktop at all (#858). ❌ covers both BROKEN (no more packages than base) and suspect (fewer than 25 added). Diffing against each variant's upstream reference is the next step and is not yet asserted.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
-| **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
+| **albacore** | ✅ | ✅ | ✅ | ✅ | ❌ |
 | **bonito** | ✅ | ✅ | ❌ | ✅ | ✅ |
 | **bonito-rawhide** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **flounder** | ❌ | ❌ | — | — | ❌ |
