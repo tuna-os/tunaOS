@@ -717,6 +717,29 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 		done
 	fi
 
+	# ── Retire the build-only repos ──────────────────────────────────────────────
+	# A file:// repo is a bind mount that exists for the duration of one RUN
+	# (Containerfile.el10 mounts /run/utah-packages and
+	# /run/gnome50-el10-packages out of digest-pinned OCI images). The .repo file
+	# the loop above wrote is NOT scoped to that RUN -- 99-cleanup.sh runs in
+	# base-no-de, before the desktop stages fork from it, so nothing removes it
+	# and it ships. On a booted host the baseurl names a path that does not
+	# exist, and the loop writes skip_if_unavailable=False, so it is not a
+	# harmless stale entry: it fails every dnf transaction the user runs.
+	#
+	# Only the file:// ones go. The https tiers are reachable from a booted host
+	# and some are deliberately left enabled (10-base-packages.sh writes
+	# tunaos-hummingbird.repo the same way).
+	for ((i = 0; i < _TD_REPO_COUNT; i++)); do
+		_TD_RN=$($YQ -r ".packages.${_TD_OS}.repos[$i].name" "${_TD_MANIFEST}")
+		_TD_RB=$($YQ -r ".packages.${_TD_OS}.repos[$i].baseurl" "${_TD_MANIFEST}")
+		[[ -z "${_TD_RN}" || "${_TD_RN}" == "null" ]] && continue
+		if [[ "${_TD_RB}" == file://* ]]; then
+			rm -f "/etc/yum.repos.d/${_TD_RN}.repo"
+			echo "Removed build-only repo ${_TD_RN} (${_TD_RB} is a bind mount, not a runtime path)"
+		fi
+	done
+
 fi # end DNF path (el10/fedora)
 
 # ── Display manager (all OSes) ───────────────────────────────────────────────
