@@ -2,6 +2,18 @@
 
 display_manager: gdm
 
+# Version floor for every GNOME image, whatever the base. Maintainer directive
+# 2026-09-03: tunaOS is moving off GNOME 49 -- nothing below 50 ships, and 51
+# is the target as it releases (51.0 is due 2026-09-12). This is the documented
+# policy; build_scripts/checks/verify-desktop-experience.sh enforces it with
+# its own constant (it runs inside the image, where this file is not
+# available) and tests/test_the_gnome_floor_is_enforced.py holds the two
+# equal. Bases that cannot reach the floor from their own repositories on
+# 2026-09-03: Debian trixie (48.7; sid has 50.4) and Gentoo (::gentoo tops out
+# at 49.9). Their gnome cells fail the desktop contract until a source that
+# meets the floor is wired, which is the honest state, not a bug in the check.
+minimum_version: 50
+
 packages:
   # This section serves Ubuntu (grouper). Debian uses gnome-debian.yaml.
   apt:
@@ -224,21 +236,65 @@ packages:
       - gnome-software
       - gnome-software-fedora-langpacks
   el10:
-    # COPR repos for GNOME 50 backport — EL10 ships GNOME 48 natively.
-    # Brings modern GNOME to Enterprise Linux without waiting 3 years.
-    # Policy exception per PACKAGE-SOURCING.md / #1319 (tier-3 temporary source;
-    # scheduled for Tideforge migration in Q4 #1187).
-    copr:
-      - repo: jreilly1821/c10s-gnome-50-fresh
-        extra_repos:
-          - jreilly1821/c10s-gnome-50
-        pre_install:
-          - "dnf -y upgrade glib2 fontconfig gobject-introspection gjs"
-          - "dnf_retry -y install --allowerasing gnome50-el10-compat"
-        packages: []
+    # GNOME 50 on EL10 comes from tunaOS's own package factory
+    # (tuna-os/tunaos-packages, build-order-gnome50 / gnome51): RPMs built in
+    # GitHub Actions in a CentOS Stream 10 mock root, signed with the tunaOS
+    # key, published as createrepo_c output inside an OCI image. No COPR:
+    # maintainer directive
+    # 2026-09-03 -- "no more COPR, build in GitHub like utah-packages". The
+    # previous jreilly1821/c10s-gnome-50 COPR entries are gone; the factory
+    # tier carries the same 50.0 builds plus gnome50-el10-compat, the glib2
+    # 2.88 / fontconfig 2.17 / gjs / gobject-introspection the stack needs,
+    # and the selinux-policy 43 that gdm 50 requires (466 binary names
+    # measured 2026-09-03).
+    #
+    # EL 10.2 ships GNOME 49 itself (AlmaLinux 10.2 AppStream: gnome-shell
+    # 49.4, gtk4 4.16, gdm 47) and the floor is 50 (minimum_version above),
+    # so this repo sits at priority 1: for every name it carries, its build
+    # wins over AppStream's regardless of version, and the version locks at
+    # the end of install-desktop.sh pin what it installed.
+    #
+    # x86_64 only today: the chain has a single leg, gnome50-el10-x86_64, and
+    # there is no aarch64 image to pin, so the EL10 gnome flavors are pinned to
+    # amd64 in .github/build-config.yml (arch_honesty criterion; same shape as
+    # xfce's tier). An aarch64 cell in tunaos-packages is the unblock.
+    #
+    # It is consumed as an OCI image of the createrepo_c output, by digest
+    # (image-versions.yaml pins `gnome50-el10-packages`), bind-mounted by
+    # Containerfile.el10 at /run/gnome50-el10-packages -- exactly how
+    # hummingbird consumes projectbluefin/utah-packages below. `unsigned: true`
+    # because the digest is the signature: the bytes cannot differ from what
+    # was reviewed, and install-desktop.sh allows that only for a file:// repo
+    # (tuna-os/tunaOS#1655).
+    #
+    # This replaces the https tier at repo.tunaos.org/gnome50/10-stream-x86_64
+    # this block used to name. That prefix was never factory output: the
+    # since-deleted refresh-gnome50-r2.yml rclone-synced the
+    # jreilly1821/c10s-gnome-50 COPR into it, so its packages carried the COPR
+    # project key and a gpgcheck=1 consumer could not install one of them --
+    # yellowfin run 33750514082 failed at "GPG check FAILED ...
+    # glib2-2.88.0-4.el10". tunaos-packages#676 gave the family its own prefix
+    # and evicts foreign content from it; #682 fixed the buildroot so the chain
+    # could rebuild what the eviction removed. Taking the OCI image by digest
+    # removes the network from the path altogether.
+    repos:
+      - name: gnome50-el10-packages
+        baseurl: file:///run/gnome50-el10-packages
+        priority: 1
+        unsigned: true
 
-    # Remove conflicting packages before COPR install
+    # Run before any group or package of this section, with the tier live.
+    # The first two are what Bluefin LTS does on the same stack: the base's
+    # glib2 2.80 and fontconfig 2.15 must be upgraded before gnome-shell 50
+    # is resolved (pango 1.57 links a fontconfig 2.17 symbol; glib2 2.84+
+    # ships both libgirepository-1.0 and -2.0, and gjs/gobject-introspection
+    # must move together or gnome-shell double-registers GIRepository at
+    # startup). gnome50-el10-compat is the tier's shim for the EL10 bits
+    # GNOME 50 assumes. The last removes the base's gnome-shell-common, which
+    # conflicts with the tier's; it is a no-op on a base that never had it.
     pre_install:
+      - "dnf -y upgrade glib2 fontconfig gobject-introspection gjs"
+      - "dnf_retry -y install --allowerasing gnome50-el10-compat"
       - "warn_on_fail dnf_retry -y remove --noautoremove gnome-shell-common"
 
     groups:

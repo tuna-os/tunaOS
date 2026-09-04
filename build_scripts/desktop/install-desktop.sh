@@ -613,6 +613,20 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 		echo "Added repo ${_TD_RN} -> ${_TD_RB}"
 	done
 
+	# Section-level pre_install: commands the manifest wants run before any
+	# group or package of this section, with the plain repos above already
+	# written. gnome.yaml's el10 section uses it to move glib2/fontconfig/
+	# gjs/gobject-introspection to the GNOME 50 tier's builds and install
+	# gnome50-el10-compat before gnome-shell 50 is resolved -- the order
+	# Bluefin LTS established for GNOME 50 on EL10. Until 2026-09-03 this key
+	# existed in the manifest and was read by nothing.
+	readarray -t _TD_PRE < <($YQ -r ".packages.${_TD_OS}.pre_install[]" "${_TD_MANIFEST}" 2>/dev/null || true)
+	for _TD_CMD in ${_TD_PRE[@]+"${_TD_PRE[@]}"}; do
+		[[ -n "${_TD_CMD}" ]] || continue
+		echo "pre_install: ${_TD_CMD}"
+		eval "${_TD_CMD}"
+	done
+
 	# Install groups
 	_TD_GROUP_OPTS=$($YQ -r ".packages.${_TD_OS}.group_options // \"\"" "${_TD_MANIFEST}")
 	_yq_array _TD_GROUPS -r ".packages.${_TD_OS}.groups[]" "${_TD_MANIFEST}"
@@ -657,7 +671,12 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 		fi
 	fi
 
-	# COPR packages (EL10 primarily)
+	# COPR packages (EL10 primarily). Add-on shape only: the repo is enabled,
+	# disabled again at once, and the listed packages are installed from it
+	# with --enablerepo so nothing else resolves from it. A COPR is not a
+	# source for a desktop stack here -- GNOME on EL10 comes from the
+	# tunaos-packages tier (see gnome.yaml) -- and PACKAGE-SOURCING.md lists
+	# the remaining add-on entries as exceptions to retire.
 	_TD_COPR_COUNT=$($YQ -r ".packages.${_TD_OS}.copr | length // 0" "${_TD_MANIFEST}" 2>/dev/null)
 	for ((i = 0; i < _TD_COPR_COUNT; i++)); do
 		_TD_COPR_REPO=$($YQ -r ".packages.${_TD_OS}.copr[$i].repo" "${_TD_MANIFEST}")
@@ -673,13 +692,11 @@ if [[ "${_TD_OS}" == "el10" || "${_TD_OS}" == "fedora" || "${_TD_OS}" == "hummin
 		fi
 		dnf -y copr disable "${_TD_COPR_REPO}" || true
 		_TD_REPO_ID="copr:copr.fedorainfracloud.org:$(echo "${_TD_COPR_REPO}" | tr '/' ':')"
-		# `packages: []` is the enable-only idiom: the block exists so the
-		# repo FILE is written and a later block can name it in --enablerepo.
-		# Running `dnf install` with no arguments there is a guaranteed error
-		# swallowed by `|| true`, which buries a real failure in noise the
-		# reader has learned to ignore. Skip it and say why.
+		# A copr entry with no packages enables nothing for anyone: no later
+		# block names the repo, and a stack must come from a tier, not a
+		# COPR. Say so instead of running `dnf install` with no arguments.
 		if ((${#_TD_COPR_PKGS[@]} == 0)); then
-			echo "Enabled ${_TD_COPR_REPO} (no packages listed — repo enabled for a later --enablerepo)"
+			echo "${_TD_COPR_REPO}: no packages listed -- nothing is installed from it (a desktop stack belongs in a repos: tier, not a copr)" >&2
 			continue
 		fi
 		# shellcheck disable=SC2086

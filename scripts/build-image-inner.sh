@@ -58,6 +58,15 @@ brew_image_ref="${brew_image}@${brew_image_sha}"
 utah_packages_image="${UTAH_PACKAGES_IMAGE:-ghcr.io/projectbluefin/utah-packages}"
 utah_packages_sha=$($YQ -r '.images[] | select(.name == "utah-packages") | .digest' image-versions.yaml)
 utah_packages_ref="${utah_packages_image}@${utah_packages_sha}"
+# EL10's GNOME comes from this project's own gnome50-el10-x86_64 build chain in
+# tuna-os/tunaos-packages, published the same way: an OCI image carrying a dnf
+# repository. Containerfile.el10 bind-mounts it into the gnome stage and
+# manifests/desktops/gnome.yaml's el10 section points dnf at it. Resolved for
+# every build so the Containerfile has one contract; only el10's gnome stage
+# reads it.
+gnome50_el10_packages_image="${GNOME50_EL10_PACKAGES_IMAGE:-ghcr.io/tuna-os/tunaos-packages}"
+gnome50_el10_packages_sha=$($YQ -r '.images[] | select(.name == "gnome50-el10-packages") | .digest' image-versions.yaml)
+gnome50_el10_packages_ref="${gnome50_el10_packages_image}@${gnome50_el10_packages_sha}"
 
 # ── Build args ────────────────────────────────────────────────────────────────
 BUILD_ARGS=()
@@ -68,6 +77,7 @@ BUILD_ARGS+=("--build-arg" "BASE_IMAGE=${BASE_IMAGE}")
 BUILD_ARGS+=("--build-arg" "COMMON_IMAGE_REF=${common_image_ref}")
 BUILD_ARGS+=("--build-arg" "BREW_IMAGE_REF=${brew_image_ref}")
 BUILD_ARGS+=("--build-arg" "UTAH_PACKAGES_IMAGE_REF=${utah_packages_ref}")
+BUILD_ARGS+=("--build-arg" "GNOME50_EL10_PACKAGES_IMAGE_REF=${gnome50_el10_packages_ref}")
 BUILD_ARGS+=("--build-arg" "ENABLE_HWE=${ENABLE_HWE}")
 BUILD_ARGS+=("--build-arg" "ENABLE_ASAHI=${ENABLE_ASAHI:-0}")
 BUILD_ARGS+=("--build-arg" "ENABLE_NVIDIA=${ENABLE_NVIDIA}")

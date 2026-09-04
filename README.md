@@ -37,9 +37,9 @@ TunaOS builds **bootc-based desktop operating systems** with atomic updates and 
 
 | Variant | Base OS | Registry Path | Desktops | Architectures |
 | :--- | :--- | :--- | :--- | :--- |
-| 🐠 **Yellowfin** | AlmaLinux Kitten 10 | `ghcr.io/tuna-os/yellowfin` | GNOME, KDE, COSMIC, Niri | x86_64, x86_64/v2, arm64 |
-| 🐟 **Albacore** | AlmaLinux 10 (RHEL 10) | `ghcr.io/tuna-os/albacore` | GNOME, KDE, COSMIC, Niri | x86_64, x86_64/v2, arm64 |
-| 🍣 **Skipjack** | CentOS Stream 10 | `ghcr.io/tuna-os/skipjack` | GNOME, KDE, COSMIC, Niri | x86_64, arm64 |
+| 🐠 **Yellowfin** | AlmaLinux Kitten 10 | `ghcr.io/tuna-os/yellowfin` | GNOME (x86_64 only, see note), KDE, COSMIC, Niri | x86_64, x86_64/v2, arm64 |
+| 🐟 **Albacore** | AlmaLinux 10 (RHEL 10) | `ghcr.io/tuna-os/albacore` | GNOME (x86_64 only, see note), KDE, COSMIC, Niri | x86_64, x86_64/v2, arm64 |
+| 🍣 **Skipjack** | CentOS Stream 10 | `ghcr.io/tuna-os/skipjack` | GNOME (x86_64 only, see note), KDE, COSMIC, Niri | x86_64, arm64 |
 | 🎣 **Bonito** | Fedora 44 | `ghcr.io/tuna-os/bonito` | GNOME, KDE, COSMIC, Niri | x86_64, arm64 |
 | 🐦 **Hummingbird** | Fedora Hummingbird (experimental) | `ghcr.io/tuna-os/hummingbird` | Base, GNOME, COSMIC | x86_64; arm64 (base only) |
 | 🎏 **Wahoo** | Fedora ELN — EL11 preview (experimental, no codecs) | `ghcr.io/tuna-os/wahoo` | Base, GNOME | x86_64, arm64 |
@@ -54,6 +54,12 @@ TunaOS builds **bootc-based desktop operating systems** with atomic updates and 
 | 🌈 **Guppy** | Gentoo Linux | `ghcr.io/tuna-os/guppy` | GNOME, KDE | x86_64 |
 | 🏔️ **Tromsø** | freedesktop-sdk (BuildStream), built in [tuna-os/tromso](https://github.com/tuna-os/tromso) | `ghcr.io/tuna-os/tromso` | KDE | x86_64 |
 | 🐭 **XFCE Linux** | freedesktop-sdk (BuildStream), built in [tuna-os/xfce-linux](https://github.com/tuna-os/xfce-linux) | `ghcr.io/tuna-os/xfce-linux` | XFCE | x86_64 |
+
+GNOME on the EL10 variants ships from tunaOS's own GNOME 50 package tier
+(built in GitHub Actions, no COPR), which is x86_64 only today, so their
+`gnome`/`gnome-hwe` images are x86_64 and `gnome-asahi` is off until the
+tier gains aarch64 ([tunaos-packages#673](https://github.com/tuna-os/tunaos-packages/issues/673)).
+Every GNOME image, on any base, is GNOME 50 or newer; nothing older promotes.
 
 Tags are `<desktop>[-hardware]` — e.g. `yellowfin:gnome-hwe`,
 `albacore:kde-nvidia`. Full tag reference: [docs/IMAGE-TAGS.md](docs/IMAGE-TAGS.md).

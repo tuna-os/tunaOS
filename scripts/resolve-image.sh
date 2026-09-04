@@ -15,6 +15,7 @@
 #   brew       — ublue-os/brew with pinned digest
 #   zirconium  — zirconium-dev/zirconium with pinned digest
 #   utah-packages — projectbluefin/utah-packages (Hummingbird GNOME repo) with pinned digest
+#   gnome50-el10-packages — tuna-os/tunaos-packages (EL10 GNOME 50 repo) with pinned digest
 #   akmods     — akmods-nvidia-open registry base (with mirror support)
 #
 # Output: fully-qualified image reference (image@sha256:... or image:tag)
@@ -58,12 +59,17 @@ utah-packages)
 	DIGEST=$($YQ -r '.images[] | select(.name == "utah-packages") | .digest' image-versions.yaml)
 	echo "${IMAGE%%:*}@${DIGEST}"
 	;;
+gnome50-el10-packages)
+	IMAGE="${GNOME50_EL10_PACKAGES_IMAGE:-ghcr.io/tuna-os/tunaos-packages}"
+	DIGEST=$($YQ -r '.images[] | select(.name == "gnome50-el10-packages") | .digest' image-versions.yaml)
+	echo "${IMAGE%%:*}@${DIGEST}"
+	;;
 akmods)
 	AKMODS_ORG=$($YQ -r ".variants[] | select(.id == \"${VARIANT}\") | .akmods // \"ublue-os\"" "$BUILD_CONFIG")
 	registry_ref akmods 2>/dev/null || echo "ghcr.io/${AKMODS_ORG}"
 	;;
 *)
-	echo "ERROR: unknown role '${ROLE}'. Valid: base, common, brew, zirconium, utah-packages, akmods" >&2
+	echo "ERROR: unknown role '${ROLE}'. Valid: base, common, brew, zirconium, utah-packages, gnome50-el10-packages, akmods" >&2
 	exit 1
 	;;
 esac
