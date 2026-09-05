@@ -280,6 +280,32 @@ runners — and tuna-os/tunaOS#848 is a prerequisite, since stage-3 flavors
 currently cannot build a dev ISO at all. Until then the ⬜/stale cells above
 should be read as *not yet covered*, not as a backlog of broken cells.
 
+**The boot gate for cosmic/niri/xfwl4 is out of scope, because it cannot
+start.** This is a different failure from everything else in this section: not
+a compositor that will not render, but a job that never runs. `verify_boot`
+routes those flavors to the GPU runner group for a real DRM render node, and
+the account's vCPU limit for that instance bucket is **0**, so the fleet
+request is rejected and no runner ever attaches:
+
+```
+Failed to launch runner: failed to create fleet: VcpuLimitExceeded
+... vCPU limit of 0 ... AllowedInstanceTypes:["g4dn*"]
+```
+
+Confirmed on two independent runs — 33848074014 job 101038352430 on `main`,
+33948918141 job 101266051600 on a branch — each ending `No files were found
+... verify-out/serial.log`. No serial log, no screenshot, no compositor,
+because no step ran.
+
+Those cells were being scored ❌ on `boots`, which asserted a boot failure
+nobody observed. They are now out of scope for that criterion in
+`green-criteria.yml`, alongside `-asahi`. Read that as **not measured** — ⬜
+means measured and unproven, ❌ means measured and failed, and only the first
+is true here. The exclusion moves no cell to green: every one still fails
+another blocking criterion. It reverts the moment g4dn capacity exists
+(tuna-os/tunaOS#2123), and a test pins the excluded prefixes equal to the
+workflow's routing so the two cannot drift apart.
+
 **Not four of five. Four of five are measured, and three of them START.**
 This section used to say cosmic, niri, xfwl4 **and kde** all need a DRM render
 node, that GitHub runners have none, and that "no configuration change alters
