@@ -146,6 +146,24 @@ criteria:
       # reusable-build-image.yml the same day. Re-gate `base` here if it
       # ever becomes a supported end-user target.
       excludes_flavors: ["base", "base-hwe", "base-nvidia"]
+      # TEMPORARY, and revert the moment g4dn capacity exists. verify_boot
+      # routes these compositors to a GPU runner for a real DRM render node,
+      # and the account's vCPU limit for that instance bucket is 0, so the
+      # fleet request fails and no runner ever attaches:
+      #   Failed to launch runner: failed to create fleet: VcpuLimitExceeded
+      #   ... vCPU limit of 0 ... AllowedInstanceTypes:["g4dn*"]
+      # Confirmed on two independent runs (#2123): nightly 33848074014 job
+      # 101038352430 on main, and 33948918141 job 101266051600 on a branch.
+      # The job dies before its first step -- no serial log, no screenshot, no
+      # compositor. Nothing was measured, so scoring these cells red asserted
+      # a boot failure nobody observed. Out-of-scope is the honest state until
+      # CI can run the gate; it is NOT a claim that they boot.
+      #
+      # Prefixes, because reusable-build-image.yml routes by prefix too:
+      #   startsWith(inputs.flavor, 'cosmic') || 'niri' || 'xfwl4'
+      # Pinned equal by tests/test_the_boots_scope_matches_the_gpu_routing.py
+      # so the scope and the routing cannot drift apart.
+      excludes_flavor_prefixes: ["cosmic", "niri", "xfwl4"]
     status_2026_08_17: "skippable per cell; silently broke matrix-wide on 2026-08-17 (#1811)"
     status_2026_08_17_pm: >-
       blocking. Gates restored by #1818 (marlin gnome/kde/xfce passed same
