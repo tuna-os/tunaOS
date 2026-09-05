@@ -75,7 +75,7 @@ Scored against `.github/green-criteria.yml`: a cell is green only when every **b
 | **albacore** | ✅ | ✅ | ❌ | ❌ | ✅ |
 | **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **flounder** | ✅ | ✅ | — | — | ❌ |
+| **flounder** | — | ✅ | — | — | ❌ |
 | **flounder-sid** | ❌ | ❌ | — | — | ❌ |
 | **grouper** | ✅ | ✅ | ❌ | — | ✅ |
 | **guppy** | ❌ | ⬜ | — | — | ⬜ |
