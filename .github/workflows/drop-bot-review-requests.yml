@@ -11,12 +11,16 @@ name: Drop bot review requests
 # genuinely requires a code-owner approval, the PR still waits for one; it just
 # stops sitting in a person's review queue.
 #
-# pull_request_target is used so the token can write on the PR. It is safe here
-# because this workflow never checks out or executes any code from the pull
-# request -- it only calls the API with values GitHub itself supplies.
+# Deliberately `pull_request`, not `pull_request_target`: this needs no code
+# from the PR, and pull_request_target would hand a write token and secrets to
+# a workflow triggered by PR contents for no benefit (tunaOS forbids it
+# outright -- tests/test_fork_safe_workflows.py). The job is additionally
+# limited to same-repo PRs: a fork PR's token is read-only, so the API call
+# would fail rather than do anything useful. Renovate branches live in the
+# repository, so the bots this exists for are always in scope.
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, reopened, ready_for_review]
 
 permissions:
@@ -28,7 +32,9 @@ concurrency:
 
 jobs:
   drop:
-    if: github.event.pull_request.user.type == 'Bot'
+    if: >-
+      github.event.pull_request.user.type == 'Bot' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
       - name: Remove auto-requested reviewers
