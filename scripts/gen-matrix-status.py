@@ -582,6 +582,16 @@ def criterion_scope_allows(criterion: dict, flavor: str) -> bool:
     scope = criterion.get("scope") or {}
     if flavor in (scope.get("excludes_flavors") or []):
         return False
+    if any(
+        flavor.startswith(prefix)
+        for prefix in (scope.get("excludes_flavor_prefixes") or [])
+    ):
+        # Prefix rather than exact, because the workflow that routes a cell to
+        # a runner does the same: reusable-build-image.yml selects the GPU
+        # group with startsWith(inputs.flavor, ...). Matching on the same shape
+        # keeps the scope and the routing from disagreeing about which cells a
+        # gate can even reach -- and a test pins the two lists equal.
+        return False
     return not any(
         flavor.endswith(suffix)
         for suffix in (scope.get("excludes_flavor_suffixes") or [])
