@@ -119,6 +119,20 @@ packages:
       - cosmic-greeter
       - greetd
       - xdg-desktop-portal-cosmic
+      # Software Vulkan (lavapipe). Not a dependency of anything, so it is
+      # only present if asked for by name -- which is why every cosmic cell
+      # that has been booted fails on GPU-less CI while gnome starts on the
+      # identical guest. The guest HAS a render node (run 32681262659 read
+      # /dev/dri and found renderD128) but the kernel reports `-virgl`, so
+      # Mesa routes GL through zink, and zink with no Vulkan ICD installed
+      # cannot pick a device:
+      #   MESA: error: ZINK: failed to choose pdev
+      #   libEGL warning: egl: failed to create dri2 screen
+      # cosmic-comp then holds a Wayland connection with no surface, which
+      # is the 'process running, nothing on screen' state the smoke gate
+      # reports. On real hardware it survived by falling back to Vulkan
+      # llvmpipe -- this is that fallback, packaged.
+      - mesa-vulkan-drivers
 
   fedora:
     packages:
@@ -155,6 +169,9 @@ packages:
       - greetd
       - xdg-desktop-portal-cosmic
       - pop-icon-theme
+      # Software Vulkan (lavapipe) -- see the apt list's note above for why
+      # this must be named rather than pulled in transitively.
+      - mesa-vulkan-drivers
 
   # ── Hummingbird (Fedora rebuild) ───────────────────────────────────
   # The cheapest real win in the matrix (#1755 §4): the rebuild repo carries
@@ -211,6 +228,9 @@ packages:
       - greetd
       - xdg-desktop-portal-cosmic
       - pop-icon-theme
+      # Software Vulkan (lavapipe) -- see the apt list's note above for why
+      # this must be named rather than pulled in transitively.
+      - mesa-vulkan-drivers
 
   # ── Wahoo (Fedora ELN) ─────────────────────────────────────────────────
   # ELN carries COSMIC natively, in eln-extras, at 1.6.0 — and that is the
@@ -255,6 +275,9 @@ packages:
       - greetd
       - xdg-desktop-portal-cosmic
       - pop-icon-theme
+      # Software Vulkan (lavapipe) -- see the apt list's note above for why
+      # this must be named rather than pulled in transitively.
+      - mesa-vulkan-drivers
     # Absent from ELN on 2026-08-26 (cosmic-icons likewise, and it is not
     # in the fedora list either). Best-effort so it lands by itself when
     # the compose grows it — tracked in tunaos-packages.
@@ -314,6 +337,9 @@ packages:
       # the login flow. Both are in EL10 appstream, so require (not best-effort).
       - gnome-keyring
       - gnome-keyring-pam
+      # Software Vulkan (lavapipe) -- see the apt list's note above for why
+      # this must be named rather than pulled in transitively.
+      - mesa-vulkan-drivers
     optional:
       - brightnessctl
       - playerctl
@@ -386,6 +412,11 @@ packages:
     - wl-clipboard
     - Mesa-dri
     - Mesa-libEGL1
+    # Software Vulkan (lavapipe). Not a dependency of anything, so it is
+    # only present if asked for by name -- which is why every cosmic cell
+    # that has been booted fails on GPU-less CI while gnome starts on the
+    # See the RPM lists above for the full zink/lavapipe note.
+    - libvulkan_lvp
 
   # ── Emerge (Gentoo) ────────────────────────────────────────────────
   # DELIBERATELY ABSENT — no emerge section at all, same treatment as

@@ -61,6 +61,14 @@ packages:
       - nautilus
       - adw-gtk3-theme
       - papirus-icon-theme
+      # Software Vulkan (lavapipe). Smithay needs EGL/GLES on the GBM device,
+      # and on the GPU-less CI guest the render node reports `-virgl`, so Mesa
+      # falls back to zink -- which needs a Vulkan ICD to choose a device at
+      # all. Not a dependency of anything, so it must be named. Whether niri
+      # then accepts a software GLES is the open question this tests: unlike
+      # wlroots it ships no Pixman/CPU renderer, so it may still decline. If
+      # it does, the honest answer is a boots-scope exclusion, not a package.
+      - mesa-vulkan-drivers
     optional:
       - polkit-gnome
 
@@ -121,6 +129,8 @@ packages:
       - gnome-keyring
       - gnome-keyring-pam
       - papirus-icon-theme
+      # Software Vulkan (lavapipe) -- see the fedora list's note above.
+      - mesa-vulkan-drivers
       # NOTE: blueman (Bluetooth applet) has no EL10/EPEL 10 build, so it is
       # intentionally absent here (present in the Fedora section). No packaged
       # standalone Bluetooth GUI exists for EL10 niri yet.
@@ -218,6 +228,8 @@ packages:
     - adwaita-icon-theme
     - Mesa-dri
     - Mesa-libEGL1
+    # See the RPM lists above: software Vulkan for the zink path.
+    - libvulkan_lvp
 
   # ── Emerge (Gentoo) ────────────────────────────────────────────────
   # DELIBERATELY ABSENT. niri is not packaged in the Gentoo main tree at all —
