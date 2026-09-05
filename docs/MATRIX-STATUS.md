@@ -322,6 +322,32 @@ What is measured today:
 | xfce | xfwl4 (Smithay) | ❌ | — | aborts: `err=NoRenderNode` |
 | niri | niri (Smithay) | ? | ? | never measured with these diagnostics |
 
+niri's row is unmeasured for a blunt reason: on **albacore** the image never
+built, so there was nothing to measure. `install-zirconium.sh` points greetd at
+`dms-greeter` for every niri image, and `niri.sh` installed the DMS suite only
+for AlmaLinux Kitten and CentOS Stream 10. albacore is plain AlmaLinux 10 — so
+it got the greeter config without the greeter, and `niri.yaml`'s el10 list ships
+no wallpaper daemon because (per `test_niri_wallpaper_daemon.bats`) el10 is
+expected to "pass through the dms branch". albacore passed through neither:
+
+```
+FAIL: greetd launches dms-greeter but /usr/share/quickshell/dms-greeter/DMSGreeter.qml is missing
+FAIL: no wallpaper daemon (swaybg/swww/wpaperd) and no dms — background will be blank
+TUNAOS_BRANDING_NIRI_FAIL variant=albacore failures=2
+```
+
+The build then died after three attempts, published no image, and both ISO legs
+refused to build from a tag still holding a previous one — which is why niri was
+the only desktop red on BOTH architectures while the rest were red on arm64
+alone. The arm64 half was the missing installer Flatpak; this was the amd64 half.
+
+The exclusion cited "Qt 6.10+" and plain AlmaLinux 10 ships qt6-qtbase-6.10.1,
+so the condition was narrower than its own reason; every EL10 variant now takes
+the DMS branch. Note this makes reality match a contract that was already
+written down: `verify-desktop-experience.sh` says "Fedora and EL10 use DMS
+(quickshell) while openSUSE uses the wlroots stack". albacore was the EL10
+variant for which that was not true.
+
 **Three of the four measured desktops come up and render on a GPU-less
 runner.** Only xfwl4 aborts.
 
