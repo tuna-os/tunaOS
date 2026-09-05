@@ -120,18 +120,26 @@ packages:
       - greetd
       - xdg-desktop-portal-cosmic
       # Software Vulkan (lavapipe). Not a dependency of anything, so it is
-      # only present if asked for by name -- which is why every cosmic cell
-      # that has been booted fails on GPU-less CI while gnome starts on the
-      # identical guest. The guest HAS a render node (run 32681262659 read
+      # only present if asked for by name.
+      #
+      # This is for the INSTALLER SMOKE path, which runs on hosted runners
+      # with no GPU. There the guest has a render node (run 32681262659 read
       # /dev/dri and found renderD128) but the kernel reports `-virgl`, so
-      # Mesa routes GL through zink, and zink with no Vulkan ICD installed
+      # Mesa routes GL through zink -- and zink with no Vulkan ICD installed
       # cannot pick a device:
       #   MESA: error: ZINK: failed to choose pdev
       #   libEGL warning: egl: failed to create dri2 screen
-      # cosmic-comp then holds a Wayland connection with no surface, which
-      # is the 'process running, nothing on screen' state the smoke gate
-      # reports. On real hardware it survived by falling back to Vulkan
-      # llvmpipe -- this is that fallback, packaged.
+      # cosmic-comp then holds a Wayland connection with no surface. On real
+      # hardware it survived by falling back to Vulkan llvmpipe; this is that
+      # fallback, packaged. Also the right thing for anyone running cosmic in
+      # a plain VM.
+      #
+      # It is NOT why the `boots` gate is red for cosmic. That gate asks for
+      # a g4dn GPU runner and the account's vCPU limit for that instance
+      # bucket is 0, so the runner never launches and QEMU never starts:
+      #   Failed to launch runner: failed to create fleet:
+      #   VcpuLimitExceeded ... AllowedInstanceTypes:["g4dn*"]
+      # No package fixes a quota of zero (tuna-os/tunaOS#2123).
       - mesa-vulkan-drivers
 
   fedora:

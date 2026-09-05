@@ -61,13 +61,17 @@ packages:
       - nautilus
       - adw-gtk3-theme
       - papirus-icon-theme
-      # Software Vulkan (lavapipe). Smithay needs EGL/GLES on the GBM device,
-      # and on the GPU-less CI guest the render node reports `-virgl`, so Mesa
-      # falls back to zink -- which needs a Vulkan ICD to choose a device at
-      # all. Not a dependency of anything, so it must be named. Whether niri
-      # then accepts a software GLES is the open question this tests: unlike
-      # wlroots it ships no Pixman/CPU renderer, so it may still decline. If
-      # it does, the honest answer is a boots-scope exclusion, not a package.
+      # Software Vulkan (lavapipe), for the hosted-runner installer smoke
+      # path: Smithay needs EGL/GLES on the GBM device, and there the render
+      # node reports `-virgl`, so Mesa falls back to zink -- which needs a
+      # Vulkan ICD to choose a device at all. Not a dependency of anything,
+      # so it must be named. Whether niri then accepts a software GLES is
+      # untested; unlike wlroots it ships no Pixman/CPU renderer, so it may
+      # still decline.
+      #
+      # This does not touch the `boots` gate, which for niri (as for cosmic)
+      # asks for a g4dn runner the account has a vCPU limit of 0 for -- the
+      # runner never launches. See cosmic.yaml and tuna-os/tunaOS#2123.
       - mesa-vulkan-drivers
     optional:
       - polkit-gnome
