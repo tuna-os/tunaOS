@@ -53,6 +53,12 @@ packages:
     - power-profiles-daemon
     - fwupd
     - plymouth
+    # Software Vulkan (lavapipe) plus the ICD loader. Arch splits these out
+    # of `mesa`, so neither arrives transitively. Without a Vulkan ICD, Mesa's
+    # zink path cannot choose a device on the GPU-less CI guest and cosmic-comp
+    # comes up with no surface -- see the note in cosmic.yaml.
+    - vulkan-icd-loader
+    - vulkan-swrast
 
   # CachyOS adds its own repos on top of Arch — same pacman packages
   # but with performance-optimized builds.
