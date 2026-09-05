@@ -1,23 +1,23 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:best-practices"],
-
-  "platformAutomerge": true,
+  "extends": [
+    "local>tuna-os/.github",
+    "local>tuna-os/.github",
+    "config:best-practices"
+  ],
   "automergeType": "pr",
   "automergeStrategy": "squash",
-  "automerge": false,
-
   "rebaseWhen": "conflicted",
-
   "git-submodules": {
     "enabled": true
   },
-
   "customManagers": [
     {
       "customType": "regex",
       "description": "Update image digests in image-versions.yaml",
-      "managerFilePatterns": ["/^image-versions\\.yaml$/"],
+      "managerFilePatterns": [
+        "/^image-versions\\.yaml$/"
+      ],
       "matchStrings": [
         "- name: (?<depName>[\\w-]+)\\n\\s+image: (?<packageName>[^\\n]+)\\n\\s+tag: (?<currentValue>[^\\n]+)\\n\\s+digest: (?<currentDigest>sha256:[a-f0-9]+)"
       ],
@@ -27,7 +27,9 @@
     {
       "customType": "regex",
       "description": "Update pinned downloads in image-versions.yaml (GitHub releases)",
-      "managerFilePatterns": ["/^image-versions\\.yaml$/"],
+      "managerFilePatterns": [
+        "/^image-versions\\.yaml$/"
+      ],
       "matchStrings": [
         "#\\s*renovate:\\s*datasource=(?<datasource>[^\\s]+)\\s+depName=(?<depName>[^\\s]+)\\n\\s+[\\w-]+:\\s*\"(?<currentValue>[^\"]+)\""
       ]
@@ -35,7 +37,9 @@
     {
       "customType": "regex",
       "description": "Update GitHub Actions pinned SHAs",
-      "managerFilePatterns": ["/\\.github/workflows/.+\\.ya?ml$/"],
+      "managerFilePatterns": [
+        "/\\.github/workflows/.+\\.ya?ml$/"
+      ],
       "matchStrings": [
         "uses:\\s+(?<depName>[\\w-]+/[\\w-]+)@(?<currentDigest>[a-f0-9]{40})\\s*#\\s*(?<currentValue>v?\\d[^\\s]*)"
       ],
@@ -44,7 +48,10 @@
     {
       "customType": "regex",
       "description": "Update font/binary version pins in build scripts",
-      "managerFilePatterns": ["/^build_scripts/.+\\.sh$/", "/^scripts/.+\\.sh$/"],
+      "managerFilePatterns": [
+        "/^build_scripts/.+\\.sh$/",
+        "/^scripts/.+\\.sh$/"
+      ],
       "matchStrings": [
         "#\\s*renovate:\\s*datasource=(?<datasource>[^\\s]+)\\s+depName=(?<depName>[^\\s]+)\\n.*?(?<currentValue>v?\\d+\\.\\d+[^\\s/\"]*)"
       ]
@@ -52,7 +59,9 @@
     {
       "customType": "regex",
       "description": "Update quay.io image digests in registry-map.yaml. tunaOS#1568: this file carried a digest pin for supply-chain safety that nothing bumped, and the pin was garbage-collected upstream (quay 404) before anyone noticed. Scoped to `registry: quay` entries so registryUrlTemplate is correct by construction; a ghcr entry that gains a digest needs its own block rather than silently resolving against the wrong registry.",
-      "managerFilePatterns": ["/^registry-map\\.yaml$/"],
+      "managerFilePatterns": [
+        "/^registry-map\\.yaml$/"
+      ],
       "matchStrings": [
         "registry: quay\\n\\s+path: (?<packageName>[^\\n]+)\\n(?:\\s+#[^\\n]*\\n)*\\s+digest: (?<currentDigest>sha256:[a-f0-9]+)\\n\\s+tag: (?<currentValue>[^\\n]+)"
       ],
@@ -61,31 +70,45 @@
       "depNameTemplate": "{{{packageName}}}"
     }
   ],
-
   "packageRules": [
     {
-      "description": "Automerge only patch/pin/digest updates (org gate .github#12): major/minor require review",
-      "matchUpdateTypes": ["patch", "pin", "pinDigest", "digest"],
+      "description": "Mirrors the low-risk set in the shared preset (local>tuna-os/.github). Redundant at runtime -- the preset already carries it, and preset rules are applied before this file's -- but kept HERE on purpose: tests/test_checksum_pinned_downloads_are_not_automerged.py reads this file alone and cannot resolve the preset, so without a local blanket rule the checksum-pinned hold below has nothing to be ordered against and the invariant from #2293/#2308 stops being verifiable in-repo. Keep it immediately above that hold.",
+      "matchUpdateTypes": [
+        "minor",
+        "patch",
+        "pin",
+        "pinDigest",
+        "digest"
+      ],
       "automerge": true
     },
     {
       "description": "Never automerge a download whose version is paired with a hand-pinned sha256. Renovate bumps the version and cannot bump the checksum, so the bump alone fails every base build closed at `sha256sum --check` (install-remora.sh). The `checksums` check catches it on the PR, but the main ruleset has no required status checks, so platformAutomerge merged #2308 with that check red and took every variant's nightly base build down on 2026-09-03 (flounder run 33694724467). Hold these for a human to run `scripts/check-download-checksums.py --fix` on the branch first. tests/test_checksum_pinned_downloads_are_not_automerged.py derives this list from the repo.",
-      "matchDepNames": ["tuna-os/remora", "twpayne/chezmoi"],
+      "matchDepNames": [
+        "tuna-os/remora",
+        "twpayne/chezmoi"
+      ],
       "automerge": false
     },
     {
       "description": "Group all GitHub Actions updates into a single PR",
-      "matchManagers": ["github-actions"],
+      "matchManagers": [
+        "github-actions"
+      ],
       "groupName": "github-actions"
     },
     {
       "description": "Group git-submodule updates into a single PR",
-      "matchManagers": ["git-submodules"],
+      "matchManagers": [
+        "git-submodules"
+      ],
       "groupName": "submodules"
     },
     {
-      "description": "ghcr.io/projectbluefin/common:latest moves upstream multiple times a day, and digest-tracking PRs get superseded rather than updated in place — three separate PRs (each a full CI run) landed in ~33 hours (tunaOS#753). Debounce: wait for a digest to sit still for a few days before opening a PR, so rapid upstream churn coalesces into one PR instead of several.",
-      "matchPackageNames": ["ghcr.io/projectbluefin/common"],
+      "description": "ghcr.io/projectbluefin/common:latest moves upstream multiple times a day, and digest-tracking PRs get superseded rather than updated in place \u2014 three separate PRs (each a full CI run) landed in ~33 hours (tunaOS#753). Debounce: wait for a digest to sit still for a few days before opening a PR, so rapid upstream churn coalesces into one PR instead of several.",
+      "matchPackageNames": [
+        "ghcr.io/projectbluefin/common"
+      ],
       "minimumReleaseAge": "3 days"
     }
   ]

@@ -1,0 +1,58 @@
+name: Drop bot review requests
+
+# CODEOWNERS (`* @hanthor` in most tuna-os repos) makes GitHub request a review
+# on every pull request, bots included. Those requests are what turn routine
+# dependency bumps into a notification stream: Renovate opens the PR, GitHub
+# asks a human to review it, and the human gets pinged even though the PR is
+# going to merge itself on green CI via platformAutomerge.
+#
+# This drops the auto-requested reviewers from bot-authored PRs only. Human PRs
+# are untouched, and nothing about branch protection changes -- if a repo
+# genuinely requires a code-owner approval, the PR still waits for one; it just
+# stops sitting in a person's review queue.
+#
+# Deliberately `pull_request`, not `pull_request_target`: this needs no code
+# from the PR, and pull_request_target would hand a write token and secrets to
+# a workflow triggered by PR contents for no benefit (tunaOS forbids it
+# outright -- tests/test_fork_safe_workflows.py). The job is additionally
+# limited to same-repo PRs: a fork PR's token is read-only, so the API call
+# would fail rather than do anything useful. Renovate branches live in the
+# repository, so the bots this exists for are always in scope.
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+
+permissions:
+  pull-requests: write
+
+concurrency:
+  group: drop-bot-review-requests-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  drop:
+    if: >-
+      github.event.pull_request.user.type == 'Bot' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Remove auto-requested reviewers
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          PR: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          requested=$(gh api "repos/${REPO}/pulls/${PR}" \
+            --jq '{reviewers: [.requested_reviewers[].login], team_reviewers: [.requested_teams[].slug]}')
+          users=$(printf '%s' "$requested" | jq -c '.reviewers')
+          teams=$(printf '%s' "$requested" | jq -c '.team_reviewers')
+          if [ "$users" = "[]" ] && [ "$teams" = "[]" ]; then
+            echo "No review requests on this PR; nothing to drop."
+            exit 0
+          fi
+          echo "Dropping review requests -- users: ${users} teams: ${teams}"
+          printf '%s' "$requested" \
+            | gh api -X DELETE "repos/${REPO}/pulls/${PR}/requested_reviewers" --input - >/dev/null
+          echo "Done."
