@@ -311,9 +311,32 @@ EOF
 		wl-mirror
 
 	# Install DankMaterialShell suite (quickshell + dms shell + theming/tools)
-	# Only enabled for AlmaLinux Kitten and CentOS Stream 10 (Qt 6.10+)
+	# Every EL10 variant: the gate is Qt 6.10+, and all three have it.
 	# Needs ligenix repo enabled for dms-greeter -> greetd dependency
-	if [[ $IS_ALMALINUXKITTEN == true || $IS_CENTOS == true ]]; then
+	#
+	# albacore (plain AlmaLinux 10) used to be excluded here, which broke its
+	# build outright rather than merely shipping a lesser desktop:
+	# install-zirconium.sh writes /etc/greetd/config.toml pointing at
+	# `dms-greeter` for EVERY niri image, and manifests/desktops/niri.yaml's
+	# el10 list carries no wallpaper daemon because -- per
+	# tests/bats/test_niri_wallpaper_daemon.bats -- "el10 legitimately ships
+	# no wallpaper daemon and passes through the dms branch". albacore passed
+	# through neither, so verify-branding-niri.sh failed twice and the image
+	# build died after three attempts (nightly 33848074014, job 101019603707):
+	#
+	#   FAIL: greetd launches dms-greeter but /usr/share/quickshell/
+	#         dms-greeter/DMSGreeter.qml is missing
+	#   FAIL: no wallpaper daemon (swaybg/swww/wpaperd) and no dms
+	#   TUNAOS_BRANDING_NIRI_FAIL variant=albacore failures=2
+	#
+	# No image published, so both ISO legs then refused to build from a stale
+	# tag -- which is why iso:niri was red on amd64 AND arm64 while every
+	# other desktop was red on arm64 only.
+	#
+	# The exclusion cited Qt 6.10+, and plain AlmaLinux 10 meets it:
+	# repo.almalinux.org/almalinux/10/AppStream/x86_64 ships qt6-qtbase-6.10.1
+	# (checked 2026-09-05). So the condition was narrower than its own reason.
+	if [[ $IS_ALMALINUX == true || $IS_ALMALINUXKITTEN == true || $IS_CENTOS == true ]]; then
 		dnf -y copr enable avengemedia/danklinux
 		dnf -y copr enable avengemedia/dms-git
 		dnf -y --enablerepo copr:copr.fedorainfracloud.org:avengemedia:dms-git \
@@ -331,8 +354,10 @@ EOF
 		dnf -y copr disable avengemedia/dms-git
 	fi
 
-	# Restore brightnessctl and playerctl for compatible EL10 variants (Kitten/CentOS)
-	if [[ $IS_ALMALINUXKITTEN == true || $IS_CENTOS == true ]]; then
+	# Restore brightnessctl and playerctl for every EL10 variant. Same
+	# reasoning as the dms block above: these come from ligenix, which
+	# albacore can reach as readily as Kitten and CentOS.
+	if [[ $IS_ALMALINUX == true || $IS_ALMALINUXKITTEN == true || $IS_CENTOS == true ]]; then
 		install_available --copr ligenix/enterprise-cosmic \
 			brightnessctl \
 			playerctl
