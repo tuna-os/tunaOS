@@ -1466,8 +1466,27 @@ variants:
       - id: gnome
         stage: 2
         platforms: ["linux/amd64", "linux/arm64"]
-        build_image: true
-        build_iso: true
+        # Off: Debian 13 trixie ships GNOME 48.7 and the floor is 50
+        # (manifests/desktops/gnome.yaml minimum_version), so this flavor
+        # cannot ship a conforming desktop from its own base.
+        #
+        # Backporting was measured, not assumed. The sid -> trixie closure
+        # for GNOME 50 is 165 source packages, 122 of them Rust crates, and
+        # it pulls rustc 1.85 -> 1.95, debhelper 13 -> 14, systemd 257 ->
+        # 262 and three LLVM toolchains trixie does not have; the build
+        # order cannot even be computed, because gdk-pixbuf, glycin, mutter,
+        # nautilus and the rust-gdk4 crates form a build-dependency cycle.
+        # With only gnome-shell and mutter as roots it is still 151. For
+        # scale, the same engine says Ubuntu resolute needs 18 and Debian
+        # sid needs 1, and trixie-backports carries no GNOME stack at all.
+        # That is a partial distribution rebuild, not a desktop backport
+        # (tuna-os/tunaos-packages#687).
+        #
+        # Debian GNOME ships from flounder-sid, which has 50.4 natively and
+        # takes 51 within weeks of release. Turn this back on only after
+        # re-measuring: while trixie is frozen the number only grows.
+        build_image: false
+        build_iso: false
       # gnome-asahi: NOT declared, and not an oversight.
       #
       # build_scripts/overlay/asahi.sh's debian branch resolves a real
@@ -1542,8 +1561,10 @@ variants:
       - id: gnome-nvidia
         platforms: ["linux/amd64"]
         stage: 3
-        build_image: true
-        build_iso: true
+        # Off with its parent: a stage-3 overlay on gnome, which cannot
+        # meet the GNOME 50 floor from trixie (see above).
+        build_image: false
+        build_iso: false
         build_qcow2: false
       - id: kde-nvidia
         platforms: ["linux/amd64"]

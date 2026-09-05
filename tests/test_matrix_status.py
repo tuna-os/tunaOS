@@ -332,11 +332,19 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
             gms.VOLATILE_LINE,
         )
 
-    def test_the_real_build_config_declares_53_luks_cells(self):
+    def test_the_real_build_config_declares_52_luks_cells(self):
         """Ties the unit tests above to the actual denominator on disk.
 
         If this number moves, the LUKS total moves with it, and that should be
         a deliberate build-config edit rather than a surprise.
+
+        53 -> 52 on 2026-09-05: flounder:gnome is off. Debian 13 trixie
+        ships GNOME 48.7 against a floor of 50, and the sid -> trixie
+        backport measures at 165 sources including rustc, debhelper 14 and
+        three LLVM toolchains, so the flavor cannot ship a conforming
+        desktop (tuna-os/tunaos-packages#687). Debian GNOME comes from
+        flounder-sid instead. gnome-nvidia is a stage-3 overlay on it and
+        goes with it, but only gnome carries LUKS, hence one cell not two.
 
         52 -> 53 on 2026-08-25: wahoo (Fedora ELN) declares one desktop
         flavor, gnome, with build_image: true. luks-e2e.yml builds its matrix
@@ -364,7 +372,7 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         the Niri stack and zero `xfce*`), so they add nothing here.
         """
         matrix = gms.luks_matrix()
-        self.assertEqual(sum(len(v) for v in matrix.values()), 53)
+        self.assertEqual(sum(len(v) for v in matrix.values()), 52)
         # The control that makes the drop specific rather than merely smaller:
         # hummingbird keeps exactly the desktops it has package sets for.
         self.assertEqual(matrix.get("hummingbird"), {"gnome", "cosmic"})
@@ -375,7 +383,12 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         self.assertNotIn("cosmic", matrix.get("flounder-sid", set()))
         # A control: the flavours flounder DOES declare are still there, so
         # this is not passing because the matrix came back empty.
-        self.assertEqual(matrix.get("flounder"), {"gnome", "kde", "xfce"})
+        self.assertEqual(matrix.get("flounder"), {"kde", "xfce"})
+        # And the paired control on the descope: Debian GNOME did not go away,
+        # it moved. flounder-sid still owes a gnome cell, so a change that
+        # switched off Debian GNOME entirely would fail here rather than pass
+        # as a smaller-but-honest denominator.
+        self.assertIn("gnome", matrix.get("flounder-sid", set()))
 
 
 if __name__ == "__main__":
