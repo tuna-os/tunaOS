@@ -36,17 +36,30 @@ fi
 # bootupd 0.2.x kept binaries under updates/EFI/<vendor>; current Fedora keeps
 # versioned binaries under /usr/lib/efi with only EFI.json under bootupd/
 # updates — hence the two-form test.
-if ls "${SYSROOT}"/usr/lib/bootupd/updates/EFI/*/grubx64.efi >/dev/null 2>&1 ||
+#
+# THE EFI BINARY NAMES ARE GLOBBED, NOT SPELLED OUT, because the suffix is the
+# EFI architecture: grubx64/shimx64/systemd-bootx64 on x86_64, and
+# grubaa64/shimaa64/systemd-bootaa64 on aarch64. Spelling out the x64 forms
+# made this probe silently unclassifiable on every arm64 image, which is not a
+# theoretical concern — albacore:kde-linux-arm64 ships a complete legacy
+# bootupd payload
+#   /usr/lib/bootupd/updates/EFI/almalinux/{grubaa64,shimaa64}.efi
+# and still fell all the way through to the "cannot determine the bootc
+# backend" exit, failing the arm64 ISO build while the amd64 leg of the same
+# cell passed. The question each branch asks — "is there a GRUB EFI binary in
+# the bootupd payload?", "is there a systemd-boot EFI binary?" — was never
+# architecture-specific; only the spelling was.
+if ls "${SYSROOT}"/usr/lib/bootupd/updates/EFI/*/grub*.efi >/dev/null 2>&1 ||
 	{ [[ -f "${SYSROOT}/usr/lib/bootupd/updates/EFI.json" ]] &&
-		find "${SYSROOT}/usr/lib/efi/grub2" -type f -name grubx64.efi -print -quit 2>/dev/null | grep -q . &&
-		find "${SYSROOT}/usr/lib/efi/shim" -type f -name shimx64.efi -print -quit 2>/dev/null | grep -q .; }; then
+		find "${SYSROOT}/usr/lib/efi/grub2" -type f -name 'grub*.efi' -print -quit 2>/dev/null | grep -q . &&
+		find "${SYSROOT}/usr/lib/efi/shim" -type f -name 'shim*.efi' -print -quit 2>/dev/null | grep -q .; }; then
 	backend="ostree"
 elif [[ "$composefs_enabled" == "1" ]]; then
 	# Reaching here means there is NO bootupd payload, so an ostree install is
 	# impossible: bootc aborts with
 	#   error: Installing to disk: bootupd is required for ostree-based installs
 	backend="composefs-native"
-elif [[ -f "${SYSROOT}/usr/lib/systemd/boot/efi/systemd-bootx64.efi" ]]; then
+elif find "${SYSROOT}/usr/lib/systemd/boot/efi" -type f -name 'systemd-boot*.efi' -print -quit 2>/dev/null | grep -q .; then
 	backend="composefs-native"
 else
 	# Never guessed. A wrong guess in either direction is an unbootable disk,
