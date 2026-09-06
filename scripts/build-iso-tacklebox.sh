@@ -96,6 +96,23 @@ fi
 # Single-environment, live-only — minimum useful recipe for a smoke ISO.
 
 OUT_DIR="$(pwd)/.build/iso-tacklebox/${VARIANT}-${FLAVOR}"
+
+# An aborted build leaves the offline store's bind mount behind, and tacklebox
+# clears that directory as its last step: the NEXT build then runs to
+# completion — squash, initramfs, xorriso, all of it — and dies at cleanup with
+#
+#   Error: clear .../tbox-offline-store: rm -rf ...: cannot remove
+#   '.../tbox-offline-store/overlay': Device or resource busy
+#
+# which costs a full rebuild to learn. Unmount it here instead, where it costs
+# nothing. Lazy, and non-fatal: a stale mount is the only thing this can hit,
+# and a busy one that survives will surface at the same place it does today.
+_stale_store="${OUT_DIR}/tbox-offline-store/overlay"
+if mountpoint -q "$_stale_store" 2>/dev/null; then
+	echo "==> Releasing stale offline-store mount from a previous run: ${_stale_store}"
+	umount -l "$_stale_store" || true
+fi
+
 mkdir -p "$OUT_DIR"
 RECIPE_FILE="${OUT_DIR}/recipe.json"
 
