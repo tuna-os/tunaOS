@@ -1,18 +1,9 @@
 """W8 architecture honesty, hummingbird arm64 (#1755 option A).
 
-The aarch64 rebuild repo began publishing on 2026-08-18
-(hummingbird/20251124-aarch64 — it 404'd when #1755 was filed), but it is a
-1358-package seed against x86_64's 8100: measured against its live
-primary.xml, cosmic has 8 of its 22 manifest packages, gnome 5 of 52, with
-no gnome-shell, no gdm, and no COSMIC compositor. An arm64 desktop leg
-would install almost nothing under --skip-unavailable and publish the #858
-shape — an image with no desktop — so the desktop flavors are pinned
-amd64-only until per-desktop coverage exists, exactly like grouper:cosmic.
-
-This test keeps the pin deliberate: whoever re-adds linux/arm64 to a
-desktop flavor deletes that flavor from the pinned set below IN THE SAME
-CHANGE, which is the reviewable claim that the aarch64 index now carries
-that desktop's manifest set.
+Desktop flavors stay amd64-only until their complete package source exists
+on aarch64. The Hummingbird package factory has now converged for COSMIC, but
+GNOME still comes from the amd64-only utah-packages OCI repository. Keep that
+remaining pin explicit so adding arm64 is a reviewable availability claim.
 """
 from __future__ import annotations
 
@@ -22,7 +13,7 @@ import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
-PINNED_AMD64_ONLY = {"gnome", "kde", "niri", "cosmic"}
+PINNED_AMD64_ONLY = {"gnome"}
 
 
 def _hummingbird() -> dict:
@@ -31,7 +22,7 @@ def _hummingbird() -> dict:
     return next(v for v in cfg["variants"] if v["id"] == "hummingbird")
 
 
-def test_desktop_flavors_are_amd64_only_until_the_aarch64_repo_converges():
+def test_desktop_flavors_without_aarch64_package_sources_are_amd64_only():
     hb = _hummingbird()
     for flavor in hb["flavors"]:
         if flavor["id"] in PINNED_AMD64_ONLY:
@@ -41,6 +32,13 @@ def test_desktop_flavors_are_amd64_only_until_the_aarch64_repo_converges():
                 f"arm64 requires measuring the desktop's manifest set "
                 f"against the live aarch64 index and removing the flavor "
                 f"from PINNED_AMD64_ONLY in the same change")
+
+
+def test_cosmic_uses_both_converged_package_repositories():
+    hb = _hummingbird()
+    cosmic = next(f for f in hb["flavors"] if f["id"] == "cosmic")
+    assert cosmic.get("platforms", hb["platforms"]) == [
+        "linux/amd64", "linux/arm64"]
 
 
 def test_base_keeps_both_arches():
