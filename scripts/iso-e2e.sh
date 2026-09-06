@@ -145,6 +145,12 @@
 #      same way those are distinct from each other: 6 says nothing drew, 7
 #      says the guest reports no working desktop, 9 says the thing that drew
 #      is not the screen this stage was supposed to reach.
+#   10 the installed system's greeter login could not be proven — only
+#      reachable with TUNAOS_E2E_REQUIRE_SESSION=1, and only when the
+#      greeter-login phase (TUNAOS_E2E_SESSION_LOGIN=1) is running at all.
+#      Either sshd on the installed system never accepted the account the
+#      recipe created, or no compositor for this flavor was running as it
+#      after the password was typed at the greeter.
 #   75 the job budget was already exhausted before the harness started
 #      (E2E_WALL_CLOCK_DEADLINE in the past) — nothing was tested, and the
 #      fix is upstream of here: whatever ran first is too slow, or the
@@ -2640,6 +2646,24 @@ run_install() {
 	# groups: [] deliberately. `useradd --groups wheel` fails outright where
 	# that group does not exist (the apt bases call it sudo), and this account
 	# needs no privileges — it needs to exist and to log in.
+	#
+	# OFF by default, and gated on the phase that needs it, because it changes
+	# the install shape for every cell that runs this script. fisherman's own
+	# internal/post/user.go carries the warning: on a SEALED image `chroot
+	# <sysroot> useradd` exits 127 because /usr is mounted read-only, so user
+	# creation is a per-backend question and marlin is exactly the composefs
+	# class that comment is about. Turn it on deliberately
+	# (TUNAOS_E2E_SESSION_LOGIN=1) and read the answer on its own, rather than
+	# tangled with the install verdict.
+	local user_json=""
+	if [[ "${TUNAOS_E2E_SESSION_LOGIN:-0}" -eq 1 ]]; then
+		user_json="  \"user\": {
+    \"username\": \"${E2E_INSTALL_USER}\",
+    \"fullname\": \"TunaOS End To End\",
+    \"password\": \"${E2E_INSTALL_PASSWORD}\",
+    \"groups\": []
+  },"
+	fi
 	local encryption_json='{"type": "none"}'
 	local E2E_LUKS_PASS="tunaos-e2e-luks"
 	[[ "$LUKS" -eq 1 ]] && encryption_json="{\"type\": \"tpm2-luks-passphrase\", \"passphrase\": \"${E2E_LUKS_PASS}\"}"
@@ -2660,12 +2684,7 @@ run_install() {
   "bootloader": "${bootloader}",
   "hostname": "tunaos-e2e",
   "encryption": ${encryption_json},
-  "user": {
-    "username": "${E2E_INSTALL_USER}",
-    "fullname": "TunaOS End To End",
-    "password": "${E2E_INSTALL_PASSWORD}",
-    "groups": []
-  },
+${user_json}
   "flatpaks": []
 }
 EOF
@@ -2856,7 +2875,11 @@ EOF
 		}
 		# 5th arg: keep draining the serial for up to 300s past login waiting
 		# for the desktop contract. See luks-first-boot.py for why.
-		python3 "$(dirname "${BASH_SOURCE[0]}")/luks-first-boot.py" \
+		# TUNAOS_LUKS_NO_POWEROFF: luks-first-boot.py powers the guest off
+		# when it is done, which would leave the greeter-login phase below
+		# with nothing to log into. Keep it up when that phase will run.
+		TUNAOS_LUKS_NO_POWEROFF="${TUNAOS_E2E_SESSION_LOGIN:-0}" \
+			python3 "$(dirname "${BASH_SOURCE[0]}")/luks-first-boot.py" \
 			"$FB_SERIAL" "$MONITOR_SOCK" "$E2E_LUKS_PASS" 900 300 \
 			2>&1 | tee "${OUTPUT_DIR}/installed-serial.log" || {
 			echo "ERROR: encrypted disk did not unlock with the passphrase / reach login"
@@ -2901,12 +2924,17 @@ EOF
 		# the step that separates a drawn greeter from a running session, and
 		# it needs the live guest — one line down there is no surface and no
 		# sshd left to ask. TUNAOS_E2E_SESSION_LOGIN=0 opts out.
-		if [[ "${TUNAOS_E2E_SESSION_LOGIN:-1}" -eq 1 ]]; then
-			run_installed_session_login || {
-				local _sess_rc=$?
+		if [[ "${TUNAOS_E2E_SESSION_LOGIN:-0}" -eq 1 ]]; then
+			local _sess_rc=0
+			run_installed_session_login || _sess_rc=$?
+			# The graceful powerdown luks-first-boot.py skipped on our behalf,
+			# so swtpm state and LUKS metadata still flush cleanly.
+			monitor_cmd "system_powerdown" || true
+			sleep 8
+			if [[ "$_sess_rc" -ne 0 ]]; then
 				[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
 				return "$_sess_rc"
-			}
+			fi
 		fi
 		[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
 		record_luks_evidence "TUNAOS_LUKS_E2E_PASS encrypted=1 passphrase_unlock=1 installed_boot=1"

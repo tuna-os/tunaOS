@@ -61,9 +61,10 @@ on:
         description: >-
           Gate on the screen checkpoints (scripts/install-checkpoints.py
           against tests/install-pipeline-screens.yaml) rather than only
-          warning.
+          warning. Off until each desktop's keywords are measured — see
+          docs/INSTALL-PIPELINE-CHECKPOINTS.md.
         required: false
-        default: true
+        default: false
         type: boolean
 
 permissions:
@@ -129,15 +130,17 @@ jobs:
     with:
       variant: ${{ inputs.variant || 'marlin' }}
       flavor: ${{ matrix.flavor }}
-      # Screen checkpoints as a gate here, unlike the monthly sweep: this
-      # workflow runs a small, named set of cells whose keyword lists in
-      # tests/install-pipeline-screens.yaml are per-desktop, so a failure is
-      # actionable rather than a contract that has never seen that desktop.
+      # Advisory for now. Gating belongs here eventually — this workflow runs a
+      # small, named set of cells, which is exactly where a per-desktop keyword
+      # contract can be actionable — but every desktop list in
+      # tests/install-pipeline-screens.yaml except niri's is still DERIVED, not
+      # measured against a captured frame of that desktop. Gating on an
+      # unmeasured contract fails builds over the contract, which is how a gate
+      # gets switched off for good. Flip this to true per desktop as its
+      # keywords are measured; docs/INSTALL-PIPELINE-CHECKPOINTS.md has the
+      # procedure and the promotion order.
       #
-      # `inputs.checkpoint_strict || true` would be wrong: GitHub's `||`
-      # yields the right-hand side for a falsy left, so an explicit `false` on
-      # a dispatch would come back as `true` and the knob could never be turned
-      # off. Non-dispatch events (no inputs at all) gate; a dispatch says what
-      # it wants.
-      checkpoint_strict: ${{ github.event_name != 'workflow_dispatch' || inputs.checkpoint_strict }}
+      # A dispatch can still ask for the gate. `inputs.checkpoint_strict` alone
+      # is right here — no `||` default — because false must stay false.
+      checkpoint_strict: ${{ inputs.checkpoint_strict || false }}
     secrets: inherit

@@ -131,12 +131,19 @@ checkpoints:
   # graphical one"; installed-desktop below is where graphical is asserted.
   - id: installed-login
     phase: installed
-    # 30-installed only, deliberately. Giving this checkpoint the
-    # installed-desktop frame as well would let a run that never photographed
-    # a greeter satisfy it off the desktop frame, and then this checkpoint
-    # could never fail while the next one passed — two checkpoints that cannot
-    # disagree are one checkpoint.
-    frames: ["30-installed"]
+    # Both frames, because the two install paths name the same moment
+    # differently: the kickstart/generic path writes 30-installed
+    # (iso-e2e.sh:2131, :3152) and the LUKS path writes installed-desktop
+    # (:2882). Listing only 30-installed made this checkpoint unsatisfiable on
+    # every --luks run — required: true against a frame that path never
+    # produces — which would have failed the first chained marlin build on a
+    # contract artifact rather than a product defect.
+    #
+    # It does mean this checkpoint and installed-desktop below can read the
+    # same frame. They are still different questions: this one passes on
+    # greeter text, that one looks for desktop furniture, and installed-session
+    # forbids greeter text outright. Only the last is proof of a session.
+    frames: ["30-installed", "installed-desktop"]
     required: true
     match: any
     keywords: ["password", "username", "login", "sign in", "log in"]
