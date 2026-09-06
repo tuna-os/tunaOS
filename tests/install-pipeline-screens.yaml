@@ -65,35 +65,96 @@ luks_prompt_text: &luks_prompt
 
 checkpoints:
   # ── Phase 1: the live ISO reaches a desktop ────────────────────────────────
+  #
+  # What is on screen here is the live session with its installer frontend
+  # autostarted, so the reliable text is the frontend's own first page plus
+  # whatever furniture that desktop draws. The five frontends are independent
+  # forks with different wording, which is why every desktop gets its own list
+  # rather than one generic one — the same reason tests/installer-screens.yaml
+  # is written per screen and not per product.
+  #
+  # PROVENANCE of each list is recorded inline: MEASURED means the words were
+  # read off a real captured frame (with the run named), DERIVED means they
+  # come from headings already measured against the frontends' source in
+  # tests/installer-screens.yaml (2026-08-07) but have not yet been confirmed
+  # against a captured frame of that desktop. Only calibrate a list DOWN to
+  # what a real frame shows; never up from a guess.
   - id: live-desktop
     phase: live
     frames: ["10-ready", "20-ssh"]
     required: true
     match: any
-    keywords: ["install", "welcome", "get started", "activities", "applications"]
+    # Fallback for a desktop with no list of its own: the words common to the
+    # welcome and disk pages of every fork.
+    keywords: ["welcome", "get started", "be installed", "available disks"]
     desktops:
-      # KDE's live session autostarts org.tunaos.InstallerKde over an otherwise
-      # empty Plasma desktop, so the installer's own welcome page is the text
-      # that reliably survives OCR; "plasma" never appears on screen at all.
-      kde: ["install", "welcome", "get started", "begin", "next"]
+      # DERIVED from org.tunaos.InstallerKde's measured headings ("Select
+      # Target Disk", "Choose the disk where <name> will be installed.").
+      kde: ["welcome", "get started", "select target disk", "choose the disk",
+            "be installed"]
+      # DERIVED. gnome ships upstream org.bootcinstaller.Installer, whose
+      # welcome page is branded from distro_name ("Welcome to <variant>") —
+      # the product name is deliberately not part of the keyword.
+      gnome: ["welcome to", "get started", "available disks", "be installed"]
+      # DERIVED from the COSMIC fork's headings.
+      cosmic: ["welcome", "get started", "select a disk", "be installed"]
+      # MEASURED 2026-09-07 off luks-out/10-ready.png from a local
+      # yellowfin:niri run: the frame is dominated by niri's "Important
+      # Hotkeys" overlay, which is what the live session actually draws over
+      # the installer on first show. Tesseract read the overlay cleanly and
+      # nothing of the installer window, so THAT is the honest contract for
+      # this desktop; "destination" (the fork's disk heading) stays as the
+      # alternative for a frame captured after the overlay is dismissed.
+      niri: ["important hotkeys", "exit niri", "focus column", "destination",
+             "be installed"]
+      # DERIVED from the XFCE fork's measured heading ("Where should <name> be
+      # installed?").
+      xfce: ["welcome", "get started", "be installed", "where should"]
     forbid: *crash_text
 
   # ── Phase 2: the installed disk boots to a login ───────────────────────────
+  #
+  # Each desktop installs a different display manager
+  # (build_scripts/desktop/configure-desktop-runtime.sh): gnome->gdm,
+  # kde->sddm, niri->greetd/gtkgreet, cosmic->cosmic-greeter,
+  # xfce->lightdm or gdm3. Their greeters share very little text, so the
+  # default list is the intersection that also covers a plain text console
+  # login — this checkpoint asserts "reached a login", not "reached a
+  # graphical one"; installed-desktop below is where graphical is asserted.
   - id: installed-login
     phase: installed
-    frames: ["30-installed", "installed-desktop"]
+    # 30-installed only, deliberately. Giving this checkpoint the
+    # installed-desktop frame as well would let a run that never photographed
+    # a greeter satisfy it off the desktop frame, and then this checkpoint
+    # could never fail while the next one passed — two checkpoints that cannot
+    # disagree are one checkpoint.
+    frames: ["30-installed"]
     required: true
     match: any
-    # A display manager or a text console login both count — this checkpoint
-    # asserts "the installed system reached a login", not that it was
-    # graphical; installed-desktop below is where graphical is asserted.
-    keywords: ["login", "password", "username", "sign in", "log in"]
+    keywords: ["password", "username", "login", "sign in", "log in"]
     desktops:
-      # SDDM's Breeze theme shows the user name over a Password field.
+      # DERIVED. SDDM's Breeze greeter draws the user name over a Password
+      # field, with Suspend / Restart / Shut Down on the bottom bar.
       kde: ["password", "login", "sign in", "suspend", "restart"]
+      # DERIVED. GDM shows the user list first; "Not listed?" is the string
+      # unique to it.
+      gnome: ["password", "not listed", "sign in", "log in"]
+      cosmic: ["password", "login", "sign in"]
+      # DERIVED. gtkgreet (build_scripts/desktop/greetd-gtkgreet.sh) is a GTK3
+      # username/password form; when it is absent greetd falls back to
+      # agreety's text prompt, which shows a bare "login:".
+      niri: ["password", "login", "username"]
+      # DERIVED. lightdm's GTK greeter labels its two fields Username and
+      # Password.
+      xfce: ["password", "username", "login", "log in"]
     forbid: *luks_prompt
 
   # ── Phase 3: the installed system reaches its desktop ──────────────────────
+  #
+  # required: false everywhere for now — a desktop frame is only captured on
+  # the paths that log in, and the per-desktop word lists below are DERIVED,
+  # not measured. Promote a desktop to required once a real frame has
+  # confirmed its list, one desktop at a time.
   - id: installed-desktop
     phase: installed
     frames: ["installed-desktop"]
@@ -102,16 +163,23 @@ checkpoints:
     keywords: ["activities", "applications", "files", "terminal", "settings"]
     desktops:
       kde: ["applications", "system settings", "discover", "konsole", "files"]
+      gnome: ["activities", "files", "settings", "software"]
+      cosmic: ["applications", "workspaces", "settings", "files"]
+      # niri draws the same hotkey overlay on the installed system's first
+      # session that it draws in the live one (MEASURED, see live-desktop).
+      niri: ["important hotkeys", "exit niri", "focus column"]
+      xfce: ["applications", "settings", "terminal", "file manager"]
     forbid: *crash_text
 
   # ── Phase 4 (optional): the TPM auto-unlock boot ───────────────────────────
   # Only captured when TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK=1. Same rule as
   # installed-login: no passphrase prompt may remain on screen, and here it is
-  # the entire point — this boot injects no passphrase at all.
+  # the entire point — this boot injects no passphrase at all. marlin is not
+  # eligible for it today (no tpm2-tools on Arch; docs/LUKS-TPM.md, tunaOS#714).
   - id: tpm-autounlock
     phase: installed
     frames: ["installed-tpm-autounlock"]
     required: false
     match: any
-    keywords: ["login", "password", "username", "sign in", "log in"]
+    keywords: ["password", "username", "login", "sign in", "log in"]
     forbid: *luks_prompt

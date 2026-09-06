@@ -53,6 +53,48 @@ on:
         required: false
         default: false
         type: boolean
+      checkpoint_strict:
+        description: >-
+          Make the screen-checkpoint assertions a hard gate (see the
+          workflow_call input of the same name).
+        required: false
+        default: false
+        type: boolean
+  # Callable so a build workflow can gate on one cell of this matrix without
+  # duplicating the 300-line job below (post-build-luks-e2e.yml does exactly
+  # that for Build Marlin). A reusable call cannot be `continue-on-error`, so
+  # the caller inherits this workflow's verdict — which is the point: a chained
+  # gate that cannot fail its caller is not a gate.
+  workflow_call:
+    inputs:
+      variant:
+        description: "Variant filter (or 'all')"
+        required: false
+        default: "all"
+        type: string
+      flavor:
+        description: "Flavor filter (or 'all')"
+        required: false
+        default: "all"
+        type: string
+      tpm_autounlock:
+        description: "Also verify TPM2 auto-unlock (see the dispatch input)."
+        required: false
+        default: false
+        type: boolean
+      checkpoint_strict:
+        description: >-
+          Make the screen-checkpoint assertions
+          (scripts/install-checkpoints.py against
+          tests/install-pipeline-screens.yaml) a hard gate rather than a
+          warning — iso-e2e.sh exits 9 when a stage's frame is missing, blank,
+          shows the wrong screen or shows failure text. Off for the broad
+          sweeps, where the keyword contract has not been measured for every
+          desktop yet; on for the cells whose contract has been calibrated
+          against real frames.
+        required: false
+        default: false
+        type: boolean
   schedule:
     # Full variant x installable-desktop sweep on the first day of each month
     # (passphrase-unlock only — see the header comment above).
@@ -440,6 +482,9 @@ jobs:
           # iso-e2e.sh itself fails the step (exit 8) on a bad unlock, so this
           # is what actually drives the third boot, not just a label.
           TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK: ${{ needs.generate-matrix.outputs.tpm_autounlock == 'true' && '1' || '0' }}
+          # Screen checkpoints: advisory unless the caller asked for a gate.
+          # See the checkpoint_strict input.
+          E2E_CHECKPOINT_STRICT: ${{ inputs.checkpoint_strict && '1' || '0' }}
         run: |
           mkdir -p luks-out
           # -E: sudo resets the environment by default, which drops VARIANT/
@@ -490,9 +535,14 @@ jobs:
           # TPM flag that never arrives would silently skip the one boot
           # this whole workflow input exists to add. Passed explicitly,
           # each either arrives or the script says so.
+          # E2E_CHECKPOINT_STRICT joins the explicitly-passed set for the same
+          # reason as the two below it: `sudo -E` is subject to sudoers
+          # env_keep/env_reset, and a gate flag that silently fails to arrive
+          # turns a gate back into a warning without saying so.
           sudo -E env FISHERMAN_OVERRIDE="$FISHERMAN_OVERRIDE" \
             E2E_WALL_CLOCK_DEADLINE="$E2E_WALL_CLOCK_DEADLINE" \
             TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK="$TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK" \
+            E2E_CHECKPOINT_STRICT="$E2E_CHECKPOINT_STRICT" \
             ./scripts/iso-e2e.sh "${ISO_PATH}" --luks \
             --output luks-out \
             --memory 10240 \
@@ -549,5 +599,14 @@ jobs:
             luks-out/timelapse/timelapse.webm
             luks-out/timelapse/timelapse-poster.webp
             luks-out/timelapse/frame-count.txt
+            # Screen-checkpoint evidence (scripts/install-checkpoints.py): the
+            # per-checkpoint verdicts, the text tesseract actually read off
+            # each frame, and the labelled contact sheet. The .ocr.txt files
+            # are what make a keyword failure diagnosable without re-running
+            # anything — "matched nothing" is not actionable, the transcript
+            # of the screen is.
+            luks-out/install-checkpoints-*.json
+            luks-out/install-checkpoints-*.png
+            luks-out/*.ocr.txt
           if-no-files-found: warn
           retention-days: 14

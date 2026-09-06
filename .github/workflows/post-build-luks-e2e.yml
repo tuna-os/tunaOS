@@ -1,0 +1,143 @@
+name: Post-Build LUKS E2E
+
+# Prove the *install experience* of a freshly built image, on the build that
+# produced it — not a month later.
+#
+# Until now the only end-to-end install coverage was luks-e2e.yml's monthly
+# cron sweep (plus manual dispatches). Everything a nightly build gated on was
+# a DISK boot: reusable-build-image.yml's Gate boots the qcow2 with
+# `iso-e2e.sh --disk` and checks the desktop contract. Nothing between two
+# monthly sweeps ever booted the ISO, ran the installer's backend, encrypted a
+# disk and rebooted into it — so an image could stay green for weeks with a
+# broken install path, which is the one path every user takes.
+#
+# Shape borrowed from projectbluefin/utah's post-testing-e2e.yml: the build
+# workflow does the building, and a separate workflow chained on its
+# `workflow_run` does the proving. Separate rather than a job inside
+# build-variant.yml on purpose — a reusable-call job cannot be
+# continue-on-error, so an inline e2e leg would redden the publish pipeline for
+# a QEMU flake, and this repo's rule is that smoke tests live in their own
+# workflow_run-chained workflow.
+#
+# COST, and why the cadences differ. One cell is a dev ISO build plus two QEMU
+# boots: ~45-60 min on one runner.
+#   * per nightly Marlin build — kde only (1 cell)
+#   * weekly — all five desktops (5 cells), because the five installer
+#     frontends are independent forks and drift apart silently; that is the
+#     same reason installer-smoke.yml runs per-desktop rather than per-variant.
+#   * everything else stays with luks-e2e.yml's monthly full sweep.
+#
+# Why marlin is the variant wired up first: Arch is the fastest-moving base in
+# the fleet (rolling, rebuilt nightly from a pinned archlinux/archlinux
+# digest), so it is the one most likely to break between two monthly sweeps and
+# least likely to be caught by an image-only gate. Adding another variant means
+# adding its build workflow to the `workflows:` list below and giving it a
+# `variant` here — the job body is luks-e2e.yml's, not a second copy.
+
+on:
+  workflow_run:
+    workflows: ["Build Marlin"]
+    types: [completed]
+    branches: [main]
+  schedule:
+    # Weekly all-desktop sweep, Thursday morning — a day after
+    # installer-smoke.yml's Wednesday run, so a frontend that only *starts*
+    # is caught before this spends an hour proving it can also install.
+    - cron: "0 6 * * 4"
+  workflow_dispatch:
+    inputs:
+      variant:
+        description: "Variant"
+        required: false
+        default: "marlin"
+        type: string
+      flavors:
+        description: >-
+          Comma-separated desktop flavors, or 'all' for the five desktops.
+        required: false
+        default: "kde"
+        type: string
+      checkpoint_strict:
+        description: >-
+          Gate on the screen checkpoints (scripts/install-checkpoints.py
+          against tests/install-pipeline-screens.yaml) rather than only
+          warning.
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+  packages: read
+
+concurrency:
+  # One install e2e at a time per variant. Two nightly builds cannot overlap,
+  # but a dispatch during a chained run can, and both would then race for the
+  # same runner-sized QEMU. Not cancel-in-progress: a half-finished install
+  # leaves no verdict, and the run it would cancel is the expensive one.
+  group: post-build-luks-e2e-${{ inputs.variant || 'marlin' }}
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    # A failed or cancelled build has nothing worth installing; schedule and
+    # dispatch are always honoured. Written out rather than `success()`
+    # because on a workflow_run event `success()` describes THIS run, not the
+    # build that triggered it.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      github.event.workflow_run.conclusion == 'success'
+    name: Plan
+    runs-on: ubuntu-latest
+    outputs:
+      flavors: ${{ steps.plan.outputs.flavors }}
+    steps:
+      - id: plan
+        env:
+          EVENT: ${{ github.event_name }}
+          FLAVORS: ${{ inputs.flavors || '' }}
+        run: |
+          set -euo pipefail
+          # The five desktops, in the order installer-smoke.yml lists them.
+          ALL='["gnome","kde","cosmic","niri","xfce"]'
+          case "$EVENT" in
+          schedule) flavors="$ALL" ;;
+          workflow_run) flavors='["kde"]' ;;
+          *)
+            if [[ -z "$FLAVORS" || "$FLAVORS" == "all" ]]; then
+              flavors="$ALL"
+            else
+              # Comma list -> JSON array, whitespace tolerated.
+              flavors="$(jq -cRn --arg f "$FLAVORS" \
+                '$f | split(",") | map(gsub("^\\s+|\\s+$";"")) | map(select(length > 0))')"
+            fi
+            ;;
+          esac
+          echo "flavors=${flavors}" >> "$GITHUB_OUTPUT"
+          echo "Planned flavors: ${flavors}"
+
+  install-e2e:
+    needs: plan
+    name: Install e2e
+    strategy:
+      # One broken desktop must not hide the state of the other four — the
+      # whole point of running them per-desktop.
+      fail-fast: false
+      matrix:
+        flavor: ${{ fromJSON(needs.plan.outputs.flavors) }}
+    uses: ./.github/workflows/luks-e2e.yml
+    with:
+      variant: ${{ inputs.variant || 'marlin' }}
+      flavor: ${{ matrix.flavor }}
+      # Screen checkpoints as a gate here, unlike the monthly sweep: this
+      # workflow runs a small, named set of cells whose keyword lists in
+      # tests/install-pipeline-screens.yaml are per-desktop, so a failure is
+      # actionable rather than a contract that has never seen that desktop.
+      #
+      # `inputs.checkpoint_strict || true` would be wrong: GitHub's `||`
+      # yields the right-hand side for a falsy left, so an explicit `false` on
+      # a dispatch would come back as `true` and the knob could never be turned
+      # off. Non-dispatch events (no inputs at all) gate; a dispatch says what
+      # it wants.
+      checkpoint_strict: ${{ github.event_name != 'workflow_dispatch' || inputs.checkpoint_strict }}
+    secrets: inherit
