@@ -279,6 +279,100 @@ After=tunaos-live-ssh-credentials.service
 EOF
 	systemctl enable tunaos-live-ssh-credentials.service "$SSH_UNIT"
 
+	# ── Dev-ISO diagnostics dump ──────────────────────────────────────────
+	#
+	# Everything the harness learns about a live session today it learns from
+	# serial markers and a screenshot. When the session simply never starts —
+	# marlin:kde: graphical.target inactive, framebuffer stddev exactly 0, a
+	# text login on ttyS0 — those say THAT it failed and nothing about why, and
+	# the one artifact that would (`journalctl -u sddm`) needs a shell in the
+	# guest. On marlin that shell does not exist: sshd accepts and immediately
+	# closes over both TCP and vsock, and the harness attaches the serial as a
+	# write-only file, so the text login cannot be answered either.
+	#
+	# So the guest reports on itself. This dumps the display-manager and sshd
+	# journals, the failed units, the pending jobs and the autologin config
+	# straight to /dev/console — which IS the serial log the harness already
+	# captures and uploads as an artifact. Dev/E2E media only, and it runs
+	# AFTER the readiness marker, so it can neither gate nor slow a run.
+	#
+	# Sections are fenced with greppable markers so a failing cell can be
+	# triaged from the artifact without booting anything.
+	cat >/usr/libexec/tunaos-live-debug <<'DBGEOF'
+#!/usr/bin/env bash
+# Dump live-session diagnostics to the console (dev/E2E ISOs only).
+# Not set -e: a missing unit or command must not stop the remaining sections.
+set -u
+
+section() {
+	echo "TUNAOS_LIVE_DEBUG_BEGIN $1"
+	shift
+	"$@" 2>&1 | sed 's/^/| /'
+	echo "TUNAOS_LIVE_DEBUG_END"
+}
+
+# Give the display manager time to try, fail and log before asking it why.
+sleep "${TUNAOS_LIVE_DEBUG_DELAY:-25}"
+
+echo "TUNAOS_LIVE_DEBUG_START uptime=$(cut -d. -f1 /proc/uptime)"
+
+# Whichever DM this desktop installed — the unit name differs per desktop
+# (sddm / plasmalogin / gdm / greetd / lightdm / cosmic-greeter), and asking
+# for all of them is cheaper than detecting.
+DMS=(sddm plasmalogin gdm gdm3 greetd lightdm cosmic-greeter display-manager)
+
+section targets systemctl is-active graphical.target multi-user.target display-manager.service
+section failed-units systemctl list-units --failed --no-pager --no-legend
+section pending-jobs systemctl list-jobs --no-pager --no-legend
+section sessions loginctl list-sessions --no-legend
+
+for dm in "${DMS[@]}"; do
+	systemctl list-unit-files "${dm}.service" --no-legend 2>/dev/null | grep -q . || continue
+	section "dm-status-${dm}" systemctl status --no-pager --full "${dm}.service"
+	section "dm-journal-${dm}" journalctl -b --no-pager -n 60 -u "${dm}.service"
+done
+
+# sshd: the harness's own way into the guest, and on marlin it accepts and
+# then closes every connection. Both unit names, same reason as above.
+for unit in sshd ssh sshd@ systemd-ssh-generator; do
+	systemctl list-unit-files "${unit}*" --no-legend 2>/dev/null | grep -q . || continue
+	section "ssh-journal-${unit}" journalctl -b --no-pager -n 40 -u "${unit}*"
+done
+section ssh-listeners ss -lntp
+section ssh-config sshd -T
+section ssh-hostkeys ls -l /etc/ssh/
+
+section autologin-conf sh -c 'cat /etc/sddm.conf.d/*.conf /etc/plasmalogin.conf.d/*.conf 2>/dev/null'
+section sessions-available sh -c 'ls /usr/share/wayland-sessions/ /usr/share/xsessions/ 2>/dev/null'
+section drm sh -c 'ls -l /dev/dri 2>&1; journalctl -b --no-pager -n 20 -k -g "drm|virtio"'
+section compositors sh -c 'pgrep -a "kwin_wayland|plasmashell|gnome-shell|cosmic-comp|niri|xfwl4|Xorg" || echo "no compositor process"'
+section installer sh -c 'pgrep -a flatpak || echo "no flatpak process"'
+
+echo "TUNAOS_LIVE_DEBUG_DONE"
+DBGEOF
+	chmod 0755 /usr/libexec/tunaos-live-debug
+
+	cat >/usr/lib/systemd/system/tunaos-live-debug.service <<'DBGUNITEOF'
+[Unit]
+Description=Dump live-session diagnostics to the console (dev/E2E ISOs only)
+After=tunaos-live-ready.service
+Wants=tunaos-live-ready.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/tunaos-live-debug
+# The console IS the serial log the harness captures; the journal copy keeps
+# it available to an interactive session too.
+StandardOutput=journal+console
+StandardError=journal+console
+RemainAfterExit=yes
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target
+DBGUNITEOF
+	systemctl enable tunaos-live-debug.service
+
 	# fisherman (the LUKS/TPM install backend) runs as root over a
 	# non-interactive SSH command, so sudo has no TTY to prompt on. Grant
 	# liveuser NOPASSWD sudo — dev/E2E media only, matching

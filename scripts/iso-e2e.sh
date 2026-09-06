@@ -1702,6 +1702,30 @@ run_installed_session_login() {
 	return 0
 }
 
+# Print the guest's own diagnostics dump out of the serial log.
+#
+# tunaos-live-debug.service (dev/E2E ISOs only) writes fenced sections to the
+# console — the display manager's journal, sshd's, the failed units, the
+# autologin config — precisely because the interesting live-session failures
+# leave no other trace: marlin:kde reaches its readiness marker with
+# graphical.target inactive and a framebuffer measuring exactly 0, and both
+# ways into that guest are shut (sshd resets every connection; the serial
+# chardev is a write-only file). Reading the sections back out of the serial
+# log is what turns that from "it was blank" into a cause.
+dump_live_debug_sections() {
+	local log
+	for log in "${SERIAL_LOG}" "${OUTPUT_DIR}/live-serial.log"; do
+		[[ -s "$log" ]] || continue
+		grep -q "TUNAOS_LIVE_DEBUG_START" "$log" || continue
+		echo "==> Guest diagnostics from $(basename "$log"):"
+		sed -n '/TUNAOS_LIVE_DEBUG_START/,/TUNAOS_LIVE_DEBUG_DONE/p' "$log" |
+			sed 's/^/    /'
+		return 0
+	done
+	echo "==> No guest diagnostics in the serial log (tunaos-live-debug runs on dev ISOs only)"
+	return 0
+}
+
 # OCR-assert the frames this run captured against the pipeline checkpoint
 # contract (tests/install-pipeline-screens.yaml) — see
 # scripts/install-checkpoints.py for what each assertion means.
@@ -1742,6 +1766,12 @@ run_checkpoint_asserts() {
 	fi
 	if [[ "$rc" -ne 0 ]]; then
 		echo "::warning::screen checkpoints reported ${rc} failure(s) for ${VARIANT:-?}:${FLAVOR:-gnome}"
+		# A failed screen checkpoint is the case the dev ISO's own
+		# diagnostics dump exists for (live-iso/common/src/customize-live.sh,
+		# tunaos-live-debug.service). It lands in the serial log; surface it
+		# in the job log too, because the whole point is to explain a wrong
+		# screen without anyone downloading an artifact or booting a guest.
+		dump_live_debug_sections
 		if [[ "${E2E_CHECKPOINT_STRICT:-0}" -eq 1 ]]; then
 			echo "ERROR: E2E_CHECKPOINT_STRICT=1 and screen checkpoints failed" >&2
 			return 9
