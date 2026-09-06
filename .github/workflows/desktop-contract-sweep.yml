@@ -199,12 +199,23 @@ jobs:
              '{cell:$cell,variant:$variant,desktop:$desktop,status:$status,reason:$reason,exit:$exitcode,omissions_status:$om,omissions_reason:$omr}' \
              > "result.json"
 
+      - name: Collect evidence
+        if: always()
+        env:
+          EVIDENCE_ARCH: amd64
+        run: |
+          scripts/evidence-bundle.sh \
+            "${{ matrix.variant }}:${{ matrix.desktop }}" \
+            desktop,no_silent_omissions .
+
       - name: Upload cell result
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: contract-${{ matrix.variant }}-${{ matrix.desktop }}
-          path: result.json
+          path: |
+            result.json
+            evidence/${{ matrix.variant }}/${{ matrix.desktop }}/amd64/
           retention-days: 30
 
   collate:

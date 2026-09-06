@@ -514,6 +514,15 @@ jobs:
             convert "$ppm" "${ppm%.ppm}.png" || true
           done
 
+      - name: Collect evidence
+        if: always() && steps.filter.outputs.skip != 'true'
+        env:
+          EVIDENCE_ARCH: amd64
+          EVIDENCE_STATUS: ${{ steps.e2e.outputs.rc == '0' && 'success' || 'failure' }}
+        run: |
+          scripts/evidence-bundle.sh \
+            "${{ matrix.variant }}:${{ matrix.flavor }}" iso iso-e2e-out
+
       - name: Job summary
         if: always() && steps.filter.outputs.skip != 'true'
         run: |
@@ -546,6 +555,7 @@ jobs:
           path: |
             iso-e2e-out/serial.log
             iso-e2e-out/*.png
+            evidence/${{ matrix.variant }}/${{ matrix.flavor }}/amd64/
           if-no-files-found: warn
           retention-days: 7
 

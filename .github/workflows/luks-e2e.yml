@@ -533,12 +533,17 @@ jobs:
 
       - name: Collect evidence
         if: always()
+        env:
+          EVIDENCE_ARCH: amd64
+          EVIDENCE_STATUS: ${{ job.status }}
         run: |
           sudo chown -R "$USER:$(id -gn)" luks-out 2>/dev/null || true
           for ppm in luks-out/*.ppm; do
             [[ -f "$ppm" ]] || continue
             convert "$ppm" "${ppm%.ppm}.png" || true
           done
+          scripts/evidence-bundle.sh \
+            "${{ matrix.variant }}:${{ matrix.flavor }}" install luks-out
 
       - name: Upload LUKS evidence
         if: always()
@@ -556,6 +561,7 @@ jobs:
             luks-out/installed-serial.log
             luks-out/luks-evidence.log
             luks-out/*.png
+            evidence/${{ matrix.variant }}/${{ matrix.flavor }}/amd64/
             # The install timelapse (scripts/record-timelapse.sh). Recording it
             # and then not collecting it is how the first two cells that ran
             # with the recorder produced nothing to look at: the frames were
