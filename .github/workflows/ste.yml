@@ -36,4 +36,4 @@ on:
 
 jobs:
   ste:
-    uses: tuna-os/.github/.github/workflows/ste-lint.yml@main
+    uses: tuna-os/.github/.github/workflows/ste-lint.yml@9a988805ce9943f44305c1f65fb4e7df88af3e64 # main
