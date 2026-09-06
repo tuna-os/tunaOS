@@ -88,9 +88,9 @@ run_generator() {
   grep -q '\*\*1/4\*\*' "$README"
 }
 
-@test "the summary separates failing from never-reached" {
+@test "the summary separates failures from never-reached cells" {
   run_generator
-  grep -q '1 failing' "$README"
+  grep -q '1 failure' "$README"
   grep -q '2 never reached' "$README"
 }
 
@@ -164,7 +164,7 @@ STUB
   printf '**68 of 145** published cells are composite-green.\n' > "$MATRIX_STATUS_DOC"
   run_generator
   [ "$status" -eq 0 ]
-  grep -q 'blocking today on `boots`, `builds`, `desktop`, `no_silent_omissions`' "$README"
+  grep -q 'criteria prevent publication: `boots`, `builds`, `desktop`, `no_silent_omissions`' "$README"
 }
 
 @test "a MATRIX-STATUS.md with no composite line is an error, not a guess" {
@@ -187,5 +187,5 @@ STUB
   # 0, not 1: `green` promoted but no Gate asserted it, and a Gate that never
   # ran is not a pass (skipped_is_not_green).
   grep -q 'composite green 0/4' "$README"
-  grep -q 'counts this table' "$README"
+  grep -q 'uses this table' "$README"
 }

@@ -37,7 +37,7 @@ join_or_dash() {
 {
 	echo "$start"
 	echo
-	echo "_Generated from the latest conclusive main-branch build for each variant (cancelled runs are skipped over). A cell is green when its image was successfully promoted to the published tag; **failing** means a job ran and failed; **not reached** means no job asserted the cell at all, usually because an earlier stage stopped it._"
+	echo "_This snapshot uses the latest conclusive build from the main branch for each variant. It omits cancelled runs. A green cell has a successful promotion to the published tag. **Failed** means that a job ran and failed. **Not reached** means that no job asserted the cell, usually because an earlier stage stopped it._"
 	echo
 	echo '| Variant | Green image cells | Latest run | Failing | Not reached |'
 	echo '| :--- | ---: | :--- | :--- | :--- |'
@@ -150,6 +150,8 @@ done < <(yq -r '.variants[] | [.id, .emoji] | @tsv' "$config")
 
 percent=$((100 * total_green / total_cells))
 total_failing=$((total_cells - total_green - total_unreached))
+failure_word="failures"
+[[ "$total_failing" -eq 1 ]] && failure_word="failure"
 
 # Composite green, scored against .github/green-criteria.yml.
 #
@@ -199,7 +201,11 @@ blocking_text=$(sed -E 's/,/`, `/g' <<<"$blocking")
 
 {
 	echo
-	echo "**Built ${total_green}/${total_cells} · composite green ${composite_green}/${composite_total} (${percent}% built)** — of the remainder, **${total_failing} failing** and **${total_unreached} never reached** (no job asserted them). The two are reported separately on purpose: a never-reached cell is untested, not broken. Composite green counts ${composite_scope} and is scored against [\`.github/green-criteria.yml\`](.github/green-criteria.yml), blocking today on \`${blocking_text}\` — every one of those a cell must satisfy, with skipped and never-tested counting as not green. The full per-axis board is [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md). This is a point-in-time CI snapshot, not a support-tier promise."
+	echo "**Built ${total_green}/${total_cells} · composite green ${composite_green}/${composite_total} (${percent}% built)** — The remainder has **${total_failing} ${failure_word}** and **${total_unreached} never reached**; no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work."
+	echo
+	echo "The score for composite green uses ${composite_scope}. [\`.github/green-criteria.yml\`](.github/green-criteria.yml) provides the score. Today, these criteria prevent publication: \`${blocking_text}\`. A cell must satisfy each criterion."
+	echo
+	echo "Skipped cells and cells with no test do not count as green. The full per-axis board is [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md). This snapshot of CI shows one point in time. It does not promise a support tier."
 	echo
 	echo "$end"
 } >>"$tmp_table"

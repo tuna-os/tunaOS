@@ -24,7 +24,7 @@ if ((count == 0)); then
 fi
 
 echo
-echo "**Sibling images, built in their own repositories.** These are TunaOS-family bootc images built with BuildStream on freedesktop-sdk rather than from a distribution's packages, so they have no cells in the matrix above and are not scored by \`green-criteria.yml\`; each repository runs its own build, live-ISO, plain-install and LUKS-install checks. Status is that repository's latest completed main-branch build."
+echo "**Sibling images from separate repositories.** These TunaOS-family bootc images use BuildStream on freedesktop-sdk. They do not use packages from a distribution. Thus, the matrix above has no cells for them, and \`green-criteria.yml\` does not score them. Each repository runs its own checks for the build, live ISO, plain installation, and LUKS installation. The status shows the latest complete build from the main branch of that repository."
 echo
 echo '| Image | Built by | Desktop | Latest main build |'
 echo '| :--- | :--- | :--- | :--- |'
