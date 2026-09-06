@@ -12,11 +12,35 @@ def main():
     with open(config_file, 'r') as f:
         config = yaml.safe_load(f)
 
+    # Nightly schedule registry: keep this in lockstep with the
+    # "Nightly schedule registry" comment block at the top of
+    # .github/workflows/build-variant.yml. The ~2h stagger exists because the
+    # org has a 20-concurrent-job ceiling; un-staggered crons queue against
+    # each other (and the proving workflows) and starve everything. If you
+    # add a variant or move a cron, update both places.
+    SCHEDULES = {
+        "yellowfin": "20 0 * * *",
+        "albacore": "20 2 * * *",
+        "gurnard": "20 4 * * *",
+        "guppy": "20 6 * * *",
+        "skipjack": "20 9 * * *",
+        "bonito": "20 11 * * *",
+        "marlin": "20 13 * * *",
+        "bonito-rawhide": "20 15 * * *",
+        "grouper": "20 17 * * *",
+        "sailfin": "20 19 * * *",
+        "flounder": "20 21 * * *",
+        "hummingbird": "20 22 * * *",
+        "flounder-sid": "20 23 * * *",
+    }
+
+    schedule_block = """  schedule:
+    - cron: "{cron}"
+"""
+
     template = """name: Build {name_cap}
 on:
-  schedule:
-    - cron: "0 1 * * *"
-  workflow_dispatch:
+{schedule}  workflow_dispatch:
     inputs:
       flavor:
         description: 'Flavor (all, base, gnome, kde, niri, etc.)'
@@ -77,12 +101,21 @@ jobs:
         name_cap = name.capitalize()
         experimental = variant.get('experimental', False)
 
-        tpl = template_experimental if experimental else template
-        workflow_content = tpl.format(
-            name=name,
-            name_cap=name_cap,
-            emoji=emoji
-        )
+        if experimental:
+            workflow_content = template_experimental.format(
+                name=name,
+                name_cap=name_cap,
+                emoji=emoji
+            )
+        else:
+            cron = SCHEDULES.get(name)
+            schedule = schedule_block.format(cron=cron) if cron else ""
+            workflow_content = template.format(
+                name=name,
+                name_cap=name_cap,
+                emoji=emoji,
+                schedule=schedule
+            )
 
         file_path = f'.github/workflows/build-{name}.yml'
         with open(file_path, 'w') as f:
