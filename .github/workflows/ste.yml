@@ -1,0 +1,39 @@
+name: Prose
+
+# Simplified Technical English (ASD-STE100) over this repository's Markdown.
+#
+# This repo's README is synced into tuna-os/docs as docs/<slug>/, and the
+# aggregator deliberately skips synced trees: a fix there is reverted by the
+# next sync, because the prose is authored here. This is the only place it can
+# actually be checked.
+#
+# The linter, its rules and its tests live in tuna-os/.github and are shared by
+# every repo, so nothing here can drift. This repo keeps only .ste-budget --
+# the number it is measured against.
+#
+# That budget is a ratchet, seeded from this repo's count at adoption rather
+# than from zero: a gate that fails on day one gets disabled on day two. It
+# only ever goes down. Lower it when a batch of prose lands; never raise it to
+# make a PR pass.
+
+on:
+  pull_request:
+    # .ste-budget and this file are in the filters on purpose: a change to
+    # the number a job is measured against must trigger that job.
+    paths:
+      - '**.md'
+      - '**.mdx'
+      - .ste-budget
+      - .github/workflows/ste.yml
+  push:
+    branches: [main]
+    paths:
+      - '**.md'
+      - '**.mdx'
+      - .ste-budget
+      - .github/workflows/ste.yml
+  workflow_dispatch:
+
+jobs:
+  ste:
+    uses: tuna-os/.github/.github/workflows/ste-lint.yml@main
