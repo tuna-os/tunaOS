@@ -92,6 +92,13 @@ downloads:
   # (tunaOS#1893): the runner images lack journald for the container,
   # and the customize/initramfs/commit steps otherwise die in conmon.
 
+  # AvengeMedia's EL10 dms-greeter 1.6 RPM is a runtime-sync launcher and
+  # carries no QML. Keep the same source payload and checksum as the pending
+  # tunaos-packages dms/dms-greeter recipes for the offline-build fallback.
+  # renovate: datasource=github-releases depName=AvengeMedia/DankMaterialShell
+  dms_qml: "v1.5.2"
+  dms_qml_sha256: "a504d4684aed1fde07bc3cad3ea1ba417331bfd43cb97420133082ae70da1478"
+
   # Zirconium's mkosi.extra payload, fetched as a source tarball by
   # build_scripts/install-zirconium.sh (niri stages only). Pinned to a commit
   # for the same reason every other download here is: `main` moves, so an

@@ -42,6 +42,25 @@ _code() { grep -v '^[[:space:]]*#' "$1"; }
   [ "$status" -eq 0 ]
 }
 
+@test "EL10 installs a checksum-pinned QML fallback after the COPR transaction" {
+  local installer="${REPO_ROOT}/build_scripts/desktop/niri.sh"
+  local fallback="${REPO_ROOT}/build_scripts/install-dms-qml-fallback.sh"
+  local versions="${REPO_ROOT}/image-versions.yaml"
+
+  [ -x "$fallback" ]
+  _code "$installer" | grep -qF '/run/context/build_scripts/install-dms-qml-fallback.sh'
+  _code "$fallback" | grep -qF '/usr/share/quickshell/dms-greeter/DMSGreeter.qml'
+  _code "$fallback" | grep -qF 'sha256sum --check --strict'
+  grep -qE '^[[:space:]]+dms_qml: "v[0-9]' "$versions"
+  grep -qE '^[[:space:]]+dms_qml_sha256: "[0-9a-f]{64}"' "$versions"
+}
+
+@test "DMS QML fallback passes shellcheck" {
+  if ! command -v shellcheck &>/dev/null; then skip "shellcheck not installed"; fi
+  run shellcheck --severity=error --exclude=SC1091 "${REPO_ROOT}/build_scripts/install-dms-qml-fallback.sh"
+  [ "$status" -eq 0 ]
+}
+
 @test "every DMS package is asked of a COPR that can resolve it" {
   if ! command -v "$YQ_BIN" &>/dev/null; then skip "yq not installed"; fi
   local manifest="${REPO_ROOT}/manifests/desktops/niri.yaml"

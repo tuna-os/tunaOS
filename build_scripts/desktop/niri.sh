@@ -311,31 +311,13 @@ EOF
 		wl-mirror
 
 	# Install DankMaterialShell suite (quickshell + dms shell + theming/tools)
-	# Every EL10 variant: the gate is Qt 6.10+, and all three have it.
-	# Needs ligenix repo enabled for dms-greeter -> greetd dependency
+	# for every EL10 variant. Needs ligenix enabled for the greetd dependency.
 	#
-	# albacore (plain AlmaLinux 10) used to be excluded here, which broke its
-	# build outright rather than merely shipping a lesser desktop:
-	# install-zirconium.sh writes /etc/greetd/config.toml pointing at
-	# `dms-greeter` for EVERY niri image, and manifests/desktops/niri.yaml's
-	# el10 list carries no wallpaper daemon because -- per
-	# tests/bats/test_niri_wallpaper_daemon.bats -- "el10 legitimately ships
-	# no wallpaper daemon and passes through the dms branch". albacore passed
-	# through neither, so verify-branding-niri.sh failed twice and the image
-	# build died after three attempts (nightly 33848074014, job 101019603707):
-	#
-	#   FAIL: greetd launches dms-greeter but /usr/share/quickshell/
-	#         dms-greeter/DMSGreeter.qml is missing
-	#   FAIL: no wallpaper daemon (swaybg/swww/wpaperd) and no dms
-	#   TUNAOS_BRANDING_NIRI_FAIL variant=albacore failures=2
-	#
-	# No image published, so both ISO legs then refused to build from a stale
-	# tag -- which is why iso:niri was red on amd64 AND arm64 while every
-	# other desktop was red on arm64 only.
-	#
-	# The exclusion cited Qt 6.10+, and plain AlmaLinux 10 meets it:
-	# repo.almalinux.org/almalinux/10/AppStream/x86_64 ships qt6-qtbase-6.10.1
-	# (checked 2026-09-05). So the condition was narrower than its own reason.
+	# The AvengeMedia EL10 dms-greeter 1.6 RPM is only a runtime-sync launcher:
+	# it ships no QML. An image build cannot rely on a first-boot download, so
+	# overlay the checksum-pinned upstream payload when the RPM omitted it.
+	# install-dms-qml-fallback.sh becomes a no-op once tunaos-packages publishes
+	# an EL10 RPM that owns DMSGreeter.qml (tunaOS#2359).
 	if [[ $IS_ALMALINUX == true || $IS_ALMALINUXKITTEN == true || $IS_CENTOS == true ]]; then
 		dnf -y copr enable avengemedia/danklinux
 		dnf -y copr enable avengemedia/dms-git
@@ -352,6 +334,7 @@ EOF
 			danksearch
 		dnf -y copr disable avengemedia/danklinux
 		dnf -y copr disable avengemedia/dms-git
+		/run/context/build_scripts/install-dms-qml-fallback.sh
 	fi
 
 	# Restore brightnessctl and playerctl for every EL10 variant. Same
