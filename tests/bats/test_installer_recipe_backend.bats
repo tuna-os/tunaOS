@@ -34,26 +34,31 @@ set_composefs() {
     >"$FIXTURE/usr/lib/ostree/prepare-root.conf"
 }
 
-# bootupd 0.2.x shape: binaries under updates/EFI/<vendor>.
+# bootupd 0.2.x shape: binaries under updates/EFI/<vendor>. The EFI arch suffix
+# is a parameter here (x64 / aa64) because it is a parameter in reality, and
+# every fixture below that hardcoded x64 is why the arm64 blindness shipped.
 add_bootupd_legacy() {
+  local efiarch="${1:-x64}"
   mkdir -p "$FIXTURE/usr/lib/bootupd/updates/EFI/almalinux"
-  touch "$FIXTURE/usr/lib/bootupd/updates/EFI/almalinux/grubx64.efi"
+  touch "$FIXTURE/usr/lib/bootupd/updates/EFI/almalinux/grub${efiarch}.efi"
 }
 
 # Current Fedora shape: only EFI.json under bootupd/updates, versioned binaries
 # under /usr/lib/efi. The probe requires ALL THREE, which is what stops a bare
 # EFI.json from being read as a payload.
 add_bootupd_modern() {
+  local efiarch="${1:-x64}"
   mkdir -p "$FIXTURE/usr/lib/bootupd/updates" \
-    "$FIXTURE/usr/lib/efi/grub2/x64" "$FIXTURE/usr/lib/efi/shim/x64"
+    "$FIXTURE/usr/lib/efi/grub2/${efiarch}" "$FIXTURE/usr/lib/efi/shim/${efiarch}"
   touch "$FIXTURE/usr/lib/bootupd/updates/EFI.json"
-  touch "$FIXTURE/usr/lib/efi/grub2/x64/grubx64.efi"
-  touch "$FIXTURE/usr/lib/efi/shim/x64/shimx64.efi"
+  touch "$FIXTURE/usr/lib/efi/grub2/${efiarch}/grub${efiarch}.efi"
+  touch "$FIXTURE/usr/lib/efi/shim/${efiarch}/shim${efiarch}.efi"
 }
 
 add_systemd_boot() {
+  local efiarch="${1:-x64}"
   mkdir -p "$FIXTURE/usr/lib/systemd/boot/efi"
-  touch "$FIXTURE/usr/lib/systemd/boot/efi/systemd-bootx64.efi"
+  touch "$FIXTURE/usr/lib/systemd/boot/efi/systemd-boot${efiarch}.efi"
 }
 
 probe() {
@@ -149,6 +154,42 @@ probe() {
   [[ "$output" == *"filesystem=xfs"* ]]
 }
 
+# ── aarch64: the same three shapes, spelled the way arm64 spells them ────────
+#
+# REGRESSION COVERAGE. The probe used to name grubx64/shimx64/systemd-bootx64
+# literally, so on aarch64 — where the EFI suffix is aa64 — every branch missed
+# and the script exited with "cannot determine the bootc backend". That failed
+# the arm64 ISO for every desktop while the amd64 leg of the same cell passed,
+# and nothing here noticed because every fixture above was x64. Measured on
+# ghcr.io/tuna-os/albacore:kde-linux-arm64, which carries the legacy payload
+# /usr/lib/bootupd/updates/EFI/almalinux/{grubaa64,shimaa64}.efi.
+
+@test "aarch64 legacy bootupd payload (grubaa64) is recognised as ostree" {
+  add_bootupd_legacy aa64
+  set_composefs no
+  probe
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"bootloader=grub2"* ]]
+  [[ "$output" == *"composeFsBackend=false"* ]]
+  [[ "$output" == *"filesystem=xfs"* ]]
+}
+
+@test "aarch64 modern bootupd payload (grubaa64 + shimaa64) is recognised" {
+  add_bootupd_modern aa64
+  set_composefs no
+  probe
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"bootloader=grub2"* ]]
+}
+
+@test "aarch64 systemd-boot (systemd-bootaa64) is composefs-native" {
+  add_systemd_boot aa64
+  probe
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"bootloader=systemd"* ]]
+  [[ "$output" == *"composeFsBackend=true"* ]]
+}
+
 # ── Never guess ──────────────────────────────────────────────────────────────
 
 @test "an unclassifiable image fails instead of guessing" {
@@ -158,4 +199,17 @@ probe() {
   probe
   [ "$status" -ne 0 ]
   [[ "$output" == *"cannot determine the bootc backend"* ]]
+}
+
+@test "aarch64 EFI.json with grubaa64 but no shim is not a bootupd payload" {
+  # The globbing must not have loosened the two-form test into a one-form test.
+  # This is the arm64 twin of the bare-EFI.json guard above.
+  mkdir -p "$FIXTURE/usr/lib/bootupd/updates" "$FIXTURE/usr/lib/efi/grub2/aa64"
+  touch "$FIXTURE/usr/lib/bootupd/updates/EFI.json"
+  touch "$FIXTURE/usr/lib/efi/grub2/aa64/grubaa64.efi"
+  set_composefs yes
+  probe
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"bootloader=systemd"* ]]
+  [[ "$output" == *"composeFsBackend=true"* ]]
 }

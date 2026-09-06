@@ -6,17 +6,25 @@
 # THE ORDER IS LOAD-BEARING: a bootupd payload identifies ostree even when
 # composefs is sealed; otherwise an enabled composefs config or systemd-boot
 # identifies composefs-native. Unknown images are never guessed.
+#
+# The EFI binary names are GLOBBED because their suffix is the EFI
+# architecture — grubx64/shimx64/systemd-bootx64 on x86_64, and
+# grubaa64/shimaa64/systemd-bootaa64 on aarch64. Globbing rather than deriving
+# the suffix from `uname -m` is deliberate: this body is run inside the image
+# under `podman run`, which may be emulating a foreign architecture, so the
+# filenames present are the only trustworthy signal. Keep this in step with
+# live-iso/common/src/installer-recipe-backend.sh, which is a port of it.
 # shellcheck disable=SC2016  # the $-free sh body is intentionally unexpanded
 TUNAOS_BACKEND_PROBE_SH='
-if { ls /usr/lib/bootupd/updates/EFI/*/grubx64.efi >/dev/null 2>&1 ||
+if { ls /usr/lib/bootupd/updates/EFI/*/grub*.efi >/dev/null 2>&1 ||
      { test -f /usr/lib/bootupd/updates/EFI.json &&
-       find /usr/lib/efi/grub2 -type f -name grubx64.efi -print -quit 2>/dev/null | grep -q . &&
-       find /usr/lib/efi/shim -type f -name shimx64.efi -print -quit 2>/dev/null | grep -q .; }; }; then
+       find /usr/lib/efi/grub2 -type f -name "grub*.efi" -print -quit 2>/dev/null | grep -q . &&
+       find /usr/lib/efi/shim -type f -name "shim*.efi" -print -quit 2>/dev/null | grep -q .; }; }; then
     echo BACKEND=ostree
 elif grep -A8 "^\[composefs\]" /usr/lib/ostree/prepare-root.conf 2>/dev/null \
      | grep -qiE "enabled[[:space:]]*=[[:space:]]*(yes|true|1|signed)"; then
     echo BACKEND=composefs-native
-elif test -f /usr/lib/systemd/boot/efi/systemd-bootx64.efi; then
+elif find /usr/lib/systemd/boot/efi -type f -name "systemd-boot*.efi" -print -quit 2>/dev/null | grep -q .; then
     echo BACKEND=composefs-native
 else
     echo BACKEND=unknown

@@ -348,6 +348,50 @@ written down: `verify-desktop-experience.sh` says "Fedora and EL10 use DMS
 (quickshell) while openSUSE uses the wlroots stack". albacore was the EL10
 variant for which that was not true.
 
+### The arm64 ISO axis had two blockers stacked, not one
+
+Clearing the missing arm64 installer Flatpak did not turn the arm64 ISO green;
+it revealed a second, independent arm64 bug underneath, and the distinction is
+worth recording because the first fix looked like it had failed.
+
+Run [33997358111](https://github.com/tuna-os/tunaOS/actions/runs/33997358111),
+`albacore:kde`, dispatched precisely because its amd64 ISO already passed and
+only arm64 failed. The Flatpak now installs — `Installing
+app/org.tunaos.InstallerKde/aarch64/master` — where it previously died on
+`error: Nothing matches org.tunaos.InstallerKde in remote tuna-os`. The build
+then got four steps further and stopped somewhere new:
+
+```
+++ bash /run/tbox-customize/1/installer-recipe-backend.sh
+ERROR: cannot determine the bootc backend of this image.
+       No bootupd payload, no composefs pin in prepare-root.conf,
+       and no systemd-boot EFI binary.
+```
+
+The image is not unclassifiable. Reading the published layers of
+`ghcr.io/tuna-os/albacore:kde-linux-arm64` directly out of the registry shows a
+complete legacy bootupd payload:
+
+```
+usr/lib/bootupd/updates/EFI/almalinux/grubaa64.efi
+usr/lib/bootupd/updates/EFI/almalinux/shimaa64.efi
+usr/lib/bootupd/updates/EFI/BOOT/BOOTAA64.EFI
+```
+
+That is branch 1 of the probe — except the probe spelled the filename
+`grubx64.efi`. The EFI binary suffix *is* the EFI architecture (`x64` on
+x86_64, `aa64` on aarch64), so both copies of the probe
+(`live-iso/common/src/installer-recipe-backend.sh` and
+`TUNAOS_BACKEND_PROBE_SH` in `scripts/lib/backend.sh`) missed every branch on
+every arm64 image and took the deliberate "never guess" exit. The names are now
+globbed, which is what the branches always meant to ask.
+
+The reason this reached production is visible in the test file: every fixture
+in `test_installer_recipe_backend.bats` built an x64 tree, so a suite that
+exercised all four branches proved nothing about half the matrix. The fixtures
+now take the EFI arch as a parameter and the aarch64 shapes are asserted
+alongside the x64 ones.
+
 **Three of the four measured desktops come up and render on a GPU-less
 runner.** Only xfwl4 aborts.
 
