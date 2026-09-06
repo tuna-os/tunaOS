@@ -60,7 +60,7 @@ iso_groups:
 sibling_images:
   - id: tromso
     emoji: "🏔️"
-    description: "Aurora Tromsø: KDE Plasma 6 on freedesktop-sdk (BuildStream)"
+    description: "Tromsø: KDE Plasma 6 on freedesktop-sdk (BuildStream)"
     image: ghcr.io/tuna-os/tromso
     repo: tuna-os/tromso
     workflow: build-tromso-multirunner.yml
