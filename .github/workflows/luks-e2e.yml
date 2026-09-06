@@ -370,7 +370,15 @@ jobs:
             just podman crun jq \
             qemu-system-x86 qemu-utils ovmf swtpm socat sshpass imagemagick \
             systemd-boot-efi mtools squashfs-tools xorriso dosfstools gdisk \
-            ffmpeg
+            ffmpeg tesseract-ocr python3-yaml
+          # tesseract-ocr + python3-yaml are scripts/install-checkpoints.py's
+          # two dependencies. Without them it degrades to presence and render
+          # checks and says so — which is exactly what run 34062061739 did:
+          # "tesseract not installed — keyword and forbidden-text assertions
+          # are SKIPPED". The checkpoint that matters most on a green cell is
+          # the one that reads the screen, so it must not be the one that
+          # silently does not run.
+          #
           # ffmpeg is what turns record-timelapse.sh's frames into the video.
           # Without it the recorder captures normally and then has nothing to
           # assemble with, which is deliberately NOT a failure — the first

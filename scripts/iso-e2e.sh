@@ -3400,7 +3400,15 @@ ssh)
 kickstart)
 	boot_live_iso || exit 1
 	wait_for_ready || exit $?
-	screenshot "10-ready"
+	# Poll for paint before photographing, the way `ready` mode does. Taking
+	# the shot the instant the readiness marker lands catches the framebuffer
+	# before the session has drawn anything: run 34062061739's marlin:kde
+	# 10-ready.png is a 282-byte, two-colour 1280x800 PNG — while that run's
+	# own timelapse shows the greeter drawing later. The screen-checkpoint
+	# assertions read this frame, so an unpainted capture reports a blank
+	# desktop that was never blank. Bounded and non-fatal: a slow paint
+	# extends the run, it cannot fail it.
+	wait_for_paint "10-ready" || true
 	rc=0
 	run_install || rc=$?
 	# Assert the captured frames even when the install itself failed: on that
@@ -3417,7 +3425,15 @@ kickstart)
 install)
 	boot_live_iso || exit 1
 	wait_for_ready || exit $?
-	screenshot "10-ready"
+	# Poll for paint before photographing, the way `ready` mode does. Taking
+	# the shot the instant the readiness marker lands catches the framebuffer
+	# before the session has drawn anything: run 34062061739's marlin:kde
+	# 10-ready.png is a 282-byte, two-colour 1280x800 PNG — while that run's
+	# own timelapse shows the greeter drawing later. The screen-checkpoint
+	# assertions read this frame, so an unpainted capture reports a blank
+	# desktop that was never blank. Bounded and non-fatal: a slow paint
+	# extends the run, it cannot fail it.
+	wait_for_paint "10-ready" || true
 	rc=0
 	run_install || rc=$?
 	# Assert the captured frames even when the install itself failed: on that
