@@ -17,6 +17,7 @@ Invoked by:
 | `resolve-flavor.sh` | Routes a variant/flavor to its Containerfile, target, parent, and build flags |
 | `resolve-image.sh` | Resolves image references (base, common, brew, akmods) |
 | `build-image-inner.sh` | The build engine (env-var driven) |
+| `gen-ci-lanes.py` | Generates the PR/post-merge/scheduled workflow inventory in `docs/CI_SPEC.md` |
 | `sync-upstream-snapshots.sh` | Syncs and drift-checks the `_upstream-snapshots/` tree |
 | `check-upstream-snapshot-size.sh` | Fails refreshes that exceed the snapshot size or change budget |
 
