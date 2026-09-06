@@ -151,6 +151,13 @@ checkpoints:
       # DERIVED. SDDM's Breeze greeter draws the user name over a Password
       # field, with Suspend / Restart / Shut Down on the bottom bar.
       kde: ["password", "login", "sign in", "suspend", "restart"]
+      # VALIDATED 2026-09-07: this whole contract was run against three real
+      # frames from a projectbluefin/utah luks-e2e run (live desktop, GDM
+      # greeter, logged-in session). installed-login passed off "not listed",
+      # installed-session passed its no-greeter-text assertion, and
+      # live-desktop failed — correctly: that ISO autostarts no installer, so
+      # there is nothing for this contract's live keywords to match.
+      #
       # MEASURED 2026-09-07 against a real GDM greeter frame (a
       # projectbluefin/utah luks-e2e run,
       # /var/tmp/utah-luks-e2e/screenshots/installed-greeter.png): tesseract
