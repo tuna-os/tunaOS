@@ -1508,12 +1508,22 @@ jobs:
 
       - name: Collect evidence
         if: always()
+        env:
+          EVIDENCE_ARCH: amd64
+          EVIDENCE_STATUS: ${{ job.status }}
+          # inputs.* is caller-typed text; it reaches the shell through env,
+          # never by interpolation into the script (see
+          # tests/test_untrusted_context_never_reaches_a_run_block_by_interpolation.py).
+          EVIDENCE_VARIANT: ${{ inputs.image-variant }}
+          EVIDENCE_FLAVOR: ${{ inputs.flavor }}
         run: |
           sudo chown -R "$USER:$(id -gn)" verify-out 2>/dev/null || true
           for ppm in verify-out/*.ppm; do
             [[ -f "$ppm" ]] || continue
             convert "$ppm" "${ppm%.ppm}.png" || true
           done
+          scripts/evidence-bundle.sh \
+            "${EVIDENCE_VARIANT}:${EVIDENCE_FLAVOR}" boots verify-out
 
       - name: Upload boot evidence
         if: always()
@@ -1523,6 +1533,7 @@ jobs:
           path: |
             verify-out/serial.log
             verify-out/*.png
+            evidence/${{ inputs.image-variant }}/${{ inputs.flavor }}/amd64/
           if-no-files-found: warn
           retention-days: 7
 

@@ -119,6 +119,9 @@ def test_provenance_records_which_run_asserted_which_criterion() -> None:
     cell = prov["sailfin:gnome"]
     assert cell["builds"]["verdict"] == "pass"
     assert cell["builds"]["run"].endswith("/actions/runs/32068513822")
+    assert cell["builds"]["evidence"].endswith(
+        "/actions/runs/32068513822#artifacts"
+    )
     assert cell["boots"]["verdict"] == "fail"
     assert cell["lifecycle"]["verdict"] == "pass"
     assert cell["lifecycle"]["run"].endswith("/actions/runs/32040213366")
@@ -127,6 +130,16 @@ def test_provenance_records_which_run_asserted_which_criterion() -> None:
     # visible instead of becoming a hole in the payload.
     assert cell["desktop"]["verdict"] == "untested"
     assert cell["desktop"]["run"] == ""
+
+
+def test_evidence_links_are_volatile_in_the_structural_check() -> None:
+    """A newer asserting run must not make an unrelated PR's drift gate red."""
+    plain = "| **albacore** | ✅ | — | — | — | — |"
+    linked = (
+        "| **albacore** | [✅](https://github.com/tuna-os/tunaOS/"
+        "actions/runs/32068513822#artifacts) | — | — | — | — |"
+    )
+    assert gms.structural(plain) == gms.structural(linked)
 
 
 def test_provenance_ships_with_the_doc() -> None:
