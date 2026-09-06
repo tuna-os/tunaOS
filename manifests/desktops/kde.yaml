@@ -65,26 +65,18 @@ packages:
   # flavor. Listing them strictly would fail the build over a fingerprint
   # helper; dropping them silently would be the #1555 shape. Neither.
   #
-  # MEASURED 2026-08-27 (run 33041330231), replacing the prediction that
-  # used to sit here: the group makes `plasma-login-manager` (6.7.4)
-  # mandatory, it claims display-manager.service first, and the build logs
-  #
-  #   display-manager.service already points at plasmalogin.service; leaving it
-  #
-  # so the greeter on wahoo is plasmalogin, NOT the sddm this manifest
-  # declares — sddm is installed but not wired. The Gate PASSED on that, so
-  # it boots and this is an accuracy gap rather than a breakage.
-  #
-  # Deliberately not "fixed" by editing display_manager: that key is
-  # top-level in this file and shared with the el10 and fedora sections,
-  # where sddm IS correct. Overriding it for ELN alone needs per-section
-  # display_manager support on the dnf path (the zypper path already has
-  # it). Left as-is until someone decides that is worth adding.
+  # MEASURED 2026-08-27 (run 33041330231): the group makes
+  # `plasma-login-manager` (6.7.4) mandatory, it claims
+  # display-manager.service, and the Gate passed with plasmalogin as the
+  # greeter. The DNF installer now supports a per-section display_manager,
+  # so record the unit ELN actually ships instead of inheriting the global
+  # sddm declaration. Do not install the unused sddm alongside it: the group
+  # already supplies plasmalogin, which owns the active alias on this base.
   eln:
+    display_manager: plasmalogin
     groups:
       - kde-desktop
     packages:
-      - sddm
       - dolphin
       - konsole
       - kate
