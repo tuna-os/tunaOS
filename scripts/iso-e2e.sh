@@ -361,7 +361,7 @@ fi
 # virtio-vga-gl, use virgl + egl-headless so those compositors get real GL and
 # actually render. Override with TBOX_E2E_GPU=virgl|plain.
 #
-# On a GPU-less runner we fall back to -vga virtio. This comment used to say
+# On a GPU-less runner we fall back to the plain 2D virtio device. This comment used to say
 # that was "fine for cosmic/kde/gnome (software fallbacks)". It is not, and
 # the claim cost weeks of misdirected debugging: cosmic and xfce are Smithay
 # too, so on hosted runners they don't render blank — they never start at
@@ -401,10 +401,38 @@ fi
 # squash runs getty only on tty1 and the serial console (ttyS0), so tty3 has
 # no console to switch to; the Wayland compositor holds tty1. The serial log
 # is the source of truth for "is it up", pixels are only for the gallery.
+#
+# The display device is per machine type, not per taste. `-vga virtio` is
+# shorthand for virtio-vga: a virtio-gpu behind a VGA-compatible PCI region,
+# and the VGA half only exists on targets that have legacy VGA — x86. On
+# qemu-system-aarch64 the type does not exist, and QEMU says so in the least
+# helpful way it can:
+#
+#   qemu-system-aarch64: type is NULL
+#   qemu-system-aarch64: Virtio VGA not available. Perhaps you want to
+#     install qemu-system-modules-opengl package?
+#   ERROR: QEMU failed to daemonize
+#
+# (albacore:kde, iso:kde linux-arm64, run 34001369641 — with
+# qemu-system-modules-opengl installed by the step before, so the hint is
+# wrong. Ubuntu ships hw-display-virtio-vga.so for arm64 too, but the
+# aarch64 binary's modinfo table registers no virtio-vga type, so the module
+# on disk is inert there; it does register virtio-gpu-pci and
+# virtio-gpu-gl-pci.) The `virt` machine's devices are the VGA-less
+# virtio-gpu-pci and, for virgl, virtio-gpu-gl-pci. screendump reads the scanout of either, so
+# nothing downstream changes; only the device name does. QEMU_MACHINE is
+# decided with the emulator above, the same way CPU_ARG keys off it below.
+if [[ "$QEMU_MACHINE" == "virt" ]]; then
+	_gpu_plain_args=(-device virtio-gpu-pci)
+	_gpu_gl_device="virtio-gpu-gl-pci"
+else
+	_gpu_plain_args=(-vga virtio)
+	_gpu_gl_device="virtio-vga-gl"
+fi
 _gpu_mode="${TBOX_E2E_GPU:-auto}"
-QEMU_GPU_ARGS=(-vga virtio -display none)
+QEMU_GPU_ARGS=("${_gpu_plain_args[@]}" -display none)
 if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /dev/dri/renderD128 ]]; } &&
-	"$QEMU" -device help 2>/dev/null | grep -q "virtio-vga-gl"; then
+	"$QEMU" -device help 2>/dev/null | grep -qF "$_gpu_gl_device"; then
 	# egl-headless is NOT a display in its own right — it renders GL locally and
 	# expects another UI to present the result. Without one, `screendump` fails:
 	#
@@ -426,11 +454,11 @@ if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /de
 	# concurrent runs.
 	# The -vnc argument needs OUTPUT_DIR, which is defined further down, so it
 	# is appended there rather than here.
-	QEMU_GPU_ARGS=(-device virtio-vga-gl -display "egl-headless,rendernode=/dev/dri/renderD128")
+	QEMU_GPU_ARGS=(-device "$_gpu_gl_device" -display "egl-headless,rendernode=/dev/dri/renderD128")
 	QEMU_NEEDS_VNC_SURFACE=1
-	echo "==> GPU: virgl (virtio-vga-gl + egl-headless /dev/dri/renderD128 + vnc surface) — Smithay compositors can render"
+	echo "==> GPU: virgl (${_gpu_gl_device} + egl-headless /dev/dri/renderD128 + vnc surface) — Smithay compositors can render"
 else
-	echo "==> GPU: -vga virtio headless (no render node/virgl) — niri/xfwl4 will not render here"
+	echo "==> GPU: ${_gpu_plain_args[*]} headless (no render node/virgl) — niri/xfwl4 will not render here"
 fi
 
 # Locate architecture-appropriate UEFI firmware. Path varies across distros

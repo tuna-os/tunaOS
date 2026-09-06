@@ -348,7 +348,7 @@ written down: `verify-desktop-experience.sh` says "Fedora and EL10 use DMS
 (quickshell) while openSUSE uses the wlroots stack". albacore was the EL10
 variant for which that was not true.
 
-### The arm64 ISO axis had two blockers stacked, not one
+### The arm64 ISO axis had three blockers stacked, not one
 
 Clearing the missing arm64 installer Flatpak did not turn the arm64 ISO green;
 it revealed a second, independent arm64 bug underneath, and the distinction is
@@ -391,6 +391,38 @@ in `test_installer_recipe_backend.bats` built an x64 tree, so a suite that
 exercised all four branches proved nothing about half the matrix. The fixtures
 now take the EFI arch as a parameter and the aarch64 shapes are asserted
 alongside the x64 ones.
+
+With the probe fixed (run [34001369641](https://github.com/tuna-os/tunaOS/actions/runs/34001369641),
+same cell), `Build Live ISO` passed on arm64 for the first time and produced a
+5.7 GB `albacore-kde-10.2-aarch64.iso`. The boot gate then failed in 36 seconds:
+
+```
+==> Accel: tcg, CPU: max, MEM: 4096M, CPUS: 4
+qemu-system-aarch64: type is NULL
+qemu-system-aarch64: Virtio VGA not available. Perhaps you want to install qemu-system-modules-opengl package?
+ERROR: QEMU failed to daemonize
+```
+
+`iso-e2e.sh` already chose the aarch64 emulator, the `virt` machine and AAVMF
+by host architecture; its display device was still `-vga virtio` — shorthand
+for `virtio-vga`, a virtio-gpu behind a VGA-compatible PCI region that exists
+only on targets with legacy VGA. The `virt` machine has `virtio-gpu-pci`, which
+the script now uses there. QEMU's package hint is wrong: the preceding step had
+just installed `qemu-system-modules-opengl`. The mechanism is visible in the
+packages the runner installed (`qemu-system-common` and
+`qemu-system-modules-opengl` 8.2.2+ds-0ubuntu1.18, arm64): `hw-display-virtio-vga.so`
+is shipped, but the aarch64 binary's built-in modinfo table registers only the
+`virtio-gpu` family — `hw-display-virtio-gpu`, `-gpu-pci`, `-gpu-gl`, `-gpu-pci-gl`
+— so the type lookup for `virtio-vga` returns nothing and the file on disk is
+never loadable, while `virtio-gpu-pci` is.
+
+Two things are recorded as unmeasured rather than assumed. The gate ran under
+TCG (`Accel: tcg`) because hosted `ubuntu-24.04-arm` runners expose no
+`/dev/kvm`, so whether a KDE live ISO reaches its readiness marker within the
+900 s timeout on four emulated vCPUs is what the next run measures. And
+`scripts/run-walkthrough.sh` is still x86-only (`qemu-system-x86_64`, OVMF,
+`-machine pc`, `-vga virtio`); it is advisory in the ISO job, so arm64 cells
+will have no installer screenshots until it learns the same three things.
 
 **Three of the four measured desktops come up and render on a GPU-less
 runner.** Only xfwl4 aborts.
