@@ -100,6 +100,26 @@
 #                         so it is opt-in rather than folded into every
 #                         --luks cell; docs/LUKS-TPM.md calls this "the
 #                         per-variant TPM-enrollment test".
+#   TUNAOS_E2E_SESSION_LOGIN=1
+#                         --luks only. After the passphrase gate passes, log
+#                         in at the INSTALLED system's greeter and require
+#                         this flavor's compositor to be running as the
+#                         account the recipe created — the check that
+#                         separates a greeter that merely drew from a session
+#                         that started. Turning it on also adds a `user` block
+#                         to the fisherman recipe and a port forward to the
+#                         installed boot, both of which exist only for this
+#                         phase. Default 0: it changes the install shape, and
+#                         user creation on a sealed/composefs image is its own
+#                         question (fisherman internal/post/user.go).
+#   TUNAOS_E2E_REQUIRE_SESSION=1
+#                         Make that phase fatal (exit 10) instead of advisory.
+#   E2E_CHECKPOINT_STRICT=1
+#                         Make the screen-checkpoint assertions
+#                         (scripts/install-checkpoints.py against
+#                         tests/install-pipeline-screens.yaml) fatal (exit 9)
+#                         instead of a warning. See
+#                         docs/INSTALL-PIPELINE-CHECKPOINTS.md.
 #   E2E_WALL_CLOCK_LIMIT  Seconds before the whole harness gives up and
 #                         terminates itself with a diagnosis (default 10800,
 #                         0 to disable). Relative to when this script starts.
