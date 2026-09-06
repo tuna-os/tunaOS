@@ -2852,6 +2852,17 @@ EOF
 		# QEMU fw_cfg boot order that OVMF applies over the stale NVRAM,
 		# putting this disk first and leaving the shell as the last resort.
 		reset_qemu_sockets
+		# The installed boot has had no port forward at all: nothing ever
+		# needed to talk to it. The greeter-login phase does — it is the
+		# `pgrep -u <user> -x <compositor>` check that separates a drawn
+		# greeter from a running session — so give it one when that phase will
+		# run, and not otherwise. The live VM is powered down by here, so
+		# SSH_PORT is free; adding the forward unconditionally would only
+		# create a way for QEMU to fail to start on a busy port.
+		local INSTALLED_HOSTFWD=""
+		[[ "${TUNAOS_E2E_SESSION_LOGIN:-0}" -eq 1 ]] &&
+			INSTALLED_HOSTFWD=",hostfwd=tcp::${SSH_PORT}-:22"
+
 		# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
 		"$QEMU" -name "tunaos-iso-e2e-installed" -machine "$QEMU_MACHINE" -cpu "$CPU_ARG" \
 			-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
@@ -2860,7 +2871,7 @@ EOF
 			-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 			-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 			-device virtio-blk-pci,drive=disk,bootindex=0 \
-			-netdev "user,id=net0" -device virtio-net-pci,netdev=net0 \
+			-netdev "user,id=net0${INSTALLED_HOSTFWD}" -device virtio-net-pci,netdev=net0 \
 			-monitor "unix:${MONITOR_SOCK},server,nowait" \
 			-serial "unix:${FB_SERIAL},server,nowait" \
 			"${QEMU_GPU_ARGS[@]}" -pidfile "$QEMU_PIDFILE" -daemonize || {
