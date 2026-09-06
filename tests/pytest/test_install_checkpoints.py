@@ -289,3 +289,40 @@ def test_shipped_contract_parses_and_names_only_known_phases():
             # tests/installer-screens.yaml learned and this contract inherits.
             assert len(kw) >= 5, f"{cp['id']}: keyword {kw!r} is too short to " \
                                  f"survive OCR noise; use a heading or prompt"
+
+
+def test_keyword_matches_when_ocr_drops_the_space(tmp_path):
+    """MEASURED case: GDM's "Not listed?" comes back as "Notlisted?".
+
+    A contract written in multi-word headings must survive tesseract joining
+    two words, or it fails on screens it can plainly see.
+    """
+    out = tmp_path / "evidence"
+    out.mkdir()
+    render(str(out / "30-installed.png"), "Notlisted?")
+    s = spec(tmp_path, """
+        checkpoints:
+          - id: installed-login
+            phase: installed
+            frames: ["30-installed"]
+            required: true
+            keywords: ["not listed"]
+        """)
+    rc, log = run(out, "--spec", s, "--flavor", "gnome")
+    assert rc == 0, log
+
+
+def test_despacing_does_not_match_a_different_screen(tmp_path):
+    """Joining adjacent words must not let a keyword match unrelated text."""
+    out = tmp_path / "evidence"
+    out.mkdir()
+    render(str(out / "30-installed.png"), "Restart Later")
+    s = spec(tmp_path, """
+        checkpoints:
+          - id: installed-login
+            phase: installed
+            frames: ["30-installed"]
+            required: true
+            keywords: ["not listed"]
+        """)
+    assert run(out, "--spec", s, "--flavor", "gnome")[0] == 1

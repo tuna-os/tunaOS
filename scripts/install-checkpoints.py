@@ -150,6 +150,25 @@ def normalize(text):
     return re.sub(r"\s+", " ", text.lower())
 
 
+def despace(text):
+    """The same text with every space removed.
+
+    MEASURED 2026-09-07 on a real GDM greeter frame
+    (/var/tmp/utah-luks-e2e/screenshots/installed-greeter.png): tesseract read
+    GNOME's "Not listed?" as "Notlisted?" — the space between the words simply
+    is not in the transcript. Tight kerning at greeter font sizes does that
+    often enough that a contract of multi-word headings would fail on screens
+    it can plainly see, which is the worst kind of false alarm: it trains
+    people to disable the gate.
+
+    So a keyword matches if it appears in the collapsed text OR if its
+    space-free form appears in the space-free text. This cannot make a keyword
+    match a *different* screen — removing spaces from both sides only ever
+    joins words that were already adjacent.
+    """
+    return re.sub(r"\s+", "", text)
+
+
 def find_frames(outdir, basename):
     """Resolve a checkpoint frame basename to real files in the evidence dir.
 
@@ -314,13 +333,16 @@ def main():
             continue
 
         texts = {p: normalize(ocr(p)) for p in frames}
+        squeezed = {p: despace(t) for p, t in texts.items()}
         record["ocr_chars"] = {os.path.basename(p): len(t) for p, t in texts.items()}
 
         # SAYS — the keyword assertion is satisfied by whichever frame of the
         # checkpoint satisfies it; they are alternative captures of one stage.
         if keywords:
-            per_frame_hits = {p: [k for k in keywords if k.lower() in t]
-                              for p, t in texts.items()}
+            per_frame_hits = {
+                p: [k for k in keywords
+                    if k.lower() in t or despace(k.lower()) in squeezed[p]]
+                for p, t in texts.items()}
             best = max(per_frame_hits.items(), key=lambda kv: len(kv[1]))
             hits = best[1]
             record["matched"] = hits
@@ -337,7 +359,7 @@ def main():
         # CLEAN — always enforced when the frame exists, on optional
         # checkpoints too: a panic is a panic wherever it is photographed.
         bad = sorted({f for p, t in texts.items() for f in forbid
-                      if f.lower() in t})
+                      if f.lower() in t or despace(f.lower()) in squeezed[p]})
         record["forbidden"] = bad
         if forbid:
             tap(not bad, f"[{cid}] screen free of failure text",

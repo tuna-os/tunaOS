@@ -95,6 +95,14 @@ checkpoints:
       # DERIVED. gnome ships upstream org.bootcinstaller.Installer, whose
       # welcome page is branded from distro_name ("Welcome to <variant>") —
       # the product name is deliberately not part of the keyword.
+      #
+      # Related measurement, 2026-09-07: a GNOME *live* frame from a
+      # projectbluefin/utah run OCR'd to nothing but the top-bar clock and
+      # "Type to search". That ISO does not autostart an installer, so it is
+      # not this contract's subject — but it is the warning that a GNOME
+      # desktop with no window on it gives OCR nothing to read. If a tunaOS
+      # gnome frame ever comes back the same way, the fault is the installer
+      # not being on screen, and this checkpoint is doing its job.
       gnome: ["welcome to", "get started", "available disks", "be installed"]
       # DERIVED from the COSMIC fork's headings.
       cosmic: ["welcome", "get started", "select a disk", "be installed"]
@@ -136,8 +144,14 @@ checkpoints:
       # DERIVED. SDDM's Breeze greeter draws the user name over a Password
       # field, with Suspend / Restart / Shut Down on the bottom bar.
       kde: ["password", "login", "sign in", "suspend", "restart"]
-      # DERIVED. GDM shows the user list first; "Not listed?" is the string
-      # unique to it.
+      # MEASURED 2026-09-07 against a real GDM greeter frame (a
+      # projectbluefin/utah luks-e2e run,
+      # /var/tmp/utah-luks-e2e/screenshots/installed-greeter.png): tesseract
+      # read the account's full name, "Notlisted?" and the vendor line, and no
+      # "Password" at all — GDM shows the user list first and only offers the
+      # password field after a selection. So the list leans on "not listed",
+      # which the matcher finds despite the dropped space (see despace() in
+      # scripts/install-checkpoints.py, added because of this very frame).
       gnome: ["password", "not listed", "sign in", "log in"]
       cosmic: ["password", "login", "sign in"]
       # DERIVED. gtkgreet (build_scripts/desktop/greetd-gtkgreet.sh) is a GTK3
