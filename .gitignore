@@ -46,3 +46,5 @@ iso-e2e-out/
 luks-out/
 live-lab-out/
 *-e2e-out/
+*-dbg-out/
+*-ready-out/

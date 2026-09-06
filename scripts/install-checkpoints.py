@@ -109,14 +109,52 @@ def stddev(path):
         return -1.0
 
 
+def _dark_ui_variant(path):
+    """A contrast-stretched, inverted, upscaled copy for light-on-dark UIs.
+
+    MEASURED 2026-09-07 on a real marlin:kde live frame showing the Marlin
+    Installer's welcome page — white text on a near-black window on a black
+    desktop. Tesseract read the raw frame as ", |": nothing. The same frame
+    through `-colorspace Gray -negate -level 10%,90% -resize 200%` reads
+    cleanly:
+
+        Install Marlin
+        This wizard will guide you through installing Marlin onto this computer.
+        You will choose a target disk and how it should be encrypted. ...
+
+    Every TunaOS installer frontend and every greeter in the fleet is dark by
+    default, so without this pass the contract reports a WORKING installer as
+    "screen says nothing" — a false failure, which is the kind that gets a gate
+    switched off. Inverting alone is not enough and upscaling alone is not
+    enough; the level stretch is what separates the text from the panel it sits
+    on, and 200% gets 12px UI text near the size tesseract is trained for.
+    """
+    if IM is None:
+        return None
+    out = os.path.splitext(path)[0] + ".darkui.png"
+    r = subprocess.run(
+        IM + [path, "-colorspace", "Gray", "-negate",
+              "-level", "10%,90%", "-resize", "200%", out],
+        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    if r.returncode == 0 and os.path.exists(out) and os.path.getsize(out) > 0:
+        return out
+    return None
+
+
 def ocr(path):
     """OCR one frame, caching the text next to it as <frame>.ocr.txt.
 
-    Two passes: --psm 6 reads the block-of-text layout that installer pages and
-    console screens present, --psm 11 ("sparse text") is what finds the handful
-    of isolated words on a display-manager or desktop screen, where psm 6
-    frequently returns nothing at all. Both are searched, because a checkpoint
-    keyword may live in either layout.
+    Three passes, unioned, because no single one reads every screen this
+    pipeline produces:
+
+      --psm 6  on the raw frame  — the block-of-text layout that console
+                                   screens and dark-on-light pages present
+      --psm 11 on the raw frame  — "sparse text", which is what finds the
+                                   handful of isolated words on a display
+                                   manager or an empty desktop, where psm 6
+                                   frequently returns nothing at all
+      --psm 6  on a dark-UI copy — see _dark_ui_variant: without it, a
+                                   light-on-dark installer reads as empty
     """
     if not HAVE_OCR:
         return ""
@@ -130,6 +168,16 @@ def ocr(path):
                            capture_output=True, text=True, check=False)
         if r.returncode == 0:
             text.append(r.stdout)
+    dark = _dark_ui_variant(path)
+    if dark:
+        r = subprocess.run(["tesseract", dark, "stdout", "--psm", "6"],
+                           capture_output=True, text=True, check=False)
+        if r.returncode == 0:
+            text.append(r.stdout)
+        try:
+            os.remove(dark)
+        except OSError:
+            pass
     joined = "\n".join(text)
     try:
         with open(cache, "w") as f:

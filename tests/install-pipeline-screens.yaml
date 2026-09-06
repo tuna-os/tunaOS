@@ -88,10 +88,26 @@ checkpoints:
     # welcome and disk pages of every fork.
     keywords: ["welcome", "get started", "be installed", "available disks"]
     desktops:
-      # DERIVED from org.tunaos.InstallerKde's measured headings ("Select
-      # Target Disk", "Choose the disk where <name> will be installed.").
-      kde: ["welcome", "get started", "select target disk", "choose the disk",
-            "be installed"]
+      # MEASURED 2026-09-07 off a real marlin:kde live frame
+      # (marlin-dbg-out/10-ready.png, local dev ISO). org.tunaos.InstallerKde
+      # autostarts over an empty Plasma desktop and its welcome page reads:
+      #
+      #   Install Marlin
+      #   This wizard will guide you through installing Marlin onto this computer.
+      #   You will choose a target disk and how it should be encrypted.
+      #   Everything after that is handled by the installer.
+      #
+      # Product-name-free, per the rule above: the variant name is branded in
+      # from distro_name, so "install marlin" would stop matching the moment
+      # another variant runs this cell. The four below are the longest runs of
+      # that page that contain no product name.
+      #
+      # This frame is also why scripts/install-checkpoints.py OCRs a
+      # contrast-stretched inverted copy: raw, tesseract read this page as
+      # ", |" — the installer is white text on near-black, like every frontend
+      # and greeter we ship.
+      kde: ["this wizard will guide", "onto this computer",
+            "choose a target disk", "handled by the installer"]
       # DERIVED. gnome ships upstream org.bootcinstaller.Installer, whose
       # welcome page is branded from distro_name ("Welcome to <variant>") —
       # the product name is deliberately not part of the keyword.
