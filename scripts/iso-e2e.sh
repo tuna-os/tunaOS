@@ -135,6 +135,16 @@
 #      either still showed the cryptsetup passphrase prompt (the first-boot
 #      enrollment oneshot did not seal a working key) or never reached
 #      login within --timeout. See installed-tpm-autounlock-serial.log.
+#   9  screen-checkpoint assertions failed — the frames this run captured do
+#      not show the pipeline the checkpoint contract
+#      (tests/install-pipeline-screens.yaml) requires: a stage went
+#      unphotographed, rendered blank, showed the wrong screen, or showed
+#      failure text (a panic, an emergency shell, a LUKS prompt still waiting
+#      after the passphrase was accepted). Only reachable with
+#      E2E_CHECKPOINT_STRICT=1; advisory otherwise. Distinct from 6 and 7 the
+#      same way those are distinct from each other: 6 says nothing drew, 7
+#      says the guest reports no working desktop, 9 says the thing that drew
+#      is not the screen this stage was supposed to reach.
 #   75 the job budget was already exhausted before the harness started
 #      (E2E_WALL_CLOCK_DEADLINE in the past) — nothing was tested, and the
 #      fix is upstream of here: whatever ran first is too slow, or the
@@ -1525,6 +1535,54 @@ run_installer_gui_checks() {
 		if [[ "${E2E_INSTALLER_GUI_STRICT:-0}" -eq 1 ]]; then
 			echo "ERROR: E2E_INSTALLER_GUI_STRICT=1 and installer GUI checks failed" >&2
 			return 1
+		fi
+	fi
+	return 0
+}
+
+# OCR-assert the frames this run captured against the pipeline checkpoint
+# contract (tests/install-pipeline-screens.yaml) — see
+# scripts/install-checkpoints.py for what each assertion means.
+#
+# Every screenshot this harness takes was, until now, evidence only a human
+# could read: the run uploads a PNG and nothing checks what is in it. The
+# failures that matters most here all photograph cleanly — a compositor that
+# never started, a black screen behind a running installer, an installed disk
+# sitting in an emergency shell or still at a passphrase prompt — so the
+# serial-marker gates above can pass on an image whose screen is wrong.
+#
+# Advisory by default, for the same reason the GUI checks are: OCR of a
+# framebuffer is noisy, and a keyword contract wants a few real runs behind it
+# before it can fail a build. E2E_CHECKPOINT_STRICT=1 makes it a gate (exit 9).
+run_checkpoint_asserts() {
+	local script_dir
+	script_dir="$(dirname "${BASH_SOURCE[0]}")"
+	local py="${script_dir}/install-checkpoints.py"
+	[[ -f "$py" ]] || return 0
+
+	local args=(--flavor "${FLAVOR:-gnome}" --variant "${VARIANT:-}")
+	# The live phase is the only one a boot-only run can satisfy; asserting
+	# the installed phases there would report a missing 30-installed frame as
+	# a failure of a run that never claimed to install anything.
+	case "$MODE" in
+	ready | ssh | app-launch) args+=(--phase live) ;;
+	esac
+
+	local out rc=0
+	out=$(python3 "$py" "$OUTPUT_DIR" "${args[@]}" 2>&1) || rc=$?
+	echo "$out" | tee -a "${SERIAL_LOG}"
+
+	# 77 is "tesseract or PyYAML is missing" — a fact about the host, not
+	# about the image. Never let it colour the verdict.
+	if [[ "$rc" -eq 77 ]]; then
+		echo "::warning::screen checkpoints skipped — missing dependency (see above)"
+		return 0
+	fi
+	if [[ "$rc" -ne 0 ]]; then
+		echo "::warning::screen checkpoints reported ${rc} failure(s) for ${VARIANT:-?}:${FLAVOR:-gnome}"
+		if [[ "${E2E_CHECKPOINT_STRICT:-0}" -eq 1 ]]; then
+			echo "ERROR: E2E_CHECKPOINT_STRICT=1 and screen checkpoints failed" >&2
+			return 9
 		fi
 	fi
 	return 0
@@ -3081,6 +3139,11 @@ ready)
 		fi
 	fi
 	screenshot_compare "10-ready" || true
+	if [[ "$rc" -eq 0 ]]; then
+		run_checkpoint_asserts || rc=$?
+	else
+		run_checkpoint_asserts || true
+	fi
 	exit "$rc"
 	;;
 ssh)
@@ -3100,21 +3163,46 @@ ssh)
 		run_installer_gui_checks || rc=5
 	fi
 	screenshot "20-ssh"
+	if [[ "$rc" -eq 0 ]]; then
+		run_checkpoint_asserts || rc=$?
+	else
+		run_checkpoint_asserts || true
+	fi
 	exit "$rc"
 	;;
 kickstart)
 	boot_live_iso || exit 1
 	wait_for_ready || exit $?
 	screenshot "10-ready"
-	run_install
-	exit $?
+	rc=0
+	run_install || rc=$?
+	# Assert the captured frames even when the install itself failed: on that
+	# path the screens are frequently the only evidence of WHY, and a failing
+	# install must not also lose its screen diagnosis. The checkpoint verdict
+	# can only make a passing run fail, never rescue a failing one.
+	if [[ "$rc" -eq 0 ]]; then
+		run_checkpoint_asserts || rc=$?
+	else
+		run_checkpoint_asserts || true
+	fi
+	exit "$rc"
 	;;
 install)
 	boot_live_iso || exit 1
 	wait_for_ready || exit $?
 	screenshot "10-ready"
-	run_install
-	exit $?
+	rc=0
+	run_install || rc=$?
+	# Assert the captured frames even when the install itself failed: on that
+	# path the screens are frequently the only evidence of WHY, and a failing
+	# install must not also lose its screen diagnosis. The checkpoint verdict
+	# can only make a passing run fail, never rescue a failing one.
+	if [[ "$rc" -eq 0 ]]; then
+		run_checkpoint_asserts || rc=$?
+	else
+		run_checkpoint_asserts || true
+	fi
+	exit "$rc"
 	;;
 app-launch)
 	boot_live_iso || exit 1

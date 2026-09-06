@@ -170,7 +170,15 @@ jobs:
           # The low-disk offline-store implementation must be reproducible and
           # available before the release-container workflow finishes publishing.
           TACKLEBOX_FROM_SOURCE: '1'
-          TACKLEBOX_SHA: a105d6d3e64eef6736cf0d24e083ae51e2f6ac92
+          # No TACKLEBOX_SHA: scripts/lib/common.sh falls back to the tracked
+          # pin in image-versions.yaml, the one place that pin is reviewed and
+          # Renovate-watched. This used to hardcode a105d6d (2026-07-18),
+          # which froze ISO publishing five weeks behind the tracked pin — and
+          # so behind f3dd168 (2026-08-20, tacklebox#235), the commit that
+          # gives every tacklebox podman run the k8s-file log driver the
+          # runner images need because they have no journald for the
+          # container. Same defect that killed the LUKS sweep; see the longer
+          # note in luks-e2e.yml's Build dev ISO step.
         run: |
           sudo --preserve-env=GITHUB_REPOSITORY_OWNER,TACKLEBOX_FROM_SOURCE,TACKLEBOX_SHA \
             just iso-group "${{ matrix.variant }}" "${{ matrix.group }}" ghcr

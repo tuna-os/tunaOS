@@ -385,14 +385,27 @@ jobs:
         env:
           VARIANT: ${{ matrix.variant }}
           FLAVOR: ${{ matrix.flavor }}
-          # fd95174 probes for tpm2-tss/pcsc inside the image instead of
-          # omitting them unconditionally. e7d76b2a baked in
-          # `--omit "tpm2-tss pcsc"` to fix Gentoo (which ships neither
-          # module); on EL images, which ship both and force-add clevis on
-          # top, that omit turns clevis into "cannot be installed" and
-          # dracut exits 1 — every EL LUKS cell died at Build dev ISO.
-          # Do not pin this back below fd95174 without re-reading that.
-          TACKLEBOX_SHA: fd95174432b854a6135600b6c321b3ef01b4bc2d
+          # No TACKLEBOX_SHA here on purpose: scripts/lib/common.sh falls back
+          # to the tracked pin in image-versions.yaml, which is the single
+          # place that pin is reviewed and Renovate-watched.
+          #
+          # This step used to hardcode fd95174 (2026-07-31) — the commit that
+          # replaced tacklebox's baked-in `--omit "tpm2-tss pcsc"` with a
+          # per-image probe, without which every EL LUKS cell died at this
+          # step because clevis then "cannot be installed" and dracut exits 1.
+          # image-versions.yaml records that as a FLOOR, not a ceiling, and the
+          # tracked pin has been above it ever since; hardcoding it here froze
+          # this workflow at the floor while every other ISO caller moved on.
+          #
+          # That is what killed the 2026-09-01 monthly sweep: all 15 variants,
+          # every cell, failed at Build dev ISO. The tracked pin moved to
+          # f3dd168 on 2026-08-20 for tacklebox#235 ("iso-smoke on RunsOn +
+          # k8s-file logging"), because the runner images have no journald for
+          # the container and every tacklebox podman run otherwise dies in
+          # conmon. Pinned back at July, this workflow could not build an ISO
+          # on those runners at all — while installer-smoke.yml, which takes
+          # the tracked pin, built the same marlin:kde dev ISO successfully on
+          # 2026-09-02.
         run: |
           export TACKLEBOX_FROM_SOURCE=1
           just iso "${VARIANT}" "${FLAVOR}" ghcr "" 1

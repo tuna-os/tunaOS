@@ -1,0 +1,117 @@
+# Full install-pipeline checkpoint contract — what the SCREEN must show at
+# each stage of ISO -> live desktop -> install -> installed system.
+#
+# tests/installer-screens.yaml is the sibling contract for the installer's own
+# pages, asserted by scripts/installer-walkthrough.py while it click-throughs
+# the frontend. It stops at the installer window: nothing there says the live
+# session came up, and nothing says the installed disk ever reached a login.
+# This file covers the whole pipeline, asserted by scripts/install-checkpoints.py
+# against the frames scripts/iso-e2e.sh already captures.
+#
+# Why OCR and not just "a screenshot was taken": a captured PNG proves QEMU had
+# a framebuffer, not that the image works. Every failure this is meant to catch
+# — a compositor that never started, a black screen behind a running installer
+# process, an installed disk that dropped to an emergency shell or sat at a
+# LUKS prompt nobody answered — produces a perfectly valid screenshot. The text
+# on the screen is what tells them apart.
+#
+# FIELDS
+#   id          checkpoint name (also the TAP description)
+#   phase       live | installed  — which stage of the pipeline. The
+#               installer's own pages are a third stage, asserted by
+#               scripts/installer-walkthrough.py against
+#               tests/installer-screens.yaml rather than from a static frame:
+#               reaching them requires driving the frontend, which only the
+#               harness holding the QEMU monitor can do.
+#   frames      basenames iso-e2e.sh writes into its --output dir, without an
+#               extension; .png preferred, .ppm converted when that is all
+#               that landed. Every frame that exists is OCR'd; the keyword
+#               assertion passes if ANY of them satisfies it (they are
+#               alternative captures of the same stage, not a sequence).
+#   required    true  -> missing / blank / non-matching frames FAIL the run
+#               false -> recorded in the JSON summary but never fatal (drift
+#                        we want visible before making it mandatory)
+#   keywords    case-insensitive substrings; `match` decides any/all
+#   match       any (default) | all
+#   forbid      substrings that must NOT appear. Enforced whenever the frame
+#               exists, even on a `required: false` checkpoint — a panic on an
+#               optional checkpoint is still a panic.
+#   desktops    per-desktop keyword overrides, keyed by the flavor family
+#               (kde / gnome / cosmic / niri / xfce)
+#
+# KEYWORD RULES (the same ones tests/installer-screens.yaml learned the hard
+# way): write headings and prompts, never bare nouns. OCR of a 1280x800
+# framebuffer is noisy — short words match by accident — and a keyword that
+# embeds the product name stops matching the moment branding changes.
+
+# Text that means the frame is evidence of a failure whatever else it shows.
+# Anchored here so every checkpoint forbids the same set.
+crash_text: &crash_text
+  - "kernel panic"
+  - "oh no! something has gone wrong"
+  - "you are in emergency mode"
+  - "entering emergency shell"
+  - "cannot open access to console"
+  - "failed to start switch root"
+  - "dracut-initqueue timeout"
+  - "no bootable device"
+
+# An unanswered LUKS prompt on a frame taken AFTER the passphrase was injected
+# is the unlock having failed, not a stage of it.
+luks_prompt_text: &luks_prompt
+  - "please enter passphrase"
+  - "enter passphrase for"
+  - "no key available with this passphrase"
+
+checkpoints:
+  # ── Phase 1: the live ISO reaches a desktop ────────────────────────────────
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready", "20-ssh"]
+    required: true
+    match: any
+    keywords: ["install", "welcome", "get started", "activities", "applications"]
+    desktops:
+      # KDE's live session autostarts org.tunaos.InstallerKde over an otherwise
+      # empty Plasma desktop, so the installer's own welcome page is the text
+      # that reliably survives OCR; "plasma" never appears on screen at all.
+      kde: ["install", "welcome", "get started", "begin", "next"]
+    forbid: *crash_text
+
+  # ── Phase 2: the installed disk boots to a login ───────────────────────────
+  - id: installed-login
+    phase: installed
+    frames: ["30-installed", "installed-desktop"]
+    required: true
+    match: any
+    # A display manager or a text console login both count — this checkpoint
+    # asserts "the installed system reached a login", not that it was
+    # graphical; installed-desktop below is where graphical is asserted.
+    keywords: ["login", "password", "username", "sign in", "log in"]
+    desktops:
+      # SDDM's Breeze theme shows the user name over a Password field.
+      kde: ["password", "login", "sign in", "suspend", "restart"]
+    forbid: *luks_prompt
+
+  # ── Phase 3: the installed system reaches its desktop ──────────────────────
+  - id: installed-desktop
+    phase: installed
+    frames: ["installed-desktop"]
+    required: false
+    match: any
+    keywords: ["activities", "applications", "files", "terminal", "settings"]
+    desktops:
+      kde: ["applications", "system settings", "discover", "konsole", "files"]
+    forbid: *crash_text
+
+  # ── Phase 4 (optional): the TPM auto-unlock boot ───────────────────────────
+  # Only captured when TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK=1. Same rule as
+  # installed-login: no passphrase prompt may remain on screen, and here it is
+  # the entire point — this boot injects no passphrase at all.
+  - id: tpm-autounlock
+    phase: installed
+    frames: ["installed-tpm-autounlock"]
+    required: false
+    match: any
+    keywords: ["login", "password", "username", "sign in", "log in"]
+    forbid: *luks_prompt
