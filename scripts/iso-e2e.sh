@@ -3381,8 +3381,15 @@ ssh)
 		check_ssh && break
 		sleep 2
 	done
-	check_ssh
-	rc=$?
+	# `check_ssh` alone is a bare failing command under `set -e`: when SSH
+	# never comes up the shell exits right here, before the 20-ssh screenshot
+	# below — so the one run that most needs a picture of the screen is the
+	# one that produces none. Measured on a local marlin:kde dev ISO whose
+	# sshd reset every connection: exit 5, empty evidence directory, and the
+	# live session's actual state unknowable. `|| rc=$?` keeps the verdict and
+	# lets the evidence be collected.
+	rc=0
+	check_ssh || rc=$?
 	if [[ "$rc" -eq 0 ]]; then
 		echo "==> Running live-image smoke checks..."
 		run_smoke_checks || rc=5
