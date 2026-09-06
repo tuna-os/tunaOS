@@ -170,6 +170,12 @@ CPUS=4
 # "Could not set up host forwarding rule 'tcp::2222-:22'" — and because two
 # runs on one host would collide with each other.
 SSH_PORT="${TBOX_E2E_SSH_PORT:-2222}"
+
+# The account fisherman creates on the installed system (see the recipe in
+# run_install) and the credentials the greeter-login phase types. Lowercase,
+# no separators: it has to be a valid user name on every base in the fleet.
+E2E_INSTALL_USER="${TUNAOS_E2E_INSTALL_USER:-tunaose2e}"
+E2E_INSTALL_PASSWORD="${TUNAOS_E2E_INSTALL_PASSWORD:-tunaose2e}"
 NO_KVM=0
 KEEP_VM=0
 LUKS=0
@@ -1540,6 +1546,136 @@ run_installer_gui_checks() {
 	return 0
 }
 
+# Type at the QEMU monitor: one HMP command, no reply needed.
+monitor_cmd() {
+	[[ -S "$MONITOR_SOCK" ]] || return 1
+	command -v socat &>/dev/null || return 1
+	echo "$1" | socat - "UNIX-CONNECT:${MONITOR_SOCK}" >/dev/null 2>&1 || return 1
+}
+
+# Type a string as hardware key events. Compositor-agnostic: a greeter cannot
+# be driven over the serial console (it is graphical) and the installed system
+# has no automation agent, so sendkey is the only way in. Mapping copied from
+# projectbluefin/utah's luks-e2e.sh send_keys, which drives GDM the same way.
+send_text() {
+	local text="$1" ch key i
+	for ((i = 0; i < ${#text}; i++)); do
+		ch="${text:i:1}"
+		case "$ch" in
+		[a-z0-9]) key="$ch" ;;
+		[A-Z]) key="shift-$(printf '%s' "$ch" | tr '[:upper:]' '[:lower:]')" ;;
+		"-") key="minus" ;;
+		"_") key="shift-minus" ;;
+		".") key="dot" ;;
+		" ") key="spc" ;;
+		*)
+			echo "WARN: no sendkey mapping for '${ch}' — skipping" >&2
+			continue
+			;;
+		esac
+		monitor_cmd "sendkey ${key}" || return 1
+		sleep 0.05
+	done
+	return 0
+}
+
+# Log in at the INSTALLED system's greeter and prove a real session starts.
+#
+# The installed-desktop screenshot proves something rendered; it cannot tell a
+# drawn greeter from a running desktop, and that comment says so. The
+# discriminator the live path uses — `pgrep -x <compositor>` over SSH — was
+# unavailable here only because the recipe created no account. It does now, so:
+#
+#   1. reach sshd on the installed system as that account,
+#   2. assert its display manager is active,
+#   3. type the password at the greeter (Enter first: GDM offers the single
+#      account already selected and Enter opens its password field; SDDM,
+#      lightdm and cosmic-greeter focus the field already, where a leading
+#      Enter is harmless),
+#   4. wait for THIS desktop's compositor to be running as that user,
+#   5. photograph the session.
+#
+# Advisory unless TUNAOS_E2E_REQUIRE_SESSION=1: an installed system whose sshd
+# is not enabled (any non-dev image) cannot answer step 1 at all, and reporting
+# that as a product failure would be wrong.
+run_installed_session_login() {
+	local user="$E2E_INSTALL_USER" pass="$E2E_INSTALL_PASSWORD"
+	local ssh_installed=(sshpass -p "$pass" ssh
+		-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+		-o ConnectTimeout=10 -o LogLevel=ERROR
+		-p "$SSH_PORT" "${user}@127.0.0.1")
+
+	if ! command -v sshpass &>/dev/null; then
+		echo "==> installed-session: sshpass not installed — skipping"
+		record_luks_evidence "TUNAOS_LUKS_E2E_INSTALLED_SESSION result=skipped reason=no-sshpass"
+		return 0
+	fi
+
+	echo "==> installed-session: waiting for sshd as ${user}..."
+	# 60s, not the 150s the compositor wait below gets: sshd on the installed
+	# system is either enabled in the image or it is not, and the "not"
+	# case (any non-dev image) must not cost two and a half minutes per cell.
+	local reachable=0 i
+	for i in $(seq 1 20); do
+		if "${ssh_installed[@]}" true 2>/dev/null; then
+			reachable=1
+			break
+		fi
+		sleep 3
+	done
+	if [[ "$reachable" -ne 1 ]]; then
+		echo "::warning::installed system did not accept SSH as ${user} — cannot prove a session started"
+		record_luks_evidence "TUNAOS_LUKS_E2E_INSTALLED_SESSION result=unavailable reason=no-ssh"
+		[[ "${TUNAOS_E2E_REQUIRE_SESSION:-0}" -eq 1 ]] && return 10
+		return 0
+	fi
+
+	local dm
+	dm=$("${ssh_installed[@]}" "systemctl is-active display-manager.service" 2>/dev/null || true)
+	echo "==> installed-session: display-manager.service is ${dm:-unknown}"
+
+	echo "==> installed-session: typing the password at the greeter..."
+	monitor_cmd "sendkey ret" || true
+	sleep 3
+	send_text "$pass" || true
+	monitor_cmd "sendkey ret" || true
+
+	# The compositor this flavor's session must run, same mapping as
+	# scripts/e2e-installer-gui-checks.sh — a generic "any compositor" check
+	# would accept the greeter's own.
+	local comps
+	case "$(printf '%s' "${FLAVOR:-gnome}" | cut -d- -f1)" in
+	kde) comps="kwin_wayland plasmashell" ;;
+	cosmic) comps="cosmic-comp" ;;
+	niri) comps="niri" ;;
+	xfce) comps="xfwl4 labwc wayfire xfwm4" ;;
+	*) comps="gnome-shell" ;;
+	esac
+
+	local found=""
+	for i in $(seq 1 36); do
+		for c in $comps; do
+			if "${ssh_installed[@]}" "pgrep -u ${user} -x ${c} >/dev/null" 2>/dev/null; then
+				found="$c"
+				break 2
+			fi
+		done
+		sleep 5
+	done
+
+	screenshot "installed-session" || true
+	if [[ -z "$found" ]]; then
+		echo "::warning::no session compositor (${comps}) running as ${user} after greeter login"
+		"${ssh_installed[@]}" "loginctl list-sessions --no-legend" 2>/dev/null || true
+		record_luks_evidence "TUNAOS_LUKS_E2E_INSTALLED_SESSION result=fail dm=${dm:-unknown}"
+		[[ "${TUNAOS_E2E_REQUIRE_SESSION:-0}" -eq 1 ]] && return 10
+		return 0
+	fi
+	echo "==> installed-session: ${found} is running as ${user}"
+	record_luks_evidence "TUNAOS_LUKS_E2E_INSTALLED_SESSION result=pass compositor=${found} dm=${dm:-unknown}"
+	return 0
+}
+
 # OCR-assert the frames this run captured against the pipeline checkpoint
 # contract (tests/install-pipeline-screens.yaml) — see
 # scripts/install-checkpoints.py for what each assertion means.
@@ -2490,6 +2626,20 @@ run_install() {
 	# enrollment (fisherman first-boot oneshot) means the first installed
 	# boot still needs a key at the prompt; a known passphrase lets the E2E
 	# inject it deterministically, after which TPM auto-unlock takes over.
+	# An account on the installed system, which fisherman creates through
+	# `useradd` (its internal/post/user.go). Two things depend on it, and
+	# neither was possible while the recipe created no user at all:
+	#
+	#   * the greeter has somebody to offer, so the login phase can actually
+	#     log in — the "greeter-drew-but-no-session hole" the installed-desktop
+	#     screenshot comment names;
+	#   * sshd on the installed system has an account to accept, which is how
+	#     the `pgrep -x <compositor>` discriminator the live path already uses
+	#     becomes available to the installed path too.
+	#
+	# groups: [] deliberately. `useradd --groups wheel` fails outright where
+	# that group does not exist (the apt bases call it sudo), and this account
+	# needs no privileges — it needs to exist and to log in.
 	local encryption_json='{"type": "none"}'
 	local E2E_LUKS_PASS="tunaos-e2e-luks"
 	[[ "$LUKS" -eq 1 ]] && encryption_json="{\"type\": \"tpm2-luks-passphrase\", \"passphrase\": \"${E2E_LUKS_PASS}\"}"
@@ -2510,6 +2660,12 @@ run_install() {
   "bootloader": "${bootloader}",
   "hostname": "tunaos-e2e",
   "encryption": ${encryption_json},
+  "user": {
+    "username": "${E2E_INSTALL_USER}",
+    "fullname": "TunaOS End To End",
+    "password": "${E2E_INSTALL_PASSWORD}",
+    "groups": []
+  },
   "flatpaks": []
 }
 EOF
@@ -2739,6 +2895,18 @@ EOF
 			else
 				_shot="unmeasured"
 			fi
+		fi
+		# ── Log in at the greeter, before the guest is killed ─────────────
+		# Everything above proves the disk unlocked and something drew. This is
+		# the step that separates a drawn greeter from a running session, and
+		# it needs the live guest — one line down there is no surface and no
+		# sshd left to ask. TUNAOS_E2E_SESSION_LOGIN=0 opts out.
+		if [[ "${TUNAOS_E2E_SESSION_LOGIN:-1}" -eq 1 ]]; then
+			run_installed_session_login || {
+				local _sess_rc=$?
+				[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
+				return "$_sess_rc"
+			}
 		fi
 		[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
 		record_luks_evidence "TUNAOS_LUKS_E2E_PASS encrypted=1 passphrase_unlock=1 installed_boot=1"

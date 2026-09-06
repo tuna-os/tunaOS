@@ -185,6 +185,34 @@ checkpoints:
       xfce: ["applications", "settings", "terminal", "file manager"]
     forbid: *crash_text
 
+  # ── Phase 3b: a real user session on the installed system ─────────────────
+  #
+  # Captured by iso-e2e.sh's greeter-login phase (run_installed_session_login),
+  # after it types the password at the installed system's greeter. The verdict
+  # on whether a session started is NOT taken from this frame — it comes from
+  # `pgrep -u <user> -x <compositor>` over SSH, which is exact. What the frame
+  # adds is the opposite assertion: the greeter must be GONE. A session that
+  # the process check calls running while the screen still shows a password
+  # field means the compositor is the greeter's own, which is the hole this
+  # whole phase exists to close.
+  #
+  # No keywords, deliberately: a freshly logged-in desktop with no window open
+  # gives OCR almost nothing (MEASURED — a GNOME session frame from a
+  # projectbluefin/utah run read as the top-bar clock and little else, and only
+  # became legible once a terminal was on screen). Asserting the absence of
+  # greeter text is the claim this frame can actually support.
+  - id: installed-session
+    phase: installed
+    frames: ["installed-session"]
+    required: false
+    match: any
+    keywords: []
+    forbid:
+      - "not listed"
+      - "enter password"
+      - "please enter passphrase"
+      - "unlock the disk"
+
   # ── Phase 4 (optional): the TPM auto-unlock boot ───────────────────────────
   # Only captured when TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK=1. Same rule as
   # installed-login: no passphrase prompt may remain on screen, and here it is
