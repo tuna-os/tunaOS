@@ -24,7 +24,7 @@ on:
         type: string
 
 concurrency:
-  group: build-{name}-${{{{ github.ref }}}}
+  group: build-{name}-${{{{ github.ref }}}}-${{{{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}}}
   cancel-in-progress: true
 
 jobs:
@@ -52,7 +52,7 @@ on:
         type: string
 
 concurrency:
-  group: build-{name}-${{{{ github.ref }}}}
+  group: build-{name}-${{{{ github.ref }}}}-${{{{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}}}
   cancel-in-progress: true
 
 jobs:

@@ -66,7 +66,7 @@ def workflow_template():
             type: string
 
     concurrency:
-      group: build-{name}-${{{{ github.ref }}}}
+      group: build-{name}-${{{{ github.ref }}}}-${{{{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}}}
       cancel-in-progress: true
 
     jobs:
@@ -154,7 +154,7 @@ def test_template_concurrency_group_format(workflow_template):
     name = "bonito"
     result = workflow_template.format(name=name, name_cap="Bonito", emoji="🎣")
 
-    assert f"build-{name}-${{{{ github.ref }}}}" in result
+    assert f"build-{name}-${{{{ github.ref }}}}-${{{{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}}}" in result
 
 
 # ── Config Parsing Tests ────────────────────────────────────────────────────
@@ -217,7 +217,7 @@ def test_generate_workflows_writes_yaml_content():
             default: 'all'
             type: string
     concurrency:
-      group: build-yellowfin-${{ github.ref }}
+      group: build-yellowfin-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}
       cancel-in-progress: true
     jobs:
       build:

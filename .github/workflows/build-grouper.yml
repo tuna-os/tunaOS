@@ -1,7 +1,7 @@
 name: Build Grouper
 on:
   schedule:
-    - cron: "20 17 * * *"
+    - cron: "0 1 * * *"
   workflow_dispatch:
     inputs:
       flavor:
@@ -10,7 +10,7 @@ on:
         type: string
 
 concurrency:
-  group: build-grouper-${{ github.ref }}
+  group: build-grouper-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}
   cancel-in-progress: true
 
 jobs:

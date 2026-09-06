@@ -31,13 +31,27 @@ WORKFLOWS = Path(__file__).resolve().parents[1] / ".github" / "workflows"
 # on `pull_request`, so they are the ones a push storm can multiply.
 EXPENSIVE = ["live-iso-bootc.yml", "iso-e2e.yml"]
 
+# The generated per-variant build workflows are the other fan-out: one
+# `workflow_dispatch` per flavor (gnome, kde, niri, ...) against ONE branch.
+# On 2026-09-06 four such dispatches for albacore shared the group
+# `build-albacore-refs/heads/main`: three were cancelled at birth and the
+# kde run already in flight lost its walkthrough and R2 upload to the
+# newest one. So the same per-run rule applies to them.
+GENERATED_BUILDS = sorted(
+    f"build-{variant['id']}.yml"
+    for variant in (
+        yaml.safe_load((WORKFLOWS.parent / "build-config.yml").read_text()) or {}
+    ).get("variants", [])
+)
+assert GENERATED_BUILDS, "no generated build-<variant>.yml workflows found"
+
 
 def _concurrency(name):
     doc = yaml.safe_load((WORKFLOWS / name).read_text()) or {}
     return doc.get("concurrency")
 
 
-@pytest.mark.parametrize("workflow", EXPENSIVE)
+@pytest.mark.parametrize("workflow", EXPENSIVE + GENERATED_BUILDS)
 def test_it_cancels_superseded_runs(workflow):
     c = _concurrency(workflow)
     assert c, f"{workflow} has no concurrency block; every PR push starts another ISO build"
@@ -47,7 +61,7 @@ def test_it_cancels_superseded_runs(workflow):
     )
 
 
-@pytest.mark.parametrize("workflow", EXPENSIVE)
+@pytest.mark.parametrize("workflow", EXPENSIVE + GENERATED_BUILDS)
 def test_a_dispatched_sweep_does_not_cancel_itself(workflow):
     """The group must vary per run for workflow_dispatch.
 
@@ -67,7 +81,7 @@ def test_a_dispatched_sweep_does_not_cancel_itself(workflow):
     )
 
 
-@pytest.mark.parametrize("workflow", EXPENSIVE)
+@pytest.mark.parametrize("workflow", EXPENSIVE + GENERATED_BUILDS)
 def test_pr_pushes_share_one_group(workflow):
     """Two pushes to the same PR must land in the same group.
 

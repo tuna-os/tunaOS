@@ -455,6 +455,76 @@ the same run it boots, `gnome-shell` starts through Mesa's software path
 launches and stamps a window, and the walkthrough captures **9 non-blank frames
 across 8 distinct visual states**. So a compositor CAN come up on this hardware.
 
+### The arm64 ISO axis is measured: albacore:kde boots on both architectures
+
+Run [34006244094](https://github.com/tuna-os/tunaOS/actions/runs/34006244094)
+(`main` @ `1735625f`, both probe and display fixes merged) is the first run in
+which an arm64 live ISO went all the way through its own gate:
+
+| step | `iso:kde (linux-amd64)` | `iso:kde (linux-arm64)` |
+|---|---|---|
+| Provenance gate (this run published the image) | pass | pass |
+| Build Live ISO | pass, 6 min | pass, 5.5 min |
+| Boot gate (`scripts/iso-e2e.sh`) | pass, 15 min 18 s, KVM | pass, 15 min 21 s, **TCG** |
+| Checksum, sign, verify | pass | pass |
+| Upload signed ISO artifact | pass | pass |
+| Installer walkthrough (advisory) | cancelled at 03:18Z, see below | no-op (x86-only script) |
+| Upload to R2 | skipped (walkthrough cancelled first) | cancelled at 03:18Z, see below |
+
+The TCG number answers the open question from the previous section: a KDE
+live ISO on four emulated aarch64 vCPUs reaches its readiness marker in about
+15 minutes, inside the 900 s boot-gate budget with margin. The image legs,
+manifest, signing, the KVM boot gate and the desktop contract all passed on the
+same run; `Attest SBOM` failed (Sigstore, the #1560 shape) and `Promote` still
+ran, as designed.
+
+**The fan-out cancelled itself.** With kde green, gnome, xfce, cosmic and niri
+were dispatched back to back at 03:18Z. Every generated `build-<variant>.yml`
+used `concurrency.group: build-<variant>-${{ github.ref }}` with
+`cancel-in-progress: true`, so four dispatches on `main` were four members of
+one group: runs 299, 300 and 301 (gnome, xfce, cosmic, in dispatch order) were
+cancelled at birth, and the newest one also cancelled the kde run above while
+it was still capturing the amd64 walkthrough and uploading the arm64 ISO to R2.
+The gates had already passed; only the two trailing steps were lost. The group
+now varies per run for `workflow_dispatch`
+(`${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}`),
+the same rule `iso-e2e.yml` and `live-iso-bootc.yml` already followed, and
+`tests/test_expensive_builds_collapse_redundant_pr_runs.py` asserts it for
+every workflow `.github/build-config.yml` generates. gnome, xfce and cosmic are
+therefore still **unmeasured** on the arm64 ISO axis: not failed, never run.
+
+**niri fails its own gate, on every architecture, before any ISO is built.**
+Run [34008659578](https://github.com/tuna-os/tunaOS/actions/runs/34008659578)
+is the first albacore:niri build under the #2349 branding gate, and the gate
+did its job. All three image legs (amd64, amd64-v2, arm64) end with:
+
+```
+  ok: greeter command dms-greeter present
+  FAIL: greetd launches dms-greeter but /usr/share/quickshell/dms-greeter/DMSGreeter.qml is missing
+  FAIL: no wallpaper daemon (swaybg/swww/wpaperd) and no dms — background will be blank
+TUNAOS_BRANDING_NIRI_FAIL variant=albacore failures=2
+```
+
+The ISO jobs then failed at the provenance gate because no image was
+published, which is the correct consequence. The cause is upstream packaging,
+not the manifest's package list: the transaction installed exactly what the
+manifest asks for (`dms-greeter` 1:1.6.0-1.el10 and `quickshell-git` from the
+`avengemedia/danklinux` COPR, `dms` and `dms-cli` 2:0.0.git.4694 from
+`avengemedia/dms-git`), and none of those RPMs carries a `.qml` file. Read
+from the COPRs' `filelists.xml` for `epel-10-x86_64`: `dms-greeter` is
+`/usr/bin/dms-greeter` plus sysusers/tmpfiles/completions; `dms-cli` is
+`/usr/bin/dms`; `dms` is a `.desktop`/service/icon shell. The 1.6 line
+provisions the greeter and shell QML at runtime (`dms-greeter enable`,
+`dms-greeter sync`), so an image built from those COPRs can never satisfy an
+offline check for `DMSGreeter.qml`, and the "no dms" branch of the background
+check trips on the same missing directory. The `tunaos-packages` recipes
+(`dms`, `dms-cli`, `dms-greeter`, `quickshell`) install the QML payload where
+the gate looks (`usr/share/quickshell/dms-greeter`, `usr/share/dankmaterialshell`)
+and target `el10`, but the factory status lists all four as *needed*, not
+built, for `el10/x86_64` and `el10/aarch64`. Until they are published, the
+el10 niri cell has no COPR-free path to green and its COPR path is red by
+construction; tracked in the niri gate issue filed with this run.
+
 ### What kde actually does — it starts, and the old claim was wrong
 
 kde was recorded here as the flavor whose greeter and autologin session "both
