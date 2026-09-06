@@ -224,15 +224,18 @@ jobs:
           sudo -E bash ./scripts/build-iso-tacklebox.sh \
             "${VARIANT}" "${FLAVOR}" ghcr "${TAG}"
 
-      # KNOWN GAP (#1378): qemu-system-x86 + ovmf are x86_64-specific, and
-      # scripts/iso-e2e.sh itself only looks for qemu-system-x86_64 + OVMF
-      # firmware — it has no qemu-system-aarch64/AAVMF path. This job now
-      # runs on an arm64 runner for arm64 platforms (ISO build + tacklebox
-      # need a native host, no cross-arch emulation), so the ISO build step
-      # above should work — but THIS step and iso-e2e.sh's boot gate will
-      # still fail on arm64 until they're taught the aarch64 QEMU/firmware
-      # equivalents. Filed as a follow-up rather than guessed at here: real
-      # aarch64 KVM boot behavior needs verifying on real CI, not assumed.
+      # #1378 follow-through. This step installs the native QEMU + firmware
+      # for the runner arch, and scripts/iso-e2e.sh picks qemu-system-aarch64,
+      # the `virt` machine and AAVMF on an aarch64 host. The last x86 literal
+      # on that path was the display device: `-vga virtio` is virtio-vga,
+      # which does not exist on the ARM virt machine ("type is NULL", run
+      # 34001369641), so iso-e2e.sh selects virtio-gpu-pci there instead.
+      # Still x86-only: scripts/run-walkthrough.sh (qemu-system-x86_64, OVMF,
+      # -machine pc, -vga virtio), which "Capture installer walkthrough" below
+      # runs advisorily (continue-on-error + `|| true`) — on arm64 that step
+      # yields no installer screenshots rather than a failure. Whether the
+      # arm64 boot gate fits its timeout under TCG (hosted arm64 runners
+      # expose no /dev/kvm) is what the run measures; it is not assumed here.
       - name: Install QEMU for boot verification
         env:
           RUNNER_ARCH: ${{ runner.arch }}
