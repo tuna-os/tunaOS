@@ -36,6 +36,7 @@ check: _ensure_check_deps
     just --unstable --fmt --check -f Justfile
     echo "Checking workflow drift..."
     python3 {{ justfile_directory() }}/scripts/generate-workflows.py
+    python3 {{ justfile_directory() }}/scripts/gen-ci-lanes.py --check
     if ! git diff --exit-code .github/workflows/build-*.yml; then
         echo "::error::Generated workflow files are stale. Run 'just generate-workflows' and commit the changes."
         exit 1

@@ -121,6 +121,23 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
 # ── The manifest-declared DM (the one force-linked into graphical.target) ──
 
+@test "wahoo KDE declares only ELN's measured plasmalogin display manager" {
+  command -v yq &>/dev/null || skip "yq not installed"
+  local manifest="${REPO_ROOT}/manifests/desktops/kde.yaml"
+
+  run yq -r '.packages.eln.display_manager' "$manifest"
+  [ "$status" -eq 0 ]
+  [ "$output" = "plasmalogin" ]
+
+  # The kde-desktop group already installs plasma-login-manager. Do not also
+  # request the unused sddm package when plasmalogin owns the active alias.
+  run yq -r '.packages.eln.packages[]' "$manifest"
+  [ "$status" -eq 0 ]
+  local packages="$output"
+  run grep -qx sddm <<<"$packages"
+  [ "$status" -ne 0 ]
+}
+
 @test "install-desktop.sh: resolves a manifest 'sddm' to plasmalogin when shipped" {
   # Assert the ASSIGNMENT, not merely that the word appears — a comment
   # mentioning plasmalogin satisfied the loose version of this test even

@@ -11,7 +11,9 @@ on:
       # exists and runs; it has to re-run when the gates themselves move.
       - '.github/workflows/**'
       - '.github/green-criteria.yml'
+      - 'docs/CI_SPEC.md'
       - 'Justfile'
+      - 'just/**'
   push:
     branches: [main]
   workflow_dispatch:
