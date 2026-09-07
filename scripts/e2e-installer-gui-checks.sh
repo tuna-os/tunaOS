@@ -98,8 +98,22 @@ fi
 # Inside the Flatpak sandbox the host sees it at
 # /run/user/<uid>/app/<app-id>/tuna-installer-ready; an unsandboxed run
 # writes to /run/user/<uid>/tuna-installer-ready directly.
+# Newest layout FIRST. Inside the sandbox $XDG_RUNTIME_DIR reads as
+# /run/user/<uid>, but it is a bind mount and the host path differs: current
+# flatpak backs it with /run/user/<uid>/.flatpak/<app-id>/xdg-run/. Reading
+# only the two older paths is what made installer-smoke runs 63-68 fail on
+# working installers ("running but never reported a window"), and what made it
+# durable is that flatpak still CREATES the empty app/<app-id>/ directory — so
+# listing it looks like confirmation that nothing was written rather than like
+# a wrong path. tests/test_readiness_stamp_lookup.py pins this for
+# installer-smoke.yml; this script is the second copy of the same lookup and
+# was never corrected, because its check() was undefined and the gate had
+# therefore never actually run.
 STAMP=""
-for d in /run/user/*/app/"${APP}"/tuna-installer-ready /run/user/*/tuna-installer-ready; do
+for d in \
+	/run/user/*/.flatpak/"${APP}"/xdg-run/tuna-installer-ready \
+	/run/user/*/app/"${APP}"/tuna-installer-ready \
+	/run/user/*/tuna-installer-ready; do
 	if [[ -f "$d" ]]; then
 		STAMP=$(cat "$d" 2>/dev/null | head -20)
 		break
@@ -135,8 +149,14 @@ if [[ -n "$STAMP" ]]; then
 			;;
 	esac
 else
+	# Search rather than re-listing the directories we already assumed were
+	# right — a stamp outside all three reads is precisely the defect above,
+	# and without this the next layout change costs another multi-run hunt.
+	echo "#   searching for a misplaced stamp:"
+	find /run/user -name tuna-installer-ready 2>/dev/null | sed 's/^/#     /' || true
 	echo "#   runtime dirs for debugging:"
-	ls -la /run/user/*/ /run/user/*/app/*/ 2>/dev/null | head -20 | sed 's/^/#     /' || true
+	ls -la /run/user/*/ /run/user/*/app/*/ /run/user/*/.flatpak/*/xdg-run/ 2>/dev/null |
+		head -30 | sed 's/^/#     /' || true
 fi
 
 # ── 6. Installer binary/entrypoint is present ──────────────────────────────

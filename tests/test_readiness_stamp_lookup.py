@@ -86,3 +86,55 @@ def test_the_failure_branch_locates_a_misplaced_stamp() -> None:
 def test_the_failure_branch_lists_the_sandbox_dir() -> None:
     body = WORKFLOW.read_text()
     assert "/run/user/*/.flatpak/*/xdg-run/" in body
+
+
+# ── The second copy of the same lookup ──────────────────────────────────────
+# scripts/e2e-installer-gui-checks.sh is the ISO harness's version of this
+# gate. It carried the pre-fix two-path lookup long after installer-smoke.yml
+# was corrected, and nothing noticed, because the script resolved its
+# e2e-assert.sh helper from the wrong directory: check() was undefined, every
+# assertion was a no-op, and the harness reported bash's 127 as a failure
+# COUNT on healthy and broken images alike. A gate that cannot pass or fail
+# hides the bugs in itself, so both copies are pinned here together.
+GUI_CHECKS = ROOT / "scripts" / "e2e-installer-gui-checks.sh"
+
+
+def gui_stamp_lookup() -> str:
+    """The `for d in ...; do` list the script iterates to find the stamp."""
+    body = GUI_CHECKS.read_text()
+    m = re.search(r"for d in\s*(.*?);\s*do", body, re.S)
+    assert m, "no stamp lookup loop found in e2e-installer-gui-checks.sh"
+    # Fold the line continuations so ordering can be compared as one string.
+    return " ".join(m.group(1).split())
+
+
+def _shell(path: str) -> str:
+    """The pinned path as the shell script spells it (quoted expansion)."""
+    return path.replace("${APP}", '"${APP}"')
+
+
+def test_gui_gate_reads_the_sandbox_host_path() -> None:
+    assert _shell(SANDBOX_HOST_PATH) in gui_stamp_lookup(), (
+        "scripts/e2e-installer-gui-checks.sh does not read "
+        "/run/user/*/.flatpak/<app>/xdg-run/ -- the same false negative "
+        "installer-smoke.yml was already fixed for"
+    )
+
+
+def test_gui_gate_keeps_the_legacy_and_unsandboxed_paths() -> None:
+    lookup = gui_stamp_lookup()
+    assert _shell(LEGACY_APP_PATH) in lookup
+    assert _shell(UNSANDBOXED_PATH) in lookup
+
+
+def test_gui_gate_reads_the_sandbox_path_first() -> None:
+    lookup = gui_stamp_lookup()
+    assert lookup.index(_shell(SANDBOX_HOST_PATH)) < lookup.index(
+        _shell(LEGACY_APP_PATH)
+    )
+
+
+def test_gui_gate_failure_branch_searches_for_a_misplaced_stamp() -> None:
+    body = GUI_CHECKS.read_text()
+    assert re.search(r"find /run/user -name tuna-installer-ready", body)
+    assert "/run/user/*/.flatpak/*/xdg-run/" in body
