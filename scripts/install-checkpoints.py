@@ -176,14 +176,24 @@ def ocr(path):
             text.append(r.stdout)
         try:
             os.remove(dark)
-        except OSError:
-            pass
+        except OSError as exc:
+            # A leftover temp file must never fail a screenshot assertion:
+            # the OCR text is already collected above, so the only thing lost
+            # is disk space in a scratch dir the harness discards anyway.
+            # Reported so a full or read-only TMPDIR is visible rather than
+            # silent, since that WOULD eventually break the next capture.
+            print(f"# note: could not remove {dark}: {exc}", file=sys.stderr)
     joined = "\n".join(text)
     try:
         with open(cache, "w") as f:
             f.write(joined)
-    except OSError:
-        pass
+    except OSError as exc:
+        # The cache is an optimisation and an evidence artifact, not a result.
+        # `joined` is returned either way, so a failure here must not turn a
+        # passing checkpoint into a failing one — but it is printed, because a
+        # cache that silently never writes makes every re-run pay full OCR
+        # cost and leaves no .ocr.txt in the uploaded evidence.
+        print(f"# note: could not write OCR cache {cache}: {exc}", file=sys.stderr)
     return joined
 
 
