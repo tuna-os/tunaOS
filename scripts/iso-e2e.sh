@@ -1767,7 +1767,15 @@ run_checkpoint_asserts() {
 	# and a gate that cries wolf on every KDE run is a gate someone will turn
 	# off. Bounded, and only on the live-only modes: the install modes have
 	# already driven the session by the time they check.
-	local settle="${TBOX_E2E_CHECKPOINT_SETTLE:-90}"
+	# 240s: MEASURED lower bound only. On this workstation a fixed marlin:kde
+	# ISO was still showing the Plasma splash after a full 90s of settling,
+	# and the installer was on screen when the guest was looked at again
+	# later — so 90 was demonstrably too short and the true figure is
+	# somewhere above it. KDE composites through llvmpipe here, so a CI runner
+	# will not be faster. The loop exits the moment the contract passes, so
+	# this budget costs nothing on a session that comes up promptly and only
+	# spends time on the runs that would otherwise report a false failure.
+	local settle="${TBOX_E2E_CHECKPOINT_SETTLE:-240}"
 	case "$MODE" in
 	ready | ssh)
 		local waited=0 label="10-ready"
