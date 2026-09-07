@@ -418,12 +418,21 @@ JSON
   [ "$result" = "localhost/yellowfin:gnome" ]
 }
 
-@test "the live squash is built in root's container context" {
-	# Without this, tacklebox reads images from the invoking user's rootless
-	# store while mksquashfs runs outside that namespace, and every file in
-	# the squash is recorded with the invoking user's uid. MEASURED: /usr came
-	# out `755 james:james`, and sshd then refuses to start at all —
-	# "/usr/share/empty.sshd must be owned by root" — which shuts the only
-	# door the e2e harness has into the guest.
-	grep -q 'export TACKLEBOX_CONTEXT=root' "${BATS_TEST_DIRNAME}/../../scripts/build-iso-tacklebox.sh"
+@test "the root context uses root's container storage, not the caller's" {
+	# The Justfile invokes this under `sudo -E`, which preserves HOME, and
+	# podman picks its store from HOME. Without pinning it, every root-context
+	# podman call lands in the INVOKING USER's rootless store — whose files
+	# are owned by that user on disk — and mksquashfs, running as real root
+	# with no user namespace, records uid 1000 for every file in the live
+	# root. MEASURED: /usr, /usr/bin/sshd and /usr/share/empty.sshd all came
+	# out `755 james:james`, after which sshd refuses to start at all
+	# ("/usr/share/empty.sshd must be owned by root", exit 255, restart loop),
+	# which shuts the only door the e2e harness has into the guest.
+	local script="${BATS_TEST_DIRNAME}/../../scripts/build-iso-tacklebox.sh"
+	grep -q 'export HOME="${TUNAOS_ROOT_HOME:-/root}"' "$script"
+	# XDG_DATA_HOME would override HOME for storage lookup, so it must go too.
+	grep -q 'unset XDG_DATA_HOME XDG_CONFIG_HOME' "$script"
+	# ...and only in the root context: the user-store calls this script makes
+	# on purpose go through `sudo -u "$SUDO_USER"`.
+	grep -B 2 'export HOME=' "$script" | grep -q 'EUID -eq 0'
 }

@@ -64,31 +64,46 @@ REPO_ROOT="$(pwd)"
 # tunaos_image_ref + tunaos_import_to_root_storage are defined in
 # scripts/lib/common.sh.
 
-# Build the live squash in ROOT's container context, not the invoking user's.
+# Build the live squash out of ROOT's container storage, not the invoking
+# user's.
 #
-# tacklebox picks its podman context from euid unless TACKLEBOX_CONTEXT says
-# otherwise (its internal/install/user_podman.go rootContext()). Under sudo it
-# reads images from the invoking user's rootless store while mksquashfs runs
-# outside that user namespace — so every file in the live squash is recorded
-# with the INVOKING USER's uid instead of 0.
+# The Justfile calls this under `sudo -E`, which preserves HOME — and podman
+# picks its store from HOME. So every root-context podman call here, and every
+# one tacklebox makes, silently operates on the INVOKING USER's rootless store:
 #
-# MEASURED on a marlin:kde dev ISO: /usr and everything under it came out
-# `755 james:james` inside LiveOS/*.rootfs.sfs. Almost nothing minds — mode
-# 755 still reads and executes — but sshd checks its privilege-separation
-# directory and refuses outright:
+#   sudo -E             podman info --format '{{.Store.GraphRoot}}'
+#     /var/home/<user>/.local/share/containers/storage
+#   sudo env HOME=/root podman info --format '{{.Store.GraphRoot}}'
+#     /var/lib/containers/storage
+#
+# A rootless store holds image files owned by the user on disk (container uid 0
+# maps to the user's uid), and mksquashfs runs as real root with no user
+# namespace — so it records uid 1000 for every file in the live root. MEASURED
+# on a marlin:kde dev ISO: /usr, /usr/bin/sshd and /usr/share/empty.sshd all
+# came out `755 james:james` inside LiveOS/*.rootfs.sfs.
+#
+# Almost nothing minds — mode 755 still reads and executes — but sshd checks
+# its privilege-separation directory and refuses outright:
 #
 #   sshd: /usr/share/empty.sshd must be owned by root and not group or
 #         world-writable
 #   sshd.service: Main process exited, code=exited, status=255/EXCEPTION
 #   sshd.service: Scheduled restart job, restart counter is at 1... 2... 3
 #
-# which is what "kex_exchange_identification: Connection reset by peer" looks
-# like from the host, over TCP and vsock alike. That is the harness's only way
-# into the guest, so it takes the dev ISO's whole reason for existing with it.
+# which is exactly what "kex_exchange_identification: Connection reset by peer"
+# looks like from the host, over TCP and vsock alike. That is the e2e harness's
+# only way into the guest, so it takes the dev ISO's whole purpose with it.
 #
-# Safe for both repo modes: the local path imports into root's storage just
-# below, and tacklebox's own Pull() lands registry images in root's store too.
-export TACKLEBOX_CONTEXT=root
+# It also quietly disabled tunaos_import_to_root_storage: its `podman image
+# exists` probe found the image in the user's store and returned early, so
+# root's store never got a copy and nobody noticed.
+#
+# The user's store is still reachable where this script means to use it — those
+# calls go through `sudo -u "$SUDO_USER"` explicitly.
+if [[ $EUID -eq 0 ]]; then
+	export HOME="${TUNAOS_ROOT_HOME:-/root}"
+	unset XDG_DATA_HOME XDG_CONFIG_HOME
+fi
 
 IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")
 # Keep the name embedded in the offline store independent of how this ISO was
