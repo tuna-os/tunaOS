@@ -53,11 +53,21 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        stream: ${{ github.event_name == 'workflow_dispatch' && fromJson(format('[\"{0}\"]', inputs.stream)) || fromJson('["gnome"]') }}
+        # Scheduled runs cover every stable desktop flavor (#1254): the
+        # matrix used to default to gnome-only on cron, so kde/xfce/cosmic/
+        # niri assets on tunaos.org only ever moved on a manual dispatch —
+        # kde had exactly one release ever (kde-20260705) despite being a
+        # first-class ROADMAP desktop, and the other three sat 36 days
+        # stale. Adoption-metrics work (#1174) needs GitHub Release
+        # download counts across all flavors users can actually get from
+        # tunaos.org, not gnome alone.
+        stream: ${{ github.event_name == 'workflow_dispatch' && fromJson(format('[\"{0}\"]', inputs.stream)) || fromJson('["gnome", "kde", "xfce", "cosmic", "niri"]') }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # ── Resolve inputs ─────────────────────────────────────────────────────
       - name: Resolve variant and tag
@@ -251,9 +261,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.vars.outputs.tag }}
+          REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          if gh release view "${TAG}" --repo "${{ github.repository }}" &>/dev/null; then
+          if gh release view "${TAG}" --repo "${REPO}" &>/dev/null; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "Release ${TAG} already exists — skipping"
           else
@@ -268,7 +279,7 @@ jobs:
           steps.existing.outputs.exists == 'false' &&
           inputs.dry_run != true &&
           (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
-        uses: projectbluefin/actions/bootc-build/create-release@eb4c546389f19ad9e42f1af052623de73c620ebb # v1
+        uses: projectbluefin/actions/bootc-build/create-release@1ca03ea1f681c17fd104870aa154f8b5fd34e1d9 # v1
         with:
           sbom-path:          ${{ steps.sbom.outputs.path }}
           tag:                ${{ steps.vars.outputs.tag }}
@@ -293,8 +304,61 @@ jobs:
               {"sbom_name": "flatpak",       "label": "Flatpak"},
               {"sbom_name": "pipewire",      "label": "PipeWire"}
             ]
-          handwritten:  ${{ inputs.handwritten || '' }}
           github-token: ${{ github.token }}
+
+      # projectbluefin/actions/bootc-build/create-release has no note-injection
+      # input (tunaos#1398 — a `handwritten:` input here was silently ignored,
+      # dropping the note from every release). Prepend it ourselves once the
+      # release exists, so it never overwrites the action's own generated
+      # changelog/SBOM notes.
+      - name: Prepend handwritten note
+        if: |
+          steps.release.outcome == 'success' &&
+          inputs.handwritten != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.vars.outputs.tag }}
+          NOTE: ${{ inputs.handwritten }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          BODY_FILE=$(mktemp)
+          {
+            echo "$NOTE"
+            echo ""
+            gh release view "$TAG" --repo "$REPO" --json body -q .body
+          } > "$BODY_FILE"
+          gh release edit "$TAG" --repo "$REPO" --notes-file "$BODY_FILE"
+      # A successful action invocation is not proof that GitHub received the
+      # release payload. Keep an empty release from looking healthy (#1186).
+      - name: Verify release assets
+        if: >-
+          !cancelled() &&
+          steps.check.outputs.skip == 'false' &&
+          inputs.dry_run != true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO:     ${{ github.repository }}
+          TAG:      ${{ steps.vars.outputs.tag }}
+        run: |
+          set -euo pipefail
+
+          ASSETS=$(gh api --paginate \
+            "repos/${REPO}/releases/tags/${TAG}" \
+            --jq '.assets[]?.name' 2>/dev/null || true)
+          ASSET_COUNT=$(printf '%s\n' "${ASSETS}" | sed '/^$/d' | wc -l)
+
+          if [[ "${ASSET_COUNT}" -eq 0 ]]; then
+            echo "::error::release ${TAG} exists but has no uploaded assets"
+            exit 1
+          fi
+
+          if ! grep -q '\.spdx\.json$' <<< "${ASSETS}"; then
+            echo "::error::release ${TAG} has no SPDX SBOM asset"
+            exit 1
+          fi
+
+          echo "Verified ${ASSET_COUNT} uploaded asset(s), including an SPDX SBOM, for ${TAG}"
 
       # ── Release cadence health gate (#1147) ───────────────────────────────
       # Before this existed, "we shipped nothing" and "we shipped" were the
@@ -341,10 +405,22 @@ jobs:
               ;;
             no-build)
               OUTCOME="no ${VARIANT} build ran in the lookback window — nothing to release"
-              LATEST=$(gh api "repos/${REPO}/releases?per_page=1" \
-                --jq '.[0].published_at // ""' 2>/dev/null || echo "")
+              # Filtered by this stream's tag prefix (#1254): now that the
+              # scheduled matrix covers 5 streams, ".releases?per_page=1"
+              # would return whichever stream shipped most recently
+              # repo-wide -- gnome ships daily, so it would permanently mask
+              # staleness on every other stream and this gate would never
+              # fire again for them. per_page=100 bounds the same way the
+              # SBOM lookback above does; a stream that hasn't shipped in
+              # over ~100 releases-worth of history reads the same as "no
+              # published release" below, which is the correct fail-loud
+              # outcome for a stream that stale.
+              LATEST=$(gh api "repos/${REPO}/releases?per_page=100" 2>/dev/null \
+                | jq -r --arg prefix "${STREAM}-" \
+                  '[.[] | select(.tag_name | startswith($prefix))][0].published_at // ""' \
+                2>/dev/null || echo "")
               if [[ -z "${LATEST}" ]]; then
-                OUTCOME="${OUTCOME}; and no published release exists at all"
+                OUTCOME="${OUTCOME}; and no published release exists for ${STREAM} at all"
                 STATUS="fail"
               else
                 AGE_DAYS=$(( ( $(date -u +%s) - $(date -u -d "${LATEST}" +%s) ) / 86400 ))

@@ -17,6 +17,10 @@
 # reusable-build-image.yml. Falls back to querying the image directly when an
 # edition predates that (or the publish step was skipped), which costs a pull.
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/build-config.sh
+source "${SCRIPT_DIR}/lib/build-config.sh"
+BUILD_CONFIG="$(tunaos_build_config)"
 
 REGISTRY="${TUNA_REGISTRY:-ghcr.io/tuna-os}"
 CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/tuna-parity"
@@ -77,13 +81,21 @@ names() { cut -f1 "$1" | LC_ALL=C sort -u; }
 # no desktop at all, which is what marlin's kde/cosmic/niri/xfce do.
 if [[ "${1:-}" == "--audit" ]]; then
 	de="${2:?usage: --audit <desktop>}"
-	# The variant roster comes from build-config when available, so the audit
-	# cannot silently omit a variant the factory declares (bonito-rawhide,
-	# flounder-sid and gurnard were missing from the old hardcoded list —
-	# exactly the absence-of-evidence hole this repo keeps refusing to dig).
-	variants=(yellowfin bonito sailfin flounder grouper marlin skipjack albacore guppy)
-	if command -v yq >/dev/null && [[ -f .github/build-config.yml ]]; then
-		mapfile -t variants < <(yq -r '.variants[].id' .github/build-config.yml)
+	# The variant roster comes from .github/build-config.yml (resolved through
+	# lib/build-config.sh, so TUNAOS_BUILD_CONFIG can relocate it) when
+	# available, so the audit cannot silently omit a variant the factory
+	# declares (bonito-rawhide, flounder-sid and gurnard were missing from the
+	# old hardcoded list — exactly the absence-of-evidence hole this repo keeps
+	# refusing to dig). The literal list below is only the no-yq fallback.
+	# Kept in step with .github/build-config.yml by
+	# tests/test_package_parity_is_scheduled.py, which fails when the two
+	# disagree: the last time this list was hand-maintained it silently
+	# dropped five declared variants (wahoo, hummingbird, bonito-rawhide,
+	# gurnard, flounder-sid) and the audit reported on nine of fourteen
+	# while looking complete.
+	variants=(yellowfin albacore skipjack wahoo bonito hummingbird sailfin guppy bonito-rawhide gurnard grouper marlin flounder flounder-sid)
+	if command -v yq >/dev/null && [[ -f "$BUILD_CONFIG" ]]; then
+		mapfile -t variants < <(yq -r '.variants[].id' "$BUILD_CONFIG")
 	fi
 	# PARITY_JSON: append one JSON object per audited cell — the machine
 	# output the scheduled workflow collates for the scoreboard (W6).

@@ -367,7 +367,7 @@ ISO_FLAVOR="${ISO_FLAVOR%%-*}"
 # jobs run natively, so an aarch64 host must use the ARM system emulator and
 # the ARM `virt` machine rather than the x86_64 emulator and `pc` machine.
 HOST_ARCH="$(uname -m)"
-QEMU=""
+QEMU="${QEMU:-}"
 QEMU_MACHINE=""
 case "$HOST_ARCH" in
 	aarch64 | arm64)
@@ -383,13 +383,15 @@ case "$HOST_ARCH" in
 		exit 77
 		;;
 esac
-for candidate in "${QEMU_CANDIDATES[@]}"; do
-	if [[ -x "$candidate" ]]; then
-		QEMU="$candidate"
-		break
-	fi
-done
-if [[ -z "$QEMU" ]]; then
+if [[ -z "${QEMU:-}" ]]; then
+	for candidate in "${QEMU_CANDIDATES[@]}"; do
+		if [[ -x "$candidate" ]]; then
+			QEMU="$candidate"
+			break
+		fi
+	done
+fi
+if [[ -z "${QEMU:-}" ]]; then
 	echo "ERROR: no QEMU system emulator found for $HOST_ARCH" >&2
 	exit 77
 fi
@@ -401,7 +403,7 @@ fi
 # virtio-vga-gl, use virgl + egl-headless so those compositors get real GL and
 # actually render. Override with TBOX_E2E_GPU=virgl|plain.
 #
-# On a GPU-less runner we fall back to -vga virtio. This comment used to say
+# On a GPU-less runner we fall back to the plain 2D virtio device. This comment used to say
 # that was "fine for cosmic/kde/gnome (software fallbacks)". It is not, and
 # the claim cost weeks of misdirected debugging: cosmic and xfce are Smithay
 # too, so on hosted runners they don't render blank — they never start at
@@ -441,10 +443,38 @@ fi
 # squash runs getty only on tty1 and the serial console (ttyS0), so tty3 has
 # no console to switch to; the Wayland compositor holds tty1. The serial log
 # is the source of truth for "is it up", pixels are only for the gallery.
+#
+# The display device is per machine type, not per taste. `-vga virtio` is
+# shorthand for virtio-vga: a virtio-gpu behind a VGA-compatible PCI region,
+# and the VGA half only exists on targets that have legacy VGA — x86. On
+# qemu-system-aarch64 the type does not exist, and QEMU says so in the least
+# helpful way it can:
+#
+#   qemu-system-aarch64: type is NULL
+#   qemu-system-aarch64: Virtio VGA not available. Perhaps you want to
+#     install qemu-system-modules-opengl package?
+#   ERROR: QEMU failed to daemonize
+#
+# (albacore:kde, iso:kde linux-arm64, run 34001369641 — with
+# qemu-system-modules-opengl installed by the step before, so the hint is
+# wrong. Ubuntu ships hw-display-virtio-vga.so for arm64 too, but the
+# aarch64 binary's modinfo table registers no virtio-vga type, so the module
+# on disk is inert there; it does register virtio-gpu-pci and
+# virtio-gpu-gl-pci.) The `virt` machine's devices are the VGA-less
+# virtio-gpu-pci and, for virgl, virtio-gpu-gl-pci. screendump reads the scanout of either, so
+# nothing downstream changes; only the device name does. QEMU_MACHINE is
+# decided with the emulator above, the same way CPU_ARG keys off it below.
+if [[ "$QEMU_MACHINE" == "virt" ]]; then
+	_gpu_plain_args=(-device virtio-gpu-pci)
+	_gpu_gl_device="virtio-gpu-gl-pci"
+else
+	_gpu_plain_args=(-vga virtio)
+	_gpu_gl_device="virtio-vga-gl"
+fi
 _gpu_mode="${TBOX_E2E_GPU:-auto}"
-QEMU_GPU_ARGS=(-vga virtio -display none)
+QEMU_GPU_ARGS=("${_gpu_plain_args[@]}" -display none)
 if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /dev/dri/renderD128 ]]; } &&
-	"$QEMU" -device help 2>/dev/null | grep -q "virtio-vga-gl"; then
+	"$QEMU" -device help 2>/dev/null | grep -qF "$_gpu_gl_device"; then
 	# egl-headless is NOT a display in its own right — it renders GL locally and
 	# expects another UI to present the result. Without one, `screendump` fails:
 	#
@@ -466,24 +496,32 @@ if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /de
 	# concurrent runs.
 	# The -vnc argument needs OUTPUT_DIR, which is defined further down, so it
 	# is appended there rather than here.
-	QEMU_GPU_ARGS=(-device virtio-vga-gl -display "egl-headless,rendernode=/dev/dri/renderD128")
+	QEMU_GPU_ARGS=(-device "$_gpu_gl_device" -display "egl-headless,rendernode=/dev/dri/renderD128")
 	QEMU_NEEDS_VNC_SURFACE=1
-	echo "==> GPU: virgl (virtio-vga-gl + egl-headless /dev/dri/renderD128 + vnc surface) — Smithay compositors can render"
+	echo "==> GPU: virgl (${_gpu_gl_device} + egl-headless /dev/dri/renderD128 + vnc surface) — Smithay compositors can render"
 else
-	echo "==> GPU: -vga virtio headless (no render node/virgl) — niri/xfwl4 will not render here"
-	# Tell the screen checkpoints so they report, rather than enforce, the
-	# pixel assertions for the desktops that cannot draw without virgl (the
-	# needs_virgl list in tests/install-pipeline-screens.yaml). Otherwise
-	# every cosmic/niri/xfce cell fails its live-desktop checkpoint on every
-	# CI runner, none of which has a render node.
+	echo "==> GPU: ${_gpu_plain_args[*]} headless (no render node/virgl) — niri/xfwl4 will not render here"
+	# Tell the screen checkpoints to REPORT rather than enforce the pixel
+	# assertions for the desktops listed under needs_virgl in
+	# tests/install-pipeline-screens.yaml. Without this every such cell fails
+	# its live-desktop checkpoint on every CI runner, none of which has a
+	# render node.
+	#
+	# Measured caveat worth keeping: cosmic is on that list but does NOT in
+	# fact need virgl — cosmic-comp drew fine on a host with no virtio-vga-gl
+	# (framebuffer stddev 0.13, and the calibrated keywords matched). The blank
+	# cosmic frames that motivated the list were greetd's source_profile hang,
+	# not the GPU. Trimming the list would make the gate real for cosmic; it is
+	# left alone here because that belongs with a CI measurement, not with this
+	# merge.
 	TUNAOS_CHECKPOINT_NO_GPU=1
 fi
 
 # Locate architecture-appropriate UEFI firmware. Path varies across distros
 # (Debian/Ubuntu, Fedora, RHEL, Brew). We also need a writable copy of the
 # variables file for UEFI to persist its NVRAM during boot.
-UEFI_CODE=""
-UEFI_VARS_SRC=""
+UEFI_CODE="${UEFI_CODE:-}"
+UEFI_VARS_SRC="${UEFI_VARS_SRC:-}"
 if [[ "$QEMU_MACHINE" == "virt" ]]; then
 	UEFI_CODE_CANDIDATES=(
 		/usr/share/AAVMF/AAVMF_CODE.fd
@@ -511,19 +549,23 @@ else
 		/usr/share/edk2-ovmf/x64/OVMF_VARS.fd
 	)
 fi
-for f in "${UEFI_CODE_CANDIDATES[@]}"; do
-	if [[ -f "$f" ]]; then
-		UEFI_CODE="$f"
-		break
-	fi
-done
-for f in "${UEFI_VARS_CANDIDATES[@]}"; do
-	if [[ -f "$f" ]]; then
-		UEFI_VARS_SRC="$f"
-		break
-	fi
-done
-if [[ -z "$UEFI_CODE" ]]; then
+if [[ -z "${UEFI_CODE:-}" ]]; then
+	for f in "${UEFI_CODE_CANDIDATES[@]}"; do
+		if [[ -f "$f" ]]; then
+			UEFI_CODE="$f"
+			break
+		fi
+	done
+fi
+if [[ -z "${UEFI_VARS_SRC:-}" ]]; then
+	for f in "${UEFI_VARS_CANDIDATES[@]}"; do
+		if [[ -f "$f" ]]; then
+			UEFI_VARS_SRC="$f"
+			break
+		fi
+	done
+fi
+if [[ -z "${UEFI_CODE:-}" ]]; then
 	echo "ERROR: UEFI firmware not found for $HOST_ARCH — install the architecture's OVMF/AAVMF package" >&2
 	exit 77
 fi
@@ -1522,6 +1564,39 @@ check_ssh() {
 	return 5
 }
 
+# A gate that DID NOT RUN is not a gate that found problems, and only one of
+# those two is tolerable in non-strict mode.
+#
+# e2e-installer-gui-checks.sh resolved its assertion helpers to a path the
+# guest does not have, so `source` failed, `check` was never defined, and
+# every assertion evaporated into command-not-found on stderr. The script
+# exited 127 -- bash for command-not-found -- and this harness printed
+#
+#   ::warning::installer GUI checks reported 127 failure(s) for gnome
+#
+# as a WARNING, in a mode that tolerates warnings. So the compositor and
+# installer-frontend assertions have never once executed, on any flavor, in
+# any smoke run, and the workflow stayed green through it (run 32681262659).
+#
+# The discriminator is the TAP summary. print_summary is the only thing that
+# emits `# Results:`, and it is the last statement of every check script, so
+# its ABSENCE means the script did not reach the end -- whatever the exit
+# code says. Missing summary is a hard failure in every mode; E2E_*_STRICT
+# governs failed assertions, not an absent gate.
+checks_ran() {
+	local output="$1" rc="$2" label="$3"
+	if [[ "$output" == *"# Results:"* ]]; then
+		return 0
+	fi
+	echo "ERROR: ${label} checks did not run to completion (exit ${rc}); no TAP summary was emitted." >&2
+	echo "  This is NOT a count of failed assertions -- the script did not finish," >&2
+	echo "  so nothing it claims to verify was verified. Strict mode does not apply." >&2
+	if [[ "$output" == *"Bail out!"* ]]; then
+		echo "$output" | grep "Bail out!" | sed "s/^/  /" >&2
+	fi
+	return 1
+}
+
 # Upload and run the TAP-style live-image smoke checks (assertions adapted
 # from frostyard/snosi's tiered on-VM test scripts) over SSH. Non-fatal by
 # default — the TAP output is CI evidence; set E2E_SMOKE_STRICT=1 to turn
@@ -1541,6 +1616,7 @@ run_smoke_checks() {
 	local smoke_output smoke_rc=0
 	smoke_output=$("${ssh_cmd[@]}" "TEST_LIB_DIR=${GUEST_HOME} bash ${GUEST_HOME}/e2e-smoke-checks.sh" 2>&1) || smoke_rc=$?
 	echo "$smoke_output" | tee -a "${SERIAL_LOG}"
+	checks_ran "$smoke_output" "$smoke_rc" "live-image smoke" || return 1
 	if [[ "$smoke_rc" -ne 0 ]]; then
 		echo "::warning::live-image smoke checks reported ${smoke_rc} failure(s)"
 		if [[ "${E2E_SMOKE_STRICT:-0}" -eq 1 ]]; then
@@ -1568,6 +1644,7 @@ run_installer_gui_checks() {
 	local gui_output gui_rc=0
 	gui_output=$("${ssh_cmd[@]}" "FLAVOR=${FLAVOR:-gnome} TEST_LIB_DIR=${GUEST_HOME} bash ${GUEST_HOME}/e2e-installer-gui-checks.sh" 2>&1) || gui_rc=$?
 	echo "$gui_output" | tee -a "${SERIAL_LOG}"
+	checks_ran "$gui_output" "$gui_rc" "installer GUI" || return 1
 	if [[ "$gui_rc" -ne 0 ]]; then
 		echo "::warning::installer GUI checks reported ${gui_rc} failure(s) for ${FLAVOR:-gnome}"
 		if [[ "${E2E_INSTALLER_GUI_STRICT:-0}" -eq 1 ]]; then
@@ -2457,7 +2534,7 @@ run_install() {
 	# `[[ "$VARIANT" == "grouper" ]]`, so sailfin, marlin, flounder,
 	# flounder-sid, guppy and gurnard — every other composefs variant — were
 	# installed down the ostree/grub2 path they cannot boot. See
-	# probe_image_backend() in scripts/lib/common.sh (tunaOS#954).
+	# probe_image_backend() in scripts/lib/backend.sh (tunaOS#954).
 	# Probe the image that will actually be INSTALLED. In the dev/e2e flow that
 	# is the locally rebuilt one, and the published tag may be months stale or
 	# absent entirely for a variant whose Gate has been failing — probing it
@@ -3391,7 +3468,7 @@ disk)
 			fi
 			break
 		fi
-		sleep 10
+		sleep "${DISK_POLL_INTERVAL:-1}"
 	done
 	# Let the display manager finish drawing before capturing evidence.
 	# Poll for paint instead of a fixed 30s sleep: under plain virtio-vga the

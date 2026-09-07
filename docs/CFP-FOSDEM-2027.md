@@ -55,7 +55,7 @@ The beats, in order:
 shot list with the real commands (`just qcow2`, `scripts/run-vm.sh demo`,
 `just corral-build`), per-shot timings, what each shot has to prove to a
 reviewer, and the pre-pull step without which `bootc upgrade` does not fit in
-five minutes. The same recording is reused for SCaLE 21x rather than shot
+five minutes. The same recording is reused for SCaLE 24x rather than shot
 twice.
 
 ## Logistics

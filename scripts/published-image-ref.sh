@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/build-config.sh
+source "${SCRIPT_DIR}/lib/build-config.sh"
 
 variant="${1:?usage: published-image-ref.sh <variant> <flavor-or-tag> [local|ghcr|registry]}"
 tag="${2:?flavor or tag required}"
 repo="${3:-ghcr}"
-config="${TUNAOS_BUILD_CONFIG:-.github/build-config.yml}"
+config="$(tunaos_build_config)"
 
 export VARIANT_ID="$variant"
 name=$(yq -r '.variants[] | select(.id == strenv(VARIANT_ID)) | .publish_name // .id' "$config")

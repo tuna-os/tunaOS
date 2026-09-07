@@ -13,7 +13,7 @@ case "${1:-}" in
 		if [[ $IS_FEDORA == true ]]; then
 			# repo.tunaos.org currently ships EL10/x86_64 only, so bonito
 			# gets stock Fedora XFCE 4.20 (X11). Switch to the
-			# hanthor/xfce-wayland stack once a Fedora chroot is published.
+			# tunaOS xfce-wayland stack once a Fedora chroot is published.
 			# NOTE: do NOT install the tuna-os.repo file here — its
 			# $releasever baseurl 404s on Fedora with
 			# skip_if_unavailable=False, breaking every later transaction.
@@ -35,11 +35,21 @@ case "${1:-}" in
 				xfce4-dict \
 				catfish
 		else
-			# EL10 (AlmaLinux/CentOS Stream): the hanthor/xfce-wayland port —
+			# EL10 (AlmaLinux/CentOS Stream): the tunaOS xfce-wayland port —
 			# xfwl4 (Rust/Smithay compositor) plus Wayland-adapted
 			# panel/session/xfdesktop/settings/thunar. Packaged from
 			# tuna-os/tunaos-packages (formerly github-copr) src/xfce-wayland,
 			# served by repo.tunaos.org
+			#
+			# "port" here means the PACKAGING is ours; every SOURCE is
+			# upstream. Verified 2026-08-21 across all 35 specs in
+			# tunaos-packages src/xfce-wayland: archive.xfce.org and
+			# gitlab.xfce.org for the XFCE components,
+			# gitlab.freedesktop.org for wlr-protocols, and the real
+			# upstreams for gtk-layer-shell (wmww) and gtkgreet
+			# (~kennylevinsen). No fork is involved anywhere in the stack.
+			# This paragraph exists because the previous wording named a
+			# personal namespace and was read as naming the source.
 			# (EL10 x86_64 only — build-config restricts xfce* platforms).
 			# NOTE: the stack is not published yet — the EL10 xfce flavors
 			# are commented out in build-config until tunaos-packages#65

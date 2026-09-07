@@ -35,9 +35,12 @@ runs:
     # image batch that has since rotated out, and isolating that is not
     # cheap. Retry rather than guess again at a resource limit.
     - name: Login to Podman (user)
+      env:
+        GHCR_TOKEN: ${{ github.token }}
+        GHCR_ACTOR: ${{ github.actor }}
       run: |
         ulimit -n 4096
-        echo "${{ github.token }}" | podman login -u "${{ github.actor }}" --password-stdin ghcr.io
+        echo "$GHCR_TOKEN" | podman login -u "$GHCR_ACTOR" --password-stdin ghcr.io
       shell: bash
 
     # Retried with linear backoff, same idiom as the GHCR push retry in
@@ -69,12 +72,14 @@ runs:
     - name: Login to Podman (sudo)
       env:
         MAX_RETRIES: 3
+        GHCR_TOKEN: ${{ github.token }}
+        GHCR_ACTOR: ${{ github.actor }}
       run: |
         login_ok=0
         for i in $(seq "${MAX_RETRIES}"); do
           sudo rm -f /dev/shm/libpod_lock* 2>/dev/null || true
           sudo podman system renumber 2>&1 || true
-          if sudo TOKEN="${{ github.token }}" ACTOR="${{ github.actor }}" \
+          if sudo TOKEN="$GHCR_TOKEN" ACTOR="$GHCR_ACTOR" \
               bash -c 'ulimit -n 4096 && echo "$TOKEN" | podman login -u "$ACTOR" --password-stdin ghcr.io'; then
             login_ok=1
             break

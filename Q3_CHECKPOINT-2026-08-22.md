@@ -1,7 +1,31 @@
 # Q3 2026 Checkpoint — Decision Sheet (2026-08-22)
 
 **Milestone**: Q3 2026 "Expand Coverage" (closes 2026-09-30)
-**Tracker**: #1299 | **Prepared**: 2026-08-11 | **Last refreshed**: 2026-08-15 (T-7; variant taxonomy + release-parity execution status) | **Decision authority**: maintainer
+**Tracker**: #1299 | **Prepared**: 2026-08-11 | **Last refreshed**: 2026-08-23 (T-9; post-dated 08-22 checkpoint — decision record still empty) | **Decision authority**: maintainer
+
+> **T-9 refresh (2026-08-23, strategist)**: the 08-22 checkpoint date elapsed with the
+> decision record below still unfilled and the ROADMAP checkpoint row still `⬜ Scheduled`
+> (confirmed 08-23, #1299 comment). This refresh updates the evidence base only — the
+> decision authority stays with the maintainer. What changed since T-7/T-8:
+> **#1499 NVIDIA initramfs regression CLOSED** (fixes #1503/#1523 merged 08-14) — but
+> NVIDIA tags are still frozen at 07-05/07-12 (gnome-nvidia-20260712 newest; 6 weeks zero
+> NVIDIA assets); #1383 has set itself the sharpest dated gate in the Q3 set — **nightly
+> green + gnome-nvidia assets republished by 09-01**. **#1256 Bonito T2 bootc profile
+> MERGED 08-18** — first Bonito movement since 07-19; Fedora-44-superseded framing
+> (#1171) still stands. **wootc shipped v0.1.0-alpha.1 on 08-22** — Q3 scope that landed
+> unboarded (#1988); Q3+Q4 ROADMAP rows proposed in PR #1989; read it as scope landed,
+> not new scope. **#1588 (release parity) still merge-eligible and unmerged 9+ days**
+> (since 08-14 07:12Z) — now inside a 40-PR merge queue (merge-eligible.json 08-23 23:45Z;
+> the 08-18 "verify empty" gate was missed, #1694). **Docs publishing halted 4 days**
+> (#1986): `sync-org-docs` fails at the MDX build gate on synced-upstream files
+> (tunaos-packages TIDEFORGE-ACTION-CACHE.md, wootc manual-testing.md) — every synced
+> page frozen at 08-19; P0 for the adoption surface.
+>
+> **Net effect on the decision set**: the two "zero movement" DESCOPE recommendations
+> (#272/#1123) rest on stale evidence — #272's staff-test PR (#1256) landed and the
+> nvidia blocker that made Bonito red closed. Recommend re-scoring #272 as STAFF
+> (re-evaluate) with a Beta→Stable exit PR by 09-01, and keep #1123 as DESCOPE → Q4
+> (local-build-only by design, no automated publish path). See updated table below.
 
 > **T-7 refresh (2026-08-15, 16:00Z, strategist #1762/#1763)**: adds the new variant health
 > taxonomy (#1753/#1754 — 89 pinned cells that should be green vs 53 rolling/experimental
@@ -90,41 +114,47 @@ Make Q3 carryover an explicit decision, not a discovery. For every open Q3 goal,
 
 ## Strategist recommendation (input — decision authority stays with maintainer)
 
-| Goal | Recommended | Rationale |
+| Goal | Recommended (T-9 refresh, 08-23) | Rationale |
 |------|-------------|-----------|
-| #272 Bonito GA | **DESCOPE → Q4** unless #1256 exits draft by 08-22 | Zero movement since 07-19; T2 profile still draft; Fedora 44 superseded by Fedora 45 planning (#1171); no external capacity |
-| #1123 Redfin alpha | **DESCOPE → Q4** with named owner | Enterprise flagship, but external-capacity framing is void (#1317) and no package-gap PRs have landed; descope explicitly rather than silently |
-| #1093 RFC governance | **STAFF (close-out)** | Policy merged (#1352); finish the 11-branch disposition pass **at** this checkpoint (#1363); then close the goal |
-| #1094 ADR coverage | ✅ **Met — close out** | ADR 0003 + ADR 0004 merged 08-13; mark completed at checkpoint |
-| #1316 Flavor equality | **STAFF cadence parity** | Catalog parity done (#1322); scheduled Releases parity (#1254) is the remaining deliverable — but blocked by #1499 NVIDIA + nightly matrix failures |
-| #1323 Package sourcing | **STAFF** | Draft exists (#1330); merge + allowlist by 08-22 keeps the audit on schedule |
+| #272 Bonito GA | **STAFF (re-evaluate)** — Beta→Stable exit PR by 09-01, else descope at the 09-01 staff-test review | Evidence base changed: T2 bootc profile **#1256 merged 08-18** (first movement since 07-19) and the nvidia initramfs blocker **#1499 closed**. Fedora-44-superseded framing (#1171) stands; GA gate per VARIANT-LIFECYCLE.md unchanged |
+| #1123 Redfin alpha | **DESCOPE → Q4** with named owner | Unchanged. Local-build alpha shipped 08-09 (#609/#1182/#1219) but no automated build/publish path is possible by design (RHEL EULA, no RHSM creds on CI); "alpha" stays local-build-verified. Enterprise posture work moves to Q4 planning (#1743) |
+| #1093 RFC governance | **STAFF (close-out)** | Policy merged (#1352); 11-branch disposition pass (#1363) still outstanding — complete it, then close the goal |
+| #1094 ADR coverage | ✅ **Met — close out** | ADR 0003 + ADR 0004 merged 08-13 |
+| #1316 Flavor equality | **STAFF cadence parity** | Catalog parity done (#1322); #1588 is authored, green, merge-eligible — merge execution only, not design (#1686 scoring rule applies) |
+| #1323 Package sourcing | **STAFF** | PACKAGE-SOURCING.md merged (#1330); DNF/COPR audit done; niri 6-COPR gap + allowlist sign-off pending |
+| #1383 NVIDIA family | **STAFF — self-set dated gate 09-01** | #1499 closed; staff test is "nightly green + gnome-nvidia assets republished by 09-01"; NVIDIA tags still frozen at 07-05/07-12 |
+| #1986 Docs publishing halt | **P0 fix — not a Q3 goal, a Q4-adoption blocker** | 4 consecutive sync failures freeze every synced page at 08-19; fix in source repos (MDX escaping) + docs gate hardening; blocks the 11-01 metrics snapshot surface (#1174) |
 
 ## Decision calendar
 
 | Date | Event | Owner |
 |------|-------|-------|
 | 2026-08-18 | Merge-eligible set verified empty (rebase sweep per #1694) — pre-checkpoint gate | strategist + ci-maintainer |
-| 2026-08-22 | **Checkpoint decision sheet filled** (table below) | maintainer (strategist prepares) |
+| 2026-08-22 | **Checkpoint decision sheet filled** (table below) — **date elapsed; record still empty as of 08-23** | maintainer (strategist prepares) |
+| 2026-08-23 | T-9 refresh (this PR) — evidence base updated, decisions pending maintainer sign-off | strategist |
+| 2026-08-24 | Docs-sync recovery check (#1986): next scheduled run must clear the MDX gate | ci-maintainer / guide |
 | 2026-08-24 | shimonenator 14-day window closes (moot — retracted) | — |
-| 2026-09-01 | Staff-test deadline: first PR for any STAFF goal | goal owners |
+| 2026-09-01 | **Staff-test deadline: first PR for any STAFF goal — sign decisions below by this date** | goal owners / maintainer |
 | 2026-09-15 | Hacktoberfest GFI seeding deadline (15–20 seeds) | outreach + strategist (#1362/#1347) |
 | 2026-09-30 | Q3 milestone closes | all |
 | 2026-10-01 | Hacktoberfest 2026 opens | all |
 
-## Decision record (fill at 2026-08-22)
+## Decision record (fill at 2026-08-22; strategist T-9 recommendations prefilled — maintainer sign-off required)
 
 | Goal | Decision (STAFF/DESCOPE/DROP) | Owner | First PR / descope ref | Date |
 |------|-------------------------------|-------|------------------------|------|
-| #272 Bonito GA | ⬜ | | | |
-| #1123 Redfin alpha | ⬜ | | | |
-| #1093 RFC governance | ⬜ | | | |
-| #1094 ADR coverage | ⬜ | | | |
-| #1316 Flavor equality | ⬜ | | | |
-| #1323 Package sourcing | ⬜ | | | |
+| #272 Bonito GA | 🟡 **STAFF (re-evaluate)** — strategist rec; pending maintainer | ci-maintainer | #1256 merged 08-18; Beta→Stable exit PR by 09-01 | |
+| #1123 Redfin alpha | 🟡 **DESCOPE → Q4** — strategist rec; pending maintainer | ci-maintainer | local alpha shipped (#609); Q4 row exists (#1743) | |
+| #1093 RFC governance | 🟡 **STAFF (close-out)** — strategist rec; pending maintainer | strategist | RFC-PROCESS.md merged (#1352); disposition pass #1363 | |
+| #1094 ADR coverage | ✅ **MET — close out** | strategist | ADR 0003 (#1369) + ADR 0004 (#1370) | 2026-08-13 |
+| #1316 Flavor equality | 🟡 **STAFF cadence parity** — strategist rec; pending maintainer | ci-maintainer | merge #1588 (green, merge-eligible 9d) | |
+| #1323 Package sourcing | 🟡 **STAFF** — strategist rec; pending maintainer | ci-maintainer | allowlist sign-off + niri COPR migration | |
+| #1383 NVIDIA family | 🟡 **STAFF — dated gate 09-01** — strategist rec; pending maintainer | ci-maintainer | nightly green + gnome-nvidia assets by 09-01 | |
+| #1986 Docs publishing halt | 🟡 **P0 fix** — not in Q3 goal set | ci-maintainer / guide | source-repo MDX escaping; docs gate hardening | |
 
 ## Outcome recording
 
-After the checkpoint, update the ROADMAP.md Q3 status table (per #1299 step 3) so carryover is a decision, not a discovery.
+After the checkpoint, update the ROADMAP.md Q3 status table (per #1299 step 3) so carryover is a decision, not a discovery. The T-9 refresh (this PR) updates the ROADMAP checkpoint row from `⬜ Scheduled` to `🟡 Date elapsed — decisions pending maintainer sign-off by 09-01` and corrects the Bonito row (nvidia regression closed, T2 profile merged) so the public roadmap does not advertise stale blockers.
 
 Before filling the Decision record above, run the delivery-pipeline check (#1657): for every goal about to be marked DESCOPE or DROP on movement grounds, confirm its PRs are genuinely absent rather than merge-eligible and stranded. A goal whose work landed only after the 08-14 freeze drained should be recorded as delivered late, not as not-delivered.
 

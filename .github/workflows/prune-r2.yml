@@ -1,0 +1,128 @@
+name: Prune R2 retention
+
+# Org-wide R2 storage retention (tunaOS#1618). Before this workflow existed,
+# the ONLY retention anywhere in the org was a `prune-r2` job embedded in
+# publish-iso-groups.yml -- a workflow_dispatch-only workflow (no schedule).
+# That meant the one existing safeguard only ran as a side effect of someone
+# manually publishing grouped ISOs, not on any regular cadence, while every
+# path it (and everything else) writes to accumulates indefinitely: dated
+# ISOs land in live-isos/ from 13+ build-<variant>.yml workflows via
+# reusable-build-artifacts.yml (same prefix the old job pruned, so those ARE
+# covered once this actually runs on a schedule), and the weekly screenshot
+# workflows write a dated copy alongside their stable "-latest" pointer with
+# no expiration at all.
+#
+# This workflow centralizes retention as its own scheduled job instead of
+# duplicating the rclone-delete logic per-prefix in multiple workflows (the
+# same duplication tunaos#1183 already flagged for other shared tooling).
+# publish-iso-groups.yml's own prune-r2 job is removed in favor of this one.
+#
+# Deliberately NOT touched here (out of scope, different repos):
+# tromso/xfce-linux's dated ISO+sig+cert uploads, tacklebox's per-recipe R2
+# uploads, and tunaos-packages' rclone-synced package repo. Those need the
+# same treatment but live in their own repos with their own R2 prefixes --
+# see tunaos#1618 item 3 for the full inventory.
+
+on:
+  schedule:
+    # Daily, well clear of the nightly build windows (00:20-23:20 UTC per
+    # build-variant.yml's schedule table) and the weekly screenshot runs
+    # (Mondays 02:00/06:00 UTC) -- an in-flight upload finishing just before
+    # this runs is still safe (min-age below excludes anything uploaded
+    # today), but running mid-upload-storm just adds noise to both.
+    - cron: "30 12 * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "List what would be deleted without deleting"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  prune:
+    name: Prune R2
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install rclone
+        run: sudo apt-get install -y rclone
+
+      - name: Prune dated ISOs older than 14 days (live-isos/)
+        env:
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: |
+          if [[ -z "${RCLONE_CONFIG_R2_ACCESS_KEY_ID:-}" ]]; then
+            echo "::notice::R2 credentials not configured; skipping prune."
+            exit 0
+          fi
+          FLAGS=(--log-level INFO --s3-no-check-bucket --min-age 14d \
+            --exclude "*-latest.iso*" \
+            --include "*.iso" --include "*.iso.sha256" --include "*.iso.sigstore.json")
+          [[ "$DRY_RUN" == "true" ]] && FLAGS+=(--dry-run)
+          echo "==> Pruning live-isos/ (>14d, excluding *-latest.iso*)..."
+          rclone delete "${FLAGS[@]}" "R2:${{ secrets.R2_BUCKET }}/live-isos/"
+
+      - name: Prune dated screenshots older than 60 days
+        env:
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          DRY_RUN: ${{ inputs.dry_run || 'false' }}
+        run: |
+          if [[ -z "${RCLONE_CONFIG_R2_ACCESS_KEY_ID:-}" ]]; then
+            echo "::notice::R2 credentials not configured; skipping prune."
+            exit 0
+          fi
+          # Longer window than ISOs -- screenshots are small (a few hundred
+          # KB each vs. multi-GB ISOs) and useful for spotting a regression
+          # a few weeks back, so this trades a little storage for real
+          # debugging value rather than matching the ISO window exactly.
+          #
+          # A single recursive prune of screenshots/ is enough: rclone delete
+          # recurses by default, so this also covers screenshots/boot/
+          # (weekly-qcow2-screenshots.yml) without a separate pass.
+          # screenshots/installer/ (installer-screenshots.yml) only ever
+          # writes "-latest.png" -- no dated files ever land there, so this
+          # is a safe no-op for that subtree, not an intentional skip.
+          FLAGS=(--log-level INFO --s3-no-check-bucket --min-age 60d \
+            --exclude "*-latest.png")
+          [[ "$DRY_RUN" == "true" ]] && FLAGS+=(--dry-run)
+          echo "==> Pruning screenshots/ recursively (>60d, excluding *-latest.png)..."
+          rclone delete "${FLAGS[@]}" "R2:${{ secrets.R2_BUCKET }}/screenshots/"
+
+      - name: Report remaining size
+        if: always()
+        env:
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+        run: |
+          if [[ -z "${RCLONE_CONFIG_R2_ACCESS_KEY_ID:-}" ]]; then
+            exit 0
+          fi
+          {
+            echo "## R2 prune summary"
+            echo
+            for prefix in live-isos screenshots; do
+              echo "### ${prefix}/"
+              rclone size --s3-no-check-bucket "R2:${{ secrets.R2_BUCKET }}/${prefix}/" \
+                --json 2>/dev/null \
+                | python3 -c 'import json,sys; d=json.load(sys.stdin); c=d["count"]; b=d["bytes"]/1024**3; print(f"- {c} objects, {b:.2f} GiB")' \
+                || echo "(size unavailable)"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"

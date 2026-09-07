@@ -111,8 +111,9 @@ time in the browser — what you clicked is what installs.
 
 ## Current state (verified 2026-08-08)
 
-- The builder graduated from this repo's `prototype/iso-builder/` (now
-  just a "moved" README) into its own repository,
+- The builder graduated from this repo's `prototype/iso-builder/` (the
+  directory is gone; a "moved" README stood in for it until 2026-09) into
+  its own repository,
   [tuna-os/iso-builder](https://github.com/tuna-os/iso-builder), deployed
   at <https://iso.tunaos.org> — build, test, and deploy independently of
   the OS image pipeline.

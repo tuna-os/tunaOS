@@ -363,11 +363,22 @@ JSON
 }
 
 @test "tacklebox invocation has a bounded, overrideable deadline" {
-	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/common.sh"
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
 	grep -q 'TUNAOS_TACKLEBOX_TIMEOUT_SECONDS:-4800' "$SCRIPT_PATH"
 	grep -q 'timeout --foreground --kill-after=120' "$SCRIPT_PATH"
 	grep -q 'tunaOS#1772' "$SCRIPT_PATH"
 	grep -q 'must be a positive integer' "$SCRIPT_PATH"
+}
+
+@test "tacklebox library is side-effect-free when sourced directly" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
+	run bash -c '
+		before=$PWD
+		source "$1"
+		[[ "$PWD" == "$before" ]]
+		declare -F tunaos_run_tacklebox >/dev/null
+	' _ "$SCRIPT_PATH"
+	[ "$status" -eq 0 ]
 }
 
 # ── Variant matrix ─────────────────────────────────────────────────────────

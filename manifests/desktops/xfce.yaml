@@ -18,7 +18,7 @@ packages:
       - xfce4-wayland
 
   el10:
-    # Wayland-only XFCE — the hanthor/xfce-wayland port (xfwl4 Rust/Smithay
+    # Wayland-only XFCE — the tunaOS xfce-wayland port (xfwl4 Rust/Smithay
     # compositor + Wayland-adapted panel/session/settings/xfdesktop/thunar).
     # No X11 (xfce-desktop group + gdm dropped). Greeter is greetd on a VT,
     # Wayland-native, so the whole session is X11-free.

@@ -1174,3 +1174,55 @@ setup_runtime_check_stubs() {
   # Must not be able to abort the install it precedes.
   grep -q 'fisherman_rev="\$(.*|| true)"' "$SCRIPT"
 }
+
+# ── GPU/display device is per machine type ──────────────────────────────────
+#
+# These execute the script's OWN selection block — extracted by its comment
+# marker, not re-typed here — so a change to iso-e2e.sh is what they assert
+# on. `-vga virtio` is virtio-vga, which does not exist on qemu-system-aarch64's
+# `virt` machine: run 34001369641, iso:kde linux-arm64 died before the guest
+# existed with "type is NULL … Virtio VGA not available … QEMU failed to
+# daemonize". The virt machine's devices are virtio-gpu-pci and, for virgl,
+# virtio-gpu-gl-pci. The virgl probe greps `-device help` for the GL device,
+# so it must ask for the aarch64 name too or virgl could never engage there.
+
+gpu_block_file() {
+  local out="${BATS_TEST_TMPDIR}/gpu-block.sh"
+  awk '/^# The display device is per machine type/{p=1} p{print} p && /no render node\/virgl/{q=1} q && /^fi$/{exit}' \
+    "${REPO_ROOT}/scripts/iso-e2e.sh" >"$out"
+  echo "$out"
+}
+
+@test "gpu block: the selection code is found by its marker" {
+  f="$(gpu_block_file)"
+  grep -q 'QEMU_GPU_ARGS=' "$f"
+  grep -q 'QEMU_NEEDS_VNC_SURFACE=1' "$f"
+}
+
+@test "gpu: aarch64 virt machine gets virtio-gpu-pci, never -vga virtio" {
+  f="$(gpu_block_file)"
+  run bash -c "QEMU_MACHINE=virt QEMU=/bin/false TBOX_E2E_GPU=plain; source '$f'; echo \"\${QEMU_GPU_ARGS[*]}\""
+  [ "$status" -eq 0 ]
+  [ "${lines[-1]}" = "-device virtio-gpu-pci -display none" ]
+}
+
+@test "gpu: x86 pc machine keeps -vga virtio" {
+  f="$(gpu_block_file)"
+  run bash -c "QEMU_MACHINE=pc QEMU=/bin/false TBOX_E2E_GPU=plain; source '$f'; echo \"\${QEMU_GPU_ARGS[*]}\""
+  [ "$status" -eq 0 ]
+  [ "${lines[-1]}" = "-vga virtio -display none" ]
+}
+
+@test "gpu: virgl on aarch64 probes for and uses virtio-gpu-gl-pci" {
+  f="$(gpu_block_file)"
+  stub="${BATS_TEST_TMPDIR}/qemu-stub"
+  cat >"$stub" <<'STUB'
+#!/usr/bin/env bash
+# Minimal `qemu -device help` stand-in that lists only the aarch64 GL device.
+[[ "$1" == "-device" && "$2" == "help" ]] && echo 'name "virtio-gpu-gl-pci", bus PCI'
+STUB
+  chmod +x "$stub"
+  run bash -c "QEMU_MACHINE=virt QEMU='$stub' TBOX_E2E_GPU=virgl; source '$f'; echo \"\${QEMU_GPU_ARGS[*]}\""
+  [ "$status" -eq 0 ]
+  [ "${lines[-1]}" = "-device virtio-gpu-gl-pci -display egl-headless,rendernode=/dev/dri/renderD128" ]
+}

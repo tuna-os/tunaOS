@@ -63,12 +63,59 @@ def test_the_boot_half_uses_the_non_gpu_harness() -> None:
     assert "iso-e2e-gpu.sh" not in steps
 
 
-def test_every_flavor_builds_on_the_same_runner() -> None:
-    """A per-flavor runner split is what drifted last time."""
-    body = WORKFLOW.read_text()
-    runners = {
-        line.split('runner: ')[1].split('}')[0].strip().strip('"').strip("'")
-        for line in body.splitlines()
+def _matrix_script() -> str:
+    """The generate-matrix job's shell, where runner names are minted.
+
+    Scoped to that job rather than the whole file. The previous version
+    scanned every line of the workflow for "runner: " and therefore read
+    COMMENTS too -- adding a comment containing the words `build_runner:
+    github` invented a runner called "github` sends this job to" and failed
+    the build. A check that reads prose is measuring the wrong surface; the
+    matrix is built in exactly one place and that is the place to look.
+    """
+    gen = jobs()["generate-matrix"]
+    script = "\n".join(step.get("run", "") for step in gen["steps"])
+    assert "include" in script, (
+        "the generate-matrix script no longer builds a matrix include list; "
+        "every assertion below would pass vacuously"
+    )
+    return script
+
+
+def _declared_runners() -> set[str]:
+    return {
+        line.split("runner: ")[1].split("}")[0].strip().strip('"').strip("'")
+        for line in _matrix_script().splitlines()
         if "runner: " in line and "matrix.runner" not in line
     }
+
+
+def test_every_flavor_builds_on_the_same_runner() -> None:
+    """A per-flavor runner split is what drifted last time."""
+    runners = _declared_runners()
+    assert runners, "no runner assignment found in the matrix script"
     assert runners == {"build-amd64"}, f"mixed build runners: {runners}"
+
+
+def test_a_comment_cannot_invent_a_runner() -> None:
+    """Regression for the scan itself.
+
+    The workflow gained a comment reading
+
+        # `build_runner: github` sends this job to ubuntu-latest instead
+
+    and the old whole-file scan turned that prose into a runner name. The
+    scan must see the matrix script and nothing else, so a comment that
+    mentions a runner anywhere else in the file is inert.
+    """
+    body = WORKFLOW.read_text(encoding="utf-8")
+    prose = [
+        line for line in body.splitlines()
+        if "runner: " in line and line.lstrip().startswith("#")
+    ]
+    assert prose, (
+        "no commented 'runner: ' line left in the workflow -- this test can "
+        "no longer demonstrate that comments are excluded; point it at a "
+        "line that still exists rather than deleting it"
+    )
+    assert _declared_runners() == {"build-amd64"}

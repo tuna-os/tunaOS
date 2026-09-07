@@ -1,0 +1,16 @@
+[
+  {"name": "tunaOS", "isArchived": false, "isPrivate": false,
+   "defaultBranchRef": {"name": "main"}, "hasRoadmap": true},
+  {"name": "bootc-installer", "isArchived": false, "isPrivate": false,
+   "defaultBranchRef": {"name": "dev"}, "hasRoadmap": true},
+  {"name": "mariner", "isArchived": false, "isPrivate": false,
+   "defaultBranchRef": {"name": "master"}, "hasRoadmap": false},
+  {"name": "remora", "isArchived": false, "isPrivate": false,
+   "defaultBranchRef": {"name": "main"}, "hasRoadmap": false},
+  {"name": "letters", "isArchived": true, "isPrivate": false,
+   "defaultBranchRef": {"name": "main"}, "hasRoadmap": false},
+  {"name": "demo-repository", "isArchived": false, "isPrivate": true,
+   "defaultBranchRef": {"name": "main"}, "hasRoadmap": false},
+  {"name": "empty-repo", "isArchived": false, "isPrivate": false,
+   "defaultBranchRef": null}
+]

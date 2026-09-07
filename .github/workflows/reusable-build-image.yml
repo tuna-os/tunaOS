@@ -118,7 +118,15 @@ jobs:
     # kde-plasma set is being compiled from source rather than pulled from the
     # binhost, which is #644's preferred fix and is tracked in #1802. Until
     # that lands, the ceiling has to clear the slowest real build.
-    timeout-minutes: 240
+    #
+    # And that build is bimodal. With the binhost warm, guppy kde takes 55m
+    # (run 33310245957, 2026-08-30). When Gentoo bumps plasma and the binhost
+    # has not caught up, every kde-plasma package compiles from source and
+    # the same cell was still emerging (250 of 254) when a flat 210m bound
+    # killed it (run 33624381727, 2026-09-02). So guppy alone gets the
+    # platform maximum; the binary variants keep 240 so a wedge on one of
+    # them still costs four hours, not six.
+    timeout-minutes: ${{ inputs.image-variant == 'guppy' && 360 || 240 }}
     strategy:
       fail-fast: false
       matrix:
@@ -154,7 +162,7 @@ jobs:
         if: ${{ startsWith(inputs.flavor, 'base') }}
 
       - name: Setup runner
-        uses: projectbluefin/actions/bootc-build/setup-runner@eb4c546389f19ad9e42f1af052623de73c620ebb # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@1ca03ea1f681c17fd104870aa154f8b5fd34e1d9 # v1 as of 2026-07-02
         with:
           storage-backend: btrfs
           update-podman: "true"
@@ -162,33 +170,62 @@ jobs:
 
       - name: Install just and yq
         run: |
+          set -euo pipefail
           # Pinned versions — /latest/download/ redirects trigger 403
-          # rate-limiting on some runner types (e.g. linux/amd64/v2).
+          # rate-limiting on some runner types (e.g. linux/amd64/v2) — AND
+          # pinned SHA-256. A version pin alone still trusts whatever bytes the
+          # CDN hands back, and these land as root-owned binaries in /usr/bin
+          # and /usr/local/bin on a runner holding R2 keys and GHCR push
+          # credentials (tunaOS#1327).
+          #
+          # Hashes verified two ways on 2026-08-14: downloaded and hashed
+          # independently, and compared against each project's own published
+          # checksums (just's SHA256SUMS, yq's checksums + checksums_hashes_order).
           YQ_VERSION="v4.53.3"
           JUST_VERSION="1.55.1"
-          ARCH=$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')
-          JUST_ARCH=$(uname -m | sed 's/amd64/x86_64/')
+          case "$(uname -m)" in
+            x86_64)
+              YQ_ARCH="amd64"; JUST_ARCH="x86_64"
+              YQ_SHA256="fa52a4e758c63d38299163fbdd1edfb4c4963247918bf9c1c5d31d84789eded4"
+              JUST_SHA256="b0ef600f0df20d5ae91ae931627c499fc52b477ffe5f5ea7b7b3ec616b16c778"
+              ;;
+            aarch64)
+              YQ_ARCH="arm64"; JUST_ARCH="aarch64"
+              YQ_SHA256="578648e463a11c1b6db6010cbf41eafed6bee79466fcffa1bb446672cf7945ea"
+              JUST_SHA256="b0ee814c9656427408e339893541e30d9027828686839499b2a2a34dd61ad173"
+              ;;
+            *)
+              echo "::error::no pinned yq/just checksum for $(uname -m)" >&2
+              exit 1
+              ;;
+          esac
 
-          # Retry loop — GitHub CDN transient 403s resolve after a short wait
-          for i in 1 2 3; do
-            sudo wget -qO /usr/bin/yq \
-              "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${ARCH}" \
-              && break || sleep $((i * 2))
-          done
+          # Retry loop — GitHub CDN transient 403s resolve after a short wait.
+          fetch() { # url dest
+            local i
+            for i in 1 2 3; do
+              curl -fsSL -o "$2" "$1" && return 0
+              sleep $((i * 2))
+            done
+            echo "::error::failed to download $1 after 3 attempts" >&2
+            return 1
+          }
 
-          # Pinned GitHub release only — no unpinned just.systems/install.sh
-          # fallback (that pipes an unauthenticated remote script into
-          # `sudo bash`, tunaos#1357). Retry the pinned download instead,
-          # same as the yq retry loop above.
-          for i in 1 2 3; do
-            curl -fsSL \
-              "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${JUST_ARCH}-unknown-linux-musl.tar.gz" \
-              -o /tmp/just.tgz \
-              && break || sleep $((i * 2))
-          done
+          # Downloaded to /tmp and verified BEFORE anything root-owned is
+          # written. The previous version piped straight to /usr/bin/yq under
+          # sudo, so unverified bytes became a system binary before anyone
+          # could object, and fell back to `curl https://just.systems/install.sh
+          # | sudo bash` — an unpinned remote script executed as root, which
+          # fired precisely when the pinned download had already failed.
+          fetch "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_${YQ_ARCH}" /tmp/yq
+          echo "${YQ_SHA256}  /tmp/yq" | sha256sum -c -
+          sudo install -m 0755 /tmp/yq /usr/bin/yq
 
+          fetch "https://github.com/casey/just/releases/download/${JUST_VERSION}/just-${JUST_VERSION}-${JUST_ARCH}-unknown-linux-musl.tar.gz" /tmp/just.tgz
+          echo "${JUST_SHA256}  /tmp/just.tgz" | sha256sum -c -
           sudo tar -xzf /tmp/just.tgz -C /usr/local/bin just
-          sudo chmod +x /usr/bin/yq /usr/local/bin/just 2>/dev/null || true
+          sudo chmod 0755 /usr/local/bin/just
+
           just --version && yq --version
 
 
@@ -227,6 +264,9 @@ jobs:
           # PR builds never publish; skip the two-pass chunkah rechunk +
           # relabel (~10 min) and validate the plain build instead.
           SKIP_RECHUNK: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+          # Wall-clock bound on the build itself, 30 minutes under the job
+          # ceiling above. See the comment at the `timeout` call below.
+          BUILD_BOUND_MINUTES: ${{ inputs.image-variant == 'guppy' && 330 || 210 }}
         run: |
           set -x
           just=$(which just)
@@ -246,11 +286,45 @@ jobs:
             done
           fi
           build_start=$(date +%s)
+          # BUILD_BOUND_MINUTES against the job ceiling, 30 minutes under it:
+          # 210m/240m for every binary variant, 330m/360m for guppy, which
+          # compiles the desktop from source whenever the Gentoo binhost lags
+          # a plasma bump (#1802). This is NOT a guess at how long a build
+          # should take. It exists so a build that was going to blow the job
+          # cap anyway fails 30 minutes early, with an exit code and a
+          # message, instead of a bare "The operation was canceled" and no
+          # telemetry.
+          #
+          # It is a clock, not a stall detector, and the message below must
+          # not claim otherwise. Run 33624381727 (guppy kde, 2026-09-02) hit
+          # the old flat 210m bound with 250 of 254 emerge jobs complete and
+          # three packages actively compiling -- slow, not wedged -- and the
+          # annotation said "made no progress for 210 minutes".
+          #
+          # Build Hummingbird #66 (run 32907940350) is why: the gnome cell
+          # stalled inside one dnf transaction at 23:12:27 and emitted not
+          # one further line before the cap cancelled it at 03:00:31. The
+          # cancel skipped Manifest, Sign, Promote and the ISO, and left
+          # nothing in the log saying what had wedged. 10-base-packages.sh
+          # now bounds the dnf side of that; this bounds every other way a
+          # build layer can hang.
+          #
+          # `timeout` runs the child in its own process group and signals the
+          # group, so buildah dies with just. Under sudo so the signals come
+          # from root -- a non-root timeout cannot kill a root buildah.
+          #
           # --preserve-env: sudo otherwise strips the cache/rechunk knobs
           # (the old layer cache never worked for exactly this reason).
+          rc=0
           sudo --preserve-env=BUILDAH_CACHE_FLAGS,SKIP_RECHUNK,PUBLIC_IMAGE_NAME \
-            "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}"
+            timeout --kill-after=60s "${BUILD_BOUND_MINUTES}m" \
+            "$just" build "${IMAGE_VARIANT}" "${FLAVOR}" "${PLATFORM}" 1 "${DEFAULT_TAG}" "${CHAIN_BASE_IMAGE}" || rc=$?
           echo "BUILD_SECONDS=$(( $(date +%s) - build_start ))" >> "$GITHUB_ENV"
+          if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+            echo "::error title=Build hit its wall-clock bound::${IMAGE_VARIANT}:${DEFAULT_TAG} (${PLATFORM}) was still running after ${BUILD_BOUND_MINUTES} minutes and was killed. This is a clock, not a stall detector: the last line of build output above says whether it was wedged or merely slow."
+            exit 1
+          fi
+          [ "$rc" -eq 0 ] || exit "$rc"
 
       - name: Build telemetry
         if: always()
@@ -298,7 +372,12 @@ jobs:
           mkdir -p verify-out
           IMAGE="localhost/${IMAGE_VARIANT}:${DEFAULT_TAG}"
           sudo -E corral create gate --bootc "$IMAGE" --wait-ssh --timeout 900
-          sudo ./scripts/iso-e2e.sh "$IMAGE" --disk --output verify-out --timeout 300 || true
+          # No `|| true` here (tuna-os/tunaos#1533): a PR whose image fails to
+          # boot must fail the PR gate, not just warn on missing evidence. The
+          # evidence-upload step below already runs under `if: always()`, so
+          # dropping the swallow doesn't lose any diagnostics — it just makes
+          # the check red when the boot actually failed.
+          sudo ./scripts/iso-e2e.sh "$IMAGE" --disk --output verify-out --timeout 300
 
       - name: Upload PR verification evidence
         if: always() && github.event_name == 'pull_request' && contains(matrix.platform, 'amd64')
@@ -722,8 +801,33 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:df3f0bac868b88029d6071734ea42cd3073d6d99aa840671cbf30af609aadc5d  # :latest linux/amd64 as of 2026-06-13
-      options: --privileged --security-opt seccomp=unconfined
+      image: cgr.dev/chainguard/wolfi-base@sha256:9fb170f1ba62a9129476e82d286d3c78164411fc2e9951df18b83587eb096c95  # :latest linux/amd64 as of 2026-06-13
+      # This job only performs registry/API operations (podman login and
+      # manifest create/add/annotate/push). It does not run or build a
+      # container or mount a host filesystem -- but podman itself needs
+      # CAP_SYS_ADMIN to believe it is root. Without it, podman classifies
+      # the process as rootless and re-execs into a user namespace before
+      # doing anything at all, and docker's default seccomp profile denies
+      # clone(CLONE_NEWUSER) to a process without that capability:
+      #
+      #   cannot clone: Operation not permitted
+      #   Error: cannot re-exec process
+      #
+      # Until 2026-09-02 that never surfaced, because the hosted runner
+      # launched every job container with `--privileged --security-opt
+      # seccomp=unconfined` on its own. Runner 2.337.0 stopped doing that.
+      # Measured on the same runner image (ubuntu-24.04 20260823.283.1),
+      # the same 63 apk packages and the same podman 6.0.2-r2: marlin's six
+      # Manifest jobs passed on runner 2.336.0 at 18:26Z (run 33659564363);
+      # every Manifest job on runner 2.337.0 from 23:12Z on died on the two
+      # lines above (sailfin 33687500544, flounder 33694724467, flounder-sid
+      # 33702354589). The two `docker create` commands differ only in those
+      # flags and the runner path. So ask explicitly for the confinement
+      # this job has always actually run under; the next runner change must
+      # not be able to take promotion down matrix-wide again.
+      # tests/test_the_manifest_job_asks_for_the_confinement_podman_needs.py
+      # holds this line in place.
+      options: --privileged
     permissions:
       contents: read
       packages: write
@@ -976,8 +1080,8 @@ jobs:
           REGISTRY: ghcr.io
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
-          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
+          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
 
       - name: Push Manifest
         if: github.event_name != 'pull_request'
@@ -1050,7 +1154,8 @@ jobs:
       - name: Login to GitHub Container Registry
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
+          GHCR_ACTOR: ${{ github.actor }}
+        run: echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "$GHCR_ACTOR" --password-stdin
 
       - name: Fetch platform digests
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -1129,7 +1234,7 @@ jobs:
       - name: Login to GitHub Container Registry
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "${{ github.actor }}" --password-stdin
+        run: echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
 
       - name: Fetch platform digests
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -1239,8 +1344,23 @@ jobs:
     # iso-e2e-gpu.sh passes through. kde/xfce stay on hosted runners (per-
     # variant evidence: marlin passed 08-17), gnome is verifiable without a
     # render node. Everything else keeps the hosted runner — sparse by design.
+    # NOT a ternary: GitHub Actions expressions have no `? :`, and one here
+    # failed to PARSE, which fails the whole file, which fails every caller.
+    # That is what startup-failed all 13 variant nightlies on 2026-08-21 with
+    # zero jobs and zero duration, and what made every sweeper re-dispatch
+    # return HTTP 422 (run 32482857699):
+    #   reusable-build-image.yml (Line: 1242): Unexpected symbol: '?'
+    # The `cond && a || b` form on line 105 of this same file is the idiom.
+    # b2d29bdb introduced the same ternary into installer-smoke.yml too; that
+    # copy was fixed in #1919 and this one was not.
+    #
+    # And `'gpu'` alone was never a runner: RunsOn groups are addressed as
+    # runs-on=<run_id>/runner=<group>, as installer-smoke.yml does. A bare
+    # label would queue forever with no runner ever claiming it -- trading a
+    # parse error for a silent hang is not a fix, so both halves are repaired.
     runs-on: >-
-      ${{ (startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4')) ? 'gpu' : 'ubuntu-latest' }}
+      ${{ (startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4'))
+          && format('runs-on={0}/runner=gpu', github.run_id) || 'ubuntu-latest' }}
     timeout-minutes: 60
     permissions:
       contents: read
@@ -1301,6 +1421,25 @@ jobs:
       - name: Build qcow2 from testing image
         env:
           TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          # hummingbird probes BACKEND=ostree SEALED=0, so it takes the xfs
+          # default and `bootc install to-disk` ABORTS installing the
+          # bootloader: BIOS grub2-install cannot read the xfs this base's
+          # mkfs.xfs produces, and bootupctl installs the BIOS component
+          # unconditionally, so the whole to-disk install fails. (An ISO
+          # install is a different path -- fisherman gives it a separate
+          # ext4 /boot -- so this is about the Gate, and about Promote
+          # being gated on the Gate.) Six
+          # consecutive nightlies died here (run 32786338463, gnome Gate job
+          # 97638679623), which is why hummingbird:gnome has never been
+          # promoted and is 404 on GHCR.
+          #
+          # Scoped to this one variant ON PURPOSE. It is a measurement, not a
+          # product change: if the gate goes green on ext4 then ext4 is the
+          # answer and the durable fix is a 50-hummingbird.toml drop-in, as
+          # 00-tunaos.toml already prescribes. Every other variant is
+          # untouched -- the variable is unset for them and the probe decides
+          # exactly as before.
+          TUNAOS_QCOW2_FILESYSTEM: ${{ inputs.image-variant == 'hummingbird' && 'ext4' || '' }}
         run: |
           just qcow2 "${TEST_IMAGE}"
 
@@ -1369,12 +1508,22 @@ jobs:
 
       - name: Collect evidence
         if: always()
+        env:
+          EVIDENCE_ARCH: amd64
+          EVIDENCE_STATUS: ${{ job.status }}
+          # inputs.* is caller-typed text; it reaches the shell through env,
+          # never by interpolation into the script (see
+          # tests/test_untrusted_context_never_reaches_a_run_block_by_interpolation.py).
+          EVIDENCE_VARIANT: ${{ inputs.image-variant }}
+          EVIDENCE_FLAVOR: ${{ inputs.flavor }}
         run: |
           sudo chown -R "$USER:$(id -gn)" verify-out 2>/dev/null || true
           for ppm in verify-out/*.ppm; do
             [[ -f "$ppm" ]] || continue
             convert "$ppm" "${ppm%.ppm}.png" || true
           done
+          scripts/evidence-bundle.sh \
+            "${EVIDENCE_VARIANT}:${EVIDENCE_FLAVOR}" boots verify-out
 
       - name: Upload boot evidence
         if: always()
@@ -1384,6 +1533,7 @@ jobs:
           path: |
             verify-out/serial.log
             verify-out/*.png
+            evidence/${{ inputs.image-variant }}/${{ inputs.flavor }}/amd64/
           if-no-files-found: warn
           retention-days: 7
 
@@ -1421,13 +1571,103 @@ jobs:
   # desktop images at multi-user, before the graphical marker). Revert this
   # block from git history if base ever becomes a supported end-user target.
 
+  # ── Desktop contract gate ───────────────────────────────────────────────────
+  # Pull the candidate :<tag>-testing manifest and verify:
+  # 1. Desktop experience (verify-desktop-experience.sh): packages, session
+  #    files, portals, display manager.
+  # 2. Package wishlist (verify-package-wishlist.sh): no undeclared omissions.
+  # Promotion of the bare tags is blocked while this fails. Skipped for base*
+  # flavors (no desktop to verify) and arm64-only flavors (verified by Asahi gate).
+  verify_desktop:
+    name: Desktop contract
+    needs: manifest
+    if: >-
+      inputs.publish && github.event_name != 'pull_request' &&
+      !startsWith(inputs.flavor, 'base') &&
+      contains(inputs.platforms, 'amd64')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: read
+    env:
+      IMAGE_NAME: ${{ inputs.image-name }}
+      IMAGE_REGISTRY: ${{ vars.IMAGE_REGISTRY || format('ghcr.io/{0}', github.repository_owner) }}
+      DEFAULT_TAG: ${{ inputs.default-tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Free up disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc \
+            /usr/local/share/boost /opt/hostedtoolcache/CodeQL || true
+          df -h /
+
+      - name: Login to GitHub Container Registry
+        env:
+          REGISTRY: ghcr.io
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GHCR_ACTOR: ${{ github.actor }}
+        run: |
+          echo "${GITHUB_TOKEN}" | podman login -u "$GHCR_ACTOR" --password-stdin "${REGISTRY}"
+          echo "${GITHUB_TOKEN}" | sudo podman login -u "$GHCR_ACTOR" --password-stdin "${REGISTRY}"
+
+      - name: Pull Candidate Image
+        env:
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+        run: |
+          set -euo pipefail
+          sudo podman pull "${TEST_IMAGE}"
+
+      - name: Verify desktop experience
+        env:
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          FLAVOR: ${{ inputs.flavor }}
+          IMAGE_VARIANT: ${{ inputs.image-variant }}
+        run: |
+          set -euo pipefail
+          # Strip overlay suffixes from flavor (e.g. gnome-nvidia -> gnome)
+          DESKTOP="${FLAVOR}"
+          for _suffix in -nvidia-hwe -nvidia -hwe -cachyos -asahi -zfs; do
+            if [[ "$DESKTOP" == *"$_suffix" ]]; then
+              DESKTOP="${DESKTOP%"$_suffix"}"
+              break
+            fi
+          done
+
+          is_hb=false
+          [[ "${IMAGE_VARIANT}" == hummingbird* ]] && is_hb=true
+
+          sudo podman run --rm \
+            -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
+            -e IS_HUMMINGBIRD="$is_hb" \
+            --entrypoint /bin/bash "${TEST_IMAGE}" /vde.sh "${DESKTOP}"
+
+      - name: Verify package wishlist
+        env:
+          TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
+          IMAGE_VARIANT: ${{ inputs.image-variant }}
+        run: |
+          set -euo pipefail
+          is_hb=false
+          [[ "${IMAGE_VARIANT}" == hummingbird* ]] && is_hb=true
+
+          sudo podman run --rm \
+            -v "$PWD/build_scripts/checks/verify-package-wishlist.sh:/vpw.sh:z" \
+            -v "$PWD/build_scripts/checks/package-miss-allowlist.txt:/allow.txt:z" \
+            -e TUNAOS_WISHLIST_ALLOWLIST=/allow.txt \
+            -e IS_HUMMINGBIRD="$is_hb" \
+            --entrypoint /bin/bash "${TEST_IMAGE}" /vpw.sh
+
   tag-image:
     name: Promote
-    needs: [manifest, sign, verify_boot, verify_asahi]
+    needs: [manifest, sign, verify_desktop, verify_boot, verify_asahi]
     if: >-
       !cancelled() && github.event_name != 'pull_request' &&
       needs.manifest.result == 'success' &&
       needs.sign.result == 'success' &&
+      (needs.verify_desktop.result == 'success' || needs.verify_desktop.result == 'skipped') &&
       (needs.verify_boot.result == 'success' || needs.verify_boot.result == 'skipped') &&
       (needs.verify_asahi.result == 'success' || needs.verify_asahi.result == 'skipped')
     # Temporarily off RunsOn: the tuna-os AWS account is capped to Free Tier,
@@ -1458,10 +1698,10 @@ jobs:
           REGISTRY: ghcr.io
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
-          echo "${{ env.GITHUB_TOKEN }}" | sudo podman login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+          echo "${{ env.GITHUB_TOKEN }}" | podman login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
+          echo "${{ env.GITHUB_TOKEN }}" | sudo podman login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
           # Also login with skopeo
-          echo "${{ env.GITHUB_TOKEN }}" | sudo skopeo login -u "${{ github.actor }}" --password-stdin "${REGISTRY}"
+          echo "${{ env.GITHUB_TOKEN }}" | sudo skopeo login -u "${GITHUB_ACTOR}" --password-stdin "${REGISTRY}"
 
       - name: Pull Image and Apply Tags
         id: tag

@@ -135,6 +135,44 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     grep -q '^BACKEND=composefs-native$' <<<"$PROBE" && COMPOSEFS_ARGS+=(--composefs-backend)
     grep -q '^SEALED=1$' <<<"$PROBE" && COMPOSEFS_ARGS+=(--filesystem ext4)
 
+    # TUNAOS_QCOW2_FILESYSTEM overrides the filesystem the probe implied.
+    #
+    # SEALED is not the only thing that can make the default xfs unusable.
+    # hummingbird probes BACKEND=ostree SEALED=0, so it takes the xfs default
+    # from 00-tunaos.toml, and then the install ABORTS:
+    #
+    #   Creating root filesystem (xfs) on device /dev/loop0p3
+    #   Bootloader: grub
+    #   /usr/sbin/grub2-install: error: ../grub-core/kern/fs.c:123:unknown filesystem.
+    #   error: Installing to disk: Installing bootloader: Failed to run
+    #     command: bootupctl backend install
+    #
+    # (build-hummingbird run 32786338463, gnome Gate job 97638679623, and the
+    # five nightlies before it.) BIOS grub2-install cannot read the xfs that
+    # this base's mkfs.xfs produces. bootupctl installs the BIOS component
+    # unconditionally on a hybrid layout, so this is not a legacy-boot-only
+    # problem -- the whole disk install fails, on UEFI hardware too.
+    #
+    # This knob exists to TEST whether ext4 is the answer before changing any
+    # product default: unset, nothing changes for any variant. If it proves
+    # out, the durable fix is a 50-<variant>.toml drop-in as 00-tunaos.toml
+    # already prescribes, not this variable.
+    if [[ -n "${TUNAOS_QCOW2_FILESYSTEM:-}" ]]; then
+        echo "==> TUNAOS_QCOW2_FILESYSTEM=${TUNAOS_QCOW2_FILESYSTEM} overriding probed filesystem"
+        # Drop any --filesystem the probe added, then append the override.
+        FILTERED=(); skip=0
+        for a in ${COMPOSEFS_ARGS[@]+"${COMPOSEFS_ARGS[@]}"}; do
+            if [[ $skip -eq 1 ]]; then skip=0; continue; fi
+            if [[ "$a" == "--filesystem" ]]; then skip=1; continue; fi
+            FILTERED+=("$a")
+        done
+        # `${a[@]+"${a[@]}"}` not `${a[@]:-}`: on an EMPTY array the latter
+        # expands to one empty string, which would reach `bootc install` as a
+        # zero-length argv element. hummingbird is exactly that case -- it
+        # probes unsealed, so COMPOSEFS_ARGS starts empty.
+        COMPOSEFS_ARGS=(${FILTERED[@]+"${FILTERED[@]}"} --filesystem "${TUNAOS_QCOW2_FILESYSTEM}")
+    fi
+
     # Console ORDER matters: the LAST console= is the primary /dev/console, and
     # that is where dracut/systemd (all userspace) writes. With tty0 last,
     # initramfs failures were visible only on the VGA screen (the Gate's

@@ -16,8 +16,21 @@
 # way, because "which ones are fine" is as useful as "which one broke".
 set -euo pipefail
 
-CONFIG="${CONFIG:-.github/build-config.yml}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/build-config.sh
+source "${SCRIPT_DIR}/lib/build-config.sh"
+CONFIG="${CONFIG:-$(tunaos_build_config)}"
 YQ="${YQ:-yq}"
+
+if ! command -v "$YQ" >/dev/null 2>&1; then
+  echo "::error::yq executable not found ('$YQ'); cannot parse $CONFIG" >&2
+  exit 1
+fi
+
+if [ ! -f "$CONFIG" ]; then
+  echo "::error::config file not found ($CONFIG)" >&2
+  exit 1
+fi
 
 # Registries serve manifest lists, image indexes and plain manifests; ask for
 # all of them or a HEAD against a multi-arch tag returns 404 on content-type
@@ -58,10 +71,12 @@ auth_header() {
 
 failed=0
 checked=0
+seen=0
 
 while IFS= read -r ref; do
   [ -n "$ref" ] || continue
   [ "$ref" = "null" ] && continue
+  seen=$((seen + 1))
   case "$ref" in *@sha256:*) ;; *)
     # Not digest-pinned. Not this script's problem, but say so rather than
     # silently passing -- an unpinned base is its own kind of surprise.
@@ -88,10 +103,25 @@ while IFS= read -r ref; do
     echo "::error::base image pin no longer resolves (HTTP ${code}): ${ref}"
     failed=$((failed + 1))
   fi
-done < <("$YQ" -r '.variants[].base_image // empty' "$CONFIG" | sort -u)
+done < <("$YQ" -r '.variants[] | .base_image // ""' "$CONFIG" | sort -u)
 
 echo
 echo "checked ${checked} digest-pinned base image(s); ${failed} unresolvable"
+
+# Zero base images read is the check being broken, not the config being
+# clean. This is not hypothetical: the extraction above used to fall back
+# with jq's `empty` keyword, which mikefarah yq v4.53.3 rejects ("lexer:
+# invalid input text"). The error happened inside a process substitution,
+# where `set -e` cannot see it, so from the night that shipped the job
+# printed "checked 0 digest-pinned base image(s); 0 unresolvable" and
+# exited 0 -- while sailfin's tumbleweed digest and both fedora-bootc
+# digests had been garbage-collected and every sailfin build died on
+# `manifest unknown` (run 33687500544, 2026-09-02). The absence-of-evidence
+# rule (#1730) applies to the checker itself.
+if [ "$seen" -eq 0 ]; then
+  echo "::error::base image pin check read ZERO base images from ${CONFIG} -- the extraction is broken, not the pins clean"
+  exit 1
+fi
 
 # ── Architecture honesty (green criterion 10, GREEN-MASTER-PLAN W8) ─────────
 # A variant may not declare a platform its base image cannot provide: the

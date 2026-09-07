@@ -40,6 +40,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Start an SSH agent with the rental's key
         run: |
@@ -53,17 +55,20 @@ jobs:
         env:
           ASAHI_HW_HOST: ${{ secrets.ASAHI_HW_TIER2_HOST }}
           ASAHI_HW_USER: ${{ secrets.ASAHI_HW_TIER2_USER || 'root' }}
+          IMAGE: ${{ inputs.image }}
         run: |
           set -o pipefail
-          scripts/asahi-remote-switch.sh "${{ inputs.image }}" 2>&1 | tee /tmp/switch.log
+          scripts/asahi-remote-switch.sh "$IMAGE" 2>&1 | tee /tmp/switch.log
 
       - name: Summarize
         # Always runs, so a rollback or a timeout reports clearly in the run
         # summary — this step must not mask the switch step's own exit code.
         if: always()
+        env:
+          IMAGE: ${{ inputs.image }}
         run: |
           {
-            echo "### \`${{ inputs.image }}\`"
+            echo "### \`${IMAGE}\`"
             echo
             echo '```'
             tail -20 /tmp/switch.log 2>/dev/null || echo "(no log captured)"

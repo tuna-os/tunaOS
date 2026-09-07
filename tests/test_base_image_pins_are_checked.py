@@ -269,3 +269,40 @@ def test_arch_honesty_criterion_is_advisory_and_asserted():
     c = next(c for c in criteria if c["id"] == "arch_honesty")
     assert c["enforcement"] == "advisory"
     assert "check-base-image-pins" in c["asserted_by"]
+
+
+# ── the checker itself can be the thing that is broken ─────────────────────
+
+
+def test_zero_pins_checked_is_a_failure_not_a_pass(tmp_path):
+    """A yq expression the pinned yq rejects (`// empty` is jq, and mikefarah
+    yq v4.53.3 answers "lexer: invalid input text \"empty\"") fails inside a
+    process substitution where `set -e` cannot see it. From the night that
+    shipped, the nightly printed "checked 0 digest-pinned base image(s);
+    0 unresolvable" and exited 0 while sailfin's garbage-collected pin took
+    every sailfin build down on `manifest unknown` (run 33687500544). The
+    absence-of-evidence rule applies to the checker: zero checked is red."""
+    proc, _ = run_check(tmp_path, [])
+    assert proc.returncode == 1, proc.stdout + proc.stderr
+    assert "checked 0 digest-pinned base image(s)" in proc.stdout
+    assert "::error::" in proc.stdout
+    assert "ZERO" in proc.stdout
+
+
+def test_an_all_unpinned_config_is_still_read_not_broken(tmp_path):
+    """The guard is about the extraction reading nothing, not about the pins
+    it read being digest-less: an unpinned base is SKIP (its own test above),
+    and one SKIP proves the expression works."""
+    proc, _ = run_check(tmp_path, ["docker.io/library/alpine:latest"])
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+
+
+def test_the_pin_extraction_uses_no_jq_only_syntax():
+    """`empty` is jq. mikefarah yq -- the binary the workflow installs -- has
+    no such operator, and the arch-honesty loop in the same script already
+    uses the `// ""` form that both accept. Keep the two consistent."""
+    body = SCRIPT.read_text()
+    assert "// " + "empty" not in body, (
+        "the jq `empty` fallback is rejected by the pinned mikefarah yq "
+        "(v4.53.3: 'lexer: invalid input text'); use `.base_image // \"\"`"
+    )

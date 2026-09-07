@@ -33,6 +33,14 @@ rawhide_rpmdb_probe
 if [[ $IS_FEDORA == true ]]; then
 	dnf_retry -y install fedora-logos
 fi
+# ELN's branding package is fedora-eln-logos, not fedora-logos: the latter
+# does not exist in eln-{baseos,appstream,crb,extras}, and fedora-eln-logos
+# (110.3, eln-appstream) is what `dnf repoquery --whatprovides system-logos`
+# answers there. Measured 2026-08-25. Without it the base ships no
+# system-logos provider at all, which plymouth-system-theme depends on.
+if [[ ${IS_ELN:-false} == true ]]; then
+	dnf_retry -y install fedora-eln-logos
+fi
 if [[ $IS_ALMALINUX == true ]]; then
 	dnf_retry -y install almalinux-backgrounds almalinux-logos
 fi
@@ -70,7 +78,16 @@ fi
 # were centos/9 and centos/10.
 ts_repo_url=""
 local_ts_ver="${MAJOR_VERSION_NUMBER:-}"
-if [[ $IS_FEDORA == true || ${IS_HUMMINGBIRD:-false} == true ]]; then
+if [[ ${IS_ELN:-false} == true ]]; then
+	# ELN reports VERSION_ID=11, which satisfies the one-or-two-digit EL-major
+	# test below and would build
+	#   https://pkgs.tailscale.com/stable/centos/11/tailscale.repo   → 404
+	# (measured 2026-08-25). Tailscale publishes no EL11 or ELN tree yet, and
+	# the fedora repo file is wrong for an EL-macro buildroot. Name it here
+	# rather than let the digit test produce a URL known to 404 — the same
+	# correction #1555 made for hummingbird's datestamp.
+	echo "INFO: tailscale publishes no ELN/EL11 repo yet; skipping on wahoo."
+elif [[ $IS_FEDORA == true || ${IS_HUMMINGBIRD:-false} == true ]]; then
 	ts_repo_url="https://pkgs.tailscale.com/stable/fedora/tailscale.repo"
 elif [[ "$local_ts_ver" =~ ^[0-9]{1,2}$ ]]; then
 	# An EL major is one or two digits. A datestamp is not.

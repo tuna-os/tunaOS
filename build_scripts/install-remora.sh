@@ -14,18 +14,30 @@
 # The binary is static Go and works on every base (dnf/zypper/pacman/apt),
 # so there is nothing distro-specific to guard here.
 #
-# The version is pinned for reproducible image builds. Deliberately NO
-# `# renovate:` marker: the custom manager for build_scripts/*.sh would bump
-# REMORA_VERSION without touching the checksums below, and the sha256 check
-# would then fail every build.
+# The version is pinned for reproducible image builds, and the binary is
+# checked against a pinned sha256 so a re-published release cannot change what
+# lands in the image without someone noticing.
+#
+# Renovate bumps REMORA_VERSION but CANNOT bump the checksums below: the
+# custom manager for build_scripts/*.sh captures the version line only. That
+# used to be the reason this file carried no `# renovate:` marker at all --
+# with the marker, a bump would leave the checksums pointing at the previous
+# release and every build would fail the sha256 check.
+#
+# scripts/check-download-checksums.py now closes that gap: it verifies these
+# checksums against the pinned release's published checksums.txt, and runs on
+# every pull request that touches this file. A Renovate bump with stale
+# checksums fails that check and cannot auto-merge; `--fix` rewrites them.
+# So the marker is safe to have, and the pin no longer silently rots.
 
 set -xeuo pipefail
 
-REMORA_VERSION="v0.2.0"
+# renovate: datasource=github-releases depName=tuna-os/remora
+REMORA_VERSION="v0.4.2"
 REMORA_ARCH="$(uname -m | sed 's/x86_64/amd64/;s/aarch64/arm64/')"
 case "${REMORA_ARCH}" in
-amd64) REMORA_SHA256="39c774ab76dbdbf95ff11a32e5083e24fa01f88804161c24998c0a21e368175a" ;;
-arm64) REMORA_SHA256="3454ac72a376c974f433b5c8db14470d908dd43fc3ddc27e19e47e70c5ab2c3b" ;;
+amd64) REMORA_SHA256="87e2bb91e532da8c6f2fb426ae0fccc6cd3f6c04acd3ff3e421f5e0ed30a2570" ;;
+arm64) REMORA_SHA256="2e248ca3e2ec855113ca8e0e7d4857a1ef6f6f3ad77a023ad037a51052f602f8" ;;
 *)
 	echo "ERROR: unsupported Remora architecture: ${REMORA_ARCH}" >&2
 	exit 1
@@ -44,9 +56,10 @@ rm "$REMORA_DOWNLOADS_DIR/remora"
 
 # Treat the downloaded binary as an image contract, not merely a successful
 # HTTP transfer. This catches wrong-architecture assets, truncated releases,
-# and release drift before an image can be published. Remora v0.2.0 has no
-# version subcommand, so its pinned release checksum proves the version while
-# this smoke test proves the installed binary can execute on the target arch.
+# and release drift before an image can be published. Remora still has no
+# version subcommand as of v0.4.0, so its pinned release checksum proves the
+# version while this smoke test proves the installed binary can execute on the
+# target arch.
 remora --help | grep -Fq 'Usage: remora <command> [args]'
 install -d /usr/share/tunaos/experience-contracts
 printf 'version=%s\nvalidated_at_build=true\n' "${REMORA_VERSION}" \

@@ -21,6 +21,15 @@ setup() {
   ORIG_SUDO_USER="${SUDO_USER:-}"
 }
 
+@test "backend library is side-effect free when sourced" {
+  local before="$PWD"
+  source "${BATS_TEST_DIRNAME}/../../scripts/lib/backend.sh"
+
+  [ "$PWD" = "$before" ]
+  declare -F probe_image_backend
+  [ -n "$TUNAOS_BACKEND_PROBE_SH" ]
+}
+
 teardown() {
   export platform="${ORIG_PLATFORM}"
   export GITHUB_REPOSITORY_OWNER="${ORIG_GITHUB_REPOSITORY_OWNER}"

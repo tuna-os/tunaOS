@@ -33,6 +33,20 @@ images:
     path: ublue-os/brew
     tag: latest
 
+  # Bluefin's GNOME 51 for Hummingbird as a dnf repository in an OCI image.
+  # Digest pinned in image-versions.yaml (see the note there).
+  utah-packages:
+    registry: ghcr
+    path: projectbluefin/utah-packages
+    tag: latest
+
+  # tunaOS' GNOME 50 for EL10 as a dnf repository in an OCI image.
+  # Digest pinned in image-versions.yaml (see the note there).
+  gnome50-el10-packages:
+    registry: ghcr
+    path: tuna-os/tunaos-packages
+    tag: gnome50-el10-x86_64
+
   akmods:
     registry: ghcr
     path: ublue-os

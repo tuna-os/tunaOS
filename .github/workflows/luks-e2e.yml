@@ -123,6 +123,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install yq
         run: |
@@ -263,6 +265,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       # The absolute time by which iso-e2e.sh must have given up, so that the
       # job ends by failing a step rather than by hitting `timeout-minutes`
@@ -400,11 +404,35 @@ jobs:
           sudo chmod +x /usr/local/bin/yq
           yq --version
 
+      # The runner image ships podman 5.8.4, which wedges committing a
+      # live-customized rootfs (#1893). Every ISO build needs the Kubic one
+      # instead; this job ran `just iso` without it. Necessary, not
+      # sufficient -- iso-e2e.yml installs this and its commit still exceeded
+      # tacklebox's 600s bound on a GitHub-hosted runner (job 97638514487) --
+      # but a build without it cannot finish at all.
+      - name: setup working podman
+        run: |
+          set -euo pipefail
+          sudo install -d /etc/apt/keyrings
+          curl -fsSL https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04/Release.key \
+            | gpg --dearmor | sudo tee /etc/apt/keyrings/kubic.gpg >/dev/null
+          echo 'deb [signed-by=/etc/apt/keyrings/kubic.gpg] https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04/ /' \
+            | sudo tee /etc/apt/sources.list.d/kubic.list
+          sudo apt-get update -qq
+          sudo apt-get remove -y podman conmon crun || true
+          sudo apt-get install -y podman
+          for p in /usr/local/bin/podman /usr/local/sbin/podman; do
+            if [ -e "$p" ] && ! dpkg -S "$p" >/dev/null 2>&1; then
+              sudo rm -f "$p"
+            fi
+          done
+          hash -r
+
       - name: Log in to GHCR
         timeout-minutes: 5
         run: |
           echo "${{ env.GITHUB_TOKEN }}" | \
-            podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+            podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
 
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -458,7 +486,12 @@ jobs:
           # 2026-09-02.
         run: |
           export TACKLEBOX_FROM_SOURCE=1
-          just iso "${VARIANT}" "${FLAVOR}" ghcr "" 1
+          # Root, not bare — same reason as installer-screenshots.yml: on a
+          # GitHub-hosted runner the rootless commit exceeds tacklebox's
+          # hardcoded 600s bound, while the root path completes in ~133s.
+          # Identical arguments to installer-smoke.yml's invocation, which is
+          # the one measured green on this runner.
+          sudo -E env "PATH=$PATH" just iso "${VARIANT}" "${FLAVOR}" ghcr "" 1
           ISO=$(find .build -maxdepth 3 -name "*.iso" | head -1)
           [[ -n "$ISO" ]] || { echo "::error::dev ISO not produced"; exit 1; }
           echo "ISO_PATH=${ISO}" >> "$GITHUB_ENV"
@@ -571,12 +604,17 @@ jobs:
 
       - name: Collect evidence
         if: always()
+        env:
+          EVIDENCE_ARCH: amd64
+          EVIDENCE_STATUS: ${{ job.status }}
         run: |
           sudo chown -R "$USER:$(id -gn)" luks-out 2>/dev/null || true
           for ppm in luks-out/*.ppm; do
             [[ -f "$ppm" ]] || continue
             convert "$ppm" "${ppm%.ppm}.png" || true
           done
+          scripts/evidence-bundle.sh \
+            "${{ matrix.variant }}:${{ matrix.flavor }}" install luks-out
 
       - name: Upload LUKS evidence
         if: always()
@@ -594,6 +632,7 @@ jobs:
             luks-out/installed-serial.log
             luks-out/luks-evidence.log
             luks-out/*.png
+            evidence/${{ matrix.variant }}/${{ matrix.flavor }}/amd64/
             # The install timelapse (scripts/record-timelapse.sh). Recording it
             # and then not collecting it is how the first two cells that ran
             # with the recorder produced nothing to look at: the frames were

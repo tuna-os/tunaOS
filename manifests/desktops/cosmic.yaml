@@ -119,6 +119,28 @@ packages:
       - cosmic-greeter
       - greetd
       - xdg-desktop-portal-cosmic
+      # Software Vulkan (lavapipe). Not a dependency of anything, so it is
+      # only present if asked for by name.
+      #
+      # This is for the INSTALLER SMOKE path, which runs on hosted runners
+      # with no GPU. There the guest has a render node (run 32681262659 read
+      # /dev/dri and found renderD128) but the kernel reports `-virgl`, so
+      # Mesa routes GL through zink -- and zink with no Vulkan ICD installed
+      # cannot pick a device:
+      #   MESA: error: ZINK: failed to choose pdev
+      #   libEGL warning: egl: failed to create dri2 screen
+      # cosmic-comp then holds a Wayland connection with no surface. On real
+      # hardware it survived by falling back to Vulkan llvmpipe; this is that
+      # fallback, packaged. Also the right thing for anyone running cosmic in
+      # a plain VM.
+      #
+      # It is NOT why the `boots` gate is red for cosmic. That gate asks for
+      # a g4dn GPU runner and the account's vCPU limit for that instance
+      # bucket is 0, so the runner never launches and QEMU never starts:
+      #   Failed to launch runner: failed to create fleet:
+      #   VcpuLimitExceeded ... AllowedInstanceTypes:["g4dn*"]
+      # No package fixes a quota of zero (tuna-os/tunaOS#2123).
+      - mesa-vulkan-drivers
 
   fedora:
     packages:
@@ -155,6 +177,9 @@ packages:
       - greetd
       - xdg-desktop-portal-cosmic
       - pop-icon-theme
+      # Software Vulkan (lavapipe) -- see the apt list's note above for why
+      # this must be named rather than pulled in transitively.
+      - mesa-vulkan-drivers
 
   # ── Hummingbird (Fedora rebuild) ───────────────────────────────────
   # The cheapest real win in the matrix (#1755 §4): the rebuild repo carries
@@ -181,7 +206,7 @@ packages:
   hummingbird:
     repos:
       - name: tunaos-hummingbird
-        baseurl: https://repo.tunaos.org/hummingbird/20251124-x86_64/
+        baseurl: https://repo.tunaos.org/hummingbird/20251124-$basearch/
         priority: 5
     packages:
       # See the fedora list's dconf note — needed here for real (the rebuild
@@ -211,7 +236,61 @@ packages:
       - greetd
       - xdg-desktop-portal-cosmic
       - pop-icon-theme
+      # Software Vulkan (lavapipe) -- see the apt list's note above for why
+      # this must be named rather than pulled in transitively.
+      - mesa-vulkan-drivers
 
+  # ── Wahoo (Fedora ELN) ─────────────────────────────────────────────────
+  # ELN carries COSMIC natively, in eln-extras, at 1.6.0 — and that is the
+  # headline finding of the whole lane so far, not just a convenience.
+  # `cosmic.el10` above sources COSMIC from COPR `yselkowitz/cosmic-epel`
+  # (twice) and fprintd from repo.tunaos.org, both tier-3 migration
+  # inventory under PACKAGE-SOURCING.md. On this base neither is needed:
+  # the compose ships cosmic-session/comp/panel/files/greeter/settings and
+  # xdg-desktop-portal-cosmic, and `fprintd-1.94.5-6.eln158` resolves from
+  # eln-appstream, so the aarch64 fprintd gap that pinned cosmic off arm64
+  # on EL10 (tunaOS#732) does not reproduce here either.
+  #
+  # Measured with `dnf repoquery` against the pinned eln-bootc digest on
+  # 2026-08-26: 23 of 24 present. If EL11 keeps this, the COSMIC COPR
+  # dependency retires itself at the EL10 -> EL11 transition rather than
+  # needing a Tideforge migration (#2048, #2049).
+  #
+  # NO copr: block here, deliberately — ELN needs none, and a new one
+  # fails scripts/check-package-sources.py.
+  eln:
+    packages:
+      - dconf
+      - cosmic-session
+      - cosmic-comp
+      - cosmic-panel
+      - cosmic-app-library
+      - cosmic-applets
+      - cosmic-bg
+      - cosmic-files
+      - cosmic-idle
+      - cosmic-launcher
+      - cosmic-notifications
+      - cosmic-osd
+      - cosmic-randr
+      - cosmic-screenshot
+      - cosmic-settings
+      - cosmic-settings-daemon
+      - cosmic-term
+      - cosmic-workspaces
+      - cosmic-greeter
+      - cosmic-icon-theme
+      - greetd
+      - xdg-desktop-portal-cosmic
+      - pop-icon-theme
+      # Software Vulkan (lavapipe) -- see the apt list's note above for why
+      # this must be named rather than pulled in transitively.
+      - mesa-vulkan-drivers
+    # Absent from ELN on 2026-08-26 (cosmic-icons likewise, and it is not
+    # in the fedora list either). Best-effort so it lands by itself when
+    # the compose grows it — tracked in tunaos-packages.
+    optional:
+      - cosmic-wallpapers
   el10:
     # cosmic-greeter hard-requires fprintd-pam, which CentOS Stream 10 only
     # builds for x86_64 -- that gap is why aarch64 cosmic was pinned off in
@@ -266,6 +345,9 @@ packages:
       # the login flow. Both are in EL10 appstream, so require (not best-effort).
       - gnome-keyring
       - gnome-keyring-pam
+      # Software Vulkan (lavapipe) -- see the apt list's note above for why
+      # this must be named rather than pulled in transitively.
+      - mesa-vulkan-drivers
     optional:
       - brightnessctl
       - playerctl
@@ -338,6 +420,11 @@ packages:
     - wl-clipboard
     - Mesa-dri
     - Mesa-libEGL1
+    # Software Vulkan (lavapipe). Not a dependency of anything, so it is
+    # only present if asked for by name -- which is why every cosmic cell
+    # that has been booted fails on GPU-less CI while gnome starts on the
+    # See the RPM lists above for the full zink/lavapipe note.
+    - libvulkan_lvp
 
   # ── Emerge (Gentoo) ────────────────────────────────────────────────
   # DELIBERATELY ABSENT — no emerge section at all, same treatment as

@@ -88,6 +88,13 @@ setup() { command -v yq >/dev/null || skip "yq not available"; }
 		# Not from the PPA. Ubuntu's own archive ships greetd, which is
 		# why niri.sh installs it straight from there too.
 		greetd
+		# Also not from the PPA: Mesa's software Vulkan driver
+		# (lavapipe), added with the cosmic/niri Vulkan change. Measured
+		# 2026-09-05 against packages.ubuntu.com for grouper's own base
+		# and its neighbours -- resolute, questing and noble all return
+		# 200 for mesa-vulkan-drivers. grouper is the only apt variant
+		# that declares cosmic, and it is ubuntu:resolute.
+		mesa-vulkan-drivers
 	)
 	local p known fail=0
 	while read -r p; do

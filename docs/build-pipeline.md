@@ -56,15 +56,17 @@ The single build workflow for all variants. Replaces the old per-variant `build-
   6. **Artifacts** (`build_artifacts_s2`, `build_artifacts_s3`, `build_artifacts_s4`): per-stage artifact jobs build ISOs (via `just iso-tacklebox`) and QCOW2s for combo cells where `build_iso: true` / `build_qcow2: true`. Each stage's artifacts depend only on that stage's image builds.
 - **Key Features**:
   - **DAG enforcement**: jobs use `needs` to enforce stage ordering; within a stage, `fail-fast: false`
-  - **Multi-platform**: `linux/amd64`, `linux/amd64/v2`, `linux/arm64` (per-variant; skipjack/bonito omit v2)
-  - **Cosign signing + SBOM** for all published images
+  - **Multi-platform artifacts**: `linux/amd64` and `linux/arm64` ISO/QCOW2 matrices per stage for multi-arch variants (#1378)
+  - **Cosign signing + SBOM** with transient error retry and deadline backoff for all published images (#1377)
   - PR builds limited to gnome flavor, single arch — keeps PR CI fast (~25 min)
 
 ### 2. Pull Request Checks
 
 PRs trigger `build-variant.yml` with `variant=all`, `flavor=gnome`. Only stage 1 runs (PR path short-circuit). The reusable workflow builds the gnome image and pushes it as a non-published test artifact.
 
-Legacy `build.yml` is archived at `.github/workflows/archive/build.yml`.
+The legacy monolithic `build.yml` (and its `generate-release.yml` companion)
+were removed in 2026-09; `git log --all -- .github/workflows/archive/` has
+them if the history is needed.
 
 ---
 

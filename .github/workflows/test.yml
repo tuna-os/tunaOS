@@ -7,7 +7,13 @@ on:
       - 'build_scripts/**'
       - '.github/scripts/**'
       - '.github/changelogs.py'
+      # The CI contract (tests/test_ci_contract.py) proves every green gate
+      # exists and runs; it has to re-run when the gates themselves move.
+      - '.github/workflows/**'
+      - '.github/green-criteria.yml'
+      - 'docs/CI_SPEC.md'
       - 'Justfile'
+      - 'just/**'
   push:
     branches: [main]
   workflow_dispatch:
@@ -26,9 +32,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Setup TunaOS Build Environment
-        uses: projectbluefin/actions/bootc-build/setup-runner@eb4c546389f19ad9e42f1af052623de73c620ebb # v1 as of 2026-07-02
+        uses: projectbluefin/actions/bootc-build/setup-runner@1ca03ea1f681c17fd104870aa154f8b5fd34e1d9 # v1 as of 2026-07-02
         with:
           storage-backend: ""
           update-podman: "false"

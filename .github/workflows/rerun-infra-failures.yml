@@ -169,9 +169,44 @@ jobs:
             exit 0
           fi
           echo "Re-running ${INFRA_JOBS}."
+
+          # Re-running one job re-runs its whole workflow run, so every
+          # sibling job in that run answers 403 "The workflow run containing
+          # this job is already running" -- benign, and the normal case when
+          # a run loses several jobs to one outage. Under `set -e` the first
+          # such 403 killed the step: run 33623184875 re-ran ONE of 40
+          # classified jobs and then exited 1, leaving the other 39 red on a
+          # fault it had already correctly diagnosed. Count outcomes instead,
+          # and fail only on a refusal that is not that one.
+          requested=0
+          covered=0
+          refused=0
           for job_id in ${INFRA_JOBS}; do
-            echo "  re-running job ${job_id}"
-            gh api --method POST "repos/${REPO}/actions/jobs/${job_id}/rerun"
+            if out=$(gh api --method POST "repos/${REPO}/actions/jobs/${job_id}/rerun" 2>&1); then
+              echo "  job ${job_id}: re-run requested"
+              requested=$((requested + 1))
+            elif grep -q "is already running" <<<"$out"; then
+              echo "  job ${job_id}: already covered by another re-run"
+              covered=$((covered + 1))
+            else
+              echo "  job ${job_id}: re-run REFUSED: ${out}"
+              refused=$((refused + 1))
+            fi
           done
-          echo "Re-run requested for job(s): ${INFRA_JOBS}." \
-            >> "$GITHUB_STEP_SUMMARY"
+
+          {
+            echo "### Infra re-run"
+            echo
+            echo "- requested: ${requested}"
+            echo "- already covered by another re-run: ${covered}"
+            echo "- refused: ${refused}"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if ((refused > 0)); then
+            echo "::error::${refused} re-run request(s) were refused for a reason other than an in-flight run." >&2
+            exit 1
+          fi
+          if ((requested == 0 && covered == 0)); then
+            echo "::error::no re-run was requested or covered; nothing was recovered." >&2
+            exit 1
+          fi

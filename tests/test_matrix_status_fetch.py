@@ -194,3 +194,67 @@ class ApiOutageCurrentlyDegradesSilently(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class InstallerSmokeIgnoresTheIsoBuildJobs(unittest.TestCase):
+    """installer-smoke.yml has TWO jobs per cell and both carry a colon.
+
+        build-iso:  name: build ${{ matrix.variant }}:${{ matrix.flavor }}
+        smoke:      name: ${{ matrix.variant }}:${{ matrix.flavor }}
+
+    The selector was a bare `r":"`, which matched both — so every ISO BUILD
+    result was filed as a smoke result under a phantom variant literally
+    named "build yellowfin".
+
+    The 2026-08-24 refresh published it: a `build yellowfin` row reading
+    all-✅ sat directly above the real `yellowfin` row reading all-❌, under
+    a summary line that said "0 of those pass".
+
+    That is the worst shape of wrong for this document. The build jobs really
+    do pass, so the phantom row looked exactly like the good news a reader
+    wants on the one axis that has none — and the two rows disagreed on the
+    same page without either being marked suspect.
+    """
+
+    SELECTOR = r"^(?!build )[^:]+:"
+
+    def _names(self, names):
+        runs = [{"databaseId": 1, "createdAt": "2026-08-24T00:00:00Z",
+                 "status": "completed"}]
+        jobs = {"1": [{"name": n, "conclusion": "success"} for n in names]}
+
+        def fake(*args):
+            if args[0] == "run" and args[1] == "list":
+                return runs
+            if args[0] == "run" and args[1] == "view":
+                return {"jobs": jobs.get(args[2], [])}
+            return None
+
+        with mock.patch.object(gms, "gh_json", side_effect=fake):
+            return gms.latest_results("installer-smoke.yml", self.SELECTOR)
+
+    def test_a_build_job_is_not_a_smoke_result(self):
+        got = self._names(["build yellowfin:gnome", "yellowfin:gnome"])
+        self.assertIn("yellowfin:gnome", got)
+        self.assertNotIn("build yellowfin:gnome", got)
+        self.assertEqual(len(got), 1)
+
+    def test_the_selector_still_admits_every_real_cell(self):
+        """Guards the fix itself: a pattern that excluded everything would
+        also drop the phantom row, and would report every cell as never
+        tested — which reads as a coverage collapse, not as a bug."""
+        real = ["yellowfin:gnome", "albacore:kde", "hummingbird:base",
+                "skipjack:cosmic-nvidia", "bonito-rawhide:niri"]
+        got = self._names(real + [f"build {n}" for n in real])
+        self.assertEqual(sorted(got), sorted(real))
+
+    def test_jobs_without_a_cell_shape_are_ignored(self):
+        got = self._names(["generate-matrix", "Publish installer screenshots"])
+        self.assertEqual(got, {})
+
+    def test_the_generator_uses_this_selector(self):
+        """The tests above prove the pattern; this proves it is the one
+        actually wired to installer-smoke.yml."""
+        source = Path(gms.__file__).read_text(encoding="utf-8")
+        self.assertIn(f'latest_results("installer-smoke.yml", r"{self.SELECTOR}")',
+                      source)

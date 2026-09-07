@@ -12,9 +12,9 @@ just fix && just check
 
 ## Contributor onboarding
 
-New here? Start with a **[good first issue](https://github.com/tuna-os/docs/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** — a curated, maintainer-sized task covering documentation parity, a small script fix, or test coverage. Before starting, leave a comment saying you are taking the issue so the work is not duplicated. The current pool and census are tracked in the [Hacktoberfest 2026 contributor plan](docs/HACKTOBERFEST-2026.md); new bounded tasks are labelled `good first issue` during the [weekly contributor triage](#weekly-contributor-triage) below.
+New here? Start with an **[org-wide good first issue](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** — a curated, maintainer-sized task covering documentation parity, a small script fix, or test coverage. Before starting, leave a comment saying you are taking the issue so the work is not duplicated. The current pool and census are tracked in the [Hacktoberfest 2026 contributor plan](docs/HACKTOBERFEST-2026.md); new bounded tasks are labelled `good first issue` during the [weekly contributor triage](#weekly-contributor-triage) below.
 
-The current starter runway lives in the org-wide **[good first issue](https://github.com/tuna-os/docs/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** pool, mostly in `tuna-os/docs` (docs-parity and guide tasks — e.g. desktop quick-starts, verification guides, cheat sheets). These tasks are intentionally independent of the image build pipeline and are curated for first-time contributors. If one is claimed or closed, pick another bounded task from the same search.
+The current starter runway lives in the **[org-wide good first issue](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** pool, mostly in `tuna-os/docs` (docs-parity and guide tasks — e.g. desktop quick-starts, verification guides, cheat sheets). These tasks are intentionally independent of the image build pipeline and are curated for first-time contributors. If one is claimed or closed, pick another bounded task from the same search.
 
 ### Fork → PR loop
 
@@ -25,13 +25,15 @@ The current starter runway lives in the org-wide **[good first issue](https://gi
 5. Open a PR against `tuna-os/tunaos:main`, link the issue with `Fixes #NNN`, and include the checks you ran.
 6. Keep the branch available while review is in progress; follow-up fixes can be pushed to the same PR.
 
-You do not need write access to the upstream repository. GitHub's fork-based PR flow is the normal path for external contributors. If CI fails, include the failing job and a short reproduction in the PR rather than silently retrying it.
+You do not need write access to the upstream repository. GitHub's fork-based PR flow is the normal path for external contributors. If CI fails, include the failing job and a short reproduction in the PR rather than silently retrying it. If a push is rejected because the GitHub App lacks `workflows` permission, follow the [workflow publishing runbook](docs/CI-WORKFLOW-PUBLISHING.md); repository workflow YAML cannot grant that App-level permission.
 
 For the Hacktoberfest 2026 backlog, see the [contributor plan](docs/HACKTOBERFEST-2026.md) for current candidates, acceptance standards, and event dates.
 
+Before drafting a guide, a campaign post, or anything that names an image reference, a shipped tool, hardware support, or readiness, work through the [pre-write claim checklist](docs/CONTENT-CLAIM-CHECKLIST.md). Five guide PRs in a row were closed for the same two defects: an image reference the project does not publish, and toolchains the images do not ship. The checklist is those defects written down.
+
 Ways to contribute without touching the build pipeline:
 
-- **Docs & guides** — the [docs site](https://github.com/tuna-os/docs) has its own `good first issue` backlog and takes content PRs for guides, FAQs, and variant pages
+- **Docs & guides** — the [docs site](https://github.com/tuna-os/docs) has its own `good first issue` backlog and takes content PRs for guides, FAQs, and variant pages; run the [claim checklist](docs/CONTENT-CLAIM-CHECKLIST.md) before you write
 - **Community** — help triage [open issues](https://github.com/tuna-os/tunaOS/issues), answer questions in [Matrix](https://matrix.to/#/%23tunaos:reilly.asia), or improve the [adopters list](ADOPTERS.md) if your org uses TunaOS
 - **Labels** — issues tagged `help wanted` are explicitly open for external contribution
 
@@ -54,6 +56,32 @@ This is a lightweight queue-management commitment, not a promise of immediate re
 just fix     # format shell scripts and Justfile
 just check   # shellcheck, yamllint, actionlint
 ```
+
+`just ci` runs what the PR gate runs — `check`, the CI contract, and every
+unit suite — so a green `just ci` locally is a green PR, minus the
+scheduled build matrix. The rest of the contributor contract:
+
+| Command | What it is |
+|---|---|
+| `just setup` | install the tools the checks and tests need, print versions |
+| `just test-fast` | the Python suites only, stop at the first failure |
+| `just test` | bats + pytest, same as CI |
+| `just test-contract` | every green gate exists, is reachable, meets its freshness SLA |
+| `just test-random [seed]` | the suites in a seeded random order (the nightly lane) |
+| `just test-cell <variant> <flavor>` | the desktop contract against one published image, as the nightly sweep runs it |
+| `just test-e2e <iso>` | boot an ISO under QEMU and assert the live environment reaches readiness |
+
+## Every incident becomes a regression test
+
+A bug that let an unusable or wrongly-promoted image ship is not fixed until a
+test proves the old failure mode cannot silently recur. Put that test in
+[`tests/regressions/`](tests/regressions/README.md), named after the issue
+(`test_issue_<number>_<what_must_not_recur>.py`), with a docstring that cites
+the issue and the run or log that measured the failure. The seed example is
+#858 (marlin:kde shipped with no Wayland session): the regression test runs
+the desktop contract's own check against a filesystem with no session file
+and holds that it fails. `tests/test_regression_convention.py` enforces the
+naming.
 
 ## Building Images
 

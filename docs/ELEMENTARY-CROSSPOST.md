@@ -54,6 +54,29 @@ elementary users about what a Pantheon-on-Ubuntu should feel like.
 
 - **No external contact without maintainer approval** (outreach policy Rule 10)
 - On approval, route the pitch through the maintainer (hanthor)
-- Track pickup in ADOPTION-METRICS.md funnel tier 1 (#1311)
-- elementary OS is a warm partner (ADOPTERS.md row added in #1356) — this is
+- Check the destination's current submission rules, attribution requirements,
+  and link policy immediately before sending; the maintainer owns the final
+  submission and any follow-up
+- Track pickup, referral traffic, and the Gurnard/Pantheon feedback response in
+  ADOPTION-METRICS.md funnel tier 1 (#1311)
+- elementary OS is listed in ADOPTERS.md's **Ecosystem & Downstream Projects**
+  table as a desktop relationship, not as a production adopter; this is warm
   ecosystem engagement, not cold outreach
+
+## Approval and outcome record
+
+Before sending, the maintainer should confirm:
+
+- [ ] Gurnard's experimental status, Ubuntu 24.04 base, tested architectures,
+      and current download URL are accurate.
+- [ ] The pitch does not imply elementary OS endorses, supports, or uses
+      TunaOS; it describes a TunaOS community proposal.
+- [ ] The [Pantheon feedback tracker](https://github.com/tuna-os/tunaos/issues/1469)
+      is linked for technical reports.
+- [ ] The destination and date are recorded in the monthly adoption snapshot.
+
+After sending, record the submission URL, publication date, referral or page
+views when available, and any pickup or moderator response. Treat referral
+traffic as directional: it does not prove installations or elementary OS
+endorsement. If the pitch is declined or receives no response, record that
+without escalating or repeatedly contacting the destination.

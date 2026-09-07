@@ -79,6 +79,10 @@ packages:
     - flatpak
     - adw-gtk-theme
     - papirus-icon-theme
+    # Software Vulkan (lavapipe) + ICD loader; Arch splits both out of `mesa`.
+    # See niri.yaml for why this is the test rather than the fix.
+    - vulkan-icd-loader
+    - vulkan-swrast
 
   cachyos:
     repos:

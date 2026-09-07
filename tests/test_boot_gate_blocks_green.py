@@ -77,7 +77,20 @@ def test_readme_updater_scores_boots_with_the_same_scope() -> None:
         "the README must read the boots scope from green-criteria.yml, not "
         "hardcode it — the two scoreboards may never disagree"
     )
-    assert '"boots,builds"' in body, "guard must accept the graduated set"
+    # The script scores `builds` and `boots` itself and takes everything else
+    # from gen-matrix-status.py's count. It used to carry a literal
+    # "boots,builds" whitelist and exit 1 on anything else, which froze the
+    # README block for two weeks after `desktop` and `no_silent_omissions`
+    # graduated on 2026-08-19. What matters is the pair of behaviours, not
+    # the literal.
+    assert "builds | boots)" in body, (
+        "the two criteria this script can measure must be named where it "
+        "decides whether it can score the blocking set itself"
+    )
+    assert "composite-green" in body, (
+        "a blocking set this script cannot score must be sourced from "
+        "docs/MATRIX-STATUS.md, not refused"
+    )
     assert "gate=" in body
 
 

@@ -32,6 +32,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: ublue-os/container-storage-action@dc1f4c8f17b672069e921f001132f7cf98a423a6 # main as of 2026-02-11
 
@@ -41,7 +43,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends just qemu-utils podman
 
       - name: Log in to GHCR
-        run: echo "${{ env.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+        run: echo "${{ env.GITHUB_TOKEN }}" | podman login ghcr.io -u "${GITHUB_ACTOR}" --password-stdin
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -59,6 +61,8 @@ jobs:
         with:
           name: gdm-bench-base-qcow2
           path: base.qcow2
+          # Already-compressed disk image: level 6 spends minutes for ~0%.
+          compression-level: 0
           retention-days: 1
 
   benchmark:
@@ -87,6 +91,8 @@ jobs:
             cpus: 4
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Enable KVM group permissions
         run: |
@@ -106,13 +112,15 @@ jobs:
 
       - name: Run benchmark (${{ matrix.label }})
         id: bench
+        env:
+          BENCH_TIMEOUT: ${{ inputs.timeout || '300' }}
         run: |
           RESULT=$(sudo ./scripts/bench-gdm-paint.sh base.qcow2 \
             --label "${{ matrix.label }}" \
             --machine "${{ matrix.machine }}" \
             --vga "${{ matrix.vga }}" \
             --cpus "${{ matrix.cpus }}" \
-            --timeout "${{ inputs.timeout || '300' }}" \
+            --timeout "$BENCH_TIMEOUT" \
             --output-dir bench-out)
           sudo chown -R "$USER:$(id -gn)" bench-out || true
           echo "$RESULT" | tee "bench-out/${{ matrix.label }}.json"

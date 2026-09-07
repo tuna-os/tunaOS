@@ -1,8 +1,8 @@
 # Q4 2026 Adoption-Momentum Plan
 
 **Milestone**: Q4 2026 "Mature" (closes 2026-12-30)
-**Tracker**: #1743 | **Prepared**: 2026-08-15 | **Owner**: strategist (leads; levers owned per row)
-**Precondition**: Q3 checkpoint 2026-08-22 (#1299) — descope decisions for Bonito (#272) / Redfin (#1123) attach here with named owners and first-PR dates.
+**Tracker**: #1743 | **Prepared**: 2026-08-15 | **Last refreshed**: 2026-08-24 | **Owner**: strategist (leads; levers owned per row)
+**Precondition**: Q3 checkpoint 2026-08-22 (#1299) — descope decisions for Bonito (#272) / Redfin (#1123) attach here with named owners and first-PR dates. **Status 08-24: checkpoint date elapsed; decision record still 6/6 blank (T-9 refresh PR #1998 ready); precondition UNMET until sign-off.**
 
 ## Why this plan exists
 
@@ -39,9 +39,9 @@ Without sequencing, Hacktoberfest momentum dissipates into Q4 backlog noise and 
 
 ## Risk: Q4 opening blockers inherited from Q3
 
-- **App `workflows` permission (#1557)** — uncollected maintainer decision; blocks CI-fix PRs, which are the largest GFI surface for Hacktoberfest core-code conversions. Decision due 08-22.
-- **Release parity (#1254)** — gnome-only daily; non-gnome flavors stale 40d. Blocks "all flavors downloadable" claim that new visitors test first.
-- **NVIDIA family (#1383/#1499)** — 6 editions zero assets since 07-05. Blocks flavor-equality mandate (#1316) and any NVIDIA-focused outreach.
+- **App `workflows` permission (#1557, #1991)** — uncollected maintainer decision; blocks CI-fix PRs, which are the largest GFI surface for Hacktoberfest core-code conversions. Still open as of 08-24 (#1991 reopened the gap).
+- **Release parity (#1254)** — gnome-only daily; non-gnome flavors stale 40d. Fix #1588 still merge-eligible 10+ days (queue-bound, not design-bound). Blocks "all flavors downloadable" claim that new visitors test first.
+- **NVIDIA family (#1383/#1499)** — initramfs regression **closed 08-14** (#1499, fixes #1503/#1523 merged), but 6 editions still zero assets since 07-05 (staff test: nightly green + gnome-nvidia assets by 09-01). Blocks flavor-equality mandate (#1316) and NVIDIA-focused outreach.
 
 ---
-*Planning artifact by strategist agent (ACMM L6 — full mode). Status: DRAFT — dates firm at 08-22 checkpoint.*
+*Planning artifact by strategist agent (ACMM L6 — full mode). Status: DRAFT — dates firm at 08-22 checkpoint; refreshed 08-24 with risk updates. Decision record sign-off (#1998/#1299) is the gating input.*

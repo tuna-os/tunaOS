@@ -337,7 +337,7 @@ Same shape as yellowfin. Additionally:
 | desktops | new upstream skew class 08-18: `libnma-gtk4` still requires `libnm.so.0` after Rawhide's NetworkManager dropped it — nothing here can fix it | heals when Rawhide rebuilds libnma; rolling standard |
 | taxonomy | rolling variant, structurally exposed to skew (#1762) | count under rolling standard |
 
-### hummingbird (Fedora rebuild, experimental) — 1/5 build
+### hummingbird (hardened rolling fork of Fedora Rawhide, experimental) — 1/5 build
 The fully-diagnosed one: **#1755**.
 | area | state | action |
 |---|---|---|
@@ -348,6 +348,34 @@ The fully-diagnosed one: **#1755**.
 | all arm64 desktops | resolved 08-18 via option A: the aarch64 repo now publishes (1358-pkg seed vs x86_64's 8100 — cosmic 8/22, gnome 5/52, no shell/gdm/compositor measured live) but cannot carry a desktop yet, so desktop flavors are pinned `linux/amd64` in build-config with the re-add condition tested | re-add arm64 per flavor when the aarch64 index carries that desktop's manifest set |
 | dconf branding failure | **deliberately left failing** — guarding it would green cells that contain no desktop | fix only after manifest sections exist |
 | convergence | tunaos-packages seed grew for the first time since 08-09 (7170→7673); reserve budget stops *between* tiers (tunaos-packages#401), cosmic/niri/kde runs lost to the 6h ceiling | in-loop deadline check (#401), tier failures layer-00/01/02/07/10/11 to classify (#402/#403/#404 candidates) |
+
+### wahoo (Fedora ELN, experimental) — 4/4 build; gnome + kde Gate-green and promoted (08-27)
+New 2026-08-25 (#2042); cosmic + kde added 08-27 (#2103). The EL11
+early-warning lane: ELN is Rawhide sources built with Enterprise Linux
+macros, and its os-release already reads `ID=eln`, `VERSION_ID=11`,
+`ID_LIKE="rhel centos fedora"` — the same 11 c11s and
+almalinux-bootc:11-kitten will carry. Nothing else in the matrix sees EL11.
+
+Dispatch-only (`experimental: true`): 0 nightly cells, 0 ISO cells; its
+incremental scheduled cells are the three desktops in the monthly LUKS sweep.
+
+**It boots.** Run 33041330231 (on a4d86c5) is the first wahoo dispatch to
+reach a Gate at all — earlier runs had it `skipped` — and **gnome and kde
+both passed it**. That retires the "this lane has never booted" caveat these
+docs carried from 08-25, for those two flavors.
+
+| area | state | action |
+|---|---|---|
+| base amd64/arm64 | built, manifested, cosign-signed, **Promoted** | keep |
+| gnome amd64/arm64 | built, **Gate PASSED**, **Promoted** | keep |
+| kde amd64/arm64 | built, **Gate PASSED**, **Promoted**. Plasma 6.7.4 (plasma-desktop, kwin 6.7.4-2, kscreen), sddm 0.21.0 present; `TUNAOS_BRANDING_KDE_OK` | keep |
+| cosmic amd64/arm64 | **built, manifested and signed on both arches** — but **Promote skipped**, held behind a Gate that never ran: the GPU runner failed to launch with AWS `VcpuLimitExceeded` ("current vCPU limit of 0" for the `g4dn*` bucket). Nothing about the image was tested; `cosmic-linux-amd64`/`-arm64` and `cosmic-testing` are on GHCR, the promoted `cosmic` tag is not | **needs a human**: raise the AWS on-demand `g4dn` vCPU limit for the runner account, then re-dispatch. Not a wahoo defect |
+| kde display manager | **measured answer to the question kde.yaml flagged**: the eln `kde-desktop` group makes `plasma-login-manager` (6.7.4) mandatory, and it claims `display-manager.service` first — the build logs `already points at plasmalogin.service; leaving it` — so the greeter is **plasmalogin, not the `sddm` the manifest declares**. The Gate passed on it, so this is an accuracy gap in the manifest, not a breakage | decide whether ELN should override `display_manager` per-section; note `display_manager` is top-level in kde.yaml and shared with el10/fedora, so it must not be changed globally |
+| package measurement | `TUNAOS_WISHLIST_OK misses=0` on every flavor — every strictly-listed name resolved, nothing silently skipped. The pre-merge repodata measurements (cosmic 23/24, kde 16/23) held exactly | re-measure when ELN moves |
+| desktop contract | **waived, not passed, on all three desktops — `missing=1` each, and the 1 is always the codec gap.** `verify-desktop-experience.sh` calls `waive()` on the h264 branch after the ELN marker, so the images are correctly stamped "NOT a verified desktop" while still building | closes only when a codec source exists |
+| codecs | **sharper evidence than the 08-25 note.** The build's own `codec_diag` shows ELN's ffmpeg-free is configured `--disable-decoders` and `--disable-decoder='h264,hevc,vc1,vvc'` — the decoders are **compiled out of libavcodec**, not merely unbacked by the `noopenh264` stub. So even a working openh264 would not restore hevc/vc1/vvc. `TUNAOS_CODEC_GAP` fires on every green build as designed | tunaos-packages#562 — a sourcing decision, not a build task |
+| SBOM attestation | still missing. All three `Attest SBOM` jobs failed on `rekor.sigstore.dev` (14x 502 plus 429s) with the workflow's `SIGSTORE_OUTAGE` classifier — the **third consecutive run**. Upstream, non-blocking; images are cosign-signed | attests itself when Sigstore's write path recovers; do not chase |
+| niri/xfce | **not declared** — ELN ships one package of the Niri stack (`swaybg`) and zero `xfce*` | #2051/#2052; tunaos-packages#559-#562 |
 
 ### sailfin (openSUSE Tumbleweed) — 0/7 → **all five desktops promoted with Gates green (08-18)**
 | area | state | action |

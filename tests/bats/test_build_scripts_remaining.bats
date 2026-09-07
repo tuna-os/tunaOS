@@ -1444,6 +1444,14 @@ STUB
   # published), so =1 there would hard-fail every dnf transaction rather than
   # add a check — same tradeoff contrib/install-gnome49.sh already makes in
   # tunaos-packages.
+  #
+  # One exception, added for utah-packages (tuna-os/tunaos-packages#629): a
+  # repo the manifest marks `unsigned: true` may write gpgcheck=0, and ONLY
+  # if its baseurl is file:// -- content the Containerfile bind-mounted out of
+  # an OCI image pinned by digest in image-versions.yaml, where the digest is
+  # the signature. The loop must refuse `unsigned: true` on any other URL.
+  # tests/test_hummingbird_gnome_consumes_utah_packages.py runs the loop for
+  # real; this test pins the shape of the block.
   local script="${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
   local block
   block="$(awk '/for \(\(i = 0; i < _TD_REPO_COUNT/,/^\tdone$/' "$script")"
@@ -1451,5 +1459,10 @@ STUB
   grep -qF 'echo "gpgcheck=1"' <<<"$block"
   grep -qF 'echo "gpgkey=https://repo.tunaos.org/public.gpg"' <<<"$block"
   grep -qF 'echo "repo_gpgcheck=0"' <<<"$block"
-  ! grep -qF 'echo "gpgcheck=0"' <<<"$block"
+  # gpgcheck=0 exists exactly once, and only under the unsigned branch.
+  [ "$(grep -cF 'echo "gpgcheck=0"' <<<"$block")" -eq 1 ]
+  grep -qF 'if [[ "${_TD_RU}" == "true" ]]; then' <<<"$block"
+  # ...and unsigned is refused unless the baseurl is file://.
+  grep -qF '"${_TD_RU}" == "true" && "${_TD_RB}" != file://*' <<<"$block"
+  grep -qF 'exit 1' <<<"$block"
 }

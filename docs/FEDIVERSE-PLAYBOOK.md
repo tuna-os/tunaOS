@@ -6,7 +6,7 @@
 
 ## Why this exists
 
-Stars are flat (~55) and the Q4 target is ≥100 (ADOPTION-METRICS.md). The
+Stars are flat (~55) and the Q4 target is ≥100 ([ADOPTION-METRICS.md](../ADOPTION-METRICS.md)). The
 immutable-desktop conversation (ublue/Bluefin/Bazzite ecosystem) has a
 disproportionately strong Fediverse presence — distro maintainers, bootc
 contributors, and the r/linux-adjacent crowd overlap heavily with

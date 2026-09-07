@@ -47,11 +47,17 @@ yq_bin() { command -v yq; }
 	[ "$status" -eq 0 ]
 }
 
+# `$basearch`, not a literal arch. install-desktop.sh writes this baseurl
+# VERBATIM into /etc/yum.repos.d, and dnf expands $basearch when it reads the
+# file. Pinned to x86_64 (as this assertion used to require), the aarch64
+# desktop lane pointed at the x86_64 prefix, which serves no aarch64 RPMs --
+# and because these lanes install with --skip-unavailable, that produced a
+# GREEN build carrying no desktop rather than a red one.
 @test "gnome.yaml declares a hummingbird repo at the measured target path" {
 	[ -n "$(yq_bin)" ] || skip "yq not available"
 	run yq -r '.packages.hummingbird.repos[0].baseurl' "$GNOME"
 	[ "$status" -eq 0 ]
-	[[ "$output" == *"hummingbird/20251124-x86_64"* ]]
+	[[ "$output" == *'hummingbird/20251124-$basearch'* ]]
 }
 
 # The assertion this file exists for: the hummingbird package list must BE the
@@ -98,7 +104,7 @@ yq_bin() { command -v yq; }
 	local cosmic_yaml="${REPO_ROOT}/manifests/desktops/cosmic.yaml"
 	run yq -r '.packages.hummingbird.repos[0].baseurl' "$cosmic_yaml"
 	[ "$status" -eq 0 ]
-	[[ "$output" == *"hummingbird/20251124-x86_64"* ]]
+	[[ "$output" == *'hummingbird/20251124-$basearch'* ]]
 	local fedora hummingbird diff
 	fedora="$(yq -r '.packages.fedora.packages[]' "$cosmic_yaml" | sort)"
 	hummingbird="$(yq -r '.packages.hummingbird.packages[]' "$cosmic_yaml" | sort)"

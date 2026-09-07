@@ -72,6 +72,7 @@ A TunaOS image is named `<variant>:<desktop>[-hardware]`.
 | 🦈 **sailfin** | openSUSE Tumbleweed | Rolling |
 | 🌈 **guppy** | Gentoo | Binary-package Gentoo, the adventurous pick |
 | 🐦 **hummingbird** | Fedora Hummingbird | Experimental next-gen Fedora base |
+| 🎏 **wahoo** | Fedora ELN | Experimental EL11 preview — what c11s/Kitten 11 will be like, months early. **No H.264/H.265**: ELN ships no working video decoder, so this is a testing lane, not a daily driver |
 | 🔒 **redfin** | RHEL 10 | Local-build only (EULA) — see [rhel-setup.md](rhel-setup.md) |
 
 ### The desktop — `gnome`, `kde`, `cosmic`, `niri`, `xfce`
@@ -130,10 +131,14 @@ replaced atomically. Switching back is the same command with the old image.
 Every image can be turned into a disk image locally:
 
 ```bash
-git clone https://github.com/tuna-os/tunaOS && cd tunaOS
+git clone https://github.com/tuna-os/tunaOS.git && cd tunaOS
 just qcow2 ghcr.io/tuna-os/bonito:kde     # produces bonito.qcow2
 just run-qcow2 bonito kde                  # boots it under QEMU
 ```
+
+### Option D — from Windows (wootc)
+
+Moving from Windows 10/11? You can install TunaOS directly without flashing a USB drive using **[wootc](https://github.com/tuna-os/wootc)** (the Windows bootc installer). Download `tunaos-installer.exe` from [wootc releases](https://github.com/tuna-os/wootc/releases), select your desktop, and reboot. See [MIGRATION.md](../MIGRATION.md#from-windows-wootc) for full details.
 
 ## 4. Day-2 administration
 
@@ -189,6 +194,16 @@ Homebrew → distrobox/toolbox container → build your own image
 ([ROLL_YOUR_OWN.md](ROLL_YOUR_OWN.md) — the equivalent of Universal Blue's
 custom-image story). That last option is the escape hatch that makes the
 first three acceptable.
+
+You can still run `dnf` inside a toolbox, and some images do ship a
+repository definition under `/etc/yum.repos.d` — hummingbird carries the
+tunaOS package repository, for instance. What they do **not** ship is the
+repositories that existed only while the image was being built: those are
+bind-mounted directories that are gone by the time you boot, and a
+definition left pointing at one would fail every `dnf` transaction rather
+than sit there harmlessly. The build removes them at the end of the desktop
+install, so every repository an image ships is one a running system can
+actually reach.
 
 ## 5. Rollback
 
@@ -269,9 +284,15 @@ itself, see the [Developer Guide](DEVELOPER-GUIDE.md).
 Every published image is signed with cosign and carries an attested SBOM:
 
 ```bash
-cosign verify ghcr.io/tuna-os/yellowfin:gnome \
-  --certificate-identity-regexp 'github.com/tuna-os/tunaOS' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+image=ghcr.io/tuna-os/yellowfin:gnome
+digest=$(skopeo inspect "docker://${image}" | jq -r .Digest)
+ref="ghcr.io/tuna-os/yellowfin@${digest}"
+
+cosign verify "${ref}" \
+  --certificate-identity \
+    "https://github.com/tuna-os/tunaOS/.github/workflows/reusable-build-image.yml@refs/heads/main" \
+  --certificate-oidc-issuer \
+    "https://token.actions.githubusercontent.com"
 ```
 
 More in [VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md).

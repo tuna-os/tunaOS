@@ -4,7 +4,7 @@
 - Date: 2026-08-11
 - Last updated: 2026-08-12
 - Issue: [#1093](https://github.com/tuna-os/tunaOS/issues/1093)
-- Policy: [RFC-PROCESS.md](../RFC-PROCESS.md) (merged via [#1352](https://github.com/tuna-os/tunaOS/pull/1352))
+- Policy: [RFC-PROCESS.md](../../RFC-PROCESS.md) (merged via [#1352](https://github.com/tuna-os/tunaOS/pull/1352))
 
 ## Context
 

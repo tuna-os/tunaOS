@@ -24,13 +24,43 @@ CONTRACT="${REPO_ROOT}/build_scripts/checks/verify-desktop-experience.sh"
   # The crippled v2-only branch is gone; the v2 accommodation is a basearch
   # pin on the same repo, not a different (free-codec) package set. Match
   # code only — the history lives on in comments.
-  run grep -E '^[^#]*ffmpeg-free' "$BASE_PKGS"
+  #
+  # Scoped to the EL branch rather than the whole file since 2026-08-25: the
+  # ELN branch (wahoo) installs ffmpeg-free deliberately and is the one place
+  # in this file where it is the correct answer, not a fallback. RPM Fusion
+  # publishes no ELN branch and `dnf repoquery` finds neither ffmpeg nor
+  # gstreamer1-plugins-ugly in eln-{baseos,appstream,crb,extras}, so there is
+  # no encumbered set to fall back FROM. A whole-file grep would have made
+  # that honest gap indistinguishable from the EL10 regression this test
+  # exists to catch — which is why the assertion moved instead of the code.
+  # The EL10 leg is still held to the full set by the test above.
+  # The EL branch is the `else` arm of the family chain to the end of file;
+  # `^[^#]*` keeps this matching CODE, since that branch's comments recount
+  # the v2 history in detail and name ffmpeg-free four times.
+  run bash -c "awk '/^else\$/,0' '$BASE_PKGS' | grep -E '^[^#]*ffmpeg-free'"
   [ "$status" -ne 0 ]
   run grep -F 's|/\$basearch/|/x86_64/|' "$BASE_PKGS"
   [ "$status" -eq 0 ]
   # ...and that pin is applied under the v2 detector, not unconditionally.
   run grep -B2 -F 's|/\$basearch/|/x86_64/|' "$BASE_PKGS"
   [[ "$output" == *"is_x86_64_v2"* ]]
+}
+
+@test "ELN leg installs the free codec set, and only the free one" {
+  # wahoo's codec baseline is NOT equivalent to bonito's or yellowfin's, and
+  # that has to stay visible: eln-{baseos,appstream,crb,extras} carry no
+  # ffmpeg and no gstreamer1-plugins-ugly (dnf repoquery, 2026-08-25), and
+  # RPM Fusion has no ELN branch to install from. If either encumbered name
+  # ever appears in this branch it means an ELN source was found — good news
+  # that must come with the comment above it updated, not slipped in.
+  # Code only, for the same reason as above: this branch's comment block
+  # names every package it deliberately does NOT install.
+  run bash -c "awk '/IS_ELN:-false/,/IS_FEDORA == true/' '$BASE_PKGS' | grep -vE '^\\s*#'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"ffmpeg-free"* ]]
+  [[ "$output" == *"gstreamer1-plugin-libav"* ]]
+  [[ "$output" != *"gstreamer1-plugins-ugly"* ]]
+  [[ "$output" != *"rpmfusion"* ]]
 }
 
 @test "Fedora leg installs gstreamer1-plugin-libav alongside RPM Fusion ffmpeg" {
@@ -67,8 +97,24 @@ CONTRACT="${REPO_ROOT}/build_scripts/checks/verify-desktop-experience.sh"
   run grep -F "grep -q ' h264 ' <<<\"\$_ffmpeg_decoders\"" "$CONTRACT"
   [ "$status" -eq 0 ]
   # And a missing decoder must be fatal (exit 1 in that branch), not a warning.
-  run grep -A3 'ffmpeg cannot decode h264' "$CONTRACT"
+  #
+  # Read over the whole branch rather than the three lines after the message:
+  # the branch carries a named ELN exemption since 2026-08-25 (ELN ships no
+  # functional H.264 decoder at all — see tests/bats/test_eln_codec_gap.bats
+  # for the measurement), and its comment block sits between the message and
+  # the exit. `-A3` was measuring comment proximity, not fatality.
+  run awk '/ffmpeg cannot decode h264/,/^\t\tfi$/' "$CONTRACT"
   [[ "$output" == *"exit 1"* ]]
+  # Fatality is the DEFAULT: every exemption in that branch must name the
+  # base it exempts, so a blanket `if false` can never creep in.
+  run bash -c "awk '/ffmpeg cannot decode h264/,/^\t\tfi\$/' '$CONTRACT' | grep -E '^\\s*(if|elif)'"
+  [ "$status" -eq 0 ]
+  while read -r line; do
+    [[ "$line" == *"IS_ELN"* || "$line" == *"IS_HUMMINGBIRD"* ]] || {
+      echo "unnamed exemption in the h264 branch: ${line}" >&2
+      return 1
+    }
+  done <<<"$output"
   # ffmpeg-would-not-run is a DIFFERENT diagnosis with a different fix
   # (packaging deps, not codec sourcing) — it must have its own fatal branch,
   # never fold into "crippled libavcodec".

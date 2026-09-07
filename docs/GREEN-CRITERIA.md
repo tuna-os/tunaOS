@@ -96,6 +96,41 @@ product. They are tracked as *not yet covered*, not as failures.
 
 ---
 
+## Gates are proven, not declared
+
+A criterion's `asserted_by` is prose for humans. Its `gates` block is the
+same claim in a form a test can check: the workflow, the job, the step that
+produces the verdict, and the scripts it runs. `scripts/check-ci-contract.py`
+(run by `tests/test_ci_contract.py` on every PR that touches a workflow or
+this file, and by `just test-contract` locally) walks every gate and fails
+when any of the following is true:
+
+- the workflow, job, verdict step, or script does not exist;
+- the workflow is not reachable from a `schedule`, `push`, or `pull_request`
+  trigger, directly or through a chain of `uses:` calls — a reusable
+  workflow nobody calls, or one that only fires by hand, asserts nothing;
+- a **blocking** gate's job or verdict step carries `continue-on-error`;
+- a **blocking** gate's job is skipped on the flavor without the criterion
+  declaring a reviewed `scope` exemption;
+- the schedule that produces the evidence fires less often than the
+  criterion's `freshness_sla_days`.
+
+The last one is what gives `stale_is_not_green` a number: `builds`,
+`desktop`, `parity`, `no_silent_omissions`, `rebuildable` and `arch_honesty`
+are refreshed nightly (SLA 2 days); `lifecycle` and `iso` weekly (8);
+`install` monthly (35). A verdict older than its SLA is evidence that
+something stopped running, not evidence that the cell still works.
+
+This exists because every one of those shapes has already happened here:
+`boots` was skippable per cell and broke matrix-wide unnoticed (#1811);
+`package-parity.sh` existed for weeks before anything scheduled it; the
+omissions manifest was written into every image and read by nothing; the
+lifecycle workflow ran once, for nine seconds, while the matrix believed it
+was covered. A test existing in the repository is not the same as a test
+being run (#2250).
+
+---
+
 ## Getting there
 
 The gap is not evenly distributed, and the cheapest wins are not the loudest
