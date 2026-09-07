@@ -118,25 +118,31 @@ reached, agetty on ttyS0). The `TUNAOS_BASE_CONTRACT` marker simply never
 emitted: the contract unit didn't fire, on a system that otherwise booted
 clean. Recorded here for the day `base` is ever re-gated.
 
-### W4. ISO + installer axis *(criterion 4 — currently 0 passes anywhere)*
+### W4. ISO + installer axis *(criterion 4 — current amd64 group sweep 32/34)*
 
 - [x] **#1772** — tacklebox `[customize]` hangs 87m silent on amd64. Fixed by
       #1882 (outer 80-min deadline) + #1885 (streamed customize, 30-min cap):
-      customize now streams and completes in ~2 min. Closed with evidence from
-      run 32238167029.
-- [x] **#1556** — arm64 `libpod_lock` during tacklebox pre-pull. Root cause
-      stale `/dev/shm/libpod_lock` (lock-count drift → ERANGE); fixed by the
-      rm + `podman system renumber` reset in ghcr-login (#1576), lifecycle
-      (#1841), and the ISO surface (#1848). Closed with arm64 login + full
-      build evidence (run 32254285223).
-- [ ] Installer smoke passes 0/31 tested. **Now blocked by #1893, not #1772**:
-      after customize completes, the ISO build hangs ~50 min silently in the
-      `podman commit` of the customized container (tacklebox#231 streams it).
-      Re-baseline and split real failures from the DRM-render-node harness
-      limit once the pin bump lands.
-- [ ] LUKS E2E (criterion 5) is the healthiest axis (31/52). Blocked at the
-      same "Build dev ISO" step (the Aug 9 failures), so it needs the same
-      #1893 fix before a fresh sweep can re-verify 31/52.
+      run 32238167029 records both per-script markers and streamed output, with
+      healthy customize completing in ~2 min. Tacklebox's regression tests pin
+      `TBOX_CUSTOMIZE_TIMEOUT`, so a stalled script exits inside that cap rather
+      than reaching the 90-minute job cancellation.
+- [x] **#1556** — arm64 `libpod_lock` during tacklebox pre-pull remained a
+      separately classified runner-state signature during this rebaseline.
+      The stale-lock reset in ghcr-login (#1576), lifecycle (#1841), and the ISO
+      surface (#1848) subsequently fixed it; run 32254285223 supplies the arm64
+      login and full-build evidence.
+- [x] **#1886 amd64 ISO rebaseline** — the 09-07 current-main grouped sweep
+      ([run 34071003886](https://github.com/tuna-os/tunaOS/actions/runs/34071003886))
+      built all 34 ISO groups; 32 reached the readiness gate, retained serial
+      logs/screenshots as per-cell artifacts, signed, and published to R2. The
+      two failures, `yellowfin:niri` and `marlin:kde`, built their ISOs and then
+      timed out at the readiness marker — boot failures, not customize hangs.
+- [ ] Installer smoke has 29/33 non-NVIDIA cells tested and one pass on the
+      current board. The old customize and post-customize commit blockers are
+      cleared; remaining failures are session/installer-runtime work.
+- [ ] LUKS E2E (criterion 5) has been freshly swept: 52/52 tested and one pass
+      on the current board. Treat each remaining failure by its retained
+      per-cell evidence rather than the retired #1772 signature.
 
 ### W5. Read the omissions manifest *(criterion 8 — data exists, unread)*
 
