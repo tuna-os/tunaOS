@@ -179,6 +179,29 @@
 
 set -euo pipefail
 
+# ── Root context: never touch the invoking user's podman ────────────────────
+# This script is run under `sudo -E` (the Justfile and CI both do it), which
+# preserves HOME and XDG_RUNTIME_DIR. It makes exactly one host-side podman
+# call -- the `podman image exists` probe in the installed-image path -- and
+# with those variables preserved, root's podman writes into the INVOKING
+# USER's stores instead of its own.
+#
+# MEASURED three times in one session: root-owned
+# /run/user/1000/containers/overlay-layers/mountpoints.json, after which the
+# user's rootless podman cannot start at all --
+#   Error: loading primary layer store data: ... permission denied
+# -- and the next `just build` dies with "unable to copy from source ...
+# trying to reuse blob". Nothing in the harness reports it, because the
+# harness itself runs fine; the damage only shows up the next time the user
+# builds something.
+#
+# scripts/build-iso-tacklebox.sh pins the same variables for the same reason;
+# this script needed its own copy, exactly like live-overlay.yml did.
+if [[ $EUID -eq 0 ]]; then
+	export HOME="${TUNAOS_ROOT_HOME:-/root}"
+	unset XDG_RUNTIME_DIR XDG_DATA_HOME XDG_CONFIG_HOME
+fi
+
 # ── Argument parsing ────────────────────────────────────────────────────────
 
 ISO_PATH=""
