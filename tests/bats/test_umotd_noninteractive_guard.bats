@@ -108,6 +108,34 @@ profile_file() {
 	[ "$n" -eq 6 ]
 }
 
+@test "the guard is REACHED on every path, not merely invoked" {
+	# The test above is necessary and was not sufficient. 40-services.sh has
+	# three package-manager paths and the first two END IN `exit 0`:
+	# apt, then pacman/zypper/emerge, then dnf falls through to the file's end.
+	# Placed at the end, this guard ran on dnf/RPM images ONLY -- silently
+	# never on Arch, the variant the umotd hang was measured on.
+	#
+	# Caught by a real `just build marlin niri`: zero mentions of profile.d
+	# anywhere in the build log, and an unguarded umotd.sh in the finished
+	# image. Being invoked by every Containerfile is not being reached.
+	local guard first_exit
+	guard=$(grep -n '_tunaos_guarded=0' "$SERVICES" | head -1 | cut -d: -f1)
+	first_exit=$(grep -n 'exit 0' "$SERVICES" | grep -v '^[0-9]*:#' | head -1 | cut -d: -f1)
+	[ -n "$guard" ]
+	[ -n "$first_exit" ]
+	# Must come before the first early exit, or some family never runs it.
+	[ "$guard" -lt "$first_exit" ]
+}
+
+@test "the guard runs at top level, not inside a package-manager branch" {
+	# Indented => nested in one of the per-family `if` blocks, which is the
+	# same defect wearing a different hat.
+	local line
+	line=$(grep -n '_tunaos_guarded=0' "$SERVICES" | head -1 | cut -d: -f1)
+	run sed -n "${line}p" "$SERVICES"
+	[ "$output" = "_tunaos_guarded=0" ]
+}
+
 # The guard alone, followed by a payload standing in for the banner call.
 guarded_stub() {
 	local f="${BATS_TEST_TMPDIR}/stub.sh"
