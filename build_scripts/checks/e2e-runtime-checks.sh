@@ -83,9 +83,33 @@ check "bootc reports an image reference" \
 check "machine-id is committed (32-hex, not uninitialized)" \
 	bash -c '[[ "$(cat /etc/machine-id 2>/dev/null)" =~ ^[0-9a-f]{32}$ ]]'
 
-# SSH host keys only exist where an ssh daemon is shipped; conditional like
-# snosi's desktop-only gnome-remote-desktop check.
-if systemctl list-unit-files sshd.service ssh.service --no-legend 2>/dev/null | grep -q .; then
+# SSH host keys only exist where an ssh daemon actually RUNS -- not merely
+# where one is shipped.
+#
+# The guard used to be `list-unit-files sshd.service ssh.service`, which
+# matches a unit that is present but DISABLED. Production images ship openssh
+# and then deliberately turn it off (see the safe_disable calls in
+# 40-services.sh), so sshd-keygen never runs and /etc/ssh/ssh_host_*_key
+# legitimately does not exist. The assertion was therefore red on every
+# installed system, on every flavor -- MEASURED on all five marlin flavors at
+# ~11s, each on a LUKS install that otherwise passed end to end.
+#
+# That is the third assertion in this file found permanently red for a reason
+# unrelated to what it claims to test (see also graphical.target and the
+# unit-graph gate). A check that always says the same thing cannot report a
+# regression.
+#
+# Gating on enabled-or-active keeps it meaningful exactly where it matters:
+# the dev ISOs, where ENABLE_SSHD=1 and the e2e harness's only way into the
+# guest is that daemon.
+_sshd_on=0
+for _u in sshd.service ssh.service sshd.socket ssh.socket; do
+	if systemctl is-enabled "$_u" &>/dev/null || systemctl is-active "$_u" &>/dev/null; then
+		_sshd_on=1
+		break
+	fi
+done
+if [[ "$_sshd_on" -eq 1 ]]; then
 	check "SSH host keys were generated" \
 		bash -c 'ls /etc/ssh/ssh_host_*_key >/dev/null 2>&1'
 
@@ -117,7 +141,14 @@ if systemctl list-unit-files sshd.service ssh.service --no-legend 2>/dev/null | 
 	else
 		emit "# tcp listeners: ss(8) unavailable"
 	fi
+else
+	# Say so rather than skipping in silence. A production image with sshd off
+	# and a DEV ISO whose sshd failed to enable both end up with no host keys;
+	# only this line separates them in the serial log, and the dev case is the
+	# one that costs the harness its only way into the guest.
+	emit "# ssh: no sshd/ssh unit enabled or active — host-key check skipped"
 fi
+unset _sshd_on _u
 
 # ── Service health (snosi 02, DE-aware) ────────────────────────────────────
 
