@@ -51,6 +51,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `generate-changelog-release.yml` | post-merge + scheduled | Generate Release | `05 11 * * *`, manual | — |
 | `ghcr-partial-pull-check.yml` | post-merge + scheduled | GHCR Partial-Pull Compatibility Canary | `30 8 * * 1`, manual | — |
 | `graduation-check.yml` | post-merge + scheduled | Graduation Check | `0 7 * * 1`, manual | — |
+| `installer-fisherman-pins.yml` | PR-deterministic + post-merge + scheduled | Installer fisherman pins | each PR, `0 5 * * *`, manual | — |
 | `installer-screenshots.yml` | post-merge + scheduled | Installer Walkthrough Screenshots | `0 5 * * 1`, manual | — |
 | `installer-smoke.yml` | post-merge | Installer Smoke | manual | — |
 | `iso-builder-parity.yml` | post-merge | ISO Builder Parity | caller cadence | — |
