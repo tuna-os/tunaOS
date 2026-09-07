@@ -2810,6 +2810,21 @@ EOF
 	# xfs volume inside a nested QEMU guest ran for 25 minutes and was still
 	# going when the timer fired — no stall, just a big image on slow virtual
 	# storage. Raised, and overridable for a cell that legitimately needs more.
+	# Record WHICH fisherman is about to run. Each desktop ships its own
+	# org.tunaos.Installer* flatpak, each bundling its own fisherman build,
+	# and the pins move independently — so "the installer" is not one thing
+	# across flavours. MEASURED: a marlin:cosmic install died at step 9/10 on
+	# `writing hostname: finding deployment dir`, fixed in fisherman 36902966
+	# months earlier; the cosmic/niri/xfce flatpaks bundled 35c8f6f1
+	# (2026-07-31) while kde bundled 027fa25c (2026-08-29). Establishing that
+	# took mounting both ISOs and running `go version -m` on the binaries.
+	# Go stamps the revision into the binary as plain text, so `grep -a` reads
+	# it with no go toolchain and no `strings` in the guest. One line here
+	# turns that archaeology into a grep of the evidence log.
+	local fisherman_rev
+	fisherman_rev="$("${ssh_cmd[@]}" "grep -aoE 'vcs\\.revision=[0-9a-f]{40}|vcs\\.time=[0-9TZ:-]{20}' /usr/local/bin/fisherman 2>/dev/null | sort -u | tr '\\n' ' '" 2>/dev/null || true)"
+	echo "TUNAOS_LUKS_E2E_FISHERMAN ${fisherman_rev:-<unstamped or unreadable>}" | tee -a "${SERIAL_LOG}"
+
 	local install_timeout="${TUNAOS_E2E_INSTALL_TIMEOUT:-3600}"
 	timeout "$install_timeout" "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman ${GUEST_HOME}/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
 		rc=$?

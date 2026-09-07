@@ -1159,3 +1159,18 @@ setup_runtime_check_stubs() {
   b="$(grep -A1 'check "hostname is set"' "${REPO_ROOT}/build_scripts/checks/e2e-runtime-checks.sh" | tail -1 | xargs)"
   [ "$a" = "$b" ]
 }
+
+@test "the install evidence records which fisherman ran" {
+  # Each desktop ships its own org.tunaos.Installer* flatpak bundling its own
+  # fisherman, and the pins move independently — so "the installer" is not one
+  # thing across flavours. A marlin:cosmic install died at step 9/10 on a bug
+  # fixed in fisherman months earlier, and pinning that down meant mounting
+  # two ISOs and running `go version -m` on the binaries. Go stamps the
+  # revision as plain text, so the guest needs no toolchain to report it.
+  grep -q 'TUNAOS_LUKS_E2E_FISHERMAN' "$SCRIPT"
+  # -F: the script escapes the dot for the remote shell, so the file holds a
+  # literal backslash-backslash-dot that a regex grep would not match.
+  grep -qF 'vcs\\.revision=' "$SCRIPT"
+  # Must not be able to abort the install it precedes.
+  grep -q 'fisherman_rev="\$(.*|| true)"' "$SCRIPT"
+}
