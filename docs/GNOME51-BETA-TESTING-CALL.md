@@ -1,161 +1,141 @@
-# GNOME 51 beta testing call: EL10 backport tier
+# GNOME 51 test and rollout plan
 
-**Status**: draft — publish after the image preflight below passes  
-**Tracks**: [#1717](https://github.com/tuna-os/tunaOS/issues/1717) (testing call), [tunaos-packages#320](https://github.com/tuna-os/tunaos-packages/pull/320) (GNOME 51 EL10 packaging), [#1334](https://github.com/tuna-os/tunaOS/issues/1334) (release-week post)  
-**Audience**: TunaOS users, Enterprise Linux desktop testers, and GNOME beta testers  
-**Prepared**: 2026-08-15
+**Status**: decision recorded 2026-09-07
 
-## Why this call is running now
+**Tracks**: [#1775](https://github.com/tuna-os/tunaOS/issues/1775), [#1717](https://github.com/tuna-os/tunaOS/issues/1717), [#1334](https://github.com/tuna-os/tunaOS/issues/1334)
 
-GNOME's official release calendar lists the GNOME 51 beta tarball date as
-**2026-08-01**, the release candidate as **2026-08-29**, and GNOME 51.0 as
-**2026-09-12**. The beta is already in its testing window; do not describe it
-as an upcoming beta when publishing this call.
+## Decision
 
-TunaOS's [GNOME 51 packaging tier](https://github.com/tuna-os/tunaos-packages/pull/320)
-provides the EL10 backport path: 17 ordered build tiers, a CentOS Stream 10
-mock configuration, and a published-repository gate. This call asks testers to
-exercise the resulting image and report regressions while there is still time
-to fix packaging before 2026-09-12.
+GNOME 51 does not roll out to every TunaOS base at once.
 
-Schedule source: [GNOME Release Calendar](https://release.gnome.org/calendar/).
+1. **Use `hummingbird:gnome` as the GNOME 51 canary.** Hummingbird gets the
+   coherent GNOME stack from Bluefin's `projectbluefin/utah-packages`
+   repository image. TunaOS pins that image by digest, mounts its repository
+   only while building the GNOME layer, and tests the resulting TunaOS image.
+2. **Keep EL10 on the factory-built GNOME 50 tier.** Yellowfin, Albacore, and
+   Skipjack must not be advertised as GNOME 51. Their configured source is the
+   digest-pinned `gnome50-el10-x86_64` image from `tuna-os/tunaos-packages`.
+   The old beta-call proposal depended on an EL10 GNOME 51 HTTP repository
+   which never became the image input; waiting on or documenting that URL is
+   not a rollout strategy.
+3. **Let distro-native variants advance independently.** Fedora, Arch,
+   openSUSE, Debian, Ubuntu, and Gentoo consume their own package ecosystems.
+   They continue through the normal per-variant build and promotion gates;
+   there is no fleet-wide switch that forces all of them to version 51.
+4. **Do not create a user-facing beta tag.** Candidates already publish under
+   the existing `:gnome-testing` tag. The workflow is the source of truth:
+   only its Promote job writes the bare `:gnome` tag after the candidate's
+   signing, desktop, boot, and architecture gates complete.
 
-## Maintainer launch gate
+This separates testing a new desktop from replacing the EL10 package platform.
+It also keeps rollback ordinary: promotion never mutates an existing booted
+deployment, and a tester can retain or return to the previous bootc deployment.
 
-Publish this call only after all of these checks are true:
+## Why Hummingbird is the canary
 
-- [ ] `https://repo.tunaos.org/gnome51/10-stream-x86_64/repodata/repomd.xml`
-      returns HTTP 200.
-- [ ] A public TunaOS image tag is explicitly identified as carrying the
-      `gnome51` tier. Record the exact tag, digest, base, and build date; do not
-      ask testers to guess a tag.
-- [ ] The image passes the normal boot gate and has a working GNOME login.
-- [ ] The download or image link is public and the rollback path is documented.
-- [ ] A maintainer has confirmed the report destination in the
-      [tunaos-packages issue tracker](https://github.com/tuna-os/tunaos-packages/issues),
-      or has opened a dedicated issue for the testing wave.
+Hummingbird is a rolling, hardened Rawhide fork, not EL10. Bluefin builds GNOME
+51 in Hummingbird's own build root and publishes the result as an OCI-carried
+RPM repository. Reusing that repository avoids a second GNOME 51 build with a
+different dependency closure.
 
-If the package repository or image is not ready, publish a waitlist/update
-instead of directing users to an untestable image.
+The supply path is reviewable in this repository:
 
-## Test targets
+- `image-versions.yaml` pins `utah-packages` by digest;
+- `registry-map.yaml` names `ghcr.io/projectbluefin/utah-packages`;
+- `Containerfile.el10` bind-mounts `/repository` only into the GNOME build;
+- `manifests/desktops/gnome.yaml` gives that local repository priority over
+  TunaOS's supplemental Hummingbird repository; and
+- `tests/test_hummingbird_gnome_consumes_utah_packages.py` holds the pin,
+  mount, priority, and local-only signature exception together.
 
-Start with the EL10 image that the launch gate names. The expected candidates
-are:
+See [HUMMINGBIRD.md](HUMMINGBIRD.md) for the base's package and architecture
+constraints.
 
-| Target | Base | Suggested use |
-|---|---|---|
-| `yellowfin:gnome` | AlmaLinux Kitten 10 | EL10 validation after the tier is included |
-| `albacore:gnome` | AlmaLinux 10 / RHEL 10 family | EL10 validation after the tier is included |
-| `skipjack:gnome` | CentOS Stream 10 | Priority target for the `10-stream-x86_64` repository |
+## Canary procedure
 
-Only test a row once its exact published image digest is announced. This table
-describes candidate targets, not a claim that every row is already GNOME 51
-enabled. ISOs are currently amd64-only; use an amd64 VM or machine unless the
-announcement says otherwise.
+### 1. Build and inspect the candidate
 
-## Safe testing workflow
+A maintainer dispatches **Build Hummingbird** with `flavor=gnome`, or inspects
+the scheduled run. Use the candidate from that run, not a tag left by an older
+run:
 
-Prefer a disposable VM or spare machine. Do not test on a machine whose only
-working deployment or irreplaceable data is at risk.
-
-### 1. Capture the starting state
-
-```bash
-cat /etc/os-release
-sudo bootc status
-rpm -q gnome-shell mutter gtk4 libadwaita 2>&1 | tee gnome51-before.txt
+```text
+ghcr.io/tuna-os/hummingbird:gnome-testing
 ```
 
-Record the exact image reference and digest from the announcement. Keep the
-previous deployment available so `bootc rollback` has a known-good target.
+Record the workflow URL and resolved image digest. In the run, require:
 
-### 2. Install or switch to the announced image
+- the package manifest identifies GNOME Shell, Mutter, GDM, Nautilus, and the
+  control center from the expected candidate;
+- `gnome-shell --version` reports major version 51;
+- the desktop contract has no `TUNAOS_DESKTOP_CONTRACT_WAIVED` result;
+- the wishlist reports no unapproved package misses;
+- signing and provenance checks pass; and
+- the boot gate installs the candidate, boots it in QEMU, and reaches the
+  graphical-session marker.
 
-For an existing bootc system, replace the placeholder with the exact published
-reference from the announcement:
+A Hummingbird waiver is not a pass for this rollout. It exists to let an
+incomplete port build while it is being bootstrapped; a waived GNOME 51 canary
+stays on `:gnome-testing` even if another automated condition would permit
+promotion.
 
-```bash
-IMAGE='ghcr.io/tuna-os/<announced-variant>:gnome'
-sudo bootc switch "$IMAGE"
-sudo systemctl reboot
-```
+### 2. Exercise the desktop
 
-For a fresh trial, use the linked amd64 ISO or a disposable VM supplied by the
-announcement. Do not infer that an existing `:gnome` tag contains GNOME 51
-unless the launch gate identifies its digest.
+Use a disposable VM or spare machine and keep a known-good deployment. Test at
+least:
 
-### 3. Exercise the desktop
+- GDM login and logout under Wayland;
+- Settings, Files, Terminal, Software, and a Flatpak;
+- audio, networking, portals, clipboard, and screenshots;
+- suspend/resume and multi-monitor or fractional scaling when available;
+- `bootc upgrade`, reboot, and `bootc rollback`; and
+- one cold boot after rollback.
 
-- [ ] GDM reaches a GNOME session and the session reports the expected GNOME 51 version.
-- [ ] Mutter/Wayland works at the tested display resolution and scaling.
-- [ ] Settings, Files, Terminal, Software, and a Flatpak launch normally.
-- [ ] Audio, networking, suspend/resume, clipboard, screenshots, and portals work.
-- [ ] A second monitor, fractional scaling, or touchpad gestures work when available.
-- [ ] `sudo bootc upgrade` stages successfully and the next boot is healthy.
-- [ ] `sudo bootc rollback` returns to the prior deployment and the next boot is usable.
-
-Capture the final state:
+Capture:
 
 ```bash
 gnome-shell --version
-rpm -q gnome-shell mutter gtk4 libadwaita 2>&1 | tee gnome51-after.txt
+rpm -q gnome-shell mutter gdm nautilus gnome-control-center gtk4 libadwaita
 sudo bootc status
 ```
 
-## How to report results
+Report the image digest, workflow URL, hardware or VM details, commands above,
+reproduction steps, logs, and rollback result. Packaging or dependency-closure
+problems belong in
+[`tuna-os/tunaos-packages`](https://github.com/tuna-os/tunaos-packages/issues);
+TunaOS image, boot, and integration problems belong in
+[`tuna-os/tunaOS`](https://github.com/tuna-os/tunaOS/issues).
 
-Report one result per issue or regression in the
-[tunaos-packages issue tracker](https://github.com/tuna-os/tunaos-packages/issues/new/choose)
-unless the announcement names a dedicated testing issue. Link back to
-[tunaos-packages#320](https://github.com/tuna-os/tunaos-packages/pull/320) when
-the result concerns the packaging tier itself. Include:
+Treat failure to boot, log in, use networking, or roll back as release-blocking.
+Remove hostnames, serial numbers, tokens, and other private data from logs.
 
-```text
-Image and digest:
-Base / hardware or VM:
-Test date (UTC):
-GNOME version:
-bootc status / deployment:
-What worked:
-What failed:
-Reproduction steps:
-Logs or screenshots:
-Rollback result:
-```
+### 3. Promote or hold
 
-Remove usernames, hostnames, serial numbers, tokens, and other private data
-before posting logs. Mark a report **release-blocking** when it prevents boot,
-login, networking, or rollback. Mark packaging-only conflicts with the affected
-RPM names and image digest.
+Promote only the exact digest tested above. The normal Promote job copies the
+verified `:gnome-testing` manifest to `:gnome` and dated tags. If a blocking
+regression appears after promotion, follow
+[rollback-a-bad-image-promotion.md](../runbooks/rollback-a-bad-image-promotion.md)
+rather than rebuilding an unreviewed hotfix under the same tag.
 
-Please report release-blocking issues by **2026-09-05** where possible so the
-maintainers can triage them before the 2026-09-12 release-week post. Testing
-can continue through release week; close the call with tested images, unique
-testers, regressions fixed, and unresolved risks.
+## EL10 graduation criteria
 
-## Copy-ready announcement
+Moving Yellowfin, Albacore, or Skipjack from GNOME 50 to 51 is a separate
+package-platform change. It requires all of the following in one reviewable
+rollout:
 
-> **Help test GNOME 51 on TunaOS's EL10 backport tier.** GNOME 51 is in its
-> upstream beta window, with the release candidate scheduled for August 29 and
-> GNOME 51.0 for September 12. We have an announced TunaOS image carrying the
-> GNOME 51 packages for Enterprise Linux 10.
->
-> Use the exact image/digest below in a disposable VM or spare machine. Check
-> login, Wayland, Settings, Files, Flatpak, audio, networking, suspend/resume,
-> `bootc upgrade`, and `bootc rollback`. Report the image digest, hardware or VM
-> details, GNOME version, logs, and rollback result in the linked tracker.
->
-> Image: `<maintainer fills exact image and digest>`  
-> Test guide: `<link to this guide>`  
-> Report issues: `https://github.com/tuna-os/tunaos-packages/issues/new/choose`
->
-> This is beta software. Keep a known-good deployment, and do not test it on
-> your only production machine.
+- a complete GNOME 51 repository image produced by the TunaOS package factory,
+  pinned by digest and consumed with the same local-mount trust model as the
+  current GNOME 50 tier;
+- an explicit architecture decision: provide each declared architecture or
+  keep GNOME flavors pinned to architectures the tier actually serves;
+- regression coverage equivalent to
+  `tests/test_el10_gnome_comes_from_the_github_built_tier.py`, updated for the
+  new tier without restoring COPR or an unsigned network repository;
+- a candidate proving GNOME major 51, the desktop and wishlist contracts, image
+  signing, boot-to-GDM, installer media, upgrade, and rollback; and
+- an announcement naming the tested image digest and any architecture or
+  hardware limitations.
 
-## Close-out for #1334
-
-Within one week of GNOME 51.0, summarize the testing wave for the release-week
-post: images and bases tested, number of distinct testers, successful upgrade
-and rollback results, fixed regressions, and unresolved limitations. Testing
-participation demonstrates community testing, not production use.
+Until those criteria pass, EL10's GNOME 50 images continue normally. GNOME 51's
+upstream release date alone is not a reason to bypass package-factory or image
+promotion gates.
