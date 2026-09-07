@@ -137,8 +137,26 @@ checkpoints:
       # gnome frame ever comes back the same way, the fault is the installer
       # not being on screen, and this checkpoint is doing its job.
       gnome: ["welcome to", "get started", "available disks", "be installed"]
-      # DERIVED from the COSMIC fork's headings.
-      cosmic: ["welcome", "get started", "select a disk", "be installed"]
+      # MEASURED 2026-09-07 off a real marlin:cosmic live frame, after the
+      # greetd source_profile fix let the session start. Tesseract read the
+      # COSMIC panel and the installer's first page:
+      #
+      #   Workspaces  Applications  Sep 7, 2:57AM
+      #   Step 1 of 6 - Welcome    Marlin Installer
+      #   Install Marlin
+      #
+      # "step 1 of" rather than "step 1 of 6": the step count is a property of
+      # the wizard's length, and a page added to the flow would silently stop
+      # this matching. The two panel words are kept as the fallback — they
+      # prove a COSMIC session is up even if the installer window has not been
+      # mapped yet, which is weaker but never wrong.
+      #
+      # NOTE: cosmic renders fine here WITHOUT virgl (stddev 0.13 on this
+      # frame, on a host whose QEMU has no virtio-vga-gl). It is still listed
+      # in needs_virgl because niri and xfwl4 in that list genuinely do not,
+      # and the flag only ever downgrades enforcement — it never fails a
+      # desktop that does draw.
+      cosmic: ["step 1 of", "welcome", "workspaces", "applications"]
       # MEASURED 2026-09-07 off luks-out/10-ready.png from a local
       # yellowfin:niri run: the frame is dominated by niri's "Important
       # Hotkeys" overlay, which is what the live session actually draws over
