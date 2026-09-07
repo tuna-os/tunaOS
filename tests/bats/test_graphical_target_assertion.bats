@@ -150,3 +150,54 @@ runtime_stubs() {
 	[ "$status" -ne 0 ]
 	[[ "$output" == *"not ok - graphical.target has not failed"* ]]
 }
+
+# ── The same dead-gate pattern, third instance ──────────────────────────────
+# "SSH host keys were generated" was red on every installed system, on every
+# flavor — MEASURED on all five marlin flavors at ~11s, each on a LUKS install
+# that otherwise passed end to end. Not a timing artifact this time: the guard
+# was `list-unit-files sshd.service ssh.service`, which matches a unit that is
+# present but DISABLED. Production images ship openssh and deliberately turn it
+# off (the safe_disable calls in 40-services.sh), so sshd-keygen never runs and
+# the host keys legitimately do not exist.
+
+sshd_gate() {
+	local state="$1"
+	bash -c "
+systemctl() {
+  case \"\$1\" in
+    is-enabled|is-active) [[ '$state' == enabled ]] && return 0 || return 1 ;;
+  esac
+  return 0
+}
+_sshd_on=0
+for _u in sshd.service ssh.service sshd.socket ssh.socket; do
+  if systemctl is-enabled \"\$_u\" &>/dev/null || systemctl is-active \"\$_u\" &>/dev/null; then _sshd_on=1; break; fi
+done
+[ \"\$_sshd_on\" -eq 1 ]"
+}
+
+@test "the host-key check does not fire on an image that ships sshd off" {
+	# The production posture. Asserting host keys here is asserting against
+	# the image's own design.
+	! sshd_gate disabled
+}
+
+@test "the host-key check still fires where sshd actually runs" {
+	# The dev ISOs, where ENABLE_SSHD=1 and that daemon is the harness's only
+	# way into the guest — the one case where a missing host key is fatal.
+	sshd_gate enabled
+}
+
+@test "the guard tests whether sshd RUNS, not whether it is installed" {
+	# list-unit-files matches a disabled unit, which is what made this red.
+	! grep -q 'list-unit-files sshd.service ssh.service' "$CHECKS"
+	grep -q 'systemctl is-enabled "$_u"' "$CHECKS"
+	grep -q 'systemctl is-active "$_u"' "$CHECKS"
+}
+
+@test "a skipped host-key check says so" {
+	# A production image with sshd off and a dev ISO whose sshd failed to
+	# enable both end with no host keys; only this line separates them in the
+	# serial log, and the dev case costs the harness its way into the guest.
+	grep -q 'host-key check skipped' "$CHECKS"
+}
