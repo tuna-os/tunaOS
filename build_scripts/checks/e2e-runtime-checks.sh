@@ -121,8 +121,30 @@ fi
 
 # ── Service health (snosi 02, DE-aware) ────────────────────────────────────
 
-check "graphical.target is active" \
-	systemctl is-active graphical.target
+# NOT `is-active graphical.target`. This script runs from
+# tunaos-desktop-contract.service, which is WantedBy=graphical.target — so it
+# executes INSIDE that target's own startup transaction, and a target is not
+# `active` until every unit wanting it has finished. `is-active` therefore
+# reports `activating` here and structurally always will: the assertion said
+# `not ok` on every desktop, on every run, including runs that passed
+# end-to-end (measured on marlin:cosmic at 11.7s under greetd AND on
+# marlin:kde at 12.4s under sddm, both LUKS installs that otherwise passed).
+#
+# A permanently-red assertion can never report a real regression, which is the
+# same defect as the installer GUI gate that could neither pass nor fail.
+#
+# Note the trap in the obvious fix: polling until `active` would DEADLOCK.
+# The target waits on this unit and this unit would wait on the target, until
+# TimeoutStartSec=90 killed it — a 90-second stall added to every boot.
+graphical_state=$(systemctl show -P ActiveState graphical.target 2>/dev/null || echo unknown)
+emit "# graphical.target ActiveState: ${graphical_state} (activating is correct from inside its own transaction)"
+check "graphical.target is reached or being reached" \
+	bash -c '[[ "$(systemctl show -P ActiveState graphical.target 2>/dev/null)" =~ ^(active|activating|reloading)$ ]]'
+
+# The stable half of the original intent: is this actually a graphical system?
+# Unlike ActiveState, get-default does not depend on when in the boot we ask.
+check "graphical.target is the default target" \
+	bash -c '[[ "$(systemctl get-default 2>/dev/null)" == graphical.target ]]'
 
 # display-manager.service is the systemd alias every DM registers; checking
 # it (rather than gdm/sddm/... by name) works on all variants, including
@@ -184,8 +206,27 @@ check "a network manager is active" \
 # Static unit-graph validation (secureblue pattern): catches units pointing
 # at missing binaries or malformed files even when nothing has failed yet.
 if command -v systemd-analyze >/dev/null 2>&1; then
+	# --recursive-errors=no, NOT yes. With `yes`, a warning in ANY
+	# transitively reachable unit fails the check — including upstream units
+	# we do not ship and cannot fix. Measured on this very repo's dev host:
+	# `--recursive-errors=yes graphical.target` reports
+	# "flatpak-appstream-refresh.service:7: Unknown key 'ExecCondition'",
+	# an upstream packaging nit, and that alone is enough to fail it. So this
+	# assertion was red on every desktop on every run, which is the same
+	# always-says-the-same-thing defect as the check above.
+	#
+	# `no` verifies graphical.target itself, which is the unit we control and
+	# the thing this gate is actually claiming. The transitive sweep is still
+	# run, but as INFORMATION — its warnings are worth reading and are not
+	# worth failing a build over, and printing them beats the previous
+	# behaviour of discarding the output into /dev/null.
 	check "systemd unit graph verifies (graphical.target)" \
-		systemd-analyze verify --recursive-errors=yes graphical.target
+		systemd-analyze verify --recursive-errors=no graphical.target
+	analyze_warnings=$(systemd-analyze verify --recursive-errors=yes graphical.target 2>&1 || true)
+	if [[ -n "$analyze_warnings" ]]; then
+		emit "# systemd-analyze warnings across the graphical.target graph (informational):"
+		while IFS= read -r line; do emit "#   $line"; done <<<"$analyze_warnings"
+	fi
 fi
 
 # Informational only (snosi hard-fails here, but TunaOS desktop images carry

@@ -144,7 +144,17 @@ setup_runtime_check_stubs() {
     case "$1" in
       is-system-running) echo running ;;
       is-active) echo active ;;
-      show) echo "gdm.service" ;;
+      # `show -P <property> <unit>` is called for more than one property, so
+      # answer per property. A stub returning one string for every `show` made
+      # `show -P ActiveState graphical.target` report a display-manager name.
+      show)
+        case " $* " in
+        *" ActiveState "*) echo active ;;
+        *) echo "gdm.service" ;;
+        esac
+        ;;
+      # The installed default target on a desktop image.
+      get-default) echo graphical.target ;;
       list-unit-files) : ;; # no sshd shipped -> host-key check skipped
       --failed) : ;;
     esac
@@ -178,7 +188,13 @@ setup_runtime_check_stubs() {
     case "$1" in
       is-system-running) echo running ;;
       is-active) echo active ;;
-      show) echo "sddm.service" ;;
+      show)
+        case " $* " in
+        *" ActiveState "*) echo active ;;
+        *) echo "sddm.service" ;;
+        esac
+        ;;
+      get-default) echo graphical.target ;;
       list-unit-files) : ;;
       --failed) : ;;
     esac
