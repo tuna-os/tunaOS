@@ -75,16 +75,16 @@ Scored against `.github/green-criteria.yml`: a cell is green only when every **b
 | **albacore** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34018482778#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34018482778#artifacts) | ⬜ | ⬜ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34018482778#artifacts) |
 | **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **flounder** | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/33997367318#artifacts) | — | — | ❌ |
+| **flounder** | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34065400930#artifacts) | — | — | ❌ |
 | **flounder-sid** | ❌ | ❌ | — | — | ❌ |
-| **grouper** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/33985913127#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/33985913127#artifacts) | ⬜ | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/33985913127#artifacts) |
-| **guppy** | ❌ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/33961272090#artifacts) | — | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/33961272090#artifacts) |
+| **grouper** | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34054195332#artifacts) | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34054195332#artifacts) | ⬜ | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34054195332#artifacts) |
+| **guppy** | ❌ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34029066521#artifacts) | — | — | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34029066521#artifacts) |
 | **hummingbird** | ❌ | — | ⬜ | — | — |
 | **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **skipjack** | ❌ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/33966969861#artifacts) | ⬜ | ⬜ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/33966969861#artifacts) |
+| **skipjack** | ❌ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34034503990#artifacts) | ⬜ | ⬜ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34034503990#artifacts) |
 | **wahoo** | ❌ | ❌ | ⬜ | — | — |
-| **yellowfin** | ❌ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34012196749#artifacts) | ⬜ | ⬜ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34012196749#artifacts) |
+| **yellowfin** | ❌ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34084302939#artifacts) | ⬜ | ⬜ | [✅](https://github.com/tuna-os/tunaOS/actions/runs/34084302939#artifacts) |
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
 
@@ -136,7 +136,7 @@ Green criterion 7 (`parity`), first cadence: every desktop's package set audited
 
 ## LUKS E2E
 
-**0 of 52** cells green (52 tested, 0 never tested).
+**1 of 52** cells green (52 tested, 0 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
@@ -151,7 +151,7 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **guppy** | ❌ | ❌ | — | — | ❌ |
 | **gurnard** | — | — | — | — | — |
 | **hummingbird** | ❌ | — | ❌ | — | — |
-| **marlin** | ❌ | ❌ | ❌ | ❌ | ❌ |
+| **marlin** | ❌ | ✅ | ❌ | ❌ | ❌ |
 | **sailfin** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **skipjack** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **wahoo** | ❌ | ❌ | ❌ | — | — |
@@ -161,7 +161,7 @@ NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes 
 
 The table above still shows a result for `flounder:cosmic`, `flounder:gnome`. `.github/build-config.yml` no longer declares those flavours, so `luks-e2e.yml` cannot schedule them and no run will ever turn them green. They are excluded from the count above — a last-measured verdict kept visible, not a gap. Same reasoning as the NVIDIA note.
 
-Newest result 2026-09-01, oldest still-authoritative result 2026-08-06. Results older than the most recent round of fixes are the best available data, not current data.
+Newest result 2026-09-06, oldest still-authoritative result 2026-08-06. Results older than the most recent round of fixes are the best available data, not current data.
 
 ## Desktop Contract Sweep
 
@@ -247,9 +247,10 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 
 | Date | Run | Cells |
 |---|---|---|
+| 2026-09-06 | [34062061739](https://github.com/tuna-os/tunaOS/actions/runs/34062061739) | 1 |
 | 2026-09-03 | [33737812664](https://github.com/tuna-os/tunaOS/actions/runs/33737812664) | 121 |
 | 2026-09-02 | [33629919067](https://github.com/tuna-os/tunaOS/actions/runs/33629919067) | 50 |
-| 2026-09-01 | [33506738063](https://github.com/tuna-os/tunaOS/actions/runs/33506738063) | 125 |
+| 2026-09-01 | [33506738063](https://github.com/tuna-os/tunaOS/actions/runs/33506738063) | 124 |
 | 2026-08-24 | [32747410944](https://github.com/tuna-os/tunaOS/actions/runs/32747410944) | 2 |
 | 2026-08-24 | [32718219267](https://github.com/tuna-os/tunaOS/actions/runs/32718219267) | 1 |
 | 2026-08-24 | [32700275124](https://github.com/tuna-os/tunaOS/actions/runs/32700275124) | 1 |
