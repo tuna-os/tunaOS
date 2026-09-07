@@ -155,7 +155,11 @@ jobs:
           # path gets root's own store, as scripts/build-iso-tacklebox.sh does
           # for the ISO build. This workflow does NOT go through that script,
           # so it needs its own copy of the fix.
-          sudo -E env HOME=/root -u XDG_DATA_HOME -u XDG_CONFIG_HOME \
+          # NOTE the argument order: GNU env stops parsing options at the
+          # first NAME=VALUE, so `env HOME=/root -u XDG_DATA_HOME` treats
+          # `-u` as the command to run and dies with
+          # `env: '-u': No such file or directory`. Options first.
+          sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root \
             "${TACKLEBOX_BIN}" customize-live \
             --image "$IMG" \
             --script "$PWD/live-iso/common/src/customize-live.sh" \

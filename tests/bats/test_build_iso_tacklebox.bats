@@ -446,7 +446,14 @@ JSON
 	# here covers.
 	local repo="${BATS_TEST_DIRNAME}/../.."
 	local wf="${repo}/.github/workflows/live-overlay.yml"
-	grep -q 'sudo -E env HOME=/root -u XDG_DATA_HOME -u XDG_CONFIG_HOME' "$wf"
+	# Options BEFORE assignments: GNU env stops parsing options at the first
+	# NAME=VALUE, so `env HOME=/root -u XDG_DATA_HOME` runs `-u` as the command
+	# and the step dies. Verified by running it, not just by grepping.
+	grep -q 'sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root' "$wf"
+	# A substring pin cannot tell you the invocation is well-formed, so
+	# actually execute the flag order this asserts.
+	run env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root true
+	[ "$status" -eq 0 ]
 
 	# And no OTHER root tacklebox call slips in unpinned. A call that goes
 	# through build-iso-tacklebox.sh inherits the in-body pin; a call that

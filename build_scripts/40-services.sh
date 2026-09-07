@@ -644,40 +644,74 @@ if [[ -f /usr/lib/systemd/system/systemd-resolved.service ]]; then
 	systemctl enable systemd-resolved.service
 fi
 
-# ── umotd: never draw the banner in a non-interactive shell ────────────────
+# ── Login banners must never run in a non-interactive shell ────────────────
 # MEASURED on a marlin:cosmic live ISO. greetd's `source_profile` default runs
-# the session command through a login shell, which sources
-# /etc/profile.d/umotd.sh. umotd is a MOTD banner — it exists for interactive
-# logins — but the file ublue ships calls it unconditionally, so it also fires
-# in every NON-interactive login shell: greetd sessions, `ssh host command`,
-# anything that sources the profile with no terminal draining its output. In
-# the live cosmic session umotd was left in `wait_woken` and the following
-# `exec cosmic-session` never ran: no compositor, no installer, a black screen
-# with zero failed units and nothing in the journal to name the cause.
+# the session command through a login shell, which sources /etc/profile.d/*.
+# `umotd` is a banner — it exists for interactive logins — but ublue's file
+# calls it unconditionally, so it also fired in a NON-interactive login shell
+# with no terminal draining its output. It was left in `wait_woken`, the
+# following `exec cosmic-session` never ran, and the result was a black screen
+# with zero failed units and nothing in the journal naming a cause.
 #
-# `case $- in *i*` is the portable interactive test ($- carries `i` only for
-# interactive shells) and is written in POSIX shell because /etc/profile.d is
-# sourced by dash on the Debian and Ubuntu variants, not only by bash.
+# Two things make this a guard over a LIST rather than a rewrite of one file:
+#
+#  1. Upstream is renaming it. Today's ghcr.io/projectbluefin/common ships
+#     `uwelcome.sh` where older ones shipped `umotd.sh`. Images built from
+#     either must be covered, and a fix keyed to one name silently no-ops on
+#     the other.
+#  2. `uwelcome.sh` has the SAME defect and upstream knows the shape of it —
+#     its own comment says "the portal lookup uwelcome makes can stall the
+#     prompt when the portal cannot start". It guards against running as root
+#     and against double greetings, but not against running with no terminal
+#     at all, which is the case that costs a whole session.
+#
+# The guard is PREPENDED, not substituted, so upstream's own logic is kept
+# intact. `case $- in *i*` is the portable interactive test and is written in
+# POSIX shell because /etc/profile.d is sourced by dash on the Debian and
+# Ubuntu variants, not only by bash.
 #
 # This is the fix that propagates: 40-services.sh runs in every Containerfile,
 # so one patch covers all variants, all desktops, and BOTH live media and
-# installed systems. The live greetd adapters in live-iso/common/src also set
-# `source_profile = false`, which is defence in depth against the next
+# installed systems. It runs in the base-no-de stage, ahead of the per-desktop
+# stages, and nothing they lay down touches /etc/profile.d — so the guard
+# survives them. The live greetd adapters in live-iso/common/src additionally
+# set `source_profile = false`, which is defence in depth against the next
 # blocking profile script rather than a second copy of this fix.
-if [[ -f /etc/profile.d/umotd.sh ]]; then
-	cat >/etc/profile.d/umotd.sh <<'UMOTD_EOF'
-#!/usr/bin/env bash
-# A MOTD banner is for interactive logins only. Unguarded, umotd also runs in
-# non-interactive login shells — where it hung a greetd session dead.
-# See build_scripts/40-services.sh for the measurement.
+_tunaos_guarded=0
+_tunaos_found=0
+for _f in /etc/profile.d/umotd.sh /etc/profile.d/uwelcome.sh; do
+	[[ -f "$_f" ]] || continue
+	_tunaos_found=$((_tunaos_found + 1))
+	if grep -q 'TUNAOS_INTERACTIVE_GUARD' "$_f"; then continue; fi
+	{
+		if head -n1 "$_f" | grep -q '^#!'; then head -n1 "$_f"; fi
+		cat <<'GUARD_EOF'
+# TUNAOS_INTERACTIVE_GUARD — added by build_scripts/40-services.sh.
+# A login banner is for interactive logins. Unguarded, this file also runs in
+# non-interactive login shells — greetd sessions, `ssh host command` — where
+# nothing drains its output and a stall takes the whole session with it.
 case $- in
 *i*) ;;
 *) return 0 ;;
 esac
-
-umotd
-UMOTD_EOF
-	chmod 0644 /etc/profile.d/umotd.sh
+GUARD_EOF
+		if head -n1 "$_f" | grep -q '^#!'; then tail -n +2 "$_f"; else cat "$_f"; fi
+	} >"${_f}.tunaos-guard"
+	# Copy back through the original inode so mode and ownership are kept.
+	cat "${_f}.tunaos-guard" >"$_f"
+	rm -f "${_f}.tunaos-guard"
+	_tunaos_guarded=$((_tunaos_guarded + 1))
+	echo "guarded ${_f} against non-interactive execution"
+done
+# Distinguish "already guarded" from "nothing to guard": only the latter means
+# upstream renamed the file out from under this list, and only the latter
+# should print a note that will be read as a warning.
+if [[ "$_tunaos_found" -eq 0 ]]; then
+	echo "NOTE: no ublue login-banner script found in /etc/profile.d to guard."
+	echo "      If upstream renamed it again, add the new name to the list in"
+	echo "      build_scripts/40-services.sh — see"
+	echo "      tests/bats/test_umotd_noninteractive_guard.bats for why."
 fi
+unset _tunaos_guarded _tunaos_found _f
 
 printf "::endgroup::\n"
