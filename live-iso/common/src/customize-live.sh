@@ -279,6 +279,119 @@ After=tunaos-live-ssh-credentials.service
 EOF
 	systemctl enable tunaos-live-ssh-credentials.service "$SSH_UNIT"
 
+	# ── Dev-ISO diagnostics dump ──────────────────────────────────────────
+	#
+	# Everything the harness learns about a live session today it learns from
+	# serial markers and a screenshot. When the session simply never starts —
+	# marlin:kde: graphical.target inactive, framebuffer stddev exactly 0, a
+	# text login on ttyS0 — those say THAT it failed and nothing about why, and
+	# the one artifact that would (`journalctl -u sddm`) needs a shell in the
+	# guest. On marlin that shell does not exist: sshd accepts and immediately
+	# closes over both TCP and vsock, and the harness attaches the serial as a
+	# write-only file, so the text login cannot be answered either.
+	#
+	# So the guest reports on itself. This dumps the display-manager and sshd
+	# journals, the failed units, the pending jobs and the autologin config
+	# straight to /dev/console — which IS the serial log the harness already
+	# captures and uploads as an artifact. Dev/E2E media only, and it runs
+	# AFTER the readiness marker, so it can neither gate nor slow a run.
+	#
+	# Sections are fenced with greppable markers so a failing cell can be
+	# triaged from the artifact without booting anything.
+	cat >/usr/libexec/tunaos-live-debug <<'DBGEOF'
+#!/usr/bin/env bash
+# Dump live-session diagnostics to the console (dev/E2E ISOs only).
+# Not set -e: a missing unit or command must not stop the remaining sections.
+set -u
+
+section() {
+	echo "TUNAOS_LIVE_DEBUG_BEGIN $1"
+	shift
+	"$@" 2>&1 | sed 's/^/| /'
+	echo "TUNAOS_LIVE_DEBUG_END"
+}
+
+echo "TUNAOS_LIVE_DEBUG_START uptime=$(cut -d. -f1 /proc/uptime)"
+
+# Whichever DM this desktop installed — the unit name differs per desktop
+# (sddm / plasmalogin / gdm / greetd / lightdm / cosmic-greeter), and asking
+# for all of them is cheaper than detecting.
+DMS=(sddm plasmalogin gdm gdm3 greetd lightdm cosmic-greeter display-manager)
+
+section targets systemctl is-active graphical.target multi-user.target display-manager.service
+section failed-units systemctl list-units --failed --no-pager --no-legend
+section pending-jobs systemctl list-jobs --no-pager --no-legend
+section sessions loginctl list-sessions --no-legend
+
+for dm in "${DMS[@]}"; do
+	systemctl list-unit-files "${dm}.service" --no-legend 2>/dev/null | grep -q . || continue
+	section "dm-status-${dm}" systemctl status --no-pager --full "${dm}.service"
+	section "dm-journal-${dm}" journalctl -b --no-pager -n 60 -u "${dm}.service"
+done
+
+# sshd: the harness's own way into the guest, and on marlin it accepts and
+# then closes every connection. Both unit names, same reason as above.
+for unit in sshd ssh sshd@ systemd-ssh-generator; do
+	systemctl list-unit-files "${unit}*" --no-legend 2>/dev/null | grep -q . || continue
+	section "ssh-journal-${unit}" journalctl -b --no-pager -n 40 -u "${unit}*"
+done
+section ssh-listeners ss -lntp
+section ssh-config sshd -T
+section ssh-hostkeys ls -l /etc/ssh/
+
+section autologin-conf sh -c 'cat /etc/sddm.conf.d/*.conf /etc/plasmalogin.conf.d/*.conf 2>/dev/null'
+section sessions-available sh -c 'ls /usr/share/wayland-sessions/ /usr/share/xsessions/ 2>/dev/null'
+section drm sh -c 'ls -l /dev/dri 2>&1; journalctl -b --no-pager -n 20 -k -g "drm|virtio"'
+section compositors sh -c 'pgrep -a "kwin_wayland|plasmashell|gnome-shell|cosmic-comp|niri|xfwl4|Xorg" || echo "no compositor process"'
+section installer sh -c 'pgrep -a flatpak || echo "no flatpak process"'
+
+echo "TUNAOS_LIVE_DEBUG_DONE"
+DBGEOF
+	chmod 0755 /usr/libexec/tunaos-live-debug
+
+	cat >/usr/lib/systemd/system/tunaos-live-debug.service <<'DBGUNITEOF'
+[Unit]
+Description=Dump live-session diagnostics to the console (dev/E2E ISOs only)
+# No ordering on tunaos-live-ready.service, deliberately, and this is the
+# whole design. That unit is After=NetworkManager-wait-online.service (90s
+# default timeout) and on a marlin:kde boot where the live session never
+# starts it had not emitted its marker minutes in — so a diagnostic ordered
+# behind it stays silent in exactly the failure it exists to explain. Same
+# rule tunaos-live-ready.service states about itself: "it must speak loudest
+# when the rest of the boot is failing."
+#
+# Driven by tunaos-live-debug.timer instead of any target, so nothing in the
+# boot can gate it.
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/tunaos-live-debug
+# StandardOutput=tty + TTYPath, not journal+console: in headless QEMU
+# (-display none) /dev/console is NOT the serial port, which is why
+# tunaos-live-ready.service writes to /dev/ttyS0 directly. A console-routed
+# dump would never reach the serial log the harness captures.
+StandardOutput=tty
+TTYPath=/dev/ttyS0
+StandardError=tty
+RemainAfterExit=yes
+TimeoutStartSec=300
+DBGUNITEOF
+
+	cat >/usr/lib/systemd/system/tunaos-live-debug.timer <<'DBGTIMEREOF'
+[Unit]
+Description=Dump live-session diagnostics shortly after boot (dev/E2E ISOs only)
+
+[Timer]
+# 40s in: late enough that the display manager has tried and logged, early
+# enough that the harness is still running (it gives up on paint at 120s).
+OnBootSec=40s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
+DBGTIMEREOF
+	systemctl enable tunaos-live-debug.timer
+
 	# fisherman (the LUKS/TPM install backend) runs as root over a
 	# non-interactive SSH command, so sudo has no TTY to prompt on. Grant
 	# liveuser NOPASSWD sudo — dev/E2E media only, matching
@@ -763,6 +876,32 @@ polkit.addRule(function(action, subject) {
     }
 });
 RULESEOF
+
+# ── 4b. Never let a download block the live desktop ──────────────────────────
+#
+# build_scripts/desktop/flatpak-preinstall.sh enables
+# flatpak-preinstall.service so an INSTALLED system self-installs the curated
+# app set. That unit is Type=oneshot and WantedBy=multi-user.target, so the
+# target waits for it — and graphical.target waits on multi-user.target.
+#
+# On live media that is a desktop that never starts. MEASURED on a marlin:kde
+# dev ISO, from the guest's own diagnostics at 40s uptime:
+#
+#   300  flatpak-preinstall.service    start running
+#   163  multi-user.target             start waiting
+#   295  tunaos-live-ready.service     start waiting
+#   162  graphical.target              start waiting
+#
+# One blocker, three symptoms: a black screen, no TUNAOS_LIVE_READY marker for
+# the harness, and an install experience nobody could have started from the
+# screen. It is intermittent purely because it tracks how long the download
+# takes — markers were observed at 9s, at 98s, and not at all.
+#
+# The live session has nothing to gain from it either way: it is thrown away
+# at reboot, and the installer it needs is already baked into this squash
+# below. Masked rather than disabled so nothing pulls it back in as a
+# dependency.
+systemctl mask flatpak-preinstall.service || true
 
 # ── 5. Installer offline-stores config ────────────────────────────────────────
 # Probe list the frontends read to find embedded OCI stores; missing paths

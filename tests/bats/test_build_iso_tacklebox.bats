@@ -428,3 +428,52 @@ JSON
   result="localhost/yellowfin:gnome"
   [ "$result" = "localhost/yellowfin:gnome" ]
 }
+
+@test "the root context uses root's container storage, not the caller's" {
+	# The Justfile invokes this under `sudo -E`, which preserves HOME, and
+	# podman picks its store from HOME. Without pinning it, every root-context
+	# podman call lands in the INVOKING USER's rootless store — whose files
+	# are owned by that user on disk — and mksquashfs, running as real root
+	# with no user namespace, records uid 1000 for every file in the live
+	# root. MEASURED: /usr, /usr/bin/sshd and /usr/share/empty.sshd all came
+	# out `755 james:james`, after which sshd refuses to start at all
+	# ("/usr/share/empty.sshd must be owned by root", exit 255, restart loop),
+	# which shuts the only door the e2e harness has into the guest.
+	local script="${BATS_TEST_DIRNAME}/../../scripts/build-iso-tacklebox.sh"
+	grep -q 'export HOME="${TUNAOS_ROOT_HOME:-/root}"' "$script"
+	# XDG_DATA_HOME would override HOME for storage lookup, so it must go too.
+	grep -q 'unset XDG_DATA_HOME XDG_CONFIG_HOME' "$script"
+	# ...and only in the root context: the user-store calls this script makes
+	# on purpose go through `sudo -u "$SUDO_USER"`.
+	grep -B 2 'export HOME=' "$script" | grep -q 'EUID -eq 0'
+}
+
+@test "every sudo -E tacklebox path pins HOME, not just this script" {
+	# The fix above lives in build-iso-tacklebox.sh, but that is not the only
+	# way tacklebox gets run as root. .github/workflows/live-overlay.yml calls
+	# `customize-live` directly under `sudo -E` and never sources this script,
+	# so it needs its own copy — otherwise the published live overlay carries
+	# the same uid-1000 payload and the same dead sshd, from a path no test
+	# here covers.
+	local repo="${BATS_TEST_DIRNAME}/../.."
+	local wf="${repo}/.github/workflows/live-overlay.yml"
+	# Options BEFORE assignments: GNU env stops parsing options at the first
+	# NAME=VALUE, so `env HOME=/root -u XDG_DATA_HOME` runs `-u` as the command
+	# and the step dies. Verified by running it, not just by grepping.
+	grep -q 'sudo -E env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root' "$wf"
+	# A substring pin cannot tell you the invocation is well-formed, so
+	# actually execute the flag order this asserts.
+	run env -u XDG_DATA_HOME -u XDG_CONFIG_HOME HOME=/root true
+	[ "$status" -eq 0 ]
+
+	# And no OTHER root tacklebox call slips in unpinned. A call that goes
+	# through build-iso-tacklebox.sh inherits the in-body pin; a call that
+	# invokes the tacklebox BINARY directly does not, so it must pin HOME
+	# itself. live-overlay.yml was exactly that case and nothing caught it.
+	local hits
+	hits="$(grep -rn 'sudo -E .*\(TACKLEBOX_BIN\|tacklebox\)' \
+		"${repo}/.github/workflows" "${repo}/scripts" 2>/dev/null |
+		grep -v 'HOME=' |
+		grep -v 'build-iso-tacklebox\.sh' || true)"
+	[ -z "$hits" ]
+}

@@ -100,6 +100,26 @@
 #                         so it is opt-in rather than folded into every
 #                         --luks cell; docs/LUKS-TPM.md calls this "the
 #                         per-variant TPM-enrollment test".
+#   TUNAOS_E2E_SESSION_LOGIN=1
+#                         --luks only. After the passphrase gate passes, log
+#                         in at the INSTALLED system's greeter and require
+#                         this flavor's compositor to be running as the
+#                         account the recipe created — the check that
+#                         separates a greeter that merely drew from a session
+#                         that started. Turning it on also adds a `user` block
+#                         to the fisherman recipe and a port forward to the
+#                         installed boot, both of which exist only for this
+#                         phase. Default 0: it changes the install shape, and
+#                         user creation on a sealed/composefs image is its own
+#                         question (fisherman internal/post/user.go).
+#   TUNAOS_E2E_REQUIRE_SESSION=1
+#                         Make that phase fatal (exit 10) instead of advisory.
+#   E2E_CHECKPOINT_STRICT=1
+#                         Make the screen-checkpoint assertions
+#                         (scripts/install-checkpoints.py against
+#                         tests/install-pipeline-screens.yaml) fatal (exit 9)
+#                         instead of a warning. See
+#                         docs/INSTALL-PIPELINE-CHECKPOINTS.md.
 #   E2E_WALL_CLOCK_LIMIT  Seconds before the whole harness gives up and
 #                         terminates itself with a diagnosis (default 10800,
 #                         0 to disable). Relative to when this script starts.
@@ -135,6 +155,22 @@
 #      either still showed the cryptsetup passphrase prompt (the first-boot
 #      enrollment oneshot did not seal a working key) or never reached
 #      login within --timeout. See installed-tpm-autounlock-serial.log.
+#   9  screen-checkpoint assertions failed — the frames this run captured do
+#      not show the pipeline the checkpoint contract
+#      (tests/install-pipeline-screens.yaml) requires: a stage went
+#      unphotographed, rendered blank, showed the wrong screen, or showed
+#      failure text (a panic, an emergency shell, a LUKS prompt still waiting
+#      after the passphrase was accepted). Only reachable with
+#      E2E_CHECKPOINT_STRICT=1; advisory otherwise. Distinct from 6 and 7 the
+#      same way those are distinct from each other: 6 says nothing drew, 7
+#      says the guest reports no working desktop, 9 says the thing that drew
+#      is not the screen this stage was supposed to reach.
+#   10 the installed system's greeter login could not be proven — only
+#      reachable with TUNAOS_E2E_REQUIRE_SESSION=1, and only when the
+#      greeter-login phase (TUNAOS_E2E_SESSION_LOGIN=1) is running at all.
+#      Either sshd on the installed system never accepted the account the
+#      recipe created, or no compositor for this flavor was running as it
+#      after the password was typed at the greeter.
 #   75 the job budget was already exhausted before the harness started
 #      (E2E_WALL_CLOCK_DEADLINE in the past) — nothing was tested, and the
 #      fix is upstream of here: whatever ran first is too slow, or the
@@ -160,6 +196,12 @@ CPUS=4
 # "Could not set up host forwarding rule 'tcp::2222-:22'" — and because two
 # runs on one host would collide with each other.
 SSH_PORT="${TBOX_E2E_SSH_PORT:-2222}"
+
+# The account fisherman creates on the installed system (see the recipe in
+# run_install) and the credentials the greeter-login phase types. Lowercase,
+# no separators: it has to be a valid user name on every base in the fleet.
+E2E_INSTALL_USER="${TUNAOS_E2E_INSTALL_USER:-tunaose2e}"
+E2E_INSTALL_PASSWORD="${TUNAOS_E2E_INSTALL_PASSWORD:-tunaose2e}"
 NO_KVM=0
 KEEP_VM=0
 LUKS=0
@@ -459,6 +501,20 @@ if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /de
 	echo "==> GPU: virgl (${_gpu_gl_device} + egl-headless /dev/dri/renderD128 + vnc surface) — Smithay compositors can render"
 else
 	echo "==> GPU: ${_gpu_plain_args[*]} headless (no render node/virgl) — niri/xfwl4 will not render here"
+	# Tell the screen checkpoints to REPORT rather than enforce the pixel
+	# assertions for the desktops listed under needs_virgl in
+	# tests/install-pipeline-screens.yaml. Without this every such cell fails
+	# its live-desktop checkpoint on every CI runner, none of which has a
+	# render node.
+	#
+	# Measured caveat worth keeping: cosmic is on that list but does NOT in
+	# fact need virgl — cosmic-comp drew fine on a host with no virtio-vga-gl
+	# (framebuffer stddev 0.13, and the calibrated keywords matched). The blank
+	# cosmic frames that motivated the list were greetd's source_profile hang,
+	# not the GPU. Trimming the list would make the gate real for cosmic; it is
+	# left alone here because that belongs with a CI measurement, not with this
+	# merge.
+	TUNAOS_CHECKPOINT_NO_GPU=1
 fi
 
 # Locate architecture-appropriate UEFI firmware. Path varies across distros
@@ -1599,6 +1655,250 @@ run_installer_gui_checks() {
 	return 0
 }
 
+# Type at the QEMU monitor: one HMP command, no reply needed.
+monitor_cmd() {
+	[[ -S "$MONITOR_SOCK" ]] || return 1
+	command -v socat &>/dev/null || return 1
+	echo "$1" | socat - "UNIX-CONNECT:${MONITOR_SOCK}" >/dev/null 2>&1 || return 1
+}
+
+# Type a string as hardware key events. Compositor-agnostic: a greeter cannot
+# be driven over the serial console (it is graphical) and the installed system
+# has no automation agent, so sendkey is the only way in. Mapping copied from
+# projectbluefin/utah's luks-e2e.sh send_keys, which drives GDM the same way.
+send_text() {
+	local text="$1" ch key i
+	for ((i = 0; i < ${#text}; i++)); do
+		ch="${text:i:1}"
+		case "$ch" in
+		[a-z0-9]) key="$ch" ;;
+		[A-Z]) key="shift-$(printf '%s' "$ch" | tr '[:upper:]' '[:lower:]')" ;;
+		"-") key="minus" ;;
+		"_") key="shift-minus" ;;
+		".") key="dot" ;;
+		" ") key="spc" ;;
+		*)
+			echo "WARN: no sendkey mapping for '${ch}' — skipping" >&2
+			continue
+			;;
+		esac
+		monitor_cmd "sendkey ${key}" || return 1
+		sleep 0.05
+	done
+	return 0
+}
+
+# Log in at the INSTALLED system's greeter and prove a real session starts.
+#
+# The installed-desktop screenshot proves something rendered; it cannot tell a
+# drawn greeter from a running desktop, and that comment says so. The
+# discriminator the live path uses — `pgrep -x <compositor>` over SSH — was
+# unavailable here only because the recipe created no account. It does now, so:
+#
+#   1. reach sshd on the installed system as that account,
+#   2. assert its display manager is active,
+#   3. type the password at the greeter (Enter first: GDM offers the single
+#      account already selected and Enter opens its password field; SDDM,
+#      lightdm and cosmic-greeter focus the field already, where a leading
+#      Enter is harmless),
+#   4. wait for THIS desktop's compositor to be running as that user,
+#   5. photograph the session.
+#
+# Advisory unless TUNAOS_E2E_REQUIRE_SESSION=1: an installed system whose sshd
+# is not enabled (any non-dev image) cannot answer step 1 at all, and reporting
+# that as a product failure would be wrong.
+run_installed_session_login() {
+	local user="$E2E_INSTALL_USER" pass="$E2E_INSTALL_PASSWORD"
+	local ssh_installed=(sshpass -p "$pass" ssh
+		-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null
+		-o ConnectTimeout=10 -o LogLevel=ERROR
+		-p "$SSH_PORT" "${user}@127.0.0.1")
+
+	if ! command -v sshpass &>/dev/null; then
+		echo "==> installed-session: sshpass not installed — skipping"
+		record_luks_evidence "TUNAOS_LUKS_E2E_INSTALLED_SESSION result=skipped reason=no-sshpass"
+		return 0
+	fi
+
+	echo "==> installed-session: waiting for sshd as ${user}..."
+	# 60s, not the 150s the compositor wait below gets: sshd on the installed
+	# system is either enabled in the image or it is not, and the "not"
+	# case (any non-dev image) must not cost two and a half minutes per cell.
+	local reachable=0 i
+	for i in $(seq 1 20); do
+		if "${ssh_installed[@]}" true 2>/dev/null; then
+			reachable=1
+			break
+		fi
+		sleep 3
+	done
+	if [[ "$reachable" -ne 1 ]]; then
+		echo "::warning::installed system did not accept SSH as ${user} — cannot prove a session started"
+		record_luks_evidence "TUNAOS_LUKS_E2E_INSTALLED_SESSION result=unavailable reason=no-ssh"
+		[[ "${TUNAOS_E2E_REQUIRE_SESSION:-0}" -eq 1 ]] && return 10
+		return 0
+	fi
+
+	local dm
+	dm=$("${ssh_installed[@]}" "systemctl is-active display-manager.service" 2>/dev/null || true)
+	echo "==> installed-session: display-manager.service is ${dm:-unknown}"
+
+	echo "==> installed-session: typing the password at the greeter..."
+	monitor_cmd "sendkey ret" || true
+	sleep 3
+	send_text "$pass" || true
+	monitor_cmd "sendkey ret" || true
+
+	# The compositor this flavor's session must run, same mapping as
+	# scripts/e2e-installer-gui-checks.sh — a generic "any compositor" check
+	# would accept the greeter's own.
+	local comps
+	case "$(printf '%s' "${FLAVOR:-gnome}" | cut -d- -f1)" in
+	kde) comps="kwin_wayland plasmashell" ;;
+	cosmic) comps="cosmic-comp" ;;
+	niri) comps="niri" ;;
+	xfce) comps="xfwl4 labwc wayfire xfwm4" ;;
+	*) comps="gnome-shell" ;;
+	esac
+
+	local found=""
+	for i in $(seq 1 36); do
+		for c in $comps; do
+			if "${ssh_installed[@]}" "pgrep -u ${user} -x ${c} >/dev/null" 2>/dev/null; then
+				found="$c"
+				break 2
+			fi
+		done
+		sleep 5
+	done
+
+	screenshot "installed-session" || true
+	if [[ -z "$found" ]]; then
+		echo "::warning::no session compositor (${comps}) running as ${user} after greeter login"
+		"${ssh_installed[@]}" "loginctl list-sessions --no-legend" 2>/dev/null || true
+		record_luks_evidence "TUNAOS_LUKS_E2E_INSTALLED_SESSION result=fail dm=${dm:-unknown}"
+		[[ "${TUNAOS_E2E_REQUIRE_SESSION:-0}" -eq 1 ]] && return 10
+		return 0
+	fi
+	echo "==> installed-session: ${found} is running as ${user}"
+	record_luks_evidence "TUNAOS_LUKS_E2E_INSTALLED_SESSION result=pass compositor=${found} dm=${dm:-unknown}"
+	return 0
+}
+
+# Print the guest's own diagnostics dump out of the serial log.
+#
+# tunaos-live-debug.service (dev/E2E ISOs only) writes fenced sections to the
+# console — the display manager's journal, sshd's, the failed units, the
+# autologin config — precisely because the interesting live-session failures
+# leave no other trace: marlin:kde reaches its readiness marker with
+# graphical.target inactive and a framebuffer measuring exactly 0, and both
+# ways into that guest are shut (sshd resets every connection; the serial
+# chardev is a write-only file). Reading the sections back out of the serial
+# log is what turns that from "it was blank" into a cause.
+dump_live_debug_sections() {
+	local log
+	for log in "${SERIAL_LOG}" "${OUTPUT_DIR}/live-serial.log"; do
+		[[ -s "$log" ]] || continue
+		grep -q "TUNAOS_LIVE_DEBUG_START" "$log" || continue
+		echo "==> Guest diagnostics from $(basename "$log"):"
+		sed -n '/TUNAOS_LIVE_DEBUG_START/,/TUNAOS_LIVE_DEBUG_DONE/p' "$log" |
+			sed 's/^/    /'
+		return 0
+	done
+	echo "==> No guest diagnostics in the serial log (tunaos-live-debug runs on dev ISOs only)"
+	return 0
+}
+
+# OCR-assert the frames this run captured against the pipeline checkpoint
+# contract (tests/install-pipeline-screens.yaml) — see
+# scripts/install-checkpoints.py for what each assertion means.
+#
+# Every screenshot this harness takes was, until now, evidence only a human
+# could read: the run uploads a PNG and nothing checks what is in it. The
+# failures that matters most here all photograph cleanly — a compositor that
+# never started, a black screen behind a running installer, an installed disk
+# sitting in an emergency shell or still at a passphrase prompt — so the
+# serial-marker gates above can pass on an image whose screen is wrong.
+#
+# Advisory by default, for the same reason the GUI checks are: OCR of a
+# framebuffer is noisy, and a keyword contract wants a few real runs behind it
+# before it can fail a build. E2E_CHECKPOINT_STRICT=1 makes it a gate (exit 9).
+run_checkpoint_asserts() {
+	local script_dir
+	script_dir="$(dirname "${BASH_SOURCE[0]}")"
+	local py="${script_dir}/install-checkpoints.py"
+	[[ -f "$py" ]] || return 0
+
+	local args=(--flavor "${FLAVOR:-gnome}" --variant "${VARIANT:-}")
+	[[ "${TUNAOS_CHECKPOINT_NO_GPU:-0}" -eq 1 ]] && args+=(--no-gpu)
+	# The live phase is the only one a boot-only run can satisfy; asserting
+	# the installed phases there would report a missing 30-installed frame as
+	# a failure of a run that never claimed to install anything.
+	case "$MODE" in
+	ready | ssh | app-launch) args+=(--phase live) ;;
+	esac
+
+	local out rc=0
+	out=$(python3 "$py" "$OUTPUT_DIR" "${args[@]}" 2>&1) || rc=$?
+
+	# Re-capture and re-check while the desktop is still settling.
+	#
+	# wait_for_paint stops at "something drew", and on KDE the first thing
+	# that draws is the Plasma splash — MEASURED on a fixed marlin:kde dev
+	# ISO: splash at stddev 0.0448, the installer's welcome page at 0.0909 a
+	# short while later. Judging the stage on the splash frame reports "the
+	# installer is not on screen" about a session that is simply mid-start,
+	# and a gate that cries wolf on every KDE run is a gate someone will turn
+	# off. Bounded, and only on the live-only modes: the install modes have
+	# already driven the session by the time they check.
+	# 240s: MEASURED lower bound only. On this workstation a fixed marlin:kde
+	# ISO was still showing the Plasma splash after a full 90s of settling,
+	# and the installer was on screen when the guest was looked at again
+	# later — so 90 was demonstrably too short and the true figure is
+	# somewhere above it. KDE composites through llvmpipe here, so a CI runner
+	# will not be faster. The loop exits the moment the contract passes, so
+	# this budget costs nothing on a session that comes up promptly and only
+	# spends time on the runs that would otherwise report a false failure.
+	local settle="${TBOX_E2E_CHECKPOINT_SETTLE:-240}"
+	case "$MODE" in
+	ready | ssh)
+		local waited=0 label="10-ready"
+		[[ "$MODE" == "ssh" ]] && label="20-ssh"
+		while [[ "$rc" -ne 0 && "$waited" -lt "$settle" ]]; do
+			sleep 15
+			waited=$((waited + 15))
+			screenshot "$label" || true
+			rc=0
+			out=$(python3 "$py" "$OUTPUT_DIR" "${args[@]}" 2>&1) || rc=$?
+		done
+		[[ "$waited" -gt 0 ]] &&
+			echo "==> screen checkpoints settled after ${waited}s"
+		;;
+	esac
+	echo "$out" | tee -a "${SERIAL_LOG}"
+
+	# 77 is "tesseract or PyYAML is missing" — a fact about the host, not
+	# about the image. Never let it colour the verdict.
+	if [[ "$rc" -eq 77 ]]; then
+		echo "::warning::screen checkpoints skipped — missing dependency (see above)"
+		return 0
+	fi
+	if [[ "$rc" -ne 0 ]]; then
+		echo "::warning::screen checkpoints reported ${rc} failure(s) for ${VARIANT:-?}:${FLAVOR:-gnome}"
+		# A failed screen checkpoint is the case the dev ISO's own
+		# diagnostics dump exists for (live-iso/common/src/customize-live.sh,
+		# tunaos-live-debug.service). It lands in the serial log; surface it
+		# in the job log too, because the whole point is to explain a wrong
+		# screen without anyone downloading an artifact or booting a guest.
+		dump_live_debug_sections
+		if [[ "${E2E_CHECKPOINT_STRICT:-0}" -eq 1 ]]; then
+			echo "ERROR: E2E_CHECKPOINT_STRICT=1 and screen checkpoints failed" >&2
+			return 9
+		fi
+	fi
+	return 0
+}
+
 # Harvest the installed-system TAP checks from the serial console. The
 # installed system has no SSH user, so the snosi-derived assertions are baked
 # into the image (build_scripts/checks/e2e-runtime-checks.sh, run by
@@ -2501,6 +2801,38 @@ run_install() {
 	# enrollment (fisherman first-boot oneshot) means the first installed
 	# boot still needs a key at the prompt; a known passphrase lets the E2E
 	# inject it deterministically, after which TPM auto-unlock takes over.
+	# An account on the installed system, which fisherman creates through
+	# `useradd` (its internal/post/user.go). Two things depend on it, and
+	# neither was possible while the recipe created no user at all:
+	#
+	#   * the greeter has somebody to offer, so the login phase can actually
+	#     log in — the "greeter-drew-but-no-session hole" the installed-desktop
+	#     screenshot comment names;
+	#   * sshd on the installed system has an account to accept, which is how
+	#     the `pgrep -x <compositor>` discriminator the live path already uses
+	#     becomes available to the installed path too.
+	#
+	# groups: [] deliberately. `useradd --groups wheel` fails outright where
+	# that group does not exist (the apt bases call it sudo), and this account
+	# needs no privileges — it needs to exist and to log in.
+	#
+	# OFF by default, and gated on the phase that needs it, because it changes
+	# the install shape for every cell that runs this script. fisherman's own
+	# internal/post/user.go carries the warning: on a SEALED image `chroot
+	# <sysroot> useradd` exits 127 because /usr is mounted read-only, so user
+	# creation is a per-backend question and marlin is exactly the composefs
+	# class that comment is about. Turn it on deliberately
+	# (TUNAOS_E2E_SESSION_LOGIN=1) and read the answer on its own, rather than
+	# tangled with the install verdict.
+	local user_json=""
+	if [[ "${TUNAOS_E2E_SESSION_LOGIN:-0}" -eq 1 ]]; then
+		user_json="  \"user\": {
+    \"username\": \"${E2E_INSTALL_USER}\",
+    \"fullname\": \"TunaOS End To End\",
+    \"password\": \"${E2E_INSTALL_PASSWORD}\",
+    \"groups\": []
+  },"
+	fi
 	local encryption_json='{"type": "none"}'
 	local E2E_LUKS_PASS="tunaos-e2e-luks"
 	[[ "$LUKS" -eq 1 ]] && encryption_json="{\"type\": \"tpm2-luks-passphrase\", \"passphrase\": \"${E2E_LUKS_PASS}\"}"
@@ -2521,6 +2853,7 @@ run_install() {
   "bootloader": "${bootloader}",
   "hostname": "tunaos-e2e",
   "encryption": ${encryption_json},
+${user_json}
   "flatpaks": []
 }
 EOF
@@ -2554,6 +2887,21 @@ EOF
 	# xfs volume inside a nested QEMU guest ran for 25 minutes and was still
 	# going when the timer fired — no stall, just a big image on slow virtual
 	# storage. Raised, and overridable for a cell that legitimately needs more.
+	# Record WHICH fisherman is about to run. Each desktop ships its own
+	# org.tunaos.Installer* flatpak, each bundling its own fisherman build,
+	# and the pins move independently — so "the installer" is not one thing
+	# across flavours. MEASURED: a marlin:cosmic install died at step 9/10 on
+	# `writing hostname: finding deployment dir`, fixed in fisherman 36902966
+	# months earlier; the cosmic/niri/xfce flatpaks bundled 35c8f6f1
+	# (2026-07-31) while kde bundled 027fa25c (2026-08-29). Establishing that
+	# took mounting both ISOs and running `go version -m` on the binaries.
+	# Go stamps the revision into the binary as plain text, so `grep -a` reads
+	# it with no go toolchain and no `strings` in the guest. One line here
+	# turns that archaeology into a grep of the evidence log.
+	local fisherman_rev
+	fisherman_rev="$("${ssh_cmd[@]}" "grep -aoE 'vcs\\.revision=[0-9a-f]{40}|vcs\\.time=[0-9TZ:-]{20}' /usr/local/bin/fisherman 2>/dev/null | sort -u | tr '\\n' ' '" 2>/dev/null || true)"
+	echo "TUNAOS_LUKS_E2E_FISHERMAN ${fisherman_rev:-<unstamped or unreadable>}" | tee -a "${SERIAL_LOG}"
+
 	local install_timeout="${TUNAOS_E2E_INSTALL_TIMEOUT:-3600}"
 	timeout "$install_timeout" "${ssh_cmd[@]}" "sudo /usr/local/bin/fisherman ${GUEST_HOME}/e2e-recipe.json 2>&1" 2>&1 | tee -a "${SERIAL_LOG}" || {
 		rc=$?
@@ -2688,6 +3036,17 @@ EOF
 		# QEMU fw_cfg boot order that OVMF applies over the stale NVRAM,
 		# putting this disk first and leaving the shell as the last resort.
 		reset_qemu_sockets
+		# The installed boot has had no port forward at all: nothing ever
+		# needed to talk to it. The greeter-login phase does — it is the
+		# `pgrep -u <user> -x <compositor>` check that separates a drawn
+		# greeter from a running session — so give it one when that phase will
+		# run, and not otherwise. The live VM is powered down by here, so
+		# SSH_PORT is free; adding the forward unconditionally would only
+		# create a way for QEMU to fail to start on a busy port.
+		local INSTALLED_HOSTFWD=""
+		[[ "${TUNAOS_E2E_SESSION_LOGIN:-0}" -eq 1 ]] &&
+			INSTALLED_HOSTFWD=",hostfwd=tcp::${SSH_PORT}-:22"
+
 		# shellcheck disable=SC2086  # TPM_ARGS is intentionally word-split (empty unless --luks)
 		"$QEMU" -name "tunaos-iso-e2e-installed" -machine "$QEMU_MACHINE" -cpu "$CPU_ARG" \
 			-accel "$ACCEL" -m "$MEMORY" -smp "$CPUS" \
@@ -2696,7 +3055,7 @@ EOF
 			-drive "if=pflash,format=raw,file=${OVMF_VARS}" \
 			-drive "if=none,id=disk,file=${INSTALL_DISK},format=qcow2" \
 			-device virtio-blk-pci,drive=disk,bootindex=0 \
-			-netdev "user,id=net0" -device virtio-net-pci,netdev=net0 \
+			-netdev "user,id=net0${INSTALLED_HOSTFWD}" -device virtio-net-pci,netdev=net0 \
 			-monitor "unix:${MONITOR_SOCK},server,nowait" \
 			-serial "unix:${FB_SERIAL},server,nowait" \
 			"${QEMU_GPU_ARGS[@]}" -pidfile "$QEMU_PIDFILE" -daemonize || {
@@ -2711,7 +3070,11 @@ EOF
 		}
 		# 5th arg: keep draining the serial for up to 300s past login waiting
 		# for the desktop contract. See luks-first-boot.py for why.
-		python3 "$(dirname "${BASH_SOURCE[0]}")/luks-first-boot.py" \
+		# TUNAOS_LUKS_NO_POWEROFF: luks-first-boot.py powers the guest off
+		# when it is done, which would leave the greeter-login phase below
+		# with nothing to log into. Keep it up when that phase will run.
+		TUNAOS_LUKS_NO_POWEROFF="${TUNAOS_E2E_SESSION_LOGIN:-0}" \
+			python3 "$(dirname "${BASH_SOURCE[0]}")/luks-first-boot.py" \
 			"$FB_SERIAL" "$MONITOR_SOCK" "$E2E_LUKS_PASS" 900 300 \
 			2>&1 | tee "${OUTPUT_DIR}/installed-serial.log" || {
 			echo "ERROR: encrypted disk did not unlock with the passphrase / reach login"
@@ -2749,6 +3112,23 @@ EOF
 				_shot="blank"
 			else
 				_shot="unmeasured"
+			fi
+		fi
+		# ── Log in at the greeter, before the guest is killed ─────────────
+		# Everything above proves the disk unlocked and something drew. This is
+		# the step that separates a drawn greeter from a running session, and
+		# it needs the live guest — one line down there is no surface and no
+		# sshd left to ask. TUNAOS_E2E_SESSION_LOGIN=0 opts out.
+		if [[ "${TUNAOS_E2E_SESSION_LOGIN:-0}" -eq 1 ]]; then
+			local _sess_rc=0
+			run_installed_session_login || _sess_rc=$?
+			# The graceful powerdown luks-first-boot.py skipped on our behalf,
+			# so swtpm state and LUKS metadata still flush cleanly.
+			monitor_cmd "system_powerdown" || true
+			sleep 8
+			if [[ "$_sess_rc" -ne 0 ]]; then
+				[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
+				return "$_sess_rc"
 			fi
 		fi
 		[[ -s "$QEMU_PIDFILE" ]] && kill "$(cat "$QEMU_PIDFILE")" 2>/dev/null || true
@@ -3150,6 +3530,11 @@ ready)
 		fi
 	fi
 	screenshot_compare "10-ready" || true
+	if [[ "$rc" -eq 0 ]]; then
+		run_checkpoint_asserts || rc=$?
+	else
+		run_checkpoint_asserts || true
+	fi
 	exit "$rc"
 	;;
 ssh)
@@ -3160,8 +3545,15 @@ ssh)
 		check_ssh && break
 		sleep 2
 	done
-	check_ssh
-	rc=$?
+	# `check_ssh` alone is a bare failing command under `set -e`: when SSH
+	# never comes up the shell exits right here, before the 20-ssh screenshot
+	# below — so the one run that most needs a picture of the screen is the
+	# one that produces none. Measured on a local marlin:kde dev ISO whose
+	# sshd reset every connection: exit 5, empty evidence directory, and the
+	# live session's actual state unknowable. `|| rc=$?` keeps the verdict and
+	# lets the evidence be collected.
+	rc=0
+	check_ssh || rc=$?
 	if [[ "$rc" -eq 0 ]]; then
 		echo "==> Running live-image smoke checks..."
 		run_smoke_checks || rc=5
@@ -3169,21 +3561,62 @@ ssh)
 		run_installer_gui_checks || rc=5
 	fi
 	screenshot "20-ssh"
+	if [[ "$rc" -eq 0 ]]; then
+		run_checkpoint_asserts || rc=$?
+	else
+		run_checkpoint_asserts || true
+	fi
 	exit "$rc"
 	;;
 kickstart)
 	boot_live_iso || exit 1
 	wait_for_ready || exit $?
-	screenshot "10-ready"
-	run_install
-	exit $?
+	# Poll for paint before photographing, the way `ready` mode does. Taking
+	# the shot the instant the readiness marker lands catches the framebuffer
+	# before the session has drawn anything: run 34062061739's marlin:kde
+	# 10-ready.png is a 282-byte, two-colour 1280x800 PNG — while that run's
+	# own timelapse shows the greeter drawing later. The screen-checkpoint
+	# assertions read this frame, so an unpainted capture reports a blank
+	# desktop that was never blank. Bounded and non-fatal: a slow paint
+	# extends the run, it cannot fail it.
+	wait_for_paint "10-ready" || true
+	rc=0
+	run_install || rc=$?
+	# Assert the captured frames even when the install itself failed: on that
+	# path the screens are frequently the only evidence of WHY, and a failing
+	# install must not also lose its screen diagnosis. The checkpoint verdict
+	# can only make a passing run fail, never rescue a failing one.
+	if [[ "$rc" -eq 0 ]]; then
+		run_checkpoint_asserts || rc=$?
+	else
+		run_checkpoint_asserts || true
+	fi
+	exit "$rc"
 	;;
 install)
 	boot_live_iso || exit 1
 	wait_for_ready || exit $?
-	screenshot "10-ready"
-	run_install
-	exit $?
+	# Poll for paint before photographing, the way `ready` mode does. Taking
+	# the shot the instant the readiness marker lands catches the framebuffer
+	# before the session has drawn anything: run 34062061739's marlin:kde
+	# 10-ready.png is a 282-byte, two-colour 1280x800 PNG — while that run's
+	# own timelapse shows the greeter drawing later. The screen-checkpoint
+	# assertions read this frame, so an unpainted capture reports a blank
+	# desktop that was never blank. Bounded and non-fatal: a slow paint
+	# extends the run, it cannot fail it.
+	wait_for_paint "10-ready" || true
+	rc=0
+	run_install || rc=$?
+	# Assert the captured frames even when the install itself failed: on that
+	# path the screens are frequently the only evidence of WHY, and a failing
+	# install must not also lose its screen diagnosis. The checkpoint verdict
+	# can only make a passing run fail, never rescue a failing one.
+	if [[ "$rc" -eq 0 ]]; then
+		run_checkpoint_asserts || rc=$?
+	else
+		run_checkpoint_asserts || true
+	fi
+	exit "$rc"
 	;;
 app-launch)
 	boot_live_iso || exit 1

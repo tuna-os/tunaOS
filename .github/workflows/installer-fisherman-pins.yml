@@ -1,0 +1,60 @@
+# Fail when a desktop's installer builds fisherman from the wrong repository.
+#
+# fisherman moved from projectbluefin/fisherman to tuna-os/fisherman and only
+# org.tunaos.InstallerKde followed. Four desktops spent two months building
+# their installer from a repo that had stopped moving; marlin:cosmic could not
+# install at all, dying at step 9 of 10 on a bug fixed months earlier, and
+# nothing anywhere reported it.
+#
+# Nothing that already existed could have caught it. The Flatpaks were rebuilt
+# daily, so publish dates looked healthy. Renovate has nothing to bump when a
+# git source points at a repository that no longer moves. The source of truth
+# lives in five OTHER repositories, which is why this job reaches across to
+# read them rather than checking anything in this one.
+#
+# Scheduled rather than per-PR: nothing in this repo can change the answer, so
+# running it on every PR would be noise. Drift here happens over months.
+name: Installer fisherman pins
+
+on:
+  schedule:
+    - cron: '0 5 * * *'
+  workflow_dispatch:
+  pull_request:
+    paths:
+      # ...but do run when the check or its tests change, so a PR that breaks
+      # the guard is caught by the guard.
+      - 'scripts/check-installer-fisherman-pins.py'
+      - 'tests/test_installer_fisherman_pins.py'
+      - '.github/workflows/installer-fisherman-pins.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installer-fisherman-pins-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Installers build fisherman from tuna-os/fisherman
+    runs-on: ubuntu-latest
+    steps:
+      # SHA-pinned: .github/scripts/check-action-pins.py rejects mutable
+      # refs, and Lint (action-pins) is a required check.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
+
+      # No pytest step here on purpose. test.yml already installs pytest and
+      # runs the whole tests/ tree, which includes
+      # tests/test_installer_fisherman_pins.py -- so the unit tests DO gate
+      # every PR, just from the job that owns test dependencies. Bootstrapping
+      # a second pytest on this runner only to run one file was redundant, and
+      # it failed here for exactly that reason: a bare ubuntu-latest has no
+      # pytest until something installs it.
+
+      - name: Read every installer's fisherman source
+        env:
+          # Read-only, and only used to raise the anonymous API rate limit.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/check-installer-fisherman-pins.py

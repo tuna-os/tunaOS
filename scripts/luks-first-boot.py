@@ -12,6 +12,7 @@ auto-unlock: no passphrase prompt.
 Usage: luks-first-boot.py <serial.sock> <monitor.sock> <passphrase> [timeout]
 Exit 0 on success (passphrase accepted + userspace reached), non-zero else.
 """
+import os
 import re
 import socket
 import sys
@@ -151,6 +152,21 @@ if not reached_login:
     sys.exit(3)
 
 # Graceful power off so swtpm state + LUKS metadata flush cleanly.
+#
+# Unless the caller still has work to do inside this guest. iso-e2e.sh's
+# greeter-login phase logs in over SSH and sendkey on THIS boot, and a guest
+# powered off here is one it cannot reach: it would report "no sshd" on a
+# healthy image. When that phase is running, iso-e2e.sh sets
+# TUNAOS_LUKS_NO_POWEROFF=1 and powers the guest down itself afterwards.
+if os.environ.get("TUNAOS_LUKS_NO_POWEROFF") == "1":
+    print("\n>>> leaving the guest running for the caller's session phase",
+          flush=True)
+    print(
+        f"LUKS_FIRST_BOOT_DESKTOP_CONTRACT={contract_result or 'absent'}",
+        flush=True,
+    )
+    sys.exit(0)
+
 try:
     mon = connect(monitor_path, tries=5)
     mon.sendall(b"system_powerdown\n")

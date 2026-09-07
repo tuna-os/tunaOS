@@ -44,6 +44,33 @@ tee /etc/greetd/config.toml <<'GREETDEOF'
 [terminal]
 vt = 1
 
+# greetd's source_profile default is what stops the live session dead.
+#
+# With it on (the default), greetd does not exec the command directly — it
+# wraps it:
+#
+#   /bin/sh -c '[ -f /etc/profile ] && . /etc/profile; \
+#               [ -f $HOME/.profile ] && . $HOME/.profile; exec <command>'
+#
+# MEASURED on a marlin:cosmic dev ISO, inside the live guest over SSH:
+#
+#   859 S+  do_wait     /bin/sh -c ... . /etc/profile; ... exec cosmic-session
+#   882 Sl+ wait_woken  umotd
+#
+# `umotd` (from /etc/profile.d/umotd.sh, shipped by the ublue common payload)
+# blocks in a non-interactive session, the shell sits in do_wait forever, and
+# `exec` is never reached. greetd itself is healthy, autologin works
+# ("pam_unix(greetd:session): session opened for user liveuser"), no unit
+# fails, graphical.target is active — and there is still no compositor and no
+# installer on screen. It looks exactly like a broken desktop.
+#
+# The live session does not need login-profile side effects; its environment
+# comes from the user systemd session. Turning source_profile off removes the
+# whole class of "something in profile.d blocks the greeter's exec", not just
+# this one instance.
+[general]
+source_profile = false
+
 # greetd autologin: initial_session logs liveuser straight into COSMIC on
 # boot; default_session relaunches it if the session exits (live kiosk).
 # NOTE: no 'type' key — that is not valid greetd TOML and makes greetd

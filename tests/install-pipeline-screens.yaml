@@ -1,0 +1,292 @@
+# Full install-pipeline checkpoint contract — what the SCREEN must show at
+# each stage of ISO -> live desktop -> install -> installed system.
+#
+# tests/installer-screens.yaml is the sibling contract for the installer's own
+# pages, asserted by scripts/installer-walkthrough.py while it click-throughs
+# the frontend. It stops at the installer window: nothing there says the live
+# session came up, and nothing says the installed disk ever reached a login.
+# This file covers the whole pipeline, asserted by scripts/install-checkpoints.py
+# against the frames scripts/iso-e2e.sh already captures.
+#
+# Why OCR and not just "a screenshot was taken": a captured PNG proves QEMU had
+# a framebuffer, not that the image works. Every failure this is meant to catch
+# — a compositor that never started, a black screen behind a running installer
+# process, an installed disk that dropped to an emergency shell or sat at a
+# LUKS prompt nobody answered — produces a perfectly valid screenshot. The text
+# on the screen is what tells them apart.
+#
+# FIELDS
+#   id          checkpoint name (also the TAP description)
+#   phase       live | installed  — which stage of the pipeline. The
+#               installer's own pages are a third stage, asserted by
+#               scripts/installer-walkthrough.py against
+#               tests/installer-screens.yaml rather than from a static frame:
+#               reaching them requires driving the frontend, which only the
+#               harness holding the QEMU monitor can do.
+#   frames      basenames iso-e2e.sh writes into its --output dir, without an
+#               extension; .png preferred, .ppm converted when that is all
+#               that landed. Every frame that exists is OCR'd; the keyword
+#               assertion passes if ANY of them satisfies it (they are
+#               alternative captures of the same stage, not a sequence).
+#   required    true  -> missing / blank / non-matching frames FAIL the run
+#               false -> recorded in the JSON summary but never fatal (drift
+#                        we want visible before making it mandatory)
+#   keywords    case-insensitive substrings; `match` decides any/all
+#   match       any (default) | all
+#   forbid      substrings that must NOT appear. Enforced whenever the frame
+#               exists, even on a `required: false` checkpoint — a panic on an
+#               optional checkpoint is still a panic.
+#   desktops    per-desktop keyword overrides, keyed by the flavor family
+#               (kde / gnome / cosmic / niri / xfce)
+#
+# KEYWORD RULES (the same ones tests/installer-screens.yaml learned the hard
+# way): write headings and prompts, never bare nouns. OCR of a 1280x800
+# framebuffer is noisy — short words match by accident — and a keyword that
+# embeds the product name stops matching the moment branding changes.
+
+# Text that means the frame is evidence of a failure whatever else it shows.
+# Anchored here so every checkpoint forbids the same set.
+crash_text: &crash_text
+  - "kernel panic"
+  - "oh no! something has gone wrong"
+  - "you are in emergency mode"
+  - "entering emergency shell"
+  - "cannot open access to console"
+  - "failed to start switch root"
+  - "dracut-initqueue timeout"
+  - "no bootable device"
+
+# An unanswered LUKS prompt on a frame taken AFTER the passphrase was injected
+# is the unlock having failed, not a stage of it.
+luks_prompt_text: &luks_prompt
+  - "please enter passphrase"
+  - "enter passphrase for"
+  - "no key available with this passphrase"
+
+# Desktops whose compositor cannot draw at all without virgl.
+#
+# cosmic-comp, niri and xfwl4 are Smithay compositors: they render through GL
+# and produce NOTHING on a host with no render node — which is every CI runner,
+# and any workstation whose QEMU lacks virtio-vga-gl (MEASURED: the linuxbrew
+# QEMU 11.1.1 on this workstation ships virtio-vga but not virtio-vga-gl, so
+# `iso-e2e.sh` reports "no render node/virgl" and falls back to plain VGA).
+#
+# A blank frame there is a fact about the host, not about the image, so
+# scripts/install-checkpoints.py reports the pixel assertions for these
+# desktops without enforcing them when told the run had no virgl
+# (TUNAOS_CHECKPOINT_NO_GPU=1, which iso-e2e.sh sets from its own GPU
+# decision). Enforcing them anyway would fail every cosmic/niri/xfce cell in
+# CI forever — the "gate that cries wolf" failure this contract already has
+# one scar from.
+needs_virgl: [cosmic, niri, xfce]
+
+checkpoints:
+  # ── Phase 1: the live ISO reaches a desktop ────────────────────────────────
+  #
+  # What is on screen here is the live session with its installer frontend
+  # autostarted, so the reliable text is the frontend's own first page plus
+  # whatever furniture that desktop draws. The five frontends are independent
+  # forks with different wording, which is why every desktop gets its own list
+  # rather than one generic one — the same reason tests/installer-screens.yaml
+  # is written per screen and not per product.
+  #
+  # PROVENANCE of each list is recorded inline: MEASURED means the words were
+  # read off a real captured frame (with the run named), DERIVED means they
+  # come from headings already measured against the frontends' source in
+  # tests/installer-screens.yaml (2026-08-07) but have not yet been confirmed
+  # against a captured frame of that desktop. Only calibrate a list DOWN to
+  # what a real frame shows; never up from a guess.
+  - id: live-desktop
+    phase: live
+    frames: ["10-ready", "20-ssh"]
+    required: true
+    match: any
+    # Fallback for a desktop with no list of its own: the words common to the
+    # welcome and disk pages of every fork.
+    keywords: ["welcome", "get started", "be installed", "available disks"]
+    desktops:
+      # MEASURED 2026-09-07 off a real marlin:kde live frame
+      # (marlin-dbg-out/10-ready.png, local dev ISO). org.tunaos.InstallerKde
+      # autostarts over an empty Plasma desktop and its welcome page reads:
+      #
+      #   Install Marlin
+      #   This wizard will guide you through installing Marlin onto this computer.
+      #   You will choose a target disk and how it should be encrypted.
+      #   Everything after that is handled by the installer.
+      #
+      # Product-name-free, per the rule above: the variant name is branded in
+      # from distro_name, so "install marlin" would stop matching the moment
+      # another variant runs this cell. The four below are the longest runs of
+      # that page that contain no product name.
+      #
+      # This frame is also why scripts/install-checkpoints.py OCRs a
+      # contrast-stretched inverted copy: raw, tesseract read this page as
+      # ", |" — the installer is white text on near-black, like every frontend
+      # and greeter we ship.
+      kde: ["this wizard will guide", "onto this computer",
+            "choose a target disk", "handled by the installer"]
+      # DERIVED. gnome ships upstream org.bootcinstaller.Installer, whose
+      # welcome page is branded from distro_name ("Welcome to <variant>") —
+      # the product name is deliberately not part of the keyword.
+      #
+      # Related measurement, 2026-09-07: a GNOME *live* frame from a
+      # projectbluefin/utah run OCR'd to nothing but the top-bar clock and
+      # "Type to search". That ISO does not autostart an installer, so it is
+      # not this contract's subject — but it is the warning that a GNOME
+      # desktop with no window on it gives OCR nothing to read. If a tunaOS
+      # gnome frame ever comes back the same way, the fault is the installer
+      # not being on screen, and this checkpoint is doing its job.
+      gnome: ["welcome to", "get started", "available disks", "be installed"]
+      # MEASURED 2026-09-07 off a real marlin:cosmic live frame, after the
+      # greetd source_profile fix let the session start. Tesseract read the
+      # COSMIC panel and the installer's first page:
+      #
+      #   Workspaces  Applications  Sep 7, 2:57AM
+      #   Step 1 of 6 - Welcome    Marlin Installer
+      #   Install Marlin
+      #
+      # "step 1 of" rather than "step 1 of 6": the step count is a property of
+      # the wizard's length, and a page added to the flow would silently stop
+      # this matching. The two panel words are kept as the fallback — they
+      # prove a COSMIC session is up even if the installer window has not been
+      # mapped yet, which is weaker but never wrong.
+      #
+      # NOTE: cosmic renders fine here WITHOUT virgl (stddev 0.13 on this
+      # frame, on a host whose QEMU has no virtio-vga-gl). It is still listed
+      # in needs_virgl because niri and xfwl4 in that list genuinely do not,
+      # and the flag only ever downgrades enforcement — it never fails a
+      # desktop that does draw.
+      cosmic: ["step 1 of", "welcome", "workspaces", "applications"]
+      # MEASURED 2026-09-07 off luks-out/10-ready.png from a local
+      # yellowfin:niri run: the frame is dominated by niri's "Important
+      # Hotkeys" overlay, which is what the live session actually draws over
+      # the installer on first show. Tesseract read the overlay cleanly and
+      # nothing of the installer window, so THAT is the honest contract for
+      # this desktop; "destination" (the fork's disk heading) stays as the
+      # alternative for a frame captured after the overlay is dismissed.
+      niri: ["important hotkeys", "exit niri", "focus column", "destination",
+             "be installed"]
+      # DERIVED from the XFCE fork's measured heading ("Where should <name> be
+      # installed?").
+      xfce: ["welcome", "get started", "be installed", "where should"]
+    forbid: *crash_text
+
+  # ── Phase 2: the installed disk boots to a login ───────────────────────────
+  #
+  # Each desktop installs a different display manager
+  # (build_scripts/desktop/configure-desktop-runtime.sh): gnome->gdm,
+  # kde->sddm, niri->greetd/gtkgreet, cosmic->cosmic-greeter,
+  # xfce->lightdm or gdm3. Their greeters share very little text, so the
+  # default list is the intersection that also covers a plain text console
+  # login — this checkpoint asserts "reached a login", not "reached a
+  # graphical one"; installed-desktop below is where graphical is asserted.
+  - id: installed-login
+    phase: installed
+    # Both frames, because the two install paths name the same moment
+    # differently: the kickstart/generic path writes 30-installed
+    # (iso-e2e.sh:2131, :3152) and the LUKS path writes installed-desktop
+    # (:2882). Listing only 30-installed made this checkpoint unsatisfiable on
+    # every --luks run — required: true against a frame that path never
+    # produces — which would have failed the first chained marlin build on a
+    # contract artifact rather than a product defect.
+    #
+    # It does mean this checkpoint and installed-desktop below can read the
+    # same frame. They are still different questions: this one passes on
+    # greeter text, that one looks for desktop furniture, and installed-session
+    # forbids greeter text outright. Only the last is proof of a session.
+    frames: ["30-installed", "installed-desktop"]
+    required: true
+    match: any
+    keywords: ["password", "username", "login", "sign in", "log in"]
+    desktops:
+      # DERIVED. SDDM's Breeze greeter draws the user name over a Password
+      # field, with Suspend / Restart / Shut Down on the bottom bar.
+      kde: ["password", "login", "sign in", "suspend", "restart"]
+      # VALIDATED 2026-09-07: this whole contract was run against three real
+      # frames from a projectbluefin/utah luks-e2e run (live desktop, GDM
+      # greeter, logged-in session). installed-login passed off "not listed",
+      # installed-session passed its no-greeter-text assertion, and
+      # live-desktop failed — correctly: that ISO autostarts no installer, so
+      # there is nothing for this contract's live keywords to match.
+      #
+      # MEASURED 2026-09-07 against a real GDM greeter frame (a
+      # projectbluefin/utah luks-e2e run,
+      # /var/tmp/utah-luks-e2e/screenshots/installed-greeter.png): tesseract
+      # read the account's full name, "Notlisted?" and the vendor line, and no
+      # "Password" at all — GDM shows the user list first and only offers the
+      # password field after a selection. So the list leans on "not listed",
+      # which the matcher finds despite the dropped space (see despace() in
+      # scripts/install-checkpoints.py, added because of this very frame).
+      gnome: ["password", "not listed", "sign in", "log in"]
+      cosmic: ["password", "login", "sign in"]
+      # DERIVED. gtkgreet (build_scripts/desktop/greetd-gtkgreet.sh) is a GTK3
+      # username/password form; when it is absent greetd falls back to
+      # agreety's text prompt, which shows a bare "login:".
+      niri: ["password", "login", "username"]
+      # DERIVED. lightdm's GTK greeter labels its two fields Username and
+      # Password.
+      xfce: ["password", "username", "login", "log in"]
+    forbid: *luks_prompt
+
+  # ── Phase 3: the installed system reaches its desktop ──────────────────────
+  #
+  # required: false everywhere for now — a desktop frame is only captured on
+  # the paths that log in, and the per-desktop word lists below are DERIVED,
+  # not measured. Promote a desktop to required once a real frame has
+  # confirmed its list, one desktop at a time.
+  - id: installed-desktop
+    phase: installed
+    frames: ["installed-desktop"]
+    required: false
+    match: any
+    keywords: ["activities", "applications", "files", "terminal", "settings"]
+    desktops:
+      kde: ["applications", "system settings", "discover", "konsole", "files"]
+      gnome: ["activities", "files", "settings", "software"]
+      cosmic: ["applications", "workspaces", "settings", "files"]
+      # niri draws the same hotkey overlay on the installed system's first
+      # session that it draws in the live one (MEASURED, see live-desktop).
+      niri: ["important hotkeys", "exit niri", "focus column"]
+      xfce: ["applications", "settings", "terminal", "file manager"]
+    forbid: *crash_text
+
+  # ── Phase 3b: a real user session on the installed system ─────────────────
+  #
+  # Captured by iso-e2e.sh's greeter-login phase (run_installed_session_login),
+  # after it types the password at the installed system's greeter. The verdict
+  # on whether a session started is NOT taken from this frame — it comes from
+  # `pgrep -u <user> -x <compositor>` over SSH, which is exact. What the frame
+  # adds is the opposite assertion: the greeter must be GONE. A session that
+  # the process check calls running while the screen still shows a password
+  # field means the compositor is the greeter's own, which is the hole this
+  # whole phase exists to close.
+  #
+  # No keywords, deliberately: a freshly logged-in desktop with no window open
+  # gives OCR almost nothing (MEASURED — a GNOME session frame from a
+  # projectbluefin/utah run read as the top-bar clock and little else, and only
+  # became legible once a terminal was on screen). Asserting the absence of
+  # greeter text is the claim this frame can actually support.
+  - id: installed-session
+    phase: installed
+    frames: ["installed-session"]
+    required: false
+    match: any
+    keywords: []
+    forbid:
+      - "not listed"
+      - "enter password"
+      - "please enter passphrase"
+      - "unlock the disk"
+
+  # ── Phase 4 (optional): the TPM auto-unlock boot ───────────────────────────
+  # Only captured when TUNAOS_E2E_VERIFY_TPM_AUTOUNLOCK=1. Same rule as
+  # installed-login: no passphrase prompt may remain on screen, and here it is
+  # the entire point — this boot injects no passphrase at all. marlin is not
+  # eligible for it today (no tpm2-tools on Arch; docs/LUKS-TPM.md, tunaOS#714).
+  - id: tpm-autounlock
+    phase: installed
+    frames: ["installed-tpm-autounlock"]
+    required: false
+    match: any
+    keywords: ["password", "username", "login", "sign in", "log in"]
+    forbid: *luks_prompt

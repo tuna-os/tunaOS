@@ -162,3 +162,75 @@ def test_the_check_is_a_denylist_not_an_allowlist() -> None:
     assert "BootcWindow" not in code, (
         "same, for gnome's wizard class"
     )
+
+# ── The second copy of the same lookup ──────────────────────────────────────
+# scripts/e2e-installer-gui-checks.sh is the ISO harness's version of this
+# gate. The tests above pin installer-smoke.yml; nothing pinned the script,
+# and the two DID diverge — the script kept the pre-fix two-path lookup after
+# the workflow was corrected. It went unnoticed because the script resolved
+# its e2e-assert.sh helper from the wrong directory, so check() was undefined,
+# every assertion was a no-op, and the harness reported bash's 127 as a
+# failure COUNT on healthy and broken images alike. A gate that cannot pass or
+# fail hides the bugs in itself, so both copies are pinned here together.
+GUI_CHECKS = ROOT / "scripts" / "e2e-installer-gui-checks.sh"
+
+
+def gui_stamp_lookup() -> str:
+    """The `for d in ...; do` list the script iterates to find the stamp."""
+    body = GUI_CHECKS.read_text()
+    m = re.search(r"for d in\s*(.*?);\s*do", body, re.S)
+    assert m, "no stamp lookup loop found in e2e-installer-gui-checks.sh"
+    return " ".join(m.group(1).split())
+
+
+def _shell(path: str) -> str:
+    """The pinned path as the shell script spells it (quoted expansion)."""
+    return path.replace("${APP}", '"${APP}"')
+
+
+def test_gui_gate_reads_the_sandbox_host_path() -> None:
+    assert _shell(SANDBOX_HOST_PATH) in gui_stamp_lookup(), (
+        "scripts/e2e-installer-gui-checks.sh does not read "
+        "/run/user/*/.flatpak/<app>/xdg-run/ -- the same false negative "
+        "installer-smoke.yml was already fixed for"
+    )
+
+
+def test_gui_gate_keeps_the_legacy_and_unsandboxed_paths() -> None:
+    lookup = gui_stamp_lookup()
+    assert _shell(LEGACY_APP_PATH) in lookup
+    assert _shell(UNSANDBOXED_PATH) in lookup
+
+
+def test_gui_gate_reads_the_sandbox_path_first() -> None:
+    lookup = gui_stamp_lookup()
+    assert lookup.index(_shell(SANDBOX_HOST_PATH)) < lookup.index(
+        _shell(LEGACY_APP_PATH)
+    )
+
+
+def test_gui_gate_resolves_its_helper_where_iso_e2e_uploads_it() -> None:
+    """The bug that hid the divergence above.
+
+    iso-e2e.sh scp's the helper to ${GUEST_HOME}/e2e-assert.sh and passes
+    TEST_LIB_DIR=${GUEST_HOME}; a script whose default puts /lib OUTSIDE the
+    expansion looks for ${GUEST_HOME}/lib/e2e-assert.sh and silently loses
+    check().
+    """
+    import subprocess
+
+    for name in (
+        "e2e-smoke-checks",
+        "e2e-installer-gui-checks",
+        "e2e-luks-checks",
+    ):
+        script = ROOT / "scripts" / f"{name}.sh"
+        line = next(
+            ln for ln in script.read_text().splitlines() if ln.startswith("HELPERS=")
+        )
+        out = subprocess.run(
+            ["bash", "-c", f"TEST_LIB_DIR=/upload; {line}; echo \"$HELPERS\""],
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+        assert out == "/upload/e2e-assert.sh", f"{name}.sh resolves to {out}"

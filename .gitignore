@@ -39,3 +39,12 @@ ubuntu.txt
 # Python bytecode
 __pycache__/
 *.py[cod]
+
+# QEMU e2e evidence directories (scripts/iso-e2e.sh --output). Serial logs,
+# screenshots, install disks and swtpm state: local run output, never source.
+iso-e2e-out/
+luks-out/
+live-lab-out/
+*-e2e-out/
+*-dbg-out/
+*-ready-out/

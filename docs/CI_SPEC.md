@@ -51,6 +51,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `generate-changelog-release.yml` | post-merge + scheduled | Generate Release | `05 11 * * *`, manual | — |
 | `ghcr-partial-pull-check.yml` | post-merge + scheduled | GHCR Partial-Pull Compatibility Canary | `30 8 * * 1`, manual | — |
 | `graduation-check.yml` | post-merge + scheduled | Graduation Check | `0 7 * * 1`, manual | — |
+| `installer-fisherman-pins.yml` | PR-deterministic + post-merge + scheduled | Installer fisherman pins | each PR, `0 5 * * *`, manual | — |
 | `installer-screenshots.yml` | post-merge + scheduled | Installer Walkthrough Screenshots | `0 5 * * 1`, manual | — |
 | `installer-smoke.yml` | post-merge | Installer Smoke | manual | — |
 | `iso-builder-parity.yml` | post-merge | ISO Builder Parity | caller cadence | — |
@@ -60,9 +61,10 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `live-initramfs.yml` | post-merge | Live Initramfs Artifacts | manual | — |
 | `live-iso-bootc.yml` | PR-deterministic + post-merge | Live ISOs (Tacklebox) | each PR, manual | — |
 | `live-overlay.yml` | post-merge + scheduled | Live Overlay Artifacts | `30 9 * * 3`, manual | — |
-| `luks-e2e.yml` | post-merge + scheduled | `install` | `0 7 1 * *`, `0 7 1 */3 *`, manual | `install`: 35d |
+| `luks-e2e.yml` | post-merge + scheduled | `install` | `0 7 1 * *`, `0 7 1 */3 *`, manual, caller cadence | `install`: 35d |
 | `matrix-status.yml` | PR-deterministic + post-merge + scheduled | Matrix Status | each PR, `0 6 * * *`, manual | — |
 | `package-parity.yml` | post-merge + scheduled | `parity` | `40 8 * * *`, manual | `parity`: 2d |
+| `post-build-luks-e2e.yml` | post-merge + scheduled | Post-Build LUKS E2E | `0 6 * * 4`, workflow completion, manual | — |
 | `pr-nudges.yml` | PR-deterministic | PR Reminders | each PR | — |
 | `prune-r2.yml` | post-merge + scheduled | Prune R2 retention | `30 12 * * *`, manual | — |
 | `publish-iso-groups.yml` | post-merge + scheduled | Publish Grouped Dedup ISOs to R2 | `0 23 * * 0`, manual | — |

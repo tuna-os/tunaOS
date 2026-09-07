@@ -1,0 +1,276 @@
+archlinux login: P+q6E616D65\TUNAOS_LIVE_DEBUG_START uptime=40
+TUNAOS_LIVE_DEBUG_BEGIN targets
+| inactive
+| inactive
+| active
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN failed-units
+| ● sshd.service loaded failed failed OpenSSH Daemon
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN pending-jobs
+| 300  flatpak-preinstall.service    start running
+| 163  multi-user.target             start waiting
+| 295  tunaos-live-ready.service     start waiting
+| 1794 power-profiles-daemon.service start waiting
+| 162  graphical.target              start waiting
+| 1880 tunaos-live-debug.service     start running
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN sessions
+| 1 1000 liveuser seat0 791 user    tty1 no -
+| 2 1000 liveuser -     839 manager -    no -
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN dm-status-sddm
+| ● sddm.service - Simple Desktop Display Manager
+|      Loaded: loaded (/usr/lib/systemd/system/sddm.service; enabled; preset: disabled)
+|      Active: active (running) since Mon 2026-09-07 00:43:35 UTC; 33s ago
+|  Invocation: 6fb1d3a030794a89b9c3993cc7c42c1e
+|        Docs: man:sddm(1)
+|              man:sddm.conf(5)
+|    Main PID: 775 (sddm)
+|       Tasks: 2 (limit: 4621)
+|      Memory: 11.6M (peak: 12.7M)
+|         CPU: 48ms
+|      CGroup: /system.slice/sddm.service
+|              └─775 /usr/bin/sddm
+| 
+| Sep 07 00:43:35 archlinux sddm[775]: Reading from "/usr/local/share/wayland-sessions/plasma.desktop"
+| Sep 07 00:43:35 archlinux sddm[775]: Reading from "/usr/share/wayland-sessions/plasma.desktop"
+| Sep 07 00:43:35 archlinux sddm[775]: Session "/usr/share/wayland-sessions/plasma.desktop" selected, command: "/usr/lib/plasma-dbus-run-session-if-needed /usr/bin/startplasma-wayland" for VT 1
+| Sep 07 00:43:35 archlinux sddm-helper[791]: [PAM] Starting...
+| Sep 07 00:43:35 archlinux sddm-helper[791]: [PAM] Authenticating...
+| Sep 07 00:43:35 archlinux sddm-helper[791]: [PAM] returning.
+| Sep 07 00:43:35 archlinux sddm[775]: Authentication for user  "liveuser"  successful
+| Sep 07 00:43:35 archlinux sddm-helper[791]: pam_unix(sddm-autologin:session): session opened for user liveuser(uid=1000) by liveuser(uid=0)
+| Sep 07 00:43:35 archlinux sddm-helper[791]: Starting Wayland user session: "/usr/share/sddm/scripts/wayland-session" "/usr/lib/plasma-dbus-run-session-if-needed /usr/bin/startplasma-wayland"
+| Sep 07 00:43:35 archlinux sddm[775]: Session started true
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN dm-journal-sddm
+| Sep 07 00:43:35 archlinux systemd[1]: Started Simple Desktop Display Manager.
+| Sep 07 00:43:35 archlinux sddm[775]: Initializing...
+| Sep 07 00:43:35 archlinux sddm[775]: Starting...
+| Sep 07 00:43:35 archlinux sddm[775]: Logind interface found
+| Sep 07 00:43:35 archlinux sddm[775]: Adding new display...
+| Sep 07 00:43:35 archlinux sddm[775]: Loaded empty theme configuration
+| Sep 07 00:43:35 archlinux sddm[775]: Using VT 1
+| Sep 07 00:43:35 archlinux sddm[775]: Display server started.
+| Sep 07 00:43:35 archlinux sddm[775]: Reading from "/usr/local/share/wayland-sessions/plasma.desktop"
+| Sep 07 00:43:35 archlinux sddm[775]: Reading from "/usr/share/wayland-sessions/plasma.desktop"
+| Sep 07 00:43:35 archlinux sddm[775]: Session "/usr/share/wayland-sessions/plasma.desktop" selected, command: "/usr/lib/plasma-dbus-run-session-if-needed /usr/bin/startplasma-wayland" for VT 1
+| Sep 07 00:43:35 archlinux sddm-helper[791]: [PAM] Starting...
+| Sep 07 00:43:35 archlinux sddm-helper[791]: [PAM] Authenticating...
+| Sep 07 00:43:35 archlinux sddm-helper[791]: [PAM] returning.
+| Sep 07 00:43:35 archlinux sddm[775]: Authentication for user  "liveuser"  successful
+| Sep 07 00:43:35 archlinux sddm-helper[791]: pam_unix(sddm-autologin:session): session opened for user liveuser(uid=1000) by liveuser(uid=0)
+| Sep 07 00:43:35 archlinux sddm-helper[791]: Starting Wayland user session: "/usr/share/sddm/scripts/wayland-session" "/usr/lib/plasma-dbus-run-session-if-needed /usr/bin/startplasma-wayland"
+| Sep 07 00:43:35 archlinux sddm[775]: Session started true
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN dm-status-display-manager
+| ● sddm.service - Simple Desktop Display Manager
+|      Loaded: loaded (/usr/lib/systemd/system/sddm.service; enabled; preset: disabled)
+|      Active: active (running) since Mon 2026-09-07 00:43:35 UTC; 33s ago
+|  Invocation: 6fb1d3a030794a89b9c3993cc7c42c1e
+|        Docs: man:sddm(1)
+|              man:sddm.conf(5)
+|    Main PID: 775 (sddm)
+|       Tasks: 2 (limit: 4621)
+|      Memory: 11.6M (peak: 12.7M)
+|         CPU: 48ms
+|      CGroup: /system.slice/sddm.service
+|              └─775 /usr/bin/sddm
+| 
+| Sep 07 00:43:35 archlinux sddm[775]: Reading from "/usr/local/share/wayland-sessions/plasma.desktop"
+| Sep 07 00:43:35 archlinux sddm[775]: Reading from "/usr/share/wayland-sessions/plasma.desktop"
+| Sep 07 00:43:35 archlinux sddm[775]: Session "/usr/share/wayland-sessions/plasma.desktop" selected, command: "/usr/lib/plasma-dbus-run-session-if-needed /usr/bin/startplasma-wayland" for VT 1
+| Sep 07 00:43:35 archlinux sddm-helper[791]: [PAM] Starting...
+| Sep 07 00:43:35 archlinux sddm-helper[791]: [PAM] Authenticating...
+| Sep 07 00:43:35 archlinux sddm-helper[791]: [PAM] returning.
+| Sep 07 00:43:35 archlinux sddm[775]: Authentication for user  "liveuser"  successful
+| Sep 07 00:43:35 archlinux sddm-helper[791]: pam_unix(sddm-autologin:session): session opened for user liveuser(uid=1000) by liveuser(uid=0)
+| Sep 07 00:43:35 archlinux sddm-helper[791]: Starting Wayland user session: "/usr/share/sddm/scripts/wayland-session" "/usr/lib/plasma-dbus-run-session-if-needed /usr/bin/startplasma-wayland"
+| Sep 07 00:43:35 archlinux sddm[775]: Session started true
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN dm-journal-display-manager
+| -- No entries --
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN ssh-journal-sshd
+| Sep 07 00:43:35 archlinux systemd[1]: sshdgenkeys.service: Deactivated successfully.
+| Sep 07 00:43:35 archlinux systemd[1]: Finished SSH Key Generation.
+| Sep 07 00:43:35 archlinux systemd[1]: Starting OpenSSH Daemon...
+| Sep 07 00:43:35 archlinux sshd[924]: /usr/share/empty.sshd must be owned by root and not group or world-writable.
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Main process exited, code=exited, status=255/EXCEPTION
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Failed with result 'exit-code'.
+| Sep 07 00:43:35 archlinux systemd[1]: Failed to start OpenSSH Daemon.
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Scheduled restart job, restart counter is at 1.
+| Sep 07 00:43:35 archlinux systemd[1]: SSH Key Generation skipped, no trigger condition checks were met.
+| Sep 07 00:43:35 archlinux systemd[1]: Starting OpenSSH Daemon...
+| Sep 07 00:43:35 archlinux sshd[989]: /usr/share/empty.sshd must be owned by root and not group or world-writable.
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Main process exited, code=exited, status=255/EXCEPTION
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Failed with result 'exit-code'.
+| Sep 07 00:43:35 archlinux systemd[1]: Failed to start OpenSSH Daemon.
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Scheduled restart job, restart counter is at 2.
+| Sep 07 00:43:35 archlinux systemd[1]: SSH Key Generation skipped, no trigger condition checks were met.
+| Sep 07 00:43:35 archlinux systemd[1]: Starting OpenSSH Daemon...
+| Sep 07 00:43:35 archlinux sshd[1010]: /usr/share/empty.sshd must be owned by root and not group or world-writable.
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Main process exited, code=exited, status=255/EXCEPTION
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Failed with result 'exit-code'.
+| Sep 07 00:43:35 archlinux systemd[1]: Failed to start OpenSSH Daemon.
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Scheduled restart job, restart counter is at 3.
+| Sep 07 00:43:35 archlinux systemd[1]: SSH Key Generation skipped, no trigger condition checks were met.
+| Sep 07 00:43:35 archlinux systemd[1]: Starting OpenSSH Daemon...
+| Sep 07 00:43:35 archlinux sshd[1051]: /usr/share/empty.sshd must be owned by root and not group or world-writable.
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Main process exited, code=exited, status=255/EXCEPTION
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Failed with result 'exit-code'.
+| Sep 07 00:43:35 archlinux systemd[1]: Failed to start OpenSSH Daemon.
+| Sep 07 00:43:36 archlinux systemd[1]: sshd.service: Scheduled restart job, restart counter is at 4.
+| Sep 07 00:43:36 archlinux systemd[1]: SSH Key Generation skipped, no trigger condition checks were met.
+| Sep 07 00:43:36 archlinux systemd[1]: Starting OpenSSH Daemon...
+| Sep 07 00:43:36 archlinux sshd[1078]: /usr/share/empty.sshd must be owned by root and not group or world-writable.
+| Sep 07 00:43:36 archlinux systemd[1]: sshd.service: Main process exited, code=exited, status=255/EXCEPTION
+| Sep 07 00:43:36 archlinux systemd[1]: sshd.service: Failed with result 'exit-code'.
+| Sep 07 00:43:36 archlinux systemd[1]: Failed to start OpenSSH Daemon.
+| Sep 07 00:43:36 archlinux systemd[1]: sshd.service: Scheduled restart job, restart counter is at 5.
+| Sep 07 00:43:36 archlinux systemd[1]: SSH Key Generation skipped, no trigger condition checks were met.
+| Sep 07 00:43:36 archlinux systemd[1]: sshd.service: Start request repeated too quickly.
+| Sep 07 00:43:36 archlinux systemd[1]: sshd.service: Failed with result 'start-limit-hit'.
+| Sep 07 00:43:36 archlinux systemd[1]: Failed to start OpenSSH Daemon.
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN ssh-journal-ssh
+| Sep 07 00:43:35 archlinux systemd[1]: Finished SSH Key Generation.
+| Sep 07 00:43:35 archlinux systemd[1]: Starting OpenSSH Daemon...
+| Sep 07 00:43:35 archlinux sshd[924]: /usr/share/empty.sshd must be owned by root and not group or world-writable.
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Main process exited, code=exited, status=255/EXCEPTION
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Failed with result 'exit-code'.
+| Sep 07 00:43:35 archlinux systemd[1]: Failed to start OpenSSH Daemon.
+| Sep 07 00:43:35 archlinux systemd[1]: Reached target SSH Access Available.
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Scheduled restart job, restart counter is at 1.
+| Sep 07 00:43:35 archlinux systemd[1]: SSH Key Generation skipped, no trigger condition checks were met.
+| Sep 07 00:43:35 archlinux systemd[1]: Starting OpenSSH Daemon...
+| Sep 07 00:43:35 archlinux sshd[989]: /usr/share/empty.sshd must be owned by root and not group or world-writable.
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Main process exited, code=exited, status=255/EXCEPTION
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Failed with result 'exit-code'.
+| Sep 07 00:43:35 archlinux systemd[1]: Failed to start OpenSSH Daemon.
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Scheduled restart job, restart counter is at 2.
+| Sep 07 00:43:35 archlinux systemd[1]: SSH Key Generation skipped, no trigger condition checks were met.
+| Sep 07 00:43:35 archlinux systemd[1]: Starting OpenSSH Daemon...
+| Sep 07 00:43:35 archlinux sshd[1010]: /usr/share/empty.sshd must be owned by root and not group or world-writable.
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Main process exited, code=exited, status=255/EXCEPTION
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Failed with result 'exit-code'.
+| Sep 07 00:43:35 archlinux systemd[1]: Failed to start OpenSSH Daemon.
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Scheduled restart job, restart counter is at 3.
+| Sep 07 00:43:35 archlinux systemd[1]: SSH Key Generation skipped, no trigger condition checks were met.
+| Sep 07 00:43:35 archlinux systemd[1]: Starting OpenSSH Daemon...
+| Sep 07 00:43:35 archlinux sshd[1051]: /usr/share/empty.sshd must be owned by root and not group or world-writable.
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Main process exited, code=exited, status=255/EXCEPTION
+| Sep 07 00:43:35 archlinux systemd[1]: sshd.service: Failed with result 'exit-code'.
+| Sep 07 00:43:35 archlinux systemd[1]: Failed to start OpenSSH Daemon.
+| Sep 07 00:43:36 archlinux systemd[1]: sshd.service: Scheduled restart job, restart counter is at 4.
+| Sep 07 00:43:36 archlinux systemd[1]: SSH Key Generation skipped, no trigger condition checks were met.
+| Sep 07 00:43:36 archlinux systemd[1]: Starting OpenSSH Daemon...
+| Sep 07 00:43:36 archlinux sshd[1078]: /usr/share/empty.sshd must be owned by root and not group or world-writable.
+| Sep 07 00:43:36 archlinux systemd[1]: sshd.service: Main process exited, code=exited, status=255/EXCEPTION
+| Sep 07 00:43:36 archlinux systemd[1]: sshd.service: Failed with result 'exit-code'.
+| Sep 07 00:43:36 archlinux systemd[1]: Failed to start OpenSSH Daemon.
+| Sep 07 00:43:36 archlinux systemd[1]: sshd.service: Scheduled restart job, restart counter is at 5.
+| Sep 07 00:43:36 archlinux systemd[1]: SSH Key Generation skipped, no trigger condition checks were met.
+| Sep 07 00:43:36 archlinux systemd[1]: sshd.service: Start request repeated too quickly.
+| Sep 07 00:43:36 archlinux systemd[1]: sshd.service: Failed with result 'start-limit-hit'.
+| Sep 07 00:43:36 archlinux systemd[1]: Failed to start OpenSSH Daemon.
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN ssh-journal-sshd@
+| Failed to add filter for units: No data available
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN ssh-listeners
+| State  Recv-Q Send-Q Local Address:Port Peer Address:PortProcess
+| LISTEN 0      4096      127.0.0.54:53        0.0.0.0:*    users:(("systemd-resolve",pid=661,fd=25))
+| LISTEN 0      4096         0.0.0.0:5355      0.0.0.0:*    users:(("systemd-resolve",pid=661,fd=14))
+| LISTEN 0      4096   127.0.0.53%lo:53        0.0.0.0:*    users:(("systemd-resolve",pid=661,fd=23))
+| LISTEN 0      50                 *:1716            *:*    users:(("kdeconnectd",pid=1330,fd=17))
+| LISTEN 0      4096            [::]:5355         [::]:*    users:(("systemd-resolve",pid=661,fd=16))
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN ssh-config
+| /usr/share/empty.sshd must be owned by root and not group or world-writable.
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN ssh-hostkeys
+| total 696
+| -rw-r--r-- 1 liveuser liveuser 673940 Aug 11 08:28 moduli
+| -rw-r--r-- 1 liveuser liveuser   1505 Aug 11 08:28 ssh_config
+| drwxr-xr-x 2 liveuser liveuser     48 Aug 14 09:03 ssh_config.d
+| -rw------- 1 root     root        505 Sep  7 00:43 ssh_host_ecdsa_key
+| -rw-r--r-- 1 root     root        176 Sep  7 00:43 ssh_host_ecdsa_key.pub
+| -rw------- 1 root     root        411 Sep  7 00:43 ssh_host_ed25519_key
+| -rw-r--r-- 1 root     root         96 Sep  7 00:43 ssh_host_ed25519_key.pub
+| -rw------- 1 root     root       4006 Sep  7 00:43 ssh_host_mldsa44_ed25519_key
+| -rw-r--r-- 1 root     root       1892 Sep  7 00:43 ssh_host_mldsa44_ed25519_key.pub
+| -rw------- 1 root     root       2602 Sep  7 00:43 ssh_host_rsa_key
+| -rw-r--r-- 1 root     root        568 Sep  7 00:43 ssh_host_rsa_key.pub
+| -rw-r--r-- 1 liveuser liveuser   3360 Aug 11 08:28 sshd_config
+| drwxr-xr-x 2 liveuser liveuser    101 Sep  7 00:35 sshd_config.d
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN autologin-conf
+| [General]
+| DisplayServer=wayland
+| CompositorCommand=kwin_wayland --no-lockscreen
+| 
+| [Autologin]
+| User=liveuser
+| Session=plasma
+| Relogin=false
+| [General]
+| DisplayServer=wayland
+| CompositorCommand=kwin_wayland --no-lockscreen
+| 
+| [Autologin]
+| User=liveuser
+| Session=plasma
+| Relogin=false
+| [General]
+| DisplayServer=wayland
+| CompositorCommand=kwin_wayland --no-lockscreen
+| 
+| [Autologin]
+| User=liveuser
+| Session=plasma
+| Relogin=false
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN sessions-available
+| /usr/share/wayland-sessions/:
+| plasma.desktop
+| 
+| /usr/share/xsessions/:
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN drm
+| total 0
+| drwxr-xr-x  2 root root         80 Sep  7 00:43 by-path
+| crw-rw----+ 1 root video  226,   1 Sep  7 00:44 card1
+| crw-rw-rw-  1 root render 226, 128 Sep  7 00:43 renderD128
+| Sep 07 00:43:32 archlinux kernel: virtio-pci 0000:00:02.0: [drm] fb0: virtio_gpudrmfb frame buffer device
+| Sep 07 00:43:32 archlinux kernel: fbcon: virtio_gpudrmfb (fb0) is primary device
+| Sep 07 00:43:32 archlinux kernel: [drm] Initialized virtio_gpu 0.1.0 for 0000:00:02.0 on minor 1
+| Sep 07 00:43:32 archlinux kernel: virtio-pci 0000:00:02.0: [drm] Registered 1 planes with drm panic
+| Sep 07 00:43:32 archlinux kernel: [drm] number of cap sets: 0
+| Sep 07 00:43:32 archlinux kernel: [drm] number of scanouts: 1
+| Sep 07 00:43:32 archlinux kernel: [drm] features: -context_init -blob_alignment
+| Sep 07 00:43:32 archlinux kernel: [drm] features: -virgl +edid -resource_blob -host_visible
+| Sep 07 00:43:32 archlinux kernel: virtio-pci 0000:00:02.0: vgaarb: deactivate vga console
+| Sep 07 00:43:32 archlinux kernel: [drm] pci: virtio-vga detected at 0000:00:02.0
+| Sep 07 00:43:32 archlinux systemd[1]: Load Kernel Module drm skipped, unmet condition check ConditionKernelModuleLoaded=!drm
+| Sep 07 00:43:30 archlinux kernel: virtio_net virtio5 ens7: renamed from eth0
+| Sep 07 00:43:29 archlinux kernel: simple-framebuffer simple-framebuffer.0: [drm] fb0: simpledrmdrmfb frame buffer device
+| Sep 07 00:43:29 archlinux kernel: [drm] Initialized simpledrm 1.0.0 for simple-framebuffer.0 on minor 0
+| Sep 07 00:43:29 archlinux kernel: simple-framebuffer simple-framebuffer.0: [drm] Registered 1 planes with drm panic
+| Sep 07 00:43:29 archlinux kernel: scsi host0: Virtio SCSI HBA
+| Sep 07 00:43:29 archlinux kernel: virtio_scsi virtio1: 4/0/0 default/read/poll queues
+| Sep 07 00:43:29 archlinux kernel: virtio_blk virtio4: [vdc] 67108864 512-byte logical blocks (34.4 GB/32.0 GiB)
+| Sep 07 00:43:29 archlinux kernel: virtio_blk virtio4: 4/0/0 default/read/poll queues
+| Sep 07 00:43:29 archlinux kernel: virtio_blk virtio3: [vdb] 16777216 512-byte logical blocks (8.59 GB/8.00 GiB)
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN compositors
+| 1068 /usr/bin/kwin_wayland_wrapper --xwayland
+| 1073 /usr/bin/kwin_wayland --wayland-fd 7 --socket wayland-0 --xwayland-fd 8 --xwayland-fd 9 --xwayland-display :0 --xwayland-xauthority /run/user/1000/xauth_vYdagn --xwayland
+| 1212 /usr/bin/plasmashell --no-respawn
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_BEGIN installer
+| 837 /usr/bin/flatpak preinstall -y
+| 1422 /usr/lib/flatpak-session-helper
+TUNAOS_LIVE_DEBUG_END
+TUNAOS_LIVE_DEBUG_DONE

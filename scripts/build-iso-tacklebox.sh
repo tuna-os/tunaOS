@@ -64,6 +64,47 @@ REPO_ROOT="$(pwd)"
 # tunaos_image_ref + tunaos_import_to_root_storage are defined in
 # scripts/lib/common.sh.
 
+# Build the live squash out of ROOT's container storage, not the invoking
+# user's.
+#
+# The Justfile calls this under `sudo -E`, which preserves HOME — and podman
+# picks its store from HOME. So every root-context podman call here, and every
+# one tacklebox makes, silently operates on the INVOKING USER's rootless store:
+#
+#   sudo -E             podman info --format '{{.Store.GraphRoot}}'
+#     /var/home/<user>/.local/share/containers/storage
+#   sudo env HOME=/root podman info --format '{{.Store.GraphRoot}}'
+#     /var/lib/containers/storage
+#
+# A rootless store holds image files owned by the user on disk (container uid 0
+# maps to the user's uid), and mksquashfs runs as real root with no user
+# namespace — so it records uid 1000 for every file in the live root. MEASURED
+# on a marlin:kde dev ISO: /usr, /usr/bin/sshd and /usr/share/empty.sshd all
+# came out `755 james:james` inside LiveOS/*.rootfs.sfs.
+#
+# Almost nothing minds — mode 755 still reads and executes — but sshd checks
+# its privilege-separation directory and refuses outright:
+#
+#   sshd: /usr/share/empty.sshd must be owned by root and not group or
+#         world-writable
+#   sshd.service: Main process exited, code=exited, status=255/EXCEPTION
+#   sshd.service: Scheduled restart job, restart counter is at 1... 2... 3
+#
+# which is exactly what "kex_exchange_identification: Connection reset by peer"
+# looks like from the host, over TCP and vsock alike. That is the e2e harness's
+# only way into the guest, so it takes the dev ISO's whole purpose with it.
+#
+# It also quietly disabled tunaos_import_to_root_storage: its `podman image
+# exists` probe found the image in the user's store and returned early, so
+# root's store never got a copy and nobody noticed.
+#
+# The user's store is still reachable where this script means to use it — those
+# calls go through `sudo -u "$SUDO_USER"` explicitly.
+if [[ $EUID -eq 0 ]]; then
+	export HOME="${TUNAOS_ROOT_HOME:-/root}"
+	unset XDG_DATA_HOME XDG_CONFIG_HOME
+fi
+
 IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")
 # Keep the name embedded in the offline store independent of how this ISO was
 # built.  A developer can build from localhost/, but the installed system and
@@ -96,6 +137,23 @@ fi
 # Single-environment, live-only — minimum useful recipe for a smoke ISO.
 
 OUT_DIR="$(pwd)/.build/iso-tacklebox/${VARIANT}-${FLAVOR}"
+
+# An aborted build leaves the offline store's bind mount behind, and tacklebox
+# clears that directory as its last step: the NEXT build then runs to
+# completion — squash, initramfs, xorriso, all of it — and dies at cleanup with
+#
+#   Error: clear .../tbox-offline-store: rm -rf ...: cannot remove
+#   '.../tbox-offline-store/overlay': Device or resource busy
+#
+# which costs a full rebuild to learn. Unmount it here instead, where it costs
+# nothing. Lazy, and non-fatal: a stale mount is the only thing this can hit,
+# and a busy one that survives will surface at the same place it does today.
+_stale_store="${OUT_DIR}/tbox-offline-store/overlay"
+if mountpoint -q "$_stale_store" 2>/dev/null; then
+	echo "==> Releasing stale offline-store mount from a previous run: ${_stale_store}"
+	umount -l "$_stale_store" || true
+fi
+
 mkdir -p "$OUT_DIR"
 RECIPE_FILE="${OUT_DIR}/recipe.json"
 

@@ -1109,6 +1109,72 @@ setup_runtime_check_stubs() {
   grep -qF 'installed-tpm-autounlock-serial.log' "$SCRIPT"
 }
 
+@test "every uploaded check script resolves e2e-assert.sh where iso-e2e.sh puts it" {
+  # MEASURED: scripts/e2e-installer-gui-checks.sh had
+  #   HELPERS="${TEST_LIB_DIR:-$(dirname "$0")}/lib/e2e-assert.sh"
+  # with the /lib OUTSIDE the default, while iso-e2e.sh scp's the helper to
+  # ${GUEST_HOME}/e2e-assert.sh and passes TEST_LIB_DIR=${GUEST_HOME}. It
+  # therefore looked for /home/liveuser/lib/e2e-assert.sh, which does not
+  # exist, so check() was undefined and EVERY assertion in that gate was a
+  # no-op. The harness reported "127 failure(s)" — bash's command-not-found
+  # exit status, mistaken for a count — on healthy and broken images alike,
+  # which is a gate that can neither pass nor fail.
+  #
+  # The contract: with TEST_LIB_DIR set to the upload directory, every check
+  # script must resolve to <that directory>/e2e-assert.sh.
+  grep -q 'GUEST_HOME}/e2e-assert.sh' "$SCRIPT"
+  local s
+  for s in e2e-smoke-checks e2e-installer-gui-checks e2e-luks-checks; do
+    run bash -c "TEST_LIB_DIR=/upload; $(grep -m1 '^HELPERS=' "${REPO_ROOT}/scripts/${s}.sh"); echo \"\$HELPERS\""
+    [ "$output" = "/upload/e2e-assert.sh" ]
+  done
+}
+
+@test "the installer GUI gate is uploaded with the helper it needs" {
+  # Both files, to the same directory, before the gate runs.
+  grep -q 'e2e-installer-gui-checks.sh" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-installer-gui-checks.sh"' "$SCRIPT"
+  grep -q 'TEST_LIB_DIR=${GUEST_HOME} bash ${GUEST_HOME}/e2e-installer-gui-checks.sh' "$SCRIPT"
+}
+
+@test "the hostname assertion does not assume a net-tools binary" {
+  # MEASURED on marlin:cosmic: scripts/e2e-smoke-checks.sh asserted
+  # `test -n "$(hostname)"` and reported `not ok` over SSH, while
+  # build_scripts/checks/e2e-runtime-checks.sh asserted the same thing WITH a
+  # /proc fallback and reported `ok` on the console of the same boot. The
+  # Arch-based variants ship no `hostname` binary, so the bare form is empty
+  # there and the gate failed on a healthy image — for every marlin run.
+  local s
+  for s in "${REPO_ROOT}/scripts/e2e-smoke-checks.sh" \
+           "${REPO_ROOT}/build_scripts/checks/e2e-runtime-checks.sh"; do
+    grep -A1 'check "hostname is set"' "$s" |
+      grep -q 'cat /proc/sys/kernel/hostname'
+  done
+}
+
+@test "the two check scripts do not disagree about hostname" {
+  # Two copies of one assertion that give different verdicts on the same boot
+  # is how this stayed unexplained. Pin them identical.
+  local a b
+  a="$(grep -A1 'check "hostname is set"' "${REPO_ROOT}/scripts/e2e-smoke-checks.sh" | tail -1 | xargs)"
+  b="$(grep -A1 'check "hostname is set"' "${REPO_ROOT}/build_scripts/checks/e2e-runtime-checks.sh" | tail -1 | xargs)"
+  [ "$a" = "$b" ]
+}
+
+@test "the install evidence records which fisherman ran" {
+  # Each desktop ships its own org.tunaos.Installer* flatpak bundling its own
+  # fisherman, and the pins move independently — so "the installer" is not one
+  # thing across flavours. A marlin:cosmic install died at step 9/10 on a bug
+  # fixed in fisherman months earlier, and pinning that down meant mounting
+  # two ISOs and running `go version -m` on the binaries. Go stamps the
+  # revision as plain text, so the guest needs no toolchain to report it.
+  grep -q 'TUNAOS_LUKS_E2E_FISHERMAN' "$SCRIPT"
+  # -F: the script escapes the dot for the remote shell, so the file holds a
+  # literal backslash-backslash-dot that a regex grep would not match.
+  grep -qF 'vcs\\.revision=' "$SCRIPT"
+  # Must not be able to abort the install it precedes.
+  grep -q 'fisherman_rev="\$(.*|| true)"' "$SCRIPT"
+}
+
 # ── GPU/display device is per machine type ──────────────────────────────────
 #
 # These execute the script's OWN selection block — extracted by its comment

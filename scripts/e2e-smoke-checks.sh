@@ -85,9 +85,17 @@ check "package metadata intact (>100 installed packages)" \
 check "system time is reasonable (year >= 2025)" \
 	bash -c 'test "$(date +%Y)" -ge 2025'
 
+# `hostname` is a net-tools/inetutils binary and the Arch-based variants do
+# not ship it, so the bare `$(hostname)` form expands to nothing there and the
+# assertion fails on a perfectly healthy image. MEASURED on a marlin:cosmic
+# dev ISO: this reported `not ok` over SSH while the identical assertion in
+# build_scripts/checks/e2e-runtime-checks.sh -- which already had the fallback
+# -- reported `ok` on the console of the SAME boot, with the hostname set to
+# `archlinux` and DEFAULT_HOSTNAME=marlin. Two copies of one check that
+# disagree are worse than one, so this one is brought in line with that one.
 # shellcheck disable=SC2016
 check "hostname is set" \
-	bash -c 'test -n "$(hostname)"'
+	bash -c 'test -n "$(hostname 2>/dev/null || cat /proc/sys/kernel/hostname)"'
 
 check "locale is configured" \
 	locale
