@@ -644,4 +644,40 @@ if [[ -f /usr/lib/systemd/system/systemd-resolved.service ]]; then
 	systemctl enable systemd-resolved.service
 fi
 
+# ── umotd: never draw the banner in a non-interactive shell ────────────────
+# MEASURED on a marlin:cosmic live ISO. greetd's `source_profile` default runs
+# the session command through a login shell, which sources
+# /etc/profile.d/umotd.sh. umotd is a MOTD banner — it exists for interactive
+# logins — but the file ublue ships calls it unconditionally, so it also fires
+# in every NON-interactive login shell: greetd sessions, `ssh host command`,
+# anything that sources the profile with no terminal draining its output. In
+# the live cosmic session umotd was left in `wait_woken` and the following
+# `exec cosmic-session` never ran: no compositor, no installer, a black screen
+# with zero failed units and nothing in the journal to name the cause.
+#
+# `case $- in *i*` is the portable interactive test ($- carries `i` only for
+# interactive shells) and is written in POSIX shell because /etc/profile.d is
+# sourced by dash on the Debian and Ubuntu variants, not only by bash.
+#
+# This is the fix that propagates: 40-services.sh runs in every Containerfile,
+# so one patch covers all variants, all desktops, and BOTH live media and
+# installed systems. The live greetd adapters in live-iso/common/src also set
+# `source_profile = false`, which is defence in depth against the next
+# blocking profile script rather than a second copy of this fix.
+if [[ -f /etc/profile.d/umotd.sh ]]; then
+	cat >/etc/profile.d/umotd.sh <<'UMOTD_EOF'
+#!/usr/bin/env bash
+# A MOTD banner is for interactive logins only. Unguarded, umotd also runs in
+# non-interactive login shells — where it hung a greetd session dead.
+# See build_scripts/40-services.sh for the measurement.
+case $- in
+*i*) ;;
+*) return 0 ;;
+esac
+
+umotd
+UMOTD_EOF
+	chmod 0644 /etc/profile.d/umotd.sh
+fi
+
 printf "::endgroup::\n"

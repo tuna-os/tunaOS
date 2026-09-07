@@ -145,7 +145,18 @@ jobs:
           # Calling the same code the ISO build calls makes that class of
           # drift impossible rather than merely fixed, which is why the
           # baseline label below can now honestly say true.
-          sudo -E "${TACKLEBOX_BIN}" customize-live \
+          # sudo -E preserves HOME, and a preserved HOME points root's podman
+          # at the RUNNER's rootless storage. MEASURED on the marlin:kde ISO
+          # built the same way: the resulting live payload came out owned by
+          # uid 1000, so sshd refused to start ("/usr/share/empty.sshd must be
+          # owned by root") and restart-looped, which reads as "Connection
+          # reset by peer" at kex rather than as a failure. Pin HOME (and drop
+          # the XDG overrides that redirect containers/storage.conf) so this
+          # path gets root's own store, as scripts/build-iso-tacklebox.sh does
+          # for the ISO build. This workflow does NOT go through that script,
+          # so it needs its own copy of the fix.
+          sudo -E env HOME=/root -u XDG_DATA_HOME -u XDG_CONFIG_HOME \
+            "${TACKLEBOX_BIN}" customize-live \
             --image "$IMG" \
             --script "$PWD/live-iso/common/src/customize-live.sh" \
             --tag "$OUT" \

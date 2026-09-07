@@ -20,7 +20,7 @@
 # verification steps (tunaOS#678).
 set -uo pipefail
 
-HELPERS="${TEST_LIB_DIR:-$(dirname "$0")}/lib/e2e-assert.sh"
+HELPERS="${TEST_LIB_DIR:-$(dirname "$0")/lib}/e2e-assert.sh"
 # shellcheck source=scripts/lib/e2e-assert.sh
 source "$HELPERS"
 

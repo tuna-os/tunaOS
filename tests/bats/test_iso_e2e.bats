@@ -1108,3 +1108,30 @@ setup_runtime_check_stubs() {
 @test "TPM auto-unlock verification preserves its own serial log rather than clobbering others" {
   grep -qF 'installed-tpm-autounlock-serial.log' "$SCRIPT"
 }
+
+@test "every uploaded check script resolves e2e-assert.sh where iso-e2e.sh puts it" {
+  # MEASURED: scripts/e2e-installer-gui-checks.sh had
+  #   HELPERS="${TEST_LIB_DIR:-$(dirname "$0")}/lib/e2e-assert.sh"
+  # with the /lib OUTSIDE the default, while iso-e2e.sh scp's the helper to
+  # ${GUEST_HOME}/e2e-assert.sh and passes TEST_LIB_DIR=${GUEST_HOME}. It
+  # therefore looked for /home/liveuser/lib/e2e-assert.sh, which does not
+  # exist, so check() was undefined and EVERY assertion in that gate was a
+  # no-op. The harness reported "127 failure(s)" — bash's command-not-found
+  # exit status, mistaken for a count — on healthy and broken images alike,
+  # which is a gate that can neither pass nor fail.
+  #
+  # The contract: with TEST_LIB_DIR set to the upload directory, every check
+  # script must resolve to <that directory>/e2e-assert.sh.
+  grep -q 'GUEST_HOME}/e2e-assert.sh' "$SCRIPT"
+  local s
+  for s in e2e-smoke-checks e2e-installer-gui-checks e2e-luks-checks; do
+    run bash -c "TEST_LIB_DIR=/upload; $(grep -m1 '^HELPERS=' "${REPO_ROOT}/scripts/${s}.sh"); echo \"\$HELPERS\""
+    [ "$output" = "/upload/e2e-assert.sh" ]
+  done
+}
+
+@test "the installer GUI gate is uploaded with the helper it needs" {
+  # Both files, to the same directory, before the gate runs.
+  grep -q 'e2e-installer-gui-checks.sh" "${GUEST_SCP_DEST}:${GUEST_HOME}/e2e-installer-gui-checks.sh"' "$SCRIPT"
+  grep -q 'TEST_LIB_DIR=${GUEST_HOME} bash ${GUEST_HOME}/e2e-installer-gui-checks.sh' "$SCRIPT"
+}
