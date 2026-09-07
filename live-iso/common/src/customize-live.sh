@@ -311,9 +311,6 @@ section() {
 	echo "TUNAOS_LIVE_DEBUG_END"
 }
 
-# Give the display manager time to try, fail and log before asking it why.
-sleep "${TUNAOS_LIVE_DEBUG_DELAY:-25}"
-
 echo "TUNAOS_LIVE_DEBUG_START uptime=$(cut -d. -f1 /proc/uptime)"
 
 # Whichever DM this desktop installed — the unit name differs per desktop
@@ -355,23 +352,45 @@ DBGEOF
 	cat >/usr/lib/systemd/system/tunaos-live-debug.service <<'DBGUNITEOF'
 [Unit]
 Description=Dump live-session diagnostics to the console (dev/E2E ISOs only)
-After=tunaos-live-ready.service
-Wants=tunaos-live-ready.service
+# No ordering on tunaos-live-ready.service, deliberately, and this is the
+# whole design. That unit is After=NetworkManager-wait-online.service (90s
+# default timeout) and on a marlin:kde boot where the live session never
+# starts it had not emitted its marker minutes in — so a diagnostic ordered
+# behind it stays silent in exactly the failure it exists to explain. Same
+# rule tunaos-live-ready.service states about itself: "it must speak loudest
+# when the rest of the boot is failing."
+#
+# Driven by tunaos-live-debug.timer instead of any target, so nothing in the
+# boot can gate it.
 
 [Service]
 Type=oneshot
 ExecStart=/usr/libexec/tunaos-live-debug
-# The console IS the serial log the harness captures; the journal copy keeps
-# it available to an interactive session too.
-StandardOutput=journal+console
-StandardError=journal+console
+# StandardOutput=tty + TTYPath, not journal+console: in headless QEMU
+# (-display none) /dev/console is NOT the serial port, which is why
+# tunaos-live-ready.service writes to /dev/ttyS0 directly. A console-routed
+# dump would never reach the serial log the harness captures.
+StandardOutput=tty
+TTYPath=/dev/ttyS0
+StandardError=tty
 RemainAfterExit=yes
-TimeoutStartSec=180
+TimeoutStartSec=300
+DBGUNITEOF
+
+	cat >/usr/lib/systemd/system/tunaos-live-debug.timer <<'DBGTIMEREOF'
+[Unit]
+Description=Dump live-session diagnostics shortly after boot (dev/E2E ISOs only)
+
+[Timer]
+# 40s in: late enough that the display manager has tried and logged, early
+# enough that the harness is still running (it gives up on paint at 120s).
+OnBootSec=40s
+AccuracySec=1s
 
 [Install]
-WantedBy=multi-user.target
-DBGUNITEOF
-	systemctl enable tunaos-live-debug.service
+WantedBy=timers.target
+DBGTIMEREOF
+	systemctl enable tunaos-live-debug.timer
 
 	# fisherman (the LUKS/TPM install backend) runs as root over a
 	# non-interactive SSH command, so sudo has no TTY to prompt on. Grant

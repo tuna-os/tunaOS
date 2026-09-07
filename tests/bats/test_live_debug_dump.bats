@@ -11,11 +11,16 @@
 # guest therefore reports on itself, to the console, which is the serial log
 # the harness already captures.
 #
-# Two properties are worth pinning:
+# Three properties are worth pinning:
 #   1. It is DEV-ONLY. Production ISOs must not ship a service that dumps
 #      journals to the console.
-#   2. It runs AFTER the readiness marker, so it can neither gate a run nor
-#      slow one down.
+#   2. Nothing in the boot can gate it. The first version ordered it
+#      After=tunaos-live-ready.service — and on a boot where the session never
+#      started, that unit had not emitted its marker minutes in (it waits on
+#      NetworkManager-wait-online.service, 90s default), so the diagnostic was
+#      silent in the one case it exists for. It is timer-driven now.
+#   3. It writes to /dev/ttyS0, not to /dev/console: under -display none those
+#      are not the same device, and only the former is in the serial log.
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 CUSTOMIZE="${REPO_ROOT}/live-iso/common/src/customize-live.sh"
@@ -43,28 +48,34 @@ debug_script() {
 	[ "$total" -eq "$in_block" ]
 }
 
-@test "the diagnostics service is enabled" {
-	dev_block | grep -q 'systemctl enable tunaos-live-debug.service'
+@test "the diagnostics timer is enabled" {
+	dev_block | grep -q 'systemctl enable tunaos-live-debug.timer'
 }
 
 @test "the embedded script is valid bash" {
 	debug_script | bash -n
 }
 
-@test "the dump runs after the readiness marker, never before it" {
-	# After= alone would let it run when the marker unit is not pulled in at
-	# all; the point is ordering, and Wants= keeps the ordering meaningful.
-	dev_block | grep -q 'After=tunaos-live-ready.service'
-	# It must not be ordered BEFORE anything the harness gates on.
-	! dev_block | grep -q 'Before=tunaos-live-ready.service'
+@test "the dump is ordered behind nothing that can gate it" {
+	# MEASURED: on a marlin:kde boot where the live session never started,
+	# tunaos-live-ready.service had not emitted its marker minutes in — it is
+	# After=NetworkManager-wait-online.service, a 90s default timeout. A
+	# diagnostic ordered behind that unit is silent in exactly the failure it
+	# exists to explain, which is the trap
+	# test_live_ready_net_diagnostic.bats records for the net diagnostic.
+	! dev_block | grep -q 'After=tunaos-live-ready.service'
+	! dev_block | grep -q 'Wants=tunaos-live-ready.service'
+	# A timer, not a target, so nothing in the boot transaction gates it.
+	dev_block | grep -q 'OnBootSec='
 }
 
-@test "the dump reaches the console, not only the journal" {
-	# The serial log IS the console. A journal-only dump would be invisible
-	# to every artifact the harness uploads — the exact failure mode
-	# test_live_ready_net_diagnostic.bats records for the net diagnostic.
-	dev_block | grep -q 'StandardOutput=journal+console'
-	dev_block | grep -q 'StandardError=journal+console'
+@test "the dump reaches the serial port the harness captures" {
+	# NOT journal+console: in headless QEMU (-display none) /dev/console is
+	# not the serial port, which is why tunaos-live-ready.service writes to
+	# /dev/ttyS0 directly. A console-routed dump would never reach the serial
+	# log the harness uploads.
+	dev_block | grep -q 'StandardOutput=tty'
+	dev_block | grep -q 'TTYPath=/dev/ttyS0'
 }
 
 @test "the dump is fenced with greppable markers" {
