@@ -64,6 +64,32 @@ REPO_ROOT="$(pwd)"
 # tunaos_image_ref + tunaos_import_to_root_storage are defined in
 # scripts/lib/common.sh.
 
+# Build the live squash in ROOT's container context, not the invoking user's.
+#
+# tacklebox picks its podman context from euid unless TACKLEBOX_CONTEXT says
+# otherwise (its internal/install/user_podman.go rootContext()). Under sudo it
+# reads images from the invoking user's rootless store while mksquashfs runs
+# outside that user namespace — so every file in the live squash is recorded
+# with the INVOKING USER's uid instead of 0.
+#
+# MEASURED on a marlin:kde dev ISO: /usr and everything under it came out
+# `755 james:james` inside LiveOS/*.rootfs.sfs. Almost nothing minds — mode
+# 755 still reads and executes — but sshd checks its privilege-separation
+# directory and refuses outright:
+#
+#   sshd: /usr/share/empty.sshd must be owned by root and not group or
+#         world-writable
+#   sshd.service: Main process exited, code=exited, status=255/EXCEPTION
+#   sshd.service: Scheduled restart job, restart counter is at 1... 2... 3
+#
+# which is what "kex_exchange_identification: Connection reset by peer" looks
+# like from the host, over TCP and vsock alike. That is the harness's only way
+# into the guest, so it takes the dev ISO's whole reason for existing with it.
+#
+# Safe for both repo modes: the local path imports into root's storage just
+# below, and tacklebox's own Pull() lands registry images in root's store too.
+export TACKLEBOX_CONTEXT=root
+
 IMAGE_REF=$(tunaos_image_ref "$VARIANT" "$FLAVOR" "$REPO" "$TAG")
 # Keep the name embedded in the offline store independent of how this ISO was
 # built.  A developer can build from localhost/, but the installed system and

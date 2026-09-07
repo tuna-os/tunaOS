@@ -417,3 +417,13 @@ JSON
   result="localhost/yellowfin:gnome"
   [ "$result" = "localhost/yellowfin:gnome" ]
 }
+
+@test "the live squash is built in root's container context" {
+	# Without this, tacklebox reads images from the invoking user's rootless
+	# store while mksquashfs runs outside that namespace, and every file in
+	# the squash is recorded with the invoking user's uid. MEASURED: /usr came
+	# out `755 james:james`, and sshd then refuses to start at all —
+	# "/usr/share/empty.sshd must be owned by root" — which shuts the only
+	# door the e2e harness has into the guest.
+	grep -q 'export TACKLEBOX_CONTEXT=root' "${BATS_TEST_DIRNAME}/../../scripts/build-iso-tacklebox.sh"
+}

@@ -730,6 +730,32 @@ polkit.addRule(function(action, subject) {
 });
 RULESEOF
 
+# ── 4b. Never let a download block the live desktop ──────────────────────────
+#
+# build_scripts/desktop/flatpak-preinstall.sh enables
+# flatpak-preinstall.service so an INSTALLED system self-installs the curated
+# app set. That unit is Type=oneshot and WantedBy=multi-user.target, so the
+# target waits for it — and graphical.target waits on multi-user.target.
+#
+# On live media that is a desktop that never starts. MEASURED on a marlin:kde
+# dev ISO, from the guest's own diagnostics at 40s uptime:
+#
+#   300  flatpak-preinstall.service    start running
+#   163  multi-user.target             start waiting
+#   295  tunaos-live-ready.service     start waiting
+#   162  graphical.target              start waiting
+#
+# One blocker, three symptoms: a black screen, no TUNAOS_LIVE_READY marker for
+# the harness, and an install experience nobody could have started from the
+# screen. It is intermittent purely because it tracks how long the download
+# takes — markers were observed at 9s, at 98s, and not at all.
+#
+# The live session has nothing to gain from it either way: it is thrown away
+# at reboot, and the installer it needs is already baked into this squash
+# below. Masked rather than disabled so nothing pulls it back in as a
+# dependency.
+systemctl mask flatpak-preinstall.service || true
+
 # ── 5. Installer offline-stores config ────────────────────────────────────────
 # Probe list the frontends read to find embedded OCI stores; missing paths
 # are skipped, and the live-ISO self-install path needs no store at all.

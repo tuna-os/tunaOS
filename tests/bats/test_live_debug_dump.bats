@@ -113,3 +113,17 @@ debug_script() {
 	! echo "$script" | grep -qE '^set -e|^set -eu|^set -euo'
 	echo "$script" | grep -qE '^set -u$'
 }
+
+@test "the live squash never blocks its desktop on flatpak-preinstall" {
+	# MEASURED from the guest's own diagnostics at 40s on a marlin:kde dev
+	# ISO: flatpak-preinstall.service was 'start running' with
+	# multi-user.target, graphical.target AND tunaos-live-ready.service all
+	# 'start waiting' behind it. Type=oneshot + WantedBy=multi-user.target
+	# means the target waits for the download to finish, so the live desktop
+	# never starts. Masked for live media only; installed systems still get
+	# the curated app set from build_scripts/desktop/flatpak-preinstall.sh.
+	grep -q 'systemctl mask flatpak-preinstall.service' "$CUSTOMIZE"
+	# ...and NOT inside the dev-only block: a production live ISO stalls the
+	# same way, and its users have no serial log to explain it.
+	! dev_block | grep -q 'flatpak-preinstall'
+}
