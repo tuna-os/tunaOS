@@ -40,11 +40,17 @@ jobs:
     name: Installers build fisherman from tuna-os/fisherman
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      # SHA-pinned: .github/scripts/check-action-pins.py rejects mutable
+      # refs, and Lint (action-pins) is a required check.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v6
 
-      - name: Unit-test the check itself
-        run: |
-          python3 -m pytest tests/test_installer_fisherman_pins.py -q
+      # No pytest step here on purpose. test.yml already installs pytest and
+      # runs the whole tests/ tree, which includes
+      # tests/test_installer_fisherman_pins.py -- so the unit tests DO gate
+      # every PR, just from the job that owns test dependencies. Bootstrapping
+      # a second pytest on this runner only to run one file was redundant, and
+      # it failed here for exactly that reason: a bare ubuntu-latest has no
+      # pytest until something installs it.
 
       - name: Read every installer's fisherman source
         env:
