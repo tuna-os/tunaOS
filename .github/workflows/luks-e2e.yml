@@ -176,7 +176,9 @@ jobs:
                    | select($skiplist | index($v) | not)
                    | ([$variant.flavors[]
                        | select(.build_image == true)
-                       | select(.id != "base")
+                       # Headless base derivatives (base-hwe/base-nvidia) have
+                       # no login target, just like base itself.
+                       | select(.id | test("^base(?:-|$)") | not)
                        | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
                      ] | sort_by(.id)) as $eligible
                    | (($eligible | map(select(.id == "gnome")) | .[0]) // $eligible[0]) as $pick
@@ -189,14 +191,15 @@ jobs:
             # from any image, so image-only variants (sailfin, guppy,
             # flounder-sid) need boot+install coverage too. Cover every amd64
             # graphical image: standard desktops, overlays (NVIDIA/CachyOS),
-            # and any future desktop tag. `base` has no login target to gate;
+            # and any future desktop tag. `base` and its headless derivatives
+            # (`base-hwe`, `base-nvidia`) have no login target to gate;
             # arm64-only flavors require an arm64 QEMU runner and are reported
             # separately in the job summary.
             matrix="$(echo "$json" | jq -c \
               --arg fv "$FILTER_VARIANT" --arg ff "$FILTER_FLAVOR" \
               '{include: [ .variants[] | . as $variant | .id as $v | .flavors[]
                  | select(.build_image == true)
-                 | select(.id != "base")
+                 | select(.id | test("^base(?:-|$)") | not)
                  | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
                  | {variant: $v, flavor: .id}
                  | select($fv == "all" or .variant == $fv)
@@ -225,7 +228,7 @@ jobs:
               .variants[] | . as $variant
               | [.id, ([.flavors[]
                  | select(.build_image == true)
-                 | select(.id != "base")
+                 | select(.id | test("^base(?:-|$)") | not)
                  | select((.platforms // $variant.platforms // []) | index("linux/amd64"))
                  | .id] | join(", "))]
               | select(.[1] != "")
@@ -237,7 +240,7 @@ jobs:
               [.variants[] | . as $variant
                | select([.flavors[]
                  | select(.build_image == true)
-                 | select(.id != "base")
+                 | select(.id | test("^base(?:-|$)") | not)
                  | select((.platforms // $variant.platforms // []) | index("linux/amd64"))] | length == 0)
                | "- `\(.id)`: no amd64 graphical image (`build_image: true`)"]
               | if length == 0 then "- None" else .[] end'
