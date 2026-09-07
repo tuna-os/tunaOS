@@ -24,15 +24,23 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 CHECKS="${REPO_ROOT}/build_scripts/checks/e2e-runtime-checks.sh"
 RUNTIME="${REPO_ROOT}/build_scripts/desktop/configure-desktop-runtime.sh"
 
-# The predicate the script uses for "graphical.target is healthy".
+# The predicate the script uses: not-failed, evaluated against a stub whose
+# is-failed behaves like the real one (exit 0 only when the unit has failed).
 state_predicate() {
 	local state="$1"
-	bash -c "[[ \"$state\" =~ ^(active|activating|reloading)\$ ]]"
+	bash -c "
+systemctl() {
+  if [[ \"\$1\" == is-failed ]]; then [[ '$state' == failed ]] && return 0 || return 1; fi
+  return 0
+}
+! systemctl is-failed --quiet graphical.target"
 }
 
 @test "the check does not assert is-active on graphical.target" {
 	# The exact assertion that could never pass from inside the transaction.
 	! grep -qE '^\s*systemctl is-active graphical\.target\s*$' "$CHECKS"
+	# ...nor the ActiveState form that replaced it and still failed good boots.
+	! grep -q 'active|activating|reloading' "$CHECKS"
 }
 
 @test "the reason it cannot: the unit is WantedBy the target it asserts on" {
@@ -42,19 +50,23 @@ state_predicate() {
 	grep -q 'e2e-runtime-checks' "$RUNTIME"
 }
 
-@test "activating counts as healthy — that is the whole point" {
-	state_predicate activating
+@test "every non-failed state passes, whenever we happen to sample" {
+	# MEASURED on a marlin:niri installed boot: ActiveState was `inactive` at
+	# 10.9s with `system state: starting` — a healthy system, sampled before
+	# graphical.target had even been queued. An earlier version of this fix
+	# accepted active/activating/reloading and rejected inactive; that failed
+	# good boots. ActiveState cannot separate healthy from broken here at ANY
+	# tolerance, because its value depends on when this unit is sampled and
+	# the unit cannot control that.
 	state_predicate active
-	state_predicate reloading
+	state_predicate activating
+	state_predicate inactive
 }
 
-@test "a genuinely broken target still fails" {
+@test "a genuinely failed target still fails" {
 	# The check must not have been softened into always passing, which would
 	# swap one useless assertion for another.
-	! state_predicate inactive
 	! state_predicate failed
-	! state_predicate deactivating
-	! state_predicate ""
 }
 
 @test "the default-target assertion is time-independent" {
@@ -72,6 +84,11 @@ state_predicate() {
 	gate="$(grep -A1 'check "systemd unit graph verifies' "$CHECKS" | tail -1)"
 	[[ "$gate" == *"--recursive-errors=no"* ]]
 	[[ "$gate" != *"--recursive-errors=yes"* ]]
+	# bootc images strip man pages; systemd-analyze's man-EXISTENCE check then
+	# fails with "'(man)' failed with exit status 1", which was enough on its
+	# own to keep this gate red on marlin:niri even after the recursive-errors
+	# narrowing. A missing man page is not a unit defect.
+	[[ "$gate" == *"--man=no"* ]]
 }
 
 @test "the transitive sweep is kept, but as information" {
@@ -80,7 +97,7 @@ state_predicate() {
 	grep -q 'recursive-errors=yes' "$CHECKS"
 	grep -q 'systemd-analyze warnings across the graphical.target graph' "$CHECKS"
 	# ...and it must never abort the remaining checks.
-	grep -q 'analyze_warnings=$(systemd-analyze verify --recursive-errors=yes graphical.target 2>&1 || true)' "$CHECKS"
+	grep -q 'analyze_warnings=$(systemd-analyze verify --man=no --recursive-errors=yes graphical.target 2>&1 || true)' "$CHECKS"
 }
 
 @test "the script is still valid bash" {
@@ -94,6 +111,7 @@ runtime_stubs() {
 		case \"\$1\" in
 		is-system-running) echo running ;;
 		is-active) echo active ;;
+		is-failed) [[ "${graphical_state}" == failed ]] && return 0 || return 1 ;;
 		show)
 			case \" \$* \" in
 			*\" ActiveState \"*) echo ${graphical_state} ;;
@@ -115,12 +133,12 @@ runtime_stubs() {
 	export -f systemctl findmnt bootc systemd-analyze rpm locale hostname
 }
 
-@test "end to end: activating passes, so a healthy boot is not red" {
-	# The measured real-world state — the one the old assertion failed on.
-	runtime_stubs activating
+@test "end to end: a still-starting boot is not red" {
+	# The measured real-world state — inactive at 10.9s on a healthy system.
+	runtime_stubs inactive
 	run bash "$CHECKS" gnome
 	[ "$status" -eq 0 ]
-	[[ "$output" == *"ok - graphical.target is reached or being reached"* ]]
+	[[ "$output" == *"ok - graphical.target has not failed"* ]]
 	[[ "$output" == *"ok - graphical.target is the default target"* ]]
 	[[ "$output" != *"not ok - "* ]]
 }
@@ -130,5 +148,5 @@ runtime_stubs() {
 	runtime_stubs failed
 	run bash "$CHECKS" gnome
 	[ "$status" -ne 0 ]
-	[[ "$output" == *"not ok - graphical.target is reached or being reached"* ]]
+	[[ "$output" == *"not ok - graphical.target has not failed"* ]]
 }

@@ -556,9 +556,15 @@ STUB
   # aurora pattern: Plasma/Qt version-skew is a hard build failure.
   grep -q 'KDE version skew' "$script"
   grep -q 'Qt version skew' "$script"
-  # runtime side re-verifies the unit graph on the installed system.
-  grep -qF 'systemd-analyze verify --recursive-errors=yes graphical.target' \
-    "${REPO_ROOT}/build_scripts/checks/e2e-runtime-checks.sh"
+  # Runtime side re-verifies the unit graph on the installed system. The
+  # runtime copy carries --man=no (bootc images strip man pages, and
+  # systemd-analyze's man-existence check then fails on its own) and runs the
+  # recursive sweep as INFORMATION while gating on --recursive-errors=no, so
+  # match the parts that carry the intent rather than one frozen flag string.
+  local runtime="${REPO_ROOT}/build_scripts/checks/e2e-runtime-checks.sh"
+  grep -qF 'systemd-analyze verify' "$runtime"
+  grep -qF 'graphical.target' "$runtime"
+  grep -qF -e '--recursive-errors=yes' "$runtime"
 }
 
 @test "EL10 KDE does not copy nonexistent Aurora files from Bluefin common" {

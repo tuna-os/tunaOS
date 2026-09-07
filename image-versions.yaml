@@ -108,7 +108,26 @@ downloads:
   # These pins drive both the toolchain builds and the version tags consumers
   # request. Renovate bumps them; the toolchain workflow rebuilds on bump.
   # renovate: datasource=github-releases depName=bootc-dev/bootc
-  bootc: "v1.16.11"
+  #
+  # CEILING, not a floor -- the opposite of the tacklebox pin below. Do not
+  # move this above v1.16.10 until bootc makes selinux optional again, or
+  # Arch ships libselinux.
+  #
+  # v1.16.11 added `selinux = { workspace = true }` to crates/lib/Cargo.toml
+  # as a hard dependency with no feature flag. selinux-sys' build script needs
+  # selinux/selinux.h, and Arch does not ship it: `libselinux` is not in the
+  # official repos at all (`pacman -Si libselinux` -> "package not found"), so
+  # there is nothing to add to Containerfile.arch's bootc-builder stage.
+  # Every marlin build therefore dies with
+  #   selinux-sys: Failed to find 'selinux/selinux.h'
+  # Renovate bumped this on 2026-09-03 and Build Marlin has been red on every
+  # run since, on both arches.
+  #
+  # Verified by building Containerfile.arch's bootc-builder stage at both
+  # versions on a clean archlinux:latest: v1.16.11 fails as above, v1.16.10
+  # completes. renovate.json carries a matching allowedVersions ceiling so
+  # this cannot be silently bumped back.
+  bootc: "v1.16.10"
   # renovate: datasource=github-releases depName=coreos/bootupd
   bootupd: "v0.3.1"
   # ostree from source only for bases whose packaged ostree is older than

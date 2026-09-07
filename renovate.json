@@ -110,6 +110,13 @@
         "ghcr.io/projectbluefin/common"
       ],
       "minimumReleaseAge": "3 days"
+    },
+    {
+      "description": "CEILING on bootc. v1.16.11 made `selinux` a hard, non-optional dependency of bootc-lib (crates/lib/Cargo.toml: `selinux = { workspace = true }`, no feature flag), and selinux-sys needs selinux/selinux.h, which Arch does not ship -- `libselinux` is not in its official repos at all. So every Arch-family image (marlin) fails to build its bootc-builder stage: \"selinux-sys: Failed to find 'selinux/selinux.h'\". v1.16.10 builds cleanly, verified by building the builder stage at both versions. Lift this the moment bootc makes selinux optional again or Arch ships libselinux -- it is a ceiling on a dependency we want to track, not a decision to stop tracking it.",
+      "matchPackageNames": [
+        "bootc-dev/bootc"
+      ],
+      "allowedVersions": "<=1.16.10"
     }
   ]
 }

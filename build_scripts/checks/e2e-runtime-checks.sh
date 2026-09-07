@@ -138,8 +138,21 @@ fi
 # TimeoutStartSec=90 killed it — a 90-second stall added to every boot.
 graphical_state=$(systemctl show -P ActiveState graphical.target 2>/dev/null || echo unknown)
 emit "# graphical.target ActiveState: ${graphical_state} (activating is correct from inside its own transaction)"
-check "graphical.target is reached or being reached" \
-	bash -c '[[ "$(systemctl show -P ActiveState graphical.target 2>/dev/null)" =~ ^(active|activating|reloading)$ ]]'
+# MEASURED on a marlin:niri installed boot: ActiveState was `inactive` at
+# 10.9s with `system state: starting` -- a perfectly healthy system, checked
+# before graphical.target had even been queued. So ActiveState cannot separate
+# healthy from broken here AT ANY TOLERANCE: accepting `inactive` would make
+# the assertion vacuous, and rejecting it fails good boots. Its value depends
+# on when this unit happens to be sampled, which this unit cannot control.
+#
+# `is-failed` does not have that problem. It is true only when the target
+# actually failed, whenever you ask -- so it still catches a real regression
+# without going red on a system that is merely still starting.
+#
+# The claim "this is a graphical system" is already carried, more reliably, by
+# the default-target assertion below plus the two display-manager assertions.
+check "graphical.target has not failed" \
+	bash -c '! systemctl is-failed --quiet graphical.target'
 
 # The stable half of the original intent: is this actually a graphical system?
 # Unlike ActiveState, get-default does not depend on when in the boot we ask.
@@ -220,9 +233,14 @@ if command -v systemd-analyze >/dev/null 2>&1; then
 	# run, but as INFORMATION — its warnings are worth reading and are not
 	# worth failing a build over, and printing them beats the previous
 	# behaviour of discarding the output into /dev/null.
+	# --man=no because bootc images strip man pages, and systemd-analyze's
+	# man-page EXISTENCE check then fails with "'(man)' failed with exit
+	# status 1" -- measured on a marlin:niri installed system, where it was
+	# enough on its own to keep this gate red even after --recursive-errors=no
+	# removed the upstream-unit noise. A missing man page is not a unit defect.
 	check "systemd unit graph verifies (graphical.target)" \
-		systemd-analyze verify --recursive-errors=no graphical.target
-	analyze_warnings=$(systemd-analyze verify --recursive-errors=yes graphical.target 2>&1 || true)
+		systemd-analyze verify --man=no --recursive-errors=no graphical.target
+	analyze_warnings=$(systemd-analyze verify --man=no --recursive-errors=yes graphical.target 2>&1 || true)
 	if [[ -n "$analyze_warnings" ]]; then
 		emit "# systemd-analyze warnings across the graphical.target graph (informational):"
 		while IFS= read -r line; do emit "#   $line"; done <<<"$analyze_warnings"
