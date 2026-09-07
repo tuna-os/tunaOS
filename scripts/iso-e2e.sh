@@ -1756,6 +1756,33 @@ run_checkpoint_asserts() {
 
 	local out rc=0
 	out=$(python3 "$py" "$OUTPUT_DIR" "${args[@]}" 2>&1) || rc=$?
+
+	# Re-capture and re-check while the desktop is still settling.
+	#
+	# wait_for_paint stops at "something drew", and on KDE the first thing
+	# that draws is the Plasma splash — MEASURED on a fixed marlin:kde dev
+	# ISO: splash at stddev 0.0448, the installer's welcome page at 0.0909 a
+	# short while later. Judging the stage on the splash frame reports "the
+	# installer is not on screen" about a session that is simply mid-start,
+	# and a gate that cries wolf on every KDE run is a gate someone will turn
+	# off. Bounded, and only on the live-only modes: the install modes have
+	# already driven the session by the time they check.
+	local settle="${TBOX_E2E_CHECKPOINT_SETTLE:-90}"
+	case "$MODE" in
+	ready | ssh)
+		local waited=0 label="10-ready"
+		[[ "$MODE" == "ssh" ]] && label="20-ssh"
+		while [[ "$rc" -ne 0 && "$waited" -lt "$settle" ]]; do
+			sleep 15
+			waited=$((waited + 15))
+			screenshot "$label" || true
+			rc=0
+			out=$(python3 "$py" "$OUTPUT_DIR" "${args[@]}" 2>&1) || rc=$?
+		done
+		[[ "$waited" -gt 0 ]] &&
+			echo "==> screen checkpoints settled after ${waited}s"
+		;;
+	esac
 	echo "$out" | tee -a "${SERIAL_LOG}"
 
 	# 77 is "tesseract or PyYAML is missing" — a fact about the host, not
