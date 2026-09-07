@@ -21,6 +21,7 @@ Invoked by:
 | `gen-ci-lanes.py` | Generates the PR/post-merge/scheduled workflow inventory in `docs/CI_SPEC.md` |
 | `sync-upstream-snapshots.sh` | Syncs and drift-checks the `_upstream-snapshots/` tree |
 | `check-upstream-snapshot-size.sh` | Fails refreshes that exceed the snapshot size or change budget |
+| `audit-git-blobs.py` | Inventories oversized blobs reachable from selected Git refs; see the [rewrite runbook](../docs/GIT-HISTORY-REWRITE.md) |
 
 See `docs/AGENT_GUIDE.md`'s Key Files table for the fuller list and how
 these fit into the overall build pipeline (`docs/PIPELINE.md`,
