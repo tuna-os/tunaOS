@@ -144,6 +144,9 @@ setup_runtime_check_stubs() {
     case "$1" in
       is-system-running) echo running ;;
       is-active) echo active ;;
+      # Real is-failed exits NON-zero for a healthy unit; a catch-all `return
+      # 0` stub would report every unit as failed.
+      is-failed) return 1 ;;
       # `show -P <property> <unit>` is called for more than one property, so
       # answer per property. A stub returning one string for every `show` made
       # `show -P ActiveState graphical.target` report a display-manager name.
@@ -188,6 +191,9 @@ setup_runtime_check_stubs() {
     case "$1" in
       is-system-running) echo running ;;
       is-active) echo active ;;
+      # Real is-failed exits NON-zero for a healthy unit; a catch-all `return
+      # 0` stub would report every unit as failed.
+      is-failed) return 1 ;;
       show)
         case " $* " in
         *" ActiveState "*) echo active ;;
