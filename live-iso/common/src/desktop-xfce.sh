@@ -50,6 +50,15 @@ if [[ -n "${_xfce_compositor}" ]] && command -v greetd &>/dev/null; then
 [terminal]
 vt = 1
 
+# Same reason as the cosmic and niri adapters: greetd's source_profile default
+# wraps the session command in a shell that sources /etc/profile first, and
+# umotd (from the ublue common payload) blocks there in a non-interactive
+# session — the shell then waits forever and never execs the session. MEASURED
+# on marlin:cosmic; xfce autologins through greetd the same way, so it is
+# exposed to the same hang.
+[general]
+source_profile = false
+
 [default_session]
 user = "liveuser"
 command = "dbus-run-session startxfce4 --wayland ${_xfce_compositor}"
