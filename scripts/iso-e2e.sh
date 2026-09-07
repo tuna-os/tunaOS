@@ -471,6 +471,12 @@ if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /de
 	echo "==> GPU: virgl (virtio-vga-gl + egl-headless /dev/dri/renderD128 + vnc surface) — Smithay compositors can render"
 else
 	echo "==> GPU: -vga virtio headless (no render node/virgl) — niri/xfwl4 will not render here"
+	# Tell the screen checkpoints so they report, rather than enforce, the
+	# pixel assertions for the desktops that cannot draw without virgl (the
+	# needs_virgl list in tests/install-pipeline-screens.yaml). Otherwise
+	# every cosmic/niri/xfce cell fails its live-desktop checkpoint on every
+	# CI runner, none of which has a render node.
+	TUNAOS_CHECKPOINT_NO_GPU=1
 fi
 
 # Locate architecture-appropriate UEFI firmware. Path varies across distros
@@ -1747,6 +1753,7 @@ run_checkpoint_asserts() {
 	[[ -f "$py" ]] || return 0
 
 	local args=(--flavor "${FLAVOR:-gnome}" --variant "${VARIANT:-}")
+	[[ "${TUNAOS_CHECKPOINT_NO_GPU:-0}" -eq 1 ]] && args+=(--no-gpu)
 	# The live phase is the only one a boot-only run can satisfy; asserting
 	# the installed phases there would report a missing 30-installed frame as
 	# a failure of a run that never claimed to install anything.

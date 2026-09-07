@@ -306,6 +306,10 @@ def main():
                          "installer-walkthrough.py rather than by this script.")
     ap.add_argument("--json", dest="json_path", default=None)
     ap.add_argument("--sheet", dest="sheet_path", default=None)
+    ap.add_argument("--no-gpu", action="store_true",
+                    help="the run had no virgl; do not enforce pixel "
+                         "assertions for desktops that cannot render without "
+                         "it (see needs_virgl in the contract)")
     ap.add_argument("--strict", action="store_true",
                     help="fail (77) when OCR is unavailable instead of "
                          "degrading to render-only checks")
@@ -324,6 +328,17 @@ def main():
     checkpoints = spec.get("checkpoints", [])
     if args.phase:
         checkpoints = [c for c in checkpoints if c.get("phase") in args.phase]
+
+    # Can this run's pixels be judged at all? cosmic-comp, niri and xfwl4 are
+    # Smithay compositors and draw nothing without virgl, which no CI runner
+    # has. Reporting their blank frames is useful; FAILING on them would fail
+    # every such cell forever, for a reason that is about the host.
+    no_gpu = (args.no_gpu
+              or os.environ.get("TUNAOS_CHECKPOINT_NO_GPU") == "1")
+    pixels_blind = no_gpu and family in (spec.get("needs_virgl") or [])
+    if pixels_blind:
+        note(f"no virgl on this host and {family} needs it to render — the "
+             f"render and keyword assertions are REPORTED, not enforced")
 
     print(f"# install-pipeline checkpoints — variant={args.variant or '?'} "
           f"flavor={args.flavor} desktop={family}", flush=True)
@@ -370,7 +385,8 @@ def main():
             record["rendered"] = round(best_dev, 4)
             tap(best_dev > BLANK_STDDEV, f"[{cid}] screen renders content",
                 f"best stddev {best_dev:.4f} <= {BLANK_STDDEV} "
-                f"({os.path.basename(best_path)} is blank)", enforced=required)
+                f"({os.path.basename(best_path)} is blank)",
+                enforced=required and not pixels_blind)
         else:
             note(f"[{cid}] no ImageMagick — render check skipped")
 
@@ -402,7 +418,7 @@ def main():
             desc = (f"[{cid}] screen says one of: {quoted}" if mode == "any"
                     else f"[{cid}] screen says all of: {quoted}")
             tap(ok, desc, f"matched {hits or 'nothing'} — OCR read: {seen}",
-                enforced=required)
+                enforced=required and not pixels_blind)
 
         # CLEAN — always enforced when the frame exists, on optional
         # checkpoints too: a panic is a panic wherever it is photographed.
@@ -445,6 +461,7 @@ def main():
         "flavor": args.flavor,
         "desktop": family,
         "ocr": HAVE_OCR,
+        "pixels_enforced": not pixels_blind,
         "checkpoints": results,
         "installer_walkthrough": walkthrough,
         "assertions": _tap,

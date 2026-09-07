@@ -63,6 +63,23 @@ luks_prompt_text: &luks_prompt
   - "enter passphrase for"
   - "no key available with this passphrase"
 
+# Desktops whose compositor cannot draw at all without virgl.
+#
+# cosmic-comp, niri and xfwl4 are Smithay compositors: they render through GL
+# and produce NOTHING on a host with no render node — which is every CI runner,
+# and any workstation whose QEMU lacks virtio-vga-gl (MEASURED: the linuxbrew
+# QEMU 11.1.1 on this workstation ships virtio-vga but not virtio-vga-gl, so
+# `iso-e2e.sh` reports "no render node/virgl" and falls back to plain VGA).
+#
+# A blank frame there is a fact about the host, not about the image, so
+# scripts/install-checkpoints.py reports the pixel assertions for these
+# desktops without enforcing them when told the run had no virgl
+# (TUNAOS_CHECKPOINT_NO_GPU=1, which iso-e2e.sh sets from its own GPU
+# decision). Enforcing them anyway would fail every cosmic/niri/xfce cell in
+# CI forever — the "gate that cries wolf" failure this contract already has
+# one scar from.
+needs_virgl: [cosmic, niri, xfce]
+
 checkpoints:
   # ── Phase 1: the live ISO reaches a desktop ────────────────────────────────
   #

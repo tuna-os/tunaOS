@@ -326,3 +326,48 @@ def test_despacing_does_not_match_a_different_screen(tmp_path):
             keywords: ["not listed"]
         """)
     assert run(out, "--spec", s, "--flavor", "gnome")[0] == 1
+
+
+def test_smithay_desktops_are_not_failed_for_a_blank_frame_without_virgl(tmp_path):
+    """cosmic/niri/xfce draw nothing without virgl — that is a host fact.
+
+    Every CI runner lacks a render node, so enforcing the pixel assertions
+    there would fail those cells forever for a reason that has nothing to do
+    with the image.
+    """
+    out = tmp_path / "evidence"
+    out.mkdir()
+    blank(str(out / "10-ready.png"))
+    s = spec(tmp_path, """
+        needs_virgl: [cosmic, niri, xfce]
+        checkpoints:
+          - id: live-desktop
+            phase: live
+            frames: ["10-ready"]
+            required: true
+            keywords: ["welcome"]
+        """)
+    rc, log = run(out, "--spec", s, "--flavor", "cosmic", "--no-gpu")
+    assert rc == 0, log
+    assert "not enforced" in log or "REPORTED" in log
+
+
+def test_a_desktop_that_renders_without_virgl_still_fails_on_a_blank_frame(tmp_path):
+    """The softening is per-desktop, not a blanket excuse.
+
+    KDE composites fine under plain VGA, so a blank KDE frame is a real
+    defect even on a host with no virgl.
+    """
+    out = tmp_path / "evidence"
+    out.mkdir()
+    blank(str(out / "10-ready.png"))
+    s = spec(tmp_path, """
+        needs_virgl: [cosmic, niri, xfce]
+        checkpoints:
+          - id: live-desktop
+            phase: live
+            frames: ["10-ready"]
+            required: true
+            keywords: ["welcome"]
+        """)
+    assert run(out, "--spec", s, "--flavor", "kde", "--no-gpu")[0] >= 1
