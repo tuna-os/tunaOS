@@ -42,6 +42,52 @@ EOF
 # matrix (added in #1039), and that is the workflow whose whole job is to
 # assert the installer process is running.
 #
+# GNOME deliberately starts a normal user session in Activities. An XDG
+# autostart application does not dismiss that overview, so the installer maps
+# behind Shell chrome and receives neither focus nor keyboard input. Install a
+# live-session-only extension which closes the overview once Shell's startup
+# animation completes. The launcher enables it in liveuser's volatile dconf
+# before starting the installer; using `gnome-extensions enable` appends to the
+# user's extension set instead of replacing the image's enabled extensions.
+_gnome_live_extension="tunaos-live-installer@tunaos.org"
+_gnome_live_extension_dir="/usr/share/gnome-shell/extensions/${_gnome_live_extension}"
+mkdir -p "${_gnome_live_extension_dir}"
+tee "${_gnome_live_extension_dir}/metadata.json" <<'METADATAEOF'
+{
+  "uuid": "tunaos-live-installer@tunaos.org",
+  "name": "TunaOS Live Installer",
+  "description": "Present the installer instead of the startup overview in the live session",
+  "shell-version": ["45", "46", "47", "48", "49", "50", "51"]
+}
+METADATAEOF
+tee "${_gnome_live_extension_dir}/extension.js" <<'EXTENSIONEOF'
+import * as Main from 'resource:///org/gnome/shell/ui/main.js';
+
+export default class TunaOSLiveInstallerExtension {
+    enable() {
+        // Hide now when the extension is enabled after startup, and again at
+        // startup-complete when it is enabled while Shell is still animating.
+        Main.layoutManager.connectObject(
+            'startup-complete', () => Main.overview.hide(), this);
+        Main.overview.hide();
+    }
+
+    disable() {
+        Main.layoutManager.disconnectObject(this);
+    }
+}
+EXTENSIONEOF
+
+install -d /usr/libexec
+tee /usr/libexec/tunaos-live-installer-gnome <<'LAUNCHEREOF'
+#!/usr/bin/env bash
+# Failure to load the convenience extension must not prevent installation.
+gnome-extensions enable tunaos-live-installer@tunaos.org ||
+    echo "tunaos-live-installer: could not suppress GNOME's startup overview" >&2
+exec flatpak run org.bootcinstaller.Installer
+LAUNCHEREOF
+chmod 0755 /usr/libexec/tunaos-live-installer-gnome
+
 # Deliberately no OnlyShowIn=, for the reason spelled out in desktop-cosmic.sh:
 # systemd-xdg-autostart-generator gates on systemd-xdg-autostart-condition
 # against XDG_CURRENT_DESKTOP, and a mismatch silently skips the unit.
@@ -50,7 +96,7 @@ tee /etc/xdg/autostart/org.tunaos.installer-live.desktop <<'DESKEOF'
 [Desktop Entry]
 Type=Application
 Name=Install TunaOS
-Exec=flatpak run org.bootcinstaller.Installer
+Exec=/usr/libexec/tunaos-live-installer-gnome
 Icon=org.bootcinstaller.Installer
 DESKEOF
 
