@@ -1,0 +1,53 @@
+name: Dead gate report
+
+# Reports assertions that were red in EVERY recent run of a gate workflow.
+#
+# Epic #2250's CI contract catches a criterion with no executing
+# implementation -- the always-GREEN case. This is the inverse, and on this
+# repo the inverse cost more: three assertions in e2e-runtime-checks.sh sat
+# red on every cell for months, each for a reason unrelated to what it
+# claimed to test, and each was read as a known issue rather than as a gate
+# measuring nothing.
+#
+# Deliberately a REPORT, never a gate. Failing the build on "always red"
+# would block the repo on exactly the assertions this is meant to surface,
+# and naming them in a job summary is enough to make them undeniable.
+
+on:
+  schedule:
+    - cron: '17 6 * * 1' # Mondays, after the weekend's scheduled runs
+  workflow_dispatch:
+    inputs:
+      workflow:
+        description: 'Workflow file to examine'
+        required: false
+        default: 'luks-e2e.yml'
+      runs:
+        description: 'How many recent runs'
+        required: false
+        default: '10'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Report dead-gate candidates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          WF: ${{ github.event.inputs.workflow || 'luks-e2e.yml' }}
+          RUNS: ${{ github.event.inputs.runs || '10' }}
+        run: |
+          set -euo pipefail
+          {
+            echo "## Dead gate candidates — \`${WF}\`, last ${RUNS} runs"
+            echo
+            echo '```'
+            python3 scripts/detect-dead-gates.py --workflow "$WF" --runs "$RUNS" 2>&1 || true
+            echo '```'
+          } >>"$GITHUB_STEP_SUMMARY"

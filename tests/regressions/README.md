@@ -14,6 +14,20 @@ can be checked (`tests/test_regression_convention.py`):
 - **Assert the failure mode, not the fix.** The test should fail on the tree
   that shipped the incident and pass on the fix — mutate a real input into
   the broken shape where you can, rather than asserting a string is present.
+- **State how it fails.** Add a line that starts with `Falsification:`. The
+  line tells the reader what makes this test fail on the unfixed tree. Use one
+  of two shapes, and make it clear which one you used:
+  - *behavioural* — the test runs the real code with the broken input. The
+    test falsifies itself.
+  - *structural* — the test looks for a string, an order or a shape. Revert
+    the fix, watch the test fail, and name what you reverted.
+
+  A test that cannot fail looks exactly like a test that passes. A green run
+  does not show the difference. This repo has examples. Three checks in
+  `build_scripts/checks/e2e-runtime-checks.sh` ran on every cell for months.
+  None of them could pass. A format check written in the same week used
+  `find -exec`, which returns 0 even when the command fails. Write the line
+  once, and you ask the question once.
 
 Tests elsewhere in `tests/` already follow the spirit of this (most carry an
 issue or run number in their docstring); this directory makes the mapping

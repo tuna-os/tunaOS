@@ -4,6 +4,10 @@ The yellowfin GNOME Gate serial console only said to run ``systemctl status``.
 The harness had already prepared credentialed root-over-vsock access, but its
 ``--disk`` QEMU command never attached the vsock device, so the failed guest's
 journal and dbus-broker coredump metadata disappeared with the VM.
+
+Falsification: structural — confirmed red by moving
+collect_disk_boot_diagnostics after the paint capture in iso-e2e.sh,
+which trips `assert collect < paint`.
 """
 
 from pathlib import Path

@@ -17,6 +17,10 @@ correctly.
 These tests hold the shape of the fix: the benign refusal is recognised and
 counted, an unexpected refusal still fails the step, and a round that
 recovered nothing at all is not reported as success.
+
+Falsification: structural — confirmed red by removing the
+`refused=$((refused + 1))` counter from rerun-infra-failures.yml, which
+fails test_an_unexpected_refusal_still_fails_the_step.
 """
 from __future__ import annotations
 

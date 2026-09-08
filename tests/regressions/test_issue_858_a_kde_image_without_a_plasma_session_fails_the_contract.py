@@ -13,6 +13,10 @@ requires the session glob in its `kde)` branch; these tests run the real
 and hold that it fails, loudly, with the path named — and that the
 hummingbird bootstrap waiver, the one legitimate way through, is not in
 effect for a stable variant.
+
+Falsification: behavioural — runs the real require_glob from
+verify-desktop-experience.sh against a root with no session file, so the
+test drives the incident's own input rather than asserting a string.
 """
 
 from __future__ import annotations
