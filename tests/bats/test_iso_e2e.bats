@@ -1222,7 +1222,14 @@ setup_runtime_check_stubs() {
 
 gpu_block_file() {
   local out="${BATS_TEST_TMPDIR}/gpu-block.sh"
-  awk '/^# The display device is per machine type/{p=1} p{print} p && /no render node\/virgl/{q=1} q && /^fi$/{exit}' \
+  # Terminate on TUNAOS_CHECKPOINT_NO_GPU=, not on the diagnostic TEXT. The
+  # marker used to be the string "no render node/virgl"; rewording that
+  # message stopped the terminator matching, so this extracted 3,396 lines
+  # instead of ~70, ran on into the UEFI-firmware check, and failed with
+  # "UEFI firmware not found" -- three GPU tests red for a reason with
+  # nothing to do with GPU selection. An extractor keyed on prose breaks
+  # when the prose is improved.
+  awk '/^# The display device is per machine type/{p=1} p{print} p && /TUNAOS_CHECKPOINT_NO_GPU=/{q=1} q && /^fi$/{exit}' \
     "${REPO_ROOT}/scripts/iso-e2e.sh" >"$out"
   echo "$out"
 }
