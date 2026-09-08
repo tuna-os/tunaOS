@@ -132,6 +132,46 @@ just test-bats     # shell script tests only
 just verify-disk image.qcow2   # QEMU boot gate
 ```
 
+### Testing an ISO: dev media vs published media
+
+`scripts/iso-e2e.sh` has two families of mode and they do not cover the same
+artifacts.
+
+| mode | reaches the guest via | works on |
+|---|---|---|
+| `--luks`, `--ssh-only`, `--kickstart`, `--app-launch` | SSH | **dev ISOs only** |
+| `--published` | QEMU monitor (`sendkey` + `screendump` + OCR) | **any ISO, including published** |
+
+Production images ship sshd disabled (`40-services.sh` turns it off unless
+`ENABLE_SSHD=1`), so every SSH-based mode fails on media a user can download
+— `--luks` dies at `ERROR: SSH not available`. For years that meant the LUKS
+gate, the smoke checks and the installer GUI checks only ever ran against dev
+ISOs, and a published ISO could regress in any of those ways unnoticed.
+
+Use `--published` to check an artifact as shipped:
+
+```bash
+curl -fsSLO https://download.tunaos.org/live-isos/<variant>[-<group>]-latest.iso
+sudo -E ./scripts/iso-e2e.sh ./<file>.iso --published --output out --memory 4096
+```
+
+Two things it deliberately does not do, both learned the hard way:
+
+- It judges readiness by **pixels, not the serial marker** — production media
+  need not ship `tunaos-live-ready.service`, and waiting for a marker that is
+  not coming burns the whole `--timeout` and reads as a hang.
+- It does not treat *any* non-blank frame as ready. A GRUB menu is non-blank,
+  and so it declared success at the bootloader and drove `sendkey` into a
+  still-booting machine; a black screen between GRUB and the compositor has
+  no bootloader text, and so the first fix for that declared success at a
+  black screen. Readiness now requires non-blank **and** not-bootloader,
+  bounded by `TUNAOS_PUBLISHED_BOOT_SETTLE`.
+
+The harness names the image from the ISO FILENAME (`<variant>-<flavor>-…`),
+so keep that shape when renaming a download or it will probe
+`ghcr.io/tuna-os/published:marlin` and fail for a reason that has nothing to
+do with the ISO.
+
 ---
 
 ## Adding a New Desktop
