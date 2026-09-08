@@ -63,8 +63,14 @@ QUALIFIED_KERNEL="$(rpm -qa | grep -P 'kernel-(|'"$KERNEL_SUFFIX"'-)(\d+\.\d+\.\
 #            so the EL10 variants land here, not on Fedora userspace.
 #   *.fcNN → fedora-nvidia.repo (fedora-NN) — bluefin-lts's arm, right for
 #            bonito's coreos-stable akmods.
-# Fallback when neither tag is readable: fedora-43, bluefin-lts's pinned
-# default, kept so an unexpected bundle still names a real repo.
+# Fallback when neither tag is readable: fedora-44, matching bonito's
+# build-config base. It was 43 — bluefin-lts's pinned default — which is now a
+# release behind the base we actually ship, so a bundle that hit this fallback
+# would have pointed a Fedora 44 image at Fedora 43 NVIDIA userspace. Both
+# releasevers exist upstream today (negativo17 fedora-43 and fedora-44 both
+# return 200; fedora-45 is 404), so this is a currency bump, not a
+# reachability fix. tests/bats/test_fedora_base_currency.bats ties it to
+# build-config so the next Fedora transition cannot leave it behind again.
 #
 # `head -1` after grep, and not grep's own -m1: -m1 stops after the first
 # matching LINE, while -o prints every match ON that line. A bundle whose
@@ -88,7 +94,7 @@ elif [[ -n "${AKMODS_FEDORA_VERSION}" ]]; then
 	NVIDIA_RELEASEVER="${AKMODS_FEDORA_VERSION}"
 else
 	NVIDIA_REPO_ID="fedora-nvidia"
-	NVIDIA_RELEASEVER="${FEDORA_AKMODS_VERSION:-43}"
+	NVIDIA_RELEASEVER="${FEDORA_AKMODS_VERSION:-44}"
 fi
 echo "==> NVIDIA userspace repo: ${NVIDIA_REPO_ID} releasever=${NVIDIA_RELEASEVER}"
 curl --retry 3 -fsSLo - "https://negativo17.org/repos/${NVIDIA_REPO_ID}.repo" |
