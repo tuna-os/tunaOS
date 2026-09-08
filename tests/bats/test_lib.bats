@@ -143,6 +143,8 @@ JQ
   # -- Source lib.sh under test (point dirname to our test root) --
   # We copy lib.sh to a temp location and tweak paths so it can be sourced.
   cp "${REPO_ROOT}/build_scripts/lib.sh" "${TEST_ROOT}/lib_test.sh"
+  mkdir -p "${TEST_ROOT}/lib"
+  cp "${REPO_ROOT}/build_scripts/lib/service-policy.sh" "${TEST_ROOT}/lib/service-policy.sh"
   # Remove the set -euo pipefail to make testing easier
   sed -i 's/^set -euo pipefail/set -uo pipefail\n# set -e removed for test/' "${TEST_ROOT}/lib_test.sh"
   # Make _IMAGE_INFO overridable so image-info.json tests can point to test stubs
