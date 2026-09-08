@@ -79,3 +79,60 @@ def test_the_formatting_gate_can_actually_fail() -> None:
         line for line in check.splitlines() if not line.lstrip().startswith("#")
     )
     assert not re.search(r"-exec\s+shfmt\s+--diff", code)
+
+
+# ── The formatter's own version is part of the formatting ───────────────────
+#
+# .editorconfig disagreeing with the code made `just fix` rewrite 145 files.
+# An unpinned FORMATTER is the same failure waiting on an upstream release
+# instead of on a config edit: two contributors on different shfmt versions
+# produce different trees, each sees the other's as unformatted, and AGENTS.md
+# makes `just fix && just check` mandatory so everyone hits it at once.
+
+
+def _pins() -> dict:
+    import yaml as _yaml
+
+    return _yaml.safe_load((ROOT / "image-versions.yaml").read_text())["downloads"]
+
+
+def test_shfmt_is_pinned() -> None:
+    pin = _pins().get("shfmt")
+    assert pin, "shfmt is not pinned in image-versions.yaml"
+    assert re.fullmatch(r"v\d+\.\d+\.\d+", pin), f"unexpected shfmt pin: {pin!r}"
+
+
+def test_renovate_tracks_the_shfmt_pin() -> None:
+    """Pinned and then forgotten is its own failure mode."""
+    text = (ROOT / "image-versions.yaml").read_text()
+    assert "depName=mvdan/sh" in text, "no renovate datasource comment for shfmt"
+
+
+def test_both_fix_and_check_refuse_a_mismatched_formatter() -> None:
+    """`just fix` is the one that WRITES, so it must be guarded too.
+
+    Guarding only `check` would let a wrong-version `fix` rewrite the tree and
+    then report the result as drift.
+    """
+    text = (ROOT / "just" / "utilities.just").read_text()
+    assert "_check_shfmt_version" in text
+    assert re.search(r"^fix: .*_check_shfmt_version", text, re.M), (
+        "`just fix` does not depend on the version guard"
+    )
+    assert re.search(r"^_ensure_check_deps: .*_check_shfmt_version", text, re.M), (
+        "`just check` does not depend on the version guard"
+    )
+
+
+def test_the_guard_is_overridable_and_says_how_to_fix_it() -> None:
+    """A hard stop with no way past it gets deleted by the next person."""
+    text = (ROOT / "just" / "utilities.just").read_text()
+    assert "TUNAOS_ALLOW_SHFMT_DRIFT" in text
+    assert "go install mvdan.cc/sh" in text
+
+
+def test_ci_installs_the_pinned_shfmt() -> None:
+    """CI and local must format identically, or `check` fails on untouched files."""
+    text = (ROOT / ".github" / "workflows" / "lint.yml").read_text()
+    assert "mvdan.cc/sh/v3/cmd/shfmt@v" in text
+    assert "image-versions.yaml" in text

@@ -13,7 +13,34 @@ simulate-matrix:
 default:
     @{{ just }} --list
 
-_ensure_check_deps:
+# Refuse to format with a shfmt other than the pinned one.
+#
+# shfmt is a formatter, so its version IS the formatting. Two contributors on
+# different versions produce different trees and each sees the other's as
+# unformatted -- and AGENTS.md makes `just fix && just check` mandatory before
+# every commit, so everyone hits it at once. Failing loudly with the two
+# version numbers costs one line; silently rewriting the tree costs a review
+# cycle and buries the real diff.
+#
+# Advisory when shfmt is absent entirely (nothing to compare); fatal only on a
+# genuine mismatch, and overridable with TUNAOS_ALLOW_SHFMT_DRIFT=1 for anyone
+# deliberately testing a new version.
+_check_shfmt_version:
+    #!/usr/bin/env bash
+    cd {{ justfile_directory() }}
+    command -v shfmt &>/dev/null || exit 0
+    want="$(sed -n 's/^  shfmt: "v\{0,1\}\([^"]*\)"$/\1/p' image-versions.yaml | head -1)"
+    [[ -z "$want" ]] && exit 0
+    have="$(shfmt --version 2>/dev/null | tr -d 'v')"
+    if [[ "$have" != "$want" ]]; then
+        echo "::error::shfmt ${have} but this repo is formatted with ${want} (image-versions.yaml)." >&2
+        echo "  A different shfmt reformats the whole tree. Install the pinned one:" >&2
+        echo "    go install mvdan.cc/sh/v3/cmd/shfmt@v${want}" >&2
+        echo "  or set TUNAOS_ALLOW_SHFMT_DRIFT=1 if you are deliberately testing a new version." >&2
+        [[ "${TUNAOS_ALLOW_SHFMT_DRIFT:-0}" == "1" ]] || exit 1
+    fi
+
+_ensure_check_deps: _check_shfmt_version
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}
     if ! command -v shellcheck &> /dev/null; then brew install shellcheck; fi
@@ -155,7 +182,7 @@ generate-workflows:
     cd {{ justfile_directory() }}
     chmod +x {{ justfile_directory() }}/scripts/generate-workflows.py && python3 {{ justfile_directory() }}/scripts/generate-workflows.py
 
-fix:
+fix: _check_shfmt_version
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}
     # _upstream-snapshots is VENDORED upstream code kept for reference. Its
