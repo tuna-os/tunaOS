@@ -66,7 +66,7 @@ Write `manifests/desktops/<name>.yaml`. No shell script needed. See existing man
 
 ## PR quality contract
 
-Five rules, each one written because a real agent PR broke it and the break
+Six rules, each one written because a real agent PR broke it and the break
 was measured. A PR that violates one of these gets closed, not reviewed.
 
 1. **Run what you claim to fix, and paste the result.** A PR titled
@@ -97,6 +97,16 @@ was measured. A PR that violates one of these gets closed, not reviewed.
    against a repo that no longer exists. If the base moved under you while
    the PR was open, rebase and re-run rule 1 — the merge queue tests the
    merge result, and "it passed on my old base" is not evidence.
+6. **Leave the docs better than you found them, in the same PR.** Every PR
+   that diagnoses something writes what it learned down where the next
+   person will hit it — a row in `docs/ci-troubleshooting.md` for anything
+   that cost you a debugging cycle, and a line here when the lesson
+   generalises past one bug. The row states the SYMPTOM someone would
+   search for, the measured CAUSE, and the FIX; a row that only says what
+   changed is a changelog entry, not a troubleshooting entry. Doing this
+   later means not doing it: the detail that makes a row useful is the
+   command output you had in front of you at the time, and it is gone by
+   the next session.
 
 Evidence style, for anything you write into the repo (comments, docs,
 commit messages): state the constraint and the measured run/log that proves
@@ -115,6 +125,57 @@ Two further conventions, adopted from Hive (#2250):
   `.github/green-criteria.yml`; `tests/test_ci_contract.py` fails when the
   contract and the workflows disagree, and `just test-contract` runs it
   locally.
+
+Six more, each measured while fixing the live-ISO and install path
+(rows 33-40 of `docs/ci-troubleshooting.md` carry the evidence):
+
+- **A permanently-red check is a dead gate, not a known issue.** A check
+  that always says the same thing cannot report a regression. Three
+  assertions in `build_scripts/checks/e2e-runtime-checks.sh` were red on
+  every run, on every flavor, for reasons unrelated to what they claimed to
+  test: `graphical.target is active` asserted from inside that target's own
+  startup transaction, the unit-graph gate failed on upstream units we do
+  not ship plus a man-page check on an image that strips man pages, and the
+  SSH host-key assertion fired on images that deliberately ship sshd
+  disabled. Each had been passed over as background noise for months. When
+  you see a failure that "always fails", that is the bug.
+- **Being invoked is not being reached.** A guard placed after an early
+  `exit 0` runs on nothing. `40-services.sh` has three package-manager
+  paths and the first two end in `exit 0`; a login-banner guard added at
+  the end of the file therefore ran on dnf images ONLY — silently never on
+  Arch, which is the variant the bug was measured on. A test asserted all
+  six Containerfiles *invoke* the script, which was true and not
+  sufficient. Assert the line number precedes the first `exit`, or assert
+  the effect in a built image.
+- **Verify a fix in the built artifact, not in the source tree.** The guard
+  above was present in the script, committed, reviewed and merged, and
+  absent from every image. `just build` then `podman run --rm <image>` to
+  check the thing actually happened costs one command and is the only
+  evidence that counts.
+- **A test that fails only on developer machines is not automatically
+  environment noise.** Ten `test_lib.bats` OS-detection cases failed
+  locally and passed in CI. The cause was a real defect: `lib.sh` assigned
+  `jq`'s `%_dbpath`-style lookup straight into `BASE_IMAGE`, so an
+  `image-info.json` that exists without a `base-image` key set it to the
+  empty string and destroyed the caller's value. CI never saw it because
+  the file only exists on ublue-derived hosts. Dismissing those failures
+  three times cost more than reading one of them would have.
+- **Guard a path before you destroy it.** `readlink -f ""` does not fail —
+  it returns `$PWD`. `rawhide_rpmdb_probe` resolved an empty `%_dbpath`
+  that way and ran `cp -a "$PWD" ...` then `rm -rf "$PWD"`, with the delete
+  NOT conditional on the copy succeeding. On a nearly full disk the copy
+  failed, the delete did not, and a full `bats` run destroyed a checkout of
+  this repository. Refuse empty and non-absolute paths before resolving
+  them, refuse `/` and `$PWD` after, and never `rm -rf` on the strength of
+  a `cp` you did not check.
+- **A detection default is a silent fallback.** `customize-live.sh` defaults
+  `DESKTOP=gnome`, so a Pantheon image matched no branch, was treated as
+  GNOME, and received GDM autologin — into an image whose only display
+  manager is LightDM. `liveuser` existed; nothing logged it in; the ISO
+  booted to a black screen. An unrecognised input did not fail loudly, it
+  became the default, and every downstream assumption followed from the
+  wrong answer. When a default exists, test the unrecognised case
+  explicitly.
 
 ## Agent Skills
 
