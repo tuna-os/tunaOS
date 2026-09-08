@@ -64,6 +64,20 @@ downloads:
   uupd: "v1.4.0"
   # renovate: datasource=github-releases depName=ledif/kcm_ublue
   kcm_ublue: "v0.6.1"
+  # renovate: datasource=github-releases depName=mvdan/sh
+  #
+  # shfmt is a FORMATTER, so its version is part of the repo's formatting.
+  # `just fix` runs it over every shell script and `just check` fails on drift,
+  # which means two contributors on different shfmt versions produce different
+  # trees and each sees the other's as unformatted.
+  #
+  # This is not hypothetical: `just fix` once rewrote 145 files and 12,277
+  # lines on a clean main because .editorconfig disagreed with the code
+  # (fixed separately). An unpinned formatter is the same failure waiting on a
+  # release rather than on a config edit -- and AGENTS.md makes
+  # `just fix && just check` mandatory before every commit, so everyone hits
+  # it at once.
+  shfmt: "v3.14.1"
   # renovate: datasource=github-releases depName=twpayne/chezmoi
   chezmoi: "v2.72.1"
   chezmoi_sha256:

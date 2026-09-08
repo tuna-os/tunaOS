@@ -56,7 +56,20 @@ jobs:
         run: |
           # Install all lint tools; brew is idempotent for already-installed
           brew install just shellcheck shfmt yamllint jq actionlint 2>/dev/null || true
+          # shfmt is a FORMATTER, so its version is part of this repo's
+          # formatting: a different one reformats the whole tree and `just
+          # check` then fails on files nobody touched. brew installs whatever
+          # is current, so install the PINNED version over the top of it and
+          # let it win on PATH. See image-versions.yaml and just/utilities.just
+          # (_check_shfmt_version), which fails locally on the same mismatch.
+          want="$(sed -n 's/^  shfmt: "v\{0,1\}\([^"]*\)"$/\1/p' image-versions.yaml | head -1)"
+          if [ -n "$want" ]; then
+            echo "Pinned shfmt: v${want}"
+            GOBIN=/usr/local/bin go install "mvdan.cc/sh/v3/cmd/shfmt@v${want}" \
+              || echo "::warning::could not install pinned shfmt v${want}; using $(shfmt --version)"
+          fi
           # Verify installations
+          shfmt --version
           shellcheck --version
           yamllint --version
           jq --version
