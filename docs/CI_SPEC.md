@@ -76,6 +76,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `reusable-build-image.yml` | post-merge + scheduled | `builds`, `desktop`, `boots`, `no_silent_omissions` | caller cadence | `builds`: 2d, `desktop`: 2d, `boots`: 2d, `no_silent_omissions`: 2d |
 | `scorecard.yml` | post-merge + scheduled | Scorecard supply-chain security | push, `38 0 * * 4`, branch_protection_rule | — |
 | `snapshot-upstreams.yml` | post-merge + scheduled | Snapshot upstreams | `0 9 * * 1`, manual | — |
+| `ste.yml` | PR-deterministic + post-merge | Prose | each PR, push, manual | — |
 | `test.yml` | PR-deterministic + post-merge | Test | each PR, push, manual | — |
 | `update-build-status.yml` | post-merge + scheduled | Update README build status | `30 13 * * *`, manual | — |
 | `validate-renovate.yaml` | PR-deterministic + post-merge | Validate Renovate Config | each PR, push | — |
