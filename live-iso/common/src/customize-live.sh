@@ -31,6 +31,17 @@ elif [[ -f "${_SR}/usr/share/wayland-sessions/cosmic.desktop" ]]; then
 elif compgen -G "${_SR}/usr/share/xsessions/xfce*.desktop" >/dev/null ||
 	compgen -G "${_SR}/usr/share/wayland-sessions/xfce*.desktop" >/dev/null; then
 	DESKTOP="xfce"
+elif [[ -f "${_SR}/usr/share/wayland-sessions/pantheon-wayland.desktop" ||
+	-f "${_SR}/usr/share/xsessions/pantheon.desktop" ]]; then
+	# Pantheon had NO branch here, and DESKTOP defaults to "gnome" — so
+	# gurnard:pantheon ran desktop-gnome.sh, which writes GDM autologin. That
+	# image ships NO gdm: lightdm is the only display manager and
+	# display-manager.service points at it. MEASURED on the published
+	# gurnard-pantheon ISO: /etc/gdm/custom.conf is present with
+	# AutomaticLogin=liveuser, lightdm has no autologin, liveuser exists, and
+	# the live session never starts — a black screen on every frame of three
+	# harness runs. The account was fine; nothing logged it in.
+	DESKTOP="pantheon"
 fi
 echo "customize-live: detected desktop=${DESKTOP}"
 
@@ -39,6 +50,9 @@ kde) INSTALLER_APP="org.tunaos.InstallerKde" ;;
 niri) INSTALLER_APP="org.tunaos.InstallerNiri" ;;
 cosmic) INSTALLER_APP="org.tunaos.InstallerCosmic" ;;
 xfce) INSTALLER_APP="org.tunaos.InstallerXfce" ;;
+# pantheon has no TunaOS-branded frontend fork either; it takes upstream
+# bootc-installer, the same as gnome.
+pantheon) INSTALLER_APP="org.bootcinstaller.Installer" ;;
 # gnome has no TunaOS-branded frontend fork; ship upstream bootc-installer
 # directly, fetched the same way projectbluefin/dakota-iso does it (see
 # install-flatpaks.sh there) rather than from the tuna-os Flatpak remote.
