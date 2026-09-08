@@ -25,6 +25,35 @@ shipped. The mkosi build-backend investigation (#999, #1227) is explicitly in
 scope: adopting a new output architecture is a portfolio commitment and passes
 the Proposal admission gate below, even though it reuses existing roots.
 
+## Upstream update tracks and availability
+
+A lifecycle stage describes product maturity; an **upstream track** describes
+how predictable its inputs are. These are separate dimensions. A Beta can
+consume either a fixed release or a rolling repository, but they cannot carry
+the same availability promise.
+
+`.github/build-config.yml` is the machine-readable source for non-release
+tracks. A variant without `upstream_track` consumes a fixed release or stream.
+The current exceptions are:
+
+| Upstream track | Variants | Availability promise |
+|---|---|---|
+| **Rolling** | `bonito-rawhide`, `marlin`, `sailfin`, `guppy`, `flounder-sid` | Best effort. A newly resolved upstream snapshot may fail until TunaOS catches up; no next-night promotion or uninterrupted-green promise is made. |
+| **Experimental** | `hummingbird`, `wahoo` | Evaluation only. No uptime, flavor-completeness, or continued-publication promise; cells can be narrowed or withdrawn when their upstream is incomplete. |
+| **Release/stream** (the default) | Every variant not marked above | CI targets continuous promotion. A red scheduled build is treated as a regression rather than expected upstream churn. |
+
+Promotion is fail-closed on every track. A failed rolling build does not replace
+the last promoted image with an unverified one. “Best effort” changes how a red
+cell is interpreted; it does not waive build, boot, desktop, signing, or other
+applicable gates.
+
+Operationally, rolling and experimental failures must still become
+**explained failures**: automation should identify upstream dependency or
+snapshot movement where possible, and an unexplained red remains a triage item.
+Expected churn is not counted as a release-track availability regression and
+does not create an obligation to restore promotion by the next nightly. See
+#1754 for that queue; fixed-release recovery is tracked separately in #1753.
+
 ## Lifecycle stages
 
 | Stage | Meaning | Entry criteria | Exit criteria |
