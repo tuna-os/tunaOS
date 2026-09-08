@@ -42,8 +42,18 @@ def test_editorconfig_matches_the_code_it_formats() -> None:
 
 
 def test_fix_does_not_reformat_vendored_upstream_code() -> None:
-    """_upstream-snapshots is kept to match upstream byte for byte."""
-    assert "_upstream-snapshots" in _recipe("fix")
+    """_upstream-snapshots is kept to match upstream byte for byte.
+
+    Both loops need the exclusion, not just the shell one. The `.just` loop
+    had none, so the automation bot reformatted a vendored
+    zirconium/...67-gamerslop.just and opened a PR for it on every run --
+    #2421, #2422 and #2423 were three identical rewrites of that same file,
+    regenerated as fast as they were rejected.
+    """
+    fix = _recipe("fix")
+    for loop in ('-iname "*.sh"', '-name "*.just"'):
+        line = next(l for l in fix.splitlines() if loop in l)
+        assert "_upstream-snapshots" in line, f"vendored tree not excluded from {loop}"
 
 
 def test_check_verifies_shell_formatting() -> None:

@@ -163,7 +163,12 @@ fix:
     # destroys the only reason it exists -- and it was 14 of the files `just
     # fix` rewrote on a clean main.
     find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './_upstream-snapshots/*' -iname "*.sh" -type f -exec shfmt --write "{}" ";"
-    find . -type f -name "*.just" -exec just --unstable --fmt -f {} \;
+    # Same exclusion as the shell loop above, and for the same reason. Without
+    # it the automation bot reformats vendored .just files and opens a PR for
+    # the change on every run: #2421, #2422 and #2423 were three identical
+    # rewrites of the same _upstream-snapshots/zirconium/.../67-gamerslop.just,
+    # regenerated as fast as they were rejected.
+    find . -not -path './_upstream-snapshots/*' -not -path './packages-repo/*' -type f -name "*.just" -exec just --unstable --fmt -f {} \;
     just --unstable --fmt -f Justfile || { exit 1; }
 
 clean:
