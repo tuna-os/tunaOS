@@ -35,6 +35,11 @@
 #       Used to gate GHCR tag promotion on images actually booting.
 #
 #   scripts/iso-e2e.sh <iso_path> --luks
+#   scripts/iso-e2e.sh <iso_path> --published
+#
+# --published is the one mode that works on media a USER can download.
+# Production ISOs ship sshd disabled, so every other mode here is
+# dev-ISO-only; this one drives the GUI through the QEMU monitor.
 #       Full LUKS e2e: boot the live ISO (needs ENABLE_SSHD=1), install via
 #       fisherman (the same backend every TunaOS installer frontend uses)
 #       with encryption.type=tpm2-luks-passphrase against an emulated TPM
@@ -207,7 +212,7 @@ fi
 ISO_PATH=""
 KICKSTART=""
 APP_CMD=""
-MODE="ready" # ready | install | kickstart | ssh | app-launch
+MODE="ready" # ready | install | kickstart | ssh | app-launch | published
 TIMEOUT=300
 LIVE_MARKER="${LIVE_MARKER:-TUNAOS_LIVE_READY|TBOX_LIVE_READY}"
 OUTPUT_DIR="./iso-e2e-out"
@@ -250,6 +255,16 @@ while [[ $# -gt 0 ]]; do
 		MODE="app-launch"
 		APP_CMD="$2"
 		shift 2
+		;;
+	--published)
+		# Test an ISO the way a USER gets it. Production media ships sshd
+		# disabled on purpose, so every SSH-based mode below is unavailable
+		# against the artifacts people actually download -- which means the
+		# gate has only ever exercised dev ISOs. This mode drives the GUI
+		# through the QEMU monitor instead: no guest agent, no sshd, nothing
+		# the image has to opt into.
+		MODE="published"
+		shift
 		;;
 	--ssh-only)
 		MODE="ssh"
@@ -318,7 +333,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$ISO_PATH" ]]; then
-	echo "Usage: $0 <iso_path> [--kickstart KS | --luks | --ssh-only] [options]" >&2
+	echo "Usage: $0 <iso_path> [--kickstart KS | --luks | --ssh-only | --published] [options]" >&2
 	exit 1
 fi
 
@@ -3557,6 +3572,57 @@ ready)
 		run_checkpoint_asserts || rc=$?
 	else
 		run_checkpoint_asserts || true
+	fi
+	exit "$rc"
+	;;
+published)
+	# ── Published/production media: no sshd, so drive the GUI ───────────────
+	#
+	# Everything else in this script reaches into the guest over SSH, which
+	# production ISOs deliberately do not offer (40-services.sh disables sshd
+	# unless ENABLE_SSHD=1). The practical consequence is that the LUKS gate,
+	# the smoke checks and the installer GUI checks have only ever run against
+	# DEV ISOs -- never against the artifact a user downloads. A published ISO
+	# could regress in any of the ways this session fixed and no gate here
+	# would notice.
+	#
+	# So: boot it, prove the live session actually painted, assert the
+	# screen contract, then drive the installer with hardware key events
+	# through the QEMU monitor. installer-walkthrough.py already does the
+	# driving compositor-agnostically (sendkey + screendump + OCR); it simply
+	# was never wired into this script.
+	#
+	# Readiness is judged by PIXELS, not the serial marker: production media
+	# need not ship tunaos-live-ready.service, and waiting 900s for a marker
+	# that is not coming is how this looked like a hang the first time.
+	boot_live_iso || exit 1
+	sleep 5
+	screenshot "00-boot"
+	rc=0
+	if ! wait_for_paint "10-ready"; then
+		echo "ERROR: live session never painted — nothing to drive" >&2
+		screenshot_compare "10-ready" || true
+		exit 2
+	fi
+	echo "==> live session painted; asserting the screen contract"
+	run_checkpoint_asserts || rc=$?
+
+	# Drive the installer. Non-fatal by default because a published ISO whose
+	# desktop is fine but whose installer regressed is a different verdict
+	# from one that never booted, and both are worth reporting separately.
+	walkthrough="${SCRIPT_DIR}/installer-walkthrough.py"
+	if [[ -f "$walkthrough" ]] && command -v python3 &>/dev/null; then
+		echo "==> Driving the installer through the QEMU monitor (no SSH)"
+		wt_rc=0
+		python3 "$walkthrough" "$MONITOR_SOCK" "${OUTPUT_DIR}/walkthrough" \
+			"${TUNAOS_PUBLISHED_STEPS:-6}" "${FLAVOR:-de}" |
+			tee -a "${SERIAL_LOG}" || wt_rc=$?
+		if [[ "$wt_rc" -ne 0 ]]; then
+			echo "::warning::installer walkthrough reported ${wt_rc} failure(s) for ${VARIANT:-?}:${FLAVOR:-?}"
+			[[ "${TUNAOS_PUBLISHED_STRICT:-0}" -eq 1 ]] && rc="$wt_rc"
+		fi
+	else
+		echo "::warning::installer-walkthrough.py or python3 unavailable — GUI drive skipped"
 	fi
 	exit "$rc"
 	;;
