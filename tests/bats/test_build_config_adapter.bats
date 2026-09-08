@@ -26,3 +26,18 @@ setup() {
 	[ "$status" -eq 1 ]
 	[[ "$output" == *"build config not found: ${missing_config}"* ]]
 }
+
+@test "the root build recipe resolves config through the adapter" {
+	justfile="${REPO_ROOT}/Justfile"
+	build_recipe="${BATS_TEST_TMPDIR}/build-recipe"
+
+	awk '
+		/^build / { in_build = 1 }
+		in_build && /^[^[:space:]#]/ && !/^build / { exit }
+		in_build { print }
+	' "$justfile" >"$build_recipe"
+
+	grep -q 'source scripts/lib/build-config.sh' "$build_recipe"
+	grep -q 'BUILD_CONFIG="$(tunaos_build_config)"' "$build_recipe"
+	! grep -q '\.github/build-config\.yml' "$build_recipe"
+}

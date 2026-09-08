@@ -58,6 +58,11 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     #!/usr/bin/env bash
     set -euo pipefail
 
+    # Resolve the domain config through its compatibility seam instead of
+    # coupling this local entrypoint to the current GitHub-owned path.
+    source scripts/lib/build-config.sh
+    BUILD_CONFIG="$(tunaos_build_config)"
+
     # Initialize submodules locally
     DID_INIT="0"
     if [[ "{{ is_ci }}" != "1" ]] && [[ "${SKIP_SUBMODULES:-0}" != "1" ]]; then
@@ -74,7 +79,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
 
     if [[ -z "{{ target_platform }}" ]]; then
         if [[ "{{ is_ci }}" != "1" ]]; then PLATFORM="{{ platform }}"; else
-            PLATFORM=$({{ yq }} -r ".variants[] | select(.id == \"{{ variant }}\") | .platforms | join(\",\")" .github/build-config.yml)
+            PLATFORM=$({{ yq }} -r ".variants[] | select(.id == \"{{ variant }}\") | .platforms | join(\",\")" "$BUILD_CONFIG")
         fi
     else PLATFORM="{{ target_platform }}"; fi
 
@@ -83,7 +88,7 @@ build variant='albacore' flavor='gnome' target_platform='' is_ci="0" tag='latest
     FLAVOR="{{ flavor }}"
 
     if [[ "${FLAVOR}" == "all" ]]; then
-        readarray -t FLAVORS < <({{ yq }} -r '.variants[] | select(.id == "{{ variant }}") | .flavors[].id' .github/build-config.yml)
+        readarray -t FLAVORS < <({{ yq }} -r '.variants[] | select(.id == "{{ variant }}") | .flavors[].id' "$BUILD_CONFIG")
         for f in "${FLAVORS[@]}"; do {{ just }} build "{{ variant }}" "$f"; done
         exit 0
     fi
