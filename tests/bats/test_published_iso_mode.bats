@@ -59,3 +59,41 @@ SCRIPT="${REPO_ROOT}/scripts/iso-e2e.sh"
   [ -f "$wt" ]
   grep -q 'mon_path = args\[0\]' "$wt"
 }
+
+@test "readiness waits past the bootloader, not just for any paint" {
+  # MEASURED on the published gurnard-pantheon ISO: wait_for_paint accepted the
+  # GRUB menu as "painted" (it is non-blank), so the walkthrough drove sendkey
+  # into a machine that was still booting and reported a blank, unchanging
+  # screen — a false failure manufactured by the gate itself. The 10-ready
+  # frame OCR'd to "gurnard-pantheon (live) / Reboot Into Firmware Interface /
+  # Boot in 1s."
+  local body
+  body="$(sed -n '/^published)$/,/^ssh)$/p' "$SCRIPT")"
+  echo "$body" | grep -q 'boot_menu_re'
+  echo "$body" | grep -q 'Reboot Into Firmware'
+  echo "$body" | grep -q 'GNU GRUB'
+}
+
+@test "a slow boot is still driven, not abandoned" {
+  # The settle loop is bounded and non-fatal: a machine that takes longer than
+  # the cap should still be handed to the walkthrough and judged there, rather
+  # than failing here on a timer.
+  local body
+  body="$(sed -n '/^published)$/,/^ssh)$/p' "$SCRIPT")"
+  echo "$body" | grep -q 'TUNAOS_PUBLISHED_BOOT_SETTLE'
+  # The loop must break out, not exit.
+  echo "$body" | grep -A12 'boot_menu_re' | grep -q 'break'
+}
+
+@test "a black screen is not mistaken for a booted session" {
+  # The first settle loop broke out as soon as the frame had no bootloader
+  # text — but a BLANK frame has no text either, so the moment the screen went
+  # black between GRUB and the compositor it declared ready and handed the
+  # walkthrough a black screen. MEASURED on gurnard-pantheon: 10-ready came
+  # back stddev=0 after the settle "succeeded".
+  local body
+  body="$(sed -n '/^published)$/,/^ssh)$/p' "$SCRIPT")"
+  echo "$body" | grep -q 'standard_deviation'
+  # Must require non-blank AND not-bootloader, not either one alone.
+  echo "$body" | grep -q 'frame_sd'
+}

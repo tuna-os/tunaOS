@@ -3604,6 +3604,45 @@ published)
 		screenshot_compare "10-ready" || true
 		exit 2
 	fi
+	# "Painted" is not "booted". wait_for_paint only asks whether the frame is
+	# non-blank, and a GRUB menu satisfies that easily — MEASURED on the
+	# published gurnard-pantheon ISO, where 10-ready OCR'd to
+	#
+	#   gurnard-pantheon (live)
+	#   Reboot Into Firmware Interface
+	#   Boot in 1s.
+	#
+	# so the walkthrough then drove sendkey into a machine that was still
+	# booting and reported a blank, unchanging screen. That is a false failure
+	# manufactured by this gate, which is worse than no gate.
+	#
+	# So: keep re-capturing until the frame stops looking like a bootloader.
+	# Bounded, and non-fatal on timeout — a slow boot should still be driven
+	# and judged by the walkthrough, not abandoned here.
+	boot_menu_re='Boot in|Reboot Into Firmware|GNU GRUB|Press .* to edit'
+	settle_deadline=$((SECONDS + ${TUNAOS_PUBLISHED_BOOT_SETTLE:-240}))
+	while ((SECONDS < settle_deadline)); do
+		frame_txt=""
+		if command -v tesseract &>/dev/null && command -v magick &>/dev/null; then
+			magick "${OUTPUT_DIR}/10-ready.ppm" -colorspace Gray /tmp/.pubocr.png 2>/dev/null &&
+				frame_txt="$(tesseract /tmp/.pubocr.png stdout --psm 6 2>/dev/null || true)"
+		fi
+		# Two ways to be "not the bootloader", and only one of them means the
+		# session arrived. A BLANK frame also has no bootloader text, so the
+		# first version of this broke out of the loop the moment the screen
+		# went black between GRUB and the compositor — turning "still booting"
+		# into "ready" and handing the walkthrough a black screen. Require the
+		# frame to be non-blank AS WELL as free of bootloader text.
+		frame_sd="$(magick "${OUTPUT_DIR}/10-ready.ppm" -colorspace Gray \
+			-format "%[fx:standard_deviation]" info: 2>/dev/null || echo 0)"
+		if awk -v v="$frame_sd" 'BEGIN{exit !(v > 0.02)}' 2>/dev/null &&
+			! grep -qiE "$boot_menu_re" <<<"$frame_txt"; then
+			break
+		fi
+		echo "==> still on the bootloader; waiting for the session (${settle_deadline}s cap)"
+		sleep 15
+		wait_for_paint "10-ready" || true
+	done
 	echo "==> live session painted; asserting the screen contract"
 	run_checkpoint_asserts || rc=$?
 
