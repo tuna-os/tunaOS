@@ -35,11 +35,29 @@ else
 	# available — it records the true OS base from stage 1.
 	_IMAGE_INFO="/usr/share/ublue-os/image-info.json"
 	if [[ -f "${_IMAGE_INFO}" ]]; then
+		# Read into a scratch var and only override when it actually yielded
+		# something. Assigning straight into BASE_IMAGE DESTROYS a
+		# caller-provided value whenever the file exists but carries no
+		# `base-image` key -- `// empty` returns the empty string, and the
+		# fallback below then cannot tell "no one told us" from "we just threw
+		# it away".
+		#
+		# Not hypothetical: ublue-derived hosts ship
+		# /usr/share/ublue-os/image-info.json with image-name / image-ref /
+		# image-flavor / image-vendor / image-tag and NO base-image. Sourcing
+		# lib.sh there with BASE_IMAGE=quay.io/fedora/fedora-bootc:43 exported
+		# leaves BASE_IMAGE empty, so every IS_* flag is derived from nothing
+		# and the variant is misidentified. That is what made ten OS-detection
+		# tests fail on such a host while passing in CI, where the file does
+		# not exist -- the tests were right and the library was wrong.
+		_base_from_info=""
 		if command -v jq >/dev/null 2>&1; then
-			BASE_IMAGE="$(jq -r '.["base-image"] // empty' "${_IMAGE_INFO}" 2>/dev/null || true)"
+			_base_from_info="$(jq -r '.["base-image"] // empty' "${_IMAGE_INFO}" 2>/dev/null || true)"
 		else
-			BASE_IMAGE="$(sed -n 's/.*"base-image": *"\([^"]*\)".*/\1/p' "${_IMAGE_INFO}" 2>/dev/null || true)"
+			_base_from_info="$(sed -n 's/.*"base-image": *"\([^"]*\)".*/\1/p' "${_IMAGE_INFO}" 2>/dev/null || true)"
 		fi
+		[[ -n "${_base_from_info}" ]] && BASE_IMAGE="${_base_from_info}"
+		unset _base_from_info
 	fi
 	if [[ -z "${BASE_IMAGE:-}" ]]; then
 		BASE_IMAGE="$(sh -c '. /etc/os-release 2>/dev/null || true; echo "${BASE_IMAGE:-}"' 2>/dev/null || true)"

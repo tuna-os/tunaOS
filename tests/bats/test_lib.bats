@@ -108,10 +108,21 @@ FIND
 SORT
   chmod +x "${TEST_ROOT}/usr/bin/sort"
 
-  # Stub jq
+  # jq shim: delegate to the real jq rather than answering a canned string.
+  #
+  # It used to `echo "almalinuxorg/almalinux-bootc"` unconditionally, which was
+  # only ever meant for the one image-info.json test — and that test writes a
+  # real JSON file with a base-image key, so it never needed a canned answer.
+  # Meanwhile the stub answered for EVERY test, so on any host where
+  # /usr/share/ublue-os/image-info.json exists (any ublue-derived workstation)
+  # lib.sh read it, got "almalinux" back regardless of the file, and overrode
+  # each test's own BASE_IMAGE. Ten OS-detection tests failed there and passed
+  # in CI, where the file is absent and jq is never called.
+  #
+  # The shim stays so PATH remains pinned to TEST_ROOT; it just tells the truth.
   cat >"${TEST_ROOT}/usr/bin/jq" <<'JQ'
 #!/usr/bin/env bash
-echo "almalinuxorg/almalinux-bootc"
+exec /usr/bin/jq "$@"
 JQ
   chmod +x "${TEST_ROOT}/usr/bin/jq"
 
@@ -136,6 +147,19 @@ JQ
   sed -i 's/^set -euo pipefail/set -uo pipefail\n# set -e removed for test/' "${TEST_ROOT}/lib_test.sh"
   # Make _IMAGE_INFO overridable so image-info.json tests can point to test stubs
   sed -i 's|^\([[:space:]]*\)_IMAGE_INFO="/usr/share/ublue-os/image-info.json"|\1_IMAGE_INFO="${_IMAGE_INFO:-/usr/share/ublue-os/image-info.json}"|' "${TEST_ROOT}/lib_test.sh"
+
+  # ...and default it to a path that does NOT exist, so the HOST's copy cannot
+  # leak in. Without this the suite is not hermetic: on a ublue-derived
+  # workstation /usr/share/ublue-os/image-info.json is present, lib.sh reads it,
+  # and setup()'s jq stub — which unconditionally prints
+  # "almalinuxorg/almalinux-bootc" for the benefit of ONE test — then overrode
+  # every other test's BASE_IMAGE. Ten OS-detection tests failed there while
+  # passing in CI, where the file simply does not exist. A suite that depends on
+  # the developer's own OS is testing the wrong machine.
+  #
+  # The one test that genuinely exercises image-info.json exports its own
+  # _IMAGE_INFO pointing at a stub under TEST_ROOT, so it is unaffected.
+  export _IMAGE_INFO="${TEST_ROOT}/absent-image-info.json"
 }
 
 teardown() {
@@ -207,6 +231,31 @@ teardown() {
     echo "$count"
   '
   [ "$output" = "1" ]
+}
+
+@test "an image-info.json without base-image must not destroy BASE_IMAGE" {
+  # lib.sh read the file straight into BASE_IMAGE:
+  #   BASE_IMAGE="$(jq -r '.["base-image"] // empty' ...)"
+  # so a file that EXISTS but carries no base-image key set BASE_IMAGE to the
+  # empty string, and the fallback below could no longer tell "nobody told us"
+  # from "we just threw it away". Every IS_* flag was then derived from
+  # nothing.
+  #
+  # Not hypothetical: ublue-derived hosts ship image-info.json with
+  # image-name / image-ref / image-flavor / image-vendor / image-tag and NO
+  # base-image, and our own 90-image-info.sh only adds the key later in the
+  # build — so any stage sourcing lib.sh before it, on a base that already
+  # carries a partial file, loses the value the Containerfile passed in.
+  mkdir -p "${TEST_ROOT}/usr/share/ublue-os"
+  cat >"${TEST_ROOT}/usr/share/ublue-os/partial-image-info.json" <<'JSON'
+{ "image-name": "dakota", "image-ref": "docker://ghcr.io/projectbluefin/dakota" }
+JSON
+  export _IMAGE_INFO="${TEST_ROOT}/usr/share/ublue-os/partial-image-info.json"
+  BASE_IMAGE="quay.io/fedora/fedora-bootc:43"
+  export BASE_IMAGE
+  source "${TEST_ROOT}/lib_test.sh"
+  [[ "$BASE_IMAGE" == "quay.io/fedora/fedora-bootc:43" ]]
+  [[ "$IS_FEDORA" == "true" ]]
 }
 
 @test "OS detection: base_image from image-info.json takes priority" {
