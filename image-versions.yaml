@@ -97,7 +97,7 @@ downloads:
   # tunaos-packages dms/dms-greeter recipes for the offline-build fallback.
   # renovate: datasource=github-releases depName=AvengeMedia/DankMaterialShell
   dms_qml: "v1.6.0"
-  dms_qml_sha256: "a504d4684aed1fde07bc3cad3ea1ba417331bfd43cb97420133082ae70da1478"
+  dms_qml_sha256: "aef0e90ad39bf85f676743da7bbe4c32758059d49342d82741d93ec414b88888"
 
   # Zirconium's mkosi.extra payload, fetched as a source tarball by
   # build_scripts/install-zirconium.sh (niri stages only). Pinned to a commit
