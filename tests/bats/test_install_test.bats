@@ -13,6 +13,10 @@
 #   - Cleanup trap structure
 #   - Port assignment logic
 
+# The discovery tests below drive the real scripts/install-test.sh. The rest of
+# this file simulates logic inline, which is why it had no repo root until now.
+REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
+
 setup() {
   TEST_ROOT="$(mktemp -d)"
 }
@@ -126,22 +130,65 @@ teardown() {
 
 # ── QEMU binary discovery ───────────────────────────────────────────────────
 
-@test "qemu_discovery: checks candidates in priority order" {
-  # Simulate discovery: first candidate wins
-  candidates=(
-    "/home/linuxbrew/.linuxbrew/bin/qemu-system-x86_64"
-    "/usr/bin/qemu-system-x86_64"
-    "/usr/local/bin/qemu-system-x86_64"
-  )
-  QEMU_BIN=""
-  for candidate in "${candidates[@]}"; do
-    if [[ -x "$candidate" ]]; then
-      QEMU_BIN="$candidate"
-      break
-    fi
-  done
-  # In test env, none exist, so QEMU_BIN stays empty
-  [ -z "$QEMU_BIN" ]
+# Extract a discovery loop from the REAL script and retarget its absolute
+# candidate paths under a scratch root, so the test drives the shipped code
+# rather than a hand-copy of it that can drift.
+#
+# The previous versions of the two tests below did exactly that — re-declared
+# the candidate array inline, ran their own loop, and then asserted
+# `[ -z "$QEMU_BIN" ]` with the comment "In test env, none exist". That is an
+# assertion that THE DEVELOPER'S MACHINE HAS NO QEMU. It passed in CI only
+# because CI has no qemu and no OVMF; on any workstation with either
+# installed it failed, while testing nothing about install-test.sh at all —
+# note neither one ever checked priority, which is what their names claim.
+extract_loop() {
+	local var="$1" root="$2"
+	# The candidate paths sit on continuation lines indented with a TAB, so the
+	# leading-character class has to include whitespace generally — matching
+	# only quote-or-space silently rewrote the brew path and left /usr/ alone,
+	# which produced a loop that searched the real filesystem.
+	sed -n "/^${var}=\"\"$/,/^done$/p" "${REPO_ROOT}/scripts/install-test.sh" |
+		sed -e "s#/home/linuxbrew/.linuxbrew#${root}/brew#g" \
+		    -e "s#\([[:space:]]\)/usr/#\1${root}/usr/#g"
+}
+
+@test "qemu_discovery: the first existing candidate wins" {
+	local root="${BATS_TEST_TMPDIR}/q1"
+	mkdir -p "${root}/brew/bin" "${root}/usr/bin" "${root}/usr/local/bin"
+	# Both the highest- and a lower-priority candidate exist.
+	touch "${root}/brew/bin/qemu-system-x86_64" "${root}/usr/bin/qemu-system-x86_64"
+	chmod +x "${root}/brew/bin/qemu-system-x86_64" "${root}/usr/bin/qemu-system-x86_64"
+	run bash -c "$(extract_loop QEMU_BIN "$root"); echo \"\$QEMU_BIN\""
+	[ "$status" -eq 0 ]
+	[ "${lines[-1]}" = "${root}/brew/bin/qemu-system-x86_64" ]
+}
+
+@test "qemu_discovery: falls through to a lower-priority candidate" {
+	local root="${BATS_TEST_TMPDIR}/q2"
+	mkdir -p "${root}/brew/bin" "${root}/usr/bin"
+	# Only the SECOND candidate exists — the loop must not stop at the first.
+	touch "${root}/usr/bin/qemu-system-x86_64"
+	chmod +x "${root}/usr/bin/qemu-system-x86_64"
+	run bash -c "$(extract_loop QEMU_BIN "$root"); echo \"\$QEMU_BIN\""
+	[ "${lines[-1]}" = "${root}/usr/bin/qemu-system-x86_64" ]
+}
+
+@test "qemu_discovery: a non-executable candidate is not accepted" {
+	# The loop tests -x, not -e: a file that exists but cannot run is not QEMU.
+	local root="${BATS_TEST_TMPDIR}/q3"
+	mkdir -p "${root}/brew/bin" "${root}/usr/bin"
+	touch "${root}/brew/bin/qemu-system-x86_64"   # present, NOT executable
+	touch "${root}/usr/bin/qemu-system-x86_64"
+	chmod +x "${root}/usr/bin/qemu-system-x86_64"
+	run bash -c "$(extract_loop QEMU_BIN "$root"); echo \"\$QEMU_BIN\""
+	[ "${lines[-1]}" = "${root}/usr/bin/qemu-system-x86_64" ]
+}
+
+@test "qemu_discovery: nothing found leaves it empty" {
+	local root="${BATS_TEST_TMPDIR}/q4"
+	mkdir -p "${root}/brew/bin"
+	run bash -c "$(extract_loop QEMU_BIN "$root"); echo \"[\$QEMU_BIN]\""
+	[ "${lines[-1]}" = "[]" ]
 }
 
 @test "qemu_discovery: errors when no QEMU found" {
@@ -156,20 +203,27 @@ teardown() {
 
 # ── Firmware discovery ──────────────────────────────────────────────────────
 
-@test "firmware_discovery: checks OVMF paths in order" {
-  candidates=(
-    "/home/linuxbrew/.linuxbrew/share/qemu/edk2-x86_64-code.fd"
-    "/usr/share/OVMF/OVMF_CODE.fd"
-    "/usr/share/edk2/x64/OVMF_CODE.fd"
-  )
-  FIRMWARE=""
-  for candidate in "${candidates[@]}"; do
-    if [[ -f "$candidate" ]]; then
-      FIRMWARE="$candidate"
-      break
-    fi
-  done
-  [ -z "$FIRMWARE" ]
+@test "firmware_discovery: the first existing OVMF path wins" {
+	local root="${BATS_TEST_TMPDIR}/f1"
+	mkdir -p "${root}/brew/share/qemu" "${root}/usr/share/OVMF"
+	touch "${root}/brew/share/qemu/edk2-x86_64-code.fd" "${root}/usr/share/OVMF/OVMF_CODE.fd"
+	run bash -c "$(extract_loop FIRMWARE "$root"); echo \"\$FIRMWARE\""
+	[ "${lines[-1]}" = "${root}/brew/share/qemu/edk2-x86_64-code.fd" ]
+}
+
+@test "firmware_discovery: falls through to a lower-priority OVMF path" {
+	local root="${BATS_TEST_TMPDIR}/f2"
+	mkdir -p "${root}/brew/share/qemu" "${root}/usr/share/edk2/x64"
+	touch "${root}/usr/share/edk2/x64/OVMF_CODE.fd"
+	run bash -c "$(extract_loop FIRMWARE "$root"); echo \"\$FIRMWARE\""
+	[ "${lines[-1]}" = "${root}/usr/share/edk2/x64/OVMF_CODE.fd" ]
+}
+
+@test "firmware_discovery: nothing found leaves it empty" {
+	local root="${BATS_TEST_TMPDIR}/f3"
+	mkdir -p "${root}/usr/share"
+	run bash -c "$(extract_loop FIRMWARE "$root"); echo \"[\$FIRMWARE]\""
+	[ "${lines[-1]}" = "[]" ]
 }
 
 @test "firmware_discovery: errors when no firmware found" {
