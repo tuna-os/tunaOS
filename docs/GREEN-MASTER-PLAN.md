@@ -329,12 +329,12 @@ Same shape as yellowfin. Additionally:
 | desktops | classified 08-18: xfce **healed on both arches**; gnome/niri amd64 fail on F44 amd64 repo skew (libxslt/libtasn1/libnotify version walls + `LIBSYSTEMD_257` symbol missing) — upstream repo inconsistency, nothing here can fix it | heals when the F44 amd64 mirrors converge; re-check next nightly |
 | *-nvidia (5) | #1725 | as above |
 
-### bonito-rawhide (Fedora Rawhide) — 6/14 build
+### bonito-rawhide (Fedora Rawhide)
 | area | state | action |
 |---|---|---|
 | base (both arches) | **promotes again since 08-18** — the #1810 liboapv wall cleared upstream | keep |
-| rpmdb (#1823) | probe verdict in (nightly 32090947417): `rpm --rebuilddb` fails **at rest** on the inherited base — malformed before any stage-2 write, or the rebuild's replace step fails under the buildah overlay; discriminating datum recorded on #1823 | run the probe once on a stable dnf base to pick between the two readings |
-| desktops | new upstream skew class 08-18: `libnma-gtk4` still requires `libnm.so.0` after Rawhide's NetworkManager dropped it — nothing here can fix it | heals when Rawhide rebuilds libnma; rolling standard |
+| rpmdb (#1823) | resolved by the upper-layer round-trip and rebuild salvage shipped in #1926; the 09-04 matrix emitted `TUNAOS_RPMDB_PROBE=rebuilt` before the desktop transactions | keep the guard while Rawhide remains exposed to lower-layer rpmdb writes |
+| desktops | **libnma skew healed upstream** — the full 09-04 matrix ([run 33906066263](https://github.com/tuna-os/tunaOS/actions/runs/33906066263)) installed `libnma-gtk4-1.10.6-12.fc45` with `NetworkManager-libnm-1.58.1-1.fc46`; all ten standard desktop/architecture transactions cleared the old `libnm.so.0` solver wall without `--skip-broken`. Gnome, COSMIC and Xfce built on both arches; KDE arm64 failed later in rechunk and Niri failed later in branding, so neither is a libnma regression. | upstream watch #1887 complete; classify later failures by their own signatures |
 | taxonomy | rolling variant, structurally exposed to skew (#1762) | count under rolling standard |
 
 ### hummingbird (hardened rolling fork of Fedora Rawhide, experimental) — 1/5 build
