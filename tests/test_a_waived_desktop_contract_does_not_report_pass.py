@@ -25,6 +25,7 @@ code that had already seen the failures.
 
 import subprocess
 import textwrap
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -91,8 +92,18 @@ def test_a_waived_contract_emits_a_greppable_marker(tmp_path):
 def test_every_hummingbird_exemption_counts_what_it_waives():
     """An exemption that doesn't count is invisible again."""
     src = CHECK.read_text()
-    exemptions = src.count('IS_HUMMINGBIRD:-false}" == "true" ]]; then')
-    counted = src.count('== "true" ]]; then waive; return 0; fi')
+    # Count STRUCTURALLY, not by matching one layout. This used to count the
+    # single-line form `... ]]; then waive; return 0; fi`, which meant a
+    # formatter expanding those one-liners into ordinary if-blocks dropped the
+    # count to 0 and failed a test whose subject had not changed at all.
+    # (shfmt does exactly that; see the .editorconfig fix in this PR.)
+    exemption_re = re.compile(
+        r'IS_HUMMINGBIRD:-false\}" == "true" \]\]; then(.*?)\n\s*fi\b',
+        re.S,
+    )
+    blocks = exemption_re.findall(src)
+    exemptions = len(blocks)
+    counted = sum(1 for b in blocks if "waive" in b)
     assert exemptions > 0, "the exemption shape changed; this test is stale"
     assert counted == exemptions, (
         f"{exemptions} require_* exemptions but only {counted} call waive() — "
