@@ -18,36 +18,36 @@
 # install. Indentation is carried over verbatim from the original block so
 # the heredocs inside stay intact.
 
-		# Display manager: neither branch pulls one in. Probe lightdm first
-		# (XFCE's usual DM), fall back to greetd; the enable logic below
-		# picks whichever landed.
-		install_available \
-			lightdm \
-			lightdm-gtk-greeter \
-			greetd \
-			greetd-selinux
+# Display manager: neither branch pulls one in. Probe lightdm first
+# (XFCE's usual DM), fall back to greetd; the enable logic below
+# picks whichever landed.
+install_available \
+	lightdm \
+	lightdm-gtk-greeter \
+	greetd \
+	greetd-selinux
 
-		# greetd ships no graphical greeter: its stock config runs
-		# `agreety --cmd /bin/sh`, i.e. a text prompt into a bare shell with
-		# no session picker. cosmic/niri never hit this because
-		# cosmic-greeter/dms-greeter ship their own config.toml — XFCE has no
-		# such package, so without this block an installed XFCE system boots
-		# to a shell. It still reaches graphical.target with
-		# display-manager.service active, so the desktop-contract gate cannot
-		# see the difference; only this config can.
-		#
-		# gtkgreet is GTK3 like the XFCE session, so it inherits the same
-		# GTK/icon/cursor/font theme — greeter and desktop match by
-		# construction. It pulls cage (its kiosk host) via Requires.
-		install_available gtkgreet
+# greetd ships no graphical greeter: its stock config runs
+# `agreety --cmd /bin/sh`, i.e. a text prompt into a bare shell with
+# no session picker. cosmic/niri never hit this because
+# cosmic-greeter/dms-greeter ship their own config.toml — XFCE has no
+# such package, so without this block an installed XFCE system boots
+# to a shell. It still reaches graphical.target with
+# display-manager.service active, so the desktop-contract gate cannot
+# see the difference; only this config can.
+#
+# gtkgreet is GTK3 like the XFCE session, so it inherits the same
+# GTK/icon/cursor/font theme — greeter and desktop match by
+# construction. It pulls cage (its kiosk host) via Requires.
+install_available gtkgreet
 
-		# Session entry: the adapted xfce4-session ships a wayland-sessions
-		# desktop file running `startxfce4 --wayland`. Only write a fallback
-		# if no packaged Wayland session landed (keeps DMs from showing an
-		# empty session list on EL10 if packaging regresses).
-		if [[ $IS_FEDORA != true ]] && ! compgen -G "/usr/share/wayland-sessions/*.desktop" >/dev/null; then
-			mkdir -p /usr/share/wayland-sessions
-			cat >/usr/share/wayland-sessions/xfce-wayland.desktop <<'EOF'
+# Session entry: the adapted xfce4-session ships a wayland-sessions
+# desktop file running `startxfce4 --wayland`. Only write a fallback
+# if no packaged Wayland session landed (keeps DMs from showing an
+# empty session list on EL10 if packaging regresses).
+if [[ $IS_FEDORA != true ]] && ! compgen -G "/usr/share/wayland-sessions/*.desktop" >/dev/null; then
+	mkdir -p /usr/share/wayland-sessions
+	cat >/usr/share/wayland-sessions/xfce-wayland.desktop <<'EOF'
 [Desktop Entry]
 Name=Xfce Session (Wayland)
 Comment=XFCE desktop on Wayland (xfwl4)
@@ -55,18 +55,18 @@ Exec=startxfce4 --wayland
 Type=Application
 DesktopNames=XFCE
 EOF
-		fi
+fi
 
-		# Point greetd at gtkgreet. Only rewrite the config when gtkgreet
-		# actually landed — if packaging regressed, leaving greetd's own
-		# config in place fails loudly at a text prompt rather than silently
-		# launching a greeter that is not installed.
-		if command -v gtkgreet &>/dev/null && command -v cage &>/dev/null; then
-			# gtkgreet is a plain Wayland client and cannot own a VT, so cage
-			# hosts it. -s keeps VT switching available (without it a greeter
-			# crash locks you out of the machine entirely).
-			mkdir -p /etc/greetd
-			cat >/etc/greetd/config.toml <<'EOF'
+# Point greetd at gtkgreet. Only rewrite the config when gtkgreet
+# actually landed — if packaging regressed, leaving greetd's own
+# config in place fails loudly at a text prompt rather than silently
+# launching a greeter that is not installed.
+if command -v gtkgreet &>/dev/null && command -v cage &>/dev/null; then
+	# gtkgreet is a plain Wayland client and cannot own a VT, so cage
+	# hosts it. -s keeps VT switching available (without it a greeter
+	# crash locks you out of the machine entirely).
+	mkdir -p /etc/greetd
+	cat >/etc/greetd/config.toml <<'EOF'
 [terminal]
 vt = 1
 
@@ -75,11 +75,11 @@ command = "cage -s -- gtkgreet -l -s /etc/greetd/gtkgreet.css"
 user = "greetd"
 EOF
 
-			# Greeter styling. Kept deliberately small: gtkgreet is GTK3, so
-			# it already picks up the session's GTK theme, icons, cursor and
-			# font — this only supplies the pieces a theme cannot know about
-			# (the layer-shell background behind the login window).
-			cat >/etc/greetd/gtkgreet.css <<'EOF'
+	# Greeter styling. Kept deliberately small: gtkgreet is GTK3, so
+	# it already picks up the session's GTK theme, icons, cursor and
+	# font — this only supplies the pieces a theme cannot know about
+	# (the layer-shell background behind the login window).
+	cat >/etc/greetd/gtkgreet.css <<'EOF'
 /* TunaOS XFCE greeter.
  *
  * gtkgreet inherits the system GTK3 theme, which is the whole reason it is
@@ -101,14 +101,14 @@ box#window-box {
 	padding: 24px;
 }
 EOF
-			# greetd runs the greeter as its own unprivileged user; it must be
-			# able to read both files.
-			chmod 0644 /etc/greetd/config.toml /etc/greetd/gtkgreet.css
-		fi
+	# greetd runs the greeter as its own unprivileged user; it must be
+	# able to read both files.
+	chmod 0644 /etc/greetd/config.toml /etc/greetd/gtkgreet.css
+fi
 
-		# Enable lightdm or greetd for display management
-		if command -v lightdm &>/dev/null; then
-			systemctl enable lightdm
-		elif command -v greetd &>/dev/null; then
-			systemctl enable greetd
-		fi
+# Enable lightdm or greetd for display management
+if command -v lightdm &>/dev/null; then
+	systemctl enable lightdm
+elif command -v greetd &>/dev/null; then
+	systemctl enable greetd
+fi

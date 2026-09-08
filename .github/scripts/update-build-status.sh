@@ -167,7 +167,10 @@ total_failing=$((total_cells - total_green - total_unreached))
 # previous behaviour, and it froze the README block for two weeks after
 # `desktop` and `no_silent_omissions` graduated on 2026-08-19.
 mapfile -t blocking_ids < <(yq -r '.criteria[] | select(.enforcement == "blocking") | .id' .github/green-criteria.yml | sort)
-blocking=$(IFS=,; echo "${blocking_ids[*]}")
+blocking=$(
+	IFS=,
+	echo "${blocking_ids[*]}"
+)
 composite_scope="this table"
 composite_total=$total_cells
 scorable=true

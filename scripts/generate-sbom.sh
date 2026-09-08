@@ -47,8 +47,8 @@ OUT="sbom-${IMAGE_NAME}-${DEFAULT_TAG}-${SAFE_PLATFORM}.spdx.json"
 # a real exit code, with logs, while the agent is still healthy.
 # The wall-clock bound stays for the orthogonal case of a scan that
 # is slow rather than hungry.
-syft_cmd=( timeout --kill-after=30s 18m
-           "$SYFT_CMD" "$IMAGE" --scope squashed -o spdx-json="$OUT" )
+syft_cmd=(timeout --kill-after=30s 18m
+	"$SYFT_CMD" "$IMAGE" --scope squashed -o spdx-json="$OUT")
 
 # Size the cap off the box we actually landed on, and say so, so a
 # future exit 137 can be read against a real number instead of an
@@ -56,24 +56,24 @@ syft_cmd=( timeout --kill-after=30s 18m
 # is not what ubuntu-latest ships now, and the arm64 leg is a
 # different image again).
 mem_total_mib="$(free -m | awk '/^Mem:/ {print $2}')"
-cap_mib=$(( mem_total_mib - SYFT_MEMORY_RESERVE_MIB ))
+cap_mib=$((mem_total_mib - SYFT_MEMORY_RESERVE_MIB))
 if [ "$cap_mib" -lt "$SYFT_MEMORY_FLOOR_MIB" ]; then
-  cap_mib="$SYFT_MEMORY_FLOOR_MIB"
+	cap_mib="$SYFT_MEMORY_FLOOR_MIB"
 fi
 echo "runner memory (MiB): total=${mem_total_mib} available=$(free -m | awk '/^Mem:/ {print $7}')"
 echo "syft cgroup cap (MiB): ${cap_mib} (reserving ${SYFT_MEMORY_RESERVE_MIB} for the agent)"
 
 if command -v systemd-run >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
-  sudo systemd-run --scope --quiet \
-    --uid="$(id -u)" --gid="$(id -g)" \
-    -p MemoryMax="${cap_mib}M" -p MemorySwapMax=0 \
-    -- "${syft_cmd[@]}"
+	sudo systemd-run --scope --quiet \
+		--uid="$(id -u)" --gid="$(id -g)" \
+		-p MemoryMax="${cap_mib}M" -p MemorySwapMax=0 \
+		-- "${syft_cmd[@]}"
 else
-  # Never silently drop the guard: without it a hungry scan can
-  # still take the agent, which is the failure this step exists to
-  # stop being invisible.
-  echo "::warning::systemd-run unavailable; syft is time-bounded but NOT memory-bounded"
-  "${syft_cmd[@]}"
+	# Never silently drop the guard: without it a hungry scan can
+	# still take the agent, which is the failure this step exists to
+	# stop being invisible.
+	echo "::warning::systemd-run unavailable; syft is time-bounded but NOT memory-bounded"
+	"${syft_cmd[@]}"
 fi
 
 jq -e '

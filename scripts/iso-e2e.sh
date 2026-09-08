@@ -408,18 +408,18 @@ HOST_ARCH="$(uname -m)"
 QEMU="${QEMU:-}"
 QEMU_MACHINE=""
 case "$HOST_ARCH" in
-	aarch64 | arm64)
-		QEMU_MACHINE="virt"
-		QEMU_CANDIDATES=(/usr/bin/qemu-system-aarch64 /usr/local/bin/qemu-system-aarch64)
-		;;
-	x86_64 | amd64)
-		QEMU_MACHINE="pc"
-		QEMU_CANDIDATES=(/usr/libexec/qemu-kvm /usr/bin/qemu-kvm /usr/bin/qemu-system-x86_64 /home/linuxbrew/.linuxbrew/bin/qemu-system-x86_64)
-		;;
-	*)
-		echo "ERROR: unsupported host architecture: $HOST_ARCH" >&2
-		exit 77
-		;;
+aarch64 | arm64)
+	QEMU_MACHINE="virt"
+	QEMU_CANDIDATES=(/usr/bin/qemu-system-aarch64 /usr/local/bin/qemu-system-aarch64)
+	;;
+x86_64 | amd64)
+	QEMU_MACHINE="pc"
+	QEMU_CANDIDATES=(/usr/libexec/qemu-kvm /usr/bin/qemu-kvm /usr/bin/qemu-system-x86_64 /home/linuxbrew/.linuxbrew/bin/qemu-system-x86_64)
+	;;
+*)
+	echo "ERROR: unsupported host architecture: $HOST_ARCH" >&2
+	exit 77
+	;;
 esac
 if [[ -z "${QEMU:-}" ]]; then
 	for candidate in "${QEMU_CANDIDATES[@]}"; do

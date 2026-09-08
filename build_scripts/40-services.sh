@@ -556,8 +556,8 @@ if [[ "${PKG_MGR:-}" == "pacman" ]] || command -v zypper &>/dev/null || command 
 	if [[ "${ENABLE_SSHD:-0}" == "1" ]]; then
 		safe_enable sshd.service
 		if ! id liveuser &>/dev/null; then
-			useradd -m -s /bin/bash -G wheel liveuser 2>/dev/null || \
-			useradd -m -s /bin/bash liveuser 2>/dev/null || true
+			useradd -m -s /bin/bash -G wheel liveuser 2>/dev/null ||
+				useradd -m -s /bin/bash liveuser 2>/dev/null || true
 		fi
 		echo 'liveuser:live' | chpasswd
 		tunaos_declare_liveuser_home
@@ -764,6 +764,5 @@ if [[ -f /usr/lib/systemd/system/systemd-resolved.service ]]; then
 	# Investigate if resolved consistently fails across all variants.
 	systemctl enable systemd-resolved.service
 fi
-
 
 printf "::endgroup::\n"

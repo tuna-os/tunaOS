@@ -24,12 +24,12 @@ REPO="${TUNAOS_REPO:-/etc/bootc-image-factory/tunaos}"
 FLAVORS="${REDFIN_FLAVORS:-gnome kde}"
 
 if [[ ! -d "${REPO}" ]]; then
-    echo "redfin-image-factory: repo missing at ${REPO} — clone tunaos/tunaos there first" >&2
-    exit 1
+	echo "redfin-image-factory: repo missing at ${REPO} — clone tunaos/tunaos there first" >&2
+	exit 1
 fi
 if ! command -v just >/dev/null 2>&1; then
-    echo "redfin-image-factory: 'just' not found (dnf install just)" >&2
-    exit 1
+	echo "redfin-image-factory: 'just' not found (dnf install just)" >&2
+	exit 1
 fi
 
 echo "==> redfin image factory: rebuilding [${FLAVORS}] from ${REPO}"
@@ -37,8 +37,8 @@ cd "${REPO}"
 git pull --ff-only || true
 
 for flavor in ${FLAVORS}; do
-    echo "==> just build redfin ${flavor}"
-    just build redfin "${flavor}"
+	echo "==> just build redfin ${flavor}"
+	just build redfin "${flavor}"
 done
 
 # Switch to the first flavor's fresh build, then update + prune. The remaining

@@ -28,6 +28,22 @@ check: _ensure_check_deps
     cd {{ justfile_directory() }}
     echo "Checking syntax of shell scripts..."
     find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
+    # `just fix` WROTE shell formatting and nothing ever CHECKED it, so the
+    # .editorconfig could disagree with every file in the repo indefinitely --
+    # and did. A formatter you do not verify is a formatter that drifts.
+    # shfmt -l LISTS files needing formatting; test its OUTPUT, not an exit
+    # code. `find ... -exec shfmt --diff {} \;` returns 0 even when shfmt
+    # itself exits 1 -- find does not propagate the child's status -- so the
+    # obvious spelling of this check is a gate that can never fail. Measured:
+    # shfmt --diff on a bad file exits 1, the same command under find -exec
+    # exits 0.
+    echo "Checking shell formatting (shfmt)..."
+    unformatted="$(find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -not -path './_upstream-snapshots/*' -iname "*.sh" -type f -print0 | xargs -0 shfmt -l 2>/dev/null || true)"
+    if [[ -n "$unformatted" ]]; then
+        echo "::error::Shell formatting drift. Run 'just fix' and commit the result."
+        echo "$unformatted"
+        exit 1
+    fi
     find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -type f -name "*.yaml" -exec yamllint -c ./.yamllint.yml {} \; -o -name "*.yml" -exec yamllint {} \; 2>/dev/null || true
     find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -type f -name "*.json" -exec sh -c 'jq . "$1" > /dev/null' _ {} \; 2>/dev/null || true
     if command -v actionlint &> /dev/null; then
@@ -142,7 +158,11 @@ generate-workflows:
 fix:
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}
-    find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -iname "*.sh" -type f -exec shfmt --write "{}" ";"
+    # _upstream-snapshots is VENDORED upstream code kept for reference. Its
+    # value is being byte-identical to what upstream ships, so reformatting it
+    # destroys the only reason it exists -- and it was 14 of the files `just
+    # fix` rewrote on a clean main.
+    find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './_upstream-snapshots/*' -iname "*.sh" -type f -exec shfmt --write "{}" ";"
     find . -type f -name "*.just" -exec just --unstable --fmt -f {} \;
     just --unstable --fmt -f Justfile || { exit 1; }
 

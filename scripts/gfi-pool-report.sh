@@ -30,8 +30,14 @@ THRESHOLD="${1:-8}"
 ORG="tuna-os"
 LABEL="good first issue"
 
-[[ "$THRESHOLD" =~ ^[0-9]+$ ]] || { echo "ERROR: threshold must be a number" >&2; exit 2; }
-command -v gh >/dev/null 2>&1 || { echo "ERROR: gh not found" >&2; exit 2; }
+[[ "$THRESHOLD" =~ ^[0-9]+$ ]] || {
+	echo "ERROR: threshold must be a number" >&2
+	exit 2
+}
+command -v gh >/dev/null 2>&1 || {
+	echo "ERROR: gh not found" >&2
+	exit 2
+}
 
 # archived:false is the whole point — see the header.
 query="is:issue is:open org:${ORG} label:\"${LABEL}\" archived:false"

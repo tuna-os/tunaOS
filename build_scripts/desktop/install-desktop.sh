@@ -1019,4 +1019,3 @@ fi
 emit_packages_manifest
 
 printf "::endgroup::\n"
-

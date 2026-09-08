@@ -783,8 +783,8 @@ install_available() {
 detect_fedora_ver() {
 	local ver
 	ver="$(rpm -E %fedora 2>/dev/null || true)"
-	if [[ -z "$ver" || "$ver" == "%fedora" ]] \
-		|| grep -qi rawhide "${OS_RELEASE:-/etc/os-release}" 2>/dev/null; then
+	if [[ -z "$ver" || "$ver" == "%fedora" ]] ||
+		grep -qi rawhide "${OS_RELEASE:-/etc/os-release}" 2>/dev/null; then
 		echo rawhide
 	else
 		echo "$ver"

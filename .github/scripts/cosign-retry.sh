@@ -48,7 +48,7 @@ _cosign_transient() {
 cosign_retry() {
 	local attempt=1 backoff=15 rc=0 now remaining out deadline
 	out="$(mktemp)"
-	deadline=$(( $(date +%s) + SIGN_DEADLINE_MINUTES * 60 ))
+	deadline=$(($(date +%s) + SIGN_DEADLINE_MINUTES * 60))
 
 	while :; do
 		rc=0
@@ -68,7 +68,7 @@ cosign_retry() {
 		fi
 
 		now="$(date +%s)"
-		remaining=$(( deadline - now ))
+		remaining=$((deadline - now))
 		if [ "$remaining" -le "$backoff" ]; then
 			# Marker, not prose: rerun-infra-failures.yml greps job logs for
 			# SIGSTORE_OUTAGE to tell "Sigstore was down" apart from "this
@@ -78,10 +78,10 @@ cosign_retry() {
 			return "$rc"
 		fi
 
-		echo "::warning::${2:-$1} failed (attempt ${attempt}, transient Sigstore error); retrying in ${backoff}s ($(( remaining / 60 ))m of budget left)..." >&2
+		echo "::warning::${2:-$1} failed (attempt ${attempt}, transient Sigstore error); retrying in ${backoff}s ($((remaining / 60))m of budget left)..." >&2
 		sleep "$backoff"
-		attempt=$(( attempt + 1 ))
-		backoff=$(( backoff * 2 ))
+		attempt=$((attempt + 1))
+		backoff=$((backoff * 2))
 		if [ "$backoff" -gt "$SIGN_BACKOFF_CAP_SECONDS" ]; then
 			backoff="$SIGN_BACKOFF_CAP_SECONDS"
 		fi

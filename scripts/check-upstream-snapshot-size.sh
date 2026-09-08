@@ -29,8 +29,8 @@ changed=$(git status --short --untracked-files=all -- "_upstream-snapshots/" | w
 
 echo "Snapshot budget: files=${files}/${MAX_FILES}, bytes=${bytes}/${MAX_BYTES}, changed_paths=${changed}/${MAX_CHANGED_FILES}"
 
-(( files <= MAX_FILES )) || die "${files} files exceeds the ${MAX_FILES}-file limit"
-(( bytes <= MAX_BYTES )) || die "${bytes} bytes exceeds the ${MAX_BYTES}-byte limit"
-(( changed <= MAX_CHANGED_FILES )) || die "${changed} changed paths exceeds the ${MAX_CHANGED_FILES}-path refresh limit"
+((files <= MAX_FILES)) || die "${files} files exceeds the ${MAX_FILES}-file limit"
+((bytes <= MAX_BYTES)) || die "${bytes} bytes exceeds the ${MAX_BYTES}-byte limit"
+((changed <= MAX_CHANGED_FILES)) || die "${changed} changed paths exceeds the ${MAX_CHANGED_FILES}-path refresh limit"
 
 echo "Upstream snapshot budget: OK"

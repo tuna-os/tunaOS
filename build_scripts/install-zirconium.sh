@@ -58,7 +58,10 @@ shopt -u nullglob
 	exit 1
 }
 SRC="${_roots[0]}mkosi.extra"
-[[ -d "$SRC" ]] || { echo "ERROR: mkosi.extra not found in zirconium@${ZIRCONIUM_REF}" >&2; exit 1; }
+[[ -d "$SRC" ]] || {
+	echo "ERROR: mkosi.extra not found in zirconium@${ZIRCONIUM_REF}" >&2
+	exit 1
+}
 
 # Factory etc -> /etc (greetd, profile.d, kmscon, taidan.toml).
 cp -av "$SRC/usr/share/factory/etc/." /etc/
