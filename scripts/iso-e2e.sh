@@ -981,7 +981,73 @@ cleanup_vm() {
 		[[ -n "$tpid" ]] && kill "$tpid" 2>/dev/null || true
 	fi
 }
-trap cleanup_vm EXIT
+# ── Agent debugging instructions ────────────────────────────────────────────
+# Printed on ANY non-zero exit, from the EXIT trap, so every one of this
+# script's 60-odd failure paths gets it without each having to remember.
+#
+# Written because an agent (me) burned real time on this harness working out
+# facts that were never printed anywhere: that the serial console goes to
+# serial.log inside the output dir rather than to stdout; that the SSH-based
+# modes cannot work on published media because production images disable sshd;
+# that the image ref is parsed from the ISO FILENAME, so a renamed download
+# fails for a reason unrelated to the ISO; and that the output directory holds
+# screenshots and a boot-diagnostics dump that nothing mentions. A failing gate
+# that does not say where its evidence lives makes every consumer rediscover
+# the layout.
+#
+# Keep this factual and current. A stale pointer is worse than none, because it
+# sends the reader somewhere confidently wrong.
+_agent_debug_instructions() {
+	local rc="$1"
+	[[ "$rc" -eq 0 ]] && return 0
+	# Only the outermost invocation should print; nested subshells inherit the
+	# trap and would repeat this several times per failure.
+	[[ "${_AGENT_HINT_PRINTED:-0}" -eq 1 ]] && return 0
+	_AGENT_HINT_PRINTED=1
+
+	printf '\n'
+	echo "════════════════════════════════════════════════════════════════════"
+	echo "AGENT DEBUG INSTRUCTIONS — iso-e2e.sh exited ${rc} (mode=${MODE:-?} variant=${VARIANT:-?} flavor=${FLAVOR:-?})"
+	echo "════════════════════════════════════════════════════════════════════"
+	echo "Evidence lives in the output directory, NOT in this log:"
+	echo "  ${OUTPUT_DIR:-<unset>}"
+	echo
+	echo "Read these first, in this order:"
+	echo "  serial.log                     guest kernel + systemd console (the live boot)"
+	echo "  installed-serial.log           the same for the post-install boot (LUKS/install modes)"
+	echo "  current-phase.txt              which phase was in flight when it died"
+	echo "  boot-diagnostics.txt           failed-unit status/journal/coredump, when collected"
+	echo "  *.ppm / *.png                  framebuffer captures (00-boot, 10-ready, 30-installed)"
+	echo "  walkthrough/                   per-step installer frames + TAP (published mode)"
+	echo
+	echo "Useful commands:"
+	echo "  grep -aE 'not ok - |TUNAOS_' \"${OUTPUT_DIR:-.}\"/serial.log"
+	echo "  tesseract <frame>.png stdout --psm 6      # read a screenshot"
+	echo
+	echo "Facts that are not obvious and have cost time before:"
+	echo "  * Exit codes: 2 = never became ready, 3 = install/contract failed."
+	echo "  * The image ref is derived from the ISO FILENAME (<variant>-<flavor>-...)."
+	echo "    Renaming a download makes this probe the wrong image and fail for an"
+	echo "    unrelated reason."
+	echo "  * --luks/--ssh-only/--kickstart/--app-launch need sshd IN THE GUEST."
+	echo "    Production ISOs ship it disabled, so those modes only work on dev"
+	echo "    ISOs. For published media use --published, which drives the GUI"
+	echo "    through the QEMU monitor instead."
+	echo "  * A blank framebuffer (stddev 0) means the compositor never painted;"
+	echo "    check serial.log for the display manager before suspecting the ISO."
+	echo
+	echo "Known-failure catalogue, symptom-indexed:"
+	echo "  docs/ci-troubleshooting.md"
+	echo "════════════════════════════════════════════════════════════════════"
+}
+
+_on_exit() {
+	local rc=$?
+	cleanup_vm
+	_agent_debug_instructions "$rc"
+	return "$rc"
+}
+trap _on_exit EXIT
 # Without this, SIGTERM kills the shell outright and the EXIT trap never runs,
 # so the watchdog below would leave QEMU and swtpm orphaned on the runner.
 trap 'exit 143' TERM
