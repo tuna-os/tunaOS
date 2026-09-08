@@ -184,8 +184,14 @@ detect() {
   [ "$status" -eq 0 ]
 }
 
+@test "weekly desktop screenshots run tacklebox from source (host DNS, not podman-in-podman)" {
+  run grep 'TACKLEBOX_FROM_SOURCE: "1"' \
+    "${REPO_ROOT}/.github/workflows/weekly-desktop-screenshots.yml"
+  [ "$status" -eq 0 ]
+}
+
 @test "weekly desktop screenshots use host networking for tacklebox customize" {
-  run grep 'sudo TBOX_CUSTOMIZE_NETWORK=host' \
+  run grep 'TBOX_CUSTOMIZE_NETWORK: host' \
     "${REPO_ROOT}/.github/workflows/weekly-desktop-screenshots.yml"
   [ "$status" -eq 0 ]
 }

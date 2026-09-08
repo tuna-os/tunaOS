@@ -126,17 +126,49 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # TACKLEBOX_FROM_SOURCE=1 is what every other ISO-building workflow in
+      # this repo already sets — reusable-build-artifacts, live-iso-bootc,
+      # luks-e2e, publish-iso-groups, installer-smoke and installer-screenshots
+      # (tunaOS#1412). This job was the odd one out, and that is the actual
+      # cause of the DNS failures:
+      #
+      #   curl: (6) Could not resolve host: github.com
+      #   Could not resolve host: kitten.mirrors.almalinux.org
+      #
+      # Without it, tunaos_run_tacklebox() (scripts/lib/tacklebox.sh) runs
+      # tacklebox INSIDE a podman container, and tacklebox then issues its own
+      # `podman run` for the live-customize step — podman-in-podman, whose
+      # nested network namespace does not reliably get a working resolver.
+      # The previous attempt at this (TBOX_CUSTOMIZE_NETWORK=host alone) never
+      # took effect either: it was exported into the *runner's* shell, but a
+      # plain `podman run "$tacklebox_image"` does not forward host env vars
+      # into the container without an explicit -e/--env-host, so tacklebox
+      # never saw it.
+      #
+      # With TACKLEBOX_FROM_SOURCE=1, tacklebox is built and run as a HOST
+      # binary at the SHA pinned in image-versions.yaml, so live-customize is
+      # an ordinary single-level host container with working DNS — and now
+      # that tacklebox's own process actually inherits the environment,
+      # TBOX_CUSTOMIZE_NETWORK=host also reaches its intended `--network host`
+      # escape hatch (internal/install/customize.go) for extra headroom on
+      # hosts whose default podman bridge is otherwise unreliable. golang-go
+      # is already in this job's "Install dependencies" step.
       - name: Build live ISO (from published GHCR image)
         if: steps.filter.outputs.skip != 'true'
-        timeout-minutes: 45
+        timeout-minutes: 70
         env:
           GITHUB_REPOSITORY_OWNER: tuna-os
+          TACKLEBOX_FROM_SOURCE: "1"
+          TBOX_CUSTOMIZE_NETWORK: host
         run: |
-          # The pinned tacklebox supports this escape hatch for hosts where
-          # root-context podman's bridge DNS is broken. The customize script
-          # fetches installer Flatpaks from GitHub/tunaos.org; host networking
-          # gives that nested container the runner's working resolver.
-          sudo TBOX_CUSTOMIZE_NETWORK=host GITHUB_REPOSITORY_OWNER=tuna-os \
+          # The Justfile's `iso` recipe already does
+          # `sudo -E bash ./scripts/build-iso-tacklebox.sh` itself; wrapping
+          # the whole thing in another plain `sudo` drops the environment
+          # again, which is why installer-smoke.yml and
+          # installer-screenshots.yml both call it unsudoed with
+          # `sudo -E env "PATH=$PATH"` instead — the form measured green
+          # there.
+          sudo -E env "PATH=$PATH" \
             just iso "${{ matrix.variant }}" "${{ matrix.flavor }}" ghcr "${{ matrix.flavor }}"
 
       - name: Boot ISO and capture desktop screenshot
