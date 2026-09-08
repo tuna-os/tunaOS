@@ -24,6 +24,7 @@ Invoked by:
 | `install-checkpoints.py` | OCRs the frames `iso-e2e.sh` captured and asserts them against `tests/install-pipeline-screens.yaml` (see `docs/INSTALL-PIPELINE-CHECKPOINTS.md`) |
 | `installer-walkthrough.py` | Drives the installer frontend with `sendkey` and asserts its pages against `tests/installer-screens.yaml` |
 | `check-upstream-snapshot-size.sh` | Fails refreshes that exceed the snapshot size or change budget |
+| `audit-git-blobs.py` | Inventories oversized blobs reachable from selected Git refs; see the [rewrite runbook](../docs/GIT-HISTORY-REWRITE.md) |
 
 See `docs/AGENT_GUIDE.md`'s Key Files table for the fuller list and how
 these fit into the overall build pipeline (`docs/PIPELINE.md`,
