@@ -44,6 +44,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `check-download-checksums.yml` | PR-deterministic + post-merge + scheduled | Check download checksums | each PR, `35 22 * * *`, manual | — |
 | `content-filter.yaml` | post-merge | Check for Spammy Issue Comments | issue_comment | — |
 | `daily-verify.yml` | post-merge + scheduled | Daily Image Verification | `0 4 * * *`, manual | — |
+| `dead-gate-report.yml` | post-merge + scheduled | Dead gate report | `17 6 * * 1`, manual | — |
 | `desktop-contract-sweep.yml` | post-merge + scheduled | `desktop`, `no_silent_omissions` | `0 8 * * *`, manual | `desktop`: 2d, `no_silent_omissions`: 2d |
 | `drop-bot-review-requests.yml` | PR-deterministic | Drop bot review requests | each PR | — |
 | `frontend-parity.yml` | post-merge + scheduled | frontend parity | `30 6 * * *`, manual | — |
