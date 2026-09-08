@@ -57,18 +57,16 @@ if command -v gtkgreet &>/dev/null && command -v cage &>/dev/null; then
 	# it. -s keeps VT switching available (without it a greeter crash locks
 	# you out of the machine entirely).
 	# cage is wlroots-based and needs a renderer. A VM without virgl has a DRM
-	# card (virtio-gpu) but NO render node, so GL initialisation fails, cage
-	# exits, greetd restarts it forever and never reaches active — a black
+	# card (virtio-gpu) and may still have a render node that cannot provide
+	# accelerated GL, so cage exits, greetd restarts it forever — a black
 	# screen with no login. That is not a CI artefact: it is GNOME Boxes,
 	# VirtualBox and every plain `-vga virtio` guest, which is exactly how
-	# most people will first try TunaOS. scripts/iso-e2e.sh:281 says the same
-	# thing about this runner ("no render node/virgl — niri/xfwl4 will not
-	# render here").
+	# most people will first try TunaOS. scripts/iso-e2e.sh identifies this as
+	# the virgl-unavailable path where guest software rendering is required.
 	#
-	# So pick the renderer at boot rather than baking one in: software
-	# (pixman) only when there is no render node, hardware GL everywhere else.
-	# A login screen is cheap to render, so the fallback costs nothing where
-	# it is used, and machines with a GPU are unaffected.
+	# So pick the renderer at boot rather than baking one in. The root detector
+	# records virtio-gpu's `-virgl` capability in /run; the no-render-node check
+	# remains a safe fallback. Hardware with working GL is unaffected.
 	install -Dm0755 /dev/stdin /usr/libexec/tunaos/greetd-session <<'SESSION_EOF'
 #!/usr/bin/env bash
 # Launch gtkgreet under cage on hardware that may have neither 3D nor a GPU
@@ -86,14 +84,15 @@ if command -v gtkgreet &>/dev/null && command -v cage &>/dev/null; then
 #      "[drm] features: -virgl", so GL initialisation cannot succeed even once
 #      the device exists. wlroots' pixman renderer draws fine on dumb buffers.
 #
-# Waiting for card* fixes (1); forcing pixman when no render node exists fixes
-# (2). A render node is the honest test for 3D here — virtio-gpu without virgl
-# exposes card* but no renderD*.
+# Waiting for card* fixes (1). For (2), the root boot detector reads the
+# kernel's `-virgl` report and writes /run/tunaos-software-gl; render-node
+# presence cannot answer this because virtio-gpu can expose one with zero caps.
 for _ in $(seq 1 30); do
 	compgen -G '/dev/dri/card*' >/dev/null 2>&1 && break
 	sleep 0.5
 done
-if ! compgen -G '/dev/dri/renderD*' >/dev/null 2>&1; then
+if [[ -e /run/tunaos-software-gl ]] ||
+	! compgen -G '/dev/dri/renderD*' >/dev/null 2>&1; then
 	export WLR_RENDERER=pixman
 	export LIBGL_ALWAYS_SOFTWARE=1
 fi

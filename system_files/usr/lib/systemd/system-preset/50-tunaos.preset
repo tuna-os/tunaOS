@@ -45,7 +45,8 @@ enable tunaos-base-contract.service
 enable tunaos-desktop-contract.service
 enable tunaos-live-ready.service
 
-# First-boot setup.
+# Boot-time hardware detection and first-boot setup.
+enable tunaos-software-gl-detect.service
 enable tunaos-var-home-restorecon.service
 enable ublue-system-setup.service
 enable flatpak-preinstall.service

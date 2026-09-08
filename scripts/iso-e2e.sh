@@ -538,7 +538,7 @@ if [[ "$_gpu_mode" != "plain" ]] && { [[ "$_gpu_mode" == "virgl" ]] || [[ -e /de
 	QEMU_NEEDS_VNC_SURFACE=1
 	echo "==> GPU: virgl (${_gpu_gl_device} + egl-headless /dev/dri/renderD128 + vnc surface) — Smithay compositors can render"
 else
-	echo "==> GPU: ${_gpu_plain_args[*]} headless (no render node/virgl) — niri/xfwl4 will not render here"
+	echo "==> GPU: ${_gpu_plain_args[*]} headless (virgl unavailable) — guest software rendering required"
 	# Tell the screen checkpoints to REPORT rather than enforce the pixel
 	# assertions for the desktops listed under needs_virgl in
 	# tests/install-pipeline-screens.yaml. Without this every such cell fails
