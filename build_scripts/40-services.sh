@@ -706,6 +706,11 @@ safe_disable mcelog.service
 safe_enable tailscaled.service
 safe_enable uupd.timer
 
+# Resolve the software-rendering policy as root before greeters and user
+# environment generators start. The preset preserves this enablement when
+# systemd reapplies distro policy on first boot.
+systemctl enable tunaos-software-gl-detect.service
+
 # Base boot contract (green criterion 3, GREEN-MASTER-PLAN W3). Every image
 # gets the unit — on desktop images it is the multi-user complement to
 # tunaos-desktop-contract.service, on base images it is the only boot proof

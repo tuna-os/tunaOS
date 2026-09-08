@@ -19,11 +19,14 @@
 # the login screen renders on machines where the session does not. This is
 # that same fix, moved to where every Wayland session picks it up.
 #
-# A render node is the honest test for 3D: virtio-gpu without virgl exposes
-# card* but no renderD*. Where a render node exists this generator prints
-# nothing at all, so hardware with working GL is untouched.
+# Render-node presence is not a sufficient 3D test: current virtio-gpu creates
+# renderD128 even when its kernel capability report says `-virgl` and zero cap
+# sets. tunaos-software-gl-detect.service reads that privileged report at boot
+# and leaves a flag for unprivileged generators. Keep the no-node check here as
+# a safe fallback if the detector did not run.
 
-if compgen -G '/dev/dri/renderD*' >/dev/null 2>&1; then
+if compgen -G '/dev/dri/renderD*' >/dev/null 2>&1 &&
+	[[ ! -e /run/tunaos-software-gl ]]; then
 	exit 0
 fi
 
