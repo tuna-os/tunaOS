@@ -17,10 +17,10 @@ command -v jq >/dev/null || {
 }
 
 case "$minimum" in
-	''|*[!0-9]*)
-		echo "FAIL: NVIDIA_MIN_ASSETS must be a non-negative integer" >&2
-		exit 1
-		;;
+'' | *[!0-9]*)
+	echo "FAIL: NVIDIA_MIN_ASSETS must be a non-negative integer" >&2
+	exit 1
+	;;
 esac
 
 flavors=(
@@ -35,26 +35,26 @@ flavors=(
 fail=0
 for flavor in "${flavors[@]}"; do
 	release=$(GH_TOKEN="${GH_TOKEN:-}" gh api --paginate --slurp \
-		"repos/$repo/releases?per_page=100" \
-		| jq -c --arg prefix "$flavor-" \
-		'add | map(select(.tag_name | startswith($prefix))) | sort_by(.published_at) | last // empty')
+		"repos/$repo/releases?per_page=100" |
+		jq -c --arg prefix "$flavor-" \
+			'add | map(select(.tag_name | startswith($prefix))) | sort_by(.published_at) | last // empty')
 
 	if [ -z "$release" ]; then
 		echo "MISSING $flavor: no GitHub release found"
-	fail=1
+		fail=1
 		continue
 	fi
 
 	tag=$(jq -r '.tag_name' <<<"$release")
 	assets=$(jq '.assets | length' <<<"$release")
 	echo "$flavor: $tag ($assets asset(s))"
-	if (( assets < minimum )); then
+	if ((assets < minimum)); then
 		echo "FAIL $flavor: latest release has fewer than $minimum asset(s)" >&2
 		fail=1
 	fi
 done
 
-if (( fail )); then
+if ((fail)); then
 	echo "NVIDIA RELEASE ASSET AUDIT FAILED: restore downloadable assets for every NVIDIA edition" >&2
 	exit 1
 fi

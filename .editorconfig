@@ -10,9 +10,14 @@ trim_trailing_whitespace = true
 indent_style = space
 indent_size = 4
 
+# shfmt reads this file, and `just fix` runs shfmt --write over every shell
+# script in the repo. This said `space` / `2` while 100% of the shell code is
+# written with tabs -- 15 of 15 build_scripts/*.sh, and shfmt's own default --
+# so `just fix`, which AGENTS.md makes mandatory before every commit, rewrote
+# 145 files and 12k lines on a clean checkout of main. Nothing caught it
+# because `just check` never ran shfmt at all.
 [*.{sh,bash}]
-indent_style = space
-indent_size = 2
+indent_style = tab
 
 [*.{yml,yaml}]
 indent_style = space

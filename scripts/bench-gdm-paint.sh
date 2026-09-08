@@ -30,14 +30,38 @@ POLL_INTERVAL=3
 
 while [[ $# -gt 0 ]]; do
 	case "$1" in
-	--label) LABEL="$2"; shift 2 ;;
-	--machine) MACHINE="$2"; shift 2 ;;
-	--vga) VGA="$2"; shift 2 ;;
-	--cpus) CPUS="$2"; shift 2 ;;
-	--memory) MEMORY="$2"; shift 2 ;;
-	--timeout) TIMEOUT="$2"; shift 2 ;;
-	--output-dir) OUTPUT_DIR="$2"; shift 2 ;;
-	*) echo "unknown arg: $1" >&2; exit 2 ;;
+	--label)
+		LABEL="$2"
+		shift 2
+		;;
+	--machine)
+		MACHINE="$2"
+		shift 2
+		;;
+	--vga)
+		VGA="$2"
+		shift 2
+		;;
+	--cpus)
+		CPUS="$2"
+		shift 2
+		;;
+	--memory)
+		MEMORY="$2"
+		shift 2
+		;;
+	--timeout)
+		TIMEOUT="$2"
+		shift 2
+		;;
+	--output-dir)
+		OUTPUT_DIR="$2"
+		shift 2
+		;;
+	*)
+		echo "unknown arg: $1" >&2
+		exit 2
+		;;
 	esac
 done
 
@@ -53,19 +77,34 @@ rm -f "$MONITOR_SOCK" "$SERIAL_LOG" "$QEMU_PIDFILE" "$OVMF_VARS"
 
 QEMU=""
 for candidate in /usr/libexec/qemu-kvm /usr/bin/qemu-kvm /usr/bin/qemu-system-x86_64; do
-	[[ -x "$candidate" ]] && { QEMU="$candidate"; break; }
+	[[ -x "$candidate" ]] && {
+		QEMU="$candidate"
+		break
+	}
 done
-[[ -z "$QEMU" ]] && { echo "ERROR: QEMU not found" >&2; exit 77; }
+[[ -z "$QEMU" ]] && {
+	echo "ERROR: QEMU not found" >&2
+	exit 77
+}
 
 OVMF_CODE=""
 for f in /usr/share/OVMF/OVMF_CODE_4M.fd /usr/share/OVMF/OVMF_CODE.fd /usr/share/edk2/ovmf/OVMF_CODE.fd /usr/share/edk2-ovmf/x64/OVMF_CODE.fd; do
-	[[ -f "$f" ]] && { OVMF_CODE="$f"; break; }
+	[[ -f "$f" ]] && {
+		OVMF_CODE="$f"
+		break
+	}
 done
 OVMF_VARS_SRC=""
 for f in /usr/share/OVMF/OVMF_VARS_4M.fd /usr/share/OVMF/OVMF_VARS.fd /usr/share/edk2/ovmf/OVMF_VARS.fd /usr/share/edk2-ovmf/x64/OVMF_VARS.fd; do
-	[[ -f "$f" ]] && { OVMF_VARS_SRC="$f"; break; }
+	[[ -f "$f" ]] && {
+		OVMF_VARS_SRC="$f"
+		break
+	}
 done
-[[ -z "$OVMF_CODE" ]] && { echo "ERROR: OVMF not found" >&2; exit 77; }
+[[ -z "$OVMF_CODE" ]] && {
+	echo "ERROR: OVMF not found" >&2
+	exit 77
+}
 if [[ -n "$OVMF_VARS_SRC" ]]; then cp -f "$OVMF_VARS_SRC" "$OVMF_VARS"; else truncate -s 4M "$OVMF_VARS"; fi
 
 ACCEL="tcg"
@@ -77,7 +116,10 @@ case "$VGA" in
 virtio) VGA_ARGS=(-vga virtio -display none) ;;
 std) VGA_ARGS=(-vga std -display none) ;;
 cirrus) VGA_ARGS=(-vga cirrus -display none) ;;
-*) echo "unknown --vga: $VGA (want virtio|std|cirrus)" >&2; exit 2 ;;
+*)
+	echo "unknown --vga: $VGA (want virtio|std|cirrus)" >&2
+	exit 2
+	;;
 esac
 
 QEMU_PID=""

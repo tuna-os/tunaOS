@@ -82,10 +82,10 @@ tunaos_run_tacklebox() {
 			"$tacklebox_image")
 	fi
 
-	local -a build_cmd=("${tb[@]}" build "$(realpath "$recipe_file")" \
-		--iso "$(realpath "$iso_out")" \
-		--output-base "$(realpath "$out_dir")" \
-		--yes)
+	local -a build_cmd=("${tb[@]}" build "$(realpath "$recipe_file")"
+	--iso "$(realpath "$iso_out")"
+	--output-base "$(realpath "$out_dir")"
+	--yes)
 
 	echo "==> Running tacklebox with a ${timeout_seconds}s deadline" >&2
 	if timeout --foreground --kill-after=120 "$timeout_seconds" "${build_cmd[@]}"; then

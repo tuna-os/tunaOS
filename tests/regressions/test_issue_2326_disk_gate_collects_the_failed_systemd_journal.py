@@ -27,7 +27,14 @@ def test_disk_qemu_attaches_the_prepared_vsock_credentials():
 
 
 def test_missing_contract_collects_diagnostics_before_evidence_capture():
-    disk_mode = SCRIPT.split("case \"$MODE\" in", 1)[1].split("\nready)", 1)[0]
+    # Slice the DISPATCH arm, not "everything after the first case header".
+    # iso-e2e.sh contains three `case "$MODE" in` statements; splitting on the
+    # first one grabbed a region starting ~1600 lines above the dispatch, so
+    # the .index() calls below matched helper definitions instead of the arm
+    # and the test failed whenever anything shifted around them. Anchor on the
+    # `disk)` arm of the last one, which is what this test is about.
+    dispatch = SCRIPT.rsplit('case "$MODE" in', 1)[1]
+    disk_mode = dispatch.split("\ndisk)", 1)[1].split("\n\t;;", 1)[0]
     collect = disk_mode.index("collect_disk_boot_diagnostics")
     paint = disk_mode.index('wait_for_paint "10-ready"')
     assert collect < paint

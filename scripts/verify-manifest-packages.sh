@@ -35,9 +35,18 @@ MANIFEST="${1:?usage: verify-manifest-packages.sh <manifest.yaml> [series] [arch
 SERIES="${2:-noble}"
 ARCH="${3:-amd64}"
 
-[[ -r "$MANIFEST" ]] || { echo "ERROR: cannot read ${MANIFEST}" >&2; exit 2; }
-command -v curl >/dev/null 2>&1 || { echo "ERROR: curl not found" >&2; exit 2; }
-command -v python3 >/dev/null 2>&1 || { echo "ERROR: python3 not found" >&2; exit 2; }
+[[ -r "$MANIFEST" ]] || {
+	echo "ERROR: cannot read ${MANIFEST}" >&2
+	exit 2
+}
+command -v curl >/dev/null 2>&1 || {
+	echo "ERROR: curl not found" >&2
+	exit 2
+}
+command -v python3 >/dev/null 2>&1 || {
+	echo "ERROR: python3 not found" >&2
+	exit 2
+}
 
 DAS="https://api.launchpad.net/1.0/ubuntu/${SERIES}/${ARCH}"
 
@@ -48,7 +57,10 @@ mapfile -t PKGS < <(
 	     f && /^    - /{n=$2; sub(/#.*/,"",n); gsub(/[ \t]/,"",n); if (n != "") print n}
 	     f && /^[a-z_]+:$/{exit}' "$MANIFEST"
 )
-[[ "${#PKGS[@]}" -gt 0 ]] || { echo "ERROR: no apt packages parsed from ${MANIFEST}" >&2; exit 2; }
+[[ "${#PKGS[@]}" -gt 0 ]] || {
+	echo "ERROR: no apt packages parsed from ${MANIFEST}" >&2
+	exit 2
+}
 
 # The PPA it declares, as a Launchpad archive URL. Absent is fine — then every
 # name must come from the primary archive.
@@ -80,12 +92,20 @@ for p in "${PKGS[@]}"; do
 	src=""
 	if [[ -n "$PPA_URL" ]]; then
 		n="$(published_in "$PPA_URL" "$p")"
-		[[ "$n" == "ERR" ]] && { errored=$((errored + 1)); echo "  ?? ${p} (PPA query failed)" >&2; continue; }
+		[[ "$n" == "ERR" ]] && {
+			errored=$((errored + 1))
+			echo "  ?? ${p} (PPA query failed)" >&2
+			continue
+		}
 		[[ "$n" -gt 0 ]] && src="ppa"
 	fi
 	if [[ -z "$src" ]]; then
 		n="$(published_in "https://api.launchpad.net/1.0/ubuntu/+archive/primary" "$p")"
-		[[ "$n" == "ERR" ]] && { errored=$((errored + 1)); echo "  ?? ${p} (archive query failed)" >&2; continue; }
+		[[ "$n" == "ERR" ]] && {
+			errored=$((errored + 1))
+			echo "  ?? ${p} (archive query failed)" >&2
+			continue
+		}
 		[[ "$n" -gt 0 ]] && src="archive"
 	fi
 	if [[ -n "$src" ]]; then

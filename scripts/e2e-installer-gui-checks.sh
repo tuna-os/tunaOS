@@ -61,15 +61,16 @@ echo "# Installer GUI checks — flavor=${FLAVOR}"
 # A generic check accepts any compositor, so a stale Wayland socket or a
 # cosmic-greeter's cosmic-comp can masquerade as a real desktop.
 case "${FLAVOR}" in
-	kde)    COMPS="kwin_wayland" ;;
-	cosmic) COMPS="cosmic-comp" ;;
-	niri)   COMPS="niri" ;;
-	xfce)   COMPS="xfwl4 labwc wayfire xfwm4" ;;
-	gnome)  COMPS="gnome-shell" ;;
-	*)      echo "not ok - unsupported installer flavor: ${FLAVOR}"
-	        FAIL=$((FAIL + 1))
-	        print_summary
-	        ;;
+kde) COMPS="kwin_wayland" ;;
+cosmic) COMPS="cosmic-comp" ;;
+niri) COMPS="niri" ;;
+xfce) COMPS="xfwl4 labwc wayfire xfwm4" ;;
+gnome) COMPS="gnome-shell" ;;
+*)
+	echo "not ok - unsupported installer flavor: ${FLAVOR}"
+	FAIL=$((FAIL + 1))
+	print_summary
+	;;
 esac
 
 compositor_found=""
@@ -98,11 +99,11 @@ fi
 # fallback — it can self-match its own command line and cannot distinguish
 # the four frontends from each other.
 case "${FLAVOR}" in
-	kde)    APP=org.tunaos.InstallerKde ;;
-	cosmic) APP=org.tunaos.InstallerCosmic ;;
-	niri)   APP=org.tunaos.InstallerNiri ;;
-	xfce)   APP=org.tunaos.InstallerXfce ;;
-	*)      APP=org.bootcinstaller.Installer ;;
+kde) APP=org.tunaos.InstallerKde ;;
+cosmic) APP=org.tunaos.InstallerCosmic ;;
+niri) APP=org.tunaos.InstallerNiri ;;
+xfce) APP=org.tunaos.InstallerXfce ;;
+*) APP=org.bootcinstaller.Installer ;;
 esac
 
 installer_running=""
@@ -174,18 +175,18 @@ if [[ -n "$STAMP" ]]; then
 	# ── 5. The signal is one we understand ─────────────────────────────────
 	STAMP_SIGNAL=$(echo "$STAMP" | sed -n 's/^signal=//p' | head -1)
 	case "${STAMP_SIGNAL}" in
-		frame-swapped|gtk-map)
-			echo "#   signal: ${STAMP_SIGNAL} — window confirmed on screen"
-			;;
-		first-frame)
-			echo "#   signal: ${STAMP_SIGNAL} — app producing frames"
-			echo "#   (libcosmic's strongest claim; does not prove a surface was presented)"
-			;;
-		*)
-			echo "not ok - unrecognised readiness signal '${STAMP_SIGNAL:-<none>}'"
-			echo "#   add it or fix the frontend"
-			FAIL=$((FAIL + 1))
-			;;
+	frame-swapped | gtk-map)
+		echo "#   signal: ${STAMP_SIGNAL} — window confirmed on screen"
+		;;
+	first-frame)
+		echo "#   signal: ${STAMP_SIGNAL} — app producing frames"
+		echo "#   (libcosmic's strongest claim; does not prove a surface was presented)"
+		;;
+	*)
+		echo "not ok - unrecognised readiness signal '${STAMP_SIGNAL:-<none>}'"
+		echo "#   add it or fix the frontend"
+		FAIL=$((FAIL + 1))
+		;;
 	esac
 else
 	echo "#   runtime dirs for debugging:"
@@ -197,16 +198,16 @@ fi
 # it claims. A missing flatpak is a build failure, not a GUI failure, and
 # catching it here distinguishes "image is broken" from "GUI didn't start".
 case "${FLAVOR}" in
-	kde)    check "installer flatpak is installed (${APP})" \
-		flatpak list --app --columns=application 2>/dev/null | grep -qFx "${APP}" ;;
-	cosmic) check "installer flatpak is installed (${APP})" \
-		flatpak list --app --columns=application 2>/dev/null | grep -qFx "${APP}" ;;
-	niri)   check "installer flatpak is installed (${APP})" \
-		flatpak list --app --columns=application 2>/dev/null | grep -qFx "${APP}" ;;
-	xfce)   check "installer flatpak is installed (${APP})" \
-		flatpak list --app --columns=application 2>/dev/null | grep -qFx "${APP}" ;;
-	*)      check "installer flatpak is installed (${APP})" \
-		flatpak list --app --columns=application 2>/dev/null | grep -qFx "${APP}" ;;
+kde) check "installer flatpak is installed (${APP})" \
+	flatpak list --app --columns=application 2>/dev/null | grep -qFx "${APP}" ;;
+cosmic) check "installer flatpak is installed (${APP})" \
+	flatpak list --app --columns=application 2>/dev/null | grep -qFx "${APP}" ;;
+niri) check "installer flatpak is installed (${APP})" \
+	flatpak list --app --columns=application 2>/dev/null | grep -qFx "${APP}" ;;
+xfce) check "installer flatpak is installed (${APP})" \
+	flatpak list --app --columns=application 2>/dev/null | grep -qFx "${APP}" ;;
+*) check "installer flatpak is installed (${APP})" \
+	flatpak list --app --columns=application 2>/dev/null | grep -qFx "${APP}" ;;
 esac
 
 print_summary
