@@ -1073,6 +1073,18 @@ setup_runtime_check_stubs() {
   grep -qF 'journalctl -b --no-pager -n 120' "$harness"
 }
 
+@test "disk gate fails immediately when serial reports an emergency shell" {
+  # albacore:gnome-nvidia-hwe reached its dracut emergency shell in about ten
+  # seconds, then the Gate waited the remaining 15 minutes for a contract unit
+  # that could never run. Keep the failure detector inside the marker loop and
+  # make it set a hard failure before leaving that loop.
+  local disk_case
+  disk_case=$(awk '/^disk\)/,/^ready\)/' "$SCRIPT")
+  grep -qF 'if boot_failed_on_serial; then' <<<"$disk_case"
+  grep -qF 'rc=1' <<<"$disk_case"
+  grep -qF 'contract cannot run after the guest entered an emergency shell' <<<"$disk_case"
+}
+
 # ── TPM2 auto-unlock verification opt-in (tunaOS#680) ──────────────────────
 #
 # fisherman#48 moved TPM2 enrollment from install time (sealed against the

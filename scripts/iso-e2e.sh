@@ -3530,6 +3530,16 @@ disk)
 			fi
 			break
 		fi
+		# An initramfs/emergency-shell signature is already a definitive boot
+		# failure. No contract unit can run from there, so waiting out the full
+		# marker deadline only hides the useful failure behind a 15-minute
+		# timeout. This caught albacore:gnome-nvidia-hwe's /sysroot mount
+		# failure in run 34095284957 roughly ten seconds into the guest boot.
+		if boot_failed_on_serial; then
+			echo "ERROR: ${DISK_CONTRACT} contract cannot run after the guest entered an emergency shell" >&2
+			rc=1
+			break
+		fi
 		sleep "${DISK_POLL_INTERVAL:-1}"
 	done
 	if [[ "$rc" -eq 2 ]]; then
