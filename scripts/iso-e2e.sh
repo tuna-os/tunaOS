@@ -3414,6 +3414,44 @@ EOF
 	return 4
 }
 
+# Capture the evidence hidden behind systemd's terse console failure. Disk
+# images normally expose only systemd-ssh-generator's vsock listener, so this
+# depends on boot_disk_image passing the VSOCK_ARGS prepared above. Keep the
+# command broad enough to diagnose the first failed service rather than baking
+# the current dbus hypothesis into the gate, while giving crash-looping core
+# services their status, journal, and coredump metadata (#2326).
+collect_disk_boot_diagnostics() {
+	local out="${OUTPUT_DIR}/boot-diagnostics.txt"
+	# Installed images generally have no liveuser/TCP sshd. Try their native
+	# systemd vsock listener first; retain TCP as a fallback for custom disks.
+	if [[ ${#VSOCK_ARGS[@]} -gt 0 ]] && check_ssh_vsock; then
+		:
+	elif ! check_ssh; then
+		echo "WARNING: guest SSH unavailable; could not collect boot diagnostics" | tee "$out" >&2
+		return 0
+	fi
+
+	echo "==> Collecting failed-unit status, boot journal, and coredump metadata over ${SSH_TRANSPORT} SSH..."
+	"${GUEST_SSH[@]}" 'if [ "$(id -u)" -eq 0 ]; then exec sh -s; else exec sudo -n sh -s; fi' <<-'DIAGEOF' >"$out" 2>&1 || true
+		echo '=== failed units ==='
+		systemctl --failed --no-pager --full || true
+		echo '=== dbus-broker status ==='
+		systemctl status dbus-broker.service dbus.socket --no-pager --full || true
+		echo '=== display manager status ==='
+		systemctl status display-manager.service --no-pager --full || true
+		echo '=== dbus/display-manager journal (this boot) ==='
+		journalctl -b --no-pager -o short-precise \
+			-u dbus-broker.service -u dbus.socket -u display-manager.service || true
+		echo '=== recent coredumps ==='
+		coredumpctl --no-pager --no-legend list 2>&1 | tail -n 30 || true
+		for exe in dbus-broker dbus-broker-launch; do
+			echo "=== coredump info: ${exe} ==="
+			coredumpctl --no-pager info "$exe" 2>&1 | tail -n 160 || true
+		done
+	DIAGEOF
+	cat "$out" >&2
+}
+
 # Boot a disk image (qcow2/raw) directly — used by --disk mode to verify
 # installed/converted images (e.g. the qcow2 produced from a GHCR image
 # before its tags are promoted). Reuses the same firmware/accel plumbing.
@@ -3438,6 +3476,7 @@ boot_disk_image() {
 		-netdev "user,id=net0,hostfwd=tcp::${SSH_PORT}-:22" \
 		-device virtio-net-pci,netdev=net0 \
 		-monitor "unix:${MONITOR_SOCK},server,nowait" \
+		"${VSOCK_ARGS[@]}" \
 		"${E2E_SERIAL_ARGS[@]}" \
 		"${QEMU_GPU_ARGS[@]}" \
 		-pidfile "$QEMU_PIDFILE" \
@@ -3493,6 +3532,11 @@ disk)
 		fi
 		sleep "${DISK_POLL_INTERVAL:-1}"
 	done
+	if [[ "$rc" -eq 2 ]]; then
+		# The serial console reports only "See systemctl status". Preserve the
+		# status and journal it points at while the failed guest is still alive.
+		collect_disk_boot_diagnostics
+	fi
 	# Let the display manager finish drawing before capturing evidence.
 	# Poll for paint instead of a fixed 30s sleep: under plain virtio-vga the
 	# guest renders via llvmpipe and first paint can lag the contract marker

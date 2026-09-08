@@ -1532,6 +1532,7 @@ jobs:
           name: boot-gate-${{ inputs.image-name }}-${{ inputs.default-tag }}
           path: |
             verify-out/serial.log
+            verify-out/boot-diagnostics.txt
             verify-out/*.png
             evidence/${{ inputs.image-variant }}/${{ inputs.flavor }}/amd64/
           if-no-files-found: warn
