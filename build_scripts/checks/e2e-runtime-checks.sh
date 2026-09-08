@@ -304,5 +304,19 @@ check "hostname is set" \
 check "locale is configured" \
 	locale
 
+# Tell an automated reader where to go next. These checks run on the guest's
+# serial console, which is the ONLY channel out of an installed system that
+# ships no sshd -- so whatever this does not print is unknowable after the
+# fact. Naming the artifacts here saves the next agent rediscovering them.
+if [[ "$FAIL" -gt 0 ]]; then
+	emit "# AGENT: ${FAIL} assertion(s) failed on the INSTALLED system."
+	emit "# AGENT: this output is the guest serial console; the host copy is"
+	emit "#        <output-dir>/installed-serial.log (or serial.log for the live boot)."
+	emit "# AGENT: re-read the '# ' info lines above — they carry the measured"
+	emit "#        values (display manager, ActiveState, ip, listeners) that say WHY."
+	emit "# AGENT: symptom-indexed catalogue: docs/ci-troubleshooting.md"
+	emit "# AGENT: a check that fails on EVERY run and every flavor is a dead gate,"
+	emit "#        not a known issue — see the PR quality contract in AGENTS.md."
+fi
 emit "TUNAOS_INSTALL_CHECKS_RESULT pass=${PASS} fail=${FAIL} desktop=${DESKTOP}"
 exit "$FAIL"
