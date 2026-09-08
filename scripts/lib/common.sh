@@ -41,35 +41,9 @@ cd "$_TUNAOS_REPO_ROOT" || {
 # `tag` defaults to the flavor name.
 # If `variant` already looks like a ref (contains `:` or `/`) it's returned
 # as-is so callers can pass `ghcr.io/foo/bar:tag` directly.
-tunaos_image_ref() {
-	local variant="${1:?variant required}"
-	local flavor="${2:-gnome}"
-	local repo="${3:-local}"
-	local tag="${4:-${flavor}}"
-
-	# Already a ref? Pass through unchanged.
-	if [[ "$variant" == *":"* || "$variant" == *"/"* ]]; then
-		echo "$variant"
-		return
-	fi
-
-	local owner="${GITHUB_REPOSITORY_OWNER:-tuna-os}"
-	case "$repo" in
-	local)
-		echo "localhost/${variant}:${tag}"
-		;;
-	ghcr)
-		GITHUB_REPOSITORY_OWNER="$owner" bash ./scripts/published-image-ref.sh "$variant" "$tag" ghcr
-		;;
-	registry)
-		bash ./scripts/published-image-ref.sh "$variant" "$tag" registry
-		;;
-	*)
-		echo "ERROR: unknown repo '${repo}' (expected: local | ghcr | registry)" >&2
-		return 1
-		;;
-	esac
-}
+# Implementation provided by the side-effect-free image library.
+# shellcheck source=image.sh
+. "$(dirname "${BASH_SOURCE[0]}")/image.sh"
 
 # ── Cross-storage image import ──────────────────────────────────────────────
 # Some scripts run via `sudo` (e.g. build-iso-tacklebox.sh)
@@ -79,80 +53,9 @@ tunaos_image_ref() {
 #
 # Returns 0 if the image now exists in root storage (or was already there),
 # non-zero otherwise.
-tunaos_import_to_root_storage() {
-	local image="${1:?image required}"
-
-	# Already there? Done.
-	if podman image exists "$image"; then
-		return 0
-	fi
-
-	# Find the user who invoked sudo. logname() falls back to SUDO_USER
-	# (the latter being absent if the script was launched outside sudo).
-	local real_user="${SUDO_USER:-$(logname 2>/dev/null || echo)}"
-	if [[ -z "$real_user" ]]; then
-		echo "ERROR: ${image} not in root storage and no SUDO_USER to import from" >&2
-		echo "       Build the image first: just <variant> <flavor>" >&2
-		return 1
-	fi
-
-	echo "==> Importing ${image} from ${real_user}'s podman storage into root's..."
-
-	# XDG_RUNTIME_DIR must be set explicitly. `sudo -u "$real_user"` from a
-	# root context inherits no user session, so rootless podman falls back to
-	# root's /run/containers/storage, cannot write there, and dies with
-	#   "RunRoot ... is not writable ... acquiring runtime init lock:
-	#    open /run/libpod/alive.lck: permission denied"
-	# Its stderr was being sent to /dev/null, so all the caller ever saw was
-	# `podman load` choking on an empty stream ("index.json: not a directory"),
-	# which points at the wrong end of the pipe entirely.
-	local real_uid
-	real_uid=$(id -u "$real_user" 2>/dev/null || echo)
-	if [[ -z "$real_uid" ]]; then
-		echo "ERROR: cannot resolve uid for ${real_user}" >&2
-		return 1
-	fi
-
-	# /run/user/<uid> only exists where systemd-logind has created a session.
-	# Blacksmith runners have none, so pointing at it produced:
-	#
-	#   Failed to get rootless runtime dir: lstat /run/user/1001: no such file
-	#   error creating temporary file: No such file or directory
-	#   invalid internal status, try resetting the pause process with
-	#   "podman system migrate"
-	#
-	# and the pipe then fed `podman load` nothing, which reported the useless
-	# "payload does not match any of the supported image formats". Fall back to
-	# a private directory owned by the user — the same shape
-	# build-iso-tacklebox.sh already uses for its dropped-privilege podman ops.
-	local xdg_dir="/run/user/${real_uid}"
-	if [[ ! -d "$xdg_dir" ]]; then
-		xdg_dir="/tmp/tbox-xdg-${real_user}"
-		install -d -o "$real_user" -g "$(id -g "$real_user")" -m 700 "$xdg_dir" || {
-			echo "ERROR: cannot create a runtime dir for ${real_user} at ${xdg_dir}" >&2
-			return 1
-		}
-	fi
-
-	local save_err
-	save_err=$(mktemp)
-	if ! sudo -u "$real_user" env "XDG_RUNTIME_DIR=${xdg_dir}" \
-		podman save "$image" 2>"$save_err" | podman load; then
-		echo "ERROR: failed to import ${image} from ${real_user}" >&2
-		[[ -s "$save_err" ]] && {
-			echo "--- podman save (as ${real_user}) said:" >&2
-			cat "$save_err" >&2
-		}
-		rm -f "$save_err"
-		return 1
-	fi
-	rm -f "$save_err"
-
-	if ! podman image exists "$image"; then
-		echo "ERROR: ${image} still not present after import" >&2
-		return 1
-	fi
-}
+# Implementation provided by the side-effect-free storage library.
+# shellcheck source=storage.sh
+. "$(dirname "${BASH_SOURCE[0]}")/storage.sh"
 
 # ── Flavor → human title ────────────────────────────────────────────────────
 # Render a flavor id (e.g. "gnome-nvidia-hwe") into the title shown in the

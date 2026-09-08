@@ -30,6 +30,16 @@ setup() {
   [ -n "$TUNAOS_BACKEND_PROBE_SH" ]
 }
 
+@test "image and storage libraries are side-effect free when sourced" {
+  local before="$PWD"
+  source "${BATS_TEST_DIRNAME}/../../scripts/lib/image.sh"
+  source "${BATS_TEST_DIRNAME}/../../scripts/lib/storage.sh"
+
+  [ "$PWD" = "$before" ]
+  declare -F tunaos_image_ref
+  declare -F tunaos_import_to_root_storage
+}
+
 teardown() {
   export platform="${ORIG_PLATFORM}"
   export GITHUB_REPOSITORY_OWNER="${ORIG_GITHUB_REPOSITORY_OWNER}"
