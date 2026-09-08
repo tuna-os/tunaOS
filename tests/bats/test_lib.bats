@@ -171,7 +171,7 @@ teardown() {
 # ═══════════════════════════════════════════════════════════════════════════
 
 @test "OS detection: IS_FEDORA and IMAGE_NAME from fedora BASE_IMAGE" {
-  BASE_IMAGE="quay.io/fedora/fedora-bootc:43"
+  BASE_IMAGE="quay.io/fedora/fedora-bootc:44"
   export BASE_IMAGE
   source "${TEST_ROOT}/lib_test.sh"
   [[ "$IS_FEDORA" == "true" ]]
@@ -274,7 +274,7 @@ JSON
 
 @test "OS detection: falls back to BASE_IMAGE env when image-info.json missing" {
   rm -f "${TEST_ROOT}/usr/share/ublue-os/image-info.json"
-  BASE_IMAGE="quay.io/fedora/fedora-bootc:43"
+  BASE_IMAGE="quay.io/fedora/fedora-bootc:44"
   export BASE_IMAGE
   source "${TEST_ROOT}/lib_test.sh"
   [[ "$IS_FEDORA" == "true" ]]
@@ -282,7 +282,7 @@ JSON
 }
 
 @test "OS detection: default DESKTOP_FLAVOR is gnome" {
-  BASE_IMAGE="quay.io/fedora/fedora-bootc:43"
+  BASE_IMAGE="quay.io/fedora/fedora-bootc:44"
   export BASE_IMAGE
   source "${TEST_ROOT}/lib_test.sh"
   [[ "$DESKTOP_FLAVOR" == "gnome" ]]
@@ -301,7 +301,7 @@ JSON
 # ═══════════════════════════════════════════════════════════════════════════
 
 @test "detected_os: outputs Fedora when IS_FEDORA is true" {
-  BASE_IMAGE="quay.io/fedora/fedora-bootc:43"
+  BASE_IMAGE="quay.io/fedora/fedora-bootc:44"
   export BASE_IMAGE
   source "${TEST_ROOT}/lib_test.sh"
   run detected_os
@@ -612,7 +612,7 @@ SCRIPT
 # ═══════════════════════════════════════════════════════════════════════════
 
 @test "print_debug_info: includes IMAGE_NAME in output" {
-  BASE_IMAGE="quay.io/fedora/fedora-bootc:43"
+  BASE_IMAGE="quay.io/fedora/fedora-bootc:44"
   export BASE_IMAGE
   source "${TEST_ROOT}/lib_test.sh"
   run print_debug_info
@@ -620,7 +620,7 @@ SCRIPT
 }
 
 @test "print_debug_info: includes detected_os output" {
-  BASE_IMAGE="quay.io/fedora/fedora-bootc:43"
+  BASE_IMAGE="quay.io/fedora/fedora-bootc:44"
   export BASE_IMAGE
   source "${TEST_ROOT}/lib_test.sh"
   run print_debug_info

@@ -91,3 +91,22 @@ map_ref() {
   run grep -F 'build-config.yml' "${REPO_ROOT}/FEDORA-BASE-POLICY.md"
   [ "$status" -eq 0 ]
 }
+
+@test "the NVIDIA userspace fallback tracks bonito's Fedora base" {
+  # build_scripts/overlay/overrides/nvidia/20-nvidia.sh hardcodes a releasever
+  # for negativo17's fedora-nvidia repo, used when the akmods bundle carries no
+  # readable dist tag. It sat at 43 after bonito moved to 44, so a build that
+  # hit the fallback would have pointed a Fedora 44 image at Fedora 43 NVIDIA
+  # userspace — kmod and userspace from different releases, which is the exact
+  # mismatch the dist-tag derivation above it exists to avoid.
+  #
+  # This is another "pins that must move together" pair, like the ones above.
+  local nvidia_script="${REPO_ROOT}/build_scripts/overlay/overrides/nvidia/20-nvidia.sh"
+  local fallback base_major
+  fallback="$(grep -oE 'FEDORA_AKMODS_VERSION:-[0-9]+' "$nvidia_script" | grep -oE '[0-9]+$')"
+  # bonito's base is the authoritative Fedora version; strip digest and tag.
+  base_major="$(config_base bonito | sed 's/.*://')"
+  [ -n "$fallback" ]
+  [ -n "$base_major" ]
+  [ "$fallback" = "$base_major" ]
+}
