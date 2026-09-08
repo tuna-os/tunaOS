@@ -79,7 +79,7 @@ _This snapshot uses the latest conclusive build from the main branch for each va
 | :--- | ---: | :--- | :--- | :--- |
 | 🐠 `yellowfin` | **8/19** | [❌ 2026-09-08](https://github.com/tuna-os/tunaOS/actions/runs/34187863052) | — | gnome,cosmic,niri,gnome-hwe,gnome-nvidia,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,niri-hwe,niri-nvidia,xfce-nvidia |
 | 🐟 `albacore` | **12/19** | [❌ 2026-09-08](https://github.com/tuna-os/tunaOS/actions/runs/34198676601) | — | cosmic,niri,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,niri-hwe,niri-nvidia |
-| 🍣 `skipjack` | **7/17** | [❌ 2026-09-07](https://github.com/tuna-os/tunaOS/actions/runs/34136406488) | — | gnome,cosmic,niri,gnome-hwe,gnome-nvidia,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,niri-hwe,niri-nvidia |
+| 🍣 `skipjack` | **7/17** | [❌ 2026-09-08](https://github.com/tuna-os/tunaOS/actions/runs/34233393242) | — | gnome,cosmic,niri,gnome-hwe,gnome-nvidia,gnome-nvidia-hwe,cosmic-hwe,cosmic-nvidia,niri-hwe,niri-nvidia |
 | 🎏 `wahoo` | **3/4** | [❌ 2026-08-27](https://github.com/tuna-os/tunaOS/actions/runs/33041330231) | — | cosmic |
 | 🎣 `bonito` | **2/16** | [❌ 2026-09-07](https://github.com/tuna-os/tunaOS/actions/runs/34143438643) | — | base,base-hwe,base-nvidia,gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-t2,gnome-nvidia,cosmic-nvidia,niri-nvidia |
 | 🐦 `hummingbird` | **0/3** | [❌ 2026-09-08](https://github.com/tuna-os/tunaOS/actions/runs/34173490007) | — | base,gnome,cosmic |
