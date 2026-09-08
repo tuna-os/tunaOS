@@ -54,3 +54,35 @@ def test_the_test_asserts_something(path):
     src = path.read_text(encoding="utf-8")
     assert re.search(r"^def test_", src, re.M), f"{path.name}: no test functions"
     assert "assert" in src, f"{path.name}: no assertions"
+
+
+@pytest.mark.parametrize("path", FILES, ids=[p.name for p in FILES])
+def test_the_docstring_says_how_the_test_fails(path):
+    """Every regression test states what makes it go red on the unfixed tree.
+
+    A test that cannot fail is indistinguishable from a test that passes, and
+    the difference is invisible in a green run. Measured on this repo: three
+    assertions in build_scripts/checks/e2e-runtime-checks.sh executed on every
+    cell for months while being structurally incapable of passing, and a shell
+    formatting gate written the same week used `find -exec`, which returns 0
+    even when the command it runs exits 1.
+
+    Two shapes are acceptable -- behavioural (the test drives the real code
+    with the broken input, so it falsifies itself) and structural (someone
+    reverted the fix and watched it go red). The line should make clear which,
+    and a structural claim should name what was reverted.
+    """
+    src = path.read_text(encoding="utf-8")
+    m = re.match(r'\s*"""(.*?)"""', src, re.S)
+    assert m, f"{path.name}: no module docstring"
+    doc = m.group(1)
+    assert "Falsification:" in doc, (
+        f"{path.name}: no `Falsification:` line. State what makes this test "
+        "red on the unfixed tree -- see tests/regressions/README.md."
+    )
+    claim = doc.split("Falsification:", 1)[1].strip()
+    assert len(claim) > 30, (
+        f"{path.name}: the Falsification line is too short to say anything: "
+        f"{claim!r}"
+    )
+

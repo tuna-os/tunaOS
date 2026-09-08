@@ -14,6 +14,21 @@ can be checked (`tests/test_regression_convention.py`):
 - **Assert the failure mode, not the fix.** The test should fail on the tree
   that shipped the incident and pass on the fix — mutate a real input into
   the broken shape where you can, rather than asserting a string is present.
+- **State how it fails.** The docstring carries a line beginning
+  `Falsification:` saying what makes this test go red on the unfixed tree.
+  Two shapes are acceptable, and the line should make clear which:
+  - *behavioural* — the test drives the real code with the broken input, so
+    it falsifies itself;
+  - *structural* — the test asserts a string, ordering or shape, and someone
+    checked it by reverting the fix. Name what was reverted.
+
+  A test that cannot fail is indistinguishable from a test that passes, and
+  the difference is invisible in a green run. Measured here: three assertions
+  in `build_scripts/checks/e2e-runtime-checks.sh` ran on every cell for months
+  while being structurally incapable of passing, and a formatting gate written
+  the same week used `find -exec`, which returns 0 even when the command it
+  runs exits 1. The line forces the question to be asked once, by the person
+  best placed to answer it.
 
 Tests elsewhere in `tests/` already follow the spirit of this (most carry an
 issue or run number in their docstring); this directory makes the mapping

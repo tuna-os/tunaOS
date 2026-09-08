@@ -4,6 +4,10 @@ The body recovered from tuna-os/corral#217 measured the failure: an agent put
 Markdown in a double-quoted ``--body`` argument, and its backticks ran ``env``.
 This test holds the actual documented command to literal stdin transport so a
 later simplification cannot silently restore credential exposure.
+
+Falsification: behavioural — executes the documented command under bash
+with a body containing shell metacharacters, so an expansion regression
+shows up as wrong output rather than as an absent quote.
 """
 
 from __future__ import annotations

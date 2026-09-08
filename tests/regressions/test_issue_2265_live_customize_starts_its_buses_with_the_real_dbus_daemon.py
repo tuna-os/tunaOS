@@ -19,6 +19,10 @@ What this holds: the script's OWN `_start_bus`, run under `set -eu` against
 the REAL dbus-daemon, starts a session bus that answers a method call and
 leaves a pidfile naming a live process. No fake is involved on purpose; the
 fake is what let this ship. Skipped, loudly, where dbus-daemon is absent.
+
+Falsification: behavioural — starts a session bus through the real helper
+and asserts on what it produces, so a helper that stopped using the real
+dbus-daemon fails here without any string matching.
 """
 from __future__ import annotations
 
