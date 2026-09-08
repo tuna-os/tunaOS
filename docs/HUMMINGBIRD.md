@@ -42,8 +42,9 @@ it leads directly to expecting Fedora 43's package set to be present. It is not.
 ## What this means for tunaOS
 
 tunaOS builds `hummingbird:{base,gnome,cosmic}` (see
-`.github/build-config.yml`). Desktop flavors are currently amd64-only; the base
-image also builds for arm64. Everything except `base` asks a distribution that
+`.github/build-config.yml`). Base and COSMIC build for amd64 and arm64; GNOME
+remains amd64-only because its utah-packages source is not multi-arch. Everything
+except `base` asks a distribution that
 **deliberately ships no desktop environment** to host a full desktop, layered
 from tunaOS's own package snapshot.
 
