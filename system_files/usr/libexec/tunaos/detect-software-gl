@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# Record whether user sessions need software rendering. This runs as root so it
+# can read the kernel's virtio-gpu capability report; render-node presence alone
+# is not sufficient because modern virtio-gpu exposes one even without virgl.
+set -euo pipefail
+
+_dri_dir="${TUNAOS_DRI_DIR:-/dev/dri}"
+_flag="${TUNAOS_SOFTWARE_GL_FLAG:-/run/tunaos-software-gl}"
+_kernel_log="${TUNAOS_KERNEL_LOG:-}"
+
+rm -f "${_flag}"
+
+# Preserve the existing fallback for machines with no render node at all.
+if ! compgen -G "${_dri_dir}/renderD*" >/dev/null 2>&1; then
+	install -Dm0644 /dev/null "${_flag}"
+	exit 0
+fi
+
+# virtio_gpu reports the negotiated 3D capability explicitly. In particular,
+# `-virgl` means that the render node above cannot provide accelerated GL.
+# A failed kernel-log read is deliberately treated as unknown: forcing software
+# globally on a real GPU is worse than retaining the previous behaviour.
+read_kernel_log() {
+	if [[ -n "${_kernel_log}" ]]; then
+		cat -- "${_kernel_log}"
+	else
+		dmesg
+	fi
+}
+if read_kernel_log 2>/dev/null |
+	grep -Eq '\[drm\] features:.*-virgl([[:space:]]|$)'; then
+	install -Dm0644 /dev/null "${_flag}"
+fi

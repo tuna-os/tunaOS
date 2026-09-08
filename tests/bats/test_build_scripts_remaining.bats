@@ -317,11 +317,10 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$fail" -eq 0 ]
 }
 
-@test "greetd greeter degrades to software rendering without a render node" {
-  # cage is wlroots-based: on a VM with virtio-gpu but no virgl there is a DRM
-  # card and NO render node, GL init fails, cage exits and greetd restart-loops
-  # on a black screen. Boot-time detection is required — a baked-in renderer
-  # either breaks virgl-less VMs or needlessly softens every GPU machine.
+@test "greetd greeter degrades to software rendering when boot detection requests it" {
+  # cage is wlroots-based. Modern virtio-gpu may create a render node despite
+  # negotiating no virgl capabilities, so the root boot detector must be able
+  # to override node-based detection without softening real GPU machines.
   local script="${REPO_ROOT}/build_scripts/desktop/greetd-gtkgreet.sh"
   grep -qF '/dev/dri/renderD*' "$script"
   grep -qF 'WLR_RENDERER=pixman' "$script"
@@ -334,10 +333,12 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   # is redirected into the test tmpdir so the result does not depend on whether
   # the machine running the tests happens to have a GPU.
   local base="${BATS_TEST_TMPDIR}/dri"
+  local flag="${BATS_TEST_TMPDIR}/software-gl"
   local w="${BATS_TEST_TMPDIR}/greetd-session"
   awk '/<<.SESSION_EOF.$/{f=1;next} /^SESSION_EOF$/{f=0} f' "$script" \
     | sed -e "s|/dev/dri/renderD\*|${base}/renderD*|" \
       -e "s|/dev/dri/card\*|${base}/card*|" \
+      -e "s|/run/tunaos-software-gl|${flag}|" \
       -e 's|^\tsleep 0.5|\t:|' \
       -e 's|^exec cage.*|echo "R=${WLR_RENDERER:-hw}"|' > "$w"
 
@@ -349,11 +350,18 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
   [ "$status" -eq 0 ]
   [[ "$output" == *"R=pixman"* ]]
 
-  # Render node present (real GPU) -> left on hardware GL.
+  # Render node present with no detector flag (real GPU) -> hardware GL.
   touch "${base}/renderD128"
   run bash "$w"
   [ "$status" -eq 0 ]
   [[ "$output" == *"R=hw"* ]]
+
+  # Render node present but virtio reported -virgl -> detector forces pixman.
+  touch "$flag"
+  run bash "$w"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"R=pixman"* ]]
+  rm -f "$flag"
 
   # The wait loop must be bounded: with no DRM device at all it still has to
   # exec the greeter rather than hang greetd forever.

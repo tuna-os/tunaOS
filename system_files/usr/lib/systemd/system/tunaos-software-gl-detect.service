@@ -1,0 +1,16 @@
+[Unit]
+Description=Detect whether TunaOS sessions need software rendering
+# The virtio-gpu driver reports virgl support while udev processes the GPU.
+# Wait for that report before deciding, and finish before a greeter or login can
+# start a user manager and run the environment generator.
+Wants=systemd-udev-settle.service
+After=systemd-udev-settle.service
+Before=display-manager.service systemd-user-sessions.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/tunaos/detect-software-gl
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
