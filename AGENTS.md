@@ -29,9 +29,11 @@ Key scripts:
 - `build_scripts/README.md` — naming scheme (dirs = code path, numbers = phase order)
 
 Containerfiles:
-- `Containerfile` — main (base + all DE stages)
+- `Containerfile.el10` — RPM-family base + desktop stages
 - `Containerfile.overlay` — HWE/nvidia parameterized layer
-- `Containerfile.ubuntu` — Ubuntu/Debian bootcification
+- `Containerfile.ubuntu` — Ubuntu bootcification
+- `Containerfile.debian` — Debian bootcification
+- `Containerfile.arch`, `.gentoo`, `.opensuse` — other base families
 
 Build pipeline: [`docs/PIPELINE.md`](docs/PIPELINE.md)
 
