@@ -957,52 +957,10 @@ rpmdb_stage2_guard() {
 	rawhide_rpmdb_probe
 }
 
-# systemctl enable wrapper that tolerates the unit-not-present case.
-# Build scripts run in a multi-stage container build where some units may
-# only exist on certain variants (e.g. tailscaled on EL10 but not on EL9).
-# The vanilla `systemctl enable` returns non-zero on a missing unit, which
-# under `set -e` would abort the build for an entirely-expected condition.
-#
-# Idempotent: enabling an already-enabled unit is a no-op.
-safe_enable() {
-	if systemctl list-unit-files "$1" &>/dev/null || [[ -f "/usr/lib/systemd/system/$1" ]]; then
-		systemctl enable "$1" || true
-	fi
-}
-
-# Mirror of safe_enable for disabling. Same rationale — units that don't
-# exist on a given variant shouldn't trip the build.
-safe_disable() {
-	if systemctl list-unit-files "$1" &>/dev/null || [[ -f "/usr/lib/systemd/system/$1" ]]; then
-		systemctl disable "$1" || true
-	fi
-}
-
-# Which unit actually is the KDE display manager on this image.
-#
-# Plasma 6.6 renamed SDDM to PlasmaLogin. EL10 pulls plasma-login-manager in
-# as a plasma-group dependency, and its scriptlet claims the
-# display-manager.service alias *before* the later explicit `sddm` install --
-# whose own enable then fails with "already exists and is a symlink to
-# plasmalogin.service" and is swallowed by safe_enable's `|| true`. The image
-# consequently booted plasmalogin while every check asserted sddm.
-#
-# Fedora/Debian/Ubuntu/Arch still ship real sddm, so this resolves per image
-# rather than renaming across the board.
-#
-# _KDE_DM_ROOT exists so the bats tests can point this at a fake tree. It is
-# never set during a build; without it a test would just inherit whatever the
-# host happens to have installed and pass for the wrong reason.
-kde_dm_unit() {
-	if [[ -e "${_KDE_DM_ROOT:-}/usr/lib/systemd/system/plasmalogin.service" ]] ||
-		{ [[ -z "${_KDE_DM_ROOT:-}" ]] &&
-			systemctl list-unit-files plasmalogin.service --no-legend 2>/dev/null |
-			grep -q '^plasmalogin.service'; }; then
-		echo plasmalogin.service
-	else
-		echo sddm.service
-	fi
-}
+# Keep the existing lib.sh API while placing service policy behind its own
+# boundary. Consumers continue to source this facade during the migration.
+# shellcheck source=build_scripts/lib/service-policy.sh
+source "$(realpath "$(dirname "${BASH_SOURCE[0]}")")/lib/service-policy.sh"
 
 # Install the dnf copr/config-manager plugin providers, one transaction each.
 #
@@ -1175,4 +1133,3 @@ with open(sys.argv[4], "w") as f:
 	chmod 0644 "$target_file"
 	echo "emit_packages_manifest: wrote $(wc -l <"$target_file") lines to ${target_file}"
 }
-

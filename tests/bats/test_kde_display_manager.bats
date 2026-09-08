@@ -54,15 +54,20 @@ REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 
 # ── DM unit selection ─────────────────────────────────────────────────────
 
-@test "lib.sh: defines kde_dm_unit" {
-  run grep -q 'kde_dm_unit()' "${REPO_ROOT}/build_scripts/lib.sh"
+@test "service-policy module defines kde_dm_unit" {
+  run grep -q 'kde_dm_unit()' "${REPO_ROOT}/build_scripts/lib/service-policy.sh"
+  [ "$status" -eq 0 ]
+}
+
+@test "lib.sh exposes service policy through its compatibility facade" {
+  run grep -q 'source.*lib/service-policy.sh' "${REPO_ROOT}/build_scripts/lib.sh"
   [ "$status" -eq 0 ]
 }
 
 # These two source the REAL lib.sh and point it at a fake tree via
 # _KDE_DM_ROOT. An earlier version of this test redefined kde_dm_unit inline
-# and asserted against its own copy, so it passed with lib.sh's version
-# deleted. If _KDE_DM_ROOT is ever removed from lib.sh these fail rather than
+# and asserted against its own copy, so it passed with the production version
+# deleted. If _KDE_DM_ROOT is ever removed from the module these fail rather than
 # silently falling through to the host's own systemd tree.
 #
 # The sourcing's own stdout is discarded on purpose: on a cache miss (no
