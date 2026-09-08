@@ -189,3 +189,44 @@ guarded_stub() {
 			"${REPO_ROOT}/live-iso/common/src/desktop-${d}.sh"
 	done
 }
+
+# ── rechunker-group-fix is masked, and for a reason that must stay true ─────
+
+@test "rechunker-group-fix is masked" {
+	# It repairs damage from ublue-os/legacy-rechunk, which tunaOS does not
+	# use — every image here is rechunked with chunkah. The unit is
+	# After=local-fs.target AND Before=systemd-sysusers.service, which closes
+	# an ordering cycle systemd resolves by DELETING jobs (measured on
+	# marlin:niri: local-fs-pre.target/start and var-lib-machines.mount/start
+	# both dropped).
+	grep -q 'systemctl mask rechunker-group-fix.service' "$SERVICES"
+}
+
+@test "the mask is reachable on every package-manager path" {
+	# Same trap the umotd guard fell into: placed after apt's or pacman's
+	# `exit 0`, it would silently never run on those families.
+	local mask first_exit
+	mask=$(grep -n 'systemctl mask rechunker-group-fix.service' "$SERVICES" | head -1 | cut -d: -f1)
+	first_exit=$(grep -n 'exit 0' "$SERVICES" | grep -v '^[0-9]*:#' | head -1 | cut -d: -f1)
+	[ "$mask" -lt "$first_exit" ]
+}
+
+@test "masking is guarded on the unit existing" {
+	# Not every variant's payload ships it; `systemctl mask` on an absent unit
+	# would still create a stray /etc symlink.
+	grep -q 'if \[\[ -f /usr/lib/systemd/system/rechunker-group-fix.service \]\]; then' "$SERVICES"
+}
+
+@test "the reason for masking is recorded where someone would look to undo it" {
+	# A future reader restoring "group handling" needs to know the premise is
+	# that tunaOS builds with chunkah. If that ever changes, the unit becomes
+	# load-bearing and its own header warns systems will not boot without it.
+	local block
+	block="$(grep -A40 'rechunker-group-fix: repairs a tool' "$SERVICES")"
+	echo "$block" | grep -qi 'chunkah'
+	echo "$block" | grep -qi 'legacy-rechunk'
+	echo "$block" | grep -qi 'ordering cycle'
+	# ...and must say the cycle finding is STATIC, so nobody reads the
+	# systemd-analyze sweep still reporting it as this change regressing.
+	echo "$block" | grep -qi 'static'
+}
