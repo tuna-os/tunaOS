@@ -80,6 +80,23 @@ launcher_app() {
   fi
 }
 
+@test "gnome dismisses its startup overview before launching the installer" {
+  local adapter="${SRC}/desktop-gnome.sh"
+  local enable_line launch_line
+
+  grep -Fq "'startup-complete', () => Main.overview.hide()" "$adapter"
+  grep -Fq 'Main.overview.hide();' "$adapter"
+  grep -Fq 'Exec=/usr/libexec/tunaos-live-installer-gnome' "$adapter"
+
+  enable_line="$(grep -n '^gnome-extensions enable tunaos-live-installer@tunaos.org' \
+    "$adapter" | cut -d: -f1)"
+  launch_line="$(grep -n '^exec flatpak run org.bootcinstaller.Installer' \
+    "$adapter" | cut -d: -f1)"
+  [ -n "$enable_line" ]
+  [ -n "$launch_line" ]
+  [ "$enable_line" -lt "$launch_line" ]
+}
+
 @test "installer smoke selects a compositor per flavor" {
   [ -f "$WORKFLOW" ]
   grep -q 'kde)    COMPS="kwin_wayland"' "$WORKFLOW"
