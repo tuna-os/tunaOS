@@ -901,12 +901,32 @@ rawhide_rpmdb_probe() {
 	# the first stage-2 rpm write on the inherited Rawhide base.
 	local _rpmdb_path _rpmdb_dir
 	_rpmdb_path="$(rpm --eval '%_dbpath' 2>/dev/null || true)"
-	_rpmdb_dir="$(readlink -f "$_rpmdb_path" 2>/dev/null || true)"
-	if [[ -n "$_rpmdb_dir" && -d "$_rpmdb_dir" ]]; then
+	# GUARD THE EMPTY CASE BEFORE RESOLVING IT. `readlink -f ""` does not fail
+	# -- it returns the CURRENT WORKING DIRECTORY. So when `rpm --eval` yields
+	# nothing (rpm absent, erroring, or stubbed), _rpmdb_dir became $PWD, the
+	# -d test passed, and the copy-up below ran `rm -rf` on the working
+	# directory. That is not theoretical: it destroyed a checkout of this repo
+	# during a full bats run, because the round trip is cp -a then rm -rf, the
+	# disk was nearly full, the copy failed, and the delete ran anyway.
+	#
+	# An rpmdb path is absolute and is never "/" or the process's cwd.
+	if [[ -z "$_rpmdb_path" || "$_rpmdb_path" != /* ]]; then
+		echo "::notice title=rpmdb copy-up (tunaOS#1823)::rpm --eval %_dbpath gave no absolute path (got '${_rpmdb_path}'); skipping the copy-up"
+		_rpmdb_dir=""
+	else
+		_rpmdb_dir="$(readlink -f "$_rpmdb_path" 2>/dev/null || true)"
+	fi
+	if [[ -n "$_rpmdb_dir" && -d "$_rpmdb_dir" && "$_rpmdb_dir" != "/" && "$_rpmdb_dir" != "$PWD" ]]; then
 		echo "::notice title=rpmdb copy-up (tunaOS#1823)::${_rpmdb_path} resolves to ${_rpmdb_dir}; recreating it in the upper layer before the first stage-2 rpm write"
-		cp -a "$_rpmdb_dir" "${_rpmdb_dir}.tbox-copyup"
-		rm -rf "$_rpmdb_dir"
-		mv "${_rpmdb_dir}.tbox-copyup" "$_rpmdb_dir"
+		# rm -rf ONLY if the copy actually succeeded. Unconditional deletion
+		# after a failed cp is how a full disk turns a copy-up into data loss.
+		if cp -a "$_rpmdb_dir" "${_rpmdb_dir}.tbox-copyup"; then
+			rm -rf "${_rpmdb_dir:?}"
+			mv "${_rpmdb_dir}.tbox-copyup" "$_rpmdb_dir"
+		else
+			echo "::warning title=rpmdb copy-up (tunaOS#1823)::cp -a of ${_rpmdb_dir} failed; leaving it in place rather than deleting it"
+			rm -rf "${_rpmdb_dir}.tbox-copyup" 2>/dev/null || true
+		fi
 	fi
 	# The rebuild's rename endgame fails under this overlay even against
 	# an upper-native dir (measured twice on the nvidia surface) — but a
@@ -916,8 +936,12 @@ rawhide_rpmdb_probe() {
 	# files in ... with files from .../rpmrebuilddb.NN"). Same salvage as
 	# 10-kernel-swap.sh: file-level swap, no directory rename needed.
 	local _rpmdb_parent _rebuilt
+	# Same hazard one line down: with _rpmdb_dir empty, "${_rpmdb_dir%/*}" is
+	# also empty and the globs below expand against "/" -- so guard it too.
 	_rpmdb_parent="${_rpmdb_dir%/*}"
-	rm -rf "${_rpmdb_parent}"/rpmrebuilddb.* "${_rpmdb_parent}"/rpmold.* 2>/dev/null || true
+	if [[ -n "$_rpmdb_parent" && -d "$_rpmdb_parent" ]]; then
+		rm -rf "${_rpmdb_parent}"/rpmrebuilddb.* "${_rpmdb_parent}"/rpmold.* 2>/dev/null || true
+	fi
 	if rpm --rebuilddb; then
 		echo "TUNAOS_RPMDB_PROBE=rebuilt"
 	else

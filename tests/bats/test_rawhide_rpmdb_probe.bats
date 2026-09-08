@@ -34,7 +34,11 @@ case "$1" in
     echo invoked >> "${REBUILD_LOG}"
     # Real rpm leaves the completed rebuild dir behind when its rename
     # endgame fails; the salvage path picks that up.
-    if [[ "${REBUILD_RC:-0}" != 0 && -n "${RPM_DBPATH_OUT:-}" ]]; then
+    # NO_SALVAGE models the case where the rebuild failed and left no
+    # completed product behind. It used to be expressed by leaving
+    # RPM_DBPATH_OUT empty, which is precisely the input that made the probe
+    # resolve %_dbpath to the working directory and delete it.
+    if [[ "${REBUILD_RC:-0}" != 0 && -z "${NO_SALVAGE:-}" && -n "${RPM_DBPATH_OUT:-}" ]]; then
       mkdir -p "${RPM_DBPATH_OUT%/*}/rpmrebuilddb.42"
       echo rebuilt > "${RPM_DBPATH_OUT%/*}/rpmrebuilddb.42/rpmdb.sqlite"
     fi
@@ -51,6 +55,20 @@ STUB
   OS_RELEASE="${BATS_TEST_TMPDIR}/os-release"
   printf 'PRETTY_NAME="Fedora Linux Rawhide (Prerelease)"\n' > "$OS_RELEASE"
   export OS_RELEASE
+
+  # Give every test a REAL dbpath under the scratch dir by default.
+  #
+  # Six of the eight tests here used to leave RPM_DBPATH_OUT unset, so the stub
+  # printed an empty string, and the probe under test resolved it with
+  # `readlink -f ""` -- which does not fail, it returns the CURRENT WORKING
+  # DIRECTORY. The probe's copy-up then ran `cp -a` + `rm -rf` on bats's cwd,
+  # i.e. the repository. That destroyed a checkout of this repo during a full
+  # suite run: the disk was nearly full, the copy failed, and the delete was
+  # not conditional on it. lib.sh is fixed to refuse a non-absolute dbpath, and
+  # this default means the suite never steers it at a real directory again.
+  RPM_DBPATH_OUT="${BATS_TEST_TMPDIR}/rpmdb"
+  mkdir -p "$RPM_DBPATH_OUT"
+  export RPM_DBPATH_OUT
 }
 
 # IS_FEDORA defaults to true here because every case below models a FEDORA
@@ -60,7 +78,7 @@ STUB
 # by being a Fedora at all. See tunaOS#1823; the non-Fedora case is now
 # asserted explicitly below instead of being the accidental default.
 run_probe() {
-  PATH="${BIN}:$PATH" IS_FEDORA="${IS_FEDORA:-true}" run bash -c "
+  PATH="${BIN}:$PATH" IS_FEDORA="${IS_FEDORA:-true}" NO_SALVAGE="${NO_SALVAGE:-}" run bash -c "
     set -euo pipefail
     ${FN_DETECT}
     ${FN_PROBE}
@@ -116,7 +134,10 @@ run_probe() {
   # even against an upper-native dir — it is not evidence of a malformed
   # source db. The round-trip is the fix; the transaction that follows is
   # the real verdict, so a rebuild failure only warns.
-  REBUILD_RC=1 run_probe
+  # NO_SALVAGE=1: the rebuild fails AND leaves nothing to salvage. That used
+  # to be modelled by an empty %_dbpath, which is the dangerous input — see
+  # the guard tests at the end of this file.
+  NO_SALVAGE=1 REBUILD_RC=1 run_probe
   [ "$status" -eq 0 ]
   [[ "$output" == *"TUNAOS_RPMDB_PROBE=rebuild-failed-nonfatal"* ]]
   [[ "$output" == *"real verdict"* ]]
@@ -158,4 +179,39 @@ run_probe() {
   first_write="$(grep -nE 'dnf_retry|dnf -y|rpm -[iU]' "$script" | head -1 | cut -d: -f1)"
   [ -n "$first_write" ]
   [ "$probe_line" -lt "$first_write" ]
+}
+
+@test "an empty %_dbpath must never touch the working directory" {
+  # The exact shape that deleted a checkout: `rpm --eval %_dbpath` yields
+  # nothing, `readlink -f ""` returns $PWD, and the copy-up's rm -rf lands on
+  # the working directory. Run from a scratch cwd and assert it survives.
+  local victim="${BATS_TEST_TMPDIR}/victim"
+  mkdir -p "$victim"
+  echo precious > "${victim}/data.txt"
+
+  cd "$victim"
+  RPM_DBPATH_OUT="" run_probe
+  cd "$BATS_TEST_TMPDIR"
+
+  # The guard must refuse the empty path rather than resolve it.
+  [[ "$output" == *"gave no absolute path"* ]]
+  # ...and the directory the probe was standing in is still there.
+  [ -f "${victim}/data.txt" ]
+  [ "$(cat "${victim}/data.txt")" = "precious" ]
+}
+
+@test "a relative %_dbpath is refused too" {
+  # readlink -f resolves a relative path against $PWD just as happily as it
+  # resolves an empty one, so the guard tests for a leading slash, not just
+  # for non-emptiness.
+  local victim="${BATS_TEST_TMPDIR}/victim2"
+  mkdir -p "$victim"
+  echo precious > "${victim}/data.txt"
+
+  cd "$victim"
+  RPM_DBPATH_OUT="relative/rpmdb" run_probe
+  cd "$BATS_TEST_TMPDIR"
+
+  [[ "$output" == *"gave no absolute path"* ]]
+  [ -f "${victim}/data.txt" ]
 }
