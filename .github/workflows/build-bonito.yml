@@ -10,7 +10,7 @@ on:
         type: string
 
 concurrency:
-  group: build-bonito-${{ github.ref }}
+  group: build-bonito-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}
   cancel-in-progress: true
 
 jobs:

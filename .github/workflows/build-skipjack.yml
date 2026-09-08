@@ -10,7 +10,7 @@ on:
         type: string
 
 concurrency:
-  group: build-skipjack-${{ github.ref }}
+  group: build-skipjack-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && github.run_id || github.event_name }}
   cancel-in-progress: true
 
 jobs:
