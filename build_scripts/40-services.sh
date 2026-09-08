@@ -137,6 +137,50 @@ if [[ "$_tunaos_found" -eq 0 ]]; then
 fi
 unset _tunaos_guarded _tunaos_found _f
 
+# ── rechunker-group-fix: repairs a tool tunaOS does not use ────────────────
+# The ublue common payload ships rechunker-group-fix.service. Its own header
+# explains it exists for images built with ublue-os/legacy-rechunk: that tool
+# prunes /usr/lib/group and /usr/lib/gshadow (nss-altfiles), and systems that
+# later rebase to an image without it lose their groups.
+#
+# tunaOS never does that. Every image here is rechunked with CHUNKAH
+# (coreos-chunkah, resolved through registry-map.yaml in
+# scripts/build-image-inner.sh). Verified directly on a built marlin:niri:
+# /usr/lib/group and /usr/lib/gshadow do not exist — the files this unit
+# repairs were never created, so there is nothing for it to repair. It runs
+# systemd-sysusers, rechunker-group-fix and systemd-tmpfiles on every boot of
+# every variant for a problem we do not have.
+#
+# On the ordering cycle, stated precisely, because it is easy to overclaim:
+# `systemd-analyze verify graphical.target` reports
+#
+#   Found ordering cycle: systemd-sysusers.service/start after
+#   rechunker-group-fix.service/start after local-fs.target/start ...
+#
+# because the unit is both After=local-fs.target and
+# Before=systemd-sysusers.service. That is a genuine cycle in the unit graph.
+# But it is a STATIC finding: PID 1 never logged a cycle or a deleted job on
+# either a pre-mask or a post-mask boot, and masking does not silence
+# systemd-analyze, which reads unit files rather than enablement state. So do
+# not expect the sweep in e2e-runtime-checks.sh to go quiet after this — it
+# will not, and that is not a regression.
+#
+# The justification for masking is therefore the first paragraph, not the
+# second: we do not ship repairs for tools we do not use.
+#
+# Masked rather than deleted: masking survives a later re-copy of the common
+# payload into /usr, and `systemctl mask` is the same mechanism
+# live-iso/common/src/customize-live.sh uses for flatpak-preinstall.service.
+#
+# Do NOT unmask this to "restore" group handling without first checking the
+# image is still chunkah-built. If tunaOS ever adopts legacy-rechunk this unit
+# becomes load-bearing, and its header warns that systems will not boot
+# without it.
+if [[ -f /usr/lib/systemd/system/rechunker-group-fix.service ]]; then
+	systemctl mask rechunker-group-fix.service
+	echo "masked rechunker-group-fix.service (legacy-rechunk repair; tunaOS uses chunkah)"
+fi
+
 # ── apt (Ubuntu/Debian) path ──────────────────────────────────────────
 # 40-services upstream is Universal-Blue/Fedora-specific (uupd, authselect,
 # rpm-ostree, ublue-* units, the Fedora /usr/lib/systemd/logind.conf path).
