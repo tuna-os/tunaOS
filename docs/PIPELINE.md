@@ -8,6 +8,11 @@ How images and ISOs get built, verified, and published. If you change CI, read t
 
 `variant × desktop × hardware_layer`, defined in `.github/build-config.yml`.
 
+Shell entrypoints resolve that contract through
+`scripts/lib/build-config.sh`. For tests that use an alternate contract, set
+`TUNAOS_BUILD_CONFIG`. Do not add new runtime dependencies on the current
+`.github/` storage path.
+
 | Variant | Base | Desktops | HWE/NVIDIA | Platforms |
 |---------|------|----------|------------|-----------|
 | yellowfin | AlmaLinux Kitten 10 | gnome, cosmic, kde, niri, xfce | yes | amd64, amd64/v2, arm64 |
@@ -157,4 +162,3 @@ All dependency updates automerge via `renovate.json`:
 - Download versions (uupd, kcm_ublue, tacklebox)
 
 No human review required — CI is the gate.
-
