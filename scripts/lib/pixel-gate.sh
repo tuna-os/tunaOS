@@ -8,10 +8,11 @@
 # "display-manager.service is active", and the repo's own history shows that
 # passing over a black console (run 29645108966). The evidence to contradict
 # it has been captured all along — the timelapse recorder screendumps real
-# frames on every GPU-less runner (151-210 frames on passing cells) and the
-# installed-desktop screenshot is stddev-measured — but both were recorded
-# fatal=0 and gated nothing. This turns the measurable cases into a gate and
-# names the unmeasurable ones instead of silently passing them.
+# frames on every GPU-less runner (151-210 frames on passing cells under the
+# prior two-second capture profile) and the installed-desktop screenshot is
+# stddev-measured — but both were recorded fatal=0 and gated nothing. This
+# turns the measurable cases into a gate and names the unmeasurable ones
+# instead of silently passing them.
 #
 # pixel_gate <shot> <stddev> <frames> <virgl> [contract]
 #   shot    drawn | blank | unmeasured | absent — screenshot_sane's verdict

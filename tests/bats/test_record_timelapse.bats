@@ -25,7 +25,7 @@ setup() {
 	# left /usr/bin on PATH, so its negative cases asserted nothing on hosts
 	# that ship the tool.)
 	local u bin
-	for u in bash sh find wc rm cat printf sleep kill mkdir sed; do
+	for u in bash sh find wc rm cat printf sleep kill mkdir sed sort tail; do
 		bin="$(command -v "$u" 2>/dev/null)" || continue
 		ln -sf "$bin" "$BIN/$u"
 	done
@@ -117,6 +117,16 @@ make_frames() {
 # that failed to capture must not consume an index — otherwise the video is
 # silently truncated at the hole rather than being short by one frame.
 @test "the frame counter only advances on a frame that actually landed" {
-	run grep -n 'n=\$((n + 1)) || rm -f' "$SCRIPT"
-	[ "$status" -eq 0 ]
+	grep -q 'if \[\[ -s "\$frame" \]\]; then' "$SCRIPT"
+	grep -q 'n=\$((n + 1))' "$SCRIPT"
+	grep -q 'rm -f "\$frame"' "$SCRIPT"
+}
+
+@test "the default recording profile is compact but overridable" {
+	grep -q 'FPS="\${TUNAOS_TIMELAPSE_FPS:-6}"' "$SCRIPT"
+	grep -q 'CRF="\${TUNAOS_TIMELAPSE_CRF:-38}"' "$SCRIPT"
+	grep -q 'TUNAOS_TIMELAPSE_INTERVAL:-3' "$SCRIPT"
+	grep -q "scale=960:-2:flags=lanczos" "$SCRIPT"
+	grep -q -- '-c:v libvpx-vp9 -crf "\$CRF" -b:v 0' "$SCRIPT"
+	grep -q -- "-frames:v 1" "$SCRIPT"
 }

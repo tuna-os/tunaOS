@@ -31,6 +31,12 @@ captures for every variant × DE to `docs/images/desktops/`, and
 captures to `docs/images/installer/` (then boot-verifies the disk the
 walkthrough installed).
 
+Each base-DE pair has a LUKS E2E WebM.
+
+See the [latest LUKS install timelapses](https://tuna-os.github.io/tunaOS/e2e/luks/latest/).
+HWE and NVIDIA overlays stay in the per-cell artifacts. The source run links
+them.
+
 ## ISO End-to-End Tests
 
 The `scripts/iso-e2e.sh` script boots a TunaOS live ISO in QEMU with OVMF (UEFI), waits for the live environment to be ready, captures screenshots, and collects serial logs.

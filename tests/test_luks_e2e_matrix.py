@@ -11,6 +11,8 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = ROOT / ".github" / "workflows" / "luks-e2e.yml"
+
+
 def generator_script() -> str:
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     return next(
@@ -64,6 +66,14 @@ def matrix_from(output: Path) -> list[dict[str, str]]:
     return json.loads(line.removeprefix("matrix="))["include"]
 
 
+def output_values(output: Path) -> dict[str, str]:
+    return {
+        line.split("=", 1)[0]: line.split("=", 1)[1]
+        for line in output.read_text(encoding="utf-8").splitlines()
+        if "=" in line
+    }
+
+
 def test_default_matrix_never_schedules_headless_base_derivatives(tmp_path):
     """base-hwe/base-nvidia cannot satisfy this workflow's login gate.
 
@@ -91,3 +101,36 @@ def test_headless_base_dispatch_fails_before_runner_fanout(tmp_path):
     proc, _ = run_generator(tmp_path, variant="yellowfin", flavor="base-hwe")
     assert proc.returncode != 0
     assert "No matching variant/flavor cells" in proc.stdout + proc.stderr
+
+
+def test_timelapse_outputs_cover_plain_desktops_only(tmp_path):
+    proc, output = run_generator(tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    values = output_values(output)
+    desktops = set(json.loads(values["base_desktops"]))
+    assert {"gnome", "kde", "cosmic", "niri", "xfce", "pantheon"} <= desktops
+    assert not any(
+        desktop.endswith(("-hwe", "-nvidia", "-asahi", "-t2", "-zfs", "-cachyos"))
+        for desktop in desktops
+    )
+
+    cells = json.loads(values["base_cells"])
+    assert cells
+    assert all(
+        not cell.endswith(
+            ("-hwe", "-nvidia", "-asahi", "-t2", "-zfs", "-cachyos")
+        )
+        for cell in cells
+    )
+
+
+def test_timelapse_publication_is_only_enabled_for_the_full_matrix(tmp_path):
+    proc, output = run_generator(tmp_path)
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert output_values(output)["publish_latest"] == "true"
+
+    filtered = tmp_path / "filtered"
+    filtered.mkdir()
+    proc, output = run_generator(filtered, variant="yellowfin")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    assert output_values(output)["publish_latest"] == "false"
