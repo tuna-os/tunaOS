@@ -31,11 +31,11 @@ captures for every variant × DE to `docs/images/desktops/`, and
 captures to `docs/images/installer/` (then boot-verifies the disk the
 walkthrough installed).
 
-The LUKS E2E workflow also records each base variant/desktop install framebuffer
-as a WebM. The [latest fully passing LUKS install timelapses](https://tuna-os.github.io/tunaOS/e2e/luks/latest/)
-are published as a stable GitHub Pages gallery; HWE/NVIDIA overlays remain in
-the per-cell diagnostic artifacts, which are linked from the player’s source
-Actions run.
+Each base-DE pair has a LUKS E2E WebM.
+
+See the [latest LUKS install timelapses](https://tuna-os.github.io/tunaOS/e2e/luks/latest/).
+HWE and NVIDIA overlays stay in the per-cell artifacts. The source run links
+them.
 
 ## ISO End-to-End Tests
 
