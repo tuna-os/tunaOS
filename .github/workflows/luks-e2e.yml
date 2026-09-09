@@ -108,8 +108,12 @@ on:
     - cron: "0 7 1 */3 *"
 
 permissions:
-  contents: read
+  # The successful full sweep refreshes the orphan pages-assets branch, like
+  # tuna-os/wootc. Filtered/reusable calls never reach that publisher job.
+  contents: write
   packages: read
+  # The publication job downloads the per-cell artifacts from this run.
+  actions: read
 
 jobs:
   # Build the {variant, flavor} matrix from build-config.yml (every variant x
@@ -120,6 +124,9 @@ jobs:
     outputs:
       matrix: ${{ steps.gen.outputs.matrix }}
       tpm_autounlock: ${{ steps.gen.outputs.tpm_autounlock }}
+      base_desktops: ${{ steps.gen.outputs.base_desktops }}
+      base_cells: ${{ steps.gen.outputs.base_cells }}
+      publish_latest: ${{ steps.gen.outputs.publish_latest }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -154,6 +161,30 @@ jobs:
             TPM_AUTOUNLOCK=false
           fi
           echo "tpm_autounlock=${TPM_AUTOUNLOCK}" >> "$GITHUB_OUTPUT"
+
+          # Plain desktop flavors are the install videos we publish. The
+          # suffixes below are overlay or hardware variants, not separate
+          # base-DE walkthroughs; keeping this derived from build-config.yml
+          # means a newly added plain desktop enters the gallery automatically.
+          BASE_DESKTOPS="$(echo "$json" | jq -c '
+            [.variants[].flavors[]
+             | select(.build_image == true)
+             | .id
+             | select(. != "base")
+             | select(test("-(hwe|nvidia|asahi|t2|zfs|cachyos)$") | not)]
+            | unique')"
+          echo "base_desktops=${BASE_DESKTOPS}" >> "$GITHUB_OUTPUT"
+
+          # The stable gallery must come from the complete monthly passphrase
+          # sweep. A single-cell post-build call or the quarterly TPM sweep
+          # has a deliberately partial matrix and must leave that gallery
+          # untouched; its per-cell artifact remains available for diagnosis.
+          if [[ "$FILTER_VARIANT" == "all" && "$FILTER_FLAVOR" == "all" &&
+                "$TPM_AUTOUNLOCK" == "false" ]]; then
+            echo "publish_latest=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "publish_latest=false" >> "$GITHUB_OUTPUT"
+          fi
 
           if [[ "$TPM_AUTOUNLOCK" == "true" ]]; then
             # docs/LUKS-TPM.md's support matrix: these three never get the
@@ -213,6 +244,13 @@ jobs:
             exit 1
           fi
           echo "matrix=${matrix}" >> "$GITHUB_OUTPUT"
+          BASE_CELLS="$(echo "$matrix" | jq -c \
+            --argjson base_desktops "$BASE_DESKTOPS" \
+            '[.include[]
+             | select(.flavor as $flavor | $base_desktops | index($flavor))
+             | "\(.variant)-\(.flavor)"]
+            | sort')"
+          echo "base_cells=${BASE_CELLS}" >> "$GITHUB_OUTPUT"
 
           # Keep the scheduled coverage auditable. A variant with no desktop
           # image cannot be exercised by this ISO-based E2E; list it
@@ -417,9 +455,10 @@ jobs:
         run: |
           set -euo pipefail
           sudo install -d /etc/apt/keyrings
-          curl -fsSL https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04/Release.key \
+          kubic_repo='https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04'
+          curl -fsSL "${kubic_repo}/Release.key" \
             | gpg --dearmor | sudo tee /etc/apt/keyrings/kubic.gpg >/dev/null
-          echo 'deb [signed-by=/etc/apt/keyrings/kubic.gpg] https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/unstable/xUbuntu_24.04/ /' \
+          echo "deb [signed-by=/etc/apt/keyrings/kubic.gpg] ${kubic_repo}/ /" \
             | sudo tee /etc/apt/sources.list.d/kubic.list
           sudo apt-get update -qq
           sudo apt-get remove -y podman conmon crun || true
@@ -660,3 +699,143 @@ jobs:
             luks-out/*.ocr.txt
           if-no-files-found: warn
           retention-days: 14
+
+  # Artifacts are the right place for every cell's complete evidence, but they
+  # expire and the WebM is nested inside a per-cell ZIP. Keep a watchable,
+  # stable Pages gallery of the latest fully passing base-DE installs, like
+  # tuna-os/wootc does. It only runs after the complete monthly passphrase
+  # sweep; HWE/NVIDIA and other overlay flavors stay in the diagnostic
+  # artifacts but are not published here.
+  # A successful matrix with missing media is a broken evidence path: fail the
+  # publisher so the stale Pages gallery cannot be mistaken for this run.
+  publish-latest-timelapse:
+    name: Publish latest LUKS base-DE timelapses
+    needs: [generate-matrix, luks]
+    if: >-
+      needs.luks.result == 'success' &&
+      needs.generate-matrix.outputs.publish_latest == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Pages template and previous media
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # This job pushes the refreshed orphan pages-assets branch.
+          persist-credentials: true
+
+      - name: Download passing-cell artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: luks-e2e-*
+          path: timelapses
+          merge-multiple: false
+
+      - name: Publish the green base-DE gallery to pages-assets
+        env:
+          BASE_DESKTOPS: ${{ needs.generate-matrix.outputs.base_desktops }}
+          BASE_CELLS: ${{ needs.generate-matrix.outputs.base_cells }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          declare -A base_flavors=()
+          while IFS= read -r flavor; do
+            base_flavors["$flavor"]=1
+          done < <(jq -r '.[]' <<<"$BASE_DESKTOPS")
+          declare -A expected_cells=()
+          while IFS= read -r cell; do
+            expected_cells["$cell"]=1
+          done < <(jq -r '.[]' <<<"$BASE_CELLS")
+
+          # Artifact names are luks-e2e-<variant>-<flavor>. The final
+          # hyphen-delimited component is the flavor, so variants such as
+          # flounder-sid still resolve to the plain `gnome`/`kde` cell.
+          declare -A videos=() posters=()
+          while IFS= read -r candidate; do
+            selected_dir="${candidate%/timelapse/timelapse.webm}"
+            cell="${selected_dir##*/luks-e2e-}"
+            flavor="${cell##*-}"
+            [[ "${base_flavors[$flavor]:-}" == 1 ]] || continue
+            [[ "${expected_cells[$cell]:-}" == 1 ]] || continue
+            evidence="$selected_dir/luks-evidence.log"
+            poster="$selected_dir/timelapse/timelapse-poster.webp"
+            if [[ -s "$candidate" && -s "$poster" ]] &&
+               grep -qx 'TUNAOS_LUKS_E2E_PASS encrypted=1 passphrase_unlock=1 installed_boot=1' "$evidence"; then
+              videos["$cell"]="$candidate"
+              posters["$cell"]="$poster"
+            fi
+          done < <(find timelapses -type f \
+            -path '*/timelapse/timelapse.webm' -size +0c -print | sort)
+
+          if [[ "${#videos[@]}" -eq 0 ]]; then
+            echo "::error::No passing base-DE timelapses were present in a successful full matrix."
+            exit 1
+          fi
+          for cell in "${!expected_cells[@]}"; do
+            if [[ -z "${videos[$cell]:-}" ]]; then
+              echo "::error::Missing passing base-DE timelapse for ${cell}."
+              exit 1
+            fi
+          done
+
+          mapfile -t cells < <(printf '%s\n' "${!videos[@]}" | sort)
+
+          # Carry any other Pages content forward before replacing only this
+          # gallery. The assets branch is force-pushed as a fresh orphan so
+          # video bytes never accumulate in Git history.
+          if git fetch --depth 1 origin pages-assets 2>/dev/null; then
+            git checkout FETCH_HEAD -- pages/e2e 2>/dev/null || true
+            git reset -q HEAD -- pages/e2e 2>/dev/null || true
+          fi
+          rm -rf pages/e2e/luks/latest
+          mkdir -p pages/e2e/luks/latest
+
+          {
+            cat <<EOF
+          <!doctype html>
+          <html lang="en">
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>TunaOS latest LUKS E2E timelapses</title>
+          <style>
+          body{max-width:1100px;margin:2rem auto;padding:0 1rem;background:#111;color:#eee;font:16px system-ui,sans-serif}
+          .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1.5rem}
+          video{width:100%;height:auto}a{color:#7dd3fc}
+          </style>
+          <h1>TunaOS latest LUKS E2E timelapses</h1>
+          <p>Passing encrypted install and first-boot captures for the base desktop cells in
+          <a href="${RUN_URL}#artifacts">this GitHub Actions run</a>.</p>
+          <div class="grid">
+          EOF
+            for cell in "${cells[@]}"; do
+              printf '<article><h2>%s</h2>' "$cell"
+              printf '<video controls muted loop playsinline poster="%s-poster.webp">' "$cell"
+              printf '<source src="%s.webm" type="video/webm"></video><p>' "$cell"
+              printf '<a href="%s.webm">Open or save the WebM</a></p></article>\n' "$cell"
+            done
+            cat <<'EOF'
+          </div>
+          </html>
+          EOF
+          } > pages/e2e/luks/latest/index.html
+          for cell in "${cells[@]}"; do
+            cp "${videos[$cell]}" "pages/e2e/luks/latest/${cell}.webm"
+            cp "${posters[$cell]}" "pages/e2e/luks/latest/${cell}-poster.webp"
+          done
+          printf '%s\n' "$RUN_URL" > pages/e2e/luks/latest/source-run.txt
+
+          if [[ -z "$(git status --porcelain pages/e2e)" ]]; then
+            echo "Timelapse gallery unchanged — nothing to publish."
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git checkout --orphan pages-assets
+          git rm -rf --cached . >/dev/null
+          git add -f pages/e2e
+          git commit -m "e2e visual: refresh LUKS gallery (${{ github.run_id }})"
+          git push -f origin HEAD:pages-assets
+          curl -sS -f -X POST \
+            -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+            -H 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/${{ github.repository }}/dispatches" \
+            -d '{"event_type":"e2e-visual-refresh"}'
+          echo "==> Published ${#cells[@]} base-DE timelapse(s) from ${RUN_URL}"
