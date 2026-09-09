@@ -48,13 +48,22 @@ _ensure_check_deps: _check_shfmt_version
     if ! command -v yamllint &> /dev/null; then brew install yamllint; fi
     if ! command -v jq &> /dev/null; then brew install jq; fi
     if ! command -v actionlint &> /dev/null; then brew install actionlint; fi
+    if ! command -v node &> /dev/null; then brew install node; fi
+
+# Check prose with the same pinned shared linter and budget as CI. This is a
+# check, not a formatter: STE findings need a human wording change, so `just
+# fix` deliberately does not alter Markdown.
+ste: _ensure_check_deps
+    #!/usr/bin/env bash
+    cd {{ justfile_directory() }}
+    ./scripts/run-ste-lint.sh
 
 # Check Just Syntax
-check: _ensure_check_deps
+check: _ensure_check_deps ste
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}
     echo "Checking syntax of shell scripts..."
-    find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
+    find . -not -path './.git/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -iname "*.sh" -type f -exec shellcheck --exclude=SC1091 "{}" ";"
     # `just fix` WROTE shell formatting and nothing ever CHECKED it, so the
     # .editorconfig could disagree with every file in the repo indefinitely --
     # and did. A formatter you do not verify is a formatter that drifts.
@@ -65,14 +74,19 @@ check: _ensure_check_deps
     # shfmt --diff on a bad file exits 1, the same command under find -exec
     # exits 0.
     echo "Checking shell formatting (shfmt)..."
-    unformatted="$(find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -not -path './_upstream-snapshots/*' -iname "*.sh" -type f -print0 | xargs -0 shfmt -l 2>/dev/null || true)"
+    unformatted="$(find . -not -path './.git/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -not -path './_upstream-snapshots/*' -iname "*.sh" -type f -print0 | xargs -0 shfmt -l 2>/dev/null || true)"
     if [[ -n "$unformatted" ]]; then
         echo "::error::Shell formatting drift. Run 'just fix' and commit the result."
         echo "$unformatted"
         exit 1
     fi
-    find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -type f -name "*.yaml" -exec yamllint -c ./.yamllint.yml {} \; -o -name "*.yml" -exec yamllint {} \; 2>/dev/null || true
-    find . -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -type f -name "*.json" -exec sh -c 'jq . "$1" > /dev/null' _ {} \; 2>/dev/null || true
+    find . -path './.git' -prune -o \
+        -not -path './system_files/usr/share/gnome-shell/extensions/*' \
+        -not -path './packages-repo/*' -not -path './.build/*' -type f \( \
+        -name "*.yaml" -exec yamllint -c ./.yamllint.yml {} \; -o \
+        -name "*.yml" -exec yamllint {} \; \
+        \) 2>/dev/null || true
+    find . -not -path './.git/*' -not -path './system_files/usr/share/gnome-shell/extensions/*' -not -path './packages-repo/*' -not -path './.build/*' -type f -name "*.json" -exec sh -c 'jq . "$1" > /dev/null' _ {} \; 2>/dev/null || true
     if command -v actionlint &> /dev/null; then
         actionlint -ignore "permission \"id-token\" is unknown" -ignore "SC2086" -ignore "SC2129" -ignore "SC2001" -ignore "SC2034" -ignore "SC2015" -ignore "SC1001" -ignore "SC2295" -ignore "SC2016" -ignore "save-always" -ignore "cannot be filtered" .github/workflows/*.yml .github/workflows/*.yaml || { exit 1; }
     fi
@@ -122,7 +136,7 @@ test-pytest: _ensure_test_deps
 setup: _ensure_test_deps
     #!/usr/bin/env bash
     cd {{ justfile_directory() }}
-    for t in shellcheck shfmt yamllint jq actionlint bats yq; do
+    for t in shellcheck shfmt yamllint jq actionlint bats yq node; do
         printf '%-11s %s\n' "$t" "$(command -v "$t" >/dev/null && $t --version 2>&1 | head -1 || echo MISSING)"
     done
     python3 -c 'import pytest, yaml; print("pytest", pytest.__version__, "pyyaml", yaml.__version__)'
