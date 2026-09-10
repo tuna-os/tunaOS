@@ -332,11 +332,23 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
             gms.VOLATILE_LINE,
         )
 
-    def test_the_real_build_config_declares_52_luks_cells(self):
+    def test_the_real_build_config_declares_51_luks_cells(self):
         """Ties the unit tests above to the actual denominator on disk.
 
         If this number moves, the LUKS total moves with it, and that should be
         a deliberate build-config edit rather than a surprise.
+
+        52 -> 51 on 2026-09-10: guppy:gnome is off. ::gentoo's main tree tops
+        out at GNOME 49.9, below the 50 floor
+        build_scripts/checks/verify-desktop-experience.sh enforces since
+        2026-09-03 -- manifests/desktops/gnome.yaml already documented this
+        as expected ("Gentoo (::gentoo tops out at 49.9). Their gnome cells
+        fail the desktop contract until a source that meets the floor is
+        wired, which is the honest state, not a bug in the check"), but the
+        build-config.yml flavor stayed declared, so every scheduled
+        Build Guppy run failed from 2026-09-03 onward burning 1-4h of CI a
+        day on a guaranteed-red cell. Tracked in tunaOS#2450; re-declare once
+        Gentoo ships a GNOME >=50 source.
 
         53 -> 52 on 2026-09-05: flounder:gnome is off. Debian 13 trixie
         ships GNOME 48.7 against a floor of 50, and the sid -> trixie
@@ -372,7 +384,7 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         the Niri stack and zero `xfce*`), so they add nothing here.
         """
         matrix = gms.luks_matrix()
-        self.assertEqual(sum(len(v) for v in matrix.values()), 52)
+        self.assertEqual(sum(len(v) for v in matrix.values()), 51)
         # The control that makes the drop specific rather than merely smaller:
         # hummingbird keeps exactly the desktops it has package sets for.
         self.assertEqual(matrix.get("hummingbird"), {"gnome", "cosmic"})
