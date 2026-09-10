@@ -59,13 +59,21 @@ jobs:
           # -nvidia, -asahi, -cachyos and -zfs variants are the same desktop
           # on different hardware and would triple the matrix without testing
           # a different contract.
-          # shellcheck disable=SC2016  # $v is yq's binding, not a shell var
-          cells=$(yq -r '.variants[] | .id as $v | .flavors[]
-              | select(.build_image == true)
-              | select(.id | test("^(gnome|kde|niri|xfce|cosmic)$"))
-              | "\($v):\(.id)"' .github/build-config.yml \
-            | jq -R -s -c 'split("\n") | map(select(length > 0))
-              | map(split(":")) | map({variant: .[0], desktop: .[1]})')
+          #
+          # Filtering happens in jq, not yq: yq's `EXPR1 as $v | EXPR2`
+          # still emits one row for a $v binding whose EXPR2 matches
+          # nothing, with $v bound but the rest of the row empty — jq's
+          # `|` has no such quirk, an empty generator produces zero rows.
+          # gurnard ships only base+pantheon (no gnome/kde/niri/xfce/cosmic
+          # flavor), so it hit exactly this: every sweep produced a stray
+          # "gurnard:" cell (variant, empty desktop) that failed
+          # evidence-bundle.sh's `invalid cell` check and then failed
+          # collate's baseline reconciliation too.
+          cells=$(yq -o=json '.' .github/build-config.yml | jq -c '
+              [.variants[] | .id as $v | .flavors[]
+                | select(.build_image == true)
+                | select(.id | test("^(gnome|kde|niri|xfce|cosmic)$"))
+                | {variant: $v, desktop: .id}]')
           if [[ -n "$FILTER" ]]; then
             cells=$(jq -c --arg f "$FILTER" \
               '[.[] | select("\(.variant):\(.desktop)" | contains($f))]' <<<"$cells")
