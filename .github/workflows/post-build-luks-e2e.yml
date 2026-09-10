@@ -68,7 +68,16 @@ on:
         type: boolean
 
 permissions:
-  contents: read
+  # Must match (or exceed) luks-e2e.yml's own top-level permissions: GitHub
+  # validates a reusable workflow's declared permissions against the
+  # CALLER's grant at schema time, before any job runs — regardless of
+  # whether the path that actually needs contents:write (the full-sweep
+  # publish job) is reachable from here. Left at contents:read after
+  # luks-e2e.yml gained contents:write for its timelapse-gallery publish job
+  # (78a77b58), every run of this workflow failed with
+  # startup_failure/"Invalid workflow file" ("requesting 'contents: write',
+  # but is only allowed 'contents: read'") from 2026-09-09 onward.
+  contents: write
   packages: read
   # The reusable LUKS workflow downloads its own per-cell artifacts to publish
   # the stable latest timelapse pointer.
