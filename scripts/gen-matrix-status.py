@@ -23,6 +23,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import datetime
 import difflib
 import json
 import os
@@ -598,8 +599,34 @@ def criterion_scope_allows(criterion: dict, flavor: str) -> bool:
     )
 
 
+def is_stale(
+    date_str: str,
+    sla_days: int | float | None,
+    today: datetime.date | str | None = None,
+) -> bool:
+    """True if evidence date_str is older than sla_days relative to today."""
+    if not date_str or sla_days is None:
+        return False
+    try:
+        ev_date = datetime.date.fromisoformat(date_str)
+    except (ValueError, TypeError):
+        return False
+    if today is None:
+        ref = datetime.date.today()
+    elif isinstance(today, str):
+        try:
+            ref = datetime.date.fromisoformat(today)
+        except (ValueError, TypeError):
+            ref = datetime.date.today()
+    elif isinstance(today, datetime.date):
+        ref = today
+    else:
+        ref = datetime.date.today()
+    return (ref - ev_date).days > sla_days
+
+
 def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
-                      omissions, parity):
+                      omissions, parity, today: datetime.date | str | None = None):
     """The bar itself: one table scored against the blocking criteria.
 
     Per-criterion applicability follows each axis's own denominator, exactly
@@ -689,19 +716,26 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
 
     def verdict(variant: str, flavor: str) -> str:
         per_cell = scorers(variant, flavor)
+        entry = provenance.get(f"{variant}:{flavor}", {})
         applicable = []
         for criterion in blocking_criteria:
             if not criterion_scope_allows(criterion, flavor):
                 continue
             cid = criterion["id"]
+            sla = criterion.get("freshness_sla_days")
+            axis_entry = entry.get(cid, {})
+            v = axis_entry.get("verdict", "untested")
+            d = axis_entry.get("date", "")
+            if is_stale(d, sla, today):
+                v = "untested"
             if cid in ("builds", "boots"):
                 # Universal criteria: absence of a verdict is ⬜, it never
                 # silently drops out of the bar (skipped_is_not_green).
-                applicable.append(per_cell.get(cid, "untested"))
+                applicable.append(v)
             elif cid in per_cell:
                 # Axis-scoped criteria (desktop/install/iso/...): judged only
                 # where their own denominator schedules the cell.
-                applicable.append(per_cell[cid])
+                applicable.append(v)
         return composite_verdict(applicable or ["untested"])
 
     green = total = 0
@@ -721,8 +755,10 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
         entry = provenance[f"{variant}:{flavor}"]
         # Prefer runtime evidence over build metadata when both assert green.
         for axis in ("boots", "desktop", "no_silent_omissions", "builds"):
-            if entry.get(axis, {}).get("verdict") == "pass":
-                url = entry[axis].get("evidence", "")
+            axis_entry = entry.get(axis, {})
+            sla = next((c.get("freshness_sla_days") for c in criteria if c.get("id") == axis), None)
+            if axis_entry.get("verdict") == "pass" and not is_stale(axis_entry.get("date", ""), sla, today):
+                url = axis_entry.get("evidence", "")
                 if url:
                     return f"[{symbol}]({url})"
         return symbol

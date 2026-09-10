@@ -92,6 +92,7 @@ run_generator() {
   run_generator
   grep -q '1 failure' "$README"
   grep -q '2 never reached' "$README"
+  grep -q '(stale: 1)' "$README"
 }
 
 @test "a cancelled run is skipped in favour of the newest conclusive one" {

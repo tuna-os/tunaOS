@@ -17,6 +17,7 @@ trap 'rm -f "$tmp_table" "$tmp_readme"' EXIT
 total_green=0
 total_cells=0
 total_unreached=0
+total_stale=0
 composite_green=0
 
 # The boots criterion's scope, read from the criteria file so this script and
@@ -130,6 +131,21 @@ while IFS=$'\t' read -r variant emoji; do
 	composite_green=$((composite_green + cgreen))
 	total_unreached=$((total_unreached + ${#unreached[@]}))
 
+	builds_sla=$(yq -r '.criteria[] | select(.id == "builds") | .freshness_sla_days // 2' .github/green-criteria.yml 2>/dev/null || echo 2)
+	builds_sla="${builds_sla:-2}"
+	today=$(date -u +%F)
+	run_age=0
+	if [[ -n "$run_date" && "$run_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+		run_epoch=$(date -u -d "$run_date" +%s 2>/dev/null || echo 0)
+		today_epoch=$(date -u -d "$today" +%s 2>/dev/null || echo 0)
+		if [[ "$run_epoch" -gt 0 && "$today_epoch" -ge "$run_epoch" ]]; then
+			run_age=$(( (today_epoch - run_epoch) / 86400 ))
+		fi
+	fi
+	if [[ "$run_age" -gt "$builds_sla" ]]; then
+		total_stale=$((total_stale + green))
+	fi
+
 	failing_text=$(join_or_dash "${failing[@]+"${failing[@]}"}")
 	unreached_text=$(join_or_dash "${unreached[@]+"${unreached[@]}"}")
 
@@ -201,7 +217,7 @@ blocking_text=$(sed -E 's/,/`, `/g' <<<"$blocking")
 
 {
 	echo
-	echo "**Built ${total_green}/${total_cells} · composite green ${composite_green}/${composite_total} (${percent}% built)** — The remainder has **${total_failing} ${failure_word}** and **${total_unreached} never reached**; no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work."
+	echo "**Built ${total_green}/${total_cells} · composite green ${composite_green}/${composite_total} (${percent}% built)** — The remainder has **${total_failing} ${failure_word}** and **${total_unreached} never reached** (stale: ${total_stale}); no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work."
 	echo
 	echo "The score for composite green uses ${composite_scope}. [\`.github/green-criteria.yml\`](.github/green-criteria.yml) provides the score. Today, these criteria prevent publication: \`${blocking_text}\`. A cell must satisfy each criterion."
 	echo
