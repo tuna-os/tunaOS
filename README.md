@@ -99,6 +99,11 @@ _This snapshot uses the latest conclusive build from the main branch for each va
 | 🏔️ `ghcr.io/tuna-os/tromso` | [tromso](https://github.com/tuna-os/tromso) | KDE | [❌ 2026-09-10](https://github.com/tuna-os/tromso/actions/runs/34439484511) |
 | 🐭 `ghcr.io/tuna-os/xfce-linux` | [xfce-linux](https://github.com/tuna-os/xfce-linux) | XFCE | [❌ 2026-09-10](https://github.com/tuna-os/xfce-linux/actions/runs/34424755451) |
 
+Factory health: 46/140 cells green
+Install-tested: 1/52 · Lifecycle-tested: 37/52 · Never tested: 86
+Known regressions: 45 blocking, 51 advisory
+Last full sweep: today
+
 **Built 50/140 · composite green 46/140 (35% built)** — The remainder has **4 failures** and **86 never reached**; no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work.
 
 The score for composite green uses published cells, per [docs/MATRIX-STATUS.md](docs/MATRIX-STATUS.md). [`.github/green-criteria.yml`](.github/green-criteria.yml) provides the score. Today, these criteria prevent publication: `boots`, `builds`, `desktop`, `no_silent_omissions`. A cell must satisfy each criterion.

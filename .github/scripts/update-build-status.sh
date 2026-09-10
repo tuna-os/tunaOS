@@ -199,7 +199,69 @@ if [[ "$scorable" == false ]]; then
 fi
 blocking_text=$(sed -E 's/,/`, `/g' <<<"$blocking")
 
+# Compute the four factory health lines (tunaOS#2262)
+install_green=0
+install_total=52
+if [[ -f "${matrix_doc:-docs/MATRIX-STATUS.md}" ]]; then
+	luks_line=$(grep -A 3 -E '^## LUKS E2E' "${matrix_doc:-docs/MATRIX-STATUS.md}" | grep -oE '\*\*[0-9]+ of [0-9]+\*\* cells green' || true)
+	if [[ -n "$luks_line" ]]; then
+		install_green=$(sed -E 's/^\*\*([0-9]+) of .*/\1/' <<<"$luks_line")
+		install_total=$(sed -E 's/^\*\*[0-9]+ of ([0-9]+)\*\*.*/\1/' <<<"$luks_line")
+	fi
+fi
+
+lifecycle_green=0
+lifecycle_total=52
+if [[ -f "${matrix_doc:-docs/MATRIX-STATUS.md}" ]]; then
+	lc_line=$(grep -A 3 -E '^## Bootc Lifecycle' "${matrix_doc:-docs/MATRIX-STATUS.md}" | grep -oE '\*\*[0-9]+ of [0-9]+\*\* cells green' || true)
+	if [[ -n "$lc_line" ]]; then
+		lifecycle_green=$(sed -E 's/^\*\*([0-9]+) of .*/\1/' <<<"$lc_line")
+		lifecycle_total=$(sed -E 's/^\*\*[0-9]+ of ([0-9]+)\*\*.*/\1/' <<<"$lc_line")
+	fi
+fi
+
+regressions_blocking=$total_failing
+regressions_advisory=0
+prov_file="docs/matrix-provenance.json"
+if [[ -f "$prov_file" && -f ".github/green-criteria.yml" ]]; then
+	read -r regressions_blocking regressions_advisory < <(python3 -c '
+import json, yaml, sys
+try:
+    prov = json.load(open("docs/matrix-provenance.json"))["cells"]
+    crit = yaml.safe_load(open(".github/green-criteria.yml"))["criteria"]
+    blocking = {c["id"] for c in crit if c.get("enforcement") == "blocking"}
+    advisory = {c["id"] for c in crit if c.get("enforcement") == "advisory"}
+    b_fails = sum(1 for c in prov.values() if any(c.get(ax, {}).get("verdict") == "fail" for ax in blocking))
+    a_fails = sum(1 for c in prov.values() if any(c.get(ax, {}).get("verdict") == "fail" for ax in advisory))
+    print(f"{b_fails} {a_fails}")
+except Exception:
+    print(f"'"$total_failing"' 0")
+' 2>/dev/null || echo "$total_failing 0")
+fi
+
+last_sweep_age="today"
+if [[ -n "${run_date:-}" ]]; then
+	today=$(date -u +%Y-%m-%d)
+	if [[ "$run_date" == "$today" ]]; then
+		last_sweep_age="today"
+	else
+		diff_days=$(( ( $(date -u +%s) - $(date -u -d "$run_date" +%s 2>/dev/null || echo 0) ) / 86400 ))
+		if [[ "$diff_days" -eq 1 ]]; then
+			last_sweep_age="1 day ago"
+		elif [[ "$diff_days" -gt 1 ]]; then
+			last_sweep_age="${diff_days} days ago"
+		else
+			last_sweep_age="$run_date"
+		fi
+	fi
+fi
+
 {
+	echo
+	echo "Factory health: ${composite_green}/${composite_total} cells green"
+	echo "Install-tested: ${install_green}/${install_total} · Lifecycle-tested: ${lifecycle_green}/${lifecycle_total} · Never tested: ${total_unreached}"
+	echo "Known regressions: ${regressions_blocking} blocking, ${regressions_advisory} advisory"
+	echo "Last full sweep: ${last_sweep_age}"
 	echo
 	echo "**Built ${total_green}/${total_cells} · composite green ${composite_green}/${composite_total} (${percent}% built)** — The remainder has **${total_failing} ${failure_word}** and **${total_unreached} never reached**; no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work."
 	echo
