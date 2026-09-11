@@ -68,7 +68,7 @@ it.
 
 Scored against `.github/green-criteria.yml`: a cell is green only when every **blocking** criterion applicable to it has a current affirmative result; a criterion that was skipped, never tested, or unasserted renders ⬜ and does not count as satisfied. Blocking today: `builds`, `desktop`, `boots`, `no_silent_omissions`. Advisory (measured in the sections below, not yet biting): `install`, `lifecycle`, `parity`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. Graduating a criterion is an edit to `enforcement:` in that file — this table and the README count tighten with no code change.
 
-**42 of 140** published cells are composite-green.
+**75 of 139** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
@@ -78,12 +78,12 @@ Scored against `.github/green-criteria.yml`: a cell is green only when every **b
 | **flounder** | — | ⬜ | — | — | ❌ |
 | **flounder-sid** | ⬜ | ⬜ | — | — | ❌ |
 | **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
-| **guppy** | ⬜ | ⬜ | — | — | ⬜ |
+| **guppy** | — | ⬜ | — | — | ⬜ |
 | **hummingbird** | ❌ | — | ⬜ | — | — |
 | **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **skipjack** | ❌ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
+| **wahoo** | ❌ | ⬜ | ⬜ | — | — |
 | **yellowfin** | ❌ | ⬜ | ⬜ | ⬜ | ⬜ |
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
@@ -92,7 +92,7 @@ Per-cell provenance — which run asserted which criterion, when — is machine-
 
 ## Silent omissions
 
-**0 of 52** cells clean (0 read, 52 never read).
+**0 of 51** cells clean (0 read, 51 never read).
 
 Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package-wishlist.sh` against every published image it pulls — the same gate new builds pass at build time — so an image shipping a silently-skipped package outside `package-miss-allowlist.txt` reads ❌ here even if it was published before the gate existed. A cell whose image was not read (no image, pull error, job lost) is ⬜, not clean.
 
@@ -104,7 +104,7 @@ Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package
 | **flounder** | — | ⬜ | — | — | ⬜ |
 | **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
 | **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
-| **guppy** | ⬜ | ⬜ | — | — | ⬜ |
+| **guppy** | — | ⬜ | — | — | ⬜ |
 | **hummingbird** | ⬜ | — | ⬜ | — | — |
 | **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -114,7 +114,7 @@ Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package
 
 ## Package parity
 
-**41 of 52** cells at parity (49 measured, 3 never measured).
+**40 of 51** cells at parity (48 measured, 3 never measured).
 
 Green criterion 7 (`parity`), first cadence: every desktop's package set audited daily against its own base (`package-parity.yml` → `scripts/package-parity.sh --audit`) — the shape that exposes a build applying no desktop at all (#858). ❌ covers both BROKEN (no more packages than base) and suspect (fewer than 25 added). Diffing against each variant's upstream reference is the next step and is not yet asserted.
 
@@ -136,7 +136,7 @@ Green criterion 7 (`parity`), first cadence: every desktop's package set audited
 
 ## LUKS E2E
 
-**1 of 52** cells green (52 tested, 0 never tested).
+**1 of 51** cells green (51 tested, 0 never tested).
 
 Measured against the set `luks-e2e.yml` schedules: every published desktop image (`build_image`), not only the ones that ship an ISO. That is wider than the ISO matrix below on purpose — the browser ISO builder can make an ISO from any image, so image-only variants (`sailfin`, `guppy`, `flounder-sid`) need boot and install coverage too.
 
@@ -145,7 +145,7 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 | **albacore** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **bonito** | ❌ | ❌ | ❌ | ❌ | ❌ |
 | **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **flounder** | ❌ | ❌ | ❌ | — | ❌ |
+| **flounder** | ❌ | ❌ | — | — | ❌ |
 | **flounder-sid** | ❌ | ❌ | — | — | ❌ |
 | **grouper** | ❌ | ❌ | ❌ | — | ❌ |
 | **guppy** | ❌ | ❌ | — | — | ❌ |
@@ -159,13 +159,13 @@ Measured against the set `luks-e2e.yml` schedules: every published desktop image
 
 NVIDIA cells are **out of scope** for this workflow — `luks-e2e.yml` excludes them deliberately, because `-nvidia` takes the identical LUKS path in headless QEMU. 42 stale pre-exclusion result(s) remain from before that change; they are not a gap and will age out.
 
-The table above still shows a result for `flounder:cosmic`, `flounder:gnome`. `.github/build-config.yml` no longer declares those flavours, so `luks-e2e.yml` cannot schedule them and no run will ever turn them green. They are excluded from the count above — a last-measured verdict kept visible, not a gap. Same reasoning as the NVIDIA note.
+The table above still shows a result for `flounder:gnome`, `guppy:gnome`. `.github/build-config.yml` no longer declares those flavours, so `luks-e2e.yml` cannot schedule them and no run will ever turn them green. They are excluded from the count above — a last-measured verdict kept visible, not a gap. Same reasoning as the NVIDIA note.
 
-Newest result 2026-09-10, oldest still-authoritative result 2026-08-06. Results older than the most recent round of fixes are the best available data, not current data.
+Newest result 2026-09-10, oldest still-authoritative result 2026-09-01. Results older than the most recent round of fixes are the best available data, not current data.
 
 ## Desktop Contract Sweep
 
-**0 of 52** cells satisfy `build_scripts/checks/verify-desktop-experience.sh` (0 tested, 52 never tested).
+**0 of 51** cells satisfy `build_scripts/checks/verify-desktop-experience.sh` (0 tested, 51 never tested).
 
 Pulls the **published** image and runs the contract script against it directly (`podman run`, no boot required) — the same denominator as LUKS E2E above (`build_image`, restricted to the five desktop flavors). This is what catches a desktop whose packages silently never landed, independent of whether anything can actually boot it on hosted CI.
 
@@ -177,7 +177,7 @@ Pulls the **published** image and runs the contract script against it directly (
 | **flounder** | — | ⬜ | — | — | ⬜ |
 | **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
 | **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
-| **guppy** | ⬜ | ⬜ | — | — | ⬜ |
+| **guppy** | — | ⬜ | — | — | ⬜ |
 | **hummingbird** | ⬜ | — | ⬜ | — | — |
 | **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
@@ -187,7 +187,7 @@ Pulls the **published** image and runs the contract script against it directly (
 
 ## Bootc Lifecycle
 
-**37 of 52** cells green (52 tested, 0 never tested).
+**36 of 51** cells green (51 tested, 0 never tested).
 
 Validates bootc image update, rebase, rollback, alias resolution, and post-switch system contracts across published stream deployments.
 
@@ -253,7 +253,6 @@ The run that last asserted each verdict above. Re-running a cell moves a row her
 | 2026-08-20 | [32335146969](https://github.com/tuna-os/tunaOS/actions/runs/32335146969) | 2 |
 | 2026-08-19 | [32238167029](https://github.com/tuna-os/tunaOS/actions/runs/32238167029) | 38 |
 | 2026-08-12 | [31585741267](https://github.com/tuna-os/tunaOS/actions/runs/31585741267) | 18 |
-| 2026-08-06 | [31087927879](https://github.com/tuna-os/tunaOS/actions/runs/31087927879) | 1 |
 
 <!-- END GENERATED -->
 
