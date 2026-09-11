@@ -53,6 +53,11 @@ class Pin:
     # {version} is the tag (v1.2.3); {num} is the tag without the leading v.
     checksums_url: str
     asset: str
+    # Which architectures this download is pinned per. Most ship one asset per
+    # arch; a payload that is the same bytes everywhere (QML, scripts) has a
+    # single checksum and uses ("noarch",) so the loop below runs once and the
+    # regexes need no {arch}.
+    arches: tuple = ARCHES
     versions: dict = field(default_factory=dict)
 
 
@@ -74,6 +79,30 @@ PINS = [
         checksum_re=r'^\s+{arch}:\s*"([0-9a-f]{{64}})"',
         checksums_url="https://github.com/twpayne/chezmoi/releases/download/{version}/chezmoi_{num}_checksums.txt",
         asset="chezmoi_{num}_linux_{arch}.deb",
+    ),
+    # The DMS QML payload, consumed by build_scripts/install-dms-qml-fallback.sh
+    # on every EL10 niri image. Added after its pinned checksum turned out to
+    # have never matched the asset: the only caller was the legacy niri.sh,
+    # which the manifest build path does not source, so nothing downloaded the
+    # tarball and nothing compared the hash. The first build that ran the
+    # fallback failed closed on it (yellowfin:niri, run 34602178178).
+    #
+    # A checksum no build verifies and no checker covers is not a pin, it is a
+    # comment. This entry is the half that would have caught it without waiting
+    # for a build: the schedule re-checks it nightly, so a release re-published
+    # under the same tag is caught the same way it is for remora and chezmoi.
+    #
+    # One asset for every architecture -- the payload is QML plus a shell
+    # script -- hence arches=("noarch",) and no {arch} in the patterns below.
+    Pin(
+        name="dms-qml",
+        version_file="image-versions.yaml",
+        version_re=r'^\s+dms_qml:\s*"(v[^"]+)"',
+        checksum_file="image-versions.yaml",
+        checksum_re=r'^\s+dms_qml_sha256:\s*"([0-9a-f]{{64}})"',
+        checksums_url="https://github.com/AvengeMedia/DankMaterialShell/releases/download/{version}/dms-qml.tar.gz.sha256",
+        asset="dms-qml.tar.gz",
+        arches=("noarch",),
     ),
 ]
 
@@ -140,7 +169,7 @@ def main() -> int:
         version = find_version(pin)
         published = fetch_published(pin, version)
 
-        for arch in ARCHES:
+        for arch in pin.arches:
             pattern, pinned = find_checksum(pin, arch)
             asset = pin.asset.format(arch=arch, num=version.lstrip("v"))
             want = published.get(asset)

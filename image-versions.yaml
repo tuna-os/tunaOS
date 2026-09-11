@@ -109,9 +109,32 @@ downloads:
   # AvengeMedia's EL10 dms-greeter 1.6 RPM is a runtime-sync launcher and
   # carries no QML. Keep the same source payload and checksum as the pending
   # tunaos-packages dms/dms-greeter recipes for the offline-build fallback.
+  #
+  # The checksum here was wrong from the day it landed and could not be
+  # noticed, because the only caller of install-dms-qml-fallback.sh was
+  # build_scripts/desktop/niri.sh -- the legacy installer, which the manifest
+  # build path never sources. The first build that actually ran the fallback
+  # died on it (yellowfin:niri arm64, run 34602178178):
+  #
+  #   sha256sum: WARNING: 1 computed checksum did NOT match
+  #   /tmp/tmp.5NcpUhiidJ/dms-qml.tar.gz: FAILED
+  #
+  # Upstream publishes its own checksum next to the asset, so this one is
+  # copied from the source of truth rather than computed from a download and
+  # trusted on its own:
+  #
+  #   curl -sSL https://github.com/AvengeMedia/DankMaterialShell/releases/\
+  #     download/v1.6.1/dms-qml.tar.gz.sha256
+  #   904ad2709a2075f10dbb089b42a9f4eb39d8f06cb2634fd4c95fa739ef9c4a2d  dms-qml.tar.gz
+  #
+  # That value matches the asset on two separate fetches, and the archive
+  # holds what the fallback asserts: DMSGreeter.qml, and a
+  # Modules/Greetd/assets/dms-greeter that is a shell script, so one payload
+  # serves every architecture. Re-derive from the .sha256 asset, never from a
+  # local sha256sum of whatever arrived, whenever this version moves.
   # renovate: datasource=github-releases depName=AvengeMedia/DankMaterialShell
   dms_qml: "v1.6.1"
-  dms_qml_sha256: "aef0e90ad39bf85f676743da7bbe4c32758059d49342d82741d93ec414b88888"
+  dms_qml_sha256: "904ad2709a2075f10dbb089b42a9f4eb39d8f06cb2634fd4c95fa739ef9c4a2d"
 
   # Zirconium's mkosi.extra payload, fetched as a source tarball by
   # build_scripts/install-zirconium.sh (niri stages only). Pinned to a commit
