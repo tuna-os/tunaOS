@@ -800,7 +800,7 @@ jobs:
     needs:
       - build_push
     container:
-      image: cgr.dev/chainguard/wolfi-base@sha256:2b0c26958ff1c8fffe62c7fb11b77780228f5652157bef307cbd8be060c97a74  # :latest linux/amd64 as of 2026-06-13
+      image: cgr.dev/chainguard/wolfi-base@sha256:6a8dca4c2153cfc11d559cfa6172c187b896423d833f3d48a4c1c44ab55596d7  # :latest linux/amd64 as of 2026-06-13
       # This job only performs registry/API operations (podman login and
       # manifest create/add/annotate/push). It does not run or build a
       # container or mount a host filesystem -- but podman itself needs
@@ -1332,9 +1332,44 @@ jobs:
     # starts. Promote treats a skipped gate as pass; asahi images are
     # verified by the dispatched "Verify Asahi image" 35-point harness
     # instead (no aarch64 KVM on GH runners — TCG boot gate is future work).
+    #
+    # cosmic/niri/xfwl4 are NOT SCHEDULED while the GPU runner group cannot be
+    # launched. TEMPORARY, maintainer decision 2026-09-11, and paired with the
+    # boots scope in .github/green-criteria.yml, which already declares the
+    # same three prefixes out of scope for the same reason.
+    #
+    # The runs-on selector below sends those compositors to the `gpu` group for
+    # a real DRM render node. The account's vCPU limit for the g4dn bucket is
+    # 0, so EC2 rejects every fleet request and the job dies before its first
+    # step ever runs:
+    #   Failed to launch runner: failed to create fleet: VcpuLimitExceeded
+    #   ... vCPU limit of 0 ... AllowedInstanceTypes:["g4dn*"]
+    #
+    # Scheduling it anyway measures nothing -- no runner, no serial log, no
+    # screenshot, no compositor -- and costs the cell its image on top: Promote
+    # needs verify_boot to be success OR skipped, and a runner that never
+    # attaches is neither. That is why `builds` reads not-green for cosmic and
+    # niri on ten variants whose images built, pushed and passed every other
+    # gate (albacore 34573957352, yellowfin 34563335220, marlin 34505652376 --
+    # Gate is the only red job in each).
+    #
+    # This is NOT a claim that those cells boot, and it does not make them
+    # green: `boots` still reads ⬜ for every one of them, which is what "not
+    # measured" has meant here since #2123. It stops a runner shortage from
+    # being recorded as a build failure.
+    #
+    # Revert together with the green-criteria exclusion the moment g4dn
+    # capacity exists (tuna-os/tunaOS#2123). The three prefixes here, in the
+    # runs-on selector below, and in green-criteria.yml are pinned equal by
+    # tests/test_the_boots_scope_matches_the_gpu_routing.py, so they cannot
+    # drift apart -- and re-adding capacity without re-adding the gate fails
+    # that test rather than silently leaving the cells ungated.
     if: >-
       inputs.publish && github.event_name != 'pull_request' &&
       !startsWith(inputs.flavor, 'base') &&
+      !startsWith(inputs.flavor, 'cosmic') &&
+      !startsWith(inputs.flavor, 'niri') &&
+      !startsWith(inputs.flavor, 'xfwl4') &&
       contains(inputs.platforms, 'amd64')
     # Back on RunsOn (AWS credits restored) for the DRM-gated desktops only:
     # cosmic/niri/xfwl4 are Smithay compositors that hard-require a DRM render
@@ -1638,10 +1673,36 @@ jobs:
 
           is_hb=false
           [[ "${IMAGE_VARIANT}" == hummingbird* ]] && is_hb=true
+          # IS_ELN matters here for the same reason IS_HUMMINGBIRD does: the
+          # contract reads it to decide whether a finding is a packaging
+          # mistake or a measured property of the upstream compose.
+          #
+          # At build time install-desktop.sh sources lib.sh, which derives
+          # IS_ELN from BASE_IMAGE, so the script's ELN branch fires and wahoo
+          # builds. This job runs the SAME script standalone in a container and
+          # passed only IS_HUMMINGBIRD, so IS_ELN defaulted to false, the
+          # branch could not fire, and the script exited 1 on a gap it is
+          # written to name and allow:
+          #
+          #   ffmpeg cannot decode h264 — a free/crippled libavcodec is installed
+          #
+          # That is wahoo's documented ELN codec gap (README calls the variant
+          # "no codecs"; tests/bats/test_eln_codec_gap.bats pins the exemption
+          # as ELN-only and loud). It cost wahoo its gnome, cosmic and kde
+          # cells: Desktop contract failed, so Promote was skipped, so `builds`
+          # read not-green for three images that built and pushed (run
+          # 34609709028). Nothing was wrong with the images.
+          #
+          # Derived from the variant id the same way is_hb is, rather than
+          # re-deriving from BASE_IMAGE, so the two stay one line apart and
+          # neither can drift from the other.
+          is_eln=false
+          [[ "${IMAGE_VARIANT}" == wahoo* ]] && is_eln=true
 
           sudo podman run --rm \
             -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
             -e IS_HUMMINGBIRD="$is_hb" \
+            -e IS_ELN="$is_eln" \
             --entrypoint /bin/bash "${TEST_IMAGE}" /vde.sh "${DESKTOP}"
 
       - name: Verify package wishlist

@@ -517,10 +517,31 @@ grep -n "Stopped\|Started\|gdm\|contract\|poweroff\\|shutdown\|TUNAOS" /tmp/gate
 eog /tmp/gate-artifact/10-ready.ppm  # or similar viewer
 ```
 
+### serial.log carries the journal, not only the console
+
+`iso-e2e.sh` boots the installed system with
+`systemd.journald.forward_to_console=1`, so `serial.log` holds each unit's own
+stderr as well as systemd's status lines. Read it first for any unit that
+failed: the reason is usually there in full.
+
+This exists because `boot-diagnostics.txt` fails you on the worst boots. The
+gate collects that file over SSH. The failures you most want to read are the
+ones that break SSH: `dbus-broker` fails, so `systemd-logind` fails, so sshd
+cannot open a PAM session. `NetworkManager` is a dbus dependent, so it takes
+the TCP transport too. The file then holds one line:
+
+```
+WARNING: guest SSH unavailable; could not collect boot diagnostics
+```
+
+The serial console needs no service inside the guest, so it survives that.
+When SSH *does* work, `boot-diagnostics.txt` is still richer — read both.
+
 ### What to look for in serial.log
 
 | Pattern | Means | Action |
 |---------|-------|--------|
+| `Failed to start dbus-broker.service` | Everything that needs the bus fails after it: logind, NetworkManager, upower, the display manager. Nothing downstream is a separate bug | Find dbus-broker's own journal lines in `serial.log`; the cascade below it is noise |
 | `Started gdm.service` then `localhost login:` | Display server crashed, fell back to text getty | Check GDM journal, check NVIDIA/virtio-gpu driver |
 | `Starting tunaos-desktop-contract.service` with no `Started`/`Finished` | Service hung — likely `systemctl is-active` blocking on dbus | Add `TimeoutStartSec=30` |
 | `TUNAOS_DESKTOP_CONTRACT_FAIL reason=*` | Individual check failed | Use the reason field to identify which check |

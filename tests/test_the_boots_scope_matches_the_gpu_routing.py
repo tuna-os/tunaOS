@@ -69,6 +69,56 @@ def test_the_scope_excludes_exactly_the_gpu_routed_compositors():
     )
 
 
+def _skipped_prefixes() -> set[str]:
+    """The flavors verify_boot's `if:` refuses to schedule.
+
+    Read out of the `if:` expression only. That expression also negates 'base',
+    which is excluded for an unrelated and permanent reason (base is a parent
+    layer, not a user-facing artifact), so 'base' is dropped here rather than
+    counted as a GPU-gated compositor.
+    """
+    text = WORKFLOW.read_text()
+    start = text.index("  verify_boot:")
+    end = text.index("\n    runs-on:", start)
+    job = text[start:end]
+    cond_start = job.index("    if: >-")
+    condition = job[cond_start:]
+    return {
+        p for p in re.findall(
+            r"!startsWith\(inputs\.flavor,\s*'([^']+)'\)", condition)
+        if p != "base"
+    }
+
+
+def test_the_gate_does_not_schedule_what_it_cannot_launch():
+    """The `if:` guard and the runs-on routing must name the same compositors.
+
+    Two lists in the same job, and the whole point of the guard is that it
+    covers exactly the flavors the routing sends to a group with no capacity
+    (maintainer decision 2026-09-11). Drift either way is a silent bug:
+
+      routed but not skipped  → the job is scheduled onto a runner that never
+                                attaches, Promote is skipped, and the cell
+                                loses its image for a gate that measured
+                                nothing — the state this guard exists to end.
+      skipped but not routed  → a flavor that CAN reach a hosted runner stops
+                                being boot-gated at all, and a real boot
+                                regression could no longer fail it.
+
+    So when g4dn capacity returns, deleting the three negations here is part of
+    the same change that removes the GPU routing — not a later cleanup.
+    """
+    routed = _routed_prefixes()
+    skipped = _skipped_prefixes()
+    assert skipped == routed, (
+        "verify_boot's `if:` guard and its GPU routing disagree.\n"
+        f"  routed to a GPU runner: {sorted(routed)}\n"
+        f"  never scheduled:        {sorted(skipped)}\n"
+        "A flavor routed to a runner CI cannot launch must not be scheduled; a "
+        "flavor that can reach a runner must still be gated."
+    )
+
+
 def test_the_exclusion_is_scoped_to_boots_and_nothing_else():
     """The gate cannot run — that says nothing about the desktop contract,
     which is measured from the published image with no runner involved."""
