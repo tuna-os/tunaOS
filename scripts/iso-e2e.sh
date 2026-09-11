@@ -2324,6 +2324,26 @@ run_install_generic() {
 	# /dev and the store bind-mounted. The kargs the passphrase-gate path
 	# appends post-install are baked here instead — bootc owns the BLS
 	# entries it writes, and --karg is the supported way in.
+	#
+	# systemd.journald.forward_to_console=1 is what makes a FAILED boot
+	# diagnosable at all. collect_disk_boot_diagnostics reaches the guest over
+	# SSH, and the failures worth diagnosing are exactly the ones that stop SSH
+	# from working: dbus-broker fails, so systemd-logind fails, so sshd cannot
+	# open a PAM session, and NetworkManager never comes up either. The gate
+	# then records the one line it can:
+	#
+	#   WARNING: guest SSH unavailable; could not collect boot diagnostics
+	#
+	# and the evidence for a real boot failure is a screenshot and systemd's
+	# terse "[FAILED] Failed to start dbus-broker.service ... See 'systemctl
+	# status' for details" — pointing at a command nobody can run, on a guest
+	# nobody can reach (yellowfin:gnome and skipjack:gnome, 2026-09-11).
+	#
+	# The serial console is the one channel that survives, because it needs no
+	# service inside the guest. Forwarding the journal to it puts each unit's
+	# actual stderr into serial.log, which is already captured and uploaded as
+	# evidence whether or not the guest is reachable. SSH collection stays as
+	# it is: richer where it works, and this costs nothing when it does.
 	if ! timeout 1800 "${ssh_cmd[@]}" "sudo podman run --rm --privileged --pid=host \
 		-v /var/lib/containers:/var/lib/containers -v /dev:/dev \
 		${luks_cfg_mount} \
@@ -2331,6 +2351,7 @@ run_install_generic() {
 		${imgref} \
 		bootc install to-disk --wipe ${block_setup} \
 		--karg console=ttyS0,115200n8 --karg rd.plymouth=0 --karg plymouth.enable=0 \
+		--karg systemd.journald.forward_to_console=1 \
 		/dev/vda 2>&1" 2>&1 | tee -a "${SERIAL_LOG}"; then
 		echo "ERROR: bootc install to-disk failed or timed out" >&2
 		return 3
@@ -3518,17 +3539,54 @@ collect_disk_boot_diagnostics() {
 		systemctl --failed --no-pager --full || true
 		echo '=== dbus-broker status ==='
 		systemctl status dbus-broker.service dbus.socket --no-pager --full || true
-		echo '=== display manager status ==='
-		systemctl status display-manager.service --no-pager --full || true
+
+		# display-manager.service is an ALIAS -- a symlink to lightdm/gdm/sddm/
+		# greetd. `systemctl status` follows it, but `journalctl -u` matches on
+		# the literal unit name a message was logged under, which is always the
+		# concrete one. So the status block below showed lightdm exiting 1 five
+		# times on flounder:xfce while the journal section that would have said
+		# WHY came back with only the dbus.socket line (2026-09-11).
+		# Resolve the alias and ask for both names.
+		dm="$(systemctl show -P Id display-manager.service 2>/dev/null || true)"
+		[ -n "$dm" ] || dm=display-manager.service
+		echo "=== display manager status (${dm}) ==="
+		systemctl status "$dm" --no-pager --full || true
+
+		# Every failed unit, not a hardcoded list: the unit that matters is the
+		# FIRST one to fail, and which one that is differs per variant. The
+		# named units above stay because they are the usual suspects and are
+		# worth having even when they did not fail.
+		echo '=== journal for every failed unit (this boot) ==='
+		failed="$(systemctl --failed --no-legend --plain --no-pager 2>/dev/null | awk '{print $1}')"
+		for unit in $failed; do
+			echo "--- ${unit} ---"
+			journalctl -b --no-pager -o short-precise -u "$unit" | tail -n 60 || true
+		done
+
 		echo '=== dbus/display-manager journal (this boot) ==='
 		journalctl -b --no-pager -o short-precise \
-			-u dbus-broker.service -u dbus.socket -u display-manager.service || true
+			-u dbus-broker.service -u dbus.socket \
+			-u display-manager.service -u "$dm" || true
+
+		# Everything at error level, as a backstop: a unit that never reached
+		# "failed" (it restart-loops, or a dependency was cancelled first)
+		# leaves nothing in the loop above but does leave this.
+		echo '=== priority<=err, this boot ==='
+		journalctl -b --no-pager -o short-precise -p err | tail -n 80 || true
+
 		echo '=== recent coredumps ==='
-		coredumpctl --no-pager --no-legend list 2>&1 | tail -n 30 || true
-		for exe in dbus-broker dbus-broker-launch; do
-			echo "=== coredump info: ${exe} ==="
-			coredumpctl --no-pager info "$exe" 2>&1 | tail -n 160 || true
-		done
+		# Debian images ship no systemd-coredump, so this whole block used to
+		# emit three `sh: coredumpctl: not found` lines into the evidence and
+		# nothing else. Say which it is.
+		if command -v coredumpctl >/dev/null 2>&1; then
+			coredumpctl --no-pager --no-legend list 2>&1 | tail -n 30 || true
+			for exe in dbus-broker dbus-broker-launch; do
+				echo "=== coredump info: ${exe} ==="
+				coredumpctl --no-pager info "$exe" 2>&1 | tail -n 160 || true
+			done
+		else
+			echo '(coredumpctl not installed on this image; no coredump metadata)'
+		fi
 	DIAGEOF
 	cat "$out" >&2
 }
