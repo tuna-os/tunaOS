@@ -286,6 +286,11 @@ post_install:
   # dms-greeter); on openSUSE it is the difference between a login screen and
   # greetd's stock text prompt into a bare shell.
   - greetd-gtkgreet.sh
+  # The DMS QML payload, for the variants whose dms-greeter RPM ships only the
+  # runtime-sync launcher. Must run AFTER the COPR transaction above installs
+  # dms-greeter and BEFORE verify-branding-niri.sh reads the directory. No-op
+  # where there is no dms-greeter, or where its QML is already present.
+  - dms-qml-payload.sh
   # Curated Flatpak set (store + browser) + preinstall service — see the
   # script header; asserts live in verify-desktop-experience.sh.
   - flatpak-preinstall.sh
