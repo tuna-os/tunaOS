@@ -1120,7 +1120,40 @@ variants:
     emoji: "🐉"
     upstream_track: rolling
     description: "Based on Fedora Rawhide (rolling)"
-    base_image: "quay.io/fedora/fedora-bootc:rawhide@sha256:0d942e1b637ad5480cbdbdabb790060f894223a55ebedbc1729f97da8b5b1ab1"
+    # NOT digest-pinned, and this is the only base image here that is not.
+    #
+    # A digest pin on this tag is dead before the nightly that would use it.
+    # Measured 2026-09-11: the digest resolved at 12:55 was already 404 by
+    # 13:36 -- 41 minutes -- and `:rawhide` had moved on. It is not that the
+    # digest goes stale; quay garbage-collects the untagged manifest at once,
+    # so the pin does not resolve AT ALL:
+    #
+    #   Error: creating build container: ... reading manifest sha256:0d942e1b…
+    #   in quay.io/fedora/fedora-bootc: manifest unknown
+    #
+    # Compare fedora-bootc:44 in this same file, whose digest was still 200 in
+    # the same measurement. Stable tags are retained; Rawhide's are not.
+    #
+    # That makes repinning a fix with a one-hour half-life, and the repo's own
+    # safety net cannot close the gap either: check-base-image-pins.yml runs at
+    # 22:20 and the variant builds at 01:00, so the digest it verified is
+    # already gone by the time anything builds. scripts/check-base-image-pins.sh
+    # names this exact variant in its own history (#1788, 2026-08-16), because
+    # it keeps happening here and nowhere else for the same reason.
+    #
+    # So the tag is the honest reference. The point of bonito-rawhide is to
+    # track Rawhide, a target that moves several times a day; a digest that
+    # cannot be fetched buys no reproducibility, it only guarantees a red base
+    # every night and takes every downstream flavor with it. The pin checker
+    # already treats this as a declared state rather than an error, and says so
+    # per run:
+    #
+    #   SKIP  (not digest-pinned)  quay.io/fedora/fedora-bootc:rawhide
+    #
+    # Re-pin by digest only if quay starts retaining Rawhide manifests, or if
+    # something resolves the tag at build time and threads one digest through
+    # every stage of that build.
+    base_image: "quay.io/fedora/fedora-bootc:rawhide"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [fedora]
     akmods: "ublue-os"
