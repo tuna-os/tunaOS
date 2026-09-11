@@ -61,10 +61,20 @@ fi
 # Strategy: Mount variant-specific cache directories for parallel builds
 # Each variant gets its own cache to avoid conflicts
 # Output each argument on a separate line for proper array handling
+#
+# No ":z" suffix: every caller of these mounts (scripts/build-image-inner.sh)
+# already passes --security-opt label=disable on the same build invocation,
+# which makes the per-mount SELinux relabel a no-op. On GitHub-hosted CI
+# runners, IS_CI=1 switches the builder to buildah, and buildah's runc
+# rejects a bind mount carrying a ":z" Data option there: "bind mounts cannot
+# have any filesystem-specific options applied" at a trivial early RUN step,
+# killing every EL10 build (yellowfin, albacore, skipjack, bonito,
+# bonito-rawhide). podman build tolerates it, which is why this only ever
+# reproduced in CI.
 
 echo "--volume"
-echo "${CACHE_VARIANT}/dnf:/var/cache/dnf:z"
+echo "${CACHE_VARIANT}/dnf:/var/cache/dnf"
 echo "--volume"
-echo "${CACHE_VARIANT}/libdnf5:/var/cache/libdnf5:z"
+echo "${CACHE_VARIANT}/libdnf5:/var/cache/libdnf5"
 echo "--volume"
-echo "${CACHE_VARIANT}/rpm:/var/lib/rpm:z"
+echo "${CACHE_VARIANT}/rpm:/var/lib/rpm"
