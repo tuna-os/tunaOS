@@ -1332,9 +1332,44 @@ jobs:
     # starts. Promote treats a skipped gate as pass; asahi images are
     # verified by the dispatched "Verify Asahi image" 35-point harness
     # instead (no aarch64 KVM on GH runners — TCG boot gate is future work).
+    #
+    # cosmic/niri/xfwl4 are NOT SCHEDULED while the GPU runner group cannot be
+    # launched. TEMPORARY, maintainer decision 2026-09-11, and paired with the
+    # boots scope in .github/green-criteria.yml, which already declares the
+    # same three prefixes out of scope for the same reason.
+    #
+    # The runs-on selector below sends those compositors to the `gpu` group for
+    # a real DRM render node. The account's vCPU limit for the g4dn bucket is
+    # 0, so EC2 rejects every fleet request and the job dies before its first
+    # step ever runs:
+    #   Failed to launch runner: failed to create fleet: VcpuLimitExceeded
+    #   ... vCPU limit of 0 ... AllowedInstanceTypes:["g4dn*"]
+    #
+    # Scheduling it anyway measures nothing -- no runner, no serial log, no
+    # screenshot, no compositor -- and costs the cell its image on top: Promote
+    # needs verify_boot to be success OR skipped, and a runner that never
+    # attaches is neither. That is why `builds` reads not-green for cosmic and
+    # niri on ten variants whose images built, pushed and passed every other
+    # gate (albacore 34573957352, yellowfin 34563335220, marlin 34505652376 --
+    # Gate is the only red job in each).
+    #
+    # This is NOT a claim that those cells boot, and it does not make them
+    # green: `boots` still reads ⬜ for every one of them, which is what "not
+    # measured" has meant here since #2123. It stops a runner shortage from
+    # being recorded as a build failure.
+    #
+    # Revert together with the green-criteria exclusion the moment g4dn
+    # capacity exists (tuna-os/tunaOS#2123). The three prefixes here, in the
+    # runs-on selector below, and in green-criteria.yml are pinned equal by
+    # tests/test_the_boots_scope_matches_the_gpu_routing.py, so they cannot
+    # drift apart -- and re-adding capacity without re-adding the gate fails
+    # that test rather than silently leaving the cells ungated.
     if: >-
       inputs.publish && github.event_name != 'pull_request' &&
       !startsWith(inputs.flavor, 'base') &&
+      !startsWith(inputs.flavor, 'cosmic') &&
+      !startsWith(inputs.flavor, 'niri') &&
+      !startsWith(inputs.flavor, 'xfwl4') &&
       contains(inputs.platforms, 'amd64')
     # Back on RunsOn (AWS credits restored) for the DRM-gated desktops only:
     # cosmic/niri/xfwl4 are Smithay compositors that hard-require a DRM render
