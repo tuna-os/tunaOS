@@ -152,3 +152,31 @@ def test_the_readme_still_has_the_markers_the_generator_writes_between():
             f"{marker} is missing from README.md; the generator has nothing to "
             "replace and the refresh PR would be empty forever"
         )
+
+
+def test_readme_carries_factory_health_lines():
+    readme = (ROOT / "README.md").read_text()
+    assert "<!-- build-status:start -->" in readme
+    block = readme.split("<!-- build-status:start -->", 1)[1].split("<!-- build-status:end -->", 1)[0]
+    import re
+    assert re.search(r"Factory health:\s+\d+/\d+\s+cells green", block), (
+        "README build status block must carry 'Factory health: N/M cells green'"
+    )
+    assert re.search(r"Install-tested:\s+\d+/\d+\s+·\s+Lifecycle-tested:\s+\d+/\d+\s+·\s+Never tested:\s+\d+", block), (
+        "README build status block must carry 'Install-tested: · Lifecycle-tested: · Never tested:'"
+    )
+    assert re.search(r"Known regressions:\s+\d+\s+blocking,\s+\d+\s+advisory", block), (
+        "README build status block must carry 'Known regressions: N blocking, M advisory'"
+    )
+    assert re.search(r"Last full sweep:\s+", block), (
+        "README build status block must carry 'Last full sweep: <age>'"
+    )
+
+
+def test_generator_emits_factory_health_lines():
+    gen_text = GENERATOR.read_text()
+    assert "Factory health:" in gen_text
+    assert "Install-tested:" in gen_text
+    assert "Known regressions:" in gen_text
+    assert "Last full sweep:" in gen_text
+
