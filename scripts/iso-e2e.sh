@@ -1013,10 +1013,13 @@ _agent_debug_instructions() {
 	echo "  ${OUTPUT_DIR:-<unset>}"
 	echo
 	echo "Read these first, in this order:"
-	echo "  serial.log                     guest kernel + systemd console (the live boot)"
+	echo "  serial.log                     guest kernel + systemd console AND the"
+	echo "                                 forwarded journal (each unit's own stderr)"
 	echo "  installed-serial.log           the same for the post-install boot (LUKS/install modes)"
 	echo "  current-phase.txt              which phase was in flight when it died"
-	echo "  boot-diagnostics.txt           failed-unit status/journal/coredump, when collected"
+	echo "  boot-diagnostics.txt           failed-unit status/journal/coredump, when"
+	echo "                                 collected — needs SSH, which the worst"
+	echo "                                 failures break; serial.log always has it"
 	echo "  *.ppm / *.png                  framebuffer captures (00-boot, 10-ready, 30-installed)"
 	echo "  walkthrough/                   per-step installer frames + TAP (published mode)"
 	echo
