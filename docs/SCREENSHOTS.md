@@ -173,4 +173,4 @@
 ![smoke-kde_08](images/installer/smoke-kde_08.png)
 
 ---
-_Last regenerated: 2026-08-24T16:52:55Z_
+_Last regenerated: 2026-09-10T14:48:52Z_

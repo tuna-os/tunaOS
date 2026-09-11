@@ -149,6 +149,50 @@ require_any_user_unit() {
 # LUKS gate read green — xfce.sh's own comment documents the blindness.
 # So assert the greeter statically, on exactly the branch xfce.sh's enable
 # logic takes: greetd is this image's DM if and only if lightdm did not land.
+# An X11 display manager with no X server is a crash loop, not a login screen.
+#
+# lightdm spawns an X server for its greeter. It only RECOMMENDS one, and
+# every apt install here runs --no-install-recommends, so on Debian/Ubuntu the
+# server arrives only if a manifest names it. When it does not, lightdm exits
+# 1 and display-manager.service restarts it until systemd gives up:
+#
+#   × lightdm.service - Light Display Manager
+#       Process: ExecStart=/usr/sbin/lightdm (code=exited, status=1/FAILURE)
+#      lightdm.service: Start request repeated too quickly.
+#
+# Nothing else in this file sees that. require_any_unit asks whether the DM
+# unit EXISTS, which it does; the boot gate reports a desktop contract
+# timeout; and lightdm writes the actual reason -- "Seat seat0: Can't create
+# display server for greeter" -- to /var/log/lightdm/lightdm.log and nowhere
+# a CI artifact looks. So the image publishes, the gate fails opaquely, and
+# the cause is one absent package.
+#
+# Paid for twice before this check existed: gurnard:pantheon (LUKS run
+# 31215923156, bisected) and then flounder:xfce + flounder-sid:xfce (run
+# 34541165610), because the fix for the first was a comment in one manifest
+# and the second manifest never read it.
+#
+# Asserted here rather than only over the manifests because this runs INSIDE
+# the image, so it holds however the packages got there -- apt, a base image
+# that already carried lightdm, or a distro whose packaging differs.
+# Deliberately silent when lightdm is absent: greetd/gtkgreet and
+# cosmic-greeter are Wayland and need no X server.
+x11_display_manager_has_a_server() {
+	command -v lightdm >/dev/null 2>&1 || return 0
+	# Xorg is /usr/bin/Xorg on some families and /usr/lib/xorg/Xorg on
+	# Debian/Ubuntu, where it is not always on PATH.
+	command -v Xorg >/dev/null 2>&1 && return 0
+	local root="${TUNAOS_VERIFY_ROOT:-}"
+	compgen -G "${root}/usr/lib/xorg/Xorg" >/dev/null && return 0
+	compgen -G "${root}/usr/libexec/Xorg" >/dev/null && return 0
+	echo "lightdm is installed but no X server is (Xorg, /usr/lib/xorg/Xorg, /usr/libexec/Xorg) — lightdm cannot create a display server for its greeter, exits 1, and display-manager.service crash-loops; the reason is logged only to /var/log/lightdm/lightdm.log" >&2
+	if [[ "${IS_HUMMINGBIRD:-false}" == "true" ]]; then
+		waive
+		return 0
+	fi
+	exit 1
+}
+
 xfce_greetd_greeter_contract() {
 	command -v lightdm >/dev/null 2>&1 && return 0
 	command -v greetd >/dev/null 2>&1 || return 0
@@ -491,6 +535,12 @@ pantheon)
 	;;
 *) exit 0 ;;
 esac
+
+# Outside the case on purpose: lightdm is not one desktop's concern. xfce uses
+# it on Debian, pantheon uses it on Ubuntu, and the two paid for the same
+# missing package separately. Whichever desktop is being verified, if the image
+# ended up with lightdm it needs an X server.
+x11_display_manager_has_a_server
 
 if [[ "$mode" == --runtime ]]; then
 	# Each check is individually gated so a single failure doesn't
