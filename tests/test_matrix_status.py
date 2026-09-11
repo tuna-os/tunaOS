@@ -332,11 +332,16 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
             gms.VOLATILE_LINE,
         )
 
-    def test_the_real_build_config_declares_52_luks_cells(self):
+    def test_the_real_build_config_declares_51_luks_cells(self):
         """Ties the unit tests above to the actual denominator on disk.
 
         If this number moves, the LUKS total moves with it, and that should be
         a deliberate build-config edit rather than a surprise.
+
+        52 -> 51 on 2026-09-10: guppy:gnome is off. Gentoo ::gentoo tops out
+        at GNOME 49.9 against the GNOME 50 floor (manifests/desktops/gnome.yaml
+        minimum_version: 50, verify-desktop-experience.sh GNOME_MINIMUM_MAJOR=50),
+        so the flavor fails verify-desktop-experience.sh deterministically (#2450).
 
         53 -> 52 on 2026-09-05: flounder:gnome is off. Debian 13 trixie
         ships GNOME 48.7 against a floor of 50, and the sid -> trixie
@@ -372,7 +377,7 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         the Niri stack and zero `xfce*`), so they add nothing here.
         """
         matrix = gms.luks_matrix()
-        self.assertEqual(sum(len(v) for v in matrix.values()), 52)
+        self.assertEqual(sum(len(v) for v in matrix.values()), 51)
         # The control that makes the drop specific rather than merely smaller:
         # hummingbird keeps exactly the desktops it has package sets for.
         self.assertEqual(matrix.get("hummingbird"), {"gnome", "cosmic"})
@@ -389,6 +394,9 @@ class UndeclaredCellsAreNotCountedAgainstUs(unittest.TestCase):
         # switched off Debian GNOME entirely would fail here rather than pass
         # as a smaller-but-honest denominator.
         self.assertIn("gnome", matrix.get("flounder-sid", set()))
+        # Guppy excludes gnome until Gentoo carries GNOME 50+ (#2450)
+        self.assertEqual(matrix.get("guppy"), {"kde", "xfce"})
+        self.assertNotIn("gnome", matrix.get("guppy", set()))
 
 
 if __name__ == "__main__":
