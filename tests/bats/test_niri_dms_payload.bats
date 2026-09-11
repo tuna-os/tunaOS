@@ -55,6 +55,33 @@ _code() { grep -v '^[[:space:]]*#' "$1"; }
   grep -qE '^[[:space:]]+dms_qml_sha256: "[0-9a-f]{64}"' "$versions"
 }
 
+@test "the path that actually builds niri reaches the QML fallback" {
+  # The test above pins niri.sh, which is the LEGACY installer. Every variant
+  # that ships niri takes the manifest path instead, and it never sources
+  # niri.sh — so that assertion held while the fallback ran on nothing. Three
+  # EL10 variants failed their niri build on the missing payload the same day
+  # (albacore/skipjack/yellowfin, 2026-09-11) with the pin above green.
+  #
+  # install-desktop.sh sources post_install entries from build_scripts/desktop/
+  # by bare name, so the hook has to live there and be named in the manifest.
+  local manifest="${REPO_ROOT}/manifests/desktops/niri.yaml"
+  local hook="${REPO_ROOT}/build_scripts/desktop/dms-qml-payload.sh"
+
+  [ -f "$hook" ]
+  _code "$manifest" | grep -qE '^[[:space:]]*-[[:space:]]*dms-qml-payload\.sh[[:space:]]*$'
+  _code "$hook" | grep -qF 'install-dms-qml-fallback.sh'
+
+  # Sourced, not executed: an `exit` here would abandon the rest of the
+  # desktop install (branding checks included) and still report success.
+  ! _code "$hook" | grep -qE '^[[:space:]]*exit[[:space:]]'
+}
+
+@test "the QML payload hook passes shellcheck" {
+  if ! command -v shellcheck &>/dev/null; then skip "shellcheck not installed"; fi
+  run shellcheck --severity=error --exclude=SC1091 "${REPO_ROOT}/build_scripts/desktop/dms-qml-payload.sh"
+  [ "$status" -eq 0 ]
+}
+
 @test "DMS QML fallback passes shellcheck" {
   if ! command -v shellcheck &>/dev/null; then skip "shellcheck not installed"; fi
   run shellcheck --severity=error --exclude=SC1091 "${REPO_ROOT}/build_scripts/install-dms-qml-fallback.sh"
