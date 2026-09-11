@@ -13,6 +13,34 @@ packages:
     - xfce4-goodies
     - lightdm
     - lightdm-gtk-greeter
+    # The X server lightdm's seat spawns. Debian's XFCE session is X11 and
+    # lightdm only RECOMMENDS an X server, so under the installer's
+    # --no-install-recommends (build_scripts/lib.sh) nothing on this list
+    # pulls one in. Without it lightdm cannot create a display server for the
+    # greeter, exits 1, and display-manager.service crash-loops:
+    #
+    #   × lightdm.service - Light Display Manager
+    #       Process: 810 ExecStart=/usr/sbin/lightdm (code=exited, status=1/FAILURE)
+    #      lightdm.service: Scheduled restart job, restart counter is at 5.
+    #
+    # and the boot gate then times out waiting for a desktop contract marker
+    # that cannot arrive (flounder:xfce and flounder-sid:xfce, run
+    # 34541165610). The daemon writes the actual reason -- "Seat seat0: Can't
+    # create display server for greeter" -- only to /var/log/lightdm/
+    # lightdm.log; the journal shows the bare exit 1 above, which is why this
+    # reads as a mystery rather than a missing package.
+    #
+    # This is the same bug pantheon.yaml carries a note about, in the same
+    # shape: measured on gurnard:pantheon by LUKS run 31215923156, bisected
+    # there with this package set minus/plus these two. XFCE on Debian is the
+    # other apt manifest that declares lightdm, and it never got the fix.
+    # tests/test_an_apt_lightdm_manifest_ships_an_x_server.py pins both.
+    - xserver-xorg
+    # Queried by every lightdm greeter for the user list; also a lightdm
+    # Recommends, so it never arrives implicitly either. Absent, each greeter
+    # start first warns "Error getting user list from
+    # org.freedesktop.Accounts".
+    - accountsservice
     - xdg-desktop-portal-gtk
     - thunar
     - mousepad
