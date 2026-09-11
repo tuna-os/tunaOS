@@ -62,10 +62,9 @@ The `gnome-asahi` image is off until the tier adds aarch64
 ([tunaos-packages#673](https://github.com/tuna-os/tunaos-packages/issues/673)).
 Every GNOME image uses GNOME 50 or newer. The project does not promote older versions.
 
-Hummingbird is x86_64 only, including its base. Its aarch64 package snapshot
-does not yet carry `xfsprogs`, which the base stage requires and refuses to go
-without, so no hummingbird arm64 image can be built at all today — not a
-narrower desktop selection, an absent architecture. See
+Hummingbird is x86_64 only. This includes its base. The aarch64 package
+snapshot has no `xfsprogs`, and the base stage needs it. No hummingbird arm64
+image builds today. The architecture is absent, not thinner. See
 [docs/HUMMINGBIRD.md](docs/HUMMINGBIRD.md).
 
 Tags are `<desktop>[-hardware]` — e.g. `yellowfin:gnome-hwe`,

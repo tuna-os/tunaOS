@@ -44,30 +44,30 @@ it leads directly to expecting Fedora 43's package set to be present. It is not.
 tunaOS builds `hummingbird:{base,gnome,cosmic}` (see
 `.github/build-config.yml`), **amd64 only — every flavor, base included**.
 
-That is narrower than it used to read here, and the reason moved down a layer.
-It was GNOME alone that was amd64-only, because its utah-packages source is not
-multi-arch; COSMIC's own package set converged on aarch64 on 2026-09-06. But the
-*base* cannot build on arm64 at all, so a desktop whose packages resolve has
-nothing to layer onto. `build_scripts/10-base-packages.sh` requires `xfsprogs`
-and exits rather than ship an image `bootc install to-disk` cannot format a root
-for, and no enabled repository carries it for aarch64. Measured against the live
-indexes on 2026-09-11 (`repo.tunaos.org/hummingbird/20251124-$basearch/repodata`,
-`primary.xml`) rather than inferred:
+That is narrower than this page said before, and the cause moved down a layer.
+GNOME alone was amd64-only, because its utah-packages source is x86_64. COSMIC's
+own package set converged on aarch64 on 2026-09-06. But the *base* does not build
+on arm64. A desktop whose packages resolve has nothing to layer onto.
+
+`build_scripts/10-base-packages.sh` needs `xfsprogs`. It exits when no repository
+has it, because `bootc install to-disk` cannot format a root without it. No
+aarch64 repository has it. These counts come from the live indexes on 2026-09-11
+(`repo.tunaos.org/hummingbird/20251124-$basearch/repodata`, `primary.xml`):
 
 | arch | packages | `xfsprogs` | `malcontent` |
 |---|---:|---:|---:|
 | x86_64 | 13442 | 1 | 2 |
 | aarch64 | 7177 | **0** | **0** |
 
-The aarch64 rebuild wave is roughly half-published, and the same gap is why
-`flatpak` is *broken* rather than merely missing there: nothing provides
+The aarch64 rebuild wave is about half-published. The same gap explains
+`flatpak`: on that arch it is *broken*, not absent. Nothing supplies
 `libmalcontent-0.so.0` for `flatpak-1.17.3-1.bfin1.aarch64`.
 
-Restoring arm64 needs two things measured, not one: `xfsprogs` present in the
-aarch64 snapshot (the curl above is the whole check), **and** an aarch64 build of
-whatever package source the variant is on by then. As hummingbird takes more of
-its set from utah-packages that second condition gets harder, not easier — that
-repository is a single-manifest x86_64 OCI image with no manifest list at all.
+To restore arm64, satisfy two conditions, not one. First, `xfsprogs` must appear
+in the aarch64 snapshot; the curl above is the whole check. Second, the
+variant's package source must build for aarch64. This condition gets harder as
+hummingbird takes more of its set from utah-packages. The utah repository is one
+OCI image for x86_64, with no manifest list.
 
 Everything except `base` asks a distribution that
 **deliberately ships no desktop environment** to host a full desktop, layered
