@@ -42,9 +42,34 @@ it leads directly to expecting Fedora 43's package set to be present. It is not.
 ## What this means for tunaOS
 
 tunaOS builds `hummingbird:{base,gnome,cosmic}` (see
-`.github/build-config.yml`). Base and COSMIC build for amd64 and arm64; GNOME
-remains amd64-only because its utah-packages source is not multi-arch. Everything
-except `base` asks a distribution that
+`.github/build-config.yml`), **amd64 only — every flavor, base included**.
+
+That is narrower than it used to read here, and the reason moved down a layer.
+It was GNOME alone that was amd64-only, because its utah-packages source is not
+multi-arch; COSMIC's own package set converged on aarch64 on 2026-09-06. But the
+*base* cannot build on arm64 at all, so a desktop whose packages resolve has
+nothing to layer onto. `build_scripts/10-base-packages.sh` requires `xfsprogs`
+and exits rather than ship an image `bootc install to-disk` cannot format a root
+for, and no enabled repository carries it for aarch64. Measured against the live
+indexes on 2026-09-11 (`repo.tunaos.org/hummingbird/20251124-$basearch/repodata`,
+`primary.xml`) rather than inferred:
+
+| arch | packages | `xfsprogs` | `malcontent` |
+|---|---:|---:|---:|
+| x86_64 | 13442 | 1 | 2 |
+| aarch64 | 7177 | **0** | **0** |
+
+The aarch64 rebuild wave is roughly half-published, and the same gap is why
+`flatpak` is *broken* rather than merely missing there: nothing provides
+`libmalcontent-0.so.0` for `flatpak-1.17.3-1.bfin1.aarch64`.
+
+Restoring arm64 needs two things measured, not one: `xfsprogs` present in the
+aarch64 snapshot (the curl above is the whole check), **and** an aarch64 build of
+whatever package source the variant is on by then. As hummingbird takes more of
+its set from utah-packages that second condition gets harder, not easier — that
+repository is a single-manifest x86_64 OCI image with no manifest list at all.
+
+Everything except `base` asks a distribution that
 **deliberately ships no desktop environment** to host a full desktop, layered
 from tunaOS's own package snapshot.
 
