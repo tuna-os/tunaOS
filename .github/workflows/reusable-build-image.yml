@@ -1673,10 +1673,36 @@ jobs:
 
           is_hb=false
           [[ "${IMAGE_VARIANT}" == hummingbird* ]] && is_hb=true
+          # IS_ELN matters here for the same reason IS_HUMMINGBIRD does: the
+          # contract reads it to decide whether a finding is a packaging
+          # mistake or a measured property of the upstream compose.
+          #
+          # At build time install-desktop.sh sources lib.sh, which derives
+          # IS_ELN from BASE_IMAGE, so the script's ELN branch fires and wahoo
+          # builds. This job runs the SAME script standalone in a container and
+          # passed only IS_HUMMINGBIRD, so IS_ELN defaulted to false, the
+          # branch could not fire, and the script exited 1 on a gap it is
+          # written to name and allow:
+          #
+          #   ffmpeg cannot decode h264 — a free/crippled libavcodec is installed
+          #
+          # That is wahoo's documented ELN codec gap (README calls the variant
+          # "no codecs"; tests/bats/test_eln_codec_gap.bats pins the exemption
+          # as ELN-only and loud). It cost wahoo its gnome, cosmic and kde
+          # cells: Desktop contract failed, so Promote was skipped, so `builds`
+          # read not-green for three images that built and pushed (run
+          # 34609709028). Nothing was wrong with the images.
+          #
+          # Derived from the variant id the same way is_hb is, rather than
+          # re-deriving from BASE_IMAGE, so the two stay one line apart and
+          # neither can drift from the other.
+          is_eln=false
+          [[ "${IMAGE_VARIANT}" == wahoo* ]] && is_eln=true
 
           sudo podman run --rm \
             -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
             -e IS_HUMMINGBIRD="$is_hb" \
+            -e IS_ELN="$is_eln" \
             --entrypoint /bin/bash "${TEST_IMAGE}" /vde.sh "${DESKTOP}"
 
       - name: Verify package wishlist
