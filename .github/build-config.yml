@@ -1083,9 +1083,6 @@ variants:
       - id: base
         stage: 1
         build_image: true
-      - id: gnome
-        stage: 2
-        build_image: true
       - id: kde
         stage: 2
         build_image: true
@@ -1097,6 +1094,18 @@ variants:
         stage: 2
         build_image: true
       # NOT declared, and not an oversight:
+      #   gnome   — ::gentoo's main tree tops out at GNOME 49.9, below the
+      #             50 floor build_scripts/checks/verify-desktop-experience.sh
+      #             enforces (manifests/desktops/gnome.yaml: "Gentoo
+      #             (::gentoo tops out at 49.9). Their gnome cells fail the
+      #             desktop contract until a source that meets the floor is
+      #             wired, which is the honest state, not a bug in the
+      #             check."). That made every scheduled Build Guppy run fail
+      #             from 2026-09-03 onward (the floor's start date) through
+      #             at least 2026-09-10, burning 1-4h of CI a day on a
+      #             guaranteed-red gnome cell and hiding whether kde/xfce/base
+      #             were actually healthy behind it. Tracked in tunaOS#2450;
+      #             re-add once Gentoo ships a GNOME >=50 source.
       #   niri    — no ebuild in the Gentoo main tree at all. A search returns
       #             only dev-ruby/niceogiri. Declaring it would publish an
       #             installable image with no compositor, exactly as
