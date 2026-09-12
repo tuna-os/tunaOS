@@ -123,3 +123,41 @@ gum
 #    one. Remove this entry once rpmfusion-free-rawhide rebuilds ffmpeg
 #    against openapv 0.3 (liboapv.so.3), restoring ffmpeg on bonito-rawhide.
 ffmpeg
+
+# ── wahoo (Fedora ELN preview lane) — GNOME/COSMIC extras the ELN compose
+#    does not carry ──
+#
+# Measured 2026-09-11 by the probe itself, not inferred: install_available
+# asked for each of these against wahoo's own enabled repos and recorded the
+# miss, which is what a wishlist entry IS (run 34657968072, wahoo:gnome and
+# wahoo:cosmic Desktop contract).
+#
+# Every one is a nice-to-have by this file's own test: none is a display
+# manager, greeter, portal or session package, so none is load-bearing for a
+# usable desktop, and verify-desktop-experience.sh — which does assert those —
+# passes on both images. What is lost is VPN configuration dialogs, document
+# and video thumbnailers, iOS device mounting, Qt window decorations that match
+# Adwaita, and the stock wallpaper sets. An image without them is still
+# correct; it is plainer.
+#
+# Note the limitation this file's format imposes: these entries are GLOBAL, so
+# a Fedora variant that starts missing gnome-backgrounds now passes too. That
+# is the existing trade in every section above (xorg-x11-server-Xwayland is
+# listed for EL10 and thereby tolerated everywhere). Per-variant scoping would
+# fix it and is a change to the gate, not to this list.
+#
+# Remove each entry once it resolves on ELN — either upstream ships it or
+# tuna-os/tunaos-packages builds it for the preview lane. The gate only fires
+# on actual misses, so deleting a line is safe the moment the package exists.
+NetworkManager-openconnect-gnome
+NetworkManager-ssh-gnome
+NetworkManager-vpnc-gnome
+evince-previewer
+evince-thumbnailer
+gnome-backgrounds
+gnome-user-share
+gvfs-afc
+qadwaitadecorations-qt5
+totem-video-thumbnailer
+# wahoo:cosmic — the only miss on that image, and purely cosmetic.
+cosmic-wallpapers
