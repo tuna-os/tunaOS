@@ -68,23 +68,23 @@ it.
 
 Scored against `.github/green-criteria.yml`: a cell is green only when every **blocking** criterion applicable to it has a current affirmative result; a criterion that was skipped, never tested, or unasserted renders ⬜ and does not count as satisfied. Blocking today: `builds`, `desktop`, `boots`, `no_silent_omissions`. Advisory (measured in the sections below, not yet biting): `install`, `lifecycle`, `parity`, `rebuildable`, `arch_honesty`. Unimplemented: `iso`. Graduating a criterion is an edit to `enforcement:` in that file — this table and the README count tighten with no code change.
 
-**75 of 139** published cells are composite-green.
+**74 of 139** published cells are composite-green.
 
 | Variant | gnome | kde | cosmic | niri | xfce |
 |---|:--:|:--:|:--:|:--:|:--:|
 | **albacore** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **bonito** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **bonito-rawhide** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **flounder** | — | ⬜ | — | — | ❌ |
-| **flounder-sid** | ⬜ | ⬜ | — | — | ❌ |
+| **flounder** | — | ⬜ | — | — | ⬜ |
+| **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
 | **grouper** | ⬜ | ⬜ | ⬜ | — | ⬜ |
 | **guppy** | — | ⬜ | — | — | ⬜ |
 | **hummingbird** | ❌ | — | ⬜ | — | — |
 | **marlin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **sailfin** | ⬜ | ⬜ | ⬜ | ⬜ | ⬜ |
 | **skipjack** | ❌ | ⬜ | ⬜ | ⬜ | ⬜ |
-| **wahoo** | ❌ | ⬜ | ⬜ | — | — |
-| **yellowfin** | ❌ | ⬜ | ⬜ | ⬜ | ⬜ |
+| **wahoo** | ⬜ | ⬜ | ⬜ | — | — |
+| **yellowfin** | ❌ | ⬜ | ⬜ | ⬜ | ❌ |
 
 Cells outside the desktop columns (base, hwe, nvidia and friends) are in the count above but not the table; only `builds` applies to them today.
 
