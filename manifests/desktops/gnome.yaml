@@ -171,6 +171,28 @@ packages:
   # GNOME version on this base: 51~beta (gnome-shell 51~beta-3.eln158,
   # gdm 51~beta-1.eln158, mutter 51~beta-1.eln158), on BOTH x86_64 and
   # aarch64 — so no per-arch flavor pin is needed, unlike hummingbird.
+  # gnome-keyring is named here rather than left to whatever gdm or
+  # gnome-shell happen to Require. ELN used to pull it in transitively and
+  # stopped: wahoo:gnome built clean on 2026-09-11 23:24 (run 34657968072) and
+  # failed on 2026-09-12 09:5x (run 34686896701) with
+  #
+  #     GNOME 51 meets the floor of 50
+  #     missing required path: none of [/usr/bin/gnome-keyring-daemon] exist
+  #
+  # from verify-desktop-experience.sh, in the same compose churn that retired
+  # fastfetch the same morning. Both names resolve on ELN, measured against the
+  # live repos (dl.fedoraproject.org/pub/eln/1, AppStream+BaseOS+CRB+Extras).
+  #
+  # -pam alongside it for the reason the apt and zypper sections give: without
+  # the PAM module the keyring is not unlocked by the login password, so saved
+  # credentials and the SSH/GPG agents prompt separately on first use. apt lists
+  # gnome-keyring + libpam-gnome-keyring and zypper lists gnome-keyring +
+  # gnome-keyring-pam; this makes ELN say the same thing.
+  #
+  # The other dnf sections (fedora, el10, hummingbird) still get it
+  # transitively and are deliberately untouched -- their contract checks pass,
+  # and changing a list on a measurement taken against a different base is how
+  # a guess ships.
   eln:
     packages:
       - ModemManager
@@ -190,6 +212,8 @@ packages:
       - gnome-control-center
       - gnome-disk-utility
       - gnome-initial-setup
+      - gnome-keyring
+      - gnome-keyring-pam
       - gnome-remote-desktop
       - gnome-session-wayland-session
       - gnome-settings-daemon
