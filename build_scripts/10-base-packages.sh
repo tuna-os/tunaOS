@@ -296,8 +296,8 @@ elif [[ ${IS_ELN:-false} == true ]]; then
 	# Base set, strict. Every name here was verified present in
 	# eln-{baseos,appstream,crb,extras} on 2026-08-25; a miss is a real ELN
 	# regression worth failing the build on, which is the whole point of an
-	# early-warning lane. The four names the EL/Fedora lists carry that ELN
-	# does NOT ship are deliberately absent rather than silently skipped:
+	# early-warning lane. The names the EL/Fedora lists carry that ELN does
+	# NOT ship are deliberately absent rather than silently skipped:
 	#
 	#   systemd-oomd  — `dnf repoquery --whatprovides systemd-oomd` returns
 	#                   nothing (EL drops the subpackage); systemd-oomd-defaults
@@ -306,6 +306,22 @@ elif [[ ${IS_ELN:-false} == true ]]; then
 	#   tailscale     — pkgs.tailscale.com/stable/centos/11/tailscale.repo
 	#                   is a 404 (measured); 20-packages.sh's own guard
 	#                   already declines to fetch it.
+	#   fastfetch     — retired from ELN between 2026-09-11 23:24 and
+	#                   2026-09-12 08:53 UTC. The lane caught it exactly as
+	#                   designed: run 34657968072 installed
+	#                   fastfetch-0:2.68.1-1.eln159 and run 34684438275, on
+	#                   the same eln159 build tags, got
+	#
+	#                       No match for argument: fastfetch
+	#
+	#                   which killed base on both arches and took all four
+	#                   wahoo cells with it. Queried against the live repos
+	#                   the same day (dl.fedoraproject.org/pub/eln/1,
+	#                   AppStream+BaseOS+CRB+Extras, 12996 packages): absent,
+	#                   while glow, gum and distrobox — its neighbours in
+	#                   this very transaction — all still resolve, which is
+	#                   what rules out a broken compose. Move it back up the
+	#                   moment ELN ships it again.
 	#
 	# glow, gum, tuned-ppd, system-reinstall-bootc, fpaste and the libcamera
 	# set are EPEL packages on the EL10 family but are IN ELN (eln-appstream
@@ -322,7 +338,6 @@ elif [[ ${IS_ELN:-false} == true ]]; then
 		systemd-container \
 		flatpak \
 		distrobox \
-		fastfetch \
 		fwupd \
 		dbus-daemon \
 		fuse-overlayfs \
