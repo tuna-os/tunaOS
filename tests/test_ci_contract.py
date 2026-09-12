@@ -28,6 +28,7 @@ not the same as a test being run."
 
 from __future__ import annotations
 
+import fnmatch
 import importlib.util
 from pathlib import Path
 
@@ -210,11 +211,37 @@ def test_a_dispatch_only_workflow_is_not_active():
     assert contract.cadence_days("x.yml", {"x.yml": doc}) is None
 
 
+def _filter_matches(path: str, patterns: list[str]) -> bool:
+    """Would a change to `path` match any entry in a paths filter?
+
+    Compares coverage, not spelling. The assertion below used to require the
+    literal strings ".github/workflows/**" and ".github/green-criteria.yml",
+    which failed when the filter was widened to ".github/**" -- a change that
+    covers strictly more, including .github/build-config.yml, which twenty
+    test files read and no entry had matched. A literal check cannot tell
+    "broader" from "gone", so it reads a safer filter as a broken one.
+    """
+    return any(fnmatch.fnmatch(path, pat.replace("/**", "/*"))
+               or path.startswith(pat.removesuffix("**"))
+               for pat in patterns)
+
+
 def test_the_contract_test_runs_on_workflow_changes():
     """A contract that only runs when tests/ change cannot catch a workflow
-    edit that breaks a gate. test.yml's pull_request paths must include the
+    edit that breaks a gate. test.yml's pull_request paths must cover the
     workflows and the criteria file."""
     doc = yaml.safe_load((ROOT / ".github/workflows/test.yml").read_text())
     paths = contract.triggers(doc)["pull_request"]["paths"]
-    assert ".github/workflows/**" in paths, paths
-    assert ".github/green-criteria.yml" in paths, paths
+    for needed in (".github/workflows/reusable-build-image.yml",
+                   ".github/green-criteria.yml"):
+        assert _filter_matches(needed, paths), (
+            f"a change to {needed} would not re-run Unit Tests; "
+            f"paths filter is {paths}")
+
+
+def test_the_filter_match_helper_can_say_no():
+    """Guard the helper: one that returned True for everything would make the
+    assertion above vacuously true (tunaOS#1730)."""
+    assert not _filter_matches(".github/workflows/x.yml", ["scripts/**"])
+    assert _filter_matches(".github/workflows/x.yml", [".github/**"])
+    assert _filter_matches(".github/workflows/x.yml", [".github/workflows/**"])
