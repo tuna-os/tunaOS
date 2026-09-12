@@ -179,6 +179,29 @@ qcow2 variant flavor='gnome' repo='local' tag='':
     # screenshot) while the captured serial.log held nothing but kernel printk —
     # an emergency-mode boot with no recorded reason. ttyS0 last puts the boot
     # log the Gate captures where it is actually useful.
+    #
+    # systemd.journald.forward_to_console=1 for the same reason, one layer up.
+    # The console carries systemd's status lines, but a unit's own stderr goes
+    # to the journal, so a failure reads:
+    #
+    #   [FAILED] Failed to start dbus-broker.service - D-Bus System Message Bus.
+    #   See 'systemctl status dbus-broker.service' for details.
+    #
+    # pointing at a command nobody can run, because the guest is unreachable
+    # for exactly the reason being diagnosed: dbus-broker fails, so
+    # systemd-logind fails, so sshd cannot open a PAM session, and
+    # collect_disk_boot_diagnostics records the one line it can —
+    # "guest SSH unavailable; could not collect boot diagnostics".
+    #
+    # Measured on three variants the same day (2026-09-11): yellowfin:gnome,
+    # skipjack:gnome and wahoo:gnome all died this way, nine cells between them
+    # once the -hwe and -nvidia flavors are counted, while kde on the same
+    # images booted clean. Nothing in the evidence says WHY dbus-broker failed.
+    #
+    # scripts/iso-e2e.sh bakes this karg on its own `bootc install to-disk`
+    # (tunaOS#2465). The Gate does not take that path — it builds the disk
+    # here, with `just qcow2`, and boots the result — so the karg has to be on
+    # both or the gate that actually scores `boots` stays undiagnosable.
     echo "==> Running bootc install to-disk (this takes a few minutes)..."
     sudo podman run \
         --rm \
@@ -196,6 +219,7 @@ qcow2 variant flavor='gnome' repo='local' tag='':
             --generic-image \
             "${COMPOSEFS_ARGS[@]}" \
             --karg console=tty0 --karg console=ttyS0 \
+            --karg systemd.journald.forward_to_console=1 \
             --karg systemd.unit=graphical.target \
             "${SSH_KEY_ARGS[@]}" \
             --source-imgref "containers-storage:${IMG_REF}" \
