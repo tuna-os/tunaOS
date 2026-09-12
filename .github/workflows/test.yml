@@ -2,18 +2,54 @@ name: Test
 on:
   pull_request:
     paths:
+      # Every path the suite asserts on, so that a change to one of them
+      # re-runs the tests that read it. tests/
+      # test_the_test_filter_covers_what_the_tests_read.py holds this list to
+      # that rule, because the gap is invisible from a pull request: a PR that
+      # matched nothing here showed every applicable check green and ran no
+      # Unit Tests at all, which reads exactly like a PR that was tested.
+      #
+      # That is measured, not theoretical. tunaOS#2475 changed one file,
+      # manifests/desktops/gnome.yaml, and merged on 13 green checks with Unit
+      # Tests absent -- while ten test files read manifests/. One of them,
+      # tests/bats/test_niri_dms_payload.bats, exists because a niri image once
+      # shipped, booted and published with its entire shell missing
+      # (tunaOS#1009, #637); a manifest edit that broke that guard would have
+      # gone green here and failed on a nightly instead.
+      #
+      # Reference counts across tests/**/*.py and tests/**/*.bats:
+      #   build_scripts 262   scripts 139   .github 101   live-iso 35
+      #   Containerfile* ~36  manifests 23  .github/build-config.yml 20
+      #   just 14  image-versions.yaml 11  system_files 11
+      #   registry-map.yaml 4  files 2
       - 'scripts/**'
       - 'tests/**'
       - 'build_scripts/**'
-      - '.github/scripts/**'
-      - '.github/changelogs.py'
-      # The CI contract (tests/test_ci_contract.py) proves every green gate
-      # exists and runs; it has to re-run when the gates themselves move.
-      - '.github/workflows/**'
-      - '.github/green-criteria.yml'
-      - 'docs/CI_SPEC.md'
+      # One entry rather than six. .github/scripts/**, changelogs.py,
+      # workflows/**, green-criteria.yml, runs-on.yml and actions/** were all
+      # listed while .github/build-config.yml -- the matrix itself, what
+      # variants exist and what flavors each declares -- was not, and twenty
+      # test files read it. A partially covered directory is the shape of this
+      # bug, so this covers it wholesale. It also keeps the CI contract
+      # (tests/test_ci_contract.py) re-running when the gates it proves move.
+      - '.github/**'
+      # Build inputs.
+      - 'manifests/**'
+      - 'live-iso/**'
+      - 'system_files/**'
+      - 'system_files_overrides/**'
+      - 'custom/**'
+      - 'files/**'
+      - 'Containerfile*'
+      - 'image-versions.yaml'
+      - 'registry-map.yaml'
+      - 'renovate.json'
       - 'Justfile'
       - 'just/**'
+      # Read as a spec by the CI contract test, not as prose. The rest of
+      # docs/ is prose and generated content, gated by `ste` and `regenerate`;
+      # see the test named above for why docs/** is deliberately absent.
+      - 'docs/CI_SPEC.md'
   push:
     branches: [main]
   workflow_dispatch:
