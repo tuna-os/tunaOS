@@ -39,30 +39,43 @@ _code() { grep -v '^[[:space:]]*#' "$SCRIPT"; }
   [[ "$remove_line" != *"--from-repo"* ]]
 }
 
-@test "the kernel install IS constrained to the t2linux COPR" {
+@test "the install no longer asks --from-repo to carry the pin" {
+  # Measured, not assumed: run 34760267199 ran repoquery --repo and install
+  # --from-repo in the same job, seconds apart, with the same id and options.
+  # The repoquery listed kernel-7.1.9-200.t2.fc44; the install said "No match
+  # for argument 'kernel'" and loaded no repository at all.
+  # Joined, because the old form put --from-repo on its own continuation
+  # line and a single-line grep would pass against it for the wrong reason.
   local install_line
-  install_line="$(_code | grep -A5 'dnf -y install --allowerasing' | tr '\n' ' ')"
-  [[ "$install_line" == *"--from-repo"* ]]
-  # The id may be held in a variable; whichever way, it must resolve to the COPR.
-  [[ "$install_line" == *"sharpenedblade:t2linux"* ]] ||
-    _code | grep -qF 'copr:copr.fedorainfracloud.org:sharpenedblade:t2linux'
+  install_line="$(_code | grep -A6 'dnf -y install --allowerasing' | tr '\n' ' ')"
+  [ -n "$install_line" ]
+  [[ "$install_line" != *"--from-repo"* ]]
 }
 
-@test "the install clears the base image's exclude filters" {
-  # The whole reason the pinned repo appeared to carry no kernel. Repo-level
-  # excludes need the glob form; the bare one only clears [main] (see the
-  # nvidia overlay, which learned this the same way).
+@test "the pin lives in the argument, as an exact EVR" {
+  # Fedora ships 7.2.4-200.fc44 and the COPR 7.1.9-200.t2.fc44, so an exact
+  # EVR can only resolve to the t2 build — a pin nothing can reinterpret.
   local install_line
-  install_line="$(_code | grep -A5 'dnf -y install --allowerasing' | tr '\n' ' ')"
-  [[ "$install_line" == *"--setopt='*.excludepkgs='"* ]]
-  [[ "$install_line" == *"--setopt='*.exclude='"* ]]
-  [[ "$install_line" == *"--setopt='excludepkgs='"* ]]
-  [[ "$install_line" == *"--setopt='exclude='"* ]]
+  install_line="$(_code | grep -A6 'dnf -y install --allowerasing' | tr '\n' ' ')"
+  [[ "$install_line" == *'"kernel-${_t2_evr}"'* ]]
+  [[ "$install_line" == *'"kernel-core-${_t2_evr}"'* ]]
+  [[ "$install_line" == *'"kernel-modules-${_t2_evr}"'* ]]
+  [[ "$install_line" == *'"kernel-modules-core-${_t2_evr}"'* ]]
+}
+
+@test "the EVR comes from the COPR and must carry the t2 dist tag" {
+  # Reading the version from the repo is the whole mechanism, so a repo that
+  # offers no .t2. kernel must stop the build rather than install whatever
+  # sorted last.
+  _code | grep -qF 'dnf -y repoquery --repo="${_T2_REPO}"'
+  _code | grep -qE "grep -E '\\\\.t2\\\\.'"
+  _code | grep -qF 'ERROR: the t2linux repo offers no kernel build tagged .t2.'
 }
 
 @test "the exclude filters actually in force are logged" {
-  # If the diagnosis above is ever wrong, the next log says which filters were
-  # really set, rather than repeating "No match for argument".
+  # This probe is what disproved the exclude theory (run 34760267199 printed
+  # "(none)"). It stays: it costs one line and it is how the next wrong
+  # diagnosis gets caught before it ships.
   _code | grep -qF '/etc/yum.repos.d/'
   _code | grep -qE "grep .*(exclude\|excludepkgs)"
 }

@@ -283,7 +283,25 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          find results -name result.json -exec cat {} + | jq -s -c 'sort_by(.cell)' > found.json
+          # -not -path '*/evidence/*': each cell artifact ships result.json
+          # TWICE — once at its root and once inside the evidence bundle — so
+          # a bare -name match counted all 51 cells twice and the baseline
+          # reported "72/102 pass" for a 51-cell sweep. The reconciliation
+          # below cannot catch that: doubling both sides still balances, and
+          # 102 == 102 held while every published number was twice its true
+          # value. Take the root copy only.
+          find results -name result.json -not -path '*/evidence/*' -exec cat {} + \
+            | jq -s -c 'sort_by(.cell)' > found.json
+
+          # ... and assert it directly, because the totals cannot. A cell
+          # reported twice is a counting bug whichever way the arithmetic
+          # lands, and this sweep's whole purpose is numbers that mean what
+          # they say.
+          dupes=$(jq -r 'group_by(.cell)[] | select(length > 1) | .[0].cell' found.json)
+          if [[ -n "$dupes" ]]; then
+            echo "::error::the same cell reported more than once: $(tr '\n' ' ' <<<"$dupes")"
+            exit 1
+          fi
 
           # RECONCILE against the dispatched matrix. A cell whose job died
           # before writing result.json used to be silently absent from this
