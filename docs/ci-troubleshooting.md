@@ -827,3 +827,30 @@ Encryption, unlock, boot and the in-guest desktop contract all genuinely passed 
 **Action taken:** re-dispatched `LUKS E2E` (`workflow_dispatch`) for `variant=yellowfin,flavor=all` (run [31286843546](https://github.com/tuna-os/tunaOS/actions/runs/31286843546)) and `variant=albacore,flavor=all` (run [31286849405](https://github.com/tuna-os/tunaOS/actions/runs/31286849405)) to get fresh, post-fix verdicts. Not yet observed to completion — a multi-cell LUKS sweep runs well past a single investigation session; check those runs' actual conclusions before assuming this note means the cells are already green.
 
 **Separate, still-open, NOT covered by the above:** `yellowfin:xfce` (same run, job 93022287474) fails during the **image build** itself — `dracut-install: ERROR: installing '/root'` plus `error: Linting: Checks failed: 2`, retried 3 times, never reaching the LUKS/pixel-gate stage at all. `albacore:gnome/kde/cosmic` log the identical `dracut-install`/lint messages during their own builds but the build still *succeeds* there (non-fatal, matching `bootc container lint`'s documented warn-only default — see #10 above), so this is not simply "the same bug, sometimes fatal" — `yellowfin:xfce`'s build genuinely dies and needs its own root-cause pass, not a re-dispatch.
+
+---
+
+### 17. A failing gate took its own evidence with it (`no_silent_omissions`, 2026-09-13)
+
+**Affected workflow:** `Desktop Contract Sweep` (`desktop-contract-sweep.yml`), and every desktop cell in `docs/MATRIX-STATUS.md`.
+
+**Symptom:** the silent-omissions section read `**0 of 51** cells clean (0 read, 51 never read)`. `.github/green-criteria.yml` marks `no_silent_omissions` as a blocker. A cell it cannot score never reaches green. So the composite table rendered every desktop cell ⬜, and the header undercounted by up to 51 cells.
+
+**What made it hard to see:** the sweep measured everything. In run [34692178123](https://github.com/tuna-os/tunaOS/actions/runs/34692178123), 52 of 53 jobs succeeded. All 51 cell jobs pulled their published image, ran `verify-package-wishlist.sh`, and wrote a verdict. The status page said "never read" about images it had already read.
+
+**Root cause — two couplings, and either one alone does it:**
+
+1. The `Baseline` job ended with a completeness gate. That gate fails on any cell short of a pass. `upload-artifact` sat after it with no `if:`. When the gate went red, it skipped that upload, and `all.json` never reached the artifact.
+2. `scripts/gen-matrix-status.py` accepted artifacts only from runs whose conclusion was `success`.
+
+The gate trips whenever a cell goes red. That is the ordinary state of a matrix under repair. It had tripped nightly since 2026-09-09, on 28 desktop-contract cells that fail. Between the two couplings, the axis went dark for exactly the period that most deserved a reader.
+
+**Fix (#2495):** the verdict and the evidence are separate things.
+
+- The completeness gate is its own step, after the upload. It still fails on `fail + miss + err + lost > 0`, so the sweep goes red as often as before.
+- The upload runs `if: always()`.
+- The reader accepts `failure` beside `success`. It still refuses cancelled, skipped, timed-out and in-flight runs.
+
+Trust is per artifact, not per conclusion. The table is built as `reconciled.json`. It becomes `all.json` only once the sweep's reconciliation accounts for every dispatched cell. So the file's presence in the artifact asserts that the totals add up. An unreconciled run publishes `baseline.md` alone, and the reader's existing `exists()` check skips it. The fix leaves the classification of each cell alone: missing, error and lost still score untested, never clean (#1730).
+
+**Lesson:** when a status page says an axis has no measurement, ask whether the measurement ran and then went in the bin. A gate that publishes nothing on failure hides its own inputs. Keep the artifact upload ahead of the gate that judges it, and let the run's conclusion carry the verdict on its own.
