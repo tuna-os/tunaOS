@@ -35,21 +35,22 @@ elementary support. If a behavior also occurs on elementary OS, mention that
 so we can separate upstream behavior from TunaOS integration work.
 ```
 
-Adapt the wording to the channel and follow its moderation rules. The launch
-post is the canonical announcement; the invitation should link to it and to
-the tracker rather than repeating a full release pitch.
+Adapt the words to the channel and follow its moderation rules. The launch
+post is the canonical announcement. The invitation must link to it and to the
+form, and must not repeat a full release pitch.
 
 ## Triage contract
 
 Every report should receive an acknowledgement or a classification. Keep the
-discussion public unless a reporter has accidentally disclosed sensitive data.
+discussion public. The one exception is a report where the reporter has
+disclosed sensitive data by accident.
 
 Reports filed through
 [`.github/ISSUE_TEMPLATE/pantheon-bug.yml`](../.github/ISSUE_TEMPLATE/pantheon-bug.yml)
-arrive labelled `pantheon`, `bug`, and `needs-info`. `needs-info` is the
-form's *default*, not a judgement: triage's first job on each report is to
-replace it with exactly one classification below, or to leave it and ask the
-one question that is missing.
+arrive labelled `pantheon`, `bug`, and `needs-info`. Here `needs-info` is the
+form's default, not a judgement. Replace it with one classification from the
+table below. If a fact is still missing, keep the label and ask one question
+in public.
 
 | Classification | Meaning | Next action |
 |---|---|---|
