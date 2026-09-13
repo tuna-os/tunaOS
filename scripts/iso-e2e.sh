@@ -3805,7 +3805,7 @@ published)
 	while ((SECONDS < settle_deadline)); do
 		frame_txt=""
 		if command -v tesseract &>/dev/null && command -v magick &>/dev/null; then
-			local ocr_tmp="${OUTPUT_DIR}/.pubocr.png"
+			ocr_tmp="${OUTPUT_DIR}/.pubocr.png"
 			magick "${OUTPUT_DIR}/10-ready.ppm" -colorspace Gray "$ocr_tmp" 2>/dev/null &&
 				frame_txt="$(tesseract "$ocr_tmp" stdout --psm 6 2>/dev/null || true)"
 			rm -f "$ocr_tmp"
