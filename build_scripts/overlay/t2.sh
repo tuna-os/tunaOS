@@ -88,11 +88,52 @@ dnf versionlock delete kernel kernel-devel kernel-devel-matched kernel-core \
 
 dnf -y remove --noautoremove kernel kernel-core kernel-modules \
 	kernel-modules-core || true
-dnf -y install --allowerasing \
+# TMPDIR=/boot is required, not tidiness. kernel-core's %posttrans runs
+# rpm-ostree kernel-install, which invokes dracut, and /boot is a tmpfs mount
+# in Containerfile.overlay. dracut stages its output in the default tmpdir and
+# renames it into /boot, and that rename crosses a filesystem boundary:
+#
+#   >>> Generating initramfs
+#   >>> error: rpm-ostree kernel-install: Adding kernel: Running dracut:
+#       Invalid cross-device link (os error 18)
+#
+# run 34765692106. dnf reported success anyway, so the image shipped a t2
+# kernel with no initramfs and panicked on first boot:
+#
+#   Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(0,0)
+#   ... Not tainted 7.1.9-200.t2.fc44.x86_64
+#
+# overrides/nvidia/10-kernel-swap.sh hit the identical EXDEV and fixed it the
+# same way; its comment is where this one comes from. Keeping dracut's
+# temporary output on the destination filesystem makes the rename local.
+TMPDIR=/boot dnf -y install --allowerasing \
 	"kernel-${_t2_evr}" \
 	"kernel-core-${_t2_evr}" \
 	"kernel-modules-${_t2_evr}" \
 	"kernel-modules-core-${_t2_evr}"
+
+# Belt and braces, and the shape 20-nvidia.sh uses: build the initramfs
+# explicitly into /lib/modules, which is part of the image, rather than trusting
+# a %posttrans whose failure does not fail the transaction.
+_t2_modver="$(rpm -q kernel-core --qf '%{VERSION}-%{RELEASE}.%{ARCH}\n' | tail -1)"
+echo "t2.sh: building the initramfs for ${_t2_modver}"
+/usr/bin/dracut --no-hostonly --kver "${_t2_modver}" --reproducible --tmpdir /boot \
+	--zstd -v --add ostree -f "/lib/modules/${_t2_modver}/initramfs.img"
+
+# Assert it, because the failure that caused the panic was silent. An initramfs
+# that is missing or implausibly small means the image cannot mount its root.
+_t2_initramfs="/lib/modules/${_t2_modver}/initramfs.img"
+if [ ! -s "${_t2_initramfs}" ]; then
+	echo "ERROR: no initramfs at ${_t2_initramfs} after the swap" >&2
+	exit 1
+fi
+_t2_initramfs_sz="$(stat -c %s "${_t2_initramfs}")"
+if [ "${_t2_initramfs_sz}" -lt 10000000 ]; then
+	echo "ERROR: initramfs ${_t2_initramfs} is only ${_t2_initramfs_sz} bytes" >&2
+	echo "       a usable one carries the root storage drivers and is far larger" >&2
+	exit 1
+fi
+echo "t2.sh: initramfs ${_t2_initramfs} is ${_t2_initramfs_sz} bytes"
 
 # Re-lock, now on the t2 kernel. Leaving the image unlocked would let any
 # later transaction pull a Fedora kernel back over this one.
