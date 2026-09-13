@@ -107,7 +107,8 @@ jobs:
         id: check
         shell: bash
         env:
-          REF: ghcr.io/tuna-os/${{ matrix.variant }}:${{ matrix.desktop }}
+          VARIANT: ${{ matrix.variant }}
+          DESKTOP: ${{ matrix.desktop }}
           CELL: ${{ matrix.variant }}:${{ matrix.desktop }}
         run: |
           # `set +e` EXPLICITLY, and it is load-bearing. GitHub launches this
@@ -127,6 +128,34 @@ jobs:
           if ! sudo sh -c 'command -v podman' >/dev/null 2>&1; then
             sudo apt-get update -qq && sudo apt-get install -y -qq podman
           fi
+
+          # Resolve the ref the pipeline actually PUBLISHES, rather than
+          # assuming ghcr.io/tuna-os/<variant>:<desktop>. Those are not the
+          # same string for every variant, and the difference cost this sweep
+          # every verdict it gave on eight cells.
+          #
+          # build-config.yml gives some variants a `publish_name` and a
+          # `tag_suffix`, so bonito-rawhide:kde publishes as
+          # bonito:kde-rawhide and flounder-sid:kde as flounder:kde-sid.
+          # scripts/published-image-ref.sh is what the rest of the pipeline
+          # uses to spell that, and the Promote job writes exactly those refs
+          # (run 34709168489) — it never writes bonito-rawhide:kde at all.
+          #
+          # The naive form did resolve, which is why nothing complained: the
+          # old pre-fold tags are still in the registry, abandoned. Measured
+          # against the registry on 2026-09-13:
+          #
+          #   bonito-rawhide:kde   created 2026-07-14   <- what the sweep read
+          #   bonito:kde-rawhide   created 2026-09-12   <- what Promote writes
+          #   flounder-sid:kde     created 2026-07-13   <- what the sweep read
+          #   flounder:kde-sid     created 2026-09-13   <- what Promote writes
+          #
+          # So every bonito-rawhide and flounder-sid verdict in this table has
+          # been about a two-month-old image that the factory stopped
+          # publishing. Not stale evidence in the usual sense — evidence about
+          # a different artifact entirely.
+          REF="$(bash ./scripts/published-image-ref.sh "$VARIANT" "$DESKTOP" ghcr)"
+          echo "==> ${CELL} resolves to ${REF}"
 
           status=missing; exitcode=""; reason="no published image"
           omissions_status=untested; omissions_reason="image not read"
