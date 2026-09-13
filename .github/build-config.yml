@@ -1075,14 +1075,42 @@ variants:
         stage: 2
         platforms: ["linux/amd64", "linux/arm64"]
         build_image: true
-      # Apple Silicon (M1/M2, Asahi Linux) — overlay/asahi.sh, OBS
-      # home:mrkcee full stack. aarch64 only; no ISO (asahi-installer path).
-      - id: gnome-asahi
-        stage: 3
-        platforms: ["linux/arm64"]
-        build_image: true
-        build_iso: false
-        build_qcow2: false
+      # gnome-asahi: NOT declared, and not an oversight. Same call marlin and
+      # flounder already made above, for the same reason and on the same kind
+      # of evidence.
+      #
+      # The image builds, assembles, and signs. It then fails the Asahi
+      # manifest gate 8/37 (run 34750381815), and every one of those 8 is a
+      # package that OBS home:mrkcee does not ship. Read out of the RPM
+      # headers directly on 2026-09-13, not inferred:
+      #
+      #   kernel-asahi-7.1.13-3.2   2259 files, ZERO .dtb — the gate wants the
+      #                             ~50 Apple device trees real hardware needs
+      #   m1n1-1.6.1-2.1            16 files, zero .dtb
+      #   u-boot-asahi-2026.07-3.1  18 files, zero .dtb
+      #   asahi-scripts-20250713    21 files: asahi-diagnose and the dracut
+      #                             modules, but NO update-m1n1, no kernel
+      #                             install hook, no asahi-fwupdate
+      #   tiny-dfr                  "Package 'tiny-dfr' not found" — absent
+      #                             from the repo entirely, which is why
+      #                             asahi.sh already installs it best-effort
+      #
+      # So nothing in the stack provides the device trees, the boot-object
+      # updater, the firmware updater, or the touchbar daemon. This is not the
+      # gate reading an openSUSE layout wrong: grouper's gnome-asahi passes the
+      # identical gate 37/0 with macsmc.ko, 104 Apple DTBs, update-m1n1 and its
+      # hook, asahi-fwupdate, and tiny-dfr all present (run 34777822830). One
+      # packaging set is complete and the other is not.
+      #
+      # An image that cannot update its own boot object or load Apple firmware
+      # does not install on an M1. Declaring the cell advertises hardware
+      # support that does not exist and costs an arm64 build a night to
+      # re-establish that. Tracked in tunaOS#2492; re-declare the day
+      # home:mrkcee (or another source) ships the DTBs and asahi-scripts'
+      # missing half.
+      #
+      # base and gnome keep their arm64 legs: they are the parent chain, and
+      # dropping them would be a wider change than this evidence supports.
       - id: kde
         stage: 2
         build_image: true
