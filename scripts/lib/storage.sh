@@ -24,12 +24,18 @@ tunaos_import_to_root_storage() {
 	fi
 
 	local xdg_dir="/run/user/${real_uid}"
+	local custom_xdg=0
 	if [[ ! -d "$xdg_dir" ]]; then
-		xdg_dir="/tmp/tbox-xdg-${real_user}"
-		install -d -o "$real_user" -g "$(id -g "$real_user")" -m 700 "$xdg_dir" || {
-			echo "ERROR: cannot create a runtime dir for ${real_user} at ${xdg_dir}" >&2
+		xdg_dir=$(mktemp -d "/tmp/tbox-xdg-${real_user}-XXXXXX") || {
+			echo "ERROR: cannot create a runtime dir for ${real_user}" >&2
 			return 1
 		}
+		install -d -o "$real_user" -g "$(id -g "$real_user")" -m 700 "$xdg_dir" || {
+			echo "ERROR: cannot set permissions on runtime dir for ${real_user} at ${xdg_dir}" >&2
+			rm -rf "$xdg_dir"
+			return 1
+		}
+		custom_xdg=1
 	fi
 
 	local save_err
@@ -42,9 +48,11 @@ tunaos_import_to_root_storage() {
 			cat "$save_err" >&2
 		}
 		rm -f "$save_err"
+		[[ $custom_xdg -eq 1 ]] && rm -rf "$xdg_dir"
 		return 1
 	fi
 	rm -f "$save_err"
+	[[ $custom_xdg -eq 1 ]] && rm -rf "$xdg_dir"
 	if ! podman image exists "$image"; then
 		echo "ERROR: ${image} still not present after import" >&2
 		return 1

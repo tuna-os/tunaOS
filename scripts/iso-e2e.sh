@@ -3805,8 +3805,10 @@ published)
 	while ((SECONDS < settle_deadline)); do
 		frame_txt=""
 		if command -v tesseract &>/dev/null && command -v magick &>/dev/null; then
-			magick "${OUTPUT_DIR}/10-ready.ppm" -colorspace Gray /tmp/.pubocr.png 2>/dev/null &&
-				frame_txt="$(tesseract /tmp/.pubocr.png stdout --psm 6 2>/dev/null || true)"
+			local ocr_tmp="${OUTPUT_DIR}/.pubocr.png"
+			magick "${OUTPUT_DIR}/10-ready.ppm" -colorspace Gray "$ocr_tmp" 2>/dev/null &&
+				frame_txt="$(tesseract "$ocr_tmp" stdout --psm 6 2>/dev/null || true)"
+			rm -f "$ocr_tmp"
 		fi
 		# Two ways to be "not the bootloader", and only one of them means the
 		# session arrived. A BLANK frame also has no bootloader text, so the
