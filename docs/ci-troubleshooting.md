@@ -981,14 +981,29 @@ Between those two lines the contract printed nothing. It had run for the unit's 
 
 ```
 _settle_rc=0
-state=$(timeout 120s systemctl is-system-running --wait 2>/dev/null) || _settle_rc=$?
+state=$(timeout "${TUNAOS_SETTLE_WAIT_SECONDS}s" systemctl is-system-running --wait 2>/dev/null) || _settle_rc=$?
 if [[ ${_settle_rc} -eq 124 ]]; then
 	state=$(systemctl is-system-running 2>/dev/null || true)
 	echo "TUNAOS_BASE_CONTRACT_NOTE settle-wait-timed-out state=${state:-unknown}" >&2
 fi
 ```
 
-A machine still `starting` after two minutes has already failed this contract. The second query turns a silent kill into a named verdict, and the checks below finally run.
+The second query turns a silent kill into a named verdict, and the checks below finally run.
+
+**The choice of bound is the hard half, and the first value was wrong.** 120s looked generous and was not. `hummingbird:gnome` needs 2min 7s of userspace to settle. Run 34775725935 caught the bound expire **fourteen milliseconds** before the machine became healthy:
+
+```
+[ 133.320660 ] TUNAOS_BASE_CONTRACT_NOTE settle-wait-timed-out state=starting
+[ 133.321714 ] TUNAOS_BASE_CONTRACT_FAIL reason=system-state=starting
+[ 133.334844 ] Startup finished in 1.159s (kernel) + 5.100s (initrd)
+               + 2min 7.074s (userspace) = 2min 13.334s
+```
+
+A gate that fails an image which was about to pass is worse than one that hangs. The bound is now 240s, and two numbers set it. It must clear the slowest settle observed on real hardware. It must also leave the unit enough of its `TimeoutStartSec` for the checks below to run and print a verdict. `40-services.sh` allows 300s and starts the unit around 13s in, so 240s nearly doubles the slowest settle and still keeps about 60s to report.
+
+`TUNAOS_SETTLE_WAIT_SECONDS` overrides it. Nothing in the image sets it; the tests do, which took that file from about four minutes of wall clock to 4.5 seconds.
+
+**Pin such a value from both sides.** A bound that is too tight will fail a healthy image. One that is too loose leaves no time to report, and restores the silent kill the bound exists to remove. A test that only checks one direction lets the other regress.
 
 Only `timeout(1)`'s own exit 124 counts as a hang. `systemctl is-system-running` exits non-zero for `degraded`, a state this contract deliberately allows, so a bare `if !` here would report every degraded boot as a hang.
 
