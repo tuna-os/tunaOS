@@ -956,3 +956,40 @@ ERROR: no initramfs at /lib/modules/<kver>/initramfs.img after the swap
 ```
 
 **Lesson:** a green dnf transaction means dnf resolved and installed. It does not mean every scriptlet succeeded. When a package's `%post` or `%posttrans` builds something the image needs, check for that artefact yourself. Otherwise the first report you get is the symptom, in a later job, and it points somewhere else.
+
+---
+
+### 21. An unbounded wait makes every check below it unreachable (2026-09-13)
+
+**Affected script:** `build_scripts/checks/verify-base-contract.sh`, and any gate that waits on a machine before it judges the machine.
+
+**Symptom:** the boot gate reports a timeout and the serial log carries no verdict at all.
+
+```
+Starting tunaos-base-contract.service - Verify TunaOS base boot contract...
+[ 314.604325] tunaos-base-contract.service: start operation timed out. Terminating.
+[ 314.635751] Failed to start tunaos-base-contract.service
+```
+
+Between those two lines the contract printed nothing. It had run for the unit's whole `TimeoutStartSec` and died mid-call.
+
+**Root cause:** the contract opened with `systemctl is-system-running --wait`. That call returns when startup reaches a terminal state, and a machine whose startup never settles never reaches one. The wait had no bound, so the unit's timeout became the bound.
+
+**The expensive part:** every check after that line was unreachable on exactly the images those checks exist to judge. The contract asserts `bootc status`. It also asserts that the system message bus is alive. #2484 added that check for `skipjack`, whose dbus-broker dies on an SELinux denial and takes the bus down with it. That is the same class of machine whose startup never settles, so the assertion written for the failure could never run on it. The gate said `timeout`; the defect had a name, and nobody heard it.
+
+**Fix (#2501):** bound the wait, then ask again without `--wait`.
+
+```
+_settle_rc=0
+state=$(timeout 120s systemctl is-system-running --wait 2>/dev/null) || _settle_rc=$?
+if [[ ${_settle_rc} -eq 124 ]]; then
+	state=$(systemctl is-system-running 2>/dev/null || true)
+	echo "TUNAOS_BASE_CONTRACT_NOTE settle-wait-timed-out state=${state:-unknown}" >&2
+fi
+```
+
+A machine still `starting` after two minutes has already failed this contract. The second query turns a silent kill into a named verdict, and the checks below finally run.
+
+Only `timeout(1)`'s own exit 124 counts as a hang. `systemctl is-system-running` exits non-zero for `degraded`, a state this contract deliberately allows, so a bare `if !` here would report every degraded boot as a hang.
+
+**Lesson:** a gate that waits must bound the wait. Without a bound, the harness timeout becomes the timeout. A harness timeout is the least informative failure available: it names the job, never the defect. It also swallows every assertion after the wait. So the checks you most want on a sick machine are the ones that never run.

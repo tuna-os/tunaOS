@@ -40,8 +40,37 @@ if [[ "${1:-}" != "--runtime" ]]; then
 fi
 
 # --wait blocks until startup settles, so a slow unit cannot race this check
-# into a false `starting` verdict on a 2-vCPU runner.
-state=$(systemctl is-system-running --wait 2>/dev/null || true)
+# into a false `starting` verdict on a 2-vCPU runner. BOUND it, though: --wait
+# waits for a terminal state, and a machine whose startup never settles never
+# supplies one. skipjack:gnome hung here for the unit's full 300s
+# TimeoutStartSec and was killed without printing a single line:
+#
+#   Starting tunaos-base-contract.service - Verify TunaOS base boot contract...
+#   [ 314.604325] tunaos-base-contract.service: start operation timed out. Terminating.
+#   [ 314.635751] Failed to start tunaos-base-contract.service
+#
+# (run 34760890405, and identically in 34705564876 before the bus assertion
+# below existed — so the hang is older than that check, not caused by it.)
+#
+# Two things were lost to that. The gate reported "timeout" where the machine
+# had a specific, nameable defect, and every check BELOW this line became
+# unreachable on precisely the images they exist to judge — including the
+# system-bus assertion, which was written for this exact failure and has never
+# once been able to fire on it.
+#
+# So: bound the wait, then fall back to an unblocking query. A machine still
+# `starting` after two minutes has already failed this contract; asking again
+# without --wait turns a silent kill into a named verdict and lets the rest of
+# the contract run.
+# Only exit 124 — timeout(1)'s own code — means the wait ran out. `degraded`
+# is an ALLOWED state here and `is-system-running` exits non-zero for it, so a
+# bare `if !` would have called every degraded boot a hang.
+_settle_rc=0
+state=$(timeout 120s systemctl is-system-running --wait 2>/dev/null) || _settle_rc=$?
+if [[ ${_settle_rc} -eq 124 ]]; then
+	state=$(systemctl is-system-running 2>/dev/null || true)
+	echo "TUNAOS_BASE_CONTRACT_NOTE settle-wait-timed-out state=${state:-unknown}" >&2
+fi
 case "$state" in
 running | degraded) ;;
 *) fail "system-state=${state:-unknown}" ;;
