@@ -24,9 +24,10 @@ set -euo pipefail
 # state there, after which every rootless op dies with "OCI permission
 # denied". Hand the dropped user a private, freshly-owned runtime dir.
 if [[ $EUID -eq 0 && -n "${SUDO_USER:-}" && "$SUDO_USER" != "root" ]]; then
-	XDG_RUNTIME_DIR="/tmp/tbox-xdg-${SUDO_USER}"
+	XDG_RUNTIME_DIR=$(mktemp -d "/tmp/tbox-xdg-${SUDO_USER}-XXXXXX")
 	install -d -o "$SUDO_USER" -g "$(id -g "$SUDO_USER")" -m 700 "$XDG_RUNTIME_DIR"
 	export XDG_RUNTIME_DIR
+	trap 'rm -rf "$XDG_RUNTIME_DIR"' EXIT
 elif [[ $EUID -eq 0 ]]; then
 	unset XDG_RUNTIME_DIR
 fi
