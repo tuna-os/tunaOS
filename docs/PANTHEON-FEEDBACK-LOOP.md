@@ -21,26 +21,36 @@ Gurnard is TunaOS's experimental Ubuntu 24.04 + Pantheon image. We are
 looking for people familiar with Pantheon or elementary OS to try the desktop
 and report packaging or integration issues.
 
-Please report one reproducible symptom per issue in the public Pantheon
-triage tracker: https://github.com/tuna-os/tunaos/issues/1469
+Please report one reproducible symptom per issue using the Pantheon bug form,
+which asks for everything triage needs:
+https://github.com/tuna-os/tunaos/issues/new?template=pantheon-bug.yml
 
-Include the Gurnard image/ISO version, hardware and architecture, whether the
-problem occurs in the live ISO or installed system, reproduction steps, and
-relevant logs or screenshots. Please do not send private logs or secrets.
+The canonical tracker for this effort is
+https://github.com/tuna-os/tunaos/issues/1469 — read it first for scope, then
+file individual symptoms with the form. Please do not send private logs or
+secrets.
 
 This is feedback for TunaOS's packaging surface, not a request for upstream
 elementary support. If a behavior also occurs on elementary OS, mention that
 so we can separate upstream behavior from TunaOS integration work.
 ```
 
-Adapt the wording to the channel and follow its moderation rules. The launch
-post is the canonical announcement; the invitation should link to it and to
-the tracker rather than repeating a full release pitch.
+Adapt the words to the channel and follow its moderation rules. The launch
+post is the canonical announcement. The invitation must link to it and to the
+form, and must not repeat a full release pitch.
 
 ## Triage contract
 
 Every report should receive an acknowledgement or a classification. Keep the
-discussion public unless a reporter has accidentally disclosed sensitive data.
+discussion public. The one exception is a report where the reporter has
+disclosed sensitive data by accident.
+
+Reports filed through
+[`.github/ISSUE_TEMPLATE/pantheon-bug.yml`](../.github/ISSUE_TEMPLATE/pantheon-bug.yml)
+arrive labelled `pantheon`, `bug`, and `needs-info`. Here `needs-info` is the
+form's default, not a judgement. Replace it with one classification from the
+table below. If a fact is still missing, keep the label and ask one question
+in public.
 
 | Classification | Meaning | Next action |
 |---|---|---|
@@ -66,7 +76,12 @@ Before inviting feedback:
       hardware scope.
 - [ ] The public tracker [#1469](https://github.com/tuna-os/tunaos/issues/1469)
       has the `bug`, `community`, and `outreach` labels.
-- [ ] The invitation links to the tracker and does not ask for cold DMs.
+- [ ] The six classification labels (`upstream`, `packaging`, `image`,
+      `installer`, `documentation`, `needs-info`) plus `pantheon` all exist in
+      the repo, so the form's default labels resolve and triage can apply a
+      classification without inventing one.
+- [ ] The invitation links to the form and the tracker, and does not ask for
+      cold DMs.
 - [ ] The maintainer or triager is available to acknowledge reports.
 
 For each new report:

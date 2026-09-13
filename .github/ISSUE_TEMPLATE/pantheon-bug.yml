@@ -1,0 +1,162 @@
+name: Pantheon (Gurnard) bug report
+description: Report a packaging, image, installer, or desktop-integration problem in the Gurnard/Pantheon variant
+title: "[pantheon] "
+labels: ["pantheon", "bug", "needs-info"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Gurnard is TunaOS's **experimental** Ubuntu 24.04/Noble variant running
+        Pantheon from the elementary PPA on an immutable bootc base. This form
+        collects the details triage needs to tell upstream elementary behavior
+        apart from TunaOS packaging, image, installer, or runtime integration.
+
+        **One symptom per issue.** If you have three problems, file three
+        reports — a single issue with three symptoms cannot carry a single
+        triage classification.
+
+        This is feedback on TunaOS's packaging surface, **not** a request for
+        upstream elementary support. Please do not paste secrets, private keys,
+        or personal data into logs.
+
+        Triage background: [docs/PANTHEON-FEEDBACK-LOOP.md](https://github.com/tuna-os/tunaos/blob/v4/docs/PANTHEON-FEEDBACK-LOOP.md)
+        · canonical tracker: [#1469](https://github.com/tuna-os/tunaos/issues/1469)
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: One or two sentences describing the single symptom.
+      placeholder: The polkit authentication dialog never appears, so privileged actions silently fail.
+    validations:
+      required: true
+
+  - type: input
+    id: image-version
+    attributes:
+      label: Image tag or ISO version
+      description: |
+        On an installed system: `bootc status` for the booted image and digest,
+        or `cat /usr/share/ublue-os/image-info.json` for the image name, flavor,
+        and build SHA. From the live ISO, give the ISO filename or download date.
+      placeholder: "ghcr.io/tuna-os/gurnard:pantheon @sha256:abc123… (image-info sha: 1a2b3c4)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: flavor
+    attributes:
+      label: Gurnard flavor
+      options:
+        - pantheon (desktop)
+        - base (no desktop)
+        - not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Where does it happen?
+      description: Live ISO and installed system are different surfaces and classify differently.
+      options:
+        - Live ISO only
+        - Installed system only
+        - Both live ISO and installed system
+        - Not tested on the other surface
+    validations:
+      required: true
+
+  - type: dropdown
+    id: arch
+    attributes:
+      label: Architecture
+      options:
+        - x86_64 / amd64
+        - aarch64 / arm64
+    validations:
+      required: true
+
+  - type: input
+    id: hardware
+    attributes:
+      label: Hardware
+      description: Make and model, plus anything relevant (GPU, virtualized, Secure Boot, external display).
+      placeholder: ThinkPad T14 Gen 3, Intel iGPU, bare metal, Secure Boot enabled
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproduction steps
+      description: Numbered steps someone else can follow from a fresh boot.
+      placeholder: |
+        1. Boot the installed system and log into the Pantheon session.
+        2. Open System Settings → Users.
+        3. Click the unlock padlock.
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: Expected vs. actual result
+      placeholder: |
+        Expected: a polkit dialog prompts for the password.
+        Actual: nothing happens; the padlock stays locked.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: elementary
+    attributes:
+      label: Does the same behavior occur on elementary OS?
+      description: |
+        The single most useful field for triage. If it reproduces on upstream
+        elementary OS it is probably `upstream`; if it does not, it is probably
+        TunaOS packaging, image, or installer work. "Not tested" is a fine answer.
+      options:
+        - Not tested
+        - "Yes — reproduces on elementary OS too"
+        - "No — works correctly on elementary OS"
+        - Not applicable (TunaOS-specific feature)
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and screenshots
+      description: |
+        Useful starting points: `journalctl -b -p warning`, `journalctl --user -b`
+        for session problems, `/var/log/lightdm/` for greeter and login failures,
+        and `bootc status` output for update or rollback problems. Review before
+        pasting — redact hostnames, tokens, and anything private.
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else
+      description: Workarounds you found, when it started, layered packages, or related issues.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Before you submit
+      options:
+        - label: This report covers a single symptom.
+          required: true
+        - label: I searched the existing Pantheon reports and this is not a duplicate.
+          required: true
+        - label: The logs and screenshots above contain no secrets or private personal data.
+          required: true
