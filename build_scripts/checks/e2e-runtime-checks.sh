@@ -52,12 +52,41 @@ emit "TUNAOS_INSTALL_CHECKS_BEGIN desktop=${DESKTOP}"
 
 # ── Installation validation (snosi 01) ─────────────────────────────────────
 
-# Unit ordering (After=display-manager.service, WantedBy=graphical.target)
-# means the system is mostly settled; accept degraded like snosi does.
+# The premise of the old assertion — "unit ordering means the system is mostly
+# settled, so demand running/degraded" — is wrong for the same structural
+# reason the two graphical.target assertions below were wrong, and the same
+# reason the SSH host-key guard was. Fourth instance of one shape.
+#
+# `is-system-running` answers `running` only once the initial boot transaction
+# has drained, and this script runs from tunaos-desktop-contract.service,
+# which is WantedBy=graphical.target — so it executes AS A JOB INSIDE that
+# transaction. While our ExecStart runs, the queue is by definition not empty,
+# so the manager answers `starting`, on a perfectly healthy boot.
+#
+# MEASURED on wahoo run 34690922548 (2026-09-12), the lane's first all-green
+# dispatch: `# system state: starting` at 16.3s on kde and 14.6s on gnome —
+# both images reached a Plasma/GNOME session, passed the display-manager,
+# branding, bootc and read-only-/usr assertions, and still reported
+# `pass=15 fail=1`, the one failure being this line, on both.
+#
+# The obvious fix is the trap documented at graphical.target: `is-system-
+# running --wait`, or a poll loop, would DEADLOCK. The manager leaves
+# `starting` when the transaction drains and this unit is one of its jobs, so
+# waiting here waits on ourselves until TimeoutStartSec=90 kills the unit — 90
+# seconds added to every boot, and still no verdict.
+#
+# So assert the half that does NOT depend on when we happen to sample: that
+# the boot has not landed somewhere broken. `maintenance` (emergency/rescue),
+# `stopping` and `offline` mean a real regression whenever you ask, as does a
+# state we cannot read at all. `initializing`/`starting` are healthy-in-
+# progress; `running`/`degraded` are healthy-settled (snosi accepts degraded
+# too). The stronger claim "this booted to a graphical desktop" is already
+# carried, time-independently, by the default-target and display-manager
+# assertions below.
 sys_state=$(systemctl is-system-running 2>/dev/null || true)
-emit "# system state: ${sys_state}"
-check "system has booted (running or degraded)" \
-	test "$sys_state" = "running" -o "$sys_state" = "degraded"
+emit "# system state: ${sys_state} (starting is correct from inside the boot transaction)"
+check "system is not in a broken boot state (not maintenance/stopping/offline)" \
+	bash -c 'case "${1:-}" in running | degraded | initializing | starting) exit 0 ;; *) exit 1 ;; esac' _ "$sys_state"
 
 # bootc deployments mount the deployment root immutably — either literally
 # ro in /proc/mounts or via a composefs/overlay stack. Accept any of those;
