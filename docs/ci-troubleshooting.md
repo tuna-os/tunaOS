@@ -854,3 +854,41 @@ The gate trips whenever a cell goes red. That is the ordinary state of a matrix 
 Trust is per artifact, not per conclusion. The table is built as `reconciled.json`. It becomes `all.json` only once the sweep's reconciliation accounts for every dispatched cell. So the file's presence in the artifact asserts that the totals add up. An unreconciled run publishes `baseline.md` alone, and the reader's existing `exists()` check skips it. The fix leaves the classification of each cell alone: missing, error and lost still score untested, never clean (#1730).
 
 **Lesson:** when a status page says an axis has no measurement, ask whether the measurement ran and then went in the bin. A gate that publishes nothing on failure hides its own inputs. Keep the artifact upload ahead of the gate that judges it, and let the run's conclusion carry the verdict on its own.
+
+---
+
+### 18. A self-check that balances on both sides cannot see a doubling (2026-09-13)
+
+**Affected workflow:** `Desktop Contract Sweep` (`desktop-contract-sweep.yml`), the `Baseline` job.
+
+**Symptom:** the baseline printed totals for twice as many cells as the sweep has.
+
+```
+DESKTOP CONTRACT BASELINE: 80/102 pass, 20 fail, 2 no image, 0 error, 0 lost
+```
+
+The sweep dispatches 51 cells. Every count in that line, and every row count in `baseline.md`, was twice its true value for as long as the job has existed.
+
+**Root cause:** each cell artifact carries `result.json` twice. One copy sits at the artifact root; `scripts/evidence-bundle.sh` writes the second into `evidence/<variant>/<flavor>/amd64/`. The collate step ran `find results -name result.json`, which matched both, so every cell entered the table twice.
+
+**Why the job's own guard missed it.** That job already asserts its arithmetic:
+
+```
+if (( pass + fail + miss + err + lost != total )); then
+  echo "::error::baseline does not reconcile: ..."
+```
+
+Double both sides and they still balance. `102 == 102` held on every run, and the check reported a healthy table while every number in it was wrong. The guard targets a real defect — cells that went missing, per the reconciliation comment in that step — and it catches that one. It cannot catch a cell counted twice, because two of a cell is not a shortfall.
+
+**Fix (#2497):** exclude the evidence copy from the tally, and assert what the arithmetic structurally cannot.
+
+```
+find results -name result.json -not -path '*/evidence/*'
+dupes=$(jq -r 'group_by(.cell)[] | select(length > 1) | .[0].cell' found.json)
+```
+
+A cell reported twice now fails the step by name. The evidence bundle still uploads: this changes what the tally reads, not what the artifact carries.
+
+**How it surfaced.** Only #2495 made it visible. The baseline artifact had never reached a red run, so nobody could compare the published table against the 51 cell artifacts beside it. The first fix exposed the second defect.
+
+**Lesson:** a check for internal consistency proves the parts agree with each other. It does not prove they agree with the world. So pin at least one number to something outside the computation — here, that a cell appears once. Otherwise a proportional error stays invisible for as long as it stays proportional.
