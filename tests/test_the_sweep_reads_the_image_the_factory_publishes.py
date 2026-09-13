@@ -25,7 +25,6 @@ factory had stopped publishing. All eight pass their desktop contract at build
 time and all eight promoted.
 """
 
-import re
 import unittest
 from pathlib import Path
 
