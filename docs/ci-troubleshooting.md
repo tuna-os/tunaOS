@@ -892,3 +892,34 @@ A cell reported twice now fails the step by name. The evidence bundle still uplo
 **How it surfaced.** Only #2495 made it visible. The baseline artifact had never reached a red run, so nobody could compare the published table against the 51 cell artifacts beside it. The first fix exposed the second defect.
 
 **Lesson:** a check for internal consistency proves the parts agree with each other. It does not prove they agree with the world. So pin at least one number to something outside the computation — here, that a cell appears once. Otherwise a proportional error stays invisible for as long as it stays proportional.
+
+---
+
+### 19. versionlock hides a package, and no exclude probe will show it (`bonito:gnome-t2`, 2026-09-13)
+
+**Affected script:** `build_scripts/overlay/t2.sh`, and any future kernel swap that installs packages under their stock names.
+
+**Symptom:** four builds of `bonito:gnome-t2` died on the same line, with a message that names the wrong thing.
+
+```
+Failed to resolve the transaction:
+No match for argument 'kernel' in repositories 'copr:…:sharpenedblade:t2linux'
+```
+
+**Root cause:** `build_scripts/10-base-packages.sh` runs `dnf versionlock add kernel kernel-core …` against the **installed** Fedora kernel. That pins `7.2.4-200.fc44` and excludes every other version, the COPR's `7.1.9-200.t2.fc44` among them. dnf says so plainly, but only once the transaction stops naming a repo:
+
+```
+Argument 'kernel-7.1.9-200.t2.fc44' matches only packages excluded by versionlock.
+```
+
+**Three traps, and each one cost a build.**
+
+1. **A repo-scoped install reports the lock as an empty repo.** Under `--from-repo`, the only candidates come from that one repo. The lock excludes all of them, so dnf words the emptiness in terms of the pin. The pin is not the problem, and neither is the repo.
+2. **`repoquery` and `install` disagree, honestly.** `repoquery --repo=<id> 'kernel*'` lists all 18 packages while `install --from-repo=<id> kernel` finds none — same id, same options, seconds apart in one job. `repoquery` does not apply versionlock's excludes. That gap reads like a broken flag and is not one.
+3. **An exclude probe answers "(none)" and is right.** `grep -E '^(exclude|excludepkgs)=' /etc/dnf/dnf.conf /etc/yum.repos.d/` finds nothing, because versionlock keeps a list of its own. Run `dnf versionlock list` too, or the probe misses the filter in force.
+
+**Why no earlier swap hit it.** This repo holds two other kernel swaps, and each one evades the lock by accident. `overrides/nvidia/10-kernel-swap.sh` bypasses dnf entirely with `rpm -ivh`. `overlay/asahi.sh` installs `kernel-16k`, a name the lock list does not carry. `t2` installs packages named exactly `kernel`, so it is the first swap the lock bites.
+
+**Fix (#2498):** release the lock, swap, then re-apply it to the kernel that was installed. Release every name `10-base-packages.sh` locks, or a straggler holds one package and the transaction fails on that alone. Re-application matters as much as release. `10-kernel-swap.sh` gives the reason after its own swap: a later transaction that pulls a different kernel would undo the whole point of the script.
+
+**Lesson:** "no match for argument" means the solver had no candidate. It does not mean the repo lacks the package. So before you doubt the repo, the id, or the flag, ask what filters the candidate set — `dnf.conf`, the `.repo` files, **and** `dnf versionlock list`. Two dnf subcommands can also disagree about the contents of a repo. When they do, suspect a difference in the filters that each of them applies. Call either of them broken only after that.
