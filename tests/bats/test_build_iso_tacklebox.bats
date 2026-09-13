@@ -370,6 +370,69 @@ JSON
 	grep -q 'must be a positive integer' "$SCRIPT_PATH"
 }
 
+# ── TBOX_* environment passthrough (tunaOS#2034) ───────────────────────────
+#
+# The container path has to forward tacklebox's knobs explicitly; the
+# host-binary path inherits them. These pin both halves of that.
+
+@test "tacklebox env: exported TBOX_* names reach the container invocation" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
+	# Run the library's own collection loop, not a copy of it, so a change to
+	# the filter cannot pass here while breaking the build.
+	run bash -c '
+		loop=$(awk "/^\tfor _tbox_name in/,/^\tdone\$/" "$1")
+		[[ -n "$loop" ]] || { echo "collection loop not found" >&2; exit 1; }
+		export TBOX_CUSTOMIZE_NETWORK=host
+		export TBOX_CUSTOMIZE_TIMEOUT=1800
+		export PATH_LOOKALIKE_TBOX=nope
+		tbox_env=() tbox_names=()
+		eval "$loop"
+		printf "%s\n" "${tbox_env[@]}"
+	' _ "$SCRIPT_PATH"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"--env"* ]]
+	[[ "$output" == *"TBOX_CUSTOMIZE_NETWORK=host"* ]]
+	[[ "$output" == *"TBOX_CUSTOMIZE_TIMEOUT=1800"* ]]
+	# Prefix match only: a name that merely contains TBOX_ is not a knob.
+	[[ "$output" != *"PATH_LOOKALIKE_TBOX"* ]]
+}
+
+@test "tacklebox env: passthrough is name-agnostic, so a new knob needs no change here" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
+	# The knob tunaOS#2034 asks tacklebox for does not exist yet. Whatever it
+	# ends up called, it must arrive without editing this library.
+	run bash -c '
+		loop=$(awk "/^\tfor _tbox_name in/,/^\tdone\$/" "$1")
+		export TBOX_A_KNOB_INVENTED_TODAY=900
+		tbox_env=() tbox_names=()
+		eval "$loop"
+		printf "%s\n" "${tbox_names[@]}"
+	' _ "$SCRIPT_PATH"
+	[ "$status" -eq 0 ]
+	[[ "$output" == *"TBOX_A_KNOB_INVENTED_TODAY=900"* ]]
+	# No literal knob name in the filter itself.
+	! grep -q -- '--env "TBOX_[A-Z]' "$SCRIPT_PATH"
+}
+
+@test "tacklebox env: forwarded array is spliced into the podman run args" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
+	# Between the volume mounts and the image ref, or podman reads it as an
+	# argument to tacklebox instead of a flag to itself.
+	tbox_line=$(grep -nF '"${tbox_env[@]}"' "$SCRIPT_PATH" | cut -d: -f1)
+	image_line=$(grep -nF '"$tacklebox_image")' "$SCRIPT_PATH" | cut -d: -f1)
+	[ -n "$tbox_line" ]
+	[ -n "$image_line" ]
+	[ "$tbox_line" -lt "$image_line" ]
+}
+
+@test "tacklebox env: whole runner environment is never handed to the container" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
+	# --env-host would carry GITHUB_TOKEN and registry credentials in with it.
+	# Comment lines may name it; no code line may use it.
+	run bash -c 'grep -vE "^[[:space:]]*#" "$1" | grep -F -- "--env-host"' _ "$SCRIPT_PATH"
+	[ "$status" -ne 0 ]
+}
+
 @test "tacklebox library is side-effect-free when sourced directly" {
 	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
 	run bash -c '

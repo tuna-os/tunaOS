@@ -52,6 +52,41 @@ Tacklebox changes that alter the accepted recipe fields or the meaning of
 these invariants require updating this document and the adapter's tests in
 the same change.
 
+## Environment contract
+
+The recipe is not the only input Tacklebox reads. Tacklebox also takes
+per-build knobs from its environment — `TBOX_CUSTOMIZE_TIMEOUT` bounds the
+live-customize script, `TBOX_CUSTOMIZE_NETWORK=host` gives that script's
+container the host network — and TunaOS runs Tacklebox two different ways:
+
+- `TACKLEBOX_FROM_SOURCE=1` builds and runs it as a host binary at the SHA
+  pinned in `image-versions.yaml`. An ordinary child process, so it inherits
+  the environment.
+- otherwise `tunaos_run_tacklebox` runs the published container image, and
+  `podman run` starts from the image's environment rather than the caller's.
+
+`scripts/lib/tacklebox.sh` closes that gap by forwarding every **exported**
+variable whose name begins with `TBOX_` into the container with an explicit
+`--env`. The forwarding matches on the prefix and nothing else, so a knob
+added to Tacklebox reaches TunaOS builds with no change on this side; the
+names TunaOS sets for a given job live in that job's workflow. Two
+consequences to keep in mind:
+
+1. A knob must be **exported**, not just assigned, or neither path sees it.
+2. `TBOX_*` is a build-knob namespace. Values are echoed into the build log
+   for diagnosis, so credentials must never be passed under that prefix.
+
+`--env-host` is deliberately not used: it would hand the Tacklebox container
+the whole runner environment, `GITHUB_TOKEN` and registry logins included.
+
+One knob does not exist yet. Tacklebox bounds the `podman commit` that
+follows live-customize with a literal `600`, and tunaOS#2034 asks for that
+bound to become settable the way `TBOX_CUSTOMIZE_TIMEOUT` already is. Until
+it lands, a commit that needs longer than 600s and a commit that has wedged
+are indistinguishable from this side — the ISO failures in tunaOS#1893 are
+all of that shape. When it lands, setting it per job is the only change
+TunaOS needs.
+
 ## Validation boundary
 
 The adapter's shell tests validate the generated recipe shape without pulling
