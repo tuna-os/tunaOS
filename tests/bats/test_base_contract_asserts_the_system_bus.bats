@@ -129,17 +129,32 @@ EOF
 
 @test "a settle wait that never returns is bounded, not left to the unit timeout" {
 	stub_hanging_settle
-	# The bound is 120s; this must come back far sooner than the 300s that
-	# killed the real service. 200s of headroom is plenty to prove the point
-	# without making the suite slow.
-	run timeout 200s bash "$SCRIPT" --runtime
+	# Drive it with a 2s bound rather than the production 240s, so the test
+	# proves the bound exists without spending four minutes to do it.
+	TUNAOS_SETTLE_WAIT_SECONDS=2 run timeout 60s bash "$SCRIPT" --runtime
 	[ "$status" -ne 124 ]
 	rm -rf "${STUB_DIR}"
 }
 
+@test "the production bound leaves the unit room to report" {
+	# 40-services.sh gives the unit TimeoutStartSec=300 and starts it after
+	# multi-user.target, around 13s in. The bound has to clear the slowest
+	# real settle AND leave time for the checks below it to print a verdict.
+	#
+	# 120s did neither: hummingbird:gnome settles after 2min 7s of userspace,
+	# and run 34775725935 caught the bound expiring 14ms before the machine
+	# became healthy — failing an image that was about to pass.
+	local want
+	want="$(grep -oE ': "\$\{TUNAOS_SETTLE_WAIT_SECONDS:=[0-9]+\}"' "$SCRIPT" |
+		grep -oE '[0-9]+')"
+	[ -n "$want" ]
+	[ "$want" -ge 200 ]   # clears the 127s settle with real margin
+	[ "$want" -le 280 ]   # leaves room under the unit's 300s to say why
+}
+
 @test "a hung settle still yields a named verdict, not silence" {
 	stub_hanging_settle
-	run timeout 200s bash "$SCRIPT" --runtime
+	TUNAOS_SETTLE_WAIT_SECONDS=2 run timeout 60s bash "$SCRIPT" --runtime
 	# It says the wait timed out AND what it found when it asked again.
 	[[ "$output" == *"settle-wait-timed-out"* ]]
 	# And it fails on the state, by name, instead of being killed mid-hang.
