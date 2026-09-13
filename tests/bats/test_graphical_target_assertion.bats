@@ -201,3 +201,103 @@ done
 	# serial log, and the dev case costs the harness its way into the guest.
 	grep -q 'host-key check skipped' "$CHECKS"
 }
+
+# ── The same dead-gate pattern, fourth instance ─────────────────────────────
+# "system has booted (running or degraded)" had the graphical.target defect
+# exactly: `systemctl is-system-running` reports `running` only once the
+# initial boot transaction has drained, and this script runs from
+# tunaos-desktop-contract.service, a job INSIDE that transaction. The manager
+# answers `starting` while our own ExecStart is what it is still waiting on.
+#
+# MEASURED on wahoo run 34690922548 (2026-09-12): `# system state: starting`
+# at 16.3s on kde and 14.6s on gnome, both reporting pass=15 fail=1 with this
+# as the only failure, on images that reached a session and passed every other
+# assertion in this file.
+
+system_state_gate() {
+	local state="$1"
+	bash -c "case \"${state}\" in running | degraded | initializing | starting) exit 0 ;; *) exit 1 ;; esac"
+}
+
+@test "the boot-state check does not demand running/degraded" {
+	# The exact predicate that could never pass from inside the transaction.
+	! grep -q 'system has booted (running or degraded)' "$CHECKS"
+}
+
+@test "the boot-state check never waits, because waiting deadlocks" {
+	# `--wait` blocks until the transaction drains; this unit IS one of its
+	# jobs, so it would wait on itself until TimeoutStartSec=90 killed it.
+	# Same trap the graphical.target fix documents, one property over.
+	! grep -q 'is-system-running --wait' "$CHECKS"
+	! grep -q 'is-system-running.*--wait' "$CHECKS"
+}
+
+@test "every healthy state passes, whenever we happen to sample" {
+	# starting/initializing are what a healthy in-transaction sample looks
+	# like; running/degraded are what a settled one looks like.
+	system_state_gate running
+	system_state_gate degraded
+	system_state_gate initializing
+	system_state_gate starting
+}
+
+@test "a genuinely broken boot state still fails" {
+	# Proof this was not softened into always passing: emergency/rescue
+	# (maintenance), a shutting-down or absent manager, and an unreadable
+	# state are all real regressions at any sampling moment.
+	! system_state_gate maintenance
+	! system_state_gate stopping
+	! system_state_gate offline
+	! system_state_gate unknown
+	! system_state_gate ""
+}
+
+# Stubs identical to runtime_stubs above, with the system state made variable
+# so the real script can be run against a measured one.
+system_state_stubs() {
+	local state="$1"
+	eval "systemctl() {
+		case \"\$1\" in
+		is-system-running) echo ${state} ;;
+		is-active) echo active ;;
+		is-failed) return 1 ;;
+		show)
+			case \" \$* \" in
+			*\" ActiveState \"*) echo active ;;
+			*) echo gdm.service ;;
+			esac
+			;;
+		get-default) echo graphical.target ;;
+		list-unit-files) : ;;
+		--failed) : ;;
+		esac
+		return 0
+	}"
+	findmnt() { echo overlay; return 0; }
+	bootc() { echo 'Image: ghcr.io/tuna-os/x:y'; return 0; }
+	systemd-analyze() { return 0; }
+	rpm() { seq 200; }
+	locale() { return 0; }
+	hostname() { echo tunaos-e2e; }
+	export -f systemctl findmnt bootc systemd-analyze rpm locale hostname
+}
+
+@test "end to end: the measured wahoo state (starting) is not red" {
+	# What kde and gnome actually reported on run 34690922548. Asserted on
+	# this line rather than on the exit status, because `ok - X` is a
+	# substring of `not ok - X`: both directions have to be pinned, and the
+	# aggregate status also answers for assertions unrelated to this fix.
+	system_state_stubs starting
+	run bash "$CHECKS" gnome
+	[[ "$output" == *"# system state: starting"* ]]
+	[[ "$output" == *"ok - system is not in a broken boot state"* ]]
+	[[ "$output" != *"not ok - system is not in a broken boot state"* ]]
+}
+
+@test "end to end: a maintenance-mode boot is still reported" {
+	# emergency.target/rescue.target — the case the assertion exists for.
+	system_state_stubs maintenance
+	run bash "$CHECKS" gnome
+	[ "$status" -ne 0 ]
+	[[ "$output" == *"not ok - system is not in a broken boot state"* ]]
+}
