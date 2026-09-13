@@ -142,6 +142,34 @@ _code() { grep -v '^[[:space:]]*#' "$SCRIPT"; }
   _code | grep -qF 'dnf -y repoquery'
 }
 
+@test "the kernel install keeps dracut's tmpdir on the destination filesystem" {
+  # /boot is a tmpfs in Containerfile.overlay. Without TMPDIR=/boot, dracut
+  # renames its output across a filesystem boundary and kernel-install dies
+  # with "Invalid cross-device link (os error 18)" — non-fatally, so the image
+  # ships a kernel with no initramfs and panics on first boot with
+  # "VFS: Unable to mount root fs on unknown-block(0,0)" (run 34765692106).
+  _code | grep -qE '^TMPDIR=/boot dnf -y install'
+}
+
+@test "the initramfs is built explicitly into /lib/modules" {
+  # /boot is a tmpfs and does not survive the build; /lib/modules does. Same
+  # shape as 20-nvidia.sh, and it does not depend on a %posttrans whose
+  # failure leaves the transaction green.
+  local d
+  d="$(_code | grep -A1 '/usr/bin/dracut' | tr '\n\t' '  ' | tr -s ' ')"
+  [ -n "$d" ]
+  [[ "$d" == *"--kver"* ]]
+  [[ "$d" == *'/lib/modules/${_t2_modver}/initramfs.img'* ]]
+}
+
+@test "a missing or tiny initramfs fails the build" {
+  # The EXDEV failure was silent. An assertion is the only thing that would
+  # have caught it before the boot gate did.
+  _code | grep -qF 'ERROR: no initramfs at'
+  _code | grep -qF 'is only ${_t2_initramfs_sz} bytes'
+  _code | grep -qE '\-lt 10000000'
+}
+
 @test "the result is asserted, not assumed" {
   # A flag whose scope surprised us is not a guarantee; a check on the
   # installed package is.
