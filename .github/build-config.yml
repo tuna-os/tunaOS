@@ -765,7 +765,21 @@ variants:
   - id: bonito
     emoji: "🎣"
     description: "Based on Fedora 44"
-    base_image: "quay.io/fedora/fedora-bootc:44@sha256:2c38c5f71a43993e07577629ef8e1695420ed38143482340215abdcea85a31fd"
+    # Repinned 2026-09-12: quay garbage-collected the previous digest
+    # (sha256:2c38c5f7…, set in tunaOS#2464) within a day of it being written.
+    # Verified dead and this one alive by direct registry query, not inferred:
+    #
+    #   GET /v2/fedora/fedora-bootc/manifests/sha256:2c38c5f7…  -> 404
+    #   GET /v2/fedora/fedora-bootc/manifests/44                -> sha256:4a460ed0…
+    #   sha256:4a460ed0… is an OCI index over amd64 arm64 ppc64le s390x
+    #
+    # :44 keeps a digest pin, unlike rawhide and tumbleweed below, because it
+    # is a release tag rather than a rolling snapshot. If quay GCs this one
+    # inside a day as well, that is the second strike and bonito should follow
+    # them to a bare tag -- a digest that cannot be fetched buys no
+    # reproducibility, only a red base and every downstream flavor with it
+    # (16 cells here).
+    base_image: "quay.io/fedora/fedora-bootc:44@sha256:4a460ed0e52aa8e8d9e27172213ec85be64d0abb6325767e5a0f67a7f1b74b79"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [fedora]
     akmods: "ublue-os"
@@ -1020,7 +1034,32 @@ variants:
     emoji: "🦈"
     upstream_track: rolling
     description: "Based on openSUSE Tumbleweed (rolling)"
-    base_image: "registry.opensuse.org/opensuse/tumbleweed:latest@sha256:349094bef091c41cf5cb84d5727a1e2ad9aa96de173cdaac4cdb68d5cea09e49"
+    # NOT digest-pinned, for the same reason as bonito-rawhide below.
+    #
+    # Tumbleweed is a rolling snapshot and registry.opensuse.org garbage-
+    # collects the manifests it replaces, faster than the daily pin check can
+    # protect a pin. Measured, this time:
+    #
+    #   2026-09-11 ~17:00  tunaOS#2464 pins sha256:349094be… (alive, verified)
+    #   2026-09-12 00:22   check-base-image-pins run 34661427002: success
+    #   2026-09-12 21:28   build-sailfin run 34720071388:
+    #                        reading manifest sha256:349094be… : manifest unknown
+    #
+    # Under 28 hours from written to dead, and dead in the window BETWEEN the
+    # 22:20 check and the build it runs ahead of. That is not a pin the checker
+    # can save: the guard exists (it caught #1788, 24 cells across three
+    # variants) and it passed nine hours before the base died anyway.
+    #
+    # The base failure took all 7 sailfin cells with it, 6 of which had just
+    # gone green. A digest that cannot be fetched buys no reproducibility --
+    # only a guaranteed red base. The checker reports this as a declared state:
+    #
+    #   SKIP  (not digest-pinned)  registry.opensuse.org/opensuse/tumbleweed:latest
+    #
+    # Re-pin by digest only if registry.opensuse.org starts retaining replaced
+    # manifests, or if something resolves the tag once at build time and
+    # threads that one digest through every stage of the build.
+    base_image: "registry.opensuse.org/opensuse/tumbleweed:latest"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [opensuse, tumbleweed]
     platforms: ["linux/amd64"]
