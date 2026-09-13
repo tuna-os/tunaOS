@@ -243,13 +243,61 @@ class ContractResultsArtifactDownload(unittest.TestCase):
         self.assertEqual(got["yellowfin:gnome"][0], "pass")
         self.assertEqual(got["yellowfin:kde"][0], "fail")
 
-    def test_non_success_runs_are_skipped(self):
-        bad_run = {"databaseId": 1, "createdAt": "2026-08-06T00:00:00Z",
-                   "status": "completed", "conclusion": "failure"}
-        with mock.patch.object(gms, "gh_json", return_value=[bad_run]), \
-                mock.patch.object(gms.subprocess, "run") as run:
+    def test_a_failed_run_is_read_rather_than_discarded(self):
+        """A failing sweep is the normal state of a matrix being worked on.
+
+        This used to assert the opposite, and the opposite was the defect.
+        The sweep fails whenever ANY cell is not passing, so requiring
+        conclusion == "success" threw away the freshest real measurements
+        for being unflattering: the gate tripped nightly from 2026-09-09,
+        every one of the 51 cell jobs succeeded and recorded its verdict,
+        and docs/MATRIX-STATUS.md still read "0 read, 51 never read" —
+        which, with no_silent_omissions blocking, rendered every desktop
+        cell in the composite table untested.
+
+        Trust is per artifact, not per conclusion. The sweep writes all.json
+        only once its own reconciliation proves every dispatched cell is
+        accounted for, so an unreconciled run has no all.json to read and
+        falls through the existing exists() check.
+        """
+        failed_run = {"databaseId": 1, "createdAt": "2026-08-06T00:00:00Z",
+                      "status": "completed", "conclusion": "failure"}
+
+        def fake_download(cmd, **kwargs):
+            out_dir = Path(cmd[cmd.index("--dir") + 1])
+            (out_dir / "all.json").write_text(
+                json.dumps([{"cell": "yellowfin:gnome", "status": "pass"}]))
+            return subprocess.CompletedProcess(cmd, 0)
+
+        with mock.patch.object(gms, "gh_json", return_value=[failed_run]), \
+                mock.patch.object(gms.subprocess, "run", side_effect=fake_download):
             got = gms.contract_results()
-        self.assertEqual(got, {})
+        self.assertEqual(got["yellowfin:gnome"][0], "pass")
+
+    def test_a_cancelled_run_is_still_skipped(self):
+        """Cancelled means the measurements may be half-taken.
+
+        Only success and failure mean the sweep ran to a verdict. Anything
+        else is untested, per the same #1730 rule as everywhere else.
+        """
+        for conclusion in ("cancelled", "skipped", "timed_out", None):
+            with self.subTest(conclusion=conclusion):
+                gms._BASELINE_CACHE = None
+                bad_run = {"databaseId": 1, "createdAt": "2026-08-06T00:00:00Z",
+                           "status": "completed", "conclusion": conclusion}
+                with mock.patch.object(gms, "gh_json", return_value=[bad_run]), \
+                        mock.patch.object(gms.subprocess, "run") as run:
+                    got = gms.contract_results()
+                self.assertEqual(got, {})
+                run.assert_not_called()
+
+    def test_an_in_flight_run_is_skipped(self):
+        gms._BASELINE_CACHE = None
+        running = {"databaseId": 1, "createdAt": "2026-08-06T00:00:00Z",
+                   "status": "in_progress", "conclusion": None}
+        with mock.patch.object(gms, "gh_json", return_value=[running]), \
+                mock.patch.object(gms.subprocess, "run") as run:
+            self.assertEqual(gms.contract_results(), {})
         run.assert_not_called()
 
     def test_expired_artifact_falls_through_to_the_next_run(self):

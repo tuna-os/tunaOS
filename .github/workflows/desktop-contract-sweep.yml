@@ -263,14 +263,14 @@ jobs:
                           reason: "job produced no result (see its log)", exit: "",
                           omissions_status: "untested",
                           omissions_reason: "job produced no result"} ]
-            | sort_by(.cell)' found.json expected.json > all.json
+            | sort_by(.cell)' found.json expected.json > reconciled.json
 
-          pass=$(jq '[.[]|select(.status=="pass")]|length' all.json)
-          fail=$(jq '[.[]|select(.status=="fail")]|length' all.json)
-          miss=$(jq '[.[]|select(.status=="missing")]|length' all.json)
-          err=$(jq '[.[]|select(.status=="error")]|length' all.json)
-          lost=$(jq '[.[]|select(.status=="lost")]|length' all.json)
-          total=$(jq 'length' all.json)
+          pass=$(jq '[.[]|select(.status=="pass")]|length' reconciled.json)
+          fail=$(jq '[.[]|select(.status=="fail")]|length' reconciled.json)
+          miss=$(jq '[.[]|select(.status=="missing")]|length' reconciled.json)
+          err=$(jq '[.[]|select(.status=="error")]|length' reconciled.json)
+          lost=$(jq '[.[]|select(.status=="lost")]|length' reconciled.json)
+          total=$(jq 'length' reconciled.json)
 
           {
             echo "# Desktop contract baseline"
@@ -288,11 +288,11 @@ jobs:
                elif .status=="error" then "⚠️"
                elif .status=="lost" then "❓"
                else "⬜" end) +
-              " | \(.reason) |"' all.json
+              " | \(.reason) |"' reconciled.json
           } | tee -a "$GITHUB_STEP_SUMMARY" > baseline.md
 
-          om_pass=$(jq '[.[]|select(.omissions_status=="pass")]|length' all.json)
-          om_fail=$(jq '[.[]|select(.omissions_status=="fail")]|length' all.json)
+          om_pass=$(jq '[.[]|select(.omissions_status=="pass")]|length' reconciled.json)
+          om_fail=$(jq '[.[]|select(.omissions_status=="fail")]|length' reconciled.json)
           {
             echo
             echo "**Silent omissions (criterion 8): ${om_pass} clean, ${om_fail} shipping unallowlisted misses** (cells whose image was not read score untested, not clean)."
@@ -301,7 +301,7 @@ jobs:
               echo "| cell | omissions |"
               echo "|---|---|"
               jq -r '.[] | select(.omissions_status=="fail")
-                | "| \(.cell) | \(.omissions_reason) |"' all.json
+                | "| \(.cell) | \(.omissions_reason) |"' reconciled.json
             fi
           } | tee -a "$GITHUB_STEP_SUMMARY" >> baseline.md
 
@@ -315,18 +315,46 @@ jobs:
             exit 1
           fi
 
-          # A baseline is useful only when every expected cell is healthy.
-          # Keep missing, infrastructure-error, and lost results non-passing:
-          # otherwise a published edition can disappear from the evidence and
-          # still look green to the release process (#1294).
-          if (( fail + miss + err + lost > 0 )); then
-            echo "::error::desktop completeness gate failed: ${fail} failed, ${miss} missing, ${err} errored, ${lost} lost"
-            exit 1
-          fi
+          # Reconciled, so the measurements are trustworthy and may be
+          # published. all.json exists ONLY past this point: downstream
+          # readers treat its presence in the artifact as the assertion
+          # that the table adds up, so an unreconciled sweep publishes
+          # baseline.md alone and is skipped rather than half-believed.
+          mv reconciled.json all.json
+
+      # Unconditional, and BEFORE the gate below. The evidence and the verdict
+      # are two different things, and coupling them cost the whole silent
+      # omissions axis: the gate has tripped every night since 2026-09-09, the
+      # upload was skipped with it, and gen-matrix-status.py — which reads
+      # criterion 8 out of this artifact — found nothing to read, so all 51
+      # desktop cells rendered untested. Not one of those 51 cell jobs had
+      # failed; they had all measured their image and said so. A failing gate
+      # is exactly when the per-cell measurements matter most, so publish them
+      # and let the gate fail the run on its own.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
         with:
           name: desktop-contract-baseline
           path: |
             all.json
             baseline.md
           retention-days: 90
+          if-no-files-found: warn
+
+      - name: Desktop completeness gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          # A baseline is useful only when every expected cell is healthy.
+          # Keep missing, infrastructure-error, and lost results non-passing:
+          # otherwise a published edition can disappear from the evidence and
+          # still look green to the release process (#1294).
+          fail=$(jq '[.[]|select(.status=="fail")]|length' all.json)
+          miss=$(jq '[.[]|select(.status=="missing")]|length' all.json)
+          err=$(jq '[.[]|select(.status=="error")]|length' all.json)
+          lost=$(jq '[.[]|select(.status=="lost")]|length' all.json)
+          if (( fail + miss + err + lost > 0 )); then
+            echo "::error::desktop completeness gate failed: ${fail} failed, ${miss} missing, ${err} errored, ${lost} lost"
+            exit 1
+          fi
+          echo "desktop completeness gate passed: every dispatched cell reported pass"

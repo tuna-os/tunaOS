@@ -314,6 +314,20 @@ def _baseline_cells() -> tuple[list[dict], str, str]:
     contract_results() and omissions_results() read the same all.json — the
     sweep records both axes from one image pull — so download it once per
     invocation rather than once per axis.
+
+    A FAILED sweep run is read too, and that is deliberate. The sweep fails
+    whenever any cell is not passing, which is the normal state of a matrix
+    being worked on; requiring conclusion == "success" meant the freshest
+    real measurements were discarded for being unflattering, and the whole
+    no_silent_omissions axis read "0 of 51 cells read" while 51 cell jobs
+    were measuring their images nightly and succeeding.
+
+    Trust still has to be earned per artifact, not assumed: the sweep writes
+    all.json only after its own reconciliation proves every dispatched cell
+    is accounted for, so the file's presence is the assertion that the table
+    adds up. An unreconciled run uploads baseline.md alone and is skipped by
+    the all_json.exists() check below, as is a run that never got far enough
+    to upload anything. Cancelled and in-flight runs stay out entirely.
     """
     global _BASELINE_CACHE
     if _BASELINE_CACHE is not None:
@@ -323,7 +337,9 @@ def _baseline_cells() -> tuple[list[dict], str, str]:
         "--limit", "10", "--json", "databaseId,createdAt,status,conclusion",
     ) or []
     for run in runs:
-        if run.get("status") != "completed" or run.get("conclusion") != "success":
+        if run.get("status") != "completed":
+            continue
+        if run.get("conclusion") not in ("success", "failure"):
             continue
         run_id, date = str(run["databaseId"]), run["createdAt"][:10]
         with tempfile.TemporaryDirectory() as tmp:
