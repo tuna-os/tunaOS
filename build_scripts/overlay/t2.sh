@@ -21,59 +21,66 @@ dnf -y copr enable sharpenedblade/t2linux
 _T2_REPO="copr:copr.fedorainfracloud.org:sharpenedblade:t2linux"
 
 # The COPR kernel is required for the T2 bridge/keyboard/trackpad/audio stack,
-# and a Fedora kernel must never silently win. Every build of this flavor has
-# died here, on both shapes of the transaction:
+# and a Fedora kernel must never silently win. Every attempt to express that
+# with `--from-repo` has died the same way, on three different shapes:
 #
-#   Failed to resolve the transaction:
 #   No match for argument 'kernel' in repositories 'copr:...:sharpenedblade:t2linux'
 #
-# That message names the wrong culprit, and it cost one wrong fix. It is not a
-# repo that lacks the package and it is not a flag whose scope surprised us:
-# the enabled chroot is fedora-44, and its metadata has carried the whole set
-# (kernel, -core, -modules, -modules-core at 7.1.9-200.t2.fc44) since
-# 2026-08-23, three weeks before run 34756027748 failed to find it. dnf even
-# downloaded that metadata in the same step that then matched nothing.
+# Two diagnoses were wrong before the probes below went in, and both are worth
+# naming so nobody re-derives them. It is NOT the flag constraining the remove
+# spec (#2494), and it is NOT the base image's exclude filters: run 34760267199
+# printed every exclude in force and the answer was
 #
-# The base image filters the packages out. `quay.io/fedora/fedora-bootc` ships
-# repo-level `exclude=kernel*` in its own .repo files, and a repo-level exclude
-# applies to the CANDIDATE SET of every repo — so kernel is invisible to the
-# solver no matter which repo it is pinned to, and dnf reports that absence in
-# the vocabulary of the pin. The nvidia overlay hit exactly this and documented
-# it (overrides/nvidia/10-kernel-swap.sh, "filtered out by exclude filtering",
-# bonito 31454139305, every *-nvidia job); it also records that clearing only
-# the [main] exclude via `--setopt=exclude=` is NOT enough, because that leaves
-# the per-repo ones standing. So clear both, per repo and glob-wide.
+#   == exclude filters in force ==
+#   (none)
 #
-# `dnf remove` above was never affected: removal reads the rpmdb, which no
-# exclude filter touches. That asymmetry is why the failure looked like a
-# missing package rather than a hidden one.
+# What that run did show, in the same job, seconds apart, with the same repo id
+# and the same options:
 #
-# The pin stays, and so does the assertion after it. The assertion is the real
-# guarantee here — twice now the flags have not meant what they appeared to.
+#   dnf repoquery --repo=copr:...:t2linux 'kernel*'   → kernel-7.1.9-200.t2.fc44
+#                                                        kernel-core-…, +16 more
+#   dnf install  --from-repo=copr:...:t2linux kernel  → No match for argument
 #
-# The two probes print the evidence rather than assuming it: if the exclude
-# theory is ever wrong, the log says which filters were actually in force and
-# what the pinned repo actually offered, instead of only "No match".
+# So the repo is right, the id is right, the packages are there, and the
+# options are fine. `--from-repo` is the one thing that differs, and under it
+# dnf loads no repository at all — its "Updating and loading repositories:"
+# line is empty on the install and names the COPR on the repoquery.
+#
+# So stop asking a flag to carry the guarantee. Read the version the COPR
+# actually offers, then install that exact EVR with every repo enabled. Fedora
+# ships 7.2.4-200.fc44 and the COPR 7.1.9-200.t2.fc44, so an exact EVR can only
+# resolve to the t2 build — the pin is in the argument itself, where it cannot
+# be reinterpreted. Leaving the other repos enabled is deliberate: the kernel's
+# own dependencies resolve from them or from what is already installed, which
+# is what `--repo` would have cut off.
+#
+# asahi.sh solves the same problem the same way, by making the argument
+# unambiguous (it installs kernel-16k, a name Fedora does not ship) rather than
+# by constraining the source. The assertion after this is the real guarantee.
 echo "== kernel packages before the swap =="
 rpm -qa 'kernel*' | sort
 echo "== exclude filters in force =="
 grep -rHnE '^[[:space:]]*(exclude|excludepkgs)[[:space:]]*=' \
 	/etc/dnf/dnf.conf /etc/yum.repos.d/ || echo "(none)"
 
+echo "== what the pinned repo offers =="
+dnf -y repoquery --repo="${_T2_REPO}" --qf '%{name}-%{evr}\n' 'kernel*' || true
+
+_t2_evr="$(dnf -y repoquery --repo="${_T2_REPO}" --qf '%{evr}\n' kernel |
+	grep -E '\.t2\.' | sort -V | tail -1)"
+if [ -z "${_t2_evr}" ]; then
+	echo "ERROR: the t2linux repo offers no kernel build tagged .t2." >&2
+	exit 1
+fi
+echo "t2.sh: installing kernel ${_t2_evr} from ${_T2_REPO}"
+
 dnf -y remove --noautoremove kernel kernel-core kernel-modules \
 	kernel-modules-core || true
-
-echo "== what the pinned repo offers =="
-dnf -y repoquery --repo="${_T2_REPO}" \
-	--setopt='excludepkgs=' --setopt='*.excludepkgs=' \
-	--setopt='exclude=' --setopt='*.exclude=' \
-	--qf '%{name}-%{evr}\n' 'kernel*' || true
-
 dnf -y install --allowerasing \
-	--from-repo="${_T2_REPO}" \
-	--setopt='excludepkgs=' --setopt='*.excludepkgs=' \
-	--setopt='exclude=' --setopt='*.exclude=' \
-	kernel kernel-core kernel-modules kernel-modules-core
+	"kernel-${_t2_evr}" \
+	"kernel-core-${_t2_evr}" \
+	"kernel-modules-${_t2_evr}" \
+	"kernel-modules-core-${_t2_evr}"
 
 # The guarantee, asserted rather than assumed. `.t2.` is the COPR's dist tag.
 _t2_kver="$(rpm -q kernel --qf '%{VERSION}-%{RELEASE}\n' | tail -1)"
