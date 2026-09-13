@@ -88,10 +88,10 @@ dnf versionlock delete kernel kernel-devel kernel-devel-matched kernel-core \
 
 dnf -y remove --noautoremove kernel kernel-core kernel-modules \
 	kernel-modules-core || true
-# TMPDIR=/boot is required, not tidiness. kernel-core's %posttrans runs
-# rpm-ostree kernel-install, which invokes dracut, and /boot is a tmpfs mount
-# in Containerfile.overlay. dracut stages its output in the default tmpdir and
-# renames it into /boot, and that rename crosses a filesystem boundary:
+# kernel-core's %posttrans runs rpm-ostree kernel-install, which invokes
+# dracut, and /boot is a tmpfs mount in Containerfile.overlay. dracut stages
+# its output in the default tmpdir and renames it into /boot, and that rename
+# crosses a filesystem boundary:
 #
 #   >>> Generating initramfs
 #   >>> error: rpm-ostree kernel-install: Adding kernel: Running dracut:
@@ -103,9 +103,17 @@ dnf -y remove --noautoremove kernel kernel-core kernel-modules \
 #   Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(0,0)
 #   ... Not tainted 7.1.9-200.t2.fc44.x86_64
 #
-# overrides/nvidia/10-kernel-swap.sh hit the identical EXDEV and fixed it the
-# same way; its comment is where this one comes from. Keeping dracut's
-# temporary output on the destination filesystem makes the rename local.
+# TMPDIR=/boot is the fix overrides/nvidia/10-kernel-swap.sh uses for the
+# identical EXDEV, and it does NOT work here. It is kept only because that
+# script sets it on `rpm -ivh` directly, where rpm inherits it; dnf adds a
+# layer, and rpm runs scriptlets with a sanitised environment, so the setting
+# never reaches %posttrans. Measured: run 34768771243 carries this exact line
+# and still logs the EXDEV at the same point. Do not read this as load-bearing
+# and do not delete it as dead — it is neither, and the next person deserves
+# to know which.
+#
+# What actually produces a bootable image is the explicit rebuild below. Same
+# run: a 278 MB initramfs in /lib/modules, a green boot gate, and Promote.
 TMPDIR=/boot dnf -y install --allowerasing \
 	"kernel-${_t2_evr}" \
 	"kernel-core-${_t2_evr}" \
