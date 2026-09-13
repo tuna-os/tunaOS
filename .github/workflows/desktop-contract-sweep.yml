@@ -156,18 +156,58 @@ jobs:
             if ! sudo podman pull -q "$REF" >/dev/null 2>&1; then
               status=error; reason="image exists but pull failed (infrastructure, not the contract)"
             else
+              # IS_ELN and IS_HUMMINGBIRD, exactly as reusable-build-image.yml
+              # passes them to this same script. Without them the sweep runs a
+              # STRICTER contract than the build did, and fails images the
+              # build deliberately passed. reusable-build-image.yml already
+              # paid for this lesson on IS_ELN: wahoo's gnome, cosmic and kde
+              # cells died on the ELN codec gap that the script is written to
+              # name and allow, "nothing was wrong with the images" (run
+              # 34609709028). That fix was never ported here, so the sweep has
+              # gone on failing the same three cells for the same reason —
+              # `ffmpeg cannot decode h264` in run 34692178123, all three.
+              # Derived from the variant id, one line apart, so neither can
+              # drift from the other or from the build job's pair.
+              is_hb=false
+              [[ "${{ matrix.variant }}" == hummingbird* ]] && is_hb=true
+              is_eln=false
+              [[ "${{ matrix.variant }}" == wahoo* ]] && is_eln=true
+
               out=$(sudo podman run --rm \
                 -v "$PWD/build_scripts/checks/verify-desktop-experience.sh:/vde.sh:z" \
+                -e IS_HUMMINGBIRD="$is_hb" \
+                -e IS_ELN="$is_eln" \
                 --entrypoint /bin/bash "$REF" /vde.sh "${{ matrix.desktop }}" 2>&1)
               exitcode=$?        # capture directly; `| tail` would mask it
               if [[ "$exitcode" -eq 0 ]]; then
                 status=pass; reason="contract satisfied"
               else
                 status=fail
-                # The script prints one "missing required ..." line on failure.
-                reason=$(grep -m1 -E "^missing (required|unit)" <<<"$out" || echo "exit ${exitcode}")
+                # The script has about twenty distinct failure lines and only
+                # seven of them open with "missing required" or "missing unit".
+                # Matching that prefix alone recorded a bare "exit 1" for 6 of
+                # the 14 failing cells in run 34692178123 — every one of them
+                # diagnosable only by opening the job log, which is the exact
+                # habit this sweep exists to remove. So fall back to the last
+                # line the script actually printed, skipping the diagnostic
+                # dumps that follow a verdict (codec_diag) and the workflow
+                # annotations that are not verdicts at all. On those 6 cells
+                # that recovers "GNOME 49 is below the floor ...",
+                # "ffmpeg cannot decode h264 ..." and "missing flatpak
+                # preinstall declaration: org.mozilla.firefox".
+                reason=$(grep -m1 -E "^missing (required|unit)" <<<"$out" \
+                  || grep -vE "^(codec_diag:|::(warning|notice|error))" <<<"$out" \
+                     | grep -vE "^[[:space:]]*$" | tail -1 \
+                  || echo "exit ${exitcode}")
+                reason=${reason:-exit ${exitcode}}
               fi
               echo "$out" | tail -40
+
+              # The captured output itself, not just the line we managed to
+              # parse out of it. A reason field is a best-effort summary; this
+              # is the evidence, and "exit 1" with the output discarded is how
+              # 6 cells stayed undiagnosable from the artifact.
+              printf '%s\n' "$out" > desktop-contract.log
 
               # Same pulled image, second axis (green criterion 8,
               # no_silent_omissions): run the SAME gate the build runs
@@ -223,8 +263,10 @@ jobs:
           name: contract-${{ matrix.variant }}-${{ matrix.desktop }}
           path: |
             result.json
+            desktop-contract.log
             evidence/${{ matrix.variant }}/${{ matrix.desktop }}/amd64/
           retention-days: 30
+          if-no-files-found: warn
 
   collate:
     name: Baseline
@@ -263,14 +305,14 @@ jobs:
                           reason: "job produced no result (see its log)", exit: "",
                           omissions_status: "untested",
                           omissions_reason: "job produced no result"} ]
-            | sort_by(.cell)' found.json expected.json > all.json
+            | sort_by(.cell)' found.json expected.json > reconciled.json
 
-          pass=$(jq '[.[]|select(.status=="pass")]|length' all.json)
-          fail=$(jq '[.[]|select(.status=="fail")]|length' all.json)
-          miss=$(jq '[.[]|select(.status=="missing")]|length' all.json)
-          err=$(jq '[.[]|select(.status=="error")]|length' all.json)
-          lost=$(jq '[.[]|select(.status=="lost")]|length' all.json)
-          total=$(jq 'length' all.json)
+          pass=$(jq '[.[]|select(.status=="pass")]|length' reconciled.json)
+          fail=$(jq '[.[]|select(.status=="fail")]|length' reconciled.json)
+          miss=$(jq '[.[]|select(.status=="missing")]|length' reconciled.json)
+          err=$(jq '[.[]|select(.status=="error")]|length' reconciled.json)
+          lost=$(jq '[.[]|select(.status=="lost")]|length' reconciled.json)
+          total=$(jq 'length' reconciled.json)
 
           {
             echo "# Desktop contract baseline"
@@ -288,11 +330,11 @@ jobs:
                elif .status=="error" then "⚠️"
                elif .status=="lost" then "❓"
                else "⬜" end) +
-              " | \(.reason) |"' all.json
+              " | \(.reason) |"' reconciled.json
           } | tee -a "$GITHUB_STEP_SUMMARY" > baseline.md
 
-          om_pass=$(jq '[.[]|select(.omissions_status=="pass")]|length' all.json)
-          om_fail=$(jq '[.[]|select(.omissions_status=="fail")]|length' all.json)
+          om_pass=$(jq '[.[]|select(.omissions_status=="pass")]|length' reconciled.json)
+          om_fail=$(jq '[.[]|select(.omissions_status=="fail")]|length' reconciled.json)
           {
             echo
             echo "**Silent omissions (criterion 8): ${om_pass} clean, ${om_fail} shipping unallowlisted misses** (cells whose image was not read score untested, not clean)."
@@ -301,7 +343,7 @@ jobs:
               echo "| cell | omissions |"
               echo "|---|---|"
               jq -r '.[] | select(.omissions_status=="fail")
-                | "| \(.cell) | \(.omissions_reason) |"' all.json
+                | "| \(.cell) | \(.omissions_reason) |"' reconciled.json
             fi
           } | tee -a "$GITHUB_STEP_SUMMARY" >> baseline.md
 
@@ -315,18 +357,46 @@ jobs:
             exit 1
           fi
 
-          # A baseline is useful only when every expected cell is healthy.
-          # Keep missing, infrastructure-error, and lost results non-passing:
-          # otherwise a published edition can disappear from the evidence and
-          # still look green to the release process (#1294).
-          if (( fail + miss + err + lost > 0 )); then
-            echo "::error::desktop completeness gate failed: ${fail} failed, ${miss} missing, ${err} errored, ${lost} lost"
-            exit 1
-          fi
+          # Reconciled, so the measurements are trustworthy and may be
+          # published. all.json exists ONLY past this point: downstream
+          # readers treat its presence in the artifact as the assertion
+          # that the table adds up, so an unreconciled sweep publishes
+          # baseline.md alone and is skipped rather than half-believed.
+          mv reconciled.json all.json
+
+      # Unconditional, and BEFORE the gate below. The evidence and the verdict
+      # are two different things, and coupling them cost the whole silent
+      # omissions axis: the gate has tripped every night since 2026-09-09, the
+      # upload was skipped with it, and gen-matrix-status.py — which reads
+      # criterion 8 out of this artifact — found nothing to read, so all 51
+      # desktop cells rendered untested. Not one of those 51 cell jobs had
+      # failed; they had all measured their image and said so. A failing gate
+      # is exactly when the per-cell measurements matter most, so publish them
+      # and let the gate fail the run on its own.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
         with:
           name: desktop-contract-baseline
           path: |
             all.json
             baseline.md
           retention-days: 90
+          if-no-files-found: warn
+
+      - name: Desktop completeness gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          # A baseline is useful only when every expected cell is healthy.
+          # Keep missing, infrastructure-error, and lost results non-passing:
+          # otherwise a published edition can disappear from the evidence and
+          # still look green to the release process (#1294).
+          fail=$(jq '[.[]|select(.status=="fail")]|length' all.json)
+          miss=$(jq '[.[]|select(.status=="missing")]|length' all.json)
+          err=$(jq '[.[]|select(.status=="error")]|length' all.json)
+          lost=$(jq '[.[]|select(.status=="lost")]|length' all.json)
+          if (( fail + miss + err + lost > 0 )); then
+            echo "::error::desktop completeness gate failed: ${fail} failed, ${miss} missing, ${err} errored, ${lost} lost"
+            exit 1
+          fi
+          echo "desktop completeness gate passed: every dispatched cell reported pass"
