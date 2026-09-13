@@ -142,8 +142,10 @@ jobs:
       # The previous attempt at this (TBOX_CUSTOMIZE_NETWORK=host alone) never
       # took effect either: it was exported into the *runner's* shell, but a
       # plain `podman run "$tacklebox_image"` does not forward host env vars
-      # into the container without an explicit -e/--env-host, so tacklebox
-      # never saw it.
+      # into the container. tunaos_run_tacklebox() now forwards exported
+      # TBOX_* names explicitly (tunaOS#2034), so that half no longer bites —
+      # but a nested container's resolver still does, which is why this job
+      # keeps TACKLEBOX_FROM_SOURCE=1 rather than relying on the knob alone.
       #
       # With TACKLEBOX_FROM_SOURCE=1, tacklebox is built and run as a HOST
       # binary at the SHA pinned in image-versions.yaml, so live-customize is
