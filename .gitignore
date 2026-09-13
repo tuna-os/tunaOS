@@ -48,3 +48,8 @@ live-lab-out/
 *-e2e-out/
 *-dbg-out/
 *-ready-out/
+
+# Transient scratch from tests/bats/test_verify_image_packages.bats. Its
+# teardown removes it, so it exists only while the suite runs — long enough
+# for a concurrent `git add -A` to commit it, which is how it got in once.
+tests/bats/test_root_tmp/
