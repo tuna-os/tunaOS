@@ -22,7 +22,24 @@ if [[ "$PKG_MGR" == "apt" ]]; then
 	if command -v glib-compile-schemas &>/dev/null; then
 		glib-compile-schemas /usr/share/glib-2.0/schemas
 	fi
-	exit 0
+	# `return`, not `exit`: install-desktop.sh SOURCES its post_install hooks,
+	# so an exit here ends the whole desktop install -- successfully, and
+	# silently. gnome.yaml lists three hooks and only two ran on every apt
+	# image, because this line stopped the loop before flatpak-preinstall.sh:
+	#
+	#   Running post-install: tuna-flatpak-remote.sh
+	#   Running post-install: gnome-extensions.sh
+	#   (flatpak-preinstall.sh never ran)
+	#
+	# That was invisible on grouper:gnome, whose Containerfile stage also runs
+	# configure-desktop-runtime.sh and lays the flatpak baseline down a second
+	# time. grouper:gnome-zfs skips that stage, so it failed its own contract
+	# on `missing required path: /usr/share/flatpak/preinstall.d/*.preinstall`
+	# (run 34714039087) -- one red cell reporting a defect every apt gnome
+	# image had.
+	#
+	# Same idiom as the non-dnf branch below, which already got this right.
+	return 0 2>/dev/null || exit 0
 fi
 
 # ── Non-dnf RPM-less distros (openSUSE/Gentoo/Arch) ────────────────────
