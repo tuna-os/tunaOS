@@ -923,3 +923,36 @@ Argument 'kernel-7.1.9-200.t2.fc44' matches only packages excluded by versionloc
 **Fix (#2498):** release the lock, swap, then re-apply it to the kernel that was installed. Release every name `10-base-packages.sh` locks, or a straggler holds one package and the transaction fails on that alone. Re-application matters as much as release. `10-kernel-swap.sh` gives the reason after its own swap: a later transaction that pulls a different kernel would undo the whole point of the script.
 
 **Lesson:** "no match for argument" means the solver had no candidate. It does not mean the repo lacks the package. So before you doubt the repo, the id, or the flag, ask what filters the candidate set — `dnf.conf`, the `.repo` files, **and** `dnf versionlock list`. Two dnf subcommands can also disagree about the contents of a repo. When they do, suspect a difference in the filters that each of them applies. Call either of them broken only after that.
+
+---
+
+### 20. A scriptlet can fail without failing the transaction (`bonito:gnome-t2`, 2026-09-13)
+
+**Affected script:** `build_scripts/overlay/t2.sh`, and any overlay that installs a kernel with dnf.
+
+**Symptom:** the image built, signed, and passed the desktop contract. Two jobs later the boot gate panicked.
+
+```
+Kernel panic - not syncing: VFS: Unable to mount root fs on unknown-block(0,0)
+CPU: 2 UID: 0 PID: 1 Comm: swapper/0 Not tainted 7.1.9-200.t2.fc44.x86_64
+```
+
+**Root cause:** the image carried no initramfs. `kernel-core`'s `%posttrans` runs `rpm-ostree kernel-install`, which calls dracut. `/boot` is a tmpfs mount in `Containerfile.overlay`, dracut stages its output in the default tmpdir, and the rename into `/boot` crosses a filesystem boundary:
+
+```
+>>> Generating initramfs
+>>> error: rpm-ostree kernel-install: Adding kernel: Running dracut:
+    Invalid cross-device link (os error 18)
+```
+
+**The part that cost the cycle:** dnf called that transaction a success. The scriptlet failed, the message went to the log, and the exit status stayed 0. So the build went green with a kernel and no way to mount root. The first sign of trouble arrived at the boot gate: a different job, a different log, and a symptom that points at the kernel. The install that produced it looks innocent.
+
+**Fix (#2500):** `TMPDIR=/boot` on the install, so dracut's rename stays on one filesystem. Then build the initramfs again, explicitly, into `/lib/modules/<kver>/`, which is part of the image; `/boot` is a tmpfs and does not survive the build. `overrides/nvidia/10-kernel-swap.sh` met the identical EXDEV and its comment is where both halves come from.
+
+Then assert the result. A missing initramfs, or one too small to hold the root storage drivers, now fails the build at the step that creates it:
+
+```
+ERROR: no initramfs at /lib/modules/<kver>/initramfs.img after the swap
+```
+
+**Lesson:** a green dnf transaction means dnf resolved and installed. It does not mean every scriptlet succeeded. When a package's `%post` or `%posttrans` builds something the image needs, check for that artefact yourself. Otherwise the first report you get is the symptom, in a later job, and it points somewhere else.
