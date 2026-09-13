@@ -115,7 +115,10 @@ criteria:
       A disk built from the image boots under QEMU and its in-image contract
       marker fires: desktops to a graphical session
       (TUNAOS_DESKTOP_CONTRACT_OK), base to an operable multi-user bootc
-      system (TUNAOS_BASE_CONTRACT_OK).
+      system with a live system message bus (TUNAOS_BASE_CONTRACT_OK).
+      The bus is named because it was the gap: skipjack:kde promoted an image
+      whose dbus-broker never started, since its display manager did not
+      hard-depend on the socket the way gdm does (run 34705564876).
     asserted_by: .github/workflows/reusable-build-image.yml (Gate → scripts/iso-e2e.sh --disk)
     enforcement: blocking
     freshness_sla_days: 2
