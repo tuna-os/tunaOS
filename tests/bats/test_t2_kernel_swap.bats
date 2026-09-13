@@ -1,23 +1,23 @@
 #!/usr/bin/env bats
 # The T2 overlay must actually end up on the t2linux kernel.
 #
-# `dnf swap --from-repo=X A B` constrains BOTH specs to X. The remove spec is
-# the INSTALLED kernel, which does not come from the COPR, so the old one-liner
-#
-#   dnf -y swap --from-repo="copr:…:sharpenedblade:t2linux" kernel kernel
-#
-# died before the install side was ever considered:
+# Every build of bonito:gnome-t2 has died in this script, on both shapes of the
+# transaction, with the same message:
 #
 #   No match for argument 'kernel' in repositories 'copr:…:sharpenedblade:t2linux'
 #
-# three attempts, every run (bonito:gnome-t2, runs 34613732493, 34750383558).
-# The install side was never the problem — the enabled chroot is fedora-44 and
-# that chroot carries kernel-7.1.9-200.t2.fc44.
+# (runs 34613732493, 34750383558, 34756027748 — three buildah attempts each).
+# The message names the wrong culprit and has now cost one wrong fix. The COPR
+# has carried kernel-7.1.9-200.t2.fc44 since 2026-08-23, and dnf downloads that
+# metadata in the very step that then matches nothing. What hides it is the
+# fedora-bootc base's repo-level `exclude=kernel*`, which filters the candidate
+# set of EVERY repo — the nvidia overlay documented the same filter, and
+# recorded that clearing the [main] exclude alone does not lift it.
 #
-# What these pin is the property, not the spelling: the remove must not be
-# repo-constrained, the install must be, and the result must be checked. The
-# check is what makes "a Fedora kernel silently wins" impossible, which is what
-# the --from-repo pin was reaching for.
+# What these tests pin is the property, not the spelling: the remove must not
+# be repo-constrained, the install must be, the exclude filters must be cleared
+# at both levels, and the result must be checked. The check is what makes "a
+# Fedora kernel silently wins" impossible, which is what the pin reaches for.
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 SCRIPT="${REPO_ROOT}/build_scripts/overlay/t2.sh"
@@ -41,9 +41,35 @@ _code() { grep -v '^[[:space:]]*#' "$SCRIPT"; }
 
 @test "the kernel install IS constrained to the t2linux COPR" {
   local install_line
-  install_line="$(_code | grep -A3 'dnf -y install --allowerasing' | tr '\n' ' ')"
+  install_line="$(_code | grep -A5 'dnf -y install --allowerasing' | tr '\n' ' ')"
   [[ "$install_line" == *"--from-repo"* ]]
-  [[ "$install_line" == *"sharpenedblade:t2linux"* ]]
+  # The id may be held in a variable; whichever way, it must resolve to the COPR.
+  [[ "$install_line" == *"sharpenedblade:t2linux"* ]] ||
+    _code | grep -qF 'copr:copr.fedorainfracloud.org:sharpenedblade:t2linux'
+}
+
+@test "the install clears the base image's exclude filters" {
+  # The whole reason the pinned repo appeared to carry no kernel. Repo-level
+  # excludes need the glob form; the bare one only clears [main] (see the
+  # nvidia overlay, which learned this the same way).
+  local install_line
+  install_line="$(_code | grep -A5 'dnf -y install --allowerasing' | tr '\n' ' ')"
+  [[ "$install_line" == *"--setopt='*.excludepkgs='"* ]]
+  [[ "$install_line" == *"--setopt='*.exclude='"* ]]
+  [[ "$install_line" == *"--setopt='excludepkgs='"* ]]
+  [[ "$install_line" == *"--setopt='exclude='"* ]]
+}
+
+@test "the exclude filters actually in force are logged" {
+  # If the diagnosis above is ever wrong, the next log says which filters were
+  # really set, rather than repeating "No match for argument".
+  _code | grep -qF '/etc/yum.repos.d/'
+  _code | grep -qE "grep .*(exclude\|excludepkgs)"
+}
+
+@test "what the pinned repo offers is logged before the install" {
+  # Distinguishes "the repo has no kernel" from "something hid it" in one line.
+  _code | grep -qF 'dnf -y repoquery'
 }
 
 @test "the result is asserted, not assumed" {
