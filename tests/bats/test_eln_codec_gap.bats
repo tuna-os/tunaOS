@@ -49,6 +49,67 @@ BASE_PKGS="${REPO_ROOT}/build_scripts/10-base-packages.sh"
   [[ "$output" == *"exit 1"* ]]
 }
 
+# ── The exemption has to be REACHABLE, not just present ────────────────────
+#
+# Every test above pins the shape of the ELN branch. None of them pinned that
+# IS_ELN ever arrives, and it did not: the CI gates bind-mount only this one
+# script into the image, so the `source /run/context/build_scripts/lib.sh` at
+# the top fails, the flag stays unset, and the branch cannot fire. wahoo's
+# gnome, cosmic and kde cells went red on a gap the script is written to
+# allow (run 34609709028, tunaOS#2049). A named exemption that never runs is
+# the same outcome as no exemption at all, so it is pinned here.
+
+@test "IS_ELN is derived from the image when lib.sh could not be sourced" {
+  # The gates mount /vde.sh alone; lib.sh is simply not there to source.
+  run grep -qE '^\s*IS_ELN="\$\(_derive_is_eln\)"' "$CONTRACT"
+  [ "$status" -eq 0 ]
+}
+
+@test "the derivation uses the same os-release signal lib.sh calls primary" {
+  # lib.sh: `grep -qE '^ID=eln$' /etc/os-release /usr/lib/os-release`. Two
+  # different tests for one fact is how the build and the gate come to
+  # disagree about the same image.
+  local lib="${REPO_ROOT}/build_scripts/lib.sh"
+  run grep -F "grep -qE '^ID=eln\$'" "$lib"
+  [ "$status" -eq 0 ]
+  run bash -c "awk '/^_derive_is_eln\\(\\)/,/^}/' '$CONTRACT' | grep -F \"grep -qE '^ID=eln\\\$'\""
+  [ "$status" -eq 0 ]
+  # ID, not VARIANT_ID: 90-image-info.sh's osr_set rewrites VARIANT_ID to the
+  # tunaOS variant name, so only ID still reads `eln` in a shipped image.
+  run bash -c "awk '/^_derive_is_eln\\(\\)/,/^}/' '$CONTRACT' | grep -F 'VARIANT_ID'"
+  [ "$status" -ne 0 ]
+}
+
+@test "the derivation answers true only for an exact ID=eln line" {
+  eval "$(awk '/^_derive_is_eln\(\)/,/^}/' "$CONTRACT")"
+  local d
+  d="$(mktemp -d)"
+  printf 'ID=eln\nVERSION_ID=11\nVARIANT_ID="wahoo"\n' >"${d}/eln"
+  printf 'ID=fedora\nVARIANT_ID="bonito"\n' >"${d}/fedora"
+  printf 'ID=eln-lookalike\n' >"${d}/near"
+
+  [ "$(_derive_is_eln "${d}/eln")" = true ]
+  [ "$(_derive_is_eln "${d}/fedora")" = false ]
+  # Anchored: a substring match would claim any id containing "eln".
+  [ "$(_derive_is_eln "${d}/near")" = false ]
+  # An unreadable path is not an ELN image, and must not abort under set -e.
+  [ "$(_derive_is_eln "${d}/does-not-exist")" = false ]
+  # Both canonical paths are consulted, as lib.sh consults both.
+  [ "$(_derive_is_eln "${d}/fedora" "${d}/eln")" = true ]
+  rm -rf "$d"
+}
+
+@test "an explicitly supplied IS_ELN still decides" {
+  # Callers that do pass the flag (and any that start) keep control; the
+  # derivation fills a gap, it does not override an answer.
+  run bash -c "awk '/^if \\[\\[ -z \"\\\$\\{IS_ELN:-\\}\" \\]\\]; then/,/^fi\$/' '$CONTRACT'"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"_derive_is_eln"* ]]
+  # Guarded by -z, so IS_ELN=false from a caller is honoured as false rather
+  # than treated as unset and re-derived.
+  [[ "$output" == *'-z "${IS_ELN:-}"'* ]]
+}
+
 @test "the ELN base install does not pull the noopenh264 stub on purpose" {
   # Installing the stub explicitly would make the gap look deliberate and
   # supported. ffmpeg-free drags it in as a dependency; this file must not

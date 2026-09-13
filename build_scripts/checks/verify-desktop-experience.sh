@@ -27,6 +27,55 @@ trap emit_fail_on_early_exit EXIT
 source /run/context/build_scripts/lib.sh 2>/dev/null || true
 detected_os 2>/dev/null || true
 
+# ── IS_ELN, for the callers that cannot supply it ───────────────────────────
+#
+# The two lines above are where the IS_* flags are meant to come from, and
+# they work wherever the build_scripts tree is present: at build time, and
+# under `just test-cell`, which mounts the whole directory at /run/context.
+# The CI gates do not. verify_desktop in reusable-build-image.yml, the
+# desktop-contract sweep and bootc-lifecycle each bind-mount THIS ONE FILE
+# into the image, so /run/context/build_scripts/lib.sh does not exist, the
+# source fails, and every IS_* flag stays unset.
+#
+# For ELN that is not a missing nicety, it is the wrong verdict. The codec
+# branch far below is written to name wahoo's H.264/H.265 gap and let it
+# through — ELN publishes no working decoder, and this repo cannot fix that
+# from here — but with IS_ELN unset the branch cannot fire, so the contract
+# exits 1 on a gap it has already measured and documented. That cost wahoo
+# its gnome, cosmic and kde cells in run 34609709028: Desktop contract red,
+# Promote skipped, three images that built and pushed reading not-green
+# (tunaOS#2049). The marker is the deliverable there, not the exit code.
+#
+# Derived from the image's own os-release using the SAME test lib.sh calls
+# its primary signal — `^ID=eln$`, which survives branding because
+# 90-image-info.sh's osr_set rewrites VARIANT_ID and never ID — so the two
+# cannot drift into disagreeing about the same image.
+#
+# An IS_ELN already in the environment wins: a caller that passes one
+# explicitly still decides, and this only fills the gap it left.
+#
+# Deliberately this flag alone. Mounting lib.sh into the gates would fix
+# IS_ELN and in the same stroke switch on every other flag-gated check that
+# has been dormant in CI for as long as these gates have existed (PKG_MGR
+# and IS_FEDORA guard one further down). That is a real finding and it wants
+# its own change — not a side effect of a codec waiver.
+_derive_is_eln() { # [os-release path...]
+	local -a files=("$@")
+	((${#files[@]})) || files=(/etc/os-release /usr/lib/os-release)
+	local f
+	for f in "${files[@]}"; do
+		[[ -r "$f" ]] || continue
+		if grep -qE '^ID=eln$' "$f"; then
+			echo true
+			return 0
+		fi
+	done
+	echo false
+}
+if [[ -z "${IS_ELN:-}" ]]; then
+	IS_ELN="$(_derive_is_eln)"
+fi
+
 # How many requirements the hummingbird exemption let through.
 #
 # Every require_* below returns 0 instead of exiting when IS_HUMMINGBIRD is
