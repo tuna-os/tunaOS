@@ -39,7 +39,8 @@ The generic installer `build_scripts/desktop/install-desktop.sh` reads a manifes
 | `scripts/resolve-image.sh` | Resolves image refs (base, common, brew, akmods) |
 | `scripts/build-image-inner.sh` | The build engine (env-var driven, replaces old Justfile monolith) |
 | `build_scripts/desktop/install-desktop.sh` | Generic manifest-driven DE installer |
-| `build_scripts/lib.sh` | Shared library (OS detection, pkg abstraction, retry logic) |
+| `build_scripts/lib.sh` | Compatibility facade for shared build helpers |
+| `build_scripts/lib/platform.sh` | OS/image detection and package-manager selection |
 | `build_scripts/desktop/gnome-extensions.sh` | GNOME extension compilation (separate cache layer) |
 
 ### Containerfiles

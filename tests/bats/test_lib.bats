@@ -144,11 +144,12 @@ JQ
   # We copy lib.sh to a temp location and tweak paths so it can be sourced.
   cp "${REPO_ROOT}/build_scripts/lib.sh" "${TEST_ROOT}/lib_test.sh"
   mkdir -p "${TEST_ROOT}/lib"
+  cp "${REPO_ROOT}/build_scripts/lib/platform.sh" "${TEST_ROOT}/lib/platform.sh"
   cp "${REPO_ROOT}/build_scripts/lib/service-policy.sh" "${TEST_ROOT}/lib/service-policy.sh"
   # Remove the set -euo pipefail to make testing easier
   sed -i 's/^set -euo pipefail/set -uo pipefail\n# set -e removed for test/' "${TEST_ROOT}/lib_test.sh"
   # Make _IMAGE_INFO overridable so image-info.json tests can point to test stubs
-  sed -i 's|^\([[:space:]]*\)_IMAGE_INFO="/usr/share/ublue-os/image-info.json"|\1_IMAGE_INFO="${_IMAGE_INFO:-/usr/share/ublue-os/image-info.json}"|' "${TEST_ROOT}/lib_test.sh"
+  sed -i 's|^\([[:space:]]*\)_IMAGE_INFO="/usr/share/ublue-os/image-info.json"|\1_IMAGE_INFO="${_IMAGE_INFO:-/usr/share/ublue-os/image-info.json}"|' "${TEST_ROOT}/lib/platform.sh"
 
   # ...and default it to a path that does NOT exist, so the HOST's copy cannot
   # leak in. Without this the suite is not hermetic: on a ublue-derived
@@ -162,6 +163,21 @@ JQ
   # The one test that genuinely exercises image-info.json exports its own
   # _IMAGE_INFO pointing at a stub under TEST_ROOT, so it is unaffected.
   export _IMAGE_INFO="${TEST_ROOT}/absent-image-info.json"
+}
+
+@test "platform detection is isolated behind the compatibility facade" {
+  run bash -c '
+    source "$1"
+    declare -F initialize_build_platform >/dev/null
+    [[ ! -e /tmp/tunaos-build-env ]]
+  ' _ "${REPO_ROOT}/build_scripts/lib/platform.sh"
+  [ "$status" -eq 0 ]
+
+  run grep -q 'source.*lib/platform.sh' "${REPO_ROOT}/build_scripts/lib.sh"
+  [ "$status" -eq 0 ]
+
+  run grep -q '^initialize_build_platform$' "${REPO_ROOT}/build_scripts/lib.sh"
+  [ "$status" -eq 0 ]
 }
 
 teardown() {
