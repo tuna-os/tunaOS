@@ -58,15 +58,33 @@ fi
 # system-bus assertion, which was written for this exact failure and has never
 # once been able to fire on it.
 #
-# So: bound the wait, then fall back to an unblocking query. A machine still
-# `starting` after two minutes has already failed this contract; asking again
+# So: bound the wait, then fall back to an unblocking query. Asking again
 # without --wait turns a silent kill into a named verdict and lets the rest of
 # the contract run.
+#
+# The bound was 120s and that was far too tight. hummingbird:gnome takes
+# 2min 7s of userspace to settle, and run 34775725935 caught the bound
+# expiring FOURTEEN MILLISECONDS before the machine became healthy:
+#
+#   [ 133.320660 ] TUNAOS_BASE_CONTRACT_NOTE settle-wait-timed-out state=starting
+#   [ 133.334844 ] Startup finished in 1.159s (kernel) + 5.100s (initrd)
+#                  + 2min 7.074s (userspace) = 2min 13.334s
+#
+# A contract that fails an image which was about to pass is worse than no
+# contract. The unit allows TimeoutStartSec=300 (40-services.sh) and starts
+# after multi-user.target at roughly 13s, so 240s leaves about 60s for the
+# checks below to run and print a verdict before systemd kills the service.
+# That is nearly double the slowest settle measured, and still bounded.
+#
+# Overridable so the tests can use a short bound instead of two minutes of
+# real time; nothing in the image sets it.
+: "${TUNAOS_SETTLE_WAIT_SECONDS:=240}"
+
 # Only exit 124 — timeout(1)'s own code — means the wait ran out. `degraded`
 # is an ALLOWED state here and `is-system-running` exits non-zero for it, so a
 # bare `if !` would have called every degraded boot a hang.
 _settle_rc=0
-state=$(timeout 120s systemctl is-system-running --wait 2>/dev/null) || _settle_rc=$?
+state=$(timeout "${TUNAOS_SETTLE_WAIT_SECONDS}s" systemctl is-system-running --wait 2>/dev/null) || _settle_rc=$?
 if [[ ${_settle_rc} -eq 124 ]]; then
 	state=$(systemctl is-system-running 2>/dev/null || true)
 	echo "TUNAOS_BASE_CONTRACT_NOTE settle-wait-timed-out state=${state:-unknown}" >&2
