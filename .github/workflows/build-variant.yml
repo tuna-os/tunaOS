@@ -96,6 +96,27 @@ jobs:
           FILTER_FLAVOR: ${{ inputs.flavor || 'all' }}
         run: |
           # Flatten config into one entry per {variant, flavor}, applying filters.
+          #
+          # `build_image` is one of those filters, and it was missing. Every
+          # other consumer of this config already honours it -- luks-e2e,
+          # bootc-lifecycle, catalog-facts, daily-verify, live-overlay,
+          # live-initramfs and desktop-contract-sweep all
+          # `select(.build_image == true)` -- so the flavors turned off in
+          # build-config were still being BUILT here, and they fail, because
+          # they are off for reasons that make them unbuildable:
+          #
+          #   albacore/yellowfin/skipjack gnome-asahi  arm64 leg of an
+          #       amd64-only gnome. "no image found in image index for
+          #       architecture arm64" on every attempt (run 34726078460).
+          #   flounder gnome, gnome-nvidia            both legs fail, and
+          #       took flounder's run conclusion to `failure` while all five
+          #       published flavors promoted (run 34657636354).
+          #
+          # Five guaranteed-red jobs per nightly, reading as variant failures
+          # for images nobody publishes. No cell count changes:
+          # scripts/gen-matrix-status.py already scores `build_image` flavors
+          # only, so these were never counted -- they were only burning
+          # runners and colouring runs red.
           # All inputs are in env vars — no direct interpolation of workflow
           # inputs into the script body, to prevent shell injection.
           FULL_MATRIX=$(yq -o=json '.' .github/build-config.yml | jq -c --arg event "${EVENT_NAME}" '
@@ -104,6 +125,7 @@ jobs:
             | . as $v
             | .flavors[]
             | select(env.FILTER_FLAVOR == "all" or .id == env.FILTER_FLAVOR)
+            | select(.build_image // false)
             | select($event != "pull_request" or .id == "gnome")
             | {
                 variant:       $v.id,
