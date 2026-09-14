@@ -232,7 +232,7 @@ sed -i 's@ nvidia @ i915 amdgpu nvidia sr_mod cdrom virtio_blk @g' /usr/lib/drac
 # A filesystem list filtered to modules that exist for the target kernel would
 # survive that. It is still a guess about why the fc43 tree comes up short, and
 # it costs a multi-hour build per attempt, so it needs evidence first rather
-# than another try. See tunaOS#2516.
+# than another try. See tunaOS#2518.
 #
 # Make sure initramfs is rebuilt after nvidia drivers or kernel replacement
 /usr/bin/dracut --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible --tmpdir /boot --zstd -v --add ostree -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
