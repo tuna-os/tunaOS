@@ -213,29 +213,26 @@ sed -i 's@omit_drivers@force_drivers@g' /usr/lib/dracut/dracut.conf.d/99-nvidia.
 # =m on both, which is why they were never part of the failure.
 sed -i 's@ nvidia @ i915 amdgpu nvidia sr_mod cdrom virtio_blk @g' /usr/lib/dracut/dracut.conf.d/99-nvidia.conf
 
-# Name the root filesystems instead of hoping autodetection finds them.
+# Do NOT add `--filesystems` here. I tried it and it broke the build.
 #
-# The *-nvidia-hwe cells on the EL10 family boot into an emergency shell:
+# The three EL10 *-nvidia-hwe cells boot to an emergency shell on
+# "mount: /sysroot: unknown filesystem type 'xfs'" (albacore run 34745445506,
+# yellowfin run 34738897386). `-hwe` picks the coreos-stable akmods bundle, so
+# the kernel swap puts Fedora 43's kernel under an EL10 dracut, and that dracut
+# leaves xfs out of the initramfs without saying so. Naming the filesystems
+# looked like the fix.
 #
-#   mount[597]: mount: /sysroot: unknown filesystem type 'xfs'.
-#   Failed to mount sysroot.mount - /sysroot.
-#   Dependency failed for ostree-prepare-root.service - OSTree Prepare OS/.
+# `--filesystems` is strict. dracut-install requires every module named, and
+# EL10's kernel has no btrfs at all, so the rebuild died on the cells that were
+# already green (albacore run 34796982699, base-nvidia):
 #
-# Measured on albacore run 34745445506 and yellowfin run 34738897386 — the same
-# two lines, at 10.6s and 10.3s, on a root that really is XFS.
+#   dracut-install: Failed to find module 'btrfs'
+#   dracut[E]: FAILED: /usr/lib/dracut/dracut-install ... -m xfs ext4 btrfs vfat
 #
-# It is the fc43-kernel-on-EL10 split #1561 documents above, one module further
-# on. `-hwe` selects the coreos-stable akmods bundle
-# (scripts/build-image-inner.sh), so 10-kernel-swap.sh installs THAT bundle's
-# kernel — 7.1.8-100.fc43 on an EL10 userspace whose dracut is
-# dracut-107-8.el10_2. The non-HWE nvidia cells install 6.12.0-266.el10 from
-# the centos-10 bundle and boot fine, which is why only the -hwe combination
-# is red.
+# A filesystem list filtered to modules that exist for the target kernel would
+# survive that. It is still a guess about why the fc43 tree comes up short, and
+# it costs a multi-hour build per attempt, so it needs evidence first rather
+# than another try. See tunaOS#2516.
 #
-# Under `--no-hostonly` dracut has no fstab to read, so the filesystem set is
-# whatever it infers. It infers correctly for the EL10 kernel it was built
-# alongside and not for the Fedora one, and the failure is silent: the dracut
-# run reports no error and never mentions xfs at all. Naming them removes the
-# inference. A filesystem already builtin or already included costs nothing —
-# the same reasoning the forced drivers above rest on.
-/usr/bin/dracut --no-hostonly --filesystems "xfs ext4 btrfs vfat" --kver "$QUALIFIED_KERNEL" --reproducible --tmpdir /boot --zstd -v --add ostree -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
+# Make sure initramfs is rebuilt after nvidia drivers or kernel replacement
+/usr/bin/dracut --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible --tmpdir /boot --zstd -v --add ostree -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
