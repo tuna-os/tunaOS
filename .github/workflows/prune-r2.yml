@@ -64,11 +64,25 @@ jobs:
             echo "::notice::R2 credentials not configured; skipping prune."
             exit 0
           fi
+          # "*-latest*", NOT "*-latest.iso*". Non-amd64 ISOs publish an
+          # arch-suffixed pointer -- reusable-build-artifacts.yml writes
+          # <variant>-<flavor>-latest-<arch>.iso (plus .sha256/.sigstore.json)
+          # for every platform that isn't linux/amd64 (#1378), so the bare
+          # <variant>-<flavor>-latest.iso name stays the documented amd64
+          # download. "*-latest.iso*" needs the literal "-latest.iso" and an
+          # arch-suffixed pointer does not contain it: bonito-gnome-latest-
+          # arm64.iso never matched the exclude, matched --include "*.iso",
+          # and was therefore deletable the moment its mtime passed 14d --
+          # i.e. the first time an arm64 leg went two weeks without a
+          # successful build, which is exactly when a stable pointer has to
+          # survive. Match the CLASS of pointer instead: no dated artifact
+          # name contains "-latest" (they are <name>-<YYYYMMDD>.iso), so the
+          # broader pattern keeps every pointer and still prunes every date.
           FLAGS=(--log-level INFO --s3-no-check-bucket --min-age 14d \
-            --exclude "*-latest.iso*" \
+            --exclude "*-latest*" \
             --include "*.iso" --include "*.iso.sha256" --include "*.iso.sigstore.json")
           [[ "$DRY_RUN" == "true" ]] && FLAGS+=(--dry-run)
-          echo "==> Pruning live-isos/ (>14d, excluding *-latest.iso*)..."
+          echo "==> Pruning live-isos/ (>14d, excluding *-latest*)..."
           rclone delete "${FLAGS[@]}" "R2:${{ secrets.R2_BUCKET }}/live-isos/"
 
       - name: Prune dated screenshots older than 60 days
@@ -96,13 +110,20 @@ jobs:
           # screenshots/installer/ (installer-screenshots.yml) only ever
           # writes "-latest.png" -- no dated files ever land there, so this
           # is a safe no-op for that subtree, not an intentional skip.
+          #
+          # Same "*-latest*" rule as the ISO step above, for the same reason:
+          # the exclude should say "never delete a pointer", not enumerate the
+          # extensions pointers happen to have today. Screenshots only publish
+          # "-latest.png" right now, so this is not a fix here -- it is the one
+          # rule both steps state the same way, and it already covers a future
+          # "-latest-arm64.png" or a .webp switch without a second incident.
           FLAGS=(--log-level INFO --s3-no-check-bucket --min-age 60d \
-            --exclude "*-latest.png")
+            --exclude "*-latest*")
           [[ "$DRY_RUN" == "true" ]] && FLAGS+=(--dry-run)
-          echo "==> Pruning screenshots/ recursively (>60d, excluding *-latest.png)..."
+          echo "==> Pruning screenshots/ recursively (>60d, excluding *-latest*)..."
           rclone delete "${FLAGS[@]}" "R2:${{ secrets.R2_BUCKET }}/screenshots/"
 
-      - name: Report remaining size
+      - name: Report R2 inventory
         if: always()
         env:
           RCLONE_CONFIG_R2_TYPE: s3
@@ -115,14 +136,47 @@ jobs:
           if [[ -z "${RCLONE_CONFIG_R2_ACCESS_KEY_ID:-}" ]]; then
             exit 0
           fi
+          BUCKET="${{ secrets.R2_BUCKET }}"
+          # The dashboard-free half of #1618 item 1. Stored bytes and object
+          # counts do not need Cloudflare billing access -- only the CI
+          # credentials this job already holds -- so the part of "get the real
+          # numbers" that was blocked on nobody having the dashboard is not
+          # actually blocked for storage. Operation counts (Class A/B) still
+          # are; docs/R2-COST-VISIBILITY.md says what an owner must pull by
+          # hand, and that split is the point rather than an omission.
+          #
+          # Enumerate what is ACTUALLY in the bucket instead of looping over
+          # the two prefixes this workflow prunes. A prefix nobody here knows
+          # about is the most useful thing this report can surface: the
+          # runbook's rule is that an unknown top-level prefix is an ownership
+          # question, and you cannot ask that about a prefix you never list.
+          mapfile -t PREFIXES < <(
+            rclone lsf --dirs-only --s3-no-check-bucket "R2:${BUCKET}/" 2>/dev/null || true
+          )
           {
-            echo "## R2 prune summary"
+            echo "## R2 inventory"
             echo
-            for prefix in live-isos screenshots; do
-              echo "### ${prefix}/"
-              rclone size --s3-no-check-bucket "R2:${{ secrets.R2_BUCKET }}/${prefix}/" \
-                --json 2>/dev/null \
-                | python3 -c 'import json,sys; d=json.load(sys.stdin); c=d["count"]; b=d["bytes"]/1024**3; print(f"- {c} objects, {b:.2f} GiB")' \
-                || echo "(size unavailable)"
+            if [[ ${#PREFIXES[@]} -eq 0 ]]; then
+              echo "(listing unavailable -- rclone could not enumerate the bucket)"
+            else
+              echo "| Prefix | Objects | Size (GiB) | Retention |"
+              echo "| --- | ---: | ---: | --- |"
+            fi
+            for dir in "${PREFIXES[@]}"; do
+              prefix="${dir%/}"
+              [[ -n "$prefix" ]] || continue
+              case "$prefix" in
+                live-isos)   retention="dated objects >14d pruned above" ;;
+                screenshots) retention="dated objects >60d pruned above" ;;
+                # Not "unused". Every other prefix in this bucket belongs to
+                # some other repo (tromso, xfce-linux, tacklebox,
+                # tunaos-packages) or to nothing at all, and telling those two
+                # apart is the open half of #1618 items 2-4.
+                *)           retention="**no retention here** -- identify writer (#1618)" ;;
+              esac
+              stats=$(rclone size --s3-no-check-bucket "R2:${BUCKET}/${prefix}/" --json 2>/dev/null \
+                | python3 -c 'import json,sys; d=json.load(sys.stdin); print(str(d["count"]) + " | " + format(d["bytes"]/1024**3, ".2f"))' 2>/dev/null) \
+                || stats="? | ?"
+              echo "| \`${prefix}/\` | ${stats} | ${retention} |"
             done
           } >> "$GITHUB_STEP_SUMMARY"
