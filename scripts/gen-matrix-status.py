@@ -469,56 +469,84 @@ def load_green_criteria(path: Path = GREEN_CRITERIA) -> list[dict]:
 
 
 def build_stage_results() -> dict[str, dict]:
-    """Per-variant Promote and Gate outcomes from the newest CONCLUSIVE build.
+    """Per-CELL Promote and Gate outcomes, each from the newest conclusive
+    build run that actually asserted that cell.
 
-    Same selection rule as .github/scripts/update-build-status.sh: walk recent
-    runs, take the first whose conclusion is success or failure — a cancelled
-    run is not a verdict on anything (tunaOS#1730). One run view per variant,
-    not a RUN_DEPTH walk: a build run asserts its whole matrix at once, so the
-    newest conclusive run IS the current state of every cell it scheduled.
+    This used to take one run view per variant, on the premise that "a build
+    run asserts its whole matrix at once, so the newest conclusive run IS the
+    current state of every cell it scheduled". A flavor-filtered
+    workflow_dispatch breaks that premise, and build-<variant>.yml offers one.
+    On 2026-09-13 a single-flavor dispatch rebuilt bonito:gnome-t2 by itself;
+    it became the newest conclusive run, and every other bonito cell scored
+    untested — fifteen cells that had promoted successfully hours earlier and
+    were still the published tags. Treating a targeted rebuild as a verdict on
+    the cells it never scheduled is the tunaOS#1730 conflation wearing a new
+    hat: "this run did not assert the cell" is not "the cell regressed".
+
+    Nothing stale is laundered green. Runs are walked newest first and a cell
+    is fixed by the FIRST conclusive Promote it finds, so a fresh failure
+    always beats an older success; only cells no recent run asserted reach
+    further back. The Gate is read from that same run, so one cell's builds
+    and boots verdicts always describe one image.
     """
     out: dict[str, dict] = {}
-    for variant in sorted(_matrix("build_image", desktops_only=False)):
+    configured = _matrix("build_image", desktops_only=False)
+    for variant in sorted(configured):
         runs = gh_json(
             "run", "list", "--repo", REPO,
             "--workflow", f"build-{variant}.yml",
             "--branch", "main", "--limit", "10",
             "--json", "databaseId,conclusion,createdAt",
         ) or []
-        run = next(
-            (r for r in runs if r.get("conclusion") in ("success", "failure")),
-            None,
-        )
-        if run is None:
-            out[variant] = {"jobs": {}, "date": ""}
+        conclusive = [
+            r for r in runs if r.get("conclusion") in ("success", "failure")
+        ]
+        if not conclusive:
+            out[variant] = {"jobs": {}, "date": "", "run_id": "", "cell_run": {}}
             continue
-        detail = gh_json(
-            "run", "view", str(run["databaseId"]), "--repo", REPO,
-            "--json", "jobs",
-        ) or {}
+        flavors = set(configured[variant])
         jobs: dict[tuple[str, str], str] = {}
-        for job in detail.get("jobs", []):
-            m = re.search(
-                r" / (?P<flavor>[^/]+) / (?P<stage>Promote|Gate)$",
-                job.get("name", ""),
-            )
-            if not m:
-                continue
-            key = (m["flavor"], m["stage"])
-            conclusion = job.get("conclusion") or ""
-            # Two jobs can share a display name for one cell: the desktop
-            # Gate (skipped on base) and the base Gate (skipped on desktops)
-            # both render as "base / Gate". A real verdict must never be
-            # overwritten by its skipped twin, and job order must not decide.
-            if key in jobs and conclusion not in ("success", "failure"):
-                continue
-            jobs[key] = conclusion
+        cell_run: dict[str, tuple[str, str]] = {}
+        for run in conclusive:
+            if flavors <= set(cell_run):
+                break
+            detail = gh_json(
+                "run", "view", str(run["databaseId"]), "--repo", REPO,
+                "--json", "jobs",
+            ) or {}
+            per_run: dict[tuple[str, str], str] = {}
+            for job in detail.get("jobs", []):
+                m = re.search(
+                    r" / (?P<flavor>[^/]+) / (?P<stage>Promote|Gate)$",
+                    job.get("name", ""),
+                )
+                if not m:
+                    continue
+                key = (m["flavor"], m["stage"])
+                conclusion = job.get("conclusion") or ""
+                # Two jobs can share a display name for one cell: the desktop
+                # Gate (skipped on base) and the base Gate (skipped on
+                # desktops) both render as "base / Gate". A real verdict must
+                # never be overwritten by its skipped twin, and job order must
+                # not decide.
+                if key in per_run and conclusion not in ("success", "failure"):
+                    continue
+                per_run[key] = conclusion
+            for flavor in flavors - set(cell_run):
+                if per_run.get((flavor, "Promote")) not in ("success", "failure"):
+                    continue
+                cell_run[flavor] = (run["createdAt"][:10], str(run["databaseId"]))
+                jobs[(flavor, "Promote")] = per_run[(flavor, "Promote")]
+                if (flavor, "Gate") in per_run:
+                    jobs[(flavor, "Gate")] = per_run[(flavor, "Gate")]
         out[variant] = {
             "jobs": jobs,
-            "date": run["createdAt"][:10],
-            # Kept for provenance: builds/boots verdicts all come from this
-            # one conclusive run, so the cell→run attribution is per-variant.
-            "run_id": str(run["databaseId"]),
+            # The variant's newest conclusive run, for cells that no run
+            # asserted and so have no run of their own to name.
+            "date": conclusive[0]["createdAt"][:10],
+            "run_id": str(conclusive[0]["databaseId"]),
+            # flavor -> (date, run_id) of the run that scored THAT cell.
+            "cell_run": cell_run,
         }
     return out
 
@@ -646,10 +674,16 @@ def composite_section(criteria, stage, contract, luks, smoke, lifecycle,
 
         def stage_axis(axis: str, stage_name: str) -> str:
             v = _stage_verdict(jobs.get((flavor, stage_name)))
-            run = _run_url(vstage.get("run_id", "")) if (flavor, stage_name) in jobs else ""
+            asserted = (flavor, stage_name) in jobs
+            # Provenance is per cell now, not per variant: cells of one
+            # variant can legitimately come from different runs.
+            date, rid = vstage.get("cell_run", {}).get(
+                flavor, (vstage.get("date", ""), vstage.get("run_id", ""))
+            )
+            run = _run_url(rid) if asserted else ""
             entry[axis] = {
                 "verdict": v,
-                "date": vstage.get("date", "") if (flavor, stage_name) in jobs else "",
+                "date": date if asserted else "",
                 "run": run,
                 "evidence": f"{run}#artifacts" if run else "",
             }

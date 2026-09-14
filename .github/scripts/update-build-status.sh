@@ -37,7 +37,7 @@ join_or_dash() {
 {
 	echo "$start"
 	echo
-	echo "_This snapshot uses the latest conclusive build from the main branch for each variant. It omits cancelled runs. A green cell has a successful promotion to the published tag. **Failed** means that a job ran and failed. **Not reached** means that no job asserted the cell, usually because an earlier stage stopped it._"
+	echo "_Each cell reports the newest conclusive main-branch run that actually asserted it, so a flavor-filtered rebuild does not blank the cells it never scheduled. Cancelled runs are omitted. **Latest run** names the variant's newest conclusive run. A green cell has a successful promotion to the published tag. **Failed** means that a job ran and failed. **Not reached** means that no recent run asserted the cell, usually because an earlier stage stopped it._"
 	echo
 	echo '| Variant | Green image cells | Latest run | Failing | Not reached |'
 	echo '| :--- | ---: | :--- | :--- | :--- |'
@@ -69,14 +69,57 @@ while IFS=$'\t' read -r variant emoji; do
 	fi
 
 	# First conclusive run, else fall back to the newest so the row still
-	# reports something and says why it is not conclusive.
+	# reports something and says why it is not conclusive. This is the run the
+	# "Latest run" column names; it is NOT necessarily the run every cell is
+	# scored from -- see below.
 	run=$(jq -c '[.[] | select(.conclusion == "success" or .conclusion == "failure")][0] // .[0]' <<<"$runs")
-	run_id=$(jq -r '.databaseId' <<<"$run")
 	conclusion=$(jq -r '.conclusion' <<<"$run")
 	run_url=$(jq -r '.url' <<<"$run")
 	run_date=$(jq -r '.createdAt[0:10]' <<<"$run")
-	stage_jobs=$(gh api --paginate "repos/${repo}/actions/runs/${run_id}/jobs?per_page=100" \
-		--jq '.jobs[] | select((.name | endswith(" / Promote")) or (.name | endswith(" / Gate"))) | [.name, .conclusion] | @tsv')
+
+	# Score each CELL from the newest conclusive run that actually asserted
+	# THAT cell, not every cell from one run.
+	#
+	# The old rule assumed "a build run asserts its whole matrix at once, so
+	# the newest conclusive run IS the current state of every cell it
+	# scheduled". A flavor-filtered workflow_dispatch breaks that assumption,
+	# and these workflows offer one. On 2026-09-13 a one-flavor dispatch built
+	# bonito:gnome-t2 by itself; it became the newest conclusive run, and the
+	# table reported bonito **1/16** with fifteen cells "not reached" -- every
+	# one of which had promoted successfully hours earlier and was still the
+	# published tag. Reading a targeted rebuild as a verdict on the fifteen
+	# cells it never scheduled is the tunaOS#1730 conflation in a new place:
+	# "this run did not assert the cell" is not "the cell regressed".
+	#
+	# Nothing stale is laundered green by this. A cell is scored from the
+	# FIRST run (newest first) that gives it a conclusive Promote, so a fresh
+	# failure always outranks an older success; only cells that no recent run
+	# asserted reach further back. The Gate is read from that same run, so a
+	# cell's builds and boots verdicts always describe one image.
+	unset promo_of gate_of
+	declare -A promo_of gate_of
+	unscored=$count
+	while IFS= read -r scan_id; do
+		((unscored > 0)) || break
+		stage_jobs=$(gh api --paginate "repos/${repo}/actions/runs/${scan_id}/jobs?per_page=100" \
+			--jq '.jobs[] | select((.name | endswith(" / Promote")) or (.name | endswith(" / Gate"))) | [.name, .conclusion] | @tsv')
+		for flavor in "${configured[@]}"; do
+			[[ -n "${promo_of[$flavor]:-}" ]] && continue
+			promotion=$(awk -F '\t' -v suffix="/ ${flavor} / Promote" \
+				'index($1, suffix) == length($1) - length(suffix) + 1 { result=$2 } END { print result }' <<<"$stage_jobs")
+			[[ "$promotion" == "success" || "$promotion" == "failure" ]] || continue
+			promo_of[$flavor]=$promotion
+			# Two jobs can render as "<flavor> / Gate" (the desktop Gate
+			# skipped on base, the base Gate skipped on desktops) -- prefer a
+			# real verdict over its skipped twin, matching gen-matrix-status.py.
+			gate_of[$flavor]=$(awk -F '\t' -v suffix="/ ${flavor} / Gate" \
+				'index($1, suffix) == length($1) - length(suffix) + 1 {
+					if ($2 == "success" || $2 == "failure") { result=$2 }
+					else if (result == "") { result=$2 }
+				} END { print result }' <<<"$stage_jobs")
+			unscored=$((unscored - 1))
+		done
+	done < <(jq -r '.[] | select(.conclusion == "success" or .conclusion == "failure") | .databaseId' <<<"$runs")
 
 	# Three outcomes, not two. A cell only counts as FAILING when a job ran and
 	# said so; "no Promote job existed" and "an upstream job stopped it" are
@@ -91,18 +134,8 @@ while IFS=$'\t' read -r variant emoji; do
 	failing=()
 	unreached=()
 	for flavor in "${configured[@]}"; do
-		promotion=$(awk -F '\t' -v suffix="/ ${flavor} / Promote" \
-			'index($1, suffix) == length($1) - length(suffix) + 1 { result=$2 } END { print result }' <<<"$stage_jobs")
-		promotion=${promotion:-missing}
-		# Two jobs can render as "<flavor> / Gate" (the desktop Gate skipped
-		# on base, the base Gate skipped on desktops) — prefer a real verdict
-		# over its skipped twin, matching gen-matrix-status.py.
-		gate=$(awk -F '\t' -v suffix="/ ${flavor} / Gate" \
-			'index($1, suffix) == length($1) - length(suffix) + 1 {
-				if ($2 == "success" || $2 == "failure") { result=$2 }
-				else if (result == "") { result=$2 }
-			} END { print result }' <<<"$stage_jobs")
-		gate=${gate:-missing}
+		promotion=${promo_of[$flavor]:-missing}
+		gate=${gate_of[$flavor]:-missing}
 		case "$promotion" in
 		success) green=$((green + 1)) ;;
 		failure) failing+=("$flavor") ;;
