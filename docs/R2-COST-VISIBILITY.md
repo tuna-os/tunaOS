@@ -21,6 +21,19 @@ the issue or the operations log:
 | Egress | R2 dashboard → Egress | confirm the R2 free-egress assumption for the account and traffic path |
 | Object count | R2 usage or an authenticated inventory | `live-isos/`, `screenshots/`, and any unexpected top-level prefix |
 
+Two of those rows no longer wait on anyone. Stored bytes and object count are
+readable with the CI credentials the retention job already holds, so
+`prune-r2.yml` writes a per-prefix inventory table to its run summary on every
+scheduled run: every top-level prefix in the bucket, its object count and size,
+and whether anything in this repository retains it. That is the measurement a
+maintainer can take today; the operation counts and egress rows still need the
+dashboard, because the S3 API does not report what it was billed for.
+
+The automated table enumerates the bucket rather than the two prefixes this
+repository prunes, which is what makes it useful for the questions this runbook
+cannot answer from here: a prefix that shows up with no owner is the visible
+form of items 2-4 on the issue.
+
 Record the measurement date, billing period, bucket, account, and dashboard
 currency/units. Do not infer cost from object count alone: package-repository
 syncs can be operation-heavy while ISOs and screenshots are storage-heavy.
@@ -45,6 +58,15 @@ listed deletion set before enabling a destructive run.
 
 - Never delete `*-latest` objects as part of dated-object cleanup; download
   documentation and smoke tests use those stable names.
+- Write that rule as `*-latest*`, matching the class, not as a pattern built
+  from the extensions pointers happen to have. There is more than one pointer
+  shape: non-amd64 ISOs publish `<variant>-<flavor>-latest-<arch>.iso` (#1378)
+  alongside the bare amd64 name, and an exclude of `*-latest.iso*` silently
+  missed all three arch-suffixed objects — the ISO and both sidecars — while
+  looking correct. `tests/test_r2_retention_never_deletes_a_latest_pointer.py`
+  harvests the pointer names the upload workflows actually build and replays
+  the prune filters against them, so a new pointer shape is covered without
+  editing the test.
 - Keep ISO sidecars (`.sha256` and `.sigstore.json`) with their dated ISO. A
   sidecar without its ISO is not useful evidence or a usable download.
 - Prefer a dry run and a bounded age threshold before changing a cleanup job.
