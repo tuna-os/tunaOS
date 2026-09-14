@@ -499,6 +499,42 @@ gh run view <run-id> --json jobs --jq '.jobs[] | select(.conclusion=="failure") 
 gh run list --limit 20
 ```
 
+## Reading a published image without a container runtime
+
+`podman run` is not always available. tunaOS#2485 sat for a day on "the next
+step is a `podman run`". That environment had no podman, and no skopeo either.
+It did not need one. Ask a red cell what mode a file has, or what it
+holds, or whether the package landed. Plain HTTPS to the registry answers.
+
+```bash
+# Metadata for one path, per layer that carries it
+scripts/inspect-published-image.py stat tuna-os/skipjack:gnome \
+    etc/selinux/targeted/contexts/dbus_contexts
+
+# Everything under a prefix
+scripts/inspect-published-image.py ls tuna-os/skipjack:gnome \
+    etc/selinux/targeted/contexts
+
+# The bytes
+scripts/inspect-published-image.py cat tuna-os/albacore:gnome \
+    etc/selinux/config
+```
+
+Two paths, picked per layer. A `zstd:chunked` layer embeds a table of contents,
+named by its `io.github.containers.zstd-chunked.manifest-position` annotation. A
+range request fetches it, and it lists every path with mode, uid, gid, size,
+xattrs and byte offsets. A 320 MB layer costs a 584 KB read. For any other layer the script
+streams the blob through zstd or gzip into `tarfile`. That is slower, and it
+writes nothing to disk.
+
+**A large file is more than its table-of-contents entry.** It is one `reg` entry
+plus trailing `chunk` entries, each with its own range. Read the `reg` range
+alone and the request succeeds, zstd decompresses, and you hold a plausible file
+with its tail missing. A 374,034-byte `file_contexts` measured 49,094 bytes that
+way, ending mid-record, and looked exactly like a truncated write inside the
+image. The script reads every chunk and checks the total against the declared
+size. A short read then raises, and never answers.
+
 ## Serial Log Deep Diagnosis
 
 For boot-gate timeouts, download the gate artifact and inspect the raw serial log:
