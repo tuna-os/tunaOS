@@ -119,6 +119,28 @@ class TheRetryExistsBecauseALostLayerLooksLikeAMissingFile(unittest.TestCase):
                 self.assertRaises(subprocess.CalledProcessError):
             ipi._curl("url")
 
+    def test_a_nonsense_attempt_count_says_so_instead_of_raising_None(self):
+        # attempts=0 skips the loop body entirely. The first version ended on
+        # `raise last` with last still None, which Python turns into "TypeError:
+        # exceptions must derive from BaseException" — an error about the error
+        # handler, naming neither the URL nor the real problem.
+        with self.assertRaises(ValueError) as caught:
+            ipi._curl("url", attempts=0)
+        self.assertIn("at least 1", str(caught.exception))
+
+    def test_the_last_failure_keeps_its_own_traceback(self):
+        # Re-raised from inside the handler, so the traceback points at the
+        # curl call that failed rather than at the bottom of the retry loop.
+        import subprocess
+        err = subprocess.CalledProcessError(18, "curl")
+        with mock.patch.object(ipi.subprocess, "run", side_effect=err), \
+                mock.patch.object(ipi.time, "sleep"):
+            try:
+                ipi._curl("url", attempts=2)
+            except subprocess.CalledProcessError as exc:
+                self.assertIs(exc.__traceback__.tb_next.tb_frame.f_code,
+                              ipi._curl.__code__)
+
 
 if __name__ == "__main__":
     unittest.main()

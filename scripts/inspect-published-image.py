@@ -71,17 +71,19 @@ def _curl(*args: str, binary: bool = False, attempts: int = 3):
     lost layer here reads as "the file is not in the image" — the one answer
     this script must never give wrongly.
     """
-    last = None
     for attempt in range(attempts):
         try:
             out = subprocess.run(["curl", "-sSL", "--retry", "2", *args],
                                  capture_output=True, check=True).stdout
             return out if binary else out.decode()
-        except subprocess.CalledProcessError as exc:
-            last = exc
-            if attempt + 1 < attempts:
-                time.sleep(2 ** attempt)
-    raise last
+        except subprocess.CalledProcessError:
+            # Re-raise from inside the handler on the last attempt: a bare
+            # `raise` keeps the traceback, and there is no path here that can
+            # reach the end of the loop holding nothing to raise.
+            if attempt + 1 >= attempts:
+                raise
+            time.sleep(2 ** attempt)
+    raise ValueError(f"attempts must be at least 1, got {attempts}")
 
 
 def token(repo: str) -> str:
