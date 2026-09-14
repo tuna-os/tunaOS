@@ -1008,3 +1008,42 @@ A gate that fails an image which was about to pass is worse than one that hangs.
 Only `timeout(1)`'s own exit 124 counts as a hang. `systemctl is-system-running` exits non-zero for `degraded`, a state this contract deliberately allows, so a bare `if !` here would report every degraded boot as a hang.
 
 **Lesson:** a gate that waits must bound the wait. Without a bound, the harness timeout becomes the timeout. A harness timeout is the least informative failure available: it names the job, never the defect. It also swallows every assertion after the wait. So the checks you most want on a sick machine are the ones that never run.
+
+### 22. Two reports that both mistook silence for a verdict (2026-09-13)
+
+**Affected scripts:** `.github/scripts/update-build-status.sh`, `scripts/gen-matrix-status.py`.
+
+**Symptom:** the README snapshot gave `bonito` **1/16**. All sixteen bonito cells had promoted that day. All sixteen tags were live.
+
+```
+| 🎣 `bonito` | **1/16** | [✅ 2026-09-13](.../34768771243) | — | base,base-hwe,base-nvidia,
+  gnome,cosmic,kde,niri,xfce,gnome-hwe,gnome-asahi,gnome-nvidia,cosmic-nvidia,
+  kde-nvidia,niri-nvidia,xfce-nvidia |
+```
+
+**Root cause:** both scorers read one run per variant. Then they scored every cell from that run. `gen-matrix-status.py` stated the premise outright:
+
+> a build run asserts its whole matrix at once, so the newest conclusive run IS the current state of every cell it scheduled
+
+`build-<variant>.yml` accepts a flavor-filtered `workflow_dispatch`. One rebuild of one flavor breaks that premise. Run 34768771243 built `gnome-t2` alone. It then became the newest conclusive run. The fifteen cells it never scheduled scored "not reached".
+
+The `Failing` column stayed empty. That was the tell. Nothing had failed. The table never mentioned those cells, and it read the silence as doubt.
+
+**Fix:** score each cell from the newest conclusive run that asserted *that cell*. Walk runs newest first. Let the first conclusive Promote win, so a fresh failure beats an older success. Only a cell that no run asserted reaches further back. Read the Gate from the same run as the Promote, so one cell's `builds` and `boots` describe one image.
+
+The walk stops once every flavor has a verdict. The ordinary case still costs one fetch.
+
+Measured: `bonito` 1/16 → 16/16, `skipjack` 12/17 → 13/17, totals 112/139 → 128/138. No row lost a cell.
+
+**That same day the drift gate on the same document failed from the other end.** `--check-structure` masks live content. It then compares a committed `MATRIX-STATUS.md` against a fresh one. CI churn must never fail a pull request. The gate failed #2512 on this line:
+
+```
++N cell(s) in the most recent sweep are missing (no published image), errored
++(registry/runner trouble), or lost (job produced no result)...
+```
+
+A sweep finished between the commit and the check. It returned one `missing` cell. The generator then emitted a caveat paragraph that no committed copy could hold.
+
+**The mask works line by line. A rewrite of a line cannot hide a line that one side lacks.** Every other live readout there is a line that always exists. Only its numbers move, so the mask covers it. Name a conditional paragraph in `VOLATILE_LINE` instead.
+
+**Lesson:** a report claims what someone measured, and silence measures nothing. Ask two questions of every line you print. Did a run look at this cell? Might this line not print at all? A comparison that normalises what both sides hold will still fail on what one side alone holds.
