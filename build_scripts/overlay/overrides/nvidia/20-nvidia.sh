@@ -213,5 +213,26 @@ sed -i 's@omit_drivers@force_drivers@g' /usr/lib/dracut/dracut.conf.d/99-nvidia.
 # =m on both, which is why they were never part of the failure.
 sed -i 's@ nvidia @ i915 amdgpu nvidia sr_mod cdrom virtio_blk @g' /usr/lib/dracut/dracut.conf.d/99-nvidia.conf
 
+# Do NOT add `--filesystems` here. I tried it and it broke the build.
+#
+# The three EL10 *-nvidia-hwe cells boot to an emergency shell on
+# "mount: /sysroot: unknown filesystem type 'xfs'" (albacore run 34745445506,
+# yellowfin run 34738897386). `-hwe` picks the coreos-stable akmods bundle, so
+# the kernel swap puts Fedora 43's kernel under an EL10 dracut, and that dracut
+# leaves xfs out of the initramfs without saying so. Naming the filesystems
+# looked like the fix.
+#
+# `--filesystems` is strict. dracut-install requires every module named, and
+# EL10's kernel has no btrfs at all, so the rebuild died on the cells that were
+# already green (albacore run 34796982699, base-nvidia):
+#
+#   dracut-install: Failed to find module 'btrfs'
+#   dracut[E]: FAILED: /usr/lib/dracut/dracut-install ... -m xfs ext4 btrfs vfat
+#
+# A filesystem list filtered to modules that exist for the target kernel would
+# survive that. It is still a guess about why the fc43 tree comes up short, and
+# it costs a multi-hour build per attempt, so it needs evidence first rather
+# than another try. See tunaOS#2518.
+#
 # Make sure initramfs is rebuilt after nvidia drivers or kernel replacement
 /usr/bin/dracut --no-hostonly --kver "$QUALIFIED_KERNEL" --reproducible --tmpdir /boot --zstd -v --add ostree -f "/lib/modules/$QUALIFIED_KERNEL/initramfs.img"
