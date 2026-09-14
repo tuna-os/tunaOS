@@ -100,42 +100,7 @@ ensure_openssh_installed() {
 # survives them. The live greetd adapters in live-iso/common/src additionally
 # set `source_profile = false`, which is defence in depth against the next
 # blocking profile script rather than a second copy of this fix.
-_tunaos_guarded=0
-_tunaos_found=0
-for _f in /etc/profile.d/umotd.sh /etc/profile.d/uwelcome.sh; do
-	[[ -f "$_f" ]] || continue
-	_tunaos_found=$((_tunaos_found + 1))
-	if grep -q 'TUNAOS_INTERACTIVE_GUARD' "$_f"; then continue; fi
-	{
-		if head -n1 "$_f" | grep -q '^#!'; then head -n1 "$_f"; fi
-		cat <<'GUARD_EOF'
-# TUNAOS_INTERACTIVE_GUARD — added by build_scripts/40-services.sh.
-# A login banner is for interactive logins. Unguarded, this file also runs in
-# non-interactive login shells — greetd sessions, `ssh host command` — where
-# nothing drains its output and a stall takes the whole session with it.
-case $- in
-*i*) ;;
-*) return 0 ;;
-esac
-GUARD_EOF
-		if head -n1 "$_f" | grep -q '^#!'; then tail -n +2 "$_f"; else cat "$_f"; fi
-	} >"${_f}.tunaos-guard"
-	# Copy back through the original inode so mode and ownership are kept.
-	cat "${_f}.tunaos-guard" >"$_f"
-	rm -f "${_f}.tunaos-guard"
-	_tunaos_guarded=$((_tunaos_guarded + 1))
-	echo "guarded ${_f} against non-interactive execution"
-done
-# Distinguish "already guarded" from "nothing to guard": only the latter means
-# upstream renamed the file out from under this list, and only the latter
-# should print a note that will be read as a warning.
-if [[ "$_tunaos_found" -eq 0 ]]; then
-	echo "NOTE: no ublue login-banner script found in /etc/profile.d to guard."
-	echo "      If upstream renamed it again, add the new name to the list in"
-	echo "      build_scripts/40-services.sh — see"
-	echo "      tests/bats/test_umotd_noninteractive_guard.bats for why."
-fi
-unset _tunaos_guarded _tunaos_found _f
+tunaos_guard_login_banners
 
 # ── rechunker-group-fix: repairs a tool tunaOS does not use ────────────────
 # The ublue common payload ships rechunker-group-fix.service. Its own header
