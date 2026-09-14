@@ -1311,6 +1311,12 @@ VOLATILE_LINE = re.compile(
     r"|The table above still shows a result for "  # same: only while they remain
     r"|Missing for "                      # depends on published overlay tags
     r"|Every non-NVIDIA ISO cell has an overlay"
+    # Present only while the newest sweep has a cell that neither passed nor
+    # failed. One sweep finishing mid-review makes this whole paragraph appear
+    # or vanish, which broke the gate on tunaOS#2512 for a line no pull request
+    # wrote or can fix. Masking a line cannot hide a line that is absent, so a
+    # conditional paragraph has to be named here explicitly.
+    r"|\d+ cell\(s\) in the most recent sweep are "
     r")"
 )
 
