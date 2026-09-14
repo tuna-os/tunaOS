@@ -54,6 +54,13 @@ Expected churn is not counted as a release-track availability regression and
 does not create an obligation to restore promotion by the next nightly. See
 #1754 for that queue; fixed-release recovery is tracked separately in #1753.
 
+The README build matrix publishes that separation rather than leaving it to be
+reconstructed: every row names its track, and the release-track cells carry
+their own subtotal alongside the all-variants one.
+`.github/scripts/update-build-status.sh` derives both from the
+`upstream_track` field above, so a variant moves between them by editing
+`.github/build-config.yml` and nothing else.
+
 ## Lifecycle stages
 
 | Stage | Meaning | Entry criteria | Exit criteria |
