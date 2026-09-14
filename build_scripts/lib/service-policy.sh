@@ -34,3 +34,42 @@ kde_dm_unit() {
 		echo sddm.service
 	fi
 }
+
+# Guard ublue login banners against non-interactive login shells. greetd and
+# `ssh host command` both source profile.d without a terminal, where a banner
+# can stall the session before its real command starts. TUNAOS_PROFILE_DIR lets
+# contract tests exercise the filesystem mutation without touching /etc.
+tunaos_guard_login_banners() {
+	local profile_dir="${TUNAOS_PROFILE_DIR:-/etc/profile.d}"
+	local banner found=0
+
+	for banner in "${profile_dir}/umotd.sh" "${profile_dir}/uwelcome.sh"; do
+		[[ -f "$banner" ]] || continue
+		found=$((found + 1))
+		if grep -q 'TUNAOS_INTERACTIVE_GUARD' "$banner"; then continue; fi
+		{
+			if head -n1 "$banner" | grep -q '^#!'; then head -n1 "$banner"; fi
+			cat <<'GUARD_EOF'
+# TUNAOS_INTERACTIVE_GUARD — added by build_scripts/lib/service-policy.sh.
+# A login banner is for interactive logins. Unguarded, this file also runs in
+# non-interactive login shells — greetd sessions, `ssh host command` — where
+# nothing drains its output and a stall takes the whole session with it.
+case $- in
+*i*) ;;
+*) return 0 ;;
+esac
+GUARD_EOF
+			if head -n1 "$banner" | grep -q '^#!'; then tail -n +2 "$banner"; else cat "$banner"; fi
+		} >"${banner}.tunaos-guard"
+		# Copy through the original inode so mode and ownership are kept.
+		cat "${banner}.tunaos-guard" >"$banner"
+		rm -f "${banner}.tunaos-guard"
+		echo "guarded ${banner} against non-interactive execution"
+	done
+
+	if [[ "$found" -eq 0 ]]; then
+		echo "NOTE: no ublue login-banner script found in ${profile_dir} to guard."
+		echo "      If upstream renamed it again, update tunaos_guard_login_banners in"
+		echo "      build_scripts/lib/service-policy.sh."
+	fi
+}
