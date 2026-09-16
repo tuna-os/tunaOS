@@ -21,43 +21,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # ── 1. Desktop detection ──────────────────────────────────────────────────────
 # TUNA_SESSION_ROOT lets the bats tests point detection at a fake root.
 _SR="${TUNA_SESSION_ROOT:-}"
-DESKTOP="gnome"
-if [[ -f "${_SR}/usr/share/wayland-sessions/plasma.desktop" || -f "${_SR}/usr/share/wayland-sessions/plasmawayland.desktop" ]]; then
-	DESKTOP="kde"
-elif [[ -f "${_SR}/usr/share/wayland-sessions/niri.desktop" ]]; then
-	DESKTOP="niri"
-elif [[ -f "${_SR}/usr/share/wayland-sessions/cosmic.desktop" ]]; then
-	DESKTOP="cosmic"
-elif compgen -G "${_SR}/usr/share/xsessions/xfce*.desktop" >/dev/null ||
-	compgen -G "${_SR}/usr/share/wayland-sessions/xfce*.desktop" >/dev/null; then
-	DESKTOP="xfce"
-elif [[ -f "${_SR}/usr/share/wayland-sessions/pantheon-wayland.desktop" ||
-	-f "${_SR}/usr/share/xsessions/pantheon.desktop" ]]; then
-	# Pantheon had NO branch here, and DESKTOP defaults to "gnome" — so
-	# gurnard:pantheon ran desktop-gnome.sh, which writes GDM autologin. That
-	# image ships NO gdm: lightdm is the only display manager and
-	# display-manager.service points at it. MEASURED on the published
-	# gurnard-pantheon ISO: /etc/gdm/custom.conf is present with
-	# AutomaticLogin=liveuser, lightdm has no autologin, liveuser exists, and
-	# the live session never starts — a black screen on every frame of three
-	# harness runs. The account was fine; nothing logged it in.
-	DESKTOP="pantheon"
-fi
+# shellcheck source=live-desktop-contract.sh
+source "${SCRIPT_DIR}/live-desktop-contract.sh"
+DESKTOP="$(detect_live_desktop "${_SR}")"
+INSTALLER_APP="$(installer_app_for_desktop "${DESKTOP}")"
 echo "customize-live: detected desktop=${DESKTOP}"
-
-case "${DESKTOP}" in
-kde) INSTALLER_APP="org.tunaos.InstallerKde" ;;
-niri) INSTALLER_APP="org.tunaos.InstallerNiri" ;;
-cosmic) INSTALLER_APP="org.tunaos.InstallerCosmic" ;;
-xfce) INSTALLER_APP="org.tunaos.InstallerXfce" ;;
-# pantheon has no TunaOS-branded frontend fork either; it takes upstream
-# bootc-installer, the same as gnome.
-pantheon) INSTALLER_APP="org.bootcinstaller.Installer" ;;
-# gnome has no TunaOS-branded frontend fork; ship upstream bootc-installer
-# directly, fetched the same way projectbluefin/dakota-iso does it (see
-# install-flatpaks.sh there) rather than from the tuna-os Flatpak remote.
-*) INSTALLER_APP="org.bootcinstaller.Installer" ;;
-esac
 
 # Test hook: report detection and stop before any system mutation.
 if [[ "${TUNA_DETECT_ONLY:-0}" == "1" ]]; then
