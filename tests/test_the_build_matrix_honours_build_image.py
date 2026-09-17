@@ -26,7 +26,7 @@ promoted.
 
 No cell count moves. scripts/gen-matrix-status.py already scores only
 `build_image` flavors, so these were never counted -- 144 config entries
-filter to exactly the 138 the matrix claims today.
+filter to exactly the 135 the matrix claims today.
 """
 from __future__ import annotations
 
@@ -98,7 +98,7 @@ def test_no_disabled_flavor_is_the_parent_of_an_enabled_one():
 
 
 def test_the_filtered_matrix_is_the_cell_count_we_publish():
-    """144 config entries filter to the 138 the docs claim today.
+    """144 config entries filter to the 135 the docs claim today.
 
     Not a coincidence worth leaving implicit: if this number drifts from
     docs/MATRIX-STATUS.md and the README, one of the two is wrong about what
@@ -111,7 +111,7 @@ def test_the_filtered_matrix_is_the_cell_count_we_publish():
     assert built < total, (
         "no flavor is turned off at all; either the config changed shape or "
         "build_image stopped being used, and the filter is now a no-op")
-    assert built == 138, (
-        f"the matrix builds {built} flavors; the published cell count is 138. "
+    assert built == 135, (
+        f"the matrix builds {built} flavors; the published cell count is 135. "
         "If the matrix legitimately changed size, update docs/MATRIX-STATUS.md, "
         "the README and this number together.")

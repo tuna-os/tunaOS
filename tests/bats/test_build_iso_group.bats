@@ -132,8 +132,22 @@ _select() {
   echo "${SEL[*]}"
 }
 
-@test "select: yellowfin flagship includes gnome-nvidia + hwe" {
-  [ "$(_select '' yellowfin)" = "gnome-nvidia gnome-nvidia-hwe" ]
+# The flagship group names gnome-nvidia AND gnome-nvidia-hwe, and the EL10
+# family used to supply both. It no longer builds gnome-nvidia-hwe: that image
+# boots to an emergency shell on "unknown filesystem type 'xfs'", because -hwe
+# pulls Fedora 43's kernel under an EL10 dracut (tunaOS#2518). So the group
+# resolves to gnome-nvidia alone, and the intersection in build-iso-group.sh is
+# what drops it — no group needed editing.
+#
+# This is the same shape bonito has always had, which is why the two cases
+# below now assert the same thing for different reasons.
+@test "select: yellowfin flagship resolves to gnome-nvidia alone" {
+  [ "$(_select '' yellowfin)" = "gnome-nvidia" ]
+}
+
+@test "select: albacore and skipjack flagships resolve the same way" {
+  [ "$(_select '' albacore)" = "gnome-nvidia" ]
+  [ "$(_select '' skipjack)" = "gnome-nvidia" ]
 }
 
 @test "select: bonito flagship shrinks (no gnome-nvidia-hwe on Fedora)" {

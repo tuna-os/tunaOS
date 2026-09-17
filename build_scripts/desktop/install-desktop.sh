@@ -970,6 +970,18 @@ if [[ "${_TD_DESKTOP}" == gnome || "${_TD_DESKTOP}" == kde || "${_TD_DESKTOP}" =
 		/usr/libexec/tunaos/verify-branding
 	BRANDING_EXTRA=""
 	case "${_TD_DESKTOP}" in
+	gnome)
+		# GNOME reads dconf, not /usr/share/backgrounds. marlin:gnome carried
+		# every asset and showed the stock wallpaper, because no keyfile named
+		# one (docs/BRANDING.md). The script writes the keyfiles AND compiles
+		# them: `dconf update` above already ran, so a keyfile written here
+		# would stay uncompiled until first boot.
+		"${_TD_CTX}/build_scripts/desktop/gnome-set-branding.sh"
+		"${_TD_CTX}/build_scripts/checks/verify-branding-gnome.sh" "${IMAGE_NAME:-${_TD_DESKTOP}}"
+		install -Dm0755 "${_TD_CTX}/build_scripts/checks/verify-branding-gnome.sh" \
+			/usr/libexec/tunaos/verify-branding-gnome
+		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-gnome ${IMAGE_NAME:-${_TD_DESKTOP}} --runtime"
+		;;
 	kde)
 		# Plasma's packages own /etc/xdg/kdeglobals and overwrite the copy
 		# system_files laid down in the base stage, so the look-and-feel has to

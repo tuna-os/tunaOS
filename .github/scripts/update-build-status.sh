@@ -37,7 +37,7 @@ join_or_dash() {
 {
 	echo "$start"
 	echo
-	echo "_Each cell reports the newest conclusive main-branch run that actually asserted it, so a flavor-filtered rebuild does not blank the cells it never scheduled. Cancelled runs are omitted. **Latest run** names the variant's newest conclusive run. A green cell has a successful promotion to the published tag. **Failed** means that a job ran and failed. **Not reached** means that no recent run asserted the cell, usually because an earlier stage stopped it._"
+	echo "_Each cell reports the newest conclusive main-branch run that asserted it, so a flavor-filtered rebuild does not blank the cells it never scheduled. This table omits cancelled runs. **Latest run** names the variant's newest conclusive run. A green cell has a successful promotion to the published tag. **Failed** means that a job ran and failed. **Not reached** means that no recent run asserted the cell, usually because an earlier stage stopped it._"
 	echo
 	echo '| Variant | Green image cells | Latest run | Failing | Not reached |'
 	echo '| :--- | ---: | :--- | :--- | :--- |'

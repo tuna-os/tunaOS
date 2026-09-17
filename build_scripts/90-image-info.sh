@@ -53,8 +53,14 @@ cat >$IMAGE_INFO <<EOF
   }
 EOF
 
-HOME_URL="https://projectbluefin.io"
-DOCUMENTATION_URL="https://docs.projectbluefin.io"
+# Every variant shipped these two pointing at projectbluefin.io, inherited
+# verbatim from the bluefin-lts script this one started as, while SUPPORT_URL
+# and BUG_REPORT_URL were already ours. A user running `gnome-control-center
+# info-overview` on any TunaOS image was sent to another project's front page.
+# The contract missed it because it only asserted the two URLs that were
+# already correct; verify-branding.sh now checks all four.
+HOME_URL="https://github.com/tuna-os/tunaos"
+DOCUMENTATION_URL="https://github.com/tuna-os/tunaos/tree/main/docs"
 SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"
 BUG_SUPPORT_URL="https://github.com/tuna-os/tunaos/issues/"
 

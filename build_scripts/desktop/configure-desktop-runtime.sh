@@ -229,6 +229,16 @@ gnome | kde | niri | cosmic | xfce | pantheon)
 		/usr/libexec/tunaos/verify-branding
 	BRANDING_EXTRA=""
 	case "$desktop" in
+	gnome)
+		# The second path, for the Ubuntu and Debian bases. Wiring branding in
+		# one path only is the mistake kde-set-look-and-feel.sh already made
+		# once; half the matrix shipped unbranded (docs/BRANDING.md).
+		/run/context/build_scripts/desktop/gnome-set-branding.sh
+		/run/context/build_scripts/checks/verify-branding-gnome.sh "${IMAGE_NAME:-$desktop}"
+		install -Dm0755 /run/context/build_scripts/checks/verify-branding-gnome.sh \
+			/usr/libexec/tunaos/verify-branding-gnome
+		BRANDING_EXTRA="ExecStart=-/usr/libexec/tunaos/verify-branding-gnome ${IMAGE_NAME:-$desktop} --runtime"
+		;;
 	kde)
 		# Plasma's packages own /etc/xdg/kdeglobals and overwrite the copy
 		# system_files laid down in the base stage, so the look-and-feel has to

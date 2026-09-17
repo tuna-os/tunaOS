@@ -17,6 +17,12 @@ the paragraph appeared:
     +N cell(s) in the most recent sweep are missing (no published image),
     +errored (registry/runner trouble), or lost (job produced no result)...
 
+The sentence has since been rewritten — that wording also tripped the STE
+ratchet every time the data made it appear, which put main over budget on
+2026-09-14 (tunaOS#2547). The mask below follows the new opening, and that
+coupling is the point: a conditional paragraph is answerable to two gates at
+once, so its text cannot move without both moving with it.
+
 Masking is per line, so it cannot touch a line that is absent from one side.
 A paragraph whose *existence* is live state has to be named in VOLATILE_LINE
 explicitly, which is what these tests pin.
@@ -35,10 +41,10 @@ sys.modules["gen_matrix_status_drift"] = gms
 _spec.loader.exec_module(gms)
 
 CAVEAT = (
-    "1 cell(s) in the most recent sweep are missing (no published image), "
-    "errored (registry/runner trouble), or lost (job produced no result) "
-    "rather than a clean pass or fail — not counted above; see that sweep's "
-    "own `desktop-contract-baseline` artifact for which."
+    "The most recent sweep left 1 cell(s) outside the counts above. A cell "
+    "lands there when it has no published image, when the registry or the "
+    "runner fails, or when its job produces no result. That sweep's own "
+    "`desktop-contract-baseline` artifact names them."
 )
 
 
@@ -50,7 +56,7 @@ class ASweepFinishingMidReviewIsNotDrift(unittest.TestCase):
         for n in (1, 2, 14):
             with self.subTest(n=n):
                 self.assertTrue(
-                    gms.VOLATILE_LINE.match(CAVEAT.replace("1 cell(s)", f"{n} cell(s)", 1))
+                    gms.VOLATILE_LINE.match(CAVEAT.replace("left 1 cell(s)", f"left {n} cell(s)", 1))
                 )
 
     def test_a_block_that_gains_the_paragraph_is_structurally_identical(self):

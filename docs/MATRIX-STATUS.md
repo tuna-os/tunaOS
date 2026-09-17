@@ -185,7 +185,7 @@ Pulls the **published** image and runs the contract script against it directly (
 | **wahoo** | ✅ | ✅ | ✅ | — | — |
 | **yellowfin** | ❌ | ✅ | ✅ | ✅ | ✅ |
 
-1 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
+The most recent sweep left 1 cell(s) outside the counts above. A cell lands there when it has no published image, when the registry or the runner fails, or when its job produces no result. That sweep's own `desktop-contract-baseline` artifact names them.
 
 Newest result 2026-09-15.
 

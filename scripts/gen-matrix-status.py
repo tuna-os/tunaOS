@@ -1185,11 +1185,16 @@ def build() -> str:
     out += [""]
     if contract_other:
         out += [
-            f"{contract_other} cell(s) in the most recent sweep are "
-            "missing (no published image), errored (registry/runner "
-            "trouble), or lost (job produced no result) rather than a "
-            "clean pass or fail — not counted above; see that sweep's own "
-            "`desktop-contract-baseline` artifact for which.",
+            # Short, active sentences on purpose. This paragraph appears
+            # only while the newest sweep holds a non-pass cell, so anything
+            # the STE ratchet objects to here moves the repo total with no
+            # human edit — which is how main went over budget on 2026-09-14
+            # and stayed red for three days (tunaOS#2547).
+            f"The most recent sweep left {contract_other} cell(s) outside "
+            "the counts above. A cell lands there when it has no published "
+            "image, when the registry or the runner fails, or when its job "
+            "produces no result. That sweep's own "
+            "`desktop-contract-baseline` artifact names them.",
             "",
         ]
     dates = sorted({v[1] for v in contract.values()})
@@ -1316,7 +1321,7 @@ VOLATILE_LINE = re.compile(
     # or vanish, which broke the gate on tunaOS#2512 for a line no pull request
     # wrote or can fix. Masking a line cannot hide a line that is absent, so a
     # conditional paragraph has to be named here explicitly.
-    r"|\d+ cell\(s\) in the most recent sweep are "
+    r"|The most recent sweep left \d+ cell\(s\) outside "
     r")"
 )
 

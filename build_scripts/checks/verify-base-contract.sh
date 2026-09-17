@@ -39,6 +39,80 @@ if [[ "${1:-}" != "--runtime" ]]; then
 	exit 0
 fi
 
+# ── SELinux state, printed BEFORE anything can block ────────────────────────
+#
+# tunaOS#2485: dbus-broker, systemd-logind and pam_selinux all fail on the two
+# rolling EL10 bases, and all three fail inside libselinux:
+#
+#   dbus-broker-launch: Access denied in /etc/selinux/targeted/contexts/dbus_contexts +1
+#   systemd-logind: Failed to initialize SELinux labeling handle: Permission denied
+#   sshd-session: pam_selinux(sshd:session): Unable to get valid context for root
+#
+# The images are identical where the issue looked: dbus_contexts is byte-for-byte
+# the same as albacore's, 0644 root:root, and no image in the family carries a
+# security.selinux xattr at all. So the labels arrive at install time, and the
+# question is what they are on the running machine — which nobody has seen,
+# because the gate collects diagnostics over SSH and sshd cannot open a PAM
+# session without the bus. The one image that could answer is the one that
+# cannot be asked.
+#
+# Serial answers it. This dump goes to the console through the unit's
+# StandardOutput=journal+console, so it survives a machine with no working bus,
+# no logind and no SSH.
+#
+# It sits ABOVE the settle wait deliberately. Everything below that wait is
+# unreachable on exactly the images this exists to describe (tunaOS#2514), and
+# evidence that only prints on healthy machines is not evidence.
+#
+# Every command is guarded. A diagnostic must never be the reason a contract
+# fails, and `set -e` is off here precisely so a missing tool stays a missing
+# line.
+# One field of the probe. Run the command, fall back to a single word on any
+# failure, and reject a value with whitespace in it.
+#
+# The fallback has to survive more than a missing binary. `rpm -q` prints
+# "package X is not installed" on STDOUT and exits 1, so `2>/dev/null` does not
+# silence it and the text lands inside the marker. CI caught precisely that,
+# through this probe's own test:
+#
+#   stray line in probe output: 'unknown policy=package selinux-policy is not installed'
+#
+# One field became three lines and none of them was a measurement. Assign,
+# overwrite on a non-zero exit, then refuse anything that is not one bare word.
+_selinux_field() {
+	local fallback=$1
+	shift
+	local out
+	out=$("$@" 2>/dev/null) || out="${fallback}"
+	[[ -n "${out}" && "${out}" != *[[:space:]]* ]] || out="${fallback}"
+	printf '%s' "${out}"
+}
+
+_selinux_probe() {
+	local ctx=/etc/selinux/targeted/contexts/dbus_contexts
+
+	# matchpathcon opens the same file_contexts handle that logind and
+	# dbus-broker open. `lookup-failed` here IS the tunaOS#2485 symptom,
+	# reported by the one tool that can still speak. Kept distinct from
+	# `unavailable`, which only means the tool is absent.
+	local expected=unavailable
+	if command -v matchpathcon >/dev/null 2>&1; then
+		expected=$(_selinux_field lookup-failed matchpathcon -n "${ctx}")
+	fi
+
+	echo "TUNAOS_SELINUX_PROBE" \
+		"enforce=$(_selinux_field unknown getenforce)" \
+		"lib=$(_selinux_field unknown rpm -q --qf '%{VERSION}-%{RELEASE}' libselinux)" \
+		"policy=$(_selinux_field unknown rpm -q --qf '%{VERSION}-%{RELEASE}' selinux-policy)"
+	# stat -c %C, not ls -Z: it prints the context alone, and parsing ls output
+	# is a habit worth not having.
+	echo "TUNAOS_SELINUX_PROBE label=$(_selinux_field unreadable stat -c '%C' "${ctx}")"
+	echo "TUNAOS_SELINUX_PROBE dir=$(_selinux_field unreadable stat -c '%C' "${ctx%/*}")"
+	echo "TUNAOS_SELINUX_PROBE expected=${expected}"
+	echo "TUNAOS_SELINUX_PROBE readable=$([[ -r ${ctx} ]] && echo yes || echo no)"
+}
+_selinux_probe 2>&1 || true
+
 # --wait blocks until startup settles, so a slow unit cannot race this check
 # into a false `starting` verdict on a 2-vCPU runner. BOUND it, though: --wait
 # waits for a terminal state, and a machine whose startup never settles never
