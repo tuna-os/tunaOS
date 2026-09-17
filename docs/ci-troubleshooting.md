@@ -1109,6 +1109,43 @@ The second cause needs no author at all. `gen-matrix-status.py` prints a caveat 
 
 **Lesson:** ask what reads a file, not who writes it. A generator's output is source for every gate that measures it, and a generator's prose is prose. When a gate reads something your diff never showed, your green describes the old bytes.
 
+### 24. Our own fix ran after the thing that needed it (`flounder:kde`, 2026-09-17)
+
+`flounder:kde` and `flounder:kde-nvidia` produced no ISO on any run for two
+weeks. The job died in tacklebox's embedded live baseline:
+
+```
+>>> [customize] (1/2) baseline.sh
+useradd: cannot create directory /home
+Error: live customize for flounder-kde: ... exit status 12
+```
+
+**Root cause.** Two scripts in this repo disagree, and neither is wrong alone.
+`ostree-layout.sh` makes `/home` a symlink to `var/home`, then creates
+`/var/home`, and says why: the targets must exist at build time, because later
+layers probe the aliases. `99-cleanup.sh` then runs `find /var -mindepth 1
+-maxdepth 1 -delete`, which removes it. It restores the dpkg and apt paths and
+nothing else. So `/home` in the published image points at nothing.
+
+**Who it hits.** Only the bases where cleanup runs after layout:
+`Containerfile.arch`, `.debian` and `.gentoo`. The bases with no layout step
+take their layout from the parent and never show it. That list names the
+failing cells exactly, which is what confirmed the mechanism.
+
+**Why nothing caught it.** tunaOS already carries this fix. `customize-live.sh`
+holds `mkdir -p "$(readlink -f /home)"`, under a comment that describes this
+exact failure. It is script 2/2. The baseline that needs it is script 1/2, and
+tacklebox puts every `--script` after its embedded baseline. So the fix sat in
+this repo and never ran before the code it protects.
+
+**Fix.** Restore the `/var` alias targets in `99-cleanup.sh`, beside the dpkg
+restore and for the same stated reason. The wipe stays. The `tmpfiles.d` entries
+still own the runtime side.
+
+**Lesson:** a fix has a position, not only a body. When a script fixes something
+for its own callers, ask what runs before it. Ours was correct, tested and
+inert, and the symptom pointed at another repository the whole time.
+
 ### 25. The same fix, written once, for one base out of two (`marlin:gnome` arm64, 2026-09-17)
 
 `marlin:gnome` built an ISO on amd64 and died on arm64, in the same tacklebox

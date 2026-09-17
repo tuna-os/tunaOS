@@ -30,6 +30,41 @@ fi
 find /var -mindepth 1 -maxdepth 1 ! -path '/var/cache' -delete 2>/dev/null || true
 find /var/cache -mindepth 1 -delete 2>/dev/null || true
 
+# Restore the /var targets the alias symlinks point at.
+#
+# ostree-layout.sh creates /home -> var/home (and root, opt, srv, mnt,
+# usr/local) and then creates the directories those point at, with a comment
+# saying exactly why: "The /var targets must EXIST at image-build time, not
+# only in tmpfiles.d." The wipe above then deletes them again, and on the
+# three bases where 99-cleanup runs AFTER ostree-layout — Containerfile.arch,
+# .debian and .gentoo — the published image ships /home as a DANGLING symlink.
+#
+# tacklebox finds it first. Its embedded live baseline runs
+# `useradd --create-home` against the published image while it builds the ISO,
+# useradd follows /home to a var/home that is not there, and the ISO job dies
+# before it produces anything:
+#
+#   >>> [customize] (1/2) baseline.sh
+#   useradd: cannot create directory /home
+#   Error: live customize for flounder-kde: ... exit status 12
+#   ##[error]No files were found with the provided path: *.iso
+#
+# flounder:kde and flounder:kde-nvidia have failed this way on every run since
+# at least 2026-09-05. tunaOS' own customize-live.sh already carries the fix
+# (`mkdir -p "$(readlink -f /home)"`, with a comment describing this precise
+# failure) — but it runs as script 2/2, after the baseline that needs it, so
+# it has never had a chance to help. tacklebox offers no pre-baseline hook:
+# `--script` is documented as running after the embedded baseline.
+#
+# So restore them here, for the same reason and in the same place as the dpkg
+# paths below: a later build layer, or a later consumer of the published
+# image, needs the path to resolve NOW, not after systemd-tmpfiles runs on a
+# machine that has booted. The tmpfiles.d entries ostree-layout.sh writes
+# still own the runtime side after a factory reset; this owns build time.
+mkdir -p /var/home /var/roothome /var/opt /var/srv /var/mnt /var/usrlocal /var/tmp
+chmod 0700 /var/roothome
+chmod 1777 /var/tmp
+
 # Restore the dpkg database path and apt's log directory, for apt-based
 # variants, immediately after the wipe above — for the exact reason
 # Containerfile.debian's own comment on the FIRST /var wipe gives ("apt/dpkg
