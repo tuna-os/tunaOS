@@ -146,14 +146,58 @@ if [[ "${IS_UBUNTU:-false}" = true ]]; then
 			rm -f /etc/sudoers.d/90-cloud-init-users
 		fi
 	fi
-	# Not fatal, but named where it can be seen. If UID 1000 is still taken
-	# the live ISO build WILL fail later in tacklebox's baseline.sh with
-	# "useradd: UID 1000 is not unique" -- a message that arrives an hour
-	# downstream, in another repo's code, with no mention of this image.
-	if getent passwd 1000 >/dev/null; then
-		echo "WARNING: UID 1000 is still taken; the live ISO build will fail:"
-		getent passwd 1000
+fi
+
+# ── Arch Linux ARM: free UID 1000, for the same reason ──────────────────────
+#
+# The same failure as Ubuntu's above, on a different base and only on one
+# architecture. marlin's arm64 legs build FROM ghcr.io/tuna-os/archlinuxarm
+# (docker.io/archlinux is x86_64-only), and Arch Linux ARM's stock rootfs
+# ships its own account. Read out of the published base image's layer rather
+# than assumed:
+#
+#   alarm:x:1000:1000::/home/alarm:/bin/bash
+#
+# build-archlinuxarm-base.yml keeps it on purpose -- "alarm/root users stay
+# (standard ALARM accounts)" -- which is right for a base image and wrong for
+# an ISO build downstream of it.
+#
+# That is why marlin fails on arm64 ONLY. The x86_64 Arch base has no such
+# account, so iso:gnome (linux-amd64) builds and iso:gnome (linux-arm64) dies
+# in tacklebox's baseline.sh:
+#
+#   >>> [customize] (1/2) baseline.sh
+#   useradd: UID 1000 is not unique
+#   Error: live customize for marlin-gnome: ... exit status 4
+#
+# Narrow in the same way as the Ubuntu block: only an account still named
+# `alarm` AND still at exactly 1000 is removed, so a base that renumbers it,
+# drops it, or an operator who has repurposed the name is left alone.
+if [[ "${IS_ARCH:-false}" = true ]]; then
+	if [[ "$(id -u alarm 2>/dev/null || echo -)" == "1000" ]]; then
+		echo "removing the stock Arch Linux ARM account 'alarm' (UID 1000)"
+		# --remove deletes /home/alarm. bootc images make /home a symlink to
+		# a var/home that can be empty in the container layer, so that half
+		# may legitimately fail; the account removal has to succeed.
+		userdel --remove alarm 2>/dev/null || userdel alarm
+		if getent group alarm >/dev/null; then
+			groupdel alarm 2>/dev/null || true
+		fi
 	fi
+fi
+
+# Not fatal, but named where it can be seen. If UID 1000 is still taken the
+# live ISO build WILL fail later in tacklebox's baseline.sh with "useradd: UID
+# 1000 is not unique" -- a message that arrives an hour downstream, in another
+# repo's code, with no mention of this image.
+#
+# Deliberately OUTSIDE the per-base blocks above. It used to sit inside the
+# Ubuntu one, so the identical failure on Arch ARM went unreported and had to
+# be tracked back from an ISO job by hand. Whatever base is next, this says so
+# in the build that causes it.
+if getent passwd 1000 >/dev/null; then
+	echo "WARNING: UID 1000 is still taken; the live ISO build will fail:"
+	getent passwd 1000
 fi
 
 echo "Build variant info:"
