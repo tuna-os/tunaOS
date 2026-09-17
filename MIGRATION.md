@@ -197,6 +197,28 @@ flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flat
 
 ---
 
+## Image changes that affect existing installs
+
+### tunaOS removes `alarm` on Arch ARM (marlin, arm64)
+
+The stock rootfs of Arch Linux ARM ships an `alarm` account at UID 1000, and
+marlin's arm64 images carried it. These images no longer hold that account, so
+a live ISO can place its own user at UID 1000.
+
+After `bootc upgrade`:
+
+- If you never edited `/etc/passwd`, the account goes away with the upgrade.
+  Nothing else changes.
+- If you added or edited a user, your `/etc/passwd` counts as local
+  configuration and `alarm` stays. Run `userdel alarm` by hand to free the UID.
+- Files under `/var/home/alarm` survive either way. Once the account goes, they
+  show a bare UID and no name.
+
+Nobody should log in as `alarm` on a tunaOS system. It is an artifact of the
+base image, and `build-archlinuxarm-base.yml` keeps it for the base alone.
+
+---
+
 ## Known Limitations
 
 1. **NVIDIA drivers**: nvidia variant recommended for NVIDIA hardware. See [ROADMAP.md](ROADMAP.md) for available variants and flavors.
