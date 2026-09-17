@@ -1185,3 +1185,37 @@ itself in the build that causes it.
 **Lesson:** when a workaround names one base, ask which other bases have the
 same shape. A guard is a claim about who is affected, and this one was a guess
 that nobody revisited when a second base arrived.
+
+### 26. The fix the build never ran (`marlin:gnome` arm64, 2026-09-17)
+
+The next `marlin` run failed on the same line as §25, with the same message:
+
+```
+>>> [customize] (1/2) baseline.sh
+useradd: UID 1000 is not unique
+Error: live customize for marlin-gnome: ... exit status 4
+```
+
+**Root cause.** `Containerfile.arch` does not run `01-workarounds.sh`. Only
+`Containerfile.el10` and `Containerfile.ubuntu` run that script. The §25 fix
+went into it, so the Arch branch could never execute. The Containerfile even
+says so, ten lines above the spot where the call belongs: this base leaves out
+the numbered base scripts. That comment was already correct and nobody read
+it.
+
+**Why nothing caught it.** The test asserted that the removal existed in
+`01-workarounds.sh`, and it did, so the test passed. Presence in a file is not
+reach from a build. No test checked the call in `Containerfile.arch`, and the
+run conclusion for §25 looked like a fix that worked.
+
+**Fix.** The removal now lives in `build_scripts/free-uid-1000.sh`. That script
+reads no distro flags and needs no build context, so any Containerfile calls it
+in one line. `Containerfile.arch` calls it directly. `01-workarounds.sh` calls
+the same script, so one copy serves every base. The test now asserts that each
+Containerfile which builds ISOs reaches the script, on a line that is not a
+comment.
+
+**Lesson:** prove that the build reaches the fix. A test that finds code in a
+file proves only that the file holds the code. This is the fourth entry in this
+document where the repository already held the correct fix and the fix did not
+reach the failure.

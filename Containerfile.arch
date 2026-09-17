@@ -231,6 +231,19 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 # /usr/share/ublue-os/image-info.json is absent — the exact failures
 # verify-branding.sh reported on the first wired build. Run it here, plus
 # 40-services (service enablement + dconf update) and 99-cleanup.
+
+# Arch Linux ARM's stock rootfs ships `alarm` at UID 1000, and marlin's arm64
+# legs build FROM it (docker.io/archlinux is x86_64-only). tacklebox's embedded
+# live baseline creates the live user with an unconditional `--uid 1000`, so
+# iso:gnome (linux-arm64) died with "useradd: UID 1000 is not unique" while the
+# amd64 leg built fine. The removal used to sit in 01-workarounds.sh, which
+# this Containerfile does not run -- so it never executed and the ISO kept
+# failing. Call it here, where this base can actually reach it.
+RUN --mount=type=tmpfs,dst=/tmp \
+  --mount=type=tmpfs,dst=/boot \
+  --mount=type=bind,from=context,source=/,target=/run/context \
+  /run/context/build_scripts/free-uid-1000.sh
+
 RUN --mount=type=tmpfs,dst=/tmp \
   --mount=type=tmpfs,dst=/boot \
   --mount=type=bind,from=context,source=/,target=/run/context \
