@@ -1219,3 +1219,44 @@ comment.
 file proves only that the file holds the code. This is the fourth entry in this
 document where the repository already held the correct fix and the fix did not
 reach the failure.
+
+### 27. A volume label two characters too long (`bonito-rawhide` nvidia ISOs, 2026-09-17)
+
+bonito-rawhide built one nvidia ISO and failed the other four:
+
+```
+xorriso : FAILURE : -volid: Text too long (34 > 32)
+Error: xorriso: ... -commit: exit status 5
+```
+
+**Root cause.** ISO 9660 caps the volume ID at 32 characters. xorriso rejects
+the whole build instead of a quiet truncation. The media name was
+`tunaos-<variant>-<flavor>`, and `bonito-rawhide` is a long variant name:
+
+| media name | length | result |
+| --- | --- | --- |
+| `tunaos-bonito-rawhide-cosmic-nvidia` | 35 | failed |
+| `tunaos-bonito-rawhide-gnome-nvidia` | 34 | failed |
+| `tunaos-bonito-rawhide-niri-nvidia` | 33 | failed |
+| `tunaos-bonito-rawhide-xfce-nvidia` | 33 | failed |
+| `tunaos-bonito-rawhide-kde-nvidia` | 32 | built |
+
+**Why the pattern misleads.** Every cell that died was an nvidia cell, so the
+column reads as an NVIDIA fault. It is not. `kde-nvidia` sits exactly on the
+limit and built. The nvidia flavors carry the longest names in the
+group. The same overflow reaches `flounder-sid-cosmic-nvidia` at 33
+characters. Nothing is wrong with those images.
+
+**Fix.** `tunaos_iso_media_name` in `scripts/lib/common.sh` caps the name, and
+both ISO builders call it. A name that already fits stays exactly as it was,
+because the boot path depends on the label. tacklebox puts the same string on the
+kernel cmdline as `root=tbox:CDLABEL=...`. Both sides read `media_name`, so a
+shorter name moves them together. The cap drops the `tunaos-` prefix first:
+every ISO in the matrix carries that prefix, and `<variant>-<flavor>` is what
+identifies the media.
+
+**Lesson:** when a tool enforces a limit, put the real names in a test. This
+one held for years, because no variant name was long enough. One new variant
+with a longer name then broke four cells at once. Test the boundary: the
+`kde-nvidia` row at exactly 32 is what proves the rule. An off-by-one there
+would rename the one label that the kernel cmdline depends on.
