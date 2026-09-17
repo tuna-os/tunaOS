@@ -166,10 +166,66 @@ NVIDIA_ARCH_SH="${REPO_ROOT}/build_scripts/overlay/overrides/nvidia-arch/20-nvid
   # broke run 31766586852 (no `upgrading linux` in its log) — a latent one.
   run grep -E '^[^#]*pacman -Syu' "$CACHYOS_SH"
   [ "$status" -ne 0 ]
-  run grep -E '^pacman -Sy --noconfirm$' "$CACHYOS_SH"
+  # -Sy or -Syy, at any indent: the sync moved inside _cachyos_sync() when it
+  # gained mirror rotation. Anchoring to column zero asserted the layout of the
+  # file rather than what it does, and went red on a refactor that changed
+  # neither the flags nor the upgrade ban this test exists for.
+  run grep -E '^[[:space:]]*pacman -Syy? --noconfirm' "$CACHYOS_SH"
   [ "$status" -eq 0 ]
-  run grep -E '^pacman -S --noconfirm --needed' "$CACHYOS_SH"
+  run grep -E '^[[:space:]]*pacman -S --noconfirm --needed' "$CACHYOS_SH"
   [ "$status" -eq 0 ]
+}
+
+# ── the db sync survives one bad mirror ─────────────────────────────────────
+
+# All five *-cachyos cells died together on 2026-09-16 with
+#   error: cachyos: signature from "CachyOS <admin@cachyos.org>" is invalid
+# The key was right and unexpired, the keyring installed cleanly seconds
+# earlier, and the same db/sig pair verifies Good on every mirror today — CI
+# was served a stale db against a fresh sig, 38 minutes after a republish.
+# buildah already retries the whole build three times; all three hit the same
+# CDN edge and failed identically. Rotating the mirror is the load-bearing part.
+@test "the cachyos db sync retries rather than failing on one bad mirror" {
+  run grep -E '_cachyos_sync' "$CACHYOS_SH"
+  [ "$status" -eq 0 ]
+  # A refresh that ignores the cached copy, and the cached copy removed.
+  run grep -E 'pacman -Syy --noconfirm' "$CACHYOS_SH"
+  [ "$status" -eq 0 ]
+  run grep -F 'rm -f /var/lib/pacman/sync/cachyos.db' "$CACHYOS_SH"
+  [ "$status" -eq 0 ]
+}
+
+@test "a failed sync rotates to a different mirror" {
+  # Retrying the same edge is what the buildah wrapper already did, and it did
+  # not help. Without this line the retry above is decoration.
+  run grep -F 'cachyos-mirrorlist' "$CACHYOS_SH"
+  [ "$status" -eq 0 ]
+  # Assert the mirrorlist is REWRITTEN, not merely named. The first spelling
+  # grepped the function body for "mirrorlist" and passed against a version
+  # with the rotation deleted, because `local attempt mirrorlist=...` on line
+  # one of the function still matched. A test that cannot fail is the bug it
+  # was written to catch.
+  run bash -c "sed -n '/_cachyos_sync()/,/^}/p' '$CACHYOS_SH' | grep -qE 'mv .*mirrorlist'"
+  [ "$status" -eq 0 ]
+  # And that the failed mirror is what moves to the back.
+  run bash -c "sed -n '/_cachyos_sync()/,/^}/p' '$CACHYOS_SH' | grep -qE 'grep -m1 .\^Server'"
+  [ "$status" -eq 0 ]
+}
+
+# The one fix that must never be taken. SigLevel = Never on [cachyos] would
+# silence the error and ship an unverified kernel. It is legitimate ONLY in the
+# throwaway config used to bootstrap the keyring itself, which cannot be
+# verified before it exists.
+@test "the cachyos repo is never given SigLevel = Never" {
+  # The bootstrap sed targets a temp copy; assert it stays that way.
+  run bash -c "grep -n 'SigLevel' '$CACHYOS_SH' | grep -v 'tmpconf' | grep -v '^[0-9]*:#'"
+  [ "$status" -ne 0 ]
+  # And nothing writes it into the real pacman.conf. Comments are stripped
+  # first: an earlier spelling scanned a sed range from the first "[cachyos]"
+  # to the next EOF and matched the very comment warning against this, so the
+  # test failed on the prose documenting it.
+  run bash -c "sed 's/#.*//' '$CACHYOS_SH' | grep -n 'SigLevel' | grep -v tmpconf"
+  [ "$status" -ne 0 ]
 }
 
 @test "linux-cachyos is still what gets installed" {
