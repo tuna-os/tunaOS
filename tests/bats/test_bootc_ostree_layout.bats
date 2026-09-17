@@ -172,3 +172,73 @@ run_layout() {
   [ "$calls" -eq 2 ]
   [ "$(grep -c 'bootc-base-dirs.conf' "$f")" -eq 0 ]
 }
+
+# ── the kernel rescue ────────────────────────────────────────────────────────
+#
+# /boot is wiped by this script, and on some bases it holds the only copy of
+# the kernel. marlin's arm64 images shipped with no kernel at all for exactly
+# this reason, and the ISO failure surfaced an hour downstream in another
+# repository, so these cases are checked here rather than by a matrix cell.
+
+@test "ostree-layout.sh: rescues a kernel that only exists as /boot/Image" {
+  mkdir -p "$FIXTURE/usr/lib/modules/7.2.6-1-aarch64-ARCH"
+  echo real-kernel >"$FIXTURE/boot/Image"
+
+  run_layout
+  [ "$status" -eq 0 ]
+  [ "$(cat "$FIXTURE/usr/lib/modules/7.2.6-1-aarch64-ARCH/vmlinuz")" = "real-kernel" ]
+}
+
+@test "ostree-layout.sh: rescues a kernel that only exists as /boot/vmlinuz-<ver>" {
+  mkdir -p "$FIXTURE/usr/lib/modules/6.12.0-deb"
+  echo real-kernel >"$FIXTURE/boot/vmlinuz-6.12.0-deb"
+
+  run_layout
+  [ "$status" -eq 0 ]
+  [ "$(cat "$FIXTURE/usr/lib/modules/6.12.0-deb/vmlinuz")" = "real-kernel" ]
+}
+
+# Image.gz is not EFI-bootable on aarch64, and Arch Linux ARM ships both.
+@test "ostree-layout.sh: prefers the uncompressed kernel over Image.gz" {
+  mkdir -p "$FIXTURE/usr/lib/modules/7.2.6-1-aarch64-ARCH"
+  echo real-kernel >"$FIXTURE/boot/Image"
+  echo compressed >"$FIXTURE/boot/Image.gz"
+
+  run_layout
+  [ "$status" -eq 0 ]
+  [ "$(cat "$FIXTURE/usr/lib/modules/7.2.6-1-aarch64-ARCH/vmlinuz")" = "real-kernel" ]
+}
+
+# Every variant but Arch ARM is already in this state. Overwriting the kernel
+# the package manager installed with whatever /boot happens to hold would be a
+# regression on all of them.
+@test "ostree-layout.sh: leaves an existing vmlinuz alone" {
+  mkdir -p "$FIXTURE/usr/lib/modules/6.16.1-arch1-1"
+  echo installed >"$FIXTURE/usr/lib/modules/6.16.1-arch1-1/vmlinuz"
+  echo decoy >"$FIXTURE/boot/vmlinuz-linux"
+
+  run_layout
+  [ "$status" -eq 0 ]
+  [ "$(cat "$FIXTURE/usr/lib/modules/6.16.1-arch1-1/vmlinuz")" = "installed" ]
+}
+
+# The toolchain and common images run this script and carry no kernel by
+# design, so an absent one is not an error to raise here.
+@test "ostree-layout.sh: an image with no kernel at all still lays out" {
+  mkdir -p "$FIXTURE/usr/lib/modules/6.1.0"
+
+  run_layout
+  [ "$status" -eq 0 ]
+  [ ! -e "$FIXTURE/usr/lib/modules/6.1.0/vmlinuz" ]
+}
+
+# Guessing here ships an image that boots the wrong kernel, which is worse
+# than stopping the build.
+@test "ostree-layout.sh: refuses to guess between two kernel trees" {
+  mkdir -p "$FIXTURE/usr/lib/modules/6.1.0" "$FIXTURE/usr/lib/modules/6.2.0"
+  echo real-kernel >"$FIXTURE/boot/Image"
+
+  run_layout
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"more than one kernel tree"* ]]
+}

@@ -187,7 +187,7 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 # the hook never fires, and /usr/lib/modules/<kver>/modules.dep is never
 # written.
 #
-# The image still boots, so nothing caught it. The ISO does not build:
+# Nothing caught it because no arm64 Gate runs. The ISO does not build:
 # tacklebox looks for a kernel with `[ -f "$d/modules.dep" ] || continue`,
 # finds none, and stops with
 #
@@ -197,6 +197,14 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 # (marlin run 35215948753, job 105195304184). That failure sat behind the
 # UID 1000 one and only surfaced once #2558 cleared it.
 #
+# The same message then survived the depmod fix, because tacklebox prints it
+# for a loop that needs BOTH modules.dep and vmlinuz. The published image
+# (marlin:gnome-linux-arm64, run 35236471968) has modules.dep and no kernel
+# binary in any of its 65 layers: linux-aarch64 ships one only as /boot/Image,
+# and ostree-layout.sh deletes /boot. That script now rescues the kernel first,
+# the way Containerfile.debian and Containerfile.gentoo always did by hand, and
+# the check below refuses to build an initramfs for a kernel that is not there.
+#
 # No `|| true`: a module tree that cannot be indexed is a broken image, and a
 # silent failure here is what produced an hour-downstream error in another
 # repository.
@@ -204,6 +212,12 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
     KVER="$(basename "$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d ! -name '*.img' | sort -V | tail -1)")" && \
     if [ -z "$KVER" ]; then echo "ERROR: no kernel module directory under /usr/lib/modules" >&2; exit 1; fi && \
     depmod "$KVER" && \
+    if [ ! -f "/usr/lib/modules/${KVER}/vmlinuz" ]; then \
+      echo "ERROR: /usr/lib/modules/${KVER}/vmlinuz is missing — this image has no kernel." >&2; \
+      echo "       ostree-layout.sh rescues it from /boot before wiping that directory;" >&2; \
+      echo "       reaching here means neither /boot nor the kernel package supplied one." >&2; \
+      exit 1; \
+    fi && \
     /run/context/build_scripts/bootc/dracut-config.sh "$KVER" && \
     dracut --force "/usr/lib/modules/${KVER}/initramfs.img" "${KVER}"
 

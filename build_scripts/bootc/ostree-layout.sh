@@ -63,21 +63,92 @@ declare -a ALIASES=(
 	"usr/local:../var/usrlocal"
 )
 
-# ── 1. clear the aliases and /boot ───────────────────────────────────────────
+# ── 1. rescue the kernel image ───────────────────────────────────────────────
+# The /boot wipe below is destructive, and on some bases /boot holds the only
+# copy of the kernel. bootc and tacklebox both read it from
+# /usr/lib/modules/<kver>/vmlinuz and never from /boot, so a base that ships it
+# only as /boot/Image loses its kernel here and produces an image that cannot
+# boot and cannot be made into an ISO.
+#
+# Containerfile.debian and Containerfile.gentoo (twice) already copy the kernel
+# across by hand just before calling this script, and Gentoo's comment names
+# the hazard outright: "Both must happen BEFORE the ostree layout below, which
+# deletes /boot". Containerfile.arch does not, because on x86_64 Arch's `linux`
+# package owns /usr/lib/modules/<kver>/vmlinuz and there is nothing to rescue.
+#
+# On aarch64 the base is ghcr.io/tuna-os/archlinuxarm, whose linux-aarch64
+# ships the kernel as /boot/Image alone. So marlin's arm64 images went out with
+# no kernel at all, and the ISO stopped with
+#
+#   no kernel found under /usr/lib/modules (looked for modules.dep):
+#   7.2.6-1-aarch64-ARCH
+#
+# which reads as a missing module index but is tacklebox's single error for a
+# loop that also requires vmlinuz. Verified against the published image
+# (marlin:gnome-linux-arm64, run 35236471968): modules.dep is present, and no
+# vmlinuz or Image exists in any of its 65 layers.
+#
+# This belongs here rather than in a fourth Containerfile, for the reason the
+# header of this file gives about the alias list. It is a no-op wherever the
+# kernel is already in place, which is every other variant.
+rescue_kernel_image() {
+	local modules="${R}/usr/lib/modules"
+	local dir candidate image="" target=""
+
+	[ -d "${modules}" ] || return 0
+
+	for dir in "${modules}"/*/; do
+		if [ -f "${dir}vmlinuz" ]; then
+			return 0
+		fi
+	done
+
+	# Uncompressed only: the aarch64 EFI stub cannot boot /boot/Image.gz.
+	for candidate in "${R}"/boot/vmlinuz-* "${R}/boot/vmlinuz" "${R}/boot/Image"; do
+		if [ -f "${candidate}" ]; then
+			image="${candidate}"
+			break
+		fi
+	done
+
+	# No kernel anywhere is not this script's to diagnose: the toolchain and
+	# common images pass through here too and carry none by design.
+	[ -n "${image}" ] || return 0
+
+	for dir in "${modules}"/*/; do
+		[ -d "${dir}" ] || continue
+		if [ -n "${target}" ]; then
+			echo "ERROR: ${modules} holds more than one kernel tree and none" >&2
+			echo "       carries a vmlinuz, so there is no way to tell which one" >&2
+			echo "       ${image#"${R}"} belongs to. Copy it in the Containerfile." >&2
+			exit 1
+		fi
+		target="${dir}"
+	done
+
+	[ -n "${target}" ] || return 0
+
+	echo "rescuing ${image#"${R}"} -> ${target#"${R}"}vmlinuz before the /boot wipe"
+	cp "${image}" "${target}vmlinuz"
+}
+
+rescue_kernel_image
+
+# ── 2. clear the aliases and /boot ───────────────────────────────────────────
 # These are real directories in the base image; they become symlinks below.
 for entry in "${ALIASES[@]}"; do
 	rm -rf "${R}/${entry%%:*}"
 done
 rm -rf "${R}/boot"
 
-# ── 2. wipe /var, but never a mount point ────────────────────────────────────
+# ── 3. wipe /var, but never a mount point ────────────────────────────────────
 # /var can hold mount points inherited from overlayfs layers (rpm and dnf state
 # on Fedora parents). rm -rf on one fails the layer, so skip anything mounted.
 for d in "${R}"/var/* "${R}"/var/.[!.]*; do
 	[ -d "$d" ] && ! mountpoint -q "$d" 2>/dev/null && rm -rf "$d" 2>/dev/null || true
 done
 
-# ── 3. rebuild the skeleton ──────────────────────────────────────────────────
+# ── 4. rebuild the skeleton ──────────────────────────────────────────────────
 mkdir -p "${R}/sysroot" "${R}/boot" "${R}/usr/lib/ostree" "${R}/var"
 
 # The /var targets must EXIST at image-build time, not only in tmpfiles.d.
@@ -93,7 +164,7 @@ mkdir -p "${R}/var/tmp" "${R}/var/roothome" "${R}/var/home" \
 chmod 1777 "${R}/var/tmp"
 chmod 0700 "${R}/var/roothome"
 
-# ── 4. the aliases ───────────────────────────────────────────────────────────
+# ── 5. the aliases ───────────────────────────────────────────────────────────
 ln -sfnT sysroot/ostree "${R}/ostree"
 for entry in "${ALIASES[@]}"; do
 	link="${entry%%:*}"
@@ -109,7 +180,7 @@ if [[ -f "${R}/etc/default/useradd" ]]; then
 	sed -i 's|^HOME=.*|HOME=/var/home|' "${R}/etc/default/useradd"
 fi
 
-# ── 5. tmpfiles: recreate the /var targets after a factory reset ─────────────
+# ── 6. tmpfiles: recreate the /var targets after a factory reset ─────────────
 mkdir -p "${R}/usr/lib/tmpfiles.d"
 {
 	echo "d /var/opt 0755 root root -"
@@ -122,7 +193,7 @@ mkdir -p "${R}/usr/lib/tmpfiles.d"
 	echo "d /run/media 0755 root root -"
 } >"${R}/usr/lib/tmpfiles.d/bootc-base-dirs.conf"
 
-# ── 6. prepare-root.conf ─────────────────────────────────────────────────────
+# ── 7. prepare-root.conf ─────────────────────────────────────────────────────
 # The declaration that makes the root composefs. dracut-config.sh reads this
 # file to decide whether the initramfs needs the erofs driver, so this must be
 # written BEFORE the initramfs is built — see the ordering note in each
