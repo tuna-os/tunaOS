@@ -24,6 +24,7 @@ easy to lose in a later edit:
 
 import re
 import shutil
+import tempfile
 import subprocess
 import unittest
 from pathlib import Path
@@ -58,11 +59,14 @@ class TheProbeRunsBeforeAnythingCanBlock(unittest.TestCase):
         # The one measurement that splits the family: libselinux is 3.10 on
         # albacore, which works, and 3.11 on both variants that fail.
         self.assertIn("libselinux", self.text)
-        self.assertRegex(self.joined, r"TUNAOS_SELINUX_PROBE .*lib=")
+        # The marker is its own quoted word now, so allow the closing quote as well
+        # as a space after it. A matcher that assumed one spelling of the echo
+        # went red on a refactor that changed nothing it was meant to guard.
+        self.assertRegex(self.joined, r'TUNAOS_SELINUX_PROBE["\s].*lib=')
 
     def test_it_reports_the_runtime_label_of_the_file_that_fails(self):
         self.assertIn("/etc/selinux/targeted/contexts/dbus_contexts", self.text)
-        self.assertRegex(self.joined, r"TUNAOS_SELINUX_PROBE label=")
+        self.assertRegex(self.joined, r'TUNAOS_SELINUX_PROBE["\s]?\s*label=')
 
 
 class TheProbeCannotFailTheContract(unittest.TestCase):
@@ -99,10 +103,37 @@ class TheProbeIsRunNotJustRead(unittest.TestCase):
     measurement. Reading the script did not show it. Running it did.
     """
 
+    def _script(self):
+        text = SCRIPT.read_text()
+        parts = []
+        for name in ("_selinux_field", "_selinux_probe"):
+            body = re.search(rf"({name}\(\) \{{.*?\n\}})", text, re.S)
+            self.assertIsNotNone(body, f"{name} is gone from {SCRIPT.name}")
+            parts.append(body.group(1))
+        return "\n".join(parts) + "\n_selinux_probe 2>&1 || true\n"
+
+    def _stub_dir(self):
+        """A `rpm` that behaves like the real one for a package that is absent.
+
+        `rpm -q` prints "package X is not installed" on STDOUT and exits 1. That
+        is the whole bug: `2>/dev/null` does not silence stdout, so the text
+        landed inside the marker and one field became three lines. It only
+        showed up in CI, because this host has no rpm at all and a missing
+        binary writes to stderr. A test that depends on the host having rpm
+        cannot catch it, so the stub supplies one.
+        """
+        stub = Path(self._tmp.name)
+        rpm = stub / "rpm"
+        rpm.write_text('#!/bin/sh\necho "package foo is not installed"\nexit 1\n')
+        rpm.chmod(0o755)
+        return str(stub)
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+
     def _run(self, path_env):
-        body = re.search(r"(_selinux_probe\(\) \{.*?\n\})", SCRIPT.read_text(), re.S)
-        self.assertIsNotNone(body, "the probe function is gone")
-        script = body.group(1) + "\n_selinux_probe 2>&1 || true\n"
+        script = self._script()
         # bash by absolute path: PATH here is the CHILD's lookup path, and
         # /nonexistent is the point of the test, so the interpreter itself
         # cannot be found through it.
@@ -115,7 +146,8 @@ class TheProbeIsRunNotJustRead(unittest.TestCase):
         self.assertEqual(self._run("/nonexistent").returncode, 0)
 
     def test_every_line_is_one_marker_and_nothing_else(self):
-        for path_env in ("/nonexistent", "/usr/bin:/bin"):
+        for path_env in ("/nonexistent", "/usr/bin:/bin",
+                         f"{self._stub_dir()}:/usr/bin:/bin"):
             out = self._run(path_env)
             lines = [ln for ln in out.stdout.splitlines() if ln.strip()]
             with self.subTest(path=path_env):

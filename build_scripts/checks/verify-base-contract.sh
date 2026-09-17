@@ -67,29 +67,47 @@ fi
 # Every command is guarded. A diagnostic must never be the reason a contract
 # fails, and `set -e` is off here precisely so a missing tool stays a missing
 # line.
+# One field of the probe. Run the command, fall back to a single word on any
+# failure, and reject a value with whitespace in it.
+#
+# The fallback has to survive more than a missing binary. `rpm -q` prints
+# "package X is not installed" on STDOUT and exits 1, so `2>/dev/null` does not
+# silence it and the text lands inside the marker. CI caught precisely that,
+# through this probe's own test:
+#
+#   stray line in probe output: 'unknown policy=package selinux-policy is not installed'
+#
+# One field became three lines and none of them was a measurement. Assign,
+# overwrite on a non-zero exit, then refuse anything that is not one bare word.
+_selinux_field() {
+	local fallback=$1
+	shift
+	local out
+	out=$("$@" 2>/dev/null) || out="${fallback}"
+	[[ -n "${out}" && "${out}" != *[[:space:]]* ]] || out="${fallback}"
+	printf '%s' "${out}"
+}
+
 _selinux_probe() {
 	local ctx=/etc/selinux/targeted/contexts/dbus_contexts
-	echo "TUNAOS_SELINUX_PROBE enforce=$(getenforce 2>/dev/null || echo unknown)" \
-		"lib=$(rpm -q --qf '%{VERSION}-%{RELEASE}' libselinux 2>/dev/null || echo unknown)" \
-		"policy=$(rpm -q --qf '%{VERSION}-%{RELEASE}' selinux-policy 2>/dev/null || echo unknown)"
-	# stat -c %C, not ls -Z: it prints the context alone, and shellcheck is
-	# right that parsing ls output is a habit worth not having.
-	echo "TUNAOS_SELINUX_PROBE label=$(stat -c '%C' "${ctx}" 2>/dev/null || echo unreadable)"
-	echo "TUNAOS_SELINUX_PROBE dir=$(stat -c '%C' "${ctx%/*}" 2>/dev/null || echo unreadable)"
-	# matchpathcon opens the same file_contexts handle logind and dbus-broker
-	# open. If it cannot, it fails the way they do, and says so here first --
-	# `lookup-failed` on this line IS the tunaOS#2485 symptom, reported by the
-	# one tool that can still speak.
-	#
-	# Guarded with command -v rather than `2>&1 | head -1 || echo`: under
-	# pipefail that spelling put a "command not found" message inside the
-	# marker and printed the fallback on a SECOND line, so one field became two
-	# lines of which neither was a measurement.
+
+	# matchpathcon opens the same file_contexts handle that logind and
+	# dbus-broker open. `lookup-failed` here IS the tunaOS#2485 symptom,
+	# reported by the one tool that can still speak. Kept distinct from
+	# `unavailable`, which only means the tool is absent.
 	local expected=unavailable
 	if command -v matchpathcon >/dev/null 2>&1; then
-		expected=$(matchpathcon -n "${ctx}" 2>/dev/null | head -1)
-		expected=${expected:-lookup-failed}
+		expected=$(_selinux_field lookup-failed matchpathcon -n "${ctx}")
 	fi
+
+	echo "TUNAOS_SELINUX_PROBE" \
+		"enforce=$(_selinux_field unknown getenforce)" \
+		"lib=$(_selinux_field unknown rpm -q --qf '%{VERSION}-%{RELEASE}' libselinux)" \
+		"policy=$(_selinux_field unknown rpm -q --qf '%{VERSION}-%{RELEASE}' selinux-policy)"
+	# stat -c %C, not ls -Z: it prints the context alone, and parsing ls output
+	# is a habit worth not having.
+	echo "TUNAOS_SELINUX_PROBE label=$(_selinux_field unreadable stat -c '%C' "${ctx}")"
+	echo "TUNAOS_SELINUX_PROBE dir=$(_selinux_field unreadable stat -c '%C' "${ctx%/*}")"
 	echo "TUNAOS_SELINUX_PROBE expected=${expected}"
 	echo "TUNAOS_SELINUX_PROBE readable=$([[ -r ${ctx} ]] && echo yes || echo no)"
 }
