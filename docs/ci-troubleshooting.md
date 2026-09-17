@@ -1300,3 +1300,39 @@ failed. The scope note in the test file matters as much.
 Four other bases never call `depmod` and are right not to, because their
 package managers index the tree themselves. An assertion that demanded it
 everywhere would fail code that already works.
+
+### 29. A gate that asked the wrong question (`Audit NVIDIA release assets`, 2026-09-17)
+
+This job showed red on all 15 runs it ever had. It never passed once, so it
+never reported anything.
+
+**Root cause.** It checked GitHub Releases for a per-flavor tag with at least
+one asset. This repository does not publish ISOs that way:
+
+- `attach-release` in `reusable-build-artifacts.yml` defaults to `false`, so
+  every cell skips "Attach ISO to GitHub Release". In a green ISO job for nvidia, that step still reads
+  skipped. "Upload ISO to Cloudflare R2" succeeds next to it.
+- The releases that exist are per desktop (`gnome-20260916`), not per flavor,
+  so no tag ever started with `gnome-nvidia-`.
+- Those releases carry no assets at all.
+
+The audit also asked about `gnome50-nvidia`, which is in no variant of
+`.github/build-config.yml`. Someone hardcoded its flavor list, and the list
+then drifted.
+
+**Why nothing caught it.** A check that stays red looks the same on day 15 as
+on day 1. Nobody could tell a real fault from a broken question, so the row
+carried no information.
+
+**Fix.** The audit now lists `live-isos/<variant>-<flavor>-latest.iso` in R2,
+which is where the upload step puts each ISO and the path `docs/TESTING.md`
+tells users to fetch. The cell list comes from `build-config.yml`, filtered to
+`build_image` and `build_iso`, so it tracks the matrix and cannot drift. That
+widened the audit from 6 hardcoded names, one of them fictional, to 27 real
+cells. Without R2 credentials it skips and does not fail, which is what the
+upload step and `prune-r2.yml` already do for forks.
+
+**Lesson:** a check that has never passed is not a strict check. It is an
+unread one. When a gate shows red on every run it ever had, doubt the question
+before the answer. Delete such a gate only after the intent behind it has
+somewhere true to live.
