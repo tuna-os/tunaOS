@@ -217,6 +217,30 @@ After `bootc upgrade`:
 Nobody should log in as `alarm` on a tunaOS system. It is an artifact of the
 base image, and `build-archlinuxarm-base.yml` keeps it for the base alone.
 
+### marlin's arm64 images carry a kernel again (marlin, arm64)
+
+Every marlin `linux-arm64` image published before this change holds no kernel.
+Arch Linux ARM ships the kernel as `/boot/Image` alone, and the bootc layout
+step cleared `/boot` without a copy in `/usr/lib/modules/<kver>/vmlinuz`, which
+is where bootc reads it.
+
+A `bootc upgrade` onto one of those images stages a deployment that cannot
+boot. Only arm64 marlin is affected; x86_64 marlin and every other variant
+always carried the kernel.
+
+- **On a system that still boots:** upgrade to an image built after this
+  change. No other action is needed.
+- **On a system that stopped booting after an upgrade:** pick the previous
+  entry in the boot menu, then run `sudo bootc rollback` to make it the
+  default. Upgrade again once a newer image is available.
+
+To confirm an image before you deploy it, check that the path exists:
+
+```bash
+sudo bootc image copy-to-storage
+podman run --rm ghcr.io/tuna-os/marlin:gnome ls /usr/lib/modules/*/vmlinuz
+```
+
 ---
 
 ## Known Limitations
