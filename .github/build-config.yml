@@ -845,21 +845,35 @@ variants:
   - id: bonito
     emoji: "🎣"
     description: "Based on Fedora 44"
-    # Repinned 2026-09-12: quay garbage-collected the previous digest
-    # (sha256:2c38c5f7…, set in tunaOS#2464) within a day of it being written.
-    # Verified dead and this one alive by direct registry query, not inferred:
+    # Unpinned 2026-09-17. The note this replaces named the condition itself:
+    # "If quay GCs this one inside a day as well, that is the second strike and
+    # bonito should follow them to a bare tag." It did, and this is that.
     #
-    #   GET /v2/fedora/fedora-bootc/manifests/sha256:2c38c5f7…  -> 404
-    #   GET /v2/fedora/fedora-bootc/manifests/44                -> sha256:4a460ed0…
-    #   sha256:4a460ed0… is an OCI index over amd64 arm64 ppc64le s390x
+    # sha256:2c38c5f7… (tunaOS#2464) was GC'd within a day. sha256:4a460ed0…
+    # replaced it on 2026-09-12 and was GC'd between the green nightly of
+    # 2026-09-13 (run 34768771243) and the red one of 2026-09-14 (34871837299).
+    # Every Build Bonito since has died in the pull, all four retries:
     #
-    # :44 keeps a digest pin, unlike rawhide and tumbleweed below, because it
-    # is a release tag rather than a rolling snapshot. If quay GCs this one
-    # inside a day as well, that is the second strike and bonito should follow
-    # them to a bare tag -- a digest that cannot be fetched buys no
-    # reproducibility, only a red base and every downstream flavor with it
-    # (16 cells here).
-    base_image: "quay.io/fedora/fedora-bootc:44@sha256:4a460ed0e52aa8e8d9e27172213ec85be64d0abb6325767e5a0f67a7f1b74b79"
+    #   Error: ... reading manifest sha256:4a460ed0… in quay.io/fedora/fedora-bootc:
+    #   manifest unknown
+    #
+    # Verified by direct registry query, not inferred:
+    #
+    #   GET /v2/fedora/fedora-bootc/manifests/sha256:4a460ed0…  -> 404
+    #   GET /v2/fedora/fedora-bootc/manifests/44                -> sha256:38ef702a…
+    #
+    # Two digests, two garbage collections, five days. quay does not retain
+    # replaced manifests for fedora-bootc even on a release tag, so :44 behaves
+    # like rawhide and tumbleweed below and gets their treatment. A digest that
+    # 404s buys no reproducibility — it buys a red base and all 16 cells behind
+    # it, because every downstream flavor pulls through this one line.
+    #
+    # check-base-image-pins.sh reports the new state as a declared one:
+    #   SKIP  (not digest-pinned)  quay.io/fedora/fedora-bootc:44
+    #
+    # Re-pin when quay retains replaced fedora-bootc manifests, or when the
+    # build resolves the tag once and threads that digest through every stage.
+    base_image: "quay.io/fedora/fedora-bootc:44"
     # Friendly alias: same digest also published as ghcr.io/tuna-os/<alias>:<flavor>
     aliases: [fedora]
     akmods: "ublue-os"
