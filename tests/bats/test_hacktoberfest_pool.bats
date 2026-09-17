@@ -46,9 +46,15 @@ SWEEP="${REPO_ROOT}/scripts/gfi-pool-report.sh"
   # Without the reason, the next person tidying the URL drops it again.
   run grep -F 'archived:false' "$PLAN"
   [ "$status" -eq 0 ]
+  # Assert the REASON, not one wording of it. This matched the literal phrase
+  # "is load-bearing", which an STE pass replaced with "is essential" — the
+  # document still gave the reason, and the test went red on the adjective.
+  # What must survive is the fact that makes the filter necessary, so match
+  # that instead.
+  #
   # Matched on one line — the sentence wraps, and grep is line-oriented. (This
   # test failed on its own first run for exactly that reason.)
-  run grep -Fi 'is load-bearing' "$PLAN"
+  run grep -Fi "GitHub's issue search includes" "$PLAN"
   [ "$status" -eq 0 ]
 }
 
