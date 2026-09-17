@@ -164,6 +164,42 @@ if dnf versionlock --help >/dev/null 2>&1; then
 	dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt || true
 fi
 
+# ── EXPERIMENT ONLY — tunaOS#2485. DO NOT MERGE THIS BLOCK. ──────────────────
+#
+# This branch exists to run one measurement and be thrown away. It is not a
+# fix, and it has not been reviewed as one.
+#
+# The serial probe in verify-base-contract.sh has now read all three EL10
+# variants. They are identical on every field it reports except one:
+#
+#   albacore  ✅  lib=3.10-1.el10  label == dir == expected == default_context_t
+#   skipjack  ❌  lib=3.11-1.el10  label == dir == expected == default_context_t
+#   yellowfin ❌  lib=3.11-1.el10  label == dir == expected == default_context_t
+#
+# Same selinux-policy (43.1-1.el10), same computed contexts, same Enforcing,
+# same readable=yes. The labelling is not the differentiator and the policy is
+# not the differentiator. libselinux 3.10 against 3.11 is the whole remaining
+# difference, and this pins that one variable to see whether it moves.
+#
+# libselinux-3.10-1.el10 is still present in the Stream 10 BaseOS repo, so the
+# downgrade is available rather than hypothetical.
+#
+# If skipjack:gnome goes green with only this changed, the cause is
+# established and the real change becomes a question of which pin to carry,
+# where to express it, and for how long. If it stays red, this comparison is
+# wrong somewhere, and that is worth knowing on a dispatched build rather than
+# in a merge.
+if [[ ${IS_CENTOS:-false} == true ]]; then
+	echo "EXPERIMENT tunaOS#2485: pinning libselinux to 3.10 to test the split"
+	dnf -y downgrade libselinux-3.10-1.el10 libselinux-utils-3.10-1.el10 \
+		python3-libselinux-3.10-1.el10 || {
+		echo "EXPERIMENT tunaOS#2485: downgrade failed; the run still measures 3.11" >&2
+	}
+	dnf versionlock add libselinux libselinux-utils python3-libselinux || true
+	rpm -q libselinux || true
+fi
+# ── end experiment ──────────────────────────────────────────────────────────
+
 if [[ $IS_HUMMINGBIRD == true ]]; then
 	echo "Hummingbird base detected; using --skip-unavailable for base packages..."
 	# xfsprogs: `bootc install` execs mkfs.xfs from INSIDE the image being
