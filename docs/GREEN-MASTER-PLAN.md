@@ -92,8 +92,8 @@ per-cell skippable, and `base` cells promote with the Gate skipped.
       TUNAOS_BASE_CONTRACT_OK (multi-user + operable bootc).
 - [x] DRM-limited cells: the measured outcome of each Gate decides per cell
       — marlin kde and xfce PASSED 2026-08-17, so "needs DRM" is
-      per-variant evidence, not a blanket cap; cells whose gate fails or never ran render ❌/⬜, never
-      green, exactly as required.
+      per-variant evidence, not a blanket cap; cells whose gate fails or
+      never ran render ❌/⬜, never green, exactly as required.
 - [x] Gate-ran-at-all: under the composite, a skipped or absent Gate renders
       ⬜ and the cell is not green — the absence of a gate can no longer look
       like success on any scoreboard.
@@ -294,9 +294,9 @@ as #1823, on a second variant surface. Count the EL10 nvidia cells under
 Round 1 (#1877, bare `rpm --rebuilddb`) produced the signature that
 discriminates — clean rebuild, replace REFUSED, zero malformed. Round 2
 (#1909, literal-path directory round-trip) killed the malformed storm, but
-the rebuild's rename still failed. Round 3 (#1912, `readlink -f` the dbpath
-+ round-trip the RESOLVED directory + rebuild demoted to advisory) went
-GREEN. Albacore base-nvidia run 32339591457 logged the resolution
+the rebuild's rename still failed. Round 3 (#1912, `readlink -f` the
+dbpath + round-trip the RESOLVED directory + rebuild demoted to advisory)
+went GREEN. Albacore base-nvidia run 32339591457 logged the resolution
 (`/usr/share/rpm` is a real dir there — symlink hypothesis refuted for
 EL10). The kernel transaction completed with no malformed and
 `TUNAOS_NVIDIA_CONTRACT_OK`.

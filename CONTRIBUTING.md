@@ -1,6 +1,6 @@
 # Contributing to TunaOS
 
-Thank you for contributing to TunaOS — an image factory that produces bootc-based desktop OS images.
+Thank you for your contribution to TunaOS — an image factory that builds bootc-based images for desktop operating systems.
 
 ## Quick Start
 
@@ -12,9 +12,9 @@ just fix && just check
 
 ## Contributor onboarding
 
-New here? Start with an **[org-wide good first issue](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** — a curated, maintainer-sized task covering documentation parity, a small script fix, or test coverage. Before starting, leave a comment saying you are taking the issue so the work is not duplicated. The current pool and census are tracked in the [Hacktoberfest 2026 contributor plan](docs/HACKTOBERFEST-2026.md); new bounded tasks are labelled `good first issue` during the [weekly contributor triage](#weekly-contributor-triage) below.
+New here? Start with an **[org-wide good first issue](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** — a curated, maintainer-sized task for documentation parity, a small script fix, or test coverage. Before you start, leave a comment to say you take the issue, so that nobody duplicates the work. The [Hacktoberfest 2026 contributor plan](docs/HACKTOBERFEST-2026.md) tracks the current pool and census. The [weekly contributor triage](#weekly-contributor-triage) below labels new bounded tasks `good first issue`.
 
-The current starter runway lives in the **[org-wide good first issue](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** pool, mostly in `tuna-os/docs` (docs-parity and guide tasks — e.g. desktop quick-starts, verification guides, cheat sheets). These tasks are intentionally independent of the image build pipeline and are curated for first-time contributors. If one is claimed or closed, pick another bounded task from the same search.
+The current starter runway lives in the **[org-wide good first issue](https://github.com/issues?q=org%3Atuna-os+is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22)** pool. Most of it is in `tuna-os/docs` (docs-parity and guide tasks — e.g. desktop quick-starts, verification guides, cheat sheets). These tasks are intentionally independent of the image build pipeline, and maintainers curate them for first-time contributors. If another contributor claims one, or if it closes, pick another bounded task from the same search.
 
 ### Fork → PR loop
 
@@ -23,30 +23,30 @@ The current starter runway lives in the **[org-wide good first issue](https://gi
 3. Make the smallest change that satisfies the issue's acceptance criteria.
 4. Run the checks listed below, then commit and push the branch to your fork.
 5. Open a PR against `tuna-os/tunaos:main`, link the issue with `Fixes #NNN`, and include the checks you ran.
-6. Keep the branch available while review is in progress; follow-up fixes can be pushed to the same PR.
+6. Keep the branch available while review is in progress; you can push follow-up fixes to the same PR.
 
-You do not need write access to the upstream repository. GitHub's fork-based PR flow is the normal path for external contributors. If CI fails, include the failing job and a short reproduction in the PR instead of silently retrying it. If a push is rejected because the GitHub App lacks `workflows` permission, follow the [workflow publishing runbook](docs/CI-WORKFLOW-PUBLISHING.md); repository workflow YAML cannot grant that App-level permission.
+You do not need write access to the upstream repository. GitHub's fork-based PR flow is the normal path for external contributors. If CI fails, include the job that failed and a short reproduction in the PR instead of a silent retry. If GitHub rejects a push because the GitHub App does not have `workflows` permission, follow the [runbook for workflow publication](docs/CI-WORKFLOW-PUBLISHING.md). Workflow YAML in the repository cannot grant that App-level permission.
 
 For the Hacktoberfest 2026 backlog, see the [contributor plan](docs/HACKTOBERFEST-2026.md) for current candidates, acceptance standards, and event dates.
 
-Before drafting a guide, a campaign post, or anything that names an image reference, a shipped tool, hardware support, or readiness, work through the [pre-write claim checklist](docs/CONTENT-CLAIM-CHECKLIST.md). Five guide PRs in a row were closed for the same two defects: an image reference the project does not publish, and toolchains the images do not ship. The checklist is those defects written down.
+Work through the [pre-write claim checklist](docs/CONTENT-CLAIM-CHECKLIST.md) before you write a guide or a campaign post. Do the same for any text that names an image reference, a shipped tool, hardware support, or readiness. Maintainers closed a run of five guide PRs for the same two defects. The first is an image reference the project does not publish; the second is toolchains the images do not ship. The checklist is those defects written down.
 
-Ways to contribute without touching the build pipeline:
+Ways to contribute without changes to the build pipeline:
 
-- **Docs & guides** — the [docs site](https://github.com/tuna-os/docs) has its own `good first issue` backlog and takes content PRs for guides, FAQs, and variant pages; run the [claim checklist](docs/CONTENT-CLAIM-CHECKLIST.md) before you write
+- **Docs & guides** — the [docs site](https://github.com/tuna-os/docs) has its own `good first issue` backlog and takes content PRs for guides, FAQs, and variant pages. Run the [claim checklist](docs/CONTENT-CLAIM-CHECKLIST.md) before you write
 - **Community** — help triage [open issues](https://github.com/tuna-os/tunaOS/issues), answer questions in [Matrix](https://matrix.to/#/%23tunaos:reilly.asia), or improve the [adopters list](ADOPTERS.md) if your org uses TunaOS
-- **Labels** — issues tagged `help wanted` are explicitly open for external contribution
+- **Labels** — anyone outside the project can take issues tagged `help wanted`
 
 When you pick an issue, say so in a comment (prevents double work) and ask in Matrix if you get stuck — someone is usually around.
 
 ### Weekly contributor triage
 
-The maintainer reserves one 30-minute slot each week for contributor work. During that slot:
+The maintainer keeps one 30-minute slot each week for contributor work. During that slot:
 
 1. Review new issues and label at least one bounded task `good first issue` when its scope and acceptance criteria are clear.
-2. Check claimed starter issues for unanswered questions, stale claims, or duplicate work.
+2. Check the claimed starter issues for unanswered questions, stale claims, or duplicate work.
 3. Review open contributor PRs, respond to blockers, and keep CI failures distinguishable from code-review requests.
-4. Refresh the starter links above when tasks are completed, superseded, or moved to another repository.
+4. Refresh the starter links above when tasks finish, move to another repository, or give way to newer tasks.
 
 This is a lightweight queue-management commitment, not a promise of immediate review. Contributors should expect an acknowledgement or status update within the next weekly triage slot.
 
@@ -58,7 +58,7 @@ just check   # shellcheck, yamllint, actionlint
 ```
 
 `just ci` runs what the PR gate runs — `check`, the CI contract, and every
-unit suite — so a green `just ci` locally is a green PR, minus the
+unit suite. A green `just ci` locally is a green PR, minus the
 scheduled build matrix. The rest of the contributor contract:
 
 | Command | What it is |
@@ -73,13 +73,13 @@ scheduled build matrix. The rest of the contributor contract:
 
 ## Every incident becomes a regression test
 
-A bug that let an unusable or wrongly-promoted image ship is not fixed until a
-test proves the old failure mode cannot silently recur. Put that test in
+A bug that let an unusable or wrongly-promoted image ship stays open until a
+test proves the old failure mode can never recur in silence. Put that test in
 [`tests/regressions/`](tests/regressions/README.md), named after the issue
 (`test_issue_<number>_<what_must_not_recur>.py`), with a docstring that cites
 the issue and the run or log that measured the failure. The seed example is
-#858 (marlin:kde shipped with no Wayland session): the regression test runs
-the desktop contract's own check against a filesystem with no session file
+#858 (marlin:kde shipped with no Wayland session). The regression test runs
+the desktop contract's own check against a filesystem with no session file,
 and holds that it fails. `tests/test_regression_convention.py` enforces the
 naming.
 
@@ -93,7 +93,7 @@ just build yellowfin all             # all flavors
 
 ## Adding a Desktop Environment
 
-No shell scripting required. Write a YAML manifest:
+You do not need shell scripts. Write a YAML manifest:
 
 ```bash
 # 1. Create the manifest
@@ -139,7 +139,7 @@ Full architecture: [`docs/AGENT_GUIDE.md`](docs/AGENT_GUIDE.md)
 2. Run `just fix && just check`
 3. Open PR against `main`
 4. CI validates (lint, unit tests, image build on PR)
-5. Merge queue handles the rest (automerge for passing PRs)
+5. Merge queue handles the rest (automerge when PRs pass)
 
 ## Testing
 
@@ -154,7 +154,7 @@ just verify-disk image.qcow2  # QEMU boot verification
 - [Vision](VISION.md) — project philosophy
 - [Agent Guide](docs/AGENT_GUIDE.md) — architecture reference
 - [Pipeline](docs/PIPELINE.md) — CI/CD details
-- [Testing](docs/TESTING.md) — test harness
+- [Tests](docs/TESTING.md) — test harness
 
 ## Community
 
