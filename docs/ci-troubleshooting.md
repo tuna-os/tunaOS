@@ -1083,3 +1083,28 @@ A sweep finished between the commit and the check. It returned one `missing` cel
 **The mask works line by line. A rewrite of a line cannot hide a line that one side lacks.** Every other live readout there is a line that always exists. Only its numbers move, so the mask covers it. Name a conditional paragraph in `VOLATILE_LINE` instead.
 
 **Lesson:** a report claims what someone measured, and silence measures nothing. Ask two questions of every line you print. Did a run look at this cell? Might this line not print at all? A comparison that normalises what both sides hold will still fail on what one side alone holds.
+
+### 23. A gate broke on prose that no diff ever showed (2026-09-14)
+
+**Affected files:** `.github/scripts/update-build-status.sh`, `scripts/gen-matrix-status.py`, and the two documents they write.
+
+**Symptom:** the STE ratchet failed on `main`, and on every pull request that touched a `.md` file. It stayed red for three days. The change behind it had passed that same gate.
+
+```
+2026-09-14T18:54 push         main                        failure
+2026-09-15T11:08 pull_request automation/matrix-status    failure
+2026-09-16T10:57 pull_request automation/matrix-status    failure
+2026-09-17T01:58 pull_request strategy/q3-close-q4-...    failure
+```
+
+**Root cause:** STE lints `README.md` and `docs/MATRIX-STATUS.md`. Nobody writes either by hand. tunaOS#2512 edited the README paragraph inside `update-build-status.sh`, and the local STE run read 3048 — correctly, because the committed README still held the old sentence. Automation regenerated it two days later. The fresh sentence carried a filler word and a passive clause, so the total reached 3052 against a budget of 3050.
+
+So the prose that STE reads had moved, and the diff behind it showed nothing. The gate had nothing to catch. The author had nothing to see.
+
+The second cause needs no author at all. `gen-matrix-status.py` prints a caveat paragraph only while the newest sweep holds a cell with no clean verdict. One sweep result makes that paragraph appear, and the repo total moves on its own. That same paragraph had already broken the drift gate in §22, for the same reason from the other side.
+
+**Fix.** Edit the generator and the committed file in one commit, so the linted bytes land in the diff. Keep a conditional paragraph short and active, because its cost falls on whoever opens the next pull request. `tests/test_generated_prose_is_visible_in_the_diff.py` holds the two in step.
+
+**Never raise the budget to clear this.** It looks like a fix and it discards the ratchet. The prose was wrong. The number was right.
+
+**Lesson:** ask what reads a file, not who writes it. A generator's output is source for every gate that measures it, and a generator's prose is prose. When a gate reads something your diff never showed, your green describes the old bytes.
