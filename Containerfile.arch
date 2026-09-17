@@ -174,9 +174,36 @@ RUN --mount=type=bind,from=context,source=/,target=/run/context \
 # build_scripts/overlay/cachyos.sh ran with two kernel trees and picked a
 # different one per flavor, failing 5/5 cachyos Gates (tunaOS#1563). It is not
 # worth leaving a second copy of that around to be inherited.
+
+# depmod runs here because NOTHING ELSE RUNS IT ON THIS BASE. Every other
+# variant gets it from build_scripts/26-packages-post.sh, which this
+# Containerfile does not run -- the comment further down says so, about
+# install-remora, and the same sentence applies to depmod.
+#
+# It only bites on aarch64, which is why it went unseen. On x86_64 the base is
+# docker.io/archlinux and `pacman -S linux` really installs the kernel, so
+# pacman's depmod hook fires. On aarch64 the base is ghcr.io/tuna-os/archlinuxarm,
+# whose rootfs already ships linux-aarch64, so `pacman -S --needed` is a no-op,
+# the hook never fires, and /usr/lib/modules/<kver>/modules.dep is never
+# written.
+#
+# The image still boots, so nothing caught it. The ISO does not build:
+# tacklebox looks for a kernel with `[ -f "$d/modules.dep" ] || continue`,
+# finds none, and stops with
+#
+#   no kernel found under /usr/lib/modules (looked for modules.dep):
+#   7.2.6-1-aarch64-ARCH
+#
+# (marlin run 35215948753, job 105195304184). That failure sat behind the
+# UID 1000 one and only surfaced once #2558 cleared it.
+#
+# No `|| true`: a module tree that cannot be indexed is a broken image, and a
+# silent failure here is what produced an hour-downstream error in another
+# repository.
 RUN --mount=type=bind,from=context,source=/,target=/run/context \
     KVER="$(basename "$(find /usr/lib/modules -maxdepth 1 -mindepth 1 -type d ! -name '*.img' | sort -V | tail -1)")" && \
     if [ -z "$KVER" ]; then echo "ERROR: no kernel module directory under /usr/lib/modules" >&2; exit 1; fi && \
+    depmod "$KVER" && \
     /run/context/build_scripts/bootc/dracut-config.sh "$KVER" && \
     dracut --force "/usr/lib/modules/${KVER}/initramfs.img" "${KVER}"
 
