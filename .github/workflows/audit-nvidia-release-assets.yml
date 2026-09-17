@@ -15,8 +15,27 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Check all NVIDIA editions have downloadable assets
+
+      # Same pin as build-variant.yml. The script uses `yq -o=json`, which is
+      # mikefarah's syntax; Ubuntu's packaged `yq` is a different program.
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/bin/yq "https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64"
+          sudo chmod +x /usr/bin/yq
+
+      - name: Install rclone
+        run: sudo apt-get install -y rclone
+
+      # ISOs are published to R2, not to GitHub Releases: `attach-release` in
+      # reusable-build-artifacts.yml defaults to false. Auditing releases is
+      # what kept this job red on all 15 runs it ever had.
+      - name: Check every NVIDIA edition is downloadable from R2
         env:
-          GH_TOKEN: ${{ github.token }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
+          RCLONE_CONFIG_R2_TYPE: s3
+          RCLONE_CONFIG_R2_PROVIDER: Cloudflare
+          RCLONE_CONFIG_R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          RCLONE_CONFIG_R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          RCLONE_CONFIG_R2_REGION: auto
+          RCLONE_CONFIG_R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
         run: ./scripts/audit-nvidia-release-assets.sh
