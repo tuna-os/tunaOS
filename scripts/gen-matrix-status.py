@@ -1232,7 +1232,8 @@ def build() -> str:
         f"**{tested} of {total}** non-NVIDIA ISO cells have *ever* been "
         f"tested — {pct}% coverage. {passed} of those pass.",
         "",
-        "This is the only axis that checks a human could actually install. "
+        "This is the only axis that checks whether a human could install the "
+        "image. "
         f"For {total - tested} combinations, nobody has confirmed the "
         "installer appears on screen.",
         "",
@@ -1248,8 +1249,8 @@ def build() -> str:
         # the evidence, rather than restating a cause the measurement did not
         # support.
         (
-            "cosmic, niri, xfwl4 and kde do not bring a session up on hosted CI. The "
-            + "cause is undiagnosed rather than established -- gnome starts on the "
+            "cosmic, niri, xfwl4 and kde do not bring a session up on hosted CI. "
+            + "Nobody has diagnosed the cause -- gnome starts on the "
             + "same guest, which has a render node but no 3D. See *Known systemic "
             + "gaps*."
         ),
@@ -1293,9 +1294,11 @@ def build() -> str:
     out += [
         "## Provenance",
         "",
-        "The run that last asserted each verdict above. A re-run of a cell "
-        "moves a row here without moving the cell, so this table refreshes only "
-        "when a verdict changes. Treat the dates as \"no older than\".",
+        (
+            "The run that last asserted each verdict above. A re-run of a cell "
+            "moves a row here without moving the cell, so this table refreshes "
+            "only when a verdict changes. Treat the dates as \"no older than\"."
+        ),
         "",
         "| Date | Run | Cells |",
         "|---|---|---|",
