@@ -1272,9 +1272,11 @@ no kernel found under /usr/lib/modules (looked for modules.dep):
 ```
 
 **Root cause.** tacklebox selects the kernel by the index, not the kernel:
-`[ -f "$d/modules.dep" ] || continue`. The image had the directory, `vmlinuz`
-and `initramfs.img`, and it booted. Only `modules.dep` was absent, and only
-the ISO build reads it.
+`[ -f "$d/modules.dep" ] || continue`. The image had the directory and
+`initramfs.img`, and only `modules.dep` was absent from it.
+
+This entry first said the image also had `vmlinuz` and booted. It had neither.
+§30 has the correction and the second fault behind the same message.
 
 `depmod` lives in `build_scripts/26-packages-post.sh`, which
 `Containerfile.arch` does not run. On x86_64 that cost nothing: the base is
@@ -1300,6 +1302,64 @@ failed. The scope note in the test file matters as much.
 Four other bases never call `depmod` and are right not to, because their
 package managers index the tree themselves. An assertion that demanded it
 everywhere would fail code that already works.
+
+### 30. One error message, two faults (`marlin:gnome` arm64, 2026-09-17)
+
+§28 ran `depmod` on this cell. The next build printed the same words:
+
+```
+no kernel found under /usr/lib/modules (looked for modules.dep):
+7.2.6-1-aarch64-ARCH
+```
+
+The obvious read is that the fix did not reach the build. It did. The build
+log shows `depmod` at step 25 of 37, and the module index is in the published
+image.
+
+**Root cause.** tacklebox has one message for a loop with two requirements:
+
+```sh
+for d in /usr/lib/modules/*/; do
+  [ -f "$d/modules.dep" ] || continue
+  if [ -f "$d/vmlinuz" ] && [ -f "$d/initramfs.img" ]; then
+```
+
+Past the first line, an absent `vmlinuz` ends at the same `exit 1` with the
+same text about `modules.dep`. The kernel binary was the missing file.
+
+Arch Linux ARM's `linux-aarch64` ships the kernel as `/boot/Image` alone,
+where Arch's x86_64 `linux` owns `/usr/lib/modules/<kver>/vmlinuz`.
+`build_scripts/bootc/ostree-layout.sh` runs `rm -rf /boot`, so on aarch64 it
+deleted the only copy. The arm64 images shipped with no kernel.
+
+`Containerfile.debian` and `Containerfile.gentoo` (twice) copy the kernel
+across by hand, one step before they call that script. Gentoo's comment says why:
+"Both must happen BEFORE the ostree layout below, which deletes /boot". Arch
+was a fourth copy that nobody wrote.
+
+**The evidence.** This session had no container runtime, so it read the
+published image straight from the registry. Fetch the manifest with a ghcr pull
+token, stream each layer through `zstd -dc | tar -t`, then grep the names.
+`modules.dep` sits in layer 55. Neither `vmlinuz` nor `Image` appears in any of
+the 65 layers. The section above on a published image without a container
+runtime holds the recipe.
+
+**Why it stayed hidden.** No Gate runs on arm64, so nothing booted the image
+and nothing reported that it could not boot. The ISO job was the first reader
+of `/usr/lib/modules/<kver>/vmlinuz`, an hour downstream and in another
+repository.
+
+**Fix.** `ostree-layout.sh` rescues the kernel into the module directory before
+it clears `/boot`, which is a no-op on every variant that already has one.
+`Containerfile.arch` now stops the build when `vmlinuz` is absent. It no longer
+builds an initramfs for a kernel that is not there.
+
+**Lesson:** an error message names the check that failed, not always the file
+that is missing. Read the code that prints it before you conclude a fix did not
+land. Where two causes share a message, the second cause reads as proof that the
+first one is still there. The control that settled it was the amd64
+cell of the same run, which built, booted and published from the same
+Containerfile.
 
 ### 29. A gate that asked the wrong question (`Audit NVIDIA release assets`, 2026-09-17)
 
