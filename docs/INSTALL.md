@@ -72,15 +72,24 @@ can verify what you're running instead of trusting the download blindly.
 verification bundle alongside the image:
 
 ```bash
-sha256sum --check --strict tunaos-example.iso.sha256
-
-cosign verify-blob tunaos-example.iso \
+cosign verify-blob tunaos-example.iso.sha256 \
   --bundle tunaos-example.iso.sigstore.json \
   --certificate-identity \
     "https://github.com/tuna-os/tunaOS/.github/workflows/reusable-build-artifacts.yml@refs/heads/main" \
   --certificate-oidc-issuer \
     "https://token.actions.githubusercontent.com"
+
+sha256sum --check --strict tunaos-example.iso.sha256
 ```
+
+The order matters. The bundle signs the **checksum file**, not the ISO. So the
+first command proves the checksum came from our pipeline. The second binds the
+ISO to that checksum. In the other order, a checksum of unknown origin decides
+the answer.
+
+The payload is the checksum because `cosign sign-blob` reads what it signs into
+memory, and an ISO above roughly 7 GiB exhausts the runner. Fedora, Debian and
+Arch publish signatures over checksums for the same reason.
 
 **Container images** are signed by digest, with a signed SPDX SBOM
 attestation attached to each platform image:
