@@ -69,7 +69,7 @@ that fragments the record.
 
 1. A maintainer acknowledges each response and asks the respondent to confirm
    the exact public name, category, variants, and start month.
-2. A named Production User requires explicit confirmation from an authorized
+2. A named Production User needs explicit confirmation from an authorized
    representative. A GitHub username alone is not evidence of organizational
    production use.
 3. Development and evaluation reports are welcome and should stay in those

@@ -49,7 +49,7 @@ Changes to the adapter must preserve these invariants:
    `<variant>-<flavor>-<VERSION_ID>-<arch>.iso`.
 
 Tacklebox changes that alter the accepted recipe fields or the meaning of
-these invariants require updating this document and the adapter's tests in
+these invariants need updating this document and the adapter's tests in
 the same change.
 
 ## Validation boundary

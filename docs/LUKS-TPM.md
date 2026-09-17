@@ -18,7 +18,7 @@ So: **the installer sets a passphrase and stages a one-time enrollment for the
 next boot; the first boot of your installed system enrolls the TPM against its
 own real PCR 7 and removes the staged key** — no action needed from you. This
 is a `ConditionFirstBoot` oneshot ([fisherman#48](https://github.com/tuna-os/fisherman/pull/48)),
-fixing an earlier version that enrolled at install time and never actually
+fixing an earlier version that enrolled at install time and never
 unsealed on the installed system (tunaOS#679, tunaOS#680).
 
 **First boot after install still shows the passphrase prompt once** — TPM2
@@ -53,7 +53,7 @@ equivalent) present when the image is built, since `dracut-install`
 refuses to package a module whose binaries don't exist — plus a working
 `/dev/tpmrm0` on the machine at boot. Two of those three are knowable
 **statically**, from what each base's package list and dracut config give
-the initramfs, without booting anything; only the third (does it actually
+the initramfs, without booting anything; only the third (does it
 unseal at runtime) needs the E2E boot. The columns below say which is
 which:
 
@@ -80,7 +80,7 @@ posture changes (e.g. Arch gains a `tpm2-tools` install), that test breaks
 until this table is updated too. `tests/bats/test_luks_tpm2_enroll_script.bats`
 asserts the `tunaos-luks-tpm2-enroll` script and its `ujust` wrappers are
 wired correctly, documenting the PCR 7+14 default that the manual enrollment
-path (which users actually exercise) seals to — distinct from the
+path (which users exercise) seals to — distinct from the
 first-boot oneshot's PCR-7-only seal (fisherman#48).
 
 Filled in by the per-variant TPM-enrollment test: install → first installed

@@ -5,7 +5,7 @@
 Migrate `scripts/iso-e2e.sh --luks` from a raw `sudo bootc install to-disk
 --block-setup tpm2-luks` to `sudo fisherman recipe.json` — the same install
 backend every TunaOS installer frontend uses (GUI installers, upstream
-bootc-installer for gnome) — so the LUKS E2E workflow actually tests what
+bootc-installer for gnome) — so the LUKS E2E workflow tests what
 real users get, not a separate, untested code path. Per
 `docs/ci-troubleshooting.md`'s "Key takeaway": every raw `bootc install
 to-disk` call in this codebase should be replaced with fisherman.
@@ -22,7 +22,7 @@ install backend this branch touches:
 - [ ] **gnome installer path** (upstream `org.bootcinstaller.Installer`
       Flatpak, newly embedded this migration) — `yellowfin:gnome` or
       `albacore:gnome`, once the ostree/dnf backend above is confirmed
-- [ ] **composefs/apt** — any `grouper:*` flavor, currently blocked (see
+- [ ] **composefs/apt** — any `grouper:*` flavor, now blocked (see
       "Explicitly out of scope" below) — stretch goal, not required to
       call this done
 
@@ -77,7 +77,7 @@ sessions).
   targets gain implicit After= on their wants, so the check self-deadlocks;
   the script exited silently under `set -e` and no marker ever reached
   ttyS0. This broke every variant Gate on main AND explains why LUKS E2E's
-  installed-boot wait (which requires the contract marker from the *pulled
+  installed-boot wait (which needs the contract marker from the *pulled
   published image*) could never pass: no published image emits a marker.
   Chain in flight: Build Yellowfin gnome (run 29614564619, branch
   fix/desktop-contract-gate) proves the Gate; Build Yellowfin kde (run

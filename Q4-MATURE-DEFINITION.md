@@ -16,7 +16,7 @@ checkpoint (#1299). Q4 must close with evidence, not wishes.
    published artifact, a live ruleset, a public snapshot. "In progress" is not a status.
 2. **Every Q3 descope lands on a named Q4 tracker with a first-PR date** — decided at
    the 08-22 Q3 checkpoint, not discovered at Q4 close.
-3. **"Mature" is falsifiable** — the claim requires a public adoption artifact
+3. **"Mature" is falsifiable** — the claim needs a public adoption artifact
    (ADOPTERS.md), not vibes.
 4. **Milestone fidelity is checked monthly** — every tracker attached at creation,
    milestone count matches reality (#1307 ritual).

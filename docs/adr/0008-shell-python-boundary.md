@@ -59,7 +59,7 @@ data with `grep`/`sed`/regex.
 **Neither**: if a real tool already handles it, use the tool. `yq` is a hard
 dependency (`_ensure-deps` fails without it) and parses YAML properly; reaching
 for `python3 -c "import re; ..."` to pull a field out of YAML is the one thing
-this ADR actually asks people to stop doing. See Consequences.
+this ADR asks people to stop doing. See Consequences.
 
 **Tests follow the language under test.** `bats` for shell, `pytest` for Python.
 

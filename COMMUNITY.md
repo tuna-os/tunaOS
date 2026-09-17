@@ -25,7 +25,7 @@ tunaOS is an open-source project building OCI-based Enterprise Linux desktops. W
 
 ### Contributor recognition and attribution
 
-We recognize contributors for the work they actually contribute, while taking
+We recognize contributors for the work they contribute, while taking
 care to distinguish human contributions from automated activity. Before
 publishing a contributor spotlight or counting a contribution toward the
 community's human-contributor metrics, maintainers should verify the commit

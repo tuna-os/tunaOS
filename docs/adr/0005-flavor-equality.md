@@ -46,7 +46,7 @@ This tiering was contradicted by reality in three ways:
 Explicitly rejected alternatives:
 
 - **Declaring GNOME the flagship** (keeping tier-1 framing): entrenches the
-  adoption friction for the majority of the variant portfolio and contradicts
+  adoption friction for most the variant portfolio and contradicts
   the admission gate already in force.
 - **Descoping non-GNOME flavors**: abandons working builds and the KDE/XFCE/
   COSMIC communities that already consume them; the ROADMAP's desktop

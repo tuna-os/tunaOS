@@ -7,7 +7,7 @@ and apps, start with the [User Guide](USER-GUIDE.md).
 
 ## Use a pre-built ISO
 
-Browse the currently published installation media on the download page:
+Browse the published installation media on the download page:
 
 **[📦 tunaos.org/download](https://tunaos.org/download)**
 

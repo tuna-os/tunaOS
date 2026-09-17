@@ -13,7 +13,7 @@ Dakota X13s story**
 Windows-on-ARM laptops are becoming interesting Linux hardware, but support
 still depends on the exact model, firmware, kernel support, and desktop image.
 The Lenovo ThinkPad X13s is a useful reference device because it is a known
-ARM laptop target rather than an abstract architecture claim. TunaOS already
+ARM laptop target instead of an abstract architecture claim. TunaOS already
 has device-specific documentation for [Bonito on the X13s](https://github.com/tuna-os/docs/tree/main/docs/bonito-x13s)
 and [Dakota on the X13s](https://github.com/tuna-os/docs/tree/main/docs/dakota-x13s).
 
@@ -27,7 +27,7 @@ still experimental, and where to report a result.
 TunaOS has device-focused documentation for trying its Bonito and Dakota ARM
 images on the ThinkPad X13s. This is aimed at Linux users who already own an
 X13s or are evaluating Snapdragon laptops and want an immutable, bootable
-container desktop rather than a conventional package-installed root.
+container desktop instead of a conventional package-installed root.
 
 The useful part is the test loop: follow the matching device guide, record the
 image and kernel versions, check suspend, audio, display, networking, and

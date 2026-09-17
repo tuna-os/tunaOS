@@ -48,7 +48,7 @@ and the signature is recorded in Sigstore's transparency infrastructure. See
 
 - Base images pinned by digest in `image-versions.yaml`
 - Third-party GitHub Actions pinned to commit SHAs
-- Release promotion requires successful keyless signature and SBOM-attestation
+- Release promotion needs successful keyless signature and SBOM-attestation
   verification against the expected repository workflow and protected ref
 - Build secrets use BuildKit secret mounts, never environment variables
 - Workflow credentials must not be embedded in URLs; use header-based Git

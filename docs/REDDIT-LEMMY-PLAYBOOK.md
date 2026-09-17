@@ -1,25 +1,26 @@
 # Reddit / Lemmy Release-Announcement Playbook
 
 > Status: **draft** — for maintainer review before first post.
-> Tracking issues: [#1346](https://github.com/tuna-os/tunaOS/issues/1346) (Reddit/Lemmy Linux-community presence), [#1599](https://github.com/tuna-os/tunaOS/issues/1599) (homelab/self-hosted, Draft D), [#1610](https://github.com/tuna-os/tunaOS/issues/1610) (Q3 checkpoint recap, Draft E).
-> Prepared: 2026-08-12, homelab draft added 2026-08-14. First post targets: Gurnard launch (#1344) / GNOME 51 release week (#1334).
+> Issues to track: [#1346](https://github.com/tuna-os/tunaOS/issues/1346) (Reddit/Lemmy Linux-community presence), [#1599](https://github.com/tuna-os/tunaOS/issues/1599) (homelab/self-hosted, Draft D), [#1610](https://github.com/tuna-os/tunaOS/issues/1610) (Q3 checkpoint recap, Draft E).
+> Prepared: 2026-08-12, homelab draft added on 2026-08-14. First post targets: Gurnard launch (#1344) / GNOME 51 release week (#1334).
 
 ## Why this exists
 
 Stars are flat (~55; 3 new in the last week) and the Q4 target is ≥100
 (ADOPTION-METRICS.md). Matrix (#1136), DistroWatch (#1333), Fedora Magazine
-(#1137), and conferences (#1135/#1166) are covered — but there is **no**
-Reddit/Lemmy presence, and that is where the ublue/Bluefin ecosystem gets
-outsized visibility for immutable-desktop releases. This playbook makes
-release announcements a repeatable, low-effort process.
+(#1137), and conferences (#1135/#1166) already have plans. But TunaOS has
+**no** Reddit/Lemmy presence. On Reddit and Lemmy, the ublue/Bluefin
+ecosystem has outsized visibility for immutable-desktop releases. This
+playbook makes release announcements a repeatable, low-effort process.
 
 ## Rules of engagement
 
-- **One text post per release or variant launch on r/linux**, plus one
-  Lemmy cross-post — **max ~1/month**, no spam cadence
-- **Maintainer-voiced**, first-person, linking tunaos.org (not just GitHub)
+- **One text post per release or variant launch on r/linux**. Also make
+  one cross-post to Lemmy — **max ~1/month**, no spam cadence
+- **Maintainer-voiced**, first-person, with a link to tunaos.org (not only
+  GitHub)
 - **Respect each community's rules** — r/linux self-promotion policy,
-  Lemmy instance rules; read them before posting
+  Lemmy instance rules; read them before you post
 - **Never astroturf** — no bot accounts, no vote manipulation, no
   sockpuppets. One human account, clearly the maintainer
 - **Engage honestly in comments** — answer questions, accept criticism,
@@ -34,8 +35,8 @@ release announcements a repeatable, low-effort process.
 | [programming.dev/c/linux](https://programming.dev/c/linux) | Lemmy Linux audience | Publish the same announcement as a native post, adapting links and tone to the community |
 | [lemmy.world/c/linux](https://lemmy.world/c/linux) | Additional Lemmy Linux audience | Cross-post only after checking local rules and whether the post adds value there |
 
-Keep this list small and check relevance/local moderation rules before
-expanding it — a post that fits r/linux does not automatically fit every
+Keep this list small. Check relevance and local moderation rules before
+you expand it. A post that fits r/linux does not automatically fit every
 Lemmy Linux community.
 
 ## When to post (candidate hooks)
@@ -62,32 +63,33 @@ Lemmy Linux community.
 
 ## Release gate
 
-Before drafting a post, confirm:
+Before you draft a post, confirm:
 
-- the release or variant is published and the download page works;
+- the release or variant is live and the download page works;
 - the release notes identify what changed, known limitations, and a
   support path;
 - checksums/signatures and source links are available where applicable;
-- the named variant and desktop are spelled consistently with the catalog;
+- the post spells the variant and desktop names exactly as the catalog does;
 - screenshots or other media are free to redistribute and have useful alt
   text;
-- the post has one clear action for readers (try it, read the notes, or
-  give feedback), not a list of unrelated asks.
+- the post has one clear action for readers — try it, read the notes, or
+  give feedback;
+- the post does not hold a list of unrelated asks.
 
-If the download, release notes, or signing state is not ready, wait — a
+If the download, release notes, or signature state is not ready, wait — a
 broken announcement link is worse than a late announcement.
 
 ## Process
 
 1. Draft post as a **GitHub Discussion** first (public review, gets the
    community's eyes on it before it goes out)
-2. Re-check the target community's current rules immediately before
-   posting — promotion limits, flair, and account-age requirements can
-   change between drafting and publishing
+2. Re-check the target community's current rules immediately before you
+   post. Promotion limits, flair, and account-age requirements can change
+   between the draft and the post
 3. Maintainer posts to r/linux + Lemmy (one human account)
 4. Track star/download deltas per post in the monthly
-   ADOPTION-METRICS.md snapshot (#1311); label unavailable values
-   `not available` rather than estimating them
+   ADOPTION-METRICS.md snapshot (#1311). Do not estimate unavailable
+   values; label them `not available`
 5. Retro after 3 posts: what worked, what to cut
 
 ## Ready-to-post drafts (August 2026 launch trio)
@@ -101,8 +103,8 @@ post verbatim or trim.
 three for r/linux this month. Recommendation: **Draft B (ARM roundup)** —
 it has the broadest audience (Apple Silicon + Snapdragon Linux are both
 hot topics in 2026). The other two go to their niche subs (r/AsahiLinux,
-r/linuxhardware, r/Ubuntu, r/elementaryos) where they are on-topic and not
-subject to r/linux's self-promotion limits.
+r/linuxhardware, r/Ubuntu, r/elementaryos). In those subs they are
+on-topic, and r/linux's self-promotion limits do not apply.
 
 ### Draft A — Gurnard (Ubuntu 24.04 + Pantheon)
 
@@ -168,19 +170,20 @@ detail: https://tunaos.org/blog/2026/08/12/announcing-gurnard-ubuntu-pantheon
 
 ### Draft C — Snapdragon ARM laptops (X13s reference path)
 
-**Tracking:** [#1374](https://github.com/tuna-os/tunaOS/issues/1374)
+**Issue:** [#1374](https://github.com/tuna-os/tunaOS/issues/1374)
 
 **Target subs:** r/linuxhardware, Snapdragon/X13s communities, r/linux (if not using Draft B)
 
 **Title:** `TunaOS on Snapdragon ARM laptops — the X13s reference path for Linux testing`
 
-**Accuracy note:** Do not describe the ThinkPad X13s as a Snapdragon X Elite
-device. Lenovo's X13s uses Snapdragon 8cx Gen 3, while Snapdragon X Elite is a
-separate platform family. Lead with the X13s support that is documented today;
-invite X Elite owners to report hardware compatibility rather than implying
-that the X13s image is already validated on every X Elite laptop. Sources:
+**Accuracy note:** Do not describe the ThinkPad X13s as a device with
+Snapdragon X Elite. Lenovo's X13s uses Snapdragon 8cx Gen 3, while Snapdragon
+X Elite is a separate platform family. Lead with the X13s support that the
+docs cover today. Ask owners of X Elite machines to report hardware
+compatibility. Do not imply that the X13s image works on every laptop with X
+Elite. Sources:
 [Lenovo X13s specification](https://news.lenovo.com/wp-content/uploads/2022/02/ThinkPad-X13s-Gen-1-Datasheet.pdf),
-[Qualcomm X Elite brief](https://docs.qualcomm.com/bundle/publicresource/87-71417-1_REV_E_Snapdragon_X_Elite_Product_Brief.pdf).
+[Qualcomm brief for X Elite](https://docs.qualcomm.com/bundle/publicresource/87-71417-1_REV_E_Snapdragon_X_Elite_Product_Brief.pdf).
 
 **Body:**
 
@@ -210,15 +213,16 @@ that the X13s image is already validated on every X Elite laptop. Sources:
 
 Before publication, the maintainer should:
 
-1. Confirm the target community permits project announcements and hardware
-   testing requests; ask moderators or channel maintainers where required.
+1. Confirm that the target community lets you announce projects and ask for
+   hardware tests. Ask moderators or channel maintainers where required.
 2. Use the [Bonito X13s](https://github.com/tuna-os/docs/tree/main/docs/bonito-x13s)
    and [Dakota X13s](https://github.com/tuna-os/docs/tree/main/docs/dakota-x13s)
    guides as the technical source of truth. Do not promise X Elite support
    unless a device-specific report exists.
 3. Ask testers to report model, firmware, image/variant, installer path,
-   kernel, working hardware, and logs. Link the resulting issue or discussion
-   back to #1374 so this outreach produces evidence rather than impressions.
+   kernel, hardware that works, and logs. Link the new issue or discussion
+   back to #1374, because this outreach must give evidence and not
+   impressions.
 4. Record the post URL, date, channel, and tester responses in the issue. Do
    not add an adopter entry without consent-confirmed public evidence.
 
@@ -264,10 +268,10 @@ to the r/linux 1/month slot budget above.
 
 ### Draft E — Q3 checkpoint recap (08-22)
 
-**Target subs:** r/linux (the Q3 slot — Aug's Draft B already went out
-or was skipped, pick one per month), r/selfhosted/r/homelab only if the
-Corral/Draft D angle is reused. Prepared 2026-08-15 for the 08-22
-publish; body mirrors the recap post
+**Target subs:** r/linux (the Q3 slot — pick one post per month, and the
+maintainer either posted Aug's Draft B or skipped it). Use
+r/selfhosted and r/homelab only if you reuse the Corral/Draft D angle.
+Prepared 2026-08-15 for the 08-22 publish; the body mirrors the recap post
 (`docs/blog/2026-08-22-q3-2026-community-checkpoint.md`, draft:true).
 
 **Title:** `TunaOS Q3 checkpoint: four new desktops on enterprise lifecycles, honest numbers, and a Hacktoberfest backlog`
@@ -320,7 +324,7 @@ publish; body mirrors the recap post
 1. Post the chosen draft (maintainer account), then drop the URL + star
    delta into the monthly ADOPTION-METRICS.md snapshot (#1311).
 2. Retro after 3 posts (playbook rule above).
-3. Next hook in the calendar: Q3 checkpoint recap (08-22, Draft E
-   above), GNOME 51 release week (~09-12), Hacktoberfest (10-01),
-   Fedora 45 (~10-20), homelab/self-hosted post (Draft D, no fixed date
-   — ride the Q3 checkpoint's Corral/bootc mentions per #1599).
+3. Next hooks in the calendar: Q3 checkpoint recap (08-22, Draft E
+   above), GNOME 51 release week (~09-12). Then Hacktoberfest (10-01)
+   and Fedora 45 (~10-20). The homelab/self-hosted post (Draft D) has no
+   fixed date. Ride the Q3 checkpoint's Corral/bootc mentions per #1599.

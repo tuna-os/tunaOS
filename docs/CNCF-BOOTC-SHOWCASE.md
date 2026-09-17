@@ -11,7 +11,7 @@
 
 [bootc](https://github.com/containers/bootc) is a CNCF Sandbox project establishing the standard for container-native, transactional operating systems. **TunaOS** is one of the most comprehensive real-world desktop and workstation implementations of `bootc`, shipping 37 published editions across 7 distribution families (AlmaLinux 10, CentOS Stream 10, Fedora, Ubuntu, Debian, Gentoo, Arch, and openSUSE).
 
-This document provides a complete ecosystem showcase case study detailing how TunaOS leverages `bootc` for enterprise workstations, cloud-native virtualization via KubeVirt/Corral, and cryptographically verified supply-chain pipelines.
+This document provides a complete ecosystem showcase case study detailing how TunaOS uses `bootc` for enterprise workstations, cloud-native virtualization via KubeVirt/Corral, and cryptographically verified supply-chain pipelines.
 
 ---
 

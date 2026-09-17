@@ -46,7 +46,7 @@ manifest-driven, multi-distro build pipeline.
    keyless signing (verified against Rekor, SBOMs included) — no long-lived
    signing keys, a real chain of trust for desktops.
 4. **Pantheon on Ubuntu LTS (Gurnard)**: the elementary-OS desktop as an
-   atomic bootc image on Ubuntu 24.04 LTS (currently **Experimental**,
+   atomic bootc image on Ubuntu 24.04 LTS (now **Experimental**,
    per the variant lifecycle).
 5. **bootc-migrate**: migrate between Bluefin/Dakota and TunaOS without
    reinstalling — container-native rebase, one transaction.

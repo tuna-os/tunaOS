@@ -46,7 +46,7 @@ if the upstream change is in one of these files, the port is often trivial.
    If the upstream adds
    a package in an EL10-specific COPR that TunaOS already uses (e.g., `jreilly1821/c10s-gnome-50-fresh`,
    `jreilly1821/c10s-gnome-50-fresh`, `ublue-os/packages`), it's safe to add.
-   If it requires a new COPR not already in TunaOS, note it in the PR body.
+   If it needs a new COPR not already in TunaOS, note it in the PR body.
 
 2. **Config files**: Copy config files from `system_files/` and `system_files_overrides/gnome/`
    verbatim, preserving the same path structure.

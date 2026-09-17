@@ -4,7 +4,7 @@
 **Owner:** strategist, with maintainer approval for external contact
 
 This is an evidence ledger, not a prospect list. It deliberately separates
-prepared material from outreach that was actually sent. No organization is
+prepared material from outreach that was sent. No organization is
 listed as a TunaOS adopter without consent-confirmed public evidence in
 [ADOPTERS.md](../ADOPTERS.md).
 

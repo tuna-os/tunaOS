@@ -9,7 +9,7 @@
 
 ## 1. Objectives & Hacker News Dynamics
 
-Hacker News is the single highest-leverage developer discovery channel for systems engineering, Linux distributions, and developer tooling. A successful "Show HN" post drives high-intent traffic, GitHub stars, contributor onboarding, and adoption feedback.
+Hacker News is the single highest-use developer discovery channel for systems engineering, Linux distributions, and developer tooling. A successful "Show HN" post drives high-intent traffic, GitHub stars, contributor onboarding, and adoption feedback.
 
 **HN Cultural Rules for Success:**
 - **Extreme Honesty Over Hype:** HN aggressively penalizes marketing fluff, unverifiable claims, and artificial upvoting. Concrete technical details, open architecture explanations, and candid acknowledgment of current bugs and limitations earn respect and front-page longevity.
@@ -80,7 +80,7 @@ We're a small community project and would love your technical feedback, architec
   *A:* "TunaOS originated as a fork of Bluefin (Universal Blue) and shares the same foundational container-native `bootc` philosophy. However, TunaOS focuses on bringing modern desktops to Enterprise Linux (EL10 / AlmaLinux) lifecycles, and implements a multi-base manifest build system across EL, Fedora, Arch, and Debian/Ubuntu bases."
 
 - **Q: "How do application installations work if `/usr` is read-only?"**  
-  *A:* "Desktop applications run via Flatpak (Flathub) for sandbox isolation, while CLI and developer workflows leverage container toolboxes (`distrobox` / `toolbox`). For system-level packages, client-side container layering or temporary `bootc usroverlay` testing is supported."
+  *A:* "Desktop applications run via Flatpak (Flathub) for sandbox isolation, while CLI and developer workflows use container toolboxes (`distrobox` / `toolbox`). For system-level packages, client-side container layering or temporary `bootc usroverlay` testing is supported."
 
 - **Q: "What is the security model?"**  
   *A:* "We eliminate long-lived private signing keys by using Sigstore keyless OIDC signing tied to GitHub Actions workflows. Every published image contains an SBOM and is verified against Rekor before deployment."

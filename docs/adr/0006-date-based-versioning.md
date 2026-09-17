@@ -9,7 +9,7 @@
 ## Context
 
 tunaOS images are rebuilt daily from upstream sources — there are no feature
-releases, and each build simply incorporates whatever upstream changed since
+releases, and each build incorporates whatever upstream changed since
 the last one. Tags were date-based (`<variant>-<YYYYMMDD>`, e.g.
 `gnome-20260528`) with no semantic versioning, which #274 flagged as
 insufficient for an enterprise-facing project: a bare date conveys nothing
@@ -18,7 +18,7 @@ Competing projects (Fedora Silverblue, Bluefin) tie versioned release
 cadences to upstream Fedora releases (40, 41, 42...); tunaOS has no
 equivalent upstream cadence to hang a major/minor number on, since it
 tracks multiple base distros (AlmaLinux, CentOS Stream, Fedora, Ubuntu)
-rebuilding continuously rather than on a fixed release schedule.
+rebuilding continuously instead of on a fixed release schedule.
 
 ## Decision
 
@@ -36,7 +36,7 @@ There is no major/minor version number — date tags are chronological, not
 semantic — because there is no natural SemVer boundary to attach one to
 across multiple independently-versioned upstream bases. Breaking changes
 (kernel bumps, desktop-environment major upgrades, filesystem layout
-changes) are communicated via release notes rather than encoded in the tag
+changes) are communicated via release notes instead of encoded in the tag
 itself.
 
 ### Alternative considered and rejected
@@ -49,7 +49,7 @@ the number tracks — but tunaOS ships a continuous rebuild across several
 base distros with independent upstream cadences, not a single versioned
 artifact tunaOS itself controls the compatibility contract for. Bolting a
 SemVer number onto that would either be arbitrary (incremented by feel, not
-by a real compatibility rule) or would require inventing a compatibility
+by a real compatibility rule) or would need inventing a compatibility
 contract the project doesn't otherwise need. The three-tier scheme answers
 #274's actual underlying asks — "what can I pin to for stability" (Weekly),
 "what can an enterprise deployment rely on longer-term" (LTS) — without
@@ -61,16 +61,16 @@ that overhead.
 you exactly when it was built, with no version-negotiation step); the tier
 system gives users and enterprises a stability dial (Daily/Weekly/LTS)
 without requiring the project to define or maintain SemVer compatibility
-guarantees it can't actually make across independently-versioned upstream
+guarantees it can't make across independently-versioned upstream
 bases.
 
 **Negative** — no version number ordering shortcut ("is 2.1 newer than
 1.9?") the way SemVer gives one; consumers must compare dates or rely on
 the tier label instead. Migration guidance for users coming from
 SemVer-versioned projects (Fedora Silverblue/Kinoite) has to explain the
-tier scheme rather than mapping onto a familiar major/minor number, which
+tier scheme instead of mapping onto a familiar major/minor number, which
 VERSIONING.md's Migration section addresses with an explicit `rebase`
-example rather than a version-number comparison.
+example instead of a version-number comparison.
 
 ---
 *Backfilled per RFC-PROCESS.md / #1094 (ADR coverage gap) — source: VERSIONING.md, #274 (closed via PR #338, merged 2026-06-08).*

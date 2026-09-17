@@ -50,7 +50,7 @@ Explicitly rejected alternatives:
   maintenance this ADR exists to avoid.
 - **Hosted build service**: servers to run, abuse to police, egress or
   compute to pay for.
-- **Local CLI / fork-and-dispatch as the *primary* path**: requires a
+- **Local CLI / fork-and-dispatch as the *primary* path**: needs a
   terminal or a GitHub account; both stay documented as fallbacks for
   air-gapped or exotic cases, nothing more.
 
@@ -102,8 +102,8 @@ time in the browser — what you clicked is what installs.
 
 - Relay: one Worker, free-tier scale; edge cache does the heavy lifting.
 - User side per build: 1.8–3.5 GB download, minutes of WASM decompress/
-  author time, and roughly 2× ISO disk headroom. Desktop images require the
-  OPFS-backed store rather than the current memory-only path.
+  author time, and roughly 2× ISO disk headroom. Desktop images need the
+  OPFS-backed store instead of the current memory-only path.
 - Remaining engineering is incremental: per-image initramfs artifacts or
   cpio append, OPFS durability, and remora customization. The expensive
   format work (unpack, erofs, ESP, and ISO9660/El Torito authoring) is already

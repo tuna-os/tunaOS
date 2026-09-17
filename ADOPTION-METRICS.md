@@ -9,7 +9,7 @@
 
 tunaOS ships 179+ downloadable ISOs across 9+ variants × 5 desktops, yet has
 **zero usage telemetry**. Roadmap themes (Q3 "Expand", Q4 "Mature") are executed
-without evidence of what users actually download, install, or keep. Enterprise
+without evidence of what users download, install, or keep. Enterprise
 credibility (Redfin/RHEL #1123, FOSDEM 2027 CFP #1135) rests on demonstrable
 adoption — today the only public signal is a star count that moved 55→56 in a
 month.
@@ -36,10 +36,10 @@ publish, and *how* the snapshot feeds roadmap decisions.
 
 **Instrumentation order** (cheapest first):
 
-1. **GitHub Releases download counts** — free API counter; requires non-gnome
+1. **GitHub Releases download counts** — free API counter; needs non-gnome
    flavors to publish assets too (#1254 parity gap — scheduled matrix now
    covers gnome/kde/xfce/cosmic/niri, PR pending; watch the next few
-   scheduled runs to confirm kde/xfce/cosmic/niri actually publish before
+   scheduled runs to confirm kde/xfce/cosmic/niri publish before
    counting this instrumentation step done).
 2. **R2/Cloudflare access-log analytics** on tunaos.org/download — R2 already
    serves the ISOs; enable access logs + a dashboard (owner: ci-maintainer).

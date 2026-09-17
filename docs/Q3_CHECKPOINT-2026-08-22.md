@@ -52,5 +52,5 @@ remain separate from the Q4 adoption metrics. See #1714.
 
 ## Escalation Path (#1657)
 
-- **Primary Target**: Restore automated pull request merging on `tuna-os/tunaos` and `tuna-os/tunaos-packages` by configuring a ruleset bypass actor or executing `gh pr merge --queue` prior to the 2026-08-19 pre-checkpoint freeze.
+- **Primary Target**: Restore automated pull request merging on `tuna-os/tunaos` and `tuna-os/tunaos-packages` by configuring a ruleset bypass actor or executing `gh pr merge --queue` before the 2026-08-19 pre-checkpoint freeze.
 - **Fallback**: Execute the 2026-08-22 checkpoint scoring against merge-eligible PR state per this document.

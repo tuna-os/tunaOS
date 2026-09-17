@@ -1,15 +1,15 @@
 # ADR 0003: co-build bootc (OCI) and mkosi DDI from a single recipe tree
 
-- Status: proposed (investigation + POC scaffolding; no build has been executed)
+- Status: proposed (investigation + POC scaffold; no one has run a build)
 - Date: 2026-08-11
 - Issue: [#999](https://github.com/tuna-os/tunaOS/issues/999)
-- Supersedes: [docs/mkosi-investigation.md](../mkosi-investigation.md) (research phase; this ADR adds concrete POC scaffolding)
+- Supersedes: [docs/mkosi-investigation.md](../mkosi-investigation.md) (research phase; this ADR adds a concrete POC scaffold)
 
 ## Context
 
 This repo builds nine variants with hand-maintained Containerfiles
 (`Containerfile.arch`, `.el10`, `.ubuntu`, `.debian`, `.opensuse`, `.gentoo`,
-`.overlay`, `.custom`, `.final`). The niri stack already sources its DMS
+`.overlay`, `.custom`, `.final`). The niri stack already gets its DMS
 payload from `zirconium-dev/zirconium` — an **mkosi** project — and the
 `install-zirconium.sh` stopgap exists only because this repo doesn't build the
 payload itself.
@@ -18,28 +18,30 @@ The ask in #999 is twofold:
 
 1. Can mkosi replace (or wrap) the Containerfile-based build backend?
 2. Can we emit both a bootc OCI image **and** a DDI (Discoverable Disk Image)
-   from the **same** recipe tree — and **boot both** in QEMU?
+   from the **same** recipe tree? Can we then **boot both** in QEMU?
 
 This repo has no mkosi profiles today. A previous investigation
-(`docs/mkosi-investigation.md`, merged in #1227) established that zirconium's
-`bootc-ostree` profile produces a plain `Format=oci` image — not a new
-artifact type — and that its DDI (`sysupdate`) profile is a different OS
-deployment model (dm-verity + UKI + systemd-sysupdate, no ostree/bootc), not
-an alternate packaging of the same rootfs.
+(`docs/mkosi-investigation.md`, merged in #1227) established two points.
+First, zirconium's `bootc-ostree` profile produces a plain `Format=oci`
+image — not a new artifact type. Second, its DDI (`sysupdate`) profile is a
+different deployment model for the OS (dm-verity + UKI + systemd-sysupdate,
+no ostree/bootc). It is not an alternate way to package the same rootfs.
 
 ## Decision
 
-**Build exactly one prototype variant (`bonito:gnome`, Fedora 44 base) as**
-**both a bootc OCI image and a plain DDI disk image from the same `mkosi/`**
-**tree using two output profiles.** This is the lowest-risk entry point:
-Fedora matches zirconium's base, so no distro-porting work is needed; bonito
-is the TunaOS variant closest to the reference; gnome is the simplest desktop
-to validate. The DDI produced here is a **plain disk image** (`Format=disk`,
-`Bootable=yes`, `Bootloader=systemd-boot`), **not** the sysupdate/verity
-profile — see Finding 2 in the investigation doc for why a particleOS-style
-DDI is a separate, much larger undertaking.
+**Build exactly one variant as a prototype (`bonito:gnome`, Fedora 44
+base). Build it as both a bootc OCI image and a plain DDI, a disk image,
+from the same `mkosi/` tree, with two output profiles**. This is the
+lowest-risk entry point. Fedora matches zirconium's base, so the work needs
+no port between distros. Bonito is the TunaOS variant closest to the
+reference, and gnome is the simplest desktop to validate.
 
-Concretely: one `mkosi/` directory containing `mkosi.conf`,
+The DDI produced here is a **plain disk image** (`Format=disk`,
+`Bootable=yes`, `Bootloader=systemd-boot`), **not** the sysupdate/verity
+profile. See Finding 2 in the investigation doc: a particleOS-style DDI is a
+separate, much larger task.
+
+Concretely: one `mkosi/` directory that contains `mkosi.conf`,
 `mkosi.conf.d/bootc.conf`, `mkosi.conf.d/ddi.conf`, `mkosi.extra/`, and
 any `mkosi.postinst.chroot` scripts — from which a single `mkosi build`
 chooses the output format via `--profile` or `--include-directory`.
@@ -74,8 +76,8 @@ mkosi/
 ### Base: `mkosi/mkosi.conf`
 
 This is the common root — same source tree, same packages, same extra files,
-but NO output format pinned here. The output format is selected by the profile
-drop-in.
+but NO output format pinned here. The profile drop-in selects the output
+format.
 
 ```ini
 [Config]
@@ -264,9 +266,10 @@ sudo ./scripts/iso-e2e.sh bonito.qcow2 --disk --output verify-out --timeout 300
 # scripts/lifecycle-test.sh if applicable
 ```
 
-If the mkosi-built image passes the existing unmodified LUKS E2E gate,
-**Finding 1 from the investigation is confirmed in practice**: mkosi and
-buildah are interchangeable as OCI producers for this repo's pipeline.
+If the mkosi-built image passes the existing LUKS E2E gate without changes,
+**that result confirms Finding 1 from the investigation in practice**. mkosi
+and buildah are interchangeable as OCI producers for this repo's
+pipeline.
 
 ### Build the DDI disk image
 
@@ -318,8 +321,8 @@ mkosi --directory=mkosi --include-directory=mkosi/mkosi.conf.d \
 ```
 
 With `Incremental=yes` in the base config, the second build reuses the cached
-package install tree and only re-emits a different output format — both
-artifacts are produced from one package-resolution pass.
+package install tree. It only re-emits a different output format. Both
+artifacts come from one package-resolution pass.
 
 ## What maps cleanly vs. what doesn't
 
@@ -342,17 +345,17 @@ artifacts are produced from one package-resolution pass.
 
 ### Known friction points
 
-1. **RHSM secrets.** The current `Containerfile.el10` mounts RHSM credentials
-   via `--secret id=rhsm`. mkosi has a `[Build] Credentials=` mechanism
-   (`mkosi.credentials/`) that can carry subscription-manager certs, but this
-   has not been tested end-to-end. For Fedora-based POC this is a non-issue
-   (no RHSM needed); for EL variants, it requires validation.
+1. **RHSM secrets.** In the current pipeline, `Containerfile.el10` mounts
+   RHSM credentials via `--secret id=rhsm`. mkosi has a `[Build] Credentials=`
+   mechanism (`mkosi.credentials/`) that can carry subscription-manager certs,
+   but no one has tested this end-to-end. For Fedora-based POC this is a
+   non-issue (no RHSM needed); for EL variants, it needs validation.
 
-2. **Overlay stages (hwe/nvidia/cachyos/asahi).** `Containerfile.overlay` is
-   parametrized by `OVERLAY_TYPE` + `DESKTOP_FLAVOR`. In mkosi this maps to
-   profile drops (e.g. `mkosi.profiles/nvidia/mkosi.conf.d/` with NVIDIA
-   packages + akmods), but the kernel-module build step (akmods → kmod RPM)
-   that currently runs inside `Containerfile.hwe` may need to move to a
+2. **Overlay stages (hwe/nvidia/cachyos/asahi).** `Containerfile.overlay`
+   takes `OVERLAY_TYPE` + `DESKTOP_FLAVOR` as parameters. In mkosi this maps
+   to profile drops (e.g. `mkosi.profiles/nvidia/mkosi.conf.d/` with NVIDIA
+   packages + akmods). But the kernel-module build step (akmods → kmod RPM)
+   now runs inside `Containerfile.hwe`. It may need to move to a
    `mkosi.build.chroot` or a pre-built kmod layer. The akmods post-build step
    in the current pipeline (`Containerfile.hwe` lines 15–100 approx.) is the
    highest-risk part to port.
@@ -365,27 +368,27 @@ artifacts are produced from one package-resolution pass.
      `FROM ${BREW_IMAGE_REF}` would be handled.
    - Use `mkosi.sandbox` scripts to pull/install from external OCI layers.
 
-4. **`build_scripts/` porting.** The 30+ shell scripts in `build_scripts/`
-   would move to `mkosi.postinst.chroot` (runs inside the image after package
-   install) and `mkosi.finalize.chroot` (runs after image assembly). Most
-   scripts are distro-agnostic (they `cp` files, `systemctl enable` services,
-   etc.) and would port directly. Distro-specific scripts (e.g.
-   `10-base-packages.sh` with its `dnf`/`apt`/`zypper`/`pacman` dispatch)
-   would be replaced by `[Content] Packages=` in per-distro profiles.
+4. **Port of `build_scripts/`.** The 30+ shell scripts in `build_scripts/`
+   would move to two places. `mkosi.postinst.chroot` runs inside the image
+   after package install, and `mkosi.finalize.chroot` runs after image
+   assembly. Most scripts are distro-agnostic (they `cp` files, `systemctl
+   enable` services, etc.) and would port directly. `[Content] Packages=` in
+   per-distro profiles would replace the distro-specific scripts (e.g.
+   `10-base-packages.sh` with its `dnf`/`apt`/`zypper`/`pacman` dispatch).
 
 5. **aarch64.** mkosi supports cross-architecture builds via
    `--architecture=arm64`, but `bootc install to-disk` on a foreign
-   architecture requires QEMU user-mode emulation (`qemu-aarch64-static`).
+   architecture needs the user-mode emulation of QEMU (`qemu-aarch64-static`).
    The existing pipeline already handles this in `build-variant.yml`.
 
-6. **Signing.** `Format=oci` images should sign identically through the
+6. **Signatures.** `Format=oci` images should sign identically through the
    existing `reusable-build-image.yml` cosign step (same OCI format at the
-   point signing happens), but this is untested.
+   point where cosign signs). But no one has tested this.
 
 ## CI integration sketch
 
 A POC workflow (NOT implemented here — this is the investigation deliverable)
-would run as an optional, non-blocking job in `build-variant.yml`:
+would run as an optional job that does not block, in `build-variant.yml`:
 
 ```yaml
 # In build-variant.yml, as an experimental step after the bonito:gnome build:
@@ -409,39 +412,40 @@ mkosi-poc:
         sudo ./scripts/iso-e2e.sh ddi.qcow2 --disk --output ddi-boot-out --timeout 300
 ```
 
-The POC job MUST be `continue-on-error: true` and not added to any branch
-protection required-check list — per AGENTS.md guard rails, `paths:` filters
-or required-check context changes need explicit approval.
+The POC job MUST be `continue-on-error: true`. No one may add it to the
+required-check list for branch protection. Per AGENTS.md guard rails,
+`paths:` filters or required-check context changes need explicit approval.
 
 ## Recommendation
 
 **Hybrid: add mkosi as an alternate backend behind a Justfile flag, with ONE**
-**proven variant first, before considering any Containerfile removal.**
+**proven variant first, before you consider any Containerfile removal.**
 
 Concrete path:
 
-1. **Week 1–2:** Land the `mkosi/` directory layout from this ADR (the
-   profile files are inert — no pipeline change, no build triggered).
+1. **Week 1–2:** Land the `mkosi/` directory layout from this ADR. The
+   profile files are inert — no pipeline change, no build triggered.
 2. **Week 2–3:** Someone with actual build tooling runs the POC commands
-   above against `bonito:gnome`, confirms the bootc OCI passes the existing
-   LUKS E2E gate unmodified, and confirms the DDI boots in QEMU.
+   above against `bonito:gnome`. That person confirms that the bootc OCI
+   passes the existing LUKS E2E gate without changes. That person also
+   confirms that the DDI boots in QEMU.
 3. **Week 3–4:** Add `just mkosi-bootc bonito gnome` and
    `just mkosi-ddi bonito gnome` recipes that wrap the `mkosi build` calls.
 4. **Post-POC:** If the gate passes, add the optional CI job above. Do NOT
-   remove any Containerfile or change any production build path until the
-   mkosi-built image has been the actual published image for at least one
-   release cycle with zero regressions.
+   remove any Containerfile or change any production build path yet. Wait
+   until the mkosi-built image has been the actual published image for at
+   least one release cycle with zero regressions.
 
 The DDI path is a **separate track** (the priority is bootc OCI parity). The
 DDI POC can proceed in parallel but should not gate the bootc POC.
 
 ## Explicit non-goals for this ADR
 
-- **Not** proposing removal of any Containerfile.
-- **Not** proposing a `systemd-sysupdate` / dm-verity migration.
-- **Not** proposing workflow-file changes (the bot lacks `workflows` permission).
-- **Not** proposing changes to required-check branch-protection contexts.
-- **Not** implementing `mkosi.postinst.chroot` or `mkosi.finalize.chroot` scripts
+- This ADR does **not** propose removal of any Containerfile.
+- It does **not** propose a `systemd-sysupdate` / dm-verity migration.
+- It does **not** propose workflow-file changes (the bot lacks `workflows` permission).
+- It does **not** propose changes to required-check branch-protection contexts.
+- It does **not** add `mkosi.postinst.chroot` or `mkosi.finalize.chroot` scripts
   (those belong in the actual POC implementation, not the investigation).
 
 ## References

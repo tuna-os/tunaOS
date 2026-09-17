@@ -40,7 +40,7 @@ The current exceptions are:
 |---|---|---|
 | **Rolling** | `bonito-rawhide`, `marlin`, `sailfin`, `guppy`, `flounder-sid` | Best effort. A newly resolved upstream snapshot may fail until TunaOS catches up; no next-night promotion or uninterrupted-green promise is made. |
 | **Experimental** | `hummingbird`, `wahoo` | Evaluation only. No uptime, flavor-completeness, or continued-publication promise; cells can be narrowed or withdrawn when their upstream is incomplete. |
-| **Release/stream** (the default) | Every variant not marked above | CI targets continuous promotion. A red scheduled build is treated as a regression rather than expected upstream churn. |
+| **Release/stream** (the default) | Every variant not marked above | CI targets continuous promotion. A red scheduled build is treated as a regression instead of expected upstream churn. |
 
 Promotion is fail-closed on every track. A failed rolling build does not replace
 the last promoted image with an unverified one. “Best effort” changes how a red
@@ -67,7 +67,7 @@ does not create an obligation to restore promotion by the next nightly. See
 
 ### 1. Proposal — admission gate (#1196)
 
-A new base variant or flavor requires, **before any build work starts**:
+A new base variant or flavor needs, **before any build work starts**:
 
 1. **A ROADMAP row** with a named owner and acceptance criteria (one line minimum).
 2. **Capacity confirmation** — the new build / boot-gate / LUKS-E2E /
@@ -109,11 +109,11 @@ must not be promoted or gain additional ISO coverage.
 Wahoo is recorded here for the opposite reason to the four rows above: those
 were grandfathered in and needed a gate applied retroactively, whereas this
 one cleared the gate before its first commit — upstream base availability was
-measured, not assumed, and the flavor set was cut to what the compose actually
+measured, not assumed, and the flavor set was cut to what the compose
 carries. It is dispatch-only precisely so it consumes none of the nightly
 capacity the interim freeze protects. Its one non-zero cell is the monthly
 LUKS sweep, which `luks-e2e.yml` derives from `build_image` with no
-experimental filter; that is counted rather than excluded, and pinned by the
+experimental filter; that is counted instead of excluded, and pinned by the
 denominator in `tests/test_matrix_status.py`.
 
 The ELN codec gap is a portfolio constraint, not just a build detail: ELN
@@ -148,14 +148,14 @@ existing cells without reopening the general Q3 flavor freeze.
 ### 2a. Published-edition completeness gate (#1294)
 
 Every declared `variant × desktop` edition must pass the desktop contract
-against the image tag that is actually published. A build-time pass is not
+against the image tag that is published. A build-time pass is not
 enough: the scheduled `desktop-contract-sweep.yml` workflow rechecks the
 published tag and treats a failed, missing, errored, or lost result as a gate
 failure.
 
 Package-count and compressed-size deltas are useful audit signals, but they
 are not a portable completeness threshold across Fedora/EL, Debian/Ubuntu,
-openSUSE, Arch, and Gentoo. A small delta therefore requires both:
+openSUSE, Arch, and Gentoo. A small delta therefore needs both:
 
 1. the desktop contract's required session, display-manager, application,
    portal, and supporting-service checks to pass; and
@@ -175,9 +175,9 @@ may be shown as `Stable` in ROADMAP only when every cell that it advertises as
 part of that variant has passed the applicable gates below. A passing GNOME
 cell does not make a variant with failing KDE, Niri, NVIDIA, ZFS, or arm64
 cells Stable. If coverage is intentionally narrower, the ROADMAP row must say
-which cells are supported rather than implying that the whole variant is GA.
+which cells are supported instead of implying that the whole variant is GA.
 
-Promotion Beta → Stable requires **all applicable gates for every advertised
+Promotion Beta → Stable needs **all applicable gates for every advertised
 cell**:
 
 - **Boot-gate green for 4 consecutive weeks** of daily runs with no regressions.

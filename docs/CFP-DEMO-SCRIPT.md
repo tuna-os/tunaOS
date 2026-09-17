@@ -2,17 +2,17 @@
 
 The one recordable artifact both 2027 conference proposals depend on (#1135 action 2).
 [FOSDEM](./CFP-FOSDEM-2027.md) attaches it; the SCaLE 24x draft explicitly
-reuses the same recording rather than shooting a second one.
+reuses the same recording instead of shooting a second one.
 
 ## Why this file exists
 
 The CFP drafts carry a four-bullet demo outline. That is enough to describe a
 demo in an abstract and not enough to record one: it names no commands, no
-running order, no timings, and — the part that actually decides whether the
+running order, no timings, and — the part that decides whether the
 video helps — no statement of what each shot has to *prove* to a reviewer.
 
 A 3–5 minute video improvised from four bullets gets reshot. This is the shot
-list, with the commands taken from this repo rather than invented.
+list, with the commands taken from this repo instead of invented.
 
 > **Not executed.** Every command below was read out of `Justfile`,
 > `scripts/run-vm.sh` and `scripts/corral-build.sh` in this repo, and the image
@@ -20,7 +20,7 @@ list, with the commands taken from this repo rather than invented.
 > run end-to-end by the person who wrote it — no Apple-silicon-free VM host in
 > that session. **Do the dry run in "Before you record" first.** If a command
 > has drifted, fix it here in the same sitting, so the next recorder inherits a
-> corrected script rather than the same surprise.
+> corrected script instead of the same surprise.
 
 ## The through-line
 
@@ -55,7 +55,7 @@ sudo podman pull ghcr.io/tuna-os/yellowfin:gnome
 ```
 
 Then the recorded `bootc upgrade` shows the staging and the atomic swap, which
-is the interesting part, rather than a progress bar.
+is the interesting part, instead of a progress bar.
 
 ## Shot list (target 3:30, hard ceiling 5:00)
 
@@ -112,7 +112,7 @@ kubectl get vmi -w
 ```
 
 On screen: the VM object being created and scheduled. If the cluster is not
-available on the recording machine, **cut this shot rather than fake it** — a
+available on the recording machine, **cut this shot instead of fake it** — a
 three-shot video that is entirely real beats a four-shot video with one
 reenactment, and reviewers do notice. Say in the abstract that Corral is shown
 live in the talk instead.

@@ -16,7 +16,7 @@ Millions of functional 8- to 12-year-old laptops (such as Lenovo ThinkPad T420/T
 The Linux community maintains active, recurring discussions around e-waste mitigation, hardware longevity, and right-to-repair across platforms like r/linux, r/linuxhardware, r/eWaste, Lemmy (`!linux@lemmy.ml`), and local computer refurbishing non-profits (ITAD).
 
 **TunaOS's Angle:**
-- **Atomic Reliability on Aging Hardware:** Older machines cannot afford broken package states or interrupted system updates. TunaOS leverages `bootc` container-native image updates with instant atomic rollbacks (`bootc rollback`), delivering fleet-grade immutability to standalone legacy laptops.
+- **Atomic Reliability on Aging Hardware:** Older machines cannot afford broken package states or interrupted system updates. TunaOS uses `bootc` container-native image updates with instant atomic rollbacks (`bootc rollback`), delivering fleet-grade immutability to standalone legacy laptops.
 - **Lightweight Desktop Footprint:** Through the standalone **XFCE Linux** project ([`tuna-os/xfce-linux`](https://github.com/tuna-os/xfce-linux), a BuildStream-built XFCE 4.20 Wayland image) and low-resource TunaOS flavor streams (such as Bonito/Albacore XFCE/base), users get a fast, modern desktop experience without modern DE memory overhead.
 
 ---

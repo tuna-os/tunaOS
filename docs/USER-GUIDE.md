@@ -2,7 +2,7 @@
 
 Everything you need to run TunaOS day to day: picking an image, installing
 it, staying updated, rolling back, and getting apps — plus what our quality
-labels actually promise you.
+labels promise you.
 
 ## Is TunaOS for you?
 
@@ -203,7 +203,7 @@ bind-mounted directories that are gone by the time you boot, and a
 definition left pointing at one would fail every `dnf` transaction rather
 than sit there harmlessly. The build removes them at the end of the desktop
 install, so every repository an image ships is one a running system can
-actually reach.
+reach.
 
 ## 5. Rollback
 
@@ -268,7 +268,7 @@ TunaOS as well:
 - **Pet containers** via distrobox for a long-lived mutable shell.
 - **Kubernetes/cloud tooling** via Homebrew (`brew install kubectl helm k9s …`).
 
-TunaOS does not currently ship a separate `-dx` image tier; the container
+TunaOS does not now ship a separate `-dx` image tier; the container
 tooling above is present in the standard images. For hacking on TunaOS
 itself, see the [Developer Guide](DEVELOPER-GUIDE.md).
 

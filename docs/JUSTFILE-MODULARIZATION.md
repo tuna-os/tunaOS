@@ -55,7 +55,7 @@ in the root because both the build engine and imported recipes use it.
 ## Cross-repo follow-up
 
 Do not create a `just-recipes` repository or add a remote import as an
-individual repository change. That requires a maintainer decision about
+individual repository change. That needs a maintainer decision about
 version pinning, release compatibility, and how consuming repositories vendor
 the files. If approved, the shared repository must be pinned (submodule or CI
 checkout), imported from a local path, and tested against each consumer before

@@ -21,7 +21,7 @@ XFCE 4.20, plus Ubuntu-, Debian-, Gentoo-, Arch-, and Fedora-based flavors.
 Published container images are multi-arch (x86_64 and aarch64). Downloadable
 ISOs are x86_64 today — the artifact matrix that builds them is still
 amd64-only (#1378), so an aarch64 listing would promise a download that does
-not exist. Apple Silicon (M1/M2) work is in progress rather than shipped: the
+not exist. Apple Silicon (M1/M2) work is in progress instead of shipped: the
 build config marks the Asahi flavor "EXPERIMENTAL: kernel + glue only; boot
 payloads pending #777", and the macOS installer app has not yet been proven on
 real hardware.
@@ -83,7 +83,7 @@ distributions it does not have.
 **Status terms** follow [VARIANT-LIFECYCLE.md](../VARIANT-LIFECYCLE.md):
 `Stable` means GA, `Beta` means published for testing. Experimental variants
 predate the admission gate and have no named owner yet — worth saying plainly
-to an editor rather than listing them alongside GA products.
+to an editor instead of listing them alongside GA products.
 
 ## Suggested pitch to DistroWatch Weekly editors
 

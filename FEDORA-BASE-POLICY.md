@@ -6,7 +6,7 @@
 
 ## Purpose
 
-tunaOS currently builds **two** Fedora-base variants simultaneously — Bonito
+tunaOS now builds **two** Fedora-base variants simultaneously — Bonito
 (Fedora 44) and Bonito Rawhide — with no written policy for which Fedora
 release(s) the project commits to tracking, or when a new Fedora release
 starts a base-currency transition. Fedora ships a new release roughly every
@@ -52,7 +52,7 @@ tunaOS tracks Fedora bases on an **N (current stable) + rawhide** model,
   planned/upcoming, not shipped, until this policy's trigger condition is
   met and #1171 reports base readiness.
 
-## Executing a transition — where the version actually lives
+## Executing a transition — where the version lives
 
 A currency policy that does not say what to edit cannot be carried out, and
 this repo has already paid for that. `scripts/get-base-image.sh`'s header
@@ -63,7 +63,7 @@ build-config:
 
 — "silently, because nothing compared them". The lesson it drew was to keep one
 copy. The inventory below is the copies that remain, measured on 2026-08-14,
-so the next transition is a checklist rather than a search.
+so the next transition is a checklist instead of a search.
 
 **Authoritative.** Change this first; everything else follows it:
 

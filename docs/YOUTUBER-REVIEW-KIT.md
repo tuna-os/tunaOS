@@ -16,9 +16,9 @@ criteria the issue proposed):
 4. **Michael Horn** — ARM-focused; hold for a second wave once the ARM story
    (see below) has a complete download
 
-## What's actually ready to send today
+## What's ready to send today
 
-Verified live (`curl -I`, 2026-08-14) rather than assumed from the original
+Verified live (`curl -I`, 2026-08-14) instead of assumed from the original
 issue draft, which named two artifacts that don't exist yet — see
 **Known gap** below before sending anything.
 
@@ -110,7 +110,7 @@ wget https://download.tunaos.org/live-isos/yellowfin-gnome-latest.iso
 ```
 
 Every published ISO is boot-verified in QEMU before it's uploaded — see
-[TESTING.md](./TESTING.md) for what that gate actually checks.
+[TESTING.md](./TESTING.md) for what that gate checks.
 
 ## Sequencing
 

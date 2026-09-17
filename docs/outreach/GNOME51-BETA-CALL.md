@@ -14,7 +14,7 @@ Enterprise Linux distributions (AlmaLinux 10, CentOS Stream 10, RHEL 10) provide
 
 TunaOS bridges this gap through its dedicated automated RPM backport tier in [`tuna-os/tunaos-packages`](https://github.com/tuna-os/tunaos-packages) (comprising 17 build tiers), delivering the full modern **GNOME 51** desktop stack—including Mutter, GTK4, Libadwaita, Nautilus, GNOME Shell, GDM, and Orca—on top of an enterprise EL10 base.
 
-The upstream GNOME 51 beta window provides a high-leverage testing window to validate backported RPM packages, uncover regressions in Wayland compositing and hardware acceleration, and refine TunaOS Albacore/Yellowfin images ahead of the final GNOME 51.0 release.
+The upstream GNOME 51 beta window provides a high-use testing window to validate backported RPM packages, uncover regressions in Wayland compositing and hardware acceleration, and refine TunaOS Albacore/Yellowfin images ahead of the final GNOME 51.0 release.
 
 ---
 
@@ -85,4 +85,4 @@ When reporting regressions:
 - [ ] Confirm RPM repository tier metadata (`repo.tunaos.org/gnome51/10-stream`) is active and reachable.
 - [ ] Confirm `ghcr.io/tuna-os/albacore:gnome-next` builds are green in CI.
 - [ ] Cross-check upstream GNOME 51 release schedule dates before posting.
-- [ ] Maintainer approval obtained prior to external announcement.
+- [ ] Maintainer approval obtained before external announcement.

@@ -35,7 +35,7 @@ work, or that Linux support replaces a hardware repair.
    The project README documents the corresponding `bootc switch` workflow;
    use a disposable test deployment and keep the current deployment available
    for rollback. For a physical refurbishing workflow, use the project's
-   published live ISO and installation documentation rather than improvising
+   published live ISO and installation documentation instead of improvising
    partitioning commands.
 3. **Test the actual work.** Check suspend/resume, Wi-Fi, audio, display
    brightness, browser/video playback, USB devices, and a clean reboot. Record

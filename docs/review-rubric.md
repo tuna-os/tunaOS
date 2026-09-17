@@ -3,7 +3,7 @@
 What a reviewer (human or agent) checks before approving a PR here, beyond
 "CI is green":
 
-1. **Checks actually ran, and ran on the real change.** `just fix && just
+1. **Checks ran, and ran on the real change.** `just fix && just
    check` and `just test` are mandatory per `CONTRIBUTING.md` — verify the
    PR's CI ran them on the current head, not a stale commit.
 2. **Green-criteria impact.** If the change touches build, desktop, or boot

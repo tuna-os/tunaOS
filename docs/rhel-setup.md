@@ -13,7 +13,7 @@ You need a Red Hat account with an active subscription. The free **Red Hat Devel
 
 ### 2. Authenticate to registry.redhat.io
 
-The RHEL 10 bootc base image is hosted on `registry.redhat.io` and requires authentication before building:
+The RHEL 10 bootc base image is hosted on `registry.redhat.io` and needs authentication before building:
 
 ```bash
 # Log in (stores credentials in ~/.config/containers/auth.json)
@@ -27,7 +27,7 @@ Enter your Red Hat Customer Portal username and password, or use a **Registry Se
 
 #### Using auth.json on builder VMs (corral/remote)
 
-If you build on a remote VM (corral, CI runner, etc.), copy your local auth.json rather than logging in interactively:
+If you build on a remote VM (corral, CI runner, etc.), copy your local auth.json instead of logging in interactively:
 
 ```bash
 # Copy auth to a corral builder VM

@@ -24,7 +24,7 @@ your hardware (HWE kernels, NVIDIA, ARM), see the
 > **Apple Silicon status.** [ROADMAP.md](../ROADMAP.md) is the canonical source
 > and lists Apple Silicon support as 🟡 **in progress**
 > ([#781](https://github.com/tuna-os/tunaOS/issues/781)), so this row says the
-> same thing rather than a flat "Supported". Concretely, what exists today:
+> same thing instead of a flat "Supported". Concretely, what exists today:
 > the `-asahi` images build and are gated in CI (Bonito & Grouper, 36/36
 > verified, [#776](https://github.com/tuna-os/tunaOS/issues/776)), and the
 > installer track has D0–D2 and D4 done. What does not exist yet: the D3
