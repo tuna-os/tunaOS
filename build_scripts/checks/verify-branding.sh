@@ -155,7 +155,12 @@ fi
 
 # Every URL must point at us. help.ubuntu.com sends our users to a project
 # that cannot help them with our image.
-for field in SUPPORT_URL BUG_REPORT_URL; do
+#
+# All four, not two. This loop read SUPPORT_URL and BUG_REPORT_URL alone, and
+# the two it skipped were wrong on every single variant — HOME_URL and
+# DOCUMENTATION_URL named projectbluefin.io, inherited from the upstream script
+# (docs/BRANDING.md). A field no check reads is a field nobody notices.
+for field in HOME_URL DOCUMENTATION_URL SUPPORT_URL BUG_REPORT_URL; do
 	v="$(osr "$field")"
 	if [[ "$v" == *tuna-os* || "$v" == *tunaos* ]]; then
 		pass "${field}=${v}"
