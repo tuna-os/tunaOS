@@ -1108,3 +1108,43 @@ The second cause needs no author at all. `gen-matrix-status.py` prints a caveat 
 **Never raise the budget to clear this.** It looks like a fix and it discards the ratchet. The prose was wrong. The number was right.
 
 **Lesson:** ask what reads a file, not who writes it. A generator's output is source for every gate that measures it, and a generator's prose is prose. When a gate reads something your diff never showed, your green describes the old bytes.
+
+### 25. The same fix, written once, for one base out of two (`marlin:gnome` arm64, 2026-09-17)
+
+`marlin:gnome` built an ISO on amd64 and died on arm64, in the same tacklebox
+baseline as §24 but for a different reason:
+
+```
+>>> [customize] (1/2) baseline.sh
+useradd: UID 1000 is not unique
+Error: live customize for marlin-gnome: ... exit status 4
+```
+
+**Root cause.** tacklebox's baseline asks for `--uid 1000` and does not check.
+marlin's arm64 legs build from `ghcr.io/tuna-os/archlinuxarm`, because
+`docker.io/archlinux` is x86_64 only, and Arch Linux ARM ships its own account
+there. Read from the published layer, not assumed:
+
+```
+alarm:x:1000:1000::/home/alarm:/bin/bash
+```
+
+`build-archlinuxarm-base.yml` keeps it on purpose, which suits a base image and
+not an ISO built from one. The x86_64 Arch base has no such account, so one
+architecture failed and the other did not.
+
+**Why nothing caught it.** This repo had already solved it. A block in
+`01-workarounds.sh` removes the cloud account that `docker.io/library/ubuntu`
+ships at the same UID, and its comment states the reason: the real error lands
+"an hour downstream, in another repo's code, with no mention of this image".
+The guard was `IS_UBUNTU`. The diagnostic that block prints for this failure
+sat inside the same branch, so Arch ARM hit the identical bug in silence.
+
+**Fix.** Remove the `alarm` account on the same terms as the Ubuntu one: only
+when it is still named `alarm` and still at exactly 1000. Move the warning out
+of the per-base branch, so the next base to ship an account at 1000 reports
+itself in the build that causes it.
+
+**Lesson:** when a workaround names one base, ask which other bases have the
+same shape. A guard is a claim about who is affected, and this one was a guess
+that nobody revisited when a second base arrived.
