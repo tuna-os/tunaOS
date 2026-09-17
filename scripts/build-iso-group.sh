@@ -125,9 +125,11 @@ fi
 if [[ -n "$GROUP_SUFFIX" ]]; then
 	ISO_BASENAME="${VARIANT}-${GROUP_SUFFIX}"
 	MEDIA_NAME="TunaOS ${VARIANT^} ${GROUP_SUFFIX^}"
+	MEDIA_NAME="$(tunaos_iso_media_name "$MEDIA_NAME")"
 else
 	ISO_BASENAME="${VARIANT}"
 	MEDIA_NAME="TunaOS ${VARIANT^}"
+	MEDIA_NAME="$(tunaos_iso_media_name "$MEDIA_NAME")"
 fi
 
 echo "==> Building grouped ISO '${ISO_BASENAME}' for ${VARIANT}"

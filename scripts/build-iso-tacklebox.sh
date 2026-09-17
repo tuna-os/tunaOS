@@ -180,9 +180,12 @@ xfce*) DESKTOP="xfce" ;;
 gnome* | *) DESKTOP="gnome" ;;
 esac
 
+# Capped at the ISO 9660 32-character volume ID; see tunaos_iso_media_name.
+MEDIA_NAME="$(tunaos_iso_media_name "tunaos-${VARIANT}-${FLAVOR}")"
+
 cat >"$RECIPE_FILE" <<EOF
 {
-  "media_name": "tunaos-${VARIANT}-${FLAVOR}",
+  "media_name": "${MEDIA_NAME}",
   "size": "10G",
   "shared_store": {
     "format": "ext4"

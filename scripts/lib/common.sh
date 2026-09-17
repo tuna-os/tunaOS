@@ -76,3 +76,49 @@ cd "$_TUNAOS_REPO_ROOT" || {
 # focused consumers can avoid common.sh's repository-root cwd change.
 # shellcheck source=backend.sh
 . "$(dirname "${BASH_SOURCE[0]}")/backend.sh"
+
+# ── ISO volume label ────────────────────────────────────────────────────────
+# Fit a media name into the ISO 9660 volume ID, which is capped at 32
+# characters. xorriso does not truncate; it aborts the whole build:
+#
+#   xorriso : FAILURE : -volid: Text too long (34 > 32)
+#
+# bonito-rawhide hit this the moment the nvidia flavors were built, and the
+# arithmetic says exactly which cells die (run 35192681250):
+#
+#   tunaos-bonito-rawhide-cosmic-nvidia   35  failed
+#   tunaos-bonito-rawhide-gnome-nvidia    34  failed
+#   tunaos-bonito-rawhide-niri-nvidia     33  failed
+#   tunaos-bonito-rawhide-xfce-nvidia     33  failed
+#   tunaos-bonito-rawhide-kde-nvidia      32  BUILT
+#
+# kde-nvidia landing exactly on the limit is what makes this a length bug and
+# not an nvidia bug. Nothing is wrong with those four images.
+#
+# The label is load-bearing, so it cannot be renamed casually: tacklebox puts
+# this same string on the kernel cmdline as `root=tbox:CDLABEL=...`
+# (internal/target/iso.go:98, cmd/tacklebox/build.go:630). Both sides come from
+# media_name, so shortening it here moves them together and the ISO still
+# finds its own root. The output FILENAME is separate and is left alone, which
+# is what scripts/iso-e2e.sh keys off.
+#
+# Shortening drops the vendor prefix first: "tunaos-" is the least
+# informative part when every ISO in the matrix carries it, and
+# <variant>-<flavor> is what actually identifies the media. The hash tail is a
+# backstop for a future name long enough to overflow even without the prefix,
+# so this can never again abort a build on a name nobody measured.
+tunaos_iso_media_name() {
+	local name="$1" limit=32
+
+	if [[ ${#name} -gt ${limit} ]]; then
+		name="${name#tunaos-}"
+	fi
+
+	if [[ ${#name} -gt ${limit} ]]; then
+		local digest
+		digest="$(printf '%s' "$name" | sha256sum | cut -c1-4)"
+		name="${name:0:$((limit - 5))}-${digest}"
+	fi
+
+	printf '%s' "$name"
+}

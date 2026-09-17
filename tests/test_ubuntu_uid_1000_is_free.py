@@ -37,34 +37,67 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKAROUNDS = ROOT / "build_scripts" / "01-workarounds.sh"
+FREE_UID = ROOT / "build_scripts" / "free-uid-1000.sh"
 CUSTOMIZE_LIVE = ROOT / "live-iso" / "common" / "src" / "customize-live.sh"
 BUILD_CONFIG = ROOT / ".github" / "build-config.yml"
 
 
-def test_the_stock_ubuntu_account_is_removed_on_ubuntu_bases():
-    text = WORKAROUNDS.read_text()
+def test_the_stock_ubuntu_account_is_removed():
+    text = FREE_UID.read_text()
     assert "userdel" in text, "nothing removes the stock cloud account"
-    block = text[text.index("IS_UBUNTU"):]
-    assert "ubuntu" in block
+    assert "ubuntu" in text, "the stock cloud account is not named"
 
 
-def test_the_removal_is_gated_on_the_ubuntu_base():
-    """A userdel that ran everywhere would delete whatever an unrelated base
-    happens to call `ubuntu`."""
-    text = WORKAROUNDS.read_text()
-    guard = text.index('if [[ "${IS_UBUNTU:-false}" = true ]]; then')
+def test_every_ubuntu_containerfile_reaches_the_removal():
+    """Presence in a script is not reach from a build.
+
+    The Arch equivalent of this removal sat in 01-workarounds.sh, which
+    Containerfile.arch does not run, so it never executed and marlin's arm64
+    ISO kept failing on the message it was written to prevent. Assert the
+    call, on a line that is not a comment.
+    """
+    for name in ("Containerfile.ubuntu", "Containerfile.el10"):
+        path = ROOT / name
+        if not path.exists():
+            continue
+        reached = any(
+            re.search(r"/run/context/build_scripts/(free-uid-1000|01-workarounds)\.sh", line)
+            for line in path.read_text().splitlines()
+            if not line.lstrip().startswith("#")
+        )
+        assert reached, f"{name} never runs the UID 1000 removal"
+
+
+def test_the_removal_is_gated_before_any_userdel():
+    """A userdel that ran unconditionally would delete whatever an unrelated
+    base happens to call `ubuntu`. The guard must come first."""
+    text = FREE_UID.read_text()
+    guard = text.index('== "1000"')
     assert guard < text.index("userdel")
 
 
 def test_the_removal_is_narrow_enough_to_be_safe():
     """Only the STOCK account goes. A base that renumbers it, drops it, or an
     operator who repurposed the name must be left alone rather than silently
-    altered — so the UID is checked, not just the name."""
-    text = WORKAROUNDS.read_text()
-    guard = text[text.index('if [[ "${IS_UBUNTU:-false}" = true ]]; then'):
-                 text.index("userdel")]
-    assert re.search(r"id -u ubuntu\b", guard), "the account is not identified by name"
-    assert re.search(r'==\s*"?1000"?', guard), "the removal does not pin UID 1000"
+    altered — so the UID is checked, AND the name comes from a fixed list."""
+    text = FREE_UID.read_text()
+    assert re.search(r'"ubuntu:', text), "the account is not named in the removal list"
+    assert re.search(r"id -u ", text), "the account is not identified by name"
+    assert re.search(r'==\s*"?1000"?', text), "the removal does not pin UID 1000"
+
+
+def test_the_removal_never_deletes_whoever_merely_holds_1000():
+    """The list is an allowlist on purpose. Deriving the account name from
+    `getent passwd 1000` would delete a real operator account on any base
+    that puts one there."""
+    text = FREE_UID.read_text()
+    for line in text.splitlines():
+        if line.lstrip().startswith("#") or "userdel" not in line:
+            continue
+        assert "getent" not in line, (
+            "the account passed to userdel is derived from whoever holds "
+            "UID 1000, not from the fixed list"
+        )
 
 
 def test_the_account_removal_itself_must_succeed():
@@ -73,11 +106,19 @@ def test_the_account_removal_itself_must_succeed():
     layer. Falling back to a plain userdel keeps the failure that matters
     fatal, where a blanket `|| true` would let the UID stay taken and the
     ISO keep failing with the build reported green."""
-    text = WORKAROUNDS.read_text()
-    assert "userdel --remove ubuntu 2>/dev/null || userdel ubuntu" in text
-    fallback = text.index("|| userdel ubuntu")
+    text = FREE_UID.read_text()
+    assert 'userdel --remove "${account}" 2>/dev/null || userdel "${account}"' in text
+    fallback = text.index('|| userdel "${account}"')
     line_end = text.index("\n", fallback)
     assert "|| true" not in text[fallback:line_end]
+
+
+def test_01_workarounds_delegates_instead_of_keeping_a_second_copy():
+    """Two implementations drift, and the one that drifts is the one nobody
+    is reading when the ISO breaks."""
+    text = WORKAROUNDS.read_text()
+    assert "free-uid-1000.sh" in text
+    assert not re.search(r"^\s*userdel", text, re.M), "a second copy of the removal survives"
 
 
 def test_customize_live_still_asks_for_1000_only_when_free():

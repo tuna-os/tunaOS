@@ -24,6 +24,14 @@ build_scripts/
 ├── 91-arch-customizations.sh  # arch-specific tweaks (after image-info)
 ├── 99-cleanup.sh              # final cleanup (always last)
 │
+│   # ── called directly by Containerfiles, not part of the numeric run ──
+├── free-uid-1000.sh           # remove the stock account at UID 1000 so a
+│                              #   live ISO can place its own user there.
+│                              #   Takes no distro flags, so any Containerfile
+│                              #   calls it in one line. Containerfile.arch
+│                              #   does; el10 and ubuntu reach it through
+│                              #   01-workarounds.sh.
+│
 ├── desktop/                   # desktop stage (per-DE Containerfile targets)
 │   ├── install-desktop.sh     #   manifest-driven installer (dnf/pacman/…)
 │   │                          #   reads manifests/desktops/<de>.yaml

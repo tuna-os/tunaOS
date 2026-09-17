@@ -90,115 +90,15 @@ if [[ "$IS_CENTOS" = true ]] && ! [[ "$IS_ALMALINUX" = true ]]; then
 		/etc/yum.repos.d/compose.repo
 	cat /etc/yum.repos.d/compose.repo
 fi
-# ── Ubuntu: free UID 1000 for a real user ───────────────────────────────────
+# ── Free UID 1000 for the live ISO user ─────────────────────────────────────
 #
-# docker.io/library/ubuntu ships a packaged cloud account at UID 1000.
-# Measured on the pinned gurnard base
-# (ubuntu:noble@sha256:561618e2c15bf2397621dd04f96926663a3b5616c189cf7e38db7e82f5c538ea),
-# by extracting /etc/passwd from its single layer:
-#
-#   ubuntu:x:1000:1000:Ubuntu:/home/ubuntu:/bin/bash
-#
-# Two things follow, and the second is what made this visible.
-#
-# 1. The first REAL user an installed gurnard/grouper creates lands at 1001,
-#    while a passwordless phantom account holds the UID every desktop
-#    session, flatpak permission and $XDG_RUNTIME_DIR path assumes. Nothing
-#    in tunaOS references this account -- it is dead weight from the cloud
-#    image lineage.
-#
-# 2. The live ISO cannot be built at all. tacklebox's CustomizeLive prepends
-#    its embedded src/live/baseline.sh, which creates the live user with an
-#    unconditional `--uid 1000`:
-#
-#      >>> [customize] (1/2) baseline.sh
-#      useradd: UID 1000 is not unique
-#      Error: live customize for gurnard-pantheon: ... exit status 4
-#
-#    (gurnard run 32484024591, both linux-amd64 and linux-arm64.) tunaOS
-#    hit exactly this bug in its OWN live-iso/common/src/customize-live.sh
-#    and fixed it there by asking for 1000 only when it is free -- but that
-#    script runs as (2/2) and never gets the chance.
-#
-# Removing the account fixes the shipped image on its own merits and frees
-# the UID as a consequence. Deliberately narrow: only an account that is
-# still the stock one -- name `ubuntu`, UID exactly 1000 -- is removed, so a
-# base image that stops shipping it, renumbers it, or an operator who has
-# repurposed the name is left alone rather than silently altered.
-if [[ "${IS_UBUNTU:-false}" = true ]]; then
-	if [[ "$(id -u ubuntu 2>/dev/null || echo -)" == "1000" ]]; then
-		echo "removing the stock cloud account 'ubuntu' (UID 1000)"
-		# --remove deletes /home/ubuntu. bootc images make /home a symlink to
-		# a var/home that is empty in the container layer, so that half can
-		# legitimately fail; the account removal is what has to succeed.
-		userdel --remove ubuntu 2>/dev/null || userdel ubuntu
-		# An if-block, not `A && B || C`: shellcheck's SC2015 is an INFO
-		# finding, and tests/bats/test_build_scripts.bats runs shellcheck
-		# with only SC1091 excluded, so info findings fail the gate.
-		if getent group ubuntu >/dev/null; then
-			groupdel ubuntu 2>/dev/null || true
-		fi
-		# cloud-init's sudoers drop-in names the account just deleted, which
-		# leaves a rule for a user that no longer exists. Removed only when
-		# it actually mentions `ubuntu`: on a base that repurposed the file
-		# for something else, deleting it would revoke unrelated sudo.
-		if grep -q '\bubuntu\b' /etc/sudoers.d/90-cloud-init-users 2>/dev/null; then
-			rm -f /etc/sudoers.d/90-cloud-init-users
-		fi
-	fi
-fi
-
-# ── Arch Linux ARM: free UID 1000, for the same reason ──────────────────────
-#
-# The same failure as Ubuntu's above, on a different base and only on one
-# architecture. marlin's arm64 legs build FROM ghcr.io/tuna-os/archlinuxarm
-# (docker.io/archlinux is x86_64-only), and Arch Linux ARM's stock rootfs
-# ships its own account. Read out of the published base image's layer rather
-# than assumed:
-#
-#   alarm:x:1000:1000::/home/alarm:/bin/bash
-#
-# build-archlinuxarm-base.yml keeps it on purpose -- "alarm/root users stay
-# (standard ALARM accounts)" -- which is right for a base image and wrong for
-# an ISO build downstream of it.
-#
-# That is why marlin fails on arm64 ONLY. The x86_64 Arch base has no such
-# account, so iso:gnome (linux-amd64) builds and iso:gnome (linux-arm64) dies
-# in tacklebox's baseline.sh:
-#
-#   >>> [customize] (1/2) baseline.sh
-#   useradd: UID 1000 is not unique
-#   Error: live customize for marlin-gnome: ... exit status 4
-#
-# Narrow in the same way as the Ubuntu block: only an account still named
-# `alarm` AND still at exactly 1000 is removed, so a base that renumbers it,
-# drops it, or an operator who has repurposed the name is left alone.
-if [[ "${IS_ARCH:-false}" = true ]]; then
-	if [[ "$(id -u alarm 2>/dev/null || echo -)" == "1000" ]]; then
-		echo "removing the stock Arch Linux ARM account 'alarm' (UID 1000)"
-		# --remove deletes /home/alarm. bootc images make /home a symlink to
-		# a var/home that can be empty in the container layer, so that half
-		# may legitimately fail; the account removal has to succeed.
-		userdel --remove alarm 2>/dev/null || userdel alarm
-		if getent group alarm >/dev/null; then
-			groupdel alarm 2>/dev/null || true
-		fi
-	fi
-fi
-
-# Not fatal, but named where it can be seen. If UID 1000 is still taken the
-# live ISO build WILL fail later in tacklebox's baseline.sh with "useradd: UID
-# 1000 is not unique" -- a message that arrives an hour downstream, in another
-# repo's code, with no mention of this image.
-#
-# Deliberately OUTSIDE the per-base blocks above. It used to sit inside the
-# Ubuntu one, so the identical failure on Arch ARM went unreported and had to
-# be tracked back from an ISO job by hand. Whatever base is next, this says so
-# in the build that causes it.
-if getent passwd 1000 >/dev/null; then
-	echo "WARNING: UID 1000 is still taken; the live ISO build will fail:"
-	getent passwd 1000
-fi
+# The stock accounts that sit at UID 1000 on some bases (ubuntu, alarm) are
+# removed by build_scripts/free-uid-1000.sh, which also reports the UID still
+# being taken. It lives on its own because only Containerfile.el10 and
+# Containerfile.ubuntu run THIS script: an Arch branch in here could never
+# execute, and marlin's arm64 ISO kept dying on the message that branch was
+# written to prevent. Containerfiles that need it call it directly.
+/run/context/build_scripts/free-uid-1000.sh
 
 echo "Build variant info:"
 echo "is_fedora: $IS_FEDORA"
