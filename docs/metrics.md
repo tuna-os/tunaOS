@@ -1,7 +1,7 @@
 # PR / build metrics
 
 **Status: not yet implemented.** This file exists so the intent is written
-down honestly rather than fabricated — there is no metrics pipeline here
+down honestly instead of fabricated — there is no metrics pipeline here
 today.
 
 ## What already exists

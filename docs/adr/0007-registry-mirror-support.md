@@ -5,7 +5,7 @@
 - Last updated: 2026-08-13
 - Design doc: RFC-009 (see `registry-map.yaml`'s own header: "See RFC-009 for
   design rationale") — the design was never merged as a reviewable RFC
-  document; this ADR backfills the decision record from what actually shipped.
+  document; this ADR backfills the decision record from what shipped.
 
 ## Context
 
@@ -52,7 +52,7 @@ variable overrides at three levels (registry host, image path, tag/digest).**
   consolidating `registry_ref()` with the two other image-metadata sources
   that existed independently (`build-config.yml`'s `base_image` per variant,
   `image-versions.yaml`'s digest pins) — so callers don't need to know which
-  of three files actually holds a given image's reference.
+  of three files holds a given image's reference.
 
 ### Alternative considered and rejected
 
@@ -62,7 +62,7 @@ those branches merged and the actual shipped design differs in detail from
 what a from-branch archaeology would show, this ADR does not attempt to
 reconstruct what specifically changed between v1/v2/v3. That's a gap: if the
 rejected intermediate designs matter for future reference, someone with
-direct knowledge of those branches should backfill it, rather than this ADR
+direct knowledge of those branches should backfill it, instead of this ADR
 guessing.
 
 ## Consequences
@@ -71,12 +71,12 @@ guessing.
 mirror/fork overrides are a single environment variable, not a
 call-site-by-call-site edit; digest pinning for security-sensitive images is
 enforced by the shape of the data (a `digest` field takes precedence
-automatically) rather than by convention.
+automatically) instead of by convention.
 
 **Negative** — three `rfc009-registry-mirrors-*` branches remain unmerged
 and now describe a design that diverged from what shipped; per RFC-PROCESS.md
 and #1363, they still need an explicit disposition (most likely: abandon,
-since the functionality already shipped through other commits) rather than
+since the functionality already shipped through other commits) instead of
 being left to imply open, undecided work.
 
 ---

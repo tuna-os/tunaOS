@@ -7,7 +7,7 @@
 > [docs/Q4-2026-PROMOTION-CALENDAR.md](./Q4-2026-PROMOTION-CALENDAR.md)'s
 > own plan ("adapt the FOSDEM abstract for SCaLE's format and audience... no
 > SCaLE-specific draft exists yet — write one from the FOSDEM abstract
-> rather than from scratch") — same underlying talk and project story, not
+> instead of from scratch") — same underlying talk and project story, not
 > a second abstract written independently.
 
 ## Why a separate draft, not just the FOSDEM one
@@ -73,7 +73,7 @@ bootc segment).
 
 - Length: SCaLE talks are commonly 45 min including Q&A — expand the
   FOSDEM 30-min outline with more Corral/KubeVirt depth (backend support
-  matrix, the Proxmox-API-compat layer) rather than padding the desktop
+  matrix, the Proxmox-API-compat layer) instead of padding the desktop
   half
 - Speaker: maintainer or maintainer-designate; SCaLE offers speaker passes
   (confirm current policy when the CFP opens) — budget-friendlier than

@@ -34,7 +34,7 @@ had to exist *before* the existing branch backlog could be disposed of.
 - Branches that cannot meet the gate within **30 days** of the last commit
   are flagged for triage (merged, abandoned, or folded into a successor).
 - Small, contained changes (script fixes, single manifest edits) do **not**
-  require an RFC — the gate applies to cross-cutting architectural or process
+  need an RFC — the gate applies to cross-cutting architectural or process
   proposals only.
 
 Explicitly rejected alternatives:
@@ -50,11 +50,11 @@ Explicitly rejected alternatives:
 **Positive** — the backlog becomes tractable: the policy gives every one of
 the 11 extant branches an explicit disposition path and a deadline; decisions
 now produce ADRs automatically, closing the #1094 coverage gap structurally
-rather than by campaign.
+instead of by campaign.
 
 **Negative** — the policy is only as good as its application: the 11 existing
 branches still need a one-pass disposition audit (new issue #1363), and the
-30-day triage rule requires someone to actually run the sweep — otherwise the
+30-day triage rule needs someone to run the sweep — otherwise the
 policy becomes governance theater.
 
 ---

@@ -6,7 +6,7 @@
 
 This runbook turns the large-blob inventory into a repeatable, auditable
 rewrite procedure. A rewrite changes commit and tag IDs, invalidates open pull
-request bases, and requires existing contributors to re-clone. It must be run
+request bases, and needs existing contributors to re-clone. It must be run
 by a maintainer with permission to coordinate a freeze and temporarily change
 branch protection; it is not routine repository maintenance.
 
@@ -67,7 +67,7 @@ The 2026-09-02 mirror scan in #2290 found 16 blobs totaling 244.94 MiB:
 The first two rows are the unambiguous rewrite set (178.46 MiB). Do not add
 the wallpaper paths unless maintainers explicitly decide that their historical
 source value is lower than the additional reclaim. Generate the object-level
-list with the audit script rather than copying IDs from this dated summary.
+list with the audit script instead of copying IDs from this dated summary.
 
 ## Rewrite window
 
@@ -77,7 +77,7 @@ list with the audit script rather than copying IDs from this dated summary.
 2. Resolve the path policy for every repository. Keep runtime media and
    deliberately vendored source unless its owner approves removal.
 3. Drain or close open pull requests. Record any commit that must be recreated.
-4. Announce the UTC freeze and require a fresh clone after the all-clear.
+4. Announce the UTC freeze and need a fresh clone after the all-clear.
 5. Pause bots and scheduled writers. Disable automatic merges.
 6. Export branch protection/ruleset settings and identify signed release tags.
    Rewriting a signed tag invalidates its signature; issue a replacement tag

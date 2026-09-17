@@ -12,7 +12,7 @@
 
 ## 1. Objective & Value Proposition
 
-First-time visitors to the GitHub repository (`README.md`) and the project website (`tunaos.org`) currently encounter text descriptions and build matrices without immediate visual proof of the user experience.
+First-time visitors to the GitHub repository (`README.md`) and the project website (`tunaos.org`) now encounter text descriptions and build matrices without immediate visual proof of the user experience.
 
 A concise, high-polish **25–30 second boot-to-desktop demo** (available as a lightweight animated WebP/GIF and an embedded high-definition MP4/WebM video) serves as the top-of-funnel conversion asset for onboarding new users, contributors, and media reviewers.
 

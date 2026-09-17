@@ -52,6 +52,19 @@ def test_local_runner_reads_the_ci_pin_and_budget() -> None:
     assert ".ste-budget" in text
 
 
+def _budget() -> str:
+    """The budget the runner will actually pass, read from the same file it reads.
+
+    This used to be the literal "3050" inside the stub below. That made the
+    fixture a second, silent copy of .ste-budget: the first ratchet after it
+    was written (3050 -> 1650) turned this test red, and the failure said
+    `assert 1 == 0` with an empty linter stdout — which looks like a broken
+    runner, not like a stale number in a test. Read the file instead, so
+    lowering the budget stays a one-file change.
+    """
+    return (ROOT / ".ste-budget").read_text(encoding="utf-8").strip()
+
+
 def test_local_runner_uses_a_cached_pinned_linter(tmp_path: Path) -> None:
     cache = tmp_path / "cache" / _ste_ref() / ".github" / "actions" / "ste-lint"
     cache.mkdir(parents=True)
@@ -59,9 +72,9 @@ def test_local_runner_uses_a_cached_pinned_linter(tmp_path: Path) -> None:
         """
         const args = process.argv.slice(2);
         const valid = args.includes('--summary') ||
-          (args.includes('--max') && args[args.indexOf('--max') + 1] === '3050');
+          (args.includes('--max') && args[args.indexOf('--max') + 1] === '%s');
         process.exit(valid ? 0 : 1);
-        """,
+        """ % _budget(),
         encoding="utf-8",
     )
     env = os.environ | {"TUNAOS_STE_CACHE_DIR": str(tmp_path / "cache")}

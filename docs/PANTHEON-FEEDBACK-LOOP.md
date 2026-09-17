@@ -35,7 +35,7 @@ so we can separate upstream behavior from TunaOS integration work.
 
 Adapt the wording to the channel and follow its moderation rules. The launch
 post is the canonical announcement; the invitation should link to it and to
-the tracker rather than repeating a full release pitch.
+the tracker instead of repeating a full release pitch.
 
 ## Triage contract
 
@@ -77,7 +77,7 @@ For each new report:
 3. Separate packaging defects from upstream behavior in the issue summary.
 4. Mark the first one or two small, reproducible follow-ups `good first issue`
    only after a maintainer has written acceptance criteria and confirmed that
-   the task does not require elementary upstream access.
+   the task does not need elementary upstream access.
 5. Record the outcome in the next adoption snapshot, including unresolved
    reports and any change to the download or docs funnel.
 

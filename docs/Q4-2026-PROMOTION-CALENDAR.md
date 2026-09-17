@@ -76,7 +76,7 @@ digest together; the event and KubeCon dates remain independent calendar items.
 - [ ] A contributor volunteers for All Things Open and/or KubeCon NA.
 - [ ] Demo hardware and a reliable network-independent demo path are tested.
 - [ ] Drafts receive technical review before publication.
-- [ ] Matrix announcements link to the canonical post rather than duplicating
+- [ ] Matrix announcements link to the canonical post instead of duplicating
       changing technical details.
 - [ ] Referral links and notable questions are recorded in the follow-up notes.
 - [ ] Any resulting docs or engineering work is filed as a separate issue.

@@ -63,7 +63,7 @@ run:
 ghcr.io/tuna-os/hummingbird:gnome-testing
 ```
 
-Record the workflow URL and resolved image digest. In the run, require:
+Record the workflow URL and resolved image digest. In the run, need:
 
 - the package manifest identifies GNOME Shell, Mutter, GDM, Nautilus, and the
   control center from the expected candidate;
@@ -115,19 +115,19 @@ Promote only the exact digest tested above. The normal Promote job copies the
 verified `:gnome-testing` manifest to `:gnome` and dated tags. If a blocking
 regression appears after promotion, follow
 [rollback-a-bad-image-promotion.md](../runbooks/rollback-a-bad-image-promotion.md)
-rather than rebuilding an unreviewed hotfix under the same tag.
+instead of rebuilding an unreviewed hotfix under the same tag.
 
 ## EL10 graduation criteria
 
 Moving Yellowfin, Albacore, or Skipjack from GNOME 50 to 51 is a separate
-package-platform change. It requires all of the following in one reviewable
+package-platform change. It needs all of the following in one reviewable
 rollout:
 
 - a complete GNOME 51 repository image produced by the TunaOS package factory,
   pinned by digest and consumed with the same local-mount trust model as the
   current GNOME 50 tier;
 - an explicit architecture decision: provide each declared architecture or
-  keep GNOME flavors pinned to architectures the tier actually serves;
+  keep GNOME flavors pinned to architectures the tier serves;
 - regression coverage equivalent to
   `tests/test_el10_gnome_comes_from_the_github_built_tier.py`, updated for the
   new tier without restoring COPR or an unsigned network repository;

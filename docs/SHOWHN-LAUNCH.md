@@ -10,7 +10,7 @@
 ## Why HN and why now
 
 Stars are flat at ~55 (two months) against a Q4 target of ≥100
-(ADOPTION-METRICS.md). Hacker News is the single highest-leverage launch
+(ADOPTION-METRICS.md). Hacker News is the single highest-use launch
 channel for a young Linux distro: a strong Show HN thread converts into
 stars, forks, and first-time contributors (exactly what the Q3 checkpoint
 recap, #1345, needs after landing our first human external contributor,

@@ -1,8 +1,8 @@
 # TunaOS User Guide
 
-Everything you need to run TunaOS day to day: picking an image, installing
-it, staying updated, rolling back, and getting apps — plus what our quality
-labels actually promise you.
+Everything you need to run TunaOS day to day: how to pick an image, install
+it, stay updated, roll back, and get apps. This guide also states what our
+quality labels promise you.
 
 ## Is TunaOS for you?
 
@@ -12,8 +12,9 @@ come from Flathub and Homebrew; development happens in containers; the OS
 itself is a signed image we build, test, and publish nightly.
 
 TunaOS stands on the shoulders of the
-[Universal Blue](https://universal-blue.org/) family, and we would rather
-point you at their excellent documentation than re-explain what we share:
+[Universal Blue](https://universal-blue.org/) family. We prefer to point you
+at their excellent documentation instead of a second explanation of what we
+share:
 
 | If you are… | Read alongside this guide |
 | :--- | :--- |
@@ -25,15 +26,15 @@ point you at their excellent documentation than re-explain what we share:
 
 What TunaOS adds to the family is *choice of base*: the same desktop
 experience on Enterprise Linux, Fedora, Debian, Ubuntu, Arch, openSUSE, or
-Gentoo — where Bluefin, Aurora, and Bazzite are Fedora-based, TunaOS lets you
-pick the foundation and keep the experience.
+Gentoo. Bluefin, Aurora, and Bazzite are Fedora-based; TunaOS lets you pick
+the foundation and keep the experience.
 
 ---
 
 ## 1. What kind of OS this is
 
-TunaOS images are **bootc-based**: the operating system is delivered as a
-container image, and your installed system atomically updates to each new
+TunaOS images are **bootc-based**: TunaOS delivers the operating system as a
+container image, and your installed system moves atomically to each new
 image. That means:
 
 - **Updates are atomic.** An update either fully applies or doesn't happen.
@@ -41,10 +42,10 @@ image. That means:
 - **Rollback is built in.** The previous deployment stays on disk; one
   command (or one boot-menu pick) returns to it.
 - **The OS is the same everywhere.** Your installation is bit-for-bit the
-  image we test in CI, not a package soup that drifted from it.
+  image we test in CI. It is not a package soup that drifted from it.
 - **You don't install packages onto the base.** Apps come from Flatpak,
-  Homebrew, or containers (§7). Changing the base OS means switching to a
-  different image — which is cheap and reversible (§6).
+  Homebrew, or containers (§7). To change the base OS, you switch to a
+  different image — a cheap and reversible move (§6).
 
 If you have used Silverblue, Bluefin, Aurora, or Bazzite, you already know
 this model. If not, Bluefin's
@@ -85,7 +86,7 @@ same pinned source Zirconium ships on Fedora.
 ### The hardware suffix — optional
 
 - `-hwe` — Hardware Enablement kernel for newer hardware
-- `-nvidia` — NVIDIA drivers + CUDA (via [Universal Blue akmods](https://github.com/ublue-os/akmods), the same driver packaging Bazzite and Aurora use)
+- `-nvidia` — NVIDIA drivers + CUDA (via [Universal Blue akmods](https://github.com/ublue-os/akmods), the same driver packages that Bazzite and Aurora use)
 - `-nvidia-hwe` — both
 - `-asahi` — Apple Silicon (select variants; see [ASAHI-HARDWARE-TIERS.md](ASAHI-HARDWARE-TIERS.md))
 
@@ -95,10 +96,10 @@ NVIDIA. The live per-cell status of every combination is in the
 
 ### What "green" promises — read this once
 
-Historically, a green cell meant "the image built and was published". We have
-deliberately raised that bar: [GREEN-CRITERIA.md](GREEN-CRITERIA.md) defines
-what full green means — builds, desktop present, boots, installs, updates
-and rolls back, honest about omissions — and the README reports **built**
+Historically, a green cell meant only that the image built and we published
+it. We have deliberately raised that bar. [GREEN-CRITERIA.md](GREEN-CRITERIA.md)
+defines what full green means — builds, desktop present, boots, installs,
+updates and rolls back, honest about omissions. The README reports **built**
 and **composite green** separately. A variant can be built-green and still
 carry known gaps on the harder criteria; the scoreboard tells you which.
 Pick yellowfin/albacore gnome or kde if you want the most-proven cells
@@ -123,12 +124,13 @@ sudo bootc switch ghcr.io/tuna-os/yellowfin:gnome
 sudo systemctl reboot
 ```
 
-Your home directory and local data are untouched; the OS beneath you is
-replaced atomically. Switching back is the same command with the old image.
+Your home directory and local data stay as they are; bootc replaces the OS
+beneath you atomically. To switch back, run the same command with the old
+image.
 
 ### Option C — VM / cloud
 
-Every image can be turned into a disk image locally:
+You can turn every image into a disk image locally:
 
 ```bash
 git clone https://github.com/tuna-os/tunaOS.git && cd tunaOS
@@ -138,7 +140,7 @@ just run-qcow2 bonito kde                  # boots it under QEMU
 
 ### Option D — from Windows (wootc)
 
-Moving from Windows 10/11? You can install TunaOS directly without flashing a USB drive using **[wootc](https://github.com/tuna-os/wootc)** (the Windows bootc installer). Download `tunaos-installer.exe` from [wootc releases](https://github.com/tuna-os/wootc/releases), select your desktop, and reboot. See [MIGRATION.md](../MIGRATION.md#from-windows-wootc) for full details.
+Moving from Windows 10/11? You can install TunaOS directly, with no USB drive to write, through **[wootc](https://github.com/tuna-os/wootc)** (the Windows bootc installer). Download `tunaos-installer.exe` from [wootc releases](https://github.com/tuna-os/wootc/releases), select your desktop, and reboot. See [MIGRATION.md](../MIGRATION.md#from-windows-wootc) for full details.
 
 ## 4. Day-2 administration
 
@@ -148,11 +150,11 @@ model, same habits — with TunaOS specifics called out.
 
 ### Updates
 
-Updates arrive as new image builds from nightly CI, and are applied
-automatically by **[uupd](https://github.com/ublue-os/uupd)** (the Universal
-Blue updater, running on a systemd timer) — the same updater Bluefin and
+Updates arrive as new image builds from nightly CI.
+**[uupd](https://github.com/ublue-os/uupd)** (the Universal Blue updater, on
+a systemd timer) applies them automatically — the same updater Bluefin and
 Aurora use. It also keeps Flatpaks and Homebrew current. Staged updates
-activate on the next reboot; nothing changes under a running system.
+activate on the next reboot; nothing changes under a live system.
 
 Update manually any time:
 
@@ -162,12 +164,12 @@ sudo bootc status           # what you're on, what's staged
 ```
 
 (We deliberately ship uupd instead of bootc's own
-`bootc-fetch-apply-updates.timer`, which is masked in our images — one
+`bootc-fetch-apply-updates.timer`, which our images mask — one
 updater, not two.)
 
 ### ujust — the task runner
 
-Like the rest of the family, TunaOS ships **`ujust`**: curated just recipes
+Like the rest of the family, TunaOS ships **`ujust`**: curated `just` recipes
 for common admin tasks. Run `ujust` with no arguments to list what's
 available on your image.
 
@@ -187,9 +189,9 @@ changed from stock.
 
 ### Why there is no package layering
 
-Bluefin documents `rpm-ostree` layering as a last resort; TunaOS images are
-**bootc-native across seven different package ecosystems**, so host-level
-layering isn't offered at all. The intended paths are, in order: Flatpak →
+Bluefin documents `rpm-ostree` layers as a last resort. TunaOS images
+are **bootc-native across seven different ecosystems of packages**, so we do
+not offer host layers at all. The intended paths are, in order: Flatpak →
 Homebrew → distrobox/toolbox container → build your own image
 ([ROLL_YOUR_OWN.md](ROLL_YOUR_OWN.md) — the equivalent of Universal Blue's
 custom-image story). That last option is the escape hatch that makes the
@@ -198,12 +200,12 @@ first three acceptable.
 You can still run `dnf` inside a toolbox, and some images do ship a
 repository definition under `/etc/yum.repos.d` — hummingbird carries the
 tunaOS package repository, for instance. What they do **not** ship is the
-repositories that existed only while the image was being built: those are
-bind-mounted directories that are gone by the time you boot, and a
-definition left pointing at one would fail every `dnf` transaction rather
-than sit there harmlessly. The build removes them at the end of the desktop
-install, so every repository an image ships is one a running system can
-actually reach.
+repositories that existed only during the image build. Those are
+bind-mounted directories that are gone by the time you boot. A repository
+definition that points at one of them is not harmless: it would fail every
+`dnf` transaction. The build removes them at the end of the desktop
+install, so every repository an image ships is one a live system can
+reach.
 
 ## 5. Rollback
 
@@ -214,12 +216,12 @@ sudo bootc rollback
 sudo systemctl reboot
 ```
 
-An image-based OS makes "get back to a working system" a one-liner. Use it
+An image-based OS makes "get back to a system that works" a one-liner. Use it
 first, debug second.
 
 ## 6. Rebasing — desktop, hardware, or entire base
 
-Rebasing is the same `bootc switch` from §3. Common moves:
+A rebase is the same `bootc switch` from §3. Common moves:
 
 ```bash
 # same base, different desktop
@@ -242,20 +244,21 @@ treat them as an experiment, and know `bootc rollback` is always there.
   `flatpak install flathub org.mozilla.firefox`.
 - **CLI tools** come from **Homebrew**, baked into the image the same way
   Bluefin does it (`ghcr.io/ublue-os/brew`): `brew install ripgrep`.
-- **Everything else** works great in containers: `distrobox` / `toolbox`
+- **Everything else** works great in containers. `distrobox` / `toolbox`
   give you a mutable Fedora/Ubuntu/Arch/anything userland with your home
-  directory mounted — the family's answer to "but I need `apt install`".
+  directory mounted. This is the family's answer to "but I need
+  `apt install`".
 
 ## 8. Gaming
 
 For serious gaming on this family of operating systems, the honest answer
-is: **[Bazzite](https://bazzite.gg)** is the specialist — Steam Gaming Mode,
-Proton tuning, HDR/VRR, handheld support — and if gaming is your primary
-use, run Bazzite. On TunaOS, the basics work the family way: install Steam,
-Lutris, or Heroic from Flathub, and NVIDIA users pick a `-nvidia` image
-(§2). Bazzite's documentation on Proton, controllers, and per-game tuning
-largely applies to any Flathub Steam install, and is the best reference for
-those topics on our Fedora-based variants too.
+is **[Bazzite](https://bazzite.gg)**. It is the specialist — Steam Gaming
+Mode, Proton tuning, HDR/VRR, handheld support — so if gaming is your
+primary use, run Bazzite. On TunaOS, the basics work the family way: install
+Steam, Lutris, or Heroic from Flathub, and NVIDIA users pick a `-nvidia`
+image (§2). Bazzite's documentation on Proton, controllers, and per-game
+tuning largely applies to any Flathub Steam install. It is also the best
+reference for those topics on our Fedora-based variants.
 
 ## 9. For developers
 
@@ -268,20 +271,21 @@ TunaOS as well:
 - **Pet containers** via distrobox for a long-lived mutable shell.
 - **Kubernetes/cloud tooling** via Homebrew (`brew install kubectl helm k9s …`).
 
-TunaOS does not currently ship a separate `-dx` image tier; the container
-tooling above is present in the standard images. For hacking on TunaOS
+TunaOS does not now ship a separate `-dx` image tier; the container
+tooling above is present in the standard images. To work on TunaOS
 itself, see the [Developer Guide](DEVELOPER-GUIDE.md).
 
 ## 10. Disk encryption and secure boot
 
 - Installers support **LUKS full-disk encryption** with optional **TPM2
-  auto-unlock**; a recovery key is generated and shown during install. Keep
-  it. Details: [LUKS-TPM.md](LUKS-TPM.md).
+  auto-unlock**. The installer generates a recovery key and shows it during
+  install. Keep it. Details: [LUKS-TPM.md](LUKS-TPM.md).
 - Secure Boot state and expectations per variant: [SECURE-BOOT.md](SECURE-BOOT.md).
 
 ## 11. Verifying what you run
 
-Every published image is signed with cosign and carries an attested SBOM:
+We sign every published image with cosign, and each one carries an attested
+SBOM:
 
 ```bash
 image=ghcr.io/tuna-os/yellowfin:gnome
@@ -320,5 +324,5 @@ scoreboard — we publish exactly what is and isn't proven, per cell.
 - [Bazzite](https://bazzite.gg) — gaming on this family
 - [Zirconium](https://github.com/zirconium-dev/zirconium) — our Niri stack
 - [bootc documentation](https://bootc-dev.github.io/bootc/) — the
-  underlying technology
+  technology underneath
 - [DEVELOPER-GUIDE.md](DEVELOPER-GUIDE.md) — how all of this is built

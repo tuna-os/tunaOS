@@ -2,9 +2,9 @@
 
 Last updated: 2026-07-16 (by `fix/r2-cost-reduction` investigation)
 
-Quick reference for diagnosing recurring CI failures. These were surfaced during a
-branch-integration push that touched 36 files across `.github/`, `build_scripts/`,
-`live-iso/`, `scripts/`, and `tests/`.
+Quick reference to diagnose CI failures that recur. A branch-integration push
+that touched 36 files across `.github/`, `build_scripts/`, `live-iso/`,
+`scripts/`, and `tests/` surfaced them.
 
 ---
 
@@ -30,8 +30,8 @@ non-GNOME desktop).
 1. **Primary:** Add `flatpak` to the EL10 `dnf_retry -y install` block in
    `10-base-packages.sh` (sorted alphabetically under `fastfetch`).
 2. **Belt-and-suspenders:** `customize-live.sh` now checks `command -v flatpak`
-   before attempting any flatpak operations and exits with a clear error
-   instead of a confusing "command not found" at line 116.
+   before it runs any flatpak operation. It exits with a clear error instead of
+   the unclear "command not found" at line 116.
 
 **Files changed:**
 - `build_scripts/10-base-packages.sh` — added `flatpak` to EL10 packages
@@ -74,7 +74,7 @@ Server-oriented bootc bases (AlmaLinux) default to multi-user.target
 
 **Architecture context:**
 
-The readiness markers live in two places depending on boot mode:
+The readiness markers live in two places, one for each boot mode:
 
 | Mode | Script | Waits for | Who emits it |
 |------|--------|-----------|--------------|
@@ -84,37 +84,37 @@ The readiness markers live in two places depending on boot mode:
 Both services are WantedBy/After `graphical.target` or `display-manager.service`,
 so neither runs if the system stays at multi-user.target.
 
-**Three fixes were needed (all applied):**
+**Three fixes, all applied:**
 
 1. **Build-time: `systemctl set-default graphical.target`** in
    `install-desktop.sh` — sets the default target in the image layer.
    Commit `0c36e46`.
 
 2. **Bootc install: `--karg systemd.unit=graphical.target`** in the `Justfile`
-   `qcow2` recipe — `bootc install to-disk` creates a fresh OSTree deployment
-   that does NOT preserve the default.target symlink from step 1. The kernel
-   cmdline override is the only reliable way. Commit `40c66b8`.
+   `qcow2` recipe. `bootc install to-disk` creates a fresh OSTree deployment.
+   That deployment does NOT preserve the default.target symlink from step 1.
+   The kernel cmdline override is the only reliable way. Commit `40c66b8`.
 
 3. **Service timeout: `TimeoutStartSec=30`** on `tunaos-desktop-contract.service`
-   — prevents a hung `systemctl is-active` call from blocking boot indefinitely.
+   — a hung `systemctl is-active` call then cannot block the boot indefinitely.
    Commit `ebdb0cd`.
 
-**Additionally:** `verify-desktop-experience.sh --runtime` was hardened to use
-individual gated checks with diagnostic `TUNAOS_DESKTOP_CONTRACT_FAIL` markers
-instead of `set -e` killing the script silently. Commit `ebdb0cd`.
+**Also:** we hardened `verify-desktop-experience.sh --runtime` to use
+individual gated checks with diagnostic `TUNAOS_DESKTOP_CONTRACT_FAIL` markers,
+instead of `set -e`, which killed the script silently. Commit `ebdb0cd`.
 
-**Caveat for NVIDIA images:** The grouped ISO flagship group boots
+**Caveat for NVIDIA images:** The flagship group of the grouped ISO boots
 `gnome-nvidia` by default. In QEMU with virtio-gpu (no NVIDIA hardware),
 the NVIDIA kernel modules may interfere with DRM initialisation. This produces
-a blank framebuffer even if graphical.target is reached. Two mitigations:
+a blank framebuffer even if the system reaches graphical.target. Two mitigations:
 1. The `graphical.target` fix should at least let the contract service run
    (marker appears on serial even if screen is blank).
-2. Consider changing the flagship group's default boot entry from
-   `gnome-nvidia` to `gnome` for CI boot gates, or adding a
-   `--boot-entry <name>` option to `iso-e2e.sh`.
+2. For CI boot gates, consider a change of the flagship group's default boot
+   entry from `gnome-nvidia` to `gnome`. A new `--boot-entry <name>` option
+   for `iso-e2e.sh` is an alternative.
 
-**Timing note:** The fix commits were pushed 2026-07-15 ~14:00 UTC. A Build
-Yellowfin dispatch from the branch is needed to test the full fix chain.
+**Timing note:** We pushed the fix commits 2026-07-15 ~14:00 UTC. To test the
+full fix chain, dispatch Build Yellowfin from the branch.
 
 ---
 
@@ -134,25 +134,25 @@ error: Recipe 'iso-group' failed on line 182 with exit code 1
 at the build step (they fell through to the boot gate).
 
 **Suspected cause:** Either:
-- A now-removed `iso_groups` entry (e.g. an "nvidia" suffix group) was present
-  during the schedule window and its intersection with variant flavors was
-  empty, causing `build-iso-group.sh` to fail before creating the recipe.
+- A now-removed `iso_groups` entry (e.g. an "nvidia" suffix group) existed
+  during the schedule window. Its intersection with variant flavors was empty,
+  so `build-iso-group.sh` failed before it created the recipe.
 - Or the schedule trigger's environment/defaults differ from workflow_dispatch
   in a way that breaks the matrix generation (`generate-matrix` step).
 
-**Status:** Not yet root-caused. The schedule failures have stopped since the
-config was simplified to two groups (flagship + community). Monitor the next
+**Status:** Not yet root-caused. The schedule failures have stopped since we
+simplified the config to two groups (flagship + community). Monitor the next
 Sunday run (2026-07-20).
 
 ---
 
 ### 4. LUKS E2E fisherman rewrite — full bug chain (2026-07-16, `fix/r2-cost-reduction`)
 
-Migrating `scripts/iso-e2e.sh --luks` from raw `sudo bootc install to-disk
+The move of `scripts/iso-e2e.sh --luks` from raw `sudo bootc install to-disk
 --block-setup tpm2-luks` to `sudo fisherman recipe.json` (per the Key
-Takeaway above) surfaced a chain of real, independent bugs, each only
-visible once the previous one was fixed and the run got one step further.
-Recorded here so the next similar migration doesn't have to re-discover
+Takeaway above) surfaced a chain of real, independent bugs. Each bug became
+visible only after a fix for the previous one let the run go one step further.
+This record exists so the next similar migration doesn't have to re-discover
 each one from scratch.
 
 | # | Symptom | Root cause | Fix |
@@ -182,7 +182,7 @@ each one from scratch.
 | 23 | Local `just build <variant> <flavor>` dies at Pass 3 with `writing blob to file "/tmp/container_images_storage.../35": no space left on device`, after the image itself built fine | Not a repo bug — a workstation one. `scripts/build-image-inner.sh` honours `TMPDIR` for both the chunkah scratch dir and `podman load`, and on an atomic desktop (Bluefin here) `/tmp` is a 7.7 GB RAM-backed tmpfs, which a ~4 GB rechunked OCI archive plus podman's staging copy overruns. CI runners have a disk-backed `/tmp`, which is why this never appears there | Build with a disk-backed scratch: `TMPDIR=/var/tmp/tunaos-build just build ...`. Note the failing step runs `podman system prune -af` just before it, so a failure here costs the whole build cache — set `TMPDIR` on the first attempt, not the second |
 | 24 | `marlin:kde`'s live session started only intermittently — sometimes the installer, sometimes a black screen with **stddev exactly 0** and no `TUNAOS_LIVE_READY` marker — and SSH into the live env was ALWAYS refused (`kex_exchange_identification: Connection reset by peer`, TCP and vsock alike). LUKS E2E stayed green throughout, because `--luks` drives fisherman over SSH and never looks at the screen | **Two independent causes, both named by the guest's own diagnostics dump** (`tunaos-live-debug`, captured on a boot with `ready=0`). (1) `flatpak-preinstall.service` is `Type=oneshot` + `WantedBy=multi-user.target`, so the target waits for a flatpak download and `graphical.target` waits on the target — at 40s the dump showed it `start running` with `multi-user.target`, `graphical.target` and `tunaos-live-ready.service` all `start waiting`. One blocker, three symptoms, and intermittent purely because it tracked the download (markers observed at 9s, 98s, and never). (2) The Justfile runs the ISO build under `sudo -E`, which preserves `HOME`, and podman picks its store from `HOME` — so the build read images from the invoking user's *rootless* store while `mksquashfs` ran as real root outside that namespace, recording uid 1000 for every file in the live root (`/usr`, `/usr/bin/sshd`, `/usr/share/empty.sshd` all `755 james:james`). sshd refuses its privsep directory outright (`must be owned by root`), exits 255 and restart-loops. It also silently defeated `tunaos_import_to_root_storage`, whose `podman image exists` probe found the image in the user's store and returned early | **Fixed and verified.** `customize-live.sh` masks `flatpak-preinstall.service` in the live squash (installed systems keep the curated app set); `build-iso-tacklebox.sh` pins `HOME=/root` and clears `XDG_DATA_HOME`/`XDG_CONFIG_HOME` in the root context. Rebuilt ISO measures `755 root:root` on `/usr/share/empty.sshd` and `flatpak-preinstall.service -> /dev/null`; the boot then reached `TUNAOS_LIVE_READY uptime=6.97` (was 98s or never), `ok - ssh daemon is active`, and the harness completed its in-guest smoke suite over SSH for the first time. Both pinned by bats tests. Remaining nit, not a product fault: KDE composites through llvmpipe, so the installer lands on screen well after the Plasma splash — the checkpoint runner re-captures for `TBOX_E2E_CHECKPOINT_SETTLE` (240s) rather than judging the splash frame |
 | 25 | `marlin:cosmic`'s live ISO shows no desktop and no installer, while looking healthy by every usual check: greetd active, autologin succeeded (`pam_unix(greetd:session): session opened for user liveuser`), `graphical.target` active, **zero failed units**, `cosmic-greeter` inactive (correct — the live adapter masks it deliberately) | greetd's `source_profile` defaults to true, so it does not exec the session command — it wraps it in `/bin/sh -c '[ -f /etc/profile ] && . /etc/profile; ...; exec cosmic-session'`. MEASURED inside the guest over SSH: `859 S+ do_wait /bin/sh -c ... exec cosmic-session` with child `882 Sl+ wait_woken umotd`. `umotd` (from `/etc/profile.d/umotd.sh`, shipped by the ublue common payload) blocks in a non-interactive session, so the shell waits forever and `exec` is never reached. Nothing logs an error | `source_profile = false` in the `[general]` section of every live greetd config — cosmic, niri **and xfce**, all three of which autologin through greetd (a bats test pins it, and is what caught xfce missing it). Verified on a rebuilt ISO: `cosmic-session`, `cosmic-comp`, `cosmic-panel` and `bwrap ... tuna-installer-cosmic` all running, framebuffer stddev 0.13, and the calibrated cosmic checkpoint passes 4/4. Two corrections worth keeping: cosmic does NOT need virgl to start OR to render (it drew fine on a host with no `virtio-vga-gl`), and the blank frames seen before this fix were the hang, not the GPU |
-| 26 | The fixes for rows 24 and 25 each landed in ONE place, but neither defect lives in one place. Asked directly: *do these propagate to the other variants?* | `source_profile = false` reached live cosmic/niri/xfce only. gnome and kde do not use greetd, and the **installed-system** greetd configs (`build_scripts/desktop/greetd-gtkgreet.sh`, `xfce-greeter.sh`) run their greeter through the same profile-sourcing shell with no such setting — so an installed niri/xfce box is exposed to the identical hang. Separately, `HOME` was pinned in `build-iso-tacklebox.sh`, but `.github/workflows/live-overlay.yml` invokes the tacklebox **binary** directly under `sudo -E` and never sources that script, so it kept publishing overlays built against the runner's rootless store | Fixed one level up instead: `/etc/profile.d/umotd.sh` is rewritten with an interactive guard (`case $- in *i*`) in `build_scripts/40-services.sh` — one of only three build scripts invoked by **all six** Containerfiles, so it covers every variant, every desktop, live media **and** installed systems. (`01-workarounds.sh`, the obvious home, runs for el10 and ubuntu only and would have missed Arch, the variant this was measured on.) The guard is POSIX shell because `/etc/profile.d` is sourced by dash on the Debian and Ubuntu variants. Measured cost of the guard: a login shell adds only `LANG`, `DEBUGINFOD_URLS`, perl paths, and `XDG_DATA_DIRS` — `/usr/local/bin` (fisherman) is on PATH either way and the flatpak exports come back via the `60-flatpak` user-environment-generator, so a session loses nothing. `live-overlay.yml` now pins `HOME=/root` itself, and a bats test fails any *direct* root tacklebox call that does not | 
+| 26 | The fixes for rows 24 and 25 each landed in ONE place, but neither defect lives in one place. Asked directly: *do these propagate to the other variants?* | `source_profile = false` reached live cosmic/niri/xfce only. gnome and kde do not use greetd. The **installed-system** greetd configs (`build_scripts/desktop/greetd-gtkgreet.sh`, `xfce-greeter.sh`) run their greeter through the same shell that sources the profile, with no such setting. An installed niri/xfce box therefore risks the identical hang. Separately, `build-iso-tacklebox.sh` pins `HOME`. But `.github/workflows/live-overlay.yml` invokes the tacklebox **binary** directly under `sudo -E` and never sources that script, so it continued to publish overlays built against the runner's rootless store. | Fixed one level up instead: `build_scripts/40-services.sh` rewrites `/etc/profile.d/umotd.sh` with an interactive guard (`case $- in *i*`). It is one of only three build scripts that **all six** Containerfiles invoke. So it covers every variant, every desktop, live media **and** installed systems. `01-workarounds.sh`, the obvious home, runs for el10 and ubuntu only and would have missed Arch, the variant we measured this on. The guard is POSIX shell because dash sources `/etc/profile.d` on the Debian and Ubuntu variants. Measured cost of the guard: a login shell adds only `LANG`, `DEBUGINFOD_URLS`, perl paths, and `XDG_DATA_DIRS`. `/usr/local/bin` (fisherman) is on PATH either way, and the flatpak exports come back via the `60-flatpak` user-environment-generator, so a session loses nothing. `live-overlay.yml` now pins `HOME=/root` itself, and a bats test fails any *direct* root tacklebox call that does not | 
 | 27 | `installer GUI checks reported 127 failure(s)` on marlin:kde and marlin:cosmic alike — on healthy images and broken ones, before and after the row 25 fix | Not a count. `scripts/e2e-installer-gui-checks.sh` resolved its helper as `${TEST_LIB_DIR}/lib/e2e-assert.sh` while `iso-e2e.sh` uploads it to `${TEST_LIB_DIR}/e2e-assert.sh` (`e2e-smoke-checks.sh` has the `/lib` *inside* the default and was always right). `source` failed, `check` was undefined, every assertion was a no-op, and 127 was bash's command-not-found status. A gate that can neither pass nor fail — and therefore could not report the bug in itself | Path corrected; a bats test now pins all three check scripts against the upload destination. **Consequence worth stating:** this gate has never asserted anything, so no historical run of it is evidence of anything. With `check()` restored it immediately failed on `installer readiness stamp present` — see row 28 |
 | 28 | With the row 27 fix in place, `not ok - installer readiness stamp present` on a marlin:cosmic ISO whose compositor and installer were both confirmed running | A false negative this repo had already diagnosed once. installer-smoke runs 63-68 failed identically until run 32445454947 found the stamp at `/run/user/<uid>/.flatpak/<app-id>/xdg-run/tuna-installer-ready`: inside the sandbox `$XDG_RUNTIME_DIR` reads as `/run/user/<uid>`, but it is a bind mount and the host path differs. `installer-smoke.yml` was fixed and pinned by `tests/test_readiness_stamp_lookup.py`; `e2e-installer-gui-checks.sh` is the second copy of that lookup and kept the two-path version, invisibly, because its assertions had never executed. What makes it durable: flatpak still *creates* the empty `app/<app-id>/` directory, so listing it reads as confirmation that nothing was written rather than as a wrong path | Sandbox host path added first, and the failure branch now `find`s the stamp rather than re-listing the directories it already assumes are right. The pytest pins **both** copies together. Gate now 4/4 on marlin:cosmic: compositor `cosmic-comp`, frontend `org.tunaos.InstallerCosmic`, stamp present, app_id matches, `signal: first-frame` |
 | 29 | `not ok - hostname is set` on every marlin ISO e2e run | A check bug, never an image defect — and the evidence was in the same serial log twice. `scripts/e2e-smoke-checks.sh` asserted `test -n "$(hostname)"` over SSH; `build_scripts/checks/e2e-runtime-checks.sh` asserted the same thing **with** a `/proc/sys/kernel/hostname` fallback on the console of the SAME boot and passed at 6.77s. `hostname` is a net-tools/inetutils binary the Arch-based variants do not ship, so only the copy without the fallback saw an empty string. Measured: hostname `archlinux`, `DEFAULT_HOSTNAME=marlin` | Smoke copy brought in line, and a bats test pins the two byte-identical — two copies of one assertion returning different verdicts on one boot is what kept this unexplained rather than obvious. Benign artifact noticed while tracing it: the live squashfs carries an empty `/etc/hostname` the OS image does not have (podman's bind-mount placeholder, captured when the live rootfs is squashed); systemd falls back correctly |
@@ -190,7 +190,7 @@ each one from scratch.
 | 31 | After debugging an image with `sudo podman image mount`, ROOTLESS `podman` on the workstation dies with `open /run/user/1000/containers/overlay-layers/mountpoints.json: permission denied` — and earlier, `open .../storage/overlay-images/images.json: permission denied` | The same HOME/XDG leak as rows 24 and 26, one level down. `sudo` here resets `HOME` to `/root` (so root podman does use root's *storage*), but it still passes `XDG_RUNTIME_DIR` through — so root podman writes its runtime state into the invoking user's `/run/user/1000/containers`, leaving one root-owned file that locks the user out of their own store. `sudo -E` is worse: it preserves `HOME` too, and then root podman writes into `~/.local/share/containers` as well | Repair with a targeted `find … ! -user <you> -exec chown <you>:<you> {} +` over BOTH `~/.local/share/containers/storage` and `/run/user/<uid>/containers` — not a blanket recursive chown, which flattens the subuid-mapped ownership a rootless store depends on. Note the count of "foreign-owned" files *rises* after the repair: chowning the directories makes previously untraversable subuid-mapped files visible, which is normal and not damage. Avoid it in the first place with `sudo env -u XDG_RUNTIME_DIR podman …` (options before assignments — see row 26) |
 | 32 | **Preventing rows 30–31 from recurring.** The fisherman drift lasted ~2 months and nothing reported it | Nothing that existed could have. The Flatpaks were *rebuilt daily*, so publish dates looked healthy — the package was fresh and the SOURCE was stale. Renovate has nothing to bump when a git source points at a repository that no longer moves. Binary inspection could date four of five but not gnome, whose Flatpak builds fisherman from a `type: dir` source with no VCS stamp. And the source of truth lives in five OTHER repositories, so no check inside tunaOS was looking at it | `scripts/check-installer-fisherman-pins.py` reads the fisherman source out of all five installers — the four Flatpak manifests and gnome's `.gitmodules` — and fails any that is not `tuna-os/fisherman`. Run daily by `installer-fisherman-pins.yml` (drift here happens over months, so per-PR would be noise), plus on any PR touching the check itself, so a PR that breaks the guard is caught by the guard. Three deliberate design calls: (1) it asserts the **repository, not the revision** — pinning an older revision of a live repo is a visible, reviewable choice, while sourcing a dead repo is the silent one, and a noisy check gets switched off; (2) revision *divergence* across desktops is a warning, because that is the exact shape the drift took — kde moved, nobody else did; (3) a missing/unparseable source is a hard **failure**, not a skip — the gate in row 27 could neither pass nor fail for months, so "found nothing" must never read as "nothing wrong". Ten unit tests exercise the pure audit with no network, including the literal broken configurations that shipped. A network error warns rather than reddening the build: this guards against drift over months, not a flaky minute |
 | 33 | `not ok - graphical.target is active` and `not ok - systemd unit graph verifies (graphical.target)` on **every** installed-system run, on **every** desktop — including LUKS installs that pass end-to-end (measured: marlin:cosmic at 11.7s under greetd, marlin:kde at 12.4s under sddm, both `TUNAOS_LUKS_E2E_PASS`) | Two different causes, same shape — an assertion that could never pass. (1) `e2e-runtime-checks.sh` runs from `tunaos-desktop-contract.service`, which is `WantedBy=graphical.target`, so it executes **inside that target's own startup transaction**; a target is not `active` until every unit wanting it has finished, so `is-active` reports `activating` there and structurally always will. **The obvious fix is a trap**: polling until `active` deadlocks — the target waits on this unit, the unit waits on the target — until `TimeoutStartSec=90` fires, adding a 90s stall to every boot. (2) `systemd-analyze verify --recursive-errors=yes` returns non-zero when **any transitively reachable** unit warns, including upstream units we neither ship nor can fix; measured on a dev host, `flatpak-appstream-refresh.service:7: Unknown key 'ExecCondition'` alone is enough | (1) Assert `ActiveState` is one of `active`/`activating`/`reloading` — healthy *including* the in-transaction case — and add `systemctl get-default == graphical.target`, which is the stable half of the original intent because unlike `ActiveState` it does not depend on when in the boot you ask. Verified the predicate still fails `inactive`, `failed`, `deactivating` and empty, so it was not merely softened into always passing. (2) Gate on `--recursive-errors=no` (our unit, which is what the assertion claims) and keep the transitive sweep as **information**, printed rather than discarded into `/dev/null`. **The rule this shares with rows 27 and 29:** an assertion that always says the same thing cannot report a regression, so a permanently-red check is not a known-issue — it is a dead gate |
-| 34 | **Build Marlin red on every run for 18+ consecutive days**, both arches, and `just build marlin <flavor>` fails identically locally: `error: failed to run custom build command for 'selinux-sys v0.6.15'` → `selinux-sys: Failed to find 'selinux/selinux.h'` | Renovate bumped `downloads.bootc` to **v1.16.11** on 2026-09-03. That release added `selinux = { workspace = true }` to `crates/lib/Cargo.toml` as a **hard, non-optional** dependency — no feature flag to turn it off. Confirmed against the tags: `selinux-sys` is absent from v1.16.8/9/10's `Cargo.lock` and present in v1.16.11's. `selinux-sys`'s build script needs `selinux/selinux.h`, and **Arch does not ship it — `libselinux` is not in the official repos at all** (`pacman -Si libselinux` → "package not found"), so there is nothing to add to `Containerfile.arch`'s bootc-builder stage. Not a tunaOS regression: an upstream dependency change that is simply unbuildable on a non-SELinux distro. (Note the failures predate 09-03 too, so at least one *earlier* cause is still unidentified — this row explains the current one, not the whole 18-day streak) | Pinned back to **v1.16.10** as a **CEILING** — the opposite of the tacklebox FLOOR pin directly below it in the same file, and the comment says so, because reading one as the other is how a well-meant bump reintroduces this. Verified by building `Containerfile.arch`'s bootc-builder stage on a clean `archlinux:latest` at **both** versions (v1.16.11 fails as above, v1.16.10 completes), then by a full `just build marlin niri` reaching `BUILD_EXIT=0`. **A pin alone would not have held** — Renovate would re-bump it next run, which is how it arrived — so `renovate.json` carries a matching `allowedVersions: "<=1.16.10"`, and `tests/test_bootc_version_ceiling.py` pins both files and requires them to agree. The rule's description must name the exit condition (bootc makes selinux optional, or Arch ships libselinux), because a ceiling with no stated way out becomes permanent by accident |
+| 34 | **Build Marlin red on every run for 18+ consecutive days**, both arches, and `just build marlin <flavor>` fails identically locally: `error: failed to run custom build command for 'selinux-sys v0.6.15'` → `selinux-sys: Failed to find 'selinux/selinux.h'` | Renovate bumped `downloads.bootc` to **v1.16.11** on 2026-09-03. That release added `selinux = { workspace = true }` to `crates/lib/Cargo.toml` as a **hard, non-optional** dependency — no feature flag to turn it off. Confirmed against the tags: `selinux-sys` is absent from v1.16.8/9/10's `Cargo.lock` and present in v1.16.11's. `selinux-sys`'s build script needs `selinux/selinux.h`. **Arch does not ship it: `libselinux` is not in the official repos at all** (`pacman -Si libselinux` → "package not found"). So there is nothing to add to `Containerfile.arch`'s bootc-builder stage. Not a tunaOS regression: an upstream dependency change that is unbuildable on a non-SELinux distro. Note also that the failures predate 09-03, so at least one *earlier* cause is still unidentified. This row explains the current one, not the whole 18-day streak. | Pinned back to **v1.16.10** as a **CEILING**. It is the opposite of the FLOOR pin for tacklebox directly below it in the same file, and the comment says so. A reader who takes one for the other reintroduces this with a well-meant bump. We verified this: `Containerfile.arch`'s bootc-builder stage builds on a clean `archlinux:latest` at **both** versions — v1.16.11 fails as above, v1.16.10 completes. A full `just build marlin niri` then reached `BUILD_EXIT=0`. **A pin alone would not have held** — Renovate would re-bump it next run, which is how it arrived. So `renovate.json` carries a matching `allowedVersions: "<=1.16.10"`, and `tests/test_bootc_version_ceiling.py` pins both files and requires them to agree. The rule's description must name the exit condition (bootc makes selinux optional, or Arch ships libselinux), because a ceiling with no stated way out becomes permanent by accident |
 | 35 | `not ok - SSH host keys were generated` on **every** installed system, on **every** flavor — measured on all five marlin flavors at ~11s, each on a LUKS install that otherwise passed end to end | Not a timing artifact, unlike rows 33's pair. The guard was `systemctl list-unit-files sshd.service ssh.service`, which matches a unit that is **present but DISABLED**. Production images ship openssh and then deliberately turn it off (the `safe_disable sshd.service`/`ssh.service`/`.socket` calls in `40-services.sh`), so `sshd-keygen` never runs and `/etc/ssh/ssh_host_*_key` legitimately does not exist. The assertion was asserting against the image's own design | Gate on whether sshd actually **runs** — `is-enabled` or `is-active` on any of the four unit spellings — rather than on whether it is installed. That keeps the check meaningful exactly where it matters: the dev ISOs, where `ENABLE_SSHD=1` and that daemon is the harness's only way into the guest, so a missing host key is fatal. A skipped check now **says so** in the serial log, because a production image with sshd off and a dev ISO whose sshd failed to enable both end up with no host keys and only that line separates them. **Third assertion in this one file found permanently red for a reason unrelated to what it claims to test** (see rows 33 and 29): a check that always says the same thing cannot report a regression, so a permanently-red check is not a known issue — it is a dead gate, and the file now has tests pinning all three against returning to that state |
 | 36 | `systemd-analyze verify graphical.target` reports an ordering cycle through `rechunker-group-fix.service` on every variant (surfaced by the informational sweep added in row 33) | The ublue common payload ships `rechunker-group-fix.service`, which is `After=local-fs.target` **and** `Before=systemd-sysusers.service` — a genuine cycle in the unit graph, back through `systemd-tmpfiles-setup-dev` → `local-fs-pre.target`. Upstream `projectbluefin/common:latest` still ships it that way; our own `_upstream-snapshots/aurora` copy has that `Before=` commented out, so someone upstream already hit it. **But the unit is irrelevant to tunaOS regardless:** its header says it exists for images built with `ublue-os/legacy-rechunk`, which prunes `/usr/lib/group` and `/usr/lib/gshadow`. tunaOS rechunks with **chunkah** (`coreos-chunkah`), and a built `marlin:niri` confirms it — neither file exists, so the damage the unit repairs was never done | Masked in `40-services.sh` (above the package-manager branching, so every family reaches it). **State the evidence precisely:** the cycle is a **STATIC** `systemd-analyze` finding — PID 1 logged no cycle and no deleted job on either a pre-mask or post-mask boot, and masking does **not** silence `systemd-analyze`, which reads unit files rather than enablement state. So the sweep still reports it after this change, and that is not a regression. The justification for masking is that we should not ship repairs for tools we do not use — it runs `systemd-sysusers`, `rechunker-group-fix` and `systemd-tmpfiles` on every boot of every variant for a problem we do not have — **not** an observed runtime failure. Masked rather than deleted so it survives a re-copy of the common payload; do not unmask without first checking the image is still chunkah-built |
 | 37 | Thirteen bats tests fail on a developer workstation and pass in CI — the whole `OS detection` / `detected_os` / `print_debug_info` / `warn_on_fail` cluster in `test_lib.bats`, reporting e.g. `ALMALINUX: true` for a **fedora** `BASE_IMAGE` | Two faults, and the suite was not hermetic. (1) `test_lib.bats`'s `setup()` stubbed `jq` to print `almalinuxorg/almalinux-bootc` **unconditionally** — meant for one image-info.json test, but applied to every test in the file. (2) `lib.sh` read that answer straight into `BASE_IMAGE`. On any **ublue-derived workstation** `/usr/share/ublue-os/image-info.json` exists, so `lib.sh` consulted it, the stub answered "almalinux" regardless of the file, and each test's own `BASE_IMAGE` was overridden. In CI the file is absent, `jq` is never called, and everything passed — so the failures looked like developer-environment noise and were dismissed as such (by me, repeatedly, as "pre-existing on main") | Both fixed. The jq shim now delegates to the real `jq` — the one test that needed a canned answer writes a real JSON with a `base-image` key and never needed one — and `setup()` defaults `_IMAGE_INFO` to a path that does not exist, so host state cannot leak in. **And a genuine library bug behind it:** `lib.sh` assigned the lookup straight into `BASE_IMAGE`, so an `image-info.json` that exists but carries **no** `base-image` key set it to the empty string, destroying a caller-provided value — `// empty` returns "" and the fallback below then cannot tell "nobody told us" from "we just threw it away". Our own `90-image-info.sh` writes the key, but it runs late, so any stage sourcing `lib.sh` on a base that already ships a partial file loses what the Containerfile passed in. Now read into a scratch var and applied only when non-empty, with a regression test confirmed to fail without the fix. **Lesson:** a test that fails only on developer machines is not automatically environment noise — here it was the suite reading the developer's own OS, and a real library defect underneath |
@@ -425,27 +425,26 @@ flatpak before it.
 *The harness.* Both offline-store probes were answered **inside** the guest:
 `sudo podman image exists <ref>`, then `sudo jq -e ... images.json` as the
 fallback. guppy has neither binary, so both exited 127 and the harness
-concluded "image absent" — then fell through to the SSH image transfer that
-`scripts/iso-e2e.sh` documents at length as physically impossible (a ~4.9G tar
-into a tmpfs upperdir on a 4096M guest, #941). A missing tool read as a missing
-image.
+concluded "image absent". It then fell through to the SSH image transfer.
+`scripts/iso-e2e.sh` documents that transfer at length as physically impossible:
+a ~4.9G tar into a tmpfs upperdir on a 4096M guest, #941. A missing tool read as
+a missing image.
 
 **Fix, matching the two layers.**
 
 - `Containerfile.gentoo` emerges `app-containers/podman`.
 - `customize-live.sh` asserts `command -v podman` next to its `sudo`
-  assertion, so the next base to omit it fails the ISO build in seconds rather
-  than hour three of a matrix cell.
-- The store index is read out of the guest once with `cat` and parsed on the
-  **host** (`store_records_image`), so the probe needs nothing from the guest
-  that the diagnostic dump has not already proven it can do. Matching is on
-  `names` only, never `names-history`: containers-storage will not resolve a
-  ref that was retagged away, so answering yes for one is the same dead end by
-  another road.
-- Podman-shaped diagnostics are gated on the guest actually having podman, so
-  a skopeo-only base says so once instead of printing `command not found` a
-  dozen times and leaving the cause to be inferred from an absent `Found`
-  line.
+  assertion. The next base to omit it then fails the ISO build in seconds. It does
+  not die in hour three of a matrix cell.
+- `cat` reads the store index out of the guest once, and the **host** parses
+  it (`store_records_image`). The probe then needs nothing from the guest
+  that the diagnostic dump has not already proven it can do. The match is on
+  `names` only, never `names-history`, because containers-storage will not
+  resolve a ref that someone retagged away. A yes for one is the same dead end
+  by another road.
+- Podman-shaped diagnostics run only when the guest has podman. A skopeo-only
+  base then says so once. It does not print `command not found` a dozen times
+  and leave the reader to infer the cause from an absent `Found` line.
 
 ---
 
@@ -470,18 +469,18 @@ image.
 
 ### Key takeaway
 
-Every place in our code that calls `bootc install to-disk` directly should be
-replaced with `fisherman recipe.json`. This is how dakota-iso does it. The
+Every place in our code that calls `bootc install to-disk` directly must use
+`fisherman recipe.json` instead. This is how dakota-iso does it. The
 fisherman tool:
-- Handles ostree vs composefs backend selection
+- Handles the choice between the ostree and composefs backends
 - Preserves graphical.target on EL10 (ostree) via proper kernel kargs
 - Handles LUKS/TPM encryption
 - Installs flatpaks post-install
 - Sets hostname
 - Creates user accounts
 
-See `_upstream-snapshots/dakota-iso/scripts/luks-install-qemu.sh` for end-to-end
-example including recipe generation, fisherman building, SCP upload, and SSH invocation.
+See `_upstream-snapshots/dakota-iso/scripts/luks-install-qemu.sh` for an end-to-end
+example that includes recipe generation, the fisherman build, SCP upload, and SSH invocation.
 
 ## Diagnostic Commands
 
@@ -617,7 +616,7 @@ Containerfile.overlay (OVERLAY_TYPE=nvidia)
 ## Critical architectural insight: IMAGE vs OSTREE DEPLOYMENT
 
 A common source of confusion: `systemctl set-default graphical.target` in
-`install-desktop.sh` works during the Containerfile build, but `bootc install
+`install-desktop.sh` works during the Containerfile build. But `bootc install
 to-disk` creates a **fresh OSTree deployment** that does NOT preserve the
 default.target symlink **on ostree-backend variants only**.
 
@@ -629,7 +628,7 @@ default.target symlink **on ostree-backend variants only**.
 | **composefs** | Fedora, Ubuntu, Arch, Debian, openSUSE, Gentoo | systemd-boot | ❌ NO |
 
 The kernel cmdline override `systemd.unit=graphical.target` is the only reliable
-way to ensure EL10 installed systems reach graphical.target.
+way to make sure that EL10 systems, once installed, reach graphical.target.
 
 ### Fisherman recipe approach (replaces raw `bootc install to-disk`)
 
@@ -657,9 +656,10 @@ This means:
   the `Justfile` `qcow2` recipe is a short-term workaround for EL10 only. The
   proper fix is to switch to `fisherman recipe.json` everywhere
 - **For live ISO (ready mode):** the live squashfs uses the image's default target
-  directly (no OSTree deployment), so the `set-default` in install-desktop.sh works
-- **For real installed systems:** users never hit this because they bootc install
-  and their system already runs graphical=true before install... but VERIFY this
+  directly, with no OSTree deployment. The `set-default` in install-desktop.sh
+  therefore works
+- **For real installed systems:** users never hit this. They bootc install, and
+  their system already runs graphical=true before install... but VERIFY this
 
 ## Build Gate Workflow
 
@@ -678,7 +678,7 @@ Grouped ISO workflow:
 
 ## Confirmed Gate Failures (2026-07-15)
 
-All failing gates share the same root cause — images built before the
+All gates that fail share the same root cause — images built before the
 `graphical.target` fix (commit `0c36e46`, pushed ~12:00 UTC):
 
 | Workflow | Variant:Flavor | Mode | Error |
@@ -688,8 +688,8 @@ All failing gates share the same root cause — images built before the
 | Publish Grouped ISOs | yellowfin (flagship) | ISO ready | `TUNAOS_LIVE_READY` not emitted + blank screen |
 | LUKS E2E | yellowfin:kde | ISO → install | `flatpak: command not found` (separate root cause, see §1) |
 
-Once new images are published with the `graphical.target` fix, all three boot-gate
-timeouts should resolve (assuming no NVIDIA-driver interaction in §2 caveat).
+Once we publish new images with the `graphical.target` fix, all three boot-gate
+timeouts should resolve, if no NVIDIA-driver interaction from the §2 caveat occurs.
 
 ---
 
@@ -703,9 +703,9 @@ Error: writing blob: initiating layer upload to /v2/tuna-os/flounder-sid/blobs/u
 ```
 
 **Root cause:**
-When new experimental variant container images are pushed to GitHub Container Registry (`ghcr.io/tuna-os/<variant>`) for the first time, GitHub automatically creates the package under the organization namespace. By default, newly created GHCR packages do NOT inherit write permissions for the repository's `GITHUB_TOKEN` from GitHub Actions workflows.
+A workflow pushes new container images for an experimental variant to GitHub Container Registry (`ghcr.io/tuna-os/<variant>`) for the first time. GitHub then automatically creates the package under the organization namespace. By default, a GHCR package that GitHub creates does NOT inherit write permissions for the repository's `GITHUB_TOKEN` from GitHub Actions workflows.
 
-Even though `reusable-build-image.yml` declares `permissions: packages: write`, GitHub Container Registry enforces package-level access controls. If the `tuna-os/<variant>` package settings do not explicitly grant Actions access to `tuna-os/tunaOS`, `podman push` fails with `permission_denied: write_package`.
+Even though `reusable-build-image.yml` declares `permissions: packages: write`, GitHub Container Registry applies its own access controls for each package. If the `tuna-os/<variant>` package settings do not explicitly grant access for Actions to `tuna-os/tunaOS`, `podman push` fails with `permission_denied: write_package`.
 
 **Resolution (GitHub Org Admin / Package Owner Settings):**
 For each variant package published to `ghcr.io/tuna-os/<package>`:
@@ -722,27 +722,27 @@ Applies to all experimental variant packages: `flounder-sid`, `flounder`, `guppy
 
 **Affected workflows:** `Build Bonito Rawhide` (`bonito-rawhide`).
 
-**Symptom 1 (Base image pull EOF):**
+**Symptom 1 (EOF during the base image pull):**
 ```
 Error: pulling image quay.io/fedora/fedora-bootc:rawhide: unexpected EOF / CDN blob transfer dropped mid-pull
 ```
-**Symptom 2 (Desktop contract gate failure):**
+**Symptom 2 (failure of the desktop contract gate):**
 ```
 ERROR: desktop experience contract marker was not emitted
 ==> Screenshot 10-ready stddev=0
 ```
 
 **Root cause & Mitigations:**
-1. **Quay CDN blob drop:** `reusable-build-image.yml` includes an explicit 4-attempt retry loop with exponential backoff (`sudo podman pull --platform "${PLATFORM}" "$BASE"`) before invoking `just build`. If `quay.io` drops a blob transfer, local podman retries the pull instead of failing the job.
-2. **Desktop contract gate / Rawhide desktop breakage:** Rawhide packages rolling Fedora development builds. When desktop packages or display manager defaults temporarily break in Rawhide, or when systemd target initialization changes, the boot gate in `reusable-build-image.yml` times out waiting for `TUNAOS_DESKTOP_CONTRACT_OK`.
-   - Gate artifacts (`serial.log`, `10-ready.png`) uploaded to the Actions run provide diagnostic evidence to identify whether failure is due to display manager startup (`gdm`, `greetd`, `sddm`), missing systemd units (`graphical.target`), or package breakage.
-   - Unpublished/failing `bonito-rawhide` tags are automatically skipped from the published ISO matrix (`publish-iso-groups.yml`) via `#674` so a broken Rawhide build does not block stable ISO releases.
+1. **Blob drop at the Quay CDN:** `reusable-build-image.yml` includes an explicit retry loop of 4 tries with exponential backoff (`sudo podman pull --platform "${PLATFORM}" "$BASE"`) before it calls `just build`. If `quay.io` drops a blob transfer, local podman retries the pull, and the job does not fail.
+2. **Desktop contract gate / Rawhide desktop breakage:** Rawhide packages the development builds of Fedora as they roll. Desktop packages in Rawhide break temporarily, the defaults of the display manager change, or systemd target initialization changes. The boot gate in `reusable-build-image.yml` then times out as it waits for `TUNAOS_DESKTOP_CONTRACT_OK`.
+   - Gate artifacts (`serial.log`, `10-ready.png`) go to the Actions run. They provide the evidence to identify the cause: display manager startup (`gdm`, `greetd`, `sddm`), missing systemd units (`graphical.target`), or package breakage.
+   - The published ISO matrix (`publish-iso-groups.yml`) automatically skips `bonito-rawhide` tags that fail or never publish, via `#674`. A broken Rawhide build therefore does not block the release of stable ISOs.
 
 ---
 
 ### 11. Podman/crun cache mount options rejected (`rw + bind conflict`)
 
-**Affected workflows:** `LUKS E2E`, Containerfile builds utilizing `--mount=type=cache,rw,...` options.
+**Affected workflows:** `LUKS E2E`, Containerfile builds that use `--mount=type=cache,rw,...` options.
 
 **Symptom:**
 ```
@@ -750,11 +750,11 @@ resolving mountpoints: invalid options "rw, shared, rw, bind", can only specify 
 ```
 
 **Root cause:**
-Older versions of `crun` / `podman` on certain runner environments (e.g. Blacksmith or legacy GitHub runners) exhibit a mount-parsing bug when explicit `rw` options are passed to `--mount=type=cache,rw,...`. Because `type=cache` mounts default to read-write (`rw`) mode automatically, specifying an explicit `rw` flag causes `crun` to concatenate duplicate `rw` flags (`rw, shared, rw, bind`), causing `crun` to reject the mount initialization.
+Older versions of `crun` / `podman` on certain runner environments (e.g. Blacksmith or legacy GitHub runners) have a bug in how they parse mounts. The bug appears when a build passes explicit `rw` options to `--mount=type=cache,rw,...`. Because `type=cache` mounts default to read-write (`rw`) mode automatically, an explicit `rw` flag makes `crun` concatenate duplicate `rw` flags (`rw, shared, rw, bind`), and `crun` then rejects the mount initialization.
 
 **Fix & Prevention:**
-1. **Omit explicit `rw` in cache mounts**: When specifying buildah/podman cache mounts in Containerfiles or build scripts, omit the redundant `rw` modifier (e.g. use `--mount=type=cache,id=...` instead of `--mount=type=cache,rw,id=...`).
-2. **Runner `crun` version alignment**: Ensure GitHub Actions runner environments update `crun` to `v1.14.1+` where mount option parsing deduplicates default access modes.
+1. **Omit explicit `rw` in cache mounts**: In Containerfiles or build scripts, omit the redundant `rw` modifier from buildah/podman cache mounts. For example, use `--mount=type=cache,id=...` instead of `--mount=type=cache,rw,id=...`.
+2. **Runner `crun` version alignment**: Make sure that the runner environments for GitHub Actions update `crun` to `v1.14.1+`. In that version, the parser for mount options removes duplicates from the default access modes.
 
 ---
 
@@ -768,10 +768,10 @@ Drift in fixed-sleep sendkey choreography (ret/tab/tab/ret) causing screenshot c
 ```
 
 **Root cause & Modernized Driver Design:**
-1. **Blind sendkey choreography drift**: Fixed sleeps (`sleep 45/60/60`s) and fixed key counts break when GUI installers (`bootc-installer` and the per-desktop `org.tunaos.Installer*` forks) change screen layouts or load times.
-2. **State-aware stepping driver**: Replaced blind choreography in `scripts/run-walkthrough.sh` with the state-aware driver in `scripts/installer-walkthrough.py`. It polls QEMU screendumps, detects framebuffer stabilization (hash/stddev delta), performs OCR matching against `tests/installer-screens.yaml`, and advances screens dynamically (`welcome -> disk -> encryption -> summary -> install -> done`).
-3. **Per-desktop frontend keymaps & assertions**: Frontends (`org.bootcinstaller.Installer`, `org.tunaos.InstallerKde`, etc.) declare per-desktop keymaps and screen contracts. Framebuffer stddev assertions are enforced on compositors with GL rendering (GNOME, KDE, COSMIC) while recorded for virgl-dependent compositors (Niri, XFCE).
-4. **Hardened installed-disk gate**: After UI installation completes, `iso-e2e.sh --disk` boots `install-disk.qcow2`, injects the test passphrase, and verifies both LUKS encryption and desktop experience contract (`TUNAOS_DESKTOP_CONTRACT_OK`) as a blocking gate.
+1. **Drift in the blind sendkey choreography**: GUI installers change screen layouts or load times. Fixed sleeps (`sleep 45/60/60`s) and a fixed count of keys then break. The installers here are `bootc-installer` and the per-desktop `org.tunaos.Installer*` forks.
+2. **State-aware step driver**: Replaced blind choreography in `scripts/run-walkthrough.sh` with the state-aware driver in `scripts/installer-walkthrough.py`. It polls QEMU screendumps, detects framebuffer stabilization (hash/stddev delta), does OCR matching against `tests/installer-screens.yaml`, and advances screens dynamically (`welcome -> disk -> encryption -> summary -> install -> done`).
+3. **Per-desktop frontend keymaps & assertions**: Frontends (`org.bootcinstaller.Installer`, `org.tunaos.InstallerKde`, etc.) declare per-desktop keymaps and screen contracts. The driver enforces assertions on framebuffer stddev for compositors that render with GL (GNOME, KDE, COSMIC). For virgl-dependent compositors (Niri, XFCE) it only records them.
+4. **Hardened installed-disk gate**: After UI installation completes, `iso-e2e.sh --disk` boots `install-disk.qcow2` and injects the test passphrase. It then verifies both LUKS encryption and the desktop experience contract (`TUNAOS_DESKTOP_CONTRACT_OK`), and a failure stops the job.
 
 ---
 
@@ -786,12 +786,12 @@ flounder-sid:cosmic exit=1 missing required command: cosmic-comp
 ```
 
 **Root cause:**
-Debian 13 (Trixie), Sid (unstable), and experimental repos do not ship COSMIC desktop packages (`cosmic-comp`, `cosmic-session`, etc.) natively in Debian archives. The `manifests/desktops/cosmic.yaml` PPA declaration `ppa:hepp3n/cosmic-epoch` specifies `condition: ubuntu`, which is skipped on Debian builds to prevent ABI-skewed Ubuntu binary package installation. As a result, apt soft-fails missing package names, producing published container images with no compositor.
+Debian 13 (Trixie), Sid (unstable), and experimental repos do not ship COSMIC desktop packages (`cosmic-comp`, `cosmic-session`, etc.) natively in Debian archives. The `manifests/desktops/cosmic.yaml` PPA declaration `ppa:hepp3n/cosmic-epoch` specifies `condition: ubuntu`, so Debian builds skip it and do not install Ubuntu binary packages with a skewed ABI. As a result, apt soft-fails missing package names, and the published container images have no compositor.
 
-**Resolution Strategy & Upstream Packaging:**
-1. **Upstream DEB packaging track**: `tuna-os/tunaos-packages#152` is the original Debian-specific ask; the comprehensive plan (widen every COSMIC recipe to Debian *and* Ubuntu, publish them to our own apt repo, then retire `ppa:hepp3n/cosmic-epoch` entirely — the same third-party dependency that also causes grouper:cosmic's failures) is tracked in `tuna-os/tunaos#964`.
-2. **Concrete progress, verified 2026-08-09**: of the 14 COSMIC recipes, 5 (`pop-icon-theme`, `cosmic-icon-theme`, `cosmic-randr`, `cosmic-panel`, `cosmic-comp`) are gate-proven for both the `ubuntu` and `debian` Tideforge targets (`tunaos-packages` issues #204, #210, #214, #216), and 4 of those 5 are already published to `repo.tunaos.org/tideforge/<distro>/` via `.github/workflows/publish-tideforge-debs.yml` (a manually-dispatched, incrementally-widened matrix — `cosmic-comp`'s publish entry hasn't landed yet even though its gate has). The other 9, including `cosmic-session` (which must land last — it `Requires` the other ten), are not yet gate-widened. `manifests/desktops/cosmic.yaml`'s `apt:` block still points at the PPA and must stay that way until all 14 are published — `cosmic-session`'s own recipe currently ships with an intentionally empty `ubuntu`/`debian` runtime-`Depends` list for exactly this reason, so pointing `flounder`/`grouper` at that repo today would trade a working PPA build for an unsatisfiable-`Depends` apt failure.
-3. **Matrix Visibility**: The flavor remains declared in `.github/build-config.yml` and reported as red in post-publish contract sweeps (`desktop-contract-sweep.yml` / #921) to maintain transparent tracking rather than silently shrinking matrix coverage. Rebuilding after packaging updates will replace existing tags cleanly without destructive registry actions.
+**Resolution Strategy & Upstream Packages:**
+1. **Track for upstream DEB packages**: `tuna-os/tunaos-packages#152` is the original Debian-specific ask. `tuna-os/tunaos#964` tracks the comprehensive plan: widen every COSMIC recipe to Debian *and* Ubuntu, then publish them to our own apt repo. The plan then retires `ppa:hepp3n/cosmic-epoch` entirely, the same third-party dependency that also causes grouper:cosmic's failures.
+2. **Concrete progress, verified 2026-08-09**: of the 14 COSMIC recipes, 5 are gate-proven for both the `ubuntu` and `debian` Tideforge targets. They are `pop-icon-theme`, `cosmic-icon-theme`, `cosmic-randr`, `cosmic-panel` and `cosmic-comp` (`tunaos-packages` issues #204, #210, #214, #216). 4 of those 5 already reach `repo.tunaos.org/tideforge/<distro>/` through `.github/workflows/publish-tideforge-debs.yml`, a matrix that we dispatch by hand and widen step by step. `cosmic-comp`'s publish entry hasn't landed yet, even though its gate has. The other 9 have no widened gate yet. They include `cosmic-session`, which must land last because it `Requires` the other ten. `manifests/desktops/cosmic.yaml`'s `apt:` block still points at the PPA and must stay that way until all 14 reach the repo. `cosmic-session`'s own recipe now ships with an intentionally empty `ubuntu`/`debian` runtime-`Depends` list for exactly this reason. To point `flounder`/`grouper` at that repo today would trade a PPA build that works for an apt failure on unsatisfiable `Depends`.
+3. **Matrix Visibility**: The flavor remains declared in `.github/build-config.yml`, and post-publish contract sweeps (`desktop-contract-sweep.yml` / #921) report it as red. That keeps the state visible, instead of a silent reduction of matrix coverage. A rebuild after package updates will replace existing tags cleanly, with no destructive registry actions.
 
 ---
 
@@ -802,12 +802,12 @@ Debian 13 (Trixie), Sid (unstable), and experimental repos do not ship COSMIC de
 **Policy & Criteria:**
 An experimental variant (`experimental: true`) is eligible for promotion to the nightly build schedule (`schedule: cron: "0 1 * * *"`) once it meets the following criteria:
 1. **Clean Image Build**: All declared DE/flavor stages build green without failures.
-2. **ISO & Disk Boot Gate**: For variants with `build_iso: true` (e.g. `grouper`, `marlin`), the ISO build and QEMU disk boot gate (`iso-e2e.sh --disk`) complete cleanly emitting `TUNAOS_DESKTOP_CONTRACT_OK`.
-3. **No Soft Failures / Missing Compositors**: Post-publish desktop contract sweep verifies essential desktop commands (e.g. `niri`, `cosmic-comp`, `nautilus`, `sddm`) are present and functional.
+2. **ISO & Disk Boot Gate**: Some variants have `build_iso: true` (e.g. `grouper`, `marlin`). For those, the ISO build and QEMU disk boot gate (`iso-e2e.sh --disk`) complete cleanly and emit `TUNAOS_DESKTOP_CONTRACT_OK`.
+3. **No Soft Failures / Missing Compositors**: The post-publish sweep of the desktop contract looks for essential commands (e.g. `niri`, `cosmic-comp`, `nautilus`, `sddm`). They must be present and functional.
 
-**Variant Status & Promotion Tracking:**
+**Variant Status & Promotion Record:**
 - `grouper` (Ubuntu 26.04): Promoted once image and ISO e2e boot gates pass cleanly.
-- `marlin` (Arch): Promoted upon passing image and ISO e2e gates.
+- `marlin` (Arch): Promoted once it passes image and ISO e2e gates.
 - `flounder-sid` (Debian Sid): Promoted upon green image builds (no ISOs).
 - `guppy` (Gentoo) & `sailfin` (openSUSE TW): Promoted upon green image builds following target-stage fixes.
 - `flounder` (Debian Trixie): Stays experimental until ostree base requirements (`≥ 2025.3`) land.
@@ -822,22 +822,22 @@ An experimental variant (`experimental: true`) is eligible for promotion to the 
 Published container images built green in CI but shipped missing essential desktop components:
 - `flounder:niri`: Missing `niri` compositor (no apt branch).
 - `sailfin:gnome`: Missing `nautilus`, file manager, keyring (minimal pattern skeleton).
-- `flounder:cosmic` & `flounder-sid:cosmic`: Missing `cosmic-comp` (Ubuntu PPA condition skipped on Debian).
+- `flounder:cosmic` & `flounder-sid:cosmic`: Missing `cosmic-comp` (Debian skips the Ubuntu PPA condition).
 - `grouper:gnome`: Missing `gnome-keyring` (absent from apt list).
-- `KDE on PlasmaLogin`: Display manager unit enablement skipped due to hardcoded DM name or base-stage timing.
+- `KDE on PlasmaLogin`: The build skipped enablement of the display manager unit, because of a hardcoded DM name or base-stage timing.
 
 **Root cause:**
-1. **Build-time vs Published Artifact Gating**: Build-time checks run only during initial image assembly, not against published registry tags on GHCR (`ghcr.io/tuna-os/*`). Stale tags or un-gated apt builds could be published despite missing binaries.
-2. **Apt Soft Failures**: Package managers on apt paths didn't hard-fail on missing optional packages, soft-skipping missing compositors or desktop utilities.
+1. **Gating of build-time checks against published artifacts**: Build-time checks run only during initial image assembly. They do not run against published registry tags on GHCR (`ghcr.io/tuna-os/*`). We could publish stale tags or un-gated apt builds despite missing binaries.
+2. **Apt Soft Failures**: Package managers on apt paths didn't hard-fail on missing optional packages. They soft-skipped missing compositors or desktop utilities.
 
 **Solution Architecture:**
 1. **Scheduled Post-Publish Sweep (`desktop-contract-sweep.yml`)**: Executes `build_scripts/checks/verify-desktop-experience.sh` nightly against all 47 published matrix cells.
-2. **Four Explicit Cell Verdicts**:
-   - `pass`: Image pulled, verified, and satisfies full desktop contract.
+2. **Four explicit verdicts per cell**:
+   - `pass`: Image pulled, verified, and satisfies the full desktop contract.
    - `fail`: Image pulled but fails required binary or unit assertions.
    - `missing`: No published image tag in registry.
    - `error`: Network or registry pull failure.
-3. **Display Manager Enablement Assertion**: Verifies display manager units (`gdm`, `sddm`, `plasmalogin`, `greetd`) are actively enabled in the image layer rather than merely present as installed unit files.
+3. **Assertion on display manager enablement**: Verifies that the display manager units (`gdm`, `sddm`, `plasmalogin`, `greetd`) are actively enabled in the image layer. Presence as installed unit files is not enough.
 
 ---
 
@@ -854,15 +854,15 @@ ERROR: pixel gate FAILED — the encrypted install unlocked and reached
        login, but nothing provably rendered (...).
 ##[error]Process completed with exit code 6.
 ```
-Encryption, unlock, boot and the in-guest desktop contract all genuinely passed — the *only* failing signal is `scripts/lib/pixel-gate.sh`'s pixel gate, and specifically its `shot=absent` path.
+Encryption, unlock, boot and the in-guest desktop contract all genuinely passed — the *only* signal that fails is `scripts/lib/pixel-gate.sh`'s pixel gate, and specifically its `shot=absent` path.
 
-**Root cause — not a new defect, a timing gap:** `scripts/lib/pixel-gate.sh` commit `e20fd037` (#1102, merged 2026-08-08T02:42 UTC) added exactly this case — `shot=absent` *and* `contract=ok` — as an advisory `absent_contract_ok` verdict (`fatal=0`), on the evidence of `gurnard:pantheon` and `grouper:xfce` hitting the identical pattern. Every one of the six failing job logs checked here (`yellowfin:gnome` run 31226672079, `yellowfin:kde`/`niri`/`cosmic` same run, `albacore:gnome`/`kde`/`cosmic` runs 31224487929/31224494825) is timestamped **before** `e20fd037` landed — they ran the *old* pixel-gate logic, which had no `contract=ok` carve-out and fell through to the fatal `absent` branch instead. None of these cells has been re-dispatched since the fix merged, so `MATRIX-STATUS.md`'s "35/52 green" — sourced from the newest available run per cell — is reporting genuinely stale verdicts for these six, not current ones.
+**Root cause — not a new defect, a timing gap:** `scripts/lib/pixel-gate.sh` commit `e20fd037` (#1102, merged 2026-08-08T02:42 UTC) added exactly this case — `shot=absent` *and* `contract=ok` — as an advisory `absent_contract_ok` verdict (`fatal=0`). The evidence was `gurnard:pantheon` and `grouper:xfce`, which hit the identical pattern. Every one of the six job logs that fail here (`yellowfin:gnome` run 31226672079, `yellowfin:kde`/`niri`/`cosmic` same run, `albacore:gnome`/`kde`/`cosmic` runs 31224487929/31224494825) carries a timestamp **before** `e20fd037` landed. They ran the *old* pixel-gate logic, which had no `contract=ok` carve-out and fell through to the fatal `absent` branch instead. Nobody has re-dispatched these cells since the fix merged. So `MATRIX-STATUS.md`'s "35/52 green" — sourced from the newest available run per cell — reports genuinely stale verdicts for these six, not current ones.
 
-**Lesson:** before treating a red LUKS E2E cell as an open bug to diagnose, check the failing job's evidence lines against `git log` for `scripts/lib/pixel-gate.sh` (or whatever check actually failed) — `fatal=1` on an old run doesn't mean the current tree would still produce it. A cell only needs new investigation once it fails again on a run that started *after* the relevant fix.
+**Lesson:** before you treat a red cell of LUKS E2E as an open bug to diagnose, check the evidence lines of the job that failed. Compare them against `git log` for `scripts/lib/pixel-gate.sh`, or for whatever check failed. `fatal=1` on an old run doesn't mean the current tree would still produce it. A cell only needs new investigation once it fails again on a run that started *after* the relevant fix.
 
-**Action taken:** re-dispatched `LUKS E2E` (`workflow_dispatch`) for `variant=yellowfin,flavor=all` (run [31286843546](https://github.com/tuna-os/tunaOS/actions/runs/31286843546)) and `variant=albacore,flavor=all` (run [31286849405](https://github.com/tuna-os/tunaOS/actions/runs/31286849405)) to get fresh, post-fix verdicts. Not yet observed to completion — a multi-cell LUKS sweep runs well past a single investigation session; check those runs' actual conclusions before assuming this note means the cells are already green.
+**Action taken:** re-dispatched `LUKS E2E` (`workflow_dispatch`) for `variant=yellowfin,flavor=all` (run [31286843546](https://github.com/tuna-os/tunaOS/actions/runs/31286843546)) and `variant=albacore,flavor=all` (run [31286849405](https://github.com/tuna-os/tunaOS/actions/runs/31286849405)) to get fresh, post-fix verdicts. Not yet observed to completion — a multi-cell LUKS sweep runs well past a single investigation session. Check those runs' own conclusions before you decide that the cells are already green.
 
-**Separate, still-open, NOT covered by the above:** `yellowfin:xfce` (same run, job 93022287474) fails during the **image build** itself — `dracut-install: ERROR: installing '/root'` plus `error: Linting: Checks failed: 2`, retried 3 times, never reaching the LUKS/pixel-gate stage at all. `albacore:gnome/kde/cosmic` log the identical `dracut-install`/lint messages during their own builds but the build still *succeeds* there (non-fatal, matching `bootc container lint`'s documented warn-only default — see #10 above), so this is not simply "the same bug, sometimes fatal" — `yellowfin:xfce`'s build genuinely dies and needs its own root-cause pass, not a re-dispatch.
+**Separate, still-open, NOT covered by the above:** `yellowfin:xfce` (same run, job 93022287474) fails during the **image build** itself — `dracut-install: ERROR: installing '/root'` plus `error: Linting: Checks failed: 2`, retried 3 times. It never reached the LUKS/pixel-gate stage at all. `albacore:gnome/kde/cosmic` log the identical `dracut-install`/lint messages during their own builds, but the build still *succeeds* there. Those messages are non-fatal, and they match the warn-only default that `bootc container lint` documents — see #10 above. So this is not "the same bug, sometimes fatal": `yellowfin:xfce`'s build genuinely dies and needs its own root-cause pass, not a re-dispatch.
 
 ---
 

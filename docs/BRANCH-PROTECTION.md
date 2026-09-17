@@ -10,7 +10,7 @@ via `GET /repos/tuna-os/tunaos/branches/main/protection` (classic API — 403 fo
 non-admin callers, and in fact 404 "Branch not protected" even for an admin
 token, because this repo uses the newer **rulesets** API instead of classic
 branch protection). This doc records what `GET
-/repos/tuna-os/tunaos/rulesets` actually shows (verified 2026-08-13) and what
+/repos/tuna-os/tunaos/rulesets` shows (verified 2026-08-13) and what
 is missing.
 
 ## Current state (verified 2026-08-13)
@@ -24,7 +24,7 @@ Three rulesets exist on the repo, targeting branches:
 | `Code Quality Copilot review for default branch` (id 19461730) | disabled | — |
 
 The active `main` ruleset protects against branch deletion and force-push,
-routes merges through a merge queue, and requires Copilot code review. **It
+routes merges through a merge queue, and needs Copilot code review. **It
 does not contain a `required_status_checks` rule or a `pull_request` (required
 review count) rule.** The merge queue's `ALLGREEN` grouping strategy waits for
 whatever checks a given PR happens to have — it does not itself pin down a
@@ -36,7 +36,7 @@ can bypass every rule on this ruleset, including the merge queue. Rule-suite
 history (`GET /repos/tuna-os/tunaos/rulesets/rule-suites?ref=main`) shows
 several recent pushes straight to `main` with `"result": "fail"` from
 `hanthor-hive-agent[bot]` (e.g. 2026-08-12T23:41 UTC) — evidence the bypass is
-actually exercised, not just theoretically available.
+exercised, not just theoretically available.
 
 ## Candidate required-check list
 
@@ -70,7 +70,7 @@ scoped to the paths they already filter on.
 This is the remaining live-repository work for #1167. A maintainer with
 ruleset-admin access should apply the proposal to the active `main` ruleset,
 then record the result in the issue. The API shape is intentionally shown as a
-checklist rather than embedded in CI: rulesets are repository configuration and
+checklist instead of embedded in CI: rulesets are repository configuration and
 must not be silently changed by a code workflow.
 
 1. Read back `GET /repos/tuna-os/tunaos/rulesets/10437561` and confirm that the

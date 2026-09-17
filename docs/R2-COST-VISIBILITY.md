@@ -50,7 +50,7 @@ listed deletion set before enabling a destructive run.
 - Prefer a dry run and a bounded age threshold before changing a cleanup job.
 - Treat an unknown top-level prefix as an ownership question, not as disposable
   data. Identify its writer and consumer before deleting it.
-- A Cloudflare bucket deletion or account-level lifecycle rule requires an
+- A Cloudflare bucket deletion or account-level lifecycle rule needs an
   owner with dashboard access; this repository cannot prove that `tunaosdev`
   is unused or safely delete it.
 

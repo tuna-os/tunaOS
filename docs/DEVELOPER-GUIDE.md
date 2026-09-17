@@ -1,7 +1,7 @@
 # TunaOS Developer Guide
 
-How the whole thing actually works — every pipe, every gate, and why each one
-exists. The [User Guide](USER-GUIDE.md) tells people what to run; this
+How the whole thing works — every pipe, every gate, and why each one
+exists. The [User Guide](USER-GUIDE.md) shows people what to run; this
 document tells you what happens between a commit and a user's `bootc upgrade`.
 
 TunaOS is a fork-of-ideas from the [Universal Blue](https://universal-blue.org/)
@@ -11,9 +11,9 @@ family — [Bluefin](https://projectbluefin.io) (GNOME),
 [Zirconium](https://github.com/zirconium-dev/zirconium) (Niri). We consume
 their artifacts directly where we can (`ghcr.io/projectbluefin/common`,
 `ghcr.io/ublue-os/brew`, `ublue-os/akmods` for NVIDIA, the Zirconium source
-tree for our Niri stack) and re-derive their patterns where we can't, because
-our defining feature — the same desktop on *thirteen different bases* — means
-most of their Fedora-only plumbing needs a base-agnostic equivalent here.
+tree for our Niri stack). Where we can't, we re-derive their patterns. What
+defines us is the same desktop on *thirteen different bases*, so most of
+their Fedora-only machinery needs a base-agnostic equivalent here.
 
 ---
 
@@ -56,17 +56,18 @@ flowchart LR
 
 ## 2. The build matrix: 135 cells
 
-Everything CI does is driven by **`.github/build-config.yml`**: 14 variants ×
+**`.github/build-config.yml`** drives everything CI does: 14 variants ×
 their flavors (5 desktops + `base` + hardware tiers) × declared platforms
 (amd64 / amd64-v2 / arm64). A **cell** is one `(variant, flavor)` pair —
 `yellowfin:gnome`, `bonito:kde-nvidia` — and there are 135 of them with
 `build_image: true`. Every scoreboard, gate, and denominator in the project
-derives from this file, on purpose: a flavor that isn't declared here doesn't
-exist, and tests enforce that the workflows regenerate from it rather than
+derives from this file, on purpose. A flavor that isn't declared here doesn't
+exist. Tests enforce that the workflows regenerate from this file, and do not
 drift.
 
-Flavors stack in a strict DAG — hardware layers go **on top of** desktop
-images, never the reverse, so a desktop is built exactly once per variant:
+Flavors stack in a strict DAG. Hardware layers go **on top of** desktop
+images, never the reverse, so CI builds each desktop exactly once per
+variant:
 
 ```mermaid
 flowchart TD
@@ -77,9 +78,10 @@ flowchart TD
     gnomehwe --> gnh["gnome-nvidia-hwe"]
 ```
 
-Stage 1 builds `base`; stage 2 fans out desktops (decoupled from a fully
-green multi-arch base by #1729, so one dead architecture cannot strand every
-desktop); stages 3–4 apply `Containerfile.overlay` hardware layers.
+Stage 1 builds `base`. Stage 2 fans out the desktops. Issue #1729 decoupled
+stage 2 from the green status of every architecture in the base. One dead
+architecture does not strand every desktop. Stages 3–4 apply the hardware
+layers in `Containerfile.overlay`.
 
 ## 3. A cell's journey: `reusable-build-image.yml`
 
@@ -97,28 +99,28 @@ flowchart LR
     PR --> AT["Attest SBOM<br/>in-toto attestation"]
 ```
 
-The load-bearing details, each one paid for with a real incident:
+The important details, each one paid for with a real incident:
 
 - **Two tags per cell.** Builds land on `:<tag>-testing`; **Promote** copies
-  to the published `:<tag>` only after the pipeline is satisfied. Users only
-  ever pull promoted tags.
+  to the published `:<tag>` only after the pipeline passes. Users pull only
+  the promoted tags.
 - **Rechunk**: `chunkah` re-layers the image into ostree-friendly chunks so
   `bootc upgrade` downloads deltas, not the world — same technique as
   Bluefin.
 - **SBOM generation is memory-bounded** (`systemd-run --scope -p MemoryMax`
-  with a runner-derived cap) because syft OOM-killed entire runners on
-  Gentoo-sized package inventories; if the scan still dies, an SPDX document
-  is synthesized from the image's own package manifest
-  (`scripts/packages_to_spdx.py`) so Promote never ships unattested.
+  with a runner-derived cap). syft once OOM-killed whole runners on
+  Gentoo-sized package inventories. If the scan still dies,
+  `scripts/packages_to_spdx.py` synthesizes an SPDX document from the image's
+  own package manifest. Promote therefore never ships unattested.
 - **The Gate** builds a real disk from the image (`just qcow2` →
   `bootc install to-disk --via-loopback`) and boots it in QEMU
-  (`scripts/iso-e2e.sh`). It is advisory per cell today; making it blocking
-  where CI can boot (gnome + base cells — the rest need a DRM render node
-  hosted runners lack) is workstream W3 of
-  [GREEN-MASTER-PLAN.md](GREEN-MASTER-PLAN.md).
+  (`scripts/iso-e2e.sh`). It is advisory per cell today. Workstream W3 of
+  [GREEN-MASTER-PLAN.md](GREEN-MASTER-PLAN.md) makes it `blocking` where CI
+  can boot: the gnome and base cells. The other cells need a DRM render node,
+  which hosted runners lack.
 - **Retries with judgement**: promotion `skopeo` copies, GHCR pushes and
-  cosign calls retry with backoff; a Sigstore outage downgrades attestation
-  rather than blocking Promote (#1560).
+  cosign calls retry with backoff. A Sigstore outage downgrades the
+  attestation; it does not block Promote (#1560).
 
 ### Inside the image build
 
@@ -126,7 +128,7 @@ Per-family Containerfiles (`Containerfile.el10`, `.debian`, `.ubuntu`,
 `.arch`, `.gentoo`, `.opensuse`, `.final`, `.overlay`) all execute the same
 numbered pipeline from `build_scripts/`:
 
-- **`lib.sh`** is the shared vocabulary. The functions worth knowing:
+- **`lib.sh`** is the shared vocabulary. The functions that matter:
   - `install_available` / `apt_install_available` — install what the repo
     set can resolve, and **record every miss** via
     `record_package_wishlist` into `/usr/share/tunaos/missing-on-*.txt`
@@ -143,13 +145,13 @@ numbered pipeline from `build_scripts/`:
   best-effort), consumed by `install-desktop.sh`. The Niri stack is built
   from the pinned Zirconium source (`install-zirconium.sh`,
   `image-versions.yaml`).
-- **`build_scripts/checks/`** are the in-build gates:
-  `verify-desktop-experience.sh` (the desktop contract — sessions, DM,
-  portals actually present) and `verify-package-wishlist.sh` (every recorded
-  miss must be declared acceptable in `package-miss-allowlist.txt`, or the
-  build fails — silent omissions are how marlin:kde once shipped with no
-  wayland-sessions at all, #858).
-- **`system_files/`** is the plain-file overlay (branding, defaults,
+- **`build_scripts/checks/`** are the in-build gates.
+  `verify-desktop-experience.sh` checks the desktop contract: sessions, DM
+  and portals present. `verify-package-wishlist.sh` fails the build unless
+  `package-miss-allowlist.txt` declares every recorded miss acceptable.
+  Silent omissions are how marlin:kde once shipped with no wayland-sessions
+  at all (#858).
+- **`system_files/`** is the plain-file overlay (brand assets, defaults,
   `00-tunaos.toml` bootc install config).
 
 ### Local development
@@ -162,16 +164,16 @@ just check                        # linters
 just test                         # pytest + bats
 ```
 
-One sharp edge, fixed but worth knowing: recipes live in imported `just/`
-modules, and **the working directory of an imported recipe depends on the
-just version** (apt's 1.21.0 runs them from `just/`, 1.25+ from the repo
-root). Every module recipe therefore begins with
+One sharp edge, now fixed, is still worth a note: recipes live in imported
+`just/` modules. **The directory an imported recipe runs in depends on the
+`just` version** (apt's 1.21.0 runs them from `just/`, 1.25+ from the repo
+root). Every module recipe therefore starts with
 `cd {{ justfile_directory() }}`, and a test sweep keeps it that way — don't
 remove those lines.
 
-The test suite (`tests/`, pytest + bats) is unusual on purpose: most tests
-pin *workflow behavior* — YAML structure, generated files, gate semantics —
-because this repo's product is largely its pipeline. If you change the
+The test suite (`tests/`, pytest + bats) is unusual on purpose. Most tests
+pin *workflow behavior*: YAML structure, generated files, gate semantics.
+This repo's product is largely its pipeline. If you change the
 pipeline's shape, expect a test to tell you which document or generator you
 also need to update.
 
@@ -212,34 +214,35 @@ flowchart TD
 
 Design rules that hold across all factories:
 
-- **Builds are tiered** topological orders over the real BuildRequires graph,
-  computed — not hand-maintained — and the workflows that run them are
-  *generated* from the build orders (tests enforce regeneration).
-- **Publishing is gated on having built something.** A run that compiled
-  zero packages must not re-sign and re-upload the old repo as if it were
-  fresh (`INCIDENT-repo-wipe-gnome.md` is the origin story; every R2 writer
-  now carries the refuse-to-publish-empty guard).
-- **Repos are regenerated fully**, not `createrepo_c --update`-patched —
-  stale metadata entries once served checksums for RPMs that no longer
-  existed (the gtkgreet drift class).
+- **Tiered builds**: topological orders over the real BuildRequires graph. A
+  tool computes these orders; nobody maintains them by hand. The build orders
+  also *generate* the workflows that run them, and tests enforce that
+  regeneration.
+- **A run publishes only when it built something.** A run that compiled zero
+  packages must not re-sign the old repo. It must not re-upload that repo as
+  if it were fresh. `INCIDENT-repo-wipe-gnome.md` is the origin story; every
+  R2 writer now carries the refuse-to-publish-empty guard.
+- **The tooling regenerates repos in full**, not with
+  `createrepo_c --update` patches. Stale metadata entries once served
+  checksums for RPMs that no longer existed (the gtkgreet drift class).
 - **The Hummingbird factory tracks its upstream automatically.** Its build
-  order is *the runtime gap*: everything the desktops need minus everything
-  `public-hummingbird` already ships (measured by
-  `measure-hummingbird-gap.py`, `membership: runtime` in the catalog).
-  Build-only tools come from the buildroot's inherited Rawhide fallback. A
-  daily **gap-drift detector** re-measures whenever upstream publishes a new
-  repo revision and opens a PR with the adds/drops — when upstream adopts a
-  package we build, it drops out of our order and upstream's build wins by
-  repo priority (our `.fc43` dist tag intentionally sorts below their
-  `.hum1`, so we can never shadow them).
+  order is *the runtime gap*. It is everything the desktops need, minus
+  everything `public-hummingbird` already ships. `measure-hummingbird-gap.py` measures
+  this gap, from the `membership: runtime` entries in the catalog. Build-only
+  tools come from the buildroot's inherited Rawhide fallback. A daily
+  **gap-drift detector** re-measures the gap when upstream publishes a new
+  repo revision. The detector opens a PR with the adds and drops. When
+  upstream adopts a package we build, that package drops out of our order.
+  Upstream's build then wins by repo priority. Our `.fc43` dist tag sorts
+  below their `.hum1` on purpose, so we can never shadow them.
 
 ## 6. The quality machinery: how "green" is kept honest
 
 This is the part most forks of Universal Blue don't have, and the part this
-project considers its real product. The bar is defined in
-**`.github/green-criteria.yml`** — ten criteria, each with an explicit
-`enforcement` (`blocking` / `advisory` / `unimplemented`), and a composite
-rule: *a cell is green only when every blocking criterion has a current
+project considers its real product. **`.github/green-criteria.yml`** holds
+the bar: ten criteria, each with an explicit `enforcement`
+(`blocking` / `advisory` / `unimplemented`). A composite rule then applies:
+*a cell counts as green only when every `blocking` criterion has a current
 affirmative result; skipped or never-tested never counts.*
 
 ```mermaid
@@ -265,42 +268,43 @@ flowchart LR
 
 The important properties:
 
-- **Enforcement is data, not code.** Graduating a criterion from advisory to
-  blocking is a one-line edit to `green-criteria.yml`; the composite table
-  and the README count tighten automatically. A criterion made blocking
-  without a wired per-cell assertion fails the test suite with instructions
-  — a raised bar can never silently render as a blank board.
+- **Enforcement is data, not code.** To graduate a criterion from advisory
+  to `blocking`, edit one line in `green-criteria.yml`. The composite table
+  and the README count then tighten automatically. If you make a criterion
+  `blocking` without a wired per-cell assertion, the test suite fails with
+  instructions. A raised bar can never silently render as a blank board.
 - **Absence of evidence is never failure, and never success.** Skipped,
-  missing, cancelled, and lost all render ⬜ and count against green — the
-  #1730 rule, applied uniformly.
-- **Published images are re-checked, not trusted.** The 08:00 sweep pulls
-  every published desktop image and runs the *same* scripts the build ran:
-  the desktop contract, and the omissions gate against
-  `/usr/share/tunaos/missing-on-*.txt` — so an image published before a gate
-  existed still gets judged by it.
-- **The scoreboard is generated, and its honesty is tested** — down to
-  details like "a flavor removed from build-config keeps its last verdict
-  visible but leaves the denominator", and "the README refresh opens a PR
-  because direct pushes to main bounce".
+  missing, cancelled, and lost all render ⬜ and count against green. This is
+  the #1730 rule, applied uniformly.
+- **Nothing trusts a published image; the sweep re-checks it.** The 08:00
+  sweep pulls every published desktop image. It then runs the *same* scripts
+  the build ran: the desktop contract, and the omissions gate against
+  `/usr/share/tunaos/missing-on-*.txt`. The sweep judges an image even when
+  it shipped before the gate existed.
+- **A generator writes the scoreboard, and tests hold it honest.** The tests
+  go down to fine details. One: "a flavor removed from build-config keeps its
+  last verdict visible but leaves the denominator". Another: "the README
+  refresh opens a PR because direct pushes to main bounce".
 
-Where each axis stands today, per cell, is
-[MATRIX-STATUS.md](MATRIX-STATUS.md); the plan for driving all of it to
-blocking is [GREEN-MASTER-PLAN.md](GREEN-MASTER-PLAN.md).
+[MATRIX-STATUS.md](MATRIX-STATUS.md) shows where each axis stands today, per
+cell. [GREEN-MASTER-PLAN.md](GREEN-MASTER-PLAN.md) holds the plan to drive
+all of it to `blocking`.
 
 ## 7. Troubleshooting CI — the classes we've already met
 
-Before debugging a red run from scratch, check it against the catalogue:
-[ci-troubleshooting.md](ci-troubleshooting.md) and the *Failures that look
+Before you debug a red run from scratch, check it against the catalogue:
+[`ci-troubleshooting.md`](ci-troubleshooting.md) and the *Failures that look
 like successes* section of [MATRIX-STATUS.md](MATRIX-STATUS.md). Highlights:
 
-- A **cancelled run is not a verdict** — superseded runs get skipped by
-  every reader; never count them as failures.
-- **`continue-on-error` masks step outcomes in the jobs API** — read raw
-  logs (the signed blob URL from the logs API) when a step's real exit
-  matters.
-- **Job names are load-bearing**: the matrix readers key on
-  `<variant> / <flavor> / <Stage>` names. Renaming jobs breaks scoreboards.
-- **Infra flakes get retried by classification** (#1731), not by hand.
+- A **cancelled run is not a verdict** — every reader skips superseded runs;
+  never count them as failures.
+- **`continue-on-error` masks step outcomes in the jobs API.** Read the raw
+  logs when a step's real exit matters. The logs API gives you a signed blob
+  URL.
+- **Job names matter**: the matrix readers key on
+  `<variant> / <flavor> / <Stage>` names. A rename of a job breaks the
+  scoreboards.
+- **CI retries the infra flakes by classification** (#1731), not by hand.
 
 ## 8. Repository tour
 
@@ -321,14 +325,14 @@ like successes* section of [MATRIX-STATUS.md](MATRIX-STATUS.md). Highlights:
 ## 9. Contributing flow
 
 1. Branch; `main` is merge-queue only.
-2. Make the change *and* the change's paper trail: if you touched the
-   pipeline's shape, a generator, a gate, or the matrix, there is a test or
-   a generated document that must move with it — CI will tell you which.
+2. Make the change *and* the change's paper trail. Did you touch the
+   pipeline's shape, a generator, a gate, or the matrix? Then a test or a
+   generated document must move with the change. CI will tell you which.
 3. `just check && just test` locally.
 4. PR; the queue runs the required checks and merges.
 
-The house style, learned the hard way and enforced by review: **measure,
-don't assume** (comments in this codebase cite run IDs); **loud beats
-silent** (a gate that can't score must fail, not skip); and **absence of
-evidence is not evidence of absence** — if your change makes something stop
-being checked, say so in the scoreboard, don't let it render green.
+The house style comes from hard experience, and review enforces it.
+**Measure, don't assume**: comments in this codebase cite run IDs. **Loud
+beats silent**: a gate that can't score must fail, not skip. **Absence of
+evidence is not evidence of absence**: if your change leaves something
+unchecked, say so in the scoreboard. Don't let it render green.

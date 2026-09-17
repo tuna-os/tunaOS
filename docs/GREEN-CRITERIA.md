@@ -4,34 +4,34 @@ A **cell** is one (variant, flavor) pair — `yellowfin:gnome`, `marlin:kde`.
 
 Until 2026-08-17, green meant *the image built and promoted*. That is the
 weakest claim this pipeline can make. An image can build, push, promote and
-ship no desktop at all: `marlin:kde` published with no
-`/usr/share/wayland-sessions/` whatsoever, because one AUR-only package failed
-the entire KDE set silently (tunaOS#858).
+ship no desktop at all. `marlin:kde` published with no
+`/usr/share/wayland-sessions/` at all, because one package from the AUR failed
+the entire KDE set in silence (tunaOS#858).
 
-Green now means the image **works**: it boots, the desktop starts, the ISO
-installs, the installed system updates and rolls back, and the package set is
+Green now means the image **works**. It boots, the desktop starts, and the ISO
+installs. The installed system updates and rolls back, and the package set is
 what it claims to be.
 
 The criteria live in [`.github/green-criteria.yml`](../.github/green-criteria.yml).
-That file is the source of truth; this document explains the reasoning.
-`tests/test_green_criteria.py` keeps the two from drifting.
+That file is the source of truth; this document explains why.
+`tests/test_green_criteria.py` holds the two in step.
 
 ---
 
 ## The composite rule
 
-> A cell is green only if every **blocking** criterion has an affirmative,
-> current result. Skipped, never-tested and stale all count as **not green**.
+> A cell reaches green only when every criterion that blocks it holds an
+> affirmative, current result. Skipped, never-tested and stale all count as **not green**.
 
 This rule matters more than the list. Every criterion below already existed in
-some form before the bar was raised, and almost none of them blocked anything:
-the boot Gate was skippable, the parity manifest was written into every image
-and read by nothing, and Bootc Lifecycle had never run for a single cell.
+some form before we raised the bar, and almost none of them blocked anything.
+CI could skip the boot Gate. Every image carried the parity manifest, and
+nothing read it. Bootc Lifecycle had never run for a single cell.
 
-Adding criteria to a system that does not enforce the ones it has just adds
-more things that silently do not run. On 2026-08-17 the boot Gate broke across
-the whole matrix — a moved file path — and marlin still looked fine, because
-21 of its 25 jobs were green and the 4 that mattered were the ones that
+New criteria on a system that does not enforce the ones it has add only more
+things that fail to run, and fail in silence. On 2026-08-17 somebody moved a
+file path, and that broke the boot Gate across the whole matrix. marlin still
+looked fine: 21 of its 25 jobs passed, and the 4 that mattered were the 4 that
 vanished (#1811).
 
 **"Never tested" must never render as green.** It is the difference between
@@ -57,9 +57,9 @@ vanished (#1811).
 ### Why some of these are separate that look similar
 
 **2 vs 3 — present vs startable.** Desktop Contract Sweep inspects the
-published image without booting it; the Gate boots a disk and waits for a real
-session. An image can satisfy one and fail the other, and guppy:gnome
-currently does exactly that (#1801).
+published image and never boots it. The Gate boots a disk and waits for a real
+session. An image can satisfy one and fail the other, and guppy:gnome does
+exactly that now (#1801).
 
 **4 vs 5 — ISO vs install.** LUKS E2E drives the installer backend over SSH and
 never looks at the screen. It proves a system installs and boots; it does not
@@ -69,25 +69,26 @@ LUKS while its installer GUI had never once been observed.
 **7 vs 8 — parity vs honesty.** Parity asks whether the package set matches
 upstream. Honesty asks whether the build *admitted* what it dropped.
 `install_available` and `--skip-unavailable` mean missing packages never fail a
-build — deliberately, so a partial repo cannot hard-fail everything — and the
-consequence is an image that builds cleanly with a hole in it. The evidence is
-already written to `/usr/share/tunaos/missing-on-*.txt` inside every image. It
-just needs to be read.
+build. That is deliberate, so one partial repo cannot fail everything at once.
+The consequence is an image that builds cleanly with a hole in it. Every image
+already carries the evidence at `/usr/share/tunaos/missing-on-*.txt`. It needs
+a reader.
 
 ### Why lifecycle ranks higher than it looks
 
 Criterion 6 has never run for a single cell in 52. For a bootc OS the update
 transaction *is* the product. An image that installs perfectly and cannot
 `bootc upgrade`, or cannot roll back off a bad deployment, has failed at the
-one thing immutability is sold on. Every user meets upgrade repeatedly and the
-ISO exactly once.
+one thing that immutability promises. Every user meets the upgrade path again
+and again, and the ISO exactly once.
 
 ### What is deliberately excluded
 
-**Signature and attestation are not green-blocking.** Provenance is reported on
-its own axis. Sigstore outages are frequent and unrelated to whether an image
-works; coupling them cost the matrix a full day on 2026-08-15, when a Rekor 502
-took 136 cells down after signing had already succeeded (#1560).
+**A signature and an attestation do not block green.** Provenance has its own
+axis. Sigstore outages are frequent, and they say nothing about whether an
+image works. The coupling cost the matrix a full day on 2026-08-15, when a
+Rekor 502 took 136 cells down after the signature had already succeeded
+(#1560).
 
 **Anything CI structurally cannot test.** Four of five desktops need a DRM
 render node that hosted runners do not have, and NVIDIA needs real hardware.

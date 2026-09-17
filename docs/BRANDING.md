@@ -41,7 +41,7 @@ variant gets these whether or not anything uses them:
 | wallpaper | `/usr/share/backgrounds/tunaos/tunaos-default.png` |
 | boot splash | `/usr/share/plymouth/themes/shark/`, via `default.plymouth` |
 
-### 3. Application — what a user actually sees
+### 3. Application — what a user sees
 
 **This is the layer that was missing, and the reason for this page.** A file
 under `/usr/share/backgrounds` changes nothing on its own. Something has to tell

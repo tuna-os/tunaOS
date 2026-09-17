@@ -1,28 +1,28 @@
 # Master plan: getting to green
 
-**Green** is defined in [GREEN-CRITERIA.md](GREEN-CRITERIA.md) /
-[`.github/green-criteria.yml`](../.github/green-criteria.yml): a cell is green
-only when it builds, ships its declared desktop, boots to a session, installs
-from ISO, completes installation, survives update/rebase/rollback, matches
-upstream, admits its omissions, stays rebuildable, and declares no
-architecture it cannot satisfy. Skipped, never-tested and stale are **not
-green**.
+[GREEN-CRITERIA.md](GREEN-CRITERIA.md) /
+[`.github/green-criteria.yml`](../.github/green-criteria.yml) define **green**.
+A cell counts as green only when it builds, ships its declared desktop, boots
+to a session, installs from ISO, and completes installation. It must also
+survive update/rebase/rollback, match upstream, admit its omissions, stay
+rebuildable, and declare no architecture it cannot satisfy. Skipped,
+never-tested and stale cells never count as **green**.
 
-This document is the work plan to get there. It was written on 2026-08-17
-against measured state, not aspiration; where something is undiagnosed it says
-so. Baselines per criterion are recorded in `green-criteria.yml`; this file is
-about *sequence* — what unblocks what.
+This document is the work plan to get there. The authors wrote it on
+2026-08-17 against measured state, not aspiration; where a problem has no
+diagnosis, it says so. `green-criteria.yml` records the baselines per
+criterion; this file is about *sequence* — what unblocks what.
 
 The matrix is 142 image cells across 13 variants. On 08-17: **84 build**,
-**35/52 pass the desktop contract**, **31/52 pass install (LUKS)**,
-**0/36 ISO cells pass installer smoke**, **0/52 lifecycle** (one 9-second run
-ever), parity and omissions **unmeasured**.
+**35/52 pass the desktop contract**, **31/52 pass install (LUKS)**. Also on
+08-17: **0/36 ISO cells pass the installer smoke test**, **0/52 lifecycle**
+(one 9-second run ever), parity and omissions **unmeasured**.
 
 ---
 
 ## Part 1 — Cross-cutting workstreams
 
-Ordered by leverage: each unblocks many cells or makes the scoreboard honest.
+Ordered by effect: each unblocks many cells or makes the scoreboard honest.
 Per-variant work (Part 2) mostly hangs off these.
 
 ### W1. Truth in reporting *(first, everything else is scored by it)*
@@ -51,10 +51,10 @@ true number; do not soften it.
 
 ### W2. Bootc Lifecycle online *(criterion 6 — largest information gain)*
 
-The workflow exists, is on a weekly cron (Thu 05:00Z), and has run **once**,
-failing in 9 seconds — `generate-matrix` succeeded (the jq emits 156 cells
-against today's config) yet no downstream job materialised. Verification run
-`31999953433` dispatched 08-17 06:01Z.
+The workflow exists, is on a weekly cron (Thu 05:00Z), and has run **once**.
+That run failed in 9 seconds: `generate-matrix` succeeded (the jq emits 156
+cells against today's config) yet no downstream job materialised.
+Verification run `31999953433` dispatched 08-17 06:01Z.
 
 - [x] Diagnose the run-2 result; fix whatever eats the matrix between
       `generate-matrix` and the `lifecycle` job — run 2 surfaced the arm64
@@ -90,38 +90,42 @@ per-cell skippable, and `base` cells promote with the Gate skipped.
       (green-criteria.yml `scope:` excludes -asahi and base-hwe/base-nvidia);
       plain `base` cells get their own non-promote-blocking Gate asserting
       TUNAOS_BASE_CONTRACT_OK (multi-user + operable bootc).
-- [x] DRM-limited cells: measured Gate outcomes decide per cell — marlin kde
-      and xfce PASSED 2026-08-17, so "needs DRM" is per-variant evidence, not
-      a blanket cap; cells whose gate fails or never ran render ❌/⬜, never
-      green, exactly as required.
+- [x] DRM-limited cells: the measured outcome of each Gate decides per cell
+      — marlin kde and xfce PASSED 2026-08-17, so "needs DRM" is
+      per-variant evidence, not a blanket cap; cells whose gate fails or
+      never ran render ❌/⬜, never green, exactly as required.
 - [x] Gate-ran-at-all: under the composite, a skipped or absent Gate renders
       ⬜ and the cell is not green — the absence of a gate can no longer look
       like success on any scoreboard.
 
 *Resolved (2026-08-18, maintainer decision):* every **base** Gate timed out
-marker-less matrix-wide (VM boots, paints a text screen, serial silent —
-verified on sailfin and bonito-rawhide with #1855's surviving evidence),
-and the maintainer settled the underlying product question instead: base
-images are parent layers, not user-facing artifacts — nobody runs them
-as-is. Plain `base` is now a reviewed boots-scope exclusion (like
-base-hwe/base-nvidia) and the dedicated base Gate job is removed; a base's
-boot machinery is transitively proven by every desktop Gate stacked on it
-(marlin's 15 Gate passes prove marlin's base boots). The boots axis is now
-exactly the desktop Gate, which demonstrably works. #1861's serial-tail
-dump stays — it serves the desktop-Gate ❌ cells (albacore/yellowfin/
-skipjack/grouper/flounder/guppy), which are the real remaining boots work.
+marker-less matrix-wide. The VM boots, paints a text screen, and leaves the
+serial port silent. Sailfin and bonito-rawhide both confirm it, on the
+evidence that survived from #1855. The maintainer then settled the product
+question behind it: base images are parent layers, not user-facing
+artifacts — nobody runs them as-is.
+
+Plain `base` is now a reviewed boots-scope exclusion (like
+base-hwe/base-nvidia), and the project drops the base Gate job that served
+it. Every desktop Gate stacked on a base proves that base's boot machinery
+transitively (marlin's 15 Gate passes prove marlin's base boots). The boots
+axis is now exactly the desktop Gate, which demonstrably works. #1861's
+serial-tail dump stays — it serves the desktop-Gate ❌ cells
+(albacore/yellowfin/skipjack/grouper/flounder/guppy), which are the real
+remaining boots work.
 
 *Post-mortem datum (08-18, from #1861's serial dump on the last base Gate
-ever run, sailfin dispatch 32105775211):* console routing was never the
-problem — the serial log shows a complete boot to login (graphical target
-reached, agetty on ttyS0). The `TUNAOS_BASE_CONTRACT` marker simply never
-emitted: the contract unit didn't fire, on a system that otherwise booted
-clean. Recorded here for the day `base` is ever re-gated.
+ever run, sailfin dispatch 32105775211):* the serial console route was never
+the problem. The serial log shows a complete boot to login (graphical target
+reached, agetty on ttyS0). The `TUNAOS_BASE_CONTRACT` marker never emitted:
+the contract unit didn't fire, on a system that otherwise booted clean.
+Recorded here for the day `base` is ever re-gated.
 
 ### W4. ISO + installer axis *(criterion 4 — current amd64 group sweep 32/34)*
 
-- [x] **#1772** — tacklebox `[customize]` hangs 87m silent on amd64. Fixed by
-      #1882 (outer 80-min deadline) + #1885 (streamed customize, 30-min cap):
+- [x] **#1772** — tacklebox `[customize]` hangs for 87m in silence on
+      amd64. Fixed by #1882 (outer 80-min deadline) + #1885 (streamed
+      customize, 30-min cap):
       run 32238167029 records both per-script markers and streamed output, with
       healthy customize completing in ~2 min. Tacklebox's regression tests pin
       `TBOX_CUSTOMIZE_TIMEOUT`, so a stalled script exits inside that cap rather
@@ -131,7 +135,8 @@ clean. Recorded here for the day `base` is ever re-gated.
       The stale-lock reset in ghcr-login (#1576), lifecycle (#1841), and the ISO
       surface (#1848) subsequently fixed it; run 32254285223 supplies the arm64
       login and full-build evidence.
-- [x] **#1886 amd64 ISO rebaseline** — the 09-07 current-main grouped sweep
+- [x] **#1886 amd64 ISO rebaseline** — the 09-07 grouped sweep of current
+      main
       ([run 34071003886](https://github.com/tuna-os/tunaOS/actions/runs/34071003886))
       built all 34 ISO groups; 32 reached the readiness gate, retained serial
       logs/screenshots as per-cell artifacts, signed, and published to R2. The
@@ -189,7 +194,7 @@ payloads, action pins.
       the COPR *content* question (#391 is about trusting the repo, not just
       its existence) — the structural fix for that is RFC 011's tier-2
       migration, not this check.
-- [x] The `createrepo_c --update` drift class (#358) is fixed in
+- [x] The `createrepo_c --update` drift class (#358) has a fix in
       `build-xfce-package.yml` only — audit `build-xfce-distributed.yml`,
       `build.yml`, `build-gnome49/50/51-package.yml` (noted on #358).
       Audited 2026-08-18 (tunaos-packages#421): every named suspect is clean
@@ -213,7 +218,7 @@ payloads, action pins.
       unsatisfiable declaration is now a loud config error, not a mystery
       red cell. Package-repo arch coverage (the hummingbird case proper) is
       the remaining half, shared with W7's repo-pin extension.
-- [x] Decided and built: the aarch64 hummingbird leg landed
+- [x] Decided and built: the aarch64 leg of hummingbird landed
       (tunaos-packages#414) and upstream public-hummingbird serves arm64
       with full source parity — the four guaranteed-red cells become
       buildable once the first aarch64 factory run publishes.
@@ -234,11 +239,12 @@ payloads, action pins.
 ### W10. Package supply (RFC 011) — the factory closes the gap and retires COPR
 
 The image factory's green bar depends on the package supply. RFC 011
-(tunaos-packages) makes the supply structural: one catalog owns identity,
-the gap engine computes per-target need against live repo indexes, and one
-unified format-agnostic factory (`package-factory.yml` + `package-factory-cell.yml`,
-landed in tunaos-packages#430, amended by #438) builds only what the target's
-system repos cannot supply. Measured 2026-08-18 (`docs/factory-status.json`):
+(tunaos-packages) makes the supply structural. One catalog owns the identity
+of each package. The gap engine computes the need per target against live
+repo indexes. One factory — unified and format-agnostic
+(`package-factory.yml` + `package-factory-cell.yml`, landed in
+tunaos-packages#430, amended by #438) — builds only what the repos of the
+target cannot supply. Measured 2026-08-18 (`docs/factory-status.json`):
 
 | target | built | needed | coverage |
 |---|---|---|---|
@@ -262,7 +268,7 @@ The third-party dependency to retire is COPR `jreilly1821/c10s-gnome-50` /
       `opensuse-tumbleweed`, `ubuntu`) so their need is computed, not assumed.
 - [ ] Retire COPR: remove the `copr_name` entries as each family's in-factory
       build proves out and the image build points at the factory R2 path.
-- [ ] Wire factory dependency ordering — gap deps must publish before their
+- [ ] Wire the factory's dependency order — gap deps must publish before their
       dependents' clean-install verify (tunaos-packages#440; the first el10
       wave showed niri failing on unbuilt `libseat`, its declared runtime dep).
 
@@ -274,37 +280,43 @@ Counts are build-axis cells from the README matrix (142 total). "Blockers"
 are issues that stand between the variant and *build* green; the criteria
 above then apply on top. NVIDIA flavors across yellowfin/albacore/skipjack/
 bonito/bonito-rawhide/marlin/flounder/flounder-sid share **#1725**
-(semodule install fails) plus W9, and are not repeated per row.
+(semodule install fails) plus W9. The rows below do not repeat them.
+
 *Re-classified 08-18 for EL10 (albacore run 32090745718, posted on #1725):
-the current failure is not semodule — all five albacore nvidia legs die in
-the overlay kernel swap with rpmdb sqlite corruption ("database disk image
-is malformed" on every INSERT while installing kernel-6.12.0-257.el10),
-i.e. the same rpmdb-under-buildah-overlay class as #1823, on a second
-variant surface. Count EL10 nvidia cells under #1823 until it resolves.
-**RESOLVED on the EL10 surface, three rounds of evidence (08-18→08-20):**
-round 1 (#1877, bare `rpm --rebuilddb`) produced the discriminating
-signature — clean rebuild, replace REFUSED, zero malformed; round 2
-(#1909, literal-path directory round-trip) killed the malformed storm but
-the rebuild's rename still failed; round 3 (#1912, `readlink -f` the
+the current failure is not semodule. All five nvidia legs of albacore die in
+the overlay kernel swap with rpmdb sqlite corruption. The log says "database
+disk image is malformed" on every INSERT while it installs
+kernel-6.12.0-257.el10. This is the same rpmdb-under-buildah-overlay class
+as #1823, on a second variant surface. Count the EL10 nvidia cells under
+#1823 until it resolves.*
+
+**RESOLVED on the EL10 surface, three rounds of evidence (08-18→08-20)**.
+Round 1 (#1877, bare `rpm --rebuilddb`) produced the signature that
+discriminates — clean rebuild, replace REFUSED, zero malformed. Round 2
+(#1909, literal-path directory round-trip) killed the malformed storm, but
+the rebuild's rename still failed. Round 3 (#1912, `readlink -f` the
 dbpath + round-trip the RESOLVED directory + rebuild demoted to advisory)
-went GREEN: albacore base-nvidia run 32339591457 logged the resolution
+went GREEN. Albacore base-nvidia run 32339591457 logged the resolution
 (`/usr/share/rpm` is a real dir there — symlink hypothesis refuted for
-EL10), the kernel transaction completed with no malformed and
-`TUNAOS_NVIDIA_CONTRACT_OK`. Root cause: rpm writing into a db directory
-still in a lower overlay layer; the upper-layer round-trip is the whole
-fix, the rebuild was only ever the probe. Round 4 (#1916) closed the
-second half of the class: the DESKTOP legs inherit a db their stage-2
-already corrupted at rest and need the rebuild's PRODUCT, which rpm
-builds and then discards at its failing rename — so the guard now
-salvages it file-level, exactly per rpm's own printed recovery
-instruction. **Validation run 32367546177 (08-20): ALL FIVE albacore
+EL10). The kernel transaction completed with no malformed and
+`TUNAOS_NVIDIA_CONTRACT_OK`.
+
+Root cause: rpm writes into a db directory that is still in a lower overlay
+layer. The upper-layer round-trip is the whole fix; the rebuild was only
+ever the probe. Round 4 (#1916) closed the second half of the class. The
+DESKTOP legs inherit a db their stage-2 already corrupted at rest. They need
+the rebuild's PRODUCT, which rpm builds and then discards at the rename that
+fails. So the guard now salvages it file-level, exactly per rpm's own
+printed recovery instruction.
+
+**Validation run 32367546177 (08-20): ALL FIVE of the albacore
 desktop-nvidia legs built green** — `rebuilt-salvaged` marker, zero
 malformed, zero failed deps, `TUNAOS_NVIDIA_CONTRACT_OK` — plus
-base-nvidia promoted. The full EL10 nvidia cluster (~15 build cells
-across albacore/yellowfin/skipjack, same overlay script) is unblocked;
+base-nvidia promoted. This unblocks the EL10 nvidia cluster in full
+(~15 build cells across albacore/yellowfin/skipjack, same overlay script);
 the next board refresh shows it. Ported to bonito-rawhide's stage-2
 (`rawhide_rpmdb_probe`, #1915+#1916) — verify on its next nightly's
-desktop legs, then #1823 closes.*
+desktop legs, then #1823 closes.
 
 ### yellowfin (AlmaLinux Kitten 10) — 12/20 build
 | area | state | action |
@@ -315,7 +327,7 @@ desktop legs, then #1823 closes.*
 | gnome-asahi | arm64/Asahi tier (#1738 sweep red) | Asahi hardware smoke track |
 
 ### albacore (AlmaLinux 10) — 12/20 build
-Same shape as yellowfin. Additionally:
+Same shape as yellowfin. Also:
 | area | state | action |
 |---|---|---|
 | gnome-nvidia-hwe | **boot gate fails for real** — marker never emitted, 900s timeout (#1751); only non-Sigstore red in the 08-15 EL10 sweep | debug with the full-log method recorded on #1751 |
@@ -358,16 +370,16 @@ The fully-diagnosed one: **#1755**.
 ### wahoo (Fedora ELN, experimental) — 4/4 build; gnome + kde Gate-green and promoted (08-27)
 New 2026-08-25 (#2042); cosmic + kde added 08-27 (#2103). The EL11
 early-warning lane: ELN is Rawhide sources built with Enterprise Linux
-macros, and its os-release already reads `ID=eln`, `VERSION_ID=11`,
-`ID_LIKE="rhel centos fedora"` — the same 11 c11s and
+macros. Its os-release already reads `ID=eln`, `VERSION_ID=11`,
+`ID_LIKE="rhel centos fedora"` — the same 11 that c11s and
 almalinux-bootc:11-kitten will carry. Nothing else in the matrix sees EL11.
 
 Dispatch-only (`experimental: true`): 0 nightly cells, 0 ISO cells; its
 incremental scheduled cells are the three desktops in the monthly LUKS sweep.
 
 **It boots.** Run 33041330231 (on a4d86c5) is the first wahoo dispatch to
-reach a Gate at all — earlier runs had it `skipped` — and **gnome and kde
-both passed it**. That retires the "this lane has never booted" caveat these
+reach a Gate at all; earlier runs had it `skipped`. Both **gnome and kde
+passed it**. That retires the "this lane has never booted" caveat these
 docs carried from 08-25, for those two flavors.
 
 | area | state | action |
@@ -398,8 +410,8 @@ The best-instrumented variant after this week.
 | kde | **VERIFIED 08-18** (nightly 32090675142): #1816's binhost version-lock worked — kde built in **79 minutes** (vs the 6h ceiling), **Gate passed, Promoted**. Guppy now builds 4/4 with two desktop cells fully green | keep; #1816 pattern is the template if the tree races ahead again |
 
 ### gurnard (Ubuntu 24.04, experimental) — 2/2 build
-Green on build. Next bar: gates, ISO, lifecycle like everyone else. No known
-variant-specific blocker.
+Green on build. Next bar: gates, ISO and lifecycle, as for everyone else.
+No known variant-specific blocker.
 
 ### grouper (Ubuntu 26.04) — 6/7 build
 | area | state | action |
@@ -427,29 +439,30 @@ Green on build (nvidia included since #1564). Next bar is gates/ISO/lifecycle.
 
 ## Part 3 — Sequence
 
-**Phase 0 — score honestly (days).** W1 composite scoring; W2 lifecycle
-diagnosis (run in flight); confirm #1811 restored the marlin/grouper gates;
-close out the four "undiagnosed" boxes above (skipjack gnome, sailfin
-desktops, grouper gnome-zfs, flounder-sid gnome/xfce) — every one is a
-log-pull away from being a classified blocker.
+**Phase 0 — score honestly (days).** W1 scores the composite; W2 diagnoses
+lifecycle (run in flight); confirm #1811 restored the marlin/grouper gates.
+Then close out the four "undiagnosed" boxes above: skipjack gnome, sailfin
+desktops, grouper gnome-zfs, flounder-sid gnome/xfce. Every one of them is a
+log-pull away from a classified blocker.
 
 **Phase 1 — build to 100% of the satisfiable matrix (weeks).** #1725 nvidia
-semodule (~16 cells, largest single block); hummingbird cosmic manifest
-section (1 cell, proves the rebuild path); W8 decision on hummingbird arm64;
-guppy kde binhost (#1802); bonito-rawhide upstream watch (#1810).
+semodule (~16 cells, largest single block). Then the cosmic manifest section
+for hummingbird (1 cell, proves the rebuild path), and the W8 decision on
+hummingbird arm64. Also: guppy kde binhost (#1802); bonito-rawhide upstream
+watch (#1810).
 
 **Phase 2 — boots + desktop (overlaps 1).** Gate mandatory-for-green on
-testable cells (W3); guppy gnome #1801 and albacore gnome-nvidia-hwe #1751
-are the two known real boot failures; W9 GPU runners to open the other four
-desktops.
+testable cells (W3). Guppy gnome #1801 and albacore gnome-nvidia-hwe #1751
+are the two known real boot failures. Then W9 GPU runners to open the other
+four desktops.
 
 **Phase 3 — ISO + install.** #1772, #1556, then installer-smoke re-baseline.
-Zero cells pass today; this is the axis with the most ground to cover.
+Today, zero cells pass; this is the axis with the most ground to cover.
 
-**Phase 4 — lifecycle, parity, omissions as gates.** W2 weekly green, W5/W6
-feeding W1, then flip each from `advisory` to `blocking` in
-`green-criteria.yml` — deliberately, one at a time, with the number drop each
-causes stated in the PR that flips it.
+**Phase 4 — lifecycle, parity, omissions as gates.** W2 goes weekly green
+and W5/W6 feed W1. Then flip each from `advisory` to `blocking` in
+`green-criteria.yml` — deliberately, one at a time. The PR that flips a
+criterion states the number drop it causes.
 
 **Definition of done:** `green-criteria.yml` shows every criterion `blocking`,
 and the composite table shows a cell green only when all of them hold. The

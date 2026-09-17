@@ -67,7 +67,7 @@ MEASURED:
    sudo ./scripts/iso-e2e.sh <iso> --ssh-only --output niri-out
    ```
    For the installed-system checkpoints you need a full `--luks` run.
-2. Read what tesseract actually sees, not what the UI "says":
+2. Read what tesseract sees, not what the UI "says":
    ```bash
    tesseract niri-out/10-ready.png stdout --psm 6
    tesseract niri-out/10-ready.png stdout --psm 11   # sparse-text layout

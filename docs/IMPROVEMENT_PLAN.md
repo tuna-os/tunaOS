@@ -2,16 +2,16 @@
 
 > **📅 Last updated: 2026-06-10**
 > This document is a historical record of the May 2026 improvement sprint.
-> Much of the planned work has been completed. See individual phase status
+> The team completed much of the planned work. See individual phase status
 > below and [ROADMAP.md](../ROADMAP.md) for current priorities.
 
 Status: 2026-05-24 — substantial progress. Eighteen commits landed on
-main across two sessions plus two upstream PRs merged. Phases 1, 2,
+main across two sessions. Two upstream PRs also merged. Phases 1, 2,
 3a, 4.1, 4.2 effectively complete; 4.4 partial; remaining work below.
 
-This plan covers the multi-step work requested in May 2026:
-build-failure robustness, dakota-style end-to-end ISO testing, ISO
-building via tacklebox for every variant, and security hardening.
+This plan covers the multi-step work requested in May 2026. The topics
+are build-failure robustness, end-to-end ISO tests in the dakota style,
+ISO builds with tacklebox for every variant, and stronger security.
 
 ---
 
@@ -105,16 +105,17 @@ What I'd add to TunaOS:
 
 ### 2a. `scripts/iso-e2e.sh`
 New top-level script that takes `<variant> <flavor>` and an existing ISO
-path; daemonises a QEMU instance, waits for the live env marker, exercises
-**three** install paths, and emits artifacts.
+path. It daemonises a QEMU instance, waits for the live env marker,
+exercises **three** install paths, and emits artifacts.
 
 The three install paths we should cover (one per matrix leg, parallel):
 
-1. **Anaconda kickstart install** — boots `tests/anaconda-ks.cfg`, lets
-   the existing kickstart drive auto-partition + reboot, verifies the
-   installed disk boots and `gdm` reaches the login screen.
+1. **Anaconda kickstart install** — boots `tests/anaconda-ks.cfg` and
+   lets the existing kickstart drive auto-partition + reboot. Then it
+   verifies that the installed disk boots and `gdm` reaches the login
+   screen.
 2. **bootc-direct install** — the live env runs `bootc install to-disk
-   /dev/vda` (the path the GNOME Initial Setup wizard would also take).
+   /dev/vda` (the path that the wizard in GNOME Initial Setup would also take).
    Verifies the no-installer path.
 3. **LUKS install** — same as dakota-iso but using anaconda's encryption
    prompt instead of fisherman. Catches dracut/cryptsetup regressions.
@@ -135,8 +136,8 @@ Installed into the live ISO container only — gated by `ENABLE_LIVE_READY=1`
 ARG in `live-iso/common/Containerfile`.
 
 ### 2d. `tests/iso-verify.py`
-Replaces today's stub in `tests/lima-template.yaml` (which is currently
-just a Lima config, not a verifier). Connects to the QEMU monitor + serial
+Replaces today's stub in `tests/lima-template.yaml` (which is now only
+a Lima config, not a verifier). Connects to the QEMU monitor + serial
 log; asserts:
 - `gdm.service` reached `active` within 90 s
 - No `Failed to start` in the journal
@@ -149,10 +150,11 @@ Estimate: 3–5 days, mostly QEMU/CI debugging.
 ## Phase 3 — Tacklebox-based ISO builds for all variants
 
 `tuna-os/tacklebox` (which I now realise is a sibling repo in the same
-org) is a Go-based bootc → ISO/block-image builder. It's strictly more
-powerful than the current `image-builder-cli`-based ISO path because it
-supports multi-env media, but for single-env ISOs it's also simpler and
-removes the patched `image-builder-dev` from the critical path.
+org) is a Go-based bootc → ISO/block-image builder. It is stronger than
+the ISO path that uses the current `image-builder-cli`, because it
+supports multi-env media. For single-env ISOs it is also simpler, and it
+removes the patched `image-builder-dev` from the path that every build
+must take.
 
 What changes for TunaOS:
 
@@ -161,8 +163,8 @@ Replace `live-iso/common/build.sh` + `live-iso/common/Containerfile` (and
 the patched `image-builder-cli` clone inside `scripts/build-live-iso.sh`)
 with a thin wrapper that:
 
-1. Pulls `ghcr.io/tuna-os/tacklebox:latest` (a release artifact tacklebox
-   already publishes via its `ci.yml`).
+1. Pulls `ghcr.io/tuna-os/tacklebox:latest` (a release artifact that
+   tacklebox already publishes via its `ci.yml`).
 2. Generates a recipe per `(variant, flavor)` from a template like:
 
    ```json
@@ -193,13 +195,13 @@ iso-all:
 ```
 
 The existing `live-iso variant flavor repo tag dev` recipe stays as a
-compatibility alias for one release cycle, then is removed.
+compatibility alias for one release cycle. Then we remove it.
 
 ### 3c. Per-variant ISO publishing in CI
 `.github/workflows/publish-isos.yml` today only publishes
 `yellowfin-gnome` and `albacore-gnome`. With tacklebox-driven builds
-generating ISOs in ~10 minutes (vs ~30 today), enable ISO publishing
-for every variant×flavor where the `build-config.yml` matrix has
+that make ISOs in ~10 minutes (vs ~30 today), publish an ISO for every
+variant×flavor where the `build-config.yml` matrix has
 `build_iso: true`. The matrix already exists — we'd consume it in
 `publish-isos.yml`.
 
@@ -212,19 +214,19 @@ Risks:
 - Tacklebox is young (created 2026-05-10 per its GitHub metadata). We
   need to vendor a release SHA, not `:latest`.
 - Tacklebox is multi-env-first; for single-env ISOs we're using a tiny
-  slice of its surface area. Watch for regressions affecting that slice.
+  slice of its surface area. Watch for regressions that affect that slice.
 - ISO size: tacklebox uses `mksquashfs` directly (vs anaconda's
-  installer ISO format). Live ISO size will change; downstream rclone
-  publishing may need an updated size hint.
+  installer ISO format). Live ISO size will change; the rclone step that
+  publishes downstream may need an updated size hint.
 
 Estimate: 1–2 weeks. Tacklebox integration is mostly mechanical; the
-publishing matrix change touches the most CI surface area.
+matrix change for ISO publication touches the most CI surface area.
 
 ---
 
 ## Phase 4 — Security hardening
 
-Findings from the audit pass (severity descending):
+Findings from the audit pass, in order of severity:
 
 1. **RHSM credentials in build history** (P1). Phase 0 removed them from
    `ENV`, but they're still substituted into the `RUN` command and visible
@@ -237,23 +239,23 @@ Findings from the audit pass (severity descending):
    `Containerfile`, `Justfile`, `build_scripts/10-base-packages.sh`,
    `.github/workflows/reusable-build-image.yml` (CI side).
 2. **Unpinned GitHub Actions** (P2). 32 actions referenced by `@v4` /
-   `@v7` rather than commit SHA. Some are first-party (`actions/*`),
+   `@v7` instead of commit SHA. Some are first-party (`actions/*`),
    relatively safe; some are third-party (`google-github-actions/run-
    gemini-cli@v0.1.22`, `jlumbroso/free-disk-space@main`) — those are
    the priority. Pin every third-party action to a SHA, document the
    versioned upgrade in `renovate.json5`.
 3. **`--security-opt label=disable` everywhere** (P3). Used in every
    `podman build` in the Justfile and most workflow steps. SELinux
-   labelling is disabled because the build mounts the repo in. The
-   safer pattern is `:Z` on the bind mount, which relabels just that
+   labels are disabled because the build mounts the repo in. The
+   safer pattern is `:Z` on the bind mount, which relabels only that
    path. Plumb through where feasible; document where it isn't.
 4. **`set -eo pipefail` (no `-u`)** in several `build_scripts/*` (P3).
    Unset-variable errors slip through silently. Standardise on
    `set -euo pipefail` and add `:-` fallbacks where intentional.
 5. **`bootc container lint --fatal-warnings || true`** (P2). Already
-   called out in Phase 1; tracking here for closure.
+   called out in Phase 1; noted here for closure.
 6. **Scorecard score** (P3). `scorecard.yml` runs but isn't gating.
-   Once the above are addressed, fail the workflow on regressions.
+   Once we address the above, fail the workflow on regressions.
 
 Estimate: 3–5 days, mostly mechanical PR work + one cosign/rekor
 verification pass.
@@ -266,10 +268,10 @@ Optional but improves the bus factor:
 
 - Update `docs/AGENT_GUIDE.md` Troubleshooting section with the
   `dnf_retry` behaviour and where to look in `.build-logs/`.
-- Add `docs/TESTING.md` explaining the Phase 2 e2e harness:
-  how to run `just iso-e2e <variant> <flavor>` locally, how to read
-  serial logs, how to interpret screenshot artifacts.
-- Add a `tests/README.md` documenting `anaconda-ks.cfg`,
+- Add `docs/TESTING.md` to explain the Phase 2 e2e harness. It must tell
+  the reader how to run `just iso-e2e <variant> <flavor>` locally, how to
+  read serial logs, and how to interpret screenshot artifacts.
+- Add a `tests/README.md` file that describes `anaconda-ks.cfg`,
   `live-iso-verify.yaml`, and the new `live-ready/` unit.
 
 Estimate: 1 day, can land alongside any of the above.
@@ -281,49 +283,50 @@ Estimate: 1 day, can land alongside any of the above.
 Most impactful items first:
 
 1. **Phase 3b — Tacklebox CI integration.** Wire `just iso-tacklebox`
-   into a workflow that builds and publishes an ISO for every
+   into a workflow. That workflow builds and publishes an ISO for every
    variant×flavor with `build_iso: true` in `.github/build-config.yml`.
-   Right now only `yellowfin-gnome` and `albacore-gnome` get published
-   (in `publish-isos.yml`); the matrix already supports more. Likely
+   Right now `publish-isos.yml` publishes only `yellowfin-gnome` and
+   `albacore-gnome`; the matrix already supports more. Likely
    touches `.github/workflows/publish-isos.yml` and `iso-e2e.yml`.
 2. **Phase 2 follow-up — kickstart mode.** `scripts/iso-e2e.sh
-   --kickstart KS` is currently stubbed (exit 3). Implement: copy
+   --kickstart KS` is now a stub (exit 3). Steps: copy
    kickstart to a virtual floppy, append `inst.ks=hd:fd0` to kernel
    cmdline, watch for `/var/log/anaconda` completion via the QEMU
    monitor. Reuse `tests/anaconda-ks.cfg` as the default.
-3. **Phase 2 follow-up — per-PR ISO build.** Currently `iso-e2e.yml`
-   downloads from R2, which means PR changes aren't actually tested.
-   Add a `pull_request`-triggered job that builds the ISO locally (via
-   the new `iso-tacklebox` path — much faster than the anaconda path)
-   and runs the harness against that. ~25 min budget on a free runner.
+3. **Phase 2 follow-up — per-PR ISO build.** Today `iso-e2e.yml`
+   downloads from R2, so the PR changes get no test.
+   Add a `pull_request`-triggered job that builds the ISO locally, via
+   the new `iso-tacklebox` path. That path is much faster than the
+   anaconda path. The job then runs the harness against that ISO.
+   ~25 min budget on a free runner.
 4. **Phase 4.3 — `--security-opt label=disable`.** Used in every
    `podman build` in the Justfile and most workflow steps. SELinux
-   labelling is disabled because the build mounts the repo in. The
-   safer pattern is `:Z` on the bind mount, which relabels just that
+   labels are disabled because the build mounts the repo in. The
+   safer pattern is `:Z` on the bind mount, which relabels only that
    path. Plumb where feasible; document where it isn't.
 5. **Phase 4.4 — `set -euo pipefail` consistency.** Several
    `build_scripts/*` files use `set -eo pipefail` only — unset-variable
    errors slip through silently. Standardise on `set -euo pipefail`
    and add `:-` fallbacks where intentional.
 6. **Phase 1.2 — surface bonito's three lint failures.** Remove the
-   `|| true` from `cleanup.sh:117` for `IS_FEDORA`, capture the exact
-   warnings, fix the underlying tmpfiles.d / var-state issues. The
-   `.build-logs/` snapshot is from March 2026; later commits to
-   `cleanup.sh` may have already resolved these. Verify against a
-   fresh build before removing the mask.
-7. **Phase 5 — docs polish.** ✅ COMPLETE (PR #319 + follow-up commit `a7c87f0`). AGENT_GUIDE Troubleshooting updated with dnf_retry, flavor table modernized to 4-stage DAG, Key Files expanded with Containerfile.hwe, Commands examples fixed (dx/nvidia→gnome/gnome-nvidia). docs/TESTING.md and tests/README.md added. build-pipeline.md fully rewritten: 5 variants, unified build-variant.yml, tacklebox, iso-e2e.
+   `|| true` from `cleanup.sh:117` for `IS_FEDORA`. Then capture the
+   exact warnings and fix the tmpfiles.d / var-state issues that cause
+   them. The `.build-logs/` snapshot is from March 2026; later commits
+   to `cleanup.sh` may have already resolved these. Verify against a
+   fresh build before you remove the mask.
+7. **Phase 5 — docs polish.** ✅ COMPLETE (PR #319 + follow-up commit `a7c87f0`). AGENT_GUIDE Troubleshooting updated with dnf_retry, flavor table modernized to 4-stage DAG. Key Files expanded with Containerfile.hwe, Commands examples fixed (dx/nvidia→gnome/gnome-nvidia). `docs/TESTING.md` and `tests/README.md` added. build-pipeline.md fully rewritten: 5 variants, unified build-variant.yml, tacklebox, iso-e2e.
 
 ## Upstream work (separate repos)
 
 - **`tuna-os/tunaos-packages`** (formerly `github-copr`) — add `Obsoletes: gnome-shell-common < %{major_version}`
   to `src/gnome-49/gnome-shell/gnome-shell.spec` and the matching
-  `gnome-50` spec. Once that lands, the `pre_install` workaround under
-  `packages.el10` in `manifests/desktops/gnome.yaml` — the
-  `dnf remove --noautoremove gnome-shell-common` that clears the way for the
-  COPR's newer gnome-shell — can be removed. (It lived at
+  `gnome-50` spec. Once that lands, we can remove the `pre_install`
+  workaround under `packages.el10` in `manifests/desktops/gnome.yaml` —
+  the `dnf remove --noautoremove gnome-shell-common` that clears the way
+  for the COPR's newer gnome-shell. (It lived at
   `build_scripts/desktop/gnome.sh:48`, commit `33e11a1`, until GNOME moved onto
   the manifest installer.)
 - **`tuna-os/tacklebox`** — publish a release container image so we
   don't have to `go build` from source each time. The `scripts/build-iso-tacklebox.sh`
-  fallback to building from source will still work as a development
+  fallback that builds from source will still work as a development
   shortcut, but releases are nicer for CI.

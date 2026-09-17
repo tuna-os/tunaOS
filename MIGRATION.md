@@ -155,7 +155,7 @@ Endless OS uses OSTree but with a different deployment model. Migration is not t
 
 ## From Windows (wootc)
 
-If you are currently running Windows (Windows 10 or 11), you can migrate to TunaOS directly using **[wootc](https://github.com/tuna-os/wootc)** without needing to burn a USB flash drive or repartition your drive in advance.
+If you are now running Windows (Windows 10 or 11), you can migrate to TunaOS directly using **[wootc](https://github.com/tuna-os/wootc)** without needing to burn a USB flash drive or repartition your drive in advance.
 
 wootc is a Windows installer application for TunaOS:
 - **No USB stick required**: Runs directly within Windows and prepares a bootable environment.
@@ -200,9 +200,9 @@ flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flat
 ## Known Limitations
 
 1. **NVIDIA drivers**: nvidia variant recommended for NVIDIA hardware. See [ROADMAP.md](ROADMAP.md) for available variants and flavors.
-2. **Secure Boot**: NVIDIA flavors require manual enrollment of the MOK key on first boot after migration; community bases don't support Secure Boot at all — see [docs/SECURE-BOOT.md](docs/SECURE-BOOT.md).
+2. **Secure Boot**: NVIDIA flavors need manual enrollment of the MOK key on first boot after migration; community bases don't support Secure Boot at all — see [docs/SECURE-BOOT.md](docs/SECURE-BOOT.md).
 3. **Dual boot**: Not recommended or tested with tunaOS Atomic images.
-4. **Fingerprint readers**: May require additional driver configuration.
+4. **Fingerprint readers**: May need additional driver configuration.
 
 ---
 

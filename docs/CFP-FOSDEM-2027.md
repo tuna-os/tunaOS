@@ -51,11 +51,11 @@ The beats, in order:
 3. Corral: declare a desktop VM as a manifest, `kubectl apply`, watch it schedule
 4. Boot the updated image; GNOME session running on AlmaLinux 10
 
-**To actually record it, use [CFP-DEMO-SCRIPT.md](./CFP-DEMO-SCRIPT.md)** — the
+**To record it, use [CFP-DEMO-SCRIPT.md](./CFP-DEMO-SCRIPT.md)** — the
 shot list with the real commands (`just qcow2`, `scripts/run-vm.sh demo`,
 `just corral-build`), per-shot timings, what each shot has to prove to a
 reviewer, and the pre-pull step without which `bootc upgrade` does not fit in
-five minutes. The same recording is reused for SCaLE 24x rather than shot
+five minutes. The same recording is reused for SCaLE 24x instead of shot
 twice.
 
 ## Logistics
@@ -83,7 +83,7 @@ and the tulilirockz "warm path" correction (#1339): the commits are
 inherited pre-fork history from bluefin-lts, not real engagement with this
 repo. `.github/CODEOWNERS` still lists castrojo (and tulilirockz), but
 given both show zero real post-fork activity, that file itself looks like
-it was carried over unchanged from the fork rather than reflecting actual
+it was carried over unchanged from the fork instead of reflecting actual
 current maintainers — worth a maintainer's separate look, not assumed here.
 
 Treat this as cold outreach unless a maintainer confirms an actual current

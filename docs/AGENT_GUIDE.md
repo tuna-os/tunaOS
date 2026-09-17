@@ -1,12 +1,12 @@
 # TunaOS Agent Guide
 
-Authoritative reference for AI agents and contributors working on the TunaOS repository.
+The authoritative reference for AI agents and contributors who work on the TunaOS repository.
 
 ---
 
 ## What This Project Is
 
-TunaOS is an **image factory** — it produces bootable OCI container images that serve as complete, immutable desktop Linux operating systems. The output is `base OS × desktop × kernel × drivers = image`, assembled by a build matrix and delivered via bootc.
+TunaOS is an **image factory**. It produces bootable OCI container images, and each one is a complete, immutable desktop Linux operating system. The output is `base OS × desktop × kernel × drivers = image`. A build matrix assembles it, and bootc delivers it.
 
 See [`VISION.md`](../VISION.md) for the project philosophy.
 
@@ -16,7 +16,7 @@ See [`VISION.md`](../VISION.md) for the project philosophy.
 
 ### The Manifest System
 
-Desktop environments are defined as **YAML manifests** in `manifests/desktops/`:
+**YAML manifests** in `manifests/desktops/` define each desktop environment:
 
 ```
 manifests/desktops/
@@ -146,7 +146,7 @@ Production images ship sshd disabled (`40-services.sh` turns it off unless
 `ENABLE_SSHD=1`), so every SSH-based mode fails on media a user can download
 — `--luks` dies at `ERROR: SSH not available`. For years that meant the LUKS
 gate, the smoke checks and the installer GUI checks only ever ran against dev
-ISOs, and a published ISO could regress in any of those ways unnoticed.
+ISOs. A published ISO could regress in any of those ways, and nobody saw it.
 
 Use `--published` to check an artifact as shipped:
 
@@ -157,19 +157,19 @@ sudo -E ./scripts/iso-e2e.sh ./<file>.iso --published --output out --memory 4096
 
 Two things it deliberately does not do, both learned the hard way:
 
-- It judges readiness by **pixels, not the serial marker** — production media
-  need not ship `tunaos-live-ready.service`, and waiting for a marker that is
-  not coming burns the whole `--timeout` and reads as a hang.
+- It judges readiness by **pixels, not the serial marker**. Production media
+  need not ship `tunaos-live-ready.service`. A wait for a marker that never
+  arrives burns the whole `--timeout` and reads as a hang.
 - It does not treat *any* non-blank frame as ready. A GRUB menu is non-blank,
-  and so it declared success at the bootloader and drove `sendkey` into a
-  still-booting machine; a black screen between GRUB and the compositor has
-  no bootloader text, and so the first fix for that declared success at a
-  black screen. Readiness now requires non-blank **and** not-bootloader,
-  bounded by `TUNAOS_PUBLISHED_BOOT_SETTLE`.
+  so the harness once declared success at the bootloader and drove `sendkey`
+  into a machine that was still booting. A black screen between GRUB and the
+  compositor holds no bootloader text, so the first fix for that declared
+  success at a black screen. Readiness now needs non-blank **and**
+  not-bootloader, bounded by `TUNAOS_PUBLISHED_BOOT_SETTLE`.
 
-The harness names the image from the ISO FILENAME (`<variant>-<flavor>-…`),
-so keep that shape when renaming a download or it will probe
-`ghcr.io/tuna-os/published:marlin` and fail for a reason that has nothing to
+The harness names the image from the ISO FILENAME (`<variant>-<flavor>-…`).
+Keep that shape when you rename a download. Otherwise the harness probes
+`ghcr.io/tuna-os/published:marlin` and fails for a reason that has nothing to
 do with the ISO.
 
 ---
@@ -188,7 +188,7 @@ No new shell script needed. `install-desktop.sh` handles it.
 2. Add detection to `build_scripts/lib.sh` (IS_* flag, PKG_MGR)
 3. Add the variant to `.github/build-config.yml`
 4. Add pacman/apt/dnf sections to each desktop manifest
-5. (Optional) Create a `Containerfile.<variant>` if bootcification is needed
+5. (Optional) Create a `Containerfile.<variant>` if the variant needs bootc conversion
 
 ---
 
@@ -213,7 +213,7 @@ Outreach and community growth initiatives are tracked centrally in [#687](https:
   - Discussions release announcements & triage response.
   - Triage and tagging of `good-first-issue` items across sub-repositories (`gtk-office-suite`, `Tavern`, `letters`).
   - Documentation and technical blog posts (e.g. Modern Enterprise Desktop & bootc on AlmaLinux).
-- **External / Human Initiatives**: CFPs (All Things Open, KubeCon, Flock to Fedora), external blog/social posts, and community platform hosting require an authorized team member's external account and identity.
+- **External / Human Initiatives**: CFPs (All Things Open, KubeCon, Flock to Fedora), external blog/social posts, and community platform hosting need an authorized team member's external account and identity.
 
 ---
 

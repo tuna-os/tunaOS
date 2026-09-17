@@ -22,7 +22,7 @@ everything works — no firmware settings changed, no keys enrolled.
 | Bonito Rawhide | Fedora Rawhide | ✅ Yes, in principle | Rawhide is signed, but as a moving target it can hit occasional signing/SBAT gaps — expect the odd regression |
 | Redfin | RHEL 10 (local build) | ✅ Yes (standard flavors) | Red Hat-signed shim + kernel — not a publicly published variant yet |
 | Any `*-nvidia` flavor | EL base + ublue akmods | ⚠️ **No** — one-time key enrollment required | See [NVIDIA flavors](#nvidia-flavors) |
-| Any `*-hwe` flavor | EL base | ✅ Yes, today | The HWE overlay currently keeps the signed base kernel; if it ever swaps kernels this becomes ⚠️ like NVIDIA |
+| Any `*-hwe` flavor | EL base | ✅ Yes, today | The HWE overlay now keeps the signed base kernel; if it ever swaps kernels this becomes ⚠️ like NVIDIA |
 | Marlin (+ CachyOS overlay) | Arch Linux | ❌ No | Unsigned kernel (stock Arch / CachyOS), no signed shim — disable Secure Boot |
 | Flounder | Debian 13 (trixie) | ❌ Not out of the box | The bootcified image does not wire Debian's signed shim/kernel path; untested under SB — disable Secure Boot |
 | Flounder Sid | Debian Sid | ❌ Not out of the box | Same as Flounder, on the unstable branch |

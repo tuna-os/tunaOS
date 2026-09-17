@@ -27,12 +27,12 @@ finding is no longer current.
 Treat `gtk-office-suite/suite-common` as the canonical Rust shared library for
 new TunaOS and GTK Office Suite development. Use `suite-common-rs` only when a
 consumer explicitly needs the standalone Rust project, and describe the
-standalone Python project as a separate legacy library rather than as another
+standalone Python project as a separate legacy library instead of as another
 Rust implementation.
 
 This repository records the ownership and naming decision only. Renaming or
 archiving the Python repository, or changing the standalone Rust repository's
-disposition, requires action by the maintainers of those repositories and is
+disposition, needs action by the maintainers of those repositories and is
 not performed by a TunaOS code change.
 
 ## Consequences

@@ -55,7 +55,7 @@ Hive agents (guide, architect, sec-check, quality, ci-maintainer) run against th
 ## Bus Factor Mitigations
 
 - **Automated CI/CD**: CI is fully automated with no manual release steps; releases and boot reports run on schedule.
-- **Declarative Configuration**: All configuration is stored in YAML files (`build-config.yml`, `image-versions.yaml`, manifests) rather than tribal knowledge.
+- **Declarative Configuration**: All configuration is stored in YAML files (`build-config.yml`, `image-versions.yaml`, manifests) instead of tribal knowledge.
 - **Dependency Management**: Image versions pinned in `image-versions.yaml` with automated Renovate updates.
 - **Decision Transparency**: All architectural designs and historical rationales are documented in durable ADRs ([docs/adr/](docs/adr/README.md)).
 - **Documented Triage & Governance**: Issue triage policy ([TRIAGE-POLICY.md](TRIAGE-POLICY.md)) and RFC process ([RFC-PROCESS.md](RFC-PROCESS.md)) enable reproducible decision-making.

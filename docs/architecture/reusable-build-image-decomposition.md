@@ -10,7 +10,7 @@
 
 `.github/workflows/reusable-build-image.yml` is the primary OCI build workflow for TunaOS, called by 59 caller workflows (`build-*.yml`, `daily-verify.yml`, `catalog-facts.yml`, `bootc-lifecycle.yml`, etc.).
 
-Over successive development cycles, the file has expanded from **791 lines to 1,229 lines** (+55% growth). It currently mixes multiple distinct operational concerns within two massive jobs (`build_push` and `manifest`):
+Over successive development cycles, the file has expanded from **791 lines to 1,229 lines** (+55% growth). It now mixes multiple distinct operational concerns within two massive jobs (`build_push` and `manifest`):
 
 1. **Tooling & Setup** (runner configuration, `just` / `yq` installation & retries).
 2. **OCI Image Build & Layer Caching** (buildah distributed cache, `just build`, telemetry summary).
@@ -26,7 +26,7 @@ Over successive development cycles, the file has expanded from **791 lines to 1,
 
 ### Why Monolithic Growth is High Risk
 - **Blast Radius**: A single YAML syntax error or step failure in `reusable-build-image.yml` immediately breaks all 13 OS variants and 59 workflow callers.
-- **Workflow Permissions Overhead**: The monolith requires broad `contents: read`, `packages: write`, and `id-token: write` permissions across the entire workflow.
+- **Workflow Permissions Overhead**: The monolith needs broad `contents: read`, `packages: write`, and `id-token: write` permissions across the entire workflow.
 - **Review Complexity**: A 1,229-line file with nested bash scripts, inline `jq`/`yq` commands, and conditional branching (`github.event_name == 'pull_request'`) imposes severe cognitive load during code review.
 - **Parametrization Deficits**: Hardcoded strings (such as maintainer contact info in OpenContainer labels) cannot be overridden without modifying the central monolith.
 

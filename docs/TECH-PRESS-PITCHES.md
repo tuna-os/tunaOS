@@ -30,7 +30,7 @@ hands-on download links; the announcement is at
 Hi OMG! Linux — would you be interested in a short news item or hands-on
 look at Gurnard, TunaOS's new Ubuntu 24.04 LTS + Pantheon image? The hook is
 practical: readers can try the elementary-style desktop on a standard Ubuntu
-LTS base, with image-based updates and rollback, rather than reading about a
+LTS base, with image-based updates and rollback, instead of reading about a
 new desktop concept. Gurnard is explicitly experimental, and a maintainer can
 answer questions or supply a current ISO/image link from
 <https://tunaos.org/download>.

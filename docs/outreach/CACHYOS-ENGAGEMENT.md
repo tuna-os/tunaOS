@@ -13,7 +13,7 @@
 
 TunaOS's **Marlin** variant delivers an immutable, container-native (`bootc`) desktop built on an Arch Linux rolling base integrated with the **CachyOS repository and kernel overlay**.
 
-Through the CachyOS package repositories, Marlin systems utilize performance-optimized packages (compiled with x86-64-v3/v4 micro-architecture optimizations) and run the high-performance **`linux-cachyos`** kernel featuring modern CPU schedulers (BORE / sched-ext).
+Through the CachyOS package repositories, Marlin systems use performance-optimized packages (compiled with x86-64-v3/v4 micro-architecture optimizations) and run the high-performance **`linux-cachyos`** kernel featuring modern CPU schedulers (BORE / sched-ext).
 
 ### Recent Upstream & Container Hardening
 The Marlin variant completed major initramfs and boot-pipeline hardening:

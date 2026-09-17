@@ -273,7 +273,41 @@ jobs:
         with:
           cosign-release: v3.1.3
 
+      # SIGN THE CHECKSUM, NOT THE ISO.
+      #
+      # publish-iso-groups.yml fixed this in its own signing step and carries
+      # the measurement; this step kept passing $ISO and has been paying for it
+      # every night since. `cosign sign-blob` reads its payload into memory, the
+      # runner has 16 GB and no swap, so an ISO over roughly 7 GiB OOM-kills the
+      # runner — which Actions reports as "The runner has received a shutdown
+      # signal", not as a failure of this step. The ISO is built and boot-gated
+      # by then, so the cell reads red having done all the work.
+      #
+      # bonito-rawhide:kde is the proof, on both arches, every run since at
+      # least 2026-09-11. Same run, same step, same code path:
+      #
+      #   niri  amd64  5.8G -> Wrote bundle (60s)
+      #   gnome arm64  6.2G -> Wrote bundle (65s)
+      #   xfce  arm64  6.6G -> Wrote bundle (93s)
+      #   kde   arm64  7.9G -> runner shutdown, 48s after "Using payload from:"
+      #   kde   amd64  8.3G -> runner shutdown
+      #
+      # kde is the only flavor above ~7G and the only one that fails, while five
+      # siblings sign fine in the same window — so this is not Sigstore.
+      #
+      # The .sha256 is ~100 bytes and binds the ISO cryptographically, so
+      # signing it gives the same guarantee for a payload cosign can hold.
+      # Fedora, Debian and Arch all do exactly this.
+      #
+      # VERIFICATION CHANGES SHAPE, deliberately and in step with the grouped
+      # ISOs: verify the bundle over the .sha256, then check the ISO against
+      # that checksum. docs/VERIFY-ARTIFACTS.md and docs/INSTALL.md carry it.
+      #
+      # timeout-minutes and `timeout 300` are here so a future regression fails
+      # this step with a readable error instead of vanishing into a runner
+      # shutdown, which is what made this cost five days to see.
       - name: Checksum, sign, and verify ISO
+        timeout-minutes: 30
         env:
           COSIGN_YES: "true"
         run: |
@@ -281,14 +315,23 @@ jobs:
           ISO=$(find . -maxdepth 1 -name "*.iso" -print -quit)
           [[ -n "$ISO" ]] || { echo "::error::ISO not found"; exit 1; }
           CHECKSUM="${ISO}.sha256"
+          # Bundle keeps the ISO-derived name so every downstream key (R2
+          # objects, artifact globs, the prune filter) is unchanged. It is the
+          # signature over $CHECKSUM, not over $ISO.
           BUNDLE="${ISO}.sigstore.json"
           identity="https://github.com/${GITHUB_REPOSITORY}/.github/workflows/reusable-build-artifacts.yml@${GITHUB_REF}"
           issuer="https://token.actions.githubusercontent.com"
 
+          echo "=== before signing ==="
+          ls -l "$ISO"
+          free -m || true
+
           sha256sum "$(basename "$ISO")" > "$CHECKSUM"
           sha256sum --check --strict "$CHECKSUM"
-          cosign sign-blob --bundle "$BUNDLE" "$ISO"
-          cosign verify-blob "$ISO" \
+
+          # The payload is the checksum file, NOT $ISO. See the note above.
+          timeout 300 cosign sign-blob --bundle "$BUNDLE" "$CHECKSUM"
+          timeout 300 cosign verify-blob "$CHECKSUM" \
             --bundle "$BUNDLE" \
             --certificate-identity "$identity" \
             --certificate-oidc-issuer "$issuer"

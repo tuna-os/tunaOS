@@ -107,7 +107,7 @@ same file/workflow/repo before treating it as independent work.
 ### 5. SLA re-baseline by priority tier (adopts #1195 recommendation #3)
 
 Replace the flat, universally-violated SLA with tiers keyed to what's
-actually being tracked:
+being tracked:
 
 | Tier | Definition | Target response |
 |---|---|---|
@@ -127,7 +127,7 @@ flat 100%-violated SLA no longer does.
 It does not authorize automated closure. No workflow in this repo
 auto-closes issues on this policy's authority; `actions/stale`-style
 automation was evaluated (see "Current state" above) and rejected as the
-wrong mechanism for how this queue actually behaves. Triage stays a
+wrong mechanism for how this queue behaves. Triage stays a
 verify-then-decide human/agent action per issue, using the criteria above.
 
 ---

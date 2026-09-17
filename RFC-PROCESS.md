@@ -15,7 +15,7 @@ decisions.
 last-touched 2026-06-06/06-08 — **2 months stale**. None carry a reviewable
 RFC document; the ROADMAP cites "RFC 010" (Grouper) with no `rfc010` branch
 and no RFC docs directory exists. The Q3 2026 checkpoint (2026-08-22, #1299)
-requires an **RFC merge policy doc merged by 2026-09-01** as the STAFF test
+needs an **RFC merge policy doc merged by 2026-09-01** as the STAFF test
 for #1093.
 
 ## Scope
@@ -92,12 +92,12 @@ ref.
 
 **Net**: 1 merged (rfc005, this PR), 1 deleted as a zero-diff ref
 (rfc001-v2), 9 abandoned (8 already absorbed into `main` through other
-commits, 1 superseded by a different architectural direction). None require
+commits, 1 superseded by a different architectural direction). None need
 carrying forward — every unresolved idea worth keeping (rfc004's drift-gate
 concept) is called out above for a fresh RFC against current architecture,
 not a revival of stale branch content.
 
-Branch deletion itself requires push access this contributor doesn't have;
+Branch deletion itself needs push access this contributor doesn't have;
 the maintainer command to execute this disposition is:
 
 ```bash

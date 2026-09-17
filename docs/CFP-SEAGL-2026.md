@@ -92,7 +92,7 @@ comparison to Silverblue, Universal Blue, NixOS, and MicroOS.
       open/close window. Record "verified on seagl.org, `<date>`" in the header
       above before this draft is treated as submittable again. This step is
       first because skipping it is what produced the 2026 error.
-- [ ] Confirm the 2027 CFP is actually open (historically ~April; 2026 opened
+- [ ] Confirm the 2027 CFP is open (historically ~April; 2026 opened
       04-24 and re-opened through 06-30)
 - [ ] Finalize title + abstract (this draft)
 - [ ] Record 2–3 min demo video (reuse the #1658 demo outline work)
@@ -104,7 +104,7 @@ comparison to Silverblue, Universal Blue, NixOS, and MicroOS.
 
 The event still happens 23–24 October 2026 at UW and online. Attending,
 volunteering, or sponsoring is a maintainer call tracked in #1691 — the talk
-track simply resumes for 2027.
+track resumes for 2027.
 
 ## Supporting material (for reviewers / talk page)
 

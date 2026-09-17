@@ -11,7 +11,7 @@
 
 ## 1. Outreach Purpose & Channel Advantage
 
-While written tech press and YouTube review hardware kits require extensive preparation and logistics, **Linux podcasts** represent the highest-trust, most authentic channel for reaching experienced Linux power users, developers, sysadmins, and homelabbers.
+While written tech press and YouTube review hardware kits need extensive preparation and logistics, **Linux podcasts** represent the highest-trust, most authentic channel for reaching experienced Linux power users, developers, sysadmins, and homelabbers.
 
 A 15-minute maintainer interview or segment discussion provides the nuance required to explain container-native (`bootc`) desktops, Enterprise Linux lifecycles, and atomic rollback workflows.
 

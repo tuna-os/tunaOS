@@ -23,5 +23,5 @@ Each cell in the ledger records evidence across the full definition of done:
 ## 2. Capability & Waiver Rules
 
 - **No Implicit Skips**: Every cell declared in `.github/build-config.yml` must explicitly satisfy required capabilities or record an active waiver.
-- **Waiver Expiry**: Experimental or beta waivers require an assigned owner and expiration date; expired waivers automatically fail CI.
+- **Waiver Expiry**: Experimental or beta waivers need an assigned owner and expiration date; expired waivers automatically fail CI.
 - **CI Gate Integration**: `.github/workflows/matrix-status.yml` enforces structure and capability presence in PRs (`--check-structure`), preventing undocumented variant additions or cell drops from bypassing release gates.

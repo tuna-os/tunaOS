@@ -1,4 +1,4 @@
-# Hummingbird — what it actually is
+# Hummingbird — what it is
 
 Written because this was got wrong repeatedly, in code comments, in
 `GREEN-MASTER-PLAN.md`, and in issue triage. Hummingbird is **not** Fedora 43
@@ -79,7 +79,7 @@ variant — but it is a *port*, not a *rebuild*, and the difference matters:
 - There is no upstream desktop package set to fall back on. Anything the desktop
   needs either exists in tunaOS's hummingbird snapshot or does not exist at all.
 - Upstream rolls. A snapshot taken once drifts away from the base image
-  continuously, and the failure mode is unresolvable dependencies rather than
+  continuously, and the failure mode is unresolvable dependencies instead of
   missing packages (see below).
 - Hardening and minimalism are the *point*. A package being absent is often a
   deliberate upstream choice, not an oversight to be reported as a bug.
@@ -120,8 +120,8 @@ which only 43 names match `gnome-*`:
 | `harfbuzz`, `gnome-desktop3` | **no** |
 | `flatpak` | **no** |
 
-`gtk4` is present *and* requires `harfbuzz`, which is not. That is why dnf
-reports gtk4 and 17 other packages as having **broken dependencies** rather than
+`gtk4` is present *and* needs `harfbuzz`, which is not. That is why dnf
+reports gtk4 and 17 other packages as having **broken dependencies** instead of
 being unavailable — and why `--skip-unavailable` silently drops them.
 
 The consequence, measured on `ghcr.io/tuna-os/hummingbird:gnome-testing` built
@@ -154,7 +154,7 @@ corrected. Judge this repo by its *content* age, never its name.
 The genuine mismatch is between the two halves: `.github/build-config.yml`
 pins the upstream base image by digest while the package prefix grows on the
 factory's own cadence. They drift apart with every upstream roll, and the
-drift surfaces as dependency breakage inside the layered desktop rather than
+drift surfaces as dependency breakage inside the layered desktop instead of
 as anything that looks like a pin problem.
 
 `scripts/check-package-repo-pins.py` verifies the URL resolves **and** fails
@@ -207,9 +207,9 @@ lies. Anyone fixing this should know that `MAJOR_VERSION_NUMBER` feeds
 
 Not fixed here: correcting the label is a fleet-wide metadata change across
 thirteen variants with downstream consumers, which wants its own change and its
-own review rather than being folded into a hummingbird documentation pass.
+own review instead of being folded into a hummingbird documentation pass.
 
-## What actually blocks a hummingbird ISO (measured 2026-08-25)
+## What blocks a hummingbird ISO (measured 2026-08-25)
 
 The chain from "packages exist" to "a laptop runs Hummingbird GNOME" has six
 links. Five of them were opaque this morning; they are not any more, and the
@@ -277,7 +277,7 @@ it settled two questions at once.
 flatpak line and failed in **56 seconds** (03:03:22 → 03:04:18), against the
 57 minutes of silence the same failure cost on 32866334376. The `EXIT` trap
 fired in the log — `+ _reap_live_buses` — and the cell reported a real exit 1
-rather than a timeout.
+instead of a timeout.
 
 **The flatpak gate is not an artefact of the e2e harness.** The identical
 three lines came out of `ghcr.io/tuna-os/hummingbird:cosmic-linux-amd64`, a
@@ -300,7 +300,7 @@ is still the first and only thing that fails.
 
 The same run's `gnome / linux-amd64` cell never published at all, so the
 `iso:gnome` job was refused by the provenance gate in 0 seconds — correctly,
-rather than building media from a stale tag.
+instead of building media from a stale tag.
 
 The gnome cell did not fail. It stopped:
 
@@ -323,7 +323,7 @@ build itself (210m under the 240m job ceiling for every binary variant; 330m
 under 360m for guppy, which compiles from source) so a build that would blow
 the ceiling anyway fails 30 minutes inside it with an annotation instead of a
 bare cancellation. It is a clock, not a stall detector: the annotation sends
-the reader to the last line of build output rather than claiming a wedge.
+the reader to the last line of build output instead of claiming a wedge.
 
 The same job also exposed a second, quieter fault: `install-desktop.sh` passed
 `--skip-unavailable` *before* `install`, which dnf5 rejects outright. The
@@ -377,7 +377,7 @@ run looks identical to a merely slow one.
 ### `flatpak` is the single package gating the whole ISO axis
 
 Not `gnome-shell`. `flatpak` is **layer-07**, and it blocks three consecutive
-steps rather than one:
+steps instead of one:
 
 * the **live-overlay** build — `customize-live.sh` pre-installs the installer
   app and `exit 1`s if flatpak cannot be made present;
@@ -407,7 +407,7 @@ Filtering on `index <= 7` silently answers a different question and reports far
 too little work remaining — measured 15 instead of 53 when this was last
 computed. Match on the tier `name`, or find flatpak's index first.
 
-### Re-measured 2026-08-26 03:28: what is actually in each index
+### Re-measured 2026-08-26 03:28: what is in each index
 
 Both indexes read live, side by side. The two have moved in opposite
 directions since 08-25, and the difference matters more than either number.
@@ -474,7 +474,7 @@ Run 32925587829 built `hummingbird:gnome` in **11m33s** and pushed it to
 GHCR — the dnf-flag and stalled-download fixes work, and the cell that ran
 3h57m and was cancelled the night before now completes in twelve minutes.
 
-That makes the question answerable from the image rather than from the
+That makes the question answerable from the image instead of from the
 indexes. Its own published package manifest
 (`packages-hummingbird-gnome-linux-amd64`, 405 packages) against the 52 the
 manifest asks for:
@@ -531,7 +531,7 @@ Skipping packages with broken dependencies:
 ```
 
 `gtk4` is in that list, and every other entry is a GTK application. Resolving
-gtk4's 71 requires against the union of both indexes leaves exactly two
+gtk4's 71 needs against the union of both indexes leaves exactly two
 unmet, and they are the same package:
 
     gstreamer1-plugins-bad-free-libs(x86-64)
@@ -562,7 +562,7 @@ Requires: gstreamer1-plugins-bad-free-libs%{?_isa} >= %{gstreamer_version}
 %endif
 ```
 
-Hummingbird is not `rhel`, so all three are on and gtk4 hard-requires a
+Hummingbird is not `rhel`, so all three are on and gtk4 hard-needs a
 package we do not serve. Extending that guard to hummingbird would make gtk4
 installable in one line, and it is the wrong fix.
 
@@ -579,7 +579,7 @@ nothing needs vendoring), and `gstreamer1`, `gstreamer1-plugins-base`, `gtk3`
 and `gtk4` from the same tier are all served. It is one of seven sources that
 tier is short. Build it.
 
-### How far the chain actually is: 570 of 673
+### How far the chain is: 570 of 673
 
 Comparing build-order SOURCE names against the source of every binary we
 serve (`sourcerpm`, not served binary names — see the trap below):
@@ -601,14 +601,14 @@ serve (`sourcerpm`, not served binary names — see the trap below):
 | layer-11…17 | 37 | 31 | 6 |
 | **total** | **673** | **570** | **103** |
 
-The chain is **85% served**, and the gaps are scattered rather than sitting
+The chain is **85% served**, and the gaps are scattered instead of sitting
 behind a clean frontier. "Reached tier 5 of 22" describes a from-scratch
-rebuild restarting, not how much is actually published — which is why that
+rebuild restarting, not how much is published — which is why that
 figure and this one have felt irreconcilable.
 
 ### What the goal needs, by tier
 
-Where each package a working GNOME laptop install requires sits:
+Where each package a working GNOME laptop install needs sits:
 
 | tier | still missing, and what it gates |
 | :--- | :--- |
@@ -667,7 +667,7 @@ QEMU cannot surface this, and that is the point. virtio needs no firmware, so
 
 * **no wifi** — no firmware, no `wpa_supplicant`, and NetworkManager present
   without its wifi plugin (`NetworkManager-wifi` exists in `public-hummingbird`
-  and is simply not requested);
+  and is not requested);
 * **no GPU initialisation** on amdgpu or recent i915/xe, which need firmware
   blobs before the display comes up at all;
 * **no audio** on any modern Intel laptop, which needs `sof-firmware`.
@@ -704,7 +704,7 @@ for it.
 ### Our own repo can shadow upstream's fixes
 
 The desktop manifests and the base stage both add our rebuild repo at
-`priority: 5`, and dnf priority is *absolute* rather than a tie-break. So for
+`priority: 5`, and dnf priority is *absolute* instead of a tie-break. So for
 any package present in both indexes, ours installs even when upstream's is
 newer. Measured: 30 names overlap, **16 of them older on our side**, including
 `sudo` fifteen releases behind. The gap measurement drops adopted packages from
@@ -722,7 +722,7 @@ the BUILD ORDER but nothing withdraws the already-published copy.
 3. **A missing package may be intentional.** Before filing it as a packaging
    bug, consider that minimalism is the product.
 4. **Desktop flavors are a port onto a desktop-less base.** Expect gaps; expect
-   them to be structural rather than accidental.
+   them to be structural instead of accidental.
 5. **Both pins move.** Refreshing one without the other is how the halves drift.
 
 ## Related

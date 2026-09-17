@@ -12,7 +12,7 @@ Enterprise Linux users (AlmaLinux 10, CentOS Stream 10, RHEL 10) typically wait 
 
 ### The Packaging Hook
 - **Tier-based Mock Builds**: TunaOS packages the complete GNOME 51 desktop stack (`mutter`, `gnome-shell`, `gtk4`, `libadwaita`, `nautilus`, `gdm`, `ptyxis`, `orca`, and core shell extensions) through an automated, mock-based build pipeline.
-- **Native RPM Repository on Cloudflare R2**: Packages are built in-house and distributed directly from the TunaOS Cloudflare R2 RPM repository rather than unmaintained third-party PPAs or stale COPR repositories (aligning with org package sourcing policy #1319).
+- **Native RPM Repository on Cloudflare R2**: Packages are built in-house and distributed directly from the TunaOS Cloudflare R2 RPM repository instead of unmaintained third-party PPAs or stale COPR repositories (aligning with org package sourcing policy #1319).
 - **Atomic Image Assembly**: The resulting RPMs are layered into bootable OCI container images (`Yellowfin:gnome`, `Albacore:gnome`, `Skipjack:gnome`) and cryptographically signed with Sigstore/cosign keyless signing.
 
 ---
@@ -90,7 +90,7 @@ Downloadable x86_64 ISOs are available immediately at [tunaos.org/download](http
 >
 > Congratulations on the GNOME 51 release. The TunaOS project has published packaging and bootable container images enabling GNOME 51 on AlmaLinux 10 and CentOS Stream 10.
 >
-> Our goal is to make the latest GNOME innovations immediately accessible to workstation users in enterprise and research environments that require EL10 lifecycles. All packaging is maintained openly, built against EL10 sysroots, and tested across both x86_64 and aarch64.
+> Our goal is to make the latest GNOME innovations immediately accessible to workstation users in enterprise and research environments that need EL10 lifecycles. All packaging is maintained openly, built against EL10 sysroots, and tested across both x86_64 and aarch64.
 >
 > We welcome feedback from GNOME developers and packagers:
 > - Repository: https://github.com/tuna-os/tunaOS

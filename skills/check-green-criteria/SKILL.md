@@ -1,6 +1,6 @@
 # Check green criteria
 
-Use this when asked whether a (variant, flavor) cell is actually green, or
+Use this when asked whether a (variant, flavor) cell is green, or
 why it isn't — "green" here means something specific, defined in
 [`.github/green-criteria.yml`](../../.github/green-criteria.yml) (prose
 companion: [`docs/GREEN-CRITERIA.md`](../../docs/GREEN-CRITERIA.md)).
@@ -16,7 +16,7 @@ companion: [`docs/GREEN-CRITERIA.md`](../../docs/GREEN-CRITERIA.md)).
    outside a criterion's scope isn't judged on it at all; that's a reviewed
    exclusion, not a gap.
 3. Cross-reference against `tests/test_green_criteria.py`, which is what
-   actually keeps this file honest — if the two disagree, the test is
+   keeps this file honest — if the two disagree, the test is
    usually right and the YAML needs updating, not the other way round.
 4. For a specific cell's live status, check the workflow named in that
    criterion's `asserted_by` field (e.g. `desktop-contract-sweep.yml` for

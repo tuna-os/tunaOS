@@ -44,7 +44,57 @@ fi
 # 31766586852: `installing linux-cachyos` with no `upgrading linux` shows the
 # parent's kernel was untouched there. This closes the latent version, not the
 # observed one.) Same shape as overrides/nvidia-arch/20-nvidia.sh.
-pacman -Sy --noconfirm
+#
+# Retried, and rotated across mirrors between attempts. All five *-cachyos
+# cells died here on 2026-09-16, identically:
+#
+#   error: cachyos: signature from "CachyOS <admin@cachyos.org>" is invalid
+#   error: failed to synchronize all databases (invalid or corrupted database)
+#
+# "invalid", not "unknown trust" and not "expired": the downloaded cachyos.db
+# did not match the downloaded cachyos.db.sig. The key was right (same
+# F3B607488DB35A47 the sig carries, no expiry), the keyring package installed
+# cleanly moments earlier, and the same db/sig pair verifies Good today on
+# mirror.cachyos.org, cdn77.cachyos.org and us.cachyos.org. The repo had been
+# republished 38 minutes before CI hit it, and the two files are cached
+# independently per edge — so CI was served a stale db against a fresh sig.
+#
+# The buildah wrapper already retries the whole build three times and that did
+# not help, because all three attempts hit the same CDN edge. Rotating the
+# mirror is the part that matters; -Syy plus dropping the cached db is what
+# stops pacman reusing the bad copy it already has.
+#
+# What this must never do is set SigLevel = Never or TrustAll on [cachyos] to
+# make the message go away. That check is the only thing standing between this
+# overlay and an unverified kernel.
+_cachyos_sync() {
+	local attempt mirrorlist=/etc/pacman.d/cachyos-mirrorlist
+	for attempt in 1 2 3; do
+		if [[ ${attempt} -eq 1 ]]; then
+			pacman -Sy --noconfirm && return 0
+		else
+			# Drop the cached pair, then force a refresh rather than
+			# letting pacman decide the db is already current.
+			rm -f /var/lib/pacman/sync/cachyos.db*
+			pacman -Syy --noconfirm && return 0
+		fi
+		echo "WARNING: cachyos db sync failed (attempt ${attempt}/3)" >&2
+		# Send the mirror that just failed to the back of the list so the
+		# next attempt resolves to a different edge.
+		if [[ -w ${mirrorlist} ]] && grep -q '^Server' "${mirrorlist}"; then
+			local first
+			first="$(grep -m1 '^Server' "${mirrorlist}")"
+			grep -vxF "${first}" "${mirrorlist}" >"${mirrorlist}.next"
+			printf '%s\n' "${first}" >>"${mirrorlist}.next"
+			mv "${mirrorlist}.next" "${mirrorlist}"
+			echo "         rotated away from: ${first}" >&2
+		fi
+		sleep $((attempt * 20))
+	done
+	echo "ERROR: cachyos db sync failed on every mirror in ${mirrorlist}." >&2
+	return 1
+}
+_cachyos_sync
 pacman -S --noconfirm --needed \
 	cachyos-keyring cachyos-mirrorlist cachyos-settings \
 	linux-cachyos linux-cachyos-headers tpm2-tss
