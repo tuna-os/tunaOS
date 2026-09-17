@@ -39,6 +39,62 @@ if [[ "${1:-}" != "--runtime" ]]; then
 	exit 0
 fi
 
+# ── SELinux state, printed BEFORE anything can block ────────────────────────
+#
+# tunaOS#2485: dbus-broker, systemd-logind and pam_selinux all fail on the two
+# rolling EL10 bases, and all three fail inside libselinux:
+#
+#   dbus-broker-launch: Access denied in /etc/selinux/targeted/contexts/dbus_contexts +1
+#   systemd-logind: Failed to initialize SELinux labeling handle: Permission denied
+#   sshd-session: pam_selinux(sshd:session): Unable to get valid context for root
+#
+# The images are identical where the issue looked: dbus_contexts is byte-for-byte
+# the same as albacore's, 0644 root:root, and no image in the family carries a
+# security.selinux xattr at all. So the labels arrive at install time, and the
+# question is what they are on the running machine — which nobody has seen,
+# because the gate collects diagnostics over SSH and sshd cannot open a PAM
+# session without the bus. The one image that could answer is the one that
+# cannot be asked.
+#
+# Serial answers it. This dump goes to the console through the unit's
+# StandardOutput=journal+console, so it survives a machine with no working bus,
+# no logind and no SSH.
+#
+# It sits ABOVE the settle wait deliberately. Everything below that wait is
+# unreachable on exactly the images this exists to describe (tunaOS#2514), and
+# evidence that only prints on healthy machines is not evidence.
+#
+# Every command is guarded. A diagnostic must never be the reason a contract
+# fails, and `set -e` is off here precisely so a missing tool stays a missing
+# line.
+_selinux_probe() {
+	local ctx=/etc/selinux/targeted/contexts/dbus_contexts
+	echo "TUNAOS_SELINUX_PROBE enforce=$(getenforce 2>/dev/null || echo unknown)" \
+		"lib=$(rpm -q --qf '%{VERSION}-%{RELEASE}' libselinux 2>/dev/null || echo unknown)" \
+		"policy=$(rpm -q --qf '%{VERSION}-%{RELEASE}' selinux-policy 2>/dev/null || echo unknown)"
+	# stat -c %C, not ls -Z: it prints the context alone, and shellcheck is
+	# right that parsing ls output is a habit worth not having.
+	echo "TUNAOS_SELINUX_PROBE label=$(stat -c '%C' "${ctx}" 2>/dev/null || echo unreadable)"
+	echo "TUNAOS_SELINUX_PROBE dir=$(stat -c '%C' "${ctx%/*}" 2>/dev/null || echo unreadable)"
+	# matchpathcon opens the same file_contexts handle logind and dbus-broker
+	# open. If it cannot, it fails the way they do, and says so here first --
+	# `lookup-failed` on this line IS the tunaOS#2485 symptom, reported by the
+	# one tool that can still speak.
+	#
+	# Guarded with command -v rather than `2>&1 | head -1 || echo`: under
+	# pipefail that spelling put a "command not found" message inside the
+	# marker and printed the fallback on a SECOND line, so one field became two
+	# lines of which neither was a measurement.
+	local expected=unavailable
+	if command -v matchpathcon >/dev/null 2>&1; then
+		expected=$(matchpathcon -n "${ctx}" 2>/dev/null | head -1)
+		expected=${expected:-lookup-failed}
+	fi
+	echo "TUNAOS_SELINUX_PROBE expected=${expected}"
+	echo "TUNAOS_SELINUX_PROBE readable=$([[ -r ${ctx} ]] && echo yes || echo no)"
+}
+_selinux_probe 2>&1 || true
+
 # --wait blocks until startup settles, so a slow unit cannot race this check
 # into a false `starting` verdict on a 2-vCPU runner. BOUND it, though: --wait
 # waits for a terminal state, and a machine whose startup never settles never
