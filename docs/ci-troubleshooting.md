@@ -1260,3 +1260,43 @@ one held for years, because no variant name was long enough. One new variant
 with a longer name then broke four cells at once. Test the boundary: the
 `kde-nvidia` row at exactly 32 is what proves the rule. An off-by-one there
 would rename the one label that the kernel cmdline depends on.
+
+### 28. The kernel was there; the index was not (`marlin:gnome` arm64, 2026-09-17)
+
+§26 cleared the UID 1000 failure on this cell. The next build reached much
+further and stopped here:
+
+```
+no kernel found under /usr/lib/modules (looked for modules.dep):
+7.2.6-1-aarch64-ARCH
+```
+
+**Root cause.** tacklebox selects the kernel by the index, not the kernel:
+`[ -f "$d/modules.dep" ] || continue`. The image had the directory, `vmlinuz`
+and `initramfs.img`, and it booted. Only `modules.dep` was absent, and only
+the ISO build reads it.
+
+`depmod` lives in `build_scripts/26-packages-post.sh`, which
+`Containerfile.arch` does not run. On x86_64 that cost nothing: the base is
+`docker.io/archlinux`, `pacman -S linux` installs a kernel, and pacman's
+depmod hook writes the index. On aarch64 the base is
+`ghcr.io/tuna-os/archlinuxarm`, whose rootfs already carries
+`linux-aarch64`, so `pacman -S --needed` does nothing, the hook never fires,
+and nothing indexes the tree.
+
+**Why it stayed hidden.** Two covers. The image boots without the index, so
+every runtime gate passed. The ISO job also died sooner, at UID 1000, and did so
+for weeks. One fix exposed the next.
+
+**Fix.** `Containerfile.arch` runs `depmod` on the kernel that step already
+resolved, before dracut. The tests assert reach on a line that is not a
+comment, the shared `KVER`, the order against dracut, and the absence of
+`|| true`.
+
+**Lesson:** an early failure hides every later one, so a fix that works will
+often reveal a second fault instead of a green cell. Read the new error as
+progress and check what it says. A still-red cell is not proof that the fix
+failed. The scope note in the test file matters as much.
+Four other bases never call `depmod` and are right not to, because their
+package managers index the tree themselves. An assertion that demanded it
+everywhere would fail code that already works.
