@@ -202,6 +202,33 @@ variants:
         build_iso: true
         build_qcow2: false
       - id: gnome-nvidia-hwe
+        # NOT built: this cell cannot mount its own root. See tunaOS#2518.
+        #
+        # It builds, signs and passes its desktop contract, then boots into an
+        # emergency shell:
+        #
+        #   mount: /sysroot: unknown filesystem type 'xfs'
+        #   Dependency failed for ostree-prepare-root.service
+        #
+        # `-hwe` selects the coreos-stable akmods bundle
+        # (scripts/build-image-inner.sh), so 10-kernel-swap.sh installs THAT
+        # bundle's kernel -- Fedora 43's -- into an EL10 userspace whose dracut
+        # is dracut-107-8.el10. That dracut leaves xfs out of the initramfs and
+        # says nothing about it. The non-HWE nvidia cells take 6.12.0-266.el10
+        # from the centos-10 bundle and boot, which is why only this
+        # combination is red, on all three EL10 variants at once.
+        #
+        # There is no EL10 HWE akmods bundle to switch to: the tag list on
+        # ghcr.io/ublue-os/akmods-nvidia-open stops at centos-10.
+        #
+        # Naming the filesystems in the dracut rebuild was tried and reverted
+        # (tunaOS#2517): `--filesystems` is strict, EL10 has no btrfs, and it
+        # broke every EL10 *-nvidia cell to repair this one.
+        #
+        # Re-declare the day an EL10 HWE bundle ships, or the day the fc43
+        # module tree is readable by EL10's dracut. The x86_64-only note below
+        # still applies when it comes back.
+        #
         # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
         # any other platform the exact-EVR kmod install can never match and
         # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
@@ -210,7 +237,7 @@ variants:
         # matches. Same shape as bluefin's x86_64-only GDX.
         platforms: ["linux/amd64"]
         stage: 4
-        build_image: true
+        build_image: false
         build_iso: false
         build_qcow2: false
       - id: cosmic-hwe
@@ -400,6 +427,33 @@ variants:
         build_iso: true
         build_qcow2: false
       - id: gnome-nvidia-hwe
+        # NOT built: this cell cannot mount its own root. See tunaOS#2518.
+        #
+        # It builds, signs and passes its desktop contract, then boots into an
+        # emergency shell:
+        #
+        #   mount: /sysroot: unknown filesystem type 'xfs'
+        #   Dependency failed for ostree-prepare-root.service
+        #
+        # `-hwe` selects the coreos-stable akmods bundle
+        # (scripts/build-image-inner.sh), so 10-kernel-swap.sh installs THAT
+        # bundle's kernel -- Fedora 43's -- into an EL10 userspace whose dracut
+        # is dracut-107-8.el10. That dracut leaves xfs out of the initramfs and
+        # says nothing about it. The non-HWE nvidia cells take 6.12.0-266.el10
+        # from the centos-10 bundle and boot, which is why only this
+        # combination is red, on all three EL10 variants at once.
+        #
+        # There is no EL10 HWE akmods bundle to switch to: the tag list on
+        # ghcr.io/ublue-os/akmods-nvidia-open stops at centos-10.
+        #
+        # Naming the filesystems in the dracut rebuild was tried and reverted
+        # (tunaOS#2517): `--filesystems` is strict, EL10 has no btrfs, and it
+        # broke every EL10 *-nvidia cell to repair this one.
+        #
+        # Re-declare the day an EL10 HWE bundle ships, or the day the fc43
+        # module tree is readable by EL10's dracut. The x86_64-only note below
+        # still applies when it comes back.
+        #
         # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
         # any other platform the exact-EVR kmod install can never match and
         # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
@@ -408,7 +462,7 @@ variants:
         # matches. Same shape as bluefin's x86_64-only GDX.
         platforms: ["linux/amd64"]
         stage: 4
-        build_image: true
+        build_image: false
         build_iso: false
         build_qcow2: false
       - id: cosmic-hwe
@@ -597,12 +651,38 @@ variants:
         build_image: true
         build_iso: true
         build_qcow2: false
-      # gnome-nvidia-hwe re-enabled (tunaOS#639): the gnome-shell-49 vs
-      # gnome-shell-common-48 file conflict is fixed upstream in the spec
-      # (tuna-os/tunaos-packages#23 merged: Obsoletes: gnome-shell-common <
-      # %{major_version}), verified live in the published spec, not just
-      # by the PR having merged.
+      # tunaOS#639 re-enabled this cell once the gnome-shell-49 vs
+      # gnome-shell-common-48 file conflict was fixed upstream
+      # (tuna-os/tunaos-packages#23). That fix held. What stops the cell now is
+      # unrelated and is described below.
       - id: gnome-nvidia-hwe
+        # NOT built: this cell cannot mount its own root. See tunaOS#2518.
+        #
+        # It builds, signs and passes its desktop contract, then boots into an
+        # emergency shell:
+        #
+        #   mount: /sysroot: unknown filesystem type 'xfs'
+        #   Dependency failed for ostree-prepare-root.service
+        #
+        # `-hwe` selects the coreos-stable akmods bundle
+        # (scripts/build-image-inner.sh), so 10-kernel-swap.sh installs THAT
+        # bundle's kernel -- Fedora 43's -- into an EL10 userspace whose dracut
+        # is dracut-107-8.el10. That dracut leaves xfs out of the initramfs and
+        # says nothing about it. The non-HWE nvidia cells take 6.12.0-266.el10
+        # from the centos-10 bundle and boot, which is why only this
+        # combination is red, on all three EL10 variants at once.
+        #
+        # There is no EL10 HWE akmods bundle to switch to: the tag list on
+        # ghcr.io/ublue-os/akmods-nvidia-open stops at centos-10.
+        #
+        # Naming the filesystems in the dracut rebuild was tried and reverted
+        # (tunaOS#2517): `--filesystems` is strict, EL10 has no btrfs, and it
+        # broke every EL10 *-nvidia cell to repair this one.
+        #
+        # Re-declare the day an EL10 HWE bundle ships, or the day the fc43
+        # module tree is readable by EL10's dracut. The x86_64-only note below
+        # still applies when it comes back.
+        #
         # x86_64 only: the akmods-nvidia-open kmods are x86_64 builds, so on
         # any other platform the exact-EVR kmod install can never match and
         # the overlay hard-fails (overrides/nvidia/10-kernel-swap.sh) rather
@@ -611,7 +691,7 @@ variants:
         # matches. Same shape as bluefin's x86_64-only GDX.
         platforms: ["linux/amd64"]
         stage: 4
-        build_image: true
+        build_image: false
         build_iso: false
         build_qcow2: false
       - id: cosmic-hwe

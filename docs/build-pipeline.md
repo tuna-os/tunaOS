@@ -60,7 +60,7 @@ points and the manual `build-flavor.yml` dispatcher.
   - Pull request: the repository's PR workflows select the affected build and
     validation lanes; PR candidates are never promoted
 - **Process**:
-  1. **Matrix Generation** (`generate_matrix`): reads `.github/build-config.yml` via `yq` + `jq`, emits one matrix per stage (S1–S4). Only flavors with `build_image: true` enter the matrix. This filter turns the 144 declared flavors into the 138 published cells
+  1. **Matrix Generation** (`generate_matrix`): reads `.github/build-config.yml` via `yq` + `jq`, emits one matrix per stage (S1–S4). Only flavors with `build_image: true` enter the matrix. This filter turns the 144 declared flavors into the 135 published cells
   2. **Stage 1** (`build_base`): builds `{variant}:base` for every variant in parallel
   3. **Stage 2** (`build_stage2`): builds `base-hwe`, `base-nvidia`, and all desktop flavors (gnome, kde, niri, cosmic) — runs after all stage 1 complete
   4. **Stage 3** (`build_stage3`): builds `<de>-hwe` and `<de>-nvidia` — runs after all stage 2 complete
