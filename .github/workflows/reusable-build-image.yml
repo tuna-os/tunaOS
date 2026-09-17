@@ -848,7 +848,28 @@ jobs:
           apk update
           # Install necessary packages for building and pushing the image
           apk add jq git podman uutils bash conmon crun netavark fuse-overlayfs libstdc++ yq
-          ln -sf /bin/bash /bin/sh
+          # Point /bin/sh at bash WITHOUT `ln -sf`.
+          #
+          # This step installs uutils, which replaces coreutils in PATH, so the
+          # very next command runs uutils' ln. uutils 0.12.0-r0 rewrote the -f
+          # path to "replace links atomically instead of unlinking first"
+          # (uutils/coreutils#14623, released in 0.12.0), and `ln -sf` then
+          # started failing here with
+          #
+          #   ln: failed to create symbolic link '/bin/sh': Not a directory
+          #
+          # The image is pinned by digest but `apk add` is not, so the bump
+          # landed mid-run and split one run cleanly by clock: in Build Bonito
+          # 35202293222 every Manifest job started up to 09:54 passed and every
+          # one from 09:58 failed, and Build Gurnard 35205505527 hit the same
+          # error at 10:11. Nothing in this repository changed.
+          #
+          # `rm` then a plain `ln -s` never enters the rewritten -f path, and
+          # behaves the same under GNU, busybox and uutils. Deliberately not
+          # pinned to uutils 0.11.0-r1: a pin here would need someone to notice
+          # and lift it once upstream fixes the regression.
+          rm -f /bin/sh
+          ln -s /bin/bash /bin/sh
           mkdir -p /etc/containers
           echo '{"default":[{"type":"insecureAcceptAnything"}]}' | jq . > /etc/containers/policy.json
 
