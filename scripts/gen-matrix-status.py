@@ -35,6 +35,11 @@ import urllib.request
 from collections import defaultdict
 from pathlib import Path
 
+try:
+    from scripts.matrix_status_github import query_json
+except ModuleNotFoundError:  # Direct execution: scripts/ is sys.path[0].
+    from matrix_status_github import query_json
+
 REPO = "tuna-os/tunaOS"
 DOC = Path("docs/MATRIX-STATUS.md")
 PROV = Path("docs/matrix-provenance.json")
@@ -108,17 +113,7 @@ PASS, FAIL, UNTESTED, NA = "✅", "❌", "⬜", "—"
 
 def gh_json(*args: str):
     """Run gh and parse JSON. Returns None on missing/failed query after retries."""
-    for attempt in range(3):
-        try:
-            out = subprocess.run(
-                ["gh", *args], capture_output=True, text=True, check=True
-            ).stdout
-            return json.loads(out) if out.strip() else None
-        except (subprocess.CalledProcessError, json.JSONDecodeError):
-            if attempt == 2:
-                return None
-            time.sleep(2)
-    return None
+    return query_json(args, run=subprocess.run, sleep=time.sleep)
 
 
 def load_build_config(config_path: Path = CONFIG) -> dict:
