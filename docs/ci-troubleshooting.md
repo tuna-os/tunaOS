@@ -1361,6 +1361,52 @@ first one is still there. The control that settled it was the amd64
 cell of the same run, which built, booted and published from the same
 Containerfile.
 
+### 31. The ISO builds and cannot boot (`marlin:gnome` arm64, 2026-09-18)
+
+§30 gave this cell its kernel back. `Build Live ISO` then SUCCEEDED for the
+first time and produced a 6.16 GB arm64 ISO. One step later the job was still
+red, at `Boot gate: verify ISO readiness`: no readiness marker in 900 seconds,
+and a blank framebuffer.
+
+**Root cause.** The live root filesystem uses a compressor the kernel cannot
+read. From the guest serial console, about 648 times until the timeout:
+
+```
+mount: /run/rootfsbase: fsconfig() failed:
+       Filesystem uses "zstd" compression. This is not supported.
+Warning: Tacklebox: cannot loop-mount /LiveOS/marlin-gnome.rootfs.sfs
+```
+
+tacklebox squashes the live rootfs with zstd. Arch Linux ARM's `linux-aarch64`
+has no zstd support in its squashfs driver, and the kernel itself says so. That
+makes this a measurement, not a guess. Arch's x86_64 `linux` does support zstd,
+so the amd64 cell of the same run boots and publishes. The same fault predicts
+skipjack's `iso:cosmic (linux-arm64)`, which builds and then fails its gate the
+same way.
+
+**Where the fix is not.** `scripts/build-iso-tacklebox.sh` writes the recipe,
+and the recipe has no compressor field. tacklebox chooses zstd. So the change
+belongs upstream in tuna-os/tacklebox, or in the ARM kernel config. Do not
+reach for a workaround in this repository.
+
+**Two things this also exposed.**
+
+The failure never stops. `/sbin/tbox-live-root` line 135 runs `return` outside
+a function, so the error path aborts and dracut tries again under `A start job
+is running for dracut initqueue hook (no limit)`. A mount failure with no
+recovery costs a full gate timeout on each arm64 cell, in place of seconds.
+
+The gate measures less than it reports. On the arm64 runner it prints
+`tesseract not installed` and `requires Pillow and requests`, so its keyword and
+forbidden-text assertions SKIP. Its verdict here was still right, because the
+frame-difference check caught the blank screen on its own. Read which assertions
+ran before you trust a pass from this gate on arm64.
+
+**Lesson:** a cell that builds is not a cell that works. Three fixes in a row
+can each be correct while the cell stays red. Check which STEP failed, not
+whether the job did. The serial log holds the evidence, and the job log does
+not carry it: pull the e2e artifact.
+
 ### 29. A gate that asked the wrong question (`Audit NVIDIA release assets`, 2026-09-17)
 
 This job showed red on all 15 runs it ever had. It never passed once, so it
