@@ -26,6 +26,15 @@ on:
         description: 'Flavor (all, base, gnome, kde, niri, etc.)'
         default: 'all'
         type: string
+      publish-isos:
+        description: >-
+          Upload built ISOs to R2 even when this run was not triggered by the
+          nightly schedule. Scheduled runs always publish; leave this false for
+          test builds so a dispatch does not pay to store an ISO nobody asked
+          for.
+        required: false
+        type: boolean
+        default: false
     secrets:
       R2_ACCESS_KEY_ID:
         required: false
@@ -397,6 +406,19 @@ jobs:
       safeplatform: ${{ matrix.safeplatform }}
       image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
+      # Each published cell writes its ISO to R2 TWICE -- a dated object and
+      # the -latest pointer -- so a full dispatch of one variant costs tens of
+      # GB of writes for artifacts nobody downloads. upload-r2 defaults to
+      # true in reusable-build-artifacts.yml and nothing here overrode it, so
+      # every test build paid that. The boot gate runs BEFORE the upload, so
+      # gating an ISO never needed one: a dispatch still builds, boots and
+      # uploads the workflow artifact, it just does not publish.
+      #
+      # Nightly runs still publish, which is what keeps the documented
+      # download URLs current and the NVIDIA download audit honest. Deliberate
+      # manual publishing has its own workflow (publish-isos.yml), and
+      # publish-isos above forces it here.
+      upload-r2: ${{ github.event_name == 'schedule' || inputs.publish-isos }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.
@@ -432,6 +454,19 @@ jobs:
       safeplatform: ${{ matrix.safeplatform }}
       image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
+      # Each published cell writes its ISO to R2 TWICE -- a dated object and
+      # the -latest pointer -- so a full dispatch of one variant costs tens of
+      # GB of writes for artifacts nobody downloads. upload-r2 defaults to
+      # true in reusable-build-artifacts.yml and nothing here overrode it, so
+      # every test build paid that. The boot gate runs BEFORE the upload, so
+      # gating an ISO never needed one: a dispatch still builds, boots and
+      # uploads the workflow artifact, it just does not publish.
+      #
+      # Nightly runs still publish, which is what keeps the documented
+      # download URLs current and the NVIDIA download audit honest. Deliberate
+      # manual publishing has its own workflow (publish-isos.yml), and
+      # publish-isos above forces it here.
+      upload-r2: ${{ github.event_name == 'schedule' || inputs.publish-isos }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.
@@ -465,6 +500,19 @@ jobs:
       safeplatform: ${{ matrix.safeplatform }}
       image-tag: ${{ matrix.published_tag }}-${{ matrix.safeplatform }}
       build-iso: ${{ matrix.build_iso }}
+      # Each published cell writes its ISO to R2 TWICE -- a dated object and
+      # the -latest pointer -- so a full dispatch of one variant costs tens of
+      # GB of writes for artifacts nobody downloads. upload-r2 defaults to
+      # true in reusable-build-artifacts.yml and nothing here overrode it, so
+      # every test build paid that. The boot gate runs BEFORE the upload, so
+      # gating an ISO never needed one: a dispatch still builds, boots and
+      # uploads the workflow artifact, it just does not publish.
+      #
+      # Nightly runs still publish, which is what keeps the documented
+      # download URLs current and the NVIDIA download audit honest. Deliberate
+      # manual publishing has its own workflow (publish-isos.yml), and
+      # publish-isos above forces it here.
+      upload-r2: ${{ github.event_name == 'schedule' || inputs.publish-isos }}
       # Names the artifact this cell's OWN image leg uploads after a
       # successful push. Its existence is what makes the relaxed gate above
       # safe; see the provenance gate in reusable-build-artifacts.yml.

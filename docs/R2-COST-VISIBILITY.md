@@ -29,7 +29,7 @@ syncs can be operation-heavy while ISOs and screenshots are storage-heavy.
 
 | Prefix | Writers in this repository | Intended retention | Owner/action |
 | --- | --- | --- | --- |
-| `live-isos/` | `reusable-build-artifacts.yml`, `publish-iso-groups.yml`, and the variant workflows | 14 days for dated objects; `*-latest` objects are live pointers | `prune-r2.yml`; verify the scheduled job is succeeding |
+| `live-isos/` | `reusable-build-artifacts.yml`, `publish-iso-groups.yml`, and the variant workflows on their nightly schedule | 14 days for dated objects; `*-latest` objects are live pointers | `prune-r2.yml`; verify the scheduled job is succeeding |
 | `screenshots/` | `weekly-desktop-screenshots.yml`, `weekly-qcow2-screenshots.yml`, and installer screenshot jobs | 60 days for dated evidence; `*-latest` objects are live pointers | `prune-r2.yml`; review growth monthly |
 
 The names above are logical prefixes. The configured bucket comes from the
@@ -40,6 +40,23 @@ The R2 retention workflow is deliberately independent of ISO publishing. A
 failed or manually skipped build must not also skip housekeeping. Its dry-run
 mode should be used after changing a prefix or age threshold; inspect the
 listed deletion set before enabling a destructive run.
+
+### What a variant build writes
+
+Each published ISO cell writes its ISO to `live-isos/` twice: a dated object,
+then the `*-latest` pointer. At roughly 6 GB an ISO that is about 12 GB per
+cell, and a full matrix for one variant covers about 27 ISO cells. Both copies are
+Class A operations, and the dated half stays until `prune-r2.yml` reaches it.
+
+Only the nightly schedule pays that. A `workflow_dispatch` of a variant build
+publishes nothing unless someone sets `publish-isos`, because `build-variant.yml`
+passes `upload-r2` only for a scheduled run. Before that, `upload-r2` took its
+default of true and every test build published a full set. The boot gate runs
+before the upload, so a dispatch still builds the ISO, boots it and keeps the
+workflow artifact and the e2e evidence.
+
+To publish once, on purpose, use `publish-isos.yml`, which has its own
+`skip_upload` input.
 
 ## Retention safety rules
 
