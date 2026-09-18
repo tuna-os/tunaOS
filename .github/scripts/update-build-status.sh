@@ -19,6 +19,26 @@ total_cells=0
 total_unreached=0
 composite_green=0
 
+# Release-track subtotal, kept separately from the all-variants one.
+#
+# VARIANT-LIFECYCLE.md makes the distinction operational rather than cosmetic:
+# on the release/stream track "a red scheduled build is treated as a regression
+# rather than expected upstream churn", while a rolling or experimental variant
+# carries "no next-night promotion or uninterrupted-green promise". One mixed
+# ratio cannot say which of those a reader is looking at -- and the mixed ratio
+# was the only number this table published, so the recovery target in tunaOS
+# #1753 had to be reconstructed by hand, job by job, from a nightly's logs.
+#
+# Derived from build-config.yml's `upstream_track`, the same field
+# VARIANT-LIFECYCLE.md calls the machine-readable source and
+# tests/test_variant_upstream_tracks.py pins. Nothing is hardcoded here: a
+# variant that starts or stops tracking a rolling upstream moves between the
+# two subtotals by editing that one field.
+release_green=0
+release_cells=0
+release_variants=0
+nonrelease_cells=0
+
 # The boots criterion's scope, read from the criteria file so this script and
 # the composite scoreboard cannot disagree about which cells CI can boot.
 mapfile -t boots_excl_flavors < <(yq -r '.criteria[] | select(.id == "boots") | .scope.excludes_flavors[]?' .github/green-criteria.yml)
@@ -39,14 +59,32 @@ join_or_dash() {
 	echo
 	echo "_This snapshot uses the latest conclusive build from the main branch for each variant. It omits cancelled runs. A green cell has a successful promotion to the published tag. **Failed** means that a job ran and failed. **Not reached** means that no job asserted the cell, usually because an earlier stage stopped it._"
 	echo
-	echo '| Variant | Green image cells | Latest run | Failing | Not reached |'
-	echo '| :--- | ---: | :--- | :--- | :--- |'
+	echo '| Variant | Track | Green image cells | Latest run | Failing | Not reached |'
+	echo '| :--- | :--- | ---: | :--- | :--- | :--- |'
 } >"$tmp_table"
 
-while IFS=$'\t' read -r variant emoji; do
+while IFS=$'\t' read -r variant emoji track; do
+	# `upstream_track` is absent for release/stream variants -- that absence IS
+	# the default, per VARIANT-LIFECYCLE.md ("A variant without upstream_track
+	# consumes a fixed release or stream"), so name it rather than rendering an
+	# empty cell. Defaulted in bash as well as in the yq expression below: the
+	# field is the thing this subtotal is built on, and a blank track would
+	# quietly move a rolling variant into the release column.
+	track=${track:-release}
 	mapfile -t configured < <(yq -r ".variants[] | select(.id == \"$variant\") | .flavors[] | select(.build_image == true) | .id" "$config")
 	count=${#configured[@]}
 	total_cells=$((total_cells + count))
+	# Denominators are accumulated here, before any `continue` below: a variant
+	# with no completed run still HAS release-track cells, and dropping them
+	# from the denominator would shrink the target every time a workflow went
+	# quiet -- flattering the ratio for the one reason that should worry a
+	# reader most.
+	if [[ "$track" == release ]]; then
+		release_cells=$((release_cells + count))
+		release_variants=$((release_variants + 1))
+	else
+		nonrelease_cells=$((nonrelease_cells + count))
+	fi
 
 	# --status completed includes cancelled runs, and a cancelled run is not a
 	# verdict on anything: docs/MATRIX-STATUS.md lists exactly this under
@@ -63,7 +101,7 @@ while IFS=$'\t' read -r variant emoji; do
 		--json databaseId,conclusion,createdAt,url)
 
 	if [[ $(jq 'length' <<<"$runs") -eq 0 ]]; then
-		printf '| %s `%s` | 0/%d | no completed run | — | all |\n' "$emoji" "$variant" "$count" >>"$tmp_table"
+		printf '| %s `%s` | %s | 0/%d | no completed run | — | all |\n' "$emoji" "$variant" "$track" "$count" >>"$tmp_table"
 		total_unreached=$((total_unreached + count))
 		continue
 	fi
@@ -129,6 +167,7 @@ while IFS=$'\t' read -r variant emoji; do
 	total_green=$((total_green + green))
 	composite_green=$((composite_green + cgreen))
 	total_unreached=$((total_unreached + ${#unreached[@]}))
+	[[ "$track" == release ]] && release_green=$((release_green + green))
 
 	failing_text=$(join_or_dash "${failing[@]+"${failing[@]}"}")
 	unreached_text=$(join_or_dash "${unreached[@]+"${unreached[@]}"}")
@@ -140,9 +179,9 @@ while IFS=$'\t' read -r variant emoji; do
 	cancelled) icon='🚫' ;;
 	*) icon='⬜' ;;
 	esac
-	printf '| %s `%s` | **%d/%d** | [%s %s](%s) | %s | %s |\n' \
-		"$emoji" "$variant" "$green" "$count" "$icon" "$run_date" "$run_url" "$failing_text" "$unreached_text" >>"$tmp_table"
-done < <(yq -r '.variants[] | [.id, .emoji] | @tsv' "$config")
+	printf '| %s `%s` | %s | **%d/%d** | [%s %s](%s) | %s | %s |\n' \
+		"$emoji" "$variant" "$track" "$green" "$count" "$icon" "$run_date" "$run_url" "$failing_text" "$unreached_text" >>"$tmp_table"
+done < <(yq -r '.variants[] | [.id, .emoji, (.upstream_track // "release")] | @tsv' "$config")
 
 # Family images built elsewhere (build-config `sibling_images:`). Rendered
 # after the variant table and OUTSIDE its totals: they are not cells here.
@@ -199,9 +238,28 @@ if [[ "$scorable" == false ]]; then
 fi
 blocking_text=$(sed -E 's/,/`, `/g' <<<"$blocking")
 
+# Guard the release-track denominator the same way the percent above is
+# guarded by the zero-cell check: a config where every variant is rolling is a
+# configuration error here, not a division to attempt.
+release_percent=0
+if ((release_cells > 0)); then
+	release_percent=$((100 * release_green / release_cells))
+fi
+variant_word="variants"
+((release_variants == 1)) && variant_word="variant"
+
 {
 	echo
 	echo "**Built ${total_green}/${total_cells} · composite green ${composite_green}/${composite_total} (${percent}% built)** — The remainder has **${total_failing} ${failure_word}** and **${total_unreached} never reached**; no job asserted the latter. We show the two values separately. A cell with no job has no test, but it can still work."
+	echo
+	# The number the release-track recovery work is actually measured against.
+	# The mixed ratio above cannot be read as a target: it moves when a rolling
+	# upstream churns, which is expected and carries no obligation to restore
+	# promotion by the next nightly (VARIANT-LIFECYCLE.md). Splitting rather
+	# than filtering, because both numbers are real -- an unexplained red on a
+	# rolling variant is still a triage item, just not a release-track
+	# regression.
+	echo "**Release track: ${release_green}/${release_cells} built (${release_percent}%).** The rows marked \`release\` above — ${release_variants} ${variant_word} — build on pinned releases and streams, so a red cell there is a regression and is tracked as one ([#1753](https://github.com/tuna-os/tunaOS/issues/1753)). The other ${nonrelease_cells} cells track \`rolling\` or \`experimental\` upstreams, where expected churn is not a release-track regression ([#1754](https://github.com/tuna-os/tunaOS/issues/1754), [VARIANT-LIFECYCLE.md](VARIANT-LIFECYCLE.md)). Only the built count is split this way; composite green stays a single number, for the reason given below."
 	echo
 	echo "The score for composite green uses ${composite_scope}. [\`.github/green-criteria.yml\`](.github/green-criteria.yml) provides the score. Today, these criteria prevent publication: \`${blocking_text}\`. A cell must satisfy each criterion."
 	echo
