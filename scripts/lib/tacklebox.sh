@@ -31,6 +31,35 @@ tunaos_run_tacklebox() {
 	local tacklebox_image="${TACKLEBOX_IMAGE:-ghcr.io/tuna-os/tacklebox:latest}"
 	local from_source="${TACKLEBOX_FROM_SOURCE:-0}"
 
+	# Make the two execution paths agree about the environment.
+	#
+	# The host-binary path (TACKLEBOX_FROM_SOURCE=1) runs tacklebox as an
+	# ordinary child process, so it inherits every exported TBOX_* knob for
+	# free. The container path does not: `podman run <image>` starts from the
+	# image's own environment and drops the caller's. A workflow that exports
+	# a tacklebox knob — weekly-desktop-screenshots.yml sets
+	# TBOX_CUSTOMIZE_NETWORK=host — therefore had it silently ignored on the
+	# container path, which is the same trap that workflow's comment records
+	# hitting once already. Forward the exported TBOX_* names explicitly so a
+	# knob set for a build takes effect however tacklebox is run.
+	#
+	# The filter is deliberately name-agnostic. tunaOS does not need to know
+	# which knobs tacklebox understands, so one added there reaches it the day
+	# it lands with no change on this side — tunaOS#2034 asks tacklebox for a
+	# settable bound on the post-customize `podman commit`, currently a 600s
+	# literal that kills the ISO builds tracked in tunaOS#1893, and forwarding
+	# is what lets tunaOS set it once it exists.
+	#
+	# Not --env-host: that hands the container the runner's entire
+	# environment, GITHUB_TOKEN and registry credentials included.
+	local -a tbox_env=() tbox_names=()
+	local _tbox_name
+	for _tbox_name in $(compgen -e); do
+		[[ "$_tbox_name" == TBOX_* ]] || continue
+		tbox_env+=(--env "${_tbox_name}=${!_tbox_name}")
+		tbox_names+=("${_tbox_name}=${!_tbox_name}")
+	done
+
 	local -a tb
 	if [[ "$from_source" == "1" ]]; then
 		# Pin the source SHA so CI doesn't silently track a moving HEAD.
@@ -79,7 +108,15 @@ tunaos_run_tacklebox() {
 			-v /dev:/dev
 			-v "$(realpath "$out_dir"):$(realpath "$out_dir")"
 			-v "$(realpath "$recipe_file"):$(realpath "$recipe_file"):ro"
+			"${tbox_env[@]}"
 			"$tacklebox_image")
+	fi
+
+	# Say which knobs are in play either way: on the host path the inheritance
+	# is invisible, and a knob that turns out not to have been set is the first
+	# thing to check when a build behaves as though it were unset.
+	if ((${#tbox_names[@]})); then
+		echo "==> Tacklebox environment: ${tbox_names[*]}" >&2
 	fi
 
 	local -a build_cmd=("${tb[@]}" build "$(realpath "$recipe_file")"
