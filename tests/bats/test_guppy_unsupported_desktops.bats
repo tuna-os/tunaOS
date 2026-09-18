@@ -1,6 +1,7 @@
 #!/usr/bin/env bats
 # Gentoo's main tree does not currently provide the packages needed by the
-# Niri or COSMIC manifests. Keep those flavors out of Guppy's published matrix
+# Niri or COSMIC manifests, and its GNOME ebuilds (49.9) sit below the GNOME 50
+# version floor (#2450). Keep those flavors out of Guppy's published matrix
 # until there is a maintained package source and a passing build.
 #
 # This is deliberately a repository-level guard: adding a flavor is otherwise
@@ -18,10 +19,10 @@ root = sys.argv[1]
 cfg = yaml.safe_load(open(os.path.join(root, '.github/build-config.yml')))
 guppy = next(v for v in cfg['variants'] if v['id'] == 'guppy')
 flavors = {f['id'] for f in guppy.get('flavors', [])}
-unsupported = {'niri', 'cosmic'}
+unsupported = {'niri', 'cosmic', 'gnome'}
 found = sorted(flavors & unsupported)
 assert not found, f'guppy declares unsupported Gentoo flavors: {found}'
-assert {'gnome', 'kde', 'xfce'} <= flavors, 'known Gentoo desktop coverage disappeared'
+assert {'kde', 'xfce'} <= flavors, 'known Gentoo desktop coverage disappeared'
 print(','.join(sorted(flavors)))
 EOF
   [ "$status" -eq 0 ]

@@ -1045,9 +1045,6 @@ variants:
       - id: base
         stage: 1
         build_image: true
-      - id: gnome
-        stage: 2
-        build_image: true
       - id: kde
         stage: 2
         build_image: true
@@ -1059,6 +1056,13 @@ variants:
         stage: 2
         build_image: true
       # NOT declared, and not an oversight:
+      #   gnome   — Gentoo ::gentoo main tree tops out at GNOME 49.9 (tested
+      #             49.7-49.9), while the desktop contract enforces the GNOME 50
+      #             version floor (minimum_version: 50 in manifests/desktops/gnome.yaml,
+      #             GNOME_MINIMUM_MAJOR=50 in verify-desktop-experience.sh).
+      #             Declaring it fails verify-desktop-experience.sh deterministically
+      #             (tunaOS#2450). Re-add once ::gentoo carries GNOME 50/51 or
+      #             an overlay is wired.
       #   niri    — no ebuild in the Gentoo main tree at all. A search returns
       #             only dev-ruby/niceogiri. Declaring it would publish an
       #             installable image with no compositor, exactly as
