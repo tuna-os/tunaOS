@@ -13,19 +13,19 @@
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 SERVICES="${REPO_ROOT}/build_scripts/40-services.sh"
+POLICY="${REPO_ROOT}/build_scripts/lib/service-policy.sh"
 
 # The guard block, retargeted at a scratch root so it can actually be RUN.
 # Grepping the source cannot tell you the block works; these tests execute it.
 run_guard_on() {
 	local root="$1"
-	sed -n '/^_tunaos_guarded=0$/,/^unset _tunaos_guarded/p' "$SERVICES" |
-		sed "s|/etc/profile.d/|${root}/etc/profile.d/|g" >"${root}/guard.sh"
-	bash -euo pipefail "${root}/guard.sh"
+	TUNAOS_PROFILE_DIR="${root}/etc/profile.d" bash -euo pipefail -c \
+		'. "$1"; tunaos_guard_login_banners' _ "$POLICY"
 }
 
 # The guard text the build prepends.
 profile_file() {
-	sed -n "/cat <<'GUARD_EOF'/,/^GUARD_EOF$/p" "$SERVICES" | sed '1d;$d'
+	sed -n "/cat <<'GUARD_EOF'/,/^GUARD_EOF$/p" "$POLICY" | sed '1d;$d'
 }
 
 @test "both the old and the new upstream banner names are covered" {
@@ -36,7 +36,7 @@ profile_file() {
 	# upstream knows the shape of it — its own comment says the portal lookup
 	# "can stall the prompt when the portal cannot start" — but it guards
 	# only against root and double greetings, not against having no terminal.
-	grep -q '/etc/profile.d/umotd.sh /etc/profile.d/uwelcome.sh' "$SERVICES"
+	grep -q 'profile_dir}/umotd.sh.*profile_dir}/uwelcome.sh' "$POLICY"
 }
 
 @test "the guard is prepended, so upstream's own logic survives" {
@@ -97,7 +97,7 @@ profile_file() {
 	# Containerfiles (arch, el10, ubuntu, debian, opensuse, gentoo). A fix in
 	# 01-workarounds.sh would have reached el10 and ubuntu only — Arch, the
 	# variant the bug was measured on, does not run it.
-	grep -q 'profile.d/umotd.sh' "$SERVICES"
+	grep -q '^tunaos_guard_login_banners$' "$SERVICES"
 	# ...and in the base stage, ahead of the per-desktop stages. Nothing they
 	# lay down touches /etc/profile.d, so the guard survives them.
 	! grep -rq 'profile\.d' "${REPO_ROOT}/build_scripts/desktop/install-desktop.sh"
@@ -119,7 +119,7 @@ profile_file() {
 	# anywhere in the build log, and an unguarded umotd.sh in the finished
 	# image. Being invoked by every Containerfile is not being reached.
 	local guard first_exit
-	guard=$(grep -n '_tunaos_guarded=0' "$SERVICES" | head -1 | cut -d: -f1)
+	guard=$(grep -n '^tunaos_guard_login_banners$' "$SERVICES" | head -1 | cut -d: -f1)
 	first_exit=$(grep -n 'exit 0' "$SERVICES" | grep -v '^[0-9]*:#' | head -1 | cut -d: -f1)
 	[ -n "$guard" ]
 	[ -n "$first_exit" ]
@@ -131,15 +131,18 @@ profile_file() {
 	# Indented => nested in one of the per-family `if` blocks, which is the
 	# same defect wearing a different hat.
 	local line
-	line=$(grep -n '_tunaos_guarded=0' "$SERVICES" | head -1 | cut -d: -f1)
+	line=$(grep -n '^tunaos_guard_login_banners$' "$SERVICES" | head -1 | cut -d: -f1)
 	run sed -n "${line}p" "$SERVICES"
-	[ "$output" = "_tunaos_guarded=0" ]
+	[ "$output" = "tunaos_guard_login_banners" ]
 }
 
 # The guard alone, followed by a payload standing in for the banner call.
 guarded_stub() {
 	local f="${BATS_TEST_TMPDIR}/stub.sh"
-	{ profile_file; echo 'echo BANNER'; } >"$f"
+	{
+		profile_file
+		echo 'echo BANNER'
+	} >"$f"
 	printf '%s' "$f"
 }
 
@@ -177,7 +180,7 @@ guarded_stub() {
 @test "a path that is not there is left alone" {
 	# Not every variant ships a banner; touching a missing path would create a
 	# stray profile.d entry calling a binary that does not exist.
-	grep -q '\[\[ -f "\$_f" \]\] || continue' "$SERVICES"
+	grep -q '\[\[ -f "\$banner" \]\] || continue' "$POLICY"
 }
 
 @test "live greetd adapters keep source_profile = false" {
