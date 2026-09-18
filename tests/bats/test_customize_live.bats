@@ -8,6 +8,7 @@
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 SCRIPT="${REPO_ROOT}/live-iso/common/src/customize-live.sh"
+CONTRACT="${REPO_ROOT}/live-iso/common/src/live-desktop-contract.sh"
 
 setup() {
   FAKE_ROOT="$(mktemp -d)"
@@ -71,11 +72,17 @@ detect() {
 
 @test "customize-live.sh: passes shellcheck" {
   if command -v shellcheck &>/dev/null; then
-    run shellcheck --severity=error --exclude=SC1091 "${SCRIPT}"
+    run shellcheck --severity=error --exclude=SC1091 "${SCRIPT}" "${CONTRACT}"
     [ "$status" -eq 0 ]
   else
     skip "shellcheck not installed"
   fi
+}
+
+@test "desktop contract rejects unsupported desktop names" {
+  run bash -c 'source "$1"; installer_app_for_desktop unknown' _ "${CONTRACT}"
+  [ "$status" -eq 2 ]
+  [ "$output" = "unsupported live desktop: unknown" ]
 }
 
 @test "customize-live.sh: installs from the tuna-os flatpak remote" {

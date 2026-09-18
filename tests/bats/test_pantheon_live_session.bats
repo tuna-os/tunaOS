@@ -18,6 +18,7 @@
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 CUSTOMIZE="${REPO_ROOT}/live-iso/common/src/customize-live.sh"
+CONTRACT="${REPO_ROOT}/live-iso/common/src/live-desktop-contract.sh"
 ADAPTER="${REPO_ROOT}/live-iso/common/src/desktop-pantheon.sh"
 
 detect() {
@@ -81,7 +82,8 @@ detect() {
 }
 
 @test "pantheon maps to the upstream installer, like gnome" {
-  grep -q 'pantheon) INSTALLER_APP="org.bootcinstaller.Installer"' "$CUSTOMIZE"
+  run bash -c 'source "$1"; installer_app_for_desktop pantheon' _ "$CONTRACT"
+  [ "$output" = "org.bootcinstaller.Installer" ]
 }
 
 @test "the adapter is executable and lints" {
