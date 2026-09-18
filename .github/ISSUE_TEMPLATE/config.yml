@@ -1,0 +1,13 @@
+# Blank issues stay enabled on purpose: this repo covers many variants and most
+# reports do not fit one of the forms below.
+blank_issues_enabled: true
+contact_links:
+  - name: Pantheon/Gurnard triage tracker
+    url: https://github.com/tuna-os/tunaos/issues/1469
+    about: Scope and triage contract for Pantheon-on-Gurnard feedback. Read this first, then file one symptom per report with the Pantheon bug form.
+  - name: Matrix chat
+    url: https://matrix.to/#/%23tunaos:reilly.asia
+    about: Questions, "is this expected?", and anything that is not yet a reproducible bug.
+  - name: Security vulnerabilities
+    url: https://github.com/tuna-os/tunaos/security/advisories/new
+    about: Report security issues privately. Do not open a public issue.

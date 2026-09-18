@@ -55,11 +55,17 @@ def test_local_runner_reads_the_ci_pin_and_budget() -> None:
 def test_local_runner_uses_a_cached_pinned_linter(tmp_path: Path) -> None:
     cache = tmp_path / "cache" / _ste_ref() / ".github" / "actions" / "ste-lint"
     cache.mkdir(parents=True)
+    # Read the budget rather than hardcoding it: the number is a ratchet that
+    # drops whenever a batch of prose lands, and a literal here turns every
+    # such drop into a two-file edit with a confusing failure when it is
+    # forgotten. What this asserts is that the runner passes .ste-budget
+    # through to --max, not what today's number happens to be.
+    budget = (ROOT / ".ste-budget").read_text(encoding="utf-8").strip()
     (cache / "ste-lint.mjs").write_text(
-        """
+        f"""
         const args = process.argv.slice(2);
         const valid = args.includes('--summary') ||
-          (args.includes('--max') && args[args.indexOf('--max') + 1] === '3050');
+          (args.includes('--max') && args[args.indexOf('--max') + 1] === '{budget}');
         process.exit(valid ? 0 : 1);
         """,
         encoding="utf-8",
