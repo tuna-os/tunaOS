@@ -58,6 +58,17 @@ images:
     tag: gnome50-el10-x86_64
     digest: sha256:b279ab7c95e48fdc14ad083169fd79cd87b04a5d2aba90d3a8ba1580f7de944d
 
+# Package ceilings carried until their upstream regressions are fixed.
+packages:
+  # libselinux 3.11-1.el10 prevents dbus-broker, systemd-logind and
+  # pam_selinux from opening their SELinux context handles on the rolling EL10
+  # bases (tunaOS#2485). skipjack:gnome changed from a dead system bus to
+  # TUNAOS_DESKTOP_CONTRACT_OK when only libselinux was moved back to 3.10 in
+  # run 35191766126. 3.10-2 contains only the subsequent restorecon ENOENT fix
+  # (RHEL-110181), so keep the rolling bases on the latest 3.10 build until an
+  # upstream 3.11+ build is demonstrated by the same boot contract.
+  el10_rolling_libselinux: "3.10-2.el10"
+
 # Pinned binary downloads (managed by Renovate)
 downloads:
   # renovate: datasource=github-releases depName=ublue-os/uupd
