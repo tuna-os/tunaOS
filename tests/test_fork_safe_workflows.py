@@ -23,8 +23,9 @@ fork:
     secret is fork-aware: guarded by the event name or the head repo, or
     written to tolerate the failure.
 
-A dynamic fork simulation (running each PR workflow under `act` with an empty
-secret set) is the other half and is tracked separately.
+The scheduled dynamic half lives in `.github/workflows/fork-simulation.yml`:
+it runs each PR workflow under `act` with an empty secret set and a read-only
+token.
 """
 
 from __future__ import annotations

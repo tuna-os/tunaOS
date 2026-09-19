@@ -47,6 +47,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `dead-gate-report.yml` | post-merge + scheduled | Dead gate report | `17 6 * * 1`, manual | — |
 | `desktop-contract-sweep.yml` | post-merge + scheduled | `desktop`, `no_silent_omissions` | `0 8 * * *`, manual | `desktop`: 2d, `no_silent_omissions`: 2d |
 | `drop-bot-review-requests.yml` | PR-deterministic | Drop bot review requests | each PR | — |
+| `fork-simulation.yml` | post-merge + scheduled | Fork PR simulation | `17 8 * * 1`, manual | — |
 | `frontend-parity.yml` | post-merge + scheduled | frontend parity | `30 6 * * *`, manual | — |
 | `gdm-paint-benchmark.yml` | post-merge | GDM Paint Benchmark | manual | — |
 | `generate-changelog-release.yml` | post-merge + scheduled | Generate Release | `05 11 * * *`, manual | — |
