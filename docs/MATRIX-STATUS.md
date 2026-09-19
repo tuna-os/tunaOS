@@ -101,7 +101,7 @@ Green criterion 8 (`no_silent_omissions`): the sweep runs `checks/verify-package
 | **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito-rawhide** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **flounder** | ✅ | ✅ | — | — | ✅ |
+| **flounder** | — | ✅ | — | — | ✅ |
 | **flounder-sid** | ✅ | ✅ | — | — | ✅ |
 | **grouper** | ✅ | ✅ | ✅ | — | ✅ |
 | **guppy** | ✅ | ✅ | — | — | ✅ |
@@ -123,11 +123,11 @@ Green criterion 7 (`parity`), first cadence: every desktop's package set audited
 | **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito** | ✅ | ✅ | ❌ | ✅ | ✅ |
 | **bonito-rawhide** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **flounder** | ❌ | ❌ | — | — | ❌ |
+| **flounder** | — | ❌ | — | — | ❌ |
 | **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
 | **grouper** | ❌ | ❌ | ❌ | — | ❌ |
 | **guppy** | ✅ | ✅ | — | — | ✅ |
-| **hummingbird** | ✅ | ❌ | ✅ | ❌ | — |
+| **hummingbird** | ✅ | — | ✅ | — | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
@@ -174,7 +174,7 @@ Pulls the **published** image and runs the contract script against it directly (
 | **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito-rawhide** | ❌ | ❌ | ❌ | ❌ | ❌ |
-| **flounder** | ✅ | ✅ | — | — | ✅ |
+| **flounder** | — | ✅ | — | — | ✅ |
 | **flounder-sid** | ❌ | ❌ | — | — | ❌ |
 | **grouper** | ✅ | ✅ | ✅ | — | ✅ |
 | **guppy** | ❌ | ✅ | — | — | ✅ |
@@ -184,8 +184,6 @@ Pulls the **published** image and runs the contract script against it directly (
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **wahoo** | ❌ | ❌ | ⬜ | — | — |
 | **yellowfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
-
-4 cell(s) in the most recent sweep are missing (no published image), errored (registry/runner trouble), or lost (job produced no result) rather than a clean pass or fail — not counted above; see that sweep's own `desktop-contract-baseline` artifact for which.
 
 Newest result 2026-09-02.
 
