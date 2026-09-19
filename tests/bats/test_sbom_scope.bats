@@ -18,6 +18,10 @@
 
 REPO_ROOT="$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)"
 WORKFLOW="${REPO_ROOT}/.github/workflows/reusable-build-image.yml"
+# SBOM attestation lives in its own `workflow_run` workflow since #2282, so a
+# transparency-log outage gets its own run conclusion and cannot turn a
+# nightly that built everything red.
+ATTEST_WORKFLOW="${REPO_ROOT}/.github/workflows/attest-sbom.yml"
 
 @test "SBOM scans the squashed image view" {
   run grep -E -- '--scope squashed' "$WORKFLOW"
@@ -65,10 +69,24 @@ WORKFLOW="${REPO_ROOT}/.github/workflows/reusable-build-image.yml"
 @test "published images use keyless signing and signed SPDX attestations" {
   grep -q 'id-token: write' "$WORKFLOW"
   grep -q 'cosign sign "$index_ref"' "$WORKFLOW"
-  grep -q 'cosign attest --type spdxjson' "$WORKFLOW"
-  grep -q 'cosign verify-attestation' "$WORKFLOW"
-  run grep -E 'COSIGN_PRIVATE_KEY|SIGNING_SECRET' "$WORKFLOW"
+  # Attestation is a separate run, but it is still keyless and still verified.
+  grep -q 'id-token: write' "$ATTEST_WORKFLOW"
+  grep -q 'cosign attest --type spdxjson' "$ATTEST_WORKFLOW"
+  grep -q 'cosign verify-attestation' "$ATTEST_WORKFLOW"
+  run grep -E 'COSIGN_PRIVATE_KEY|SIGNING_SECRET' "$WORKFLOW" "$ATTEST_WORKFLOW"
   [ "$status" -ne 0 ]
+}
+
+@test "attestation cannot decide the build run's conclusion" {
+  # `continue-on-error: true` was the old answer and it was not enough: it
+  # keeps a job from failing the run it is DEFINED in, and the caller's
+  # `uses:` job still reports the called workflow's aggregate result. Run
+  # 33591594151 concluded failure with 27 of 30 jobs green (#2282).
+  # Anchored past any `#`, so the incident write-ups that quote the command
+  # in a comment do not read as the command itself.
+  run grep -E '^[^#]*cosign attest' "$WORKFLOW"
+  [ "$status" -ne 0 ]
+  grep -q '^  workflow_run:' "$ATTEST_WORKFLOW"
 }
 
 @test "active workflows no longer pass a signing key secret" {

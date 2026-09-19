@@ -94,7 +94,7 @@ flowchart LR
     M --> GT["Gate<br/>qcow2 via bootc install<br/>boot + verify in QEMU"]
     S --> PR["Promote<br/>:tag-testing → :tag"]
     GT -.->|"advisory today"| PR
-    PR --> AT["Attest SBOM<br/>in-toto attestation"]
+    PR -.->|"run completes"| AT["attest-sbom.yml<br/>separate workflow_run<br/>in-toto attestation"]
 ```
 
 The load-bearing details, each one paid for with a real incident:
@@ -119,6 +119,16 @@ The load-bearing details, each one paid for with a real incident:
 - **Retries with judgement**: promotion `skopeo` copies, GHCR pushes and
   cosign calls retry with backoff; a Sigstore outage downgrades attestation
   rather than blocking Promote (#1560).
+- **SBOM attestation is a separate run**, not a job. `attest-sbom.yml` is
+  triggered by `workflow_run` when a build workflow completes, reads the
+  digest and SBOM artifacts of that run, and attests them. `continue-on-error`
+  was not enough on its own: it stops a job failing the run it is defined in,
+  but the caller's `uses:` job still reports a reusable workflow's aggregate
+  result, so one unreachable transparency log concluded a 27-of-30-green
+  nightly as `failure` and the README matrix read it as unbuilt (#2282). A
+  separate workflow has a separate conclusion. Recovery is unchanged:
+  `rerun-infra-failures.yml` classifies the `SIGSTORE_OUTAGE` marker and
+  re-runs it once.
 
 ### Inside the image build
 
