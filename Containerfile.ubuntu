@@ -16,7 +16,7 @@
 #
 # Skips (RPM/Bluefin-specific): RHSM, COPR, dnf versionlock, RPM Fusion, EPEL.
 
-ARG BASE_IMAGE="docker.io/library/ubuntu:resolute@sha256:9559ceb7c21e528e233e8dff26a0fb2682f4094cce06176eeb075d87a22b31de"
+ARG BASE_IMAGE="docker.io/library/ubuntu:resolute@sha256:da6fc2be547864451aa253836dd926da33623312df4a9a243e35dc877c378a78"
 ARG ENABLE_HWE="${ENABLE_HWE:-0}"  
 ARG ENABLE_NVIDIA="${ENABLE_NVIDIA:-0}"
 ARG DESKTOP_FLAVOR="${DESKTOP_FLAVOR:-gnome}"
