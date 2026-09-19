@@ -78,9 +78,17 @@ jobs:
           # survive. Match the CLASS of pointer instead: no dated artifact
           # name contains "-latest" (they are <name>-<YYYYMMDD>.iso), so the
           # broader pattern keeps every pointer and still prunes every date.
+          # Use one ordered filter list. rclone explicitly warns that mixing
+          # --include and --exclude makes rule order indeterminate; retention
+          # must not depend on whichever order a particular rclone release
+          # chooses. The final rule also keeps unrelated live-isos objects out
+          # of this extension-scoped deletion.
           FLAGS=(--log-level INFO --s3-no-check-bucket --min-age 14d \
-            --exclude "*-latest*" \
-            --include "*.iso" --include "*.iso.sha256" --include "*.iso.sigstore.json")
+            --filter "- *-latest*" \
+            --filter "+ *.iso" \
+            --filter "+ *.iso.sha256" \
+            --filter "+ *.iso.sigstore.json" \
+            --filter "- *")
           [[ "$DRY_RUN" == "true" ]] && FLAGS+=(--dry-run)
           echo "==> Pruning live-isos/ (>14d, excluding *-latest*)..."
           rclone delete "${FLAGS[@]}" "R2:${{ secrets.R2_BUCKET }}/live-isos/"
@@ -117,8 +125,11 @@ jobs:
           # "-latest.png" right now, so this is not a fix here -- it is the one
           # rule both steps state the same way, and it already covers a future
           # "-latest-arm64.png" or a .webp switch without a second incident.
+          # Keep this as an ordered --filter rule too. Besides making the two
+          # retention policies consistent, this avoids reintroducing rclone's
+          # indeterminate mixed --include/--exclude mode when this list grows.
           FLAGS=(--log-level INFO --s3-no-check-bucket --min-age 60d \
-            --exclude "*-latest*")
+            --filter "- *-latest*")
           [[ "$DRY_RUN" == "true" ]] && FLAGS+=(--dry-run)
           echo "==> Pruning screenshots/ recursively (>60d, excluding *-latest*)..."
           rclone delete "${FLAGS[@]}" "R2:${{ secrets.R2_BUCKET }}/screenshots/"
