@@ -1690,8 +1690,17 @@ jobs:
     steps:
       - name: Install skopeo
         run: |
-          sudo apt-get update
-          sudo apt-get install -y skopeo
+          # GitHub's runner also enables vendor repositories (currently Google
+          # Chrome and Microsoft).  Promotion only needs an Ubuntu package, so
+          # do not let an unrelated vendor's stale index or outage turn a
+          # successfully built image red at the final step.
+          APT_OPTIONS=(
+            -o "Dir::Etc::sourcelist=/etc/apt/sources.list.d/ubuntu.sources"
+            -o "Dir::Etc::sourceparts=-"
+            -o "Acquire::Retries=5"
+          )
+          sudo apt-get "${APT_OPTIONS[@]}" update
+          sudo apt-get "${APT_OPTIONS[@]}" install -y skopeo
 
       - name: Login to GitHub Container Registry
         env:
