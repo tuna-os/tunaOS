@@ -123,11 +123,11 @@ Green criterion 7 (`parity`), first cadence: every desktop's package set audited
 | **albacore** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **bonito** | ✅ | ✅ | ❌ | ✅ | ✅ |
 | **bonito-rawhide** | ✅ | ✅ | ✅ | ✅ | ✅ |
-| **flounder** | — | ❌ | — | — | ❌ |
+| **flounder** | ❌ | ❌ | — | — | ❌ |
 | **flounder-sid** | ⬜ | ⬜ | — | — | ⬜ |
 | **grouper** | ❌ | ❌ | ❌ | — | ❌ |
 | **guppy** | ✅ | ✅ | — | — | ✅ |
-| **hummingbird** | ✅ | — | ✅ | — | — |
+| **hummingbird** | ✅ | ❌ | ✅ | ❌ | — |
 | **marlin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **sailfin** | ✅ | ✅ | ✅ | ✅ | ✅ |
 | **skipjack** | ✅ | ✅ | ✅ | ✅ | ✅ |
