@@ -132,8 +132,8 @@ _select() {
   echo "${SEL[*]}"
 }
 
-@test "select: yellowfin flagship includes gnome-nvidia + hwe" {
-  [ "$(_select '' yellowfin)" = "gnome-nvidia gnome-nvidia-hwe" ]
+@test "select: yellowfin flagship drops the unbuildable nvidia-hwe cell" {
+  [ "$(_select '' yellowfin)" = "gnome-nvidia" ]
 }
 
 @test "select: bonito flagship shrinks (no gnome-nvidia-hwe on Fedora)" {
