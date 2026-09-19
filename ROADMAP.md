@@ -130,11 +130,11 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 | projectbluefin/actions adopted | ✅ Done | #440–441 |
 | arm64 builds passing | ✅ Done | #448 |
 
----
-
-## Q3 2026 (July–September) — "Expand" 🟡 IN PROGRESS
+## Q3 2026 (July–September) — "Expand" ✅ COMPLETE
 
 **Theme**: Expand variant coverage, harden architecture, grow community.
+
+**Final Status (September 2026)**: Core variant expansion complete; release parity gates and wootc alpha channels active. Q3 milestone closed.
 
 **Mid-quarter update (2026-08-10)**: Q3 milestone populated; CI green (at the time — see 08-13 correction below); **downloads verified working** (179 ISOs, newest 08-07). ⚠️ **Q3 at risk — checkpoint 2026-08-22** (#1299): 4 open strategic goals (#272 Bonito GA, #1123 Redfin alpha, #1093 RFC governance, #1094 ADR coverage) with zero movement since 08-08 while CI/ops work lands daily. ⚠️ **Desktop parity crisis** (#1294): tunaos-packages#133 audit shows 24/37 published editions are too small to contain their desktop (non-RPM bases: sailfin/flounder/grouper). GitHub Releases gap fixed 08-08 (#1106/#1147 closed, `a4b147f8`).
 
