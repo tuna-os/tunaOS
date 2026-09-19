@@ -1,0 +1,229 @@
+name: Fork PR simulation
+
+# Execute the repository's pull_request workflows with no repository secrets.
+# The token inherited by the simulation job is contents:read only, matching
+# GitHub's permission downgrade for an untrusted fork.  `act` copies a local,
+# synthetic head commit into the runner, so actions/checkout never replaces it
+# with trusted main.  This complements tests/test_fork_safe_workflows.py: the
+# static test spots suspicious shapes; this run exercises their actual guards.
+on:
+  schedule:
+    - cron: "17 8 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  discover:
+    name: Discover pull_request workflows
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      matrix: ${{ steps.workflows.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install PyYAML
+        run: pip3 install --quiet pyyaml --break-system-packages
+
+      - name: Build matrix
+        id: workflows
+        run: echo "matrix=$(python3 scripts/fork-simulation.py matrix)" >> "$GITHUB_OUTPUT"
+
+  simulate:
+    name: ${{ matrix.workflow }}
+    needs: discover
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix: ${{ fromJSON(needs.discover.outputs.matrix) }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install PyYAML
+        run: pip3 install --quiet pyyaml --break-system-packages
+
+      - name: Install act (verified release)
+        env:
+          ACT_VERSION: v0.2.89
+          ACT_SHA256: 0191d6f1f3b716b5c55820032605d05fc3c1cdbf581ebeff655019e5dd1524c0
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/act.tar.gz"
+          curl --fail --location --silent --show-error \
+            "https://github.com/nektos/act/releases/download/${ACT_VERSION}/act_Linux_x86_64.tar.gz" \
+            --output "$archive"
+          echo "${ACT_SHA256}  ${archive}" | sha256sum --check --strict
+          tar -xzf "$archive" -C "$RUNNER_TEMP" act
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - name: Exercise workflow as each PR persona
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          WORKFLOW: ${{ matrix.workflow }}
+        run: |
+          set -euo pipefail
+          result="$RUNNER_TEMP/${WORKFLOW}.tsv"
+          : > "$result"
+          for persona in first-time-external same-repo-contributor renovate; do
+            worktree="$(mktemp -d "${RUNNER_TEMP}/fork-simulation.XXXXXX")"
+            git clone --quiet --local --no-hardlinks "$GITHUB_WORKSPACE" "$worktree/repo"
+            cd "$worktree/repo"
+            git config user.name "Fork Simulation"
+            git config user.email "fork-simulation@users.noreply.github.com"
+            git switch --quiet --create "fork-simulation/${persona}"
+            printf '%s\n' "$persona" > .fork-simulation
+            git add .fork-simulation
+            git commit --quiet -m "test: synthetic untrusted head for ${persona}"
+            head_sha="$(git rev-parse HEAD)"
+            base_sha="$(git rev-parse HEAD^)"
+            python3 scripts/fork-simulation.py event "$persona" \
+              --repository "$REPOSITORY" --head-sha "$head_sha" --base-sha "$base_sha" \
+              > "$worktree/event.json"
+
+            echo "::group::${WORKFLOW} — ${persona}"
+            set +e
+            # -self-hosted avoids a second container layer. All nested jobs then
+            # share this runner, so serialize matrices to prevent parallel brew,
+            # apt, and podman operations from interfering with each other.
+            timeout 75m act pull_request \
+              --workflows ".github/workflows/${WORKFLOW}" \
+              --eventpath "$worktree/event.json" \
+              --actor "$(python3 scripts/fork-simulation.py actor "$persona")" \
+              --secret-file /dev/null \
+              --secret "GITHUB_TOKEN=${GH_TOKEN}" \
+              --env-file /dev/null \
+              --artifact-server-path "$worktree/artifacts" \
+              --concurrent-jobs 1 \
+              --platform ubuntu-latest=-self-hosted \
+              --platform ubuntu-24.04=-self-hosted \
+              --platform ubuntu-24.04-arm=-self-hosted \
+              --container-architecture linux/amd64
+            rc=$?
+            set -e
+            echo "::endgroup::"
+            if [[ $rc -eq 0 ]]; then
+              status=pass
+            elif [[ $rc -eq 124 ]]; then
+              status=timeout
+            else
+              status=fail
+            fi
+            printf '%s\t%s\t%s\n' "$persona" "$status" "$rc" >> "$result"
+            rm -rf "$worktree"
+          done
+
+      - name: Upload result
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: fork-simulation-${{ strategy.job-index }}
+          path: ${{ runner.temp }}/${{ matrix.workflow }}.tsv
+          if-no-files-found: error
+
+  report:
+    name: Fork-safety report
+    if: always()
+    needs: [discover, simulate]
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install PyYAML
+        run: pip3 install --quiet pyyaml --break-system-packages
+
+      - name: Download results
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: fork-simulation-*
+          path: results
+          merge-multiple: true
+
+      - name: Build per-workflow report
+        id: report
+        run: |
+          set -euo pipefail
+          {
+            echo "## Fork pull-request simulation"
+            echo
+            echo "All repository secrets were empty. The simulated GITHUB_TOKEN had contents:read only."
+            echo
+            echo "| workflow | first-time external | same-repo contributor | Renovate |"
+            echo "| :-- | :--: | :--: | :--: |"
+            mapfile -t workflows < <(python3 scripts/fork-simulation.py matrix | jq -r '.workflow[]')
+            for workflow in "${workflows[@]}"; do
+              file="results/${workflow}.tsv"
+              row="| \`${workflow}\`"
+              for persona in first-time-external same-repo-contributor renovate; do
+                status=""
+                if [[ -f "$file" ]]; then
+                  status="$(awk -F '\t' -v p="$persona" '$1 == p { print $2 }' "$file")"
+                fi
+                case "$status" in
+                  pass) cell='✅ pass' ;;
+                  timeout) cell='⏱️ timeout' ;;
+                  *) cell='❌ fail' ;;
+                esac
+                row+=" | ${cell}"
+              done
+              echo "${row} |"
+            done
+            echo
+            echo "Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          } | tee report.md >> "$GITHUB_STEP_SUMMARY"
+          if grep -Eq '❌|⏱️' report.md; then
+            echo "failed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "failed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open or refresh one failure issue
+        if: steps.report.outputs.failed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          title="[ci] fork pull-request simulation is failing"
+          marker='<!-- fork-simulation -->'
+          body="$(mktemp)"
+          {
+            echo "$marker"
+            echo "The weekly simulation found a pull_request workflow that did not survive an empty secret set and downgraded token."
+            echo
+            cat report.md
+            echo
+            echo "Inspect the failed persona's log. Guard writes and secret-dependent work for fork PRs, while preserving useful read-only feedback."
+          } > "$body"
+          search='in:title "[ci] fork pull-request simulation is failing"'
+          existing="$(gh issue list --state open --search "$search" \
+            --json number --jq '.[0].number // empty')"
+          if [[ -n "$existing" ]]; then
+            gh issue edit "$existing" --title "$title" --body-file "$body"
+          else
+            gh issue create --title "$title" --body-file "$body" --label ci
+          fi
+
+      - name: Fail the run when a simulation failed
+        if: steps.report.outputs.failed == 'true'
+        run: exit 1
