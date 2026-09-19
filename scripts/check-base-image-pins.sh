@@ -21,6 +21,19 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/lib/build-config.sh"
 CONFIG="${CONFIG:-$(tunaos_build_config)}"
 YQ="${YQ:-yq}"
+VARIANT_FILTER="${1:-}"
+
+if [ "$#" -gt 1 ] || { [ -n "$VARIANT_FILTER" ] && [[ ! "$VARIANT_FILTER" =~ ^[a-z0-9-]+$ ]]; }; then
+	echo "usage: $0 [variant]" >&2
+	exit 2
+fi
+
+base_query='.variants[] | .base_image // ""'
+arch_query='.variants[] | [.id, (.base_image // ""), ((.platforms // []) | join(","))] | @tsv'
+if [ -n "$VARIANT_FILTER" ]; then
+	base_query=".variants[] | select(.id == \"${VARIANT_FILTER}\") | .base_image // \"\""
+	arch_query=".variants[] | select(.id == \"${VARIANT_FILTER}\") | [.id, (.base_image // \"\"), ((.platforms // []) | join(\",\"))] | @tsv"
+fi
 
 if ! command -v "$YQ" >/dev/null 2>&1; then
 	echo "::error::yq executable not found ('$YQ'); cannot parse $CONFIG" >&2
@@ -104,7 +117,7 @@ while IFS= read -r ref; do
 		echo "::error::base image pin no longer resolves (HTTP ${code}): ${ref}"
 		failed=$((failed + 1))
 	fi
-done < <("$YQ" -r '.variants[] | .base_image // ""' "$CONFIG" | sort -u)
+done < <("$YQ" -r "$base_query" "$CONFIG" | sort -u)
 
 echo
 echo "checked ${checked} digest-pinned base image(s); ${failed} unresolvable"
@@ -191,7 +204,7 @@ else:
 			;;
 		esac
 	done
-done < <("$YQ" -r '.variants[] | [.id, (.base_image // ""), ((.platforms // []) | join(","))] | @tsv' "$CONFIG")
+done < <("$YQ" -r "$arch_query" "$CONFIG")
 
 echo
 echo "checked ${arch_checked} declared platform(s); ${arch_failed} unsatisfiable"

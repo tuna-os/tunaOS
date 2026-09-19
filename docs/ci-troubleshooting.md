@@ -807,3 +807,21 @@ Encryption, unlock, boot and the in-guest desktop contract all genuinely passed 
 **Action taken:** re-dispatched `LUKS E2E` (`workflow_dispatch`) for `variant=yellowfin,flavor=all` (run [31286843546](https://github.com/tuna-os/tunaOS/actions/runs/31286843546)) and `variant=albacore,flavor=all` (run [31286849405](https://github.com/tuna-os/tunaOS/actions/runs/31286849405)) to get fresh, post-fix verdicts. Not yet observed to completion — a multi-cell LUKS sweep runs well past a single investigation session; check those runs' actual conclusions before assuming this note means the cells are already green.
 
 **Separate, still-open, NOT covered by the above:** `yellowfin:xfce` (same run, job 93022287474) fails during the **image build** itself — `dracut-install: ERROR: installing '/root'` plus `error: Linting: Checks failed: 2`, retried 3 times, never reaching the LUKS/pixel-gate stage at all. `albacore:gnome/kde/cosmic` log the identical `dracut-install`/lint messages during their own builds but the build still *succeeds* there (non-fatal, matching `bootc container lint`'s documented warn-only default — see #10 above), so this is not simply "the same bug, sometimes fatal" — `yellowfin:xfce`'s build genuinely dies and needs its own root-cause pass, not a re-dispatch.
+
+---
+
+### 17. Bonito fails on both base architectures with `manifest unknown` (#2113)
+
+**Symptom:** both Bonito base jobs fail while pulling a digest-pinned
+`quay.io/fedora/fedora-bootc:44` manifest, before any Containerfile step runs.
+
+**Measured cause:** the repository-wide pin check passed in run 32907984619 on
+2026-08-25, but Quay garbage-collected that digest before scheduled Bonito run
+32965043165 started. The check was too far from this variant's build to protect
+against a digest that disappeared in the intervening hours.
+
+**Fix:** `build-bonito.yml` runs `check-base-image-pins.sh bonito` as a blocking
+preflight immediately before it invokes the reusable matrix. The scoped check
+names the dead reference and exits nonzero before either architecture, or any
+downstream flavor, consumes runner time. The repository-wide scheduled check
+remains useful for early warning; the adjacent preflight closes its timing gap.
