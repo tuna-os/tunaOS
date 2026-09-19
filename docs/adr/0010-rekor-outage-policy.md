@@ -2,19 +2,22 @@
 
 - Status: accepted
 - Date: 2026-09-19
-- Tracking: [#1750](https://github.com/tuna-os/tunaOS/issues/1750)
+- Issue: [#1750](https://github.com/tuna-os/tunaOS/issues/1750)
 - Operational procedure: [Rekor outage response](../../runbooks/rekor-outage.md)
 
 ## Context
 
-The 2026-08-14 and 2026-08-15 Rekor incidents made signing an availability
-risk. In the latter incident, every Albacore flavor built and passed its gates,
-but promotion was skipped because Cosign could not upload to Rekor. PR #1748
-subsequently reduced critical-path Sigstore calls, gave signing a 40-minute
-retry deadline, moved SBOM attestation off the promotion path, and added one
-automatic re-run after 45 minutes.
+The 2026-08-14 and 2026-08-15 Rekor incidents made signature publication an
+availability risk. In the latter incident, every Albacore flavor built and
+passed its gates. Cosign errors stopped promotion because Cosign could not
+upload to Rekor.
 
-That recovery path covers a short outage and probably covers one lasting up to
+PR #1748 then reduced the number of Sigstore calls on the promotion path. It
+gave each signature operation a 40-minute retry deadline and moved SBOM
+attestation off the promotion path. It also added one automatic re-run after 45
+minutes.
+
+That recovery path covers a short outage and probably covers an outage of up to
 roughly two hours. It does not make Rekor irrelevant: image signing remains a
 promotion precondition, and keyless verification depends on Sigstore's
 transparency infrastructure.
@@ -43,7 +46,7 @@ Reconsider the backend when either trigger is met:
 At a trigger, the preferred design to evaluate is **keyless signing with an
 RFC 3161 signed timestamp and no transparency-log upload**. This retains
 short-lived Fulcio certificates and removes the Rekor dependency that actually
-failed. Selection and reliability review of the timestamp authority, consumer
+failed. A reliability review and selection of the timestamp authority, consumer
 notification, and an atomic migration of image, SBOM, and ISO signing are
 required before implementation.
 
@@ -84,12 +87,12 @@ The project keeps that invariant.
 
 - Brief outages remain an operational event, not an emergency architecture
   change.
-- Promotion can remain unavailable when both bounded attempts fail; that is a
+- Promotion can remain unavailable when both bounded tries fail; that is a
   deliberate fail-closed choice.
 - Maintainers must record outage events so the rolling threshold is observable.
 - A timestamp migration must cover `reusable-build-image.yml`, SBOM
   attestations, `publish-iso-groups.yml`, and reusable ISO artifact signing.
 - Downstream users that pin the current workflow identity or verification
   behavior need advance notice and updated commands.
-- `SECURITY.md` and `docs/VERIFY-ARTIFACTS.md` remain accurate until a migration
-  is actually approved and deployed.
+- `SECURITY.md` and `docs/VERIFY-ARTIFACTS.md` remain accurate until maintainers
+  approve and deploy a migration.
