@@ -14,4 +14,14 @@ When a skill mentions a role (e.g. "apply the AFK-ready triage label"), use the 
 
 Edit the right-hand column to match whatever vocabulary you actually use.
 
-For queue-level policy (SLA tiers, when to close a bot-filed finding, milestone-vs-backlog signal) see [TRIAGE-POLICY.md](../../TRIAGE-POLICY.md) — this file only maps individual-issue labels.
+For queue-level policy (SLA tiers, when to close a bot-filed finding, milestone-vs-backlog signal) see [TRIAGE-POLICY.md](../../TRIAGE-POLICY.md).
+
+The wider issue lifecycle uses these tracker labels:
+
+| Stage | Labels | Meaning |
+| --- | --- | --- |
+| Intake | `needs-triage`, `needs-info`, `needs-design`, `ready-for-agent`, `ready-for-human` | Evaluate, request evidence/design, or declare the issue specified |
+| Contributor fit | `good first issue`, `help wanted`, `expert needed` | Advertise the experience expected to take ready work |
+| Delivery | `in progress`, `blocked`, `needs review` | Show the current implementation hand-off |
+| Completion | closed issue (`done`) | Resolved work is represented by closure, not a required label |
+| Advisory | `inactive` | Assigned for 14 days with no linked PR; the bot does not unassign |

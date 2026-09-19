@@ -1,0 +1,47 @@
+name: Welcome first-time contributors
+
+# pull_request_target is intentional and metadata-only: this job never checks
+# out, imports, or executes contributor-controlled content. That lets a fork PR
+# receive a welcome without giving its code access to a write token (#2261).
+"on":
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  welcome:
+    if: >-
+      github.actor != 'dependabot[bot]' &&
+      github.actor != 'renovate[bot]' &&
+      github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Welcome a contributor on their first issue or pull request
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            const item = context.payload.issue || context.payload.pull_request;
+            const prior = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'all', creator: item.user.login,
+              per_page: 100
+            });
+            const isPull = context.eventName === 'pull_request_target';
+            const hasPriorOfKind = prior.some(candidate =>
+              candidate.number !== item.number && Boolean(candidate.pull_request) === isPull
+            );
+            if (hasPriorOfKind) {
+              core.info(`@${item.user.login} has opened this kind of item before.`);
+              return;
+            }
+            const kind = isPull ? 'pull request' : 'issue';
+            await github.rest.issues.createComment({
+              owner, repo, issue_number: item.number,
+              body: `Welcome @${item.user.login}, and thanks for opening your first ${kind} in tunaOS! This automated greeting is not a maintainer review or an acceptance signal. A maintainer or contributor will follow up when available.`
+            });

@@ -1,0 +1,104 @@
+name: Flag inactive issue assignments
+
+# Advisory only: an old assignment is useful context, not authority to remove
+# an assignee. A linked PR suppresses the reminder (#2261).
+"on":
+  schedule:
+    - cron: "23 9 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  flag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment on assignments idle for 14 days
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            const cutoff = Date.now() - 14 * 24 * 60 * 60 * 1000;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', per_page: 100
+            });
+
+            // Create the state label lazily. This is classification, not an
+            // unassignment or a judgement about whether the work is wanted.
+            try {
+              await github.rest.issues.getLabel({owner, repo, name: 'inactive'});
+            } catch (error) {
+              if (error.status !== 404) throw error;
+              await github.rest.issues.createLabel({
+                owner, repo, name: 'inactive', color: 'd4c5f9',
+                description: 'Assigned, but no linked PR after 14 days'
+              });
+            }
+
+            for (const issue of issues) {
+              if (issue.pull_request) continue;
+              const hasInactiveLabel = issue.labels.some(label =>
+                (typeof label === 'string' ? label : label.name) === 'inactive'
+              );
+              const clearInactive = async () => {
+                if (hasInactiveLabel) {
+                  await github.rest.issues.removeLabel({
+                    owner, repo, issue_number: issue.number, name: 'inactive'
+                  });
+                }
+              };
+              if (issue.assignees.length === 0) {
+                await clearInactive();
+                continue;
+              }
+
+              const timeline = await github.paginate(
+                github.rest.issues.listEventsForTimeline,
+                {owner, repo, issue_number: issue.number, per_page: 100}
+              );
+              const hasLinkedPR = timeline.some(event =>
+                event.event === 'cross-referenced' && event.source?.issue?.pull_request
+              );
+              if (hasLinkedPR) {
+                await clearInactive();
+                continue;
+              }
+
+              const stale = [];
+              for (const assignee of issue.assignees) {
+                const assignment = [...timeline].reverse().find(event =>
+                  event.event === 'assigned' && event.assignee?.login === assignee.login
+                );
+                if (assignment && Date.parse(assignment.created_at) <= cutoff) {
+                  stale.push({login: assignee.login, created: assignment.created_at});
+                }
+              }
+              if (stale.length === 0) {
+                await clearInactive();
+                continue;
+              }
+
+              await github.rest.issues.addLabels({
+                owner, repo, issue_number: issue.number, labels: ['inactive']
+              });
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner, repo, issue_number: issue.number, per_page: 100
+              });
+              const reminders = stale.map(item => ({
+                ...item,
+                marker: `<!-- assignment-inactive:${item.login}:${item.created} -->`
+              })).filter(item =>
+                !comments.some(comment => comment.body?.includes(item.marker))
+              );
+              if (reminders.length === 0) continue;
+
+              const people = reminders.map(item => `@${item.login}`).join(', ');
+              const markers = reminders.map(item => item.marker).join('\n');
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: issue.number,
+                body: `${markers}\nAutomated gardening note: ${people} has been assigned for at least 14 days, but this issue has no linked pull request. This is an advisory inactivity marker only; nobody has been unassigned. Please link the PR or update the issue when convenient.`
+              });
+            }

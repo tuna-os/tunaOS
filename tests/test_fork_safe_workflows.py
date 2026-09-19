@@ -38,8 +38,12 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 WORKFLOWS = ROOT / ".github" / "workflows"
 
-# Reviewed exceptions. Empty on purpose; add an entry with the reason.
-PULL_REQUEST_TARGET_ALLOWED: dict[str, str] = {}
+# Reviewed exceptions. These metadata-only workflows need a write token to
+# comment on a fork PR, but never check out or execute the contributor's code.
+PULL_REQUEST_TARGET_ALLOWED: dict[str, str] = {
+    "greetings.yml": "comments on the first fork PR; fixed github-script only",
+    "regression-test-links.yml": "reads merged-PR filenames via API and comments",
+}
 
 # Signals that a step can only succeed with write access or real secrets.
 WRITE_ACTIONS = re.compile(
@@ -114,6 +118,24 @@ def test_pull_request_target_is_not_used_without_review():
         "write token against a PR's contents. Add a reviewed reason to "
         "PULL_REQUEST_TARGET_ALLOWED or use pull_request."
     )
+
+
+def test_pull_request_target_exceptions_are_metadata_only():
+    """A target workflow has a base-branch write token: keep fork code out."""
+    for name, reason in PULL_REQUEST_TARGET_ALLOWED.items():
+        assert reason, f"{name}: allowlist entries require a review reason"
+        text = (WORKFLOWS / name).read_text(encoding="utf-8")
+        doc = _load(name)
+        assert "pull_request_target" in _triggers(doc)
+        assert "actions/checkout" not in text, f"{name}: must not check out fork code"
+        for job in (doc.get("jobs") or {}).values():
+            for step in (job or {}).get("steps") or []:
+                run = str(step.get("run", ""))
+                assert not run.strip(), f"{name}: target jobs may only use reviewed actions"
+                uses = str(step.get("uses", ""))
+                assert re.fullmatch(r"actions/github-script@[0-9a-f]{40}", uses), (
+                    f"{name}: pull_request_target step must use pinned github-script, got {uses!r}"
+                )
 
 
 def _fork_aware(text: str) -> bool:

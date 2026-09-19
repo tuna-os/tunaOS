@@ -19,6 +19,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `arm64-ulimit-probe.yml` | PR-deterministic + post-merge | arm64 ulimit probe (diagnostic) | each PR, manual | — |
 | `asahi-hw-nightly-one.yml` | post-merge + scheduled | Asahi hardware smoke (one) | caller cadence | — |
 | `asahi-hw-nightly.yml` | post-merge + scheduled | Asahi hardware smoke (Tier 2 rental) | `0 6 * * *`, manual | — |
+| `assignment-inactivity.yml` | post-merge + scheduled | Flag inactive issue assignments | `23 9 * * *`, manual | — |
 | `audit-nvidia-release-assets.yml` | post-merge + scheduled | Audit NVIDIA release assets | `30 0 * * *`, manual | — |
 | `bootc-lifecycle.yml` | post-merge + scheduled | `lifecycle` | `0 5 * * 4`, manual | `lifecycle`: 8d |
 | `build-albacore.yml` | post-merge + scheduled | Build Albacore | `20 2 * * *`, manual | — |
@@ -52,11 +53,13 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `generate-changelog-release.yml` | post-merge + scheduled | Generate Release | `05 11 * * *`, manual | — |
 | `ghcr-partial-pull-check.yml` | post-merge + scheduled | GHCR Partial-Pull Compatibility Canary | `30 8 * * 1`, manual | — |
 | `graduation-check.yml` | post-merge + scheduled | Graduation Check | `0 7 * * 1`, manual | — |
+| `greetings.yml` | PR-deterministic + post-merge | Welcome first-time contributors | each PR, issues | — |
 | `installer-fisherman-pins.yml` | PR-deterministic + post-merge + scheduled | Installer fisherman pins | each PR, `0 5 * * *`, manual | — |
 | `installer-screenshots.yml` | post-merge + scheduled | Installer Walkthrough Screenshots | `0 5 * * 1`, manual | — |
 | `installer-smoke.yml` | post-merge | Installer Smoke | manual | — |
 | `iso-builder-parity.yml` | post-merge | ISO Builder Parity | caller cadence | — |
 | `iso-e2e.yml` | PR-deterministic + post-merge + scheduled | `iso` | each PR, `0 6 * * 1`, manual | `iso`: 8d |
+| `issue-labels.yml` | post-merge + scheduled | Ensure issue lifecycle labels | `7 8 * * *`, manual | — |
 | `just-fix.yml` | PR-deterministic + post-merge | Just Fix | each PR, push | — |
 | `lint.yml` | PR-deterministic + post-merge | Lint and Check | each PR, push | — |
 | `live-initramfs.yml` | post-merge | Live Initramfs Artifacts | manual | — |
@@ -72,6 +75,7 @@ This inventory is generated from workflow triggers and `.github/green-criteria.y
 | `publish-iso-groups.yml` | post-merge + scheduled | Publish Grouped Dedup ISOs to R2 | `0 23 * * 0`, manual | — |
 | `publish-isos.yml` | post-merge | Publish Live ISOs to R2 | manual | — |
 | `randomized-tests.yml` | post-merge + scheduled | Randomized Tests | `30 3 * * *`, manual | — |
+| `regression-test-links.yml` | PR-deterministic | Link merged regression tests to issues | each PR | — |
 | `rerun-infra-failures.yml` | post-merge | Re-run infra failures | workflow completion, manual | — |
 | `rerun-startup-failures.yml` | post-merge + scheduled | Re-run startup failures | `0 */3 * * *`, manual | — |
 | `reusable-build-artifacts.yml` | post-merge + scheduled | Artifacts | caller cadence | — |

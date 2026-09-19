@@ -120,6 +120,26 @@ jobs:
           echo "body_file=${BODY_FILE}" >> "$GITHUB_OUTPUT"
           echo "Report bytes: $(stat -c%s "$BODY_FILE")"
 
+      - name: Add inactive blocked issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          # This is an advisory inventory, not a bot decision to close or
+          # reprioritize anything. Search by issue activity, not creation age.
+          CUTOFF=$(date -u -d '30 days ago' +%Y-%m-%d)
+          {
+            printf '\n## Blocked issues without activity for 30 days\n\n'
+            printf '_Automated inventory only; inclusion is not a maintainer priority decision._\n\n'
+            gh issue list \
+              --repo "$REPO" \
+              --state open \
+              --search "is:issue label:blocked updated:<${CUTOFF}" \
+              --limit 100 \
+              --json number,title,updatedAt,url \
+              --jq '.[] | "- [#\(.number)](\(.url)) — \(.title) (last activity \(.updatedAt[0:10]))"'
+          } >> "${{ steps.report.outputs.body_file }}"
+
       - name: Open report issue
         env:
           GH_TOKEN: ${{ github.token }}

@@ -1,0 +1,64 @@
+name: Link merged regression tests to issues
+
+# pull_request_target is intentional and metadata-only. Files are read through
+# the API; contributor code is never checked out or executed with this token.
+"on":
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: read
+
+jobs:
+  link:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Comment on issues named by regression test files
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            const pull = context.payload.pull_request;
+            const files = await github.paginate(github.rest.pulls.listFiles, {
+              owner, repo, pull_number: pull.number, per_page: 100
+            });
+            const links = new Map();
+            for (const file of files) {
+              const match = file.filename.match(/^tests\/regressions\/test_issue_(\d+)_[a-z0-9_]+\.py$/);
+              if (match && file.status !== 'removed') {
+                if (!links.has(match[1])) links.set(match[1], []);
+                links.get(match[1]).push(file.filename);
+              }
+            }
+
+            for (const [number, paths] of links) {
+              let issue;
+              try {
+                issue = (await github.rest.issues.get({
+                  owner, repo, issue_number: Number(number)
+                })).data;
+              } catch (error) {
+                if (error.status === 404) {
+                  core.warning(`${paths.join(', ')} names missing issue #${number}`);
+                  continue;
+                }
+                throw error;
+              }
+              if (issue.pull_request) {
+                core.warning(`#${number} is a pull request, not an issue.`);
+                continue;
+              }
+              const marker = `<!-- regression-test-link:pr-${pull.number} -->`;
+              const comments = await github.paginate(github.rest.issues.listComments, {
+                owner, repo, issue_number: Number(number), per_page: 100
+              });
+              if (comments.some(comment => comment.body?.includes(marker))) continue;
+              const tests = paths.map(path => `\`${path}\``).join(', ');
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: Number(number),
+                body: `${marker}\nAutomated gardening note: ${tests} was merged in #${pull.number}. This links the regression coverage to the incident; it is not a maintainer statement about the issue's lifecycle state.`
+              });
+            }
