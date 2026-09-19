@@ -17,6 +17,9 @@ SCRIPT = (ROOT / "scripts" / "iso-e2e.sh").read_text(encoding="utf-8")
 WORKFLOW = (ROOT / ".github" / "workflows" / "reusable-build-image.yml").read_text(
     encoding="utf-8"
 )
+SELINUX_TMPFILES = (
+    ROOT / "system_files/usr/lib/tmpfiles.d/tunaos-selinux-policy.conf"
+).read_text(encoding="utf-8")
 
 
 def _between(start: str, end: str) -> str:
@@ -57,3 +60,21 @@ def test_diagnostics_include_the_failed_bus_and_coredump_metadata():
 def test_workflow_uploads_the_diagnostics_even_when_the_gate_fails():
     assert "- name: Upload boot evidence\n        if: always()" in WORKFLOW
     assert "verify-out/boot-diagnostics.txt" in WORKFLOW
+
+
+def test_policy_upgrade_is_relabelled_before_dbus_starts():
+    """The GNOME policy RPM is installed while build-time SELinux is off.
+
+    ``systemd-tmpfiles-setup.service`` runs in sysinit.target, before D-Bus in
+    basic.target.  An uppercase ``Z`` recursively applies the policy loaded by
+    PID 1, repairing old-policy labels on dbus_contexts and the rest of the
+    replacement policy tree without changing modes or ownership.
+    """
+    rules = [
+        line.split()
+        for line in SELINUX_TMPFILES.splitlines()
+        if line and not line.startswith("#")
+    ]
+    assert rules == [
+        ["Z", "/etc/selinux/targeted/contexts", "-", "-", "-", "-"]
+    ]
