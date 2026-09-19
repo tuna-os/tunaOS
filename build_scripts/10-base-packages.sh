@@ -164,6 +164,45 @@ if dnf versionlock --help >/dev/null 2>&1; then
 	dnf versionlock add kernel kernel-devel kernel-devel-matched kernel-core kernel-modules kernel-modules-core kernel-modules-extra kernel-uki-virt || true
 fi
 
+# tunaOS#2485: libselinux 3.11-1.el10 makes dbus-broker, systemd-logind and
+# pam_selinux fail to open their context handles on both rolling EL10 bases.
+# A skipjack:gnome boot with no other package change passed its Gate, desktop
+# contract and promotion on 3.10-1 (run 35191766126); the same cell has a dead
+# system bus on 3.11-1 (run 35185567440). 3.10-2 differs from that measured
+# good build only by RHEL-110181's restorecon ENOENT fix and is the newest 3.10
+# build retained in both rolling repositories.
+#
+# Keep this scoped to yellowfin and skipjack: albacore already ships working
+# 3.10 userspace. This is a ceiling, not a permanent fork. Remove it after a
+# 3.11+ package passes the same enforcing boot and desktop contracts.
+if [[ "$IMAGE_NAME" == "yellowfin" || "$IMAGE_NAME" == "skipjack" ]]; then
+	LIBSELINUX_PIN="$(awk '$1 == "el10_rolling_libselinux:" { gsub(/"/, "", $2); print $2 }' /run/context/image-versions.yaml)"
+	if [[ -z "$LIBSELINUX_PIN" ]]; then
+		echo "ERROR: packages.el10_rolling_libselinux is not pinned in image-versions.yaml" >&2
+		exit 1
+	fi
+	if ! dnf versionlock --help >/dev/null 2>&1; then
+		echo "ERROR: dnf versionlock is required to hold the libselinux ceiling" >&2
+		exit 1
+	fi
+
+	libselinux_packages=(libselinux libselinux-utils python3-libselinux)
+	libselinux_nevrs=()
+	for package in "${libselinux_packages[@]}"; do
+		libselinux_nevrs+=("${package}-${LIBSELINUX_PIN}")
+	done
+	dnf -y downgrade "${libselinux_nevrs[@]}"
+	dnf versionlock add "${libselinux_packages[@]}"
+
+	for package in "${libselinux_packages[@]}"; do
+		installed="$(rpm -q --queryformat '%{VERSION}-%{RELEASE}' "$package")"
+		if [[ "$installed" != "$LIBSELINUX_PIN" ]]; then
+			echo "ERROR: $package resolved to $installed, expected $LIBSELINUX_PIN" >&2
+			exit 1
+		fi
+	done
+fi
+
 if [[ $IS_HUMMINGBIRD == true ]]; then
 	echo "Hummingbird base detected; using --skip-unavailable for base packages..."
 	# xfsprogs: `bootc install` execs mkfs.xfs from INSIDE the image being
