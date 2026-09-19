@@ -1,6 +1,6 @@
 # tunaOS Roadmap
 
-**Last updated**: 2026-08-23 (Windows conversion channel added to Q3 + Q4 after wootc `v0.1.0-alpha.1` shipped 08-22 — #1988) | **Maintainer**: tuna-os (hanthor)
+**Last updated**: 2026-09-18 (Post-September 2026 checkpoint & Q4 transition alignment — #2577) | **Maintainer**: tuna-os (hanthor)
 
 ---
 
@@ -10,7 +10,7 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 
 ---
 
-## Current Status (August 2026)
+## Current Status (September 2026 / Q4 Transition)
 
 ### Active Variants
 
