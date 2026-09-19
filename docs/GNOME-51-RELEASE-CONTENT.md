@@ -11,7 +11,7 @@
 Enterprise Linux users (AlmaLinux 10, CentOS Stream 10, RHEL 10) typically wait years for major GNOME desktop environment upgrades. TunaOS bridges this gap by packaging current GNOME releases—specifically **GNOME 51.0**—on top of Enterprise Linux bases on day one, delivered as atomic, rollback-capable `bootc` container images.
 
 ### The Packaging Hook
-- **Tier-based Mock Builds**: TunaOS packages the complete GNOME 51 desktop stack (`mutter`, `gnome-shell`, `gtk4`, `libadwaita`, `nautilus`, `gdm`, `ptyxis`, `orca`, and core shell extensions) through an automated, mock-based build pipeline.
+- **Tier-based Mock Builds**: TunaOS packages the GNOME 51 desktop stack (`mutter`, `gnome-shell`, `gtk4`, `libadwaita`, `nautilus`, `gdm`, `ptyxis`, and `orca`) through an automated, mock-based build pipeline.
 - **Native RPM Repository on Cloudflare R2**: Packages are built in-house and distributed directly from the TunaOS Cloudflare R2 RPM repository rather than unmaintained third-party PPAs or stale COPR repositories (aligning with org package sourcing policy #1319).
 - **Atomic Image Assembly**: The resulting RPMs are layered into bootable OCI container images (`Yellowfin:gnome`, `Albacore:gnome`, `Skipjack:gnome`) and cryptographically signed with Sigstore/cosign keyless signing.
 
