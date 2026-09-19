@@ -1,0 +1,47 @@
+name: Ensure issue lifecycle labels
+
+# Repository files cannot declare GitHub labels, so keep the documented
+# lifecycle usable without silently changing any existing label's metadata.
+"on":
+  schedule:
+    - cron: "7 8 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  ensure:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create missing lifecycle labels
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            const {owner, repo} = context.repo;
+            const wanted = [
+              ['needs-triage', 'd93f0b', 'Maintainer evaluation needed'],
+              ['needs-info', 'fbca04', 'Waiting for more information'],
+              ['needs-design', 'fbca04', 'A scoped technical decision is needed'],
+              ['ready-for-agent', '0e8a16', 'Fully specified for an AFK agent'],
+              ['ready-for-human', '0e8a16', 'Requires human implementation'],
+              ['good first issue', '7057ff', 'Approachable for a first contribution'],
+              ['help wanted', '008672', 'Contributors are welcome to implement this'],
+              ['expert needed', 'b60205', 'Requires specialist experience'],
+              ['in progress', '1d76db', 'Implementation is underway'],
+              ['blocked', 'b60205', 'Cannot proceed until a dependency changes'],
+              ['needs review', '5319e7', 'Implementation is awaiting review'],
+              ['inactive', 'd4c5f9', 'Assigned, but no linked PR after 14 days'],
+              ['wontfix', 'ffffff', 'Will not be actioned']
+            ];
+            const existing = new Set((await github.paginate(
+              github.rest.issues.listLabelsForRepo, {owner, repo, per_page: 100}
+            )).map(label => label.name));
+            for (const [name, color, description] of wanted) {
+              if (existing.has(name)) continue;
+              await github.rest.issues.createLabel({
+                owner, repo, name, color, description
+              });
+              core.info(`Created ${name}`);
+            }

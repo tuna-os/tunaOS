@@ -104,7 +104,35 @@ pattern #1195 itself cites) should collapse onto one tracker issue. When
 triaging a new bot-filed issue, search for existing open issues covering the
 same file/workflow/repo before treating it as independent work.
 
-### 5. SLA re-baseline by priority tier (adopts #1195 recommendation #3)
+### 5. Label lifecycle
+
+Labels describe the issue's current hand-off; they do not replace a
+maintainer's judgement. An issue starts at `needs-triage` and moves through
+one of these paths:
+
+```text
+needs-triage → needs-info | needs-design | ready-for-agent | ready-for-human
+ready-for-agent | ready-for-human → good first issue | help wanted | expert needed
+in progress | blocked | needs review → done (closed)
+```
+
+`needs-info` waits for the reporter, while `needs-design` waits for a scoped
+technical decision. The two `ready-*` labels record that a maintainer considers
+the work specified and identify who can implement it. The second row
+communicates the expected contributor experience;
+more than one of those labels may apply. The final row records execution
+state, and `done` means the issue was closed rather than requiring a durable
+`done` label.
+
+Only mechanical transitions are automated. A daily idempotent sync creates
+missing lifecycle labels but never rewrites existing label metadata. The
+readiness-label workflow adds `help wanted` to unassigned ready issues; old
+assignments with no linked PR receive an `inactive` label and an advisory comment but are never
+unassigned. The other transitions remain explicit human or contributor
+decisions. Bot comments identify themselves as automation and are not
+maintainer reviews.
+
+### 6. SLA re-baseline by priority tier (adopts #1195 recommendation #3)
 
 Replace the flat, universally-violated SLA with tiers keyed to what's
 actually being tracked:
