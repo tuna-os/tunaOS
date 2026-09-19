@@ -56,8 +56,9 @@ the same change.
 
 The recipe is not the only input Tacklebox reads. Tacklebox also takes
 per-build knobs from its environment — `TBOX_CUSTOMIZE_TIMEOUT` bounds the
-live-customize script, `TBOX_CUSTOMIZE_NETWORK=host` gives that script's
-container the host network — and TunaOS runs Tacklebox two different ways:
+live-customize script, `TBOX_CUSTOMIZE_COMMIT_TIMEOUT` bounds its subsequent
+`podman commit`, and `TBOX_CUSTOMIZE_NETWORK=host` gives the script container
+the host network — and TunaOS runs Tacklebox two different ways:
 
 - `TACKLEBOX_FROM_SOURCE=1` builds and runs it as a host binary at the SHA
   pinned in `image-versions.yaml`. An ordinary child process, so it inherits
@@ -79,13 +80,13 @@ consequences to keep in mind:
 `--env-host` is deliberately not used: it would hand the Tacklebox container
 the whole runner environment, `GITHUB_TOKEN` and registry logins included.
 
-One knob does not exist yet. Tacklebox bounds the `podman commit` that
-follows live-customize with a literal `600`, and tunaOS#2034 asks for that
-bound to become settable the way `TBOX_CUSTOMIZE_TIMEOUT` already is. Until
-it lands, a commit that needs longer than 600s and a commit that has wedged
-are indistinguishable from this side — the ISO failures in tunaOS#1893 are
-all of that shape. When it lands, setting it per job is the only change
-TunaOS needs.
+Tacklebox defaults the post-customize commit deadline to 600 seconds. Several
+TunaOS desktop layers exceeded that limit on CI even when Podman used native
+`overlay` storage (tunaOS#1893). The adapter therefore defaults
+`TBOX_CUSTOMIZE_COMMIT_TIMEOUT` to 1800 seconds. A caller can override it with
+any non-negative number; `0` disables the inner deadline. The adapter's
+`TUNAOS_TACKLEBOX_TIMEOUT_SECONDS` remains the outer bound, so disabling the
+inner deadline does not make the whole build unbounded.
 
 ## Validation boundary
 
