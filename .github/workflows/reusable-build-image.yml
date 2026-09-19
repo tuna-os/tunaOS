@@ -1417,6 +1417,21 @@ jobs:
           fi
           sudo apt-get install -y "${pkgs[@]}"
 
+      # This runs before the candidate image is touched. A missing render node,
+      # KVM, or QEMU GL backend is runner infrastructure, not a desktop boot
+      # failure. GPU-routed cells require virgl; hosted cells still record the
+      # plain display path so every Gate has the same fingerprint in its
+      # summary and evidence bundle (tuna-os/tunaOS#1888).
+      - name: Record GPU/DRM runner capability
+        env:
+          REQUIRE_VIRGL: ${{ (startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4')) && '1' || '0' }}
+        run: |
+          args=(--output runner-capability.txt)
+          if [[ "$REQUIRE_VIRGL" == "1" ]]; then
+            args+=(--require-virgl)
+          fi
+          scripts/gpu-drm-preflight.sh "${args[@]}"
+
       - name: Build qcow2 from testing image
         env:
           TEST_IMAGE: ${{ env.IMAGE_REGISTRY }}/${{ env.IMAGE_NAME }}:${{ env.DEFAULT_TAG }}-testing
@@ -1443,6 +1458,10 @@ jobs:
           just qcow2 "${TEST_IMAGE}"
 
       - name: Boot and verify
+        env:
+          # Do not let a GPU-routed gate silently fall back to plain virtio.
+          # The preflight above has already proved this mode is available.
+          TBOX_E2E_GPU: ${{ (startsWith(inputs.flavor, 'cosmic') || startsWith(inputs.flavor, 'niri') || startsWith(inputs.flavor, 'xfwl4')) && 'virgl' || 'auto' }}
         run: |
           QCOW2=$(find . -maxdepth 1 -name "*.qcow2" | head -1)
           mkdir -p verify-out
@@ -1475,6 +1494,10 @@ jobs:
         shell: bash
         run: |
           sudo chown -R "$USER:$(id -gn)" verify-out 2>/dev/null || true
+          if [[ -f runner-capability.txt ]]; then
+            mkdir -p verify-out
+            mv runner-capability.txt verify-out/runner-capability.txt
+          fi
           if [[ -r verify-out/serial.log ]]; then
             echo "serial=true" >> "$GITHUB_OUTPUT"
           else
@@ -1532,6 +1555,7 @@ jobs:
           path: |
             verify-out/serial.log
             verify-out/boot-diagnostics.txt
+            verify-out/runner-capability.txt
             verify-out/*.png
             evidence/${{ inputs.image-variant }}/${{ inputs.flavor }}/amd64/
           if-no-files-found: warn
