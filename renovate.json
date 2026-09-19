@@ -26,6 +26,18 @@
     },
     {
       "customType": "regex",
+      "description": "Update base-image digests in build-config.yml. These pins previously had no updater: Hummingbird stayed on its 2026-08-14 base while its rolling package repository moved to fuse3 3.18, making Flatpak unresolvable (#1754).",
+      "managerFilePatterns": [
+        "/^\\.github\\/build-config\\.yml$/"
+      ],
+      "matchStrings": [
+        "base_image: \\\"(?<packageName>[^:@\\\"]+(?:/[^:@\\\"]+)+):(?<currentValue>[^@\\\"\\s]+)@(?<currentDigest>sha256:[a-f0-9]+)\\\""
+      ],
+      "datasourceTemplate": "docker",
+      "depNameTemplate": "{{{packageName}}}"
+    },
+    {
+      "customType": "regex",
       "description": "Update pinned downloads in image-versions.yaml (GitHub releases)",
       "managerFilePatterns": [
         "/^image-versions\\.yaml$/"
@@ -72,7 +84,7 @@
   ],
   "packageRules": [
     {
-      "description": "Mirrors the low-risk set in the shared preset (local>tuna-os/.github). Redundant at runtime -- the preset already carries it, and preset rules are applied before this file's -- but kept HERE on purpose: tests/test_checksum_pinned_downloads_are_not_automerged.py reads this file alone and cannot resolve the preset, so without a local blanket rule the checksum-pinned hold below has nothing to be ordered against and the invariant from #2293/#2308 stops being verifiable in-repo. Keep it immediately above that hold.",
+      "description": "Mirrors the low-risk set in the shared preset (local>tuna-os/.github). Redundant at runtime -- the preset already carries it, and preset rules are applied before this file's -- but kept HERE on purpose: tests/test_checksum_pinned_downloads_are_not_automerged.py reads this file alone and cannot resolve the preset, so without a local blanket rule the checksum-pinned hold below has nothing to be ordered against and the invariant from #2293/#2308 stops being verifiable in-repo. Keep it immediately above the explicit holds below.",
       "matchUpdateTypes": [
         "minor",
         "patch",
@@ -81,6 +93,13 @@
         "digest"
       ],
       "automerge": true
+    },
+    {
+      "description": "Base-image digest changes move the operating system under every flavor of a variant. Open the update promptly, but never inherit the blanket digest automerge rule: rolling snapshots need their build and contract gates reviewed before they replace a known base.",
+      "matchFileNames": [
+        ".github/build-config.yml"
+      ],
+      "automerge": false
     },
     {
       "description": "Never automerge a download whose version is paired with a hand-pinned sha256. Renovate bumps the version and cannot bump the checksum, so the bump alone fails every base build closed at `sha256sum --check` (install-remora.sh). The `checksums` check catches it on the PR, but the main ruleset has no required status checks, so platformAutomerge merged #2308 with that check red and took every variant's nightly base build down on 2026-09-03 (flounder run 33694724467). Hold these for a human to run `scripts/check-download-checksums.py --fix` on the branch first. tests/test_checksum_pinned_downloads_are_not_automerged.py derives this list from the repo.",
