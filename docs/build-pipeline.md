@@ -60,7 +60,7 @@ points and the manual `build-flavor.yml` dispatcher.
   - Pull request: the repository's PR workflows select the affected build and
     validation lanes; PR candidates are never promoted
 - **Process**:
-  1. **Matrix Generation** (`generate_matrix`): reads `.github/build-config.yml` via `yq` + `jq`, emits one matrix per stage (S1–S4)
+  1. **Matrix Generation** (`generate_matrix`): reads `.github/build-config.yml` via `yq` + `jq`, emits one matrix per stage (S1–S4). Only flavors with `build_image: true` enter the matrix. This filter turns the 145 declared flavors into the 137 published cells
   2. **Stage 1** (`build_base`): builds `{variant}:base` for every variant in parallel
   3. **Stage 2** (`build_stage2`): builds `base-hwe`, `base-nvidia`, and all desktop flavors (gnome, kde, niri, cosmic) — runs after all stage 1 complete
   4. **Stage 3** (`build_stage3`): builds `<de>-hwe` and `<de>-nvidia` — runs after all stage 2 complete
@@ -92,7 +92,7 @@ The pipeline relies on several helper scripts in the `scripts/` directory and Ju
 - **`reusable-build-image.yml`**: Shared CI job for image build, multi-arch
   manifest assembly, signing, SBOM generation, candidate verification, and
   promotion.
-- **`generate_matrix`** (in `build-variant.yml`): `yq` + `jq` pipeline that reads `build-config.yml` and emits per-stage JSON matrices.
+- **`generate_matrix`** (in `build-variant.yml`): `yq` + `jq` pipeline that reads `build-config.yml`, keeps the flavors marked `build_image: true`, and emits per-stage JSON matrices.
 - **`build-iso-tacklebox.sh`** + `just iso-tacklebox`: Go-based bootc→ISO builder using `ghcr.io/tuna-os/tacklebox`. Replaces the legacy anaconda-based ISO path.
 - **`iso-e2e.sh`**: QEMU+OVMF+KVM end-to-end harness for ISO and installed-disk
   checks; it captures screenshots and serial logs and validates readiness.
