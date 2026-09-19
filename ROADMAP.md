@@ -1,6 +1,6 @@
 # tunaOS Roadmap
 
-**Last updated**: 2026-08-23 (Windows conversion channel added to Q3 + Q4 after wootc `v0.1.0-alpha.1` shipped 08-22 — #1988) | **Maintainer**: tuna-os (hanthor)
+**Last updated**: 2026-09-17 (Q3 exit readiness audit and late-September currency refresh — #2568) | **Maintainer**: tuna-os (hanthor)
 
 ---
 
