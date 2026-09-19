@@ -3,7 +3,9 @@
 TunaOS OCI images are signed with Sigstore Cosign's keyless GitHub Actions
 identity. No project signing key or password is required. Verification checks
 both the artifact digest and the identity of the protected workflow that built
-it.
+it. If Sigstore's transparency service is unavailable, follow the
+[Rekor outage runbook](../runbooks/rekor-outage.md); do not weaken these
+verification commands to work around the outage.
 
 ## Install Cosign
 
