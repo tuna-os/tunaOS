@@ -1,0 +1,23 @@
+name: Add Help Wanted
+
+# A readiness label is a maintainer's decision that an issue is specified well
+# enough for somebody to take. Publish that decision to contributors instead of
+# requiring a second, easy-to-forget label operation. The shared implementation
+# only labels unassigned issues and tolerates API failures; this wrapper owns the
+# tunaOS label vocabulary and trigger. Hive practice #12, epic #2250 / #2261.
+
+on:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  add-help-wanted:
+    name: Advertise ready, unassigned issues
+    if: >-
+      github.event.label.name == 'ready-for-agent' ||
+      github.event.label.name == 'ready-for-human'
+    uses: tuna-os/.github/.github/workflows/reusable-add-help-wanted.yml@624128cde8e8d2f7e534ed5fbb2a709fa6d672fa
