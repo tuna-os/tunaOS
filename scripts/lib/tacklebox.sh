@@ -31,6 +31,19 @@ tunaos_run_tacklebox() {
 	local tacklebox_image="${TACKLEBOX_IMAGE:-ghcr.io/tuna-os/tacklebox:latest}"
 	local from_source="${TACKLEBOX_FROM_SOURCE:-0}"
 
+	# Tacklebox defaults its post-customize podman commit to 600 seconds. That
+	# is too short for several multi-gigabyte desktop layers on CI (#1893), so
+	# TunaOS gives it 30 minutes while the outer deadline above still catches a
+	# real wedge. Keep this local: the library must not alter its caller's
+	# environment after the function returns. Export it so both the host binary
+	# and the container forwarding path below receive the same value.
+	local TBOX_CUSTOMIZE_COMMIT_TIMEOUT="${TBOX_CUSTOMIZE_COMMIT_TIMEOUT:-1800}"
+	[[ "$TBOX_CUSTOMIZE_COMMIT_TIMEOUT" =~ ^(0|[1-9][0-9]*)$ ]] || {
+		echo "ERROR: TBOX_CUSTOMIZE_COMMIT_TIMEOUT must be a non-negative integer" >&2
+		return 2
+	}
+	export TBOX_CUSTOMIZE_COMMIT_TIMEOUT
+
 	# Make the two execution paths agree about the environment.
 	#
 	# The host-binary path (TACKLEBOX_FROM_SOURCE=1) runs tacklebox as an
@@ -45,10 +58,9 @@ tunaos_run_tacklebox() {
 	#
 	# The filter is deliberately name-agnostic. tunaOS does not need to know
 	# which knobs tacklebox understands, so one added there reaches it the day
-	# it lands with no change on this side — tunaOS#2034 asks tacklebox for a
-	# settable bound on the post-customize `podman commit`, currently a 600s
-	# literal that kills the ISO builds tracked in tunaOS#1893, and forwarding
-	# is what lets tunaOS set it once it exists.
+	# it lands with no change on this side. That includes the commit deadline
+	# above, added upstream for tunaOS#2034 after the 600s default killed the
+	# ISO builds tracked in tunaOS#1893.
 	#
 	# Not --env-host: that hands the container the runner's entire
 	# environment, GITHUB_TOKEN and registry credentials included.

@@ -370,6 +370,14 @@ JSON
 	grep -q 'must be a positive integer' "$SCRIPT_PATH"
 }
 
+@test "tacklebox commit gets a longer inner deadline but remains overrideable" {
+	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
+	grep -q 'TBOX_CUSTOMIZE_COMMIT_TIMEOUT:-1800' "$SCRIPT_PATH"
+	grep -q 'local TBOX_CUSTOMIZE_COMMIT_TIMEOUT=' "$SCRIPT_PATH"
+	grep -q 'export TBOX_CUSTOMIZE_COMMIT_TIMEOUT' "$SCRIPT_PATH"
+	grep -q 'must be a non-negative integer' "$SCRIPT_PATH"
+}
+
 # ── TBOX_* environment passthrough (tunaOS#2034) ───────────────────────────
 #
 # The container path has to forward tacklebox's knobs explicitly; the
@@ -384,6 +392,7 @@ JSON
 		[[ -n "$loop" ]] || { echo "collection loop not found" >&2; exit 1; }
 		export TBOX_CUSTOMIZE_NETWORK=host
 		export TBOX_CUSTOMIZE_TIMEOUT=1800
+		export TBOX_CUSTOMIZE_COMMIT_TIMEOUT=1800
 		export PATH_LOOKALIKE_TBOX=nope
 		tbox_env=() tbox_names=()
 		eval "$loop"
@@ -393,14 +402,14 @@ JSON
 	[[ "$output" == *"--env"* ]]
 	[[ "$output" == *"TBOX_CUSTOMIZE_NETWORK=host"* ]]
 	[[ "$output" == *"TBOX_CUSTOMIZE_TIMEOUT=1800"* ]]
+	[[ "$output" == *"TBOX_CUSTOMIZE_COMMIT_TIMEOUT=1800"* ]]
 	# Prefix match only: a name that merely contains TBOX_ is not a knob.
 	[[ "$output" != *"PATH_LOOKALIKE_TBOX"* ]]
 }
 
 @test "tacklebox env: passthrough is name-agnostic, so a new knob needs no change here" {
 	SCRIPT_PATH="${REPO_ROOT:-$(cd "${BATS_TEST_DIRNAME}/../.." && pwd)}/scripts/lib/tacklebox.sh"
-	# The knob tunaOS#2034 asks tacklebox for does not exist yet. Whatever it
-	# ends up called, it must arrive without editing this library.
+	# Future knobs must arrive without editing this library.
 	run bash -c '
 		loop=$(awk "/^\tfor _tbox_name in/,/^\tdone\$/" "$1")
 		export TBOX_A_KNOB_INVENTED_TODAY=900
