@@ -44,7 +44,7 @@ containerfile_code() {
   while read -r script _arg; do
     [ -n "$script" ] || continue
     case "$script" in
-    install-desktop.sh | configure-desktop-runtime.sh | gnome-extensions.sh | zfs.sh) continue ;;
+    install-desktop.sh | configure-desktop-runtime.sh | zfs.sh) continue ;;
     esac
     [ -f "${REPO_ROOT}/build_scripts/desktop/${script}" ] || {
       echo "FAIL: Containerfile.ubuntu calls desktop/${script}, which does not exist" >&2
