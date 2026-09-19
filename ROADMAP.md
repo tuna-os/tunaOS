@@ -1,6 +1,6 @@
 # tunaOS Roadmap
 
-**Last updated**: 2026-08-23 (Windows conversion channel added to Q3 + Q4 after wootc `v0.1.0-alpha.1` shipped 08-22 — #1988) | **Maintainer**: tuna-os (hanthor)
+**Last updated**: 2026-09-16 (Transition Q3 to Q4 'Mature' roadmap milestones; multi-desktop ISO release parity gate audit) | **Maintainer**: tuna-os (hanthor)
 
 ---
 
@@ -10,7 +10,7 @@ Bring a modern, cloud-native experience to the Enterprise Linux Desktop. tunaOS 
 
 ---
 
-## Current Status (August 2026)
+## Current Status (September 2026)
 
 ### Active Variants
 
@@ -179,7 +179,7 @@ See [SECURITY.md](./SECURITY.md) for vulnerability reporting.
 
 **Planning started (2026-08-08)**: Q4 milestone #3 created; tracking issue #1159 open. **All 9 Q4 goals now tracked** (#1167 branch protection, #1168 governance, #1186 release automation, #1187 package signing/SBOM). Stale dependency refs (#306/#307/#212/#301 closed) still flagged in #1159. Extended 08-08 evening: adoption metrics (#1174) and variant lifecycle policy (#1175) added as strategist-owned goals. **Update 08-13**: All stale Q4 dependency refs now resolved — Supply chain hardening re-tracked under #1193 (was #212/#301, both closed), Tacklebox decoupling under #1192 (was #306, closed), Upstream snapshot automation under #1194 (was #307, closed). Both #1192 and #1194 already existed and already carried the Q4 milestone — this was a ROADMAP linking gap, not a missing-tracker gap. #1159's recommendation #3 (refresh stale dependency refs) is complete.
 
-**Progress note (2026-08-11)**: keyless Cosign signing + signed SBOM attestations **landed 08-10** for published ISOs and container images (#1303, #1305) — first Q4 supply-chain deliverable. Remaining scope for #1187: signed SBOMs for **every** release artifact across all flavors (blocked on Releases cadence parity #1254) and tunaos-packages artifacts. Package sourcing policy (#1319/#1323) drafted as [PACKAGE-SOURCING.md](./PACKAGE-SOURCING.md) — source inventory feeds the #1187 attestation graph in Q4.
+**Progress note (2026-09-16)**: Transitioning into Q4 2026 ("Mature"). Multi-desktop ISO release parity gate audit initiated: verifying release automation across GNOME, KDE, COSMIC, Niri, and XFCE desktop editions per flavor equality mandate (#1315). Keyless Cosign signing + signed SBOM attestations **landed 08-10** for published ISOs and container images (#1303, #1305) — first Q4 supply-chain deliverable. Remaining scope for #1187: signed SBOMs for **every** release artifact across all flavors (blocked on Releases cadence parity #1254) and tunaos-packages artifacts. Package sourcing policy (#1319/#1323) drafted as [PACKAGE-SOURCING.md](./PACKAGE-SOURCING.md) — source inventory feeds the #1187 attestation graph in Q4.
 
 | Goal | Owner | Dependencies |
 |------|-------|--------------|
