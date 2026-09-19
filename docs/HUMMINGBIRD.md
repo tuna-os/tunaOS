@@ -631,11 +631,11 @@ a weekly archaeology exercise into a number on the build.
 
 ### Link 7: firmware, and why CI can never tell you about it
 
-`linux-firmware` and every per-device firmware package are absent from
+`linux-firmware` and every per-device firmware package were absent from
 `hummingbird:base` (287 packages) and `hummingbird:gnome` (405), from
 `public-hummingbird`, from our published snapshot, **and from the 673-entry
-build order**. Nothing is scheduled to build them. Measured 2026-08-25 against
-the images' own rpm manifests and both repodata indexes; full table in #2064.
+build order**. Measured 2026-08-25 against the images' own rpm manifests and
+both repodata indexes; full table in #2064.
 
 QEMU cannot surface this, and that is the point. virtio needs no firmware, so
 `installer-smoke` and `iso-e2e` pass on media that would reach a laptop with:
@@ -651,16 +651,20 @@ The driver *userspace* is fine — the gnome layer already brings
 `mesa-dri-drivers`, `libdrm` and `mesa-libgbm`. This is specifically a firmware
 gap.
 
-It is also not obviously a Hummingbird bug. A hardened, desktop-less
-server/container base omitting ~500 MB of unauditable vendor blobs is a
-defensible choice; the gap only appears when the desktop flavors point it at
-a laptop. #2064 lays out the four options and deliberately does not pick one,
-because the choice trades the hardening premise against hardware support and
-that is a maintainer's call.
+The #2064 maintainer decision is to put firmware in desktop images without
+changing the desktop-less Hummingbird base. GNOME and COSMIC now request the
+first-pass hardware set: `linux-firmware`, explicit AMD/Intel GPU and Intel
+Wi-Fi subpackages, `wireless-regdb`, `iw`, and `NetworkManager-wifi`. The
+explicit subpackages matter because `linux-firmware` recommends them weakly,
+while the manifest install fallback disables weak dependencies. The package
+factory must build the three source roots (`linux-firmware`, `wireless-regdb`,
+and `iw`) before all of those requests can resolve. Association (`iwd` or
+`wpa_supplicant`) and the separate audio firmware stack remain the decision's
+second pass.
 
 **Do not read a green `installer-smoke` cell as evidence that a laptop install
-works.** Every passing cell in `docs/MATRIX-STATUS.md`, including the single
-`yellowfin gnome` one, is QEMU.
+works.** Every passing cell in `docs/MATRIX-STATUS.md` runs in QEMU, which does
+not exercise this hardware.
 
 ### The precedent that says this is achievable
 

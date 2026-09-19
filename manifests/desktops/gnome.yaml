@@ -51,6 +51,17 @@ packages:
     packages: &fedora_gnome_packages
       - ModemManager
       - NetworkManager-adsl
+      # Laptop hardware baseline. Hummingbird inherits this list and does not
+      # ship these in its desktop-less base (#2064). Keep the firmware binary
+      # names explicit: linux-firmware's device packages are weak dependencies,
+      # and install_available disables weak dependencies on its fallback path.
+      - NetworkManager-wifi
+      - linux-firmware
+      - amd-gpu-firmware
+      - intel-gpu-firmware
+      - iwlwifi-mvm-firmware
+      - wireless-regdb
+      - iw
       - NetworkManager-openconnect-gnome
       - NetworkManager-openvpn-gnome
       - NetworkManager-ppp
