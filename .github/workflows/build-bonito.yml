@@ -14,8 +14,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Quay has repeatedly garbage-collected Fedora 44 manifests while their
+  # digest was still pinned here (#2113). Run this immediately before Bonito,
+  # rather than relying only on the earlier repository-wide scheduled check:
+  # the 2026-08-25 check passed, then the pin was gone by the next build.
+  preflight-base-pin:
+    name: Verify Fedora 44 base pin
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install yq
+        run: |
+          sudo wget -qO /usr/bin/yq https://github.com/mikefarah/yq/releases/download/v4.53.3/yq_linux_amd64
+          sudo chmod +x /usr/bin/yq
+
+      - name: Verify Fedora 44 base pin still resolves
+        run: ./scripts/check-base-image-pins.sh bonito
+
   build:
     name: 🎣-bonito
+    needs: preflight-base-pin
     uses: ./.github/workflows/build-variant.yml
     with:
       variant: 'bonito'
