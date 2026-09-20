@@ -148,6 +148,8 @@ lint_image() {
 # Install packages. On apt, skips recommended/suggested packages to keep
 # the image lean (mirrors --setopt=install_weak_deps=False on dnf).
 pkg_install() {
+	# platform.sh initializes this variable before package helpers run.
+	# shellcheck disable=SC2153
 	if [[ "$PKG_MGR" == "apt" ]]; then
 		mkdir -p /var/lib/apt/lists/partial /var/lib/dpkg /var/cache/apt/archives/partial
 		apt-get update -qq
