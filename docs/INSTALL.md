@@ -1,19 +1,22 @@
 # Installing TunaOS
 
-Everything below the quick start that used to live on the front page: building
-your own media, switching an existing system, verifying what you downloaded,
-and registry authentication. For choosing an image, day-2 updates, rollbacks
-and apps, start with the [User Guide](USER-GUIDE.md).
+This page contains information that used to be in the quick start on the front
+page. It covers custom media, system conversion, download verification,
+and registry authentication. For image selection, day-2 updates, rollbacks,
+and apps, see the [User Guide](USER-GUIDE.md).
 
 ## Use a pre-built ISO
 
-Browse the currently published installation media on the download page:
+Browse the installation media that the project now publishes on the download
+page:
 
 **[📦 tunaos.org/download](https://tunaos.org/download)**
 
 ## Install from Windows (wootc)
 
-If you are coming from Windows, you can install TunaOS directly using **[wootc](https://github.com/tuna-os/wootc)** without writing an ISO to a USB flash drive or repartitioning your disk.
+You can use **[wootc](https://github.com/tuna-os/wootc)** to install TunaOS
+directly from Windows. You do not need to put an ISO on a USB flash drive or
+change the partitions on your disk.
 
 - Download the installer from the [wootc releases](https://github.com/tuna-os/wootc/releases)
 - Run `tunaos-installer.exe` as Administrator, select your desktop and variant, and reboot into TunaOS
@@ -23,10 +26,10 @@ If you are coming from Windows, you can install TunaOS directly using **[wootc](
 
 **In your browser — no tools, no root, nothing uploaded:**
 
-**[🛠️ tunaos.org/iso-builder](https://tunaos.org/iso-builder)** — point it
-at any TunaOS image (or your own bootc image), pick your flatpaks, and it
-authors a bootable live ISO entirely in WebAssembly using the same
-[tacklebox](https://github.com/tuna-os/tacklebox) engine CI uses.
+**[🛠️ tunaos.org/iso-builder](https://tunaos.org/iso-builder)** — select any
+TunaOS image or your own bootc image, and then select your flatpaks. The builder
+uses WebAssembly to create a bootable live ISO with the
+[tacklebox](https://github.com/tuna-os/tacklebox) engine that CI uses.
 [User guide](https://tunaos.org/docs/iso-builder).
 
 **Or locally with [tacklebox](https://github.com/tuna-os/tacklebox):**
@@ -56,7 +59,7 @@ sudo bootc image build-to-qcow2 \
 
 ## Switch an existing system
 
-If you're already running a compatible bootc system:
+If you already use a compatible bootc system:
 
 ```bash
 sudo bootc switch ghcr.io/tuna-os/yellowfin:gnome
@@ -64,9 +67,9 @@ sudo bootc switch ghcr.io/tuna-os/yellowfin:gnome
 
 ## Verifying downloads
 
-TunaOS images and ISOs are keylessly signed (Sigstore Cosign, GitHub Actions
-OIDC identity — no project key or password) and published with SBOMs, so you
-can verify what you're running instead of trusting the download blindly.
+GitHub Actions uses Sigstore Cosign and its OIDC identity to sign TunaOS images
+and ISOs without a project key or password. Each artifact has an SBOM. You can
+verify the software on your system without implicit trust in the download.
 
 **ISOs** ship with a `.iso.sha256` checksum and a `.iso.sigstore.json`
 verification bundle alongside the image:
@@ -82,8 +85,8 @@ cosign verify-blob tunaos-example.iso \
     "https://token.actions.githubusercontent.com"
 ```
 
-**Container images** are signed by digest, with a signed SPDX SBOM
-attestation attached to each platform image:
+Cosign signs each **container image** by digest. Each platform image also has
+an attached, signed attestation for its SPDX SBOM:
 
 ```bash
 digest=$(skopeo inspect docker://ghcr.io/tuna-os/yellowfin:gnome | jq -r .Digest)
@@ -94,13 +97,13 @@ cosign verify "ghcr.io/tuna-os/yellowfin@${digest}" \
     "https://token.actions.githubusercontent.com"
 ```
 
-Full commands, the SBOM-attestation example, and the exact trust boundary
-(which identities/issuers are accepted and why) are in
-[VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md).
+Full commands, the SBOM-attestation example, and the exact trust boundary are
+in [VERIFY-ARTIFACTS.md](VERIFY-ARTIFACTS.md). The trust boundary identifies
+the identities and issuers that verification accepts and explains the reasons.
 
 ## Container registry authentication
 
-Images are published on GitHub Container Registry (GHCR). To pull images with
+TunaOS publishes images on GitHub Container Registry (GHCR). To pull images with
 `bootc` or `podman`:
 
 ```bash
@@ -111,15 +114,15 @@ echo "$GITHUB_TOKEN" | podman login ghcr.io -u YOUR_USERNAME --password-stdin
 gh auth token | podman login ghcr.io -u YOUR_USERNAME --password-stdin
 ```
 
-See [GitHub Container Registry docs](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
+See the [documentation for GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry)
 for more details.
 
 ### Troubleshooting: `501 Unsupported client range` on pull
 
 TunaOS images publish as `zstd:chunked` for faster delta pulls, but GHCR's
 blob CDN doesn't support the multi-range HTTP requests that chunked pulls
-use. Most `podman`/`bootc` builds fall back to a normal full-blob pull
-automatically, but some do not and hard-fail with:
+use. Most `podman`/`bootc` builds automatically fall back to a standard pull
+of the full blob, but some do not and fail with:
 
 ```
 Error: copying system image from manifest list: partial pull of blob sha256:...:
