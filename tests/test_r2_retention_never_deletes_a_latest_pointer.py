@@ -117,10 +117,19 @@ def prune_steps() -> list[tuple[str, str, list[tuple[str, str]]]]:
             line for line in run.splitlines() if not line.lstrip().startswith("#")
         )
         prefix = re.search(r'R2:\$\{\{[^}]*\}\}/([^"\s]+)', code)
-        rules = [
-            (kind, pattern)
-            for kind, pattern in re.findall(r'--(exclude|include) "([^"]+)"', code)
-        ]
+        rules = []
+        # Prefer rclone's ordered --filter form. Keep understanding the legacy
+        # flags so this safety test still describes a useful failure if a
+        # future edit reintroduces them.
+        flag_re = re.compile(
+            r'--(?:(exclude|include) "([^"]+)"|filter "([+-]) ([^"]+)")'
+        )
+        for match in flag_re.finditer(code):
+            kind, pattern, sign, filter_pattern = match.groups()
+            if sign:
+                kind = "include" if sign == "+" else "exclude"
+                pattern = filter_pattern
+            rules.append((kind, pattern))
         steps.append((step.get("name", "?"), prefix.group(1) if prefix else "?", rules))
     return steps
 
@@ -173,6 +182,21 @@ def test_there_are_prune_steps_to_check():
     assert len(steps) >= 2, f"expected the ISO and screenshot prunes, got {steps}"
     for name, prefix, rules in steps:
         assert rules, f"{name!r} deletes from {prefix!r} with no filters at all"
+
+
+def test_prune_rules_have_deterministic_order():
+    """Do not mix flags whose evaluation order rclone calls indeterminate."""
+    doc = yaml.safe_load(PRUNE.read_text(encoding="utf-8"))
+    for step in doc["jobs"]["prune"]["steps"]:
+        run = step.get("run", "")
+        if "rclone delete" not in run:
+            continue
+        code = "\n".join(
+            line for line in run.splitlines() if not line.lstrip().startswith("#")
+        )
+        assert "--include " not in code
+        assert "--exclude " not in code
+        assert "--filter " in code
 
 
 @pytest.mark.parametrize("name", sorted(pointer_names()))
