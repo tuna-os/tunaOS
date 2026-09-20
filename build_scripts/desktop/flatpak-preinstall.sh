@@ -20,13 +20,14 @@
 # favorite-apps pins org.mozilla.firefox.desktop and its setup hook installs
 # the Firefox flatpak's systemconfig extension).
 #
-# The curated set is deliberately small and identical across desktops:
+# The common curated set is deliberately small:
 #   io.github.kolunmi.Bazaar   the software store (every desktop; replaces
 #                              the excluded gnome-software / hidden discover)
 #   org.mozilla.firefox        the browser (every desktop; Bluefin's choice)
-# Per-desktop additions belong in the same mechanism: add_app lines guarded
-# by _FP_DESKTOP, with a matching assert in verify-desktop-experience.sh —
-# assert exactly what is added, nothing aspirational.
+# GNOME additionally gets Extension Manager. It provides an explicit,
+# user-controlled route to extensions without baking any extension into the
+# image. Per-desktop additions need a matching assertion in
+# verify-desktop-experience.sh — assert exactly what is added.
 #
 # Test hooks: TUNAOS_PREINSTALL_DIR and TUNAOS_SYSTEMD_SYSTEM_DIR redirect
 # the paths (same pattern as 40-services.sh); systemctl resolves via PATH.
@@ -61,6 +62,9 @@ _fp_add_app() {
 
 _fp_add_app io.github.kolunmi.Bazaar
 _fp_add_app org.mozilla.firefox
+if [[ "$_FP_DESKTOP" == "gnome" ]]; then
+	_fp_add_app com.mattjakeman.ExtensionManager
+fi
 
 # A preinstall file with nothing to run it is decoration. flatpak ships the
 # unit on current Fedora/EL; where a base does not ship it yet, say so

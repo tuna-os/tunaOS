@@ -428,9 +428,6 @@ RUN --mount=type=tmpfs,dst=/tmp \
 # the manifest was missing; they are in it now, so the two lists are identical
 # and there is only one.
 #
-# gnome-extensions.sh moves into the manifest's post_install rather than
-# vanishing: on apt it does nothing but compile schemas, which is exactly what
-# the tail of gnome.sh's apt branch did.
 FROM base-no-de AS gnome
 COPY --from=common /system_files/bluefin /
 RUN --mount=type=tmpfs,dst=/opt --mount=type=tmpfs,dst=/tmp \
